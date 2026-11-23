@@ -11,11 +11,9 @@ import { WebhookCopyUrlButton } from '@/components/bots/webhooks/WebhookCopyUrlB
 import { webhookResultsTo, webhookUnknownBotName } from '@/components/bots/webhooks/webhook-copy'
 import { hookIdOfRule } from '../../../../../shared/connector-webhook-contract'
 import type { RuntimeClientTarget } from '../../../../../shared/remote-runtime/host-catalog/runtime-client-target'
+import { getRuntimeTargetHostId } from '@/runtime/rpc/targets/runtime-client-target'
 import type { NativeChatMessage } from '../../../../../shared/native-chat/native-chat-types'
-import {
-  automationRowAccessibleName,
-  automationRowMark
-} from '../../../../../shared/automations/automation-chat-row'
+import { automationRowMark } from '../../../../../shared/automations/automation-chat-row'
 import { useAutomationRunWording } from './automation-run-wording'
 import {
   useNativeChatVisualOwner,
@@ -25,11 +23,7 @@ import { useNativeChatDisclosure } from '../messages/disclosure/native-chat-disc
 import { NativeChatAutomationCardDetails } from '../NativeChatAutomationCardDetails'
 import { structuredAgentSessionTabId } from '../../../../../shared/agent-session/view/structured-agent-session-projection'
 import { requestNativeChatComposerFocus } from '../composer/focus/native-chat-composer-focus-intent'
-import {
-  NativeChatAutomationRowBody,
-  NativeChatAutomationRowFrame,
-  ROW_NOTE
-} from './NativeChatAutomationRowFrame'
+import { NativeChatAutomationRowFrame, ROW_NOTE } from './NativeChatAutomationRowFrame'
 import { RUN_LINK_BUTTON } from './automation-run-link-button'
 
 // Every automation card in a chat shares this prefix, so opening one closes the rest.
@@ -133,61 +127,54 @@ export function NativeChatAutomationSavedRow({
     >
       <NativeChatAutomationRowFrame
         mark={automationRowMark(automation)}
-        label={label}
+        lead={label}
         name={automation.name}
         status={status}
-        accessibleName={automationRowAccessibleName(
-          {
-            label,
-            name: automation.name,
-            status,
-            time: timestamp === null ? null : wording.formatTime(timestamp)
-          },
-          wording.say
-        )}
         timestamp={timestamp}
         open={open}
         onToggle={() => setOpen(!open)}
         toggleRef={toggle}
-        action={
-          hookId && owner ? (
-            <div className="relative shrink-0">
-              <CopyWebhookUrl target={owner.target} hookId={hookId} worktreeId={owner.worktreeId} />
-            </div>
-          ) : null
-        }
+        // Live settings and controls, never cut.
+        clampDetails={false}
       >
-        {(ids) => (
-          <NativeChatAutomationRowBody ids={ids} timestamp={timestamp}>
-            <p className={ROW_NOTE}>{facts.join(' · ')}</p>
-            {hookId && owner ? (
+        <>
+          <p className={ROW_NOTE}>{facts.join(' · ')}</p>
+          {hookId && owner ? (
+            <div className="flex flex-wrap items-center gap-2">
               <p className={ROW_NOTE}>
                 {t(
                   'components.native-chat.automationSaved.webhookHint',
                   'Point your service at this URL'
                 )}
               </p>
-            ) : null}
-            {open ? (
-              <NativeChatAutomationCardDetails
-                automationId={automation.id}
-                environmentId={
-                  owner?.target.kind === 'environment' ? owner.target.environmentId : null
-                }
-                onEditInChat={owner ? () => draftChangeInChat(owner, automation.name) : null}
-              />
-            ) : null}
-            <div className="mt-2">
-              <button
-                type="button"
-                className={RUN_LINK_BUTTON}
-                onClick={() => openBotAutomation(automation.id, null)}
-              >
-                {wording.say('openAutomation')}
-              </button>
+              <CopyWebhookUrl target={owner.target} hookId={hookId} worktreeId={owner.worktreeId} />
             </div>
-          </NativeChatAutomationRowBody>
-        )}
+          ) : null}
+          {open ? (
+            <NativeChatAutomationCardDetails
+              automationId={automation.id}
+              environmentId={
+                owner?.target.kind === 'environment' ? owner.target.environmentId : null
+              }
+              onEditInChat={owner ? () => draftChangeInChat(owner, automation.name) : null}
+            />
+          ) : null}
+          <div className="mt-2">
+            <button
+              type="button"
+              className={RUN_LINK_BUTTON}
+              onClick={() =>
+                openBotAutomation(
+                  getRuntimeTargetHostId(owner?.target ?? { kind: 'local' }),
+                  automation.id,
+                  null
+                )
+              }
+            >
+              {wording.say('openAutomation')}
+            </button>
+          </div>
+        </>
       </NativeChatAutomationRowFrame>
     </div>
   )

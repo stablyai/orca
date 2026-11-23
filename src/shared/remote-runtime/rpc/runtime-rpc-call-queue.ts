@@ -64,11 +64,14 @@ export function isTimedPRRead(method: string, params: unknown): boolean {
   )
 }
 
-// Slow worktree removal, model listing and usage scans get a separate lane so foreground refresh/send slots remain free;
-// background slots belong to status.
+// Slow worktree removal, model listing, usage and session-history scans get a separate lane so foreground
+// refresh/send slots remain free; background slots belong to status.
 function isLongWaitRuntimeMethod(method: string): boolean {
   return (
-    method === 'worktree.rm' || method === 'agentSession.modelCatalog' || method === 'usage.call'
+    method === 'worktree.rm' ||
+    method === 'agentSession.modelCatalog' ||
+    method === 'usage.call' ||
+    method === 'aiVault.listSessions'
   )
 }
 
@@ -77,7 +80,8 @@ function isBulkReadRuntimeMethod(method: string): boolean {
   return (
     method === 'files.readChunk' ||
     method === 'files.readDocPreviewChunk' ||
-    method === 'files.readTerminalArtifactChunk'
+    method === 'files.readTerminalArtifactChunk' ||
+    method === 'agentSessionAttachment.readTextChunk'
   )
 }
 

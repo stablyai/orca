@@ -19,7 +19,9 @@ export function agentReadsSkill(
   return rootPaths.some((rootPath) =>
     sources.some(
       (source) =>
-        source.path === rootPath && source.sourceKind !== 'repo' && readsSkillSource(reader, source)
+        source.path === rootPath &&
+        source.sourceKind !== 'repo' &&
+        readsSkillSource(reader, source, skill)
     )
   )
 }

@@ -13,13 +13,7 @@ import { BOT_TEMPLATES_RELEASES } from './bot-template-catalog/releases'
 import { BOT_TEMPLATES_SUPPORT } from './bot-template-catalog/support'
 
 /** Ids from before templates carried packages; an older host knows only these. */
-export const LEGACY_BOT_TEMPLATE_IDS = [
-  'support',
-  'release',
-  'followup',
-  'feedback',
-  'briefing'
-] as const
+const LEGACY_BOT_TEMPLATE_IDS = ['support', 'release', 'followup', 'feedback', 'briefing'] as const
 
 export const BOT_TEMPLATE_CATEGORIES = [
   'coding',

@@ -34,6 +34,8 @@ export type TelemetrySettings = {
   browserExtensionsBanner?: BrowserExtensionsBannerAssignment
   /** Local UTC-day cursors cap dashboard observations across restarts; at most two writes a day. */
   agentDashboardActiveDays?: Partial<Record<AgentDashboardSurface, number>>
+  /** UTC day of the last unsampled chat send per client; at most two writes a day. */
+  chatMessageSentDays?: Partial<Record<'desktop' | 'mobile', number>>
   /** UTC-day cursors written only after the SDK accepted the milestone capture; at most two writes a day. */
   protectedMilestones?: {
     installCohort?: MilestoneInstallCohort

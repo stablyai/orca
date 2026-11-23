@@ -32,7 +32,13 @@ fi
 
 case "$case_name" in
   # The bundled launcher must stay in Electron's node mode.
-  nofuse-userns-bundled-status) command=("$launcher" status) ;;
+  nofuse-userns-bundled-status)
+    # The unprivileged runner inherits HOME=/root; an unreadable profile does not prove absence.
+    ORCA_USER_DATA_PATH=$(mktemp -d) || exit 91
+    export ORCA_USER_DATA_PATH
+    trap 'rmdir -- "$ORCA_USER_DATA_PATH"' EXIT
+    command=("$launcher" status)
+    ;;
   # Direct binaries must hand off before Ozone initializes.
   nofuse-nosandbox-direct-binary-skills)
     command=("$extracted_root/orca-ide" --no-sandbox skills --help)

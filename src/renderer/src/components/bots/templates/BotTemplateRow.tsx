@@ -2,6 +2,7 @@ import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/class-names'
 import { useTranslate } from '@/i18n/use-translate'
 import type { BotTemplate } from '../../../../../shared/bots/bot-templates'
+import { botTemplateWord } from '../../../../../shared/bots/bot-template-text'
 import { BotTemplateNeedsSetupBadge } from './BotTemplateDetail'
 import { BotTemplateMascot } from './BotTemplateMascot'
 
@@ -19,6 +20,7 @@ export function BotTemplateRow({
   rowRef?: (element: HTMLDivElement | null) => void
 }): React.JSX.Element {
   const t = useTranslate()
+  const name = botTemplateWord(template, 'name', t)
   return (
     <div
       ref={rowRef}
@@ -36,17 +38,19 @@ export function BotTemplateRow({
       <BotTemplateMascot template={template} className="size-8 shrink-0 rounded-lg" />
       <div className="min-w-0 flex-1">
         <span className="flex min-w-0 items-baseline gap-2">
-          <span className="truncate text-sm font-medium text-foreground">{template.name}</span>
+          <span className="truncate text-sm font-medium text-foreground">{name}</span>
           {template.needsSetup ? <BotTemplateNeedsSetupBadge /> : null}
         </span>
-        <p className="truncate text-xs leading-5 text-muted-foreground">{template.line}</p>
+        <p className="truncate text-xs leading-5 text-muted-foreground">
+          {botTemplateWord(template, 'line', t)}
+        </p>
       </div>
       <Button
         type="button"
         variant="outline"
         size="xs"
         tabIndex={current ? 0 : -1}
-        aria-label={t('bots.templates.useNamed', 'Use {{name}}', { name: template.name })}
+        aria-label={t('bots.templates.useNamed', 'Use {{name}}', { name })}
         className={current ? undefined : 'invisible group-focus-within:visible'}
         onClick={(event) => {
           event.stopPropagation()

@@ -67,6 +67,7 @@ export class ClaudeAgentTeamsService {
       tmuxValue,
       baseEnv: env,
       panes: new Map([[leaderPane, leader]]),
+      startingHandles: new Set(),
       paneOrder: [leaderPane],
       nextPaneNumber: 2,
       mainVertical: null,
@@ -85,6 +86,20 @@ export class ClaudeAgentTeamsService {
         this.teams.delete(teamId)
       }
     }
+  }
+
+  /** Whether a team's lead or one of its teammates runs in this terminal. */
+  holdsHandle(handle: string): boolean {
+    for (const team of this.teams.values()) {
+      if (
+        team.leaderHandle === handle ||
+        team.startingHandles.has(handle) ||
+        [...team.panes.values()].some((pane) => pane.handle === handle)
+      ) {
+        return true
+      }
+    }
+    return false
   }
 
   getActiveTeamCount(): number {

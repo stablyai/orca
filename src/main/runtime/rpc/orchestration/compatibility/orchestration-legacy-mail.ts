@@ -99,6 +99,7 @@ export async function handleLegacyCheck(args: {
       ? page.messages
           .map((message) =>
             formatMessageBanner(message, {
+              peerMail: db,
               authority: formattingAuthority,
               supportedActionHints: readOnly
                 ? []

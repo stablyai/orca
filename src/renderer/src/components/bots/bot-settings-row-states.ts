@@ -1,14 +1,15 @@
-// The one-line state under each row of a bot's panel Settings list.
+// Row states for a bot's settings: the short value at a Settings row's end, and the longer lines its pages show.
 import { translate } from '@/i18n/i18n'
 import { uiDateTimeFormat } from '@/i18n/ui-intl-formatters'
 import type { BotTools } from '../../../../shared/bot-tools'
 import {
-  LOOK_AROUND_EVERY_LABELS,
   lookedDay,
-  type BotLookAround
+  type BotLookAround,
+  type LookAroundEvery
 } from '../../../../shared/bots/bot-look-around'
+import { lookAroundEveryLabel } from '../../../../shared/bots/bot-look-around-every-label'
 import type { BotTidyUp } from '../../../../shared/bots/bot-tidy-up'
-import { botToolTitle } from '../../../../shared/bots/bot-tool-labels'
+import { botToolsLine } from '../../../../shared/bots/bot-tool-labels'
 
 const CLOCK = { hour: 'numeric', minute: '2-digit' } as const
 const DATE = { month: 'short', day: 'numeric' } as const
@@ -18,7 +19,8 @@ const none = (): string => translate('bots.settingsPage.none', 'None')
 
 /** Names as a short list: "Slack, GitHub". */
 export function nameList(names: readonly string[], intlLocale?: string): string {
-  return new Intl.ListFormat(intlLocale, { type: 'unit', style: 'short' }).format(names)
+  // Why: CJK unit lists have no separator ("SlackGitHub"); narrow conjunctions read "Slack、GitHub".
+  return new Intl.ListFormat(intlLocale, { type: 'conjunction', style: 'narrow' }).format(names)
 }
 
 /** "12:04 PM" today, "yesterday 4:12 PM", then "Oct 29". */
@@ -52,7 +54,7 @@ export function lookAroundLine(
   if (!setting.on) {
     return off()
   }
-  const every = LOOK_AROUND_EVERY_LABELS[setting.every]
+  const every = lookAroundEveryLabel(setting.every, translate)
   return lastLookedAt
     ? `${every} · ${translate('bots.settingsPage.lastLooked', 'last looked {{when}}', {
         when: lookedWhen(lastLookedAt, now)
@@ -86,14 +88,41 @@ export function tidyUpLine(
     : every
 }
 
-/** "MEMORY.md and 6 topic files"; just "MEMORY.md" with none, or before the folder is read. */
-export function memoryLine(topicFiles: number | null): string {
-  return topicFiles
-    ? translate('bots.settingsPage.memoryFiles', 'MEMORY.md and {{count}} topic files', {
-        count: topicFiles,
-        defaultValue_one: 'MEMORY.md and {{count}} topic file'
+/** "7 files": MEMORY.md and its topic files; null before the folder is read. */
+export function memoryValue(topicFiles: number | null): string | null {
+  return topicFiles === null
+    ? null
+    : translate('bots.settingsView.memoryFiles', '{{count}} files', {
+        count: topicFiles + 1,
+        defaultValue_one: '{{count}} file'
       })
-    : 'MEMORY.md'
+}
+
+const LOOK_AROUND_SHORT: Record<LookAroundEvery, () => string> = {
+  'every-4h': () => translate('bots.settingsView.lookAroundShort.every4h', '4h'),
+  'every-2h': () => translate('bots.settingsView.lookAroundShort.every2h', '2h'),
+  'twice-daily': () => translate('bots.settingsView.lookAroundShort.twiceDaily', 'Twice a day'),
+  mornings: () => translate('bots.settingsView.lookAroundShort.mornings', 'Mornings')
+}
+
+/** "4h"; null while it is off, as its switch says. */
+export function lookAroundValue(setting: BotLookAround): string | null {
+  return setting.on ? LOOK_AROUND_SHORT[setting.every]() : null
+}
+
+/** "Nightly" or "Weekly"; null while it is off, as its switch says. */
+export function tidyUpValue(setting: BotTidyUp): string | null {
+  if (!setting.on) {
+    return null
+  }
+  return setting.every === 'night'
+    ? translate('bots.settingsView.tidyUpShort.night', 'Nightly')
+    : translate('bots.settingsView.tidyUpShort.week', 'Weekly')
+}
+
+/** A count, or "None". */
+export function countValue(count: number): string {
+  return count > 0 ? String(count) : none()
 }
 
 /** "Sentry, Playwright · 6 more from Claude Code"; null until the tools are read. */
@@ -102,31 +131,20 @@ export function toolsLine(
   agentLabel: string,
   intlLocale?: string
 ): string | null {
-  if (!tools) {
-    return null
-  }
-  if ('unsupported' in tools) {
-    return translate('bots.settingsPage.toolsInAgent', 'Set up in {{agent}}', {
-      agent: agentLabel
-    })
-  }
-  const own = tools.own.map((tool) => botToolTitle(tool.name))
-  const inherited = tools.inherited.length
-  if (own.length === 0) {
-    return inherited > 0
-      ? translate('bots.settingsPage.toolsFrom', '{{count}} from {{agent}}', {
-          count: inherited,
-          agent: agentLabel
-        })
-      : none()
-  }
-  const names = nameList(own, intlLocale)
-  return inherited > 0
-    ? `${names} · ${translate('bots.settingsPage.toolsMore', '{{count}} more from {{agent}}', {
-        count: inherited,
+  return botToolsLine(tools, {
+    none: none(),
+    from: (count) =>
+      translate('bots.settingsPage.toolsFrom', '{{count}} from {{agent}}', {
+        count,
         agent: agentLabel
-      })}`
-    : names
+      }),
+    more: (count) =>
+      translate('bots.settingsPage.toolsMore', '{{count}} more from {{agent}}', {
+        count,
+        agent: agentLabel
+      }),
+    list: (names) => nameList(names, intlLocale)
+  })
 }
 
 /** Names, or "None". */
@@ -134,26 +152,19 @@ export function namesLine(names: readonly string[], intlLocale?: string): string
   return names.length > 0 ? nameList(names, intlLocale) : none()
 }
 
-/** "Slack 3 with access · Linear 2 with access · 1 request"; "Only you" with nobody added. */
-export function whoCanAskLine(
-  connectors: readonly { label: string; people: number }[],
-  requests: number
-): string {
-  const parts = connectors
-    .filter((connector) => connector.people > 0)
-    .map((connector) =>
-      translate('bots.settingsPage.withAccess', '{{service}} {{people}} with access', {
-        service: connector.label,
-        people: connector.people
-      })
-    )
-  if (requests > 0) {
-    parts.push(
-      translate('settings.bots.connectorRequests', '{{count}} requests', {
+/** "Only you", "You and 4 others", "You and 4 others · 1 request". */
+export function whoCanAskValue(people: number, requests: number): string {
+  const who =
+    people > 0
+      ? translate('bots.settingsView.youAndOthers', 'You and {{count}} others', {
+          count: people,
+          defaultValue_one: 'You and {{count}} other'
+        })
+      : translate('bots.settingsPage.onlyYou', 'Only you')
+  return requests > 0
+    ? `${who} · ${translate('settings.bots.connectorRequests', '{{count}} requests', {
         count: requests,
         defaultValue_one: '{{count}} request'
-      })
-    )
-  }
-  return parts.length > 0 ? parts.join(' · ') : translate('bots.settingsPage.onlyYou', 'Only you')
+      })}`
+    : who
 }

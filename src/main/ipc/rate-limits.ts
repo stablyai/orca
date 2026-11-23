@@ -9,6 +9,7 @@ export function registerRateLimitHandlers(
 ): void {
   ipcMain.handle('rateLimits:get', () => rateLimits.getState())
   ipcMain.handle('rateLimits:refresh', () => rateLimits.refresh())
+  ipcMain.handle('rateLimits:refreshOnOwnerReturn', () => rateLimits.refreshOnOwnerReturn())
   ipcMain.handle('rateLimits:refreshCodexForTarget', (_event, target: RateLimitRuntimeTarget) =>
     rateLimits.refreshCodexForTarget(target)
   )

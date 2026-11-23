@@ -3,7 +3,9 @@ import { ORCA_AGENT_SESSION_CALLER_ENV_KEYS } from '../../../ipc/pty/host-env/sp
 import { STRUCTURED_CHILD_ENV_TO_DELETE } from '../../../runtime/agent-session/environment/structured-session-child-env'
 import {
   LEGACY_NATIVE_CHAT_VISUALS_DIR_ENV,
-  NATIVE_CHAT_SCRATCH_DIR_ENV
+  NATIVE_CHAT_SCRATCH_DIR_ENV,
+  withNativeChatVisualsEnv,
+  type NativeChatVisualsLaunch
 } from '../../../native-chat/conversation-files/native-chat-visuals-delivery'
 import type { ProviderProcessLaunch } from '../../../provider-process/provider-process-launch'
 import type { ReadOnlySessionMode } from '../../../bots/bot-look-around-policy'
@@ -12,6 +14,7 @@ import type { AgentCliVersionCheck } from '../../../agent-launch/preflight/agent
 import { AgentCliInstallationError } from '../../../native-chat/agent-launch/agent-cli-installation-error'
 import type { PiBackgroundWorkLaunch } from '../background-work/rpc-background-work-bridge'
 import { PI_BACKGROUND_WORK_DIR_ENV } from '../background-work/rpc-background-work-bridge-source'
+import { PI_BOT_TOOLS_ENV } from '../../../bots/bot-tools-pi'
 
 export type PiRpcLaunchOptions = {
   command: string
@@ -31,6 +34,8 @@ export type PiRpcLaunchOptions = {
   tools?: PiToolLimit
   /** Orca's background-work bridge for this launch; absent when it could not be prepared. */
   backgroundWork?: PiBackgroundWorkLaunch
+  /** The extension that registers a bot's own tools, and the servers it reads; absent: none. */
+  botTools?: { extension: string; servers: string }
 }
 
 const CALLER_ENV_TO_DELETE = [
@@ -39,11 +44,18 @@ const CALLER_ENV_TO_DELETE = [
   ORCA_AGENT_SESSION_SPAWN_TOKEN_ENV
 ]
 
-/** Structured Pi has no scratch folder; an inherited one belongs to another chat. */
-export const PI_RPC_SESSION_ENV_TO_DELETE: readonly string[] = [
-  NATIVE_CHAT_SCRATCH_DIR_ENV,
-  LEGACY_NATIVE_CHAT_VISUALS_DIR_ENV
-]
+/** This chat's own scratch folder, if it has one; an inherited one belongs to another chat. */
+export function withPiVisualsEnv(
+  env: Record<string, string>,
+  visuals: NativeChatVisualsLaunch | null
+): { env: Record<string, string>; inheritedEnvToDelete: readonly string[] } {
+  return {
+    env: withNativeChatVisualsEnv(env, visuals),
+    inheritedEnvToDelete: visuals
+      ? [LEGACY_NATIVE_CHAT_VISUALS_DIR_ENV]
+      : [NATIVE_CHAT_SCRATCH_DIR_ENV, LEGACY_NATIVE_CHAT_VISUALS_DIR_ENV]
+  }
+}
 
 /** Remove caller identity before the structured-session seal supplies its own. */
 export function withoutPiCallerEnv(env: Readonly<Record<string, string>>): Record<string, string> {
@@ -175,6 +187,7 @@ export function buildPiRpcLaunch(options: PiRpcLaunchOptions): ProviderProcessLa
       ...(options.tools === 'read' ? ['--tools', PI_READ_TOOLS.join(','), '--no-mcp'] : []),
       ...(options.tools === 'none' ? ['--no-tools', '--no-mcp'] : []),
       ...(options.backgroundWork ? ['--extension', options.backgroundWork.extension] : []),
+      ...(options.botTools ? ['--extension', options.botTools.extension] : []),
       ...(options.sessionFile ? ['--session', options.sessionFile] : []),
       ...(options.forkFile ? ['--fork', options.forkFile] : [])
     ],
@@ -182,7 +195,8 @@ export function buildPiRpcLaunch(options: PiRpcLaunchOptions): ProviderProcessLa
       ...options.env,
       ...(options.backgroundWork
         ? { [PI_BACKGROUND_WORK_DIR_ENV]: options.backgroundWork.directory }
-        : {})
+        : {}),
+      ...(options.botTools ? { [PI_BOT_TOOLS_ENV]: options.botTools.servers } : {})
     },
     envToDelete: [...(options.envToDelete ?? [])]
   }

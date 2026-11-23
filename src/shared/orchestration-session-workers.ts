@@ -9,7 +9,8 @@ export const ORCHESTRATION_SESSION_WORKER_SUMMARY_MAX = 280
 export const ORCHESTRATION_SESSION_WORKERS_LIMIT = 50
 
 /** The Dispatch's lifecycle, never the agent's own state: `working` is an open Dispatch whose
- *  process is live, even while its agent waits. `stopped` covers a worker that exited without reporting. */
+ *  process is live, even while its agent waits. `stopped` covers a worker that exited without reporting and,
+ *  where only shown, one whose terminal its host can't find at all (its Dispatch may still be open). */
 export type OrchestrationSessionWorkerState =
   | 'working'
   | 'completed'
@@ -29,6 +30,9 @@ export type OrchestrationSessionWorker = {
   /** The agent's own reported state while its process is live; `unknown` without a fresh report.
    *  Absent from older hosts. */
   activity?: OrchestrationSessionWorkerActivity
+  /** Its turn ended while its own background tasks still run: since when, and what they run. Absent
+   *  otherwise and from older hosts. */
+  backgroundWait?: { since: number; commands: string[] }
   /** The worker asked its coordinator, or awaits its decision, and has no answer yet. Absent from older hosts. */
   pendingQuestion?: boolean
   /** The execution host's own verdict; contact loss is never read as an exit. */
@@ -38,6 +42,9 @@ export type OrchestrationSessionWorker = {
   /** The paired server a remote worker runs on, as the answering host names it. Absent from older hosts. */
   hostEnvironmentId?: string
   worktreeId: string | null
+  /** The mailbox address the worker sends from (its terminal or chat handle), so a chat can tell which
+   *  Dispatch a piece of mail came from. Absent from older hosts. */
+  address?: string | null
   /** The worker's terminal pane, when it runs in a terminal. */
   paneKey: string | null
   /** The worker's chat session, when it runs in a native chat. */
@@ -72,8 +79,12 @@ export function sessionWorkerIsRunning(worker: Pick<OrchestrationSessionWorker, 
 /** The agent state an open worker draws: its own report (working without one, as from an older host),
  *  resting while its open `ask` or gate waits on its coordinator. A prompt it reports still shows. */
 export function sessionWorkerAgentState(
-  worker: Pick<OrchestrationSessionWorker, 'activity' | 'pendingQuestion'>
+  worker: Pick<OrchestrationSessionWorker, 'activity' | 'pendingQuestion' | 'backgroundWait'>
 ): Exclude<OrchestrationSessionWorkerActivity, 'unknown'> {
+  // Its own turn is over: it waits on its background tasks, not working.
+  if (worker.backgroundWait) {
+    return 'done'
+  }
   const reported = worker.activity && worker.activity !== 'unknown' ? worker.activity : 'working'
   return reported === 'working' && worker.pendingQuestion ? 'done' : reported
 }
@@ -81,21 +92,27 @@ export function sessionWorkerAgentState(
 /** A live worker resting on its open `ask`, with no prompt of its own. A gate can't open while its
  *  task's worker runs, so a live worker's open question is always an ask. */
 export function sessionWorkerAsksCoordinator(
-  worker: Pick<OrchestrationSessionWorker, 'state' | 'activity' | 'pendingQuestion'>
+  worker: Pick<
+    OrchestrationSessionWorker,
+    'state' | 'activity' | 'pendingQuestion' | 'backgroundWait'
+  >
 ): boolean {
   return worker.state === 'working' && sessionWorkerRestsOnAsk(worker)
 }
 
 /** Its open question waits on its coordinator and it reports no prompt of its own. */
 export function sessionWorkerRestsOnAsk(
-  worker: Pick<OrchestrationSessionWorker, 'activity' | 'pendingQuestion'>
+  worker: Pick<OrchestrationSessionWorker, 'activity' | 'pendingQuestion' | 'backgroundWait'>
 ): boolean {
   return Boolean(worker.pendingQuestion) && sessionWorkerAgentState(worker) === 'done'
 }
 
 /** Mid-turn: live, with no open question, and its agent has not reported stopping to wait. */
 export function sessionWorkerIsWorking(
-  worker: Pick<OrchestrationSessionWorker, 'state' | 'activity' | 'pendingQuestion'>
+  worker: Pick<
+    OrchestrationSessionWorker,
+    'state' | 'activity' | 'pendingQuestion' | 'backgroundWait'
+  >
 ): boolean {
   return worker.state === 'working' && sessionWorkerAgentState(worker) === 'working'
 }

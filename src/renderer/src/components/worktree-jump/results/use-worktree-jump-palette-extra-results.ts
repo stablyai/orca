@@ -34,23 +34,20 @@ export function useWorktreeJumpPaletteExtraResults({
     visible,
     scoped
   })
+  // Host/project chips filter workspaces, not bots; issue/PR URLs still scope every source.
   const sources = useMemo(
     () =>
-      scoped ? allSources.filter((source) => source.id === BOT_PALETTE_SOURCE_ID) : allSources,
-    [allSources, scoped]
+      allSources.filter((source) =>
+        scoped
+          ? source.id === BOT_PALETTE_SOURCE_ID
+          : !taskSourceUrl && (!filterActive || source.id === BOT_PALETTE_SOURCE_ID)
+      ),
+    [allSources, filterActive, scoped, taskSourceUrl]
   )
   const hasQuery = paletteSearchQuery.length > 0
-  // Filters and issue/PR URLs scope the palette to workspaces; the @ scope pauses filters for bots.
-  const suppressed = !scoped && (filterActive || Boolean(taskSourceUrl))
   const botSource = allSources.find((source) => source.id === BOT_PALETTE_SOURCE_ID)
-  // A filter hiding bots that match a typed query offers to search bots instead; a pasted link doesn't.
-  const filterHiddenBotMatches =
-    !scoped && filterActive && !taskSourceUrl && hasQuery ? (botSource?.results.length ?? 0) : 0
   const botCatalogSize = botSource?.catalogSize ?? 0
   const extraSections = useMemo<PaletteExtraSection[]>(() => {
-    if (suppressed) {
-      return []
-    }
     const ranked = (item: ExtraPaletteItem) => ({
       rank: item.result.rank,
       order: item.result.order,
@@ -73,8 +70,8 @@ export function useWorktreeJumpPaletteExtraResults({
         return { source, items }
       })
       .filter((section) => section.items.length > 0)
-  }, [hasQuery, paletteSearchContext, sources, suppressed])
-  return { extraSections, hidesPaletteWorkspace, filterHiddenBotMatches, botCatalogSize }
+  }, [hasQuery, paletteSearchContext, sources])
+  return { extraSections, hidesPaletteWorkspace, botCatalogSize }
 }
 
 export type WorktreeJumpPaletteExtraResults = ReturnType<typeof useWorktreeJumpPaletteExtraResults>

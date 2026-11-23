@@ -19,6 +19,7 @@ import {
   type AtRestCommandScan
 } from '../../native-chat/agent-session-wire/options/at-rest-command-catalog'
 import { join } from 'node:path'
+import { isNativeChatSkillForAgent } from '../../../shared/native-chat/input/commands/native-chat-skill-visibility'
 
 // Older clients eagerly discover commands; retain their bounded admission.
 const MAX_PROBES_RUNNING = 2
@@ -122,7 +123,11 @@ async function scanClaudeAtRest(
   )
   const names = new Set(builtIn.map((command) => command.name))
   const skills = discovered.skills
-    .filter((skill) => skill.providers.includes('claude'))
+    // The default ~/.claude/skills beside a relocated account home is for agents that borrow it.
+    .filter(
+      (skill) =>
+        skill.providers.includes('claude') && isNativeChatSkillForAgent('claude', skill, discovered)
+    )
     .map((skill): AgentSessionSlashCommand => ({
       name: skill.name,
       kind: 'skill',

@@ -16,11 +16,7 @@ import type { BotChatTreeChat } from '../../../../../../shared/bots/bot-chat-tre
 import { NativeChatMentionMenu } from './NativeChatAutocompleteMenus'
 
 const avatar = (emoji: string, size = 'size-5') => (
-  <BotAvatarTile
-    src={null}
-    fallback={emoji}
-    className={`mt-0.5 ${size} shrink-0 rounded-sm text-2xs`}
-  />
+  <BotAvatarTile src={null} fallback={emoji} className={`${size} shrink-0 rounded-sm text-2xs`} />
 )
 const BOTS = [
   {
@@ -177,6 +173,7 @@ function Frame({
             activeIndex={0}
             listboxId={listboxId}
             onChoose={() => {}}
+            onHover={() => {}}
           />
           <div className="rounded-xl border border-chat-composer-border bg-chat-composer-surface px-3 py-3 text-sm">
             {typed}

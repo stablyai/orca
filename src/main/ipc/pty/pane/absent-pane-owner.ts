@@ -39,7 +39,8 @@ function releaseAbsentPaneProcess(
     owner.incarnationId ?? null
   )
   runtime?.onPtyExit(owner.ptyId, UNVERIFIED_PROCESS_EXIT_CODE, owner.incarnationId, {
-    hostExitConfirmed: true
+    hostExitConfirmed: true,
+    paneRespawning: true
   })
   settleStop?.(true)
   clearProviderPtyState(owner.ptyId)

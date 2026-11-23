@@ -7,7 +7,7 @@ import { z } from 'zod'
 import { writeFileAtomically } from '../filesystem/atomic-file-publication'
 import { SUGGESTION_SOURCES } from '../../shared/bots/bot-look-around'
 import { backgroundRunSessionIds, EMPTY_BOT_LOOK, type BotLookState } from './bot-look-around-state'
-import { lookFailureIsQuiet } from './bot-look-around-failures'
+import { lookFailureIsQuiet, usageLimitNotedBefore } from './bot-look-around-failures'
 import { backgroundRunSlept } from './bot-background-run'
 
 export function lookAroundStoreFile(userDataPath: string): string {
@@ -58,6 +58,7 @@ const BotLookSchema = z.object({
       runs: z.array(RunSchema),
       pastSessionIds: z.array(z.string()).optional(),
       through: z.number().optional(),
+      firstFrom: z.number().optional(),
       checkedAt: z.number().optional(),
       last: BotTidyUpSummarySchema.optional().catch(undefined)
     })
@@ -146,8 +147,13 @@ export class BotLookAroundStore {
 
   /** A look's or a tidy-up's turn is no news when it succeeds, whatever it ended with (its owner
    *  hears through Up next or memory History), when the host slept during it (it is missed and
-   *  tried again), and when it fails under `lookFailureIsQuiet`; any other session's turn is news. */
-  lookTurnIsQuiet(sessionId: string, outcome: 'success' | 'failure'): boolean {
+   *  tried again), when it fails under `lookFailureIsQuiet`, and when a look's usage limit follows
+   *  another's; any other session's turn is news. */
+  lookTurnIsQuiet(
+    sessionId: string,
+    outcome: 'success' | 'failure',
+    usageLimited = false
+  ): boolean {
     const look = this.botOfLook(sessionId)
     const tidy = look === null ? this.botOfTidyUp(sessionId) : null
     const runs = look !== null ? this.get(look) : tidy !== null ? this.get(tidy).tidyUp : undefined
@@ -155,7 +161,8 @@ export class BotLookAroundStore {
       runs !== undefined &&
       (outcome === 'success' ||
         backgroundRunSlept(sessionId) ||
-        lookFailureIsQuiet(runs, sessionId))
+        lookFailureIsQuiet(runs, sessionId) ||
+        (look !== null && usageLimited && usageLimitNotedBefore(runs.runs, sessionId)))
     )
   }
 

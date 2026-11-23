@@ -59,7 +59,7 @@ export function ImportBotHero({
       <ArrowRight className="mb-5 size-5 shrink-0 text-muted-foreground" aria-hidden />
       {existing ? (
         <Face label={existing.name}>
-          <BotAvatar bot={existing} className="size-24 rounded-2xl text-4xl" />
+          <BotAvatar bot={existing} size="large" className="size-24 rounded-2xl text-4xl" />
         </Face>
       ) : (
         <Face label={t('bots.import.newBotLabel', 'New bot')}>
@@ -70,16 +70,28 @@ export function ImportBotHero({
                 aria-label={t('bots.import.changePicture', 'Change picture')}
                 className="rounded-2xl outline-none hover:opacity-90 focus-visible:ring-[3px] focus-visible:ring-ring/50"
               >
-                <BotAvatarTile src={picture.src} fallback="" className="size-24 rounded-2xl" />
+                <BotAvatarTile
+                  src={picture.src}
+                  outfit={picture.outfitArt}
+                  fallback=""
+                  className="size-24 rounded-2xl"
+                />
               </button>
             </PopoverTrigger>
-            <PopoverContent className="w-96">
-              <BotPicturePicker
-                value={picture.value}
-                custom={picture.custom}
-                onChange={picture.onChange}
-                onUpload={picture.onUpload}
-              />
+            {/* A window too short for the open picker scrolls the card; any other fits it whole. */}
+            <PopoverContent wheelScroll className="flex w-96 flex-col">
+              <div className="scrollbar-sleek min-h-0 overflow-x-hidden overflow-y-auto overscroll-contain">
+                <BotPicturePicker
+                  value={picture.value}
+                  custom={picture.custom}
+                  onChange={picture.onChange}
+                  onUpload={picture.onUpload}
+                  color={picture.color}
+                  onColorChange={picture.onColorChange}
+                  outfit={picture.outfit}
+                  onOutfitChange={picture.onOutfitChange}
+                />
+              </div>
             </PopoverContent>
           </Popover>
         </Face>

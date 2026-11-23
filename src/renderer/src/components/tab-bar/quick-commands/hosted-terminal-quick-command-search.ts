@@ -1,4 +1,4 @@
-import { searchTerminalQuickCommands } from '@/lib/terminal/quick-commands/terminal-quick-command-search'
+import { searchTerminalQuickCommands } from '../../../../../shared/terminal/quick-commands/terminal-quick-command-search'
 import type { HostedTerminalQuickCommand } from '@/lib/terminal/quick-commands/use-terminal-quick-command-hosts'
 
 export function searchHostedTerminalQuickCommands(

@@ -197,6 +197,13 @@ export function claudeDispatchInvokesSlashCommand(content: readonly unknown[]): 
   return claudeDispatchPrompt(content)?.startsWith('/') === true
 }
 
+// Claude's rename command and its built-in `/name` alias; command names are case-sensitive.
+const CLAUDE_RENAME_COMMAND = /^\/(?:rename|name)(?:\s|$)/
+
+export function claudeDispatchRenamesSession(content: readonly unknown[]): boolean {
+  return CLAUDE_RENAME_COMMAND.test(claudeDispatchPrompt(content) ?? '')
+}
+
 /** Bound waiter metadata for large images; replay uses this digest only when identity cannot match. */
 export function claudeDispatchContentKey(content: readonly unknown[]): string {
   const digest = createHash('sha256')

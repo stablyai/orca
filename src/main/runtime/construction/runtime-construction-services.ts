@@ -24,6 +24,7 @@ import type { TitleDisplayClear } from '../workspaces/process-listing/runtime-wo
 import type { OrchestrationDb } from '../orchestration/db/orchestration-db'
 import type { WorkerTerminalResourceRow } from '../orchestration/terminal-authority/release/worker-terminal-ownership'
 import type { ResolvedWorktree } from '../workspaces/catalog/runtime-worktree-path-identity'
+import type { ScopedWorktreeReads } from '../workspaces/catalog/scoped-worktree-row-resolution'
 import type {
   RuntimeTerminalShow,
   RuntimeTerminalSummary
@@ -95,7 +96,6 @@ export abstract class RuntimeConstructionServices extends RuntimeAgentStatusRead
 
   protected abstract handleGraphReloadTimeout(windowId: number): void
   protected abstract flushScheduledMobileSessionTabsChanged(worktreeId: string): void
-  protected abstract getMobileSessionWorktreeIdsForPty(ptyId: string): string[]
   abstract touchMobileSessionTabsForWorktree(
     worktreeId: string,
     options?: {
@@ -115,9 +115,12 @@ export abstract class RuntimeConstructionServices extends RuntimeAgentStatusRead
   ): TuiIdleHookTurn | null
   protected abstract readLiveTerminalScreenLines(ptyId: string | null | undefined): string[] | null
   protected abstract readCaughtUpRuledScreen(ptyId: string): RuledScreen | null
-  protected abstract clearWaitBlockedStamp(ptyId: string): void
+  protected abstract readScreenClearingBlockedTailForPty(ptyId: string): string | null
+  protected abstract isAgentSettledForDelivery(ptyId: string): boolean
   protected abstract readRuledScreen(ptyId: string | null | undefined): RuledScreen | null
   protected abstract readOutputClockAt(ptyId: string | null | undefined): number | null
+  protected abstract requestReattachedRepaint(ptyId: string): void
+  protected abstract confirmReattachedRestTitle(ptyId: string, agent: TuiAgent): Promise<boolean>
   protected abstract headlessTerminals: Map<string, RuntimeHeadlessTerminal>
   protected abstract readHeadlessVisibleTerminalState(
     ptyId: string
@@ -285,7 +288,8 @@ export abstract class RuntimeConstructionServices extends RuntimeAgentStatusRead
   abstract notifyMessageArrived(handle: string, messageType?: string): void
   protected abstract resolveGitWorktreeSelector(
     selector: string,
-    requiredHostId?: ExecutionHostId
+    requiredHostId?: ExecutionHostId,
+    reads?: ScopedWorktreeReads
   ): Promise<ResolvedWorktree>
   protected abstract resolveWorkspaceSelector(...args: Calls.SelectorArgs): Calls.SelectorResult
   protected abstract resolveWorkspaceCandidate(...args: Calls.SelectorArgs): Calls.CandidateResult

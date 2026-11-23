@@ -46,7 +46,7 @@ export const NO_GOOGLE_CLIENT =
 export type GoogleSignInDeps = {
   http: GoogleHttp
   now: () => number
-  client: () => GoogleClientConfig | null
+  client: () => GoogleClientConfig | null | Promise<GoogleClientConfig | null>
   /** Absent on a host with no browser of its own (orca serve). */
   openBrowser?: (url: string) => Promise<void>
 }
@@ -82,9 +82,9 @@ function authorizeUrl(
   url.searchParams.set('state', args.state)
   url.searchParams.set('code_challenge', args.codeChallenge)
   url.searchParams.set('code_challenge_method', 'S256')
-  // A refresh token every time, so Reconnect always yields one.
+  // A refresh token every time, so Reconnect always yields one; the chooser lets them add another account.
   url.searchParams.set('access_type', 'offline')
-  url.searchParams.set('prompt', 'consent')
+  url.searchParams.set('prompt', 'select_account consent')
   if (args.loginHint) {
     url.searchParams.set('login_hint', args.loginHint)
   }
@@ -100,7 +100,7 @@ export async function runGoogleSignIn(
   options: GoogleSignInOptions,
   channel: CallerOwnedSignInChannel<GoogleSignInPrompt, string>
 ): Promise<GoogleAccountRecord> {
-  const client = deps.client()
+  const client = await deps.client()
   if (!client) {
     throw new Error(NO_GOOGLE_CLIENT)
   }
@@ -228,7 +228,7 @@ async function finishGoogleSignIn(
   // A reconnect keeps what was picked before, whichever account the browser signed in to.
   const choices = googleChoices([
     ...asked,
-    ...(readGoogleAccount(account.email)?.choices ?? []),
+    ...((await readGoogleAccount(account.email))?.choices ?? []),
     ...grantedGoogleChoices(grantedScopes)
   ])
   const services = await checkGoogleServices({
@@ -253,6 +253,6 @@ async function finishGoogleSignIn(
     checkedAt: now,
     connectedAt: now
   }
-  saveGoogleAccount(record)
+  await saveGoogleAccount(record)
   return record
 }

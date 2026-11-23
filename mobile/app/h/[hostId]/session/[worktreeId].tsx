@@ -8,6 +8,10 @@ import { useLocalSearchParams, useRouter } from 'expo-router'
 import { firstParam } from '../../../../src/navigation/route-param-reader'
 import { STANDALONE_SESSION_PARAM } from '../../../../src/navigation/host-stack-navigation'
 import {
+  SESSION_REQUEST_PARAMS,
+  sessionScreenIdentity
+} from '../../../../src/session/session-pane-intent'
+import {
   shellScreenRoute,
   shellScreenRouteKey
 } from '../../../../src/mobile-web-shell/routing/shell-screen-route'
@@ -25,8 +29,10 @@ export default withWorkspaceRoute(function MobileSessionScreen() {
     name?: string | string[]
     created?: string | string[]
     warning?: string | string[]
+    homeDraft?: string | string[]
     paneKey?: string | string[]
     botItem?: string | string[]
+    paneIntent?: string | string[]
     standalone?: string | string[]
   }>()
   const hostId = firstParam(params.hostId)
@@ -35,25 +41,27 @@ export default withWorkspaceRoute(function MobileSessionScreen() {
   const router = useRouter()
   const paneKey = firstParam(params.paneKey) ?? ''
   const botItem = firstParam(params.botItem) ?? ''
+  const homeDraft = firstParam(params.homeDraft) ?? ''
   // Clear only the consumed request; a newer tap must survive.
   const eraseRequest = useCallback(
     (param: BridgeClearableRouteParam, value: string) => {
-      if (
-        (param !== 'paneKey' && param !== 'botItem') ||
-        value === '' ||
-        value !== (param === 'paneKey' ? paneKey : botItem)
-      ) {
+      const held: Partial<Record<BridgeClearableRouteParam, string>> = {
+        paneKey,
+        botItem,
+        homeDraft
+      }
+      if (value === '' || value !== held[param]) {
         return
       }
       router.setParams({ [param]: '' })
     },
-    [botItem, paneKey, router]
+    [botItem, homeDraft, paneKey, router]
   )
 
   // Omit empty params: created=1 is one-shot, warning is host text, absent name derives a label, and empty paneKey marks a spent tap.
   const routeParams: Record<string, string> = {
     ...Object.fromEntries(
-      (['name', 'created', 'warning', 'paneKey', 'botItem', STANDALONE_SESSION_PARAM] as const)
+      (['name', 'created', 'warning', ...SESSION_REQUEST_PARAMS, STANDALONE_SESSION_PARAM] as const)
         .map((key) => [key, firstParam(params[key])] as const)
         .filter(([, value]) => value !== '')
     ),
@@ -72,10 +80,12 @@ export default withWorkspaceRoute(function MobileSessionScreen() {
   }
   // Item and pane requests update the current page without discarding its bridge.
   // Keep shared shellScreenRouteKey unchanged because other screens treat param changes as identity changes.
-  const { paneKey: _paneKey, botItem: _botItem, ...identity } = routeParams
   return (
     <MobileWebShellScreen
-      key={shellScreenRouteKey({ pathname: route.pathname, params: identity })}
+      key={shellScreenRouteKey({
+        pathname: route.pathname,
+        params: sessionScreenIdentity(routeParams)
+      })}
       hostId={hostId}
       route={route}
       onRouteParamClear={eraseRequest}
