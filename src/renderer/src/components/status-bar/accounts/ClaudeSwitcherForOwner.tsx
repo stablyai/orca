@@ -357,24 +357,25 @@ export function ClaudeSwitcherForOwner({
           <div role="status" className="font-medium">
             {t('auto.components.status.bar.StatusBar.signedOutAccounts', 'Signed out')}
           </div>
-        ) : undefined
+        ) : (
+          claudeAccountCardSignIn({
+            claude,
+            target: panelShowsActiveAccount ? activeTarget : undefined,
+            signingInId,
+            disabled: isSwitching,
+            onSignIn: (accountId) => {
+              // Why: the hidden sign-in runs on this device; a server's login runs from its Settings section.
+              if (hasActiveRuntimeEnvironment) {
+                setOpen(false)
+                openAccountSettings()
+              } else {
+                void handleSignIn(accountId)
+              }
+            }
+          })
+        )
       }
       accountLabel={panelShowsActiveAccount && rosterKnown ? activeTarget?.label : undefined}
-      accountStatusAction={claudeAccountCardSignIn({
-        claude,
-        target: panelShowsActiveAccount ? activeTarget : undefined,
-        signingInId,
-        disabled: isSwitching,
-        onSignIn: (accountId) => {
-          // Why: the hidden sign-in runs on this device; a server's login runs from its Settings section.
-          if (hasActiveRuntimeEnvironment) {
-            setOpen(false)
-            openAccountSettings()
-          } else {
-            void handleSignIn(accountId)
-          }
-        }
-      })}
       topContent={
         // Why: runtime selection refreshes this desktop's own usage, so a remote owner has none here.
         chatAction || hasActiveRuntimeEnvironment || wslHostDistro !== null ? undefined : (

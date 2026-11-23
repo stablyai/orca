@@ -32,7 +32,6 @@ export function ProviderDetailsMenu({
   panelFooter,
   usageSignInHint,
   accountStatus,
-  accountStatusAction,
   variant = 'default'
 }: {
   provider: ProviderRateLimits | null
@@ -48,8 +47,6 @@ export function ProviderDetailsMenu({
   trigger?: React.ReactElement
   accountLabel?: string
   accountStatus?: React.ReactNode
-  /** Fix for the account card's usage error, e.g. a Sign in button. */
-  accountStatusAction?: React.ReactNode
   panelFooter?: React.ReactNode
   usageSignInHint?: string
   variant?: 'default' | 'account'
@@ -80,7 +77,6 @@ export function ProviderDetailsMenu({
               footer={panelFooter}
               usageSignInHint={usageSignInHint}
               statusContent={accountStatus}
-              statusAction={accountStatusAction}
               usagePercentageDisplay={usagePercentageDisplay}
               inMenu
             />

@@ -112,8 +112,7 @@ function ErrorMessage({
   label,
   detail,
   stale = false,
-  inverted = false,
-  action
+  inverted = false
 }: {
   message: string
   label?: string
@@ -122,8 +121,6 @@ function ErrorMessage({
   /** When true, prior data is still visible — show a softer "refresh failed" label. */
   stale?: boolean
   inverted?: boolean
-  /** Fix for this error, e.g. a Sign in button; sits at the right of the label and message. */
-  action?: React.ReactNode
 }): React.JSX.Element {
   const t = useTranslate()
   const labelClass = inverted ? 'text-background/80' : 'text-foreground/85'
@@ -138,19 +135,10 @@ function ErrorMessage({
       ? staleRefreshLabel
       : (label ?? genericRefreshLabel)
 
-  const text = (
-    <div className="min-w-0 space-y-0.5" title={detail}>
+  return (
+    <div className="space-y-0.5" title={detail}>
       <div className={`text-[11px] font-medium ${labelClass}`}>{resolvedLabel}</div>
       {message !== resolvedLabel ? <div className={detailClass}>{message}</div> : null}
-    </div>
-  )
-  if (!action) {
-    return text
-  }
-  return (
-    <div className="flex items-center justify-between gap-3">
-      {text}
-      <div className="shrink-0">{action}</div>
     </div>
   )
 }
@@ -253,8 +241,7 @@ export function ProviderPanel({
   usagePercentageDisplay = 'used',
   embedded = false,
   headerAction,
-  usageSignInHint,
-  errorAction
+  usageSignInHint
 }: {
   p: ProviderRateLimits | null
   inverted?: boolean
@@ -266,8 +253,6 @@ export function ProviderPanel({
   /** Rendered at the right of the provider name line, e.g. the Used/Left column toggle. */
   headerAction?: React.ReactNode
   usageSignInHint?: string
-  /** Rendered beside the error when no usage could be read, e.g. a Sign in button. */
-  errorAction?: React.ReactNode
 }): React.JSX.Element {
   const t = useTranslate()
   const signInRequired = p?.status === 'error' && isCodexUsageSignInRequired(p)
@@ -323,7 +308,6 @@ export function ProviderPanel({
             message={usageSignInHint ?? getProviderUsageErrorMessage(p, t)}
             detail={signInRequired ? (p.error ?? undefined) : undefined}
             inverted={inverted}
-            action={errorAction}
           />
         </div>
       </div>

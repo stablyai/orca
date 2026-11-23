@@ -5,6 +5,8 @@ import { signInToClaudeAccount } from '@/lib/provider-accounts/claude-account-si
 import type { RuntimeClientTarget } from '../../../../../shared/remote-runtime/host-catalog/runtime-client-target'
 import type { ProviderRateLimits } from '../../../../../shared/agent-usage/rate-limits/rate-limit-types'
 import { InlineUsageSignInAction } from '../usage/InlineProviderUsage'
+import { TriangleAlert } from 'lucide-react'
+import { useTranslate } from '@/i18n/use-translate'
 
 /** Runs one account's hidden re-authentication at a time and reloads the rows after it lands. */
 export function useClaudeAccountSignIn(
@@ -54,7 +56,7 @@ export function useOpenClaudeAccountSettings(
   }
 }
 
-/** The account card's Sign in button, shown when the card's account read as signed out. */
+/** The account card's status when the card's account read as signed out: one row with its Sign in button. */
 export function claudeAccountCardSignIn({
   claude,
   target,
@@ -75,11 +77,47 @@ export function claudeAccountCardSignIn({
     return undefined
   }
   return (
-    <InlineUsageSignInAction
+    <ClaudeAccountCardSignedOut
       accountLabel={target.label}
       isSigningIn={signingInId === accountId}
       disabled={disabled || signingInId !== null}
       onSignIn={() => onSignIn(accountId)}
     />
+  )
+}
+
+function ClaudeAccountCardSignedOut({
+  accountLabel,
+  isSigningIn,
+  disabled,
+  onSignIn
+}: {
+  accountLabel: string
+  isSigningIn: boolean
+  disabled: boolean
+  onSignIn: () => void
+}): React.JSX.Element {
+  const t = useTranslate()
+  const message = t(
+    'accounts.claude.usageSignInMessage',
+    'This account needs you to sign in again.'
+  )
+  return (
+    <div className="flex items-center justify-between gap-3">
+      <div role="status" className="flex min-w-0 items-center gap-1.5" title={message}>
+        <TriangleAlert aria-hidden className="size-3.5 shrink-0 text-status-warning-text" />
+        <span className="truncate text-[13px] font-medium">
+          {t('auto.components.status.bar.StatusBar.signedOutAccounts', 'Signed out')}
+        </span>
+        <span className="sr-only">{message}</span>
+      </div>
+      <InlineUsageSignInAction
+        accountLabel={accountLabel}
+        isSigningIn={isSigningIn}
+        disabled={disabled}
+        onSignIn={onSignIn}
+        showBusyLabel
+      />
+    </div>
   )
 }

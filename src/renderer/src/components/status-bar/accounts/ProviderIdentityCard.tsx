@@ -13,15 +13,12 @@ export function ProviderIdentityCard({
   footer,
   usageSignInHint,
   statusContent,
-  statusAction,
   usagePercentageDisplay,
   inMenu = false
 }: {
   p: ProviderRateLimits
   accountLabel?: string
   statusContent?: React.ReactNode
-  /** Fix for a usage error, shown beside it, e.g. a Sign in button. */
-  statusAction?: React.ReactNode
   footer?: React.ReactNode
   usageSignInHint?: string
   usagePercentageDisplay: UsagePercentageDisplay
@@ -60,7 +57,6 @@ export function ProviderIdentityCard({
               showResetCredits={false}
               usageSignInHint={usageSignInHint}
               usagePercentageDisplay={usagePercentageDisplay}
-              errorAction={statusAction}
             />
           )}
           {footer}
