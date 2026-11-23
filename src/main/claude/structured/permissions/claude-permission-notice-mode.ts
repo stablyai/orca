@@ -142,7 +142,9 @@ export function createClaudePermissionNoticeMode(onChange: () => void) {
       }
       pending.delete(id)
       if (response.subtype === 'success') {
-        prove(write.mode, write.position)
+        const payload = response.response
+        const mode = isRecord(payload) ? readClaudeFrameString(payload, 'mode') : null
+        prove(mode ?? write.mode, write.position)
       } else {
         const newRefusal =
           NOTICE_MODES.some((intent) => intent === write.mode) && !refusals.has(write.mode)

@@ -28,7 +28,7 @@ const RESPONSE_FIELDS: Fields = {
     object: {
       subtype: true,
       request_id: true,
-      response: { object: { current_permission_mode: true } },
+      response: { object: { current_permission_mode: true, mode: true } },
       pending_permission_requests: { items: REQUEST_FIELDS }
     }
   }

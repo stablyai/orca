@@ -29,7 +29,7 @@ import { claudeLaunchPermissions } from './claude-structured-inbound-control'
 const PROVIDER_SESSION = 'provider-session'
 const NOTICE_PREFIX = 'full-access-refused:claude:'
 
-type ModeReplyPayload = { current_permission_mode: string }
+type ModeReplyPayload = { current_permission_mode: string } | { mode: string }
 
 type PermissionWireRequest = {
   type: 'control_request'
@@ -266,6 +266,38 @@ it('reconciles late Auto success without a journal frame and reports a later Ask
   ])
   claude.retire()
 })
+
+it.each(['small', 'oversized'])(
+  'keeps Plan after a deferred Auto switch returns the retained mode in the %s reply',
+  async (size) => {
+    const claude = controlledClaude('auto')
+    try {
+      claude.send(report('default', 'init'))
+      await Promise.resolve()
+
+      claude.mode('deferred-auto', 'auto')
+      claude.mode('newer-plan', 'plan')
+      await Promise.resolve()
+      claude.send(reply('newer-plan'))
+      await Promise.resolve()
+
+      const payload =
+        size === 'oversized' ? { padding: 'x'.repeat(70_000), mode: 'plan' } : { mode: 'plan' }
+      claude.send(reply('deferred-auto', payload))
+      await Promise.resolve()
+
+      expect(claude.session.permissionNoticeMode?.running()).toBe('plan')
+      expect(claude.session.permissionNoticeMode?.hasRun('auto')).toBe(false)
+      expect(claude.journal.texts()).toEqual([
+        'Claude uses Ask for approval instead.',
+        "Claude's permission mode is unconfirmed.",
+        'Claude uses Plan mode.'
+      ])
+    } finally {
+      claude.retire()
+    }
+  }
+)
 
 it('keeps overlapping mode replies and Full access tool authorization in wire order', async () => {
   const claude = controlledClaude('bypassPermissions')
