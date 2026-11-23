@@ -16,7 +16,10 @@ export type AiVaultAppliedScan = {
 
 export function useAppliedAiVaultScan(initialScan?: () => AiVaultAppliedScan | null): {
   scan: AiVaultAppliedScan | null
-  applyScan: (applied: AiVaultAppliedScan, onApplied?: (result: AiVaultListResult) => void) => void
+  applyScan: (
+    applied: AiVaultAppliedScan,
+    onApplied?: (result: AiVaultListResult) => void
+  ) => boolean
 } {
   const [scan, setScan] = useState<AiVaultAppliedScan | null>(initialScan ?? null)
   const acceptedScanRef = useRef(scan)
@@ -36,6 +39,7 @@ export function useAppliedAiVaultScan(initialScan?: () => AiVaultAppliedScan | n
       acceptedScanRef.current = next
       setScan(next)
       onApplied?.(result)
+      return next !== previous
     },
     []
   )

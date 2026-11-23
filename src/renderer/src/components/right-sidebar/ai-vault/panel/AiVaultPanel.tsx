@@ -331,7 +331,7 @@ export default function AiVaultPanel({
         search={search}
         noAgents={agents.length === 0}
         listed={filteredSessions.length > 0}
-        historyLoading={historyLoading}
+        historyLoading={historyRefreshing}
       >
         {searching
           ? filteredSessions.length > 0 && (
@@ -360,7 +360,7 @@ export default function AiVaultPanel({
             searchHitHostLabels={searchHitHostLabels}
             groups={groups}
             collapsedGroups={collapsedGroups}
-            loading={searching ? search.loading : loading}
+            loading={searching ? search.loading : historyLoading}
             scopePending={!searching && scopePending}
             scanProgressShown={stripShown}
             sessionsCount={searching ? filteredSessions.length : sessions.length}

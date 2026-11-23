@@ -1,7 +1,7 @@
 import { useState } from 'react'
 
 /**
- * Identifies the list the panel is waiting for: changes when a list is shown or a different list is
+ * Identifies the list the panel is waiting for: changes when the applied list changes or a different list is
  * requested, including a return to an earlier one, so a strip hold never outlives its own wait.
  */
 export function useAiVaultListGeneration(listRevision: number, listKey: string): string {

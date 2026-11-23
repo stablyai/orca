@@ -144,7 +144,9 @@ beforeEach(() => {
       'listSessions' | 'cancelListSessions' | 'onWindowFocused'
     >
   }
-  Reflect.set(window, 'api', api)
+  if (!Reflect.set(window, 'api', api) || window.api !== api) {
+    throw new Error('Session refresh API fixture did not install')
+  }
   useAppStore.setState(initialAppState, true)
 })
 
@@ -157,7 +159,7 @@ afterEach(() => {
 })
 
 describe('useAiVaultSessionRefresh when chat-link associations change mid-refresh', () => {
-  it('drops the stale result, clears the flags, keeps the rows and relaunches a background refresh', async () => {
+  it('excludes two invalidated replies and relaunches with current associations', async () => {
     await mountWithRows()
     const foreground = deferredList()
     listSessionsMock.mockReturnValueOnce(foreground.promise)
@@ -177,12 +179,20 @@ describe('useAiVaultSessionRefresh when chat-link associations change mid-refres
     expect(latest?.loading).toBe(false)
     expect(latest?.refreshing).toBe(false)
 
-    await act(async () =>
-      background.resolve({ ...EMPTY_RESULT, sessions: [session(1), session(3)] })
-    )
+    const replacement = deferredList()
+    listSessionsMock.mockReturnValueOnce(replacement.promise)
+    await act(async () => changeAssociations())
+    await act(async () => background.resolve({ ...EMPTY_RESULT, sessions: [session(3)] }))
     await flush()
-    expect(ids()).toEqual(['session-1', 'session-3'])
-    expect(renders.some((render) => render.ids.includes('session-2'))).toBe(false)
+    expect(ids()).toEqual(['session-1'])
+    expect(latest?.loading).toBe(false)
+    expect(latest?.refreshing).toBe(false)
+    await act(async () => replacement.resolve({ ...EMPTY_RESULT, sessions: [session(6)] }))
+    await flush()
+    expect(ids()).toEqual(['session-6'])
+    expect(
+      renders.some((render) => render.ids.includes('session-2') || render.ids.includes('session-3'))
+    ).toBe(false)
     // The relaunched refresh is background: it never raises the flags.
     expect(renders.some((render) => render.refreshing || render.loading)).toBe(false)
   })
@@ -236,6 +246,34 @@ describe('useAiVaultSessionRefresh when chat-link associations change mid-refres
     await act(async () => background.reject(new Error('host unavailable')))
     await flush()
     expect(ids()).toEqual(['session-1'])
+    expect(latest?.loading).toBe(false)
+    expect(latest?.refreshing).toBe(false)
+  })
+
+  it('keeps queued foreground intent through the background reply and its own held publication', async () => {
+    await mountWithRows()
+    const background = deferredList()
+    listSessionsMock.mockReturnValueOnce(background.promise)
+    await act(async () => void latest?.refresh({ background: true }))
+    const foreground = deferredList()
+    listSessionsMock.mockReturnValueOnce(foreground.promise)
+    await act(async () => void latest?.refresh({ force: true }))
+    expect(latest?.refreshing).toBe(true)
+    renders.length = 0
+    await act(async () => background.resolve({ ...EMPTY_RESULT, sessions: [session(2)] }))
+    await flush()
+    expect(ids()).toEqual(['session-2'])
+    expect(latest?.refreshing).toBe(true)
+    markInputQuietSchedulerInput()
+    await act(async () => foreground.resolve({ ...EMPTY_RESULT, sessions: [session(3)] }))
+    await flush()
+    expect(ids()).toEqual(['session-2'])
+    expect(renders.every((render) => render.refreshing)).toBe(true)
+    await act(async () => {
+      vi.advanceTimersByTime(1_000)
+    })
+    await flush()
+    expect(ids()).toEqual(['session-3'])
     expect(latest?.loading).toBe(false)
     expect(latest?.refreshing).toBe(false)
   })

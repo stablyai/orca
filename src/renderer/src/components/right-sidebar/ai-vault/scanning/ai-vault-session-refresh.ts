@@ -40,7 +40,7 @@ export function useAiVaultSessionRefresh(
   loading: boolean
   /** A foreground refresh is in flight, including while a cached list is shown without a spinner. */
   refreshing: boolean
-  /** Counts lists this hook has shown, so a wait can tell its own list from an earlier one. */
+  /** Changes when a different list is shown, so a wait can identify its own list. */
   listRevision: number
   scopePending: boolean
   refresh: (args?: AiVaultRefreshArgs) => Promise<void>
@@ -222,8 +222,9 @@ export function useAiVaultSessionRefresh(
           if (!requestCurrent()) {
             return
           }
-          applyListed(list, true)
-          setListRevision((revision) => revision + 1)
+          if (applyListed(list, true)) {
+            setListRevision((revision) => revision + 1)
+          }
           setLoading(false)
           // A queued foreground request keeps the flag until its own list lands.
           if (!(pendingRefreshRef.current && pendingForegroundRef.current)) {

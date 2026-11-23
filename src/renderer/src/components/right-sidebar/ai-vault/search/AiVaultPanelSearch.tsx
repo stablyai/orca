@@ -74,7 +74,7 @@ export function AiVaultPanelSearch({
   search: ReturnType<typeof useAiVaultPanelSearch>
   noAgents: boolean
   listed: boolean
-  /** The session list is still being scanned, so list-only matching is partial. */
+  /** A foreground list request is outstanding, so list-only matches may be incomplete. */
   historyLoading?: boolean
   children: ReactNode
 }) {

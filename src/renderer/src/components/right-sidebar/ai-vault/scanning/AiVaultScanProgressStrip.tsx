@@ -225,7 +225,7 @@ export function AiVaultScanProgressStrip({
   active?: boolean
   /** The panel's own load is still waiting to show its list. */
   listPending?: boolean
-  /** Changes when a list is shown or a different list is requested; a hold never outlives it. */
+  /** Changes with the applied list or requested key; terminal waits also retire their hold. */
   listGeneration?: string
 }): React.JSX.Element {
   const t = useTranslate()
@@ -235,6 +235,10 @@ export function AiVaultScanProgressStrip({
   const reportedActive =
     reportedProgress !== null && (reportedActiveProp ?? reported.settledAt === null)
   const [watched, setWatched] = useState<{ scanId: string; generation: string } | null>(null)
+  // A terminal wait can end without publishing another list or changing its generation.
+  if (!listPending && watched !== null) {
+    setWatched(null)
+  }
   // Why: remember only a scan seen running while this list was awaited, so a later wait never revives a finished scan.
   if (
     reportedActive &&
