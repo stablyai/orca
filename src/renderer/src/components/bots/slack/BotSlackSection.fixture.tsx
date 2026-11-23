@@ -3,20 +3,14 @@
 import React from 'react'
 import { defineFixture } from '../../../component-fixtures/component-fixture'
 import { ConfirmationDialogProvider } from '../../dismiss/confirmation/confirmation-dialog'
-import { publishBots, setBotHostListing, stampBotHost } from '@/lib/bot-catalog-snapshot'
-import { toRuntimeExecutionHostId } from '../../../../../shared/execution-host/execution-host'
+import { publishBots } from '@/lib/bot-catalog-snapshot'
 import { refreshAccessRequests } from '@/lib/bot-access-requests'
 import type { Bot } from '../../../../../shared/bot-types'
 import { BotConnectorsSection } from '../../settings/bots/BotConnectorsSection'
 import { clickWhenShown, settle, slackOnly, stub } from '../bot-connectors-host-fixture'
 import { BotSlackSetupDialog } from './BotSlackSetupDialog'
-import { BotSlackSection } from './BotSlackSection'
-import type { ConnectorBotSlackState } from '../../../../../shared/connector-bot-slack-contract'
 import portrait from '../../../component-fixtures/assets/slack-avatar.jpg'
 import { connectorAvatarSrc } from '../../../../../shared/connector-avatar-scheme'
-import { botSlackIconLook } from '../../../../../shared/bots/bot-slack-icon'
-import { botRefKey } from '@/lib/bot-hosts'
-import { slackIconFailures } from '../bot-slack-icon-failures'
 
 // The Slack photo's address; the host's avatar cache is played by a bundled portrait wherever its
 // cached src is drawn, so the shot never waits on the network.
@@ -171,49 +165,3 @@ const dialog = (interact?: () => Promise<void>, photo = true) =>
 export const afterInstall = dialog()
 export const afterInstallPicker = dialog(openPicker)
 export const afterInstallPickerNoPhoto = dialog(openPicker, false)
-
-// A dressed mascot whose colored picture this window failed to send to Slack: the note and its Try again.
-const dressed: Bot = {
-  ...builder,
-  avatar: 'mascot:B1',
-  avatarColor: '#f4c4cf',
-  avatarOutfit: 'party'
-}
-const installedSlack: Extract<ConnectorBotSlackState, { state: 'installed' }> = {
-  state: 'installed',
-  teamId: 'T1',
-  teamName: 'Globex',
-  appId: 'A1',
-  botUserId: 'UB',
-  installerUserId: 'U-alice',
-  installerName: 'Alice',
-  postAs: 'person',
-  computerName: 'm4 air'
-}
-// The bot on a paired computer that is away: the note says when it goes, with no Try again.
-const away: Bot = stampBotHost(toRuntimeExecutionHostId('studio'), dressed)
-const iconFailed = (width: number, bot: Bot = dressed) =>
-  defineFixture({
-    width: width + 40,
-    setup: () => {
-      host(bot)
-      if (bot === away) {
-        setBotHostListing({ hosts: [{ hostId: away.hostId, state: 'offline' }], updateNeeded: [] })
-      }
-      slackIconFailures.set(botRefKey(bot), { look: botSlackIconLook(bot) ?? '' })
-    },
-    render: () => (
-      <ConfirmationDialogProvider>
-        <div style={{ width }} className="bg-sidebar px-2 py-3 text-sidebar-foreground">
-          <BotSlackSection bot={bot} slack={installedSlack} />
-        </div>
-      </ConfirmationDialogProvider>
-    ),
-    interact: async () => {
-      await settle(300)
-    }
-  })
-
-export const panel350IconFailed = iconFailed(350)
-export const panel280IconFailed = iconFailed(280)
-export const panel350IconFailedAway = iconFailed(350, away)

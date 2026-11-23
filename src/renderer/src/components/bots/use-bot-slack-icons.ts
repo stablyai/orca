@@ -1,8 +1,8 @@
 // Draws each Slack-linked bot's colored or dressed mascot once per look, for the host to send as its Slack
 // icon. Until a window draws it (a host with none open, a look set from a phone or the CLI), the host sends
-// the plain mascot; two windows drawing the same look keep one picture. A try that fails is shown in the
-// bot's Slack settings and tried again only on a real step: the bot's record changing, its host coming
-// back, bots turned back on, the window focused, Try again, or a reload. Nothing here runs on a timer.
+// the plain mascot; two windows drawing the same look keep one picture. A try that fails is tried again only
+// on a real step: the bot's record changing, its host coming back, bots turned back on, the window focused,
+// or a reload. Nothing here runs on a timer.
 import { useEffect } from 'react'
 import { readBotsEnabled, subscribeToBotChanges, useBotsEnabled } from '@/lib/bot-catalog'
 import { onBotHostCameBack } from '@/lib/bot-host-link-read'
@@ -15,9 +15,8 @@ import type { ExecutionHostId } from '../../../../shared/execution-host/executio
 import { BOTS_SLACK_ICON_RUNTIME_CAPABILITY } from '../../../../shared/bot-runtime-capabilities'
 import { wornBotOutfit } from '../../../../shared/bots/bot-avatar-outfit'
 import { botSlackIconLook } from '../../../../shared/bots/bot-slack-icon'
-import { slackIconFailures as failures } from './bot-slack-icon-failures'
 import { drawBotSlackIcon } from './bot-slack-icon-raster'
-import { botSlackIconWanted, resendBotSlackIcon, uploadBotSlackIcon } from './bot-slack-icon-rpc'
+import { botSlackIconWanted, uploadBotSlackIcon } from './bot-slack-icon-rpc'
 
 // Per bot, the look asked about or drawn this session, with its attempt's number, so a late end of an older
 // attempt never lets a newer one go.
@@ -28,14 +27,14 @@ let attempts = 0
 type Attempt = { bot: Bot; look: string; attempt: number }
 const pending = new Map<string, Map<string, Attempt>>()
 const running = new Set<string>()
-// Bots whose Try again was pressed: an icon the host already keeps is sent to the cloud again too.
-const forced = new Set<string>()
+// Per bot, the look its last try failed at: not tried again until a real step clears it.
+const failures = new Map<string, { look: string }>()
 // Per host, its bots as last looked at: a notice that left a host's list as it was (a Needs You count, a
 // detail of the list) costs one compare for that host. Each bot record is looked at once.
 const seenHosts = new Map<ExecutionHostId, readonly Bot[]>()
 const seen = new WeakSet<Bot>()
 
-// Ends an attempt that can't go on; `failed` shows it in the bot's Slack settings until a real step.
+// Ends an attempt that can't go on; a `failed` one waits for a real step.
 function forget(bot: Bot, attempt: number, failed = false): void {
   const key = botRefKey(bot)
   const entry = handled.get(key)
@@ -91,11 +90,6 @@ async function publish(bot: Bot, look: string, attempt: number): Promise<void> {
       return
     }
     if (!want.wanted) {
-      // Kept already: a Try again sends it on, in case it was the send that failed.
-      if (forced.delete(key) && !(await resendBotSlackIcon(bot))) {
-        forget(bot, attempt, true)
-        return
-      }
       failures.delete(key)
       return
     }
@@ -107,11 +101,10 @@ async function publish(bot: Bot, look: string, attempt: number): Promise<void> {
       return
     }
     if (png && (await uploadBotSlackIcon(bot, look, png))) {
-      forced.delete(key)
       failures.delete(key)
       return
     }
-    // No drawing, or the host's look changed meanwhile: shown only for a drawing that failed.
+    // No drawing, or the host's look changed meanwhile: only a drawing that failed waits for a real step.
     forget(bot, attempt, !png)
   } catch (error) {
     forget(bot, attempt, true)
@@ -178,11 +171,6 @@ function prune(hostId: ExecutionHostId, bots: readonly Bot[]): void {
       }
     }
   }
-  for (const key of forced) {
-    if (key.startsWith(prefix) && !listed.has(key)) {
-      forced.delete(key)
-    }
-  }
   for (const key of pending.get(hostId)?.keys() ?? []) {
     if (!listed.has(key)) {
       pending.get(hostId)?.delete(key)
@@ -242,15 +230,6 @@ function retryFailed(): void {
   }
 }
 
-/** The settings' Try again: the bot's icon is asked about, drawn and sent again now. With its host away it
- *  does nothing, and the note stays: the host's return tries again. */
-export function retryBotSlackIcon(bot: Bot): void {
-  if (readBotHostState(bot.hostId) === 'live') {
-    forced.add(botRefKey(bot))
-    askAgain(bot)
-  }
-}
-
 /** For the window: follows the bots list another surface loaded, and never loads it itself. */
 export function useBotSlackIcons(): void {
   const enabled = useBotsEnabled()
@@ -272,7 +251,6 @@ export function useBotSlackIcons(): void {
       seenHosts.clear()
       handled.clear()
       failures.clear()
-      forced.clear()
       pending.clear()
     }
   }, [enabled])

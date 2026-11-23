@@ -18,11 +18,3 @@ export async function uploadBotSlackIcon(bot: BotRef, look: string, png: string)
   })
   return stored
 }
-
-/** Try again for an icon the host already keeps: it is sent to the cloud again. False when none is kept. */
-export async function resendBotSlackIcon(bot: BotRef): Promise<boolean> {
-  const { resent } = await callBotRpc<{ resent: boolean }>(bot, 'bots.avatar.slackIcon.resend', {
-    botId: bot.id
-  })
-  return resent
-}
