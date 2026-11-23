@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import type { RpcClient } from '../../../transport/rpc/rpc-client-contract'
 import { nativeChatTerminalAgentRestart } from '../../../terminal/session/mobile-session-terminal-operations'
 import { isResumableTuiAgent } from '../../../../../src/shared/agent-session/lifecycle/agent-session-resume'
@@ -20,7 +20,13 @@ export type MobileNativeChatAgentRestartPhase =
   | { kind: 'idle' }
   /** `sessionId` is set when a running agent is replaced: done once the chat shows that session. */
   | { kind: 'restarting'; mode: PaneAgentRestartMode; sessionId?: string }
-  | { kind: 'failed'; mode: PaneAgentRestartMode; reason: PaneAgentRestartRefusal }
+  /** `sessionId` keeps the conversation the failed attempt targeted, so a retry asks for it again. */
+  | {
+      kind: 'failed'
+      mode: PaneAgentRestartMode
+      reason: PaneAgentRestartRefusal
+      sessionId?: string
+    }
 
 export type MobileNativeChatAgentRestart = {
   phase: MobileNativeChatAgentRestartPhase
@@ -53,7 +59,8 @@ export function useMobileNativeChatAgentRestart(args: {
       setPhase({ kind: 'idle' })
     }
   }
-  useEffect(() => {
+  // Why layout: an older terminal's reply must not land between this commit and a passive effect.
+  useLayoutEffect(() => {
     operationRef.current += 1
   }, [terminal])
   const settled =
@@ -75,20 +82,29 @@ export function useMobileNativeChatAgentRestart(args: {
           setPhase(next)
         }
       }
+      // Why: the exit of the agent a resume replaced can move `sessionId` to that stopped one.
+      const retried = phase.kind === 'failed' && mode === 'resume' ? phase.sessionId : undefined
+      const target = retried ?? sessionId
+      const failed = (reason: PaneAgentRestartRefusal): MobileNativeChatAgentRestartPhase => ({
+        kind: 'failed',
+        mode,
+        reason,
+        ...(retried ? { sessionId: retried } : {})
+      })
       if (!client || !terminal || !agent) {
-        report({ kind: 'failed', mode, reason: 'pane_unavailable' })
+        report(failed('pane_unavailable'))
         return
       }
       // Replacing a running agent: wait for the chat to show the resumed conversation.
       report(
-        !exited && mode === 'resume' && sessionId
-          ? { kind: 'restarting', mode, sessionId }
+        (!exited || retried) && mode === 'resume' && target
+          ? { kind: 'restarting', mode, sessionId: target }
           : { kind: 'restarting', mode }
       )
       void nativeChatTerminalAgentRestart
         .request(
           client,
-          { terminal, mode, agent, sessionId, transcriptPath: null },
+          { terminal, mode, agent, sessionId: target, transcriptPath: null },
           { timeoutMs: AGENT_RESTART_REQUEST_TIMEOUT_MS }
         )
         .then((response) => {
@@ -97,12 +113,12 @@ export function useMobileNativeChatAgentRestart(args: {
             ? verdict.value
             : { ok: false as const, reason: 'failed' as const }
           if (!result.ok) {
-            report({ kind: 'failed', mode, reason: result.reason })
+            report(failed(result.reason))
           }
         })
-        .catch(() => report({ kind: 'failed', mode, reason: 'failed' }))
+        .catch(() => report(failed('failed')))
     },
-    [client, terminal, agent, sessionId, exited]
+    [client, terminal, agent, sessionId, exited, phase]
   )
   useEffect(() => {
     if (phase.kind !== 'restarting') {
@@ -110,7 +126,13 @@ export function useMobileNativeChatAgentRestart(args: {
     }
     const reads = setInterval(readNow, AGENT_RESTART_READ_MS)
     const settle = setTimeout(
-      () => setPhase({ kind: 'failed', mode: phase.mode, reason: 'failed' }),
+      () =>
+        setPhase({
+          kind: 'failed',
+          mode: phase.mode,
+          reason: 'failed',
+          ...(phase.sessionId ? { sessionId: phase.sessionId } : {})
+        }),
       AGENT_RESTART_SETTLE_MS
     )
     return () => {

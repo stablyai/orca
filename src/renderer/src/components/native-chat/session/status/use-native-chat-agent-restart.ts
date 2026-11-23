@@ -12,7 +12,13 @@ export type NativeChatAgentRestartPhase =
   | { kind: 'idle' }
   /** `sessionId` is set when a running agent is replaced: done once the chat shows that session. */
   | { kind: 'restarting'; mode: PaneAgentRestartMode; sessionId?: string }
-  | { kind: 'failed'; mode: PaneAgentRestartMode; reason: PaneAgentRestartRefusal }
+  /** `sessionId` keeps the conversation the failed attempt targeted, so a retry asks for it again. */
+  | {
+      kind: 'failed'
+      mode: PaneAgentRestartMode
+      reason: PaneAgentRestartRefusal
+      sessionId?: string
+    }
 
 export type NativeChatAgentRestart = {
   phase: NativeChatAgentRestartPhase
@@ -61,26 +67,46 @@ export function useNativeChatAgentRestart(args: {
   )
   const restart = useCallback(
     (mode: PaneAgentRestartMode) => {
-      const result = restartPaneAgent({ paneKey, mode, agent, sessionId, transcriptPath })
+      // Why: the exit of the agent a resume replaced can move `sessionId` to that stopped one.
+      const retried = phase.kind === 'failed' && mode === 'resume' ? phase.sessionId : undefined
+      const target = retried ?? sessionId
+      const result = restartPaneAgent({
+        paneKey,
+        mode,
+        agent,
+        sessionId: target,
+        transcriptPath: retried && retried !== sessionId ? null : transcriptPath
+      })
       if (!result.ok) {
-        setPhase({ kind: 'failed', mode, reason: result.reason })
+        setPhase({
+          kind: 'failed',
+          mode,
+          reason: result.reason,
+          ...(retried ? { sessionId: retried } : {})
+        })
         return
       }
       // Replacing a running agent: wait for the chat to show the resumed conversation.
       setPhase(
-        !exited && mode === 'resume' && sessionId
-          ? { kind: 'restarting', mode, sessionId }
+        (!exited || retried) && mode === 'resume' && target
+          ? { kind: 'restarting', mode, sessionId: target }
           : { kind: 'restarting', mode }
       )
     },
-    [paneKey, agent, sessionId, transcriptPath, exited]
+    [paneKey, agent, sessionId, transcriptPath, exited, phase]
   )
   useEffect(() => {
     if (phase.kind !== 'restarting') {
       return
     }
     const settle = setTimeout(
-      () => setPhase({ kind: 'failed', mode: phase.mode, reason: 'failed' }),
+      () =>
+        setPhase({
+          kind: 'failed',
+          mode: phase.mode,
+          reason: 'failed',
+          ...(phase.sessionId ? { sessionId: phase.sessionId } : {})
+        }),
       AGENT_RESTART_SETTLE_MS
     )
     return () => clearTimeout(settle)

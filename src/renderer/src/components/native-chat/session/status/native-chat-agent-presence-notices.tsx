@@ -85,7 +85,8 @@ export function nativeChatAgentPresenceNotices(args: {
             }
           }
         : {}),
-      onDismiss: args.onDismissRestart
+      // Dismissing mid-restart would hide a later failure and its retry.
+      ...(restarting ? {} : { onDismiss: args.onDismissRestart })
     }
   ]
 }

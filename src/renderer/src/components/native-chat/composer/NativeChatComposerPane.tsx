@@ -101,11 +101,7 @@ export const NativeChatComposerPane = forwardRef<ComposerHandle, C.NativeChatCom
       terminalTabId,
       targetPtyId,
       onOptimisticSendCanceled,
-      // An exited agent retires delayed writes too, or the shell would run them.
-      {
-        inputOwnedByCard: inputOwnedByCard || sendBlocked,
-        onPendingSendRetired: optimisticSendOutcome?.reject
-      }
+      { inputOwnedByCard, sendBlocked, onPendingSendRetired: optimisticSendOutcome?.reject }
     )
 
     // Why inputOwnedByCard: the hidden field can still hold keyboard focus for a frame.

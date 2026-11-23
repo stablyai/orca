@@ -120,9 +120,13 @@ function resolveRestartSource(
     named
   )
   // The recipe goes with the session it launched; a named fallback borrows no other session's.
-  const launchConfig = candidates.find(
-    (candidate) => candidate?.session && candidate.session === providerSession
-  )?.launchConfig
+  const launchConfig =
+    candidates.find((candidate) => candidate?.session && candidate.session === providerSession)
+      ?.launchConfig ??
+    // A fresh start names no session: the agent's own sessionless status row still holds its recipe.
+    (request.mode === 'fresh' && !providerSession && candidates[0] && !candidates[0].session
+      ? candidates[0].launchConfig
+      : undefined)
   return { agent, providerSession, ...(launchConfig ? { launchConfig } : {}) }
 }
 

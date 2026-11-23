@@ -20,6 +20,8 @@ export function withMobileNativeChatAgentPresence(
     nativeChatCanStop: false,
     nativeChatAsk: null,
     nativeChatPermission: null,
+    // Option commands are writes too; with no agent running they would reach the shell.
+    nativeChatSessionOptions: null,
     handleNativeChatAnswerAsk: refuseWrite,
     handleNativeChatRespondPermission: refuseWrite,
     handleNativeChatSend: refuseWrite,

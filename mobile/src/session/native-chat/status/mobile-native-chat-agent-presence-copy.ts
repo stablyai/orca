@@ -104,7 +104,8 @@ export function mobileNativeChatAgentNotice(args: {
             }
           ]
         : []),
-      { label: t('common.ok', 'OK'), onPress: args.onDismissRestart }
+      // Dismissing mid-restart would hide a later failure and its retry.
+      { label: t('common.ok', 'OK'), onPress: args.onDismissRestart, disabled: restarting }
     ]
   }
 }
