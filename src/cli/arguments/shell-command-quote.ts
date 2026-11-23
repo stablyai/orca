@@ -14,3 +14,13 @@ export function quoteCliCommandArgument(value: string): string {
   }
   return quotePosixShell(value)
 }
+
+/** The argument quoted safely for every shell the CLI's printed commands target, or null when no
+ *  quoting is: on Windows, characters PowerShell expands next to a cmd.exe operator. */
+export function quoteCliCommandArgumentForEveryShell(value: string): string | null {
+  return process.platform === 'win32' &&
+    /[$`"\u201C-\u201E]/.test(value) &&
+    /[&|<>^\r\n]/.test(value)
+    ? null
+    : quoteCliCommandArgument(value)
+}

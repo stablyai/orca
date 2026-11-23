@@ -6,7 +6,7 @@ import {
 } from '../arguments/flags'
 import { printResult } from '../output/command-result-output'
 import { RuntimeClientError } from '../runtime/connection/types'
-import { quoteCliCommandArgument } from '../arguments/shell-command-quote'
+import { agentReadClosingLine, agentReadConnectionArgs } from './agent-read-continuation'
 import type { RuntimeClient } from '../runtime/client'
 import { getOptionalWorktreeSelector } from '../workspace-selection/workspace-selector'
 import {
@@ -84,8 +84,9 @@ export const AGENT_CONVERSATION_HANDLERS: Record<string, CommandHandler> = {
         'Update Orca on that host to page agent reads.'
       )
     }
+    const connection = result.result.nextCursor ? await agentReadConnectionArgs(flags) : []
     printResult(result, json, (read) =>
-      formatAgentRead(read, { limit, cursorRead: cursor !== undefined })
+      formatAgentRead(read, { limit, connection, cursorRead: cursor !== undefined })
     )
   }
 }
@@ -167,7 +168,7 @@ function formatTool(tool: AgentReadTool): string {
 
 function formatAgentRead(
   result: AgentReadResult,
-  call: { limit: number | undefined; cursorRead: boolean }
+  call: { limit: number | undefined; connection: readonly string[]; cursorRead: boolean }
 ): string {
   const lines = result.entries.map((entry) =>
     entry.shortened
@@ -188,38 +189,15 @@ function formatAgentRead(
     if (lines.length === 0) {
       lines.push(call.cursorRead || nextCursor ? 'No entries in this part.' : 'Nothing new.')
     }
-    const command = nextCursor
-      ? olderPageCommand(result.orcaSessionId, nextCursor, call.limit)
-      : null
-    if (result.clearedBefore) {
-      lines.push(
-        command
-          ? `Before this: /clear. Earlier conversation: ${command}`
-          : "Before this: /clear. Orca can't read the earlier conversation here."
-      )
-    } else if (command) {
-      lines.push(`Older: ${command}`)
+    const closing = agentReadClosingLine(result, call)
+    if (closing) {
+      lines.push(closing)
     }
   }
   if (result.state) {
     lines.unshift(`state: ${result.state}`)
   }
   return lines.join('\n')
-}
-
-/** The command that reads the next older page, with the caller's page size. */
-function olderPageCommand(orcaSessionId: string, cursor: string, limit: number | undefined) {
-  return [
-    'orca',
-    'agent',
-    'read',
-    `${ORCA_SESSION_ADDRESS_PREFIX}${orcaSessionId}`,
-    '--cursor',
-    cursor,
-    ...(limit !== undefined ? ['--limit', String(limit)] : [])
-  ]
-    .map(quoteCliCommandArgument)
-    .join(' ')
 }
 
 function formatEntry(entry: AgentReadEntry): string {
