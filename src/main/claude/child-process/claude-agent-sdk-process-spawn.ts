@@ -28,6 +28,15 @@ export type ClaudeSdkWireObservers = {
   retirePermissionNotice?: () => void
 }
 
+type ClaudeStdinWriteCallback = (error: Error | null | undefined) => void
+
+type ClaudeStdinWrite = (
+  this: ProviderChild['stdin'],
+  chunk: unknown,
+  encodingOrCallback?: BufferEncoding | ClaudeStdinWriteCallback,
+  callback?: ClaudeStdinWriteCallback
+) => boolean
+
 function definedEnv(env: Record<string, string | undefined>): Record<string, string> {
   const next: Record<string, string> = {}
   for (const [key, value] of Object.entries(env)) {
@@ -91,8 +100,12 @@ export function createClaudeCodeProcessSpawn(
       if (onStdin) {
         const { stdin } = managed.child
         stdin.write = new Proxy(stdin.write, {
-          apply(write, receiver, args: [unknown, ...unknown[]]) {
-            const accepted: boolean = Reflect.apply(write, receiver, args)
+          apply(
+            write: ClaudeStdinWrite,
+            receiver: ProviderChild['stdin'],
+            args: Parameters<ClaudeStdinWrite>
+          ) {
+            const accepted = write.call(receiver, ...args)
             const [chunk] = args
             if (typeof chunk === 'string' || Buffer.isBuffer(chunk)) {
               onStdin(chunk)

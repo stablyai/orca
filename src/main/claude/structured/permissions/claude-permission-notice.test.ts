@@ -1,6 +1,5 @@
-import { ChildProcess } from 'node:child_process'
-import { PassThrough, Writable } from 'node:stream'
 import { expect, it, vi } from 'vitest'
+import { createFakePipedChild } from '../../../../shared/__fixtures__/fake-spawned-child'
 import { agentJournalItemKey } from '../../../../shared/agent-session/journal/agent-session-journal-item-key'
 import type { StructuredAgentSessionEventSink } from '../../../native-chat/agent-session-wire/journal-ingress/structured-agent-session-event-sink'
 import { createClaudeCodeProcessSpawn } from '../../child-process/claude-agent-sdk-process-spawn'
@@ -24,6 +23,26 @@ import { claudeLaunchPermissions } from './claude-structured-inbound-control'
 
 const PROVIDER_SESSION = 'provider-session'
 const NOTICE_PREFIX = 'full-access-refused:claude:'
+
+type ModeReplyPayload = { current_permission_mode: string }
+
+type PermissionWireRequest = {
+  type: 'control_request'
+  request_id: string
+  request: Record<string, string>
+}
+
+type PermissionWireReply = {
+  type: 'control_response'
+  response: {
+    subtype: 'success'
+    request_id: string
+    response: ModeReplyPayload | undefined
+    pending_permission_requests?: PermissionWireRequest[]
+  }
+}
+
+type PermissionWireRecord = ReturnType<typeof report> | PermissionWireReply | PermissionWireRequest
 
 function journalRows() {
   const rows: {
@@ -75,11 +94,11 @@ function journalRows() {
   }
 }
 
-function wireLine(record: object): string {
+function wireLine(record: PermissionWireRecord): string {
   return `${JSON.stringify(record)}\n`
 }
 
-function reply(id: string, response?: object) {
+function reply(id: string, response?: ModeReplyPayload): PermissionWireReply {
   return { type: 'control_response', response: { subtype: 'success', request_id: id, response } }
 }
 
@@ -87,7 +106,7 @@ function report(mode: string, subtype = 'status') {
   return { type: 'system', subtype, permissionMode: mode, session_id: PROVIDER_SESSION }
 }
 
-function toolRequest(id: string) {
+function toolRequest(id: string): PermissionWireRequest {
   return { type: 'control_request', request_id: id, request: { subtype: 'can_use_tool' } }
 }
 
@@ -129,12 +148,9 @@ function controlledClaude(
   )
   Object.assign(session, permissions.sessionFacts)
 
-  const stdout = new PassThrough()
-  const raw = Object.assign(new ChildProcess(), {
-    stdin: new Writable({ write: (_chunk, _encoding, callback) => callback() }),
-    stdout,
-    stderr: new PassThrough()
-  })
+  const raw = createFakePipedChild()
+  const { stdout } = raw
+  raw.stdin.resume()
   const spawner = createClaudeCodeProcessSpawn(() => raw, 'win32', undefined, permissions.handlers)
   const child = spawner.spawn({
     command: 'claude',
@@ -160,7 +176,7 @@ function controlledClaude(
     write,
     mode: (id: string, mode: string) => write(id, { subtype: 'set_permission_mode', mode }),
     stdout,
-    send: (...records: object[]) => stdout.write(records.map(wireLine).join('')),
+    send: (...records: PermissionWireRecord[]) => stdout.write(records.map(wireLine).join('')),
     frame: (message: Record<string, unknown>) => {
       delivery.deliver(() => translator.handle({ type: 'message', sessionId: 'chat', message }))
     },
