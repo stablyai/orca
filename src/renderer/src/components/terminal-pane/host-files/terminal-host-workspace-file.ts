@@ -33,6 +33,7 @@ export type HostWorkspaceFile = {
   kind: 'host'
   /** The host's spelling of the path, so the tab's relative path agrees with it. */
   absolutePath: string
+  relativePath: string
   worktreeId: string
   worktreePath: string
   executionHostId: ExecutionHostId
@@ -160,16 +161,18 @@ export function revealHostWorkspaceRoot(file: HostWorkspaceFile): void {
   }
 }
 
+type HostFileLinkSource = {
+  terminalHandle?: string | null
+  hostFileOnly?: boolean
+  existenceOnly?: boolean
+  openWithSystemDefault?: boolean
+}
+
 /** For paired paths outside the source workspace, ask the server for an owning workspace or a file grant; only paths the host lacks fall to this computer. Null when inapplicable; rejects when neither can open. */
 export async function resolveHostWorkspaceFile(
   context: RuntimeFileOperationArgs,
   absolutePath: string,
-  source: {
-    terminalHandle?: string | null
-    hostFileOnly?: boolean
-    existenceOnly?: boolean
-    openWithSystemDefault?: boolean
-  } = {}
+  source: HostFileLinkSource = {}
 ): Promise<HostWorkspaceFile | HostGrantedFile | ClientLocalFile | null> {
   const environmentId = runtimeTargetEnvironmentId(context.target)
   if (
@@ -179,7 +182,16 @@ export async function resolveHostWorkspaceFile(
   ) {
     return null
   }
-  const worktree = toRuntimeWorktreeSelector(context.worktreeId)
+  return resolvePairedWorkspaceFile(environmentId, context.worktreeId, absolutePath, source)
+}
+
+export async function resolvePairedWorkspaceFile(
+  environmentId: string,
+  worktreeId: string,
+  absolutePath: string,
+  source: HostFileLinkSource
+): Promise<HostWorkspaceFile | HostGrantedFile | ClientLocalFile> {
+  const worktree = toRuntimeWorktreeSelector(worktreeId)
   const resolveOnHost = (crossWorkspace: boolean): Promise<RuntimeTerminalPathResolution> =>
     callHostRoute<RuntimeTerminalPathResolution>(
       hostRouteForAuthority({ endpoint: { kind: 'environment', environmentId }, at: 'local' }),
@@ -201,7 +213,7 @@ export async function resolveHostWorkspaceFile(
     !source.openWithSystemDefault &&
     !isHtmlFilePath(absolutePath) &&
     (await opensInPlace(environmentId))
-      ? await resolveInClickedWorkspace(resolveOnHost, context.worktreeId)
+      ? await resolveInClickedWorkspace(resolveOnHost, worktreeId)
       : await resolveOnHost(true)
   const relativePath = resolved.relativePath
   if (relativePath === null || !resolved.absolutePath) {
@@ -236,6 +248,7 @@ export async function resolveHostWorkspaceFile(
   return {
     kind: 'host',
     absolutePath: resolved.absolutePath,
+    relativePath,
     worktreeId: resolved.worktree,
     worktreePath,
     executionHostId: toRuntimeExecutionHostId(environmentId),

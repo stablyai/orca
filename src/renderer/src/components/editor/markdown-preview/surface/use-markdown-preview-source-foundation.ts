@@ -79,10 +79,12 @@ export function useMarkdownPreviewSourceFoundation({
     sourceRuntimeEnvironmentId !== undefined
       ? sourceRuntimeEnvironmentId
       : sourceOpenFile?.runtimeEnvironmentId
+  const runtimeOwnerId = resolvedSourceRuntimeEnvironmentId?.trim()
   const sourceWorktree = resolveMarkdownPreviewSourceWorktree(
     worktreesByRepo,
     resolvedSourceWorktreeId,
-    filePath
+    filePath,
+    runtimeOwnerId
   )
   // Notes and their owner come from the copy this preview's content does: its source tab's own
   // provenance and host. The row lookup above only supplies the id and path every copy shares.
@@ -91,7 +93,6 @@ export function useMarkdownPreviewSourceFoundation({
     sourceOpenFile ?? { runtimeEnvironmentId: resolvedSourceRuntimeEnvironmentId }
   )
   const sourceRoutingWorktreeId = sourceWorktree?.id ?? resolvedSourceWorktreeId
-  const runtimeOwnerId = resolvedSourceRuntimeEnvironmentId?.trim()
   const sourceConnectionIdSelector = useMemo(
     () =>
       createConnectionIdForFileSelector(sourceRoutingWorktreeId, filePath, {
