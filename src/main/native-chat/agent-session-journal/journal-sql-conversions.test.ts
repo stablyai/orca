@@ -344,6 +344,49 @@ describe('JournalSqlConversions storage guard', () => {
     expect(deferPass).toHaveBeenCalledTimes(3)
   })
 
+  it('a skipped chat whose need grew moves back, so smaller chats that fit are tried', async () => {
+    const needs = new Map([
+      ['a', 10],
+      ['b', 11],
+      ['c', 11.5]
+    ])
+    let free = 9
+    const converted: string[] = []
+    const readers: Pick<JournalSqlReaderPool, 'database'> = {
+      database: async (read) => ({
+        kind: 'sessions',
+        sessionIds: read.kind === 'sessions' && read.after === null ? ['a', 'b', 'c'] : []
+      })
+    }
+    const conversions: JournalBackgroundConversions = {
+      ensure: async () => null,
+      compareLegacyChats: async () => {},
+      deferred: () => false,
+      resumed: () => false,
+      passCompleted: () => {},
+      deferPass: () => {}
+    }
+    const pass = new JournalSavedChatConversion(
+      readers,
+      conversions,
+      async () => true,
+      async (sessionId) => {
+        const needed = needs.get(sessionId)!
+        if (needed > free) {
+          throw new JournalConversionStorageError(true, needed)
+        }
+        converted.push(sessionId)
+      },
+      () => {}
+    )
+    await pass.run()
+    // 'a' stopped partway at 12 GB free, so it now needs 20; 'b' and 'c' fit in 12.
+    needs.set('a', 20)
+    free = 12
+    await pass.run()
+    expect(converted).toEqual(['b', 'c'])
+  })
+
   it('the last two skipped chats keep their size, so unchanged retries do not size them again', async () => {
     const asked: [string | undefined, string | undefined][] = []
     const { conversions } = conversion((sessionId, sizedAt) => {

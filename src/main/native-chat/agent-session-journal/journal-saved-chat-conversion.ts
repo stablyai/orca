@@ -36,8 +36,20 @@ export class JournalSavedChatConversion {
         return
       }
       if (this.fresh.length > skips) {
-        this.fresh.pop()
-        break
+        const chat = { ...this.skipped[this.head]!, needed: this.fresh.pop()!.needed }
+        const next = this.skipped[this.head + 1]
+        if (!next || next.needed >= chat.needed) {
+          this.skipped[this.head] = chat
+          break
+        }
+        // Its need grew after a stop: it moves back so smaller chats are tried first.
+        this.skipped.splice(this.head, 1)
+        let at = this.head
+        while (at < this.skipped.length && this.skipped[at]!.needed < chat.needed) {
+          at++
+        }
+        this.skipped.splice(at, 0, chat)
+        continue
       }
       this.head++
     }
