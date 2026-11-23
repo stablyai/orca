@@ -7,7 +7,7 @@ import { connectorDescription } from '../bots/AddConnectorDialog'
 import { BotAppBrandLogo } from '../bots/apps/BotAppBrandLogo'
 import { BOT_CONNECTORS } from '../bots/bot-connectors'
 import { useConnectorSetup } from '../bots/ConnectorSetupDialogs'
-import { useGoogleHost } from '../bots/google/google-connect-client'
+import { refreshGoogle, useGoogleHost } from '../bots/google/google-connect-client'
 import { googleSignInChoices } from '../bots/google/google-account-readiness'
 import { GoogleSignInWaiting } from '../bots/google/GoogleSignInWaiting'
 import { useGoogleSignIn } from '../bots/google/use-google-sign-in'
@@ -51,7 +51,12 @@ export function NativeChatGoogleOfferCard({
     const text = t('components.native-chat.googleOffer.useAccount', 'Use {{email}} for Google.', {
       email: connected.email
     })
-    const answer = googleOfferSignedInAnswer(connected.email, { added, defaultAccount })
+    // The sign-in can take minutes; compare with the default as it is now, not at the click.
+    const latest = await refreshGoogle(botTarget(bot))
+    const answer = googleOfferSignedInAnswer(connected.email, {
+      added,
+      defaultAccount: latest.status === 'ready' ? (latest.google.defaultAccount ?? null) : null
+    })
     if (answer === 'again') {
       answering.sendAgain(text, [connected.email])
     } else if (answer === 'send') {

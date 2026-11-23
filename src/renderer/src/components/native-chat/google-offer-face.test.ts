@@ -47,6 +47,19 @@ describe('the Google Connect card', () => {
     })
   })
 
+  it('reconnects a signed-out default even when on for the bot and another account works', () => {
+    const google = {
+      client,
+      accounts: [account('a@x.com', 'reconnect'), account('b@x.com')],
+      defaultAccount: 'a@x.com'
+    }
+    expect(googleOfferFace(google, true)).toEqual({
+      kind: 'choose',
+      defaultAccount: 'a@x.com',
+      reconnect: true
+    })
+  })
+
   it('reads Connected once on, adding an account only where the host keeps a default', () => {
     const accounts = [account('a@x.com')]
     expect(googleOfferFace({ client, accounts, defaultAccount: 'a@x.com' }, true)).toEqual({

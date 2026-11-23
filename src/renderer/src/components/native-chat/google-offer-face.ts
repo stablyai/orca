@@ -20,14 +20,15 @@ export function googleOfferFace(
     accounts: google.accounts
   })
   const defaultAccount = google.defaultAccount
-  if (allowed && host === 'connected') {
+  const fallback = google.accounts.find((account) => account.email === defaultAccount)
+  // A signed-out default still takes calls without --account, so even on for the bot it reconnects.
+  if (allowed && host === 'connected' && fallback?.status !== 'reconnect') {
     return {
       kind: 'connected',
       defaultAccount: defaultAccount ?? null,
       canAdd: defaultAccount !== undefined
     }
   }
-  const fallback = google.accounts.find((account) => account.email === defaultAccount)
   // An old host keeps no default, so a second account there would break its calls: today's card.
   if (!fallback || (host !== 'connected' && host !== 'reconnect')) {
     return { kind: 'connect' }
