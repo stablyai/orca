@@ -21,9 +21,9 @@ export function createRestartAnswers() {
   /** Every answer so far, including those that arrive after the action returned. */
   const continued: StructuredAgentSessionContinuationOutcome[] = []
 
-  /** Settles the chats that already have an answer now, and the rest in one later pass once each
-   *  has answered or run out of time, so a recovery record is never spent without a verdict.
-   *  Returns the chats still waiting and that later pass. */
+  /** Files failures of chats that already have an answer now, and settles everything else in one
+   *  later pass once each chat has answered or the action's deadline passed, so a recovery record
+   *  is never spent without a verdict. Returns the chats still waiting and that later pass. */
   async function settle(
     action: {
       operationId: string
@@ -64,7 +64,8 @@ export function createRestartAnswers() {
       await settleChats(() => true, true)
       return { waiting, settled: Promise.resolve() }
     }
-    await settleChats((sessionId) => !waiting.has(sessionId), false)
+    // Early refusals are filed now, so they show at once; completions wait for the last pass.
+    const filedEarly = new Set(await settleChats((sessionId) => !waiting.has(sessionId), false))
     // One deadline for the whole action, not a timer per chat.
     const settled = withTimeout(
       Promise.all([...waiting].map((sessionId) => answers.get(sessionId)?.answered)),
@@ -76,7 +77,7 @@ export function createRestartAnswers() {
         const unanswered = [...waiting].filter((sessionId) => !outcomeOf(sessionId))
         await Promise.all(unanswered.map((sessionId) => answers.get(sessionId)?.giveUp()))
       })
-      .then(() => settleChats((sessionId) => waiting.has(sessionId), true))
+      .then(() => settleChats((sessionId) => !filedEarly.has(sessionId), true))
       .catch(() => {
         logger.warn('settling late restart continuations failed', {
           scope: 'restart-offer-settle',

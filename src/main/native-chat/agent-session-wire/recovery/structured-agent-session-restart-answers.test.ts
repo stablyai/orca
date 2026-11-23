@@ -21,7 +21,9 @@ it('returns before late answers, then settles them in one pass without dropping 
   const failures = {
     settle: vi.fn(async (_op, outcomes, action, last = true) => {
       const ids = outcomes.map((outcome: { sessionId: string }) => outcome.sessionId)
-      settled.push({ ids, last, failure: ids.map((id: string) => action.failureAfterResume(id)) })
+      const failure = ids.map((id: string) => action.failureAfterResume(id))
+      settled.push({ ids, last, failure })
+      return ids.filter((_id: string, index: number) => failure[index] !== null)
     })
   }
   const answers = createRestartAnswers()
@@ -64,7 +66,7 @@ it('returns before late answers, then settles them in one pass without dropping 
 
   expect(settled).toEqual([
     { ids: ['fast'], last: false, failure: [null] },
-    { ids: ['refused', 'stuck'], last: true, failure: ['refused', 'unconfirmed'] }
+    { ids: ['fast', 'refused', 'stuck'], last: true, failure: [null, 'refused', 'unconfirmed'] }
   ])
   expect([giveUp.fast.mock.calls.length, giveUp.refused.mock.calls.length]).toEqual([0, 0])
   expect(giveUp.stuck).toHaveBeenCalledOnce()
@@ -141,7 +143,7 @@ it('settles a chat its agent never answers on its own: no longer sending, queue 
       candidates: [],
       markers: new Map()
     },
-    { settle: vi.fn(async () => {}) },
+    { settle: vi.fn(async () => []) },
     logger
   )
   await vi.advanceTimersByTimeAsync(150_000)
