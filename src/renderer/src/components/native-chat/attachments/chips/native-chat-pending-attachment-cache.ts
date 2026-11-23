@@ -23,6 +23,7 @@ import { resolveNativeChatComposerDraftOwner } from '../../drafts/native-chat-co
 import {
   chipScopes,
   nativeChatPendingAttachmentScope,
+  readyReferences,
   savingImageChips
 } from './native-chat-pending-attachment-scopes'
 
@@ -48,13 +49,19 @@ export function nativeChatComposerHasUserContent(scopeKey: string): boolean {
 }
 
 function writePending(scopeKey: string, next: readonly NativeChatComposerImageAttachment[]): void {
-  for (const chip of pendingCache.get(scopeKey) ?? []) {
+  const previous = pendingCache.get(scopeKey) ?? []
+  for (const chip of previous) {
     if (chipScopes.get(chip.id) === scopeKey) {
       chipScopes.delete(chip.id)
     }
   }
   for (const chip of next) {
     chipScopes.set(chip.id, scopeKey)
+  }
+  for (const chip of previous) {
+    if (!chipScopes.has(chip.id)) {
+      readyReferences.delete(chip.id)
+    }
   }
   if (next.length === 0) {
     pendingCache.delete(scopeKey)
@@ -119,6 +126,7 @@ export function takeNativeChatPendingAttachment(
   const taken = current.find((attachment) => attachment.id === id && attachment.pending)
   if (taken) {
     writePending(scopeKey, trimSettled(current.filter((attachment) => attachment !== taken)))
+    insertReadyReferences(scopeKey)
   }
   return taken
 }
@@ -206,6 +214,7 @@ export function settleNativeChatPendingAttachment(
     pendingOwners.get(scopeKey)
   )
   writePending(scopeKey, trimSettled(current.map((chip) => (chip.id === id ? image : chip))))
+  insertReadyReferences(scopeKey)
   return true
 }
 
@@ -235,28 +244,47 @@ export function settleNativeChatPendingAttachmentReferences(
   scopeKey = references.length
     ? nativeChatPendingAttachmentScope(scopeKey, references[0].id)
     : scopeKey
-  const owner = pendingOwners.get(scopeKey)
-  const paths = references.flatMap(({ id, path }) =>
-    takeNativeChatPendingAttachment(scopeKey, id) ? [path] : []
+  const waiting = new Set(
+    nativeChatPendingAttachmentSnapshot(scopeKey).flatMap((chip) => (chip.pending ? [chip.id] : []))
   )
-  if (paths.length === 0) {
+  const accepted = references.filter(({ id }) => waiting.has(id))
+  if (accepted.length === 0) {
     return false
   }
-  if (insertAtCaret && scopeKey === originalScope) {
+  accepted.forEach(({ id, path }) => readyReferences.set(id, path))
+  insertReadyReferences(scopeKey, scopeKey === originalScope ? insertAtCaret : undefined)
+  return true
+}
+
+/** Insert saved references from the queue's front; one behind a chip still pending waits for it. */
+function insertReadyReferences(scopeKey: string, insertAtCaret?: (paths: string[]) => void): void {
+  const owner = pendingOwners.get(scopeKey)
+  const current = nativeChatPendingAttachmentSnapshot(scopeKey)
+  const ready: NativeChatComposerImageAttachment[] = []
+  for (const chip of current) {
+    if (chip.pending && !readyReferences.has(chip.id)) {
+      break
+    }
+    if (chip.pending) {
+      ready.push(chip)
+    }
+  }
+  const paths = ready.map(({ id }) => readyReferences.get(id) ?? '')
+  if (paths.length === 0) {
+    return
+  }
+  writePending(scopeKey, trimSettled(current.filter((chip) => !ready.includes(chip))))
+  if (insertAtCaret) {
     insertAtCaret(paths)
   } else {
-    insertNativeChatComposerDraftText(
-      scopeKey,
-      paths.map(formatNativeChatFileReference).join(' '),
-      { owner }
-    )
+    const text = paths.map(formatNativeChatFileReference).join(' ')
+    insertNativeChatComposerDraftText(scopeKey, text, { owner })
   }
-  return true
 }
 
 /**
  * `keepSaving`: a composer going unavailable keeps images main is still saving, so they reach the draft,
- * and the finished images queued behind them, so they still land in paste order.
+ * and the finished images and saved references queued behind them, so they still land in paste order.
  */
 export function clearNativeChatPendingAttachments(
   scopeKey: string,
@@ -268,9 +296,15 @@ export function clearNativeChatPendingAttachments(
     writePending(
       scopeKey,
       options?.keepSaving
-        ? trimSettled(current.filter((chip) => !chip.pending || savingImageChips.has(chip.id)))
+        ? trimSettled(
+            current.filter(
+              (chip) =>
+                !chip.pending || savingImageChips.has(chip.id) || readyReferences.has(chip.id)
+            )
+          )
         : []
     )
+    insertReadyReferences(scopeKey)
   }
 }
 

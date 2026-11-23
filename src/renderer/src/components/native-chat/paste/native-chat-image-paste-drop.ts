@@ -3,7 +3,7 @@ import { translate } from '@/i18n/i18n'
 
 /** Why a pasted image that reached the save step did not end up in the draft. */
 export type NativeChatImagePasteDropCause =
-  /** The user removed its chip, or closed the chat, before the save finished. */
+  /** Its chip left the draft (the user removed it, or the draft was cleared) before the save finished. */
   | 'chip-removed'
   /** The paste carried an image but the clipboard had none when it was read. */
   | 'clipboard-empty'

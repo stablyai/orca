@@ -3,7 +3,8 @@ import { expect, it } from 'vitest'
 import {
   addNativeChatPendingAttachment,
   clearNativeChatPendingAttachments,
-  settleNativeChatPendingAttachment
+  settleNativeChatPendingAttachment,
+  settleNativeChatPendingAttachmentReferences
 } from './native-chat-pending-attachment-cache'
 import {
   holdNativeChatPendingImageSave,
@@ -28,4 +29,19 @@ it('keeps a saving image and its queued successor when the composer goes unavail
     '/tmp/first.png',
     '/tmp/second.png'
   ])
+})
+
+// A composer that takes file references gets them in paste order even when saves finish out of order.
+it('inserts saved file references in paste order when the later save finishes first', () => {
+  const scope = 'pending-reference-order-invariant'
+  addNativeChatPendingAttachment(scope, { id: 'early', path: '', pending: true })
+  addNativeChatPendingAttachment(scope, { id: 'late', path: '', pending: true })
+
+  expect(
+    settleNativeChatPendingAttachmentReferences(scope, [{ id: 'late', path: '/tmp/late.png' }])
+  ).toBe(true)
+  expect(readNativeChatComposerDraft(scope).text).toBe('')
+  settleNativeChatPendingAttachmentReferences(scope, [{ id: 'early', path: '/tmp/early.png' }])
+
+  expect(readNativeChatComposerDraft(scope).text).toBe('@/tmp/early.png @/tmp/late.png')
 })
