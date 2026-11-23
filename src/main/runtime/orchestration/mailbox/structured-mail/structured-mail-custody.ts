@@ -6,9 +6,11 @@ import type { StructuredMailSendRow } from '../../db/messages/structured-mail-se
 import type { StructuredMailboxPointerHost } from '../structured-pointer/structured-mailbox-pointer-host-contract'
 import type { StructuredPointerTarget } from '../structured-pointer/structured-mailbox-pointer-delivery'
 import { structuredMailboxCustody } from '../routing/structured-session-mail-target'
+import { structuredMailWasDeliveredWhole } from './structured-mail-whole'
 import type { JournalMailObservation } from '../../../../native-chat/agent-session-journal/journal-mail-observation'
 import { reconcileLifecycleMessage } from '../../workers/lifecycle/lifecycle-reconciliation'
 import type { QueuedMessageOwed } from '../../../../native-chat/agent-session-journal/queued-messages/queued-message-consume-error'
+import { sessionMailTaker } from '../../db/messages/mail-taker'
 import {
   orchestrationMailNotice,
   type AgentMessageSource
@@ -223,9 +225,28 @@ export function settleStructuredMailAttempt(
   }
   const owed = currentOwed()
   const state = observation.state
-  const retire = (consumed: boolean) => db.retireStructuredMailSend(row, consumed)
+  const taker = sessionMailTaker(row.session_id)
+  // Taken whole, so read; or left unread, still with this chat when owed here, else with nobody.
+  const retire = (consumed: boolean) =>
+    db.retireStructuredMailSend(
+      row,
+      consumed ? { read: true, taker } : { read: false, taker: owed === 'owed' ? taker : null }
+    )
   const release = () => {
     decision.released = db.releaseStructuredMailSend(row)
+  }
+  // A pointer or in-doubt send left the mail unread: hold it while custody is unreadable, and tell
+  // its owner now when the chat lost the mailbox and can no longer `check` it.
+  const retireUnconsumed = () => {
+    if (owed === 'unavailable') {
+      decision.outstanding = true
+      return
+    }
+    retire(false)
+    if (owed === 'stale') {
+      db.markAsUndelivered([row.message_id])
+      decision.released = true
+    }
   }
   switch (state.kind) {
     case 'accepted': {
@@ -233,37 +254,27 @@ export function settleStructuredMailAttempt(
       if (message) {
         reconcileLifecycleMessage(db, message)
       }
-      // Unreadable custody keeps the attempt until a later observation can tell whether its owner moved.
-      if (owed === 'unavailable') {
-        decision.outstanding = true
+      const corrected = db.getMessageById(row.message_id)
+      if (
+        corrected &&
+        !corrected.read &&
+        structuredMailWasDeliveredWhole(row, corrected, observation)
+      ) {
+        retire(true)
         break
       }
-      // The agent was sent a pointer, not the mail: it stays unread until `check` takes it.
-      retire(false)
-      if (owed === 'stale') {
-        // A chat that lost the mailbox cannot `check` it: its owner now, terminal or chat, is told.
-        db.markAsUndelivered([row.message_id])
-        decision.released = true
-      }
+      retireUnconsumed()
       break
     }
     case 'unknown':
-      if (owed === 'unavailable') {
-        decision.outstanding = true
-        break
-      }
-      retire(false)
-      if (owed === 'stale') {
-        db.markAsUndelivered([row.message_id])
-        decision.released = true
-      }
+      retireUnconsumed()
       break
     case 'refused':
       release()
       break
     case 'rejected':
       if (state.cancelled) {
-        retire(false)
+        db.retireStructuredMailSend(row, { read: false, taker: null })
       } else if (owed === 'stale') {
         release()
       } else {
@@ -279,7 +290,11 @@ export function settleStructuredMailAttempt(
       ) {
         release()
       } else if (observation.withdrawal === 'person' && owed === 'owed') {
-        retire(true)
+        // The person removed it before the agent read it.
+        db.retireStructuredMailSend(row, {
+          read: true,
+          taker: { kind: 'dropped', why: 'withdrawn' }
+        })
       } else {
         decision.outstanding = true
       }

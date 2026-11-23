@@ -4,7 +4,7 @@ import { sanitizeCrashReportString } from '../../../shared/crash-reporting/crash
 import type { CrashReportDiagnosticBundle } from '../../../shared/crash-reporting/crash-reporting-diagnostic-bundle'
 import { collectDiagnosticBundle, getDiagnosticsStatus } from '../../observability/index'
 import { resolveDiagnosticOrcaChannel } from '../../observability/diagnostic-upload-endpoint'
-import type { FeedbackDiagnosticBundleAttachment } from '../../ipc/feedback-request'
+import type { FeedbackDiagnosticBundleAttachment } from '../../ipc/feedback/feedback-request'
 import type { FeedbackSubmitResult } from '../../../shared/feedback/feedback-submit-contract'
 
 const CRASH_REPORT_LOG_LOOKBACK_MINUTES = 3 * 24 * 60

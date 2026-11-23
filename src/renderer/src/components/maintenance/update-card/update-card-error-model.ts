@@ -1,7 +1,7 @@
-// @protected-copy: update signature and publisher warnings.
+// @protected-copy scope=file
 import { getUpdateInstallBlockGuidance } from './update-install-block-guidance'
 import type { UpdateStatus } from '../../../../../shared/updater/update-status-types'
-import type { UpdateErrorCardModel } from '../../UpdateErrorCardContent'
+import type { UpdateErrorCardModel } from './UpdateErrorCardContent'
 import {
   isWindowsSignatureCheckUnavailableFailure,
   isWindowsSignatureMismatchFailure
@@ -40,8 +40,28 @@ export function buildUpdateCardErrorModel(
   },
   t: Translate = translate
 ): UpdateErrorCardModel | null {
+  if (status.state === 'downloaded' && status.installing) {
+    return null
+  }
+  if (
+    (status.state === 'downloaded' || status.state === 'error') &&
+    status.installOnQuit &&
+    status.version &&
+    (status.state === 'error' || installError)
+  ) {
+    return {
+      variant: 'waiting',
+      title: t('updates.installOnQuit.title', 'Restart Orca manually'),
+      summary: t(
+        'updates.installOnQuit.summary',
+        'Orca couldn’t restart automatically. Quit Orca and let the update install before reopening it.'
+      ),
+      detail: installError ?? (status.state === 'error' ? updaterMessageText(status) : undefined),
+      deferLabel: t('updates.installOnQuit.keepWorking', 'Keep Working')
+    }
+  }
   if (status.state !== 'error') {
-    return installError
+    return status.state === 'downloaded' && installError
       ? {
           title: t('auto.components.UpdateCard.4cf109845a', 'Update Error'),
           summary: t(
@@ -49,7 +69,7 @@ export function buildUpdateCardErrorModel(
             'Could not restart to install the update.'
           ),
           detail: installError,
-          releaseUrl: getReleaseNotesUrlForVersion(cachedVersion),
+          releaseUrl: isLocalBuild ? undefined : getReleaseNotesUrlForVersion(status.version),
           primaryAction: {
             label: t('auto.components.UpdateCard.2c2d3e03ca', 'Try Again'),
             onClick: onInstallRetry
@@ -82,8 +102,10 @@ export function buildUpdateCardErrorModel(
     return {
       title: t('auto.components.UpdateCard.4cf109845a', 'Update Error'),
       summary: message,
-      detail: message,
-      releaseUrl: getReleaseNotesUrlForVersion(cachedVersion),
+      detail: installError ?? message,
+      releaseUrl: isLocalBuild
+        ? undefined
+        : getReleaseNotesUrlForVersion(status.version ?? cachedVersion),
       primaryAction: {
         label: t('auto.components.UpdateCard.2c2d3e03ca', 'Try Again'),
         onClick: onInstallRetry

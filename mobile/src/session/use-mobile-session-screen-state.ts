@@ -26,6 +26,7 @@ import type { TerminalRecord as Terminal } from '../terminal/session/inventory/m
 import type { MobileSessionTab } from './tabs/mobile-session-tabs'
 import { useMobileSessionTabActionTargets } from './tabs/use-mobile-session-tab-action-targets'
 import type { MobileSessionFoundationModel } from './use-mobile-session-foundation'
+import type { MobileSessionTextSizeSheetKind } from './MobileSessionTextSizeSheet'
 
 export function useMobileSessionScreenState(scope: MobileSessionFoundationModel) {
   const { worktreeId, initialCreateWarning } = scope
@@ -71,6 +72,7 @@ export function useMobileSessionScreenState(scope: MobileSessionFoundationModel)
   const [showCreateBrowserModal, setShowCreateBrowserModal] = useState(false)
   const [showHeaderMoreActions, setShowHeaderMoreActions] = useState(false)
   const [showTerminalLayout, setShowTerminalLayout] = useState(false)
+  const [textSizeSheet, setTextSizeSheet] = useState<MobileSessionTextSizeSheetKind | null>(null)
   const sessionTabActionTargets = useMobileSessionTabActionTargets()
   const [discardMarkdownTarget, setDiscardMarkdownTarget] = useState<Extract<
     MobileSessionTab,
@@ -167,6 +169,8 @@ export function useMobileSessionScreenState(scope: MobileSessionFoundationModel)
     setShowHeaderMoreActions,
     showTerminalLayout,
     setShowTerminalLayout,
+    textSizeSheet,
+    setTextSizeSheet,
     ...sessionTabActionTargets,
     discardMarkdownTarget,
     setDiscardMarkdownTarget,

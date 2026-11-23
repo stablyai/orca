@@ -4,11 +4,13 @@ import { useNativeChatMobileHoldNotice } from '../host-access/use-native-chat-mo
 import { forwardRef, useCallback, useState, useRef } from 'react'
 import { useNativeChatComposerInterrupt } from './submit/use-native-chat-composer-interrupt'
 import { useNativeChatContextUsageSummary } from '../usage/use-native-chat-context-usage-summary'
-import { useNativeChatMentionFiles } from './pickers/use-native-chat-mention-files'
 import { useNativeChatDraft } from '../drafts/use-native-chat-draft'
 import { useNativeChatDraftEvents } from './editor/use-native-chat-draft-events'
 import { useNativeChatComposerRecall } from '../drafts/use-native-chat-composer-recall'
 import { useNativeChatLaunchDraftAdoption } from '../drafts/use-native-chat-launch-draft-adoption'
+import { useNativeChatComposerMentions } from '../native-chat-composer-room'
+import { useNativeChatRoomSend } from '../native-chat-room-send'
+import { NativeChatComposerRoomProvider } from '../NativeChatComposerRoomProvider'
 import { NativeChatComposerWorkspace } from './controls/NativeChatComposerWorkspace'
 import { NativeChatComposerField } from './editor/NativeChatComposerField'
 import { useNativeChatComposerAttachments } from '../attachments/chips/use-native-chat-composer-attachments'
@@ -19,7 +21,10 @@ import { useNativeChatFileDrops } from '../attachments/intake/use-native-chat-fi
 import { useNativeChatComposerKeyDown } from './editor/use-native-chat-composer-keydown'
 import { useNativeChatSendLifecycle } from '../session/terminal/send/use-native-chat-send-lifecycle'
 import { useNativeChatComposerSessionOptions } from './controls/use-native-chat-composer-session-options'
-import { useNativeChatDictation } from './editor/use-native-chat-dictation'
+import {
+  useNativeChatDictation,
+  nativeChatDictationFieldProps
+} from './editor/use-native-chat-dictation'
 import { useNativeChatPtyComposerSend } from './submit/use-native-chat-pty-composer-send'
 import { useNativeChatStructuredComposerSend } from './submit/use-native-chat-structured-composer-send'
 import { useImeEnterGestureOwnership } from '@/lib/text-input/ime/ime-composition-keyboard-event'
@@ -35,6 +40,7 @@ export const NativeChatComposerPane = forwardRef<ComposerHandle, C.NativeChatCom
   function NativeChatComposerPane(
     {
       terminalTabId,
+      room,
       editSession,
       paneKey,
       draftScopeKey = paneKey,
@@ -46,6 +52,7 @@ export const NativeChatComposerPane = forwardRef<ComposerHandle, C.NativeChatCom
       isStopping = false,
       afterStop,
       onStop,
+      escapeStops = true,
       onOptimisticSend,
       optimisticSendOutcome,
       onOptimisticSendCanceled,
@@ -53,7 +60,6 @@ export const NativeChatComposerPane = forwardRef<ComposerHandle, C.NativeChatCom
       onSubmitted,
       answerCommandLocally,
       onSwitchToTerminal,
-      readTerminalScreen,
       launchSeed,
       structuredTransport,
       steerHead,
@@ -104,7 +110,7 @@ export const NativeChatComposerPane = forwardRef<ComposerHandle, C.NativeChatCom
       disabled ||
       (structuredTransport?.runtime === 'remote' && structuredTransport.sessionPending === true)
 
-    const { picker, orcaCommands } = useNativeChatComposerCommandPicker({
+    const { picker, orcaCommands, sideChat } = useNativeChatComposerCommandPicker({
       mode: editSession ? 'edit' : launchPrompt || pending ? 'launch' : undefined,
       agent,
       terminalTabId,
@@ -114,24 +120,20 @@ export const NativeChatComposerPane = forwardRef<ComposerHandle, C.NativeChatCom
       recalledFromHistory: recall.active,
       disabled,
       isComposing: imeEnterGesture.isComposing,
+      room,
       structuredTransport,
       editor: { textareaRef, setDraft, setCaret, setActiveSuggestion },
       setNotice
     })
-    const {
-      autocomplete,
-      classifySend,
-      clearSkillOrigin,
-      completeItem,
-      completeMention,
-      dismiss,
-      handleDraftOrCaretChange
-    } = picker
-    const mentionFiles = useNativeChatMentionFiles({
-      query: autocomplete.mode === 'mention' ? autocomplete.query : null,
+    const { classifySend, clearSkillOrigin, completeItem, dismiss, handleDraftOrCaretChange } =
+      picker
+    const mentions = useNativeChatComposerMentions(room, draft, picker, {
       terminalTabId,
-      structuredWorktreeId: structuredTransport?.worktreeId
+      structuredWorktreeId: structuredTransport?.worktreeId,
+      caret,
+      notices
     })
+    const { autocomplete } = mentions
 
     const resolveTarget = useCallback(
       () => (targetPtyId ? { ptyId: targetPtyId } : null),
@@ -203,40 +205,42 @@ export const NativeChatComposerPane = forwardRef<ComposerHandle, C.NativeChatCom
     })
 
     const dictation = useNativeChatDictation(textareaRef, disabled)
-    const sessionOptions = useNativeChatComposerSessionOptions({
+    // What option commands and PTY sends share to reach, and read, the agent's input line.
+    const ptyCommandTarget = {
       agent,
       disabled,
+      resolveTarget,
       onSlashCommand,
       onSubmitted,
-      resolveTarget,
+      readTerminalDraft: launchSeed?.readTerminalDraft
+    }
+    const sessionOptions = useNativeChatComposerSessionOptions({
+      ...ptyCommandTarget,
       terminalTabId,
       targetPtyId,
       onSwitchToTerminal,
-      readTerminalScreen,
       paneKey,
       structuredTransport,
       isWorking
     })
     const contextUsageSummary = useNativeChatContextUsageSummary(structuredTransport)
 
-    const sendStructured = useNativeChatStructuredComposerSend({
-      agent,
-      draftScopeKey,
-      imageAttachments,
-      structuredTransport,
-      isComposing: imeEnterGesture.isComposing,
-      clearSkillOrigin,
-      setDraft,
-      setCaret
-    })
+    const sendStructured = useNativeChatRoomSend(
+      useNativeChatStructuredComposerSend({
+        agent,
+        draftScopeKey,
+        imageAttachments,
+        structuredTransport,
+        isComposing: imeEnterGesture.isComposing,
+        clearSkillOrigin,
+        setDraft,
+        setCaret
+      })
+    )
 
     const ptyCommandRouting = {
-      agent,
-      disabled,
+      ...ptyCommandTarget,
       ...sessionOptions.ptyCommandRouting,
-      resolveTarget,
-      onSlashCommand,
-      onSubmitted,
       answerCommandLocally,
       trackPendingSend,
       setDraft,
@@ -252,13 +256,12 @@ export const NativeChatComposerPane = forwardRef<ComposerHandle, C.NativeChatCom
       imageAttachments,
       launchDraft: launchSeed?.launchDraft,
       launchDraftResolved: launchSeed?.launchDraftResolved === true,
-      readTerminalDraft: launchSeed?.readTerminalDraft,
       classifySend,
       onOptimisticSend,
       optimisticSendOutcome,
       terminalTabId
     })
-    const submission = useNativeChatComposerSubmit({
+    const { goalMode, ...submission } = useNativeChatComposerSubmit({
       agent,
       textareaRef,
       structuredTransport,
@@ -267,16 +270,15 @@ export const NativeChatComposerPane = forwardRef<ComposerHandle, C.NativeChatCom
       caret,
       imageAttachments,
       disabled,
+      held: mentions.sendHeld,
       sendPty,
       sendStructured,
       submitEmpty: launchPrompt?.onEmptySubmit,
-      consumeOrcaCommand: pending || launchPrompt ? undefined : orcaCommands.consume,
-      matchesOrcaCommand: pending || launchPrompt ? undefined : orcaCommands.matchesDraft,
+      orcaCommands: pending || launchPrompt ? undefined : orcaCommands,
       setDraft,
       setCaret
     })
 
-    const { goalMode } = submission
     const { sendHeld, ...sendButton } = nativeChatComposerSendState({
       agent,
       draft,
@@ -289,7 +291,8 @@ export const NativeChatComposerPane = forwardRef<ComposerHandle, C.NativeChatCom
       isWorking,
       canStop: hasPty && onStop !== undefined,
       orcaCommand: !pending && !launchPrompt && orcaCommands.matchesDraft(draft),
-      goalMode: goalMode.active
+      goalMode: goalMode.active,
+      mentionHold: mentions.sendHeld
     })
 
     const { send, chooseEditItem, fieldOverrides, dispatchPickerCommand } =
@@ -319,9 +322,10 @@ export const NativeChatComposerPane = forwardRef<ComposerHandle, C.NativeChatCom
     })
 
     const handleKeyDown = useNativeChatComposerKeyDown({
-      autocomplete,
-      mentionFiles,
-      completeMention,
+      autocomplete: autocomplete,
+      mentionFiles: mentions.mentionFiles,
+      completeMention: mentions.chooseMention,
+      mentionKey: mentions.handleKey,
       activeSuggestion,
       draft,
       recall: editSession ? undefined : recall.recall,
@@ -331,7 +335,7 @@ export const NativeChatComposerPane = forwardRef<ComposerHandle, C.NativeChatCom
         ? chooseEditItem
         : goalMode.interceptPick(orcaCommands.interceptPick(dispatchPickerCommand)),
       dismissPicker: dismiss,
-      interrupt: editSession?.cancel ?? interrupt,
+      interrupt: editSession?.cancel ?? (escapeStops ? interrupt : undefined),
       send,
       hasAttachments: imageAttachments.length > 0,
       ...(!editSession && steerHead ? { steerHead } : {}),
@@ -354,67 +358,61 @@ export const NativeChatComposerPane = forwardRef<ComposerHandle, C.NativeChatCom
       flushPendingAttachments: attachments.flushPendingAttachments
     })
 
+    const workspace = { terminalTabId, structuredTransport, isWorking }
+    const workspaceFooter =
+      editSession || launchPrompt ? undefined : <NativeChatComposerWorkspace {...workspace} />
     return (
       <div ref={root} data-native-chat-composer-scope={draftScopeKey}>
-        <NativeChatComposerField
-          draftScopeKey={draftScopeKey}
-          positionTarget={editSession ? undefined : terminalTabId}
-          textareaRef={textareaRef}
-          draft={draft}
-          disabled={disabled}
-          hasPty={hasPty}
-          canSend={canSend}
-          unavailableHint={unavailableHint}
-          autocomplete={autocomplete}
-          mentionFiles={mentionFiles}
-          activeSuggestion={activeSuggestion}
-          notices={notices}
-          imageAttachments={imageAttachments}
-          numberImages={Boolean(structuredTransport)}
-          attachmentEnvironmentId={structuredTransport?.runtimeEnvironmentId ?? undefined}
-          {...sendButton}
-          isWorking={isWorking}
-          isStopping={isStopping}
-          afterStop={afterStop}
-          attachDisabled={attachDisabled}
-          dictationDisabled={dictation.dictationDisabled}
-          isDictating={dictation.isDictating}
-          isDictationHoldMode={dictation.isDictationHoldMode}
-          imeEnterGesture={imeEnterGesture}
-          {...draftEvents}
-          onKeyDown={handleKeyDown}
-          onPaste={handlePasteEvent}
-          pickerListboxId={picker.listboxId}
-          onChoosePickerItem={goalMode.interceptPick(orcaCommands.interceptPick(completeItem))}
-          goalMode={goalMode}
-          onRetrySkills={picker.retrySkills}
-          onChooseMentionFile={completeMention}
-          onRemoveImageAttachment={attachments.removeImageAttachment}
-          onAttach={fileDrops.pickAttachments}
-          onDictationToggle={dictation.toggleDictation}
-          onDictationHoldStart={dictation.startHoldDictation}
-          onDictationHoldEnd={dictation.stopHoldDictation}
-          onSend={send}
-          steerPreview={steerChord.preview}
-          onSteerPreview={steerChord.runPreview}
-          onStop={interrupt}
-          sessionOptionsSurface={sessionOptions.surface}
-          sessionOptionsSnapshot={sessionOptions.snapshot}
-          contextUsage={contextUsageSummary}
-          sessionOptionsPickerRequest={structuredTransport?.optionPickerRequest ?? null}
-          agent={agent}
-          launchPrompt={launchPrompt}
-          workspaceFooter={
-            !editSession && !launchPrompt ? (
-              <NativeChatComposerWorkspace
-                terminalTabId={terminalTabId}
-                structuredTransport={structuredTransport}
-                isWorking={isWorking}
-              />
-            ) : undefined
-          }
-          {...fieldOverrides}
-        />
+        <NativeChatComposerRoomProvider mentions={mentions}>
+          <NativeChatComposerField
+            draftScopeKey={draftScopeKey}
+            positionTarget={editSession ? undefined : terminalTabId}
+            textareaRef={textareaRef}
+            sideChat={sideChat}
+            draft={draft}
+            disabled={disabled}
+            hasPty={hasPty}
+            canSend={canSend}
+            placeholderHint={unavailableHint}
+            idleHint={afterStop ? undefined : mentions.hint}
+            autocomplete={autocomplete}
+            mentionFiles={mentions.listed}
+            activeSuggestion={mentions.activeIndex ?? activeSuggestion}
+            notices={mentions.notices}
+            imageAttachments={imageAttachments}
+            numberImages={Boolean(structuredTransport)}
+            attachmentEnvironmentId={structuredTransport?.runtimeEnvironmentId ?? undefined}
+            {...sendButton}
+            isWorking={isWorking}
+            isStopping={isStopping}
+            afterStop={afterStop}
+            attachDisabled={attachDisabled}
+            {...nativeChatDictationFieldProps(dictation)}
+            imeEnterGesture={imeEnterGesture}
+            {...draftEvents}
+            onKeyDown={handleKeyDown}
+            onPaste={handlePasteEvent}
+            pickerListboxId={picker.listboxId}
+            onChoosePickerItem={goalMode.interceptPick(orcaCommands.interceptPick(completeItem))}
+            goalMode={goalMode}
+            onRetrySkills={picker.retrySkills}
+            onChooseMentionFile={mentions.chooseMention}
+            onRemoveImageAttachment={attachments.removeImageAttachment}
+            onAttach={fileDrops.pickAttachments}
+            onSend={send}
+            steerPreview={steerChord.preview}
+            onSteerPreview={steerChord.runPreview}
+            onStop={interrupt}
+            sessionOptionsSurface={sessionOptions.surface}
+            sessionOptionsSnapshot={sessionOptions.snapshot}
+            contextUsage={contextUsageSummary}
+            sessionOptionsPickerRequest={structuredTransport?.optionPickerRequest ?? null}
+            agent={agent}
+            launchPrompt={launchPrompt}
+            workspaceFooter={workspaceFooter}
+            {...fieldOverrides}
+          />
+        </NativeChatComposerRoomProvider>
       </div>
     )
   }

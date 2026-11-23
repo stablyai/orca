@@ -1,7 +1,7 @@
 import { BrowserWindow, dialog, ipcMain } from 'electron'
 import { writeFile } from 'node:fs/promises'
 import { ExportTimeoutError, htmlToPdf } from '../lib/html-to-pdf'
-import { abortWhenRendererGone } from './renderer-lifetime-abort'
+import { abortWhenRendererGone } from './renderer-requests/renderer-lifetime-abort'
 import {
   pdfExportFailure,
   type PdfExportResult

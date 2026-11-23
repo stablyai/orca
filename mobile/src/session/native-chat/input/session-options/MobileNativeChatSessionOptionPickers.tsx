@@ -1,9 +1,8 @@
 import { useEffect, useRef } from 'react'
 import { Keyboard, View } from 'react-native'
-import { ChevronLeft, Clock } from 'lucide-react-native'
+import { Clock } from 'lucide-react-native'
 import { BottomDrawer } from '../../../../components/bottom-drawer/BottomDrawer'
 import { ListGroup, LIST_LEADING_INSET, SectionHeader } from '../../../../components/list/ListGroup'
-import { NavBarButton } from '../../../../components/nav-bar/NavBarButton'
 import { SheetHeader } from '../../../../components/nav-bar/SheetHeader'
 import { useMobileColorScheme } from '../../../../theme/use-mobile-color-scheme'
 import { useMobileTranslation } from '../../../../i18n/use-mobile-translation'
@@ -138,7 +137,7 @@ export function MobileNativeChatSessionOptionPickers({
       descriptor.valueSource !== 'unknown' &&
       descriptor.valueSource !== 'default' &&
       descriptor.kind.type === 'select' &&
-      descriptor.kind.currentValue === value
+      (descriptor.fallbackModel ?? descriptor.kind.currentValue) === value
     ) {
       return
     }
@@ -212,20 +211,16 @@ export function MobileNativeChatSessionOptionPickers({
                       ? t('chat.sessionOptionPickers.onAttach', 'Applies when the chat attaches')
                       : undefined
                 }
+                {...(homeView
+                  ? {}
+                  : {
+                      onBack: {
+                        label: t('chat.sessionOptionPickers.backToModels', 'Back to models'),
+                        onPress: () => onNavigate(home.id)
+                      }
+                    })}
                 trailing={{ label: t('common.done', 'Done'), onPress: closePicker }}
               />
-              {homeView ? null : (
-                <View style={styles.back}>
-                  <NavBarButton
-                    icon={ChevronLeft}
-                    accessibilityLabel={t(
-                      'chat.sessionOptionPickers.backToModels',
-                      'Back to models'
-                    )}
-                    onPress={() => onNavigate(home.id)}
-                  />
-                </View>
-              )}
             </View>
             {homeView && model ? (
               <SectionHeader title={nativeChatSessionOptionLabel(model, say)} first />

@@ -2,7 +2,7 @@ import React from 'react'
 import { cn } from '@/lib/class-names'
 import type { AutomationRunStatus } from '../../../../../shared/automations/history/automation-run'
 import { useTranslate } from '@/i18n/use-translate'
-import { getToneForAutomationRunStatus } from '../listing/automation-list-last-run'
+import { getToneForAutomationRunStatus } from '../../../../../shared/automation-last-run'
 import { getAutomationRunStatusLabel } from '../automation-page-parts'
 
 /** A run's outcome at a glance; the status word next to it carries the meaning. */

@@ -1,26 +1,78 @@
 // Launch reads use receipts and member sizes; full hashing belongs to installation.
 
 import { lstatSync, readFileSync, readdirSync, realpathSync, statSync } from 'node:fs'
-import { readdir, rm, writeFile } from 'node:fs/promises'
+import { lstat, readdir, rm, writeFile } from 'node:fs/promises'
 import { basename, dirname, join } from 'node:path'
 import { z } from 'zod'
 import { isDefinitiveAbsence } from '../../shared/errors/definitive-filesystem-absence'
 import type { ProviderProcessExit } from '../provider-process/managed-provider-process'
+import type { ArchiveDigest } from './runtime-archive-download'
+
+export type ManagedRuntimeMember = { path: string; sha256: string; bytes: number }
 
 export type ManagedRuntimePin = {
   version: string
   url: string
-  archiveSha256: string
   archiveBytes: number
-  members: readonly { path: string; sha256: string; bytes: number }[]
-}
+} & ArchiveDigest &
+  (
+    | {
+        /** `file`: the download is the single member itself, not a zip. */
+        format?: 'zip' | 'file'
+        members: readonly ManagedRuntimeMember[]
+      }
+    | {
+        /** Only the archive's hash is published; it vouches for every file, and these must be executable.
+         *  `file`: the download is the one executable itself. */
+        format: 'tar.gz' | 'zip' | 'file'
+        executables: readonly string[]
+      }
+  )
 
 export type ManagedRuntime = {
   label: string
   root(dataDirectory: string): string
   pin(): ManagedRuntimePin | null
+  /** Runtimes that follow a published latest release look it up here; pin() answers from it. */
+  refreshPin?(signal?: AbortSignal): Promise<void>
+  /** An installed copy older than pin() is brought up to it without a click, as this build ships it. */
+  updatesToPin?: true
   /** Validate startup without user credentials before publishing/reusing this pinned copy. */
   validate?(folder: string, pin: ManagedRuntimePin, signal: AbortSignal): Promise<void>
+  /** Add files the unpacked release needs before it is checked and published, e.g. a second command name. */
+  prepare?(folder: string, pin: ManagedRuntimePin): Promise<void>
+}
+
+/** A managed runtime that is an agent CLI, and where its command sits in a release. */
+export type ManagedAgentCli = {
+  runtime: ManagedRuntime
+  /** Whether this host has a build to download. */
+  available: () => boolean
+  executable: (folder: string) => string
+  /** The one stock command it stands in for, when the agent's launches name other programs too. */
+  standsInFor?: string
+}
+
+const serverUseListeners = new Set<(agent: string) => void>()
+/** Told each time a chat starts on Orca's installed server, so an update that failed is retried on use. */
+export function onManagedServerUse(listener: (agent: string) => void): () => void {
+  serverUseListeners.add(listener)
+  return () => serverUseListeners.delete(listener)
+}
+/** A launch resolved to `version` of Orca's `runtime`; only runtimes that follow their pin listen. */
+export function noteManagedServerUse(
+  agent: string,
+  runtime: ManagedRuntime | undefined,
+  version: string | undefined
+): void {
+  if (version !== undefined && runtime?.updatesToPin) {
+    serverUseListeners.forEach((listener) => listener(agent))
+  }
+}
+
+/** The download's digest names the release, so a republished build is never mistaken for it. */
+export function runtimeReleaseId(pin: ArchiveDigest): string {
+  return 'archiveSha512' in pin ? pin.archiveSha512 : pin.archiveSha256
 }
 
 /** What a failed start check observed; the installer words it for the user. */
@@ -45,7 +97,7 @@ const RECEIPT_MAX_BYTES = 8 * 1024
 const VERSION_ORDER = new Intl.Collator(undefined, { numeric: true })
 
 const runtimeReleaseReceiptSchema = z.object({
-  releaseId: z.string().regex(/^[a-f0-9]{64}$/),
+  releaseId: z.string().regex(/^[a-f0-9]{64}(?:[a-f0-9]{64})?$/),
   version: z.string().min(1),
   platform: z.string(),
   arch: z.string(),
@@ -84,7 +136,7 @@ export function resolveInstalledRuntimeRelease(
     typeof read === 'object' ? [{ name, releaseId: read.releaseId }] : []
   )
   const pinned = releases.find(
-    (release) => release.name === pin?.version && release.releaseId === pin.archiveSha256
+    (release) => release.name === pin?.version && release.releaseId === runtimeReleaseId(pin)
   )
   const chosen = pinned ?? releases.sort((a, b) => VERSION_ORDER.compare(b.name, a.name))[0]
   return {
@@ -96,6 +148,27 @@ export function resolveInstalledRuntimeRelease(
   }
 }
 
+/** Whether `root` may hold a published release; an unreadable one may, so callers fail closed. */
+export async function runtimeReleaseMayBePublished(root: string): Promise<boolean> {
+  let names: string[]
+  try {
+    names = await readdir(root)
+  } catch (error) {
+    return !isDefinitiveAbsence(error)
+  }
+  const receipts = await Promise.all(
+    names
+      .filter((name) => !name.startsWith('.'))
+      .map((name) =>
+        lstat(join(root, name, RUNTIME_RELEASE_RECEIPT)).then(
+          (receipt) => receipt.isFile(),
+          (error: unknown) => !isDefinitiveAbsence(error)
+        )
+      )
+  )
+  return receipts.some(Boolean)
+}
+
 /** Require every pinned companion beside the resolved executable; never launch an isolated server file. */
 export function copyBesidePinnedMembers(
   command: string,
@@ -103,7 +176,8 @@ export function copyBesidePinnedMembers(
 ): string | null {
   try {
     const real = realpathSync(command)
-    const whole = (pin?.members ?? []).every((member) => {
+    const members = pin && 'members' in pin ? pin.members : []
+    const whole = members.every((member) => {
       const file = statSync(join(dirname(real), basename(member.path)))
       return file.isFile() && (process.platform === 'win32' || (file.mode & 0o111) !== 0)
     })
@@ -119,21 +193,40 @@ export async function writeRuntimeReleaseReceipt(
   pin: ManagedRuntimePin
 ): Promise<void> {
   const receipt: z.infer<typeof runtimeReleaseReceiptSchema> = {
-    releaseId: pin.archiveSha256,
+    releaseId: runtimeReleaseId(pin),
     version: pin.version,
     platform: process.platform,
     arch: process.arch,
-    members: pin.members.map(({ path, bytes }) => ({ path, bytes }))
+    members: await receiptMembers(folder, pin)
   }
   await writeFile(join(folder, RUNTIME_RELEASE_RECEIPT), JSON.stringify(receipt), { flag: 'wx' })
 }
 
+// An archive without published member hashes records the sizes its executables extracted to.
+async function receiptMembers(
+  folder: string,
+  pin: ManagedRuntimePin
+): Promise<{ path: string; bytes: number }[]> {
+  if ('members' in pin) {
+    return pin.members.map(({ path, bytes }) => ({ path, bytes }))
+  }
+  return Promise.all(
+    pin.executables.map(async (path) => ({
+      path,
+      bytes: (await lstat(join(folder, ...path.split('/')))).size
+    }))
+  )
+}
+
 /** Exclusive writer only: keep must match launch resolution so reclamation cannot remove a running release. */
-export async function reclaimRuntimeReleases(root: string, keep: string | null): Promise<string[]> {
+export async function reclaimRuntimeReleases(
+  root: string,
+  keep: readonly string[]
+): Promise<string[]> {
   const names = await readdir(root).catch((error: NodeJS.ErrnoException) =>
     error.code === 'ENOENT' ? [] : Promise.reject(error)
   )
-  const stale = names.filter((name) => name !== keep)
+  const stale = names.filter((name) => !keep.includes(name))
   const results = await Promise.allSettled(
     stale.map((name) => rm(join(root, name), { recursive: true, force: true }))
   )

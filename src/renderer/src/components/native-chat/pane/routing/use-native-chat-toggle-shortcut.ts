@@ -5,7 +5,7 @@ import {
   globalShortcutTargetYields,
   findPluginCommandForKeybinding
 } from '@/lib/plugins/commands/plugin-command-keybindings'
-import { getKeybindingContext } from '../../../terminal-workspace-model'
+import { getKeybindingContext } from '../../../terminal/workbench/terminal-workspace-model'
 import {
   ModifierDoubleTapDetector,
   toModifierDoubleTapEvent

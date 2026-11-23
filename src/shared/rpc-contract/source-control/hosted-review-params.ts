@@ -35,6 +35,7 @@ export const HostedReviewCreationEligibility = z.object({
   linkedBitbucketPR: z.number().int().positive().nullable().optional(),
   linkedAzureDevOpsPR: z.number().int().positive().nullable().optional(),
   linkedGiteaPR: z.number().int().positive().nullable().optional(),
+  currentHeadOid: z.string().nullable().optional(),
   /** The user's Create PR; older hosts drop it. */
   wakeWslDistro: OptionalBoolean
 })

@@ -8,7 +8,7 @@ export type PreambleParams = {
   // Dispatch ids fence completion authority across retries of one Task.
   dispatchId: string
   taskSpec: string
-  /** A terminal handle, or a session's `orca_session_id:<id>`; each is labelled by its kind. */
+  /** A terminal handle, or a session's `orca_session_id:<id>`; a terminal handle is not printed. */
   coordinatorHandle: string
   /** The paired Orca's name when it coordinates this worker's Run from another computer. */
   coordinatedFrom?: string
@@ -37,19 +37,47 @@ function isSessionHandle(handle: string): boolean {
   return handle.startsWith(ORCA_SESSION_ADDRESS_PREFIX)
 }
 
-/** Terminal agents keep their handle's wording; only a session is named by its Orca session ID. */
+/** A terminal coordinator's handle is not printed: workers splice a second term_ UUID into their own --from (#14570). */
 function dispatchIdentityLines(params: PreambleParams): string {
   return [
     params.coordinatedFrom
       ? `You are coordinated from ${params.coordinatedFrom}. Your coordinator's address here is: ${params.coordinatorHandle}`
       : isSessionHandle(params.coordinatorHandle)
         ? `Your coordinator's Orca session ID is: ${params.coordinatorHandle}`
-        : `Your coordinator's terminal handle is: ${params.coordinatorHandle}`,
+        : 'Your coordinator receives mail you send with no recipient.',
     `Your task ID is: ${params.taskId}`,
     ...(isSessionHandle(params.workerHandle)
       ? [`Your Orca session ID is: ${params.workerHandle}`]
       : [])
   ].join('\n')
+}
+
+// Chat mail arrives directly; terminal workers need the check syntax so they never guess `check --from`.
+function checkLines({
+  chat,
+  unreadMail,
+  cli,
+  workerHandle
+}: {
+  chat: boolean
+  unreadMail?: boolean
+  cli: string
+  workerHandle: string
+}): string {
+  if (chat) {
+    return unreadMail
+      ? `  # Messages for this task arrive next, one at a time.
+
+`
+      : ''
+  }
+  const comment = unreadMail
+    ? 'Messages for this task are waiting; read them'
+    : 'When Orca says you have messages, read them'
+  return `  # ${comment}:
+  ${cli} orchestration check --terminal ${workerHandle}
+
+`
 }
 
 // Place behavior rules beside CLI examples, where agent readers use them.
@@ -72,18 +100,12 @@ The coordinator cannot see this ${surface}. Reach it with the \`${cli} orchestra
 below, and message it only to ask, report a blocker, or finish; it needs no progress updates
 unless the task asks.
 Do only this task, yourself: no subagents or helper workers unless the task asks.
+Terminals you open with \`${cli} terminal create\` or \`split\` close with this worker; add --keep-open to one the user keeps.
 
 === CLI COMMANDS ===
 
 \`\`\`sh
-${
-  params.unreadMail
-    ? `  # Messages for this task are waiting; read them:
-  ${cli} orchestration check${chat ? '' : ` --terminal ${params.workerHandle}`}
-
-`
-    : ''
-}  # Ask the coordinator, then end your turn; Orca wakes you with the answer.
+${checkLines({ chat, unreadMail: params.unreadMail, cli, workerHandle: params.workerHandle })}  # Ask the coordinator, then end your turn; Orca wakes you with the answer.
   # Never use a local question prompt such as AskUserQuestion; the
   # coordinator cannot see or answer it.
   ${cli} orchestration ask --from ${params.workerHandle} --question "<your question>"

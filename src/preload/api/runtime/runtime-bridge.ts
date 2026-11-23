@@ -21,8 +21,11 @@ export const runtimeApi = {
   syncWindowGraph: (graph: RuntimeRendererSyncWindowGraph): Promise<RuntimeSyncWindowGraphResult> =>
     ipcRenderer.invoke('runtime:syncWindowGraph', graph),
   getStatus: (): Promise<RuntimeStatus> => ipcRenderer.invoke('runtime:getStatus'),
-  call: (args: { method: string; params?: unknown }): Promise<RuntimeRpcResponse<unknown>> =>
-    ipcRenderer.invoke('runtime:call', args),
+  call: (args: {
+    method: string
+    params?: unknown
+    orchestration?: { contractVersion: number; requestId: string }
+  }): Promise<RuntimeRpcResponse<unknown>> => ipcRenderer.invoke('runtime:call', args),
   subscribe: async (
     args: { method: string; params?: unknown },
     callback: (response: RuntimeRpcResponse<unknown>) => void
@@ -153,5 +156,18 @@ export const runtimeApi = {
       callback(data)
     ipcRenderer.on('runtime:sidebarInputsChanged', listener)
     return () => ipcRenderer.removeListener('runtime:sidebarInputsChanged', listener)
+  },
+  onOrchestrationSessionWorkersChanged: (
+    callback: (event: { sessionId: string }) => void
+  ): (() => void) => {
+    const listener = (_event: Electron.IpcRendererEvent, data: { sessionId: string }) =>
+      callback(data)
+    ipcRenderer.on('runtime:orchestrationSessionWorkersChanged', listener)
+    return () => ipcRenderer.removeListener('runtime:orchestrationSessionWorkersChanged', listener)
+  },
+  onPeerMailReturned: (callback: () => void): (() => void) => {
+    const listener = (): void => callback()
+    ipcRenderer.on('runtime:peerMailReturned', listener)
+    return () => ipcRenderer.removeListener('runtime:peerMailReturned', listener)
   }
 } satisfies PreloadApi['runtime']

@@ -31,9 +31,24 @@ export function NativeChatOlderHistoryRow({
     // Stay out of flow so adding or removing the history row cannot shift the transcript.
     <div
       ref={olderHistory.sentinelRef}
+      data-native-chat-older-history=""
       className="absolute inset-x-0 top-0 flex h-10 items-center justify-center"
     >
-      {olderHistory.isAutoLoadEnabled ? (
+      {olderHistory.loadFailed && !loadingEarlier ? (
+        <span className="flex max-w-full min-w-0 items-center gap-2 px-3 text-xs">
+          <span role="alert" className="min-w-0 truncate text-destructive">
+            {t('components.native-chat.loadEarlierFailed', "Couldn't load earlier messages.")}
+          </span>
+          <Button
+            variant="outline"
+            size="xs"
+            className="shrink-0"
+            onClick={olderHistory.loadEarlierManually}
+          >
+            {t('components.native-chat.loadEarlierRetry', 'Retry')}
+          </Button>
+        </span>
+      ) : olderHistory.isAutoLoadEnabled ? (
         <span role="status" aria-live="polite" className="text-xs text-chat-foreground-faint">
           {loadingEarlier ? <DelayedLoadingLabel /> : null}
         </span>

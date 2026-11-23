@@ -46,7 +46,7 @@ export function dropNativeChatTurnHeldOptionPicks(scopeKey: string): void {
 export type NativeChatTurnHeldOptionSurface = NativeChatPtySessionOptionsSurface & {
   /** Idle sends the held picks once, model first, through the surface's own commands. */
   setWorking(working: boolean): void
-  /** The held pick being typed after the turn; a message waits for it. */
+  /** The held pick being typed after the turn; its command waits for queued messages. */
   sendingHeldPick(): string | null
 }
 

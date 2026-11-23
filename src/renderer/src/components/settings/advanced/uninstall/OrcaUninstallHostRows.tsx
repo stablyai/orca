@@ -1,9 +1,7 @@
 import type React from 'react'
 import { useMemo } from 'react'
 import { Monitor } from 'lucide-react'
-import { Trans } from 'react-i18next'
 import type { OrcaUninstallHostEntry } from '../../../../../../shared/uninstall/orca-uninstall-types'
-import { i18n } from '@/i18n/i18n'
 import { cn } from '@/lib/class-names'
 import { useTranslate } from '@/i18n/use-translate'
 import { Badge } from '../../../ui/badge'
@@ -12,7 +10,7 @@ import { useBoundedHostRows } from '../../../host-picker/use-bounded-host-rows'
 import { HostListSearchField } from '../../../host-picker/HostListSearchField'
 import { HostListOverflowNote } from '../../../host-picker/HostListOverflowNote'
 import { isOrcaUninstallProblem } from './orca-uninstall-plan-state'
-import { getOrcaUninstallSlotKind, OrcaUninstallCopyCommandButton } from './OrcaUninstallStatus'
+import { getOrcaUninstallSlotKind } from './OrcaUninstallStatus'
 import { PATH_CLASS, SUB_ROW_CLASS, SubRowSlot, type RowsModel } from './OrcaUninstallRowLayout'
 import { orcaUninstallRetryKey } from './use-orca-uninstall'
 
@@ -62,20 +60,16 @@ function HostSubRow({
     (model.runningStep === 'ssh-hosts' && entry.state === 'present') ||
     model.retrying.has(orcaUninstallRetryKey('ssh-hosts', entry.hostId))
   const kind = getOrcaUninstallSlotKind([entry.state], running)
-  let action: React.ReactNode = null
-  if (model.phase === 'done' && entry.state === 'needs-user' && entry.manualCommand) {
-    action = <OrcaUninstallCopyCommandButton command={entry.manualCommand} />
-  } else if (model.phase === 'done' && entry.state === 'error') {
-    action = (
-      <Button
-        variant="outline"
-        size="xs"
-        onClick={() => model.retry({ step: 'ssh-hosts', only: [entry.hostId] })}
-      >
-        {t('settings.uninstall.retry', 'Retry')}
-      </Button>
-    )
-  }
+  const canRetry = model.phase === 'done' && isOrcaUninstallProblem(entry.state)
+  const action = canRetry ? (
+    <Button
+      variant="outline"
+      size="xs"
+      onClick={() => model.retry({ step: 'ssh-hosts', only: [entry.hostId] })}
+    >
+      {t('settings.uninstall.retry', 'Retry')}
+    </Button>
+  ) : null
   return (
     <div className={SUB_ROW_CLASS}>
       <Monitor className="size-3.5 text-muted-foreground" />
@@ -84,21 +78,14 @@ function HostSubRow({
         <Badge variant="hostContext">{t('settings.uninstall.host.ssh', 'SSH')}</Badge>
       </span>
       <span className={cn(PATH_CLASS, 'font-sans')}>
-        {entry.connected ? (
-          t('settings.uninstall.host.connected', 'Connected')
-        ) : entry.manualCommand ? (
-          <Trans
-            i18n={i18n}
-            defaults={t(
-              'settings.uninstall.host.notConnectedRun',
-              'Not connected. Run <cmd>{{command}}</cmd> on the host.'
-            )}
-            values={{ command: entry.manualCommand }}
-            components={{ cmd: <code className="font-mono" /> }}
-          />
-        ) : (
-          t('settings.uninstall.host.notConnected', 'Not connected.')
-        )}
+        {entry.connected
+          ? t('settings.uninstall.host.connected', 'Connected')
+          : canRetry
+            ? t(
+                'settings.uninstall.host.notConnectedRetry',
+                'Not connected. Connect this host, then Retry.'
+              )
+            : t('settings.uninstall.host.notConnected', 'Not connected.')}
       </span>
       <SubRowSlot
         kind={model.phase === 'idle' ? 'blank' : kind}

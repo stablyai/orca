@@ -23,6 +23,7 @@ import {
   hasTypedAgentPermission,
   type AgentPermissionChoice
 } from '../permissions/tui-agent-permission-choice'
+import { seedPermissionUpdates, type AgentPermissionSeed } from './agent-launch-permission-seed'
 import { liftAgentPermissionArgs } from '../permissions/tui-agent-permission-lift'
 import {
   legacyArgumentsUpdates,
@@ -96,6 +97,8 @@ export type AgentLaunchSettingsMutation =
       agent?: TuiAgent
       withoutAuto?: true
     }
+  /** Hosts with the seed capability: applies only while no permission was ever chosen there. */
+  | ({ type: 'seed-permission' } & AgentPermissionSeed)
   | { type: 'command'; agent: TuiAgent; value: string }
   /** The whole terminal text, flag included, as older clients see it. */
   | { type: 'arguments'; agent: TuiAgent; value: string }
@@ -231,6 +234,8 @@ export function agentLaunchSettingsMutationUpdates(
         ...(mutation.exceptAuto ? { exceptAuto: true } : {})
       })
     }
+    case 'seed-permission':
+      return seedPermissionUpdates(settings, mutation)
     case 'command': {
       const commands = { ...settings.agentCmdOverrides }
       if (mutation.value.trim()) {

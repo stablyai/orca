@@ -7,6 +7,7 @@ import type {
 } from '../remote-runtime/ssh/ssh-types'
 import type { Automation } from '../automations/automation-definition'
 import type { AutomationRun } from '../automations/history/automation-run'
+import type { Bot } from '../bot-types'
 import type { MigrationUnsupportedPtyEntry } from '../agent-status/contracts/agent-status-ipc-payload'
 import type { FeatureInteractionTelemetryBucketState } from '../feature-education/interactions/feature-interactions'
 import type { CodexResetCreditAttemptLedger } from '../agent-accounts/codex/codex-reset-credit-attempt-ledger'
@@ -117,6 +118,14 @@ export type PersistedState = {
   legacyPaneKeyAliasEntries: LegacyPaneKeyAliasEntry[]
   automations: Automation[]
   automationRuns: AutomationRun[]
+  /** Absent until the first bot is created, so profiles without bots save unchanged. */
+  bots?: Bot[]
+  /** Bots on agents an older build cannot read, kept apart so a rollback's save leaves them be. */
+  botsNewerAgents?: Bot[]
+  /** Ids of `bots` and `botsNewerAgents` in the order saved, which the two lists alone lose. */
+  botOrder?: string[]
+  /** Legacy forced 'ask' defaults have been removed; preserve later explicit overrides. */
+  botsPermissionDefaultMigrated?: true
   /** Catalogs an orcad imported, so a retried commit returns the same receipt. */
   orcadMigrationImportReceipts?: OrcadMigrationImportReceipt[]
   /** Commits whose full receipt aged out of the list above; still answered as committed. */

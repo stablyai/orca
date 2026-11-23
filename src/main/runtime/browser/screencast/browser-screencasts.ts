@@ -35,12 +35,17 @@ import type {
   ActiveBrowserScreencastSubscriber,
   ActiveBrowserScreencastPage
 } from './browser-screencast-contracts'
+import { BrowserScreencastGuestReplacements } from './browser-screencast-guest-replacement'
+import { holdScreencastWindowHost } from './browser-screencast-window-host'
+import { watchScreencastViewerPageEvents } from './browser-screencast-viewer-page-events'
+import { startScreencastViewerEvents } from './browser-screencast-viewer-events'
 
 export class RuntimeBrowserScreencasts {
   private readonly activeScreencastsByPageId = new Map<string, ActiveBrowserScreencastPage>()
+  readonly guestSwaps = new BrowserScreencastGuestReplacements(this.activeScreencastsByPageId)
 
   constructor(
-    private readonly host: Pick<RuntimeBrowserCommandHost, 'getAvailableAuthoritativeWindow'>,
+    private readonly host: Pick<RuntimeBrowserCommandHost, 'getAvailableAuthoritativeWindowId'>,
     private readonly targets: Pick<
       RuntimeBrowserCommandTargets,
       'resolveBrowserCommandTarget' | 'resolveBrowserPageWebContents'
@@ -68,7 +73,7 @@ export class RuntimeBrowserScreencasts {
     const target = await this.targets.resolveBrowserCommandTarget(params, {
       waitForFirstLoad: false
     })
-    const { browserPageId, webContents: guest } = this.targets.resolveBrowserPageWebContents(
+    const { browserPageId } = this.targets.resolveBrowserPageWebContents(
       target.worktreeId,
       target.browserPageId
     )
@@ -80,25 +85,35 @@ export class RuntimeBrowserScreencasts {
       resolveSubscriberDone = resolve
     })
     let createdPageStream = false
+    await this.guestSwaps.settle(browserPageId)
     let active = this.activeScreencastsByPageId.get(browserPageId)
-    while (active?.stopping) {
-      await active.session?.done
-      active = this.activeScreencastsByPageId.get(browserPageId)
-    }
+    // Read the guest only now: a replacement swaps it while this viewer waits.
+    const { webContents: guest } = this.targets.resolveBrowserPageWebContents(
+      target.worktreeId,
+      browserPageId
+    )
     if (!active) {
       createdPageStream = true
       const subscribers = new Map<string, ActiveBrowserScreencastSubscriber>()
+      const pageEvents = watchScreencastViewerPageEvents(guest, subscribers)
       const pendingRecord: Omit<ActiveBrowserScreencastPage, 'started'> = {
         format: params.format,
         session: null,
         stopping: false,
         subscribers,
         viewportOwnerSubscriptionId: null,
-        appliedBudget: budget
+        appliedBudget: budget,
+        pointer: pageEvents.pointer
       }
-      // Hidden host compositors stop producing guest frames when throttled.
-      const win = this.host.getAvailableAuthoritativeWindow()
-      const releaseThrottle = win ? rendererPublicationThrottle.acquire(win.webContents) : () => {}
+      const failStream = (message: string): void => {
+        for (const subscriber of pendingRecord.subscribers.values()) {
+          subscriber.emit?.({ type: 'error', message })
+        }
+        // Terminal errors must force newcomers onto a fresh stream; a starting one stops once started.
+        pendingRecord.stopping = true
+        pendingRecord.session?.stop()
+      }
+      const windowHost = holdScreencastWindowHost(guest, this.host, failStream)
       // Active-tab covers hide the guest widget independently of the host.
       const releaseGuestThrottle = rendererPublicationThrottle.acquire(guest)
       const started = startBrowserScreencast(guest, {
@@ -127,16 +142,8 @@ export class RuntimeBrowserScreencasts {
             subscriber.emit?.(event)
           }
         },
-        onError: (message) => {
-          for (const subscriber of pendingRecord.subscribers.values()) {
-            subscriber.emit?.({ type: 'error', message })
-          }
-          // Terminal errors must force newcomers onto a fresh stream.
-          if (pendingRecord.session) {
-            pendingRecord.stopping = true
-            pendingRecord.session.stop()
-          }
-        }
+        onError: failStream,
+        noFrameMessage: windowHost.noFrameMessage
       })
       const record: ActiveBrowserScreencastPage = Object.assign(pendingRecord, { started })
       active = record
@@ -144,11 +151,15 @@ export class RuntimeBrowserScreencasts {
       void record.started
         .then((session) => {
           record.session = session
+          if (record.stopping) {
+            session.stop()
+          }
           return session.done
         })
         .finally(() => {
+          pageEvents.stop()
           releaseGuestThrottle()
-          releaseThrottle()
+          windowHost.release()
           if (this.activeScreencastsByPageId.get(browserPageId) === record) {
             this.activeScreencastsByPageId.delete(browserPageId)
           }
@@ -171,7 +182,10 @@ export class RuntimeBrowserScreencasts {
       pendingFrameRetry: null,
       pairedDeviceId: stream.pairedDeviceId,
       delivery: INITIAL_SCREENCAST_SUBSCRIBER_DELIVERY,
-      frameCredit: null
+      frameCredit: null,
+      pointerEvents: params.pointerEvents === 1,
+      contextMenus: params.contextMenus === 1,
+      stopViewerEvents: null
     }
     if (params.frameAck === 1) {
       const credit = createBrowserScreencastFrameCredit({
@@ -230,6 +244,16 @@ export class RuntimeBrowserScreencasts {
         // Replayed delivery is the first evidence that ghost eviction may use.
         deliverScreencastSubscriberFrame(subscriber, bytes)
       },
+      startViewerEvents: () => {
+        const subscriber = active.subscribers.get(subscriptionId)
+        if (subscriber) {
+          subscriber.stopViewerEvents = startScreencastViewerEvents(
+            { guestWebContentsId: guest.id, browserPageId },
+            params,
+            stream
+          )
+        }
+      },
       session: {
         done: subscriberDone,
         stop: () => this.leaveScreencastSubscriber(active, subscriptionId, session),
@@ -241,7 +265,9 @@ export class RuntimeBrowserScreencasts {
         browserPageId,
         format: active.format,
         tab: this.catalog.describeBrowserTab(browserPageId, target.worktreeId),
-        ...(subscriber.frameCredit ? { frameAck: true as const } : {})
+        ...(subscriber.frameCredit ? { frameAck: true as const } : {}),
+        ...(subscriber.pointerEvents ? { pointer: active.pointer() } : {}),
+        ...(subscriber.contextMenus ? { contextMenus: true as const } : {})
       }
     }
   }

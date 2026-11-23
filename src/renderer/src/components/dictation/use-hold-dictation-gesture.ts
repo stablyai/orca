@@ -8,7 +8,7 @@ import type { GlobalSettings } from '../../../../shared/settings/global-settings
 import { dictationShortcutMode } from '../../../../shared/speech/dictation/dictation-shortcut-mode'
 import { addAppKeyListener, removeAppKeyListener } from '@/lib/keyboard/app-keyboard-router'
 import { showTerminalShortcutCaptureNotification } from '@/lib/notifications/terminal-shortcut-capture-notification'
-import { getKeybindingContext } from '../terminal-workspace-model'
+import { getKeybindingContext } from '../terminal/workbench/terminal-workspace-model'
 
 type HoldDictationGestureOptions = {
   canStartDictation: () => boolean

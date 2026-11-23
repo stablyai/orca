@@ -144,6 +144,7 @@ export function applyTerminalFontStyle(
     return
   }
   scope.terminalFontStyle = style
+  scope.terminalFontLoad = null
   installFontFaceCss(fontFaceCss)
   const family = terminalFontFamilyCss(style.font, isIOSWebView())
   const face = terminalFontFace(style.font)
@@ -155,8 +156,11 @@ export function applyTerminalFontStyle(
   commitTerminalFont(scope, scope.terminalFontFamily)
   const settle = () => {
     if (scope.terminalFontStyle === style) {
+      scope.terminalFontLoad = null
       commitTerminalFont(scope, family)
     }
   }
-  document.fonts.load(`16px "${face}"`, FONT_FACE_PROBE_TEXT).then(settle, settle)
+  scope.terminalFontLoad = document.fonts
+    .load(`16px "${face}"`, FONT_FACE_PROBE_TEXT)
+    .then(settle, settle)
 }

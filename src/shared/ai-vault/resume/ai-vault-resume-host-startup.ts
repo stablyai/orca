@@ -2,9 +2,9 @@
 
 import { isAntigravityReferenceSession } from '../../agent-session/lifecycle/provider-handles/antigravity-session-origin'
 import { realHomeCodexResumeEnvDeletion } from './ai-vault-resume-command'
+import { getAiVaultResumeCodexHome } from './ai-vault-resume-path'
 import {
   getAiVaultAgentProviderSession,
-  getAiVaultResumeCodexHome,
   type AiVaultResumeCommandSession,
   type AiVaultResumeHostShell,
   type AiVaultResumeStartup

@@ -3,7 +3,6 @@ import type {
   JournalSqlQueueRead,
   JournalSqlQueueReadResult
 } from './journal-sql-queue-read'
-export { readJournalSqlQueue } from './journal-sql-queue-read'
 export type {
   JournalSqlQueueFacts,
   JournalSqlQueueRead,
@@ -53,7 +52,8 @@ export type JournalSqlQueueWrite =
         messageId: string
         body: AgentJournalMessageItem
         requireAttachments?: true
-        holdReason?: QueuedMessageHoldReason
+        /** A card moved from another chat keeps whatever hold it had there. */
+        holdReason?: string
         options?: AgentSessionExecutionOptions
         deliveryMode?: 'queue' | 'steer'
         unattended?: boolean
@@ -63,6 +63,8 @@ export type JournalSqlQueueWrite =
   | { kind: 'queue-hold'; messageIds: readonly string[]; reason: QueuedMessageHoldReason }
   | { kind: 'queue-withdraw'; messageIds: readonly string[]; systemMail?: true }
   | { kind: 'queue-move'; input: { messageId: string } & AgentSessionQueuedMessageMoveAnchor }
+  /** Sends the card into the running turn once the agent can take it. */
+  | { kind: 'queue-steer'; messageId: string }
 
 /**
  * The one ordered queue of a SQL journal: every read is a named procedure on a reader snapshot and
@@ -109,6 +111,11 @@ export class SqlJournalQueuedMessages {
 
   async failureHolds(): Promise<boolean> {
     return (await this.read({ kind: 'failure-holds' }, 'failure-holds')).held
+  }
+
+  /** Whether an editor holds this card now, as the drain's own selection reads it. */
+  async editHeld(messageId: string): Promise<boolean> {
+    return (await this.read({ kind: 'edit-held', messageId, now: this.now() }, 'edit-held')).held
   }
 
   async list(): Promise<QueuedMessageRow[]> {
@@ -221,6 +228,11 @@ export class SqlJournalQueuedMessages {
       { kind: 'queue-move', input },
       receipt
     ) as Promise<AgentSessionQueuedMessageMoveResult>
+  }
+
+  steerWhenReady(messageId: string): Promise<QueuedMessageRow | null> {
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: queue-steer returns the card from its writer command.
+    return this.port.write({ kind: 'queue-steer', messageId }) as Promise<QueuedMessageRow | null>
   }
 
   private async read<K extends Exclude<JournalSqlQueueRead['kind'], 'next-input-card'>>(

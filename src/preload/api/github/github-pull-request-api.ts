@@ -42,6 +42,7 @@ export type GithubPullRequestApi = {
     repoOwnerExecutionHostId?: string
     branch: string
     linkedPRNumber?: number | null
+    linkedPRUrl?: string
     fallbackPRNumber?: number | null
     acceptMergedFallbackPR?: boolean
     currentHeadOid?: string | null
@@ -154,6 +155,8 @@ export type GithubPullRequestApi = {
       prNumber: number
       method?: 'merge' | 'squash' | 'rebase'
       prRepo?: GitHubOwnerRepo | null
+      /** The PR head the user reviewed; the merge is refused if GitHub's head moved past it. */
+      expectedHeadSha?: string | null
     }
   ) => Promise<{ ok: true } | { ok: false; error: string }>
   setPRAutoMerge: (

@@ -9,9 +9,9 @@ import type {
   RuntimeSyncWindowGraph,
   RuntimeMobileSessionTabsSnapshot
 } from '../../../../shared/remote-runtime/session-graph/runtime-session-contracts'
-import { withMainSessionTabRows } from '../../session-tabs/main-session-tab-rows'
-import { withMainTabOrder } from '../../session-tabs/main-session-tab-order'
-import { headlessMobileSnapshotContentUnchanged } from '../../session-tabs/mobile-session-snapshot-equality'
+import { withMainSessionTabRows } from '../../session-tabs/layout/main-session-tab-rows'
+import { withMainTabOrder } from '../../session-tabs/layout/main-session-tab-order'
+import { headlessMobileSnapshotContentUnchanged } from '../../session-tabs/publication/mobile-session-snapshot-equality'
 import {
   composeMainTerminalSurfaces,
   TerminalSurfaceIndex,

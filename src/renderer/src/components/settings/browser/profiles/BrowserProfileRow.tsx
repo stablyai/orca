@@ -18,9 +18,9 @@ import {
   DropdownMenuTrigger
 } from '../../../ui/dropdown-menu'
 import { Tooltip, TooltipContent, TooltipTrigger } from '../../../ui/tooltip'
-import { useConfirmationDialog } from '../../../confirmation-dialog-context'
-import { BrowserCookieImportDisclosure } from '../../../BrowserCookieImportDisclosure'
-import { BrowserCookieImportMachineNotice } from '../../../BrowserCookieImportMachineNotice'
+import { useConfirmationDialog } from '../../../dismiss/confirmation/confirmation-dialog-context'
+import { BrowserCookieImportDisclosure } from './BrowserCookieImportDisclosure'
+import { BrowserCookieImportMachineNotice } from './BrowserCookieImportMachineNotice'
 import { useAppStore } from '../../../../store/index'
 import '../../../../../../shared/orca-profiles/constants'
 import { BROWSER_FAMILY_LABELS } from '../../../../../../shared/browser/browser-family-labels'

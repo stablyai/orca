@@ -4,10 +4,7 @@ import { FOLDER_WORKSPACE_INSTANCE_SEPARATOR } from '../../../../shared/worktree
 import type { Repo } from '../../../../shared/repository/repo-types'
 import type { Worktree } from '../../../../shared/worktree/types'
 import { isENOENT } from '../../../filesystem/local-file-io/filesystem-path-containment'
-import {
-  getLocalWorktreePathAccess,
-  toLocalWorktreeRuntimePath
-} from '../../../workspaces/removal/local-worktree-filesystem'
+import { getLocalWorktreePathAccess } from '../../../workspaces/removal/local-worktree-filesystem'
 import { isWorktreePathMissing } from '../../../workspaces/removal/worktree-removal-safety'
 import { getRepoExecutionHostId } from '../../../../shared/execution-host/execution-host'
 import { getRepoOwnedWorktreeMeta } from '../../../workspaces/catalog/worktree-metadata-ownership'
@@ -26,11 +23,8 @@ export async function isLocalRuntimeWorktreePathMissing(
   worktreePath: string,
   localWorktreeGitOptions: { wslDistro?: string } = {}
 ): Promise<boolean> {
-  const access = getLocalWorktreePathAccess(localWorktreeGitOptions)
-  return isWorktreePathMissing(
-    toLocalWorktreeRuntimePath(worktreePath, localWorktreeGitOptions),
-    access.statPath
-  )
+  const access = getLocalWorktreePathAccess(localWorktreeGitOptions, worktreePath)
+  return isWorktreePathMissing(worktreePath, access.statPath)
 }
 
 function getRuntimeFolderWorkspaceInstanceIdentity(repo: Repo, worktreeId: string): string {

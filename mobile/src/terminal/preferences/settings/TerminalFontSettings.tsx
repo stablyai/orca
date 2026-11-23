@@ -1,7 +1,8 @@
-import { Platform, Pressable, Text, View } from 'react-native'
+import { Pressable, Text, View } from 'react-native'
 import { Minus, Plus } from 'lucide-react-native'
 import type { Translate } from '../../../i18n/mobile-i18n'
 import { useMobileTranslation } from '../../../i18n/use-mobile-translation'
+import { hostOs } from '../../../platform/host-os'
 import { ListRow } from '../../../components/list/ListGroup'
 import { MobileSlider } from '../../../components/controls/MobileSlider'
 import {
@@ -29,7 +30,8 @@ import type { TerminalFontSettings } from '../use-terminal-font-settings'
 function fontOptions(t: Translate): PickerOption<TerminalFontId>[] {
   const onDevice = t('app.terminalSettings.fontsOnDevice', 'On this device')
   const included = t('app.terminalSettings.fontsIncluded', 'Included with Orca')
-  const ios = Platform.OS === 'ios'
+  // The phone's OS, not the page's 'web': the session's Text size sheet lists these fonts too.
+  const ios = hostOs() === 'ios'
   return [
     {
       value: 'system',
@@ -45,7 +47,7 @@ function fontOptions(t: Translate): PickerOption<TerminalFontId>[] {
   ]
 }
 
-function fontLabel(font: TerminalFontId, t: Translate): string {
+export function terminalFontLabel(font: TerminalFontId, t: Translate): string {
   return fontOptions(t).find((option) => option.value === font)?.label ?? 'Menlo'
 }
 
@@ -85,12 +87,7 @@ export function TerminalFontSection({
   const t = useMobileTranslation()
   const { fontStyle, selectFontStyle } = settings
   const px = terminalFontPxForScale(settings.textScale)
-  const pointsLabel = t('app.terminalSettings.sizePoints', '{{size}} pt', { size: px })
-  const stepTo = (next: number) => {
-    if (next >= TERMINAL_MIN_FONT_PX && next <= TERMINAL_MAX_FONT_PX) {
-      settings.selectTextScale(terminalTextScaleForPx(next))
-    }
-  }
+  const pointsLabel = terminalPointsLabel(px, t)
   return (
     <SettingsSection
       title={t('app.terminalSettings.fontHeading', 'FONT')}
@@ -102,46 +99,17 @@ export function TerminalFontSection({
       <ListRow
         key="font"
         title={t('app.terminalSettings.font', 'Font')}
-        value={fontLabel(fontStyle.font, t)}
+        value={terminalFontLabel(fontStyle.font, t)}
         navigates
         onPress={onOpenFontPicker}
       />
-      <View key="size" style={styles.row}>
-        <View style={styles.rowTop}>
-          <Text style={styles.title}>{t('app.terminalSettings.size', 'Size')}</Text>
-          <Text style={styles.value}>{pointsLabel}</Text>
-        </View>
-        <View style={styles.sliderLine}>
-          <Text style={[styles.sizeMark, styles.sizeMarkSmall]}>A</Text>
-          <View style={styles.slider}>
-            <MobileSlider
-              value={px}
-              min={TERMINAL_MIN_FONT_PX}
-              max={TERMINAL_MAX_FONT_PX}
-              onValueChange={(next) => settings.previewTextScale(terminalTextScaleForPx(next))}
-              onSlidingComplete={(next) => settings.selectTextScale(terminalTextScaleForPx(next))}
-              accessibilityLabel={t('app.terminalSettings.size', 'Size')}
-              accessibilityValueText={pointsLabel}
-            />
-          </View>
-          <Text style={[styles.sizeMark, styles.sizeMarkLarge]}>A</Text>
-          <View style={styles.stepper}>
-            <StepButton
-              icon="minus"
-              label={t('app.terminalSettings.smaller', 'Smaller')}
-              disabled={px <= TERMINAL_MIN_FONT_PX}
-              onPress={() => stepTo(px - 1)}
-            />
-            <View style={styles.stepperDivider} />
-            <StepButton
-              icon="plus"
-              label={t('app.terminalSettings.larger', 'Larger')}
-              disabled={px >= TERMINAL_MAX_FONT_PX}
-              onPress={() => stepTo(px + 1)}
-            />
-          </View>
-        </View>
-      </View>
+      <TerminalTextSizeRow
+        key="size"
+        px={px}
+        value={pointsLabel}
+        onPreview={(next) => settings.previewTextScale(terminalTextScaleForPx(next))}
+        onCommit={(next) => settings.selectTextScale(terminalTextScaleForPx(next))}
+      />
       <View key="lineSpacing" style={styles.row}>
         <Text style={styles.title}>{t('app.terminalSettings.lineSpacing', 'Line spacing')}</Text>
         <MobileSegmentedControl
@@ -163,6 +131,70 @@ export function TerminalFontSection({
         />
       </View>
     </SettingsSection>
+  )
+}
+
+export function terminalPointsLabel(px: number, t: Translate): string {
+  return t('app.terminalSettings.sizePoints', '{{size}} pt', { size: px })
+}
+
+/** The size row: a slider whose drag previews each step and commits on release, and a −/+ stepper. */
+export function TerminalTextSizeRow({
+  px,
+  value,
+  onPreview,
+  onCommit
+}: {
+  px: number
+  /** Shown beside the title, e.g. "13 pt". */
+  value: string
+  onPreview: (px: number) => void
+  onCommit: (px: number) => void
+}) {
+  useMobileColorScheme()
+  const t = useMobileTranslation()
+  const stepTo = (next: number) => {
+    if (next >= TERMINAL_MIN_FONT_PX && next <= TERMINAL_MAX_FONT_PX) {
+      onCommit(next)
+    }
+  }
+  return (
+    <View style={styles.row}>
+      <View style={styles.rowTop}>
+        <Text style={styles.title}>{t('app.terminalSettings.size', 'Size')}</Text>
+        <Text style={styles.value}>{value}</Text>
+      </View>
+      <View style={styles.sliderLine}>
+        <Text style={[styles.sizeMark, styles.sizeMarkSmall]}>A</Text>
+        <View style={styles.slider}>
+          <MobileSlider
+            value={px}
+            min={TERMINAL_MIN_FONT_PX}
+            max={TERMINAL_MAX_FONT_PX}
+            onValueChange={onPreview}
+            onSlidingComplete={onCommit}
+            accessibilityLabel={t('app.terminalSettings.size', 'Size')}
+            accessibilityValueText={terminalPointsLabel(px, t)}
+          />
+        </View>
+        <Text style={[styles.sizeMark, styles.sizeMarkLarge]}>A</Text>
+        <View style={styles.stepper}>
+          <StepButton
+            icon="minus"
+            label={t('app.terminalSettings.smaller', 'Smaller')}
+            disabled={px <= TERMINAL_MIN_FONT_PX}
+            onPress={() => stepTo(px - 1)}
+          />
+          <View style={styles.stepperDivider} />
+          <StepButton
+            icon="plus"
+            label={t('app.terminalSettings.larger', 'Larger')}
+            disabled={px >= TERMINAL_MAX_FONT_PX}
+            onPress={() => stepTo(px + 1)}
+          />
+        </View>
+      </View>
+    </View>
   )
 }
 
@@ -204,7 +236,7 @@ export function TerminalFontPicker({
   onClose
 }: {
   visible: boolean
-  settings: TerminalFontSettings
+  settings: Pick<TerminalFontSettings, 'fontStyle' | 'selectFontStyle'>
   onClose: () => void
 }) {
   const t = useMobileTranslation()

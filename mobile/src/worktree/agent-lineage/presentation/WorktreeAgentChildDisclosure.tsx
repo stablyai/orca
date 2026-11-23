@@ -1,4 +1,4 @@
-import { ChevronDown, ChevronRight } from 'lucide-react-native'
+import { Bell, ChevronDown, ChevronRight } from 'lucide-react-native'
 import { Pressable, Text, View } from 'react-native'
 import { useMobileTranslation } from '../../../i18n/use-mobile-translation'
 import { colors, pressedStyle, spacing } from '../../../theme/mobile-theme'
@@ -17,6 +17,8 @@ type ChildToggleProps = {
   expanded: boolean
   // Shown beside the collapsed count so hidden sub-agent work stays visible.
   signalState?: AgentDotState
+  /** A hidden descendant the desktop holds unread. */
+  unread?: boolean
   onToggle: () => void
 }
 
@@ -24,6 +26,7 @@ export function WorktreeAgentChildToggle({
   count,
   expanded,
   signalState,
+  unread,
   onToggle
 }: ChildToggleProps) {
   const t = useMobileTranslation()
@@ -48,7 +51,9 @@ export function WorktreeAgentChildToggle({
       style={({ pressed }) => [styles.toggle, pressed && pressedStyle]}
       hitSlop={CHILD_TOGGLE_HIT_SLOP}
       accessibilityRole="button"
-      accessibilityLabel={label}
+      accessibilityLabel={
+        !expanded && unread ? `${label}, ${t('agents.list.unread', 'Unread')}` : label
+      }
       accessibilityState={{ expanded }}
       onPress={(event) => {
         event.stopPropagation()
@@ -58,6 +63,7 @@ export function WorktreeAgentChildToggle({
       {expanded ? null : (
         <>
           {signalState ? <AgentStateDot state={signalState} /> : null}
+          {unread ? <Bell size={12} color={colors.statusAmber} fill={colors.statusAmber} /> : null}
           <Text style={styles.count}>+{count}</Text>
         </>
       )}
@@ -74,11 +80,19 @@ type IdleGroupProps = {
   count: number
   depth: number
   expanded: boolean
+  /** An idle child (or its descendant) the collapsed group hides is unread on the desktop. */
+  unread?: boolean
   onToggle: () => void
 }
 
 /** Idle children fold behind one quiet row so held-but-idle sub-agents don't crowd live work. */
-export function WorktreeAgentIdleGroupRow({ count, depth, expanded, onToggle }: IdleGroupProps) {
+export function WorktreeAgentIdleGroupRow({
+  count,
+  depth,
+  expanded,
+  unread,
+  onToggle
+}: IdleGroupProps) {
   const t = useMobileTranslation()
   useMobileColorScheme()
   return (
@@ -95,9 +109,18 @@ export function WorktreeAgentIdleGroupRow({ count, depth, expanded, onToggle }: 
           ? t('components.worktreeAgentList.hideIdleChildren', 'Hide {{count}} idle child agents', {
               count
             })
-          : t('components.worktreeAgentList.showIdleChildren', 'Show {{count}} idle child agents', {
-              count
-            })
+          : [
+              t(
+                'components.worktreeAgentList.showIdleChildren',
+                'Show {{count}} idle child agents',
+                {
+                  count
+                }
+              ),
+              unread ? t('agents.list.unread', 'Unread') : null
+            ]
+              .filter(Boolean)
+              .join(', ')
       }
       accessibilityState={{ expanded }}
       onPress={(event) => {
@@ -111,6 +134,9 @@ export function WorktreeAgentIdleGroupRow({ count, depth, expanded, onToggle }: 
       <Text style={styles.idleLabel} numberOfLines={1}>
         {t('components.worktreeAgentList.idleChildCount', '{{count}} idle', { count })}
       </Text>
+      {!expanded && unread ? (
+        <Bell size={12} color={colors.statusAmber} fill={colors.statusAmber} />
+      ) : null}
       {expanded ? (
         <ChevronDown size={12} color={colors.textMuted} />
       ) : (

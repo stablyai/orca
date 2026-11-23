@@ -9,7 +9,7 @@ import { resolveHostId } from '../../../persistence/loading-store/workspace-sess
 import {
   withDurableRuntimeStore,
   withRuntimePaneAdmission
-} from '../../orca-runtime-tests/runtime-durable-store-fixture'
+} from '../../construction/test-context/runtime-durable-store-fixture'
 import { OrcaRuntimeService } from '../../orca-runtime'
 
 export const REPO = {

@@ -63,9 +63,7 @@ export const NATIVE_CHAT_VISUAL_THEME_TOKENS = [
   '--chart-2',
   '--chart-3',
   '--chart-4',
-  '--chart-5',
-  '--font-sans',
-  '--font-mono'
+  '--chart-5'
 ] as const
 
 export type NativeChatVisualTheme = {

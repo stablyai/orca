@@ -6,7 +6,7 @@ import type { MarkdownPreviewBlockRange } from '../render-tree/markdown-preview-
 import { requestMarkdownPreviewEditorRevealFrame } from '../links/markdown-preview-editor-reveal'
 import type { MarkdownPreviewFoundation } from '../surface/use-markdown-preview-foundation'
 import type { MarkdownPreviewViewport } from '../viewport/use-markdown-preview-viewport'
-import { motionSafeScrollBehavior } from '@/hooks/usePrefersReducedMotion'
+import { motionSafeScrollBehavior } from '@/hooks/theme/usePrefersReducedMotion'
 
 function isMarkdownAnnotationNavigationClick(target: EventTarget | null): boolean {
   if (!(target instanceof HTMLElement)) {

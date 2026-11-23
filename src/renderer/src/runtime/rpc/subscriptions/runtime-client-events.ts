@@ -122,6 +122,10 @@ function isRuntimeClientEvent(
     message.type === 'activateWorktree' ||
     message.type === 'worktreeTerminalSleepState' ||
     message.type === 'workspaceViewChanged' ||
-    message.type === 'workspaceCleanupRunFinished'
+    message.type === 'botsChanged' ||
+    message.type === 'orchestrationSessionWorkersChanged' ||
+    message.type === 'peerMailReturned' ||
+    message.type === 'workspaceCleanupRunFinished' ||
+    (message.type === 'agentCliUpdateFinished' && typeof message.agent === 'string')
   )
 }

@@ -22,7 +22,10 @@ import { HostListSearchField } from '../../../host-picker/HostListSearchField'
 import { HostListOverflowNote } from '../../../host-picker/HostListOverflowNote'
 import { translate } from '@/i18n/i18n'
 import { useTranslate, type Translate } from '@/i18n/use-translate'
-import { translateExecutionHostDetail, translateHostDisplayLabel } from '../../execution-host-label'
+import {
+  translateExecutionHostDetail,
+  translateHostDisplayLabel
+} from '../../../../runtime/hosts/display/execution-host-label'
 
 type SidebarHostScopeMenuSectionProps = {
   hostVisibilityLabel: string

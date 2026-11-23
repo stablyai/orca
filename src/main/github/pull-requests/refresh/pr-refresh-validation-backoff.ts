@@ -101,7 +101,3 @@ export function clearPRRefreshValidationBackoffForTests(): void {
   counters.skipped = 0
   counters.expired = 0
 }
-
-export function getPRRefreshValidationBackoffCountForTests(): number {
-  return validationBackoff.size
-}

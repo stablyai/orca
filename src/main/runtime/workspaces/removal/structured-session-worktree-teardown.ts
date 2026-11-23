@@ -18,7 +18,7 @@ import {
   captureStructuredSessionSurface,
   retireCapturedStructuredSessionSurface,
   type StructuredSessionSurfaceRuntime
-} from '../../agent-session/structured-agent-session-close'
+} from '../../agent-session/lifecycle/structured-agent-session-close'
 import type { WorktreePtyHostFence } from './worktree-pty-host-fence'
 import { getRepoIdFromWorktreeId } from '../../../../shared/worktree/id'
 import type { StructuredAgentId } from '../../../../shared/agent-session/lifecycle/provider-handles/agent-session-provider-handle'

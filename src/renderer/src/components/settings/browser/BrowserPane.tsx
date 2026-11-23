@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type MutableRefObject } from 'react'
 import type { GlobalSettings } from '../../../../../shared/settings/global-settings-types'
+import { useRuntimeStatusByEnvironmentId } from '@/store/slices/runtime-status/views/use-runtime-status-view'
 import { useAppStore } from '../../../store/index'
 import { matchesSettingsSearch } from '../search/settings-search'
 import { getBrowserPaneSearchEntries } from './browser-search'
@@ -42,12 +43,12 @@ import {
 import { isMacUserAgent } from '@/app-shell/platform/user-agent-platform'
 import { isWebClientLocation } from '@/app-shell/platform/web-client-location'
 import { useTranslate } from '@/i18n/use-translate'
-import { translateHostDisplayLabel } from '../../sidebar/execution-host-label'
+import { translateHostDisplayLabel } from '../../../runtime/hosts/display/execution-host-label'
 import { translateBrowserSessionProfileLabel } from '@/lib/browser/profiles/browser-session-profile-label'
 import { useUiLanguageRevision } from '@/i18n/use-ui-language-revision'
 import { resolveAvailableBrowserSessionHostId } from './profiles/browser-session-host-selection'
 import { getDefaultBrowserProfileForHost } from '@/store/slices/browser/hosts/browser-host-state'
-import { motionSafeScrollBehavior } from '@/hooks/usePrefersReducedMotion'
+import { motionSafeScrollBehavior } from '@/hooks/theme/usePrefersReducedMotion'
 
 type BrowserPaneProps = {
   settings: GlobalSettings
@@ -81,7 +82,7 @@ export function BrowserPane({
   const sshTargetLabels = useAppStore((s) => s.sshTargetLabels)
   const sshConnectionStates = useAppStore((s) => s.sshConnectionStates)
   const runtimeEnvironments = useAppStore((s) => s.runtimeEnvironments)
-  const runtimeStatusByEnvironmentId = useAppStore((s) => s.runtimeStatusByEnvironmentId)
+  const runtimeStatusByEnvironmentId = useRuntimeStatusByEnvironmentId()
   const browserSessionHostIdOverride = useAppStore((s) => s.browserSessionHostIdOverride)
   const setBrowserSessionHostId = useAppStore((s) => s.setBrowserSessionHostId)
   const detectedBrowsers = useAppStore((s) => s.detectedBrowsers)
@@ -307,7 +308,7 @@ export function BrowserPane({
             <BrowserMemorySaverSetting settings={settings} updateSettings={updateSettings} />
           ) : null}
 
-          {showUserAgent ? <BrowserUserAgentSetting hostId={settingsFocusedHostId} /> : null}
+          {showUserAgent ? <BrowserUserAgentSetting /> : null}
 
           {showSitePermissions ? <BrowserSitePermissionsSetting /> : null}
 

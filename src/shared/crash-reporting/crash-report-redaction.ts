@@ -20,8 +20,15 @@ const SECRET_PATTERNS = [
   /-----BEGIN [A-Z ]*PRIVATE KEY-----[\s\S]*?(?:-----END [A-Z ]*PRIVATE KEY-----|$)/g
 ]
 const CREDENTIAL_URL_PATTERN = /\b[A-Za-z0-9._%+-]+:[A-Za-z0-9._%+-]+@(?=[^/\s]+)/g
-const SECRET_ASSIGNMENT_PATTERN =
-  /\b(token|access[_-]?token|refresh[_-]?token|api[_-]?key|client[_-]?secret|secret|password|account[_-]?key)\s*[:=]\s*(?:"[^"\r\n]*"|'[^'\r\n]*'|[^&\s,;]+)/gi
+// An env-style prefix such as NOTION_ in NOTION_TOKEN, where \b alone never matches the key word.
+const SECRET_KEY = String.raw`(?:[A-Za-z0-9_]+_)?(?:token|access[_-]?token|refresh[_-]?token|api[_-]?key|client[_-]?secret|secret|password|account[_-]?key|access[_-]?key|private[_-]?key)`
+const SECRET_KEY_END = String.raw`(?:\\?["'])?\s*[:=]`
+// An escaped quote never carries a value past the next assignment, which keeps its own redaction.
+const BEFORE_NEXT_SECRET = String.raw`(?![\s,;&{]{0,8}\\?["']?\b${SECRET_KEY}${SECRET_KEY_END})`
+const SECRET_ASSIGNMENT_PATTERN = new RegExp(
+  String.raw`\b(${SECRET_KEY})${SECRET_KEY_END}\s*(?:\\"(?:${BEFORE_NEXT_SECRET}(?:\\[^"]|[^"\\\r\n]))*\\"|"(?:${BEFORE_NEXT_SECRET}(?:\\.|[^"\\\r\n]))*"|"[^"\r\n]*"|'[^'\r\n]*'|[^&\s,;]+)`,
+  'gi'
+)
 
 // Quoted paths retain spaces; unquoted paths stop at whitespace to preserve prose.
 const PATH_PATTERNS = [
@@ -33,6 +40,27 @@ const PATH_PATTERNS = [
   /\\\\[^\\\s"'`<>\n\r)]+\\(?:\\ |[^\s"'`<>\n\r)]*)/gi,
   /%(?:USERPROFILE|APPDATA|LOCALAPPDATA|HOMEDRIVE|HOMEPATH)%[^\s"'`<>)]*/gi
 ]
+
+/** Whether text holds a token, key or credentialed URL these patterns would redact. */
+export function containsSecretLike(value: string): boolean {
+  return [...SECRET_PATTERNS, CREDENTIAL_URL_PATTERN].some((pattern) =>
+    new RegExp(pattern.source, pattern.flags.replace('g', '')).test(value)
+  )
+}
+
+/** `value` with tokens, keys, credentialed URLs and `password=`-style assignments redacted, and
+ *  nothing else touched. */
+export function redactSecretLike(value: string): string {
+  let redacted = value.replace(CREDENTIAL_URL_PATTERN, '[redacted-credential]@')
+  redacted = redacted.replace(
+    SECRET_ASSIGNMENT_PATTERN,
+    (_match, key: string) => `${key}=[redacted]`
+  )
+  for (const pattern of SECRET_PATTERNS) {
+    redacted = redacted.replace(pattern, '[redacted-secret]')
+  }
+  return redacted
+}
 
 export function sanitizeCrashReportString(
   value: string,

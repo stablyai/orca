@@ -1,4 +1,5 @@
 import type { AppState } from '../../../store/types'
+import { isBotChatTab } from '@/components/bots/bot-workspace'
 
 const EDITOR_SESSION_CONTENT_TYPES = new Set([
   'editor',
@@ -14,6 +15,11 @@ export function closeMobileSessionTabInStore(
   tabId: string
 ): boolean {
   const workspaceTabs = store.unifiedTabsByWorktree[worktreeId] ?? []
+  if (
+    workspaceTabs.some((tab) => (tab.id === tabId || tab.entityId === tabId) && isBotChatTab(tab))
+  ) {
+    return false
+  }
   const exactTab = workspaceTabs.find((tab) => tab.id === tabId)
   if (exactTab) {
     return store.closeUnifiedTab(exactTab.id) !== null

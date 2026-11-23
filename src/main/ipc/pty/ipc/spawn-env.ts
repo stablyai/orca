@@ -10,7 +10,7 @@ import { resolvePathEnvKey } from '../../../pty/environment/windows-path-segment
 import { routesFreshSpawnsToLocalProvider } from '../host-env/fresh-spawn-routing'
 import { parseValidPaneKey } from '../pane/key-state'
 import { shouldRefreshNativeClaudeAgentTeamsEnv } from '../pane/launch-authority'
-import { selectWindowJcodeRuntimeDir, stampPtySpawnPaneEnv } from '../spawn-pane-env'
+import { selectWindowJcodeRuntimeDir, stampPtySpawnPaneEnv } from '../host-env/spawn-pane-env'
 import type { PtyIpcSpawnState } from './spawn-state'
 import { assemblePtyIpcSpawnCodexEnv } from './spawn-env-codex'
 import { prepareAntigravityAccountForLaunch } from '../../../antigravity/native-account-launch'

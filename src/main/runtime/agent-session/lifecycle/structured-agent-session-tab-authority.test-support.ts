@@ -29,10 +29,10 @@ import { openTestAgentSessionRecordStoreSlot } from '../records/agent-session-re
 import { seedTestAgentSessionRecordStore } from '../records/agent-session-record-store-persistence.test-fixture'
 import { createStructuredAgentSessionLogger } from '../../../native-chat/agent-session-wire/host/structured-agent-session-logger'
 import { OrcaRuntimeService } from '../../orca-runtime'
-import { withChatTabChanges } from '../agent-session-tab-layout'
+import { withChatTabChanges } from '../../session-tabs/chat/agent-session-tab-layout'
 import { collectSavedStructuredAgentSessionIds } from './saved-structured-agent-session-restoration'
-import { chatTabCommandsSettled } from '../../orca-runtime-tests/session-layout-apply.test-fixture'
-import { stopStructuredAgentSessionRuntime } from '../structured-agent-session-runtime'
+import { chatTabCommandsSettled } from '../../terminal/layout/session-layout-apply.test-fixture'
+import { stopStructuredAgentSessionRuntime } from '../installation/structured-agent-session-runtime'
 
 export const B = 'chat-b-0002',
   C = 'chat-c-0003',

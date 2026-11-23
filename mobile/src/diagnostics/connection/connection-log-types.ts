@@ -43,6 +43,7 @@ export type ConnectionLogEntry = {
   path?: MobileConnectionDiagnosticPath
   // Carry the relay close code separately so diagnostics need not parse detail.
   relayCloseCode?: number
+  relayCredentialRejected?: boolean
 }
 
 export type ConnectionLogSink = (entry: ConnectionLogEntry) => void

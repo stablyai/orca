@@ -3,7 +3,7 @@ import { randomUUID } from 'node:crypto'
 import { open, writeFile } from 'node:fs/promises'
 import { SshHostNotServedError } from '../../../providers/ssh-host-not-served-error'
 import { sanitizeLocalDownloadFilename } from './local-download-filename'
-import { abortWhenRendererGone } from '../../renderer-lifetime-abort'
+import { abortWhenRendererGone } from '../../renderer-requests/renderer-lifetime-abort'
 import type { FilesystemHandlerContext } from '../filesystem-handler-context'
 import {
   cleanupLocalTransferPath,

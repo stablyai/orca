@@ -108,16 +108,3 @@ export function observeRunningWslDistros(callback: RunningDistrosCallback): () =
     }
   }
 }
-
-export function resetWslTranscriptRunningObserverForTests(): void {
-  for (const subscription of subscriptions.values()) {
-    subscription.active = false
-    subscription.pending = null
-  }
-  subscriptions.clear()
-  if (timer) {
-    clearTimeout(timer)
-    timer = null
-  }
-  nextSubscriptionId = 0
-}

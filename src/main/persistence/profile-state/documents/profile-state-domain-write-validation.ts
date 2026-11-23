@@ -26,7 +26,9 @@ export function validateProfileStateDomainTransaction(
   }
   if (
     !Array.isArray(transaction.replacements) ||
-    (transaction.replacements.length === 0 && transaction.automationRunsAfter === undefined)
+    (transaction.replacements.length === 0 &&
+      transaction.automationRunsAfter === undefined &&
+      !transaction.patches?.length)
   ) {
     throw new Error('Profile state domain transaction requires at least one replacement')
   }
@@ -43,15 +45,17 @@ export function validateProfileStateDomainTransaction(
   }
 }
 
+/** `parsed` is the payload's value when the caller built the payload from it. */
 export function prepareProfileStateDomainMutation(
-  replacement: ProfileStateDomainMutation
+  replacement: ProfileStateDomainMutation,
+  parsed?: { value: unknown }
 ): PreparedProfileStateMutation {
   const payloadHash =
     replacement.payload === null ? null : hashProfileStateJson(replacement.payload)
-  let parsed: unknown
-  if (replacement.payload !== null) {
+  let value = parsed?.value
+  if (replacement.payload !== null && !parsed) {
     try {
-      parsed = JSON.parse(replacement.payload)
+      value = JSON.parse(replacement.payload)
     } catch {
       throw new Error(`Profile state domain payload is invalid JSON: ${replacement.domain}`)
     }
@@ -62,8 +66,8 @@ export function prepareProfileStateDomainMutation(
     now: replacement.now,
     domainVersion: replacement.domainVersion ?? PROFILE_STATE_DOCUMENT_VERSION,
     payloadHash,
-    automationRunsValue: replacement.domain === 'automationRuns' ? parsed : undefined,
-    splitDomainValue: isProfileStateSplitDomain(replacement.domain) ? parsed : undefined
+    automationRunsValue: replacement.domain === 'automationRuns' ? value : undefined,
+    splitDomainValue: isProfileStateSplitDomain(replacement.domain) ? value : undefined
   }
 }
 

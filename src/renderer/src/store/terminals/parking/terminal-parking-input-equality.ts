@@ -1,7 +1,7 @@
 import type { TerminalTab } from '../../../../../shared/workspace-layout/terminal-tab-types'
 import type { Tab, TabGroup } from '../../../../../shared/workspace-layout/tab-groups/tab-types'
 import type { AppState } from '../../types'
-import type { TabRowChange } from '../../keyed-tab-row-diff'
+import type { TabRowChange } from '../../record-transitions/keyed-tab-row-diff'
 
 export function sameTerminalParkingTab(
   previous: TerminalTab | undefined,

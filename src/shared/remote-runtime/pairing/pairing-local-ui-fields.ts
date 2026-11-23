@@ -13,6 +13,9 @@ export const PAIRING_LOCAL_UI_FIELDS = [
   'sidebarOpen',
   // Activity bar placement is a per-viewport layout choice like sidebarOpen; older hosts reject the new key.
   'activityBarPosition',
+  'activityBarOrder',
+  'activityBarBotOrder',
+  'activityBarHidden',
   // Sidebar model badges are a client display choice; older hosts reject the new key.
   'showAgentModels',
   // Agent View filters and presentation belong to each client's host catalog and viewport.
@@ -21,13 +24,20 @@ export const PAIRING_LOCAL_UI_FIELDS = [
   'agentsHideWorkspacesFromOtherDevices',
   'agentsHideAutomationGeneratedWorkspaces',
   'agentsHideCliCreatedWorkspaces',
+  // Bots run on this computer; old hosts reject the unknown key.
+  'hideBotCreatedWorkspaces',
+  'botSidebarView',
+  'botChatFolds',
   'agentsShowChildAgents',
   'agentsCompactMode',
   'agentsShowSearch',
   'agentsReadFilter',
   'agentsGroupBy',
   'activityClearedAtByPaneKey',
-  'manuallyUnreadTurnsByPaneKey'
+  'manuallyUnreadTurnsByPaneKey',
+  // The moved-to-WSL list belongs to the desktop that ran the move; hosts' strict ui.set rejects both.
+  'wslMovedSectionCollapsed',
+  'hiddenWslMovedProjectKeys'
 ] as const satisfies readonly (keyof PersistedUIState)[]
 
 export type PairingLocalUiField = (typeof PAIRING_LOCAL_UI_FIELDS)[number]

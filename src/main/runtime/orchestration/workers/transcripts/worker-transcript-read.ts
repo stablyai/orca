@@ -3,16 +3,25 @@ import type { NativeChatMessage } from '../../../../../shared/native-chat/native
 import { resolveNativeChatTranscriptAgent } from '../../../../../shared/native-chat/native-chat-agent-support'
 import type { OrchestrationWorkerReadFallbackReason } from '../../../../../shared/orchestration/workers/orchestration-worker-output'
 import { resolveSessionFilePath } from '../../../../native-chat/session-file-resolver'
-import { nativeChatLineDecoderForAgent } from '../../../../native-chat/transcript-tail-reader'
+import {
+  nativeChatLineDecoderForAgent,
+  type NativeChatLineDecoder
+} from '../../../../native-chat/transcript-tail-reader'
 import { decodeClaudeTranscriptLine } from '../../../../native-chat/transcript-decoding/transcript-line-decoders-claude'
 import {
   boundWorkerTranscriptMessages,
+  boundWorkerTranscriptNewest,
   clampWorkerTranscriptLimit
 } from './worker-transcript-payload'
 import {
   readForwardLocalWorkerTranscriptPage,
   readInitialLocalWorkerTranscriptPage
 } from './worker-transcript-local-read'
+import { readInitialWorkerTranscriptReusing } from './worker-transcript-initial-read-cache'
+import {
+  nativeChatTurnEvidenceObserverForAgent,
+  type NativeChatTurnEvidence
+} from '../../../../native-chat/transcript-decoding/transcript-turn-evidence'
 
 type WorkerTranscriptReadFailure = {
   ok: false
@@ -30,6 +39,9 @@ export type WorkerTranscriptReadSuccess = {
   limited: boolean
   clipping: string[]
   warnings: string[]
+  /** A first page's newest turn marker, decoded from the same bytes as its messages; cursor
+   *  pages carry none. */
+  turn?: NativeChatTurnEvidence
 }
 
 export type WorkerTranscriptReadResult = WorkerTranscriptReadFailure | WorkerTranscriptReadSuccess
@@ -77,16 +89,42 @@ export async function readWorkerTranscript(args: {
     return { ok: false, reason: 'transcript_missing', warnings: [] }
   }
   const limit = clampWorkerTranscriptLimit(args.limit)
+  const resolvedPath = filePath
+  const read = () => readResolvedWorkerTranscript(resolvedPath, decode, limit, args)
+  // A first read of an unchanged file serves its settled page; any other read scans.
+  return args.offset === undefined && args.expectedSourceFingerprint === undefined
+    ? readInitialWorkerTranscriptReusing(resolvedPath, [limit, decode], read)
+    : read()
+}
+
+async function readResolvedWorkerTranscript(
+  filePath: string,
+  decode: NativeChatLineDecoder,
+  limit: number,
+  args: Pick<
+    Parameters<typeof readWorkerTranscript>[0],
+    'agent' | 'offset' | 'expectedSourceFingerprint' | 'expectedBoundaryCheckpoint'
+  >
+): Promise<WorkerTranscriptReadResult> {
   try {
+    // The bound that decided where a forward page stops is the page's own: computed once.
+    let forwardBound: ReturnType<typeof boundWorkerTranscriptMessages> | undefined
     const page =
       args.offset === undefined
-        ? await readInitialLocalWorkerTranscriptPage(filePath, limit, decode)
+        ? await readInitialLocalWorkerTranscriptPage(
+            filePath,
+            limit,
+            decode,
+            nativeChatTurnEvidenceObserverForAgent(args.agent)
+          )
         : await readForwardLocalWorkerTranscriptPage(
             filePath,
             args.offset,
             limit,
             decode,
-            args.expectedBoundaryCheckpoint
+            args.expectedBoundaryCheckpoint,
+            (messages) =>
+              (forwardBound = boundWorkerTranscriptMessages(messages, filePath)).messages.length
           )
     if (!page.ok) {
       return page
@@ -97,7 +135,19 @@ export async function readWorkerTranscript(args: {
     ) {
       return { ok: false, reason: 'source_changed', warnings: [] }
     }
-    const bounded = boundWorkerTranscriptMessages(page.messages, filePath)
+    const bounded =
+      args.offset === undefined
+        ? boundWorkerTranscriptNewest(page.messages, filePath)
+        : (forwardBound ?? boundWorkerTranscriptMessages(page.messages, filePath))
+    // A newest-first bound drops the page's oldest messages, which shifts the reply's index.
+    const dropped = page.messages.length - bounded.messages.length
+    const replyIndex = (page.turn?.replyIndex ?? -1) - dropped
+    const turn =
+      page.turn?.state === 'completed'
+        ? replyIndex >= 0
+          ? { ...page.turn, replyIndex }
+          : undefined
+        : page.turn
     return {
       ok: true,
       filePath,
@@ -110,7 +160,8 @@ export async function readWorkerTranscript(args: {
         ...(page.limited ? ['message_limit_or_scan_window'] : []),
         ...(bounded.limited ? ['transcript_payload'] : [])
       ],
-      warnings: [...page.warnings, ...bounded.warnings]
+      warnings: [...page.warnings, ...bounded.warnings],
+      ...(turn ? { turn } : {})
     }
   } catch (error) {
     const code = (error as NodeJS.ErrnoException | null)?.code

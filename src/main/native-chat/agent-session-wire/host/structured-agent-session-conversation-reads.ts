@@ -1,3 +1,4 @@
+import { agentSessionLeaseOwnerVerdict } from '../../../../shared/agent-session/lifecycle/leases/agent-session-lease-adjudication'
 import { holdStructuredMailSources } from '../observations/structured-agent-session-mail-sources'
 import {
   createStructuredAgentSessionCatalogReads,
@@ -14,6 +15,10 @@ import type {
   StructuredAgentSessionHostDeps,
   StructuredAgentSessionHostSession
 } from './structured-agent-session-host-types'
+import {
+  readAgentJournalPage,
+  type AgentReadJournalPage
+} from '../publication/history/agent-read-journal-page'
 import {
   queuedSendAnswer,
   structuredSendAnswer
@@ -75,6 +80,34 @@ export function createStructuredAgentSessionConversationReads(context: () => Rea
       (await journalOf(sessionId)).reads.item(itemId),
     automationRun: async (sessionId: string, messageId: string, inputIds: readonly string[]) =>
       (await journalOf(sessionId)).reads.automationRun(messageId, inputIds),
+    /** Opened at rest; pending prompts wait only while the conversation can answer them. */
+    agentReadPage: async (sessionId: string, limit: number): Promise<AgentReadJournalPage> => {
+      const journal = await journalOf(sessionId)
+      const { deps, sessions } = context()
+      const work = await hostStructuredAgentSessionCurrentWork(
+        { store: deps.store, sessions },
+        sessionId
+      )
+      const actionable = work ? new Set(work.actionablePromptIds()) : null
+      const page = await readAgentJournalPage(
+        journal,
+        { sessionId, limit },
+        (itemId) => actionable?.has(itemId) ?? true
+      )
+      const record = deps.store.getRecord(sessionId)
+      const session = sessions.get(sessionId)
+      // A dead owner cannot be working; a completion the snapshot proved stays proved.
+      if (
+        page.state === 'working' &&
+        record &&
+        (agentSessionLeaseOwnerVerdict(record.lease) === 'exited' ||
+          (!session?.child && session?.lastEndedChild?.rootGone))
+      ) {
+        const { state: _state, ...content } = page
+        return content
+      }
+      return page
+    },
 
     readModelCatalog,
     attentionReads: {
@@ -159,9 +192,20 @@ export function createStructuredAgentSessionConversationReads(context: () => Rea
       return revealStructuredAgentSession(deps, id, conversation)
     },
     sessionAgent: (id: string) => context().deps.store.getConversation(id)?.provider ?? null,
-    childAccountHome: (id: string) => context().sessions.get(id)?.child?.accountHome,
+    /** After an out-of-turn options write, so an open tab re-reads the chat's options. */
+    publishStatus: (id: string) => context().publishStatus(id),
+    /** The home a running child launched under. ACP adapters report none, so `orPinned` falls
+     *  back to the record's pinned home while a child runs. */
+    childAccountHome: (id: string, orPinned = false) => {
+      const { sessions, deps } = context()
+      const child = sessions.get(id)?.child
+      return child && orPinned
+        ? (child.accountHome ?? deps.store.getConversation(id)?.accountHome)
+        : child?.accountHome
+    },
     holdsSessions: () => context().deps.store.holdsRecords(),
-    onSessionsHeld: (listener: () => void) => context().deps.store.onFirstRecord(listener),
+    openConversationCount: () => context().sessions.size,
+    onSessionsHeld: (listener: () => void) => context().deps.store.onHeldChange(listener),
     prospectiveAccountHome: (id: string) => {
       const { deps, serialize } = context()
       return serialize(

@@ -9,6 +9,7 @@ export function waitForBrowserGuestLoad(
       clearTimeout(timer)
       guest.off('did-finish-load', loaded)
       guest.off('did-fail-load', failed)
+      guest.off('did-stop-loading', loaded)
       guest.off('destroyed', destroyed)
       if (error) {
         reject(error)
@@ -49,7 +50,10 @@ export function waitForBrowserGuestLoad(
         }
         finish(error instanceof Error ? error : new Error('The browser page could not load'))
       })
-    } else if (!guest.isLoading()) {
+    } else if (guest.isLoadingMainFrame()) {
+      // isLoadingMainFrame stays true after did-finish-load until did-stop-loading, later in the same task.
+      guest.on('did-stop-loading', loaded)
+    } else {
       loaded()
     }
   })

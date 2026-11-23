@@ -7,7 +7,7 @@ import {
 import { reconcileCodexAccountHomeHook } from '../../codex/hooks/reconciliation/codex-account-home-hook'
 import { stopCodexStateDbBackfillRecoveries } from '../../codex/history/index/codex-state-db-backfill-recovery'
 import type { GetSelectedCodexHomePath } from '../../ipc/pty/host-env/types'
-import { isWslHostOrcadProcess } from '../../ipc/wsl-guest-windows-drive-path'
+import { isWslHostOrcadProcess } from '../../wsl/filesystem/wsl-guest-windows-drive-path'
 import type { BackendServiceCleanup } from '../../backend/service-composition'
 
 /** Keep host status hooks and session discovery in client-selected managed CODEX_HOME paths. */

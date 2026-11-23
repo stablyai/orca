@@ -3,14 +3,17 @@ import type { JournalSqlOwner } from './journal-sql-owner'
 import type { JournalSqlReaderPool } from './journal-sql-reader-pool'
 import type { JournalSqlConversions } from './journal-sql-conversions'
 import type { JournalSqlActivity } from './journal-sql-activity'
-import type { JournalSqlMaintenance } from './journal-sql-maintenance'
+import type { JournalPagedMaintenanceKind, JournalSqlMaintenance } from './journal-sql-maintenance'
+import { JOURNAL_STORED_OUTPUT_WRITES } from './journal-stored-output'
 
 const MINUTE = 60_000
 const COMPACTION_INTERVAL = 6 * 60 * MINUTE
+// About 8k saved outputs a minute at the shared 10% duty cycle; none while writes are off.
+const STORED_OUTPUT_PAGES_PER_TICK = JOURNAL_STORED_OUTPUT_WRITES ? 256 : 0
 
 /** Idle conversion and periodic pruning share one owner; activity never blocks retired cleanup. */
 export class JournalSqlBackgroundMaintenance {
-  private readonly stopped = new AbortController()
+  readonly stopped = new AbortController()
   private running: Promise<void> | undefined
   private discover = false
   private sweep = false
@@ -25,11 +28,13 @@ export class JournalSqlBackgroundMaintenance {
   constructor(
     private readonly writer: Pick<JournalSqlOwner, 'maintain'>,
     private readonly readers: Pick<JournalSqlReaderPool, 'database'>,
-    private readonly conversions: Pick<JournalSqlConversions, 'ensure'>,
+    private readonly conversions: Pick<JournalSqlConversions, 'ensure' | 'compareLegacyChats'>,
     private readonly activity: JournalSqlActivity,
     private readonly onError: (error: unknown, sessionId?: string) => void,
     private readonly onTick?: () => void
   ) {}
+
+  legacy?: { run(): Promise<void> }
 
   start(): Promise<void> {
     if (this.stopped.signal.aborted) {
@@ -90,7 +95,7 @@ export class JournalSqlBackgroundMaintenance {
     await this.running
   }
 
-  private async boundary(): Promise<boolean> {
+  async boundary(): Promise<boolean> {
     while (!this.stopped.signal.aborted) {
       await this.runOrdinaryWork()
       if (this.periodic) {
@@ -107,10 +112,11 @@ export class JournalSqlBackgroundMaintenance {
 
   private async run(): Promise<void> {
     while (!this.stopped.signal.aborted && (this.discover || this.sweep || this.periodic)) {
-      await this.runOrdinaryWork()
+      await this.runOrdinaryWork().then(() => this.legacy?.run())
       if (this.discover) {
         this.discover = false
         try {
+          await this.conversions.compareLegacyChats(() => this.boundary())
           await this.convertSavedChats()
         } catch (error) {
           this.report(error)
@@ -141,6 +147,7 @@ export class JournalSqlBackgroundMaintenance {
           }
         }
         await this.pages({ kind: 'page-reclaim' }, this.reclaim)
+        await this.pages({ kind: 'stored-output-compaction' }, STORED_OUTPUT_PAGES_PER_TICK)
       } catch (error) {
         this.report(error)
       }
@@ -152,6 +159,33 @@ export class JournalSqlBackgroundMaintenance {
       } catch (error) {
         this.report(error)
       }
+      try {
+        await this.forgottenChats()
+      } catch (error) {
+        this.report(error)
+      }
+    }
+  }
+
+  /** Rows of chats the record store deleted, page by page like retired epochs. */
+  private async forgottenChats(): Promise<void> {
+    let after: string | null = null
+    while (!this.stopped.signal.aborted) {
+      await setImmediate()
+      const page = await this.readers.database({ kind: 'forgotten-chats', after })
+      if (page.kind !== 'forgotten-chats') {
+        throw new Error('journal reader returned no forgotten chats')
+      }
+      for (const sessionId of page.sessionIds) {
+        await this.pages({ kind: 'chat-discard', sessionId })
+        if (this.stopped.signal.aborted) {
+          return
+        }
+      }
+      if (page.sessionIds.length === 0) {
+        return
+      }
+      after = page.sessionIds.at(-1)!
     }
   }
 
@@ -188,10 +222,7 @@ export class JournalSqlBackgroundMaintenance {
   }
 
   private async pages(
-    operation: Extract<
-      JournalSqlMaintenance,
-      { kind: 'event-tail-prune' | 'domain-retired-prune' | 'page-reclaim' }
-    >,
+    operation: Extract<JournalSqlMaintenance, { kind: JournalPagedMaintenanceKind }>,
     limit = Infinity
   ): Promise<void> {
     for (let unit = 0; unit < limit && !this.stopped.signal.aborted; unit++) {
@@ -217,7 +248,7 @@ export class JournalSqlBackgroundMaintenance {
     }
   }
 
-  private async rest(started: number): Promise<void> {
+  async rest(started: number): Promise<void> {
     this.work += performance.now() - started
     if (this.work >= 25) {
       try {
@@ -246,7 +277,7 @@ export class JournalSqlBackgroundMaintenance {
           return
         }
         try {
-          await this.convertSavedChat(sessionId)
+          await this.serviceWhile(this.conversions.ensure(sessionId, false))
         } catch (error) {
           this.report(error, sessionId)
         }
@@ -255,16 +286,11 @@ export class JournalSqlBackgroundMaintenance {
     }
   }
 
-  private async convertSavedChat(sessionId: string): Promise<void> {
+  async serviceWhile<T>(work: Promise<T>): Promise<T> {
     let complete = false
-    const conversion = this.conversions.ensure(sessionId, false).then(
-      () => {
-        complete = true
-      },
-      (error) => {
-        complete = true
-        this.report(error, sessionId)
-      }
+    const settled = work.then(
+      () => (complete = true),
+      () => (complete = true)
     )
     while (!complete && !this.stopped.signal.aborted) {
       await this.runOrdinaryWork()
@@ -278,11 +304,12 @@ export class JournalSqlBackgroundMaintenance {
         signal.addEventListener('abort', ready, { once: true })
       })
       try {
-        await Promise.race([conversion, wake])
+        await Promise.race([settled, wake])
       } finally {
         signal.removeEventListener('abort', ready)
       }
     }
+    return complete ? work : Promise.reject(new Error('journal maintenance stopped'))
   }
 
   private report(error: unknown, sessionId?: string): void {

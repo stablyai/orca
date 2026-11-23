@@ -25,6 +25,9 @@ export const WORKTREE_GITHUB_PR_SUPPRESSION_RUNTIME_CAPABILITY =
 // Legacy clients cannot safely derive a branch name from a qualified ref selector.
 export const REPO_SEARCH_QUALIFIED_REFS_RUNTIME_CAPABILITY =
   'repo.search-qualified-refs.v1' as const
+// Clients that label full refs/heads|remotes selectors; older qualified-ref clients display refName raw.
+export const REPO_SEARCH_CANONICAL_REFS_RUNTIME_CAPABILITY =
+  'repo.search-canonical-refs.v1' as const
 export const FOLDER_WORKSPACE_PATH_STATUS_RUNTIME_CAPABILITY =
   'folder-workspace.path-status.v1' as const
 // Hosts whose folderWorkspace.update/delete honor `requireUniqueId`; older hosts edit the first twin and delete every row with the id.
@@ -33,6 +36,9 @@ export const FOLDER_WORKSPACE_UNIQUE_ID_MUTATION_RUNTIME_CAPABILITY =
 // Replay ambiguous creates only with advertised idempotency support; older hosts strip clientMutationId. status.worktreeCreateIdempotency supplies optional retention policy.
 export const WORKTREE_CREATE_IDEMPOTENCY_RUNTIME_CAPABILITY =
   'worktree.create-idempotency.v1' as const
+// Hosts whose create settings (nest, keep local main) are edited in place from Settings; clients stop sending theirs.
+export const WORKTREE_CREATE_HOST_OWNED_SETTINGS_RUNTIME_CAPABILITY =
+  'worktree.create.host-owned-settings.v1' as const
 export const WORKTREE_REMOVE_BRANCH_POLICY_RUNTIME_CAPABILITY =
   'worktree.remove-branch-policy.v1' as const
 // A failed running archive hook blocks deletion. This does not prove a hook was found: unreadable SSH orca.yaml is indistinguishable from absence (#20196).
@@ -136,6 +142,7 @@ export const WORKTREE_RUNTIME_CAPABILITIES = [
   FOLDER_WORKSPACE_PATH_STATUS_RUNTIME_CAPABILITY,
   FOLDER_WORKSPACE_UNIQUE_ID_MUTATION_RUNTIME_CAPABILITY,
   WORKTREE_CREATE_IDEMPOTENCY_RUNTIME_CAPABILITY,
+  WORKTREE_CREATE_HOST_OWNED_SETTINGS_RUNTIME_CAPABILITY,
   WORKTREE_ARCHIVE_FAILURE_BLOCKING_RUNTIME_CAPABILITY,
   WORKTREE_REMOVE_BRANCH_POLICY_RUNTIME_CAPABILITY,
   WORKTREE_VISIBILITY_DEFAULTS_RUNTIME_CAPABILITY,

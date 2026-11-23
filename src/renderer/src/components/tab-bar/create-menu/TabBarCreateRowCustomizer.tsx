@@ -7,7 +7,16 @@ import {
   verticalListSortingStrategy
 } from '@dnd-kit/sortable'
 import { CSS } from '@dnd-kit/utilities'
-import { Eye, EyeOff, GripVertical, Keyboard, Lock, MoreVertical, RotateCcw } from 'lucide-react'
+import {
+  Eye,
+  EyeOff,
+  GripVertical,
+  Info,
+  Keyboard,
+  Lock,
+  MoreVertical,
+  RotateCcw
+} from 'lucide-react'
 import { useTranslate } from '@/i18n/use-translate'
 import { cn } from '@/lib/class-names'
 import {
@@ -18,6 +27,7 @@ import {
   DropdownMenuSubContent,
   DropdownMenuSubTrigger
 } from '@/components/ui/dropdown-menu'
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { ShortcutRecorderButton } from '../../settings/shortcuts/ShortcutRecorderButton'
 import { useKeybindingActionEditor } from '../../settings/shortcuts/use-keybinding-action-editor'
 import type { KeybindingActionId, KeybindingInput } from '../../../../../shared/keybindings/types'
@@ -181,13 +191,6 @@ export function TabBarCreateRowCustomizer({
           {hidden.map((item) => renderRow(item, false))}
         </SortableContext>
       </DndContext>
-      <p className="px-2.5 pt-1 pb-1.5 text-2xs leading-4 text-muted-foreground">
-        {t(
-          'tabBar.createRow.hint',
-          'Drag to reorder, or {{modifier}}↑/↓. Space shows or hides. Hidden items still open from search and their shortcuts.',
-          { modifier: editor.platform === 'darwin' ? '⌥' : 'Alt+' }
-        )}
-      </p>
     </>
   )
 }
@@ -198,10 +201,32 @@ function HiddenDivider({ empty }: { empty: boolean }): React.JSX.Element {
     id: HIDDEN_DIVIDER_ID,
     disabled: true
   })
+  const hiddenHint = t(
+    'tabBar.createRow.hiddenHint',
+    'Hidden items still open from search and their shortcuts.'
+  )
   return (
     <div ref={setNodeRef} style={{ transform: CSS.Translate.toString(transform), transition }}>
       <DropdownMenuSeparator />
-      <DropdownMenuLabel>{t('tabBar.createRow.hiddenLabel', 'Hidden')}</DropdownMenuLabel>
+      <DropdownMenuLabel>
+        <span className="flex items-center gap-1">
+          <span>{t('tabBar.createRow.hiddenLabel', 'Hidden')}</span>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <button
+                type="button"
+                aria-label={hiddenHint}
+                className="inline-flex size-4 items-center justify-center rounded-sm text-muted-foreground/70 outline-none hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring"
+              >
+                <Info className="size-3" />
+              </button>
+            </TooltipTrigger>
+            <TooltipContent side="top" sideOffset={4} className="max-w-56">
+              {hiddenHint}
+            </TooltipContent>
+          </Tooltip>
+        </span>
+      </DropdownMenuLabel>
       {empty ? (
         <div className="mx-1 mb-1 flex h-7 items-center justify-center rounded-md border border-dashed border-border text-2xs text-muted-foreground">
           {t('tabBar.createRow.hiddenEmpty', 'Drag items here to hide them')}

@@ -107,6 +107,18 @@ export function WslMoveResultBody({
             {result.browserLoginsNotCopiedReason ? (
               <p>{wslMoveBrowserLoginsNotCopied(result.browserLoginsNotCopiedReason, t)}</p>
             ) : null}
+            {result.droppedForMappedDrives?.length ? (
+              <p data-testid="wsl-move-dropped-for-drives">
+                {t(
+                  'wslMove.result.droppedForMappedDrives',
+                  'Not moved, because their drive letter no longer points into {{distro}}: {{names}}. Check the drive, then move them again.',
+                  {
+                    distro,
+                    names: result.droppedForMappedDrives.map((project) => project.name).join(', ')
+                  }
+                )}
+              </p>
+            ) : null}
             <p className="text-muted-foreground">
               {t(
                 'wslMove.result.undoHint',

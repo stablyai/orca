@@ -10,9 +10,15 @@ import { getWorktreeScanMutationRevision } from '../../../workspaces/catalog/loc
 import { resolveLocalProjectRuntimesForRepos } from '../../../workspaces/execution-host/local-project-runtime-resolution'
 import {
   resolveRepoWorktreeRows,
-  resolveScopedWorktreeIdRow,
+  worktreeRowMemoRepoKey,
+  type RepoWorktreeRow,
   type RepoWorktreeRowDeps
 } from './repo-worktree-row-resolution'
+import { WorktreeRowProjectionMemo } from './worktree-row-projection-memo'
+import {
+  resolveScopedWorktreeIdRow,
+  type ScopedWorktreeReads
+} from './scoped-worktree-row-resolution'
 import {
   joinResolvedWorktreeScans,
   platformsByRepoId,
@@ -36,6 +42,8 @@ import {
 import { withUnregisteredRemovalCheckouts } from '../../../workspaces/removal/worktree-removal-listing'
 import { withoutInFlightWorktreeCreates } from '../../../workspaces/creation/worktree-create-in-flight'
 import { preserveFolderUpgradeWorktreePath } from '../../../workspaces/catalog/folder-upgrade-worktree-path'
+import { collapsePathEqualWorktreeRows } from '../../../workspaces/catalog/path-equal-worktree-rows'
+import { readRuntimeWorktreeMetadata } from './runtime-listing-metadata'
 import type { GitWorktreeInfo } from '../../../../shared/worktree/types'
 import {
   peekWorktreeCatalog,
@@ -51,6 +59,8 @@ import * as ScanCache from './runtime-worktree-scan-cache'
 const RESOLVED_WORKTREE_CACHE_TTL_MS = 1000
 
 export abstract class RuntimeWorkspaceCatalog extends OrcaRuntimeWithReadKittyFile {
+  private readonly worktreeRowMemo = new WorktreeRowProjectionMemo<RepoWorktreeRow>()
+
   protected abstract readRepoWorktreeCatalog(
     ...args: Parameters<RuntimeWorkspaceRepoScanRefresh['readRepoWorktreeCatalog']>
   ): ReturnType<RuntimeWorkspaceRepoScanRefresh['readRepoWorktreeCatalog']>
@@ -139,6 +149,10 @@ export abstract class RuntimeWorkspaceCatalog extends OrcaRuntimeWithReadKittyFi
           )
       )
     )
+    // Repos registered while scans awaited keep their rows.
+    this.worktreeRowMemo.retainRepos(
+      new Set(this.requireStore().getRepos().map(worktreeRowMemoRepoKey))
+    )
     const lineageById = this.store?.getAllWorktreeLineage?.() ?? {}
     const worktrees = projectResolvedWorktreeLineage(perRepoWorktrees.flat(), lineageById)
     return { worktrees, platformByRepoId }
@@ -200,18 +214,26 @@ export abstract class RuntimeWorkspaceCatalog extends OrcaRuntimeWithReadKittyFi
       },
       claimLineagePrune: claimRuntimeLineagePrune,
       listFolderWorkspaces: (repo, repoOwnerCount) =>
-        listRuntimeFolderWorkspaces(store, repo, repoOwnerCount)
+        listRuntimeFolderWorkspaces(store, repo, repoOwnerCount),
+      rowMemo: this.worktreeRowMemo
     }
   }
 
   protected async resolveExplicitWorktreeIdScoped(
     worktreeId: string,
-    requiredHostId?: ExecutionHostId
+    requiredHostId?: ExecutionHostId,
+    reads?: ScopedWorktreeReads
   ): Promise<ResolvedWorktree | null> {
     if (!this.store) {
       return null
     }
-    return await resolveScopedWorktreeIdRow(this.repoWorktreeRowDeps(), worktreeId, requiredHostId)
+    // Narrowed projections can't prune the memo, so they don't fill it either.
+    return await resolveScopedWorktreeIdRow(
+      { ...this.repoWorktreeRowDeps(), rowMemo: undefined },
+      worktreeId,
+      requiredHostId,
+      reads
+    )
   }
 
   /** The resolution scan plus the checkouts this host's removals own that Git no longer lists. */
@@ -221,8 +243,16 @@ export abstract class RuntimeWorkspaceCatalog extends OrcaRuntimeWithReadKittyFi
     options: { claimsHygiene?: boolean } = {}
   ): Promise<RuntimeWorktreeScanResult> {
     const cached = await this.listRepoWorktreesForResolution(repo, projectRuntimeByRepoId, options)
+    const store = this.requireStore()
     // Paired detectedList must retain folder-upgrade locators or folder ids lose metadata and terminals (#30150).
-    const scan = { ...cached, worktrees: preserveFolderUpgradeWorktreePath(repo, cached.worktrees) }
+    const scan = {
+      ...cached,
+      worktrees: collapsePathEqualWorktreeRows(
+        repo,
+        preserveFolderUpgradeWorktreePath(repo, cached.worktrees),
+        (worktreeId) => readRuntimeWorktreeMetadata(store, repo, worktreeId) !== undefined
+      )
+    }
     const listing =
       scan.ok && getRepoExecutionHostId(repo) === LOCAL_EXECUTION_HOST_ID
         ? {

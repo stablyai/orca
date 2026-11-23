@@ -13,7 +13,10 @@ import {
   getActiveTabNavOrder,
   type VisibleTabRef
 } from '../../../lib/workspace/tabs/order/group-tab-order'
-import { getActiveEntityIdForTabType, type TypeCyclableTab } from '../../terminal/tab-type-cycle'
+import {
+  getActiveEntityIdForTabType,
+  type TypeCyclableTab
+} from '../../../lib/workspace/tabs/tab-type-cycle'
 
 export type RecentTabSwitcherItem = TypeCyclableTab & {
   key: string

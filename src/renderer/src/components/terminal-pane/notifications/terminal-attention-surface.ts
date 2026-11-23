@@ -17,8 +17,9 @@ import {
   isCurrentKnownPaneKey,
   isCurrentLivePaneKey
 } from './terminal-notification-liveness'
-import { isTabOnScreen, isWorkspaceOnScreen } from '@/hooks/agent-auto-ack-targets'
+import { isTabOnScreen, isWorkspaceOnScreen } from '@/attention/agent-auto-ack-targets'
 import { isWorkspaceNotificationMutedBySidebarFilters } from '@/attention/hidden-workspace-notification-mute'
+import { readRuntimeStatuses } from '@/store/slices/runtime-status/views/runtime-status-owner'
 
 type StoreSnapshot = ReturnType<typeof useAppStore.getState>
 
@@ -63,7 +64,7 @@ export function createTerminalAttentionSurface(state: StoreSnapshot): AgentAtten
     isWorkspaceViewed: (workspaceId) => isWorkspaceOnScreen(state, workspaceId),
     isWorkspaceActive: (workspaceId) => state.activeWorktreeId === workspaceId,
     isWorkspaceMuted: (workspaceId) =>
-      isWorkspaceNotificationMutedBySidebarFilters(state, workspaceId),
+      isWorkspaceNotificationMutedBySidebarFilters(state, readRuntimeStatuses(), workspaceId),
     resolveViewedSubjectKey: (groupId) => resolveViewedPaneKey(state, groupId)
   }
 }

@@ -5,6 +5,7 @@ import { getAgentSessionOptionCatalog } from '../../../../../../src/shared/agent
 import type { AgentSessionOptionCatalog } from '../../../../../../src/shared/agent-session/options/catalog-providers/agent-session-option-catalog-types'
 import type { AgentSessionConversationCommand } from '../../../../../../src/shared/agent-session/conversation-context/agent-session-conversation-command'
 import { useCallback, useMemo, useState } from 'react'
+import type { AgentStatusEntry } from '../../../../../../src/shared/agent-status/contracts/agent-status-types'
 import type {
   NativeChatSessionOptionSettingsMutation,
   SessionOptionDescriptor,
@@ -41,8 +42,8 @@ export function useMobileNativeChatSessionOptionController(args: {
   hostId: string
   isTabChatView: (tabId: string) => boolean
   isWorking: boolean
-  reportedModel: string | null
-  modelSwitchCommand?: string
+  /** The terminal agent's status row: its model, live effort and session, as desktop reads them. */
+  reportedStatus?: Pick<AgentStatusEntry, 'model' | 'modelSwitchCommand' | 'providerSession'> | null
   structured: {
     optionSurface?: SessionOptionsSurface
     conversationCommands?: readonly AgentSessionConversationCommand[]
@@ -70,7 +71,7 @@ export function useMobileNativeChatSessionOptionController(args: {
     hostId,
     isTabChatView,
     isWorking,
-    reportedModel,
+    reportedStatus,
     structured,
     toggleTabChatView,
     worktreeId
@@ -112,10 +113,12 @@ export function useMobileNativeChatSessionOptionController(args: {
   )
   const sessionOptions = useMobileNativeChatSessionOptions({
     discoveredModels,
-    modelSwitchCommand: args.modelSwitchCommand,
+    modelSwitchCommand: reportedStatus?.modelSwitchCommand,
     agent: activeChatStructured ? null : agent,
     scopeKey: mobileNativeChatScopeKey(hostId, worktreeId, activeSessionTabId),
-    reportedModel,
+    reportedModel: reportedStatus?.model ?? null,
+    reportedEffort: reportedStatus?.providerSession?.effort,
+    reportingSessionId: reportedStatus?.providerSession?.id,
     isWorking,
     dispatchCommand,
     onAgentPicker: handleAgentPicker,

@@ -14,6 +14,7 @@ export type RepoSummary = {
   executionHostId?: ExecutionHostId | null
   issueSourcePreference?: IssueSourcePreference
   upstream?: { owner: string; repo: string; host?: string } | null
+  hiddenAt?: number
 }
 
 export type IssueSourcePreference = 'upstream' | 'origin' | 'auto'
@@ -44,6 +45,9 @@ export type GitHubWorkItem = {
   checksSummary?: ProviderCheckSummary
   mergeable?: GitHubPRMergeableState
   mergeStateStatus?: string | null
+  autoMergeEnabled?: boolean
+  autoMergeAllowed?: boolean | null
+  mergeQueueRequired?: boolean | null
 }
 
 export type GitHubAssignableUser = {
@@ -127,16 +131,6 @@ export type GitPushTarget = {
 export type SetupDecision = 'inherit' | 'run' | 'skip'
 
 export type SetupRunPolicy = 'ask' | 'run-by-default' | 'skip-by-default'
-
-export type RepoHooksResponse = {
-  hooks: { scripts?: { setup?: string } } | null
-  source: string | null
-  setupRunPolicy?: SetupRunPolicy
-  setupTrust?: {
-    contentHash: string
-    scriptContent: string
-  }
-}
 
 export type LinearProject = {
   id: string

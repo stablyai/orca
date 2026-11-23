@@ -1,0 +1,41 @@
+import type { PreloadApi } from '../../../../../preload/api-types'
+import { toRuntimeWorktreeSelector } from '../../../runtime/rpc/targets/runtime-worktree-selector'
+import { resolveRuntimeWorktreeByPath } from '../workspaces/web-runtime-worktree-catalog'
+import { callRuntimeResult } from '../../runtime/client/web-runtime-calls'
+
+export function createGitHistoryApi(): Pick<PreloadApi['git'], 'history' | 'refs' | 'blame'> {
+  return {
+    refs: async ({ worktreePath, query }) => {
+      const worktree = await resolveRuntimeWorktreeByPath(worktreePath)
+      return callRuntimeResult('git.refs', {
+        worktree: toRuntimeWorktreeSelector(worktree.id),
+        query
+      })
+    },
+    history: async ({ worktreePath, limit, baseRef, branchOnly, skip, refs, historyToken }) => {
+      const worktree = await resolveRuntimeWorktreeByPath(worktreePath)
+      return callRuntimeResult('git.history', {
+        worktree: toRuntimeWorktreeSelector(worktree.id),
+        limit,
+        baseRef,
+        branchOnly,
+        refs,
+        historyToken,
+        skip
+      })
+    },
+    blame: async ({ worktreePath, filePath, knownHeadOid }) => {
+      const worktree = await resolveRuntimeWorktreeByPath(worktreePath)
+      return callRuntimeResult(
+        'git.blame',
+        {
+          worktree: toRuntimeWorktreeSelector(worktree.id),
+          filePath,
+          knownHeadOid
+        },
+        // Large files with long history take seconds to blame, past the 30s default.
+        120_000
+      )
+    }
+  }
+}

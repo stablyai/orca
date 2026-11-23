@@ -16,7 +16,7 @@ import type { WorkspaceStatusDefinition } from '../../../../../../shared/worktre
 import { getWorkspaceStatusVisualMeta } from '../../workspace-status/presentation/workspace-status'
 import WorkspaceStatusAppearancePopover from '../../workspace-status/presentation/WorkspaceStatusAppearancePopover'
 import { useTranslate } from '@/i18n/use-translate'
-import { translateWorkspaceBoardStatusLabel } from '../../workspace-board-status-label'
+import { translateWorkspaceBoardStatusLabel } from '../../workspace-status/presentation/workspace-board-status-label'
 
 type WorkspaceKanbanSettingsMenuProps = {
   workspaceStatuses: readonly WorkspaceStatusDefinition[]

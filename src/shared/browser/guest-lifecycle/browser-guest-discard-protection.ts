@@ -1,3 +1,4 @@
+import type { BrowserLoadStallEvent } from './browser-guest-events'
 export const BROWSER_GUEST_PROTECTION_CHALLENGE = 'browser:guest-protection-challenge'
 export const BROWSER_GUEST_PROTECTION_REPORT = 'browser:guest-protection-report'
 
@@ -41,6 +42,8 @@ export type BrowserGuestDiscardApi = {
     webContentsId: number
     policyToken?: BrowserGuestIdleDiscardToken
   }) => boolean
+  /** Remakes a This-device page Memory Saver freed; false when it was not freed. */
+  wakeClientPage: (args: { browserPageId: string }) => Promise<boolean>
   acknowledgeGuestRemoval: (args: {
     browserPageId: string
     webContentsId: number
@@ -52,6 +55,8 @@ export type BrowserGuestDiscardApi = {
   onGuestDiscardProtectionChanged: (
     callback: (event: BrowserGuestDiscardProtectionChange) => void
   ) => () => void
+  /** A page load that hasn't committed after a few seconds, and when it clears. */
+  onLoadStall: (callback: (event: BrowserLoadStallEvent) => void) => () => void
 }
 
 export type BrowserGuestIdleDiscardToken = {
