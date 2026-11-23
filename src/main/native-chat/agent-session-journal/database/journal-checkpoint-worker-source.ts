@@ -17,20 +17,22 @@ try {
 const frames = db.prepare('PRAGMA wal_checkpoint(NOOP)');
 const passive = db.prepare('PRAGMA wal_checkpoint(PASSIVE)');
 const behind = (state) => state.log - state.checkpointed >= workerData.frames;
-const check = () => {
+const check = (force) => {
   clearTimeout(retry);
   const before = frames.get();
   let state = before;
-  if (behind(state)) {
+  const ran = behind(state) || (force && state.log > state.checkpointed);
+  if (ran) {
     passive.get();
     state = frames.get();
   }
-  // Still behind but moving: writes outpace one pass. No progress means a reader pins the WAL;
-  // the writer's next commit asks again.
-  if (behind(state) && state.checkpointed > before.checkpointed) {
-    retry = setTimeout(check, workerData.retryMs);
+  // Still behind: soon while catching up, slower while a reader pins the WAL, so committed frames
+  // still reach disk once it lets go.
+  if (behind(state)) {
+    const moving = state.checkpointed > before.checkpointed;
+    retry = setTimeout(() => check(false), moving ? workerData.retryMs : workerData.pinnedRetryMs);
   }
-  parentPort.postMessage({ type: 'checked' });
+  parentPort.postMessage({ type: 'checked', ran });
 };
 parentPort.on('message', (message) => {
   if (message.type === 'stop') {
@@ -39,7 +41,7 @@ parentPort.on('message', (message) => {
     parentPort.close();
     return;
   }
-  check();
+  check(message.force === true);
 });
-check();
+check(false);
 `

@@ -11,9 +11,8 @@ import {
 
 const CHECKPOINT_FRAMES = 1000
 const CHECKPOINT_RETRY_MS = 100
-// While a worker runs, the writer's own commits checkpoint only once the WAL passes this many frames.
-const WRITER_BACKSTOP_FRAMES = 10_000
-// SQLite's default, for while no worker runs.
+const CHECKPOINT_PINNED_RETRY_MS = 1000
+// SQLite's default: the writer's own commits checkpoint only while no worker runs.
 const WRITER_ALONE_FRAMES = 1000
 const PARKED_RECHECK_MS = 100
 const RESTART_DELAY_MS = 10_000
@@ -24,7 +23,7 @@ const STOP_TIMEOUT_MS = 5000
 export class JournalCheckpointOwner {
   private worker: WorkerRequestTransport | undefined
   private asking = false
-  private askAgain = false
+  private askAgain: { force: boolean } | undefined
   private exited: Promise<void> = Promise.resolve()
   private restartTimer: ReturnType<typeof setTimeout> | undefined
   private restartDelayMs: number
@@ -99,7 +98,7 @@ export class JournalCheckpointOwner {
     }
     this.measure()
     if (this.log - this.checkpointed >= CHECKPOINT_FRAMES) {
-      this.ask()
+      this.ask(false)
     }
     this.wake()
   }
@@ -132,17 +131,32 @@ export class JournalCheckpointOwner {
   }
 
   /**
-   * Runs only while a write waits on WAL room, so the writer is idle. Its PASSIVE checkpoint returns at
-   * once when the worker is mid-checkpoint, and catches up for itself when no worker is running. A fully
-   * checkpointed WAL past the ceiling resets only through TRUNCATE once overlapping readers keep the
-   * next write from restarting it, so try one without waiting on readers.
+   * Runs only while a write waits on WAL room, so the writer is idle. The worker copies the backlog;
+   * without one, the writer does. A fully checkpointed WAL past the ceiling resets only through
+   * TRUNCATE once overlapping readers keep the next write from restarting it, so the writer tries one
+   * without waiting on readers; with nothing left to copy it only shortens the file.
    */
   private relieve(): void {
     if (this.stopped || this.writer.isTransaction) {
       return
     }
     try {
-      this.passive!.get()
+      if (this.worker) {
+        this.ask(true)
+      } else {
+        this.passive!.get()
+      }
+    } catch (error) {
+      this.warn(error)
+    }
+    this.resetIfCopied()
+  }
+
+  private resetIfCopied(): void {
+    if (this.stopped || this.writer.isTransaction) {
+      return
+    }
+    try {
       this.measure()
       if (this.log >= JOURNAL_WAL_BACKPRESSURE_FRAMES && this.checkpointed === this.log) {
         const timeout = Number(this.writer.pragma('busy_timeout', { simple: true }))
@@ -178,16 +192,16 @@ export class JournalCheckpointOwner {
   }
 
   /** One request at a time: a slow checkpoint never queues more behind it. */
-  private ask(): void {
+  private ask(force: boolean): void {
     if (!this.worker) {
       return
     }
     if (this.asking) {
-      this.askAgain = true
+      this.askAgain = { force: force || this.askAgain?.force === true }
       return
     }
     try {
-      this.worker.postMessage({ type: 'check' })
+      this.worker.postMessage({ type: 'check', force })
       this.asking = true
     } catch (error) {
       // A worker that can't take messages is exiting; its exit schedules the replacement.
@@ -206,7 +220,8 @@ export class JournalCheckpointOwner {
             workerData: {
               filename: this.filename,
               frames: CHECKPOINT_FRAMES,
-              retryMs: CHECKPOINT_RETRY_MS
+              retryMs: CHECKPOINT_RETRY_MS,
+              pinnedRetryMs: CHECKPOINT_PINNED_RETRY_MS
             }
           })
     } catch (error) {
@@ -218,14 +233,23 @@ export class JournalCheckpointOwner {
     // The worker checks once at start, for a WAL a crash left behind.
     this.asking = true
     let failure: unknown
-    worker.on('message', (message: { type?: unknown }) => {
-      if (message?.type === 'checked' && this.worker === worker) {
-        this.asking = false
+    worker.on('message', (message: { type?: unknown; ran?: unknown }) => {
+      if (message?.type !== 'checked' || this.worker !== worker) {
+        return
+      }
+      this.asking = false
+      if (message.ran === true) {
         this.restartDelayMs = this.options.restartDelayMs ?? RESTART_DELAY_MS
-        if (this.askAgain) {
-          this.askAgain = false
-          this.ask()
-        }
+      }
+      const again = this.askAgain
+      this.askAgain = undefined
+      if (again) {
+        this.ask(again.force)
+      }
+      // Let a parked write in as soon as the copy it waited on lands, not at the next recheck.
+      if (this.waiters.size > 0) {
+        this.resetIfCopied()
+        this.wake()
       }
     })
     worker.on('error', (error: Error) => {
@@ -236,7 +260,7 @@ export class JournalCheckpointOwner {
         if (this.worker === worker) {
           this.worker = undefined
           this.asking = false
-          this.askAgain = false
+          this.askAgain = undefined
         }
         resolve()
         if (this.closing) {
@@ -248,10 +272,10 @@ export class JournalCheckpointOwner {
       })
     })
     worker.unref()
-    this.autocheckpoint(WRITER_BACKSTOP_FRAMES)
+    this.autocheckpoint(0)
   }
 
-  /** Each restart that dies before a successful check waits twice as long, so a persistent failure settles. */
+  /** Each restart that dies before a checkpoint succeeds waits twice as long, so a persistent failure settles. */
   private scheduleRestart(): void {
     if (this.closing) {
       return

@@ -30,7 +30,7 @@ it('replaces a checkpoint worker that dies, and the replacement checkpoints the 
     factory: () => {
       const worker = new Worker(journalCheckpointWorkerSource, {
         eval: true,
-        workerData: { filename, frames: 1000, retryMs: 10 }
+        workerData: { filename, frames: 1000, retryMs: 10, pinnedRetryMs: 10 }
       })
       workers.push(worker)
       return worker
