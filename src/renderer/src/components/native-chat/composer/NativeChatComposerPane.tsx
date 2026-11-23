@@ -9,6 +9,7 @@ import { useNativeChatDraftEvents } from './editor/use-native-chat-draft-events'
 import { useNativeChatComposerRecall } from '../drafts/use-native-chat-composer-recall'
 import { useNativeChatLaunchDraftAdoption } from '../drafts/use-native-chat-launch-draft-adoption'
 import { useNativeChatComposerMentions } from '../native-chat-composer-room'
+import { useNativeChatKeptMentionHighlight } from './pickers/use-native-chat-kept-mention-highlight'
 import { useNativeChatRoomSend } from '../native-chat-room-send'
 import { NativeChatComposerRoomProvider } from '../NativeChatComposerRoomProvider'
 import { NativeChatComposerWorkspace } from './controls/NativeChatComposerWorkspace'
@@ -136,6 +137,7 @@ export const NativeChatComposerPane = forwardRef<ComposerHandle, C.NativeChatCom
       notices
     })
     const { autocomplete } = mentions
+    useNativeChatKeptMentionHighlight(mentions, activeSuggestion, setActiveSuggestion)
 
     const resolveTarget = useCallback(
       () => (targetPtyId ? { ptyId: targetPtyId } : null),

@@ -20,6 +20,10 @@ import {
 } from './native-chat-host-session-mentions'
 
 const LIST_TIMEOUT_MS = 5_000
+// As `agent.list` reads every workspace, no terminal page may hide one.
+const TERMINAL_LIST_LIMIT = 10_000
+// The `@` list shows at most this many of each kind for a query, as it caps files.
+const ROWS_PER_KIND = 8
 const NO_VALUES: readonly string[] = []
 
 /** The host's other chats and terminals for `@` (`query` non-null while open), read once each
@@ -56,7 +60,7 @@ export function useNativeChatHostSessions(
       callRuntimeRpc<RuntimeTerminalListResult>(
         target,
         'terminal.list',
-        { includeVisualLayouts: false, includePreview: false },
+        { limit: TERMINAL_LIST_LIMIT, includeVisualLayouts: false, includePreview: false },
         { timeoutMs: LIST_TIMEOUT_MS }
       )
     ]).then(([agents, terminals]) => {
@@ -77,9 +81,8 @@ export function useNativeChatHostSessions(
     }
   }, [open, structuredWorktreeId, terminalTabId])
   const mentions = useMemo(() => {
-    const listed = new Set([...crew.references.values()].map((agent) => agent.address))
     return lists && paneKey !== undefined
-      ? hostSessionMentions(lists, { paneKey, sessionId, ptyId }, listed)
+      ? hostSessionMentions(lists, { paneKey, sessionId, ptyId }, crew.addresses)
       : NO_HOST_SESSION_MENTIONS
   }, [lists, paneKey, sessionId, ptyId, crew])
   return useMemo(
@@ -91,8 +94,8 @@ export function useNativeChatHostSessions(
         query === null
           ? NO_VALUES
           : [
-              ...rankNativeChatCrewMentions(mentions.chats, query),
-              ...rankNativeChatCrewMentions(mentions.terminals, query)
+              ...rankNativeChatCrewMentions(mentions.chats, query).slice(0, ROWS_PER_KIND),
+              ...rankNativeChatCrewMentions(mentions.terminals, query).slice(0, ROWS_PER_KIND)
             ]
     }),
     [mentions, crew, query]
