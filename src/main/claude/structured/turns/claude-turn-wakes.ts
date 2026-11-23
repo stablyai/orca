@@ -43,6 +43,11 @@ export class ClaudeTurnWakes {
     return true
   }
 
+  /** A message reached Claude between turns: the next wake-up is not only its runs'. */
+  messaged(): void {
+    this.unnamed = true
+  }
+
   /** Taken by the turn that opens next: named only when Claude opened it, not a send. */
   take(opensItself: boolean): { wokenBy?: string[] } {
     const wokenBy = this.unnamed ? [] : this.pending

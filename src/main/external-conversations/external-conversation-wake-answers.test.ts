@@ -382,3 +382,40 @@ it('reads each launch’s sends as the conversations that delivered them', async
     { run: 'r2', sends: [THREAD, null], runs: ['w1'] }
   ])
 })
+
+it('gives a wake-up with no prose of its own no earlier answer to post', async () => {
+  const items = [
+    {
+      itemId: 'private-answer',
+      sequence: 1,
+      revision: 0,
+      observedAt: 1,
+      body: { kind: 'message', role: 'assistant', blocks: [{ type: 'text', text: 'Private.' }] }
+    },
+    {
+      itemId: 'wake-row',
+      sequence: 2,
+      revision: 0,
+      observedAt: 2,
+      body: {
+        kind: 'turn',
+        turnId: 't2',
+        state: 'completed',
+        startedAt: 2,
+        userItemId: 'wake-row',
+        wokenBy: ['r1']
+      }
+    }
+  ]
+  const cursor = { epoch: 'e', sequence: 2 }
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: endedTurn reads only these journal reads; the rows are journal-shaped.
+  const chat = {
+    journalReads: async () => ({
+      operationWindow: async () => ({ snapshot: { items, submissions: [], cursor } }),
+      canonicalItemIds: async () => new Map()
+    })
+  } as unknown as ConversationChat
+  const turn = await endedTurn(chat, SESSION, 't2', cursor)
+  expect(turn.wake?.wokenBy).toEqual(['r1'])
+  expect(turn.lastAssistantMessage).toBeUndefined()
+})

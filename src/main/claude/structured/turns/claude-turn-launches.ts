@@ -95,7 +95,7 @@ export class ClaudeTurnLaunches {
 
 /** A message someone sent the root agent, as the stream echoes it: not a tool result, not Claude's
  *  own notice. */
-function isRootInput(frame: Record<string, unknown>): boolean {
+export function isRootInput(frame: Record<string, unknown>): boolean {
   if (frame.type !== 'user' || frame.parent_tool_use_id || isClaudeInjectedUserMessage(frame)) {
     return false
   }

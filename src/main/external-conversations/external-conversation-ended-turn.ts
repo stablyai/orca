@@ -84,7 +84,6 @@ export async function endedTurn(
   }
   const items = journal.items.filter((item) => item.sequence <= cursor.sequence)
   const opener = await readEndedChatTurnOpener(() => chat.journalReads(sessionId), items, turnId)
-  const lastAssistantMessage = latestStructuredAgentSessionAssistantMessage(items)
   const failure = latestStructuredAgentSessionFailure(items, journal.submissions)
   const row = endedChatTurnRow(items, turnId)
   const lifecycle = row && readAgentJournalTurn(row.body)
@@ -95,6 +94,11 @@ export async function endedTurn(
           steered: steeredInto(journal.submissions, row.itemId)
         }
       : undefined
+  // A wake-up has no message of its own to stop at: only its own prose is its answer.
+  const lastAssistantMessage =
+    wake && row
+      ? structuredAgentSessionTurnAssistantMessage(items, row.itemId)
+      : latestStructuredAgentSessionAssistantMessage(items)
   const launches = lifecycle?.launches?.map((launch) => ({
     run: launch.run,
     sends: launch.sends.map((send) => sentFrom(items, opener, send)),

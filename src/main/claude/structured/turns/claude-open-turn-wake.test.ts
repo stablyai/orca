@@ -167,3 +167,8 @@ it('stamps a wake-up’s launch with the run that woke it, and a message into it
   })
   expect(messaged.at(-1)?.wokenBy).toBeUndefined()
 })
+
+it('names nothing on a wake-up after a message reached Claude between turns', () => {
+  const turns = replay({ 11: (send) => send(echo('late-echo')) })
+  expect(turns.at(-1)?.wokenBy).toBeUndefined()
+})

@@ -2,7 +2,7 @@
 // whose each background launch is for (launches), with the root agent's calls to tell launches by.
 import { ClaudeToolOriginRegistry } from '../../subagents/claude-tool-origin-registry'
 import type { ClaudeCurrentTurn } from './claude-turn-lifecycle-item'
-import { ClaudeTurnLaunches } from './claude-turn-launches'
+import { ClaudeTurnLaunches, isRootInput } from './claude-turn-launches'
 import { ClaudeTurnWakes } from './claude-turn-wakes'
 
 export class ClaudeTurnInputs {
@@ -24,6 +24,9 @@ export class ClaudeTurnInputs {
 
   /** One provider frame before it opens or joins a turn; true when it changed `turn`'s row. */
   observe(frame: Record<string, unknown>, opensTurn: boolean, turn: ClaudeCurrentTurn | null) {
+    if (!turn && !opensTurn && isRootInput(frame)) {
+      this.wakes.messaged()
+    }
     const named = this.wakes.observe(frame, turn)
     const launched = !!turn && this.launches.observe(frame, opensTurn, this.toolOrigins, turn)
     return !!turn && (named || launched || this.unwoken(turn))
