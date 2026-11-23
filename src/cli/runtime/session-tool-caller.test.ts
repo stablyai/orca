@@ -49,6 +49,13 @@ describe('adoptSessionToolCaller', () => {
       await expect(
         adoptSessionToolCaller({ HERMES_HOME: home, HERMES_SESSION_ID: 'local-bot' }, noTrade)
       ).rejects.toThrow(/ran nothing/)
+      // A delegated subagent's tool runs under its own session id, beside its chat's.
+      await expect(
+        adoptSessionToolCaller(
+          { HERMES_HOME: home, HERMES_SESSION_ID: 'child', HERMES_SESSION_CHAT_ID: 'local-bot' },
+          noTrade
+        )
+      ).rejects.toThrow(/ran nothing/)
       await expect(
         adoptSessionToolCaller({ HERMES_HOME: home, HERMES_SESSION_ID: 'local-chat' }, noTrade)
       ).resolves.toBeUndefined()

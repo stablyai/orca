@@ -16,7 +16,8 @@ export const ORCA_AGENT_SESSION_TOOL_TOKEN_ENV = 'ORCA_AGENT_SESSION_TOOL_TOKEN'
  *  Orca's CLI refuses a bot's tool whose token never arrived instead of running it as the owner. */
 export const SHARED_TOOL_PROCESS_SESSION_FILES = [
   {
-    sessionIdEnv: 'HERMES_SESSION_ID',
+    // A delegated subagent and the rest of a compressed turn get a new session id; the chat id stays.
+    sessionIdEnvs: ['HERMES_SESSION_ID', 'HERMES_SESSION_CHAT_ID'],
     homeEnv: 'HERMES_HOME',
     defaultHome: '.hermes',
     dir: 'orca-sessions'

@@ -22,17 +22,22 @@ export async function tradeSessionToolToken(
 /** A bot's session Orca published for the tool's own session, whose token didn't reach the tool. */
 async function publishedBotSession(env: NodeJS.ProcessEnv): Promise<boolean> {
   for (const place of SHARED_TOOL_PROCESS_SESSION_FILES) {
-    const sessionId = env[place.sessionIdEnv]?.trim()
-    if (!sessionId || !new RegExp(`^${SHARED_TOOL_PROCESS_SESSION_ID_PATTERN}$`).test(sessionId)) {
-      continue
-    }
     const home = env[place.homeEnv]?.trim() || join(homedir(), place.defaultHome)
-    const file = await readFile(join(home, place.dir, `${sessionId}.json`), 'utf-8').catch(
-      () => null
-    )
-    const published: unknown = file ? safeJson(file) : null
-    if (isRecord(published) && published[SHARED_TOOL_PROCESS_BOT_FIELD] === '1') {
-      return true
+    for (const name of place.sessionIdEnvs) {
+      const sessionId = env[name]?.trim()
+      if (
+        !sessionId ||
+        !new RegExp(`^${SHARED_TOOL_PROCESS_SESSION_ID_PATTERN}$`).test(sessionId)
+      ) {
+        continue
+      }
+      const file = await readFile(join(home, place.dir, `${sessionId}.json`), 'utf-8').catch(
+        () => null
+      )
+      const published: unknown = file ? safeJson(file) : null
+      if (isRecord(published) && published[SHARED_TOOL_PROCESS_BOT_FIELD] === '1') {
+        return true
+      }
     }
   }
   return false
