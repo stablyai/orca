@@ -8,6 +8,7 @@ import type { Repo } from '../../../../shared/repository/repo-types'
 import { WORKTREE_OPEN_EXISTING_BRANCH_V2_REQUEST_RUNTIME_CAPABILITY } from '../../../../shared/remote-runtime/protocol/worktree-runtime-capabilities'
 import { translate } from '@/i18n/i18n'
 import type { Translate } from '@/i18n/use-translate'
+import { getHostHealthUnavailableDetail } from '@/lib/workspace/creation/project-host-health-detail'
 import {
   buildProjectHostSetupOptions,
   getHostSetupUnavailableDetail,
@@ -56,7 +57,8 @@ export function listOpenOnHostTargets(
       parsed?.kind !== 'runtime' ||
       option.hostId === sourceHostId ||
       rpcHostId === sourceHostId ||
-      host?.aliasHostIds?.includes(sourceHostId)
+      host?.aliasHostIds?.includes(sourceHostId) ||
+      host?.mergedIntoHostId === sourceHostId
     ) {
       continue
     }
@@ -91,9 +93,12 @@ function getDisabledReason(
   if (option.kind === 'needs-setup' && !option.canSetLocation) {
     return option.detail
   }
-  // Why: on the relay the shown row is ssh:, so the options builder never checked the server's capabilities.
-  const runtimeUnavailable =
-    option.kind === 'needs-setup' && host ? getHostSetupUnavailableDetail(host, t) : null
+  // Why: the options builder checks health only for needs-setup rows, and on the relay the shown
+  // row is ssh:, so it never checked the server's setup capabilities either.
+  const runtimeUnavailable = !host
+    ? null
+    : (getHostHealthUnavailableDetail(host.health) ??
+      (option.kind === 'needs-setup' ? getHostSetupUnavailableDetail(host, t) : null))
   if (runtimeUnavailable) {
     return runtimeUnavailable
   }

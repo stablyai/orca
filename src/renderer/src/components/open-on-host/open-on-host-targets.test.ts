@@ -179,4 +179,41 @@ describe('listOpenOnHostTargets', () => {
     )
     expect(byHost('runtime:x', targets).disabledReason).not.toBeNull()
   })
+
+  it('disables a ready location on a disconnected host', () => {
+    const targets = listOpenOnHostTargets(
+      {
+        ...input,
+        hosts: input.hosts.map((host) =>
+          host.id === 'runtime:buildbox' ? { ...host, health: 'disconnected' } : host
+        )
+      },
+      t
+    )
+    expect(byHost('runtime:buildbox', targets).existingSetup).not.toBeNull()
+    expect(byHost('runtime:buildbox', targets).disabledReason).not.toBeNull()
+  })
+
+  it('skips a ready location on the merged-away id of the source host', () => {
+    const targets = listOpenOnHostTargets(
+      {
+        ...input,
+        sourceHostId: 'ssh:devbox',
+        projectHostSetups: [{ ...setup, id: 'setup-devbox', hostId: 'runtime:devbox' }],
+        hosts: [
+          {
+            id: 'ssh:devbox',
+            kind: 'ssh',
+            label: 'devbox',
+            detail: '',
+            health: 'available',
+            aliasHostIds: ['runtime:devbox']
+          },
+          { ...runtimeHost('runtime:devbox', baseCapabilities), mergedIntoHostId: 'ssh:devbox' }
+        ]
+      },
+      t
+    )
+    expect(targets).toEqual([])
+  })
 })
