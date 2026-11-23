@@ -15,11 +15,13 @@ import {
   parseCliVersion
 } from '../../../../shared/app-lifecycle/identity/app-version'
 import { resolveCommandOnLocalPath } from '../../../ipc/command-path/command-path-resolver'
+import { withConfiguredProxyEnv } from '../../../network/configured-proxy-child-env'
 import { hostShellEnvironment } from '../../../runtime/agent-session/environment/structured-agent-shell-environment'
 import type {
   ProviderRateLimits,
   UsageRateLimitFailureKind
 } from '../../../../shared/agent-usage/rate-limits/rate-limit-types'
+import type { NetworkProxySettings } from '../../../../shared/network/network-proxy'
 import {
   ANTIGRAVITY_MIN_USAGE_VERSION,
   ANTIGRAVITY_PROBE_ENV,
@@ -70,6 +72,7 @@ export type FetchAntigravityRateLimitsOptions = AntigravityUsageDependencies & {
   signal?: AbortSignal
   /** A WSL target reads the agy installed and signed in inside that distro. */
   target?: LocalAccountRuntimeTarget
+  networkProxySettings?: NetworkProxySettings
 }
 
 type AgyResult = Pick<ProcessResult, 'code' | 'stdout' | 'stderr' | 'timedOut'> & {
@@ -193,12 +196,14 @@ async function readAntigravityUsage(
     if (!program) {
       return notFound()
     }
+    // agy is a Go CLI that reads only proxy env vars; WSL runs keep the guest's own proxy env.
+    const probeEnv = withConfiguredProxyEnv(env, options.networkProxySettings) ?? env
     const runCommand = options.runCommand ?? runProcess
     run = (args, timeoutMs) =>
       runCommand({
         program,
         args,
-        env,
+        env: probeEnv,
         timeoutMs,
         maxOutputBytes: ANTIGRAVITY_USAGE_MAX_OUTPUT_BYTES,
         signal: options.signal

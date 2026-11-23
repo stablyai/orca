@@ -1,5 +1,4 @@
 import { defineMethod, defineStreamingMethod } from '../../core'
-import { Screencast } from '../../../../../shared/rpc-contract/browser/browser-params'
 import { BrowserError } from '../../../../browser/browser-error'
 
 import { BROWSER_UNAVAILABLE_ERROR_CODE } from '../../../../../shared/remote-runtime/session-graph/runtime-session-contracts'
@@ -7,6 +6,7 @@ import { runtimeBrowserCommandsFactoryIsAvailable } from '../../../browser/insta
 import {
   FileChooserAnswer,
   PagePromptAnswer,
+  Screencast,
   ScreencastAck,
   ScreencastReclaimForDesktop,
   ScreencastUnsubscribe

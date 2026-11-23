@@ -21,9 +21,11 @@ import type { Translate } from '../../i18n/mobile-i18n'
 import { colors, typography } from '../../theme/mobile-theme'
 import { themedStyleSheet } from '../../theme/themed-styles'
 import { useMobileColorScheme } from '../../theme/use-mobile-color-scheme'
-import { chatSessionId, phoneAskCounts, type PhoneAsk } from './phone-needs-you-asks'
+import { phoneAskCounts, type PhoneAsk } from './phone-needs-you-asks'
+import { chatSessionId } from './use-phone-chat-prompts'
 import type { PhoneConnectorNeed } from '../connectors/phone-connector-needs'
 import type { ConnectorAccessRequest } from '../../../../src/shared/connector-bot-access-contract'
+import type { PairedServerAskCard } from '../../../../src/shared/rpc-contract/paired-server-asks-params'
 import type { RpcClient } from '../../transport/rpc/rpc-client-contract'
 import { useOptionalHostProtocolGates } from '../../components/host-connection/host-protocol-gates-context'
 import { structuredAgentSessionHostSupport } from '../../session/native-chat/agent-session/mobile-structured-agent-session-host-support'
@@ -93,10 +95,11 @@ function AskRow({
     { client, sessionId, enabled: sessionId !== null, hostSupport, agent: null },
     null
   )
-  const asked = ask.approval ? undefined : asyncQuestionSkip?.awaiting
+  // A prompt the turn stopped for is the one it waits on, as on the desktop; Skip is for the others.
+  const asked = ask.approval || ask.question ? undefined : asyncQuestionSkip?.awaiting
   const save = asyncQuestionSkip?.save
   const title = askRowTitle(ask, owner?.name ?? botName, t)
-  const line = askLine(ask, t, asked?.text)
+  const line = askLine(ask, t, ask.question ?? asked?.text)
   const command = ask.tool?.input ? (
     <Text style={styles.command} numberOfLines={1}>
       {ask.tool.input}
@@ -182,6 +185,50 @@ function AccessAskRow({
         title
       })}
       onPress={onOpen}
+    />
+  )
+}
+
+/** A paired server's agent waiting to message the bot: a tap opens the Home chat, where its card
+ *  waits, as the desktop's Open does. */
+function PairedAskRow({
+  ask,
+  card,
+  botName,
+  disabled,
+  onOpen
+}: {
+  ask: PhoneAsk
+  card: PairedServerAskCard
+  botName: string
+  disabled: boolean
+  onOpen: (() => void) | null
+}) {
+  const t = useMobileTranslation()
+  const name = card.botName ?? botName
+  const title = t('bots.needs.pairedAsk', '{{from}} wants to message {{name}}', {
+    from: ask.title,
+    name
+  })
+  return (
+    <ListRow
+      title={title}
+      wrapTitle
+      subtitle={[
+        card.serverName,
+        t('bots.needs.pairedAskDetail', 'Permission · Message {{name}}', { name })
+      ]
+        .filter(Boolean)
+        .join(' · ')}
+      subtitleLines={1}
+      leading={<Shield size={17} strokeWidth={2.1} color={colors.agentQuestion} />}
+      disabled={disabled || !onOpen}
+      accessibilityRole="button"
+      accessibilityLabel={t('bots.needs.actionFor', '{{action}}: {{title}}', {
+        action: t('bots.needs.open', 'Open'),
+        title
+      })}
+      onPress={onOpen ?? undefined}
     />
   )
 }
@@ -293,6 +340,15 @@ export function MobileBotNeedsYouGroup({
                     key={row.key}
                     title={row.ask.title}
                     onOpen={disabled ? null : () => onOpenAsk(row.ask!)}
+                  />
+                ) : row.ask?.open && 'pairedAsk' in row.ask.open ? (
+                  <PairedAskRow
+                    key={row.key}
+                    ask={row.ask}
+                    card={row.ask.open.pairedAsk.card}
+                    botName={botName}
+                    disabled={disabled}
+                    onOpen={row.ask.open.pairedAsk.home ? () => onOpenAsk(row.ask!) : null}
                   />
                 ) : row.ask?.open && 'access' in row.ask.open ? (
                   <AccessAskRow

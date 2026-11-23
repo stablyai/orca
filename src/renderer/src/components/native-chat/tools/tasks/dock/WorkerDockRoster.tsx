@@ -13,9 +13,7 @@ import { useLatestHandler } from '@/lib/use-latest-handler'
 import { workerDockSummary } from './worker-dock-summary'
 import { WorkerDockHeader } from './WorkerDockHeader'
 import { useWorkerDockScroll } from './use-worker-dock-scroll'
-import { useWorkerDockRowCache } from './use-worker-dock-row-cache'
 import { workerDockAnchorIndex, type WorkerDockScrollAnchor } from './worker-dock-scroll-anchor'
-import { useWorkerDockScrollViewport } from './NativeChatWorkerDockFrame'
 import { workerDockRosterBudget } from './worker-dock-roster-budget'
 
 export function WorkerDockRoster(props: {
@@ -47,11 +45,6 @@ export function WorkerDockRoster(props: {
   const id = useId()
   const root = useRef<HTMLDivElement>(null)
   const viewport = useRef<HTMLDivElement>(null)
-  const { scroller, scrollMargin } = useWorkerDockScrollViewport(
-    viewport,
-    props.narrow,
-    props.expanded
-  )
   const summary = useRef<HTMLButtonElement>(null)
   const anchor = useRef<WorkerDockScrollAnchor | null>(null)
   const [held, setHeld] = useState<
@@ -65,23 +58,29 @@ export function WorkerDockRoster(props: {
   >(null)
   const [active, setActive] = useState<string | null>(null)
   const [focused, setFocused] = useState<string | null>(null)
-  const [browsing, setBrowsing] = useState(false)
-  const cached = useWorkerDockRowCache(props.rows, active, focused)
   const current = useMemo(
     () => new Map(props.identities.map((row) => [row.id, row])),
     [props.identities]
   )
-  const identities = useMemo(
-    () =>
-      (held ?? props.identities).filter(
-        (row) => current.has(row.id) || active === row.id || focused === row.id
-      ),
-    [held, props.identities, active, focused, current]
-  )
-  const orderHeld =
-    held !== null &&
-    JSON.stringify(held.map((row) => [row.id, workerDockNeedsAttention(row.state)])) !==
-      JSON.stringify(props.identities.map((row) => [row.id, workerDockNeedsAttention(row.state)]))
+  // A held order keeps rows from jumping under the pointer, but never keeps a row that left (a
+  // cleared or finished worker goes at once) and never hides one that arrived (it joins the end).
+  const identities = useMemo(() => {
+    if (!held) {
+      return props.identities
+    }
+    const kept = held.flatMap((row) => current.get(row.id) ?? [])
+    const keptIds = new Set(kept.map((row) => row.id))
+    return [...kept, ...props.identities.filter((row) => !keptIds.has(row.id))]
+  }, [held, props.identities, current])
+  // The held order follows what is shown, so a row that arrived keeps its place when the next comes.
+  if (
+    held &&
+    (held.length !== identities.length ||
+      held.some((row, index) => row.id !== identities[index].id))
+  ) {
+    setHeld(identities)
+  }
+  const orderHeld = identities.some((row, index) => row.id !== props.identities[index]?.id)
   const clearing = props.identities.some(
     (row) => (row.state === 'failed' || row.state === 'unexpected') && props.pending.has(row.id)
   )
@@ -92,9 +91,8 @@ export function WorkerDockRoster(props: {
     count,
     needsYou,
     failures: failed
-  } = workerDockSummary(props.countIdentities ?? props.identities, cached, t)
-  const [height, setHeight] = useState(props.narrow ? 120 : 100)
-  const [more, setMore] = useState(false)
+  } = workerDockSummary(props.countIdentities ?? props.identities, props.rows, t)
+  const [budget, setBudget] = useState(props.narrow ? 200 : 160)
   const items = useMemo(
     () =>
       identities.map((row, index) => ({
@@ -129,8 +127,7 @@ export function WorkerDockRoster(props: {
   )
   const rowWindow = useNativeChatToolRunWindow({
     rows: rowKeys,
-    scrollerRef: scroller,
-    scrollMargin,
+    scrollerRef: viewport,
     isVisible: props.visible,
     drawsEveryRow: small,
     estimateSize,
@@ -142,52 +139,28 @@ export function WorkerDockRoster(props: {
   const modelColumn =
     props.identities.some((row) => row.hasModel) ||
     [...props.rows.values()].some((row) => row.model)
-  const measure = () => {
+  // Sized from the pane and the rows' layout, never from the scroll position: scrolling moves the
+  // list, it never resizes it.
+  const measure = useLatestHandler(() => {
     const element = viewport.current
-    if (!element) {
-      return
+    if (element) {
+      setBudget(workerDockRosterBudget(root.current, element, props.narrow, orderHeld))
     }
-    const budget = workerDockRosterBudget(root.current, element, props.narrow, orderHeld)
-    const measured = small
-      ? [...element.querySelectorAll<HTMLElement>('[data-index]')].map((node) => ({
-          start: node.offsetTop,
-          end: node.offsetTop + node.offsetHeight
-        }))
-      : virtual.getVirtualItems()
-    const start = measured.find((item) => item.end > element.scrollTop + 1)?.start ?? 0
-    let end = start
-    for (const item of measured) {
-      if (item.end <= start + 1) {
-        continue
-      }
-      if (item.end - start > budget && end > start) {
-        break
-      }
-      end = item.end
-    }
-    const last = element.firstElementChild?.lastElementChild
-    const totalSize = small
-      ? last instanceof HTMLElement
-        ? last.offsetTop + last.offsetHeight
-        : 0
-      : virtual.getTotalSize()
-    const next = Math.max(24, Math.min(end - start, totalSize - start))
-    setHeight(next)
-    setMore(end < totalSize - 1)
-  }
-  useLayoutEffect(measure)
-  const resize = useLatestHandler(measure)
+  })
+  useLayoutEffect(measure, [measure, props.expanded, props.narrow, orderHeld, items])
+  const shown = total > 0 || identities.length > 0 || Boolean(props.incomplete)
   useEffect(() => {
     const pane = root.current?.closest('[data-native-chat-root]')
-    if (!pane) {
+    if (!pane || typeof ResizeObserver === 'undefined') {
       return
     }
-    const observer = new ResizeObserver(resize)
+    const observer = new ResizeObserver(measure)
     observer.observe(pane)
     return () => observer.disconnect()
-  }, [resize])
+    // The strip draws nothing while empty, so the pane is only reachable once it has a row.
+  }, [measure, shown])
   const loadVisibleWindow = useLatestHandler(() => {
-    const first = visibleItems.find((item) => item.end > (scroller.current?.scrollTop ?? 0))
+    const first = visibleItems.find((item) => item.end > (viewport.current?.scrollTop ?? 0))
     const key = first ? items[first.index]?.id : undefined
     if (key && !props.rows.has(key)) {
       void props.loadWindow?.(key)
@@ -215,17 +188,12 @@ export function WorkerDockRoster(props: {
   useLayoutEffect(preserveAnchor, [identityOrder, props.rows, preserveAnchor])
   const hold = () => setHeld((previous) => previous ?? props.identities)
   const release = () => {
-    if (
-      !browsing &&
-      !root.current?.contains(document.activeElement) &&
-      !root.current?.matches(':hover')
-    ) {
+    if (!root.current?.contains(document.activeElement) && !root.current?.matches(':hover')) {
       setHeld(null)
       setActive(null)
     }
   }
   const scrollTo = (index: number) => {
-    setBrowsing(true)
     hold()
     const target = Math.max(0, Math.min(index, items.length - 1))
     if (small && viewport.current) {
@@ -234,7 +202,6 @@ export function WorkerDockRoster(props: {
     } else {
       virtual.scrollToIndex(target, { align: 'start' })
     }
-    requestAnimationFrame(measure)
   }
   const scrollHandlers = useWorkerDockScroll({
     small,
@@ -244,19 +211,42 @@ export function WorkerDockRoster(props: {
     onAnchorChange: (value) => {
       anchor.current = { ...value, order: items }
     },
-    measure,
-    hold,
-    setBrowsing,
+    onScrolled: hold,
     scrollTo
   })
-  if (!total && !identities.length && !props.incomplete) {
+  // A row that leaves while it holds focus (Clear, say) hands focus to the row that takes its
+  // place, to the header, or to the message box once the strip is gone, never to the page.
+  const lastFocus = useRef<{ id: string; index: number; pane: Element | null } | null>(null)
+  useLayoutEffect(() => {
+    const saved = lastFocus.current
+    if (!saved || items.some((row) => row.id === saved.id)) {
+      return
+    }
+    lastFocus.current = null
+    const focusedNow = document.activeElement
+    if (focusedNow && focusedNow !== document.body) {
+      return
+    }
+    const next = items[Math.min(saved.index, items.length - 1)]
+    const target = next
+      ? viewport.current?.querySelector<HTMLElement>(
+          `[data-worker-dock-row="${CSS.escape(next.id)}"] [data-worker-dock-open]`
+        )
+      : null
+    ;(
+      target ??
+      summary.current ??
+      saved.pane?.querySelector<HTMLElement>('[data-native-chat-composer-scope] textarea')
+    )?.focus()
+  }, [items])
+  if (!shown) {
     return null
   }
   return (
     <div
       ref={root}
       data-native-chat-background-tasks="true"
-      className="min-h-0 min-w-0 text-xs text-muted-foreground group-has-[[data-native-chat-worker-approvals]]/worker-dock:contents"
+      className="min-h-0 min-w-0 overflow-hidden rounded-xl border border-border bg-chat-canvas bg-[linear-gradient(var(--color-chat-composer-surface),var(--color-chat-composer-surface))] text-xs text-muted-foreground shadow-sm"
       onPointerEnter={hold}
       onPointerOverCapture={(event) => {
         const row =
@@ -278,12 +268,23 @@ export function WorkerDockRoster(props: {
             ? event.target.closest<HTMLElement>('[data-worker-dock-row]')
             : null
         if (row) {
-          setFocused(row.dataset.workerDockRow ?? null)
+          const id = row.dataset.workerDockRow ?? null
+          setFocused(id)
+          lastFocus.current = id
+            ? {
+                id,
+                index: items.findIndex((item) => item.id === id),
+                pane: row.closest('[data-native-chat-root]')
+              }
+            : lastFocus.current
           row.scrollIntoView({ block: 'nearest' })
         }
       }}
       onBlurCapture={() =>
         queueMicrotask(() => {
+          if (!root.current?.contains(document.activeElement)) {
+            lastFocus.current = null
+          }
           setFocused(
             document.activeElement?.closest<HTMLElement>('[data-worker-dock-row]')?.dataset
               .workerDockRow ?? null
@@ -297,7 +298,6 @@ export function WorkerDockRoster(props: {
         expanded={props.expanded}
         incomplete={props.incomplete}
         count={count}
-        total={total}
         clearable={clearable}
         failed={failed}
         needsYou={needsYou}
@@ -306,7 +306,6 @@ export function WorkerDockRoster(props: {
         summary={summary}
         onToggle={() => {
           setHeld(null)
-          setBrowsing(false)
           props.onExpandedChange(!props.expanded)
         }}
         onClear={props.onClearAll}
@@ -325,8 +324,9 @@ export function WorkerDockRoster(props: {
                 size="xs"
                 onClick={() => {
                   setHeld(null)
-                  setBrowsing(false)
-                  virtual.scrollToOffset(0)
+                  if (viewport.current) {
+                    viewport.current.scrollTop = 0
+                  }
                 }}
               >
                 {t('components.native-chat.workerDock.showLatest', 'Show latest')}
@@ -337,14 +337,10 @@ export function WorkerDockRoster(props: {
             ref={viewport}
             id={id}
             role="region"
-            aria-label={
-              more
-                ? t('components.native-chat.workerDock.workersMore', 'Workers · more workers below')
-                : t('components.native-chat.workerDock.workersRegion', 'Workers')
-            }
+            aria-label={t('components.native-chat.workerDock.workersRegion', 'Workers')}
             tabIndex={0}
-            className="scrollbar-sleek overflow-y-auto border-t border-border focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring group-has-[[data-native-chat-worker-approvals]]/worker-dock:h-auto! group-has-[[data-native-chat-worker-approvals]]/worker-dock:overflow-visible"
-            style={{ height }}
+            className="scrollbar-sleek min-h-0 overflow-y-auto overscroll-contain border-t border-border focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
+            style={{ maxHeight: budget }}
             onScroll={scrollHandlers.onScroll}
             onKeyDown={scrollHandlers.onKeyDown}
           >
@@ -357,17 +353,15 @@ export function WorkerDockRoster(props: {
             >
               {visibleItems.map((item) => {
                 const identity = items[item.index]
-                const row = props.rows.get(identity.id) ?? cached.get(identity.id)
-                const retired = !current.has(identity.id)
+                const row = props.rows.get(identity.id)
                 return (
                   <WorkerDockItem
                     key={identity.id}
                     index={item.index}
                     identity={identity}
                     row={row}
-                    retired={retired}
                     small={small}
-                    start={item.start - scrollMargin}
+                    start={item.start}
                     measure={rowWindow.measureRow}
                     narrow={props.narrow}
                     compact={props.compact}
@@ -383,11 +377,6 @@ export function WorkerDockRoster(props: {
               })}
             </div>
           </div>
-          {more && !props.compact ? (
-            <div className="flex h-6 items-center justify-center bg-gradient-to-b from-muted/30 to-muted text-2xs group-has-[[data-native-chat-worker-approvals]]/worker-dock:hidden">
-              {t('components.native-chat.workerDock.moreBelow', 'More below')}
-            </div>
-          ) : null}
         </>
       ) : null}
     </div>

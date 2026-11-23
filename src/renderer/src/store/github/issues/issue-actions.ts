@@ -61,7 +61,7 @@ export const createIssueActions = (
                   number,
                   ownerRepo: options?.ownerRepo
                 },
-                { timeoutMs: 30_000 }
+                { timeoutMs: 30_000, background: options?.background === true }
               )
             : await window.api.gh.issue({
                 repoPath,

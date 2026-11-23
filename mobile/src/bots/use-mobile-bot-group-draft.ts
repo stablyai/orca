@@ -1,4 +1,4 @@
-import { useCallback, useRef, type SetStateAction } from 'react'
+import { useCallback, useEffect, useRef, type SetStateAction } from 'react'
 import {
   clearMobileNativeChatDraftForSend,
   editMobileNativeChatDraft,
@@ -7,15 +7,27 @@ import {
   useMobileNativeChatDraft
 } from '../session/native-chat/composer/drafts/mobile-native-chat-draft-store'
 import { appendReturnedDraftText } from '../../../src/shared/native-chat/input/drafts/returned-draft-text'
+import { loadMobileNativeChatDrafts } from '../session/native-chat/composer/drafts/mobile-native-chat-draft-persistence'
 
-/** A room's draft key: the group's id for its original room, a thread's id for that thread. */
-export function mobileBotGroupDraftKey(hostId: string, roomId: string): string {
-  return `group:${hostId}:${roomId}`
+// A group's rooms keep their drafts as chat tabs (mobileNativeChatScopeKey's shape) of a workspace named
+// for the group, which no worktree id takes; one row per group, so a page deleting one rewrites no other's.
+function groupDrafts(groupId: string): string {
+  return `bot-groups:${groupId}`
 }
 
-/** A group room's composer text, kept in native chat's draft store so it outlives leaving the room. */
-export function useMobileBotGroupDraft(hostId: string, roomId: string) {
-  const key = mobileBotGroupDraftKey(hostId, roomId)
+/** A room's draft key, a chat tab's scope so it is saved like one: the group's id for its original
+ *  room, a thread's id for that thread. */
+export function mobileBotGroupDraftKey(hostId: string, groupId: string, roomId: string): string {
+  return `${hostId}\0${groupDrafts(groupId)}\0${roomId}`
+}
+
+/** A group room's composer text and photos, kept and saved with chat's drafts, so they outlive the
+ *  room's page. */
+export function useMobileBotGroupDraft(hostId: string, groupId: string, roomId: string) {
+  const key = mobileBotGroupDraftKey(hostId, groupId, roomId)
+  useEffect(() => {
+    void loadMobileNativeChatDrafts(hostId, groupDrafts(groupId))
+  }, [hostId, groupId])
   const text = useMobileNativeChatDraft(key)
   const editGenerationRef = useRef(0)
   const edit = useCallback(

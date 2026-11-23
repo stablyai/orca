@@ -11,11 +11,7 @@ import {
   legacyCompanionsPresent,
   removeLeftoverLegacyCompanions
 } from './journal-legacy-retirement-files'
-import {
-  LEGACY_PROOF_LAYOUT,
-  type LegacySourceHeld,
-  type LegacySourceRetiring
-} from './journal-legacy-retirement-state'
+import type { LegacySourceHeld, LegacySourceRetiring } from './journal-legacy-retirement-state'
 import {
   acquireJournalLegacyFileLock,
   createJournalLegacyFileEligibility
@@ -229,7 +225,7 @@ export class JournalLegacyRetirement {
     const proven: LegacySourceHeld = {
       version: 2,
       phase: 'held',
-      layout: LEGACY_PROOF_LAYOUT,
+      layout: this.proof.layout,
       proof: observation.proof,
       store: observation.store,
       counts: walked.counts,
@@ -254,7 +250,7 @@ export class JournalLegacyRetirement {
       const retiring: LegacySourceRetiring = {
         version: 2,
         phase: 'retiring',
-        layout: LEGACY_PROOF_LAYOUT,
+        layout: this.proof.layout,
         proof: observation.proof,
         store: observation.store
       }

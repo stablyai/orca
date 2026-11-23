@@ -5,7 +5,7 @@ import { isNoBootRefusal } from './wsl-orcad-connection-errors'
 import type { WslOrcadConnectIntent, WslOrcadConnectionStatus } from './wsl-orcad-connection-status'
 import { wslDistroHolderKey } from '../discovery/wsl-distro-holder-record'
 import { recoverWslOrcad, type WslOrcadRecoveryReason } from './wsl-orcad-liveness-recovery'
-import { confirmsRunning, gatherWslLivenessEvidence } from './wsl-orcad-liveness-evidence'
+import { confirmsRunning, gatherWslLivenessEvidence, revives } from './wsl-orcad-liveness-evidence'
 import {
   attachSupervisedWatch,
   cancellableWait,
@@ -282,7 +282,7 @@ export class WslOrcadLivenessSupervisor {
       case 'orcad-exited': {
         disarmSupervised(entry)
         const generation = entry.generation
-        const visible = await this.deps.hasUserVisibleWork(entry.distro)
+        const visible = await revives(this.deps, entry.distro)
         if (entry.generation !== generation) {
           return
         }

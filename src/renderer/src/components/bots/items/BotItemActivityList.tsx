@@ -22,6 +22,7 @@ import {
 import {
   botItemActivity,
   botItemWaitEntryKey,
+  botItemWorkerStopReason,
   type BotItemActivityEntry
 } from '../../../../../shared/bots/bot-item-activity'
 import { botItemActorName } from '../../../../../shared/bots/bot-item-actor-name'
@@ -199,12 +200,14 @@ function WorkerBody({
     )
   }
   const failed = entry.link.state === 'failed' || entry.link.state === 'stopped'
+  const reason = botItemWorkerStopReason(entry.link)
   return (
     <>
       {failed
         ? t('bots.items.activity.workerFailed', 'Worker stopped:')
         : t('bots.items.activity.workerFinished', 'Worker finished:')}{' '}
       {title}
+      {reason ? ` - ${reason}` : null}
       {entry.link.report ? <span className="block">{entry.link.report.subject}</span> : null}
     </>
   )

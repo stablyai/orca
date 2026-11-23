@@ -266,7 +266,8 @@ setMobileNativeChatDraftSource({
         text,
         skills: text === '' ? [] : inputs.skills,
         skillOrigin: text === '' ? undefined : drafts.get(scope)?.skillOrigin,
-        images: inputs.images.flatMap(({ path }) => (sending.has(path) ? [] : [{ path }])),
+        // A photo still uploading (no path yet) is saved once it lands.
+        images: inputs.images.flatMap(({ path }) => (!path || sending.has(path) ? [] : [{ path }])),
         files: savedMobileNativeChatFiles(inputs.files).filter((file) => !sending.has(file.path)),
         inFlight,
         queued: savedMobileNativeChatOfflineSends(scope, inFlight)

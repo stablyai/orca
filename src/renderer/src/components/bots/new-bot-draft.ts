@@ -2,12 +2,15 @@
 // A built-in template reads in the UI language; text the owner leaves as shown is saved in the
 // template's English, so SOUL.md keeps the words the template was written in.
 import type { Translate } from '@/i18n/use-translate'
-import { proposalIdentity, type BotProposal } from '../../../../shared/bots/bot-proposal'
+import {
+  BOT_PURPOSE_MAX_LENGTH,
+  proposalIdentity,
+  type BotProposal
+} from '../../../../shared/bots/bot-proposal'
 import { botTemplate } from '../../../../shared/bots/bot-templates'
 import { botTemplateText } from '../../../../shared/bots/bot-template-text'
 import { finalSentenceStop, joinSentences } from '../../../../shared/text/sentence-joining'
 import type { NewBotProposalDraft } from './NewBotProposalFields'
-import { PURPOSE_MAX_LENGTH } from './NewBotPurposeField'
 
 export type NewBotDraft = NewBotProposalDraft & { purpose: string }
 
@@ -124,7 +127,7 @@ export function templateIdentityTooLong(
   return (
     templateIdentity(proposal) !== undefined &&
     !identityUntouched(proposal, purpose, t) &&
-    purpose.trim().length > PURPOSE_MAX_LENGTH
+    purpose.trim().length > BOT_PURPOSE_MAX_LENGTH
   )
 }
 

@@ -73,6 +73,7 @@ export type DesktopCorePaths = {
 /** What the composing process supplies: native effects and facts the core cannot own. */
 export type DesktopCoreNative = {
   isQuitting(): boolean
+  isNativeUpdateInstallUnderWay(): boolean
   isServeMode(): boolean
   servedOrcaProfileId(): string | undefined
   openExternal(url: string): Promise<void>
@@ -261,7 +262,9 @@ export async function composeDesktopCore(
     claudeUsage: core.claudeUsage!,
     codexUsage: core.codexUsage!,
     // Remote clients mirror schedules; only server processes execute remote_host_service ownership.
-    allowRemoteHostScheduling: native.isServeMode()
+    allowRemoteHostScheduling: native.isServeMode(),
+    // A macOS update closes windows long before will-quit.
+    isHostQuitting: () => native.isQuitting() || native.isNativeUpdateInstallUnderWay()
   })
   startWorkspaceCleanupRunner(runtime, store)
   configureRuntimeServices(core, runtime, {

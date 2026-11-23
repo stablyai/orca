@@ -15,6 +15,7 @@ import {
   dictationSeparators
 } from '../../../../shared/speech/dictation/dictation-transcript-spacing'
 import { focusedBrowserPageId } from '@/app-shell/chrome/resolve-zoom-target'
+import { BROWSER_KEYBOARD_PROXY_SELECTOR } from '@/lib/text-input/focus/editable-target'
 
 /** Each returns whether the text landed. */
 type ComposerInsert = (text: string) => boolean
@@ -132,6 +133,11 @@ function readFocusedInsertionTarget(): DictationInsertionTarget | null {
     if (paneElement && tabId && Number.isFinite(paneId)) {
       return { kind: 'terminal', tabId, paneId, pane: paneElement }
     }
+    return null
+  }
+
+  // A streamed page's keyboard proxy is cleared after each insertion, so it can't space dictation.
+  if (activeElement.matches(BROWSER_KEYBOARD_PROXY_SELECTOR)) {
     return null
   }
 

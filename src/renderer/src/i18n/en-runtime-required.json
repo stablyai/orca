@@ -1864,10 +1864,6 @@
       "pausedMatches_one": "{{count}} paused match",
       "pausedMatches_other": "{{count}} paused matches"
     },
-    "section": {
-      "showMore_one": "Show {{count}} more bot",
-      "showMore_other": "Show {{count}} more bots"
-    },
     "settingsView": {
       "memoryFiles_one": "{{count}} file",
       "memoryFiles_other": "{{count}} files",
@@ -3141,6 +3137,8 @@
         "agentCount_other": "{{count}} agents",
         "clearAllLabel_one": "Clear failed worker",
         "clearAllLabel_other": "Clear all {{count}} failed workers",
+        "cleared_one": "Cleared 1 worker",
+        "cleared_other": "Cleared {{count}} workers",
         "commandCount_one": "{{count}} command",
         "commandCount_other": "{{count}} commands",
         "monitorCount_one": "{{count}} monitor",
@@ -3176,6 +3174,8 @@
         "compactAfterSending": "Your earlier message is still being sent. Run /compact once it has gone.",
         "continuationSuperseded": "This chat has moved on. Check the latest messages before continuing.",
         "conversationCleared": "This conversation has been cleared.",
+        "diskFull": "The disk on the computer running this chat is full.",
+        "freeDiskSpace": "Free up space on that disk, then try again.",
         "goalsUnsupported": "This agent doesn't support goals.",
         "historyUnavailable": "Orca couldn't open this chat's history right now.",
         "historyUnreadable": "Orca couldn't read this chat's saved history.",

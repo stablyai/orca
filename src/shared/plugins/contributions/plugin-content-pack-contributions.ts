@@ -95,6 +95,11 @@ export const pluginKeybindingContributionSchema = z
           ctx.addIssue({ code: 'custom', message: normalized.error })
           return z.NEVER
         }
+        // Older Orca builds reject a literal `+` key (`Mod++`), so require the portable `Plus` spelling.
+        if (normalized.value.endsWith('+Plus') && !/\bplus\b/i.test(value)) {
+          ctx.addIssue({ code: 'custom', message: 'write the + key as Plus, like Mod+Plus' })
+          return z.NEVER
+        }
         return normalized.value
       }),
     when: pluginCommandWhenSchema.optional().meta({
