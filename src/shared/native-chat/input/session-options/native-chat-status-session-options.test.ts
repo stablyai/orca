@@ -103,8 +103,10 @@ it('merges changed host options while preserving phone picks and session reports
   const scope = 'applied-seed'
   const launch = { model: 'opus', effort: 'high', fastMode: true }
   const initial = chip(scope)
+  const sibling = chip(scope)
   await initial.surface.mergeAppliedSessionOptions(launch)
-  expect([initial.shown('effort'), initial.source('effort')]).toEqual(['high', 'applied'])
+  await sibling.surface.mergeAppliedSessionOptions(launch)
+  expect([initial.shown('effort'), sibling.shown('effort')]).toEqual(['high', 'high'])
   await initial.surface.setOption('fastMode', false)
 
   let finishDispatch: (() => void) | undefined

@@ -14,6 +14,8 @@ export type NativeChatSessionOptionRecord = {
   agent: AgentType
   model?: TrackedNativeChatSessionOption
   valuesByModel: Record<string, Record<string, TrackedNativeChatSessionOption>>
+  /** Last options the host published for this chat, so only later host changes replace phone state. */
+  hostApplied?: Record<string, SessionOptionValue>
 }
 
 export function createNativeChatSessionOptionRecord(
@@ -28,6 +30,7 @@ export function cloneNativeChatSessionOptionRecord(
   return {
     agent: record.agent,
     ...(record.model ? { model: { ...record.model } } : {}),
+    ...(record.hostApplied ? { hostApplied: { ...record.hostApplied } } : {}),
     valuesByModel: Object.fromEntries(
       Object.entries(record.valuesByModel).map(([modelId, values]) => [
         modelId,

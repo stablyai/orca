@@ -12,10 +12,6 @@ import {
 import { setBoundedScopeCacheEntry } from '../composer/native-chat-scope-cache'
 
 const sessionOptionCache = new Map<string, NativeChatSessionOptionRecord>()
-const hostAppliedSessionOptions = new Map<
-  string,
-  { agent: AgentType; values: Record<string, SessionOptionValue> }
->()
 
 export function readNativeChatSessionOptionCache(
   scopeKey: string,
@@ -67,16 +63,12 @@ export function mergeNativeChatAppliedSessionOptions(
     return false
   }
 
-  const lastHost = hostAppliedSessionOptions.get(scopeKey)
-  const previous = lastHost?.agent === record.agent ? lastHost.values : undefined
-  setBoundedScopeCacheEntry(hostAppliedSessionOptions, scopeKey, {
-    agent: record.agent,
-    values: { ...values }
-  })
-
+  const previous = record.hostApplied
+  record.hostApplied = { ...values }
   let changed = false
   if (record.model?.value !== modelId) {
     if (!shouldApplyHostValue(record.model, previous, 'model', modelId)) {
+      writeNativeChatSessionOptionCache(scopeKey, record)
       return false
     }
     if (record.model) {
@@ -96,9 +88,7 @@ export function mergeNativeChatAppliedSessionOptions(
       changed = true
     }
   }
-  if (changed) {
-    writeNativeChatSessionOptionCache(scopeKey, record)
-  }
+  writeNativeChatSessionOptionCache(scopeKey, record)
   return changed
 }
 
