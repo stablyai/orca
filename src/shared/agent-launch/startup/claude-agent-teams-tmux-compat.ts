@@ -169,28 +169,39 @@ function tmuxSpecialKeyText(token: string): string | null {
   }
 }
 
+// The program word: bare, or a quoted path (Orca's own copy) after PowerShell's optional call operator.
+const PROGRAM_HEAD = /^(?:& )?(?:'[^']*'|"[^"]*"|[^\s'"]+)/
+
 export function isDirectClaudeCommand(command: string | undefined): boolean {
   const trimmed = command?.trim() ?? ''
-  if (!trimmed) {
+  const head = trimmed.match(PROGRAM_HEAD)?.[0]
+  if (!head || /[;&|<>`]/.test(trimmed.slice(head.length))) {
     return false
   }
-  if (/[;&|<>`]/.test(trimmed)) {
-    return false
-  }
-  const first = trimmed.match(/^\S+/)?.[0] ?? ''
-  return first === 'claude' || first.endsWith('/claude')
+  const program = head.replace(/^& /, '').replace(/^(['"])(.*)\1$/, '$2')
+  const name = program
+    .split(/[\\/]/)
+    .at(-1)
+    ?.replace(/\.(exe|cmd)$/i, '')
+  return name === 'claude' && (program === 'claude' || /[\\/]/.test(program))
 }
 
 export function addClaudeTeammateModeAuto(command: string): string {
-  if (/(^|\s)--teammate-mode(?:\s|=|$)/.test(command)) {
-    return command
-  }
-  return command.replace(/^(\S+)/, '$1 --teammate-mode auto')
+  return addClaudeTeammateMode(command, 'auto')
 }
 
 export function addClaudeTeammateModeInProcess(command: string): string {
+  return addClaudeTeammateMode(command, 'in-process')
+}
+
+function addClaudeTeammateMode(command: string, mode: 'auto' | 'in-process'): string {
   if (/(^|\s)--teammate-mode(?:\s|=|$)/.test(command)) {
     return command
   }
-  return command.replace(/^(\S+)/, '$1 --teammate-mode in-process')
+  const head = command.trimStart().match(PROGRAM_HEAD)?.[0]
+  if (!head) {
+    return command
+  }
+  const end = command.length - command.trimStart().length + head.length
+  return `${command.slice(0, end)} --teammate-mode ${mode}${command.slice(end)}`
 }

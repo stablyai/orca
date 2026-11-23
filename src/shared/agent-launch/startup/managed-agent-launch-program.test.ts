@@ -36,11 +36,15 @@ describe("launching Orca's copy of an agent", () => {
     )
   })
 
-  it("keeps the user's own CLI and Command setting", () => {
+  it("keeps the user's own CLI and a Command setting naming another program", () => {
     expect(launch({ platform: 'darwin' })?.launchCommand).toBe('claude')
     expect(
       launch({ platform: 'darwin', managed: MAC_CLAUDE, override: '~/bin/claude' })?.launchCommand
     ).toBe('~/bin/claude')
+    expect(
+      launch({ platform: 'darwin', managed: MAC_CLAUDE, override: 'claude --verbose' })
+        ?.launchCommand
+    ).toBe("'/Users/a b/Library/Application Support/orca/claude/bin/claude' --verbose")
   })
 
   it('records the stock name, so a resume finds the copy the host has then', () => {

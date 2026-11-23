@@ -1,6 +1,6 @@
 import { recognizeAgentProcessFromCommandLine } from '../../agent-status/process/agent-process-recognition'
 import { shellReadyMarkerComesFromLineEditor } from '../../terminal/output/shell-ready-marker-timing'
-import { unwrapCodexStartupImageCommand } from './codex-startup-image-command'
+import { unwrapCodexDirectLaunchCommand } from './codex-startup-image-command'
 
 export type StartupCommandDelivery = 'fast' | 'shell-ready'
 
@@ -67,7 +67,7 @@ export function hasCodexNativeDraftFlag(command: string | null | undefined): boo
   if (recognizeAgentProcessFromCommandLine(command)?.agent !== 'codex' || !command) {
     return false
   }
-  const tokens = tokenizeCommandWithQuoteMetadata(unwrapCodexStartupImageCommand(command))
+  const tokens = tokenizeCommandWithQuoteMetadata(unwrapCodexDirectLaunchCommand(command))
   return tokens.some(
     (token, index) =>
       index > 0 &&

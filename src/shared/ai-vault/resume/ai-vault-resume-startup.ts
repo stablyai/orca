@@ -124,7 +124,6 @@ function ompResumeProgram(
     recorded ?? getTuiAgentLaunchCommand(TUI_AGENT_CONFIG.omp, platform),
     {
       agent: 'omp',
-      cmdOverrides: resumeCommandOverrides(args),
       managedAgentCommands: args.managedAgentCommands,
       platform,
       shell: resolveStartupShell(platform, shell)
@@ -170,7 +169,6 @@ export function buildAiVaultLocalResumeStartup(
     const startupPlan = buildAgentResumeStartupPlan({
       agent: session.agent,
       providerSession: localProviderSession,
-      cmdOverrides: resumeCommandOverrides(args),
       platform,
       agentHostPlatform: args.host.agentHostPlatform,
       shell: liveShell,

@@ -25,7 +25,7 @@ export function extractAgentLaunchCommand(command: string): string {
     offset += match[0].length
   }
   // PowerShell runs a quoted program path, such as Orca's own copy, through its call operator.
-  const call = POWERSHELL_CALL_PREFIX.exec(command.slice(offset))
+  const call = POWERSHELL_CALL_PREFIX.exec(prefix.slice(offset))
   return command.slice(offset + (call?.[0].length ?? 0))
 }
 

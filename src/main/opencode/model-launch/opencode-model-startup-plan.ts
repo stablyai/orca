@@ -1,4 +1,4 @@
-import { buildShellCommandFromArgv } from '../../../shared/agent-launch/startup/tui-agent-startup-shell'
+import { getFirstCommandToken } from '../../../shared/shell/command-resolution/command-token-scanner'
 import type { AgentStartupPlanInputs } from '../../../shared/agent-launch/startup/agent-startup-plan-inputs'
 import {
   buildAgentDraftLaunchPlan,
@@ -41,20 +41,24 @@ function refuseModel(message = OPENCODE_MODEL_TRANSPORT_REFUSAL): never {
   throw new OrchestrationError('capability_unsupported', message)
 }
 
+/** One token as the probes' scanner reads it: quoted whole, with no escapes inside. */
+function probeProgram(path: string): string {
+  const quote = path.includes('"') ? "'" : '"'
+  return `${quote}${path}${quote}`
+}
+
 export async function resolveOpenCodeModelLaunchRoute(
   options: Pick<StartupScope, 'inputs' | 'cwd' | 'hostIdentity'>
 ) {
   const { inputs } = options
-  const command =
-    inputs.cmdOverrides.opencode ||
-    getTuiAgentLaunchCommand(TUI_AGENT_CONFIG.opencode, inputs.platform)
-  // Probes run the program the launch will (one token, as they parse it); records keep the stock name.
-  const managed = !inputs.cmdOverrides.opencode?.trim() && inputs.managedAgentCommands?.opencode
-  const program = managed
-    ? process.platform === 'win32'
-      ? `"${managed}"`
-      : buildShellCommandFromArgv([managed], 'posix')
-    : command
+  const stock = getTuiAgentLaunchCommand(TUI_AGENT_CONFIG.opencode, inputs.platform)
+  const command = inputs.cmdOverrides.opencode || stock
+  // Probes run the program the launch will; records keep the stock name.
+  const managed = inputs.managedAgentCommands?.opencode
+  const program =
+    managed && getFirstCommandToken(command) === getFirstCommandToken(stock)
+      ? probeProgram(managed)
+      : command
   const env: Record<string, string> = {}
   for (const [key, value] of Object.entries({ ...process.env, ...inputs.agentEnv })) {
     if (value !== undefined) {

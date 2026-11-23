@@ -137,7 +137,7 @@ async function detectAgentsWithManagedCopies(
   for (const id of runtime === 'wsl' ? [] : detected.filter(isTuiAgent)) {
     const [program] = getTuiAgentLaunchCommand(TUI_AGENT_CONFIG[id], process.platform).split(' ')
     const path = foundOutsidePath.get(program)
-    if (path && !options?.agentCmdOverrides?.[id]?.trim()) {
+    if (path) {
       outsidePath[id] = path
     }
   }

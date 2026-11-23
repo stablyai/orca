@@ -166,9 +166,9 @@ function onTerminalPath(file: string): boolean {
     )
 }
 
-/** Full paths the launches of `agents` on this host run, where no Command setting is set: Orca's
- *  copy where the user has no CLI of their own, or the user's CLI found only outside PATH (in its
- *  installer's folder), which a terminal can't run by name. */
+/** Full paths the launches of `agents` on this host run in place of the stock program (also when a
+ *  Command setting names it): Orca's copy where the user has no CLI of their own, or the user's CLI
+ *  found only outside PATH (in its installer's folder), which a terminal can't run by name. */
 export async function readHostManagedAgentCommands(
   settings: LaunchSettings,
   agents: readonly TuiAgent[]
@@ -176,9 +176,6 @@ export async function readHostManagedAgentCommands(
   const commands: ManagedAgentCommands = {}
   await Promise.all(
     agents.map(async (agent) => {
-      if (settings.agentCmdOverrides?.[agent]?.trim()) {
-        return
-      }
       try {
         const [program] = getTuiAgentLaunchCommand(TUI_AGENT_CONFIG[agent], process.platform).split(
           ' '
