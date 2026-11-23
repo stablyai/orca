@@ -60,6 +60,7 @@ export function requireWorkerAuthority(runtime: OrcaRuntimeService, terminalHand
 }
 
 export async function createExistingWorktreeWorkerTerminal(args: {
+  fullAccess?: boolean
   runtime: OrcaRuntimeService
   worktreeId: string
   agent: TuiAgent
@@ -70,6 +71,7 @@ export async function createExistingWorktreeWorkerTerminal(args: {
   const terminal = await args.runtime.createTerminal(`id:${args.worktreeId}`, {
     // Resolve ids through agent config; cursor alone opens the desktop app, its CLI is cursor-agent.
     startupAgent: args.agent,
+    ...(args.fullAccess ? { sessionOptions: { permissionMode: 'full-access' } } : {}),
     launchSource: 'orchestration',
     suppressStartupUpdatePrompt: true,
     ...(args.launchPreferences ? { launchPreferences: args.launchPreferences } : {}),
@@ -90,6 +92,7 @@ export async function createExistingWorktreeWorkerTerminal(args: {
 
 /** Return structured workers in the terminal authority shape; registry-backed pane/incarnation getters keep requireWorkerAuthority mode-independent. */
 export async function createStructuredWorkerSessionForWorktree(args: {
+  fullAccess?: boolean
   runtime: OrcaRuntimeService
   worktreeId: string
   agent: TuiAgent
@@ -98,7 +101,10 @@ export async function createStructuredWorkerSessionForWorktree(args: {
   launchPreferences?: AgentLaunchPreferences
   effects: WorkerEffect[]
 }): Promise<Awaited<ReturnType<typeof createStructuredWorkerSession>>> {
-  const options = narrowStructuredLaunchSeedOptions(args.launchPreferences)
+  const options = narrowStructuredLaunchSeedOptions({
+    ...args.launchPreferences,
+    ...(args.fullAccess ? { permissionMode: 'full-access' } : {})
+  })
   const created = await createStructuredWorkerSession({
     runtime: args.runtime,
     worktreeId: args.worktreeId,

@@ -1,4 +1,5 @@
 import { BotFailureError } from '../../shared/bots/bot-failure-copy'
+import { prepareAutomationAccess } from '../automations/launch/automation-chat-permission'
 import type { z } from 'zod'
 import {
   isBotGroupMemberSession,
@@ -235,6 +236,10 @@ export async function deliverTurn(
     }
     const beforeRun = () => assertTurnActive(groups, message, turn)
     beforeRun()
+    await prepareAutomationAccess(groups.runtime, turn.sessionId, {
+      botId: turn.botId,
+      automation: Boolean(run?.automation || message.automationRun)
+    })
     // A hand-off serves the person's post it continues, whose words and images it carries.
     const original =
       (message.mentioned && message.rootRequestId

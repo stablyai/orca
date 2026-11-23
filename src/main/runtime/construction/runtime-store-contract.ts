@@ -224,6 +224,8 @@ export type RuntimeStore = {
     agentSkillSharingEnabled?: GlobalSettings['agentSkillSharingEnabled']
     nativeChatSessionOptions?: GlobalSettings['nativeChatSessionOptions']
     nativeChatPermissionMode?: GlobalSettings['nativeChatPermissionMode']
+    automationFullAccess?: GlobalSettings['automationFullAccess']
+    fullAccessBotIds?: GlobalSettings['fullAccessBotIds']
     nativeChatQueueFollowUps?: GlobalSettings['nativeChatQueueFollowUps']
     nativeChatCiResultLines?: GlobalSettings['nativeChatCiResultLines']
     nativeChatAutoContinueAfterUsageLimit?: GlobalSettings['nativeChatAutoContinueAfterUsageLimit']

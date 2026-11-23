@@ -34,6 +34,7 @@ import type { ManagedAccountNameSettings } from '../agent-accounts/managed-accou
 import type { NewTabMenuSettings } from '../new-tab-menu/new-tab-menu-layout'
 import type { UiLanguageSettings } from '../i18n/ui-language-settings'
 import type { ChatDeleteSettings } from '../agent-session/chat-deletion/orca-chat-delete'
+import type { AutomationPermissionSettings } from '../automations/launch/automation-permission-policy'
 
 type DesktopWindowSettings = {
   /** Windows-only: close (X) hides to tray instead of quitting; the tray icon is always present regardless. */
@@ -46,6 +47,7 @@ type DesktopWindowSettings = {
 
 /** Settings groups owned by their feature modules and composed into GlobalSettings. */
 export type GlobalSettingsBase = AntigravityChatAuthSettings &
+  AutomationPermissionSettings &
   EmulatorOpeningSettings &
   SshRemoteControlSettings &
   ClaudeAgentViewSettings &

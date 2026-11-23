@@ -2,13 +2,12 @@
 import { OWNER_ACTS_FOR, type AutomationTriggeredBy } from '../../shared/bots/bot-acts-for'
 import type { BotConversationActsFor } from '../runtime/orchestration/db/bot-requests/bot-conversation-acts-for-store'
 import { randomUUID } from 'node:crypto'
-import {
-  AGENT_CHAT_PERMISSION_MODE_OPTION_ID,
-  newChatPermissionMode
-} from '../../shared/agent-launch/permissions/agent-chat-permission-mode'
+import { prepareAutomationAccess } from '../automations/launch/automation-chat-permission'
+import { automationChatPermissionMode } from '../../shared/automations/launch/automation-permission-policy'
+import { AGENT_CHAT_PERMISSION_MODE_OPTION_ID } from '../../shared/agent-launch/permissions/agent-chat-permission-mode'
 import type { AgentMessageSource } from '../../shared/agent-session/journal/agent-session-message-source'
-import type { Bot, BotAgent } from '../../shared/bot-types'
-import { botOnSetup } from '../../shared/bots/bot-agent-setup'
+import type { Bot } from '../../shared/bot-types'
+export { botOnAgent } from '../../shared/bots/bot-agent-setup'
 import type { StructuredAgentSessionFirstMessage } from '../../shared/agent-session/lifecycle/operations/structured-agent-session-create'
 import type { StructuredAgentSessionCreateOptions } from '../native-chat/agent-session-wire/acquisition/structured-agent-session-create-options'
 import { agentSessionSendBodyFingerprint } from '../../shared/agent-session/requests/structured-agent-session-send-mutation'
@@ -44,6 +43,7 @@ import { supportedStructuredSeedOptions } from '../runtime/agent-session/install
 export type BotChatHost = StructuredAgentTurnHost & BotHomeHost & QueuedCarryHost
 
 export type BotChatDependencies = {
+  prepareAutomation?: (sessionId: string, botId: string, automation: boolean) => Promise<void>
   bots: Pick<BotController, 'list' | 'setChatSession'>
   /** Installs the native-chat host on first use. */
   host: () => Promise<BotChatHost>
@@ -62,6 +62,7 @@ export type BotChatDependencies = {
 /** What Orca writes on an automation run's message: where what the bot learns came from, who did
  *  the event, and the run itself for the chat's row. */
 export type BotRunFields = {
+  automation?: true
   memorySource?: string
   triggeredBy?: AutomationTriggeredBy
   automationRun?: AutomationRunMessage
@@ -171,6 +172,7 @@ export function botChatSessions(deps: BotChatDependencies) {
             ? { from }
             : {}
     const body = { ...botMessageBody(text, run), ...sender }
+    await deps.prepareAutomation?.(sessionId, botId, run?.automation === true)
     const outcome = await sendAgentTurn({
       kind: 'structured-session',
       host: turnHost,
@@ -273,7 +275,13 @@ export async function startBotSession(
   if (input.actsFor) {
     runtime.getOrchestrationDb().recordBotConversationActsFor(sessionId, input.actsFor)
   }
-  const permissionMode = bot.permissionMode && newChatPermissionMode(bot.agent, bot.permissionMode)
+  const permissionMode = automationChatPermissionMode(
+    bot.agent,
+    runtime.requireStore().getSettings(),
+    input.message?.run?.automation,
+    bot.permissionMode,
+    bot.id
+  )
   // A model the agent no longer lists still goes through: the agent's own failure names it, as for any chat.
   const saved = botStartOptions(
     () => runtime.requireStore().getSettings(),
@@ -342,14 +350,10 @@ export function closeBotSession(
   return closeStructuredAgentSessionChild(sessionId, { runtime })
 }
 
-/** The bot as a chat on `agent` runs it: another agent starts on its own defaults, since the bot's
- *  launch belongs to its agent. */
-export function botOnAgent(bot: Bot, agent: BotAgent | undefined): Bot {
-  return agent && agent !== bot.agent ? botOnSetup(bot, { agent }) : bot
-}
-
 export function runtimeBotChats(runtime: OrcaRuntimeService) {
   return botChatSessions({
+    prepareAutomation: (sessionId, botId, automation) =>
+      prepareAutomationAccess(runtime, sessionId, { botId, automation }),
     bots: runtime.bots,
     host: () => requireStructuredHost(runtime),
     createChat: async (bot, sessionId) => {

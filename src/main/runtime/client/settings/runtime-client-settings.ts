@@ -135,6 +135,8 @@ export class RuntimeClientSettingsController {
         sttModel: settings.voice?.sttModel ?? ''
       },
       nativeChatPermissionMode: publishedLegacyChatPermissionMode(settings),
+      automationFullAccess: settings.automationFullAccess === true,
+      fullAccessBotIds: settings.fullAccessBotIds ?? [],
       // Mirror the host preference; delivery still depends on queue capability.
       nativeChatQueueFollowUps: nativeChatQueueFollowUps(settings),
       // Resolved, so a phone can tell a reported value from an older host's absence.

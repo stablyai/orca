@@ -178,6 +178,7 @@ export function createBotAutomationDispatcher(
         : automationRunPrompt(automation.prompt, run.event, asker)
     const automationRun = captureAutomationRunMessage(automation, run, text, asker)
     const fields: BotRunFields = {
+      automation: true,
       memorySource: automationRunMemoryLabel(automation.name, run.event),
       ...(run.triggeredBy ? { triggeredBy: run.triggeredBy } : {}),
       ...(automationRun ? { automationRun } : {})

@@ -52,3 +52,7 @@ export function botOnSetup<B extends Pick<Bot, 'agent' | 'launch'>>(
 export function chatRunAgentSetupRefusal(): string {
   return "A run in a chat continues on that chat's agent, so --agent, --model and --effort need --runs-in new."
 }
+
+export function botOnAgent(bot: Bot, agent: Bot['agent'] | undefined): Bot {
+  return agent && agent !== bot.agent ? botOnSetup(bot, { agent }) : bot
+}

@@ -1,5 +1,6 @@
 import { coordinatorKeepOpenByDefault } from '../../../rpc/methods/orchestration/worker/start/worker-keep-open-default'
 import { botOfSession } from '../../../../bots/bot-session-tabs'
+import { refuseUnpropagatedBotAccess } from '../../../../bots/bot-full-access-policy'
 import { createHash, randomUUID } from 'node:crypto'
 import { z } from 'zod'
 import type { WorkerStartParams } from '../../../../../shared/rpc-contract/orchestration/orchestration-worker-start-params'
@@ -131,6 +132,13 @@ export async function startRemoteOwnedWorker(
   ctx: StartContext,
   callerRequestId: string | undefined
 ): Promise<unknown> {
+  refuseUnpropagatedBotAccess(
+    runtime,
+    ctx.orchestrationCompatibilityEvidence ?? {
+      agentSessionId: ctx.orchestrationCaller?.orcaSessionId ?? undefined,
+      terminalHandle: params.from
+    }
+  )
   if (params.terminal) {
     throw new OrchestrationError(
       'invalid_argument',
