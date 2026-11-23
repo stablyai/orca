@@ -1,7 +1,7 @@
 import { useEffect, useLayoutEffect, useRef, type RefObject } from 'react'
 
 /** A selected equation, by its source and its place among the reply's equations with that source. */
-type MathSelection = { source: string; index: number }
+type MathSelection = { element: Element; source: string; index: number }
 
 const MATH = '[data-math-source]'
 
@@ -23,7 +23,7 @@ function selectedEquation(root: HTMLElement): MathSelection | null {
   if (!math || source == null || !root.contains(math)) {
     return null
   }
-  return { source, index: equationsWithSource(root, source).indexOf(math) }
+  return { element: math, source, index: equationsWithSource(root, source).indexOf(math) }
 }
 
 /** While a reply streams, a redraw can replace a typeset equation's element, and a selection in it
@@ -38,20 +38,27 @@ export function useKeptMathSelection(root: RefObject<HTMLElement | null>, active
     const note = (): void => {
       kept.current = root.current ? selectedEquation(root.current) : null
     }
+    // A reader's own click or key may clear the selection; that is theirs to keep cleared.
+    const forget = (): void => {
+      kept.current = null
+    }
     note()
     document.addEventListener('selectionchange', note)
-    return () => document.removeEventListener('selectionchange', note)
+    document.addEventListener('pointerdown', forget, true)
+    document.addEventListener('keydown', forget, true)
+    return () => {
+      document.removeEventListener('selectionchange', note)
+      document.removeEventListener('pointerdown', forget, true)
+      document.removeEventListener('keydown', forget, true)
+    }
   }, [active, root])
   // Runs in the commit that replaced the element, before the browser reports the lost selection.
   useLayoutEffect(() => {
     const was = kept.current
     const element = root.current
     const selection = document.getSelection()
-    if (!was || !element || !selection) {
-      return
-    }
-    const range = selection.rangeCount > 0 ? selection.getRangeAt(0) : null
-    if (range && !range.collapsed && range.commonAncestorContainer.isConnected) {
+    // Only an equation whose element this commit replaced; one still drawn keeps what the reader did.
+    if (!was || was.element.isConnected || !element || !selection) {
       return
     }
     const replacement = equationsWithSource(element, was.source)[was.index]

@@ -39,3 +39,19 @@ it('selects the replacement of a selected equation a redraw replaced', () => {
   expect(after.contains(range.commonAncestorContainer)).toBe(true)
   expect(document.getSelection()!.toString()).toContain('a² + b² = c²')
 })
+
+it('leaves a cleared selection cleared while the equation is still drawn', () => {
+  const view = render(<Reply redraw={0} tail="Here" />)
+  const equation = view.container.querySelector('.katex-display')!
+  act(() => {
+    const range = document.createRange()
+    range.selectNodeContents(equation)
+    document.getSelection()!.removeAllRanges()
+    document.getSelection()!.addRange(range)
+    document.dispatchEvent(new Event('selectionchange'))
+  })
+  // The reader clicks away; a redraw lands before the browser reports the change.
+  document.getSelection()!.removeAllRanges()
+  view.rerender(<Reply redraw={0} tail="Here more" />)
+  expect(document.getSelection()!.rangeCount).toBe(0)
+})
