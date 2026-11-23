@@ -3,6 +3,7 @@ import { Laptop } from 'lucide-react'
 import { useMountedRef } from '@/hooks/useMountedRef'
 import { useTranslate } from '@/i18n/use-translate'
 import { useAppStore } from '@/store/index'
+import type { RuntimeAccessGrant } from '../../../../../../shared/remote-runtime/host-catalog/runtime-access-grants'
 import { Button } from '../../../ui/button'
 import {
   Dialog,
@@ -22,38 +23,50 @@ export function RuntimeShareComputerSection(): React.JSX.Element {
   const t = useTranslate()
   const [open, setOpen] = useState(false)
   const [editingName, setEditingName] = useState(false)
-  const [activeLinkCount, setActiveLinkCount] = useState<number | null>(null)
+  const [runtimeAccessGrants, setRuntimeAccessGrants] = useState<RuntimeAccessGrant[] | null>(null)
   const mountedRef = useMountedRef()
-  const linkCountRequest = useRef(0)
+  const accessGrantRequest = useRef(0)
   const machineName = useAppStore((state) => state.settings?.machineName ?? '')
   const publishedMachineName = usePublishedMachineName(machineName)
 
-  const loadActiveLinkCount = useCallback(async () => {
-    const request = ++linkCountRequest.current
+  const loadRuntimeAccessGrants = useCallback(async () => {
+    const request = ++accessGrantRequest.current
     const result = await window.api.mobile.listRuntimeAccessGrants().catch(() => null)
-    if (mountedRef.current && request === linkCountRequest.current) {
-      setActiveLinkCount(result?.grants.length ?? null)
+    if (mountedRef.current && request === accessGrantRequest.current) {
+      setRuntimeAccessGrants(result?.grants ?? null)
     }
   }, [mountedRef])
   useEffect(() => {
-    const refresh = (): void => void loadActiveLinkCount()
+    const refresh = (): void => void loadRuntimeAccessGrants()
     const unsubscribe = window.api.mobile.onDevicesChanged(refresh)
     window.addEventListener('focus', refresh)
     refresh()
     return () => {
+      accessGrantRequest.current += 1
       unsubscribe()
       window.removeEventListener('focus', refresh)
     }
-  }, [loadActiveLinkCount])
+  }, [loadRuntimeAccessGrants])
 
   const handleOpenChange = (next: boolean): void => {
     setOpen(next)
     if (!next) {
       setEditingName(false)
-      void loadActiveLinkCount()
     }
+    void loadRuntimeAccessGrants()
   }
 
+  const handleAccessGrantRevoked = (deviceId: string): void => {
+    if (!mountedRef.current) {
+      return
+    }
+    setRuntimeAccessGrants(
+      (current) => current?.filter((grant) => grant.deviceId !== deviceId) ?? null
+    )
+    void loadRuntimeAccessGrants()
+  }
+
+  const activeLinkCount = runtimeAccessGrants?.length ?? null
   const activeLinksLabel = !activeLinkCount
     ? null
     : activeLinkCount === 1
@@ -108,7 +121,13 @@ export function RuntimeShareComputerSection(): React.JSX.Element {
         {activeLinksLabel ? (
           <p className="text-xs text-muted-foreground">{activeLinksLabel}</p>
         ) : null}
-        <RuntimePairingUrlGenerator framed={false} showHeader={false} />
+        <RuntimePairingUrlGenerator
+          framed={false}
+          showHeader={false}
+          runtimeAccessGrants={runtimeAccessGrants}
+          loadRuntimeAccessGrants={loadRuntimeAccessGrants}
+          onAccessGrantRevoked={handleAccessGrantRevoked}
+        />
         {editingName ? (
           <MachineNameField id="runtime-share-machine-name" />
         ) : (

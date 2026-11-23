@@ -10133,7 +10133,6 @@
           "6dd594a507": "Generated web client URL.",
           "2752126f3e": "Runtime pairing is unavailable.",
           "95b8be4cea": "Failed to refresh network interfaces.",
-          "1b4e0bbcc5": "Failed to load shared access grants.",
           "custom-option": "{{address}} (custom)",
           "add-custom": "Use custom address…",
           "custom-title": "Custom connection address",

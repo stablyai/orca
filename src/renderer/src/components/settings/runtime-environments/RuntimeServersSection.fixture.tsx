@@ -1,9 +1,11 @@
 import { useEffect, useState } from 'react'
 import type { PublicKnownRuntimeEnvironment } from '../../../../../shared/remote-runtime/host-catalog/runtime-environments'
+import { ORCAD_NOT_WSL_HOST_LAUNCH_DEFERRAL_CODE } from '../../../../../shared/remote-runtime/wsl-hosts/wsl-host-types'
 import type { RemoteServerUpdateEntry } from '@/runtime/hosts/updates/remote-server-update-coordinator'
 import { defineFixture } from '../../../component-fixtures/component-fixture'
 import { SettingsSection } from '../section-layout/SettingsSection'
 import { ServerListRow, ServerRowChip } from '../host-rows/ServerListRow'
+import { WslHostsSection } from '../wsl/hosts/WslHostsSection'
 import { Button } from '../../ui/button'
 import { RuntimeServersHeaderActions } from './runtime-servers-header-actions'
 import { RuntimeServersPageProvider, useRuntimeServersPage } from './runtime-servers-page-context'
@@ -260,32 +262,48 @@ export const compactChippedRows = chippedRows(248)
 export const minimumChippedRows = chippedRows(276)
 
 function chippedRows(width: number): ReturnType<typeof defineFixture> {
+  const wslHost: PublicKnownRuntimeEnvironment = {
+    ...environment('ubuntu', 'Ubuntu', 'ws://192.0.2.16:6768'),
+    orcadDeployment: { kind: 'wsl', distro: 'Ubuntu', localPort: 6768, remotePort: 6768 }
+  }
   return defineFixture({
     width,
+    store: {
+      runtimeEnvironments: [wslHost],
+      wslHostStatuses: {
+        [wslHost.id]: {
+          environmentId: wslHost.id,
+          distro: 'Ubuntu',
+          state: 'ready',
+          detail: null,
+          deferredUpdate: {
+            candidateVersion: '1.9.0',
+            code: ORCAD_NOT_WSL_HOST_LAUNCH_DEFERRAL_CODE,
+            reason: 'Started outside WSL host mode.',
+            forceable: false
+          }
+        }
+      }
+    },
+    setup: () => {
+      Object.assign(window.api.runtimeEnvironments, { wslHosts: {} })
+    },
     render: () => (
-      <div className="divide-y divide-border rounded-lg border border-border bg-card">
-        <ServerListRow
-          name="Ubuntu"
-          chips={<ServerRowChip>WSL</ServerRowChip>}
-          status={{ label: 'Connected', tone: 'success' }}
-          primaryAction={
-            <Button variant="outline" size="xs">
-              Restart
-            </Button>
-          }
-          menuItems={<div>More</div>}
-        />
-        <ServerListRow
-          name="dev-box"
-          chips={<ServerRowChip>SSH tunnel</ServerRowChip>}
-          status={{ label: 'Connected', tone: 'success' }}
-          primaryAction={
-            <Button variant="outline" size="xs">
-              Update
-            </Button>
-          }
-          menuItems={<div>More</div>}
-        />
+      <div className="space-y-4">
+        <WslHostsSection onChanged={() => {}} />
+        <div className="rounded-lg border border-border bg-card">
+          <ServerListRow
+            name="dev-box"
+            chips={<ServerRowChip>SSH tunnel</ServerRowChip>}
+            status={{ label: 'Connected', tone: 'success' }}
+            primaryAction={
+              <Button variant="outline" size="xs">
+                Update
+              </Button>
+            }
+            menuItems={<div>More</div>}
+          />
+        </div>
       </div>
     )
   })
