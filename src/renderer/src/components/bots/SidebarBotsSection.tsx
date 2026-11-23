@@ -1,4 +1,5 @@
-import React, { useCallback, useMemo, useRef, useState } from 'react'
+import React, { Suspense, useCallback, useMemo, useRef, useState } from 'react'
+import { lazyWithRetry as lazy } from '@/app-shell/startup/lazy-with-retry'
 import { callBotRpc } from '@/lib/bot-hosts'
 import { Bot as BotIcon, Download, LayoutTemplate, Link2, Plus, Users } from 'lucide-react'
 import { Button } from '@/components/ui/button'
@@ -40,12 +41,13 @@ import { BotGroupRow } from './BotGroupRow'
 import { BotGroupMembersDialog } from './BotGroupMembersDialog'
 import { useBotGroupDelete } from './use-bot-group-delete'
 import { findBotGroupRoom, type BotGroup } from '../../../../shared/bots/bot-group'
-import { NewBotDialog } from './NewBotDialog'
 import { openBotShareLink } from './sharing/bot-share-receive-open'
 import { BotSidebarOptionsMenu } from './BotSidebarOptionsMenu'
 import { useBotSidebarArrangement } from './use-bot-sidebar-arrangement'
 import { ImportBotDialog } from './ImportBotDialog'
 import { botErrorMessage } from './bot-presentation'
+
+const NewBotDialog = lazy(() => import('./NewBotDialog').then((m) => ({ default: m.NewBotDialog })))
 import { BotCollapsedPreview, useBotPreviewFacts } from './BotCollapsedPreview'
 import { collapsedBotPreview } from '../../../../shared/bots/bot-collapsed-preview'
 import { openBotTemplates } from './templates/bot-templates-open'
@@ -392,12 +394,16 @@ export function SidebarBotsSection({
           </div>
         </BotsRevealProvider>
       </BotSidebarSearchHost>
-      <NewBotDialog
-        open={newBotOpen}
-        onOpenChange={setNewBotOpen}
-        onCreated={onOpenBot}
-        onImport={() => setImportOpen(true)}
-      />
+      {newBotOpen ? (
+        <Suspense fallback={null}>
+          <NewBotDialog
+            open={newBotOpen}
+            onOpenChange={setNewBotOpen}
+            onCreated={onOpenBot}
+            onImport={() => setImportOpen(true)}
+          />
+        </Suspense>
+      ) : null}
       <ImportBotDialog open={importOpen} onOpenChange={setImportOpen} onCreated={onOpenBot} />
       {editingGroup ? (
         <BotGroupMembersDialog

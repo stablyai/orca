@@ -1,18 +1,11 @@
-import { PluginUpdateReviewHost } from './components/plugins/dialogs/PluginUpdateReviewHost'
-import { useCallback, useEffect, useLayoutEffect } from 'react'
+import { Suspense, useCallback, useEffect, useLayoutEffect } from 'react'
 import { createPortal } from 'react-dom'
+import { lazyWithRetry as lazy } from './app-shell/startup/lazy-with-retry'
 import { Toaster } from '@/components/ui/sonner'
 import { TooltipProvider } from '@/components/ui/tooltip'
 import { ConfirmationDialogProvider } from './components/dismiss/confirmation/confirmation-dialog'
-import { BrowserWebAuthnAccountDialog } from './components/browser-pane/page-prompts/browser-webauthn-account-dialog'
-import { BrowserExtensionInstallDialog } from './components/browser-pane/page-prompts/browser-extension-install-dialog'
 import { BrowserPagePrompts } from './components/browser-pane/page-prompts/browser-page-prompts'
 import { LinkRoutingPreferenceDialogProvider } from './components/link-actions/link-routing-preference-dialog'
-import { SkillFreshnessNudge } from './components/skills/freshness/SkillFreshnessNudge'
-import PinnedTabCloseDialog from './components/terminal-pane/layout/close/PinnedTabCloseDialog'
-import RunningTerminalCloseDialog from './components/terminal-pane/layout/close/RunningTerminalCloseDialog'
-import WorktreeBaseFallbackDialog from './components/sidebar/workspace-creation/base-ref-update/WorktreeBaseFallbackDialog'
-import ClaudeAccountSwitchDialog from './components/provider-accounts/claude/ClaudeAccountSwitchDialog'
 import { AppBackgroundServices } from './app-shell/AppBackgroundServices'
 import { AppRootSurfaces } from './app-shell/AppRootSurfaces'
 import { AppWorkspaceShell } from './app-shell/AppWorkspaceShell'
@@ -39,11 +32,52 @@ import { usePersistedUIWriter } from './app-shell/storage/use-persisted-ui-write
 import { useRuntimeGraphSync } from './runtime/sync-runtime-graph/use-runtime-graph-sync'
 import { useWindowVisibilityEffects } from './app-shell/chrome/use-window-visibility-effects'
 import { SpaceWindowStatePublisher } from './components/workspace-space/SpaceWindowStatePublisher'
-import { PlainSshTerminalPanels } from './components/plain-ssh-terminal/PlainSshTerminalPanels'
-import { PluginShotReplayMount } from './components/plugins/view/PluginShotReplayMount'
 import { AddToChatPointMenuHost } from './components/native-chat/selection-quotes/AddToChatMenu'
 import { installActiveWorktreeRemovalSuccessor } from './lib/workspace/activation/active-worktree-removal-successor'
 import { useAppStore } from './store'
+
+const PluginUpdateReviewHost = lazy(() =>
+  import('./components/plugins/dialogs/PluginUpdateReviewHost').then((m) => ({
+    default: m.PluginUpdateReviewHost
+  }))
+)
+const BrowserWebAuthnAccountDialog = lazy(() =>
+  import('./components/browser-pane/page-prompts/browser-webauthn-account-dialog').then((m) => ({
+    default: m.BrowserWebAuthnAccountDialog
+  }))
+)
+const BrowserExtensionInstallDialog = lazy(() =>
+  import('./components/browser-pane/page-prompts/browser-extension-install-dialog').then((m) => ({
+    default: m.BrowserExtensionInstallDialog
+  }))
+)
+const SkillFreshnessNudge = lazy(() =>
+  import('./components/skills/freshness/SkillFreshnessNudge').then((m) => ({
+    default: m.SkillFreshnessNudge
+  }))
+)
+const PinnedTabCloseDialog = lazy(
+  () => import('./components/terminal-pane/layout/close/PinnedTabCloseDialog')
+)
+const RunningTerminalCloseDialog = lazy(
+  () => import('./components/terminal-pane/layout/close/RunningTerminalCloseDialog')
+)
+const WorktreeBaseFallbackDialog = lazy(
+  () => import('./components/sidebar/workspace-creation/base-ref-update/WorktreeBaseFallbackDialog')
+)
+const ClaudeAccountSwitchDialog = lazy(
+  () => import('./components/provider-accounts/claude/ClaudeAccountSwitchDialog')
+)
+const PlainSshTerminalPanels = lazy(() =>
+  import('./components/plain-ssh-terminal/PlainSshTerminalPanels').then((m) => ({
+    default: m.PlainSshTerminalPanels
+  }))
+)
+const PluginShotReplayMount = lazy(() =>
+  import('./components/plugins/view/PluginShotReplayMount').then((m) => ({
+    default: m.PluginShotReplayMount
+  }))
+)
 
 function App(): React.JSX.Element {
   const layout = useAppChromeLayout()
@@ -117,24 +151,30 @@ function App(): React.JSX.Element {
               floatingWorkspace={floatingWorkspace}
               onboardingGate={onboardingGate}
             />
-            <BrowserWebAuthnAccountDialog />
-            <BrowserExtensionInstallDialog />
+            <Suspense fallback={null}>
+              <BrowserWebAuthnAccountDialog />
+              <BrowserExtensionInstallDialog />
+            </Suspense>
           </LinkRoutingPreferenceDialogProvider>
         </ConfirmationDialogProvider>
         {createPortal(
           <Toaster closeButton toastOptions={{ className: 'font-sans text-sm' }} />,
           document.body
         )}
-        <PlainSshTerminalPanels />
-        <PluginShotReplayMount />
-        <PluginUpdateReviewHost />
+        <Suspense fallback={null}>
+          <PlainSshTerminalPanels />
+          <PluginShotReplayMount />
+          <PluginUpdateReviewHost />
+        </Suspense>
       </TooltipProvider>
-      <SkillFreshnessNudge />
-      {/* One account-link confirm at a time, over whatever screen the owner is on. */}
-      <WorktreeBaseFallbackDialog />
-      <ClaudeAccountSwitchDialog />
-      <PinnedTabCloseDialog />
-      <RunningTerminalCloseDialog />
+      <Suspense fallback={null}>
+        <SkillFreshnessNudge />
+        {/* One account-link confirm at a time, over whatever screen the owner is on. */}
+        <WorktreeBaseFallbackDialog />
+        <ClaudeAccountSwitchDialog />
+        <PinnedTabCloseDialog />
+        <RunningTerminalCloseDialog />
+      </Suspense>
       {/* Electron drag hit-testing follows DOM order, ignoring z-index; render controls last to keep them clickable. */}
       {hasCustomTitleBar && <WindowControls closeOnly={tilingWindowMode} />}
     </div>

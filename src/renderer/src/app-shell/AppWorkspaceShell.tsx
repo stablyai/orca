@@ -1,4 +1,4 @@
-import { memo, Suspense, useCallback, useRef } from 'react'
+import { memo, Suspense, useCallback, useRef, useState } from 'react'
 import { lazyWithRetry as lazy } from '@/app-shell/startup/lazy-with-retry'
 import { useTranslate } from '@/i18n/use-translate'
 import { useAppStore } from '@/store/index'
@@ -181,6 +181,16 @@ export function AppWorkspaceShell(props: {
   const { setOpenWithFocus } = floatingWorkspace
   // `orca plugin shot` captures the right sidebar, which the parked launcher floats over.
   const capturingPluginShot = usePluginViewCaptureStore((s) => s.capturing)
+  const activityBarPosition = useAppStore((s) => s.activityBarPosition)
+  // Defer fetching/mounting RightSidebar while it starts closed; once opened, keep it mounted for layout stability.
+  const canMountRightSidebarNow =
+    layout.rightSidebarOpen || activityBarPosition === 'side' || capturingPluginShot
+  const [hasMountedRightSidebar, setHasMountedRightSidebar] = useState(canMountRightSidebarNow)
+  if (canMountRightSidebarNow && !hasMountedRightSidebar) {
+    setHasMountedRightSidebar(true)
+  }
+  const shouldMountRightSidebar =
+    layout.showRightSidebarControls && (canMountRightSidebarNow || hasMountedRightSidebar)
   const toggleFloatingWorkspace = useCallback(
     () => setOpenWithFocus((open) => !open),
     [setOpenWithFocus]
@@ -286,7 +296,7 @@ export function AppWorkspaceShell(props: {
           </div>
         </div>
         {/* Retain the shell for stable layout while heavy panels disconnect; tasks can unmount it. */}
-        {layout.showRightSidebarControls ? (
+        {shouldMountRightSidebar ? (
           <RecoverableRenderErrorBoundary
             boundaryId="right-sidebar"
             surface="right-sidebar"
