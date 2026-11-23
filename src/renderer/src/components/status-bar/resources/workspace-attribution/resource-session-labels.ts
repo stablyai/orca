@@ -55,7 +55,9 @@ export function resolveSnapshotSessionLabel(
   // The binding follows a pane moved since spawn; a restored PTY's spawn-time key may name its old tab.
   const tabId = boundTabId ?? parsePaneKey(session.paneKey)?.tabId
   if (tabId) {
-    const match = index.tabsByIdByWorktree.get(worktreeId)?.get(tabId)
+    // The row stays in the sampled workspace, but a pane moved since spawn has its tab elsewhere.
+    const tabWorktreeId = index.tabIdToWorktreeId.get(tabId) ?? worktreeId
+    const match = index.tabsByIdByWorktree.get(tabWorktreeId)?.get(tabId)
     const tab = match?.tab
     const tabIndex = match?.index ?? -1
     if (tab) {

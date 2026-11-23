@@ -177,12 +177,14 @@ function presentDesktopStructuredSession(
       pairedHostId,
       workspace
     )
+    const onPairedHost = pairedHostId !== null && pairedHostId !== LOCAL_EXECUTION_HOST_ID
     if (
       (activeWorktreeId !== workspace || activeView !== 'terminal' || otherHostSelected) &&
-      !activateWslMovedWorkspace(workspace)
+      // A moved WSL workspace is this machine's; it never stands in for a paired host's copy.
+      (onPairedHost || !activateWslMovedWorkspace(workspace))
     ) {
       // A local open names its host only to move off a paired twin, as every other local open does.
-      if (pairedHostId && (pairedHostId !== LOCAL_EXECUTION_HOST_ID || otherHostSelected)) {
+      if (pairedHostId && (onPairedHost || otherHostSelected)) {
         activateAndRevealWorktree(workspace, { executionHostId: pairedHostId })
       } else {
         activateAndRevealWorktree(workspace)

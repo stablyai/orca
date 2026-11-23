@@ -89,8 +89,19 @@ export function reuseChats(
 }
 
 /** Whether a fresh sample of a workspace renders exactly as its earlier row did. */
-function rendersSame(row: UnifiedWorktreeRow, wt: WorktreeMemory): boolean {
+function rendersSame(
+  row: UnifiedWorktreeRow,
+  placement: Omit<SamplePlacement, 'readOnly'>,
+  wt: WorktreeMemory
+): boolean {
   return (
+    // Placement can fall back to the sample's own names, so a renamed workspace must not keep its old row.
+    row.worktreeName === placement.worktreeName &&
+    row.repoId === placement.repoId &&
+    row.repoName === placement.repoName &&
+    row.isRemote === placement.isRemote &&
+    row.hostLabel === placement.hostLabel &&
+    row.unplaced === placement.unplaced &&
     row.cpu === wt.cpu &&
     row.memory === wt.memory &&
     sameChats(row.chats ?? [], wt.chats ?? []) &&
@@ -127,7 +138,7 @@ export function buildChatRowGroups(
     }
     const { readOnly: _readOnly, ...rowPlacement } = placement
     const earlier = priorRows.get(rowPlacement.worktreeId)
-    const reused = earlier !== undefined && rendersSame(earlier, wt)
+    const reused = earlier !== undefined && rendersSame(earlier, rowPlacement, wt)
     const row: UnifiedWorktreeRow = reused
       ? earlier
       : {
