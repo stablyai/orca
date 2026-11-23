@@ -61,12 +61,16 @@ function keptInitialization(line: string | null): unknown {
  * (under the terminal daemon where it can, so it outlives the next restart).
  */
 export function claudeChatConnectionOpener(
-  chatKey: string,
+  /** Null keeps today's launch (a bot's chat, whose grants end with this run). */
+  chatKey: string | null,
   open: typeof openClaudeStreamJsonConnection = openClaudeStreamJsonConnection
 ): (
   launch: ClaudeStreamJsonLaunch,
   handlers: ClaudeStreamJsonConnectionHandlers
 ) => Promise<ClaudeStreamJsonConnection> {
+  if (chatKey === null) {
+    return (launch, handlers) => open(launch, handlers)
+  }
   return async (launch, handlers) =>
     (await openKeptClaudeAgentConnection(chatKey, launch, handlers)) ??
     open({ ...launch, relayChatKey: chatKey }, handlers)

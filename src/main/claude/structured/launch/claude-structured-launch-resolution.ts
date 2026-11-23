@@ -1,5 +1,5 @@
 import { claudeBotSessionOptions } from './claude-bot-session-options'
-import { withBotLaunchToolsEnv } from '../../../bots/bot-launch-tools'
+import { BotLaunchTools, withBotLaunchToolsEnv } from '../../../bots/bot-launch-tools'
 import type { ClaudeAccountRecipe } from '../../../../shared/agent-session/lifecycle/accounts/agent-session-acquired-account'
 import { prepareClaudeLaunchAccount, withClaudeLaunchAccountPin } from './claude-launch-account'
 import { assertStructuredAgentResolutionCurrent } from '../../../native-chat/agent-launch/structured-agent-command-resolution'
@@ -79,6 +79,8 @@ export type ClaudeStructuredLaunch = {
   /** Always Orca's resolved user CLI: the SDK's bundled binaries are excluded from the install. */
   pathToClaudeCodeExecutable: string
   prefixArgs?: readonly string[]
+  /** The launch carries grants this run issued; it keeps today's launch and is never relayed. */
+  appBoundGrants?: true
   account?: ClaudeStructuredInvocation['account']
   options: ClaudeStructuredSdkOptions
   cwd: string
@@ -296,6 +298,8 @@ export function claudeStructuredLaunchPart(
         cliFlag: async (flag, ...budget) =>
           deps.cliFlags ? deps.cliFlags.check(flag, probeLaunch, ...budget) : 'unknown',
         continuesChain,
+        // A bot's tool-relay token is issued by this run, so its agent must not outlive it.
+        ...(tools === BotLaunchTools.none ? {} : { appBoundGrants: true as const }),
         ...(sources.configuredProgram ? { configuredProgram: sources.configuredProgram } : {}),
         ...(fork && head && !continuesChain
           ? { forkedFromKey: agentSessionProviderHandleKey(head) }
