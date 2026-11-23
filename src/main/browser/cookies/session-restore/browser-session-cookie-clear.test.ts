@@ -306,6 +306,19 @@ describe('session cookie snapshot that a launch could not read', () => {
     expect((await launch()).jar.names()).toEqual([])
   })
 
+  it('a full clear whose removal failed is retried even when reading the jar then fails', async () => {
+    const { target, clear } = await savedButUnread()
+    io.rmFailures = 1
+    await expect(clear.clearBrowserCookieJar(target)).rejects.toThrow('EBUSY')
+    // Electron's read works, but the CDP read of the whole jar fails.
+    io.cdpReply = {}
+
+    await elapse(30_000)
+
+    expect(existsSync(snapshotFile())).toBe(false)
+    expect((await launch()).jar.names()).toEqual([])
+  })
+
   it('a full clear whose removal failed gets one last try at quit', async () => {
     const { target, clear, restore } = await savedButUnread()
     io.rmFailures = 1

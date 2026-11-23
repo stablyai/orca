@@ -236,14 +236,18 @@ async function saveSessionCookies(tracker: SessionCookieTracker): Promise<void> 
   // A failed clear's rewrite gets this one retry; after it, only a real change is written.
   const rewrite = tracker.savedFile === 'stale' && !tracker.rewriteRetried
   tracker.rewriteRetried ||= rewrite
-  if (!canSealSessionCookies()) {
-    // Without sealing only a removal can land: a failed clear that kept nothing still removes the file.
-    const current = !quitting && trackers.get(tracker.filePath) === tracker
-    if (rewrite && tracker.saved.size === 0 && current) {
-      await writeTrackedSnapshot(tracker, []).catch((error: unknown) =>
-        console.warn('[browser-session-cookies] Save failed:', error)
-      )
+  // A failed clear that kept nothing removes the file first: neither sealing nor a read of the
+  // jar (which may fail) can hold that up. Capturing newer cookies is a separate step.
+  const current = !quitting && trackers.get(tracker.filePath) === tracker
+  if (rewrite && tracker.saved.size === 0 && current) {
+    try {
+      await writeTrackedSnapshot(tracker, [])
+    } catch (error) {
+      console.warn('[browser-session-cookies] Save failed:', error)
+      return
     }
+  }
+  if (!canSealSessionCookies()) {
     return
   }
   const changedDuringSave = new Map<string, ScopeChange>()
@@ -255,7 +259,7 @@ async function saveSessionCookies(tracker: SessionCookieTracker): Promise<void> 
     if (cookies && !quitting && trackers.get(tracker.filePath) === tracker) {
       const saved = groupByScope(cookies, cdpCookieScopeKey)
       // Sites often re-set a session cookie to the value it already had; skip the sealed write.
-      if (rewrite || !sameSavedCookies(tracker.saved, saved)) {
+      if ((rewrite && tracker.savedFile === 'stale') || !sameSavedCookies(tracker.saved, saved)) {
         await writeTrackedSnapshot(tracker, cookies)
       }
       tracker.fullRead = false
