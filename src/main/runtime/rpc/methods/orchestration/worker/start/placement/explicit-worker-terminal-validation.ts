@@ -1,5 +1,6 @@
 import type { OrcaRuntimeService } from '../../../../../../orca-runtime'
 import { OrchestrationError } from '../../../../../../orchestration/orchestration-error'
+import { refuseUnmatchedWorkerSelector } from '../worker-start-selector-refusal'
 import { isPeerCaller } from '../../../../../../orchestration/addressing/orchestration-caller-identity'
 import { isStructuredWorkerHandle } from '../../../../../../../../shared/orchestration/workers/structured-worker-handle'
 import type {
@@ -70,7 +71,11 @@ export async function explicitWorkerWorkspace(
   const chat = chatAssigneeOf(terminal)
   const workspaceId = chat
     ? (await admitChatAssignee(runtime, chat, db)).location.workspaceId
-    : (await runtime.showTerminal(terminal.address)).worktreeId
+    : (
+        await refuseUnmatchedWorkerSelector({ flag: '--terminal', value: terminal.address }, () =>
+          runtime.showTerminal(terminal.address)
+        )
+      ).worktreeId
   return workspaceId ? `id:${workspaceId}` : 'current'
 }
 
