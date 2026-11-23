@@ -12,6 +12,9 @@ export function noteAtlasFontProbeMismatch(): void {
   const now = Date.now()
   mismatchTimestamps = mismatchTimestamps.filter((timestamp) => now - timestamp < MISMATCH_WINDOW_MS)
   mismatchTimestamps.push(now)
+  if (mismatchTimestamps.length > MISMATCH_BURST_THRESHOLD) {
+    mismatchTimestamps.splice(0, mismatchTimestamps.length - MISMATCH_BURST_THRESHOLD)
+  }
   if (mismatchTimestamps.length < MISMATCH_BURST_THRESHOLD) {
     return
   }
