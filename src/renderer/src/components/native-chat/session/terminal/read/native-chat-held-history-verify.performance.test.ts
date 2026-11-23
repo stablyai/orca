@@ -287,3 +287,73 @@ describe.each([
     }
   })
 })
+
+describe('held-history verification under sliding windows', () => {
+  beforeEach(() => vi.useFakeTimers())
+  afterEach(() => vi.useRealTimers())
+  const digest = '0000000000000001'
+
+  it('keeps each verification within twice the held span while appends and replacements alternate', async () => {
+    let end = 300
+    const hashed: number[] = []
+    const verify = vi.fn(async (ranges: TranscriptByteRange[]) => {
+      hashed.push(ranges.reduce((sum, range) => sum + range.end - range.start, 0))
+      return ranges.map(() => true)
+    })
+    const scheduler = new NativeChatHeldHistoryVerify<TranscriptByteRange[]>({
+      visible: () => true,
+      olderSpan: () => ({ start: Math.max(0, end - 900), end: end - 300 }),
+      verify,
+      reread: async () => [{ start: Math.max(0, end - 900), end, digest }],
+      apply: (ranges) => ranges
+    })
+    try {
+      scheduler.reset([{ start: 0, end, digest }])
+      for (let k = 0; k < 5_000; k++) {
+        scheduler.append([{ start: end, end: end + 1, digest }])
+        end++
+        scheduler.replacement([{ start: end - 300, end, digest }], true)
+        await vi.advanceTimersByTimeAsync(1_000)
+      }
+      expect(Math.max(...hashed)).toBeLessThanOrEqual(2_100)
+    } finally {
+      scheduler.clear()
+    }
+  })
+
+  it('retries once more for appends that land during the last timed re-read', async () => {
+    let resolveRead: (() => void) | undefined
+    const reread = vi.fn(
+      () =>
+        new Promise<TranscriptByteRange[]>((resolve) => {
+          resolveRead = () => resolve([])
+        })
+    )
+    const scheduler = new NativeChatHeldHistoryVerify<TranscriptByteRange[]>({
+      visible: () => true,
+      olderSpan: () => ({ start: 0, end: 300 }),
+      verify: async (ranges) => ranges.map(() => false),
+      reread,
+      apply: () => false
+    })
+    try {
+      scheduler.reset([{ start: 0, end: 600, digest }])
+      scheduler.replacement([{ start: 300, end: 600, digest }], true)
+      for (let attempt = 1; attempt <= 4; attempt++) {
+        await vi.advanceTimersByTimeAsync(60_000)
+        expect(reread).toHaveBeenCalledTimes(attempt)
+        if (attempt === 4) {
+          scheduler.append([{ start: 600, end: 601, digest }])
+        }
+        resolveRead?.()
+      }
+      await vi.advanceTimersByTimeAsync(60_000)
+      expect(reread).toHaveBeenCalledTimes(5)
+      resolveRead?.()
+      await vi.advanceTimersByTimeAsync(600_000)
+      expect(reread).toHaveBeenCalledTimes(5)
+    } finally {
+      scheduler.clear()
+    }
+  })
+})

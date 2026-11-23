@@ -28,6 +28,8 @@ export class NativeChatHeldHistoryVerify<T> {
   private stale = false
   // Unsettled verifies and refused re-reads back off, then wait for the next transcript frame, so a file that never settles isn't re-hashed forever.
   private backoff = 0
+  // A frame that lands during an attempt earns one follow-up even after the timed retries run out.
+  private frameDuringRun = false
   private generation = 0
   private revision = 0
   private pending = false
@@ -65,6 +67,9 @@ export class NativeChatHeldHistoryVerify<T> {
   append(ranges?: TranscriptByteRange[]): void {
     this.ranges = mergeTranscriptRanges([...this.ranges, ...(ranges ?? [])])
     this.window = mergeTranscriptRanges([...this.window, ...(ranges ?? [])])
+    if (this.running) {
+      this.frameDuringRun = true
+    }
     if (this.backoff > MAX_TIMED_RETRIES) {
       this.schedule()
     }
@@ -117,6 +122,7 @@ export class NativeChatHeldHistoryVerify<T> {
     this.window = []
     this.stale = false
     this.backoff = 0
+    this.frameDuringRun = false
   }
 
   private applyResult(result: T | undefined, superseded: boolean): void {
@@ -134,7 +140,7 @@ export class NativeChatHeldHistoryVerify<T> {
 
   private retryLater(): void {
     this.backoff++
-    if (this.backoff <= MAX_TIMED_RETRIES) {
+    if (this.backoff <= MAX_TIMED_RETRIES || this.frameDuringRun) {
       this.schedule()
     }
   }
@@ -160,6 +166,7 @@ export class NativeChatHeldHistoryVerify<T> {
       return
     }
     this.pending = false
+    this.frameDuringRun = false
     const controller = new AbortController()
     this.running = controller
     const generation = this.generation
@@ -191,7 +198,9 @@ export class NativeChatHeldHistoryVerify<T> {
           }
           coveredTo = Math.max(coveredTo, range.end)
         }
-        if (coveredTo >= span.end && this.options.verify) {
+        // A proof stretched far past the held rows would re-hash evicted bytes; a re-read refreshes it instead.
+        const evicted = ranges.some((range) => range.start < span.start - (span.end - span.start))
+        if (!evicted && coveredTo >= span.end && this.options.verify) {
           const result = await this.options.verify(ranges, controller.signal)
           if (controller.signal.aborted || this.generation !== generation) {
             return
