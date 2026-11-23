@@ -1,7 +1,7 @@
 import {
   OFFICIAL_MARKETPLACE_GIT_SOURCE,
-  isOfficialMarketplaceGitSource,
   isMarketplaceListingSupported,
+  isOfficialMarketplaceGitSource,
   pluginMarketplaceGitSourceSchema,
   type PluginMarketplaceEntry,
   type PluginMarketplaceGitSource
@@ -16,14 +16,21 @@ import {
   type PluginMarketplaceCachedSnapshot,
   type PluginMarketplaceRegisteredSource
 } from './plugin-marketplace-store'
-import type { PluginKillListEntry } from '../../../shared/plugins/catalog/plugin-kill-list'
+import type {
+  PluginBlockNotice,
+  PluginKillListEntry
+} from '../../../shared/plugins/catalog/plugin-kill-list'
 import type { PluginImageCache } from '../media/plugin-image-cache'
-import { validateMarketplaceProvenance } from './plugin-marketplace-provenance'
+import { cacheValidatedMarketplace } from './plugin-marketplace-provenance'
 import { CommunityMarketplaceSeed } from './plugin-community-marketplace-seed'
+import { COMMUNITY_MARKETPLACE_GIT_SOURCE } from '../../../shared/plugins/catalog/plugin-install-link'
+import type { OrcaCloudCapabilities } from '../../../shared/orca-profiles/orca-cloud-capabilities'
+import { PluginMarketplaceTeamPolicy } from './plugin-marketplace-team-policy'
 import { pluginMarketplaceErrorMessage } from './plugin-marketplace-error-message'
 import { sharedSourceRefresh } from './plugin-marketplace-shared-refresh'
 import {
   pluginMarketplaceListing,
+  pluginMarketplaceSourceState,
   type PluginMarketplaceListing,
   type PluginMarketplaceSourceState
 } from './plugin-marketplace-projection'
@@ -39,7 +46,9 @@ type MarketplaceFetcher = (
 export class PluginMarketplaceService {
   private readonly store: PluginMarketplaceStore
   private readonly fetcher: MarketplaceFetcher
-  private readonly getKillListEntry: (pluginKey: string) => PluginKillListEntry | null
+  private readonly getKillListEntry: (
+    pluginKey: string
+  ) => (PluginKillListEntry & PluginBlockNotice) | null
   private readonly hostVersion: string | null
   private readonly imageCache: PluginImageCache | null
   private readonly refreshChains = new Map<string, Promise<PluginMarketplaceSourceState>>()
@@ -47,21 +56,24 @@ export class PluginMarketplaceService {
   private officialSeedPromise: Promise<PluginMarketplaceSourceState> | null = null
   private officialSeedRequested = false
   private readonly communitySeed: CommunityMarketplaceSeed
+  private readonly teamPolicy: PluginMarketplaceTeamPolicy
 
   constructor(options: {
     pluginsDataDir: string
     fetcher?: MarketplaceFetcher
     store?: PluginMarketplaceStore
-    getKillListEntry?: (pluginKey: string) => PluginKillListEntry | null
+    getKillListEntry?: (pluginKey: string) => (PluginKillListEntry & PluginBlockNotice) | null
     /** Picks which of an entry's releases to offer; without it the newest is offered. */
     hostVersion?: string
     imageCache?: PluginImageCache
+    getTeamCapabilities?: () => OrcaCloudCapabilities | undefined
   }) {
     this.hostVersion = options.hostVersion ?? null
     this.imageCache = options.imageCache ?? null
     this.store = options.store ?? new PluginMarketplaceStore(options.pluginsDataDir)
     this.fetcher = options.fetcher ?? fetchPluginMarketplace
     this.getKillListEntry = options.getKillListEntry ?? (() => null)
+    this.teamPolicy = new PluginMarketplaceTeamPolicy(options.getTeamCapabilities)
     this.communitySeed = new CommunityMarketplaceSeed(this.store, (source) =>
       this.addSource(source)
     )
@@ -69,26 +81,24 @@ export class PluginMarketplaceService {
 
   async listSources(): Promise<PluginMarketplaceSourceState[]> {
     await this.waitForOfficialSeed()
-    const sources = await this.store.listSources()
+    const sources = await this.teamPolicy.list(this.store)
     return Promise.all(
       sources.map(async (source) => {
-        try {
-          const error = this.sourceErrors.get(source.id)
-          return this.stateFromSnapshot(
-            source,
-            await this.store.readSnapshot(source.id),
-            Boolean(error),
-            error
-          )
-        } catch (error) {
-          return this.stateFromSnapshot(source, null, true, pluginMarketplaceErrorMessage(error))
-        }
+        let error = this.sourceErrors.get(source.id)
+        const snapshot = await this.store.readSnapshot(source.id).catch((cause) => {
+          error = pluginMarketplaceErrorMessage(cause)
+          return null
+        })
+        return pluginMarketplaceSourceState(source, snapshot, error, this.teamPolicy)
       })
     )
   }
 
   async addSource(source: PluginMarketplaceGitSource): Promise<PluginMarketplaceSourceState> {
     const parsedSource = pluginMarketplaceGitSourceSchema.parse(source)
+    if (!this.teamPolicy.allows(parsedSource)) {
+      throw new Error('This plugin catalog is turned off by your team.')
+    }
     const sourceId = marketplaceSourceId(parsedSource)
     const existing = (await this.store.listSources()).find((candidate) => candidate.id === sourceId)
     const candidate: PluginMarketplaceRegisteredSource = existing ?? {
@@ -97,11 +107,14 @@ export class PluginMarketplaceService {
       addedAt: Date.now()
     }
     const fetched = await this.fetchAndValidate(candidate)
+    if (!this.teamPolicy.allows(parsedSource)) {
+      throw new Error('This plugin catalog is turned off by your team.')
+    }
     const registered = existing ?? (await this.store.addSource(parsedSource, candidate.addedAt))
     try {
       const snapshot = await this.store.writeSnapshot({ source: registered, ...fetched })
       this.sourceErrors.delete(registered.id)
-      return this.stateFromSnapshot(registered, snapshot, false)
+      return pluginMarketplaceSourceState(registered, snapshot, undefined, this.teamPolicy)
     } catch (error) {
       if (!existing) {
         await this.store.removeSource(registered.id).catch(() => undefined)
@@ -110,7 +123,14 @@ export class PluginMarketplaceService {
     }
   }
 
+  allowsSource(source: PluginMarketplaceGitSource): boolean {
+    return this.teamPolicy.allows(source)
+  }
+
   async removeSource(sourceId: string): Promise<boolean> {
+    if (this.teamPolicy.isManaged(sourceId)) {
+      throw new Error('This plugin catalog is managed by your team.')
+    }
     const source = (await this.store.listSources()).find((candidate) => candidate.id === sourceId)
     if (source && isOfficialMarketplaceGitSource(source.source.url)) {
       throw new Error('the official marketplace is managed by Orca and cannot be removed')
@@ -127,6 +147,9 @@ export class PluginMarketplaceService {
   }
 
   seedOfficialSource(): Promise<PluginMarketplaceSourceState> {
+    if (!this.teamPolicy.allows(OFFICIAL_MARKETPLACE_GIT_SOURCE)) {
+      return Promise.reject(new Error('The official plugin catalog is turned off by your team.'))
+    }
     this.officialSeedRequested = true
     if (!this.officialSeedPromise) {
       const seed = this.performOfficialSeed()
@@ -143,7 +166,9 @@ export class PluginMarketplaceService {
 
   /** Adds the community catalog once by default; see CommunityMarketplaceSeed. */
   seedCommunitySource(now?: number): Promise<void> {
-    return this.communitySeed.run(now)
+    return this.teamPolicy.allows(COMMUNITY_MARKETPLACE_GIT_SOURCE)
+      ? this.communitySeed.run(now)
+      : Promise.resolve()
   }
 
   async refreshSource(sourceId: string): Promise<PluginMarketplaceSourceState> {
@@ -164,7 +189,7 @@ export class PluginMarketplaceService {
 
   async refreshAll(): Promise<PluginMarketplaceSourceState[]> {
     await this.waitForOfficialSeed()
-    const sources = await this.store.listSources()
+    const sources = await this.teamPolicy.list(this.store)
     return Promise.all(sources.map((source) => this.refreshSource(source.id)))
   }
 
@@ -178,14 +203,18 @@ export class PluginMarketplaceService {
   }
 
   /** Listings from the cached catalogs in catalog order, without waiting on any fetch. */
-  async listCachedPlugins(): Promise<PluginMarketplaceListing[]> {
+  async listCachedPlugins(pluginKeys?: ReadonlySet<string>): Promise<PluginMarketplaceListing[]> {
     const states = await this.listSnapshots()
     return states.flatMap(({ source, snapshot }) =>
       snapshot.marketplace.plugins
         // Why: hide packs whose contribution kind this build no longer
         // supports (themes/icons/skills) so users never reach a dead install.
-        .filter((entry) => isMarketplaceListingSupported(entry.categories))
-        .map((entry) => this.listingFromEntry(source, snapshot, entry))
+        .filter(
+          (entry) =>
+            (!pluginKeys || pluginKeys.has(entry.id)) &&
+            isMarketplaceListingSupported(entry.categories)
+        )
+        .flatMap((entry) => this.listingFromEntry(source, snapshot, entry) ?? [])
     )
   }
 
@@ -193,7 +222,7 @@ export class PluginMarketplaceService {
     marketplaceSourceId: string,
     pluginKey: string
   ): Promise<PluginMarketplaceListing | null> {
-    const source = (await this.store.listSources()).find(
+    const source = (await this.teamPolicy.list(this.store)).find(
       (candidate) => candidate.id === marketplaceSourceId
     )
     if (!source) {
@@ -208,7 +237,9 @@ export class PluginMarketplaceService {
   }
 
   private async performRefresh(sourceId: string): Promise<PluginMarketplaceSourceState> {
-    const source = (await this.store.listSources()).find((candidate) => candidate.id === sourceId)
+    const source = (await this.teamPolicy.list(this.store)).find(
+      (candidate) => candidate.id === sourceId
+    )
     if (!source) {
       throw new Error(`unknown marketplace source: ${sourceId}`)
     }
@@ -216,26 +247,26 @@ export class PluginMarketplaceService {
       const fetched = await this.fetchAndValidate(source)
       const snapshot = await this.store.writeSnapshot({ source, ...fetched })
       this.sourceErrors.delete(source.id)
-      return this.stateFromSnapshot(source, snapshot, false)
+      return pluginMarketplaceSourceState(source, snapshot, undefined, this.teamPolicy)
     } catch (error) {
       const cached = await this.store.readSnapshot(source.id).catch(() => null)
+      const message = pluginMarketplaceErrorMessage(error)
+      this.sourceErrors.set(source.id, message)
       if (!cached) {
         throw error
       }
-      const message = pluginMarketplaceErrorMessage(error)
-      this.sourceErrors.set(source.id, message)
-      return this.stateFromSnapshot(source, cached, true, message)
+      return pluginMarketplaceSourceState(source, cached, message, this.teamPolicy)
     }
   }
 
   private async performOfficialSeed(): Promise<PluginMarketplaceSourceState> {
     const sources = await this.store.listSources()
-    const existing = sources.find((source) => isOfficialMarketplaceGitSource(source.source.url))
+    const existing = sources.find(({ source }) => this.teamPolicy.isDefaultOfficialSource(source))
     const source =
       existing ?? (await this.store.addSource(OFFICIAL_MARKETPLACE_GIT_SOURCE, Date.now()))
     const snapshot = await this.store.readSnapshot(source.id).catch(() => null)
     if (snapshot) {
-      return this.stateFromSnapshot(source, snapshot, false)
+      return pluginMarketplaceSourceState(source, snapshot, undefined, this.teamPolicy)
     }
     try {
       return await this.performRefresh(source.id)
@@ -243,7 +274,7 @@ export class PluginMarketplaceService {
       // Keep official source configuration offline so later refreshes need no user-supplied URL.
       const message = pluginMarketplaceErrorMessage(error)
       this.sourceErrors.set(source.id, message)
-      return this.stateFromSnapshot(source, null, true, message)
+      return pluginMarketplaceSourceState(source, null, message, this.teamPolicy)
     }
   }
 
@@ -255,26 +286,13 @@ export class PluginMarketplaceService {
   private async fetchAndValidate(
     source: PluginMarketplaceRegisteredSource
   ): Promise<PluginMarketplaceFetchResult> {
-    const fetched = await this.fetcher(source)
-    validateMarketplaceProvenance(source, fetched)
-    const cache = this.imageCache
-    if (cache) {
-      await Promise.all(
-        (fetched.images ?? []).map((image) =>
-          cache.put(image).catch((error: unknown) => {
-            console.warn('[plugins] could not cache marketplace image:', error)
-            return null
-          })
-        )
-      )
-    }
-    return fetched
+    return cacheValidatedMarketplace(source, await this.fetcher(source), this.imageCache)
   }
 
   private async listSnapshots(): Promise<
     { source: PluginMarketplaceRegisteredSource; snapshot: PluginMarketplaceCachedSnapshot }[]
   > {
-    const sources = await this.store.listSources()
+    const sources = await this.teamPolicy.list(this.store)
     const snapshots = await Promise.all(
       sources.map(async (source) => ({
         source,
@@ -295,37 +313,15 @@ export class PluginMarketplaceService {
     source: PluginMarketplaceRegisteredSource,
     snapshot: PluginMarketplaceCachedSnapshot,
     entry: PluginMarketplaceEntry
-  ): PluginMarketplaceListing {
+  ): PluginMarketplaceListing | null {
     return pluginMarketplaceListing({
       source,
       snapshot,
       entry,
       hostVersion: this.hostVersion,
-      blocked: this.getKillListEntry(entry.id)
+      blocked: this.getKillListEntry(entry.id),
+      requiredRules: this.teamPolicy.requiredPluginRules(),
+      managedByTeams: this.teamPolicy.managedByTeams(source.source)
     })
-  }
-
-  private stateFromSnapshot(
-    source: PluginMarketplaceRegisteredSource,
-    snapshot: PluginMarketplaceCachedSnapshot | null,
-    stale: boolean,
-    error?: string
-  ): PluginMarketplaceSourceState {
-    return {
-      id: source.id,
-      source: source.source,
-      addedAt: source.addedAt,
-      marketplace: snapshot
-        ? {
-            name: snapshot.marketplace.name,
-            owner: snapshot.marketplace.owner,
-            resolvedCommit: snapshot.marketplaceCommit,
-            fetchedAt: snapshot.fetchedAt
-          }
-        : null,
-      stale,
-      official: isOfficialMarketplaceGitSource(source.source.url),
-      ...(error ? { error } : {})
-    }
   }
 }

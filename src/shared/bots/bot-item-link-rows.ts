@@ -35,6 +35,8 @@ export type BotItemLinkRow =
       linear: string | null
     }
   | { kind: 'file'; key: string; path: string; name: string }
+  /** A wait or schedule that will wake the agent for the item; `active` while it exists and is on. */
+  | { kind: 'automation'; key: string; name: string | null; active: boolean }
 
 /** A GitHub PR or issue on one line; `title` and `state` are null until the host's cache has read it. */
 export type BotItemGitHubRow = {
@@ -127,6 +129,8 @@ function group(row: BotItemLinkRow): number {
       return row.linear ? 2 : 3
     case 'file':
       return 4
+    case 'automation':
+      return 5
   }
 }
 
@@ -182,6 +186,14 @@ export function botItemLinkRows(links: readonly BotItemLinkView[]): BotItemLinkR
       case 'file':
         rows.push(fileRow(link.ref))
         break
+      case 'automation':
+        rows.push({
+          kind: 'automation',
+          key: `automation:${link.ref}`,
+          name: link.name,
+          active: link.active
+        })
+        break
     }
   }
   for (const pr of prs.values()) {
@@ -232,6 +244,7 @@ export function botItemWorkerRow(
     startedAt: link.startedAt ?? 0,
     ...(link.settledAt !== null ? { settledAt: link.settledAt } : {}),
     dispatchId: link.latest ?? link.ref,
+    ...(link.neverStarted ? { neverStarted: true as const } : {}),
     ...(link.host ? { hostId: link.host } : {}),
     ...(link.report ? { summary: link.report.subject } : {})
   }

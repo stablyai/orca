@@ -126,32 +126,43 @@ export const antigravityChatAccount = {
     }
     await folder.prepare?.(env)
     await linkAntigravityUserSkills(home, antigravityUserHome(env))
-    const path = join(home, ANTIGRAVITY_ACP_HOME, 'settings.json')
-    const projection = JSON.stringify({
-      auth: { type: auth.method },
-      ...(await gcpProjection(auth, env))
-    })
-    // Unchanged settings cost no durable write, so a listing or a start mostly writes nothing.
-    if ((await readFile(path, 'utf8').catch(() => null)) === projection) {
-      return
-    }
-    try {
-      await writeFileDurableIfCurrent(
-        durableWriteTempPath(path),
-        path,
-        projection,
-        () => {
-          assertCurrent?.()
-          return true
-        },
-        0o600
-      )
-    } catch (cause) {
-      assertCurrent?.()
-      throw new AntigravitySignInSentence(
-        'Antigravity account settings could not be prepared. Check that Orca can write its data folder and try again.',
-        { cause }
-      )
-    }
+    await writeAntigravityChatSettings(home, auth, env, assertCurrent)
+  }
+}
+
+/** Writes the chat home's `settings.json` for `auth`, which the server and agy read to pick the
+ *  sign-in method (and gcloud's project); an unchanged file is left alone. */
+export async function writeAntigravityChatSettings(
+  home: string,
+  auth: AntigravityChatAuthConfig,
+  env: Readonly<Record<string, string>>,
+  assertCurrent?: () => void
+): Promise<void> {
+  const path = join(home, ANTIGRAVITY_ACP_HOME, 'settings.json')
+  const projection = JSON.stringify({
+    auth: { type: auth.method },
+    ...(await gcpProjection(auth, env))
+  })
+  // Unchanged settings cost no durable write, so a listing or a start mostly writes nothing.
+  if ((await readFile(path, 'utf8').catch(() => null)) === projection) {
+    return
+  }
+  try {
+    await writeFileDurableIfCurrent(
+      durableWriteTempPath(path),
+      path,
+      projection,
+      () => {
+        assertCurrent?.()
+        return true
+      },
+      0o600
+    )
+  } catch (cause) {
+    assertCurrent?.()
+    throw new AntigravitySignInSentence(
+      'Antigravity account settings could not be prepared. Check that Orca can write its data folder and try again.',
+      { cause }
+    )
   }
 }

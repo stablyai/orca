@@ -1,3 +1,4 @@
+import type { AgentBackgroundWait } from '../../agent-status/lifecycle/agent-background-wait'
 import type { FleetAgentStatusEvidence } from './orchestration-fleet-agent-status-evidence'
 import { createFleetStatusIndex, statusForFleetWorker } from './orchestration-fleet-status-index'
 import {
@@ -114,6 +115,9 @@ export type OrchestrationFleetWorker = {
     dispatch: string
     detail: string | null
     activity: 'working' | 'blocked' | 'waiting' | 'done' | 'unknown'
+    /** Its turn ended while its own background tasks still run, as its last status row says. Absent
+     *  otherwise, and from older hosts. */
+    backgroundWait?: AgentBackgroundWait
   }
   outcome: 'in_progress' | 'succeeded' | 'failed' | 'outcome_unknown' | 'finished_unverified'
   liveness: FleetLiveness

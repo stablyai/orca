@@ -19,7 +19,8 @@ export function CodexResetCredits({
   canRedeemReset,
   isRedeemingReset,
   onReset,
-  renderAction
+  renderAction,
+  unsupportedRuntime
 }: {
   resetCreditCount: number
   resetCreditExpiry: string | null
@@ -27,6 +28,7 @@ export function CodexResetCredits({
   isRedeemingReset: boolean
   onReset: () => void
   renderAction?: (action: React.ReactNode) => React.ReactNode
+  unsupportedRuntime?: 'wsl'
 }): React.JSX.Element {
   const t = useTranslate()
   const action = (
@@ -40,14 +42,23 @@ export function CodexResetCredits({
   return (
     <div className="flex items-center justify-between gap-2">
       <div className="min-w-0 text-2xs text-muted-foreground">
-        {t(
-          'auto.components.status.bar.StatusBar.rateLimitResetsAvailable',
-          '{{count}} rate-limit resets available',
-          {
-            count: resetCreditCount,
-            defaultValue_one: '{{count}} rate-limit reset available'
-          }
-        )}
+        {unsupportedRuntime === 'wsl'
+          ? t(
+              'auto.components.status.bar.StatusBar.rateLimitResetsUnsupportedWsl',
+              '{{count}} resets available · not in WSL yet',
+              {
+                count: resetCreditCount,
+                defaultValue_one: '{{count}} reset available · not in WSL yet'
+              }
+            )
+          : t(
+              'auto.components.status.bar.StatusBar.rateLimitResetsAvailable',
+              '{{count}} rate-limit resets available',
+              {
+                count: resetCreditCount,
+                defaultValue_one: '{{count}} rate-limit reset available'
+              }
+            )}
         {resetCreditExpiry ? <div>{resetCreditExpiry}</div> : null}
       </div>
       {canRedeemReset ? (renderAction ? renderAction(action) : action) : null}

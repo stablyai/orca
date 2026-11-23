@@ -17,6 +17,7 @@ import type { BotConnectorTitle } from '../bot-connector-titles'
 import type { ComposioProblem } from '../bot-connector-entries'
 import { botToolErrorMessage } from '../bot-tools-client'
 import { ComposioAppLogo } from './ComposioAppLogo'
+import { composioSlugLine } from '../../../../../shared/bots/bot-app-lines'
 import {
   connectComposioApp,
   disconnectComposioApp,
@@ -112,7 +113,7 @@ export function BotComposioAppRow({
   const t = useTranslate()
   const confirm = useConfirmationDialog()
   const name = composioAppName(connection.app, connection.name)
-  const uses = composioAppLine(connection.app, [])
+  const uses = composioSlugLine(connection.app, composioAppLine(connection.app, []), t)
   const working = connection.status === 'active'
   const run = (action: () => Promise<unknown>): void =>
     void action().catch((error: unknown) => toast.error(botToolErrorMessage(error)))

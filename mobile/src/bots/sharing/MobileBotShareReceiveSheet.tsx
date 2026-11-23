@@ -302,8 +302,7 @@ function ReviewSteps(props: {
     review,
     spots,
     open: (page: ReviewPage) => props.setNav((current) => [...current, page]),
-    toolIds: props.toolIds,
-    setToolIds: props.setToolIds
+    consent: { toolIds: props.toolIds, setToolIds: props.setToolIds }
   }
   if (step.kind === 'create') {
     return (
@@ -363,9 +362,11 @@ function ReviewSteps(props: {
       />
       <MobileBotShareReviewOverview
         ctx={ctx}
-        updated={step.updated}
-        onCreate={() => props.onStep({ kind: 'create', review })}
-        onReviewAgain={() => props.onReviewAgain(review.shareId)}
+        choosing={{
+          updated: step.updated,
+          onCreate: () => props.onStep({ kind: 'create', review }),
+          onReviewAgain: () => props.onReviewAgain(review.shareId)
+        }}
       />
     </>
   )

@@ -19,6 +19,8 @@ import {
   randomMascotAvatar
 } from '../../../src/shared/bot-avatar'
 import { proposalCreateParams, type BotProposal } from '../../../src/shared/bots/bot-proposal'
+import { botTemplate } from '../../../src/shared/bots/bot-templates'
+import { botTemplateWord } from '../../../src/shared/bots/bot-template-text'
 import { MobileBotTemplatesSheet } from './MobileBotTemplatesSheet'
 import { MobileBotImportSheet, type BotImportFrom } from './MobileBotImportSheet'
 import { MobileBotShareReceiveSheet } from './sharing/MobileBotShareReceiveSheet'
@@ -134,6 +136,7 @@ function NewBotForm(props: NewBotSheetProps) {
   const choosesComputer = props.computers.length > 1 || seed !== undefined || !listed
   const picture = parseBotAvatar(avatar)
   const trimmed = name.trim()
+  const template = botTemplate(proposal?.value.templateId)
   // Until the computer says which agents it has, or when it has none, it makes no bot, as the desktop's New bot.
   const agentsReady = client !== null && choices !== null && choices.length > 0
   const ready = trimmed.length > 0 && agentsReady
@@ -156,6 +159,9 @@ function NewBotForm(props: NewBotSheetProps) {
                 ...(proposal?.value.purpose.trim()
                   ? proposalCreateParams({ ...proposal.value, name: trimmed }, agent, {
                       templatePackages: computer?.templatePackages === true,
+                      templateNameShown: template
+                        ? botTemplateWord(template, 'name', t)
+                        : undefined,
                       ...(seed?.fromOffer ? { fromOffer: seed.fromOffer } : {})
                     })
                   : { name: trimmed, agent }),
@@ -209,7 +215,8 @@ function NewBotForm(props: NewBotSheetProps) {
   ) : null
   const agentRow = (
     <NewBotAgentRow
-      agent={agent}
+      agent={choices?.length === 0 ? null : agent}
+      hostLabel={computer?.label ?? ''}
       loading={client !== null && choices === null}
       onPick={() => pick('agent')}
     />

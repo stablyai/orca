@@ -142,7 +142,7 @@ export async function handOffGroupMentions(
         )
       }
     })
-    groups.changed()
+    groups.changed(groupId)
     return stored
   })
   for (const line of woken) {
