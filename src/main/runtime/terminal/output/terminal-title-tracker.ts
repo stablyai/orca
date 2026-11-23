@@ -22,6 +22,8 @@ export abstract class OrcaRuntimeWithGetUnpersistedTrackedTitleForPty extends Or
   protected abstract createTerminalSideEffectCommandCodeDetector(
     ptyId: string
   ): NonNullable<RuntimePtyTitleTrackerEntry['commandCodeDetector']>
+  /** The shell came back and the hook proved the agent process ended. A descendant tells that worker's Dispatch. */
+  protected noteProvenAgentProcessExit(_ptyId: string): void {}
 
   protected getUnpersistedTrackedTitleForPty(ptyId: string | null): string | null {
     if (!ptyId || this.getTrackedRawTitleForPty(ptyId) !== null) {
@@ -161,7 +163,17 @@ export abstract class OrcaRuntimeWithGetUnpersistedTrackedTitleForPty extends Or
           this.openCodeRunLifetime.onCommandStarted(ptyId)
         },
         onCommandFinished: (exitCode: number | null) => {
-          void this.recheckHookAgentPresenceForPty(ptyId)
+          const current = this.ptysById.get(ptyId)
+          const incarnation = current?.incarnationId
+          void this.recheckHookAgentPresenceForPty(ptyId).then((verdict) => {
+            if (this.ptysById.get(ptyId) !== current || current?.incarnationId !== incarnation) {
+              return
+            }
+            // A killed agent returns the shell without closing the PTY. The discarded probe used to leave the worker live.
+            if (verdict === 'exited') {
+              this.noteProvenAgentProcessExit(ptyId)
+            }
+          })
           this.retirePtyAgentLaunchAuthority(ptyId, true)
           this.recordTerminalSideEffectFact(ptyId, { kind: 'command-finished', exitCode })
           this.openCodeRunLifetime.onCommandFinished(ptyId, exitCode)
