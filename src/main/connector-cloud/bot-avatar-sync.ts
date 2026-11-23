@@ -26,18 +26,22 @@ const MAX_REFUSED_WAIT_MS = 30 * 60_000
 // Sends in flight at once, so a large roster never fans out into one request per bot.
 const MAX_CONCURRENT_SENDS = 4
 
-// Per bot record (records are replaced on write, never changed in place): its key, so a retry pass over
-// unchanged bots derives no look again.
-const pictureKeys = new WeakMap<SyncedBot, string>()
+// Per bot record (records are replaced on write, never changed in place): its look, so a pass over
+// unchanged bots derives none again.
+const looks = new WeakMap<SyncedBot, string | null>()
+
+function lookOf(bot: SyncedBot): string | null {
+  let look = looks.get(bot)
+  if (look === undefined) {
+    look = botSlackIconLook(bot)
+    looks.set(bot, look)
+  }
+  return look
+}
 
 // What the cloud is sent for a bot: its picture and, for a colored or dressed mascot, its look.
 function pictureKey(bot: SyncedBot): string {
-  let key = pictureKeys.get(bot)
-  if (key === undefined) {
-    key = `${bot.avatar ?? ''}|${botSlackIconLook(bot) ?? ''}`
-    pictureKeys.set(bot, key)
-  }
-  return key
+  return `${bot.avatar ?? ''}|${lookOf(bot) ?? ''}`
 }
 
 export class BotAvatarSync {
@@ -138,7 +142,7 @@ export class BotAvatarSync {
       present.add(bot.id)
       // A bot that no longer needs its drawn icon (unlinked, or another kind of picture) lets its bytes go;
       // only a bot write changes that, so the retry timer's passes skip it.
-      if (!fromTimer && (!(bot.slack || bot.github) || !bot.avatar || !botSlackIconLook(bot))) {
+      if (!fromTimer && (!(bot.slack || bot.github) || !bot.avatar || !lookOf(bot))) {
         this.prepared.delete(bot.id)
       }
       if (!(bot.slack || bot.github) || !bot.avatar || (fromTimer && this.owed.has(bot.id))) {
@@ -295,7 +299,7 @@ export class BotAvatarSync {
   // The drawn icon for the mascot's look now, named by its bytes as an upload is; null sends the plain
   // mascot. Kept per bot until its look or icon changes, so a retry (signed out, offline) reads nothing.
   private async mascotIcon(bot: SyncedBot): Promise<{ version: string; png: string } | null> {
-    const look = botSlackIconLook(bot)
+    const look = lookOf(bot)
     if (!look) {
       this.prepared.delete(bot.id)
       return null
