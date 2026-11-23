@@ -199,10 +199,10 @@ function applyStep(
     // Unmuted now and goes on with its batch; the save's wait runs in the thread's queue just ahead
     // of its turn, so a save that works is on disk before the turn is admitted. A Stop cancels the
     // turn as it would any queued message; the unmute stays.
-    const saving = deps.write(key, false)
-    void deps
-      .queued(key, () => saving)
+    const saving = deps
+      .write(key, false)
       .catch((error: unknown) => console.warn('[connectors] could not save a thread unmute', error))
+    void deps.queued(key, () => saving)
     return null
   }
   const ref = delivery.asker?.messageRef

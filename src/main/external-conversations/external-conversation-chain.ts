@@ -60,6 +60,15 @@ export class ConversationChain {
     return result
   }
 
+  /** Runs `work` in the lane after its queued items; refused when the lane is cancelled meanwhile,
+   *  even while `work` ran. */
+  after(id: string, work?: () => Promise<unknown>): Promise<Delivery> {
+    return this.enqueue(id, async (signal) => {
+      await work?.()
+      return signal.aborted ? refused(refusalOf(signal)) : { outcome: 'accepted' }
+    })
+  }
+
   /** Resolves true if no running work could publish; laneSignal protects a replacement lane. */
   cancel(id: string, reason: ConnectorRefusal, laneSignal?: AbortSignal): Promise<boolean> | null {
     const lane = this.lanes.get(id)

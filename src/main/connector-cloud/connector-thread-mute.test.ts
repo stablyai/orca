@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import type { ExternalConversationHost } from '../external-conversations/external-conversation-host'
 import type { ExternalConversationSeam } from '../external-conversations/external-conversation-seam'
+import { ConversationChain } from '../external-conversations/external-conversation-chain'
 import { dispatchDelivery } from './connector-deliveries'
 import { dispatchBatch } from './connector-delivery-batches'
 import { handleThreadMute, threadMuteStep } from './connector-thread-mute'
@@ -361,5 +362,20 @@ describe('a held reply whose thread is stopped while it waits', () => {
       (handled) => handled()
     )
     expect(await outcome?.decided).toEqual(stopped)
+  })
+})
+
+describe('a wait in the thread queue that a Stop lands on while it runs', () => {
+  // A Stop on a running turn finds the queue busy only with the wait; the wait must still come back
+  // refused, so the reply held behind it is never sent after the Stop.
+  it('is refused', async () => {
+    const chain = new ConversationChain(new AbortController().signal)
+    let saved = (): void => {}
+    const waited = chain.after('thread', () => new Promise<void>((resolve) => (saved = resolve)))
+    await Promise.resolve()
+    const stopped = chain.cancel('thread', 'conversation_cancelled')
+    saved()
+    expect(await waited).toEqual({ outcome: 'refused', reason: 'conversation_cancelled' })
+    await stopped
   })
 })
