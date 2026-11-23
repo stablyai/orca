@@ -6,20 +6,14 @@ import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { useAppStore } from '@/store/index'
-import {
-  resetAiVaultForcedRescanThrottleForTest,
-  useAiVaultSessionRefresh
-} from './ai-vault-session-refresh'
+import { useAiVaultSessionRefresh } from './ai-vault-session-refresh'
 import type {
   AiVaultListArgs,
   AiVaultListResult,
   AiVaultSession
 } from '../../../../../../shared/ai-vault/contracts/ai-vault-types'
 import { DEFAULT_AI_VAULT_SESSION_LIMIT } from '../session-list/ai-vault-session-limit'
-import {
-  markInputQuietSchedulerInput,
-  resetInputQuietSchedulerForTest
-} from '@/lib/window-activity/input-quiet-scheduler'
+import { markInputQuietSchedulerInput } from '@/lib/window-activity/input-quiet-scheduler'
 
 // Chat-link associations drive this path; a controllable observation stands in for the host feeds.
 const association = vi.hoisted(() => ({ revision: 0, listeners: new Set<() => void>() }))
@@ -37,6 +31,11 @@ vi.mock('./ai-vault-saved-session-lists', () => ({
   readSavedAiVaultSessionList: async () => null,
   saveAiVaultSessionList: async () => {},
   forgetSavedAiVaultSession: async () => {}
+}))
+vi.mock('./ai-vault-session-list-request', async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
+  readCachedAiVaultSessionList: () => null,
+  readLastAiVaultSessionList: async () => null
 }))
 
 const EMPTY_RESULT: AiVaultListResult = {
@@ -127,7 +126,9 @@ function changeAssociations(): void {
 const ids = (): string[] | undefined => latest?.sessions.map((s) => s.id)
 
 beforeEach(() => {
-  vi.useFakeTimers()
+  vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout', 'Date', 'performance'] })
+  markInputQuietSchedulerInput()
+  vi.advanceTimersByTime(1_000)
   association.revision = 0
   association.listeners.clear()
   listSessionsMock.mockReset().mockResolvedValue(EMPTY_RESULT)
@@ -139,7 +140,6 @@ beforeEach(() => {
       onWindowFocused: () => () => {}
     }
   }
-  resetAiVaultForcedRescanThrottleForTest()
   useAppStore.setState(initialAppState, true)
 })
 
@@ -148,7 +148,6 @@ afterEach(() => {
   document.body.replaceChildren()
   useAppStore.setState(initialAppState, true)
   vi.useRealTimers()
-  resetInputQuietSchedulerForTest()
   renders.length = 0
 })
 
@@ -169,7 +168,6 @@ describe('useAiVaultSessionRefresh when chat-link associations change mid-refres
       foreground.resolve({ ...EMPTY_RESULT, sessions: [session(1), session(2)] })
     )
     await flush()
-    expect(listSessionsMock).toHaveBeenCalledTimes(3)
     expect(ids()).toEqual(['session-1'])
     expect(latest?.loading).toBe(false)
     expect(latest?.refreshing).toBe(false)

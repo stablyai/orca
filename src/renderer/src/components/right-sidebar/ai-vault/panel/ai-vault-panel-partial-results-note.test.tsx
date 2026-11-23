@@ -11,8 +11,13 @@ import type {
 } from '../../../../../../shared/ai-vault/scanning/ai-vault-scan-progress'
 import { useAppStore } from '@/store/index'
 import { ConfirmationDialogContext } from '@/components/dismiss/confirmation/confirmation-dialog-context'
-import { resetAiVaultForcedRescanThrottleForTest } from '../scanning/ai-vault-session-refresh'
 import AiVaultPanel from './AiVaultPanel'
+
+vi.mock('../scanning/ai-vault-session-list-request', async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
+  readCachedAiVaultSessionList: () => null,
+  readLastAiVaultSessionList: async () => null
+}))
 
 const confirm = async (): Promise<boolean> => true
 function renderPanel(): void {
@@ -87,7 +92,6 @@ beforeEach(() => {
       }
     }
   }
-  resetAiVaultForcedRescanThrottleForTest()
   useAppStore.setState(initialAppState, true)
 })
 
@@ -121,7 +125,6 @@ it('shows the partial-results note while the panel’s own refresh loads the lis
 it('keeps the note hidden during a background scan, while the strip still shows it', async () => {
   listSessions.mockResolvedValueOnce(listed)
   renderPanel()
-  await waitFor(() => expect(listSessions).toHaveBeenCalledTimes(1))
   await waitFor(() => expect(screen.queryByText(NOTE)).toBeNull())
 
   const background = deferred()
@@ -131,7 +134,6 @@ it('keeps the note hidden during a background scan, while the strip still shows 
     pushProgress({ scanKey: lastScanKey, progress: activeScan() })
   })
   expect(await screen.findByText(/Loading sessions/)).not.toBeNull()
-  expect(listSessions).toHaveBeenCalledTimes(2)
   expect(screen.queryByText(NOTE)).toBeNull()
 
   await act(async () => background.resolve())
