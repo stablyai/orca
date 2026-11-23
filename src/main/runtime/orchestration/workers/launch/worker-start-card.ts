@@ -141,7 +141,13 @@ export function prepareWorkerStartCard(
     void failureTurn
       .then(async (turn) => {
         const cloud = runtime.getConnectorCloud()
-        if (!callerSession || !cloud) {
+        if (
+          !callerSession ||
+          !cloud ||
+          !turn ||
+          turn.askedInApp ||
+          turn.address.source !== 'slack'
+        ) {
           return
         }
         await postFailedBotWorkerStart(

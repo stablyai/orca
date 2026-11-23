@@ -19,7 +19,7 @@ export async function postFailedBotWorkerStart(
   }) => Promise<unknown>,
   turnFor: ConnectorTurnFor
 ): Promise<void> {
-  if (!turn || turn.address.source !== 'slack') {
+  if (!turn || turn.askedInApp || turn.address.source !== 'slack') {
     return
   }
   await post({

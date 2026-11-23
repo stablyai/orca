@@ -48,4 +48,17 @@ describe('postFailedBotWorkerStart', () => {
 
     expect(post).not.toHaveBeenCalled()
   })
+
+  it('does not post a request that originated in Orca', async () => {
+    const post = vi.fn().mockResolvedValue(undefined)
+
+    await postFailedBotWorkerStart(
+      { ...slackTurn, askedInApp: true },
+      { taskId: 'task_1', reason: 'the agent was unavailable', machine: 'Build Box' },
+      post,
+      'someone_else'
+    )
+
+    expect(post).not.toHaveBeenCalled()
+  })
 })
