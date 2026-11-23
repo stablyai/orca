@@ -69,6 +69,7 @@ export function useWorktreeDiffFileNavigation({
   )
   const sourceControlGroupOrderSetting = useAppStore((s) => s.settings?.sourceControlGroupOrder)
   const sourceControlViewModeSetting = useAppStore((s) => s.settings?.sourceControlViewMode)
+  const sourceControlFilterQuery = useAppStore((s) => s.sourceControlFilterQuery)
   const setEditorViewMode = useAppStore((s) => s.setEditorViewMode)
   const openFile = useAppStore((s) => s.openFile)
   const openDiff = useAppStore((s) => s.openDiff)
@@ -76,13 +77,17 @@ export function useWorktreeDiffFileNavigation({
     () => resolveSourceControlGroupOrder(sourceControlGroupOrderSetting),
     [sourceControlGroupOrderSetting]
   )
+  const candidateOrder = useMemo(
+    () => ({
+      groupOrder,
+      viewMode: sourceControlViewModeSetting === 'tree' ? ('tree' as const) : ('list' as const),
+      filterQuery: sourceControlFilterQuery
+    }),
+    [groupOrder, sourceControlViewModeSetting, sourceControlFilterQuery]
+  )
   const candidates = useMemo(
-    () =>
-      getWorktreeDiffNavigationCandidates(gitStatusEntries, {
-        groupOrder,
-        viewMode: sourceControlViewModeSetting === 'tree' ? 'tree' : 'list'
-      }),
-    [gitStatusEntries, groupOrder, sourceControlViewModeSetting]
+    () => getWorktreeDiffNavigationCandidates(gitStatusEntries, candidateOrder),
+    [gitStatusEntries, candidateOrder]
   )
   const activeCandidate = activeFile
     ? (candidates.find((candidate) => candidate.path === activeFile.relativePath) ?? null)
@@ -90,7 +95,8 @@ export function useWorktreeDiffFileNavigation({
   const isUnstagedDiffSurface = Boolean(
     activeFile?.mode === 'diff' && activeFile.diffSource === 'unstaged'
   )
-  const isEligibleChangesSurface = Boolean(requestedChangesMode && activeCandidate)
+  // Stay eligible after a refresh drops the current file's own entry; the resolver places the disappeared path.
+  const isEligibleChangesSurface = Boolean(requestedChangesMode && activeFile?.worktreeId)
   const isWorktreeFileNavigationSurface = isUnstagedDiffSurface || isEligibleChangesSurface
   const canNavigateWorktreeFile = isWorktreeFileNavigationSurface && candidates.length > 1
   const arrivalReveal =
@@ -107,7 +113,8 @@ export function useWorktreeDiffFileNavigation({
         return false
       }
       const candidate: WorktreeDiffNavigationCandidate | null = getAdjacentWorktreeDiffCandidate({
-        candidates,
+        entries: gitStatusEntries,
+        order: candidateOrder,
         currentPath: activeFile.relativePath,
         currentArea: activeCandidate?.area ?? 'unstaged',
         direction
@@ -146,8 +153,9 @@ export function useWorktreeDiffFileNavigation({
       activeEditorTargetGroupId,
       activeFile,
       activeWorktreeRoot,
+      candidateOrder,
       canNavigateWorktreeFile,
-      candidates,
+      gitStatusEntries,
       openDiff,
       openFile,
       setEditorViewMode

@@ -39,6 +39,7 @@ function createFakeEditor(changes: FakeLineChange[]): FakeDiffEditor {
   const fake = {
     getLineChanges: () => currentChanges,
     goToDiff: vi.fn(),
+    revealFirstDiff: vi.fn(),
     getModifiedEditor: () => ({
       getPosition: () => ({ lineNumber: positionLineNumber, column: 1 }),
       getModel: () => ({ getLineCount: () => lineCount })
@@ -222,10 +223,9 @@ describe('DiffNavigationProvider', () => {
       newEditor.fireUpdate()
     })
 
-    expect(newEditor.goToDiff).toHaveBeenCalledOnce()
-    expect(newEditor.goToDiff).toHaveBeenCalledWith('next')
+    expect(newEditor.revealFirstDiff).toHaveBeenCalledOnce()
     act(() => newEditor.fireUpdate())
-    expect(newEditor.goToDiff).toHaveBeenCalledOnce()
+    expect(newEditor.revealFirstDiff).toHaveBeenCalledOnce()
   })
 
   it('reveals pending navigation when the replacement editor is already computed at registration', () => {
@@ -239,8 +239,7 @@ describe('DiffNavigationProvider', () => {
     const newEditor = createFakeEditor([change(5), change(15)])
     act(() => registration?.registerDiffEditor(newEditor))
 
-    expect(newEditor.goToDiff).toHaveBeenCalledOnce()
-    expect(newEditor.goToDiff).toHaveBeenCalledWith('next')
+    expect(newEditor.revealFirstDiff).toHaveBeenCalledOnce()
   })
 
   it('drops the pending reveal once the pane reports another file, so a later editor never claims it', () => {
@@ -258,7 +257,7 @@ describe('DiffNavigationProvider', () => {
     act(() => registration?.registerDiffEditor(unrelatedEditor))
     act(() => unrelatedEditor.fireUpdate())
 
-    expect(unrelatedEditor.goToDiff).not.toHaveBeenCalled()
+    expect(unrelatedEditor.revealFirstDiff).not.toHaveBeenCalled()
   })
 
   it('clears pending reveal for a computed empty diff', () => {
@@ -276,6 +275,6 @@ describe('DiffNavigationProvider', () => {
       newEditor.fireUpdate()
     })
 
-    expect(newEditor.goToDiff).not.toHaveBeenCalled()
+    expect(newEditor.revealFirstDiff).not.toHaveBeenCalled()
   })
 })

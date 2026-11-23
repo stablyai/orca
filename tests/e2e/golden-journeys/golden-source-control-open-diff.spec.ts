@@ -74,16 +74,20 @@ test('@golden navigates unstaged and untracked files from diff controls', async 
   await expect(orcaPage.locator('.monaco-diff-editor')).toBeVisible({ timeout: 20_000 })
   await expectActiveEditorPath(orcaPage, fixture.worktreePath, 'unstaged.ts', true)
 
+  // Sweep order is the panel's: deleted.ts, unstaged.ts, untracked.ts.
   await navigateWithHeaderUntil(orcaPage, 'Next change', 'untracked.ts')
   await expectActiveEditorPath(orcaPage, fixture.worktreePath, 'untracked.ts')
-  await navigateWithHeaderUntil(orcaPage, 'Next change', 'deleted.ts')
-  await expectActiveEditorPath(orcaPage, fixture.worktreePath, 'deleted.ts', true)
-  await navigateWithHeaderUntil(orcaPage, 'Next change', 'unstaged.ts')
-  // Non-deleted targets open as Changes-mode edit tabs, so the wrap lands without the (diff) title.
-  await expectActiveEditorPath(orcaPage, fixture.worktreePath, 'unstaged.ts')
+  // untracked.ts is the last candidate: next falls back to the same-file wrap instead of crossing files.
+  await pressAndExpectStay(orcaPage, 'Next change', 'untracked.ts')
 
+  await navigateWithHeaderUntil(orcaPage, 'Previous change', 'unstaged.ts')
+  // Non-deleted targets open as Changes-mode edit tabs, so the hop lands without the (diff) title.
+  await expectActiveEditorPath(orcaPage, fixture.worktreePath, 'unstaged.ts')
   await navigateWithHeaderUntil(orcaPage, 'Previous change', 'deleted.ts')
   await expectActiveEditorPath(orcaPage, fixture.worktreePath, 'deleted.ts', true)
+  // deleted.ts is the first candidate: previous wraps within the file.
+  await pressAndExpectStay(orcaPage, 'Previous change', 'deleted.ts')
+
   await pressDiffShortcutUntil(orcaPage, 'F7', 'unstaged.ts')
   await expectActiveEditorPath(orcaPage, fixture.worktreePath, 'unstaged.ts')
   await pressDiffShortcutUntil(orcaPage, 'Shift+F7', 'deleted.ts')
@@ -132,6 +136,20 @@ async function expectActiveEditorPath(
     isDiff ? ' (diff)' : ''
   }`
   await expect(page.locator('.editor-header-path').first()).toHaveAttribute('title', title)
+}
+
+async function pressAndExpectStay(
+  page: Page,
+  buttonName: 'Next change' | 'Previous change',
+  expectedRelativePath: string
+): Promise<void> {
+  const button = page.getByRole('button', { name: buttonName })
+  for (let attempt = 0; attempt < 3; attempt += 1) {
+    await button.click()
+  }
+  await expect
+    .poll(() => getActiveEditorRelativePath(page), { timeout: 2_000 })
+    .toBe(expectedRelativePath)
 }
 
 async function navigateWithHeaderUntil(

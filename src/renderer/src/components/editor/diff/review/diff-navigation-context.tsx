@@ -111,8 +111,9 @@ export function DiffNavigationProvider({
       return
     }
     pendingRevealDirectionRef.current = null
+    // Both directions land on the destination's first change (#10353); goToDiff would resolve against the cursor and wrap or skip.
     if (countChanges(diffEditor) > 0) {
-      diffEditor.goToDiff(direction)
+      diffEditor.revealFirstDiff()
     }
   }, [])
 

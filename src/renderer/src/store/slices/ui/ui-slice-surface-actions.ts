@@ -193,6 +193,8 @@ export function createUiSurfaceActions(set: UISliceSet, _get: UISliceGet): Parti
       ),
     scrollToDiffCommentId: null,
     setScrollToDiffCommentId: (id) => set({ scrollToDiffCommentId: id }),
+    sourceControlFilterQuery: '',
+    setSourceControlFilterQuery: (query) => set({ sourceControlFilterQuery: query }),
     floatingWorkspacePath: null,
     setFloatingWorkspacePath: (path) =>
       set((state) =>

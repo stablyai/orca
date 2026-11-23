@@ -47,7 +47,9 @@ export function useSourceControlPanelViewState({
   const sourceControlGroupOrder = resolveSourceControlGroupOrder(settings?.sourceControlGroupOrder)
   const [collapsedTreeDirs, setCollapsedTreeDirs] = useState<Set<string>>(new Set())
   const [baseRefDialogOpen, setBaseRefDialogOpen] = useState(false)
-  const [filterQuery, setFilterQuery] = useState('')
+  // Store-backed so diff-change navigation can follow the panel's active filter.
+  const filterQuery = useAppStore((s) => s.sourceControlFilterQuery)
+  const setFilterQuery = useAppStore((s) => s.setSourceControlFilterQuery)
   const isGitHistoryExpanded = !collapsedSections.has('history')
 
   const handleToggleSourceControlViewMode = useCallback(() => {

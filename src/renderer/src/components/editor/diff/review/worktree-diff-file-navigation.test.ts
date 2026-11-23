@@ -3,13 +3,17 @@ import type { GitStatusEntry } from '../../../../../../shared/git/status/git-sta
 import { resolveSourceControlGroupOrder } from '../../../../../../shared/source-control/listing/source-control-section-order'
 import {
   getAdjacentWorktreeDiffCandidate,
-  getWorktreeDiffNavigationCandidates
+  getWorktreeDiffNavigationCandidates,
+  type WorktreeDiffNavigationOrder
 } from './worktree-diff-file-navigation'
 
-const listOrder = {
+const order = (
+  overrides: Partial<WorktreeDiffNavigationOrder> = {}
+): WorktreeDiffNavigationOrder => ({
   groupOrder: resolveSourceControlGroupOrder(undefined),
-  viewMode: 'list'
-} as const
+  viewMode: 'list',
+  ...overrides
+})
 
 const unstaged = (path: string): GitStatusEntry => ({
   path,
@@ -23,28 +27,24 @@ const untracked = (path: string): GitStatusEntry => ({
 })
 const deleted = (path: string): GitStatusEntry => ({ path, status: 'deleted', area: 'unstaged' })
 
+const candidatePaths = (entries: GitStatusEntry[], listOrder = order()): string[] =>
+  getWorktreeDiffNavigationCandidates(entries, listOrder).map((candidate) => candidate.path)
+
 describe('worktree diff file navigation', () => {
   it('keeps each path once, in Source Control Changes-section order', () => {
-    const candidates = getWorktreeDiffNavigationCandidates(
-      [
+    expect(
+      candidatePaths([
         { path: 'src/10.ts', status: 'modified', area: 'staged' },
         unstaged('src/2.ts'),
         unstaged('src/10.ts'),
         untracked('src/new.ts')
-      ],
-      listOrder
-    )
-
-    expect(candidates.map((candidate) => candidate.path)).toEqual([
-      'src/2.ts',
-      'src/10.ts',
-      'src/new.ts'
-    ])
+      ])
+    ).toEqual(['src/2.ts', 'src/10.ts', 'src/new.ts'])
   })
 
   it('excludes staged-only, pinned-conflict and unresolved-conflict entries', () => {
-    const candidates = getWorktreeDiffNavigationCandidates(
-      [
+    expect(
+      candidatePaths([
         { path: 'src/staged.ts', status: 'modified', area: 'staged' },
         {
           path: 'src/conflict.ts',
@@ -59,17 +59,14 @@ describe('worktree diff file navigation', () => {
           conflictStatus: 'resolved_locally'
         },
         unstaged('src/eligible.ts')
-      ],
-      listOrder
-    )
-
-    expect(candidates.map((candidate) => candidate.path)).toEqual(['src/eligible.ts'])
+      ])
+    ).toEqual(['src/eligible.ts'])
   })
 
   it('sorts untracked entries together with unstaged ones like the Changes section', () => {
     const candidates = getWorktreeDiffNavigationCandidates(
       [untracked('src/r-new.ts'), deleted('src/a-removed.ts')],
-      listOrder
+      order()
     )
 
     expect(candidates).toEqual([
@@ -78,73 +75,108 @@ describe('worktree diff file navigation', () => {
     ])
   })
 
-  it('keeps staged-only files out regardless of the group order preset', () => {
-    const candidates = getWorktreeDiffNavigationCandidates(
-      [
-        { path: 'src/staged.ts', status: 'modified', area: 'staged' },
-        unstaged('src/a.ts'),
-        untracked('src/z-new.ts')
-      ],
-      { groupOrder: resolveSourceControlGroupOrder('staged-first'), viewMode: 'list' }
-    )
-
-    expect(candidates.map((candidate) => candidate.path)).toEqual(['src/a.ts', 'src/z-new.ts'])
+  it('applies the live Source Control filter to the sweep', () => {
+    expect(
+      candidatePaths([unstaged('src/a.ts'), unstaged('src/b.ts')], order({ filterQuery: 'a.' }))
+    ).toEqual(['src/a.ts'])
+    expect(
+      candidatePaths([unstaged('src/a.ts'), unstaged('src/b.ts')], order({ filterQuery: 'zzz' }))
+    ).toEqual([])
   })
 
   it('walks tree view files depth-first, directories first, like the Source Control tree', () => {
-    const candidates = getWorktreeDiffNavigationCandidates(
-      [untracked('src/z.ts'), unstaged('src/a/deep/x.ts'), unstaged('src/a/b.ts')],
-      { groupOrder: resolveSourceControlGroupOrder(undefined), viewMode: 'tree' }
-    )
-
-    expect(candidates.map((candidate) => candidate.path)).toEqual([
-      'src/a/deep/x.ts',
-      'src/a/b.ts',
-      'src/z.ts'
-    ])
-  })
-
-  it.each([
-    ['next', 'src/a.ts', 'src/b.ts'],
-    ['previous', 'src/a.ts', 'src/c.ts']
-  ] as const)('wraps %s from %s to %s', (direction, currentPath, expectedPath) => {
-    const candidates = getWorktreeDiffNavigationCandidates(
-      [unstaged('src/a.ts'), unstaged('src/b.ts'), unstaged('src/c.ts')],
-      listOrder
-    )
-
-    expect(getAdjacentWorktreeDiffCandidate({ candidates, currentPath, direction })).toMatchObject({
-      path: expectedPath
-    })
-  })
-
-  it('returns no candidate for a single-file sweep', () => {
-    const candidates = getWorktreeDiffNavigationCandidates([unstaged('src/a.ts')], listOrder)
-
     expect(
-      getAdjacentWorktreeDiffCandidate({ candidates, currentPath: 'src/a.ts', direction: 'next' })
-    ).toBeNull()
+      candidatePaths(
+        [untracked('src/z.ts'), unstaged('src/a/deep/x.ts'), unstaged('src/a/b.ts')],
+        order({ viewMode: 'tree' })
+      )
+    ).toEqual(['src/a/deep/x.ts', 'src/a/b.ts', 'src/z.ts'])
   })
 
-  it('inserts a disappeared path between its neighbors', () => {
-    const candidates = getWorktreeDiffNavigationCandidates(
-      [unstaged('src/a.ts'), unstaged('src/c.ts'), unstaged('src/d.ts')],
-      listOrder
-    )
+  it('steps to the interior neighbor in both directions', () => {
+    const entries = [unstaged('src/a.ts'), unstaged('src/b.ts'), unstaged('src/c.ts')]
 
     expect(
       getAdjacentWorktreeDiffCandidate({
-        candidates,
+        entries,
+        order: order(),
+        currentPath: 'src/a.ts',
+        direction: 'next'
+      })
+    ).toMatchObject({ path: 'src/b.ts' })
+    expect(
+      getAdjacentWorktreeDiffCandidate({
+        entries,
+        order: order(),
+        currentPath: 'src/c.ts',
+        direction: 'previous'
+      })
+    ).toMatchObject({ path: 'src/b.ts' })
+  })
+
+  it('stops at the list ends instead of wrapping across files', () => {
+    const entries = [unstaged('src/a.ts'), unstaged('src/b.ts')]
+
+    expect(
+      getAdjacentWorktreeDiffCandidate({
+        entries,
+        order: order(),
         currentPath: 'src/b.ts',
         direction: 'next'
       })
-    ).toMatchObject({ path: 'src/c.ts' })
+    ).toBeNull()
     expect(
       getAdjacentWorktreeDiffCandidate({
-        candidates,
-        currentPath: 'src/b.ts',
+        entries,
+        order: order(),
+        currentPath: 'src/a.ts',
         direction: 'previous'
       })
-    ).toMatchObject({ path: 'src/a.ts' })
+    ).toBeNull()
+    expect(
+      getAdjacentWorktreeDiffCandidate({
+        entries,
+        order: order(),
+        currentPath: 'src/a.ts',
+        direction: 'next'
+      })
+    ).toMatchObject({ path: 'src/b.ts' })
+  })
+
+  it('places a disappeared path between its projected neighbors across mixed areas', () => {
+    const entries = [
+      unstaged('src/a.ts'),
+      untracked('src/b.ts'),
+      unstaged('src/d.ts'),
+      unstaged('src/f.ts')
+    ]
+
+    expect(
+      getAdjacentWorktreeDiffCandidate({
+        entries,
+        order: order(),
+        currentPath: 'src/e.ts',
+        direction: 'next'
+      })
+    ).toMatchObject({ path: 'src/f.ts' })
+    expect(
+      getAdjacentWorktreeDiffCandidate({
+        entries,
+        order: order(),
+        currentPath: 'src/e.ts',
+        direction: 'previous'
+      })
+    ).toMatchObject({ path: 'src/d.ts' })
+  })
+
+  it('returns no adjacent candidate for a single-file sweep', () => {
+    expect(
+      getAdjacentWorktreeDiffCandidate({
+        entries: [unstaged('src/a.ts')],
+        order: order(),
+        currentPath: 'src/a.ts',
+        direction: 'next'
+      })
+    ).toBeNull()
   })
 })

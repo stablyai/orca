@@ -185,6 +185,9 @@ export type UISliceSurfaces = {
   // Why: cleared by the diff decorator after it reveals the line, so the same id can be requested again without a stale value.
   scrollToDiffCommentId: string | null
   setScrollToDiffCommentId: (id: string | null) => void
+  /** Live Source Control path filter; store-backed so diff-change navigation can follow what the panel displays. */
+  sourceControlFilterQuery: string
+  setSourceControlFilterQuery: (query: string) => void
   /** Floating cwd resolved like runtime session cwd; null until resolved. */
   floatingWorkspacePath: string | null
   setFloatingWorkspacePath: (path: string | null) => void

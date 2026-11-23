@@ -1,5 +1,4 @@
 import type { GitStatusEntry } from '../../../../../../shared/git/status/git-status-types'
-import { compareGitStatusEntries } from '../../../../../../shared/git/status/git-status-sort'
 import type { SourceControlViewMode } from '../../../../../../shared/ui-chrome/ui-chrome-types'
 import {
   buildSourceControlDisplaySections,
@@ -11,6 +10,10 @@ import {
   collectSourceControlTreeFileEntries,
   compactSourceControlTree
 } from '../../../../../../shared/source-control/listing/source-control-tree'
+import {
+  filterSourceControlPathEntries,
+  getSourceControlFileFilterState
+} from '../../../right-sidebar/source-control/listing/file-filter'
 
 export type WorktreeDiffNavigationDirection = 'next' | 'previous'
 
@@ -21,26 +24,30 @@ export type WorktreeDiffNavigationCandidate = Pick<
   area: 'unstaged' | 'untracked'
 }
 
-type WorktreeDiffNavigationOrder = {
+export type WorktreeDiffNavigationOrder = {
   groupOrder: readonly SourceControlDisplaySectionArea[]
   viewMode: SourceControlViewMode
+  filterQuery?: string
 }
 
 type AdjacentCandidateArgs = {
-  candidates: readonly WorktreeDiffNavigationCandidate[]
+  entries: readonly GitStatusEntry[] | undefined
+  order: WorktreeDiffNavigationOrder
   currentPath: string
   currentArea?: 'unstaged' | 'untracked'
   direction: WorktreeDiffNavigationDirection
 }
 
-// Follow Source Control's own sections (group order, untracked folded into Changes, tree depth-first) so the sweep visits files in the order the panel displays them.
+// Follow Source Control's own sections (group order, filter, untracked folded into Changes, tree depth-first) so the sweep visits files in the order the panel displays them.
 export function getWorktreeDiffNavigationCandidates(
   entries: readonly GitStatusEntry[] | undefined,
-  { groupOrder, viewMode }: WorktreeDiffNavigationOrder
+  order: WorktreeDiffNavigationOrder
 ): WorktreeDiffNavigationCandidate[] {
+  const filterState = getSourceControlFileFilterState(order.filterQuery ?? '')
+  const filtered = filterSourceControlPathEntries([...(entries ?? [])], filterState)
   const sections = buildSourceControlDisplaySections(
-    groupSourceControlEntries(entries ?? []),
-    groupOrder
+    groupSourceControlEntries(filtered),
+    order.groupOrder
   )
   const candidates: WorktreeDiffNavigationCandidate[] = []
   for (const section of sections) {
@@ -49,7 +56,7 @@ export function getWorktreeDiffNavigationCandidates(
       continue
     }
     const items =
-      viewMode === 'tree'
+      order.viewMode === 'tree'
         ? compactSourceControlTree(
             buildGitStatusSourceControlTree(section.area, section.items)
           ).flatMap((node) => collectSourceControlTreeFileEntries(node))
@@ -70,65 +77,50 @@ export function getWorktreeDiffNavigationCandidates(
   return candidates
 }
 
+// No cross-file wrap: the ends of the list hand back to the caller's same-file wrap.
 export function getAdjacentWorktreeDiffCandidate({
-  candidates,
+  entries,
+  order,
   currentPath,
   currentArea = 'unstaged',
   direction
 }: AdjacentCandidateArgs): WorktreeDiffNavigationCandidate | null {
-  if (candidates.length <= 1) {
+  const candidates = getWorktreeDiffNavigationCandidates(entries, order)
+  const currentIndex = candidates.findIndex((candidate) => candidate.path === currentPath)
+  if (currentIndex === -1) {
+    return findAdjacentOfDisappearedPath({ entries, order, currentPath, currentArea, direction })
+  }
+  return candidateAt(candidates, currentIndex + (direction === 'next' ? 1 : -1))
+}
+
+// Locate a path the status refresh dropped by projecting it alongside the real entries, which also places it correctly in tree and filtered order.
+function findAdjacentOfDisappearedPath({
+  entries,
+  order,
+  currentPath,
+  currentArea,
+  direction
+}: {
+  entries: readonly GitStatusEntry[] | undefined
+  order: WorktreeDiffNavigationOrder
+  currentPath: string
+  currentArea: 'unstaged' | 'untracked'
+  direction: WorktreeDiffNavigationDirection
+}): WorktreeDiffNavigationCandidate | null {
+  const positioned = getWorktreeDiffNavigationCandidates(
+    [...(entries ?? []), { path: currentPath, status: 'modified', area: currentArea }],
+    order
+  )
+  const insertedIndex = positioned.findIndex((candidate) => candidate.path === currentPath)
+  if (insertedIndex === -1) {
     return null
   }
-
-  const currentIndex = candidates.findIndex((candidate) => candidate.path === currentPath)
-  if (currentIndex !== -1) {
-    return candidates[wrapIndex(currentIndex + (direction === 'next' ? 1 : -1), candidates.length)]
-  }
-
-  const insertionIndex = findInsertionIndex(candidates, currentPath, currentArea)
-  const targetIndex =
-    direction === 'next'
-      ? wrapIndex(insertionIndex, candidates.length)
-      : wrapIndex(insertionIndex - 1, candidates.length)
-  return candidates[targetIndex]
+  return candidateAt(positioned, insertedIndex + (direction === 'next' ? 1 : -1))
 }
 
-function findInsertionIndex(
+function candidateAt(
   candidates: readonly WorktreeDiffNavigationCandidate[],
-  currentPath: string,
-  currentArea: 'unstaged' | 'untracked'
-): number {
-  const currentEntry: GitStatusEntry = { path: currentPath, status: 'modified', area: currentArea }
-  const areaStart = candidates.findIndex((candidate) => candidate.area === currentArea)
-  if (areaStart === -1) {
-    return 0
-  }
-  let areaEnd = areaStart
-  while (areaEnd < candidates.length && candidates[areaEnd]?.area === currentArea) {
-    areaEnd += 1
-  }
-  return findAreaInsertionIndex(candidates, areaStart, areaEnd, currentEntry)
-}
-
-function findAreaInsertionIndex(
-  candidates: readonly WorktreeDiffNavigationCandidate[],
-  start: number,
-  end: number,
-  currentEntry: GitStatusEntry
-): number {
-  let low = start
-  let high = end
-  while (low < high) {
-    const mid = Math.floor((low + high) / 2)
-    if (compareGitStatusEntries(candidates[mid], currentEntry) < 0) {
-      low = mid + 1
-    } else {
-      high = mid
-    }
-  }
-  return low
-}
-
-function wrapIndex(index: number, length: number): number {
-  return ((index % length) + length) % length
+  index: number
+): WorktreeDiffNavigationCandidate | null {
+  return index >= 0 && index < candidates.length ? (candidates[index] ?? null) : null
 }
