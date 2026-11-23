@@ -29,10 +29,7 @@ import {
   type StructuredAgentSessionHistory
 } from '../native-chat/conversation-adoption/structured-agent-cli-conversations'
 import { ANTIGRAVITY_TRANSCRIPT_IMPORT } from './antigravity-transcript-import'
-import {
-  resolveAntigravityChatAuthConfig,
-  type AntigravityChatAuthConfig
-} from '../../shared/agent-accounts/antigravity/antigravity-chat-auth-config'
+import { resolveAntigravityChatAuthConfig } from '../../shared/agent-accounts/antigravity/antigravity-chat-auth-config'
 import { agentSessionSetupFor } from '../../shared/agent-session/lifecycle/launch/agent-session-setup-commands'
 import { deliverAntigravityInstructions } from '../acp/launch/acp-instructions'
 import { ANTIGRAVITY_ACP_COMMAND, ANTIGRAVITY_ACP_RUNTIME } from './antigravity-acp-runtime'
@@ -41,6 +38,7 @@ import {
   isValidAppVersion
 } from '../../shared/app-lifecycle/identity/app-version'
 import { ANTIGRAVITY_ACP_ENV, scrubAntigravityAcpEnvironment } from './antigravity-acp-environment'
+import { scrubAgyOrcaHomeEnvironment } from './antigravity-agy-orca-home-environment'
 import {
   ANTIGRAVITY_LAUNCH_GATE,
   answerAntigravityChatAuth,
@@ -207,26 +205,6 @@ const ANTIGRAVITY_HOST_LAUNCH_SPEC: AcpLaunchSpec = {
   },
   keepsEverySession: true,
   sessionMeta: undefined
-}
-
-// Windows' alternate-case updater flag would shadow the configured uppercase entry.
-function scrubAgyOrcaHomeEnvironment(
-  env: Record<string, string>,
-  inherited: NodeJS.ProcessEnv,
-  auth?: AntigravityChatAuthConfig
-): string[] {
-  const shadowing = Object.keys(env).filter(
-    (key) =>
-      process.platform === 'win32' &&
-      key.toUpperCase() === 'AGY_CLI_DISABLE_AUTO_UPDATE' &&
-      key !== 'AGY_CLI_DISABLE_AUTO_UPDATE'
-  )
-  for (const key of shadowing) {
-    delete env[key]
-  }
-  // Keeps only the saved method's key, as for Orca's server. agy's own variables
-  // other than AGY_ACP_* (its gateway, AGY_ADC_AUTH, AGY_ACCOUNT) pass through, as for the host's agy.
-  return [...shadowing, ...scrubAntigravityAcpEnvironment(env, inherited, auth)]
 }
 
 // agy on a home Orca owns, for Gemini API key chats: the saved method's settings.json

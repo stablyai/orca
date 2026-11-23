@@ -16,7 +16,8 @@ export function AntigravityChatSignInRow(props: {
   googleSignIn?: AntigravityGoogleSignInState
   /** After the sign-in method saves; the host's answer about the route is read again. */
   onSaved?: () => void
-  /** Hide the server's account row: Gemini API key chats run on agy, which Orca doesn't sign in. */
+  /** Hide the server's account row unless it carries an error or a sign-in: Gemini API key chats
+   *  run on agy, which Orca doesn't sign in. */
   noServerAccount?: boolean
 }): React.JSX.Element {
   const signIn = useAntigravityChatSignInControls({
@@ -41,7 +42,11 @@ export function AntigravityChatSignInRow(props: {
         )}
       >
         {(auth) =>
-          props.noServerAccount ? null : <AntigravityChatAccountRow signIn={signIn} auth={auth} />
+          // On agy the server's account says nothing, but a failed save, or a method that signs in
+          // picked here, still needs its message and button.
+          props.noServerAccount && !auth.alert && !auth.reauth ? null : (
+            <AntigravityChatAccountRow signIn={signIn} auth={auth} />
+          )
         }
       </AntigravityChatAuthForm>
       {props.runtime}

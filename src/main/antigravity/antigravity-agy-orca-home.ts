@@ -24,7 +24,7 @@ import {
   isValidAppVersion
 } from '../../shared/app-lifecycle/identity/app-version'
 import { hasAntigravityChatApiKey } from './antigravity-chat-api-key-store'
-import { agyOrcaHomeKeyPresent } from './antigravity-agy-orca-home-credential'
+import { envHasGeminiApiKey } from './antigravity-agy-orca-home-credential'
 import { writeAntigravityChatSettings } from './antigravity-chat-account'
 import {
   AGY_HOME_SKILL_FOLDERS,
@@ -103,8 +103,9 @@ export const antigravityAgyOrcaAccount = {
     if (auth.method !== 'gemini-api-key') {
       throw refusal(METHOD_CHANGED, purpose)
     }
-    // New chats without a key run on Orca's server; one pinned here never runs without it.
-    if (!(await agyOrcaHomeKeyPresent(env))) {
+    // New chats without a key run on Orca's server; one pinned here never runs without it. Only
+    // the final launch env counts: a saved key that didn't decrypt into it leaves agy keyless.
+    if (!envHasGeminiApiKey(env)) {
       throw refusal(await missingKey(), purpose)
     }
     await folder.prepare?.(env)

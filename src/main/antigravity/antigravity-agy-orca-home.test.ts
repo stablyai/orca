@@ -12,6 +12,7 @@ import { join } from 'node:path'
 import { afterEach, expect, it, vi } from 'vitest'
 import type * as HostAcp from './antigravity-host-acp'
 import type * as OrcaHome from './antigravity-agy-orca-home'
+import type * as Credential from './antigravity-agy-orca-home-credential'
 import {
   AntigravityChatAuthConfigSchema,
   type AntigravityChatAuthConfig
@@ -30,7 +31,8 @@ vi.mock('./antigravity-host-acp', async (importOriginal) => ({
 // No key is saved in Orca's store.
 vi.mock('./antigravity-chat-api-key-store', () => ({ hasAntigravityChatApiKey: async () => false }))
 // Whether a Gemini API key is here (antigravity-agy-orca-home-credential.test.ts).
-vi.mock('./antigravity-agy-orca-home-credential', () => ({
+vi.mock('./antigravity-agy-orca-home-credential', async (importOriginal) => ({
+  ...(await importOriginal<typeof Credential>()),
   agyOrcaHomeKeyPresent: async (env: Record<string, string>) =>
     agy.credential || env.GEMINI_API_KEY === 'shell-key'
 }))

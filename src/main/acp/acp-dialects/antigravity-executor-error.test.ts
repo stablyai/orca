@@ -55,9 +55,22 @@ describe('antigravityExecutorErrorWords', () => {
 
   it('keeps a very long line as it is rather than parsing it', () => {
     const long = `\u26a0 agent executor error: ${'Error 400, Message: , Status: A, '.repeat(2_000)}Status: B`
-    const started = performance.now()
     expect(antigravityExecutorErrorWords(long)).toBeUndefined()
-    expect(performance.now() - started).toBeLessThan(50)
+  })
+
+  it('fails fast on a near-limit line built to make the parse backtrack', () => {
+    const lead = '\u26a0 agent executor error: '
+    for (const unit of [
+      'Error 400, Message: , Status: A, ',
+      ', Status: A',
+      'Error 400, Message: '
+    ]) {
+      const line = `${lead}${unit.repeat(Math.floor((16_000 - lead.length) / unit.length))}x`
+      expect(line.length).toBeLessThanOrEqual(16_384)
+      const started = performance.now()
+      antigravityExecutorErrorWords(line)
+      expect(performance.now() - started).toBeLessThan(100)
+    }
   })
 
   it('leaves lines without that shape to the notice itself', () => {
