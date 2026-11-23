@@ -38,7 +38,8 @@ function reading(usedPercent: number, updatedAt: number): ProviderRateLimits {
   }
 }
 
-async function relaunchedChat() {
+/** A chat cut on account A at a reset `resetsAt` (none when null), then relaunched on account B. */
+async function relaunchedChat(resetsAt: number | null = RESET) {
   let clock = NOW
   let homePath = join(tmpdir(), 'orca-usage-fixture', 'a')
   const nextHome = join(tmpdir(), 'orca-usage-fixture', 'b')
@@ -66,6 +67,7 @@ async function relaunchedChat() {
     now: () => clock,
     restartable: true,
     acquiredAccountHome: accountHome,
+    hostDeps: { launchAccountHome: async () => accountHome() },
     usageLimitAutoContinue: {
       isEnabled: () => true,
       isWorkspaceAsleep: () => false,
@@ -75,7 +77,6 @@ async function relaunchedChat() {
   })
   rig = current
   const { host, store } = current
-  host.deps.launchAccountHome = async () => accountHome()
   const fence = () => store.getRecord(SESSION)!.lease.runtimeFence
   const attach = (expectedFence: number) =>
     host.attach(QUEUED_RIG_CALLER, hostTestAttachParams(expectedFence))
@@ -107,7 +108,10 @@ async function relaunchedChat() {
     {
       kind: 'status',
       ...agentSessionFailureWords(
-        agentSessionFailureFact('usageLimitReached', { usageLimit: { resetsAt: RESET } }),
+        agentSessionFailureFact(
+          'usageLimitReached',
+          resetsAt === null ? {} : { usageLimit: { resetsAt } }
+        ),
         { surface: 'row' }
       )
     },
@@ -134,7 +138,7 @@ async function relaunchedChat() {
 
   homePath = nextHome
   await relaunch()
-  expect(await journal.reads.usageLimitCut()).toMatchObject({ fence: cutFence, resetsAt: RESET })
+  expect(await journal.reads.usageLimitCut()).toMatchObject({ fence: cutFence })
 
   return {
     current,
@@ -147,8 +151,11 @@ async function relaunchedChat() {
     pass: async (offset: number, next: ProviderRateLimits | null) => {
       clock = NOW + offset
       limits = next
-      await host.usageLimitContinue.tick()
-      return (await journal.reads.pendingSubmissions()).filter(({ origin }) => origin === 'host')
+      await current.host.usageLimitContinue.tick()
+      const pending = await (
+        await current.host.conversation(SESSION)
+      ).journal.reads.pendingSubmissions()
+      return pending.filter(({ origin }) => origin === 'host')
     }
   }
 }
@@ -225,4 +232,19 @@ it('holds a retry when the account is exhausted and asks for a missing reading',
   expect(requested).toContainEqual({ notWithinMs: 600_000 })
   expect(await pass(20_000, reading(100, NOW + 20_000))).toEqual([])
   expect(await pass(45_000, reading(100, NOW + 45_000))).toEqual([])
+})
+
+it('continues a cut with no known reset once the relaunched account shows room', async () => {
+  const { pass } = await relaunchedChat(null)
+  expect(await pass(5_000, reading(100, NOW + 5_000))).toEqual([])
+  expect(await pass(20_000, reading(0, NOW + 20_000))).toEqual([])
+  expect(await pass(40_000, reading(0, NOW + 40_000))).toHaveLength(1)
+})
+
+it('continues a cut with no known reset after Orca restarts while the relaunched chat waits', async () => {
+  const { current, pass } = await relaunchedChat(null)
+  expect(await pass(5_000, reading(100, NOW + 5_000))).toEqual([])
+  current.crashRestartHostProcess()
+  expect(await pass(20_000, reading(0, NOW + 20_000))).toEqual([])
+  expect(await pass(40_000, reading(0, NOW + 40_000))).toHaveLength(1)
 })

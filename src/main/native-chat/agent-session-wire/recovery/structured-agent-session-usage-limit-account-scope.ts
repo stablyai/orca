@@ -32,10 +32,55 @@ export type UsageLimitAccountAttributionHost = Pick<
   'launchAccountHome' | 'usageLimitAutoContinue'
 > & { store: Pick<AgentSessionRecordStore, 'getRecord'> }
 
+/** What a chat's attribution was computed under: the sources' witness and the launch the record
+ *  named. A send binds to both. */
+export type UsageLimitAttributionBinding = {
+  witness: string | undefined
+  launchFence: number | undefined
+  runtimeFence: number | undefined
+}
+
+/** What `record`'s attribution would be computed under now. */
+export function attributionBinding(
+  host: UsageLimitAccountAttributionHost,
+  record: AgentSessionRecord | null
+): UsageLimitAttributionBinding {
+  return {
+    witness: record ? liveWitness(host, record.provider) : undefined,
+    launchFence: record?.launchedAccount?.fence,
+    runtimeFence: record?.lease.runtimeFence
+  }
+}
+
+/** Whether `binding` still describes `record`: same sources, same launch. */
+export function attributionBindingHolds(
+  host: UsageLimitAccountAttributionHost,
+  record: AgentSessionRecord | null,
+  binding: UsageLimitAttributionBinding | undefined
+): boolean {
+  const now = attributionBinding(host, record)
+  return (
+    binding !== undefined &&
+    record !== null &&
+    now.witness === binding.witness &&
+    now.launchFence === binding.launchFence &&
+    now.runtimeFence === binding.runtimeFence
+  )
+}
+
 /** Changes whenever a source the provider's attribution reads changes. */
-export function liveWitness(
+function liveWitness(
   host: UsageLimitAccountAttributionHost,
   provider: AgentSessionRecord['provider']
 ): string | undefined {
   return host.usageLimitAutoContinue?.accountWitness?.(provider)
+}
+
+export type UsageLimitAccountVerdict = {
+  /** The latest reset the send waits for: the cut's, or a later one the account still shows spent. */
+  resetsAt: number
+  /** The account shows a spent window with no known reset; nothing is sent automatically. */
+  unknownReset: boolean
+  /** Due, but no reading taken since that reset has arrived yet. */
+  awaitingReading: boolean
 }

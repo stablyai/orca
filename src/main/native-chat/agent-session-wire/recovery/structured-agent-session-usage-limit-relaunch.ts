@@ -1,3 +1,4 @@
+import type { UsageLimitAccountScope } from './structured-agent-session-usage-limit-account-scope'
 import { rateLimitShowsRoom } from '../../../../shared/agent-usage/rate-limits/rate-limit-spent-windows'
 import type { ProviderRateLimits } from '../../../../shared/agent-usage/rate-limits/rate-limit-types'
 import { NATIVE_CHAT_USAGE_LIMIT_MAX_OVERDUE_MS } from '../../../../shared/native-chat/transcript/continuation/native-chat-usage-limit-cut'
@@ -35,12 +36,11 @@ export function usageLimitCutLaunch(
   }
 }
 
-/** What a chat's attribution was computed under: the sources' witness and the launch the record
- *  named. A send binds to both. */
-export type UsageLimitAttributionBinding = {
-  witness: string | undefined
-  launchFence: number | undefined
-  runtimeFence: number | undefined
+/** Only room ends a relaunched cut's wait early, and the poller may be idle: ask for it, a first
+ *  reading too while the provider has none. */
+export function askForRoom(scope: UsageLimitAccountScope | undefined, notWithinMs: number): void {
+  const ask = scope?.account?.refresh ?? scope?.bootstrap
+  ask?.(notWithinMs)
 }
 
 type Relaunch = {
