@@ -72,6 +72,9 @@ const SENTENCES: Record<AgentSessionWriteNoticeSentence, () => string> = {
       'session.writeNotice.historyUnavailable',
       "Orca couldn't open this chat's history right now."
     ),
+  diskFull: () => translate('session.writeNotice.diskFull', 'Your disk is almost full.'),
+  freeDiskSpace: () =>
+    translate('session.writeNotice.freeDiskSpace', 'Free up disk space, then try again.'),
   savedInOtherFolder: () =>
     translate(
       'session.writeNotice.savedInOtherFolder',

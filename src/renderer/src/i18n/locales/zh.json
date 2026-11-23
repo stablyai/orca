@@ -20065,6 +20065,8 @@
         "historyUnreadable": "Orca 无法读取此聊天的已保存历史记录",
         "historyUnusable": "无法加载此聊天",
         "historyUnavailable": "Orca 目前无法打开此聊天的历史记录",
+        "diskFull": "磁盘空间即将用尽。",
+        "freeDiskSpace": "请释放磁盘空间后重试。",
         "savedInOtherFolder": "此对话保存在另一个文件夹中",
         "savedByNewerOrca": "这些聊天由更新版本的 Orca 保存",
         "updateOrcaToKeepUsing": "请更新 Orca 以继续使用这些聊天",

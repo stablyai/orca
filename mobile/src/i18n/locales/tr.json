@@ -2751,6 +2751,8 @@
       "conversationCleared": "Bu konuşma temizlendi.",
       "goalsUnsupported": "Bu ajan hedefleri desteklemiyor.",
       "historyUnavailable": "Orca şu anda bu sohbetin geçmişini açamadı.",
+      "diskFull": "Diskiniz neredeyse dolu.",
+      "freeDiskSpace": "Diskte yer açın, ardından tekrar deneyin.",
       "savedInOtherFolder": "Bu konuşma başka bir klasöre kaydedildi.",
       "historyUnreadable": "Orca bu sohbetin kayıtlı geçmişini okuyamadı.",
       "historyUnusable": "Bu sohbet yüklenemiyor.",

@@ -42,6 +42,8 @@ export const AGENT_SESSION_WRITE_NOTICE_COPY = {
   historyUnreadable: "Orca couldn't read this chat's saved history.",
   historyUnusable: 'Unable to load this chat.',
   historyUnavailable: "Orca couldn't open this chat's history right now.",
+  diskFull: 'Your disk is almost full.',
+  freeDiskSpace: 'Free up disk space, then try again.',
   savedInOtherFolder: 'This conversation was saved in another folder.',
   savedByNewerOrca: 'Chats were saved by a newer Orca.',
   updateOrcaToKeepUsing: 'Update Orca to keep using them.',
