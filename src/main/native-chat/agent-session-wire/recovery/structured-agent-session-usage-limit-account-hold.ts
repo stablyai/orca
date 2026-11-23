@@ -123,7 +123,6 @@ export class UsageLimitAccountHolds {
     } catch {
       // No attributable account this pass: the cut's own reset and any hold already seen decide.
     }
-    // Sources moved or the chat launched again while this resolved: the result mixes them.
     if (record && !this.bindingHolds(id, host, binding)) {
       return
     }
@@ -134,7 +133,6 @@ export class UsageLimitAccountHolds {
     if (!movedTo) {
       this.movedSince.delete(id)
     } else if (since?.cut !== hit.cut || !sameAccountHome(since.to, movedTo)) {
-      // Each destination counts from when it was chosen, so an older reading of it never releases.
       this.movedSince.set(id, { cut: hit.cut, to: movedTo, at: now })
       switched = true
     }
@@ -198,12 +196,10 @@ export class UsageLimitAccountHolds {
     limited: { turnItemId: string; resetsAt: number } & SwitchReset,
     now: number
   ): UsageLimitAccountVerdict {
-    // The account the chat moved to never hit this cut: from the move on, only its reading holds.
     const moved = this.movedSince.get(id)
     const movedCut = moved?.cut === switchFreeIdentity(limited)
     const cut = movedCut ? { ...limited, resetsAt: Math.min(limited.resetsAt, moved.at) } : limited
-    const scope = this.scopes.get(id)
-    let hold = this.holds.get(id)
+    let [scope, hold] = [this.scopes.get(id), this.holds.get(id)]
     const awaitingRoom =
       limited.resetFromSwitch === true &&
       this.relaunched.at(id, switchFreeIdentity(limited)) !== undefined
@@ -221,7 +217,6 @@ export class UsageLimitAccountHolds {
     }
     hold.account = account?.key ?? hold.account
     const reading = account?.read()
-    // Only a reading taken since the cut's reset can speak for the account at that reset.
     const fresh = (since: number) =>
       reading?.status === 'ok' &&
       reading.usageMetadata?.source !== 'live-session' &&
@@ -237,7 +232,6 @@ export class UsageLimitAccountHolds {
       (hold.unknownReset && hold.spentSeenAt) || cut.resetsAt,
       typeof covering === 'number' ? covering : cut.resetsAt
     )
-    // Spending the new account showed before the move still holds; only a later reading releases it.
     if (
       account &&
       reading &&
@@ -247,7 +241,6 @@ export class UsageLimitAccountHolds {
       if (typeof covering === 'number') {
         hold.heldUntil = Math.max(hold.heldUntil ?? covering, covering)
       }
-      // Eligible: every window spent now holds the send, whenever it began.
       const spentUntil = rateLimitSpentUntil(reading)
       if (spentUntil !== undefined) {
         if (spentUntil === null) {
@@ -267,12 +260,15 @@ export class UsageLimitAccountHolds {
         hold.unknownReset = false
       }
     }
+    const room = this.relaunched.roomAt(id, switchFreeIdentity(limited), account?.key, reading, now)
+    if (awaitingRoom && room !== undefined) {
+      hold.unknownReset = false
+    }
     const heldTo = Math.max(
       cut.resetsAt,
       hold.heldUntil ?? cut.resetsAt,
       (hold.unknownReset && hold.spentSeenAt) || cut.resetsAt
     )
-    const room = this.relaunched.roomAt(id, switchFreeIdentity(limited), account?.key, reading, now)
     const resetsAt =
       room !== undefined && !hold.unknownReset && (awaitingRoom || room < heldTo) ? room : heldTo
     let waitFrom = resetsAt + GRACE_MS

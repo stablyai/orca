@@ -321,3 +321,22 @@ it('continues a resetless relaunched cut when fresh room arrives after a day hel
     expect((await current.submission(sent[0]!.clientMessageId))?.handedOverAt).toBeDefined()
   )
 })
+
+it('continues a resetless relaunched cut when room follows a day-old unknown spent window', async () => {
+  const { current, pass } = await relaunchedChat(null)
+  expect(
+    await pass(5_000, {
+      ...reading(100, NOW + 5_000),
+      weekly: { usedPercent: 100, windowMinutes: 10_080, resetsAt: null, resetDescription: null }
+    })
+  ).toEqual([])
+  const roomAt = NOW + NATIVE_CHAT_USAGE_LIMIT_MAX_OVERDUE_MS + 10_000
+  expect(await pass(NATIVE_CHAT_USAGE_LIMIT_MAX_OVERDUE_MS + 10_000, reading(0, roomAt))).toEqual(
+    []
+  )
+  const sent = await pass(NATIVE_CHAT_USAGE_LIMIT_MAX_OVERDUE_MS + 25_000, reading(0, roomAt))
+  expect(sent).toHaveLength(1)
+  await eventually(async () =>
+    expect((await current.submission(sent[0]!.clientMessageId))?.handedOverAt).toBeDefined()
+  )
+})
