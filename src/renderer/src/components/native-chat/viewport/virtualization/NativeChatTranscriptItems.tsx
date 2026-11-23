@@ -1,3 +1,4 @@
+import { stageBesideStreamedText } from '../../../../../../shared/agent-session/view/structured-agent-session-streamed-text-rows'
 import { Fragment, useMemo } from 'react'
 import {
   NativeChatTranscriptRow,
@@ -37,7 +38,9 @@ export function NativeChatTranscriptItems({
   window: NativeChatTranscriptWindow
   newRowsMarker?: NativeChatNewRowsMarkerState
 }): React.JSX.Element {
-  const rowKeys = useMemo(() => slots.map(nativeChatSlotKey), [slots])
+  // A streamed text revision draws the same rows, so its keys are its base's.
+  const keySlots = stageBesideStreamedText(slots)
+  const rowKeys = useMemo(() => keySlots.map(nativeChatSlotKey), [keySlots])
   const replyReveals = useNativeChatReplyReveals(rowKeys, loadedMessageIds)
   const placed = useNativeChatTimedRows(slots, timedRows)
   const rowContext = useMemo(

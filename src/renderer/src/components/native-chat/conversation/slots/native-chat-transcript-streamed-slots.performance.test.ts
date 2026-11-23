@@ -1,6 +1,8 @@
 import { expect, it, vi } from 'vitest'
 import type { NativeChatMessage } from '../../../../../../shared/native-chat/native-chat-types'
 import * as slotsModule from './native-chat-transcript-slots'
+import { noteRevisedInPlace } from '../../../../../../shared/agent-session/view/revised-in-place-lists'
+import { stageBesideStreamedText } from '../../../../../../shared/agent-session/view/structured-agent-session-streamed-text-rows'
 import { buildNativeChatTranscript } from './native-chat-transcript-slots'
 import {
   createNativeChatStreamedTranscript,
@@ -169,4 +171,59 @@ it('builds again when a capped estimate cannot tell whether controls were in flo
     buildNativeChatTranscript({ ...settled, messages: rows }).slots
   // Text-only revisions may shrink a reply, not only grow it.
   expect(withStreamedRows(build(saved), saved, withReply(saved, lines(72)))).toBeNull()
+})
+
+function historyOf(turns: number): NativeChatMessage[] {
+  const rows: NativeChatMessage[] = []
+  for (let turn = 0; turn < turns; turn++) {
+    rows.push(message(`ask-${turn}`, 'user', `Question ${turn}`))
+    rows.push(message(`answer-${turn}`, 'assistant', `Answer ${turn}`))
+  }
+  return rows
+}
+
+/** Row reads a stream of 20 windows makes, each revising the previous window's last row in place. */
+function rowReadsStreaming(turns: number): { reads: number; keysHeld: boolean } {
+  const saved = historyOf(turns)
+  const input = {
+    ...inputFor(saved),
+    turnKeys: saved.map((_, index) => `turn-${index >> 1}`),
+    liveTurnKey: `turn-${turns - 1}`
+  }
+  const project = createNativeChatStreamedTranscript()
+  const built = project(input, saved, saved).slots
+  let previous: readonly NativeChatMessage[] = saved
+  let raw = saved
+  let reads = 0
+  let keysHeld = true
+  let text = `Answer ${turns - 1}`
+  for (let window = 0; window < 20; window++) {
+    text += ` and more ${window}`
+    const next = [...raw.slice(0, -1), message(`answer-${turns - 1}`, 'assistant', text)]
+    const counted = new Proxy(next, {
+      get(target, key, receiver) {
+        if (typeof key === 'string' && /^\d+$/.test(key)) {
+          reads++
+        }
+        return Reflect.get(target, key, receiver)
+      }
+    })
+    noteRevisedInPlace(counted, previous, [next.length - 1])
+    const { slots } = project(input, saved, counted)
+    keysHeld &&= stageBesideStreamedText(slots) === built
+    previous = counted
+    raw = next
+  }
+  return { reads, keysHeld }
+}
+
+// Perf contract: a live window visits only the rows it revised, so its cost does not grow with
+// history, and its slots stay linked to the built ones that key readers kept.
+it('visits only revised rows each window, at any history length', () => {
+  const small = rowReadsStreaming(200)
+  const large = rowReadsStreaming(2000)
+  expect(small.keysHeld).toBe(true)
+  expect(large.keysHeld).toBe(true)
+  expect(large.reads).toBe(small.reads)
+  expect(large.reads).toBeLessThan(200)
 })

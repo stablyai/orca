@@ -1,6 +1,8 @@
 import type { NativeChatMessage } from '../../../../../../shared/native-chat/native-chat-types'
 import { deriveNativeChatRowContent } from '../../../../../../shared/native-chat/transcript/row-content/native-chat-row-content'
 import type { Translate } from '@/i18n/use-translate'
+import { positionsRevisedFrom } from '../../../../../../shared/agent-session/view/revised-in-place-lists'
+import { noteStreamedTextStage } from '../../../../../../shared/agent-session/view/structured-agent-session-streamed-text-rows'
 import {
   buildNativeChatTranscript,
   type NativeChatMessageSlot,
@@ -64,6 +66,8 @@ function withStreamedRunMember(
   }
   const workRun = members.slice()
   workRun[at] = current
+  // Only a thought's text changed, so the run's calls and header hold.
+  noteStreamedTextStage(workRun, members)
   return { ...slot, workRun, message: isHead ? current : slot.message }
 }
 
@@ -131,13 +135,16 @@ export function withStreamedRows(
   slots: NativeChatTranscriptSlot[],
   built: readonly NativeChatMessage[],
   rows: readonly NativeChatMessage[],
-  typography?: NativeChatTranscriptSlotsInput['typography']
+  typography?: NativeChatTranscriptSlotsInput['typography'],
+  /** The only positions `rows` replaced in `built`, when known. */
+  revisedAt?: readonly number[]
 ): NativeChatTranscriptSlot[] | null {
   if (built.length !== rows.length) {
     return null
   }
   let next: NativeChatTranscriptSlot[] | undefined
-  for (const [index, current] of rows.entries()) {
+  for (const index of revisedAt ?? rows.keys()) {
+    const current = rows[index]!
     const before = built[index]!
     if (before === current) {
       continue
@@ -174,7 +181,13 @@ export function withStreamedRows(
     next ??= slots.slice()
     next[at] = { ...slot, message: current, estimatedHeight }
   }
-  return next ?? slots
+  if (!next) {
+    return slots
+  }
+  // A patch moves no slot, so its index holds; key readers keep what they built for `slots`.
+  slotIndexes.set(next, slotIndexById(slots))
+  noteStreamedTextStage(next, slots)
+  return next
 }
 
 type Built = ReturnType<typeof buildNativeChatTranscript>
@@ -194,6 +207,8 @@ export function createNativeChatStreamedTranscript(): (
     rows: readonly NativeChatMessage[]
     built: Built
   } | null = null
+  // The last window's rows and slots: a window revising those rows in place patches only there.
+  let last: { rows: readonly NativeChatMessage[]; slots: NativeChatTranscriptSlot[] } | null = null
   return (input, saved, rows, t) => {
     if (!base || base.input !== input || base.saved !== saved) {
       base = {
@@ -202,12 +217,19 @@ export function createNativeChatStreamedTranscript(): (
         rows: saved,
         built: buildNativeChatTranscript({ ...input, messages: saved }, t)
       }
+      last = null
     }
-    const slots = withStreamedRows(base.built.slots, base.rows, rows, input.typography)
+    const revisedAt = last ? positionsRevisedFrom(rows, last.rows) : undefined
+    const slots =
+      last && revisedAt
+        ? withStreamedRows(last.slots, last.rows, rows, input.typography, revisedAt)
+        : withStreamedRows(base.built.slots, base.rows, rows, input.typography)
     if (slots) {
+      last = { rows, slots }
       return { ...base.built, slots }
     }
     base = { input, saved, rows, built: buildNativeChatTranscript({ ...input, messages: rows }, t) }
+    last = { rows, slots: base.built.slots }
     return base.built
   }
 }

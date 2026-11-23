@@ -1,5 +1,6 @@
 // Virtualizer owns row anchoring; scroll hook owns follow intent. Use container coordinates and never reattach a parked reader from geometry alone.
 
+import { stageBesideStreamedText } from '../../../../../../shared/agent-session/view/structured-agent-session-streamed-text-rows'
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { elementScroll, useVirtualizer, type VirtualItem } from '@tanstack/react-virtual'
 import { createProgrammaticScrollMarks } from '@/lib/list-interaction/virtualized-scrolling/programmatic-scroll-marks'
@@ -80,7 +81,8 @@ export function useNativeChatTranscriptWindow({
   )
   // Keep measured offsets through content-only growth to preserve the end anchor; rebuild only on structural changes.
   // Encoded only when the slots change: scroll and range renders reuse it.
-  const encodedItemKeys = useMemo(() => JSON.stringify(slots.map(nativeChatSlotKey)), [slots])
+  const keySlots = stageBesideStreamedText(slots)
+  const encodedItemKeys = useMemo(() => JSON.stringify(keySlots.map(nativeChatSlotKey)), [keySlots])
   const itemKeys = useMemo(() => JSON.parse(encodedItemKeys) as string[], [encodedItemKeys])
   const estimateSize = useCallback(
     (index: number) => slots[index]?.estimatedHeight ?? FALLBACK_ROW_PX,

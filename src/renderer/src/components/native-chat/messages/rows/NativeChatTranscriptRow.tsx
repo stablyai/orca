@@ -223,6 +223,7 @@ export const NativeChatTranscriptRow = memo(function NativeChatTranscriptRow({
           previousTodoWrite={predecessors?.todowrite}
           previousUpdatePlan={predecessors?.update_plan}
           revealedDiff={
+            context.revealedDiff &&
             (workRun ?? [message]).some((member) => member.id === context.revealedDiff?.messageId)
               ? (context.revealedDiff ?? undefined)
               : undefined

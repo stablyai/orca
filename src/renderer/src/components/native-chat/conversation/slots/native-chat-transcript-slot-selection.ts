@@ -36,7 +36,10 @@ export function splitNativeChatSlotsWaitingBehindLiveTurn(
   stopping = false,
   journalSubmissions?: readonly AgentJournalSubmission[],
   host: Parameters<typeof nativeChatMessagesWaitingBehindLiveTurn>[4] = {}
-): { slots: NativeChatTranscriptSlot[]; waitingSlots: NativeChatTranscriptSlot[] } {
+): {
+  slots: readonly NativeChatTranscriptSlot[]
+  waitingSlots: NativeChatTranscriptSlot[]
+} {
   const waiting = nativeChatMessagesWaitingBehindLiveTurn(
     slots.flatMap((slot) => (slot.kind === 'message' ? [slot.message] : [])),
     journalItems,
@@ -56,5 +59,6 @@ export function splitNativeChatSlotsWaitingBehindLiveTurn(
     }
     return true
   })
-  return { slots: transcriptSlots, waitingSlots }
+  // Nothing waiting keeps the list itself, so a streamed text revision stays linked to its base.
+  return { slots: waitingSlots.length === 0 ? slots : transcriptSlots, waitingSlots }
 }
