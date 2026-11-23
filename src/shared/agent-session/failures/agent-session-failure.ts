@@ -45,6 +45,10 @@ export const AGENT_SESSION_FAILURE_KINDS = [
   'runtimeNotInstalled',
   /** The agent refuses Full access while it runs as root. */
   'fullAccessAsRoot',
+  /** A bot's tools would run without its limits: Orca's plugin for the agent is off. */
+  'botToolsNeedStatusHooks',
+  /** A bot's tools would run without its limits: the agent's shared process kept an older plugin. */
+  'botToolsGatewayOutdated',
   /** Orca's own launch preparation on the host failed before any agent process was spawned. */
   'launchPreparationFailed',
   'conversationOpenInTerminal',

@@ -24,6 +24,7 @@ import type { BotHostReadState } from '../use-bot-host-read'
 const NO_GROUPS: BotItemGroups = {
   needs_you: [],
   working: [],
+  waiting: [],
   planned: [],
   snoozed: [],
   stale: [],

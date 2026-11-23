@@ -3,7 +3,7 @@
 // BotItemPane holds it under the back row and sends typing from anywhere in it to the comment box.
 // The comment box always stays at the bottom: a reply to the agent's question is a comment, typed there
 // or picked from the question's quick replies.
-import { useDeferredValue, useEffect, useMemo, useRef, useState } from 'react'
+import { useDeferredValue, useEffect, useMemo, useRef } from 'react'
 import { ExternalLink, House, MessageSquare } from 'lucide-react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
@@ -32,7 +32,7 @@ import { NativeChatFileLinkExistenceContext } from '../../native-chat/links/acti
 import { NativeChatLinkClickContext } from '../../native-chat/links/actions/native-chat-link-click-context'
 import { useNativeChatLinkActions } from '../../native-chat/links/actions/use-native-chat-link-actions'
 import { BotItemActivityList } from './BotItemActivityList'
-import { BotItemCancelDialog } from './BotItemCancelDialog'
+import { useBotItemStatusNotes } from './BotItemStatusNoteDialog'
 import { BotItemClampedText } from './BotItemClampedText'
 import { BotItemCommentBox, type BotItemCommentBoxHandle } from './BotItemCommentBox'
 import { NativeChatSelectionQuote } from '../../native-chat/selection-quotes/NativeChatSelectionQuote'
@@ -178,7 +178,6 @@ export function BotItemBody({
   nav?: React.ReactNode
 }): React.JSX.Element {
   const t = useTranslate()
-  const [canceling, setCanceling] = useState(false)
   const snoozing = useBotItemSnoozing(bot)
   const pane = useRef<HTMLDivElement | null>(null)
   const ownComment = useRef<BotItemCommentBoxHandle | null>(null)
@@ -198,6 +197,7 @@ export function BotItemBody({
     void setBotItemsStatus(bot, [item.uid], to, reason).catch((error: unknown) =>
       toast.error(botErrorMessage(error))
     )
+  const notes = useBotItemStatusNotes((_items, to, note) => setStatus(to, note))
   const ChatIcon = item.chat.kind === 'home' ? House : MessageSquare
   const pending = useBotItemPendingComments(bot, item.uid, view.events)
   // The header and comment box paint first; the Activity, the costly part, renders right after.
@@ -314,7 +314,7 @@ export function BotItemBody({
                       item={item}
                       chatTitle={chatTitle}
                       deleted={deleted}
-                      onStatus={(to) => (to === 'canceled' ? setCanceling(true) : setStatus(to))}
+                      onStatus={(to) => notes.move([item], to)}
                       snoozing={snoozing}
                       scrollRef={scrollRef}
                     />
@@ -401,14 +401,7 @@ export function BotItemBody({
           </NativeChatPaneFileDropSurface>
         </NativeChatTextAttachmentScope>
       </NativeChatMarkdownImageOwnerContext>
-      <BotItemCancelDialog
-        items={canceling ? [item] : null}
-        onCancel={(reason) => {
-          setCanceling(false)
-          setStatus('canceled', reason)
-        }}
-        onClose={() => setCanceling(false)}
-      />
+      {notes.dialog}
       {snoozing.dialog}
     </div>
   )

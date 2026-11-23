@@ -1,4 +1,5 @@
 import type { BrowserScreencastFrameMetadata } from '../../../../../shared/browser/screencast/browser-screencast-protocol'
+import type { RemoteBrowserHostContextMenus } from './remote-browser-host-context-menus'
 import type { RemoteBrowserInputQueue } from './remote-browser-input-queue'
 import type { RemoteBrowserStreamLifecycle } from './remote-browser-stream-lifecycle'
 import type {
@@ -16,6 +17,8 @@ export type RemoteBrowserPageInputParams = {
   pickerAvailable: boolean
   /** A page tool (the element picker) owns the pointer: right presses go to the page. */
   pagePointerOwned: boolean
+  /** When the host reports page menus, right presses go to the page and its menu opens from the host's report. */
+  hostContextMenus: RemoteBrowserHostContextMenus
   inputQueue: RemoteBrowserInputQueue
   imageRef: React.RefObject<HTMLImageElement | null>
   remoteViewportRef: React.RefObject<HTMLDivElement | null>

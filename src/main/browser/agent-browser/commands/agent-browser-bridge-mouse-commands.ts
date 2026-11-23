@@ -17,6 +17,7 @@ import { agentBrowserSetMediaArguments } from '../protocol/agent-browser-set-med
 import { forgetBrowserGuestInputGestures } from '../../guest-lifecycle/input/browser-guest-input-gesture'
 import { assertFinitePointerValues } from '../../cdp/input/cdp-pointer-input'
 import { assertUploadFilesExist } from '../../cdp/input/browser-upload-files'
+import { noteInjectedRightPress } from '../../guest-lifecycle/input/browser-guest-context-menu-target'
 
 const AgentBrowserDevice = z.object({
   width: z.number().positive(),
@@ -72,6 +73,9 @@ export abstract class AgentBrowserBridgeMouseCommands extends AgentBrowserBridge
             y: point.y
           })
           if (!point.handled) {
+            if (cdpButton === 'right') {
+              noteInjectedRightPress(wc, 'mousePressed')
+            }
             await sendGuestCdpCommand(wc, 'Input.dispatchMouseEvent', {
               type: 'mousePressed',
               x: point.x,
@@ -81,6 +85,9 @@ export abstract class AgentBrowserBridgeMouseCommands extends AgentBrowserBridge
               modifiers: cdpModifiers,
               clickCount: 1
             })
+            if (cdpButton === 'right') {
+              noteInjectedRightPress(wc, 'mouseReleased')
+            }
             await sendGuestCdpCommand(wc, 'Input.dispatchMouseEvent', {
               type: 'mouseReleased',
               x: point.x,

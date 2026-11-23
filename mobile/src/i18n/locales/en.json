@@ -3017,6 +3017,8 @@
       "agentCommandFailed": "{{agent}}'s Command in Settings → Agents didn't start {{agent}}: {{detail}}. Change it or reset it.",
       "runtimeNotInstalled": "{{agent}} isn't installed on the computer running this chat. Install it from the chat in a current version of Orca.",
       "fullAccessAsRoot": "{{agent}} won't use Full access while it runs as root. Choose another permission for {{agent}} in Settings → Agents for the computer running this chat, then start a new chat.",
+      "botToolsNeedStatusHooks": "{{agent}} bots need Agent status hooks: they are how a bot's tools act as the bot. Turn them on for {{agent}} in Settings → Agents, then start a new chat.",
+      "botToolsGatewayOutdated": "{{agent}}'s gateway is still running an older copy of Orca's plugin, so this bot's tools can't act as the bot. Run `hermes gateway stop`, then start a new chat.",
       "launchPreparationFailed": "Orca couldn't prepare {{agent}} to start on the computer running this chat.",
       "conversationOpenElsewhere": "Codex is still holding this conversation open. Try again in a moment, or close other Codex terminals.",
       "conversationOpenInTerminal": "{{agent}} is already running this conversation in another terminal. Quit {{agent}} there or close that terminal to continue here.",
@@ -6215,8 +6217,8 @@
       "moreMatches_one": "{{count}} more match. Search for more of a name to narrow it.",
       "moreMatches_other": "{{count}} more matches. Search for more of a name to narrow it.",
       "readFailedTitle": "Couldn’t load chats",
-      "waitingCount": "{{count}} waiting",
-      "runningCount": "{{count}} running"
+      "runningCount": "{{count}} running",
+      "needsYouCount": "{{count}} needs you"
     },
     "row": {
       "replyingIn": "Replying in {{place}}",
@@ -6284,6 +6286,7 @@
       "status": {
         "planned": "Planned",
         "working": "In progress",
+        "waiting": "Waiting",
         "needsYou": "Needs you",
         "done": "Done",
         "canceled": "Canceled"
@@ -6331,7 +6334,8 @@
         "retry": "Retry",
         "discard": "Discard",
         "mayHaveArrived": "May have arrived.",
-        "replyingTo": "Replying to: {{question}}. Go to the question"
+        "replyingTo": "Replying to: {{question}}. Go to the question",
+        "waitingOn": "Waiting on"
       },
       "comment": {
         "offline": "{{host}} is offline. Your comment is kept; Comment works again when it’s back.",
@@ -6359,7 +6363,10 @@
         "openInBrowser": "Open in browser",
         "copyLink": "Copy link",
         "copyPath": "Copy path",
-        "fileOutside": "{{path}} isn't in this bot's folder"
+        "fileOutside": "{{path}} isn't in this bot's folder",
+        "automation": "Automation",
+        "automationOn": "Will wake the agent for this item",
+        "automationEnded": "Ended"
       },
       "open": {
         "failed": "Couldn’t open this item.",
@@ -6417,6 +6424,14 @@
         "placeholder": "Reason",
         "confirmOne": "Cancel item",
         "offline": "{{host}} is offline. Your reason is kept; {{action}} works again when it’s back."
+      },
+      "wait": {
+        "titleOne": "What is {{title}} waiting on?",
+        "titleMany": "What are {{count}} items waiting on?",
+        "placeholder": "Waiting on",
+        "keep": "Cancel",
+        "confirm": "Set Waiting",
+        "offline": "{{host}} is offline. What you typed is kept; Set Waiting works again when it’s back."
       },
       "strip": {
         "view": "View"

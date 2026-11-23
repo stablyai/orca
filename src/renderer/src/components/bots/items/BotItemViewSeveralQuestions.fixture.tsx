@@ -1,5 +1,5 @@
-// An agent's ask of several questions on the item page: one line at a time, picks held until the
-// last line or "send anyway", and words typed in the comment box sent at once.
+// An agent's ask of several questions on the item page: one line at a time, answers picked or typed in
+// the comment box held until the last line or "send anyway".
 import { defineFixture } from '../../../component-fixtures/component-fixture'
 import { fixtureCos } from '../../../component-fixtures/fixture-bot-panel'
 import { makeTestBotItem } from '../../../../../shared/bots/bot-item.test-fixture'
@@ -112,12 +112,12 @@ const typedItem = makeTestBotItem(232, {
 const typedView = { ...severalView, item: typedItem }
 const TYPED = 'Top strip, but ask a second opinion before landing it.'
 
-// Words in the box, and no answers held from an earlier render of the same page: a reused fixture
-// page keeps the draft store, so held picks would otherwise ride along on the send.
-function typeInBox(uid: string): void {
+// Words in the box, with `held` the answers held for other lines (none by default): a reused fixture
+// page keeps the draft store, so earlier held answers would otherwise ride along.
+function typeInBox(uid: string, held = ''): void {
   updateNativeChatComposerDraft(
     botItemHeldAnswersScope(fixtureCos, uid, 'e61'),
-    { text: '' },
+    { text: held },
     'immediate'
   )
   updateNativeChatComposerDraft(
@@ -133,9 +133,9 @@ async function sendFromBox(frame: HTMLElement): Promise<void> {
   await new Promise((resolve) => setTimeout(resolve, 400))
 }
 
-// Words typed for the first of several questions, sent from the box: they post at once as one
-// comment answering that line, instead of waiting on this device for the other lines. The fixture
-// has no host, so the comment shows Not sent with Retry, and the line is open again.
+// Words typed for the first of several questions, sent from the box: held like a picked answer, the
+// line folds above as "Question → answer · not sent yet", the step moves to the next open line, and
+// "1 answer not sent yet, send anyway" shows. Nothing posts until the last line.
 export const severalQuestionsTypedAnswer = defineFixture({
   width: 900,
   setup: () => typeInBox(typedItem.uid),
@@ -157,12 +157,19 @@ const onItsWayItem = makeTestBotItem(233, {
 })
 const onItsWayView = { ...severalView, item: onItsWayItem }
 
-// The same send while the host takes it: the ask stops asking, its answered line reads
-// "Question → answer", and the box names no question until the host's read has the comment.
+// Words typed for the last open line, the other three held: all four post as one comment. While the
+// host takes it the ask stops asking, its lines read "Question → answer", and the box names no
+// question until the host's read has the comment.
 export const severalQuestionsTypedAnswerOnItsWay = defineFixture({
   width: 900,
   setup: () => {
-    typeInBox(onItsWayItem.uid)
+    typeInBox(
+      onItsWayItem.uid,
+      SEVERAL.questions
+        .slice(1)
+        .map(({ prompt, options }) => `${prompt} → ${options[0]!.label}`)
+        .join('\n')
+    )
     const runtime: unknown = window.api.runtime
     Reflect.set(window.api, 'runtime', {
       ...(typeof runtime === 'object' ? runtime : {}),
@@ -209,8 +216,8 @@ const readView = {
   ]
 }
 
-// Once the host's read has it: the answered line reads "Question → answer" above, and the step is on
-// the next open line, 1 of 3, which the box names.
+// One answer the host already has (sent with "send anyway", or by an older build): the answered line
+// reads "Question → answer" above, and the step is on the next open line, 1 of 3, which the box names.
 export const severalQuestionsTypedAnswerRead = defineFixture({
   width: 900,
   render: () => (

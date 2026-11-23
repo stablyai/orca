@@ -211,3 +211,16 @@ export function botItemActivity(
   }
   return entries.sort((a, b) => a.at - b.at)
 }
+
+/** The move a Waiting item's card, last in Activity, stands in for: its latest status event, while
+ *  that set Waiting. */
+export function botItemWaitEntryKey(
+  item: Pick<BotItem, 'status' | 'wait'>,
+  entries: readonly BotItemActivityEntry[]
+): string | null {
+  if (item.status !== 'waiting' || !item.wait) {
+    return null
+  }
+  const last = entries.findLast((entry) => entry.kind === 'event' && entry.event.kind === 'status')
+  return last?.kind === 'event' && last.event.data.to === 'waiting' ? last.key : null
+}

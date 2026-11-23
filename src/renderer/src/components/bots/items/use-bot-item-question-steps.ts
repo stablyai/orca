@@ -1,9 +1,9 @@
 // An ask of several questions, one line at a time: a quick reply or the box's Enter answers the line
-// it is on, and the step moves to the first open line. Quick replies are held on this device (the
-// comment box's draft store, so a reload keeps them) and post as one comment when the last line is
-// answered, so the agent wakes once, or when the owner sends them sooner. Words sent from the box post
-// at once, as any send does, and any other comment sent sooner posts the held answers with it, so none
-// is left only on this device.
+// it is on, and the step moves to the first open line. Answers, picked or typed, are held on this
+// device (the comment box's draft store, so a reload keeps them) and post as one comment when the last
+// line is answered, so the agent wakes once, or when the owner sends them sooner. An answer with files
+// or skills, and any other comment sent sooner, posts the held answers with it, so none is left only
+// on this device.
 import { useCallback, useMemo, useState } from 'react'
 import { useLatestHandler } from '@/lib/use-latest-handler'
 import { botRefKey } from '@/lib/bot-hosts'
@@ -144,7 +144,7 @@ export function useBotItemQuestionSteps(
     setSent({ askId, text, answers })
     send(text, paths, askId, undefined, skills)
   }
-  // A composer submission sends immediately, even when it carries no files or skills.
+  // Typed words wait like a quick reply; files and skills aren't held here, so they post the answers so far.
   const settle = (
     index: number,
     words: string,
@@ -153,7 +153,11 @@ export function useBotItemQuestionSteps(
   ): void => {
     const next = kept.map((held_, at) => (at === index ? words : held_))
     setChosen(null)
-    if (fromBoxPaths !== undefined || lines.every((at) => next[at])) {
+    if (
+      (fromBoxPaths?.length ?? 0) > 0 ||
+      (skills?.length ?? 0) > 0 ||
+      lines.every((at) => next[at])
+    ) {
       post(next, botItemAnswersText(shape, next), fromBoxPaths ?? [], skills)
       return
     }

@@ -1,13 +1,14 @@
 import { BrowserWindow, ipcMain, type WebContents } from 'electron'
 import { isResourceWindowVisible } from '../../../window/visibility/resource-view-admission'
-import { sendGuestCdpCommand } from '../../cdp/debugger/guest-cdp-command'
+import { isFiniteNumber, readPageViewport } from './agent-page-viewport'
 import { isAgentRpcCaller } from '../../../runtime/rpc/callers/rpc-caller-identity'
 import {
   BROWSER_AGENT_ACTIVITY_CHANNEL,
   BROWSER_AGENT_CURSOR_ARRIVED_CHANNEL,
   BROWSER_AGENT_CURSOR_CHANNEL,
   type BrowserAgentActivityEvent,
-  type BrowserAgentCursorEvent
+  type BrowserAgentCursorEvent,
+  type BrowserAgentPointerPoint
 } from '../../../../shared/browser/automation/browser-agent-activity-contract'
 import {
   getActiveRpcAgentSessionId,
@@ -60,6 +61,8 @@ type BrowserAgentActivityDeps = {
   pageIdForGuest: (guestWebContentsId: number) => string | null
   rendererForPage: (browserPageId: string) => WebContents | null
   worktreeForPage: (browserPageId: string) => string | null
+  /** The page started or stopped being agent-driven; hosts republish its session row. */
+  onPageActiveChanged?: (browserPageId: string) => void
 }
 
 const NOT_AN_AGENT: AgentCommandLease = {
@@ -72,6 +75,11 @@ const NOT_AN_AGENT: AgentCommandLease = {
 export class BrowserAgentActivity {
   private readonly pages = new Map<string, PageActivity>()
   private readonly pendingArrivals = new Map<number, PendingArrival>()
+  /** Viewers of a streamed page, which draw its cursor without a renderer of this process. */
+  private readonly cursorWatchers = new Map<
+    string,
+    Set<(point: BrowserAgentPointerPoint) => void>
+  >()
   private sequence = 0
   private listening = false
 
@@ -92,6 +100,7 @@ export class BrowserAgentActivity {
         agentSessionId: undefined
       }
       this.pages.set(browserPageId, page)
+      this.deps.onPageActiveChanged?.(browserPageId)
     }
     page.controller = remoteCliBrowserScopeController() ?? null
     page.agentSessionId = getActiveRpcAgentSessionId()
@@ -149,6 +158,7 @@ export class BrowserAgentActivity {
     if (!existing) {
       this.pages.set(toPageId, page)
       this.publish(toPageId, true, page)
+      this.deps.onPageActiveChanged?.(toPageId)
     }
   }
 
@@ -196,6 +206,23 @@ export class BrowserAgentActivity {
       }
     }
     this.publish(browserPageId, false)
+    this.deps.onPageActiveChanged?.(browserPageId)
+  }
+
+  /** Sends where the agent points on the page to a stream viewer until the returned stop runs. */
+  watchCursor(
+    browserPageId: string,
+    listener: (point: BrowserAgentPointerPoint) => void
+  ): () => void {
+    const watchers = this.cursorWatchers.get(browserPageId) ?? new Set()
+    watchers.add(listener)
+    this.cursorWatchers.set(browserPageId, watchers)
+    return () => {
+      watchers.delete(listener)
+      if (watchers.size === 0 && this.cursorWatchers.get(browserPageId) === watchers) {
+        this.cursorWatchers.delete(browserPageId)
+      }
+    }
   }
 
   /** Moves the page's agent cursor to an input's point; resolves once it has visibly landed. */
@@ -209,28 +236,38 @@ export class BrowserAgentActivity {
     if (!browserPageId || !this.isExecuting(browserPageId)) {
       return
     }
-    const renderer = this.deps.rendererForPage(browserPageId)
-    if (!renderer || renderer.isDestroyed()) {
+    const pageRenderer = this.deps.rendererForPage(browserPageId)
+    const renderer = pageRenderer && !pageRenderer.isDestroyed() ? pageRenderer : null
+    // Only a page with no window here streams its cursor: its row carries the agent mark that clears it.
+    if (!renderer && !this.cursorWatchers.has(browserPageId)) {
       return
     }
     const viewport = await readPageViewport(guest)
-    if (!viewport || renderer.isDestroyed()) {
+    if (!viewport) {
+      return
+    }
+    const point: BrowserAgentPointerPoint = {
+      x,
+      y,
+      viewportWidth: viewport.width,
+      viewportHeight: viewport.height,
+      press
+    }
+    if (!renderer) {
+      // A stream viewer is a network hop away, so the agent never waits for it to draw.
+      for (const watcher of this.cursorWatchers.get(browserPageId) ?? []) {
+        watcher(point)
+      }
+      return
+    }
+    if (renderer.isDestroyed()) {
       return
     }
     // Drag steps and the press after a move follow without waiting; only a fresh move is shown first.
     const watchable = isResourceWindowVisible(BrowserWindow.fromWebContents(renderer))
     const awaitsArrival = watchable && !press && !input.buttons
     const sequence = ++this.sequence
-    const event: BrowserAgentCursorEvent = {
-      browserPageId,
-      sequence,
-      x,
-      y,
-      viewportWidth: viewport.width,
-      viewportHeight: viewport.height,
-      press,
-      awaitsArrival
-    }
+    const event: BrowserAgentCursorEvent = { ...point, browserPageId, sequence, awaitsArrival }
     if (!awaitsArrival) {
       renderer.send(BROWSER_AGENT_CURSOR_CHANNEL, event)
       return
@@ -287,37 +324,4 @@ export class BrowserAgentActivity {
       renderer.send(BROWSER_AGENT_ACTIVITY_CHANNEL, event)
     }
   }
-}
-
-function isFiniteNumber(value: unknown): value is number {
-  return typeof value === 'number' && Number.isFinite(value)
-}
-
-// Input points are in the page's CSS px; innerWidth/innerHeight include classic scrollbars,
-// matching the webview box the renderer scales against, where clientWidth would not.
-async function readPageViewport(
-  guest: WebContents
-): Promise<{ width: number; height: number } | null> {
-  try {
-    const response: unknown = await sendGuestCdpCommand(guest, 'Runtime.evaluate', {
-      expression: '[innerWidth, innerHeight]',
-      returnByValue: true
-    })
-    const result =
-      response !== null && typeof response === 'object' && 'result' in response
-        ? response.result
-        : null
-    const size =
-      result !== null && typeof result === 'object' && 'value' in result ? result.value : null
-    if (Array.isArray(size) && isPositiveNumber(size[0]) && isPositiveNumber(size[1])) {
-      return { width: size[0], height: size[1] }
-    }
-  } catch {
-    // A page that cannot report its viewport just shows no cursor.
-  }
-  return null
-}
-
-function isPositiveNumber(value: unknown): value is number {
-  return isFiniteNumber(value) && value > 0
 }
