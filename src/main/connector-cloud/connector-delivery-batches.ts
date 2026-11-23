@@ -107,7 +107,8 @@ export function dispatchBatch(
     return late.map((delivery) => refuse(delivery.deliveryId, { outcome: 'expired' }))
   }
   // Refused before the seam (expired, unsupported), or held by a thread's mute: the later ones go
-  // on their own.
+  // on as a batch of their own, so a request and its follow-ups behind a silenced one stay one turn.
+  const [next, ...after] = later
   const carried = first.received
     ? later.map((delivery): DispatchedDelivery => ({
         deliveryId: delivery.deliveryId,
@@ -120,10 +121,9 @@ export function dispatchBatch(
           first.done
         )
       }))
-    : later.flatMap((delivery) => {
-        const own = dispatchDelivery(seam, host, machine, delivery, msLeft, [], outboxAccount)
-        return own ? [own] : []
-      })
+    : next
+      ? dispatchBatch(seam, host, machine, [next, ...after], msLeft, outboxAccount)
+      : []
   return [
     first,
     ...carried,

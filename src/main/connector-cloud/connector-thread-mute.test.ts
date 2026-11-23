@@ -387,3 +387,64 @@ describe('a wait in the thread queue that a Stop lands on while it runs', () => 
     saved()
   })
 })
+
+describe('a silenced reply leading a batch', () => {
+  // The request and its follow-ups behind it still reach the chat as one turn.
+  it('leaves the rest batched', async () => {
+    let muted = true
+    const turns: { text: string; later: number }[] = []
+    const seam = {
+      send: async (
+        _host: unknown,
+        _key: unknown,
+        _id: string,
+        message: { text: string; later?: unknown[] }
+      ) => {
+        turns.push({ text: message.text, later: message.later?.length ?? 0 })
+        return { outcome: 'accepted' }
+      },
+      receipts: {
+        run: (_k: unknown, _d: unknown, _m: unknown, _t: unknown, run: () => unknown) => run(),
+        known: () => false,
+        heldByMute: () => null,
+        carried: async (_k: unknown, _d: unknown, _t: unknown, done: Promise<unknown>) => done
+      }
+    } as unknown as ExternalConversationSeam
+    const machine = {
+      runTrigger: async () => false,
+      threadMute: (
+        delivery: Parameters<typeof handleThreadMute>[1],
+        record: Parameters<typeof handleThreadMute>[2]
+      ) =>
+        handleThreadMute(
+          {
+            read: () => ({ botId: 'bot1', muted }),
+            write: async (_key, next) => {
+              muted = next
+            },
+            botNames: () => [],
+            otherBotNames: () => [],
+            queued: async () => {},
+            waiting: new Map(),
+            react: async () => {}
+          },
+          delivery,
+          record
+        )
+    }
+    const batch = [
+      send('fyi'),
+      send('<@U0BOT> draft a reply', { mentioned: true }),
+      send('do not send it')
+    ] as unknown as Parameters<typeof dispatchBatch>[3]
+    const dispatched = dispatchBatch(
+      seam,
+      {} as ExternalConversationHost,
+      machine,
+      batch,
+      () => 60_000
+    )
+    await Promise.all(dispatched.map((entry) => entry.done))
+    expect(turns).toEqual([{ text: '<@U0BOT> draft a reply', later: 1 }])
+  })
+})
