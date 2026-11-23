@@ -16,7 +16,9 @@ import { getPtyIdsForConnection, ptyIncarnationById, ptyOwnership } from './owne
 import { clearBackgroundedDeliverySyncForPty } from './listener-lifecycle'
 import {
   activeRendererPtys,
+  getFallbackPrioritizedRendererPtyId,
   interactiveOutputCharsByPty,
+  invalidateFallbackPrioritizedRendererPtyChange,
   invalidatePendingPtyDrainPolicy,
   invalidatePendingPtyDrainPriority,
   lastInputAtByPty,
@@ -58,6 +60,7 @@ export function clearProviderPtyState(
   ptyIncarnationById.delete(id)
   lastInputAtByPty.delete(id)
   interactiveOutputCharsByPty.delete(id)
+  const prevFallbackPtyId = getFallbackPrioritizedRendererPtyId()
   const activeChanged = activeRendererPtys.delete(id)
   visibleRendererPtys.delete(id)
   rendererVisibilityKnownPtys.delete(id)
@@ -67,6 +70,10 @@ export function clearProviderPtyState(
   if (activeChanged) {
     invalidatePendingPtyDrainPriority(id, false)
   }
+  invalidateFallbackPrioritizedRendererPtyChange(prevFallbackPtyId, {
+    excludeId: activeChanged ? id : undefined,
+    schedulePrev: false
+  })
   if (deliveryPolicyChanged) {
     invalidatePendingPtyDrainPolicy(id, false)
   }

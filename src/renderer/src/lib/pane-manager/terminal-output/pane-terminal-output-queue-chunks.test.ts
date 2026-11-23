@@ -39,4 +39,24 @@ describe('pane terminal output queue chunks', () => {
     expect(`${taken?.data ?? ''}${rest?.data ?? ''}`).toBe(data)
     expect(entry.queuedChars).toBe(0)
   })
+
+  it('defers forceForegroundRefresh until the final slice when splitting an oversized chunk', () => {
+    const entry = createEntry()
+    enqueueChunk(entry, 'a'.repeat(32), {
+      foreground: true,
+      forceForegroundRefresh: true,
+      followupForegroundRefresh: true
+    })
+
+    const firstSlice = takeQueuedChunk(entry, 16)
+    expect(firstSlice?.data.length).toBe(16)
+    expect(firstSlice?.forceForegroundRefresh).toBe(false)
+    expect(firstSlice?.followupForegroundRefresh).toBe(false)
+
+    const finalSlice = takeQueuedChunk(entry, 16)
+    expect(finalSlice?.data.length).toBe(16)
+    expect(finalSlice?.forceForegroundRefresh).toBe(true)
+    expect(finalSlice?.followupForegroundRefresh).toBe(true)
+    expect(entry.queuedChars).toBe(0)
+  })
 })

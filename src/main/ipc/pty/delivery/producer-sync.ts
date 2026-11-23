@@ -5,7 +5,12 @@ import {
 } from './pty-hidden-delivery-gate'
 import { tryGetProviderForPty } from '../provider/registry'
 import {
+  PRODUCER_FLOW_ACTIVE_HIGH_WATERMARK_CHARS,
+  PRODUCER_FLOW_ACTIVE_LOW_WATERMARK_CHARS
+} from './pty-producer-flow-control'
+import {
   PRODUCER_FLOW_CONTROL_ENABLED,
+  isPrioritizedRendererPty,
   rendererVisibilityKnownPtys,
   visibleRendererPtys
 } from './visibility-state'
@@ -15,7 +20,13 @@ export function updateProducerFlowControl(session: PtyIpcSession, id: string): v
   if (!PRODUCER_FLOW_CONTROL_ENABLED) {
     return
   }
-  session.producerFlowControl.update(id, session.pendingData.get(id)?.data.length ?? 0)
+  const watermarks = isPrioritizedRendererPty(id)
+    ? {
+        highWatermarkChars: PRODUCER_FLOW_ACTIVE_HIGH_WATERMARK_CHARS,
+        lowWatermarkChars: PRODUCER_FLOW_ACTIVE_LOW_WATERMARK_CHARS
+      }
+    : undefined
+  session.producerFlowControl.update(id, session.pendingData.get(id)?.data.length ?? 0, watermarks)
 }
 
 export function syncPtyBackgroundedDelivery(

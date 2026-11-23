@@ -10,6 +10,8 @@ export function buildInlineImageAddonOptions(): IImageAddonOptions {
   return {
     // Orca already answers CSI 14t/16t via its pixel-size responder.
     enableSizeReports: false,
+    // Explicit Kitty deletes leave stale tile references on untouched blank cells; never paint checkerboards for them.
+    showPlaceholder: false,
     storageLimit: IMAGE_STORAGE_LIMIT_MB,
     pixelLimit: (IMAGE_STORAGE_LIMIT_MB * 1000000) / 4,
     sixelSizeLimit: IMAGE_SEQUENCE_SIZE_LIMIT,

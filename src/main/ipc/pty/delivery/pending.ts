@@ -12,13 +12,19 @@ import { redactPtyIdForDiagnostics } from '../../../../shared/terminal/pty/diagn
 import { recordCrashBreadcrumb } from '../../../crash-reporting/breadcrumbs/crash-breadcrumb-store'
 import { terminalOutputBacklogCapChars } from '../../../../shared/terminal/replay/terminal-scrollback-policy'
 import { isHiddenPtyDeliveryGateEnabled } from './pty-hidden-delivery-gate'
+import { isPrioritizedRendererPty } from './visibility-state'
 import type { PendingPtyData } from './pty-pending-data-drain-contract'
 import type { PtyEscapeBoundary } from './pty-escape-boundary'
 import { DROPPED_QUERY_SALVAGE_MAX_CHARS } from './constants'
 import type { PtyIpcSession } from '../session'
 
-export function pendingDataCapChars(session: PtyIpcSession): number {
-  return terminalOutputBacklogCapChars(session.getSettings?.().terminalScrollbackRows)
+export const ACTIVE_PTY_PENDING_BACKLOG_MIN_CAP_CHARS = 6 * 1024 * 1024
+
+export function pendingDataCapChars(session: PtyIpcSession, id?: string): number {
+  const baseCap = terminalOutputBacklogCapChars(session.getSettings?.().terminalScrollbackRows)
+  return id && isPrioritizedRendererPty(id)
+    ? Math.max(baseCap, ACTIVE_PTY_PENDING_BACKLOG_MIN_CAP_CHARS)
+    : baseCap
 }
 
 export function extractDroppedPtyQueryBytes(data: string): string {
@@ -77,7 +83,7 @@ export function dropOversizedPendingPtyData(
   id: string,
   pending: PendingPtyData
 ): PendingPtyData {
-  const capChars = pendingDataCapChars(session)
+  const capChars = pendingDataCapChars(session, id)
   if (pending.droppedOutput === true || pending.data.length <= capChars) {
     return pending
   }

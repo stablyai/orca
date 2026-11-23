@@ -8,6 +8,43 @@ export const interactiveOutputCharsByPty = new Map<string, number>()
 export const activeRendererPtys = new Set<string>()
 export const visibleRendererPtys = new Set<string>()
 export const rendererVisibilityKnownPtys = new Set<string>()
+
+// When no explicit active-PTY claim is registered, prioritize a sole visible PTY so active-pane
+// resets or early rebinds do not downgrade a lone foreground terminal to 16KB background slicing.
+export function getFallbackPrioritizedRendererPtyId(): string | undefined {
+  if (activeRendererPtys.size > 0 || visibleRendererPtys.size !== 1) {
+    return undefined
+  }
+  return visibleRendererPtys.values().next().value
+}
+
+export function isPrioritizedRendererPty(id: string): boolean {
+  return activeRendererPtys.has(id) || getFallbackPrioritizedRendererPtyId() === id
+}
+
+export function invalidateFallbackPrioritizedRendererPtyChange(
+  prevFallbackPtyId: string | undefined,
+  opts: {
+    excludeId?: string
+    schedulePrev?: boolean
+    scheduleNext?: boolean
+    onPromoted?: (id: string) => void
+  } = {}
+): void {
+  const nextFallbackPtyId = getFallbackPrioritizedRendererPtyId()
+  if (prevFallbackPtyId === nextFallbackPtyId) {
+    return
+  }
+  if (prevFallbackPtyId && prevFallbackPtyId !== opts.excludeId) {
+    invalidatePendingPtyDrainPriority(prevFallbackPtyId, opts.schedulePrev)
+  }
+  if (nextFallbackPtyId) {
+    if (nextFallbackPtyId !== opts.excludeId) {
+      invalidatePendingPtyDrainPriority(nextFallbackPtyId, opts.scheduleNext)
+    }
+    opts.onPromoted?.(nextFallbackPtyId)
+  }
+}
 // Visible attaches suppress main-start hiding; remember it so failed attaches can hide the PTY again.
 export const attachingRendererViewPtys = new Map<string, { views: number; skippedHide: boolean }>()
 /** A visible view, or one mid-attach, owns delivery; hiding it would drop output it is about to paint. */

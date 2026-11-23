@@ -12,7 +12,7 @@ import type { PtyRendererDeliveryDebugSnapshot } from './delivery/debug'
 import { PtyProducerFlowController } from './delivery/pty-producer-flow-control'
 import { PtyPendingDataDrainQueue } from './delivery/pty-pending-data-drain-queue'
 import type { PendingPtyData } from './delivery/pty-pending-data-drain-contract'
-import { activeRendererPtys } from './delivery/visibility-state'
+import { isPrioritizedRendererPty } from './delivery/visibility-state'
 import {
   isHiddenPtyDeliveryGateEnabled,
   shouldDropHiddenRendererPtyData
@@ -81,6 +81,7 @@ export type PtyIpcSession = {
   rendererDeliveryAccountingByPty: Map<string, RendererPtyDeliveryAccounting>
   trustedTerminalHandleEnv: Set<string>
   flushTimer: ReturnType<typeof setTimeout> | null
+  flushImmediate: ReturnType<typeof setImmediate> | null
   pendingDataFlushActive: boolean
   pendingDataCreditReleasedDuringFlush: boolean
   rendererInFlightTotalChars: number
@@ -197,6 +198,7 @@ export function createPtyIpcSession(args: {
     rendererDeliveryAccountingByPty: new Map(),
     trustedTerminalHandleEnv: new Set(),
     flushTimer: null,
+    flushImmediate: null,
     pendingDataFlushActive: false,
     pendingDataCreditReleasedDuringFlush: false,
     rendererInFlightTotalChars: 0,
@@ -260,14 +262,15 @@ export function createPtyIpcSession(args: {
 
   session.pendingData = new PtyPendingDataDrainQueue(
     (id) => {
-      const runnableLane = activeRendererPtys.has(id) ? 'active' : 'background'
+      const prioritized = isPrioritizedRendererPty(id)
+      const runnableLane = prioritized ? 'active' : 'background'
       // Hidden delivery can retire even when renderer credit is exhausted.
       if (shouldDropHiddenRendererPtyData(id, session.getSettings?.())) {
         return runnableLane
       }
       if (
         !session.rendererPtyDispatcherReady ||
-        !session.canSendPtyDataToRenderer(id, { interactive: activeRendererPtys.has(id) })
+        !session.canSendPtyDataToRenderer(id, { interactive: prioritized })
       ) {
         return 'blocked'
       }

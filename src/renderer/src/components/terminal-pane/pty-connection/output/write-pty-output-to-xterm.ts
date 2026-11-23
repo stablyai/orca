@@ -8,6 +8,7 @@ import { CLIENT_PLATFORM } from '@/lib/workspace/creation/new-workspace'
 
 import { FOREGROUND_SYNCHRONIZED_FRAME_INTERACTIVE_WINDOW_MS } from './foreground-output-budgets'
 import { scanSynchronizedOutput } from '../../../../../../shared/terminal/protocol/escape/terminal-synchronized-output-scan'
+import { TerminalKittyApcFilter } from '../../../../../../shared/terminal/protocol/escape/terminal-kitty-apc-filter'
 import { shouldWritePtyOutputForeground } from './foreground-output-visibility'
 import { containsCursorRestore } from '../../../../../../shared/terminal/protocol/escape/terminal-cursor-restore'
 import { containsHiddenStartupRendererQuery } from './hidden-startup-renderer-query'
@@ -20,6 +21,10 @@ import {
 import type { ConnectPanePtySession } from '../connect-pane-pty-session'
 
 export function bindWritePtyOutputToXterm(session: ConnectPanePtySession): void {
+  const kittyApcFilter = new TerminalKittyApcFilter()
+  let kittyApcFilterPtyId: string | null | undefined = session.transport.getPtyId()
+  let kittyApcFilterGeneration = session.transportStreamGeneration
+
   const shouldRefreshForegroundSynchronously = (): boolean =>
     CLIENT_PLATFORM === 'win32' && session.shouldRefreshForegroundSynchronously()
 
@@ -30,9 +35,15 @@ export function bindWritePtyOutputToXterm(session: ConnectPanePtySession): void 
   ): void {
     const ptyId = session.transport.getPtyId()
     const generation = session.transportStreamGeneration
+    if (ptyId !== kittyApcFilterPtyId || generation !== kittyApcFilterGeneration) {
+      kittyApcFilter.reset()
+      kittyApcFilterPtyId = ptyId
+      kittyApcFilterGeneration = generation
+    }
+    const nonKittyData = kittyApcFilter.filter(data)
     data = session.idleCursorReset.processOutput(data)
-    // Why: every application byte funnels through here, so it's the one place the kitty keyboard mirror observes the pane's protocol negotiation.
-    session.kittyKeyboardModes.scan(data)
+    // Why: strip Kitty base64 payloads once so protocol/render scanners avoid scanning image megabytes.
+    session.kittyKeyboardModes.scan(nonKittyData)
     // Why before classification: this chunk may be the echo that calibrates its own window.
     if (data.length > 0) {
       noteTerminalOutputAfterInput(session.inputEchoDelay, performance.now())
@@ -44,11 +55,12 @@ export function bindWritePtyOutputToXterm(session: ConnectPanePtySession): void 
       !foreground &&
       session.canUseHiddenOutputSnapshot(ptyId) &&
       session.shouldSnapshotHiddenCodexOutput &&
-      (opts?.hiddenStartupRendererQuery === true || containsHiddenStartupRendererQuery(data))
+      (opts?.hiddenStartupRendererQuery === true ||
+        containsHiddenStartupRendererQuery(nonKittyData))
     const synchronizedForegroundScan =
       session.shouldProtectNativeWindowsSynchronizedOutput && foreground
         ? scanSynchronizedOutput(
-            data,
+            nonKittyData,
             session.synchronizedForegroundMarkerTail,
             session.synchronizedForegroundOutputActive
           )
@@ -65,13 +77,13 @@ export function bindWritePtyOutputToXterm(session: ConnectPanePtySession): void 
     const nativeWindowsCursorRestore =
       session.shouldProtectNativeWindowsSynchronizedOutput &&
       foreground &&
-      containsCursorRestore(data)
+      containsCursorRestore(nonKittyData)
     const foregroundOutput = foreground || parseHiddenStartupOutput
     if (foreground) {
       session.scheduleForegroundGridDriftCheck()
     }
     const renderRefreshDecision = foregroundOutput
-      ? session.shouldForceForegroundRenderRefresh(data)
+      ? session.shouldForceForegroundRenderRefresh(nonKittyData)
       : { refresh: false, inPlaceRewrite: false }
     const foregroundRenderRefreshNeeded = renderRefreshDecision.refresh
     // Why: Claude Code's in-place prompt redraws on Windows ConPTY can paint one frame late; a follow-up repaint fixes the column desync without a resize.

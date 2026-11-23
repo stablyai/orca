@@ -106,7 +106,7 @@ export function schedulePendingDataAfterCreditReport(
   if (creditedAny) {
     session.pendingData.reactivateBlocked()
   }
-  if (session.pendingData.size > 0 && !session.flushTimer) {
+  if (session.pendingData.size > 0 && !session.flushTimer && !session.flushImmediate) {
     session.schedulePendingDataFlush(0)
   }
 }

@@ -1,8 +1,9 @@
 import { shouldDropHiddenRendererPtyData } from './pty-hidden-delivery-gate'
 import { advanceEscapeBoundary } from './pty-escape-boundary'
 import type { PendingPtyData } from './pty-pending-data-drain-contract'
-import { activeRendererPtys } from './visibility-state'
+import { isPrioritizedRendererPty } from './visibility-state'
 import {
+  PTY_ACTIVE_BATCH_FLUSH_CHUNK_CHARS,
   PTY_BATCH_DRAIN_CONTINUE_MS,
   PTY_BATCH_FLUSH_CHUNK_CHARS,
   PTY_BATCH_FLUSH_MAX_WRITES,
@@ -15,8 +16,26 @@ import { dropHiddenPendingPtyData } from './hidden-transition'
 import { warnIfDroppingHiddenBytesForVisiblePty } from './debug-snapshot'
 import type { PtyIpcSession } from '../session'
 
-export function schedulePendingDataFlush(session: PtyIpcSession, delayMs: number): void {
+export function clearScheduledPendingDataFlush(session: PtyIpcSession): void {
   if (session.flushTimer) {
+    clearTimeout(session.flushTimer)
+    session.flushTimer = null
+  }
+  if (session.flushImmediate) {
+    clearImmediate(session.flushImmediate)
+    session.flushImmediate = null
+  }
+}
+
+export function scheduleImmediatePendingDataFlush(session: PtyIpcSession): void {
+  if (session.flushImmediate || session.flushTimer) {
+    return
+  }
+  session.flushImmediate = setImmediate(() => session.flushPendingData())
+}
+
+export function schedulePendingDataFlush(session: PtyIpcSession, delayMs: number): void {
+  if (session.flushTimer || session.flushImmediate) {
     return
   }
   session.flushTimer = setTimeout(() => session.flushPendingData(), delayMs)
@@ -31,7 +50,7 @@ export function invalidatePendingPtyDrainClassification(
     typeof id === 'string'
       ? session.pendingData.invalidate(id)
       : session.pendingData.invalidateAll()
-  if (invalidated && schedule && !session.flushTimer) {
+  if (invalidated && schedule && !session.flushTimer && !session.flushImmediate) {
     schedulePendingDataFlush(session, 0)
   }
 }
@@ -67,15 +86,14 @@ export function armDispatcherReadyWatchdog(session: PtyIpcSession): void {
 }
 
 export function clearFlushTimerIfIdle(session: PtyIpcSession): void {
-  if (session.pendingData.size > 0 || session.flushTimer === null) {
+  if (session.pendingData.size > 0) {
     return
   }
-  clearTimeout(session.flushTimer)
-  session.flushTimer = null
+  clearScheduledPendingDataFlush(session)
 }
 
 export function flushPendingData(session: PtyIpcSession): void {
-  session.flushTimer = null
+  clearScheduledPendingDataFlush(session)
   if (!session.mainWindow || session.mainWindow.isDestroyed()) {
     // Resume before wiping bookkeeping; no later drain can release these producers.
     session.producerFlowControl.releaseAll()
@@ -91,6 +109,7 @@ export function flushPendingData(session: PtyIpcSession): void {
   const settings = session.getSettings?.()
   let writes = 0
   let sendFailed = false
+  let prioritizedRemainderPtyId: string | null = null
   const round = session.pendingData.beginRound()
   let creditReleasedDuringFlush = false
   session.pendingDataFlushActive = true
@@ -109,6 +128,9 @@ export function flushPendingData(session: PtyIpcSession): void {
       ) {
         session.pendingData.remove(selection)
         session.pendingOverflowMarkedPtys.delete(id)
+        if (prioritizedRemainderPtyId === id) {
+          prioritizedRemainderPtyId = null
+        }
         session.updateProducerFlowControl(id)
         const drop = dropHiddenPendingPtyData(session, id, pending)
         warnIfDroppingHiddenBytesForVisiblePty(session, id, pending.data.length)
@@ -123,12 +145,19 @@ export function flushPendingData(session: PtyIpcSession): void {
         }
         continue
       }
-      if (!session.canSendPtyDataToRenderer(id, { interactive: activeRendererPtys.has(id) })) {
+      const isActivePty = isPrioritizedRendererPty(id)
+      if (!session.canSendPtyDataToRenderer(id, { interactive: isActivePty })) {
         session.pendingData.block(selection)
+        if (prioritizedRemainderPtyId === id) {
+          prioritizedRemainderPtyId = null
+        }
         continue
       }
       if (pending.droppedOutput === true) {
         session.pendingData.remove(selection)
+        if (prioritizedRemainderPtyId === id) {
+          prioritizedRemainderPtyId = null
+        }
         session.updateProducerFlowControl(id)
         // A pending-cap gap requires snapshot repaint; only salvaged query bytes remain in data.
         if (!sendPtyDataToRenderer(session, id, makeDroppedOutputPayload(id, pending))) {
@@ -143,7 +172,10 @@ export function flushPendingData(session: PtyIpcSession): void {
       // Keep synchronized frames intact or xterm holds painting until the closing escape or its timeout.
       const splitAt = indivisible
         ? data.length
-        : resolveSynchronizedOutputSafeSplit(data, PTY_BATCH_FLUSH_CHUNK_CHARS)
+        : resolveSynchronizedOutputSafeSplit(
+            data,
+            isActivePty ? PTY_ACTIVE_BATCH_FLUSH_CHUNK_CHARS : PTY_BATCH_FLUSH_CHUNK_CHARS
+          )
       const chunk = indivisible ? data : data.slice(0, splitAt)
       const remaining = indivisible ? '' : data.slice(splitAt)
       if (remaining) {
@@ -162,9 +194,17 @@ export function flushPendingData(session: PtyIpcSession): void {
           nextPending.startEscapeBoundary = remainderEscapeBoundary
         }
         session.pendingData.replaceWithRemainder(selection, nextPending)
+        if (isActivePty) {
+          prioritizedRemainderPtyId = id
+        } else if (prioritizedRemainderPtyId === id) {
+          prioritizedRemainderPtyId = null
+        }
       } else {
         session.pendingData.remove(selection)
         session.pendingOverflowMarkedPtys.delete(id)
+        if (prioritizedRemainderPtyId === id) {
+          prioritizedRemainderPtyId = null
+        }
       }
       session.updateProducerFlowControl(id)
       const sent = sendPtyDataToRenderer(
@@ -201,15 +241,20 @@ export function flushPendingData(session: PtyIpcSession): void {
     session.ackGatedFlushSkipCount++
   }
   if (sendFailed && session.pendingData.size > 0) {
-    if (session.flushTimer) {
-      clearTimeout(session.flushTimer)
-      session.flushTimer = null
-    }
+    clearScheduledPendingDataFlush(session)
     schedulePendingDataFlush(session, PTY_BATCH_DRAIN_CONTINUE_MS)
     return
   }
   if (session.pendingData.size > 0 && (writes > 0 || creditReleasedDuringFlush)) {
-    // Yield between slices so background floods do not delay keystroke writes.
-    schedulePendingDataFlush(session, writes > 0 ? PTY_BATCH_DRAIN_CONTINUE_MS : 0)
+    const canContinuePrioritizedImmediate =
+      prioritizedRemainderPtyId !== null &&
+      Boolean(session.pendingData.get(prioritizedRemainderPtyId)) &&
+      session.canSendPtyDataToRenderer(prioritizedRemainderPtyId, { interactive: true })
+    if (canContinuePrioritizedImmediate) {
+      scheduleImmediatePendingDataFlush(session)
+    } else {
+      // Yield between slices so background floods do not delay keystroke writes.
+      schedulePendingDataFlush(session, writes > 0 ? PTY_BATCH_DRAIN_CONTINUE_MS : 0)
+    }
   }
 }

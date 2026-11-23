@@ -103,4 +103,20 @@ describe('pty input write queue', () => {
 
     expect(delivered).toEqual(['accepted:stale-active', 'ordinary:fresh'])
   })
+
+  it('coalesces synchronous mouse wheel reports into one write while preserving keystroke order', async () => {
+    const writes: string[] = []
+    const queue = createPtyInputWriteQueue({
+      isWritable: () => true,
+      write: (_id, data) => writes.push(data)
+    })
+
+    for (let i = 0; i < 4; i += 1) {
+      expect(queue.enqueue('pty-1', '\x1b[<64;10;5M', 'driving')).toBe(true)
+    }
+    expect(queue.enqueue('pty-1', 'x', 'driving')).toBe(true)
+
+    await queue.waitForDrain()
+    expect(writes).toEqual([`${'\x1b[<64;10;5M'.repeat(4)}x`])
+  })
 })

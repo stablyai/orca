@@ -1,4 +1,5 @@
 import { yieldToEventLoop } from '../../../../../../shared/concurrency/event-loop-yield'
+import { isXtermMouseReport } from '../../input/pointer/terminal-pointer-input-sequences'
 import {
   isTerminalInputTooLargeWithDeferredMeasurement,
   iterateTerminalInputChunks
@@ -30,6 +31,7 @@ export function createPtyInputWriteQueue(deps: PtyInputWriteQueueDeps): PtyInput
   let generation = 0
   let failedGeneration: number | null = null
   let drainPromise: Promise<void> | null = null
+  let microtaskDrainScheduled = false
   const pendingAcceptedCancels = new Set<() => void>()
 
   function resetSequenceIfEmpty(): void {
@@ -41,11 +43,8 @@ export function createPtyInputWriteQueue(deps: PtyInputWriteQueueDeps): PtyInput
   function firstPending(): PendingPtyInputWrite | undefined {
     const ordinary = peekHeadQueue(pendingOrdinary)
     const reply = peekHeadQueue(pendingReplies)
-    if (!ordinary) {
-      return reply
-    }
-    if (!reply) {
-      return ordinary
+    if (!ordinary || !reply) {
+      return ordinary ?? reply
     }
     return ordinary.sequence < reply.sequence ? ordinary : reply
   }
@@ -67,11 +66,7 @@ export function createPtyInputWriteQueue(deps: PtyInputWriteQueueDeps): PtyInput
   }
 
   function removePending(item: PendingPtyInputWrite, accepted?: boolean): void {
-    if (item.replyOnly) {
-      shiftReply()
-    } else {
-      shiftOrdinary()
-    }
+    void (item.replyOnly ? shiftReply() : shiftOrdinary())
     if (accepted !== undefined) {
       item.resolveAccepted?.(accepted)
     }
@@ -141,11 +136,7 @@ export function createPtyInputWriteQueue(deps: PtyInputWriteQueueDeps): PtyInput
           if (firstPending() !== next) {
             continue
           }
-          if (next.tooLarge) {
-            removePending(next, false)
-            continue
-          }
-          if (!deps.isWritable(next.id)) {
+          if (next.tooLarge || !deps.isWritable(next.id)) {
             removePending(next, false)
             continue
           }
@@ -236,6 +227,19 @@ export function createPtyInputWriteQueue(deps: PtyInputWriteQueueDeps): PtyInput
     drainPromise = drain().finally(finishDrain)
   }
 
+  function scheduleMicrotaskDrain(): void {
+    if (drainPromise || microtaskDrainScheduled) {
+      return
+    }
+    microtaskDrainScheduled = true
+    queueMicrotask(() => {
+      microtaskDrainScheduled = false
+      if (firstPending()) {
+        scheduleDrain()
+      }
+    })
+  }
+
   function enqueueInput(
     id: string,
     text: string,
@@ -249,11 +253,10 @@ export function createPtyInputWriteQueue(deps: PtyInputWriteQueueDeps): PtyInput
         return false
       }
       // Every query reply stays atomic so host-side ordering can classify it (#13892).
-      const replyOnly = queryReply
-      if (replyOnly && !admitReply(text)) {
+      if (queryReply && !admitReply(text)) {
         return false
       }
-      const tooLarge = replyOnly ? false : isTerminalInputTooLargeWithDeferredMeasurement(text)
+      const tooLarge = queryReply ? false : isTerminalInputTooLargeWithDeferredMeasurement(text)
       if (tooLarge === true) {
         resolveAccepted?.(false)
         return false
@@ -262,20 +265,21 @@ export function createPtyInputWriteQueue(deps: PtyInputWriteQueueDeps): PtyInput
         sequence: nextSequence,
         id,
         text,
-        replyOnly,
+        replyOnly: queryReply,
         inputKind,
         tooLarge,
         resolveAccepted
       }
       nextSequence += 1
-      if (replyOnly) {
+      if (queryReply) {
         pendingReplies.items.push(item)
         pendingReplyCount += 1
         pendingReplyCodeUnits += text.length
       } else {
         pendingOrdinary.items.push(item)
       }
-      scheduleDrain()
+      const coalesceMicrotask = !queryReply && !resolveAccepted && isXtermMouseReport(text)
+      void (coalesceMicrotask ? scheduleMicrotaskDrain() : scheduleDrain())
       return true
     } catch {
       resolveAccepted?.(false)
@@ -284,21 +288,19 @@ export function createPtyInputWriteQueue(deps: PtyInputWriteQueueDeps): PtyInput
   }
 
   return {
-    enqueue(id: string, data: string, inputKind: TerminalInputKind): boolean {
-      return enqueueInput(id, data, false, inputKind)
-    },
-
-    enqueueQueryReply(id: string, data: string): boolean {
-      return enqueueInput(id, data, true, 'query-reply')
-    },
-
+    enqueue: (id, data, inputKind) => enqueueInput(id, data, false, inputKind),
+    enqueueQueryReply: (id, data) => enqueueInput(id, data, true, 'query-reply'),
     enqueueAccepted: (id, data, inputKind) =>
       new Promise((resolve) => {
         enqueueInput(id, data, false, inputKind, resolve)
       }),
 
     async waitForDrain(): Promise<void> {
-      while (drainPromise) {
+      while (microtaskDrainScheduled || drainPromise) {
+        if (microtaskDrainScheduled && !drainPromise) {
+          await new Promise<void>((resolve) => queueMicrotask(resolve))
+          continue
+        }
         await drainPromise
       }
     },
@@ -306,6 +308,7 @@ export function createPtyInputWriteQueue(deps: PtyInputWriteQueueDeps): PtyInput
     clear(): void {
       generation += 1
       failedGeneration = null
+      microtaskDrainScheduled = false
       clearPending()
       for (const cancel of pendingAcceptedCancels) {
         cancel()

@@ -16,6 +16,8 @@ import {
 import { tryGetProviderForPty, closeStartupQueryAuthorityForPty } from '../provider/registry'
 import {
   activeRendererPtys,
+  getFallbackPrioritizedRendererPtyId,
+  invalidateFallbackPrioritizedRendererPtyChange,
   invalidatePendingPtyDrainPolicy,
   invalidatePendingPtyDrainPriority,
   ptySizes,
@@ -219,6 +221,7 @@ export function installPtyResizeVisibilityIpc(session: PtyIpcSession): void {
       return
     }
     // Active panes get scheduling priority; inactive ingestion, state and notifications continue.
+    const prevFallbackPtyId = getFallbackPrioritizedRendererPtyId()
     if (args.active) {
       if (activeRendererPtys.has(args.id)) {
         return
@@ -228,6 +231,13 @@ export function installPtyResizeVisibilityIpc(session: PtyIpcSession): void {
       return
     }
     invalidatePendingPtyDrainPriority(args.id)
+    invalidateFallbackPrioritizedRendererPtyChange(prevFallbackPtyId, {
+      excludeId: args.id,
+      onPromoted: (id) => session.updateProducerFlowControl(id)
+    })
+    if (args.active) {
+      session.updateProducerFlowControl(args.id)
+    }
   })
 
   ipcMain.removeAllListeners('pty:setRendererPtyVisible')
@@ -237,8 +247,16 @@ export function installPtyResizeVisibilityIpc(session: PtyIpcSession): void {
     }
     // Preserve hidden-at-production origin through batching even if visibility changes before flush.
     rendererVisibilityKnownPtys.add(args.id)
+    const prevFallbackPtyId = getFallbackPrioritizedRendererPtyId()
     if (args.visible) {
       visibleRendererPtys.add(args.id)
+    } else {
+      visibleRendererPtys.delete(args.id)
+    }
+    invalidateFallbackPrioritizedRendererPtyChange(prevFallbackPtyId, {
+      onPromoted: (id) => session.updateProducerFlowControl(id)
+    })
+    if (args.visible) {
       closeStartupQueryAuthorityForPty(args.id)
       // Panes release main's runtime mark only on their own claim release or first gate sync; a pane
       // that synced before the mark, or never syncs the gate, would leave it stuck (#43972).
@@ -252,8 +270,6 @@ export function installPtyResizeVisibilityIpc(session: PtyIpcSession): void {
         }
         return
       }
-    } else {
-      visibleRendererPtys.delete(args.id)
     }
     session.syncPtyBackgroundedDelivery(args.id, 'visibility-report')
   })

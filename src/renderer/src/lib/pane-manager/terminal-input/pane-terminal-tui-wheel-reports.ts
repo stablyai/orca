@@ -108,6 +108,8 @@ function resolveContinuousWheelGesture(
   const continuous =
     legacyDelta === null ||
     Math.abs(legacyDelta) < LEGACY_MOUSE_WHEEL_DELTA_MIN ||
+    (Math.abs(legacyDelta) % LEGACY_MOUSE_WHEEL_DELTA_UNIT !== 0 &&
+      matchesContinuousWheelDeltaRatio(event, legacyDelta)) ||
     (inputAt !== null &&
       state.continuousGestureAt !== null &&
       inputAt >= state.continuousGestureAt &&

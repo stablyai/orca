@@ -15,6 +15,7 @@ import { recordTerminalOutputQueueDebugPressure } from './pane-terminal-output-s
 import { clearForegroundRelease } from './pane-terminal-foreground-queue-state'
 import {
   BACKGROUND_CHUNK_CHARS,
+  HIGH_PRIORITY_CHUNK_CHARS,
   discardTerminalOutput,
   fireQueuedAckCredits,
   queuedByTerminal,
@@ -114,7 +115,10 @@ export function writeQueuedChunk(entry: QueueEntry): 'foreground' | 'background'
     discardTerminalOutput(entry.terminal)
     return null
   }
-  const queuedWrite = takeQueuedChunk(entry, BACKGROUND_CHUNK_CHARS)
+  const queuedWrite = takeQueuedChunk(
+    entry,
+    entry.highPriority ? HIGH_PRIORITY_CHUNK_CHARS : BACKGROUND_CHUNK_CHARS
+  )
   if (!queuedWrite) {
     return null
   }

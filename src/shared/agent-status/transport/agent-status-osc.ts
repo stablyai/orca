@@ -72,7 +72,7 @@ export function createAgentStatusOscProcessor(): (data: string) => ProcessedAgen
 
   return (data: string): ProcessedAgentStatusChunk => {
     // Keep ordinary output on the identity path unless it ends in a split marker, avoiding clean-string rebuilds per PTY chunk.
-    if (pending.length === 0 && !data.includes(OSC_AGENT_STATUS_PREFIX)) {
+    if (pending.length === 0 && !data.includes(']9999;')) {
       const carry = findAgentStatusPrefixCarry(data)
       if (carry.length === 0) {
         return { cleanData: data, payloads: [], lastPayloadCleanOffset: null }

@@ -25,7 +25,9 @@ export function repaintTerminalAfterImageAdded(
     }
     try {
       const end = terminal.rows - 1
-      if (typeof terminal._core?.refresh === 'function') {
+      // Hidden windows throttle rAF, so repaint synchronously when hidden; visible panes coalesce on rAF instead of forcing mid-frame WebGL rebuilds.
+      const isHidden = typeof document !== 'undefined' && document.hidden === true
+      if (isHidden && typeof terminal._core?.refresh === 'function') {
         terminal._core.refresh(0, end, true)
       } else {
         terminal.refresh(0, end)
