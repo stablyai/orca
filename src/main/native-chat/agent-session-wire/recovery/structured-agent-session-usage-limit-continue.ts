@@ -50,8 +50,7 @@ export class StructuredAgentSessionUsageLimitContinue {
   }
 
   constructor(private readonly deps: UsageLimitContinueDeps) {
-    const switchReset = (id: string, cut: HostUsageLimitCut) =>
-      this.holds.withSwitchReset(id, cut, deps.now())
+    const switchReset = (id: string, cut: HostUsageLimitCut) => this.holds.withSwitchReset(id, cut)
     this.cold = new UsageLimitColdCuts({ ...deps, logger: deps.host.logger, switchReset })
   }
 
@@ -123,7 +122,7 @@ export class StructuredAgentSessionUsageLimitContinue {
     id: string,
     read: HostUsageLimitCut | null
   ): AgentSessionStatusSummary['usageLimitContinue'] => {
-    const cut = read && this.holds.withSwitchReset(id, read, this.deps.now())
+    const cut = read && this.holds.withSwitchReset(id, read)
     // A cut Orca can never continue shows only the manual actions, whatever the setting.
     if (!cut || !this.holds.schedulable(id, cut, this.deps.now())) {
       return undefined
@@ -222,7 +221,7 @@ export class StructuredAgentSessionUsageLimitContinue {
         if (read) {
           await this.holds.attribute(id, this.deps.host, read, this.deps.now())
         }
-        const cut = read && this.holds.withSwitchReset(id, read, this.deps.now())
+        const cut = read && this.holds.withSwitchReset(id, read)
         const previous = this.attempts.get(id)
         if (!cut || previous?.identity !== attemptIdentity(cut)) {
           this.attempts.delete(id)
@@ -237,7 +236,6 @@ export class StructuredAgentSessionUsageLimitContinue {
           continue
         }
         if (!this.eligible(id, cut)) {
-          this.holds.askForRelaunchRoom(id, cut)
           continue
         }
         const retryAt = attempt ? attempt.at + 60_000 * 2 ** Math.max(0, attempt.count - 1) : 0
