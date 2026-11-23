@@ -3,7 +3,6 @@ import type {
   JournalSqlQueueRead,
   JournalSqlQueueReadResult
 } from './journal-sql-queue-read'
-export { readJournalSqlQueue } from './journal-sql-queue-read'
 export type {
   JournalSqlQueueFacts,
   JournalSqlQueueRead,
