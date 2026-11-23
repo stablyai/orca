@@ -18,6 +18,7 @@ import type { StoreRuntimeState } from '../store-runtime-state'
 import {
   type WriteSchedulingOperations,
   scheduleSave,
+  withUnreadStateHint,
   workspaceLinkWriteOptions
 } from '../profile-writing/write-scheduling'
 import { mergeWorktreeMetaForWrite } from './worktree-meta-write-normalization'
@@ -286,7 +287,16 @@ export function setWorktreeMetaForHost(
         updated.externalConversations
       )
     : undefined
-  scheduleSave(scheduling, WORKTREE_METADATA_DOMAINS, undefined, undefined, linkWriteOptions)
+  scheduleSave(
+    scheduling,
+    WORKTREE_METADATA_DOMAINS,
+    undefined,
+    undefined,
+    // A migrated or rehomed row can enter or leave a host's records with its flags unchanged.
+    singleWorkspaceUnmoved
+      ? withUnreadStateHint(linkWriteOptions, existing, updated)
+      : linkWriteOptions
+  )
   for (const listener of runtime.worktreeMetaWriteListeners ?? []) {
     try {
       listener({ worktreeId, hostId: executionHostId, previous: existing, next: updated })
