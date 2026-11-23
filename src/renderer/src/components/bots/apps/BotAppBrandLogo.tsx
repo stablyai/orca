@@ -6,8 +6,6 @@ import cloudflareLogo from '@/assets/connector-brands/cloudflare.svg'
 import context7Logo from '@/assets/connector-brands/context7.svg'
 import datadogLogo from '@/assets/connector-brands/datadog.svg'
 import datadogDarkLogo from '@/assets/connector-brands/datadog-dark.svg'
-import feishuLogo from '@/assets/connector-brands/feishu.svg'
-import { FeishuIcon } from '../../icons/FeishuIcon'
 import gitlabLogo from '@/assets/connector-brands/gitlab.svg'
 import googleLogo from '@/assets/connector-brands/google.svg'
 import neonLogo from '@/assets/connector-brands/neon.svg'
@@ -43,7 +41,6 @@ type BotAppBrand = {
 
 /** By connector id or BOT_MCP_APPS id; a new MCP app adds its logo here, and its tile to LOGO_TILES.brand. */
 const BRANDS: Readonly<Record<string, BotAppBrand>> = {
-  'feishu-local': { logo: feishuLogo, Icon: FeishuIcon },
   slack: { logo: slackLogo, Icon: SlackIcon },
   google: { logo: googleLogo, Icon: GoogleIcon },
   linear: { Icon: LinearIcon },

@@ -1,6 +1,5 @@
 import React, { useState } from 'react'
-import { FeishuIcon } from '../../icons/FeishuIcon'
-import { BotAppBrandLogo } from '../apps/BotAppBrandLogo'
+import { AppWindow } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { useTranslate } from '@/i18n/use-translate'
 import type { Bot } from '../../../../../shared/bot-types'
@@ -18,8 +17,7 @@ export function BotFeishuCard({
   const [open, setOpen] = useState(false)
   return (
     <BotConnectorRowFrame
-      icon={<FeishuIcon className="size-4" />}
-      logo={<BotAppBrandLogo app={{ id: 'feishu-local', Icon: FeishuIcon }} />}
+      icon={<AppWindow className="size-4" />}
       name={t('bots.feishu.name', 'Feishu')}
       description={t('bots.feishu.line', 'Private messages through Feishu CLI on this host')}
       status={null}

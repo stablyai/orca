@@ -2,7 +2,6 @@ import React, { useEffect, useState } from 'react'
 import { createNonSecureContextUuid } from '../../../../../shared/identifiers/non-secure-context-uuid'
 import { botTarget } from '@/lib/bot-hosts'
 import { openOwnedHttpLink } from '@/lib/browser/navigation/http-link-routing'
-import { BotAppBrandLogo } from '../apps/BotAppBrandLogo'
 import { Button } from '@/components/ui/button'
 import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog'
 import { Label } from '@/components/ui/label'
@@ -150,10 +149,7 @@ export function BotFeishuSetup({
       }}
     >
       <DialogContent surface="security" aria-describedby={undefined}>
-        <div className="flex items-center gap-2">
-          <BotAppBrandLogo app={{ id: 'feishu-local' }} size="sm" />
-          <DialogTitle>{t('bots.feishu.title', 'Feishu on this host')}</DialogTitle>
-        </div>
+        <DialogTitle>{t('bots.feishu.title', 'Feishu on this host')}</DialogTitle>
         <p className="text-sm text-muted-foreground" role="status">
           {state
             ? status(off && cliMissing ? 'cli-missing' : state.status)

@@ -9,8 +9,7 @@ import {
 } from '../../../../shared/execution-host/execution-host'
 import type { ComponentType } from 'react'
 import { useFeishuState } from './feishu/feishu-local-client'
-import { FeishuIcon } from '../icons/FeishuIcon'
-import { Webhook } from 'lucide-react'
+import { AppWindow, Webhook } from 'lucide-react'
 import { translate } from '@/i18n/i18n'
 import { useBotGitHub } from '@/lib/bot-github-state'
 import { useBotLinear } from '@/lib/bot-linear-state'
@@ -40,7 +39,7 @@ export const BOT_CONNECTORS: readonly BotConnector[] = [
     get label() {
       return translate('bots.feishu.name', 'Feishu')
     },
-    Icon: FeishuIcon,
+    Icon: AppWindow,
     available: true,
     add: 'link'
   },

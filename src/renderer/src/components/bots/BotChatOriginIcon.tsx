@@ -9,12 +9,11 @@ import { GitHubIcon } from '../icons/GitHubIcon'
 import { LinearIcon } from '../icons/LinearIcon'
 import { usageLimitStopTip } from './BotUsageLimitMark'
 import type { BotUsageLimitStop } from './use-bot-usage-limit-stops'
-import { FeishuIcon } from '../icons/FeishuIcon'
 import { SlackIcon } from '../icons/SlackIcon'
 
 const ORIGIN_ICONS = {
   home: House,
-  'feishu-local': FeishuIcon,
+  'feishu-local': MessageSquare,
   slack: SlackIcon,
   linear: LinearIcon,
   github: GitHubIcon,
