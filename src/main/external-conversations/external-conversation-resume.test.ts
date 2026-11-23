@@ -1,3 +1,6 @@
+import { readdirSync } from 'node:fs'
+import { join } from 'node:path'
+import { DatabaseSync } from 'node:sqlite'
 import { afterEach, describe, expect, it } from 'vitest'
 import {
   HOST_TEST_SESSION as SESSION,
@@ -30,6 +33,44 @@ const resume = (chat: QueuedMessageTestRig, installed = true) =>
   resumeRefusal({ resume: true }, hostOf(chat, installed), SESSION)
 const NOT_FAILED = { outcome: 'refused', reason: 'not_failed' }
 
+// TEMP CI debug: the journal rows the failure-holds read uses.
+function journalRows(root: string): unknown {
+  const files: string[] = []
+  const walk = (dir: string): void => {
+    for (const entry of readdirSync(dir, { withFileTypes: true })) {
+      const path = join(dir, entry.name)
+      if (entry.isDirectory()) {
+        walk(path)
+      } else if (/\.(sqlite|db)$/.test(entry.name)) {
+        files.push(path)
+      }
+    }
+  }
+  walk(root)
+  return files.map((file) => {
+    try {
+      const db = new DatabaseSync(file, { readOnly: true })
+      const tables = db.prepare("SELECT name FROM sqlite_master WHERE type='table'").all()
+      if (!tables.some((t) => t.name === 'journal_items')) {
+        db.close()
+        return { file: file.slice(root.length) }
+      }
+      const items = db
+        .prepare(
+          `SELECT epoch, item_id, sequence, sequence_index, turn_marker, hidden, queue_command_turn,
+             queue_failed_outcome, queue_failed_at, queue_failure_witnessed_through,
+             queue_failure_report_turn_item_id FROM journal_items ORDER BY sequence, sequence_index`
+        )
+        .all()
+      const head = db.prepare('SELECT * FROM journal_chat_state').all()
+      db.close()
+      return { file: file.slice(root.length), items, head }
+    } catch (error) {
+      return { file: file.slice(root.length), error: String(error) }
+    }
+  })
+}
+
 // What the chat holds, for a failure message.
 async function seen(chat: QueuedMessageTestRig): Promise<string> {
   const holds = await (
@@ -40,6 +81,8 @@ async function seen(chat: QueuedMessageTestRig): Promise<string> {
   const work = await chat.host.currentWork(SESSION)
   const page = await chat.host.history({ sessionId: SESSION, direction: 'tail' })
   return JSON.stringify({
+    rows: process.env.CI ? journalRows(chat.root) : undefined,
+    now: Date.now(),
     holds,
     working: work?.working(),
     prompt: work?.hasActionablePrompt(),
