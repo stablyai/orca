@@ -59,7 +59,11 @@ export async function checkDirectMailbox(args: {
         messages: exposeMessages(visibleMessages),
         count: visibleMessages.length,
         ...(params.format || params.inject
-          ? { formatted: visibleMessages.map(formatMessageBanner).join('\n\n') }
+          ? {
+              formatted: visibleMessages
+                .map((message) => formatMessageBanner(message, { peerMail: db }))
+                .join('\n\n')
+            }
           : {})
       })
     return consumeUnread && messages.length

@@ -33,6 +33,7 @@ import { closedChatWorkersForSession } from '../../workers/lifecycle/chat-assign
 import { OPERATOR_CLOSE_EXIT_CAUSE } from '../../../../../shared/terminal/pty/lifecycle/terminal-exit-cause'
 import { resolveTerminalIdentityFromProbes } from '../../../terminal/identity/terminal-identity-probe'
 import { observeChatWorkerWorking } from '../../workers/turn-stops/chat-worker-turn-stops'
+import { ChatWorkerModelWait } from '../../workers/turn-stops/chat-worker-model-wait'
 
 export abstract class OrcaRuntimeWithGetPtyRecordForPaneKey extends OrcaRuntimeWithPruneMobileSessionTabGroupLayout {
   protected terminalIdentitySources = () => ({
@@ -188,6 +189,16 @@ export abstract class OrcaRuntimeWithGetPtyRecordForPaneKey extends OrcaRuntimeW
   }
 
   /** The structured idle edge: any journal movement is a chance to redrive parked mail. */
+  /** Chat workers whose model is not answering: one watch per working chat worker. A chat that
+   *  never orchestrated must not create the database. */
+  private chatWorkerModelWaitWatch?: ChatWorkerModelWait
+  private get chatWorkerModelWait(): ChatWorkerModelWait {
+    return (this.chatWorkerModelWaitWatch ??= new ChatWorkerModelWait({
+      ...this.workerTurnStopReportDeps,
+      getDb: () => this.getExistingOrchestrationDb()
+    }))
+  }
+
   notifyStructuredSessionJournalActivity(sessionId: string): void {
     this.orchestrationStructuredMailboxPointerDelivery.onJournalActivity(sessionId)
     scheduleSessionLinkDelivery(this.sessionLinkDb(), sessionId)
@@ -201,10 +212,15 @@ export abstract class OrcaRuntimeWithGetPtyRecordForPaneKey extends OrcaRuntimeW
     // A repeat (a streamed revision republishes the same status) is nothing new to mail; what the
     // journal changes, the parked mail's own watch hears.
     const delivery = this.orchestrationStructuredMailboxPointerDelivery
-    if (
-      !delivery.statusChanged(summary.sessionId, summary.status) ||
-      summary.status === 'attention'
-    ) {
+    if (!delivery.statusChanged(summary.sessionId, summary.status)) {
+      return
+    }
+    try {
+      this.chatWorkerModelWait.observe(summary.sessionId, summary.status)
+    } catch (error) {
+      console.warn('[orchestration] chat model-wait watch failed', summary.sessionId, error)
+    }
+    if (summary.status === 'attention') {
       return
     }
     // Log failures without blocking the later first-turn workspace rename.
@@ -251,6 +267,7 @@ export abstract class OrcaRuntimeWithGetPtyRecordForPaneKey extends OrcaRuntimeW
   forgetStructuredSessionMail(sessionId: string): void {
     this.orchestrationStructuredMailboxPointerDelivery.forgetSession(sessionId)
     void pauseSessionLinkForSession(this.sessionLinkDb(), sessionId)
+    this.chatWorkerModelWaitWatch?.end(sessionId)
   }
 
   /** After a check, move, takeover or reset, delete the cards that would hand a chat mail it no

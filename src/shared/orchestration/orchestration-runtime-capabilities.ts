@@ -65,6 +65,10 @@ export const ORCHESTRATION_PEER_MAIL_FILES_RUNTIME_CAPABILITY =
 /** Runs the workers a paired Orca places here as its own, coordinated from that Orca (wire v1). */
 export const ORCHESTRATION_REMOTE_OWNED_WORKERS_RUNTIME_CAPABILITY =
   'orchestration.remote-owned-workers.v1' as const
+/** Its agents can message agents on a paired computer that pulls with `clientAsks`
+ *  (`send --on-client`); replies come back by `peerMailReturn`. */
+export const ORCHESTRATION_CLIENT_AGENT_ASKS_RUNTIME_CAPABILITY =
+  'orchestration.client-agent-asks.v1' as const
 
 export const ORCHESTRATION_RUNTIME_CAPABILITIES = [
   SESSION_LINK_CAPABILITY,
@@ -72,6 +76,7 @@ export const ORCHESTRATION_RUNTIME_CAPABILITIES = [
   SESSION_LINK_PAIRED_DESKTOP_CAPABILITY,
   SESSION_LINK_POLICY_CAPABILITY,
   SESSION_LINK_OWNER_CHOICES_CAPABILITY,
+  ORCHESTRATION_CLIENT_AGENT_ASKS_RUNTIME_CAPABILITY,
   ORCHESTRATION_FEDERATION_RUNTIME_CAPABILITY,
   ORCHESTRATION_FEDERATION_CONTROL_MAIL_RUNTIME_CAPABILITY,
   ORCHESTRATION_FEDERATION_LIFECYCLE_SETTLEMENT_RUNTIME_CAPABILITY,

@@ -1,3 +1,4 @@
+import { setConnectorClaimSource } from '../native-chat/agent-session-wire/recovery/structured-agent-session-connector-claims'
 import type { AgentTransitionDetector } from '../agent-hooks/observations/agent-transition-detector'
 import type { RuntimeWorktreeLifecycleEvent } from '../runtime/workspaces/lifecycle/worktree-lifecycle-event'
 import { isRefOf } from '../../shared/connector-place-names'
@@ -14,13 +15,19 @@ import { cloudConversation } from '../../shared/connectors/connector-cloud-contr
 import { getAgentSessionAttachmentStore } from '../native-chat/agent-session-attachments/agent-session-attachment-store-registry'
 import type { SlackMirrorCloud } from './slack-mirror-cloud'
 import { DeliveryReceipts, type DeliveryReceiptDb } from './external-conversation-delivery-receipts'
-import { allLinks, type ExternalConversationLinkStore } from './external-conversation-links'
+import {
+  findLinkForSession,
+  findLinksForSession,
+  type ExternalConversationLinkStore
+} from './external-conversation-links'
 import { markThreadSeen } from './external-conversation-link-writes'
 import { ExternalConversationSeam } from './external-conversation-seam'
 import {
   conversationReplyFill,
+  journalAskedByOwner,
   type ConversationReplyFill
 } from './external-conversation-reply-fill'
+import { usageLimitReplyPause } from './external-conversation-reply-pause'
 import { ConnectorReplyRecovery } from './external-conversation-reply-recovery'
 import type { OrchestrationDb } from '../runtime/orchestration/db/orchestration-db'
 import { canonicalOrcaSessionId } from '../runtime/orchestration/addressing/session-lineage/canonical-orca-session-id'
@@ -173,41 +180,82 @@ export function installExternalConversations(
 /** The reply outbox's fill, boot recovery and watch (design item 125), for one enabled seam. */
 function connectorReplyOutbox(
   store: ExternalConversationLinkStore,
-  runtime: { getConnectorCloud?: () => { repliesFilled(): void } | null },
+  runtime: {
+    getConnectorCloud?: () => { repliesFilled(): void } | null
+    structuredAgentSessionLaunchContinuation?: { continued: Promise<unknown> }
+  },
   signal: AbortSignal
 ): { fill: ConversationReplyFill; admitted: (sessionId: string) => void } {
   const journal = () => getStructuredAgentSessionHost()?.deps.store.connectorReplies() ?? null
   const filled = () => runtime.getConnectorCloud?.()?.repliesFilled()
-  const fill = conversationReplyFill(journal, filled)
+  const usageLimitDisposition = async (sessionId: string, turnItemId: string) =>
+    getStructuredAgentSessionHost()?.usageLimitContinue.disposition(sessionId, turnItemId)
+  const fill = conversationReplyFill(
+    journal,
+    filled,
+    usageLimitReplyPause(journal, usageLimitDisposition, async (sessionId) => {
+      const shown = await getStructuredAgentSessionHost()?.readUsageLimitContinue(sessionId)
+      return shown?.state === 'scheduled' ? (shown.continueAt ?? shown.resetsAt) : undefined
+    }),
+    journalAskedByOwner(async (sessionId) =>
+      getStructuredAgentSessionHost()?.journalReads(sessionId)
+    )
+  )
   const recovery = new ConnectorReplyRecovery({
     journal,
     chat: getStructuredAgentSessionHost,
     hasSession: (sessionId) =>
       getStructuredAgentSessionHost()?.deps.store.getConversation(sessionId) != null,
     isBot: (sessionId) =>
-      [...allLinks(store)].some(({ link }) => link.sessionId === sessionId && link.bot),
-    agentOf: (sessionId) =>
-      [...allLinks(store)].find(({ link }) => link.sessionId === sessionId)?.link.agent ?? '',
+      findLinksForSession(store, sessionId).some(({ link }) => Boolean(link.bot)),
+    agentOf: (sessionId) => findLinkForSession(store, sessionId)?.link.agent ?? '',
     fillTurn: fill,
-    filled
+    filled,
+    usageLimitDisposition,
+    // This start's own continuations of restart cuts claim first; whatever they left closes then.
+    ...(runtime.structuredAgentSessionLaunchContinuation
+      ? { continuationsSettled: runtime.structuredAgentSessionLaunchContinuation.continued }
+      : {})
   })
+  setConnectorClaimSource((sessionId, cut) => recovery.claimFor(sessionId, cut))
+  let unwatchStatus: (() => void) | undefined
+  let unwatchPauses: (() => void) | undefined
   const boot = () => {
     recovery.dispose()
-    if (getStructuredAgentSessionHost()) {
+    unwatchStatus?.()
+    unwatchPauses?.()
+    const host = getStructuredAgentSessionHost()
+    // A setting change or a never-loaded chat's close publishes no status: its scheduler says so.
+    unwatchPauses = host?.usageLimitContinue.onDispositionChange((id) => recovery.statusChanged(id))
+    // Every end of a usage-limit pause publishes the chat's status (its continue's state).
+    unwatchStatus = host?.subscribeStatus({
+      id: 'connector-reply-pauses',
+      emit: (event) => {
+        if (event.type === 'status') {
+          recovery.statusChanged(event.session.sessionId)
+        } else if (event.type === 'snapshot') {
+          event.sessions.forEach((session) => recovery.statusChanged(session.sessionId))
+        }
+      }
+    })
+    if (host) {
       void recovery.boot()
     }
   }
   const stop = onStructuredAgentSessionHostChanged(boot)
   signal.addEventListener('abort', () => {
     stop()
+    unwatchStatus?.()
+    unwatchPauses?.()
+    setConnectorClaimSource(null)
     recovery.dispose()
   })
   boot()
   return {
     fill: async (turn) => {
-      const covered = await fill(turn)
+      const filledTurn = await fill(turn)
       recovery.turnEnded(turn.sessionId)
-      return covered
+      return filledTurn
     },
     admitted: (sessionId) => recovery.admitted(sessionId)
   }

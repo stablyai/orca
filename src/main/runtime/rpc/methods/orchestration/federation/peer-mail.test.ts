@@ -9,6 +9,16 @@ import {
   ORCHESTRATION_PEER_MAIL_TYPES_RUNTIME_CAPABILITY
 } from '../../../../../../shared/orchestration/orchestration-runtime-capabilities'
 import type { RuntimeRpcResponse } from '../../../../../../shared/remote-runtime/rpc/runtime-rpc-envelope'
+import type { PeerMailSender } from '../../../../../../shared/rpc-contract/orchestration/orchestration-peer-mail-params'
+import { agentSessionConversationView } from '../../../../../../shared/agent-session/lifecycle/leases/agent-session-conversation-view'
+import {
+  agentSessionLeaseFixture,
+  agentSessionRecordFixture
+} from '../../../../../../shared/agent-session/lifecycle/records/agent-session-record.test-fixture'
+import { folderWorkspaceKey } from '../../../../../../shared/workspace/identity/workspace-scope'
+import { makeTestBot } from '../../../../../bots/bot.test-fixture'
+import type { StructuredAgentSessionHost } from '../../../../../native-chat/agent-session-wire/host/structured-agent-session-host'
+import { setStructuredAgentSessionHost } from '../../../../../native-chat/agent-session-wire/host/structured-agent-session-registry'
 import { OrcaRuntimeService } from '../../../../orca-runtime'
 import { OrchestrationDb } from '../../../../orchestration/db/orchestration-db'
 import type { OrchestrationEnvironmentTransport } from '../../../../orchestration/federation/environment-transport'
@@ -19,6 +29,7 @@ import { ORCHESTRATION_METHODS } from '../orchestration'
 import { ORCHESTRATION_REPLY_METHOD } from '../messaging/reply-method'
 import { notifyPeerMailQueued } from '../../../../orchestration/federation/peer-mail/peer-mail-waiters'
 import { inProcessSessionLinks } from '../../../../orchestration/session-links/worker/session-link-worker.test-fixture'
+import { structuredMailMessage } from '../../../../orchestration/mailbox/structured-mail/structured-mail-source'
 import { OrcaRuntimeRpcServer } from '../../../server/runtime-rpc'
 import { STATUS_METHODS } from '../../host-management/status'
 import { TERMINAL_QUERY_METHODS } from '../../terminal/terminal-query-methods'
@@ -158,6 +169,7 @@ describe('agent mail between paired Orca servers', () => {
   })
 
   afterEach(async () => {
+    setStructuredAgentSessionHost(null)
     for (const server of cliServers.values()) {
       await server.stop()
     }
@@ -201,6 +213,123 @@ describe('agent mail between paired Orca servers', () => {
   function mailFor(side: Side, handle: string) {
     return side.db.getUnreadMessages(handle)
   }
+
+  function receivingBotHome(held = false): string[] {
+    const sessionId = CHAT_ON_B.slice('orca_session_id:'.length)
+    const bot = makeTestBot({ name: 'Docs', agent: 'claude', chatSessionId: sessionId })
+    const saved = agentSessionRecordFixture(agentSessionLeaseFixture({ sessionId }))
+    const record = agentSessionConversationView({
+      ...saved,
+      location: { ...saved.location, workspaceId: folderWorkspaceKey(bot.folderWorkspaceId) }
+    })
+    const notes: string[] = []
+    const host = {
+      deps: {
+        store: {
+          getConversation: (id: string) => (id === sessionId ? record : null),
+          listConversations: () => [record]
+        }
+      },
+      conversation: async () => ({
+        journal: { queuedMessages: { failureHolds: async () => held } }
+      }),
+      captureAgentStartDestination: async (id: string) => id,
+      appendAgentStart: async (_destination: string, line: { body: { text: string } }) => {
+        notes.push(line.body.text)
+      }
+    }
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the fixture implements the native host calls Home admission and journal notes use.
+    setStructuredAgentSessionHost(host as unknown as StructuredAgentSessionHost)
+    vi.spyOn(b.runtime.bots, 'list').mockReturnValue([bot])
+    vi.spyOn(b.runtime.bots, 'enabled').mockReturnValue(true)
+    vi.spyOn(b.runtime, 'ensureStructuredAgentSessionHost').mockResolvedValue(undefined)
+    vi.spyOn(b.runtime, 'publishStructuredAgentSessionTab').mockResolvedValue()
+    vi.spyOn(b.runtime, 'notifyMessageArrived').mockImplementation(() => {})
+    return notes
+  }
+
+  async function requestFromPeer(sender: PeerMailSender | undefined, machine: string) {
+    const { conversation_id } = a.db.openHomePeerMailConversation({
+      environmentId: 'env_b',
+      peerFingerprint: 'fingerprint_b',
+      localParty: CHAT_ON_A,
+      localPaneKey: null
+    })
+    const result = await transport.call('devB', 'orchestration.peerMailDeliver', {
+      conversationId: conversation_id,
+      messageId: 'msg_aaaaaaaaaaaa',
+      to: 'bot:Docs',
+      senderLabel: `${CHAT_ON_A} on ${machine}`,
+      subject: 'Review the sidebar',
+      type: 'question',
+      sender
+    })
+    expect(result).toMatchObject({ ok: true })
+    const messages = mailFor(b, CHAT_ON_B)
+    expect(messages).toHaveLength(1)
+    const message = messages[0]!
+    const { body } = structuredMailMessage({
+      db: b.db,
+      mailboxHandle: CHAT_ON_B,
+      dispatchId: null,
+      message,
+      cliCommand: 'orca',
+      senderSnapshot: () => ({ name: null, agent: null }),
+      followUp: undefined
+    })
+    return {
+      message,
+      record: JSON.parse(b.db.getBotRequest(message.id)!.record),
+      requestSender: JSON.parse(message.payload!).botRequest.from,
+      header: body.blocks.find((block) => block.type === 'text')?.text.split('\n')[0]
+    }
+  }
+
+  it('keeps a paired bot name in a Home request and routes its answer back', async () => {
+    const notes = receivingBotHome()
+    const { message, record, requestSender, header } = await requestFromPeer(
+      {
+        name: 'Sidebar',
+        computer: 'Review Laptop',
+        bot: { id: 'remote', name: 'Ranger', avatar: null }
+      },
+      // The label's computer differs: the sender's own record of where it is decides.
+      'Laptop (old name)'
+    )
+    expect(record).toMatchObject({
+      fromBotId: null,
+      fromBotName: 'Ranger',
+      fromPairedComputer: 'Review Laptop',
+      askers: [{ kind: 'owner' }]
+    })
+    expect(requestSender).toBe('Ranger on Review Laptop')
+    expect(header).toBe('──── From: Ranger on Review Laptop (question) ────')
+    expect(notes).toEqual([])
+    await chatReply(b, CHAT_ON_B, { id: message.id, body: 'Looks good.' })
+    a.runtime.ensureOrchestrationFederationRelay()
+    await vi.waitFor(() =>
+      expect(mailFor(a, CHAT_ON_A)).toMatchObject([{ body: 'Looks good.', to_handle: CHAT_ON_A }])
+    )
+  })
+
+  it.each([
+    {
+      sender: { name: 'Sidebar', computer: "Morgan's MacBook Pro" },
+      description: 'a paired agent'
+    },
+    { sender: undefined, description: 'an older peer' }
+  ])('identifies $description whose request queues in failed Home', async ({ sender }) => {
+    const notes = receivingBotHome(true)
+    const { record, requestSender, header } = await requestFromPeer(sender, "Morgan's MacBook Pro")
+    expect(record).toMatchObject({
+      fromBotId: null,
+      fromBotName: null,
+      fromPairedComputer: "Morgan's MacBook Pro"
+    })
+    expect(requestSender).toBe("an agent on Morgan's MacBook Pro")
+    expect(header).toBe("──── From: an agent on Morgan's MacBook Pro (question) ────")
+    expect(notes).toEqual([])
+  })
 
   it('carries a terminal agent mail to the paired server and its flagless reply back', async () => {
     const sent = await cli(
@@ -252,6 +381,31 @@ describe('agent mail between paired Orca servers', () => {
       mutation(a, 'orchestration.reply', { id: back!.id, body: 'Thanks.', from: 'term_a' })
     ).resolves.toMatchObject({ ok: true })
     expect(mailFor(b, 'term_b').map((message) => message.body)).toEqual(['Thanks.'])
+  })
+
+  it("reports the server's delivery hold, as a local send does", async () => {
+    // A terminal whose agent died shows no live status, so its server's gate holds the mail.
+    vi.spyOn(b.runtime, 'readTerminalMailHold').mockImplementation((mailbox) =>
+      mailbox === 'term_b' ? { kind: 'unverified', terminal: 'term_b' } : null
+    )
+
+    const sent = await cli(
+      a,
+      'send',
+      '--from',
+      'term_a',
+      '--on',
+      'devB',
+      '--to',
+      'term_b',
+      '--subject',
+      'Still there?'
+    )
+
+    expect(sent).toMatchObject({
+      result: { warnings: [{ code: 'recipient_delivery_held', recipient: 'term_b' }] }
+    })
+    expect(mailFor(b, 'term_b')).toHaveLength(1)
   })
 
   it('returns a chat agent reply to the chat on the opening server', async () => {
@@ -479,7 +633,7 @@ describe('agent mail between paired Orca servers', () => {
     a.runtime.ensureOrchestrationFederationRelay()
     await vi.waitFor(() => expect(mailFor(a, 'term_a')).toHaveLength(1))
     const [answer] = mailFor(a, 'term_a')
-    b.db.markAsRead([first!.id])
+    b.db.markAsRead([first!.id], { kind: 'orca' })
 
     aCredential = 'fingerprint_a_repaired'
     await expect(

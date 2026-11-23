@@ -1,9 +1,11 @@
 // The Share dialog's pages and what each page reads and changes.
 import type { Bot } from '../../../../../shared/bot-types'
 import type { BotShareCandidateSummary } from '../../../../../shared/bots/bot-package'
-import type { BotShareFlagSpot } from './bot-share-flags'
+
+type BotShareAvailableSkills = BotShareCandidateSummary['available']['skills']
+import type { BotShareFlagSpot } from '../../../../../shared/bots/bot-share-flag-spots'
 import type { BotShareSelection } from './bot-share-rpc'
-import { BOT_SHARE_MAX_PICKS } from '../../../../../shared/rpc-contract/bots-share-params'
+import { pickedSkillNames } from '../../../../../shared/bots/bot-share-skill-picks'
 
 export type BotShareList =
   | 'skills'
@@ -30,16 +32,7 @@ export type BotShareContext = {
   setNote: (note: string) => void
 }
 
-/** The picked names of a part: an absent list is all of them. */
-export function pickedOf(names: readonly string[] | undefined, all: readonly string[]): string[] {
-  return names ? all.filter((name) => names.includes(name)) : [...all]
-}
-
-export function toggled(picked: readonly string[], name: string, on: boolean): string[] {
-  return on ? [...picked, name] : picked.filter((entry) => entry !== name)
-}
-
-/** Every memory file a share can carry: all of them, or the first BOT_SHARE_MAX_PICKS when there are more. */
-export function allMemory(notes: readonly { topic: string }[]): string[] {
-  return notes.slice(0, BOT_SHARE_MAX_PICKS).map((note) => note.topic)
+/** The ticked skills: one linked into a project from outside it only with the owner's tick on it. */
+export function pickedSkills(selection: BotShareSelection, available: BotShareAvailableSkills) {
+  return pickedSkillNames(selection.skills, available, selection.outsideSkills)
 }

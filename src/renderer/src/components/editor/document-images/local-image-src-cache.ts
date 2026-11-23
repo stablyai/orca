@@ -4,6 +4,7 @@ import {
   prunePinnedLocalImageCache,
   unpinLocalImageCacheKey
 } from './local-image-cache-pinning'
+import { isCommittedAgentSessionAttachmentPath } from '../../../../../shared/agent-session/agent-session-attachments'
 
 const BLOB_URL_CACHE_MAX_SIZE = 100
 // Bound retained encoded image payload separately from the reusable entry target.
@@ -125,11 +126,25 @@ function scheduleBlobUrlRevocation(urls: string[]): void {
   pendingBlobUrlRevocationTimer = setTimeout(revokePendingBlobUrls, 30_000)
 }
 
+/** Committed chat attachments never change, so a re-read on focus would only download them again. */
+export function isImmutableLocalImageCacheKey(key: string): boolean {
+  return isCommittedAgentSessionAttachmentPath(key.slice(key.lastIndexOf('\0') + 1))
+}
+
 export function invalidateLocalImageCache(): void {
-  const staleUrls = Array.from(blobUrlCache.values())
-  blobUrlCache.clear()
-  blobUrlCacheBytes.clear()
-  inFlightBlobUrlLoads.clear()
+  const staleUrls: string[] = []
+  for (const [key, url] of blobUrlCache) {
+    if (!isImmutableLocalImageCacheKey(key)) {
+      staleUrls.push(url)
+      blobUrlCache.delete(key)
+      blobUrlCacheBytes.delete(key)
+    }
+  }
+  for (const key of inFlightBlobUrlLoads.keys()) {
+    if (!isImmutableLocalImageCacheKey(key)) {
+      inFlightBlobUrlLoads.delete(key)
+    }
+  }
   cacheGeneration += 1
   for (const listener of cacheListeners) {
     listener()
@@ -157,15 +172,25 @@ export function resetLocalImageCacheState(): void {
   cacheListeners.clear()
 }
 
+/** A window shown again without focus (uncovered, restored behind another) gets no focus event. */
+function invalidateWhenShownUnfocused(): void {
+  if (document.visibilityState === 'visible' && !document.hasFocus()) {
+    invalidateLocalImageCache()
+  }
+}
+
 export function disposeLocalImageCacheState(): void {
   if (typeof window !== 'undefined') {
     window.removeEventListener('focus', invalidateLocalImageCache)
+    document.removeEventListener('visibilitychange', invalidateWhenShownUnfocused)
   }
   resetLocalImageCacheState()
 }
 
+// Every shown image, including one whose read failed, reads again when the window comes back.
 if (typeof window !== 'undefined') {
   window.addEventListener('focus', invalidateLocalImageCache)
+  document.addEventListener('visibilitychange', invalidateWhenShownUnfocused)
 }
 
 if (import.meta !== undefined && import.meta.hot) {

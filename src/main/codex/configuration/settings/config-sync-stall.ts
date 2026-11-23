@@ -101,7 +101,3 @@ export function reportCodexConfigSyncOutcome(
     `[codex-config] Config sync stalled (${status.reason}): ${status.systemConfigPath} is unusable, so ${runtimeHomePath} keeps its last synced settings. Edits to the source will not apply until it is readable.`
   )
 }
-
-export function resetCodexConfigSyncStallLatchForTests(): void {
-  stalledHomes.clear()
-}

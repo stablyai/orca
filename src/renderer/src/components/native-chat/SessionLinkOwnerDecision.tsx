@@ -101,7 +101,7 @@ export function SessionLinkOwnerDecision({
             allowOther={request.allowOther ?? true}
             disabled={disabled}
             isSubmitting={submitting}
-            requireAnswer
+            requiresEveryAnswer
             shouldFocus={!collapsed && shouldFocus}
             onAnswer={(selections) => {
               const body = formatAskAnswer(prompt, selections).trim()

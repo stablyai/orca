@@ -3,6 +3,7 @@ import { readAgentLaunchPreferencesForWorkspace } from '@/runtime/agent-launch-s
 import type { AgentLaunchPreferences } from '@/runtime/agent-launch-settings/host-agent-launch-preferences-resource'
 import { agentLaunchCommandErrorMessage } from '@/lib/workspace/creation/work-item/launch-work-item-direct-messages'
 import { toast } from 'sonner'
+import { notifyAgentExitedBeforeLaunchPrompt } from '@/lib/agent-session/launch/prompt/launch-agent-paste-timeout-notice'
 import {
   deliverLaunchPromptToAgentTab,
   seedNativeChatLaunchDraftForAgentTab
@@ -205,7 +206,8 @@ export function finishDirectWorkItemPrompt(args: {
       content: draftContent,
       submit,
       forcePaste: submit,
-      onTimeout: () => notifyDirectWorkItemAgentStartTimeout(agent, submit)
+      onTimeout: () => notifyDirectWorkItemAgentStartTimeout(agent, submit),
+      onAgentExited: () => notifyAgentExitedBeforeLaunchPrompt(agent, draftContent)
     })
   }
   return true

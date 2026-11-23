@@ -1,3 +1,4 @@
+import { dropReaderlessRunQuestions } from '../questions/readerless-run-questions'
 import type { RunRow } from '../orchestration-records'
 import {
   mailboxAddressOf,
@@ -49,6 +50,7 @@ const RUNS_BOUND_TO_COORDINATOR_SQL = `SELECT ${RUN_COLUMN_LIST} FROM runs
 
 export function getRun(this: OrchestrationDb, id: string): RunRow | undefined {
   const run = this.getRunRaw(id)
+  this.workerDockSources?.rememberRun(run)
   return run ? exposeRunTimestamps(run) : undefined
 }
 
@@ -209,6 +211,7 @@ export function unbindOtherRunsForCoordinator(
         )
         .run(run.id)
       this.fenceUnacknowledgedMailboxDeliveries(`run:${run.id}`)
+      dropReaderlessRunQuestions(this, run.id)
     }
   }
   return changed

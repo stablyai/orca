@@ -84,33 +84,45 @@ async function exists(path: string): Promise<boolean> {
 }
 
 describe('deleteSkills', () => {
-  it('removes directory and file aliases while preserving unrelated files', async () => {
+  it('removes the canonical skill and its directory alias', async () => {
     const { home, stateDirectory, canonicalDirectory, file } = await fixture()
     const directoryAlias = join(home, '.claude', 'skills', 'demo')
-    const fileAliasDirectory = join(home, '.codex', 'skills', 'demo')
-    const fileAlias = join(fileAliasDirectory, 'SKILL.md')
-    const notes = join(fileAliasDirectory, 'notes.md')
     await mkdir(join(home, '.claude', 'skills'), { recursive: true })
-    await symlink(canonicalDirectory, directoryAlias, 'dir')
-    await mkdir(fileAliasDirectory, { recursive: true })
-    await symlink(file, fileAlias)
-    await writeFile(notes, 'kept')
+    // Product aliases are junctions on Windows (skill-native-alias.ts); POSIX ignores the type.
+    await symlink(canonicalDirectory, directoryAlias, 'junction')
 
     const result = await run(home, stateDirectory, await request(file))
     expect(result.skills[0].status).toBe('deleted')
     expect(await exists(canonicalDirectory)).toBe(false)
     expect(await exists(directoryAlias)).toBe(false)
-    expect(await exists(fileAlias)).toBe(false)
-    expect(await readFile(notes, 'utf8')).toBe('kept')
     expect(await readdir(join(home, '.agents', 'skills'))).toEqual([])
     expect(await exists(skillDeleteJournalPath(stateDirectory, canonicalDirectory))).toBe(false)
   })
+
+  // File links need the Windows symlink privilege, which stock hosts lack.
+  it.skipIf(process.platform === 'win32')(
+    'removes a file alias inside another agent folder',
+    async () => {
+      const { home, stateDirectory, file } = await fixture()
+      const fileAliasDirectory = join(home, '.codex', 'skills', 'demo')
+      const fileAlias = join(fileAliasDirectory, 'SKILL.md')
+      const notes = join(fileAliasDirectory, 'notes.md')
+      await mkdir(fileAliasDirectory, { recursive: true })
+      await symlink(file, fileAlias)
+      await writeFile(notes, 'kept')
+
+      const result = await run(home, stateDirectory, await request(file))
+      expect(result.skills[0].status).toBe('deleted')
+      expect(await exists(fileAlias)).toBe(false)
+      expect(await readFile(notes, 'utf8')).toBe('kept')
+    }
+  )
 
   it('restores every staged placement when a later rename fails', async () => {
     const { home, stateDirectory, canonicalDirectory, file } = await fixture()
     const aliasDirectory = join(home, '.claude', 'skills', 'demo')
     await mkdir(join(home, '.claude', 'skills'), { recursive: true })
-    await symlink(canonicalDirectory, aliasDirectory, 'dir')
+    await symlink(canonicalDirectory, aliasDirectory, 'junction')
 
     let renames = 0
     const filesystem: SkillInstallFilesystem = {
@@ -133,7 +145,7 @@ describe('deleteSkills', () => {
   it('reports partial with the staged paths when the rollback itself fails', async () => {
     const { home, stateDirectory, canonicalDirectory, file } = await fixture()
     await mkdir(join(home, '.claude', 'skills'), { recursive: true })
-    await symlink(canonicalDirectory, join(home, '.claude', 'skills', 'demo'), 'dir')
+    await symlink(canonicalDirectory, join(home, '.claude', 'skills', 'demo'), 'junction')
 
     let renames = 0
     const filesystem: SkillInstallFilesystem = {
@@ -195,7 +207,7 @@ describe('deleteSkills', () => {
     )
     const link = join(home, '.claude', 'skills', 'linked')
     await mkdir(join(home, '.claude', 'skills'), { recursive: true })
-    await symlink(managedElsewhere, link, 'dir')
+    await symlink(managedElsewhere, link, 'junction')
 
     const result = await run(home, stateDirectory, await request(join(link, 'SKILL.md')))
     expect(result.skills[0].status).toBe('deleted')
