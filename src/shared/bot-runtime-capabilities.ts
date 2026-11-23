@@ -50,6 +50,10 @@ export const BOTS_ITEM_COMMENT_PLAIN_RUNTIME_CAPABILITY = 'bots.item-comment-pla
 // file in the comment's mail. An older host refuses the field.
 export const BOTS_ITEM_COMMENT_SKILLS_RUNTIME_CAPABILITY = 'bots.item-comment-skills.v1' as const
 
+// Host takes `skipped` on the owner's item comments (bots.items.owner.comment): an answer sent with the
+// ask's other questions skipped, which closes them and names them in the mail. An older host refuses the field.
+export const BOTS_ITEM_COMMENT_SKIPPED_RUNTIME_CAPABILITY = 'bots.item-comment-skipped.v1' as const
+
 // Host stores a picture's background color (bots.update and bots.create `avatarColor`); an older host's strict
 // update refuses the field, so clients offer the colors only where this is advertised.
 export const BOTS_AVATAR_COLOR_RUNTIME_CAPABILITY = 'bots.avatar-color.v1' as const
@@ -84,6 +88,7 @@ export const BOT_RUNTIME_CAPABILITIES = [
   BOTS_ITEM_COMMENT_QUESTION_ID_RUNTIME_CAPABILITY,
   BOTS_ITEM_COMMENT_PLAIN_RUNTIME_CAPABILITY,
   BOTS_ITEM_COMMENT_SKILLS_RUNTIME_CAPABILITY,
+  BOTS_ITEM_COMMENT_SKIPPED_RUNTIME_CAPABILITY,
   BOTS_SESSION_LINKS_RUNTIME_CAPABILITY,
   BOTS_AVATAR_COLOR_RUNTIME_CAPABILITY,
   BOTS_AVATAR_OUTFIT_RUNTIME_CAPABILITY,

@@ -30279,7 +30279,8 @@
         "step": "{{n}} of {{total}}",
         "typeAnswer": "Type your answer",
         "replaced": "The agent asked a new question. Read it, then reply.",
-        "replacedByNewer": "Replaced by a newer question"
+        "replacedByNewer": "Replaced by a newer question",
+        "skipped": "Skipped"
       },
       "readMoreClosedFailed": "Reading more Closed items failed",
       "wait": {

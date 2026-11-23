@@ -5306,7 +5306,8 @@
       "ask": {
         "notSentYet": "ainda não enviado",
         "replaced": "O agente fez uma nova pergunta. Leia e responda.",
-        "replacedByNewer": "Substituída por uma pergunta mais recente"
+        "replacedByNewer": "Substituída por uma pergunta mais recente",
+        "skipped": "Ignoradas"
       }
     },
     "needs": {

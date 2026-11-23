@@ -10,6 +10,7 @@ import {
   type BotItemStatus
 } from '../../shared/bots/bot-items'
 import { BOT_ITEM_SNOOZE_MAX_MS } from '../../shared/bots/bot-item-snooze'
+import { botItemQuestionLine, botItemQuestionShape } from '../../shared/bots/bot-item-ask'
 import { BotItemError } from './bot-item-error'
 import { BotItemsWrites } from './bot-items-writes'
 import {
@@ -22,6 +23,15 @@ import { eventRecordOf } from './bot-items-rows'
 import type { BotItemEventRecord, BotItemMail, BotItemRecord } from './bot-items-schema'
 
 const OWED_MAIL_PAGE = 50
+
+/** The ask's questions, by their first line, at the skipped indices it has: the mail names them. */
+function skippedQuestions(ask: BotItemEventRecord, skipped: readonly number[]): string[] {
+  const { decisions } = botItemQuestionShape(ask.data)
+  return [...new Set(skipped)].flatMap((index) => {
+    const decision = decisions[index]
+    return decision ? [botItemQuestionLine(decision.question)] : []
+  })
+}
 
 export type BotItemOwnerStatusInput = {
   uids: readonly string[]
@@ -56,7 +66,9 @@ export class BotItemsOwner extends BotItemsWrites {
     questionEventId?: number,
     /** A comment of its own: it answers no question, so a Needs you item keeps waiting on it. */
     plain = false,
-    skills: readonly BotItemCommentSkill[] = []
+    skills: readonly BotItemCommentSkill[] = [],
+    /** The answered ask's lines, by index, this answer skips: they close unanswered. */
+    skipped: readonly number[] = []
   ): BotItemWriteOutcome {
     assertBotItemText('text', commentText)
     if (!commentText.trim() && images.length === 0) {
@@ -111,7 +123,8 @@ export class BotItemsOwner extends BotItemsWrites {
         answers,
         plain,
         skills,
-        typeof askedIn === 'string' ? askedIn : undefined
+        typeof askedIn === 'string' ? askedIn : undefined,
+        answering ? skippedQuestions(answering, skipped) : []
       )
       this.endSnooze(uid, actor, now)
       // A reply hands the item back to the bot.
@@ -153,7 +166,8 @@ export class BotItemsOwner extends BotItemsWrites {
     answers?: string,
     plain = false,
     skills: readonly BotItemCommentSkill[] = [],
-    askedInConversation?: string
+    askedInConversation?: string,
+    skipped: readonly string[] = []
   ): number {
     const data = {
       text: commentText,
@@ -162,7 +176,8 @@ export class BotItemsOwner extends BotItemsWrites {
       ...(answers === undefined ? {} : { answers }),
       ...(plain ? { plain: true } : {}),
       ...(skills.length > 0 ? { skills } : {}),
-      ...(askedInConversation === undefined ? {} : { askedInConversation })
+      ...(askedInConversation === undefined ? {} : { askedInConversation }),
+      ...(skipped.length > 0 ? { skipped } : {})
     }
     return this.appendEvent(item.uid, 'commented', actor, data, true, now)
   }

@@ -24109,7 +24109,8 @@
       "ask": {
         "notSentYet": "noch nicht gesendet",
         "replaced": "Der Agent hat eine neue Frage gestellt. Lies sie und antworte dann.",
-        "replacedByNewer": "Durch eine neuere Frage ersetzt"
+        "replacedByNewer": "Durch eine neuere Frage ersetzt",
+        "skipped": "Übersprungen"
       },
       "readMoreClosedFailed": "Weitere geschlossene Einträge konnten nicht gelesen werden"
     },

@@ -6594,7 +6594,8 @@
         "heldCount_one": "{{count}} answer not sent yet, <send>send anyway</send>",
         "heldCount_other": "{{count}} answers not sent yet, <send>send anyway</send>",
         "replaced": "The agent asked a new question. Read it, then reply.",
-        "replacedByNewer": "Replaced by a newer question"
+        "replacedByNewer": "Replaced by a newer question",
+        "skipped": "Skipped"
       },
       "readFailedClosedPage": "Couldn’t read more closed items.",
       "skillLimit": "Message not sent. Keep at most {{limit}} selected skill files and try again."
