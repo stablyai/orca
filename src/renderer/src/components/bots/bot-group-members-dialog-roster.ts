@@ -7,6 +7,7 @@ import { botGroupMemberRefs } from '../../../../shared/bots/bot-sidebar-entries'
 import {
   LOCAL_EXECUTION_HOST_ID,
   parseRoutableExecutionHostId,
+  toRuntimeExecutionHostId,
   type ExecutionHostId
 } from '../../../../shared/execution-host/execution-host'
 
@@ -24,7 +25,7 @@ export function mixable(hostId: ExecutionHostId): boolean {
 export function withUnlistedMembers(bots: readonly Bot[], group: BotGroup | undefined): Bot[] {
   const listed = new Set(bots.map(botRefKey))
   const unlisted = (group?.remoteMembers ?? []).flatMap((member): Bot[] => {
-    const hostId = `runtime:${member.environmentId}` as const
+    const hostId = toRuntimeExecutionHostId(member.environmentId)
     return listed.has(botRefKey({ hostId, id: member.botId }))
       ? []
       : [

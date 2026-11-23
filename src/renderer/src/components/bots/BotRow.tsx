@@ -27,7 +27,7 @@ import { usageLimitStopTip } from './BotUsageLimitMark'
 import { BotUpNextCount } from './BotUpNextCount'
 import { revealBotUpNext } from './bot-up-next-reveal'
 import { useDeleteBot } from './use-delete-bot'
-import { setBotPurpose } from './bot-purpose-cache'
+import { holdBotPurpose, setBotPurpose } from './bot-purpose-cache'
 import { botSidebarEntryKey } from './bot-sidebar-entry-keys'
 
 type BotRowFold = {
@@ -68,7 +68,7 @@ export function BotRow({
   useEffect(() => {
     setBotPurpose(purposeKey, description)
   }, [purposeKey, description])
-  useEffect(() => () => setBotPurpose(purposeKey, null), [purposeKey])
+  useEffect(() => holdBotPurpose(purposeKey), [purposeKey])
 
   // Opening never unfolds; only the chevron folds. A double-click's second click renames, a held key repeats.
   const open = (event: { detail: number; repeat?: boolean }): void => {

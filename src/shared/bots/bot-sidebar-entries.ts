@@ -1,5 +1,5 @@
 import type { BotGroup } from './bot-group-schema'
-import type { ExecutionHostId } from '../execution-host/execution-host'
+import { toRuntimeExecutionHostId, type ExecutionHostId } from '../execution-host/execution-host'
 import { getBotHomes, type BotHomeOwner } from './bot-homes'
 
 type BotHomeWorkspace = Parameters<typeof getBotHomes>[1][number]
@@ -44,7 +44,7 @@ export function botGroupMemberRefs(
   return [
     ...group.members.map((member) => ({ hostId: group.hostId, id: member.botId })),
     ...(group.remoteMembers ?? []).map((member) => ({
-      hostId: `runtime:${member.environmentId}` as const,
+      hostId: toRuntimeExecutionHostId(member.environmentId),
       id: member.botId
     }))
   ]
