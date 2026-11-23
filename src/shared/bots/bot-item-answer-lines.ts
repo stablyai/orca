@@ -12,10 +12,12 @@ import { stripSentImagePromptMarkers } from '../native-chat/transcript/images/na
 
 /** Per question line, the answer a comment names for it ("Question → answer"), else null. A line
  *  belongs to the question with the longest matching lead, as one question's words may lead another's;
- *  questions whose first lines read the same take their answers in the ask's order. */
+ *  questions whose first lines read the same take their lines in the ask's order, a bare "Question →"
+ *  keeping an open one's place. */
 export function botItemNamedAnswers(shape: BotItemQuestionShape, text: string): (string | null)[] {
   const heads = shape.decisions.map((decision) => `${botItemQuestionLine(decision.question)} →`)
   const answers: (string | null)[] = shape.decisions.map(() => null)
+  const taken = shape.decisions.map(() => false)
   for (const line of text.split('\n').map((l) => l.trim())) {
     let best = -1
     heads.forEach((head, index) => {
@@ -23,31 +25,30 @@ export function botItemNamedAnswers(shape: BotItemQuestionShape, text: string): 
         return
       }
       const longer = best === -1 || head.length > heads[best].length
-      const free =
-        head.length === heads[best]?.length && answers[best] !== null && answers[index] === null
+      const free = head.length === heads[best]?.length && taken[best] && !taken[index]
       if (longer || free) {
         best = index
       }
     })
     const words = best === -1 ? '' : line.slice(heads[best].length).trim()
-    if (words && answers[best] === null) {
-      answers[best] = words
+    if (best !== -1 && !taken[best] && (words || line === heads[best])) {
+      taken[best] = true
+      answers[best] = words || null
     }
   }
   return answers
 }
 
-/** One comment for a set of answers: a line per answered question, in the ask's order; a picked quick
- *  reply writes exactly what its chip posts on its own. */
-export function botItemAnswersText(
+function answerLines(
   shape: BotItemQuestionShape,
-  answers: readonly (string | null)[]
+  answers: readonly (string | null)[],
+  keepsPlace: (index: number) => boolean
 ): string {
   return shape.decisions
     .flatMap((decision, index) => {
       const words = answers[index]?.replace(/\s+/g, ' ').trim()
       if (!words) {
-        return []
+        return keepsPlace(index) ? [`${botItemQuestionLine(decision.question)} →`] : []
       }
       const reply = decision.replies.find((option) => option.label === words)
       return [
@@ -57,6 +58,30 @@ export function botItemAnswersText(
       ]
     })
     .join('\n')
+}
+
+/** One comment for a set of answers: a line per answered question, in the ask's order; a picked quick
+ *  reply writes exactly what its chip posts on its own. */
+export function botItemAnswersText(
+  shape: BotItemQuestionShape,
+  answers: readonly (string | null)[]
+): string {
+  return answerLines(shape, answers, () => false)
+}
+
+/** Answers held on this device as their draft stores them: an open line whose first line another
+ *  question shares keeps a bare "Question →", so the answers after it read back on their own lines. */
+export function botItemHeldAnswersText(
+  shape: BotItemQuestionShape,
+  answers: readonly (string | null)[]
+): string {
+  if (!answers.some((words) => words?.trim())) {
+    return ''
+  }
+  const leads = shape.decisions.map((decision) => botItemQuestionLine(decision.question))
+  return answerLines(shape, answers, (index) =>
+    leads.some((lead, at) => at !== index && lead === leads[index])
+  )
 }
 
 /** What an owner's comment answered on one question line, for its "Question → answer" look: the quick

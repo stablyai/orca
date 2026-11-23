@@ -10,6 +10,7 @@ import { botItemQuestionLine, type BotItemQuestionShape } from './bot-item-ask'
 import {
   botItemAnswersText,
   botItemAnswerWords,
+  botItemHeldAnswersText,
   botItemNamedAnswers
 } from './bot-item-answer-lines'
 import {
@@ -118,7 +119,7 @@ export function createBotItemQuestionStepsHooks(
     const { draft, setDraft } = useHeldDraft(scopeKey)
     const held = useMemo(() => botItemNamedAnswers(shape, draft), [shape, draft])
     const hold = useCallback(
-      (answers: readonly (string | null)[]) => setDraft(botItemAnswersText(shape, answers)),
+      (answers: readonly (string | null)[]) => setDraft(botItemHeldAnswersText(shape, answers)),
       [setDraft, shape]
     )
     return { held, hold }
