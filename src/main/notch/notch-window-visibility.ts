@@ -25,6 +25,6 @@ export function configureNotchWindowVisibility(window: BrowserWindow): void {
       throw new Error('Could not configure the native notch window')
     }
   } catch (error) {
-    console.warn('[notch] Could not keep the panel visible when Orca is hidden:', error)
+    console.warn('[notch] Could not configure native panel visibility and activation:', error)
   }
 }

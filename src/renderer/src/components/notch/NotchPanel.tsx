@@ -64,7 +64,7 @@ export function NotchPanel({ snapshot }: { snapshot: NotchSnapshot }): React.JSX
             className="pointer-events-auto cursor-default focus-visible:outline-none"
             aria-expanded={expanded}
           >
-            <NotchBar snapshot={snapshot} squareBottom={expanded} />
+            <NotchBar snapshot={snapshot} />
           </button>
         </div>
 

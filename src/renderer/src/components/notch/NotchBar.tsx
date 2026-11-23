@@ -61,23 +61,14 @@ function Wing({
   )
 }
 
-export function NotchBar({
-  snapshot,
-  squareBottom
-}: {
-  snapshot: NotchSnapshot
-  squareBottom: boolean
-}): React.JSX.Element {
+export function NotchBar({ snapshot }: { snapshot: NotchSnapshot }): React.JSX.Element {
   const { layout, metrics, counts } = snapshot
-  const bottomRadius = squareBottom ? 0 : 'var(--radius-xl)'
   return (
     <div
-      className="flex shrink-0 items-center bg-black text-foreground"
+      className="flex shrink-0 items-center rounded-b-xl bg-black text-foreground"
       style={{
         width: layout.barWidth,
         height: metrics.barHeight,
-        borderBottomLeftRadius: bottomRadius,
-        borderBottomRightRadius: bottomRadius,
         borderTopLeftRadius: metrics.presentation === 'notch' ? 0 : 'var(--radius-xl)',
         borderTopRightRadius: metrics.presentation === 'notch' ? 0 : 'var(--radius-xl)'
       }}

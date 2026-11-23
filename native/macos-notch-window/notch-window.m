@@ -1,7 +1,32 @@
 #import <AppKit/AppKit.h>
+#import <objc/runtime.h>
 #include <node_api.h>
 #include <stdint.h>
 #include <string.h>
+
+static bool preventPanelActivation(NSWindow *window) {
+  if (NSProcessInfo.processInfo.operatingSystemVersion.majorVersion < 27) return true;
+  // Electron #53889: the nonactivating style alone does not prevent app activation on macOS 27.
+  SEL selector = NSSelectorFromString(@"_setPreventsActivation:");
+  if (![window respondsToSelector:selector]) return false;
+  Method method = class_getInstanceMethod(window.class, selector);
+  if (method == NULL || method_getNumberOfArguments(method) != 3) return false;
+  char *returnType = method_copyReturnType(method);
+  char *argumentType = method_copyArgumentType(method, 2);
+  bool supported = strcmp(returnType, @encode(void)) == 0 &&
+                   strcmp(argumentType, @encode(BOOL)) == 0;
+  free(returnType);
+  free(argumentType);
+  if (!supported) return false;
+  void (*setPreventsActivation)(id, SEL, BOOL) =
+      (void (*)(id, SEL, BOOL))method_getImplementation(method);
+  @try {
+    setPreventsActivation(window, selector, YES);
+    return true;
+  } @catch (NSException *exception) {
+    return false;
+  }
+}
 
 static napi_value configure(napi_env env, napi_callback_info info) {
   size_t argc = 1;
@@ -23,7 +48,7 @@ static napi_value configure(napi_env env, napi_callback_info info) {
           (uintptr_t)(__bridge void *)window.contentView != viewAddress) continue;
       window.canHide = NO;
       window.hidesOnDeactivate = NO;
-      configured = !window.canHide && !window.hidesOnDeactivate;
+      configured = !window.canHide && !window.hidesOnDeactivate && preventPanelActivation(window);
       break;
     }
   }
