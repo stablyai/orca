@@ -5,6 +5,7 @@ import { compareJournalLegacyChatsWhenIdle } from './journal-sql-legacy-compares
 import { isJournalSqlSourceContentFailure } from './journal-sql-failure'
 import { isJournalReaderReplyLimitFailure } from './journal-sql-reader-reply-limit'
 import { isDiskAlmostFull } from '../../../shared/diagnostics/perf-notice-signals'
+import type { JournalConversionStorage } from './journal-conversion-storage'
 
 const CONVERSION_EXPANSION = 1.5
 
@@ -35,9 +36,7 @@ function warnLegacy(step: string, sessionId: string, error: unknown): void {
 export class JournalSqlConversions {
   private readonly pending = new Map<string, Conversion>()
   private readonly ready = new Map<string, string>()
-  private backgroundStorage?: Promise<
-    Awaited<ReturnType<JournalSqlReaderPool['conversionStorage']>>
-  >
+  private backgroundStorage?: Promise<JournalConversionStorage>
   private retryAt = 0
   private retryDelay = 60_000
   private closed = false
@@ -88,6 +87,9 @@ export class JournalSqlConversions {
     }
     const result = this.convert(sessionId, promotion.signal)
       .then((epoch) => {
+        if (!foreground) {
+          this.retryDelay = 60_000
+        }
         if (epoch !== null) {
           this.rememberReady(sessionId, epoch)
         }
@@ -95,6 +97,8 @@ export class JournalSqlConversions {
       })
       .catch((error: unknown) => {
         if (!foreground && isJournalConversionStorageError(error)) {
+          // The retry measures again, so space freed since lets it resume.
+          this.backgroundStorage = undefined
           this.retryAt = performance.now() + this.retryDelay
           this.retryDelay = Math.min(this.retryDelay * 2, 60 * 60_000)
         }

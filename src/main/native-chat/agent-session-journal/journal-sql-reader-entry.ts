@@ -1,9 +1,9 @@
 /* oxlint-disable max-lines -- one worker entry serializes the reader protocol. */
 import { legacyProofReply } from './journal-legacy-proof-reply'
+import { measureJournalConversionStorage } from './journal-conversion-storage'
 import { JournalForkPreparation } from './journal-fork-preparation'
 import { parentPort, workerData } from 'node:worker_threads'
 import { existsSync } from 'node:fs'
-import { statfs } from 'node:fs/promises'
 import Database from '../../sqlite/sync-database'
 import { journalSqlFailure, journalSqlSourceFailure } from './journal-sql-failure'
 import type { JournalSqlReaderRequest, JournalSqlReaderReply } from './journal-sql-reader-protocol'
@@ -208,19 +208,16 @@ async function handle(id: number, operation: JournalSqlReaderRequest['operation'
         break
       }
       case 'conversion-storage': {
-        const storage = await statfs(workerData.originalFilename)
         const source = openOriginal()
         if (!source) {
           throw new Error('journal conversion source is unavailable')
         }
-        const remainingBytes = operation.estimate ? conversionEstimate(source, db!) : undefined
-        reply({
-          type: 'conversion-storage',
-          id,
-          freeBytes: Number(storage.bavail) * Number(storage.bsize),
-          totalBytes: Number(storage.blocks) * Number(storage.bsize),
-          ...(remainingBytes === undefined ? {} : { remainingBytes })
-        })
+        const storage = await measureJournalConversionStorage(
+          workerData.originalFilename,
+          source,
+          operation.estimate === true
+        )
+        reply({ type: 'conversion-storage', id, ...storage })
         break
       }
       case 'conversion-page': {
@@ -267,12 +264,6 @@ async function handle(id: number, operation: JournalSqlReaderRequest['operation'
           : journalSqlFailure(error)
     })
   }
-}
-
-function conversionEstimate(source: Database.Database, _destination: Database.Database): number {
-  const pages = Number(source.pragma('page_count', { simple: true }))
-  const pageSize = Number(source.pragma('page_size', { simple: true }))
-  return pages * pageSize
 }
 
 function openOriginal(): Database.Database | undefined {
