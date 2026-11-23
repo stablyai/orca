@@ -17,9 +17,10 @@ import { agentJournalSubmissionKey } from '../../../shared/agent-session/journal
 import type { AgentJournalMessageItem } from '../../../shared/agent-session/journal/agent-session-journal-types'
 
 // #47529: opening one ended turn of a bot group room reads it through the operation window. Guards
-// the bounded read: the rows and sends it examines stay fixed however many turns the chat ran after
-// it, and each send read is pinned to its index (a full walk of the chat's sends fails to plan).
-// Reverting the bound makes the count grow with those turns.
+// the bounded read: the rows and sends it returns stay fixed however many turns the chat ran after
+// it. The tally counts rows returned to our code, not work inside SQLite; each send read is pinned to
+// its index and was checked to key on it with EXPLAIN QUERY PLAN in review. Reverting the bound makes
+// the count grow with the later turns.
 
 const directories: string[] = []
 afterEach(() => {

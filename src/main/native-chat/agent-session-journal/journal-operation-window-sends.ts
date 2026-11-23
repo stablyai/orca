@@ -52,21 +52,23 @@ export function operationSends(
 /** The sends whose opener row, provider row or answering turn row, or the head they were sent at,
  *  sits in `[start, end)`. */
 export function windowSends(scope: JournalSqlScope, start: number, end: number): Send[] {
-  const rows = `(SELECT item_id FROM journal_items INDEXED BY journal_items_visible_position
+  const rows = (
+    column: string
+  ) => `(SELECT ${column} FROM journal_items INDEXED BY journal_items_visible_position
       WHERE session_id=? AND epoch=? AND hidden=0 AND sequence>=? AND sequence<?)`
   const range = [...scope.prefix, start, end]
   return [
-    ...sendHeads(scope, `AND item_id IN ${rows}`, range, 'journal_submission_item'),
+    ...sendHeads(scope, `AND item_id IN ${rows('item_id')}`, range, 'journal_submission_item'),
     ...sendHeads(
       scope,
-      `AND provider_item_id IN ${rows}`,
+      `AND provider_item_id IN ${rows('item_id')}`,
       range,
       'journal_submission_provider_item'
     ),
     ...sendHeads(
       scope,
       // `+item_id` drops the column's TEXT affinity, so the comparison keys on the indexed expression.
-      `AND ${SEND_ANSWERED_TURN_SQL} IN ${rows.replace('SELECT item_id', 'SELECT +item_id')}`,
+      `AND ${SEND_ANSWERED_TURN_SQL} IN ${rows('+item_id')}`,
       range,
       'journal_submission_answered_turn'
     ),
