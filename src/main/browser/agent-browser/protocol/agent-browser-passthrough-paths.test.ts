@@ -74,6 +74,14 @@ describe('resolveAgentBrowserPassthroughPaths', () => {
     expect(resolveAgentBrowserPassthroughPaths(args, resolve)).toEqual(expected)
   })
 
+  it('keeps a lone Windows screenshot path readable as a path', () => {
+    const windowsResolve = (path: string): string => `C:\\work\\${path.slice(2)}`
+    expect(resolveAgentBrowserPassthroughPaths(['screenshot', './shot'], windowsResolve)).toEqual([
+      'screenshot',
+      'C:/work/shot'
+    ])
+  })
+
   it('requotes only batch steps whose path changed, so agent-browser splits them back', () => {
     const [, changed, unchanged] = resolveAgentBrowserPassthroughPaths(
       ['batch', `pdf 'a "b".pdf'`, `fill @e1 'x y'`],

@@ -13,6 +13,8 @@ type PathOperands = {
   pathOptions?: readonly string[]
   /** Indexes (among positional operands after the command) that are files. */
   positional?: (operands: readonly string[]) => readonly number[]
+  /** Keeps a resolved operand in a form the helper still reads as a path. */
+  asPath?: (resolved: string) => string
 }
 
 // agent-browser 0.43's own test for a lone `screenshot` operand: a path, or else a selector.
@@ -30,7 +32,10 @@ const PATH_OPERANDS: Record<string, PathOperands> = {
   // `screenshot [selector] [path]`: a lone operand may be either.
   screenshot: {
     valueOptions: ['--threshold'],
-    positional: (ops) => (ops.length >= 2 ? [1] : isLoneScreenshotPath(ops[0] ?? '') ? [0] : [])
+    positional: (ops) => (ops.length >= 2 ? [1] : isLoneScreenshotPath(ops[0] ?? '') ? [0] : []),
+    // A Windows `C:\\work\\shot` has no `/`, so it would read as a selector.
+    asPath: (resolved) =>
+      isLoneScreenshotPath(resolved) ? resolved : resolved.replaceAll('\\', '/')
   },
   pdf: { positional: () => [0] },
   download: { positional: () => [1] },
@@ -98,7 +103,8 @@ export function resolveAgentBrowserPassthroughPaths(
   for (const operandIndex of grammar.positional?.(operands) ?? []) {
     const index = positions[operandIndex]
     if (index !== undefined) {
-      resolved[index] = resolveFileWord(args[index]!, resolvePath)
+      const path = resolveFileWord(args[index]!, resolvePath)
+      resolved[index] = grammar.asPath?.(path) ?? path
     }
   }
   return resolved
