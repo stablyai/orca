@@ -36,6 +36,7 @@ export function selectExactWorkerProviderSession(args: {
   wslDistro?: string | null
   launchToken: string | null | undefined
   observedAfter: number
+  providerGenerationResetAtEpochMs?: number
   statuses: readonly AgentStatusIpcPayload[]
 }): ExactWorkerProviderSession | null {
   const status = args.statuses
@@ -47,6 +48,8 @@ export function selectExactWorkerProviderSession(args: {
         entry.providerSessionOnly !== true &&
         entry.providerSession !== undefined &&
         entry.agentType !== undefined &&
+        (args.providerGenerationResetAtEpochMs === undefined ||
+          (entry.evidenceObservedAt ?? entry.receivedAt) > args.providerGenerationResetAtEpochMs) &&
         entry.receivedAt >= args.observedAfter
     )
     .sort((left, right) => right.receivedAt - left.receivedAt)[0]

@@ -217,6 +217,7 @@ export abstract class OrcaRuntimeWithGetTerminalInteractiveWait extends OrcaRunt
       launchToken: pty?.launchToken,
       wslDistro,
       observedAfter: typeof observation === 'number' ? observation : 0,
+      providerGenerationResetAtEpochMs: pty?.providerGenerationResetAtEpochMs,
       statuses: this.publicPaneStatusFn?.(paneKey) ?? []
     })
     const launchConfig = session ? heldLaunchConfig(pty, session.agent) : undefined
