@@ -1,4 +1,4 @@
-import { memo, useCallback, useState } from 'react'
+import { memo, useCallback, useRef, useState } from 'react'
 import { callRuntimeRpc } from '@/runtime/rpc/calls/runtime-rpc-call'
 import { Select, SelectContent, SelectGroup, SelectItem, SelectLabel } from '@/components/ui/select'
 import * as SelectPrimitive from 'radix-ui/select'
@@ -59,11 +59,12 @@ export function useRemoteBrowserSelectPopup({
   | 'lifecycle'
   | 'createRemoteOperationToken'
 >): {
-  /** Runs in the input queue after a left press, so the next input waits for the list to open. */
+  /** Call after a press is sent, without awaiting it: the next input must not wait for this read. */
   readSelectPopupAfterPress: (press: RemoteBrowserPress & { button: string }) => Promise<void>
   selectPopupElement: React.JSX.Element | null
 } {
   const [selectPopup, setSelectPopup] = useState<RemoteSelectPopupState | null>(null)
+  const latestPressReadRef = useRef(0)
   // A hidden or busy pane has no frame under the list to anchor it to.
   if (selectPopup && (!isActive || busy)) {
     setSelectPopup(null)
@@ -73,6 +74,7 @@ export function useRemoteBrowserSelectPopup({
     button,
     ...press
   }: RemoteBrowserPress & { button: string }): Promise<void> => {
+    const pressRead = ++latestPressReadRef.current
     // Only a primary press opens a list; a page tool's press picks the element instead.
     if (button !== 'left' || pagePointerOwned) {
       return
@@ -96,7 +98,13 @@ export function useRemoteBrowserSelectPopup({
       return
     }
     const image = imageRef.current
-    if (!image || !mountedRef.current || !isCurrentRemoteOperationToken(press.operationToken)) {
+    // Reads overlap, so only the latest press's answer may open or close the list.
+    if (
+      !image ||
+      !mountedRef.current ||
+      pressRead !== latestPressReadRef.current ||
+      !isCurrentRemoteOperationToken(press.operationToken)
+    ) {
       return
     }
     const clientRect = popup
@@ -109,7 +117,7 @@ export function useRemoteBrowserSelectPopup({
           })
         })
       : null
-    // A later press that opened no list replaces one an earlier, slower press left open.
+    // A later press that opened no list replaces one an earlier press left open.
     setSelectPopup(popup && clientRect ? { ...popup, ...press, clientRect } : null)
   }
 
