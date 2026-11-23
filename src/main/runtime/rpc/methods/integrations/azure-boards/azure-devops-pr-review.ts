@@ -2,11 +2,13 @@ import { AzureBoardsRepo } from '../../../../../../shared/rpc-contract/azure-boa
 import {
   AzureDevOpsPr,
   AzureDevOpsPrBranch,
-  AzureDevOpsPrFiles
+  AzureDevOpsPrComment,
+  AzureDevOpsPrFiles,
+  AzureDevOpsPrVote
 } from '../../../../../../shared/rpc-contract/azure-boards/azure-devops-pr-review-params'
 import { defineMethod } from '../../../core'
 
-// Read-only: GETs only. Voting and commenting are separate, confirmed writes.
+// Reads are GETs; the two writes require `confirm: true` and spend a daily budget.
 export const AZURE_DEVOPS_PR_REVIEW_METHODS = [
   defineMethod({
     name: 'azureDevOps.prAwaitingReview',
@@ -45,5 +47,24 @@ export const AZURE_DEVOPS_PR_REVIEW_METHODS = [
     params: AzureDevOpsPrFiles,
     handler: async (params, { runtime }) =>
       runtime.listAzureDevOpsPrFiles(params.repo, params.id, params.sinceIteration)
+  }),
+  defineMethod({
+    name: 'azureDevOps.prComment',
+    permission: 'workspace',
+    params: AzureDevOpsPrComment,
+    handler: async (params, { runtime }) =>
+      runtime.addAzureDevOpsPrComment(params.repo, params.id, {
+        body: params.body,
+        threadId: params.threadId,
+        filePath: params.filePath,
+        line: params.line
+      })
+  }),
+  defineMethod({
+    name: 'azureDevOps.prVote',
+    permission: 'workspace',
+    params: AzureDevOpsPrVote,
+    handler: async (params, { runtime }) =>
+      runtime.setAzureDevOpsPrVote(params.repo, params.id, params.vote)
   })
 ]

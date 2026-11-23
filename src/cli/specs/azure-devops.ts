@@ -56,5 +56,33 @@ export const AZURE_DEVOPS_COMMAND_SPECS: CommandSpec[] = [
       'Reports base and head commits; after `git fetch origin <head>`, `git diff <base> <head> -- <path>` shows the change.'
     ],
     examples: ['orca azure-devops pr files 4321 --since-iteration 2 --json']
+  },
+  {
+    path: ['azure-devops', 'pr', 'comment'],
+    summary: 'Post a comment on a pull request (needs --confirm)',
+    usage:
+      'orca azure-devops pr comment <id> --body <text> [--thread <threadId> | --file <path> [--line <n>]] [--confirm] [--repo <selector>] [--json]',
+    allowedFlags: [...REPO_FLAGS, 'id', 'body', 'thread', 'file', 'line', 'confirm'],
+    booleanFlags: ['confirm'],
+    positionalArgs: ['id'],
+    notes: [
+      REPO_NOTE,
+      'Without --confirm, prints what it would post and posts nothing. Pass --confirm only after the user approved this exact text.',
+      'At most 20 comments a day go through Orca; --thread replies in an existing thread, --file/--line opens one on the PR version of that file.'
+    ]
+  },
+  {
+    path: ['azure-devops', 'pr', 'vote'],
+    summary: 'Set your vote on a pull request (needs --confirm)',
+    usage:
+      'orca azure-devops pr vote <id> --vote approve|approve-with-suggestions|wait-for-author|reset [--confirm] [--repo <selector>] [--json]',
+    allowedFlags: [...REPO_FLAGS, 'id', 'vote', 'confirm'],
+    booleanFlags: ['confirm'],
+    positionalArgs: ['id'],
+    notes: [
+      REPO_NOTE,
+      'Without --confirm, prints the vote it would set and changes nothing. Pass --confirm only after the user approved this vote.',
+      'Reject is not available: problems belong in comments. At most 5 votes a day go through Orca.'
+    ]
   }
 ]

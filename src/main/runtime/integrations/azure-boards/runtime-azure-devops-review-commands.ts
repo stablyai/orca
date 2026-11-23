@@ -17,6 +17,12 @@ import {
   locateAzureDevOpsPullRequest
 } from '../../../azure-devops/pull-request-review/pr-review-read-client'
 import {
+  addAzureDevOpsPullRequestComment,
+  setAzureDevOpsPullRequestVote,
+  type AzureDevOpsAllowedVote,
+  type AzureDevOpsPrCommentInput
+} from '../../../azure-devops/pull-request-review/pr-review-write-client'
+import {
   resolveAzureDevOpsRepoSelector,
   type RuntimeAzureBoardsCommandsDeps
 } from './runtime-azure-boards-commands'
@@ -64,5 +70,23 @@ export class RuntimeAzureDevOpsReviewCommands {
       id,
       sinceIteration
     )
+  }
+
+  async addAzureDevOpsPrComment(
+    repoSelector: string,
+    id: number,
+    input: AzureDevOpsPrCommentInput
+  ): Promise<{ threadId: number; commentId: number }> {
+    const repo = await resolveAzureDevOpsRepoSelector(this.deps, repoSelector)
+    return addAzureDevOpsPullRequestComment(await locateAzureDevOpsPullRequest(repo, id), id, input)
+  }
+
+  async setAzureDevOpsPrVote(
+    repoSelector: string,
+    id: number,
+    vote: AzureDevOpsAllowedVote
+  ): Promise<{ vote: number }> {
+    const repo = await resolveAzureDevOpsRepoSelector(this.deps, repoSelector)
+    return setAzureDevOpsPullRequestVote(await locateAzureDevOpsPullRequest(repo, id), id, vote)
   }
 }

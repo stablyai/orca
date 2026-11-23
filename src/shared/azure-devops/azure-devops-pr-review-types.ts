@@ -1,5 +1,7 @@
 export const AZURE_DEVOPS_PR_REVIEW_READ_RUNTIME_CAPABILITY =
   'azure-devops.pr-review-read.v1' as const
+export const AZURE_DEVOPS_PR_REVIEW_WRITE_RUNTIME_CAPABILITY =
+  'azure-devops.pr-review-write.v1' as const
 
 /** Azure DevOps reviewer votes: 10, 5, 0, -5, -10. */
 export type AzureDevOpsVoteLabel =

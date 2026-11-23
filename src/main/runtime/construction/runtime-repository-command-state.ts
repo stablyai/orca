@@ -206,6 +206,18 @@ export abstract class OrcaRuntimeWithRepositoryCommands extends OrcaRuntimeWithF
     return this.azureDevOpsReviewCommands.listAzureDevOpsPrFiles(repo, id, sinceIteration)
   }
 
+  addAzureDevOpsPrComment(
+    ...args: Parameters<AzureReview['addAzureDevOpsPrComment']>
+  ): ReturnType<AzureReview['addAzureDevOpsPrComment']> {
+    return this.azureDevOpsReviewCommands.addAzureDevOpsPrComment(...args)
+  }
+
+  setAzureDevOpsPrVote(
+    ...args: Parameters<AzureReview['setAzureDevOpsPrVote']>
+  ): ReturnType<AzureReview['setAzureDevOpsPrVote']> {
+    return this.azureDevOpsReviewCommands.setAzureDevOpsPrVote(...args)
+  }
+
   protected readonly gitLabQueryCommands = new RuntimeGitLabQueryCommands({
     resolveRepo: (selector) => this.resolveRepoSelector(selector),
     getLocalGitArgs: (repo) => this.getLocalGitExecutionOptionArgs(repo),

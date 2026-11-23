@@ -18,6 +18,7 @@ import {
   formatAzureDevOpsPrThreads
 } from './azure-devops-pr-format'
 import { resolveAzureBoardsRepo } from './azure-boards-target'
+import { azureDevOpsPrWriteHandlers } from './azure-devops-pr-write'
 
 function prTarget(context: HandlerContext): Promise<string> {
   return resolveAzureBoardsRepo(context, AZURE_DEVOPS_PR_REVIEW_READ_RUNTIME_CAPABILITY)
@@ -44,6 +45,7 @@ function sinceIteration(context: HandlerContext): number | undefined {
 }
 
 export const AZURE_DEVOPS_PR_HANDLERS: Record<string, CommandHandler> = {
+  ...azureDevOpsPrWriteHandlers(prId),
   'azure-devops pr list': async (context) => {
     const branch = getOptionalStringFlag(context.flags, 'branch')?.trim()
     const repo = await prTarget(context)

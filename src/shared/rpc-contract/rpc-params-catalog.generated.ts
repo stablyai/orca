@@ -143,7 +143,9 @@ import {
 import {
   AzureDevOpsPr,
   AzureDevOpsPrBranch,
-  AzureDevOpsPrFiles
+  AzureDevOpsPrComment,
+  AzureDevOpsPrFiles,
+  AzureDevOpsPrVote
 } from './azure-boards/azure-devops-pr-review-params'
 import {
   ComposioApp,
@@ -1238,9 +1240,11 @@ export const RPC_PARAMS_BY_METHOD = {
   'azureDevOps.pr': AzureDevOpsPr,
   'azureDevOps.prAwaitingReview': AzureBoardsRepo,
   'azureDevOps.prChecks': AzureDevOpsPr,
+  'azureDevOps.prComment': AzureDevOpsPrComment,
   'azureDevOps.prFiles': AzureDevOpsPrFiles,
   'azureDevOps.prForBranch': AzureDevOpsPrBranch,
   'azureDevOps.prThreads': AzureDevOpsPr,
+  'azureDevOps.prVote': AzureDevOpsPrVote,
   'bots.access.decide': BotAccessDecide,
   'bots.access.list': null,
   'bots.access.redeem': BotAccessRedeem,
