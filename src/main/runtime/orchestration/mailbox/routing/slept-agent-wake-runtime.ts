@@ -60,6 +60,9 @@ export abstract class RuntimeSleptAgentWakes extends RuntimeSleptMailboxWakes {
       if (!pane) {
         return null
       }
+      if (bounds.signal?.aborted) {
+        return Promise.reject(bounds.signal.reason ?? new Error('request_aborted'))
+      }
       const woken = this.wakeSleptPane(handle, pane).finally(() =>
         this.sleptAgentWakes.delete(handle)
       )

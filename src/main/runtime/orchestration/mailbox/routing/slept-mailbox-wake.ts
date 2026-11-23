@@ -288,6 +288,8 @@ export class SleptMailboxWake {
     if (
       !before ||
       mailWakeObligation(before.record) !== 'automatic' ||
+      // A request queued behind a refused attempt waits for the same availability edge.
+      this.failedToWake(before.record) ||
       (this.succeeded.get(mailbox)?.paneKey === before.record.paneKey &&
         this.succeeded.get(mailbox)?.sequence === before.sequence)
     ) {

@@ -62,7 +62,7 @@ export function listMailWakeAttempts(this: OrchestrationDb): SleptMailRecord[] {
   for (const row of this.db.prepare('SELECT * FROM mail_wake_attempts').all()) {
     const parsed =
       typeof row.record === 'string'
-        ? sleepingAgentSessionRecordSchema.safeParse(JSON.parse(row.record))
+        ? sleepingAgentSessionRecordSchema.safeParse(parseStoredRecord(row.record))
         : null
     if (
       !parsed?.success ||
@@ -105,4 +105,12 @@ export function attachMailWakeAttemptStore(ctor: { prototype: object }): void {
     settleMailWake,
     listMailWakeAttempts
   })
+}
+
+function parseStoredRecord(record: string): unknown {
+  try {
+    return JSON.parse(record)
+  } catch {
+    return null
+  }
 }

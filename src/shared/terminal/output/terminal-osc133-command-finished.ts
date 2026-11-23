@@ -127,7 +127,8 @@ export function createOsc133CommandFinishedScanner(
       }
 
       if (terminator.length === 0) {
-        // A cancelled sequence is no marker; its ESC may start the next one.
+        // A cancelled sequence is no marker, and breaks marker adjacency; its ESC may start the next one.
+        noteOutput()
         offset = terminator.index
         continue
       }

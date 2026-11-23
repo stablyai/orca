@@ -21,6 +21,17 @@ describe('liveResumeRecordChange', () => {
     expect(liveResumeRecordChange(slept, live)).toBeNull()
   })
 
+  it("keeps the Agent Sleep record but takes a finished turn's changed effort", () => {
+    const live = {
+      ...slept,
+      origin: 'live' as const,
+      providerSession: { key: 'session_id' as const, id: 'session-a', effort: 'high' }
+    }
+    expect(liveResumeRecordChange(slept, live)).toEqual({
+      set: { ...slept, providerSession: { key: 'session_id', id: 'session-a', effort: 'high' } }
+    })
+  })
+
   it('replaces it once the same conversation is working again', () => {
     const live = { ...slept, origin: 'live' as const, state: 'working' as const }
     expect(liveResumeRecordChange(slept, live)).toEqual({ set: live })

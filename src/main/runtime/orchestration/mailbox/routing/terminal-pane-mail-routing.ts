@@ -263,7 +263,8 @@ export abstract class OrcaRuntimeWithGetPtyRecordForPaneKey extends RuntimeSlept
   /** After a check, move, takeover or reset, delete the cards that would hand a chat mail it no
    *  longer owes. Visible cleanup only: it never holds up the action that called it. `mailboxes`:
    *  only those the action touched; without it, every mailbox (a reset, a store becoming readable). */
-  withdrawStaleChatMail(mailboxes?: Iterable<string>): void {
+  withdrawStaleChatMail(touched?: Iterable<string>): void {
+    const mailboxes = touched && [...touched]
     this.publishSleepingMail(mailboxes ? { mailboxes } : undefined)
     this.orchestrationStructuredMailboxPointerDelivery.withdrawStale(mailboxes)
   }

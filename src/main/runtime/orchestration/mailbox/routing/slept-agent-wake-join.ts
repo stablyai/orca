@@ -22,11 +22,12 @@ export function joinWithin(
       timeoutMs && timeoutMs > 0
         ? setTimeout(() => settle(new Error('timeout')), timeoutMs)
         : undefined
+    // Observed before an early abort, so a shared wake's later failure is never unhandled.
+    woken.then(() => settle(), settle)
     if (signal?.aborted) {
       onAbort()
       return
     }
     signal?.addEventListener('abort', onAbort, { once: true })
-    woken.then(() => settle(), settle)
   })
 }
