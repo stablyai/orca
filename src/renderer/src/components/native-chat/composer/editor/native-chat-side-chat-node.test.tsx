@@ -60,16 +60,20 @@ const pillShown = (container: HTMLElement) => waitFor(() => expect(pill(containe
 const pillCount = (editor: Editor) =>
   JSON.stringify(editor.getJSON()).split('"nativeChatSideChat"').length - 1
 
+function insertSideChatDraft(editor: Editor): void {
+  act(() => {
+    editor.commands.insertContent([
+      { type: SIDE_CHAT_NODE, attrs: { token: '/btw ' } },
+      { type: 'text', text: 'why?' }
+    ])
+  })
+}
+
 // Once Send would no longer open a side chat, no history step may bring the pill back.
 describe('side chat pill availability', () => {
-  it('leaves no pill after undo and redo once side chat is unavailable', () => {
+  it('restores a deleted side question as text when undone after side chat becomes unavailable', () => {
     const { input, editor, disableSideChat } = setup()
-    act(() => {
-      editor.commands.insertContent([
-        { type: SIDE_CHAT_NODE, attrs: { token: '/btw ' } },
-        { type: 'text', text: 'why?' }
-      ])
-    })
+    insertSideChatDraft(editor)
     expect(input.value).toBe('/btw why?')
     expect(pillCount(editor)).toBe(1)
     act(() => {
@@ -85,11 +89,19 @@ describe('side chat pill availability', () => {
     })
     expect(input.value).toBe('/btw why?')
     expect(pillCount(editor)).toBe(0)
+  })
+
+  it('restores an undone side question as text when redone after side chat becomes unavailable', () => {
+    const { input, editor, disableSideChat } = setup()
+    insertSideChatDraft(editor)
+    expect(input.value).toBe('/btw why?')
+    expect(pillCount(editor)).toBe(1)
     act(() => {
       editor.commands.undo()
     })
     expect(input.value).toBe('')
     expect(pillCount(editor)).toBe(0)
+    disableSideChat()
     act(() => {
       editor.commands.redo()
     })
