@@ -86,3 +86,30 @@ it('never offers a stacked card to later focus handoffs', () => {
   render(<Card placement="stacked" />)
   expect(focusNativeChatPromptCard(container, null)).toBe(false)
 })
+
+// A browser activates a button unless the key event is default-prevented.
+function press(type: 'keydown' | 'keyup', key: string, repeat = false): boolean {
+  const event = new KeyboardEvent(type, { key, repeat, bubbles: true, cancelable: true })
+  act(() => {
+    allow().dispatchEvent(event)
+  })
+  return !event.defaultPrevented
+}
+
+// Enter held to send the message focus moved from must not approve the next request.
+it('ignores a held Enter on the focused default answer but takes a fresh press', () => {
+  render(<Composer draft="" />)
+  render(<Card />)
+  expect(document.activeElement).toBe(allow())
+  expect(press('keydown', 'Enter', true)).toBe(false)
+  expect(press('keydown', 'Enter')).toBe(true)
+})
+
+it('activates on Space only after a fresh Space press on the button', () => {
+  render(<Composer draft="" />)
+  render(<Card />)
+  expect(press('keydown', ' ', true)).toBe(false)
+  expect(press('keyup', ' ')).toBe(false)
+  expect(press('keydown', ' ')).toBe(true)
+  expect(press('keyup', ' ')).toBe(true)
+})
