@@ -188,7 +188,7 @@ export class ProviderRelaySpool {
     }
     this.mode = 'attached'
     this.updatePressure()
-    return after
+    return Math.min(after, this.nextSeqValue - 1)
   }
 
   /** A takeover holds live records back until its own replay, so none reaches the new client twice. */

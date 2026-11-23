@@ -47,6 +47,8 @@ export class ProviderRelay {
   private failure: ProviderRelayFailure | null = null
   /** The relay is kept until a client was actually sent its exit, so no outcome goes unseen. */
   private exitDelivered = false
+  /** The attachment the exit last went to, so one client never gets it twice. */
+  private exitSentTo: ProviderRelayAttachment | null = null
 
   constructor(private readonly options: RelayOptions) {
     this.relayId = options.relayId
@@ -322,7 +324,11 @@ export class ProviderRelay {
   }
 
   private sendExit(): void {
-    const sent = this.attachment?.send({
+    if (this.attachment === null || this.exitSentTo === this.attachment) {
+      return
+    }
+    this.exitSentTo = this.attachment
+    const sent = this.attachment.send({
       type: 'event',
       event: 'relayExit',
       sessionId: this.relayId,
