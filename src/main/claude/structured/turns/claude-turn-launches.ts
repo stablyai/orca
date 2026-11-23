@@ -1,4 +1,4 @@
-// Who each background run the root agent launches is for, fixed at its launch: every input the turn
+// Who each background shell command the root agent launches is for, fixed at its launch: every input the turn
 // had taken by then, in the order the stream shows them (the send that opened it, each send steered
 // in, the runs that woke it or finished into it). A turn with an input Orca can't name records no
 // more launches.
@@ -8,7 +8,10 @@ import { isClaudeInjectedUserMessage } from '../journal/claude-internal-message-
 import type { ClaudeToolOriginRegistry } from '../../subagents/claude-tool-origin-registry'
 
 type Launch = NonNullable<AgentJournalTurnItem['launches']>[number]
-type Calls = Pick<ClaudeToolOriginRegistry, 'has' | 'childOwnerRef'>
+type Calls = Pick<ClaudeToolOriginRegistry, 'has' | 'childOwnerRef'> & {
+  /** A root background shell command (Bash with run_in_background). */
+  shell: (id: string) => boolean
+}
 
 const MAX_LAUNCHES = 16
 const MAX_INPUTS = 16
@@ -78,6 +81,10 @@ export class ClaudeTurnLaunches {
       return false
     }
     this.launched.add(run)
+    // Only a root background shell command: an agent, a Monitor or a workflow can take input later.
+    if (!calls.shell(run)) {
+      return false
+    }
     const launches = turn.launches ?? []
     if (this.unnamed || this.inputsSeen > this.steersNamed || launches.length >= MAX_LAUNCHES) {
       return false

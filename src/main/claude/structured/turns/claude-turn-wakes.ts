@@ -6,6 +6,7 @@ import { taskAliasId, taskId } from '../../background-tasks/claude-background-ta
 import type { ClaudeToolOriginRegistry } from '../../subagents/claude-tool-origin-registry'
 
 const MAX_WOKEN_BY = 16
+const MAX_TASK_RUNS = 64
 
 export class ClaudeTurnWakes {
   private pending: string[] = []
@@ -14,6 +15,8 @@ export class ClaudeTurnWakes {
   private unnamed = false
   /** Runs the open turn started itself; their finish is that turn's own work, not a wake. */
   private readonly startedInTurn = new Set<string>()
+  /** Each started task's run: a shell's final update names only its task, and arrives first. */
+  private readonly taskRuns = new Map<string, string>()
 
   /** Reads one provider frame; true when it changed the open turn's names (it names none once a
    *  finish into it can't be named). */
@@ -22,19 +25,34 @@ export class ClaudeTurnWakes {
     turn: { wokenBy?: string[] } | null,
     calls: Pick<ClaudeToolOriginRegistry, 'childOwnerRef'>
   ): boolean {
-    if (frame.type !== 'system' || !taskId(frame)) {
+    const task = taskId(frame)
+    if (frame.type !== 'system' || !task) {
       return false
     }
     const run = taskAliasId(frame.tool_use_id)
-    if (frame.subtype === 'task_started' && turn && run) {
-      this.startedInTurn.add(run)
+    if (frame.subtype === 'task_started' && run) {
+      this.started(task, run, !!turn)
+    }
+    // A background shell's end opens its wake-up with this update, just before its notification.
+    if (frame.subtype === 'task_updated' && !turn) {
+      const status = terminalStatus(frame.patch)
+      const updated = this.taskRuns.get(task)
+      if (status && updated) {
+        this.queue(isStop(status) ? undefined : updated)
+      }
+      return false
     }
     if (frame.subtype !== 'task_notification') {
       return false
     }
+    const stopped = isStop(frame.status)
     if (!turn) {
-      this.queue(run)
+      this.queue(stopped ? undefined : run)
       return false
+    }
+    if (stopped && turn.wokenBy) {
+      delete turn.wokenBy
+      return true
     }
     const { wokenBy } = turn
     // A subagent's own task reports to it, not to the root's wake-up.
@@ -64,6 +82,17 @@ export class ClaudeTurnWakes {
     return opensItself && wokenBy.length > 0 ? { wokenBy } : {}
   }
 
+  private started(task: string, run: string, inTurn: boolean): void {
+    if (inTurn) {
+      this.startedInTurn.add(run)
+    }
+    this.taskRuns.delete(task)
+    this.taskRuns.set(task, run)
+    if (this.taskRuns.size > MAX_TASK_RUNS) {
+      this.taskRuns.delete(this.taskRuns.keys().next().value!)
+    }
+  }
+
   private queue(run: string | undefined): void {
     if (run && this.pending.includes(run)) {
       return
@@ -74,4 +103,16 @@ export class ClaudeTurnWakes {
       this.unnamed = true
     }
   }
+}
+
+/** A stop may be Orca's (its Stop), so a stopped run's wake-up is no one's. */
+function isStop(status: unknown): boolean {
+  return status === 'stopped' || status === 'killed'
+}
+
+function terminalStatus(patch: unknown): string | undefined {
+  const status = patch && typeof patch === 'object' && 'status' in patch ? patch.status : undefined
+  return status === 'completed' || status === 'failed' || isStop(status)
+    ? String(status)
+    : undefined
 }

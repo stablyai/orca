@@ -10,6 +10,9 @@ export class ClaudeTurnInputs {
   readonly toolOrigins = new ClaudeToolOriginRegistry()
   private readonly wakes = new ClaudeTurnWakes()
   private readonly launches = new ClaudeTurnLaunches()
+  /** The open turn's root background shell commands (Bash with run_in_background): the only work
+   *  whose launch can be a conversation's, since nothing reaches it once it runs. */
+  private readonly shells = new Set<string>()
 
   /** `republish` rewrites an open turn's row this changed outside a frame. */
   constructor(private readonly republish: (turn: ClaudeCurrentTurn) => void) {}
@@ -22,6 +25,7 @@ export class ClaudeTurnInputs {
   /** A turn opened (a command turn names nothing): what it took in starts from its opener. */
   begin(turn: ClaudeCurrentTurn | null): void {
     this.wakes.take(false)
+    this.shells.clear()
     this.launches.begin(turn ? { send: turn.openedBy, runs: turn.wokenBy } : {})
   }
 
@@ -31,7 +35,12 @@ export class ClaudeTurnInputs {
       this.wakes.messaged()
     }
     const named = this.wakes.observe(frame, turn, this.toolOrigins)
-    const launched = !!turn && this.launches.observe(frame, opensTurn, this.toolOrigins, turn)
+    const calls = {
+      has: (id: string) => this.toolOrigins.has(id),
+      shell: (id: string) => this.shells.has(id),
+      childOwnerRef: (id: string) => this.toolOrigins.childOwnerRef(id)
+    }
+    const launched = !!turn && this.launches.observe(frame, opensTurn, calls, turn)
     return !!turn && (named || launched || this.unwoken(turn))
   }
 
@@ -43,8 +52,25 @@ export class ClaudeTurnInputs {
     }
   }
 
-  /** Someone answered the turn's question or approval. */
+  /** A root call the agent made in the open turn. */
+  rootCall(tool: { id: string; name: string; input: unknown }): void {
+    const input = tool.input
+    if (
+      tool.name === 'Bash' &&
+      input &&
+      typeof input === 'object' &&
+      'run_in_background' in input &&
+      input.run_in_background === true
+    ) {
+      this.shells.add(tool.id)
+    }
+  }
+
+  /** Someone answered a question or approval: between turns, the next wake-up names nothing. */
   promptAnswered(turn: ClaudeCurrentTurn | null): void {
+    if (!turn) {
+      this.wakes.messaged()
+    }
     this.launches.promptAnswered()
     if (turn && this.unwoken(turn)) {
       this.republish(turn)

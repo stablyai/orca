@@ -175,6 +175,7 @@ export function journalClaudeMessage(
       ctx.toolOrigins.recordChildOwned(tool.id, envelope.parentToolUseId)
     } else {
       ctx.toolOrigins.recordTopLevel(tool.id)
+      ctx.turn.inputs.rootCall(tool)
     }
     const toolIdentity = claudeToolIdentity(envelope.sessionId, tool.id)
     const toolBody = claudeToolBody({ tool })

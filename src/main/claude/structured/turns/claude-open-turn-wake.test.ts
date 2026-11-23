@@ -9,12 +9,71 @@ import { resolveAgentJournalTurnRowWrite } from '../../../native-chat/agent-sess
 // task_notification frame (naming the finished run by the call that started it) arrives between turns
 // and opens that turn; the turn records the run, so Orca can tell whose work woke the chat.
 
-// The run: the Agent call that started the background subagent.
+// The run: the call that started the background task.
 const RUN = 'toolu_0113cofGsD2kJXoxmbapdZbE'
 const SESSION = 'capture-bg-allow'
-const frames = capture.scenarios['bg-allow'].flatMap((entry): Record<string, unknown>[] =>
+const SHELL = 'bshell001'
+/** The captured background subagent: the root Agent call, its own work, its finish and wake-up. */
+const agentFrames = capture.scenarios['bg-allow'].flatMap((entry): Record<string, unknown>[] =>
   entry.from === 'cli' ? [entry.frame] : []
 )
+/** The same turns with the root agent starting a background shell instead: its Bash call with
+ *  run_in_background, the task the CLI reports for it, and none of the subagent's own frames. */
+const frames = agentFrames.flatMap((frame, index): Record<string, unknown>[] => {
+  if ([6, 7, 8, 9, 13, 14].includes(index)) {
+    return []
+  }
+  if (index === 2) {
+    return [
+      rootToolUse('msg_capture_9', RUN, 'Bash', { command: 'sleep 30', run_in_background: true })
+    ]
+  }
+  if (index === 3) {
+    return [
+      { ...frame, tasks: [{ task_id: SHELL, task_type: 'local_bash', description: 'Sleep' }] }
+    ]
+  }
+  if (index === 4) {
+    return [shellStarted(SHELL, RUN)]
+  }
+  return index === 16 || index === 17 ? [{ ...frame, task_id: SHELL }] : [frame]
+})
+/** Positions in `frames`: the launch, the first turn's end, the finish and the wake-up's reply. */
+const LAUNCHED = 4
+const ENDED = 7
+const WOKEN = 11
+
+/** The root agent's call, as the stream shows it. */
+function rootToolUse(
+  id: string,
+  call: string,
+  name: string,
+  input: Record<string, unknown>,
+  parent: string | null = null
+): Record<string, unknown> {
+  return {
+    type: 'assistant',
+    message: { id, role: 'assistant', content: [{ type: 'tool_use', id: call, name, input }] },
+    parent_tool_use_id: parent,
+    session_id: SESSION,
+    uuid: `${id}-assistant`
+  }
+}
+
+/** The CLI reporting a background shell it started. */
+function shellStarted(taskId: string, call: string): Record<string, unknown> {
+  return {
+    type: 'system',
+    subtype: 'task_started',
+    task_id: taskId,
+    tool_use_id: call,
+    description: 'Sleep',
+    task_type: 'local_bash',
+    is_backgrounded: true,
+    session_id: SESSION,
+    uuid: `${taskId}-started`
+  }
+}
 
 type Translator = ReturnType<typeof createClaudeJournalTranslator>
 
@@ -23,7 +82,8 @@ function replay(
   after: Record<
     number,
     (send: (frame: Record<string, unknown>) => void, t: Translator) => void
-  > = {}
+  > = {},
+  source = frames
 ) {
   const turns: Extract<AgentJournalItemBody, { kind: 'turn' }>[] = []
   const record = (body: AgentJournalItemBody) => {
@@ -52,7 +112,7 @@ function replay(
       observedAt: at,
       ...(opens ? { startsTurn: true, clientMessageId: 'c1', requestedAt: at } : {})
     })
-  frames.forEach((frame, index) => {
+  source.forEach((frame, index) => {
     send(frame, index + 1, index === 1)
     after[index]?.((extra) => send(extra, index + 1), translator)
   })
@@ -70,54 +130,36 @@ const echo = (uuid: string): Record<string, unknown> => ({
 
 /** The root agent starting a background command in the wake-up. */
 const followUp = (send: (frame: Record<string, unknown>) => void) => {
-  send({
-    type: 'assistant',
-    message: {
-      id: 'msg_follow',
-      role: 'assistant',
-      content: [
-        { type: 'tool_use', id: 'toolu_follow', name: 'Bash', input: { command: 'sleep 5' } }
-      ]
-    },
-    parent_tool_use_id: null,
-    session_id: SESSION,
-    uuid: 'follow-assistant'
-  })
-  send({
-    type: 'system',
-    subtype: 'task_started',
-    task_id: 'bfollow1',
-    tool_use_id: 'toolu_follow',
-    description: 'Sleep',
-    task_type: 'local_bash',
-    is_backgrounded: true,
-    session_id: SESSION,
-    uuid: 'follow-started'
-  })
+  send(
+    rootToolUse('msg_follow', 'toolu_follow', 'Bash', {
+      command: 'sleep 5',
+      run_in_background: true
+    })
+  )
+  send(shellStarted('bfollow1', 'toolu_follow'))
 }
 
 it('names the task whose notification opened the turn, in the SDK frame order', () => {
   const turns = replay()
-  expect(turns.filter((row) => row.wokenBy)).not.toHaveLength(0)
   expect(turns.at(-1)).toMatchObject({ wokenBy: [RUN] })
   expect(turns.filter((row) => !row.wokenBy).length).toBeGreaterThan(0)
 })
 
 it('names a task that finishes into the wake-up too', () => {
   const other = {
-    ...frames[17],
+    ...frames[WOKEN],
     task_id: 'private-job',
     tool_use_id: 'toolu_private',
-    uuid: 'other-notification'
+    uuid: 'other'
   }
-  const turns = replay({ 18: (send) => send(other) })
+  const turns = replay({ [WOKEN]: (send) => send(other) })
   expect(turns.at(-1)).toMatchObject({ wokenBy: [RUN, 'toolu_private'] })
 })
 
 it('keeps no names on the ended row once a finish into the wake-up names no run', () => {
-  const unnamed: Record<string, unknown> = { ...frames[17], uuid: 'unnamed-notification' }
+  const unnamed: Record<string, unknown> = { ...frames[WOKEN], uuid: 'unnamed-notification' }
   delete unnamed.tool_use_id
-  const turns = replay({ 18: (send) => send(unnamed) })
+  const turns = replay({ [WOKEN]: (send) => send(unnamed) })
   const running = turns.findLast((row) => row.state === 'running' && row.wokenBy)!
   const ended = turns.at(-1)!
   expect(running.wokenBy).toEqual([RUN])
@@ -132,8 +174,52 @@ it('keeps no names on the ended row once a finish into the wake-up names no run'
   expect(merged?.body.wokenBy).toBeUndefined()
 })
 
-it('stamps a launch with the send that opened its turn', () => {
+it('stamps a background shell’s launch with the send that opened its turn', () => {
   const turns = replay()
+  expect(turns.find((row) => row.launches)?.launches).toEqual([
+    { run: RUN, sends: ['c1'], runs: [] }
+  ])
+})
+
+it('stamps no launch of a subagent, a Monitor, or a shell a subagent starts', () => {
+  expect(replay({}, agentFrames).some((row) => row.launches)).toBe(false)
+  const monitor = replay({
+    [LAUNCHED]: (send) => {
+      send(rootToolUse('msg_monitor', 'toolu_monitor', 'Monitor', { command: 'tail -f log' }))
+      send(shellStarted('bmonitor1', 'toolu_monitor'))
+    }
+  })
+  expect(monitor.findLast((row) => row.launches)?.launches?.map((launch) => launch.run)).toEqual([
+    RUN
+  ])
+  const childShell = replay(
+    {
+      5: (send) => {
+        send(
+          rootToolUse(
+            'msg_child',
+            'toolu_child',
+            'Bash',
+            { command: 'sleep 9', run_in_background: true },
+            RUN
+          )
+        )
+        send(shellStarted('bchild1', 'toolu_child'))
+      }
+    },
+    agentFrames
+  )
+  expect(childShell.some((row) => row.launches)).toBe(false)
+})
+
+it('stamps a launch after a foreground command finished in its turn', () => {
+  const turns = replay({
+    [LAUNCHED - 2]: (send) => {
+      send(rootToolUse('msg_fg', 'toolu_fg', 'Bash', { command: 'sleep 1' }))
+      send({ ...shellStarted('bfg1', 'toolu_fg'), is_backgrounded: false })
+      send(finish('bfg1', 'toolu_fg'))
+    }
+  })
   expect(turns.find((row) => row.launches)?.launches).toEqual([
     { run: RUN, sends: ['c1'], runs: [] }
   ])
@@ -141,7 +227,7 @@ it('stamps a launch with the send that opened its turn', () => {
 
 it('stamps a launch with a send steered in before it, and none after an unnamed message', () => {
   const named = replay({
-    3: (send, t) => {
+    [LAUNCHED - 1]: (send, t) => {
       t.turnCycle.steered('c2')
       send(echo('steer-1'))
     }
@@ -149,18 +235,18 @@ it('stamps a launch with a send steered in before it, and none after an unnamed 
   expect(named.find((row) => row.launches)?.launches).toEqual([
     { run: RUN, sends: ['c1', 'c2'], runs: [] }
   ])
-  const unnamed = replay({ 3: (send) => send(echo('steer-1')) })
+  const unnamed = replay({ [LAUNCHED - 1]: (send) => send(echo('steer-1')) })
   expect(unnamed.some((row) => row.launches)).toBe(false)
 })
 
 it('stamps a wake-up’s launch with the run that woke it, and a message into it drops its names', () => {
-  const woken = replay({ 18: followUp })
+  const woken = replay({ [WOKEN]: followUp })
   expect(woken.at(-1)).toMatchObject({
     wokenBy: [RUN],
     launches: [{ run: 'toolu_follow', sends: [], runs: [RUN] }]
   })
   const messaged = replay({
-    18: (send, t) => {
+    [WOKEN]: (send, t) => {
       t.turnCycle.steered('c3')
       send(echo('steer-2'))
     }
@@ -169,7 +255,7 @@ it('stamps a wake-up’s launch with the run that woke it, and a message into it
 })
 
 it('names nothing on a wake-up after a message reached Claude between turns', () => {
-  const turns = replay({ 11: (send) => send(echo('late-echo')) })
+  const turns = replay({ [ENDED]: (send) => send(echo('late-echo')) })
   expect(turns.at(-1)?.wokenBy).toBeUndefined()
 })
 
@@ -181,50 +267,70 @@ it('drops a wake-up’s names when an image someone sent reaches it', () => {
       content: [{ type: 'image', source: { type: 'base64', data: 'AA==' } }]
     }
   }
-  const turns = replay({ 18: (send) => send(image) })
+  const turns = replay({ [WOKEN]: (send) => send(image) })
   expect(turns.at(-1)?.wokenBy).toBeUndefined()
 })
 
 /** A task finishing, as the SDK reports it. */
-const finish = (taskId: string, run: string): Record<string, unknown> => ({
-  type: 'system',
-  subtype: 'task_notification',
-  task_id: taskId,
-  tool_use_id: run,
-  status: 'completed',
-  session_id: SESSION,
-  uuid: `finish-${run}`
-})
+function finish(taskId: string, run: string, status = 'completed'): Record<string, unknown> {
+  return {
+    type: 'system',
+    subtype: 'task_notification',
+    task_id: taskId,
+    tool_use_id: run,
+    status,
+    session_id: SESSION,
+    uuid: `finish-${run}`
+  }
+}
 
 it('stamps nothing after a prompt is answered, and a wake-up whose prompt is answered names nothing', () => {
-  const launched = replay({ 3: (_send, t) => t.turnCycle.promptAnswered() })
+  const launched = replay({ [LAUNCHED - 1]: (_send, t) => t.turnCycle.promptAnswered() })
   expect(launched.some((row) => row.launches)).toBe(false)
-  const woken = replay({ 18: (_send, t) => t.turnCycle.promptAnswered() })
+  const woken = replay({ [WOKEN]: (_send, t) => t.turnCycle.promptAnswered() })
   expect(woken.at(-1)?.wokenBy).toBeUndefined()
 })
 
+it('names nothing on a wake-up after a prompt was answered between turns', () => {
+  const turns = replay({ [ENDED]: (_send, t) => t.turnCycle.promptAnswered() })
+  expect(turns.at(-1)?.wokenBy).toBeUndefined()
+})
+
+it('names nothing on a wake-up for a stopped run, between turns or into it', () => {
+  const stop = (frame: Record<string, unknown>, index: number) =>
+    index === WOKEN - 1
+      ? { ...frame, patch: { status: 'stopped' } }
+      : index === WOKEN
+        ? { ...frame, status: 'stopped' }
+        : frame
+  const between = replay({}, frames.map(stop))
+  expect(between.at(-1)?.turnId).toBe(replay().at(-1)?.turnId)
+  expect(between.findLast((row) => row.wokenBy)).toBeUndefined()
+  // Without the update first, the stopped notification alone opens the wake-up.
+  const notified = replay(
+    {},
+    frames.map(stop).filter((_frame, index) => index !== WOKEN - 1)
+  )
+  expect(notified.length).toBeGreaterThan(2)
+  expect(notified.findLast((row) => row.wokenBy)).toBeUndefined()
+  const into = replay({ [WOKEN]: (send) => send(finish('bother1', 'toolu_other', 'stopped')) })
+  expect(into.at(-1)?.wokenBy).toBeUndefined()
+})
+
 it('drops a launch whose run finishes inside the turn that launched it', () => {
-  const turns = replay({ 4: (send) => send(finish('abf3e75543ca0d2a2', RUN)) })
+  const turns = replay({ [LAUNCHED]: (send) => send(finish(SHELL, RUN)) })
   const launching = turns.find((row) => row.launches)?.turnId
   expect(launching).toBeDefined()
   expect(turns.findLast((row) => row.turnId === launching)?.launches).toBeUndefined()
 })
 
 it('keeps a subagent’s own finish out of a wake-up’s names', () => {
-  const turns = replay({
-    5: (send) =>
-      send({
-        type: 'assistant',
-        message: {
-          id: 'msg_child',
-          role: 'assistant',
-          content: [{ type: 'tool_use', id: 'toolu_child', name: 'Bash', input: { command: 'ls' } }]
-        },
-        parent_tool_use_id: RUN,
-        session_id: SESSION,
-        uuid: 'child-assistant'
-      }),
-    18: (send) => send(finish('bchild1', 'toolu_child'))
-  })
+  const turns = replay(
+    {
+      5: (send) => send(rootToolUse('msg_child', 'toolu_child', 'Bash', { command: 'ls' }, RUN)),
+      18: (send) => send(finish('bchild1', 'toolu_child'))
+    },
+    agentFrames
+  )
   expect(turns.at(-1)?.wokenBy).toEqual([RUN])
 })
