@@ -10,6 +10,8 @@ import { BrowserError } from '../../browser-error'
 const PRINT_READ_CHUNK_BYTES = 2 * 1024 * 1024
 // Covers a person choosing where to save; each read restarts it.
 const PRINT_HOLD_MS = 5 * 60_000
+// A PDF past this is not held for a viewer: memory, and minutes over a slow link.
+const PRINT_MAX_BYTES = 256 * 1024 * 1024
 
 /** A device streaming a server page that saves what its own input makes the page print. */
 export type BrowserPrintViewer = {
@@ -104,7 +106,7 @@ export function printForBrowserViewer(
       }
       // One stream reads it, as its last slice releases it.
       const viewer = deviceViewers(guestWebContentsId, pairedDeviceId).at(-1)
-      if (!viewer) {
+      if (!viewer || bytes.length > PRINT_MAX_BYTES) {
         forgetPrint(printId)
         return
       }
