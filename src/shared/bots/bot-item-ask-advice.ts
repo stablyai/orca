@@ -29,7 +29,7 @@ const TIPS: Record<BotItemAskAdviceCode, string> = {
   no_question: 'Lead with the question itself, ending in a question mark.',
   long_question: 'Keep the question to one line under 140 characters; put the why in --comment.',
   long_context:
-    'Keep --comment short or link to details; longer context fits in the same call with --comment-file.',
+    'Keep --comment short or link to details; longer context fits in the same call with --comment-file instead.',
   jargon: 'Say in plain words what each hash or ID is, or link it instead.'
 }
 
