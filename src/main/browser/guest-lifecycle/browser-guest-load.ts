@@ -2,15 +2,10 @@ import { BrowserError } from '../browser-error'
 
 export function waitForBrowserGuestLoad(
   guest: Electron.WebContents,
-  start?: () => Promise<void>,
-  /** A held first load: the deadline counts from when it is released, not from the hold. */
-  deadlineFrom?: Promise<unknown>
+  start?: () => Promise<void>
 ): Promise<void> {
   return new Promise((resolve, reject) => {
-    let timer: ReturnType<typeof setTimeout> | undefined
-    let settled = false
     const finish = (error?: Error): void => {
-      settled = true
       clearTimeout(timer)
       guest.off('did-finish-load', loaded)
       guest.off('did-fail-load', failed)
@@ -35,26 +30,16 @@ export function waitForBrowserGuestLoad(
         finish(new BrowserError('browser_navigation_failed', description))
       }
     }
-    const startDeadline = (): void => {
-      if (settled) {
-        return
-      }
-      timer = setTimeout(
-        () =>
-          finish(
-            new BrowserError(
-              'browser_navigation_failed',
-              'The browser page did not finish loading. Try reloading it.'
-            )
-          ),
-        30_000
-      )
-    }
-    if (deadlineFrom) {
-      void deadlineFrom.then(startDeadline, startDeadline)
-    } else {
-      startDeadline()
-    }
+    const timer = setTimeout(
+      () =>
+        finish(
+          new BrowserError(
+            'browser_navigation_failed',
+            'The browser page did not finish loading. Try reloading it.'
+          )
+        ),
+      30_000
+    )
     guest.on('did-finish-load', loaded)
     guest.on('did-fail-load', failed)
     guest.once('destroyed', destroyed)
@@ -62,7 +47,7 @@ export function waitForBrowserGuestLoad(
       void start().then(loaded, (error: unknown) => {
         if (error && typeof error === 'object' && 'errno' in error && error.errno === -3) {
           // Superseded: wait for the navigation that replaced it. Stopped: nothing will load.
-          if (!settled && !guest.isDestroyed() && !guest.isLoadingMainFrame()) {
+          if (!guest.isDestroyed() && !guest.isLoadingMainFrame()) {
             loaded()
           }
           return

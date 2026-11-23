@@ -18,6 +18,7 @@ import {
   type BrowserRouteGuestPopupDependencies
 } from './browser-route-guest-popups'
 import type { BrowserRouteGuestState } from './browser-route-webcontents-state'
+import { whenBrowserExtensionsReadyForPage } from '../../extensions/profile-sessions/browser-extension-page-start'
 
 export function createBrowserRouteGuestState(
   guest: WebContents,
@@ -122,6 +123,14 @@ export async function navigateBrowserRouteGuest(
     return false
   }
   try {
+    // As in initialization: a route session's first request must not straddle an extension load.
+    const extensionsReady = whenBrowserExtensionsReadyForPage(state.guest)
+    if (extensionsReady) {
+      await extensionsReady
+      if (!isCurrent() || state.guest.isDestroyed()) {
+        return false
+      }
+    }
     await (startBrowserPageAttach(state.guest, normalized)
       ? waitForBrowserPageReady(registration.browserPageId, state.guest)
       : state.guest.loadURL(normalized))

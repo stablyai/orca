@@ -220,9 +220,7 @@ export function startBrowserPageAttach(
     snapshot
       ? guest.navigationHistory.restore({ entries: snapshot.entries, index: snapshot.index })
       : guest.loadURL(url ?? attach.url)
-  // The load deadline counts from when the hold ends (extensions ready, Stop or close).
-  let released = (): void => {}
-  const holdReleased = new Promise<void>((resolve) => (released = resolve))
+  // The 30 s load deadline counts from attach, as without a hold, which is bounded well inside it.
   const promise = waitForBrowserGuestLoad(
     guest,
     extensionsReady
@@ -231,10 +229,9 @@ export function startBrowserPageAttach(
             guest,
             extensionsReady,
             (requested) => (requested ? startHeldLoad(guest, requested, snapshot) : load()),
-            { released, history: snapshot }
+            { history: snapshot }
           )
-      : load,
-    extensionsReady ? holdReleased : undefined
+      : load
   ).then(() => {
     if (pages.get(attach.pageId) !== page || page.guest !== guest) {
       throw new Error('Browser page replaced')

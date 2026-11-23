@@ -28,8 +28,6 @@ export function loadPageWhenReady(
   ready: Promise<unknown>,
   load: (requested: HeldLoad | null) => Promise<void>,
   hooks: {
-    /** Runs once the hold ends, however it ends, before anything loads. */
-    released?: () => void
     /** The page's saved history: Stop still puts it back, so a reload keeps it. */
     history?: SavedHistory | null
   } = {}
@@ -79,7 +77,6 @@ export function loadPageWhenReady(
     heldFirstLoads.delete(contents)
     Reflect.deleteProperty(contents, 'loadURL')
     Reflect.deleteProperty(contents, 'stop')
-    hooks.released?.()
     const queued = requested
     const outcome = finishHeldLoad()
     queued?.settle(outcome)
