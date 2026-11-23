@@ -196,7 +196,8 @@ export class ProviderRelayLineReader {
   }
 
   private async spillMemory(): Promise<void> {
-    if (!this.spilled || this.partial.length === 0) {
+    // With the disk failing, held bytes stay where they are rather than being re-joined per chunk.
+    if (!this.spilled || this.spillBroken || this.partial.length === 0) {
       return
     }
     const held = Buffer.concat(this.partial)
@@ -223,6 +224,10 @@ export class ProviderRelayLineReader {
         flag: this.spilledBytes === 0 ? 'w' : 'a'
       })
       this.spilledBytes += chunk.length
+      if (this.disposed) {
+        // The owner's cleanup may have run before this write created the file.
+        await unlink(this.options.spillPath).catch(() => {})
+      }
     } catch {
       // Disk trouble: the rest of this line stays in memory rather than being lost; a torn tail is cut.
       this.spillBroken = true
@@ -245,17 +250,15 @@ export class ProviderRelayLineReader {
       }
       return
     }
+    const tailBytes = tail?.length ?? 0
+    const overCap = this.spillBroken && this.partialBytes + tailBytes > MEMORY_LINE_LIMIT_BYTES
     // Nothing whole reached the file (the first append failed): the line is entirely in memory.
-    const head = this.spilledBytes === 0 ? Buffer.alloc(0) : await this.readSpill()
+    const head = this.spilledBytes === 0 || overCap ? Buffer.alloc(0) : await this.readSpill()
     await unlink(this.options.spillPath).catch(() => {})
     const spilledBytes = this.spilledBytes
     this.spilledBytes = 0
-    const tailBytes = tail?.length ?? 0
-    const lost =
-      // A missing or cut-short file would yield a line without its start, which would be corrupt.
-      head === null ||
-      head.length < spilledBytes ||
-      (this.spillBroken && this.partialBytes + tailBytes > MEMORY_LINE_LIMIT_BYTES)
+    // A missing or cut-short file would yield a line without its start, which would be corrupt.
+    const lost = overCap || head === null || head.length < spilledBytes
     const parts = lost
       ? []
       : [head.subarray(0, spilledBytes), ...this.partial, ...(tail ? [tail] : [])]

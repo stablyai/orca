@@ -48,6 +48,8 @@ export class ProviderRelaySpool {
   /** A failed write keeps every later record in memory, so a full or broken disk loses nothing. */
   private fileFailed = false
   private attachGeneration = 0
+  /** Bumped when the file is removed, so batches queued before that never write into a new one. */
+  private fileEpoch = 0
   private io: Promise<void> = Promise.resolve()
   private paused = false
   private disposed = false
@@ -258,11 +260,15 @@ export class ProviderRelaySpool {
       queued.bytes.push(bytes)
     } else {
       const write: SpoolWrite = { chunk: encoded, records: [record], bytes: [bytes] }
+      const epoch = this.fileEpoch
       this.queuedWrite = write
       this.io = this.io
         .then(async () => {
           if (this.queuedWrite === write) {
             this.queuedWrite = null
+          }
+          if (epoch !== this.fileEpoch) {
+            return
           }
           if (write.chunk.length === 0 || this.fileFailed) {
             this.keepInMemory(write)
@@ -319,6 +325,7 @@ export class ProviderRelaySpool {
       this.queuedWrite.chunk = ''
       this.queuedWrite = null
     }
+    this.fileEpoch++
     this.fileUnackedBytes = 0
     this.fileIndex = []
     this.fileIndexHead = 0

@@ -50,8 +50,11 @@ export async function replaySpoolFile(replay: SpoolReplay): Promise<boolean> {
         parts.push(chunk)
         continue
       }
-      const lines = (partial + parts.join('') + chunk).split('\n')
+      // The record that ends here is joined alone; it was written, so it fits in one string.
+      const newline = chunk.indexOf('\n')
+      replayLine(partial + parts.join('') + chunk.slice(0, newline))
       parts = []
+      const lines = chunk.slice(newline + 1).split('\n')
       partial = lines.pop() ?? ''
       for (const line of lines) {
         replayLine(line)
