@@ -16,7 +16,12 @@ export type CatalogLoadState = {
   /** Paths whose Git listing or read failed; batched passes treat them as absent. */
   failed: Set<string>
   memo: CatalogBufferMemo
-  readOptions?: { timeout: number; env?: NodeJS.ProcessEnv; signal?: AbortSignal }
+  readOptions?: {
+    timeout: number
+    env?: NodeJS.ProcessEnv
+    signal?: AbortSignal
+    terminationBarrier?: boolean
+  }
 }
 
 /** A regular file's size and, when it fit the largest requested limit, its bytes; null when absent. */
@@ -195,7 +200,8 @@ export async function readCatalogImageBlobs(
     readOptions: {
       timeout: 10_000,
       env: offlineGitEnv(),
-      signal
+      signal,
+      terminationBarrier: true
     }
   }
   await loadCatalogFiles(repository, commit, requests, state)

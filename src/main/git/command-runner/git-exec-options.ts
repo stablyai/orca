@@ -48,6 +48,8 @@ export type GitBufferExecOptions = {
   preferWslDirectGit?: boolean
   admissionTier?: GitAdmissionTier
   signal?: AbortSignal
+  /** Keep the caller's ownership until the child has terminated, even after abort or timeout. */
+  terminationBarrier?: boolean
   stdin?: string
 }
 

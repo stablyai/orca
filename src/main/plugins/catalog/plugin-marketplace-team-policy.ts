@@ -76,6 +76,9 @@ export function allowsTeamCatalogSource(
 }
 
 export class PluginMarketplaceTeamPolicy {
+  private capabilities: OrcaCloudCapabilities | undefined
+  private managedSources = new Map<string, PluginMarketplaceRegisteredSource>()
+
   constructor(private readonly getCapabilities?: () => OrcaCloudCapabilities | undefined) {}
 
   allows(source: PluginMarketplaceGitSource, capabilities = this.getCapabilities?.()): boolean {
@@ -104,21 +107,54 @@ export class PluginMarketplaceTeamPolicy {
     )
   }
 
-  async list(store: PluginMarketplaceStore): Promise<PluginMarketplaceRegisteredSource[]> {
+  configuredManagedSourceIds(): Iterable<string> {
+    return this.managed(this.getCapabilities?.()).keys()
+  }
+
+  findEffectiveSource(
+    store: Pick<PluginMarketplaceStore, 'registeredSource'>,
+    sourceId: string
+  ): PluginMarketplaceRegisteredSource | undefined {
     const capabilities = this.getCapabilities?.()
+    const managed = this.managed(capabilities)
+    const source = store.registeredSource(sourceId) ?? managed.get(sourceId)
+    return source && this.allows(source.source, capabilities) ? source : undefined
+  }
+
+  async loadEffectiveSource(store: PluginMarketplaceStore, sourceId: string) {
+    await store.listSources()
+    return this.findEffectiveSource(store, sourceId)
+  }
+
+  async list(store: PluginMarketplaceStore): Promise<PluginMarketplaceRegisteredSource[]> {
     const sources = await store.listSources()
+    const capabilities = this.getCapabilities?.()
     if (!capabilities) {
       return [...sources]
     }
     const visible = sources.filter(({ source }) => this.allows(source, capabilities))
     const visibleIds = new Set(visible.map(({ id }) => id))
-    for (const source of capabilities.teamPolicy?.internalCatalogs ?? []) {
-      const id = marketplaceSourceId(source)
-      if (!visibleIds.has(id) && this.allows(source, capabilities)) {
-        visibleIds.add(id)
-        visible.push({ id, source, addedAt: capabilities.refreshedAt })
+    for (const managed of this.managed(capabilities).values()) {
+      if (!visibleIds.has(managed.id) && this.allows(managed.source, capabilities)) {
+        visible.push(managed)
       }
     }
     return visible
+  }
+
+  private managed(capabilities: OrcaCloudCapabilities | undefined) {
+    if (this.capabilities !== capabilities) {
+      const next = new Map<string, PluginMarketplaceRegisteredSource>()
+      for (const source of capabilities?.teamPolicy?.internalCatalogs ?? []) {
+        const id = marketplaceSourceId(source)
+        next.set(
+          id,
+          this.managedSources.get(id) ?? { id, source, addedAt: capabilities!.refreshedAt }
+        )
+      }
+      this.managedSources = next
+      this.capabilities = capabilities
+    }
+    return this.managedSources
   }
 }

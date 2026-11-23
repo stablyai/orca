@@ -1,18 +1,28 @@
 import { createHash } from 'node:crypto'
-import { createReadStream } from 'node:fs'
-import { mkdir, rm } from 'node:fs/promises'
+import { mkdir, readdir, rm } from 'node:fs/promises'
 import { dirname, join } from 'node:path'
 import { z } from 'zod'
 import { lazyZodSchema } from '../../../shared/schema/lazy-zod-schema'
-import { PLUGIN_COMMIT_PATTERN } from '../../../shared/plugins/installation/plugin-install-lockfile'
 import {
   pluginMarketplaceGitSourceSchema,
-  pluginMarketplaceListingSchema,
-  pluginMarketplaceSchema,
   type PluginMarketplace,
   type PluginMarketplaceGitSource
 } from '../../../shared/plugins/catalog/plugin-marketplace'
 import { writePluginFileAtomically } from '../installation/plugin-atomic-file-write'
+
+import {
+  cachedSnapshotSchema,
+  readBoundedText,
+  readSnapshotFromDisk,
+  SNAPSHOT_FILE_MAX_BYTES,
+  type CatalogRepositorySlot,
+  type PluginMarketplaceCachedSnapshot
+} from './plugin-marketplace-snapshot-file'
+export {
+  snapshotRepositorySlot,
+  type CatalogRepositorySlot,
+  type PluginMarketplaceCachedSnapshot
+} from './plugin-marketplace-snapshot-file'
 
 export const PLUGIN_MARKETPLACE_SOURCE_LIMIT = 64
 export const PLUGIN_MARKETPLACE_SOURCE_ID_PATTERN = /^[0-9a-f]{32}$/
@@ -31,44 +41,7 @@ const sourceFileSchema = lazyZodSchema(() =>
     sources: z.array(registeredSourceSchema).max(PLUGIN_MARKETPLACE_SOURCE_LIMIT)
   })
 )
-const snapshotFields = {
-  sourceId: sourceIdSchema,
-  source: pluginMarketplaceGitSourceSchema,
-  marketplaceCommit: z.string().regex(PLUGIN_COMMIT_PATTERN),
-  fetchedAt: z.number().finite().nonnegative()
-}
-// Why two cache keys: builds that predate release records parse `<id>.json` strictly, so a
-// downgrade must find only v1-shaped data there and refetch rather than fail.
-const legacySnapshotSchema = lazyZodSchema(() =>
-  z.strictObject({
-    schemaVersion: z.literal(1),
-    ...snapshotFields,
-    marketplace: pluginMarketplaceSchema
-  })
-)
-const cachedSnapshotSchema = lazyZodSchema(() =>
-  z.strictObject({
-    schemaVersion: z.literal(2),
-    ...snapshotFields,
-    catalogRepository: z.enum(['repository', 'replacement']).optional(),
-    marketplace: pluginMarketplaceListingSchema
-  })
-)
-
 export type PluginMarketplaceRegisteredSource = z.infer<typeof registeredSourceSchema>
-export type PluginMarketplaceCachedSnapshot =
-  | z.infer<typeof cachedSnapshotSchema>
-  | z.infer<typeof legacySnapshotSchema>
-
-export type CatalogRepositorySlot = NonNullable<
-  z.infer<typeof cachedSnapshotSchema>['catalogRepository']
->
-
-export function snapshotRepositorySlot(
-  snapshot?: PluginMarketplaceCachedSnapshot | null
-): CatalogRepositorySlot {
-  return (snapshot?.schemaVersion === 2 && snapshot.catalogRepository) || 'repository'
-}
 
 // Why a separate file: sources.json is parsed strictly by older builds, so it can't gain fields.
 const seededDefaultsSchema = lazyZodSchema(() =>
@@ -80,7 +53,6 @@ const seededDefaultsSchema = lazyZodSchema(() =>
 export type PluginMarketplaceDefaultSource = 'community'
 
 const SOURCE_FILE_MAX_BYTES = 2 * 1024 * 1024
-const SNAPSHOT_FILE_MAX_BYTES = 16 * 1024 * 1024
 
 export function marketplaceSourceId(source: PluginMarketplaceGitSource): string {
   const parsed = pluginMarketplaceGitSourceSchema.parse(source)
@@ -96,7 +68,13 @@ export class PluginMarketplaceStore {
   private readonly snapshotDirectory: string
   private sources: PluginMarketplaceRegisteredSource[] | null = null
   private writeChain: Promise<void> = Promise.resolve()
-  private readonly snapshots = new Map<string, Promise<PluginMarketplaceCachedSnapshot | null>>()
+  private readonly snapshots = new Map<
+    string,
+    {
+      read: Promise<PluginMarketplaceCachedSnapshot | null>
+      value?: PluginMarketplaceCachedSnapshot | null
+    }
+  >()
 
   constructor(pluginsDataDir: string) {
     const root = join(pluginsDataDir, 'marketplaces')
@@ -108,6 +86,23 @@ export class PluginMarketplaceStore {
   async listSources(): Promise<readonly PluginMarketplaceRegisteredSource[]> {
     await this.loadSources()
     return this.sources!
+  }
+
+  registeredSource(sourceId: string): PluginMarketplaceRegisteredSource | undefined {
+    return this.sources?.find(({ id }) => id === sourceId)
+  }
+
+  async snapshotSourceIds(): Promise<string[]> {
+    const files = await readdir(this.snapshotDirectory).catch((error: NodeJS.ErrnoException) => {
+      if (error.code !== 'ENOENT') {
+        throw error
+      }
+      return []
+    })
+    return files.flatMap((file) => {
+      const id = /^([0-9a-f]{32})(?:\.v2)?\.json$/.exec(file)?.[1]
+      return id ? [id] : []
+    })
   }
 
   async addSource(
@@ -141,11 +136,20 @@ export class PluginMarketplaceStore {
       return next
     })
     if (removed) {
-      this.snapshots.delete(parsedId)
-      await rm(this.snapshotPath(parsedId), { force: true })
-      await rm(this.legacySnapshotPath(parsedId), { force: true })
+      await this.clearSnapshot(parsedId)
     }
     return removed
+  }
+
+  async clearSnapshot(sourceId: string): Promise<void> {
+    const id = sourceIdSchema.parse(sourceId)
+    this.snapshots.delete(id)
+    try {
+      await rm(this.snapshotPath(id), { force: true })
+      await rm(this.legacySnapshotPath(id), { force: true })
+    } finally {
+      this.snapshots.delete(id)
+    }
   }
 
   /** Whether Orca already added this default source once; a user's later removal must stick. */
@@ -202,59 +206,38 @@ export class PluginMarketplaceStore {
     }
     await mkdir(this.snapshotDirectory, { recursive: true })
     await writePluginFileAtomically(path, text)
-    this.snapshots.set(input.source.id, Promise.resolve(snapshot))
+    this.snapshots.set(input.source.id, { read: Promise.resolve(snapshot), value: snapshot })
     return snapshot
   }
 
   /** Parsed once per process; every write goes through this store, which keeps it current. */
   async readSnapshot(sourceId: string): Promise<PluginMarketplaceCachedSnapshot | null> {
     const parsedId = sourceIdSchema.parse(sourceId)
-    let snapshot = this.snapshots.get(parsedId)
-    if (!snapshot) {
-      snapshot = this.readSnapshotFromDisk(parsedId)
-      this.snapshots.set(parsedId, snapshot)
-      // Why: a failed read must be retried, not cached.
-      void snapshot.catch(() => {
-        if (this.snapshots.get(parsedId) === snapshot) {
-          this.snapshots.delete(parsedId)
-        }
-      })
+    const cached = this.snapshots.get(parsedId)
+    if (cached) {
+      return cached.read
     }
-    return snapshot
-  }
-
-  private async readSnapshotFromDisk(
-    sourceId: string
-  ): Promise<PluginMarketplaceCachedSnapshot | null> {
-    return (
-      (await this.readSnapshotFile(this.snapshotPath(sourceId), sourceId, cachedSnapshotSchema)) ??
-      (await this.readSnapshotFile(
-        this.legacySnapshotPath(sourceId),
-        sourceId,
-        legacySnapshotSchema
-      ))
-    )
-  }
-
-  private async readSnapshotFile<T extends { sourceId: string }>(
-    path: string,
-    sourceId: string,
-    schema: z.ZodType<T>
-  ): Promise<T | null> {
-    try {
-      const parsed = schema.parse(JSON.parse(await readBoundedText(path, SNAPSHOT_FILE_MAX_BYTES)))
-      if (parsed.sourceId !== sourceId) {
-        throw new Error('marketplace snapshot source identity does not match its cache path')
-      }
-      return parsed
-    } catch (error) {
-      if (error instanceof Error && 'code' in error && error.code === 'ENOENT') {
-        return null
-      }
-      throw new Error(
-        `marketplace snapshot is invalid: ${error instanceof Error ? error.message : String(error)}`
+    const pending: NonNullable<ReturnType<typeof this.snapshots.get>> = {
+      read: readSnapshotFromDisk(
+        parsedId,
+        this.snapshotPath(parsedId),
+        this.legacySnapshotPath(parsedId)
+      ).then(
+        (value) => (pending.value = value),
+        (error: unknown) => {
+          if (this.snapshots.get(parsedId) === pending) {
+            this.snapshots.delete(parsedId)
+          }
+          throw error
+        }
       )
     }
+    this.snapshots.set(parsedId, pending)
+    return pending.read
+  }
+
+  currentSnapshot(sourceId: string): PluginMarketplaceCachedSnapshot | null | undefined {
+    return this.snapshots.get(sourceId)?.value
   }
 
   private async loadSources(): Promise<void> {
@@ -272,10 +255,10 @@ export class PluginMarketplaceStore {
         }
         ids.add(source.id)
       }
-      this.sources = parsed.sources
+      this.sources ??= parsed.sources
     } catch (error) {
       if ((error as NodeJS.ErrnoException).code === 'ENOENT') {
-        this.sources = []
+        this.sources ??= []
         return
       }
       throw new Error(
@@ -293,11 +276,9 @@ export class PluginMarketplaceStore {
       .catch(() => undefined)
       .then(async () => {
         await this.loadSources()
-        const next = sourceFileSchema.parse({
-          schemaVersion: 1,
-          sources: mutation(this.sources!)
-        }).sources
-        await writeAtomicJson(this.sourcesPath, { schemaVersion: 1, sources: next })
+        const next = mutation(this.sources!)
+        const file = sourceFileSchema.parse({ schemaVersion: 1, sources: next })
+        await writeAtomicJson(this.sourcesPath, file)
         this.sources = next
       })
     this.writeChain = update
@@ -311,20 +292,6 @@ export class PluginMarketplaceStore {
   private legacySnapshotPath(sourceId: string): string {
     return join(this.snapshotDirectory, `${sourceId}.json`)
   }
-}
-
-async function readBoundedText(path: string, limit: number): Promise<string> {
-  const chunks: Buffer[] = []
-  let totalBytes = 0
-  for await (const chunk of createReadStream(path)) {
-    const bytes = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk)
-    totalBytes += bytes.byteLength
-    if (totalBytes > limit) {
-      throw new Error(`file exceeds its ${limit}-byte limit`)
-    }
-    chunks.push(bytes)
-  }
-  return Buffer.concat(chunks, totalBytes).toString('utf8')
 }
 
 async function writeAtomicJson(path: string, value: unknown): Promise<void> {

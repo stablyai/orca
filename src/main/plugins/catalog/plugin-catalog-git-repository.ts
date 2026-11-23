@@ -14,6 +14,7 @@ import { writePluginFileAtomically } from '../installation/plugin-atomic-file-wr
 const SHA1_COMMIT_PATTERN = /^[0-9a-f]{40}$/
 const CATALOG_SNAPSHOT_REF = 'refs/orca/snapshot'
 const CATALOG_FETCHED_REF = 'refs/orca/fetched'
+const CATALOG_PRUNE_PENDING = 'orca-prune-pending'
 
 function catalogGit(repository: string, args: string[]): Promise<string> {
   return runPluginGit(
@@ -55,7 +56,7 @@ export async function readRetainedPluginGitCommit<T>(
     ref: string
     repository: string
     maxDownloadBytes: number
-    reusable: boolean
+    publishedCommit?: string
   },
   read: (commit: string) => Promise<T>
 ): Promise<T> {
@@ -64,18 +65,19 @@ export async function readRetainedPluginGitCommit<T>(
   }
   const { repository } = input
   const gitDir = join(repository, '.git')
+  const prunePending = join(gitDir, CATALOG_PRUNE_PENDING)
   const config = pluginGitConfigArgs(join(repository, 'no-hooks'))
   const ref = input.ref.trim()
   const exactCommit = SHA1_COMMIT_PATTERN.test(ref)
   if (PLUGIN_COMMIT_PATTERN.test(ref) && !exactCommit) {
     throw new Error('SHA-256 plugin repositories are not supported')
   }
-  if (!input.reusable) {
+  if (!input.publishedCommit) {
     await rm(repository, { recursive: true, force: true })
   }
   let download: Awaited<ReturnType<typeof trackCatalogDownload>> | undefined
   try {
-    if (!input.reusable) {
+    if (!input.publishedCommit) {
       await mkdir(repository, { recursive: true })
       await runPluginGit([...config, 'init', '--quiet', '--template='], repository)
       await catalogGit(repository, ['remote', 'add', 'origin', input.url])
@@ -83,6 +85,8 @@ export async function readRetainedPluginGitCommit<T>(
     }
     download = await trackCatalogDownload(gitDir)
     const remoteRef = exactCommit ? ref : await resolveCatalogRemoteRef(repository, ref)
+    // A completed transfer can leave canonical objects before Git records its fetched ref.
+    await writePluginFileAtomically(prunePending, '')
     await runBoundedPluginGitDownload(
       [...config, '--git-dir', gitDir, ...pluginGitFetchCommitArgs(remoteRef)],
       repository,
@@ -95,12 +99,18 @@ export async function readRetainedPluginGitCommit<T>(
       throw new Error('Git resolved an invalid catalog commit identity')
     }
     await catalogGit(repository, ['update-ref', CATALOG_FETCHED_REF, commit])
-    return await read(commit)
+    const unchanged = commit === input.publishedCommit && !(await download.hasNewFiles())
+    const value = await read(commit)
+    if (!input.publishedCommit || unchanged) {
+      await rm(prunePending, { force: true }).catch(() => undefined)
+    }
+    return value
   } catch (error) {
-    if (input.reusable && download) {
+    if (input.publishedCommit && download) {
       await catalogGit(repository, ['update-ref', '-d', CATALOG_FETCHED_REF])
       await download.rollback()
-    } else if (!input.reusable) {
+      await rm(prunePending, { force: true })
+    } else if (!input.publishedCommit) {
       await rm(repository, { recursive: true, force: true })
     }
     throw error
@@ -152,9 +162,10 @@ async function sweepInterruptedCatalogDownload(gitDir: string): Promise<void> {
     `${CATALOG_SNAPSHOT_REF}.lock`,
     `${CATALOG_FETCHED_REF}.lock`
   ]
-  const files = [...(await listCatalogObjectFiles(gitDir))].filter((path) =>
-    basename(path).startsWith('tmp_')
-  )
+  const files = [...(await listCatalogObjectFiles(gitDir))].filter((path) => {
+    const name = basename(path)
+    return name.startsWith('tmp_') || name.startsWith('.tmp-')
+  })
   await Promise.all([
     ...files.map((path) => rm(path, { force: true })),
     ...locks.map((name) => rm(join(gitDir, name), { force: true }))
@@ -178,6 +189,7 @@ async function trackCatalogDownload(gitDir: string) {
     })
   )
   return {
+    hasNewFiles: async () => (await newFiles()).length !== 0,
     bytes: async () => {
       const sizes = await Promise.all(
         (await newFiles()).map((path) =>
@@ -221,17 +233,31 @@ export async function pinRetainedPluginGitCommit(
   ).split('\n')
   const superseded = refs.some((ref) => ref && !ref.endsWith(` ${commit}`))
   const pinned = refs.includes(`${CATALOG_SNAPSHOT_REF} ${commit}`)
-  if (!pinned || superseded) {
+  const prunePending = join(repository, '.git', CATALOG_PRUNE_PENDING)
+  if (superseded) {
+    await writePluginFileAtomically(prunePending, '')
+  }
+  const shouldPrune = await lstat(prunePending).then(
+    () => true,
+    (error: NodeJS.ErrnoException) => {
+      if (error.code !== 'ENOENT') {
+        throw error
+      }
+      return false
+    }
+  )
+  if (!pinned || shouldPrune) {
     await catalogGit(repository, ['update-ref', CATALOG_SNAPSHOT_REF, commit])
     await catalogGit(repository, ['update-ref', '--no-deref', 'HEAD', commit])
   }
   if (refs.some((ref) => ref.startsWith(`${CATALOG_FETCHED_REF} `))) {
     await catalogGit(repository, ['update-ref', '-d', CATALOG_FETCHED_REF])
   }
-  if (superseded) {
+  if (shouldPrune) {
     await withPruneBarrier(async () => {
       await catalogGit(repository, ['reflog', 'expire', '--expire=now', '--all'])
       await catalogGit(repository, ['-c', 'pack.threads=2', 'gc', '--prune=now'])
+      await rm(prunePending, { force: true })
     })
   }
 }

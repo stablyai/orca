@@ -1,8 +1,10 @@
-import { access, mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
+import { access, mkdir, mkdtemp, rename, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { gitExecFileAsyncBuffer } from '../../git/command-runner/git-exec-file'
+import * as gitRunner from '../../git/command-runner/git-exec-file'
+import { PluginCatalogRepositoryStore } from './plugin-catalog-repository'
 import { pngImageBytes } from '../media/plugin-image-test-fixture'
 import { createCatalogBufferMemo } from './plugin-catalog-image-extraction'
 import {
@@ -13,6 +15,7 @@ import {
 
 let root: string
 let repository: string
+const runGit = gitExecFileAsyncBuffer
 
 beforeEach(async () => {
   root = await mkdtemp(join(tmpdir(), 'orca-catalog-blobs-'))
@@ -23,8 +26,82 @@ beforeEach(async () => {
 
 afterEach(async () => {
   vi.unstubAllEnvs()
+  vi.restoreAllMocks()
   await rm(root, { recursive: true, force: true })
 })
+
+it.skipIf(process.platform === 'win32').each(['abort', 'timeout'])(
+  'keeps repository ownership through delayed Git termination on %s',
+  async (stop) => {
+    const bytes = pngImageBytes(1600, 1000)
+    const object = await writeBlob(bytes)
+    const commit = await commitTree(`100644 blob ${object}\tcover.png\n`)
+    const id = 'a'.repeat(32)
+    const directory = join(root, 'catalog-repositories', id)
+    const retained = join(directory, 'repository')
+    await mkdir(directory, { recursive: true })
+    await rename(repository, retained)
+    const started = join(root, 'started')
+    const stopping = join(root, 'stopping')
+    const release = join(root, 'release')
+    const shim = join(root, 'git.cjs')
+    await writeFile(
+      shim,
+      `
+      const fs = require('node:fs');
+      process.on('SIGTERM', () => fs.writeFileSync(${JSON.stringify(stopping)}, ''));
+      setInterval(() => {
+        if (fs.existsSync(${JSON.stringify(release)})) process.exit(1);
+      }, 10);
+      fs.writeFileSync(${JSON.stringify(started)}, '');
+    `
+    )
+    await writeFile(
+      join(root, 'git'),
+      '#!/bin/sh\nexec "$ORCA_TEST_GIT_NODE" "$ORCA_TEST_GIT_SHIM" "$@"\n',
+      { mode: 0o755 }
+    )
+    vi.stubEnv('ORCA_TEST_GIT_NODE', process.execPath)
+    vi.stubEnv('ORCA_TEST_GIT_SHIM', shim)
+    vi.stubEnv('PATH', `${root}:${process.env.PATH}`)
+    if (stop === 'timeout') {
+      vi.spyOn(gitRunner, 'gitExecFileAsyncBuffer').mockImplementation((args, options) =>
+        runGit(args, { ...options, timeout: 5_000 })
+      )
+    }
+    const repositories = new PluginCatalogRepositoryStore(root)
+    const controller = new AbortController()
+    let completed = false
+    const reading = repositories
+      .readImages(
+        id,
+        () => ({
+          commit,
+          paths: new Map([['cover.png', 1024]]),
+          slot: 'repository'
+        }),
+        controller.signal
+      )
+      .finally(() => {
+        completed = true
+      })
+    const removing = repositories.remove(id)
+    try {
+      await vi.waitFor(() => access(started), { timeout: 10_000 })
+      if (stop === 'abort') {
+        controller.abort()
+      }
+      await vi.waitFor(() => access(stopping), { timeout: 10_000 })
+      expect(completed).toBe(false)
+      await expect(access(retained)).resolves.toBeUndefined()
+    } finally {
+      await writeFile(release, '')
+      await removing
+    }
+    expect(await reading).toEqual(new Map())
+    await expect(access(retained)).rejects.toMatchObject({ code: 'ENOENT' })
+  }
+)
 
 async function git(args: string[], stdin?: string): Promise<string> {
   const { stdout } = await gitExecFileAsyncBuffer(args, { cwd: repository, timeout: 10_000, stdin })

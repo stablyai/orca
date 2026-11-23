@@ -87,9 +87,13 @@ export function parsePluginImageUrl(url: string): PluginImageReference | null {
   }
   const parts = parsed.pathname.split('/').filter(Boolean)
   if (parsed.hostname === 'sha' && parts.length === 1 && /^[0-9a-f]{64}$/.test(parts[0] ?? '')) {
+    const sourceId = parsed.searchParams.get('source')
+    const commit = parsed.searchParams.get('commit')
+    const path = parsed.searchParams.get('path')
+    const located = sourceId !== null || commit !== null || path !== null
     const kind = parsed.searchParams.get('kind')
     if (kind === null) {
-      return { kind: 'sha', sha256: parts[0] ?? '' }
+      return located ? null : { kind: 'sha', sha256: parts[0]! }
     }
     const width = Number(parsed.searchParams.get('width'))
     const height = Number(parsed.searchParams.get('height'))
@@ -106,13 +110,11 @@ export function parsePluginImageUrl(url: string): PluginImageReference | null {
     }
     const sha256 = parts[0]!
     const image = { kind, width, height } satisfies PluginCatalogImageIdentity
-    const sourceId = parsed.searchParams.get('source')
-    if (sourceId === null) {
+    if (!located) {
       return { kind: 'sha', sha256, image }
     }
-    const commit = parsed.searchParams.get('commit')
-    const path = parsed.searchParams.get('path')
     if (
+      !sourceId ||
       !/^[0-9a-f]{32}$/.test(sourceId) ||
       !commit ||
       !/^[0-9a-f]{40}$/.test(commit) ||

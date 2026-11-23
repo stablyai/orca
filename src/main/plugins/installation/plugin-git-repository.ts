@@ -62,6 +62,7 @@ export async function runPluginGit(
   const name = args[findGitSubcommandIndex(args)] ?? ''
   const command = /^[a-z]+(?:-[a-z]+)*$/.test(name) ? name : 'command'
   const started = performance.now()
+  let terminated: Promise<void> | undefined
   try {
     const { stdout } = await gitExecFileAsync(args, {
       cwd,
@@ -69,10 +70,14 @@ export async function runPluginGit(
       timeout: PLUGIN_GIT_TIMEOUT_MS,
       signal: signal ? AbortSignal.any([signal, pluginGitShutdown.signal]) : pluginGitShutdown.signal,
       // Why: abort must stop remote-https and index-pack too, and settle only once they exit.
-      terminationBarrier: true
+      terminationBarrier: true,
+      observeChildTermination: (lifetime) => {
+        terminated = lifetime
+      }
     })
     return stdout.trim()
   } finally {
+    await terminated
     console.debug('[plugins:git] complete', command, `${Math.round(performance.now() - started)}ms`)
   }
 }

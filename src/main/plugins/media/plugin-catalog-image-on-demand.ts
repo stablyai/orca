@@ -9,6 +9,7 @@ import {
 import type { PluginImageReference } from '../../../shared/plugins/images/plugin-image-url'
 import { validateCatalogImage, type CatalogImage } from '../catalog/plugin-catalog-image-extraction'
 import type { PluginCatalogRepositoryStore } from '../catalog/plugin-catalog-repository'
+import type { PluginMarketplaceTeamPolicy } from '../catalog/plugin-marketplace-team-policy'
 import {
   snapshotRepositorySlot,
   type CatalogRepositorySlot,
@@ -25,6 +26,7 @@ type CatalogReference = Extract<PluginImageReference, { kind: 'catalog' }>
 type PendingImage = {
   source: PluginMarketplaceRegisteredSource
   snapshot: PluginMarketplaceCachedSnapshot
+  key: string
   path: string
   kind: PluginImageKind
   image: Pick<CatalogImage, 'sha256' | 'width' | 'height'>
@@ -53,39 +55,54 @@ export class PluginCatalogImageOnDemand {
 
   constructor(
     private readonly options: {
-      allowsSource: (source: PluginMarketplaceRegisteredSource) => boolean
+      policy: PluginMarketplaceTeamPolicy
       cache: PluginImageCache
-      store: Pick<PluginMarketplaceStore, 'listSources' | 'readSnapshot'>
+      store: PluginMarketplaceStore
       repositories: Pick<PluginCatalogRepositoryStore, 'readImages'>
     }
   ) {}
 
   async read(reference: CatalogReference, signal: AbortSignal): Promise<CheckedPluginImage | null> {
     const { sourceId, path } = reference.location
-    const source = (await this.options.store.listSources()).find((entry) => entry.id === sourceId)
-    if (signal.aborted || !source || !this.options.allowsSource(source)) {
+    const { store, policy } = this.options
+    const source = await policy.loadEffectiveSource(store, sourceId)
+    if (signal.aborted || !source) {
       return null
     }
-    const snapshot = await this.options.store.readSnapshot(sourceId)
-    if (signal.aborted || !snapshot || !this.options.allowsSource(source)) {
+    await store.readSnapshot(sourceId)
+    const snapshot = this.currentSnapshot(source)
+    if (signal.aborted || !snapshot) {
       return null
     }
     const image = { ...reference.image, path, sha256: reference.sha256 }
     const key = imageKey(image.kind, image)
     const asset = await this.readFromSnapshot(source, snapshot, key, image, signal)
-    if (signal.aborted || !this.options.allowsSource(source)) {
-      return null
+    if (signal.aborted || asset) {
+      return !signal.aborted && this.isEffective(source) ? asset : null
     }
-    if (asset) {
-      return asset
-    }
-    // A queued read can reach Git after a concurrent publication has retired its snapshot.
-    const current = await this.options.store.readSnapshot(sourceId)
-    if (signal.aborted || !current || current === snapshot) {
+    const current = this.currentSnapshot(source)
+    if (!current || current === snapshot) {
       return null
     }
     const retried = await this.readFromSnapshot(source, current, key, image, signal)
-    return this.options.allowsSource(source) && !signal.aborted ? retried : null
+    return this.isEffective(source) && !signal.aborted ? retried : null
+  }
+
+  private isEffective(source: PluginMarketplaceRegisteredSource): boolean {
+    return this.options.policy.findEffectiveSource(this.options.store, source.id) === source
+  }
+
+  private currentSnapshot(source: PluginMarketplaceRegisteredSource) {
+    const snapshot = this.options.store.currentSnapshot(source.id)
+    return this.isEffective(source) &&
+      snapshot?.source.url === source.source.url &&
+      snapshot.source.ref === source.source.ref
+      ? snapshot
+      : null
+  }
+
+  private declares(snapshot: PluginMarketplaceCachedSnapshot, key: string): boolean {
+    return (this.locations.get(snapshot) ?? this.indexSnapshot(snapshot)).has(key)
   }
 
   private async readFromSnapshot(
@@ -95,32 +112,19 @@ export class PluginCatalogImageOnDemand {
     image: CatalogReference['image'] & Pick<CatalogImage, 'path' | 'sha256'>,
     signal: AbortSignal
   ): Promise<CheckedPluginImage | null> {
-    const locations = this.locations.get(snapshot) ?? this.indexSnapshot(snapshot)
-    if (!locations.has(key)) {
+    if (!this.declares(snapshot, key)) {
       return null
     }
     const commit = snapshot.marketplaceCommit
     const slot = snapshotRepositorySlot(snapshot)
-    let verified = this.verified.get(source)
-    if (verified?.commit !== commit || verified.slot !== slot) {
-      verified = { commit, slot, keys: new Set() }
-      this.verified.set(source, verified)
-    }
-    if (verified.keys.has(key)) {
+    const verified = this.verified.get(source)
+    if (verified?.commit === commit && verified.slot === slot && verified.keys.has(key)) {
       const cached = await this.options.cache.get(image.sha256).catch(() => null)
       if (cached) {
         return cached
       }
     }
-    const asset = await this.queue(
-      { source, snapshot, path: image.path, kind: image.kind, image },
-      key,
-      signal
-    )
-    if (asset) {
-      verified.keys.add(key)
-    }
-    return asset
+    return this.queue({ source, snapshot, key, path: image.path, kind: image.kind, image }, signal)
   }
 
   private indexSnapshot(snapshot: PluginMarketplaceCachedSnapshot): Set<string> {
@@ -148,17 +152,16 @@ export class PluginCatalogImageOnDemand {
 
   private queue(
     input: Omit<PendingImage, 'controller' | 'subscribers'>,
-    key: string,
     signal: AbortSignal
   ): Promise<CheckedPluginImage | null> {
     if (signal.aborted) {
       return Promise.resolve(null)
     }
-    const { snapshot } = input
+    const { snapshot, key } = input
     const { sourceId } = snapshot
     const pending = this.pending.get(snapshot) ?? new Map<string, PendingImage>()
     let job = pending.get(key)
-    if (!job) {
+    if (job?.source !== input.source) {
       const subscribers = new Set<(asset: CheckedPluginImage | null) => void>()
       job = { ...input, controller: new AbortController(), subscribers }
       pending.set(key, job)
@@ -197,45 +200,52 @@ export class PluginCatalogImageOnDemand {
       const jobs: PendingImage[] = []
       while (queue[0]?.snapshot === snapshot && jobs.length < IMAGE_BATCH_SIZE) {
         const job = queue.shift()!
-        if (!this.options.allowsSource(job.source)) {
-          for (const finish of job.subscribers) {
-            finish(null)
-          }
-        } else if (!job.controller.signal.aborted) {
+        if (!job.controller.signal.aborted) {
           jobs.push(job)
         }
       }
       if (jobs.length) {
-        await this.readBatch(snapshot, jobs)
+        await this.readBatch(sourceId, jobs)
       }
     }
     this.queues.delete(sourceId)
   }
 
-  private async readBatch(
-    snapshot: PluginMarketplaceCachedSnapshot,
-    jobs: PendingImage[]
-  ): Promise<void> {
+  private async readBatch(sourceId: string, jobs: PendingImage[]): Promise<void> {
     const controller = new AbortController()
     const onAbort = () => {
       if (jobs.every((job) => job.controller.signal.aborted)) {
         controller.abort()
       }
     }
-    const paths = new Map<string, number>()
     for (const job of jobs) {
       job.controller.signal.addEventListener('abort', onAbort, { once: true })
-      paths.set(job.path, Math.max(paths.get(job.path) ?? 0, PLUGIN_IMAGE_RULES[job.kind].maxBytes))
     }
     try {
+      let admitted: { job: PendingImage; snapshot: PluginMarketplaceCachedSnapshot }[] = []
       const files = await this.options.repositories.readImages(
-        snapshot.sourceId,
-        snapshot.marketplaceCommit,
-        paths,
-        controller.signal,
-        snapshotRepositorySlot(snapshot)
+        sourceId,
+        () => {
+          const paths = new Map<string, number>()
+          admitted = jobs.flatMap((job) => {
+            const snapshot = this.currentSnapshot(job.source)
+            if (!snapshot || job.controller.signal.aborted || !this.declares(snapshot, job.key)) {
+              return []
+            }
+            paths.set(
+              job.path,
+              Math.max(paths.get(job.path) ?? 0, PLUGIN_IMAGE_RULES[job.kind].maxBytes)
+            )
+            return [{ job, snapshot }]
+          })
+          const snapshot = admitted[0]?.snapshot
+          return snapshot
+            ? { commit: snapshot.marketplaceCommit, paths, slot: snapshotRepositorySlot(snapshot) }
+            : null
+        },
+        controller.signal
       )
-      for (const job of jobs) {
+      for (const { job, snapshot } of admitted) {
         const bytes = files.get(job.path)
         if (job.controller.signal.aborted || !bytes) {
           continue
@@ -243,6 +253,14 @@ export class PluginCatalogImageOnDemand {
         const info = readPluginImageHeader(bytes)
         if (typeof info !== 'string' && validateCatalogImage(bytes, job.image, job.kind)) {
           await this.options.cache.put(bytes).catch(() => null)
+          const commit = snapshot.marketplaceCommit
+          const slot = snapshotRepositorySlot(snapshot)
+          let verified = this.verified.get(job.source)
+          if (verified?.commit !== commit || verified.slot !== slot) {
+            verified = { commit, slot, keys: new Set() }
+            this.verified.set(job.source, verified)
+          }
+          verified.keys.add(job.key)
           for (const finish of job.subscribers) {
             finish({ bytes, mimeType: PLUGIN_IMAGE_MIME[info.format] })
           }

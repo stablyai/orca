@@ -16,6 +16,12 @@ import { readCatalogImageBlobs } from './plugin-catalog-blob-reader'
 
 const CATALOG_DOWNLOAD_MAX_BYTES = 512 * 1024 * 1024
 
+export type CatalogImageRead = {
+  commit: string
+  paths: ReadonlyMap<string, number>
+  slot: CatalogRepositorySlot
+}
+
 export class PluginCatalogRepositoryStore {
   private readonly mutations = new Map<string, Promise<unknown>>()
   private readonly readers = new Map<string, Set<Promise<unknown>>>()
@@ -58,11 +64,13 @@ export class PluginCatalogRepositoryStore {
       const directory = this.directory(source.id)
       const currentSlot = snapshotRepositorySlot(published)
       const current = join(directory, currentSlot)
-      const reusable = await isReusableCatalogRepository(
-        current,
-        source.source.url,
-        published?.marketplaceCommit
-      )
+      const reusable =
+        !!published &&
+        (await isReusableCatalogRepository(
+          current,
+          source.source.url,
+          published?.marketplaceCommit
+        ))
       const slot =
         reusable || !published
           ? currentSlot
@@ -82,7 +90,7 @@ export class PluginCatalogRepositoryStore {
           ref: source.source.ref,
           repository,
           maxDownloadBytes: this.maxDownloadBytes,
-          reusable
+          publishedCommit: reusable ? publishedCommit : undefined
         },
         async (commit) => ({ commit, value: await save(repository, commit, slot) })
       )
@@ -103,10 +111,8 @@ export class PluginCatalogRepositoryStore {
 
   async readImages(
     sourceId: string,
-    commit: string,
-    paths: ReadonlyMap<string, number>,
-    signal?: AbortSignal,
-    slot: CatalogRepositorySlot = 'repository'
+    select: () => CatalogImageRead | null,
+    signal?: AbortSignal
   ): Promise<Map<string, Buffer>> {
     let barrier = this.readBarriers.get(sourceId)
     while (barrier) {
@@ -116,6 +122,11 @@ export class PluginCatalogRepositoryStore {
     if (signal?.aborted) {
       return new Map()
     }
+    const request = select()
+    if (!request) {
+      return new Map()
+    }
+    const { commit, paths, slot } = request
     const repository = join(this.directory(sourceId), slot)
     const read = readCatalogImageBlobs(repository, commit, paths, signal)
     const active = this.readers.get(sourceId) ?? new Set()
@@ -131,8 +142,8 @@ export class PluginCatalogRepositoryStore {
     }
   }
 
-  async sweep(sources: Promise<readonly PluginMarketplaceRegisteredSource[]>): Promise<void> {
-    const registered = new Set((await sources).map((source) => source.id))
+  async sweep(sources: Promise<readonly string[]>): Promise<void> {
+    const registered = new Set(await sources)
     const folders = await readdir(this.root).catch((error: NodeJS.ErrnoException) => {
       if (error.code !== 'ENOENT') {
         throw error

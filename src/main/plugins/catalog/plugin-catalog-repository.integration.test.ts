@@ -1,11 +1,13 @@
 import { randomFillSync } from 'node:crypto'
 import {
   access,
+  cp,
   copyFile,
   mkdir,
   mkdtemp,
   readFile,
   readdir,
+  rename,
   rm,
   writeFile
 } from 'node:fs/promises'
@@ -13,6 +15,8 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, expect, it, vi } from 'vitest'
 import type { PluginMarketplace } from '../../../shared/plugins/catalog/plugin-marketplace'
+import type { OrcaCloudCapabilities } from '../../../shared/orca-profiles/orca-cloud-capabilities'
+import { ORCA_CLOUD_TEAM_POLICY_FLAGS } from '../../../shared/orca-profiles/orca-cloud-team-policy'
 import { pluginShaImageUrl } from '../../../shared/plugins/images/plugin-image-url'
 import { runPluginGit } from '../installation/plugin-git-repository'
 import * as pluginGit from '../installation/plugin-git-repository'
@@ -24,7 +28,12 @@ import { PluginCatalogRepositoryStore } from './plugin-catalog-repository'
 import * as catalogBlobs from './plugin-catalog-blob-reader'
 import * as retainedGit from './plugin-catalog-git-repository'
 import { PluginMarketplaceService } from './plugin-marketplace-service'
-import { PluginMarketplaceStore, snapshotRepositorySlot } from './plugin-marketplace-store'
+import {
+  marketplaceSourceId,
+  PluginMarketplaceStore,
+  snapshotRepositorySlot
+} from './plugin-marketplace-store'
+import { PluginMarketplaceTeamPolicy } from './plugin-marketplace-team-policy'
 
 vi.mock('electron', () => ({ protocol: { handle: vi.fn() } }))
 
@@ -41,11 +50,13 @@ afterEach(async () => {
 async function fixture({
   largeCatalog = false,
   maxDownloadBytes,
-  collision = false
+  collision = false,
+  managed = false
 }: {
   largeCatalog?: boolean
   maxDownloadBytes?: number
   collision?: boolean
+  managed?: boolean
 } = {}) {
   const root = await mkdtemp(join(tmpdir(), 'orca-retained-catalog-'))
   roots.push(root)
@@ -130,27 +141,39 @@ async function fixture({
   const firstCommit = await publish('first.png', firstBytes)
   const store = new PluginMarketplaceStore(root)
   const repositories = new PluginCatalogRepositoryStore(root, maxDownloadBytes)
-  const service = new PluginMarketplaceService({ pluginsDataDir: root, store, repositories })
-  const source = await service.addSource({
+  const origin = {
     kind: 'git',
     url: 'ssh://git@example.invalid/catalog.git',
     ref: 'main'
+  } as const
+  const capabilities = {
+    flags: { 'plugins.memberSources': false },
+    refreshedAt: 1,
+    teamPolicy: { orgIds: ['org_test'], internalCatalogs: [origin] }
+  }
+  const service = new PluginMarketplaceService({
+    pluginsDataDir: root,
+    store,
+    repositories,
+    getTeamCapabilities: () => (managed ? capabilities : undefined)
   })
+  const source = managed
+    ? await service.refreshSource(marketplaceSourceId(origin))
+    : await service.addSource(origin)
   const repository = join(root, 'catalog-repositories', source.id, 'repository')
   const read = async (commit: string, path: string) => {
     const slot = snapshotRepositorySlot(await store.readSnapshot(source.id))
     return (
-      await repositories.readImages(
-        source.id,
+      await repositories.readImages(source.id, () => ({
         commit,
-        new Map([[path, 1024 * 1024]]),
-        undefined,
+        paths: new Map([[path, 1024 * 1024]]),
         slot
-      )
+      }))
     ).get(path)
   }
   return {
     root,
+    capabilities,
     git,
     firstBytes,
     iconBytes,
@@ -180,7 +203,7 @@ it('retains the late-alphabet cover and icon in a catalog over 64 MiB of artwork
     cache,
     store: f.store,
     repositories: f.repositories,
-    allowsSource: () => true
+    policy: new PluginMarketplaceTeamPolicy()
   })
   const handler = createPluginImageRequestHandler({
     cache,
@@ -207,6 +230,67 @@ it('retains the late-alphabet cover and icon in a catalog over 64 MiB of artwork
     expect(Buffer.from(await response.arrayBuffer())).toEqual(bytes)
   }
 }, 120_000)
+
+it('serves managed catalog GET and HEAD after an offline restart and policy restoration', async () => {
+  const f = await fixture({ managed: true })
+  let capabilities: OrcaCloudCapabilities | undefined = f.capabilities
+  const getCapabilities = () => capabilities
+  const createHandler = (
+    store: PluginMarketplaceStore,
+    repositories: PluginCatalogRepositoryStore
+  ) => {
+    const cache = new PluginImageCache(join(f.root, 'managed-art'))
+    const images = new PluginCatalogImageOnDemand({
+      cache,
+      store,
+      repositories,
+      policy: new PluginMarketplaceTeamPolicy(getCapabilities)
+    })
+    return createPluginImageRequestHandler({
+      cache,
+      readCatalogImage: (reference, signal) => images.read(reference, signal),
+      findValidPlugin: () => null,
+      findApprovedPlugin: () => null
+    })
+  }
+  const url = (await f.service.listPlugins())[0]?.images?.cover?.url
+  expect(url).toBeTruthy()
+  expect(await f.store.listSources()).toEqual([])
+  const check = async (handler: ReturnType<typeof createHandler>) => {
+    const get = await handler(new Request(url!))
+    expect(get.status).toBe(200)
+    expect(Buffer.from(await get.arrayBuffer())).toEqual(f.firstBytes)
+    const head = await handler(new Request(url!, { method: 'HEAD' }))
+    expect(head.status).toBe(200)
+    expect(head.headers.get('content-type')).toBe('image/png')
+    expect(await head.arrayBuffer()).toHaveProperty('byteLength', 0)
+  }
+  await check(createHandler(f.store, f.repositories))
+  await rm(join(f.root, 'managed-art'), { recursive: true, force: true })
+
+  capabilities = undefined
+  vi.stubEnv('ORCA_TEST_SSH_REPOSITORIES', '{}')
+  const store = new PluginMarketplaceStore(f.root)
+  const repositories = new PluginCatalogRepositoryStore(f.root)
+  const service = new PluginMarketplaceService({
+    pluginsDataDir: f.root,
+    store,
+    repositories,
+    getTeamCapabilities: getCapabilities
+  })
+  await service.removeSource('f'.repeat(32)) // Wait for the startup sweep.
+  expect(await service.listPlugins()).toEqual([])
+  const handler = createHandler(store, repositories)
+  expect((await handler(new Request(url!))).status).toBe(404)
+  capabilities = f.capabilities
+  await check(handler)
+  capabilities = { ...f.capabilities, flags: { [ORCA_CLOUD_TEAM_POLICY_FLAGS.plugins]: false } }
+  expect((await handler(new Request(url!, { method: 'HEAD' }))).status).toBe(404)
+  capabilities = { ...f.capabilities, teamPolicy: { orgIds: ['org_test'] } }
+  expect((await handler(new Request(url!))).status).toBe(404)
+  capabilities = { ...f.capabilities, refreshedAt: 2 }
+  await check(handler)
+})
 
 it('keeps the published image readable until a replacement snapshot is saved', async () => {
   const f = await fixture()
@@ -369,11 +453,13 @@ it('fetches the branch on both first and subsequent reads when a tag shares its 
 it('pins the published commit before contacting the remote', async () => {
   const f = await fixture()
   await runPluginGit(['update-ref', '-d', 'refs/orca/snapshot'], f.repository)
-  vi.spyOn(pluginGit, 'runBoundedPluginGitDownload').mockImplementation(async (...args) => {
-    expect(await runUnmockedGit(['rev-parse', '--verify', 'refs/orca/snapshot'], args[1])).toBe(
-      f.firstCommit
-    )
-    return runUnmockedDownload(...args)
+  vi.spyOn(pluginGit, 'runPluginGit').mockImplementation(async (...args) => {
+    if (args[0].includes('ls-remote')) {
+      expect(await runUnmockedGit(['rev-parse', '--verify', 'refs/orca/snapshot'], args[1])).toBe(
+        f.firstCommit
+      )
+    }
+    return runUnmockedGit(...args)
   })
   expect(await f.service.refreshSource(f.source.id)).toMatchObject({ stale: false })
 })
@@ -388,6 +474,99 @@ it('reuses the retained clone after an unchanged refresh without leaving the fet
   await expect(
     runUnmockedGit(['show-ref', '--verify', 'refs/orca/fetched'], f.repository)
   ).rejects.toThrow()
+})
+
+it('pins both commits while the replacement snapshot is being saved', async () => {
+  const f = await fixture()
+  const next = await f.publish('second.png', pngImageBytes(1280, 800))
+  const save = f.store.writeSnapshot.bind(f.store)
+  vi.spyOn(f.store, 'writeSnapshot').mockImplementationOnce(async (input) => {
+    expect(await runUnmockedGit(['rev-parse', 'refs/orca/snapshot'], f.repository)).toBe(
+      f.firstCommit
+    )
+    expect(await runUnmockedGit(['rev-parse', 'refs/orca/fetched'], f.repository)).toBe(next)
+    return save(input)
+  })
+  expect(await f.service.refreshSource(f.source.id)).toMatchObject({ stale: false })
+  await expect(
+    runUnmockedGit(['show-ref', '--verify', 'refs/orca/fetched'], f.repository)
+  ).rejects.toThrow()
+})
+
+it.each([
+  ['loose', '100'],
+  ['packed', '1']
+])('prunes finalized %s objects left before the fetched ref', async (format, unpackLimit) => {
+  const f = await fixture()
+  const next = await f.publish('interrupted.png', pngImageBytes(1280, 800))
+  const restartedRoot = join(f.root, 'restarted')
+  const repository = join(restartedRoot, 'catalog-repositories', f.source.id, 'repository')
+  vi.spyOn(pluginGit, 'runBoundedPluginGitDownload').mockImplementationOnce(async (...args) => {
+    const [command, ...options] = args
+    await runUnmockedDownload(
+      command.map((arg) =>
+        arg === 'fetch.unpackLimit=0' ? `fetch.unpackLimit=${unpackLimit}` : arg
+      ),
+      ...options
+    )
+    await cp(f.repository, repository, { recursive: true })
+    await cp(join(f.root, 'marketplaces'), join(restartedRoot, 'marketplaces'), { recursive: true })
+  })
+  expect(await f.service.refreshSource(f.source.id)).toMatchObject({ stale: false })
+  const gitDir = join(repository, '.git')
+  const looseCommit = join(gitDir, 'objects', next.slice(0, 2), next.slice(2))
+  if (format === 'loose') {
+    await expect(access(looseCommit)).resolves.toBeUndefined()
+  } else {
+    await expect(access(looseCommit)).rejects.toMatchObject({ code: 'ENOENT' })
+    expect(
+      (await readdir(join(gitDir, 'objects', 'pack'))).some((file) => file.endsWith('.pack'))
+    ).toBe(true)
+  }
+  await expect(runUnmockedGit(['cat-file', '-e', next], repository)).resolves.toBe('')
+  await expect(
+    runUnmockedGit(['show-ref', '--verify', 'refs/orca/fetched'], repository)
+  ).rejects.toThrow()
+  await f.git(['reset', '--hard', f.firstCommit])
+  const repositories = new PluginCatalogRepositoryStore(restartedRoot)
+  const service = new PluginMarketplaceService({ pluginsDataDir: restartedRoot, repositories })
+  expect(await service.refreshSource(f.source.id)).toMatchObject({
+    stale: false,
+    marketplace: { resolvedCommit: f.firstCommit }
+  })
+  await expect(runUnmockedGit(['cat-file', '-e', next], repository)).rejects.toThrow()
+  const files = await repositories.readImages(f.source.id, () => ({
+    commit: f.firstCommit,
+    paths: new Map([['first.png', 1024 * 1024]]),
+    slot: 'repository'
+  }))
+  expect(files.get('first.png')).toEqual(f.firstBytes)
+})
+
+it('retries failed pruning on the next unchanged publication after restart', async () => {
+  const f = await fixture()
+  const nextBytes = pngImageBytes(1280, 800)
+  const next = await f.publish('second.png', nextBytes)
+  const git = vi.spyOn(pluginGit, 'runPluginGit').mockImplementation(async (...args) => {
+    if (args[0].includes('gc')) {
+      throw new Error('pruning interrupted')
+    }
+    return runUnmockedGit(...args)
+  })
+  expect(await f.service.refreshSource(f.source.id)).toMatchObject({ stale: false })
+  expect(await f.read(next, 'second.png')).toEqual(nextBytes)
+  await expect(runUnmockedGit(['cat-file', '-e', f.firstCommit], f.repository)).resolves.toBe('')
+  await expect(
+    runUnmockedGit(['show-ref', '--verify', 'refs/orca/fetched'], f.repository)
+  ).rejects.toThrow()
+  git.mockRestore()
+  const restarted = new PluginMarketplaceService({ pluginsDataDir: f.root })
+  expect(await restarted.refreshSource(f.source.id)).toMatchObject({
+    stale: false,
+    marketplace: { resolvedCommit: next }
+  })
+  await expect(runUnmockedGit(['cat-file', '-e', f.firstCommit], f.repository)).rejects.toThrow()
+  expect(await f.read(next, 'second.png')).toEqual(nextBytes)
 })
 
 it('sweeps interrupted transfers before fetching an unchanged catalog', async () => {
@@ -470,11 +649,11 @@ it.each(['before fetch', 'after publish'] as const)(
     })
     const refreshing = f.service.refreshSource(f.source.id)
     await pinStarted.promise
-    const reading = f.repositories.readImages(
-      f.source.id,
-      expectedCommit,
-      new Map([[expectedPath, 1024 * 1024]])
-    )
+    const reading = f.repositories.readImages(f.source.id, () => ({
+      commit: expectedCommit,
+      paths: new Map([[expectedPath, 1024 * 1024]]),
+      slot: 'repository'
+    }))
     const outcome = reading.then(
       (files) => files.get(expectedPath),
       (error: unknown) => error
@@ -525,6 +704,38 @@ it('holds off re-adding a source until overlapping removals finish', async () =>
     id: f.source.id,
     stale: false
   })
+})
+
+it('keeps a removed snapshot ineligible while a new registration is being published', async () => {
+  const f = await fixture()
+  const snapshot = join(f.root, 'marketplaces', 'snapshots', `${f.source.id}.v2.json`)
+  const remnant = `${snapshot}.saved`
+  await rename(snapshot, remnant)
+  await mkdir(snapshot)
+  await expect(f.service.removeSource(f.source.id)).rejects.toMatchObject({ code: 'ERR_FS_EISDIR' })
+  await rm(snapshot, { recursive: true })
+  await rename(remnant, snapshot)
+  expect(await f.store.listSources()).toEqual([])
+  const next = await f.publish('second.png', pngImageBytes(1280, 800))
+  const entered = Promise.withResolvers<void>()
+  const release = Promise.withResolvers<void>()
+  const save = f.store.writeSnapshot.bind(f.store)
+  vi.spyOn(f.store, 'writeSnapshot').mockImplementationOnce(async (input) => {
+    entered.resolve()
+    await release.promise
+    return save(input)
+  })
+  const adding = f.service.addSource(f.source.source)
+  try {
+    await entered.promise
+    expect(f.store.registeredSource(f.source.id)).toBeTruthy()
+    expect(await f.service.listPlugins()).toEqual([])
+    expect(await f.store.readSnapshot(f.source.id)).toBeNull()
+  } finally {
+    release.resolve()
+    await adding
+  }
+  expect(await adding).toMatchObject({ stale: false, marketplace: { resolvedCommit: next } })
 })
 
 it('sweeps abandoned repositories at startup and retries a failed removal', async () => {

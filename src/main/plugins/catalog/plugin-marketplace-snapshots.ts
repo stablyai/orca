@@ -6,6 +6,28 @@ import type {
 import { pluginMarketplaceErrorMessage } from './plugin-marketplace-error-message'
 import { pluginMarketplaceSourceState } from './plugin-marketplace-projection'
 import type { PluginMarketplaceTeamPolicy } from './plugin-marketplace-team-policy'
+import type { PluginCatalogRepositoryStore } from './plugin-catalog-repository'
+
+export function sweepUnpublishedCatalogRepositories(
+  repositories: PluginCatalogRepositoryStore | null,
+  store: PluginMarketplaceStore,
+  policy: PluginMarketplaceTeamPolicy
+): Promise<void> | undefined {
+  return repositories
+    ?.sweep(
+      Promise.all([store.listSources(), store.snapshotSourceIds()]).then(
+        ([registered, snapshots]) => [
+          ...registered.map(({ id }) => id),
+          ...policy.configuredManagedSourceIds(),
+          // Capabilities may not be loaded yet. Retain repositories that have a publication on disk.
+          ...snapshots
+        ]
+      )
+    )
+    .catch((error: unknown) => {
+      console.warn('[plugins] could not sweep retained catalog repositories:', error)
+    })
+}
 
 export async function readMarketplaceSourceStates(
   store: PluginMarketplaceStore,

@@ -5,7 +5,8 @@ import {
 import { runSourceRefresh } from './plugin-marketplace-refresh-queue'
 import {
   readMarketplaceSnapshots,
-  readMarketplaceSourceStates
+  readMarketplaceSourceStates,
+  sweepUnpublishedCatalogRepositories
 } from './plugin-marketplace-snapshots'
 import { PluginCatalogRepositoryStore } from './plugin-catalog-repository'
 import {
@@ -72,16 +73,17 @@ export class PluginMarketplaceService {
   }) {
     this.hostVersion = options.hostVersion ?? null
     this.store = options.store ?? new PluginMarketplaceStore(options.pluginsDataDir)
-    const repositories =
+    this.repositories =
       options.repositories ??
       (options.fetcher ? null : new PluginCatalogRepositoryStore(options.pluginsDataDir))
-    this.repositories = repositories
     this.fetcher = options.fetcher
-    this.repositorySweep = repositories?.sweep(this.store.listSources()).catch((error: unknown) => {
-      console.warn('[plugins] could not sweep retained catalog repositories:', error)
-    })
     this.getKillListEntry = options.getKillListEntry ?? (() => null)
     this.teamPolicy = new PluginMarketplaceTeamPolicy(options.getTeamCapabilities)
+    this.repositorySweep = sweepUnpublishedCatalogRepositories(
+      this.repositories,
+      this.store,
+      this.teamPolicy
+    )
     this.communitySeed = new CommunityMarketplaceSeed(this.store, (source) =>
       this.addSource(source)
     )
@@ -108,10 +110,10 @@ export class PluginMarketplaceService {
     parsedSource: PluginMarketplaceGitSource
   ): Promise<PluginMarketplaceSourceState> {
     const existing = (await this.store.listSources()).find((candidate) => candidate.id === sourceId)
-    const candidate: PluginMarketplaceRegisteredSource = existing ?? {
-      id: sourceId,
-      source: parsedSource,
-      addedAt: Date.now()
+    const candidate = existing ?? { id: sourceId, source: parsedSource, addedAt: Date.now() }
+    if (!existing && !this.teamPolicy.isManaged(sourceId)) {
+      // A failed removal can leave a snapshot for the previous registration.
+      await this.store.clearSnapshot(sourceId)
     }
     try {
       const snapshot = await refreshMarketplaceSnapshot(
@@ -245,9 +247,7 @@ export class PluginMarketplaceService {
     marketplaceSourceId: string,
     pluginKey: string
   ): Promise<PluginMarketplaceListing | null> {
-    const source = (await this.teamPolicy.list(this.store)).find(
-      (candidate) => candidate.id === marketplaceSourceId
-    )
+    const source = await this.teamPolicy.loadEffectiveSource(this.store, marketplaceSourceId)
     if (!source) {
       return null
     }
@@ -260,9 +260,7 @@ export class PluginMarketplaceService {
   }
 
   private async performRefresh(sourceId: string): Promise<PluginMarketplaceSourceState> {
-    const source = (await this.teamPolicy.list(this.store)).find(
-      (candidate) => candidate.id === sourceId
-    )
+    const source = await this.teamPolicy.loadEffectiveSource(this.store, sourceId)
     if (!source) {
       throw new Error(`unknown marketplace source: ${sourceId}`)
     }

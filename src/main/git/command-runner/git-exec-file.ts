@@ -7,7 +7,7 @@ import { retryGitFetchRefRace } from '../../../shared/git/fetch/git-fetch-ref-ra
 import { pendingWslDriveCheckoutGitRouting } from './host-routing/wsl-drive-checkout-git-routing'
 import type { ResolvedCommand } from './host-routing/wsl-command-resolution'
 import { annotateWslHostFailure, isTransientWslFailure } from './host-routing/wsl-host-failure'
-import type { GitBufferExecOptions, GitExecOptions } from './git-exec-options'
+import type { GitExecOptions } from './git-exec-options'
 import { execFileCapture, execFileCaptureToTermination } from './process-capture/exec-file-capture'
 import {
   pendingWslDirectGitReadEnvironment,
@@ -19,7 +19,7 @@ import {
 } from './host-routing/git-command-resolution'
 import { prepareWindowsHostGitEnvironment } from './host-routing/windows-host-git-environment'
 import { buildNetworkSshPolicyEnv } from './git-environment/git-ssh-policy-env'
-import { nonInteractiveGitEnv, untranslatedGitOutputEnv } from './git-environment/git-process-env'
+import { nonInteractiveGitEnv } from './git-environment/git-process-env'
 import { acquireGitAdmission, releaseGitAdmissionAfter } from './admission/git-subprocess-admission'
 import {
   GitCommandTimeoutError,
@@ -30,7 +30,7 @@ import {
   findGitSubcommandIndex
 } from '../../../shared/git/commands/git-command-classification'
 import { createAbortError } from './process-capture/abort-error'
-import { readCapturedGitBuffer, readCapturedGitString } from './process-capture/captured-git-output'
+import { readCapturedGitString } from './process-capture/captured-git-output'
 import { runUnlessGitCwdKnownMissing } from './host-routing/missing-git-spawn-cwd'
 import { trackGitWorktreeMutation } from './git-worktree-mutation-state'
 import { trackGitRefMutation } from './git-ref-mutation-state'
@@ -246,76 +246,4 @@ export function gitExecFileAsync(args: string[], callerOptions: GitExecOptions) 
   })
 }
 
-async function gitExecFileAsyncBufferInSpan(
-  args: string[],
-  options: GitBufferExecOptions
-): Promise<{ stdout: Buffer }> {
-  const meta = { args, cwd: options.cwd, admissionTier: options.admissionTier }
-  return withGitSpan(meta, async (span) => {
-    const checkoutRoutingReady = pendingWslDriveCheckoutGitRouting(args, options)
-    if (checkoutRoutingReady) {
-      await checkoutRoutingReady
-    }
-    const readEnvironmentReady = pendingWslDirectGitReadEnvironment(args, options)
-    if (readEnvironmentReady) {
-      await readEnvironmentReady
-    }
-    // Fence fallback login-shell output so rc banners cannot become raw blob content.
-    let resolved = resolveGitCommand(args, options, false, true)
-    const environmentReady = prepareWindowsHostGitEnvironment(resolved, undefined, options.signal)
-    if (environmentReady) {
-      await environmentReady
-    }
-    resolved = resolveGitCommand(args, options, false, true)
-    const grant = await acquireGitAdmission({
-      args,
-      cwd: options.cwd,
-      wslDistro: options.wslDistro,
-      tier: options.admissionTier,
-      signal: options.signal
-    })
-    span?.setAttribute('git.queue_wait_ms', grant.queueWaitMs)
-    span?.setAttribute('git.runs_in', gitRunsIn(resolved))
-    const timeoutMs = gitCommandTimeoutMs(args, options.timeout, options.timeoutMsForTest)
-    let termination: Promise<void> | null = null
-    try {
-      let reportTerminated: () => void = () => {}
-      termination = new Promise<void>((resolve) => {
-        reportTerminated = resolve
-      })
-      const { stdout } = await execFileCapture(resolved.binary, resolved.args, {
-        cwd: resolved.cwd,
-        ownedPosixGroup: process.platform !== 'win32' && !resolved.wsl,
-        encoding: 'buffer',
-        signal: options.signal,
-        stdin: options.stdin,
-        maxBuffer: options.maxBuffer,
-        timeout: timeoutMs,
-        env: untranslatedGitOutputEnv(options.env),
-        admissionTier: options.admissionTier,
-        onChildTerminated: reportTerminated,
-        // A buffered read holds only admission, so a lost worker ends it.
-        workerLossEndsLifetime: true,
-        ...(timeoutMs === undefined
-          ? {}
-          : { createTimeoutError: () => new GitCommandTimeoutError(timeoutMs) })
-      })
-      if (!Buffer.isBuffer(stdout)) {
-        throw new Error('Git buffer capture returned text instead of bytes')
-      }
-      return { stdout: readCapturedGitBuffer(stdout, resolved) }
-    } finally {
-      releaseGitAdmissionAfter(termination, grant)
-    }
-  })
-}
-
-export function gitExecFileAsyncBuffer(
-  args: string[],
-  callerOptions: Parameters<typeof gitExecFileAsyncBufferInSpan>[1]
-): Promise<{ stdout: Buffer }> {
-  const options = routeLocalGitOptions(callerOptions)
-  return runAdmittedWslGit(options, () =>
-    runUnlessGitCwdKnownMissing(options, () => gitExecFileAsyncBufferInSpan(args, options))
-  )
-}
+export { gitExecFileAsyncBuffer } from './git-buffered-read'
