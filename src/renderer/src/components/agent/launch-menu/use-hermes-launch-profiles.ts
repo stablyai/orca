@@ -1,10 +1,5 @@
 import { useEffect, useState } from 'react'
 import { isWebClientLocation } from '@/app-shell/platform/web-client-location'
-import {
-  HERMES_PROFILE_NAME,
-  hasHermesProfileArg,
-  withHermesProfileArgs
-} from '../../../../../shared/agent-launch/startup/hermes-profile'
 import type { ExecutionHostId } from '../../../../../shared/execution-host/execution-host'
 import { parseExecutionHostId } from '../../../../../shared/execution-host/execution-host'
 import type { HermesLaunchProfiles } from '../../../../../shared/hermes/hermes-launch-profiles'
@@ -94,13 +89,4 @@ function readCachedProfiles(key: string): { key: string; profiles: HermesLaunchP
 export function hermesProfileSubmenuApplies(executionHostId: ExecutionHostId | undefined): boolean {
   const kind = executionHostId === undefined ? 'local' : parseExecutionHostId(executionHostId)?.kind
   return kind === 'local' || kind === 'ssh' || kind === 'runtime'
-}
-
-/** `--profile <id>` folded into the pane's Arguments; null keeps the caller's own text.
- *  A profile flag already present is a choice typed in Settings or the picker, so it wins. */
-export function hermesProfileLaunchArgs(baseArgs: string, profile: string): string | null {
-  if (!HERMES_PROFILE_NAME.test(profile) || hasHermesProfileArg(baseArgs)) {
-    return null
-  }
-  return withHermesProfileArgs(baseArgs, profile)
 }

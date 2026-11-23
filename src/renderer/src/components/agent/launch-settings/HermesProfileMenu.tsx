@@ -25,8 +25,9 @@ export function hermesProfileSurfaceUnavailable(
   if (entry.agent !== 'hermes') {
     return undefined
   }
-  const argsText = draft.pendingArguments ?? draft.arguments ?? ''
-  return readHermesProfileArg(argsText) === null
+  const picked = readHermesProfileArg(draft.pendingArguments ?? draft.arguments ?? '')
+  // The root store is reachable from a chat; only a named profile needs the terminal's arguments.
+  return !picked || picked === 'default'
     ? undefined
     : {
         chat: t(
@@ -80,9 +81,13 @@ export function HermesProfileMenu({
   }
   const argsText = draft.pendingArguments ?? draft.arguments ?? entry.arguments ?? ''
   const picked = readHermesProfileArg(argsText)
-  const label = picked ?? t('agentPicker.hermesDefaultProfile', 'Default')
+  const current = picked === 'default' ? null : picked
+  const label = current ?? t('agentPicker.hermesDefaultProfile', 'Default')
   const choose = (profile: string | null) =>
-    onEdit({ kind: 'arguments', text: withHermesProfileArgs(argsText, profile) })
+    onEdit({
+      kind: 'arguments',
+      text: withHermesProfileArgs(argsText, profile ?? 'default')
+    })
   return (
     <div className="flex min-h-7 min-w-0 shrink-0 items-center justify-between gap-3 border-t border-border px-2.5 py-1.5">
       <span className="text-xs text-muted-foreground">
@@ -104,7 +109,7 @@ export function HermesProfileMenu({
           </Button>
         </DropdownMenuTrigger>
         <DropdownMenuContent align="start" collisionPadding={8} className="min-w-0">
-          <HermesProfileItems profiles={profiles.profiles} current={picked} onPick={choose} />
+          <HermesProfileItems profiles={profiles.profiles} current={current} onPick={choose} />
         </DropdownMenuContent>
       </DropdownMenu>
     </div>

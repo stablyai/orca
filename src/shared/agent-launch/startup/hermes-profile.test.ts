@@ -3,7 +3,6 @@ import {
   hermesProfileRoot,
   hermesStateDbProfile,
   hermesStateDbProfileArgs,
-  hasHermesProfileArg,
   readHermesProfileArg,
   readHermesProfileName,
   withHermesProfileArgs
@@ -67,20 +66,33 @@ describe('hermes profile arguments', () => {
     expect(readHermesProfileArg('--profile=work --tui')).toBe('work')
     expect(readHermesProfileArg('-p work')).toBe('work')
     expect(readHermesProfileArg('--tui')).toBeNull()
-    expect(readHermesProfileArg('--profile default')).toBeNull()
-    expect(hasHermesProfileArg('--profile default')).toBe(true)
-    expect(hasHermesProfileArg('--tui')).toBe(false)
+  })
+
+  it('keeps an explicit default apart from no flag', () => {
+    // Bare `hermes` follows the host's sticky profile; `--profile default` pins the root store.
+    expect(readHermesProfileArg('--profile default')).toBe('default')
+    expect(readHermesProfileArg('-p default')).toBe('default')
   })
 
   it('folds a picked profile into the user text', () => {
     expect(withHermesProfileArgs('--tui', 'work')).toBe('--tui --profile work')
     expect(withHermesProfileArgs('', 'work')).toBe('--profile work')
     expect(withHermesProfileArgs('--profile old --tui', 'work')).toBe('--tui --profile work')
+    expect(withHermesProfileArgs('--tui', 'default')).toBe('--tui --profile default')
     expect(withHermesProfileArgs('-p old', null)).toBe('')
+  })
+
+  it('changes only the flag, never whitespace inside another value', () => {
+    expect(withHermesProfileArgs('--title "a  b" --profile old', 'work')).toBe(
+      '--title "a  b" --profile work'
+    )
+    expect(withHermesProfileArgs('--title "a  b"', null)).toBe('--title "a  b"')
   })
 
   it('leaves the text alone for a name that cannot be spliced', () => {
     expect(withHermesProfileArgs('--tui', 'a;b')).toBe('--tui')
+    expect(readHermesProfileArg('--profile a;b')).toBeNull()
+    expect(readHermesProfileArg('--profile custom')).toBeNull()
   })
 })
 

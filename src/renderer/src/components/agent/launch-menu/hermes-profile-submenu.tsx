@@ -15,7 +15,7 @@ import { useAppStore } from '@/store/index'
 import { getAgentCatalog } from '@/lib/agent-catalog/agent-catalog'
 import { useTranslate } from '@/i18n/use-translate'
 import { rowTitle } from './agent-menu-row-presentation'
-import { hermesProfileLaunchArgs } from './use-hermes-launch-profiles'
+import { withHermesProfileArgs } from '../../../../../shared/agent-launch/startup/hermes-profile'
 
 /** Launch Hermes in one of its named profiles: `--profile <id>` folds into the pane's Arguments. */
 export function HermesProfileSubmenu({
@@ -41,15 +41,15 @@ export function HermesProfileSubmenu({
   const t = useTranslate()
   const settings = useAppStore((s) => s.settings)
   const launchProfile = (profile: string | null) => {
-    if (!profile) {
-      // The default profile is a plain launch: bare `hermes` follows its own sticky choice.
-      runLaunch(row)
-      return
-    }
+    // A menu pick always wins, and Default is explicit: bare `hermes` follows the host's sticky
+    // profile, which would contradict the marked item on a host with a named active profile.
     const configuredArgs = resolveTuiAgentLaunchRawArgs('hermes', settings)
-    const agentArgs = hermesProfileLaunchArgs(configuredArgs, profile)
-    // A null fold keeps the user's own profile flag; the launch then runs their Arguments.
-    runLaunch(row, undefined, undefined, agentArgs ?? undefined)
+    runLaunch(
+      row,
+      undefined,
+      undefined,
+      withHermesProfileArgs(configuredArgs, profile ?? 'default')
+    )
   }
   return (
     <DropdownMenuSub>
