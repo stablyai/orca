@@ -14,7 +14,7 @@ import {
 } from './dingtalk-domain'
 import { decideInbound } from './dingtalk-inbound'
 import { DingTalkLedger } from './dingtalk-ledger'
-import { attributeTurnEnded, DingTalkTurnDeliveries, type TurnObservation } from './dingtalk-turns'
+import { DingTalkTurnDeliveries } from './dingtalk-turns'
 import { recoverDingTalkLedger, replayDingTalkInbox } from './dingtalk-local-recovery'
 import { sendDingTalkReplyIfEnabled } from './dingtalk-local-reply-send'
 import { statusOf, type DingTalkLocalStatus } from './dingtalk-local-status'
@@ -54,8 +54,6 @@ export function installDingTalkLocalConnector(deps: ConnectorDeps): DingTalkLoca
   let lastError = ''
   const sending = new Set<string>()
   const turnDeliveries = new DingTalkTurnDeliveries()
-  // Rows a turn answered before their delivery was confirmed; attributed once it is.
-  const answeredEarly = new Set<string>()
   const recordError = (error: unknown): void => {
     lastError = messageOf(error)
   }
@@ -170,7 +168,7 @@ export function installDingTalkLocalConnector(deps: ConnectorDeps): DingTalkLoca
       })
     }
     if (
-      answeredEarly.delete(inboxKey) &&
+      turnDeliveries.landed(inboxKey) &&
       ledger.snapshot().inbox[inboxKey]?.state === 'delivered'
     ) {
       await ledger.transitionInbox(inboxKey, 'delivered', 'attributed')
@@ -183,26 +181,33 @@ export function installDingTalkLocalConnector(deps: ConnectorDeps): DingTalkLoca
       { kind: 'turn-ended' }
     >
   ): Promise<void> => {
-    const attribution = attributeTurnEnded(ledger.snapshot(), {
+    const { externalId } = event.conversation
+    const attribution = turnDeliveries.attribute(ledger.snapshot(), {
       kind: 'turn-ended',
       source: event.conversation.source,
-      externalId: event.conversation.externalId,
+      externalId,
       turnId: event.turnId,
       origin: event.origin,
-      lastAssistantMessage: event.lastAssistantMessage,
-      deliveryId: turnDeliveries.end(event.conversation.externalId, event.turnId)
-    } satisfies TurnObservation)
+      lastAssistantMessage: event.lastAssistantMessage
+    })
     if (attribution.kind !== 'reply') {
       return
     }
-    await ledger.putReply(attribution.reply)
-    for (const inboxKey of attribution.inboxKeys) {
-      const state = ledger.snapshot().inbox[inboxKey]?.state
-      if (state === 'delivered') {
-        await ledger.transitionInbox(inboxKey, 'delivered', 'attributed')
-      } else if (state === 'delivering') {
-        answeredEarly.add(inboxKey)
+    try {
+      // A repeated or concurrent end of the same turn stores no second reply and claims no rows.
+      if (!(await ledger.putReply(attribution.reply))) {
+        return
       }
+      for (const inboxKey of attribution.inboxKeys) {
+        const state = ledger.snapshot().inbox[inboxKey]?.state
+        if (state === 'delivered') {
+          await ledger.transitionInbox(inboxKey, 'delivered', 'attributed')
+        } else if (state === 'delivering') {
+          turnDeliveries.answerEarly(inboxKey)
+        }
+      }
+    } finally {
+      turnDeliveries.end(externalId, event.turnId)
     }
     void sendReplyIfEnabled(attribution.reply)
   }
@@ -273,6 +278,7 @@ export function installDingTalkLocalConnector(deps: ConnectorDeps): DingTalkLoca
       currentSetup = await readSetup()
       const seam = deps.seam()
       if (seam) {
+        turnDeliveries.watch()
         releaseWatch = seam.watch(deps.host(), (event) => {
           if (event.kind === 'turn-started') {
             turnDeliveries.start(event.conversation.externalId, event.at, event.deliveryId)

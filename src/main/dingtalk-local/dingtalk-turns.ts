@@ -4,6 +4,7 @@ import {
   type ConversationRow,
   type DingTalkExternalId,
   type DingTalkLedgerState,
+  type InboxRow,
   type ReplyRow
 } from './dingtalk-domain'
 
@@ -14,7 +15,7 @@ export type TurnObservation = {
   turnId: number | null
   origin?: string
   lastAssistantMessage?: string
-  /** The delivery that alone started this turn, from its turn-started event. */
+  /** The delivery that alone started this turn, from its turn-started event; it owns the turn. */
   deliveryId?: string
 }
 
@@ -34,7 +35,8 @@ export type TurnAttribution =
 export function attributeTurnEnded(
   state: DingTalkLedgerState,
   event: TurnObservation,
-  now = Date.now()
+  now = Date.now(),
+  sweepable: (row: InboxRow) => boolean = () => true
 ): TurnAttribution {
   if (event.source !== 'dingtalk') {
     return { kind: 'ignore', reason: 'wrong_source' }
@@ -70,37 +72,83 @@ export function attributeTurnEnded(
     error: '',
     updatedAt: now
   }
-  return { kind: 'reply', reply, inboxKeys: answeredInboxKeys(state, event) }
+  return { kind: 'reply', reply, inboxKeys: answeredInboxKeys(state, event, sweepable) }
 }
 
-/** The messages a turn answered: the one delivery that started it, else every message of the
- *  conversation still in flight, since a busy chat folds those into its running turn. */
-function answeredInboxKeys(state: DingTalkLedgerState, event: TurnObservation): string[] {
+/** The messages a turn answered: exactly the one delivery that started it, else every sweepable
+ *  message of the conversation still in flight, since a busy chat folds those into its running turn. */
+function answeredInboxKeys(
+  state: DingTalkLedgerState,
+  event: TurnObservation,
+  sweepable: (row: InboxRow) => boolean
+): string[] {
   const rows = Object.values(state.inbox).filter((row) => row.externalId === event.externalId)
-  const started = event.deliveryId && rows.find((row) => row.deliveryId === event.deliveryId)
-  if (started) {
-    return [started.key]
+  if (event.deliveryId) {
+    return rows.filter((row) => row.deliveryId === event.deliveryId).map((row) => row.key)
   }
   return rows
-    .filter((row) => row.state === 'delivered' || row.state === 'delivering')
+    .filter((row) => (row.state === 'delivered' || row.state === 'delivering') && sweepable(row))
     .map((row) => row.key)
 }
 
-/** Remembers which delivery alone started each turn, until that turn ends. */
+const turnKey = (externalId: string, turnId: number | null): string =>
+  `${externalId}\u0000${turnId}`
+
+/** One watch's turns: the delivery each named turn answers, and rows answered before they landed. */
 export class DingTalkTurnDeliveries {
-  private readonly started = new Map<string, string>()
+  // Kept until the turn's reply is stored, so a repeated or concurrent end stays on its own row.
+  private readonly named = new Map<string, string>()
+  private readonly answeredEarly = new Set<string>()
+  private watchedSince = Number.POSITIVE_INFINITY
+
+  /** A new watch: rows delivered before it belong to turns whose end it never hears. */
+  watch(now = Date.now()): void {
+    this.named.clear()
+    this.answeredEarly.clear()
+    this.watchedSince = now
+  }
 
   start(externalId: string, at: number, deliveryId: string | undefined): void {
     if (deliveryId) {
-      this.started.set(`${externalId}\u0000${at}`, deliveryId)
+      this.named.set(turnKey(externalId, at), deliveryId)
     }
   }
 
-  end(externalId: string, turnId: number | null): string | undefined {
-    const key = `${externalId}\u0000${turnId}`
-    const deliveryId = this.started.get(key)
-    this.started.delete(key)
-    return deliveryId
+  attribute(
+    state: DingTalkLedgerState,
+    event: Omit<TurnObservation, 'deliveryId'>
+  ): TurnAttribution {
+    const key = turnKey(event.externalId, event.turnId)
+    const deliveryId = this.named.get(key)
+    const result = attributeTurnEnded(state, { ...event, deliveryId }, Date.now(), (row) =>
+      this.sweepable(row)
+    )
+    if (result.kind === 'ignore' && result.reason !== 'already_replied') {
+      this.named.delete(key)
+    }
+    return result
+  }
+
+  /** The turn's reply is stored and its rows claimed. */
+  end(externalId: string, turnId: number | null): void {
+    this.named.delete(turnKey(externalId, turnId))
+  }
+
+  answerEarly(inboxKey: string): void {
+    this.answeredEarly.add(inboxKey)
+  }
+
+  /** Whether a turn answered this row before its delivery landed; answered once. */
+  landed(inboxKey: string): boolean {
+    return this.answeredEarly.delete(inboxKey)
+  }
+
+  private sweepable(row: InboxRow): boolean {
+    return (
+      row.updatedAt >= this.watchedSince &&
+      !this.answeredEarly.has(row.key) &&
+      ![...this.named.values()].includes(row.deliveryId)
+    )
   }
 }
 

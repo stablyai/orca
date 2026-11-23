@@ -10,12 +10,13 @@ import {
   stableReplyId,
   stableSendUuid,
   type DingTalkInbound,
+  type DingTalkLedgerState,
   type InboxRow
 } from './dingtalk-domain'
 import { decideInbound } from './dingtalk-inbound'
 import { DingTalkLedger } from './dingtalk-ledger'
 import { reconcileLedger } from './dingtalk-reconcile'
-import { attributeTurnEnded } from './dingtalk-turns'
+import { attributeTurnEnded, DingTalkTurnDeliveries } from './dingtalk-turns'
 import { cloudConversation } from '../../shared/connectors/connector-cloud-contract'
 
 const profile = schemas.Profile.parse('corp:user')
@@ -196,6 +197,68 @@ describe('DingTalk turn attribution', () => {
         uuid: expect.stringContaining('dt-local-')
       })
     }
+  })
+})
+
+describe('DingTalk turn deliveries', () => {
+  const ended = {
+    kind: 'turn-ended',
+    source: 'dingtalk',
+    externalId,
+    turnId: 7,
+    origin: 'delivery',
+    lastAssistantMessage: 'done'
+  } as const
+  const secondId = schemas.MessageId.parse('message-2')
+  function stateWith(...rows: InboxRow[]): DingTalkLedgerState {
+    const conversation = {
+      externalId,
+      profile,
+      groupId,
+      conversationId,
+      botId: 'bot',
+      sessionId: 'session-1',
+      latestMessageId: messageId,
+      updatedAt: 1
+    }
+    return {
+      version: 1,
+      inbox: Object.fromEntries(rows.map((row) => [row.key, row])),
+      conversations: { [externalId]: conversation },
+      replies: {},
+      watermarks: {}
+    }
+  }
+  const second: InboxRow = {
+    ...inbox('delivered'),
+    key: 'inbox-2',
+    event: { ...inbound(), messageId: secondId },
+    deliveryId: stableDeliveryId(profile, secondId),
+    updatedAt: 200
+  }
+
+  it('keeps a repeated end of a named turn on its own row until its reply is stored', () => {
+    const turns = new DingTalkTurnDeliveries()
+    turns.watch(100)
+    turns.start(externalId, 7, second.deliveryId)
+    const state = stateWith({ ...inbox('delivered'), updatedAt: 150 }, second)
+    const first = turns.attribute(state, ended)
+    const repeated = turns.attribute(state, ended)
+    expect(first.kind === 'reply' && first.inboxKeys).toEqual(['inbox-2'])
+    expect(repeated.kind === 'reply' && repeated.inboxKeys).toEqual(['inbox-2'])
+  })
+
+  it('leaves rows delivered before the watch, or owned by a named turn, out of an unnamed sweep', () => {
+    const turns = new DingTalkTurnDeliveries()
+    turns.watch(100)
+    const third: InboxRow = {
+      ...second,
+      key: 'inbox-3',
+      deliveryId: stableDeliveryId(profile, schemas.MessageId.parse('message-3'))
+    }
+    turns.start(externalId, 9, third.deliveryId)
+    const swept = turns.attribute(stateWith(inbox('delivered'), second, third), ended)
+    expect(swept.kind === 'reply' && swept.inboxKeys).toEqual(['inbox-2'])
   })
 })
 
