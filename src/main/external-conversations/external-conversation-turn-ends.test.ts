@@ -1,11 +1,11 @@
 import { expect, it } from 'vitest'
 import { mergedTurns } from '../native-chat/agent-session-wire/observations/structured-agent-session-turn-completion-feed'
-import { threadBotTurnReply } from './external-conversation-turn-ends'
+import { threadBotTurnReply, type ChatTurnEnd } from './external-conversation-turn-ends'
+import type { ExternalConversationLink } from '../../shared/connectors/external-conversation-link'
 import type { EndedChatTurn } from './external-conversation-ended-turn'
 
-type End = Parameters<typeof threadBotTurnReply>[0]
 const WARNING = 'I replied but the message may not have reached you. Please ask again.'
-const link = {
+const link: ExternalConversationLink = {
   source: 'slack',
   externalId: 'thread',
   sessionId: 'chat-1',
@@ -13,23 +13,39 @@ const link = {
   paneKey: 'pane',
   bot: { kind: 'bot', botId: 'bot-1' },
   createdAt: 0
-} as Parameters<typeof threadBotTurnReply>[1]
+}
 // Worker mail woke the chat and the bot ended that turn quietly.
-const quiet = {
-  lastAssistantMessage: 'NO_REPLY',
-  opener: { body: { kind: 'message', role: 'user', origin: 'orca' } }
-} as unknown as EndedChatTurn
+const quiet: EndedChatTurn = { lastAssistantMessage: 'NO_REPLY' }
 const stamped = (externalId: string): Pick<EndedChatTurn, 'stamps'> => ({
-  stamps: [{ conversation: { source: 'slack', externalId } }] as EndedChatTurn['stamps']
+  stamps: [{ account: 'a', conversation: { source: 'slack', externalId }, deliveryId: 'd' }]
 })
 
 async function told(mergedTurnCount: number | undefined, merged?: Pick<EndedChatTurn, 'stamps'>[]) {
-  const end = {
+  const end: ChatTurnEnd = {
+    ended: {
+      kind: 'turn-ended',
+      conversation: { source: 'slack', externalId: 'thread' },
+      worktreeId: 'wt',
+      paneKey: 'pane',
+      turnId: null,
+      stopReason: 'success',
+      at: 0
+    },
     news: {
+      kind: 'turn-ended',
+      sessionId: 'chat-1',
+      outcome: 'success',
       ...(mergedTurnCount === undefined ? {} : { mergedTurnCount }),
-      ...(merged ? { readMergedAttributions: async () => merged } : {})
-    }
-  } as End
+      ...(merged ? { readMergedAttributions: async () => merged } : {}),
+      readTurn: async () => quiet,
+      at: 0
+    },
+    agent: 'codex',
+    emit: () => {},
+    turnFor: () => ({}),
+    workersChecked: async () => undefined,
+    current: () => true
+  }
   return threadBotTurnReply(end, link, quiet, true)
 }
 
