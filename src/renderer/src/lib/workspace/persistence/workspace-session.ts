@@ -7,6 +7,8 @@ import { pruneLocalTerminalScrollbackBuffers } from '../../../../../shared/works
 import { normalizeBrowserHistoryEntries } from '../../../../../shared/workspace-session/workspace-session-browser-history'
 import { normalizeWorkspaceDocHistoryEntries } from '../../../../../shared/workspace-session/workspace-doc-history'
 import type { AppState } from '../../../store/types'
+import { getRepoIdFromWorktreeId } from '../../../../../shared/worktree/id'
+import { getRepoSshConnectionId } from '../../../../../shared/execution-host/execution-host'
 import type { OpenFile } from '../../../store/slices/editor/types/open-file'
 import { buildPersistedUnifiedTabSessionData } from './workspace-session-unified-tabs'
 import { buildLastVisitedAtByWorktreeId } from './workspace-session-focus-recency'
@@ -109,6 +111,8 @@ export const SESSION_RELEVANT_FIELDS = [
   'deferredSshSessionIdsByTabId',
   'strandedEditorDrafts'
 ] as const satisfies readonly (keyof WorkspaceSessionSnapshot)[]
+
+export type SessionRelevantField = (typeof SESSION_RELEVANT_FIELDS)[number]
 
 type _MissingSessionField = Exclude<
   keyof WorkspaceSessionSnapshot,
@@ -238,9 +242,12 @@ export function buildTerminalSessionData(
   // Derive reconnect targets locally with preindexed ownership; fragile synchronous IPC can drop under shutdown pressure, while per-tab catalog rescans delay quit.
   const remoteSessionIdsByTabId: Record<string, string> = {}
   for (const [worktreeId, tabs] of Object.entries(tabsByWorktree)) {
-    const worktree = worktreeById.get(worktreeId)
-    const repo = worktree ? repoById.get(worktree.repoId) : null
-    if (!repo?.connectionId) {
+    // Cold-start SSH listings can be absent; the composite worktree id still names its repo.
+    const repo = repoById.get(
+      worktreeById.get(worktreeId)?.repoId ?? getRepoIdFromWorktreeId(worktreeId)
+    )
+    // Legacy connectionId and ssh:<target> ownership both name an SSH repo.
+    if (!repo || !getRepoSshConnectionId(repo)) {
       continue
     }
     for (const tab of tabs) {

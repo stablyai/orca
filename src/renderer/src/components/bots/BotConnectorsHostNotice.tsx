@@ -11,6 +11,7 @@ import {
   cancelBotHostSignIn,
   startBotHostSignIn,
   useBotHostOrcaAccount,
+  useBotHostOrcaAccountSettled,
   useBotHostSignIn,
   type BotHostSignInView
 } from '@/lib/bot-host-orca-account'
@@ -19,9 +20,12 @@ import { useAppStore } from '@/store'
 import { BOTS_CONNECTORS_RUNTIME_CAPABILITY } from '../../../../shared/bot-runtime-capabilities'
 import { botHasConnector, type Bot } from '../../../../shared/bot-types'
 import { botLinkOwners } from '../../../../shared/bot-link-owners'
+import { orcaCloudNeedsSignIn } from '../../../../shared/bots/host-orca-sign-in'
 import type { ExecutionHostId } from '../../../../shared/execution-host/execution-host'
 import type { OrcaAccountServerStatus } from '../../../../shared/orca-account-server-sign-in'
+import { joinSentences } from '../../../../shared/text/sentence-joining'
 import { useBotHostLabel } from './use-bot-host-label'
+import { BotHostSignInBlocked, useBotHostSignInFromHere } from './bot-host-sign-in-from-here'
 import { openBotConnectorsTab } from './bot-settings-open'
 
 /** What the notice says for a server bot; null says nothing. */
@@ -33,6 +37,10 @@ export type BotHostNoticeState =
   | { kind: 'unreachable' }
   | { kind: 'cant-save'; reason: string }
   | { kind: 'update-needed' }
+  /** Its link waits on its sign-in, but its account couldn't be read: Try again reads it. */
+  | { kind: 'unread' }
+  /** A build without Orca Cloud sign-in, for links that need one. */
+  | { kind: 'unconfigured' }
   | null
 
 /** The notice for a server bot, from its host's own account, its connector and its Orca's version. */
@@ -44,6 +52,8 @@ export function botHostNoticeState(input: {
   /** Who each of the bot's links was made under (null: not recorded). */
   linkOwners: (string | null)[]
   own: { userId: string; email: string } | null
+  /** Whether the host's account read has finished (failed or not). */
+  settled: boolean
 }): BotHostNoticeState {
   const { account, connector } = input
   if (input.hasConnectorSetup === null) {
@@ -52,8 +62,15 @@ export function botHostNoticeState(input: {
   if (!input.hasConnectorSetup) {
     return { kind: 'update-needed' }
   }
-  if (!account || account.state === 'unconfigured') {
-    return null
+  if (!account) {
+    // Still reading says nothing; a failed read says so only where the link waits on a sign-in.
+    return input.settled && orcaCloudNeedsSignIn(connector) ? { kind: 'unread' } : null
+  }
+  if (account.state === 'unconfigured') {
+    // Only where a sign-in would matter: the bot has links, or the link itself asks for one.
+    return connector !== 'ok' && (input.linkOwners.length > 0 || orcaCloudNeedsSignIn(connector))
+      ? { kind: 'unconfigured' }
+      : null
   }
   if (account.state !== 'signed-in' && account.storage.kind === 'refused') {
     return { kind: 'cant-save', reason: account.storage.reason }
@@ -92,13 +109,11 @@ function linkedTo(
 }
 
 /**
- * From Settings, the sign-in moves to a bot's Connectors tab first: the page opens in that bot's
- * workspace, which leaves Settings, and the tab keeps the wait line and its code beside it.
+ * The sign-in moves to a bot's Connectors tab first. From Settings the browser page leaves
+ * Settings; from a chat the setup dialog closes. The tab keeps the code, the failure, and Cancel
+ * in view either way.
  */
 export function showSignInBesidePage(hostId: ExecutionHostId, bot: Bot | null): void {
-  if (useAppStore.getState().activeView !== 'settings') {
-    return
-  }
   const target = bot ?? readHostBots(hostId)[0]
   if (target) {
     openBotConnectorsTab(target)
@@ -156,6 +171,70 @@ function SignInWaiting({
   )
 }
 
+/** Sign in on the server, then its wait with the code to check, or why it stopped. */
+export function BotHostSignInControl({
+  hostId,
+  host,
+  bot,
+  label,
+  firstSignIn
+}: {
+  hostId: ExecutionHostId
+  host: string
+  bot: Bot | null
+  label: string
+  firstSignIn: boolean
+}): React.JSX.Element {
+  const signIn = useBotHostSignIn(hostId)
+  if (signIn.phase === 'waiting') {
+    return <SignInWaiting hostId={hostId} view={signIn} firstSignIn={firstSignIn} host={host} />
+  }
+  return (
+    <div className="flex flex-col gap-1">
+      {signIn.phase === 'failed' ? <p className="text-destructive">{signIn.error}</p> : null}
+      <Button
+        variant="outline"
+        size="xs"
+        className="self-start"
+        disabled={signIn.phase === 'starting'}
+        onClick={() => {
+          showSignInBesidePage(hostId, bot)
+          void startBotHostSignIn(hostId, bot ?? undefined)
+        }}
+      >
+        {label}
+      </Button>
+    </div>
+  )
+}
+
+/** A server's notice state and the account it read, for the notice and a chat card. */
+export function useServerNoticeState(
+  hostId: ExecutionHostId,
+  bot: Bot | null
+): {
+  state: BotHostNoticeState
+  account: OrcaAccountServerStatus | null
+  connector: BotHostConnectorStatus | undefined
+} {
+  const account = useBotHostOrcaAccount(hostId)
+  const settled = useBotHostOrcaAccountSettled(hostId)
+  const connector = useBotHostConnectorStatus(hostId)
+  const hasSetup = useBotHostHas(hostId, BOTS_CONNECTORS_RUNTIME_CAPABILITY)
+  const hasConnectorSetup = useBotHostVerified(hostId) ? hasSetup : null
+  const ownCloud = useAppStore((state) => state.orcaProfileAuthStatus?.cloud ?? null)
+  const own = ownCloud ? { userId: ownCloud.userId, email: ownCloud.email } : null
+  const state = botHostNoticeState({
+    account,
+    connector,
+    hasConnectorSetup,
+    linkOwners: bot ? botLinkOwners(bot) : [],
+    own,
+    settled
+  })
+  return { state, account, connector }
+}
+
 /**
  * A server's notice: for one of its bots, or (no bot) for all of them in Settings, where the group
  * header already says its account and version.
@@ -170,20 +249,8 @@ function ServerNotice({
   bot: Bot | null
 }): React.JSX.Element | null {
   const t = useTranslate()
-  const account = useBotHostOrcaAccount(hostId)
-  const connector = useBotHostConnectorStatus(hostId)
-  const hasSetup = useBotHostHas(hostId, BOTS_CONNECTORS_RUNTIME_CAPABILITY)
-  const hasConnectorSetup = useBotHostVerified(hostId) ? hasSetup : null
-  const ownCloud = useAppStore((state) => state.orcaProfileAuthStatus?.cloud ?? null)
-  const own = ownCloud ? { userId: ownCloud.userId, email: ownCloud.email } : null
-  const signIn = useBotHostSignIn(hostId)
-  const state = botHostNoticeState({
-    account,
-    connector,
-    hasConnectorSetup,
-    linkOwners: bot ? botLinkOwners(bot) : [],
-    own
-  })
+  const signInFromHere = useBotHostSignInFromHere(hostId)
+  const { state } = useServerNoticeState(hostId, bot)
   if (!state || (!bot && state.kind === 'update-needed')) {
     return null
   }
@@ -202,35 +269,19 @@ function ServerNotice({
         })
       : null
   const line = (text: string): React.JSX.Element => (
-    <p>
-      {lead ? `${lead} ` : ''}
-      {text}
-    </p>
+    <p>{lead ? joinSentences([lead, text]) : text}</p>
   )
-  const signInButton = (label: string): React.JSX.Element =>
-    signIn.phase === 'waiting' ? (
-      <SignInWaiting
-        hostId={hostId}
-        view={signIn}
-        firstSignIn={state.kind === 'signed-out'}
-        host={host}
-      />
+  const signInButton = (label: string): React.JSX.Element | null =>
+    signInFromHere === null ? null : signInFromHere !== 'start' ? (
+      <BotHostSignInBlocked hostId={hostId} host={host} why={signInFromHere} />
     ) : (
-      <div className="flex flex-col gap-1">
-        {signIn.phase === 'failed' ? <p className="text-destructive">{signIn.error}</p> : null}
-        <Button
-          variant="outline"
-          size="xs"
-          className="self-start"
-          disabled={signIn.phase === 'starting'}
-          onClick={() => {
-            showSignInBesidePage(hostId, bot)
-            void startBotHostSignIn(hostId, bot ?? undefined)
-          }}
-        >
-          {label}
-        </Button>
-      </div>
+      <BotHostSignInControl
+        hostId={hostId}
+        host={host}
+        bot={bot}
+        label={label}
+        firstSignIn={state.kind === 'signed-out'}
+      />
     )
   const body = ((): React.JSX.Element => {
     switch (state.kind) {
@@ -243,6 +294,15 @@ function ServerNotice({
               { host, name }
             )}
           </p>
+        )
+      case 'unread':
+      case 'unconfigured':
+        // What a sign-in from here waits on, and (unread) Try again.
+        return (
+          <>
+            {lead ? <p>{lead}</p> : null}
+            <BotHostSignInBlocked hostId={hostId} host={host} why={state.kind} />
+          </>
         )
       case 'unreachable':
         return line(t('bots.host.notice.unreachable', '{{host}} can’t reach Orca Cloud.', { host }))
@@ -285,24 +345,24 @@ function ServerNotice({
           <>
             {lead
               ? line(
-                  [
-                    t('bots.host.notice.signedOut', '{{host}} is signed out of Orca.', { host }),
-                    state.linkedTo?.email === null
-                      ? t(
-                          'bots.host.notice.linksBelongElsewhere',
-                          '{{name}}’s connectors belong to another Orca account.',
-                          { name }
-                        )
-                      : state.linkedTo?.email
+                  joinSentences(
+                    [
+                      t('bots.host.notice.signedOut', '{{host}} is signed out of Orca.', { host }),
+                      state.linkedTo?.email === null
                         ? t(
-                            'bots.host.notice.linksBelong',
-                            '{{name}}’s connectors belong to {{email}}.',
-                            { name, email: state.linkedTo.email }
+                            'bots.host.notice.linksBelongElsewhere',
+                            '{{name}}’s connectors belong to another Orca account.',
+                            { name }
                           )
-                        : ''
-                  ]
-                    .filter(Boolean)
-                    .join(' ')
+                        : state.linkedTo?.email
+                          ? t(
+                              'bots.host.notice.linksBelong',
+                              '{{name}}’s connectors belong to {{email}}.',
+                              { name, email: state.linkedTo.email }
+                            )
+                          : ''
+                    ].filter(Boolean)
+                  )
                 )
               : line(
                   t(
@@ -311,7 +371,7 @@ function ServerNotice({
                     { host, name }
                   )
                 )}
-            {signInButton(t('bots.host.signIn.start', 'Sign {{host}} in to Orca', { host }))}
+            {signInButton(t('bots.host.signIn.start', 'Sign in on {{host}}', { host }))}
             {bot && lead ? null : (
               <p>
                 {t(

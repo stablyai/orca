@@ -1,4 +1,4 @@
-import { AgentSessionProviderAliasIndex } from './agent-session-provider-alias-index'
+import { AgentSessionConversationKeyIndexes } from './agent-session-conversation-key-index'
 import { AgentSessionRecordsChanged } from './agent-session-records-changed'
 import { AgentSessionLeaseHolderIndex } from './agent-session-lease-holder-index'
 import {
@@ -58,7 +58,7 @@ export class AgentSessionStoreTransactions {
   senderIdentityRevision = 0
   /** Lineage survives admission and lease writes; membership and committed clear invalidate it. */
   private lineage: object = {}
-  private providerAliases: AgentSessionProviderAliasIndex | null = null
+  readonly keyIndexes = new AgentSessionConversationKeyIndexes()
   readonly leaseHolders: AgentSessionLeaseHolderIndex
   private readonly receiptCommits = new WeakMap<
     JournalReceiptStage,
@@ -95,11 +95,6 @@ export class AgentSessionStoreTransactions {
 
   lineageRevision(): object {
     return this.lineage
-  }
-
-  providerAliasOwner(nativeId: string): string | null {
-    this.providerAliases ??= new AgentSessionProviderAliasIndex(this.published)
-    return this.providerAliases.owner(nativeId)
   }
 
   get readOnly(): boolean {
@@ -299,11 +294,12 @@ export class AgentSessionStoreTransactions {
         this.published = draft
       }
       this.leaseHolders.applyCommitted(this.published, writes.records)
-      if (published.unreadableRecords !== draft.unreadableRecords) {
-        this.providerAliases = null
-      } else {
-        this.providerAliases?.applyCommitted(this.published, writes.records)
-      }
+      this.keyIndexes.applyCommitted(
+        published,
+        this.published,
+        writes.records,
+        published.unreadableRecords !== draft.unreadableRecords
+      )
       notifyAgentSessionStoreCacheChanges(published, draft, writes)
       for (const id of changes.deaths) {
         this.deathEvidenceListeners.forEach((listener) => listener(id))

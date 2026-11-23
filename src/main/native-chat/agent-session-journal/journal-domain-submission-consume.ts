@@ -33,6 +33,8 @@ type JournalDomainQueueSelection = {
   mail?: JournalMailCustody
   /** Only other agents' mail may join a turn that has not taken in earlier mail yet. */
   mailOnly?: boolean
+  /** False keeps mail out of a running turn, as for a person's card queued without steering. */
+  mailJoinsTurn?: boolean
 }
 
 export type JournalDomainQueuePick =
@@ -104,7 +106,8 @@ export function nextJournalDomainQueueCard(
         continue
       }
       const mail = orchestrationMailNotice(card.body.from)
-      if (steer && (card.body.command || (!mail && card.deliveryMode !== 'steer'))) {
+      const joins = card.deliveryMode === 'steer' || (mail && selection.mailJoinsTurn !== false)
+      if (steer && (card.body.command || !joins)) {
         continue
       }
       if (selection.mailOnly && !mail) {

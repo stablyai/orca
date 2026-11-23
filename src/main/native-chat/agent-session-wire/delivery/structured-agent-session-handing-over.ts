@@ -145,11 +145,14 @@ export function beginStructuredAgentSessionHandover(
   const entry: Handover = sends.get(clientMessageId) ?? { count: 0 }
   entry.count += 1
   sends.set(clientMessageId, entry)
+  // The send's writes, through its accepted receipt, must not wait behind other chats' streaming.
+  const sending = 'holdSending' in journal ? journal.holdSending() : undefined
   let held = true
   const completed = Promise.withResolvers<void>()
   const release = (): void => {
     if (held) {
       held = false
+      sending?.()
       if (entry.input?.owner === release) {
         delete entry.input
       }

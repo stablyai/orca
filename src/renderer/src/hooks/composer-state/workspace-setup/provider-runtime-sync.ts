@@ -35,7 +35,7 @@ import type { GitHubRepositoryIdentity } from '../../../../../shared/github/repo
 import {
   getRepoSetupAgentStartupPolicy,
   buildSetupAgentStartupHookSettings
-} from './setup-policy-decisions'
+} from '../../../../../shared/workspace-setup/repo-hook-settings-defaults'
 
 export function useComposerProviderRuntimeSync(input: ComposerProviderRuntimeSyncInput) {
   const {

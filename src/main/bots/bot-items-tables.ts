@@ -9,12 +9,16 @@ import {
 } from '../../shared/bots/bot-items'
 import { BotItemError } from './bot-item-error'
 import { linkWords, type BotItemLinkInput } from './bot-items-input'
+import { hasKeptWaitingAsks, waitingAskOf } from './bot-item-waiting-ask-keep'
 import { eventRecordOf, itemRecordOf, linkRecordOf } from './bot-items-rows'
 import type { BotItemEventRecord, BotItemLinkRecord, BotItemRecord } from './bot-items-schema'
 
 export class BotItemsTables {
   /** The current write's first event, while one runs. */
   private action: number | null = null
+  /** A write is running: reads in it don't keep waiting asks, so a keep can never fail or slow it. */
+  private writing = false
+  private keeps: boolean | null = null
 
   constructor(
     protected readonly db: SyncDatabase,
@@ -35,6 +39,7 @@ export class BotItemsTables {
     }
     this.db.exec('BEGIN IMMEDIATE')
     this.action = null
+    this.writing = true
     try {
       const result = write()
       this.db.exec('COMMIT')
@@ -44,6 +49,7 @@ export class BotItemsTables {
       throw error
     } finally {
       this.action = null
+      this.writing = false
     }
   }
 
@@ -120,6 +126,18 @@ export class BotItemsTables {
     return id
   }
 
+  /** The item's ask waiting on the owner, which a later question can leave open: the kept one while the
+   *  events since it can't have changed it, else worked out from all its events. */
+  protected waitingAsk(item: Pick<BotItemRecord, 'uid'>): number | null {
+    return waitingAskOf(this.db, item.uid, this.keepsWaitingAsks(), !this.writing)
+  }
+
+  /** This file keeps each item's waiting ask, and this build may write it. */
+  protected keepsWaitingAsks(): boolean {
+    this.keeps ??= !this.readOnly && hasKeptWaitingAsks(this.db)
+    return this.keeps
+  }
+
   protected requireItem(uid: string): BotItemRecord {
     const item = this.get(uid)
     if (!item) {
@@ -135,21 +153,9 @@ export class BotItemsTables {
     actor: BotItemActor,
     reopenTo?: BotItemStatus
   ): void {
-    if (actor.kind === 'bot' && actor.botId !== item.ownerBotId) {
-      throw new BotItemError(
-        'not_owner',
-        `Item ${item.number} belongs to another bot. Read it, or ask its bot.`
-      )
-    }
+    assertBotItemOwnerWrite(item, actor, reopenTo)
     if (isOpenBotItemStatus(item.status)) {
       return
-    }
-    const closed = item.status === 'done' ? 'done' : 'canceled'
-    if (reopenTo !== 'planned' && reopenTo !== 'working') {
-      throw new BotItemError(
-        'item_closed',
-        `Item ${item.number} is ${closed}; reopen it with \`--status planned\` or \`--status in-progress\`, or comment on it.`
-      )
     }
     if (actor.kind === 'bot' && item.status === 'canceled' && this.canceledByOwner(item.uid)) {
       throw new BotItemError(
@@ -169,7 +175,8 @@ export class BotItemsTables {
   }
 
   /** Status, keeping the Needs you question only while it is Needs you and the close note only while
-   *  it is closed. A new question or a close brings a snoozed item back now. */
+   *  it is closed; any move ends a wait, which `writeWait` names again for Waiting. A new question or a
+   *  close brings a snoozed item back now. */
   protected writeStatus(
     uid: string,
     status: BotItemStatus,
@@ -184,7 +191,8 @@ export class BotItemsTables {
     }
     this.db
       .prepare(
-        'UPDATE items SET status = ?, question_event = ?, close_note = ?, closed_at = ? WHERE uid = ?'
+        `UPDATE items SET status = ?, question_event = ?, close_note = ?, closed_at = ?,
+           wait_event = NULL WHERE uid = ?`
       )
       .run(
         status,
@@ -193,6 +201,31 @@ export class BotItemsTables {
         closed ? now : null,
         uid
       )
+  }
+
+  /** A move to Waiting and its status event, whose note says what it waits on. */
+  protected moveToWait(
+    item: BotItemRecord,
+    note: string,
+    actor: BotItemActor,
+    mail: boolean,
+    now: number
+  ): number {
+    this.writeStatus(item.uid, 'waiting', null, actor, now)
+    const data = { from: item.status, to: 'waiting', note }
+    const eventId = this.appendEvent(item.uid, 'status', actor, data, mail, now)
+    this.db.prepare('UPDATE items SET wait_event = ? WHERE uid = ?').run(eventId, item.uid)
+    return eventId
+  }
+
+  /** What a Waiting item waits on, as its status event says; null for any other item. */
+  protected waitText(item: BotItemRecord): string | null {
+    if (item.status !== 'waiting' || item.waitEvent === null) {
+      return null
+    }
+    const row = this.db.prepare('SELECT * FROM item_events WHERE id = ?').get(item.waitEvent)
+    const note = row === undefined ? null : eventRecordOf(row).data.note
+    return typeof note === 'string' ? note : null
   }
 
   /** The owner's snooze, or null to bring the item back. */
@@ -234,5 +267,60 @@ export class BotItemsTables {
         )
         .run(uid, link.kind, link.ref, eventId)
     }
+  }
+}
+
+/** The owner-write rules readable from the item alone: its bot's, and open unless this reopens it. */
+export function assertBotItemOwnerWrite(
+  item: BotItemRecord,
+  actor: BotItemActor,
+  reopenTo?: BotItemStatus
+): void {
+  if (actor.kind === 'bot' && actor.botId !== item.ownerBotId) {
+    throw new BotItemError(
+      'not_owner',
+      `Item ${item.number} belongs to another bot. Read it, or ask its bot.`
+    )
+  }
+  assertBotItemOpen(item, reopenTo)
+}
+
+/** Links on an open item: any agent attaches its own work (workers it started, PRs, URLs, files) to
+ *  any item here; only the item's own agent links another's workers. `startedBy` names a Dispatch's
+ *  starting agent, read only for a link by someone else. */
+export function assertBotItemAttach(
+  item: BotItemRecord,
+  actor: BotItemActor,
+  links: readonly BotItemLinkInput[],
+  startedBy: (dispatchId: string) => string | null
+): void {
+  if (actor.kind === 'bot' && actor.botId !== item.ownerBotId) {
+    const other = links.find(
+      (link) => link.kind === 'dispatch' && startedBy(link.ref) !== actor.botId
+    )
+    if (other) {
+      throw new BotItemError(
+        'not_owner',
+        `Item ${item.number} belongs to another bot: link only workers you started, not dispatch:${other.ref}.`
+      )
+    }
+    if (!isOpenBotItemStatus(item.status)) {
+      throw new BotItemError('item_closed', `Item ${item.number} is closed. Ask its bot.`)
+    }
+    return
+  }
+  assertBotItemOpen(item)
+}
+
+function assertBotItemOpen(item: BotItemRecord, reopenTo?: BotItemStatus): void {
+  if (isOpenBotItemStatus(item.status)) {
+    return
+  }
+  const closed = item.status === 'done' ? 'done' : 'canceled'
+  if (reopenTo !== 'planned' && reopenTo !== 'working') {
+    throw new BotItemError(
+      'item_closed',
+      `Item ${item.number} is ${closed}; reopen it with \`--status planned\` or \`--status in-progress\`, or comment on it.`
+    )
   }
 }

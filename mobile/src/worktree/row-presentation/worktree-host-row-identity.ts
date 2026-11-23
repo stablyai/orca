@@ -31,9 +31,11 @@ export function clearConfirmedActiveWorktreeIdentity(
     : pending
 }
 
+/** Server rows come in their own list, so each list confirms only its own rows' sleep. */
 export function retainLiveSleptWorktreeIdentities(
   previous: Set<string>,
-  confirmed: readonly Worktree[]
+  confirmed: readonly Worktree[],
+  listsServerRows: boolean
 ): Set<string> {
   if (previous.size === 0) {
     return previous
@@ -49,7 +51,7 @@ export function retainLiveSleptWorktreeIdentities(
   const still = new Set<string>()
   for (const id of previous) {
     const wt = confirmedByIdentity.get(id)
-    if (wt && wt.liveTerminalCount > 0) {
+    if (id.startsWith('runtime:') !== listsServerRows || (wt && wt.liveTerminalCount > 0)) {
       still.add(id)
     }
   }

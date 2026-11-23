@@ -94,6 +94,8 @@ export type UsageRateLimitMetadata = {
   account?: { id: string | null; email: string | null }
   /** Claude/Codex: set only on a successful reading of one saved account; older hosts omit it. */
   readingAccount?: UsageReadingAccount
+  /** Codex: the managed login this auth rejection actually came from. */
+  authFailureAccount?: UsageReadingAccount
 }
 
 export type ProviderRateLimits = {
@@ -185,7 +187,7 @@ export type CursorAccountStatus = {
   signedIn: boolean
   email: string | null
   displayName: string | null
-  /** Which local store the session came from: the macOS Keychain, the CLI auth file, or Cursor IDE. */
+  /** Which local store the session came from: the OS keychain (macOS Keychain or Linux keyring), the CLI auth file, or Cursor IDE. */
   credentialSource: 'keychain' | 'cli' | 'desktop' | null
   planType: string | null
   tokenFresh: boolean

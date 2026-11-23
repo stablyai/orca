@@ -9,9 +9,6 @@ import {
 
 export const GOOGLE_CONSOLE_ORIGIN = 'https://console.cloud.google.com'
 
-/** Company: Internal audience. Personal (gmail.com): External, then Publish. */
-export type GoogleAccountKind = 'company' | 'personal'
-
 /** `links`: Personal only; Google keeps Publish greyed until Branding has a home page, a privacy link and their domain. */
 export type GoogleConsoleStep = 'project' | 'apis' | 'branding' | 'links' | 'publish' | 'client'
 
@@ -21,12 +18,6 @@ export const GOOGLE_PERSONAL_APP_LINKS = {
   privacyPolicy: 'https://www.onorca.dev/privacy',
   authorizedDomain: 'onorca.dev'
 } as const
-
-export function googleConsoleSteps(kind: GoogleAccountKind): GoogleConsoleStep[] {
-  return kind === 'personal'
-    ? ['project', 'apis', 'branding', 'links', 'publish', 'client']
-    : ['project', 'apis', 'branding', 'client']
-}
 
 /** The APIs to turn on for these choices; the People API (name lookup) always comes first. */
 export function googleConsoleApiIds(choices: readonly GoogleServiceChoice[]): string[] {

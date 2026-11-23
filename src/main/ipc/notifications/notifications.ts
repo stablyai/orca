@@ -1,5 +1,6 @@
 import { BrowserWindow, Notification, ipcMain, powerMonitor } from 'electron'
 import { readDesktopAwayState } from '../../notifications/desktop-away-state'
+import { closeDesktopNotification } from '../../notifications/desktop-notification'
 import type { Store } from '../../persistence/loading-store/store'
 import type {
   NotificationAttentionAcknowledgement,
@@ -18,6 +19,7 @@ import { isMainWindowVisible } from '../../window/visibility/main-window-visibil
 import { activeNotificationsById } from './native-notification-lifecycle'
 import { deliverNativeNotification } from './native-notification-delivery'
 import { removeReadMacosNotifications } from './macos-notification-center'
+import { sessionRepliesInSlack } from '../../external-conversations/external-conversation-links'
 import { createNotificationDeliveryService } from '../../notifications/notification-delivery-service'
 import {
   createAnnouncedNotificationRegistry,
@@ -104,7 +106,7 @@ export function registerNotificationHandlers(store: Store, runtime?: OrcaRuntime
     for (const entry of entries) {
       const native = activeNotificationsById.get(entry.id)
       if (native) {
-        native.notification.close()
+        closeDesktopNotification(native.notification)
         native.release()
         dismissed += 1
       }
@@ -237,6 +239,7 @@ export function registerNotificationHandlers(store: Store, runtime?: OrcaRuntime
     platform: process.platform,
     now: () => Date.now(),
     wasRead: announced.wasRead,
+    repliesInSlack: (sessionId) => sessionRepliesInSlack(store, sessionId),
     reserveNative: (request) => {
       if (!request.notificationId || (!request.paneKey && !request.worktreeId)) {
         return undefined

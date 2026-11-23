@@ -52,6 +52,8 @@ export type Subscriber = {
    *  (`StructuredAgentSessionCurrentWork.viewKey`); a change with no row still owes a frame. */
   workView?: string
   historyView?: string
+  /** Aborts when the subscriber is dropped, withdrawing its reads still waiting for a reader. */
+  stopped?: AbortSignal
 } & CurrentRequestsSubscriber &
   SubscriberFieldState
 

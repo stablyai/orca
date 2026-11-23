@@ -61,12 +61,13 @@ function terminalSignature(payload: unknown): TerminalSignature {
 }
 
 export class CodexTurnFailures {
-  private readonly usageLimits = new CodexUsageLimits()
+  private readonly usageLimits: CodexUsageLimits
   private readonly evidence = new Map<string, FailureEvidence>()
 
   constructor(
     private readonly deps: {
       account?: () => AgentSessionAccountKind | undefined
+      localClock?: boolean
       activeTurn: (threadId: string) => string | null
       append: (
         threadId: string,
@@ -74,7 +75,9 @@ export class CodexTurnFailures {
         frame: Omit<UnhandledProviderFrameJournalItem, 'body'> & { body: AgentJournalStatusItem }
       ) => CodexJournalTranslationAdmission
     }
-  ) {}
+  ) {
+    this.usageLimits = new CodexUsageLimits(Date.now, deps.localClock === true)
+  }
 
   appendTerminal(
     kind: string,

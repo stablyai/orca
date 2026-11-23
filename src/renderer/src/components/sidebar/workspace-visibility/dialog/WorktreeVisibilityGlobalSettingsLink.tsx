@@ -39,10 +39,7 @@ function GlobalSettingsButton(): React.JSX.Element {
       onClick={openGlobalWorktreeVisibilitySettings}
     >
       <Settings className="size-3.5" />
-      {t(
-        'auto.components.sidebar.WorktreeVisibilityDialog.openGlobalSettings',
-        'Manage in Global Settings'
-      )}
+      {t('auto.components.sidebar.WorktreeVisibilityDialog.openGlobalSettings', 'Global settings')}
     </Button>
   )
 }

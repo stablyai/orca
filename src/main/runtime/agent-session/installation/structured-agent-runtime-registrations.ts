@@ -13,6 +13,7 @@ import { agentModelCatalogStore } from '../../../native-chat/agent-model-catalog
 import { agentSessionAttachmentStoreRoot } from '../../../native-chat/agent-session-attachments/agent-session-attachment-references'
 import { journalSqlReads } from '../../../native-chat/agent-session-journal/journal-sql-reads'
 import { createStructuredClaudeRuntimeAdapter } from './structured-claude-runtime-adapter'
+import { nameChatFromClaudeRename } from '../naming/claude-user-rename'
 import { claudeAtRestDiscovery, codexAtRestSkillRoots } from './structured-agent-at-rest-discovery'
 import { acpListingNeedsChatFolder } from '../../../acp/discovery/acp-model-discovery-policy'
 import type { AcpLaunchSpec } from '../../../acp/launch/acp-launch-contract'
@@ -85,6 +86,7 @@ function createCodexAdapter(context: StructuredAgentAdapterContext): StructuredA
       deps.readCodexInstallation
     ),
     ...(deps.openCodexConnection ? { openConnection: deps.openCodexConnection } : {}),
+    ...(deps.sharedCodexServers ? { sharedServers: deps.sharedCodexServers } : {}),
     ...(deps.readProcessStartTime ? { readProcessStartTime: deps.readProcessStartTime } : {}),
     modelCatalog: agentModelCatalogStore,
     readModelCatalog: (sessionId, verifiedOnly) =>
@@ -151,6 +153,10 @@ function createClaudeAdapter(
     onChildWorkEvidence: (sessionId, evidence, producer) =>
       host()?.publishChildWorkEvidence(sessionId, evidence, producer),
     onDispatchSettledLate: followUps.onDispatchSettledLate,
+    onUserRenamed: nameChatFromClaudeRename({
+      naming: deps.conversationNaming,
+      logger: deps.logger
+    }),
     ...(deps.openClaudeConnection ? { openClaudeConnection: deps.openClaudeConnection } : {}),
     ...(deps.readProcessStartTime ? { readProcessStartTime: deps.readProcessStartTime } : {})
   })

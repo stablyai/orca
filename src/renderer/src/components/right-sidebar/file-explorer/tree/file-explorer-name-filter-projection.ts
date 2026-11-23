@@ -19,7 +19,7 @@ import {
   type FileExplorerRowProjection
 } from './file-explorer-row-projection'
 import { isDotfileRelativePath } from './file-explorer-entries'
-import { isPathIgnored } from '../../../../lib/source-control/paths/git-path-decoration'
+import { isPathIgnored } from '../../../../../../shared/git/status/git-path-decoration'
 
 export type FileExplorerNameFilterProjectionSource = {
   query: string

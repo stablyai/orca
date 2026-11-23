@@ -136,7 +136,7 @@ export abstract class CodexRuntimeHomeSync extends CodexRuntimeHomeWsl {
 
   protected safeRecoverInterruptedRuntimeAuthOperation(): void {
     try {
-      recoverInterruptedGuardedFileOperation(this.getRuntimeAuthPath())
+      recoverInterruptedGuardedFileOperation(this.getRuntimeAuthPath(), { credential: true })
     } catch (error) {
       console.warn('[codex-runtime-home] Failed to recover interrupted auth update:', error)
     }

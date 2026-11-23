@@ -282,10 +282,3 @@ export async function closeAllPlainSshTerminals(): Promise<void> {
   }
   await Promise.all(pending.map((session) => session.exited))
 }
-
-/** Test seam: quit is one-way in a real app. */
-export function resetPlainSshTerminalsForTests(): void {
-  quitting = false
-  slots.clear()
-  sessions.clear()
-}

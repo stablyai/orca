@@ -18,8 +18,10 @@ const LOOK_TURNED_OFF = `Look around turned off: the last ${LOOK_FAILURES_TO_TUR
 import { watchBotTurnEnds } from './bot-run-turn-watch'
 
 const runners = new WeakMap<object, BotLookAroundRunner>()
+const continuedLookWatches = new WeakSet<object>()
 
 export function runtimeLookAroundRunner(runtime: OrcaRuntimeService): BotLookAroundRunner {
+  watchContinuedLooksOnce(runtime)
   const existing = runners.get(runtime)
   if (existing) {
     return existing
@@ -56,14 +58,26 @@ export function runtimeLookAroundRunner(runtime: OrcaRuntimeService): BotLookAro
     now: Date.now
   })
   runners.set(runtime, runner)
-  // A look its usage limit stopped finishes in the turn that continues it, whoever sends it.
-  void requireStructuredHost(runtime)
-    .then((host) => watchContinuedLooks(host, runtime.lookAround, Date.now))
-    .catch((error: unknown) => console.warn('[bots] could not watch continued looks', error))
   return runner
 }
 
-/** Looks and tidy-ups ride the host's automation scheduler: its minute tick, while it runs. */
+/** A look its usage limit stopped finishes in the turn that continues it, whoever sends it.
+ *  Watched once per runtime; a host that couldn't start yet is tried again on the next call. */
+function watchContinuedLooksOnce(runtime: OrcaRuntimeService): void {
+  if (continuedLookWatches.has(runtime)) {
+    return
+  }
+  continuedLookWatches.add(runtime)
+  void requireStructuredHost(runtime)
+    .then((host) => watchContinuedLooks(host, runtime.lookAround, Date.now))
+    .catch((error: unknown) => {
+      continuedLookWatches.delete(runtime)
+      console.warn('[bots] could not watch continued looks', error)
+    })
+}
+
+/** Looks, tidy-ups and usage-limit waits ride the host's automation scheduler: its minute tick,
+ *  while it runs. */
 export function bindLookAroundToAutomations(
   service: Pick<AutomationService, 'onTick'>,
   runtime: OrcaRuntimeService
@@ -76,5 +90,9 @@ export function bindLookAroundToAutomations(
     void Promise.resolve()
       .then(() => runtimeTidyUpRunner(runtime).tick())
       .catch((error: unknown) => console.warn('[bots] tidy-up tick failed', error))
+    // A usage-limit wait whose reset passed with no continue scheduled ends on this minute.
+    void Promise.resolve()
+      .then(() => runtime.botItems.usageLimitTick(Date.now()))
+      .catch((error: unknown) => console.warn('[bots] usage-limit tick failed', error))
   }
 }
