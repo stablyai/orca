@@ -29,6 +29,7 @@ import { MobileNativeChatTurnStatus } from '../session/native-chat/transcript/me
 import { MobileNativeChatMessage } from '../session/native-chat/transcript/messages/MobileNativeChatMessage'
 import { createStructuredQuestionProjection } from '../../../src/shared/native-chat/transcript/messages/structured-agent-question-projection'
 import { projectStructuredAgentStartItem } from '../../../src/shared/native-chat/transcript/messages/structured-agent-start-projection'
+import { botCodedText } from '../../../src/shared/bots/bot-failure-copy'
 
 export type MobileBotGroupSession = StructuredMobileSession & {
   groupTurnItems: ReturnType<typeof indexBotGroupJournal>
@@ -190,8 +191,11 @@ export function MobileBotGroupTurn({
                           ? queued
                             ? t('chat.queuedMessages.queuedState', 'Queued')
                             : turn.error
-                              ? 'Not started'
-                              : 'Waiting for the native session…'
+                              ? t('bots.groups.notStarted', 'Not started')
+                              : t(
+                                  'bots.groups.waitingForTheNativeSession',
+                                  'Waiting for the native session…'
+                                )
                           : undefined
                     }
                     startedAt={clock?.startedAt ?? null}
@@ -223,7 +227,7 @@ export function MobileBotGroupTurn({
                 </Pressable>
               </View>
               {turn.error ? (
-                <Text style={styles.notice}>{turn.error}</Text>
+                <Text style={styles.notice}>{botCodedText(turn.error, turn.failure, t)}</Text>
               ) : !clock && !queued ? (
                 <Text style={styles.notice}>
                   {t('bots.groups.waitingForTheNativeSession', 'Waiting for the native session…')}
