@@ -8,12 +8,19 @@ const HERMES_STATE_DB = /(?:[\\/]profiles[\\/]([^\\/]+))?[\\/]state\.db(?:#[^\\/
 /** `-p <profile>` for a session in that profile's store: bare `hermes` follows the sticky
  *  `hermes profile use` choice, which may be another profile. Profile ids are literal in every shell. */
 export function hermesStateDbProfileArgs(stateDbPath: string | null | undefined): string[] {
+  const profile = hermesStateDbProfile(stateDbPath)
+  return profile ? ['-p', profile] : []
+}
+
+/** The profile a Hermes store path names, or null when the path is not one of its stores.
+ *  The root home is `default`, so callers can compare stores without spelling the root out. */
+export function hermesStateDbProfile(stateDbPath: string | null | undefined): string | null {
   const match = stateDbPath?.match(HERMES_STATE_DB)
   if (!match) {
-    return []
+    return null
   }
   const profile = match[1] ?? 'default'
-  return profile === 'default' || HERMES_PROFILE_NAME.test(profile) ? ['-p', profile] : []
+  return profile === 'default' || HERMES_PROFILE_NAME.test(profile) ? profile : null
 }
 
 /** The Hermes root a home belongs to: named profiles live at <root>/profiles/<name>. */

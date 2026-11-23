@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
   hermesProfileRoot,
+  hermesStateDbProfile,
   hermesStateDbProfileArgs,
   readHermesProfileName
 } from './hermes-profile'
@@ -42,6 +43,13 @@ describe('hermesStateDbProfileArgs', () => {
 
   it('reads the root store as the default profile', () => {
     expect(hermesStateDbProfileArgs('/h/.hermes/state.db#abc')).toEqual(['-p', 'default'])
+  })
+
+  it('classifies store paths without inventing profiles', () => {
+    expect(hermesStateDbProfile('/h/.hermes/state.db#abc')).toBe('default')
+    expect(hermesStateDbProfile('\\h\\.hermes\\profiles\\work\\state.db#abc')).toBe('work')
+    expect(hermesStateDbProfile('/h/.claude/sessions/x.jsonl')).toBeNull()
+    expect(hermesStateDbProfile('/h/.hermes/profiles/Work/state.db#abc')).toBeNull()
   })
 
   it('passes other agents stores through unnamed', () => {
