@@ -8,10 +8,15 @@ import { BACKEND_PUBLIC_USAGE_METHOD } from '../../shared/backend/backend-servic
 import { AgentAwakeService } from '../power/agent-awake-service'
 import { bindAgentAwakeToHookStatus } from '../power/agent-awake-hook-status-binding'
 import { normalizeComputerAwakeMode } from '../../shared/app-lifecycle/computer-awake-mode'
+import { isLinuxWaylandSession } from '../../shared/app-lifecycle/launch/linux-wayland-session'
 import { registerSystemResumeBroadcast } from '../power/system-resume-broadcast'
 import { recordWakeSignal } from '../power/wake-signal-clock'
 import { installBackgroundRunAwakeHold } from '../power/background-run-awake-hold'
-import { readDesktopAwayState } from '../notifications/desktop-away-state'
+import {
+  readDesktopAwayState,
+  subscribeDesktopAwayChanges
+} from '../notifications/desktop-away-state'
+import { electronWaylandHelperPath } from '../host/electron-wayland-helper-path'
 import {
   listCapableSharedControlSockets,
   startDesktopPresenceReporter
@@ -61,6 +66,13 @@ export function initializeMainProcessObservers(store: Store): void {
   })
   state.stopDesktopPresenceReporter = startDesktopPresenceReporter({
     readAway: () => readDesktopAwayState(powerMonitor),
+    subscribeAwayChanges: (onChange) =>
+      subscribeDesktopAwayChanges(
+        onChange,
+        isLinuxWaylandSession({ platform: process.platform, env: process.env })
+          ? electronWaylandHelperPath()
+          : undefined
+      ),
     listTargets: listCapableSharedControlSockets,
     subscribePowerEvents: ({ away, back }) => {
       powerMonitor.on('suspend', away)

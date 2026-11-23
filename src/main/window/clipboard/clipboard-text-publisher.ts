@@ -1,5 +1,4 @@
 import { app, clipboard } from 'electron'
-import { join } from 'node:path'
 import { runProcess } from '@orca/process-host'
 import {
   assertClipboardTextWriteWithinLimitWithYield,
@@ -12,6 +11,7 @@ import { writeClipboardTextAndVerify } from './clipboard-text-write-verify'
 import { stageClipboardPublisher } from './clipboard-publisher-executable'
 import { envWithoutAppImageRuntime } from '../../pty/shell-startup/appimage-terminal-env'
 import { isLegacyAppImageRuntimeIdentity } from '../../updater/linux-package/linux-update-package-type'
+import { electronWaylandHelperPath } from '../../host/electron-wayland-helper-path'
 
 const WAYLAND_CLIPBOARD_WRITE_FAILED_ERROR = 'Wayland clipboard write failed'
 const MAX_PENDING_CLIPBOARD_WRITES = 32
@@ -117,16 +117,7 @@ export function createClipboardPublisher(deps: ClipboardTextPublisherDeps) {
 let stagedPublisher: Promise<string> | undefined
 
 function publisherPath(): string | Promise<string> {
-  const source = app.isPackaged
-    ? join(process.resourcesPath, 'bin', 'orca-wayland-clipboard')
-    : join(
-        app.getAppPath(),
-        'native',
-        'wayland-clipboard',
-        '.build',
-        process.arch,
-        'orca-wayland-clipboard'
-      )
+  const source = electronWaylandHelperPath()
   if (
     !app.isPackaged ||
     !isLegacyAppImageRuntimeIdentity({

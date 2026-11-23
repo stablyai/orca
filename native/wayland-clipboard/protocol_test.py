@@ -224,6 +224,54 @@ pid_t fork(void) {
 
 
 
+class IdleNotifierServer(DataControlServer):
+    def __init__(self, version):
+        super().__init__(None)
+        self.version = version
+        self.notification = None
+        self.subscribed = threading.Event()
+
+    def request(self, object_id, opcode, body):
+        kind = self.objects[object_id]
+        if kind == "manager":
+            new_id, timeout, seat = struct.unpack("=III", body)
+            if opcode != 2 or timeout != 180000 or self.objects[seat] != "seat":
+                raise RuntimeError("Expected v2 input-idle notification at 180 seconds")
+            self.notification = new_id
+            self.subscribed.set()
+            return
+        super().request(object_id, opcode, body)
+        if kind == "display" and opcode == 1 and self.version:
+            self.send(self.registry, 0, number(20) + string("ext_idle_notifier_v1") + number(self.version))
+
+
+class IdleProtocolTests(unittest.TestCase):
+    def test_reports_input_idle_and_resume_and_exits_when_the_parent_pipe_closes(self):
+        with IdleNotifierServer(2) as server, subprocess.Popen(
+            [BINARY, "--watch-idle", "180000"], stdin=subprocess.PIPE, stdout=subprocess.PIPE,
+            env=server.environment(),
+        ) as watcher:
+            try:
+                self.assertTrue(server.subscribed.wait(2))
+                for opcode, line in ((0, b"idled\n"), (1, b"resumed\n"), (0, b"idled\n")):
+                    server.send(server.notification, opcode)
+                    self.assertTrue(select.select([watcher.stdout], [], [], 2)[0])
+                    self.assertEqual(watcher.stdout.readline(), line)
+                watcher.stdin.close()
+                self.assertEqual(watcher.wait(2), 0)
+            finally:
+                if watcher.poll() is None:
+                    watcher.kill()
+
+    def test_exits_without_status_when_input_idle_is_unavailable(self):
+        for version in (None, 1):
+            with self.subTest(version=version), IdleNotifierServer(version) as server:
+                result = subprocess.run([BINARY, "--watch-idle", "180000"], input=b"", capture_output=True,
+                                        env=server.environment(), timeout=5)
+                self.assertEqual(result.returncode, 78)
+                self.assertEqual(result.stdout, b"")
+
+
 if __name__ == "__main__":
     BINARY = os.path.abspath(sys.argv.pop(1))
     unittest.main()

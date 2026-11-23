@@ -29,8 +29,8 @@ passes these checks with the helper disabled on native Wayland:
   large text, and later external copies on Mutter, wlroots and KDE.
 
 When these pass, restore the existing Electron writers in `clipboard-ipc-handlers.ts`
-and remove the text publisher, executable staging, native directory, build script
-and packaging resource/hooks. Keep sender authorization and payload limits.
+and remove the clipboard-specific publisher and executable staging. Keep sender
+authorization, payload limits, and the native idle watcher and its packaging.
 Do not use Electron's write-then-read result alone to validate the repair: the
 affected runtime returns its own rejected text from the cache.
 
@@ -48,6 +48,16 @@ readers and expire after two seconds without progress. AppImage launches stage a
 private, content-addressed executable outside its install directory so AppImage
 unmounts and updates cannot invalidate the owner's executable. Its environment
 also excludes library paths inside the AppImage mount.
+
+## Desktop idle notifications
+
+On Linux Wayland, the same bundled helper runs with `--watch-idle 180000` and
+reports `idled` and `resumed` for the compositor's single seat. It uses the
+input-only request from [`ext-idle-notify-v1` version 2](https://raw.githubusercontent.com/wayland-mirror/wayland-protocols/main/staging/ext-idle-notify/ext-idle-notify-v1.xml)
+so display idle inhibitors do not affect the three-minute notification threshold.
+The timer starts with the subscription. Electron's idle reading supplies the
+initial state and the fallback if the helper or protocol is unavailable. Session
+lock is tracked independently. The watcher exits when its parent pipe closes.
 
 ## Building and testing
 
@@ -72,7 +82,8 @@ On an executable target architecture, the build runs `protocol_test.py` against
 an isolated fake compositor and `x11_test.py` against its own Xvfb server. Coverage
 includes both data-control protocols, byte preservation, unsupported desktops,
 owner cancellation, bounded stalled receivers, repeated copies, empty text,
-Unicode, CRLF and 16 MiB incremental transfers. Cross-built slices still need a
+Unicode, CRLF and 16 MiB incremental transfers. The protocol test also checks the
+input-idle subscription and parent cleanup. Cross-built slices still need a
 runtime test on their target architecture. The X server and clipboard tools in
 the build image are test dependencies only.
 
