@@ -24,8 +24,7 @@ import { findBotsRevealElement, wantedDepth } from './bots-sidebar-reveal-dom'
 import { startBotsRevealGlow, type BotsRevealGlow } from './bots-sidebar-reveal-glow'
 import type { BotsRevealContextValue, BotsRevealRequest } from './bots-sidebar-reveal-context'
 import { seekDistantBotSidebarRow } from './bot-sidebar-virtual-scroll'
-import { botGroupFoldToOpen } from './bot-group-folders'
-import { readBotGroups } from '@/lib/bot-group-catalog-snapshot'
+import { botGroupFoldToReveal } from './reveal-bot-sidebar-row'
 
 /** Long enough for a paired server's chat read; past it, the bot row stands as the reveal. */
 export const BOTS_REVEAL_MAX_WAIT_MS = 10_000
@@ -218,7 +217,7 @@ export function useBotsSidebarReveal(
       const wanted = wantedDepth(target)
       const homeId =
         entriesRef.current.find((candidate) => candidate.id === target.entryKey)?.home.id ?? null
-      const groupFold = botGroupFoldToOpen(target.entryKey, readBotGroups(), store.collapsedGroups)
+      const groupFold = botGroupFoldToReveal(target.entryKey)
       if (groupFold) {
         toUnfold.add(groupFold)
       }

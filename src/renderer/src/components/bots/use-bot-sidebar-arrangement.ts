@@ -14,6 +14,7 @@ import type { WorktreeStatus } from '../../../../shared/worktree/row-display/wor
 import { botStatusNeedsAttention } from '../../../../shared/bots/bot-collapsed-preview'
 import {
   arrangeBotSidebarEntries,
+  botSidebarEntryRecency,
   type BotSidebarEntryActivity
 } from '../../../../shared/bots/bot-sidebar-view'
 import type { BotSidebarEntry } from '../../../../shared/bots/bot-sidebar-entries'
@@ -99,7 +100,11 @@ function withMembersActivity(
       entry.kind === 'bot' && members.has(entry.id)
         ? {
             needsYou: busiest.needsYou || activities[index]!.needsYou,
-            activityAt: Math.max(busiest.activityAt, activities[index]!.activityAt)
+            // A member never active yet counts from when it was made, as it would on its own.
+            activityAt: Math.max(
+              busiest.activityAt,
+              botSidebarEntryRecency(entry, activities[index]!.activityAt)
+            )
           }
         : busiest,
     own
