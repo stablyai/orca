@@ -5,6 +5,7 @@ import { mainProcessState as state } from '../startup/main-process-state'
 import { focusExistingWindow } from '../startup/main-window/main-window-actions'
 import { registerNotchHandlers } from '../ipc/notch'
 import { translateMain } from '../i18n/main-i18n'
+import { parsePaneKey } from '../../shared/workspace-layout/stable-pane-id'
 import {
   NOTCH_REVEAL_PANE_CHANNEL,
   NOTCH_VIEWED_PANES_RESET_CHANNEL,
@@ -97,15 +98,51 @@ export function initializeNotchAgentStatus(): void {
         .catch((error) => console.warn('[notch] Could not persist read completions:', error))
     },
     source: {
-      getStatusSnapshot: () => [...agentHookServer.getStatusSnapshot(), ...remote.getRows()],
+      getStatusSnapshot: () => {
+        const runtime = state.core.runtime
+        const name = runtime?.orchestrationSenderNames.agentRowNamer()
+        const local = agentHookServer.getStatusSnapshot().map((row) => ({
+          ...row,
+          title:
+            name?.({
+              paneKey: row.paneKey,
+              worktreeId: row.worktreeId,
+              tabId: row.tabId ?? parsePaneKey(row.paneKey)?.tabId,
+              ptyId: row.terminalHandle
+                ? (runtime?.getTerminalPtyIdForHandle(row.terminalHandle) ?? undefined)
+                : undefined,
+              agentType: row.agentType ?? null,
+              providerSessionId: row.providerSession?.id
+            }) ||
+            row.prompt?.trim() ||
+            undefined
+        }))
+        return [...local, ...remote.getRows()]
+      },
       subscribeStatusRowMutations: (listener) => {
         const local = agentHookServer.subscribeStatusRowMutations(listener)
         const freshness = agentHookServer.subscribeStatusFreshness(listener)
         const paired = remote.subscribe(listener)
+        let observingNames = true
+        const namesChanged = (): void => {
+          if (observingNames) {
+            listener()
+          }
+        }
+        const titles = state.core.runtime?.onMobileSessionTabsChanged(
+          namesChanged,
+          undefined,
+          'runtime',
+          { observation: 'caller' }
+        )
+        const savedNames = state.store?.onWorkspaceSessionWritten(namesChanged)
         return () => {
+          observingNames = false
           local()
           freshness()
           paired()
+          titles?.()
+          savedNames?.()
         }
       }
     }

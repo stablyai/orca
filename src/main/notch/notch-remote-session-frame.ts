@@ -1,3 +1,7 @@
+import { getAgentRowConversationName } from '../../shared/agent-status/presentation/agent-row-conversation-name'
+import { normalizeAgentProviderSession } from '../../shared/agent-session/lifecycle/agent-session-resume'
+import { parseAiVaultSessionTitlesResult } from '../ai-vault/session-titles/session-title-result-validation'
+import type { AiVaultSessionTitle } from '../../shared/ai-vault/contracts/ai-vault-session-title'
 import { normalizeAgentStatusPayload } from '../../shared/agent-status/contracts/agent-status-types'
 import { withMirroredEvidenceReceipt } from '../../shared/agent-status/contracts/agent-status-freshness'
 import { toRuntimeExecutionHostId } from '../../shared/execution-host/execution-host'
@@ -118,7 +122,9 @@ export function notchRemoteSessionRows(
       originalPaneKey,
       executionHostId,
       sessionId,
-      title: typeof tab.title === 'string' ? tab.title : undefined,
+      title: structured
+        ? (nonEmptyString(tab.title) ?? nonEmptyString(status.prompt))
+        : terminalConversationTitle(tab, raw, status),
       agentType: status.agentType ?? (structured ? statusAgent(tab.agent) : undefined),
       worktreeId: snapshot.worktree,
       tabId,
@@ -142,4 +148,39 @@ export function notchRemoteSessionRows(
 
 function statusAgent(agent: unknown): NotchStatusObservation['agentType'] {
   return normalizeAgentStatusPayload({ state: 'working', agentType: agent })?.agentType
+}
+
+function nonEmptyString(value: unknown): string | undefined {
+  return typeof value === 'string' ? value.trim() || undefined : undefined
+}
+
+function terminalConversationTitle(
+  tab: Record<string, unknown>,
+  raw: Record<string, unknown>,
+  status: NonNullable<ReturnType<typeof normalizeAgentStatusPayload>>
+): string | undefined {
+  let aiVaultTitle: AiVaultSessionTitle | undefined
+  if (tab.aiVaultTitle != null) {
+    try {
+      aiVaultTitle = parseAiVaultSessionTitlesResult({ titles: [tab.aiVaultTitle] }).titles[0]
+    } catch {
+      // Malformed optional naming metadata must not drop the host's status row.
+    }
+  }
+  return (
+    getAgentRowConversationName(
+      {
+        title: nonEmptyString(tab.title) ?? '',
+        customTitle: nonEmptyString(tab.customTitle) ?? null,
+        quickCommandLabel: nonEmptyString(tab.quickCommandLabel),
+        generatedTitle: nonEmptyString(tab.generatedTitle),
+        defaultTitle: nonEmptyString(tab.defaultTitle),
+        aiVaultTitle
+      },
+      status.agentType,
+      true,
+      undefined,
+      normalizeAgentProviderSession(raw.providerSession)?.id
+    ) ?? nonEmptyString(status.prompt)
+  )
 }
