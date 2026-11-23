@@ -64,6 +64,7 @@ const powerShellSuffix = (images: boolean): string =>
   ` } finally { if ($orcaRemoteClipboard) { Remove-Item Env:SSH_CONNECTION }${images ? '; if ($orcaKitty) { Remove-Item Env:KITTY_WINDOW_ID }' : ''} } }`
 
 const BOTH = [true, false] as const
+const SHARED_SERVER_ARGS: ReadonlySet<string> = new Set(CODEX_SHARED_SERVER_ARGS)
 // Built once: recognition unwraps process command lines often.
 const POSIX_PREFIXES = new Map(BOTH.map((images) => [images, posixPrefix(images)]))
 const POWERSHELL_WRAPPERS = BOTH.flatMap((images) =>
@@ -112,10 +113,7 @@ export function withCodexDirectLaunchCommand(
       return command
     }
     const args = parsed.tokens.slice(index + 1)
-    const identity = !args.some(
-      (arg) =>
-        (CODEX_SHARED_SERVER_ARGS as readonly string[]).includes(arg) || arg.startsWith('--remote=')
-    )
+    const identity = !args.some((arg) => SHARED_SERVER_ARGS.has(arg) || arg.startsWith('--remote='))
     const end = parsed.spans[index].end
     const launch = `${command.slice(0, end)}${identity ? IDENTITY_SPLAT : ''}${command.slice(end)}`
     // Without the call operator PowerShell parses a quoted path as a string expression (#46114).

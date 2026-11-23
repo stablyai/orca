@@ -169,6 +169,7 @@ export function buildAiVaultLocalResumeStartup(
     const startupPlan = buildAgentResumeStartupPlan({
       agent: session.agent,
       providerSession: localProviderSession,
+      cmdOverrides: resumeCommandOverrides(args),
       platform,
       agentHostPlatform: args.host.agentHostPlatform,
       shell: liveShell,
