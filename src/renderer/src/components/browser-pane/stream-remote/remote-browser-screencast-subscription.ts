@@ -1,4 +1,5 @@
 import type { RuntimeRpcResponse } from '../../../../../shared/remote-runtime/rpc/runtime-rpc-envelope'
+import type { BrowserAgentPointerPoint } from '../../../../../shared/browser/automation/browser-agent-activity-contract'
 import type {
   BrowserScreencastPointer,
   BrowserScreencastReadyResult,
@@ -62,6 +63,8 @@ export type RemoteBrowserScreencastEvents = {
   onPointer: (pointer: BrowserScreencastPointer | null) => void
   /** Whether this stream reports the page's own menus, and the menus it reports. */
   hostContextMenus: Pick<RemoteBrowserHostContextMenus, 'setSupported' | 'deliver'>
+  /** Where an agent points or presses on the page; hosts without `agentCursor` send none. */
+  onAgentCursor: (point: BrowserAgentPointerPoint) => void
   onClosed: () => void
   /** This stream's view of the page's dialog and prompts; they close with the stream. */
   pagePrompts: RemoteBrowserPagePrompts
@@ -102,7 +105,8 @@ export async function openRemoteBrowserScreencastStream(
         pagePrompts: 1,
         contextMenus: 1,
         // A web client's picked files have no paths to stage on the host.
-        ...(isWebClientLocation() ? {} : { fileChoosers: 1 })
+        ...(isWebClientLocation() ? {} : { fileChoosers: 1 }),
+        agentCursor: 1
       }),
       timeoutMs: 15_000
     },
@@ -173,6 +177,9 @@ function dispatchScreencastResponse(
     events.pagePrompts.close(event.requestId)
   } else if (event.type === 'fileChooser') {
     events.pagePrompts.chooseFiles(event.request, dialogPage)
+  } else if (event.type === 'agentCursor') {
+    const { x, y, viewportWidth, viewportHeight, press } = event
+    events.onAgentCursor({ x, y, viewportWidth, viewportHeight, press })
   } else if (event.type === 'error') {
     events.onFailed(event.message)
   }

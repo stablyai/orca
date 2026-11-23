@@ -22,7 +22,15 @@ export abstract class BrowserManagerVisibility extends BrowserManagerState {
     pageIdForGuest: (guestWebContentsId) =>
       this.resolveBrowserTabIdForGuestWebContentsId(guestWebContentsId),
     rendererForPage: (browserPageId) => this.resolveRendererForBrowserTab(browserPageId),
-    worktreeForPage: (browserPageId) => this.worktreeIdByTabId.get(browserPageId) ?? null
+    worktreeForPage: (browserPageId) => this.worktreeIdByTabId.get(browserPageId) ?? null,
+    // A server page's row carries the agent mark to viewers on other machines.
+    onPageActiveChanged: (browserPageId) => {
+      const guestId =
+        this.webContentsIdByTabId.get(browserPageId) ?? browserPopupPageWebContentsId(browserPageId)
+      if (guestId !== null) {
+        this.notifyBrowserGuestStateChanged(guestId)
+      }
+    }
   })
 
   private agentLeadListener: ((guestWebContentsId: number, led: boolean) => void) | null = null
@@ -161,6 +169,14 @@ export abstract class BrowserManagerVisibility extends BrowserManagerState {
   /** The page shows "An agent is using this page": a command is queued or one settled within the idle window. */
   isAgentUsingPage(browserPageId: string): boolean {
     return this.agentActivity.isActive(browserPageId)
+  }
+
+  /** A stream viewer draws the agent's pointer on the page until the returned stop runs. */
+  watchAgentCursor(
+    browserPageId: string,
+    listener: Parameters<BrowserAgentActivity['watchCursor']>[1]
+  ): () => void {
+    return this.agentActivity.watchCursor(browserPageId, listener)
   }
 
   // Show the agent's pointer landing before the input it precedes reaches the page.
