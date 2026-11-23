@@ -70,7 +70,7 @@ export type WorkerStarted = {
   /** What this start launched; the only kind known for a worker on another host. */
   agent?: AgentType | null
   followUp?: AgentJournalAgentStartItem['followUp']
-  /** Where this start ran; local starts use this computer's name. */
+  /** The paired server this start ran on; absent for a local start. */
   machine?: string
   /** A failed start has no worker card, but a bot's Slack thread still needs its one failure notice. */
   failure?: string
@@ -145,7 +145,7 @@ export function prepareWorkerStartCard(
           {
             taskId: args.taskId,
             reason: failure,
-            machine: args.machine ?? runtime.readMachineName()
+            machine: args.machine
           },
           async (input) => {
             const sent = await runtime.getConnectorCloud()?.reply({ ...input, turnId: Date.now() })

@@ -4,7 +4,8 @@ import type { BotTurnAddress } from './bot-work-types'
 export type FailedBotWorkerStart = {
   taskId: string
   reason: string
-  machine: string
+  /** The paired server it ran on; a local start names none, since its workspace may be over SSH. */
+  machine?: string
 }
 
 /** Posts the one failure notice a Slack-started bot worker owns. The task key makes retries idempotent;
@@ -25,12 +26,13 @@ export async function postFailedBotWorkerStart(
   await post({
     replyId: `worker-start-failed:${start.taskId}`,
     conversation: turn.address,
-    text: `I couldn't start the worker on ${start.machine}. ${asSentence(start.reason)} Please retry it or check the bot's Chat.`,
+    text: `I couldn't start the worker${start.machine ? ` on ${start.machine}` : ''}. ${asSentence(start.reason)} Please retry it or check the bot's Chat.`,
     turnFor: 'none'
   })
 }
 
 function asSentence(text: string): string {
-  const trimmed = text.trim()
-  return /[.!?]$/.test(trimmed) ? trimmed : `${trimmed}.`
+  const trimmed = text.trim() || 'The start failed.'
+  const capitalized = trimmed[0].toUpperCase() + trimmed.slice(1)
+  return /[.!?]$/.test(capitalized) ? capitalized : `${capitalized}.`
 }
