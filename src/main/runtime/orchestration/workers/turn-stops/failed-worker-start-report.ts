@@ -77,8 +77,8 @@ export function reportFailedWorkerStart(
       legacyStopKey: 'gone',
       gone: {
         from: `dispatch:${dispatch.id}`,
-        reason: 'lost',
-        cause: `it never started: ${worker.last_error ?? 'its start failed'}`,
+        reason: 'start-failed',
+        cause: worker.last_error ?? undefined,
         lastOutput: undefined,
         leftover: describeLeftover(worker.residual_resources),
         ...(failedWorkerStartHasOutput(db, worker, dispatch) ? {} : { neverStarted: true })

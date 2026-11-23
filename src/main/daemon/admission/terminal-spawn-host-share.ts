@@ -4,7 +4,7 @@ import type {
   SpawnRequestFacts
 } from '../../../shared/terminal/pty/admission/spawn-admission-contract'
 import { recentAutomaticAdmits } from '../../../shared/terminal/pty/admission/host-automatic-work-budget'
-import { TERMINAL_HOST_CAP_HINT } from '../../../shared/terminal/pty/lifecycle/terminal-spawn-error-copy'
+import { TerminalHostCapError } from '../../../shared/terminal/pty/lifecycle/terminal-host-cap-refusal'
 import type { HostTerminalLedger, OtherDaemonsShare } from './host-terminal-ledger'
 import type { HostTerminalShare } from './host-terminal-ledger-entry'
 import { TerminalSpawnDeferredError } from './terminal-spawn-deferred-error'
@@ -77,9 +77,13 @@ export class TerminalSpawnHostShare {
   }
 }
 
-/** Declared restores retain sleeping panes; other callers need the legacy error message. */
-export function hostTerminalCapRefusal(facts: SpawnRequestFacts, charge: SpawnCharge): Error {
+/** Declared restores retain sleeping panes; other callers get the cap and its counts. */
+export function hostTerminalCapRefusal(
+  facts: SpawnRequestFacts,
+  charge: SpawnCharge,
+  cap: { inUse: number; limit: number }
+): Error {
   return facts.declaredIntent !== null && charge !== 'interactive'
     ? new TerminalSpawnDeferredError('live_cap')
-    : new Error(TERMINAL_HOST_CAP_HINT)
+    : new TerminalHostCapError(cap.inUse, cap.limit)
 }

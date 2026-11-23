@@ -2,7 +2,7 @@ import {
   type SpawnRequestFacts,
   TERMINAL_SPAWN_REFUSED_MESSAGE
 } from '../../../shared/terminal/pty/admission/spawn-admission-contract'
-import { TERMINAL_HOST_CAP_HINT } from '../../../shared/terminal/pty/lifecycle/terminal-spawn-error-copy'
+import { readTerminalHostCapRefusal } from '../../../shared/terminal/pty/lifecycle/terminal-host-cap-refusal'
 import type { LegacyRestoreDetails, LegacyRestoreRecords } from './legacy-restore-records'
 import type { TerminalSpawnLease } from './terminal-spawn-gate'
 
@@ -15,7 +15,7 @@ function refusalReason(error: unknown): 'pressure' | 'host_cap' | null {
   }
   return error.message === TERMINAL_SPAWN_REFUSED_MESSAGE
     ? 'pressure'
-    : error.message === TERMINAL_HOST_CAP_HINT
+    : readTerminalHostCapRefusal(error)
       ? 'host_cap'
       : null
 }

@@ -169,7 +169,7 @@ export class TerminalSpawnGate {
     if (this.mode === 'observe' || decision.kind === 'admit') {
       // Reserve first so refused forks cannot be logged as admitted.
       if (!this.host.tryReserve(this.state, maximum)) {
-        this.refuseAtHostCap(facts, charge, maximum)
+        this.refuseAtHostCap(facts, charge, maximum, others.terminals)
       }
       this.record(decision, charge, facts, !alreadyWaited)
       return { kind: 'lease', lease: this.lease(facts, charge, now) }
@@ -179,7 +179,7 @@ export class TerminalSpawnGate {
       decision.kind === 'wait' &&
       this.host.terminals(this.state) + 1 + others.terminals > maximum
     ) {
-      this.refuseAtHostCap(facts, charge, maximum)
+      this.refuseAtHostCap(facts, charge, maximum, others.terminals)
     }
     this.record(decision, charge, facts, !alreadyWaited)
     if (decision.kind === 'defer') {
@@ -243,7 +243,12 @@ export class TerminalSpawnGate {
     this.host.stop()
   }
 
-  private refuseAtHostCap(facts: SpawnRequestFacts, charge: SpawnCharge, maximum: number): never {
+  private refuseAtHostCap(
+    facts: SpawnRequestFacts,
+    charge: SpawnCharge,
+    maximum: number,
+    otherDaemonTerminals: number
+  ): never {
     this.hostCapRefused += 1
     try {
       this.options.log('host-terminal-cap-reached', {
@@ -255,7 +260,10 @@ export class TerminalSpawnGate {
     } catch {
       // Diagnostics must never change the refusal.
     }
-    throw hostTerminalCapRefusal(facts, charge)
+    throw hostTerminalCapRefusal(facts, charge, {
+      inUse: this.host.terminals(this.state) + otherDaemonTerminals,
+      limit: maximum
+    })
   }
 
   private lease(facts: SpawnRequestFacts, charge: SpawnCharge, now: number): TerminalSpawnLease {

@@ -34,6 +34,7 @@ import type {
 } from '../../shared/agent-session/journal/agent-session-journal-types'
 import { testOrcaSessionId } from '../../shared/agent-session/identity/orca-session-address-test-fixture'
 import type { BotRequestRecord } from './bot-request-view'
+import { TerminalHostCapError } from '../../shared/terminal/pty/lifecycle/terminal-host-cap-refusal'
 
 // How a request another agent sent ends back at its asker: the chat's real journal says which turn
 // answered it, the real orchestration database holds the request and takes the notice. Stubbed:
@@ -309,6 +310,50 @@ it('tells the asker its request failed when the turn that answered it fails', as
   expect(notices()).toEqual([
     expect.stringContaining("Helper's turn failed with an error. It ended without answering"),
     expect.stringContaining("Helper's turn failed with an error. It ended without answering")
+  ])
+})
+
+it('names the host terminal cap when a worker start the failed turn made was refused at it', async () => {
+  const r1 = request('review this')
+  send('m1', r1, null, { turn: TURN_A, via: 'start' })
+  turn('turn-a', 'm1', 'running')
+  const turnId = agentJournalItemKey(TURN_A)
+  const startedAt = Date.now() - 1_000
+  // The chat's own worker start, refused at the cap while its turn ran.
+  const task = db.createTask({ runId, spec: 'review' })
+  const { dispatch } = db.createStartingWorkerDispatch({
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: this test's chat id stands for its Orca session id.
+    creator: { kind: 'session', orcaSessionId: 'chat' as never },
+    maxDepth: Number.MAX_SAFE_INTEGER,
+    taskId: task.id,
+    startOptions: {}
+  })
+  db.failWorkerStart(
+    dispatch.id,
+    'worktree_create',
+    `Failed to create the startup terminal for /repo/wt: ${new TerminalHostCapError(256, 256).message}`
+  )
+  turn('turn-a', 'm1', 'failure')
+
+  await settleBotRequestFailure(runtime(), {
+    ...failedTurn(turnId),
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the reader looks up only this turn's row.
+    read: async () =>
+      ({
+        items: [
+          {
+            itemId: turnId,
+            body: { kind: 'turn', turnId: 'turn-a', state: 'completed', startedAt },
+            observedAt: startedAt
+          }
+        ],
+        submissions: []
+      }) as never
+  })
+  expect(notices()).toEqual([
+    expect.stringContaining(
+      "Helper's turn failed: Orca refused the terminal of a worker it started because this host is at its terminal limit (256 of 256 terminals in use)."
+    )
   ])
 })
 
