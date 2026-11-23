@@ -141,10 +141,11 @@ export function installConnectorHost({
   })
   runtime.onBotsWritten(() => avatars.changed())
   stops.push(runtime.bots.slackIcons.onStored((botId) => avatars.iconStored(botId)))
-  // Pictures changed or drawn while bots were off go once they are back on.
+  // Turning bots on or off runs a pass of the pictures.
   stops.push(
     store.onSettingsChanged((updates) => {
-      if (updates.botsEnabled !== undefined && runtime.bots.enabled()) {
+      // On, what was owed goes; off, the bytes kept for retries are let go.
+      if (updates.botsEnabled !== undefined) {
         avatars.changed()
       }
     })

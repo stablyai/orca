@@ -5,7 +5,7 @@ import { botRefKey } from '@/lib/bot-hosts'
 import type { Bot } from '../../../../shared/bot-types'
 import { botSlackIconLook } from '../../../../shared/bots/bot-slack-icon'
 
-type Failure = { look: string; count: number }
+type Failure = { look: string }
 
 const listeners = new Set<() => void>()
 
@@ -33,7 +33,7 @@ class FailureMap extends Map<string, Failure> {
   }
 }
 
-/** Per bot (by botRefKey), its failed attempts at a look. */
+/** Per bot (by botRefKey), the look its last try failed at. */
 export const slackIconFailures = new FailureMap()
 
 function subscribe(listener: () => void): () => void {

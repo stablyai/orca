@@ -200,7 +200,7 @@ const iconFailed = (width: number, bot: Bot = dressed) =>
       if (bot === away) {
         setBotHostListing({ hosts: [{ hostId: away.hostId, state: 'offline' }], updateNeeded: [] })
       }
-      slackIconFailures.set(botRefKey(bot), { look: botSlackIconLook(bot) ?? '', count: 1 })
+      slackIconFailures.set(botRefKey(bot), { look: botSlackIconLook(bot) ?? '' })
     },
     render: () => (
       <ConfirmationDialogProvider>

@@ -18,7 +18,8 @@ vi.mock('@/lib/bot-catalog', () => ({
 }))
 vi.mock('@/lib/bot-catalog-snapshot', () => ({
   readBotHostState: () => hostState,
-  readLiveBotHostIds: () => ['local']
+  readBotHostIds: () => [],
+  readHostBots: () => []
 }))
 vi.mock('@/lib/bot-host-status', () => ({ botHostHas: () => true }))
 vi.mock('@/lib/bot-host-link-read', () => ({ onBotHostCameBack: () => () => {} }))
