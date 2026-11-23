@@ -1,8 +1,10 @@
+import { nativeChatCaretOnVisualEdge } from './native-chat-prompt-caret-edge'
 import { insertAgentReferences, NativeChatAgentReference } from './native-chat-agent-reference'
 import {
   nativeChatDraftPositions,
   hasUnsavedNativeChatComposerDraftChange
 } from '../../drafts/native-chat-composer-draft-memory'
+import { createPromptTextPositionTracking } from './native-chat-prompt-text-position'
 import { resolveNativeChatPastedText } from '../../paste/native-chat-composer-pasted-text-references'
 import { NativeChatPastedTextScopeProvider } from './native-chat-pasted-text-state'
 import {
@@ -74,6 +76,7 @@ function NativePromptEditor({
 }: NativeChatPromptEditorProps): React.JSX.Element {
   // Only an editor given its image row holds image chips; chat keeps images in its tray.
   const imageChips = imageRow !== undefined
+  const textPositions = useMemo(() => createPromptTextPositionTracking(), [])
   const adopted = useRef(readNativeChatDraftSnapshot(scopeKey, initialValue))
   const [initialContent] = useState(() =>
     openingPromptContent(adopted.current?.document, initialValue, imageChips)
@@ -158,7 +161,8 @@ function NativePromptEditor({
           true
         )
     },
-    onTransaction: ({ editor: current, transaction }, history) => {
+    onTransaction: ({ editor: current, transaction, appendedTransactions }, history) => {
+      textPositions.apply([transaction, ...appendedTransactions])
       if (
         !transaction.getMeta('preventUpdate') &&
         (transaction.docChanged || transaction.selectionSet)
@@ -255,6 +259,8 @@ function NativePromptEditor({
     () =>
       editor
         ? {
+            trackTextPosition: (offset, changed) =>
+              textPositions.track(editor.state.doc, offset, changed),
             insertAgentReferences: (references) => insertAgentReferences(editor, references),
             insertText: (text) => {
               const content = editor.schema.nodeFromJSON(promptTextContent(text, imageChips))
@@ -324,24 +330,7 @@ function NativePromptEditor({
             },
             focus: () => focusMountedNativeChatEditor(editor),
             contains: (node) => mountedEditorView(editor)?.dom.contains(node) === true,
-            isCaretOnVisualEdge: (edge) => {
-              const { selection, doc } = editor.state
-              if (!selection.empty) {
-                return false
-              }
-              const before = promptText(doc, 0, selection.from)
-              const after = promptText(doc, selection.from)
-              // An empty composer has one line: no layout read on the path every recall starts from.
-              if (before === '' && after === '') {
-                return true
-              }
-              const beyond = edge === 'start' ? before : after
-              // Why both: the text check covers other paragraphs, the view covers soft wraps.
-              return (
-                !beyond.includes('\n') &&
-                mountedEditorView(editor)?.endOfTextblock(edge === 'start' ? 'up' : 'down') === true
-              )
-            },
+            isCaretOnVisualEdge: (edge) => nativeChatCaretOnVisualEdge(editor, edge),
             select: () => {
               editor.commands.selectAll()
             },
@@ -401,7 +390,7 @@ function NativePromptEditor({
             }
           }
         : null,
-    [editor, scopeKey, applyPosition, imageChips]
+    [editor, scopeKey, applyPosition, imageChips, textPositions]
   )
   useNativeChatPromptEditorHandle(inputRef, editor, input)
   useNativeChatComposerMount(scopeKey ?? '', input, isComposing, disabled)

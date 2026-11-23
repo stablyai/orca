@@ -30,24 +30,48 @@ const selfUpdate = (...args: string[]): (() => AgentCliUpdatePlan) => {
 
 // `codex update` arrived in 0.126.0; older builds are updated by hand.
 const CODEX_UPDATE_COMMAND_SINCE = '0.126.0'
+// Earlier releases read `qwen update` as a prompt and run it.
+const QWEN_UPDATE_COMMAND_SINCE = '0.20.0'
 // Below 2.0.0 is the archived Python CLI, which Kimi Code replaces rather than updates.
 const KIMI_CODE_SINCE = '2.0.0'
+
+// Only the agent's own keg counts: a mise or Volta shim on PATH resolves into that manager's keg.
+function homebrewUpgradeCommand(keg: string, realPath: string): string | null {
+  const owner = /\/(Caskroom|Cellar)\/([^/]+)\//.exec(realPath.replaceAll('\\', '/'))
+  return owner?.[2] === keg
+    ? `brew upgrade ${owner[1] === 'Caskroom' ? '--cask ' : ''}${keg}`
+    : null
+}
+
+// The CLI's own update only prints the package manager's command for an install it owns.
+const packageManagerPlan = (command: string | null): AgentCliUpdatePlan | null =>
+  command ? { runnable: false, command } : null
+
+// The `claude-code` cask follows Claude's stable channel rather than the one Orca compares
+// against, so it keeps `claude update`, which names the brew command or the `@latest` cask.
+function claudeUpdatePlan(_installed: string, realPath: string): AgentCliUpdatePlan {
+  const command = /Microsoft[/\\]WinGet[/\\]Packages[/\\]Anthropic\.ClaudeCode_/i.test(realPath)
+    ? 'winget upgrade Anthropic.ClaudeCode'
+    : homebrewUpgradeCommand('claude-code@latest', realPath)
+  return packageManagerPlan(command) ?? { runnable: true, args: ['update'] }
+}
 
 function manualCodexUpdateCommand(realPath: string): string {
   const path = realPath.replaceAll('\\', '/')
   if (path.includes('/node_modules/@openai/codex/')) {
     return 'npm install -g @openai/codex@latest'
   }
-  if (/\/(Caskroom|Cellar)\/codex\//.test(path)) {
-    return 'brew upgrade codex'
-  }
-  return agentSessionInstallCommand('codex', process.platform) ?? 'codex update'
+  return (
+    homebrewUpgradeCommand('codex', path) ??
+    agentSessionInstallCommand('codex', process.platform) ??
+    'codex update'
+  )
 }
 
-// Each self-update follows how the CLI was installed (native, npm, bun, Homebrew), and a
+// Other self-updates follow how the CLI was installed (native, npm, bun, Homebrew), and a
 // package manager behind the release is caught by the version read after it.
 const AGENT_CLI_UPDATE_DEFINITIONS: Record<AgentCliUpdateAgent, AgentCliUpdateDefinition> = {
-  claude: { latest: () => ({ kind: 'claude' }), plan: selfUpdate('update') },
+  claude: { latest: () => ({ kind: 'claude' }), plan: claudeUpdatePlan },
   codex: {
     parseVersion: parseCodexCliVersion,
     // Codex's npm, Homebrew and standalone builds all publish from this release.
@@ -75,15 +99,16 @@ const AGENT_CLI_UPDATE_DEFINITIONS: Record<AgentCliUpdateAgent, AgentCliUpdateDe
   },
   kimi: {
     latest: () => npm('@moonshot-ai/kimi-code'),
-    plan: (installed) =>
-      compareAppVersions(installed, KIMI_CODE_SINCE) >= 0
+    plan: (installed, realPath) =>
+      packageManagerPlan(homebrewUpgradeCommand('kimi-code', realPath)) ??
+      (compareAppVersions(installed, KIMI_CODE_SINCE) >= 0
         ? { runnable: true, args: ['update', '--yes'] }
         : {
             runnable: false,
             command:
               agentSessionInstallCommand('kimi', process.platform) ??
               'https://moonshotai.github.io/kimi-code/'
-          }
+          })
   },
   cursor: {
     // The build hash would read as a prerelease of the date it was built on.
@@ -97,7 +122,43 @@ const AGENT_CLI_UPDATE_DEFINITIONS: Record<AgentCliUpdateAgent, AgentCliUpdateDe
     updatesOutsideLauncher: true,
     latest: () => ({ kind: 'github', repo: 'NousResearch/hermes-agent', tagPrefix: 'v' }),
     plan: () => ({ runnable: false, command: 'hermes update' })
-  }
+  },
+  // `goose update` replaces its own binary with the stable release's.
+  goose: {
+    latest: () => ({ kind: 'github', repo: 'aaif-goose/goose', tagPrefix: 'v' }),
+    plan: selfUpdate('update')
+  },
+  // `auggie upgrade` installs its prerelease channel, so the user installs npm's stable release.
+  aug: {
+    latest: () => npm('@augmentcode/auggie'),
+    plan: () => ({ runnable: false, command: 'npm install -g @augmentcode/auggie@latest' })
+  },
+  // Both upgrade the way they were installed, as OpenCode 1.x does.
+  kilo: { latest: () => npm('@kilocode/cli'), plan: selfUpdate('upgrade') },
+  'mimo-code': { latest: () => npm('@mimo-ai/cli'), plan: selfUpdate('upgrade') },
+  // On an npm build `qwen update` prints the command to run, which the failed update shows.
+  // The standalone launcher runs the newest copy in its own folder.
+  'qwen-code': {
+    updatesOutsideLauncher: true,
+    latest: () => npm('@qwen-code/qwen-code'),
+    plan: (installed, realPath) =>
+      packageManagerPlan(homebrewUpgradeCommand('qwen-code', realPath)) ??
+      (compareAppVersions(installed, QWEN_UPDATE_COMMAND_SINCE) >= 0
+        ? { runnable: true, args: ['update'] }
+        : {
+            runnable: false,
+            command:
+              agentSessionInstallCommand('qwen-code', process.platform) ??
+              'npm install -g @qwen-code/qwen-code@latest'
+          })
+  },
+  // `devin update` needs a terminal: without one it exits 130 before checking.
+  devin: {
+    latest: () => ({ kind: 'acp-registry', id: 'devin' }),
+    plan: () => ({ runnable: false, command: 'devin update' })
+  },
+  // `codebuddy update` follows how it was installed (npm, Homebrew or its native installer).
+  codebuddy: { latest: () => npm('@tencent-ai/codebuddy-code'), plan: selfUpdate('update') }
 }
 
 export function agentCliUpdateDefinition(agent: AgentCliUpdateAgent): AgentCliUpdateDefinition {

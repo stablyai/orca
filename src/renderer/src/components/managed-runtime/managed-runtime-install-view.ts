@@ -117,15 +117,21 @@ function settledView(
     )
   }
   if (state.installedVersion !== null && state.updatesAutomatically) {
+    // Behind, the menu's install is an update to the newer release, so it says so.
+    const menu = !state.available
+      ? null
+      : !state.installedCurrent && state.version !== null
+        ? t('components.managed-runtime.updateTo', 'Update to {{version}}', {
+            version: state.version
+          })
+        : t('components.managed-runtime.reinstall', 'Reinstall {{agent}}', { agent })
     return view(
       t('components.managed-runtime.installedByOrca', 'Installed by Orca · {{version}}', {
         version: state.installedVersion
       }),
       null,
       null,
-      state.available
-        ? t('components.managed-runtime.reinstall', 'Reinstall {{agent}}', { agent })
-        : null
+      menu
     )
   }
   if (state.installedVersion !== null) {

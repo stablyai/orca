@@ -39,6 +39,9 @@ export const isConnectorWorkspaceRef = (value: string): boolean => WORKSPACE_REF
 
 // The most files one `orca bot reply` posts with its words.
 export const CONNECTOR_REPLY_MAX_FILES = 10
+// The most buttons one `orca bot reply` offers, and the longest label each takes (Slack's own cap).
+export const CONNECTOR_REPLY_MAX_CHOICES = 10
+export const CONNECTOR_REPLY_CHOICE_MAX_CHARS = 75
 
 // A file the CLI uploads itself: its name and exact size, which the source's upload slot is cut for.
 // No Orca cap; the source's own limits apply.
@@ -100,6 +103,12 @@ export const ConnectorActionArgs = z
     stage: z.literal(true).optional(),
     // reply and attach: the postIds of files staged for it, posted with its text as one post.
     files: z.array(z.string().min(1).max(128)).min(1).max(CONNECTOR_REPLY_MAX_FILES).optional(),
+    // reply: a button for each under its text (Slack); sent only to a cloud listing `reply.choices`.
+    choices: z
+      .array(z.string().trim().min(1).max(CONNECTOR_REPLY_CHOICE_MAX_CHARS))
+      .min(1)
+      .max(CONNECTOR_REPLY_MAX_CHOICES)
+      .optional(),
     // read, with download: answer a link the CLI streams the bytes from. Sent only to a cloud listing
     // `files.direct`.
     stream: z.literal(true).optional(),
@@ -144,6 +153,8 @@ export const CONNECTOR_ACT_ERROR_CODES = [
   'cloud_lacks_reply_files',
   // A file to attach or download, to a cloud that can't hand the bytes straight to this machine.
   'cloud_lacks_direct_files',
+  // `bot reply --choice`, to a cloud that can't put buttons on a reply.
+  'cloud_lacks_reply_choices',
   // A post whose answer was lost after every retry: it may have posted.
   'connector_post_unknown',
   // A set whose answer was lost: it may have changed the issue.

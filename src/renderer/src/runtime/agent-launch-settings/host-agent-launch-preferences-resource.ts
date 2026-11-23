@@ -42,6 +42,9 @@ const INHERITED: AgentLaunchPreferences = {
   agentPermissionDefault: 'own',
   agentPermissionOverrides: {}
 }
+/** True when the host has not stated its preferences (pending, timed out, failed, older server or stale owner). */
+export const isInheritedAgentLaunchPreferences = (preferences: AgentLaunchPreferences): boolean =>
+  preferences === INHERITED
 const FIRST_READ_DEADLINE_MS = 3_000
 const snapshotByEnvironment = new Map<string, Resource>()
 export const current = (entry: Resource): boolean =>
@@ -116,10 +119,6 @@ subscribeHostAgentLaunchSettings((owner) => {
     refresh(entry)
   }
 })
-
-export function clearHostAgentMenuSettingsForTests(): void {
-  snapshotByEnvironment.forEach((_, id) => forget(id))
-}
 
 export function resource(owner: AgentLaunchSettingsOwner): Resource {
   const key = snapshotKey(owner.environmentId, owner.pairingRevision, owner.runtimeId)

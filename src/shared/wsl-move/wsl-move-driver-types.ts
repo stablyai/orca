@@ -56,7 +56,10 @@ export type WslMoveRefusalCode =
   | 'wsl_move_nothing_new'
   /** The distro has no connected WSL host. */
   | 'wsl_move_host_unavailable'
-  /** The host runs an older Orca that cannot take this move; it must update first. */
+  /**
+   * The host's server cannot take this move: it runs an older Orca and must update first, or
+   * (a `detail`) it runs this version but something other than the WSL host may have started it.
+   */
   | 'wsl_move_host_update_required'
   /** Terminals, automations or dispatches in scope must finish first: see `blockers`. */
   | 'wsl_move_terminals_blocked'
@@ -179,6 +182,18 @@ export const WSL_MOVE_PROGRESS_CHANNEL = 'wslMove:progress'
 
 /** The `detail` of a refusal because Windows did not say where a project's mapped drive points. */
 export const WSL_MOVE_MAPPED_DRIVE_UNVERIFIABLE_DETAIL = 'mapped-drive-unverifiable'
+
+/**
+ * The `detail` of a `wsl_move_host_update_required` whose host row offers Restart as WSL host: its
+ * server was started some other way, usually by an SSH host pointed at the distro.
+ */
+export const WSL_MOVE_HOST_NOT_WSL_LAUNCHED_DETAIL = 'host-not-started-as-wsl-host'
+
+/**
+ * The `detail` of a `wsl_move_host_update_required` whose server waits on no update and offers no
+ * restart: why it lacks the capability is unproven, and updating cannot help.
+ */
+export const WSL_MOVE_HOST_LAUNCH_UNPROVEN_DETAIL = 'host-launch-unproven'
 
 /** The `detail` of an earlier move committed on the host whose desktop half waits for a restart. */
 export const WSL_MOVE_FINISH_PENDING_DETAIL = 'finish-pending'

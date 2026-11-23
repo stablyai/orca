@@ -5,6 +5,7 @@ import type {
   BrowserExtensionContextMenuItem,
   BrowserExtensionContextMenuPayload
 } from '../../../../../../shared/browser/extensions/browser-extension-context-menu-types'
+import { browserExtensionMenuCheck } from './browser-extension-menu-check'
 
 type ItemProps = {
   item: BrowserExtensionContextMenuItem
@@ -101,11 +102,11 @@ function ExtensionMenuItem({
       </div>
     )
   }
-  const checkable = item.type === 'checkbox' || item.type === 'radio'
+  const check = browserExtensionMenuCheck(item)
   return (
     <button
-      role={checkable ? (item.type === 'radio' ? 'menuitemradio' : 'menuitemcheckbox') : 'menuitem'}
-      aria-checked={checkable ? item.checked : undefined}
+      role={check?.role ?? 'menuitem'}
+      aria-checked={check?.checked}
       disabled={!item.enabled || !item.key}
       className={itemClassName}
       onClick={() => {
@@ -113,7 +114,7 @@ function ExtensionMenuItem({
         onDone()
       }}
     >
-      {checkable ? <Check className={cn('size-3.5', !item.checked && 'opacity-0')} /> : null}
+      {check ? <Check className={cn('size-3.5', !check.checked && 'opacity-0')} /> : null}
       <span className="flex-1 truncate text-left">{item.title}</span>
     </button>
   )

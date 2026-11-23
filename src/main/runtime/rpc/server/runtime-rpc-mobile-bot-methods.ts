@@ -123,6 +123,7 @@ export const MOBILE_BOT_RPC_METHODS = [
   // The bot's Google panel; sign-in stays off the phone, which has no loopback for its return.
   'google.client.export',
   'google.client.import',
+  'google.default.set',
   'google.disconnect',
   'google.status',
   'webhooks.calls',
