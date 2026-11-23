@@ -2,12 +2,14 @@ import type { ProviderRelayRecord } from '../protocol/daemon-provider-relay-prot
 
 type JsonObject = Record<string, unknown>
 
+function isObject(value: unknown): value is JsonObject {
+  return typeof value === 'object' && value !== null && !Array.isArray(value)
+}
+
 function parseObject(line: string): JsonObject | null {
   try {
     const value: unknown = JSON.parse(line)
-    return typeof value === 'object' && value !== null && !Array.isArray(value)
-      ? (value as JsonObject)
-      : null
+    return isObject(value) ? value : null
   } catch {
     return null
   }
@@ -116,8 +118,8 @@ export class ProviderRelayPendingRequests {
       return
     }
     if (message.type === 'control_request') {
-      const request = message.request as JsonObject | undefined
-      if (request?.subtype === 'initialize' && this.initializeKey === null) {
+      const { request } = message
+      if (isObject(request) && request.subtype === 'initialize' && this.initializeKey === null) {
         this.initializeKey = controlId(message.request_id)
       }
       return
@@ -130,8 +132,8 @@ export class ProviderRelayPendingRequests {
 
   private responseKey(message: JsonObject): string | null {
     if (message.type === 'control_response') {
-      const response = message.response as JsonObject | undefined
-      return controlId(response?.request_id)
+      const { response } = message
+      return isObject(response) ? controlId(response.request_id) : null
     }
     return 'result' in message || 'error' in message ? rpcId(message.id) : null
   }

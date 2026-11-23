@@ -1,4 +1,3 @@
-import type { Socket } from 'node:net'
 import type { ManagedProviderProcess } from '../../provider-process/managed-provider-process'
 import type {
   ProviderRelayAttachResult,
@@ -25,7 +24,12 @@ type RelayOptions = {
 
 /** The client's event stream; its close detaches the relay, as a closing stream detaches a PTY. */
 export type ProviderRelayStream = {
-  socket: Pick<Socket, 'write' | 'once' | 'off' | 'destroyed'>
+  socket: {
+    write(chunk: string | Uint8Array): unknown
+    once(event: 'close', listener: () => void): unknown
+    off(event: 'close', listener: () => void): unknown
+    readonly destroyed: boolean
+  }
   framing?: DaemonStreamFraming
 }
 

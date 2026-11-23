@@ -302,10 +302,10 @@ export type ListSessionsResult = {
 
 /** Everything that would end if this daemon stopped: live PTYs plus live chat relays. */
 export function countLiveDaemonSessions(result: ListSessionsResult): number {
-  const relays = result.liveRelays
+  const relays = typeof result.liveRelays === 'number' ? result.liveRelays : 0
   return (
     result.sessions.filter((session) => session.isAlive).length +
-    (Number.isSafeInteger(relays) && (relays as number) > 0 ? (relays as number) : 0)
+    (Number.isSafeInteger(relays) && relays > 0 ? relays : 0)
   )
 }
 

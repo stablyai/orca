@@ -17,6 +17,17 @@ type SpoolOptions = {
 
 type SpoolMode = 'attached' | 'replaying' | 'detached'
 
+function isSpoolRecord(value: unknown): value is ProviderRelayRecord {
+  return (
+    typeof value === 'object' &&
+    value !== null &&
+    'seq' in value &&
+    Number.isSafeInteger(value.seq) &&
+    'line' in value &&
+    typeof value.line === 'string'
+  )
+}
+
 /**
  * Seq-numbered stdout lines awaiting the client's ack. Attached, they live in memory; detached,
  * they are appended to a private file. Acks trim; the file goes once everything in it is acked.
@@ -214,8 +225,8 @@ export class ProviderRelaySpool {
         continue
       }
       try {
-        const record = JSON.parse(line) as ProviderRelayRecord
-        if (Number.isSafeInteger(record.seq) && typeof record.line === 'string') {
+        const record: unknown = JSON.parse(line)
+        if (isSpoolRecord(record)) {
           records.push(record)
         }
       } catch {}

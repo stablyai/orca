@@ -25,8 +25,11 @@ export function answerProviderRelayRequest(
     return Promise.reject(new Error('Relay host unavailable'))
   }
   const { clientId } = client
-  const payload = (request as { payload?: Record<string, unknown> }).payload ?? {}
-  const relayId = payload.relayId as string
+  const payload: Record<string, unknown> =
+    'payload' in request && typeof request.payload === 'object' && request.payload !== null
+      ? { ...request.payload }
+      : {}
+  const relayId = payload.relayId
   switch (request.type) {
     case 'relaySpawn':
       return relays.spawn(request.payload?.spec, request.payload?.chatKey)

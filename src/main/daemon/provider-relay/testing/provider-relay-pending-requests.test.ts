@@ -13,6 +13,7 @@ function fakeManaged(): {
 } {
   const stdout = new PassThrough()
   const stdin = new PassThrough()
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: ProviderRelay reads only these members of the managed process.
   const managed = {
     child: { stdout, stdin, pid: 4242 },
     onExit: () => {},

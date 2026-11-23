@@ -442,6 +442,7 @@
 1 src/main/daemon/process-scopes/daemon-rttime-limit.ts
 3 src/main/daemon/process-scopes/terminal-scopes-runtime.ts
 2 src/main/daemon/process-scopes/terminal-scopes.ts
+1 src/main/daemon/provider-relay/provider-relay-host.ts # daemon-owned chat agents launch through the same spawnManagedProviderProcess as the app; its existsSync runs only after a failed spawn
 3 src/main/daemon/providers/adapter/daemon-pty-daemon-recovery.ts
 1 src/main/daemon/providers/adapter/daemon-pty-runtime-state.ts
 1 src/main/daemon/providers/adapter/daemon-pty-session-control.ts

@@ -1,8 +1,7 @@
 import { randomUUID } from 'node:crypto'
 import { lstat, mkdir, readdir, unlink } from 'node:fs/promises'
 import { basename, isAbsolute, join } from 'node:path'
-import { spawnManagedProviderProcess } from '../../provider-process/managed-provider-process'
-import { installProviderOwnershipDirectory } from '../../provider-process/provider-ownership-journal'
+import type { spawnManagedProviderProcess } from '../../provider-process/managed-provider-process'
 import type {
   ProviderRelayAttachResult,
   ProviderRelayListResult,
@@ -10,6 +9,8 @@ import type {
   ProviderRelaySpawnSpec
 } from '../protocol/daemon-provider-relay-protocol'
 import { ProviderRelay, type ProviderRelayStream } from './provider-relay'
+
+type SpawnManaged = typeof spawnManagedProviderProcess
 
 const PROVIDER_OWNER_EXECUTABLE = 'orca-provider-exec'
 const MAX_CHAT_KEY_CHARS = 1024
@@ -55,7 +56,7 @@ function ownerProvenGone(pid: number): boolean {
     process.kill(pid, 0)
     return false
   } catch (error) {
-    return (error as NodeJS.ErrnoException).code === 'ESRCH'
+    return error instanceof Error && 'code' in error && error.code === 'ESRCH'
   }
 }
 
@@ -63,7 +64,7 @@ function ownerProvenGone(pid: number): boolean {
 export class ProviderRelayHost {
   private readonly relays = new Map<string, ProviderRelay>()
   private readonly platform: NodeJS.Platform
-  private ready: Promise<string> | null = null
+  private ready: Promise<{ directory: string; spawn: SpawnManaged }> | null = null
   private disposed = false
 
   constructor(private readonly options: RelayHostOptions) {
@@ -102,12 +103,12 @@ export class ProviderRelayHost {
     if (this.staleFor(spec)) {
       return { refused: 'stale-bundle' }
     }
-    const directory = await this.prepare()
+    const { directory, spawn } = await this.prepare()
     if (this.disposed || !this.options.acceptsWork()) {
       return { refused: 'unavailable' }
     }
     const relayId = `r-${process.pid}-${randomUUID()}`
-    const managed = spawnManagedProviderProcess(
+    const managed = spawn(
       { command: spec.command, args: spec.args, cwd: spec.cwd, env: spec.env },
       {
         site: 'daemon-provider-relay',
@@ -117,8 +118,8 @@ export class ProviderRelayHost {
         ownerExecutable: spec.ownerExecutable
       }
     )
-    let spawnError: Error | null = null
-    managed.child.on('error', (error: Error) => {
+    let spawnError: (Error & { code?: unknown }) | null = null
+    managed.child.on('error', (error: Error & { code?: unknown }) => {
       spawnError ??= error
     })
     const relay = new ProviderRelay({
@@ -137,7 +138,7 @@ export class ProviderRelayHost {
     if (pid === undefined) {
       this.relays.delete(relayId)
       await relay.dispose()
-      const error = spawnError as (Error & { code?: unknown }) | null
+      const error: (Error & { code?: unknown }) | null = spawnError
       return {
         spawnError: {
           code: typeof error?.code === 'string' ? error.code : 'UNKNOWN',
@@ -153,30 +154,30 @@ export class ProviderRelayHost {
   attach(
     clientId: string,
     stream: ProviderRelayStream,
-    relayId: string,
+    relayId: unknown,
     fromSeq: unknown
   ): Promise<ProviderRelayAttachResult> {
     return this.require(relayId).attach(clientId, stream, typeof fromSeq === 'number' ? fromSeq : 0)
   }
 
-  write(clientId: string, relayId: string, data: unknown): void {
+  write(clientId: string, relayId: unknown, data: unknown): void {
     if (typeof data !== 'string') {
       throw new Error('Invalid relay write')
     }
     this.requireAttached(clientId, relayId).write(data)
   }
 
-  ack(clientId: string, relayId: string, seq: unknown): void {
+  ack(clientId: string, relayId: unknown, seq: unknown): void {
     const relay = this.requireAttached(clientId, relayId)
     relay.ack(typeof seq === 'number' ? seq : 0)
     this.removeIfFinished(relay)
   }
 
-  async close(relayId: string, grace: unknown): Promise<void> {
+  async close(relayId: unknown, grace: unknown): Promise<void> {
     await this.require(relayId).close(grace === 'brief' ? 'brief' : undefined)
   }
 
-  async detach(clientId: string, relayId: string): Promise<void> {
+  async detach(clientId: string, relayId: unknown): Promise<void> {
     await this.require(relayId).detach(clientId)
   }
 
@@ -222,7 +223,7 @@ export class ProviderRelayHost {
     }
   }
 
-  private prepare(): Promise<string> {
+  private prepare(): Promise<{ directory: string; spawn: SpawnManaged }> {
     this.ready ??= this.prepareOnce().catch((error: unknown) => {
       this.ready = null
       throw error
@@ -230,7 +231,8 @@ export class ProviderRelayHost {
     return this.ready
   }
 
-  private async prepareOnce(): Promise<string> {
+  /** Spawn code loads on the first chat only, so a daemon that never relays starts as fast as before. */
+  private async prepareOnce(): Promise<{ directory: string; spawn: SpawnManaged }> {
     const directory = join(this.options.runtimeDir, 'chat-relay')
     const journal = join(directory, 'provider-processes')
     await mkdir(journal, { recursive: true, mode: 0o700 })
@@ -244,9 +246,14 @@ export class ProviderRelayHost {
         throw new Error('Relay directory is not private')
       }
     }
+    const [{ spawnManagedProviderProcess }, { installProviderOwnershipDirectory }] =
+      await Promise.all([
+        import('../../provider-process/managed-provider-process'),
+        import('../../provider-process/provider-ownership-journal')
+      ])
     installProviderOwnershipDirectory(journal)
     await this.removeDeadOwnersSpools(directory)
-    return directory
+    return { directory, spawn: spawnManagedProviderProcess }
   }
 
   /** A spool only its creating daemon can read; once that daemon is proven gone, nobody can. */
