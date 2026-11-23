@@ -3,6 +3,7 @@ import type { ForegroundNudgeReason } from '../connection/connection-state'
 const RECONNECT_DELAYS = [500, 1000, 2000, 4000, 8000, 15_000, 30_000, 60_000]
 export const RPC_RECONNECT_ATTEMPT_LIMIT = 12
 const TRICKLE_RECONNECT_DELAY_MS = 90_000
+const NETWORK_HINT_QUIET_MS = 10_000
 
 type ReconnectScheduleOptions = {
   openConnection: () => void
@@ -13,7 +14,7 @@ type ReconnectScheduleOptions = {
 export class RpcClientReconnectSchedule {
   private attempt = 0
   private timer: ReturnType<typeof setTimeout> | null = null
-  private expeditedSinceAuthentication = false
+  private lastNetworkHintAt: number | null = null
 
   constructor(private readonly options: ReconnectScheduleOptions) {}
 
@@ -23,7 +24,7 @@ export class RpcClientReconnectSchedule {
 
   authenticated(): void {
     this.attempt = 0
-    this.expeditedSinceAuthentication = false
+    this.lastNetworkHintAt = null
   }
 
   schedule(): void {
@@ -52,12 +53,14 @@ export class RpcClientReconnectSchedule {
   }
 
   claimExpeditedRetry(reason: ForegroundNudgeReason): boolean {
-    // Repeated iOS network hints and in-app focus changes must let an unreachable host back off.
-    if (this.expeditedSinceAuthentication && reason !== 'app-resume') {
-      return false
+    if (reason !== 'network-change') {
+      return true
     }
-    this.expeditedSinceAuthentication = true
-    return true
+    // Coalesce noisy iOS callbacks while allowing a later, separate network change to recover.
+    const now = performance.now()
+    const previous = this.lastNetworkHintAt
+    this.lastNetworkHintAt = now
+    return previous === null || now - previous >= NETWORK_HINT_QUIET_MS
   }
 
   redialNow(): void {
