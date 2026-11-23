@@ -4183,7 +4183,23 @@
       "deny": "Deny",
       "waiting": "{{count}} workers waiting · oldest first",
       "countdown": "Claude denies it on its own in {{time}} if nobody answers.",
-      "openWorker": "Open worker"
+      "openWorker": "Open worker",
+      "record": {
+        "youAllowedFor": "You allowed <tool>{{tool}}</tool> for <task>{{task}}</task>",
+        "youDeniedFor": "You denied <tool>{{tool}}</tool> for <task>{{task}}</task>",
+        "coordinatorAllowed": "Coordinator allowed <tool>{{tool}}</tool> for <task>{{task}}</task>",
+        "coordinatorDenied": "Coordinator denied <tool>{{tool}}</tool> for <task>{{task}}</task>",
+        "allowedInTerminal": "<tool>{{tool}}</tool> for <task>{{task}}</task> allowed in its terminal",
+        "deniedInTerminal": "<tool>{{tool}}</tool> for <task>{{task}}</task> denied in its terminal",
+        "allowedInChat": "<tool>{{tool}}</tool> for <task>{{task}}</task> allowed in its chat",
+        "deniedInChat": "<tool>{{tool}}</tool> for <task>{{task}}</task> denied in its chat",
+        "autoDenied": "<tool>{{tool}}</tool> for <task>{{task}}</task> denied automatically after 2:00",
+        "waitsInTerminal": "<tool>{{tool}}</tool> for <task>{{task}}</task> waits in its terminal",
+        "workerEnded": "<tool>{{tool}}</tool> for <task>{{task}}</task> closed: the worker ended",
+        "closedUnnamed": "<tool>{{tool}}</tool> for <task>{{task}}</task> closed without a recorded answer",
+        "reasonSentAsMessage": "Reason, sent as a message",
+        "coordinatorReason": "Coordinator's reason"
+      }
     },
     "messageTime": {
       "yesterday": "Yesterday {{time}}"

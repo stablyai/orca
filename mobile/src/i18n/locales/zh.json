@@ -1176,7 +1176,23 @@
       "deny": "拒绝",
       "waiting": "{{count}} 个工作者在等待 · 最早的在前",
       "countdown": "如果无人回答，Claude 将在 {{time}} 后自动拒绝",
-      "openWorker": "打开工作者"
+      "openWorker": "打开工作者",
+      "record": {
+        "youAllowedFor": "你已为 <task>{{task}}</task> 允许 <tool>{{tool}}</tool>",
+        "youDeniedFor": "你已为 <task>{{task}}</task> 拒绝 <tool>{{tool}}</tool>",
+        "coordinatorAllowed": "协调者已为 <task>{{task}}</task> 允许 <tool>{{tool}}</tool>",
+        "coordinatorDenied": "协调者已为 <task>{{task}}</task> 拒绝 <tool>{{tool}}</tool>",
+        "allowedInTerminal": "<task>{{task}}</task> 的 <tool>{{tool}}</tool> 已在工作者的终端中允许",
+        "deniedInTerminal": "<task>{{task}}</task> 的 <tool>{{tool}}</tool> 已在工作者的终端中拒绝",
+        "allowedInChat": "<task>{{task}}</task> 的 <tool>{{tool}}</tool> 已在工作者的聊天中允许",
+        "deniedInChat": "<task>{{task}}</task> 的 <tool>{{tool}}</tool> 已在工作者的聊天中拒绝",
+        "autoDenied": "<task>{{task}}</task> 的 <tool>{{tool}}</tool> 已在 2:00 后自动拒绝",
+        "waitsInTerminal": "<task>{{task}}</task> 的 <tool>{{tool}}</tool> 正在工作者的终端中等待回答",
+        "workerEnded": "<task>{{task}}</task> 的 <tool>{{tool}}</tool> 已关闭：工作者已结束",
+        "closedUnnamed": "<task>{{task}}</task> 的 <tool>{{tool}}</tool> 已关闭，未记录回答",
+        "coordinatorReason": "协调者的原因",
+        "reasonSentAsMessage": "原因（已作为消息发送）"
+      }
     },
     "messageTime": {
       "yesterday": "昨天 {{time}}"
