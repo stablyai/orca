@@ -181,6 +181,7 @@ export function applyJournalDomainLifecycle(
           stopSettle
         })
         const revived = commit.items[0]!.itemId
+        // A same-batch revival hides the removal and gets a new ordinal: agent read cursors miss it.
         removedItemIds.splice(
           0,
           removedItemIds.length,
