@@ -74,9 +74,10 @@ export type ExternalConversationLink = {
    *  didn't ask for that turn; kept so a restarted watch still tells only its state, never its words.
    *  Cleared at that turn's end. */
   adoptedTurn?: { itemId: string; at: number }
-  /** Background work a turn of its conversation's left running (`work` fingerprints what runs): the
-   *  turn its wake-up opens answers the conversation too. Main-process data: clients ignore it. */
-  wakeAnswers?: { at: number; work: string }
+  /** Background tasks (child work ids) its conversation's own turns started that still run, and when
+   *  the chat's last turn ended: a turn their finishing wakes answers the conversation too.
+   *  Main-process data: clients ignore it. */
+  wakeAnswers?: { tasks: string[]; at: number }
   /** Who began the conversation, as its first delivery said; absent on links an older Orca wrote. */
   opener?: ExternalConversationOpener
   /** Slack only: whether the owner's Orca-typed messages, and the bot's replies to them, post to the

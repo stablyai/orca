@@ -1,90 +1,107 @@
-// Where a chat's self-started turn (a background task's wake-up) answers: the conversation whose
-// turn left that work running, kept on the link so a restart still knows.
-import { createHash } from 'node:crypto'
-import type { AgentStatusIpcPayload } from '../../shared/agent-status/contracts/agent-status-ipc-payload'
+// Where a chat's self-started turn (a background task's wake-up) answers: the conversation whose own
+// turn started the task, by the task's id, kept on the link so a restart still knows.
 import type { AgentJournalRenderItem } from '../../shared/agent-session/journal/agent-session-journal-types'
 import { isSelfStartedTurnRow } from '../../shared/agent-session/requests/structured-agent-session-latest-request'
+import type { AgentChildWorkView } from '../../shared/agent-status/child-work/agent-status-child-work-view'
+import {
+  isAgentChildWork,
+  isLiveChildWork
+} from '../../shared/agent-status/child-work/agent-status-child-work-liveness'
 import type { ExternalConversationLink } from '../../shared/connectors/external-conversation-link'
 import type { EndedChatTurn } from './external-conversation-ended-turn'
 import type { LinkedConversation } from './external-conversation-links'
 
 type WakeAnswers = ExternalConversationLink['wakeAnswers']
+type ChildWork = readonly Pick<
+  AgentChildWorkView,
+  'id' | 'kind' | 'state' | 'operation' | 'firstObservedAt' | 'observedAt' | 'settledAt'
+>[]
+
+/** Kept per link; a chat with more running at once is unusual, and an id over the cap is no one's. */
+const MAX_WAKE_TASKS = 16
 
 export type WakeAnswersDeps = {
-  readHookRow: (paneKey: string) => AgentStatusIpcPayload | null
-  /** Keeps (or, with undefined, clears) the background work whose wake-up answers the link. */
+  /** The chat's child work, settled included; empty when it can't be read. */
+  childWork: (sessionId: string) => ChildWork
+  /** Keeps (or, with undefined, clears) the tasks whose wake-ups answer the link. */
   keepWakeAnswers: (linked: LinkedConversation, wakeAnswers: WakeAnswers) => void
 }
 
-/** At a turn's end: what it left running answers its conversation only if the turn did. */
+function backgroundTasks(children: ChildWork): ChildWork {
+  return children.filter((child) => !isAgentChildWork(child))
+}
+
+/** At a turn's end: the tasks its conversation's turns started that still run. A turn that answered
+ *  the conversation adds the tasks first seen during it; any other turn adds none, so a task an
+ *  Orca-typed turn started never answers the thread. */
 export function settleWake(
   deps: WakeAnswersDeps,
   linked: LinkedConversation,
-  answered: boolean,
-  at: number
+  turn: { answered: boolean; startedAt: number | null; endedAt: number }
 ): void {
-  const work = pendingWork(deps.readHookRow(linked.link.paneKey))
-  const next = wakeAnswersAfter(linked.link, answered, work, at)
-  if (next !== linked.link.wakeAnswers) {
+  const tasks = backgroundTasks(deps.childWork(linked.link.sessionId))
+  const live = new Set(tasks.filter(isLiveChildWork).map((task) => task.id))
+  const { startedAt } = turn
+  const started =
+    turn.answered && startedAt !== null
+      ? tasks.filter((task) => live.has(task.id) && task.firstObservedAt >= startedAt)
+      : []
+  const ids = [
+    ...new Set([
+      ...(linked.link.wakeAnswers?.tasks ?? []).filter((id) => live.has(id)),
+      ...started.map((task) => task.id)
+    ])
+  ].slice(0, MAX_WAKE_TASKS)
+  const next = ids.length > 0 ? { tasks: ids, at: turn.endedAt } : undefined
+  if (next || linked.link.wakeAnswers) {
     deps.keepWakeAnswers(linked, next)
   }
 }
 
-/** The ended turn is the chat waking itself for work one of its conversation's turns left running. */
+/** Whether the tasks that finished since the last turn ended, so woke the chat, are all ones its
+ *  conversation's turns started. Any other finishing too makes the wake-up Orca's: it can't be told
+ *  apart. */
+function wokeForConversation(wakeAnswers: WakeAnswers, children: ChildWork): boolean {
+  if (!wakeAnswers) {
+    return false
+  }
+  const recorded = new Set(wakeAnswers.tasks)
+  const finished = backgroundTasks(children).filter(
+    (task) => !isLiveChildWork(task) && (task.settledAt ?? task.observedAt) > wakeAnswers.at
+  )
+  return finished.length > 0 && finished.every((task) => recorded.has(task.id))
+}
+
+/** The ended turn is the chat waking itself for tasks its conversation's turns started. */
 export function wokenTurn(
   turn: Pick<EndedChatTurn, 'selfStarted'>,
-  link: Pick<ExternalConversationLink, 'wakeAnswers' | 'lastTurn'>
-): boolean {
-  return turn.selfStarted === true && wakeAnswersConversation(link)
-}
-
-/** What the chat's ended turn left running, fingerprinted; null when nothing does. */
-function pendingWork(row: AgentStatusIpcPayload | null): string | null {
-  const commands = row?.workingMode === 'monitoring' ? row.backgroundCommands : undefined
-  if (!commands?.length) {
-    return null
-  }
-  return createHash('sha256')
-    .update(JSON.stringify([...commands].sort()))
-    .digest('hex')
-    .slice(0, 16)
-}
-
-/** The record a turn's end leaves. A turn that answered its conversation hands it the work it left
- *  running. Any other turn keeps an earlier record only while exactly that work still runs: once
- *  other work runs, Orca can't tell whose wake-up comes next, so it stays in Orca. */
-function wakeAnswersAfter(
   link: Pick<ExternalConversationLink, 'wakeAnswers'>,
-  answered: boolean,
-  work: string | null,
-  at: number
-): WakeAnswers {
-  if (!work) {
-    return undefined
-  }
-  if (answered) {
-    return { at, work }
-  }
-  return link.wakeAnswers?.work === work ? link.wakeAnswers : undefined
+  children: ChildWork
+): boolean {
+  return turn.selfStarted === true && wokeForConversation(link.wakeAnswers, children)
 }
 
-/** Whether a self-started turn answers its conversation: the work that woke it was left by one of the
- *  conversation's turns, or, with none recorded, no one else has asked the chat anything since. */
-function wakeAnswersConversation(
-  link: Pick<ExternalConversationLink, 'wakeAnswers' | 'lastTurn'>
+/** The chat's running turn is such a wake-up: it opened itself, nothing was steered in (a steer
+ *  clears the record), and only the conversation's tasks finished since. */
+export function wokenRunningTurn(
+  link: Pick<ExternalConversationLink, 'wakeAnswers'>,
+  activeTurn: { item: Pick<AgentJournalRenderItem, 'itemId' | 'body'> } | null | undefined,
+  children: ChildWork
 ): boolean {
-  return link.wakeAnswers !== undefined || link.lastTurn === 'conversation'
+  return Boolean(
+    activeTurn &&
+    isSelfStartedTurnRow(activeTurn.item, () => false) &&
+    wokeForConversation(link.wakeAnswers, children)
+  )
 }
 
-/** Whether what the chat runs now acts for its conversation through a wake-up: between turns, only
- *  work a conversation's turn left runs (so a worker it starts reports there); in a turn, the one that
- *  work woke. */
-export function wokenForConversation(
-  link: Pick<ExternalConversationLink, 'wakeAnswers' | 'lastTurn'>,
-  activeTurn: { item: Pick<AgentJournalRenderItem, 'itemId' | 'body'> } | null | undefined
+/** Between turns, whether all that runs is tasks its conversation's turns started, so a worker one of
+ *  them starts reports there. With anything else running, the caller can't be told apart. */
+export function onlyConversationTasksRun(
+  link: Pick<ExternalConversationLink, 'wakeAnswers'>,
+  children: ChildWork
 ): boolean {
-  if (!activeTurn) {
-    return link.wakeAnswers !== undefined
-  }
-  return isSelfStartedTurnRow(activeTurn.item, () => false) && wakeAnswersConversation(link)
+  const recorded = new Set(link.wakeAnswers?.tasks ?? [])
+  const live = backgroundTasks(children).filter(isLiveChildWork)
+  return live.length > 0 && live.every((task) => recorded.has(task.id))
 }

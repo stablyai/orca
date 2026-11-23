@@ -25,6 +25,8 @@ export type ChatTurnsDeps = ConversationWorkersDeps &
     chatTurnWaiting: (sessionId: string) => boolean
     /** Whether reports from workers its conversation's turns started opened the chat's running turn. */
     runningTurnReported: (sessionId: string) => boolean
+    /** Whether the chat's running turn is a wake-up for tasks its conversation's turns started. */
+    runningTurnWoken: (sessionId: string) => boolean
     /** Read once per ended turn of a bot conversation. */
     workLinks: (link: ExternalConversationLink) => Promise<ConnectorWorkLink[]>
     /** The ended Orca-typed turn's owner posts to its Slack thread (taken once), else null. */

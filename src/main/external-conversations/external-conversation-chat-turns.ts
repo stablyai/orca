@@ -96,7 +96,8 @@ export class ChatTurns {
   private owns(link: ExternalConversationLink): boolean {
     return conversationOwnsTurn(link, {
       delivered: this.deps.chatTurnDelivered,
-      reported: this.deps.runningTurnReported
+      reported: this.deps.runningTurnReported,
+      woken: this.deps.runningTurnWoken
     })
   }
 
@@ -253,13 +254,13 @@ export class ChatTurns {
     }
     // A synced Orca-typed turn the thread didn't hear posts its reply too.
     if (mirrored && !heard) {
-      settleWake(this.deps, linked, true, news.at)
+      settleWake(this.deps, linked, { answered: true, startedAt: ended.turnId, endedAt: news.at })
       return endMirroredTurn(end, mirrored, linked.link)
     }
     // Someone in the thread spoke during it: the thread mirrors the chat, so it gets the answer
     // whatever opened the turn.
     if (adopted && !heard) {
-      settleWake(this.deps, linked, false, news.at)
+      settleWake(this.deps, linked, { answered: false, startedAt: ended.turnId, endedAt: news.at })
       return endAdoptedTurn(end, this.deps.promptsAudience)
     }
     // A turn begun in Orca never reached the conversation, so its end doesn't either.
@@ -272,9 +273,11 @@ export class ChatTurns {
       const opener = turn.opener ?? turn.latestOpener
       const reported =
         origin === 'local' && !shared && Boolean(opener && isConversationReport(opener.body))
-      const woken = origin === 'local' && !shared && wokenTurn(turn, linked.link)
+      const children = shared ? [] : this.deps.childWork(linked.link.sessionId)
+      const woken = origin === 'local' && !shared && wokenTurn(turn, linked.link, children)
       if (!shared) {
-        settleWake(this.deps, linked, heard || reported || woken, news.at)
+        const answered = heard || reported || woken
+        settleWake(this.deps, linked, { answered, startedAt: ended.turnId, endedAt: news.at })
       }
       const reply = botTurnReply(end, linked.link, turn, heard && origin === 'delivery')
       const links = readOnce(() => this.toldLinks.next(paneKey, linked.link))

@@ -25,6 +25,7 @@ import {
   type LinkedConversation
 } from './external-conversation-links'
 import { keepLinkFact } from './external-conversation-link-writes'
+import type { WakeAnswersDeps } from './external-conversation-wake-answers'
 import { AnsweredPrompts } from './external-conversation-answered-prompts'
 import { ShownPrompts, type SnapshotEntryTrace } from './external-conversation-snapshot-prompts'
 import type { StructuredAgentSessionPromptStanding } from '../native-chat/agent-session-wire/observations/structured-agent-session-prompt-standing'
@@ -127,6 +128,9 @@ export type ConversationEventsDeps = {
   chatTurnWaiting: (sessionId: string) => boolean
   /** Whether reports from workers its conversation's turns started opened the chat's running turn. */
   runningTurnReported: (sessionId: string) => boolean
+  /** Whether the chat's running turn is a wake-up for tasks its conversation's turns started. */
+  runningTurnWoken: (sessionId: string) => boolean
+  childWork: WakeAnswersDeps['childWork']
   /** The pull requests a bot conversation's work opened, read once per ended turn. */
   workLinks: (link: ExternalConversationLink) => Promise<ConnectorWorkLink[]>
   workerActivities: ConversationWorkersDeps['workerActivities']

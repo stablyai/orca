@@ -47,9 +47,12 @@ const fitsId = (id: string): boolean =>
 export function promptAudience(
   link: Pick<ExternalConversationLink, 'source' | 'externalId' | 'bot' | 'sessionId'>,
   prompt: Pick<PendingPrompt, 'promptId'>,
-  opener: AgentJournalRenderItem | null
+  opener: AgentJournalRenderItem | null,
+  /** The running turn is a wake-up for tasks the conversation's turns started (its opener then is
+   *  an earlier turn's message). */
+  woke = false
 ): ConnectorPromptAudience {
-  const raisedBy = promptRaisedBy(link, opener)
+  const raisedBy = woke ? 'conversation' : promptRaisedBy(link, opener)
   const woken = raisedBy === 'orca' ? wokenBy(opener) : undefined
   const open = fitsId(link.sessionId)
     ? {

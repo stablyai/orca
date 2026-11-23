@@ -25,7 +25,8 @@ export function recordLastTurn(
 /**
  * A message a chat took, as its host admitted it: the turn it opens is its conversation's when the
  * message is a delivery or mail finishing its ask, else Orca's (typed, other mail, an automation). One
- * joining a running turn only ever makes it the conversation's. Recovery sends are not triggers.
+ * joining a running turn only ever makes it the conversation's, and one of Orca's joining clears the
+ * tasks whose wake-ups answer it. Recovery sends are not triggers.
  */
 export function recordAdmittedTurn(
   deps: LastTurnDeps,
@@ -41,5 +42,11 @@ export function recordAdmittedTurn(
     })
   if (link && (owned || !joinsRunningTurn)) {
     recordLastTurn(deps, link, owned ? 'conversation' : 'orca', workspace)
+  }
+  // Someone in Orca steering into a running turn (a wake-up's included) makes what it does next
+  // theirs too, so no task's wake-up answers the conversation from here; a missed post beats a
+  // private one.
+  if (link?.wakeAnswers && !owned && joinsRunningTurn) {
+    writeLinkFact(deps.store, link, { wakeAnswers: undefined }, workspace)
   }
 }

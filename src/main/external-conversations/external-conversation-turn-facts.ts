@@ -6,7 +6,7 @@ import {
   type ExternalConversationLinkStore
 } from './external-conversation-links'
 import { isConversationReport } from './external-conversation-turn-opener'
-import { wokenForConversation } from './external-conversation-wake-answers'
+import { onlyConversationTasksRun, wokenRunningTurn } from './external-conversation-wake-answers'
 
 /** Whether mail finishing its conversation's ask (isConversationReport) opened the chat's running turn;
  *  read from its journal, so it holds across watches and restarts. */
@@ -19,8 +19,8 @@ export function runningTurnOpenedByConversationReport(
 }
 
 /** Whether a chat's running turn is its conversation's (conversationOwnsTurn): a delivery it took
- *  (`pending`), a continuation claiming the link's requests, mail finishing its ask, or a wake-up of
- *  work its turn left. */
+ *  (`pending`), a continuation claiming the link's requests, mail finishing its ask, or a wake-up for
+ *  tasks its turns started. */
 export function chatTurnFacts(
   chats: ConversationChatHost | undefined,
   store: ExternalConversationLinkStore,
@@ -39,8 +39,33 @@ export function chatTurnFacts(
     reported: (sessionId: string) => runningTurnOpenedByConversationReport(chats, sessionId),
     woken: (sessionId: string) => {
       const link = findLinkForSession(store, sessionId)?.link
-      const turn = currentChat(chats)?.publishedWork(sessionId)?.activeTurn
-      return !!link && wokenForConversation(link, turn)
+      const chat = currentChat(chats)
+      const turn = chat?.publishedWork(sessionId)?.activeTurn
+      return !!link && wokenRunningTurn(link, turn, chat?.reads.childWork(sessionId) ?? [])
+    },
+    /** No turn runs, and only tasks its conversation's turns started do: a worker one of them starts
+     *  reports there. */
+    tasksRun: (sessionId: string) => {
+      const link = findLinkForSession(store, sessionId)?.link
+      const chat = currentChat(chats)
+      return (
+        !!link &&
+        !chat?.publishedWork(sessionId)?.activeTurn &&
+        onlyConversationTasksRun(link, chat?.reads.childWork(sessionId) ?? [])
+      )
     }
+  }
+}
+
+/** ChatTurns' reads of the same facts, and of the chat's child work. */
+export function chatTurnWatchFacts(
+  facts: ReturnType<typeof chatTurnFacts>,
+  chats: ConversationChatHost | undefined
+) {
+  return {
+    chatTurnDelivered: facts.delivered,
+    runningTurnReported: facts.reported,
+    runningTurnWoken: facts.woken,
+    childWork: (sessionId: string) => currentChat(chats)?.reads.childWork(sessionId) ?? []
   }
 }

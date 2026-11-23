@@ -20,7 +20,10 @@ const ExternalConversationLinkSchema = z.object({
   lastTurn: z.enum(['conversation', 'orca']).optional(),
   adoptedTurn: z.object({ itemId: z.string().min(1), at: z.number().positive() }).optional(),
   wakeAnswers: z
-    .object({ at: z.number().positive(), work: z.string().min(1).max(64) })
+    .object({
+      tasks: z.array(z.string().min(1).max(512)).min(1).max(16),
+      at: z.number().positive()
+    })
     .optional()
     .catch(undefined),
   seenAt: z.number().nullable().optional(),
