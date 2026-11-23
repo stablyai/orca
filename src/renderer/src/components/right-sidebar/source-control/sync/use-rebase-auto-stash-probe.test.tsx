@@ -1,6 +1,6 @@
 // @vitest-environment happy-dom
 import { cleanup, renderHook } from '@testing-library/react'
-import { flush } from '../panel/source-control-hook-test-harness'
+import { flush } from './rebase-hook-test-harness'
 import { afterEach, expect, it, vi } from 'vitest'
 import { getWorktreeOperationStore } from '../panel/worktree-operation-store'
 import { useRebaseAutoStashProbe } from './use-rebase-auto-stash-probe'
