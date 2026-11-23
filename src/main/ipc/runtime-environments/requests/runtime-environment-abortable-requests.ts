@@ -21,9 +21,16 @@ export function sendRemoteRuntimeRequestAbortable(
   signal?: AbortSignal,
   clientCapabilities: readonly RuntimeCapability[] = [],
   prepareRequest?: RuntimeRequestPreparation,
-  prepareGuard?: RuntimeRequestGuard
+  prepareGuard?: RuntimeRequestGuard,
+  responseTimeoutMs?: number
 ): Promise<RuntimeRpcResponse<unknown>> {
-  if (signal || clientCapabilities.length > 0 || prepareRequest || prepareGuard) {
+  if (
+    signal ||
+    clientCapabilities.length > 0 ||
+    prepareRequest ||
+    prepareGuard ||
+    responseTimeoutMs !== undefined
+  ) {
     return sendRemoteRuntimeRequestOnSocket(
       connection,
       method,
@@ -36,7 +43,8 @@ export function sendRemoteRuntimeRequestAbortable(
       undefined,
       prepareRequest,
       undefined,
-      prepareGuard
+      prepareGuard,
+      responseTimeoutMs
     )
   }
   return envelope
@@ -95,9 +103,11 @@ export function sendRemoteRuntimeSharedControlRequestAbortable(
   envelope?: RuntimeOrchestrationEnvelope,
   signal?: AbortSignal,
   prepareRequest?: RuntimeRequestPreparation,
-  prepareGuard?: RuntimeRequestGuard
+  prepareGuard?: RuntimeRequestGuard,
+  responseTimeoutMs?: number,
+  idlePassive?: boolean
 ): Promise<RuntimeRpcResponse<unknown>> {
-  if (signal || prepareRequest || prepareGuard) {
+  if (signal || prepareRequest || prepareGuard || responseTimeoutMs !== undefined || idlePassive) {
     return sendRemoteRuntimeSharedControlRequest(
       environmentId,
       connection,
@@ -107,7 +117,9 @@ export function sendRemoteRuntimeSharedControlRequestAbortable(
       envelope,
       signal,
       prepareRequest,
-      prepareGuard
+      prepareGuard,
+      responseTimeoutMs,
+      idlePassive
     )
   }
   return envelope

@@ -1,4 +1,4 @@
-import { useAppStateValue } from '@/store/retained-views/app-state-view'
+import { useAppStateValueWithHostStatuses } from '@/store/slices/runtime-status/views/use-runtime-status-view'
 import type { PublicKnownRuntimeEnvironment } from '../../../../../shared/remote-runtime/host-catalog/runtime-environments'
 import { getWindowsTerminalCapabilityOwnerKey } from '@/runtime/hosts/capabilities/windows-terminal-capabilities'
 import { isWebClientLocation } from '@/app-shell/platform/web-client-location'
@@ -39,12 +39,12 @@ export function useWindowsTerminalCapabilityOwnerKey(
   sshConnectionId?: string | null
 ): string {
   const isWebClient = isWebClientLocation()
-  return useAppStateValue((state) =>
+  return useAppStateValueWithHostStatuses((state, statuses) =>
     resolveWindowsTerminalCapabilityOwnerKey({
       activeRuntimeEnvironmentId,
       isWebClient,
       runtimeEnvironments: state.runtimeEnvironments ?? [],
-      runtimeStatusByEnvironmentId: state.runtimeStatusByEnvironmentId,
+      runtimeStatusByEnvironmentId: statuses,
       sshConnectionId
     })
   )

@@ -33,6 +33,7 @@ import { codeHostErrorText } from '@/lib/source-control/remote/code-host-error-c
 
 export function PRActionsPanel({
   item,
+  headSha,
   repoPath,
   repoId,
   sourceContext,
@@ -42,6 +43,8 @@ export function PRActionsPanel({
   onMutated
 }: {
   item: GitHubWorkItem
+  /** Head from the loaded details; falls back to the list item's head. */
+  headSha: string | undefined
   repoPath: string | null
   repoId: string | null
   sourceContext?: TaskSourceContext | null
@@ -165,6 +168,7 @@ export function PRActionsPanel({
     if (mergeDisabled) {
       return
     }
+    const expectedHeadSha = headSha ?? item.headSha ?? null
     const label = getPullRequestMergeMethodLabel(method)
     const confirmed = await confirm({
       title: getPullRequestMergeConfirmationTitle(method, item.number),
@@ -188,7 +192,8 @@ export function PRActionsPanel({
                 repo: getGitHubRuntimeRepoId(sourceContext, repoId ?? item.repoId),
                 prNumber: item.number,
                 method,
-                prRepo
+                prRepo,
+                expectedHeadSha
               },
               { timeoutMs: 30_000 }
             )
@@ -198,7 +203,8 @@ export function PRActionsPanel({
               sourceContext,
               prNumber: item.number,
               method,
-              prRepo
+              prRepo,
+              expectedHeadSha
             })
       if (!result.ok) {
         toast.error(

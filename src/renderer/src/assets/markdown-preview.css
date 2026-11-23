@@ -5,6 +5,8 @@
   line-height: 1.7;
   min-width: 0;
   flex: 1;
+  /* Why: the reading column and rail follow the document width, which excludes the TOC panel. */
+  container: markdown-doc / inline-size;
 }
 
 .markdown-preview-shell {
@@ -14,6 +16,24 @@
   height: 100%;
   min-width: 0;
   container-type: inline-size;
+}
+
+/* Why: padding, not max-width, keeps the body full width so annotated blocks can hang their rail into it. */
+.markdown-preview > .markdown-body {
+  --md-measure: calc(var(--markdown-reading-measure-em) * 1em);
+  --md-rail-space: 0px;
+  /* Why: main's min(28cqw, 300px) of the shell, measured against the scroller's 64px-narrower content box. */
+  --md-rail-width: clamp(220px, calc(28cqw + 17.92px), 300px);
+  --md-pad-start: max(
+    0px,
+    min((100% - var(--md-measure)) / 2, 100% - var(--md-measure) - var(--md-rail-space))
+  );
+  padding-left: var(--md-pad-start);
+  padding-right: max(var(--md-rail-space), 100% - var(--md-measure) - var(--md-pad-start));
+}
+
+.markdown-preview.has-markdown-review-rail > .markdown-body {
+  --md-rail-space: calc(32px + var(--md-rail-width));
 }
 
 .markdown-preview:focus-visible {
@@ -325,9 +345,26 @@
 .markdown-annotation-list-block {
   position: relative;
   display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(220px, min(28cqw, 300px));
+  grid-template-columns: minmax(0, 1fr) var(--md-rail-width);
+  /* Why: must equal the 32px in --md-rail-space so the rail fills the body's right padding exactly. */
   column-gap: 32px;
   align-items: start;
+  margin-right: calc(-1 * var(--md-rail-space));
+}
+
+/* Why: a nested block's rail stays inside its parent's text column, as before. */
+:is(.markdown-annotation-block, .markdown-annotation-list-block)
+  :is(.markdown-annotation-block, .markdown-annotation-list-block) {
+  margin-right: 0;
+}
+
+/* Why: an empty nested rail would squeeze quote text; the kept gap still holds the add button. */
+:is(.markdown-annotation-block, .markdown-annotation-list-block)
+  :is(.markdown-annotation-block, .markdown-annotation-list-block):not(
+    .has-review-notes,
+    .is-adding-note
+  ) {
+  grid-template-columns: minmax(0, 1fr) 0px;
 }
 
 .markdown-annotation-block > :not(.markdown-annotation-controls),
@@ -484,7 +521,12 @@
   max-width: min(100%, 480px);
 }
 
-@container (max-width: 760px) {
+/* Why: 696px of document content is main's 760px shell minus the scroller's 64px side padding. */
+@container markdown-doc (max-width: 696px) {
+  .markdown-preview.has-markdown-review-rail > .markdown-body {
+    --md-rail-space: 0px;
+  }
+
   .markdown-annotation-row > :last-child > .markdown-annotation-add {
     right: 4px;
   }
@@ -492,6 +534,7 @@
   .markdown-annotation-block,
   .markdown-annotation-list-block {
     display: block;
+    margin-right: 0;
   }
 
   .markdown-annotation-controls {
@@ -799,7 +842,8 @@
 }
 
 /* Use themed checkbox rendering for contrast in both schemes, matching the rich editor. */
-.markdown-body li > input[type='checkbox'] {
+.markdown-body li > input[type='checkbox'],
+.markdown-body .markdown-annotation-list-content > input[type='checkbox'] {
   appearance: none;
   width: 16px;
   height: 16px;
@@ -812,12 +856,14 @@
   vertical-align: -2px;
 }
 
-.markdown-body li > input[type='checkbox']:checked {
+.markdown-body li > input[type='checkbox']:checked,
+.markdown-body .markdown-annotation-list-content > input[type='checkbox']:checked {
   background: var(--primary);
   border-color: var(--primary);
 }
 
-.markdown-body li > input[type='checkbox']:checked::after {
+.markdown-body li > input[type='checkbox']:checked::after,
+.markdown-body .markdown-annotation-list-content > input[type='checkbox']:checked::after {
   content: '';
   position: absolute;
   left: 4px;

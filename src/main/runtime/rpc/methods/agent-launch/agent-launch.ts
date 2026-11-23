@@ -66,7 +66,7 @@ async function runAgentLaunch(
   view: AgentLaunchView,
   replaySafe?: ReplaySafeLaunch
 ): Promise<AgentLaunchResult> {
-  const callerNavigationId = agentLaunchCallerNavigationId(intent.target, context)
+  const callerNavigationId = agentLaunchCallerNavigationId(context)
   const result = await executeAgentLaunch({
     runtime: context.runtime,
     intent,
@@ -75,7 +75,8 @@ async function runAgentLaunch(
       context,
       replaySafe?.attachOperationId,
       replaySafe?.callerKey,
-      callerNavigationId !== null,
+      // Worktree creation keeps host-wide chat activation, so a windowless host's other clients open the new worktree on the chat.
+      callerNavigationId !== null && intent.target.kind !== 'create-worktree',
       replaySafe?.terminalSpawn,
       view
     ),

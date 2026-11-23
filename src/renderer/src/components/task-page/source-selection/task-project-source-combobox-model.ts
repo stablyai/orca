@@ -1,6 +1,6 @@
 import { getRepoExecutionHostId } from '../../../../../shared/execution-host/execution-host'
 import type { Repo } from '../../../../../shared/repository/repo-types'
-import type { TaskProjectPickerGroup } from '../task-page-default-repo-selection'
+import type { TaskProjectPickerGroup } from '../../../../../shared/work-items/task-repo-selection'
 
 export function selectedTaskProjectGroups(
   groups: readonly TaskProjectPickerGroup[],

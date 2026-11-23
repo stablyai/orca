@@ -24,6 +24,7 @@ import { sayNativeChatSessionOptionTranslated as say } from './native-chat-sessi
 import { NativeChatSessionOptionWriteGroup } from './NativeChatSessionOptionWriteGroup'
 import { NativeChatSessionSpeedButton } from './NativeChatSessionSpeedButton'
 import { speedButtonTiers } from '../../../../../../../shared/native-chat/input/session-options/native-chat-session-speed-tiers'
+import { orderEffortLevels } from '../../../../../../../shared/agent-session/options/view/effort-level-order'
 
 type NativeChatSessionOptionRowsProps = {
   /** The current model's options, in display order. */
@@ -224,6 +225,7 @@ function OptionRow(props: {
         type="single"
         variant="segmented"
         size="xs"
+        density={layout === 'inline' ? 'compact' : 'default'}
         spacing={0.5}
         role="radiogroup"
         aria-labelledby={labelId}
@@ -239,7 +241,10 @@ function OptionRow(props: {
         // Why -ml-2: a wrapped group lines its first label up under the row's.
         className={cn('flex-wrap', layout !== 'inline' && '-ml-2')}
       >
-        {descriptor.kind.choices.map((choice) => (
+        {(descriptor.category === 'thought_level'
+          ? orderEffortLevels(descriptor.kind.choices)
+          : descriptor.kind.choices
+        ).map((choice) => (
           <LevelSegment key={choice.value} optionId={descriptor.id} choice={choice} />
         ))}
       </ToggleGroup>
@@ -292,7 +297,9 @@ export function NativeChatSessionOptionRows({
           <div className={cn(divided && 'border-t border-border', layout === 'menu' && 'p-1')}>
             <div
               className={cn(
-                layout === 'inline' ? 'flex flex-wrap items-center gap-3' : 'flex flex-col',
+                layout === 'inline'
+                  ? 'flex flex-wrap items-center gap-x-2 gap-y-1'
+                  : 'flex flex-col',
                 layout === 'menu' && 'gap-0.5',
                 layout === 'settings' && 'gap-2.5'
               )}
@@ -304,7 +311,8 @@ export function NativeChatSessionOptionRows({
                     key={descriptor.id}
                     busy={pendingIds.has(descriptor.id)}
                     className={cn(
-                      layout === 'inline' && descriptor.category !== 'thought_level' && 'ml-auto'
+                      layout === 'inline' &&
+                        (descriptor.category === 'thought_level' ? 'min-w-0 flex-1' : 'ml-auto')
                     )}
                   >
                     <div data-option-id={descriptor.id}>

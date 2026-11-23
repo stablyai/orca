@@ -5,13 +5,16 @@ import { WorktreeCardDetailsHover } from './WorktreeCardMeta'
 import { WorktreeCardMetaBadges } from '../metadata/WorktreeCardMetaBadges'
 import { WorktreeCardPortsDetails, WorktreeCardPortsTrigger } from './WorktreeCardPorts'
 import type { WorktreeCardController } from '../controller/use-worktree-card-controller'
+import { WorktreeCardLineActivity } from './worktree-card-line-activity'
 
 /** Ports and linked-item badges; the new card style leaves the review to the status lane.
  *  Why an element, not a component: hover triggers merge their props onto this exact div. */
 export function renderWorktreeCardIndicators(
   card: WorktreeCardController
 ): React.ReactElement | null {
-  const { worktree, hasDetails, hasPorts, showPR, showIssue, reviewInStatusLane } = card
+  const { worktree, hasDetails, showPR, showIssue, reviewInStatusLane, compactLine } = card
+  // A bot's worker line has no room for ports or branch/PR marks; its hover card lists them.
+  const hasPorts = card.hasPorts && !compactLine
   if (!hasDetails && !hasPorts) {
     return null
   }
@@ -19,6 +22,7 @@ export function renderWorktreeCardIndicators(
   const referenceItems = allReferenceItems.filter((item) =>
     item.type !== 'issue'
       ? showPR &&
+        !compactLine &&
         (!reviewInStatusLane ||
           allReferenceItems.filter((candidate) => candidate.type !== 'issue').length > 1)
       : item.provider === 'linear'
@@ -38,10 +42,11 @@ export function renderWorktreeCardIndicators(
           issue={card.metaIssue}
           linearIssue={card.metaLinearIssue}
           jiraIssue={card.metaJiraIssue}
-          review={reviewInStatusLane ? null : card.metaReview}
+          review={reviewInStatusLane || compactLine ? null : card.metaReview}
           comment={card.metaComment}
           automationProvenance={card.metaAutomationProvenance}
           cliProvenance={card.metaCliProvenance}
+          bot={card.metaBot}
           className="ml-0 pr-0"
         />
       )}
@@ -78,6 +83,7 @@ export function WorktreeCardMetaDetailsHover({
       comment={card.metaComment}
       automationProvenance={card.metaAutomationProvenance}
       cliProvenance={card.metaCliProvenance}
+      bot={card.metaBot}
       detailsAfter={card.hasPorts ? <WorktreeCardPortsDetails ports={workspacePorts} /> : null}
       hoverControl={card.detailsHoverControl}
       onEditIssue={affiliateListMode ? undefined : card.handleEditIssue}
@@ -107,11 +113,14 @@ export function WorktreeCardIdentityHover({
   card,
   branchName,
   workspaceTitle,
+  closed = false,
   children
 }: {
   card: WorktreeCardController
   branchName: string | undefined
   workspaceTitle: string | undefined
+  /** Drops open requests, e.g. while the title is being renamed, without unmounting the title. */
+  closed?: boolean
   children: React.ReactElement<React.RefAttributes<HTMLElement>>
 }): React.JSX.Element {
   const { worktree, repo, affiliateListMode, hoverIssue, hoverReview, workspacePorts } = card
@@ -130,16 +139,32 @@ export function WorktreeCardIdentityHover({
       comment={card.hoverComment}
       automationProvenance={card.metaAutomationProvenance}
       cliProvenance={card.metaCliProvenance}
+      bot={card.metaBot}
       branchName={branchName}
       workspaceTitle={workspaceTitle}
       workspaceTitleRenameDisabled={card.isDeleting || affiliateListMode}
       detailsAfter={
-        workspacePorts.length > 0 ? <WorktreeCardPortsDetails ports={workspacePorts} /> : null
+        card.compactLine || workspacePorts.length > 0 ? (
+          <>
+            {card.compactLine ? (
+              <WorktreeCardLineActivity
+                worktreeId={worktree.id}
+                executionHostId={worktree.hostId ?? 'local'}
+                runtimeOwnerEnvironmentId={worktree.runtimeOwnerEnvironmentId}
+                workspaceMenuEnabled={!affiliateListMode}
+              />
+            ) : null}
+            {workspacePorts.length > 0 ? <WorktreeCardPortsDetails ports={workspacePorts} /> : null}
+          </>
+        ) : null
       }
       openDelay={100}
       hoverControl={{
         ...hoverControl,
         handleHoverOpenChange: (open) => {
+          if (open && closed) {
+            return
+          }
           if (
             !open ||
             !identityRef.current?.querySelector(

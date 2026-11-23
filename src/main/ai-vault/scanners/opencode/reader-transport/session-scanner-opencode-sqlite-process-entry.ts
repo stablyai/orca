@@ -17,7 +17,10 @@ function validRequest(value: unknown): value is OpenCodeSqliteWorkerRequest {
     !('id' in value) ||
     !Number.isSafeInteger(value.id) ||
     !('kind' in value) ||
-    ('agent' in value && value.agent !== 'opencode2' && value.agent !== 'zcode') ||
+    ('agent' in value &&
+      value.agent !== 'opencode2' &&
+      value.agent !== 'zcode' &&
+      value.agent !== 'hermes') ||
     ('timeoutMs' in value &&
       (typeof value.timeoutMs !== 'number' ||
         !Number.isFinite(value.timeoutMs) ||
@@ -25,7 +28,12 @@ function validRequest(value: unknown): value is OpenCodeSqliteWorkerRequest {
   ) {
     return false
   }
-  if (value.kind === 'native-page' || value.kind === 'native-signal') {
+  if (
+    value.kind === 'native-page' ||
+    value.kind === 'native-signal' ||
+    value.kind === 'hermes-history' ||
+    value.kind === 'hermes-exists'
+  ) {
     return (
       'dbPath' in value &&
       typeof value.dbPath === 'string' &&

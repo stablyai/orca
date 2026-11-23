@@ -12,7 +12,7 @@ export async function confirmQuitAndStopAllSessions(
   const { response } = await showMessageBox({
     type: 'warning',
     buttons: [
-      translateMain('quitAndStopAllSessions.confirm', 'Stop Sessions and Quit'),
+      translateMain('quitAndStopAllSessions.confirm', 'Stop & Quit'),
       translateMain('quitAndStopAllSessions.cancel', 'Cancel')
     ],
     // Why Cancel by default: stopping running agents can't be undone, so Return/Escape must not confirm it.

@@ -43,10 +43,12 @@ export type RuntimeServiceCommandSurface = {
   acknowledgeNotificationAttention(acknowledgement: NotificationAttentionAcknowledgement): void
   reconcileStructuredPromptAttention: RuntimeMobileNotificationController['reconcileStructuredPromptAttention']
   dispatchPluginNotification: RuntimeMobileNotificationController['dispatchPlugin']
+  dispatchOwnerNotice: RuntimeMobileNotificationController['dispatchOwnerNotice']
   setMobilePushRegistrar: RuntimeMobileNotificationController['setPushRegistrar']
   testMobilePushDevice: RuntimeMobileNotificationController['testPushDevice']
   registerMobilePushDevice: RuntimeMobileNotificationController['registerPushDevice']
   unregisterMobilePushDevice: RuntimeMobileNotificationController['unregisterPushDevice']
+  coveredMobilePushTokenDigests: RuntimeMobileNotificationController['coveredPushTokenDigests']
   setAccountServices: RuntimeAccountController['setServices']
   getDataAccountsSnapshot: RuntimeAccountController['dataAccountsSnapshot']
   setCommitMessageAgentEnvironmentResolvers: RuntimeAccountController['setCommitMessageAgentEnvironment']
@@ -160,10 +162,12 @@ export function installRuntimeServiceCommandSurface(
     reconcileStructuredPromptAttention:
       notifications.reconcileStructuredPromptAttention.bind(notifications),
     dispatchPluginNotification: notifications.dispatchPlugin.bind(notifications),
+    dispatchOwnerNotice: notifications.dispatchOwnerNotice.bind(notifications),
     setMobilePushRegistrar: notifications.setPushRegistrar.bind(notifications),
     testMobilePushDevice: notifications.testPushDevice.bind(notifications),
     registerMobilePushDevice: notifications.registerPushDevice.bind(notifications),
     unregisterMobilePushDevice: notifications.unregisterPushDevice.bind(notifications),
+    coveredMobilePushTokenDigests: notifications.coveredPushTokenDigests.bind(notifications),
     setAccountServices: accounts.setServices.bind(accounts),
     getDataAccountsSnapshot: accounts.dataAccountsSnapshot.bind(accounts),
     setCommitMessageAgentEnvironmentResolvers:

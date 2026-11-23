@@ -19,7 +19,8 @@ export function CodexResetCredits({
   canRedeemReset,
   isRedeemingReset,
   onReset,
-  renderAction
+  renderAction,
+  unsupportedRuntime
 }: {
   resetCreditCount: number
   resetCreditExpiry: string | null
@@ -27,6 +28,7 @@ export function CodexResetCredits({
   isRedeemingReset: boolean
   onReset: () => void
   renderAction?: (action: React.ReactNode) => React.ReactNode
+  unsupportedRuntime?: 'wsl'
 }): React.JSX.Element {
   const t = useTranslate()
   const action = (
@@ -40,14 +42,23 @@ export function CodexResetCredits({
   return (
     <div className="flex items-center justify-between gap-2">
       <div className="min-w-0 text-2xs text-muted-foreground">
-        {t(
-          'auto.components.status.bar.StatusBar.rateLimitResetsAvailable',
-          '{{count}} rate-limit resets available',
-          {
-            count: resetCreditCount,
-            defaultValue_one: '{{count}} rate-limit reset available'
-          }
-        )}
+        {unsupportedRuntime === 'wsl'
+          ? t(
+              'auto.components.status.bar.StatusBar.rateLimitResetsUnsupportedWsl',
+              '{{count}} resets available · not in WSL yet',
+              {
+                count: resetCreditCount,
+                defaultValue_one: '{{count}} reset available · not in WSL yet'
+              }
+            )
+          : t(
+              'auto.components.status.bar.StatusBar.rateLimitResetsAvailable',
+              '{{count}} rate-limit resets available',
+              {
+                count: resetCreditCount,
+                defaultValue_one: '{{count}} rate-limit reset available'
+              }
+            )}
         {resetCreditExpiry ? <div>{resetCreditExpiry}</div> : null}
       </div>
       {canRedeemReset ? (renderAction ? renderAction(action) : action) : null}
@@ -62,7 +73,8 @@ export function CodexResetConfirmation({
   onSkipChange,
   isRedeemingReset,
   onConfirm,
-  accountLabel
+  accountLabel,
+  hostLabel
 }: {
   open: boolean
   onOpenChange: (open: boolean) => void
@@ -71,6 +83,8 @@ export function CodexResetConfirmation({
   isRedeemingReset: boolean
   onConfirm: () => void | Promise<void>
   accountLabel?: string
+  /** The remote host that owns the account, named so a reset can't be mistaken for this device's. */
+  hostLabel?: string
 }): React.JSX.Element {
   const t = useTranslate()
   return (
@@ -81,16 +95,22 @@ export function CodexResetConfirmation({
             {t('auto.components.status.bar.StatusBar.972a1ff497', 'Reset Codex limits?')}
           </DialogTitle>
           <DialogDescription>
-            {accountLabel
+            {accountLabel && hostLabel
               ? t(
-                  'components.native-chat.usage.confirmReset',
-                  'This uses one Codex rate-limit reset credit for {{account}} and resets any eligible usage windows immediately.',
-                  { account: accountLabel }
+                  'auto.components.status.bar.StatusBar.confirmHostReset',
+                  'This uses one Codex rate-limit reset credit for {{account}} on {{host}} and resets any eligible usage windows immediately.',
+                  { account: accountLabel, host: hostLabel }
                 )
-              : t(
-                  'auto.components.status.bar.StatusBar.6d1042aa6f',
-                  'This uses one Codex rate-limit reset credit for the active account and resets any eligible usage windows immediately.'
-                )}
+              : accountLabel
+                ? t(
+                    'components.native-chat.usage.confirmReset',
+                    'This uses one Codex rate-limit reset credit for {{account}} and resets any eligible usage windows immediately.',
+                    { account: accountLabel }
+                  )
+                : t(
+                    'auto.components.status.bar.StatusBar.6d1042aa6f',
+                    'This uses one Codex rate-limit reset credit for the active account and resets any eligible usage windows immediately.'
+                  )}
           </DialogDescription>
         </DialogHeader>
         <label className="flex cursor-pointer items-center gap-2 rounded-sm px-1 py-1 text-xs text-foreground/80 transition-colors hover:text-foreground">

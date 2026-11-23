@@ -22,7 +22,15 @@ export abstract class BrowserManagerVisibility extends BrowserManagerState {
     pageIdForGuest: (guestWebContentsId) =>
       this.resolveBrowserTabIdForGuestWebContentsId(guestWebContentsId),
     rendererForPage: (browserPageId) => this.resolveRendererForBrowserTab(browserPageId),
-    worktreeForPage: (browserPageId) => this.worktreeIdByTabId.get(browserPageId) ?? null
+    worktreeForPage: (browserPageId) => this.worktreeIdByTabId.get(browserPageId) ?? null,
+    // A server page's row carries the agent mark to viewers on other machines.
+    onPageActiveChanged: (browserPageId) => {
+      const guestId =
+        this.webContentsIdByTabId.get(browserPageId) ?? browserPopupPageWebContentsId(browserPageId)
+      if (guestId !== null) {
+        this.notifyBrowserGuestStateChanged(guestId)
+      }
+    }
   })
 
   private agentLeadListener: ((guestWebContentsId: number, led: boolean) => void) | null = null
@@ -41,6 +49,22 @@ export abstract class BrowserManagerVisibility extends BrowserManagerState {
   /** Holds the page's agent marking for one queued command, from queueing until it settles. */
   beginAgentCommand(browserPageId: string): AgentCommandLease {
     const lease = this.agentActivity.beginCommand(browserPageId)
+    if (!lease.agent) {
+      return lease
+    }
+    this.leadAgentOnPage(browserPageId)
+    return {
+      ...lease,
+      // A person's input queued ahead may have taken the page back; the agent leads again as it acts.
+      run: (execute) =>
+        lease.run(() => {
+          this.leadAgentOnPage(browserPageId)
+          return execute()
+        })
+    }
+  }
+
+  private leadAgentOnPage(browserPageId: string): void {
     const pageGuestId =
       this.webContentsIdByTabId.get(browserPageId) ?? browserPopupPageWebContentsId(browserPageId)
     // An SSH route popup has no guest policies, so its opener carries the lead.
@@ -49,10 +73,9 @@ export abstract class BrowserManagerVisibility extends BrowserManagerState {
         ? null
         : (resolveBrowserRouteGuestPopupOpener(pageGuestId) ?? pageGuestId)
     // Only attached guests, whose teardown releases the lead.
-    if (lease.agent && guestId !== null && this.policyAttachedGuestIds.has(guestId)) {
+    if (guestId !== null && this.policyAttachedGuestIds.has(guestId)) {
       this.leadAgent(guestId)
     }
-    return lease
   }
 
   /** Tells the page's frames when the agent takes or gives up its lead, so they can refuse system dialogs. */
@@ -79,7 +102,7 @@ export abstract class BrowserManagerVisibility extends BrowserManagerState {
     }
   }
 
-  /** The desktop user's own input takes the page back from the agent. */
+  /** A person's own input takes the page back from the agent. */
   releaseAgentLead(guestWebContentsId: number): void {
     if (this.agentLedGuestIds.delete(guestWebContentsId)) {
       this.agentLeadListener?.(guestWebContentsId, false)
@@ -100,10 +123,21 @@ export abstract class BrowserManagerVisibility extends BrowserManagerState {
     return this.pageInputCredit.during(browserPageId, caller, execute)
   }
 
+  /** Input injected into this guest's page now is a person's: a paired viewer's relayed click or key press. */
+  isPersonCommandRunning(guestWebContentsId: number): boolean {
+    return this.pageInputCredit.isRunningPersonCommand(this.pageIdForGuest(guestWebContentsId))
+  }
+
   /** Credits a guest's activating input (or a DOM-activated tap) to the command delivering it, under the tab a link it opens would join. */
   creditPageInput(guestWebContentsId: number): void {
     if (this.pageInputCredit.idle) {
       return
+    }
+    // A viewer's click or tap arrives injected, like an agent's, but is the person's own input.
+    if (this.isPersonCommandRunning(guestWebContentsId)) {
+      this.releaseAgentLead(
+        resolveBrowserRouteGuestPopupOpener(guestWebContentsId) ?? guestWebContentsId
+      )
     }
     const ownerTabId = this.resolveBrowserTabIdForGuestWebContentsId(guestWebContentsId)
     if (ownerTabId) {
@@ -111,7 +145,7 @@ export abstract class BrowserManagerVisibility extends BrowserManagerState {
     }
   }
 
-  /** An agent drove the page this guest shows since the desktop user last gave it input. */
+  /** An agent drove the page this guest shows since a person last gave it input. */
   isAgentLedGuest(guestWebContentsId: number): boolean {
     // SSH route popups skip guest policies, so they follow their opener's lead.
     return this.agentLedGuestIds.has(
@@ -119,7 +153,7 @@ export abstract class BrowserManagerVisibility extends BrowserManagerState {
     )
   }
 
-  /** An agent drives the page this guest shows (a tab or a popup), or drove it since the desktop user last gave it input. */
+  /** An agent drives the page this guest shows (a tab or a popup), or drove it since a person last gave it input. */
   isAgentLeadingGuest(guestWebContentsId: number): boolean {
     return (
       this.isAgentLedGuest(guestWebContentsId) ||
@@ -154,9 +188,21 @@ export abstract class BrowserManagerVisibility extends BrowserManagerState {
     this.agentActivity.handOver(fromPageId, toPageId)
   }
 
+  protected isAgentCommandRunning(guestWebContentsId: number): boolean {
+    return this.agentActivity.isExecuting(this.pageIdForGuest(guestWebContentsId))
+  }
+
   /** The page shows "An agent is using this page": a command is queued or one settled within the idle window. */
   isAgentUsingPage(browserPageId: string): boolean {
     return this.agentActivity.isActive(browserPageId)
+  }
+
+  /** A stream viewer draws the agent's pointer on the page until the returned stop runs. */
+  watchAgentCursor(
+    browserPageId: string,
+    listener: Parameters<BrowserAgentActivity['watchCursor']>[1]
+  ): () => void {
+    return this.agentActivity.watchCursor(browserPageId, listener)
   }
 
   // Show the agent's pointer landing before the input it precedes reaches the page.

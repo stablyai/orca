@@ -1,4 +1,5 @@
 import { setBrowserGuestVisible } from '../browser-guest-activity'
+import { OFFSCREEN_ANIMATION_ATTRIBUTE } from '@/lib/window-activity/offscreen-animation-pause'
 import {
   getBrowserPageChromeInsetHeight,
   rememberBrowserPageChromeInsetHeight
@@ -169,8 +170,8 @@ export function ensureBrowserPageViewport(
 export const BROWSER_PAGE_PRESET_VIEWPORT_CLASS_NAME = 'browser-page-preset-viewport'
 
 // CDP presets use window DIP while UI zoom changes CSS pixels; divide the host box to avoid unpainted strips.
-function applyViewportPresetSizeStyles(
-  viewport: BrowserPageViewport,
+export function applyViewportPresetSizeStyles(
+  viewport: Pick<BrowserPageViewport, 'content' | 'scroller'>,
   size: { width: number; height: number } | null
 ): void {
   if (size) {
@@ -247,13 +248,9 @@ export function scrollBrowserPageViewport(
   scroller.scrollTop += deltaY
 }
 
-export function getBrowserPageViewportScrollState(
-  browserPageId: string
-): BrowserPageViewportScrollState | null {
-  const scroller = browserPageViewports.get(browserPageId)?.scroller
-  if (!scroller) {
-    return null
-  }
+export function readBrowserPageViewportScrollState(
+  scroller: HTMLElement
+): BrowserPageViewportScrollState {
   return {
     scrollLeft: Math.max(0, scroller.scrollLeft),
     scrollTop: Math.max(0, scroller.scrollTop),
@@ -310,6 +307,8 @@ export function applyBrowserPageViewportLayout(
   }
   viewport.shell.style.display = 'flex'
   viewport.shell.style.opacity = layout.active ? '1' : '0'
+  // At opacity 0 its loops (the agent glow) would still draw every frame.
+  viewport.shell.toggleAttribute(OFFSCREEN_ANIMATION_ATTRIBUTE, !layout.active)
   viewport.shell.style.pointerEvents = layout.active ? 'auto' : 'none'
   viewport.shell.style.zIndex = layout.active ? '1' : '0'
 }

@@ -1,4 +1,4 @@
-import { mkdtemp, rm } from 'node:fs/promises'
+import { mkdtemp, readFile, readdir, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -10,6 +10,11 @@ import {
   MOBILE_WEB_BUNDLE_DIR as defaultBundleDir,
   assertMobileWebBundleBuilt
 } from '../../desktop-distribution/runtime-verification/verify-packaged-mobile-web-bundle.cjs'
+import {
+  contentAssetName,
+  MOBILE_WEB_BUNDLE_ENTRYPOINT,
+  sha256Hex
+} from './mobile-web-bundle-manifest.mjs'
 
 const projectDir = fileURLToPath(new URL('../../../..', import.meta.url))
 const manifestContract = join(
@@ -33,8 +38,57 @@ export const MOBILE_WEB_APP_BUNDLE_MAX_CATALOG_BYTES = 3 * 1024 * 1024
 export const MOBILE_WEB_APP_HOST_CATALOG_MAX_BYTES = 384 * 1024
 
 // Our own fence on the page's code, well inside the phone contract (32 MiB total, 10 MiB per asset in
-// manifest-contract.ts); it fails the build before the code weighs more than any one asset may.
-export const MOBILE_WEB_APP_BUNDLE_MAX_TOTAL_BYTES = 10 * 1024 * 1024
+// manifest-contract.ts); routes are split and the entry is capped below, so no one asset nears 10 MiB.
+// Split by startup cost vs assets loaded on use: the eager budget holds everything the page may load
+// to open (all code, fonts outside the terminal allowance, images the document names); the on-demand
+// budget holds only files outfitSheetsOnDemand proves are fetched when used, and any that the document
+// names count as eager. The phone shell still downloads each on-demand file to disk once per bundle
+// update (shellDownloadedAssets), so this budget also bounds that download.
+// Eager: main's own fence. 10.9375 MiB since main reached 11,435,308 bytes with the phone's connector
+// account actions still to land (2026-11-23).
+export const MOBILE_WEB_APP_BUNDLE_MAX_EAGER_BYTES = 10.9375 * 1024 * 1024
+export const MOBILE_WEB_APP_BUNDLE_MAX_ON_DEMAND_BYTES = 1024 * 1024
+export const MOBILE_WEB_APP_BUNDLE_MAX_ON_DEMAND_FILE_BYTES = 128 * 1024
+
+const OUTFIT_SHEET_DIR = join(projectDir, 'src', 'shared', 'bot-mascots', 'outfits')
+
+// Each outfit's sheet ships as its own image, fetched only when a picture wears that outfit, never
+// inlined in code. Returns the sheets the page document never names, so a page with no outfits loads none.
+export async function outfitSheetsOnDemand(manifest, bundleDir) {
+  const document = await readFile(join(bundleDir, MOBILE_WEB_BUNDLE_ENTRYPOINT), 'utf8')
+  const sheets = (await readdir(OUTFIT_SHEET_DIR)).filter((name) => name.endsWith('.webp'))
+  const onDemand = []
+  for (const name of sheets) {
+    const file = contentAssetName(sha256Hex(await readFile(join(OUTFIT_SHEET_DIR, name))), 'webp')
+    const asset = manifest.assets.find((entry) => entry.path === `assets/${file}`)
+    if (!asset) {
+      fail(`outfit sheet ${name} is not its own image in the bundle, so it was inlined or dropped`)
+    }
+    if (!document.includes(file)) {
+      onDemand.push({ name, byteLength: asset.byteLength })
+    }
+  }
+  return onDemand
+}
+
+export function assertOnDemandFits(onDemand) {
+  const tooBig = onDemand.find(
+    (file) => file.byteLength > MOBILE_WEB_APP_BUNDLE_MAX_ON_DEMAND_FILE_BYTES
+  )
+  if (tooBig) {
+    fail(
+      `on-demand file ${tooBig.name} is ${String(tooBig.byteLength)} bytes, over the per-file budget of ` +
+        `${String(MOBILE_WEB_APP_BUNDLE_MAX_ON_DEMAND_FILE_BYTES)}`
+    )
+  }
+  const bytes = onDemand.reduce((total, file) => total + file.byteLength, 0)
+  if (bytes > MOBILE_WEB_APP_BUNDLE_MAX_ON_DEMAND_BYTES) {
+    fail(
+      `on-demand files are ${String(bytes)} bytes, over the budget of ${String(MOBILE_WEB_APP_BUNDLE_MAX_ON_DEMAND_BYTES)}`
+    )
+  }
+  return bytes
+}
 
 // Only these licensed terminal fonts have their own allowance; other fonts (KaTeX's) and code count.
 // The page fetches each only when the terminal draws with it, so none weighs on first open.
@@ -56,7 +110,7 @@ export function mobileWebAppBundleBudgetBytes(manifest) {
     .filter((asset) =>
       APPROVED_TERMINAL_FONTS.some(
         ([sha256, byteLength]) =>
-          asset.path === `assets/${sha256}.woff2` &&
+          asset.path === `assets/${contentAssetName(sha256, 'woff2')}` &&
           asset.sha256 === sha256 &&
           asset.contentType === 'font/woff2' &&
           asset.byteLength === byteLength
@@ -75,17 +129,18 @@ export const MOBILE_WEB_APP_BUNDLE_SCRIPT_SWEEP = [
   ['./h/[hostId]/agent-history/[worktreeId].tsx', 9],
   ['./h/[hostId]/automations.tsx', 13],
   ['./h/[hostId]/edit.tsx', 14],
-  ['./h/[hostId]/files/[worktreeId].tsx', 19],
-  ['./h/[hostId]/files/preview/[worktreeId].tsx', 27],
-  ['./h/[hostId]/history/[worktreeId].tsx', 28],
-  ['./h/[hostId]/index.tsx', 32],
-  ['./h/[hostId]/new-workspace.tsx', 40],
-  ['./h/[hostId]/pr/[worktreeId].tsx', 41],
-  ['./h/[hostId]/review/[worktreeId].tsx', 48],
-  ['./h/[hostId]/session/[worktreeId].tsx', 60],
-  ['./h/[hostId]/source-control/[worktreeId].tsx', 66],
-  ['./h/[hostId]/tasks.tsx', 73],
-  ['./h/_layout.tsx', 75]
+  ['./h/[hostId]/files/[worktreeId].tsx', 18],
+  ['./h/[hostId]/files/preview/[worktreeId].tsx', 22],
+  ['./h/[hostId]/group/[groupId].tsx', 29],
+  ['./h/[hostId]/history/[worktreeId].tsx', 30],
+  ['./h/[hostId]/index.tsx', 38],
+  ['./h/[hostId]/new-workspace.tsx', 43],
+  ['./h/[hostId]/pr/[worktreeId].tsx', 44],
+  ['./h/[hostId]/review/[worktreeId].tsx', 54],
+  ['./h/[hostId]/session/[worktreeId].tsx', 77],
+  ['./h/[hostId]/source-control/[worktreeId].tsx', 79],
+  ['./h/[hostId]/tasks.tsx', 86],
+  ['./h/_layout.tsx', 90]
 ]
 
 const sweptScripts = MOBILE_WEB_APP_BUNDLE_SCRIPT_SWEEP.map(([, scripts]) => scripts)
@@ -217,11 +272,12 @@ export async function verifyMobileWebAppBundle({ bundleDir = defaultBundleDir } 
         `${String(MOBILE_WEB_APP_HOST_CATALOG_MAX_BYTES)} one reply carries`
     )
   }
-  const budgetBytes = mobileWebAppBundleBudgetBytes(manifest) - first.catalogBytes
-  if (budgetBytes > MOBILE_WEB_APP_BUNDLE_MAX_TOTAL_BYTES) {
+  const onDemandBytes = assertOnDemandFits(await outfitSheetsOnDemand(manifest, bundleDir))
+  const eagerBytes = mobileWebAppBundleBudgetBytes(manifest) - first.catalogBytes - onDemandBytes
+  if (eagerBytes > MOBILE_WEB_APP_BUNDLE_MAX_EAGER_BYTES) {
     fail(
-      `bundle excluding the approved fonts and locale catalogs is ${String(budgetBytes)} bytes, over the Phase C budget of ` +
-        `${String(MOBILE_WEB_APP_BUNDLE_MAX_TOTAL_BYTES)}`
+      `bundle excluding the approved fonts, locale catalogs and on-demand files is ${String(eagerBytes)} bytes, ` +
+        `over the Phase C eager budget of ${String(MOBILE_WEB_APP_BUNDLE_MAX_EAGER_BYTES)}`
     )
   }
   // Read chunk/entry bounds and image count from fresh verified build: they are not manifest fields, while buildId binds on-disk bytes.
@@ -252,7 +308,7 @@ export async function verifyMobileWebAppBundle({ bundleDir = defaultBundleDir } 
         `budget of ${String(MOBILE_WEB_APP_BUNDLE_MAX_ENTRY_BYTES)}`
     )
   }
-  return { ...manifest, catalogBytes: first.catalogBytes }
+  return { ...manifest, catalogBytes: first.catalogBytes, eagerBytes, onDemandBytes }
 }
 
 if (isDirectInvocation(import.meta.url, process.argv[1])) {
@@ -261,7 +317,8 @@ if (isDirectInvocation(import.meta.url, process.argv[1])) {
     console.log(
       `[verify-mobile-web-app-bundle] OK — ${String(manifest.assets.length)} asset(s), ` +
         `${String(manifest.totalBytes)} total bytes, ` +
-        `${String(mobileWebAppBundleBudgetBytes(manifest) - manifest.catalogBytes)}/${String(MOBILE_WEB_APP_BUNDLE_MAX_TOTAL_BYTES)} bytes excluding the approved fonts, ` +
+        `${String(manifest.eagerBytes)}/${String(MOBILE_WEB_APP_BUNDLE_MAX_EAGER_BYTES)} eager bytes excluding the approved fonts, ` +
+        `${String(manifest.onDemandBytes)}/${String(MOBILE_WEB_APP_BUNDLE_MAX_ON_DEMAND_BYTES)} on-demand bytes, ` +
         `${String(manifest.catalogBytes)}/${String(MOBILE_WEB_APP_BUNDLE_MAX_CATALOG_BYTES)} bytes of language catalogs, ` +
         `reproducible buildId ${manifest.buildId}`
     )

@@ -5,6 +5,7 @@ import {
 import type { AgentJournalCursor } from '../../../../shared/agent-session/journal/agent-session-journal-identity'
 import type { AgentSessionRewindRecord } from '../../../../shared/agent-session/lifecycle/rewind/agent-session-rewind'
 import type { AgentSessionStoreState } from './agent-session-store-state'
+import { withoutAgentSessionInstructionsKey } from './agent-session-instructions-receipt'
 import { settleAgentSessionOperationInto } from '../ownership/agent-session-operation-admission'
 import {
   agentSessionProviderHandleChainHead,
@@ -71,7 +72,10 @@ export function commitAgentSessionRewindCompletion(
     current.providerFork = fork
   }
   draft.records.set(sessionId, {
-    ...(cancel ? cancelAgentSessionUsageLimitContinue(record, cancel) : record),
+    // The rewound context may predate the instructions update its later turns carried.
+    ...withoutAgentSessionInstructionsKey(
+      cancel ? cancelAgentSessionUsageLimitContinue(record, cancel) : record
+    ),
     ...(childBoundary && record.forkedFrom
       ? { forkedFrom: { ...record.forkedFrom, childBoundary } }
       : {}),

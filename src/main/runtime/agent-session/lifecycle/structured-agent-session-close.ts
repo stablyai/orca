@@ -2,6 +2,7 @@ import type { StructuredAgentSessionCloseWork } from '../../../native-chat/agent
 import type { StructuredAgentSessionHost } from '../../../native-chat/agent-session-wire/host/structured-agent-session-host'
 import { getStructuredAgentSessionHost } from '../../../native-chat/agent-session-wire/host/structured-agent-session-registry'
 import type { OrcaRuntimeService } from '../../orca-runtime'
+import { runsForBot } from '../../../bots/bot-session-tabs'
 import type { StructuredAgentSessionCloseCause } from '../../../native-chat/agent-session-wire/termination/structured-agent-session-host-lifetime'
 import {
   observeStructuredSession,
@@ -12,6 +13,9 @@ export type StructuredAgentSessionCloseOutcome = {
   stopped: boolean
   closeAttempted: boolean
   reason?: string
+  /** The close cut a start whose acquire had not returned: true once that start has ended and its
+   *  exit is proven, false when it ended without that proof. */
+  whenStartEnds?: Promise<boolean>
 }
 
 export type StructuredSessionSurfaceRuntime = Pick<
@@ -54,6 +58,9 @@ export async function closeStructuredAgentSessionChild(
       ? captureStructuredSessionSurface(host, sessionId, options.runtime)
       : options.surface
   const admitClose = options.admitClose
+  const startingOrWindingDown = () =>
+    host.reads.agentStarting(sessionId) || host.reads.startWindingDown(sessionId)
+  const wasStarting = startingOrWindingDown()
   let admitted = admitClose === undefined
   let closeFailure: string | undefined
   try {
@@ -75,6 +82,21 @@ export async function closeStructuredAgentSessionChild(
       options.afterClose?.()
     }
   }
+  if (
+    admitted &&
+    // A start may also have registered after that read, before this close's lane cut it.
+    (wasStarting || startingOrWindingDown()) &&
+    closeFailure === undefined &&
+    !structuredSessionCloseSettled(sessionId)
+  ) {
+    // The aborted start refuses its late child, but an acquire may return long after: never wait on it.
+    return {
+      stopped: false,
+      closeAttempted: true,
+      reason: STARTING_AGENT_STOPPING_REASON,
+      whenStartEnds: settleCancelledStart(host, sessionId, surface, options.runtime)
+    }
+  }
   if (!admitted || !structuredSessionCloseSettled(sessionId)) {
     return {
       stopped: false,
@@ -86,7 +108,40 @@ export async function closeStructuredAgentSessionChild(
     }
   }
   await retireCapturedStructuredSessionSurface(host, sessionId, surface, options.runtime)
-  return { stopped: true, closeAttempted: true }
+  return {
+    stopped: true,
+    closeAttempted: true,
+    ...(wasStarting ? { reason: STARTING_AGENT_STOPPED_REASON } : {})
+  }
+}
+
+export const STARTING_AGENT_STOPPED_REASON =
+  'Its agent was still starting; Orca cancelled the start.'
+
+export const STARTING_AGENT_STOPPING_REASON =
+  'Its agent was still starting; Orca will close it as soon as it comes up.'
+
+async function settleCancelledStart(
+  host: StructuredAgentSessionHost,
+  sessionId: string,
+  surface: StructuredSessionSurface | null,
+  runtime: StructuredSessionSurfaceRuntime | undefined
+): Promise<boolean> {
+  try {
+    await host.reads.startAttemptsEnded(sessionId)
+    if (!structuredSessionCloseSettled(sessionId)) {
+      return false
+    }
+    await retireCapturedStructuredSessionSurface(host, sessionId, surface, runtime)
+    return true
+  } catch (error) {
+    host.deps.logger.warn('settling a cancelled start failed', {
+      scope: 'cancelled-start-close',
+      sessionId,
+      error
+    })
+    return false
+  }
 }
 
 /** Capture actual presentation independently: a failed SHOW can leave Retry with no table row. */
@@ -143,12 +198,14 @@ export function structuredSessionSurfaceIsCurrent(
   }
 }
 
-/** Bookkeeping cannot invalidate native proof or reach a surface created after admission. */
+/** Bookkeeping cannot invalidate native proof or reach a surface created after admission.
+ *  `background`: the chat keeps working with no tab, so it stays open. */
 export async function retireCapturedStructuredSessionSurface(
   host: StructuredAgentSessionHost,
   sessionId: string,
   surface: StructuredSessionSurface | null,
-  runtime?: StructuredSessionSurfaceRuntime
+  runtime?: StructuredSessionSurfaceRuntime,
+  background = false
 ): Promise<{ committed: boolean; error?: unknown }> {
   const current = (hidden = false) =>
     structuredSessionSurfaceIsCurrent(host, sessionId, surface, runtime, hidden)
@@ -161,6 +218,7 @@ export async function retireCapturedStructuredSessionSurface(
   try {
     await host.setSessionTabVisibility(sessionId, false, undefined, {
       deferHiddenNotice: true,
+      ...(background ? { background } : {}),
       check: () => {
         if (!current()) {
           throw obsolete
@@ -213,19 +271,30 @@ export async function closeCapturedStructuredSession(
   sessionId: string,
   cause: StructuredAgentSessionCloseCause,
   surface: StructuredSessionSurface | null,
-  runtime: StructuredSessionSurfaceRuntime
+  runtime: StructuredSessionSurfaceRuntime & Partial<Pick<OrcaRuntimeService, 'bots'>>
 ): Promise<boolean> {
   if (surface && !structuredSessionSurfaceIsCurrent(host, sessionId, surface, runtime)) {
     return false
   }
-  const result = await retireCapturedStructuredSessionSurface(host, sessionId, surface, runtime)
+  // A bot's thread or run keeps working when its tab closes; it waits in the bot's Activity.
+  const keepRunning =
+    cause === 'user-close' && runtime.bots !== undefined && runsForBot(runtime.bots, sessionId)
+  const result = await retireCapturedStructuredSessionSurface(
+    host,
+    sessionId,
+    surface,
+    runtime,
+    keepRunning
+  )
   if (
     surface &&
     !structuredSessionSurfaceIsCurrent(host, sessionId, surface, runtime, result.committed)
   ) {
     return false
   }
-  await host.close(sessionId, cause)
+  if (!keepRunning) {
+    await host.close(sessionId, cause)
+  }
   return result.committed
 }
 

@@ -13,20 +13,21 @@ import {
 } from '../usage/usage-provider-settings-target'
 import { useStatusBarMenuFocusHandoff } from '../usage/ProviderDetailsMenu'
 import { CLOSE_ALL_CONTEXT_MENUS_EVENT } from '@/lib/overlay-interaction/close-all-context-menus'
-import { useStatusBarDensity } from './status-bar-density'
 import {
   getUsageOwnerHostScope,
   useOwnerUsageRateLimits
 } from '../usage/use-owner-usage-rate-limits'
 import { isOwnerNotSetUpPlaceholder } from '../usage/owner-usage-rate-limits'
 import { useTranslate } from '@/i18n/use-translate'
+import { nativeChatSurfaceVisible } from '@/lib/workspace/ownership/visible-account-surface'
 
 export function useStatusBarController(floatingTerminalOpen: boolean) {
   const t = useTranslate()
   const floatingTerminalShortcut = useShortcutLabel('floatingTerminal.toggle')
   const localRateLimits = useAppStore((s) => s.rateLimits)
   // Why: with a remote account owner the agents run there, so its usage is the one to show.
-  const { rateLimits, remoteOwner, refreshRemote } = useOwnerUsageRateLimits(localRateLimits)
+  const ownerUsage = useOwnerUsageRateLimits(localRateLimits)
+  const { rateLimits, remoteOwner, refreshRemote } = ownerUsage
   const remoteOwned = remoteOwner !== null
   const settings = useAppStore((s) => s.settings)
   const refreshRateLimits = useAppStore((s) => s.refreshRateLimits)
@@ -38,6 +39,11 @@ export function useStatusBarController(floatingTerminalOpen: boolean) {
   const statusBarUsageMode = normalizeStatusBarUsageMode(useAppStore((s) => s.statusBarUsageMode))
   const setStatusBarUsageMode = useAppStore((s) => s.setStatusBarUsageMode)
   const [usageMenuOpen, setUsageMenuOpen] = useState(false)
+  // Why: the bar sits right under a chat, where usage reads as part of that chat (owner call).
+  const usageHidden = useAppStore(nativeChatSurfaceVisible)
+  if (usageHidden && usageMenuOpen) {
+    setUsageMenuOpen(false)
+  }
   const usageMenuFocusHandoff = useStatusBarMenuFocusHandoff()
   const statusBarVisible = useAppStore((s) => s.statusBarVisible)
   const statusBarItems = useAppStore((s) => s.statusBarItems)
@@ -60,15 +66,6 @@ export function useStatusBarController(floatingTerminalOpen: boolean) {
   const [isRefreshing, setIsRefreshing] = useState(false)
   const [menuOpen, setMenuOpen] = useState(false)
   const [menuPoint, setMenuPoint] = useState({ x: 0, y: 0 })
-  const {
-    density: { compact, usageTightestOnly, segmentsIconOnly, collapseUsage },
-    overflowing,
-    collapsedUsageProviders,
-    barRef,
-    usageRef,
-    segmentsRef
-  } = useStatusBarDensity()
-
   useEffect(() => {
     mountedRef.current = true
     return () => {
@@ -89,7 +86,7 @@ export function useStatusBarController(floatingTerminalOpen: boolean) {
 
   const refreshDetectedAgents = useAppStore((s) => s.refreshDetectedAgents)
   const handleRefresh = useCallback(async () => {
-    if (isRefreshing) {
+    if (isRefreshing || (remoteOwner !== null && remoteOwner.environmentId === null)) {
       return
     }
     setIsRefreshing(true)
@@ -104,7 +101,7 @@ export function useStatusBarController(floatingTerminalOpen: boolean) {
         setIsRefreshing(false)
       }
     }
-  }, [isRefreshing, refreshRemote, refreshRateLimits, refreshDetectedAgents])
+  }, [isRefreshing, remoteOwner, refreshRemote, refreshRateLimits, refreshDetectedAgents])
 
   if (!statusBarVisible) {
     return null
@@ -201,10 +198,7 @@ export function useStatusBarController(floatingTerminalOpen: boolean) {
     showMuse
   const anyVisible = hasVisibleUsageMeters || showResourceUsage
   // Why: include Settings so durable managed accounts count — a configured user isn't shown the empty state while snapshots hydrate.
-  const isEmptyUsageState = isUsageEmptyState(
-    { claude, codex, gemini, opencodeGo, kimi, antigravity, minimax, grok, cursor, zcode, muse },
-    usageSettings
-  )
+  const isEmptyUsageState = isUsageEmptyState(rateLimits, usageSettings)
   // Why: one-time nudge — once dismissed, stays hidden even if providers reconnect later.
   const showEmptyUsageCta = isEmptyUsageState && !usageEmptyStateDismissed
   const anyFetching =
@@ -240,25 +234,25 @@ export function useStatusBarController(floatingTerminalOpen: boolean) {
     showMuse ? visibleMuse : null
   ]
     .filter((p): p is ProviderRateLimits => p !== null)
-    // Why: the bar collapses chips from the end, so placeholders give way first.
+    // Why: the usage row clips from the end, so placeholders give way first.
     .sort((a, b) => Number(isOwnerNotSetUpPlaceholder(a)) - Number(isOwnerNotSetUpPlaceholder(b)))
 
-  // Why: the shown accounts are the owning host's; without a scope Settings opens on the default host.
   const hostScope = getUsageOwnerHostScope(remoteOwner)
-  const handleManageAccounts = (): void => {
-    setUsageMenuOpen(false)
-    openSettingsTarget({ pane: 'accounts', repoId: null, hostScope })
-    openSettingsPage()
-  }
   const handleUsageDetails = (): void => {
+    if (!hostScope) {
+      return
+    }
     setUsageMenuOpen(false)
-    openSettingsTarget({ pane: 'stats', repoId: null })
+    openSettingsTarget({ pane: 'stats', repoId: null, hostScope })
     openSettingsPage()
   }
-  const handleOpenProviderAccounts = (provider: ProviderRateLimits['provider']): void => {
-    const sectionId = getUsageProviderAccountsSectionId(provider)
+  const handleOpenProviderAccounts = (provider: ProviderRateLimits['provider'] | null): void => {
+    if (!hostScope) {
+      return
+    }
+    const sectionId = provider ? getUsageProviderAccountsSectionId(provider) : null
     // Why: a placeholder for a CLI-owned provider still leads to the host's accounts.
-    if (!sectionId && !remoteOwner) {
+    if (provider && !sectionId && !remoteOwner) {
       return
     }
     setUsageMenuOpen(false)
@@ -271,7 +265,7 @@ export function useStatusBarController(floatingTerminalOpen: boolean) {
     openSettingsPage()
   }
   const canSignInFromUsageRow = (provider: ProviderRateLimits['provider']): boolean =>
-    usageRowSignInOpensSettings(provider, settings)
+    hostScope !== null && usageRowSignInOpensSettings(provider, settings)
   const handleUsageMenuOpenChange = (nextOpen: boolean): void => {
     if (nextOpen) {
       usageMenuFocusHandoff.reset()
@@ -284,15 +278,11 @@ export function useStatusBarController(floatingTerminalOpen: boolean) {
     antigravityAccounts: rateLimits.antigravityAccounts,
     anyFetching,
     anyVisible,
-    barRef,
     canSignInFromUsageRow,
-    collapseUsage,
-    collapsedUsageProviders,
-    compact,
     detectedAgentIds,
     floatingTerminalActionLabel,
     floatingTerminalShortcut,
-    handleManageAccounts,
+    handleManageAccounts: () => handleOpenProviderAccounts(null),
     handleOpenProviderAccounts,
     handleRefresh,
     handleUsageDetails,
@@ -302,13 +292,11 @@ export function useStatusBarController(floatingTerminalOpen: boolean) {
     isRefreshing,
     menuOpen,
     menuPoint,
-    overflowing,
+    ownerUsage,
     petEnabled,
     recordFeatureInteraction,
     remoteOwner,
     rosterProviders,
-    segmentsIconOnly,
-    segmentsRef,
     setMenuOpen,
     setMenuPoint,
     setStatusBarUsageMode,
@@ -322,11 +310,10 @@ export function useStatusBarController(floatingTerminalOpen: boolean) {
     statusBarItems,
     statusBarUsageMode,
     toggleStatusBarItem,
+    usageHidden,
     usageMenuFocusHandoff,
     usageMenuOpen,
-    usagePercentageDisplay,
-    usageRef,
-    usageTightestOnly
+    usagePercentageDisplay
   }
 }
 

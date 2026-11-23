@@ -22,7 +22,7 @@ import {
 } from './configure-process'
 import { installServeSupervisorDisconnectQuit } from '../updater/serve-update-handoff'
 import {
-  installUncaughtPipeErrorGuard,
+  installUncaughtExceptionQuitGuard,
   installUnhandledRejectionLogging
 } from './process-failure/main-process-error-guards'
 import { hydrateShellPath, mergePathSegments } from './shell-environment/hydrate-shell-path'
@@ -164,7 +164,7 @@ function initializeMainProcessPreflight(options: MainProcessPreflightOptions): b
     },
     onBlocked: (reason) => console.error(`[serve] Desktop activation blocked: ${reason}`)
   })
-  installUncaughtPipeErrorGuard()
+  installUncaughtExceptionQuitGuard()
   // #9441: log background rejections so restore failure cannot silently kill main.
   installUnhandledRejectionLogging()
   // Expose version without Electron imports for main/daemon TERM_PROGRAM_VERSION.

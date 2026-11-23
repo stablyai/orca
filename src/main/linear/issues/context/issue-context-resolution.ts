@@ -13,6 +13,7 @@ import {
 import { ISSUE_QUERY, SEARCH_QUERY, mapIssue, pickSearchIssue } from './issue-context-graphql'
 import type { RawIssueResponse } from './issue-context-graphql'
 import { LinearAgentAccessError, linearError, toLinearAccessError } from './linear-access-errors'
+import { linearNotConnectedError } from './linear-not-connected-error'
 import { getFanoutClientEntries, workspaceFailure } from './workspace-read-fanout'
 import type { WorkspaceReadFailure } from './workspace-read-fanout'
 import { sumSearchTotals, type WorkspaceSearchResult } from './linear-search-totals'
@@ -33,17 +34,16 @@ export async function searchLinearIssuesForAgents(args: {
   workspaceId?: (string & {}) | 'all'
 }): Promise<LinearSearchResult> {
   const limit = clampLinearSearchLimit(args.limit)
-  const workspaceId = resolveSearchWorkspaceId(args.workspaceId)
-  const { entries, failures: entryFailures } =
-    workspaceId === 'all' ? getFanoutClientEntries() : getExplicitClientEntries(workspaceId)
+  const workspaceId = await resolveSearchWorkspaceId(args.workspaceId)
+  const { entries, failures: entryFailures } = await (workspaceId === 'all'
+    ? getFanoutClientEntries()
+    : getExplicitClientEntries(workspaceId))
   if (entries.length === 0) {
-    throwIfExplicitWorkspaceHasConnectedAlternatives(workspaceId)
+    await throwIfExplicitWorkspaceHasConnectedAlternatives(workspaceId)
     if (entryFailures[0]) {
       throw entryFailures[0].error
     }
-    throw linearError('linear_not_connected', 'Linear is not connected.', {
-      nextSteps: ['Connect Linear from Orca settings, then retry the search.']
-    })
+    throw linearNotConnectedError()
   }
 
   const perWorkspace = await readSearchWorkspaces(
@@ -83,20 +83,18 @@ export async function resolveIssue(
   selectors: { workspaceId?: string | null; organizationUrlKey?: string | null },
   signal?: AbortSignal
 ): Promise<ResolvedIssue> {
-  const workspace = resolveWorkspaceSelector(selectors, getConnectedWorkspaces())
+  const workspace = resolveWorkspaceSelector(selectors, await getConnectedWorkspaces())
   const selection = workspace?.id ?? selectors.workspaceId ?? 'all'
   const { entries, failures: entryFailures } =
     selection === 'all'
-      ? getFanoutClientEntries(signal)
-      : getExplicitClientEntries(selection, signal)
+      ? await getFanoutClientEntries(signal)
+      : await getExplicitClientEntries(selection, signal)
   if (entries.length === 0) {
-    throwIfExplicitWorkspaceHasConnectedAlternatives(selection)
+    await throwIfExplicitWorkspaceHasConnectedAlternatives(selection)
     if (entryFailures[0]) {
       throw entryFailures[0].error
     }
-    throw linearError('linear_not_connected', 'Linear is not connected.', {
-      nextSteps: ['Connect Linear from Orca settings, then retry the issue read.']
-    })
+    throw linearNotConnectedError()
   }
 
   const results = await readIssueWorkspaces(entries, identifier, selection, entryFailures, signal)
@@ -113,28 +111,29 @@ export async function resolveIssue(
   return results[0]
 }
 
-export const getConnectedWorkspaces = (): LinearWorkspace[] => getStatus().workspaces ?? []
+export const getConnectedWorkspaces = async (): Promise<LinearWorkspace[]> =>
+  (await getStatus()).workspaces ?? []
 
-export function getRequiredEntry(
+export async function getRequiredEntry(
   workspaceId: string,
   signal?: AbortSignal
-): LinearClientForWorkspace {
-  const entry = getClients(workspaceId, signal)[0]
+): Promise<LinearClientForWorkspace> {
+  const entry = (await getClients(workspaceId, signal))[0]
   if (!entry) {
-    throw linearError('linear_not_connected', 'Linear is not connected.')
+    throw linearNotConnectedError()
   }
   return entry
 }
 
-function getExplicitClientEntries(
+async function getExplicitClientEntries(
   workspaceId?: string,
   signal?: AbortSignal
-): {
+): Promise<{
   entries: LinearClientForWorkspace[]
   failures: WorkspaceReadFailure[]
-} {
+}> {
   try {
-    return { entries: getClients(workspaceId, signal), failures: [] }
+    return { entries: await getClients(workspaceId, signal), failures: [] }
   } catch (error) {
     if (error instanceof LinearAgentAccessError) {
       throw error
@@ -143,23 +142,24 @@ function getExplicitClientEntries(
   }
 }
 
-function resolveSearchWorkspaceId(
+async function resolveSearchWorkspaceId(
   workspaceId?: (string & {}) | 'all'
-): (string & {}) | 'all' | undefined {
+): Promise<(string & {}) | 'all' | undefined> {
   if (!workspaceId || workspaceId === 'all') {
     return workspaceId
   }
-  return resolveWorkspaceSelector({ workspaceId }, getConnectedWorkspaces())?.id ?? workspaceId
+  const workspaces = await getConnectedWorkspaces()
+  return resolveWorkspaceSelector({ workspaceId }, workspaces)?.id ?? workspaceId
 }
 
-function throwIfExplicitWorkspaceHasConnectedAlternatives(
+async function throwIfExplicitWorkspaceHasConnectedAlternatives(
   workspaceId?: (string & {}) | 'all'
-): void {
+): Promise<void> {
   if (!workspaceId || workspaceId === 'all') {
     return
   }
   try {
-    if (getClients('all').length > 0) {
+    if ((await getClients('all')).length > 0) {
       throw unknownWorkspace(workspaceId)
     }
   } catch (error) {
@@ -182,7 +182,7 @@ export async function withLinearRead<T>(
     return await read()
   } catch (error) {
     if (isAuthError(error)) {
-      clearToken(entry.workspace.id)
+      await clearToken(entry.workspace.id)
       throw linearError('linear_auth_expired', 'Linear authentication expired.', {
         nextSteps: ['Reconnect Linear from Orca settings.']
       })

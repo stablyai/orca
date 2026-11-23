@@ -1,3 +1,4 @@
+import { readRuntimeStatuses } from '@/store/slices/runtime-status/views/runtime-status-owner'
 import { translate } from '@/i18n/i18n'
 import { activateAndRevealWorktree } from '@/lib/workspace/activation/worktree-activation'
 import { assertRuntimeEnvironmentCapability } from '@/runtime/rpc/compatibility/runtime-capability-proof'
@@ -82,7 +83,7 @@ export async function resolveWorkspacePortBrowserUrl(args: {
 // Why: servers without a browser engine (managed SSH, desktop-hosted pages) open links here; ports must too.
 function opensRuntimePortOnThisDesktop(worktreeId: string, environmentId: string): boolean {
   const state = useAppStore.getState()
-  const capabilities = state.runtimeStatusByEnvironmentId?.get(environmentId)?.status?.capabilities
+  const capabilities = readRuntimeStatuses().get(environmentId)?.status?.capabilities
   return (
     !capabilities?.includes(BROWSER_SCREENCAST_RUNTIME_CAPABILITY) &&
     canOpenWorkspaceBrowserTabOnRuntime(state, worktreeId, environmentId)
@@ -277,7 +278,8 @@ function workspacePortScanRequestKey(target: RuntimeClientTarget, repoId?: strin
 
 export async function scanWorkspacePortsForTarget(
   target: RuntimeClientTarget,
-  repoId?: string
+  repoId?: string,
+  options?: { background?: boolean }
 ): Promise<WorkspacePortScanResult> {
   const key = workspacePortScanRequestKey(target, repoId)
   const existing = inFlightWorkspacePortScans.get(key)
@@ -286,7 +288,7 @@ export async function scanWorkspacePortsForTarget(
   }
 
   // Coalesce same-tick surface refreshes to avoid duplicate lsof/netstat/RPC work.
-  const promise = runWorkspacePortScanForTarget(target, repoId).finally(() => {
+  const promise = runWorkspacePortScanForTarget(target, repoId, options).finally(() => {
     if (inFlightWorkspacePortScans.get(key) === promise) {
       inFlightWorkspacePortScans.delete(key)
     }

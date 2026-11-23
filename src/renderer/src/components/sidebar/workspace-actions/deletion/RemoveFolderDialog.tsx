@@ -17,6 +17,7 @@ import {
   normalizeExecutionHostId
 } from '../../../../../../shared/execution-host/execution-host'
 import { countOpenRepoTerminalTabs } from '@/store/repos/repo-removal'
+import { worktreeBelongsToHost } from '@/store/repos/repo-host-identity'
 import { getRecipeVmSshTargetForHost } from '@/runtime/ephemeral-vm/recipe-vm-managed-host'
 import { RemovalUnsavedFilesNotice } from './RemovalUnsavedFilesNotice'
 import { confirmUnsavedDiscard } from '@/store/slices/worktrees/teardown/removed-workspace-unsaved-files'
@@ -80,6 +81,28 @@ const RemoveFolderDialog = React.memo(function RemoveFolderDialog() {
       ),
     [detectedWorktreesByRepo, hostId, repoId, worktreesByRepo]
   )
+
+  // The main checkout is the project itself; every other row on this host leaves Orca with it (#17645).
+  const linkedWorkspaceCount = useMemo(
+    () =>
+      hostId
+        ? (worktreesByRepo[repoId] ?? []).filter(
+            (worktree) => !worktree.isMainWorktree && worktreeBelongsToHost(worktree, hostId)
+          ).length
+        : 0,
+    [hostId, repoId, worktreesByRepo]
+  )
+  const linkedWorkspaceWarning =
+    linkedWorkspaceCount === 0
+      ? null
+      : t(
+          'auto.components.sidebar.RemoveFolderDialog.linkedWorkspaceWarning',
+          '{{count}} workspaces in this project will also be removed from Orca.',
+          {
+            count: linkedWorkspaceCount,
+            defaultValue_one: '{{count}} workspace in this project will also be removed from Orca.'
+          }
+        )
 
   const openTerminalCount = useAppStore((s) =>
     repoId && hostId ? countOpenRepoTerminalTabs(s, repoId, hostId) : 0
@@ -150,6 +173,9 @@ const RemoveFolderDialog = React.memo(function RemoveFolderDialog() {
             <span className="break-all font-medium text-foreground">{displayName}</span>
             {descriptionAfterName}
           </DialogDescription>
+          {linkedWorkspaceWarning ? (
+            <p className="text-xs font-medium text-foreground">{linkedWorkspaceWarning}</p>
+          ) : null}
           {openTerminalWarning ? (
             <p className="text-xs font-medium text-foreground">{openTerminalWarning}</p>
           ) : null}

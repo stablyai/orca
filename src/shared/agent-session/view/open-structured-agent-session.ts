@@ -3,8 +3,11 @@ import type { OrchestrationPartyLocationResult } from '../../orchestration/orche
 import type { AgentSessionWorkspaceKind } from '../lifecycle/agent-session-record'
 import { workspaceKindForWorktreeId } from '../../agent-launch/contracts/workspace-launch-kind'
 
+/** `project`: the repo itself left the catalog, so its files may still be on disk. */
+export type StructuredSessionRemovedWorkspaceKind = AgentSessionWorkspaceKind | 'project'
+
 export type StructuredSessionWorkspaceRemovedDetails = {
-  workspaceKind: AgentSessionWorkspaceKind
+  workspaceKind: StructuredSessionRemovedWorkspaceKind
 }
 
 export function readStructuredSessionWorkspaceRemovedDetails(
@@ -12,7 +15,11 @@ export function readStructuredSessionWorkspaceRemovedDetails(
 ): StructuredSessionWorkspaceRemovedDetails | undefined {
   if (value !== null && typeof value === 'object' && 'workspaceKind' in value) {
     const { workspaceKind } = value
-    if (workspaceKind === 'folder' || workspaceKind === 'git-worktree') {
+    if (
+      workspaceKind === 'folder' ||
+      workspaceKind === 'git-worktree' ||
+      workspaceKind === 'project'
+    ) {
       return { workspaceKind }
     }
   }
@@ -39,12 +46,13 @@ export type StructuredSessionOpenFailure = {
   beforeEffects: boolean
   code?: string
   surface?: 'terminal'
-  workspaceKind?: AgentSessionWorkspaceKind
+  workspaceKind?: StructuredSessionRemovedWorkspaceKind
 }
 export type StructuredSessionOpenTab = { id: string; sessionId: string; agent?: string }
 export type StructuredSessionOpenResult =
   | { kind: 'opened'; target: StructuredSessionOpenTarget; tab: StructuredSessionOpenTab }
-  | { kind: 'terminal'; handle: string }
+  /** `environmentId`: another paired server's terminal, as the answering host names that server. */
+  | { kind: 'terminal'; handle: string; environmentId?: string }
   | { kind: 'failed'; failure: StructuredSessionOpenFailure }
   | { kind: 'superseded' }
 
@@ -128,7 +136,8 @@ export async function resolveStructuredSessionOpenSource(
     }
   }
   if (found.location.kind === 'terminal') {
-    return { kind: 'terminal', handle: found.location.handle }
+    const { handle, environmentId } = found.location
+    return { kind: 'terminal', handle, ...(environmentId ? { environmentId } : {}) }
   }
   if (found.location.kind !== 'chat') {
     return { kind: 'failed', failure: { reason: 'unsupported', beforeEffects: true } }

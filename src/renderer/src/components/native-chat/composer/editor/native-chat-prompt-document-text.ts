@@ -6,9 +6,17 @@ import {
   splitImageReferences
 } from '../../../../../../shared/native-chat/attachments/native-chat-image-reference'
 import { NATIVE_CHAT_PASTED_TEXT_TOKEN } from '../../paste/native-chat-pasted-text-reference'
+import {
+  botClientMentionToken,
+  botMentionToken,
+  splitBotMentions
+} from '../../../../../../shared/bots/bot-mention-context'
 
 export const IMAGE_REFERENCE_NODE = 'nativeChatImageReference'
 export const FILE_REFERENCE_NODE = 'nativeChatFileReference'
+/** A bot, or one of its chats, picked under `@`: a pill that reads as its `[Bot: <name>](bot:<id>)`
+ *  or `(bot-chat:<id>/<chatId>)` token. */
+export const BOT_MENTION_NODE = 'nativeChatBotMention'
 
 export function promptLeafString(
   type: string | undefined,
@@ -25,10 +33,72 @@ export function promptLeafString(
   if (type === IMAGE_REFERENCE_NODE) {
     return imageReferenceToken(String(attrs?.attachmentId))
   }
+  if (type === BOT_MENTION_NODE) {
+    const chatId = typeof attrs?.chatId === 'string' && attrs.chatId ? attrs.chatId : undefined
+    const server = typeof attrs?.server === 'string' && attrs.server ? attrs.server : undefined
+    return botMentionToken({ id: String(attrs?.id), name: String(attrs?.name) }, chatId, server)
+  }
   return type === 'hardBreak' ? '\n' : (text ?? String(attrs?.token ?? ''))
 }
 
-/** All text-to-document paths must reconstruct image chips and pending-paste pills. */
+// A bot token in typed-over, pasted or restored text is the same mention picking puts there.
+function botMentionContent(text: string): JSONContent[] {
+  return splitBotMentions(text).map((part) =>
+    typeof part === 'string'
+      ? { type: 'text', text: part }
+      : part.client
+        ? // The editor has no pill for a paired computer's bot yet, so its token stays as typed.
+          { type: 'text', text: botClientMentionToken(part, part.client) }
+        : {
+            type: BOT_MENTION_NODE,
+            attrs: {
+              id: part.id,
+              name: part.name,
+              chatId: part.chatId ?? '',
+              server: part.server ?? ''
+            }
+          }
+  )
+}
+
+/** Upgrade only paragraph text in an adopted draft; existing atoms and unknown blocks stay intact. */
+export function restorePromptBotMentions(document: JSONContent): JSONContent {
+  if (document.type !== 'doc' || !Array.isArray(document.content)) {
+    return document
+  }
+  let changed = false
+  const content = document.content.map((block) => {
+    if (block?.type !== 'paragraph' || !Array.isArray(block.content)) {
+      return block
+    }
+    let upgraded = false
+    const content = block.content.flatMap((node) => {
+      if (node?.type !== 'text' || typeof node.text !== 'string' || !node.text) {
+        return [node]
+      }
+      const parts = botMentionContent(node.text)
+      if (!parts.some((part) => part.type === BOT_MENTION_NODE)) {
+        return [node]
+      }
+      upgraded = true
+      return parts.map((part) =>
+        part.type === 'text' ? { ...node, text: part.text } : { ...part, marks: node.marks }
+      )
+    })
+    changed ||= upgraded
+    return upgraded ? { ...block, content } : block
+  })
+  return changed ? { ...document, content } : document
+}
+
+/** All text-to-document paths must reconstruct image chips, bot mentions and pending-paste pills. */
+/** The editor's opening content: an adopted draft's document with bot pills restored, else its text. */
+export function openingPromptContent(document: JSONContent | undefined, text: string): JSONContent {
+  return document
+    ? restorePromptBotMentions(promptParagraphLines(document))
+    : promptTextContent(text)
+}
+
 export function promptTextContent(text: string): JSONContent {
   return {
     type: 'doc',
@@ -43,7 +113,7 @@ export function promptTextContent(text: string): JSONContent {
                   ? []
                   : index % 2 === 1
                     ? [{ type: FILE_REFERENCE_NODE, attrs: { token: piece, path: '' } }]
-                    : [{ type: 'text', text: piece }]
+                    : botMentionContent(piece)
               )
           : [{ type: IMAGE_REFERENCE_NODE, attrs: { attachmentId: part.attachmentId } }]
       )

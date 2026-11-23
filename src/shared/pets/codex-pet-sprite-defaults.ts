@@ -9,7 +9,7 @@ export const CODEX_PET_DEFAULT_FPS = 8
 // Codex sheets are 8 columns wide (its widest rows run 8 frames).
 export const CODEX_PET_DEFAULT_COLUMNS = 8
 
-// Mirror codex-rs/tui/src/pets/model.rs: final frames hold finalMs, others frameMs.
+// As Codex animates pets: the final frame holds finalMs, others frameMs.
 function appStateDurations(frames: number, frameMs: number, finalMs: number): number[] {
   return Array.from({ length: frames }, (_, i) => (i === frames - 1 ? finalMs : frameMs))
 }

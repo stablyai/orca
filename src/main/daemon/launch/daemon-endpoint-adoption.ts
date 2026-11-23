@@ -130,7 +130,7 @@ export function takeDaemonAdoptionLeaseRelease(
   return release
 }
 
-// Structural, so `orca uninstall` can load the endpoint error without the whole adapter graph.
+// Structural, so loading the endpoint error does not pull in the whole adapter graph.
 type AdoptedDaemonAdapter = { disconnectOnly(): Promise<void>; dispose(): void }
 
 export async function cleanupFailedDaemonAdoption(

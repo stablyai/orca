@@ -5,7 +5,9 @@
  * and a host with a Remove still pending is never touched.
  */
 import { findWslHostDeployment } from '../../../shared/remote-runtime/host-store/runtime-environment-wsl-host-store'
+import { ORCAD_NOT_WSL_HOST_LAUNCH_DEFERRAL_CODE } from '../../../shared/remote-runtime/wsl-hosts/wsl-host-types'
 import type { WslHostService } from '../../wsl/host-lifecycle/wsl-host-service'
+import type { WslMoveHostServerState } from '../../persistence/moving-wsl-projects/execution/wsl-move-driver-ports'
 import { defaultWslOrcadEnvironmentId } from '../../wsl/orcad/wsl-orcad-deploy'
 
 export type WslMoveHostConnectMode = 'user' | 'automatic'
@@ -51,4 +53,27 @@ export async function connectWslMoveHostService(
     await service.connect(environmentId)
   }
   return true
+}
+
+/**
+ * What the connected server's deferral says a missing WSL capability means. A ready server with
+ * no update waiting runs this build (or a newer one), so the cause is how it was started.
+ */
+export function wslMoveHostServerState(
+  service: Pick<WslHostService, 'getStatuses'>,
+  environmentId: string
+): { serverState?: WslMoveHostServerState } {
+  const status = service.getStatuses().find((entry) => entry.environmentId === environmentId)
+  if (status?.state !== 'ready') {
+    return {}
+  }
+  const code = status.deferredUpdate?.code
+  return {
+    serverState:
+      code === ORCAD_NOT_WSL_HOST_LAUNCH_DEFERRAL_CODE
+        ? 'restart-offered'
+        : code
+          ? 'update-pending'
+          : 'current'
+  }
 }

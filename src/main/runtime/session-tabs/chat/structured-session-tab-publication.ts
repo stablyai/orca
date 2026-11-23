@@ -29,6 +29,7 @@ export type StructuredSessionTabPublicationInput = {
   navigation?: 'caller'
   capture?: (surface: StructuredSessionSurface) => void
   workspaceAuthority?: {
+    writerFence?: Int32Array
     check(): void
     current(): boolean
     committed(): void
@@ -61,6 +62,7 @@ export async function admitStructuredSessionTabPublication(
       throw new Error('Chat tab inventory is unavailable')
     }
     await host.setSessionTabVisibility(input.sessionId, true, newReopenedChatTabId(), {
+      writerFence: input.workspaceAuthority?.writerFence,
       check: () => input.workspaceAuthority?.check(),
       capture: (winner) => {
         if (winner) {

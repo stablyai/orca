@@ -131,6 +131,30 @@ export type ParsedHookEnvelope = {
   launchToken?: string
 }
 
+// Why: a Codex hook's payload is parsed before its async rollout prefetch; its normalization takes that parse instead of repeating it.
+const prefetchedPayloads = new WeakMap<Record<string, unknown>, { raw: string; payload: unknown }>()
+
+function parseHookPayloadText(raw: string): unknown {
+  try {
+    return parseAgentHookJson(raw)
+  } catch {
+    return null
+  }
+}
+
+/** Parses a hook body's string payload and keeps it for that body's next envelope parse. */
+export function parseHookPayloadForPrefetch(body: Record<string, unknown>, raw: string): unknown {
+  const payload = parseHookPayloadText(raw)
+  prefetchedPayloads.set(body, { raw, payload })
+  return payload
+}
+
+function takeHookPayload(body: Record<string, unknown>, raw: string): unknown {
+  const prefetched = prefetchedPayloads.get(body)
+  prefetchedPayloads.delete(body)
+  return prefetched?.raw === raw ? prefetched.payload : parseHookPayloadText(raw)
+}
+
 /** Validates the transport envelope while preserving warning-before-tab-rejection order. */
 export function parseHookEnvelope(
   state: HookListenerState,
@@ -152,13 +176,7 @@ export function parseHookEnvelope(
   const hookPayload = antigravityPayloadAbsent
     ? {}
     : typeof rawPayload === 'string'
-      ? (() => {
-          try {
-            return parseAgentHookJson(rawPayload)
-          } catch {
-            return null
-          }
-        })()
+      ? takeHookPayload(record, rawPayload)
       : rawPayload
   if (
     !paneKey ||

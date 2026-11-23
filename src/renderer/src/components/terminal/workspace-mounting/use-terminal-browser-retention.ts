@@ -1,5 +1,5 @@
 import { useEffect } from 'react'
-import { onBrowserGuestPaintRetentionChange } from '../../browser-pane/host-guest/retention/browser-guest-paint-retention'
+import { onBrowserGuestPaintRetentionChange } from '../../browser-pane/host-guest/retention/browser-page-paint-retention-terms'
 import { browserPageVetoesGuestEviction } from '../../browser-pane/host-guest/retention/browser-guest-eviction-veto'
 import { installBrowserPageDownloadActivityTracking } from '../../browser-pane/navigate/browser-page-download-activity'
 import {
@@ -10,6 +10,7 @@ import {
 import { installBrowserGuestPageRetention } from '../../browser-pane/host-guest/browser-guest-page-retention'
 import { discardPersistentWebview } from '../../browser-pane/host-guest/webview-registry'
 import { releaseBrowserPageMount } from '../../browser-pane/host-guest/retention/browser-page-mount-admission'
+import { freeBrowserClientPage } from '../../browser-pane/host-guest/client-pages/browser-client-page-renderer-installation'
 
 export function useTerminalBrowserRetention(): void {
   useEffect(() => {
@@ -39,7 +40,7 @@ export function useTerminalBrowserRetention(): void {
         if (discarded) {
           releaseBrowserPageMount(pageId)
         }
-        return discarded
+        return discarded || freeBrowserClientPage(pageId, webview, webContentsId, policyToken)
       }
     })
   }, [])

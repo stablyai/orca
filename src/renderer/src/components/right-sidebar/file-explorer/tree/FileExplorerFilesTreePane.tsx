@@ -71,7 +71,6 @@ export function FileExplorerFilesTreePane({
   const {
     scrollRef,
     runtimeDownloadContext,
-    supportsFolderDownload,
     canOpenWorkspaceFileBrowserForPath,
     statusByRelativePath,
     folderStatusByRelativePath,
@@ -220,7 +219,6 @@ export function FileExplorerFilesTreePane({
           sourceWorkspaceId={tree.sourceWorkspaceId}
           dirCache={tree.dirCache}
           runtimeDownloadContext={runtimeDownloadContext}
-          supportsFolderDownload={supportsFolderDownload}
           canOpenInOrcaBrowser={canOpenWorkspaceFileBrowserForPath}
           onClick={handleRowClick}
           onDoubleClick={handleDoubleClick}
