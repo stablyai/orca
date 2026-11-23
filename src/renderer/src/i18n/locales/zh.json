@@ -28408,7 +28408,7 @@
         "remove": "从此电脑移除",
         "revoke": "移除并在 Google 撤销授权",
         "promotes": "{{email}} 将成为默认账户",
-        "removeOneNote": "Bots 将不再在这里使用此账户"
+        "removeOneNote": "Bots 将停止在此处使用此账户"
       },
       "account": "Google 账户 · {{email}}",
       "reconnect": "重新连接",

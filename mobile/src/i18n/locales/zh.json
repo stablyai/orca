@@ -235,6 +235,12 @@
     }
   },
   "browser": {
+    "clientHost": {
+      "openOnNamed": "在 {{device}} 上打开",
+      "openOn": "在另一台电脑上打开",
+      "offlineNamed": "{{device}} 已离线",
+      "offline": "显示此页面的电脑已离线"
+    },
     "addressField": {
       "urlPlaceholder": "URL"
     },
@@ -286,6 +292,41 @@
       "certificateProceedFailed": "Orca 无法批准此证书请求，请重试该页面后再试，",
       "certificateChallengeUnavailable": "此证书请求已不可用，请重试该页面以重新请求",
       "certificateProceedNeedsHostUpdate": "请更新此主机上的 Orca，以便在手机上接受证书警告"
+    },
+    "pagePrompt": {
+      "downloadStarted": "正在下载到主机上的 {{path}}",
+      "downloadSaved": "已保存到主机上的 {{path}}",
+      "downloadCanceled": "下载已取消",
+      "downloadFailed": "无法完成下载",
+      "answerFailed": "该回答未能送达页面",
+      "openFailed": "无法打开处理此 {{scheme}} 链接的应用",
+      "localFiles": "本地文件",
+      "ask": {
+        "camera": "使用摄像头",
+        "microphone": "使用麦克风",
+        "location": "获取位置信息",
+        "notifications": "显示通知",
+        "clipboard": "查看复制到剪贴板的文本和图像",
+        "midi": "使用 MIDI 设备",
+        "windowManagement": "管理所有显示器上的窗口",
+        "idleDetection": "检测你是否正在使用此设备",
+        "localNetwork": "访问此设备上的应用和本地网络中的设备"
+      },
+      "fileTitle": "此文件请求执行以下操作",
+      "permissionTitle": "{{site}} 请求执行以下操作",
+      "block": "阻止",
+      "allow": "允许",
+      "signInTitle": "登录",
+      "signInDescription": "{{origin}} 要求输入用户名和密码",
+      "signInInsecure": "你与此网站的连接不是私密连接",
+      "signInRetry": "用户名或密码不正确",
+      "signIn": "登录",
+      "openLinkTitle": "打开此 {{scheme}} 链接？",
+      "openLinkDescription": "{{origin}} 想要打开另一个应用程序",
+      "openLinkAnonymous": "浏览器中的某个页面想要打开另一个应用程序",
+      "openLink": "打开链接",
+      "username": "用户名",
+      "password": "密码"
     }
   },
   "chat": {
@@ -8270,8 +8311,8 @@
         "title": "要断开 {{email}} 的连接吗？",
         "revokeNote": "Bots 将停止在此处使用此账户，Google 也会在所有已授权的地方撤销 Orca 的访问权限",
         "removeOneNote": "Bots 将停止在此处使用此账户",
-        "removeNote": "Bots 将停止在此处使用此账户。Bot 设置会保留，之后点击“连接 Google”即可重新开启",
-        "promotes": "{{email}} 将成为默认账户。",
+        "removeNote": "Bots 将停止在此处使用此账户。Bot 设置会保留，之后点击\"连接 Google\"即可重新开启",
+        "promotes": "{{email}} 将成为默认账户",
         "confirm": "断开连接",
         "removeFromHost": "从 {{host}} 移除",
         "revoke": "移除并在 Google 撤销授权"
