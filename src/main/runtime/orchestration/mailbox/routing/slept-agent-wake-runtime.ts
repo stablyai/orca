@@ -244,7 +244,7 @@ export abstract class RuntimeSleptAgentWakes extends RuntimeSleptMailboxWakes {
       }
     }
     // A reloading window can publish its panes late; only a closed tab also drops the sleep record.
-    return paneKey && this.sleepingMailRecord(paneKey) ? 'open' : 'closed'
+    return paneKey && this.sleepingRecords.has(paneKey) ? 'open' : 'closed'
   }
 
   /** Resolves once the handle names a connected process again: graph sync binds it after the spawn. */

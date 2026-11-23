@@ -285,14 +285,15 @@ describe('Agent-slept window pane wake', () => {
     const { db, runtime, handle } = await sleptPane()
     // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the reload path under test reads only these runtime members.
     const internals = runtime as unknown as {
-      sleepingMailRecord: (paneKey: string) => unknown
+      sleepingRecords: Map<string, unknown>
       issuePtyHandle: (pty: unknown) => string
       ptysById: Map<string, unknown>
       terminalIdentity: { setHandle: (handle: string, record: unknown) => void }
       handles: ReadonlyMap<string, object>
     }
     // The pane's saved sleep record, which names the handle it slept under.
-    vi.spyOn(internals, 'sleepingMailRecord').mockReturnValue({
+    internals.sleepingRecords.set(PANE_KEY, {
+      paneKey: PANE_KEY,
       agent: 'codex',
       terminalHandle: handle
     })
