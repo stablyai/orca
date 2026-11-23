@@ -1,28 +1,24 @@
 import { afterEach, describe, expect, it } from 'vitest'
 import type { AgentSessionStatusSummary } from '../../shared/agent-session/agent-session-wire'
 import type { BotItemLinkView, BotItemWorkerState } from '../../shared/bots/bot-items'
-import { BotItemUsageLimitWaits } from './bot-item-usage-limit-wait'
+import { type BotItemUsageLimitStore, BotItemUsageLimitWaits } from './bot-item-usage-limit-wait'
 import type { BotItemBotActor } from './bot-items-input'
 import type { WorkerRead } from './bot-items-link-join'
-import type { BotItemsRemote } from './bot-items-ops'
 import type { BotItemLinkRecord } from './bot-items-schema'
 import { BotItemsStore } from './bot-items-store'
-import type { BotWorkWorker } from './bot-work-types'
 
 const BOT: BotItemBotActor = { kind: 'bot', botId: 'bot', chatId: 'home' }
 const HOUR = 3_600_000
 const NOW = Date.UTC(2026, 10, 22, 12)
 
 /** The store as the host reaches it: every call async. */
-function remote(store: BotItemsStore): BotItemsRemote {
-  return new Proxy(store, {
-    get: (target, op) => {
-      const value: unknown = Reflect.get(target, op)
-      return typeof value === 'function'
-        ? (...args: unknown[]) => Promise.resolve(value.apply(target, args))
-        : value
-    }
-  }) as unknown as BotItemsRemote
+function remote(store: BotItemsStore): BotItemUsageLimitStore {
+  return {
+    linkedDispatchRefs: async () => store.linkedDispatchRefs(),
+    linksTo: async (kind, refs) => store.linksTo(kind, refs),
+    viewRows: async (uids) => store.viewRows(uids),
+    usageLimitWait: async (uid, text) => store.usageLimitWait(uid, text)
+  }
 }
 
 function summary(
@@ -37,7 +33,7 @@ function summary(
     latestPrompt: '',
     updatedAt: NOW,
     ...(cut ? { usageLimitContinue: { turnItemId: 't', ...cut } } : {})
-  } as AgentSessionStatusSummary
+  }
 }
 
 describe('usage-limit Waiting', () => {
@@ -45,7 +41,9 @@ describe('usage-limit Waiting', () => {
   afterEach(() => stores.splice(0).forEach((store) => store.dispose()))
 
   /** One item, its workers by Dispatch with each one's session and state. */
-  function setup(workers: Record<string, { session: string; state: BotItemWorkerState }>) {
+  type Workers = Record<string, { session: string; state: BotItemWorkerState }>
+
+  function setup(workers: Workers) {
     const store = BotItemsStore.open(':memory:')
     stores.push(store)
     const { uid } = store.add(
@@ -62,13 +60,7 @@ describe('usage-limit Waiting', () => {
     const waits = new BotItemUsageLimitWaits({
       store: () => remote(store),
       join: {
-        readLinkedWorkers: async (refs: readonly string[]) =>
-          new Map<string, WorkerRead>(
-            refs.map((ref) => [
-              ref,
-              { worker: { dispatchId: ref } as BotWorkWorker, pr: null, report: null }
-            ])
-          ),
+        readLinkedWorkers: async () => new Map<string, WorkerRead>(),
         linkView: (link: BotItemLinkRecord): BotItemLinkView => ({
           kind: 'dispatch',
           ref: link.ref,
@@ -146,16 +138,16 @@ describe('usage-limit Waiting', () => {
   })
 
   it('waits once the other worker on the item finishes', async () => {
-    const workers = {
-      ctx_a: { session: 'a', state: 'working' as BotItemWorkerState },
-      ctx_b: { session: 'b', state: 'working' as BotItemWorkerState }
+    const workers: Workers = {
+      ctx_a: { session: 'a', state: 'working' },
+      ctx_b: { session: 'b', state: 'working' }
     }
     const { waits, note } = setup(workers)
     const cut = summary('a', { resetsAt: NOW + HOUR, state: 'off' })
     waits.saw({ type: 'snapshot', sessions: [cut, summary('b')] }, NOW)
     await waits.settled()
     expect(note()).toBe('working')
-    workers.ctx_b.state = 'completed'
+    workers.ctx_b!.state = 'completed'
     waits.recheck()
     await waits.settled()
     expect(note()).toMatch(/usage resets/)

@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { BOTS_ITEM_WAITING_CAPABILITY } from '../../../../shared/bot-runtime-capabilities'
 import { makeTestBotItem } from '../../../../shared/bots/bot-item.test-fixture'
-import type { BotItemEvent } from '../../../../shared/bots/bot-items'
+import type { BotItemEvent, BotItemStatus } from '../../../../shared/bots/bot-items'
 import { remoteRuntimeClientCapabilities } from '../../../../shared/remote-runtime/remote-runtime-client-capabilities'
 import { BotItemsStore } from '../../../bots/bot-items-store'
 import type { RpcContext } from '../core'
@@ -64,15 +64,17 @@ describe('Waiting for a client that predates it', () => {
       botItems: {
         store: () => ({ get: async (id: string) => store.get(id) }),
         changed: () => {},
-        views: async (records: { status: string }[]) =>
-          records.map((record) => makeTestBotItem(1, { status: record.status as 'waiting' })),
+        views: async (records: readonly { status: BotItemStatus }[]) =>
+          records.map((record) => makeTestBotItem(1, { status: record.status })),
         sendOwedMail: async () => {}
       }
     }
     const answer = (context: Pick<RpcContext, 'clientKind' | 'clientCapabilities'>) =>
       writeResult(
+        // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: a write with no event reads only these botItems calls.
         { ...context, runtime: runtime as unknown as RpcContext['runtime'] },
         { uid, eventId: null },
+        // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the writer is read only for a write's event.
         {} as BotItemWriter
       )
     expect((await answer(older)).item.status).toBe('working')

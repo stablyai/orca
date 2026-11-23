@@ -40,9 +40,15 @@ export function botItemUsageLimitWaitText(
   return soonest.auto ? `${agent} continues ${when}` : `${agent} usage resets ${when}`
 }
 
+/** The store calls a pass makes. */
+export type BotItemUsageLimitStore = Pick<
+  BotItemsRemote,
+  'linkedDispatchRefs' | 'linksTo' | 'viewRows' | 'usageLimitWait'
+>
+
 export type BotItemUsageLimitDeps = {
   /** The profile's items store, only once it has a file. */
-  store: () => BotItemsRemote | null
+  store: () => BotItemUsageLimitStore | null
   join: Pick<BotItemLinkJoin, 'readLinkedWorkers' | 'linkView'>
   /** A worker's (its newest Dispatch's) chat session root; null for one with no chat. */
   sessionOf: (dispatchId: string) => string | null
@@ -55,7 +61,7 @@ export type BotItemUsageLimitDeps = {
 /** Each In progress or Waiting item with workers waits or goes back as its workers' stops say.
  *  `moved` is told of each item moved, even when a later one fails, which then rejects the whole. */
 export async function moveItemsOnUsageLimits(
-  store: BotItemsRemote,
+  store: BotItemUsageLimitStore,
   join: BotItemUsageLimitDeps['join'],
   sessionOf: BotItemUsageLimitDeps['sessionOf'],
   cuts: ReadonlyMap<string, BotUsageLimitCut>,
