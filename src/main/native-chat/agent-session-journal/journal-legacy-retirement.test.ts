@@ -5,10 +5,12 @@ import { journalDomainImportState } from './journal-domain-import-rows'
 import { initializeJournalDomainDatabase } from './database/journal-domain-database'
 import {
   cleanup,
+  companions,
   continueInOlderOrca,
   fakeLease,
   olderOrcaChat,
-  profile
+  profile,
+  queue
 } from './journal-legacy-retirement.test-fixture'
 import { JournalLegacyIneligibleError } from './journal-legacy-retention-error'
 import { setLegacyJournalRetirementHost } from './journal-legacy-retirement-outcome'
@@ -23,29 +25,6 @@ function rename(filename: string, sessionId: string, name: string) {
   db.close()
 }
 
-function queue(filename: string, sessionId: string, text: string) {
-  const db = new Database(filename)
-  db.prepare(
-    `INSERT INTO queued_messages
-    (session_id,message_id,position,body_json,fingerprint,created_at,host_instance,state)
-    VALUES(?,?,?,?,?,?,?,?)`
-  ).run(
-    sessionId,
-    'queued-after-copy',
-    1,
-    JSON.stringify({
-      kind: 'message',
-      role: 'user',
-      blocks: [{ type: 'text', text }]
-    }),
-    'fingerprint',
-    1000,
-    'older-host',
-    'waiting'
-  )
-  db.close()
-}
-
 /** Every original version kept here for a chat, oldest key first. */
 const originals = (db: Database.Database, sessionId: string) =>
   db
@@ -54,9 +33,6 @@ const originals = (db: Database.Database, sessionId: string) =>
     .map((row) => JSON.parse(String(row.value)))
 
 const original = (db: Database.Database, sessionId: string) => originals(db, sessionId)[0] ?? null
-
-const companions = (filename: string) =>
-  [filename, `${filename}-wal`, `${filename}-shm`].filter((name) => existsSync(name))
 
 function tabsAndRecords(db: Database.Database) {
   return {

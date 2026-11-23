@@ -1,11 +1,14 @@
 // One host's usage-limit stops, derived once per feed and refreshed only when a session's stop facts change.
-import type { StructuredAgentSessionStatusFeedOwner } from '@/runtime/native-chat/status/structured-agent-session-status-feed'
-import type { StructuredAgentSessionStatusChange } from '@/runtime/native-chat/status/structured-agent-session-status-dispatch'
-import type { AgentSessionStatusSummary } from '../../../../shared/agent-session/agent-session-wire'
-import {
-  usageLimitStops,
-  type NamedUsageLimitStop
-} from '../../../../shared/bots/bot-usage-limit-stop'
+import type { AgentSessionStatusSummary } from '../agent-session/agent-session-wire'
+import type { AgentSessionStatusSnapshot } from '../agent-session/view/agent-session-status-snapshot-fold'
+import { usageLimitStops, type NamedUsageLimitStop } from './bot-usage-limit-stop'
+
+/** A host's status feed, the desktop's or the phone's. */
+export type UsageLimitStopFeed = {
+  getSnapshot: () => AgentSessionStatusSnapshot
+  /** `change`: the sessions an update touched; null or absent when it doesn't say. */
+  subscribe: (listener: (change?: ReadonlySet<string> | null) => void) => () => void
+}
 
 export type HostUsageLimitStop = NamedUsageLimitStop & { workspaceId: string }
 
@@ -15,7 +18,7 @@ type HostUsageLimitStops = {
   stopsAt: (now: number) => readonly HostUsageLimitStop[]
 }
 
-const indexes = new WeakMap<StructuredAgentSessionStatusFeedOwner, HostUsageLimitStops>()
+const indexes = new WeakMap<UsageLimitStopFeed, HostUsageLimitStops>()
 
 /** The fields a stop reads; any other status change leaves every stop as it was. */
 function sameStopFacts(
@@ -37,9 +40,7 @@ function sameStopFacts(
   )
 }
 
-function createHostUsageLimitStops(
-  feed: StructuredAgentSessionStatusFeedOwner
-): HostUsageLimitStops {
+function createHostUsageLimitStops(feed: UsageLimitStopFeed): HostUsageLimitStops {
   // Only the sessions holding a usage-limit cut, so a reader's derive scales with stops, not sessions.
   let cut = new Map<string, AgentSessionStatusSummary>()
   let revision = 0
@@ -68,9 +69,9 @@ function createHostUsageLimitStops(
     }
     return changed
   }
-  const onChange = (change: StructuredAgentSessionStatusChange): void => {
+  const onChange = (change?: ReadonlySet<string> | null): void => {
     let changed = false
-    if (change === null) {
+    if (!change) {
       changed = rebuild()
     } else {
       const sessions = feed.getSnapshot()
@@ -132,9 +133,7 @@ function createHostUsageLimitStops(
   }
 }
 
-export function hostUsageLimitStops(
-  feed: StructuredAgentSessionStatusFeedOwner
-): HostUsageLimitStops {
+export function hostUsageLimitStops(feed: UsageLimitStopFeed): HostUsageLimitStops {
   let index = indexes.get(feed)
   if (!index) {
     index = createHostUsageLimitStops(feed)

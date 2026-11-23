@@ -16,6 +16,8 @@ import { colors, pressedStyle } from '../../theme/mobile-theme'
 import { useMobileColorScheme } from '../../theme/use-mobile-color-scheme'
 import { MobileBrowserAddressField } from './MobileBrowserAddressField'
 import { MobileBrowserJavaScriptDialog } from './MobileBrowserJavaScriptDialog'
+import { MobileBrowserPagePrompt } from './MobileBrowserPagePrompt'
+import type { MobileBrowserPagePromptState } from '../page-interaction/use-mobile-browser-page-prompts'
 import { MobileBrowserKeyRow } from './MobileBrowserKeyRow'
 import { MobileBrowserLoadFailure } from './MobileBrowserLoadFailure'
 import {
@@ -53,6 +55,8 @@ type MobileBrowserPaneViewProps = {
   certificateTrustSupported: boolean
   controlsDisabled: boolean
   dialog: BrowserDialogState | null
+  pagePrompt: MobileBrowserPagePromptState | null
+  answerPagePrompt: (value: unknown) => Promise<void>
   error: string | null
   frameGeometry: BrowserFrameGeometry | null
   frameLayers: readonly [BrowserFrameLayerBinding, BrowserFrameLayerBinding]
@@ -104,6 +108,8 @@ export function MobileBrowserPaneView(props: MobileBrowserPaneViewProps) {
     certificateTrustSupported,
     controlsDisabled,
     dialog,
+    pagePrompt,
+    answerPagePrompt,
     error,
     frameGeometry,
     frameLayers,
@@ -324,6 +330,13 @@ export function MobileBrowserPaneView(props: MobileBrowserPaneViewProps) {
             dialog={dialog}
             keyboardLift={keyboardLift}
             sendDialogCommand={sendDialogCommand}
+          />
+        ) : pagePrompt ? (
+          <MobileBrowserPagePrompt
+            key={pagePrompt.request.requestId}
+            prompt={pagePrompt}
+            keyboardLift={keyboardLift}
+            answer={answerPagePrompt}
           />
         ) : null}
       </View>

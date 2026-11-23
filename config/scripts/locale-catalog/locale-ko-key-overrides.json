@@ -5529,10 +5529,10 @@
     "ko": "이 워크스페이스와 모든 하위 워크스페이스의 활성 패널을 닫아 메모리와 CPU 사용량을 줄입니다."
   },
   "auto.components.stats.usage.overview.sections.statusOff": {
-    "ko": "비활성"
+    "ko": "꺼짐"
   },
   "auto.components.settings.contrast.off": {
-    "ko": "끔"
+    "ko": "꺼짐"
   },
   "auto.components.TaskPage.labelCountSingular": {
     "ko": "라벨 {{count}}개"

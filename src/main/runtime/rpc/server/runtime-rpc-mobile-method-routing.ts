@@ -66,6 +66,8 @@ export const EXECUTION_HOST_METHODS = [
   'browser.mouseMove',
   'browser.mouseUp',
   'browser.mouseWheel',
+  // Answers a streamed page's permission, sign-in or open-app prompt on the host that asked; gated on browser.page-prompts.v1.
+  'browser.pagePromptAnswer',
   // Read-only list so the phone can name a tab's profile and offer the host's profiles for a new tab.
   'browser.profileList',
   'browser.reload',
