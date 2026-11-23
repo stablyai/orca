@@ -14,6 +14,8 @@ export type NotchStatusSource = {
 export type NotchStatusServiceOptions = {
   source: NotchStatusSource
   acknowledgedAtByPaneKey?: Readonly<Record<string, number>>
+  acknowledgedCompletions?: Readonly<Record<string, string>>
+  onAcknowledgedCompletionsChanged?: (completions: Readonly<Record<string, string>>) => void
   /** Coalesces bursts; a hook storm across worktrees must not repaint per event. */
   scheduleFlush?: (flush: () => void) => () => void
 }
@@ -33,12 +35,28 @@ export class NotchStatusService {
   private readonly listeners = new Set<(summary: NotchStatusSummary) => void>()
   private readonly unsubscribes: (() => void)[] = []
   private acknowledgedAtByPaneKey: Record<string, number> = {}
+  private readonly acknowledgedCompletions: Record<string, string>
+  private readonly onAcknowledgedCompletionsChanged: NotchStatusServiceOptions['onAcknowledgedCompletionsChanged']
   private summary: NotchStatusSummary = EMPTY_NOTCH_SUMMARY
   private cancelPendingFlush: (() => void) | null = null
   private flushPending = false
   private started = false
 
   constructor(options: NotchStatusServiceOptions) {
+    this.acknowledgedCompletions = Object.fromEntries(
+      Object.entries(options.acknowledgedCompletions ?? {})
+        .filter(
+          ([key, identity]) =>
+            key.startsWith('runtime:') &&
+            key.includes('|') &&
+            key.length <= 512 &&
+            typeof identity === 'string' &&
+            identity.length > 0 &&
+            identity.length <= 1024
+        )
+        .slice(-MAX_ACKNOWLEDGEMENTS)
+    )
+    this.onAcknowledgedCompletionsChanged = options.onAcknowledgedCompletionsChanged
     this.acknowledgedAtByPaneKey = { ...options.acknowledgedAtByPaneKey }
     this.trimAcknowledgements()
     this.source = options.source
@@ -82,14 +100,37 @@ export class NotchStatusService {
 
   acknowledgePanes(paneKeys: readonly string[], acknowledgedAt: number): void {
     let changed = false
+    let completionsChanged = false
+    const snapshot = this.source.getStatusSnapshot()
     for (const paneKey of paneKeys) {
+      const row = snapshot.find((entry) => entry.paneKey === paneKey)
+      if (
+        row?.state === 'done' &&
+        row.completionIdentity &&
+        this.acknowledgedCompletions[paneKey] !== row.completionIdentity
+      ) {
+        delete this.acknowledgedCompletions[paneKey]
+        this.acknowledgedCompletions[paneKey] = row.completionIdentity
+        completionsChanged = true
+      }
       if ((this.acknowledgedAtByPaneKey[paneKey] ?? 0) < acknowledgedAt) {
         this.acknowledgedAtByPaneKey[paneKey] = acknowledgedAt
         changed = true
       }
     }
     this.trimAcknowledgements()
-    if (changed && this.started) {
+    if (completionsChanged) {
+      const keys = Object.keys(this.acknowledgedCompletions)
+      for (const key of keys.slice(0, Math.max(0, keys.length - MAX_ACKNOWLEDGEMENTS))) {
+        delete this.acknowledgedCompletions[key]
+      }
+      try {
+        this.onAcknowledgedCompletionsChanged?.({ ...this.acknowledgedCompletions })
+      } catch (error) {
+        console.warn('[notch] Could not persist read completions:', error)
+      }
+    }
+    if ((changed || completionsChanged) && this.started) {
       this.recompute()
     }
   }
@@ -111,7 +152,8 @@ export class NotchStatusService {
     this.scheduleFreshnessExpiry(snapshot)
     const next = buildNotchSummary({
       snapshot,
-      acknowledgedAtByPaneKey: this.acknowledgedAtByPaneKey
+      acknowledgedAtByPaneKey: this.acknowledgedAtByPaneKey,
+      acknowledgedCompletions: this.acknowledgedCompletions
     })
     if (summariesEqual(this.summary, next)) {
       return

@@ -16,7 +16,7 @@ describe('notch remote evidence clocks', () => {
         }
       ]
     }
-    const first = notchRemoteSessionRows('host-a', snapshot, new Map(), 1000)
+    const first = notchRemoteSessionRows('host-a', snapshot, new Map(), 1000, 'pairing-runtime')
     expect(first).toHaveLength(1)
     expect(first[0]).toMatchObject({
       paneKey: 'runtime:host-a|terminal-tab:23456789-abcd-4abc-a123-123456789abc',
@@ -29,13 +29,13 @@ describe('notch remote evidence clocks', () => {
       stateStartedAt: 1000
     })
     const previous = new Map(first.map((row) => [row.paneKey, row]))
-    const replay = notchRemoteSessionRows('host-a', snapshot, previous, 5000)
+    const replay = notchRemoteSessionRows('host-a', snapshot, previous, 5000, 'pairing-runtime')
     expect(replay[0]).toMatchObject({
       receivedAt: 1000,
       mirroredEvidenceReceivedAt: 1000,
       stateStartedAt: 1000
     })
-    const otherHost = notchRemoteSessionRows('host-b', snapshot, previous, 5000)
+    const otherHost = notchRemoteSessionRows('host-b', snapshot, previous, 5000, 'pairing-runtime')
     expect(otherHost[0]).toMatchObject({
       paneKey: 'runtime:host-b|terminal-tab:23456789-abcd-4abc-a123-123456789abc',
       receivedAt: 5000,
@@ -46,7 +46,7 @@ describe('notch remote evidence clocks', () => {
       updatedAt: 9_100_000,
       stateStartedAt: 9_050_000
     }
-    const nextTurn = notchRemoteSessionRows('host-a', snapshot, previous, 6000)
+    const nextTurn = notchRemoteSessionRows('host-a', snapshot, previous, 6000, 'pairing-runtime')
     expect(nextTurn[0]).toMatchObject({ receivedAt: 6000, stateStartedAt: 6000 })
   })
 })

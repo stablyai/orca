@@ -78,6 +78,15 @@ export function initializeNotchAgentStatus(): void {
   remoteSessions = remote
   service = new NotchStatusService({
     acknowledgedAtByPaneKey: state.nativeSettings?.getUI().acknowledgedAgentsByPaneKey,
+    acknowledgedCompletions: state.nativeSettings?.getUI().notchAcknowledgedCompletions,
+    onAcknowledgedCompletionsChanged: (completions) => {
+      void state.nativeSettings
+        ?.requestCoreWrite({
+          kind: 'ui',
+          updates: { notchAcknowledgedCompletions: { ...completions } }
+        })
+        .catch((error) => console.warn('[notch] Could not persist read completions:', error))
+    },
     source: {
       getStatusSnapshot: () => [...agentHookServer.getStatusSnapshot(), ...remote.getRows()],
       subscribeStatusRowMutations: (listener) => {

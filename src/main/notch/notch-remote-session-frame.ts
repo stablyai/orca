@@ -24,7 +24,8 @@ export function notchRemoteSessionRows(
   environmentId: string,
   snapshot: Record<string, unknown>,
   previous: ReadonlyMap<string, NotchRemoteObservation>,
-  now: number
+  now: number,
+  ownerIdentity: string
 ): NotchRemoteObservation[] {
   if (typeof snapshot.worktree !== 'string' || !Array.isArray(snapshot.tabs)) {
     return []
@@ -108,6 +109,12 @@ export function notchRemoteSessionRows(
           }
         : {}),
       paneKey,
+      completionIdentity: JSON.stringify([
+        ownerIdentity,
+        status.state,
+        transition ?? evidenceObservedAt,
+        finite(raw.turnStartedAt) ? raw.turnStartedAt : null
+      ]),
       originalPaneKey,
       executionHostId,
       sessionId,

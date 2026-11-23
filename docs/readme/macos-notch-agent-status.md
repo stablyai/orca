@@ -14,7 +14,7 @@ The auxiliary window is transparent, non-focusable, and ignores mouse events out
 
 Main owns the window geometry, counts, session identities, and snapshots. Local hook and host-owned structured-chat changes come from the existing agent hook server. The feature subscribes independently of the main window, so closing that window does not detach its local status source.
 
-Ready paired hosts publish their session inventories over a passive session-tabs stream. Host-qualified identities keep identical pane keys on different machines separate. The observer does not start disconnected or sleeping hosts. The stream is released when the preference is disabled or the application quits.
+Ready paired hosts publish their session inventories over a passive session-tabs stream. Host-qualified identities keep identical pane keys on different machines separate. Read remote completions persist in desktop UI state as host/pane-qualified transition identities, scoped to the pairing and runtime. Repeated inventories after a restart stay read; a new host transition becomes unread without comparing host and local clocks. The observer does not start disconnected or sleeping hosts. The stream is released when the preference is disabled or the application quits.
 
 The renderer only presents snapshots and requests actions by current row identity; main resolves the target from its own inventory. IPC actions validate both the sender frame and the owning window. Existing workspace and structured-chat activation paths perform navigation. Reading a session uses the existing acknowledgement flow rather than assuming that a click succeeded.
 

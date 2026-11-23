@@ -21,6 +21,7 @@ export type NotchStatusObservation = AgentStatusIpcPayload & {
   originalPaneKey?: string
   structuredHostOwned?: true
   mirroredEvidenceReceivedAt?: number
+  completionIdentity?: string
 }
 
 export type NotchSession = {
@@ -85,6 +86,7 @@ export type BuildNotchSummaryArgs = {
   snapshot: readonly NotchStatusObservation[]
   /** paneKey -> ack timestamp, mirrored into main from the renderer's acknowledgeAgents. */
   acknowledgedAtByPaneKey: Readonly<Record<string, number>>
+  acknowledgedCompletions?: Readonly<Record<string, string>>
   /** Injected so the decay below is testable and so one tick sees one consistent clock. */
   now?: number
 }
@@ -92,6 +94,7 @@ export type BuildNotchSummaryArgs = {
 export function buildNotchSummary({
   snapshot,
   acknowledgedAtByPaneKey,
+  acknowledgedCompletions = {},
   now = Date.now()
 }: BuildNotchSummaryArgs): NotchStatusSummary {
   const counts: Record<NotchLane, number> = { working: 0, attention: 0, done: 0 }
@@ -134,7 +137,9 @@ export function buildNotchSummary({
     // A finished agent you've already looked at leaves the bar entirely — bar and panel agree.
     if (
       lane === 'done' &&
-      !isUnvisited(entry.stateStartedAt, acknowledgedAtByPaneKey[entry.paneKey])
+      (entry.completionIdentity
+        ? acknowledgedCompletions[entry.paneKey] === entry.completionIdentity
+        : !isUnvisited(entry.stateStartedAt, acknowledgedAtByPaneKey[entry.paneKey]))
     ) {
       continue
     }

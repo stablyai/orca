@@ -60,6 +60,7 @@ const openPassiveStream = createPassiveSessionStreamOpener({
 })
 
 type HostWatch = {
+  owner: string
   identity: string
   stream: { close: () => void } | null
   retry: ReturnType<typeof setTimeout> | null
@@ -141,6 +142,7 @@ export class NotchRemoteSessions {
     const owner = `${snapshot.pairingRevision}\0${snapshot.status?.runtimeId}`
     const saved = this.receipts.get(id)
     const watch: HostWatch = {
+      owner,
       identity,
       stream: null,
       retry: null,
@@ -227,7 +229,7 @@ export class NotchRemoteSessions {
           } else {
             watch.rows.set(
               snapshot.worktree,
-              notchRemoteSessionRows(id, snapshot, watch.receipts, now)
+              notchRemoteSessionRows(id, snapshot, watch.receipts, now, watch.owner)
             )
           }
         }

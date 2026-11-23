@@ -29,6 +29,10 @@ export const UI_STATE_DISPOSITIONS = {
   agentsFilterRepoIds: moveDisposition(38),
   setupScriptPromptDismissedRepoIds: moveDisposition(38),
   acknowledgedAgentsByPaneKey: moveDisposition(38, { note: 'Pane keys are kept.' }),
+  notchAcknowledgedCompletions: notApplicableDisposition(
+    38,
+    'Paired-host notch reads stay on the observing desktop; WSL moves only local workspaces.'
+  ),
   activityClearedAtByPaneKey: moveDisposition(38, { note: 'Pane keys are kept.' }),
   manuallyUnreadTurnsByPaneKey: moveDisposition(38, { note: 'Pane keys are kept.' }),
   trustedOrcaHooks: notApplicableDisposition(
