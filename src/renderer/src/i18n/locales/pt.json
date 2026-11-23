@@ -22921,6 +22921,11 @@
       "dontShowAgain": "Não mostrar novamente",
       "dismiss": "Dispensar"
     },
+    "fileDrop": {
+      "copyUploadedPaths": "Copiar caminhos",
+      "copyUploadedPathsFailed": "Não foi possível copiar os caminhos dos arquivos enviados.",
+      "uploadedWithoutPaste": "Envio concluído, mas não foi possível colar os caminhos no terminal."
+    },
     "newerDaemonBanner": {
       "failedTitle": "Não foi possível reabrir este terminal",
       "title": "Este terminal foi aberto em uma versão mais recente do Orca",

@@ -21649,6 +21649,11 @@
       "dontShowAgain": "不再顯示",
       "dismiss": "關閉"
     },
+    "fileDrop": {
+      "copyUploadedPaths": "複製路徑",
+      "copyUploadedPathsFailed": "無法複製已上傳檔案的路徑。",
+      "uploadedWithoutPaste": "上傳完成，但無法將路徑貼上到終端機。"
+    },
     "newerDaemonBanner": {
       "failedTitle": "無法重新開啟此終端機",
       "title": "此終端機是在較新版本的 Orca 中開啟的",

@@ -21974,6 +21974,11 @@
       "dontShowAgain": "Nicht mehr anzeigen",
       "dismiss": "Ausblenden"
     },
+    "fileDrop": {
+      "copyUploadedPaths": "Pfade kopieren",
+      "copyUploadedPathsFailed": "Die Pfade der hochgeladenen Dateien konnten nicht kopiert werden.",
+      "uploadedWithoutPaste": "Upload abgeschlossen, aber die Pfade konnten nicht in das Terminal eingefügt werden."
+    },
     "newerDaemonBanner": {
       "failedTitle": "Dieses Terminal konnte nicht erneut geöffnet werden",
       "title": "Dieses Terminal wurde in einer neueren Version von Orca geöffnet",

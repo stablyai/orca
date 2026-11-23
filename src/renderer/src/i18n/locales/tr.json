@@ -22093,6 +22093,11 @@
       "dontShowAgain": "Bir daha gösterme",
       "dismiss": "Kapat"
     },
+    "fileDrop": {
+      "copyUploadedPaths": "Yolları kopyala",
+      "copyUploadedPathsFailed": "Yüklenen dosyaların yolları kopyalanamadı.",
+      "uploadedWithoutPaste": "Yükleme tamamlandı, ancak yollar terminale yapıştırılamadı."
+    },
     "newerDaemonBanner": {
       "failedTitle": "Bu terminal yeniden açılamadı",
       "title": "Bu terminal Orca'nın daha yeni bir sürümünde açıldı",

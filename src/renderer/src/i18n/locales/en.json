@@ -25013,6 +25013,11 @@
       "dontShowAgain": "Don't show again",
       "dismiss": "Dismiss"
     },
+    "fileDrop": {
+      "copyUploadedPaths": "Copy paths",
+      "copyUploadedPathsFailed": "Could not copy uploaded paths.",
+      "uploadedWithoutPaste": "Upload finished, but the paths couldn't be pasted into the terminal."
+    },
     "newerDaemonBanner": {
       "failedTitle": "Couldn't reopen this terminal",
       "title": "This terminal was opened in a newer version of Orca",

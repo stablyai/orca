@@ -24715,6 +24715,11 @@
       "dialogDescription": "Orca 现在将每个 Claude 账户保存在各自的文件夹中，新终端中的 claude 会遵循您选择的账户",
       "dialogCause": "在此更新之前打开的终端不会如此，因此这里的 claude 使用系统默认的登录信息登录，请打开新终端以使用所选账户"
     },
+    "fileDrop": {
+      "copyUploadedPaths": "复制路径",
+      "copyUploadedPathsFailed": "无法复制已上传文件的路径。",
+      "uploadedWithoutPaste": "上传完成，但无法将路径粘贴到终端。"
+    },
     "newerDaemonBanner": {
       "failedTitle": "无法重新打开此终端",
       "title": "此终端是在较新版本的 Orca 中打开的",
