@@ -46,7 +46,7 @@ import { themedStyleSheet } from '../../theme/themed-styles'
 import { useMobileColorScheme } from '../../theme/use-mobile-color-scheme'
 import { BotItemCommentMicContext } from './bot-item-comment-mic'
 import { MobileBotItemReplyQuote } from './MobileBotItemReplyQuote'
-import { useBotItemCommentImages } from './use-bot-item-comment-images'
+import { useBotDraftImages } from '../use-bot-draft-images'
 import {
   botItemCommentDraftKey,
   botItemCommentDrafts as drafts,
@@ -191,9 +191,9 @@ export function MobileBotItemCommentBox({
       focusMobileNativeChatTextDestination(scope)
       run()
     })
-  const photos = useBotItemCommentImages({
+  const photos = useBotDraftImages({
     client,
-    uid,
+    draftKey: uid,
     sessionId: attachTo,
     editText: (change) => (shownDrafts.get(key) ?? setText)(change(drafts.get(key) ?? '')),
     showToast
@@ -232,7 +232,7 @@ export function MobileBotItemCommentBox({
       )
       pickedSkills.delete(key)
       setText('')
-      photos.clear()
+      photos.clearSent(photos.images.map((image) => image.id))
     }
   }
   useImperativeHandle(ref, () => ({
