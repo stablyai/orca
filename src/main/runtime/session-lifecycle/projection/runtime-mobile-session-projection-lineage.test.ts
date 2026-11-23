@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { AgentStatusEntry } from '../../../../shared/agent-status/contracts/agent-status-types'
 import type { AgentStatusIpcPayload } from '../../../../shared/agent-status/contracts/agent-status-ipc-payload'
 import type { RuntimeMobileSessionTerminalTab } from '../../../../shared/remote-runtime/session-graph/runtime-mobile-session-tab-contracts'
@@ -127,9 +127,21 @@ function hostWithFinishedHookRow(now: number): RuntimeMobileSessionProjectionHos
   }
 }
 
+// Why a fixed clock: the projection compares row ages against the current time.
+const NOW = Date.UTC(2026, 0, 15, 12, 0, 0)
+
 describe('paired-client frame lineage identity', () => {
+  beforeEach(() => {
+    vi.useFakeTimers()
+    vi.setSystemTime(NOW)
+  })
+
+  afterEach(() => {
+    vi.useRealTimers()
+  })
+
   it('keeps the renderer row terminal handle and dispatch lineage once its turn is done', () => {
-    const now = Date.now()
+    const now = NOW
     const rendererRow: AgentStatusEntry = {
       state: 'done',
       prompt: 'resident task',
@@ -173,7 +185,7 @@ describe('paired-client frame lineage identity', () => {
   })
 
   it('keeps lineage when a shell title demotes a working row', () => {
-    expect(demoteRuntimeMobileAgentStatus(workingWorkerRow(Date.now()), null)).toMatchObject({
+    expect(demoteRuntimeMobileAgentStatus(workingWorkerRow(NOW), null)).toMatchObject({
       state: 'done',
       terminalHandle: 'term_worker',
       orchestration: ORCHESTRATION
@@ -181,7 +193,7 @@ describe('paired-client frame lineage identity', () => {
   })
 
   it('keeps lineage when a stale working row is rebuilt from its title', () => {
-    const now = Date.now()
+    const now = NOW
     const renewed = renewRuntimeMobileAgentStatusFromPtyTitle(
       workingWorkerRow(now - AGENT_STATUS_STALE_AFTER_MS - 60_000),
       workingTitlePty(now)
