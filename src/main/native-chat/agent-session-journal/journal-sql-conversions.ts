@@ -9,7 +9,8 @@ import { isDiskAlmostFull } from '../../../shared/diagnostics/perf-notice-signal
 const CONVERSION_EXPANSION = 1.5
 
 export class JournalConversionStorageError extends Error {
-  constructor() {
+  /** False for one chat waiting on more room than it last had: other chats go on. */
+  constructor(readonly holdsOthers = true) {
     super('journal conversion deferred for storage')
     this.name = 'JournalConversionStorageError'
   }
@@ -41,6 +42,8 @@ function warnLegacy(step: string, sessionId: string, error: unknown): void {
 export class JournalSqlConversions {
   private readonly pending = new Map<string, Conversion>()
   private readonly ready = new Map<string, string>()
+  // Free bytes each chat started with before it stopped partway, so it never rebuilds the same prefix.
+  private readonly stopped = new Map<string, number>()
   private retryAt = 0
   private retryDelay = 60_000
   private closed = false
@@ -91,6 +94,7 @@ export class JournalSqlConversions {
     }
     const result = this.convert(sessionId, promotion.signal)
       .then((epoch) => {
+        this.stopped.delete(sessionId)
         if (epoch !== null) {
           if (!foreground) {
             this.retryDelay = 60_000
@@ -100,7 +104,7 @@ export class JournalSqlConversions {
         return epoch
       })
       .catch((error: unknown) => {
-        if (!foreground && isJournalConversionStorageError(error)) {
+        if (!foreground && isJournalConversionStorageError(error) && error.holdsOthers) {
           this.retryAt = performance.now() + this.retryDelay
           this.retryDelay = Math.min(this.retryDelay * 2, 60 * 60_000)
         }
@@ -197,8 +201,12 @@ export class JournalSqlConversions {
       }
     }
     // Measured only for a chat that still converts, so ready chats never read their rows.
-    if (await this.lowOnSpace(promotion, sessionId)) {
+    const free = await this.room(promotion, sessionId)
+    if (free === null) {
       throw new JournalConversionStorageError()
+    }
+    if (free <= (this.stopped.get(sessionId) ?? -1)) {
+      throw new JournalConversionStorageError(false)
     }
     await this.boundary(promotion)
     const reader = await this.readers.prepareConversion(sessionId)
@@ -209,7 +217,8 @@ export class JournalSqlConversions {
       const { header } = reader
       for (;;) {
         await this.boundary(promotion)
-        if (await this.lowOnSpace(promotion)) {
+        if ((await this.room(promotion)) === null) {
+          this.stopped.set(sessionId, free)
           throw new JournalConversionStorageError()
         }
         const page = await reader.next()
@@ -232,10 +241,10 @@ export class JournalSqlConversions {
     }
   }
 
-  /** Whether background work must stop for space; a chat opened meanwhile never does. */
-  private async lowOnSpace(promotion: AbortSignal, sessionId?: string): Promise<boolean> {
+  /** Free bytes, or null when background work must stop for space; an opened chat never does. */
+  private async room(promotion: AbortSignal, sessionId?: string): Promise<number | null> {
     if (promotion.aborted) {
-      return false
+      return Infinity
     }
     const storage = await this.storage(sessionId).catch((error: unknown) => {
       if (promotion.aborted) {
@@ -244,11 +253,13 @@ export class JournalSqlConversions {
       throw error
     })
     if (!storage || promotion.aborted) {
-      return false
+      return Infinity
     }
     const needed =
       sessionId === undefined ? 0 : (storage.remainingBytes ?? Infinity) * CONVERSION_EXPANSION
     return isDiskAlmostFull({ ...storage, freeBytes: storage.freeBytes - needed })
+      ? null
+      : storage.freeBytes
   }
 
   /** Only a failed space measure defers; a damaged or missing original keeps its own failure. */

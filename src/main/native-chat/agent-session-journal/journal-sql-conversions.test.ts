@@ -166,4 +166,26 @@ describe('JournalSqlConversions storage guard', () => {
     await expect(conversions.ensure('chat', false)).rejects.toBe(corrupt)
     expect(conversions.deferred()).toBe(false)
   })
+
+  it('a chat that stopped partway waits for more room than it had, without holding back others', async () => {
+    let now = 1_000
+    vi.spyOn(performance, 'now').mockImplementation(() => now)
+    let free = 60 * GB
+    let checks = 0
+    // Its third space check (the second batch) finds the floor, as its writes filled the disk.
+    const { conversions, writes } = conversion(
+      () =>
+        ++checks === 3 ? { freeBytes: 4 * GB, totalBytes: 100 * GB } : { ...ROOM, freeBytes: free },
+      3
+    )
+    await expect(conversions.ensure('chat', false)).rejects.toEqual(deferred)
+    now += 60_000
+    writes.length = 0
+    // The same room as before would rebuild the same prefix and stop again.
+    await expect(conversions.ensure('chat', false)).rejects.toEqual(deferred)
+    expect(writes).not.toContain('import-page')
+    expect(conversions.deferred()).toBe(false)
+    free = 61 * GB
+    await expect(conversions.ensure('chat', false)).resolves.toBe('epoch')
+  })
 })
