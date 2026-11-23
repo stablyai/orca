@@ -44,6 +44,8 @@ function harness(thread: Conversation = THREAD) {
   let workLinkReads = 0
   // What the pane is linked to as an end is read: its conversation, another one, or none.
   let linking: 'same' | 'other' | 'none' = 'same'
+  // What it is linked to once the end's worker check returns.
+  let lateLinking: 'same' | 'other' | 'none' = 'same'
   const saved: { externalConversations: unknown[] } = {
     externalConversations: [
       {
@@ -111,7 +113,10 @@ function harness(thread: Conversation = THREAD) {
         workLinkReads += 1
         return []
       },
-      workerActivities: async () => null,
+      workerActivities: async () => {
+        linking = lateLinking
+        return null
+      },
       promptsAudience: () => true,
       pendingPrompt: () => pending,
       turnOpener: () => null,
@@ -146,11 +151,14 @@ function harness(thread: Conversation = THREAD) {
         outcome?: 'cancellation' | 'failure'
         /** The pane is relinked, or unlinked, while its end is read. */
         relinked?: 'other' | 'none'
+        /** ...or later, while its end waits for its workers' check. */
+        relinkedLate?: 'other' | 'none'
       }
     ) {
       leadStartedAt = at
       leadWorking = true
       linking = 'same'
+      lateLinking = opts.relinkedLate ?? 'same'
       if (opts.unwatched) {
         chat = turns()
       } else {
@@ -315,6 +323,8 @@ describe('a background run answers the conversation it was launched for', () => 
     // Launched for the conversation the pane is relinked to: still not the one its end posts to.
     await t.turn(26, { woke: ['c'], says: 'C done.', relinked: 'other' })
     await t.turn(31, { woke: ['b'], says: 'B done.', relinked: 'none' })
+    await t.turn(41, { woke: ['a'], says: 'A done late.', relinkedLate: 'other' })
+    await t.turn(51, { woke: ['b'], says: 'B done late.', relinkedLate: 'none' })
     expect(t.said()).toEqual(['Started.'])
   })
 

@@ -297,7 +297,9 @@ export class ChatTurns {
       // A wake-up posts its final words only: no work links to look up for it.
       const told = heard || reported ? links() : Promise.resolve([])
       const [workLinks] = await Promise.all([told, this.workers.check(paneKey, 'turn-ended')])
-      if (generation !== this.generation) {
+      // Still the conversation it was judged for, after the waits.
+      const stale = woken && !sameConversation(this.deps.linkedFor(paneKey), linked)
+      if (generation !== this.generation || stale) {
         return
       }
       // Owner words steered in and posted to the thread go before the answer.
