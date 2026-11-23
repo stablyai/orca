@@ -1,11 +1,11 @@
-// Settings' Soul, Memory, Tools and Skills: what Memory's row counts, Access's rows in the desktop's
+// Settings' Soul, Memory, Tools and Skills: the Soul and memory rows, Access's rows in the desktop's
 // order (Tools, then Skills), and the open page.
 import type { ReactNode } from 'react'
 import { ListRow } from '../components/list/ListGroup'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
 import type { RpcClient } from '../transport/rpc/rpc-client-contract'
 import type { SheetBot } from './bot-sheet-operations'
-import type { SettingsRootPage } from './MobileBotSettingsRoot'
+import type { SettingsFeature, SettingsRootPage } from './MobileBotSettingsRoot'
 import { MobileBotToolsPage, MobileBotToolsRow } from './tools/MobileBotToolsPage'
 import { botSkillSourceCount, MobileBotSkillsPage, useBotSkillScan } from './skills/MobileBotSkills'
 import { MobileBotMemoryPage, MobileBotSoulPage } from './soul-memory/MobileBotSoulAndMemory'
@@ -25,11 +25,7 @@ export function useBotSoulMemorySkills(
   page: SettingsRootPage | null,
   setPage: (page: SettingsRootPage | null) => void,
   save: (updates: { skillProjects: string[] }) => Promise<boolean>
-): {
-  memoryTopics: number | null
-  accessRows: ReactNode
-  page: ReactNode
-} {
+): SettingsFeature {
   const t = useMobileTranslation()
   const { client, routeBot } = settings
   const { bot, reads } = routeBot
@@ -46,24 +42,58 @@ export function useBotSoulMemorySkills(
     onBack: () => setPage(null)
   }
   const skills = botSkillSourceCount(scan)
+  const memoryTopics = topicNames ? botMemoryTopicCount(topicNames) : null
   return {
-    memoryTopics: topicNames ? botMemoryTopicCount(topicNames) : null,
-    // An array, not a fragment, so the group draws a line between the rows.
-    accessRows: [
-      <MobileBotToolsRow key="tools" {...settings} bot={bot} onOpen={() => setPage('tools')} />,
-      <ListRow
-        key="skills"
-        title={t('bots.skills.title', 'Skills')}
-        value={
-          skills === null
-            ? undefined
-            : skills > 0
-              ? String(skills)
-              : t('bots.settings.none', 'None')
-        }
-        navigates
-        onPress={() => setPage('skills')}
-      />
+    rows: [
+      {
+        key: 'soul',
+        group: 'soul-and-memory',
+        node: (
+          <ListRow title={t('bots.soul.title', 'Soul')} navigates onPress={() => setPage('soul')} />
+        )
+      },
+      {
+        key: 'memory',
+        group: 'soul-and-memory',
+        node: (
+          <ListRow
+            title={t('bots.memory.title', 'Memory')}
+            value={
+              memoryTopics === null
+                ? undefined
+                : t('bots.settings.memoryFiles', '{{count}} files', {
+                    count: memoryTopics + 1,
+                    defaultValue_one: '{{count}} file'
+                  })
+            }
+            navigates
+            onPress={() => setPage('memory')}
+          />
+        )
+      },
+      {
+        key: 'tools',
+        group: 'access',
+        node: <MobileBotToolsRow {...settings} bot={bot} onOpen={() => setPage('tools')} />
+      },
+      {
+        key: 'skills',
+        group: 'access',
+        node: (
+          <ListRow
+            title={t('bots.skills.title', 'Skills')}
+            value={
+              skills === null
+                ? undefined
+                : skills > 0
+                  ? String(skills)
+                  : t('bots.settings.none', 'None')
+            }
+            navigates
+            onPress={() => setPage('skills')}
+          />
+        )
+      }
     ],
     page:
       page === 'tools' ? (

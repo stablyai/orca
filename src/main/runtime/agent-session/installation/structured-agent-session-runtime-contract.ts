@@ -50,6 +50,8 @@ export type StructuredAgentSessionRuntimeDeps = StructuredAgentSessionTransportO
   piManagedExtensionsEnabled?: () => boolean
   /** This host's preference for agents' suggested next prompts, read when a chat starts one. */
   nativeChatPromptSuggestions?: () => boolean
+  /** This host's opt-in to Codex chats sharing capped app-servers, read when a chat starts one. */
+  sharedCodexServers?: () => boolean
   /** Required, and asserted at install time — saved Arguments must never be silently omitted. */
   resolveLaunchArgs: (provider: AgentSessionRecord['provider']) => Promise<string[]> | string[]
   /** Required, and asserted at install time — an absent policy must not degrade to a guess. */
@@ -98,6 +100,7 @@ export type StructuredAgentSessionRuntimeDeps = StructuredAgentSessionTransportO
   /** Every structured-session status projection, for host-side reactions such as the first-work
    *  workspace rename that CLI agents get from their hooks. */
   onSessionStatusChanged?: StructuredAgentSessionHostDeps['onSessionStatusChanged']
+  readWorkerDockPresence?: StructuredAgentSessionHostDeps['readWorkerDockPresence']
   conversationNaming?: StructuredAgentSessionHostDeps['conversationNaming']
   /** See `StructuredAgentSessionHostDeps.turnContext`. */
   turnContext?: StructuredAgentSessionHostDeps['turnContext']

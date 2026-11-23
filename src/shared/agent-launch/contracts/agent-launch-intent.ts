@@ -125,11 +125,13 @@ export type AgentLaunchResult = {
 
 export type AgentLaunchMode = 'structured' | 'terminal'
 
-/** Why a launch ran in the mode it did. `user_default` is the preference being honoured and
- *  `requested` the caller's explicit pick; every other member is a reason a chat could not run. */
+/** Why a launch ran in the mode it did. `user_default` is the preference being honoured,
+ *  `requested` the caller's explicit pick and `chat_lineage` the worker lineage's; every other
+ *  member is a reason a chat could not run. */
 export type AgentLaunchModeReason =
   | 'user_default'
   | 'requested'
+  | 'chat_lineage'
   | 'remote_execution_host'
   | 'reused_terminal'
   | 'agent_without_structured_session'
@@ -144,6 +146,7 @@ export type AgentLaunchModeReason =
   | 'structured_unsupported_on_host'
   | 'pinned_claude_account'
   | 'chat_runtime_not_installed'
+  | 'chat_cannot_run_orca_commands'
 
 /** Restates `WorkerStartModeReceipt` in surface-neutral terms so orchestration's receipt and a
  *  mobile or renderer launch report the same vocabulary. */

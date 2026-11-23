@@ -8,7 +8,7 @@ import {
 } from '../../shared/backend/backend-service-contract'
 import { BackendPortRpc } from '../../shared/backend/backend-port-rpc'
 import { setAppEnvironment } from '../../shared/app-lifecycle/app-environment'
-import { agentTokenUsageSchema } from '../../shared/telemetry/schemas/telemetry-agent-token-usage-schema'
+import { agentTokenUsageDailySchema } from '../../shared/telemetry/schemas/telemetry-agent-token-usage-schema'
 import { backendMessagePort, type BackendNativePort } from './backend-message-port'
 import { createDesktopBackendEnvironment } from './node-service-environment'
 import { BackendDocumentPeers } from './backend-document-peers'
@@ -184,8 +184,11 @@ async function bootstrap(raw: unknown, port: BackendNativePort): Promise<void> {
         claudeProfileDirs: async () => (await call('usage.claudeProfileDirs')) as string[],
         telemetry: {
           isEnabled: async () => (await call('usage.telemetry.enabled')) === true,
-          capture: async (snapshot) =>
-            (await call('usage.telemetry.capture', agentTokenUsageSchema.parse(snapshot))) === true
+          capture: async (totals) =>
+            (await call(
+              'usage.telemetry.captureDaily',
+              agentTokenUsageDailySchema.parse(totals)
+            )) === true
         }
       })
       registerCleanup(() => usage!.stop())

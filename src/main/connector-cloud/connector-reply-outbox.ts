@@ -112,7 +112,12 @@ const fitted = (row: Filled): Filled =>
 export function replyEventsOf(rows: readonly Filled[]): ConnectorReplyEvent[] {
   const groups = new Map<string, Filled[]>()
   for (const row of rows) {
-    const key = JSON.stringify([row.conversation, row.fill.answerDeliveryId, row.fill.outcome])
+    const key = JSON.stringify([
+      row.conversation,
+      row.fill.answerDeliveryId,
+      row.fill.outcome,
+      row.fill.turnStartedAt
+    ])
     groups.set(key, [...(groups.get(key) ?? []), row])
   }
   const events: ConnectorReplyEvent[] = []
@@ -122,7 +127,7 @@ export function replyEventsOf(rows: readonly Filled[]): ConnectorReplyEvent[] {
     if (!first || !conversation) {
       continue
     }
-    const { answerDeliveryId, outcome, prose, failure, links, tookMs } = first.fill
+    const { answerDeliveryId, outcome, prose, failure, links, tookMs, turnStartedAt } = first.fill
     // Each event names the answer's own delivery among its ids.
     const others = group.map((row) => row.deliveryId).filter((id) => id !== answerDeliveryId)
     const room = CONNECTOR_CLIENT_LIMITS.maxReplyDeliveryIds - 1
@@ -136,7 +141,8 @@ export function replyEventsOf(rows: readonly Filled[]): ConnectorReplyEvent[] {
         ...(outcome === 'answered' && prose ? { prose } : {}),
         ...(failure ? { failure } : {}),
         ...(links?.length ? { links } : {}),
-        ...(outcome === 'answered' && tookMs ? { tookMs } : {})
+        ...(outcome === 'answered' && tookMs ? { tookMs } : {}),
+        ...(turnStartedAt === undefined ? {} : { turnId: turnStartedAt })
       })
     }
   }

@@ -12,6 +12,7 @@ import type {
   BrowserProfileImportFromBrowserResult
 } from '../../../../shared/browser/runtime/runtime-browser-contracts'
 import { BrowserError } from '../../../browser/browser-error'
+import type { BrowserSessionProfile } from '../../../../shared/browser/workspaces/browser-workspace-types'
 import { browserSessionRegistry } from '../../../browser/sessions/profiles/browser-session-registry'
 import { browserManager } from '../../../browser/guest-lifecycle/manager/browser-manager'
 import { getRuntimeDesktopSurface } from '../../construction/runtime-desktop-surface'
@@ -28,15 +29,35 @@ import type {
 import type { RuntimeBrowserCommandTargets } from './browser-command-targets'
 import type { RuntimeBrowserTabCatalog } from '../tabs/browser-tab-catalog'
 import type { RuntimeBrowserTabCreation } from '../tabs/browser-tab-creation'
+import type { RuntimeBrowserTabClose } from '../tabs/browser-tab-close'
+import type { RuntimeBrowserScreencasts } from '../screencast/browser-screencasts'
 import type { BrowserClientPageOpeningHost } from '../client-pages/browser-client-page-opening'
 import { cloneBrowserTabToProfile } from './browser-tab-profile-clone'
+import {
+  closeServerPagesInDeletedProfile,
+  closeServerPagesOfMissingProfiles
+} from './deleted-profile-server-pages'
 import type { RuntimeBrowserClientPlacement } from '../../../../shared/browser/client-hosting/runtime-browser-placement'
+
+function requireBrowserProfile(profileId: string): BrowserSessionProfile {
+  const profile =
+    browserSessionRegistry.getProfile(profileId) ??
+    (profileId === 'default' ? browserSessionRegistry.getDefaultProfile() : null)
+  if (!profile) {
+    throw new BrowserError('invalid_argument', `Browser profile ${profileId} was not found`)
+  }
+  return profile
+}
 
 export class RuntimeBrowserProfiles {
   constructor(
     private readonly host: Pick<
       RuntimeBrowserCommandHost,
-      'getRuntimeId' | 'getAuthoritativeWindowId' | 'getAvailableAuthoritativeWindowId'
+      | 'getRuntimeId'
+      | 'getAuthoritativeWindowId'
+      | 'getAvailableAuthoritativeWindowId'
+      | 'getOffscreenBrowserBackend'
+      | 'serveBrowserTabs'
     > &
       BrowserClientPageOpeningHost,
     private readonly targets: Pick<
@@ -47,7 +68,9 @@ export class RuntimeBrowserProfiles {
       RuntimeBrowserTabCatalog,
       'describeBrowserTab' | 'describeClientHostedBrowserTab' | 'resolveClientHostedBrowserPage'
     >,
-    private readonly creation: Pick<RuntimeBrowserTabCreation, 'browserTabCreate'>
+    private readonly creation: Pick<RuntimeBrowserTabCreation, 'browserTabCreate'>,
+    private readonly pageGuestSwaps: Pick<RuntimeBrowserScreencasts['guestSwaps'], 'replace'>,
+    private readonly close: Pick<RuntimeBrowserTabClose, 'browserTabClose'>
   ) {}
 
   async browserTabSetProfile(
@@ -55,15 +78,7 @@ export class RuntimeBrowserProfiles {
       profileId: string
     } & BrowserCommandTargetParams
   ): Promise<BrowserTabSetProfileResult> {
-    const profile =
-      browserSessionRegistry.getProfile(params.profileId) ??
-      (params.profileId === 'default' ? browserSessionRegistry.getDefaultProfile() : null)
-    if (!profile) {
-      throw new BrowserError(
-        'invalid_argument',
-        `Browser profile ${params.profileId} was not found`
-      )
-    }
+    const profile = requireBrowserProfile(params.profileId)
 
     // Resolve client pages first: server-local targets cannot resolve folder workspaces/remote guests.
     const clientPage = await this.catalog.resolveClientHostedBrowserPage(params)
@@ -85,6 +100,8 @@ export class RuntimeBrowserProfiles {
           )
         this.host.notifyHeadlessBrowserSessionTabsChanged?.(clientPage.workspaceId)
       }
+      // Deleted while the target resolved: the client would rebuild the page in a retired profile.
+      requireBrowserProfile(profile.id)
       const placement = await authority.switchClientPageProfile(
         {
           authorityRuntimeId: authority.authorityRuntimeId,
@@ -120,6 +137,28 @@ export class RuntimeBrowserProfiles {
       }
     }
 
+    const offscreen = this.host.getOffscreenBrowserBackend()
+    if (offscreen?.ownsTab(browserPageId)) {
+      // No pane remounts a server's page; viewers resubscribe once it is rebuilt in the profile.
+      // The saved profile follows inside the swap, so overlapping switches save in the order they ran.
+      await this.pageGuestSwaps.replace(browserPageId, async () => {
+        await offscreen.setTabProfile(browserPageId, profile.id)
+        const worktreeId = browserManager.getWorktreeIdForTab(browserPageId)
+        if (worktreeId) {
+          this.host.serveBrowserTabs?.profileChanged({
+            worktreeId,
+            pageId: browserPageId,
+            profileId: profile.id,
+            sessionPartition: profile.partition
+          })
+          this.host.notifyHeadlessBrowserSessionTabsChanged?.(worktreeId)
+        }
+      })
+      return { browserPageId, profileId: profile.id, profileLabel: profile.label }
+    }
+
+    // Deleted while the target resolved: the renderer would remount the page in a retired partition.
+    requireBrowserProfile(profile.id)
     const windowId = this.host.getAuthoritativeWindowId()
     const reply = await getRuntimeDesktopSurface().requestRenderer<{
       requestId: string
@@ -201,10 +240,21 @@ export class RuntimeBrowserProfiles {
   }
 
   async browserProfileDelete(params: { profileId: string }): Promise<BrowserProfileDeleteResult> {
-    return {
-      deleted: await browserSessionRegistry.deleteProfile(params.profileId),
-      profileId: params.profileId
+    const deleted = await browserSessionRegistry.deleteProfile(params.profileId)
+    if (deleted) {
+      await closeServerPagesInDeletedProfile(
+        this.host,
+        this.close,
+        this.pageGuestSwaps,
+        params.profileId
+      )
     }
+    return { deleted, profileId: params.profileId }
+  }
+
+  /** Startup: saved server tabs of an already-deleted profile close. */
+  async browserCloseServerPagesOfMissingProfiles(): Promise<void> {
+    await closeServerPagesOfMissingProfiles(this.host, this.close, this.pageGuestSwaps)
   }
 
   async browserProfileDetectBrowsers(): Promise<BrowserDetectProfilesResult> {

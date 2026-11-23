@@ -5,6 +5,7 @@ import type {
 } from '../../../shared/agent-status/contracts/agent-status-ipc-payload'
 import type { AgentInterruptInferenceRequest } from '../../../shared/agent-status/lifecycle/agent-interrupt-intent'
 import type { AgentQuestionAnsweredInferenceRequest } from '../../../shared/agent-status/lifecycle/agent-question-answered-intent'
+import type { OrcaRuntimeService } from '../../runtime/orca-runtime'
 import { agentHookServer } from '../../agent-hooks/server/agent-hook-server'
 import { getMigrationUnsupportedPtySnapshot } from '../../agent-hooks/observations/migration-unsupported-pty-state'
 import { registerAgentPaneAuthorityIpcHandlers } from './agent-pane-authority-ipc'
@@ -30,7 +31,8 @@ type AgentHookHandlerDependencies = {
 
 // Startup auto-installs hooks; renderer removal would misleadingly revert on the next launch.
 export function registerAgentHookHandlers(
-  runtime?: AgentStatusRuntimeEnrichment,
+  runtime?: AgentStatusRuntimeEnrichment &
+    Partial<Pick<OrcaRuntimeService, 'terminalWorkerRestartOffers'>>,
   dependencies: AgentHookHandlerDependencies = {}
 ): void {
   // Allow safe re-registration independently of the outer module guard.
@@ -39,6 +41,7 @@ export function registerAgentHookHandlers(
   ipcMain.removeHandler('agentStatus:inferQuestionAnswered')
   ipcMain.removeHandler('agentStatus:hasVerifiableAgentProcess')
   ipcMain.removeHandler('agentStatus:getMigrationUnsupportedSnapshot')
+  ipcMain.removeHandler('agentStatus:hasRestartOffers')
   registerAgentStatusRowTeardownIpcHandlers()
   registerAgentPaneAuthorityIpcHandlers({
     ownsPty: createAgentPaneAuthorityOwnership({
@@ -78,6 +81,11 @@ export function registerAgentHookHandlers(
   })
   ipcMain.handle('agentStatus:hasVerifiableAgentProcess', (_event, paneKey: unknown): boolean =>
     typeof paneKey === 'string' ? agentHookServer.hasVerifiableAgentProcess(paneKey) : false
+  )
+  // Each window asks once it mounts: a push sent before then, or to another window, never reached it.
+  ipcMain.handle(
+    'agentStatus:hasRestartOffers',
+    (): boolean => (runtime?.terminalWorkerRestartOffers?.list().length ?? 0) > 0
   )
   ipcMain.handle(
     'agentStatus:getMigrationUnsupportedSnapshot',

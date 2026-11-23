@@ -80,7 +80,7 @@ export const ORCHESTRATION_WORKER_LAUNCH_HANDLER: Record<string, CommandHandler>
       ...(taskTitle ? { taskTitle } : {}),
       ...(deps ? { deps } : {}),
       ...(parent ? { parent } : {}),
-      // The host checks the item is the calling bot chat's own, open one, then records it.
+      // The host checks the caller is a bot's own chat and the item is open, then records it.
       ...(item ? { origin: `bot-item:${item}` } : {}),
       ...(forQuestion ? { forQuestion } : {}),
       on: getOptionalStringFlag(flags, 'on'),
