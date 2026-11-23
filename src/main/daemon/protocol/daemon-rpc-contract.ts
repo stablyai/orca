@@ -296,8 +296,10 @@ export type GetSnapshotResult<Snapshot = TerminalSnapshot> = {
 
 export type ListSessionsResult = {
   sessions: SessionInfo[]
-  /** Daemon-owned chat agents still running (v63+); older daemons omit it. */
+  /** Daemon-owned chat agents still held, running or with output not yet collected (v63+). */
   liveRelays?: number
+  /** Of those, the agents still running; only these end if the daemon stops (v63+). */
+  runningRelays?: number
 }
 
 /** Everything that would end if this daemon stopped: live PTYs plus live chat relays. */

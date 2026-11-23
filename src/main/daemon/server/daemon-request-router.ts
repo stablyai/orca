@@ -175,7 +175,8 @@ export class DaemonRequestRouter {
       case 'listSessions':
         return {
           sessions: this.options.host.listSessions(),
-          liveRelays: this.options.relays.liveCount
+          liveRelays: this.options.relays.liveCount,
+          runningRelays: this.options.relays.runningCount
         }
       case 'shutdownIfIdle':
         return answerShutdownIfIdle(this.options, clientId, request.id)

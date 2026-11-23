@@ -331,10 +331,8 @@ export class ProviderRelaySpool {
     this.updatePressure()
   }
 
+  /** Also runs with no record indexed: a first append that failed may still have created the file. */
   private removeFile(): void {
-    if (this.fileIndex.lastSeq === 0 && !this.file) {
-      return
-    }
     // A queued write holds only acked records, so it is dropped rather than written.
     if (this.queuedWrite) {
       this.queuedWrite.chunk = ''

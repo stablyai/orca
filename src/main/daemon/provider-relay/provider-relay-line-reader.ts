@@ -252,6 +252,10 @@ export class ProviderRelayLineReader {
       // Disk trouble: the rest of this line stays in memory rather than being lost; a torn tail is cut.
       this.spillBroken = true
       await truncate(this.options.spillPath, this.spilledBytes).catch(() => {})
+      if (this.disposed) {
+        // A write that opened the file after the owner's cleanup must not leave it behind.
+        await unlink(this.options.spillPath).catch(() => {})
+      }
       this.hold(chunk)
     }
   }

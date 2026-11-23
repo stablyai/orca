@@ -12,6 +12,7 @@ import { ProviderRelayLineReader } from './provider-relay-line-reader'
 import { unlink } from 'node:fs/promises'
 import { ProviderRelayAttachment, type ProviderRelayStream } from './provider-relay-attachment'
 
+const MAX_QUEUED_INPUT_BYTES = 16 * 1024 * 1024
 const RELAY_TAKEN_OVER = 'Relay attach superseded by a detach or another attach'
 
 type RelayOptions = {
@@ -74,8 +75,16 @@ export class ProviderRelay {
       onFailed: (reason) => this.fail(reason)
     })
     stdout.on('data', (chunk: Buffer) => this.lines.push(chunk))
-    stdout.once('end', () => void this.lines.end().then(() => this.stdoutDone()))
-    stdout.on('error', () => {})
+    // A read error ends the output as surely as EOF; either way the exit can then be announced.
+    let ending = false
+    const endOutput = (): void => {
+      if (!ending) {
+        ending = true
+        void this.lines.end().then(() => this.stdoutDone())
+      }
+    }
+    stdout.once('end', endOutput)
+    stdout.on('error', endOutput)
     options.managed.child.stdin.on('error', () => {})
     options.managed.onExit((exit) => {
       this.exitStatus = {
@@ -197,9 +206,14 @@ export class ProviderRelay {
   }
 
   write(data: string): void {
+    const { stdin } = this.options.managed.child
+    // An agent that stops reading must not grow the daemon's buffer without bound; the client retries.
+    if (stdin.writableLength > MAX_QUEUED_INPUT_BYTES) {
+      throw new Error('Relay input is full')
+    }
     const answered = this.pending.observeClientData(data)
     // A request stays owed until its answer has reached the agent; a failed write keeps it.
-    this.options.managed.child.stdin.write(data, (error) => {
+    stdin.write(data, (error) => {
       if (!error && answered.length > 0) {
         this.pending.releaseAnswered(answered)
         this.updateReading()

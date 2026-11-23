@@ -89,6 +89,14 @@ export class ProviderRelayHost {
     return this.relays.size
   }
 
+  get runningCount(): number {
+    let running = 0
+    for (const relay of this.relays.values()) {
+      running += relay.live ? 1 : 0
+    }
+    return running
+  }
+
   async spawn(
     spec: ProviderRelaySpawnSpec | undefined,
     chatKey: unknown
@@ -163,8 +171,8 @@ export class ProviderRelayHost {
     relayId: unknown,
     fromSeq: unknown
   ): Promise<ProviderRelayAttachResult> {
+    // An ended relay's expiry keeps running through attaches: it lives at most a day after it ends.
     const relay = this.require(relayId)
-    this.clearExpiry(relay)
     const result = await relay.attach(clientId, stream, typeof fromSeq === 'number' ? fromSeq : 0)
     // An ended relay with nothing left to ack is done once a client has seen its outcome.
     this.removeIfFinished(relay)
@@ -222,7 +230,7 @@ export class ProviderRelayHost {
     const { appVersion, entryPath } = this.options
     return (
       (appVersion ?? undefined) !== spec.appVersion ||
-      (entryPath !== null && spec.entryPath !== undefined && entryPath !== spec.entryPath)
+      (entryPath !== null && entryPath !== spec.entryPath)
     )
   }
 
@@ -263,17 +271,13 @@ export class ProviderRelayHost {
 
   private expireWhenAbandoned(relay: ProviderRelay): void {
     // A late stdout end on an already removed relay must not pin it with a timer.
-    if (
-      !this.registered(relay) ||
-      relay.live ||
-      relay.attachedClientId !== null ||
-      this.expiries.has(relay)
-    ) {
+    // Attached or not: a client that stops acking can't keep an ended agent's output forever.
+    if (!this.registered(relay) || relay.live || this.expiries.has(relay)) {
       return
     }
     const timer = setTimeout(() => {
       this.expiries.delete(relay)
-      if (!relay.live && relay.attachedClientId === null) {
+      if (!relay.live) {
         this.remove(relay)
       }
     }, ENDED_RELAY_RETENTION_MS)

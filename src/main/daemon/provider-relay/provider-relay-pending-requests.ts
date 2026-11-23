@@ -24,10 +24,10 @@ function rpcId(value: unknown): string | null {
 /** Past these the agent's output pauses until answers come in; a held request is never dropped. */
 const MAX_PENDING_REQUESTS = 256
 const MAX_PENDING_CHARS = 8 * 1024 * 1024
-/** An initialize answer comes first; past this many agent lines nothing more is parsed for it. */
-const INITIALIZE_WINDOW_LINES = 256
 /** Codex resolves a server request elsewhere (another client, a timeout) and says so with this. */
 const RESOLVED_METHOD = 'serverRequest/resolved'
+/** JSON may escape the slash; the parsed method is the same. */
+const RESOLVED_METHOD_ESCAPED = 'serverRequest\\/resolved'
 
 /** A client line longer than this is forwarded but not classified, so it can't grow without bound. */
 const MAX_CLIENT_LINE_CHARS = 256 * 1024 * 1024
@@ -54,7 +54,6 @@ export class ProviderRelayPendingRequests {
   private readonly pending = new Map<string, ProviderRelayRecord>()
   private pendingChars = 0
   private initializeKey: string | null = null
-  private initializeLinesLeft = INITIALIZE_WINDOW_LINES
   private clientLinePartial = ''
   private skippingClientLine = false
   maxClientRequestId: number | null = null
@@ -96,12 +95,16 @@ export class ProviderRelayPendingRequests {
   observeAgentLine(record: ProviderRelayRecord): void {
     const { line } = record
     const maybeRpcRequest =
-      line.includes('"method"') && (line.includes('"id"') || line.includes(RESOLVED_METHOD))
+      line.includes('"method"') &&
+      (line.includes('"id"') ||
+        line.includes(RESOLVED_METHOD) ||
+        line.includes(RESOLVED_METHOD_ESCAPED))
     const maybeControl = line.includes('control_')
+    // Until the initialize answer is seen, any line shaped like an answer is parsed for it.
     const awaitingInitialize =
       this.initializeKey !== null &&
       this.initializeResult === null &&
-      this.initializeLinesLeft-- > 0
+      (line.includes('"result"') || line.includes('"error"'))
     if (!maybeRpcRequest && !maybeControl && !awaitingInitialize && !mayHideKey(line)) {
       return
     }

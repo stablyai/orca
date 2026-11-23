@@ -58,7 +58,11 @@ export async function cleanupDaemonForProtocol(
       .request<ListSessionsResult>('listSessions', undefined)
       .catch(() => ({ sessions: [] }))
     killedCount = sessions.sessions.filter((s) => s.isAlive).length
-    killedRelayCount = countLiveDaemonSessions(sessions) - killedCount
+    // Ended relays kept for collection have no agent left to kill.
+    killedRelayCount =
+      typeof sessions.runningRelays === 'number'
+        ? sessions.runningRelays
+        : countLiveDaemonSessions(sessions) - killedCount
 
     // One shutdown RPC avoids racing per-session kills against daemon exit.
     await client.request('shutdown', { killSessions: true }).catch(() => {
