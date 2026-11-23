@@ -159,12 +159,11 @@ export class ProviderRelaySpool {
     await this.io
   }
 
+  /** Pause at the cap, resume below half of it, so acks near the cap don't flap the agent's stdout. */
   private updatePressure(): void {
-    const paused =
-      !this.disposed &&
-      (this.mode === 'detached'
-        ? this.fileBytes >= this.fileCap
-        : this.memoryBytes >= this.memoryCap)
+    const [held, cap] =
+      this.mode === 'detached' ? [this.fileBytes, this.fileCap] : [this.memoryBytes, this.memoryCap]
+    const paused = !this.disposed && (this.paused ? held >= cap / 2 : held >= cap)
     if (paused !== this.paused) {
       this.paused = paused
       this.options.onPressureChanged(paused)
