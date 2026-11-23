@@ -145,7 +145,8 @@ export function buildDashboardSnapshotCard(args: {
         terminalLayoutsByTabId[row.tab.id],
         paneTitlesByTabId[row.tab.id],
         state.chatNames,
-        state.unifiedTabsByWorktree
+        state.unifiedTabsByWorktree,
+        state.agentStatusByPaneKey
       )
     ),
     ...(terminalInput ? { terminalInput } : {})

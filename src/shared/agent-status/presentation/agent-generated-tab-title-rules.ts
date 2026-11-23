@@ -60,7 +60,11 @@ export function statusDerivesGeneratedTitle(
   // Why: history is capped, so a producer far past its first prompt falls back to its own name rather than a sibling's.
   return (
     deriveGeneratedTabTitle(generatedTitleSourceText(entry)) === title ||
-    entry.stateHistory.some((past) => deriveGeneratedTabTitle(past.prompt) === title)
+    entry.stateHistory.some(
+      (past) =>
+        deriveGeneratedTabTitle(generatedTitleSourceText({ ...entry, prompt: past.prompt })) ===
+        title
+    )
   )
 }
 

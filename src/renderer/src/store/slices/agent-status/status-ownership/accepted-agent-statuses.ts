@@ -112,6 +112,15 @@ export class AcceptedAgentStatuses implements ReadonlyMap<string, AgentStatusEnt
     }
   }
 
+  hasOtherKeyInTab(tabId: string, key: string): boolean {
+    for (const other of this.keysForTab(tabId)) {
+      if (other !== key) {
+        return true
+      }
+    }
+    return false
+  }
+
   pendingKey(key: string): boolean {
     return this.pending?.has(key) ?? false
   }

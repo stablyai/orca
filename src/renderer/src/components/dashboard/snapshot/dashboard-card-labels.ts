@@ -36,7 +36,8 @@ export function rowConversationName(
   layout: TerminalLayoutSnapshot | undefined,
   paneTitles: Record<number, string> | undefined,
   names: StructuredChatTabNames,
-  tabs: AppState['unifiedTabsByWorktree'] | undefined
+  tabs: AppState['unifiedTabsByWorktree'] | undefined,
+  agentStatuses: AppState['agentStatusByPaneKey']
 ): string | undefined {
   const parentPaneKey = row.entry.orchestration?.parentPaneKey
   // Why: a child row rendered on its parent's tab does not own that tab's name.
@@ -57,6 +58,8 @@ export function rowConversationName(
     paneTitles,
     parsePaneKey(row.paneKey)?.leafId
   )
+  const sharesTab =
+    paneLiveTitle !== undefined && agentStatuses.hasOtherKeyInTab(row.tab.id, row.paneKey)
   return (
     getAgentRowConversationName(
       row.tab,
@@ -64,7 +67,7 @@ export function rowConversationName(
       generatedTitlesEnabled,
       paneLiveTitle,
       row.entry.providerSession?.id,
-      row.entry
+      sharesTab ? row.entry : undefined
     ) ?? undefined
   )
 }

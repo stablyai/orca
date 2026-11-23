@@ -110,15 +110,13 @@ export function getAgentRowConversationName(
   // Tab live title names the focused pane; split callers supply their own title/null. Undefined retains single-pane behavior; tab-owned names still apply.
   paneLiveTitle?: string | null,
   providerSessionId?: string,
-  // A split pane shows the generated title only when its own prompts derive it.
+  // Passed only when another agent shares the tab: the generated title then shows only on the pane whose prompts derive it.
   paneStatus?: Parameters<typeof statusDerivesGeneratedTitle>[0]
 ): string | null {
   const liveTitle =
     paneLiveTitle === undefined ? (tab.title?.trim() ?? '') : (paneLiveTitle?.trim() ?? '')
   const siblingGeneratedTitle =
-    paneLiveTitle !== undefined &&
-    paneStatus !== undefined &&
-    !statusDerivesGeneratedTitle(paneStatus, tab.generatedTitle)
+    paneStatus !== undefined && !statusDerivesGeneratedTitle(paneStatus, tab.generatedTitle)
   const named = resolveTabNameSource(
     {
       customTitle: tab.customTitle,
