@@ -2666,7 +2666,8 @@
       "stateIdleCount_one": "{{value0}} stopped",
       "stateIdleCount_other": "{{value0}} stopped",
       "stateUnverifiableCount_one": "{{value0}} with status unavailable",
-      "stateUnverifiableCount_other": "{{value0}} with status unavailable"
+      "stateUnverifiableCount_other": "{{value0}} with status unavailable",
+      "openAgent": "Open {{value0}}"
     },
     "bulkCloseSheetActions": {
       "closeOtherTabs": "Close Other Tabs"
@@ -3748,7 +3749,8 @@
       "started_other": "Kicked off {{count}} subagents",
       "ran_one": "Ran {{count}} subagent",
       "ran_other": "Ran {{count}} subagents",
-      "tokens": "{{value0}} tokens"
+      "tokens": "{{value0}} tokens",
+      "openAgent": "Open {{value0}}"
     },
     "textAttachmentPreview": {
       "unreadableReply": "Unreadable attachment reply. Try again.",
@@ -4217,6 +4219,16 @@
     "eventRow": {
       "running": "Running",
       "failed": "Failed"
+    },
+    "subagentView": {
+      "promptFromMain": "Prompt from main agent",
+      "noSteps": "No steps yet",
+      "beforeClear": "This subagent ran before the chat was cleared",
+      "stoppedBeforeReply": "Stopped before replying",
+      "noReply": "Ended without a reply",
+      "backTo": "Back to {{value0}}",
+      "unnamed": "Subagent",
+      "mainAgent": "Main agent"
     },
     "workerApproval": {
       "title": "{{worker}} · {{title}}",

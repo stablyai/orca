@@ -10,6 +10,8 @@ export type MobileNativeChatRowOverlays = {
   openActions: (message: NativeChatMessage) => void
   /** Confirms, then rewinds the chat to this user message; explains instead when it can't now. */
   openRewind: (itemId: string) => void
+  /** Draws a subagent's own view over the chat; absent where nothing can show one. */
+  openSubagent?: (agentId: string) => void
   /** Reads host image paths the phone cannot load itself. */
   imageSource?: MobileNativeChatImageSource
 }

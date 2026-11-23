@@ -1,5 +1,8 @@
 import { slackPeopleOf } from '../../../../src/shared/connectors/slack-mention-tokens'
-import { MobileQueuedMessageComposerContext } from './input/queued-messages/mobile-queued-message-composer-context'
+import {
+  MobileQueuedMessageComposerContext,
+  useMobileQueuedMessageComposer
+} from './input/queued-messages/mobile-queued-message-composer-context'
 import { MobileMarkdownSlackPeopleContext } from '../../components/markdown/parsing/mobile-markdown-mentions'
 import { Activity, useCallback, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { StyleSheet, View } from 'react-native'
@@ -29,6 +32,7 @@ import type { MobileNativeChatHostOutage } from './status/mobile-native-chat-hos
 import { MobileMarkdownLinksContext } from '../../components/markdown/links/mobile-markdown-links-context'
 import type { ConnectionState } from '../../transport/connection/connection-state'
 import { useMobileTranslation } from '../../i18n/use-mobile-translation'
+import { useMobileNativeChatSubagents } from './subagents/use-mobile-native-chat-subagents'
 
 type Props = {
   controller: MobileNativeChatController
@@ -194,42 +198,18 @@ function MobileNativeChatOverlayContent({
     connState,
     onOpenFile
   })
-  const queuedComposerContext = useMemo(
-    () => ({
-      agent,
-      structured: structuredComposer ?? null,
-      interactionModeSupported: controller.nativeChatSessionOptions?.controller.snapshot.some(
-        (entry) => entry.id === 'interactionMode'
-      ),
-      skillDiscovery: controller.nativeChatSkills,
-      onNeedSkills: controller.loadNativeChatSkills,
-      ...mentionFiles,
-      onError: (message: string) => controller.reportQueuedEditError?.(message),
-      onMicPress,
-      micActive,
-      micStarting,
-      micProcessing,
-      dictationMode,
-      onMicPressIn,
-      onMicPressOut
-    }),
-    [
-      agent,
-      structuredComposer,
-      controller.nativeChatSessionOptions,
-      controller.nativeChatSkills,
-      controller.loadNativeChatSkills,
-      mentionFiles,
-      controller.reportQueuedEditError,
-      onMicPress,
-      micActive,
-      micStarting,
-      micProcessing,
-      dictationMode,
-      onMicPressIn,
-      onMicPressOut
-    ]
-  )
+  const queuedComposerContext = useMobileQueuedMessageComposer(controller, {
+    agent,
+    structured: structuredComposer ?? null,
+    ...mentionFiles,
+    onMicPress,
+    micActive,
+    micStarting,
+    micProcessing,
+    dictationMode,
+    onMicPressIn,
+    onMicPressOut
+  })
   // Why a ref: rows read this through context, and the route's callback changes every render.
   const runInTerminalRef = useRef(onRunInTerminal)
   useLayoutEffect(() => {
@@ -271,6 +251,13 @@ function MobileNativeChatOverlayContent({
     ]
   )
   const continueFailed = sendErrorMessage === null && continuation?.failed === true
+  const subagents = useMobileNativeChatSubagents({
+    scopeKey: `${sendSurfaceId}\0${sessionId}`,
+    messages: fullContent.messages,
+    folded,
+    agent,
+    source: controller.nativeChatSubagents
+  })
   const chat = (
     <MobileNativeChatRowOverlaysHost
       conversation={{ surfaceId: sendSurfaceId, sessionId }}
@@ -278,6 +265,7 @@ function MobileNativeChatOverlayContent({
       onOpenUrlInOrca={onOpenUrlInOrca}
       linkOpenMode={linkOpenMode}
       rewind={controller.nativeChatRewind}
+      openSubagent={subagents.open}
     >
       <MobileMarkdownLinksContext.Provider value={markdownLinks}>
         <MobileQueuedMessageComposerContext.Provider value={queuedComposerContext}>
@@ -388,7 +376,9 @@ function MobileNativeChatOverlayContent({
                       contextUsage={controller.nativeChatContextUsage}
                       structuredComposer={structuredComposer}
                       keyboardInset={keyboardInset}
+                      covered={subagents.screen !== null}
                     />
+                    {subagents.screen}
                   </MobileNativeChatNoticeContext.Provider>
                 </MobileNativeChatReplyRevealsContext.Provider>
               </MobileNativeChatRootItemSourceContext.Provider>
