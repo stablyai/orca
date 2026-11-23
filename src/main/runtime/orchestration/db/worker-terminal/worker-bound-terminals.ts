@@ -91,6 +91,7 @@ export function paneAutoCloseState(
   if (!bound) {
     return own
   }
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the projection selects exactly pane_key.
   const worker = db.db
     .prepare(
       `SELECT pane_key FROM worker_terminal_resources

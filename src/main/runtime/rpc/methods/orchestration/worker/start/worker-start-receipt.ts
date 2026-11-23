@@ -109,6 +109,7 @@ function failedWorkerStartReceipt(args: WorkerStartFailureArgs): unknown {
       runId: args.runId,
       dispatchId: args.dispatchId,
       setupReceipt: args.setup,
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: this host wrote these effects from WorkerEffect[].
       effects: JSON.parse(worker.effects) as WorkerEffect[]
     })
   }

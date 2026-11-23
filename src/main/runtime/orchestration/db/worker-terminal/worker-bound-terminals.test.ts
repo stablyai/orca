@@ -8,7 +8,10 @@ import '../contract-constants'
 import '../messages/mailbox-routing-page'
 import '../dispatch-row-writer'
 import '../attempt-outcome-projection'
-import { createOrcaSessionId } from '../../../../../shared/agent-session/identity/orca-session-address'
+import {
+  createOrcaSessionId,
+  type OrcaSessionId
+} from '../../../../../shared/agent-session/identity/orca-session-address'
 import { bindWorkerTerminal, keepPaneOpen, paneAutoCloseState } from './worker-bound-terminals'
 import { closeWorkerBoundTerminals } from '../../../rpc/methods/orchestration/worker/release/worker-bound-terminal-close'
 import { workerKeepOpenByDefault } from '../../../rpc/methods/orchestration/worker/start/worker-keep-open-default'
@@ -35,10 +38,14 @@ describe('terminals bound to a worker', () => {
     rmSync(directory, { recursive: true, force: true })
   })
 
-  function startWorker(creatorChat: string, setupState = 'running', creatorDispatchId?: string) {
+  function startWorker(
+    creatorChat: OrcaSessionId,
+    setupState = 'running',
+    creatorDispatchId?: string
+  ) {
     const task = db.createTask({ runId, spec: 'work' })
     const { dispatch } = db.createStartingWorkerDispatch({
-      creator: { kind: 'session', orcaSessionId: creatorChat as never },
+      creator: { kind: 'session', orcaSessionId: creatorChat },
       maxDepth: Number.MAX_SAFE_INTEGER,
       taskId: task.id,
       startOptions: {}
@@ -86,6 +93,7 @@ describe('terminals bound to a worker', () => {
         closeTerminal: async (handle: string) => {
           closed.push(handle)
           panes.delete(handle)
+          // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the code under test never reads the close receipt.
           return {} as never
         }
       }
