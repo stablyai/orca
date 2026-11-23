@@ -3,6 +3,7 @@
 export const journalCheckpointWorkerSource = `
 const { parentPort, workerData } = require('node:worker_threads');
 const { DatabaseSync } = require('node:sqlite');
+const { statSync } = require('node:fs');
 const db = new DatabaseSync(workerData.filename);
 let retry;
 try {
@@ -16,7 +17,16 @@ try {
 }
 const frames = db.prepare('PRAGMA wal_checkpoint(NOOP)');
 const passive = db.prepare('PRAGMA wal_checkpoint(PASSIVE)');
-const behind = (state) => state.log - state.checkpointed >= workerData.frames;
+const oversized = () => {
+  try {
+    return statSync(workerData.filename + '-wal').size > workerData.sizeLimit;
+  } catch {
+    return false;
+  }
+};
+// An oversized WAL is copied even with few frames waiting, so its newest commits still reach disk.
+const behind = (state) =>
+  state.log - state.checkpointed >= workerData.frames || (state.log > state.checkpointed && oversized());
 const check = (force, id) => {
   clearTimeout(retry);
   const before = frames.get();

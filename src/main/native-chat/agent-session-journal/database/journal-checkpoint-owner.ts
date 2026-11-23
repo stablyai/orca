@@ -3,6 +3,7 @@ import { spawnWorkerThread } from '../../../worker-threads/worker-thread-spawn'
 import type Database from '../../../sqlite/sync-database'
 import type { WorkerRequestTransport } from '../../../worker-threads/worker-thread-transport'
 import { journalCheckpointWorkerSource } from './journal-checkpoint-worker-source'
+import { JOURNAL_SIZE_LIMIT_BYTES } from './journal-database'
 import {
   JOURNAL_WAL_BACKPRESSURE_FRAMES,
   JournalWalWaiters,
@@ -25,6 +26,8 @@ const STOP_TIMEOUT_MS = 5000
 export class JournalCheckpointOwner {
   private worker: WorkerRequestTransport | undefined
   private asking = false
+  /** The writer's own checkpoint failed with no worker answering, e.g. on a full disk. */
+  private checkpointFailed = false
   private writerCheckpoints: boolean | undefined
   private requestId = 0
   private askedAt = 0
@@ -120,7 +123,8 @@ export class JournalCheckpointOwner {
 
   private gated(urgent: boolean): boolean {
     const { unknown, log } = this
-    const stopped = this.stopped || this.stalled()
+    // A failing checkpoint opens admission, as on main: writes then reach SQLite and get its error.
+    const stopped = this.stopped || this.stalled() || this.checkpointFailed
     return journalWalGated({ stopped, unknown, log }, urgent)
   }
 
@@ -175,8 +179,10 @@ export class JournalCheckpointOwner {
         this.ask(true)
       } else {
         this.passive!.get()
+        this.checkpointFailed = false
       }
     } catch (error) {
+      this.checkpointFailed = !this.worker
       this.warn(error)
     }
     this.resetIfCopied()
@@ -253,7 +259,8 @@ export class JournalCheckpointOwner {
               filename: this.filename,
               frames: CHECKPOINT_FRAMES,
               retryMs: CHECKPOINT_RETRY_MS,
-              pinnedRetryMs: CHECKPOINT_PINNED_RETRY_MS
+              pinnedRetryMs: CHECKPOINT_PINNED_RETRY_MS,
+              sizeLimit: JOURNAL_SIZE_LIMIT_BYTES
             }
           })
     } catch (error) {
@@ -273,6 +280,7 @@ export class JournalCheckpointOwner {
         return
       }
       if (message.ran === true) {
+        this.checkpointFailed = false
         this.restartDelayMs = this.options.restartDelayMs ?? RESTART_DELAY_MS
       }
       if (message.id === this.requestId && this.asking) {
