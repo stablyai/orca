@@ -20,17 +20,5 @@ export function hearsTurnCompletionEdge(
       return subscriber.includePrompts === true
     case 'held-aware':
       return subscriber.includeHeld === true
-    case 'held-unaware':
-      return subscriber.includeHeld !== true
   }
-}
-
-/** A held end goes only to those who hear held ends, and not to them again once announced; a clean
- *  end that restates a prompt goes only to clients that don't take prompts. */
-export function completionAudience(end: {
-  held?: boolean
-  restatesPrompt: boolean
-  told?: boolean
-}): TurnCompletionAudience {
-  return end.held ? 'held-aware' : end.restatesPrompt ? 'legacy' : end.told ? 'held-unaware' : 'all'
 }

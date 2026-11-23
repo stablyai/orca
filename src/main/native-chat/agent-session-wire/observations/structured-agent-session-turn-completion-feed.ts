@@ -2,7 +2,6 @@
 // Completion and prompt events are live-only; late subscribers receive no replay.
 
 import { chatTurnRunning, type ChatStateReader } from './chat-turn-running'
-import { structuredAgentSessionAwaitsAnswer } from '../../../../shared/agent-session/view/structured-agent-session-async-questions'
 import type { AgentSessionRecord } from '../../../../shared/agent-session/lifecycle/agent-session-record'
 import type {
   AgentSessionTurnCompletion,
@@ -12,21 +11,14 @@ import type {
   AgentSessionAttentionEdge,
   StructuredAttentionState
 } from '../../../../shared/agent-session/view/agent-session-attention'
-import {
-  foldAgentLeadStatus,
-  heldTurnCountsAsFinished
-} from '../../../../shared/agent-status/lifecycle/agent-lead-status-fold'
-import {
-  agentChildWorkLiveness,
-  type AgentChildWorkLivenessCandidate
-} from '../../../../shared/agent-status/child-work/agent-status-child-work-liveness'
+import type { AgentChildWorkLivenessCandidate } from '../../../../shared/agent-status/child-work/agent-status-child-work-liveness'
 import type { StructuredAgentSessionLatestRequest } from '../../../../shared/agent-session/requests/structured-agent-session-latest-request'
 import type { AgentSessionJournal } from '../../agent-session-journal/journal-store'
 import {
-  completionAudience,
   hearsTurnCompletionEdge,
   type TurnCompletionAudience
 } from './structured-agent-session-turn-completion-audience'
+import { structuredAgentSessionTurnHold } from './structured-agent-session-turn-hold'
 import type {
   StructuredAgentSessionStatusState,
   StructuredAgentSessionJournalProjection
@@ -74,8 +66,8 @@ type RequestMark = Pick<StructuredAgentSessionLatestRequest, 'kind' | 'id'>
 /** Missing baseline makes first observation silent; settled/prompts track already-accounted edges. */
 type SessionBaseline = CompletionFeedCursor & {
   settled: RequestMark | null
-  // The end live work holds, already told to subscribers that hear held ends.
-  held: RequestMark | null
+  // The end running workers hold, and the subscribers already told it.
+  held: (RequestMark & { heard: Set<string> }) | null
   prompts: ReadonlySet<string>
 }
 
@@ -197,11 +189,12 @@ export class StructuredAgentSessionTurnCompletionFeed {
     baseline.prompts = prompts
     const settled = this.settledCompletion(sessionId, session, state, baseline)
     if (settled) {
-      const { completion, held, told } = settled
+      const { completion, held, heard } = settled
       completion.journalCursor = cursor
       const restatesPrompt = completion.awaitingUser === true && completion.outcome === 'success'
-      const audience = completionAudience({ held, restatesPrompt, told })
-      this.broadcast({ type: 'completion', completion }, audience)
+      const audience = held ? 'held-aware' : restatesPrompt ? 'legacy' : 'all'
+      // A held end goes only to those who hear held ends, and not to them again once announced.
+      this.broadcast({ type: 'completion', completion }, audience, held ?? heard)
       if (!held && !restatesPrompt) {
         return
       }
@@ -243,7 +236,11 @@ export class StructuredAgentSessionTurnCompletionFeed {
     session: CompletionFeedSession,
     state: StructuredAgentSessionStatusState,
     baseline: SessionBaseline
-  ): { completion: AgentSessionTurnCompletion; held?: true; told?: true } | null {
+  ): {
+    completion: AgentSessionTurnCompletion
+    held?: Set<string>
+    heard?: Set<string>
+  } | null {
     const request = state.latestRequest
     if (request?.turnState === 'running') {
       // Clear on running so each running-to-settled transition can fire, even for a reused ID.
@@ -260,15 +257,22 @@ export class StructuredAgentSessionTurnCompletionFeed {
     ) {
       return null
     }
-    // Live work defers this end; those who hear held ends hear it now, once.
-    if (this.heldByLiveWork(sessionId, state, request)) {
-      if (sameMark(baseline.held, request)) {
+    // Live work defers this end. One running workers hold is news now to those who hear held ends:
+    // its words are sent with it. A continuing goal's is not, as its later turns finish the answer.
+    const hold = structuredAgentSessionTurnHold(
+      state,
+      request,
+      this.deps.readChildWork(sessionId),
+      this.deps.readAsyncQuestionsSkippedThrough?.(sessionId)
+    )
+    if (hold) {
+      if (hold === 'goal' || sameMark(baseline.held, request)) {
         return null
       }
-      baseline.held = { kind: request.kind, id: request.id }
+      baseline.held = { kind: request.kind, id: request.id, heard: new Set() }
       return {
         completion: this.completionOf(sessionId, session, state, request.id, 'success'),
-        held: true
+        held: baseline.held.heard
       }
     }
     baseline.settled = settledMark(request)
@@ -278,7 +282,7 @@ export class StructuredAgentSessionTurnCompletionFeed {
     }
     return {
       completion: this.completionOf(sessionId, session, state, request.id, request.outcome),
-      ...(sameMark(baseline.held, request) ? { told: true as const } : {})
+      ...(baseline.held && sameMark(baseline.held, request) ? { heard: baseline.held.heard } : {})
     }
   }
 
@@ -302,39 +306,22 @@ export class StructuredAgentSessionTurnCompletionFeed {
     }
   }
 
-  /** A successful turn is finished only when the combined row would be done; a held request stays unaccounted so a later observe can announce it. */
-  private heldByLiveWork(
-    sessionId: string,
-    state: StructuredAgentSessionStatusState,
-    request: StructuredAgentSessionLatestRequest
-  ): boolean {
-    if (request.outcome !== 'success' || state.summary.status === 'attention') {
-      return false
-    }
-    // An open async question pauses the goal on the user, so it is news now.
-    if (
-      state.goalContinues &&
-      !structuredAgentSessionAwaitsAnswer(
-        state.summary.openAsyncQuestion,
-        this.deps.readAsyncQuestionsSkippedThrough?.(sessionId)
-      )
-    ) {
-      return true
-    }
-    const held = foldAgentLeadStatus({
-      leadState: 'done',
-      childWorkLiveness: agentChildWorkLiveness(this.deps.readChildWork(sessionId))
-    })
-    return (
-      held.stateName !== 'done' &&
-      !heldTurnCountsAsFinished(held, request.outcome, request.selfStarted === true)
-    )
-  }
-
-  private broadcast(event: AgentSessionAttentionEdge, audience: TurnCompletionAudience): void {
+  /** `heard`: for a held end, records who hears it; for any other, those who already did. */
+  private broadcast(
+    event: AgentSessionAttentionEdge,
+    audience: TurnCompletionAudience,
+    heard?: Set<string>
+  ): void {
+    const recording = audience === 'held-aware'
     for (const subscriber of this.subscribers.values()) {
-      if (!hearsTurnCompletionEdge(subscriber, audience)) {
+      if (
+        !hearsTurnCompletionEdge(subscriber, audience) ||
+        (!recording && heard?.has(subscriber.id))
+      ) {
         continue
+      }
+      if (recording) {
+        heard?.add(subscriber.id)
       }
       try {
         subscriber.emit(event)

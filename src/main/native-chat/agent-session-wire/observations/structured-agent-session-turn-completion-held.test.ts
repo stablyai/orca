@@ -6,7 +6,11 @@ import { StructuredAgentSessionTurnCompletionFeed } from './structured-agent-ses
 
 const location = { kind: 'local' } as const
 
-function turn(id: string, running: boolean): StructuredAgentSessionStatusState {
+function turn(
+  id: string,
+  running: boolean,
+  goalContinues = false
+): StructuredAgentSessionStatusState {
   const state = {
     latestRequest: {
       kind: 'turn',
@@ -16,6 +20,7 @@ function turn(id: string, running: boolean): StructuredAgentSessionStatusState {
       settledAt: running ? undefined : 1
     },
     owesWork: false,
+    ...(goalContinues ? { goalContinues } : {}),
     pendingPromptIds: [],
     summary: { status: running ? 'working' : 'idle' }
   }
@@ -32,10 +37,10 @@ it('tells a held answer at its own end, once, to those who hear held ends, befor
     readStatusState: async () => null,
     readChildWork: () => workers
   })
-  const ends = (held: boolean) => {
+  const ends = (held: boolean, id = held ? 'held' : 'plain') => {
     const seen: string[] = []
     feed.subscribe({
-      id: held ? 'held' : 'plain',
+      id,
       includePrompts: true,
       ...(held ? { includeHeld: true } : {}),
       emit: (event: AgentSessionTurnCompletionEvent) => {
@@ -66,5 +71,26 @@ it('tells a held answer at its own end, once, to those who hear held ends, befor
   // The worker finishes: everyone hears the newest end, those who heard it held don't hear it twice.
   workers = []
   observe(turn('mail', false))
-  expect({ heard, plain }).toEqual({ heard: ['answer', 'mail'], plain: ['mail'] })
+  expect({ heard: [...heard], plain: [...plain] }).toEqual({
+    heard: ['answer', 'mail'],
+    plain: ['mail']
+  })
+
+  // A continuing goal's turns are not news until the goal ends: its later turns finish the answer.
+  observe(turn('goal', true))
+  observe(turn('goal', false, true))
+  expect(heard.at(-1)).toBe('mail')
+
+  // One who wasn't listening when an end was held still hears that end once the workers finish.
+  observe(turn('late', true))
+  workers = [{ kind: 'agent', state: 'working' }]
+  observe(turn('late', false))
+  const late = ends(true, 'late-listener')
+  workers = []
+  observe(turn('late', false))
+  expect({ heard: heard.slice(-1), plain: plain.slice(-1), late }).toEqual({
+    heard: ['late'],
+    plain: ['late'],
+    late: ['late']
+  })
 })
