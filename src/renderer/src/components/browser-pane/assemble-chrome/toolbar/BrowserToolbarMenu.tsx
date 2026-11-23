@@ -26,6 +26,7 @@ import { useTranslate } from '@/i18n/use-translate'
 import type { BrowserChromeOverflowMenuProps } from './browser-chrome-toolbar'
 import type { BrowserPageSiteDisplaySource } from './browser-page-site-display-source'
 import { browserCookieImportFailureText } from '@/lib/browser/cookies/browser-cookie-import-error-copy'
+import { browserPageCookieRefreshAction } from '@/lib/browser/cookies/browser-cookie-refresh'
 import { useBrowserPageCookieImport } from '../profile-routing/use-browser-page-cookie-import'
 import { switchServerBrowserPageProfile } from '../profile-routing/server-browser-page-profile-switch'
 import { errorMessage } from '../../../../../../shared/errors/error-message'
@@ -315,6 +316,8 @@ export function BrowserToolbarMenu({
     )
     if (result.ok) {
       const browser = detectedBrowsers.find((b) => b.family === browserFamily)
+      const profileName =
+        browser?.profiles.find((p) => p.directory === browserProfile)?.name ?? browserProfile
       emitBrowserCookieImportToast(
         result.summary,
         browserProfile
@@ -324,7 +327,7 @@ export function BrowserToolbarMenu({
               {
                 value0: result.summary.importedCookies,
                 value1: browser?.label ?? browserFamily,
-                value2: browserProfile
+                value2: profileName
               }
             )
           : t(
@@ -389,7 +392,11 @@ export function BrowserToolbarMenu({
                 pageRoute,
                 onImportFromBrowser: (browserFamily, browserProfile) =>
                   void handleImportFromBrowser(browserFamily, browserProfile),
-                onImportFromFile: () => void handleImportFromFile()
+                onImportFromFile: () => void handleImportFromFile(),
+                refresh: browserPageCookieRefreshAction(
+                  allProfiles.find((p) => p.id === effectiveProfileId),
+                  pageRoute
+                )
               }
             : null
         }

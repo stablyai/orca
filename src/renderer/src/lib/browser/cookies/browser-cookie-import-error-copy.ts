@@ -29,6 +29,8 @@ const COPY: Record<BrowserCookieImportFailureCode, (values: Values) => string | 
           { profile }
         )
   },
+  savedSourceUnavailable: () =>
+    translate('browser.cookieImport.errors.savedSourceUnavailable', EN.savedSourceUnavailable),
   fileUnreadable: () => translate('browser.cookieImport.errors.fileUnreadable', EN.fileUnreadable),
   fileInvalidJson: () =>
     translate('browser.cookieImport.errors.fileInvalidJson', EN.fileInvalidJson),

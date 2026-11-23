@@ -1,5 +1,5 @@
 import { z } from 'zod'
-import { requiredString } from '../rpc-param-primitives'
+import { OptionalString, requiredString } from '../rpc-param-primitives'
 
 export const ProfileCreate = z
   .object({
@@ -24,4 +24,12 @@ export const BrowserIdentitySet = z.object({
   mode: z.enum(['clean', 'native']),
   // Opt-in overwrite of corrupt or newer-version data; the host backs the old bytes up first.
   reset: z.boolean().optional()
+})
+
+export const ProfileImportFromBrowser = z.object({
+  profileId: requiredString('Missing required --profile'),
+  browserFamily: requiredString('Missing required --browser-family'),
+  browserProfile: OptionalString,
+  supportsPartitionSkippedCookies: z.literal(true).optional(),
+  refreshSavedSource: z.literal(true).optional()
 })

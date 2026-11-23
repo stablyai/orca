@@ -107,7 +107,7 @@ export function createBrowserApi(): NonNullable<Partial<PreloadApi>['browser']> 
     sessionDetectBrowsers: () => Promise.resolve([]),
     sessionDetectBrowsersForClientHost: () => Promise.resolve(null),
     sessionImportFromBrowserForClientHost: () => Promise.resolve(null),
-    sessionClientRouteImportSources: () => Promise.resolve({}),
+    sessionClientRouteImportSources: () => Promise.resolve(null),
     sessionImportFromBrowser: () =>
       Promise.resolve({
         ok: false,

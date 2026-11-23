@@ -268,7 +268,11 @@ import {
   GrabSetMode,
   GrabViewportBridge
 } from './browser/browser-grab-params'
-import { BrowserIdentitySet, ProfileCreate } from './browser/browser-identity-params'
+import {
+  BrowserIdentitySet,
+  ProfileCreate,
+  ProfileImportFromBrowser
+} from './browser/browser-identity-params'
 import { Screenshot, Snapshot } from './browser/browser-observation-params'
 import {
   Check,
@@ -298,7 +302,6 @@ import {
   MouseXY,
   ProfileClearGoogleCookies,
   ProfileDelete,
-  ProfileImportFromBrowser,
   Scroll,
   Select,
   SelectorPath,

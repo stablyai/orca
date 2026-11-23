@@ -1,9 +1,11 @@
 import { defineMethod } from '../../core'
-import { ProfileCreate } from '../../../../../shared/rpc-contract/browser/browser-identity-params'
+import {
+  ProfileCreate,
+  ProfileImportFromBrowser
+} from '../../../../../shared/rpc-contract/browser/browser-identity-params'
 import {
   ProfileDelete,
   ProfileClearGoogleCookies,
-  ProfileImportFromBrowser,
   TabProfileClone,
   TabSetProfile,
   TabShow

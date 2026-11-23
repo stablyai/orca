@@ -528,6 +528,7 @@
     },
     "cookieImport": {
       "errors": {
+        "savedSourceUnavailable": "Сохранённый источник импорта больше недоступен. Выберите источник в разделе «Импортировать файлы cookie».",
         "notAuthorized": "Нет доступа",
         "profileNotFound": "Профиль сессии не найден.",
         "invalidBrowserProfile": "Недопустимое имя профиля браузера.",
@@ -577,6 +578,11 @@
       "sshPage": {
         "stored": "Сохранено в браузере для {{host}}.",
         "googleCookiesSkipped": "Файлы cookie Google не импортированы. Откройте страницу, которая работает через {{host}}, и войдите в Google."
+      },
+      "refresh": {
+        "action": "Обновить из {{value0}}",
+        "success": "Обновлено файлов cookie из {{value1}} в {{value2}}: {{value0}}.",
+        "sourceUnavailable": "{{value0}} больше недоступен. Выберите другой источник в разделе «Импортировать файлы cookie»."
       }
     },
     "passwords": {

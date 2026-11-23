@@ -1,4 +1,4 @@
-import { Import } from 'lucide-react'
+import { Import, RefreshCw } from 'lucide-react'
 import {
   DropdownMenuItem,
   DropdownMenuPortal,
@@ -30,6 +30,8 @@ export type BrowserToolbarImportCookiesSubProps = {
   pageRoute: BrowserPageCookieImportRoute
   onImportFromBrowser: (browserFamily: string, browserProfile?: string) => void
   onImportFromFile: () => void
+  /** Repeats the profile's last browser import; null when it has no replayable source. */
+  refresh: { label: string; onRefresh: () => void } | null
 }
 
 /** Import Cookies › sits at the top of the ⋯ menu: without logins the browser is of little use. */
@@ -41,7 +43,8 @@ export function BrowserToolbarImportCookiesSub({
   browserSessionImportState,
   pageRoute,
   onImportFromBrowser,
-  onImportFromFile
+  onImportFromFile,
+  refresh
 }: BrowserToolbarImportCookiesSubProps): React.JSX.Element {
   const t = useTranslate()
   const fromBrowserLabel = (label: string): string =>
@@ -69,6 +72,20 @@ export function BrowserToolbarImportCookiesSub({
       </DropdownMenuSubTrigger>
       <DropdownMenuPortal>
         <DropdownMenuSubContent data-browser-page-menu-id={browserPageId}>
+          {refresh ? (
+            <>
+              <DropdownMenuItem onSelect={refresh.onRefresh}>
+                <RefreshCw className="size-3.5" />
+                {/* Wraps instead of truncating: the profile name is what tells Work from Personal. */}
+                <span>
+                  {t('browser.cookieImport.refresh.action', 'Refresh from {{value0}}', {
+                    value0: refresh.label
+                  })}
+                </span>
+              </DropdownMenuItem>
+              <DropdownMenuSeparator />
+            </>
+          ) : null}
           <BrowserCookieImportMachineNotice pageRoute={pageRoute} />
           {detectedBrowsers.map((browser) =>
             browser.profiles.length > 1 ? (

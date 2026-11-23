@@ -148,6 +148,8 @@ export type BrowserSessionProfileSource = {
     | 'vivaldi'
     | 'manual'
   profileName?: string
+  /** Source browser's profile folder, so Refresh re-reads the same profile; absent on older imports. */
+  profileDirectory?: string
   importedAt: number
 }
 
@@ -196,6 +198,14 @@ export type BrowserClientHostCookieImportArgs = {
   profile?: { id: string; label: string; scope: BrowserSessionProfileScope }
   /** Fills that page's own jar, which differs from the profile's when the page browses through another host. */
   browserPageId?: string
+}
+
+export type BrowserCookieImportFromBrowserRequest = {
+  profileId: string
+  browserFamily: string
+  browserProfile?: string
+  /** Refuse unless this matches the source this machine last imported from. */
+  refreshSavedSource?: true
 }
 
 export type BrowserCookieImportResult =

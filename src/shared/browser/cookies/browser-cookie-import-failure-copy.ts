@@ -5,6 +5,8 @@ export const BROWSER_COOKIE_IMPORT_FAILURE_COPY = {
   invalidBrowserProfile: 'Invalid browser profile name.',
   browserNotFound: 'Browser not found on this system.',
   browserProfileDatabaseMissing: 'No cookies database found for profile "{{profile}}".',
+  savedSourceUnavailable:
+    'The saved import source is no longer available. Choose a source under Import Cookies.',
   fileUnreadable: 'Could not read the selected file.',
   fileInvalidJson: 'File is not valid JSON.',
   fileNotArray: 'Expected a JSON array of cookie objects.',

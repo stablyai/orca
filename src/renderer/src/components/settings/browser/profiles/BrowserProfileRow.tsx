@@ -1,4 +1,5 @@
-import { Import, Loader2, Trash2 } from 'lucide-react'
+import { useState } from 'react'
+import { Import, Loader2, RefreshCw, Trash2 } from 'lucide-react'
 import { toast } from 'sonner'
 import { emitBrowserCookieImportToast } from '@/lib/browser/cookies/browser-cookie-import-toast'
 import type {
@@ -23,7 +24,11 @@ import { BrowserCookieImportDisclosure } from './BrowserCookieImportDisclosure'
 import { BrowserCookieImportMachineNotice } from './BrowserCookieImportMachineNotice'
 import { useAppStore } from '../../../../store/index'
 import '../../../../../../shared/orca-profiles/constants'
-import { BROWSER_FAMILY_LABELS } from '../../../../../../shared/browser/browser-family-labels'
+import {
+  browserCookieImportSourceLabel,
+  browserCookieRefreshSource,
+  refreshBrowserProfileCookies
+} from '@/lib/browser/cookies/browser-cookie-refresh'
 import { useTranslate } from '@/i18n/use-translate'
 import { browserCookieImportFailureText } from '@/lib/browser/cookies/browser-cookie-import-error-copy'
 import { translateBrowserSessionProfileLabel } from '@/lib/browser/profiles/browser-session-profile-label'
@@ -61,6 +66,25 @@ export function BrowserProfileRow({
   const isImporting = importState?.profileId === profile.id && importState.status === 'importing'
   const fetchDetectedBrowsers = useAppStore((s) => s.fetchDetectedBrowsers)
   const confirm = useConfirmationDialog()
+  const [importMenuOpen, setImportMenuOpen] = useState(false)
+  const refreshSource = browserCookieRefreshSource(profile.source)
+
+  const openImportMenu = (open: boolean): void => {
+    setImportMenuOpen(open)
+    if (open) {
+      // Probe profile folders only when import opens; macOS treats them as protected app data.
+      void fetchDetectedBrowsers()
+    }
+  }
+
+  const handleRefresh = async (): Promise<void> => {
+    if (!refreshSource) {
+      return
+    }
+    if ((await refreshBrowserProfileCookies(profile, refreshSource)) === 'sourceUnavailable') {
+      openImportMenu(true)
+    }
+  }
 
   const handleImportFromBrowser = async (
     browserFamily: string,
@@ -71,6 +95,8 @@ export function BrowserProfileRow({
       .importCookiesFromBrowser(profile.id, browserFamily, browserProfile)
     if (result.ok) {
       const browser = detectedBrowsers.find((b) => b.family === browserFamily)
+      const profileName =
+        browser?.profiles.find((p) => p.directory === browserProfile)?.name ?? browserProfile
       emitBrowserCookieImportToast(
         result.summary,
         browserProfile
@@ -80,7 +106,7 @@ export function BrowserProfileRow({
               {
                 value0: result.summary.importedCookies,
                 value1: browser?.label ?? browserFamily,
-                value2: browserProfile,
+                value2: profileName,
                 value3: translateBrowserSessionProfileLabel(profile.label, profile.id)
               }
             )
@@ -150,8 +176,14 @@ export function BrowserProfileRow({
   }
 
   const sourceLabel = profile.source
-    ? `${BROWSER_FAMILY_LABELS[profile.source.browserFamily] ?? profile.source.browserFamily}${profile.source.profileName ? ` (${profile.source.profileName})` : ''}`
+    ? browserCookieImportSourceLabel(profile.source)
     : t('auto.components.settings.BrowserProfileRow.796d846483', 'No cookies imported')
+
+  const refreshLabel = refreshSource
+    ? t('browser.cookieImport.refresh.action', 'Refresh from {{value0}}', {
+        value0: refreshSource.label
+      })
+    : ''
 
   // Use role=button because nested dropdown/trash buttons make a native button invalid and trigger hydration warnings.
   return (
@@ -160,7 +192,8 @@ export function BrowserProfileRow({
       tabIndex={0}
       onClick={onSelect}
       onKeyDown={(e) => {
-        if (e.key === 'Enter' || e.key === ' ') {
+        // Keys on the row's own buttons must reach those buttons.
+        if (e.target === e.currentTarget && (e.key === 'Enter' || e.key === ' ')) {
           e.preventDefault()
           onSelect()
         }
@@ -185,14 +218,26 @@ export function BrowserProfileRow({
         <p className="truncate text-[11px] text-muted-foreground">{sourceLabel}</p>
       </div>
       <div className="flex shrink-0 items-center gap-1" onClick={(e) => e.stopPropagation()}>
-        <DropdownMenu
-          onOpenChange={(open) => {
-            if (open) {
-              // Probe profile folders only when import opens; macOS treats them as protected app data.
-              void fetchDetectedBrowsers()
-            }
-          }}
-        >
+        {refreshSource ? (
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button
+                variant="muted-field-icon"
+                size="icon"
+                className="size-7"
+                aria-label={refreshLabel}
+                disabled={isImporting}
+                onClick={() => void handleRefresh()}
+              >
+                <RefreshCw className="size-3" />
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent side="top" sideOffset={4}>
+              {refreshLabel}
+            </TooltipContent>
+          </Tooltip>
+        ) : null}
+        <DropdownMenu open={importMenuOpen} onOpenChange={openImportMenu}>
           <DropdownMenuTrigger asChild>
             <Button
               variant="ghost"

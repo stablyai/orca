@@ -1,6 +1,5 @@
 import { captureRuntimeEnvironmentRequestRevision } from '@/runtime/rpc/environment-revisions/runtime-environment-revision'
 import type { BrowserSlice, BrowserSliceGet, BrowserSliceSet } from '../browser-slice-contract'
-import type { BrowserCookieImportResult } from '../../../../../../shared/browser/workspaces/browser-workspace-types'
 import type {
   BrowserProfileImportFromBrowserResult,
   BrowserProfileClearDefaultCookiesResult
@@ -26,7 +25,13 @@ export function createBrowserCookieImportActions(
   get: BrowserSliceGet
 ): Pick<BrowserSlice, 'importCookiesFromBrowser' | 'clearDefaultSessionCookies'> {
   return {
-    importCookiesFromBrowser: async (profileId, browserFamily, browserProfile?, pageRoute?) => {
+    importCookiesFromBrowser: async (
+      profileId,
+      browserFamily,
+      browserProfile?,
+      pageRoute?,
+      options?
+    ) => {
       if (pageRoute?.kind === 'ssh') {
         return importSshPageCookies(get, pageRoute, () =>
           window.api.browser.sessionImportFromBrowser({
@@ -65,7 +70,8 @@ export function createBrowserCookieImportActions(
               pageRoute
             ),
             browserFamily,
-            browserProfile
+            browserProfile,
+            ...options
           })
           ranOnClient = clientHostResult != null
           const pairingRevision = captureRuntimeEnvironmentRequestRevision(runtimeEnvironmentId)
@@ -74,7 +80,13 @@ export function createBrowserCookieImportActions(
             (await callRuntimeRpc<BrowserProfileImportFromBrowserResult>(
               { kind: 'environment', environmentId: runtimeEnvironmentId },
               'browser.profileImportFromBrowser',
-              { profileId, browserFamily, browserProfile, supportsPartitionSkippedCookies: true },
+              {
+                profileId,
+                browserFamily,
+                browserProfile,
+                supportsPartitionSkippedCookies: true,
+                ...options
+              },
               { timeoutMs: 30_000, expectedEnvironmentPairingRevision: pairingRevision }
             ))
           if (result.ok) {
@@ -132,11 +144,12 @@ export function createBrowserCookieImportActions(
         })
       )
       try {
-        const result = (await window.api.browser.sessionImportFromBrowser({
+        const result = await window.api.browser.sessionImportFromBrowser({
           profileId,
           browserFamily,
-          browserProfile
-        })) as BrowserCookieImportResult
+          browserProfile,
+          ...options
+        })
         if (result.ok) {
           get().recordFeatureInteraction?.('cookie-import')
           set((state) =>

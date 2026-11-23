@@ -1,6 +1,9 @@
 import { existsSync, readFileSync, readdirSync } from 'node:fs'
 import { join } from 'node:path'
-import type { BrowserSessionProfileSource } from '../../../../shared/browser/workspaces/browser-workspace-types'
+import type {
+  BrowserCookieImportFromBrowserRequest,
+  BrowserSessionProfileSource
+} from '../../../../shared/browser/workspaces/browser-workspace-types'
 
 export type BrowserProfile = {
   name: string
@@ -226,4 +229,32 @@ export function detectFirefox(): DetectedBrowser | null {
     }
   }
   return null
+}
+
+/** Badge for the selected profile; its folder lets Refresh repeat this exact import. */
+export function detectedBrowserImportSource(
+  browser: DetectedBrowser
+): Omit<BrowserSessionProfileSource, 'importedAt'> {
+  return {
+    browserFamily: browser.family,
+    profileName:
+      browser.profiles.find((profile) => profile.directory === browser.selectedProfile)?.name ??
+      browser.selectedProfile,
+    profileDirectory: browser.selectedProfile
+  }
+}
+
+/** Refresh replays only the source this machine recorded, never a folder named by a peer. */
+export function refusesSavedSourceRefresh(
+  saved: BrowserSessionProfileSource | null | undefined,
+  request: Omit<BrowserCookieImportFromBrowserRequest, 'profileId'>
+): boolean {
+  return (
+    request.refreshSavedSource === true &&
+    !(
+      saved?.profileDirectory &&
+      saved.browserFamily === request.browserFamily &&
+      saved.profileDirectory === request.browserProfile
+    )
+  )
 }

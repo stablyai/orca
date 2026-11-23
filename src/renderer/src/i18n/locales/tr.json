@@ -476,6 +476,7 @@
     },
     "cookieImport": {
       "errors": {
+        "savedSourceUnavailable": "Kayıtlı içe aktarma kaynağı artık kullanılamıyor. Çerezleri İçe Aktar bölümünden bir kaynak seçin.",
         "notAuthorized": "Yetki yok",
         "profileNotFound": "Oturum profili bulunamadı.",
         "invalidBrowserProfile": "Geçersiz tarayıcı profili adı.",
@@ -519,6 +520,11 @@
       "sshPage": {
         "stored": "{{host}} tarayıcısında saklandı.",
         "googleCookiesSkipped": "Google çerezleri içe aktarılmadı. {{host}} üzerinden gezinen bir sayfa açın, ardından Google'da oturum açın."
+      },
+      "refresh": {
+        "action": "{{value0}} kaynağından yenile",
+        "success": "{{value1}} konumundan {{value2}} profiline {{value0}} çerez yenilendi.",
+        "sourceUnavailable": "{{value0}} artık kullanılamıyor. Çerezleri İçe Aktar bölümünden başka bir kaynak seçin."
       }
     },
     "passwords": {

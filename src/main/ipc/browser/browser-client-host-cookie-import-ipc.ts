@@ -1,14 +1,22 @@
 import { BrowserWindow, ipcMain } from 'electron'
 import { browserCookieImportFailure } from '../../../shared/browser/cookies/browser-cookie-import-failure-copy'
-import type { BrowserCookieImportResult } from '../../../shared/browser/workspaces/browser-workspace-types'
+import type {
+  BrowserCookieImportFromBrowserRequest,
+  BrowserCookieImportResult
+} from '../../../shared/browser/workspaces/browser-workspace-types'
+import { refusesSavedSourceRefresh } from '../../browser/cookies/sources/browser-cookie-source-profiles'
 import {
   importCookieFileIntoClientRoutePartition,
   importCookiesIntoClientRoutePartition
 } from '../../browser/cookies/client-route/browser-client-route-cookie-import'
 import { clearClientRouteDefaultCookies } from '../../browser/cookies/client-route/browser-client-route-cookie-clear'
-import { clientRouteCookieImportSources } from '../../browser/cookies/client-route/client-route-cookie-import-source-store'
+import {
+  clientRouteCookieImportSources,
+  readClientRouteCookieImportSource
+} from '../../browser/cookies/client-route/client-route-cookie-import-source-store'
 import { pickCookieFile } from '../../browser/cookies/imports/cookie-file-picker'
 import { isTrustedBrowserRenderer } from './browser-renderer-trust'
+import { getPairedRuntimeBrowserClientRouteIdentity } from '../../browser/client-hosts/lifecycle/paired-runtime-browser-client-host-runtime'
 
 type ClientHostCookieImportTargetArgs = {
   environmentId: string
@@ -45,13 +53,21 @@ export function registerClientHostCookieImportHandlers(): void {
     'browser:session:importFromBrowserForClientHost',
     async (
       event,
-      args: ClientHostCookieImportTargetArgs & {
-        browserFamily: string
-        browserProfile?: string
-      }
+      args: ClientHostCookieImportTargetArgs & BrowserCookieImportFromBrowserRequest
     ): Promise<BrowserCookieImportResult | null> => {
       if (!isTrustedBrowserRenderer(event.sender)) {
         return browserCookieImportFailure('notAuthorized')
+      }
+      // A refresh replays this desktop's record, never a folder the server listed.
+      if (
+        args.refreshSavedSource &&
+        getPairedRuntimeBrowserClientRouteIdentity(args.environmentId) &&
+        refusesSavedSourceRefresh(
+          await readClientRouteCookieImportSource(args.environmentId, args.profileId),
+          args
+        )
+      ) {
+        return browserCookieImportFailure('savedSourceUnavailable')
       }
       return importCookiesIntoClientRoutePartition({
         ...clientHostCookieImportTarget(args),
@@ -78,12 +94,16 @@ export function registerClientHostCookieImportHandlers(): void {
     }
   )
 
-  // Overlay desktop imports unavailable to the server's profile records.
+  // Null unless this desktop hosts the pages; hosted pages use only this desktop's jar.
   ipcMain.handle(
     'browser:session:clientRouteImportSources',
     (event, args: { environmentId: string }) => {
-      if (!isTrustedBrowserRenderer(event.sender) || typeof args?.environmentId !== 'string') {
-        return {}
+      if (
+        !isTrustedBrowserRenderer(event.sender) ||
+        typeof args?.environmentId !== 'string' ||
+        !getPairedRuntimeBrowserClientRouteIdentity(args.environmentId)
+      ) {
+        return null
       }
       return clientRouteCookieImportSources(args.environmentId)
     }

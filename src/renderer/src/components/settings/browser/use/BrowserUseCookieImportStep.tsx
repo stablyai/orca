@@ -49,6 +49,8 @@ export function BrowserUseCookieImportStep({
       .importCookiesFromBrowser(profileId, browserFamily, browserProfile)
     if (result.ok) {
       const browser = detectedBrowsers.find((b) => b.family === browserFamily)
+      const profileName =
+        browser?.profiles.find((p) => p.directory === browserProfile)?.name ?? browserProfile
       emitBrowserCookieImportToast(
         result.summary,
         t(
@@ -57,7 +59,7 @@ export function BrowserUseCookieImportStep({
           {
             value0: result.summary.importedCookies,
             value1: browser?.label ?? browserFamily,
-            value2: browserProfile ? ` (${browserProfile})` : ''
+            value2: profileName ? ` (${profileName})` : ''
           }
         ),
         result
