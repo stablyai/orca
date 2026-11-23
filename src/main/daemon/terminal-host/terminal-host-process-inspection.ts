@@ -170,9 +170,15 @@ export async function inspectTerminalHostProcess(args: {
     childProcessEvidence = await session.inspectChildProcesses(
       args.steadyState !== true,
       args.ignoreDetached === true,
-      // A pane the proof refuses keeps main's job-only read: the census could never stop its re-checks.
+      // A pane the proof refuses (wsl.exe, a command, Git Bash) keeps main's job-only read: the census could never
+      // stop its re-checks.
       steadyPollJudgesByJobMembership(args, foregroundProcess) ||
-        (args.jobMembershipOnly === true && mayBeGitBashLauncher(session))
+        (args.jobMembershipOnly === true &&
+          !(
+            foregroundProcess !== null &&
+            isShellProcess(foregroundProcess) &&
+            !mayBeGitBashLauncher(session)
+          ))
     )
     // A full census (escaped children included) is the only Windows proof; wsl.exe cannot prove its guest idle.
     // A cached census may predate recent input or output, so prove only a pane quiet since before it could start.

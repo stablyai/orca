@@ -1,4 +1,9 @@
 import { readFile } from 'node:fs/promises'
+import { isShellProcess } from '../../../shared/agent-status/process/shell-process-detection'
+import {
+  getCommandTokenPathBasename,
+  getFirstCommandToken
+} from '../../../shared/shell/command-resolution/command-token-scanner'
 import { parseLinuxProcStatStartTime } from '../../../shared/process-observation/tables/process-table-snapshot-reader'
 import { captureProcessTable } from '../../../shared/process-observation/tables/process-table-ps-capture'
 import {
@@ -32,11 +37,35 @@ export async function isSameForegroundAgent(
     return false
   }
   // One process, in the same start marker the full capture recorded: /proc ticks on Linux, ps lstart elsewhere.
-  const startTime =
-    process.platform === 'linux'
-      ? parseLinuxProcStatStartTime(await readFile(`/proc/${pid}/stat`, 'utf8'))
-      : (await captureProcessTable(['-o', 'lstart=', '-p', String(pid)])).trim()
-  return startTime !== null && normalizeSpaces(startTime) === normalizeSpaces(expected.startTime)
+  const current =
+    process.platform === 'linux' ? await readLinuxProcess(pid) : await readPsProcess(pid)
+  return (
+    current !== null &&
+    normalizeSpaces(current.startTime) === normalizeSpaces(expected.startTime) &&
+    // A shell-script launcher can `exec` a shell in the same pid, which no exit notice reports.
+    !isShellProcess(current.program)
+  )
+}
+
+async function readLinuxProcess(
+  pid: number
+): Promise<{ startTime: string; program: string } | null> {
+  const [stat, cmdline] = await Promise.all([
+    readFile(`/proc/${pid}/stat`, 'utf8'),
+    readFile(`/proc/${pid}/cmdline`, 'utf8')
+  ])
+  const startTime = parseLinuxProcStatStartTime(stat)
+  // argv[0], which for a script is its interpreter (stat's comm would name the script).
+  const program = getCommandTokenPathBasename(cmdline.split('\0')[0] ?? '')
+  return startTime === null ? null : { startTime, program }
+}
+
+async function readPsProcess(pid: number): Promise<{ startTime: string; program: string } | null> {
+  const line = (await captureProcessTable(['-o', 'lstart=,command=', '-p', String(pid)])).trim()
+  const match = /^(\S+\s+\S+\s+\d{1,2}\s+\S+\s+\d{4})\s+(.+)$/.exec(line)
+  return match
+    ? { startTime: match[1], program: getCommandTokenPathBasename(getFirstCommandToken(match[2])) }
+    : null
 }
 
 function normalizeSpaces(value: string): string {
