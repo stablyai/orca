@@ -5,7 +5,7 @@ import {
   profileStateDatabaseBackupsAsync,
   type ProfileStateDatabaseBackup
 } from './profile-state-backup-path'
-import { runProfileStateBackup, runProfileStateBackupWorker } from './profile-state-backup-worker'
+import { runProfileStateBackup } from './profile-state-backup-worker'
 import { removeAbandonedProfileStateBackupFiles } from './profile-state-backup-temporary-files'
 
 const BACKUP_COUNT = 5
@@ -128,17 +128,4 @@ export class ProfileStateBackupRotation {
 
 function isMissingPath(error: unknown): boolean {
   return error instanceof Error && 'code' in error && error.code === 'ENOENT'
-}
-
-/** The rotation a live profile writer runs, each backup in its own worker thread. */
-export function createProfileStateBackupRotation(
-  profile: { databasePath: string; profileId: string },
-  workerPath: string | undefined
-): ProfileStateBackupRotation {
-  return new ProfileStateBackupRotation(
-    profile.databasePath,
-    profile.profileId,
-    Date.now,
-    (job, signal) => runProfileStateBackupWorker(job, { workerPath, signal })
-  )
 }

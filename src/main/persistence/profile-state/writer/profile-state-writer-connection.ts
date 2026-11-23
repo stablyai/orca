@@ -2,6 +2,7 @@ import { resolveProfileStateWriterWorkerPath } from './profile-state-writer-work
 import {
   createProfileStateWriterRequest,
   isExpectedProfileStateWriterSuccess,
+  isProfileStateSaveCommand,
   type PendingProfileStateWriterRequest,
   type SuccessfulProfileStateWriterResponse
 } from './profile-state-writer-request'
@@ -21,7 +22,6 @@ import {
   startProfileStateWriterSlowWarning
 } from './profile-state-writer-slow-warning'
 import { ProfileStateWriterThread } from './profile-state-writer-thread'
-import { isProfileStateSaveCommand } from './profile-state-writer-request'
 
 export type ProfileStateWriterConnectionOptions = {
   workerPath?: string

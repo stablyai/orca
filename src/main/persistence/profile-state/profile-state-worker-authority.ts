@@ -2,10 +2,8 @@ import type {
   AsyncProfileStateAuthority,
   ProfileStateMaintenance
 } from '../loading-store/profile-writing/profile-state-authority'
-import {
-  createProfileStateBackupRotation,
-  type ProfileStateBackupRotation
-} from './backup/profile-state-backup-rotation'
+import { ProfileStateBackupRotation } from './backup/profile-state-backup-rotation'
+import { runProfileStateBackupWorker } from './backup/profile-state-backup-worker'
 import { quarantineProfileStateDatabase } from './recovery/profile-state-database-quarantine'
 import type { ProfileStateWriteWorkerClient } from './writer/profile-state-writer-worker-client'
 import {
@@ -87,9 +85,7 @@ export class ProfileStateWorkerAuthority implements AsyncProfileStateAuthority {
   }
 
   /** Saving is frozen until restart outside the writer (a failed maintenance pause); say so instead of leaving a retry notice up. */
-  reportSavingStopped(error: unknown): void {
-    this.reopenPolicy.reportStopped(error)
-  }
+  readonly reportSavingStopped = (error: unknown): void => this.reopenPolicy.reportStopped(error)
 
   async abort(): Promise<void> {
     this.idleStop.cancel()
@@ -133,13 +129,11 @@ export class ProfileStateWorkerAuthority implements AsyncProfileStateAuthority {
     return this.run((writer) => writer.writeSerializedState(payload)).then(() => {})
   }
 
-  writeJsonExport(targetPath: string): Promise<number> {
-    return this.run((writer) => writer.writeJsonExport(targetPath), false)
-  }
+  readonly writeJsonExport = (targetPath: string): Promise<number> =>
+    this.run((writer) => writer.writeJsonExport(targetPath), false)
 
-  writeLatestJsonExport(dataFile: string): Promise<number | undefined> {
-    return this.run((writer) => writer.writeLatestJsonExport(dataFile), false)
-  }
+  readonly writeLatestJsonExport = (dataFile: string): Promise<number | undefined> =>
+    this.run((writer) => writer.writeLatestJsonExport(dataFile), false)
 
   scheduleBackup(): void {
     if (!this.closing) {
@@ -219,7 +213,13 @@ export class ProfileStateWorkerAuthority implements AsyncProfileStateAuthority {
   }
 
   private createBackups(): ProfileStateBackupRotation {
-    return createProfileStateBackupRotation(this.initialization, this.options.backupWorkerPath)
+    return new ProfileStateBackupRotation(
+      this.initialization.databasePath,
+      this.initialization.profileId,
+      Date.now,
+      (job, signal) =>
+        runProfileStateBackupWorker(job, { workerPath: this.options.backupWorkerPath, signal })
+    )
   }
 
   private run<T>(command: WriterCommand<T>, save = true): Promise<T> {
