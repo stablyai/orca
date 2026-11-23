@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto'
 import { afterEach, describe, expect, it } from 'vitest'
 import type { Bot } from '../../shared/bot-types'
 import type { AgentJournalMessageItem } from '../../shared/agent-session/journal/agent-session-journal-types'
@@ -47,7 +48,10 @@ describe('replacing a chat carries its unsent queued messages', () => {
     rig = undefined
   })
 
-  async function setup(createChat?: (sessionId: string) => Promise<void>) {
+  async function setup(
+    createChat?: (sessionId: string) => Promise<void>,
+    newChatAgent: 'codex' | 'claude' = 'codex'
+  ) {
     rig = await createQueuedMessageTestRig()
     const current = rig
     // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: replace reads only these fields.
@@ -67,7 +71,14 @@ describe('replacing a chat carries its unsent queued messages', () => {
             expectedRuntimeFence: null,
             payloadFingerprint: ''
           },
-          providerHandle: { kind: 'codex', threadId: `thread-${sessionId}` }
+          ...(newChatAgent === 'claude'
+            ? ({
+                provider: 'claude',
+                agent: 'claude',
+                providerHandle: { kind: 'claude', sessionId: randomUUID(), leafUuid: null },
+                accountHome: { variable: 'CLAUDE_CONFIG_DIR', path: '/private-fixture/claude' }
+              } as const)
+            : { providerHandle: { kind: 'codex', threadId: `thread-${sessionId}` } })
         })
       )
       expect(attached).toMatchObject({ ok: true })
@@ -120,6 +131,12 @@ describe('replacing a chat carries its unsent queued messages', () => {
       body: message('maybe sent'),
       holdReason: QUEUED_MESSAGE_HELD_DELIVERY_UNCONFIRMED
     })
+    await queuedMessages.insert({
+      messageId: 'plan',
+      body: message('plan it first'),
+      options: { interactionMode: 'plan', model: 'gpt-fixture', effort: 'high' },
+      deliveryMode: 'steer'
+    })
     await queuedMessages.insert({ messageId: 'editing', body: message('editing') })
     return { chats }
   }
@@ -144,7 +161,13 @@ describe('replacing a chat carries its unsent queued messages', () => {
     const next = await chats.reset('bot-1')
     expect(next).not.toBe(HOST_TEST_SESSION)
     const bodies = await received(next)
-    expect(bodies.map(textOf)).toEqual(['owner text', 'run result', 'look at this', 'maybe sent'])
+    expect(bodies.map(textOf)).toEqual([
+      'owner text',
+      'run result',
+      'look at this',
+      'maybe sent',
+      'plan it first'
+    ])
     expect(bodies[0].from).toBeUndefined()
     expect(bodies[1].from).toEqual(RESULT_SENDER)
     expect(bodies[2].blocks).toContainEqual(IMAGE)
@@ -180,6 +203,26 @@ describe('replacing a chat carries its unsent queued messages', () => {
     })
   })
 
+  it('sends a moved card with the mode, model and delivery it was queued with', async () => {
+    const { chats } = await setup()
+    const next = await chats.reset('bot-1')
+    const { journal } = await rig!.host.conversation(next)
+    expect(await journal.queuedMessages.get('plan')).toMatchObject({
+      options: { interactionMode: 'plan', model: 'gpt-fixture', effort: 'high' },
+      deliveryMode: 'steer'
+    })
+  })
+
+  it('keeps only Plan or Build when the new chat runs another agent', async () => {
+    const { chats } = await setup(undefined, 'claude')
+    const next = await chats.reset('bot-1')
+    expect(rig!.store.getConversation(next)?.provider).toBe('claude')
+    const { journal } = await rig!.host.conversation(next)
+    const card = await journal.queuedMessages.get('plan')
+    expect(card?.options).toEqual({ interactionMode: 'plan' })
+    expect(card?.deliveryMode).toBe('steer')
+  })
+
   it('keeps them in the old chat when the new chat cannot be made', async () => {
     const { chats } = await setup(async () => {
       throw new Error('start failed')
@@ -192,6 +235,7 @@ describe('replacing a chat carries its unsent queued messages', () => {
       'look at this',
       'slack dm',
       'maybe sent',
+      'plan it first',
       'editing'
     ])
   })
