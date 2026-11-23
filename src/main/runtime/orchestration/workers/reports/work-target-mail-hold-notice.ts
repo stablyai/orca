@@ -50,12 +50,13 @@ export function preserveUnreadFollowUpMail(db: OrchestrationDb, dispatchId: stri
     .run(dispatchId)
 }
 
-/** Notify the live helper creator or Run coordinator once when targeted unread work mail is held instead of rerouted. */
+/** Notify the live helper creator or Run coordinator once when targeted unread work mail is held instead of rerouted or exposed. */
 export function notifyTargetedMailHeld(
   notify: (handle: string, messageType: string) => void,
   db: OrchestrationDb,
   args: {
-    dispatchId: string
+    dispatchId?: string
+    mailboxHandle?: string
     heldMessageIds: readonly string[]
     reason: string
     runIdFallback?: string
@@ -65,12 +66,16 @@ export function notifyTargetedMailHeld(
   if (sortedIds.length === 0) {
     return null
   }
-  const id = workTargetHoldNoticeId(args.dispatchId, sortedIds)
+  const sourceKey = args.dispatchId ?? args.mailboxHandle
+  if (!sourceKey) {
+    return null
+  }
+  const id = workTargetHoldNoticeId(sourceKey, sortedIds)
   if (db.getMessageById?.(id)) {
     return null
   }
-  const dispatch = db.getDispatchContextById(args.dispatchId)
-  if (dispatch) {
+  const dispatch = args.dispatchId ? db.getDispatchContextById(args.dispatchId) : undefined
+  if (dispatch && args.dispatchId) {
     return escalateWorkerFailure(
       db,
       dispatch,
@@ -99,18 +104,21 @@ export function notifyTargetedMailHeld(
   if (!owningRun || owningRun.legacy === 1) {
     return null
   }
+  const sourceMailbox = args.mailboxHandle ?? (args.dispatchId ? `dispatch:${args.dispatchId}` : '')
   try {
     const message = db.insertMessage({
       id,
-      from: `dispatch:${args.dispatchId}`,
+      from: sourceMailbox,
       to: `run:${owningRun.id}`,
-      subject: 'Mail did not reach the finished worker',
-      body: `Orca held ${sortedIds.length} targeted unread message(s) for dispatch:${args.dispatchId} instead of moving them to run:${owningRun.id}: ${args.reason}. The original mail remains unread on dispatch:${args.dispatchId} for recovery.`,
+      subject: args.dispatchId
+        ? 'Mail did not reach the finished worker'
+        : 'Targeted mail held pending verification',
+      body: `Orca held ${sortedIds.length} targeted unread message(s) for ${sourceMailbox} instead of delivering them to an unverified destination: ${args.reason}. The original mail remains unread on ${sourceMailbox} for recovery.`,
       type: 'escalation',
       priority: 'high',
       payload: JSON.stringify({
         kind: 'work_target_mail_held',
-        dispatchId: args.dispatchId,
+        ...(args.dispatchId ? { dispatchId: args.dispatchId } : { mailboxHandle: sourceMailbox }),
         heldMessageIds: sortedIds,
         reason: args.reason
       }),
@@ -120,7 +128,7 @@ export function notifyTargetedMailHeld(
     return message
   } catch (error) {
     console.warn('[orchestration] failed to notify held targeted mail', {
-      dispatchId: args.dispatchId,
+      sourceMailbox,
       runId: owningRun.id,
       error
     })

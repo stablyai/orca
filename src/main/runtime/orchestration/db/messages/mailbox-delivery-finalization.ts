@@ -91,3 +91,16 @@ export function requireDeliveryRaw(db: OrchestrationDb, id: string): DeliveryRow
   }
   return delivery
 }
+
+export function fenceOutstandingMailboxDelivery(
+  this: OrchestrationDb,
+  deliveryId: string,
+  consumerGeneration: number
+): void {
+  this.db
+    .prepare(
+      `UPDATE deliveries SET status = 'fenced'
+        WHERE id = ? AND status = 'outstanding' AND consumer_generation = ?`
+    )
+    .run(deliveryId, consumerGeneration)
+}

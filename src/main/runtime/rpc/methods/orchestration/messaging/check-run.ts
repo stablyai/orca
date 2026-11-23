@@ -12,8 +12,12 @@ import {
   withReplyFollowUps
 } from './mailbox-message-receipt'
 import { interruptedAcknowledgedCheck } from '../routing'
-import { routeAllMailboxPages } from './mailbox-page-routing'
 import { resolveRunScope } from '../runs/run-scope'
+import { routeVerifiedDirectMailToRun } from './check-worker-target-mail'
+import {
+  filterReadableMailboxMessages,
+  prepareRoleDeliveryWorkTargetGate
+} from './work-target-mailbox-read-gate'
 import type { CheckParams } from '../../../../../../shared/rpc-contract/orchestration/orchestration-params'
 import type { z } from 'zod'
 import type { MessageWake } from '../../../../orchestration/mailbox/runtime-message-waiters'
@@ -58,16 +62,6 @@ export async function checkRunMailbox(args: {
     revalidateLegacyCoordinator,
     orchestrationCompatibilityEvidence
   } = args
-  const routeDirectSnapshot = async (
-    runId: string,
-    directHandle: string,
-    routePage: (throughSequence: number) => { routedCount: number; hasMore: boolean }
-  ): Promise<void> => {
-    const throughSequence = db.getLatestUnreadDirectMessageSequenceForRun(runId, directHandle)
-    if (throughSequence !== undefined) {
-      await routeAllMailboxPages(() => routePage(throughSequence), signal)
-    }
-  }
   const run = resolveRunScope(runtime, {
     runId: params.run,
     callerTerminalHandle: handle,
@@ -79,15 +73,21 @@ export async function checkRunMailbox(args: {
   })
   const generation = run.consumer_generation
   const address = `run:${run.id}`
+  const recipientAddress = callerSession?.address ?? handle
+  const runTarget = { kind: 'bare', recipientAddress } as const
   runtime.ensureOrchestrationFederationRelay(run.id)
-  await routeDirectSnapshot(run.id, handle, (throughSequence) =>
-    db.routeUnreadDirectMessagesToRunMailbox(run.id, handle, throughSequence)
-  )
-  const coordinatorHandle = run.coordinator_handle
-  if (coordinatorHandle && coordinatorHandle !== handle) {
-    await routeDirectSnapshot(run.id, coordinatorHandle, (throughSequence) =>
-      db.routeUnreadDirectMessagesToRunMailbox(run.id, coordinatorHandle, throughSequence)
+  const directHandles = new Set(
+    [handle, recipientAddress, run.coordinator_handle].filter((value): value is string =>
+      Boolean(value)
     )
+  )
+  for (const directHandle of directHandles) {
+    await routeVerifiedDirectMailToRun(runtime, db, {
+      runId: run.id,
+      directHandle,
+      recipientAddress,
+      signal
+    })
   }
   const revalidateConsumer = (): void => {
     args.revalidateCaller()
@@ -127,7 +127,12 @@ export async function checkRunMailbox(args: {
   }
   const acknowledged = pending.acknowledged
   if (params.all || (params.unread === false && !params.peek)) {
-    const messages = db.getRunMailboxHistory(run.id, 100, typeFilter)
+    const messages = await filterReadableMailboxMessages(runtime, db, {
+      target: runTarget,
+      mailboxHandle: address,
+      runId: run.id,
+      messages: db.getRunMailboxHistory(run.id, 100, typeFilter)
+    })
     const result = {
       messages: exposeMessages(messages),
       count: messages.length,
@@ -158,7 +163,13 @@ export async function checkRunMailbox(args: {
         }
       : {})
   })
-  const readPeek = () => db.getUnreadRunMailbox(run.id, 100, typeFilter)
+  const readPeek = () =>
+    filterReadableMailboxMessages(runtime, db, {
+      target: runTarget,
+      mailboxHandle: address,
+      runId: run.id,
+      messages: db.getUnreadRunMailbox(run.id, 100, typeFilter)
+    })
   const result = (batch: MailboxDeliveryBatch | undefined) => {
     const receipt = deliveryReceipt({
       db,
@@ -171,17 +182,33 @@ export async function checkRunMailbox(args: {
       ? receipt
       : withReplyFollowUps(args.runtime, db, args.reader, receipt)
   }
-  const takeDelivery = (wakeTypes?: MessageType[], wake?: MessageWake) =>
-    args.reconciliation.takeRole({
-      mailbox: { runId: run.id, mailboxHandle: address, consumerGeneration: generation, wakeTypes },
-      revalidate: revalidateConsumer,
-      respond: (batch) =>
-        batch?.finalResponse ? result(batch) : withTakenRunCheckNext(db, result(batch), run.id),
-      record: args.recordMutationReceipt,
-      wake
+  const takeDelivery = async (wakeTypes?: MessageType[], wake?: MessageWake) => {
+    const targetGate = await prepareRoleDeliveryWorkTargetGate(runtime, db, {
+      target: runTarget,
+      mailboxHandle: address,
+      runId: run.id,
+      consumerGeneration: generation
     })
+    const batch = await args.reconciliation.takeRole({
+      mailbox: {
+        runId: run.id,
+        mailboxHandle: address,
+        consumerGeneration: generation,
+        wakeTypes,
+        ...(targetGate.excludeMessageIds ? { excludeMessageIds: targetGate.excludeMessageIds } : {})
+      },
+      revalidate: revalidateConsumer,
+      respond: (taken) =>
+        taken?.finalResponse ? result(taken) : withTakenRunCheckNext(db, result(taken), run.id),
+      record: args.recordMutationReceipt,
+      wake,
+      verifySelected: targetGate.verifySelected
+    })
+    targetGate.flushHeld()
+    return batch
+  }
   if (params.peek) {
-    const peeked = readPeek()
+    const peeked = await readPeek()
     if (peeked.length > 0 || !params.wait) {
       return peekResult(peeked)
     }
@@ -234,7 +261,12 @@ export async function checkRunMailbox(args: {
     return params.peek ? { ...peekResult([]), ...ended } : { ...result(undefined), ...ended }
   }
   if (params.peek) {
-    return { ...peekResult(readPeek()), timedOut: false, cancelled: false, connectionLost: false }
+    return {
+      ...peekResult(await readPeek()),
+      timedOut: false,
+      cancelled: false,
+      connectionLost: false
+    }
   }
   const batch = await takeDelivery(typeFilter, waitResult)
   return result(batch)

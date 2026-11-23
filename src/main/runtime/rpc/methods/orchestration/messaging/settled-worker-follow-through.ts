@@ -22,14 +22,15 @@ import {
   beginUnreadFollowThrough,
   endUnreadFollowThrough,
   notifyTargetedMailHeld,
-  preserveUnreadFollowUpMail
+  preserveUnreadFollowUpMail,
+  workTargetHoldNoticeId
 } from '../../../../orchestration/workers/reports/work-target-mail-hold-notice'
 import {
   planWorkerFollowUp,
   startWorkerFollowUp,
   type WorkerFollowUpOutcome
 } from './worker-follow-up'
-import { verifyUnreadFollowThroughBeforeAction } from '../../../../../bots/bot-work-target-unread-provenance'
+import { partitionUnreadMessagesForWorkerDispatch } from '../../../../../bots/bot-work-target-unread-provenance'
 import { captureReportedWorkerResumeSession } from '../worker/follow-up/worker-resume-session-capture'
 import {
   custodyOf,
@@ -90,7 +91,8 @@ export async function continueUnreadWorkerMailNow(
   db: OrchestrationDb,
   dispatchId: string
 ): Promise<void> {
-  const first = db.getUnreadMessages(`dispatch:${dispatchId}`, [...FOLLOW_UP_MESSAGE_TYPES])[0]
+  const unread = db.getUnreadMessages(`dispatch:${dispatchId}`, [...FOLLOW_UP_MESSAGE_TYPES])
+  const first = unread[0]
   if (!first) {
     clearFollowUpMail(db, dispatchId)
     return
@@ -128,36 +130,68 @@ export async function continueUnreadWorkerMailNow(
   beginUnreadFollowThrough(db, dispatchId)
   let plan: ReturnType<typeof planWorkerFollowUp> = undefined
   let outcome: WorkerFollowUpOutcome | undefined
+  let startedForOrdinaryMail = false
+  const notifiedHeldIds = new Set<string>()
   try {
     try {
       plan = planWorkerFollowUp(db, dispatchId, first.type)
-      const steerId = plan?.kind === 'steer' ? plan.dispatchId : undefined
-      await verifyUnreadFollowThroughBeforeAction(runtime, db, dispatchId, steerId)
-      outcome =
-        plan?.kind === 'start'
-          ? await startWorkerFollowUp({
-              ctx: { runtime, orchestrationCaller: senderCaller(db, first) },
-              db,
-              plan,
-              from: first.from_handle,
-              message: receivesMailWhole(plan.latest.assignee_handle)
-                ? CHAT_FOLLOW_UP_TASK
-                : FOLLOW_UP_TASK,
-              takesMailOf: dispatchId,
-              trustedUnreadMailFollowThrough: true
-            })
-          : plan
+      if (plan?.kind === 'start') {
+        const partition = await partitionUnreadMessagesForWorkerDispatch(
+          runtime,
+          db,
+          plan.latest.id,
+          unread
+        )
+        const finalPartition = partition.reverifySync()
+        if (finalPartition.held.length > 0) {
+          preserveUnreadFollowUpMail(db, dispatchId)
+          const heldMessageIds = finalPartition.held.map((item) => item.messageId)
+          for (const id of heldMessageIds) {
+            notifiedHeldIds.add(id)
+          }
+          notifyTargetedMailHeld((handle, type) => runtime.notifyMessageArrived(handle, type), db, {
+            dispatchId,
+            heldMessageIds,
+            reason: finalPartition.held[0]!.reason
+          })
+        }
+        if (finalPartition.deliverableIds.length === 0) {
+          return
+        }
+        startedForOrdinaryMail = finalPartition.ordinaryIds.length > 0
+        const deliverableSet = new Set(finalPartition.deliverableIds)
+        const lead = unread.find((message) => deliverableSet.has(message.id)) ?? first
+        plan = planWorkerFollowUp(db, dispatchId, lead.type)
+        outcome =
+          plan?.kind === 'start'
+            ? await startWorkerFollowUp({
+                ctx: { runtime, orchestrationCaller: senderCaller(db, lead) },
+                db,
+                plan,
+                from: lead.from_handle,
+                message: receivesMailWhole(plan.latest.assignee_handle)
+                  ? CHAT_FOLLOW_UP_TASK
+                  : FOLLOW_UP_TASK,
+                takesMailOf: dispatchId,
+                trustedUnreadMailFollowThrough: true
+              })
+            : plan
+      } else {
+        outcome = plan
+      }
     } catch (error) {
       const reason = error instanceof Error ? error.message : String(error)
-      const heldTargetedIds = listUnreadTargetedMessageIds(db, `dispatch:${dispatchId}`)
-      if (heldTargetedIds.length > 0) {
+      const unnotifiedTargetedIds = listUnreadTargetedMessageIds(
+        db,
+        `dispatch:${dispatchId}`
+      ).filter((id) => !notifiedHeldIds.has(id))
+      const alreadyHeldByHandOver =
+        unnotifiedTargetedIds.length > 0 &&
+        Boolean(db.getMessageById(workTargetHoldNoticeId(dispatchId, unnotifiedTargetedIds)))
+      if (unnotifiedTargetedIds.length > 0) {
         preserveUnreadFollowUpMail(db, dispatchId)
-        notifyTargetedMailHeld((handle, type) => runtime.notifyMessageArrived(handle, type), db, {
-          dispatchId,
-          heldMessageIds: heldTargetedIds,
-          reason
-        })
-      } else {
+      }
+      if (!alreadyHeldByHandOver || startedForOrdinaryMail) {
         noticeUnreadMailNotContinued(runtime, db, dispatchId, reason)
       }
       const claimed = plan?.kind === 'start' ? getFollowUpDispatch(db, plan.latest.id) : undefined
@@ -174,15 +208,17 @@ export async function continueUnreadWorkerMailNow(
     if (outcome?.kind === 'started' && custodyOf(db, followUpId) === 'failed') {
       const followUpWorker = db.getWorkerDispatch(followUpId)
       const reason = followUpWorker?.last_error ?? followUpWorker?.state ?? 'unknown'
-      const heldTargetedIds = listUnreadTargetedMessageIds(db, `dispatch:${dispatchId}`)
-      if (heldTargetedIds.length > 0) {
+      const unnotifiedTargetedIds = listUnreadTargetedMessageIds(
+        db,
+        `dispatch:${dispatchId}`
+      ).filter((id) => !notifiedHeldIds.has(id))
+      const alreadyHeldByHandOver =
+        unnotifiedTargetedIds.length > 0 &&
+        Boolean(db.getMessageById(workTargetHoldNoticeId(dispatchId, unnotifiedTargetedIds)))
+      if (unnotifiedTargetedIds.length > 0) {
         preserveUnreadFollowUpMail(db, dispatchId)
-        notifyTargetedMailHeld((handle, type) => runtime.notifyMessageArrived(handle, type), db, {
-          dispatchId,
-          heldMessageIds: heldTargetedIds,
-          reason
-        })
-      } else {
+      }
+      if (!alreadyHeldByHandOver || startedForOrdinaryMail) {
         noticeUnreadMailNotContinued(runtime, db, dispatchId, reason)
       }
     }

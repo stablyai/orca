@@ -8,7 +8,10 @@ import {
   notifyTargetedMailHeld,
   preserveUnreadFollowUpMail
 } from '../../../../orchestration/workers/reports/work-target-mail-hold-notice'
-import { verifyUnreadMailboxMessagesForWorkerDispatch } from '../../../../../bots/bot-work-target-unread-provenance'
+import {
+  partitionUnreadMessagesForBareRecipient,
+  verifyUnreadMailboxMessagesForWorkerDispatch
+} from '../../../../../bots/bot-work-target-unread-provenance'
 import { routeAllMailboxPages } from './mailbox-page-routing'
 
 /** Move ordinary unread mail from a settled worker Dispatch to its owning Run while holding targeted work mail in place with a deduplicated notice. */
@@ -124,12 +127,14 @@ export async function routeVerifiedDirectMailToDispatch(
     )
     return
   }
-  const partition = await verifyUnreadMailboxMessagesForWorkerDispatch(runtime, db, {
-    destinationDispatchId: dispatchId,
-    sourceMailbox: directHandle,
-    runId,
-    throughSequence
-  })
+  const partition = (
+    await verifyUnreadMailboxMessagesForWorkerDispatch(runtime, db, {
+      destinationDispatchId: dispatchId,
+      sourceMailbox: directHandle,
+      runId,
+      throughSequence
+    })
+  ).reverifySync()
   if (partition.deliverableIds.length > 0) {
     await routeAllMailboxPages(
       () =>
@@ -149,6 +154,61 @@ export async function routeVerifiedDirectMailToDispatch(
       dispatchId,
       heldMessageIds: partition.held.map((item) => item.messageId),
       reason: partition.held[0]!.reason,
+      runIdFallback: runId
+    })
+  }
+}
+
+/** Route direct mail for `runId` from `directHandle` to `run:<runId>`, verifying targeted mail against the live coordinator. */
+export async function routeVerifiedDirectMailToRun(
+  runtime: OrcaRuntimeService,
+  db: OrchestrationDb,
+  args: {
+    runId: string
+    directHandle: string
+    recipientAddress: string
+    signal?: AbortSignal
+  }
+): Promise<void> {
+  const { runId, directHandle, recipientAddress, signal } = args
+  const throughSequence = db.getLatestUnreadDirectMessageSequenceForRun(runId, directHandle)
+  if (throughSequence === undefined) {
+    return
+  }
+  const targetedIds = listUnreadTargetedMessageIds(db, directHandle, { runId, throughSequence })
+  if (targetedIds.length === 0) {
+    await routeAllMailboxPages(
+      () => db.routeUnreadDirectMessagesToRunMailbox(runId, directHandle, throughSequence),
+      signal
+    )
+    return
+  }
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: SELECT of one TEXT primary-key column.
+  const rows = db.db
+    .prepare(
+      `SELECT id FROM messages
+       WHERE run_id = ? AND to_handle = ? AND read = 0
+         AND delivery_contract = 'current_delivery' AND sequence <= ?
+       ORDER BY sequence ASC`
+    )
+    .all(runId, directHandle, throughSequence) as { id: string }[]
+  const finalResult = (
+    await partitionUnreadMessagesForBareRecipient(runtime, db, recipientAddress, rows)
+  ).reverifySync()
+  if (finalResult.deliverableIds.length > 0) {
+    await routeAllMailboxPages(
+      () =>
+        db.routeUnreadDirectMessagesToRunMailbox(runId, directHandle, throughSequence, {
+          onlyMessageIds: finalResult.deliverableIds
+        }),
+      signal
+    )
+  }
+  if (finalResult.held.length > 0) {
+    notifyTargetedMailHeld((handle, type) => runtime.notifyMessageArrived(handle, type), db, {
+      mailboxHandle: directHandle,
+      heldMessageIds: finalResult.held.map((item) => item.messageId),
+      reason: finalResult.held[0]!.reason,
       runIdFallback: runId
     })
   }

@@ -122,9 +122,18 @@ export function routeUnreadDirectMessagesToRunMailbox(
   this: OrchestrationDb,
   runId: string,
   directHandle: string,
-  throughSequence?: number
+  throughSequence?: number,
+  options?: DirectMessageRoutingOptions
 ): MailboxRoutingPage {
-  return this.routeDirectMessagePage(`run:${runId}`, runId, directHandle, throughSequence, true)
+  return this.routeDirectMessagePage(
+    `run:${runId}`,
+    runId,
+    directHandle,
+    throughSequence,
+    true,
+    false,
+    options
+  )
 }
 
 export function routeUnreadDirectMessagesToDispatchMailbox(

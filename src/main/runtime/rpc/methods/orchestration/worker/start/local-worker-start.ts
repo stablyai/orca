@@ -44,8 +44,8 @@ import type { ResolvedBotWorkTargetPlacement } from '../../../../../../../shared
 import { runtimeRepoSelectorText } from '../../../../../workspaces/catalog/runtime-repo-selector'
 import { prepareLocalWorkerPlacementAndLaunch } from './placement/local-worker-existing-placement'
 import {
-  resolveVerifiedTakesMailIds,
-  reverifyTakesMailBeforeHandOver
+  resolveInitialOrdinaryTakesMailIds,
+  verifyAndBindTakesMailForHandOver
 } from '../../../../../../bots/bot-work-target-follow-up-mail-gate'
 
 export async function startLocalWorker(args: {
@@ -114,8 +114,9 @@ export async function startLocalWorker(args: {
   )
   let mode = chatWorkerMode(await hostMode, chat)
 
-  const takesMailMessageIds = args.followUp?.takesMailOf
-    ? await resolveVerifiedTakesMailIds(runtime, db, args.followUp.takesMailOf, args.followUp.of)
+  const takesMailOf = args.followUp?.takesMailOf
+  const takesMailMessageIds = takesMailOf
+    ? await resolveInitialOrdinaryTakesMailIds(runtime, db, takesMailOf, args.followUp!.of)
     : undefined
   // Synchronous through the Dispatch insert, so nothing else claims the terminal in between.
   refuseClaimedWorkerTerminal(db, params.terminal, runtime, args.followUp?.of)
@@ -232,12 +233,13 @@ export async function startLocalWorker(args: {
     const worktreeId = resolvedWorktree.id
     const worktreeInstanceId = resolvedWorktree.instanceId ?? null
     // A hand-over from the background wait gets a fresh delivery budget; one in time keeps the shared one.
-    const bindTerminal = (): void => {
-      const terminalAuthority = authority ?? requireWorkerAuthority(runtime, handle)
+    const bindTerminal = (
+      resolvedAuthority = authority ?? requireWorkerAuthority(runtime, handle)
+    ): void => {
       db.prepareStartingWorkerAuthority({
         dispatchId: started.dispatch.id,
         handle,
-        ...terminalAuthority,
+        ...resolvedAuthority,
         worktreeId,
         worktreeInstanceId,
         effects,
@@ -246,14 +248,16 @@ export async function startLocalWorker(args: {
       })
     }
     const handOver = async (deliveryDeadline = readinessDeadline): Promise<unknown> => {
-      bindTerminal()
-      if (args.followUp?.takesMailOf) {
-        await reverifyTakesMailBeforeHandOver(runtime, db, {
-          dispatchId: started.dispatch.id,
-          takesMailOf: args.followUp.takesMailOf,
-          runId: run.id
-        })
-      }
+      const terminalAuthority = authority ?? requireWorkerAuthority(runtime, handle)
+      await verifyAndBindTakesMailForHandOver(runtime, db, {
+        dispatchId: started.dispatch.id,
+        takesMailOf: args.followUp?.takesMailOf,
+        runId: run.id,
+        worktreeId,
+        worktreeInstanceId,
+        workerHostScope: 'hostScope' in terminalAuthority ? terminalAuthority.hostScope : undefined,
+        bindTerminal: () => bindTerminal(terminalAuthority)
+      })
       if (workerChat) {
         rebindReusedStructuredWorker(handle, db)
       }

@@ -1,10 +1,14 @@
 import { noteQuestionEdge } from './question-edges'
 import {
+  fenceOutstandingMailboxDelivery,
   finalizeMailboxDelivery,
   markDeliveryAcknowledged,
   requireDeliveryRaw
 } from './mailbox-delivery-finalization'
-export { finalizeMailboxDelivery } from './mailbox-delivery-finalization'
+export {
+  fenceOutstandingMailboxDelivery,
+  finalizeMailboxDelivery
+} from './mailbox-delivery-finalization'
 import type { DeliveryRow, MessageRow, MessageType } from '../orchestration-records'
 import { OrchestrationError } from '../../orchestration-error'
 import { generateId } from '../generated-id'
@@ -47,6 +51,8 @@ export type MailboxDeliveryParams = {
   consumerSource?: 'dispatch' | 'attachment'
   limit?: number
   wakeTypes?: MessageType[]
+  /** Unverified targeted message IDs withheld from fresh batch creation. */
+  excludeMessageIds?: readonly string[]
 }
 
 export type MailboxDeliveryBatch = {
@@ -138,6 +144,9 @@ function selectMailboxDelivery(
     const messages = db.getDeliveryMessages(existing)
     return { delivery: exposeDeliveryTimestamps(existing), messages, replayed: true }
   }
+  const excluded = params.excludeMessageIds?.length ? params.excludeMessageIds : undefined
+  const excludeClause = excluded ? ' AND id NOT IN (SELECT value FROM json_each(?))' : ''
+  const excludeParam = excluded ? [JSON.stringify(excluded)] : []
   if (params.wakeTypes?.length) {
     const placeholders = params.wakeTypes.map(() => '?').join(',')
     const matching = db.db
@@ -145,9 +154,9 @@ function selectMailboxDelivery(
         `SELECT 1 FROM messages
          WHERE run_id = ? AND to_handle = ? AND read = 0
            AND delivery_contract = 'current_delivery'
-           AND type IN (${placeholders}) LIMIT 1`
+           AND type IN (${placeholders})${excludeClause} LIMIT 1`
       )
-      .get(params.runId, params.mailboxHandle, ...params.wakeTypes)
+      .get(params.runId, params.mailboxHandle, ...params.wakeTypes, ...excludeParam)
     if (!matching) {
       return undefined
     }
@@ -156,10 +165,10 @@ function selectMailboxDelivery(
     .prepare(
       `SELECT id FROM messages
        WHERE run_id = ? AND to_handle = ? AND read = 0
-         AND delivery_contract = 'current_delivery'
+         AND delivery_contract = 'current_delivery'${excludeClause}
        ORDER BY sequence ASC LIMIT ?`
     )
-    .all(params.runId, params.mailboxHandle, limit)
+    .all(params.runId, params.mailboxHandle, ...excludeParam, limit)
     .flatMap((row) => (typeof row?.id === 'string' ? [row.id] : []))
   if (messageIds.length === 0) {
     return undefined
@@ -289,6 +298,7 @@ export type RoleMailboxDeliveryMethods = {
   hasOutstandingMailboxDelivery: typeof hasOutstandingMailboxDelivery
   getOutstandingMailboxDelivery: typeof getOutstandingMailboxDelivery
   fenceUnacknowledgedMailboxDeliveries: typeof fenceUnacknowledgedMailboxDeliveries
+  fenceOutstandingMailboxDelivery: typeof fenceOutstandingMailboxDelivery
 }
 
 export function attachRoleMailboxDelivery(ctor: { prototype: object }): void {
@@ -301,6 +311,7 @@ export function attachRoleMailboxDelivery(ctor: { prototype: object }): void {
     takeMailboxDelivery,
     hasOutstandingMailboxDelivery,
     getOutstandingMailboxDelivery,
-    fenceUnacknowledgedMailboxDeliveries
+    fenceUnacknowledgedMailboxDeliveries,
+    fenceOutstandingMailboxDelivery
   })
 }

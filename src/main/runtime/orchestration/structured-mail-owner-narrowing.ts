@@ -3,7 +3,14 @@
 import type { MessageRow } from './db/orchestration-records'
 import type { OrchestrationDb } from './db/orchestration-db'
 import { selectOrchestrationPointerBatch } from './mailbox/terminal-pointer/mailbox-pointer-eligibility'
-import type { StructuredMailboxPointerHost } from './mailbox/structured-pointer/structured-mailbox-pointer-host-contract'
+import type { StructuredMailSendRow } from './db/messages/structured-mail-send-store'
+import * as mailCustody from './mailbox/structured-mail/structured-mail-custody'
+import type {
+  StructuredMailMessageVerifier,
+  StructuredMailboxPointerHost,
+  StructuredPointerSendOutcome
+} from './mailbox/structured-pointer/structured-mailbox-pointer-host-contract'
+import type { StructuredPointerTarget } from './mailbox/structured-pointer/structured-mailbox-pointer-delivery'
 import type { QueuedMessageOwed } from '../../native-chat/agent-session-journal/queued-messages/queued-message-consume-error'
 
 type Owner = Pick<StructuredMailboxPointerHost, 'narrowBatch' | 'mailHeld'>
@@ -66,4 +73,55 @@ export function ownerAdjustedOwed(
   }
   const rows = messageIds.flatMap((messageId) => db.getMessageById(messageId) ?? [])
   return rows.length > 0 && narrow(sessionId, rows).ended.length === rows.length ? 'stale' : owed
+}
+
+/** Verify targeted mail before whole-mail chat admission; returns a synchronous commit-time recheck or null when held. */
+export async function verifyStructuredMailAdmission(
+  verify: StructuredMailMessageVerifier | undefined,
+  db: OrchestrationDb,
+  mailboxHandle: string,
+  target: StructuredPointerTarget,
+  message: MessageRow
+): Promise<(() => boolean) | null> {
+  if (!verify) {
+    return () => true
+  }
+  const checked = await verify(db, mailboxHandle, target, message)
+  return checked.ok ? checked.reverifySync : null
+}
+
+/** Settle a structured send outcome and schedule redelivery when custody moved or released. */
+export async function settleStructuredSendOutcome(args: {
+  db: OrchestrationDb
+  host: StructuredMailboxPointerHost
+  attempt: StructuredMailSendRow
+  outcome: StructuredPointerSendOutcome
+  lastOwed: QueuedMessageOwed
+  owedNow: () => QueuedMessageOwed
+  redeliver: () => void
+}): Promise<'next' | 'park'> {
+  const { db, host, attempt, outcome, lastOwed, owedNow, redeliver } = args
+  switch (outcome.kind) {
+    case 'unattached':
+    case 'refused':
+      db.releaseStructuredMailSend(attempt)
+      return 'park'
+    case 'obsolete':
+      db.releaseStructuredMailSend(attempt)
+      if (lastOwed === 'stale') {
+        queueMicrotask(redeliver)
+      }
+      return lastOwed === 'unavailable' ? 'park' : 'next'
+    case 'queued':
+      return 'next'
+    case 'sent':
+      if (outcome.state === 'accepted' || outcome.state === 'unknown') {
+        const observed = await mailCustody.observeStructuredMailAttempt(host, attempt)
+        const settled = mailCustody.settleStructuredMailAttempt(db, attempt, observed, owedNow)
+        if (settled.released) {
+          queueMicrotask(redeliver)
+        }
+      }
+      return 'next'
+  }
 }

@@ -4,14 +4,20 @@ import type { OrchestrationEntryCaller } from '../runtime/orchestration/addressi
 import type { OrchestrationDb } from '../runtime/orchestration/db/orchestration-db'
 import { FOLLOW_UP_MESSAGE_TYPES } from '../runtime/orchestration/db/dispatch-context/worker-follow-up-plan'
 import { readMessagesWorkTargetProvenance } from '../runtime/orchestration/db/messages/message-work-target-provenance'
-import type { MessageRow } from '../runtime/orchestration/db/orchestration-records'
 import { OrchestrationError } from '../runtime/orchestration/orchestration-error'
 import type { WorkerFollowUp } from '../runtime/rpc/methods/orchestration/worker/follow-up/worker-follow-up-placement'
 import { activeBotWorkTargetForCaller } from './bot-turn-work-target'
-import {
-  verifyLocalWorkerDispatchMatchesAllWorkTargets,
-  verifyLocalWorkerDispatchMatchesWorkTarget
-} from './bot-work-target-follow-up'
+import { verifyLocalWorkerDispatchMatchesWorkTarget } from './bot-work-target-follow-up'
+import { partitionUnreadMessagesForWorkerDispatch } from './bot-work-target-unread-partition'
+
+export {
+  partitionUnreadMessagesForBareRecipient,
+  partitionUnreadMessagesForResolvedWorkspace,
+  partitionUnreadMessagesForWorkerDispatch,
+  verifyUnreadMailboxMessagesForWorkerDispatch,
+  type UnreadMessageTargetPartition,
+  type UnreadMessageTargetPartitionResult
+} from './bot-work-target-unread-partition'
 
 export type UnreadWorkTargetProvenanceBatch =
   | { kind: 'empty' }
@@ -24,14 +30,7 @@ export type UnreadWorkTargetProvenanceBatch =
     }
   | { kind: 'corrupt'; messageId: string; reason: string }
 
-/**
- * Inspect ALL unread follow-up messages across `dispatchId` and its follow-up ancestors so neither
- * earlier untargeted mail nor mixed-origin batches can hide a targeted message's provenance.
- */
-export function collectLineageUnreadWorkTargetProvenances(
-  db: OrchestrationDb,
-  dispatchId: string
-): UnreadWorkTargetProvenanceBatch {
+function collectLineageUnreadFollowUpIds(db: OrchestrationDb, dispatchId: string): string[] {
   const seen = new Set<string>()
   const queue = [dispatchId]
   while (queue.length > 0) {
@@ -47,11 +46,22 @@ export function collectLineageUnreadWorkTargetProvenances(
   }
   const unreadIds: string[] = []
   for (const id of seen) {
-    const unread = db.getUnreadMessages(`dispatch:${id}`, [...FOLLOW_UP_MESSAGE_TYPES])
-    for (const msg of unread) {
+    for (const msg of db.getUnreadMessages(`dispatch:${id}`, [...FOLLOW_UP_MESSAGE_TYPES])) {
       unreadIds.push(msg.id)
     }
   }
+  return unreadIds
+}
+
+/**
+ * Inspect ALL unread follow-up messages across `dispatchId` and its follow-up ancestors so neither
+ * earlier untargeted mail nor mixed-origin batches can hide a targeted message's provenance.
+ */
+export function collectLineageUnreadWorkTargetProvenances(
+  db: OrchestrationDb,
+  dispatchId: string
+): UnreadWorkTargetProvenanceBatch {
+  const unreadIds = collectLineageUnreadFollowUpIds(db, dispatchId)
   if (unreadIds.length === 0) {
     return { kind: 'empty' }
   }
@@ -85,10 +95,21 @@ export function collectLineageUnreadWorkTargetProvenances(
   }
 }
 
+function strongestPlacement(
+  placements: readonly ResolvedBotWorkTargetPlacement[]
+): ResolvedBotWorkTargetPlacement | undefined {
+  return (
+    placements.find((target) => target.expectedWorkspaceInstanceId !== undefined) ??
+    placements.find((target) => target.mode === 'existing') ??
+    placements[0]
+  )
+}
+
 /**
  * Resolve and enforce work targets for a worker follow-up before `followUp.place()` can touch
  * terminals or release leftover shells. Only trusted background unread-mail follow-through with
  * real unread SQLite mail uses persisted provenance alone; direct `takesMailOf` cannot bypass.
+ * Invalid targeted mail never blocks unrelated ordinary or valid targeted mail from continuing.
  */
 export async function resolveVerifiedFollowUpWorkTarget(
   runtime: Pick<
@@ -106,169 +127,36 @@ export async function resolveVerifiedFollowUpWorkTarget(
   >
 ): Promise<ResolvedBotWorkTargetPlacement | undefined> {
   const activeTurnTarget = activeBotWorkTargetForCaller(runtime.botWorkTargets, orchestrationCaller)
-  const unreadBatches = [
-    collectLineageUnreadWorkTargetProvenances(db, followUp.of),
-    ...(followUp.takesMailOf && followUp.takesMailOf !== followUp.of
-      ? [collectLineageUnreadWorkTargetProvenances(db, followUp.takesMailOf)]
-      : [])
+  const unreadIds = [
+    ...new Set([
+      ...collectLineageUnreadFollowUpIds(db, followUp.of),
+      ...(followUp.takesMailOf && followUp.takesMailOf !== followUp.of
+        ? collectLineageUnreadFollowUpIds(db, followUp.takesMailOf)
+        : [])
+    ])
   ]
-  for (const batch of unreadBatches) {
-    if (batch.kind === 'corrupt') {
-      throw new OrchestrationError(
-        'invalid_argument',
-        `Unread mail ${batch.messageId} for dispatch:${followUp.addressed} has unreadable work-target provenance (${batch.reason}). No effects were applied.`,
-        { effectsApplied: false }
-      )
-    }
-  }
-  const persistedTargets = unreadBatches.flatMap((batch) =>
-    batch.kind === 'targeted' ? batch.placements : []
-  )
-  const hasUnreadMail = unreadBatches.some((batch) => batch.kind !== 'empty')
   const isTrustedUnreadFollowThrough =
-    Boolean(followUp.takesMailOf && followUp.trustedUnreadMailFollowThrough) && hasUnreadMail
-  const requiredTargets = isTrustedUnreadFollowThrough
-    ? persistedTargets
-    : [...(activeTurnTarget ? [activeTurnTarget] : []), ...persistedTargets]
-  if (requiredTargets.length === 0) {
-    return undefined
-  }
-  await verifyLocalWorkerDispatchMatchesAllWorkTargets(runtime, db, followUp.of, requiredTargets)
-  return (
-    requiredTargets.find((target) => target.expectedWorkspaceInstanceId !== undefined) ??
-    requiredTargets.find((target) => target.mode === 'existing') ??
-    requiredTargets[0]
-  )
-}
+    Boolean(followUp.takesMailOf && followUp.trustedUnreadMailFollowThrough) && unreadIds.length > 0
 
-/** Verify unread follow-through provenance before steering into an already-claimed follow-up. */
-export async function verifyUnreadFollowThroughBeforeAction(
-  runtime: Pick<
-    OrcaRuntimeService,
-    'showManagedTerminalWorkspace' | 'getBotWorkTargetCatalogStore' | 'showTerminal'
-  >,
-  db: OrchestrationDb,
-  dispatchId: string,
-  steerDispatchId?: string
-): Promise<void> {
-  const batch = collectLineageUnreadWorkTargetProvenances(db, dispatchId)
-  if (batch.kind === 'corrupt') {
-    throw new OrchestrationError(
-      'invalid_argument',
-      `unread mail ${batch.messageId} has unreadable work-target provenance (${batch.reason})`,
-      { effectsApplied: false }
-    )
+  const verifiedTargets: ResolvedBotWorkTargetPlacement[] = []
+  if (!isTrustedUnreadFollowThrough && activeTurnTarget) {
+    await verifyLocalWorkerDispatchMatchesWorkTarget(runtime, db, followUp.of, activeTurnTarget)
+    verifiedTargets.push(activeTurnTarget)
   }
-  if (steerDispatchId && batch.kind === 'targeted') {
-    await verifyLocalWorkerDispatchMatchesAllWorkTargets(
+
+  if ((isTrustedUnreadFollowThrough || followUp.takesMailOf) && unreadIds.length > 0) {
+    const partition = await partitionUnreadMessagesForWorkerDispatch(
       runtime,
       db,
-      steerDispatchId,
-      batch.placements
+      followUp.of,
+      unreadIds.map((id) => ({ id }))
     )
-  }
-}
-
-export type UnreadMessageTargetPartition = {
-  deliverableIds: string[]
-  held: { messageId: string; reason: string }[]
-}
-
-/**
- * Partition unread messages for transfer into `destinationDispatchId`.
- * Ordinary (untargeted) messages and targeted messages matching the live destination proceed;
- * drifted, mismatched, or corrupt targeted messages stay held in their original mailbox.
- */
-export async function partitionUnreadMessagesForWorkerDispatch(
-  runtime: Pick<
-    OrcaRuntimeService,
-    'showManagedTerminalWorkspace' | 'getBotWorkTargetCatalogStore' | 'showTerminal'
-  >,
-  db: OrchestrationDb,
-  destinationDispatchId: string,
-  messages: readonly Pick<MessageRow, 'id'>[]
-): Promise<UnreadMessageTargetPartition> {
-  if (messages.length === 0) {
-    return { deliverableIds: [], held: [] }
-  }
-  const byId = readMessagesWorkTargetProvenance(
-    db,
-    messages.map((message) => message.id)
-  )
-  const verificationByKey = new Map<string, { ok: true } | { ok: false; reason: string }>()
-  const deliverableIds: string[] = []
-  const held: { messageId: string; reason: string }[] = []
-  for (const message of messages) {
-    const entry = byId.get(message.id)
-    if (!entry || entry.kind === 'absent') {
-      deliverableIds.push(message.id)
-      continue
+    if (partition.deliverableIds.length === 0 && partition.held.length > 0) {
+      throw new OrchestrationError('invalid_argument', partition.held[0]!.reason, {
+        effectsApplied: false
+      })
     }
-    if (entry.kind === 'corrupt') {
-      held.push({ messageId: message.id, reason: entry.reason })
-      continue
-    }
-    const key = JSON.stringify(entry.placement)
-    let verdict = verificationByKey.get(key)
-    if (!verdict) {
-      try {
-        await verifyLocalWorkerDispatchMatchesWorkTarget(
-          runtime,
-          db,
-          destinationDispatchId,
-          entry.placement
-        )
-        verdict = { ok: true }
-      } catch (error) {
-        verdict = {
-          ok: false,
-          reason: error instanceof Error ? error.message : String(error)
-        }
-      }
-      verificationByKey.set(key, verdict)
-    }
-    if (verdict.ok) {
-      deliverableIds.push(message.id)
-    } else {
-      held.push({ messageId: message.id, reason: verdict.reason })
-    }
+    verifiedTargets.push(...partition.verifiedPlacements)
   }
-  return { deliverableIds, held }
-}
-
-/** Query unread current-delivery messages in `sourceMailbox` for `runId` (bounded by optional sequence) and partition them against `destinationDispatchId`. */
-export async function verifyUnreadMailboxMessagesForWorkerDispatch(
-  runtime: Pick<
-    OrcaRuntimeService,
-    'showManagedTerminalWorkspace' | 'getBotWorkTargetCatalogStore' | 'showTerminal'
-  >,
-  db: OrchestrationDb,
-  args: {
-    destinationDispatchId: string
-    sourceMailbox: string
-    runId: string
-    throughSequence?: number
-  }
-): Promise<UnreadMessageTargetPartition & { totalCount: number }> {
-  const throughClause = args.throughSequence === undefined ? '' : ' AND sequence <= ?'
-  const params: (string | number)[] = [args.runId, args.sourceMailbox]
-  if (args.throughSequence !== undefined) {
-    params.push(args.throughSequence)
-  }
-  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: SELECT of one TEXT primary-key column.
-  const rows = db.db
-    .prepare(
-      `SELECT id FROM messages
-       WHERE run_id = ? AND to_handle = ? AND read = 0
-         AND delivery_contract = 'current_delivery'${throughClause}
-       ORDER BY sequence ASC`
-    )
-    .all(...params) as { id: string }[]
-  const partition = await partitionUnreadMessagesForWorkerDispatch(
-    runtime,
-    db,
-    args.destinationDispatchId,
-    rows
-  )
-  return { ...partition, totalCount: rows.length }
+  return strongestPlacement(verifiedTargets)
 }

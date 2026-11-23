@@ -123,12 +123,14 @@ async function runPassHeldWorkerMail(
       runId: followUpDispatch.run_id
     })
     if (ownTargetedIds.length > 0) {
-      const ownPartition = await partitionUnreadMessagesForWorkerDispatch(
-        runtime,
-        db,
-        followUpId,
-        ownTargetedIds.map((id) => ({ id }))
-      )
+      const ownPartition = (
+        await partitionUnreadMessagesForWorkerDispatch(
+          runtime,
+          db,
+          followUpId,
+          ownTargetedIds.map((id) => ({ id }))
+        )
+      ).reverifySync()
       if (ownPartition.held.length > 0) {
         const returnIds = ownPartition.held.map((item) => item.messageId)
         let page
@@ -158,11 +160,13 @@ async function runPassHeldWorkerMail(
       ? db.getUnreadMessages(`dispatch:${source}`, [...FOLLOW_UP_MESSAGE_TYPES])[0]
       : undefined
     if (first) {
-      const partition = await verifyUnreadMailboxMessagesForWorkerDispatch(runtime, db, {
-        destinationDispatchId: followUpId,
-        sourceMailbox: `dispatch:${source}`,
-        runId: first.run_id
-      })
+      const partition = (
+        await verifyUnreadMailboxMessagesForWorkerDispatch(runtime, db, {
+          destinationDispatchId: followUpId,
+          sourceMailbox: `dispatch:${source}`,
+          runId: first.run_id
+        })
+      ).reverifySync()
       const currentCustody = custodyOf(db, followUpId)
       if (currentCustody === 'starting') {
         runtime.withdrawStaleChatMail(lineageMailboxes)

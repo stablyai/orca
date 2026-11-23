@@ -28,73 +28,41 @@ export {
   workTargetFollowUpRefusal
 } from './bot-work-target-registration-checks'
 
-/** Verify an existing local/SSH workspace matches host, registration, policy, and incarnation. */
-export async function verifyLocalWorkspaceMatchesWorkTarget(
-  runtime: Pick<
-    OrcaRuntimeService,
-    'showManagedTerminalWorkspace' | 'getBotWorkTargetCatalogStore'
-  >,
+export type BotWorkTargetWorkspaceRuntime = Pick<
+  OrcaRuntimeService,
+  'getBotWorkTargetCatalogStore'
+> & {
+  showManagedTerminalWorkspace: (
+    selector: string,
+    requiredHostId?: Parameters<OrcaRuntimeService['showManagedTerminalWorkspace']>[1]
+  ) => Promise<BotWorkTargetWorkspaceSummary>
+}
+
+/** Synchronously validate a previously fetched workspace summary against live host catalog/registration state. */
+export function verifyResolvedLocalWorkspaceMatchesWorkTargetSync(
+  runtime: Pick<OrcaRuntimeService, 'getBotWorkTargetCatalogStore'>,
   args: {
-    worktreeId: string
+    managed: BotWorkTargetWorkspaceSummary
     workTarget: ResolvedBotWorkTargetPlacement
     recipientLabel: string
     workerHostScope?: string | null
     workerWorkspaceInstanceId?: string | null
     requireRecordedInstanceId?: boolean
   }
-): Promise<{ worktreeId: string; managed: BotWorkTargetWorkspaceSummary }> {
+): { worktreeId: string; managed: BotWorkTargetWorkspaceSummary } {
   const {
-    worktreeId,
+    managed,
     workTarget,
     recipientLabel,
     workerHostScope,
     workerWorkspaceInstanceId,
     requireRecordedInstanceId
   } = args
-  if (workTarget.onEnvironmentId) {
-    throw workTargetFollowUpRefusal(
-      workTarget,
-      `${recipientLabel} runs on this host, not on the selected paired server.`
-    )
-  }
-  const storeHostId = workTarget.targetHostId ?? LOCAL_EXECUTION_HOST_ID
-  const parsedHost = parseExecutionHostId(storeHostId)
-  if (!parsedHost || parsedHost.kind === 'runtime') {
-    throw workTargetFollowUpRefusal(
-      workTarget,
-      `Cannot verify ${recipientLabel} against the selected target host.`
-    )
-  }
-  if (workerHostScope !== undefined && workerHostScope !== null) {
-    const scope = readWorkerTerminalHostScope(workerHostScope)
-    if (scope.kind === 'unreadable') {
-      throw workTargetFollowUpRefusal(
-        workTarget,
-        `${recipientLabel} has an unreadable host scope and cannot be verified against the selected target.`
-      )
-    }
-    if (parsedHost.kind === 'local' && scope.kind === 'remote') {
-      throw workTargetFollowUpRefusal(
-        workTarget,
-        `${recipientLabel} runs on a remote SSH host, not the selected local host.`
-      )
-    }
-    if (
-      parsedHost.kind === 'ssh' &&
-      (scope.kind !== 'remote' || scope.targetId !== parsedHost.targetId)
-    ) {
-      throw workTargetFollowUpRefusal(
-        workTarget,
-        `${recipientLabel} does not run on the selected SSH host.`
-      )
-    }
-  }
-  if (
-    parsedHost.kind === 'ssh' &&
-    getRegisteredSshState(parsedHost.targetId)?.status !== 'connected'
-  ) {
-    throw workTargetFollowUpRefusal(workTarget, 'The SSH host for the selected target is offline.')
-  }
+  const storeHostId = assertLocalWorkTargetHostAndScope({
+    workTarget,
+    recipientLabel,
+    workerHostScope
+  })
   const store = runtime.getBotWorkTargetCatalogStore()
   if (!store) {
     throw workTargetFollowUpRefusal(
@@ -102,10 +70,7 @@ export async function verifyLocalWorkspaceMatchesWorkTarget(
       'The host project catalog is not ready to verify this worker.'
     )
   }
-  const managed = await runtime
-    .showManagedTerminalWorkspace(`id:${worktreeId}`, storeHostId)
-    .catch(() => null)
-  if (!managed || (managed.hostId ?? LOCAL_EXECUTION_HOST_ID) !== storeHostId) {
+  if ((managed.hostId ?? LOCAL_EXECUTION_HOST_ID) !== storeHostId) {
     throw workTargetFollowUpRefusal(
       workTarget,
       `${recipientLabel}'s workspace is no longer available on the selected host.`
@@ -221,4 +186,122 @@ export async function verifyLocalWorkspaceMatchesWorkTarget(
     requireRecordedInstanceId
   })
   return { worktreeId: managed.id, managed }
+}
+
+function assertLocalWorkTargetHostAndScope(args: {
+  workTarget: ResolvedBotWorkTargetPlacement
+  recipientLabel: string
+  workerHostScope?: string | null
+}) {
+  const { workTarget, recipientLabel, workerHostScope } = args
+  if (workTarget.onEnvironmentId) {
+    throw workTargetFollowUpRefusal(
+      workTarget,
+      `${recipientLabel} runs on this host, not on the selected paired server.`
+    )
+  }
+  const storeHostId = workTarget.targetHostId ?? LOCAL_EXECUTION_HOST_ID
+  const parsedHost = parseExecutionHostId(storeHostId)
+  if (!parsedHost || parsedHost.kind === 'runtime') {
+    throw workTargetFollowUpRefusal(
+      workTarget,
+      `Cannot verify ${recipientLabel} against the selected target host.`
+    )
+  }
+  if (workerHostScope !== undefined && workerHostScope !== null) {
+    const scope = readWorkerTerminalHostScope(workerHostScope)
+    if (scope.kind === 'unreadable') {
+      throw workTargetFollowUpRefusal(
+        workTarget,
+        `${recipientLabel} has an unreadable host scope and cannot be verified against the selected target.`
+      )
+    }
+    if (parsedHost.kind === 'local' && scope.kind === 'remote') {
+      throw workTargetFollowUpRefusal(
+        workTarget,
+        `${recipientLabel} runs on a remote SSH host, not the selected local host.`
+      )
+    }
+    if (
+      parsedHost.kind === 'ssh' &&
+      (scope.kind !== 'remote' || scope.targetId !== parsedHost.targetId)
+    ) {
+      throw workTargetFollowUpRefusal(
+        workTarget,
+        `${recipientLabel} does not run on the selected SSH host.`
+      )
+    }
+  }
+  if (
+    parsedHost.kind === 'ssh' &&
+    getRegisteredSshState(parsedHost.targetId)?.status !== 'connected'
+  ) {
+    throw workTargetFollowUpRefusal(workTarget, 'The SSH host for the selected target is offline.')
+  }
+  return storeHostId
+}
+
+/** Verify an existing local/SSH workspace matches host, registration, policy, and incarnation. */
+export async function verifyLocalWorkspaceMatchesWorkTarget(
+  runtime: BotWorkTargetWorkspaceRuntime,
+  args: {
+    worktreeId: string
+    workTarget: ResolvedBotWorkTargetPlacement
+    recipientLabel: string
+    workerHostScope?: string | null
+    workerWorkspaceInstanceId?: string | null
+    requireRecordedInstanceId?: boolean
+  }
+): Promise<{
+  worktreeId: string
+  managed: BotWorkTargetWorkspaceSummary
+  reverifySync: () => void
+}> {
+  const {
+    worktreeId,
+    workTarget,
+    recipientLabel,
+    workerHostScope,
+    workerWorkspaceInstanceId,
+    requireRecordedInstanceId
+  } = args
+  const storeHostId = assertLocalWorkTargetHostAndScope({
+    workTarget,
+    recipientLabel,
+    workerHostScope
+  })
+  if (!runtime.getBotWorkTargetCatalogStore()) {
+    throw workTargetFollowUpRefusal(
+      workTarget,
+      'The host project catalog is not ready to verify this worker.'
+    )
+  }
+  const managed = await runtime
+    .showManagedTerminalWorkspace(`id:${worktreeId}`, storeHostId)
+    .catch(() => null)
+  if (!managed || (managed.hostId ?? LOCAL_EXECUTION_HOST_ID) !== storeHostId) {
+    throw workTargetFollowUpRefusal(
+      workTarget,
+      `${recipientLabel}'s workspace is no longer available on the selected host.`
+    )
+  }
+  const reverifySync = () => {
+    verifyResolvedLocalWorkspaceMatchesWorkTargetSync(runtime, {
+      managed,
+      workTarget,
+      recipientLabel,
+      workerHostScope,
+      workerWorkspaceInstanceId,
+      requireRecordedInstanceId
+    })
+  }
+  const verified = verifyResolvedLocalWorkspaceMatchesWorkTargetSync(runtime, {
+    managed,
+    workTarget,
+    recipientLabel,
+    workerHostScope,
+    workerWorkspaceInstanceId,
+    requireRecordedInstanceId
+  })
+  return { ...verified, reverifySync }
 }

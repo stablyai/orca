@@ -41,6 +41,7 @@ import { OrcaRuntimeWithLinearCommands } from './integrations/linear/linear-comm
 import type { WiredBot } from '../bots/bot-structured-session-wiring'
 import type { RuntimeStore } from './construction/runtime-store-contract'
 import { watchBotSettingsChangeSources } from '../bots/bot-settings-change-sources'
+import { createStructuredMailWorkTargetVerifier } from '../bots/bot-work-target-structured-mail-gate'
 import type { BotChangeScope } from '../../shared/bots/bot-change-scope'
 import type { BotChatTreeIndex } from '../bots/bot-chat-tree-index'
 import { BotChatTreeWorkerCache } from '../bots/bot-chat-tree-worker-cache'
@@ -241,6 +242,8 @@ export abstract class OrcaRuntimeWithBots extends OrcaRuntimeWithLinearCommands 
   })
 
   protected override structuredMailReportItem = botItemOfReport(this.botItems)
+
+  protected override structuredMailVerifyMessage = createStructuredMailWorkTargetVerifier(this)
 
   /** Whether a bot's work on this host opened this pull request as its owner: a live worker's, or a
    *  workspace under a bot's home with its head branch checked out. */

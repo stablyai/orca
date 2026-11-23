@@ -19,12 +19,14 @@ import {
 } from './bot-turn-work-target'
 import type { BotWorkTargetWorkspaceSummary } from './bot-work-target-refusals'
 import {
+  type BotWorkTargetWorkspaceRuntime,
   verifyLocalWorkspaceMatchesWorkTarget,
   WORK_TARGET_NO_EFFECTS,
   workTargetFollowUpRefusal
 } from './bot-work-target-workspace-match'
 
 export {
+  type BotWorkTargetWorkspaceRuntime,
   isWorkTargetFollowUpMessageType,
   verifyLocalWorkspaceMatchesWorkTarget
 } from './bot-work-target-workspace-match'
@@ -91,14 +93,15 @@ export function extractWorkerRecordedWorktreeInstanceId(
 
 /** Verify a local/SSH worker Dispatch against `workTarget` before storing mail or starting a follow-up. */
 export async function verifyLocalWorkerDispatchMatchesWorkTarget(
-  runtime: Pick<
-    OrcaRuntimeService,
-    'showManagedTerminalWorkspace' | 'getBotWorkTargetCatalogStore' | 'showTerminal'
-  >,
+  runtime: BotWorkTargetWorkspaceRuntime & Pick<OrcaRuntimeService, 'showTerminal'>,
   db: OrchestrationDb,
   dispatchId: string,
   workTarget: ResolvedBotWorkTargetPlacement
-): Promise<{ worktreeId: string; managed: BotWorkTargetWorkspaceSummary }> {
+): Promise<{
+  worktreeId: string
+  managed: BotWorkTargetWorkspaceSummary
+  reverifySync: () => void
+}> {
   const dispatch = db.getDispatchContextById(dispatchId)
   if (!dispatch) {
     throw workTargetFollowUpRefusal(
@@ -143,15 +146,17 @@ export async function verifyLocalWorkerDispatchMatchesWorkTarget(
 
 /** Verify a local worker Dispatch satisfies every preserved/active work target simultaneously. */
 export async function verifyLocalWorkerDispatchMatchesAllWorkTargets(
-  runtime: Pick<
-    OrcaRuntimeService,
-    'showManagedTerminalWorkspace' | 'getBotWorkTargetCatalogStore' | 'showTerminal'
-  >,
+  runtime: BotWorkTargetWorkspaceRuntime & Pick<OrcaRuntimeService, 'showTerminal'>,
   db: OrchestrationDb,
   dispatchId: string,
   workTargets: readonly ResolvedBotWorkTargetPlacement[]
-): Promise<{ worktreeId: string; managed: BotWorkTargetWorkspaceSummary } | undefined> {
-  let verified: { worktreeId: string; managed: BotWorkTargetWorkspaceSummary } | undefined
+): Promise<
+  | { worktreeId: string; managed: BotWorkTargetWorkspaceSummary; reverifySync: () => void }
+  | undefined
+> {
+  let verified:
+    | { worktreeId: string; managed: BotWorkTargetWorkspaceSummary; reverifySync: () => void }
+    | undefined
   for (const target of workTargets) {
     verified = await verifyLocalWorkerDispatchMatchesWorkTarget(runtime, db, dispatchId, target)
   }
@@ -160,16 +165,15 @@ export async function verifyLocalWorkerDispatchMatchesAllWorkTargets(
 
 /** Verify a bare local terminal or standalone session recipient against `workTarget`. */
 export async function verifyBareRecipientMatchesWorkTarget(
-  runtime: Pick<
-    OrcaRuntimeService,
-    | 'showManagedTerminalWorkspace'
-    | 'getBotWorkTargetCatalogStore'
-    | 'showTerminal'
-    | 'getOrchestrationDispatchAuthority'
-  >,
+  runtime: BotWorkTargetWorkspaceRuntime &
+    Pick<OrcaRuntimeService, 'showTerminal' | 'getOrchestrationDispatchAuthority'>,
   recipient: string,
   workTarget: ResolvedBotWorkTargetPlacement
-): Promise<{ worktreeId: string; managed: BotWorkTargetWorkspaceSummary }> {
+): Promise<{
+  worktreeId: string
+  managed: BotWorkTargetWorkspaceSummary
+  reverifySync: () => void
+}> {
   const sessionId = parseOrcaSessionAddress(recipient)
   let worktreeId: string | undefined
   let workerHostScope: string | null | undefined

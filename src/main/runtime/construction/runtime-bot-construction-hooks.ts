@@ -3,6 +3,7 @@ import type { AgentMessageSource } from '../../../shared/agent-session/journal/a
 import type { createStructuredMailboxPointerHost } from '../orchestration/mailbox/structured-pointer/structured-mailbox-pointer-host'
 import type {
   StructuredMailFollowUp,
+  StructuredMailMessageVerifier,
   StructuredMailReportItem
 } from '../orchestration/mailbox/structured-pointer/structured-mailbox-pointer-host-contract'
 import { RuntimeConstructionServices } from './runtime-construction-services'
@@ -19,6 +20,9 @@ export abstract class RuntimeBotConstructionHooks extends RuntimeConstructionSer
 
   // The open item a finished worker's report was started for, from this host's item store.
   protected structuredMailReportItem?: StructuredMailReportItem
+
+  // Live work-target provenance verification for whole-mail chat push delivery.
+  protected structuredMailVerifyMessage?: StructuredMailMessageVerifier
 
   // The chat's bound conversation and whether its answer to this mail lands there; null if unbound.
   protected chatConversationPlace?(

@@ -12,8 +12,6 @@ import {
   resolveWorkerLineage
 } from '../runtime/orchestration/db/dispatch-context/worker-follow-up-lineage'
 import { OrchestrationError } from '../runtime/orchestration/orchestration-error'
-import { RpcDispatcher } from '../runtime/rpc/dispatcher'
-import { ORCHESTRATION_METHODS } from '../runtime/rpc/methods/orchestration/orchestration'
 import { continueUnreadWorkerMailNow } from '../runtime/rpc/methods/orchestration/messaging/settled-worker-follow-through'
 import { startWorker } from '../runtime/rpc/methods/orchestration/worker/worker-start-method'
 import {
@@ -373,7 +371,8 @@ describe('local existing-worker follow-up and unread-mail provenance enforcement
         .some((msg) => msg.subject === 'Mail did not reach the finished worker')
     ).toBe(true)
 
-    // Mixed-origin mailbox (untargeted first, targeted second): refuses on drifted incarnation & blocks untargeted swallow.
+    // Mixed-origin mailbox (untargeted first, drifted targeted second):
+    // holds only the invalid targeted message without blocking ordinary unread follow-through.
     const wMixed = seedLocalWorker(reopenedDb, {
       runId: run.id,
       spec: 'Mixed mailbox worker',
@@ -384,14 +383,14 @@ describe('local existing-worker follow-up and unread-mail provenance enforcement
       worktreeInstanceId: 'inst-acme-1'
     })
     reopenedDb.insertMessage({
-      from: 'term_human',
+      from: BOT_ADDRESS,
       to: `dispatch:${wMixed.dispatchId}`,
       subject: 'Untargeted first',
       body: 'Earlier note',
       type: 'status',
       runId: run.id
     })
-    reopenedDb.insertMessage({
+    const driftedMixedMsg = reopenedDb.insertMessage({
       from: BOT_ADDRESS,
       to: `dispatch:${wMixed.dispatchId}`,
       subject: 'Targeted second',
@@ -405,26 +404,30 @@ describe('local existing-worker follow-up and unread-mail provenance enforcement
       .prepare("UPDATE worker_dispatches SET state = 'succeeded' WHERE dispatch_id = ?")
       .run(wMixed.dispatchId)
     markUnreadFollowUpMail(reopenedDb, wMixed.dispatchId)
-    await continueUnreadWorkerMailNow(restartedRuntime, reopenedDb, wMixed.dispatchId)
-    expect(resolveWorkerLineage(reopenedDb, wMixed.dispatchId)?.latest.id).toBe(wMixed.dispatchId)
-
-    const restartedDispatcher = new RpcDispatcher({
-      runtime: restartedRuntime,
-      methods: ORCHESTRATION_METHODS
-    })
-    expectRpcFailure(
-      await restartedDispatcher.dispatch(
-        rpcReq(
-          'orchestration.send',
-          { to: `dispatch:${wMixed.dispatchId}`, subject: 'Untargeted revive', body: 'No swallow' },
-          { sessionId: BOT_SESSION_ID }
-        )
-      ),
-      'invalid_argument'
+    vi.spyOn(restartedRuntime, 'inspectTerminalProcessIncarnationLiveness').mockResolvedValue(
+      'exited'
     )
-    expect(resolveWorkerLineage(reopenedDb, wMixed.dispatchId)?.latest.id).toBe(wMixed.dispatchId)
+    const showWorkspaceSpy = vi.spyOn(restartedRuntime, 'showManagedTerminalWorkspace')
+    showWorkspaceSpy.mockClear()
+    await continueUnreadWorkerMailNow(restartedRuntime, reopenedDb, wMixed.dispatchId)
+    // Ordinary mail proceeded into follow-up placement while drifted targeted mail stayed held with 1 hold notice.
+    expect(showWorkspaceSpy).toHaveBeenCalledWith('id:wt-acme')
+    expect(reopenedDb.getMessageById(driftedMixedMsg.id)?.to_handle).toBe(
+      `dispatch:${wMixed.dispatchId}`
+    )
+    expect(reopenedDb.getMessageById(driftedMixedMsg.id)?.read).toBe(0)
+    expect(
+      reopenedDb
+        .getUnreadMessages(`run:${run.id}`)
+        .filter(
+          (msg) =>
+            msg.from_handle === `dispatch:${wMixed.dispatchId}` &&
+            msg.payload?.includes('work_target_mail_held')
+        )
+    ).toHaveLength(1)
 
-    // Conflicting targeted provenances (Target A + Target B) and corrupt provenance JSON both fail closed.
+    // Conflicting targeted provenances (Target A valid + Target B mismatched):
+    // holds only Target B while letting valid Target A enter follow-up placement.
     fx.worktrees.get('wt-acme')!.instanceId = 'inst-acme-1'
     const wConflict = seedLocalWorker(reopenedDb, {
       runId: run.id,
@@ -444,7 +447,7 @@ describe('local existing-worker follow-up and unread-mail provenance enforcement
       runId: run.id,
       workTargetProvenance: { sourceOrigin: `session:${BOT_SESSION_ID}`, placement: explicitTarget }
     })
-    reopenedDb.insertMessage({
+    const mismatchedConflictMsg = reopenedDb.insertMessage({
       from: BOT_ADDRESS,
       to: `dispatch:${wConflict.dispatchId}`,
       subject: 'Target B',
@@ -470,10 +473,22 @@ describe('local existing-worker follow-up and unread-mail provenance enforcement
       .prepare("UPDATE worker_dispatches SET state = 'succeeded' WHERE dispatch_id = ?")
       .run(wConflict.dispatchId)
     markUnreadFollowUpMail(reopenedDb, wConflict.dispatchId)
+    showWorkspaceSpy.mockClear()
     await continueUnreadWorkerMailNow(restartedRuntime, reopenedDb, wConflict.dispatchId)
-    expect(resolveWorkerLineage(reopenedDb, wConflict.dispatchId)?.latest.id).toBe(
-      wConflict.dispatchId
+    expect(showWorkspaceSpy).toHaveBeenCalledWith('id:wt-acme')
+    expect(reopenedDb.getMessageById(mismatchedConflictMsg.id)?.to_handle).toBe(
+      `dispatch:${wConflict.dispatchId}`
     )
+    expect(reopenedDb.getMessageById(mismatchedConflictMsg.id)?.read).toBe(0)
+    expect(
+      reopenedDb
+        .getUnreadMessages(`run:${run.id}`)
+        .filter(
+          (msg) =>
+            msg.from_handle === `dispatch:${wConflict.dispatchId}` &&
+            msg.payload?.includes('work_target_mail_held')
+        )
+    ).toHaveLength(1)
 
     const wCorrupt = seedLocalWorker(reopenedDb, {
       runId: run.id,

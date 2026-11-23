@@ -22,7 +22,12 @@ import {
   type AgentMessageSource
 } from '../../../../../shared/agent-session/journal/agent-session-message-source'
 import { StructuredMailboxParking } from '../structured-mail/structured-mailbox-parking'
-import { ownerAdjustedOwed, selectOwnedMail } from '../../structured-mail-owner-narrowing'
+import {
+  ownerAdjustedOwed,
+  selectOwnedMail,
+  settleStructuredSendOutcome,
+  verifyStructuredMailAdmission
+} from '../../structured-mail-owner-narrowing'
 import { StructuredMailSettledState } from '../structured-mail/structured-mail-settled-state'
 import * as mailCustody from '../structured-mail/structured-mail-custody'
 
@@ -266,11 +271,21 @@ export class OrchestrationStructuredMailboxPointerDelivery<
     again?: mailCustody.StructuredMailResend
   ): Promise<AdmitStep> {
     const sessionId = target.sessionId
-    // Read before the fence, so a slow item read cannot leave the send a stale one; it never stops the send.
-    const reportItem = this.deps.reportItem
-      ? await this.deps.reportItem(db, message).catch(() => null)
-      : null
-    const fence = this.deps.host.currentFence(sessionId)
+    const reverify = await verifyStructuredMailAdmission(
+      this.deps.verifyMessage,
+      db,
+      mailboxHandle,
+      target,
+      message
+    )
+    const reportItem =
+      reverify && this.deps.reportItem
+        ? await this.deps.reportItem(db, message).catch(() => null)
+        : null
+    const fence = reverify ? this.deps.host.currentFence(sessionId) : null
+    if (!reverify || !reverify()) {
+      return 'next'
+    }
     if (fence === null) {
       return 'park'
     }
@@ -307,7 +322,9 @@ export class OrchestrationStructuredMailboxPointerDelivery<
       expectedRuntimeFence: fence,
       body,
       stillOwed: () => {
-        last.owed = this.authority.owedTo(sessionId, mailboxHandle, [message.id])
+        last.owed = reverify()
+          ? this.authority.owedTo(sessionId, mailboxHandle, [message.id])
+          : 'stale'
         return (
           last.owed === 'owed' &&
           !shouldReleaseOrchestrationPointer(
@@ -319,35 +336,15 @@ export class OrchestrationStructuredMailboxPointerDelivery<
         )
       }
     })
-    switch (outcome.kind) {
-      case 'unattached':
-      case 'refused':
-        // Refused before admission (a full queue, a detached chat): retry on the session's next edge.
-        db.releaseStructuredMailSend(attempt)
-        return 'park'
-      case 'obsolete':
-        db.releaseStructuredMailSend(attempt)
-        if (last.owed === 'stale') {
-          // Custody moved during the send: its owner now, a terminal included, is told.
-          queueMicrotask(() => this.redeliver(mailboxHandle))
-        }
-        return last.owed === 'unavailable' ? 'park' : 'next'
-      case 'queued':
-        return 'next'
-      case 'sent':
-        // In doubt, including a resend the host answered from an earlier admission: never again.
-        if (outcome.state === 'accepted' || outcome.state === 'unknown') {
-          const observed = await mailCustody.observeStructuredMailAttempt(this.deps.host, attempt)
-          const settled = mailCustody.settleStructuredMailAttempt(db, attempt, observed, () =>
-            this.authority.owedTo(sessionId, mailboxHandle, [message.id])
-          )
-          if (settled.released) {
-            queueMicrotask(() => this.redeliver(mailboxHandle))
-          }
-        }
-        // Pending or rejected: the record decides on a later pass.
-        return 'next'
-    }
+    return settleStructuredSendOutcome({
+      db,
+      host: this.deps.host,
+      attempt,
+      outcome,
+      lastOwed: last.owed,
+      owedNow: () => this.authority.owedTo(sessionId, mailboxHandle, [message.id]),
+      redeliver: () => this.redeliver(mailboxHandle)
+    })
   }
 
   private redeliver(mailboxHandle: string): void {

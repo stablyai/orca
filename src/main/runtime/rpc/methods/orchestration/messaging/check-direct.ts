@@ -6,6 +6,10 @@ import { formatMessageBanner } from '../../../../orchestration/mailbox/formattin
 import type { CheckMailReconciliation } from './check-mail-reconciliation'
 import type { OrchestrationSessionCaller } from '../../../../orchestration/addressing/orchestration-caller-identity'
 import { withReplyFollowUps, exposeMessages } from './mailbox-message-receipt'
+import {
+  filterReadableMailboxMessages,
+  prepareDirectDeliveryWorkTargetGate
+} from './work-target-mailbox-read-gate'
 import { staleDelivery } from '../../../../orchestration/db/messages/role-mailbox-delivery'
 import { ORCHESTRATION_LEGACY_RUN_ID } from '../../../../../../shared/orchestration/orchestration-rpc-contract'
 import type { CheckParams } from '../../../../../../shared/rpc-contract/orchestration/orchestration-params'
@@ -35,18 +39,20 @@ export async function checkDirectMailbox(args: {
   // Honor legacy unread:false callers for compatibility (design doc §5).
   const showAll = params.all === true || (params.unread === false && params.peek !== true)
   const consumeUnread = !showAll && params.peek !== true
+  const recipientAddress = args.reader?.address ?? handle
+  const directTarget = { kind: 'bare', recipientAddress } as const
   const readAndReturn = async () => {
     if (consumeUnread) {
       args.revalidateConsumer()
     }
-    const messages = (
+    const rawMessages = (
       showAll
         ? db.getAllMessagesForHandle(handle, undefined, typeFilter, args.runId)
         : db.getUnreadMessages(handle, typeFilter, { excludeRunOwnedDirect: true })
     ).filter((message) => args.runId === undefined || message.run_id === args.runId)
     if (
       consumeUnread &&
-      messages.some((message) => message.run_id === ORCHESTRATION_LEGACY_RUN_ID)
+      rawMessages.some((message) => message.run_id === ORCHESTRATION_LEGACY_RUN_ID)
     ) {
       throw new OrchestrationError(
         'legacy_read_only',
@@ -54,7 +60,7 @@ export async function checkDirectMailbox(args: {
         { effectsApplied: false }
       )
     }
-    const respond = (visibleMessages: typeof messages) =>
+    const respond = (visibleMessages: typeof rawMessages) =>
       withReplyFollowUps(runtime, db, args.reader, {
         messages: exposeMessages(visibleMessages),
         count: visibleMessages.length,
@@ -66,14 +72,37 @@ export async function checkDirectMailbox(args: {
             }
           : {})
       })
-    return consumeUnread && messages.length
-      ? args.reconciliation.takeDirect({
-          selected: messages,
-          revalidate: args.revalidateConsumer,
-          respond,
-          record: args.recordMutationReceipt
-        })
-      : respond(messages)
+    if (!consumeUnread) {
+      const visible = await filterReadableMailboxMessages(runtime, db, {
+        target: directTarget,
+        mailboxHandle: handle,
+        runId: args.runId,
+        messages: rawMessages
+      })
+      return respond(visible)
+    }
+    if (rawMessages.length === 0) {
+      return respond(rawMessages)
+    }
+    const targetGate = await prepareDirectDeliveryWorkTargetGate(runtime, db, {
+      recipientAddress,
+      mailboxHandle: handle,
+      selected: rawMessages,
+      fallbackRunId: args.runId
+    })
+    if (targetGate.deliverable.length === 0) {
+      targetGate.flushHeld()
+      return respond([])
+    }
+    const taken = await args.reconciliation.takeDirect({
+      selected: targetGate.deliverable,
+      revalidate: args.revalidateConsumer,
+      respond,
+      record: args.recordMutationReceipt,
+      verifySelected: targetGate.verifySelected
+    })
+    targetGate.flushHeld()
+    return taken
   }
 
   if (signal?.aborted) {
