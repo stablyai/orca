@@ -31,6 +31,8 @@ export type StructuredAgentLaunchOptions = StructuredLaunchPromptOptions & {
   forkRequiresInheritedOriginal?: boolean
   /** The host the route decided on; read only by the caller that starts the launch. */
   executionHostId?: ExecutionHostId
+  /** A folder inside the workspace the chat runs in (a task group's); read by the starting caller. */
+  launchDirectory?: string
   /** The saved selection a paired host reported it will seed; read only by the starting caller. */
   hostSeedOptions?: Readonly<Record<string, string>>
   /** Explicit encoded action input, captured durably before any asynchronous preparation. */

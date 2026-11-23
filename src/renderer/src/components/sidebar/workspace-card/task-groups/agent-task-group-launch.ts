@@ -6,7 +6,10 @@ import { activateWorktreeFromSidebar } from '@/lib/workspace/activation/sidebar-
 import { readNewAgentTabDefault } from '@/components/terminal/keyboard-shortcuts/terminal-agent-tab-shortcut'
 import { createNonSecureContextUuid } from '../../../../../../shared/identifiers/non-secure-context-uuid'
 import type { ExecutionHostId } from '../../../../../../shared/execution-host/execution-host'
-import { agentTaskGroupWorkspaceKey } from './agent-task-group-workspace-key'
+import {
+  agentTaskGroupWorkspaceKey,
+  canBrowseTaskGroupFolder
+} from './agent-task-group-workspace-key'
 
 /**
  * Starts the default agent in a new tab of the same workspace and files it under the group.
@@ -16,7 +19,7 @@ export async function launchConversationInAgentTaskGroup(args: {
   worktreeId: string
   executionHostId: ExecutionHostId | undefined
   groupId: string
-  /** The group's folder; a cwd other than the workspace root starts the agent in a terminal. */
+  /** The group's folder: a local chat runs there; a remote host's agent starts there in a terminal. */
   folderPath?: string
 }): Promise<void> {
   const agent = readNewAgentTabDefault(useAppStore.getState(), args.worktreeId)
@@ -38,7 +41,11 @@ export async function launchConversationInAgentTaskGroup(args: {
     agent,
     worktreeId: args.worktreeId,
     launchSource: 'sidebar',
-    ...(args.folderPath ? { initialCwd: args.folderPath } : {})
+    ...(args.folderPath
+      ? canBrowseTaskGroupFolder(args.executionHostId)
+        ? { chatLaunchDirectory: args.folderPath }
+        : { initialCwd: args.folderPath }
+      : {})
   })
   if (!outcome || 'refused' in outcome) {
     return

@@ -93,7 +93,9 @@ export function createStructuredAgentSessionLaunchIntent(
   resumeFrom?: StructuredAgentSessionResumeSource,
   hostSeedOptions?: LaunchSeed,
   activate = true,
-  forkFrom?: StructuredAgentSessionForkSource
+  forkFrom?: StructuredAgentSessionForkSource,
+  /** A folder inside the workspace the chat runs in (a task group's). */
+  launchDirectory?: string
 ): StructuredAgentSessionLaunchIntent {
   const owner = structuredAgentSessionOwnerTarget(
     worktreeId,
@@ -118,7 +120,8 @@ export function createStructuredAgentSessionLaunchIntent(
     hostSeedOptions,
     forkFrom,
     // New chats keep the legacy id until pane keys address the tab by its own id.
-    undefined
+    undefined,
+    launchDirectory
   )
 }
 
@@ -130,7 +133,8 @@ function buildStructuredAgentSessionLaunchIntent(
   resumeFrom: StructuredAgentSessionResumeSource | undefined,
   hostSeedOptions: LaunchSeed,
   forkFrom: StructuredAgentSessionForkSource | undefined,
-  tabId: string | undefined
+  tabId: string | undefined,
+  launchDirectory?: string
 ): StructuredAgentSessionLaunchIntent {
   const state = useAppStore.getState()
   return {
@@ -146,6 +150,7 @@ function buildStructuredAgentSessionLaunchIntent(
       ...(resumeFrom ? { resumeFrom } : {}),
       ...(forkFrom ? { forkFrom } : {}),
       ...(tabId ? { tabId } : {}),
+      ...(launchDirectory ? { launchDirectory } : {}),
       randomUuid: createNonSecureContextUuid
     }),
     ...(forkFrom ? {} : launchSeedOptions(state, owner, agent, hostSeedOptions, resumeFrom))
@@ -181,7 +186,8 @@ export function retryStructuredAgentSessionLaunchIntent(
       fresh ? undefined : intent.params.resumeFrom,
       intent.seedOptions,
       intent.params.forkFrom,
-      intent.params.tabId
+      intent.params.tabId,
+      intent.params.launchDirectory
     ),
     forkRequiresInheritedOriginal: intent.forkRequiresInheritedOriginal,
     explicitLaunchOptions: intent.explicitLaunchOptions

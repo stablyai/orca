@@ -13,5 +13,7 @@ export const CREATE_TAB_FIELDS = {
       afterTabId: Identifier('Invalid tab id').optional()
     })
     .strict()
-    .optional()
+    .optional(),
+  /** A folder inside the workspace for the chat to run in; the host refuses one outside it. */
+  launchDirectory: z.string().min(1).max(4096).optional()
 }

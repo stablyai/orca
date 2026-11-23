@@ -26,7 +26,7 @@ import { structuredLaunchSeedOptions } from '../../../../shared/native-chat/inpu
 import { hasPersistedStructuredAgentSessionStore as hasPersistedStructuredAgentSessionStoreOnDisk } from '../../agent-session/records/agent-session-record-store-slot'
 import { ensureStructuredAgentSessionHostUnlessRefused } from '../../agent-session/installation/structured-agent-session-host-refusal'
 import { getProfileUserDataPath } from '../../../orca-profiles/profile-storage-paths'
-import { isFloatingWorkspaceSelector } from '../../../../shared/workspace/identity/floating-workspace-worktree'
+import { launchDirectoryForCreate } from './structured-session-launch-directory'
 import type { AgentSessionAccountHome } from '../../../../shared/agent-session/lifecycle/accounts/agent-session-account-home'
 import type { StructuredAgentId } from '../../../../shared/agent-session/lifecycle/provider-handles/agent-session-provider-handle'
 import type { StructuredAgentCreateSupportReply } from '../../../../shared/agent-session/lifecycle/operations/structured-agent-create-support-reply'
@@ -108,9 +108,10 @@ export abstract class OrcaRuntimeWithGetStructuredAgentSessionCreateSupport exte
             (source) => this.getStructuredAgentCliSourceRoute(source)
           )
         : undefined)
-    const hostLaunchDirectory = isFloatingWorkspaceSelector(input.worktree)
-      ? (await this.resolveRuntimeFileTarget(input.worktree)).worktree.path
-      : undefined
+    const hostLaunchDirectory = await launchDirectoryForCreate(
+      input,
+      async (worktree) => (await this.resolveRuntimeFileTarget(worktree)).worktree.path
+    )
     // A fork runs where its source runs, and an adopted conversation where it was saved.
     const resolved = input.forkFrom
       ? await resolveStructuredAgentSessionForkIntent({
