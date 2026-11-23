@@ -24,12 +24,18 @@ function openTab(pageId: string, url: string, racesExtensions = false, fails = f
     isDestroyed: () => false,
     loadURL: (loaded: string) => {
       loads.push(loaded)
-      const settle = (): boolean =>
-        fails
-          ? guest.emit('did-fail-load', {}, -102, 'ERR_CONNECTION_REFUSED', loaded, true)
-          : guest.emit('did-finish-load')
-      setTimeout(settle, 1)
-      return Promise.resolve()
+      // Like Electron: the load events fire, then loadURL settles the same way.
+      return new Promise<void>((resolve, reject) =>
+        setTimeout(() => {
+          if (fails) {
+            guest.emit('did-fail-load', {}, -102, 'ERR_CONNECTION_REFUSED', loaded, true)
+            reject(new Error('ERR_CONNECTION_REFUSED'))
+          } else {
+            guest.emit('did-finish-load')
+            resolve()
+          }
+        }, 1)
+      )
     }
   }) as unknown as Electron.WebContents
   const marker = prepareBrowserPageAttach(pageId, RENDERER_ID, PARTITION, url)
