@@ -85,6 +85,7 @@ export const browserRouteWebContentsRegistry = new BrowserRouteWebContentsRegist
   popupReleased: (opener) => browserManager.invalidateGuestMemoryProtection(opener),
   openNewTabPopup: (source, request, observed, childOpener) =>
     browserManager.openNewTabPopup(source, request, observed, childOpener),
+  isGuestWindowVisible: (source) => browserManager.isGuestShownInVisibleDesktopWindow(source),
   releaseAgentLead: (openerWebContentsId) => browserManager.releaseAgentLead(openerWebContentsId)
 })
 routeWebContentsRegistryRef.current = browserRouteWebContentsRegistry

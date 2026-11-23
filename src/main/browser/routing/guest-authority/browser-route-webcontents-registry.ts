@@ -77,6 +77,7 @@ export class BrowserRouteWebContentsRegistry {
         reportBlockedPopup: (blocked) => this.dependencies.reportBlockedPopup?.(blocked),
         popupReleased: (opener) => this.dependencies.popupReleased?.(opener),
         openNewTabPopup: this.dependencies.openNewTabPopup,
+        isGuestWindowVisible: this.dependencies.isGuestWindowVisible,
         releaseAgentLead: this.dependencies.releaseAgentLead,
         isPopupNavigationAllowed: (url) => this.navigationAllowed(state, url, false)
       })

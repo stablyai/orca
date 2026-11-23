@@ -17,13 +17,17 @@ export function isNewBrowserTabPopupIntent(details: NewBrowserTabPopupRequest): 
 }
 
 // A link and a featureless `window.open(url, '_blank')` arrive alike; only the created child's opener tells them apart.
-// Only this desktop's user sees a child window; other opens stay tabs, as do background tabs (no child) and file links.
+// Desktop clicks and local-CLI clicks on a visible desktop window wait for a child; remote/headless viewers stay tabs.
 export function waitsForPopupOpener(
   details: NewBrowserTabPopupRequest,
-  observed: ObservedBrowserGuestGesture | null
+  observed: ObservedBrowserGuestGesture | null,
+  desktopWindowVisible = false
 ): boolean {
+  const mayShowDesktopPopup =
+    observed !== null &&
+    (!observed.byAgent || (observed.injectedSource === 'local-agent' && desktopWindowVisible))
   return (
-    observed?.byAgent === false &&
+    mayShowDesktopPopup &&
     details.disposition === 'foreground-tab' &&
     isNewBrowserTabPopupIntent(details) &&
     normalizeBrowserPopupUrl(details.url) !== null

@@ -1,4 +1,5 @@
-import { shell } from 'electron'
+import { BrowserWindow, shell } from 'electron'
+import { isResourceWindowVisible } from '../../../../window/visibility/resource-view-admission'
 import {
   normalizeExternalBrowserUrl,
   redactKagiSessionToken
@@ -158,7 +159,8 @@ export abstract class BrowserManagerGuestPopupPolicy extends BrowserManagerNavig
       (isLocalFileLinkFromLocalPage(guest, request.url) ? request.url : null)
     const answersAsTab =
       childOpener === undefined
-        ? isNewBrowserTabPopupIntent(request) && !waitsForPopupOpener(request, observed)
+        ? isNewBrowserTabPopupIntent(request) &&
+          !waitsForPopupOpener(request, observed, this.isGuestShownInVisibleDesktopWindow(guest))
         : childOpener === null && isBrowserTabPopupRequest(request)
     if (!ownerContext || !newTabUrl || !answersAsTab) {
       return false
@@ -227,6 +229,22 @@ export abstract class BrowserManagerGuestPopupPolicy extends BrowserManagerNavig
         this.publishServerPagePopup(contents, owner)
       }
     }
+  }
+
+  isGuestShownInVisibleDesktopWindow(guest: Electron.WebContents): boolean {
+    if (guest.isDestroyed() || this.isListedAsServerPage(guest.id)) {
+      return false
+    }
+    const ownerContext = this.resolvePopupOwnerContext(guest.id)
+    const renderer = ownerContext
+      ? this.resolveRendererForBrowserTab(ownerContext.browserTabId)
+      : null
+    const hostContents =
+      guest.getType() === 'webview' ? (renderer ?? guest.hostWebContents ?? null) : guest
+    const hostWindow =
+      (hostContents ? BrowserWindow.fromWebContents(hostContents) : null) ??
+      (renderer && hostContents !== renderer ? BrowserWindow.fromWebContents(renderer) : null)
+    return isResourceWindowVisible(hostWindow)
   }
 
   /** An offscreen page, or a popup one opened: viewers list both as server tabs. */

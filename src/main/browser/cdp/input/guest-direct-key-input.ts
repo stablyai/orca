@@ -2,7 +2,7 @@ import { assertExpectedPageUrlForStep } from './browser-expected-page-url'
 import type { WebContents } from 'electron'
 import type { AgentInputFocusGuard } from './agent-input-focus-guard'
 import { BrowserError } from '../../browser-error'
-import { withAgentInputInjection } from './agent-input-injection'
+import { runWithInjectedInputSource, withAgentInputInjection } from './agent-input-injection'
 import { resolveFocusedFrameRoute } from './guest-focused-frame-route'
 import { prepareGuestTextInsertion } from './guest-renderer-text-insertion'
 import {
@@ -196,28 +196,30 @@ export async function releaseHeldPageInput(
   release: HeldInputRelease,
   guardFocus: AgentInputFocusGuard
 ): Promise<unknown> {
-  const send: GuestSessionCdpSender = (method, params, sessionId) =>
-    sendGuestCdpCommand(webContents, method, params, sessionId)
-  // The command's debugger lease may already have detached.
-  const lease = acquireElectronDebugger(webContents)
-  try {
-    if (release.method === 'Input.dispatchKeyEvent') {
-      return await dispatchPageKeyEvent(webContents, release.params, send, guardFocus)
+  return await runWithInjectedInputSource(webContents.id, 'remote-viewer', async () => {
+    const send: GuestSessionCdpSender = (method, params, sessionId) =>
+      sendGuestCdpCommand(webContents, method, params, sessionId)
+    // The command's debugger lease may already have detached.
+    const lease = acquireElectronDebugger(webContents)
+    try {
+      if (release.method === 'Input.dispatchKeyEvent') {
+        return await dispatchPageKeyEvent(webContents, release.params, send, guardFocus)
+      }
+      if (release.method !== 'Input.dispatchMouseEvent') {
+        return await send(release.method, release.params)
+      }
+      const button = normalizeCdpPointerButton(String(release.params.button))
+      const state = cdpPointerStateFor(webContents)
+      const remaining = { ...state }
+      releaseCdpPointerButton(remaining, button)
+      // Preserve other callers' held buttons when releasing this one.
+      const result = await send(release.method, { ...release.params, buttons: remaining.buttons })
+      releaseCdpPointerButton(state, button)
+      return result
+    } finally {
+      lease.release()
     }
-    if (release.method !== 'Input.dispatchMouseEvent') {
-      return await send(release.method, release.params)
-    }
-    const button = normalizeCdpPointerButton(String(release.params.button))
-    const state = cdpPointerStateFor(webContents)
-    const remaining = { ...state }
-    releaseCdpPointerButton(remaining, button)
-    // Preserve other callers' held buttons when releasing this one.
-    const result = await send(release.method, { ...release.params, buttons: remaining.buttons })
-    releaseCdpPointerButton(state, button)
-    return result
-  } finally {
-    lease.release()
-  }
+  })
 }
 
 export type TextInsertionRoute = {

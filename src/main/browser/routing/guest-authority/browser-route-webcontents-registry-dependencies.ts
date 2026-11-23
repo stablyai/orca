@@ -19,6 +19,7 @@ export type BrowserRouteWebContentsRegistryDependencies = {
   reportBlockedPopup?(input: { openerWebContentsId: number; url: string }): void
   popupReleased?(opener: WebContents): void
   openNewTabPopup?: BrowserRouteGuestPopupDependencies['openNewTabPopup']
+  isGuestWindowVisible?: BrowserRouteGuestPopupDependencies['isGuestWindowVisible']
   releaseAgentLead?: BrowserRouteGuestPopupDependencies['releaseAgentLead']
   maxGuests?: number
 }

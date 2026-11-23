@@ -1,5 +1,9 @@
 import type { WebContents } from 'electron'
-import { isAgentInjectingInput } from '../../cdp/input/agent-input-injection'
+import {
+  getAgentInputInjectionSource,
+  isAgentInjectingInput,
+  type InjectedInputSource
+} from '../../cdp/input/agent-input-injection'
 
 // Window-open details lack user activation; track browser-process input instead of page events.
 const ACTIVATING_MOUSE_TYPES: ReadonlySet<string> = new Set(['mouseDown', 'mouseUp'])
@@ -77,7 +81,10 @@ export function getLastBrowserGuestInputInSession(
 }
 
 /** A recent activating input; `byAgent` when an agent or remote viewer sent it, not this desktop's user. */
-export type ObservedBrowserGuestGesture = { byAgent: boolean }
+export type ObservedBrowserGuestGesture = {
+  byAgent: boolean
+  injectedSource?: InjectedInputSource
+}
 
 export type BrowserGuestInputGesture = {
   /** Single-use: one observed click cannot be replayed into a second window or tab. */
@@ -93,14 +100,15 @@ export function trackBrowserGuestInputGesture(
   }: { now?: () => number; onActivatingInput?: (byAgent: boolean) => void } = {}
 ): BrowserGuestInputGesture {
   let lastGestureAt: number | null = null
-  let lastGestureByAgent = false
+  let lastGestureSource: InjectedInputSource | null = null
   let unsubscribe: (() => void) | null = null
   try {
     unsubscribe = onActivatingBrowserGuestInput(guest, () => {
       lastGestureAt = now()
-      lastGestureByAgent = isAgentInjectingInput(guest)
-      noteSessionInput(guest, lastGestureAt, lastGestureByAgent)
-      onActivatingInput?.(lastGestureByAgent)
+      lastGestureSource = getAgentInputInjectionSource(guest)
+      const byAgent = lastGestureSource !== null
+      noteSessionInput(guest, lastGestureAt, byAgent)
+      onActivatingInput?.(byAgent)
     })
   } catch {
     // Fail closed: an unobservable input stream never counts as a gesture.
@@ -110,7 +118,9 @@ export function trackBrowserGuestInputGesture(
       const observedAt = lastGestureAt
       lastGestureAt = null
       return unsubscribe && observedAt !== null && isRecentBrowserGuestInput(observedAt, now())
-        ? { byAgent: lastGestureByAgent }
+        ? lastGestureSource === null
+          ? { byAgent: false }
+          : { byAgent: true, injectedSource: lastGestureSource }
         : null
     },
     dispose: () => {

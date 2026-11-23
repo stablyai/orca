@@ -6,6 +6,10 @@ import {
   guardPaneFocusForAgentInput
 } from '../../cdp/input/agent-input-focus-guard'
 import {
+  runWithInjectedInputSource,
+  type InjectedInputSource
+} from '../../cdp/input/agent-input-injection'
+import {
   BrowserAgentActivity,
   type AgentCommandLease,
   type AgentPointerInput
@@ -97,7 +101,13 @@ export abstract class BrowserManagerVisibility extends BrowserManagerState {
     caller: RpcCallerIdentity | undefined,
     execute: () => Promise<T>
   ): Promise<T> {
-    return this.pageInputCredit.during(browserPageId, caller, execute)
+    const guestId =
+      this.webContentsIdByTabId.get(browserPageId) ?? browserPopupPageWebContentsId(browserPageId)
+    const source: InjectedInputSource =
+      caller?.kind === 'local-cli' ? 'local-agent' : 'remote-viewer'
+    return this.pageInputCredit.during(browserPageId, caller, () =>
+      guestId === null ? execute() : runWithInjectedInputSource(guestId, source, execute)
+    )
   }
 
   /** Credits a guest's activating input (or a DOM-activated tap) to the command delivering it, under the tab a link it opens would join. */

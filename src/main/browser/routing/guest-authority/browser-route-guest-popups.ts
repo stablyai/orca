@@ -46,6 +46,7 @@ export type BrowserRouteGuestPopupDependencies = {
     observed: ObservedBrowserGuestGesture | null,
     childOpener?: Electron.WebFrameMain | null
   ) => boolean
+  isGuestWindowVisible?: (source: WebContents) => boolean
   /** The desktop user's own input in a popup takes its opener's page back from the agent. */
   releaseAgentLead?: (openerWebContentsId: number) => void
   openPopupWindow?: (
@@ -223,7 +224,12 @@ export function createBrowserRouteGuestPopupController(input: {
       }
       // At the cap, a request waiting on its child's opener may still become a tab, so createWindow applies the cap.
       const capped =
-        popups.size >= MAX_BROWSER_ROUTE_GUEST_POPUPS && !waitsForPopupOpener(request, observed)
+        popups.size >= MAX_BROWSER_ROUTE_GUEST_POPUPS &&
+        !waitsForPopupOpener(
+          request,
+          observed,
+          input.dependencies.isGuestWindowVisible?.(source) ?? false
+        )
       if (!permitted || capped || !observed) {
         if (!disposed) {
           reportBlockedPopup(details?.url)
