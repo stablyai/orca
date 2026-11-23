@@ -48,7 +48,8 @@ export function stopMayHaveRejected(send: Pick<RejectedSend, 'rejection'>): bool
 export async function savedStop(chat: StopReadingChat, sessionId: string): Promise<SavedStop> {
   try {
     return (await (await chat.journalReads(sessionId)).latestStop())?.event ?? null
-  } catch {
+  } catch (error) {
+    console.warn('[connectors] could not read the chat’s latest Stop', error)
     return null
   }
 }
@@ -85,11 +86,11 @@ export async function rejectedSendRefusal(
   link: { sessionId: string; agent: string },
   send: RejectedSend | null | undefined
 ): Promise<Delivery> {
-  if (send && stopMayHaveRejected(send)) {
+  const fact = readAgentSessionFailureFact(send?.rejection)
+  if (send && fact && STOP_REJECTIONS.has(fact.kind)) {
     if (personStopTookBack(send, await savedStop(chat, link.sessionId))) {
       return refused('conversation_cancelled')
     }
   }
-  const fact = readAgentSessionFailureFact(send?.rejection)
   return refused('agent_not_reachable', fact && connectorFailure(fact, link.agent))
 }
