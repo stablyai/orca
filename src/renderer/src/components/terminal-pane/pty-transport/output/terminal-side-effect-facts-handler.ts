@@ -285,17 +285,3 @@ export function registerTerminalSideEffectFactConsumer(
     }
   }
 }
-
-export function _dispatchTerminalSideEffectBatchForTest(batch: TerminalSideEffectBatch): void {
-  dispatchTerminalSideEffectBatch(batch)
-}
-
-export function _resetTerminalSideEffectFactConsumersForTest(): void {
-  consumersByPtyId.clear()
-  for (const ptyId of Array.from(handoffFactBuffersByPtyId.keys())) {
-    deleteHandoffFactBuffer(ptyId)
-  }
-  channelUnsubscribe?.()
-  channelUnsubscribe = null
-  persistedAuthorityFlagCache = undefined
-}

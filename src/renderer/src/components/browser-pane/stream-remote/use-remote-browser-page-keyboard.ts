@@ -63,7 +63,8 @@ export function useRemoteBrowserPageKeyboard({
   isCurrentRemoteOperationToken,
   closeMissingRemotePage,
   scheduleRemoteTabInfoRefresh,
-  setPaneNotice
+  setPaneNotice,
+  closeSelectPopupForPageInput
 }: {
   pickerAvailable: boolean
   runtimeTarget: () => RemoteBrowserRuntimeTarget | null
@@ -75,6 +76,7 @@ export function useRemoteBrowserPageKeyboard({
   closeMissingRemotePage: (remotePageId?: string | null) => void
   scheduleRemoteTabInfoRefresh: (token: RemoteBrowserOperationToken, delayMs?: number) => void
   setPaneNotice: (notice: RemoteBrowserPaneNotice | null) => void
+  closeSelectPopupForPageInput: () => void
 }): {
   handleRemoteScreenshotKeyDown: (event: React.KeyboardEvent<HTMLImageElement>) => void
   handleRemoteScreenshotPaste: (event: React.ClipboardEvent<HTMLImageElement>) => void
@@ -147,6 +149,7 @@ export function useRemoteBrowserPageKeyboard({
       if (!isCurrentRemoteOperationToken(operationToken)) {
         return
       }
+      closeSelectPopupForPageInput()
       try {
         if (input.method === 'browser.keyboardInsertText') {
           // Why: a paste pressed before our queued copy finished carries the clipboard from before it.

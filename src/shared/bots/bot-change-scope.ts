@@ -39,6 +39,27 @@ export type BotChangeScope = {
   kinds?: readonly BotChangeKind[]
   kindBots?: Readonly<Partial<Record<BotChangeKind, readonly string[]>>>
   needsYou?: BotNeedsYouCounts
+  /** An `items` change's items, by bot: a bot listed here had only these change, so its list reads
+   *  just them. A bot left out (and an older host's notice) re-reads whole. */
+  itemUids?: Readonly<Record<string, readonly string[]>>
+  /** The host reads a list's items by uid, so a `workers` change can read just the loaded items that
+   *  link a worker. Absent: an older host, whose lists read whole. */
+  namesItems?: true
+}
+
+/** The notice of these changed items, by bot; null for none. */
+export function botItemsChangeScope(
+  items: readonly { uid: string; ownerBotId: string }[]
+): BotChangeScope | null {
+  const itemUids: Record<string, string[]> = {}
+  for (const { uid, ownerBotId } of items) {
+    ;(itemUids[ownerBotId] ??= []).push(uid)
+  }
+  const botIds = Object.keys(itemUids)
+  if (botIds.length === 0) {
+    return null
+  }
+  return { botIds, kinds: ['items'], itemUids }
 }
 
 /** What a reader re-reads for: its bot (absent for a host-wide reader) and the kinds it shows. */
@@ -112,22 +133,47 @@ export function botChangeBotIds(
 
 const ANY_KIND = '*'
 
-/** Changes that go out in one quiet window, each kind keeping its own bots (null: every bot). A change
- *  naming no kinds is held under ANY_KIND. */
-export type PendingBotChanges = Map<BotChangeKind | typeof ANY_KIND, Set<string> | null>
+/** Changes that go out in one quiet window: each kind keeping its own bots (null: every bot), a change
+ *  naming no kinds held under ANY_KIND; and each bot's changed items (null once a change of its items
+ *  didn't name them, or named too many to read one by one). */
+export type PendingBotChanges = {
+  kinds: Map<BotChangeKind | typeof ANY_KIND, Set<string> | null>
+  itemUids: Map<string, Set<string> | null>
+}
+
+export function pendingBotChanges(): PendingBotChanges {
+  return { kinds: new Map(), itemUids: new Map() }
+}
+
+/** The most items a notice names for one bot; more re-read the bot's list whole. */
+export const BOT_CHANGE_ITEM_UIDS_MAX = 100
 
 export function addBotChange(pending: PendingBotChanges, scope: BotChangeScope): void {
   const kinds: readonly (BotChangeKind | typeof ANY_KIND)[] =
     scope.kinds && scope.kinds.length > 0 ? scope.kinds : [ANY_KIND]
   for (const kind of kinds) {
-    const bots = pending.get(kind)
+    const bots = pending.kinds.get(kind)
     if (!scope.botIds) {
-      pending.set(kind, null)
+      pending.kinds.set(kind, null)
     } else if (bots === undefined) {
-      pending.set(kind, new Set(scope.botIds))
+      pending.kinds.set(kind, new Set(scope.botIds))
     } else if (bots !== null) {
       scope.botIds.forEach((id) => bots.add(id))
     }
+  }
+  if (!kinds.includes('items') || !scope.botIds) {
+    return
+  }
+  for (const botId of scope.botIds) {
+    const named = scope.itemUids?.[botId]
+    const uids = pending.itemUids.get(botId)
+    if (!named || uids === null) {
+      pending.itemUids.set(botId, null)
+      continue
+    }
+    const next = uids ?? new Set<string>()
+    named.forEach((uid) => next.add(uid))
+    pending.itemUids.set(botId, next.size > BOT_CHANGE_ITEM_UIDS_MAX ? null : next)
   }
 }
 
@@ -135,10 +181,10 @@ export function addBotChange(pending: PendingBotChanges, scope: BotChangeScope):
  *  keeps an unscoped change of one kind (an automation run) from sending another kind's change (a
  *  worker's) to every bot's readers. */
 export function botChangeNotice(pending: PendingBotChanges): BotChangeScope {
-  const entries = [...pending]
+  const entries = [...pending.kinds]
   const allScoped = entries.every(([, bots]) => bots !== null)
   const botIds = allScoped ? [...new Set(entries.flatMap(([, bots]) => [...(bots ?? [])]))] : null
-  if (pending.has(ANY_KIND)) {
+  if (pending.kinds.has(ANY_KIND)) {
     return botIds ? { botIds } : {}
   }
   const kinds = entries.map(([kind]) => kind).filter((kind) => kind !== ANY_KIND)
@@ -146,10 +192,19 @@ export function botChangeNotice(pending: PendingBotChanges): BotChangeScope {
     kind !== ANY_KIND && bots ? [[kind, [...bots]] as const] : []
   )
   const sameBots = allScoped && scoped.every(([, bots]) => bots.length === botIds?.length)
+  // An items change of every bot names none of them.
+  const named =
+    pending.kinds.get('items') === null
+      ? []
+      : [...pending.itemUids].flatMap(([botId, uids]) =>
+          uids ? [[botId, [...uids]] as const] : []
+        )
   return {
     ...(botIds ? { botIds } : {}),
     kinds,
-    ...(sameBots || scoped.length === 0 ? {} : { kindBots: Object.fromEntries(scoped) })
+    ...(sameBots || scoped.length === 0 ? {} : { kindBots: Object.fromEntries(scoped) }),
+    ...(named.length > 0 ? { itemUids: Object.fromEntries(named) } : {}),
+    ...(pending.kinds.has('workers') ? { namesItems: true as const } : {})
   }
 }
 
@@ -166,7 +221,7 @@ export function readBotChangeScope(event: unknown): BotChangeScope | undefined {
     'kinds' in event && Array.isArray(event.kinds)
       ? event.kinds.filter((kind): kind is BotChangeKind => typeof kind === 'string')
       : undefined
-  const kindBots = 'kindBots' in event ? readKindBots(event.kindBots) : undefined
+  const kindBots = 'kindBots' in event ? readStringLists(event.kindBots) : undefined
   const needsYou = 'needsYou' in event ? readBotNeedsYouCounts(event.needsYou) : undefined
   return botIds || kinds
     ? {
@@ -178,11 +233,27 @@ export function readBotChangeScope(event: unknown): BotChangeScope | undefined {
     : undefined
 }
 
-function readKindBots(value: unknown): BotChangeScope['kindBots'] {
+/** `readBotChangeScope` with the items it names (`itemUids`, `namesItems`), for Items lists that read
+ *  just those; kept apart so readers that don't stay as small as they were. */
+export function readBotChangeScopeWithItems(event: unknown): BotChangeScope | undefined {
+  const scope = readBotChangeScope(event)
+  if (!scope || !event || typeof event !== 'object') {
+    return scope
+  }
+  const itemUids = 'itemUids' in event ? readStringLists(event.itemUids) : undefined
+  return {
+    ...scope,
+    ...(itemUids ? { itemUids } : {}),
+    ...('namesItems' in event && event.namesItems === true ? { namesItems: true as const } : {})
+  }
+}
+
+/** A record of string lists (`kindBots`, `itemUids`), read loosely. */
+function readStringLists(value: unknown): Record<string, string[]> | undefined {
   if (!value || typeof value !== 'object') {
     return undefined
   }
-  const out: Partial<Record<string, string[]>> = {}
+  const out: Record<string, string[]> = {}
   for (const [kind, bots] of Object.entries(value)) {
     if (Array.isArray(bots)) {
       out[kind] = bots.filter((id): id is string => typeof id === 'string')

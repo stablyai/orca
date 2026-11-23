@@ -1,6 +1,6 @@
 import type { ReactNode } from 'react'
 import { useSyncExternalStore } from 'react'
-import { Pressable, Text, View, useWindowDimensions, type LayoutRectangle } from 'react-native'
+import { Text, View, useWindowDimensions, type LayoutRectangle } from 'react-native'
 import {
   AlertCircle,
   CornerDownRight,
@@ -8,7 +8,7 @@ import {
   MoreHorizontal,
   Send
 } from 'lucide-react-native'
-import { colors, pressedStyle } from '../../../../theme/mobile-theme'
+import { colors } from '../../../../theme/mobile-theme'
 import { queuedMessageCardSteers } from '../../../../../../src/shared/agent-session/view/structured-agent-session-queued-cards'
 import { useMobileColorScheme } from '../../../../theme/use-mobile-color-scheme'
 import type { MobileQueuedMessageCard } from './mobile-structured-queued-message-cards'
@@ -23,6 +23,8 @@ import {
   queuedMessageStyles as styles
 } from './mobile-native-chat-queued-message-styles'
 import { useMobileTranslation } from '../../../../i18n/use-mobile-translation'
+import { MobilePendingButton } from '../../../../components/controls/MobilePendingButton'
+import type { MobileQueuedCardControl } from './mobile-queued-card-actions'
 
 const subscribeNever = () => () => undefined
 // The 32pt pill reaches 44pt inside the row's own height; Android drops touches outside the parent.
@@ -32,7 +34,8 @@ type QueuedMessageCardRowProps = {
   dragHandle?: ReactNode
   card: MobileQueuedMessageCard
   editor?: MobileQueuedMessageInlineEditor
-  busy: boolean
+  /** The control whose action for this card is on its way, if any. */
+  busyControl?: MobileQueuedCardControl
   /** Set on the card the composer's Steer queued preview would send. */
   headLight?: MobileQueuedHeadLight
   steerHeld: boolean
@@ -81,7 +84,7 @@ export function MobileQueuedMessageCardRow({
 
 function QueuedMessageCardContents({
   card,
-  busy,
+  busyControl,
   headLight,
   steerHeld,
   agentWorking,
@@ -100,6 +103,7 @@ function QueuedMessageCardContents({
   const narrow = useWindowDimensions().width < QUEUED_ROW_NARROW_WIDTH
   const returned = card.state === 'returned'
   // A card that needs attention offers its retry, Send, which is what its caption names.
+  const busy = busyControl !== undefined
   const steers = agentWorking && !card.needsAttention && queuedMessageCardSteers(card)
   const count = card.images?.length ?? 0
   const lit = useSyncExternalStore(
@@ -177,9 +181,12 @@ function QueuedMessageCardContents({
           ) : null}
         </View>
         {card.waitsForAgent ? null : (
-          <Pressable
-            accessibilityRole="button"
-            accessibilityState={{ disabled: busy || steerHeld }}
+          <MobilePendingButton
+            label={
+              steers
+                ? t('session.queuedMessageCardRow.steer', 'Steer')
+                : t('session.queuedMessageCardRow.send', 'Send')
+            }
             accessibilityLabel={
               returned
                 ? t('session.queuedMessageCardRow.sendAgainHint', 'Send this message again')
@@ -191,47 +198,36 @@ function QueuedMessageCardContents({
                   : t('session.queuedMessageCardRow.sendHint', 'Send this message')
             }
             hitSlop={STEER_HIT_SLOP}
-            style={({ pressed }) => [
-              styles.steerPill,
-              // Filled like the composer's primary while Steer queued would press it.
-              lit && styles.litAction,
-              // Opacity, so a lit pill still answers a press.
-              pressed && pressedStyle,
-              (busy || steerHeld) && styles.disabled
-            ]}
+            // Filled like the composer's primary while Steer queued would press it.
+            style={[styles.steerPill, lit && styles.litAction]}
+            labelStyle={[styles.steerLabel, lit && styles.litActionLabel]}
+            icon={
+              narrow ? null : steers ? (
+                <CornerDownRight
+                  size={12}
+                  color={lit ? colors.bgBase : colors.textPrimary}
+                  strokeWidth={2}
+                />
+              ) : (
+                <Send size={12} color={lit ? colors.bgBase : colors.textPrimary} strokeWidth={2} />
+              )
+            }
+            spinnerColor={lit ? colors.bgBase : colors.textPrimary}
+            pending={busyControl === 'send'}
             disabled={busy || steerHeld}
             onPress={onSend}
-          >
-            {narrow ? null : steers ? (
-              <CornerDownRight
-                size={12}
-                color={lit ? colors.bgBase : colors.textPrimary}
-                strokeWidth={2}
-              />
-            ) : (
-              <Send size={12} color={lit ? colors.bgBase : colors.textPrimary} strokeWidth={2} />
-            )}
-            <Text style={[styles.steerLabel, lit && styles.litActionLabel]}>
-              {steers
-                ? t('session.queuedMessageCardRow.steer', 'Steer')
-                : t('session.queuedMessageCardRow.send', 'Send')}
-            </Text>
-          </Pressable>
+          />
         )}
-        <Pressable
-          accessibilityRole="button"
-          accessibilityState={{ disabled: busy }}
-          accessibilityLabel={t('session.queuedMessageCardRow.moreActions', 'More actions')}
-          style={({ pressed }) => [
-            styles.moreButton,
-            pressed && styles.pressed,
-            busy && styles.disabled
-          ]}
+        <MobilePendingButton
+          label={t('session.queuedMessageCardRow.moreActions', 'More actions')}
+          iconOnly
+          icon={<MoreHorizontal size={16} color={colors.textSecondary} strokeWidth={2} />}
+          style={styles.moreButton}
+          spinnerColor={colors.textSecondary}
+          pending={busyControl === 'more'}
           disabled={busy}
           onPress={onMore}
-        >
-          <MoreHorizontal size={16} color={colors.textSecondary} strokeWidth={2} />
-        </Pressable>
+        />
       </View>
       {returned && card.caption ? (
         <View style={styles.expandedBody}>

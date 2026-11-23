@@ -6,7 +6,7 @@ import {
 import { createNonSecureContextUuid as createBrowserUuid } from '../../../../shared/identifiers/non-secure-context-uuid'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
-import type { SecretDraft } from './bot-tool-draft'
+import type { SecretDraft } from '../../../../shared/bots/bot-tool-draft'
 
 export function BotToolSecretRows({
   rows,

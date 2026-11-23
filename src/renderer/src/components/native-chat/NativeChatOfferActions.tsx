@@ -4,7 +4,11 @@ import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import { useTranslate } from '@/i18n/use-translate'
 import { updateBot, useCardBot } from '@/lib/bot-catalog'
-import { answerBotOffer } from '../../../../shared/bots/bot-offer-answers'
+import {
+  answerBotOffer,
+  answerBotOfferAgain,
+  type BotOfferAnswerUpdate
+} from '../../../../shared/bots/bot-offer-answers'
 import { botErrorMessage } from '../bots/bot-presentation'
 import { NativeChatCardActions } from './NativeChatCardFrame'
 import { NativeChatBotKickoffContext } from './native-chat-bot-kickoff-view'
@@ -16,6 +20,8 @@ export type NativeChatOffer = {
   dismiss: () => void
   /** Tells the bot `text`, as if typed, and keeps `chosen` as this card's answer. */
   send: (text: string, chosen: readonly string[]) => void
+  /** Like `send`, for a further action on a card already answered: replaces its answer. */
+  sendAgain: (text: string, chosen: readonly string[]) => void
 }
 
 export function useNativeChatOffer(botId: string, cardId: string): NativeChatOffer {
@@ -27,12 +33,18 @@ export function useNativeChatOffer(botId: string, cardId: string): NativeChatOff
   // the claim back and leaves the card to press again.
   const answerOffer = async (
     update: Parameters<typeof answerBotOffer>[0],
-    text: string
+    text: string,
+    again = false
   ): Promise<void> => {
-    const outcome = await answerBotOffer(update, {
-      update: (offerAnswer) => updateBot(ref, { offerAnswer }),
+    const ops = {
+      update: (offerAnswer: BotOfferAnswerUpdate) => updateBot(ref, { offerAnswer }),
       send: async () => (await view?.send(text)) === true
-    }).catch((error: unknown) => {
+    }
+    const outcome = await (
+      again && update.sent
+        ? answerBotOfferAgain({ cardId, sent: update.sent }, answer?.sent, ops)
+        : answerBotOffer(update, ops)
+    ).catch((error: unknown) => {
       toast.error(botErrorMessage(error))
       return null
     })
@@ -51,7 +63,9 @@ export function useNativeChatOffer(botId: string, cardId: string): NativeChatOff
         { cardId, dismissed: true },
         t('components.native-chat.offerCard.dismiss', 'Dismiss')
       ),
-    send: (text, chosen) => void answerOffer({ cardId, sent: { chosen: [...chosen] } }, text)
+    send: (text, chosen) => void answerOffer({ cardId, sent: { chosen: [...chosen] } }, text),
+    sendAgain: (text, chosen) =>
+      void answerOffer({ cardId, sent: { chosen: [...chosen] } }, text, true)
   }
 }
 

@@ -9,9 +9,11 @@ import { eventually } from '../host/testing/structured-agent-session-queued-mess
 import {
   hostTestCatalogReadOperation,
   HOST_TEST_SESSION as SESSION,
-  hostTestOperationId
+  hostTestOperationId,
+  HOST_TEST_THREAD as THREAD
 } from '../host/testing/structured-agent-session-host-test-data.test-fixture'
-import { openRigTurnFor } from '../host/testing/structured-agent-session-queued-rig-turn.test-fixture'
+import { agentJournalSubmissionKey } from '../../../../shared/agent-session/journal/agent-session-journal-item-key'
+import { AGENT_JOURNAL_THREAD_SCOPE } from '../../../../shared/agent-session/journal/agent-session-journal-types'
 import { createTestParams } from '../host/testing/structured-agent-session-create.test-fixture'
 
 let rig: QueuedMessageTestRig
@@ -19,6 +21,33 @@ beforeEach(async () => {
   rig = await createQueuedMessageTestRig({ restartable: true })
 })
 afterEach(() => rig.dispose())
+
+async function openRigTurnFor(
+  rig: QueuedMessageTestRig,
+  id: string,
+  state: 'running' | 'interrupted' = 'running'
+) {
+  const journal = rig.host.collaboratorsForTests().sessions.get(SESSION)?.journal
+  if (!journal) {
+    throw new Error('Expected the test conversation to be open')
+  }
+  const turnId = `turn-of-${id}`
+  const now = Date.now()
+  await journal.appendItem(
+    { provider: 'codex', threadId: THREAD, turnId, ordinal: 0 },
+    {
+      kind: 'turn',
+      turnId,
+      startedAt: now,
+      userItemId: agentJournalSubmissionKey(id),
+      ...(state === 'running' ? { state } : { state, completedAt: now })
+    },
+    {
+      fence: rig.store.getRecord(SESSION)?.lease.runtimeFence ?? 1,
+      turnScope: AGENT_JOURNAL_THREAD_SCOPE
+    }
+  )
+}
 
 function pick(key: string, value: string | null, sessionId = SESSION) {
   const fields = { key, value }

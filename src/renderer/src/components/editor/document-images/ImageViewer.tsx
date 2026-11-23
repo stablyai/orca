@@ -2,6 +2,7 @@ import { Image as ImageIcon, Maximize2, RotateCcw, ZoomIn, ZoomOut } from 'lucid
 import { type JSX, type SyntheticEvent, useMemo, useState } from 'react'
 import { cn } from '@/lib/class-names'
 import PdfViewer from '../pdf/PdfViewer'
+import type { ViewerFocusPane } from '../commands/use-viewer-pending-focus'
 import { IMAGE_VIEWER_ZOOM_STEP } from '../viewer-viewport/image-viewer-zoom'
 import type { PanZoomSize } from '../../../../../shared/document-preview/pan-zoom-view'
 import { PanZoomImageDialog } from './PanZoomImageDialog'
@@ -37,6 +38,7 @@ type ImageViewerProps = {
   scrollCacheKey?: string | null
   /** A writable tab's id; only then can a PDF's form fields be filled in and saved. */
   editFileId?: string | null
+  focusPane?: ViewerFocusPane | null
 }
 
 function formatByteSize(bytes: number): string {
@@ -59,7 +61,8 @@ export default function ImageViewer({
   layout = 'fill',
   preferenceKey,
   scrollCacheKey = null,
-  editFileId = null
+  editFileId = null,
+  focusPane = null
 }: ImageViewerProps): JSX.Element {
   const t = useTranslate()
   const [loaded, setLoaded] = useState<{ key: string | null; size: PanZoomSize } | null>(null)
@@ -110,6 +113,7 @@ export default function ImageViewer({
         preferenceKey={preferenceKey}
         scrollCacheKey={scrollCacheKey}
         editFileId={editFileId}
+        focusPane={focusPane}
       />
     )
   }

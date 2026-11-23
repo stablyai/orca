@@ -56,6 +56,7 @@ const workerSchema = z.looseObject({
   worktreeId: salvagedOptional('worktreeId', z.string()),
   paneKey: salvagedOptional('paneKey', z.string()),
   note: salvagedOptional('note', z.enum(WORKER_NOTES)),
+  waitsOnBackground: salvagedOptional('waitsOnBackground', z.literal(true)),
   dispatchId: salvagedOptional('dispatchId', z.string()),
   hostId: salvagedOptional('hostId', z.string()),
   agent: salvagedOptional('agent', z.string()),

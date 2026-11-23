@@ -1,10 +1,9 @@
-// The Google app key, taken as Orca's browser downloads it from a bot's setup page: however Download
-// JSON was clicked, the key goes to Orca (never to Downloads) and the client step finishes.
+// The Google app key, taken as Orca's browser downloads it from an agent's setup page. The claim is
+// made when the download starts, for the one run waiting on that page in that agent's workspace, and
+// the bytes go to host-private staging (never the workspace) until they are imported or dropped.
 import { randomUUID } from 'node:crypto'
 import { readFile, rm, stat } from 'node:fs/promises'
-import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import type { BrowserDownloadFinishedEvent } from '../../shared/browser/guest-lifecycle/browser-guest-events'
 import { GOOGLE_CLIENT_FILE_MAX_BYTES } from '../../shared/google/google-client-config'
 import {
   googleSetupAwaitsKey,
@@ -12,11 +11,14 @@ import {
   type GoogleSetupRun
 } from '../../shared/google/google-setup-run'
 import type { StandingDownloadClaimResolver } from '../browser/guest-lifecycle/manager/downloads/browser-manager-download-creation'
+import type { ClientDownloadClaimant } from '../runtime/browser/downloads/client-download-claims'
 import { parseGoogleClientFile } from './google-client-file'
 import { GOOGLE_KEY_FILE_NAME } from './google-key-download-watch'
 
 export type GoogleSetupKeyDownloadDeps = {
   runs: () => GoogleSetupRun[]
+  /** The workspace an agent's browser pages belong to. */
+  botWorkspace: (botId: string) => string | null
   /** Saves the key as this host's Google app; throws why it isn't one. */
   importKey: (text: string) => void | Promise<void>
   keyArrived: (botId: string) => Promise<unknown>
@@ -40,49 +42,112 @@ export function googleSetupWithholdsPageText(
   )
 }
 
-/** The run on this page that still waits for its key. */
-function waitingRun(
-  deps: GoogleSetupKeyDownloadDeps,
-  browserTabId: string
-): GoogleSetupRun | undefined {
-  return deps
-    .runs()
-    .find((entry) => entry.browserPageId === browserTabId && googleSetupAwaitsKey(entry))
+/** A download as it starts: which page, in which workspace, from which document. */
+export type GoogleSetupKeyDownloadStart = {
+  browserPageId: string
+  workspaceId: string | null
+  filename: string
+  documentUrl: string
 }
 
-/**
- * Claims a key download made by Google Cloud's client page in a tab a running setup waits on. The
- * claim belongs to that run: a run cancelled or started over meanwhile only gets the file deleted.
- */
+/** The one run a key download starting on this page belongs to; null when none, or more than one
+ *  run names the page (a stale page pick), or the page isn't in that agent's workspace. */
+function claimingRun(
+  deps: GoogleSetupKeyDownloadDeps,
+  start: GoogleSetupKeyDownloadStart
+): GoogleSetupRun | null {
+  if (!GOOGLE_KEY_FILE_NAME.test(start.filename) || !isGoogleClientsPage(start.documentUrl)) {
+    return null
+  }
+  const onPage = deps
+    .runs()
+    .filter((run) => run.browserPageId === start.browserPageId && googleSetupAwaitsKey(run))
+  if (onPage.length !== 1) {
+    return null
+  }
+  const [run] = onPage
+  return start.workspaceId !== null && deps.botWorkspace(run.botId) === start.workspaceId
+    ? run
+    : null
+}
+
+/** The downloaded key's bytes in staging: read once, then always removed. */
+type KeyFile = {
+  /** The text, or null when it is larger than `maxBytes`. */
+  read: (maxBytes: number) => Promise<string | null>
+  remove: () => Promise<void>
+}
+
+/** This host's own browser: Chromium saves the key into Orca's private `stagingDir`. */
 export function googleSetupKeyDownloadClaim(
-  deps: GoogleSetupKeyDownloadDeps
+  deps: GoogleSetupKeyDownloadDeps,
+  host: { stagingDir: string; workspaceOfPage: (browserPageId: string) => string | null }
 ): StandingDownloadClaimResolver {
   return ({ browserTabId, filename, documentUrl }) => {
-    if (!GOOGLE_KEY_FILE_NAME.test(filename) || !isGoogleClientsPage(documentUrl)) {
-      return null
+    const start = {
+      browserPageId: browserTabId,
+      workspaceId: host.workspaceOfPage(browserTabId),
+      filename,
+      documentUrl
     }
-    const run = waitingRun(deps, browserTabId)
+    const run = claimingRun(deps, start)
     if (!run) {
       return null
     }
-    const savePath = join(tmpdir(), `orca-google-app-${randomUUID()}.json`)
-    return { savePath, finish: (event) => void takeKey(deps, run, savePath, event) }
+    // Chromium creates the folder when it saves there.
+    const savePath = join(host.stagingDir, `${randomUUID()}.json`)
+    const file: KeyFile = {
+      read: async (maxBytes) =>
+        (await stat(savePath)).size > maxBytes ? null : readFile(savePath, 'utf8'),
+      remove: () => rm(savePath, { force: true })
+    }
+    return {
+      savePath,
+      finish: (event) =>
+        void takeKey(
+          deps,
+          run,
+          event.status === 'completed'
+            ? file
+            : { reason: event.error ?? `the download was ${event.status}.`, file }
+        )
+    }
+  }
+}
+
+/** A paired desktop's download, claimed when it begins; its bytes stay in this host's memory. */
+export function googleSetupClientDownloadClaimant(
+  deps: GoogleSetupKeyDownloadDeps
+): ClientDownloadClaimant {
+  return (start) => {
+    const run = claimingRun(deps, start)
+    if (!run) {
+      return null
+    }
+    return {
+      maxBytes: GOOGLE_CLIENT_FILE_MAX_BYTES,
+      // The desktop shows where it went; the key itself is never saved in the workspace.
+      label: 'Google setup in Orca',
+      take: (download) => {
+        const file: KeyFile = {
+          read: async () => ('bytes' in download ? download.bytes.toString('utf8') : null),
+          remove: async () => {}
+        }
+        return takeKey(deps, run, 'reason' in download ? { reason: download.reason, file } : file)
+      }
+    }
   }
 }
 
 /** The key's text, or why it isn't this setup's key. */
 async function readKey(
   run: GoogleSetupRun,
-  savePath: string,
-  event: BrowserDownloadFinishedEvent
+  file: KeyFile
 ): Promise<{ text: string } | { reason: string }> {
-  if (event.status !== 'completed') {
-    return { reason: event.error ?? `the download was ${event.status}.` }
-  }
-  if ((await stat(savePath)).size > GOOGLE_CLIENT_FILE_MAX_BYTES) {
+  const text = await file.read(GOOGLE_CLIENT_FILE_MAX_BYTES)
+  if (text === null) {
     return { reason: 'the file is too large to be a Google app key.' }
   }
-  const text = await readFile(savePath, 'utf8')
   const parsed = parseGoogleClientFile(text)
   if (!parsed.ok) {
     return { reason: parsed.message }
@@ -93,17 +158,26 @@ async function readKey(
   return { text }
 }
 
+/** Imports the key for the run that claimed it, if that run still waits for it; the staged copy is
+ *  removed whatever happens, and a failed removal is reported, never hidden. */
 async function takeKey(
   deps: GoogleSetupKeyDownloadDeps,
   armed: GoogleSetupRun,
-  savePath: string,
-  event: BrowserDownloadFinishedEvent
+  download: KeyFile | { reason: string; file: KeyFile }
 ): Promise<void> {
-  // Still the run that armed the claim, on its page, waiting for its key.
-  const live = (): boolean => waitingRun(deps, armed.browserPageId ?? '')?.id === armed.id
+  const file = 'file' in download ? download.file : download
+  const live = (): boolean =>
+    deps
+      .runs()
+      .some(
+        (run) =>
+          run.id === armed.id &&
+          run.browserPageId === armed.browserPageId &&
+          googleSetupAwaitsKey(run)
+      )
   let outcome: { ok: true } | { ok: false; reason: string } | null = null
   try {
-    const key = await readKey(armed, savePath, event)
+    const key = 'reason' in download ? download : await readKey(armed, file)
     if (!live()) {
       return
     }
@@ -116,8 +190,9 @@ async function takeKey(
   } catch (error) {
     outcome = { ok: false, reason: error instanceof Error ? error.message : String(error) }
   } finally {
-    // The secret's file never outlives the import, whatever the bot's chat is doing.
-    await rm(savePath, { force: true }).catch(() => {})
+    await file.remove().catch((error: unknown) => {
+      console.error('[google-setup] could not delete the staged key download', error)
+    })
   }
   if (!outcome || !live()) {
     return

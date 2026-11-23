@@ -1,3 +1,4 @@
+import { BOT_NAME_MAX_LENGTH } from '../bot-types'
 import {
   BOT_CONNECTOR_NAMES,
   BOT_TEMPLATE_CATEGORIES,
@@ -45,7 +46,9 @@ export function botTemplateEventParts(name: string): { trigger: string; action: 
 export function botTemplateMatches(
   template: BotTemplate,
   query: string,
-  categoryLabel: (category: BotTemplateCategory) => string
+  categoryLabel: (category: BotTemplateCategory) => string,
+  // Why: translated pages still find a template by the words they show, and by its English.
+  shownText: (english: string) => string = (english) => english
 ): boolean {
   const words = query.trim().toLowerCase().split(/\s+/).filter(Boolean)
   if (words.length === 0) {
@@ -54,6 +57,8 @@ export function botTemplateMatches(
   const text = [
     template.name,
     template.line,
+    shownText(template.name),
+    shownText(template.line),
     categoryLabel(template.category),
     ...template.connectors.map((kind) => BOT_CONNECTOR_NAMES[kind]),
     ...template.skills
@@ -82,7 +87,8 @@ export function freeBotName(name: string, taken: readonly string[]): string {
     return name
   }
   for (let index = 2; ; index++) {
-    const candidate = `${name} ${index}`
+    // Kept within the name limit, so a long name still makes a bot.
+    const candidate = `${name.slice(0, BOT_NAME_MAX_LENGTH - ` ${index}`.length)} ${index}`
     if (!used.has(candidate.toLowerCase())) {
       return candidate
     }

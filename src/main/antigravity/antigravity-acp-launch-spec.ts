@@ -1,10 +1,11 @@
 // Antigravity chats run Orca's managed ACP server, or the host's own `agy acp` when compatible.
 
-import { join, win32 } from 'node:path'
+import { join } from 'node:path'
 import { homedir } from 'node:os'
 import type { AcpHostBackendInput, AcpLaunchSpec } from '../acp/launch/acp-launch-contract'
 import { antigravityChatRoute } from './antigravity-chat-route'
 import { ORCA_ACP_CLIENT_INFO } from '../acp/launch/acp-client-info'
+import { windowsLocalAppDataBinDirectories } from '../acp/launch/acp-windows-install-directories'
 import type { Implementation } from '../acp/generated/acp-protocol.generated'
 import { ANTIGRAVITY_ACP_DIALECT } from '../acp/acp-dialects/antigravity-dialect'
 import {
@@ -53,11 +54,18 @@ const ANTIGRAVITY_SESSION_HISTORY: StructuredAgentSessionHistory = {
     })
 }
 
-// Servers before 1.5.1 offer non-Gemini models only to allowlisted editors such as Zed.
-function antigravityClientInfo(version: string | null): Implementation {
+const ZED_CLIENT_INFO: Implementation = { name: 'zed', version: '0.0.0' }
+
+// Google's ACP server (still in 1.5.2) offers non-Gemini models only to allowlisted editors such
+// as Zed; named `orca`, a Google-account chat loses Claude and GPT-OSS. Its versions are not agy's.
+const managedServerClientInfo = (): Implementation => ZED_CLIENT_INFO
+
+// agy 1.5.1 and later offer every model to any client. Orca requires a newer agy, so `zed` is only
+// the fallback when agy's version is unknown.
+function agyClientInfo(version: string | null): Implementation {
   return version && isValidAppVersion(version) && compareAppVersions(version, '1.5.1') >= 0
     ? ORCA_ACP_CLIENT_INFO
-    : { name: 'zed', version: '0.0.0' }
+    : ZED_CLIENT_INFO
 }
 
 // Orca's managed ACP server keeps its own sign-in under <userData>/antigravity-chat.
@@ -70,7 +78,7 @@ const ANTIGRAVITY_MANAGED_LAUNCH_SPEC = {
   env: ANTIGRAVITY_ACP_ENV,
   scrubEnvironment: scrubAntigravityAcpEnvironment,
   dialect: ANTIGRAVITY_ACP_DIALECT,
-  clientInfo: antigravityClientInfo,
+  clientInfo: managedServerClientInfo,
   loginCommand: agentSessionSetupFor('antigravity')?.loginCommand ?? [],
   authMethod: ({ antigravityChatAuth }) =>
     resolveAntigravityChatAuthConfig(antigravityChatAuth).method,
@@ -135,6 +143,7 @@ const ANTIGRAVITY_HOST_LAUNCH_SPEC: AcpLaunchSpec = {
   // and on a host without one they get launch's cliMissing refusal.
   managedCopyAllowed: (settings) => settings.antigravityManagedAgyEnabled !== false,
   args: ({ fullAccess }) => ['acp', ...(fullAccess ? [AGY_SKIP_PERMISSIONS_FLAG] : [])],
+  clientInfo: agyClientInfo,
   // Match terminal and quota launches: a background updater steals focus on Windows (#27390)
   // and can replace agy mid-probe.
   env: { AGY_CLI_DISABLE_AUTO_UPDATE: 'true' },
@@ -162,23 +171,12 @@ const ANTIGRAVITY_HOST_LAUNCH_SPEC: AcpLaunchSpec = {
     }
   },
   minimumVersions: [ANTIGRAVITY_HOST_ACP_MINIMUM_VERSION],
-  installDirectories: ({ env, homePath }) => {
-    if (process.platform !== 'win32') {
-      return [join(homePath, '.local', 'bin')]
-    }
-    const localAppData = Object.entries(env)
-      .find(([key]) => key.toUpperCase() === 'LOCALAPPDATA')?.[1]
-      ?.trim()
-    return [
-      ...new Set([
-        ...(localAppData && win32.isAbsolute(localAppData)
-          ? [join(localAppData, 'agy', 'bin')]
-          : []),
-        join(homePath, 'AppData', 'Local', 'agy', 'bin'),
-        join(homePath, '.local', 'bin')
-      ])
-    ]
-  },
+  installDirectories: ({ env, homePath }) => [
+    ...(process.platform === 'win32'
+      ? windowsLocalAppDataBinDirectories(env, homePath, 'agy')
+      : []),
+    join(homePath, '.local', 'bin')
+  ],
   managedRuntime: undefined,
   resolveSessionMeta: undefined,
   // agy has no full-access mode, so its launch flag grants it; plan approvals still reach the chat.

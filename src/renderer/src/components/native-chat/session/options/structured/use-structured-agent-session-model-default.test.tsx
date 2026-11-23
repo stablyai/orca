@@ -7,7 +7,7 @@ import {
   LIVE_OPTIONS,
   descriptor,
   renderOptions
-} from './use-structured-agent-session-options.test-fixture'
+} from './structured-session-model-default.test-fixture'
 import { seededByNextLaunch } from './structured-session-option-defaults.test-fixture'
 import { act, waitFor } from '@testing-library/react'
 import { expect, it } from 'vitest'
