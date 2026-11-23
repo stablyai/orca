@@ -1,184 +1,66 @@
-// What a message to a bot's Slack thread says about its mute: a whole-message mute or unmute
-// command past mentions of the bot, and whether it @mentions this bot or another behind its app.
-export type ThreadMuteCommand = 'mute' | 'unmute'
-
-// Whole messages only, and none a one-word answer to a question could be ("quiet").
-const MUTE_PHRASES = [
-  'mute',
-  'mute this',
-  'mute here',
+// Whether a reply to a bot's Slack thread tells the bot to stop listening there: the sender's own
+// words, plain text only, and exactly one listed phrase. Anything else (a quote, code, a forward, a
+// question in any script, an emoji, extra words) is no directive, so no random message mutes.
+export const THREAD_MUTE_PHRASES = [
+  'stop listening to this thread',
+  'stop listening in this thread',
+  'stop listening here',
+  'stop following this thread',
+  'unfollow this thread',
   'mute this thread',
-  'mute thread',
-  'be quiet',
-  'stay quiet',
-  'go quiet',
-  'stop responding',
-  'stop responding here',
+  'stop replying in this thread',
   'stop responding in this thread',
-  'stop replying',
   'stop replying here',
-  'stop replying in this thread'
-]
-const UNMUTE_PHRASES = [
-  'unmute',
-  'unmute this',
-  'unmute here',
-  'unmute this thread',
-  'unmute thread',
-  'start responding',
-  'start responding again',
-  'start replying again',
-  'resume responding',
-  'you can respond again'
+  'stop responding here'
 ]
 
-const MAX_COMMAND_WORDS = 8
+const PHRASES = new Set(THREAD_MUTE_PHRASES)
+const MAX_DIRECTIVE_WORDS = 8
 
-const COMMANDS = new Map<string, ThreadMuteCommand>([
-  ...MUTE_PHRASES.map((phrase) => [phrase, 'mute'] as const),
-  ...UNMUTE_PHRASES.map((phrase) => [phrase, 'unmute'] as const)
-])
+// One line of letters, spaces and commas, with at most one trailing "." or "!": an allowlist, so a
+// question mark, quote, backtick, `>`, `<`, `@`, emoji or newline in any script never passes.
+const PLAIN = /^[\p{L} ,]+[.!]?$/u
 
-/** How people address the thread's bot: its Slack user (`<@U…>`; a shared app's bots share one,
- *  told apart by the name after it) and its names (`@reviewer`). */
-export type ThreadBot = {
-  userId: string | null
-  names: readonly string[]
-  /** Other bots' names: after a shared app's mention, one of these addresses that bot instead. */
-  others?: readonly string[]
-}
-
-function normalized(text: string): string {
+function words(text: string): string {
   return text
     .toLowerCase()
-    .replace(/[\u2019']/g, '')
-    .replace(/[^\p{L}\p{N}@<>\s]/gu, ' ')
-    .replace(/\s+/g, ' ')
+    .replace(/\s*,\s*/g, ', ')
+    .replace(/ +/g, ' ')
     .trim()
 }
 
-// The longest name first: "reviewer 2" (folder reviewer-2) before its bot's name "reviewer".
-function afterName(rest: string, names: readonly string[]): string | null {
-  const name = [...names]
-    .sort((a, b) => b.length - a.length)
-    .find((entry) => rest === entry || rest.startsWith(`${entry} `))
-  return name === undefined ? null : rest.slice(name.length).trimStart()
+function isPhrase(rest: string): boolean {
+  const plain = rest.replace(/^please /, '').replace(/, (?:please|thanks)$/, '')
+  return PHRASES.has(plain)
 }
 
-/** The message past its leading mentions of `bot`; null when one names someone else, so "@Bob
- *  mute" or a mute for another bot never mutes this one. `any` takes every mention (batching, which
- *  only needs to keep a likely command out of a turn). */
-function pastMentions(text: string, bot: ThreadBot | 'any'): string | null {
-  let rest = normalized(text)
-  const names =
-    bot === 'any' ? [] : bot.names.map((name) => normalized(name)).filter((name) => name !== '')
-  const userId = bot === 'any' ? null : bot.userId?.toLowerCase()
-  for (;;) {
-    const slack = /^<@([^>]+)>\s*/.exec(rest)
-    const token = /^@\S+\s*/.exec(rest)
-    if (slack) {
-      if (bot !== 'any' && slack[1] !== userId) {
-        return null
-      }
-      rest = rest.slice(slack[0].length)
-      rest = afterName(rest, names) ?? rest
-    } else if (token) {
-      // "@reviewer", or a shared app's "@Orca reviewer".
-      const named = afterName(rest.slice(1), names) ?? afterName(rest.slice(token[0].length), names)
-      if (bot !== 'any' && named === null) {
-        return null
-      }
-      rest = named ?? rest.slice(token[0].length)
-    } else {
-      return rest
-    }
-  }
-}
-
-function commandOf(rest: string): ThreadMuteCommand | null {
-  const plain = rest
-    .replace(/^please /, '')
-    .replace(/ please$/, '')
-    .replace(/ thanks$/, '')
-  return COMMANDS.get(plain) ?? null
-}
-
-/** The command a whole message is, past leading mentions of the bot and a "please"; null for
- *  anything else ("mute the video", "don't mute", a question like "mute?"). */
-export function threadMuteCommand(text: string, bot: ThreadBot): ThreadMuteCommand | null {
-  // A question anywhere ("mute?!", "mute? 🤔") asks about muting, and code (`mute`) quotes it:
-  // neither mutes.
-  const rest = text.includes('?') || text.includes('`') ? null : pastMentions(text, bot)
-  return rest === null ? null : commandOf(rest)
-}
-
-/** Whether a message may be a mute command for some bot, its handle unknown: kept out of batches. */
-export function mayBeThreadMuteCommand(text: string): boolean {
-  const rest = pastMentions(text, 'any') ?? ''
-  const mentioned = rest !== normalized(text)
-  if (commandOf(rest) !== null) {
-    return true
-  }
-  // A mention may name its bot in the words after it ("@Orca Reviewer bot mute"); no phrase, with
-  // its "please" and "thanks", runs past the last few words.
-  const words = rest.split(' ')
-  const tail = Math.max(1, words.length - MAX_COMMAND_WORDS)
-  for (let drop = tail; mentioned && drop < words.length; drop++) {
-    if (commandOf(words.slice(drop).join(' ')) !== null) {
-      return true
-    }
-  }
-  return false
-}
-
-/** Whether the message @mentions the bot anywhere, as its Slack user or by a whole name ("@reviewer"
- *  is not "@reviewer-2", nor "ops@reviewer.io"). */
-export function mentionsBot(text: string, bot: ThreadBot): boolean {
-  // Code (```blocks``` and `spans`) only quotes a name; it mentions no one.
-  const lower = text
-    .replace(/```[\s\S]*?```/g, ' ')
-    .replace(/`[^`\n]*`/g, ' ')
-    .toLowerCase()
-  const userId = bot.userId?.toLowerCase()
-  return (
-    (userId !== undefined && lower.includes(`<@${userId}>`)) ||
-    bot.names.some((name) => {
-      const at = `@${name.toLowerCase().trim()}`
-      return (
-        at.length > 1 &&
-        lower
-          .split(at)
-          .some(
-            (after, index, parts) =>
-              index > 0 &&
-              !/[\p{L}\p{N}_.-]$/u.test(parts[index - 1]) &&
-              !/^[\p{L}\p{N}_-]/u.test(after)
-          )
-      )
-    })
-  )
-}
-
-/** Whether the message, cleaned up as the other checks read it, starts with `<@userId>`. */
-export function leadsWithBotUser(text: string, userId: string): boolean {
-  return normalized(text).startsWith(`<@${userId.toLowerCase()}>`)
-}
-
-/** Whether the message leads with the shared Slack user's mention and then another bot's name
- *  (longest first), so it is that bot's, not this one's. */
-export function addressesOtherBot(text: string, bot: ThreadBot): boolean {
-  const userId = bot.userId?.toLowerCase()
-  const rest = normalized(text)
-  const prefix = `<@${userId}>`
-  if (!userId || !bot.others?.length || !leadsWithBotUser(text, userId)) {
+/** Whether the sender's own words are a directive to stop listening, after an optional leading
+ *  exact name of this bot (several bots may share one Slack app). `any` takes any leading words,
+ *  for batching, which only keeps a likely directive out of a turn. */
+export function isThreadMuteDirective(
+  spoken: string | undefined,
+  botNames: readonly string[] | 'any'
+): boolean {
+  const trimmed = spoken?.trim() ?? ''
+  if (!PLAIN.test(trimmed)) {
     return false
   }
-  const after = rest.slice(prefix.length).trimStart()
-  const named = [
-    ...bot.names.map((name) => ({ name: normalized(name), other: false })),
-    ...bot.others.map((name) => ({ name: normalized(name), other: true }))
-  ]
-    .filter(({ name }) => name !== '' && (after === name || after.startsWith(`${name} `)))
-    .sort((a, b) => b.name.length - a.name.length)
-  return named[0]?.other === true
+  const rest = words(trimmed.replace(/[.!]$/, ''))
+  if (isPhrase(rest)) {
+    return true
+  }
+  if (botNames === 'any') {
+    // No phrase, with its "please" and ", thanks", runs past the last few words.
+    const all = rest.split(' ')
+    for (let index = Math.max(1, all.length - MAX_DIRECTIVE_WORDS); index < all.length; index++) {
+      if (isPhrase(all.slice(index).join(' '))) {
+        return true
+      }
+    }
+    return false
+  }
+  return botNames.some((name) => {
+    const named = words(name)
+    return named !== '' && rest.startsWith(`${named} `) && isPhrase(rest.slice(named.length + 1))
+  })
 }

@@ -1,5 +1,4 @@
 import type { ConnectorCloudFeature } from '../../shared/connectors/connector-cloud-contract'
-import { botSlackApps } from '../../shared/bot-types'
 import { getAppEnvironment } from '../../shared/app-lifecycle/app-environment'
 import { runtimeConversationHost } from '../external-conversations/external-conversation-runtime-host'
 import { getOrcaCloudAuthConfig } from '../orca-profiles/cloud-auth/profile-cloud-auth-config'
@@ -212,17 +211,6 @@ function threadMuteDeps(runtime: OrcaRuntimeService, store: ConnectorCloudStore)
     queued: (key, work) =>
       runtime.getExternalConversationSeam()?.queued(key, work) ??
       Promise.resolve(work?.()).then(() => undefined),
-    // Only bots behind the same Slack app share its mention.
-    otherBotNames: (botId) => {
-      const bots = store.getBots?.() ?? []
-      const own = bots.find((entry) => entry.id === botId)
-      const apps = new Set(own ? botSlackApps(own).map((app) => app.appId) : [])
-      return bots.flatMap((entry) =>
-        entry.id !== botId && botSlackApps(entry).some((app) => apps.has(app.appId))
-          ? [entry.name, entry.folder]
-          : []
-      )
-    },
     botNames: (botId) => {
       const bot = store.getBots?.().find((entry) => entry.id === botId)
       return bot ? [bot.name, bot.folder] : []

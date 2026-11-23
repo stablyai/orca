@@ -1,62 +1,26 @@
-// Saving a thread's mute: written to its link at once, then flushed to disk. A failed flush is
-// tried again on its own, backing off, until one lands, so an unmute a mention answered through
-// a failing disk is still kept.
+// Saving a thread's mute: written to its link, then flushed to disk. A flush that fails puts the
+// previous value back, so a mute in memory is only ever one on disk or still being saved, and the
+// delivery that asked for it is refused and sent again.
 import { writeLinkFact } from '../external-conversations/external-conversation-link-writes'
 import type { ExternalConversationLinkStore } from '../external-conversations/external-conversation-links'
 import type { ConnectorConversation } from '../../shared/connectors/connector-cloud-contract'
 import type { RuntimeStore } from '../runtime/construction/runtime-store-contract'
 
-const FIRST_RETRY_MS = 5_000
-const MAX_RETRY_MS = 300_000
-
 type MuteSaveStore = ExternalConversationLinkStore & Pick<RuntimeStore, 'flushPendingOrThrowAsync'>
 
-/** The mute's write: settles once on disk, and rejects (retrying in the background) when not. */
+/** The mute's write: settles once on disk, and rejects with the previous value kept when not. */
 export function threadMuteSaves(
   store: MuteSaveStore
 ): (key: ConnectorConversation, muted: boolean) => Promise<void> {
-  // Threads whose mute is in memory but not yet on disk (its save failed, or is still running), by
-  // how many changes each has had, so a save clears only the changes made before it began.
-  const unsaved = new Map<string, number>()
-  let retry: ReturnType<typeof setTimeout> | null = null
-  let delay = FIRST_RETRY_MS
-  const flush = async (): Promise<void> => {
-    // A flush saves every change made before it began: those threads' mutes are then on disk.
-    const covered = [...unsaved]
-    await store.flushPendingOrThrowAsync?.({ drainToStableGeneration: false })
-    for (const [id, changes] of covered) {
-      if (unsaved.get(id) === changes) {
-        unsaved.delete(id)
-      }
-    }
-    delay = FIRST_RETRY_MS
-  }
-  const retryLater = (): void => {
-    if (retry) {
-      return
-    }
-    retry = setTimeout(() => {
-      retry = null
-      flush().catch((error: unknown) => {
-        console.warn('[connectors] could not save a thread mute; trying again', error)
-        delay = Math.min(delay * 2, MAX_RETRY_MS)
-        retryLater()
-      })
-    }, delay)
-    retry.unref?.()
-  }
   return async (key, muted) => {
-    const id = JSON.stringify([key.source, key.externalId])
-    // Already so and on disk: nothing to do. Already so but not yet on disk (another reply's save
-    // still running, or failed): this one waits for a save of its own.
-    if (!writeLinkFact(store, key, { muted: muted ? true : undefined }) && !unsaved.has(id)) {
+    // Already so: a resend after a crash past its save, or a mute repeated, has nothing to save.
+    if (!writeLinkFact(store, key, { muted: muted ? true : undefined })) {
       return
     }
-    unsaved.set(id, (unsaved.get(id) ?? 0) + 1)
     try {
-      await flush()
+      await store.flushPendingOrThrowAsync?.({ drainToStableGeneration: false })
     } catch (error) {
-      retryLater()
+      writeLinkFact(store, key, { muted: muted ? undefined : true })
       throw error
     }
   }

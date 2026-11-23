@@ -2,10 +2,9 @@ import { describe, expect, it } from 'vitest'
 import type { ExternalConversationHost } from '../external-conversations/external-conversation-host'
 import type { ExternalConversationSeam } from '../external-conversations/external-conversation-seam'
 import { ConversationChain } from '../external-conversations/external-conversation-chain'
-import { dispatchDelivery } from './connector-deliveries'
 import { dispatchBatch } from './connector-delivery-batches'
-import { handleThreadMute, threadMuteStep } from './connector-thread-mute'
-import { threadMuteCommand } from './connector-thread-mute-phrases'
+import { handleThreadMute, threadMuteStep, type ThreadMuteDeps } from './connector-thread-mute'
+import { isThreadMuteDirective } from './connector-thread-mute-phrases'
 
 const conversation = { source: 'slack', externalId: 'T1:C1:1800000000.000100:U0BOT' }
 const send = (text: string, extra: Record<string, unknown> = {}) => ({
@@ -25,386 +24,180 @@ const send = (text: string, extra: Record<string, unknown> = {}) => ({
   ...extra
 })
 
-describe('threadMuteCommand', () => {
-  const bot = { userId: 'U0BOT', names: ['Reviewer bot', 'reviewer'] }
-  it('reads only a whole message addressed to this bot as a command', () => {
-    expect(threadMuteCommand('mute', bot)).toBe('mute')
-    expect(threadMuteCommand('<@U0BOT> Be quiet!', bot)).toBe('mute')
-    expect(threadMuteCommand('<@U0BOT> reviewer stop responding in this thread', bot)).toBe('mute')
-    expect(threadMuteCommand('@Orca reviewer please unmute 🔊', bot)).toBe('unmute')
-    expect(threadMuteCommand('Start responding again.', bot)).toBe('unmute')
-    // A numbered handle is matched whole, never as its bot's shorter name.
-    expect(
-      threadMuteCommand('<@U0BOT> reviewer-2 mute', {
-        userId: 'U0BOT',
-        names: ['reviewer', 'reviewer-2']
-      })
-    ).toBe('mute')
-    // Someone else's mute, a question, or a sentence that only contains the word.
-    expect(threadMuteCommand('<@UOTHER> mute', bot)).toBeNull()
-    expect(threadMuteCommand('@bob be quiet', bot)).toBeNull()
-    expect(threadMuteCommand('mute?', bot)).toBeNull()
-    expect(threadMuteCommand('mute?! 🤔', bot)).toBeNull()
-    expect(threadMuteCommand('`mute`', bot)).toBeNull()
-    expect(threadMuteCommand("don't mute", bot)).toBeNull()
-    expect(threadMuteCommand('mute the video player', bot)).toBeNull()
+describe('a directive to stop listening', () => {
+  it('is only the sender’s own plain words, exactly one listed phrase', () => {
+    const names = ['Reviewer']
+    const mutes = [
+      'stop listening to this thread',
+      'Stop listening to this thread.',
+      'please stop listening here',
+      'mute this thread!',
+      'stop responding here, thanks',
+      'Reviewer stop following this thread'
+    ]
+    const never = [
+      '"stop listening to this thread"',
+      '“mute this thread”',
+      "'mute this thread'",
+      'mute？',
+      'stop listening here؟',
+      '¿stop listening here',
+      'can you stop listening to this thread?',
+      'how do I make it stop listening here',
+      "don't stop listening to this thread",
+      'never mute this thread',
+      '`stop listening here`',
+      '```\nstop listening here\n```',
+      '> stop listening here',
+      'Forwarded message\nstop listening here',
+      'stop listening to this thread and summarize',
+      'mute',
+      'be quiet',
+      'quiet',
+      'stop',
+      '<@USam> stop listening here',
+      '@sam stop listening here',
+      'Sam stop listening here',
+      'stop listening to this thread 🙏'
+    ]
+    expect(mutes.filter((text) => !isThreadMuteDirective(text, names))).toEqual([])
+    expect(never.filter((text) => isThreadMuteDirective(text, names))).toEqual([])
+    expect(isThreadMuteDirective(undefined, names)).toBe(false)
   })
-})
 
-describe('a mention in a muted thread', () => {
-  it('unmutes only for this bot’s own whole name', () => {
-    const bot = { userId: 'U0BOT', names: ['reviewer'] }
-    const step = (text: string) => threadMuteStep(true, { text }, bot)
-    expect(step('ping @reviewer, look')).toBe('unmute_and_send')
-    expect(step('ping @reviewer-2')).toBe('silence')
-    expect(step('@reviewer-2 hello')).toBe('silence')
-    // The person's own words decide, not the thread context an older Orca's text carries with them.
-    const withContext = { text: 'earlier: can you look?\n\nunmute', asker: { text: 'unmute' } }
-    expect(threadMuteStep(true, withContext, bot)).toBe('unmute')
-    expect(step('send it to ops@reviewer.io')).toBe('silence')
-    expect(step('the example username is `@reviewer`')).toBe('silence')
-    expect(step('```\n<@U0BOT> hi\n```')).toBe('silence')
-  })
-
-  it('leaves a sibling bot whose name ends in a phrase to that bot', () => {
-    const bot = { userId: 'UAPP', names: ['reviewer'], others: ['reviewer mute'] }
-    expect(threadMuteStep(false, { text: '<@UAPP> reviewer mute' }, bot)).toBe('send')
-    expect(threadMuteStep(true, { text: '<@UAPP> reviewer mute unmute' }, bot)).toBe('silence')
-    expect(threadMuteStep(false, { text: '<@UAPP> reviewer mute' }, { ...bot, others: [] })).toBe(
-      'mute'
+  it('mutes a muted or unmuted thread, and only a mention unmutes one', () => {
+    const directive = { asker: { text: 'stop listening here' } }
+    expect(threadMuteStep(false, directive, [])).toBe('mute')
+    // "@Bot stop listening here": the stripped mention is flagged, and the mute wins.
+    expect(threadMuteStep(true, { ...directive, mentioned: true }, [])).toBe('mute')
+    expect(threadMuteStep(true, { asker: { text: 'look' }, mentioned: true }, [])).toBe(
+      'unmute_and_send'
     )
-  })
-})
-
-describe('a muted thread', () => {
-  // Muting is decided before the agent: once muted, only a mention or "unmute" reaches the chat.
-  it('keeps unmentioned replies from the agent until a mention or unmute', async () => {
-    // One waiting list for the whole test, as Orca keeps one per connector.
-    const waiting = new Map<string, Promise<unknown>>()
-    let muted = false
-    const reacted: string[] = []
-    const reached: string[] = []
-    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: test fakes of the members this path calls.
-    const seam = {
-      send: async (_host: unknown, _key: unknown, _id: string, message: { text: string }) => {
-        reached.push(message.text)
-        return { outcome: 'accepted' }
-      },
-      receipts: {
-        run: (_k: unknown, _d: unknown, _m: unknown, _t: unknown, run: () => unknown) => run(),
-        known: () => false,
-        heldByMute: () => null
-      }
-    } as unknown as ExternalConversationSeam
-    const machine = {
-      runTrigger: async () => false,
-      threadMute: (
-        delivery: Parameters<typeof handleThreadMute>[1],
-        record: Parameters<typeof handleThreadMute>[2],
-        carriedBefore?: Promise<boolean>
-      ) =>
-        handleThreadMute(
-          {
-            read: () => ({ botId: 'bot1', muted }),
-            write: async (_key, next) => {
-              muted = next
-            },
-            botNames: () => ['reviewer'],
-            otherBotNames: () => ['reviewer-2'],
-            queued: async () => {},
-            waiting,
-            react: async (_bot, _key, _ref, emoji) => {
-              reacted.push(emoji)
-            }
-          },
-          delivery,
-          record,
-          carriedBefore
-        )
-    }
-    const deliver = async (raw: unknown) => {
-      const dispatched = dispatchDelivery(
-        seam,
-        // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: test fakes of the members this path calls.
-        {} as ExternalConversationHost,
-        machine,
-        raw,
-        () => 60_000
-      )
-      return await dispatched?.done
-    }
-
-    await deliver(send('first'))
-    expect(await deliver(send('<@U0BOT> mute'))).toEqual({ outcome: 'accepted' })
-    await deliver(send('anyone there?'))
-    await deliver(send('hello again', { mentioned: true }))
-    await deliver(send('mute'))
-    await deliver(send('ping @reviewer'))
-    await deliver(send('mute'))
-    await deliver(send('<@UOTHER> unmute'))
-    // Another bot behind the same Slack app: its mute is no mention of this one.
-    await deliver(send('<@U0BOT> reviewer-2 mute'))
-    await deliver(send('still muted'))
-    await deliver(send('unmute'))
-    await deliver(send('back'))
-
-    expect(reached).toEqual(['first', 'hello again', 'ping @reviewer', 'back'])
-    expect(reacted).toEqual([':mute:', ':mute:', ':mute:', ':loud_sound:'])
-    expect(muted).toBe(false)
-  })
-})
-
-describe('a reply in the same poll as its thread’s start', () => {
-  // The start writes the thread's link only once its queued delivery runs: its replies wait for it,
-  // then a mute mutes and anything else goes on to the chat.
-  const replyAfterStart = async (text: string, waiting = new Map<string, Promise<unknown>>()) => {
-    let linked = false
-    let muted = false
-    const outcome = handleThreadMute(
-      {
-        read: () => (linked ? { botId: 'bot1', muted } : null),
-        write: async (_key, next) => {
-          muted = next
-        },
-        botNames: () => [],
-        otherBotNames: () => [],
-        queued: async () => {
-          linked = true
-        },
-        waiting,
-        react: async () => {}
-      },
-      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: test fakes of the members this path calls.
-      send(text) as Parameters<typeof handleThreadMute>[1],
-      (handled) => handled()
+    expect(threadMuteStep(true, { asker: { text: 'hi' }, bareMention: true }, [])).toBe(
+      'unmute_and_send'
     )
-    const result = outcome ? await outcome.decided : null
-    return { result, muted }
+    expect(threadMuteStep(true, { asker: { text: '@reviewer look' } }, ['reviewer'])).toBe(
+      'silence'
+    )
+    expect(threadMuteStep(true, { asker: { text: 'unmute' } }, [])).toBe('silence')
+    // A resend of the thread's context with the phrase in it, or no words of the sender's, never
+    // mutes; Resume leaves the mute as it was.
+    expect(threadMuteStep(false, {}, [])).toBe('send')
+    expect(threadMuteStep(true, { ...directive, resume: { turnId: 1 } }, [])).toBe('send')
+  })
+})
+
+/** The mute path with stand-ins for the link and the agent's turns, for ordering. */
+function harness(options: {
+  muted?: boolean
+  linked?: boolean
+  queued?: ThreadMuteDeps['queued']
+}) {
+  const state = { muted: options.muted ?? false, linked: options.linked ?? true }
+  const turns: { text: string; later: number }[] = []
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: test fakes of the members this path calls.
+  const seam = {
+    send: async (
+      _host: unknown,
+      _key: unknown,
+      _id: string,
+      message: { text: string; later?: unknown[] }
+    ) => {
+      turns.push({ text: message.text, later: message.later?.length ?? 0 })
+      return { outcome: 'accepted' }
+    },
+    receipts: {
+      run: (_k: unknown, _d: unknown, _m: unknown, _t: unknown, run: () => unknown) => run(),
+      known: () => false,
+      heldByMute: () => null,
+      carried: async (_k: unknown, _d: unknown, _t: unknown, done: Promise<unknown>) => done
+    }
+  } as unknown as ExternalConversationSeam
+  const deps: ThreadMuteDeps = {
+    waiting: new Map(),
+    read: () => (state.linked ? { botId: 'bot1', muted: state.muted } : null),
+    write: async (_key, next) => {
+      state.muted = next
+    },
+    botNames: () => ['reviewer'],
+    queued:
+      options.queued ??
+      (async (_key, work) => {
+        await work?.()
+        state.linked = true
+        return undefined
+      }),
+    react: async () => {}
   }
-
-  it('mutes on a mute and sends anything else on', async () => {
-    expect(await replyAfterStart('mute')).toEqual({ result: { outcome: 'accepted' }, muted: true })
-    expect(await replyAfterStart('@sam be quiet')).toEqual({ result: 'send', muted: false })
-    // An ordinary reply goes on at once, batched as ever, unless one waits ahead of it.
-    expect(await replyAfterStart('later reply')).toEqual({ result: null, muted: false })
-    const behind = new Map([
-      [JSON.stringify(['slack', conversation.externalId]), Promise.resolve()]
-    ])
-    expect(await replyAfterStart('later reply', behind)).toEqual({ result: 'send', muted: false })
-  })
-})
-
-describe('a resent delivery', () => {
-  // A delivery this machine already took replays its receipt: a resent old mention never undoes a
-  // newer mute, and a resent silenced reply never reaches the chat because the thread was unmuted.
-  it('never decides the mute again', async () => {
-    // One waiting list for the whole test, as Orca keeps one per connector.
-    const waiting = new Map<string, Promise<unknown>>()
-    let muted = true
-    const reached: string[] = []
-    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: test fakes of the members this path calls.
-    const seam = {
-      send: async (_host: unknown, _key: unknown, _id: string, message: { text: string }) => {
-        reached.push(message.text)
-        return { outcome: 'accepted' }
-      },
-      receipts: { known: () => true, heldByMute: () => null }
-    } as unknown as ExternalConversationSeam
-    const machine = {
-      runTrigger: async () => false,
-      threadMute: (
-        delivery: Parameters<typeof handleThreadMute>[1],
-        record: Parameters<typeof handleThreadMute>[2],
-        carriedBefore?: Promise<boolean>
-      ) =>
-        handleThreadMute(
-          {
-            read: () => ({ botId: 'bot1', muted }),
-            write: async (_key, next) => {
-              muted = next
-            },
-            botNames: () => [],
-            otherBotNames: () => [],
-            queued: async () => {},
-            waiting,
-            react: async () => {}
-          },
-          delivery,
-          record,
-          carriedBefore
-        )
-    }
-    const resent = dispatchDelivery(
+  const machine = {
+    runTrigger: async () => false,
+    threadMute: (
+      delivery: Parameters<typeof handleThreadMute>[1],
+      record: Parameters<typeof handleThreadMute>[2],
+      carriedBefore?: Promise<boolean>
+    ) => handleThreadMute(deps, delivery, record, carriedBefore)
+  }
+  const batch = (...deliveries: ReturnType<typeof send>[]) =>
+    dispatchBatch(
       seam,
       // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: test fakes of the members this path calls.
       {} as ExternalConversationHost,
       machine,
-      send('<@U0BOT> look', { mentioned: true }),
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: test fakes of the members this path calls.
+      deliveries as unknown as Parameters<typeof dispatchBatch>[3],
       () => 60_000
     )
-    await resent?.done
-    expect(muted).toBe(true)
-    expect(reached).toEqual(['<@U0BOT> look'])
-  })
-})
+  const settled = async (dispatched: ReturnType<typeof batch>) =>
+    await Promise.all(dispatched.map((entry) => entry.done))
+  return { state, turns, batch, settled }
+}
 
 describe('a mention that unmutes, with follow-ups in its poll', () => {
   // The unmute is saved before the mention goes on, and its follow-ups still go with it as one turn.
   it('reaches the chat once, carrying them', async () => {
-    // One waiting list for the whole test, as Orca keeps one per connector.
-    const waiting = new Map<string, Promise<unknown>>()
-    let muted = true
-    const turns: { text: string; later: number }[] = []
-    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: test fakes of the members this path calls.
-    const seam = {
-      send: async (
-        _host: unknown,
-        _key: unknown,
-        _id: string,
-        message: { text: string; later?: unknown[] }
-      ) => {
-        turns.push({ text: message.text, later: message.later?.length ?? 0 })
-        return { outcome: 'accepted' }
-      },
-      receipts: {
-        run: (_k: unknown, _d: unknown, _m: unknown, _t: unknown, run: () => unknown) => run(),
-        known: () => false,
-        heldByMute: () => null,
-        carried: async (_k: unknown, _d: unknown, _t: unknown, done: Promise<unknown>) => done
-      }
-    } as unknown as ExternalConversationSeam
-    const machine = {
-      runTrigger: async () => false,
-      threadMute: (
-        delivery: Parameters<typeof handleThreadMute>[1],
-        record: Parameters<typeof handleThreadMute>[2],
-        carriedBefore?: Promise<boolean>
-      ) =>
-        handleThreadMute(
-          {
-            read: () => ({ botId: 'bot1', muted }),
-            write: async (_key, next) => {
-              muted = next
-            },
-            botNames: () => ['reviewer'],
-            otherBotNames: () => [],
-            queued: async () => {},
-            waiting,
-            react: async () => {}
-          },
-          delivery,
-          record,
-          carriedBefore
-        )
-    }
-    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: test fakes of the members this path calls.
-    const batch = [
-      send('<@U0BOT> ok unmute', { mentioned: true }),
-      send('a'),
-      send('b')
-    ] as unknown as Parameters<typeof dispatchBatch>[3]
-    const dispatched = dispatchBatch(
-      seam,
-      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: test fakes of the members this path calls.
-      {} as ExternalConversationHost,
-      machine,
-      batch,
-      () => 60_000
-    )
-    await Promise.all(dispatched.map((entry) => entry.done))
-    expect(turns).toEqual([{ text: '<@U0BOT> ok unmute', later: 2 }])
-    expect(muted).toBe(false)
+    const { state, turns, batch, settled } = harness({ muted: true })
+    await settled(batch(send('ok, look', { mentioned: true }), send('a'), send('b')))
+    expect(turns).toEqual([{ text: 'ok, look', later: 2 }])
+    expect(state.muted).toBe(false)
   })
 })
 
-describe('a silenced reply resent after an unmute', () => {
-  // Its receipt says the mute held it: the resend replays that, never reaching the chat or counting
-  // its automations as run in a turn.
-  it('replays as held', async () => {
-    // One waiting list for the whole test, as Orca keeps one per connector.
-    const waiting = new Map<string, Promise<unknown>>()
-    let muted = true
-    const reached: string[] = []
-    const held = new Map<string, Promise<unknown>>()
-    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: test fakes of the members this path calls.
-    const seam = {
-      send: async (_host: unknown, _key: unknown, _id: string, message: { text: string }) => {
-        reached.push(message.text)
-        return { outcome: 'accepted' }
-      },
-      receipts: {
-        run: (
-          _k: unknown,
-          id: string,
-          method: string,
-          _t: unknown,
-          run: () => Promise<unknown>
-        ) => {
-          const done = run()
-          if (method === 'connector.mute') {
-            held.set(id, done)
-          }
-          return done
-        },
-        known: (_k: unknown, id: string) => held.has(id),
-        heldByMute: (_k: unknown, id: string) => held.get(id) ?? null
-      }
-    } as unknown as ExternalConversationSeam
-    const machine = {
-      runTrigger: async () => false,
-      threadMute: (
-        delivery: Parameters<typeof handleThreadMute>[1],
-        record: Parameters<typeof handleThreadMute>[2],
-        carriedBefore?: Promise<boolean>
-      ) =>
-        handleThreadMute(
-          {
-            read: () => ({ botId: 'bot1', muted }),
-            write: async (_key, next) => {
-              muted = next
-            },
-            botNames: () => [],
-            otherBotNames: () => [],
-            queued: async () => {},
-            waiting,
-            react: async () => {}
-          },
-          delivery,
-          record,
-          carriedBefore
-        )
-    }
-    const deliver = async (raw: unknown) =>
-      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: test fakes of the members this path calls.
-      await dispatchDelivery(seam, {} as ExternalConversationHost, machine, raw, () => 60_000)?.done
-    const reply = send('do the thing', { automations: [{ automationId: 'a1', triggerId: 't1' }] })
-    expect(await deliver(reply)).toEqual({ outcome: 'accepted' })
-    await deliver(send('unmute'))
-    expect(await deliver(reply)).toEqual({ outcome: 'accepted' })
-    expect(reached).toEqual([])
-    expect(muted).toBe(false)
+describe('a silenced reply leading a batch', () => {
+  // The request and its follow-ups behind it still reach the chat as one turn.
+  it('leaves the rest batched', async () => {
+    const { turns, batch, settled } = harness({ muted: true })
+    await settled(batch(send('fyi'), send('draft a reply', { mentioned: true }), send('not yet')))
+    expect(turns).toEqual([{ text: 'draft a reply', later: 1 }])
+  })
+})
+
+describe('a directive in the same poll as its thread’s start', () => {
+  // The start writes the thread's link only once its queued delivery runs: a likely directive waits
+  // for it, then mutes, or goes on to the chat when it names someone else.
+  it('mutes once the link is written, and sends a look-alike on', async () => {
+    const directive = harness({ linked: false })
+    await directive.settled(directive.batch(send('stop listening here')))
+    expect(directive.state.muted).toBe(true)
+    expect(directive.turns).toEqual([])
+
+    const lookAlike = harness({ linked: false })
+    await lookAlike.settled(lookAlike.batch(send('Sam stop listening here')))
+    expect(lookAlike.state.muted).toBe(false)
+    expect(lookAlike.turns).toEqual([{ text: 'Sam stop listening here', later: 0 }])
   })
 })
 
 describe('a held reply whose thread is stopped while it waits', () => {
-  // The Stop settles its wait in the thread's queue as refused: it is refused too, never sent on.
-  it('is refused as the Stop refused it', async () => {
+  // The Stop settles its wait in the thread's queue as refused: it and the batch behind it are
+  // refused too, as one queued turn would be, never sent after the Stop.
+  it('takes its batch down with it', async () => {
     const stopped = { outcome: 'refused', reason: 'conversation_cancelled' } as const
-    const outcome = handleThreadMute(
-      {
-        read: () => null,
-        write: async () => {},
-        botNames: () => [],
-        otherBotNames: () => [],
-        queued: async () => stopped,
-        waiting: new Map(),
-        react: async () => {}
-      },
-      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: test fakes of the members this path calls.
-      send('@sam be quiet') as Parameters<typeof handleThreadMute>[1],
-      (handled) => handled()
-    )
-    expect(await outcome?.decided).toEqual(stopped)
+    const { turns, batch, settled } = harness({ linked: false, queued: async () => stopped })
+    expect(await settled(batch(send('Sam stop listening here'), send('draft it')))).toEqual([
+      stopped,
+      stopped
+    ])
+    expect(turns).toEqual([])
   })
 })
 
@@ -429,195 +222,14 @@ describe('a wait in the thread queue that a Stop lands on while it runs', () => 
   })
 })
 
-describe('a silenced reply leading a batch', () => {
-  // The request and its follow-ups behind it still reach the chat as one turn.
-  it('leaves the rest batched', async () => {
-    // One waiting list for the whole test, as Orca keeps one per connector.
-    const waiting = new Map<string, Promise<unknown>>()
-    let muted = true
-    const turns: { text: string; later: number }[] = []
-    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: test fakes of the members this path calls.
-    const seam = {
-      send: async (
-        _host: unknown,
-        _key: unknown,
-        _id: string,
-        message: { text: string; later?: unknown[] }
-      ) => {
-        turns.push({ text: message.text, later: message.later?.length ?? 0 })
-        return { outcome: 'accepted' }
-      },
-      receipts: {
-        run: (_k: unknown, _d: unknown, _m: unknown, _t: unknown, run: () => unknown) => run(),
-        known: () => false,
-        heldByMute: () => null,
-        carried: async (_k: unknown, _d: unknown, _t: unknown, done: Promise<unknown>) => done
-      }
-    } as unknown as ExternalConversationSeam
-    const machine = {
-      runTrigger: async () => false,
-      threadMute: (
-        delivery: Parameters<typeof handleThreadMute>[1],
-        record: Parameters<typeof handleThreadMute>[2],
-        carriedBefore?: Promise<boolean>
-      ) =>
-        handleThreadMute(
-          {
-            read: () => ({ botId: 'bot1', muted }),
-            write: async (_key, next) => {
-              muted = next
-            },
-            botNames: () => [],
-            otherBotNames: () => [],
-            queued: async () => {},
-            waiting,
-            react: async () => {}
-          },
-          delivery,
-          record,
-          carriedBefore
-        )
-    }
-    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: test fakes of the members this path calls.
-    const batch = [
-      send('fyi'),
-      send('<@U0BOT> draft a reply', { mentioned: true }),
-      send('do not send it')
-    ] as unknown as Parameters<typeof dispatchBatch>[3]
-    const dispatched = dispatchBatch(
-      seam,
-      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: test fakes of the members this path calls.
-      {} as ExternalConversationHost,
-      machine,
-      batch,
-      () => 60_000
-    )
-    await Promise.all(dispatched.map((entry) => entry.done))
-    expect(turns).toEqual([{ text: '<@U0BOT> draft a reply', later: 1 }])
-  })
-})
-
-describe('a held reply leading a batch, stopped while it waits', () => {
-  // Its follow-ups are refused with it, as one queued turn would be, never sent after the Stop.
-  it('takes its batch down with it', async () => {
-    const stopped = { outcome: 'refused', reason: 'conversation_cancelled' } as const
-    const reached: string[] = []
-    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: test fakes of the members this path calls.
-    const seam = {
-      send: async (_host: unknown, _key: unknown, _id: string, message: { text: string }) => {
-        reached.push(message.text)
-        return { outcome: 'accepted' }
-      },
-      receipts: {
-        run: (_k: unknown, _d: unknown, _m: unknown, _t: unknown, run: () => unknown) => run(),
-        known: () => false,
-        heldByMute: () => null,
-        carried: async (_k: unknown, _d: unknown, _t: unknown, done: Promise<unknown>) => done
-      }
-    } as unknown as ExternalConversationSeam
-    const waiting = new Map<string, Promise<unknown>>()
-    const machine = {
-      runTrigger: async () => false,
-      threadMute: (
-        delivery: Parameters<typeof handleThreadMute>[1],
-        record: Parameters<typeof handleThreadMute>[2],
-        carriedBefore?: Promise<boolean>
-      ) =>
-        handleThreadMute(
-          {
-            read: () => null,
-            write: async () => {},
-            botNames: () => [],
-            otherBotNames: () => [],
-            queued: async () => stopped,
-            waiting,
-            react: async () => {}
-          },
-          delivery,
-          record,
-          carriedBefore
-        )
-    }
-    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: test fakes of the members this path calls.
-    const batch = [send('@sam be quiet'), send('draft it')] as unknown as Parameters<
-      typeof dispatchBatch
-    >[3]
-    const dispatched = dispatchBatch(
-      seam,
-      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: test fakes of the members this path calls.
-      {} as ExternalConversationHost,
-      machine,
-      batch,
-      () => 60_000
-    )
-    const results = await Promise.all(dispatched.map((entry) => entry.done))
-    expect(results).toEqual([stopped, stopped])
-    expect(reached).toEqual([])
-  })
-})
-
-describe('a later mute in the same poll as a held batch', () => {
-  // `mute`, a mention, then `mute` again: the mention keeps its place, so the last mute wins.
+describe('a later directive in the same poll as a held batch', () => {
+  // A directive, a mention, then a directive again: the mention keeps its place, so the last wins.
   it('is never overtaken by the batch before it', async () => {
-    let muted = false
-    const reached: string[] = []
-    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: test fakes of the members this path calls.
-    const seam = {
-      send: async (_host: unknown, _key: unknown, _id: string, message: { text: string }) => {
-        reached.push(message.text)
-        return { outcome: 'accepted' }
-      },
-      receipts: {
-        run: (_k: unknown, _d: unknown, _m: unknown, _t: unknown, run: () => unknown) => run(),
-        known: () => false,
-        heldByMute: () => null,
-        carried: async (_k: unknown, _d: unknown, _t: unknown, done: Promise<unknown>) => done
-      }
-    } as unknown as ExternalConversationSeam
-    const waiting = new Map<string, Promise<unknown>>()
-    const machine = {
-      runTrigger: async () => false,
-      threadMute: (
-        delivery: Parameters<typeof handleThreadMute>[1],
-        record: Parameters<typeof handleThreadMute>[2],
-        carriedBefore?: Promise<boolean>
-      ) =>
-        handleThreadMute(
-          {
-            read: () => ({ botId: 'bot1', muted }),
-            write: async (_key, next) => {
-              muted = next
-            },
-            botNames: () => ['reviewer'],
-            otherBotNames: () => [],
-            queued: async (_key, work) => void (await work?.()),
-            waiting,
-            react: async () => {}
-          },
-          delivery,
-          record,
-          carriedBefore
-        )
-    }
-    const dispatch = (texts: { text: string; extra?: Record<string, unknown> }[]) =>
-      dispatchBatch(
-        seam,
-        // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: test fakes of the members this path calls.
-        {} as ExternalConversationHost,
-        machine,
-        // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: test fakes of the members this path calls.
-        texts.map(({ text, extra }) => send(text, extra)) as unknown as Parameters<
-          typeof dispatchBatch
-        >[3],
-        () => 60_000
-      )
-    const first = dispatch([
-      { text: 'mute' },
-      { text: '@reviewer check this', extra: { mentioned: true } }
-    ])
-    const second = dispatch([{ text: 'mute' }])
-    await Promise.all([...first, ...second].map((entry) => entry.done))
-    expect(reached).toEqual(['@reviewer check this'])
-    expect(muted).toBe(true)
+    const { state, turns, batch, settled } = harness({})
+    const first = batch(send('stop listening here'), send('check this', { mentioned: true }))
+    const second = batch(send('stop listening here'))
+    await Promise.all([settled(first), settled(second)])
+    expect(turns).toEqual([{ text: 'check this', later: 0 }])
+    expect(state.muted).toBe(true)
   })
 })
