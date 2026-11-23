@@ -76,24 +76,25 @@ export function useRemoteBrowserSelectPopup({
     setSelectPopup(null)
   }
 
+  const checkSelectListOpened = (press: RemoteBrowserPress): Promise<boolean> =>
+    callRuntimeRpc(
+      press.target,
+      'browser.eval',
+      {
+        worktree: runtimeWorktree,
+        page: press.pageId,
+        expression: REMOTE_SELECT_LIST_OPENED_EXPRESSION
+      },
+      RPC_OPTIONS
+    ).then(readRemoteSelectListOpenedResult, () => false)
+
   const checkSelectListAfterPress = ({
     button,
     ...press
   }: RemoteBrowserPress & { button: string }): void => {
     // Only a primary press opens a list; a page tool's press picks the element instead.
     listOpenedByPressRef.current =
-      button === 'left' && !pagePointerOwned
-        ? callRuntimeRpc(
-            press.target,
-            'browser.eval',
-            {
-              worktree: runtimeWorktree,
-              page: press.pageId,
-              expression: REMOTE_SELECT_LIST_OPENED_EXPRESSION
-            },
-            RPC_OPTIONS
-          ).then(readRemoteSelectListOpenedResult, () => false)
-        : null
+      button === 'left' && !pagePointerOwned ? checkSelectListOpened(press) : null
   }
 
   const readSelectPopupAfterPress = async ({
@@ -102,9 +103,26 @@ export function useRemoteBrowserSelectPopup({
   }: RemoteBrowserPress & { button: string }): Promise<void> => {
     const listOpened = listOpenedByPressRef.current
     listOpenedByPressRef.current = null
+    if (button !== 'left' || pagePointerOwned || !listOpened) {
+      return
+    }
     // Why: the check ran while the button was down, so for a press that opened no list it is
     // already answered and the next input does not wait.
-    if (button !== 'left' || pagePointerOwned || !listOpened || !(await listOpened)) {
+    if (await listOpened) {
+      await showOpenSelectPopup(press)
+      return
+    }
+    // A click handler can open the list instead (showPicker), so look again without holding the
+    // lane; the read then queues behind any input made meanwhile and finds the list still open.
+    void checkSelectListOpened(press).then((openedByClick) => {
+      if (openedByClick) {
+        void enqueueRemoteInput(() => showOpenSelectPopup(press))
+      }
+    })
+  }
+
+  const showOpenSelectPopup = async (press: RemoteBrowserPress): Promise<void> => {
+    if (!isCurrentRemoteOperationToken(press.operationToken)) {
       return
     }
     let popup: RemoteSelectPopup | null = null
@@ -200,19 +218,17 @@ export function useRemoteBrowserSelectPopup({
       setPaneNotice
     ]
   )
+  // Input queued behind an opening list was made before the list showed: a press elsewhere closes
+  // it as it closes a native list, and a key goes to the page's select, which the read left focused,
+  // so the list would no longer match the page.
   const dismissSelectPopup = useCallback((): void => setSelectPopup(null), [])
   // Keys reach the page only through the frame, so arrows and typing need it focused again.
   const refocusFrame = useCallback((): void => imageRef.current?.focus(), [imageRef])
 
-  // Input queued behind an opening list was made before the list showed: a press elsewhere closes
-  // it as it closes a native list, and a key goes to the page's select, which the read left focused,
-  // so the list would no longer match the page.
-  const closeSelectPopupForPageInput = useCallback((): void => setSelectPopup(null), [])
-
   return {
     checkSelectListAfterPress,
     readSelectPopupAfterPress,
-    closeSelectPopupForPageInput,
+    closeSelectPopupForPageInput: dismissSelectPopup,
     selectPopupElement: selectPopup ? (
       <RemoteBrowserSelectPopup
         popup={selectPopup}
