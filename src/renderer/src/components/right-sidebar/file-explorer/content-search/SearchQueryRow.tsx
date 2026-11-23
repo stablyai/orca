@@ -38,6 +38,7 @@ export function SearchQueryRow({
   return (
     <div
       className="flex h-8 items-center gap-1 rounded-md border border-border bg-input/50 px-2 focus-within:border-ring focus-within:ring-1 focus-within:ring-ring"
+      data-explorer-query-surface=""
       data-ignore-file-explorer-keys="true"
     >
       <SearchIcon className="size-3.5 shrink-0 text-muted-foreground" />

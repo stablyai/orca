@@ -193,9 +193,10 @@ export function registerAppHandlers(store: Store, options: RegisterAppHandlersOp
     const window = isTrustedUIRenderer(event.sender)
       ? BrowserWindow.fromWebContents(event.sender)
       : null
-    if (window && typeof suppressed === 'boolean') {
-      setWindowMaterialSuppressed(window, suppressed)
+    if (!window || typeof suppressed !== 'boolean') {
+      return undefined
     }
+    return setWindowMaterialSuppressed(window, suppressed)
   })
 
   ipcMain.handle('app:relaunch', async () => {

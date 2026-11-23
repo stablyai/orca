@@ -93,7 +93,7 @@
       calc(
         max(
             var(--orca-theme-background-surface-opacity, var(--orca-window-surface-opacity, 1)),
-            0.8
+            var(--chat-minimum-canvas-opacity, 0.8)
           ) *
           100%
       ),

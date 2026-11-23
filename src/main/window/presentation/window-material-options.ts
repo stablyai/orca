@@ -1,5 +1,8 @@
 import type { BrowserWindowConstructorOptions } from 'electron'
-import type { WindowMaterial } from '../../../shared/app-lifecycle/windows/window-material'
+import {
+  isBlurredWindowMaterial,
+  type WindowMaterial
+} from '../../../shared/app-lifecycle/windows/window-material'
 
 type WindowMaterialOptions = Pick<
   BrowserWindowConstructorOptions,
@@ -22,7 +25,7 @@ export function windowMaterialOptions(
   if (platform === 'darwin') {
     // Why no `transparent` with vibrancy: it suppresses the effect view and forces full-window alpha compositing (#8482).
     // Why active: the default follows focus and turns into a flat gray fill whenever Orca is unfocused.
-    return material === 'blur'
+    return isBlurredWindowMaterial(material)
       ? { backgroundColor: CLEAR, vibrancy: MAC_BLUR_VIBRANCY, visualEffectState: 'active' }
       : { backgroundColor: CLEAR, transparent: true }
   }

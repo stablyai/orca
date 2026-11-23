@@ -394,6 +394,10 @@ export const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktr
         onKeyUp={handleContainerKeyUp}
         onBlur={handleContainerBlur}
         onPointerDown={handleScrollPointerDown}
+        onScroll={(event) => {
+          const viewport = event.currentTarget
+          viewport.toggleAttribute('data-worktree-sidebar-scrolled', viewport.scrollTop > 1)
+        }}
         onTouchMove={markDirectScrollInput}
         onWheel={markDirectScrollInput}
         onDragOver={nativeDrag.handleWorktreeDragOver}

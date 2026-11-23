@@ -32,8 +32,8 @@ export type AppApi = {
   restartAsAdministrator: () => Promise<void>
   /** Append filenames to this base: Vite /@fs in dev, file:// resources when packaged. */
   getFeatureWallAssetBaseUrl: () => Promise<string>
-  /** Drops macOS vibrancy while an opaque theme image covers it; no-op otherwise. */
-  setWindowMaterialSuppressed: (suppressed: boolean) => Promise<void>
+  /** Drops macOS blur while covered by a theme image, and reports the effective material. */
+  setWindowMaterialSuppressed: (suppressed: boolean) => Promise<WindowMaterial | void>
   /** Uses app.exit(0), bypassing normal quit handling. */
   relaunch: () => Promise<void>
   /** Uses normal quit handling so daemon terminals survive for reattachment. */

@@ -1474,6 +1474,136 @@ html.native-shell .app-layout {
   background: var(--bg-titlebar, var(--card));
 }
 
+:root.dark[data-window-material='frosted']:not([data-theme-background], [data-reduce-effects]) {
+  --chat-minimum-canvas-opacity: 0.2;
+}
+
+:root.dark[data-window-material='frosted']:not([data-theme-background], [data-reduce-effects])
+  body:not([data-modal-overlay-open], [data-onboarding-overlay-open]) {
+  /* Preserve contrast over bright wallpapers before tinting individual surfaces. */
+  background-color: color-mix(in srgb, var(--background) 65%, transparent);
+}
+
+:root.dark[data-window-material='frosted']:not([data-theme-background], [data-reduce-effects])
+  :is(.bg-worktree-sidebar, .titlebar-left:not(.titlebar-left-floating)) {
+  background-color: color-mix(in srgb, var(--worktree-sidebar) 28%, transparent);
+}
+
+:root.dark[data-window-material='frosted']:not([data-theme-background], [data-reduce-effects])
+  [data-worktree-sticky-header].bg-worktree-sidebar {
+  background-color: transparent;
+}
+
+:root.dark[data-window-material='frosted']:not([data-theme-background], [data-reduce-effects])
+  [data-worktree-sidebar-scrolled]
+  [data-worktree-sticky-header].bg-worktree-sidebar {
+  /* Soften scrolling rows only while they can pass under a pinned header. */
+  backdrop-filter: blur(8px);
+}
+
+:root.dark[data-window-material='frosted']:not([data-theme-background], [data-reduce-effects])
+  .right-sidebar-surface {
+  background-color: color-mix(in srgb, var(--sidebar) 28%, transparent);
+}
+
+:root.dark[data-window-material='frosted']:not([data-theme-background], [data-reduce-effects])
+  [data-right-sidebar-panel]
+  > .bg-sidebar {
+  background-color: transparent;
+}
+
+:root.dark[data-window-material='frosted']:not([data-theme-background], [data-reduce-effects])
+  :is(
+    [data-sidebar-search-trigger],
+    [data-explorer-query-surface],
+    [data-file-explorer-view-switch]
+  ) {
+  background-color: color-mix(in srgb, var(--muted) 42%, transparent);
+}
+
+:root.dark[data-window-material='frosted']:not([data-theme-background], [data-reduce-effects])
+  [data-sidebar-search-trigger]:hover {
+  background-color: color-mix(
+    in srgb,
+    var(--foreground) 8%,
+    color-mix(in srgb, var(--muted) 42%, transparent)
+  );
+}
+
+:root.dark[data-window-material='frosted']:not([data-theme-background], [data-reduce-effects])
+  [data-file-explorer-view-switch]
+  [data-slot='toggle-group-item'][data-state='on'] {
+  background-color: color-mix(in srgb, var(--foreground) 14%, transparent);
+}
+
+:root.dark[data-window-material='frosted']:not([data-theme-background], [data-reduce-effects])
+  [data-bots-onboarding-card] {
+  background-color: color-mix(in srgb, var(--bots-onboarding-card) 44%, transparent);
+  --bots-onboarding-avatar-ring: transparent;
+}
+
+:root.dark[data-window-material='frosted']:not([data-theme-background], [data-reduce-effects])
+  [data-native-chat-root]
+  .native-chat-composer-card {
+  background-color: color-mix(in srgb, var(--chat-composer-surface) 56%, transparent);
+}
+
+:root.dark[data-window-material='frosted']:not([data-theme-background], [data-reduce-effects])
+  :is(.titlebar, .titlebar-left-floating, .bg-tab-bar) {
+  background-color: color-mix(in srgb, var(--tab-bar, var(--card)) 40%, transparent);
+}
+
+:root.dark[data-window-material='frosted']:not([data-theme-background], [data-reduce-effects])
+  :is([data-tab-group-strip-id], .titlebar)
+  [data-tab-strip-scroller] {
+  border-right-color: transparent;
+
+  &[data-active-tab-docked] > [data-active-tab-dock] {
+    /* Cover tabs that scroll underneath the selected slot, including its margins. */
+    background-color: color(from var(--tab-bar, var(--card)) srgb r g b / 1);
+  }
+
+  :is(.bg-tab-active, .bg-tab-inactive) {
+    width: calc(100% - var(--spacing));
+    height: calc(100% - var(--spacing));
+    margin: calc(var(--spacing) / 2);
+    border: 1px solid color-mix(in srgb, var(--border) 60%, transparent);
+    border-radius: var(--radius-md);
+  }
+
+  .bg-tab-active {
+    background-color: color-mix(
+      in srgb,
+      var(--tab-active) var(--active-tab-tint, 56%),
+      transparent
+    );
+    border-color: var(--active-tab-border, var(--border));
+  }
+
+  .bg-tab-inactive {
+    background-color: color-mix(in srgb, var(--tab-inactive) 20%, transparent);
+  }
+
+  .bg-tab-active > .bg-tab-active-indicator {
+    display: none;
+  }
+}
+
+:root.dark[data-window-material='frosted']:not([data-theme-background], [data-reduce-effects])
+  [data-unfocused-split-group] {
+  --active-tab-tint: 32%;
+  --active-tab-border: color-mix(in srgb, var(--border) 60%, transparent);
+}
+
+:root.dark[data-window-material='frosted']:not([data-theme-background], [data-reduce-effects])
+  [data-focused-split-group] {
+  --active-tab-border: color-mix(
+    in srgb,
+    var(--tab-active-indicator, var(--foreground)) 40%,
+    var(--border)
+  );
+}
+
 .titlebar-traffic-light-pad {
   width: calc(80px / var(--ui-zoom-factor, 1));
   flex-shrink: 0;

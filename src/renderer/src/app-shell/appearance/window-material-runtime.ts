@@ -1,12 +1,13 @@
-import type {
-  WindowMaterial,
-  WindowMaterialHost
+import {
+  isBlurredWindowMaterial,
+  type WindowMaterial,
+  type WindowMaterialHost
 } from '../../../../shared/app-lifecycle/windows/window-material'
 import { getRendererAppPlatform } from '../platform/renderer-app-platform'
 
 let material: WindowMaterial | undefined
 
-/** Material this window was created with; fixed for its lifetime, so the settings value may differ until restart. */
+/** Material this window uses, including a native fallback if the Frosted Glass view failed. */
 export function activeWindowMaterial(): WindowMaterial {
   if (material === undefined) {
     try {
@@ -35,7 +36,7 @@ let blurSuppressed: boolean | undefined
 export function syncWindowMaterialWithThemeBackground(themeBackgroundActive: boolean): void {
   if (
     getRendererAppPlatform() !== 'darwin' ||
-    activeWindowMaterial() !== 'blur' ||
+    !isBlurredWindowMaterial(activeWindowMaterial()) ||
     blurSuppressed === themeBackgroundActive
   ) {
     return
@@ -45,12 +46,19 @@ export function syncWindowMaterialWithThemeBackground(themeBackgroundActive: boo
     return
   }
   blurSuppressed = themeBackgroundActive
-  void setSuppressed(themeBackgroundActive).catch(() => {
-    // Forget the state so the next apply retries instead of trusting a failed switch.
-    if (blurSuppressed === themeBackgroundActive) {
-      blurSuppressed = undefined
-    }
-  })
+  void setSuppressed(themeBackgroundActive)
+    .then((effectiveMaterial) => {
+      if (material === 'frosted' && effectiveMaterial === 'blur') {
+        material = 'blur'
+        applyWindowMaterialToDocument()
+      }
+    })
+    .catch(() => {
+      // Forget the state so the next apply retries instead of trusting a failed switch.
+      if (blurSuppressed === themeBackgroundActive) {
+        blurSuppressed = undefined
+      }
+    })
 }
 
 /** Lets main.css clear the opaque body paint before first frame so the material shows through. */

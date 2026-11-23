@@ -37,6 +37,9 @@ function windowMaterialLabel(
   if (material === 'translucent') {
     return t('settings.windowMaterial.translucent', 'Translucent')
   }
+  if (material === 'frosted') {
+    return t('settings.windowMaterial.frosted', 'Frosted Glass')
+  }
   return host.platform === 'win32'
     ? t('settings.windowMaterial.acrylic', 'Acrylic blur')
     : t('settings.windowMaterial.blur', 'Blurred')
@@ -57,7 +60,8 @@ function windowMaterialHint(
       'Requires Windows 11 version 22H2 or later.'
     )
   }
-  if (windowMaterialPreference(settings, host.platform) === 'off') {
+  const material = hostWindowMaterial(windowMaterialPreference(settings, host.platform), host)
+  if (material === 'off') {
     return description
   }
   if (settings.reduceVisualEffects === true || readPrefersReducedTransparency()) {
@@ -70,6 +74,12 @@ function windowMaterialHint(
     return t(
       'settings.windowMaterial.needsOpacity',
       'Lower Background Opacity below 1 to see the desktop through terminals.'
+    )
+  }
+  if (material === 'frosted') {
+    return t(
+      'settings.windowMaterial.frostedDescription',
+      'Softens the desktop behind the window with a neutral blur. Requires restart.'
     )
   }
   return host.platform === 'linux'

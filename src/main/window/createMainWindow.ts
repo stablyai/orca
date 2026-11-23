@@ -12,7 +12,10 @@ import {
   resolveWindowMaterial
 } from '../../shared/app-lifecycle/windows/window-material'
 import { windowMaterialOptions } from './presentation/window-material-options'
-import { rememberWindowMaterial } from './presentation/window-material-suppression'
+import {
+  rememberWindowMaterial,
+  resolveAvailableWindowMaterial
+} from './presentation/window-material-suppression'
 import { markSystemSessionEnding } from '../crash-reporting/process-exits/expected-teardown-state'
 import { recordDurableCrashBreadcrumb } from '../crash-reporting/breadcrumbs/durable-crash-breadcrumb'
 import { clearTrustedUIRendererWebContentsId, setTrustedUIRendererWebContentsId } from '../ipc/ui'
@@ -116,10 +119,12 @@ export function createMainWindow(
     // Chromium drops a page's key releases after a press cancelled here, so Hold can't see its release; the page keeps the key then.
     return voice?.enabled === true && voice.dictationMode !== 'hold'
   })
-  const windowMaterial = resolveWindowMaterial(
-    settings,
-    { platform: process.platform, osRelease: release() },
-    nativeTheme.prefersReducedTransparency
+  const windowMaterial = resolveAvailableWindowMaterial(
+    resolveWindowMaterial(
+      settings,
+      { platform: process.platform, osRelease: release() },
+      nativeTheme.prefersReducedTransparency
+    )
   )
 
   const pumpHiddenFrames = shouldPumpHiddenWindowFrames(process.env, process.platform)
