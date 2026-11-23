@@ -197,7 +197,7 @@ export function WorktreeCardsKeptHintContent(): React.JSX.Element {
       onOpenAutoFocus={(event) => event.preventDefault()}
       onClick={close}
     >
-      <PopoverArrow />
+      <PopoverArrow tone="pointer" />
       <div className="flex items-center gap-1.5 font-semibold">
         <Check aria-hidden="true" className="size-3.5 shrink-0" />
         {t('sidebar.worktreeCardsIntroNotice.keptTitle', 'New cards are on')}
