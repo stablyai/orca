@@ -2,12 +2,27 @@ import type { ClaudeSession } from '../claude-structured-session-state'
 import { readClaudeFrameString } from '../startup/claude-structured-init-proof'
 import { isRootClaudeFrame } from '../turns/claude-turn-opening'
 import { claudeBypassRefused, claudeOwesPermissionFallback } from './claude-full-access-refusal'
+import { readClaudeEarlierRefusalNotice } from './claude-full-access-refusal-notice'
 import {
   recordClaudeBuildPermissionMode,
   setClaudeAllowedPermissionMode
 } from './claude-permission-mode-ladder'
 
 type ClaudeRootInit = NonNullable<ClaudeSession['actualFirstRootInit']>
+
+export function readClaudeStartupPermissionNotice(
+  session: ClaudeSession,
+  reads: Parameters<typeof readClaudeEarlierRefusalNotice>[1],
+  assertCurrent: () => void
+): Promise<void> {
+  const read = readClaudeEarlierRefusalNotice(session, reads, assertCurrent).finally(() => {
+    if (session.fullAccessRefusalNoticeRead === read) {
+      delete session.fullAccessRefusalNoticeRead
+    }
+  })
+  session.fullAccessRefusalNoticeRead = read
+  return read
+}
 
 export function readClaudeRootInit(message: Record<string, unknown>): ClaudeRootInit | undefined {
   if (message.type === 'system' && message.subtype === 'init' && isRootClaudeFrame(message)) {
@@ -46,13 +61,36 @@ export function adoptClaudeLaunchRootInit(
   }
 }
 
-export function observeClaudeRootInit(session: ClaudeSession | null, init: ClaudeRootInit): void {
+export async function observeClaudeRootInit(
+  session: ClaudeSession | null,
+  init: ClaudeRootInit,
+  current: () => ClaudeSession | undefined
+): Promise<void> {
   if (!session) {
     return
   }
   adoptClaudeLaunchRootInit(session, init)
   if (!claudeBypassRefused(session) || !claudeOwesPermissionFallback(session)) {
     return
+  }
+  const noticeRead = session.fullAccessRefusalNoticeRead
+  if (noticeRead) {
+    const request = session.permissionModeRequests
+    try {
+      await noticeRead
+    } catch {
+      return
+    }
+    if (
+      current() !== session ||
+      !session.delivery.ready ||
+      session.connection.closed ||
+      session.permissionModeRequests !== request ||
+      !claudeBypassRefused(session) ||
+      !claudeOwesPermissionFallback(session)
+    ) {
+      return
+    }
   }
   const write = setClaudeAllowedPermissionMode(session, 'bypassPermissions')
   const request = session.permissionModeRequests

@@ -169,6 +169,7 @@ export type ClaudeSession = {
   /** The latest permission notice, including a warning or Auto recovery from an earlier process. */
   fullAccessRefusalNoticeId?: string
   fullAccessRefusalNotices?: { process: string; count: number; after?: number }
+  fullAccessRefusalNoticeRead?: Promise<void>
   /** Counts permission mode requests, so a fallback written after Claude answers never lands
    *  over a newer request. */
   permissionModeRequests?: number

@@ -1,4 +1,5 @@
 import type { PermissionMode } from '@anthropic-ai/claude-agent-sdk'
+import { agentJournalItemKey } from '../../../../../shared/agent-session/journal/agent-session-journal-item-key'
 import { ClaudeBackgroundTaskTracker } from '../../../background-tasks/claude-background-task-tracker'
 import { ClaudeChildWorkDecoder } from '../../../child-work/claude-child-work-decoder'
 import { ClaudeSlashCommandCatalog } from '../../../command-catalog/claude-slash-command-catalog'
@@ -122,11 +123,19 @@ export function permissionTestSession(
     observeClaudeReportedPermissionMode(session.reportedOptions, message)
     const rootInit = readClaudeRootInit(message)
     if (rootInit) {
-      observeClaudeRootInit(session, rootInit)
+      void observeClaudeRootInit(session, rootInit, () => session)
     }
     translator.handle({ type: 'message', sessionId: 'session', message })
   }
   return { session, rows, writes, frame }
+}
+
+export function savedNotice(notice: string) {
+  const itemId = agentJournalItemKey({
+    provider: 'orca',
+    clientMessageId: `full-access-refused:claude:t0000000001:earlier:1:${notice}`
+  })
+  return { itemId, greatestTimedId: itemId }
 }
 
 export function openPermissionTestSession(

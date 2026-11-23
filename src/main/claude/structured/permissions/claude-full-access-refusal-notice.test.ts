@@ -1,29 +1,22 @@
+import { setImmediate } from 'node:timers/promises'
 import { expect, it, vi } from 'vitest'
-import { agentJournalItemKey } from '../../../../shared/agent-session/journal/agent-session-journal-item-key'
 import { ClaudeControlRequestTimeoutError } from '../../sdk-transport/claude-agent-sdk-control-requests'
 import type { ClaudeSession } from '../claude-structured-session-state'
 import { applyClaudeMessageOptions } from '../launch/claude-structured-message-options'
+import { readClaudeEarlierRefusalNotice } from './claude-full-access-refusal-notice'
 import {
-  claimClaudeFullAccessRefusalNotice,
-  readClaudeEarlierRefusalNotice
-} from './claude-full-access-refusal-notice'
-import { adoptClaudeLaunchRootInit } from './claude-permission-startup'
+  adoptClaudeLaunchRootInit,
+  readClaudeStartupPermissionNotice
+} from './claude-permission-startup'
 import {
   finishPermissionCatchUp,
   openPermissionTestSession,
   permissionTestSession,
-  refuseClaudePermission
+  refuseClaudePermission,
+  savedNotice
 } from './__tests__/claude-permission.test-fixture'
 
 const intents: readonly ('auto' | 'bypassPermissions')[] = ['auto', 'bypassPermissions']
-
-function savedNotice(notice: string) {
-  const itemId = agentJournalItemKey({
-    provider: 'orca',
-    clientMessageId: `full-access-refused:claude:t0000000001:earlier:1:${notice}`
-  })
-  return { itemId, greatestTimedId: itemId }
-}
 
 function previousWarning(intent: (typeof intents)[number]) {
   return savedNotice(intent === 'auto' ? 'auto-settings:ask' : 'settings:ask')
@@ -181,6 +174,51 @@ it('preserves Full access startup decisions when initialize and root disagree', 
   expect(writes).toEqual([])
 })
 
+it.each(['fallback', 'plan'])(
+  'waits for a saved Full access recovery before %s',
+  async (outcome) => {
+    const saved = savedNotice('restored:bypassPermissions')
+    const delayed = Promise.withResolvers<typeof saved>()
+    const planReply = Promise.withResolvers<void>()
+    const { session, rows, writes, frame } = permissionTestSession('bypassPermissions', (mode) => {
+      if (mode === 'plan') {
+        return planReply.promise
+      }
+      return mode === 'auto' ? refuseClaudePermission('internal_error') : Promise.resolve()
+    })
+    await openPermissionTestSession(session, 'default')
+    const recovery = recoveryText('bypassPermissions')
+    rows.push(recovery)
+    const read = readClaudeStartupPermissionNotice(
+      session,
+      { newestItemId: () => delayed.promise },
+      () => {}
+    )
+    frame('init', 'default')
+    await setImmediate()
+    const plan =
+      outcome === 'plan'
+        ? applyClaudeMessageOptions(session, { interactionMode: 'plan' }, undefined)
+        : undefined
+    delayed.resolve(saved)
+    await read
+    finishPermissionCatchUp(session)
+    await setImmediate()
+
+    if (plan) {
+      expect(writes).toEqual(['plan'])
+      planReply.resolve()
+      await plan
+      return
+    }
+    expect(rows).toEqual([
+      recovery,
+      "Claude didn't start this chat in Full access and Approve for me isn't available right now, so Claude uses Ask for approval instead."
+    ])
+    expect(writes).toEqual(['default', 'auto', 'default'])
+  }
+)
+
 it.each(intents)('requires a current %s write after a root init with no mode', async (intent) => {
   const acknowledged = Promise.withResolvers<void>()
   const started = Promise.withResolvers<void>()
@@ -287,38 +325,4 @@ it('leaves the saved warning in place when delivery retires before acknowledgeme
   acknowledged.resolve()
   await build
   expect(rows).toEqual([])
-})
-
-it('recovers the earlier warning after one transient journal lookup failure', async () => {
-  const { session, frame, rows } = permissionTestSession('bypassPermissions')
-  const newestItemId = vi
-    .fn()
-    .mockRejectedValueOnce(new Error('Reader exited'))
-    .mockResolvedValueOnce(previousWarning('bypassPermissions'))
-  await readClaudeEarlierRefusalNotice(session, { newestItemId }, () => {})
-
-  frame('init', 'bypassPermissions')
-  finishPermissionCatchUp(session)
-  expect(rows).toEqual(['Claude uses Full access again.'])
-})
-
-it('sorts permission notice IDs across a base-36 digit boundary', () => {
-  const clock = vi.spyOn(Date, 'now')
-  const noticeAt = (time: number) => {
-    clock.mockReturnValue(time)
-    const { session } = permissionTestSession('auto')
-    session.autoDisabled = true
-    session.appliedInputOptions.set('buildPermissionMode', 'default')
-    session.initialization.startup.open()
-    return claimClaudeFullAccessRefusalNotice(session)?.id
-  }
-  try {
-    const before = noticeAt(36 ** 8 - 1)
-    const after = noticeAt(36 ** 8)
-    expect(before).toMatch(/^t00zzzzzzzz:/)
-    expect(after).toMatch(/^t0100000000:/)
-    expect([after, before].sort()).toEqual([before, after])
-  } finally {
-    clock.mockRestore()
-  }
 })

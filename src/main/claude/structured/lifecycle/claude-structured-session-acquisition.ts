@@ -99,7 +99,9 @@ export async function acquireClaudeSession({
     const rootInit = permission.readClaudeRootInit(message)
     if (rootInit) {
       firstRootInit ??= rootInit
-      permission.observeClaudeRootInit(liveSession, firstRootInit)
+      void permission.observeClaudeRootInit(liveSession, firstRootInit, () =>
+        sessions.get(sessionId)
+      )
     }
     const modelReport = observeClaudeFrameModels(liveSession, message, init?.model)
     if (init) {
