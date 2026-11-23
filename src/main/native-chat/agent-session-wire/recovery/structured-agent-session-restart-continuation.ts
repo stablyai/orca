@@ -225,11 +225,11 @@ export async function startStructuredAgentSessionContinuation(
   return {
     verdict: async () => {
       const outcome = await verdict()
-      // A pending verdict is no answer: the deadline may still give up on it.
-      answered = outcome.outcome !== 'pending'
-      // After giving up, only a real answer earns a second note.
-      if (!gaveUp || outcome.outcome === 'continued' || outcome.outcome === 'refused') {
-        notedUnconfirmed ||= outcome.outcome === 'pending' || outcome.outcome === 'unknown'
+      // Only the agent's accept or refusal answers it; pending or unknown may still be given up on.
+      answered = outcome.outcome === 'continued' || outcome.outcome === 'refused'
+      // After giving up, the late-answer wait below writes the one note.
+      if (!gaveUp) {
+        notedUnconfirmed ||= !answered
         await noteOutcome(deps, sessionId, outcome)
       }
       return outcome

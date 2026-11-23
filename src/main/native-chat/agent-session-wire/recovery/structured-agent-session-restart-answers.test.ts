@@ -102,7 +102,7 @@ it('settles a chat its agent never answers on its own: no longer sending, queue 
     value: { clientMessageId, submission: rows.get(clientMessageId) }
   })
   const host = {
-    sessions: new Map(['fast', 'stuck'].map((id) => [id, { journal: journalFor(id) }])),
+    sessions: new Map(['fast', 'stuck', 'dropped'].map((id) => [id, { journal: journalFor(id) }])),
     conversationFence: () => 1,
     send: async ({ envelope }: { envelope: { clientOperationId: string } }) => {
       const id = envelope.clientOperationId
@@ -114,6 +114,12 @@ it('settles a chat its agent never answers on its own: no longer sending, queue 
       if (sessionId === 'stuck') {
         // Never answers, like an agent stuck retrying its API.
         await new Promise(() => {})
+      }
+      if (sessionId === 'dropped') {
+        // Its turn ended without taking it: read as unknown while the row stays pending.
+        return {
+          value: { clientMessageId: id, submission: { ...rows.get(id)!, dispatchState: 'unknown' } }
+        }
       }
       rows.get(id)!.dispatchState = 'accepted'
       return submission(id)
@@ -128,7 +134,7 @@ it('settles a chat its agent never answers on its own: no longer sending, queue 
     now: () => 0
   }
   const answers = createRestartAnswers()
-  for (const sessionId of ['fast', 'stuck']) {
+  for (const sessionId of ['fast', 'stuck', 'dropped']) {
     const started = await startStructuredAgentSessionContinuation(
       // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: an in-memory journal with only the reads and writes a continuation makes.
       continuationDeps(host as unknown as Parameters<typeof continuationDeps>[0], async () => true),
@@ -145,7 +151,10 @@ it('settles a chat its agent never answers on its own: no longer sending, queue 
   const { settled } = await answers.settle(
     {
       operationId: 'op',
-      outcomes: ['fast', 'stuck'].map((sessionId) => ({ sessionId, outcome: 'resumed' as const })),
+      outcomes: ['fast', 'stuck', 'dropped'].map((sessionId) => ({
+        sessionId,
+        outcome: 'resumed' as const
+      })),
       candidates: [],
       markers: new Map()
     },
@@ -155,11 +164,14 @@ it('settles a chat its agent never answers on its own: no longer sending, queue 
   await vi.advanceTimersByTimeAsync(150_000)
   await settled
 
-  // Before: the stuck chat stayed "Sending…" and its queued messages stayed held behind it.
+  // Before: both stayed "Sending…" and the restart kept holding their queued messages.
   expect(rows.get('continue-stuck')!.dispatchState).toBe('unknown')
-  expect(released.toSorted()).toEqual(['fast', 'stuck'])
+  expect(rows.get('continue-dropped')!.dispatchState).toBe('unknown')
+  expect([...new Set(released)].toSorted()).toEqual(['dropped', 'fast', 'stuck'])
+  // One note each: the dropped chat's verdict already said it couldn't confirm.
   expect(notes).toEqual([
     { sessionId: 'fast', text: AGENT_SESSION_RESTART_CONTINUATION_NOTE },
+    { sessionId: 'dropped', text: AGENT_SESSION_RESTART_CONTINUATION_UNCONFIRMED_NOTE },
     { sessionId: 'stuck', text: AGENT_SESSION_RESTART_CONTINUATION_UNCONFIRMED_NOTE }
   ])
 

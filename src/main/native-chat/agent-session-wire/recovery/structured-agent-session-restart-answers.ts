@@ -103,8 +103,8 @@ export function createRestartAnswers() {
   return {
     continued,
     /** A chat whose continuation was handed over; `answer` resolves with its agent's answer and
-     *  `giveUp` settles it as unconfirmed when the action's deadline passes first. The agent may
-     *  still take it later; that updates the message's delivery, not the note. */
+     *  `giveUp` settles it as unconfirmed when the action's deadline passes first; a later accept
+     *  or refusal still updates the message and adds its note. */
     handedOver(
       sessionId: string,
       answer: Promise<StructuredAgentSessionContinuationOutcome>,
@@ -112,8 +112,9 @@ export function createRestartAnswers() {
     ) {
       const answered = answer.then(
         (outcome) => {
-          // Still pending (e.g. its settlement wait was refused at capacity): no answer; the deadline decides.
-          if (outcome.outcome === 'pending') {
+          // Pending or unknown (e.g. a wait refused at capacity, or a turn that ended without it):
+          // no answer yet; the deadline decides.
+          if (outcome.outcome === 'pending' || outcome.outcome === 'unknown') {
             return new Promise<void>(() => {})
           }
           continued.push(outcome)
