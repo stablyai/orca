@@ -4,7 +4,7 @@ import { setImmediate } from 'node:timers/promises'
 import type { AgentType } from '../../../../shared/agent-status/contracts/agent-status-types'
 import {
   CLAUDE_TRANSCRIPT_TAIL_MAX_BYTES,
-  readClaudeTranscriptFrontier,
+  CLAUDE_TRANSCRIPT_WINDOW_RAW_MAX_BYTES as MAX_RAW_WINDOW_BYTES,
   readClaudeTranscriptWindow
 } from '../../../claude/transcripts/claude-transcript-tail'
 import { claudeRecord } from '../../../claude/structured/journal/claude-structured-item-translation'
@@ -12,11 +12,14 @@ import {
   decodeClaudeTranscriptRecord,
   mayBeClaudeConversationEntry
 } from '../../transcript-decoding/transcript-line-decoders-claude'
-import { splitTranscriptStreamLines } from '../../transcript-streaming/transcript-stream-lines'
+import {
+  splitTranscriptStreamLineBatches,
+  type TranscriptLine
+} from '../../transcript-streaming/transcript-stream-lines'
 import { transcriptFallbackId } from '../../transcript-streaming/transcript-fallback-id'
 import { claudeLegacyIdentity } from './journal-legacy-identity'
 import { createNewestItemWindow } from './journal-newest-item-window'
-import { createClaudeImportIndex } from './journal-claude-import-index'
+import { createClaudeImportIndex, type ClaudeImportSelection } from './journal-claude-import-index'
 import { replacementItem } from './journal-replacement-items'
 import {
   adoptedTranscriptSourceObserver,
@@ -35,6 +38,7 @@ type ImportInput = {
   retainedBytes: number
   bounded?: true
   maxBytes?: number
+  maxIndexBytes?: number
   decodedMessageIdentities?: true
 }
 
@@ -51,27 +55,28 @@ type ImportResult = {
 
 type Row = Record<string, unknown>
 type ImportScan = {
-  record: (parsed: unknown, position: number) => void
-  select: (newestFirst: boolean) => Promise<Set<number>>
+  record: (row: Row | null, position: number, lineIndex?: number, end?: number) => void
+  select: (maxRangeBytes?: number) => Promise<ClaudeImportSelection>
+  needsRecord: () => boolean
   item: (row: Row, index: number, fallbackId: string) => JournalReplacementItem | undefined
   check: () => void
 }
 
 export async function importClaudeTranscript(input: ImportInput): Promise<ImportResult> {
-  const index = createClaudeImportIndex()
+  const index = createClaudeImportIndex(input.bounded === true, input.maxIndexBytes)
   let conversation = false
   const check = () => input.signal?.throwIfAborted()
   const scan: ImportScan = {
     check,
-    record(parsed, position) {
+    record(row, position, lineIndex = -1, end = position) {
       check()
-      conversation ||= mayBeClaudeConversationEntry(parsed)
-      const row = claudeRecord(parsed)
+      conversation ||= mayBeClaudeConversationEntry(row)
       if (row) {
-        index.record(row, position)
+        index.record(row, position, lineIndex, end)
       }
     },
-    select: (newestFirst) => index.select(check, newestFirst),
+    select: (maxRangeBytes) => index.select(check, maxRangeBytes),
+    needsRecord: () => !index.full || !conversation,
     item(row, lineIndex, fallbackId) {
       check()
       const message = decodeClaudeTranscriptRecord(row, fallbackId)
@@ -130,6 +135,7 @@ async function importClaudeWindow(input: ImportInput, scan: ImportScan) {
     let sourceFrontier: string | undefined
     const first = await readClaudeTranscriptWindow({
       ...range,
+      select: () => sourceFrontier === undefined || scan.needsRecord(),
       visit(row, position) {
         if (sourceFrontier === undefined && typeof row.uuid === 'string' && row.uuid) {
           sourceFrontier = row.uuid
@@ -138,7 +144,7 @@ async function importClaudeWindow(input: ImportInput, scan: ImportScan) {
         return false
       }
     })
-    const selected = await scan.select(true)
+    const { positions: selected } = await scan.select()
     const items: JournalReplacementItem[] = []
     let itemBytes = 0
     if (selected.size) {
@@ -186,33 +192,41 @@ async function importClaudeFile(
   observe: ((line: string) => void) | undefined
 ) {
   const snapshot = await stat(input.filePath)
+  const frontierCutoff = snapshot.size - CLAUDE_TRANSCRIPT_TAIL_MAX_BYTES
+  let sourceFrontier: string | undefined
   const sourceConsumedBytes = await visitClaudeFile(input, snapshot.size, scan.check, {
     observe,
-    visit: scan.record
+    visit(row, index, offset, record) {
+      scan.record(row, offset, index, offset + record.byteLength)
+      // The backward frontier probe needs the delimiter before a row, unless it starts at BOF.
+      const withinProbe = offset > frontierCutoff || (offset === 0 && frontierCutoff === 0)
+      if (record.terminated && withinProbe && typeof row?.uuid === 'string' && row.uuid) {
+        sourceFrontier = row.uuid
+      }
+    }
   })
-  const selected = await scan.select(false)
+  const { positions: selected, first, end } = await scan.select(MAX_RAW_WINDOW_BYTES)
   const retained = createNewestItemWindow(input.retainedBytes)
-  if (selected.size) {
-    await visitClaudeFile(input, snapshot.size, scan.check, {
-      select: (index) => selected.has(index),
-      visit(parsed, index, offset) {
-        selected.delete(index)
-        const row = claudeRecord(parsed)
-        if (row) {
-          const item = scan.item(row, index, transcriptFallbackId(input.filePath, offset))
-          if (item) {
-            retained.push(item)
-          }
+  if (first) {
+    await visitClaudeFile(input, end, scan.check, {
+      start: first.position,
+      lineIndex: first.lineIndex,
+      select: (offset) => selected.has(offset),
+      visit(row, index, offset) {
+        if (!row) {
+          return
+        }
+        selected.delete(offset)
+        const item = scan.item(row, index, transcriptFallbackId(input.filePath, offset))
+        if (item) {
+          retained.push(item)
         }
       }
     })
+    if (selected.size) {
+      throw new Error('Claude transcript changed while reading its window')
+    }
   }
-  const sourceFrontier = await readClaudeTranscriptFrontier({
-    filePath: input.filePath,
-    consumedBytes: sourceConsumedBytes,
-    maxBytes: CLAUDE_TRANSCRIPT_TAIL_MAX_BYTES,
-    check: scan.check
-  })
   await checkTranscriptSnapshot(input.filePath, snapshot, scan.check)
   return {
     items: retained.items(),
@@ -228,45 +242,53 @@ async function visitClaudeFile(
   size: number,
   check: () => void,
   options: {
-    select?: (index: number) => boolean
+    start?: number
+    lineIndex?: number
+    select?: (offset: number) => boolean
     observe?: (line: string) => void
-    visit: (parsed: unknown, index: number, offset: number) => void
+    visit: (row: Row | null, lineIndex: number, offset: number, record: TranscriptLine) => void
   }
 ): Promise<number> {
   check()
   if (!size) {
     return 0
   }
-  let consumedBytes = 0
-  let index = 0
+  let consumedBytes = options.start ?? 0
+  let index = options.lineIndex ?? 0
   let rowsSinceYield = 0
   let bytesSinceYield = 0
-  const stream = createReadStream(input.filePath, { end: size - 1, signal: input.signal })
+  const stream = createReadStream(input.filePath, {
+    start: options.start,
+    end: size - 1,
+    signal: input.signal
+  })
   try {
-    for await (const record of splitTranscriptStreamLines(stream, 16 * 1024 * 1024)) {
-      check()
-      const offset = consumedBytes
-      consumedBytes += record.byteLength
-      bytesSinceYield += record.byteLength
-      const line = record.line.endsWith('\r') ? record.line.slice(0, -1) : record.line
-      if (line) {
-        const lineIndex = index++
-        if (options.select?.(lineIndex) ?? true) {
-          options.observe?.(line)
-          let parsed: unknown
-          try {
-            parsed = JSON.parse(line)
-          } catch {
-            // Foreign and torn records still advance the legacy line index.
-          }
-          options.visit(parsed, lineIndex, offset)
-        }
-      }
-      if (++rowsSinceYield >= 256 || bytesSinceYield >= 1024 * 1024) {
-        await setImmediate()
+    for await (const batch of splitTranscriptStreamLineBatches(stream, 16 * 1024 * 1024, true)) {
+      for (const record of batch) {
         check()
-        rowsSinceYield = 0
-        bytesSinceYield = 0
+        const offset = consumedBytes
+        consumedBytes += record.byteLength
+        bytesSinceYield += record.byteLength
+        const line = record.line.endsWith('\r') ? record.line.slice(0, -1) : record.line
+        if (line) {
+          const lineIndex = index++
+          if (options.select?.(offset) ?? true) {
+            options.observe?.(line)
+            let row: Row | null = null
+            try {
+              row = claudeRecord(JSON.parse(line))
+            } catch {
+              // Foreign and torn records still advance the legacy line index.
+            }
+            options.visit(row, lineIndex, offset, record)
+          }
+        }
+        if (++rowsSinceYield >= 256 || bytesSinceYield >= 1024 * 1024) {
+          await setImmediate()
+          check()
+          rowsSinceYield = 0
+          bytesSinceYield = 0
+        }
       }
     }
   } finally {

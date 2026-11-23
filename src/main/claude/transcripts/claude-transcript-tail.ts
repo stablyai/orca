@@ -76,7 +76,7 @@ export async function readClaudeTranscriptFrontier(input: {
   const range = {
     ...input,
     endBytes: input.consumedBytes,
-    maxBytes: input.maxBytes ?? WINDOW_RAW_MAX_BYTES
+    maxBytes: input.maxBytes ?? CLAUDE_TRANSCRIPT_WINDOW_RAW_MAX_BYTES
   }
   await visitClaudeTranscriptTail(range, (row) => {
     if (typeof row.uuid !== 'string' || !row.uuid) {
@@ -90,7 +90,7 @@ export async function readClaudeTranscriptFrontier(input: {
 
 /** Recovery bounds source work as well as the retained item window. */
 export const CLAUDE_TRANSCRIPT_WINDOW_MAX_BYTES = 20 * 1024 * 1024
-const WINDOW_RAW_MAX_BYTES = 64 * 1024 * 1024
+export const CLAUDE_TRANSCRIPT_WINDOW_RAW_MAX_BYTES = 64 * 1024 * 1024
 
 type TranscriptSource = { filePath: string } | { handle: FileHandle }
 type TranscriptRowVisitor = (row: Record<string, unknown>, recordEnd: number) => boolean
@@ -114,7 +114,9 @@ export async function readClaudeTranscriptWindow(
   skippedRecords: number
 }> {
   const newestFirst: Record<string, unknown>[] = []
-  const cap = input.visit ? WINDOW_RAW_MAX_BYTES : CLAUDE_TRANSCRIPT_WINDOW_MAX_BYTES
+  const cap = input.visit
+    ? CLAUDE_TRANSCRIPT_WINDOW_RAW_MAX_BYTES
+    : CLAUDE_TRANSCRIPT_WINDOW_MAX_BYTES
   const result = await visitClaudeTranscriptTail(
     {
       ...input,

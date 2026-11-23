@@ -49,27 +49,57 @@ export async function decodeTranscriptStream(
   }
 }
 
-type TranscriptLine = { line: string; byteLength: number; terminated: boolean }
+export type TranscriptLine = { line: string; byteLength: number; terminated: boolean }
 
 export async function* splitTranscriptStreamLines(
   stream: AsyncIterable<Buffer | string>,
   maxRecordBytes = Infinity
 ): AsyncGenerator<TranscriptLine> {
+  for await (const records of splitTranscriptStreamLineBatches(stream, maxRecordBytes)) {
+    yield* records
+  }
+}
+
+export async function* splitTranscriptStreamLineBatches(
+  stream: AsyncIterable<Buffer | string>,
+  maxRecordBytes = Infinity,
+  rawByteLengths = false
+): AsyncGenerator<TranscriptLine[]> {
   let records: TranscriptLine[] = []
+  let rawChunk: Buffer | undefined
+  let rawStart = 0
+  let pendingRawBytes = 0
   const framer = createTranscriptLineFramer((line, byteLength, terminated) => {
+    // Replacement characters can change the encoded length of a malformed UTF-8 line.
+    if (rawByteLengths) {
+      if (terminated && rawChunk) {
+        const nextStart = rawChunk.indexOf(0x0a, rawStart) + 1
+        byteLength = pendingRawBytes + nextStart - rawStart
+        pendingRawBytes = 0
+        rawStart = nextStart
+      } else {
+        byteLength = pendingRawBytes
+      }
+    }
     records.push({ line, byteLength, terminated })
   }, maxRecordBytes)
   for await (const chunk of stream) {
-    framer.write(chunk)
-    for (const record of records) {
-      yield record
+    if (rawByteLengths) {
+      if (typeof chunk === 'string') {
+        throw new Error('Raw transcript offsets require a byte stream')
+      }
+      rawChunk = chunk
+      rawStart = 0
     }
+    framer.write(chunk)
+    if (rawChunk) {
+      pendingRawBytes += rawChunk.length - rawStart
+    }
+    yield records
     records = []
   }
   framer.end()
-  for (const record of records) {
-    yield record
-  }
+  yield records
 }
 
 /** Frame chunks synchronously so native decoding avoids a promise per record. */

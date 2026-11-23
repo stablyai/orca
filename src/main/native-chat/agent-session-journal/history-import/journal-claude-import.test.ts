@@ -261,12 +261,56 @@ it.each(importModes)('budgets active answers before abandoned answers: %s', asyn
   ])
 })
 
+it.each(importModes)(
+  'keeps the newest conversation when the link index fills: %s',
+  async (bounded) => {
+    root = await mkdtemp(join(tmpdir(), 'orca-claude-index-capacity-'))
+    const filePath = join(root, 'session.jsonl')
+    const noise = Array.from({ length: 12 }, (_, index) =>
+      JSON.stringify({ type: 'progress', uuid: `unrelated-${index}` })
+    )
+    await writeFile(
+      filePath,
+      [
+        '{"type":"user","uuid":"old","message":{"content":"Old question"}}',
+        ...noise,
+        '{"type":"user","uuid":"question","parentUuid":"old","message":{"content":"New question"}}',
+        '{"type":"assistant","uuid":"answer","parentUuid":"question","message":{"content":"New answer"}}',
+        '{"type":"progress","uuid":"frontier","parentUuid":"answer"}',
+        ''
+      ].join('\n')
+    )
+    const input = {
+      agent: 'claude' as const,
+      filePath,
+      sessionId: 'index-capacity-session',
+      limits: { inlineHeadBytes: 1024 },
+      retainedBytes: 2400,
+      maxIndexBytes: 1024,
+      bounded
+    }
+    const imported = await importClaudeTranscript(input)
+    expect(imported.items.map(({ body }) => body)).toEqual([
+      { kind: 'message', role: 'user', blocks: [{ type: 'text', text: 'New question' }] },
+      { kind: 'message', role: 'assistant', blocks: [{ type: 'text', text: 'New answer' }] }
+    ])
+    expect(imported.sourceFrontier).toBe('frontier')
+    if (bounded) {
+      expect(imported.sourceMtimeMs).toEqual(expect.any(Number))
+    }
+  }
+)
+
 it('preserves the requested agent and absolute line index for UUID-less legacy messages', async () => {
   root = await mkdtemp(join(tmpdir(), 'orca-claude-identity-'))
   const filePath = join(root, 'session.jsonl')
   await writeFile(
     filePath,
-    '{"type":"progress"}\n{"type":"progress"}\n{"type":"assistant","message":{"role":"assistant","content":"Saved answer"}}\n'
+    Buffer.concat([
+      Buffer.from('{"type":"progress"}\r\n'),
+      Buffer.from([0xff, 0x0a]),
+      Buffer.from('{"type":"assistant","message":{"role":"assistant","content":"Saved answer"}}')
+    ])
   )
   const imported = await prepareLegacyTranscriptImport({
     agent: 'openclaude',
@@ -277,7 +321,7 @@ it('preserves the requested agent and absolute line index for UUID-less legacy m
     { provider: 'legacy', agent: 'openclaude', sessionId: 'legacy-session', recordId: '#2' }
   ])
 
-  await appendFile(filePath, '{"type":"user","uuid":"prompt","message":{"content":"Question"}}\n')
+  await appendFile(filePath, '\n{"type":"user","uuid":"prompt","message":{"content":"Question"}}\n')
   const adopted = await prepareLegacyTranscriptImport({
     agent: 'openclaude',
     sessionId: 'legacy-session',

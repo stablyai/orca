@@ -1,8 +1,9 @@
 import { afterEach, expect, it, vi } from 'vitest'
+import * as fs from 'node:fs'
 import { stat, utimes, writeFile } from 'node:fs/promises'
 import * as capacityRecovery from './claude-transcript-capacity-recovery'
 import * as transcriptTail from './claude-transcript-tail'
-import { importClaudeTranscript } from '../../native-chat/agent-session-journal/history-import/journal-claude-import'
+import * as claudeImport from '../../native-chat/agent-session-journal/history-import/journal-claude-import'
 import { catchUpClaudeTranscript } from './claude-transcript-catch-up'
 import {
   chat,
@@ -106,6 +107,46 @@ it.each<'metadata' | 'uuidless-metadata'>(['metadata', 'uuidless-metadata'])(
   }
 )
 
+it('persists the degraded recovery receipt across reopen', async () => {
+  const c = await chat('batch')
+  const importTranscript = claudeImport.importClaudeTranscript
+  vi.spyOn(claudeImport, 'importClaudeTranscript').mockImplementation((input) =>
+    importTranscript({ ...input, maxIndexBytes: 1024 })
+  )
+  await writeFile(
+    c.filePath,
+    [
+      '{"type":"assistant","uuid":"old-leaf","message":{"content":"Old answer"}}',
+      ...Array.from({ length: 12 }, (_, index) => `{"type":"progress","uuid":"noise-${index}"}`),
+      '{"type":"user","uuid":"new-question","parentUuid":"old-leaf","message":{"content":"New question"}}',
+      '{"type":"assistant","uuid":"new-answer","parentUuid":"new-question","message":{"content":"New answer"}}',
+      ''
+    ].join('\n')
+  )
+  const input = {
+    sessionId: SESSION,
+    providerSessionId: PROVIDER,
+    leafUuid: 'old-leaf',
+    claudeConfigDir: c.config,
+    cwd: c.cwd,
+    sink: c.deferred.sink,
+    maxBytes: 128
+  }
+  expect(await catchUpClaudeTranscript(input)).toMatchObject({ kind: 'capacity' })
+  expect(await catchUpClaudeTranscript({ ...input, mode: 'recovery', maxBytes: 4096 })).toBe(true)
+  expect(await c.journal.reads.historyOrigin()).toMatchObject({
+    raw: {
+      kind: 'native_copy',
+      ids: ['new-question', 'new-answer'],
+      sourceFrontier: 'new-answer',
+      sourceConsumedBytes: expect.any(Number),
+      sourceMtimeMs: expect.any(Number)
+    }
+  })
+  await c.reopen()
+  expect(await catchUpClaudeTranscript(input)).toBe(true)
+})
+
 it('bounds two-pass recovery reads and stops decoding when the active item window fills', async () => {
   const c = await chat('batch')
   const message = (uuid: string, parentUuid: string | null, size = 800) => ({
@@ -127,7 +168,7 @@ it('bounds two-pass recovery reads and stops decoding when the active item windo
   const read = vi.spyOn(transcriptTail, 'readClaudeTranscriptWindow')
   const rawCap = 96 * 1024
   const itemBudget = 2400
-  const imported = await importClaudeTranscript({
+  const imported = await claudeImport.importClaudeTranscript({
     agent: 'claude',
     filePath: c.filePath,
     sessionId: PROVIDER,
@@ -148,6 +189,51 @@ it('bounds two-pass recovery reads and stops decoding when the active item windo
   expect(payloads.bytesRead).toBe(64 * 1024)
   expect(payloads.decodedBytes).toBeLessThan(3 * 1024)
 })
+
+it.each([undefined, true] as const)(
+  'bounds bytes read when the transcript exceeds 64 MiB: %s',
+  async (bounded) => {
+    const c = await chat('batch')
+    const padding = `{"type":"progress","data":"${'x'.repeat(1024 * 1024)}"}\n`
+    const message = (uuid: string, parentUuid: string | null) =>
+      `${JSON.stringify({ type: 'assistant', uuid, parentUuid, message: { content: uuid } })}\n`
+    await writeFile(
+      c.filePath,
+      (async function* () {
+        yield message('outside', null)
+        for (let index = 0; index < 10; index++) {
+          yield padding
+        }
+        yield message('inside', 'outside')
+        for (let index = 0; index < 63; index++) {
+          yield padding
+        }
+        yield message('newest', 'inside')
+      })()
+    )
+    const { size } = await stat(c.filePath)
+    const stream = vi.spyOn(fs, 'createReadStream')
+    const window = vi.spyOn(transcriptTail, 'readClaudeTranscriptWindow')
+    const imported = await claudeImport.importClaudeTranscript({
+      agent: 'claude',
+      filePath: c.filePath,
+      sessionId: PROVIDER,
+      limits: { inlineHeadBytes: 1024 },
+      retainedBytes: 2400,
+      maxBytes: 128 * 1024 * 1024,
+      bounded
+    })
+    const streamBytes = stream.mock.results.reduce((sum, { value }) => sum + value.bytesRead, 0)
+    const reads = await Promise.all(window.mock.results.map(({ value }) => value))
+    const bytesRead = reads.reduce((sum, read) => sum + read.bytesRead, streamBytes)
+    expect(bytesRead).toBeGreaterThanOrEqual(bounded ? 64 * 1024 * 1024 : size)
+    expect(bytesRead).toBeLessThanOrEqual(bounded ? 128 * 1024 * 1024 : size + 64 * 1024 * 1024)
+    expect(imported.items.map(({ identity }) => identity)).toEqual([
+      { provider: 'claude', sessionId: PROVIDER, uuid: 'inside' },
+      { provider: 'claude', sessionId: PROVIDER, uuid: 'newest' }
+    ])
+  }
+)
 
 // PR #45200: the reader without a visitor has a separate raw and decode budget.
 it('reads and decodes a bounded recent window despite a large prefix', async () => {
