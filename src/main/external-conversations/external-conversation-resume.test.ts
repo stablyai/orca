@@ -30,6 +30,23 @@ const resume = (chat: QueuedMessageTestRig, installed = true) =>
   resumeRefusal({ resume: true }, hostOf(chat, installed), SESSION)
 const NOT_FAILED = { outcome: 'refused', reason: 'not_failed' }
 
+// What the chat holds, for a failure message.
+async function seen(chat: QueuedMessageTestRig): Promise<string> {
+  const holds = await (
+    await chat.host.conversation(SESSION)
+  ).journal.queuedMessages
+    .failureHolds()
+    .catch((error: unknown) => String(error))
+  const work = await chat.host.currentWork(SESSION)
+  const page = await chat.host.history({ sessionId: SESSION, direction: 'tail' })
+  return JSON.stringify({
+    holds,
+    working: work?.working(),
+    prompt: work?.hasActionablePrompt(),
+    items: page.ok ? page.page.items.map((item) => item.body) : page
+  })
+}
+
 async function failedTurn(chat: QueuedMessageTestRig): Promise<void> {
   const id = await chat.workingSend()
   const turnId = `turn-${id}`
@@ -42,7 +59,7 @@ async function failedTurn(chat: QueuedMessageTestRig): Promise<void> {
       { turnScope: { kind: 'thread' } }
     )
   chat.providerEvents().publish()
-  await eventually(async () => expect(await resume(chat)).toBeNull())
+  await eventually(async () => expect(await resume(chat), await seen(chat)).toBeNull())
 }
 
 describe('resumeRefusal', () => {
