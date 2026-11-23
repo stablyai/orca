@@ -161,7 +161,8 @@ export function useSourceControlRebaseContinue({
   const scope = useSourceControlScope()
   const shouldInspect = conflictOperation === 'rebase' && rebaseStopUnread
   useEffect(() => {
-    if (!shouldInspect || !activeWorktreeId || !worktreePath) {
+    // An unresolved owner has no host to ask; requireGitOwnerTarget below would throw out of the effect.
+    if (!shouldInspect || !activeRepoTarget || !activeWorktreeId || !worktreePath) {
       return
     }
     let current = true
@@ -190,7 +191,10 @@ export function useSourceControlRebaseContinue({
 
   const handleContinueRebase = useCallback(async (): Promise<void> => {
     const state = operationStore.getState()
+    // Admit only with a resolved owner: requireGitOwnerTarget runs after the lock is taken, outside
+    // runContinueRequest's finally, so a throw there would leave Continue and Abort locked.
     if (
+      !activeRepoTarget ||
       !activeWorktreeId ||
       !worktreePath ||
       conflictOperation !== 'rebase' ||
