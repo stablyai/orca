@@ -1,7 +1,7 @@
 // @protected-copy: drawn inside the security-surface setup dialog
 // One run of "Add <bot> to Slack": its steps from the cloud's state, Slack's install page, and the
 // token form; the dialog draws them.
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useBots } from '@/lib/bot-catalog'
 import { botSlackCalls } from '@/lib/bot-connector-host-calls'
 import { openBotHostPageOrSay } from '@/lib/bot-host-page'
@@ -334,7 +334,11 @@ export function useBotSlackSetup(
   // Still behind, on required or optional permissions: the approval this flow waits for isn't in.
   const installed = waited?.state === 'installed' && !waited.updateNeeded && !waited.updateAvailable
   const otherUser = waited?.state === 'created' && waited.oauthFailure === 'other_user'
-  const shown = slackSetupShownStep(step, { installed, otherUser, expired })
+  // One object per outcome: callers keep the shown step across renders (the outage hook's state).
+  const shown = useMemo(
+    () => slackSetupShownStep(step, { installed, otherUser, expired }),
+    [step, installed, otherUser, expired]
+  )
 
   // Once per open: a bot re-read while setup runs (each refresh does) is a new object and a new
   // `start`, and running it again would open Slack again while the update still waits.
