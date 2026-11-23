@@ -135,9 +135,13 @@ export class UsageLimitAccountHolds {
       this.movedSince.set(id, { cut: hit.cut, to: movedTo, at: now })
     }
     this.relaunched.note(id, hit.cut, relaunchedOn, hit.launchFence, now)
-    if (relaunchedOn && limited.resetsAt === undefined) {
-      // Nothing schedules this cut until room is seen, so no due send asks for that reading.
-      askForRoom(scope, UNKNOWN_RESET_ASK_MS)
+  }
+
+  /** A relaunched cut with no reset is scheduled only once room is seen, so no due send asks for
+   *  that reading: the sweep asks for it here, for a cut Orca would continue. */
+  askForRelaunchRoom(id: string, cut: NativeChatUsageLimitCut): void {
+    if (cut.resetsAt === undefined && this.relaunched.waits(id, switchFreeIdentity(cut))) {
+      askForRoom(this.scopes.get(id), UNKNOWN_RESET_ASK_MS)
     }
   }
 

@@ -13,6 +13,7 @@ import { UsageLimitColdCuts } from './structured-agent-session-usage-limit-cold-
 import { usageLimitContinueMutation } from './structured-agent-session-usage-limit-continue-message'
 import {
   cancelsCut,
+  usageLimitCutContinuable,
   isUsageLimitChatOpen,
   openUsageLimitChats,
   usageLimitCutDisposition,
@@ -174,19 +175,11 @@ export class StructuredAgentSessionUsageLimitContinue {
   }
 
   private eligible(id: string, cut: HostUsageLimitCut): cut is Cut {
-    const record = this.deps.host.store.getRecord(id)
-    return (
-      !this.disposed &&
-      cut.chain < USAGE_LIMIT_CONTINUE_CHAIN_LIMIT &&
-      this.deps.host.usageLimitAutoContinue?.isEnabled() === true &&
-      this.holds.schedulable(id, cut, this.deps.now()) &&
-      record !== null &&
-      record.location.executionHostId === this.deps.host.store.hostId &&
-      !this.deps.host.usageLimitAutoContinue?.isWorkspaceAsleep(record.location.workspaceId) &&
-      isUsageLimitChatOpen(this.deps.host.store, id) &&
-      !cancelsCut(record.usageLimitContinueCancel, cut)
-    )
+    return this.continuable(id, cut) && this.holds.schedulable(id, cut, this.deps.now())
   }
+
+  private continuable = (id: string, cut: HostUsageLimitCut): boolean =>
+    !this.disposed && usageLimitCutContinuable(this.deps.host, id, cut)
 
   cancel = (input: { sessionId: string; turnItemId: string; resetsAt: number }): Promise<void> =>
     this.deps.serialize(input.sessionId, async () => {
@@ -235,7 +228,16 @@ export class StructuredAgentSessionUsageLimitContinue {
           this.attempts.delete(id)
         }
         const attempt = this.attempts.get(id)
-        if (!cut || !this.eligible(id, cut) || attempt?.unconfirmed || (attempt?.count ?? 0) >= 5) {
+        if (
+          !cut ||
+          !this.continuable(id, cut) ||
+          attempt?.unconfirmed ||
+          (attempt?.count ?? 0) >= 5
+        ) {
+          continue
+        }
+        if (!this.eligible(id, cut)) {
+          this.holds.askForRelaunchRoom(id, cut)
           continue
         }
         const retryAt = attempt ? attempt.at + 60_000 * 2 ** Math.max(0, attempt.count - 1) : 0

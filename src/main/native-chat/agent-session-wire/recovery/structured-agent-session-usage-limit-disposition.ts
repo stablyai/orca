@@ -1,5 +1,6 @@
 import type { HostUsageLimitCut, SwitchReset } from './structured-agent-session-usage-limit-chain'
 import { USAGE_LIMIT_CONTINUE_CHAIN_LIMIT } from './structured-agent-session-usage-limit-chain'
+import type { UsageLimitContinueDeps } from './structured-agent-session-usage-limit-continue-deps'
 
 /** Whether the connector requests a usage-limit cut owes still wait for its automatic continue
  *  (Phase 1 §1.5). */
@@ -19,6 +20,24 @@ export const openUsageLimitChats = (store: OpenChats): string[] => [
 
 export const isUsageLimitChatOpen = (store: OpenChats, id: string): boolean =>
   store.isSessionTabVisible(id) || store.isSessionInBackground(id)
+
+/** Everything but a reset to wait for: Orca would continue this cut once it has one. */
+export function usageLimitCutContinuable(
+  host: Pick<UsageLimitContinueDeps['host'], 'store' | 'usageLimitAutoContinue'>,
+  id: string,
+  cut: HostUsageLimitCut
+): boolean {
+  const record = host.store.getRecord(id)
+  return (
+    cut.chain < USAGE_LIMIT_CONTINUE_CHAIN_LIMIT &&
+    host.usageLimitAutoContinue?.isEnabled() === true &&
+    record !== null &&
+    record.location.executionHostId === host.store.hostId &&
+    !host.usageLimitAutoContinue?.isWorkspaceAsleep(record.location.workspaceId) &&
+    isUsageLimitChatOpen(host.store, id) &&
+    !cancelsCut(record.usageLimitContinueCancel, cut)
+  )
+}
 
 type Cancel = { turnItemId: string; resetsAt: number } | undefined
 

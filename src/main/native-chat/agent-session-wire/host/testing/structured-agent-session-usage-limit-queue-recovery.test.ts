@@ -39,7 +39,7 @@ function reading(usedPercent: number, updatedAt: number): ProviderRateLimits {
 }
 
 /** A chat cut on account A at a reset `resetsAt` (none when null), then relaunched on account B. */
-async function relaunchedChat(resetsAt: number | null = RESET) {
+async function relaunchedChat(resetsAt: number | null = RESET, autoContinue = true) {
   let clock = NOW
   let homePath = join(tmpdir(), 'orca-usage-fixture', 'a')
   const nextHome = join(tmpdir(), 'orca-usage-fixture', 'b')
@@ -69,7 +69,7 @@ async function relaunchedChat(resetsAt: number | null = RESET) {
     acquiredAccountHome: accountHome,
     hostDeps: { launchAccountHome: async () => accountHome() },
     usageLimitAutoContinue: {
-      isEnabled: () => true,
+      isEnabled: () => autoContinue,
       isWorkspaceAsleep: () => false,
       subscribe: () => () => {},
       ...sources
@@ -264,4 +264,11 @@ it('never sends an unconfirmed continue again when its room goes and comes back'
   expect(await pass(30_000, reading(100, NOW + 30_000))).toEqual([])
   expect(await pass(40_000, reading(0, NOW + 40_000))).toEqual([])
   expect(await pass(60_000, reading(0, NOW + 60_000))).toEqual([])
+})
+
+it('asks for no reading for a relaunched cut while auto-continue is off', async () => {
+  const { pass, requested } = await relaunchedChat(null, false)
+  expect(await pass(5_000, null)).toEqual([])
+  expect(await pass(20_000, null)).toEqual([])
+  expect(requested).toEqual([])
 })
