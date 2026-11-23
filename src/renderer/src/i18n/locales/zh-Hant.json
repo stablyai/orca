@@ -23810,7 +23810,7 @@
       "hitTip": "{{agent}} 已達使用上限 · {{time}} 重設"
     },
     "section": {
-      "title": "機器人",
+      "title": "Bots",
       "startFromScratch": "從頭開始"
     },
     "errors": {
