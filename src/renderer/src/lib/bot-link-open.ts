@@ -115,7 +115,9 @@ export async function openBotLinkHome(
         return
       }
       // A server's chat tabs reach this window only once its home is open here, as the sidebar opens it.
-      openBotHome(bot)
+      if (!openBotHome(bot)) {
+        return
+      }
       await activateAiVaultStructuredSession(
         {
           structuredSession: { workspaceId: folderWorkspaceKey(bot.folderWorkspaceId), sessionId }
