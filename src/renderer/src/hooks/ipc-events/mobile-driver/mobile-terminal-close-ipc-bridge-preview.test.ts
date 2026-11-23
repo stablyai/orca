@@ -3,7 +3,6 @@ import type { RuntimeNavigationTarget } from '../../../../../shared/remote-runti
 import { createTestStore, seedStore } from '../../../store/testing/app-store-test-fixture'
 import { makeWorktree } from '../../../store/slices/worktrees/worktree.test-fixture'
 import { TEST_REPO } from '../../../store/repos/repo.test-fixture'
-import { createStoreSessionMockApi } from '../../../store/testing/app-store-session-api.test-fixture'
 import type * as HostPersistence from '@/lib/workspace/persistence/workspace-session-host-persistence'
 import {
   drawTabsFromMain,
@@ -35,7 +34,9 @@ vi.mock('../../../store', () => ({
 vi.mock('@/components/terminal-pane/layout/close/closed-terminal-leaf-notice', () => ({
   applyClosedTerminalLeafNotice: vi.fn()
 }))
-vi.mock('@/components/terminal/tab-lifecycle/terminal-tab-actions', () => ({ closeTerminalTab: vi.fn() }))
+vi.mock('@/components/terminal/tab-lifecycle/terminal-tab-actions', () => ({
+  closeTerminalTab: vi.fn()
+}))
 vi.mock('@/components/sidebar/workspace-actions/sleep/sleep-worktree-flow', () => ({
   runSleepWorktree: vi.fn()
 }))
@@ -87,7 +88,7 @@ async function setup(): Promise<{
   const noop = (): (() => void) => () => {}
   vi.stubGlobal('window', {
     api: {
-      ...createStoreSessionMockApi(),
+      gh: {},
       ui: {
         onOpenFileFromMobile: (cb: (payload: OpenFilePayload) => void) => {
           listener = cb

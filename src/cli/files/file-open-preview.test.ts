@@ -15,7 +15,6 @@ vi.mock('../runtime/client', async (importOriginal) => ({
 
 import { main } from '../index'
 import type * as RuntimeClientExports from '../runtime/client'
-import { okFixture, queueFixtures } from '../runtime/fixtures/runtime-rpc-fixtures'
 
 describe('orca file open --preview', () => {
   beforeEach(() => {
@@ -31,7 +30,8 @@ describe('orca file open --preview', () => {
 
   it('asks for a preview only when --preview is passed', async () => {
     const opened = { worktree: 'wt-1', relativePath: 'a.html', kind: 'text', opened: true }
-    queueFixtures(callMock, okFixture('open', opened), okFixture('open', opened))
+    const reply = { id: 'open', ok: true, result: opened, _meta: { runtimeId: 'runtime-1' } }
+    callMock.mockResolvedValueOnce(reply).mockResolvedValueOnce(reply)
     await main(['file', 'open', 'a.html', '--preview', '--worktree', 'id:wt-1'], '/tmp/repo')
     await main(['file', 'open', 'a.html', '--worktree', 'id:wt-1'], '/tmp/repo')
     expect(callMock.mock.calls.map(([, params]) => params)).toEqual([
