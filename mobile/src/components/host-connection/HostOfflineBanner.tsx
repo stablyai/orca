@@ -56,8 +56,8 @@ export function useHostOfflineBanner({
   if (!show) {
     return null
   }
-  // A nudge redials now instead of waiting out the reconnect backoff.
-  const retry = forceReconnect ?? (client ? () => client.notifyForeground('focus') : null)
+  // The shell owns the socket; use its immediate recovery signal for an explicit retry.
+  const retry = forceReconnect ?? (client ? () => client.notifyForeground('app-resume') : null)
   const readThisDocument = asOf !== null && asOf >= mountedAt
   return {
     offline: outage || state === 'disconnected',
