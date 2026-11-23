@@ -25,6 +25,8 @@ const GO = 'Go ahead without a separate OK?'
 const MERGE = 'Merge it?'
 
 const stores: BotItemsStore[] = []
+// Second connections a test opens on its store's file, closed even when an assertion fails.
+const files: DatabaseSync[] = []
 afterEach(() => stores.splice(0).forEach((store) => store.dispose()))
 
 function item(path = ':memory:') {
@@ -219,6 +221,7 @@ it('works out the waiting ask from the events when none is kept or an older Orca
     const kept = store.viewRows([uid], true).waitingAsks[uid]
     expect(kept).toBe(botItemEventId(first))
     const file = new DatabaseSync(path)
+    files.push(file)
     file.prepare('DELETE FROM item_waiting_asks').run()
     expect(store.viewRows([uid], true).waitingAsks[uid]).toBe(kept)
     expect(file.prepare('SELECT ask FROM item_waiting_asks').get()).toEqual({ ask: first })
@@ -234,8 +237,8 @@ it('works out the waiting ask from the events when none is kept or an older Orca
       .run(uid, NOW)
     file.prepare('UPDATE items SET last_event_id = ?').run(moved.lastInsertRowid)
     expect(store.viewRows([uid], true).waitingAsks[uid]).toBeUndefined()
-    file.close()
   } finally {
+    files.splice(0).forEach((file) => file.close())
     stores.splice(0).forEach((store) => store.dispose())
     rmSync(dir, { recursive: true, force: true })
   }
@@ -247,6 +250,7 @@ it('answers as pairing every event does, reading only the events since the kept 
     const path = join(dir, 'items.sqlite')
     const { store, uid, ask, comment } = item(path)
     const file = new DatabaseSync(path)
+    files.push(file)
     const keptAt = (): unknown => file.prepare('SELECT at FROM item_waiting_asks').get()?.at
     const lastEvent = (): unknown =>
       file.prepare('SELECT last_event_id FROM items').get()?.last_event_id
@@ -273,8 +277,8 @@ it('answers as pairing every event does, reading only the events since the kept 
     expect(opened()).toEqual([botItemEventId(asked), botItemEventId(asked)])
     comment('Yes', asked)
     expect(opened()).toEqual([undefined, undefined])
-    file.close()
   } finally {
+    files.splice(0).forEach((file) => file.close())
     stores.splice(0).forEach((store) => store.dispose())
     rmSync(dir, { recursive: true, force: true })
   }
