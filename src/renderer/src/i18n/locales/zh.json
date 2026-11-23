@@ -24535,9 +24535,9 @@
       "addAccountHelp": "要添加账户，请在 agy 中运行 /logout 并重新登录，然后在这里点击“保存”",
       "googleSignIn": "Google 账户登录",
       "googleSignInAgy": "agy 自带的登录",
-      "googleSignInAgyOption": "通过运行 agy 登录；也提供 Claude 和 GPT-OSS",
+      "googleSignInAgyOption": "通过运行 agy 登录",
       "googleSignInOrca": "Orca 内置登录",
-      "googleSignInOrcaOption": "在此通过浏览器登录，无需 agy，仅限 Gemini 模型",
+      "googleSignInOrcaOption": "在此通过浏览器登录，无需 agy",
       "googleSignInUpdateFailed": "无法更改 Antigravity 使用 Google 登录的方式",
       "apiKeyGet": "获取 API 密钥"
     },
