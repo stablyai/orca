@@ -39,9 +39,6 @@ import { useBotSoulMemorySkills } from './use-bot-soul-memory-skills'
 import { useMobileBotSharingSettings } from './sharing/MobileBotSharing'
 import { botSaveErrorMessage } from './mobile-bot-sheet-copy'
 
-/** The bot's home folder on its computer (null until read), and where to go once Settings deletes it. */
-export type BotSettingsHome = { folderPath: string | null; onDeleted: () => void }
-
 /** The bot's Settings, as the desktop's: one list, and a page for each row that has more. */
 export function MobileBotSettingsTab(props: {
   routeBot: RouteBot
@@ -56,7 +53,8 @@ export function MobileBotSettingsTab(props: {
   /** The host answers: off, every setting is read-only. */
   online: boolean
   hostName: string
-  home: BotSettingsHome
+  /** The bot's home folder on its computer (null until read), and where to go once Settings deletes it. */
+  home: { folderPath: string | null; onDeleted: () => void }
   /** Puts a draft in the bot's Home Chat, where hooks are made; null while no chat shows. */
   onAskInChat?: ((draft: string) => void) | null
   onOpenFile?: (path: string) => void

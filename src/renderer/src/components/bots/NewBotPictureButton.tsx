@@ -35,11 +35,22 @@ export function NewBotPictureButton({
   useBotAvatarIntakeHost(rootRef, intake)
   const { line } = intake
   const showReading = submitted && intake.reading
-  // The popover stays inside the dialog's padding, so a narrow dialog narrows it rather than its edge.
-  const [dialog, setDialog] = useState<HTMLElement | null>(null)
+  // The popover stays inside the dialog's padding sideways, so a narrow dialog narrows it rather than its
+  // edge; downward it may pass the dialog, so an open outfit grid shows whole.
+  const [dialogWidth, setDialogWidth] = useState<number | null>(null)
   useEffect(() => {
-    setDialog(rootRef.current?.closest<HTMLElement>('[role="dialog"]') ?? null)
+    const dialog = rootRef.current?.closest<HTMLElement>('[role="dialog"]')
+    if (!dialog) {
+      return
+    }
+    const observer = new ResizeObserver(() => setDialogWidth(dialog.clientWidth))
+    observer.observe(dialog)
+    return () => observer.disconnect()
   }, [])
+  const widthStyle: React.CSSProperties & Record<'--new-bot-picture-width', string> = {
+    '--new-bot-picture-width':
+      dialogWidth === null ? '20rem' : `${dialogWidth - 2 * DIALOG_PADDING_PX}px`
+  }
   return (
     <div ref={rootRef} className="flex flex-wrap items-center gap-x-3">
       <Popover onOpenChange={(open) => open && line.kind === 'error' && intake.dismiss()}>
@@ -52,6 +63,7 @@ export function NewBotPictureButton({
           >
             <BotAvatarTile
               src={picture.src}
+              outfit={picture.outfitArt}
               fallback=""
               className="size-16 rounded-[inherit] shadow-[0_0_0_3px_var(--dialog-surface)] transition-[filter] group-hover/picture:brightness-95"
             />
@@ -70,12 +82,19 @@ export function NewBotPictureButton({
         </PopoverTrigger>
         <PopoverContent
           align="start"
-          collisionBoundary={dialog}
           collisionPadding={DIALOG_PADDING_PX}
-          className="w-[min(20rem,var(--radix-popover-content-available-width))]"
+          style={widthStyle}
+          // A window too short for the open picker scrolls the card; any other fits it whole.
+          wheelScroll
+          className="flex w-[min(20rem,var(--new-bot-picture-width),var(--radix-popover-content-available-width))] flex-col"
         >
           {/* The whole popover takes a dropped picture, so all of it is outlined while one is dragged. */}
-          <div className={cn(BOT_PICTURE_DROP_OUTLINE, 'pt-3')}>
+          <div
+            className={cn(
+              BOT_PICTURE_DROP_OUTLINE,
+              'scrollbar-sleek min-h-0 overflow-x-hidden overflow-y-auto overscroll-contain pt-3'
+            )}
+          >
             <BotPicturePicker
               value={picture.value}
               custom={picture.custom}
@@ -83,6 +102,8 @@ export function NewBotPictureButton({
               onUpload={picture.onUpload}
               color={picture.color}
               onColorChange={picture.onColorChange}
+              outfit={picture.outfit}
+              onOutfitChange={picture.onOutfitChange}
               uploadLink
               intake={intake}
             />

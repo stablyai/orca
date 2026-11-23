@@ -6,6 +6,7 @@ import {
   AGENT_STATUS_TOOL_INPUT_MAX_LENGTH,
   normalizeOptionalField
 } from '../contracts/agent-status-field-normalization'
+import { redactString } from '../../observability/redactor'
 
 /** The lead agent ended its turn while background tasks it started still run: when, and what they run. */
 export type AgentBackgroundWait = { since: number; commands: string[] }
@@ -40,7 +41,7 @@ export function childWorkBackgroundCommands(
     child.membership === 'live' && isLiveChildWork(child) && !isAgentChildWork(child)
       ? [
           normalizeOptionalField(
-            child.operation?.input ?? child.description ?? child.name,
+            redactString(child.operation?.input ?? child.description ?? child.name ?? ''),
             AGENT_STATUS_TOOL_INPUT_MAX_LENGTH
           ) ?? 'background task'
         ]

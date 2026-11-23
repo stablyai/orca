@@ -136,9 +136,11 @@ function Settings(): React.JSX.Element {
               onUndo={picture.undo}
               color={picture.color}
               onColorChange={picture.pickColor}
+              outfit={picture.outfit}
+              onOutfitChange={picture.pickOutfit}
             />
             <p className="text-center text-xs text-muted-foreground">
-              Changes your bot&apos;s picture in Slack too.
+              Slack gets the picture, not the color or outfit.
             </p>
           </div>
         </PopoverContent>
@@ -178,6 +180,27 @@ export const newColor = defineFixture({
     await settle(600)
   }
 })
+
+function wearOutfit(name: string): () => Promise<void> {
+  return async () => {
+    document.querySelector<HTMLButtonElement>('button[aria-label="Change picture"]')?.click()
+    await settle(300)
+    document.querySelector<HTMLButtonElement>('button[aria-label="Pink"]')?.click()
+    document.querySelector<HTMLButtonElement>('button[aria-label="Outfit"]')?.click()
+    await settle(300)
+    document.querySelector<HTMLButtonElement>(`button[aria-label="${name}"]`)?.click()
+    await settle(600)
+  }
+}
+
+export const newOutfit = defineFixture({
+  width: 560,
+  setup: stubUpload,
+  render: () => <NewBot />,
+  interact: wearOutfit('Detective')
+})
+
+export const newReviewer = defineFixture({ ...newOutfit, interact: wearOutfit('Reviewer') })
 
 export const newDrag = defineFixture({
   width: 560,

@@ -238,6 +238,7 @@ import {
 } from './bots-tools-params'
 import { BotWorkForget, BotWorkList } from './bots-work-params'
 import {
+  AudioMuted,
   CertificateProceed,
   FindInPage,
   PageZoom,
@@ -1431,6 +1432,7 @@ export const RPC_PARAMS_BY_METHOD = {
   'browser.scrollIntoView': Element,
   'browser.select': Select,
   'browser.selectAll': Element,
+  'browser.setAudioMuted': AudioMuted,
   'browser.setCredentials': SetCredentials,
   'browser.setDevice': SetDevice,
   'browser.setHeaders': SetHeaders,

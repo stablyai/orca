@@ -8,6 +8,7 @@ import { mapSettledWithConcurrency } from '../../../shared/concurrency/map-with-
 import type { BrowserBackend, BrowserBackendCreateTab } from '../browser-backend'
 import type { BrowserManager } from '../guest-lifecycle/manager/browser-manager'
 import type { AgentBrowserBridge } from '../agent-browser/agent-browser-bridge'
+import { BrowserError } from '../browser-error'
 import { browserSessionRegistry } from '../sessions/profiles/browser-session-registry'
 import { installBrowserJavaScriptDialogs } from '../guest-lifecycle/prompts/browser-javascript-dialogs'
 import {
@@ -190,6 +191,10 @@ export class OffscreenBrowserBackend implements BrowserBackend {
     const win = this.windowsByPageId.get(browserPageId)
     if (!win || win.isDestroyed()) {
       throw new Error(`Browser page ${browserPageId} is not running`)
+    }
+    // Deleted while the switch waited: refuse it, or the page would reopen in the default session.
+    if (!browserSessionRegistry.getProfile(profileId)) {
+      throw new BrowserError('invalid_argument', `Browser profile ${profileId} was not found`)
     }
     const previousWebContentsId = win.webContents.id
     const worktreeId = this.browserManager.getWorktreeIdForTab(browserPageId)
