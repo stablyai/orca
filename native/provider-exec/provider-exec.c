@@ -35,6 +35,7 @@
 #endif
 #if defined(__APPLE__)
 #include <limits.h>
+#include <sys/proc.h>
 #include <sys/sysctl.h>
 #endif
 
@@ -239,9 +240,16 @@ static _Noreturn void fail(int code) {
 // deadline own the stop, so owner EOF resumes it and a repeated term never restarts or shortens it.
 enum watcher_phase { WATCH_IDLE, WATCH_STDIN_GRACE, WATCH_TERM_GRACE, WATCH_REAP };
 enum { WATCH_LINE_MAX = 32, WATCH_READ_MAX = 256, WATCH_POLL_MS = 25, WATCH_REAP_MS = 1500 };
+enum { TREE_SWEEP_INTERVAL_MS = 100 };
+// Inherited by every tool the CLI starts, so one reparented to launchd is still found on macOS.
+#define TREE_TAG_NAME "ORCA_PROVIDER_TREE"
 
 struct watcher {
     pid_t group;
+    pid_t reaper;
+    long long leader_start;
+    char tree_tag[64];
+    long long next_sweep_ns;
     unsigned stdin_end_grace_ms;
     unsigned sigterm_grace_ms;
     int session;
@@ -263,6 +271,385 @@ static int group_absent(struct watcher *w) {
     return kill(-w->group, 0) < 0 && errno == ESRCH;
 }
 
+struct proc_row {
+    pid_t pid;
+    pid_t ppid;
+    pid_t pgid;
+    uid_t uid;
+    long long start;
+    int zombie;
+};
+
+#if defined(__APPLE__)
+static void row_from_kinfo(const struct kinfo_proc *k, struct proc_row *row) {
+    row->pid = k->kp_proc.p_pid;
+    row->ppid = k->kp_eproc.e_ppid;
+    row->pgid = k->kp_eproc.e_pgid;
+    row->uid = k->kp_eproc.e_ucred.cr_uid;
+    row->start = (long long)k->kp_proc.p_starttime.tv_sec * 1000000LL +
+                 (long long)k->kp_proc.p_starttime.tv_usec;
+    row->zombie = k->kp_proc.p_stat == SZOMB;
+}
+
+static int read_row(pid_t pid, struct proc_row *row) {
+    int mib[] = {CTL_KERN, KERN_PROC, KERN_PROC_PID, pid};
+    struct kinfo_proc k;
+    size_t size = sizeof k;
+    if (sysctl(mib, 4, &k, &size, NULL, 0) != 0) {
+        return -1;
+    }
+    if (size == 0) {
+        return 0;
+    }
+    if (size != sizeof k || k.kp_proc.p_pid != pid) {
+        return -1;
+    }
+    row_from_kinfo(&k, row);
+    return 1;
+}
+
+static struct proc_row *read_table(size_t *count) {
+    int mib[] = {CTL_KERN, KERN_PROC, KERN_PROC_ALL, 0};
+    for (int attempt = 0; attempt < 4; attempt++) {
+        size_t size = 0;
+        if (sysctl(mib, 4, NULL, &size, NULL, 0) != 0) {
+            return NULL;
+        }
+        size += size / 4 + sizeof(struct kinfo_proc) * 16;
+        struct kinfo_proc *procs = malloc(size);
+        if (procs == NULL) {
+            return NULL;
+        }
+        if (sysctl(mib, 4, procs, &size, NULL, 0) != 0) {
+            free(procs);
+            if (errno == ENOMEM) {
+                continue;
+            }
+            return NULL;
+        }
+        size_t n = size / sizeof *procs;
+        struct proc_row *rows = malloc((n > 0 ? n : 1) * sizeof *rows);
+        if (rows != NULL) {
+            for (size_t i = 0; i < n; i++) {
+                row_from_kinfo(&procs[i], &rows[i]);
+            }
+            *count = n;
+        }
+        free(procs);
+        return rows;
+    }
+    return NULL;
+}
+
+// Reads the environment the process was exec'd with; unreadable means not provably ours.
+static int carries_tree_tag(pid_t pid, const char *tag) {
+    static char *args;
+    static size_t args_max;
+    if (args == NULL) {
+        int max_mib[] = {CTL_KERN, KERN_ARGMAX};
+        int max = 0;
+        size_t max_size = sizeof max;
+        if (sysctl(max_mib, 2, &max, &max_size, NULL, 0) != 0 || max <= 0 ||
+                (args = malloc((size_t)max)) == NULL) {
+            return 0;
+        }
+        args_max = (size_t)max;
+    }
+    int mib[] = {CTL_KERN, KERN_PROCARGS2, pid};
+    size_t size = args_max;
+    int argc;
+    if (sysctl(mib, 3, args, &size, NULL, 0) != 0 || size < sizeof argc) {
+        return 0;
+    }
+    memcpy(&argc, args, sizeof argc);
+    const char *p = args + sizeof argc;
+    const char *end = args + size;
+    const char *z = memchr(p, '\0', (size_t)(end - p));
+    if (z == NULL) {
+        return 0;
+    }
+    for (p = z; p < end && *p == '\0'; p++) {
+    }
+    size_t tag_length = strlen(tag);
+    for (int i = 0; p < end && *p != '\0'; i++) {
+        z = memchr(p, '\0', (size_t)(end - p));
+        if (z == NULL) {
+            return 0;
+        }
+        if (i >= argc && (size_t)(z - p) == tag_length && memcmp(p, tag, tag_length) == 0) {
+            return 1;
+        }
+        p = z + 1;
+    }
+    return 0;
+}
+#elif defined(__linux__)
+static int read_row(pid_t pid, struct proc_row *row) {
+    char path[32];
+    snprintf(path, sizeof path, "/proc/%ld/stat", (long)pid);
+    int fd = open(path, O_RDONLY | O_CLOEXEC);
+    if (fd < 0) {
+        return errno == ENOENT || errno == ESRCH ? 0 : -1;
+    }
+    char buf[1024];
+    ssize_t got;
+    while ((got = read(fd, buf, sizeof buf - 1)) < 0 && errno == EINTR) {
+    }
+    int read_errno = errno;
+    close(fd);
+    if (got <= 0) {
+        return got == 0 || read_errno == ESRCH ? 0 : -1;
+    }
+    buf[got] = '\0';
+    // comm may hold spaces or parens; the fields after the last ')' are fixed.
+    const char *fields = strrchr(buf, ')');
+    char state;
+    int ppid;
+    int pgid;
+    unsigned long long start;
+    if (fields == NULL ||
+            sscanf(fields + 1,
+                " %c %d %d %*d %*d %*d %*u %*u %*u %*u %*u %*u %*u %*d %*d %*d %*d %*d %*d %llu",
+                &state, &ppid, &pgid, &start) != 4) {
+        return -1;
+    }
+    row->pid = pid;
+    row->ppid = ppid;
+    row->pgid = pgid;
+    row->uid = 0;
+    row->start = (long long)start;
+    row->zombie = state == 'Z' || state == 'X';
+    return 1;
+}
+
+static struct proc_row *read_table(size_t *count) {
+    DIR *dir = opendir("/proc");
+    if (dir == NULL) {
+        return NULL;
+    }
+    size_t n = 0;
+    size_t capacity = 256;
+    struct proc_row *rows = malloc(capacity * sizeof *rows);
+    int failed = rows == NULL;
+    struct dirent *entry;
+    for (errno = 0; !failed && (entry = readdir(dir)) != NULL; errno = 0) {
+        unsigned pid;
+        if (parse_ms(entry->d_name, INT_MAX, &pid) != 0) {
+            continue;
+        }
+        if (n == capacity) {
+            struct proc_row *grown = realloc(rows, capacity * 2 * sizeof *rows);
+            if (grown == NULL) {
+                failed = 1;
+                break;
+            }
+            rows = grown;
+            capacity *= 2;
+        }
+        int found = read_row((pid_t)pid, &rows[n]);
+        if (found < 0) {
+            failed = 1;
+        } else if (found > 0) {
+            n++;
+        }
+    }
+    if (errno != 0) {
+        failed = 1;
+    }
+    closedir(dir);
+    if (failed) {
+        free(rows);
+        return NULL;
+    }
+    *count = n;
+    return rows;
+}
+#endif
+
+#if defined(__APPLE__) || defined(__linux__)
+static int compare_row_pid(const void *a, const void *b) {
+    pid_t left = ((const struct proc_row *)a)->pid;
+    pid_t right = ((const struct proc_row *)b)->pid;
+    return (left > right) - (left < right);
+}
+
+static const struct proc_row *find_row(const struct proc_row *rows, size_t n, pid_t pid) {
+    struct proc_row key = {.pid = pid};
+    return bsearch(&key, rows, n, sizeof *rows, compare_row_pid);
+}
+
+// Tools can setsid away from the CLI group, so its whole tree is read before any signal.
+// Linux anchors at the subreaper, which adopts orphans. macOS anchors at the live leader and at
+// launchd orphans that carry the tag or share a session with a member: a session holds only
+// descendants of the member that created it, and its id is never reissued while it exists.
+struct tree_scan {
+    struct proc_row *rows;
+    size_t n;
+    unsigned char *state;
+    size_t *chain;
+    pid_t *sids;
+    size_t sid_count;
+    int leader_alive;
+};
+
+#if defined(__APPLE__)
+static int member_session(const struct tree_scan *scan, pid_t sid) {
+    for (size_t i = 0; i < scan->sid_count; i++) {
+        if (scan->sids[i] == sid) {
+            return 1;
+        }
+    }
+    return 0;
+}
+#endif
+
+static int tree_root(struct watcher *w, const struct tree_scan *scan, const struct proc_row *row) {
+#if defined(__linux__)
+    (void)scan;
+    return row->ppid == w->reaper;
+#else
+    if (scan->leader_alive && row->ppid == w->group) {
+        return 1;
+    }
+    if (row->ppid != 1 || row->uid != geteuid() || row->start < w->leader_start || row->zombie) {
+        return 0;
+    }
+    pid_t sid = getsid(row->pid);
+    return (sid > 0 && member_session(scan, sid)) || carries_tree_tag(row->pid, w->tree_tag);
+#endif
+}
+
+// 0 unknown, 1 member, 2 outside; resolved once along each ancestor chain.
+static void resolve_members(struct watcher *w, struct tree_scan *scan) {
+    pid_t self = getpid();
+    memset(scan->state, 0, scan->n);
+    for (size_t i = 0; i < scan->n; i++) {
+        size_t depth = 0;
+        size_t at = i;
+        unsigned char verdict = 2;
+        while (scan->state[at] == 0 && depth < scan->n) {
+            scan->chain[depth++] = at;
+            const struct proc_row *row = &scan->rows[at];
+            if (row->pid == self || row->pid == w->reaper || row->pid <= 1) {
+                break;
+            }
+            if (tree_root(w, scan, row)) {
+                verdict = 1;
+                break;
+            }
+            const struct proc_row *parent = find_row(scan->rows, scan->n, row->ppid);
+            if (parent == NULL) {
+                break;
+            }
+            at = (size_t)(parent - scan->rows);
+        }
+        if (scan->state[at] != 0) {
+            verdict = scan->state[at];
+        }
+        for (size_t d = 0; d < depth; d++) {
+            scan->state[scan->chain[d]] = verdict;
+        }
+    }
+}
+
+// Signals each live descendant (and the groups they lead) once, re-checking its start time
+// against PID reuse. Returns how many were alive, or -1 when the tree could not be read.
+static int sweep_tree(struct watcher *w, int signal_number) {
+    struct tree_scan scan = {0};
+    scan.rows = read_table(&scan.n);
+    if (scan.rows == NULL) {
+        return -1;
+    }
+    size_t slots = scan.n > 0 ? scan.n : 1;
+    qsort(scan.rows, scan.n, sizeof *scan.rows, compare_row_pid);
+    scan.state = malloc(slots);
+    scan.chain = malloc(slots * sizeof *scan.chain);
+    scan.sids = malloc((slots + 1) * sizeof *scan.sids);
+    if (scan.state == NULL || scan.chain == NULL || scan.sids == NULL) {
+        free(scan.rows);
+        free(scan.state);
+        free(scan.chain);
+        free(scan.sids);
+        return -1;
+    }
+    const struct proc_row *leader = find_row(scan.rows, scan.n, w->group);
+    scan.leader_alive = leader != NULL && !leader->zombie && leader->start == w->leader_start;
+    struct proc_row *rows = scan.rows;
+    size_t n = scan.n;
+    unsigned char *state = scan.state;
+#if defined(__APPLE__)
+    // The CLI session can outlive its leader; members can admit their sessions' orphans.
+    scan.sids[scan.sid_count++] = w->group;
+    for (;;) {
+        resolve_members(w, &scan);
+        size_t before = scan.sid_count;
+        for (size_t i = 0; i < n; i++) {
+            pid_t sid = state[i] == 1 && !rows[i].zombie ? getsid(rows[i].pid) : -1;
+            if (sid > 0 && !member_session(&scan, sid) && scan.sid_count <= n) {
+                scan.sids[scan.sid_count++] = sid;
+            }
+        }
+        if (scan.sid_count == before) {
+            break;
+        }
+    }
+#else
+    resolve_members(w, &scan);
+#endif
+    int live = 0;
+    for (size_t i = 0; i < n; i++) {
+        struct proc_row now;
+        // The CLI group gets its own signal, so its members are never signalled twice.
+        if (state[i] != 1 || rows[i].zombie || rows[i].pgid == w->group ||
+                read_row(rows[i].pid, &now) != 1 || now.start != rows[i].start || now.zombie ||
+                now.pgid == w->group) {
+            continue;
+        }
+        live++;
+        if (signal_number == 0) {
+            continue;
+        }
+        if (now.pgid == now.pid) {
+            kill(-now.pid, signal_number);
+            continue;
+        }
+        // A member of a group led by another member already got that group's signal.
+        const struct proc_row *lead = find_row(rows, n, now.pgid);
+        if (lead == NULL || state[lead - rows] != 1 || lead->pgid != lead->pid) {
+            kill(now.pid, signal_number);
+        }
+    }
+    free(rows);
+    free(state);
+    free(scan.chain);
+    free(scan.sids);
+    return live;
+}
+#else
+static int sweep_tree(struct watcher *w, int signal_number) {
+    (void)w;
+    (void)signal_number;
+    return 0;
+}
+#endif
+
+// Rate-limited: the table is read only after the CLI group is gone, at most every sweep interval.
+static int tree_absent(struct watcher *w, int signal_number) {
+    if (!group_absent(w)) {
+        return 0;
+    }
+    struct timespec now;
+    if (clock_gettime(CLOCK_MONOTONIC, &now) != 0) {
+        return 0;
+    }
+    long long now_ns = (long long)now.tv_sec * 1000000000LL + now.tv_nsec;
+    if (now_ns < w->next_sweep_ns) {
+        return 0;
+    }
+    w->next_sweep_ns = now_ns + (long long)TREE_SWEEP_INTERVAL_MS * 1000000LL;
+    return sweep_tree(w, signal_number) == 0;
+}
+
 static long long monotonic_ns(struct watcher *w) {
     struct timespec now;
     if (clock_gettime(CLOCK_MONOTONIC, &now) != 0) {
@@ -276,7 +663,8 @@ static void kill_group(struct watcher *w) {
     if (w->phase == WATCH_REAP) {
         return;
     }
-    if (kill(-w->group, SIGKILL) < 0 && errno == ESRCH) {
+    int members = sweep_tree(w, SIGKILL);
+    if (kill(-w->group, SIGKILL) < 0 && errno == ESRCH && members == 0) {
         watcher_complete(1);
     }
     w->phase = WATCH_REAP;
@@ -285,7 +673,8 @@ static void kill_group(struct watcher *w) {
 
 // TERM grace starts once TERM is issued, so a late wakeup never spends it beforehand.
 static void watcher_term(struct watcher *w) {
-    if (kill(-w->group, SIGTERM) < 0 && errno == ESRCH) {
+    int members = sweep_tree(w, SIGTERM);
+    if (kill(-w->group, SIGTERM) < 0 && errno == ESRCH && members == 0) {
         watcher_complete(1);
     }
     if (w->sigterm_grace_ms == 0) {
@@ -353,14 +742,14 @@ static void watcher_owner_eof(struct watcher *w) {
     }
 }
 
-// Idle blocks indefinitely; stopping probes only the reserved CLI group, without a table scan.
+// Idle blocks indefinitely; stopping probes the CLI group, then the tree once that group is gone.
 static _Noreturn void watch_owner(struct watcher *w) {
     int owner_open = 1;
     struct pollfd owner = {.fd = OWNER_FD, .events = POLLIN};
     for (;;) {
         int timeout = -1;
         if (w->phase != WATCH_IDLE) {
-            if (group_absent(w)) {
+            if (tree_absent(w, w->phase == WATCH_REAP ? SIGKILL : 0)) {
                 watcher_complete(1);
             }
             long long remaining = w->deadline_ns - monotonic_ns(w);
@@ -571,6 +960,17 @@ static _Noreturn void run_leader(struct watcher *watcher, char *command[]) {
         fail(EXIT_BOOTSTRAP);
     }
     watcher->group = getpid();
+#if defined(__linux__)
+    watcher->reaper = getppid();
+#elif defined(__APPLE__)
+    struct proc_row leader_row;
+    if (read_row(watcher->group, &leader_row) != 1) {
+        fail(EXIT_BOOTSTRAP);
+    }
+    watcher->leader_start = leader_row.start;
+    snprintf(watcher->tree_tag, sizeof watcher->tree_tag, TREE_TAG_NAME "=%ld.%lld",
+             (long)watcher->group, leader_row.start);
+#endif
 
     // Stop signals stay blocked from the parent's fork, so the watcher installs its ignores first.
     int started = start_watcher(watcher);
@@ -612,6 +1012,11 @@ static _Noreturn void run_leader(struct watcher *watcher, char *command[]) {
         fail(EXIT_GATE_CLOSED);
     }
     sigprocmask(SIG_SETMASK, &saved_mask, NULL);
+#if defined(__APPLE__)
+    if (setenv(TREE_TAG_NAME, strchr(watcher->tree_tag, '=') + 1, 1) != 0) {
+        fail(EXIT_BOOTSTRAP);
+    }
+#endif
 
     execvp(command[0], command);
     int error = errno;
