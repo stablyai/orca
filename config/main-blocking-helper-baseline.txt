@@ -1033,7 +1033,8 @@
 2 src/main/plugins/storage/plugin-secrets-store.ts
 2 src/main/plugins/storage/plugin-storage-store.ts
 2 src/main/ports/darwin-process-metadata.ts
-7 src/main/ports/local-workspace-platform-port-scanner.ts
+1 src/main/ports/linux-socket-owners.ts # Linux socket listing runs in the port-scan worker; the only sync call is the worker client's one existsSync per lazy worker spawn
+8 src/main/ports/local-workspace-platform-port-scanner.ts # Linux socket listing runs in the port-scan worker; the only sync call is the worker client's one existsSync per lazy worker spawn
 1 src/main/ports/local-workspace-port-scanner.ts
 1 src/main/ports/port-scan-command-client.ts
 3 src/main/preflight/agent-command-detection.ts

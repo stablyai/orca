@@ -16,11 +16,11 @@ const PROC_NET_TCP = `  sl  local_address rem_address   st tx_queue rx_queue tr 
 describe('parseProcNetTcp', () => {
   it("drops other login users' listeners but keeps ours, root's and system services'", () => {
     expect(parseProcNetTcp(PROC_NET_TCP, 1000)).toEqual([
-      { host: '127.0.0.1', port: 8080, inode: 41234, uid: 1000 },
-      { host: '0.0.0.0', port: 22, inode: 20101, uid: 0 },
-      { host: '127.0.0.1', port: 5432, inode: 20777, uid: 113 },
-      { host: '127.0.0.1', port: 11111, inode: 20888, uid: 65534 },
-      { host: '127.0.0.1', port: 8009, inode: 20999, uid: 61200 }
+      { host: '127.0.0.1', port: 8080, inode: 41234 },
+      { host: '0.0.0.0', port: 22, inode: 20101 },
+      { host: '127.0.0.1', port: 5432, inode: 20777 },
+      { host: '127.0.0.1', port: 11111, inode: 20888 },
+      { host: '127.0.0.1', port: 8009, inode: 20999 }
     ])
   })
 

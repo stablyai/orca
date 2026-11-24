@@ -88,7 +88,7 @@ async function dispatchPlatformListeningPortScan(
   options: WorkspacePortScanOptions
 ): Promise<PlatformListeningPortScan> {
   if (process.platform === 'linux') {
-    return scanLinuxProcPorts(options)
+    return scanLinuxProcPorts()
   }
   if (process.platform === 'darwin') {
     return scanDarwinLsofPorts(options)
@@ -165,25 +165,14 @@ async function scanWindowsNetstatPorts(
   }
 }
 
-async function scanLinuxProcPorts(
-  options: WorkspacePortScanOptions
-): Promise<PlatformListeningPortScan> {
+async function scanLinuxProcPorts(): Promise<PlatformListeningPortScan> {
   const ownUid = process.getuid?.()
   const [tcp4, tcp6] = await Promise.all([
     readProcNet('/proc/net/tcp', ownUid),
     readProcNet('/proc/net/tcp6', ownUid)
   ])
   const sockets = [...tcp4, ...tcp6]
-  const inodeToPid = await resolveLinuxSocketOwners(
-    new Set(sockets.map((socket) => socket.inode)),
-    // Root and service sockets can't be mapped by a normal user; ours must be, or the next scan walks again.
-    new Set(
-      sockets.flatMap((socket) => (socket.uid === ownUid || ownUid === 0 ? [socket.inode] : []))
-    ),
-    {
-      requireFresh: options.requireMetadata
-    }
-  )
+  const inodeToPid = await resolveLinuxSocketOwners(new Set(sockets.map((socket) => socket.inode)))
   const metadata = new Map<number, ProcessMetadata>()
   const rawPorts: RawListeningPort[] = []
 
