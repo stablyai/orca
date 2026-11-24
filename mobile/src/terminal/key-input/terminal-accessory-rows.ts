@@ -5,6 +5,7 @@ export const ROW_DIVIDER_ID_PREFIX = '__row_divider_'
 export type TerminalAccessoryLayout = {
   rowCount?: number
   rows?: string[][]
+  preservedRows?: string[][] | undefined
   orderedBuiltInIds: string[]
   visibleBuiltInIds: string[]
   directionPadEnabled?: boolean
@@ -26,6 +27,18 @@ export function clampTerminalAccessoryRowCount(value: unknown): number {
   return Math.min(
     MAX_TERMINAL_ACCESSORY_ROWS,
     Math.max(MIN_TERMINAL_ACCESSORY_ROWS, Math.trunc(value))
+  )
+}
+
+/** Collapses overflow trailing rows onto the final row when shrinking below source length. */
+export function foldTerminalAccessoryRows(
+  sourceRows: readonly (readonly string[])[],
+  rowCount: number
+): string[][] {
+  return Array.from({ length: rowCount }, (_, i) =>
+    i === rowCount - 1 && sourceRows.length > rowCount
+      ? sourceRows.slice(i).flat()
+      : [...(sourceRows[i] ?? [])]
   )
 }
 
@@ -136,7 +149,8 @@ export function buildTerminalAccessoryPreference(
   currentBuiltInIds: readonly string[],
   includeInserted: boolean,
   directionPadEnabled: boolean,
-  smartRail: boolean
+  smartRail: boolean,
+  candidatePreservedRows?: readonly (readonly string[])[]
 ): TerminalAccessoryLayoutPreference {
   const clampedCount = clampTerminalAccessoryRowCount(rowCount)
   const { rows, orderedBuiltInIds, inserted } = normalizeBuiltInAccessoryRows(
@@ -150,10 +164,20 @@ export function buildTerminalAccessoryPreference(
       visibleSet.add(id)
     }
   }
+  const preservedCount =
+    candidatePreservedRows && candidatePreservedRows.length > clampedCount
+      ? clampTerminalAccessoryRowCount(candidatePreservedRows.length)
+      : 0
+  const preservedRows =
+    preservedCount > clampedCount && candidatePreservedRows
+      ? normalizeBuiltInAccessoryRows(candidatePreservedRows, preservedCount, currentBuiltInIds)
+          .rows
+      : undefined
   return {
     version: 3,
     rowCount: clampedCount,
     rows,
+    ...(preservedRows ? { preservedRows } : {}),
     directionPadEnabled,
     smartRail,
     orderedBuiltInIds,
@@ -178,6 +202,7 @@ export function normalizePersistedAccessoryLayout(
     directionPadEnabled: 'directionPadEnabled' in value ? value.directionPadEnabled : undefined,
     smartRail: 'smartRail' in value ? value.smartRail : undefined,
     rows: 'rows' in value ? value.rows : undefined,
+    preservedRows: 'preservedRows' in value ? value.preservedRows : undefined,
     rowCount: 'rowCount' in value ? value.rowCount : undefined
   }
   const builtInSet = new Set(currentBuiltInIds)
@@ -203,6 +228,10 @@ export function normalizePersistedAccessoryLayout(
       candidate.version === 3
         ? clampTerminalAccessoryRowCount(candidate.rowCount ?? rows.length)
         : 1
+    const preservedRows =
+      candidate.version === 3
+        ? (readAccessoryRowMatrix(candidate.preservedRows) ?? undefined)
+        : undefined
     return buildTerminalAccessoryPreference(
       rows,
       rowCount,
@@ -210,7 +239,8 @@ export function normalizePersistedAccessoryLayout(
       currentBuiltInIds,
       true,
       directionPadEnabled,
-      smartRail
+      smartRail,
+      preservedRows
     )
   }
 

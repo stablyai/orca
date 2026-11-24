@@ -9,6 +9,7 @@ import {
   buildTerminalAccessoryPreference,
   clampTerminalAccessoryRowCount,
   dedupeKnownIds,
+  foldTerminalAccessoryRows,
   normalizePersistedAccessoryLayout,
   parseTerminalAccessoryRowReorderIds,
   type TerminalAccessoryLayout,
@@ -92,7 +93,8 @@ export function createTerminalAccessoryLayoutPreference(
     currentBuiltInIds,
     false,
     layout.directionPadEnabled !== false,
-    layout.smartRail === true
+    layout.smartRail === true,
+    layout.preservedRows
   )
 }
 
@@ -138,7 +140,7 @@ export function reorderTerminalAccessoryBuiltInIds(
   )
 }
 
-/** Updates rowCount (clamped 1–4), merging trailing rows into the final row when shrinking. */
+/** Updates rowCount (clamped 1–6), preserving the unshrunk row partition so re-expanding restores it. */
 export function setTerminalAccessoryRowCount(
   layout: TerminalAccessoryLayout,
   nextRowCount: number,
@@ -146,11 +148,12 @@ export function setTerminalAccessoryRowCount(
 ): TerminalAccessoryLayout {
   const current = createTerminalAccessoryLayoutPreference(layout, currentBuiltInIds)
   const rowCount = clampTerminalAccessoryRowCount(nextRowCount)
-  const rows = Array.from({ length: rowCount }, (_, i) =>
-    i === rowCount - 1 && rowCount < current.rowCount
-      ? current.rows.slice(i).flat()
-      : [...(current.rows[i] ?? [])]
-  )
+  const sourceRows =
+    current.preservedRows && current.preservedRows.length > current.rowCount
+      ? current.preservedRows
+      : current.rows
+  const rows = foldTerminalAccessoryRows(sourceRows, rowCount)
+  const nextPreservedRows = sourceRows.length > rowCount ? sourceRows : undefined
   return stripVersion(
     buildTerminalAccessoryPreference(
       rows,
@@ -159,7 +162,8 @@ export function setTerminalAccessoryRowCount(
       currentBuiltInIds,
       false,
       current.directionPadEnabled !== false,
-      current.smartRail === true
+      current.smartRail === true,
+      nextPreservedRows
     )
   )
 }
@@ -185,7 +189,7 @@ export function reorderTerminalAccessoryBuiltInRows(
   )
 }
 
-/** Returns partitioned built-in key IDs across the configured 1–4 rows. */
+/** Returns partitioned built-in key IDs across the configured 1–6 rows. */
 export function getTerminalAccessoryBuiltInRows(
   layout: TerminalAccessoryLayout,
   currentBuiltInIds = builtInIds()

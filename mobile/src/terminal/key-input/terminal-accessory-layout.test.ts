@@ -209,4 +209,67 @@ describe('terminal-accessory-layout multi-row preferences', () => {
       ['ctrlC', 'arrowUp']
     ])
   })
+
+  it('restores exact row partitions across shrink and re-expand even after reload', async () => {
+    const fiveIds = ['escape', 'tab', 'ctrlC', 'arrowUp', 'arrowDown']
+    const fiveRows = [['escape'], ['tab'], ['ctrlC'], ['arrowUp'], ['arrowDown']]
+    const initial: TerminalAccessoryLayout = {
+      rowCount: 5,
+      rows: fiveRows,
+      orderedBuiltInIds: fiveIds,
+      visibleBuiltInIds: fiveIds
+    }
+
+    const down4 = setTerminalAccessoryRowCount(initial, 4, fiveIds)
+    expect(down4.rows).toEqual([['escape'], ['tab'], ['ctrlC'], ['arrowUp', 'arrowDown']])
+
+    const down3 = setTerminalAccessoryRowCount(down4, 3, fiveIds)
+    expect(down3.rows).toEqual([['escape'], ['tab'], ['ctrlC', 'arrowUp', 'arrowDown']])
+
+    const up4 = setTerminalAccessoryRowCount(down3, 4, fiveIds)
+    expect(up4.rows).toEqual([['escape'], ['tab'], ['ctrlC'], ['arrowUp', 'arrowDown']])
+
+    const up5 = setTerminalAccessoryRowCount(up4, 5, fiveIds)
+    expect(up5.rows).toEqual(fiveRows)
+    expect(up5.preservedRows).toBeUndefined()
+
+    const up6 = setTerminalAccessoryRowCount(up5, 6, fiveIds)
+    expect(up6.rows).toEqual([...fiveRows, []])
+
+    await saveTerminalAccessoryLayout(
+      setTerminalAccessoryBuiltInVisible(down3, 'tab', false, fiveIds)
+    )
+    await saveTerminalSmartRail(true)
+    const reloaded = await loadTerminalAccessoryLayout(false)
+    const restored = setTerminalAccessoryRowCount(reloaded, 5)
+    expect(restored.rows.map((r) => r.filter((id) => fiveIds.includes(id)))).toEqual([
+      ['escape'],
+      ['tab'],
+      ['ctrlC'],
+      ['arrowUp'],
+      ['arrowDown']
+    ])
+    expect(restored.smartRail).toBe(true)
+
+    const reordered = reorderTerminalAccessoryBuiltInRows(
+      down3,
+      [
+        'escape',
+        `${ROW_DIVIDER_ID_PREFIX}2`,
+        'tab',
+        'ctrlC',
+        `${ROW_DIVIDER_ID_PREFIX}3`,
+        'arrowUp',
+        'arrowDown'
+      ],
+      fiveIds
+    )
+    expect(reordered.preservedRows).toBeUndefined()
+    expect(setTerminalAccessoryRowCount(reordered, 4, fiveIds).rows).toEqual([
+      ['escape'],
+      ['tab', 'ctrlC'],
+      ['arrowUp', 'arrowDown'],
+      []
+    ])
+  })
 })
