@@ -42,8 +42,9 @@ import { SKILL_DISCOVER_WORKSPACE_CAPABILITY } from '../../../../../src/shared/s
 import { AGENT_SESSION_PHONE_CONTINUE_INTERRUPTED_RUNTIME_CAPABILITY } from '../../../../../src/shared/agent-session/lifecycle/stopping/agent-session-continue-interrupted-capability'
 
 export type StructuredAgentSessionHostSupport = {
-  /** A shared agent's host takes a send with no fence, and needs no read first while it is away
-   *  (the phone holds the send for it then), as the desktop's do. */
+  /** A shared agent's host takes every send with no fence, as the desktop sends them, so a chat
+   *  opened while the host is away needs no read first (the phone holds the send). Hosts admit sends
+   *  without checking the fence (`admitAgentSessionMutation`); only hosts older than sharing did. */
   sendsWithoutFence?: boolean
   commandsOnRequest?: boolean
   coherentModelCatalog?: boolean

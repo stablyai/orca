@@ -244,7 +244,8 @@ export function useMobileStructuredSendWithOutcome(args: {
       const outcome = await sendsOut.trackSend(sendMobileStructuredAgentSessionMessage)({
         client,
         sessionId,
-        expectedRuntimeFence: currentFence,
+        // As the desktop's: a shared agent's host takes every send with no fence.
+        expectedRuntimeFence: fenceless ? null : currentFence,
         text: wireText,
         attachments: imageAttachments,
         skills,

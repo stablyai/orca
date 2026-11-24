@@ -1,7 +1,8 @@
 // Home's rows for the agents shared with each paired computer's account. The phone follows each
 // computer's shares when it connects, and reads an agent's row (its avatar and last activity) from its
 // host each time the phone's link to it comes up; the rows change only when one of those does.
-import { useEffect, useMemo, useState } from 'react'
+import { hostConnectionEpoch } from '../../query/host-status-query'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import {
   toRuntimeExecutionHostId,
   type ExecutionHostId
@@ -53,13 +54,24 @@ export function useHomeSharedAgentRows(
   hostStates: Readonly<Record<string, ConnectionState>>
 ): readonly HomeBotRow[] {
   const connected = useMemo(
-    () => hosts.filter((host) => host.client && hostStates[host.hostId] === 'connected'),
+    () =>
+      hosts.flatMap((host) =>
+        host.client && hostStates[host.hostId] === 'connected'
+          ? [{ hostId: host.hostId, client: host.client }]
+          : []
+      ),
     [hosts, hostStates]
   )
-  // Each connect is when the computer's shares (and this phone's keys to them) are followed.
+  // Each connect is when the computer's shares (and this phone's keys to them) are followed; a
+  // state change elsewhere follows none again.
+  const synced = useRef(new Set<string>())
   useEffect(() => {
     for (const host of connected) {
-      void phoneSharedAgents().syncComputer(host.hostId, host.client!)
+      const connection = `${host.hostId}\n${hostConnectionEpoch(host.client)}`
+      if (!synced.current.has(connection)) {
+        synced.current.add(connection)
+        void phoneSharedAgents().syncComputer(host.hostId, host.client)
+      }
     }
   }, [connected])
   const [views, setViews] = useState<ReadonlyMap<string, SharedBotHostView[]>>(new Map())
