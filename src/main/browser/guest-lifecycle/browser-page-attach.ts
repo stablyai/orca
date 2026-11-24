@@ -12,7 +12,15 @@ import {
 import { noteBrowserPageClosed, noteBrowserPageOpened } from './browser-page-partition-presence'
 import { normalizeBrowserNavigationUrl } from '../../../shared/browser/navigation/browser-url'
 
-type Attach = { pageId: string; page: Page; url: string; token: string; admitted: boolean }
+type Attach = {
+  pageId: string
+  page: Page
+  url: string
+  token: string
+  admitted: boolean
+  /** Asked for after the first prepare (an address entered while the page waited to exist). */
+  requested?: boolean
+}
 const attachments = new Map<string, Attach>()
 export const guestLoads = new WeakMap<Electron.WebContents, Promise<void>>()
 let generation = 0
@@ -59,12 +67,14 @@ export function prepareBrowserPageAttach(
     noteBrowserPageOpened(partition)
   }
   delete page.claim.pendingRendererId
+  const previous = page.token ? attachments.get(page.token) : undefined
   if (page.token) {
     attachments.delete(page.token)
   }
   const token = randomUUID()
   page.token = token
-  attachments.set(token, { pageId, page, url, token, admitted: false })
+  const requested = previous !== undefined && !previous.admitted && previous.url !== url
+  attachments.set(token, { pageId, page, url, token, admitted: false, requested })
   return MARKER + token
 }
 
@@ -215,11 +225,20 @@ export function startBrowserPageAttach(
     guest.on('did-stop-loading', stopped)
     guest.once('destroyed', dispose)
   }
-  const promise = waitForBrowserGuestLoad(guest, () =>
-    snapshot
-      ? guest.navigationHistory.restore({ entries: snapshot.entries, index: snapshot.index })
-      : guest.loadURL(url ?? attach.url)
-  ).then(() => {
+  const restore = (): Promise<void> =>
+    guest.navigationHistory.restore({ entries: snapshot!.entries, index: snapshot!.index })
+  const firstLoad = (): Promise<void> => {
+    if (!snapshot) {
+      return guest.loadURL(url ?? attach.url)
+    }
+    if (!attach.requested) {
+      return restore()
+    }
+    // The back list comes back, then the entered address loads after it, as a new navigation would.
+    void restore().catch(() => {})
+    return guest.loadURL(attach.url)
+  }
+  const promise = waitForBrowserGuestLoad(guest, firstLoad).then(() => {
     if (pages.get(attach.pageId) !== page || page.guest !== guest) {
       throw new Error('Browser page replaced')
     }

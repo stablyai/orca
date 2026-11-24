@@ -261,6 +261,30 @@
       "existingWhy": "{{distro}} zaten ana makine olarak çalışıyor; Git, dosyalar ve terminaller Windows dosya paylaşımı yerine doğrudan Linux'ta çalışır.",
       "existingAccept": "Ana makineye ekle"
     },
+    "hiddenProjects": {
+      "hidden": "{{name}} gizlendi",
+      "hiddenDescription": "Terminalleri ve ajanları çalışmaya devam eder. Listenin altındaki Gizli projeler bölümünden projeyi yeniden gösterebilirsiniz.",
+      "undo": "Geri al",
+      "hideFailed": "{{name}} gizlenemedi. Sunucusunda Orca'nın güncellenmesi gerekebilir.",
+      "showFailed": "{{name}} yeniden gösterilemedi.",
+      "listLabel": "Gizli projeler",
+      "show": "Göster",
+      "showAriaLabel": "{{name}} projesini kenar çubuğunda göster",
+      "settingsTitle": "Kenar çubuğunda gizle",
+      "settingsDescription": "Projenin bu sunucudaki kopyasını kenar çubuğunda, proje seçicilerinde ve çalışma alanı değiştiricisinde gizler. Terminalleri, ajanları ve otomasyonları çalışmaya devam eder. Eşleştirilmiş bir Orca sunucusunda bu işlem, projeyi o sunucuya bağlı herkes için gizler.",
+      "settingsToggleLabel": "{{name}} projesini kenar çubuğunda gizle",
+      "keywordHide": "gizle",
+      "keywordHidden": "gizli",
+      "keywordSidebar": "kenar çubuğu",
+      "hideFromSidebar": "Kenar Çubuğunda Gizle",
+      "sectionTitle": "Gizli projeler ({{count}})",
+      "allHidden": "Tüm projeler gizli. Aşağıdaki Gizli projeler bölümünden birini gösterin.",
+      "undoGone": "{{name}} Orca'dan kaldırıldı.",
+      "settingsGroup": "Kenar Çubuğu",
+      "showOnHostAriaLabel": "{{host}} sunucusundaki {{name}} projesini kenar çubuğunda göster",
+      "keywordShow": "göster",
+      "keywordUnhide": "gizlemeyi kaldır"
+    },
     "cardSlot": {
       "needYouCount": "{{count}} sizi bekliyor",
       "needsYou": "Sizi bekliyor"
@@ -368,6 +392,12 @@
       "pending": "Yeniden açılıyor…",
       "caveat": "Bu işlem, uzak sunucuda bu sayfanın son adresinde yeni bir sayfa açar. Oturum açma durumu ve diğer geçici sayfa verileri farklı olabilir, form gönderiminden gelen bir sayfa boş açılır.",
       "failed": "Bu sayfa uzak sunucuda açılamadı. Bağlantıyı kontrol edip tekrar deneyin."
+    },
+    "deviceMove": {
+      "toThisComputer": "Bu bilgisayarda aç",
+      "toHost": "{{host}} üzerinde aç",
+      "tooltip": "Bu adresi diğer tarafta yeni bir sekmede açar ve bunu kapatır. Yeniden oturum açmanız gerekebilir.",
+      "failedToThisComputer": "Bu sayfa bu bilgisayarda açılamadı."
     },
     "sshRoute": {
       "preparingTitle": "SSH sunucusu üzerinden bağlanılıyor",
@@ -519,6 +549,13 @@
       "sshPage": {
         "stored": "{{host}} tarayıcısında saklandı.",
         "googleCookiesSkipped": "Google çerezleri içe aktarılmadı. {{host}} üzerinden gezinen bir sayfa açın, ardından Google'da oturum açın."
+      },
+      "picker": {
+        "menuItem": "Çerezleri İçe Aktar…",
+        "search": "Profillerde ara",
+        "lastUsed": "Son kullanılan",
+        "noMatches": "Eşleşme yok",
+        "googleNote": "Google oturumları içe aktarılmaz"
       }
     },
     "passwords": {
@@ -940,7 +977,10 @@
       "defaultSurfaceSetAllTerminal": "Tümünü Terminal yap",
       "modelListFallback": "Yerleşik liste. Orca bu ana makineden model listesi alamadı.",
       "chatUnavailableOnWindows": "{{value0}} Chat henüz Windows'ta kullanılamıyor, bu nedenle {{value0}} bu ana makinede bir terminalde açılır. macOS veya Linux ana makinesindeki sohbetler çalışmaya devam eder.",
-      "undetectedCommandHint": "{{agent}} CLI, PATH dışında kuruluysa bu ana makinedeki yürütülebilir dosyanın tam yolunu girin."
+      "undetectedCommandHint": "{{agent}} CLI, PATH dışında kuruluysa bu ana makinedeki yürütülebilir dosyanın tam yolunu girin.",
+      "agentActions": "{{agent}} işlemleri",
+      "defaultAutoBadge": "Varsayılan · Otomatik",
+      "newAgentsTitle": "Yeni ajanlar"
     },
     "followSymlinkedDirectoriesKeywords": {
       "symlink": "sembolik bağlantı",
@@ -1069,6 +1109,11 @@
       "include": "Dahil edilecek glob'lar (her satıra bir tane)",
       "includeHelp": "Çalışma alanı köküne göre göreli yollarla eşleşir. Eşleşen glob yoksa biçimlendirme yapılmaz. * ve ** noktayla başlayan adları atlar; bunları açıkça belirtin, ör. .github/**/*.yml. Bu komutu kullanmak için Genel > Düzenleyici bölümünde Kaydederken biçimlendir seçeneğini etkinleştirin.",
       "710343e374": "Biçimlendirici komutu"
+    },
+    "voice": {
+      "cleanup": {
+        "recipeDescription": "Dikte edilen metni eklenmeden önce düzeltir."
+      }
     },
     "general": {
       "openInMenu": {
@@ -2160,7 +2205,11 @@
       },
       "projectHostSetupOptions": {
         "hostLocalGitProject": "Bu projenin eşleşen bir Git uzak deposu yok",
-        "hostLocalFolderProject": "Klasör projeleri diğer sunuculara bağlanamaz"
+        "hostLocalFolderProject": "Klasör projeleri diğer sunuculara bağlanamaz",
+        "pendingNotSetUp": "Proje bu sunucuda izleniyor ancak kurulmadı",
+        "pendingSettingUp": "Proje kurulumu sürüyor",
+        "pendingError": "Proje kurulumu dikkat gerektiriyor",
+        "pendingUnsupported": "Proje bu sunucuda desteklenmiyor"
       },
       "updateCheckClickOptions": {
         "releaseHint": "{{rcKey}}+tıklama en son sürüm adayını (RC), {{perfKey}}+tıklama ise en son performans testi derlemesini denetler.",
@@ -3976,6 +4025,8 @@
             "4c2990886e": "{{value0}}/{{value1}} silindi",
             "86ba852118": "{{value0}}, {{value1}} başarısız oldu",
             "archivedStatus": "Arşivlendi",
+            "mergedStatus": "Merge edildi",
+            "unchangedStatus": "Yeni commit yok",
             "74f6c16279": "Geri"
           },
           "backgroundRemoval": {
@@ -6039,7 +6090,9 @@
           "updateSkipped": "Güncelleme atlandı: {{value0}}",
           "updateAvailable": "Güncelleme mevcut",
           "repairAvailable": "Onarılabilir",
-          "installAvailable": "Yüklenebilir"
+          "installAvailable": "Yüklenebilir",
+          "otherBuild": "Orca'nın başka bir sürümü tarafından yüklendi",
+          "otherBuildKept": "Korundu: Orca'nın başka bir sürümü tarafından yazıldı"
         },
         "installResult": {
           "installed": "Yüklendi ve doğrulandı.",
@@ -6243,13 +6296,6 @@
           "changesLost_one": "{{count}} commit'lenmemiş değişiklik kaybolacak",
           "changesLost_other": "{{count}} commit'lenmemiş değişiklik kaybolacak",
           "uncountedChangesLost": "Commit'lenmemiş değişiklikler kaybolacak"
-        },
-        "DeleteWorktreeLineageNotice": {
-          "a940f3c96e": "Alt çalışma alanları silinecek",
-          "alsoDeletesChildren_other": "Bu çalışma alanı silindiğinde {{count}} alt çalışma alanı da silinir.",
-          "alsoDeletesChildren_one": "Bu çalışma alanı silindiğinde {{count}} alt çalışma alanı da silinir.",
-          "moreChildren_other": "+{{count}} tane daha",
-          "moreChildren_one": "+{{count}} tane daha"
         },
         "ImportedWorktreesVisibilityLine": {
           "b7a87dc32f": "Çalışma ağacını göster",
@@ -7506,6 +7552,14 @@
           "inProgress": "Devam ediyor",
           "inReview": "İncelemede",
           "done": "Tamamlandı"
+        },
+        "AddProjectMenu": {
+          "changeProjectHost": "Proje sunucusu: {{host}}",
+          "projectHost": "Proje sunucusu",
+          "addRemoteHost": "Uzak sunucu ekle…",
+          "browseFolder": "Klasör seç…",
+          "cloneFromUrl": "URL'den klonla…",
+          "createNewProject": "Yeni proje oluştur…"
         }
       },
       "shared": {
@@ -7916,7 +7970,6 @@
         },
         "BrowserProfileRow": {
           "8e636cae25": "\"{{value0}}\" profili kaldırıldı.",
-          "2d4bea7f35": "Varsayılan çerezler temizlendi.",
           "796d846483": "Çerez içe aktarılmadı",
           "c29648fe5b": "Etkin",
           "b4c167764d": "Dosyadan {{value0}} çerez, {{value1}} içine aktarıldı.",
@@ -7924,10 +7977,7 @@
           "b4e9d3f2a1c5": "{{value1}} kaynağından {{value0}} çerez, {{value2}} içine aktarıldı.",
           "c5a273a809": "{{value0}} kaynağından",
           "80bffd32bf": "Çerezleri İçe Aktar",
-          "bd7d68f138": "Dosyadan…",
-          "4054c458e1": "Varsayılan çerezleri temizle",
-          "3b662becd5": "Varsayılan profildeki çerezler temizlensin mi?",
-          "f159cf5a3e": "Bu profildeki sitelerden çıkış yapmanıza neden olabilir."
+          "bd7d68f138": "Dosyadan…"
         },
         "BrowserUseComputerUseNotice": {
           "79209b37b9": "Çerez içe aktarma uygun değilse Computer Use, yerel uygulamaları kontrol edebilir ve uygun olduğunda mevcut oturum açılmış tarayıcı oturumlarını kullanabilir. Orca Computer Use becerisini yükleyin; macOS ayrıca gizlilik izinleri gerektirir.",
@@ -8631,6 +8681,10 @@
           "workerAutoReleaseDescription": "Açık tut seçilmediği sürece çalışanın terminalini veya sohbetini tamamlandıktan 2 dakika sonra kapatır. Yeniden çalışmaya başlarsa tamamladığında 2 dakika yeniden başlar.",
           "workerAutoReleaseKeywordClose": "kapat",
           "workerAutoReleaseKeywordRelease": "serbest bırak",
+          "coordinatorApprovalsTitle": "Koordinatörlerin çalışanların izin istemlerini onaylamasına izin ver",
+          "coordinatorApprovalsDescription": "Bir koordinatör ajan, gerekçe belirterek bir çalışanın izin istemini onaylayabilir. İzin ver ve Reddet seçeneklerini görmeye devam edersiniz; ilk yanıt geçerli olur. Bu bilgisayarda çalıştırılan çalışanlar için geçerlidir.",
+          "coordinatorApprovalsKeywordApprove": "onayla",
+          "coordinatorApprovalsKeywordPermission": "izin",
           "8a94078d05": "Ajan Orkestrasyonu"
         },
         "OrchestrationSetupCard": {
@@ -11454,7 +11508,10 @@
               "shortcutDescription": "Dikteyi başlatan tuş.",
               "shortcutKeyword": "klavye",
               "keepLoadedTitle": "Modeli yüklü tut",
-              "gpuKeyword": "ekran kartı"
+              "gpuKeyword": "ekran kartı",
+              "cleanupDescription": "Metin eklenmeden önce ajanınızla noktalama işaretlerini, sayıları ve sözlü düzeltmeleri düzenleyin.",
+              "cleanupKeyword": "düzeltme sözcüğü",
+              "cleanupScratchKeyword": "son söyleneni geri al"
             }
           }
         },
@@ -12207,6 +12264,7 @@
         "PluginRemoveDialog": {
           "cancel": "İptal",
           "remove": "Eklentiyi kaldır",
+          "pausesAutomations": "Oluşturduğu otomasyonlar duraklatılır ve eklenti yeniden yüklense de duraklatılmış olarak kalır.",
           "title": "{{value0}} kaldırılsın mı?",
           "description": "Verileri de kaldırılır."
         },
@@ -13516,7 +13574,8 @@
           "sources": "Katalog kaynakları…"
         },
         "PluginSettingsOverview": {
-          "offTitle": "Eklentiler kapalı"
+          "offTitle": "Eklentiler kapalı",
+          "offAutomations": "Eklentilerin oluşturduğu otomasyonlar duraklatılır ve eklentiler yeniden açıldığında duraklatılmış olarak kalır."
         },
         "pluginContributions": {
           "dark": "Koyu",
@@ -13589,6 +13648,21 @@
         },
         "SettingsSearchableSelect": {
           "noMatches": "Eşleşme yok."
+        },
+        "RepositoryRemoveProjectSection": {
+          "filesNoteVmRecipe": "VM tarifleri, ortamlarının ve dosyalarının silinip silinmeyeceğini belirler.",
+          "filesNote": "Dosyalar diskte kalır; projeyi daha sonra yeniden ekleyebilirsiniz.",
+          "hostCount_one": "{{count}} sunucu",
+          "hostCount_other": "{{count}} sunucu",
+          "checkoutCount_one": "{{count}} checkout",
+          "checkoutCount_other": "{{count}} checkout",
+          "removeButton": "Kaldır…",
+          "dialogTitle": "{{name}} kaldırılsın mı?",
+          "terminalWarning_one": "Bu projedeki {{count}} açık terminal kapatılacak.",
+          "terminalWarning_other": "Bu projedeki {{count}} açık terminal kapatılacak.",
+          "cancel": "İptal",
+          "confirm": "Kaldır",
+          "unknownHost": "Bilinmeyen sunucu"
         },
         "PluginAuthor": {
           "catalogClaim": "Yayımcı {{catalog}} tarafından listeleniyor. Yazarlık doğrulanmadı.",
@@ -17577,8 +17651,6 @@
             "ed8f54509d": "Varsayılan",
             "e5d31de1a9": "Görüntü Alanı Boyutu",
             "56f94f4ffa": "Dosyadan…",
-            "eb280bfb11": "{{value0}}'den",
-            "2293adf620": "Çerezleri İçe Aktar",
             "cf7cdc67ef": "Yeni Profil…",
             "7b838540c7": "Tarayıcı menüsü",
             "a7a86702b3": "{{value0}} profili oluşturuldu ve bu profile geçildi",
@@ -17745,7 +17817,10 @@
           "execution": "Çalıştırma",
           "notRunYet": "Henüz çalıştırılmadı",
           "usageDetail_one": "{{tokens}} token · {{known}}/{{count}} çalıştırma raporlandı",
-          "usageDetail_other": "{{tokens}} token · {{known}}/{{count}} çalıştırma raporlandı"
+          "usageDetail_other": "{{tokens}} token · {{known}}/{{count}} çalıştırma raporlandı",
+          "createdBy": "Oluşturan",
+          "createdByPluginTitle": "Eklenti {{plugin}}",
+          "createdByEnded": "Eklenti kaldırıldı veya devre dışı bırakıldı; bu otomasyonu değiştirmeden önce izin istemelidir"
         },
         "AutomationEditorDialog": {
           "fb1896a5e7": "İptal",
@@ -19972,7 +20047,6 @@
         "terminalRequired": "Bu OMP sorusunu terminalde yanıtlayın.",
         "openTerminal": "Terminalde yanıtla",
         "recommended": "Önerilen",
-        "stepAnswered": "{{value0}}, yanıtlandı",
         "stepOf": "{{value0}} / {{value1}}",
         "answered": "Yanıtlandı",
         "title": "Soru",
@@ -20001,7 +20075,9 @@
           "file": "Plan dosyası",
           "reviewTitle": "Önerilen planı incele",
           "refineHint": "Planı iyileştir seçeneği, değişiklik isteklerinizi gönderebilmeniz için incelemeyi kapatır."
-        }
+        },
+        "answerNotApplied": "{{name}}: yanıt bu isteme ulaşmadı",
+        "answerWorkerEnded": "{{name}} sonlandığı için bu istem kapatıldı"
       },
       "launchPromptNotDelivered": "İletilmedi, terminali kontrol edin",
       "subagents": {
@@ -20169,6 +20245,7 @@
         "reconnect": "Yeniden bağlan",
         "stopped": "{{distro}} durduruldu",
         "start": "Başlat",
+        "connecting": "{{distro}} bağlantısı kuruluyor…",
         "unverifiable": "Orca, {{distro}} öğesinin çalışıp çalışmadığını denetleyemedi",
         "startToSend": "Göndermek için {{distro}} dağıtımını başlatın.",
         "startDistro": "{{distro}} dağıtımını başlat"
@@ -20714,7 +20791,10 @@
             "dirty": "Değişiklik var",
             "unpushed": "Push edilmemiş",
             "unknown": "Bilinmiyor"
-          }
+          },
+          "ignoredFilesBlocker": "Yok sayılan yerel dosyalar",
+          "ignoredFilesNamed": "Yok sayılan dosyalar: {{value0}}",
+          "ignoredFilesUnchecked": "Yok sayılan dosyalar tam olarak kontrol edilmedi"
         }
       },
       "creation": {
@@ -20745,6 +20825,9 @@
           "line_other": "{{count}} dosyadaki kaydedilmemiş düzenlemeler silinecek: {{files}}"
         },
         "ignoredFilesUnchecked": "Yok sayılan dosyalar tam olarak kontrol edilemedi"
+      },
+      "atRiskLocalFiles": {
+        "namesAndMore": "{{names}} ve daha fazlası"
       }
     },
     "agentSessionContinuation": {
@@ -20972,7 +21055,13 @@
           "listening": "{{model}} da dinliyor…",
           "heardLabel": "{{model}} şunu duydu",
           "heardNothing": "Hiç kelime yok. Daha yüksek sesle konuşmayı deneyin.",
-          "heardFailed": "{{model}} kaydı yazıya dökemedi."
+          "heardFailed": "{{model}} kaydı yazıya dökemedi.",
+          "cleaningUp": "Düzeltiliyor…",
+          "tryCleanup": "Düzeltmeyi dene",
+          "cleanupFailed": "Metin düzeltilemedi: {{reason}}",
+          "cleanupTimedOut": "Düzeltme çok uzun sürdü.",
+          "cleanupOff": "Yapay zekâ ile düzeltme kapalı.",
+          "afterCleanup": "Düzeltme sonrası · {{agent}}, {{model}} · {{seconds}} sn"
         },
         "silenceStop": {
           "off": "Kapalı",
@@ -20999,6 +21088,44 @@
         },
         "gpu": {
           "description": "Dikte bilgisayarınızı donduruyorsa kapatın."
+        },
+        "cleanup": {
+          "consent": {
+            "goesToKnown": "Bu bilgisayardaki {{agent}} aracılığıyla {{company}}. {{plan}} planınızın kullanımına dâhil edilir.",
+            "goesToAgent": "Bu bilgisayardaki {{agent}} ajanının istem göndermek üzere yapılandırıldığı yere.",
+            "sentLabel": "Gönderilen",
+            "sent": "Dikte edilen metin, sözlüğünüz ve talimatlarınız.",
+            "notSentLabel": "Gönderilmeyen",
+            "notSent": "Ses kaydı, dosyalar veya ekran içeriği.",
+            "goesToLabel": "Gönderildiği yer",
+            "waitLabel": "Bekleme",
+            "wait": "Metin birkaç saniye sonra eklenir.",
+            "title": "Yapay zekâ ile düzeltme açılsın mı?",
+            "description": "Her diktenin ardından Orca, metni eklemeden önce düzeltmesi için {{agent}} ajanına gönderir.",
+            "cancel": "İptal",
+            "confirm": "Aç"
+          },
+          "instructions": {
+            "label": "Talimatlar",
+            "custom": "Kendi talimatlarınız.",
+            "builtIn": "Yerleşik: noktalama işaretlerini, sayıları ve düzeltmeleri düzenle. İfadelerimi koru.",
+            "edit": "Düzenle",
+            "emptyHint": "Yerleşik talimatları kullanmak için boş bırakın.",
+            "reset": "Sıfırla",
+            "cancel": "İptal",
+            "save": "Kaydet"
+          },
+          "saveFailed": "Yapay zekâ ile düzeltme kaydedilemedi.",
+          "noAgent": "Yapay zekâ ile düzeltme yapabilecek bir ajan yok. Aşağıdan birini seçin.",
+          "title": "Düzeltme",
+          "label": "Yapay zekâ ile düzeltme",
+          "description": "Metin eklenmeden önce noktalama işaretlerini, sayıları ve sözlü düzeltmeleri düzenler. Metnin gönderildiği alıcı: {{agent}}. Ses asla gönderilmez.",
+          "anAgent": "bir yapay zekâ ajanı",
+          "agent": "Ajan ve model",
+          "agentDescription": "Bu bilgisayarda çalışır. Küçük ve hızlı bir model beklemeyi kısaltır.",
+          "correctionWord": "Düzeltme sözcüğü",
+          "correctionWordDescription": "Az önce söylediğinizi geri almak için bu sözcüğü söyleyin: “saat dörtte, {{word}}, saat beşte”.",
+          "correctionWordOff": "Yok"
         },
         "keepLoaded": {
           "label": "Modeli yüklü tut",
@@ -21181,7 +21308,9 @@
     },
     "tabGroup": {
       "splitPaneLanding": {
-        "newAgent": "Yeni Ajan"
+        "newAgent": "Yeni Ajan",
+        "searchAgentsAndFiles": "Ajan ve dosya ara",
+        "searchShort": "Ara"
       }
     },
     "contextualTours": {
@@ -21193,7 +21322,16 @@
       }
     },
     "dictation": {
-      "stoppedAfterSilenceSeconds": "{{seconds}} saniyelik sessizlikten sonra durduruldu"
+      "stoppedAfterSilenceSeconds": "{{seconds}} saniyelik sessizlikten sonra durduruldu",
+      "cleanupNotice": {
+        "timedOut": "Düzeltme çok uzun sürdü. Metin duyulduğu gibi eklendi.",
+        "failed": "Metin düzeltilemedi. Duyulduğu gibi eklendi.",
+        "dismiss": "Kapat"
+      },
+      "DictationIndicator": {
+        "cleaningUp": "Düzeltiliyor…",
+        "skipCleanup": "Düzeltmeyi atla"
+      }
     },
     "crash": {
       "report": {
@@ -21719,7 +21857,10 @@
         "kimiProviderLimited": "Kimi sağlayıcı sınırına ulaştı veya sağlayıcı meşgul. Yeniden denemeden önce bekleyin veya istek sıklığını azaltın.",
         "kimiContextOverflow": "Kimi'nin bağlamı tükendi. İstemi kısaltın veya yeni bir oturum başlatın, ardından yeniden deneyin.",
         "kimiConfigInvalid": "Kimi'nin yapılandırması geçersiz. Yeniden denemeden önce çalıştırma sunucusundaki model ve sağlayıcı yapılandırmasını kontrol edin.",
-        "kimiContinueSessionConflict": "Kimi çakışan seçenekler aldı: --continue, --session. Yeniden denemeden önce metin oluşturma tarifini veya CLI argümanlarını düzeltin."
+        "kimiContinueSessionConflict": "Kimi çakışan seçenekler aldı: --continue, --session. Yeniden denemeden önce metin oluşturma tarifini veya CLI argümanlarını düzeltin.",
+        "commandTemplateEmptyDictationCleanup": "Dikte düzeltmesi için komut şablonu boş.",
+        "dictationCleanupAgentUnsupported": "Yapay zekâ ile düzeltme için Ayarlar -> Ses -> Düzeltme bölümünde desteklenen bir ajan seçin. Desteklenen ajanlar: {{agents}} veya Özel komut.",
+        "agentCannotGenerateDictationCleanup": "“{{agent}}” ajanı dikte düzeltmesini desteklemiyor. Desteklenen ajanlar: {{agents}} veya Özel komut."
       },
       "enableSourceControlAi": "Ayarlar -> Git bölümünde Kaynak Kontrolü AI özelliğini etkinleştirin.",
       "chooseBaseBranch": "Oluşturmadan önce bir temel branch seçin.",
@@ -22222,6 +22363,7 @@
       "changed": "agy'nin kendi hesabı değişti. agy'yi başlatmadan önce kayıtlı bir hesabı yeniden seçin.",
       "refresh": "Hesapları yenile",
       "usage": "Kullanımı yenile",
+      "usageWithReading": "Kullanımı yenile ({{reading}})",
       "usageReading": "Oturum: {{session}} · Haftalık: {{weekly}}",
       "saved": "Kaydedilmiş Google hesabı",
       "remove": "Kaldır",
@@ -22242,7 +22384,23 @@
       "lastReading": "{{reading}} · Okunma zamanı: {{time}}",
       "noReading": "Kullanım bilinmiyor: henüz okunmadı",
       "fd47b5a5dd": "Antigravity Hesapları",
-      "apiKeyGet": "API anahtarı al"
+      "personalOption": "Kişisel Google AI planınız",
+      "enterpriseOption": "Kuruluşunuzun lisansı",
+      "apiKeyGet": "API anahtarı al",
+      "location": "Konum",
+      "enterpriseFieldsShort": "Bir proje ve konum girin.",
+      "chatUseMethod": "{{method}} kullanmak için yeniden oturum açın",
+      "loadFailed": "agy hesapları yüklenemedi",
+      "loading": "Hesaplar yükleniyor…",
+      "notSignedIn": "Oturum açılmadı",
+      "runAgy": "Oturum açmak için bu sunucuda agy'yi çalıştırın",
+      "signInHelp": "Oturum açma yardımı",
+      "currentLogin": "Geçerli agy oturumu",
+      "currentNotSaved": "Geçerli agy oturumu · kaydedilmedi",
+      "noEmailNotSaved": "agy e-posta adresi bildirmedi · kaydedilmedi",
+      "saveShort": "Kaydet",
+      "readAt": "Okunma zamanı: {{time}}",
+      "active": "Etkin"
     },
     "claude": {
       "added": "Hesap eklendi. Başlatacağınız bir sonraki Claude'da kullanmak için bu hesabı seçin.",
@@ -22256,7 +22414,7 @@
       "signInRequired": "Bu hesabı kullanmak için yeniden oturum açın",
       "signInAgain": "Yeniden oturum aç",
       "usageSignInLabel": "Yeniden oturum aç",
-      "usageSignInMessage": "Seçili Claude hesabında yeniden oturum açmanız gerekiyor. Ayarlar > Yapay Zeka Sağlayıcı Hesapları bölümünü açın veya Sistem varsayılanı seçeneğini seçin.",
+      "usageSignInMessage": "Bu hesapta yeniden oturum açmanız gerekiyor.",
       "signIn": "Oturum aç",
       "moreSignInOptions": "Diğer oturum açma seçenekleri",
       "copySignInLink": "Bunun yerine oturum açma bağlantısını kopyala",
@@ -24170,7 +24328,6 @@
     "row": {
       "runsOn": "{{host}} üzerinde çalışıyor",
       "disconnected": "Bağlantı kesildi",
-      "hostDisconnected": "{{host}} bağlantısı kesildi",
       "idle": "Boşta",
       "paused": "Duraklatıldı",
       "reading": "Mesajınızı okuyor",
@@ -24199,7 +24356,9 @@
       },
       "ask": {
         "notSentYet": "henüz gönderilmedi",
-        "replaced": "Ajan yeni bir soru sordu. Okuyup yanıtlayın."
+        "replaced": "Ajan yeni bir soru sordu. Okuyup yanıtlayın.",
+        "replacedByNewer": "Daha yeni bir soruyla değiştirildi",
+        "skipped": "Atlandı"
       },
       "chat": {
         "moreItems": "+{{count}} tane daha"
@@ -24552,7 +24711,24 @@
       }
     }
   },
+  "plugins": {
+    "actionConfirmation": {
+      "cancel": "İptal",
+      "deleteAutomation": "{{plugin}}, “{{automation}}” otomasyonunu silmek istiyor",
+      "deleteAutomationDetail": "Bu otomasyonu eklenti oluşturmadı. Zamanlanmış çalıştırmaları durur ve Otomasyonlar bölümünden kaldırılır.",
+      "delete": "Sil",
+      "changeAutomation": "{{plugin}}, “{{automation}}” otomasyonunu değiştirmek istiyor",
+      "changeAutomationDetail": "Bu otomasyonu eklenti oluşturmadı. Onaylarsanız eklenti şunları değiştirir: {{fields}}.",
+      "change": "Değiştir",
+      "changeElevatedAutomationDetail": "Bu otomasyon, ajanını seçtiğiniz ek ayarlarla (argümanlar, izin modu veya ön kontrol komutu) çalıştırır. Onaylarsanız eklenti şunları değiştirir: {{fields}}.",
+      "newPrompt": "Yeni istem: “{{prompt}}”",
+      "unknownProject": "bilinmeyen bir proje",
+      "automationNewWorkspaces": "Otomasyon {{id}}: {{schedule}} zamanlamasıyla her çalıştırmada {{project}} için yeni bir çalışma alanı.",
+      "automationInWorkspace": "Otomasyon {{id}}: {{schedule}} zamanlamasıyla {{project}} / {{workspace}} içinde."
+    }
+  },
   "agentPicker": {
+    "refreshModels": "Modelleri yenile",
     "catalogUnsupportedLaunch": "{{agent}} modelleri bu sunucuda kullanılamıyor. Geçerli seçimleriniz uygulanmaya devam eder.",
     "catalogEmpty": "{{agent}} için kullanılabilir model yok.",
     "setByArguments": "Argümanlarınızla ayarlandı",
@@ -24685,6 +24861,15 @@
       "deleteFailed": "{{model}} silinemedi.",
       "dismiss": "Kapat",
       "cancelDownload": "İndirmeyi iptal et"
+    }
+  },
+  "usage": {
+    "failure": {
+      "unavailable": "Kullanım bilgileri kullanılamıyor. Yeniden bağlanmak için Yenile'yi deneyin.",
+      "setting": "Takip değişikliği doğrulanamadı. Ayarı değiştirmeyi yeniden deneyin.",
+      "refresh": "Önceki yenileme tamamlanamadı. Yenile'yi yeniden deneyin.",
+      "read": "Kullanım bilgileri yüklenemedi. Yenile'yi yeniden deneyin.",
+      "retry": "Yenile"
     }
   },
   "crashReport": {

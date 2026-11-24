@@ -82,7 +82,7 @@ export function WorkerDockRoster(props: {
   }
   const orderHeld = identities.some((row, index) => row.id !== props.identities[index]?.id)
   const clearing = props.identities.some(
-    (row) => (row.state === 'failed' || row.state === 'unexpected') && props.pending.has(row.id)
+    (row) => workerDockClearable(row) && props.pending.has(row.id)
   )
   const clearable = props.identities.filter(workerDockClearable).length
   const {

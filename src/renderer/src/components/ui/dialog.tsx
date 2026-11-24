@@ -120,7 +120,10 @@ function DialogContentCloseButton({ variant }: { variant: 'close' | 'minimize' }
 const unifiedDialogSizeClass: Record<UnifiedDialogSize, string> = {
   confirm: 'sm:max-w-[420px]',
   form: 'sm:max-w-[480px]',
-  list: 'sm:max-w-[520px]'
+  list: 'sm:max-w-[520px]',
+  // The review keeps its final bounds while the panes fill and the dialog fades in.
+  review:
+    'flex h-[min(28rem,calc(100dvh-3rem))] flex-col sm:max-w-[680px] data-[state=open]:[--tw-enter-scale:1]! data-[state=closed]:[--tw-exit-scale:1]!'
 }
 
 function DialogContent({

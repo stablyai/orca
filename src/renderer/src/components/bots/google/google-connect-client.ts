@@ -15,12 +15,12 @@ import type { GoogleClientView } from '../../../../../shared/google/google-clien
 import {
   GOOGLE_CONNECT_RUNTIME_CAPABILITY,
   type GoogleAccountView,
+  type GoogleSignInAsk,
   type GoogleSignInPrompt,
   type GoogleSignInStatus,
   type GoogleStatusView
 } from '../../../../../shared/google/google-connect-types'
 import { googleAppExportFileName } from '../../../../../shared/google/google-console-setup'
-import type { GoogleServiceChoice } from '../../../../../shared/google/google-scopes'
 import type { RuntimeClientTarget } from '../../../../../shared/remote-runtime/host-catalog/runtime-client-target'
 import type { Bot } from '../../../../../shared/bot-types'
 import { errorMessage } from '../../../../../shared/errors/error-message'
@@ -285,7 +285,7 @@ async function untilSettled(run: SignInRun, first: GoogleSignInStatus): Promise<
 export async function connectGoogle(
   target: RuntimeClientTarget,
   // `bot`: whose workspace a server's page opens in.
-  request: { services: readonly GoogleServiceChoice[]; account?: string; bot?: BotRef },
+  request: GoogleSignInAsk & { bot?: BotRef },
   onPrompt: (prompt: GoogleSignInPrompt, way: GoogleSignInWay) => void
 ): Promise<GoogleAccountView> {
   if (running) {
@@ -294,10 +294,8 @@ export async function connectGoogle(
   const run: SignInRun = { target, flowId: null, cancelled: false, reopen: openInMyBrowser }
   running = run
   try {
-    const started = await callRuntimeRpc<GoogleSignInStatus>(target, 'google.signIn.start', {
-      services: [...request.services],
-      ...(request.account ? { account: request.account } : {})
-    })
+    const { bot, ...ask } = request
+    const started = await callRuntimeRpc<GoogleSignInStatus>(target, 'google.signIn.start', ask)
     run.flowId = started.flowId
     const waiting = await settle(run, started)
     if (waiting.phase !== 'waiting' || !waiting.prompt) {
@@ -311,10 +309,10 @@ export async function connectGoogle(
         ? toRuntimeExecutionHostId(target.environmentId)
         : null
     const onServer =
-      serverHost !== null && openOnServer(serverHost, waiting.prompt.authorizeUrl, request.bot)
+      serverHost !== null && openOnServer(serverHost, waiting.prompt.authorizeUrl, bot)
     // Its return reaches only the server's loopback, so it never reopens in the system browser.
     run.reopen = onServer
-      ? (url) => void openBotHostPageOrSay(serverHost, url, { bot: request.bot, local: 'system' })
+      ? (url) => void openBotHostPageOrSay(serverHost, url, { bot, local: 'system' })
       : run.reopen
     if (serverHost !== null && !onServer) {
       await callRuntimeRpc(target, 'google.signIn.cancel', { flowId: started.flowId }).catch(

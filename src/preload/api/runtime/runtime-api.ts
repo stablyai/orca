@@ -8,6 +8,7 @@ import type {
   CrewSubscriptionSetupResult
 } from '../../../shared/remote-runtime/host-catalog/runtime-environment-subscription-setup'
 import type { ManagedOrcadPreloadApi } from './managed-orcad-api'
+import type { RuntimePortForwardsPreloadApi } from './runtime-port-forwards-api'
 import type { WslHostsPreloadApi } from '../wsl/wsl-hosts-api'
 import type { RuntimeHostStatusSnapshot } from '../../../shared/remote-runtime/host-status/runtime-host-status'
 import type {
@@ -193,6 +194,8 @@ export type RuntimeApi = {
     ) => Promise<RuntimeEnvironmentSubscriptionHandle>
     // Only desktop clients deploy servers over SSH.
     managedOrcad?: ManagedOrcadPreloadApi
+    // Only desktop clients listen on their own loopback for a server's ports.
+    portForwards?: RuntimePortForwardsPreloadApi
     // Only Windows desktops (or e2e fakes) host WSL distros.
     wslHosts?: WslHostsPreloadApi
   }
