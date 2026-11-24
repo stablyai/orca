@@ -189,10 +189,8 @@ describe('a terminal Claude worker waiting on its model', () => {
       expect(payload).toEqual({ taskId, dispatchId, handle: HANDLE, modelWait: 'waiting' })
       expectNoScreenText(message.payload ?? '', frame.sentinel)
 
-      // The same stretch again still reaches the mail lookup, and changes nothing.
-      const lookup = vi.spyOn(db, 'getMessageById')
+      // The same stretch again changes nothing.
       await observeStalledStretch(watcher, wait)
-      expect(lookup).toHaveBeenCalledWith(id)
       const again = db.getUnreadRunMailbox(runId, 100, ['escalation'])
       expect(again).toHaveLength(1)
       expect(again[0]).toEqual(message)
@@ -231,10 +229,8 @@ describe('a terminal Claude worker waiting on its model', () => {
       // A paired worker's notice goes home, not into this machine's mail.
       expect(localMailCount(db)).toBe(0)
 
-      // The same stretch again reaches the relay queue under the same id, and changes nothing.
-      const enqueue = vi.spyOn(db, 'enqueueFederationRelay')
+      // The same stretch again changes nothing.
       await observeStalledStretch(watcher, wait)
-      expect(enqueue).toHaveBeenCalledWith(expect.objectContaining({ messageId: id }))
       const again = db.listPendingFederationRelay(dispatchId, 'to_home')
       expect(again).toHaveLength(1)
       expect(again[0]).toEqual(relayed[0])

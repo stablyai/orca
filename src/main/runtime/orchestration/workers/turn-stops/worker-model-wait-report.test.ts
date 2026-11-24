@@ -19,6 +19,11 @@ const KEY = `sk-ant-api03-${'x9Y8'.repeat(16)}`
 // The notice's line limit, written out so the test does not borrow the code under test.
 const LAST_SEEN_MAX_CHARS = 300
 
+/** The body's retry-words field, cut at its label and at the sentence the notice ends with. */
+function lastSeenField(body: string): string | undefined {
+  return /Last seen: (.*?) It is still /u.exec(body)?.[1]
+}
+
 /** Both redaction markers and the kept sentinel; no raw credential, nothing past the cap. */
 function expectOnlySanitized(texts: readonly string[], inside: string, past: string): void {
   for (const text of texts) {
@@ -113,8 +118,7 @@ describe('the model-wait notice', () => {
       modelWait: 'retrying',
       lastSeen: expected
     })
-    // Bounded on both sides: the whole capped line, nothing cut or added.
-    expect(retrying.body).toContain(` ${expected} `)
+    expect(lastSeenField(retrying.body)).toBe(expected)
     expectOnlySanitized([retrying.body, retrying.payload ?? ''], inside, past)
 
     // Ten quiet minutes later the wait itself goes up as an escalation, with the same retry line.
@@ -133,7 +137,7 @@ describe('the model-wait notice', () => {
       modelWait: 'waiting',
       lastSeen: expected
     })
-    expect(waiting.body).toContain(` ${expected} `)
+    expect(lastSeenField(waiting.body)).toBe(expected)
     expect(waiting.body).toContain('10 min')
     expectOnlySanitized([waiting.body, waiting.payload ?? ''], inside, past)
 
