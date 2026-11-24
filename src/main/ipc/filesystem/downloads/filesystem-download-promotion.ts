@@ -1,5 +1,7 @@
 import { randomUUID } from 'node:crypto'
-import { link, open, rename, rm, stat } from 'node:fs/promises'
+import { createReadStream, type Stats } from 'node:fs'
+import { link, lstat, open, rename, rm, stat } from 'node:fs/promises'
+import { pipeline } from 'node:stream/promises'
 import { dirname, join } from 'node:path'
 import { errnoCodeOrUnknown } from '../../../../shared/errors/errno-code'
 import { isENOENT } from '../../../filesystem/local-file-io/filesystem-path-containment'
@@ -80,29 +82,22 @@ const NO_HARD_LINK_CODES = new Set(['EPERM', 'ENOTSUP', 'EOPNOTSUPP', 'ENOSYS', 
 
 /**
  * Moves the finished file to the first name nothing holds, never replacing a file: a link (or, on
- * a volume without links, an exclusively created placeholder it then replaces) fails when the name
- * was taken while it downloaded, and the next free name is tried.
+ * a volume without links, an exclusive create that the file is then copied into) fails when the
+ * name was taken while it downloaded, and the next free name is tried.
  */
 export async function promoteDownloadedFileWithoutOverwrite(
   tempPath: string,
   destinationPath: string,
-  nextFreePath: () => Promise<string>
+  nextFreePath: () => Promise<string>,
+  signal?: AbortSignal
 ): Promise<string> {
   let target = destinationPath
   let hardLinks = true
   for (let attempt = 0; attempt < 8; attempt += 1) {
+    signal?.throwIfAborted()
     try {
-      if (hardLinks) {
-        await link(tempPath, target)
-        await cleanupLocalTransferPath(tempPath)
-      } else {
-        await (await open(target, 'wx')).close()
-        // The placeholder is ours, so a failed move leaves no empty file behind.
-        await rename(tempPath, target).catch(async (error: unknown) => {
-          await cleanupLocalTransferPath(target)
-          throw error
-        })
-      }
+      await (hardLinks ? link(tempPath, target) : copyIntoNewFile(tempPath, target, signal))
+      await cleanupLocalTransferPath(tempPath)
       return target
     } catch (error) {
       const code = errnoCodeOrUnknown(error)
@@ -116,6 +111,36 @@ export async function promoteDownloadedFileWithoutOverwrite(
     }
   }
   throw new Error('Could not choose a unique file name in Downloads.')
+}
+
+/** Writes through the handle that created the file, so nothing another app saves there is touched. */
+async function copyIntoNewFile(
+  sourcePath: string,
+  targetPath: string,
+  signal: AbortSignal | undefined
+): Promise<void> {
+  const target = await open(targetPath, 'wx')
+  let copied = false
+  try {
+    await pipeline(
+      createReadStream(sourcePath),
+      target.createWriteStream({ autoClose: false }),
+      signal ? { signal } : {}
+    )
+    copied = true
+  } finally {
+    if (!copied) {
+      await removeIfStillOurs(targetPath, await target.stat())
+    }
+    await target.close()
+  }
+}
+
+async function removeIfStillOurs(filePath: string, ours: Stats): Promise<void> {
+  const current = await lstat(filePath).catch(() => null)
+  if (current && current.dev === ours.dev && current.ino === ours.ino) {
+    await cleanupLocalTransferPath(filePath)
+  }
 }
 
 export type DownloadFileResult = { canceled: true } | { canceled: false; destinationPath: string }

@@ -3,9 +3,11 @@ import { constants, type Stats } from 'node:fs'
 import { lstat, open } from 'node:fs/promises'
 import type { RuntimeFileReadChunkResult } from '../../../../../shared/file-content/runtime-file-read'
 import { BrowserError } from '../../../browser-error'
+import { LOCAL_READ_OPEN_FLAGS } from '../../../../filesystem/local-file-io/local-regular-file-read'
 
-// Base64 grows a slice by a third; this keeps each reply well under the 4 MiB frame cap.
-const COPY_READ_CHUNK_BYTES = 2 * 1024 * 1024
+// Each reply is one frame on the connection other calls share; a small slice keeps a slow link's
+// other replies waiting seconds, not tens of seconds (file downloads read 384 KiB).
+const COPY_READ_CHUNK_BYTES = 512 * 1024
 // The desktop's toast offers the copy for 10 s, longer while hovered or hidden; it drops the
 // button before this runs out.
 const OFFER_UNCLAIMED_MS = 2 * 60_000
@@ -86,8 +88,8 @@ export async function readBrowserDownloadCopy(
   clearTimeout(offer.expiry)
   let handle: Awaited<ReturnType<typeof open>> | null = null
   try {
-    // No link may stand in for the saved file.
-    handle = await open(offer.savePath, constants.O_RDONLY | (constants.O_NOFOLLOW ?? 0))
+    // No link may stand in for the saved file, and a pipe put there can't hang the open.
+    handle = await open(offer.savePath, LOCAL_READ_OPEN_FLAGS | (constants.O_NOFOLLOW ?? 0))
     const stats = await handle.stat()
     const { identity } = offer
     if (

@@ -109,7 +109,8 @@ export async function copyBrowserServerDownloadHere(
         // The link that follows claims it.
         browserDownloadDestinationReservations.release(free.reservationKey)
         return free.savePath
-      }
+      },
+      signal
     )
     saved = true
     return { destinationPath }
