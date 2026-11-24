@@ -33,6 +33,7 @@ import {
   useLinearTitle,
   useOpenWeb
 } from './BotItemLinks'
+import { useBotItemLivePr, useBotItemPrWorkspacesVisible } from './use-bot-item-live-pr'
 
 export function BotItemLinkChips({
   bot,
@@ -59,6 +60,7 @@ function LinkChips({
 }): React.JSX.Element | null {
   const t = useTranslate()
   const rows = useMemo(() => botItemLinkChipOrder(botItemLinkRows(links)), [links])
+  useBotItemPrWorkspacesVisible(rows)
   const fileContext = useBotItemFileContext(bot)
   const list = useRef<HTMLUListElement | null>(null)
   const overflow = useRef<HTMLDivElement | null>(null)
@@ -328,7 +330,8 @@ function Chip({
   }
 }
 
-function GitHubChip({ row }: { row: BotItemGitHubRow }): React.JSX.Element {
+function GitHubChip({ row: hostRow }: { row: BotItemGitHubRow }): React.JSX.Element {
+  const row = useBotItemLivePr(hostRow)
   const t = useTranslate()
   const openWeb = useOpenWeb()
   const tip = [
