@@ -27,7 +27,8 @@ export function createRemoteBrowserGuestToolsTransport({
   remotePage: () => string | null
   inputQueue: RemoteBrowserInputQueue
 }): BrowserGuestToolsTransport {
-  const awaitingSelections = new Set<AbortController>()
+  // Each wait's request, so a request-scoped cancel ends only that request's wait.
+  const awaitingSelections = new Map<AbortController, string | undefined>()
 
   const call = async <T>(
     method: string,
@@ -79,7 +80,7 @@ export function createRemoteBrowserGuestToolsTransport({
     // Not queued: it waits for a click, and the click must be able to reach the page meanwhile.
     awaitGrabSelection: async ({ opId, requestId }): Promise<BrowserGrabResult> => {
       const controller = new AbortController()
-      awaitingSelections.add(controller)
+      awaitingSelections.set(controller, requestId)
       try {
         return (
           (await call<BrowserGrabResult>(
@@ -102,8 +103,11 @@ export function createRemoteBrowserGuestToolsTransport({
     },
     cancelGrab: async ({ requestId }): Promise<boolean> => {
       const page = remotePage()
-      // A rearm during the round trip starts a new wait that this cancel must not end.
+      // A rearm during the round trip starts a new wait that this cancel must not end, and a
+      // retired request's cancel must not end the wait of the request that replaced it.
       const cancelledSelections = [...awaitingSelections]
+        .filter(([, waitRequestId]) => requestId === undefined || waitRequestId === requestId)
+        .map(([controller]) => controller)
       // Ask the host to settle the pick first; aborting alone would leave its overlay armed until the call closes.
       const cancelled = await inInputOrder(() =>
         call<{ cancelled: boolean }>('browser.grab.cancel', { requestId }, { page })
