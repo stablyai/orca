@@ -1,5 +1,5 @@
-// Per-thread mute for a bot's Slack thread, decided before the agent sees the message: an exact
-// directive ("stop listening to this thread") stops later replies reaching it until someone
+// Per-thread mute for a bot's Slack thread, decided before the agent sees the message: once the bot
+// has left the thread (`orca bot reply --leave-thread`), later replies stop reaching it until someone
 // @mentions it. The bot's own posts (a background run's result, an automation) still go out.
 import type {
   ConnectorConversation,
@@ -8,18 +8,17 @@ import type {
 } from '../../shared/connectors/connector-cloud-contract'
 import type { SendDelivery } from './connector-deliveries'
 import { refused, type Delivery } from '../external-conversations/external-conversation-types'
-import { isThreadMuteDirective } from './connector-thread-mute-phrases'
 
-/** What a send to a bot's thread does: a directive mutes here and never reaches the agent; a muted
- *  thread silences any send that doesn't mention the bot; a mention unmutes and goes on. */
-export type ThreadMuteStep = 'mute' | 'silence' | 'unmute_and_send' | 'send'
+/** What a send to a bot's thread does: a muted thread silences any send that doesn't mention the
+ *  bot; a mention unmutes and goes on. */
+export type ThreadMuteStep = 'silence' | 'unmute_and_send' | 'send'
 
 type MuteFacts = Pick<SendDelivery, 'bareMention' | 'mentioned' | 'resume'> & {
-  asker?: { text: string; app?: true; via?: unknown }
+  asker?: { app?: true; via?: unknown }
 }
 
 /** Whether a person wrote it: another Slack app's message, or an Orca bot's on someone's behalf,
- *  never mutes or unmutes a bot, so no agent quoting the phrase or relaying a mention moves it. */
+ *  never unmutes a bot, so no agent relaying a mention moves it. */
 function byPerson(delivery: MuteFacts): boolean {
   return delivery.asker !== undefined && !delivery.asker.app && !delivery.asker.via
 }
@@ -30,23 +29,12 @@ export function threadMuteStep(muted: boolean, delivery: MuteFacts): ThreadMuteS
   if (delivery.resume) {
     return 'send'
   }
-  // Only the sender's own words, never the thread context sent with them; "@Bot stop listening
-  // here" mutes, as its mention is stripped.
-  if (byPerson(delivery) && isThreadMuteDirective(delivery.asker?.text)) {
-    return 'mute'
-  }
   if (!muted) {
     return 'send'
   }
   return byPerson(delivery) && (delivery.mentioned || delivery.bareMention)
     ? 'unmute_and_send'
     : 'silence'
-}
-
-/** Whether a send is a directive to stop listening, kept out of batches so it is never carried into
- *  the turn before it as words. */
-export function isThreadMuteSend(delivery: MuteFacts): boolean {
-  return byPerson(delivery) && isThreadMuteDirective(delivery.asker?.text)
 }
 
 /** The bot's Slack user from a thread id (`T:C:ts:UBOT`); null for a DM (`T:D…`), which has no
@@ -69,9 +57,7 @@ export function withoutAutomations(
     : result
 }
 
-export const MUTED_EMOJI = ':mute:'
-
-// A mute or unmute that could not be saved: refused with nothing confirmed, so the thread offers
+// An unmute that could not be saved: refused with nothing confirmed, so the thread offers
 // Send again.
 const NOT_SAVED = refused('thread_mute_not_saved')
 
@@ -89,23 +75,12 @@ export type ThreadMuteDeps = {
   ) => Promise<Delivery | undefined>
   /** Each thread's newest reply still deciding (its link being written, its mute being saved). */
   waiting: Map<string, Promise<unknown>>
-  react: (
-    botId: string,
-    key: ConnectorConversation,
-    messageRef: string,
-    emoji: string
-  ) => Promise<void>
 }
 
 const ACCEPTED = { outcome: 'accepted' } as const
 
 /** Runs a handled send's effects under its durable delivery receipt, so a resend replays it. */
-export type RecordHandled = {
-  (handled: () => Promise<Delivery>): Promise<ConnectorDeliveryResult>
-  /** Whether its receipt has room now, checked before a mute is saved so a full backlog refuses it
-   *  with nothing written. */
-  admits: () => boolean
-}
+export type RecordHandled = (handled: () => Promise<Delivery>) => Promise<ConnectorDeliveryResult>
 
 type Decided = ConnectorDeliveryResult | 'send' | 'carried'
 
@@ -146,24 +121,9 @@ export function handleThreadMute(
   if (thread === 'not_bot') {
     return null
   }
-  if (thread) {
-    // Most replies to a thread that isn't muted are no directive: they go on at once.
-    const applied =
-      thread.muted || isThreadMuteSend(delivery) ? applyStep(deps, delivery, record, thread) : null
-    return applied && { decided: hold(deps, id, applied.decided) }
-  }
-  // No link yet: a start in the same poll is still writing it. A directive waits for it and
-  // is then decided as any other; the rest go on now, batched as ever.
-  if (!isThreadMuteSend(delivery)) {
-    return null
-  }
-  return {
-    decided: hold(
-      deps,
-      id,
-      inPlace(deps, delivery, record, async () => false)
-    )
-  }
+  // No link yet (a start in the same poll is still writing it), or not muted: it goes on at once.
+  const applied = thread?.muted ? applyStep(deps, delivery, record) : null
+  return applied && { decided: hold(deps, id, applied.decided) }
 }
 
 /** Takes the reply's place in the thread's queue now and decides it there once `before` settles
@@ -202,7 +162,7 @@ async function decideNow(
 ): Promise<Decided> {
   const linked = deps.read(delivery.conversation)
   const applied =
-    linked && linked !== 'not_bot' && applyStep(deps, delivery, record, linked, 'in_place')
+    linked && linked !== 'not_bot' && linked.muted && applyStep(deps, delivery, record, 'in_place')
   return applied ? await applied.decided : 'send'
 }
 
@@ -227,68 +187,33 @@ function applyStep(
   deps: ThreadMuteDeps,
   delivery: SendDelivery,
   record: RecordHandled,
-  thread: { botId: string; muted: boolean },
   // Already in its place in the thread's queue, so an unmute saves there and queues nothing more.
   place?: 'in_place'
 ): ThreadMuteOutcome | null {
   const key = delivery.conversation
-  const step = threadMuteStep(thread.muted, delivery)
+  const step = threadMuteStep(true, delivery)
   if (step === 'send') {
     return null
   }
   if (step === 'silence') {
     return { decided: record(async () => ACCEPTED) }
   }
-  const save = (): Promise<boolean> =>
-    deps.write(key, step === 'mute').then(
-      () => true,
-      (error: unknown) => {
-        console.warn('[connectors] could not save a thread mute', error)
-        return false
-      }
-    )
-  if (step === 'unmute_and_send') {
-    // The save waits in the thread's queue, so a Stop in the same poll still finds it and the
-    // mention is refused with it, never answered after the Stop. Once saved, it goes on: the bot is
-    // never answered as unmuted when it isn't.
-    const saved = save()
-    const sent = (ok: boolean) => (ok ? ('send' as const) : NOT_SAVED)
-    if (place) {
-      return { decided: saved.then(sent) }
+  // The save waits in the thread's queue, so a Stop in the same poll still finds it and the mention
+  // is refused with it, never answered after the Stop. Once saved, it goes on: the bot is never
+  // answered as unmuted when it isn't.
+  const saved = deps.write(key, false).then(
+    () => true,
+    (error: unknown) => {
+      console.warn('[connectors] could not save a thread unmute', error)
+      return false
     }
-    const decided = deps
-      .queued(key, () => saved)
-      .then(async (wait) => (wait?.outcome === 'refused' ? wait : sent(await saved)))
-    return { decided }
+  )
+  const sent = (ok: boolean) => (ok ? ('send' as const) : NOT_SAVED)
+  if (place) {
+    return { decided: saved.then(sent) }
   }
-  const ref = delivery.asker?.messageRef
-  // A full backlog refuses it with nothing written. Saved, then its receipt, then its emoji: a crash
-  // between leaves the resend to decide it again, and a save that fails leaves no receipt.
-  if (!record.admits()) {
-    return { decided: Promise.resolve(refused('delivery_backlog_full')) }
-  }
-  const decided = save().then(async (ok) => {
-    if (!ok) {
-      return NOT_SAVED
-    }
-    const result = await record(async () => ACCEPTED)
-    if (result.outcome !== 'accepted') {
-      // Refused after the save (the backlog filled meanwhile): put the thread back as it was, so a
-      // refused mute never stays in effect.
-      await deps
-        .write(key, thread.muted)
-        .catch((error: unknown) => console.warn('[connectors] could not undo a thread mute', error))
-      return result
-    }
-    if (ref) {
-      // The emoji is the only answer: a failed one leaves the thread muted all the same.
-      void deps
-        .react(thread.botId, key, ref, MUTED_EMOJI)
-        .catch((error: unknown) =>
-          console.warn('[connectors] could not react to a thread mute', error)
-        )
-    }
-    return result
-  })
+  const decided = deps
+    .queued(key, () => saved)
+    .then(async (wait) => (wait?.outcome === 'refused' ? wait : sent(await saved)))
   return { decided }
 }

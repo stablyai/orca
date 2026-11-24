@@ -51,6 +51,7 @@ export function agentSessionMessagePayload(body: AgentJournalMessageItem): Agent
     origin: _origin,
     asker: _asker,
     connectorConversation: _connectorConversation,
+    leaveEligible: _leaveEligible,
     connectorDelivery: _connectorDelivery,
     connectorClaim: _connectorClaim,
     memorySource: _memorySource,

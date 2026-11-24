@@ -166,6 +166,12 @@ export const CONNECTOR_ACT_ERROR_CODES = [
   // A look-around run asked for something other than a read.
   'look_around_reads_only',
   // `bot reply --react` in a run no message woke, or where reactions aren't available.
-  'no_waking_message'
+  'no_waking_message',
+  // `bot reply --leave-thread` outside a Slack thread the bot follows, from a turn not running or not
+  // a person's, or whose leave couldn't be saved.
+  'not_a_thread',
+  'leave_refused_stale',
+  'leave_refused_mixed',
+  'thread_mute_not_saved'
 ] as const
 export type ConnectorActErrorCode = (typeof CONNECTOR_ACT_ERROR_CODES)[number]

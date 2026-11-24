@@ -371,6 +371,7 @@ import {
 } from './computer/computer-schemas-params'
 import {
   ConnectorAct,
+  ConnectorLeaveThread,
   ConnectorReact,
   ConnectorReply,
   ConnectorSlackMirrorPost,
@@ -1513,6 +1514,7 @@ export const RPC_PARAMS_BY_METHOD = {
   'computer.setValue': SetValue,
   'computer.typeText': TypeText,
   'connector.act': ConnectorAct,
+  'connector.leaveThread': ConnectorLeaveThread,
   'connector.react': ConnectorReact,
   'connector.reply': ConnectorReply,
   'connector.slackMirror.post': ConnectorSlackMirrorPost,

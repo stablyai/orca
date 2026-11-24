@@ -41,6 +41,8 @@ export type FilledTurn = {
   covered: ReadonlySet<string>
   paused: boolean
   resumesAt?: number
+  /** This fill wrote an answer carrying the turn's prose: what a turn-end line can ride on. */
+  answered?: true
 }
 
 /** Whether the bot's owner sent the message that admitted a row (its journal body's asker): the
@@ -174,9 +176,11 @@ export function conversationReplyFill(
         ...(turn.turnStartedAt === undefined ? {} : { turnStartedAt: turn.turnStartedAt })
       })
     }
-    if (await store.fillOutcomes(fills)) {
+    const changed = await store.fillOutcomes(fills)
+    if (changed) {
       filled()
     }
-    return { covered, paused: false }
+    const answered = changed && fills.some((fill) => fill.outcome === 'answered' && fill.prose)
+    return { covered, paused: false, ...(answered ? { answered: true as const } : {}) }
   }
 }

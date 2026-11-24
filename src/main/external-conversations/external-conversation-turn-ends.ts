@@ -13,6 +13,7 @@ import type { ExternalConversationLink } from '../../shared/connectors/external-
 import type { ConnectorWorkLink } from '../../shared/connector-work-link-contract'
 import { connectorReplyWords } from '../../shared/agent-session/journal/journal-connector-reply-turn'
 import { isSlackDirectMessage } from '../../shared/connectors/slack-direct-message'
+import type { TurnLeave } from './external-conversation-thread-leaves'
 export type { SlackMirrorTurn } from './slack-mirror'
 
 export type ChatTurnEnd = {
@@ -26,6 +27,8 @@ export type ChatTurnEnd = {
   workersChecked: () => Promise<unknown>
   /** Still the same signed-in account: false after a reset, so the end reaches no one. */
   current: () => boolean
+  /** A leave of its thread made in this turn, confirmed once as the turn ends. */
+  leave: TurnLeave
 }
 
 /** An adopted turn's end: how it went, never what it said or the links its work opened. A success
@@ -62,7 +65,7 @@ export function endAdoptedTurn(
 /** Its reply posts after the owner's words: held while their post failed, until Retry or Dismiss,
  *  across a restart too. A quiet result still ends the turn, with no words. */
 export function endMirroredTurn(end: ChatTurnEnd, mirrored: SlackMirrorTurn): void {
-  void end.news.readTurn().then(async (read) => {
+  void end.news.readTurn().then(async (turn) => {
     if (!end.current()) {
       return
     }
@@ -70,6 +73,7 @@ export function endMirroredTurn(end: ChatTurnEnd, mirrored: SlackMirrorTurn): vo
     if (!end.current()) {
       return
     }
+    const read = end.leave.turn(turn)
     const message = read.lastAssistantMessage
     mirrored.release({
       ...end.ended,
@@ -81,6 +85,7 @@ export function endMirroredTurn(end: ChatTurnEnd, mirrored: SlackMirrorTurn): vo
         ? { failure: connectorFailure(read.failure, end.agent) }
         : {})
     })
+    end.leave.settle(true)
   })
 }
 
@@ -136,7 +141,7 @@ export async function endRepliedTurn(
   }
   const failure = turnFailure(end, turn)
   let threw = false
-  const { covered, resumesAt } = await fill({
+  const { covered, resumesAt, answered } = await fill({
     sessionId: end.news.sessionId,
     turnItemId: turn.turnItemId,
     stamps: turn.stamps,
@@ -155,6 +160,9 @@ export async function endRepliedTurn(
   // A turn whose stamps name this conversation answers it through the outbox only, even when its
   // rows were already sent and gone or the fill failed (recovery drains what is left): never also as
   // a full end.
+  if (answered) {
+    end.leave.answered()
+  }
   const outboxed =
     covered.has(link.externalId) || (answersThroughOutbox(link.source) && stampsName(turn, link))
   if (!end.current()) {
@@ -183,6 +191,7 @@ export async function endRepliedTurn(
         : {})
     })
   }
+  end.leave.settle()
   return 'told'
 }
 

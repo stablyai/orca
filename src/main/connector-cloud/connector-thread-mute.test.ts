@@ -9,7 +9,6 @@ import {
   threadMuteStep,
   type ThreadMuteDeps
 } from './connector-thread-mute'
-import { isThreadMuteDirective } from './connector-thread-mute-phrases'
 
 const conversation = { source: 'slack', externalId: 'T1:C1:1800000000.000100:U0BOT' }
 const send = (text: string, extra: Record<string, unknown> = {}) => ({
@@ -29,85 +28,21 @@ const send = (text: string, extra: Record<string, unknown> = {}) => ({
   ...extra
 })
 
-describe('a directive to stop listening', () => {
-  it('is only the sender’s own plain words, exactly one listed phrase', () => {
-    const mutes = [
-      'stop listening to this thread',
-      'Stop listening to this thread.',
-      'please stop listening here',
-      'mute this thread!',
-      'stop responding here, thanks',
-      'please stop replying in this thread, please'
-    ]
-    const never = [
-      '"stop listening to this thread"',
-      '“mute this thread”',
-      "'mute this thread'",
-      'mute？',
-      'stop listening here؟',
-      '¿stop listening here',
-      'can you stop listening to this thread?',
-      'how do I make it stop listening here',
-      "don't stop listening to this thread",
-      'never mute this thread',
-      '`stop listening here`',
-      '```\nstop listening here\n```',
-      '> stop listening here',
-      'Forwarded message\nstop listening here',
-      'stop listening to this thread and summarize',
-      'mute',
-      'be quiet',
-      'quiet',
-      'stop',
-      '<@USam> stop listening here',
-      '@sam stop listening here',
-      'Sam stop listening here',
-      // A name before the phrase is someone's sentence, never this bot's directive.
-      'Reviewer stop following this thread',
-      'Never mute this thread.',
-      'Do not mute this thread.',
-      'Why stop listening here',
-      'Cannot mute this thread.',
-      'Alice said stop listening here',
-      'stop listening to this thread 🙏'
-    ]
-    expect(mutes.filter((text) => !isThreadMuteDirective(text))).toEqual([])
-    expect(never.filter((text) => isThreadMuteDirective(text))).toEqual([])
-    expect(isThreadMuteDirective(undefined)).toBe(false)
-    // Far longer than any directive: rejected before it is scanned.
-    expect(isThreadMuteDirective(`a${' '.repeat(40_000)}b`)).toBe(false)
-    expect(isThreadMuteDirective(`${'please '.repeat(40)}stop listening here`)).toBe(false)
-  })
-
-  it('mutes a muted or unmuted thread, and only a mention unmutes one', () => {
-    const directive = { asker: { text: 'stop listening here' } }
-    expect(threadMuteStep(false, directive)).toBe('mute')
-    // "@Bot stop listening here": the stripped mention is flagged, and the mute wins.
-    expect(threadMuteStep(true, { ...directive, mentioned: true })).toBe('mute')
-    expect(threadMuteStep(true, { asker: { text: 'look' }, mentioned: true })).toBe(
-      'unmute_and_send'
-    )
-    expect(threadMuteStep(true, { asker: { text: 'hi' }, bareMention: true })).toBe(
-      'unmute_and_send'
-    )
-    expect(threadMuteStep(true, { asker: { text: '@reviewer look' } })).toBe('silence')
-    expect(threadMuteStep(true, { asker: { text: 'unmute' } })).toBe('silence')
-    // An agent's words (another app's, or an Orca bot's for someone) never move it, even quoting
-    // the phrase or mentioning the bot.
-    const app = { text: 'stop listening here', app: true as const }
-    const relayed = { text: 'stop listening here', via: { userId: 'U0OTHER', name: 'Builder' } }
-    expect(threadMuteStep(false, { asker: app })).toBe('send')
-    expect(threadMuteStep(false, { asker: relayed })).toBe('send')
-    expect(threadMuteStep(true, { asker: { ...app, text: 'look' }, mentioned: true })).toBe(
+describe('a send to a bot thread', () => {
+  it('is silenced while muted, and only a person\u2019s mention unmutes it', () => {
+    expect(threadMuteStep(false, { asker: {} })).toBe('send')
+    expect(threadMuteStep(false, { asker: {}, mentioned: true })).toBe('send')
+    expect(threadMuteStep(true, { asker: {}, mentioned: true })).toBe('unmute_and_send')
+    expect(threadMuteStep(true, { asker: {}, bareMention: true })).toBe('unmute_and_send')
+    expect(threadMuteStep(true, { asker: {} })).toBe('silence')
+    // An agent's words (another app's, or an Orca bot's for someone) never unmute it.
+    expect(threadMuteStep(true, { asker: { app: true }, mentioned: true })).toBe('silence')
+    expect(threadMuteStep(true, { asker: { via: { userId: 'U0OTHER' } }, bareMention: true })).toBe(
       'silence'
     )
-    expect(threadMuteStep(true, { asker: { ...relayed, text: 'hi' }, bareMention: true })).toBe(
-      'silence'
-    )
-    // A resend of the thread's context with the phrase in it, or no words of the sender's, never
-    // mutes; Resume leaves the mute as it was.
-    expect(threadMuteStep(false, {})).toBe('send')
-    expect(threadMuteStep(true, { ...directive, resume: { turnId: 1 } })).toBe('send')
+    expect(threadMuteStep(true, { mentioned: true })).toBe('silence')
+    // Resume leaves the mute as it was.
+    expect(threadMuteStep(true, { asker: {}, resume: { turnId: 1 } })).toBe('send')
     // A DM has no thread to mute, even when its id carries a thread's timestamp.
     expect(slackThreadBotUser('T1:C1:1800000000.000100:U0BOT')).toBe('U0BOT')
     expect(slackThreadBotUser('T1:D1:1800000000.000100:U0BOT')).toBeNull()
@@ -138,7 +73,6 @@ function harness(options: {
       run: (_k: unknown, _d: unknown, _m: unknown, _t: unknown, run: () => unknown) => run(),
       known: () => false,
       heldByMute: () => null,
-      admits: () => true,
       carried: async (_k: unknown, _d: unknown, _t: unknown, done: Promise<unknown>) => done
     }
   } as unknown as ExternalConversationSeam
@@ -155,8 +89,7 @@ function harness(options: {
         state.linked = true
         await work?.()
         return undefined
-      }),
-    react: async () => {}
+      })
   }
   const machine = {
     runTrigger: async () => false,
@@ -217,40 +150,16 @@ describe('a silenced reply leading a batch', () => {
   })
 })
 
-describe('a directive in the same poll as its thread’s start', () => {
-  // The start writes the thread's link only once its queued delivery runs: a directive waits for it,
-  // then mutes; a look-alike goes on to the chat as ever.
-  it('mutes once the link is written, and sends a look-alike on', async () => {
-    const directive = harness({ linked: false })
-    await directive.settled(directive.batch(send('stop listening here')))
-    expect(directive.state.muted).toBe(true)
-    expect(directive.turns).toEqual([])
-
-    const lookAlike = harness({ linked: false })
-    await lookAlike.settled(lookAlike.batch(send('Sam stop listening here')))
-    expect(lookAlike.state.muted).toBe(false)
-    expect(lookAlike.turns).toEqual([{ text: 'Sam stop listening here', later: 0 }])
-  })
-})
-
 describe('a held reply whose thread is stopped while it waits', () => {
-  // The Stop settles its wait in the thread's queue as refused: it and the batch behind it are
-  // refused too, as one queued turn would be, never sent after the Stop.
+  // A mention's unmute saves in the thread's queue: a Stop in its poll refuses it and the batch
+  // behind it, as one queued turn would be, never sent after the Stop.
   it('takes its batch down with it', async () => {
     const stopped = { outcome: 'refused', reason: 'conversation_cancelled' } as const
-    const { turns, batch, settled } = harness({ linked: false, queued: async () => stopped })
-    expect(await settled(batch(send('stop listening here'), send('draft it')))).toEqual([
+    const { turns, batch, settled } = harness({ muted: true, queued: async () => stopped })
+    expect(await settled(batch(send('look', { mentioned: true }), send('draft it')))).toEqual([
       stopped,
       stopped
     ])
-    expect(turns).toEqual([])
-  })
-
-  // A mention's unmute saves in the thread's queue: a Stop in its poll refuses the mention with it.
-  it('refuses a mention whose unmute is still saving', async () => {
-    const stopped = { outcome: 'refused', reason: 'conversation_cancelled' } as const
-    const { turns, batch, settled } = harness({ muted: true, queued: async () => stopped })
-    expect(await settled(batch(send('look', { mentioned: true })))).toEqual([stopped])
     expect(turns).toEqual([])
   })
 })
@@ -273,17 +182,5 @@ describe('a wait in the thread queue that a Stop lands on while it runs', () => 
     expect(await waited).toEqual({ outcome: 'refused', reason: 'conversation_cancelled' })
     await stopped
     saved()
-  })
-})
-
-describe('a later directive in the same poll as a held batch', () => {
-  // A directive, a mention, then a directive again: the mention keeps its place, so the last wins.
-  it('is never overtaken by the batch before it', async () => {
-    const { state, turns, batch, settled } = harness({})
-    const first = batch(send('stop listening here'), send('check this', { mentioned: true }))
-    const second = batch(send('stop listening here'))
-    await Promise.all([settled(first), settled(second)])
-    expect(turns).toEqual([{ text: 'check this', later: 0 }])
-    expect(state.muted).toBe(true)
   })
 })

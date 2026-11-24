@@ -2,12 +2,26 @@ import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+
+const journal = vi.hoisted(() => {
+  const items: unknown[] = []
+  return { items }
+})
+vi.mock('../bots/bot-session-tabs', () => ({
+  botOfSession: (_bots: unknown, sessionId: string) =>
+    sessionId === 'session-bot1' ? { id: 'bot1', name: 'Reviewer' } : null
+}))
+vi.mock('../bots/bot-turn-for', () => ({ botTurnFor: async () => 'someone_else' }))
+vi.mock('../bots/bot-chat-session', () => ({
+  requireStructuredHost: async () => ({
+    journalReads: async () => ({
+      operationWindow: async () => ({ snapshot: { items: journal.items, submissions: [] } })
+    })
+  })
+}))
 import { folderWorkspaceKey } from '../../shared/workspace/identity/workspace-scope'
 import type { ConnectorConversation } from '../../shared/connectors/connector-cloud-contract'
-import {
-  CONNECTOR_PENDING_RECEIPT_LIMIT,
-  DeliveryReceipts
-} from '../external-conversations/external-conversation-delivery-receipts'
+import { DeliveryReceipts } from '../external-conversations/external-conversation-delivery-receipts'
 import type { ExternalConversationHost } from '../external-conversations/external-conversation-host'
 import { writeLink } from '../external-conversations/external-conversation-links'
 import { readThreadMute } from '../external-conversations/external-conversation-link-writes'
@@ -17,6 +31,11 @@ import { OrchestrationDb } from '../runtime/orchestration/db/orchestration-db'
 import { dispatchDelivery } from './connector-deliveries'
 import { handleThreadMute } from './connector-thread-mute'
 import { threadMuteSaves } from './connector-thread-mute-saves'
+import { CONNECTOR_LEAVE_THREAD_METHOD } from '../runtime/rpc/methods/connector-leave-thread'
+import {
+  takeThreadLeft,
+  THREAD_LEFT_LINE
+} from '../external-conversations/external-conversation-thread-leaves'
 
 const THREAD = 'T1:C1:1800000000.000100'
 const FIRST: ConnectorConversation = { source: 'slack', externalId: `${THREAD}:U0BOT` }
@@ -92,14 +111,12 @@ async function botHome(muted: { first?: true; second?: true }) {
   return store
 }
 
-/** The real mute path between the real store and receipts; only the agent's turn and the emoji are
- *  stand-ins. */
+/** The real mute path between the real store and receipts; only the agent's turn is a stand-in. */
 function connector(
   store: ReturnType<typeof createStore>,
   receipts = new DeliveryReceipts(() => orchestration)
 ) {
   const turns: string[] = []
-  const reacted: string[] = []
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the mute path calls only these seam members.
   const seam = {
     receipts,
@@ -115,10 +132,7 @@ function connector(
     read: (key: ConnectorConversation) => readThreadMute(store, key),
     write: threadMuteSaves(store),
     queued: (_key: ConnectorConversation, work?: () => Promise<unknown>) =>
-      Promise.resolve(work?.()).then(() => undefined),
-    react: async (_bot: string, _key: ConnectorConversation, ref: string, emoji: string) => {
-      reacted.push(`${ref} ${emoji}`)
-    }
+      Promise.resolve(work?.()).then(() => undefined)
   }
   const machine = {
     runTrigger: async () => false,
@@ -137,7 +151,62 @@ function connector(
       raw,
       () => 60_000
     )?.done
-  return { deliver, turns, reacted }
+  return { deliver, turns }
+}
+
+const TURN_ID = 1_800_000_000_300
+
+/** `orca bot reply --leave-thread` from bot1's chat, which answers FIRST, while a member's request
+ *  in that thread runs. */
+function leaver(store: ReturnType<typeof createStore>) {
+  journal.items = [
+    {
+      itemId: 'u1',
+      revision: 1,
+      sequence: 1,
+      observedAt: 1,
+      body: {
+        kind: 'message',
+        role: 'user',
+        text: 'thanks, you can leave this thread now',
+        origin: 'connector',
+        asker: { role: 'member', userId: 'U1', messageRef: `slack:${THREAD}:1800000000.000250` },
+        connectorConversation: FIRST,
+        leaveEligible: true
+      }
+    },
+    {
+      itemId: 't1',
+      revision: 1,
+      sequence: 2,
+      observedAt: 2,
+      body: { kind: 'turn', turnId: 'p1', state: 'running', userItemId: 'u1' }
+    }
+  ]
+  const posted: unknown[] = []
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: leaving reads only these runtime fields.
+  const context = {
+    runtime: {
+      bots: { enabled: () => true },
+      lookAround: { botOfTidyUp: () => null, botOfLook: () => null },
+      requireStore: () => store,
+      getExternalConversationSeam: () => ({
+        replyTarget: () => ({ key: FIRST, turnId: TURN_ID }),
+        queued: async (_key: unknown, work: () => Promise<unknown>) => {
+          await work()
+          return undefined
+        }
+      }),
+      getConnectorCloud: () => ({
+        reply: async (reply: unknown) => {
+          posted.push(reply)
+          return { ok: true }
+        }
+      })
+    }
+  } as unknown as Parameters<typeof CONNECTOR_LEAVE_THREAD_METHOD.handler>[1]
+  const leave = () => CONNECTOR_LEAVE_THREAD_METHOD.handler({ sessionId: 'session-bot1' }, context)
+  return { leave, posted }
 }
 
 describe('a muted bot thread', () => {
@@ -176,111 +245,80 @@ describe('a muted bot thread', () => {
     expect(readThreadMute(reopened, SECOND)).toEqual({ botId: 'bot2', muted: false })
   })
 
-  it('is one thread: a directive or a mention in another thread leaves it as it is', async () => {
+  it('is one thread: a mention in another thread leaves it as it is', async () => {
     const store = await botHome({ first: true })
     const { deliver, turns } = connector(store)
     await deliver(send(ELSEWHERE, 'look here too', { mentioned: true }))
     await deliver(send(FIRST, 'fyi'))
     expect(readThreadMute(store, FIRST)).toEqual({ botId: 'bot1', muted: true })
     await deliver(send(FIRST, 'can you look', { mentioned: true }))
-    await deliver(send(ELSEWHERE, 'stop listening here'))
     await deliver(send(FIRST, 'thanks'))
     expect(readThreadMute(store, FIRST)).toEqual({ botId: 'bot1', muted: false })
-    expect(readThreadMute(store, ELSEWHERE)).toEqual({ botId: 'bot1', muted: true })
     expect(turns).toEqual(['look here too', 'can you look', 'thanks'])
   })
+})
 
-  it('stays muted across a restart, for that bot only', async () => {
+describe('a bot that leaves its thread', () => {
+  it('stays left across a restart, for that bot and thread only, until a mention', async () => {
     const store = await botHome({})
-    const { deliver, turns, reacted } = connector(store)
+    const { leave, posted } = leaver(store)
 
-    const directive = send(SECOND, 'Stop listening to this thread.')
-    expect(await deliver(directive)).toEqual({ outcome: 'accepted' })
-    expect(await deliver(directive)).toEqual({ outcome: 'accepted' })
-    expect(reacted).toEqual([`${directive.asker.messageRef} :mute:`])
+    expect(await leave()).toEqual({ ok: true })
+    // Asked again in the same turn: already left, and still one line to post.
+    expect(await leave()).toEqual({ ok: true, already: true })
+    await takeThreadLeft('session-bot1', TURN_ID)?.post()
+    expect(takeThreadLeft('session-bot1', TURN_ID)).toBeNull()
+    expect(posted).toEqual([expect.objectContaining({ text: THREAD_LEFT_LINE, turnId: TURN_ID })])
 
     await closeTestStores()
     const reopened = createStore()
-    expect(readThreadMute(reopened, SECOND)).toEqual({ botId: 'bot2', muted: true })
-    expect(readThreadMute(reopened, FIRST)).toEqual({ botId: 'bot1', muted: false })
+    expect(readThreadMute(reopened, FIRST)).toEqual({ botId: 'bot1', muted: true })
+    expect(readThreadMute(reopened, SECOND)).toEqual({ botId: 'bot2', muted: false })
+    expect(readThreadMute(reopened, ELSEWHERE)).toEqual({ botId: 'bot1', muted: false })
 
     const after = connector(reopened)
+    const quiet = send(FIRST, 'thanks all')
+    expect(await after.deliver(quiet)).toEqual({ outcome: 'accepted' })
+    expect(await after.deliver(quiet)).toEqual({ outcome: 'accepted' })
     await after.deliver(send(SECOND, 'thanks all'))
-    await after.deliver(send(FIRST, 'thanks all'))
-    expect([...turns, ...after.turns]).toEqual(['thanks all'])
+    await after.deliver(send(ELSEWHERE, 'and here'))
+    expect(after.turns).toEqual(['thanks all', 'and here'])
+    await after.deliver(send(FIRST, 'one more thing', { mentioned: true }))
+    expect(after.turns).toEqual(['thanks all', 'and here', 'one more thing'])
+    expect(readThreadMute(reopened, FIRST)).toEqual({ botId: 'bot1', muted: false })
   })
-})
 
-describe('a mute whose save fails', () => {
-  // Refused, so the thread offers Send again; nothing is confirmed until a save lands.
-  it('is refused with nothing confirmed, and mutes when it is sent again', async () => {
+  it('posts no line once a mention has brought it back', async () => {
     const store = await botHome({})
-    const { deliver, reacted } = connector(store)
+    const { leave, posted } = leaver(store)
+    await leave()
+    const { deliver, turns } = connector(store)
+    await deliver(send(FIRST, 'wait, one more', { mentioned: true }))
+    expect(turns).toEqual(['wait, one more'])
+    expect(takeThreadLeft('session-bot1', TURN_ID)).toBeNull()
+    expect(posted).toEqual([])
+  })
+
+  it('whose save fails is refused, posts nothing, and still wakes on the next reply', async () => {
+    const store = await botHome({})
+    const { leave, posted } = leaver(store)
     vi.spyOn(console, 'warn').mockImplementation(() => {})
     vi.spyOn(store, 'flushPendingOrThrowAsync').mockRejectedValueOnce(new Error('disk full'))
 
-    const directive = send(FIRST, 'stop listening here')
-    expect(await deliver(directive)).toEqual({
-      outcome: 'refused',
-      reason: 'thread_mute_not_saved'
-    })
+    await expect(leave()).rejects.toMatchObject({ code: 'thread_mute_not_saved' })
     expect(readThreadMute(store, FIRST)).toEqual({ botId: 'bot1', muted: false })
-    expect(reacted).toEqual([])
-
-    expect(await deliver(directive)).toEqual({ outcome: 'accepted' })
-    expect(readThreadMute(store, FIRST)).toEqual({ botId: 'bot1', muted: true })
-    expect(reacted).toHaveLength(1)
-  })
-})
-
-describe('a mute when the receipt backlog is full', () => {
-  it('is refused before anything is written', async () => {
-    const store = await botHome({})
-    const receipts = new DeliveryReceipts(() => orchestration)
-    for (let index = 0; index < CONNECTOR_PENDING_RECEIPT_LIMIT; index++) {
-      void receipts.run(
-        FIRST,
-        `pending-${index}`,
-        'connector.send',
-        ['x'],
-        () => new Promise(() => {})
-      )
-    }
-    const { deliver, reacted } = connector(store, receipts)
-
-    expect(await deliver(send(FIRST, 'stop listening here'))).toEqual({
-      outcome: 'refused',
-      reason: 'delivery_backlog_full'
-    })
-    expect(readThreadMute(store, FIRST)).toEqual({ botId: 'bot1', muted: false })
-    expect(reacted).toEqual([])
+    expect(takeThreadLeft('session-bot1', TURN_ID)).toBeNull()
+    expect(posted).toEqual([])
+    const { deliver, turns } = connector(store)
+    await deliver(send(FIRST, 'still there?'))
+    expect(turns).toEqual(['still there?'])
   })
 
-  // The backlog filled between the check and the receipt: the saved mute is put back.
-  it('is undone when its receipt is refused after the save', async () => {
+  it('changes nothing when no request of the thread is running', async () => {
     const store = await botHome({})
-    const receipts = new DeliveryReceipts(() => orchestration)
-    // Other threads fill the backlog while the mute's save is on its way to disk.
-    const flush = store.flushPendingOrThrowAsync.bind(store)
-    vi.spyOn(store, 'flushPendingOrThrowAsync').mockImplementationOnce(async (options) => {
-      for (let index = 0; index < CONNECTOR_PENDING_RECEIPT_LIMIT; index++) {
-        void receipts.run(
-          SECOND,
-          `pending-${index}`,
-          'connector.send',
-          ['x'],
-          () => new Promise(() => {})
-        )
-      }
-      await flush(options)
-    })
-    const { deliver, reacted } = connector(store, receipts)
-
-    expect(await deliver(send(FIRST, 'stop listening here'))).toEqual({
-      outcome: 'refused',
-      reason: 'delivery_backlog_full'
-    })
+    const { leave } = leaver(store)
+    journal.items = []
+    await expect(leave()).rejects.toMatchObject({ code: 'leave_refused_stale' })
     expect(readThreadMute(store, FIRST)).toEqual({ botId: 'bot1', muted: false })
-    expect(reacted).toEqual([])
   })
 })

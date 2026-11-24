@@ -203,19 +203,16 @@ export function dispatchDelivery(
     return { deliveryId, received: false, done }
   }
   if (delivery.kind === 'send' && !seam.receipts.known(delivery.conversation, deliveryId)) {
-    // Before the seam: a mute command or a muted thread's reply never reaches the agent. Done alone,
-    // so its batch's later sends go on their own.
-    const record = Object.assign(
-      (handled: () => Promise<Delivery>) =>
-        seam.receipts.run(
-          delivery.conversation,
-          deliveryId,
-          'connector.mute',
-          [delivery.text],
-          handled
-        ),
-      { admits: () => seam.receipts.admits(delivery.conversation, deliveryId, 'connector.mute') }
-    )
+    // Before the seam: a muted thread's reply never reaches the agent. Done alone, so its batch's
+    // later sends go on their own.
+    const record = (handled: () => Promise<Delivery>) =>
+      seam.receipts.run(
+        delivery.conversation,
+        deliveryId,
+        'connector.mute',
+        [delivery.text],
+        handled
+      )
     const muted = machine.threadMute?.(delivery, record, carriedBefore)
     if (muted) {
       // Held until decided; one that then goes on carries its batch's later sends, as it would have.

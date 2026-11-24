@@ -1,6 +1,7 @@
 // A conversation's native chat (structured session): its deliveries, prompts, turns and Stop.
 import { randomUUID } from 'node:crypto'
 import { isConversationReport } from './external-conversation-turn-opener'
+import { leaveEligibleBatch } from './external-conversation-thread-leaves'
 import {
   endedTurn,
   endedTurnAttribution,
@@ -260,6 +261,7 @@ export async function deliverToChat(
           ...(link.bot
             ? { connectorConversation: { source: link.source, externalId: link.externalId } }
             : {}),
+          ...leaveEligibleBatch(link, asker, delivery.later),
           // Its reply outbox rows commit with this admission (design item 125).
           ...(delivery.reply && delivery.deliveryId
             ? {
