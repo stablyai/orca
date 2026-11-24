@@ -280,8 +280,8 @@ struct watcher {
     int swept_group_gone;
     // Exact identities already sent TERM, so each gets it once and none is skipped.
     struct identity_set termed;
-    // Tag verdicts per identity, so a stop reads each process's environment at most once.
-    struct identity_set tagged;
+    // Identities read in full without the tag, so each unrelated orphan is read once per stop.
+    struct identity_set untagged;
     long long sweep_interval_ms;
     int group_term_pending;
     unsigned stdin_end_grace_ms;
@@ -429,6 +429,7 @@ static struct proc_row *read_table(size_t *count) {
     return NULL;
 }
 
+// 1 tagged, 0 read in full without the tag, -1 unreadable right now.
 // Reads the environment the process was exec'd with; unreadable means not provably ours.
 static int carries_tree_tag(pid_t pid, const char *tag) {
     static char *args;
@@ -439,14 +440,14 @@ static int carries_tree_tag(pid_t pid, const char *tag) {
         size_t max_size = sizeof max;
         if (sysctl(max_mib, 2, &max, &max_size, NULL, 0) != 0 || max <= 0 ||
                 (args = malloc((size_t)max)) == NULL) {
-            return 0;
+            return -1;
         }
         args_max = (size_t)max;
     }
     int mib[] = {CTL_KERN, KERN_PROCARGS2, pid};
     size_t size = args_max;
     if (sysctl(mib, 3, args, &size, NULL, 0) != 0 || size < sizeof(int)) {
-        return 0;
+        return -1;
     }
     int argc;
     memcpy(&argc, args, sizeof argc);
@@ -461,7 +462,7 @@ static int carries_tree_tag(pid_t pid, const char *tag) {
     for (int i = 0; p != NULL && p < end && (i < argc || *p != '\0'); i++) {
         const char *z = memchr(p, '\0', (size_t)(end - p));
         if (z == NULL) {
-            return 0;
+            return -1;
         }
         if (i >= argc && (size_t)(z - p) == tag_length && memcmp(p, tag, tag_length) == 0) {
             return 1;
@@ -653,17 +654,18 @@ struct tree_scan {
 };
 
 #if defined(__APPLE__)
-// The verdict is cached per exact identity; the identity check after it covers PID reuse.
+// Only a full read without the tag is cached per identity (most launchd orphans are unrelated).
+// A tagged process is read again each sweep, so one that execs without the tag drops out, and a
+// failed read is retried.
 static int tagged_once(struct watcher *w, const struct proc_row *row) {
-    const struct identity *known = identity_find(&w->tagged, row->pid, row->start);
-    if (known != NULL) {
-        return known->value;
+    if (identity_find(&w->untagged, row->pid, row->start) != NULL) {
+        return 0;
     }
     int tagged = carries_tree_tag(row->pid, w->tree_tag);
-    if (identity_reserve(&w->tagged)) {
-        identity_insert(&w->tagged, row->pid, row->start, tagged);
+    if (tagged == 0 && identity_reserve(&w->untagged)) {
+        identity_insert(&w->untagged, row->pid, row->start, 0);
     }
-    return tagged;
+    return tagged == 1;
 }
 
 static int compare_sid(const void *a, const void *b) {
@@ -1068,6 +1070,11 @@ static int tree_absent(struct watcher *w, int signal_number) {
                                                                       : interval * 2);
     w->sweep_interval_ms = interval;
     w->next_sweep_ns = now_ns + interval * 1000000LL;
+    // Backoff never skips the last sweep before the phase deadline, so a late tool still gets TERM.
+    long long last_chance = w->deadline_ns - (long long)TREE_SWEEP_INTERVAL_MS * 1000000LL;
+    if (w->next_sweep_ns > last_chance && now_ns < last_chance) {
+        w->next_sweep_ns = last_chance;
+    }
     if (!group_gone) {
         return 0;
     }
