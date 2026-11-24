@@ -82,3 +82,24 @@ export function seed(
     return { ...row, title }
   })
 }
+
+/** A failed row's saved result, as a host returns it: the worker's own Markdown report, or a short
+ *  raw error that still fills two lines of a narrow card. */
+export function savedResult(row: WorkerDockRowView, kind: 'report' | 'raw') {
+  return {
+    id: `result:${row.dispatchId}`,
+    dispatchId: row.dispatchId,
+    name: row.name,
+    title: row.title,
+    outcome: 'failed' as const,
+    body:
+      kind === 'report'
+        ? 'Could not finish the audit. Two checks failed; see [the release log](https://example.com/release-log) and **rerun** after fixing them.\n\n- Typecheck: 3 errors\n- Lint: 1 warning'
+        : 'Typecheck failed: 3 errors in worker-dock-read.ts. Run pnpm typecheck locally to see them.',
+    report: kind === 'report',
+    at: row.changedAt,
+    settlement: row.settlement ?? `settled:${row.dispatchId}`,
+    acknowledged: false,
+    ownerActionsAvailable: true
+  }
+}

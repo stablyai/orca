@@ -140,10 +140,10 @@ export function WorkerDockResultDialog({
           failed: row.state === 'failed' || row.state === 'unexpected'
         }
       : null
-  // A failure's body is its raw error: one line up front, the rest on request. A finished
-  // worker's body is its report and reads in full. An error beside a loaded result is a failed
+  // A failure's raw error shows one line up front, the rest on request. A worker's own report
+  // (finished or failed) reads in full as Markdown. An error beside a loaded result is a failed
   // action (Show in dock again), shown next to the result rather than in place of it.
-  const raw = result ? (status?.failed ? result.body : null) : error
+  const raw = result ? (status?.failed && result.report !== true ? result.body : null) : error
   const actionError = result ? error : null
   const reason = raw ? workerDockReasonLine(raw) : null
   // The reason line clamps at two lines, and how much fits depends on the glyphs and the width,
@@ -163,7 +163,7 @@ export function WorkerDockResultDialog({
         scrollable
         showCloseButton={false}
         className="sm:max-w-md"
-        data-worker-dock-card=""
+        data-worker-dock-result-card=""
         onOpenAutoFocus={(event) => {
           event.preventDefault()
           // A keyboard open lands on Open worker with its ring, so the next key has a visible

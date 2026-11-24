@@ -135,7 +135,7 @@ it('opens from a pointer press with focus on the card itself, so no button shows
       selector !== ':focus-visible' && Element.prototype.matches.call(opener, selector)
   })
   card(result)
-  expect(document.activeElement).toBe(document.querySelector('[data-worker-dock-card]'))
+  expect(document.activeElement).toBe(document.querySelector('[data-worker-dock-result-card]'))
   opener.remove()
 })
 
@@ -189,4 +189,18 @@ it('names the worker and its state from the row when the saved result is unreada
   expect(screen.getByRole('heading')).toHaveTextContent('Audit the billing checklist')
   expect(document.querySelector('[data-worker-dock-card-state]')).toHaveTextContent('Failed')
   expect(screen.getByRole('alert')).toHaveTextContent('The saved result could not be read.')
+})
+
+it("reads a failed worker's own report in full as Markdown, with no details fold", () => {
+  card({
+    ...result,
+    outcome: 'failed',
+    report: true,
+    body: 'Could not finish. See [the release log](https://example.com/log) for **two** gaps.'
+  })
+  expect(screen.getByRole('link', { name: 'the release log' })).toBeInTheDocument()
+  expect(screen.getByText('two').tagName).toBe('STRONG')
+  expect(screen.queryByRole('button', { name: 'Show details' })).toBeNull()
+  expect(document.querySelector('[data-worker-dock-card-reason]')).toBeNull()
+  expect(document.querySelector('[data-worker-dock-card-state]')).toHaveTextContent('Failed')
 })

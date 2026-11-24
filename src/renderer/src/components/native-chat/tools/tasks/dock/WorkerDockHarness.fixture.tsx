@@ -10,7 +10,7 @@ import { defineFixture } from '../../../../../component-fixtures/component-fixtu
 import { workerDockFixturePane } from './worker-dock-pane-fixture'
 import { NativeChatBackgroundTasksStatus } from '../NativeChatBackgroundTasksStatus'
 import type { WorkerDockRowView } from './WorkerDockRow'
-import { SOURCE, seed, worker, type Seed } from './worker-dock-seed-fixture'
+import { SOURCE, savedResult, seed, worker, type Seed } from './worker-dock-seed-fixture'
 import { WorkerDockProviderDetailsDialog } from './WorkerDockProviderDetailsDialog'
 import { WorkerDockResultDialogSlot } from './WorkerDockResultDialogSlot'
 
@@ -51,6 +51,7 @@ function Harness({
   lazy = 0,
   failReads = 0,
   details = false,
+  result,
   ...options
 }: {
   count: number
@@ -68,6 +69,9 @@ function Harness({
   failReads?: number
   /** Opening a command shows its details dialog, as a chat does. */
   details?: boolean
+  /** The saved result a failed row's card reads: the worker's own Markdown report, or a raw
+   *  error. Without it the read comes back empty, as an unreadable result does. */
+  result?: 'report' | 'raw'
 } & Seed) {
   const [rows, setRows] = useState(() => seed(count, failed, remote, options))
   const [detailed, setDetailed] = useState(() => new Set(rows.slice(0, lazy).map((row) => row.id)))
@@ -162,6 +166,19 @@ function Harness({
       } else if (method === 'orchestration.workerDockResult') {
         // A moment, as a host takes: a row can leave while its result is still on the way.
         await new Promise((resolve) => setTimeout(resolve, 300))
+        const dispatch =
+          typeof params === 'object' && params !== null && 'dispatch' in params
+            ? params.dispatch
+            : null
+        const row = rows.find((item) => item.dispatchId === dispatch)
+        if (result && row) {
+          return {
+            id: 'dock-fixture',
+            ok: true as const,
+            result: savedResult(row, result),
+            _meta: { runtimeId: 'fixture' }
+          }
+        }
       } else if (method === 'orchestration.workerDockStop') {
         const { dispatch } = WorkerDockStop.parse(params)
         const row = rows.find((item) => item.dispatchId === dispatch)
@@ -272,6 +289,24 @@ export const lazyHundredOpen720 = defineFixture({
 export const lastFailedDetails720 = defineFixture({
   width: 720,
   render: () => workerDockFixturePane(<Harness count={1} failed={1} details open />)
+})
+// The only worker failed and saved its own Markdown report; the card reads it in full.
+export const failedReport720 = defineFixture({
+  width: 720,
+  render: () => workerDockFixturePane(<Harness count={1} failed={1} details result="report" open />)
+})
+export const failedReport320 = defineFixture({
+  width: 320,
+  render: () => workerDockFixturePane(<Harness count={1} failed={1} details result="report" open />)
+})
+// The only worker failed with a raw error; the card shows one reason line and Show details.
+export const failedRaw720 = defineFixture({
+  width: 720,
+  render: () => workerDockFixturePane(<Harness count={1} failed={1} details result="raw" open />)
+})
+export const failedRaw320 = defineFixture({
+  width: 320,
+  render: () => workerDockFixturePane(<Harness count={1} failed={1} details result="raw" open />)
 })
 // The first two detail reads fail; a later key press recovers the last row.
 export const lazyFailingOpen720 = defineFixture({
