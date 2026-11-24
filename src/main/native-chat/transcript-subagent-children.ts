@@ -96,7 +96,10 @@ async function childTranscriptPath(args: {
   agentId: string
   signal?: AbortSignal
 }): Promise<string | null> {
-  if (args.decode === decodeClaudeTranscriptLine || args.decode === decodeClaudeChatTranscriptLine) {
+  if (
+    args.decode === decodeClaudeTranscriptLine ||
+    args.decode === decodeClaudeChatTranscriptLine
+  ) {
     return claudeChildPath(args.parentPath, args.agentId)
   }
   if (args.decode === decodeCodexTranscriptLine) {
