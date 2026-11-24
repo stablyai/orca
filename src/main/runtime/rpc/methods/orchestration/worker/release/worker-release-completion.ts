@@ -226,7 +226,8 @@ async function completeWorkerTerminalReleaseOnce(
         dispatchId,
         state: 'release_unknown',
         processAction: 'closed_agent_terminal',
-        archive: { source: archiveSource, status: archiveStatus },
+        // The row as it is now: a Keep open since the capture may have dropped that output record.
+        archive: archiveSummary(unknown),
         lastError: unknown.release_error ?? reason,
         recovery: releaseUnknownRecovery(dispatchId)
       }
@@ -248,7 +249,7 @@ async function completeWorkerTerminalReleaseOnce(
           dispatchId,
           state: 'release_pending',
           processAction: 'none',
-          archive: { source: archiveSource, status: archiveStatus },
+          archive: archiveSummary(current),
           lastError: reason,
           recovery:
             'The owning endpoint is temporarily unavailable; recovery will retry this release after reconnect without another coordinator decision.'
@@ -262,7 +263,7 @@ async function completeWorkerTerminalReleaseOnce(
         dispatchId,
         state: 'release_unknown',
         processAction: 'none',
-        archive: { source: archiveSource, status: archiveStatus },
+        archive: archiveSummary(unknown),
         lastError: unknown.release_error ?? reason,
         recovery: releaseUnknownRecovery(dispatchId)
       }

@@ -317,44 +317,76 @@ describe('worker release stays within its own custody', () => {
     expect(db.settleWorkerTerminalRelease(resourceId, successor).release_state).toBe('released')
   })
 
-  it('keeps a fresh release that joined a held automatic close pending when that close fails transiently', async () => {
-    setup()
-    vi.spyOn(runtime, 'isWorkerAgentInTurn').mockReturnValue(false)
-    const { dispatchId } = await startSettledWorker()
-    db.db
-      .prepare(
-        `UPDATE worker_terminal_resources SET auto_release_at = datetime('now', '-1 minute'),
-           auto_release_dispatch_id = owner_dispatch_id WHERE owner_dispatch_id = ?`
+  it.each([
+    { toggled: true, failure: 'transient' },
+    { toggled: true, failure: 'failed' },
+    { toggled: false, failure: 'transient' },
+    { toggled: false, failure: 'failed' }
+  ] as const)(
+    'answers a held automatic close that fails ($failure; Keep open, Allow Auto-Close and a fresh release joined: $toggled) from the row as it is now',
+    async ({ toggled, failure }) => {
+      setup()
+      vi.spyOn(runtime, 'isWorkerAgentInTurn').mockReturnValue(false)
+      const { dispatchId } = await startSettledWorker()
+      db.db
+        .prepare(
+          `UPDATE worker_terminal_resources SET auto_release_at = datetime('now', '-1 minute'),
+             auto_release_dispatch_id = owner_dispatch_id WHERE owner_dispatch_id = ?`
+        )
+        .run(dispatchId)
+      expect(db.claimDueWorkerTerminalAutoReleases(Date.now())).toBe(1)
+      const closing = deferred<{ handle: string; tabId: string; ptyKilled: boolean }>()
+      vi.mocked(runtime.closeTerminal).mockImplementationOnce(() => closing.promise)
+
+      const held = completeWorkerTerminalRelease({
+        runtime,
+        db,
+        dispatchId,
+        resource: db.getWorkerTerminalResourceByOwner(dispatchId)!,
+        mode: 'recovery'
+      })
+      await vi.waitFor(() => expect(runtime.closeTerminal).toHaveBeenCalledTimes(1))
+      // The close recorded where the output lives before closing.
+      expect(db.getWorkerTerminalArchive(dispatchId)).toBeDefined()
+      let joined: Promise<unknown> = held
+      if (toggled) {
+        // Keep open drops that record; Allow Auto-Close and a new request then join the held close.
+        await call('orchestration.workerKeepOpen', { paneKey: workerPaneKey, keep: true })
+        await call('orchestration.workerKeepOpen', { paneKey: workerPaneKey, keep: false })
+        joined = call('orchestration.workerRelease', { dispatch: dispatchId })
+        await vi.waitFor(() =>
+          expect(db.getWorkerTerminalResourceByOwner(dispatchId)?.release_state).toBe('requested')
+        )
+        expect(db.getWorkerTerminalArchive(dispatchId)).toBeUndefined()
+      }
+      closing.reject(
+        new Error(failure === 'transient' ? 'Terminal endpoint not connected' : 'close exploded')
       )
-      .run(dispatchId)
-    expect(db.claimDueWorkerTerminalAutoReleases(Date.now())).toBe(1)
-    const closing = deferred<{ handle: string; tabId: string; ptyKilled: boolean }>()
-    vi.mocked(runtime.closeTerminal).mockImplementationOnce(() => closing.promise)
 
-    const recovery = reconcileRequestedWorkerTerminalReleases(runtime)
-    await vi.waitFor(() => expect(runtime.closeTerminal).toHaveBeenCalledTimes(1))
-    // Keep open, then Allow Auto-Close, then the coordinator asks again: a fresh request joins the held close.
-    await call('orchestration.workerKeepOpen', { paneKey: workerPaneKey, keep: true })
-    await call('orchestration.workerKeepOpen', { paneKey: workerPaneKey, keep: false })
-    const fresh = call('orchestration.workerRelease', { dispatch: dispatchId })
-    await vi.waitFor(() =>
-      expect(db.getWorkerTerminalResourceByOwner(dispatchId)?.release_state).toBe('requested')
-    )
-    closing.reject(new Error('Terminal endpoint not connected'))
-
-    await expect(fresh).resolves.toMatchObject({
-      dispatchId,
-      state: 'release_pending',
-      processAction: 'none'
-    })
-    await expect(recovery).resolves.toMatchObject({ attempted: 1, pending: 1, retained: 0 })
-    expect(db.getWorkerTerminalResourceByOwner(dispatchId)?.release_state).toBe('requested')
-    // The pending intent is still recovery's to finish.
-    await expect(reconcileRequestedWorkerTerminalReleases(runtime)).resolves.toMatchObject({
-      attempted: 1,
-      released: 1
-    })
-  })
+      const expected = {
+        dispatchId,
+        state: failure === 'transient' ? 'release_pending' : 'release_unknown',
+        processAction: 'none',
+        // A dropped record shows as none; a surviving one is named.
+        archive: toggled ? null : { source: 'terminal', status: 'unavailable' }
+      }
+      await expect(held).resolves.toMatchObject(expected)
+      await expect(joined).resolves.toMatchObject(expected)
+      expect(db.getWorkerTerminalArchive(dispatchId) === undefined).toBe(toggled)
+      // A transient failure keeps the intent: the fresh request's, or the held close's own.
+      expect(db.getWorkerTerminalResourceByOwner(dispatchId)?.release_state).toBe(
+        failure === 'failed' ? 'unknown' : toggled ? 'requested' : 'releasing'
+      )
+      expect(runtime.closeTerminal).toHaveBeenCalledTimes(1)
+      if (failure === 'transient') {
+        // The pending intent is still recovery's to finish.
+        await expect(reconcileRequestedWorkerTerminalReleases(runtime)).resolves.toMatchObject({
+          attempted: 1,
+          released: 1
+        })
+      }
+    }
+  )
 
   it.each(['killed', 'unconfirmed', 'failed'] as const)(
     "reports a close that lost custody (%s) as transferred, never with the successor's state or error",
