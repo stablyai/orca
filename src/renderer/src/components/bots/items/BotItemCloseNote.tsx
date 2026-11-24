@@ -16,3 +16,19 @@ export function BotItemCloseNote({ item }: { item: BotItem }): React.JSX.Element
     </p>
   )
 }
+
+/** What the item counts as done, when it says. */
+export function BotItemDoneWhen({ item }: { item: BotItem }): React.JSX.Element | null {
+  const t = useTranslate()
+  if (!item.doneMeans) {
+    return null
+  }
+  return (
+    <section>
+      <h3 className="mb-1 text-xs text-muted-foreground">
+        {t('bots.items.field.doneMeans', 'Done when')}
+      </h3>
+      <p className="text-[13px] leading-[19px] break-words text-foreground">{item.doneMeans}</p>
+    </section>
+  )
+}

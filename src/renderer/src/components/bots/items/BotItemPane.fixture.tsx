@@ -61,9 +61,10 @@ function Pane({
       style={height ? { height } : undefined}
     >
       <BotItemPaneFrame walk={state} offline={offline} onBack={() => {}}>
-        {({ comment, nav }) => (
+        {({ comment, statusSlot, nav }) => (
           <BotItemBody
             commentRef={comment}
+            statusSlot={statusSlot}
             nav={nav}
             bot={fixtureCos}
             item={shown}

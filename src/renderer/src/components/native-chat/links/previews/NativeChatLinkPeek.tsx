@@ -7,6 +7,7 @@ import { NativeChatWebPeekBody } from './NativeChatWebLinkPeek'
 import { NativeChatLinkPeekContext } from './native-chat-link-peek-context'
 import { previewableWebUrl } from './native-chat-web-link-preview'
 import { CARD_OFFSET, sideWithRoom, WINDOW_MARGIN, type PeekSide } from './link-peek-side'
+import { usePeekBounds, type PeekBoundary } from './use-peek-bounds'
 import { LinkPeekRetryContext, type LinkPeekRetryState } from './link-peek-retry-context'
 import { parseGitHubIssueOrPRLink } from '../../../../../../shared/github/repositories/links'
 
@@ -18,6 +19,8 @@ export function NativeChatLinkPeek({
   retryKey,
   overPopover = false,
   side = 'top',
+  boundTo,
+  fullTitle = false,
   children
 }: {
   href: string | undefined
@@ -36,6 +39,10 @@ export function NativeChatLinkPeek({
   retryKey?: string
   /** The link sits in a popover: its card opens above it rather than under it. */
   overPopover?: boolean
+  /** A region inside the window the card must stay in (a narrow pane), followed while it is open. */
+  boundTo?: PeekBoundary
+  /** A GitHub card's title whole rather than cut at two lines: for a link whose own text is cut. */
+  fullTitle?: boolean
   children: ReactNode
 }): ReactNode {
   const { githubRepo, githubRoutingAuthorityKey, webPreviews } =
@@ -58,6 +65,7 @@ export function NativeChatLinkPeek({
           link={github.link}
           otherRepoFallback={githubFallback ?? (github.ownRepo ? undefined : webBody)}
           failedFallback={githubFailedFallback}
+          fullTitle={fullTitle}
         />
       )
     }
@@ -72,11 +80,13 @@ export function NativeChatLinkPeek({
           link={routed}
           otherRepoFallback={githubFallback ?? webBody}
           failedFallback={githubFailedFallback}
+          fullTitle={fullTitle}
         />
       )
     }
     return webBody
   }, [
+    fullTitle,
     githubFailedFallback,
     githubFallback,
     githubRepo,
@@ -88,7 +98,13 @@ export function NativeChatLinkPeek({
     return children
   }
   return (
-    <LinkPeekCard body={body} side={side} retryKey={retryKey} overPopover={overPopover}>
+    <LinkPeekCard
+      body={body}
+      side={side}
+      retryKey={retryKey}
+      overPopover={overPopover}
+      boundTo={boundTo}
+    >
       {children}
     </LinkPeekCard>
   )
@@ -99,18 +115,21 @@ function LinkPeekCard({
   side,
   retryKey,
   overPopover,
+  boundTo,
   children
 }: {
   body: ReactNode
   side: 'top' | 'bottom' | 'left'
   retryKey: string | undefined
   overPopover: boolean
+  boundTo: PeekBoundary | undefined
   children: ReactNode
 }): ReactNode {
   const t = useTranslate()
   const [open, setOpen] = useState(false)
   const [placed, setPlaced] = useState<PeekSide>(side)
   const trigger = useRef<HTMLSpanElement>(null)
+  const bounds = usePeekBounds(open, trigger, boundTo)
   const lookup = useRef<LinkPeekRetryState>({ status: 'idle' })
   const retryKeyHeld = useRef(false)
   const [failed, setFailed] = useState(false)
@@ -262,6 +281,8 @@ function LinkPeekCard({
         align="start"
         sideOffset={CARD_OFFSET}
         collisionPadding={WINDOW_MARGIN}
+        collisionBoundary={bounds?.boundary}
+        style={bounds ? { maxWidth: bounds.maxWidth } : undefined}
         className={cn(
           'flex max-h-(--radix-hover-card-content-available-height) w-96 max-w-[calc(100vw-1rem)] flex-col',
           // Over the popover the link is listed in (popovers sit at 60).

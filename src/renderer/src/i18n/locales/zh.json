@@ -27826,7 +27826,6 @@
         "doneNote": "已完成：",
         "showLess": "收起",
         "showMore": "展开",
-        "linkCount": "{{count}} 个链接",
         "reply": "回复",
         "replyAbove": "回复上方的问题",
         "replyBelow": "回复下方的问题",
@@ -27927,7 +27926,6 @@
         "short": "还没有事项。当 {{bot}} 接手任务时，会显示在这里"
       },
       "field": {
-        "chat": "聊天",
         "description": "描述",
         "doneMeans": "完成标准",
         "doneMeansLower": "完成标准",

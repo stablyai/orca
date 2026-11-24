@@ -7,7 +7,7 @@ import { makeFolderWorkspace } from '@/store/folder-workspaces/folder-workspace.
 import { LinkActionPopover } from '@/components/link-actions/LinkActionPopover'
 import { NativeChatLinkClickContext } from '@/components/native-chat/links/actions/native-chat-link-click-context'
 import { useNativeChatLinkActions } from '@/components/native-chat/links/actions/use-native-chat-link-actions'
-import { BotItemLinks } from './BotItemLinks'
+import { BotItemLinksBlock } from './BotItemLinks'
 
 const now = Date.now()
 const SHARE_DIALOG_ISSUE: LinearIssue = {
@@ -66,7 +66,7 @@ const worker = (
 
 const frame = (links: BotItemLinkView[]) => (
   <div className="@container p-3">
-    <BotItemLinks bot={fixtureCos} links={links} chat="Home Chat" />
+    <BotItemLinksBlock bot={fixtureCos} links={links} chat="Home Chat" />
   </div>
 )
 
@@ -88,7 +88,7 @@ export const mixedLinks = defineFixture({
   width: 400,
   store: {
     linearIssueCache: {
-      'ENG-4120': {
+      'selected::ENG-4120': {
         data: SHARE_DIALOG_ISSUE,
         fetchedAt: now
       }
@@ -166,7 +166,7 @@ export const serverWork = defineFixture({
     ])
 })
 
-/** The failing PR's tooltip: state, checks, repo. */
+/** The failing PR's tooltip: title, repo and number, state, checks. */
 export const prTooltip = defineFixture({
   width: 400,
   render: () =>
@@ -177,7 +177,7 @@ export const prTooltip = defineFixture({
     ]),
   interact: async (frame) => {
     const rows = [...frame.querySelectorAll<HTMLButtonElement>('button')]
-    rows.find((row) => row.textContent?.includes('#41230'))?.focus()
+    rows.find((row) => row.textContent?.includes('view-only links'))?.focus()
     await new Promise((resolve) => setTimeout(resolve, 200))
   }
 })
@@ -233,12 +233,12 @@ export const prPopover = defineFixture({
     </div>
   ),
   interact: async (frame) => {
-    clickRow(frame, '#41230')
+    clickRow(frame, 'view-only links')
     await new Promise((resolve) => setTimeout(resolve, 200))
   }
 })
 
-/** A narrow panel: long titles ellipsize; hovering a row scrolls only the one that overflows. */
+/** A narrow panel: long names ellipsize; the state stays whole. */
 export const longTitles = defineFixture({
   width: 260,
   render: () =>

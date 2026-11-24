@@ -1,4 +1,4 @@
-// Shared seeded data and probes for the BotItemLinkChips fixtures: invented repos, people and PRs only.
+// Seeded item link previews and interaction probes.
 import { fixtureCos } from '../../../component-fixtures/fixture-bot-panel'
 import type { BotItemLinkView } from '../../../../../shared/bots/bot-items'
 import type { GitHubWorkItem } from '../../../../../shared/github/work-items/work-item-types'
@@ -8,8 +8,10 @@ import { makeFolderWorkspace } from '@/store/folder-workspaces/folder-workspace.
 import { rememberRepoSlug, repoSlugCacheKey } from '@/lib/workspace/catalog/repo-slug-cache'
 import { useRef, useState } from 'react'
 import { NativeChatLinkClickContext } from '@/components/native-chat/links/actions/native-chat-link-click-context'
-import { BotItemLinkChips } from './BotItemLinkChips'
+import { BotItemLinksBlock } from './BotItemLinks'
 import { typeIntoBotItemComment } from './bot-item-comment-typing'
+
+export const sampleBot = { ...fixtureCos, name: 'Sample Bot', avatar: null }
 
 export const now = Date.now()
 export const hour = 3_600_000
@@ -130,10 +132,10 @@ export const store = {
   repos: [REPO],
   folderWorkspaces: [
     makeFolderWorkspace({
-      id: fixtureCos.folderWorkspaceId,
+      id: sampleBot.folderWorkspaceId,
       projectGroupId: 'bots',
-      name: fixtureCos.name,
-      folderPath: '/home/fixture/.orca/bots/cos'
+      name: sampleBot.name,
+      folderPath: '/home/fixture/.orca/bots/sample'
     })
   ]
 }
@@ -174,34 +176,37 @@ export function signedIn(answer: 'item' | 'fail' | 'failOnce' = 'item'): () => v
   }
 }
 
-// Room below for the card, which opens under the chip as tooltips do.
-export const header = (links: BotItemLinkView[] = LINKS.slice(0, 1)) => (
+// Room below for the card, which opens under the row as tooltips do.
+export const linkBlock = (links: BotItemLinkView[] = LINKS) => (
   <div className="flex flex-col gap-1.5 px-3 pb-44 pt-6">
     <div className="text-sm font-semibold text-foreground">#1385 Share dialog follow-up</div>
-    <BotItemLinkChips bot={fixtureCos} links={links} chat="Home Chat" />
+    <BotItemLinksBlock bot={sampleBot} links={links} chat="Home Chat" />
   </div>
 )
 
-/** A narrow item pane at the window's right edge, beside the rest of the window. */
-export const narrowHeader = () => (
+/** A narrow item pane at the window's right edge, beside the rest of the window: its cards stay inside
+ *  it, as in the item page. */
+export const narrowLinkBlock = () => (
   <div className="flex">
     <div className="flex-1" />
-    <div className="w-[360px] border-l border-border">{header()}</div>
+    <div data-bot-item-pane="" className="w-[360px] border-l border-border">
+      {linkBlock()}
+    </div>
   </div>
 )
 
-export const chip = (frame: HTMLElement, text: string): HTMLButtonElement => {
+export const rowButton = (frame: HTMLElement, text: string): HTMLButtonElement => {
   const found = [...frame.querySelectorAll<HTMLButtonElement>('button')].find((button) =>
     button.textContent?.includes(text)
   )
   if (!found) {
-    throw new Error(`Missing chip ${text}`)
+    throw new Error(`Missing link row ${text}`)
   }
   return found
 }
 
 export const hover = async (frame: HTMLElement, text: string): Promise<void> => {
-  hoverElement(chip(frame, text))
+  hoverElement(rowButton(frame, text))
   await new Promise((resolve) => setTimeout(resolve, 700))
 }
 
@@ -212,7 +217,7 @@ export const hoverElement = (element: Element): void => {
 }
 
 /** The item pane's keys and link handler, reduced to what they report: Escape the pane would take as
- *  Back (only when nothing before it claimed the key), the link a chip opened, and the pane's own
+ *  Back (only when nothing before it claimed the key), the link a row opened, and the pane's own
  *  type-to-comment handler sending stray keys into a draft, as the real pane does. */
 export function PaneProbe({ links }: { links?: BotItemLinkView[] }): React.JSX.Element {
   const [log, setLog] = useState<string[]>([])
@@ -243,7 +248,7 @@ export function PaneProbe({ links }: { links?: BotItemLinkView[] }): React.JSX.E
           note(`Opened ${url}`)
         }}
       >
-        {header(links)}
+        {linkBlock(links)}
       </NativeChatLinkClickContext>
       <div data-probe-log="" className="px-3 pb-3 font-mono text-xs text-muted-foreground">
         {log.length > 0 ? log.join(' | ') : 'No pane events'}

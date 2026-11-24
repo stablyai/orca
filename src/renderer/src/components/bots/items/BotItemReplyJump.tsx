@@ -29,6 +29,7 @@ export function useBotItemNeedsYouJump({
   activityShown,
   loadingTarget,
   scrollRef,
+  paneRef,
   revealRow,
   comment
 }: {
@@ -38,8 +39,11 @@ export function useBotItemNeedsYouJump({
   /** The item view is already reading earlier pages to find the question. */
   loadingTarget: boolean
   scrollRef: React.RefObject<HTMLDivElement | null>
+  /** The item's body. A newer interaction anywhere in the pane holding it wins: the details, Activity,
+   *  and the back row the Status menu and Reply are portaled into. */
+  paneRef: React.RefObject<HTMLDivElement | null>
   revealRow: (row: HTMLElement, behavior: ScrollBehavior) => void
-  comment: React.RefObject<BotItemCommentBoxHandle | null>
+  comment: React.RefObject<Pick<BotItemCommentBoxHandle, 'focus'> | null>
 }): BotItemNeedsYouJump {
   const [watch] = useState(createBotItemNeedsYouWatch)
   const id = useId()
@@ -96,24 +100,31 @@ export function useBotItemNeedsYouJump({
     }
   }, [loadingTarget, watch])
 
-  // The owner scrolling or typing meanwhile takes over: no late jump pulls the page away.
+  // The owner scrolling, clicking or typing anywhere in the item meanwhile takes over: no late jump
+  // pulls the page or the cursor away, e.g. after "N more" in the details moved focus to a link, or the
+  // Status menu opened. Its pane frame, not just the body: the status row is the frame's, and another
+  // pane's clicks are not this item's.
   useEffect(() => {
-    const root = scrollRef.current
+    const body = paneRef.current
+    const root = body?.closest<HTMLElement>('[data-bot-item-pane]') ?? body
     if (!pending) {
       return
     }
     const cancel = (): void => watch.cancel()
-    root?.addEventListener('wheel', cancel, { passive: true })
-    root?.addEventListener('touchmove', cancel, { passive: true })
-    root?.addEventListener('pointerdown', cancel)
+    root?.addEventListener('wheel', cancel, { capture: true, passive: true })
+    root?.addEventListener('touchmove', cancel, {
+      capture: true,
+      passive: true
+    })
+    root?.addEventListener('pointerdown', cancel, true)
     window.addEventListener('keydown', cancel, true)
     return () => {
-      root?.removeEventListener('wheel', cancel)
-      root?.removeEventListener('touchmove', cancel)
-      root?.removeEventListener('pointerdown', cancel)
+      root?.removeEventListener('wheel', cancel, true)
+      root?.removeEventListener('touchmove', cancel, true)
+      root?.removeEventListener('pointerdown', cancel, true)
       window.removeEventListener('keydown', cancel, true)
     }
-  }, [pending, scrollRef, watch])
+  }, [pending, paneRef, watch])
 
   const jump = (): void => {
     const node = watch.node()

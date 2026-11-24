@@ -1,3 +1,4 @@
+import { cn } from '@/lib/class-names'
 import {
   useContext,
   useEffect,
@@ -120,7 +121,8 @@ export function NativeChatGitHubPeekBody({
   source,
   link,
   otherRepoFallback,
-  failedFallback
+  failedFallback,
+  fullTitle = false
 }: {
   source: GitHubPeekSource
   link: GitHubIssueOrPRLink
@@ -131,6 +133,8 @@ export function NativeChatGitHubPeekBody({
    *  unanswered: what such a link showed before, kept until its details arrive, and never a failure.
    *  Null shows just the name until then. Undefined for the chat repo's own links. */
   otherRepoFallback?: ReactNode
+  /** The title whole rather than cut at two lines: for a link whose own text is cut. */
+  fullTitle?: boolean
 }): ReactNode {
   // Select the catalog itself so unrelated store updates don't rescan it for a route.
   const routeRepos = useAppStore((state) => (source.kind === 'routed' ? state.repos : null))
@@ -159,6 +163,7 @@ export function NativeChatGitHubPeekBody({
       link={link}
       otherRepoFallback={otherRepoFallback}
       failedFallback={failedFallback}
+      fullTitle={fullTitle}
     />
   )
 }
@@ -167,12 +172,14 @@ function GitHubPeekContent({
   lookup,
   link,
   otherRepoFallback,
-  failedFallback
+  failedFallback,
+  fullTitle
 }: {
   lookup: ReturnType<typeof peekLookup>
   link: GitHubIssueOrPRLink
   otherRepoFallback?: ReactNode
   failedFallback?: ReactNode
+  fullTitle: boolean
 }): ReactNode {
   const t = useTranslate()
   const { state, retry } = useNativeChatHoverPreview(lookup.key, lookup.read, lookup.load)
@@ -250,7 +257,12 @@ function GitHubPeekContent({
       </div>
       {state.status === 'ready' ? (
         <>
-          <div className="line-clamp-2 text-sm font-semibold text-foreground">
+          <div
+            className={cn(
+              'text-sm font-semibold text-foreground',
+              fullTitle ? '[overflow-wrap:anywhere]' : 'line-clamp-2'
+            )}
+          >
             {state.value.title}
           </div>
           {state.value.type === 'issue' && state.value.labels.length > 0 ? (

@@ -30315,9 +30315,8 @@
         "short": "No items yet. When {{bot}} takes something on, it shows up here."
       },
       "field": {
-        "chat": "Chat",
         "description": "description",
-        "doneMeans": "Done means",
+        "doneMeans": "Done when",
         "doneMeansLower": "done means",
         "title": "title"
       },
@@ -30344,7 +30343,15 @@
         "serverPr": "PR not shown for server work yet",
         "automation": "Automation",
         "automationOn": "Will wake the agent for this item",
-        "automationEnded": "Ended"
+        "automationEnded": "Ended",
+        "running": "Running",
+        "done": "Done",
+        "failed": "Failed",
+        "stopped": "Stopped",
+        "checksPassing": "Passing",
+        "checksFailing": "Failing",
+        "file": "File",
+        "linear": "Linear"
       },
       "menu": {
         "cancel": "Cancel",
@@ -30396,11 +30403,14 @@
         "firstItem": "First item",
         "lastItem": "Last item",
         "deleted": "This item was deleted.",
-        "linkCount": "{{count}} links",
         "reply": "Reply",
         "replyAbove": "Reply, above",
         "replyBelow": "Reply, below",
-        "loading": "Loading item…"
+        "moreLinks": "{{count}} more links",
+        "loading": "Loading item…",
+        "moreCount": "{{count}} more",
+        "fromChat": "From {{chat}}",
+        "links": "Links"
       },
       "loading": "Loading items…",
       "readFailed": "Couldn't read items.",

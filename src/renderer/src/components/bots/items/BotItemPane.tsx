@@ -27,6 +27,8 @@ const PENDING_NOTICE_DELAY_MS = 400
  *  call it makes once per mount when the item first shows. */
 export type BotItemPaneSlots = {
   comment: React.RefObject<BotItemCommentBoxHandle | null>
+  /** The back row's right end, where the item puts its status menu. */
+  statusSlot: HTMLElement | null
   nav: React.ReactNode
   onShown: (item: BotItem) => void
   onLoading: () => (() => void) | undefined
@@ -61,6 +63,7 @@ export function BotItemPane({
           listed={listed}
           takeFocus={takeFocus}
           commentRef={slots.comment}
+          statusSlot={slots.statusSlot}
           nav={slots.nav}
           onShown={slots.onShown}
           onLoading={slots.onLoading}
@@ -90,6 +93,7 @@ export function BotItemPaneFrame({
   const root = useRef<HTMLDivElement | null>(null)
   const comment = useRef<BotItemCommentBoxHandle | null>(null)
   const announcer = useRef<BotItemAnnouncerHandle | null>(null)
+  const [statusSlot, setStatusSlot] = useState<HTMLElement | null>(null)
   const onLoading = useLatestHandler(() => announcer.current?.loading())
   // The committed item and place, read after a step's flush and by the item's first-show call.
   const shown = useRef({ uid: walk.uid, place: walk.place, opening: true })
@@ -156,7 +160,9 @@ export function BotItemPaneFrame({
   useEffect(() => {
     const pane = root.current
     return pane
-      ? registerDictationInputOwner(pane, { focusInput: () => comment.current?.focus() })
+      ? registerDictationInputOwner(pane, {
+          focusInput: () => comment.current?.focus()
+        })
       : undefined
   }, [])
   const nav = walk.place ? (
@@ -192,23 +198,33 @@ export function BotItemPaneFrame({
         onBack()
       }}
     >
-      <div className="flex items-center gap-1 px-1.5 pb-1 text-xs text-muted-foreground">
-        <Button variant="ghost" size="xs" onClick={onBack}>
+      <div className="flex min-w-0 items-center gap-1 px-2 pt-2 pb-1 text-xs text-muted-foreground">
+        <Button variant="ghost" size="xs" data-bot-item-back="" onClick={onBack}>
           <ArrowLeft />
           {t('bots.items.tab', 'Home')}
         </Button>
         {owner ? (
-          <span className="flex min-w-0 items-center gap-1.5 px-1 text-foreground">
+          <span
+            title={owner.name}
+            className="flex min-w-0 items-center gap-1.5 px-1 text-foreground"
+          >
             <BotAvatar bot={owner} className="size-4 shrink-0 rounded-full text-[9px]" />
-            <span className="min-w-0 truncate">{owner.name}</span>
+            {/* Below a 300px pane the avatar alone: a name cut to a letter only crowds the row. */}
+            <span className="min-w-0 truncate @max-[300px]/item-pane:sr-only">{owner.name}</span>
           </span>
         ) : null}
+        {/* Outside the item's fieldset, so offline is set here too. */}
+        <fieldset
+          ref={setStatusSlot}
+          disabled={offline}
+          className="ml-auto flex min-w-0 shrink-0 items-center"
+        />
       </div>
       {walk.failed ? <BotItemsReadFailed onRetry={walk.retry} closedPage /> : null}
       {/* min-w-0: a fieldset is never narrower than its content, so one long unwrapped line widened the item. */}
       <fieldset disabled={offline} className="flex min-h-0 min-w-0 flex-1 flex-col">
         <BotItemSteppingContext value={walk.pending}>
-          {children({ comment, nav, onShown, onLoading })}
+          {children({ comment, statusSlot, nav, onShown, onLoading })}
         </BotItemSteppingContext>
       </fieldset>
       <BotItemAnnouncer ref={announcer} />
@@ -260,7 +276,10 @@ function useSlowPending(pending: boolean): boolean {
   return pending && slow
 }
 
-type BotItemAnnouncerHandle = { say: (text: string) => void; loading: () => () => void }
+type BotItemAnnouncerHandle = {
+  say: (text: string) => void
+  loading: () => () => void
+}
 
 /** The pane's screen-reader line. A leaf, so speaking re-renders only it. */
 function BotItemAnnouncer({ ref }: { ref: React.Ref<BotItemAnnouncerHandle> }): React.JSX.Element {
