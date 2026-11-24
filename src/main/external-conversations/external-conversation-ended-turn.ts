@@ -3,8 +3,10 @@ import type {
   AgentJournalRenderItem,
   AgentJournalSnapshot
 } from '../../shared/agent-session/journal/agent-session-journal-types'
-import type { AgentJournalConnectorDelivery } from '../../shared/agent-session/journal/agent-journal-bot-message-fields'
-import { connectorReplyTurnStamps } from '../../shared/agent-session/journal/journal-connector-reply-turn'
+import {
+  connectorReplyTurnStamps,
+  type ConnectorReplyStamp
+} from '../../shared/agent-session/journal/journal-connector-reply-turn'
 import type { AgentSessionFailureFact } from '../../shared/agent-session/failures/agent-session-failure'
 import {
   latestStructuredAgentSessionAssistantMessage,
@@ -30,7 +32,7 @@ export type EndedChatTurn = {
   /** The turn row's journal key, the connector deliveries it answered, and the root prose written
    *  inside it (design item 125). */
   turnItemId?: string
-  stamps?: AgentJournalConnectorDelivery[]
+  stamps?: ConnectorReplyStamp[]
   turnProse?: string
 }
 
@@ -118,4 +120,24 @@ function outboxTurn(
         turnProse: structuredAgentSessionTurnAssistantMessage(items, turnItemId)
       }
     : {}
+}
+
+/** The message that opened a turn, read from its own rows; undefined when they can't be read. */
+export async function turnOpenerOf(
+  chat: Pick<ConversationChat, 'journalReads'>,
+  sessionId: string,
+  turnId: string
+): Promise<AgentJournalRenderItem | null | undefined> {
+  const reads = await chat.journalReads(sessionId).catch(() => null)
+  const window = await reads
+    ?.operationWindow({
+      turnIds: [turnId],
+      itemIds: [turnId],
+      anchorsOnly: true,
+      withoutToolOutput: true
+    })
+    .catch(() => null)
+  return reads && window
+    ? readEndedChatTurnOpener(async () => reads, window.snapshot.items, turnId)
+    : undefined
 }

@@ -57,7 +57,8 @@ export type ConversationEvent =
   | (ConversationPane & { kind: 'turn-started'; at: number; deliveryId?: string })
   | (ConversationPane & {
       kind: 'turn-ended'
-      /** The ended turn's turn-started `at`; null when its start predates this watch. */
+      /** The ended turn's turn-started `at`; null when its start predates this watch. The cloud ends
+       *  its open turn when that is no newer, so a restart's end can name this start as a fence. */
       turnId: number | null
       /** Host verdict; null means none was recorded. */
       stopReason: AgentTurnOutcome | null
@@ -75,6 +76,8 @@ export type ConversationEvent =
       turnFor?: ConnectorTurnFor
       /** The thread's turn state only: its answer goes through the reply outbox. */
       stateOnly?: true
+      /** Paused at a usage limit with a known reset: an automatic continue picks it up then. */
+      resumes?: true
     })
   // Whether orchestration workers the chat started still run, told on each change.
   | (ConversationPane & { kind: 'workers'; running: boolean })
@@ -111,16 +114,13 @@ export type ConversationEventsDeps = {
     promptId: string,
     cursor?: AgentJournalCursor
   ) => StructuredAgentSessionPromptStanding
-  promptCursor?: (
-    link: ExternalConversationLink,
-    promptId: string
-  ) => AgentJournalCursor | undefined
+  promptCursor?: (link: ExternalConversationLink, id: string) => AgentJournalCursor | undefined
   /** Native chats' prompts and turn ends; returns the release. */
   onChatNews: (listener: (news: ChatNews) => void) => () => void
   onWatchDisposed?: () => void
   /** Read once per ended chat turn. */
   chatTurnOrigin: (sessionId: string, turnAt: number | null) => ConnectorTurnOrigin
-  /** Whether a delivery was sent to the chat and its turn hasn't ended. */
+  /** Whether a delivery was sent to the chat (or its running turn claims some) and it hasn't ended. */
   chatTurnDelivered: (sessionId: string) => boolean
   /** The delivery a chat turn that began at `turnAt` answers; taken once. */
   chatTurnDelivery: (sessionId: string, turnAt: number) => string | undefined

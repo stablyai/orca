@@ -194,8 +194,14 @@ function livenessField(projection: WorkerProjection | null | undefined): string 
   return liveness?.detail ? `${liveness.verdict} (${liveness.detail})` : liveness?.verdict
 }
 
-/** Only a live worker's activity is known; a finished turn is an idle agent, not finished work. */
+/** Only a live worker's activity is known; a finished turn is an idle agent, not finished work. A turn
+ *  its own background tasks hold open is named for them, as last seen, even once its status is stale. */
 function knownActivity(projection: WorkerProjection | null | undefined): string | undefined {
+  const wait = projection?.stage.backgroundWait
+  if (wait) {
+    const [command, ...more] = wait.commands
+    return `waiting on its background task${command ? ` \`${command}\`` : ''}${more.length ? ` (and ${more.length} more)` : ''}${sinceIso(wait.since)}`
+  }
   if (projection?.liveness.verdict !== 'live' || projection.stage.activity === 'unknown') {
     return undefined
   }
@@ -207,4 +213,10 @@ function lastActivity(projection: WorkerProjection | null | undefined): string |
   return knownActivity(projection) && typeof at === 'number'
     ? formatPrCommentRelativeTime(new Date(at).toISOString(), Date.now())
     : undefined
+}
+
+/** A relayed copy may carry a time no date can hold. */
+function sinceIso(since: number): string {
+  const date = new Date(since)
+  return Number.isFinite(date.getTime()) ? ` since ${date.toISOString()}` : ''
 }

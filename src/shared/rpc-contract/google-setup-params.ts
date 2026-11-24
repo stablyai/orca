@@ -25,7 +25,9 @@ export const GoogleSetupWrite = z.object({
     z.object({
       action: z.literal('start'),
       mode: z.enum(GOOGLE_SETUP_MODES).optional(),
-      browserPageId: Text(200).optional()
+      browserPageId: Text(200).optional(),
+      /** Set up a new Google app even though this computer already has one. */
+      newApp: z.literal(true).optional()
     }),
     z.object({
       action: z.literal('step'),
@@ -55,12 +57,14 @@ export const GoogleSetupWrite = z.object({
 })
 
 /** Where the owner started a setup from, for the bot's first line. */
-export const GOOGLE_SETUP_STARTED_FROM = ['add-connector', 'settings'] as const
+export const GOOGLE_SETUP_STARTED_FROM = ['add-connector', 'settings', 'chat'] as const
 
 /** The owner starts (or returns to) a bot's Google setup; the bot hears it without a chat bubble. */
 export const GoogleSetupStart = z.object({
   botId: Text(200),
-  from: z.enum(GOOGLE_SETUP_STARTED_FROM)
+  from: z.enum(GOOGLE_SETUP_STARTED_FROM),
+  /** Set up a new Google app even though this computer already has one. */
+  newApp: z.literal(true).optional()
 })
 
 /** An owner's click on a setup card: recorded, and told to the bot without a chat bubble. */
@@ -68,4 +72,14 @@ export const GoogleSetupAnswer = z.object({
   botId: Text(200),
   card: z.enum(GOOGLE_SETUP_CARDS),
   values: Values
+})
+
+/** The owner's Import file for an agent on another host: that host looks for the key it saved, or
+ *  imports the one the owner picked from the candidates it listed. */
+/** A key file on the agent's host the owner may pick; `id` names this exact file. */
+export type GoogleSetupKeyCandidate = { name: string; id: string; savedAt: number }
+
+export const GoogleSetupImportHostKey = z.object({
+  botId: Text(200),
+  file: z.object({ name: Text(255), id: Text(200) }).optional()
 })

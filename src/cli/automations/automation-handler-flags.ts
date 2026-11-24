@@ -13,6 +13,7 @@ import {
 } from '../../shared/automations/launch/automation-precheck'
 import { buildAutomationRrule } from '../../shared/automations/scheduling/automation-schedule-occurrences'
 import { getAutomationScheduleInputError } from '../../shared/automations/scheduling/automation-schedule-parsing'
+import { TRIGGER_REFUSAL_HINTS } from '../specs/automation-trigger-hints'
 import { isTuiAgent } from '../../shared/agent-launch/catalog/tui-agent-config'
 import {
   getOptionalPositiveIntegerFlag,
@@ -162,7 +163,8 @@ export function getScheduleFlag(
         dayOfWeek
       })
     : raw
-  const scheduleError = getAutomationScheduleInputError(rrule, `Invalid automation trigger: ${raw}`)
+  const label = `Invalid automation trigger: ${raw}.`
+  const scheduleError = getAutomationScheduleInputError(rrule, label, TRIGGER_REFUSAL_HINTS)
   if (scheduleError) {
     throw new RuntimeClientError('invalid_argument', scheduleError)
   }

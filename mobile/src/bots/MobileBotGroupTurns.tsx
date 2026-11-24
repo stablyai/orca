@@ -13,7 +13,8 @@ import {
   botGroupOperationAdmitted,
   createBotGroupJournalIndexer,
   type indexBotGroupJournal,
-  type BotGroupTurn
+  type BotGroupTurn,
+  withBotGroupTurnAnswer
 } from '../../../src/shared/bots/bot-group'
 import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 import { colors } from '../theme/mobile-theme'
@@ -28,6 +29,7 @@ import { MobileNativeChatTurnStatus } from '../session/native-chat/transcript/me
 import { MobileNativeChatMessage } from '../session/native-chat/transcript/messages/MobileNativeChatMessage'
 import { createStructuredQuestionProjection } from '../../../src/shared/native-chat/transcript/messages/structured-agent-question-projection'
 import { projectStructuredAgentStartItem } from '../../../src/shared/native-chat/transcript/messages/structured-agent-start-projection'
+import { botCodedText } from '../../../src/shared/bots/bot-failure-copy'
 
 export type MobileBotGroupSession = StructuredMobileSession & {
   groupTurnItems: ReturnType<typeof indexBotGroupJournal>
@@ -125,12 +127,16 @@ export function MobileBotGroupTurn({
   )
   const lifecycle = items.find((item) => item.body.kind === 'turn')?.body
   const clock = lifecycle?.kind === 'turn' ? lifecycle : null
-  const queued = session?.queued.cards.some((card) => card.messageId === turn.operationId)
+  const queued = session?.queued.holds(turn.operationId)
   const working = clock?.state === 'running' && !turn.revoked
   const source = useMemo(() => ({ client, sessionId: turn.sessionId }), [client, turn.sessionId])
   const rawMessages = useMemo(
-    () => transcript.messages(items).filter((message) => message.role !== 'user'),
-    [items]
+    () =>
+      withBotGroupTurnAnswer(
+        transcript.messages(items).filter((message) => message.role !== 'user'),
+        { operationId: turn.operationId, answer: turn.answer }
+      ),
+    [items, turn.operationId, turn.answer]
   )
   const fullContent = useMobileNativeChatMessageDetail(rawMessages, source)
   const messages = useMemo(
@@ -153,13 +159,16 @@ export function MobileBotGroupTurn({
   const identity = useMemo(
     () => ({
       name: turn.botName,
-      avatar: mobileBotAvatarSource(
-        { name: turn.botName, avatar: turn.avatar, avatarColor: turn.avatarColor },
-        undefined
-      ),
+      avatar: mobileBotAvatarSource({
+        id: turn.botId,
+        name: turn.botName,
+        avatar: turn.avatar,
+        avatarColor: turn.avatarColor,
+        avatarOutfit: turn.avatarOutfit
+      }),
       showName: true
     }),
-    [turn.botName, turn.avatar, turn.avatarColor]
+    [turn.botId, turn.botName, turn.avatar, turn.avatarColor, turn.avatarOutfit]
   )
   return (
     // Group turns keep the action sheet for every link; the phone's link setting isn't read here.
@@ -182,8 +191,11 @@ export function MobileBotGroupTurn({
                           ? queued
                             ? t('chat.queuedMessages.queuedState', 'Queued')
                             : turn.error
-                              ? 'Not started'
-                              : 'Waiting for the native session…'
+                              ? t('bots.groups.notStarted', 'Not started')
+                              : t(
+                                  'bots.groups.waitingForTheNativeSession',
+                                  'Waiting for the native session…'
+                                )
                           : undefined
                     }
                     startedAt={clock?.startedAt ?? null}
@@ -215,7 +227,7 @@ export function MobileBotGroupTurn({
                 </Pressable>
               </View>
               {turn.error ? (
-                <Text style={styles.notice}>{turn.error}</Text>
+                <Text style={styles.notice}>{botCodedText(turn.error, turn.failure, t)}</Text>
               ) : !clock && !queued ? (
                 <Text style={styles.notice}>
                   {t('bots.groups.waitingForTheNativeSession', 'Waiting for the native session…')}

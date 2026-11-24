@@ -22,9 +22,11 @@ export type StructuredAgentSessionLaunchContinuation = {
   answer?: RestartContinuationAnswer
   /** Chats the run that just ended may have cut and this start did not continue: the chats it held,
    *  which covers a cut that left no offer, and chats with an offer it recorded (a quit releases its
-   *  chats first). None with the setting off: every cut waits for the person, and only a dismissal
-   *  tells a coordinator. */
+   *  chats first). Whatever the setting, as the restart offer shows them. */
   cutByLastRun: ReadonlySet<string>
+  /** Whether this start continued on its own. Off, every cut waits for the person, and only a
+   *  dismissal tells a coordinator. */
+  automatic: boolean
 }
 
 export type StructuredAgentSessionLaunchContinuationDeps = {
@@ -82,7 +84,7 @@ export async function continueStructuredAgentSessionsAtLaunch(
   }
   try {
     if (!deps.resumeWorkOnRestart()) {
-      return { continued: new Set(), cutByLastRun: new Set() }
+      return { continued: new Set(), automatic: false, cutByLastRun: await cutByLastRun() }
     }
     const answer = await deps.restartResume.continueAfterRestart(
       undefined,
@@ -103,7 +105,7 @@ export async function continueStructuredAgentSessionsAtLaunch(
         outcome.outcome === 'refused' ? [] : [outcome.sessionId]
       )
     )
-    return { continued, answer, cutByLastRun: await cutByLastRun(handedOff) }
+    return { continued, answer, automatic: true, cutByLastRun: await cutByLastRun(handedOff) }
   } finally {
     // Only this launch continues on its own what the last run cut; later launches leave it to a
     // person. A failure here must not hide what this launch already continued.
@@ -137,6 +139,7 @@ export function structuredAgentSessionLaunchContinuationDeps(
 export class StructuredAgentSessionLaunchContinuationOnce {
   private started = false
   private readonly settled = Promise.withResolvers<StructuredAgentSessionLaunchContinuation>()
+  private readonly ran = Promise.withResolvers<StructuredAgentSessionLaunchContinuation>()
   private readonly reserved = Promise.withResolvers<StructuredAgentSessionResumeCandidate[]>()
   private answered = false
   private readonly retried = new Set<(settled: StructuredAgentSessionLaunchContinuation) => void>()
@@ -145,6 +148,12 @@ export class StructuredAgentSessionLaunchContinuationOnce {
 
   get done(): Promise<StructuredAgentSessionLaunchContinuation> {
     return this.settled.promise
+  }
+
+  /** Settles once a run with a host continued, a retried restoration's included, or with nothing
+   *  when this start had no host and nothing retries; a failed restoration's nothing waits. */
+  get continued(): Promise<StructuredAgentSessionLaunchContinuation> {
+    return this.ran.promise
   }
 
   /** The chats the automatic action took, known before any agent starts, so a window can show it.
@@ -169,12 +178,19 @@ export class StructuredAgentSessionLaunchContinuationOnce {
 
   /** Without a host (none saved, refused, or restoration failed) this start continues nothing and the
    *  offers stay for a person; waiters go on, and a restoration retried after a failure still runs it. */
-  start(deps?: StructuredAgentSessionLaunchContinuationDeps): void {
-    const nothing = { continued: new Set<string>(), cutByLastRun: new Set<string>() }
+  start(deps?: StructuredAgentSessionLaunchContinuationDeps, { retryable = false } = {}): void {
+    const nothing = {
+      continued: new Set<string>(),
+      automatic: false,
+      cutByLastRun: new Set<string>()
+    }
     if (!deps) {
       this.resolvedEmpty = !this.started
       this.reserved.resolve([])
       this.settled.resolve(nothing)
+      if (!retryable) {
+        this.ran.resolve(nothing)
+      }
       return
     }
     if (this.started) {
@@ -190,6 +206,7 @@ export class StructuredAgentSessionLaunchContinuationOnce {
         // Setting off or a failure before reserving took nothing.
         this.reserved.resolve([])
         this.settled.resolve(settled)
+        this.ran.resolve(settled)
         if (this.resolvedEmpty) {
           this.retriedOutcome = settled
           this.retried.forEach((listener) => listener(settled))

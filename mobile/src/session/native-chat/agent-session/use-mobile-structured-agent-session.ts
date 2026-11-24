@@ -227,6 +227,9 @@ export function useMobileStructuredAgentSession(
     sessionKey,
     agentName: agent ? (tuiAgentDisplayName(agent) ?? agent) : undefined,
     journalItems: state.items,
+    transcriptShown: messages.length > 0,
+    // A saved or reloading copy is not this chat's current queue yet.
+    queueCurrent: status !== 'loading' && savedAt === null,
     queuedMessages,
     queuePause,
     submissions: state.submissions,

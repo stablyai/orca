@@ -10,9 +10,15 @@ Your owner creates their own Google app, and you help them do it. Orca draws the
 
 When someone asks why this is needed, say: "You create your own Google app, so your sign-in and everything it can reach stay on your computer. Nothing goes through Orca's servers, and you can turn it off any time from Google." Never mention app verification, Google's review, or workarounds.
 
+## A new app
+
+The Google app is the Google Cloud app Orca signs in through. A computer saves one, and every new account signs in through it; accounts already connected keep their own. Once one is saved, `start` shows the Connect card instead of a setup, which is right for adding another account the current app works for.
+
+Run `ORCA bot google-setup start --new-app` only to make a new app: when your owner asks for Google set up for another company, when Google refused a sign-in through the current app (the company blocks outside apps, or the app is limited to another company), or when your owner wants a work account to sign in without Google's unverified-app warning. Its key becomes the app new sign-ins use. Not for adding another account the current app works for: that's the Connect card.
+
 ## Flow
 
-1. `ORCA bot google-setup start`, then end your turn. Do nothing else until your owner has answered both the path card and the services card that follows it: don't open Google Cloud, and don't post about the cards, which already ask. The services answer is the one that wakes you (an imported setup file has no services card). If the path is recorded and the services aren't yet, end your turn. If `start` answers that Google is already set up (a Connect card, or already on), there is nothing to set up: end your turn, and don't run the steps below.
+1. `ORCA bot google-setup start`, then end your turn. Do nothing else until your owner has answered both the path card and the services card that follows it: don't open Google Cloud, and don't post about the cards, which already ask. The services answer is the one that wakes you (an imported setup file has no services card). If the path is recorded and the services aren't yet, end your turn. If `start` answers that Google is already set up (a Connect card, or already on), there is nothing to set up: end your turn, and don't run the steps below (unless you need `--new-app`, above).
 2. Account:
    - In do-it-for-me and guide-here, open Google Cloud and read the account (see Browser). In guide-browser, ask for it (see Paths).
    - Record it with `ORCA bot google-setup set --account <email> --kind <work|personal>`.
@@ -77,7 +83,7 @@ The API ids are `people.googleapis.com`, plus the ones for each chosen service:
   2. Run `ORCA bot google-setup need-user branding --note "Tick the User Data Policy box under Finish"`.
   3. Ticking is enough; your owner doesn't have to press Done. Watch the box in the background: `ORCA wait --page <id> --selector "input[type=checkbox]:checked" --timeout 600000`, then `snapshot` and check the box shows `checked=true`. When it does, say "Got it, carrying on" and mark branding done. In do-it-for-me you finish the wizard first (Continue, then Create); in guide-here your owner does.
   4. If the wait ends without it, end your turn. Their Done on the card, or a word in chat, wakes you: `snapshot`, and go on only if the box shows `checked=true`.
-- **Never `snapshot`, `read`, `screenshot` or `eval` while the "OAuth client created" dialog is open,** because it shows the client secret. On the client page, click effects carry no page lines (no `page`), so the dialog's secret never reaches you; don't `snapshot` to make up for it. After Create, `wait --text "OAuth client created"`, then click Download JSON by its label: `ORCA exec --page <id> --command 'find role button click --name "Download JSON"'`. Then OK, and only then read the page again.
+- **Never `snapshot`, `read`, `screenshot` or `eval` while the "OAuth client created" dialog is open,** because it shows the client secret. On the client page, click effects carry no page lines (no `page`), so the dialog's secret never reaches you; don't `snapshot` to make up for it. After Create, `wait --text "OAuth client created"`, then click Download JSON by its label: `ORCA find --page <id> --locator text --value "Download JSON" --action click`. Then OK, and only then read the page again.
 - **Never open, print or import the key file.** Your owner's Import button on the card saves it.
 - **Never resize the page or the browser** (`ORCA viewport`, or any other way). Your owner sees the same page.
 

@@ -69,6 +69,9 @@ export type GitHubSlice = {
   visibleReviewWorktreeIds: readonly string[]
   visibleReviewCardWorktreeIds: readonly string[]
   setVisibleReviewCardWorktreeIds: (ids: readonly string[]) => void
+  /** Workspaces whose PRs an open item page shows; refreshed as visible sidebar rows are. */
+  visibleItemPageReviewWorktreeIds: readonly string[]
+  setVisibleItemPageReviewWorktreeIds: (ids: readonly string[]) => void
   // Why: keyed by repoId + limit + query so same-path repos on different SSH targets don't share results.
   workItemsCache: Record<string, CacheEntry<readonly GitHubWorkItem[]>>
   fetchPRForBranch: (
@@ -82,6 +85,8 @@ export type GitHubSlice = {
       reason?: GitHubPRRefreshReason
       userRefresh?: boolean
       selected?: boolean
+      /** A refresh timer's read or retry: no use of an idle WSL host (#46567). */
+      background?: boolean
       onReadOutcome?: (outcome: PRSnapshotReply) => void
       signal?: AbortSignal
     }
@@ -89,7 +94,8 @@ export type GitHubSlice = {
   fetchIssue: (
     repoPath: string,
     number: number,
-    options?: RepoScopedFetchOptions & { ownerRepo?: GitHubOwnerRepo }
+    /** `background`: a card's poll, which must not hold an idle WSL host up or wake it. */
+    options?: RepoScopedFetchOptions & { ownerRepo?: GitHubOwnerRepo; background?: boolean }
   ) => Promise<IssueInfo | null>
   fetchPRChecks: (
     repoPath: string,

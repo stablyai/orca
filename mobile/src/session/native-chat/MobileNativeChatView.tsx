@@ -1,3 +1,4 @@
+import { mobileWaitingAgentMailRows } from './transcript/agent-messages/MobileWaitingAgentMailRows'
 import { MobileBotFirstScreen, useMobileBotFirstScreen } from './MobileBotFirstScreen'
 import { MobileBotCardSendContext } from './transcript/bot-cards/mobile-bot-card-host'
 import { mobileNativeChatOtherBotCard } from './transcript/bot-cards/mobile-native-chat-bot-cards'
@@ -21,6 +22,7 @@ import { useMobileTranslation } from '../../i18n/use-mobile-translation'
 import { MobileNativeChatInputLockStatus } from './composer/field/MobileNativeChatInputLockStatus'
 import { useMobileColorScheme } from '../../theme/use-mobile-color-scheme'
 import { styles } from './mobile-native-chat-view-styles'
+import { MobileNativeChatComposerMenuHost } from './composer/menus/MobileNativeChatComposerMenuHost'
 import { MobileNativeChatEmptyStateView } from './transcript/viewport/MobileNativeChatEmptyStateView'
 import { mobileNativeChatListFooter } from './transcript/viewport/mobile-native-chat-list-footer'
 import { mobileNativeChatListHeader } from './transcript/viewport/mobile-native-chat-list-header'
@@ -38,6 +40,10 @@ import { MobileNativeChatFloatingControls } from './lower-region/MobileNativeCha
 import { MobileNativeChatDraftComposer } from './composer/MobileNativeChatDraftComposer'
 import { MobileNativeChatPromptCard } from './input/prompts/MobileNativeChatPromptCard'
 import { useMobileNativeChatWorkerApprovalSlot } from './input/prompts/MobileNativeChatWorkerApproval'
+import {
+  MobileWorkerApprovalReceiptsContext,
+  useMobileWorkerApprovalReceiptPlacement
+} from './transcript/messages/MobileNativeChatWorkerApprovalReceipts'
 import type { MobileNativeChatMicProps } from './composer/dictation/MobileNativeChatComposerMic'
 import { useMobileNativeChatPromptInputOwner } from './input/prompts/use-mobile-native-chat-prompt-input-owner'
 import {
@@ -113,6 +119,7 @@ export function MobileNativeChatView({
   onDismissSendError,
   filePaths,
   onNeedFiles,
+  fileReference,
   skillDiscovery,
   onNeedSkills,
   sessionOptions,
@@ -137,7 +144,7 @@ export function MobileNativeChatView({
   workerApprovals,
   promptKey,
   onRespondPermission,
-  composerTray: { content: trayContent, composerInputRef: inputRef, steerHead } = NO_COMPOSER_TRAY,
+  composerTray: { content: trayContent, composerInputRef: inputRef, ...tray } = NO_COMPOSER_TRAY,
   onOpenFile,
   keyboardInset = 0
 }: Props): React.JSX.Element {
@@ -145,6 +152,7 @@ export function MobileNativeChatView({
   const t = useMobileTranslation()
   const insets = useSafeAreaInsets()
   const bottomPad = keyboardInset > 0 ? keyboardInset + insets.bottom : insets.bottom
+  const rootStyle = [styles.root, { paddingBottom: bottomPad }]
   const { fontScale, pinchGesture } = useMobileNativeChatPinchGesture()
   const { font, lineSpacing } = useNativeChatTextSettings()
 
@@ -230,6 +238,7 @@ export function MobileNativeChatView({
     showsTurnDiffs: turnBot === null
   })
 
+  const workerReceipts = useMobileWorkerApprovalReceiptPlacement(turns, workerApprovals?.receipts)
   const rowKeys = useMobileNativeChatRowKeys(folded, messages, sendSurfaceId, turns.presentation)
   const itemJump = useMobileNativeChatItemNavigation({
     navigation: itemNavigation,
@@ -271,7 +280,8 @@ export function MobileNativeChatView({
   const header = mobileNativeChatListHeader(hasMore, olderPages, loadEarlier)
   // Changing text size, face or spacing relays out every row, so preserve the page’s reading anchor.
   const layoutKey = `${fontScale}:${font}:${lineSpacing}`
-  const footer = mobileNativeChatListFooter(liveStatus, turns.waitingRows, renderItem)
+  const mailRows = mobileWaitingAgentMailRows(tray.waitingAgentMail, fontScale, tail.viewport)
+  const footer = mobileNativeChatListFooter(liveStatus, turns.waitingRows, renderItem, mailRows)
   const emptyState = mobileNativeChatEmptyState(status, agent, error, sessionLive, clearing)
 
   const composerPlaceholder = mobileNativeChatComposerPlaceholder(
@@ -331,13 +341,8 @@ export function MobileNativeChatView({
           onChangeText={onComposerTextChange}
           onSend={handleSend}
           sendSurfaceId={sendSurfaceId}
-          {...{
-            getSendCompletionGeneration,
-            getComposerEditGeneration,
-            inputRef,
-            sendFollowUp,
-            steerHead
-          }}
+          {...{ getSendCompletionGeneration, getComposerEditGeneration, inputRef, sendFollowUp }}
+          steerHead={tray.steerHead}
           {...{ agent, sessionOptions, contextUsage }}
           {...{ onAttachImage, onPasteImages, attachments, onRemoveAttachment }}
           {...{ isAttaching, onMicPress, micActive, micStarting, micProcessing }}
@@ -345,7 +350,7 @@ export function MobileNativeChatView({
           {...offlineQueue.composerLock}
           sendDisabled={expandedPromptOwnsSend}
           placeholder={composerPlaceholder}
-          {...{ filePaths, onNeedFiles, skillDiscovery, onNeedSkills }}
+          {...{ filePaths, onNeedFiles, fileReference, skillDiscovery, onNeedSkills }}
           stop={canStop ? { onStop, held: turnIndicator?.stopRequestInFlight === true } : null}
         />
       </View>
@@ -353,19 +358,19 @@ export function MobileNativeChatView({
   )
 
   if (readFailedFinally && emptyStateView) {
-    return <View style={[styles.root, { paddingBottom: bottomPad }]}>{emptyStateView}</View>
+    return <View style={rootStyle}>{emptyStateView}</View>
   }
 
   return (
     <MobileNativeChatOpenFileContext value={onOpenFile}>
-      <View testID="native-chat-view" style={[styles.root, { paddingBottom: bottomPad }]}>
+      <MobileNativeChatComposerMenuHost testID="native-chat-view" style={rootStyle}>
         {status === 'loading' && messages.length === 0 ? (
           <MobileStateView
             loading
             title={t('session.nativeChatView.loading', 'Loading conversation…')}
           />
         ) : firstScreen ? (
-          <MobileBotFirstScreen firstScreen={firstScreen} />
+          <MobileBotFirstScreen firstScreen={firstScreen} after={mailRows} />
         ) : (
           <GestureHandlerRootView style={styles.listWrap}>
             <MobileNativeChatDisclosureContext.Provider value={disclosures}>
@@ -376,24 +381,26 @@ export function MobileNativeChatView({
                     roots={disclosures.roots}
                     runPlacements={rowKeys.runPlacements}
                   >
-                    <MobileNativeChatRowList
-                      {...{
-                        tail,
-                        rowKeys,
-                        renderItem,
-                        footer,
-                        emptyStateView,
-                        onScroll,
-                        layoutKey
-                      }}
-                      {...{ header, hasHeader: hasMore === true, onNearTop: loadEarlierNearTop }}
-                      itemJump={itemJump}
-                      rows={turns.listMessages}
-                      runs={turns.presentation.workRuns.heads}
-                      roots={disclosures.roots}
-                      contentContainerStyle={styles.listContent}
-                      pinchGesture={pinchGesture}
-                    />
+                    <MobileWorkerApprovalReceiptsContext value={workerReceipts}>
+                      <MobileNativeChatRowList
+                        {...{
+                          tail,
+                          rowKeys,
+                          renderItem,
+                          footer,
+                          emptyStateView,
+                          onScroll,
+                          layoutKey
+                        }}
+                        {...{ header, hasHeader: hasMore === true, onNearTop: loadEarlierNearTop }}
+                        itemJump={itemJump}
+                        rows={turns.listMessages}
+                        runs={turns.presentation.workRuns.heads}
+                        roots={disclosures.roots}
+                        contentContainerStyle={styles.listContent}
+                        pinchGesture={pinchGesture}
+                      />
+                    </MobileWorkerApprovalReceiptsContext>
                   </MobileNativeChatScrollRootsBoundary>
                 </MobileMarkdownBotCardContext.Provider>
               </MobileBotCardSendContext.Provider>
@@ -407,7 +414,7 @@ export function MobileNativeChatView({
         <MobileNativeChatLowerRegion scopeKey={sendSurfaceId} composerPresent={!promptOwnsInput}>
           {lowerContent}
         </MobileNativeChatLowerRegion>
-      </View>
+      </MobileNativeChatComposerMenuHost>
     </MobileNativeChatOpenFileContext>
   )
 }

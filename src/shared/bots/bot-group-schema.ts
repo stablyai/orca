@@ -1,9 +1,21 @@
 import * as z from 'zod'
 import { BOT_AGENTS, BotNameSchema } from '../bot-types'
 import { BotAvatarColorSchema } from './bot-avatar-color'
+import { BotStoredOutfitSchema } from './bot-avatar-outfit'
 import { isAdmissibleAgentJournalRenderItem } from '../agent-session/journal/agent-session-journal-schemas'
 import type { AgentJournalRenderItem } from '../agent-session/journal/agent-session-journal-types'
-import type { NativeChatBlock } from '../native-chat/native-chat-types'
+import type { NativeChatBlock, NativeChatMessage } from '../native-chat/native-chat-types'
+import { isQuietBotResult, quietBotResultText } from '../bot-quiet-result'
+import { AutomationRunMessageSchema } from '../automations/automation-run-message'
+
+// Read back through readBotFailure, which drops a code this build doesn't know.
+const StoredBotFailureSchema = z
+  .object({
+    code: z.string(),
+    params: z.record(z.string(), z.union([z.string(), z.number()])).optional()
+  })
+  .optional()
+  .catch(undefined)
 
 export const BotGroupReplyMode = z.discriminatedUnion('kind', [
   z.object({ kind: z.literal('bot'), botId: z.string().min(1) }),
@@ -17,6 +29,30 @@ const BotGroupMemberSchema = z.object({
   sessionId: z.string().min(1),
   stoppedThroughSequence: z.number().int().nonnegative().optional()
 })
+
+/** A bot on a paired computer in a room hosted here: it has no session here. It is asked as the
+ *  owner's own question by mail, and its answer comes back by mail. Name and look as when it joined. */
+export const BotGroupRemoteMemberSchema = z.object({
+  environmentId: z.string().min(1),
+  botId: z.string().min(1),
+  /** Its Home Chat when it joined: questions go to that chat, so a renamed or deleted bot is never
+   *  replaced by another bot of the same name. */
+  chatSessionId: z.string().min(1),
+  /** The paired computer's name when the bot joined. */
+  computer: z.string().min(1),
+  /** The room's newest post when it joined: earlier history is what it may be shown on joining. */
+  joinedAfter: z.number().int().nonnegative(),
+  name: BotNameSchema,
+  avatar: z.string().nullable(),
+  avatarColor: BotAvatarColorSchema.nullable().optional().catch(undefined),
+  avatarOutfit: BotStoredOutfitSchema.nullable().optional().catch(undefined),
+  agent: z.enum(BOT_AGENTS)
+})
+
+/** Bots on paired computers, as the desktop listed them for a create or edit. */
+export const BotGroupRemoteBotsSchema = z
+  .array(BotGroupRemoteMemberSchema.omit({ computer: true, joinedAfter: true }))
+  .max(31)
 
 /** Sessions of members that left a room: its history still opens there; they grant no access. */
 const FormerSessionIds = z.array(z.string().min(1)).optional()
@@ -49,6 +85,9 @@ export const BotGroupSchema = z.object({
   createdAt: z.number(),
   /** The original room's members; each thread holds its own sessions for the same bots. */
   members: z.array(BotGroupMemberSchema),
+  /** Bots on paired computers, asked in every room of the group. An older or unreadable list is
+   *  dropped, never the group. */
+  remoteMembers: z.array(BotGroupRemoteMemberSchema).optional().catch(undefined),
   formerSessionIds: FormerSessionIds,
   threads: z.array(BotGroupThreadSchema).optional(),
   replyMode: BotGroupReplyMode,
@@ -65,20 +104,52 @@ const BotGroupTurnSchema = z.object({
   botName: z.string(),
   avatar: z.string().nullable(),
   avatarColor: BotAvatarColorSchema.nullable().optional().catch(undefined),
+  avatarOutfit: BotStoredOutfitSchema.nullable().optional().catch(undefined),
   agent: z.enum(BOT_AGENTS),
   sessionId: z.string(),
   mailbox: z.literal(true).optional(),
   /** Read from the worker relation, never stored on the message. */
   workerDispatchIds: z.array(z.string()).optional(),
   error: z.string().optional(),
+  /** `error`'s code, so each client can say it in its reader's language. */
+  failure: StoredBotFailureSchema,
   revoked: z.literal(true).optional(),
   /** The finished reply, saved when the turn ended; null when it ended without one. Absent while
    *  the turn runs, and on turns saved before replies were. */
   reply: z.string().nullable().optional(),
+  /** Its answer to another member's request: sent as mail, so its own chat shows only the call. */
+  answer: z.string().optional(),
   /** The members its reply named, saved as their hand-offs were reserved: a replay wakes none. */
   handedOff: z.array(z.string()).optional(),
+  /** The members it sent peer requests to: its @mentions of them wake no second turn. */
+  mailed: z.array(z.string()).optional(),
   frozenItems: z
     .array(z.custom<AgentJournalRenderItem>(isAdmissibleAgentJournalRenderItem))
+    .optional()
+})
+
+/** A post's question to one remote member, by the mail id it went with. `sending` that is not in
+ *  flight never left this computer. An answer replaces a notice, never the reverse. */
+export const BotGroupRemoteAskSchema = BotGroupRemoteMemberSchema.extend({
+  requestId: z.string().min(1),
+  /** `failed`: refused before that computer took it. `unknown`: it may have; an answer still lands. */
+  state: z.enum(['sending', 'sent', 'failed', 'unknown']),
+  error: z.string().optional(),
+  /** `error`'s code, so each client can say it in its reader's language. */
+  failure: StoredBotFailureSchema,
+  /** The room was stopped while this ask was unanswered; that computer may still answer. */
+  stopped: z.literal(true).optional(),
+  reply: z
+    .discriminatedUnion('kind', [
+      z.object({
+        kind: z.literal('answer'),
+        text: z.string(),
+        /** Shortened here; the whole answer is in this computer's mail. */
+        truncated: z.literal(true).optional()
+      }),
+      /** That computer told this one the bot won't answer. */
+      z.object({ kind: z.literal('notice') })
+    ])
     .optional()
 })
 
@@ -110,13 +181,36 @@ export const BotGroupMessageSchema = z.object({
     .optional(),
   /** The member whose reply this follow-up turn reads, on the asker's own mail turn. */
   answeredBy: z.object({ id: z.string(), name: z.string() }).optional(),
-  /** On a person's post: the turns its members' `@Name` replies have woken so far. */
+  /** Legacy, read only: the hand-off count older builds saved on a person's post. */
   handoffs: z.number().int().nonnegative().optional(),
-  /** Woken by an `@Name` in the requester's reply; counts toward its post's hand-off limit. */
+  /** Woken by an `@Name` in the requester's reply. */
   mentioned: z.literal(true).optional(),
-  /** The quiet line held where the post's hand-offs reached this limit; it starts no turn. */
+  /** Legacy: the paused line older builds saved after a hand-off cap; it starts no turn. */
   pausedAfter: z.number().int().positive().optional(),
-  turns: z.array(BotGroupTurnSchema)
+  /** A member's line for a change to its items made outside the room, such as the owner's answer: a
+   *  request of its own, like a person's post, that hand-offs, peer mail and Stop attach to. */
+  fromItems: z.literal(true).optional(),
+  /** A member's line for a worker report that landed after the request it served was stopped: a
+   *  request of its own, as `fromItems` is. */
+  fromReports: z.literal(true).optional(),
+  /** On a post an automation's run made, served as its owner's: the run, shown as its run row. */
+  automationRun: AutomationRunMessageSchema.optional().catch(undefined),
+  /** Beside `automationRun`: where the run's words came from and who did its event, so a hand-off
+   *  or a replay of the post keeps them out of the owner's own words. */
+  memorySource: z.string().min(1).optional().catch(undefined),
+  triggeredBy: z
+    .object({
+      source: z.string(),
+      event: z.string().optional(),
+      actor: z.string().optional(),
+      actorId: z.string().optional(),
+      place: z.string().optional()
+    })
+    .optional()
+    .catch(undefined),
+  turns: z.array(BotGroupTurnSchema),
+  /** The post's questions to remote members; older or unreadable ones are dropped, never the post. */
+  remoteAsks: z.array(BotGroupRemoteAskSchema).optional().catch(undefined)
 })
 
 /** The human request a peer request serves, and the two member sessions it runs between. */
@@ -138,14 +232,82 @@ export const LegacyBotGroupSchema = BotGroupSchema.omit({
 
 export type BotGroupReplyMode = z.infer<typeof BotGroupReplyMode>
 export type BotGroupMember = z.infer<typeof BotGroupMemberSchema>
+export type BotGroupRemoteMember = z.infer<typeof BotGroupRemoteMemberSchema>
+export type BotGroupRemoteAsk = z.infer<typeof BotGroupRemoteAskSchema>
 export type BotGroupThread = z.infer<typeof BotGroupThreadSchema>
 export type BotGroup = z.infer<typeof BotGroupSchema>
 export type BotGroupTurn = z.infer<typeof BotGroupTurnSchema>
 export type BotGroupMessageImage = z.infer<typeof BotGroupMessageImageSchema>
 export type BotGroupMessage = z.infer<typeof BotGroupMessageSchema>
+
+/** Whether a line starts a request of its own: a person's post, an item change made outside the
+ *  room, or a worker report that landed after a Stop. */
+export function startsBotGroupRequest(
+  message: Pick<BotGroupMessage, 'author' | 'fromItems' | 'fromReports'>
+): boolean {
+  return (
+    message.author.kind === 'owner' || message.fromItems === true || message.fromReports === true
+  )
+}
 export type BotGroupLatest = z.infer<typeof BotGroupLatestSchema>
 export type BotGroupPeerScope = z.infer<typeof BotGroupPeerScopeSchema>
 export type LegacyBotGroup = z.infer<typeof LegacyBotGroupSchema>
+
+const WORD_CHARACTER = /[\p{L}\p{N}]/u
+
+/** Whether a turn's own words already say its answer to a member's request, as whole words: an
+ *  answer of `42` is not said by `142 files`. */
+function holdsAnswer(words: string, answer: string): boolean {
+  const said = answer.trim()
+  for (let at = words.indexOf(said); at !== -1; at = words.indexOf(said, at + 1)) {
+    const before = words[at - 1] ?? ''
+    const after = words[at + said.length] ?? ''
+    if (!WORD_CHARACTER.test(before) && !WORD_CHARACTER.test(after)) {
+      return true
+    }
+  }
+  return false
+}
+
+/** A turn's reply as room history: its answer to a member's request added unless the reply
+ *  already says it, and a quiet reply's marker dropped. Null when neither has words. */
+export function botGroupTurnReplyText(
+  reply: string | null | undefined,
+  answer: string | undefined
+): string | null {
+  const said = reply && isQuietBotResult(reply) ? quietBotResultText(reply) : (reply ?? '')
+  if (!answer?.trim() || holdsAnswer(said, answer)) {
+    return said || null
+  }
+  return said ? `${said}\n\n${answer}` : answer
+}
+
+/** A turn's rows as the room draws them on desktop and mobile: its answer to a member's request
+ *  closes them, unless its own words already said it. */
+export function withBotGroupTurnAnswer(
+  messages: NativeChatMessage[],
+  turn: Pick<BotGroupTurn, 'operationId' | 'answer'>
+): NativeChatMessage[] {
+  const words = messages
+    .flatMap((message) =>
+      message.role === 'assistant'
+        ? message.blocks.flatMap((block) => (block.type === 'text' ? [block.text] : []))
+        : []
+    )
+    .join('\n')
+  return turn.answer?.trim() && !holdsAnswer(words, turn.answer)
+    ? [
+        ...messages,
+        {
+          id: `${turn.operationId}:answer`,
+          role: 'assistant',
+          blocks: [{ type: 'text', text: turn.answer }],
+          timestamp: null,
+          source: 'transcript'
+        }
+      ]
+    : messages
+}
 
 /** An owner post's transcript blocks for desktop and mobile message rows. */
 export function botGroupOwnerMessageBlocks(

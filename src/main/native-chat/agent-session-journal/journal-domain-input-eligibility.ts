@@ -20,13 +20,14 @@ export function journalDomainInputEligibility(
   context = new JournalSqlStatusContext(scope),
   work = readJournalSqlCurrentWork(context, authority)
 ) {
-  const blocked = journalDomainInputRecordBlocked(scope, context)
+  const record = journalDomainInputRecord(scope, context)
   const prompts = [...context.select({ kind: 'pending-prompts' })].flatMap(({ item }) => {
     const displayed = work.isCurrentItem(item.itemId) ? context.displayed(item.itemId) : null
     return displayed ? [displayed] : []
   })
   return {
-    blocked,
+    blocked: journalDomainInputRecordBlocked(record),
+    record,
     context,
     work,
     prompts,
@@ -36,7 +37,7 @@ export function journalDomainInputEligibility(
   }
 }
 
-function journalDomainInputRecordBlocked(scope: JournalSqlScope, context: JournalSqlStatusContext) {
+function journalDomainInputRecord(scope: JournalSqlScope, context: JournalSqlStatusContext) {
   const row =
     context.inputHead ??
     scope.db
@@ -46,9 +47,12 @@ function journalDomainInputRecordBlocked(scope: JournalSqlScope, context: Journa
   if (row?.record_json != null && !isReadableAgentSessionStoreRecord(scope.sessionId, saved)) {
     throw new Error('input admission requires a readable session record')
   }
-  const record = isReadableAgentSessionStoreRecord(scope.sessionId, saved)
+  return isReadableAgentSessionStoreRecord(scope.sessionId, saved)
     ? decodePersistedAgentSessionRecord(saved).record
     : null
+}
+
+function journalDomainInputRecordBlocked(record: ReturnType<typeof journalDomainInputRecord>) {
   return (
     !record || record.rewind?.phase === 'prepared' || record.rewind?.phase === 'provider-succeeded'
   )
@@ -59,8 +63,10 @@ export function journalDomainResolvedInputEligibility(
   context: JournalSqlStatusContext,
   work: JournalObserverResult['work']
 ) {
+  const record = journalDomainInputRecord(context.scope, context)
   return {
-    blocked: journalDomainInputRecordBlocked(context.scope, context),
+    blocked: journalDomainInputRecordBlocked(record),
+    record,
     context,
     prompts: work.actionablePrompts,
     pending: context.firstQueuedInput(),

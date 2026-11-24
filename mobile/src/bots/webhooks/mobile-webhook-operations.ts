@@ -40,11 +40,15 @@ const WebhookSummarySchema = z.looseObject({
   lastCall: z.looseObject({ at: z.number(), signatureValid: z.boolean() }).nullable(),
   host: z.enum(['online', 'offline']),
   automationName: z.string(),
+  deletesAutomation: z.boolean().optional(),
   resultsTo: ResultsToSchema,
   filters: FiltersSchema,
   pendingCalls: z.number(),
   keyGeneration: z.number()
 })
+
+/** Owner writes fail at once while the phone can't reach the host, instead of waiting for it. */
+export const WEBHOOK_WRITE = { failWhenDisconnected: true } as const
 
 export type PhoneWebhook = z.infer<typeof WebhookSummarySchema>
 

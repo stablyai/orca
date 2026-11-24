@@ -5,13 +5,14 @@ import { Button } from '@/components/ui/button'
 import { translate } from '@/i18n/i18n'
 import { useTranslate } from '@/i18n/use-translate'
 import { botTarget, type BotRef } from '@/lib/bot-hosts'
+import { googleAccountApp } from '../../../../../../shared/google/google-account-app'
 import type { GoogleSetupRun } from '../../../../../../shared/google/google-setup-run'
 import {
   googleReadyChoices,
   googleSetupBlockerIsConnect
 } from '../../../../../../shared/google/google-setup-card-view'
 import { useTurnOnBotGoogle } from '../use-turn-on-bot-google'
-import { googleAccountChoices, googleReadinessFixer } from '../GoogleAccountReadiness'
+import { googleAccountChoices, googleReadinessFixer } from '../google-account-readiness'
 import { googleChoiceLogos, GoogleLogoStack } from '../GoogleServicePicker'
 import { GoogleAddServiceDialog } from '../GoogleAddServiceDialog'
 import { GoogleSignInWaiting } from '../GoogleSignInWaiting'
@@ -37,14 +38,17 @@ export function GoogleSetupConnectCard({
   newest: boolean
 }): React.JSX.Element {
   const t = useTranslate()
-  const signIn = useGoogleSignIn(botTarget(bot))
+  const signIn = useGoogleSignIn(botTarget(bot), bot)
   const host = useBotHostLabel(bot.hostId)
   const turnOn = useTurnOnBotGoogle()
   const done = run.steps.connect?.status === 'done'
   const blocker = useGoogleSetupBlocker(bot)
   const stuck = blocker && googleSetupBlockerIsConnect(blocker) ? blocker : null
   const connect = async (): Promise<void> => {
-    const account = await signIn.connect(run.services ?? ['gmail'], run.account)
+    // Setup just made this computer's app, so even a saved account signs in through it.
+    const account = await signIn.connect(run.services ?? ['gmail'], run.account, {
+      currentApp: true
+    })
     if (!account) {
       return
     }
@@ -140,18 +144,19 @@ export function GoogleSetupConnectedCard({
 }): React.JSX.Element {
   const t = useTranslate()
   const host = useGoogleHost(botTarget(bot))
-  const signIn = useGoogleSignIn(botTarget(bot))
+  const signIn = useGoogleSignIn(botTarget(bot), bot)
   const google = host.status === 'ready' ? host.google : null
   const account =
     google?.accounts.find((entry) => entry.email === run.account) ?? google?.accounts[0] ?? null
   const rows = account ? googleReadinessRows(account).filter((row) => row.key !== 'contacts') : []
   const ready = account ? googleReadyChoices(account) : (run.services ?? [])
+  const app = account ? googleAccountApp(account, google?.client ?? null) : null
   const fix = account
     ? googleReadinessFixer({
         target: botTarget(bot),
         account,
-        clientId: google?.client?.clientId ?? null,
-        projectId: google?.client?.projectId ?? null,
+        clientId: app?.clientId ?? null,
+        projectId: app?.projectId ?? null,
         onAllowAgain: (choices) => void signIn.connect(choices, account.email)
       })
     : null
@@ -216,7 +221,7 @@ export function GoogleSetupConnectedCard({
           open={adding}
           onOpenChange={setAdding}
           have={googleAccountChoices(account)}
-          projectId={google?.client?.projectId}
+          projectId={app?.projectId ?? undefined}
           account={account.email}
           onSignIn={(services) => {
             setAdding(false)

@@ -3,6 +3,7 @@ import type { MessageInsert } from '../messages/message-insert'
 import { OrchestrationError } from '../../orchestration-error'
 import { generateId } from '../generated-id'
 import type { OrchestrationDb } from '../orchestration-db'
+import { NOT_CLIENT_ENVIRONMENT_SQL } from '../../federation/client-asks/client-ask-environment'
 
 export type PeerMailConversationRow = {
   conversation_id: string
@@ -69,25 +70,28 @@ export function getPeerMailConversation(
 export function listHomePeerMailEnvironments(this: OrchestrationDb): string[] {
   const statement = this.db.prepare<{ environment_id: string }>(
     `SELECT DISTINCT environment_id FROM peer_mail_conversations
-     WHERE role = 'home' AND environment_id IS NOT NULL`
+     WHERE role = 'home' AND environment_id IS NOT NULL AND ${NOT_CLIENT_ENVIRONMENT_SQL}`
   )
   const rows = statement.all()
   return rows.map((row) => row.environment_id)
 }
 
-/** Conversations a paired Orca opened here that hold replies it has not acknowledged yet. */
+/** Conversations a paired Orca opened here that hold replies it has not acknowledged yet, and, for a
+ *  paired computer that takes asks (`clientEnvironmentId`), this Orca's conversations holding asks for it. */
 export function listPeerConversationIdsWithPendingReplies(
   this: OrchestrationDb,
-  peerFingerprint: string
+  peerFingerprint: string,
+  clientEnvironmentId: string | null = null
 ): string[] {
   const statement = this.db.prepare<{ conversation_id: string }>(
     `SELECT DISTINCT c.conversation_id FROM federation_relay_items i
      JOIN peer_mail_conversations c ON c.conversation_id = i.dispatch_id
-     WHERE i.direction = 'to_home' AND i.acked_at IS NULL
-       AND c.role = 'peer' AND c.peer_fingerprint = ?
+     WHERE i.acked_at IS NULL AND c.peer_fingerprint = ?1
+       AND ((i.direction = 'to_home' AND c.role = 'peer' AND c.environment_id IS NULL)
+         OR (?2 IS NOT NULL AND i.direction = 'to_worker' AND c.role = 'home' AND c.environment_id = ?2))
      ORDER BY c.conversation_id`
   )
-  const rows = statement.all(peerFingerprint)
+  const rows = statement.all(peerFingerprint, clientEnvironmentId)
   return rows.map((row) => row.conversation_id)
 }
 
@@ -112,7 +116,9 @@ export function isPeerMailSenderLabel(this: OrchestrationDb, label: string): boo
 function openPeerConversation(
   db: OrchestrationDb,
   conversationId: string,
-  peerFingerprint: string
+  peerFingerprint: string,
+  // Set when the far side is a server this Orca dials: the server opened it for its agents' asks.
+  environmentId: string | null = null
 ): void {
   const conversation = db.getPeerMailConversation(conversationId)
   if (
@@ -128,10 +134,10 @@ function openPeerConversation(
   if (!conversation) {
     db.db
       .prepare(
-        `INSERT INTO peer_mail_conversations (conversation_id, role, peer_fingerprint)
-         VALUES (?, 'peer', ?)`
+        `INSERT INTO peer_mail_conversations (conversation_id, role, peer_fingerprint, environment_id)
+         VALUES (?, 'peer', ?, ?)`
       )
-      .run(conversationId, peerFingerprint)
+      .run(conversationId, peerFingerprint, environmentId)
   }
 }
 
@@ -169,9 +175,10 @@ export function linkPeerMailMessage(
     peerFingerprint: string
     messageId: string
     senderLabel: string
+    environmentId?: string
   }
 ): void {
-  openPeerConversation(this, params.conversationId, params.peerFingerprint)
+  openPeerConversation(this, params.conversationId, params.peerFingerprint, params.environmentId)
   this.db
     .prepare(
       `INSERT OR IGNORE INTO peer_mail_messages (message_id, conversation_id, sender_label, remote_party)
@@ -187,6 +194,8 @@ export function insertPeerMailMessage(
     conversationId: string
     /** Only a 'peer' conversation is created here, by the paired Orca that opened it. */
     peerFingerprint?: string
+    /** With `peerFingerprint`: the server this Orca dials that opened it. */
+    environmentId?: string
     remoteParty: string | null
     message: MessageInsert & { id: string; from: string }
   }
@@ -204,7 +213,12 @@ export function insertPeerMailMessage(
       )
     }
     if (params.peerFingerprint !== undefined) {
-      openPeerConversation(this, params.conversationId, params.peerFingerprint)
+      openPeerConversation(
+        this,
+        params.conversationId,
+        params.peerFingerprint,
+        params.environmentId
+      )
     }
     if (this.getPeerMailMessage(params.message.id)) {
       this.db.exec('RELEASE peer_mail_insert')

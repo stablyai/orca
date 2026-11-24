@@ -1,5 +1,5 @@
 // The picture carousel: the current face large, its wrapped neighbours dimmed beside it.
-import React, { useEffect, useRef, useState } from 'react'
+import React, { useLayoutEffect, useState } from 'react'
 import { ChevronLeft, ChevronRight } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
@@ -7,6 +7,7 @@ import { useTranslate } from '@/i18n/use-translate'
 import { cn } from '@/lib/class-names'
 import type { BotMascotId } from '../../../../shared/bot-avatar'
 import { BotAvatarTile } from './BotAvatar'
+import type { BotOutfitArt } from './bot-mascot-look'
 import { BotMascotBitmapTile } from './BotMascotBitmapTile'
 import { BotPictureVeil } from './BotPictureIntakeLine'
 
@@ -18,9 +19,10 @@ export type BotPictureFace =
   | {
       key: string
       src: string | null
+      outfit?: BotOutfitArt | null
       fallback: string
       /** A mascot, drawn from its bitmap instead of `src`. */
-      mascot?: { id: BotMascotId; color: string | null }
+      mascot?: { id: BotMascotId; color: string | null; face?: string | null }
       render?: undefined
     }
   | { key: string; render: (current: boolean) => React.ReactNode; label: string }
@@ -88,24 +90,40 @@ export function BotPictureCarousel({
   // under them (Generate arriving once its agents are known, a picture taking a slot) lands in place.
   const order = faces.map((face) => face.key).join(' ')
   const [slideOver, setSlideOver] = useState<string | null>(null)
+  // A slide ends with its list, so a list put back (a refused upload) never revives it.
+  if (slideOver !== null && slideOver !== order) {
+    setSlideOver(null)
+  }
   const sliding = slideOver === order
-  const settle = useRef<ReturnType<typeof setTimeout> | null>(null)
-  useEffect(
-    () => () => {
-      if (settle.current) {
-        clearTimeout(settle.current)
-      }
-    },
-    []
-  )
-  const go = (next: number): void => {
-    setSlideOver(order)
-    if (settle.current) {
-      clearTimeout(settle.current)
+  // Every face in view since the slide began, so faces leaving view keep their outfit until it ends,
+  // whatever moved the current face (an arrow, or a pasted picture taking Generate).
+  const [dressed, setDressed] = useState<ReadonlySet<string>>(() => new Set())
+  const [seenIndex, setSeenIndex] = useState(index)
+  if (index !== seenIndex) {
+    setSeenIndex(index)
+    const left = faces.filter((_, i) => Math.abs(faceOffset(i, seenIndex, count)) <= 1)
+    setDressed((was) => (sliding ? new Set([...was, ...left.map((face) => face.key)]) : new Set()))
+  }
+  // The slide lasts a little past the 300 ms move from the latest change of face, however it moved;
+  // a layout effect, so the previous timer is cleared in the same commit and can't end the new slide.
+  useLayoutEffect(() => {
+    if (!sliding) {
+      return
     }
-    // A little past the 300 ms slide.
-    settle.current = setTimeout(() => setSlideOver(null), 400)
-    onIndexChange(((next % count) + count) % count)
+    const timer = setTimeout(() => setSlideOver(null), 400)
+    return () => clearTimeout(timer)
+  }, [sliding, index])
+  const go = (next: number): void => {
+    const target = ((next % count) + count) % count
+    // The face already current: nothing moves, so nothing slides.
+    if (target === index) {
+      return
+    }
+    setSlideOver(order)
+    if (!sliding) {
+      setDressed(new Set())
+    }
+    onIndexChange(target)
   }
   const faceClass = cn(FACE_CLASS, sliding ? 'will-change-[transform,opacity]' : 'transition-none')
   return (
@@ -133,6 +151,8 @@ export function BotPictureCarousel({
         // Faces past the neighbours wait further out, so they slide in rather than appear.
         const x = Math.sign(offset) * NEIGHBOUR_OFFSET_PX * (distance > 1 ? 1.4 : 1)
         const position = distance === 0 ? 'current' : distance === 1 ? 'neighbour' : 'hidden'
+        // Hidden faces wear nothing, so only the faces in view read and decode outfit art.
+        const shown = position !== 'hidden' || (sliding && dressed.has(face.key))
         const style = {
           transform: `translate(calc(-50% + ${x}px), -50%) scale(${distance === 0 ? 1 : NEIGHBOUR_SCALE})`
         }
@@ -169,11 +189,14 @@ export function BotPictureCarousel({
               <BotMascotBitmapTile
                 id={face.mascot.id}
                 color={face.mascot.color}
+                face={shown ? face.mascot.face : null}
+                outfit={shown ? face.outfit : null}
                 className="size-28 rounded-xl"
               />
             ) : (
               <BotAvatarTile
                 src={face.src}
+                outfit={shown ? face.outfit : null}
                 fallback={face.fallback}
                 className="size-28 rounded-xl text-4xl"
               />

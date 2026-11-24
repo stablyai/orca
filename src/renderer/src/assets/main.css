@@ -183,6 +183,16 @@
   --color-activity-bar-indicator: var(--tab-active-indicator, var(--foreground));
   /* The theme's accent where one is set (link color); the built-in note blue otherwise. */
   --color-theme-accent: var(--text-link, var(--callout-note));
+  /* A theme-accent button's fill: the accent, unless no label reads on it (then the built-in accent). */
+  --color-theme-accent-fill: var(--theme-accent-fill, var(--text-link, var(--callout-note)));
+  /* Its hover: 12% toward the neutral opposite of the label, so the label keeps 4.5:1 either way. */
+  --color-theme-accent-fill-hover: color-mix(
+    in srgb,
+    var(--theme-accent-fill, var(--text-link, var(--callout-note))) 88%,
+    oklch(from var(--theme-accent-foreground) calc(1 - l) 0 0)
+  );
+  /* The label on a theme-accent fill: derived from the accent (near-black or white, whichever reads better). */
+  --color-theme-accent-foreground: var(--theme-accent-foreground);
   --color-git-graph-ref: var(--git-graph-ref);
   --color-git-graph-remote-ref: var(--git-graph-remote-ref);
   --color-git-graph-base-ref: var(--git-graph-base-ref);
@@ -260,6 +270,8 @@
   --chat-composer-border-mix: 11%;
   --chat-selection-mix: 30%;
   --chat-content-max-width: 46rem;
+  /* Why: unitless so each markdown surface multiplies it by its own font size; zoom keeps characters per line. */
+  --markdown-reading-measure-em: 60;
   --card: #fff;
   --card-foreground: #0a0a0a;
   /* Why: another product's logo is drawn for a white backdrop in both themes. */
@@ -498,6 +510,8 @@
   --status-warning-foreground: color-mix(in srgb, var(--status-warning) 70%, var(--foreground));
   /* GitHub's own hues for the two callout kinds no status token covers. */
   --callout-note: #0969da;
+  /* Keep in step with accentInkHex (src/shared/color/accent-ink.ts): white reads better on this accent. */
+  --theme-accent-foreground: #fafafa;
   --callout-important: #8250df;
   --git-decoration-added: #587c0c;
   --git-decoration-modified: #895503;
@@ -535,6 +549,8 @@
   /* Warning text on a plain surface; the bare hue is ~3:1 on light backgrounds. */
   --status-warning-foreground: color-mix(in srgb, var(--status-warning) 70%, var(--foreground));
   --callout-note: #4493f8;
+  /* Keep in step with accentInkHex (src/shared/color/accent-ink.ts): near-black reads better on this accent. */
+  --theme-accent-foreground: #171717;
   --callout-important: #ab7df8;
   --git-decoration-added: #81b88b;
   --git-decoration-modified: #e2c08d;
@@ -597,18 +613,35 @@
   --notice-outline-edge: transparent;
   --notice-secondary-edge: transparent;
   --notice-surface: var(--popover);
-  --notice-border: color-mix(in srgb, var(--popover-foreground) 14%, transparent);
+  --notice-border: color-mix(in srgb, var(--popover-foreground) 20%, transparent);
   --notice-secondary: color-mix(in srgb, var(--foreground) 6%, var(--notice-surface));
-  --notice-shadow: 0 11px 32px -6px rgb(0 0 0 / 0.2), 0 2px 6px rgb(0 0 0 / 0.08);
+  /* Body copy under a notice title; app themes raise it until it reads at 4.5:1 on the surface. */
+  --notice-description: color-mix(in srgb, var(--popover-foreground) 80%, transparent);
+  --notice-shadow: 0 16px 40px -8px rgb(0 0 0 / 0.28), 0 3px 8px rgb(0 0 0 / 0.12);
+  /* The bot pill's ring + lift: an approved exception to the three elevation levels, lighter than notices. */
+  --bot-home-banner-shadow:
+    0 0 0 1px rgb(0 0 0 / 0.04), 0 1px 2px rgb(0 0 0 / 0.015), 0 4px 14px rgb(0 0 0 / 0.02);
 }
 
 .dark {
-  --notice-surface: color-mix(in srgb, var(--foreground) 7%, var(--popover));
-  --notice-border: color-mix(in srgb, var(--popover-foreground) 15%, transparent);
+  /* Why 15%: 1.4:1 against the dark chat and editor canvas (#1e1e1e) so a toast can't blend in. */
+  --notice-surface: color-mix(in srgb, var(--foreground) 15%, var(--popover));
+  --notice-border: color-mix(in srgb, var(--popover-foreground) 22%, transparent);
   --notice-secondary: color-mix(in srgb, var(--foreground) 10%, var(--notice-surface));
+  /* Why: the lifted surface now matches the palette's accent and sits above its muted fill, so hover
+     and muted panels step up from the surface (as app themes do) and muted text reads on them. */
+  --notice-accent: color-mix(in srgb, var(--foreground) 16%, var(--notice-surface));
+  --notice-muted: var(--notice-secondary);
+  --notice-muted-foreground: color-mix(
+    in srgb,
+    var(--popover-foreground) 72%,
+    var(--notice-surface)
+  );
   --notice-shadow:
-    0 11px 32px -6px rgb(0 0 0 / 0.55), 0 2px 6px rgb(0 0 0 / 0.22),
-    inset 0 1px 0 rgb(255 255 255 / 0.06);
+    0 18px 48px -8px rgb(0 0 0 / 0.7), 0 4px 12px rgb(0 0 0 / 0.35),
+    inset 0 1px 0 rgb(255 255 255 / 0.08);
+  --bot-home-banner-shadow:
+    0 0 0 1px rgb(255 255 255 / 0.06), 0 1px 2px rgb(0 0 0 / 0.075), 0 4px 14px rgb(0 0 0 / 0.075);
 }
 
 /* Why: buttons, text and inner panels paint from these; foregrounds pair with the popover the surface lifts,
@@ -735,13 +768,20 @@ body[data-modal-overlay-open] [data-toasts-raised] [data-sonner-toaster] {
 }
 
 [data-sonner-toaster] [data-sonner-toast][data-styled='true'] [data-title] {
+  color: var(--popover-foreground);
+  font-weight: 500;
   line-height: 1.35;
 }
 
 [data-sonner-toaster] [data-sonner-toast][data-styled='true'] [data-description] {
-  /* Match custom JSX toast descriptions’ 80% body-copy opacity. */
-  color: color-mix(in srgb, var(--popover-foreground) 80%, transparent);
+  color: var(--notice-description);
   line-height: 1.45;
+}
+
+/* Why: custom JSX toast bodies paint text-popover-foreground/80; route them through the same
+   readable description color as Sonner descriptions so app themes can't sink them below 4.5:1. */
+[data-sonner-toaster] .text-popover-foreground\/80 {
+  color: var(--notice-description);
 }
 
 /* Visible toasts absorb backdrop clicks; Toaster gates actions while a modal owns the pointer lock. */
@@ -1938,10 +1978,39 @@ html.native-shell .app-layout {
   box-shadow: none;
 }
 
+/* Lineage connectors: quiet enough to sit behind cards, strong enough to read the tree at a glance. */
+[data-worktree-lineage-guides] {
+  --worktree-lineage-guide-color: color-mix(
+    in srgb,
+    var(--worktree-sidebar-foreground) 22%,
+    transparent
+  );
+}
+
+[data-worktree-lineage-guide='rail'],
+[data-worktree-lineage-guide='stem'] {
+  background-color: var(--worktree-lineage-guide-color);
+}
+
+[data-worktree-lineage-guide='branch'] {
+  border-color: var(--worktree-lineage-guide-color);
+}
+
+/* Why: title-only cards use py-2 instead of pt-1.25, which drops the title center by 3px. */
+[data-worktree-lineage-row]:has(> * [data-worktree-card-single-line]) {
+  --worktree-lineage-title-center: 19px;
+}
+
 /* Continuous segments must not cast a horizontal shadow at every virtual boundary. */
 [data-worktree-family-segment],
 .dark [data-worktree-family-segment] {
   box-shadow: none;
+}
+
+/* Active and selected cards already use box-shadow. */
+[data-worktree-card-surface][data-worktree-card-menu-open] {
+  outline: 1px solid color-mix(in oklab, var(--worktree-sidebar-ring) 60%, transparent);
+  outline-offset: -1px;
 }
 
 /* #19624: mix text tokens toward sidebar in oklab for theme-stable perceptual dimming; preserve unread amber at full brightness. */
@@ -2244,8 +2313,16 @@ html.native-shell .app-layout {
 }
 
 .agent-working-spinner[data-animation-offscreen],
-.loading-spinner[data-animation-offscreen] {
+.loading-spinner[data-animation-offscreen],
+[data-animation-offscreen] .stale-review-shimmer {
   animation: none;
+}
+
+/* Virtual-list rows outside the viewport (overscan included) pause only endless loops; finite animations still finish. */
+[data-row-offscreen] .animate-spin,
+[data-row-offscreen] .animate-pulse,
+[data-row-offscreen] .shimmer:not(.shimmer-once) {
+  animation-play-state: paused;
 }
 
 /* Generic spinners and pulses hold still under reduced motion even where a caller forgot motion-reduce:. */
@@ -2532,11 +2609,6 @@ html.native-shell .app-layout {
 
 .settings-target-highlight[data-settings-target-loose] {
   --settings-target-halo: 10px;
-  border-radius: var(--radius-md);
-}
-
-[data-settings-scroll-list] .settings-target-highlight {
-  --settings-target-tint: color-mix(in srgb, var(--foreground) 12%, transparent);
   border-radius: var(--radius-md);
 }
 
@@ -4363,6 +4435,11 @@ body:has([data-contextual-tour-target='tab-create-menu'][data-state='open'])
   50% {
     opacity: 1;
   }
+}
+
+/* The descendant pause above doesn't reach pseudo-elements. */
+[data-animation-offscreen] .browser-agent-cursor-layer::before {
+  animation-play-state: paused;
 }
 
 @media (prefers-reduced-motion: reduce) {

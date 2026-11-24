@@ -7,7 +7,7 @@ import { nameLinkedPlace } from './external-conversation-place'
 import { isBotAgent } from '../../shared/bot-types'
 import {
   type ConversationChatHost,
-  runningTurnOpenedByConversationReport,
+  chatTurnFacts,
   watchChatNews
 } from './external-conversation-chat'
 import { answerConversation } from './external-conversation-answer'
@@ -19,6 +19,7 @@ import {
   type LinkableChat
 } from './external-conversation-chat-delivery'
 import { cancelConversation } from './external-conversation-cancel'
+import { resumeRefusal } from './external-conversation-resume'
 import { ConversationChain } from './external-conversation-chain'
 import { GoneChats } from './external-conversation-gone-chats'
 import { ConversationEvents, type ConversationWatchListener } from './external-conversation-events'
@@ -32,8 +33,8 @@ import {
   type ExternalConversationSeamDeps
 } from './external-conversation-host'
 import {
-  allLinks,
   findLink,
+  findLinkForSession,
   findConversationChat,
   type LinkedConversation
 } from './external-conversation-links'
@@ -134,7 +135,7 @@ export class ExternalConversationSeam {
   /** Whether the chat's running turn is its conversation's, so workers it starts report there too: a
    *  turn the owner typed that the Slack mirror posted to the thread is the thread's ask as well. */
   conversationTurn(chats: ConversationChatHost | undefined, sessionId: string): boolean {
-    const linked = [...allLinks(this.deps.store)].find(({ link }) => link.sessionId === sessionId)
+    const linked = findLinkForSession(this.deps.store, sessionId)
     return Boolean(
       linked &&
       (conversationOwnsTurn(linked.link, this.turnFacts(chats)) ||
@@ -143,10 +144,7 @@ export class ExternalConversationSeam {
   }
 
   private turnFacts(chats: ConversationChatHost | undefined) {
-    return {
-      delivered: (sessionId: string) => this.chatDeliveries.pending(sessionId),
-      reported: (sessionId: string) => runningTurnOpenedByConversationReport(chats, sessionId)
-    }
+    return chatTurnFacts(chats, this.deps.store, (id) => this.chatDeliveries.pending(id))
   }
 
   /** Null unless a watch runs (replies need the connector) and the chat is linked. */
@@ -182,7 +180,7 @@ export class ExternalConversationSeam {
     })
     this.chatDeliveries.stopFollowing()
     const release = this.events.watch(listener)
-    this.deps.slackMirror?.()?.flushHeld()
+    this.deps.watched?.()
     return release
   }
 
@@ -344,6 +342,9 @@ export class ExternalConversationSeam {
     const chat = link.bot
       ? await botChatFor(this.deps.store, host.bots, key, link.bot)
       : linkedChat(workspace.worktreeId, link)
-    return 'outcome' in chat ? chat : this.deliverToChat(host, key, chat, message, signal)
+    return 'outcome' in chat
+      ? chat
+      : ((await resumeRefusal(message, host.chat, chat.sessionId, { workspace, link })) ??
+          this.deliverToChat(host, key, chat, message, signal))
   }
 }

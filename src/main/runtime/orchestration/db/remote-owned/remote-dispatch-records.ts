@@ -296,6 +296,9 @@ export type RemoteOwnedQuestionRow = {
   run_id: string
   environment_id: string
   dispatch_id: string
+  taken_by: string | null
+  awaiting: 1 | null
+  ended: 'answered' | 'unanswered' | 'dropped' | null
 }
 
 /** A question a remote worker asked here, which its server answers. */
@@ -306,4 +309,13 @@ export function getRemoteOwnedQuestion(
   return db.db
     .prepare<RemoteOwnedQuestionRow>('SELECT * FROM remote_owned_questions WHERE message_id = ?')
     .get(messageId)
+}
+
+/** Its answer reached the worker's computer: no notice is owed, even after one went. */
+export function recordRemoteAskAnswered(db: OrchestrationDb, messageId: string): void {
+  db.db
+    .prepare(
+      `UPDATE remote_owned_questions SET ended = 'answered', awaiting = NULL WHERE message_id = ?`
+    )
+    .run(messageId)
 }

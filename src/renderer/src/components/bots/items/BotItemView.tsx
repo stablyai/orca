@@ -3,7 +3,7 @@
 // BotItemPane holds it under the back row and sends typing from anywhere in it to the comment box.
 // The comment box always stays at the bottom: a reply to the agent's question is a comment, typed there
 // or picked from the question's quick replies.
-import { useDeferredValue, useEffect, useMemo, useRef, useState } from 'react'
+import { useDeferredValue, useEffect, useMemo, useRef } from 'react'
 import { ExternalLink, House, MessageSquare } from 'lucide-react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
@@ -32,9 +32,11 @@ import { NativeChatFileLinkExistenceContext } from '../../native-chat/links/acti
 import { NativeChatLinkClickContext } from '../../native-chat/links/actions/native-chat-link-click-context'
 import { useNativeChatLinkActions } from '../../native-chat/links/actions/use-native-chat-link-actions'
 import { BotItemActivityList } from './BotItemActivityList'
-import { BotItemCancelDialog } from './BotItemCancelDialog'
+import { useBotItemStatusNotes } from './BotItemStatusNoteDialog'
 import { BotItemClampedText } from './BotItemClampedText'
 import { BotItemCommentBox, type BotItemCommentBoxHandle } from './BotItemCommentBox'
+import { NativeChatSelectionQuote } from '../../native-chat/selection-quotes/NativeChatSelectionQuote'
+import { revealBotItemComment } from './bot-item-comment-reveal'
 import { BotItemHeader } from './BotItemHeader'
 import { setBotItemsStatus } from './use-bot-items'
 import { useBotItemSnoozing } from './BotItemSnooze'
@@ -42,6 +44,7 @@ import { useBotItemView, type BotItemViewRead } from './use-bot-item-view'
 import { useBotItemPendingComments } from './use-bot-item-pending-comments'
 import { BotItemsReadFailed } from './BotItemsReadFailed'
 import { BotItemNavRow } from './BotItemStepper'
+import { BotItemLoading } from './BotItemLoading'
 
 const NO_FOLDERS: never[] = []
 
@@ -53,6 +56,7 @@ export function BotItemView({
   commentRef,
   nav,
   onShown,
+  onLoading,
   onGone
 }: {
   bot: Bot
@@ -65,6 +69,7 @@ export function BotItemView({
   nav?: React.ReactNode
   /** Called once, when the item first shows. */
   onShown?: (item: BotItem) => void
+  onLoading?: () => (() => void) | undefined
   onGone?: (uid: string) => void
 }): React.JSX.Element {
   const view = useBotItemView(bot, uid, listed)
@@ -81,13 +86,14 @@ export function BotItemView({
       told.current = true
       onShown?.(item)
     }
-  }, [item, onShown])
-  const notice = deleted ? <BotItemDeletedNotice /> : null
+    return !item && !view.failed && !deleted ? onLoading?.() : undefined
+  }, [item, onShown, view.failed, deleted, onLoading])
   if (!item) {
     return (
       <BotItemUnread takeFocus={takeFocus} failed={view.failed} deleted={deleted} nav={nav}>
-        {notice}
+        {deleted ? <BotItemDeletedNotice /> : null}
         {view.failed ? <BotItemsReadFailed onRetry={view.retry} /> : null}
+        {!view.failed && !deleted ? <BotItemLoading /> : null}
       </BotItemUnread>
     )
   }
@@ -96,7 +102,7 @@ export function BotItemView({
       bot={bot}
       view={view}
       item={item}
-      notice={notice}
+      notice={deleted ? <BotItemDeletedNotice /> : null}
       deleted={deleted}
       takeFocus={takeFocus}
       commentRef={commentRef}
@@ -172,7 +178,6 @@ export function BotItemBody({
   nav?: React.ReactNode
 }): React.JSX.Element {
   const t = useTranslate()
-  const [canceling, setCanceling] = useState(false)
   const snoozing = useBotItemSnoozing(bot)
   const pane = useRef<HTMLDivElement | null>(null)
   const ownComment = useRef<BotItemCommentBoxHandle | null>(null)
@@ -192,6 +197,7 @@ export function BotItemBody({
     void setBotItemsStatus(bot, [item.uid], to, reason).catch((error: unknown) =>
       toast.error(botErrorMessage(error))
     )
+  const notes = useBotItemStatusNotes((_items, to, note) => setStatus(to, note))
   const ChatIcon = item.chat.kind === 'home' ? House : MessageSquare
   const pending = useBotItemPendingComments(bot, item.uid, view.events)
   // The header and comment box paint first; the Activity, the costly part, renders right after.
@@ -202,8 +208,12 @@ export function BotItemBody({
     isVisible: true
   })
   // From the comment box or a quick reply: shown at once, then sent to the host.
-  const sendComment = (text: string, paths: readonly string[] = [], questionId?: string): void => {
-    pending.send(text, paths, view.events.at(-1)?.id ?? item.lastEventId, questionId)
+  const sendComment: Parameters<typeof useBotItemQuestionSteps>[3] = (
+    text,
+    paths = [],
+    ...rest
+  ) => {
+    pending.send(text, paths, view.events.at(-1)?.id ?? item.lastEventId, ...rest)
     jumpToLatest()
   }
   const sendLatest = useLatestHandler(sendComment)
@@ -255,8 +265,8 @@ export function BotItemBody({
     [deleted, comment, quick, steps, sent]
   )
   // The waiting question's comment, with its words and quick replies, is read even when it is older
-  // than the loaded page: earlier pages load until it shows.
-  const questionId = item.question?.eventId
+  // than the loaded page (later comments can push it back): earlier pages load until it shows.
+  const questionId = item.waitingAsk ?? item.question?.eventId
   const questionUnread =
     view.eventsRead &&
     questionId !== undefined &&
@@ -304,7 +314,7 @@ export function BotItemBody({
                       item={item}
                       chatTitle={chatTitle}
                       deleted={deleted}
-                      onStatus={(to) => (to === 'canceled' ? setCanceling(true) : setStatus(to))}
+                      onStatus={(to) => notes.move([item], to)}
                       snoozing={snoozing}
                       scrollRef={scrollRef}
                     />
@@ -371,10 +381,9 @@ export function BotItemBody({
               </NativeChatLinkClickContext>
             </NativeChatFileLinkExistenceContext>
             <LinkActionPopover request={links.linkActionRequest} onClose={links.closeLinkActions} />
+            <NativeChatSelectionQuote rootRef={pane} composerRef={comment} enabled={!deleted} />
             {deleted ? (
-              nav ? (
-                <BotItemNavRow nav={nav} />
-              ) : null
+              nav && <BotItemNavRow nav={nav} />
             ) : (
               <BotItemCommentBox
                 ref={comment}
@@ -383,20 +392,16 @@ export function BotItemBody({
                 attachTo={attachTo}
                 nav={nav}
                 question={waitingOn}
+                onShowQuestion={(eventId) =>
+                  revealBotItemComment(scrollRef.current, eventId, 'flash')
+                }
                 onSend={fromBox}
               />
             )}
           </NativeChatPaneFileDropSurface>
         </NativeChatTextAttachmentScope>
       </NativeChatMarkdownImageOwnerContext>
-      <BotItemCancelDialog
-        items={canceling ? [item] : null}
-        onCancel={(reason) => {
-          setCanceling(false)
-          setStatus('canceled', reason)
-        }}
-        onClose={() => setCanceling(false)}
-      />
+      {notes.dialog}
       {snoozing.dialog}
     </div>
   )
