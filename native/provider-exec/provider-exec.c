@@ -282,8 +282,9 @@ struct watcher {
     struct identity_set termed;
     // Identities read in full without the tag, so each unrelated orphan is read once per stop.
     struct identity_set untagged;
-    // Live members the last full sweep found.
+    // Every member proven during this stop that may still be alive, kept by exact identity.
     struct identity_set known;
+    int sweep_generation;
     long long next_full_ns;
     long long sweep_interval_ms;
     int group_term_pending;
@@ -898,6 +899,34 @@ static int deliver_to_member(struct watcher *w, struct proc_row *row, int signal
     return alive;
 }
 
+// Marks a member found by this sweep, so signal_unseen_known skips it.
+static void seen_member(struct watcher *w, const struct proc_row *row) {
+    struct identity *item = identity_find(&w->known, row->pid, row->start);
+    if (item != NULL) {
+        item->value = w->sweep_generation;
+    }
+}
+
+// Earlier-proven members this sweep didn't reach: still signalled through their own handle, and
+// dropped from the record once gone.
+static int signal_unseen_known(struct watcher *w, int signal_number) {
+    int live = 0;
+    size_t kept = 0;
+    for (size_t i = 0; i < w->known.count; i++) {
+        struct identity item = w->known.items[i];
+        if (item.value != w->sweep_generation) {
+            struct proc_row row = {.pid = item.pid, .start = item.start};
+            if (!deliver_to_member(w, &row, signal_number)) {
+                continue;
+            }
+            live++;
+        }
+        w->known.items[kept++] = item;
+    }
+    w->known.count = kept;
+    return live;
+}
+
 // Between full sweeps only the members the last one found are rechecked, each by its own kernel
 // handle, so a lingering tool costs O(members) rather than a host-wide table read.
 static int probe_known_members(struct watcher *w, int signal_number) {
@@ -1000,7 +1029,7 @@ static int sweep_once(struct watcher *w, int signal_number) {
         dropped = 1;
     }
     live = 0;
-    w->known.count = 0;
+    w->sweep_generation++;
     for (size_t i = 0; i < scan.n; i++) {
         struct proc_row *row = &scan.rows[i];
         if (!tree_member(scan.state[i]) || row->zombie) {
@@ -1024,12 +1053,15 @@ static int sweep_once(struct watcher *w, int signal_number) {
             if (identity_reserve(&w->known)) {
                 identity_insert(&w->known, row->pid, row->start, 0);
             }
+            seen_member(w, row);
             live++;
         } else {
             // It may have forked after the table was read and exited since.
             dropped = 1;
         }
     }
+    // A member proven by an earlier sweep stays one after its ancestry is gone; its handle decides.
+    live += signal_unseen_known(w, signal_number);
     // A dropped member may live on under a new parent, or in a child born after the table was read,
     // so this sweep cannot prove the tree empty.
     if (dropped && live == 0) {
@@ -1049,12 +1081,42 @@ done:
     return live;
 }
 
-// /proc is read one row at a time, so on Linux only two empty scans in a row prove the tree gone.
+#if defined(__linux__)
+// Every live tree process descends from the subreaper, which adopts orphans, so the tree is empty
+// only if its sole child is this watcher. 1 that holds, 0 another child exists or the list is
+// unreadable, -1 the kernel doesn't provide the list.
+static int reaper_has_only_watcher(const struct watcher *w) {
+    char path[64];
+    snprintf(path, sizeof path, "/proc/%ld/task/%ld/children", (long)w->reaper, (long)w->reaper);
+    FILE *children = fopen(path, "re");
+    if (children == NULL) {
+        return errno == ENOENT ? -1 : 0;
+    }
+    long child;
+    int only_watcher = 1;
+    while (fscanf(children, "%ld", &child) == 1) {
+        if (child != (long)getpid()) {
+            only_watcher = 0;
+        }
+    }
+    if (ferror(children)) {
+        only_watcher = 0;
+    }
+    fclose(children);
+    return only_watcher;
+}
+#endif
+
+// /proc is read one row at a time, so on Linux two empty scans in a row, and the subreaper having
+// no child but this watcher, prove the tree gone.
 static int sweep_tree(struct watcher *w, int signal_number) {
     int live = sweep_once(w, signal_number);
 #if defined(__linux__)
     if (live == 0) {
         live = sweep_once(w, signal_number);
+    }
+    if (live == 0 && reaper_has_only_watcher(w) == 0) {
+        live = -1;
     }
 #endif
     return live;
