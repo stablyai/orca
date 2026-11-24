@@ -1115,7 +1115,8 @@ static int sweep_tree(struct watcher *w, int signal_number) {
     if (live == 0) {
         live = sweep_once(w, signal_number);
     }
-    if (live == 0 && reaper_has_only_watcher(w) == 0) {
+    // While the CLI group lives its leader is the subreaper's child too; absence isn't claimed then.
+    if (live == 0 && group_absent(w) && reaper_has_only_watcher(w) == 0) {
         live = -1;
     }
 #endif
@@ -1143,7 +1144,8 @@ static int tree_absent(struct watcher *w, int signal_number) {
     }
     long long now_ns = (long long)now.tv_sec * 1000000000LL + now.tv_nsec;
     // The first sweep after the group is gone runs at once; completion waits on it.
-    if (now_ns < w->next_sweep_ns && (!group_gone || w->swept_group_gone)) {
+    int first_gone = group_gone && !w->swept_group_gone;
+    if (now_ns < w->next_sweep_ns && !first_gone) {
         return 0;
     }
     w->swept_group_gone = group_gone;
@@ -1151,8 +1153,10 @@ static int tree_absent(struct watcher *w, int signal_number) {
     long long last_chance = w->deadline_ns - tick;
     // Known members are rechecked every interval; the whole table is read again only on its own
     // backoff, once none of them is left, or in the last interval before the phase deadline.
-    int live = w->known.count > 0 ? probe_known_members(w, signal_number) : 0;
-    int full = live == 0 || now_ns >= w->next_full_ns || now_ns >= last_chance;
+    int probed = w->known.count > 0;
+    int live = probed ? probe_known_members(w, signal_number) : 0;
+    int full = (probed && live == 0) || first_gone || now_ns >= w->next_full_ns ||
+               now_ns >= last_chance;
     if (full) {
         live = sweep_tree(w, signal_number);
         long long interval =
@@ -1167,7 +1171,8 @@ static int tree_absent(struct watcher *w, int signal_number) {
     if (w->next_sweep_ns > last_chance && now_ns < last_chance) {
         w->next_sweep_ns = last_chance;
     }
-    if (!group_gone) {
+    // Only a full sweep decides; a probe can show members alive but never prove the tree empty.
+    if (!group_gone || !full) {
         return 0;
     }
     return live == 0 ? 1 : live == TREE_UNPROVABLE ? 2 : 0;
