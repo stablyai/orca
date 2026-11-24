@@ -20,7 +20,7 @@ export function HideProviderUsageMenuItem({
       onSelect={() => {
         recordFeatureInteraction('usage-tracking')
         // Same switch as the status bar's right-click menu, so either path can restore it.
-        void setStatusBarItemVisible(provider, false)
+        setStatusBarItemVisible(provider, false).catch(console.error)
       }}
     >
       <EyeOff className="size-3.5" />

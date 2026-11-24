@@ -279,7 +279,11 @@ export function createUiPreferenceActions(set: UISliceSet, get: UISliceGet): Par
       const updated = visible ? [...current, item] : current.filter((i) => i !== item)
       set({ statusBarItems: updated })
       // Main gates some usage fetches on this list, so callers refresh only after it persists.
-      await window.api.ui.set({ statusBarItems: updated }).catch(console.error)
+      await window.api.ui.set({ statusBarItems: updated }).catch((error: unknown) => {
+        // Roll back so the UI and a retry match what main still has.
+        set((s) => (s.statusBarItems === updated ? { statusBarItems: current } : {}))
+        throw error
+      })
     },
 
     agentDashboardDrawerOpen: false,

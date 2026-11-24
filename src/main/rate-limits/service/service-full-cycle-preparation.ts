@@ -54,8 +54,6 @@ export abstract class RateLimitServiceFullCyclePreparation extends RateLimitServ
     }
     const antigravityGeneration = this.antigravityFetchGeneration
     const antigravityTarget = this.antigravityFetchTarget
-    // Hidden Cursor skips its keychain read and settles idle (null would read as loading).
-    const cursorFetchAllowed = this.cursorUsageEnabledResolver?.() ?? true
     const codexFetchGated = codexHome.skip
     const codexHomePath = codexHome.homePath
     const codexProvenance = codexFetchGated
@@ -136,6 +134,9 @@ export abstract class RateLimitServiceFullCyclePreparation extends RateLimitServ
           baseUrl: ZCODE_PLAN_SITE_BASE_URLS[zcodePlanConfigResult.config.site]
         }
       : null
+    // Read after the config awaits so hiding Cursor mid-preparation still skips its keychain read.
+    // Hidden Cursor settles idle (null would read as loading).
+    const cursorFetchAllowed = this.cursorUsageEnabledResolver?.() ?? true
     this.updateState({
       ...previousState,
       claude: this.claudeStateAtCycleStart(previousState.claude),

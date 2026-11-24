@@ -244,9 +244,11 @@ export abstract class RateLimitServiceFullCycleApplication extends RateLimitServ
     const shouldApplyAntigravity = antigravityGeneration === this.antigravityFetchGeneration
     // Discard Cursor stale usage only for a known account change; unidentified transient failures retain their last reading.
     const cursorAccountChanged = hasKnownProvenanceChange(previousState.cursor, cursor)
+    // Re-check: a read started before the user hid Cursor must not publish onto the hidden meter.
+    const cursorShown = cursorFetchAllowed && (this.cursorUsageEnabledResolver?.() ?? true)
     // The stale policy would resurface the last reading as an error; a hidden meter settles idle.
-    const nextCursor = !cursorFetchAllowed
-      ? cursor
+    const nextCursor = !cursorShown
+      ? disabledUsageSnapshot('cursor')
       : cursorAccountChanged
         ? cursor
         : this.applyStalePolicy(cursor, previousState.cursor)
@@ -257,7 +259,7 @@ export abstract class RateLimitServiceFullCycleApplication extends RateLimitServ
       zcodeAccount !== undefined &&
       previousZcodeAccount === zcodeAccount
     this.trackActiveFailureStreak('grok', grok)
-    if (cursorFetchAllowed) {
+    if (cursorShown) {
       this.trackActiveFailureStreak('cursor', cursor)
     } else {
       // A hidden meter's past failures must not throttle the first read after it is shown again.

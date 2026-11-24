@@ -84,8 +84,19 @@ export function CursorAccountsSection(): React.JSX.Element {
     }
   }, [])
 
+  // Hidden Cursor polls publish idle snapshots; reloading on those would keep reading the sign-in.
+  const reloadOnUsageUpdate = useRef(showInStatusBar)
+  useEffect(() => {
+    reloadOnUsageUpdate.current = showInStatusBar
+  }, [showInStatusBar])
+  const statusLoaded = useRef(false)
+
   // Background usage updates can change sign-in state; reload status on arrival.
   useEffect(() => {
+    if (statusLoaded.current && !reloadOnUsageUpdate.current) {
+      return
+    }
+    statusLoaded.current = true
     void loadStatus()
   }, [loadStatus, cursorUsage?.updatedAt])
 
@@ -102,7 +113,12 @@ export function CursorAccountsSection(): React.JSX.Element {
   // Main skips Cursor reads while hidden, so re-showing must fetch now, not at the next poll.
   const handleShowInStatusBarChange = async (checked: boolean): Promise<void> => {
     recordFeatureInteraction('usage-tracking')
-    await setStatusBarItemVisible('cursor', checked)
+    try {
+      await setStatusBarItemVisible('cursor', checked)
+    } catch (error) {
+      console.error('Failed to save Cursor status bar visibility:', error)
+      return
+    }
     if (checked) {
       await handleRefreshUsage()
     }
