@@ -24,7 +24,7 @@ export function lookAroundPrompt(input: {
     '',
     'This run only reads. Read files, run read-only commands (`gh pr view|list|checks|diff`, `gh issue|run view|list`, `git log|show|diff|status|rev-parse|ls-files`, ' +
       `\`${cli} bot connectors|list|chats\`, \`${cli} bot item list|show\`, \`${cli} bot work list\`, \`${cli} slack find|read|check\`, \`${cli} linear issue|search|list-issues\`, \`${cli} automations list|show\`, \`${cli} repo list\`, \`${cli} worktree ps\`), and suggest. ` +
-      'Run each alone, with no pipe, `;`, `&&` or redirect such as `2>&1`. Anything else is refused; do not retry it, suggest it instead. Do not edit MEMORY.md or any other file.',
+      'You may chain reads with `;`, `&&` or `||` and end one with `2>&1`; pipes, `$(...)` and other redirects are refused. Anything else is refused; do not retry it, suggest it instead. Do not edit MEMORY.md or any other file.',
     '',
     `Look for: ${input.focus.trim() || DEFAULT_FOCUS}`,
     '',
@@ -47,7 +47,7 @@ export function lookAroundPrompt(input: {
     '- why: one sentence on why now.',
     '- ask: the message your owner would send you to do it, written as them.',
     '- link: the thread, issue or pull request it is about.',
-    'Quote each value in single quotes, on one line, with no apostrophe inside; other quoting is refused. Suggest only things with a concrete next step; if nothing is worth it, suggest nothing.',
+    'Quote each value in straight single quotes, on one line, with no apostrophe, double quote or curly quote inside; other quoting is refused. Suggest only things with a concrete next step; if nothing is worth it, suggest nothing.',
     '',
     `When done, end with ${BOT_QUIET_MARKER}; one short line for your owner may come before it.`
   ]
