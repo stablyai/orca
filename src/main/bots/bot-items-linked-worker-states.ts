@@ -36,6 +36,9 @@ type Kept = {
   dispatchId: string
   resourceId: string | null
   print: number
+  reason: string | null
+  /** The database's state the fingerprint last matched in: unchanged since, it isn't read again. */
+  checkedAt: string
   /** The kept report's length, counted against its budget. */
   chars: number
 }
@@ -63,8 +66,10 @@ export class LinkedWorkerStates {
       this.source = db
     }
     const writes = this.writes
-    // Another connection's commits fire no notice here; it counts them.
+    // Row notices, other connections' commits (which fire none here) and the dock's own revision: with
+    // none since a kept worker was last checked, its rows are unchanged and no fingerprint is read.
     const version = dataVersion(db)
+    const stamp = version === null ? null : `${writes}:${version}:${dockRevision(db)}`
     const states = new Map<string, LinkedWorkerState | null>()
     const candidates = unique.flatMap((ref) => {
       const kept = this.kept.get(ref)
@@ -72,21 +77,25 @@ export class LinkedWorkerStates {
     })
     const prints = readPrints(
       db,
-      candidates.map(([, kept]) => kept)
+      candidates.flatMap(([, kept]) => (kept.checkedAt === stamp ? [] : [kept]))
     )
     const missing = unique.filter((ref) => !this.kept.has(ref))
     for (const [ref, kept] of candidates) {
-      const now = prints.get(printKey(kept))
-      if (now?.print !== kept.print) {
-        this.forget(ref)
-        missing.push(ref)
-        continue
+      if (kept.checkedAt !== stamp) {
+        const now = prints.get(printKey(kept))
+        if (stamp === null || now?.print !== kept.print) {
+          this.forget(ref)
+          missing.push(ref)
+          continue
+        }
+        kept.reason = now.reason
+        kept.checkedAt = stamp
       }
       // Most recently used last, so the oldest falls out first.
       this.kept.delete(ref)
       this.kept.set(ref, kept)
       const report = kept.report === undefined ? this.report(kept.worker.taskId) : kept.report
-      states.set(ref, { worker: kept.worker, report: report ?? null, reason: now.reason })
+      states.set(ref, { worker: kept.worker, report: report ?? null, reason: kept.reason })
     }
     const lineageOf = new Map<string, WorkerLineage>()
     const workers =
@@ -96,7 +105,7 @@ export class LinkedWorkerStates {
       [...workers.values()].flatMap((worker) => worker?.dispatchId ?? [])
     )
     // Rows written while the read ran may be newer than what it saw: keep nothing from it.
-    const keep = this.writes === writes && version !== null && dataVersion(db) === version
+    const keep = stamp !== null && `${this.writes}:${dataVersion(db)}:${dockRevision(db)}` === stamp
     const finished: [string, Kept][] = []
     const reports = new Map<string, LinkedWorkerState['report'] | undefined>()
     for (const [ref, worker] of workers) {
@@ -136,6 +145,8 @@ export class LinkedWorkerStates {
               dispatchId: lineage.latest.id,
               resourceId: resource?.id ?? null,
               print: 0,
+              reason: reasons.get(worker.dispatchId) ?? null,
+              checkedAt: stamp ?? '',
               chars: reportLength(read)
             }
           ])
@@ -279,6 +290,16 @@ function hashText(text: string): number {
   h1 = Math.imul(h1 ^ (h1 >>> 16), 2246822507) ^ Math.imul(h2 ^ (h2 >>> 13), 3266489909)
   h2 = Math.imul(h2 ^ (h2 >>> 16), 2246822507) ^ Math.imul(h1 ^ (h1 >>> 13), 3266489909)
   return 4294967296 * (2097151 & h2) + (h1 >>> 0)
+}
+
+/** The dock facts' revision, which every change to them bumps; null when unreadable. */
+function dockRevision(db: OrchestrationDb): number | null {
+  try {
+    const row = db.db.prepare('SELECT revision FROM worker_dock_revision WHERE id = 1').get()
+    return typeof row?.revision === 'number' ? row.revision : null
+  } catch {
+    return null
+  }
 }
 
 /** SQLite's count of commits other connections made to this database; null when unreadable. */
