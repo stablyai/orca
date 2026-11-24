@@ -27,6 +27,7 @@ import { isRuntimeCompatBlockError } from '@/runtime/rpc/compatibility/runtime-p
 import { executionHostIdForStructuredTarget } from '@/runtime/native-chat/session-ownership/structured-agent-session-owner'
 import type { OrchestrationPartyLocationResult } from '../../../../../shared/orchestration/orchestration-caller-status'
 import type { RuntimeClientTarget } from '../../../../../shared/remote-runtime/host-catalog/runtime-client-target'
+import type { RuntimeMobileSessionTabsResult } from '../../../../../shared/remote-runtime/session-graph/runtime-session-contracts'
 
 const STRUCTURED_SESSION_RESTORE_TIMEOUT_MS = 5_000
 
@@ -64,6 +65,15 @@ const defaultDeps: StructuredSessionOpenAdapterDeps = {
   },
   refresh: refreshStructuredSessionTabs,
   reveal: revealStructuredSession
+}
+
+export function structuredSessionOpenDepsWaitingForPairedTab(
+  sessionId: string
+): StructuredSessionOpenAdapterDeps {
+  return {
+    ...defaultDeps,
+    refresh: (worktreeId, owner) => refreshStructuredSessionTabs(worktreeId, owner, sessionId)
+  }
 }
 
 export type StructuredSessionOpenOutcome = 'activated' | 'gone' | 'host-cannot-open' | 'unavailable'
@@ -281,7 +291,8 @@ type AgentSessionRevealReply =
 
 async function refreshStructuredSessionTabs(
   worktreeId: string,
-  target?: RuntimeClientTarget
+  target?: RuntimeClientTarget,
+  waitForSessionId?: string
 ): Promise<void> {
   const state = useAppStore.getState()
   const host =
@@ -291,15 +302,55 @@ async function refreshStructuredSessionTabs(
     await withStructuredSessionRestoreTimeout(refreshLocalStructuredSessionWorktreeTabs(worktreeId))
     return
   }
-  // Paired inventories arrive through their existing host-scoped subscription.
-  await withStructuredSessionRestoreTimeout(
-    callRuntimeRpc(
+  const deadline = performance.now() + STRUCTURED_SESSION_RESTORE_TIMEOUT_MS
+  const snapshot = await withStructuredSessionRestoreTimeout(
+    callRuntimeRpc<RuntimeMobileSessionTabsResult>(
       host,
       'session.tabs.list',
       { worktree: toRuntimeWorktreeSelector(worktreeId) },
       { timeoutMs: STRUCTURED_SESSION_RESTORE_TIMEOUT_MS }
     )
   )
+  if (
+    waitForSessionId &&
+    Array.isArray(snapshot?.tabs) &&
+    snapshot.tabs.some((tab) => tab.type === 'agent-session' && tab.sessionId === waitForSessionId)
+  ) {
+    // The host answered that the tab exists, but this window activates it from the paired mirror.
+    await waitForPairedStructuredSessionTab(
+      { workspaceId: worktreeId, sessionId: waitForSessionId, target: host },
+      deadline - performance.now()
+    )
+  }
+}
+
+function waitForPairedStructuredSessionTab(
+  tab: Parameters<typeof findStructuredAgentSessionTab>[1],
+  timeoutMs: number
+): Promise<void> {
+  if (
+    timeoutMs <= 0 ||
+    findStructuredAgentSessionTab(useAppStore.getState().unifiedTabsByWorktree, tab)
+  ) {
+    return Promise.resolve()
+  }
+  return new Promise((resolve) => {
+    const finish = (): void => {
+      clearTimeout(timer)
+      unsubscribe()
+      resolve()
+    }
+    const timer = setTimeout(finish, timeoutMs)
+    const unsubscribe = useAppStore.subscribe((state, previous) => {
+      if (
+        state.unifiedTabsByWorktree[tab.workspaceId] !==
+          previous.unifiedTabsByWorktree[tab.workspaceId] &&
+        findStructuredAgentSessionTab(state.unifiedTabsByWorktree, tab)
+      ) {
+        finish()
+      }
+    })
+  })
 }
 
 async function withStructuredSessionRestoreTimeout<T>(promise: Promise<T>): Promise<T> {

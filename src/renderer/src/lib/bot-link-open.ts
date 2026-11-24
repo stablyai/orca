@@ -27,7 +27,11 @@ import {
 } from './bot-catalog-snapshot'
 import { openBotHome, openBotHomeTab, refreshBots } from './bot-catalog'
 import { botHostTarget, botTarget } from './bot-hosts'
-import { activateAiVaultStructuredSession } from './agent-session/open/activate-ai-vault-structured-session'
+import {
+  activateAiVaultStructuredSession,
+  structuredSessionOpenFeedback
+} from './agent-session/open/activate-ai-vault-structured-session'
+import { structuredSessionOpenDepsWaitingForPairedTab } from './agent-session/open/open-existing-structured-session'
 import { isHome } from '../../../shared/bots/bot-homes'
 import type { BotDeepLink } from '../../../shared/bot-deep-link'
 import { folderWorkspaceKey } from '../../../shared/workspace/identity/workspace-scope'
@@ -122,7 +126,10 @@ export async function openBotLinkHome(
         {
           structuredSession: { workspaceId: folderWorkspaceKey(bot.folderWorkspaceId), sessionId }
         },
-        undefined,
+        {
+          ...structuredSessionOpenFeedback,
+          ...structuredSessionOpenDepsWaitingForPairedTab(sessionId)
+        },
         botTarget(bot)
       )
       return
