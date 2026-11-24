@@ -19,46 +19,14 @@ function parseObject(line: string): JsonObject | null {
   }
 }
 
-/** Top-level fields of a line the envelope scan could not finish; non-scalar values carry no value. */
-function wholeLineFields(line: string): LeadingProperty[] {
-  const message = parseObject(line)
-  return Object.entries(message ?? {}).map(([key, value]) =>
-    typeof value === 'string' || typeof value === 'number' ? { key, value } : { key }
-  )
-}
-
 /**
- * Agent lines are classified from their leading envelope fields only (`id`, `method`, `type`,
- * `request_id`), which every supported agent writes before its payload. The scan stops at the first
- * object value and never reads past this many chars, so a notification is never parsed whole; a line
- * whose envelope the scan can't finish (cut by this limit, or unusual) is parsed whole instead.
+ * Agent lines are gated by their leading envelope fields (`id`, `method`, `type`), which every
+ * supported agent writes before its payload. The scan stops at the first object value and never
+ * reads past this many chars, so a notification or a plain Claude frame is never parsed.
  */
 const ENVELOPE_SCAN_CHARS = 4096
 
-const CONTROL_REQUEST_TYPES = new Set<unknown>(['control_request', 'control_cancel_request'])
-
-/**
- * The envelope fields of an agent line. A scan cut short (by the char limit or the field limit) is
- * still enough when what it read decides the line; only an undecided line is parsed whole.
- */
-function envelopeFields(line: string): LeadingProperty[] {
-  const head = line.length > ENVELOPE_SCAN_CHARS ? line.slice(0, ENVELOPE_SCAN_CHARS) : line
-  const envelope = leadingJsonEnvelope(head, { stopAtContainer: true })
-  if (envelope.complete) {
-    return envelope.properties
-  }
-  // A number running into the cut may be missing digits, so it is not trusted.
-  const last = envelope.properties.at(-1)
-  const read =
-    typeof last?.value === 'number' ? envelope.properties.slice(0, -1) : envelope.properties
-  const value = (key: string): unknown => read.find((property) => property.key === key)?.value
-  const decided =
-    typeof value('method') === 'string'
-      ? value('id') !== undefined
-      : typeof value('type') === 'string' &&
-        (!CONTROL_REQUEST_TYPES.has(value('type')) || value('request_id') !== undefined)
-  return decided ? read : wholeLineFields(line)
-}
+const LEADING_BRACE = /^\s*\{/
 
 function rpcId(value: unknown): string | null {
   return typeof value === 'number' || typeof value === 'string'
@@ -135,60 +103,73 @@ export class ProviderRelayPendingRequests {
     }
   }
 
+  /**
+   * Lines that may be a request, a cancel, a resolution or the awaited initialize answer are parsed
+   * once and classified from the parsed object, so a malformed or duplicate-keyed line is read
+   * exactly as the client will read it.
+   */
   observeAgentLine(record: ProviderRelayRecord): void {
-    const { line } = record
-    const fields = envelopeFields(line)
-    const field = (key: string): LeadingProperty | undefined =>
-      fields.find((property) => property.key === key)
-    const method = field('method')?.value
-    const type = field('type')?.value
+    if (!this.mayClassify(record.line)) {
+      return
+    }
+    const message = parseObject(record.line)
+    if (!message) {
+      return
+    }
+    const { method, type } = message
     if (method === RESOLVED_METHOD) {
-      // Rare, and its request id sits inside `params`, so this one notification is parsed.
-      const message = parseObject(line)
-      const key = isObject(message?.params) ? rpcId(message.params.requestId) : null
+      const key = isObject(message.params) ? rpcId(message.params.requestId) : null
       if (key) {
         this.release(key)
       }
-      return
-    }
-    // Requests are rare and parsed before being held, so a malformed copy never replaces a valid one.
-    if (typeof method === 'string') {
-      const key = rpcId(field('id')?.value)
-      if (key && parseObject(line)) {
+    } else if (typeof method === 'string') {
+      const key = rpcId(message.id)
+      if (key) {
         this.hold(key, record)
       }
-      return
-    }
-    if (CONTROL_REQUEST_TYPES.has(type)) {
-      const key = controlId(field('request_id')?.value)
-      if (key && type === 'control_request' && parseObject(line)) {
+    } else if (type === 'control_request' || type === 'control_cancel_request') {
+      const key = controlId(message.request_id)
+      if (key && type === 'control_request') {
         this.hold(key, record)
       } else if (key) {
         this.release(key)
       }
-      return
-    }
-    if (this.initializeKey === null || this.initializeResult !== null) {
-      return
-    }
-    // A Claude answer keeps its request id inside `response`; only that line is parsed.
-    // Codex writes `error` before `id`; with no id ahead of the payload, this one line is parsed.
-    const answerId = field('id')?.value
-    const answerKey =
-      type === 'control_response' || ((field('result') || field('error')) && answerId === undefined)
-        ? this.responseKeyOf(line)
-        : field('result') || field('error')
-          ? rpcId(answerId)
-          : null
-    // A malformed line can't stand in for the answer a reattaching client is handed.
-    if (answerKey === this.initializeKey && (type === 'control_response' || parseObject(line))) {
-      this.initializeResult = line
+    } else if (this.awaitingInitialize && this.responseKey(message) === this.initializeKey) {
+      this.initializeResult = record.line
     }
   }
 
-  private responseKeyOf(line: string): string | null {
-    const message = parseObject(line)
-    return message ? this.responseKey(message) : null
+  private get awaitingInitialize(): boolean {
+    return this.initializeKey !== null && this.initializeResult === null
+  }
+
+  /** False for a line the envelope alone shows is none of those, which is nearly every line. */
+  private mayClassify(line: string): boolean {
+    const head = line.length > ENVELOPE_SCAN_CHARS ? line.slice(0, ENVELOPE_SCAN_CHARS) : line
+    if (!LEADING_BRACE.test(head)) {
+      return false
+    }
+    const { properties, complete } = leadingJsonEnvelope(head, { stopAtContainer: true })
+    const field = (key: string): LeadingProperty | undefined =>
+      properties.find((property) => property.key === key)
+    const method = field('method')?.value
+    const type = field('type')?.value
+    if (typeof method === 'string') {
+      // A notification has no id; one cut before its fields end may still have one.
+      return method === RESOLVED_METHOD || field('id') !== undefined || !complete
+    }
+    if (typeof type === 'string') {
+      return (
+        type === 'control_request' ||
+        type === 'control_cancel_request' ||
+        (type === 'control_response' && this.awaitingInitialize)
+      )
+    }
+    if (field('method') || field('type')) {
+      return false
+    }
+    // No method or type read: an answer, or a line cut before its envelope was read.
+    return !complete || (this.awaitingInitialize && Boolean(field('result') || field('error')))
   }
 
   /**
