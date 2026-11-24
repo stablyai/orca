@@ -12,7 +12,7 @@ import {
   botChatLabelParts,
   botChatLabelText,
   botNameDigitSuffix,
-  shownSeparator
+  shownBotChatParts
 } from './resume-toast-row-label'
 
 function rowActions(row: ResumeToastRow, remote: boolean, t: Translate): ResumeFailureAction[] {
@@ -147,7 +147,7 @@ export function NativeChatResumeToastRow({
                 className="flex min-w-0 flex-1 rounded-sm text-xs text-foreground/90 outline-none focus-visible:ring-2 focus-visible:ring-ring/50 focus-visible:ring-inset"
               >
                 {labelParts && owner ? (
-                  labelParts.map((part) =>
+                  shownBotChatParts(labelParts).map((part) =>
                     part.kind === 'bot' ? (
                       <BotName key={part.key} name={owner} />
                     ) : part.kind === 'chat' ? (
@@ -159,7 +159,7 @@ export function NativeChatResumeToastRow({
                         key={part.key}
                         className="shrink-0 whitespace-pre text-muted-foreground"
                       >
-                        {shownSeparator(part.text)}
+                        {part.text}
                       </span>
                     )
                   )
@@ -168,7 +168,7 @@ export function NativeChatResumeToastRow({
                 )}
               </span>
             </TooltipTrigger>
-            <TooltipContent side="top" className="max-w-80 break-words">
+            <TooltipContent side="top" className="max-w-80 wrap-anywhere">
               {name}
             </TooltipContent>
           </Tooltip>

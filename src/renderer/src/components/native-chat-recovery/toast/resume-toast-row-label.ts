@@ -66,9 +66,14 @@ export function botNameDigitSuffix(name: string): { head: string; digits: string
     : null
 }
 
-const SHOWN_SEPARATOR_MAX = 4
+const SHOWN_LITERALS_MAX = 4
 
-/** A translation's text between the names, or " · " when it is too long to show whole. */
-export function shownSeparator(text: string): string {
-  return Array.from(text).length > SHOWN_SEPARATOR_MAX ? ' · ' : text
+/** The pieces as the row shows them: a translation whose text around the names runs past a few
+ *  characters in all is shown in the default order, so the names always keep their room. */
+export function shownBotChatParts(parts: BotChatLabelPart[]): BotChatLabelPart[] {
+  const literalLength = parts.reduce(
+    (length, part) => length + (part.kind === 'text' ? Array.from(part.text).length : 0),
+    0
+  )
+  return literalLength > SHOWN_LITERALS_MAX ? ENGLISH_ORDER : parts
 }

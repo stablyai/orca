@@ -199,6 +199,14 @@ const LONG_NAME_CHATS = {
   'chat-2': { bot: 'UX Designer', chat: PROMPTS[0] ?? '' }
 }
 
+/** Focuses the second row's label from the keyboard, so its full-name tooltip opens. */
+async function focusSecondRow(frame: HTMLElement): Promise<void> {
+  const labels = frame.querySelectorAll<HTMLElement>('li [tabindex="0"]')
+  window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Tab', bubbles: true }))
+  labels[1]?.focus()
+  await new Promise((resolve) => setTimeout(resolve, 300))
+}
+
 function LongNamesToast(): React.JSX.Element {
   return (
     <NativeChatResumeToast
@@ -225,12 +233,27 @@ export const botChatsLongNames = defineFixture({
 export const botChatsLongNamesFocused = defineFixture({
   width: NARROWEST,
   render: () => <LongNamesToast />,
-  interact: async (frame) => {
-    const labels = frame.querySelectorAll<HTMLElement>('li [tabindex="0"]')
-    window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Tab', bubbles: true }))
-    labels[1]?.focus()
-    await new Promise((resolve) => setTimeout(resolve, 300))
-  }
+  interact: focusSecondRow
+})
+
+const UNBROKEN = 'W'.repeat(62)
+
+/** Two unbroken 63-character names that differ only at the end: the tooltip wraps inside the window. */
+export const botChatsUnbrokenNamesFocused = defineFixture({
+  width: NARROWEST,
+  render: () => (
+    <NativeChatResumeToast
+      view={resumeToastView(finishedRun(twelve.slice(0, 3), 'launch'), [], new Map())}
+      listedAt={NOW}
+      defaultExpanded
+      {...actions}
+      {...botChats({
+        'chat-0': { bot: `${UNBROKEN}A`, chat: 'Home' },
+        'chat-1': { bot: `${UNBROKEN}B`, chat: 'Home' }
+      })}
+    />
+  ),
+  interact: focusSecondRow
 })
 
 const LONG_SEPARATOR = ' ———————— a forty-eight character separator ——— '
@@ -241,7 +264,7 @@ const longSeparatorT: Translate = (key, fallback, options) =>
     : translate(key, fallback, options)
 const LONG_SEPARATOR_SCOPE = { intlLocale: 'en', t: longSeparatorT }
 
-/** A language pack's separator too long to show whole falls back to " · ", so the names stay in view. */
+/** A translation with too much text around the names shows in the default order, so the names stay in view. */
 export const botChatsLongSeparator = defineFixture({
   width: NARROWEST,
   render: () => (

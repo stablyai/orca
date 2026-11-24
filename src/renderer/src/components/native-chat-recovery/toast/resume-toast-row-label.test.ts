@@ -6,7 +6,7 @@ import {
   botChatLabelText,
   botNameDigitSuffix,
   resumeRowBotName,
-  shownSeparator
+  shownBotChatParts
 } from './resume-toast-row-label'
 
 const bots: { name: string; hostId: ExecutionHostId; folderWorkspaceId: string }[] = [
@@ -37,13 +37,19 @@ describe('resume toast row label', () => {
     expect(botChatLabelText(lost, 'UX Designer', 'Home')).toBe('UX Designer · Home')
   })
 
-  it('shows a separator too long to fit as the default one', () => {
-    const separator = ' ———————— a forty-eight character separator ——— '
-    const parts = botChatLabelParts(translation(`{{bot}}${separator}{{chat}}`))
-    expect(
-      parts.map((part) => (part.kind === 'text' ? shownSeparator(part.text) : part.kind))
-    ).toEqual(['bot', ' · ', 'chat'])
-    expect(shownSeparator(' de ')).toBe(' de ')
+  it('shows a translation with too much text around the names in the default order', () => {
+    const shown = (template: string) =>
+      botChatLabelText(
+        shownBotChatParts(botChatLabelParts(translation(template))),
+        'UX Designer',
+        'Home'
+      )
+    expect(shown('{{chat}} de {{bot}}')).toBe('Home de UX Designer')
+    expect(shown(`{{bot}}${' ———————— a forty-eight character separator ——— '}{{chat}}`)).toBe(
+      'UX Designer · Home'
+    )
+    // No one literal is long, but together they would squeeze the chat out.
+    expect(shown('WW{{chat}} W {{bot}}WW')).toBe('UX Designer · Home')
   })
 
   it("keeps only a left-to-right name's trailing instance number whole", () => {
