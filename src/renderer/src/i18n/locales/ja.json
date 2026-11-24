@@ -19978,7 +19978,6 @@
         "terminalRequired": "ターミナルでこの OMP の質問に答えてください。",
         "openTerminal": "ターミナルで回答する",
         "recommended": "おすすめ",
-        "stepAnswered": "{{value0}}、回答済み",
         "stepOf": "{{value0}} / {{value1}}",
         "answered": "回答済み",
         "title": "質問",
@@ -23179,7 +23178,7 @@
       "signInRequired": "このアカウントを使用するにはもう一度サインインしてください",
       "signInAgain": "もう一度サインイン",
       "usageSignInLabel": "もう一度サインイン",
-      "usageSignInMessage": "選択した Claude アカウントは再度サインインが必要です。設定 > AI プロバイダーアカウントを開くか、システムのデフォルトを選択してください。",
+      "usageSignInMessage": "このアカウントは再度サインインが必要です。",
       "signIn": "サインイン",
       "moreSignInOptions": "その他のサインインオプション",
       "copySignInLink": "代わりにサインインリンクをコピー",
@@ -25518,7 +25517,6 @@
     "row": {
       "runsOn": "{{host}} で実行中",
       "disconnected": "切断済み",
-      "hostDisconnected": "{{host}} は切断されています",
       "idle": "アイドル",
       "paused": "一時停止中",
       "reading": "メッセージを読んでいます",
@@ -25575,7 +25573,9 @@
       },
       "ask": {
         "notSentYet": "まだ送信されていません",
-        "replaced": "Agent が新たな質問をしました。確認してから返信してください。"
+        "replaced": "Agent が新たな質問をしました。確認してから返信してください。",
+        "replacedByNewer": "新しい質問に置き換えられました",
+        "skipped": "スキップ済み"
       },
       "readMoreClosedFailed": "クローズ済みの項目をさらに読み込めませんでした"
     },

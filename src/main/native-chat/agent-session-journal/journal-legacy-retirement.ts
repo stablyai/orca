@@ -19,6 +19,7 @@ import {
 import type { JournalSqlOwner } from './journal-sql-owner'
 import {
   LegacyJournalRetirementReporter,
+  LegacyJournalRetirementLaunchReport,
   legacyProofFailureOutcome,
   type LegacyJournalRetirementOutcome
 } from './journal-legacy-retirement-outcome'
@@ -57,10 +58,11 @@ export class JournalLegacyRetirement {
   private retryAt = 0
   private retryDelay = 60_000
   private done = false
+  private readonly launchReport = new LegacyJournalRetirementLaunchReport()
   private readonly reporter: LegacyJournalRetirementReporter
   private activeMs = 0
   private readonly waits = legacyProofWaits()
-  private firstAttemptAt: number | undefined
+  private startedAt: number | undefined
   // What the proof read this launch, so a failed attempt still reports the file's size.
   private observed: (LegacyProofObservation & { walBytes: string }) | undefined
   // The first finished walk this launch: a retry walks only from saved progress, so counts less.
@@ -113,22 +115,20 @@ export class JournalLegacyRetirement {
       } else if (this.leftovers) {
         await this.outcome({ outcome: 'deferred', defer: 'leftover_files' }).catch(() => {})
       } else {
-        const removing = this.proof.finished && this.deletes
         const failed = legacyProofFailureOutcome(
           error,
           walkedFor(this.finishedWalk, this.observed) ?? this.proof.walked,
-          removing,
+          this.proof.finished && this.deletes,
           this.stopped.signal.aborted
         )
-        const bytes = this.observed ? sourceBytes(this.observed) : null
-        await this.outcome({ ...failed, sourceBytes: bytes, activeMs: this.activeMs }).catch(
-          () => {}
-        )
+        failed.sourceBytes = this.observed ? sourceBytes(this.observed) : null
+        failed.activeMs = this.activeMs
+        await this.outcome(failed).catch(() => {})
       }
       this.later()
-      const reason = error instanceof Error ? error.message : String(error)
-      if (this.diagnosed !== reason) {
-        this.diagnosed = reason
+      const message = error instanceof Error ? error.message : String(error)
+      if (this.diagnosed !== message) {
+        this.diagnosed = message
         this.report(error)
       }
     }
@@ -142,15 +142,18 @@ export class JournalLegacyRetirement {
     if (this.done || this.stopped.signal.aborted || performance.now() < this.retryAt) {
       return
     }
+    if (this.launchReport.reported) {
+      return
+    }
+    const present = await legacyFilePresent(this.filename)
+    // Main skips ownership only when the original is present and the version is unknown.
+    if ((!present || this.version !== null) && !this.ownsProfile()) {
+      return this.launchReport.defer('not_owner', this.deletes)
+    }
     // No other Orca runs this profile while we hold its lock, so an absent original stays absent.
-    if (!(await legacyFilePresent(this.filename))) {
-      // Only the profile's owner reads its store, and reports for it.
-      if (!this.ownsProfile()) {
-        this.done = true
-        return
-      }
-      const saved = await readRetirementState(this.writer)
-      this.reporter.saved(saved.reported)
+    if (!present) {
+      const { reported, retirement } = await readRetirementState(this.writer)
+      this.reporter.saved(reported)
       if (await legacyCompanionsPresent(this.filename)) {
         // Finishing a removal cut short deletes too, so a build that keeps the file keeps these.
         if (!this.deletes) {
@@ -158,7 +161,7 @@ export class JournalLegacyRetirement {
           return this.outcome({ outcome: 'deferred', defer: 'leftover_files' })
         }
         this.leftovers = true
-        await removeLeftoverLegacyCompanions(this.filename, absorbedWal(saved.retirement))
+        await removeLeftoverLegacyCompanions(this.filename, absorbedWal(retirement))
         // A WAL this store never proved absorbed stays, so the file isn't fully gone.
         if (await legacyCompanionsPresent(this.filename)) {
           this.done = true
@@ -166,16 +169,12 @@ export class JournalLegacyRetirement {
         }
       }
       this.done = true
-      return this.outcome({
-        outcome: deletedBefore(saved.retirement) ? 'deleted_before' : 'absent'
-      })
+      return this.outcome({ outcome: deletedBefore(retirement) ? 'deleted_before' : 'absent' })
     }
-    // None of these change while this process runs, so a refusal here waits for the next launch.
-    if (this.version === null || !this.ownsProfile()) {
-      this.done = true
-      return
+    if (this.version === null) {
+      return this.launchReport.defer('no_version', this.deletes)
     }
-    this.firstAttemptAt ??= performance.now()
+    this.startedAt ??= performance.now()
     const saved = await readRetirementState(this.writer)
     this.reporter.saved(saved.reported)
     // Retirement runs on an update: the version that copied the profile, or an older one, keeps it.
@@ -240,7 +239,7 @@ export class JournalLegacyRetirement {
     }
     const signal = AbortSignal.any([recycled.signal, this.stopped.signal])
     let lease: Awaited<ReturnType<typeof acquireJournalLegacyFileLock>> | undefined
-    let removal: Partial<LegacyJournalRetirementOutcome> | undefined
+    let removal: Partial<LegacyJournalRetirementOutcome>
     try {
       // One full-sync commit makes every converted row durable before the original goes.
       const destination = await legacyDestinationIdentity(journalDomainDatabasePath(this.directory))
@@ -293,9 +292,7 @@ export class JournalLegacyRetirement {
       }
     }
     // Reported once the lock and the reader gate are released: reporting waits on the writer.
-    if (removal) {
-      await this.outcome(removal)
-    }
+    await this.outcome(removal)
   }
 
   /** The proof finished and this build keeps the file: saved, so later launches don't walk again. */
@@ -319,8 +316,7 @@ export class JournalLegacyRetirement {
   }
 
   private outcome(fields: Partial<LegacyJournalRetirementOutcome>): Promise<void> {
-    const elapsedMs =
-      this.firstAttemptAt === undefined ? null : performance.now() - this.firstAttemptAt
+    const elapsedMs = this.startedAt === undefined ? null : performance.now() - this.startedAt
     return this.reporter.report({ elapsedMs, ...fields })
   }
 

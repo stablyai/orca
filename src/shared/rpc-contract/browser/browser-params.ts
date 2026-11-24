@@ -166,7 +166,10 @@ export const Highlight = BrowserTarget.extend({
 })
 
 export const Exec = BrowserTarget.extend({
-  command: requiredString('Missing required --command')
+  command: requiredString('Missing required --command'),
+  // A local caller's directory (and legacy WSL distro), so file operands resolve as it typed them.
+  cwd: OptionalString,
+  wslDistro: OptionalString
 })
 
 export const Get = BrowserTarget.extend({

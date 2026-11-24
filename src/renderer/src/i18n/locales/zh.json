@@ -20426,7 +20426,6 @@
         "terminalRequired": "在终端中回答这个 OMP 问题",
         "openTerminal": "在终端中回答",
         "recommended": "推荐",
-        "stepAnswered": "{{value0}}，已回答",
         "stepOf": "第 {{value0}} 个，共 {{value1}} 个",
         "answered": "已回答",
         "title": "问题",
@@ -24558,7 +24557,7 @@
       "signInRequired": "请重新登录以使用此账户",
       "signInAgain": "重新登录",
       "usageSignInLabel": "重新登录",
-      "usageSignInMessage": "所选 Claude 账户需要您重新登录，请打开设置 > AI 提供商账户，或选择系统默认",
+      "usageSignInMessage": "此账户需要您重新登录。",
       "signIn": "登录",
       "moreSignInOptions": "更多登录选项",
       "copySignInLink": "改为复制登录链接",
@@ -27648,7 +27647,6 @@
       "waitingFor": "正在等待 {{label}}",
       "waitingForUntil": "正在等待 {{label}} · 直到 {{time}}",
       "waitingCount": "正在等待 {{count}} 个事件",
-      "hostDisconnected": "{{host}} 已断开连接",
       "disconnected": "已断开连接",
       "runsOn": "在 {{host}} 上运行",
       "deleteTitle": "要删除 {{name}} 吗？",
@@ -27801,12 +27799,7 @@
       },
       "cancel": {
         "confirmMany": "取消 {{count}} 项",
-        "confirmOne": "取消事项",
-        "keep": "保留",
-        "placeholder": "原因",
-        "titleMany": "要取消 {{count}} 个事项吗？",
-        "titleOne": "要取消“{{title}}”吗？",
-        "why": "bot 会看到原因。不会删除任何内容"
+        "keep": "保留"
       },
       "chat": {
         "added": "添加了 {{items}}",
@@ -27902,8 +27895,7 @@
         "serverPr": "服务器上的工作暂不显示 PR"
       },
       "menu": {
-        "cancel": "取消事项…",
-        "canceled": "已取消…",
+        "cancel": "取消事项",
         "done": "完成"
       },
       "pill": {
@@ -27963,7 +27955,9 @@
         "recommended": "推荐",
         "step": "第 {{n}} 个，共 {{total}} 个",
         "typeAnswer": "输入你的回答",
-        "replaced": "智能体提出了新问题。请先阅读，再回复"
+        "replaced": "智能体提出了新问题。请先阅读，再回复",
+        "replacedByNewer": "已由较新的问题取代",
+        "skipped": "已跳过"
       },
       "readMoreClosedFailed": "无法读取更多已关闭的条目"
     },

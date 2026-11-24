@@ -21,7 +21,7 @@ import {
   hasCommandBoundarySinceReattach,
   hasTerminalCommandPainted,
   spendReattachedRepaintRequest
-} from '../input/terminal-command-paint'
+} from '../input/terminal-command-paint-record'
 import type { RuledScreen } from '../wait/screen-input-veto'
 import type { AgentStatus } from '../../../../shared/agent-status/title/agent-title-core'
 

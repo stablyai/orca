@@ -13,6 +13,7 @@ export const BOT_ITEMS_OPS = [
   'list',
   'needsYou',
   'viewRows',
+  'closes',
   'add',
   'set',
   'comment',

@@ -235,6 +235,30 @@
       "existingWhy": "{{distro}} 已作為主機執行，因此 Git、檔案和終端機將在 Linux 中原生執行，而不是透過 Windows 檔案共用。",
       "existingAccept": "新增到主機"
     },
+    "hiddenProjects": {
+      "hidden": "已隱藏 {{name}}",
+      "hiddenDescription": "其終端機和代理程式會繼續執行。可從清單下方的「已隱藏的專案」中重新顯示。",
+      "undo": "復原",
+      "hideFailed": "無法隱藏 {{name}}。其主機可能需要更新 Orca。",
+      "showFailed": "無法重新顯示 {{name}}。",
+      "listLabel": "已隱藏的專案",
+      "show": "顯示",
+      "showAriaLabel": "在側邊欄中顯示 {{name}}",
+      "settingsTitle": "從側邊欄隱藏",
+      "settingsDescription": "從側邊欄、專案選擇器和工作區切換器中隱藏此主機上的專案副本。其終端機、代理程式和自動化會繼續執行。在已配對的 Orca 伺服器上，這會對連線至該伺服器的所有人隱藏此專案副本。",
+      "settingsToggleLabel": "從側邊欄隱藏 {{name}}",
+      "keywordHide": "隱藏",
+      "keywordHidden": "已隱藏",
+      "keywordSidebar": "側邊欄",
+      "hideFromSidebar": "從側邊欄隱藏",
+      "sectionTitle": "已隱藏的專案（{{count}}）",
+      "allHidden": "所有專案都已隱藏。可從下方的「已隱藏的專案」中顯示一個專案。",
+      "undoGone": "{{name}} 已從 Orca 中移除。",
+      "settingsGroup": "側邊欄",
+      "showOnHostAriaLabel": "在側邊欄中顯示 {{host}} 上的 {{name}}",
+      "keywordShow": "顯示",
+      "keywordUnhide": "取消隱藏"
+    },
     "cardSlot": {
       "needYouCount": "{{count}} 個需要你",
       "needsYou": "需要你"
@@ -911,7 +935,10 @@
       "defaultSurfaceSetAllTerminal": "全部設為終端機",
       "modelListFallback": "內建清單。Orca 無法從此主機取得模型清單。",
       "chatUnavailableOnWindows": "{{value0}} Chat 尚不支援 Windows，因此 {{value0}} 會在此主機的終端機中開啟。macOS 或 Linux 主機上的聊天仍可正常使用。",
-      "undetectedCommandHint": "如果 {{agent}} CLI 安裝在 PATH 之外，請輸入其在此主機上的可執行檔完整路徑。"
+      "undetectedCommandHint": "如果 {{agent}} CLI 安裝在 PATH 之外，請輸入其在此主機上的可執行檔完整路徑。",
+      "agentActions": "{{agent}} 操作",
+      "defaultAutoBadge": "預設 · 自動",
+      "newAgentsTitle": "新代理程式"
     },
     "followSymlinkedDirectoriesKeywords": {
       "symlink": "符號連結",
@@ -1062,6 +1089,11 @@
     },
     "sharedLinks": {
       "keywordBots": "機器人"
+    },
+    "voice": {
+      "cleanup": {
+        "recipeDescription": "在輸入前整理聽寫文字。"
+      }
     },
     "automaticUpdates": {
       "title": "自動更新",
@@ -3832,6 +3864,8 @@
             "4c2990886e": "已刪除 {{value0}}/{{value1}}",
             "86ba852118": "{{value0}}，{{value1}} 個失敗",
             "archivedStatus": "已封存",
+            "mergedStatus": "已合併",
+            "unchangedStatus": "沒有新提交",
             "74f6c16279": "返回"
           },
           "backgroundRemoval": {
@@ -5821,7 +5855,9 @@
           "updateSkipped": "已略過更新：{{value0}}",
           "updateAvailable": "有可用更新",
           "repairAvailable": "可修復",
-          "installAvailable": "可安裝"
+          "installAvailable": "可安裝",
+          "otherBuild": "由其他版本的 Orca 安裝",
+          "otherBuildKept": "已保留：由其他版本的 Orca 寫入"
         },
         "installResult": {
           "installed": "已安裝並驗證。",
@@ -7251,6 +7287,14 @@
           "inProgress": "進行中",
           "inReview": "審核中",
           "done": "已完成"
+        },
+        "AddProjectMenu": {
+          "changeProjectHost": "專案主機：{{host}}",
+          "projectHost": "專案主機",
+          "addRemoteHost": "新增遠端主機…",
+          "browseFolder": "瀏覽資料夾…",
+          "cloneFromUrl": "從 URL 複製…",
+          "createNewProject": "建立新專案…"
         }
       },
       "shared": {
@@ -8371,6 +8415,10 @@
           "workerAutoReleaseDescription": "除非選擇「保持開啟」，否則工作代理程式完成 2 分鐘後會關閉其終端機或聊天。如果它再次開始工作，完成後會重新計時 2 分鐘。",
           "workerAutoReleaseKeywordClose": "關閉",
           "workerAutoReleaseKeywordRelease": "釋放",
+          "coordinatorApprovalsTitle": "允許協調者核准工作代理程式的權限請求",
+          "coordinatorApprovalsDescription": "協調者代理程式可以允許工作代理程式的權限請求，並提供理由。你仍會看到「允許」和「拒絕」，以最先給出的答覆為準。適用於在這台電腦上執行的工作代理程式。",
+          "coordinatorApprovalsKeywordApprove": "核准",
+          "coordinatorApprovalsKeywordPermission": "權限",
           "8a94078d05": "代理程式編排"
         },
         "OrchestrationSetupCard": {
@@ -11190,7 +11238,10 @@
               "shortcutDescription": "開始聽寫的按鍵。",
               "shortcutKeyword": "鍵盤",
               "keepLoadedTitle": "保持模型載入",
-              "gpuKeyword": "顯示卡"
+              "gpuKeyword": "顯示卡",
+              "cleanupDescription": "在輸入文字前，使用代理程式修正標點和數字，並處理口述更正。",
+              "cleanupKeyword": "更正詞",
+              "cleanupScratchKeyword": "收回剛才的話"
             }
           }
         },
@@ -11943,6 +11994,7 @@
         "PluginRemoveDialog": {
           "cancel": "取消",
           "remove": "移除外掛",
+          "pausesAutomations": "由此外掛建立的自動化會暫停，即使重新安裝外掛也會保持暫停。",
           "title": "要移除 {{value0}} 嗎？",
           "description": "其資料也會一併移除。"
         },
@@ -13251,7 +13303,8 @@
           "sources": "目錄來源…"
         },
         "PluginSettingsOverview": {
-          "offTitle": "外掛已關閉"
+          "offTitle": "外掛已關閉",
+          "offAutomations": "由外掛建立的自動化會暫停，即使重新開啟外掛也會保持暫停。"
         },
         "pluginContributions": {
           "dark": "深色",
@@ -13324,6 +13377,21 @@
         },
         "SettingsSearchableSelect": {
           "noMatches": "沒有符合的項目。"
+        },
+        "RepositoryRemoveProjectSection": {
+          "filesNoteVmRecipe": "VM 配方決定是否刪除其環境與檔案。",
+          "filesNote": "檔案會保留在磁碟上，之後可以重新新增。",
+          "hostCount_one": "{{count}} 台主機",
+          "hostCount_other": "{{count}} 台主機",
+          "checkoutCount_one": "{{count}} 個檢出副本",
+          "checkoutCount_other": "{{count}} 個檢出副本",
+          "removeButton": "移除…",
+          "dialogTitle": "移除 {{name}}？",
+          "terminalWarning_one": "此專案中 {{count}} 個已開啟的終端機將被關閉。",
+          "terminalWarning_other": "此專案中 {{count}} 個已開啟的終端機將被關閉。",
+          "cancel": "取消",
+          "confirm": "移除",
+          "unknownHost": "未知主機"
         },
         "PluginAuthor": {
           "publisher": "發行者",
@@ -17393,7 +17461,10 @@
           "missedRunGrace": "錯過執行寬限期",
           "execution": "執行",
           "notRunYet": "尚未執行",
-          "usageDetail_other": "{{tokens}} token · 已回報 {{known}}/{{count}} 次執行"
+          "usageDetail_other": "{{tokens}} token · 已回報 {{known}}/{{count}} 次執行",
+          "createdBy": "建立者",
+          "createdByPluginTitle": "外掛 {{plugin}}",
+          "createdByEnded": "外掛已移除或停用；變更此自動化前必須先徵求許可"
         },
         "AutomationEditorDialog": {
           "fb1896a5e7": "取消",
@@ -19547,7 +19618,6 @@
         "terminalRequired": "請在終端機中回答這個 OMP 問題。",
         "openTerminal": "在終端機中回答",
         "recommended": "推薦",
-        "stepAnswered": "{{value0}}，已回答",
         "stepOf": "第 {{value0}} 個，共 {{value1}} 個",
         "answered": "已回答",
         "title": "問題",
@@ -19575,7 +19645,9 @@
           "file": "計畫檔案",
           "reviewTitle": "審查建議的計畫",
           "refineHint": "「調整計畫」會關閉審查畫面，以便傳送要變更的內容。"
-        }
+        },
+        "answerNotApplied": "{{name}}：答覆未送達此權限請求",
+        "answerWorkerEnded": "{{name}} 已結束，因此此權限請求已關閉"
       },
       "launchPromptNotDelivered": "未送達 — 請檢查終端機",
       "subagents": {
@@ -19736,6 +19808,7 @@
         "reconnect": "重新連線",
         "stopped": "{{distro}} 已停止",
         "start": "啟動",
+        "connecting": "正在連線至 {{distro}}…",
         "unverifiable": "Orca 無法確認 {{distro}} 是否正在執行",
         "startToSend": "請啟動 {{distro}} 後再傳送。",
         "startDistro": "啟動 {{distro}}"
@@ -20272,7 +20345,10 @@
             "dirty": "有變更",
             "unpushed": "未推送",
             "unknown": "未知"
-          }
+          },
+          "ignoredFilesBlocker": "被忽略的本機檔案",
+          "ignoredFilesNamed": "被忽略的檔案：{{value0}}",
+          "ignoredFilesUnchecked": "被忽略的檔案未完整檢查"
         }
       },
       "creation": {
@@ -20303,6 +20379,9 @@
           "line_other": "{{count}} 個檔案中未儲存的編輯內容將被捨棄：{{files}}"
         },
         "ignoredFilesUnchecked": "無法完整檢查 Git 忽略的檔案"
+      },
+      "atRiskLocalFiles": {
+        "namesAndMore": "{{names}} 等檔案"
       }
     },
     "agentSessionContinuation": {
@@ -20530,7 +20609,13 @@
           "listening": "{{model}} 也在聽…",
           "heardLabel": "{{model}} 聽到的內容",
           "heardNothing": "沒有聽到任何字詞。請大聲一點。",
-          "heardFailed": "{{model}} 無法轉寫這段錄音。"
+          "heardFailed": "{{model}} 無法轉寫這段錄音。",
+          "cleaningUp": "正在整理…",
+          "tryCleanup": "試用整理",
+          "cleanupFailed": "整理失敗：{{reason}}",
+          "cleanupTimedOut": "整理逾時。",
+          "cleanupOff": "AI 整理已關閉。",
+          "afterCleanup": "整理後 · {{agent}}，{{model}} · {{seconds}} 秒"
         },
         "silenceStop": {
           "off": "關閉",
@@ -20557,6 +20642,44 @@
         },
         "gpu": {
           "description": "如果聽寫導致電腦當機，請關閉。"
+        },
+        "cleanup": {
+          "consent": {
+            "goesToKnown": "透過這台電腦上的 {{agent}} 傳送至 {{company}}。計入你的 {{plan}} 方案用量。",
+            "goesToAgent": "這台電腦上的 {{agent}} 所設定的提示詞傳送目的地。",
+            "sentLabel": "傳送內容",
+            "sent": "聽寫文字、你的詞彙和指令。",
+            "notSentLabel": "不傳送",
+            "notSent": "音訊、檔案或螢幕上的內容。",
+            "goesToLabel": "傳送至",
+            "waitLabel": "等待",
+            "wait": "文字會在幾秒後輸入。",
+            "title": "開啟 AI 整理？",
+            "description": "每次聽寫結束後，Orca 都會將文字傳送給 {{agent}}，整理後再輸入。",
+            "cancel": "取消",
+            "confirm": "開啟"
+          },
+          "instructions": {
+            "label": "指令",
+            "custom": "你自己的指令。",
+            "builtIn": "內建：修正標點和數字，並處理口述更正。保留我的措辭。",
+            "edit": "編輯",
+            "emptyHint": "留空以使用內建指令。",
+            "reset": "重設",
+            "cancel": "取消",
+            "save": "儲存"
+          },
+          "saveFailed": "無法儲存 AI 整理設定。",
+          "noAgent": "沒有可執行 AI 整理的代理程式。請在下方選擇一個。",
+          "title": "整理",
+          "label": "AI 整理",
+          "description": "在輸入文字前修正標點和數字，並處理口述更正。會將文字傳送給 {{agent}}，絕不傳送音訊。",
+          "anAgent": "一個 AI 代理程式",
+          "agent": "代理程式與模型",
+          "agentDescription": "在這台電腦上執行。小型快速模型可縮短等待時間。",
+          "correctionWord": "更正詞",
+          "correctionWordDescription": "說出此詞即可收回剛才的話，例如：「四點，{{word}}，五點」。",
+          "correctionWordOff": "無"
         },
         "keepLoaded": {
           "label": "保持模型載入",
@@ -20739,7 +20862,9 @@
     },
     "tabGroup": {
       "splitPaneLanding": {
-        "newAgent": "新增代理程式"
+        "newAgent": "新增代理程式",
+        "searchAgentsAndFiles": "搜尋代理程式與檔案",
+        "searchShort": "搜尋"
       }
     },
     "contextualTours": {
@@ -20751,7 +20876,16 @@
       }
     },
     "dictation": {
-      "stoppedAfterSilenceSeconds": "靜音 {{seconds}} 秒後已停止"
+      "stoppedAfterSilenceSeconds": "靜音 {{seconds}} 秒後已停止",
+      "cleanupNotice": {
+        "timedOut": "整理逾時。已依原始辨識結果輸入。",
+        "failed": "整理失敗。已依原始辨識結果輸入。",
+        "dismiss": "關閉"
+      },
+      "DictationIndicator": {
+        "cleaningUp": "正在整理…",
+        "skipCleanup": "略過整理"
+      }
     },
     "toastFallbacks": {
       "worktreeCreateFailed": "無法建立工作樹。",
@@ -21279,7 +21413,10 @@
         "kimiProviderLimited": "Kimi 已達到提供者的限制，或提供者正忙碌中。請稍候再試，或降低要求頻率。",
         "kimiContextOverflow": "Kimi 的上下文已用盡。請縮短提示詞或啟動新的工作階段，然後再試一次。",
         "kimiConfigInvalid": "Kimi 的設定無效。請在重試前檢查執行主機上的模型和提供者設定。",
-        "kimiContinueSessionConflict": "Kimi 收到衝突的選項：--continue, --session。請在重試前修正產生文字的動作範本或 CLI 引數。"
+        "kimiContinueSessionConflict": "Kimi 收到衝突的選項：--continue, --session。請在重試前修正產生文字的動作範本或 CLI 引數。",
+        "commandTemplateEmptyDictationCleanup": "聽寫整理的命令範本為空。",
+        "dictationCleanupAgentUnsupported": "請在「設定 -> 語音 -> 整理」中為 AI 整理選擇支援的代理程式。支援的代理程式：{{agents}}，也可選擇「自訂命令」。",
+        "agentCannotGenerateDictationCleanup": "代理程式「{{agent}}」不支援聽寫整理。支援的代理程式：{{agents}}，也可選擇「自訂命令」。"
       },
       "enableSourceControlAi": "請在「設定 -> Git」中啟用原始碼控制 AI。",
       "chooseBaseBranch": "產生前請先選擇基礎分支。",
@@ -21778,6 +21915,7 @@
       "changed": "原生帳戶已變更。請在啟動 agy 前重新選擇已儲存的帳戶。",
       "refresh": "重新整理帳戶",
       "usage": "重新整理用量",
+      "usageWithReading": "重新整理用量（{{reading}}）",
       "usageReading": "工作階段：{{session}} · 每週：{{weekly}}",
       "saved": "已儲存的 Google 帳戶",
       "remove": "移除",
@@ -21798,7 +21936,23 @@
       "lastReading": "{{reading}} · 讀取於 {{time}}",
       "noReading": "用量未知：尚未讀取",
       "fd47b5a5dd": "Antigravity 帳戶",
-      "apiKeyGet": "取得 API 金鑰"
+      "personalOption": "你的個人 Google AI 方案",
+      "enterpriseOption": "你所屬組織的授權",
+      "apiKeyGet": "取得 API 金鑰",
+      "location": "位置",
+      "enterpriseFieldsShort": "請輸入專案和位置。",
+      "chatUseMethod": "重新登入以使用 {{method}}",
+      "loadFailed": "無法載入 agy 帳戶",
+      "loading": "正在載入帳戶…",
+      "notSignedIn": "尚未登入",
+      "runAgy": "在此主機上執行 agy 以登入",
+      "signInHelp": "登入說明",
+      "currentLogin": "目前的 agy 登入帳戶",
+      "currentNotSaved": "目前的 agy 登入帳戶 · 尚未儲存",
+      "noEmailNotSaved": "agy 未提供電子郵件地址 · 尚未儲存",
+      "saveShort": "儲存",
+      "readAt": "讀取於 {{time}}",
+      "active": "使用中"
     },
     "claude": {
       "added": "已新增帳戶。選擇它即可將其用於您下次啟動的 Claude。",
@@ -21812,7 +21966,7 @@
       "signInRequired": "請重新登入以使用此帳戶",
       "signInAgain": "重新登入",
       "usageSignInLabel": "重新登入",
-      "usageSignInMessage": "所選 Claude 帳戶需要您重新登入。請開啟設定 > AI 供應商帳戶，或選擇系統預設。",
+      "usageSignInMessage": "此帳戶需要您重新登入。",
       "signIn": "登入",
       "moreSignInOptions": "更多登入選項",
       "copySignInLink": "改為複製登入連結",
@@ -23713,7 +23867,6 @@
     "row": {
       "runsOn": "在 {{host}} 上執行",
       "disconnected": "已中斷連線",
-      "hostDisconnected": "{{host}} 已中斷連線",
       "idle": "閒置",
       "paused": "已暫停",
       "reading": "正在閱讀你的訊息",
@@ -23770,7 +23923,9 @@
       },
       "ask": {
         "notSentYet": "尚未傳送",
-        "replaced": "代理程式提出了新問題。請先閱讀，再回覆。"
+        "replaced": "代理程式提出了新問題。請先閱讀，再回覆。",
+        "replacedByNewer": "已由較新的問題取代",
+        "skipped": "已略過"
       },
       "readMoreClosedFailed": "無法讀取更多已關閉的項目"
     },
@@ -24095,6 +24250,22 @@
       }
     }
   },
+  "plugins": {
+    "actionConfirmation": {
+      "cancel": "取消",
+      "deleteAutomation": "{{plugin}} 想要刪除自動化「{{automation}}」",
+      "deleteAutomationDetail": "此自動化並非由該外掛建立。其排程將停止，且此自動化會從「自動化」中移除。",
+      "delete": "刪除",
+      "changeAutomation": "{{plugin}} 想要變更自動化「{{automation}}」",
+      "changeAutomationDetail": "此自動化並非由該外掛建立。若你確認，外掛會變更：{{fields}}。",
+      "change": "變更",
+      "changeElevatedAutomationDetail": "此自動化會使用你選擇的額外設定（引數、權限模式或預先檢查命令）來執行代理程式。若你確認，外掛會變更：{{fields}}。",
+      "newPrompt": "新提示詞：「{{prompt}}」",
+      "unknownProject": "未知專案",
+      "automationNewWorkspaces": "自動化 {{id}}：依 {{schedule}} 執行，每次在 {{project}} 的新工作區中執行。",
+      "automationInWorkspace": "自動化 {{id}}：在 {{project}} / {{workspace}} 中依 {{schedule}} 執行。"
+    }
+  },
   "agentPicker": {
     "catalogUnsupportedLaunch": "此主機上無法使用 {{agent}} 模型。目前的選擇仍會套用。",
     "catalogEmpty": "{{agent}} 沒有可用模型。",
@@ -24228,6 +24399,15 @@
       "deleteFailed": "無法刪除 {{model}}。",
       "dismiss": "關閉",
       "cancelDownload": "取消下載"
+    }
+  },
+  "usage": {
+    "failure": {
+      "unavailable": "用量目前無法使用。請嘗試按「重新整理」以重新連線。",
+      "setting": "無法確認用量追蹤設定的變更。請嘗試再次變更。",
+      "refresh": "上次重新整理未能完成。請再次按「重新整理」。",
+      "read": "無法載入用量。請再次按「重新整理」。",
+      "retry": "重新整理"
     }
   },
   "crashReport": {

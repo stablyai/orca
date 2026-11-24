@@ -4,6 +4,7 @@ import { afterEach, expect, it } from 'vitest'
 import type { Bot } from '../../../../../shared/bot-types'
 import { botItemAskText } from '../../../../../shared/bots/bot-item-ask'
 import type { BotItem, BotItemEvent } from '../../../../../shared/bots/bot-items'
+import type { BotItemQuestionStepsSend } from '../../../../../shared/bots/use-bot-item-question-steps'
 import { useBotItemQuestionSteps } from './use-bot-item-question-steps'
 
 afterEach(cleanup)
@@ -69,13 +70,22 @@ const bot: Bot = {
 function steps(uid: string, own = asking, shown = item) {
   const posted: { text: string; paths: readonly string[] }[] = []
   const answering: (string | undefined)[] = []
-  const send = (text: string, paths: readonly string[] = [], questionId?: string): void => {
+  const skipping: (readonly number[] | undefined)[] = []
+  const send: BotItemQuestionStepsSend = (
+    text,
+    paths = [],
+    questionId,
+    _plain,
+    _skills,
+    skipped
+  ) => {
     posted.push({ text, paths })
     answering.push(questionId)
+    skipping.push(skipped)
   }
   // Its own item, so answers held on this device by another case don't carry over.
   const hook = renderHook(() => useBotItemQuestionSteps(bot, { ...shown, uid }, [own], send, []))
-  return { hook, posted, answering }
+  return { hook, posted, answering, skipping }
 }
 
 it('holds a typed answer to one of several questions until the last is answered', () => {
@@ -103,13 +113,15 @@ it('posts a typed answer with files at once, with the answers held so far', () =
   ])
 })
 
-it('sends the held answers when the owner sends them sooner', () => {
-  const { hook, posted } = steps('send-anyway')
+it('sends the held answers sooner, skipping the lines still unanswered', () => {
+  const { hook, posted, answering, skipping } = steps('send-anyway')
   const first = hook.result.current.steps!
   act(() => hook.result.current.fromBox('the internal ones', [], `${first.askId}:${first.current}`))
   expect(hook.result.current.steps!.heldCount).toBe(1)
   act(() => hook.result.current.steps!.sendHeld())
   expect(posted.map(({ text }) => text)).toEqual([`${HOSTS} → the internal ones`])
+  expect(answering).toEqual(['e2'])
+  expect(skipping).toEqual([[1]])
 })
 
 it('posts a typed answer to a single question at once, naming the question it answers', () => {

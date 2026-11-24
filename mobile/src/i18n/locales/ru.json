@@ -21,7 +21,7 @@
     },
     "claude": {
       "usageSignInLabel": "Войти снова",
-      "usageSignInMessage": "Для выбранной учётной записи Claude нужен повторный вход. Откройте «Настройки → Учётные записи ИИ-провайдеров» или выберите «Системная по умолчанию»."
+      "usageSignInMessage": "Для этой учётной записи нужен повторный вход."
     }
   },
   "agentHistory": {
@@ -400,6 +400,17 @@
     "queuedMessages": {
       "deleteAll": "Удалить все",
       "editMessage": "Изменить сообщение",
+      "showLess": "Показать меньше",
+      "moreCount_one": "Ещё {{count}}",
+      "moreCount_other": "Ещё {{count}}",
+      "moreCount_few": "Ещё {{count}}",
+      "moreCount_many": "Ещё {{count}}",
+      "deleteMessage": "Удалить сообщение",
+      "queuedCount_one": "{{count}} сообщение в очереди",
+      "queuedCount_other": "{{count}} сообщения в очереди",
+      "queuedCount_few": "{{count}} сообщения в очереди",
+      "queuedCount_many": "{{count}} сообщений в очереди",
+      "foldNeedsAttention": "{{more}}, сообщение требует внимания",
       "pausedState": "Приостановлено",
       "queuedState": "В очереди",
       "resume": "Продолжить",
@@ -2573,6 +2584,7 @@
       "images_one": "{{count}} изображение",
       "images_other": "{{count}} изображения",
       "moreActions": "Другие действия",
+      "you": "Вы",
       "send": "Отправить",
       "sendAgainHint": "Отправить это сообщение ещё раз",
       "sendHint": "Отправить это сообщение",
@@ -2682,6 +2694,7 @@
       "unsavedMarkdown": "Несохранённые изменения в Markdown",
       "urlPrompt": "Введите URL или оставьте поле пустым, чтобы открыть новую вкладку.",
       "allowAutoClose": "Разрешить автоматическое закрытие",
+      "agents": "Агенты",
       "renameTerminalFailed": "Не удалось переименовать терминал. {{reason}}"
     },
     "sourceControlLaunchAgent": {
@@ -3002,11 +3015,29 @@
     "nativeChatView": {
       "linkedMessageMissing": "Не удалось найти это сообщение."
     },
+    "tabsSheet": {
+      "needsYou": "Требуют вашего внимания",
+      "working": "В работе",
+      "everythingElse": "Всё остальное",
+      "closeTab": "Закрыть {{title}}"
+    },
+    "tabRows": {
+      "browser": "Браузер",
+      "markdown": "Заметка Markdown",
+      "file": "Файл",
+      "chat": "Чат",
+      "terminal": "Терминал"
+    },
     "browserProfile": {
       "default": "По умолчанию"
     },
     "tabBar": {
+      "oneTab": "1 вкладка",
       "tabCount": "Вкладок: {{count}}",
+      "anotherNeedsYou": "другая вкладка требует вашего внимания",
+      "actionsHint": "Показывает действия для этой вкладки",
+      "next": "Следующая вкладка",
+      "previous": "Предыдущая вкладка",
       "hint": "Показывает все вкладки"
     }
   },
@@ -3622,6 +3653,9 @@
       "planModelUnavailable": "Модель «{{model}}» недоступна для {{label}}.",
       "planModelWithoutThinking": "Модель «{{model}}» не поддерживает настройку глубины рассуждений.",
       "planThinkingLevelInvalid": "Глубина рассуждений «{{level}}» недопустима для {{model}}.",
+      "commandTemplateEmptyDictationCleanup": "Не задан шаблон команды для правки диктовки.",
+      "dictationCleanupAgentUnsupported": "Выберите поддерживаемого агента для правки с ИИ в разделе «Настройки -> Голос -> Правка текста». Поддерживаемые агенты: {{agents}} или «Своя команда».",
+      "agentCannotGenerateDictationCleanup": "Агент «{{agent}}» не поддерживает правку диктовки. Поддерживаемые агенты: {{agents}} или «Своя команда».",
       "promptTooLargeForArgument": "Запрос для {{label}} слишком большой для передачи одним аргументом командной строки. Добавьте в индекс меньше изменений и повторите попытку.",
       "promptTooLargeForWindows": "Запрос для {{label}} слишком большой для командной строки Windows. Добавьте в индекс меньше изменений и повторите попытку.",
       "pullRequestDetailsUnparseable": "Не удалось разобрать сгенерированные сведения о пул-реквесте.",
@@ -4644,6 +4678,10 @@
     }
   },
   "bots": {
+    "section": {
+      "scrollLeft": "Прокрутить влево · скрыто: {{amount}}",
+      "scrollRight": "Прокрутить вправо · скрыто: {{amount}}"
+    },
     "link": {
       "pairTitle": "Подключить компьютер",
       "pairRequired": "Чтобы открыть эту ссылку, подключите этот телефон к компьютеру, а затем снова откройте ссылку.",
@@ -4837,7 +4875,9 @@
       "skillLimit": "Сообщение не отправлено. Выберите не больше {{limit}} файлов навыков и попробуйте снова.",
       "ask": {
         "notSentYet": "ещё не отправлено",
-        "replaced": "Агент задал новый вопрос. Прочитайте его, затем ответьте."
+        "replaced": "Агент задал новый вопрос. Прочитайте его, затем ответьте.",
+        "replacedByNewer": "Заменён более новым вопросом",
+        "skipped": "Пропущены"
       }
     },
     "needs": {
