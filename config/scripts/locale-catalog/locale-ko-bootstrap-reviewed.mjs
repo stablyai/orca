@@ -3,8 +3,17 @@ import fs from 'node:fs/promises'
 import { LOCALE_KEY_OVERRIDES } from './locale-key-overrides.mjs'
 import { repairTranslatedValue, shouldPreserveEnglishValue } from './locale-translation-policy.mjs'
 
+// The variable name precedes any i18next format (`{{n, number}}`) or unescape (`{{- n}}`) marker.
+function interpolationName(token) {
+  return token.replace(/^-\s*/, '').split(',')[0].trim()
+}
+
 function signature(text, key) {
-  const tokens = [...text.matchAll(/{{\s*([^{}]+?)\s*}}/g)].map((match) => match[1]).sort()
+  const interpolations = [...text.matchAll(/{{\s*([^{}]+?)\s*}}/g)].map((match) => match[1])
+  if (interpolations.some((token) => !interpolationName(token))) {
+    throw new Error(`${key}: empty interpolation name`)
+  }
+  const tokens = interpolations.sort()
   if (/[{}]/.test(text.replace(/{{\s*[^{}]+?\s*}}/g, ''))) {
     throw new Error(`${key}: invalid interpolation`)
   }

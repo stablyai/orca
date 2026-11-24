@@ -147,3 +147,65 @@ test('Korean bootstrap guards reviewed keys without contaminating the English ca
     rmSync(root, { recursive: true, force: true })
   }
 })
+
+test('Korean bootstrap rejects empty interpolation names before any writes', () => {
+  const root = realpathSync(mkdtempSync(path.join(tmpdir(), 'ko-bootstrap-name-')))
+  try {
+    const dir = path.join(root, 'config/scripts/locale-catalog')
+    const locales = path.join(root, 'src/renderer/src/i18n/locales')
+    mkdirSync(path.dirname(dir), { recursive: true })
+    mkdirSync(locales, { recursive: true })
+    cpSync(scripts, dir, { recursive: true })
+    const table = path.join(dir, 'locale-ko-bootstrap-reviewed.json')
+    const source = path.join(locales, 'en.json')
+    const cache = path.join(locales, '.ko-catalog-cache.json')
+    const output = path.join(locales, 'ko.json')
+    const preload = path.join(root, 'fetch.mjs')
+    writeFileSync(preload, "globalThis.fetch = async () => { throw Error('unexpected fetch') }\n")
+    const run = () =>
+      spawnSync(
+        process.execPath,
+        ['--import', preload, path.join(dir, 'bootstrap-locale-catalog.mjs'), '--locale', 'ko'],
+        { cwd: root, encoding: 'utf8' }
+      )
+    writeFileSync(source, JSON.stringify({ one: 'Plain text', ordinary: 'Other text' }))
+    writeFileSync(cache, JSON.stringify({ 'Other text': '다른 값' }))
+    writeFileSync(output, 'sentinel output')
+    const before = readFileSync(cache, 'utf8')
+    for (const row of [
+      { key: 'one', en: 'Hello {{ }}', ko: '안녕 {{ }}' },
+      { key: 'one', en: 'Hello {{ , number}}', ko: '안녕 {{ , number}}' },
+      { key: 'one', en: 'Hello {{name}}', ko: '안녕 {{ }}' }
+    ]) {
+      writeFileSync(table, JSON.stringify([row]))
+      writeFileSync(source, JSON.stringify({ one: row.en, ordinary: 'Other text' }))
+      let result = run()
+      expect(result.status).not.toBe(0)
+      expect(result.stderr).toContain('empty interpolation name')
+      expect(result.stderr).not.toContain('unexpected fetch')
+      expect(readFileSync(cache, 'utf8')).toBe(before)
+      expect(readFileSync(output, 'utf8')).toBe('sentinel output')
+    }
+    writeFileSync(table, JSON.stringify([{ key: 'one', en: 'Hello {{ }}', ko: '안녕 {{ }}' }]))
+    writeFileSync(source, JSON.stringify({ one: 'Plain text', ordinary: 'Other text' }))
+    let result = run()
+    expect(result.status).not.toBe(0)
+    expect(result.stderr).toContain('empty interpolation name')
+    expect(readFileSync(cache, 'utf8')).toBe(before)
+    expect(readFileSync(output, 'utf8')).toBe('sentinel output')
+    const valid = [
+      { key: 'p1', en: 'Total {{count, number}} items', ko: '총 {{count, number}}개' },
+      { key: 'p2', en: 'Raw {{- html}} value', ko: '원본 {{- html}} 값' },
+      { key: 'p3', en: '{{a}} then {{b}}', ko: '{{b}} 다음 {{a}}' }
+    ]
+    writeFileSync(table, JSON.stringify(valid))
+    writeFileSync(source, JSON.stringify(Object.fromEntries(valid.map((row) => [row.key, row.en]))))
+    result = run()
+    expect(result.status, result.stderr).toBe(0)
+    expect(JSON.parse(readFileSync(output))).toEqual(
+      Object.fromEntries(valid.map((row) => [row.key, row.ko]))
+    )
+  } finally {
+    rmSync(root, { recursive: true, force: true })
+  }
+})
