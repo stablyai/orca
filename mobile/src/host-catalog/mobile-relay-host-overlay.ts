@@ -3,7 +3,7 @@ import {
   MobileRelayEndpointSchema,
   type MobileRelayEndpoint
 } from '../../../src/shared/remote-runtime/relay/mobile-relay-credential-contract'
-import { relayConnectWebSocketUrl } from '../transport/relay/mobile-relay-connect-url'
+import { relayConnectWebSocketUrl } from '../../../src/shared/remote-runtime/relay/client/relay-connect-url'
 
 const MobileAccessEndpointSchema = z
   .object({

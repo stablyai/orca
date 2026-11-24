@@ -1,4 +1,4 @@
-// Mirror mobile E2EE v2 outside React Native; see mobile-e2ee-v2-client-session.ts and shared contract/framing.
+// Mirror mobile E2EE v2 outside React Native; see paired-e2ee-v2-client-session.ts and shared contract/framing.
 // phone-e2ee-desktop-parity.test.mjs pins real desktop compatibility.
 import { createHash, hkdfSync } from 'node:crypto'
 import { createRequire } from 'node:module'

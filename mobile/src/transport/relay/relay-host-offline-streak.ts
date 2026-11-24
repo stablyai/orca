@@ -1,4 +1,4 @@
-import { RelayOuterError } from '../encryption/mobile-relay-e2ee-link'
+import { RelayOuterError } from '../../../../src/shared/remote-runtime/relay/client/relay-e2ee-link'
 import { isHostAttachTimeout } from './relay-recovery-failure-count'
 import { MOBILE_RELAY_CLOSE_CODE } from '../../../../src/shared/remote-runtime/relay/mobile-relay-close-codes'
 

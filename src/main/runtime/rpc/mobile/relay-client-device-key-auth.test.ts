@@ -1,0 +1,136 @@
+import { mkdtempSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
+import nacl from 'tweetnacl'
+import type { WebSocket } from 'ws'
+import { describe, expect, it, vi } from 'vitest'
+import { generateKeyPair } from '../../../../shared/remote-runtime/e2ee/node/e2ee-crypto'
+import { NODE_RELAY_CLIENT_PLATFORM } from '../../../../shared/remote-runtime/relay/client/node/node-relay-client-platform'
+import type { RelayClientPlatform } from '../../../../shared/remote-runtime/relay/client/relay-client-platform'
+import { connectRelayRpcClient } from '../../../../shared/remote-runtime/relay/client/relay-rpc-client'
+import { connectSharedHost } from '../../../../shared/remote-runtime/relay/client/shared-host-relay-connection'
+import { DeviceRegistry } from '../server/pairing/device-registry'
+import { MobileSocketWiring, type MobileSocketTransport } from './mobile-socket-wiring'
+
+const RELAY_HOST_ID = 'AbCdEf0123_-xyZ9'
+const desktop = generateKeyPair()
+const desktopPublicKeyB64 = Buffer.from(desktop.publicKey).toString('base64')
+
+class HostSocket {
+  readonly OPEN = 1
+  readyState = this.OPEN
+  bufferedAmount = 0
+  constructor(readonly toClient: (frame: string | Buffer) => void) {}
+  readonly send = (data: string | Buffer) => setImmediate(() => this.toClient(data))
+  readonly close = vi.fn()
+}
+
+/**
+ * The owner's real host E2EE server behind a stand-in relay cell. The cell accepts any relay
+ * credential, then pipes frames both ways; the host answers every request with what it read.
+ */
+function relayToHost(registry: DeviceRegistry, relayDeviceId: string) {
+  let handler: Parameters<MobileSocketTransport['onMessage']>[0] | null = null
+  const transport: MobileSocketTransport = {
+    onMessage: (next) => {
+      handler = next
+    },
+    onConnectionClose: () => {},
+    setClientId: () => {},
+    terminateClientConnections: () => 0
+  }
+  const requests: Record<string, unknown>[] = []
+  const wiring = new MobileSocketWiring({
+    deviceRegistry: registry,
+    e2eeKeypair: { ...desktop, publicKeyB64: desktopPublicKeyB64 },
+    onText: (socket, plaintext, reply) => {
+      const request = JSON.parse(plaintext) as Record<string, unknown>
+      requests.push(request)
+      reply(JSON.stringify({ id: request.id, ok: true, result: socket.device.deviceId }))
+    },
+    onBinary: () => {},
+    onClose: () => {}
+  })
+  wiring.attachTransport(transport, () => ({
+    transport: 'relay',
+    relayHostId: RELAY_HOST_ID,
+    relayDeviceId,
+    basisConnId: 'basis',
+    credentialKind: 'invite'
+  }))
+  const platform: RelayClientPlatform = {
+    ...NODE_RELAY_CLIENT_PLATFORM,
+    createSocket: (_url, events) => {
+      const host = new HostSocket((frame) =>
+        events.onMessage(typeof frame === 'string' ? frame : new Uint8Array(frame))
+      )
+      let relayAuthenticated = false
+      setImmediate(events.onOpen)
+      return {
+        OPEN: 1,
+        readyState: 1,
+        bufferedAmount: 0,
+        close: () => {},
+        send: (frame) => {
+          if (!relayAuthenticated) {
+            relayAuthenticated = true
+            const hello = { type: 'relay-hello', ok: true, credentialKind: 'invite' }
+            setImmediate(() => events.onMessage(JSON.stringify({ ...hello, leaseExpiresAt: 1 })))
+            return
+          }
+          // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the wiring only sends, closes and reads OPEN/readyState/bufferedAmount.
+          handler?.(String(frame), () => {}, host as unknown as WebSocket)
+        }
+      }
+    }
+  }
+  return { platform, requests }
+}
+
+describe('relay client authentication against the host', () => {
+  it('signs in with a device key and sends no token; a phone token still signs in and stamps it', async () => {
+    const registry = new DeviceRegistry(mkdtempSync(join(tmpdir(), 'orca-relay-client-')))
+    const phone = registry.addDevice('Phone', 'mobile')
+    const key = nacl.sign.keyPair()
+    const keyed = registry.forkDeviceKey(
+      phone.deviceId,
+      Buffer.from(key.publicKey).toString('base64'),
+      'Laptop'
+    )
+
+    const shared = relayToHost(registry, phone.deviceId)
+    const sharedClient = connectSharedHost({
+      platform: shared.platform,
+      connection: {
+        kind: 'shared-host',
+        relay: { cellUrl: 'https://cell.example', relayHostId: RELAY_HOST_ID },
+        hostPublicKeyB64: desktopPublicKeyB64,
+        deviceId: keyed.deviceId,
+        relayCredential: { kind: 'invite', inviteToken: 'invite' }
+      },
+      sign: async (message) => nacl.sign.detached(message, key.secretKey)
+    })
+    await expect(sharedClient.sendRequest('status.get')).resolves.toMatchObject({
+      ok: true,
+      result: keyed.deviceId
+    })
+    expect(shared.requests[0]).not.toHaveProperty('deviceToken')
+    sharedClient.close()
+
+    const token = relayToHost(registry, phone.deviceId)
+    const phoneClient = connectRelayRpcClient({
+      platform: token.platform,
+      endpoint: { cellUrl: 'https://cell.example', relayHostId: RELAY_HOST_ID },
+      credential: 'invite',
+      expectedCredentialKind: 'invite',
+      authCredential: { kind: 'token', deviceToken: phone.token! },
+      desktopPublicKeyB64
+    })
+    await expect(phoneClient.sendRequest('status.get')).resolves.toMatchObject({
+      ok: true,
+      result: phone.deviceId
+    })
+    expect(token.requests[0]).toMatchObject({ deviceToken: phone.token })
+    phoneClient.close()
+  })
+})

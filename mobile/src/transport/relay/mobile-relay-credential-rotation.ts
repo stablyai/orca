@@ -7,7 +7,7 @@ import {
   MobileRelayCredentialBundleSchema,
   type MobileRelayCredentialBundle
 } from '../../host-credentials/mobile-relay-credential-bundle'
-import { hashMobileRelayCredential } from './mobile-relay-credential-hash'
+import { hashRelayCredential } from '../../../../src/shared/remote-runtime/relay/relay-credential-hash'
 import {
   relayCredentialProvision,
   relayPairingEndpointsRead
@@ -35,7 +35,7 @@ export async function rotateMobileRelayCredential(args: {
       ...bundle,
       pending: {
         token,
-        hash: hashMobileRelayCredential(token),
+        hash: hashRelayCredential(token),
         reqId: `rotate-${encodeBase64Url(randomBytes(16))}`
       }
     })
@@ -89,8 +89,7 @@ export function mobileRelayCredentialNeedsRotation(
   now: number
 ): boolean {
   // Repair pre-release decoded-byte hashes over authenticated direct connectivity using the stored hash.
-  const malformedCurrentHash =
-    bundle.current.hash !== hashMobileRelayCredential(bundle.current.token)
+  const malformedCurrentHash = bundle.current.hash !== hashRelayCredential(bundle.current.token)
   return (
     Boolean(bundle.pending) ||
     malformedCurrentHash ||

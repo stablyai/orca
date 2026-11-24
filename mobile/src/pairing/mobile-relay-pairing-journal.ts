@@ -5,7 +5,7 @@ import type {
   PairingRelay,
   PairingOffer
 } from '../../../src/shared/remote-runtime/pairing/mobile-relay-pairing-offer'
-import { hashMobileRelayCredential } from '../transport/relay/mobile-relay-credential-hash'
+import { hashRelayCredential } from '../../../src/shared/remote-runtime/relay/relay-credential-hash'
 
 const Base64Url32ByteSchema = z.string().regex(/^[A-Za-z0-9_-]{43}$/)
 
@@ -91,7 +91,7 @@ export function createMobileRelayPairingJournal(args: {
       relay: relayMetadata,
       installReqId,
       resumeConfirmReqId,
-      pendingResumeTokenHash: hashMobileRelayCredential(pendingResumeToken)
+      pendingResumeTokenHash: hashRelayCredential(pendingResumeToken)
     }),
     secrets: {
       v: 1,

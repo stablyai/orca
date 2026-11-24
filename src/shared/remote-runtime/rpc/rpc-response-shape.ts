@@ -1,4 +1,20 @@
-import type { RpcResponse } from './rpc-wire-types'
+// Wire validation does not require _meta, and shell-produced native replies have no runtime to name.
+export type RpcSuccess = {
+  id: string
+  ok: true
+  result: unknown
+  streaming?: true
+  _meta?: { runtimeId: string }
+}
+
+export type RpcFailure = {
+  id: string
+  ok: false
+  error: { code: string; message: string; data?: unknown }
+  _meta?: { runtimeId: string }
+}
+
+export type RpcResponse = RpcSuccess | RpcFailure
 
 export function isRpcResponse(value: unknown): value is RpcResponse {
   if (!value || typeof value !== 'object') {

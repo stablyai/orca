@@ -1,19 +1,15 @@
+import { WsInboundMessageQueue } from '../../../network/websocket/ws-inbound-message-queue'
+import { createPairedE2EEClientHandshake } from '../../e2ee/paired-e2ee-client-handshake'
+import { RelayPhoneHelloSchema, type RelayPhoneHello } from '../mobile-relay-phone-protocol'
+import { relayHostCloseReasonFrom, type RelayHostCloseReason } from '../relay-host-close-reason'
 import {
-  RelayPhoneHelloSchema,
-  type RelayPhoneHello
-} from '../../../../src/shared/remote-runtime/relay/mobile-relay-phone-protocol'
-import {
-  relayHostCloseReasonFrom,
-  type RelayHostCloseReason
-} from '../../../../src/shared/remote-runtime/relay/relay-host-close-reason'
-import { latchHostToE2EEV2 } from './e2ee-v2-host-latch'
-import { MobileE2EEV2ClientSession } from './mobile-e2ee-v2-client-session'
-import { MobileE2EEV2PhysicalChannel } from './mobile-e2ee-v2-physical-channel'
-import { receiveBinaryAsBase64, websocketPayloadToUint8 } from './websocket-payload-bytes'
-import { relayConnectWebSocketUrl } from '../relay/mobile-relay-connect-url'
-import { WsInboundMessageQueue } from '../../../../src/shared/network/websocket/ws-inbound-message-queue'
+  PairedE2EEV2PhysicalChannel,
+  type PairedE2EEClientCredential
+} from './paired-e2ee-v2-physical-channel'
+import type { RelayClientPlatform, RelayClientSocket } from './relay-client-platform'
+import { relayConnectWebSocketUrl } from './relay-connect-url'
 
-// Native WebSockets normally emit close immediately after error or a relay-hello
+// Sockets normally emit close immediately after error or a relay-hello
 // refusal; bound the missing-close case so recovery is never left pending.
 const RELAY_ERROR_CLOSE_GRACE_MS = 250
 
@@ -28,11 +24,14 @@ export class RelayOuterError extends Error {
   }
 }
 
-type MobileRelayE2eeLinkOptions = {
+export type RelayE2eeLinkOptions = {
+  platform: RelayClientPlatform
   endpoint: { cellUrl: string; relayHostId: string }
+  // The relay's invite or resume bearer, presented to the cell before E2EE starts.
   credential: string
   expectedCredentialKind: 'invite' | 'resume'
-  deviceToken: string
+  // What authenticates this device to the host inside E2EE: a phone's token or a device key.
+  authCredential: PairedE2EEClientCredential
   desktopPublicKeyB64: string
   onAuthenticated: () => void
   onText: (plaintext: string) => void
@@ -43,36 +42,51 @@ type MobileRelayE2eeLinkOptions = {
   // Fired once relay-auth is on the wire: from here the cell owns the wait.
   onOpen?: () => void
   onError: (error: Error) => void
-  createSocket?: (url: string) => WebSocket
 }
 
-export class MobileRelayE2eeLink {
-  private readonly options: MobileRelayE2eeLinkOptions
-  private readonly socket: WebSocket
-  private readonly channel: MobileE2EEV2PhysicalChannel
+/** A relay client's socket to a host: relay-auth and hello with the cell, then E2EE v2 with the host. */
+export class RelayE2eeLink {
+  private readonly options: RelayE2eeLinkOptions
+  private readonly socket: RelayClientSocket
+  private readonly channel: PairedE2EEV2PhysicalChannel
   private outerReady = false
   private closed = false
   private rejectedHelloCode: number | null = null
   private closeGraceTimer: ReturnType<typeof setTimeout> | null = null
   private readonly inbound: WsInboundMessageQueue
 
-  constructor(options: MobileRelayE2eeLinkOptions) {
+  constructor(options: RelayE2eeLinkOptions) {
     this.options = options
-    this.socket = (options.createSocket ?? ((url) => receiveBinaryAsBase64(new WebSocket(url))))(
-      relayConnectWebSocketUrl(options.endpoint.cellUrl, options.endpoint.relayHostId)
+    const { platform } = options
+    this.socket = platform.createSocket(
+      relayConnectWebSocketUrl(options.endpoint.cellUrl, options.endpoint.relayHostId),
+      {
+        onOpen: () => this.sendRelayAuth(),
+        onMessage: (data) => void this.inbound.enqueue(data),
+        // `error` is often delivered just before `close`; wait for close so a
+        // typed relay code is not replaced by a generic transport error.
+        onError: () => {
+          if (!this.closed) {
+            this.awaitClose()
+          }
+        },
+        onClose: (code, reason) => this.handleClose(code, reason)
+      }
     )
-    const session = MobileE2EEV2ClientSession.create({
-      desktopPublicKeyB64: options.desktopPublicKeyB64,
-      transport: 'relay',
-      relayHostId: options.endpoint.relayHostId
-    })
-    this.channel = new MobileE2EEV2PhysicalChannel({
-      session,
+    this.channel = new PairedE2EEV2PhysicalChannel({
+      handshake: createPairedE2EEClientHandshake({
+        primitives: platform.primitives,
+        hostPublicKeyB64: options.desktopPublicKeyB64,
+        framing: 'v2',
+        transport: 'relay',
+        relayHostId: options.endpoint.relayHostId
+      }),
       socket: this.socket,
-      deviceToken: options.deviceToken,
-      decodeBinary: websocketPayloadToUint8,
+      credential: options.authCredential,
+      decodeBinary: platform.decodeBinary,
+      inflateFrame: platform.inflateFrame,
       onAuthenticated: () => {
-        latchHostToE2EEV2(options.desktopPublicKeyB64)
+        platform.latchHostToE2EEV2?.(options.desktopPublicKeyB64)
         options.onAuthenticated()
       },
       onText: options.onText,
@@ -92,7 +106,6 @@ export class MobileRelayE2eeLink {
       },
       (error) => this.fail(asError(error))
     )
-    this.bindSocket()
   }
 
   sendText(plaintext: string): boolean {
@@ -114,51 +127,40 @@ export class MobileRelayE2eeLink {
     this.socket.close()
   }
 
-  private bindSocket(): void {
-    this.socket.onopen = () => {
-      try {
-        this.socket.send(
-          JSON.stringify({
-            type: 'relay-auth',
-            v: 1,
-            mode: 'connect',
-            credential: this.options.credential
-          })
-        )
-      } catch (error) {
-        this.fail(asError(error))
-        return
-      }
-      this.options.onOpen?.()
-    }
-    this.socket.onmessage = (event) => {
-      void this.inbound.enqueue(event.data)
-    }
-    // `error` is often delivered just before `close`; wait for close so a
-    // typed relay code is not replaced by a generic transport error.
-    this.socket.onerror = () => {
-      if (!this.closed) {
-        this.awaitClose()
-      }
-    }
-    this.socket.onclose = (event) => {
-      this.clearCloseGrace()
-      // Ahead of fail(), which no-ops once a missing close already timed out.
-      const hostCloseReason = relayHostCloseReasonFrom(event.reason)
-      if (hostCloseReason) {
-        this.options.onHostCloseReason?.(hostCloseReason)
-      }
-      this.fail(
-        new RelayOuterError(
-          this.rejectedHelloCode ?? (event.code || 1006),
-          this.rejectedHelloCode !== null,
-          event.reason ?? ''
-        )
+  private sendRelayAuth(): void {
+    try {
+      this.socket.send(
+        JSON.stringify({
+          type: 'relay-auth',
+          v: 1,
+          mode: 'connect',
+          credential: this.options.credential
+        })
       )
+    } catch (error) {
+      this.fail(asError(error))
+      return
     }
+    this.options.onOpen?.()
   }
 
-  // Bound waiting for close reason; dead native sockets may never emit it.
+  private handleClose(code: number, reason: string): void {
+    this.clearCloseGrace()
+    // Ahead of fail(), which no-ops once a missing close already timed out.
+    const hostCloseReason = relayHostCloseReasonFrom(reason)
+    if (hostCloseReason) {
+      this.options.onHostCloseReason?.(hostCloseReason)
+    }
+    this.fail(
+      new RelayOuterError(
+        this.rejectedHelloCode ?? (code || 1006),
+        this.rejectedHelloCode !== null,
+        reason
+      )
+    )
+  }
+
+  // Bound waiting for close reason; dead sockets may never emit it.
   private awaitClose(): void {
     this.closeGraceTimer ??= setTimeout(() => {
       this.closeGraceTimer = null
@@ -200,7 +202,10 @@ export class MobileRelayE2eeLink {
     }
     this.outerReady = true
     this.options.onHello?.(parsed.data)
-    this.channel.start()
+    // onHello may refuse this hello by closing the link.
+    if (!this.closed) {
+      this.channel.start()
+    }
   }
 
   private fail(error: Error): void {
@@ -218,4 +223,11 @@ export class MobileRelayE2eeLink {
 
 function asError(error: unknown): Error {
   return error instanceof Error ? error : new Error(String(error))
+}
+
+// A token client stamps its token on every request; a device-key socket is itself the principal.
+export function relayRequestCredentialFields(credential: PairedE2EEClientCredential): {
+  deviceToken?: string
+} {
+  return credential.kind === 'token' ? { deviceToken: credential.deviceToken } : {}
 }
