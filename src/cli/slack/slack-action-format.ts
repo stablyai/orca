@@ -1,5 +1,6 @@
 // How `orca slack` prints each verb's answer.
 import { inlineUntrusted, untrustedContent } from '../../shared/quoted-text-fence'
+import { messagePartsLines } from '../../shared/connector-message-parts'
 import type { SlackVerb } from './slack-action-args'
 
 type RefView = { ref: string; label: string }
@@ -15,6 +16,8 @@ export type ActionResult = {
   url?: string
   // What the read left out, in words.
   note?: string
+  // Set by this machine on a `read --only` answer alone: only then do a message's parts print.
+  messageParts?: true
   messages?: (RefView & {
     author: string
     // Posted by an app (a Slack bot_id), whatever user id Slack gave it: never read as a person's.
@@ -23,6 +26,9 @@ export type ActionResult = {
     at: number
     url?: string
     files?: MessageFile[]
+    shared?: unknown
+    links?: unknown
+    partsLeftOut?: unknown
   })[]
   // A file read with --download: where to stream it from, with the ticket that opens it.
   download?: MessageFile & { data?: string; url?: string; ticket?: string }
@@ -72,10 +78,12 @@ export function formatActionResult(verb: SlackVerb | 'attach', result: ActionRes
             `${message.app ? `the app ${authorName(message.author)} posted` : `${authorName(message.author)} wrote`}, ${new Date(message.at).toISOString()}`,
             message.text
           ),
-          ...(message.files ?? []).map(
-            (file) =>
-              `[Orca: file ${file.id}: ${authorName(file.name)}${file.type ? `, ${file.type}` : ''}${file.size === undefined ? '' : `, ${Math.ceil(file.size / 1024)} KB`}; --download ${file.id} saves it]`
-          )
+          ...(result.messageParts
+            ? messagePartsLines(message)
+            : (message.files ?? []).map(
+                (file) =>
+                  `[Orca: file ${file.id}: ${authorName(file.name)}${file.type ? `, ${file.type}` : ''}${file.size === undefined ? '' : `, ${Math.ceil(file.size / 1024)} KB`}; --download ${file.id} saves it]`
+              ))
         ].join('\n')
       )
       return [

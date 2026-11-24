@@ -1,6 +1,6 @@
 import { EpochMsSchema } from '@orca-cloud/push-contract'
 import { z } from 'zod'
-import { ConnectorMessageFileSchema } from './action-messages.js'
+import { ConnectorMessageFileSchema } from './message-parts.js'
 import { CONNECTOR_LIMITS } from './connector-limits.js'
 
 // One of the asker's own messages before a bare mention. Its text may be empty when it carries files

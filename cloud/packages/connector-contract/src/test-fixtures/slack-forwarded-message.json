@@ -1,0 +1,66 @@
+{
+  "user": "UUSERONE",
+  "type": "message",
+  "ts": "1700000003.300000",
+  "text": "Please check the example attachment.",
+  "team": "TEXAMPLE",
+  "thread_ts": "1700000003.300000",
+  "attachments": [
+    {
+      "fallback": "[November 14th, 2023 10:13 PM] sample-assistant: The sample is ready for review.",
+      "blocks": [
+        {
+          "type": "rich_text",
+          "block_id": "sample-share",
+          "elements": [
+            {
+              "type": "rich_text_section",
+              "elements": [
+                {
+                  "type": "text",
+                  "text": "The sample is ready for review."
+                }
+              ]
+            }
+          ]
+        }
+      ],
+      "author_id": "UHELPER",
+      "author_subname": "sample-assistant",
+      "is_msg_unfurl": true,
+      "ts": "1700000002.200000",
+      "channel_id": "CEXAMPLE",
+      "channel_team": "TEXAMPLE",
+      "is_reply_unfurl": true,
+      "text": "The sample is ready for review.",
+      "author_name": "Sample Assistant",
+      "author_link": "https://example.slack.com/services/BDEMO",
+      "mrkdwn_in": [
+        "text"
+      ],
+      "private_channel_prompt": true,
+      "color": "D0D0D0",
+      "is_share": true,
+      "from_url": "https://example.slack.com/archives/CEXAMPLE/p1700000002200000?thread_ts=1700000001.100000&cid=CEXAMPLE",
+      "id": 1,
+      "footer": "Thread in Slack Conversation"
+    }
+  ],
+  "blocks": [
+    {
+      "type": "rich_text",
+      "block_id": "sample-post",
+      "elements": [
+        {
+          "type": "rich_text_section",
+          "elements": [
+            {
+              "type": "text",
+              "text": "Please check the example attachment."
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

@@ -140,7 +140,8 @@ export async function actionArgs(
         ...(limit ? { limit } : {}),
         ...(before ? { before } : {}),
         // The bytes stream to this machine from a link the answer gives, never inline.
-        ...(download ? { download, stream: true as const } : {})
+        ...(download ? { download, stream: true as const } : {}),
+        ...(flags.get('only') === true ? { only: true as const } : {})
       }
     }
     case 'pin':

@@ -189,6 +189,9 @@ export const CONNECTOR_CLOUD_FEATURES = [
   // upload URL, attach takes staged `files`, and read's `stream` answers a link to the bytes.
   'files.direct'
 ] as const
+// read's `only`: the named message alone, with its files, shared messages and link previews. Only a
+// cloud that reads it so advertises this.
+export const CONNECTOR_CLOUD_MESSAGE_PARTS_FEATURE = 'messageParts'
 // Hooks can be made. Listed only while webhooks are switched on and the cloud's sealing keys are valid.
 export const CONNECTOR_CLOUD_WEBHOOKS_FEATURE = 'webhooks'
 // The cloud reads a prompt's raisedBy and routes or masks it by it, so a bot link's prompts from turns
