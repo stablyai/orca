@@ -124,8 +124,11 @@ async function assertSameItem(
   const savedOwners = plan.resource?.prior_owner_dispatch_ids ?? '[]'
   // A saved list this long names more owners than the 200 steps checked, so it is never parsed.
   unchecked ||= !elsewhere && savedOwners.length > 16_384
-  if (!elsewhere && !unchecked) {
-    for (const owner of parseWorkerTerminalPriorOwnerIds(savedOwners) ?? []) {
+  const owners = elsewhere || unchecked ? [] : parseWorkerTerminalPriorOwnerIds(savedOwners)
+  // An unreadable list, as the terminal's release treats it, can't be checked.
+  unchecked ||= owners === null
+  if (owners) {
+    for (const owner of owners) {
       walk(owner)
       if (elsewhere || unchecked) {
         break
