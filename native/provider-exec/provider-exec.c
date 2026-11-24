@@ -248,8 +248,8 @@ enum watcher_phase { WATCH_IDLE, WATCH_STDIN_GRACE, WATCH_TERM_GRACE, WATCH_REAP
 enum { WATCH_LINE_MAX = 32, WATCH_READ_MAX = 256, WATCH_POLL_MS = 25, WATCH_REAP_MS = 1500 };
 enum { TREE_SWEEP_INTERVAL_MS = 100 };
 // A sweep result: the tree can't be proven empty on this host at all (no pidfd or audit-token
-// signal, a foreign or hidepid /proc), so once the CLI group is gone the stop ends unverified
-// at once rather than waiting out its deadlines.
+// signal, a gone or replaced subreaper, a foreign /proc), so once the CLI group is gone the stop
+// ends unverified at once rather than waiting out its deadlines.
 enum { TREE_UNPROVABLE = -2 };
 // Inherited by every tool the CLI starts, so one reparented to launchd is still found on macOS.
 #define TREE_TAG_NAME "ORCA_PROVIDER_TREE"
@@ -454,10 +454,11 @@ static int read_row(pid_t pid, struct proc_row *row) {
 
 // NSpid lists this process's PID in the procfs mount's namespace and each nested one, so a single
 // entry equal to getpid() proves /proc describes this namespace.
+// 1 this namespace, 0 another one (or no NSpid line), -1 unreadable right now.
 static int procfs_in_own_namespace(void) {
     FILE *status = fopen("/proc/self/status", "re");
     if (status == NULL) {
-        return 0;
+        return -1;
     }
     char line[256];
     int own = 0;
@@ -811,8 +812,9 @@ static int sweep_once(struct watcher *w, int signal_number) {
     long long scan_tick = (long long)boot.tv_sec * ticks_per_second +
                           (long long)boot.tv_nsec * ticks_per_second / 1000000000LL;
     // /proc can be remounted while the chat runs, so its namespace is proven around every read.
-    if (!procfs_in_own_namespace()) {
-        return TREE_UNPROVABLE;
+    int namespace_before = procfs_in_own_namespace();
+    if (namespace_before != 1) {
+        return namespace_before == 0 ? TREE_UNPROVABLE : -1;
     }
     int hidden_before = procfs_hides_processes();
     struct pollfd anchor = {.fd = w->reaper_fd, .events = POLLIN};
@@ -841,8 +843,12 @@ static int sweep_once(struct watcher *w, int signal_number) {
 #if defined(__linux__)
     // Orphans are adopted by this exact subreaper; any other process at its PID anchors nothing.
     const struct proc_row *reaper = find_row(scan.rows, scan.n, w->reaper);
-    if (reaper == NULL || reaper->start != w->reaper_start || !same_identity(reaper)) {
+    // A reaper gone or replaced can't come back; a failed identity read can be retried.
+    if (reaper == NULL || reaper->start != w->reaper_start) {
         live = TREE_UNPROVABLE;
+        goto done;
+    }
+    if (!same_identity(reaper)) {
         goto done;
     }
 #endif
@@ -851,8 +857,9 @@ static int sweep_once(struct watcher *w, int signal_number) {
 #if defined(__linux__)
     // A hidden row this watcher can signal might be a member, so the scan can't prove absence.
     // Checked around each table read: the mount's options can change while the chat runs.
-    if (!procfs_in_own_namespace()) {
-        live = TREE_UNPROVABLE;
+    int namespace_after = procfs_in_own_namespace();
+    if (namespace_after != 1) {
+        live = namespace_after == 0 ? TREE_UNPROVABLE : -1;
         goto done;
     }
     int hidden = table_has_hidden_row || hidden_before || procfs_hides_processes();
@@ -914,8 +921,9 @@ static int sweep_once(struct watcher *w, int signal_number) {
         live = -1;
     }
 #if defined(__linux__)
+    // A hidden process may become visible (after an exec), so hidepid keeps retrying.
     if (hidden && live == 0) {
-        live = TREE_UNPROVABLE;
+        live = -1;
     }
 #endif
 done:
@@ -1532,7 +1540,7 @@ int main(int argc, char *argv[]) {
     // The pidfd, taken while this pid is certainly itself, turns readable once it exits.
     watcher.reaper_fd = (int)syscall(SYS_pidfd_open, getpid(), 0);
     if (watcher.reaper_fd >= 0 && set_cloexec(watcher.reaper_fd, 1) == 0 &&
-            procfs_in_own_namespace() && read_row(getpid(), &reaper_row) == 1) {
+            procfs_in_own_namespace() == 1 && read_row(getpid(), &reaper_row) == 1) {
         watcher.reaper = reaper_row.pid;
         watcher.reaper_start = reaper_row.start;
     } else {
