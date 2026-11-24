@@ -19,6 +19,7 @@ import { listenForBrowserSystemDialogs } from '../guest-lifecycle/prompts/browse
 import { listenForBrowserGuestPageVisibility } from '../guest-lifecycle/visibility/browser-guest-page-visibility'
 
 let initialized = false
+let profilesRead = false
 
 export function initializeBrowserSessionsForApp(
   activeProfile?: BrowserSessionRegistryProfileOptions & {
@@ -55,8 +56,8 @@ export function initializeBrowserSessionsForApp(
 
   // Replay cookies before Chromium opens the live DB via session.fromPartition.
   browserSessionRegistry.applyPendingCookieImport()
-  browserSessionRegistry.initializeBrowserSessionsFromPersistedState()
-  // Startup's synchronous read can't say whether it failed; one that did leaves site lists unseeded.
+  profilesRead = browserSessionRegistry.initializeBrowserSessionsFromPersistedState()
+  // Retry unreadable site lists without changing the saved-profile startup result.
   loadBrowserProfileSiteListsWithRetry()
   initialized = true
 }
@@ -64,6 +65,11 @@ export function initializeBrowserSessionsForApp(
 /** Whether a partition may be opened: before this, opening one would skip a pending cookie import. */
 export function browserSessionsInitialized(): boolean {
   return initialized
+}
+
+/** Whether startup read the saved browser profiles; after a failed read a missing profile may not be deleted. */
+export function browserSessionProfilesReadAtStartup(): boolean {
+  return profilesRead
 }
 
 /** Restored tabs must load through their proxy and signed in. Extensions start with each profile's first page. */

@@ -17,6 +17,12 @@ export type BotMemoryFact = {
 export const BOT_MEMORY_SOURCE_SEPARATOR = ' · from: '
 
 const FACT_LINE = /^(\s*[-*]\s+)(.*)$/
+/** The how-to line a new bot's MEMORY.md starts with (bot-home.ts), not a fact. */
+export const BOT_MEMORY_SEED_INTRO =
+  'One line per fact, newest first. Longer notes go in memory/<topic>.md.'
+// Headings ("# x", never "#123"), table rows, HTML comments and rules (---, ***, ===, * * *).
+const NOT_A_FACT = /^(?:#{1,6}(?:\s|$)|\||<!--|[\s*_=:-]+$)/
+const FENCE = /^\s*(`{3,}|~{3,})/
 const DATED_TEXT = /^(\d{4}-\d{2}-\d{2})(?:\s*[:\u2013\u2014-]\s*|\s+)(.*)$/
 
 function splitLines(text: string): { lines: string[]; eol: string } {
@@ -38,10 +44,35 @@ export function countBotMemoryLines(text: string): number {
   return trimmed === '' ? 0 : trimmed.split(/\r?\n/).length
 }
 
+type FactParts = Omit<BotMemoryFact, 'line'> & { prefix: string }
+
+/** Each line's fact, or null: a line in a code fence is never one, whatever it looks like. */
+function lineFacts(lines: readonly string[]): (FactParts | null)[] {
+  // The open fence, if any: it closes only on the same character at least as many times.
+  let open: string | null = null
+  return lines.map((raw) => {
+    const fence = FENCE.exec(raw)?.[1]
+    // A closer is the same character, at least as long, with nothing but spaces after it.
+    const closes =
+      open !== null &&
+      fence !== undefined &&
+      fence[0] === open[0] &&
+      fence.length >= open.length &&
+      raw.trim() === fence
+    if (fence && (open === null || closes)) {
+      open = open === null ? fence : null
+      return null
+    }
+    return open !== null ? null : factParts(raw)
+  })
+}
+
 export function parseBotMemoryFacts(text: string): BotMemoryFact[] {
   const facts: BotMemoryFact[] = []
-  splitLines(text).lines.forEach((raw, line) => {
-    const fact = factParts(raw)
+  const { lines } = splitLines(text)
+  const parts = lineFacts(lines)
+  lines.forEach((_raw, line) => {
+    const fact = parts[line]
     if (fact) {
       const { prefix: _prefix, ...read } = fact
       facts.push({ line, ...read })
@@ -50,17 +81,23 @@ export function parseBotMemoryFacts(text: string): BotMemoryFact[] {
   return facts
 }
 
-function factParts(raw: string): (Omit<BotMemoryFact, 'line'> & { prefix: string }) | null {
-  const listed = FACT_LINE.exec(raw)
-  const body = listed?.[2]?.trim()
-  if (!listed || !body) {
+function factParts(raw: string): FactParts | null {
+  // A list line, or any other line with words in it: every line of MEMORY.md is one fact.
+  const plain = raw.trim()
+  if (plain === BOT_MEMORY_SEED_INTRO || NOT_A_FACT.test(plain) || FENCE.test(plain)) {
     return null
   }
+  const listed = FACT_LINE.exec(raw)
+  const body = listed ? listed[2]?.trim() : plain
+  if (!body) {
+    return null
+  }
+  const prefix = listed ? listed[1] : (/^\s*/.exec(raw)?.[0] ?? '')
   const dated = DATED_TEXT.exec(body)
   const text = dated ? dated[2].trim() : body
   const at = text.lastIndexOf(BOT_MEMORY_SOURCE_SEPARATOR)
   return {
-    prefix: listed[1],
+    prefix,
     date: dated?.[1] ?? null,
     text: at > 0 ? text.slice(0, at).trim() : text,
     source: at > 0 ? text.slice(at + BOT_MEMORY_SOURCE_SEPARATOR.length).trim() || null : null
@@ -75,19 +112,23 @@ function factParts(raw: string): (Omit<BotMemoryFact, 'line'> & { prefix: string
 export function tagBotMemoryChanges(before: string, after: string, label: string | null): string {
   const earlier = new Map<string, number>()
   const known = new Map<string, string | null>()
-  for (const line of splitLines(before).lines) {
-    earlier.set(line, (earlier.get(line) ?? 0) + 1)
-    const fact = factParts(line)
+  const was = splitLines(before).lines
+  lineFacts(was).forEach((fact, index) => {
+    // Only facts count as already there: a line a fence hid before is new once it is a fact.
+    if (fact) {
+      earlier.set(was[index], (earlier.get(was[index]) ?? 0) + 1)
+    }
     if (fact && !known.has(factKey(fact.text))) {
       known.set(factKey(fact.text), fact.source)
     }
-  }
+  })
   const { lines, eol } = splitLines(after)
+  const facts = lineFacts(lines)
   return lines
-    .map((raw) => {
+    .map((raw, index) => {
       const seen = earlier.get(raw) ?? 0
       earlier.set(raw, seen - 1)
-      const fact = seen > 0 ? null : factParts(raw)
+      const fact = seen > 0 ? null : facts[index]
       // A separator lookalike left in the text would read as a source.
       const text = fact ? oneLine(defusedSeparators(fact.text)) : ''
       if (!fact || !text) {
@@ -104,8 +145,9 @@ export function dropBotMemoryFact(text: string, fact: string): { text: string; d
   const wanted = factParts(`- ${fact.trim().replace(/^[-*]\s+/, '')}`)
   const key = wanted ? factKey(wanted.text) : ''
   const { lines, eol } = splitLines(text)
-  const kept = lines.filter((raw) => {
-    const parts = factParts(raw)
+  const facts = lineFacts(lines)
+  const kept = lines.filter((_raw, index) => {
+    const parts = facts[index]
     return key === '' || !parts || factKey(parts.text) !== key
   })
   return { text: kept.join(eol), dropped: lines.length - kept.length }
@@ -126,9 +168,14 @@ function rawFactKey(raw: string): string | null {
   return fact ? factKey(fact.text) : null
 }
 
+/** Each line's fact key in `text`, fences read: null for a line that states no fact. */
+function lineKeys(lines: readonly string[]): (string | null)[] {
+  return lineFacts(lines).map((fact) => (fact ? factKey(fact.text) : null))
+}
+
 /** The facts `text` states, by their words. */
 export function botMemoryFactKeys(text: string): Set<string> {
-  return new Set(splitLines(text).lines.flatMap((raw) => rawFactKey(raw) ?? []))
+  return new Set(lineKeys(splitLines(text).lines).flatMap((key) => key ?? []))
 }
 
 export function botMemoryLineKey({ line }: BotMemoryLine): string | null {
@@ -156,10 +203,13 @@ export function mergeBotMemoryChanges(a: BotMemoryChange, b: BotMemoryChange): B
 
 /** Whether only fact lines differ (blank lines aside): what a `BotMemoryChange` can say in full. */
 export function onlyBotMemoryFactsChanged(before: string, after: string): boolean {
-  const others = (text: string): string[] =>
-    splitLines(text).lines.flatMap((raw) =>
-      raw.trim() !== '' && rawFactKey(raw) === null ? [raw.trim()] : []
+  const others = (text: string): string[] => {
+    const { lines } = splitLines(text)
+    const keys = lineKeys(lines)
+    return lines.flatMap((raw, index) =>
+      raw.trim() !== '' && keys[index] === null ? [raw.trim()] : []
     )
+  }
   const [a, b] = [others(before), others(after)]
   return a.length === b.length && a.every((line, index) => line === b[index])
 }
@@ -167,11 +217,13 @@ export function onlyBotMemoryFactsChanged(before: string, after: string): boolea
 /** The facts `after` has that `before` hasn't, and the reverse. */
 export function botMemoryChange(before: string, after: string): BotMemoryChange {
   const only = (from: string, other: string): BotMemoryLine[] => {
-    const keys = new Set(splitLines(other).lines.map(rawFactKey))
+    const keys = new Set(lineKeys(splitLines(other).lines))
     const lines: BotMemoryLine[] = []
     let previous: string | null = null
-    for (const raw of splitLines(from).lines) {
-      const key = rawFactKey(raw)
+    const rows = splitLines(from).lines
+    const rowKeys = lineKeys(rows)
+    for (const [index, raw] of rows.entries()) {
+      const key = rowKeys[index]
       if (key !== null && !keys.has(key)) {
         lines.push({ line: raw, after: previous })
       }
@@ -187,11 +239,12 @@ export function botMemoryChange(before: string, after: string): BotMemoryChange 
 export function applyBotMemoryChange(text: string, change: BotMemoryChange): string {
   const gone = new Set(change.removed.map(({ line }) => rawFactKey(line)))
   const { lines, eol } = splitLines(text)
-  const kept = lines.filter((raw) => {
-    const key = rawFactKey(raw)
+  const keys = lineKeys(lines)
+  const kept = lines.filter((_raw, index) => {
+    const key = keys[index]
     return key === null || !gone.has(key)
   })
-  const present = new Set(kept.map(rawFactKey))
+  const present = new Set(lineKeys(kept))
   for (const { line, after } of change.added) {
     const key = rawFactKey(line)
     if (key === null || present.has(key)) {
@@ -259,8 +312,16 @@ export function editBotMemoryFact(text: string, fact: BotMemoryFact, nextText: s
   if (next === '') {
     lines.splice(fact.line, 1)
   } else {
-    const prefix = FACT_LINE.exec(lines[fact.line] ?? '')?.[1] ?? '- '
-    lines[fact.line] = factLine(prefix, fact.date, next, fact.source)
+    const prefix = lineFacts(lines)[fact.line]?.prefix ?? '- '
+    const line = factLine(prefix, fact.date, next, fact.source)
+    // An undashed line edited to look like a heading or rule would stop being a fact: dash it;
+    // text that is no fact even dashed ("***") leaves the line as it was.
+    const dashed = factLine('- ', fact.date, next, fact.source)
+    if (factParts(line)) {
+      lines[fact.line] = line
+    } else if (factParts(dashed)) {
+      lines[fact.line] = dashed
+    }
   }
   return lines.join(eol)
 }
@@ -277,9 +338,11 @@ export function addBotMemoryFact(text: string, fact: string, date: string): stri
   }
   const { lines, eol } = splitLines(text)
   const line = factLine('- ', date, next)
-  const first = parseBotMemoryFacts(text)[0]
-  if (first) {
-    lines.splice(first.line, 0, line)
+  // Above the first list line, so prose a file opens with stays first.
+  const facts = lineFacts(lines)
+  const first = lines.findIndex((raw, index) => FACT_LINE.test(raw) && facts[index] !== null)
+  if (first !== -1) {
+    lines.splice(first, 0, line)
     return lines.join(eol)
   }
   const body = text.trimEnd()

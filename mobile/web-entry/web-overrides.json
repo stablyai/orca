@@ -186,7 +186,7 @@
       "reason": "Natively there is no `init` and the shell layout decides who draws the host sidebar. Inside the page the only answer is the `ownsHostArea` init fact, never the page's own width, because a detail-route page on a wide iPad sits beside the shell's sidebar."
     },
     {
-      "file": "src/terminal/preferences/terminal-settings-scroll-lock.web.ts",
+      "file": "src/components/reorder/drag-reorder-scroll-lock.web.ts",
       "reason": "setNativeProps does not exist on React Native Web, where an Animated.ScrollView ref is the DOM node, so the drag's scroll lock threw instead of landing; this one sets overflowY inline and clears it again, which RN Web's own class then takes back over."
     },
     {

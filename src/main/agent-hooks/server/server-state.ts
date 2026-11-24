@@ -42,6 +42,7 @@ import type {
   StatusRowMutationListener
 } from './server-types'
 import { RevisionedMap } from './revisioned-map'
+import type { TerminalModelWait } from './server-model-wait'
 import { recordAgentExit, forgetAgentExit, type AgentExitEvidence } from './agent-exit-evidence'
 import { paneAgentIdentity, type PaneAgentIdentity } from './pane-agent-identity'
 import { cliWriterTopology } from './cli-writer-observation'
@@ -54,10 +55,15 @@ export abstract class AgentHookServerState extends AgentHookServerStateContract 
     /** Answers the record that was saved when the agent quit. */
     retireSavedRecord?(paneKey: string, exitedAt: number): SleepingAgentSessionRecord | undefined
     readSavedRecord?(paneKey: string): SleepingAgentSessionRecord | undefined
-    confirmProcessExit?(paneKey: string, agent: string): Promise<boolean>
+    /** True where the host proves the shell alone; null where it cannot tell (remote). */
+    confirmProcessExit?(paneKey: string, agent: string): Promise<boolean | null>
     /** The host's word that the pane's shell holds its PTY alone, whatever launch it ran; null
      *  where the host gives none (remote, Windows), so a command mark stands as on main. */
     confirmShellAlone?(paneKey: string, agent?: string): Promise<boolean | null>
+    /** The pane's agent ended, proven: its process gone, its shell alone, or its own end hook. */
+    agentExited?(paneKey: string): void
+    /** Claude waited on its model this long with no hook; true keeps the stopwatch running. */
+    modelWaitElapsed?(paneKey: string, wait: TerminalModelWait): Promise<boolean>
     ownsProcess(paneKey: string, ptyId: string, incarnationId?: string): boolean
     isStopping(paneKey: string): boolean
     isReversibleStop(ptyId: string, incarnationId?: string): boolean
@@ -68,6 +74,12 @@ export abstract class AgentHookServerState extends AgentHookServerStateContract 
     lifecycle: NonNullable<AgentHookServerState['terminalPaneLifecycle']>
   ): void {
     this.terminalPaneLifecycle = lifecycle
+  }
+
+  /** An idle agent's row outlives the TTL while its pane is placed; until placement is readable,
+   *  the prune after binding decides. */
+  protected placementKeepsRow(row: EnrichedAgentHookEventPayload): boolean {
+    return !this.terminalPaneLifecycle || this.terminalPaneLifecycle.isPlaced(row) === true
   }
 
   /** Which agent conversation this pane holds; see paneAgentIdentity. A null `savedRecord` was

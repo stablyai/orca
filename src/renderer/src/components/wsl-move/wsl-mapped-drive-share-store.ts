@@ -49,9 +49,3 @@ export function useWslMappedDriveShare(path: string | null): string | null {
   }, [letter])
   return letter ? (current.get(letter)?.share ?? null) : null
 }
-
-export function resetWslMappedDriveShareStoreForTests(): void {
-  entries = new Map()
-  inFlight.clear()
-  listeners.clear()
-}

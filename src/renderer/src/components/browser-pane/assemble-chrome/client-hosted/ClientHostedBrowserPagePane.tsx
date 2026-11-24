@@ -17,9 +17,10 @@ import { attachBrowserClientPageToViewport } from '../../host-guest/client-pages
 import { useBrowserClientHostedPopupNotices } from '../../navigate/browser-client-hosted-popup-notices'
 import { useBrowserClientHostedPermissionNotices } from '../../navigate/browser-client-hosted-permission-notices'
 import { useClientHostedBrowserIntroTour } from './use-client-hosted-browser-intro-tour'
-import { ClientHostedBrowserUnavailableNotice } from './client-hosted-browser-unavailable-notice'
+import { ClientHostedBrowserPageStandIn } from './client-hosted-browser-page-stand-in'
+import { useClientHostedPageAttachment } from './use-client-hosted-page-attachment'
 import { watchBrowserClientPageGuestLoss } from '../../host-guest/recovery/browser-client-page-guest-loss'
-import { useClientHostedBrowserMarkup } from '../../annotate/capture/use-client-hosted-browser-markup'
+import { useClientHostedBrowserAnnotate } from '../../annotate/use-client-hosted-browser-annotate'
 import { ClientHostedBrowserPageOverlays } from './client-hosted-browser-page-overlays'
 import { ClientHostedBrowserPageToolbar } from './client-hosted-browser-page-toolbar'
 import { bindBrowserClientPageChromeListeners } from './browser-client-page-chrome-listeners'
@@ -36,9 +37,8 @@ import { useBrowserPageWebviewShortcuts } from '../../host-guest/input/use-brows
 import { useBrowserPageZoomFeedback } from '../../host-guest/viewport/use-browser-page-zoom-feedback'
 import { ClientHostedBrowserLoadFailure } from '../../navigate/client-hosted-browser-load-failure'
 import { useClientHostedPageUrlSubmission } from '../../navigate/use-client-hosted-page-url-submission'
-import { useClientPageWorkspaceFileDrop } from '../../navigate/browser-page-workspace-file-drop'
+import { useWorkspaceDocPageFileDrop } from '../../navigate/browser-page-workspace-file-drop'
 import { isBlankBrowserUrl } from '@/lib/browser/palette/browser-palette-search'
-import { BrowserNewTabPage } from '../../new-tab/BrowserNewTabPage'
 import { useBrowserPageReloadActions } from '../../navigate/use-browser-page-reload-actions'
 import { consumeBrowserPageDeferredNavigation } from '../../navigate/browser-page-deferred-navigation'
 import { toDisplayUrl } from '../../describe-page/browser-page-url-display'
@@ -71,7 +71,8 @@ export function ClientHostedBrowserPagePane(props: Props) {
   const loadFailureRef = useRef<BrowserGuestMetadata['loadError']>(browserTab.loadError ?? null)
   const onUpdatePageStateRef = useRef(onUpdatePageState)
   const isActiveRef = useRef(isActive)
-  const [attachmentError, setAttachmentError] = useState<string | null>(null)
+  const attach = useClientHostedPageAttachment(browserTab.id, onUpdatePageState)
+  const { attachmentError, setAttachmentError, wakeWhenShown, recoverLostGuest } = attach
   const [findOpen, setFindOpen] = useState(false)
   const [paneRoot, setPaneRoot] = useState<HTMLDivElement | null>(null)
   const updatePageStateFromGuest = useEffectEvent(onUpdatePageState)
@@ -81,15 +82,10 @@ export function ClientHostedBrowserPagePane(props: Props) {
   const browserHostGeneration = placement?.browserHostGeneration ?? null
   const pageHostGeneration = placement?.pageHostGeneration ?? null
   const initialization = useClientHostedPageInitialization(props, attachmentError, loadFailureRef)
-  const retryGuestRecoveryRef = useRef<() => void>(() => {})
   useLayoutEffect(() => {
     onUpdatePageStateRef.current = onUpdatePageState
     isActiveRef.current = isActive
-    retryGuestRecoveryRef.current = () => {
-      onUpdatePageState(browserTab.id, { loading: false })
-      setAttachmentError('browser_client_page_guest_unavailable')
-    }
-  }, [browserTab.id, isActive, onUpdatePageState])
+  }, [isActive, onUpdatePageState])
 
   const guestFocus = useWebviewGuestFocus(webviewRef)
   const shortcutOwner = { browserTabId: browserTab.id, workspaceId, isActive, chromeShortcutScope }
@@ -111,7 +107,7 @@ export function ClientHostedBrowserPagePane(props: Props) {
     browserTab: initialization.reloadPage,
     onInitializationAction: initialization.initializationAction,
     webviewRef,
-    retryGuestRecoveryRef,
+    retryGuestRecoveryRef: attach.retryGuestRecoveryRef,
     onUpdatePageStateRef
   })
 
@@ -145,7 +141,16 @@ export function ClientHostedBrowserPagePane(props: Props) {
   )
   const getAgentCursorHost = useCallback(() => webviewRef.current?.parentElement ?? null, [])
   useBrowserAgentCursor(browserTab.id, webviewRef, getAgentCursorHost)
-  const fileDrop = useClientPageWorkspaceFileDrop(browserTab.id, worktreeId, pageBox.contentRef)
+  const fileDrop = useWorkspaceDocPageFileDrop(browserTab.id, worktreeId, pageBox.contentRef)
+
+  const annotate = useClientHostedBrowserAnnotate(
+    props,
+    initialization,
+    webviewRef,
+    pageBox.contentRef,
+    viewportPresetId ? paneRoot : null
+  )
+  const bindAnnotationGuest = annotate.bindGuest
 
   useLayoutEffect(() => {
     const viewport = pageBox.contentRef.current
@@ -168,12 +173,11 @@ export function ClientHostedBrowserPagePane(props: Props) {
         viewport
       )
     } catch (error) {
-      setAttachmentError(error instanceof Error ? error.message : 'browser_client_page_unavailable')
-      return
+      const code = error instanceof Error ? error.message : 'browser_client_page_unavailable'
+      return wakeWhenShown(viewport, pageHostGeneration, code)
     }
     if (!attachment) {
-      setAttachmentError('browser_client_page_renderer_unavailable')
-      return
+      return wakeWhenShown(viewport, pageHostGeneration, 'browser_client_page_renderer_unavailable')
     }
     const webview = attachment.webview
     let guestAvailable = true
@@ -186,7 +190,7 @@ export function ClientHostedBrowserPagePane(props: Props) {
       onLost: () => {
         guestAvailable = false
         releaseGuest()
-        retryGuestRecoveryRef.current()
+        recoverLostGuest(viewport, pageHostGeneration)
       }
     })
     const publisher = startBrowserClientPageMetadataPublisher({
@@ -274,6 +278,7 @@ export function ClientHostedBrowserPagePane(props: Props) {
       dismissAddressBarSuggestions: () => dismissAddressBarSuggestionsRef.current?.(),
       applyViewportPreset: pageBox.applyOverride
     })
+    const unbindAnnotationDocument = bindAnnotationGuest(webview)
     const onFailLoad = createBrowserClientPageLoadFailureHandler(webview, (loadError) => {
       loadFailureRef.current = loadError
       updatePageStateFromGuest(browserTab.id, { loading: false, loadError })
@@ -285,6 +290,7 @@ export function ClientHostedBrowserPagePane(props: Props) {
       webview.removeEventListener('did-fail-load', onFailLoad)
       webview.removeEventListener('did-navigate', onNavigate)
       unbindChrome()
+      unbindAnnotationDocument()
       guestLoss.dispose()
       publisher.dispose()
       forgetBrowserClientPageMetadataReports(browserTab.id)
@@ -309,19 +315,13 @@ export function ClientHostedBrowserPagePane(props: Props) {
     browserHostGeneration,
     pageHostGeneration,
     runtimeEnvironmentId,
-    setAddressBarValueFromPage
+    setAddressBarValueFromPage,
+    bindAnnotationGuest,
+    attach.remountRevision,
+    setAttachmentError,
+    wakeWhenShown,
+    recoverLostGuest
   ])
-
-  const markup = useClientHostedBrowserMarkup({
-    webviewRef,
-    browserPageId: browserTab.id,
-    runtimeEnvironmentId,
-    placement,
-    isActive,
-    unavailable: initialization.unavailable,
-    showFailureOverlay: initialization.showFailureOverlay,
-    controlsContainer: viewportPresetId ? paneRoot : null
-  })
 
   return (
     <div
@@ -336,6 +336,7 @@ export function ClientHostedBrowserPagePane(props: Props) {
         canGoForward={browserTab.canGoForward}
         webviewRef={webviewRef}
         onReload={() => reload.reloadWebviewOrRecoverGuest(false)}
+        remoteRoutedNetwork
       />
       <div data-contextual-tour-target="client-hosted-browser-controls">
         <ClientHostedBrowserPageToolbar
@@ -353,10 +354,11 @@ export function ClientHostedBrowserPagePane(props: Props) {
           addressBarInputRef={addressBarInputRef}
           dismissAddressBarSuggestionsRef={dismissAddressBarSuggestionsRef}
           navigateToUrl={navigateToUrl}
-          markup={markup.tool}
+          annotateTools={annotate.tools}
           onOpenFind={() => setFindOpen(true)}
         />
       </div>
+      {annotate.banner}
       <div className={BROWSER_DEVTOOLS_DOCK_SPLIT_CLASS_NAME}>
         <div
           ref={viewportContainerRef}
@@ -368,7 +370,7 @@ export function ClientHostedBrowserPagePane(props: Props) {
             scrollerRef={pageBox.scrollerRef}
             contentRef={pageBox.contentRef}
           >
-            {markup.overlay}
+            {annotate.overlays}
           </ClientHostedBrowserPageBox>
           <ClientHostedBrowserPageOverlays
             browserPageId={browserTab.id}
@@ -387,16 +389,16 @@ export function ClientHostedBrowserPagePane(props: Props) {
               onRetry={() => reload.runReloadTrigger('reload')}
             />
           ) : null}
-          {initialization.unavailable ? (
-            <ClientHostedBrowserUnavailableNotice
-              runtimeEnvironmentId={runtimeEnvironmentId}
-              worktreeId={worktreeId}
-              reopenUrl={browserTab.url}
-              placementHostClientId={browserHostClientId}
-            />
-          ) : initialization.showNewTab ? (
-            <BrowserNewTabPage worktreeId={worktreeId} onOpenUrl={navigateToUrl} serversElsewhere />
-          ) : null}
+          <ClientHostedBrowserPageStandIn
+            unavailable={initialization.unavailable}
+            showNewTab={initialization.showNewTab}
+            runtimeEnvironmentId={runtimeEnvironmentId}
+            worktreeId={worktreeId}
+            browserPageId={browserTab.id}
+            reopenUrl={browserTab.url}
+            placementHostClientId={browserHostClientId}
+            onOpenUrl={navigateToUrl}
+          />
         </div>
         {devToolsPageFlex === null ? null : <BrowserDevToolsDock browserPageId={browserTab.id} />}
       </div>

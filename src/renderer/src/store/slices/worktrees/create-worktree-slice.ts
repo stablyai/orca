@@ -1,6 +1,7 @@
 import { createObserveTerminalGitHubPullRequestLink } from './session/worktree-terminal-reference'
 import type { StateCreator } from 'zustand'
 import type { AppState } from '../../types'
+import { runtimeStatusSubscriptionsFor } from '../runtime-status/views/runtime-status-subscriptions'
 import type { WorktreeSlice } from './worktree-slice-contract'
 import { worktreeSliceInitialState } from './session/worktree-slice-initial-state'
 import { createFetchDetectedWorktrees } from './listing/fetch-detected-worktrees'
@@ -59,7 +60,11 @@ import {
 import { createPurgeStaleRuntimeHostState } from './teardown/purge-stale-runtime-host-state'
 import { createMigrateWorktreeIdentity } from './session/migrate-worktree-identity'
 
-export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> = (set, get) => ({
+export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> = (
+  set,
+  get,
+  api
+) => ({
   ...worktreeSliceInitialState,
   fetchDetectedWorktrees: createFetchDetectedWorktrees(set, get),
   fetchWorktrees: createFetchWorktrees(set, get),
@@ -67,12 +72,14 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
   fetchWorktreeLineage: createFetchWorktreeLineage(set, get),
   updateWorktreeLineage: createUpdateWorktreeLineage(set, get),
   assignWorktreeParent: createAssignWorktreeParent(set, get),
-  assignCrossStoreWorktreeParent: createAssignCrossStoreWorktreeParent(set, get),
+  assignCrossStoreWorktreeParent: createAssignCrossStoreWorktreeParent(set, get, api),
   updateWorktreeGitIdentity: createUpdateWorktreeGitIdentity(set, get),
   updateWorktreeBaseStatus: createUpdateWorktreeBaseStatus(set, get),
   updateWorktreeRemoteBranchConflict: createUpdateWorktreeRemoteBranchConflict(set, get),
   prefetchWorktreeCreateBase: createPrefetchWorktreeCreateBase(set, get),
-  createWorktree: createCreateWorktree(set, get),
+  createWorktree: createCreateWorktree(set, get, () =>
+    runtimeStatusSubscriptionsFor(api).readStatuses()
+  ),
   beginPendingWorktreeCreation: createBeginPendingWorktreeCreation(set, get),
   updatePendingWorktreeCreation: createUpdatePendingWorktreeCreation(set, get),
   removePendingWorktreeCreation: createRemovePendingWorktreeCreation(set, get),

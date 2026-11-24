@@ -7,7 +7,7 @@ import { holdBrowserSessionWebRequest } from './browser-session-web-request-owne
 
 /**
  * Electron allows one session.webRequest listener per event, so request decisions owned by other
- * layers (extension content blocking) run inside Orca's own handlers: the certificate guard's
+ * layers (extension content blocking) run inside Orca's own handlers: the request gate's
  * onBeforeRequest, the user agent policy's onBeforeSendHeaders and the onHeadersReceived installed
  * here. Each hook is called only after Orca's own policy for that event has run.
  */

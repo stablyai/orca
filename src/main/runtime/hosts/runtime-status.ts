@@ -2,8 +2,15 @@ import {
   BROWSER_GOOGLE_COOKIE_CLEAR_CAPABILITY,
   BROWSER_CERTIFICATE_TRUST_RUNTIME_CAPABILITY,
   BROWSER_PAGE_ZOOM_RUNTIME_CAPABILITY,
+  BROWSER_SITE_DISPLAY_RUNTIME_CAPABILITY,
+  BROWSER_AUDIO_MUTE_RUNTIME_CAPABILITY,
+  BROWSER_FIND_IN_PAGE_RUNTIME_CAPABILITY,
+  BROWSER_TAB_PROFILE_SWITCH_RUNTIME_CAPABILITY,
   BROWSER_STOP_HARD_RELOAD_RUNTIME_CAPABILITY,
+  BROWSER_MOBILE_STOP_RUNTIME_CAPABILITY,
   BROWSER_CLIENT_HOST_RUNTIME_CAPABILITY,
+  BROWSER_GRAB_RUNTIME_CAPABILITY,
+  BROWSER_DROP_FILES_RUNTIME_CAPABILITY,
   BROWSER_HEADLESS_RUNTIME_CAPABILITY,
   BROWSER_IDENTITY_RUNTIME_CAPABILITY,
   BROWSER_TAB_CREATE_KNOWN_ID_RUNTIME_CAPABILITY
@@ -13,6 +20,7 @@ import { googleRuntimeCapabilities } from '../../google/google-connect'
 import {
   runtimeBrowserCommandsFactoryIsHeadless,
   runtimeBrowserCommandsFactorySupportsGoogleCookieClear,
+  runtimeBrowserEngineIdentity,
   runtimeBrowserCommandsFactorySupportsClientHosting,
   runtimeBrowserUnavailableCause
 } from '../browser/installation/runtime-browser-commands-factory'
@@ -69,7 +77,7 @@ import { RuntimeWorkspaceChangeEvents } from '../workspaces/catalog/runtime-work
 export abstract class OrcaRuntimeWithGetStatus extends RuntimeWorkspaceChangeEvents {
   getStatus(): RuntimeStatus {
     // Advertise screencast for renderer/offscreen backends; headless ownership prevents client-local fallback.
-    const hasRenderer = Boolean(this.getAvailableAuthoritativeWindow())
+    const hasRenderer = Boolean(this.hasAuthoritativeWindow())
     const hasOffscreen = !hasRenderer && Boolean(this.offscreenBrowserBackend)
     const hasHeadlessCommands = runtimeBrowserCommandsFactoryIsHeadless()
     const canBrowse = hasRenderer || hasOffscreen
@@ -103,8 +111,8 @@ export abstract class OrcaRuntimeWithGetStatus extends RuntimeWorkspaceChangeEve
     if (hasOffscreen || hasHeadlessCommands) {
       capabilities.push(BROWSER_HEADLESS_RUNTIME_CAPABILITY)
     }
-    // Only initialized identity stores can serve this process-wide, pre-ready mode.
-    if (isBrowserIdentityModeStoreInitialized()) {
+    // Only initialized identity stores can serve this process-wide, pre-ready mode; orcad serves its engine's.
+    if (isBrowserIdentityModeStoreInitialized() || runtimeBrowserEngineIdentity()) {
       capabilities.push(BROWSER_IDENTITY_RUNTIME_CAPABILITY)
     }
     // Only the daemon inside a distro can receive that distro's projects.
@@ -118,8 +126,18 @@ export abstract class OrcaRuntimeWithGetStatus extends RuntimeWorkspaceChangeEve
       capabilities.push(
         BROWSER_CERTIFICATE_TRUST_RUNTIME_CAPABILITY,
         BROWSER_PAGE_ZOOM_RUNTIME_CAPABILITY,
-        BROWSER_STOP_HARD_RELOAD_RUNTIME_CAPABILITY
+        BROWSER_SITE_DISPLAY_RUNTIME_CAPABILITY,
+        BROWSER_STOP_HARD_RELOAD_RUNTIME_CAPABILITY,
+        BROWSER_FIND_IN_PAGE_RUNTIME_CAPABILITY,
+        BROWSER_MOBILE_STOP_RUNTIME_CAPABILITY,
+        BROWSER_GRAB_RUNTIME_CAPABILITY,
+        BROWSER_AUDIO_MUTE_RUNTIME_CAPABILITY,
+        BROWSER_DROP_FILES_RUNTIME_CAPABILITY
       )
+    }
+    // Only an offscreen page swap keeps its viewers' streams; a window's webview remount does not yet.
+    if (hasOffscreen) {
+      capabilities.push(BROWSER_TAB_PROFILE_SWITCH_RUNTIME_CAPABILITY)
     }
     capabilities.push(...orcaAccountRuntimeCapabilities())
     capabilities.push(...googleRuntimeCapabilities())

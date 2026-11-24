@@ -2,15 +2,17 @@ import type {
   GoogleCookieClearLocalTarget,
   GoogleCookieClearResult
 } from '../../../shared/browser/cookies/browser-google-cookie-clear'
-import type { BrowserCookieImportResult } from '../../../shared/browser/workspaces/browser-workspace-types'
 import type { BrowserSiteListSetResult } from '../../../shared/browser/profiles/browser-profile-site-list'
+import type {
+  BrowserClientHostCookieImportArgs,
+  BrowserCookieImportResult
+} from '../../../shared/browser/workspaces/browser-workspace-types'
 
 export type BrowserSessionCookieApi = {
   /** Null when the environment's pages are not client-hosted on this desktop. */
-  sessionImportCookiesForClientHost: (args: {
-    environmentId: string
-    profileId: string
-  }) => Promise<BrowserCookieImportResult | null>
+  sessionImportCookiesForClientHost: (
+    args: BrowserClientHostCookieImportArgs
+  ) => Promise<BrowserCookieImportResult | null>
   sessionResolvePartition: (args: { profileId: string | null }) => Promise<string | null>
   sessionGoogleCookieClearTarget: (args: {
     profileId: string
@@ -25,4 +27,8 @@ export type BrowserSessionCookieApi = {
     profileId: string
     hosts: string[]
   }) => Promise<BrowserSiteListSetResult>
+  /** Null when the environment's pages are not client-hosted on this desktop. */
+  sessionClearDefaultCookiesForClientHost: (args: {
+    environmentId: string
+  }) => Promise<boolean | null>
 }

@@ -295,10 +295,7 @@ const MobileAgentListRow = memo(function MobileAgentListRow(props: {
             ) : null}
             <View style={styles.footer}>
               {row.entry.bot && props.footer === 'workspace' ? (
-                <MobileBotAvatar
-                  avatar={mobileBotAvatarSource(row.entry.bot, undefined)}
-                  size={13}
-                />
+                <MobileBotAvatar avatar={mobileBotAvatarSource(row.entry.bot)} size={13} />
               ) : agent.agentType ? (
                 <MobileAgentIcon agentId={agent.agentType} size={13} />
               ) : null}

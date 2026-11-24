@@ -4,8 +4,8 @@ import { folderWorkspaceKey } from '../../shared/workspace/identity/workspace-sc
 import type { AgentPaneWorkspace } from '../agent-hooks/observations/agent-transition-detector'
 import { chatLink, type LinkableChat } from './external-conversation-chat-delivery'
 import {
-  allLinks,
   findLink,
+  findLinkForPane,
   linksOf,
   readLinks,
   sameConversation,
@@ -111,10 +111,7 @@ export function writeChatLink(
     ...(title ? { title } : {}),
     ...(seenAt !== undefined ? { seenAt } : {})
   }
-  if (
-    !chat.bot &&
-    (existing || [...allLinks(store)].some((linked) => linked.link.paneKey === link.paneKey))
-  ) {
+  if (!chat.bot && (existing || findLinkForPane(store, link.paneKey) !== null)) {
     throw new Error('external_conversation_already_linked')
   }
   writeLink(store, workspace, link)

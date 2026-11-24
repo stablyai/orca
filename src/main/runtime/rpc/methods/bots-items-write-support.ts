@@ -15,10 +15,12 @@ import type { BotItemLinkInput, BotItemWriteOutcome } from '../../../bots/bot-it
 import type { BotItemsRemote } from '../../../bots/bot-items-ops'
 import type { BotItemRecord } from '../../../bots/bot-items-schema'
 import { noteBotItemWrite } from '../../../bots/bot-item-chat-notes'
+import { notifyBotItemQuestion } from '../../../bots/bot-item-question-notice'
+import { runtimeBotOwnerNotice } from '../../../bots/bot-could-not-finish'
 import { sessionCallerOf } from '../../orchestration/addressing/orchestration-caller-identity'
-import type { OrcaRuntimeService } from '../../orca-runtime'
 import type { RpcContext } from '../core'
 import { itemsWriter, type BotItemWriter } from './bots-items-caller'
+import { botItemsForClient } from './bots-items-waiting-compat'
 
 export type BotItemWriteResult = {
   item: BotItem
@@ -64,21 +66,31 @@ export async function resolveItem(store: BotItemsRemote, ref: string): Promise<B
 }
 
 /** What a write answers with: the item as it is now, and what the write did. The writer's chat shows
- *  the write as an item note. */
+ *  the write as an item note; a write that asks the owner tells them. */
 export async function writeResult(
-  runtime: OrcaRuntimeService,
+  context: Pick<RpcContext, 'runtime' | 'clientKind' | 'clientCapabilities'>,
   outcome: BotItemWriteOutcome,
   writer: BotItemWriter
 ): Promise<BotItemWriteResult> {
+  const { runtime } = context
   const store = runtime.botItems.store()
   const record = await store.get(outcome.uid)
   if (!record) {
     throw new BotItemError('not_found', 'The item is gone.')
   }
-  runtime.botItems.changed([record.ownerBotId])
-  const [item] = await runtime.botItems.views([record])
+  runtime.botItems.changed([record])
+  const [view] = await runtime.botItems.views([record])
+  const [item] = botItemsForClient([view!], context)
   if (outcome.eventId !== null) {
-    await noteBotItemWrite(store, writer.sessionId, record, outcome.eventId, item!.links)
+    const write = await noteBotItemWrite(
+      store,
+      writer.sessionId,
+      record,
+      outcome.eventId,
+      item!.links
+    )
+    const owner = runtime.bots.list().find((bot) => bot.id === record.ownerBotId)
+    notifyBotItemQuestion(runtimeBotOwnerNotice(runtime), owner, item!, write)
   }
   // A write from another chat of the bot owes the item's chat a mail.
   await runtime.botItems.sendOwedMail()
@@ -96,14 +108,14 @@ export function botNamed(value: string, writer: Bot, bots: readonly Bot[]): Bot 
   return bot
 }
 
-/** `dispatch:<id>`, `pr:<owner/repo#n>`, a URL (a GitHub PR URL is that PR), or a path. One form per
- *  thing, so `item list --link` finds it however it was written. */
+/** `dispatch:<id>`, `automation:<id>`, `pr:<owner/repo#n>`, a URL (a GitHub PR URL is that PR), or a
+ *  path. One form per thing, so `item list --link` finds it however it was written. */
 export function parseItemLink(ref: string): BotItemLinkInput {
   const value = ref.trim()
   const [scheme = '', ...rest] = value.split(':')
   const body = rest.join(':')
-  if (scheme === 'dispatch' && body) {
-    return { kind: 'dispatch', ref: body }
+  if ((scheme === 'dispatch' || scheme === 'automation') && body) {
+    return { kind: scheme, ref: body }
   }
   if (scheme === 'pr') {
     if (!parseBotItemPrRef(body)) {

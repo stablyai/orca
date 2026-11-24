@@ -28,9 +28,8 @@ export const MobileHomeBotRow = memo(function MobileHomeBotRow(props: {
     <MobileBotRowView
       avatar={
         row.kind === 'bot' ? (
-          // Uploaded pictures need their own read; Home draws mascots, else the initial.
           <MobileBotRowAvatar
-            avatar={mobileBotAvatarSource(row.bot, undefined)}
+            avatar={mobileBotAvatarSource(row.bot)}
             dot={row.dot}
             surface={surface}
           />

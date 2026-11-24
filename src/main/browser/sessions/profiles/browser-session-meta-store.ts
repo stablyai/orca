@@ -58,6 +58,7 @@ function parseAllowedHosts(value: unknown): Record<string, string[]> {
   return result
 }
 
+const lastReadSucceededByPath = new Map<string, boolean>()
 /** Enabled extensions per metadata file as last read; every write goes through persistBrowserSessionMeta. */
 const enabledExtensionIdsByPath = new Map<
   string,
@@ -135,12 +136,23 @@ export function loadBrowserSessionMeta(
   let path: string | undefined
   try {
     path = resolveMetadataPath()
-    const meta = parseBrowserSessionMeta(JSON.parse(readFileSync(path, 'utf-8')), defaultPartition)
+    const data: unknown = JSON.parse(readFileSync(path, 'utf-8'))
+    const meta = parseBrowserSessionMeta(data, defaultPartition)
     unreadableMetaPaths.delete(path)
     // Only a read that worked is kept: a brief lock must not read as "nothing enabled" for the run.
     enabledExtensionIdsByPath.set(path, copyIdLists(meta.enabledExtensionIdsByProfileId))
+    // A malformed profile list is not proof that its profiles were deleted.
+    lastReadSucceededByPath.set(
+      path,
+      isRecord(data) &&
+        !Array.isArray(data) &&
+        (data.profiles === undefined || Array.isArray(data.profiles))
+    )
     return meta
   } catch (error) {
+    if (path !== undefined) {
+      lastReadSucceededByPath.set(path, false)
+    }
     // A file that reads but isn't JSON may be overwritten as it always was; one we couldn't read may not.
     if (path !== undefined && !isMissingFileError(error) && !(error instanceof SyntaxError)) {
       unreadableMetaPaths.add(path)
@@ -165,6 +177,11 @@ export async function readBrowserSessionMetaAsync(
   } catch (error) {
     return isMissingFileError(error) ? emptyBrowserSessionMeta() : null
   }
+}
+
+/** Whether the latest read of this metadata file succeeded; a failed read looks like "no profiles". */
+export function didReadBrowserSessionMeta(metadataPath: string): boolean {
+  return lastReadSucceededByPath.get(metadataPath) === true
 }
 
 /**

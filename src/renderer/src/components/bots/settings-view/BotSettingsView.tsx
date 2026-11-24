@@ -1,5 +1,6 @@
 // A bot's settings: one view with a root and drill-in subpages, shown by two hosts, the bot's right panel
 // (its header gear) and Settings › Bots. Hosts differ only in width, scrolling and where Back goes from the root.
+import { useResetOtherBotConnectorPage } from '../bot-connector-page'
 import { useCallback, useEffect, useMemo, useRef } from 'react'
 import { ChevronLeft, CloudOff } from 'lucide-react'
 import { BreadcrumbButton } from '@/components/ui/breadcrumb-button'
@@ -139,6 +140,7 @@ export function BotSettingsView({
   onExit: () => void
   onDeleted: () => void
 }): React.JSX.Element {
+  useResetOtherBotConnectorPage(bot)
   const place = useBotSettingsPlace(host, bot.id)
   const page = place?.page ?? null
   const home = useBotHome(bot)
@@ -289,7 +291,8 @@ export function BotSettingsView({
               </fieldset>
             ) : (
               <div
-                className={cn('flex min-w-0 flex-col gap-[18px]', offline ? 'opacity-60' : null)}
+                data-bot-settings-root
+                className={cn('flex min-w-0 flex-col gap-3', offline ? 'opacity-60' : null)}
               >
                 <BotSettingsRoot
                   bot={bot}

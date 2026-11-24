@@ -287,7 +287,7 @@ export function BrowserExtensionsMenuSub({
         <DropdownMenuItem
           // Why this profile: an install from the store page lands where the store was opened.
           onSelect={() =>
-            void openBrowserProfileTab(CHROME_WEB_STORE_HOME_URL, state.profileId).then(
+            void openBrowserProfileTab(CHROME_WEB_STORE_HOME_URL, state.browserProfileId).then(
               (opened) => {
                 if (opened) {
                   trackBrowserExtensionsWebStoreOpened('toolbar_menu')

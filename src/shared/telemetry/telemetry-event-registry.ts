@@ -1,10 +1,11 @@
+import { codexHistoryMoveStatusSchema } from './schemas/telemetry-codex-history-move-event-schemas'
 import {
   onboardingLanguagePickerOpenedSchema,
   onboardingLanguageChangedSchema,
   onboardingLanguageRequestedSchema
 } from './schemas/telemetry-onboarding-language-schemas'
-import { agentTokenUsageSchema } from './schemas/telemetry-agent-token-usage-schema'
-import { codexHistoryCleanupSweepSchema } from './schemas/telemetry-codex-history-cleanup-event-schemas'
+import { agentTokenUsageDailySchema } from './schemas/telemetry-agent-token-usage-schema'
+import { legacyJournalRetirementSchema } from './schemas/telemetry-legacy-journal-retirement-schema'
 import {
   agentDashboardActiveSchema,
   agentDashboardEnabledSchema,
@@ -68,9 +69,7 @@ import {
   mobileSessionOpenedSchema,
   nativeChatMessageSentSchema,
   nativeChatPickerItemAcceptedSchema,
-  nativeChatPickerOpenedSchema,
-  nativeChatSendClassifiedSchema,
-  nativeChatSkillDiscoverySchema,
+  nativeChatPickerAcceptsDailySchema,
   nativeChatToggledSchema,
   orcaCliFeatureTipSetupClickedSchema,
   orcaCliFeatureTipSetupResultSchema,
@@ -160,7 +159,7 @@ export const eventSchemas = {
   setup_script_prompt_shown: setupScriptPromptShownSchema,
   setup_script_prompt_action: setupScriptPromptActionSchema,
 
-  agent_token_usage: agentTokenUsageSchema,
+  agent_token_usage_daily: agentTokenUsageDailySchema,
   agent_started: agentStartedSchema,
   agent_prompt_sent: agentPromptSentSchema,
   agent_error: agentErrorSchema,
@@ -192,10 +191,8 @@ export const eventSchemas = {
   native_chat_message_sent: nativeChatMessageSentSchema,
   // Main-owned provider-accepted prompts; legacy message_sent includes commands and queued writes.
   native_chat_prompt_submitted: nativeChatMessageSentSchema,
-  native_chat_picker_opened: nativeChatPickerOpenedSchema,
   native_chat_picker_item_accepted: nativeChatPickerItemAcceptedSchema,
-  native_chat_send_classified: nativeChatSendClassifiedSchema,
-  native_chat_skill_discovery: nativeChatSkillDiscoverySchema,
+  native_chat_picker_accepts_daily: nativeChatPickerAcceptsDailySchema,
   mobile_session_opened: mobileSessionOpenedSchema,
 
   telemetry_opted_in: telemetryOptedInSchema,
@@ -267,9 +264,11 @@ export const eventSchemas = {
 
   wsl_usage_snapshot: wslUsageSnapshotSchema,
 
-  codex_history_cleanup_sweep: codexHistoryCleanupSweepSchema,
+  legacy_journal_retirement: legacyJournalRetirementSchema,
 
   plugin_installed: pluginInstalledSchema,
+
+  codex_history_move_status: codexHistoryMoveStatusSchema,
 
   ...browserExtensionsEventSchemas
 } as const

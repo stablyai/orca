@@ -1,7 +1,8 @@
 // The computers New bot can make a bot on, why the others can't yet, and whose Orca account each runs under.
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { translate } from '@/i18n/i18n'
-import type { Translate } from '@/i18n/use-translate'
+import { useTranslate, type Translate } from '@/i18n/use-translate'
+import { translateHostDisplayLabel } from '@/runtime/hosts/display/execution-host-label'
 import { botHostTarget } from '@/lib/bot-hosts'
 import { callRuntimeRpc } from '@/runtime/rpc/calls/runtime-rpc-call'
 import { runtimeHostConnectionStateForEntry } from '@/runtime/hosts/connections/runtime-host-connection-state'
@@ -9,6 +10,7 @@ import { getRendererAppPlatform } from '@/app-shell/platform/renderer-app-platfo
 import { useRuntimeStatusByEnvironmentId } from '@/store/slices/runtime-status/views/use-runtime-status-view'
 import { useAppStore } from '@/store'
 import type { AppState } from '@/store/types'
+import type { RuntimeStatuses } from '@/store/slices/runtime-status/views/runtime-status-owner'
 import { BOTS_CREATE_RUNTIME_CAPABILITY } from '../../../../shared/bot-runtime-capabilities'
 import {
   LOCAL_EXECUTION_HOST_ID,
@@ -35,11 +37,10 @@ export type BotCreateHost = {
   windows?: boolean
 }
 
-export type BotCreateHostsInput = Pick<
-  AppState,
-  'runtimeEnvironments' | 'runtimeStatusByEnvironmentId' | 'sshTargetLabels'
-> & {
+export type BotCreateHostsInput = Pick<AppState, 'runtimeEnvironments' | 'sshTargetLabels'> & {
+  runtimeStatusByEnvironmentId: RuntimeStatuses
   settings?: Pick<NonNullable<AppState['settings']>, 'hostSettingOverrides'> | null
+  t?: Translate
 }
 
 /** Configured computers, with creation available locally and on bot-capable paired servers. */
@@ -86,7 +87,7 @@ export function botCreateHosts(input: BotCreateHostsInput): BotCreateHost[] {
   return [
     {
       hostId: LOCAL_EXECUTION_HOST_ID,
-      label: registry[0].label,
+      label: translateHostDisplayLabel(registry[0], input.t),
       platform: getRendererAppPlatform()
     },
     ...runtimes,
@@ -204,18 +205,20 @@ export function useBotCreateHost(
       : undefined
   )
   const onlyKey = only?.join('\n')
+  const t = useTranslate()
   const hosts = useMemo(() => {
     const all = botCreateHosts({
       runtimeEnvironments,
       runtimeStatusByEnvironmentId,
       sshTargetLabels,
-      settings: { hostSettingOverrides: settings }
+      settings: { hostSettingOverrides: settings },
+      t
     })
     const allowed = onlyKey?.split('\n')
     return allowed
       ? all.filter((host) => host.blocked !== 'needs-server' && allowed.includes(host.hostId))
       : all
-  }, [runtimeEnvironments, runtimeStatusByEnvironmentId, sshTargetLabels, settings, onlyKey])
+  }, [runtimeEnvironments, runtimeStatusByEnvironmentId, sshTargetLabels, settings, onlyKey, t])
   const [hostId, setHostId] = useState<ExecutionHostId>(initialHostId)
   const [listing, setListing] = useState(false)
   // A server unpaired while the dialog is open leaves the first listed computer picked.

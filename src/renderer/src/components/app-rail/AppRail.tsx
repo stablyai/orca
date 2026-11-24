@@ -1,5 +1,14 @@
 import React, { useCallback, useLayoutEffect, useMemo, useRef, useState } from 'react'
-import { CircleHelp, Layers, Settings } from 'lucide-react'
+import {
+  BookOpen,
+  CalendarClock,
+  CircleHelp,
+  Files,
+  Layers,
+  List,
+  Settings,
+  Smartphone
+} from 'lucide-react'
 import { useAppStore } from '@/store/index'
 import { useTranslate } from '@/i18n/use-translate'
 import { SettingsTooltipLabel } from '@/components/sidebar/chrome/SidebarSettingsHelpMenu'
@@ -24,6 +33,13 @@ import { AppRailMoreMenu, useAppRailSlotCapacity } from './AppRailMoreMenu'
 import { partitionAppRail } from './app-rail-overflow'
 import { railItemOwningFocus } from './app-rail-focus-ownership'
 import { useWorkspaceListRegionPresent } from './workspace-list-region-presence'
+import {
+  activateRailDestination,
+  selectCurrentRailDestination,
+  selectShownRailDestinationsKey,
+  shownRailDestinationsFromKey,
+  type AppRailDestinationId
+} from './app-rail-destinations'
 import { getTitlebarSidebarToggle } from '@/app-shell/chrome/titlebar-sidebar-toggle-ref'
 
 const ICON_SIZE = 18
@@ -39,6 +55,8 @@ export function AppRail({
   const t = useTranslate()
   const workspacesActive = useAppStore(isWorkspacesRailItemActive)
   const settingsActive = useAppStore((s) => s.activeView === 'settings')
+  const shownDestinationsKey = useAppStore(selectShownRailDestinationsKey)
+  const currentDestination = useAppStore(selectCurrentRailDestination)
   const listShowsWorkspaces = useAppStore((s) => (s.sidebarBody ?? 'workspaces') === 'workspaces')
   const listRegionPresent = useWorkspaceListRegionPresent()
   const setupProgress = useSetupGuideProgressSnapshot()
@@ -66,21 +84,33 @@ export function AppRail({
   const capacity = useAppRailSlotCapacity(toolbar, () => {
     transitionOwnerRef.current = toolbarRef.current ? railItemOwningFocus(toolbarRef.current) : null
   })
-  const partition = partitionAppRail(0, capacity)
+  // Hidden destinations are left out before partitioning; hidden is never folded.
+  const shownDestinations = shownRailDestinationsFromKey(shownDestinationsKey)
+  const partition = partitionAppRail(shownDestinations.length, capacity)
+  const railDestinations = shownDestinations.slice(0, partition.shownDestinations)
+  const foldedDestinations = shownDestinations.slice(partition.shownDestinations)
+  const destinationActive = (id: AppRailDestinationId): boolean => id === currentDestination
 
   const renderedItems: AppRailItemId[] = [
     'workspaces',
+    ...railDestinations,
     ...(partition.more ? (['more'] as const) : []),
     ...(partition.helpInMore ? [] : (['help'] as const)),
     ...(partition.settingsInMore ? [] : (['settings'] as const))
   ]
+  const shownCurrentDestination =
+    currentDestination && shownDestinations.includes(currentDestination) ? currentDestination : null
   const activeItem: AppRailItemId | null = workspacesActive
     ? 'workspaces'
-    : settingsActive
-      ? partition.settingsInMore
-        ? 'more'
-        : 'settings'
-      : null
+    : shownCurrentDestination
+      ? railDestinations.includes(shownCurrentDestination)
+        ? shownCurrentDestination
+        : 'more'
+      : settingsActive
+        ? partition.settingsInMore
+          ? 'more'
+          : 'settings'
+        : null
   const [lastFocusedItem, setLastFocusedItem] = useState<AppRailItemId | null>(null)
   const tabStopItem =
     lastFocusedItem && renderedItems.includes(lastFocusedItem)
@@ -148,6 +178,35 @@ export function AppRail({
   const workspacesLabel = t('appRail.workspaces', 'Workspaces')
   const settingsLabel = t('auto.components.sidebar.SidebarSettingsHelpMenu.a428c25998', 'Settings')
   const helpLabel = t('auto.components.sidebar.SidebarSettingsHelpMenu.2991a0106c', 'Help')
+  // The list rows' labels and icons, so the rail reads the same.
+  const destinationLabel = (id: AppRailDestinationId): string => {
+    switch (id) {
+      case 'tasks':
+        return t('auto.components.sidebar.SidebarNav.fee535205b', 'Tasks')
+      case 'automations':
+        return t('auto.components.sidebar.SidebarNav.f323383e9a', 'Automations')
+      case 'artifacts':
+        return t('auto.components.sidebar.SidebarNav.artifacts', 'Artifacts')
+      case 'skills':
+        return t('auto.components.sidebar.SidebarNav.skills', 'Skills')
+      case 'mobile':
+        return t('auto.components.sidebar.SidebarNav.1b5c41caee', 'Orca Mobile')
+    }
+  }
+  const destinationIcon = (id: AppRailDestinationId, size: number): React.ReactNode => {
+    switch (id) {
+      case 'tasks':
+        return <List size={size} aria-hidden />
+      case 'automations':
+        return <CalendarClock size={size} aria-hidden />
+      case 'artifacts':
+        return <Files size={size} aria-hidden />
+      case 'skills':
+        return <BookOpen size={size} aria-hidden />
+      case 'mobile':
+        return <Smartphone size={size} aria-hidden />
+    }
+  }
   const openSettings = (): void => useAppStore.getState().openSettingsPage()
 
   const handleKeyDown = (event: React.KeyboardEvent<HTMLDivElement>): void => {
@@ -210,6 +269,18 @@ export function AppRail({
               onClick={() => navigateFromRail(() => activateWorkspacesRailItem(useAppStore))}
             />
           </RailItem>
+          {railDestinations.map((id) => (
+            <RailItem key={id} tooltip={destinationLabel(id)}>
+              <AppRailButton
+                itemId={id}
+                icon={destinationIcon(id, ICON_SIZE)}
+                label={destinationLabel(id)}
+                active={destinationActive(id)}
+                tabStop={tabStopItem === id}
+                onClick={() => activateRailDestination(id)}
+              />
+            </RailItem>
+          ))}
           {partition.more ? (
             <AppRailMoreMenu
               help={help}
@@ -218,6 +289,13 @@ export function AppRail({
               settingsActive={settingsActive}
               onOpenSettings={openSettings}
               tabStop={tabStopItem === 'more'}
+              destinations={foldedDestinations.map((id) => ({
+                id,
+                label: destinationLabel(id),
+                icon: destinationIcon(id, 14),
+                current: destinationActive(id),
+                onSelect: () => activateRailDestination(id)
+              }))}
             />
           ) : null}
         </div>

@@ -19,6 +19,8 @@ export type ProviderChild = Pick<
   EventEmitter & {
     /** Actual CLI writer, which differs from the root on the compatibility path. */
     readonly writerPid?: number
+    /** The launcher's owner-pipe watcher, beside the CLI on the direct path. */
+    readonly watcherPid?: number
     ready?: Promise<void>
     /** Group observation is independent of the real leader's outcome. */
     readonly groupVerdict?: DescendantTreeVerdict

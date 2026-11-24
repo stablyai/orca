@@ -37,6 +37,7 @@ export function taskPageWorkItemStatusSignature(item: GitHubWorkItem): string {
     item.checksSummary?.passed ?? null,
     item.checksSummary?.scope ?? null,
     item.checksSummary?.pending ?? null,
+    item.checksSummary?.actionRequired ?? null,
     item.checksSummary?.neutral ?? null,
     item.mergeable ?? null,
     item.autoMergeEnabled ?? null,

@@ -9,6 +9,14 @@ import {
 // Keyed by profile, not session: SSH route partitions of a profile share its list.
 const listsByProfileId = new Map<string, { entries: string[]; compiled: CompiledBrowserSiteList }>()
 const profileIdBySession = new WeakMap<Session, string>()
+const changeListeners = new Set<() => void>()
+
+export function onBrowserProfileSiteListsChanged(listener: () => void): () => void {
+  changeListeners.add(listener)
+  return () => {
+    changeListeners.delete(listener)
+  }
+}
 
 export function setBrowserProfileSiteList(profileId: string, entries: readonly string[]): void {
   if (entries.length === 0) {
@@ -18,6 +26,9 @@ export function setBrowserProfileSiteList(profileId: string, entries: readonly s
       entries: [...entries],
       compiled: compileBrowserSiteList(entries)
     })
+  }
+  for (const listener of changeListeners) {
+    listener()
   }
 }
 
@@ -36,6 +47,14 @@ export function getBrowserProfileSiteListEntries(profileId: string): string[] {
 
 export function bindBrowserSessionToSiteListProfile(session: Session, profileId: string): void {
   profileIdBySession.set(session, profileId)
+  for (const listener of changeListeners) {
+    listener()
+  }
+}
+
+export function browserSessionHasSiteList(session: Session): boolean {
+  const profileId = profileIdBySession.get(session)
+  return profileId !== undefined && listsByProfileId.has(profileId)
 }
 
 export function isBrowserSessionRequestOutsideSiteList(session: Session, url: string): boolean {

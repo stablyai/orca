@@ -14,6 +14,10 @@ import type { BrowserUserAgentMode } from '../../../shared/browser/identity/brow
 import type { ManagedBrowserProfileOwner } from '../../../shared/browser/profiles/browser-profile-scope'
 import type { GrabIntent } from '../../../shared/browser/element-grab/browser-grab-types'
 import type {
+  BrowserClientHostCookieImportArgs,
+  BrowserProfileCookieImportArgs
+} from '../../../shared/browser/workspaces/browser-workspace-types'
+import type {
   BrowserSitePermissionKey,
   BrowserSitePermissionDecision
 } from '../../../shared/browser/site-settings/browser-site-permission'
@@ -193,23 +197,21 @@ export const browserPageInteractionAndSessionsApi = {
     ipcRenderer.invoke('browser:session:getAllowedHosts', args),
   sessionSetAllowedHosts: (args: { profileId: string; hosts: string[] }) =>
     ipcRenderer.invoke('browser:session:setAllowedHosts', args),
-  sessionImportCookies: (args: { profileId: string }) =>
+  sessionImportCookies: (args: BrowserProfileCookieImportArgs) =>
     ipcRenderer.invoke('browser:session:importCookies', args),
-  sessionImportCookiesForClientHost: (args: { environmentId: string; profileId: string }) =>
+  sessionImportCookiesForClientHost: (args: BrowserClientHostCookieImportArgs) =>
     ipcRenderer.invoke('browser:session:importCookiesForClientHost', args),
   sessionResolvePartition: (args: { profileId: string | null }): Promise<string | null> =>
     ipcRenderer.invoke('browser:session:resolvePartition', args),
   sessionDetectBrowsers: () => ipcRenderer.invoke('browser:session:detectBrowsers'),
   sessionDetectBrowsersForClientHost: (args: { environmentId: string }) =>
     ipcRenderer.invoke('browser:session:detectBrowsersForClientHost', args),
-  sessionImportFromBrowser: (args: { profileId: string; browserFamily: string }) =>
-    ipcRenderer.invoke('browser:session:importFromBrowser', args),
-  sessionImportFromBrowserForClientHost: (args: {
-    environmentId: string
-    profileId: string
-    browserFamily: string
-    browserProfile?: string
-  }) => ipcRenderer.invoke('browser:session:importFromBrowserForClientHost', args),
+  sessionImportFromBrowser: (
+    args: BrowserProfileCookieImportArgs & { browserFamily: string; browserProfile?: string }
+  ) => ipcRenderer.invoke('browser:session:importFromBrowser', args),
+  sessionImportFromBrowserForClientHost: (
+    args: BrowserClientHostCookieImportArgs & { browserFamily: string; browserProfile?: string }
+  ) => ipcRenderer.invoke('browser:session:importFromBrowserForClientHost', args),
   sessionClientRouteImportSources: (args: { environmentId: string }) =>
     ipcRenderer.invoke('browser:session:clientRouteImportSources', args),
   sessionGoogleCookieClearTarget: (args: { profileId: string; environmentId: string | null }) =>
@@ -218,6 +220,8 @@ export const browserPageInteractionAndSessionsApi = {
     ipcRenderer.invoke('browser:session:clearGoogleCookies', target),
   sessionClearDefaultCookies: (): Promise<boolean> =>
     ipcRenderer.invoke('browser:session:clearDefaultCookies'),
+  sessionClearDefaultCookiesForClientHost: (args: { environmentId: string }) =>
+    ipcRenderer.invoke('browser:session:clearDefaultCookiesForClientHost', args),
   sitePermissionsList: (args: { profileId: string }) =>
     ipcRenderer.invoke('browser:sitePermissions:list', args),
   sitePermissionsSet: (args: {

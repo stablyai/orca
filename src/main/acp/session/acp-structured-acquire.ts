@@ -9,7 +9,6 @@ import type {
 } from '../../native-chat/agent-session-wire/providers/structured-agent-session-adapter'
 import { providerTimelineSink } from '../../native-chat/agent-session-timeline/provider-timeline-plan'
 import { providerSpawnedProcessIdentity } from '../../provider-process/provider-spawned-process-identity'
-import { acpPrivateTempConnect } from '../launch/acp-private-temp'
 import { acpClientInfo } from '../launch/acp-client-info'
 import * as childState from './children/acp-structured-child'
 import type { AcpSessionEvent } from '../protocol/acp-session-events'
@@ -18,18 +17,22 @@ import { acpAgentName } from './acp-structured-agent-definitions'
 import { AcpStructuredLane } from '../journal/acp-structured-lane'
 import { acpLaneChildWorkDelivery } from '../journal/acp-lane-child-work-delivery'
 import { NO_ACP_CHILD_STOPS } from '../turns/acp-structured-child-stop'
-import { prepareAcpStructuredLaunch } from '../launch/acp-structured-launch-preparation'
+import {
+  acpLaunchConnect,
+  prepareAcpStructuredLaunch
+} from '../launch/acp-structured-launch-preparation'
 import { acpProcessEnvironment } from '../launch/acp-structured-launch-resolution'
+import { SharedToolProcessSession } from '../../runtime/agent-session/environment/shared-tool-process-callers'
 import { AcpStructuredOptions } from '../options/acp-structured-options'
-import { acpAnswersRequests, acpLaunchPermission } from '../launch/acp-launch-permission-modes'
+import { acpLaunchPermission } from '../launch/acp-launch-permission-modes'
 import { AcpStructuredPrompts } from '../requests/acp-structured-prompts'
+import { acpStructuredPermissionHandler } from '../requests/acp-structured-permission-handler'
 import { withAcpUrlElicitation } from '../requests/acp-url-elicitation'
 import { AcpLoadHistory } from '../history/acp-history-replay'
 import { asReattachHistory } from '../history/acp-reattach-history'
-import { routeAcpSessionEvent } from '../timeline/acp-session-event-routing'
+import { reportsAcpOptions, routeAcpSessionEvent } from '../timeline/acp-session-event-routing'
 import type { AcpStructuredSessionAdapterDeps } from './acp-structured-session-adapter-deps'
 import type { AcpStructuredTurnsDeps } from '../turns/acp-turn-dispatch-contract'
-import { RequestPermissionResponseSchema } from '../generated/acp-protocol.generated'
 import { createStructuredAgentSessionLogger } from '../../native-chat/agent-session-wire/host/structured-agent-session-logger'
 
 const MAX_EARLY_FRAMES = 2_048
@@ -91,9 +94,8 @@ export async function acquireAcpStructuredSession(input: {
     }
   }
   // Keep the last abort check and spawn synchronous when no temp directory is needed.
-  const connect = spec.privateTempDirectory
-    ? await acpPrivateTempConnect(deps, closedBeforeSpawn)
-    : deps.connect
+  const connect = await acpLaunchConnect(deps, launch, closedBeforeSpawn)
+  let sharedTools: SharedToolProcessSession | null = null
   const connection = connect(
     {
       command: launch.command,
@@ -107,23 +109,7 @@ export async function acquireAcpStructuredSession(input: {
       clientCapabilities: withAcpUrlElicitation(spec.dialect.clientCapabilities),
       retryBusyPrompts: spec.agent === 'omp',
       ...(spec.signIn ? { signIn: spec.signIn } : {}),
-      onPermission: (request, context) => {
-        if (!childState.isAcpReadySession(session) || !session.turns?.acceptsRequests) {
-          // Nobody can answer during Stop, a steer or teardown.
-          return { outcome: { outcome: 'cancelled' } }
-        }
-        // Do not auto-approve questions or permissions enforced by the agent's own mode.
-        const claimed = spec.dialect.request?.('session/request_permission', request)
-        if (session.permission === 'full-access' && acpAnswersRequests(spec) && !claimed) {
-          const allow = request.options.find((option) => option.kind === 'allow_once')
-          if (allow) {
-            return { outcome: { outcome: 'selected', optionId: allow.optionId } }
-          }
-        }
-        return prompts
-          .handle('session/request_permission', request, context)
-          .then((reply) => RequestPermissionResponseSchema.parse(reply))
-      },
+      onPermission: acpStructuredPermissionHandler(() => session, spec, prompts),
       onRequest: (method, params, context) => prompts.handle(method, params, context),
       onExtensionNotification: (method, params) =>
         whenLane(() => {
@@ -151,11 +137,14 @@ export async function acquireAcpStructuredSession(input: {
       },
       // Read final diagnostics at process exit, which may follow stdout EOF.
       onExit: () => {
+        sharedTools?.end()
         session?.historyCatchUp?.abort()
         input.onExit(session)
       }
     }
   )
+  // Until the process exits, only its session's tools can name the chat.
+  sharedTools = SharedToolProcessSession.forLaunch(spec, launch.env, launch.version)
   if (!spec.permissionModeConfig) {
     options.applied.set('permissionMode', launch.fullAccess ? 'full-access' : 'ask')
   }
@@ -182,7 +171,7 @@ export async function acquireAcpStructuredSession(input: {
         childState.isAcpReadySession(session) &&
         !session.ended &&
         event.kind === 'known' &&
-        event.notification.update.sessionUpdate === 'config_option_update'
+        reportsAcpOptions(event.notification.update)
       ) {
         deps.onEvent?.({
           type: 'options-reported',
@@ -301,7 +290,9 @@ export async function acquireAcpStructuredSession(input: {
         },
         onSettled: input.onSettled,
         onSessionLost: (error) => input.onConnectionLost(child, error)
-      }),
+      })
+        // Before the first turn, so no tool of this session runs without its identity.
+        .then((opened) => sharedTools?.publishFor(opened) ?? opened),
     dispose: () => {
       child.historyCatchUp?.abort()
       slot.lane?.dispose()
