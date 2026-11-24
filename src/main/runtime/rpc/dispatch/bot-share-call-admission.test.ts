@@ -1,6 +1,7 @@
 import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
+import { z } from 'zod'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { Bot } from '../../../../shared/bot-types'
 import { OWNER_ACTS_FOR, type BotRequestAsker } from '../../../../shared/bots/bot-acts-for'
@@ -24,7 +25,6 @@ import { ALL_RPC_METHODS } from '../methods/rpc-method-registry'
 import { BOT_METHODS } from '../methods/bots'
 import { STRUCTURED_AGENT_SESSION_STATUS_METHODS } from '../methods/structured-sessions/subscriptions/structured-agent-session-status-stream'
 import { STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY } from '../../../../shared/agent-session/capabilities/agent-session-runtime-capabilities'
-import type { AgentSessionStatusEvent } from '../../../../shared/agent-session/agent-session-wire'
 import { makeTestBot } from '../../../bots/bot.test-fixture'
 
 const SHARED = { id: 'bot-shared', folderWorkspaceId: 'home-shared' }
@@ -128,11 +128,11 @@ beforeEach(() => {
         }
       },
       // Every chat on the host, as the owner's own stream carries them.
-      subscribeStatus: ({ emit }: { emit: (event: AgentSessionStatusEvent) => void }) => {
+      subscribeStatus: ({ emit }: { emit: (event: unknown) => void }) => {
         const summary = (sessionId: string) => ({ sessionId, agent: 'claude' })
-        emit({ type: 'snapshot', sessions: SESSIONS.map(({ id }) => summary(id)) } as never)
+        emit({ type: 'snapshot', sessions: SESSIONS.map(({ id }) => summary(id)) })
         for (const { id } of SESSIONS) {
-          emit({ type: 'status', session: summary(id) } as never)
+          emit({ type: 'status', session: summary(id) })
         }
         return () => {}
       }
@@ -187,13 +187,24 @@ async function call(method: string, params: unknown) {
   )
 }
 
+const Session = z.object({ sessionId: z.string() })
+const StatusEvent = z.discriminatedUnion('type', [
+  z.object({ type: z.literal('snapshot'), sessions: z.array(Session) }),
+  z.object({ type: z.literal('status'), session: Session })
+])
+
 async function streamStatus(): Promise<string[]> {
-  const events: AgentSessionStatusEvent[] = []
+  const streamed: string[] = []
   await dispatcher.dispatchStreamingObjects(
     { id: 'r1', authToken: '', method: 'agentSession.subscribeStatus', params: undefined },
     (response) => {
       if (response.ok && response.streaming) {
-        events.push(response.result as AgentSessionStatusEvent)
+        const event = StatusEvent.parse(response.result)
+        streamed.push(
+          ...(event.type === 'snapshot'
+            ? event.sessions.map((session) => `snapshot:${session.sessionId}`)
+            : [`status:${event.session.sessionId}`])
+        )
       }
     },
     {
@@ -204,13 +215,7 @@ async function streamStatus(): Promise<string[]> {
       connectionId: 'share-connection'
     }
   )
-  return events.flatMap((event) =>
-    event.type === 'snapshot'
-      ? event.sessions.map((session) => `snapshot:${session.sessionId}`)
-      : event.type === 'status'
-        ? [`status:${event.session.sessionId}`]
-        : []
-  )
+  return streamed
 }
 
 const errorCode = (response: Awaited<ReturnType<typeof call>>) =>
