@@ -69,7 +69,9 @@ export function WorktreeAgentChildToggle({
         {expanded ? null : (
           <>
             {signalState ? <AgentStateDot state={signalState} /> : null}
-            {unread ? <Bell size={12} color={colors.statusAmber} fill={colors.statusAmber} /> : null}
+            {unread ? (
+              <Bell size={12} color={colors.statusAmber} fill={colors.statusAmber} />
+            ) : null}
             <Text style={styles.count}>+{count}</Text>
           </>
         )}
