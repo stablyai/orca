@@ -9,6 +9,8 @@ import { serializePortForwardChange } from './ssh-managed-port-forward-restore'
 import { clearForwardFailure, listUnrestoredPortForwards } from './ssh-port-forward-unrestored'
 import { PortForwardTornDownError } from '../../ssh/port-forwarding/ssh-port-forward'
 import { assertIpv6LoopbackPortFree } from '../../ssh/port-forwarding/local-forward-ipv6-loopback-probe'
+import { addForwardOnFreeLocalPort } from '../../ssh/port-forwarding/forward-local-port-choice'
+import { loopbackPortForwardDialHost } from '../../../shared/workspace/ports/port-forward-loopback-host'
 import { broadcastPortForwards, enrichDetected } from './ssh-renderer-broadcast'
 
 export function registerSshPortForwardHandlers(handle: RegisterSshRequest): void {
@@ -42,6 +44,43 @@ export function registerSshPortForwardHandlers(handle: RegisterSshRequest): void
         return entry
       })
   )
+
+  // The renderer calls this only from a person's click on the host's localhost link or port.
+  handle('ssh:ensurePortForward', (args: { targetId: string; remotePort: number }) => {
+    const targetId = typeof args?.targetId === 'string' ? args.targetId : ''
+    const remotePort = args?.remotePort
+    if (!targetId || !Number.isInteger(remotePort) || remotePort < 1 || remotePort > 65_535) {
+      throw new Error('Invalid port forward request')
+    }
+    return serializePortForwardChange(targetId, async () => {
+      const existing = portForwardManager!
+        .listForwards(targetId)
+        .find(
+          (forward) =>
+            forward.remotePort === remotePort &&
+            loopbackPortForwardDialHost(forward.remoteHost) !== null
+        )
+      if (existing) {
+        return { entry: existing, created: false }
+      }
+      const conn = connectionManager!.getConnection(targetId)
+      if (!conn) {
+        throw new Error(`SSH connection "${targetId}" not found`)
+      }
+      // SSH forwards listen on 127.0.0.1 only.
+      const entry = await addForwardOnFreeLocalPort(
+        remotePort,
+        (localPort) =>
+          portForwardManager!.addForward(targetId, conn, localPort, 'localhost', remotePort),
+        (id) => portForwardManager!.removeForwardAndWait(id),
+        false
+      )
+      clearForwardFailure(targetId, entry)
+      persistPortForwards(targetId)
+      broadcastPortForwards(targetId)
+      return { entry, created: true }
+    })
+  })
 
   handle(
     'ssh:updatePortForward',

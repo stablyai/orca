@@ -1,18 +1,14 @@
 import type { PairedRuntimeConnection } from '../../../shared/remote-runtime/pairing/paired-runtime-connection'
 import type { PortForwardEntry } from '../../../shared/remote-runtime/ssh/ssh-types'
-import { pairedPortForwardDialHost } from '../../../shared/workspace/ports/port-forward-loopback-host'
+import { loopbackPortForwardDialHost } from '../../../shared/workspace/ports/port-forward-loopback-host'
 import { SshPortForwardManager } from '../../ssh/port-forwarding/ssh-port-forward'
-import { assertIpv6LoopbackPortFree } from '../../ssh/port-forwarding/local-forward-ipv6-loopback-probe'
-import { assertPortNotShadowingListener } from '../../runtime/rpc/transports/websocket/shadowed-port-probe'
+import {
+  addForwardOnFreeLocalPort,
+  assertLoopbackPortFree
+} from '../../ssh/port-forwarding/forward-local-port-choice'
 import { serializePortForwardChange } from '../../ipc/ssh/ssh-managed-port-forward-restore'
 import { holdsIpv6Loopback, PairedPortForwardProvider } from './paired-port-forward-provider'
 import { PairedPortForwardTunnel } from './paired-port-forward-tunnel'
-
-// Loopback answers at once on POSIX; Windows retries a refused SYN for seconds, which also means nothing listens.
-const LOOPBACK_PROBE_TIMEOUT_MS = 150
-// Keep the remote number when free, else the next few; past them, any free port beats a long scan.
-const NEXT_PORT_ATTEMPTS = 20
-const OS_PORT_ATTEMPTS = 5
 
 type PairedPortForwardsDeps = {
   resolveConnection: (environmentId: string) => Promise<PairedRuntimeConnection>
@@ -137,42 +133,15 @@ export function ensurePairedPortForward(args: {
         args.remotePort,
         args.label
       )
-    let entry: PortForwardEntry | null = null
-    const lastCandidate = Math.min(args.remotePort + NEXT_PORT_ATTEMPTS - 1, 65_535)
-    for (let candidate = args.remotePort; candidate <= lastCandidate && !entry; candidate++) {
-      if (await loopbackPortAnswers(candidate)) {
-        continue
-      }
-      // Lost races and privileged ports move on to the next number.
-      entry = await add(candidate).catch(() => null)
-    }
-    entry ??= await addOnFreeOsPort(add).catch(retireIdleTunnelAfter(args.environmentId))
+    const entry = await addForwardOnFreeLocalPort(
+      args.remotePort,
+      add,
+      (id) => manager.removeForwardAndWait(id),
+      holdsIpv6Loopback(process.platform)
+    ).catch(retireIdleTunnelAfter(args.environmentId))
     deps?.onChanged(args.environmentId)
     return { entry, created: true }
   })
-}
-
-/** The OS picks a port free on 127.0.0.1 only. Where the forward holds [::1] too, a collision there
- *  fails the start; where it doesn't (Windows), [::1] is probed. Either way, pick again. */
-async function addOnFreeOsPort(
-  add: (localPort: number) => Promise<PortForwardEntry>
-): Promise<PortForwardEntry> {
-  for (let attempt = 1; ; attempt++) {
-    try {
-      const entry = await add(0)
-      if (!holdsIpv6Loopback(process.platform)) {
-        await assertIpv6LoopbackPortFree(entry.localPort).catch(async (error: unknown) => {
-          await manager.removeForwardAndWait(entry.id)
-          throw error
-        })
-      }
-      return entry
-    } catch (error) {
-      if (attempt >= OS_PORT_ATTEMPTS) {
-        throw error
-      }
-    }
-  }
 }
 
 /** A person removed or disconnected the server: its forwards stop listening here. Queued behind
@@ -243,7 +212,7 @@ function retireIdleTunnelAfter(environmentId: string): (error: unknown) => never
 }
 
 function requireLoopbackRemoteHost(remoteHost: string): string {
-  const host = pairedPortForwardDialHost(remoteHost)
+  const host = loopbackPortForwardDialHost(remoteHost)
   if (!host) {
     throw new Error('Only localhost ports on a paired server can be forwarded.')
   }
@@ -252,20 +221,4 @@ function requireLoopbackRemoteHost(remoteHost: string): string {
 
 function forwardChangeKey(environmentId: string): string {
   return `runtime:${environmentId}`
-}
-
-/** Throws EADDRINUSE when a local server already answers on the port: a [::] or [::1] one would take
- *  a browser's localhost first, and macOS and Windows let a 127.0.0.1 bind shadow a 0.0.0.0 one. */
-async function assertLoopbackPortFree(port: number): Promise<void> {
-  await Promise.all([
-    assertIpv6LoopbackPortFree(port),
-    assertPortNotShadowingListener('127.0.0.1', port, LOOPBACK_PROBE_TIMEOUT_MS)
-  ])
-}
-
-async function loopbackPortAnswers(port: number): Promise<boolean> {
-  return assertLoopbackPortFree(port).then(
-    () => false,
-    () => true
-  )
 }

@@ -1,16 +1,16 @@
 import { z } from 'zod'
 
-export type PairedPortForwardDialHost = 'localhost' | '127.0.0.1' | '::1'
+export type LoopbackPortForwardDialHost = 'localhost' | '127.0.0.1' | '::1'
 
-const DIAL_HOSTS: ReadonlyMap<string, PairedPortForwardDialHost> = new Map([
+const DIAL_HOSTS: ReadonlyMap<string, LoopbackPortForwardDialHost> = new Map([
   ['localhost', 'localhost'],
   ['127.0.0.1', '127.0.0.1'],
   ['::1', '::1'],
   ['[::1]', '::1']
 ])
 
-/** The server loopback host a paired client's forward may dial; null for anything off the server's own loopback. */
-export function pairedPortForwardDialHost(host: string): PairedPortForwardDialHost | null {
+/** The loopback host a forward may dial on the remote machine; null for anything off its own loopback. */
+export function loopbackPortForwardDialHost(host: string): LoopbackPortForwardDialHost | null {
   return DIAL_HOSTS.get(host.trim().toLowerCase()) ?? null
 }
 
