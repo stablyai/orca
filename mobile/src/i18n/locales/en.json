@@ -3979,6 +3979,7 @@
         "edit": "Edit",
         "create": "Create bot",
         "open": "Open",
+        "openBot": "Open {{name}}",
         "origin": "Proposed by {{bot}}",
         "originTemplate": "From {{template}}, proposed by {{bot}}",
         "watches": "Watches",
