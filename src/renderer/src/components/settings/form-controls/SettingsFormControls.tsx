@@ -9,6 +9,7 @@ import { SettingsDisabledControlTooltip } from './SettingsDisabledControlTooltip
 import { normalizeColor } from '@/lib/terminal/appearance/terminal-theme'
 import { cn } from '@/lib/class-names'
 import { useTranslate } from '@/i18n/use-translate'
+import { handleSegmentedControlKeyDown, type SegmentedOption } from './segmented-control-keys'
 
 type SettingsRowProps = {
   label: React.ReactNode
@@ -104,14 +105,6 @@ export function SettingsSwitchRow({
   )
 }
 
-type SegmentedOption<T extends string | number> = {
-  value: T
-  label: React.ReactNode
-  disabled?: boolean
-  ariaLabel?: string
-  tooltip?: React.ReactNode
-}
-
 type SettingsSegmentedControlProps<T extends string | number> = {
   value: T
   onChange: (value: T) => void
@@ -143,6 +136,8 @@ export function SettingsSegmentedControl<T extends string | number>({
       aria-label={ariaLabel}
       aria-labelledby={ariaLabelledBy}
       aria-describedby={ariaDescribedBy}
+      // Radiogroup keys: arrows and Home/End move focus and selection; Tab stops are unchanged.
+      onKeyDown={(event) => handleSegmentedControlKeyDown(event, options, onChange)}
       className={cn(
         'inline-flex items-center rounded-md border border-border bg-background/50 p-0.5',
         size === 'icon' && 'gap-0.5',
