@@ -151,7 +151,12 @@ async function probe(scenario: Scenario) {
 describe.skipIf(!RUN_PROBE)('native writer probe for account restart', () => {
   afterAll(() => {
     if (workDir) {
-      rmSync(workDir, { recursive: true, force: true })
+      // Windows can hold the stopped session's cwd handle briefly after exit.
+      try {
+        rmSync(workDir, { recursive: true, force: true, maxRetries: 10, retryDelay: 200 })
+      } catch (error) {
+        console.warn('[writer-probe] could not remove', workDir, error)
+      }
     }
   })
 
