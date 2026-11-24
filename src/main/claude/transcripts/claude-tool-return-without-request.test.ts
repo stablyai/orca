@@ -106,6 +106,22 @@ describe('claudeToolReturnWithoutRequest', () => {
       claudeToolReturnWithoutRequest(transcript(...STALLED, result(RETURNED, 'tool_unknown')))
     ).toBeNull()
   })
+
+  it('proves nothing when only an earlier turn had its request recorded (recorder off since)', () => {
+    const prompt = { type: 'user', isSidechain: false, message: { role: 'user', content: 'next' } }
+    expect(
+      claudeToolReturnWithoutRequest(
+        transcript(...STALLED, prompt, assistant('msg_2', ['tool_b']), result(RETURNED, 'tool_b'))
+      )
+    ).toBeNull()
+  })
+
+  it('reads a row still being appended, or an unreadable row after the result, as doubt', () => {
+    expect(
+      claudeToolReturnWithoutRequest(`${transcript(...STALLED)}{"type":"api-request",`)
+    ).toBeNull()
+    expect(claudeToolReturnWithoutRequest(`${transcript(...STALLED)}{"type":"api-req\n`)).toBeNull()
+  })
 })
 
 describe('readClaudeToolReturnWithoutRequest', () => {

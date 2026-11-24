@@ -9,18 +9,34 @@ const TAIL_BYTES = 512 * 1024
 
 /** When the newest tool result was written, if no request followed it; else null. */
 export function claudeToolReturnWithoutRequest(transcript: string): number | null {
-  let requestSeen = false
-  // The newest assistant message: its id, whether its reply finished, and its tool calls.
-  let batch: { id: unknown; finished: boolean; uses: Set<string>; results: Set<string> } | null =
-    null
+  // A row still being appended (a request's, say) may be the one this would say never came.
+  if (!transcript.endsWith('\n')) {
+    return null
+  }
+  // A request row since the last prompt or result: the recorder is on for this run of Claude.
+  let requestRecorded = false
+  // The newest assistant message: whether its own request was recorded, whether its reply
+  // finished, and its tool calls.
+  let batch: {
+    id: unknown
+    requested: boolean
+    finished: boolean
+    uses: Set<string>
+    results: Set<string>
+  } | null = null
   let lastResultAt: number | null = null
-  for (const line of transcript.split('\n')) {
+  const lines = transcript.split('\n')
+  for (const [index, line] of lines.entries()) {
     const row = parseRow(line)
     if (!row) {
+      // Only the tail's first line may be cut by the read; any other unreadable row is doubt.
+      if (index > 0 && line.trim() !== '') {
+        lastResultAt = null
+      }
       continue
     }
     if (row.type === 'api-request') {
-      requestSeen = true
+      requestRecorded = true
       lastResultAt = null
       continue
     }
@@ -37,7 +53,13 @@ export function claudeToolReturnWithoutRequest(transcript: string): number | nul
     const content = Array.isArray(message?.content) ? message.content : null
     if (row.type === 'assistant' && message) {
       if (!batch || batch.id !== message.id) {
-        batch = { id: message.id, finished: false, uses: new Set(), results: new Set() }
+        batch = {
+          id: message.id,
+          requested: requestRecorded,
+          finished: false,
+          uses: new Set(),
+          results: new Set()
+        }
       }
       // Every row of a reply carries its final stop reason (0 of 14,911 replies mixed); one cut off
       // mid-stream has none.
@@ -49,6 +71,7 @@ export function claudeToolReturnWithoutRequest(transcript: string): number | nul
       }
       continue
     }
+    requestRecorded = false
     const results = row.type === 'user' && content ? toolResultIds(content) : null
     const current = batch
     if (!results || !current) {
@@ -62,8 +85,9 @@ export function claudeToolReturnWithoutRequest(transcript: string): number | nul
       lastResultAt = at
     }
   }
-  // No request row anywhere means the recorder may be off for this session: that proves nothing.
-  if (!requestSeen || lastResultAt === null || !batch?.finished || batch.uses.size === 0) {
+  // Unless the request that produced this reply was recorded, the recorder may be off (it is
+  // checked per request): a missing row proves nothing.
+  if (!batch?.requested || lastResultAt === null || !batch.finished || batch.uses.size === 0) {
     return null
   }
   // A sibling call still running feeds the same next request.

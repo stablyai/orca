@@ -31,4 +31,6 @@ it('reads a stalled request, and a reply that says done, as still waiting', () =
 it('reads a compaction in progress from its spinner', () => {
   expect(claudeCompactingOnScreen(['✻ Compacting conversation… (1m 34s)', '❯', FOOTER])).toBe(true)
   expect(claudeCompactingOnScreen(['· Whirlpooling… (11m 27s)', '❯', FOOTER])).toBe(false)
+  // A 20-column pane wraps the spinner's words onto rows of their own.
+  expect(claudeCompactingOnScreen(['✻ Compacting', 'conversation… (1m', '34s)', '❯'])).toBe(true)
 })

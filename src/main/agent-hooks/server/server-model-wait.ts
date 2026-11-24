@@ -19,6 +19,8 @@ export type TerminalModelWait = {
   toolSeenRunning: () => void
   /** The lead Claude's transcript, as its last hook named it. */
   transcriptPath?: string
+  /** True once per stretch: a repeat look's notice is already in mail, so it needs no read. */
+  firstTranscriptLook: () => boolean
 }
 
 export const TERMINAL_MODEL_WAIT_MS = 10 * 60_000
@@ -30,6 +32,8 @@ type PaneModelWait = {
   /** The lead's Claude session: a nested `claude -p` in its Bash tool shares the pane key. */
   session?: string
   transcriptPath?: string
+  /** The stretch (its `since`) whose transcript was read. */
+  transcriptReadSince?: number
 }
 
 const TURN_ENDS = new Set(['Stop', 'StopFailure', 'SessionEnd'])
@@ -227,7 +231,12 @@ export abstract class AgentHookServerModelWait extends AgentHookServerIngestNorm
           toolSeenRunning: () => {
             wait.since = Date.now()
           },
-          ...(wait.transcriptPath ? { transcriptPath: wait.transcriptPath } : {})
+          ...(wait.transcriptPath ? { transcriptPath: wait.transcriptPath } : {}),
+          firstTranscriptLook: () => {
+            const first = wait.transcriptReadSince !== wait.since
+            wait.transcriptReadSince = wait.since
+            return first
+          }
         }).catch(() => false)
       : false
     if (this.modelWaits.get(paneKey) !== wait) {

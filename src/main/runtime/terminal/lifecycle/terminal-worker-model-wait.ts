@@ -92,7 +92,7 @@ async function toolReturnWithoutRequest(
   wait: TerminalModelWait,
   screen: readonly string[]
 ): Promise<number | null> {
-  if (!wait.transcriptPath || claudeCompactingOnScreen(screen)) {
+  if (!wait.transcriptPath || claudeCompactingOnScreen(screen) || !wait.firstTranscriptLook()) {
     return null
   }
   return readClaudeToolReturnWithoutRequest(wait.transcriptPath, WORKER_MODEL_WAIT_MS)
