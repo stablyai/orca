@@ -15,11 +15,16 @@ const ENVELOPE_SCAN_CHARS = 4096
 const FIELD_WINDOW_CHARS = 4096
 /** More open items than this can't be real; the oldest stay held, so nothing is acked past them. */
 const MAX_OPEN_ITEMS = 256
-const CHUNKS = new Set(['agent_message_chunk', 'agent_thought_chunk'])
+export const ACP_MESSAGE_CHUNKS = new Set(['agent_message_chunk', 'agent_thought_chunk'])
 /** Updates after which a session's message chunks don't continue (as the translator numbers them). */
-const MESSAGE_ENDS = new Set(['user_message_chunk', 'tool_call', 'tool_call_update', 'plan'])
+export const ACP_MESSAGE_ENDS = new Set([
+  'user_message_chunk',
+  'tool_call',
+  'tool_call_update',
+  'plan'
+])
 
-type UpdateFields = {
+export type AcpUpdateFields = {
   sessionId?: string
   sessionUpdate?: string
   messageId?: string
@@ -39,7 +44,7 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 
 /** The fields the floor needs, scanned from the line's ends. A call's end is read by the
  *  connection, which parses every line anyway (`AcpRelayTurns.observeUpdate`). */
-function updateFields(line: string): UpdateFields {
+function updateFields(line: string): AcpUpdateFields {
   const windows =
     line.length <= 2 * FIELD_WINDOW_CHARS
       ? [line]
@@ -53,8 +58,22 @@ function updateFields(line: string): UpdateFields {
   return {
     sessionId: find(SESSION_ID),
     sessionUpdate,
-    ...(sessionUpdate && CHUNKS.has(sessionUpdate) ? { messageId: find(MESSAGE_ID) } : {})
+    ...(sessionUpdate && ACP_MESSAGE_CHUNKS.has(sessionUpdate)
+      ? { messageId: find(MESSAGE_ID) }
+      : {})
   }
+}
+
+/** A session update's fields, or null for any other line; only the envelope's start is read. */
+export function acpSessionUpdateFields(line: string): AcpUpdateFields | null {
+  const { properties } = leadingJsonEnvelope(line.slice(0, ENVELOPE_SCAN_CHARS), {
+    stopAtContainer: true,
+    maxFields: 8
+  })
+  const method = properties.find((property) => property.key === 'method')?.value
+  return typeof method === 'string' && ACP_SESSION_UPDATE_METHODS.has(method)
+    ? updateFields(line)
+    : null
 }
 
 const first = (open: Map<string, { seq: number }>): number | null =>
@@ -91,24 +110,19 @@ class AcpRelayAckFloor implements ProviderRelayAckFloor {
       this.turnPending = false
       this.turnStart = seq
     }
-    const { properties } = leadingJsonEnvelope(line.slice(0, ENVELOPE_SCAN_CHARS), {
-      stopAtContainer: true,
-      maxFields: 8
-    })
-    const method = properties.find((property) => property.key === 'method')?.value
-    if (typeof method !== 'string' || !ACP_SESSION_UPDATE_METHODS.has(method)) {
+    const update = acpSessionUpdateFields(line)
+    if (!update) {
       return
     }
-    const update = updateFields(line)
     const kind = update.sessionUpdate
-    if (kind && MESSAGE_ENDS.has(kind)) {
+    if (kind && ACP_MESSAGE_ENDS.has(kind)) {
       for (const [id, message] of this.messages) {
         if (message.session === update.sessionId) {
           this.messages.delete(id)
         }
       }
     }
-    if (kind && CHUNKS.has(kind)) {
+    if (kind && ACP_MESSAGE_CHUNKS.has(kind)) {
       if (update.messageId === undefined) {
         this.numbered = true
       } else {

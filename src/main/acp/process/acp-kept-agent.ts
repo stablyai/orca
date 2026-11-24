@@ -4,6 +4,7 @@ import {
   type ProviderRelayLaunch,
   type RelayedProviderProcess
 } from '../../provider-relay/app-provider-relays'
+import { AcpRelayItemContinuation } from './acp-relay-item-continuation'
 import { acpRelayWorkMarkers, acpSpecRelays } from './acp-relay-work-markers'
 import { AcpRelayTurns } from './acp-relay-ack-floor'
 import type { RelayedProviderChild } from '../../provider-relay/relayed-provider-child'
@@ -204,9 +205,17 @@ export async function launchRelayedAcpAgent(
   // Answers to this app's own requests pass a reattach's hold; everything else waits for the chat.
   let floor = Number.POSITIVE_INFINITY
   const turns = new AcpRelayTurns()
+  const continuation = new AcpRelayItemContinuation()
   const relay: ProviderRelayLaunch = {
     chatKey: input.acquire.identity.sessionId,
-    markers: { ...acpRelayWorkMarkers(spec.agent), ackFloor: turns.ackFloor },
+    markers: {
+      ...acpRelayWorkMarkers(spec.agent),
+      ackFloor: () => {
+        continuation.reset()
+        return turns.ackFloor()
+      },
+      continuation
+    },
     keep: ACP_RELAY_KEEP,
     passWhileHeld: (line) => isJsonRpcAnswerAbove(line, floor)
   }
