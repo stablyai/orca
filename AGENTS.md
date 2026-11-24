@@ -16,6 +16,14 @@
 
 All UI work — layout, color, typography, spacing, component selection, UX behavior — must follow [`docs/STYLEGUIDE.md`](./docs/STYLEGUIDE.md). Use the tokens defined in `src/renderer/src/assets/main.css` (the canonical source) and the shadcn primitives in `src/renderer/src/components/ui/`. Don't invent new color values, font sizes, or shadow tiers when a documented one already covers the role.
 
+# zh-Hant 語系維護（本分支）
+
+- **唯一基準**：翻譯/補鍵一律以**官方上游原始英文 `en.json`** 為語意與鍵集基準（桌面 `src/renderer/src/i18n/locales/en.json`、行動 `mobile/src/i18n/locales/en.json`，對照 `origin/main` 最新版本）。`zh.json`/其他語系僅可作術語參考，不可直接覆蓋語意；採用前必須逐鍵確認與英文原文一致。**簡中轉繁不得作為最終正確性依據**（簡體中文可能落後、漏譯或語意偏移）。
+- **每次更新前先校對上游**：在 `F:\DevProjects\OrcaADE\zh-maintenance` 執行 `npm run rebase`（或 `npm run refresh`）前，先確認 `origin/main` 已 fetch 且比對最新英文鍵集；缺鍵/待譯以英文鍵為準產生報告，不以簡體中文是否有對應鍵判斷。
+- **TM 規則**：`zh-maintenance/tm/*.json` 寫入前必須對照英文 `en.json`；自動轉換/OpenCC 產物不得未經稽核直接寫入 TM。保留既有人工校正。
+- **驗證**：`cd F:\DevProjects\OrcaADE\zh-maintenance && node scripts/check.mjs` 必須通過（鍵完整、佔位符/標籤一致、無簡體殘留）；結構通過不等於語意正確，新增/大批變更需抽審英文語意。
+- **發佈邊界**：只發佈到 `ainlee/Orca_zh-Hant`（`i18n/zh-hant-coverage`），**禁止推送官方 `stablyai/orca`**；外部推送前需確認。
+
 # Electron UI Validation
 
 - Always run tests and agent-launched apps in the background with `ORCA_BACKGROUND_LAUNCH=1`.
