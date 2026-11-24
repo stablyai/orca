@@ -4,7 +4,7 @@ import type {
   AgentJournalRenderItem,
   AgentJournalSubmission
 } from '../../shared/agent-session/journal/agent-session-journal-types'
-import { leaveEligibleBatch } from '../external-conversations/external-conversation-thread-leaves'
+import { leaveEligibleBatch } from '../external-conversations/external-conversation-leave-eligibility'
 import { leaveThreadRefusal } from './bot-leave-thread-authority'
 
 const THREAD = { source: 'slack', externalId: 'T1:C1:1800000000.000100:U0BOT' }

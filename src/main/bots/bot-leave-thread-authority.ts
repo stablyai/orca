@@ -14,7 +14,7 @@ import {
   isRunningAgentJournalTurn,
   readAgentJournalTurn
 } from '../../shared/agent-session/lifecycle/records/agent-session-turn-record'
-import { askedInThread } from '../external-conversations/external-conversation-thread-leaves'
+import { askedInThread } from '../external-conversations/external-conversation-leave-eligibility'
 
 /** stale: no turn is running, or it took no message. mixed: it took a message that isn't from a
  *  person who can ask the bot here (another app, a bot, an automation, agent mail, someone Orca

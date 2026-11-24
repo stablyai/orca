@@ -1,7 +1,7 @@
 // A conversation's native chat (structured session): its deliveries, prompts, turns and Stop.
 import { randomUUID } from 'node:crypto'
 import { isConversationReport } from './external-conversation-turn-opener'
-import { leaveEligibleBatch } from './external-conversation-thread-leaves'
+import { leaveEligibleBatch } from './external-conversation-leave-eligibility'
 import {
   endedTurn,
   endedTurnAttribution,
