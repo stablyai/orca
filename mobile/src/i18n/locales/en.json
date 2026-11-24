@@ -3730,7 +3730,23 @@
       "cancelledBy": "Cancelled on {{device}}",
       "thisPhone": "this phone",
       "computer": "the computer",
-      "otherDevice": "another device"
+      "otherDevice": "another device",
+      "questionCancelled": "Question cancelled",
+      "youAnswered": "You answered: <answer>{{answer}}</answer>",
+      "answeredCount_one": "You answered <answer>{{count}} question</answer>",
+      "answeredCount_other": "You answered <answer>{{count}} questions</answer>",
+      "answeredCount": "You answered <answer>{{count}} questions</answer>"
+    },
+    "approvalRecord": {
+      "cancelled": "Request for <tool>{{tool}}</tool> cancelled",
+      "coordinatorAllowed": "Coordinator allowed <tool>{{tool}}</tool>",
+      "coordinatorDenied": "Coordinator denied <tool>{{tool}}</tool>",
+      "allowedUnnamed": "Allowed <tool>{{tool}}</tool>",
+      "deniedUnnamed": "Denied <tool>{{tool}}</tool>",
+      "youAllowed": "You allowed <tool>{{tool}}</tool>",
+      "youAllowedForSession": "You allowed <tool>{{tool}}</tool> for this session",
+      "youDenied": "You denied <tool>{{tool}}</tool>",
+      "youAnswered": "You answered <tool>{{tool}}</tool>: <answer>{{answer}}</answer>"
     },
     "subagentGroup": {
       "stateCompleted": "completed",
@@ -4243,7 +4259,7 @@
         "deniedInTerminal": "<tool>{{tool}}</tool> for <task>{{task}}</task> denied in its terminal",
         "allowedInChat": "<tool>{{tool}}</tool> for <task>{{task}}</task> allowed in its chat",
         "deniedInChat": "<tool>{{tool}}</tool> for <task>{{task}}</task> denied in its chat",
-        "autoDenied": "<tool>{{tool}}</tool> for <task>{{task}}</task> denied automatically after 2:00",
+        "timedOut": "<tool>{{tool}}</tool> for <task>{{task}}</task> timed out",
         "waitsInTerminal": "<tool>{{tool}}</tool> for <task>{{task}}</task> waits in its terminal",
         "workerEnded": "<tool>{{tool}}</tool> for <task>{{task}}</task> closed: the worker ended",
         "closedUnnamed": "<tool>{{tool}}</tool> for <task>{{task}}</task> closed without a recorded answer",
