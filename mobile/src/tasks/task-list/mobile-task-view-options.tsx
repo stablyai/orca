@@ -8,7 +8,8 @@ export const PROVIDER_LABELS: Record<TaskProvider, string> = {
   github: 'GitHub',
   gitlab: 'GitLab',
   linear: 'Linear',
-  jira: 'Jira'
+  jira: 'Jira',
+  gitea: 'Gitea'
 }
 
 export function providerEmptyLabel(t: Translate, provider: TaskProvider): string {
@@ -21,6 +22,8 @@ export function providerEmptyLabel(t: Translate, provider: TaskProvider): string
       return t('tasks.taskViewOptions.noLinearTasks', 'No Linear tasks')
     case 'jira':
       return t('tasks.taskViewOptions.noJiraTasks', 'No Jira tasks')
+    case 'gitea':
+      return t('tasks.taskViewOptions.noGiteaTasks', 'No Gitea tasks')
   }
 }
 
