@@ -115,9 +115,9 @@ function withTrackedValueGapsFilled(
   tracked: Record<string, TrackedNativeChatSessionOption> | undefined,
   applied: Record<string, TrackedNativeChatSessionOption>
 ): Record<string, TrackedNativeChatSessionOption> {
-  const filled = { ...tracked }
-  for (const [id, value] of Object.entries(applied)) {
-    filled[id] ??= { ...value }
-  }
-  return filled
+  const gaps = Object.entries(applied).filter(([id]) => tracked?.[id] === undefined)
+  // Same object when nothing is missing: a model pick in flight compares the bucket by identity.
+  return tracked && gaps.length === 0
+    ? tracked
+    : { ...tracked, ...Object.fromEntries(gaps.map(([id, value]) => [id, { ...value }])) }
 }

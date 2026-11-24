@@ -21,10 +21,11 @@ export function useMobileNativeChatAppliedSessionOptionSeed(
       )
     )
     const key = JSON.stringify(values)
-    if (filledByChat.get(chatIdentity) === key) {
-      return
-    }
+    const filled = filledByChat.get(chatIdentity) === key
+    // Refreshed on every hit too, so a chat still in use is not the one evicted.
     setBoundedScopeCacheEntry(filledByChat, chatIdentity, key)
-    surface.fillAppliedSessionOptions(values)
+    if (!filled) {
+      surface.fillAppliedSessionOptions(values)
+    }
   }, [appliedSessionOptions, chatIdentity, surface])
 }
