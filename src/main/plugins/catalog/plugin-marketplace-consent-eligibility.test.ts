@@ -11,6 +11,7 @@ import {
 import { PluginService } from '../plugin-service'
 import { applyPluginConsent } from '../activation/plugin-enablement'
 import { installStagedPluginTree } from '../installation/plugin-install-staging'
+import { pluginManifestSchema } from '../../../shared/plugins/manifest/plugin-manifest'
 import { PluginMarketplaceStore } from './plugin-marketplace-store'
 import { PluginMarketplaceService } from './plugin-marketplace-service'
 import {
@@ -166,7 +167,23 @@ it('keeps a catalog generation fixed until its guarded write finishes', async ()
   if (!admitted) {
     throw new Error('fixture offer missing')
   }
-  const publishing = withMarketplaceInstallEligibility(marketplace, admitted, '1.4.0', async () => {
+  // Why: this offer has no release to check, so the staged manifest only fills the signature.
+  const staged = {
+    hostVersion: '1.4.0',
+    manifest: pluginManifestSchema.parse({
+      manifestVersion: 2,
+      id: 'demo',
+      publisher: 'samples',
+      name: 'Demo',
+      version: '1.0.0',
+      execution: 'data',
+      license: 'MIT',
+      engines: { orca: '>=1.4.245' },
+      capabilities: [],
+      contributes: {}
+    })
+  }
+  const publishing = withMarketplaceInstallEligibility(marketplace, admitted, staged, async () => {
     order.push('write started')
     entered.resolve()
     await release.promise

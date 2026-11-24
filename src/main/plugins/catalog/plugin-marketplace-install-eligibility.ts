@@ -1,5 +1,7 @@
 import { isSamePluginSource } from '../../../shared/plugins/catalog/plugin-marketplace'
+import { pluginCatalogReleaseError } from '../../../shared/plugins/catalog/plugin-catalog-release'
 import { pluginCatalogReleaseCompatibilityError } from '../../../shared/plugins/manifest/plugin-manifest-compatibility'
+import type { PluginManifest } from '../../../shared/plugins/manifest/plugin-manifest'
 import type { PluginLockEntry } from '../../../shared/plugins/installation/plugin-install-lockfile'
 import { getUserPluginsDir } from '../discovery/plugin-discovery'
 import { pluginTreeHashMatches } from '../artifacts/plugin-content-integrity'
@@ -50,12 +52,17 @@ type CatalogOffer = Pick<
   'marketplaceSourceId' | 'pluginKey' | 'source' | 'release'
 >
 
+/** What the staged bytes were checked against: this host, and the manifest a fresh install reads. */
+export type StagedInstallRequirements = { hostVersion: string; manifest: PluginManifest }
+
 /** Only the admitted offer must stay fixed; another plugin's catalog edit is unrelated. A refresh
- *  may still raise the release's minimum Orca, so that is checked here too, at the write. */
+ *  may still change what the release requires (minimum Orca, execution profile, contributions),
+ *  so the refreshed release is checked against the staged manifest here, with the same rules a
+ *  fresh install applies, before anything is written. */
 export function withMarketplaceInstallEligibility<T>(
   marketplace: PluginMarketplaceService,
   expected: CatalogOffer,
-  hostVersion: string,
+  staged: StagedInstallRequirements,
   write: () => T | Promise<T>
 ): Promise<T> {
   return marketplace.withSourceSnapshot(expected.marketplaceSourceId, async () => {
@@ -71,11 +78,23 @@ export function withMarketplaceInstallEligibility<T>(
     ) {
       throw new MarketplaceReviewRequiredError()
     }
-    const incompatible = listing.release
-      ? pluginCatalogReleaseCompatibilityError(listing.release, hostVersion)
-      : null
-    if (incompatible) {
-      throw new Error(incompatible)
+    const release = listing.release
+    if (release) {
+      const incompatible = pluginCatalogReleaseCompatibilityError(release, staged.hostVersion)
+      if (incompatible) {
+        throw new Error(incompatible)
+      }
+      // Why these two are the release's own: the commit and hash above already equal the bytes
+      // staging verified against the release, so only the requirements can still differ here.
+      const mismatch = pluginCatalogReleaseError({
+        release,
+        manifest: staged.manifest,
+        resolvedCommit: release.commit,
+        contentHash: release.contentHash
+      })
+      if (mismatch) {
+        throw new Error(`marketplace changed after preview; review the plugin again: ${mismatch}`)
+      }
     }
     return write()
   })

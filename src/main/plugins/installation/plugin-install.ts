@@ -24,7 +24,7 @@ import {
 import { checkoutPluginGitSource } from './plugin-git-repository'
 import { findPluginRollbackCandidate } from './plugin-rollback-candidate'
 import { readPluginInstallProvenance } from './plugin-install-provenance'
-import { publishPluginInstall } from './plugin-install-publication'
+import { publishPluginInstall, type PluginPublicationGuard } from './plugin-install-publication'
 import {
   gitUrlPluginPublisher,
   localPluginPublisher
@@ -169,7 +169,7 @@ export async function installPluginFromMarketplace(input: {
   release?: PluginCatalogRelease
   blockedPluginReason?: (pluginKey: string) => string | null
   manifestError?: (manifest: PluginManifest) => string | null
-  withPublication?: (publish: () => Promise<void>, previous?: PluginLockEntry) => Promise<void>
+  withPublication?: PluginPublicationGuard
   /** Only replace an install from this marketplace; set by auto-update so Remove wins a race. */
   requireInstalled?: boolean
   requireMissing?: boolean
@@ -232,7 +232,8 @@ export async function installPluginFromMarketplace(input: {
         ...(input.release ? { release: input.release } : {}),
         blockedPluginReason: input.blockedPluginReason,
         manifestError: input.manifestError,
-        withPublication: (publish) => input.withPublication?.(publish, entry) ?? publish()
+        withPublication: (publish, staged) =>
+          input.withPublication?.(publish, entry, staged) ?? publish()
       })
     } catch (error) {
       return { ok: false, error: error instanceof Error ? error.message : String(error) }

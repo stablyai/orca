@@ -195,13 +195,13 @@ export class PluginMarketplaceInstaller {
         ...(listing.source.path ? { path: listing.source.path } : {})
       },
       ...(listing.release ? { release: listing.release } : {}),
-      withPublication: (publish, previous) => {
+      withPublication: (publish, previous, staged) => {
         previousVersion = previous?.version ?? null
         repositoryMoved = marketplaceInstallMoved(previous ?? null, listing.source)
         return withMarketplaceInstallEligibility(
           this.marketplace,
           listing,
-          this.hostVersion,
+          { hostVersion: this.hostVersion, manifest: staged },
           () => {
             if (repositoryMoved) {
               consentRevoked = true

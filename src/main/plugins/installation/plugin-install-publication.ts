@@ -12,12 +12,20 @@ import {
   restorePluginCurrentPointer,
   writePluginCurrentPointer
 } from './plugin-current-pointer'
+import type { PluginManifest } from '../../../shared/plugins/manifest/plugin-manifest'
 import { readPluginLockfile, writePluginLockfile } from './plugin-install-lockfile-store'
 import {
   prunePluginInstallProvenance,
   readPluginInstallProvenance,
   writePluginInstallProvenance
 } from './plugin-install-provenance'
+
+/** Wraps the publish step: `previous` is the install it replaces, `staged` the validated manifest. */
+export type PluginPublicationGuard = (
+  publish: () => Promise<void>,
+  previous: PluginLockEntry | undefined,
+  staged: PluginManifest
+) => Promise<void>
 
 /** Publish recoverable executable/provenance identity; retain one predecessor for rollback. */
 export async function publishPluginInstall(input: {
