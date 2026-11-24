@@ -5,7 +5,6 @@ import { Fragment, memo, useCallback, useState } from 'react'
 import { Alert, Pressable, Text, View } from 'react-native'
 import { formatAgentTypeLabel } from '../../../src/shared/agent-status/presentation/agent-type-label'
 import { AgentSpinner, type AgentSpinnerStatus } from './presentation/AgentSpinner'
-import { AGENT_FAILURE_COLOR } from './presentation/AgentStateDot'
 import { MobileAgentIcon } from '../components/icons/MobileAgentIcon'
 import { MobileBotAvatar } from '../bots/MobileBotAvatar'
 import { mobileBotAvatarSource } from '../bots/host-bot-row-facts'
@@ -353,7 +352,7 @@ const styles = themedStyleSheet(() => ({
   time: { fontSize: 12, color: colors.textMuted, fontVariant: ['tabular-nums'] },
   preview: { fontSize: 14, lineHeight: 19, color: colors.textSecondary },
   stateNeedsYou: { color: colors.agentQuestionText, fontWeight: '600' },
-  stateFailed: { color: AGENT_FAILURE_COLOR, fontWeight: '600' },
+  stateFailed: { color: colors.statusRed, fontWeight: '600' },
   footer: { flexDirection: 'row', alignItems: 'center', gap: 6, minWidth: 0 },
   place: { flexShrink: 1, fontSize: 12, color: colors.textMuted },
   trailing: { flexDirection: 'row', alignItems: 'center', gap: 8, marginLeft: 'auto' },
