@@ -83,6 +83,8 @@ export function BrowserCookieImportPicker({
   browserPageId,
   ...body
 }: BrowserCookieImportPickerProps): React.JSX.Element {
+  const t = useTranslate()
+  const label = t('browser.cookieImport.picker.menuItem', 'Import Cookies…')
   const closedOutsideRef = useRef(false)
   return (
     <Popover open={open} onOpenChange={onOpenChange}>
@@ -95,6 +97,7 @@ export function BrowserCookieImportPicker({
         collisionPadding={8}
         tone="menu"
         className="w-[260px] max-w-[calc(100vw-16px)]"
+        aria-label={label}
         data-browser-page-menu-id={browserPageId}
         data-testid="browser-cookie-import-picker"
         onInteractOutside={() => {
@@ -110,7 +113,11 @@ export function BrowserCookieImportPicker({
           closedOutsideRef.current = false
         }}
       >
-        <BrowserCookieImportPickerBody {...body} onClose={() => onOpenChange(false)} />
+        <BrowserCookieImportPickerBody
+          {...body}
+          label={label}
+          onClose={() => onOpenChange(false)}
+        />
       </PopoverContent>
     </Popover>
   )
@@ -122,8 +129,10 @@ function BrowserCookieImportPickerBody({
   pageRoute,
   onImportFromBrowser,
   onImportFromFile,
+  label,
   onClose
 }: Omit<BrowserCookieImportPickerProps, 'open' | 'onOpenChange' | 'anchorRef' | 'browserPageId'> & {
+  label: string
   onClose: () => void
 }): React.JSX.Element {
   const t = useTranslate()
@@ -188,7 +197,7 @@ function BrowserCookieImportPickerBody({
           markExplicitSelection()
         }
       }}
-      label={t('browser.cookieImport.picker.menuItem', 'Import Cookies…')}
+      label={label}
       surface="menu"
     >
       <CommandInput
