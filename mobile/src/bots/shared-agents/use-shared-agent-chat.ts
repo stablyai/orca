@@ -16,6 +16,9 @@ import type { ConnectionState } from '../../transport/connection/connection-stat
 import type { RpcClient } from '../../transport/rpc/rpc-client-contract'
 
 const noTerminal = async () => false
+// The chat reaches its host over the phone's own link, live or held for it in Orca Cloud, never
+// through the paired computer: its composer stays open whatever that computer's connection does.
+export const SHARED_AGENT_CHAT_CONNECTION = 'connected' satisfies ConnectionState
 const noConnection = async () => null
 
 export function useSharedAgentChat(args: {
@@ -27,10 +30,10 @@ export function useSharedAgentChat(args: {
   agent: string
   title: string
   capabilities: readonly string[] | null
-  connState: ConnectionState
   showToast: (message: string) => void
 }) {
-  const { client, hostId, sessionId, agent, connState, showToast } = args
+  const { client, hostId, sessionId, agent, showToast } = args
+  const connState = SHARED_AGENT_CHAT_CONNECTION
   // Its drafts and view are kept under the agent's host, as a workspace's are under its own.
   const worktreeId = `shared:${args.environmentId}`
   const tabId = `agent-session:${sessionId}`

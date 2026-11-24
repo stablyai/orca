@@ -1,7 +1,6 @@
 // A page's call naming a shared agent's host goes over the phone's own path, not the computer: while
 // the host is away a send is sealed to the pinned host key and held with the phone's share credential,
 // later sends in that chat queue behind it, and once Orca Cloud says it landed they go live again.
-import nacl from 'tweetnacl'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { z } from 'zod'
 
@@ -20,11 +19,7 @@ vi.mock('../../host-credentials/pairing-keychain', () => ({
 }))
 vi.mock('react-native', () => ({ Platform: { OS: 'ios' } }))
 
-import { SharedBotsPhoneProvisionParams } from '../../../../src/shared/bots/bot-share-phone'
-import {
-  openBotTeamShareHeldMessage,
-  sealBotTeamShareOffer
-} from '../../../../src/shared/bots/bot-team-share-seal'
+import { openBotTeamShareHeldMessage } from '../../../../src/shared/bots/bot-team-share-seal'
 import {
   isSharedBotNewChatId,
   SHARED_BOT_HOST_ERRORS,
@@ -35,7 +30,6 @@ import {
 const heldIt = it.skipIf(!SHARED_HOSTS_HOLD_WHILE_AWAY)
 import { structuredAgentSessionMessageSendMutation } from '../../../../src/shared/agent-session/requests/structured-agent-session-send-mutation'
 import { hashRelayCredential } from '../../../../src/shared/remote-runtime/relay/relay-credential-hash'
-import type { RpcResponse } from '../../../../src/shared/remote-runtime/rpc/rpc-response-shape'
 import { MOBILE_PAIRED_E2EE_PRIMITIVES as PRIMITIVES } from '../../transport/encryption/mobile-paired-e2ee-primitives'
 import type { RpcClient } from '../../transport/rpc/rpc-client-contract'
 import { HELD_WAIT_MS, PhoneSharedAgentHeld } from './phone-shared-agent-held'
@@ -44,94 +38,13 @@ import { sendMobileStructuredAgentSessionMessage } from '../../session/native-ch
 import { scopeRpcClientToExecutionHost } from '../../worktree/execution-hosts/execution-host-scoped-rpc-client'
 import { PhoneSharedAgents } from './phone-shared-agents'
 import { namesPhoneSharedAgent, routeSharedAgentCalls } from './shared-agent-call-routing'
+import { CHAT, cloud, computer, HOST, HOST_KEY, SHARED } from './phone-shared-agents.test-support'
 import {
   createBridgeVerdictHold,
   type DesktopBound
 } from '../../mobile-web-shell/host-bridge/bridge-host-verdict-hold'
 
 const ConnectorShareHoldRequestBody = z.object({ sealed: z.string() })
-const HOST = nacl.box.keyPair()
-const HOST_KEY = PRIMITIVES.encodeBase64(HOST.publicKey)
-const CHAT = '00000000-0000-4000-8000-000000000001'
-const share = {
-  shareId: 'share-1',
-  botId: 'bot-1',
-  botName: 'Ivy',
-  ownerName: 'Jinwoo Hong',
-  environmentId: 'env-1'
-}
-const SHARED = { envelope: { executionHost: 'runtime:env-1' } }
-
-/** The teammate's computer as the phone's paired host: its shares, a key per ask, and the page calls
- *  it should not get. */
-function computer() {
-  const asks: SharedBotsPhoneProvisionParams[] = []
-  const desktopCalls: string[] = []
-  const sendRequest = async (method: string, params?: unknown): Promise<RpcResponse> => {
-    if (method === 'sharedBots.phone.list') {
-      return { id: method, ok: true, result: { shares: [share] } }
-    }
-    if (method !== 'sharedBots.phone.provision') {
-      desktopCalls.push(method)
-      return { id: method, ok: true, result: {} }
-    }
-    const ask = SharedBotsPhoneProvisionParams.parse(params)
-    asks.push(ask)
-    const offer = {
-      v: 1 as const,
-      relay: {
-        v: 1 as const,
-        directorUrl: 'https://director.example',
-        cellUrl: 'https://cell.example',
-        assignmentEpoch: 1,
-        relayHostId: 'AbCdEf0123_-xyZ9',
-        inviteToken: 'i'.repeat(43),
-        e2eeFraming: 2 as const,
-        // Lapsed: the phone never dials it here, so the host is away for this test.
-        inviteExpiresAt: 10
-      },
-      hostPublicKeyB64: HOST_KEY,
-      deviceId: 'phone-key-1',
-      botId: 'bot-1'
-    }
-    const result = {
-      v: 1,
-      ...share,
-      connectorOrigin: 'https://cloud.example',
-      hostKey: HOST_KEY,
-      sealedOffer: sealBotTeamShareOffer(PRIMITIVES, { sealKey: ask.sealKey, offer })
-    }
-    return { id: method, ok: true, result }
-  }
-  return { asks, desktopCalls, client: { sendRequest } }
-}
-
-type CloudCall = { url: string; method: string; authorization: string; body: unknown }
-
-/** Orca Cloud's share endpoints; the first `failedReads` reads of held states fail. */
-function cloud(failedReads = 0) {
-  const calls: CloudCall[] = []
-  let states: { clientMessageId: string; state: string }[] = []
-  let reads = 0
-  vi.stubGlobal('fetch', async (url: string, init: RequestInit) => {
-    const headers = new Headers(init.headers)
-    const body = typeof init.body === 'string' ? JSON.parse(init.body) : undefined
-    calls.push({
-      url,
-      method: init.method ?? 'GET',
-      authorization: headers.get('authorization') ?? '',
-      body
-    })
-    if (init.method === 'POST') {
-      return Response.json({ status: 'held' })
-    }
-    return ++reads <= failedReads
-      ? Response.json({ error: 'unavailable' }, { status: 503 })
-      : Response.json({ v: 1, held: states })
-  })
-  return { calls, setStates: (next: typeof states) => (states = next) }
-}
-
 const send = (clientOperationId: string) =>
   structuredAgentSessionMessageSendMutation({
     sessionId: CHAT,

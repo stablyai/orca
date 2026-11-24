@@ -24,7 +24,7 @@ import { mobileBotAvatarSource } from '../host-bot-row-facts'
 import { MobileSharedAgentNavBar, MobileSharedAgentUnavailable } from './MobileSharedAgentChrome'
 import { sharedAgentChatHref } from './MobileSharedAgentPage'
 import { sharedAgentChatTranscriptHeld } from './shared-agent-chat-held'
-import { useSharedAgentChat } from './use-shared-agent-chat'
+import { SHARED_AGENT_CHAT_CONNECTION, useSharedAgentChat } from './use-shared-agent-chat'
 import { useSharedAgentDictation } from './use-shared-agent-dictation'
 import { MobileSharedAgentChatMenu } from './MobileSharedAgentChatMenu'
 import { MobileDictationSetupSheet } from '../../dictation/setup/MobileDictationSetupSheet'
@@ -59,7 +59,6 @@ export function MobileSharedAgentChat() {
     agent: agent?.bot?.agent ?? 'claude',
     title: params.title ?? '',
     capabilities: agent?.capabilities ?? null,
-    connState: state,
     showToast
   })
   const keyboardLift = useMobileSessionKeyboardLift(insets.bottom)
@@ -144,12 +143,12 @@ export function MobileSharedAgentChat() {
               controller={chat.controller}
               imageSource={{ client: page.client, worktreeId: chat.worktreeId }}
               worktreePath={null}
-              connState={state}
+              connState={SHARED_AGENT_CHAT_CONNECTION}
               onOpenFile={noop}
               images={chat.images}
               structuredComposer={chat.structuredComposer}
               {...dictation.mic}
-              inputLockReason={state === 'connected' ? null : 'disconnected'}
+              inputLockReason={null}
               sendErrorMessage={chat.sendError.message}
               onClearSendError={chat.sendError.clear}
               sendSurfaceId={chat.scopeKey ?? ''}
