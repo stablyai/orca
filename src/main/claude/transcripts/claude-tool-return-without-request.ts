@@ -98,13 +98,32 @@ export function claudeToolReturnWithoutRequest(transcript: string): number | nul
 }
 
 /** The tool's return time, only if it returned at least `quietMs` ago with no request since. */
-export async function readClaudeToolReturnWithoutRequest(
+export function readClaudeToolReturnWithoutRequest(
   transcriptPath: string,
   quietMs: number,
   now = Date.now()
 ): Promise<number | null> {
+  const check = checks.then(() => checkToolReturn(transcriptPath, quietMs, now))
+  checks = check.catch(() => {})
+  return check
+}
+
+// One check at a time, each parse after a turn of the event loop: a burst of quiet workers costs
+// main one parse at a time (about 1 ms per 512 KB), not all of them back to back (1,000 at once
+// held the event loop 596 ms).
+let checks: Promise<unknown> = Promise.resolve()
+
+async function checkToolReturn(
+  transcriptPath: string,
+  quietMs: number,
+  now: number
+): Promise<number | null> {
   const text = await readClaudeTranscriptTailText(transcriptPath, TAIL_BYTES)
-  const at = text === null ? null : claudeToolReturnWithoutRequest(text)
+  if (text === null) {
+    return null
+  }
+  await new Promise((resolve) => setImmediate(resolve))
+  const at = claudeToolReturnWithoutRequest(text)
   return at !== null && now - at >= quietMs ? at : null
 }
 
