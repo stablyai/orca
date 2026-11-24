@@ -24171,7 +24171,8 @@
         "sendNotesToAgent_one": "Envoyer {{count}} note à un agent",
         "clearPageNotes_other": "Effacer {{count}} notes de cette page ?",
         "sendNotesToAgent_other": "Envoyer {{count}} notes à un agent",
-        "retryClear": "Réessayer"
+        "sentNotesStillListed": "Notes envoyées, mais toujours dans la liste.",
+        "removeSentNotes": "Retirer"
       }
     }
   },

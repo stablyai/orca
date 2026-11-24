@@ -24557,7 +24557,8 @@
         "copyNotes": "Notları kopyala",
         "clearPageNotes_other": "Bu sayfadaki {{count}} not silinsin mi?",
         "sendNotesToAgent_other": "{{count}} notu bir ajana gönder",
-        "retryClear": "Yeniden dene"
+        "sentNotesStillListed": "Notlar gönderildi ama hâlâ listede.",
+        "removeSentNotes": "Kaldır"
       }
     }
   },

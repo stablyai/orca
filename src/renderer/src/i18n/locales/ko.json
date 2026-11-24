@@ -23532,7 +23532,8 @@
         "clearPageNotes_other": "이 페이지에서 메모 {{count}}개를 지울까요?",
         "copyNotes": "메모 복사",
         "sendNotesToAgent_other": "에이전트에게 메모 {{count}}개 보내기",
-        "retryClear": "다시 시도"
+        "sentNotesStillListed": "메모를 보냈지만 목록에 남아 있습니다.",
+        "removeSentNotes": "제거"
       }
     }
   },

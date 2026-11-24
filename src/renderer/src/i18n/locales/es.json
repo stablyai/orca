@@ -23857,7 +23857,8 @@
         "sendNotesToAgent_one": "Enviar {{count}} nota a un agente",
         "clearPageNotes_other": "¿Borrar {{count}} notas de esta página?",
         "sendNotesToAgent_other": "Enviar {{count}} notas a un agente",
-        "retryClear": "Reintentar"
+        "sentNotesStillListed": "Notas enviadas, pero siguen en la lista.",
+        "removeSentNotes": "Quitar"
       }
     }
   },

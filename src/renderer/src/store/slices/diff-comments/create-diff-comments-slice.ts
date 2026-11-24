@@ -19,7 +19,11 @@ import {
 } from './diff-comment-persistence'
 import { enqueueDeliveredDiffCommentCleanup } from './diff-comment-delivery-cleanup'
 import { selectWorktreeDiffCommentsOrEmpty } from './worktree-diff-comments-selector'
-import { dismissClearNotesFailedToast, showClearNotesFailedToast } from './clear-notes-failed-toast'
+import { showClearNotesFailedToast } from './clear-notes-failed-toast'
+import {
+  dismissSentNotesStillListedToast,
+  showSentNotesStillListedToast
+} from './sent-notes-still-listed-toast'
 import { readOwnedDiffComments, type DiffCommentOwner } from './diff-comment-owner'
 
 export type DiffCommentsSlice = {
@@ -199,15 +203,15 @@ export const createDiffCommentsSlice: StateCreator<AppState, [], [], DiffComment
     }
     const outcome = enqueueDeliveredDiffCommentCleanup(set, get, owner, pending).then(
       () => {
-        dismissClearNotesFailedToast()
+        dismissSentNotesStillListedToast()
         return true
       },
       (err: unknown) => {
         console.error('Failed to remove delivered review notes:', err)
         // Why: the recipient already has these notes. Mark them sent before the hold releases so they never
-        // return to Send; an edit clears the mark, and Retry asks the host again.
+        // return to Send; an edit clears the mark, and Remove asks the host again.
         markDeliveredDiffCommentsSent(set, get, owner, pending)
-        showClearNotesFailedToast(() => void get().clearDeliveredDiffComments(owner, pending))
+        showSentNotesStillListedToast(() => void get().clearDeliveredDiffComments(owner, pending))
         return false
       }
     )

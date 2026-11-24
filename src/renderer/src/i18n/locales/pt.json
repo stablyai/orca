@@ -25635,7 +25635,8 @@
         "sendNotesToAgent_one": "Enviar {{count}} nota a um agente",
         "clearPageNotes_other": "Limpar {{count}} notas desta página?",
         "sendNotesToAgent_other": "Enviar {{count}} notas a um agente",
-        "retryClear": "Tentar novamente"
+        "sentNotesStillListed": "Notas enviadas, mas ainda estão na lista.",
+        "removeSentNotes": "Remover"
       }
     }
   },

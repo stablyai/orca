@@ -23811,7 +23811,8 @@
         "clearPageNotes_other": "清除此頁面中的 {{count}} 則備註？",
         "copyNotes": "複製備註",
         "sendNotesToAgent_other": "將 {{count}} 則備註傳送給代理程式",
-        "retryClear": "重試"
+        "sentNotesStillListed": "備註已傳送，但仍在清單中。",
+        "removeSentNotes": "移除"
       }
     }
   },

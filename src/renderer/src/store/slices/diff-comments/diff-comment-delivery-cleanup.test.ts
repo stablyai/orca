@@ -123,7 +123,7 @@ describe('removing delivered review notes', () => {
     expect(host.notes).toEqual([])
   })
 
-  it('keeps a note the host did not remove out of Send, and Retry removes it', async () => {
+  it('keeps a note the host did not remove out of Send, and Remove removes it', async () => {
     const a = note('a')
     const store = createStore([a])
     host.ignoresCleanup = true
@@ -137,7 +137,8 @@ describe('removing delivered review notes', () => {
     await vi.waitFor(() => expect(host.notes[0]?.sentAt).toBeGreaterThan(0))
     expect(toastError).toHaveBeenCalledTimes(1)
     const options = toastError.mock.calls[0][1]
-    expect(options?.action).toBeDefined()
+    expect(toastError.mock.calls[0][0]).toBe("Notes sent, but they're still in the list.")
+    expect(options?.action?.label).toBe('Remove')
 
     host.ignoresCleanup = false
     options?.action?.onClick()

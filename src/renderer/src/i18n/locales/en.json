@@ -24557,7 +24557,8 @@
         "copyNotes": "Copy notes",
         "clearPageNotes_other": "Clear {{count}} notes from this page?",
         "sendNotesToAgent_other": "Send {{count}} notes to an agent",
-        "retryClear": "Retry"
+        "sentNotesStillListed": "Notes sent, but they're still in the list.",
+        "removeSentNotes": "Remove"
       }
     }
   },

@@ -23518,7 +23518,8 @@
         "clearPageNotes_other": "清除此页面中的 {{count}} 条备注？",
         "copyNotes": "复制备注",
         "sendNotesToAgent_other": "将 {{count}} 条备注发送给智能体",
-        "retryClear": "重试"
+        "sentNotesStillListed": "备注已发送，但仍在列表中。",
+        "removeSentNotes": "移除"
       }
     }
   },
