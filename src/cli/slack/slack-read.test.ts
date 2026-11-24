@@ -1,4 +1,4 @@
-import { mkdtemp, readFile } from 'node:fs/promises'
+import { mkdtemp, readFile, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
@@ -82,6 +82,21 @@ describe('Slack reads', () => {
       headers: { authorization: 'Bearer t1' }
     })
     expect(await readFile(join(cwd, 'crash.log'), 'utf8')).toBe('log bytes')
+  })
+
+  it('saves beside a stale file of the same name instead of leaving the old one to be read', async () => {
+    const cwd = await mkdtemp(join(tmpdir(), 'slack-read-'))
+    await writeFile(join(cwd, 'image.png'), 'stale')
+    await writeFile(join(cwd, 'image-2.png'), 'older')
+    vi.stubGlobal('fetch', async () => new Response('fresh', { status: 200 }))
+    const { printed } = await runRead(
+      { ref: SLACK_REF, download: 'F2' },
+      { download: { id: 'F2', name: 'image.png', url: 'https://cloud.test/f/F2', ticket: 't2' } },
+      cwd
+    )
+    expect(printed).toContain(`to ${join(cwd, 'image-3.png')}`)
+    expect(await readFile(join(cwd, 'image-3.png'), 'utf8')).toBe('fresh')
+    expect(await readFile(join(cwd, 'image.png'), 'utf8')).toBe('stale')
   })
 })
 
