@@ -1,10 +1,12 @@
 // @vitest-environment happy-dom
 import { act } from 'react'
-import { cleanup, render, screen } from '@testing-library/react'
+import { cleanup, render, renderHook, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { GoogleAccountPickerRow } from './GoogleAccountPicker'
 import { giveBotGoogleAccount } from './give-bot-google-account'
+import { useTurnOnBotGoogle } from './use-turn-on-bot-google'
+import { ConfirmationDialogProvider } from '@/components/dismiss/confirmation/confirmation-dialog'
 
 const setBotGoogle = vi.hoisted(() => vi.fn())
 const toastError = vi.hoisted(() => vi.fn())
@@ -71,5 +73,21 @@ describe('giving an agent an account signed in for it', () => {
     await expect(giveBotGoogleAccount(off, 'me@gmail.com', turnOn)).resolves.toBe(true)
     expect(turnOn).toHaveBeenCalledWith(off, ['me@gmail.com'])
     expect(setBotGoogle).not.toHaveBeenCalled()
+  })
+})
+
+describe('turning Google on for an agent', () => {
+  it('sends the askers it was confirmed for, so the host refuses if they changed', async () => {
+    const { result } = renderHook(() => useTurnOnBotGoogle(), {
+      wrapper: ConfirmationDialogProvider
+    })
+    const bot = { id: 'scout', name: 'Scout', hostId: 'local' as const, members: [] }
+    await act(async () => {
+      await expect(result.current(bot, ['me@gmail.com'])).resolves.toBe(true)
+    })
+    expect(setBotGoogle).toHaveBeenCalledWith(bot, true, {
+      accounts: ['me@gmail.com'],
+      confirmedAskers: []
+    })
   })
 })

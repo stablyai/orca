@@ -21,6 +21,7 @@ import { useGoogleNewApp } from '../bots/google/use-google-new-app'
 import { useGoogleSignIn } from '../bots/google/use-google-sign-in'
 import { useTurnOnBotGoogle } from '../bots/google/use-turn-on-bot-google'
 import { giveBotGoogleAccount } from '../bots/google/give-bot-google-account'
+import { readHostBots, refreshBotHost } from '@/lib/bot-catalog'
 import type { Bot } from '../../../../shared/bot-types'
 import {
   NativeChatCardActions,
@@ -30,6 +31,12 @@ import {
 import { NativeChatOfferActions, useNativeChatOffer } from './NativeChatOfferActions'
 import { googleOfferFace, googleOfferSignedInAnswer } from './google-offer-face'
 import { NativeChatBotKickoffContext } from './native-chat-bot-kickoff-view'
+
+/** The bot as its host lists it now (it may have changed during a sign-in), else as given. */
+async function readCurrentBot(bot: Bot): Promise<Bot> {
+  await refreshBotHost(bot.hostId).catch(() => undefined)
+  return readHostBots(bot.hostId).find((entry) => entry.id === bot.id) ?? bot
+}
 
 export function NativeChatGoogleOfferCard({
   bot,
@@ -56,7 +63,11 @@ export function NativeChatGoogleOfferCard({
 
   const signInThenTurnOn = async (account?: string): Promise<void> => {
     const connected = await signIn.connect(choices, account)
-    if (!connected || !(await giveBotGoogleAccount(bot, connected.email, turnOnGoogle))) {
+    // The sign-in can take minutes: grant against the bot as its host has it now, not at the click.
+    if (
+      !connected ||
+      !(await giveBotGoogleAccount(await readCurrentBot(bot), connected.email, turnOnGoogle))
+    ) {
       return
     }
     // The sign-in can take minutes; compare with the default as it is now, not at the click.

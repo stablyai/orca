@@ -28,6 +28,8 @@ export function useGoogleAccountChoice(
 ): {
   chosen: string[]
   setChosen: React.Dispatch<React.SetStateAction<string[]>>
+  /** The host's accounts are read; until then nothing is ticked, and saving would remove them all. */
+  ready: boolean
   saving: boolean
   save: () => Promise<boolean>
 } {
@@ -64,7 +66,7 @@ export function useGoogleAccountChoice(
     setSaving(false)
     return saved
   }
-  return { chosen, setChosen, saving, save }
+  return { chosen, setChosen, ready: view.status === 'ready', saving, save }
 }
 
 function GoogleAccountsCaption({ bot }: { bot: Pick<Bot, 'name'> }): React.JSX.Element {
@@ -108,7 +110,8 @@ export function GoogleAccountsStep({
   return (
     <>
       <BotAppStepHeader onBack={onBack} onClose={onClose} />
-      <div className="px-6 pt-1 pb-6">
+      {/* Scrolls under the header when the accounts outgrow the dialog. */}
+      <div className="scrollbar-sleek min-h-0 overflow-y-auto px-6 pt-1 pb-6">
         <BotAppStepHeading
           logo={<BotAppBrandLogo app={{ id: 'google', Icon: GoogleIcon }} size="lg" />}
           title={t('bots.google.title', 'Google')}
@@ -124,7 +127,7 @@ export function GoogleAccountsStep({
           </Button>
           <Button
             size="sm"
-            disabled={choice.chosen.length === 0 || choice.saving}
+            disabled={choice.chosen.length === 0 || choice.saving || !choice.ready}
             onClick={() => void choice.save().then((saved) => saved && onClose())}
           >
             {t('bots.apps.add', 'Add')}
@@ -190,7 +193,7 @@ export function GoogleAccountsPopover({
         </Button>
         <Button
           size="xs"
-          disabled={choice.saving}
+          disabled={choice.saving || !choice.ready}
           onClick={() => {
             if (choice.chosen.length === 0) {
               onClose()

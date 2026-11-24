@@ -4,6 +4,7 @@ import { useConfirmationDialog } from '@/components/dismiss/confirmation/confirm
 import { translate } from '@/i18n/i18n'
 import type { Bot } from '../../../../../shared/bot-types'
 import {
+  botAskerKeys,
   botOtherAskers,
   googleWhoCanAskWarning
 } from '../../../../../shared/google/google-who-can-ask-warning'
@@ -24,6 +25,8 @@ export function useTurnOnBotGoogle(): (
   return useCallback(
     async (bot, accounts) => {
       const warning = googleWhoCanAskWarning(bot.name, botOtherAskers(bot))
+      // The askers the warning named: the host keeps Google off if Who can ask changed meanwhile.
+      const confirmedAskers = botAskerKeys(bot)
       if (
         warning &&
         !(await confirm({
@@ -39,7 +42,7 @@ export function useTurnOnBotGoogle(): (
         return false
       }
       try {
-        await setBotGoogle(bot, true, accounts ? { accounts } : {})
+        await setBotGoogle(bot, true, { ...(accounts ? { accounts } : {}), confirmedAskers })
         return true
       } catch (error) {
         toast.error(botErrorMessage(error))

@@ -139,7 +139,9 @@ export function BotGoogleCard({
                   label: t('bots.google.bot.reconnectAccount', 'Reconnect {{email}}', {
                     email: signedOut.email
                   }),
-                  onClick: () => reconnect(signedOut)
+                  onClick: () => reconnect(signedOut),
+                  // The sign-in's waiting and Cancel show in the row's panel.
+                  opensRow: true
                 }
               : null
       }

@@ -96,9 +96,15 @@ export function BotConnectorMenu({
   const popoverOpen = popover?.open === true
   const wasOpen = useRef(popoverOpen)
   useEffect(() => {
-    // The popover is anchored, not triggered, so its close hands focus back to ⋯ here.
+    // The popover is anchored, not triggered, so its close hands focus back to ⋯ here; only when
+    // focus left with it (Escape, Save), not after a click that put focus on another control.
     if (wasOpen.current && !popoverOpen) {
-      requestAnimationFrame(() => triggerRef.current?.focus())
+      requestAnimationFrame(() => {
+        const focused = document.activeElement
+        if (!focused || focused === document.body) {
+          triggerRef.current?.focus()
+        }
+      })
     }
     wasOpen.current = popoverOpen
   }, [popoverOpen])

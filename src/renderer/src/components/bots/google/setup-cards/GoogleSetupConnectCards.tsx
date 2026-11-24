@@ -171,7 +171,7 @@ function GoogleSetupAccountsStep({
       <Button
         size="xs"
         className="mt-2"
-        disabled={choice.chosen.length === 0 || choice.saving}
+        disabled={choice.chosen.length === 0 || choice.saving || !choice.ready}
         onClick={() => void add()}
       >
         {t('bots.apps.add', 'Add')}
