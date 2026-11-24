@@ -1,6 +1,7 @@
 // Classify handshake and authorized responses identically so retries and refusal reasons cannot diverge.
 import type { z } from 'zod'
 import { cancelUnreadResponseBody } from '../../lib/unread-response-body'
+import type { MobilePushServiceProblem } from '../../../shared/notifications/mobile-push-contract'
 
 export const PUSH_REQUEST_DEADLINE_MS = 15_000
 
@@ -9,7 +10,17 @@ export type PushGatewayFailure = {
   reason: 'unreachable' | 'rejected'
   /** Set when sign-in was refused because this host's clock is this far ahead (negative: behind). */
   clockSkewMs?: number
+  /** The gateway answered 429; still retried like `unreachable`. */
+  rateLimited?: true
 }
+export function pushServiceProblemOf(failure: PushGatewayFailure): MobilePushServiceProblem {
+  return failure.rateLimited
+    ? 'rate_limited'
+    : failure.reason === 'rejected'
+      ? 'refused'
+      : 'unreachable'
+}
+
 export type PushGatewayResult<T> = ({ ok: true } & T) | PushGatewayFailure
 export type PushGatewayResponse = { ok: true; response: Response } | PushGatewayFailure
 
@@ -47,10 +58,10 @@ export async function readPushGatewayJson<TSchema extends z.ZodType>(
     await cancelUnreadResponseBody(response)
     // 5xx and 429 are worth another attempt later; anything else is the gateway
     // refusing this request as written.
-    return {
-      ok: false,
-      reason: response.status >= 500 || response.status === 429 ? 'unreachable' : 'rejected'
+    if (response.status === 429) {
+      return { ok: false, reason: 'unreachable', rateLimited: true }
     }
+    return { ok: false, reason: response.status >= 500 ? 'unreachable' : 'rejected' }
   }
   let payload: unknown
   try {

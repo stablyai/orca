@@ -107,6 +107,9 @@ export function parseMobilePushRegistration(value: unknown): MobilePushRegistrat
   }
 }
 
+/** Why the host's last call to Orca's push service failed: a 429, no answer, or a refusal. */
+export type MobilePushServiceProblem = 'rate_limited' | 'unreachable' | 'refused'
+
 export type MobilePushTestResult =
   | { accepted: true }
   | {
@@ -114,4 +117,6 @@ export type MobilePushTestResult =
       reason: 'not_registered' | 'unavailable' | 'rate_limited' | 'rejected'
       /** Push sign-in was refused because this host's clock is this far ahead (negative: behind). Older phones ignore it. */
       clockSkewSeconds?: number
+      /** Set when the push service itself is why this host cannot deliver. Older phones ignore it. */
+      pushServiceProblem?: MobilePushServiceProblem
     }

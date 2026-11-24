@@ -6,6 +6,7 @@ import type {
   MobilePushAgentState,
   MobilePushApnsEnvironment,
   MobilePushPlatform,
+  MobilePushServiceProblem,
   MobilePushSource
 } from '../../../shared/notifications/mobile-push-contract'
 import {
@@ -57,6 +58,8 @@ type PushGatewayClientOptions = {
   now?: () => number
 }
 
+export type PushSignInProblem = { problem: MobilePushServiceProblem; clockSkewMs?: number }
+
 type AuthorizedResponse = { ok: true; response: Response; token: string } | PushGatewayFailure
 
 export class PushGatewayClient {
@@ -75,14 +78,21 @@ export class PushGatewayClient {
     })
   }
 
-  /** How far off this host's clock is, when the push service refuses sign-in for it; null otherwise. */
-  async currentClockSkewMs(): Promise<number | null> {
-    // Only a recorded refusal re-signs in, so a fixed clock clears it without a handshake per test.
-    if (this.session.clockSkewMs() === null) {
+  /** Why this host cannot sign in to the push service right now; null when it can or never tried. */
+  async currentSignInProblem(): Promise<PushSignInProblem | null> {
+    // Only a recorded failure re-signs in, so a recovered service clears it without a handshake per test.
+    if (this.session.signInFailure() === null) {
       return null
     }
     const outcome = await this.session.ensure(null)
-    return outcome.ok ? null : (outcome.clockSkewMs ?? null)
+    const problem = this.session.signInFailure()
+    if (outcome.ok || problem === null) {
+      return null
+    }
+    return {
+      problem,
+      ...(outcome.clockSkewMs === undefined ? {} : { clockSkewMs: outcome.clockSkewMs })
+    }
   }
 
   async registerDevice(input: {
