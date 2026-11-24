@@ -1,9 +1,9 @@
-// One comment in an item's Activity, as a chat-style row on the Activity's grid: a glyph, who and when,
-// the reply it quotes, its words with its images and files, a question's lines, and for a comment sent
+// One comment in an item's Activity, as a chat-style row on the Activity's grid: a glyph, who, Quote and
+// when, the reply it quotes, its words with its images and files, a question's lines, and for a comment sent
 // from the box that didn't reach the host, Not sent · Retry · Discard.
 import { useEffect, useRef, type Ref } from 'react'
 import { Animated, Pressable, Text, View, type HostInstance } from 'react-native'
-import { CircleAlert, MessageSquare } from 'lucide-react-native'
+import { CircleAlert, MessageSquare, Quote } from 'lucide-react-native'
 import type { BotItemActivityEntry } from '../../../../src/shared/bots/bot-item-activity'
 import { botItemActorName } from '../../../../src/shared/bots/bot-item-actor-name'
 import { botItemQuestionShape } from '../../../../src/shared/bots/bot-item-ask'
@@ -35,7 +35,8 @@ export function MobileBotItemCommentCard({
   onShowLive,
   flash,
   sent,
-  asking = false
+  asking = false,
+  onQuote
 }: {
   item: BotItem
   entry: Pick<Extract<BotItemActivityEntry, { kind: 'comment' }>, 'event' | 'replyTo' | 'waiting'> &
@@ -56,12 +57,16 @@ export function MobileBotItemCommentCard({
   sent?: BotItemSentAnswers | null
   /** The docked answer card asks this comment's open lines now. */
   asking?: boolean
+  /** Puts the comment's words in the comment box as a quote. */
+  onQuote?: (text: string) => void
 }) {
   const t = useMobileTranslation()
   const { event, replyTo, waiting } = entry
   const time = useMobileMessageTime()
   const shape = botItemQuestionShape(event.data)
   const text = mobileBotItemCommentWords({ ...event.data, text: shape.body })
+  // A question's lines too, as the agent wrote them.
+  const quoted = onQuote ? mobileBotItemCommentWords(event.data).trim() : ''
   return (
     <View ref={ref} style={styles.row}>
       {flash ? <CommentFlash key={flash.at} still={flash.still} end={flash.end} /> : null}
@@ -77,6 +82,17 @@ export function MobileBotItemCommentCard({
           <Text style={styles.author} numberOfLines={1}>
             {botItemActorName(event, item, t)}
           </Text>
+          {onQuote && quoted ? (
+            <Pressable
+              style={({ pressed }) => [styles.quote, pressed && styles.pressed]}
+              hitSlop={10}
+              accessibilityRole="button"
+              accessibilityLabel={t('chat.selectionQuote.action', 'Quote')}
+              onPress={() => onQuote(quoted)}
+            >
+              <Quote size={14} color={colors.textMuted} />
+            </Pressable>
+          ) : null}
           <Text style={styles.meta} accessibilityLabel={time.full(event.at)}>
             {time.label(event.at)}
           </Text>
@@ -172,6 +188,18 @@ const styles = themedStyleSheet(() => ({
   icon: { width: 16, height: 18, alignItems: 'center', justifyContent: 'center' },
   body: { flex: 1, minWidth: 0, gap: spacing.xxs },
   head: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
+  // Chat's 24 pt message action box around its 14 pt glyph, pulled back so the 18 pt line keeps its height
+  // and the glyph sits the line's gap from the name and the time.
+  quote: {
+    width: 24,
+    height: 24,
+    marginVertical: -3,
+    marginHorizontal: -5,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: radii.control
+  },
+  pressed: { backgroundColor: colors.bgRaised },
   author: { flex: 1, fontSize: 13, lineHeight: 18, fontWeight: '600', color: colors.textPrimary },
   failed: {
     flexDirection: 'row',
