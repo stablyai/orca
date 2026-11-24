@@ -1,3 +1,4 @@
+import { realpath } from 'node:fs/promises'
 import { join } from 'node:path'
 import {
   getRuntimePathBasename,
@@ -13,18 +14,37 @@ function sameHome(left: string | null, right: string): boolean {
   )
 }
 
-const defaultListSessionFiles = (sessionsRoot: string): AsyncIterable<string> =>
-  listCodexSessionRolloutFilesIncrementally(sessionsRoot, { batchSize: 64, yieldMs: 0 })
+type ListSessionFiles = (
+  sessionsRoot: string,
+  onDirectoryError: (error: unknown) => void
+) => AsyncIterable<string>
 
+const defaultListSessionFiles: ListSessionFiles = (sessionsRoot, onDirectoryError) =>
+  listCodexSessionRolloutFilesIncrementally(
+    sessionsRoot,
+    { batchSize: 64, yieldMs: 0 },
+    (_dir, error) => onDirectoryError(error)
+  )
+
+function isDefinitiveAbsence(error: unknown): boolean {
+  const code = error instanceof Error && 'code' in error ? error.code : undefined
+  return code === 'ENOENT' || code === 'ENOTDIR'
+}
+
+/** `unknown`: part of the tree could not be read, so absence is not proven. */
 async function homeHoldsThread(
   homePath: string,
   sessionId: string,
-  listSessionFiles: (sessionsRoot: string) => AsyncIterable<string>
-): Promise<boolean> {
+  listSessionFiles: ListSessionFiles
+): Promise<boolean | 'unknown'> {
   const sessionsRoot = join(homePath, 'sessions')
   const suffix = `-${sessionId}.jsonl`.toLowerCase()
+  let incomplete = false
+  const noteError = (error: unknown): void => {
+    incomplete ||= !isDefinitiveAbsence(error)
+  }
   try {
-    for await (const filePath of listSessionFiles(sessionsRoot)) {
+    for await (const filePath of listSessionFiles(sessionsRoot, noteError)) {
       const name = getRuntimePathBasename(filePath)
         .toLowerCase()
         .replace(/\.zst$/, '')
@@ -32,10 +52,20 @@ async function homeHoldsThread(
         return true
       }
     }
-  } catch {
-    // An unreadable home cannot prove it holds the thread.
+  } catch (error) {
+    noteError(error)
   }
-  return false
+  return incomplete ? 'unknown' : false
+}
+
+// Managed homes may share one history through a linked sessions folder; that is one copy, not two.
+async function sessionsStoreIdentity(homePath: string): Promise<string> {
+  const sessionsRoot = join(homePath, 'sessions')
+  try {
+    return normalizeRuntimePathForComparison(await realpath(sessionsRoot))
+  } catch {
+    return normalizeRuntimePathForComparison(sessionsRoot)
+  }
 }
 
 /**
@@ -50,17 +80,18 @@ export async function isAmbiguousIdOnlyAccountResume(args: {
   getSelectedAccountCodexHome: () => string | null
   systemCodexHomePath: string | null
   sharedRuntimeCodexHomePath: string | null
-  listSessionFiles?: (sessionsRoot: string) => AsyncIterable<string>
+  listSessionFiles?: ListSessionFiles
 }): Promise<boolean> {
   const selectedHome = args.getSelectedAccountCodexHome()
   if (args.transcriptPath?.trim() || !selectedHome) {
     return false
   }
-  const list = args.listSessionFiles ?? defaultListSessionFiles
+  const list: ListSessionFiles = args.listSessionFiles ?? defaultListSessionFiles
   // The selected account's home ranks first for an ID-only lookup.
-  if (!(await homeHoldsThread(selectedHome, args.sessionId, list))) {
+  if ((await homeHoldsThread(selectedHome, args.sessionId, list)) !== true) {
     return false
   }
+  const selectedStore = await sessionsStoreIdentity(selectedHome)
   const otherAccountHomes = args.trustedCodexHomes.filter(
     (homePath) =>
       !sameHome(selectedHome, homePath) &&
@@ -68,7 +99,11 @@ export async function isAmbiguousIdOnlyAccountResume(args: {
       !sameHome(args.sharedRuntimeCodexHomePath, homePath)
   )
   for (const homePath of otherAccountHomes) {
-    if (await homeHoldsThread(homePath, args.sessionId, list)) {
+    if ((await sessionsStoreIdentity(homePath)) === selectedStore) {
+      continue
+    }
+    // A copy elsewhere, or a home that could not be fully read, leaves the account unproven.
+    if ((await homeHoldsThread(homePath, args.sessionId, list)) !== false) {
       return true
     }
   }
