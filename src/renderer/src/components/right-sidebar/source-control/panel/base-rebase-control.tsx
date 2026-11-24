@@ -10,6 +10,7 @@ export type BaseRebaseActions = {
   isRebasing: boolean
   isAbortingRebase: boolean
   isContinuingRebase: boolean
+  isRetryingRebaseInspect: boolean
   hasGitOwner: boolean
   onRebase: () => void
   onAbortRebase: () => void
@@ -147,24 +148,20 @@ function useRebaseStepButton(
   actions: BaseRebaseActions,
   unresolvedCount: number,
   continueState: RebaseContinueState,
-  inspectFailureMessage: string | null
+  _inspectFailureMessage: string | null
 ): StepButton {
   const t = useTranslate()
   const busy = actions.isAbortingRebase || actions.isContinuingRebase || !actions.hasGitOwner
   const continueLabel = t('auto.components.right.sidebar.SourceControl.rebaseContinue', 'Continue')
-  if (continueState === 'unreadable') {
-    const failed = t(
-      'auto.components.right.sidebar.SourceControl.rebaseStepUnreadable',
-      "Couldn't check this rebase step"
-    )
+  if (continueState === 'unreadable' || actions.isRetryingRebaseInspect) {
     return {
       label: t('auto.components.right.sidebar.SourceControl.rebaseRetryInspect', 'Retry'),
       ariaLabel: t(
         'auto.components.right.sidebar.SourceControl.rebaseRetryInspectLabel',
         'Retry checking the rebase step'
       ),
-      reason: inspectFailureMessage ? `${failed}: ${inspectFailureMessage}` : failed,
-      unavailable: busy,
+      reason: t('auto.components.right.sidebar.SourceControl.rebaseCheckAgain', 'Check again'),
+      unavailable: busy || actions.isRetryingRebaseInspect,
       primary: false,
       onPress: actions.onRetryRebaseInspect
     }
@@ -267,10 +264,10 @@ export function RebasePausedStrip({
         unavailable={step.unavailable}
         reason={step.reason}
         aria-label={step.ariaLabel}
-        aria-busy={actions.isContinuingRebase || undefined}
+        aria-busy={actions.isContinuingRebase || actions.isRetryingRebaseInspect || undefined}
         onPress={step.onPress}
       >
-        {actions.isContinuingRebase ? (
+        {actions.isContinuingRebase || actions.isRetryingRebaseInspect ? (
           <Loader2 className="size-3 animate-spin" aria-hidden="true" />
         ) : null}
         {step.label}

@@ -14548,6 +14548,7 @@
             "rebaseEmptyStep": "이 단계에는 커밋할 내용이 없습니다. 리베이스를 중단하거나 터미널에서 마무리하세요.",
             "rebaseStepUnreadable": "이 리베이스 단계를 확인하지 못했습니다",
             "rebaseStepUnreadableShort": "단계 확인 실패",
+            "rebaseCheckAgain": "다시 확인",
             "rebaseRetryInspect": "다시 시도",
             "rebaseRetryInspectLabel": "리베이스 단계 다시 확인",
             "rebaseStoppedFinishInTerminal": "Git이 이 단계에서 일시 중지했습니다. 터미널에서 마무리하거나 중단하세요.",

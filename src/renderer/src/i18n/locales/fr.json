@@ -14011,6 +14011,7 @@
             "rebaseEmptyStep": "Rien à commiter à cette étape. Annulez le rebase ou terminez-le dans un terminal.",
             "rebaseStepUnreadable": "Impossible de vérifier cette étape du rebase",
             "rebaseStepUnreadableShort": "Étape non vérifiée",
+            "rebaseCheckAgain": "Vérifier à nouveau",
             "rebaseRetryInspect": "Réessayer",
             "rebaseRetryInspectLabel": "Revérifier l’étape du rebase",
             "rebaseStoppedFinishInTerminal": "Git a mis cette étape en pause. Terminez-la dans un terminal ou annulez.",

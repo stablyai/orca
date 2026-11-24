@@ -14221,6 +14221,7 @@
             "rebaseEmptyStep": "Bu adımda commit edilecek bir şey yok. Rebase’i iptal edin veya bir terminalde tamamlayın.",
             "rebaseStepUnreadable": "Bu rebase adımı denetlenemedi",
             "rebaseStepUnreadableShort": "Adım denetlenemedi",
+            "rebaseCheckAgain": "Tekrar kontrol et",
             "rebaseRetryInspect": "Yeniden dene",
             "rebaseRetryInspectLabel": "Rebase adımını yeniden denetle",
             "rebaseStoppedFinishInTerminal": "Git bu adımda durakladı. Bir terminalde tamamla veya iptal et.",

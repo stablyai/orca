@@ -14095,6 +14095,7 @@
             "rebaseEmptyStep": "In diesem Schritt gibt es nichts zu committen. Brich den Rebase ab oder schließe ihn im Terminal ab.",
             "rebaseStepUnreadable": "Dieser Rebase-Schritt ließ sich nicht prüfen",
             "rebaseStepUnreadableShort": "Schritt nicht geprüft",
+            "rebaseCheckAgain": "Erneut prüfen",
             "rebaseRetryInspect": "Erneut versuchen",
             "rebaseRetryInspectLabel": "Rebase-Schritt erneut prüfen",
             "rebaseStoppedFinishInTerminal": "Git hat diesen Schritt angehalten. Schließe ihn im Terminal ab oder brich ab.",
