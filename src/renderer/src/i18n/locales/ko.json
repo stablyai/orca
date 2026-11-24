@@ -20831,6 +20831,10 @@
       "railLabel": "귀하의 메시지",
       "railImageMessage": "이미지 첨부",
       "railEmptyMessage": "메시지",
+      "railFilterPlaceholder": "메시지 필터",
+      "railNoMatches": "일치하는 메시지 없음",
+      "railTickLabel": "메시지 {{index}}/{{count}}: {{text}}",
+      "railMatchCount": "{{count}} / {{total}}",
       "ask": {
         "awaiting": "사용자 입력을 기다리는 중:",
         "awaitingUnnamed": "사용자 입력을 기다리는 중",

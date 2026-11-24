@@ -20157,6 +20157,10 @@
       "railLabel": "あなたのメッセージ",
       "railImageMessage": "画像添付",
       "railEmptyMessage": "メッセージ",
+      "railFilterPlaceholder": "メッセージを絞り込む",
+      "railNoMatches": "一致するメッセージはありません",
+      "railTickLabel": "メッセージ {{index}}/{{count}}: {{text}}",
+      "railMatchCount": "{{count}} / {{total}}",
       "ask": {
         "awaiting": "ユーザー入力を待っています:",
         "awaitingUnnamed": "ユーザー入力を待っています",

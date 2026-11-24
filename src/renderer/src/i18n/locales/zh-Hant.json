@@ -19613,6 +19613,10 @@
       "railLabel": "你的訊息",
       "railImageMessage": "圖片附件",
       "railEmptyMessage": "訊息",
+      "railFilterPlaceholder": "篩選你的訊息",
+      "railNoMatches": "沒有相符的訊息",
+      "railTickLabel": "第 {{index}} 則訊息，共 {{count}} 則：{{text}}",
+      "railMatchCount": "{{count}} / {{total}}",
       "prompt": {
         "collapse": "收合",
         "expand": "展開"
