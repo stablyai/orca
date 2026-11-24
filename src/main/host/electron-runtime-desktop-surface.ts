@@ -1,9 +1,15 @@
-import { BrowserWindow, ipcMain, Notification, powerMonitor } from 'electron'
+import { BrowserWindow, Notification, powerMonitor, webContents } from 'electron'
+import { isResourceWindowVisible } from '../window/visibility/resource-view-admission'
 import { readDesktopAwayState } from '../notifications/desktop-away-state'
-import type { RuntimeDesktopSurface } from '../runtime/runtime-desktop-surface'
+import { showDesktopNotification } from '../notifications/desktop-notification'
+import type { RuntimeDesktopSurface } from '../runtime/construction/runtime-desktop-surface'
+import { electronRendererWindows } from './electron-renderer-windows'
 import { translateMain } from '../i18n/main-i18n'
+import { encodeRepoIconPng } from './electron-repo-icon-png'
+import { fetchWithElectronManualRedirects } from './electron-manual-redirect-fetch'
+import { electronBrowserTabFaviconFetch } from './electron-browser-tab-favicon-fetch'
+import { holdPowerSaveBlocker } from '../power/power-save-blocker-hold'
 
-/** The desktop implementation of the runtime's optional desktop facilities. */
 export const electronRuntimeDesktopSurface: RuntimeDesktopSurface = {
   translateNotification: translateMain,
   isAwayForMobileNotifications: () => readDesktopAwayState(powerMonitor),
@@ -11,14 +17,38 @@ export const electronRuntimeDesktopSurface: RuntimeDesktopSurface = {
     if (!Notification.isSupported()) {
       return false
     }
-    new Notification({ title, body }).show()
+    showDesktopNotification(new Notification({ title, body }))
     return true
   },
-  findWindowById: (id) => BrowserWindow.fromId(id),
-  onIpc: (channel, listener) => {
-    ipcMain.on(channel, listener as Parameters<typeof ipcMain.on>[1])
+  sendToRenderers: (channel, payload) => {
+    for (const window of BrowserWindow.getAllWindows()) {
+      if (window.isDestroyed()) {
+        continue
+      }
+      try {
+        window.webContents.send(channel, payload)
+      } catch {
+        // A renderer can disappear between isDestroyed() and send().
+      }
+    }
   },
-  removeIpcListener: (channel, listener) => {
-    ipcMain.removeListener(channel, listener as Parameters<typeof ipcMain.removeListener>[1])
-  }
+  ...electronRendererWindows,
+  holdDisplayAwake: () => holdPowerSaveBlocker('prevent-display-sleep'),
+  readScreenState: () => {
+    // The shortest display-sleep setting is a minute, so a shorter idle can't mean a sleeping display.
+    const state = powerMonitor.getSystemIdleState(60)
+    return state === 'locked' || state === 'idle' ? state : 'active'
+  },
+  onScreenLocked: (listener) => {
+    powerMonitor.on('lock-screen', listener)
+    return () => powerMonitor.off('lock-screen', listener)
+  },
+  isResourceViewVisible: (rendererId) => {
+    const renderer = webContents.fromId(rendererId)
+    return isResourceWindowVisible(renderer ? BrowserWindow.fromWebContents(renderer) : null)
+  },
+  // Phone icons (repo icons, browser tab favicons) are fetched and shrunk to data URLs here.
+  encodeRepoIconPng,
+  fetchRepoIcon: (url, init) => fetchWithElectronManualRedirects(url, init),
+  browserTabFaviconFetch: electronBrowserTabFaviconFetch
 }

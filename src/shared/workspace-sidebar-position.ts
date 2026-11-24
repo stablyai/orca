@@ -1,4 +1,4 @@
-import type { WorkspaceSidebarPosition } from './ui-chrome-types'
+import type { WorkspaceSidebarPosition } from './ui-chrome/ui-chrome-types'
 
 export const DEFAULT_WORKSPACE_SIDEBAR_POSITION: WorkspaceSidebarPosition = 'left'
 

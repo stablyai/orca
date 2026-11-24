@@ -1,23 +1,36 @@
-import { AGENT_KIND_VALUES, type AgentKind } from '../../../shared/telemetry-events'
+import { AGENT_DONE_QUIET_MS } from '../../../shared/agent-status/lifecycle/agent-transitions'
+import {
+  AGENT_KIND_VALUES,
+  type AgentKind
+} from '../../../shared/telemetry/schemas/telemetry-property-schemas'
 
-// Why: co-located with the endpoint file in userData/agent-hooks/ so hook-server cross-restart artifacts stay together.
-export const LAST_STATUS_FILE_NAME = 'last-status.json'
 export const ASSISTANT_MESSAGE_RETRY_ATTEMPTS = 5
 export const ASSISTANT_MESSAGE_RETRY_MS = 50
+// Copilot can write a turn's reply well after agentStop (a Fusion answer up to ~370 ms later).
+// Retries end within the done quiet window, so a reply they find still reaches the banner and push.
+export const COPILOT_STOP_REPLY_RETRY_ATTEMPTS = Math.floor(
+  AGENT_DONE_QUIET_MS / ASSISTANT_MESSAGE_RETRY_MS
+)
 export const CODEX_SUBAGENT_POLL_MS = 1_000
 
-// Why: starts at 2 — pre-merge v1 lacked receivedAt/stateStartedAt (never shipped); a mismatched version hydrates empty (treated as corrupt).
+// Version 1 lacked ordering clocks; mismatched caches hydrate empty.
 export const LAST_STATUS_FILE_VERSION = 2
 
-// Why: recovery-cache writes are capped at one per window so the rate can't follow the hook event rate
-// (#26720); quit-time flushStatusPersistSync() still captures the final state.
-export const STATUS_PERSIST_MIN_INTERVAL_MS = 5_000
+// Saved status only seeds the "restored, unconfirmed" view after a restart, so routine saves can
+// wait minutes; authority changes bypass the window and quit, hook-disable and stop flush now.
+export const STATUS_PERSIST_MIN_INTERVAL_MS = 3 * 60_000
+// Coalesces many agents' turn edges into one save; a crash loses at most this window of them.
+export const STATUS_TURN_EDGE_PERSIST_INTERVAL_MS = 1_000
+// A failed save (often another connection's lock) retries on its own short backoff.
+export const STATUS_PERSIST_RETRY_MIN_MS = 1_000
+export const STATUS_PERSIST_RETRY_MAX_MS = 30_000
+// Routine saves never wait on a lock; quit-time flushes wait at most this long.
+export const STATUS_FLUSH_BUSY_TIMEOUT_MS = 200
 export const AGENT_PROMPT_SENT_AGENT_KINDS = new Set<AgentKind>(AGENT_KIND_VALUES)
 
-// Why: bound file growth from PTYs that never re-attach; 7 days is the "still relevant?" horizon beyond which entries shouldn't resurrect on hydrate.
-export const HYDRATE_MAX_AGE_MS = 7 * 24 * 60 * 60 * 1000
+// Expire orphaned PTY rows so old work cannot resurrect on hydration.
 
-// Why: a long-closed tab can't receive status events; bound the set so it can't grow one entry per close for the whole session.
+// Bound closed-tab memory across long sessions.
 export const CLOSED_AGENT_STATUS_TAB_IDS_MAX = 1024
 export const CLOSED_AGENT_STATUS_PANE_KEYS_MAX = 1024
 export const PANE_KEY_ALIASES_MAX = 1024

@@ -19,10 +19,10 @@ struct PushDismissalIdentity: Codable {
     notificationSeq = seq.int64Value
   }
 
-  func matches(_ other: PushDismissalIdentity) -> Bool {
-    hostFingerprint == other.hostFingerprint && notificationId == other.notificationId &&
-      notificationEpoch == other.notificationEpoch
-  }
+  struct Key: Hashable { let host: String; let id: String; let epoch: String }
+  var key: Key { Key(host: hostFingerprint, id: notificationId, epoch: notificationEpoch) }
+
+  func matches(_ other: PushDismissalIdentity) -> Bool { key == other.key }
 }
 
 final class PushDismissalLedger {
@@ -40,14 +40,30 @@ final class PushDismissalLedger {
   }
 
   func remember(_ identity: PushDismissalIdentity, now: TimeInterval = Date().timeIntervalSince1970) {
+    remember([identity], now: now)
+  }
+
+  // One read/encode/write per batch keeps catch-up pages linear in ledger size.
+  func remember(_ identities: [PushDismissalIdentity], now: TimeInterval = Date().timeIntervalSince1970) {
+    guard !identities.isEmpty else { return }
     lock.lock(); defer { lock.unlock() }
     let entries = read(now: now)
-    let previous = entries.first { $0.identity.matches(identity) }
-    let newest = (previous?.identity.notificationSeq ?? -1) > identity.notificationSeq
-      ? previous!.identity : identity
+    var order: [PushDismissalIdentity.Key] = []
+    var newest: [PushDismissalIdentity.Key: PushDismissalIdentity] = [:]
+    for identity in identities {
+      if let current = newest[identity.key] {
+        if current.notificationSeq <= identity.notificationSeq { newest[identity.key] = identity }
+      } else {
+        order.append(identity.key); newest[identity.key] = identity
+      }
+    }
+    var kept: [Entry] = []
+    for entry in entries {
+      guard let batch = newest[entry.identity.key] else { kept.append(entry); continue }
+      if entry.identity.notificationSeq > batch.notificationSeq { newest[entry.identity.key] = entry.identity }
+    }
     // Keep every live fence: count-based eviction lets delayed alerts reappear.
-    let next = entries.filter { !$0.identity.matches(identity) } +
-      [Entry(identity: newest, expiresAt: now + 86400)]
+    let next = kept + order.compactMap { key in newest[key].map { Entry(identity: $0, expiresAt: now + 86400) } }
     if let data = try? JSONEncoder().encode(next) {
       defaults.set(data, forKey: storageKey)
     }

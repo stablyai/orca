@@ -1,24 +1,31 @@
 import React from 'react'
 import { ChevronDown, ChevronRight } from 'lucide-react'
-import { cn } from '@/lib/utils'
-import { isIterationCurrent, type ProjectGroup } from '../../../../shared/github/project-group-sort'
-import { translate } from '@/i18n/i18n'
+import { cn } from '@/lib/class-names'
+import {
+  EMPTY_PROJECT_GROUP_KEY,
+  isIterationCurrent,
+  type ProjectGroup
+} from '../../../../shared/github/projects/project-group-sort'
+import { useTranslate } from '@/i18n/use-translate'
 
 type Props = {
   group: ProjectGroup
+  /** Names the empty bucket; shared grouping words it in English for other clients. */
+  groupFieldName: string
   expanded: boolean
   onToggle: () => void
-  /** Total band width for horizontally scrolling surfaces (the roadmap). The
-   *  label pins to the viewport so it stays readable when scrolled off. */
+  /** Set the roadmap band width while pinning its label within the visible viewport. */
   bandWidth?: number
 }
 
 export default function ProjectGroupHeader({
   group,
+  groupFieldName,
   expanded,
   onToggle,
   bandWidth
 }: Props): React.JSX.Element {
+  const t = useTranslate()
   const isCurrent = group.iteration ? isIterationCurrent(group.iteration) : false
   const dateRange = group.iteration
     ? formatDateRange(group.iteration.startDate, group.iteration.duration)
@@ -30,8 +37,7 @@ export default function ProjectGroupHeader({
       className={cn(
         'flex items-center border-b border-border/50 bg-muted/40 px-3 py-1.5 text-left text-xs',
         'hover:bg-muted/60',
-        // Why: min-w-full lets the band keep painting to the pane's right
-        // edge when the pane is wider than the timeline grid.
+        // Keep the band painted to the pane’s edge when the timeline is narrower.
         bandWidth == null ? 'w-full' : 'min-w-full'
       )}
       style={bandWidth == null ? undefined : { width: bandWidth }}
@@ -39,8 +45,10 @@ export default function ProjectGroupHeader({
       <span className={cn('flex items-center gap-2', bandWidth != null && 'sticky left-3')}>
         {expanded ? <ChevronDown className="size-3.5" /> : <ChevronRight className="size-3.5" />}
         <span className="font-medium">
-          {group.label ||
-            translate('auto.components.github.project.ProjectGroupHeader.244c9e7d06', 'All')}
+          {group.key === EMPTY_PROJECT_GROUP_KEY
+            ? t('projectBoard.noField', 'No {{field}}', { field: groupFieldName })
+            : group.label ||
+              t('auto.components.github.project.ProjectGroupHeader.244c9e7d06', 'All')}
         </span>
         <span className="rounded-full border border-border/50 bg-background px-1.5 text-[10px] text-muted-foreground">
           {group.rows.length}
@@ -48,7 +56,7 @@ export default function ProjectGroupHeader({
         {dateRange ? <span className="text-[10px] text-muted-foreground">{dateRange}</span> : null}
         {isCurrent ? (
           <span className="rounded-full border border-emerald-500/30 bg-emerald-500/10 px-1.5 text-[10px] text-emerald-700 dark:text-emerald-300">
-            {translate('auto.components.github.project.ProjectGroupHeader.82a22d2079', 'Current')}
+            {t('auto.components.github.project.ProjectGroupHeader.82a22d2079', 'Current')}
           </span>
         ) : null}
       </span>

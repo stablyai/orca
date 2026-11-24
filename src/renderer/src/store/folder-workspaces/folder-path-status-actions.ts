@@ -1,11 +1,10 @@
 import type { StateCreator } from 'zustand'
 import type { AppState } from '../types'
-import type { FolderWorkspacePathStatus } from '../../../../shared/folder-workspace-path-status'
-import { callRuntimeRpc } from '../../runtime/runtime-rpc-client'
-import { runtimeTargetForOwnerEnvironment } from '../../runtime/runtime-client-target'
+import type { FolderWorkspacePathStatus } from '../../../../shared/folder-workspaces/folder-workspace-path-status'
+import { callRuntimeRpc } from '../../runtime/rpc/calls/runtime-rpc-call'
+import { runtimeTargetForOwnerEnvironment } from '../../runtime/rpc/targets/runtime-client-target'
 import type { RepoSlice } from '../repos/repo-state'
 import {
-  getFolderWorkspacePathStatusRequestSnapshotForRead,
   getFolderWorkspaceStatusRequestSnapshot,
   getFreshFolderWorkspacePathStatusFromCache
 } from './folder-path-status'
@@ -31,13 +30,13 @@ export function createFolderPathStatusActions(
       const state = get()
       const cacheKey = get().getFolderWorkspacePathStatusCacheKey(request, options)
       const cached = state.folderWorkspacePathStatuses[cacheKey]
-      const requestSnapshot = getFolderWorkspacePathStatusRequestSnapshotForRead(state, request)
+      const requestSnapshot = getFolderWorkspaceStatusRequestSnapshot(state, request, options)
       return getFreshFolderWorkspacePathStatusFromCache({ entry: cached, requestSnapshot })
     },
 
     fetchFolderWorkspacePathStatus: async (request, options) => {
       const cacheKey = get().getFolderWorkspacePathStatusCacheKey(request, options)
-      const requestSnapshot = getFolderWorkspaceStatusRequestSnapshot(get(), request)
+      const requestSnapshot = getFolderWorkspaceStatusRequestSnapshot(get(), request, options)
       const cached = get().folderWorkspacePathStatuses[cacheKey]
       const freshCachedStatus = getFreshFolderWorkspacePathStatusFromCache({
         entry: cached,
@@ -62,7 +61,7 @@ export function createFolderPathStatusActions(
         set((state) => ({
           folderWorkspacePathStatuses:
             requestSnapshot !== null &&
-            getFolderWorkspaceStatusRequestSnapshot(state, request) === requestSnapshot
+            getFolderWorkspaceStatusRequestSnapshot(state, request, options) === requestSnapshot
               ? {
                   ...state.folderWorkspacePathStatuses,
                   [cacheKey]: { status, checkedAt: Date.now(), requestSnapshot }

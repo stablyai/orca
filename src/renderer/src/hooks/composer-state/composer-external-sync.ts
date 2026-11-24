@@ -1,9 +1,9 @@
 import type { ComposerTargetState } from './composer-target-state-contract'
 import type { ComposerExternalSyncState } from './composer-external-sync-contract'
-import { useHostRuntimeEffects } from './host-runtime-effects'
-import { useLinkedItemLookupEffects } from './linked-item-lookup-effects'
-import { useGitHubSourceApplication } from './github-source-application'
-import { useGitHubSubmitResolution } from './github-submit-resolution'
+import { useHostRuntimeEffects } from './workspace-target/host-runtime-effects'
+import { useLinkedItemLookupEffects } from './linked-work-items/linked-item-lookup-effects'
+import { useGitHubSourceApplication } from './linked-work-items/github-source-application'
+import { useGitHubSubmitResolution } from './linked-work-items/github-submit-resolution'
 
 export function useComposerExternalSync(target: ComposerTargetState): ComposerExternalSyncState {
   const hostRuntimeEffects = useHostRuntimeEffects({
@@ -22,8 +22,8 @@ export function useComposerExternalSync(target: ComposerTargetState): ComposerEx
     repoIdRef: target.runtimeTargetSelection.repoIdRef,
     runtimeEnvironmentId: target.workspaceIdentityState.runtimeEnvironmentId,
     selectedRepoConnectionIdRef: target.asyncComposerState.selectedRepoConnectionIdRef,
+    selectedRepoExecutionHostId: target.runtimeTargetSelection.selectedRepoExecutionHostId,
     selectedRepoHookContextKey: target.runtimeTargetSelection.selectedRepoHookContextKey,
-    selectedRepoIsGit: target.runtimeTargetSelection.selectedRepoIsGit,
     selectedRepoSshStatus: target.runtimeTargetSelection.selectedRepoSshStatus,
     setTuiAgent: target.workspaceIdentityState.setTuiAgent,
     settings: target.composerTargetStore.settings,

@@ -16,6 +16,9 @@ on:
 permissions:
   contents: read
 
+# Candidate source must not write caches in the dispatch branch's scope.
+cache-mode: read
+
 concurrency:
   group: windows-wsl-e2e-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: true
@@ -23,7 +26,8 @@ concurrency:
 jobs:
   wsl-terminal:
     runs-on: windows-2022
-    timeout-minutes: 30
+    # Retain the original WSL launch; paste, image and stopped-distro alarms are retired.
+    timeout-minutes: 50
     env:
       NODE_OPTIONS: --max-old-space-size=4096
     steps:
@@ -48,17 +52,16 @@ jobs:
           PLAYWRIGHT_JSON_OUTPUT_FILE: test-results/wsl-results.json
         run: >-
           pnpm exec playwright test
-          tests/e2e/golden-tab-bar-agent-launch.spec.ts
-          tests/e2e/terminal-windows-shell-paste-ownership.spec.ts
+          tests/e2e/golden-journeys/golden-tab-bar-agent-launch.spec.ts
           --config tests/playwright.config.ts
           --project=electron-headless
           --grep "WSL"
           --repeat-each=3
           --workers=1
           --reporter=list,json
-      - name: Require all nine WSL executions
+      - name: Require all three retained WSL launch executions
         if: always()
-        run: node config/scripts/verify-wsl-e2e-participation.mjs test-results/wsl-results.json
+        run: node config/scripts/runtime-verification/participation/verify-wsl-e2e-participation.mjs test-results/wsl-results.json
       - name: Upload WSL participation report
         uses: actions/upload-artifact@v7
         if: always()

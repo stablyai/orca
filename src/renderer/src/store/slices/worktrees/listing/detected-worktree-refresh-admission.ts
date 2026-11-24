@@ -1,23 +1,23 @@
-import { getEnvironmentSshStateGeneration } from '../../runtime-environment-ssh'
-import { getRuntimeEnvironmentConnectionGeneration } from '../../runtime-status'
+import { getEnvironmentSshStateGeneration } from '../../ssh/runtime-environment-ssh'
+import { getRuntimeEnvironmentConnectionGeneration } from '../../runtime-status/runtime-status-connection-generation'
 import type { AppState } from '../../../types'
-import type { HostQualifiedDetectedWorktreeResult } from '../../../../../../shared/detected-worktree-provider-contract'
-import type { ExecutionHostId } from '../../../../../../shared/execution-host'
-import type { AdmittedDetectedWorktreeRefresh } from './worktree-slice-types'
+import type { HostQualifiedDetectedWorktreeResult } from '../../../../../../shared/worktree/catalog/detected-worktree-provider-contract'
+import type { ExecutionHostId } from '../../../../../../shared/execution-host/execution-host'
+import type {
+  AdmittedDetectedWorktreeRefresh,
+  WorktreeCatalogAuthority
+} from './worktree-slice-types'
 import { directSshAuthoritiesEqual, getCurrentDirectSshAuthority } from './direct-ssh-authority'
 import { isStaleWorktreeCatalogPublication } from './worktree-catalog-version-state'
 import { repoHasExactlyOneExecutionHostOwner } from './worktree-host-ownership'
 
-/**
- * Why a listing was not applied. `not-current`: the connection or repo owner it was listed under
- * no longer holds. `superseded`: a newer catalog (a create or remove reply) is already applied.
- */
+/** not-current: connection/owner changed; superseded: newer create/remove catalog already applied. */
 export type WorktreeListingRefusal = 'not-current' | 'superseded'
 export type WorktreeListingMergeOutcome = 'applied' | WorktreeListingRefusal
 
 export function isCurrentDetectedWorktreeRefresh(
   state: Pick<AppState, 'sshConnectionStates'>,
-  refresh: AdmittedDetectedWorktreeRefresh
+  refresh: WorktreeCatalogAuthority
 ): boolean {
   if (refresh.directSshAuthority) {
     return directSshAuthoritiesEqual(

@@ -16,8 +16,7 @@ export type AndroidStreamControllerDeps = {
   maxSize: number
 }
 
-// Owns the per-serial scrcpy stream lifecycle and dedupes concurrent starts so
-// two racing attaches never spawn duplicate servers fighting for the same port.
+// Deduplicate starts so racing attaches cannot launch competing scrcpy servers.
 export class AndroidStreamController {
   private readonly handles = new Map<string, AndroidStreamHandle>()
   private readonly starts = new Map<string, Promise<EmulatorSessionInfo>>()
@@ -39,8 +38,6 @@ export class AndroidStreamController {
   }
 
   private async begin(serial: string): Promise<EmulatorSessionInfo> {
-    // Reuse only a live stream; if the session died on its own the registry entry
-    // is gone, so drop the stale handle and start fresh.
     if (this.handles.has(serial) && scrcpyVideoRegistry.has(serial)) {
       return androidStreamSessionInfo(serial)
     }

@@ -1,48 +1,28 @@
 import { spawn as nodeSpawn, type ChildProcess } from 'node:child_process'
 import { admitProcessTreeKill } from './process-tree-kill-gate'
-import { windowsSystem32Binary } from './windows-system-binary'
+import {
+  startWindowsTreeKill,
+  trackedWindowsTreeKill,
+  waitForWindowsTreeKill
+} from './windows-tree-kill'
 
 const PROBE_INTERVAL_MS = 25
 const SUBPROCESS_TIMEOUT_MS = 2_000
 const MAX_PS_OUTPUT_BYTES = 8 * 1024 * 1024
 
-/**
- * Signal the child's whole tree.
- *
- * POSIX precondition: the child must have been spawned `detached`. The signal
- * goes to the process group `-child.pid`, so a child that is not its own group
- * leader would hand it to whatever group it inherited instead.
- *
- * Runs in every host — Electron main, the daemon, the relay, the CLI — so the
- * own-Chromium guard arrives through `process-tree-kill-gate`, which main
- * installs and every other host leaves admitting. The exit check below is what
- * keeps the Windows branch off a pid that is no longer ours on those hosts.
- *
- * Both arms ask before walking the tree, so a refused pid never gets a
- * pid-addressed kill; that also means the recorded crumb says "about to kill",
- * not "killed". The root is still killed through its handle, which cannot reach
- * the recycled pid the refusal was about, so a refusal is never a leak. Main's
- * gate only ever refuses the `win-taskkill-tree` scope — a POSIX group holds
- * only what Orca put in it — so the POSIX refusal arm is the seam's contract,
- * not something any installed gate exercises today.
- */
+/** POSIX children must be detached: signaling -pid targets the process group. */
 export function signalProcessTree(child: ChildProcess, signal?: NodeJS.Signals): Promise<boolean> {
   if (!child.pid) {
     killRoot(child, signal)
     return Promise.resolve(true)
   }
   if (process.platform === 'win32') {
-    // Why the exit check: once the child is reaped its pid is Windows' to
-    // reissue, and `taskkill /t /f` walks whatever tree owns it *now* — a
-    // recycled pid can be one of Orca's own Chromium processes (#10680). The
-    // POSIX branch below cannot hit this: killing a reaped group is ESRCH.
-    //
-    // Why `false`: this is exactly what a taskkill against a reaped pid already
-    // resolved to (non-zero exit -> killRoot + `false`), so skipping the unsafe
-    // spawn must not also flip the termination barrier to "verified". Reporting
-    // `true` here would release the git admission grant on root exit instead of
-    // on `close`, admitting the next git command while a descendant that
-    // inherited the pipes still holds the repo.
+    // A tracked taskkill may have killed the root already; join its verdict before checking exit.
+    const tracked = trackedWindowsTreeKill(child)
+    if (tracked) {
+      return waitForWindowsTreeKill(tracked)
+    }
+    // A reaped Windows PID can be reused; root exit alone does not prove descendants are gone.
     if (childProcessHasExited(child)) {
       killRoot(child, signal)
       return Promise.resolve(false)
@@ -56,8 +36,7 @@ export function signalProcessTree(child: ChildProcess, signal?: NodeJS.Signals):
       scope: 'posix-process-group'
     })
   ) {
-    // Same shape as the reaped-pid skip above: refuse the group, still kill the
-    // root by handle, and report unverified.
+    // Refuse the group kill but still terminate the root through its handle.
     killRoot(child, signal)
     return Promise.resolve(false)
   }
@@ -90,55 +69,30 @@ function taskkillTree(
   rootPid: number,
   signal?: NodeJS.Signals
 ): Promise<boolean> {
-  // Asked before the spawn, not after: a refusal has to prevent the taskkill.
   if (
     !admitProcessTreeKill({ pid: rootPid, site: 'run-process-tree', scope: 'win-taskkill-tree' })
   ) {
     killRoot(child, signal)
     return Promise.resolve(false)
   }
-  return new Promise((resolve) => {
-    let killer: ChildProcess
-    try {
-      killer = nodeSpawn(
-        windowsSystem32Binary('taskkill.exe'),
-        ['/pid', String(rootPid), '/t', '/f'],
-        {
-          stdio: 'ignore',
-          windowsHide: true,
-          shell: false
-        }
-      )
-    } catch {
-      killRoot(child, signal)
-      resolve(false)
-      return
-    }
-    let settled = false
-    const finish = (fallback: boolean): void => {
-      if (settled) {
-        return
-      }
-      settled = true
-      clearTimeout(timer)
-      if (fallback) {
-        killRoot(child, signal)
-      }
-      resolve(!fallback)
-    }
-    killer.once('error', () => finish(true))
-    killer.once('close', (code) => finish(code !== 0))
-    const timer = setTimeout(() => {
-      killer.kill()
-      finish(true)
-    }, SUBPROCESS_TIMEOUT_MS)
-    timer.unref?.()
-  })
+  return waitForWindowsTreeKill(startWindowsTreeKill(child, rootPid, () => killRoot(child, signal)))
+}
+
+/** One process-table read: true only when the group is gone or every member is a zombie; a failed read proves nothing. */
+export async function posixProcessGroupQuiet(processGroupId: number): Promise<boolean> {
+  if (!processGroupExists(processGroupId)) {
+    return true
+  }
+  const states = await readPosixProcessGroupStates(processGroupId)
+  return states !== null && states.every((state) => state.startsWith('Z'))
 }
 
 async function waitForPosixProcessGroupQuiescence(processGroupId: number): Promise<boolean> {
   const deadline = Date.now() + SUBPROCESS_TIMEOUT_MS
   while (true) {
+    if (!processGroupExists(processGroupId)) {
+      return true
+    }
     const states = await readPosixProcessGroupStates(processGroupId)
     if (
       states ? states.every((state) => state.startsWith('Z')) : !processGroupExists(processGroupId)
@@ -152,7 +106,57 @@ async function waitForPosixProcessGroupQuiescence(processGroupId: number): Promi
   }
 }
 
+type GroupStates = Map<number, string[]>
+let runningTableRead: Promise<GroupStates | null> | undefined
+let queuedTableRead: Promise<GroupStates | null> | undefined
+
+// One parse per shared read; each waiter looks up only its own group.
+function indexGroupStates(output: string | null): GroupStates | null {
+  if (output === null) {
+    return null
+  }
+  const groups: GroupStates = new Map()
+  for (const line of output.split('\n')) {
+    const match = line.trim().match(/^(\d+)\s+(\S+)/)
+    if (match) {
+      const id = Number(match[1])
+      const states = groups.get(id)
+      if (states) {
+        states.push(match[2])
+      } else {
+        groups.set(id, [match[2]])
+      }
+    }
+  }
+  return groups
+}
+
+function startTableRead(): Promise<GroupStates | null> {
+  runningTableRead = readPosixProcessTable()
+    .then(indexGroupStates)
+    .finally(() => {
+      runningTableRead = undefined
+    })
+  return runningTableRead
+}
+
+// Concurrent group waits share a table read, but only one that starts after they ask: an earlier snapshot can miss a newer group.
+function readTableAfterNow(): Promise<GroupStates | null> {
+  if (!runningTableRead) {
+    return startTableRead()
+  }
+  queuedTableRead ??= runningTableRead.then(() => {
+    queuedTableRead = undefined
+    return startTableRead()
+  })
+  return queuedTableRead
+}
+
 function readPosixProcessGroupStates(processGroupId: number): Promise<string[] | null> {
+  return readTableAfterNow().then((groups) => (groups ? (groups.get(processGroupId) ?? []) : null))
+}
+
+function readPosixProcessTable(): Promise<string | null> {
   return new Promise((resolve) => {
     let probe: ChildProcess
     try {
@@ -168,13 +172,13 @@ function readPosixProcessGroupStates(processGroupId: number): Promise<string[] |
     let output = ''
     let truncated = false
     let settled = false
-    const finish = (states: string[] | null): void => {
+    const finish = (table: string | null): void => {
       if (settled) {
         return
       }
       settled = true
       clearTimeout(timer)
-      resolve(states)
+      resolve(table)
     }
     probe.stdout?.on('data', (chunk: Buffer | string) => {
       const text = chunk.toString()
@@ -191,11 +195,7 @@ function readPosixProcessGroupStates(processGroupId: number): Promise<string[] |
         finish(null)
         return
       }
-      const states = output.split('\n').flatMap((line) => {
-        const match = line.trim().match(/^(\d+)\s+(\S+)/)
-        return match && Number(match[1]) === processGroupId ? [match[2]] : []
-      })
-      finish(states)
+      finish(output)
     })
     const timer = setTimeout(() => {
       probe.kill()
@@ -205,7 +205,7 @@ function readPosixProcessGroupStates(processGroupId: number): Promise<string[] |
   })
 }
 
-function processGroupExists(processGroupId: number): boolean {
+export function processGroupExists(processGroupId: number): boolean {
   try {
     process.kill(-processGroupId, 0)
     return true

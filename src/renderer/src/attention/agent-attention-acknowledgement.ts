@@ -1,41 +1,64 @@
 import {
   readAgentAttentionUnreadReason,
-  type AgentAttentionRemainder,
   type ReadableAgentAttentionUnread
 } from './agent-attention-contract'
 
+export type AgentAttentionTurn = {
+  stateStartedAt: number
+  state?: string
+  sessionBoundary?: boolean
+  stateHistory?: readonly { startedAt: number }[]
+}
+
 /** Subject-keyed turn bookkeeping the acknowledgement policy reads; no surface shape here. */
 export type AgentAttentionTurnRecords = {
-  liveTurns: Record<string, { stateStartedAt: number }>
-  /** Turns kept after their session ended, so a finished agent can still be acknowledged. */
-  retainedTurns: Record<string, { entry: { stateStartedAt: number } }>
+  liveTurns: ReadonlyMap<string, AgentAttentionTurn> | Record<string, AgentAttentionTurn>
   acknowledgedTurnStartedAt: Record<string, number>
 }
 
-export type AgentAttentionAcknowledgementSink = {
-  acknowledgeSubjects: (subjectKeys: string[]) => void
-  clearWorkspaceUnread: (workspaceId: string) => void
-  clearGroupUnread: (groupId: string) => void
-  clearSubjectUnread: (subjectKey: string) => void
+/** A session-boundary idle restates the turn it displaced, so it keeps that turn's identity instead of its arrival time. */
+export function agentAttentionTurnAt(entry: AgentAttentionTurn): number {
+  if (entry.state !== 'done' || entry.sessionBoundary !== true) {
+    return entry.stateStartedAt
+  }
+  return entry.stateHistory?.at(-1)?.startedAt ?? 0
 }
 
 export function readAgentAttentionTurnStartedAt(
-  records: Pick<AgentAttentionTurnRecords, 'liveTurns' | 'retainedTurns'>,
+  records: Pick<AgentAttentionTurnRecords, 'liveTurns'>,
   subjectKey: string
 ): number | null {
-  return (
-    records.liveTurns[subjectKey]?.stateStartedAt ??
-    records.retainedTurns[subjectKey]?.entry.stateStartedAt ??
-    null
+  const turns = records.liveTurns
+  const entry = isTurnMap(turns) ? turns.get(subjectKey) : turns[subjectKey]
+  return entry ? agentAttentionTurnAt(entry) : null
+}
+
+function isTurnMap(
+  turns: AgentAttentionTurnRecords['liveTurns']
+): turns is ReadonlyMap<string, AgentAttentionTurn> {
+  return typeof turns.get === 'function'
+}
+
+/** A turn is unread until acknowledged at or after its start; with no turn there is nothing to read. */
+export function isAgentTurnUnacknowledged(
+  acknowledgedAt: number,
+  turnStartedAt: number | null | undefined
+): boolean {
+  return turnStartedAt != null && acknowledgedAt < turnStartedAt
+}
+
+/** Read the same current-turn records that auto-acknowledgement clears. */
+export function isAgentSubjectUnread(
+  records: AgentAttentionTurnRecords,
+  subjectKey: string
+): boolean {
+  return isAgentTurnUnacknowledged(
+    records.acknowledgedTurnStartedAt[subjectKey] ?? 0,
+    readAgentAttentionTurnStartedAt(records, subjectKey)
   )
 }
 
-/**
- * Subjects on the viewed surface whose current turn has not been acknowledged yet.
- *
- * Why compare stateStartedAt (not updatedAt): same-state pings must not re-trigger an ack,
- * matching the is-unvisited rule the workspace card uses.
- */
+/** Acknowledge viewed subjects by stateStartedAt, not updatedAt, so same-state pings cannot retrigger acknowledgement. */
 export function computeAgentAcknowledgementTargets(
   records: AgentAttentionTurnRecords,
   subjectKey: string | null
@@ -45,12 +68,9 @@ export function computeAgentAcknowledgementTargets(
   }
   const targets: string[] = []
   const acknowledgedAt = records.acknowledgedTurnStartedAt[subjectKey] ?? 0
-  const liveTurn = records.liveTurns[subjectKey]
-  if (liveTurn && acknowledgedAt < liveTurn.stateStartedAt) {
-    targets.push(subjectKey)
-  }
-  const retainedTurn = records.retainedTurns[subjectKey]
-  if (retainedTurn && acknowledgedAt < retainedTurn.entry.stateStartedAt) {
+  if (
+    isAgentTurnUnacknowledged(acknowledgedAt, readAgentAttentionTurnStartedAt(records, subjectKey))
+  ) {
     targets.push(subjectKey)
   }
   return targets
@@ -67,15 +87,9 @@ export function resolveViewedUnreadSubjectKey(
   return readAgentAttentionUnreadReason(unreadBySubjectKey[subjectKey]) === null ? null : subjectKey
 }
 
-/**
- * Manual mark-unread protections that no longer apply: the user moved to another subject, or
- * the agent took a new turn.
- *
- * Why keep on null: persisted UI hydrates before the turn snapshot lands, so an active subject
- * with no row yet is "not known", not "moved on"; wiping it would lose the user's mark-unread.
- */
+/** Expire manual-unread protection after a subject switch or new turn. Keep it on missing rows: UI hydrates before turn snapshots, so absence does not prove a switch. */
 export function computeLapsedManualUnreadProtections(
-  records: Pick<AgentAttentionTurnRecords, 'liveTurns' | 'retainedTurns'> & {
+  records: Pick<AgentAttentionTurnRecords, 'liveTurns'> & {
     manuallyUnreadTurnStartedAt: Record<string, number>
   },
   activeSubjectKeys: ReadonlySet<string>
@@ -92,77 +106,4 @@ export function computeLapsedManualUnreadProtections(
     }
   }
   return lapsed
-}
-
-/**
- * One workspace's attention as every surface kind sees it.
- *
- * Why a union: workspace unread is owned by the workspace, not by a surface kind, so a surface
- * that can only see its own tabs would report a sibling of another kind as absent and let the
- * clear through. A workspace owns surfaces when any kind owns one.
- */
-export function mergeAgentAttentionRemainders(
-  remainders: readonly AgentAttentionRemainder[]
-): AgentAttentionRemainder {
-  return {
-    hasSurfaces: remainders.some((remainder) => remainder.hasSurfaces),
-    unreadSubjectKeys: remainders.flatMap((remainder) => [...remainder.unreadSubjectKeys]),
-    unreadGroupIds: remainders.flatMap((remainder) => [...remainder.unreadGroupIds])
-  }
-}
-
-/**
- * Workspace unread is coarse, so a hidden sibling still wanting attention keeps it lit even
- * while the user acknowledges the subject in front of them.
- */
-export function shouldClearWorkspaceAttention(
-  remainder: AgentAttentionRemainder,
-  args: { viewedGroupId: string; clearedSubjectKeys: ReadonlySet<string> }
-): boolean {
-  if (!remainder.hasSurfaces) {
-    return true
-  }
-  for (const subjectKey of remainder.unreadSubjectKeys) {
-    if (!args.clearedSubjectKeys.has(subjectKey)) {
-      return false
-    }
-  }
-  for (const groupId of remainder.unreadGroupIds) {
-    if (groupId !== args.viewedGroupId) {
-      return false
-    }
-  }
-  return true
-}
-
-export function applyAgentAttentionAcknowledgement(
-  sink: AgentAttentionAcknowledgementSink,
-  args: {
-    /** Null when a hidden sibling still owns the workspace's attention. */
-    workspaceIdToClear: string | null
-    viewedGroupId: string
-    subjectKeys: string[]
-    viewedUnreadSubjectKey?: string | null
-  }
-): void {
-  const subjectKeysToClear = new Set(args.subjectKeys)
-  if (args.viewedUnreadSubjectKey) {
-    subjectKeysToClear.add(args.viewedUnreadSubjectKey)
-  }
-
-  if (args.subjectKeys.length === 0 && subjectKeysToClear.size === 0) {
-    return
-  }
-
-  if (args.subjectKeys.length > 0) {
-    sink.acknowledgeSubjects(args.subjectKeys)
-  }
-  if (args.workspaceIdToClear !== null) {
-    // Why: the selected agent is now visible, so drop the Dock-driving workspace unread.
-    sink.clearWorkspaceUnread(args.workspaceIdToClear)
-  }
-  sink.clearGroupUnread(args.viewedGroupId)
-  for (const subjectKey of subjectKeysToClear) {
-    sink.clearSubjectUnread(subjectKey)
-  }
 }

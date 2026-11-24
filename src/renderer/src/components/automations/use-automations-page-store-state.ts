@@ -1,25 +1,35 @@
 import { useCallback } from 'react'
-import { filterEnabledTuiAgents, isTuiAgentEnabled } from '../../../../shared/tui-agent-selection'
-import type { Repo } from '../../../../shared/repo-types'
+import {
+  filterEnabledTuiAgents,
+  isTuiAgentEnabled
+} from '../../../../shared/agent-launch/catalog/tui-agent-selection'
+import type { Repo } from '../../../../shared/repository/repo-types'
 import type { Worktree } from '../../../../shared/worktree/types'
-import { getAgentCatalog } from '@/lib/agent-catalog'
-import { useAppStore } from '@/store'
-import { useRepoMap, useWorktreeMap } from '@/store/selectors'
+import { getAgentCatalog } from '@/lib/agent-catalog/agent-catalog'
+import { useRuntimeStatusByEnvironmentId } from '@/store/slices/runtime-status/views/use-runtime-status-view'
+import { useAppStore } from '@/store/index'
+import { useRepoMap } from '@/store/repos/use-repository-catalog'
+import { useWorktreeMap } from '@/store/slices/worktrees/listing/use-worktree-catalog'
 import {
   automationFolderWorktreeForRow,
   automationRepoForRow,
   automationWorktreeForRow,
   type AutomationListRow
-} from './automation-list-row-identity'
+} from './listing/automation-list-row-identity'
+import {
+  selectFolderWorkspaces,
+  selectWorktreesByRepo
+} from '@/store/workspaces/catalog/workspace-record-fields'
 
 const AGENTS = getAgentCatalog().map((agent) => agent.id)
 
 /** Store-backed values shared by the page's state and action hooks. */
 export function useAutomationsPageStoreState() {
   const repos = useAppStore((s) => s.repos)
+  const projectGroups = useAppStore((s) => s.projectGroups)
   const projectHostSetups = useAppStore((s) => s.projectHostSetups)
-  const worktreesByRepo = useAppStore((s) => s.worktreesByRepo)
-  const folderWorkspaces = useAppStore((s) => s.folderWorkspaces)
+  const worktreesByRepo = useAppStore((s) => selectWorktreesByRepo(s))
+  const folderWorkspaces = useAppStore((s) => selectFolderWorkspaces(s))
   const unifiedTabsByWorktree = useAppStore((s) => s.unifiedTabsByWorktree)
   const terminalLayoutsByTabId = useAppStore((s) => s.terminalLayoutsByTabId)
   const ptyIdsByTabId = useAppStore((s) => s.ptyIdsByTabId)
@@ -34,9 +44,10 @@ export function useAutomationsPageStoreState() {
   const closeAutomationsPage = useAppStore((s) => s.closeAutomationsPage)
   const activeModal = useAppStore((s) => s.activeModal)
   const sshConnectionStates = useAppStore((s) => s.sshConnectionStates)
+  const sshStateByEnvironment = useAppStore((s) => s.sshStateByEnvironment)
   const sshTargetLabels = useAppStore((s) => s.sshTargetLabels)
   const runtimeEnvironments = useAppStore((s) => s.runtimeEnvironments)
-  const runtimeStatusByEnvironmentId = useAppStore((s) => s.runtimeStatusByEnvironmentId)
+  const runtimeStatusByEnvironmentId = useRuntimeStatusByEnvironmentId()
   const settings = useAppStore((s) => s.settings)
   const selectedId = useAppStore((s) => s.selectedAutomationId)
   const setSelectedId = useAppStore((s) => s.setSelectedAutomationId)
@@ -45,8 +56,8 @@ export function useAutomationsPageStoreState() {
   const repoMap = useRepoMap()
   const worktreeMap = useWorktreeMap()
   const repoForRow = useCallback(
-    (row: AutomationListRow): Repo | undefined => automationRepoForRow(row, repos, repoMap),
-    [repoMap, repos]
+    (row: AutomationListRow): Repo | undefined => automationRepoForRow(row, repos),
+    [repos]
   )
   const worktreeForRow = useCallback(
     (
@@ -54,9 +65,11 @@ export function useAutomationsPageStoreState() {
       repo: Repo | undefined,
       workspaceId: string | null | undefined = row.automation.workspaceId
     ): Worktree | undefined =>
-      automationFolderWorktreeForRow(row, folderWorkspaces, workspaceId) ??
-      automationWorktreeForRow(row, worktreesByRepo, repo, worktreeMap, workspaceId),
-    [folderWorkspaces, worktreeMap, worktreesByRepo]
+      automationFolderWorktreeForRow(row, folderWorkspaces, workspaceId, {
+        repos,
+        projectGroups
+      }) ?? automationWorktreeForRow(row, worktreesByRepo, repo, repos, workspaceId),
+    [folderWorkspaces, projectGroups, repos, worktreesByRepo]
   )
   const enabledAgents = filterEnabledTuiAgents(AGENTS, settings?.disabledTuiAgents)
   const defaultAgent =
@@ -68,6 +81,7 @@ export function useAutomationsPageStoreState() {
 
   return {
     repos,
+    projectGroups,
     projectHostSetups,
     worktreesByRepo,
     unifiedTabsByWorktree,
@@ -84,6 +98,7 @@ export function useAutomationsPageStoreState() {
     closeAutomationsPage,
     activeModal,
     sshConnectionStates,
+    sshStateByEnvironment,
     sshTargetLabels,
     runtimeEnvironments,
     runtimeStatusByEnvironmentId,

@@ -1,4 +1,4 @@
-import type { KeybindingActionId } from '../../shared/keybindings'
+import type { KeybindingActionId } from '../../shared/keybindings/types'
 import { normalizeWorkspaceSidebarPosition } from '../../shared/workspace-sidebar-position'
 import { translateMain } from '../i18n/main-i18n'
 

@@ -259,7 +259,7 @@ async function parentMain() {
       ],
       { cwd }
     )
-    taskId = readNested(task, ['task', 'id'])
+    taskId = readNested(task, ['taskId'])
     if (!taskId) {
       throw new Error('Could not create orchestration task')
     }
@@ -357,8 +357,7 @@ function buildReport(payload, mode, marker) {
   }
   return {
     ...base,
-    // Codex/Claude-like TUIs need generated multi-line prompts to arrive as
-    // one paste frame; unframed newlines are treated as live editor keys.
+    // Send generated multiline TUI prompts as one paste frame; unframed newlines become editor keys.
     contractOk: hasSubmit && rawContainsMarker && hasBracketedPasteFrame && unframedLineBreaks === 0
   }
 }
@@ -366,9 +365,7 @@ function buildReport(payload, mode, marker) {
 function parseInjectedIds(text) {
   return {
     taskId: /Your task ID is:\s*(task_[A-Za-z0-9_]+)/.exec(text)?.[1] ?? null,
-    dispatchId: /--dispatch-id\s+(ctx_[A-Za-z0-9_]+)/.exec(text)?.[1] ?? null,
-    coordinatorHandle:
-      /Your coordinator's (?:terminal handle|Orca session ID) is:\s*(\S+)/.exec(text)?.[1] ?? null
+    dispatchId: /--dispatch-id\s+(ctx_[A-Za-z0-9_]+)/.exec(text)?.[1] ?? null
   }
 }
 
@@ -392,15 +389,13 @@ async function fakeWorkerMain() {
   const chunks = []
   let finished = false
   async function sendWorkerDone(ids, report) {
-    if (!ids.taskId || !ids.dispatchId || !ids.coordinatorHandle) {
+    if (!ids.taskId || !ids.dispatchId) {
       return { attempted: false, reason: 'missing-dispatch-identifiers' }
     }
     try {
       await callOrca(cli, [
         'orchestration',
         'send',
-        '--to',
-        ids.coordinatorHandle,
         '--type',
         'worker_done',
         '--subject',
@@ -443,7 +438,6 @@ async function fakeWorkerMain() {
     const ids = parseInjectedIds(payload.toString('utf8'))
     report.parsedTaskId = ids.taskId
     report.parsedDispatchId = ids.dispatchId
-    report.parsedCoordinatorHandle = ids.coordinatorHandle
     report.workerDone = await sendWorkerDone(ids, report)
     await writeFile(reportPath, JSON.stringify(report, null, 2))
     process.stdout.write(

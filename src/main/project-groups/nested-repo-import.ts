@@ -1,8 +1,10 @@
 import type {
   NestedRepoScanResult,
   ProjectGroup,
-  ProjectGroupImportMode
-} from '../../shared/project-group-types'
+  ProjectGroupImportMode,
+  ProjectGroupParentMove
+} from '../../shared/project/groups/project-group-types'
+import type { Repo } from '../../shared/repository/repo-types'
 import {
   getRuntimePathBasename,
   isPathInsideOrEqual,
@@ -10,7 +12,8 @@ import {
   normalizeRuntimePathForComparison,
   relativePathInsideRoot,
   resolveRuntimePath
-} from '../../shared/cross-platform-path'
+} from '../../shared/file-access/cross-platform-path'
+import { createFolderScanGroupReuse } from './folder-scan-group-reuse'
 
 type CreateGroupInput = {
   name: string
@@ -24,6 +27,7 @@ type NestedProjectGroupResolver = {
   getGroupForRepo: (repoPath: string) => ProjectGroup | undefined
   getRootGroup: () => ProjectGroup | undefined
   getCreatedGroups: () => ProjectGroup[]
+  applyReusedGroupChanges: () => void
 }
 
 export type ResolvedNestedRepoSelection = {
@@ -91,8 +95,7 @@ function buildSparseFolderScopes(args: {
   parentPath: string
   repoPaths: readonly string[]
 }): FolderScope[] {
-  // Why: folder-backed workspaces should expose meaningful launch scopes
-  // without turning every one-child filesystem segment into sidebar structure.
+  // Expose meaningful folder launch scopes without making every single-child segment a sidebar group.
   const folderStats = new Map<string, { directRepoCount: number; totalRepoCount: number }>()
   const noteFolder = (relativePath: string, field: 'directRepoCount' | 'totalRepoCount'): void => {
     const normalized = normalizeRelativePath(relativePath)
@@ -147,11 +150,14 @@ export function createNestedProjectGroupResolver(args: {
   mode: ProjectGroupImportMode
   connectionId?: string | null
   repoPaths?: readonly string[]
+  existingGroups?: readonly ProjectGroup[]
+  existingRepos?: readonly Pick<Repo, 'projectGroupId'>[]
   createGroup: (input: CreateGroupInput) => ProjectGroup
+  renameGroup?: (groupId: string, name: string) => ProjectGroup | null | undefined
+  reparentGroups?: (moves: readonly ProjectGroupParentMove[]) => void
 }): NestedProjectGroupResolver {
   const createdGroups: ProjectGroup[] = []
-  // Every folder-scope read sits behind ensureRootGroup, so outside group mode the scopes are
-  // unreachable. One flag drives both so the skip can never drift from the guard that justifies it.
+  // Folder scopes are reachable only in group mode; use the same flag to skip their construction.
   const createsGroups = args.mode === 'group'
   const folderScopes = createsGroups
     ? buildSparseFolderScopes({ parentPath: args.parentPath, repoPaths: args.repoPaths ?? [] })
@@ -161,6 +167,16 @@ export function createNestedProjectGroupResolver(args: {
   )
   const folderScopeGroups = new Map<string, ProjectGroup>()
   let rootGroup: ProjectGroup | undefined
+  const connectionId = args.connectionId ?? null
+  // Rescanning a folder reuses its groups; reused groups stay out of createdGroups so rollback keeps them.
+  const groupReuse = createFolderScanGroupReuse({
+    groups: createsGroups ? (args.existingGroups ?? []) : [],
+    repos: args.existingRepos ?? [],
+    connectionId,
+    toPathKey: (path) => normalizeRuntimePathForComparison(trimPathSeparators(path)),
+    renameGroup: args.renameGroup,
+    reparentGroups: args.reparentGroups
+  })
 
   const ensureRootGroup = (): ProjectGroup | undefined => {
     if (!createsGroups) {
@@ -170,10 +186,15 @@ export function createNestedProjectGroupResolver(args: {
       return rootGroup
     }
     const fallbackName = getRuntimePathBasename(trimPathSeparators(args.parentPath))
+    const enteredName = args.groupName.trim()
+    rootGroup = groupReuse.reuseRoot(args.parentPath, enteredName, fallbackName)
+    if (rootGroup) {
+      return rootGroup
+    }
     rootGroup = args.createGroup({
-      name: args.groupName.trim() || fallbackName,
+      name: enteredName || fallbackName,
       parentPath: trimPathSeparators(args.parentPath),
-      connectionId: args.connectionId ?? null,
+      connectionId,
       parentGroupId: null,
       createdFrom: 'folder-scan'
     })
@@ -197,11 +218,17 @@ export function createNestedProjectGroupResolver(args: {
     const parentGroup = scope.parentRelativePath
       ? ensureFolderScopeGroup(scope.parentRelativePath)
       : root
+    const parentGroupId = parentGroup?.id ?? root.id
+    const reusable = groupReuse.reuseScope(scope.folderPath, parentGroupId)
+    if (reusable) {
+      folderScopeGroups.set(relativePath, reusable)
+      return reusable
+    }
     const group = args.createGroup({
       name: scope.name,
       parentPath: scope.folderPath,
-      connectionId: args.connectionId ?? null,
-      parentGroupId: parentGroup?.id ?? root.id,
+      connectionId,
+      parentGroupId,
       createdFrom: 'folder-scan'
     })
     folderScopeGroups.set(relativePath, group)
@@ -222,7 +249,10 @@ export function createNestedProjectGroupResolver(args: {
       return scopePath ? ensureFolderScopeGroup(scopePath) : root
     },
     getRootGroup: () => rootGroup,
-    getCreatedGroups: () => [...createdGroups]
+    getCreatedGroups: () => [...createdGroups],
+    applyReusedGroupChanges: () => {
+      rootGroup = groupReuse.applyChanges() ?? rootGroup
+    }
   }
 }
 
@@ -247,8 +277,7 @@ export function resolveNestedRepoSelection(args: {
     if (canonicalPath) {
       selectedPaths.push(canonicalPath)
     } else {
-      // Why: imports are derived from a bounded scan of this parent folder;
-      // callers must not smuggle unrelated paths into the group hierarchy.
+      // Scan-derived imports cannot admit paths outside their selected parent.
       rejectedPaths.push(repoPath)
     }
   }
@@ -284,8 +313,7 @@ export function resolveNestedRepoImportPaths(args: {
       normalizedPath === normalizedParentPath ||
       !isPathInsideOrEqual(canonicalParentPath, canonicalRepoPath)
     ) {
-      // Why: stopped scans import a caller-provided partial selection, so the
-      // parent boundary still blocks dot-segment escapes without rescanning.
+      // Partial selections after stopped scans still need parent-boundary validation without rescanning.
       rejectedPaths.push(repoPath)
       continue
     }

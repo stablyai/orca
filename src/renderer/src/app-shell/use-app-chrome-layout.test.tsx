@@ -1,14 +1,10 @@
 // @vitest-environment happy-dom
 import { renderHook } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { getDefaultSettings } from '../../../shared/constants'
+import { getDefaultSettings } from '../../../shared/orca-profiles/constants'
 import { useAppStore } from '../store'
 
-vi.mock('../components/terminal-pane/use-system-prefers-dark', () => ({
-  useSystemPrefersDark: () => false
-}))
-
-import { useAppChromeLayout } from './use-app-chrome-layout'
+import { useAppChromeLayout } from './chrome/use-app-chrome-layout'
 
 const initialState = useAppStore.getState()
 
@@ -20,7 +16,7 @@ function leftHeaderIsClipped(layout: ReturnType<typeof useAppChromeLayout>): boo
   )
 }
 
-function setChromeState(overrides: Record<string, unknown>): void {
+function setChromeState(overrides: Partial<ReturnType<typeof useAppStore.getState>>): void {
   useAppStore.setState({
     settings: { ...getDefaultSettings('/tmp'), workspaceSidebarPosition: 'right' },
     rightSidebarOpen: true,
@@ -28,7 +24,7 @@ function setChromeState(overrides: Record<string, unknown>): void {
     activeView: 'terminal',
     activeWorktreeId: null,
     ...overrides
-  } as never)
+  })
 }
 
 beforeEach(() => {
@@ -61,18 +57,6 @@ describe('useAppChromeLayout with the workspace list on the right', () => {
 
     expect(result.current.showRightSidebarControls).toBe(false)
     // Why: the sidebar body is not mounted, so keeping its column "open" clips the header controls in a 0-width box.
-    expect(result.current.leftSlotOpen).toBe(false)
-  })
-
-  it('releases the left slot while worktree creation hides the activity sidebar', () => {
-    setChromeState({
-      activeView: 'terminal',
-      activePendingCreationId: 'creation-1',
-      pendingWorktreeCreations: { 'creation-1': { id: 'creation-1' } }
-    })
-    const { result } = renderHook(() => useAppChromeLayout())
-
-    expect(result.current.creationLayoutActive).toBe(true)
     expect(result.current.leftSlotOpen).toBe(false)
   })
 

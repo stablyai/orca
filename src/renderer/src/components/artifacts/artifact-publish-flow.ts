@@ -3,15 +3,17 @@ import type {
   ArtifactCloudOperation,
   ArtifactPublishResult,
   ArtifactWriteRequest
-} from '../../../../shared/artifacts'
+} from '../../../../shared/artifacts/artifacts'
 import {
   ARTIFACT_MAX_CONTENT_BYTES,
   ARTIFACT_MAX_REQUEST_BYTES,
+  ARTIFACT_RATE_LIMITED_CODE,
   artifactContentByteLength,
   artifactWriteRequestByteLength
-} from '../../../../shared/artifacts'
+} from '../../../../shared/artifacts/artifacts'
 import { translate } from '@/i18n/i18n'
-import { callRuntimeRpc } from '@/runtime/runtime-rpc-client'
+import { callRuntimeRpc } from '@/runtime/rpc/calls/runtime-rpc-call'
+import { RuntimeRpcCallError } from '@/runtime/rpc/calls/runtime-rpc-result'
 import { useAppStore } from '@/store'
 
 const LOCAL_RUNTIME = { kind: 'local' } as const
@@ -20,6 +22,7 @@ export type ArtifactPublishPreparationErrorCode =
   | 'empty'
   | 'too-large'
   | 'unreadable'
+  | 'visual-unreadable'
   | 'unsupported'
   | 'binary'
 
@@ -93,7 +96,10 @@ export async function publishArtifactFromSurface(
       ),
       error instanceof ArtifactPublishPreparationError
         ? { description: artifactPreparationErrorDescription(error.code) }
-        : undefined
+        : // The desktop already wrote the limit and its local reset time into the message.
+          error instanceof RuntimeRpcCallError && error.code === ARTIFACT_RATE_LIMITED_CODE
+          ? { description: error.message }
+          : undefined
     )
   }
   return null
@@ -135,6 +141,11 @@ function artifactPreparationErrorDescription(code: ArtifactPublishPreparationErr
       return translate(
         'auto.components.artifacts.artifact-publish-flow.e2ed5acd8c',
         "Orca couldn't read this file. Open it from a workspace and try again."
+      )
+    case 'visual-unreadable':
+      return translate(
+        'auto.components.artifacts.artifact-publish-flow.visualUnreadable',
+        "Couldn't read this visual to share it."
       )
     case 'unsupported':
       return translate(

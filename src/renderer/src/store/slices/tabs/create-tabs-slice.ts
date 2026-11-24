@@ -9,22 +9,37 @@ import { createTabsLabelActions } from './tabs-label-actions'
 import { createTabsGroupActions } from './tabs-group-actions'
 import { createTabsMoveActions } from './tabs-move-actions'
 import { createTabsDropActions } from './tabs-drop-actions'
-import { createTabsSecondaryActions } from './tabs-secondary-actions'
+import { createTabsSplitRatioActions } from './tabs-split-ratio-actions'
+import { createTabsDragPreviewActions } from './tabs-drag-preview-actions'
 import { createTabsSessionActions } from './tabs-session-actions'
+import { pruneSplitLandingGroupsOnGroupRemoval } from './split-landing-groups'
+import { refusingBotSideChats } from './bot-side-chat-pin-rule'
+import { runtimeStatusSubscriptionsFor } from '../runtime-status/views/runtime-status-subscriptions'
 
-export const createTabsSlice: StateCreator<AppState, [], [], TabsSlice> = (set, get) => ({
-  unifiedTabsByWorktree: {},
-  groupsByWorktree: {},
-  activeGroupIdByWorktree: {},
-  layoutByWorktree: {},
-  ...createTabsCreateActions(set, get),
-  ...createTabsFocusActions(set, get),
-  ...createTabsCloseActions(set, get),
-  ...createTabsBulkCloseActions(set, get),
-  ...createTabsLabelActions(set, get),
-  ...createTabsGroupActions(set, get),
-  ...createTabsMoveActions(set, get),
-  ...createTabsDropActions(set, get),
-  ...createTabsSecondaryActions(set, get),
-  ...createTabsSessionActions(set, get)
-})
+export const createTabsSlice: StateCreator<AppState, [], [], TabsSlice> = (set, get, api) => {
+  pruneSplitLandingGroupsOnGroupRemoval(api)
+  const labelActions = createTabsLabelActions(set, get)
+  return {
+    unifiedTabsByWorktree: {},
+    groupsByWorktree: {},
+    activeGroupIdByWorktree: {},
+    splitLandingGroupIds: {},
+    layoutByWorktree: {},
+    ...createTabsCreateActions(set, get),
+    ...createTabsFocusActions(set, get),
+    ...createTabsCloseActions(set, get),
+    ...createTabsBulkCloseActions(set, get),
+    ...labelActions,
+    pinTab: refusingBotSideChats(
+      get,
+      () => runtimeStatusSubscriptionsFor(api).readStatuses(),
+      labelActions.pinTab
+    ),
+    ...createTabsGroupActions(set, get),
+    ...createTabsMoveActions(set, get),
+    ...createTabsDropActions(set, get),
+    ...createTabsSplitRatioActions(set),
+    ...createTabsDragPreviewActions(set),
+    ...createTabsSessionActions(set, get)
+  }
+}

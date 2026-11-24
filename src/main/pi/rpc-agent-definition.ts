@@ -1,4 +1,4 @@
-import type { DirectoryAccountAgentDefinition } from '../native-chat/agent-session-wire/structured-agent-definition'
+import type { DirectoryAccountAgentDefinition } from '../native-chat/agent-session-wire/providers/structured-agent-definition'
 
 export const PI_RPC_AGENT: DirectoryAccountAgentDefinition = {
   agent: 'pi',
@@ -7,6 +7,7 @@ export const PI_RPC_AGENT: DirectoryAccountAgentDefinition = {
   capabilities: {
     rewind: false,
     compact: true,
+    compactInstructions: true,
     threadGoal: false,
     contextUsage: true,
     imagePrompts: true,

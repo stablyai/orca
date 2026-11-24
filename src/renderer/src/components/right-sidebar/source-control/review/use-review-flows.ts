@@ -5,10 +5,6 @@ import { useSourceControlHostedReviewCreation } from './use-hosted-review-creati
 import { useSourceControlHostedReviewEligibility } from './use-hosted-review-eligibility'
 import { useSourceControlPullRequestGeneration } from './use-pull-request-generation'
 
-/**
- * The hand-driven review path: draft the fields, keep eligibility fresh while they are edited, and
- * create the review on the host.
- */
 export function useSourceControlReviewFlows(foundation: SourceControlPanelFoundation) {
   const {
     activeRepo,
@@ -18,10 +14,10 @@ export function useSourceControlReviewFlows(foundation: SourceControlPanelFounda
     activeRepoPath,
     activeRepoTarget,
     activeWorktreeId,
+    activeWorktree,
     allocatePullRequestGenerationRequestId,
     branchName,
     createHostedReview,
-    createPrInFlightRef,
     createStackedHostedReview,
     effectiveBaseRef,
     fallbackGitHubPRNumber,
@@ -43,14 +39,12 @@ export function useSourceControlReviewFlows(foundation: SourceControlPanelFounda
     linkedGitLabMR,
     linkedGiteaPR,
     openPullRequestGenerationDialog,
-    prGenerationRecords,
+    operationStore,
     provisionalHostedReviewProvider,
     refreshActiveGitStatusAfterMutation,
     refreshGitStatusAfterPullRequestGeneration,
     remoteStatus,
     resolvedPrCreationDefaults,
-    setCreatePrInFlightByWorktree,
-    setCreatePrIntentNoticeForWorktree,
     setHostedReviewCreationRequestState,
     setHostedReviewCreationState,
     setPullRequestGenerationRecord,
@@ -87,9 +81,7 @@ export function useSourceControlReviewFlows(foundation: SourceControlPanelFounda
     allocatePullRequestGenerationRequestId,
     branchName,
     hostedReviewCreateProvider,
-    prGenerationRecords,
     refreshGitStatusAfterPullRequestGeneration,
-    resolvedPrCreationDefaults,
     setPullRequestGenerationRecord,
     updatePullRequestGenerationRecord,
     worktreePath
@@ -102,6 +94,7 @@ export function useSourceControlReviewFlows(foundation: SourceControlPanelFounda
     activeRepo,
     activeRepoTarget,
     activeWorktreeId,
+    activeWorktree,
     branchName,
     effectiveBaseRef,
     fetchHostedReviewForBranch,
@@ -132,6 +125,7 @@ export function useSourceControlReviewFlows(foundation: SourceControlPanelFounda
     activeRepoPath,
     activeWorktreeId,
     branchName,
+    currentHeadOid: activeWorktree?.head ?? null,
     effectiveBaseRef,
     fallbackGitHubPRNumber,
     getHostedReviewCreationEligibility,
@@ -159,24 +153,23 @@ export function useSourceControlReviewFlows(foundation: SourceControlPanelFounda
     activeWorktreeId,
     branchName,
     createHostedReview,
-    createPrInFlightRef,
     createStackedHostedReview,
     handleGeneratePullRequestFields: createReviewComposer.handleGeneratePullRequestFields,
     handlePullRequestCreated: hostedReviewCreated.handlePullRequestCreated,
     hostedReviewCreateCopy,
     hostedReviewCreateProvider,
     hostedReviewCreation,
+    operationStore,
     prAiGenerationEnabled: createReviewComposer.prAiGenerationEnabled,
     prBase,
+    prImageUploadPendingRef: createReviewComposer.prImageUploadPendingRef,
     prBody,
     prDraft,
+    prFieldRevisions: createReviewComposer.prFieldRevisions,
     prFieldsAreSeedPlaceholders: createReviewComposer.prFieldsAreSeedPlaceholders,
     prGenerating,
     prTitle,
-    resolvedPrCreationDefaults,
-    setCreatePrInFlightByWorktree,
-    setCreatePrIntentNoticeForWorktree,
-    settings,
+    pullRequestFieldsInitialized: createReviewComposer.pullRequestFieldsInitialized,
     worktreePath
   })
 

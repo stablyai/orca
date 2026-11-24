@@ -1,11 +1,11 @@
-import type { PersistedState } from '../../../shared/persisted-state-types'
-import type { WorkspaceSessionState } from '../../../shared/workspace-session-state-types'
-import { parseWorkspaceKey } from '../../../shared/workspace-scope'
+import type { PersistedState } from '../../../shared/orca-profiles/persisted-state-types'
+import type { WorkspaceSessionState } from '../../../shared/workspace-session/workspace-session-state-types'
+import { parseWorkspaceKey } from '../../../shared/workspace/identity/workspace-scope'
 import {
   getWorktreeIdFromHostIdentity,
   isWorktreeHostIdentity
 } from '../../../shared/worktree/host-qualified-identity'
-import { worktreeRetentionIdComparisonKey } from '../../worktree-retention-path-comparison'
+import { worktreeRetentionIdComparisonKey } from '../../workspaces/catalog/worktree-retention-path-comparison'
 
 type WorkspaceSessionWorktreeReferenceKind =
   | 'none'
@@ -18,7 +18,7 @@ type WorkspaceSessionWorktreeReferenceKind =
   | 'row-arrays'
   | 'browser-row-arrays'
 
-/** Every persisted session field must state how, if at all, it can name a worktree owner. */
+/** Classify every persisted session field for worktree ownership tracking. */
 export const WORKSPACE_SESSION_WORKTREE_REFERENCE_KIND = {
   activeRepoId: 'none',
   activeWorkspaceKey: 'direct',
@@ -37,6 +37,7 @@ export const WORKSPACE_SESSION_WORKTREE_REFERENCE_KIND = {
   activeBrowserTabIdByWorktree: 'owner-keyed',
   clientHostedBrowserPagesByWorktree: 'owner-keyed',
   clientHostedBrowserCloseIntentsByEnvironment: 'row-arrays',
+  pairedTerminalTabCloseIntentsByEnvironment: 'row-arrays',
   activeTabTypeByWorktree: 'owner-keyed',
   browserUrlHistory: 'none',
   workspaceDocHistory: 'none',
@@ -47,13 +48,16 @@ export const WORKSPACE_SESSION_WORKTREE_REFERENCE_KIND = {
   activeGroupIdByWorktree: 'owner-keyed',
   activeConnectionIdsAtShutdown: 'none',
   remoteSessionIdsByTabId: 'none',
+  desktopRelayOwnerByTabId: 'none',
+  desktopRelayAdoptionVersion: 'none',
   lastVisitedAtByWorktreeId: 'owner-keyed',
   defaultTerminalTabsAppliedByWorktreeId: 'owner-keyed',
   sleepingAgentSessionsByPaneKey: 'row-record',
   terminalPtyIncarnationsByPaneKey: 'none',
   terminalTopologyRevisionByRepoId: 'none',
   terminalSurfaceTombstonesByPaneKey: 'row-record',
-  closedTerminalTabTombstonesByTabId: 'row-record'
+  closedTerminalTabTombstonesByTabId: 'row-record',
+  closedTerminalPanesByPaneKey: 'row-record'
 } as const satisfies Record<keyof WorkspaceSessionState, WorkspaceSessionWorktreeReferenceKind>
 
 type WorktreeRow = { worktreeId?: string | null }

@@ -1,38 +1,36 @@
-import { homedir } from 'node:os'
-import { join } from 'node:path'
-import { agentSessionAccountHome } from '../../shared/agent-session-account-home'
-import { isAgentSessionPreSpawnError } from '../native-chat/agent-session-wire/structured-agent-session-adapter'
-import { supportsSupervisedProviderChildLocation } from '../provider-process/supervised-provider-child-location'
 import type {
   StructuredAgentAdapterContext,
   StructuredAgentRuntimeAdapter,
   StructuredAgentRuntimeRegistration
-} from '../runtime/structured-agent-runtime-registrations'
+} from '../runtime/agent-session/installation/structured-agent-runtime-registration-types'
 import {
   composeStructuredLaunch,
   structuredAgentLaunchSources
-} from '../runtime/structured-agent-launch-composition'
+} from '../runtime/agent-session/launch/structured-agent-launch-composition'
 import { PI_RPC_AGENT } from './rpc-agent-definition'
-import {
-  piRpcLaunchPart,
-  piRpcVersionSupported,
-  resolvePiRpcCommand
-} from './rpc-launch-resolution'
-import { PiRpcSessionAdapter } from './rpc-session-adapter'
-import { createPiModelCatalogProbe } from './rpc-model-catalog-probe'
-import { PI_SESSION_HISTORY } from './pi-session-history'
+import { piRpcLaunchPart } from './rpc/launch/rpc-launch-resolution'
+import { PiRpcSessionAdapter } from './rpc/rpc-session-adapter'
+import { PI_RPC_RUNTIME_METADATA } from './rpc-runtime-metadata'
 
 function createPiRpcAdapter(context: StructuredAgentAdapterContext): StructuredAgentRuntimeAdapter {
   const { deps } = context
   return new PiRpcSessionAdapter({
-    resolveLaunch: composeStructuredLaunch(
-      PI_RPC_AGENT,
-      structuredAgentLaunchSources(context),
-      piRpcLaunchPart({})
-    ),
+    resolveLaunch:
+      deps.resolvePiLaunch ??
+      composeStructuredLaunch(
+        PI_RPC_AGENT,
+        structuredAgentLaunchSources(context),
+        piRpcLaunchPart({
+          logger: deps.logger,
+          dataDirectory: deps.stateDirectory,
+          managedExtensionsEnabled: deps.piManagedExtensionsEnabled
+        })
+      ),
     ...(deps.openPiConnection ? { openConnection: deps.openPiConnection } : {}),
     ...(deps.readProcessStartTime ? { readProcessStartTime: deps.readProcessStartTime } : {}),
     onLifecycle: context.deliverLifecycle,
+    onChildWorkEvidence: (sessionId, evidence, producer) =>
+      context.host()?.publishChildWorkEvidence(sessionId, evidence, producer),
     onSettled: ({ sessionId, clientMessageId, outcome }) => {
       if (outcome.state === 'admitted') {
         return
@@ -40,48 +38,25 @@ function createPiRpcAdapter(context: StructuredAgentAdapterContext): StructuredA
       context.followUps.onDispatchSettledLate({
         sessionId,
         clientMessageId,
-        ...(outcome.state === 'accepted' ? { providerIdentity: outcome.providerIdentity } : outcome)
+        ...(outcome.state === 'accepted'
+          ? {
+              providerIdentity: outcome.providerIdentity,
+              ...(outcome.answeredInTurn ? { answeredInTurn: outcome.answeredInTurn } : {})
+            }
+          : outcome)
       })
     },
-    onIdle: context.followUps.releaseUnansweredDispatches,
+    persistResumePoint: async ({ sessionId, fence, handle }) => {
+      await context.store.updateRecord(sessionId, {
+        kind: 'resume-point',
+        args: { fence, handle, now: Date.now() }
+      })
+    },
     logger: deps.logger
   })
 }
 
-export const PI_RPC_RUNTIME_REGISTRATION: StructuredAgentRuntimeRegistration = {
-  definition: PI_RPC_AGENT,
-  createAdapter: createPiRpcAdapter,
-  modelCatalog: (context) => ({
-    kind: 'probe',
-    // `--list-models` marks no model as the one Pi runs by default.
-    listingNamesConfiguredModel: false,
-    probe: createPiModelCatalogProbe({
-      // The environment a chat's launch starts from too.
-      resolveEnvironment: () => context.environment.resolveAgentEnvironment('pi'),
-      ...(context.deps.resolveAgentCommandSettings
-        ? { resolveCommandSettings: context.deps.resolveAgentCommandSettings }
-        : {})
-    })
-  }),
-  transcriptImport: null,
-  sessionHistory: PI_SESSION_HISTORY,
-  supportsLocation: supportsSupervisedProviderChildLocation,
-  supportsLaunch: async ({ cwd, env, commandSettings }) => {
-    let command: string
-    try {
-      command = resolvePiRpcCommand(env, commandSettings)
-    } catch (error) {
-      // An unrunnable Command setting is the launch's refusal to state, not a terminal.
-      if (isAgentSessionPreSpawnError(error)) {
-        return true
-      }
-      throw error
-    }
-    return piRpcVersionSupported({ command, cwd, env })
-  },
-  resolveAccountHome: async ({ launchEnv }) =>
-    agentSessionAccountHome(
-      PI_RPC_AGENT,
-      launchEnv.PI_CODING_AGENT_DIR?.trim() || join(homedir(), '.pi', 'agent')
-    )
-}
+export const PI_RPC_RUNTIME_REGISTRATION: StructuredAgentRuntimeRegistration = Object.assign(
+  PI_RPC_RUNTIME_METADATA,
+  { createAdapter: createPiRpcAdapter }
+)

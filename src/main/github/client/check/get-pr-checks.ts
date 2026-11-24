@@ -1,127 +1,38 @@
-import { runCoalescedProbe, type CoalescedProbes } from '../../../git/coalesced-probe'
-import { githubReadExecutionScope } from '../../github-read-execution-scope'
-import type { PRCheckDetail } from '../../../../shared/github/check-types'
-import { GITHUB_WORK_ITEMS_SSH_REMOTE_REQUIRED_MESSAGE } from '../../../../shared/work-items'
-import { ghExecFileAsync, acquire, release, type LocalGitExecOptions } from '../../gh-utils'
-import { extractExecError } from '../../../git/exec-error'
-import { resolveGitHubRepoExecution, type GitHubApiRepository } from '../../github-api-repository'
-import { mapCheckStatus, mapCheckConclusion } from '../../mappers'
-import { noteRepositoryRateLimitSpend } from '../../rate-limit'
-import type { GhExecOptions } from './../github-exec-scope'
+import { normalizePRCheckHeadSha } from '../../../../shared/github/checks/pr-check-head'
+import { getPRAutoRefreshCadence } from '../../../../shared/source-control/hosted-review/review-refresh-policy'
+import {
+  withGitHubRepoExecution,
+  type LocalGitExecOptions
+} from '../../repositories/github-repository-identity'
+import { runCoalescedProbe, type CoalescedProbes } from '../../../git/remotes/coalesced-probe'
+import type { PRCheckDetail } from '../../../../shared/github/checks/check-types'
+import { summarizePRCheckRollup } from '../../../../shared/source-control/checks/pr-check-status'
+import { GITHUB_WORK_ITEMS_SSH_REMOTE_REQUIRED_MESSAGE } from '../../../../shared/github/work-items/work-item-ssh-error'
+import { ghExecFileAsync } from '../../../git/command-runner/hosted-cli/gh-exec-file'
+import { acquire, release } from '../../execution/github-operation-slots'
+
+import { extractExecError } from '../../../git/command-runner/process-capture/exec-error'
+import { resolveGitHubRepoExecution } from '../../repositories/github-api-repository'
+import type { GitHubRepositoryIdentity as GitHubApiRepository } from '../../../../shared/github/repositories/repository-identity'
+import { mapCheckStatus, mapCheckConclusion } from '../../api/github-read-response'
+import { noteRepositoryRateLimitSpend } from '../../api/rate-limit'
 import { assertRateLimitBudget } from './../lookup/pr-lookup-rate-limit'
-import {
-  PR_CHECKS_ROLLUP_QUERY,
-  type GraphQLPRChecksResponse,
-  type RestCheckRun,
-  type RestCommitStatus,
-  type RestCheckSuite
-} from './pr-checks-graphql-query'
-import {
-  mapRestCheckRun,
-  mapRestCommitStatus,
-  mapGraphQLPRChecksResponse,
-  getPendingApprovalCheckSuiteName,
-  getPendingApprovalCheckSuiteUrl
-} from './pr-checks-response-mapping'
+import { prCheckRollupRows, readGraphQLPRCheckPages } from './pr-check-rollup'
+import { mapGraphQLPRCheckPages } from './pr-checks-response-mapping'
 import { parseActionsRunId } from './check-detail-field-mapping'
-export async function getPRChecksViaRestFallback(
-  ownerRepo: GitHubApiRepository,
-  headSha: string | undefined,
-  ghOptions: GhExecOptions,
-  noCache?: boolean
-): Promise<PRCheckDetail[] | null> {
-  if (!headSha) {
-    return null
-  }
-  try {
-    await assertRateLimitBudget('core', ownerRepo, ghOptions)
-  } catch (err) {
-    console.warn('getPRChecks skipped REST fallback, falling back to gh pr checks:', err)
-    return null
-  }
+import { checkRunTimes } from '../../../../shared/source-control/checks/pr-check-time'
+import {
+  latestPRChecks,
+  prChecksProbeKey,
+  prChecksResourceKey,
+  producePRChecks,
+  readPacedPRChecks,
+  type PRChecksObservation,
+  type PRChecksRead
+} from './pr-checks-last-outcome'
+import { readRestPRCheckObservation } from './rest-pr-check-observation'
 
-  await acquire()
-  try {
-    const cacheArgs = noCache ? [] : ['--cache', '60s']
-    const encodedHeadSha = encodeURIComponent(headSha)
-    const { stdout } = await ghExecFileAsync(
-      [
-        'api',
-        ...cacheArgs,
-        `repos/${ownerRepo.owner}/${ownerRepo.repo}/commits/${encodedHeadSha}/check-runs?per_page=100`
-      ],
-      ghOptions
-    )
-    noteRepositoryRateLimitSpend(ownerRepo, 'core', 1, ghOptions)
-    const checkRunData = JSON.parse(stdout) as {
-      check_runs?: RestCheckRun[]
-    }
-    const checkRuns = (checkRunData.check_runs ?? []).map(mapRestCheckRun)
-    const checkRunNames = new Set(checkRuns.map((check) => check.name))
-
-    let legacyStatuses: PRCheckDetail[] = []
-    try {
-      const statusResult = await ghExecFileAsync(
-        [
-          'api',
-          ...cacheArgs,
-          `repos/${ownerRepo.owner}/${ownerRepo.repo}/commits/${encodedHeadSha}/status?per_page=100`
-        ],
-        ghOptions
-      )
-      noteRepositoryRateLimitSpend(ownerRepo, 'core', 1, ghOptions)
-      const statusData = JSON.parse(statusResult.stdout) as {
-        statuses?: RestCommitStatus[]
-      }
-      legacyStatuses = (statusData.statuses ?? [])
-        .map(mapRestCommitStatus)
-        .filter((check): check is PRCheckDetail => check !== null && !checkRunNames.has(check.name))
-    } catch (err) {
-      // Why: REST fallback is already degraded; keep the richer check-run rows if legacy-status enrichment fails.
-      console.warn('getPRChecks REST status fallback failed:', err)
-    }
-
-    let pendingApprovalChecks: PRCheckDetail[] = []
-    try {
-      const suitesResult = await ghExecFileAsync(
-        [
-          'api',
-          ...cacheArgs,
-          `repos/${ownerRepo.owner}/${ownerRepo.repo}/commits/${encodedHeadSha}/check-suites?per_page=100`
-        ],
-        ghOptions
-      )
-      noteRepositoryRateLimitSpend(ownerRepo, 'core', 1, ghOptions)
-      const suitesData = JSON.parse(suitesResult.stdout) as {
-        check_suites?: RestCheckSuite[]
-      }
-      pendingApprovalChecks = (suitesData.check_suites ?? [])
-        .filter((suite) => suite.conclusion?.toLowerCase() === 'action_required')
-        .map((suite, index) => ({
-          name: getPendingApprovalCheckSuiteName(suite, headSha, index),
-          status: 'completed' as const,
-          conclusion: 'action_required' as const,
-          url: getPendingApprovalCheckSuiteUrl(ownerRepo, headSha, suite.id)
-        }))
-    } catch (err) {
-      console.warn('getPRChecks REST check-suite fallback failed:', err)
-    }
-
-    const checks = [...checkRuns, ...legacyStatuses, ...pendingApprovalChecks]
-    return checks.length > 0 ? checks : null
-  } catch (err) {
-    console.warn('getPRChecks via REST fallback failed, falling back to gh pr checks:', err)
-    return null
-  } finally {
-    release()
-  }
-}
-
-/**
- * Get detailed check statuses for a PR.
- * Uses GitHub's combined GraphQL rollup so check runs and legacy commit statuses
- * arrive in one cached request; suite-only approval blockers are included too.
- */
+/** Read the combined GraphQL rollup, including legacy statuses and suite-only approval blockers. */
 async function readPRChecks(
   repoPath: string,
   prNumber: number,
@@ -130,8 +41,7 @@ async function readPRChecks(
   options?: { noCache?: boolean },
   connectionId?: string | null,
   localGitOptions: LocalGitExecOptions = {}
-): Promise<PRCheckDetail[]> {
-  void headSha
+): Promise<PRChecksObservation> {
   const { ownerRepo, ghOptions } = await resolveGitHubRepoExecution(
     repoPath,
     prRepo,
@@ -145,25 +55,43 @@ async function readPRChecks(
     await assertRateLimitBudget('graphql', ownerRepo, ghOptions)
     await acquire()
     try {
-      const fallbackArgs = ['pr', 'checks', String(prNumber), '--json', 'name,state,link']
-      if (ownerRepo) {
-        fallbackArgs.push('--repo', `${ownerRepo.owner}/${ownerRepo.repo}`)
-      }
-      const { stdout } = await ghExecFileAsync(fallbackArgs, ghOptions).catch((err: unknown) => {
-        const { stderr } = extractExecError(err)
-        // Why: `gh pr checks` exits non-zero when a PR has no check runs yet; treat that as empty, not a load failure.
-        if (stderr.toLowerCase().includes('no checks reported')) {
-          return { stdout: '[]', stderr }
+      const readFallback = (fields: string) => {
+        const fallbackArgs = ['pr', 'checks', String(prNumber), '--json', fields]
+        if (ownerRepo) {
+          fallbackArgs.push('--repo', `${ownerRepo.owner}/${ownerRepo.repo}`)
         }
-        throw err
-      })
+        return ghExecFileAsync(fallbackArgs, ghOptions).catch((err: unknown) => {
+          const { stderr } = extractExecError(err)
+          // gh pr checks signals an empty run set with nonzero exit.
+          if (stderr.toLowerCase().includes('no checks reported')) {
+            return { stdout: '[]', stderr }
+          }
+          throw err
+        })
+      }
+      const { stdout } = await readFallback('name,state,link,startedAt,completedAt').catch(
+        (err: unknown) => {
+          // Older gh builds reject unknown --json fields; their rows simply have no times.
+          if (!extractExecError(err).stderr.toLowerCase().includes('unknown json field')) {
+            throw err
+          }
+          return readFallback('name,state,link')
+        }
+      )
       noteRepositoryRateLimitSpend(ownerRepo, 'graphql', 1, ghOptions)
-      const data = JSON.parse(stdout) as { name: string; state: string; link: string }[]
+      const data: {
+        name: string
+        state: string
+        link: string
+        startedAt?: string
+        completedAt?: string
+      }[] = JSON.parse(stdout)
       return data.map((d) => ({
         name: d.name,
         status: mapCheckStatus(d.state),
         conclusion: mapCheckConclusion(d.state),
         url: d.link || null,
+        ...checkRunTimes(d.startedAt, d.completedAt),
         workflowRunId: parseActionsRunId(d.link)
       }))
     } finally {
@@ -182,40 +110,31 @@ async function readPRChecks(
     if (canUseGraphQLRollup) {
       await acquire()
       try {
-        // Why: --cache 60s saves rate-limit budget during polling; explicit refresh skips it for fresh data.
-        const cacheArgs = options?.noCache ? [] : ['--cache', '60s']
-        const { stdout } = await ghExecFileAsync(
-          [
-            'api',
-            'graphql',
-            ...cacheArgs,
-            '-f',
-            `owner=${ownerRepo.owner}`,
-            '-f',
-            `repo=${ownerRepo.repo}`,
-            '-F',
-            `pr=${prNumber}`,
-            '-f',
-            `query=${PR_CHECKS_ROLLUP_QUERY}`
-          ],
-          ghOptions
-        )
-        noteRepositoryRateLimitSpend(ownerRepo, 'graphql', 1, ghOptions)
-        const checks = mapGraphQLPRChecksResponse(
-          ownerRepo,
-          JSON.parse(stdout) as GraphQLPRChecksResponse
-        )
-        if (checks !== null) {
-          return checks
+        // No gh disk cache: its key ignores the PR head, so it served the previous head's checks after a push, and it never evicts.
+        // Orca's own head-keyed checks cache and read coalescing bound the request volume.
+        const pages = await readGraphQLPRCheckPages(ownerRepo, prNumber, ghOptions, {
+          detailed: true
+        })
+        const observedHeadSha = normalizePRCheckHeadSha(pages.headSha)
+        return {
+          checks: mapGraphQLPRCheckPages(ownerRepo, pages),
+          ...(observedHeadSha
+            ? {
+                summary: {
+                  headSha: observedHeadSha,
+                  value: summarizePRCheckRollup(prCheckRollupRows(pages))
+                }
+              }
+            : {})
         }
       } catch (err) {
-        // Why: fall back to older `gh pr checks` when GitHub's richer rollup query is unavailable.
+        // Older CLI/API schemas may require the legacy gh pr checks path.
         console.warn('getPRChecks via GraphQL rollup failed, falling back to gh pr checks:', err)
       } finally {
         release()
       }
     }
-    const restChecks = await getPRChecksViaRestFallback(
+    const restChecks = await readRestPRCheckObservation(
       ownerRepo,
       headSha,
       ghOptions,
@@ -227,34 +146,89 @@ async function readPRChecks(
   }
 
   try {
-    return await fallbackToPRChecks()
+    return { checks: await fallbackToPRChecks() }
   } catch (err) {
     console.warn('getPRChecks failed:', err)
     throw err
   }
 }
 
-const checksReads: CoalescedProbes<PRCheckDetail[]> = new Map()
+const checksReads: CoalescedProbes<PRChecksRead> = new Map()
 
-export function getPRChecks(
+/** `timed`: a client's timer tick, which this host may answer from its last read at its PR
+ *  auto-refresh cadence. A manual read (`userRefresh`, `noCache`) always reaches the provider. */
+type PRChecksReadOptions = { noCache?: boolean; userRefresh?: boolean; timed?: boolean }
+
+export async function getPRChecks(
   repoPath: string,
   prNumber: number,
   headSha?: string,
   prRepo?: GitHubApiRepository | null,
-  options?: { noCache?: boolean },
+  options?: PRChecksReadOptions,
   connectionId?: string | null,
   localGitOptions: LocalGitExecOptions = {}
 ): Promise<PRCheckDetail[]> {
-  const key = JSON.stringify([
+  const { checks } = await getPRChecksObservation(
     repoPath,
     prNumber,
-    headSha ?? null,
-    prRepo ?? null,
-    Boolean(options?.noCache),
-    connectionId ?? null,
-    githubReadExecutionScope(localGitOptions)
-  ])
-  return runCoalescedProbe(checksReads, key, () =>
-    readPRChecks(repoPath, prNumber, headSha, prRepo, options, connectionId, localGitOptions)
+    headSha,
+    prRepo,
+    options,
+    connectionId,
+    localGitOptions
   )
+  return checks
+}
+
+export function getPRChecksObservation(
+  repoPath: string,
+  prNumber: number,
+  headSha?: string,
+  prRepo?: GitHubApiRepository | null,
+  options?: PRChecksReadOptions,
+  connectionId?: string | null,
+  localGitOptions: LocalGitExecOptions = {}
+): Promise<PRChecksObservation> {
+  return withGitHubRepoExecution(repoPath, connectionId, localGitOptions, async () => {
+    const resource = prChecksResourceKey(
+      repoPath,
+      connectionId,
+      prNumber,
+      headSha,
+      prRepo ?? null,
+      localGitOptions
+    )
+    if (options?.timed && !options.noCache && !options.userRefresh) {
+      const paced = readPacedPRChecks(resource, getPRAutoRefreshCadence())
+      if (paced) {
+        return paced
+      }
+    }
+    // The resource key carries the review generation, so a read after a PR mutation never joins
+    // one that started before it; the producer records its own result at its own start order.
+    const probeKey = prChecksProbeKey(resource, Boolean(options?.noCache))
+    const read = await runCoalescedProbe(
+      checksReads,
+      probeKey,
+      (ownsKey) =>
+        producePRChecks(
+          resource,
+          ownsKey,
+          () =>
+            readPRChecks(
+              repoPath,
+              prNumber,
+              headSha,
+              prRepo,
+              options,
+              connectionId,
+              localGitOptions
+            ),
+          () => checksReads.get(probeKey)?.promise
+        ),
+      undefined,
+      { userRefresh: options?.userRefresh === true }
+    )
+    return latestPRChecks(resource, read)
+  })
 }

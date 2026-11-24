@@ -1,12 +1,15 @@
 import { randomUUID } from 'node:crypto'
-import type { Repo } from '../../../shared/repo-types'
-import { DEFAULT_WORKSPACE_STATUS_ID } from '../../../shared/workspace-statuses'
-import { FOLDER_WORKSPACE_INSTANCE_SEPARATOR } from '../../../shared/worktree/id'
+import type { Repo } from '../../../shared/repository/repo-types'
+import { DEFAULT_WORKSPACE_STATUS_ID } from '../../../shared/workspace/status/workspace-statuses'
+import {
+  FOLDER_WORKSPACE_INSTANCE_SEPARATOR,
+  getRepoMainWorktreeId
+} from '../../../shared/worktree/id'
 import type { WorktreeMeta } from '../../../shared/worktree/meta-types'
 import type { Worktree } from '../../../shared/worktree/types'
 
 export function getFolderWorkspaceRootId(repo: Repo): string {
-  return `${repo.id}::${repo.path}`
+  return getRepoMainWorktreeId(repo)
 }
 
 export function getFolderWorkspaceInstanceId(repo: Repo, instanceId: string): string {

@@ -1,0 +1,9 @@
+{
+  "ios": {
+    "NSCameraUsageDescription": "QR コードをスキャンするため、Orca にカメラの使用を許可してください。",
+    "NSLocalNetworkUsageDescription": "Orca は LAN 上のデスクトップアプリに接続します。",
+    "NSMicrophoneUsageDescription": "音声入力のためにマイクを使用します。文字起こしはこの端末またはペアリングしたコンピュータで行われます。",
+    "NSPhotoLibraryAddUsageDescription": "セッションの画像を写真に保存するため、Orca に写真への追加を許可してください。",
+    "NSPhotoLibraryUsageDescription": "ペアリング済みのデスクトップのターミナルセッションに写真を添付するため、Orca に写真ライブラリへのアクセスを許可してください。"
+  }
+}

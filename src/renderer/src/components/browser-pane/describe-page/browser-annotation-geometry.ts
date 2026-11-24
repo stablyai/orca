@@ -5,15 +5,16 @@ import type {
   BrowserGrabPayload,
   BrowserGrabRect,
   BrowserPageAnnotation
-} from '../../../../../shared/browser-grab-types'
-import type { BrowserAnnotationViewportReport } from '../../../../../shared/browser-annotation-viewport-report'
+} from '../../../../../shared/browser/element-grab/browser-grab-types'
+import type { BrowserAnnotationViewportReport } from '../../../../../shared/browser/annotations/browser-annotation-viewport-report'
 import { translate } from '@/i18n/i18n'
 
 export type BrowserOverlaySide = 'top' | 'bottom' | 'left' | 'right'
 
-/** The pane and the guest view, narrowed to the measurement the anchor needs from each. */
-type OverlayRectSource = {
-  getBoundingClientRect: () => { left: number; top: number; width: number; height: number }
+/** The pane and the guest's drawn surface (webview or streamed frame), narrowed to the measurement overlays need. */
+type OverlayRect = { left: number; top: number; width: number; height: number }
+export type OverlayRectSource = {
+  getBoundingClientRect: () => OverlayRect
 }
 
 export type BrowserOverlayAnchor = {
@@ -44,20 +45,17 @@ export const DEFAULT_BROWSER_ANNOTATION_PRIORITY: BrowserAnnotationPriority = 'i
 export const BROWSER_PAGE_ZOOM_FEEDBACK_MS = 1400
 
 export type BrowserOverlayViewport = {
-  scrollX: number
-  scrollY: number
+  /** Bumped when the pane moves or resizes so overlays re-measure; it never stands in for guest geometry. */
   version: number
-  /** Guest `innerWidth` at the last report. */
-  viewportWidth?: number
-  /** Live box of the pending selection, re-measured by the guest; absent until it reports one. */
-  target?: BrowserGrabRect
+  /** The guest's last report. Absent until one arrives, so capture-time scroll stays authoritative. */
+  guest?: BrowserAnnotationViewportReport
 }
+
+export const INITIAL_BROWSER_OVERLAY_VIEWPORT: BrowserOverlayViewport = { version: 0 }
 
 export const EMPTY_BROWSER_ANNOTATIONS: BrowserPageAnnotation[] = []
 
-// Footprint of PendingBrowserAnnotationCard (measured at 352x237), rounded up. The height is only
-// the fallback until the card has measured itself; the width is fixed by the card's CSS, and its
-// rendered width is squeezed by the side it sits on, so measuring it would feed back into the pick.
+// Use fixed CSS width to avoid feedback from side-dependent squeezing; fallback height lasts only until the card measures itself.
 const PENDING_ANNOTATION_CARD_HEIGHT = 240
 const PENDING_ANNOTATION_CARD_WIDTH = 352
 // PopoverContent's sideOffset (10) plus its collisionPadding (12).
@@ -80,14 +78,7 @@ export function createBrowserAnnotationPayload(
 // Preference order: a later side is only reached when every earlier one is too tight.
 const BROWSER_OVERLAY_SIDES = ['bottom', 'top', 'right', 'left'] as const
 
-/**
- * Side of the target whose free band can hold the card.
- *
- * Why every side and not just below/above: Radix shifts a popover back along its own axis when
- * the named side cannot hold it, so naming a side that does not fit lands the card *on* the
- * target instead of beside it. A tall target, or a short pane, leaves neither vertical band deep
- * enough — the horizontal ones usually still are.
- */
+/** Try all sides: Radix shifts a card back over its target if the chosen free band cannot hold it. */
 function pickBrowserOverlaySide(
   space: Record<BrowserOverlaySide, number>,
   cardHeight: number
@@ -101,36 +92,51 @@ function pickBrowserOverlaySide(
     left: space.left / horizontal
   }
   const fitting = BROWSER_OVERLAY_SIDES.find((side) => room[side] >= 1)
-  // No band fits, so overlap is unavoidable and Radix still flips and shifts to keep the card
-  // on screen — the deeper vertical band only makes it overlap least. Letting it cover part of
-  // the target beats the alternatives (anchoring to the target rect, or turning collision
-  // handling off), which both park ~95% of the composer outside the pane.
+  // When nothing fits, choose the deeper vertical band and let Radix keep the card on screen rather than disabling collisions.
   return fitting ?? (room.bottom >= room.top ? 'bottom' : 'top')
+}
+
+/** Maps guest CSS pixels into the container; the drawn surface differs from the guest viewport under page zoom or a scaled stream. */
+export function mapGuestRectToContainer(
+  rect: BrowserGrabRect,
+  containerRect: OverlayRect | undefined,
+  surfaceRect: OverlayRect | undefined,
+  guestViewportWidth: number
+): BrowserGrabRect {
+  const scale =
+    surfaceRect && surfaceRect.width > 0 && guestViewportWidth > 0
+      ? surfaceRect.width / guestViewportWidth
+      : 1
+  return {
+    x: (surfaceRect?.left ?? 0) - (containerRect?.left ?? 0) + rect.x * scale,
+    y: (surfaceRect?.top ?? 0) - (containerRect?.top ?? 0) + rect.y * scale,
+    width: rect.width * scale,
+    height: rect.height * scale
+  }
 }
 
 export function getBrowserOverlayAnchor(
   payload: BrowserGrabPayload,
   container: OverlayRectSource | null,
-  webview: OverlayRectSource | null,
+  surface: OverlayRectSource | null,
   viewport: BrowserOverlayViewport,
   cardHeight: number | null = null
 ): BrowserOverlayAnchor {
   const containerRect = container?.getBoundingClientRect()
-  const webviewRect = webview?.getBoundingClientRect()
-  const rect = getLiveBrowserAnnotationRect(payload, viewport)
-  // Guest pixels differ from pane pixels whenever page zoom differs from the app's zoom.
-  const guestWidth = viewport.viewportWidth ?? payload.page.viewportWidth
-  const scale =
-    webviewRect && webviewRect.width > 0 && guestWidth > 0 ? webviewRect.width / guestWidth : 1
-  const offsetX = (webviewRect?.left ?? 0) - (containerRect?.left ?? 0)
-  const offsetY = (webviewRect?.top ?? 0) - (containerRect?.top ?? 0)
+  const {
+    x: elementLeft,
+    y: elementTop,
+    width,
+    height
+  } = mapGuestRectToContainer(
+    getLiveBrowserAnnotationRect(payload, viewport),
+    containerRect,
+    surface?.getBoundingClientRect(),
+    viewport.guest?.viewportWidth ?? payload.page.viewportWidth
+  )
   const containerWidth = containerRect?.width ?? 0
   const containerHeight = containerRect?.height ?? 0
-  const width = rect.width * scale
-  const height = rect.height * scale
-  const elementLeft = offsetX + rect.x * scale
   const elementRight = elementLeft + width
-  const elementTop = offsetY + rect.y * scale
   const elementBottom = elementTop + height
   const side = pickBrowserOverlaySide(
     {
@@ -162,14 +168,15 @@ export function getLiveBrowserAnnotationRect(
   payload: BrowserGrabPayload,
   viewport: BrowserOverlayViewport
 ): BrowserGrabRect {
-  if (viewport.target) {
-    return viewport.target
+  const guest = viewport.guest
+  if (guest?.target) {
+    return guest.target
   }
   if (payload.target.isFixed) {
     return payload.target.rectViewport
   }
-  const scrollX = viewport.version === 0 ? payload.page.scrollX : viewport.scrollX
-  const scrollY = viewport.version === 0 ? payload.page.scrollY : viewport.scrollY
+  const scrollX = guest ? guest.scrollX : payload.page.scrollX
+  const scrollY = guest ? guest.scrollY : payload.page.scrollY
   return {
     ...payload.target.rectViewport,
     x: payload.target.rectPage.x - scrollX,
@@ -177,20 +184,28 @@ export function getLiveBrowserAnnotationRect(
   }
 }
 
+/** A new selection's card must not be placed by the box the guest measured for the previous one. */
+export function forgetBrowserOverlayTarget(
+  current: BrowserOverlayViewport
+): BrowserOverlayViewport {
+  return current.guest?.target
+    ? { ...current, guest: { ...current.guest, target: undefined } }
+    : current
+}
+
 /** Folds a guest viewport report in, keeping the same state object when nothing moved. */
 export function applyBrowserAnnotationViewportReport(
   current: BrowserOverlayViewport,
   report: BrowserAnnotationViewportReport
 ): BrowserOverlayViewport {
+  const guest = current.guest
   const unchanged =
-    current.scrollX === report.scrollX &&
-    current.scrollY === report.scrollY &&
-    current.viewportWidth === report.viewportWidth &&
-    sameRect(current.target, report.target)
-  if (unchanged) {
-    return current.version === 0 ? { ...current, version: 1 } : current
-  }
-  return { ...report, version: current.version + 1 }
+    guest !== undefined &&
+    guest.scrollX === report.scrollX &&
+    guest.scrollY === report.scrollY &&
+    guest.viewportWidth === report.viewportWidth &&
+    sameRect(guest.target, report.target)
+  return unchanged ? current : { version: current.version + 1, guest: report }
 }
 
 function sameRect(a: BrowserGrabRect | undefined, b: BrowserGrabRect | undefined): boolean {

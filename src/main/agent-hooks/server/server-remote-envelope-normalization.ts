@@ -1,9 +1,21 @@
-import { normalizeAgentProviderSession } from '../../../shared/agent-session-resume'
+import { normalizeAgentProviderSession } from '../../../shared/agent-session/lifecycle/agent-session-resume'
+import {
+  isTurnEndDisposition,
+  type HostTurnEndFacts
+} from '../../../shared/agent-status/contracts/agent-status-types'
+import { isTurnEndedAt } from '../../../shared/agent-hook-listener/state/agent-hook-turn-end-timing'
 import {
   normalizeClaudePromptId,
   normalizeGrokPromptId
 } from '../../../shared/agent-hook-listener/listener-limits'
-import { isAgentHookSource, type AgentHookSource } from '../../../shared/agent-hook-relay'
+import {
+  isAgentHookSource,
+  type AgentHookSource
+} from '../../../shared/agent-hook-listener/transport/agent-hook-relay'
+import {
+  readClaudeSettledRequests,
+  type ClaudeSettledRequest
+} from '../../../shared/agent-hook-listener/claude-settled-permission-requests'
 
 export type RemoteAgentStatusEnvelope = {
   paneKey: string
@@ -20,18 +32,22 @@ export type RemoteAgentStatusEnvelope = {
   source?: unknown
   providerPromptId?: unknown
   grokPromptBoundary?: unknown
+  opensTurn?: unknown
   compactTrigger?: unknown
   toolUseId?: string
+  claudeSettledRequests?: unknown
   toolAgentId?: string
   teammateName?: string
   toolAgentType?: string
   providerSession?: unknown
   providerSessionOnly?: unknown
   isReplay?: boolean
-  /** Payload fields the relay dropped to fit an oversized frame; validated below. */
+  turnEndedAt?: unknown
+  turnEndDisposition?: unknown
+  /** Fields shed to fit the relay frame; validate before restoration. */
   shedFields?: unknown
   claudeRunningNonAgentTask?: unknown
-  /** The producing peer's advertised run-capability set — a property of the peer/connection that built this envelope, not an orthogonal call parameter. Absent (older relay/HTTP paths) defaults to the unadvertised-legacy-peer set. */
+  /** Producing peer capabilities; absent on older peers, which use legacy defaults. */
   advertisedAgentStatusCapabilities?: readonly string[]
   statusUnavailable?: unknown
   evidenceAgeMs?: unknown
@@ -43,10 +59,14 @@ export type RemoteEnvelopeFields = {
   source?: AgentHookSource
   providerPromptId?: string
   grokPromptBoundary?: true
+  opensTurn?: true
+  /** The execution host's turn-end facts, validated. */
+  hostTurnEnd: HostTurnEndFacts
   compactTrigger?: 'manual' | 'auto'
   worktreeId?: string
   promptInteractionKey?: string
   toolUseId?: string
+  claudeSettledRequests?: readonly ClaudeSettledRequest[]
   toolAgentId?: string
   teammateName?: string
   toolAgentType?: string
@@ -58,10 +78,15 @@ export function normalizeRemoteEnvelopeFields(envelope: {
   source?: unknown
   providerPromptId?: unknown
   grokPromptBoundary?: unknown
+  opensTurn?: unknown
+  turnEndedAt?: unknown
+  turnEndDisposition?: unknown
   compactTrigger?: unknown
   worktreeId?: string
   promptInteractionKey?: string
   toolUseId?: string
+  claudeSettledRequests?: unknown
+  isReplay?: boolean
   toolAgentId?: string
   teammateName?: string
   toolAgentType?: string
@@ -82,6 +107,16 @@ export function normalizeRemoteEnvelopeFields(envelope: {
           : undefined,
     grokPromptBoundary:
       source === 'grok' && envelope.grokPromptBoundary === true ? true : undefined,
+    opensTurn:
+      source === 'claude' && envelope.opensTurn === true && envelope.isReplay !== true
+        ? true
+        : undefined,
+    hostTurnEnd: {
+      ...(isTurnEndedAt(envelope.turnEndedAt) ? { turnEndedAt: envelope.turnEndedAt } : {}),
+      ...(isTurnEndDisposition(envelope.turnEndDisposition)
+        ? { turnEndDisposition: envelope.turnEndDisposition }
+        : {})
+    },
     compactTrigger:
       source === 'claude' &&
       (envelope.compactTrigger === 'manual' || envelope.compactTrigger === 'auto')
@@ -100,6 +135,15 @@ export function normalizeRemoteEnvelopeFields(envelope: {
       typeof envelope.toolUseId === 'string' && envelope.toolUseId.trim().length > 0
         ? envelope.toolUseId.trim()
         : undefined,
+    // Live hooks settle their own requests, except a batch end, which lists the requests it resolved; retained settlements repair replay gaps.
+    claudeSettledRequests:
+      source !== 'claude'
+        ? undefined
+        : envelope.isReplay === true
+          ? readClaudeSettledRequests(envelope.claudeSettledRequests)
+          : envelope.hookEventName === 'PostToolBatch'
+            ? readClaudeSettledRequests(envelope.claudeSettledRequests, Number.POSITIVE_INFINITY)
+            : undefined,
     toolAgentId:
       typeof envelope.toolAgentId === 'string' && envelope.toolAgentId.trim().length > 0
         ? envelope.toolAgentId.trim()

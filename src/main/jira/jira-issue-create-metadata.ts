@@ -1,9 +1,10 @@
+import { requireStrictJiraSite } from './jira-read-failure'
 import type {
   JiraCreateField,
   JiraIssueType,
   JiraPriority,
   JiraUser
-} from '../../shared/jira-types'
+} from '../../shared/jira/jira-types'
 import { acquire, release } from './request-queue'
 import { apiBasePath, jiraRequest } from './authenticated-request'
 import { clearToken, getClients, isAuthError } from './client'
@@ -24,9 +25,12 @@ import {
 
 export async function listIssueTypes(
   projectIdOrKey: string,
-  siteId?: string | null
+  siteId?: string | null,
+  strict = false
 ): Promise<JiraIssueType[]> {
-  const entry = getClients(siteId)[0]
+  const entries = await getClients(siteId)
+  requireStrictJiraSite(entries, siteId, strict)
+  const entry = entries[0]
   if (!entry) {
     return []
   }
@@ -45,23 +49,28 @@ export async function listIssueTypes(
     return issueTypes.map(mapIssueType)
   } catch (error) {
     if (isAuthError(error)) {
-      clearToken(entry.site.id)
+      await clearToken(entry)
       throw error
     }
     console.warn('[jira] listIssueTypes failed:', error)
+    if (strict) {
+      throw error
+    }
     return []
   } finally {
     release()
   }
 }
 
-/** Lists the required create fields for a project and issue type. */
 export async function listCreateFields(
   projectIdOrKey: string,
   issueTypeId: string,
-  siteId?: string | null
+  siteId?: string | null,
+  strict = false
 ): Promise<JiraCreateField[]> {
-  const entry = getClients(siteId)[0]
+  const entries = await getClients(siteId)
+  requireStrictJiraSite(entries, siteId, strict)
+  const entry = entries[0]
   if (!entry) {
     return []
   }
@@ -95,19 +104,26 @@ export async function listCreateFields(
     return fields
   } catch (error) {
     if (isAuthError(error)) {
-      clearToken(entry.site.id)
+      await clearToken(entry)
       throw error
     }
     console.warn('[jira] listCreateFields failed:', error)
+    if (strict) {
+      throw error
+    }
     return []
   } finally {
     release()
   }
 }
 
-/** Lists the site's issue priorities. */
-export async function listPriorities(siteId?: string | null): Promise<JiraPriority[]> {
-  const entry = getClients(siteId)[0]
+export async function listPriorities(
+  siteId?: string | null,
+  strict = false
+): Promise<JiraPriority[]> {
+  const entries = await getClients(siteId)
+  requireStrictJiraSite(entries, siteId, strict)
+  const entry = entries[0]
   if (!entry) {
     return []
   }
@@ -117,30 +133,28 @@ export async function listPriorities(siteId?: string | null): Promise<JiraPriori
     return response.map(mapPriority).filter((priority): priority is JiraPriority => !!priority)
   } catch (error) {
     if (isAuthError(error)) {
-      clearToken(entry.site.id)
+      await clearToken(entry)
       throw error
     }
     console.warn('[jira] listPriorities failed:', error)
+    if (strict) {
+      throw error
+    }
     return []
   } finally {
     release()
   }
 }
 
-/**
- * Searches all users on the site. Reporter and user-picker create fields are not
- * limited to assignable users and no issue key exists before create, so neither
- * `/user/assignable/search` variant fits. Returns `[]` when browse-users is denied.
- */
+/** Create user-pickers need all users, not just assignable users; return [] if browse-users is denied. */
 export async function searchUsers(query?: string, siteId?: string | null): Promise<JiraUser[]> {
-  const entry = getClients(siteId)[0]
+  const entry = (await getClients(siteId))[0]
   if (!entry) {
     return []
   }
   const isServer = entry.site.authType === 'server'
   const params = new URLSearchParams({ maxResults: '50' })
-  // Server/DC filters by `username`; `query` is Cloud-only. Server rejects an
-  // empty username, so fall back to the wildcard it accepts for "list everyone".
+  // Server/DC needs username and rejects an empty filter; Cloud uses query.
   params.set(isServer ? 'username' : 'query', query?.trim() || (isServer ? '.' : ''))
   await acquire()
   try {
@@ -151,10 +165,10 @@ export async function searchUsers(query?: string, siteId?: string | null): Promi
     return response.map(mapUser).filter((user): user is JiraUser => !!user)
   } catch (error) {
     if (isAuthError(error)) {
-      clearToken(entry.site.id)
+      await clearToken(entry)
       throw error
     }
-    // Browse-users permission is optional; the dialog falls back to a text field.
+    // Browse-users permission is optional; the dialog allows explicit known user IDs.
     console.warn('[jira] searchUsers failed:', error)
     return []
   } finally {
@@ -166,9 +180,12 @@ async function searchAssignableUsers(
   scope: { issueKey: string } | { project: string },
   query: string | undefined,
   siteId: string | null | undefined,
-  label: string
+  label: string,
+  strict = false
 ): Promise<JiraUser[]> {
-  const entry = getClients(siteId)[0]
+  const entries = await getClients(siteId)
+  requireStrictJiraSite(entries, siteId, strict)
+  const entry = entries[0]
   if (!entry) {
     return []
   }
@@ -187,10 +204,13 @@ async function searchAssignableUsers(
     return response.map(mapUser).filter((user): user is JiraUser => !!user)
   } catch (error) {
     if (isAuthError(error)) {
-      clearToken(entry.site.id)
+      await clearToken(entry)
       throw error
     }
     console.warn(`[jira] ${label} failed:`, error)
+    if (strict) {
+      throw error
+    }
     return []
   } finally {
     release()
@@ -200,12 +220,13 @@ async function searchAssignableUsers(
 export async function listAssignableUsers(
   key: string,
   query?: string,
-  siteId?: string | null
+  siteId?: string | null,
+  strict = false
 ): Promise<JiraUser[]> {
-  return searchAssignableUsers({ issueKey: key }, query, siteId, 'listAssignableUsers')
+  return searchAssignableUsers({ issueKey: key }, query, siteId, 'listAssignableUsers', strict)
 }
 
-// Creation has no issue key yet, so assignability is scoped by project.
+// Before creation, assignability is project-scoped because no issue key exists.
 export async function listAssignableUsersForProject(
   projectIdOrKey: string,
   query?: string,

@@ -1,47 +1,79 @@
-import { useCallback, useEffect } from 'react'
+import { PluginUpdateReviewHost } from './components/plugins/dialogs/PluginUpdateReviewHost'
+import { useCallback, useEffect, useLayoutEffect } from 'react'
+import { createPortal } from 'react-dom'
 import { Toaster } from '@/components/ui/sonner'
 import { TooltipProvider } from '@/components/ui/tooltip'
-import { ConfirmationDialogProvider } from './components/confirmation-dialog'
-import { BrowserWebAuthnAccountDialog } from './components/browser-webauthn-account-dialog'
-import { DocPreviewExternalLinkConfirmation } from './components/browser-pane/workspace-doc/doc-preview-external-link-confirmation'
-import { LinkRoutingPreferenceDialogProvider } from './components/link-routing-preference-dialog'
-import { SkillFreshnessNudge } from './components/skills/SkillFreshnessNudge'
-import PinnedTabCloseDialog from './components/terminal-pane/PinnedTabCloseDialog'
-import RunningTerminalCloseDialog from './components/terminal-pane/RunningTerminalCloseDialog'
-import WorktreeBaseFallbackDialog from './components/WorktreeBaseFallbackDialog'
-import { useUnreadDockBadge } from './hooks/useUnreadDockBadge'
+import { ConfirmationDialogProvider } from './components/dismiss/confirmation/confirmation-dialog'
+import { BrowserWebAuthnAccountDialog } from './components/browser-pane/page-prompts/browser-webauthn-account-dialog'
+import { BrowserExtensionInstallDialog } from './components/browser-pane/page-prompts/browser-extension-install-dialog'
+import { BrowserPagePrompts } from './components/browser-pane/page-prompts/browser-page-prompts'
+import { LinkRoutingPreferenceDialogProvider } from './components/link-actions/link-routing-preference-dialog'
+import { SkillFreshnessNudge } from './components/skills/freshness/SkillFreshnessNudge'
+import PinnedTabCloseDialog from './components/terminal-pane/layout/close/PinnedTabCloseDialog'
+import RunningTerminalCloseDialog from './components/terminal-pane/layout/close/RunningTerminalCloseDialog'
+import WorktreeBaseFallbackDialog from './components/sidebar/workspace-creation/base-ref-update/WorktreeBaseFallbackDialog'
+import ClaudeAccountSwitchDialog from './components/provider-accounts/claude/ClaudeAccountSwitchDialog'
 import { AppBackgroundServices } from './app-shell/AppBackgroundServices'
 import { AppRootSurfaces } from './app-shell/AppRootSurfaces'
 import { AppWorkspaceShell } from './app-shell/AppWorkspaceShell'
-import { WindowControls } from './app-shell/WindowControls'
+import { WindowControls } from './app-shell/chrome/WindowControls'
 import {
   MAC_TRAFFIC_LIGHTS_WIDTH,
   WINDOW_CONTROLS_HEIGHT,
   WINDOW_CONTROLS_WIDTH,
-  hasCustomTitleBar
-} from './app-shell/app-window-chrome'
-import { useAppChromeLayout } from './app-shell/use-app-chrome-layout'
-import { useAppSessionPersistence } from './app-shell/use-app-session-persistence'
+  hasCustomTitleBar,
+  supportsLinuxTilingWindowMode
+} from './app-shell/chrome/app-window-chrome'
+import { useAppChromeLayout } from './app-shell/chrome/use-app-chrome-layout'
+import { useAppSessionPersistence } from './app-shell/storage/use-app-session-persistence'
 import { useAppShellServices } from './app-shell/use-app-shell-services'
-import { useAppStartupHydration } from './app-shell/use-app-startup-hydration'
-import { startNativeChatDraftLoad } from './app-shell/native-chat-draft-startup'
-import { useDocumentAppearance } from './app-shell/use-document-appearance'
-import { useFloatingWorkspacePanel } from './app-shell/use-floating-workspace-panel'
-import { useGlobalKeybindings } from './app-shell/use-global-keybindings'
-import { useOnboardingAndFeatureTips } from './app-shell/use-onboarding-and-feature-tips'
-import { usePersistedUIWriter } from './app-shell/use-persisted-ui-writer'
-import { useRuntimeGraphSync } from './app-shell/use-runtime-graph-sync'
-import { useWindowVisibilityEffects } from './app-shell/use-window-visibility-effects'
+import { useAppStartupHydration } from './app-shell/startup/use-app-startup-hydration'
+import { startNativeChatDraftLoad } from './components/native-chat/drafts/native-chat-draft-startup'
+import { runWslMoveRendererStoreRewrites } from './lib/workspace/persistence/wsl-move-renderer-store-rewrites'
+import { runWslDriveUncRendererStoreRewrites } from './lib/workspace/persistence/wsl-drive-unc-renderer-store-rewrites'
+import { useDocumentAppearance } from './app-shell/appearance/use-document-appearance'
+import { useFloatingWorkspacePanel } from './components/floating-terminal/workspace/use-floating-workspace-panel'
+import { useGlobalKeybindings } from './hooks/app-commands/use-global-keybindings'
+import { useOnboardingAndFeatureTips } from './app-shell/startup/use-onboarding-and-feature-tips'
+import { usePersistedUIWriter } from './app-shell/storage/use-persisted-ui-writer'
+import { useRuntimeGraphSync } from './runtime/sync-runtime-graph/use-runtime-graph-sync'
+import { useWindowVisibilityEffects } from './app-shell/chrome/use-window-visibility-effects'
+import { SpaceWindowStatePublisher } from './components/workspace-space/SpaceWindowStatePublisher'
+import { PlainSshTerminalPanels } from './components/plain-ssh-terminal/PlainSshTerminalPanels'
+import { PluginShotReplayMount } from './components/plugins/view/PluginShotReplayMount'
+import { AddToChatPointMenuHost } from './components/native-chat/selection-quotes/AddToChatMenu'
+import { installActiveWorktreeRemovalSuccessor } from './lib/workspace/activation/active-worktree-removal-successor'
+import { useAppStore } from './store'
 
 function App(): React.JSX.Element {
   const layout = useAppChromeLayout()
+  const tilingWindowMode = useAppStore(
+    (s) => supportsLinuxTilingWindowMode && s.settings?.linuxTilingWindowMode === true
+  )
+  const windowControlsWidth = tilingWindowMode ? '46px' : WINDOW_CONTROLS_WIDTH
+  const compactWorkspaceChrome = tilingWindowMode && layout.workspaceChromeActive
+  const windowControlsHeight = compactWorkspaceChrome
+    ? 'var(--workspace-tab-row-height)'
+    : WINDOW_CONTROLS_HEIGHT
+  const layoutStyle: React.CSSProperties & Record<`--${string}`, string> = {
+    '--collapsed-sidebar-header-width': layout.leftColumnHeaderFloating
+      ? `${layout.collapsedSidebarHeaderWidth}px`
+      : '0px',
+    '--collapsed-trailing-chrome-width': layout.trailingSlotOpen
+      ? '0px'
+      : 'calc(40px + var(--window-controls-width, 0px))',
+    ...(compactWorkspaceChrome && { '--app-header-height': windowControlsHeight })
+  }
   const floatingWorkspace = useFloatingWorkspacePanel()
   const onboardingGate = useOnboardingAndFeatureTips()
-  const clearUnreadDockBadge = useUnreadDockBadge(floatingWorkspace.open)
 
   useAppShellServices()
-  // Why before the startup chain: its effect runs first, and no startup step can skip the load.
+  // Load drafts before the startup chain so no failed step can skip them.
   useEffect(startNativeChatDraftLoad, [])
+  // Committed WSL moves only: the list is empty otherwise, and always with the internal gate closed.
+  useEffect(() => void runWslMoveRendererStoreRewrites(), [])
+  // A Windows-drive conversion's own stores, after the restart that converted the project.
+  useEffect(() => void runWslDriveUncRendererStoreRewrites(), [])
   useAppStartupHydration(onboardingGate.applyStartupOnboardingState)
   useAppSessionPersistence()
   useRuntimeGraphSync()
@@ -49,73 +81,67 @@ function App(): React.JSX.Element {
   useDocumentAppearance()
   useWindowVisibilityEffects()
   useGlobalKeybindings({ layout, floatingWorkspace })
+  // App owns active-selection removal; the Space window only mirrors selection.
+  useEffect(() => installActiveWorktreeRemovalSuccessor(), [])
 
-  // Why: the same vars are set inline on .app-layout below, but portaled surfaces
-  // (sheets, dialogs) mount outside it and would otherwise fall back to 0px and
-  // render their controls under the Windows/Linux window-controls overlay.
-  useEffect(() => {
+  // Portaled sheets/dialogs live outside .app-layout and need root offsets to clear Windows/Linux controls.
+  useLayoutEffect(() => {
     const root = document.documentElement.style
-    root.setProperty('--window-controls-width', WINDOW_CONTROLS_WIDTH)
-    root.setProperty('--window-controls-height', WINDOW_CONTROLS_HEIGHT)
+    root.setProperty('--window-controls-width', windowControlsWidth)
+    root.setProperty('--window-controls-height', windowControlsHeight)
     root.setProperty('--mac-traffic-lights-width', MAC_TRAFFIC_LIGHTS_WIDTH)
-  }, [])
+  }, [windowControlsHeight, windowControlsWidth])
 
   const { cancelReturnFocusFrame } = floatingWorkspace
   const setAppRootNode = useCallback(
     (node: HTMLDivElement | null): void => {
-      // Why: these best-effort App chrome cleanups share the App root lifetime.
+      // Cancel chrome cleanup work when the App root unmounts.
       if (!node) {
         cancelReturnFocusFrame()
-        clearUnreadDockBadge()
       }
     },
-    [cancelReturnFocusFrame, clearUnreadDockBadge]
+    [cancelReturnFocusFrame]
   )
 
   return (
     <div
       ref={setAppRootNode}
       className="app-layout"
-      style={
-        {
-          // Why: tab strips reserve their edge gutters from these two vars alone, so the reservation has to
-          // collapse to 0 here when nothing floats — a tab strip can't tell which sidebar owns which slot.
-          '--collapsed-sidebar-header-width': layout.leftColumnHeaderFloating
-            ? `${layout.collapsedSidebarHeaderWidth}px`
-            : '0px',
-          '--collapsed-trailing-chrome-width': layout.trailingSlotOpen
-            ? '0px'
-            : 'calc(40px + var(--window-controls-width, 0px))',
-          // Shared so surfaces can avoid the Windows/Linux window-controls overlay without hardcoding 138px everywhere.
-          '--window-controls-width': WINDOW_CONTROLS_WIDTH,
-          // Side-position activity bar uses this to push icons below the Windows/Linux window-controls overlay.
-          '--window-controls-height': WINDOW_CONTROLS_HEIGHT,
-          // Full-bleed surfaces use this to keep the macOS traffic lights uncovered.
-          '--mac-traffic-lights-width': MAC_TRAFFIC_LIGHTS_WIDTH
-        } as React.CSSProperties
-      }
+      data-linux-tiling-window-mode={tilingWindowMode || undefined}
+      style={layoutStyle}
     >
-      <TooltipProvider delayDuration={400}>
+      <TooltipProvider>
         <ConfirmationDialogProvider>
-          <DocPreviewExternalLinkConfirmation />
+          <BrowserPagePrompts />
+          <AddToChatPointMenuHost />
           <LinkRoutingPreferenceDialogProvider>
             <AppBackgroundServices />
+            <SpaceWindowStatePublisher />
             <AppWorkspaceShell layout={layout} floatingWorkspace={floatingWorkspace} />
             <AppRootSurfaces
               floatingWorkspace={floatingWorkspace}
               onboardingGate={onboardingGate}
             />
             <BrowserWebAuthnAccountDialog />
+            <BrowserExtensionInstallDialog />
           </LinkRoutingPreferenceDialogProvider>
         </ConfirmationDialogProvider>
-        <Toaster closeButton toastOptions={{ className: 'font-sans text-sm' }} />
+        {createPortal(
+          <Toaster closeButton toastOptions={{ className: 'font-sans text-sm' }} />,
+          document.body
+        )}
+        <PlainSshTerminalPanels />
+        <PluginShotReplayMount />
+        <PluginUpdateReviewHost />
       </TooltipProvider>
       <SkillFreshnessNudge />
+      {/* One account-link confirm at a time, over whatever screen the owner is on. */}
       <WorktreeBaseFallbackDialog />
+      <ClaudeAccountSwitchDialog />
       <PinnedTabCloseDialog />
       <RunningTerminalCloseDialog />
-      {/* Why: Electron's drag-region hit-test is DOM-order-based (ignores z-index); render last so WindowControls stay clickable. */}
-      {hasCustomTitleBar && <WindowControls />}
+      {/* Electron drag hit-testing follows DOM order, ignoring z-index; render controls last to keep them clickable. */}
+      {hasCustomTitleBar && <WindowControls closeOnly={tilingWindowMode} />}
     </div>
   )
 }

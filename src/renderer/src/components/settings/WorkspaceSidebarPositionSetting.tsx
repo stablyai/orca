@@ -1,9 +1,9 @@
 import type React from 'react'
-import type { GlobalSettings } from '../../../../shared/global-settings-types'
-import type { WorkspaceSidebarPosition } from '../../../../shared/ui-chrome-types'
+import type { GlobalSettings } from '../../../../shared/settings/global-settings-types'
+import type { WorkspaceSidebarPosition } from '../../../../shared/ui-chrome/ui-chrome-types'
 import { normalizeWorkspaceSidebarPosition } from '../../../../shared/workspace-sidebar-position'
-import { translate } from '@/i18n/i18n'
-import { SettingsRow, SettingsSegmentedControl } from './SettingsFormControls'
+import { useTranslate } from '@/i18n/use-translate'
+import { SettingsRow, SettingsSegmentedControl } from './form-controls/SettingsFormControls'
 
 type WorkspaceSidebarPositionSettingProps = {
   settings: GlobalSettings
@@ -14,7 +14,8 @@ export function WorkspaceSidebarPositionSetting({
   settings,
   updateSettings
 }: WorkspaceSidebarPositionSettingProps): React.JSX.Element {
-  const title = translate(
+  const t = useTranslate()
+  const title = t(
     'auto.components.settings.AppearancePane.workspaceSidebarPosition.title',
     'Workspace List Position'
   )
@@ -22,7 +23,7 @@ export function WorkspaceSidebarPositionSetting({
     <SettingsRow
       alignTop
       label={title}
-      description={translate(
+      description={t(
         'auto.components.settings.AppearancePane.workspaceSidebarPosition.rowDescription',
         'Pick the edge for the workspace list. Explorer, Agents, and Source Control move to the opposite edge.'
       )}
@@ -35,14 +36,14 @@ export function WorkspaceSidebarPositionSetting({
           options={[
             {
               value: 'left',
-              label: translate(
+              label: t(
                 'auto.components.settings.AppearancePane.workspaceSidebarPosition.left',
                 'Left'
               )
             },
             {
               value: 'right',
-              label: translate(
+              label: t(
                 'auto.components.settings.AppearancePane.workspaceSidebarPosition.right',
                 'Right'
               )

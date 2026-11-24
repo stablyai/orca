@@ -1,12 +1,15 @@
-import type { WorktreeSlice } from '../../worktree-helpers'
+import type { WorktreeSlice } from '../worktree-slice-contract'
 
 export const worktreeSliceInitialState: Pick<
   WorktreeSlice,
   | 'worktreesByRepo'
   | 'detectedWorktreesByRepo'
   | 'worktreeCatalogVersionByRepoHost'
+  | 'worktreeCatalogAuthorityByRepoHost'
   | 'worktreeLineageById'
   | 'workspaceLineageByChildKey'
+  | 'crossStoreLineageByStoreKey'
+  | 'ownLineageInstallationId'
   | 'activeWorktreeId'
   | 'activeWorkspaceKey'
   | 'activeWorkspaceExecutionHostId'
@@ -18,6 +21,7 @@ export const worktreeSliceInitialState: Pick<
   | 'remoteBranchConflictByWorktreeId'
   | 'sortEpoch'
   | 'settledSortEpoch'
+  | 'sortOrderEpoch'
   | 'everActivatedWorktreeIds'
   | 'lastVisitedAtByWorktreeId'
   | 'hasHydratedWorktreePurge'
@@ -26,8 +30,11 @@ export const worktreeSliceInitialState: Pick<
   worktreesByRepo: {},
   detectedWorktreesByRepo: {},
   worktreeCatalogVersionByRepoHost: {},
+  worktreeCatalogAuthorityByRepoHost: {},
   worktreeLineageById: {},
   workspaceLineageByChildKey: {},
+  crossStoreLineageByStoreKey: {},
+  ownLineageInstallationId: undefined,
   activeWorktreeId: null,
   activeWorkspaceKey: null,
   activeWorkspaceExecutionHostId: null,
@@ -39,6 +46,7 @@ export const worktreeSliceInitialState: Pick<
   remoteBranchConflictByWorktreeId: {},
   sortEpoch: 0,
   settledSortEpoch: 0,
+  sortOrderEpoch: 0,
   everActivatedWorktreeIds: new Set<string>(),
   lastVisitedAtByWorktreeId: {},
   hasHydratedWorktreePurge: false,

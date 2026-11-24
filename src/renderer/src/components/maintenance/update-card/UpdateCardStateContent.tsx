@@ -1,18 +1,20 @@
+import { Loader2 } from 'lucide-react'
 import type {
   ChangelogData,
   LinuxPackageInstallRecovery,
   UpdateStatus
-} from '../../../../../shared/update-status-types'
-import { getReleaseNotesUrlForVersion } from '../../../../../shared/release-channel'
-import { UpdateErrorCardContent, type UpdateErrorCardModel } from '../../UpdateErrorCardContent'
-import { LinuxPackageInstallRecoveryCard } from '../../LinuxPackageInstallRecoveryCard'
-import { translate } from '@/i18n/i18n'
+} from '../../../../../shared/updater/update-status-types'
+import { getReleaseNotesUrlForVersion } from '../../../../../shared/updater/release-channel'
+import { UpdateErrorCardContent, type UpdateErrorCardModel } from './UpdateErrorCardContent'
+import { LinuxPackageInstallRecoveryCard } from './LinuxPackageInstallRecoveryCard'
+import { useTranslate } from '@/i18n/use-translate'
 import { UpdateCheckFeedback } from './UpdateCheckFeedback'
 import {
   UpdateAvailableRichContent,
   UpdateAvailableSimpleContent
 } from './UpdateAvailableCardContent'
 import { UpdateDownloadingContent, UpdateReadyToInstallContent } from './UpdateDownloadCardContent'
+import { RequiredUpdateRestartContent } from './RequiredUpdateRestartContent'
 
 export function UpdateCardStateContent({
   status,
@@ -50,19 +52,29 @@ export function UpdateCardStateContent({
   onDismiss: () => void
   onCollapse: () => void
 }): React.JSX.Element | null {
+  const t = useTranslate()
   if (status.state === 'checking') {
     return (
       <UpdateCheckFeedback
         icon="spinner"
-        text={translate('auto.components.UpdateCard.ba5ffc949c', 'Checking for updates...')}
+        text={t('auto.components.UpdateCard.ba5ffc949c', 'Checking for updates...')}
       />
     )
   }
   if (status.state === 'not-available') {
+    const unsupported = status.unsupportedSystemUpdate
     return (
       <UpdateCheckFeedback
         icon="check"
-        text={translate('auto.components.UpdateCard.ea2a41adbe', "You're on the latest version.")}
+        text={
+          unsupported
+            ? t(
+                'macosUpdateRequirement.settingsStatus',
+                'Orca {{version}} requires macOS {{macos}} or later. This is the latest version for this Mac.',
+                { version: unsupported.version, macos: unsupported.minimumMacosVersion }
+              )
+            : t('auto.components.UpdateCard.ea2a41adbe', "You're on the latest version.")
+        }
       />
     )
   }
@@ -85,15 +97,43 @@ export function UpdateCardStateContent({
     return <UpdateErrorCardContent {...errorCard} onClose={onCollapse} />
   }
   if (status.state === 'downloaded') {
-    return hasStartedDownload ? (
+    if (status.installing) {
+      return (
+        <div className="flex flex-col gap-3 p-4" aria-busy="true">
+          <div className="flex items-center gap-2">
+            <Loader2 className="size-4 animate-spin text-muted-foreground" />
+            <h3 className="text-sm font-semibold">
+              {t('updates.installBlock.preparingTitle', 'Preparing your update')}
+            </h3>
+          </div>
+          <p className="text-sm text-muted-foreground">
+            {t(
+              'updates.installBlock.preparingSummary',
+              'Checking running Orca instances before restarting.'
+            )}
+          </p>
+        </div>
+      )
+    }
+    if (status.teamRestart) {
+      return (
+        <RequiredUpdateRestartContent
+          version={status.version}
+          restart={status.teamRestart}
+          requiredByOrca={status.requiredByOrca}
+          onRestart={onInstallRetry}
+        />
+      )
+    }
+    return hasStartedDownload && !status.automaticDownload && !status.requiredByTeam ? (
       <div className="p-4">
-        <p className="text-sm">
-          {translate('auto.components.UpdateCard.09a55c39b5', 'Installing...')}
-        </p>
+        <p className="text-sm">{t('auto.components.UpdateCard.09a55c39b5', 'Installing...')}</p>
       </div>
     ) : (
       <UpdateReadyToInstallContent
         version={status.version}
+        requiredByTeam={status.requiredByTeam}
+        requiredByOrca={status.requiredByOrca}
         onRestart={onInstallRetry}
         onClose={onCollapse}
       />

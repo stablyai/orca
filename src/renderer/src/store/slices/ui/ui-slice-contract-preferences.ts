@@ -1,29 +1,37 @@
-import type { PersistedUIState } from '../../../../../shared/persisted-ui-state-types'
+import type { RetainedUpdateTarget } from './retained-update-target'
+import type { StatusBarUsageFormat } from '../../../../../shared/status-bar/status-bar-usage-format'
+import type { PersistedUIState } from '../../../../../shared/orca-profiles/persisted-ui-state-types'
+import type { BrowserDevToolsDockLayout } from '../../../../../shared/browser/devtools/browser-devtools-dock'
 import type {
   ActivityGroupBy,
+  ThreadReadFilter
+} from '../../../../../shared/agent-status/presentation/agents-view-thread-filters'
+import type {
   AgentActivityDisplayMode,
   ManualRepoOrderEntry,
   ProjectOrderBy,
   StatusBarItem,
-  ThreadReadFilter,
   WorktreeCardMode,
   WorktreeCardProperty,
   WorkspaceHostOrder,
   WorkspaceHostScope,
   VisibleWorkspaceHostIds
-} from '../../../../../shared/ui-chrome-types'
-import type { UsagePercentageDisplay } from '../../../../../shared/usage-percentage-display'
-import type { AutomationHostFilter } from '../../../../../shared/automation-host-filter'
+} from '../../../../../shared/ui-chrome/ui-chrome-types'
+import type { UsagePercentageDisplay } from '../../../../../shared/agent-usage/display/usage-percentage-display'
+import type { AutomationHostFilter } from '../../../../../shared/automations/ownership/automation-host-filter'
 import type { WorkspaceStatusDefinition } from '../../../../../shared/worktree/types'
-import type { WorkspacePortScanResult } from '../../../../../shared/workspace-ports'
-import type { CustomPet } from '../../../../../shared/pet-types'
-import type { ReleaseChannel } from '../../../../../shared/release-channel'
-import type { ChangelogData, UpdateStatus } from '../../../../../shared/update-status-types'
-import type { StatusBarUsageMode } from '../../../../../shared/status-bar-usage-mode'
-import type { PersistedUIWriteBaseline } from '../persisted-ui-write-baseline'
+import type { WorkspacePortScanResult } from '../../../../../shared/workspace/ports/workspace-ports'
+import type { CustomPet } from '../../../../../shared/pets/pet-types'
+import type { ReleaseChannel } from '../../../../../shared/updater/release-channel'
+import type { ChangelogData, UpdateStatus } from '../../../../../shared/updater/update-status-types'
+import type { StatusBarUsageMode } from '../../../../../shared/status-bar/status-bar-usage-mode'
+import type { PersistedUIWriteBaseline } from './persisted-ui-write-baseline'
 import type { UISliceCore } from './ui-slice-contract-core'
+import type { BotSidebarView } from '../../../../../shared/bots/bot-sidebar-view'
+import type { BotChatFold } from '../../../../../shared/bots/bot-chat-tree'
 
 export type UISlicePreferences = {
+  gitGraphFiltersByWorktree?: PersistedUIState['gitGraphFiltersByWorktree']
   /** Which list the sidebar body shows. Navigator-only; does not change the active view. */
   sidebarBody: 'workspaces' | 'agents'
   setSidebarBody: (body: UISlicePreferences['sidebarBody']) => void
@@ -53,6 +61,15 @@ export type UISlicePreferences = {
   setHideAutomationGeneratedWorkspaces: (v: boolean) => void
   hideCliCreatedWorkspaces: boolean
   setHideCliCreatedWorkspaces: (v: boolean) => void
+  hideBotCreatedWorkspaces: boolean
+  setHideBotCreatedWorkspaces: (v: boolean) => void
+  botSidebarView: BotSidebarView
+  setBotSidebarView: (patch: Partial<BotSidebarView>) => void
+  botChatFolds: Record<string, BotChatFold>
+  /** A chat's manual fold, shared by Activity and the sidebar; undefined while it folds by default. */
+  botChatFold: (hostId: string, botId: string, chatId: string) => BotChatFold | undefined
+  /** Null clears the manual choice, so the chat folds by its default again. */
+  setBotChatFold: (hostId: string, botId: string, chatId: string, fold: BotChatFold | null) => void
   hideDetachedHeadWorkspaces: boolean
   setHideDetachedHeadWorkspaces: (v: boolean) => void
   hideWorkspacesFromOtherDevices: boolean
@@ -64,6 +81,9 @@ export type UISlicePreferences = {
   setExplorerDisplayRootForWorktree: (worktreeId: string, value: string) => void
   setShowDotfilesForWorktree: (worktreeId: string, showDotfiles: boolean) => void
   toggleShowDotfilesForWorktree: (worktreeId: string) => void
+  /** Per-worktree notification mute. Missing entries inherit the default: not muted. */
+  notificationsMutedByWorktree: Record<string, boolean>
+  toggleWorktreeNotificationsMuted: (worktreeId: string) => void
   filterRepoIds: readonly string[]
   setFilterRepoIds: (ids: readonly string[]) => void
   /** Agents-view scope filters, independent from workspace navigation filters. */
@@ -89,18 +109,30 @@ export type UISlicePreferences = {
   setAgentsGroupBy: (v: ActivityGroupBy) => void
   collapsedGroups: Set<string>
   toggleCollapsedGroup: (key: string) => void
+  setCollapsedGroups: (keys: Set<string>) => void
   worktreeCardProperties: WorktreeCardProperty[]
   _worktreeCardModeDefaulted: boolean
   setWorktreeCardMode: (mode: WorktreeCardMode) => void
   setWorktreeCardProperties: (properties: readonly WorktreeCardProperty[]) => void
+  showAgentModels: boolean
+  setShowAgentModels: (show: boolean) => void
   agentActivityDisplayMode: AgentActivityDisplayMode
   setAgentActivityDisplayMode: (mode: AgentActivityDisplayMode) => void
   workspaceStatuses: WorkspaceStatusDefinition[]
   setWorkspaceStatuses: (statuses: WorkspaceStatusDefinition[]) => void
+  /** Each paired runtime host's own columns, keyed by environment id; never persisted locally. */
+  hostWorkspaceStatuses: Readonly<Record<string, readonly WorkspaceStatusDefinition[]>>
+  fetchHostWorkspaceStatuses: (environmentId: string) => Promise<void>
+  clearHostWorkspaceStatuses: (environmentIds: readonly string[]) => void
   workspaceBoardOpacity: number
   setWorkspaceBoardOpacity: (opacity: number) => void
   workspaceBoardColumnWidth: number
   setWorkspaceBoardColumnWidth: (width: number) => void
+  /** Dragged cap on the sidebar Bots section; null keeps the default 40% cap. */
+  sidebarBotsHeight: number | null
+  setSidebarBotsHeight: (height: number | null) => void
+  sidebarProjectsFirst: boolean
+  setSidebarProjectsFirst: (projectsFirst: boolean) => void
   syncTaskStatusFromWorkspaceBoard: boolean
   setSyncTaskStatusFromWorkspaceBoard: (enabled: boolean) => void
   /** Transient: the in-window Agent Dashboard companion drawer is open. Not persisted. */
@@ -114,6 +146,8 @@ export type UISlicePreferences = {
   setUsagePercentageDisplay: (display: UsagePercentageDisplay) => void
   statusBarUsageMode: StatusBarUsageMode
   setStatusBarUsageMode: (mode: StatusBarUsageMode) => void
+  statusBarUsageFormat: StatusBarUsageFormat
+  setStatusBarUsageFormat: (format: StatusBarUsageFormat) => void
 }
 
 export type UISliceSurfaces = {
@@ -130,7 +164,7 @@ export type UISliceSurfaces = {
   ) => void
   setWorkspacePortScanForKey: (key: string, result: WorkspacePortScanResult | null) => void
   setWorkspacePortScanRefreshing: (refreshing: boolean) => void
-  /** Whether the pet overlay is currently visible. Persisted so "Hide pet" survives reload. Independent of the experimentalPet flag (which gates whether it can render at all). */
+  /** Persisted pet visibility, independent of the experimentalPet render gate. */
   petVisible: boolean
   setPetVisible: (v: boolean) => void
   /** Which pet is active — a bundled id or a custom UUID. Persisted via PersistedUIState. */
@@ -140,19 +174,19 @@ export type UISliceSurfaces = {
   customPets: CustomPet[]
   addCustomPet: (model: CustomPet) => void
   removeCustomPet: (id: string) => void
-  /** Pet overlay size in CSS pixels (square). User-adjustable so an oversized imported sprite isn't stuck on screen. */
+  /** Square CSS-pixel size so imported sprites can be resized. */
   petSize: number
   setPetSize: (size: number) => void
   pendingRevealWorktree: UISliceCore['pendingRevealWorktree']
   pendingRevealSidebarRow: UISliceCore['pendingRevealSidebarRow']
   revealWorktreeInSidebar: UISliceCore['revealWorktreeInSidebar']
   revealSidebarRow: UISliceCore['revealSidebarRow']
-  clearPendingRevealWorktreeId: () => void
-  clearPendingRevealSidebarRow: () => void
+  clearPendingRevealWorktreeId: (expected?: UISliceCore['pendingRevealWorktree']) => void
+  clearPendingRevealSidebarRow: (expected?: UISliceCore['pendingRevealSidebarRow']) => void
   // Why: cleared by the diff decorator after it reveals the line, so the same id can be requested again without a stale value.
   scrollToDiffCommentId: string | null
   setScrollToDiffCommentId: (id: string | null) => void
-  /** The floating workspace's directory, resolved from its setting the same way the runtime resolves a floating session's cwd. Null until resolved. */
+  /** Floating cwd resolved like runtime session cwd; null until resolved. */
   floatingWorkspacePath: string | null
   setFloatingWorkspacePath: (path: string | null) => void
   /** Whether the floating workspace overlay is open; on screen only while the feature is enabled too. */
@@ -162,11 +196,11 @@ export type UISliceSurfaces = {
 
 export type UISlicePersistence = {
   persistedUIReady: boolean
-  /** Writer-owned fields as last hydrated from main or flushed by the writer; the debounced writer diffs against this so it only persists fields this client changed (STA-5781). */
+  /** Last hydrated/flushed values; debounced persistence diffs here to write only this client’s edits (STA-5781). */
   persistedUIWriteBaseline: PersistedUIWriteBaseline | null
-  /** Fields with a ui.set round-trip in flight; hydration keeps the mirror's value for them so an echo of the in-flight write can't revert a newer flip-back. */
+  /** Preserve local values during in-flight writes so echoes cannot revert newer flip-backs. */
   persistedUIWriteInFlightCounts: Partial<Record<keyof PersistedUIWriteBaseline, number>>
-  /** Bumped whenever hydration replaces the baseline; an ack whose write predates the bump must not fold, or it would erase a remote write that landed during the round trip. */
+  /** Baseline hydration generation fences old acks so they cannot erase intervening remote writes. */
   persistedUIWriteBaselineGeneration: number
   notePersistedUIWriteStarted: (fields: readonly (keyof PersistedUIWriteBaseline)[]) => void
   /** Settle an in-flight write: fold the acked patch into the baseline (null = rejected, leaving the fields dirty so the next change re-flushes them). */
@@ -181,6 +215,7 @@ export type UISlicePersistence = {
   setEditorFontZoomLevel: (level: number) => void
   hydratePersistedUI: (ui: PersistedUIState, source?: 'startup' | 'sync') => void
   updateStatus: UpdateStatus
+  retainedUpdateTarget: RetainedUpdateTarget | null
   setUpdateStatus: (status: UpdateStatus) => void
   // Why: cache last-'available' changelog so the card keeps rich content while downloading; cleared on idle/checking to avoid staleness.
   updateChangelog: ChangelogData | null
@@ -201,6 +236,8 @@ export type UISlicePersistence = {
   setUpdateCardCollapsed: (collapsed: boolean) => void
   updateReassuranceSeen: boolean
   markUpdateReassuranceSeen: () => void
+  seenMacosUpdateRequirement: string | null
+  markMacosUpdateRequirementSeen: (minimumMacosVersion: string) => void
   /** True on the launch where the OSC 52 default-on migration overrode a persisted `false`. */
   osc52ClipboardDefaultOnNoticePending: boolean
   clearOsc52ClipboardDefaultOnNotice: () => void
@@ -215,4 +252,8 @@ export type UISlicePersistence = {
   setBrowserDefaultZoomLevel: (level: number) => void
   browserKagiSessionLink: string | null
   setBrowserKagiSessionLink: (link: string | null) => void
+  browserDevToolsDock: BrowserDevToolsDockLayout
+  setBrowserDevToolsDock: (layout: BrowserDevToolsDockLayout) => void
+  browserExtensionSidePanelWidth: number
+  setBrowserExtensionSidePanelWidth: (width: number) => void
 }

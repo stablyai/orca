@@ -1,29 +1,36 @@
-import { NativeChatSessionGate } from './NativeChatSessionGate'
+import { BotChatRoom } from '../bots/use-bot-chat-composer-room'
+import { NativeChatSessionGate } from './host-access/NativeChatSessionGate'
 import { NativeChatStructuredSession } from './NativeChatStructuredSession'
 import { NativeChatResolvedView } from './NativeChatResolvedView'
-import { useNativeChatStatusEntry } from './use-native-chat-status-entry'
+import { useNativeChatStatusEntry } from './session/status/use-native-chat-status-entry'
 import type { NativeChatViewProps } from './native-chat-view-types'
-import { NativeChatPaneFileDropSurface } from './NativeChatPaneFileDropSurface'
-import { NativeChatVisualOwnerProvider } from './native-chat-visual-owner'
-import { NativeChatFileLinkExistenceProvider } from './use-native-chat-file-link-existence'
+import { NativeChatPaneFileDropSurface } from './attachments/intake/NativeChatPaneFileDropSurface'
+import { NativeChatTabTranscriptScope } from './native-chat-transcript-scope'
+import { NativeChatWorkersProvider } from './native-chat-workers-context'
 
 export type { NativeChatViewProps } from './native-chat-view-types'
 
-/** Resolves an agent terminal into its native conversation and composer UI. */
 export default function NativeChatView(props: NativeChatViewProps): React.JSX.Element {
   return (
     <NativeChatPaneFileDropSurface className="relative flex h-full min-h-0 min-w-0 w-full">
       {props.mode === 'structured' ? (
-        <NativeChatVisualOwnerProvider
+        <NativeChatTabTranscriptScope
           key={props.sessionId}
-          target={props.target}
-          sessionId={props.sessionId}
           tabId={props.tabId}
+          isVisible={props.isVisible}
+          sessionId={props.sessionId}
+          target={props.target}
         >
-          <NativeChatFileLinkExistenceProvider tabId={props.tabId}>
-            <NativeChatStructuredSession {...props} />
-          </NativeChatFileLinkExistenceProvider>
-        </NativeChatVisualOwnerProvider>
+          <NativeChatWorkersProvider
+            target={props.target}
+            sessionId={props.sessionId}
+            visible={props.isVisible}
+          >
+            <BotChatRoom tabId={props.tabId} sessionId={props.sessionId}>
+              <NativeChatStructuredSession {...props} />
+            </BotChatRoom>
+          </NativeChatWorkersProvider>
+        </NativeChatTabTranscriptScope>
       ) : (
         <NativeChatBridgeView {...props} />
       )}
@@ -41,7 +48,7 @@ function NativeChatBridgeView({
   resolvedAgent,
   ownsTabWideLaunchDraft,
   onSwitchToTerminal,
-  readTerminalScreen,
+  readTerminalDraft,
   contextMenuActions
 }: Exclude<NativeChatViewProps, { mode: 'structured' }>): React.JSX.Element {
   const { entry: agentStatusEntry, paneKey } = useNativeChatStatusEntry(
@@ -57,7 +64,11 @@ function NativeChatBridgeView({
       ptyId={targetPtyId}
     >
       {(resolution) => (
-        <NativeChatFileLinkExistenceProvider tabId={terminalTabId}>
+        <NativeChatTabTranscriptScope
+          sessionId={resolution.sessionId}
+          tabId={terminalTabId}
+          isVisible={isVisible}
+        >
           <NativeChatResolvedView
             paneKey={resolution.paneKey}
             agent={resolution.agent}
@@ -69,10 +80,10 @@ function NativeChatBridgeView({
             terminalTabId={terminalTabId}
             ownsTabWideLaunchDraft={ownsTabWideLaunchDraft}
             onSwitchToTerminal={onSwitchToTerminal}
-            readTerminalScreen={readTerminalScreen}
+            readTerminalDraft={readTerminalDraft}
             contextMenuActions={contextMenuActions}
           />
-        </NativeChatFileLinkExistenceProvider>
+        </NativeChatTabTranscriptScope>
       )}
     </NativeChatSessionGate>
   )

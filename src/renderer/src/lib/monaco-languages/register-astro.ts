@@ -17,41 +17,17 @@ export const astroMonarchLanguage: Monaco.languages.IMonarchLanguage = {
     { open: '<', close: '>', token: 'delimiter.angle' }
   ],
   tokenizer: {
-    // Entry state: fires once at file start with no embed on the stack.
-    // Modeled after the Svelte tokenizer — structural rules MUST NOT emit
-    // `nextEmbedded: '@pop'` from here. Only the frontmatter fence is
-    // recognised at file start; everything else (markup, `{expr}`,
-    // `<script>`/`<style>`) is handled after we've routed through
-    // `markupReenter` so the invariant "markup has html embed active" is
-    // satisfied by a single code path. Without this, an interpolation in
-    // the very first markup line popped the html embed before any push had
-    // occurred via this entry — Monaco rejects that with "cannot pop
-    // embedded language if not inside one".
+    // Initial state has no embed to pop; route non-frontmatter through markupReenter to establish HTML ownership once.
     root: [
-      // Astro frontmatter: `---` at file start opens a TypeScript fence
-      // closed by another `---` line. The opening line itself enters the
-      // typescript embed.
+      // Only file-start --- opens TypeScript frontmatter.
       [/---\s*$/, { token: 'keyword', switchTo: '@frontmatter', nextEmbedded: 'typescript' }],
       [/(?=.)/, { token: '@rematch', switchTo: '@markupReenter' }]
     ],
-    // Inside the frontmatter fence the typescript embed is active; only a
-    // closing `---` on its own line pops it. Astro requires the closing
-    // fence at column 0.
-    //
-    // The `^` here means "start of the region the embed covers", not start of
-    // line (monaco-editor#1127): `_findLeavingNestedLanguageOffset` slices the
-    // compiled `^(?:` prefix off the pop rule and tests `matchOnlyAtLineStart`
-    // against the substring `_myTokenize` handed it. Correct only because this
-    // embed always opens at end-of-line, so that substring is a whole line —
-    // do not reuse a `^`-anchored pop rule for an embed entered mid-line.
+    // Pop only a standalone column-zero fence. Monaco’s ^ anchors the embed region, safe here because entry is at end-of-line; never reuse this for mid-line entry (#1127).
     frontmatter: [
       [/^---\s*$/, { token: 'keyword', switchTo: '@markupReenter', nextEmbedded: '@pop' }]
     ],
-    // html-embedded markup state. Mirrors Svelte's invariant: whenever we
-    // are in `markup`, the html embed is active. Every state that pops back
-    // to markup routes through `markupReenter` to push html again. Astro
-    // expressions are plain JS (no `{#if}`-style block syntax), so a single
-    // `{` rule handles all interpolations.
+    // Markup always owns an HTML embed; return via markupReenter after each plain-JS expression.
     markup: [
       [
         /<script(?=\s|>)/,
@@ -61,9 +37,7 @@ export const astroMonarchLanguage: Monaco.languages.IMonarchLanguage = {
       [/<!--/, { token: 'comment', switchTo: '@comment', nextEmbedded: '@pop' }],
       [/\{/, { token: 'delimiter.curly', switchTo: '@astroExpressionEnter', nextEmbedded: '@pop' }]
     ],
-    // `@rematch` is required: on a zero-width match Monarch's progress check
-    // `continue`s and silently drops a pending `nextEmbedded` for any other
-    // token, leaving `markup` without the html embed its pop rules assume.
+    // Zero-width transitions require @rematch or Monarch silently drops nextEmbedded and leaves markup without HTML.
     markupReenter: [
       [
         restOfLineWithinEmbedBudget,
@@ -71,9 +45,7 @@ export const astroMonarchLanguage: Monaco.languages.IMonarchLanguage = {
       ],
       [/(?=.)/, { token: '@rematch', switchTo: '@markupPlain' }]
     ],
-    // Same structure as `markup` with no embeds, so the rest of an over-budget
-    // line cannot deepen the recursion. The next line starts here and re-enters
-    // the html embed as soon as it fits the budget.
+    // Keep over-budget structure without embeds to stop recursion; retry HTML on the next line when its remainder fits.
     markupPlain: [
       [/<script(?=\s|>)/, { token: 'tag', switchTo: '@scriptOpen.javascript' }],
       [/<style(?=\s|>)/, { token: 'tag', switchTo: '@styleOpen.css' }],
@@ -92,11 +64,7 @@ export const astroMonarchLanguage: Monaco.languages.IMonarchLanguage = {
       [/[^-]+/, 'comment'],
       [/./, 'comment']
     ],
-    // Once the typescript embed is active inside an expression, Monaco only
-    // consults parent rules whose action ends the embed. A brace counter
-    // therefore cannot run from inside the embed, so expressions with
-    // nested braces (e.g. `{items.map((x) => ({y: x}))}`) close at the
-    // first inner `}`. The common single-brace case `{title}` works.
+    // Active embeds expose only parent exit rules, so brace counting cannot run; nested JS braces close at the first }, a known regex-grammar limit.
     astroExpressionEnter: [
       // Empty `{}`: entry popped html, but typescript was never entered.
       [/\}/, { token: 'delimiter.curly', switchTo: '@markupReenter' }],
@@ -150,8 +118,7 @@ export const astroMonarchLanguage: Monaco.languages.IMonarchLanguage = {
     scriptBody: [
       [/<\/script\s*>/, { token: 'tag', switchTo: '@markupReenter', nextEmbedded: '@pop' }]
     ],
-    // Over-budget mirror of the body: re-enters `$S2` as soon as the rest of
-    // the line fits, so a long opening line does not grey out the whole block.
+    // Re-enter $S2 as soon as the remaining line fits so long opening lines cannot leave entire blocks unhighlighted.
     scriptBodyPlain: [
       [/<\/script\s*>/, { token: 'tag', switchTo: '@markupReenter' }],
       [

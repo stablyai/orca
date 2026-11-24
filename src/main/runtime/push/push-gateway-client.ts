@@ -1,15 +1,13 @@
-// Why: talks to the Orca push gateway (cloud/packages/push-contract/src).
-// Every method returns a result instead of throwing — push is best-effort and
-// must never break the socket fan-out it rides along with.
+// Return best-effort gateway outcomes instead of throwing through notification fan-out.
 import { z } from 'zod'
 import { cancelUnreadResponseBody } from '../../lib/unread-response-body'
-import type { E2EEKeypair } from '../e2ee-keypair'
+import type { E2EEKeypair } from '../rpc/server/pairing/e2ee-keypair'
 import type {
   MobilePushAgentState,
   MobilePushApnsEnvironment,
   MobilePushPlatform,
   MobilePushSource
-} from '../../../shared/mobile-push-contract'
+} from '../../../shared/notifications/mobile-push-contract'
 import {
   PUSH_REQUEST_DEADLINE_MS,
   readPushGatewayJson,
@@ -18,8 +16,6 @@ import {
   type PushGatewayResult
 } from './push-gateway-response'
 import { PushGatewaySession } from './push-gateway-session'
-
-export type { PushGatewayFailure, PushGatewayResult }
 
 const RegisterResponseSchema = z.object({ registrationId: z.string().min(1).max(512) })
 
@@ -37,7 +33,9 @@ const SendResponseSchema = z.object({
 export type PushSendResult = z.infer<typeof SendResponseSchema>['results'][number]
 
 export type PushSendNotification = {
-  kind?: 'alert' | 'dismiss'
+  kind?: 'alert' | 'dismiss' | 'badge'
+  /** This host's unread count; the gateway sums every host's into the phone's icon badge. */
+  badge?: number
   expiresAt?: number
   sound?: boolean
   notificationId?: string
@@ -48,6 +46,8 @@ export type PushSendNotification = {
   title: string
   body: string
   worktreeId?: string
+  paneKey?: string
+  executionHost?: `runtime:${string}`
 }
 
 type PushGatewayClientOptions = {
@@ -73,6 +73,16 @@ export class PushGatewayClient {
       fetchImpl: this.fetchImpl,
       now: options.now ?? Date.now
     })
+  }
+
+  /** How far off this host's clock is, when the push service refuses sign-in for it; null otherwise. */
+  async currentClockSkewMs(): Promise<number | null> {
+    // Only a recorded refusal re-signs in, so a fixed clock clears it without a handshake per test.
+    if (this.session.clockSkewMs() === null) {
+      return null
+    }
+    const outcome = await this.session.ensure(null)
+    return outcome.ok ? null : (outcome.clockSkewMs ?? null)
   }
 
   async registerDevice(input: {
@@ -136,9 +146,7 @@ export class PushGatewayClient {
     const retried = await this.sendAuthorized(path, init, first.token)
     if (retried.ok && retried.response.status === 401) {
       await cancelUnreadResponseBody(retried.response)
-      // A 401 that survives a freshly minted session is the gateway being unusable
-      // right now, not this request being wrong: register should report it as
-      // unreachable, and send should still spend its one retry.
+      // A 401 after fresh authentication means temporary gateway failure; preserve send retry and report register unreachable.
       return { ok: false, reason: 'unreachable' }
     }
     return retried

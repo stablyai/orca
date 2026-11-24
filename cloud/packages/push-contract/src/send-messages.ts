@@ -8,9 +8,7 @@ import { OpaqueIdSchema, SequenceSchema } from './wire-scalars.js'
 
 export const PushNotificationSchema = z
   .object({
-    // Absent for terminal-bell, which the desktop raises without a notification record.
-    // Printable ASCII only: the id becomes the APNs collapse header, and the
-    // desktop builds it from URL-encoded parts, so anything else is not Orca's.
+    // Absent for terminal-bell; printable ASCII only because desktop URL-encoded IDs become APNs collapse headers.
     notificationId: z
       .string()
       .min(1)
@@ -21,7 +19,9 @@ export const PushNotificationSchema = z
     notificationEpoch: OpaqueIdSchema,
     source: PushNotificationSourceSchema,
     sound: z.boolean().optional(),
-    kind: z.enum(['alert', 'dismiss']).optional(),
+    kind: z.enum(['alert', 'dismiss', 'badge']).optional(),
+    // The sending host's unread count; the gateway sums every host's for one phone.
+    badge: z.number().int().nonnegative().max(PUSH_LIMITS.maxBadgeCount).optional(),
     expiresAt: z.number().int().positive().optional(),
     agentState: PushAgentStateSchema.nullable(),
     title: z.string().min(1).max(PUSH_LIMITS.titleMaxChars),
@@ -39,6 +39,10 @@ export const PushNotificationSchema = z
   .refine(
     (notification) => notification.kind !== 'dismiss' || Boolean(notification.notificationId),
     { message: 'dismiss requires notificationId' }
+  )
+  .refine(
+    (notification) => (notification.kind === 'badge') === (notification.badge !== undefined),
+    { message: 'badge is sent with the badge kind only' }
   )
   .refine(
     (notification) => new TextEncoder().encode(JSON.stringify(notification)).byteLength <= 3000,

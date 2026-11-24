@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { useAppStore } from '@/store'
+import { translate } from '@/i18n/i18n'
 import { formatPermissionNotice, formatPopupNotice } from './browser-notices'
 
 export function useBrowserPageResourceNotices(browserTabId: string): {
@@ -15,15 +16,40 @@ export function useBrowserPageResourceNotices(browserTabId: string): {
       return
     }
     if (browserSessionImportState.status === 'success' && browserSessionImportState.summary) {
-      const { importedCookies, domains } = browserSessionImportState.summary
-      const domainPreview = domains.slice(0, 3).join(', ')
-      const more = domains.length > 3 ? ` +${domains.length - 3} more` : ''
+      const { importedCookies: count, domains: allDomains } = browserSessionImportState.summary
+      const domains = allDomains.slice(0, 3).join(', ')
+      const more = allDomains.length - 3
       setResourceNotice(
-        `Imported ${importedCookies} cookies for ${domainPreview}${more}. Reload the page to use them.`
+        more > 0
+          ? translate(
+              'browser.cookieImport.notice.importedMore',
+              'Imported {{count}} cookies for {{domains}} +{{more}} more. Reload the page to use them.',
+              {
+                count,
+                domains,
+                more,
+                defaultValue_one:
+                  'Imported {{count}} cookie for {{domains}} +{{more}} more. Reload the page to use them.'
+              }
+            )
+          : translate(
+              'browser.cookieImport.notice.imported',
+              'Imported {{count}} cookies for {{domains}}. Reload the page to use them.',
+              {
+                count,
+                domains,
+                defaultValue_one:
+                  'Imported {{count}} cookie for {{domains}}. Reload the page to use them.'
+              }
+            )
       )
       clearBrowserSessionImportState()
     } else if (browserSessionImportState.status === 'error' && browserSessionImportState.error) {
-      setResourceNotice(`Cookie import failed: ${browserSessionImportState.error}`)
+      setResourceNotice(
+        translate('browser.cookieImport.notice.failed', 'Cookie import failed: {{reason}}', {
+          reason: browserSessionImportState.error
+        })
+      )
       clearBrowserSessionImportState()
     }
   }, [browserSessionImportState, clearBrowserSessionImportState])

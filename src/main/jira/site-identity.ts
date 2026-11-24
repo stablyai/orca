@@ -1,14 +1,29 @@
 import { createHash } from 'node:crypto'
-import type { JiraSite, JiraViewer } from '../../shared/jira-types'
+import type { JiraAuthType, JiraSite, JiraViewer } from '../../shared/jira/jira-types'
 
 export function normalizeJiraSiteUrl(siteUrl: string): string {
   const trimmed = siteUrl.trim()
   const withProtocol = /^[a-z][a-z0-9+.-]*:\/\//i.test(trimmed) ? trimmed : `https://${trimmed}`
   const url = new URL(withProtocol)
+  if (!['https:', 'http:'].includes(url.protocol) || url.username || url.password) {
+    throw new Error('Enter an HTTP or HTTPS Jira site URL without credentials.')
+  }
   url.pathname = url.pathname.replace(/\/+$/, '')
   url.search = ''
   url.hash = ''
   return url.toString().replace(/\/$/, '')
+}
+
+// Atlassian-hosted sites are always Cloud; Server-only REST paths such as /rest/api/2/search return 410 there.
+export function resolveJiraAuthType(siteUrl: string, requested: unknown): JiraAuthType {
+  if (requested !== 'server') {
+    return 'cloud'
+  }
+  try {
+    return /\.(atlassian\.net|jira\.com)$/.test(new URL(siteUrl).hostname) ? 'cloud' : 'server'
+  } catch {
+    return 'server'
+  }
 }
 
 export function getSiteId(siteUrl: string, email: string): string {

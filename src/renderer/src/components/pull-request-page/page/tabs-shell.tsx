@@ -6,24 +6,24 @@ import {
   resolvePullRequestRepo,
   type ItemDialogTab
 } from '@/components/github/github-work-item-identity'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import type {
   GitHubAssignableUser,
   GitHubPRFile
-} from '../../../../../shared/github/pull-request-types'
+} from '../../../../../shared/github/pull-requests/pull-request-types'
 import type {
   GitHubWorkItem,
   GitHubWorkItemDetails
-} from '../../../../../shared/github/work-item-types'
-import type { PRCheckDetail } from '../../../../../shared/github/check-types'
-import type { PRComment } from '../../../../../shared/github/comment-types'
-import type { TaskSourceContext } from '../../../../../shared/task-source-context'
+} from '../../../../../shared/github/work-items/work-item-types'
+import type { PRCheckDetail } from '../../../../../shared/github/checks/check-types'
+import type { PRComment } from '../../../../../shared/github/comments/comment-types'
+import type { TaskSourceContext } from '../../../../../shared/work-items/task-source-context'
 import type { PullRequestPageProjectOrigin } from '../page-types'
 import {
   patchCachedPRChecks,
   patchCachedPRReviewRequests,
   patchCachedWorkItemBody
-} from '../cache/work-item-details'
+} from '@/components/github-item-dialog/load-item-details/work-item-details-cache'
 import { ConversationTab } from '../conversation/tab'
 import { ChecksTab } from '../checks/tab'
 import { PRFilesCombinedDiffViewer } from '../files/combined-diff-viewer'
@@ -38,6 +38,7 @@ export function PullRequestPageTabs({
   sourceContext,
   projectOrigin,
   body,
+  bodyImageUrls,
   comments,
   files,
   filesUnavailable,
@@ -63,6 +64,7 @@ export function PullRequestPageTabs({
   sourceContext?: TaskSourceContext | null
   projectOrigin: PullRequestPageProjectOrigin | undefined
   body: string
+  bodyImageUrls?: Record<string, string>
   comments: PRComment[]
   files: GitHubPRFile[]
   filesUnavailable: boolean
@@ -73,7 +75,7 @@ export function PullRequestPageTabs({
   localState: GitHubWorkItem['state']
   setLocalState: (state: GitHubWorkItem['state']) => void
   detailsCacheKey: string | null
-  pendingViewedPaths: Set<string>
+  pendingViewedPaths: ReadonlySet<string>
   invalidateCurrentDetailsCache: () => void
   appendOptimisticComment: (comment: PRComment) => void
   handlePRFileViewedChange: (path: string, viewed: boolean) => Promise<boolean>
@@ -82,6 +84,7 @@ export function PullRequestPageTabs({
     reviewRequests: GitHubAssignableUser[]
   ) => void
 }): React.JSX.Element {
+  const t = useTranslate()
   return (
     <Tabs
       value={tab}
@@ -95,11 +98,11 @@ export function PullRequestPageTabs({
       >
         <TabsTrigger value="conversation" className="px-3 py-2.5">
           <MessageSquare className="size-3.5" />
-          {translate('auto.components.PullRequestPage.9e8d45700e', 'Conversation')}
+          {t('auto.components.PullRequestPage.9e8d45700e', 'Conversation')}
         </TabsTrigger>
         <TabsTrigger value="checks" className="px-3 py-2.5">
           <ListChecks className="size-3.5" />
-          {translate('auto.components.PullRequestPage.94d95cf1f7', 'Checks')}
+          {t('auto.components.PullRequestPage.94d95cf1f7', 'Checks')}
           {checks.length > 0 && (
             <span className="ml-1 rounded-full bg-muted px-1.5 text-[10px] text-muted-foreground">
               {checks.length}
@@ -108,7 +111,7 @@ export function PullRequestPageTabs({
         </TabsTrigger>
         <TabsTrigger value="files" className="px-3 py-2.5">
           <FileText className="size-3.5" />
-          {translate('auto.components.PullRequestPage.4d18310d55', 'Files changed')}
+          {t('auto.components.PullRequestPage.4d18310d55', 'Files changed')}
           {files.length > 0 && (
             <span className="ml-1 rounded-full bg-muted px-1.5 text-[10px] text-muted-foreground">
               {files.length}
@@ -120,11 +123,13 @@ export function PullRequestPageTabs({
       <div className="min-h-0 flex-1 overflow-y-auto scrollbar-sleek">
         <TabsContent value="conversation" className="mt-0">
           <ConversationTab
+            key={detailsCacheKey}
             item={displayWorkItem ?? workItem}
             repoPath={repoPath}
             repoId={effectiveRepoId}
             sourceContext={sourceContext}
             body={body}
+            bodyImageUrls={bodyImageUrls}
             comments={comments}
             files={files}
             headSha={details?.headSha}
@@ -142,9 +147,9 @@ export function PullRequestPageTabs({
                 patchCachedPRChecks(detailsCacheKey, nextChecks)
               }
             }}
-            onBodyUpdated={(nextBody) => {
+            onBodyUpdated={(nextBody, representation) => {
               if (detailsCacheKey) {
-                patchCachedWorkItemBody(detailsCacheKey, nextBody)
+                patchCachedWorkItemBody(detailsCacheKey, nextBody, representation)
               }
             }}
             onCommentAdded={appendOptimisticComment}
@@ -187,19 +192,19 @@ export function PullRequestPageTabs({
             // Why: fetch failed (rate limit/auth/unresolved remote); offer retry instead of implying the PR is empty.
             <div className="flex flex-col items-center gap-3 px-4 py-10 text-center">
               <div className="text-[12px] text-muted-foreground">
-                {translate(
+                {t(
                   'auto.components.PullRequestPage.filesUnavailable',
                   "Couldn't load changed files."
                 )}
               </div>
               <Button variant="outline" size="sm" onClick={invalidateCurrentDetailsCache}>
                 <RefreshCw className="size-3.5" />
-                {translate('auto.components.PullRequestPage.filesRetry', 'Retry')}
+                {t('auto.components.PullRequestPage.filesRetry', 'Retry')}
               </Button>
             </div>
           ) : files.length === 0 ? (
             <div className="px-4 py-10 text-center text-[12px] text-muted-foreground">
-              {translate('auto.components.PullRequestPage.6ad2c1ab9c', 'No files changed.')}
+              {t('auto.components.PullRequestPage.6ad2c1ab9c', 'No files changed.')}
             </div>
           ) : (
             <PRFilesCombinedDiffViewer
