@@ -20344,7 +20344,11 @@
         "filePillLabel": "파일: {{name}}",
         "agentPillLabel": "에이전트: {{name}}",
         "backToBots": "봇으로 돌아가기",
+        "botChats": "채팅",
+        "botChatsCount": "{{name}}의 채팅 {{chatCount}}개",
+        "changeChat": "채팅 변경",
         "chatsHint": "채팅은 오른쪽 화살표",
+        "chooseChat": "채팅 선택",
         "loadingBotChats": "{{name}}의 채팅 불러오는 중…",
         "noMatchingChats": "일치하는 채팅 없음",
         "noOtherChats": "다른 채팅 없음",
@@ -20830,6 +20834,13 @@
           "task": "작업 보낸 쪽",
           "update": "업데이트 보낸 쪽",
           "message": "메시지 보낸 쪽"
+        },
+        "kind": {
+          "started": "시작됨",
+          "reopened": "다시 열림",
+          "followedUp": "후속 메시지",
+          "handedOff": "인계됨",
+          "task": "작업"
         }
       },
       "goal": {
@@ -20981,7 +20992,15 @@
         "linkActions": "링크 작업"
       },
       "imageGallery": {
-        "loadFailed": "{{name}} 이미지를 불러올 수 없습니다"
+        "scopeHelp": "미리보기를 열었을 때 채팅의 이 부분 근처에 있던 이미지입니다. 더 위나 아래에 있는 이미지는 포함되지 않습니다. 업데이트하려면 닫았다가 다시 여세요.",
+        "description": "이 보기의 이미지 {{count}}개 중 {{position}}번째입니다. {{help}}",
+        "stepAnnouncement": "이 보기의 이미지 {{count}}개 중 {{position}}번째: {{title}}.",
+        "firstImage": "첫 번째 이미지입니다.",
+        "lastImage": "마지막 이미지입니다.",
+        "loading": "이미지 로드 중…",
+        "loadFailed": "{{name}} 이미지를 불러올 수 없습니다",
+        "closedImageChanged": "이미지가 변경되어 미리보기를 닫았습니다. 현재 이미지 세트를 가져오려면 썸네일을 여세요.",
+        "closedChatChanged": "채팅이 변경되어 미리보기를 닫았습니다. 현재 이미지 세트를 가져오려면 썸네일을 여세요."
       },
       "hostPermission": {
         "checkAgain": "다시 확인",
@@ -21164,6 +21183,7 @@
         "stopUnconfirmed": "Orca가 워커가 중지되었는지 확인하지 못했습니다."
       },
       "connectorAsker": {
+        "anApp": "어떤 앱",
         "directMessage": "{{source}} DM",
         "earlierMessages": "스레드의 이전 메시지 {{count}}개",
         "earlierMessages_one": "스레드의 이전 메시지 {{count}}개",
@@ -21214,6 +21234,14 @@
       "usageLimitAutoContinue": {
         "cancelFailed": "자동 계속을 취소하지 못했습니다. 다시 시도하세요.",
         "scheduled": "Orca가 {{time}}에 이 채팅을 계속합니다."
+      },
+      "botRequest": {
+        "notSentTo": "전달되지 않은 대상",
+        "asked": "질문 대상",
+        "handedTo": "인계 대상",
+        "paused": "{{bot}}이(가) 일시 중지되었습니다.",
+        "botsOff": "봇이 꺼져 있습니다.",
+        "couldNotTake": "{{bot}}이(가) 이 요청을 받지 못했습니다."
       },
       "settings": "채팅 설정",
       "textAttachmentPreview": {
@@ -21284,6 +21312,37 @@
         "unchanged": "{{app}}에서는 아무것도 변경되지 않았습니다.",
         "paused": "중복 실행을 막기 위해 자동화를 일시 중지했습니다. {{app}}에서 이전 봇을 끈 뒤에 켜세요."
       },
+      "botCreateOffer": {
+        "heading": "새 봇",
+        "takesOverOne": "워크스페이스 1개 인수 예정",
+        "takesOverMany": "워크스페이스 {{count}}개 인수 예정",
+        "created": "생성됨",
+        "createdTookOverOne": "생성됨 · 워크스페이스 1개 인수함",
+        "createdTookOverMany": "생성됨 · 워크스페이스 {{count}}개 인수함",
+        "askedOne": "워크스페이스 1개 인수 요청함",
+        "askedMany": "워크스페이스 {{count}}개 인수 요청함",
+        "tookOverSome": "워크스페이스 {{count}}개 중 {{taken}}개 인수함",
+        "tookOverOne": "워크스페이스 1개 인수함",
+        "tookOverMany": "워크스페이스 {{count}}개 인수함",
+        "watches": "감시 대상",
+        "reports": "보고",
+        "takesOver": "인수 대상",
+        "template": "템플릿",
+        "nameTaken": "이름이 {{name}}인 봇이 이미 있습니다.",
+        "open": "열기",
+        "edit": "편집",
+        "rename": "이름 바꾸기",
+        "create": "봇 생성",
+        "originTemplate": "{{template}} 템플릿 기반 · 제안: {{bot}}",
+        "origin": "제안: {{bot}}",
+        "createdAskedOne": "생성됨 · 워크스페이스 1개 인수 요청함",
+        "createdAskedMany": "생성됨 · 워크스페이스 {{count}}개 인수 요청함",
+        "createdTookOverSome": "생성됨 · 워크스페이스 {{count}}개 중 {{taken}}개 인수함",
+        "deleted": "생성 후 삭제됨",
+        "does": "하는 일",
+        "willPropose": "제안 예정",
+        "details": "{{name}} 세부 정보"
+      },
       "usage": {
         "description": "이 채팅의 Codex 계정 사용량 표시",
         "loading": "Codex 사용량을 불러오는 중…",
@@ -21327,6 +21386,8 @@
       "sideChat": {
         "description": "이 채팅 옆의 포크에서 곁가지 질문하기",
         "argumentHint": "<question>",
+        "pill": "사이드 채팅",
+        "placeholder": "곁가지 질문하기",
         "notReady": "사이드 채팅이 아직 준비되지 않았습니다. 잠시 후 다시 시도하세요.",
         "replyRunning": "이 응답이 끝나면 사용할 수 있습니다.",
         "noReply": "첫 응답 이후에 사용할 수 있습니다.",
@@ -21350,6 +21411,14 @@
         "dismiss": "닫기",
         "notSent": "봇에 보내지 못했습니다. 다시 시도하세요."
       },
+      "tidyUp": {
+        "tidiedMemory": "메모리 정리됨",
+        "changes_one": "변경 {{count}}개",
+        "changes_other": "변경 {{count}}개",
+        "reviewChanges_one": "변경 {{count}}개 검토",
+        "reviewChanges_other": "변경 {{count}}개 검토"
+      },
+      "tookOver": "{{workspace}} 인수함",
       "memoryUpdated": {
         "added": "추가됨",
         "removed": "제거됨",
@@ -21575,8 +21644,29 @@
         "agyHint": "이 채팅은 이 호스트에서 Antigravity CLI를 실행합니다. 새 채팅에는 다른 방식이 적용됩니다.",
         "confirmSignIn": "Google로 로그인할까요?"
       },
+      "pairedServerAsk": {
+        "always": "{{server}} 항상 허용",
+        "deny": "거부",
+        "once": "한 번 허용",
+        "thisServer": "이 서버",
+        "title": "이 컴퓨터에서 메시지 전송 요청: {{from}} → {{to}}",
+        "titlePills": "이 컴퓨터에서 메시지 전송 요청: <from>{{from}}</from> → <to>{{to}}</to>"
+      },
+      "clientAsk": {
+        "declined": "거절됨",
+        "notConnected": "연결되지 않았음",
+        "pairedComputer": "페어링된 컴퓨터",
+        "waitingForYou": "사용자 대기 중",
+        "waitingOn": "{{computer}}에서 승인 대기 중"
+      },
       "dock": {
         "label": "메시지 상자와 프롬프트"
+      },
+      "googleOffer": {
+        "useAccount": "Google에 {{email}} 계정을 사용합니다.",
+        "reconnect": "{{email}} 다시 연결",
+        "use": "{{email}} 사용",
+        "staysDefault": "{{email}} 계정이 기본으로 유지됩니다"
       },
       "workerDock": {
         "commandOutputPending": "명령 출력이 아직 없습니다.",
@@ -21653,10 +21743,22 @@
         "cleared_one": "워커 1개를 지웠습니다",
         "cleared_other": "워커 {{count}}개를 지웠습니다"
       },
+      "webhookSetup": {
+        "heading": "웹훅 설정",
+        "keyAndSecret": "키와 서명 시크릿",
+        "copiedReceipt": "✓ URL 복사됨",
+        "signingSecret": "서명 시크릿",
+        "addSecret": "추가…",
+        "noSecret": "없음",
+        "sampleCall": "샘플 호출",
+        "sampleNote": "실제 실행이 시작됩니다",
+        "send": "보내기"
+      },
       "automationSaved": {
         "resultsInRuns": "실행할 때마다 결과 표시",
         "paused": "일시 중지됨",
         "webhookHint": "서비스가 이 URL을 호출하도록 설정하세요",
+        "gettingUrl": "URL 가져오는 중…",
         "editDraft": "“{{name}}”을(를) 다음과 같이 바꿔 주세요: ",
         "resultsInEachRun": "실행할 때마다",
         "resultsChat": "채팅",
@@ -21671,6 +21773,14 @@
         "loadFailed": "이 자동화를 읽지 못했습니다",
         "openFullPage": "페이지 열기",
         "onAgent": "{{name}}에서"
+      },
+      "botContext": {
+        "soul": "업데이트된 소울 적용됨",
+        "memory": "이 채팅 밖에서 편집된 메모리"
+      },
+      "botCreated": {
+        "unnamed": "봇 생성됨",
+        "again": "{{name}} 설정을 다시 시작했습니다"
       },
       "connectorOffer": {
         "heading": "서비스 연결",
