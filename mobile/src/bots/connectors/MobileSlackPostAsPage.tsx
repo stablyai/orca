@@ -67,8 +67,8 @@ export function MobileSlackPostAsPage(props: {
   const follow = useCallback(async () => {
     await refresh()
   }, [refresh])
-  // Once the host reports the sent change waiting, it speaks for it, so a cancel elsewhere shows here.
-  if (asked !== null && installed.postAsPending === asked) {
+  // Once the host reports the sent change waiting or applied, it speaks for it, so a change elsewhere shows here.
+  if (asked !== null && (installed.postAs === asked || installed.postAsPending === asked)) {
     setAsked(null)
   }
   const current = installed.postAs
