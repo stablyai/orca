@@ -96,9 +96,11 @@ it('tries a lasting failure once on poll answers, then on each real step and at 
 })
 
 it('never lets an older record land after a newer one, and the caller never waits on the disk', async () => {
-  const { records, onDisk, hold } = disk()
+  const { records, onDisk, hold, attempts } = disk()
   const release = hold()
   records.mark('bot-1', G1)
+  // G1's save is on its way and stuck when the newer records come.
+  await vi.waitFor(() => expect(attempts()).toBe(1))
   records.mark('bot-1', G2)
   records.mark('bot-1', G1)
   records.mark('bot-1', G2)
@@ -202,4 +204,18 @@ it('waits for a stuck disk once at quit, however many shutdown paths ask', async
   } finally {
     vi.useRealTimers()
   }
+})
+
+it('waits at quit for a send on its way to answer, then saves the record it marks', async () => {
+  const { records, onDisk } = disk()
+  let answer = (): void => {}
+  const answered = new Promise<void>((resolve) => (answer = resolve))
+  records.confirming(answered.then(() => records.mark('bot-1', G1)))
+  let saved = false
+  const quit = records.finalSave().then(() => (saved = true))
+  await idle()
+  expect(saved).toBe(false)
+  answer()
+  await quit
+  expect(onDisk.get('bot-1')).toEqual(G1)
 })

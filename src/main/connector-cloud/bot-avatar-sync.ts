@@ -217,7 +217,7 @@ export class BotAvatarSync {
       }
       this.queued.delete(id)
       if (bot.avatar && !this.sending.has(id)) {
-        void this.send(bot, pictureKey(bot))
+        this.shown.confirming(this.send(bot, pictureKey(bot)))
       }
     }
   }

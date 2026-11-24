@@ -414,3 +414,56 @@ it('sends only drawings of the latest look through every edit, a plain look incl
   // The mascot id would have Slack show the cloud's older art: only drawings ever go.
   expect(sent.some((body) => body.kind === 'mascot')).toBe(false)
 })
+
+it('keeps no record for a drawing another account may have taken, and keeps it through a sign-out', async () => {
+  home = await mkdtemp(join(tmpdir(), 'bot-slack-icon-'))
+  const folder = home
+  const bot = {
+    id: 'bot-1',
+    folderWorkspaceId: 'home-1',
+    avatar: 'mascot:A1',
+    avatarColor: '#1f2126',
+    avatarOutfit: null,
+    slack: { appId: 'A1', teamId: 'T1' },
+    github: null
+  }
+  await writeBotSlackIcon(
+    localBotHomeFilesystem,
+    folder,
+    bot.id,
+    botSlackIconLook(bot)!,
+    squarePng(512)
+  )
+  for (const [during, kept] of [
+    ['acct-2', false],
+    [null, true]
+  ] as const) {
+    let account: string | null = 'acct-1'
+    const icons = shownIn(folder)
+    await writeBotSlackIconShown(localBotHomeFilesystem, folder, bot.id, null)
+    const sync = new BotAvatarSync({
+      bots: {
+        enabled: () => true,
+        list: () => [bot],
+        readAvatarImage: async () => null,
+        slackIcons: { ...icons, read: () => readBotSlackIcon(localBotHomeFilesystem, folder, bot) }
+      },
+      cloud: () => ({
+        signedInAccount: () => account,
+        call: async <T extends z.ZodType>(
+          _path: string,
+          _body: unknown,
+          schema: T
+        ): Promise<ConnectorResult<z.infer<T>>> => {
+          // Another account signs in, or the host signs out or fences for quit, while the upload is out.
+          account = during
+          return { ok: true, value: schema.parse(undefined) }
+        }
+      })
+    })
+    sync.changed()
+    await icons.shownRecords.finalSave()
+    const shown = await readBotSlackIconShown(localBotHomeFilesystem, folder, bot.id)
+    expect(shown !== null).toBe(kept)
+  }
+})

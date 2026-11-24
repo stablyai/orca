@@ -35,7 +35,9 @@ export class BotSlackIconShownRecords {
   // Bots already tried on an answer since their last step: they wait for a real step or quit.
   private readonly spent = new Set<string>()
   private running: Promise<void> | null = null
-  private final: Promise<void> | null = null
+  private deadline: Promise<void> | null = null
+  // Sends on their way, whose answers may still mark a record.
+  private readonly sends = new Set<Promise<void>>()
   // The bot being saved, so its deletion removes its files only after that save lands.
   private saving: { botId: string; done: Promise<void> } | null = null
 
@@ -114,18 +116,24 @@ export class BotSlackIconShownRecords {
     return this.running ?? Promise.resolve()
   }
 
-  /** The last save before quit, relaunch or a host's stop: shared by every caller, so a stuck disk costs
-   *  one wait of at most `BOT_SLACK_ICON_SHOWN_SETTLE_MS` however many of them ask. */
+  /** A send whose answer may mark a record: the last save before quit waits for it too. */
+  confirming(send: Promise<void>): void {
+    this.sends.add(send)
+    const done = (): void => {
+      this.sends.delete(send)
+    }
+    send.then(done, done)
+  }
+
+  /** The last save before quit, relaunch or a host's stop: the sends on their way answer, then every
+   *  unsaved record goes once. Every caller waits again, but all share one deadline of at most
+   *  `BOT_SLACK_ICON_SHOWN_SETTLE_MS`, so a stuck disk or send costs one wait however many ask. */
   finalSave(): Promise<void> {
-    this.final ??= new Promise<void>((resolve) => {
-      const deadline = setTimeout(resolve, BOT_SLACK_ICON_SHOWN_SETTLE_MS)
-      deadline.unref?.()
-      void this.settled().finally(() => {
-        clearTimeout(deadline)
-        resolve()
-      })
+    this.deadline ??= new Promise<void>((resolve) => {
+      setTimeout(resolve, BOT_SLACK_ICON_SHOWN_SETTLE_MS).unref?.()
     })
-    return this.final
+    const saved = Promise.allSettled(this.sends).then(() => this.settled())
+    return Promise.race([this.deadline, saved])
   }
 
   /** A deleted bot keeps nothing here; settles once a save of it already on its way has landed. */

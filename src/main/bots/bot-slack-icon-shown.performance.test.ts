@@ -35,28 +35,37 @@ it('retries each failed record once however many poll answers come', async () =>
   expect(await attemptsOnFailingDisk(100, 100)).toBe(100)
 })
 
-// Saves once a stuck write lets go, after a burst of marks per bot, poll answers and real steps meanwhile.
+// Saves once a stuck write lets go, after a burst of marks per bot, poll answers and real steps behind it;
+// each bot still ends with its latest record on disk.
 async function savesAfterStuckBurst(bots: number, burst: number): Promise<number> {
   let saves = 0
   let release = (): void => {}
   const stuck = new Promise<void>((resolve) => (release = resolve))
+  const onDisk = new Map<string, string | undefined>()
   const records = new BotSlackIconShownRecords({
     read: async () => null,
-    write: async () => {
+    write: async (botId, shown) => {
       saves += 1
       await stuck
+      onDisk.set(botId, shown?.mascot)
     },
     exists: () => true
   })
+  records.mark('bot-0', { account: 'a1b2', mascot: 'start' })
+  // The first save is on its way and stuck before the burst comes.
+  await vi.waitFor(() => expect(saves).toBe(1))
   for (let round = 0; round < burst; round += 1) {
     for (let bot = 0; bot < bots; bot += 1) {
-      records.mark(`bot-${bot}`, { account: 'a1b2', mascot: `G${round % 2}` })
+      records.mark(`bot-${bot}`, { account: 'a1b2', mascot: `G${round}` })
     }
     records.answered()
     records.stepped()
   }
   release()
   await records.settled()
+  for (let bot = 0; bot < bots; bot += 1) {
+    expect(onDisk.get(`bot-${bot}`)).toBe(`G${burst - 1}`)
+  }
   return saves
 }
 
