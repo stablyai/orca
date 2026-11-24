@@ -22,7 +22,6 @@ import { styles } from './terminal-shortcut-settings-styles'
 import { useMobileColorScheme } from '../../../theme/use-mobile-color-scheme'
 import { useMobileTranslation } from '../../../i18n/use-mobile-translation'
 import '../../key-input/terminal-accessory-keys'
-import type { TerminalAccessoryKey } from '../../key-input/terminal-accessory-keys'
 import { TERMINAL_ACCESSORY_KEY_DEFINITIONS as TERMINAL_ACCESSORY_KEYS } from '../../key-input/terminal-key-definitions'
 import {
   getDefaultTerminalAccessoryLayout,
@@ -32,29 +31,13 @@ import {
   setTerminalAccessoryBuiltInVisible
 } from '../../key-input/terminal-accessory-layout'
 import { MobileSwitch } from '../../../components/controls/MobileSwitch'
+import { customKeyBytes, keyName, withVisibleOrder } from './terminal-key-row-entries'
 import { SmartRailRow } from '../../../components/list/SmartRailRow'
 
 // Absolutely positioned DragReorderList rows require one fixed height per list.
 const KEY_ROW_HEIGHT = 48
 const CUSTOM_KEY_ROW_HEIGHT = 60
 const NEW_KEY = '\u0000new'
-
-/** The key's name; its glyph too when that says something the name doesn't ("Ctrl+C" beside Interrupt). */
-function keyName(key: TerminalAccessoryKey): { title: string; glyph?: string } {
-  const title = key.accessibilityLabel ?? key.label
-  const plain = (text: string) => text.toLowerCase().replace(/[^\p{L}\p{N}]/gu, '')
-  return plain(title).startsWith(plain(key.label)) ? { title } : { title, glyph: key.label }
-}
-
-function customKeyBytes(key: CustomKey): string {
-  return key.bytes.replace(/\r/g, ' ↵')
-}
-
-/** `order` with the visible keys swapped into `visibleOrder`, so hidden keys keep their places. */
-function withVisibleOrder(order: string[], visible: Set<string>, visibleOrder: string[]): string[] {
-  let next = 0
-  return order.map((id) => (visible.has(id) ? (visibleOrder[next++] ?? id) : id))
-}
 
 type Props = {
   /** Rows show grips and drag instead of swiping. */
@@ -268,8 +251,8 @@ export function TerminalShortcutSettings({
                     { label: title }
                   ),
                   icon: CircleMinus,
-                  background: colors.statusRed,
-                  foreground: colors.onStatusRed,
+                  background: colors.textMuted,
+                  foreground: colors.onAccent,
                   onPress: () =>
                     updateLayout((current) =>
                       setTerminalAccessoryBuiltInVisible(current, key.id, false)
@@ -323,19 +306,37 @@ export function TerminalShortcutSettings({
             shownCustomKeys.map((key) => (
               <SwipeRowActions
                 key={key.id}
-                trailing={{
-                  label: deleteLabel,
-                  accessibilityLabel: t(
-                    'components.terminalShortcutSettings.deleteKey',
-                    'Delete {{label}}',
-                    { label: key.label }
-                  ),
-                  icon: Trash2,
-                  background: colors.statusRed,
-                  foreground: colors.onStatusRed,
-                  onPress: () =>
-                    updateCustomKeys((current) => current.filter((k) => k.id !== key.id))
-                }}
+                // Remove takes it off the row (Add a key brings it back); Delete forgets it.
+                trailing={[
+                  {
+                    label: removeLabel,
+                    accessibilityLabel: t(
+                      'components.terminalShortcutSettings.removeShortcut',
+                      'Remove {{label}}',
+                      { label: key.label }
+                    ),
+                    icon: CircleMinus,
+                    background: colors.textMuted,
+                    foreground: colors.onAccent,
+                    onPress: () =>
+                      updateCustomKeys((current) =>
+                        current.map((k) => (k.id === key.id ? { ...k, visible: false } : k))
+                      )
+                  },
+                  {
+                    label: deleteLabel,
+                    accessibilityLabel: t(
+                      'components.terminalShortcutSettings.deleteKey',
+                      'Delete {{label}}',
+                      { label: key.label }
+                    ),
+                    icon: Trash2,
+                    background: colors.statusRed,
+                    foreground: colors.onStatusRed,
+                    onPress: () =>
+                      updateCustomKeys((current) => current.filter((k) => k.id !== key.id))
+                  }
+                ]}
               >
                 {() => <ListRow title={key.label} />}
               </SwipeRowActions>
