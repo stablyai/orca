@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto'
 import type { CommandHandler } from '../dispatch/dispatch'
 import {
   getOptionalPositiveIntegerFlag,
@@ -6,6 +7,7 @@ import {
 } from '../arguments/flags'
 import { printResult } from '../output/command-result-output'
 import { RuntimeClientError } from '../runtime/connection/types'
+import { createStructuredAgentSessionOperationId } from '../../shared/agent-session/lifecycle/operations/structured-agent-session-mutation'
 import type { RuntimeClient } from '../runtime/client'
 import { getOptionalWorktreeSelector } from '../workspace-selection/workspace-selector'
 import {
@@ -20,6 +22,7 @@ import {
   type AgentReadEntry,
   type AgentReadResult,
   type AgentReadTool,
+  type AgentSendResult,
   type AgentShowResult
 } from '../../shared/agent-conversations/agent-conversation-contracts'
 import { AGENT_STATUS_STATES } from '../../shared/agent-status/contracts/agent-status-types'
@@ -75,10 +78,32 @@ export const AGENT_CONVERSATION_HANDLERS: Record<string, CommandHandler> = {
       ...(limit !== undefined ? { limit } : {})
     })
     printResult(result, json, formatAgentRead)
+  },
+  'agent send': async ({ flags, client, json }) => {
+    const result = await callAgentMethod<AgentSendResult>(
+      client,
+      'agent.send',
+      {
+        id: getRequiredStringFlag(flags, 'id'),
+        text: getRequiredStringFlag(flags, 'text'),
+        operationId: createStructuredAgentSessionOperationId(randomUUID)
+      },
+      'send to'
+    )
+    printResult(
+      result,
+      json,
+      (sent) => `Sent to ${ORCA_SESSION_ADDRESS_PREFIX}${sent.orcaSessionId}.`
+    )
   }
 }
 
-async function callAgentMethod<TResult>(client: RuntimeClient, method: string, params: unknown) {
+async function callAgentMethod<TResult>(
+  client: RuntimeClient,
+  method: string,
+  params: unknown,
+  verb: 'read' | 'send to' = 'read'
+) {
   return client.call<TResult>(method, params).catch((error: unknown) => {
     if (!(error instanceof RuntimeClientError)) {
       throw error
@@ -86,14 +111,14 @@ async function callAgentMethod<TResult>(client: RuntimeClient, method: string, p
     if (error.code === 'method_not_found') {
       throw new RuntimeClientError(
         'incompatible_runtime',
-        'This Orca host has no agent commands yet. Update Orca on that host to use agent commands.'
+        `This Orca host doesn't have \`orca ${method.replace('.', ' ')}\` yet. Update Orca on that host to use it.`
       )
     }
-    // Chat reads answer with bare wire codes; say what they mean.
+    // Chat reads and sends answer with bare wire codes; say what they mean.
     if ([error.code, error.message].includes('structured_agent_session_unsupported')) {
       throw new RuntimeClientError(
         'incompatible_runtime',
-        "This Orca host can't read that chat from the CLI. Update Orca on that host, or check that it has chats turned on."
+        `This Orca host can't ${verb} that chat from the CLI. Update Orca on that host, or check that it has chats turned on.`
       )
     }
     if (isUnattachedAgentSessionReadRefusal(error)) {

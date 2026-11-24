@@ -32,6 +32,10 @@ const COMMAND_SCOPED_FLAG_HELP: Record<string, Record<string, string>> = {
     id: AGENT_ID_FLAG_HELP,
     limit: '--limit <n>            Newest entries to return (default 20, at most 100)'
   },
+  'agent send': {
+    id: AGENT_ID_FLAG_HELP,
+    text: '--text <text>          The message to send'
+  },
   'extension reload': {
     'extension-id':
       '--extension-id <id>   Installed unpacked extension ID; also accepted positionally',

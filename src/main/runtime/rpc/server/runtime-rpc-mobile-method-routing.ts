@@ -27,6 +27,7 @@ export const EXECUTION_HOST_METHODS = [
   // Agent ids, chat records and transcripts live on the host that runs the agent.
   'agent.list',
   'agent.read',
+  'agent.send',
   'agent.show',
   // Read state lives with the host whose worktree.ps reports it.
   'agentActivity.clear',

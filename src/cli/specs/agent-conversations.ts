@@ -45,5 +45,19 @@ export const AGENT_CONVERSATION_COMMAND_SPECS: CommandSpec[] = [
       'orca agent read orca_session_id:3540ecf3-47c3-4876-b825-81bf5d6b3595 --limit 10',
       'orca agent read orca_session_id:3540ecf3-47c3-4876-b825-81bf5d6b3595 --json'
     ]
+  },
+  {
+    path: ['agent', 'send'],
+    summary: 'Send a message to a chat, by its Orca session ID',
+    usage: 'orca agent send <id> --text <text> [--json]',
+    allowedFlags: [...GLOBAL_FLAGS, 'id', 'text'],
+    positionalArgs: ['id'],
+    notes: [
+      "<id> is a chat's `orca_session_id:` ID from `orca agent list`. The chat gets --text as a message, as if typed in its composer. Orca records that the orca CLI sent it.",
+      'An agent messaging another agent uses `orca orchestration send`, which says who the message is from. A terminal agent is messaged that way too, by the handle `orca agent show` gives.'
+    ],
+    examples: [
+      'orca agent send orca_session_id:3540ecf3-47c3-4876-b825-81bf5d6b3595 --text "Run the tests again"'
+    ]
   }
 ]

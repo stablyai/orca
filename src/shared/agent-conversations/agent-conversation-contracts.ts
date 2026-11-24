@@ -64,6 +64,12 @@ export type AgentReadResult = {
   limited: boolean
 }
 
+export type AgentSendResult = {
+  orcaSessionId: string
+  /** The chat's id for the sent message, as its history records it. */
+  clientMessageId: string
+}
+
 export const AGENT_READ_DEFAULT_LIMIT = 20
 export const AGENT_READ_MAX_LIMIT = 100
 
@@ -74,5 +80,7 @@ export const AGENT_CONVERSATION_REFUSAL_CODES = {
   terminalHandle: 'agent_terminal_handle',
   invalidId: 'agent_invalid_id',
   unavailable: 'agent_unavailable',
-  noTranscript: 'agent_no_transcript'
+  noTranscript: 'agent_no_transcript',
+  notChat: 'agent_not_chat',
+  sendRefused: 'agent_send_refused'
 } as const
