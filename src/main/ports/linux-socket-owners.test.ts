@@ -1,15 +1,16 @@
-import { execFileSync } from 'node:child_process'
 import { describe, expect, it } from 'vitest'
-import { parseSocketHolderListing, pickLastHolders, SOCKET_HOLDER_AWK } from './linux-socket-owners'
+import { LinuxSocketHolderFilter } from './linux-socket-holder-listing'
+import { parseSocketHolderListing, pickLastHolders } from './linux-socket-owners'
 
-// `ls -ln /proc/[0-9]*/fd` sorts directories as text; the walk visits them in /proc's own order.
+// `ls -ln /proc/[0-9]*/fd` (LC_ALL=C) sorts directories as text; the walk visits them in /proc's own order.
 const LS = [
   '/proc/1000/fd:',
   'total 0',
   'lrwx------ 1 1000 1000 64 Nov 23 17:00 3 -> socket:[4242]',
   'lr-x------ 1 1000 1000 64 Nov 23 17:00 4 -> /dev/null',
-  'lrwx------ 1 1000 1000 64 Nov 23 17:00 7 -> socket:[777]',
-  'lr-x------ 1 1000 1000 64 Nov 23 17:00 8 -> /tmp/x -> socket:[5151]x',
+  'lrwx------ 1 1000 1000 64 Nov 23  2025 7 -> socket:[777]',
+  'lr-x------ 1 1000 1000 64 Nov 23 17:00 8 -> /tmp/report -> socket:[5151]',
+  'lr-x------ 1 1000 1000 64 Nov 23 17:00 9 -> /tmp/x socket:[5151]',
   '',
   '/proc/900/fd:',
   'total 0',
@@ -17,12 +18,18 @@ const LS = [
   'lrwx------ 1 1000 1000 64 Nov 23 17:00 5 -> socket:[5151]',
   ''
 ].join('\n')
-const awk = (want: string, input: string): string =>
-  execFileSync('/bin/sh', ['-c', SOCKET_HOLDER_AWK, 'sh', want], { input }).toString()
+
+function listing(wanted: number[], text: string, chunk = 7): string {
+  const filter = new LinuxSocketHolderFilter(new Set(wanted))
+  for (let i = 0; i < text.length; i += chunk) {
+    filter.write(text.slice(i, i + chunk))
+  }
+  return filter.finish()
+}
 
 describe('Linux socket holder listing', () => {
-  it('prints only wanted holders, counts every socket, and keeps the last holder in /proc order', () => {
-    const parsed = parseSocketHolderListing(awk(',4242,5151,', LS))
+  it('keeps only wanted holders from well-formed rows and the last holder in /proc order', () => {
+    const parsed = parseSocketHolderListing(listing([4242, 5151], LS))
     expect(parsed).toEqual({
       holders: [
         { pid: 1000, inode: 4242 },
@@ -42,9 +49,9 @@ describe('Linux socket holder listing', () => {
   })
 
   it('tells an unreadable layout apart from no wanted holders', () => {
-    expect(parseSocketHolderListing(awk(',1,', LS))).toEqual({ holders: [], seen: 4 })
+    expect(parseSocketHolderListing(listing([1], LS))).toEqual({ holders: [], seen: 4 })
     expect(
-      parseSocketHolderListing(awk(',4242,', "'/proc/1/fd':\n3 -> socket:[4242]\n"))?.seen
+      parseSocketHolderListing(listing([4242], "'/proc/1/fd':\n3 -> socket:[4242]\n"))?.seen
     ).toBe(0)
     expect(parseSocketHolderListing('900 socket:[4242]\n')).toBeNull()
   })
