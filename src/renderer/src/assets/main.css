@@ -1709,13 +1709,17 @@ html.native-shell .app-layout {
   padding-right: max(0px, calc(var(--window-controls-width, 0px) - 40px));
 }
 
+/* One 24x24 hover box for every titlebar icon button, so adjacent actions line up. */
 .sidebar-toggle {
   -webkit-app-region: no-drag;
   background: none;
   border: none;
   color: var(--muted-foreground);
   cursor: pointer;
-  padding: 4px 8px;
+  padding: 4px;
+  width: 24px;
+  height: 24px;
+  flex-shrink: 0;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -1785,7 +1789,9 @@ html.native-shell .app-layout {
   color: var(--muted-foreground);
   cursor: pointer;
   padding: 4px;
-  margin-right: 8px;
+  width: 24px;
+  height: 24px;
+  flex-shrink: 0;
   display: flex;
   align-items: center;
   justify-content: center;
