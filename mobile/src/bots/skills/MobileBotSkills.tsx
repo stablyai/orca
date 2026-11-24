@@ -1,18 +1,13 @@
 // Settings › Skills: the desktop's BotSkillsSection. The bot's own skills, then each linked project's,
 // and Link a project to pick from the host's projects. Open folder stays on the desktop.
 import { useEffect, useRef, useState, type ReactNode } from 'react'
-import { Text, View } from 'react-native'
-import { ChevronDown, ChevronUp, Folder, Plus } from 'lucide-react-native'
+import { Folder, Plus, Unlink } from 'lucide-react-native'
 import { BOT_MAX_SKILL_PROJECTS } from '../../../../src/shared/bot-types'
 import { BOT_AGENTS_LISTING_LINKED_SKILLS } from '../../../../src/shared/bots/bot-skill-projects'
 import { MobileSearchField } from '../../components/controls/MobileSearchField'
 import { MobileStateView } from '../../components/feedback/MobileStateView'
-import {
-  LIST_LEADING_INSET,
-  LIST_ROW_PADDING,
-  ListGroup,
-  ListRow
-} from '../../components/list/ListGroup'
+import { LIST_LEADING_INSET, ListGroup, ListRow } from '../../components/list/ListGroup'
+import { SwipeRowActions } from '../../components/list/SwipeRowActions'
 import { SheetHeader } from '../../components/nav-bar/SheetHeader'
 import type { Translate } from '../../i18n/mobile-i18n'
 import { useMobileTranslation } from '../../i18n/use-mobile-translation'
@@ -23,20 +18,17 @@ import {
   SettingsNote,
   SettingsSection
 } from '../../settings/settings-screen-frame'
-import { colors, spacing, typography } from '../../theme/mobile-theme'
+import { colors, spacing } from '../../theme/mobile-theme'
 import { themedStyleSheet } from '../../theme/themed-styles'
 import { useMobileColorScheme } from '../../theme/use-mobile-color-scheme'
 import type { RpcClient } from '../../transport/rpc/rpc-client-contract'
 import { botSkillsListedNote } from '../mobile-bot-sheet-copy'
-import { MobileBotTextButton } from '../MobileBotTextButton'
 import {
   botSkillHostRepos,
   botSkillProjectsScan,
   type PhoneSkillProject,
   type PhoneSkillScan
 } from './bot-skills-operations'
-
-const SHOWN_SKILLS = 5
 
 type SkillsBot = { id: string; name: string; agent: string; skillProjects?: string[] }
 
@@ -107,91 +99,64 @@ export function botSkillSourceCount(scan: PhoneSkillScan | null): number | null 
   return (hasOwn ? 1 : 0) + scan.projects.filter((project) => project.status !== 'missing').length
 }
 
-/** A row whose skills open under it, up to five until Show more. */
-function SkillsRow(props: {
+const OWN = '\0own'
+
+type SkillSource = {
   name: string
   skills: readonly { id: string; name: string; description: string | null }[]
+}
+
+const folderIcon = (dim = false) => (
+  <Folder size={18} color={dim ? colors.textMuted : colors.textPrimary} strokeWidth={2} />
+)
+
+/** A linked project: its skills open on their own page; on another host or gone, one line says so. */
+function ProjectRow(props: {
+  project: PhoneSkillProject
+  onOpen: () => void
+  guardPress: (onPress: () => void) => () => void
 }) {
   const t = useMobileTranslation()
-  const [open, setOpen] = useState(false)
-  const [all, setAll] = useState(false)
-  const shown = all ? props.skills : props.skills.slice(0, SHOWN_SKILLS)
-  const hidden = props.skills.length - shown.length
-  const Chevron = open ? ChevronUp : ChevronDown
+  const { project } = props
+  const local = project.status === 'local'
+  const count = local && project.skillsDir ? project.skills.length : 0
   return (
-    <View>
-      <ListRow
-        leading={<Folder size={18} color={colors.textPrimary} strokeWidth={2} />}
-        title={props.name}
-        subtitle={skillCount(t, props.skills.length)}
-        accessory={<Chevron size={16} color={colors.textMuted} strokeWidth={2.2} />}
-        onPress={() => setOpen(!open)}
-      />
-      {open ? (
-        <View style={styles.skills}>
-          {shown.map((skill) => (
-            <Text key={skill.id} style={styles.skill}>
-              <Text style={styles.skillName}>{skill.name}</Text>
-              {skill.description ? ` — ${skill.description}` : null}
-            </Text>
-          ))}
-          {hidden > 0 ? (
-            <View style={styles.more}>
-              <MobileBotTextButton
-                label={t('bots.skills.showMore', 'Show {{count}} more', { count: hidden })}
-                onPress={() => setAll(true)}
-              />
-            </View>
-          ) : null}
-        </View>
-      ) : null}
-    </View>
+    <ListRow
+      leading={folderIcon(!local)}
+      title={project.name}
+      subtitle={
+        project.status === 'remote'
+          ? t('bots.skills.remoteShort', 'On another host')
+          : project.status === 'missing'
+            ? t('bots.skills.missingShort', 'No longer in Orca')
+            : count > 0
+              ? skillCount(t, count)
+              : t('bots.skills.none', 'No skills in this project yet')
+      }
+      subtitleLines={1}
+      navigates={count > 0}
+      onPress={count > 0 ? props.guardPress(props.onOpen) : undefined}
+    />
   )
 }
 
-function ProjectRow(props: { project: PhoneSkillProject; botName: string; hostName: string }) {
+/** One source's skills: name over its description, as the desktop lists them. */
+function SkillListPage(props: { source: SkillSource; banner: ReactNode; onBack: () => void }) {
   const t = useMobileTranslation()
-  const { project } = props
-  const folder = (
-    <Folder
-      size={18}
-      color={project.status === 'local' ? colors.textPrimary : colors.textMuted}
-      strokeWidth={2}
-    />
-  )
-  if (project.status !== 'local') {
-    return (
-      <ListRow
-        leading={folder}
-        title={project.name}
-        subtitle={
-          project.status === 'remote'
-            ? t(
-                'bots.skills.remote',
-                'On another host. {{bot}} runs on {{host}}, so it can’t load these yet.',
-                { bot: props.botName, host: props.hostName }
-              )
-            : t('bots.skills.missing', 'This project is no longer in Orca.')
-        }
-        subtitleLines={3}
-        disabled
-      />
-    )
-  }
-  if (!project.skillsDir || project.skills.length === 0) {
-    return (
-      <ListRow
-        leading={folder}
-        title={project.name}
-        subtitle={t('bots.skills.none', 'No skills in this project yet')}
-      />
-    )
-  }
   return (
-    <SkillsRow
-      name={project.name}
-      skills={project.skills.map((skill) => ({ ...skill, id: skill.name }))}
-    />
+    <>
+      <SheetHeader
+        title={props.source.name}
+        subtitle={skillCount(t, props.source.skills.length)}
+        onBack={{ label: t('bots.skills.back', 'Back to Skills'), onPress: props.onBack }}
+      />
+      {props.banner}
+      <SettingsSection first>
+        {props.source.skills.map((skill) => (
+          <ListRow key={skill.id} title={skill.name} subtitle={skill.description ?? undefined} />
+        ))}
+      </SettingsSection>
+    </>
   )
 }
 
@@ -208,29 +173,56 @@ export function MobileBotSkillsPage(
   useMobileColorScheme()
   const t = useMobileTranslation()
   const [linking, setLinking] = useState(false)
-  // Settings' own Back closes the page; this one closes Link a project first.
-  useBackClaim(
-    linking
-      ? () => {
-          setLinking(false)
-          return true
-        }
-      : null
-  )
+  // Which list is open, the bot's own or a project's id, so a re-read scan updates it.
+  const [opened, setOpened] = useState<string | null>(null)
+  // Removed but not yet saved, so a second swipe builds on the first.
+  const [removed, setRemoved] = useState<readonly string[]>([])
   const { bot, scan } = props
-  const linked = bot.skillProjects ?? []
-  if (linking) {
-    return <LinkProjectPage {...props} linked={linked} onBack={() => setLinking(false)} />
-  }
+  const linked = (bot.skillProjects ?? []).filter((id) => !removed.includes(id))
   const views = new Map(scan?.projects.map((project) => [project.repoId, project]))
   const own = scan?.own
   const ownSkills = own
     ? [...own.skills, ...own.agentOnly].map((skill) => ({ ...skill, id: skill.folder }))
     : []
+  const ownName = t('bots.skills.own', '{{bot}}’s own skills', { bot: bot.name })
+  const openProject = opened === null || opened === OWN ? undefined : views.get(opened)
+  const source: SkillSource | null =
+    opened === OWN
+      ? { name: ownName, skills: ownSkills }
+      : openProject
+        ? {
+            name: openProject.name,
+            skills: openProject.skills.map((skill) => ({ ...skill, id: skill.name }))
+          }
+        : null
+  // A list the re-read emptied or dropped shows as closed, and stops holding Back.
+  const shown = source && source.skills.length > 0 ? source : null
+  // Settings' own Back closes the page; this one closes Link a project or a skills list first.
+  useBackClaim(
+    linking || shown
+      ? () => {
+          setLinking(false)
+          setOpened(null)
+          return true
+        }
+      : null
+  )
+  if (linking) {
+    return <LinkProjectPage {...props} linked={linked} onBack={() => setLinking(false)} />
+  }
+  if (shown) {
+    return <SkillListPage source={shown} banner={props.banner} onBack={() => setOpened(null)} />
+  }
   const listsSkills =
     BOT_AGENTS_LISTING_LINKED_SKILLS.includes(bot.agent) &&
     linked.some((id) => (views.get(id)?.skills.length ?? 0) > 0)
-  const ownName = t('bots.skills.own', '{{bot}}’s own skills', { bot: bot.name })
+  const remove = (repoId: string) => {
+    setRemoved((current) => [...current, repoId])
+    // Saved, the bot's own list drops it; refused, the row comes back.
+    void props
+      .save(linked.filter((id) => id !== repoId))
+      .then(() => setRemoved((current) => current.filter((id) => id !== repoId)))
+  }
   return (
     <>
       <SheetHeader
@@ -252,26 +244,45 @@ export function MobileBotSkillsPage(
           })}
         >
           {own ? (
-            ownSkills.length > 0 ? (
-              <SkillsRow name={ownName} skills={ownSkills} />
-            ) : (
-              <ListRow
-                leading={<Folder size={18} color={colors.textPrimary} strokeWidth={2} />}
-                title={ownName}
-                subtitle={t('bots.skills.ownNone', 'No skills of its own yet.')}
-              />
-            )
+            <ListRow
+              key="own"
+              leading={folderIcon()}
+              title={ownName}
+              subtitle={
+                ownSkills.length > 0
+                  ? skillCount(t, ownSkills.length)
+                  : t('bots.skills.ownNone', 'No skills of its own yet.')
+              }
+              navigates={ownSkills.length > 0}
+              onPress={ownSkills.length > 0 ? () => setOpened(OWN) : undefined}
+            />
           ) : null}
           {linked.map((repoId) => {
             const project = views.get(repoId)
             // Just linked: it shows once the re-read lands.
             return project ? (
-              <ProjectRow
+              <SwipeRowActions
                 key={repoId}
-                project={project}
-                botName={bot.name}
-                hostName={props.hostName}
-              />
+                enabled={props.online}
+                trailing={{
+                  label: t('bots.skills.remove', 'Remove'),
+                  accessibilityLabel: t('bots.skills.removeProject', 'Remove {{project}}', {
+                    project: project.name
+                  }),
+                  icon: Unlink,
+                  background: colors.statusRed,
+                  foreground: colors.onStatusRed,
+                  onPress: () => remove(repoId)
+                }}
+              >
+                {(guardPress) => (
+                  <ProjectRow
+                    project={project}
+                    onOpen={() => setOpened(repoId)}
+                    guardPress={guardPress}
+                  />
+                )}
+              </SwipeRowActions>
             ) : null
           })}
           <ListRow
@@ -402,14 +413,5 @@ function LinkProjectPage(
 }
 
 const styles = themedStyleSheet(() => ({
-  skills: {
-    paddingLeft: LIST_LEADING_INSET,
-    paddingRight: LIST_ROW_PADDING,
-    paddingBottom: spacing.md,
-    gap: spacing.xs
-  },
-  skill: { fontSize: 13, lineHeight: 18, color: colors.textSecondary },
-  skillName: { fontFamily: typography.monoFamily, color: colors.textPrimary },
-  more: { flexDirection: 'row' },
   search: { marginTop: spacing.sm, marginBottom: spacing.md }
 }))

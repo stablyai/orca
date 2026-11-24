@@ -1,6 +1,6 @@
 // Settings › Tools: the bot's own tools, the ones it gets from its owner's agent, and Add a tool,
 // like the desktop's BotToolsSection, with each tool on a page of its own.
-import { useEffect, useState } from 'react'
+import { useEffect, useState, type ReactNode } from 'react'
 import { Plus, Wrench } from 'lucide-react-native'
 import {
   botToolsLine,
@@ -85,7 +85,7 @@ export function MobileBotToolsRow(props: {
           ? t('bots.settings.readFailed', 'Couldn’t load')
           : (toolsLine(tools, botAgentLabel(props.bot.agent), t) ?? '')
       }
-      detail
+      detail={tools !== 'failed'}
       onPress={props.onOpen}
     />
   )
@@ -243,6 +243,8 @@ export function MobileBotToolsPage(props: {
 export function ToolRow(props: {
   title?: string
   line?: string
+  /** The app's own logo, for a listed app. */
+  leading?: ReactNode
   tool: PhoneOwnTool
   problem: BotToolProblem | undefined
   hostName: string
@@ -273,7 +275,7 @@ export function ToolRow(props: {
             : undefined
       }
       subtitleLines={1}
-      leading={<Wrench size={17} color={colors.textMuted} />}
+      leading={props.leading ?? <Wrench size={17} color={colors.textMuted} />}
       navigates
       // A tool that needs a sign-in opens on it; Back from there is the tool's page.
       onPress={() => props.onOpen(signIn && !props.disabled)}

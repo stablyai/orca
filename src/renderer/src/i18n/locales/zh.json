@@ -28972,7 +28972,10 @@
       "openOnPage": "在自动化页面中打开",
       "pauseShort": "暂停",
       "resumeShort": "恢复",
-      "nextAt": "下次 {{time}}"
+      "nextAt": "下次 {{time}}",
+      "deleting": "正在删除…",
+      "deleteFailed": "无法删除 {{name}}",
+      "deleteDescription": "删除 <name/> 及其运行历史"
     },
     "host": {
       "errors": {
@@ -30637,6 +30640,15 @@
       "home": "托管智能体的主聊天无法删除"
     }
   },
+  "tabStrip": {
+    "overflow": {
+      "chipOnlyName_other": "{{title}}，{{count}} 个标签页",
+      "entryNeedsAttention": "{{title}}，需要处理",
+      "moreTabs_other": "还有 {{count}} 个标签页",
+      "needAttention_other": "，{{count}} 个需要处理",
+      "openTabs_other": "{{count}} 个打开的标签页"
+    }
+  },
   "activityBar": {
     "moveUp": "上移",
     "moveDown": "下移",
@@ -30649,14 +30661,5 @@
     "moveLeft": "左移",
     "moveRight": "右移",
     "reset": "重置标签页顺序"
-  },
-  "tabStrip": {
-    "overflow": {
-      "chipOnlyName_other": "{{title}}，{{count}} 个标签页",
-      "entryNeedsAttention": "{{title}}，需要处理",
-      "moreTabs_other": "还有 {{count}} 个标签页",
-      "needAttention_other": "，{{count}} 个需要处理",
-      "openTabs_other": "{{count}} 个打开的标签页"
-    }
   }
 }

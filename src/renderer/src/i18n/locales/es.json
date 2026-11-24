@@ -25125,7 +25125,10 @@
       "runNow": "Ejecutar ahora",
       "openOnPage": "Abrir en la página de Automatizaciones",
       "pauseShort": "Pausa",
-      "resumeShort": "Reanudar"
+      "resumeShort": "Reanudar",
+      "deleting": "Eliminando…",
+      "deleteFailed": "No se pudo eliminar {{name}}",
+      "deleteDescription": "Eliminar <name/> y su historial de ejecuciones."
     },
     "access": {
       "thisComputer": "este equipo",

@@ -25346,7 +25346,10 @@
       "paused": "Приостановлено",
       "resumeShort": "Продолжить",
       "runNow": "Запустить сейчас",
-      "running": "Работает"
+      "running": "Работает",
+      "deleting": "Удаление…",
+      "deleteFailed": "Не удалось удалить {{name}}",
+      "deleteDescription": "Удалить <name/> и историю запусков."
     },
     "cloudSignIn": {
       "eventsHostChat": "Для событий {{source}} нужен вход в Orca Cloud на {{host}}. Я сохраню это правило, как только вход будет выполнен.",

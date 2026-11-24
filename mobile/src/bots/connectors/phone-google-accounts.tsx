@@ -126,6 +126,8 @@ export function GoogleDisconnectConfirm(props: {
   /** Google also cancels Orca's access. */
   revoke: boolean
   onClose: () => void
+  /** Disconnect was confirmed, not cancelled. */
+  onConfirmed?: () => void
   failed: () => void
 }) {
   const t = useMobileTranslation()
@@ -163,6 +165,7 @@ export function GoogleDisconnectConfirm(props: {
       onCancel={props.onClose}
       onConfirm={() => {
         props.onClose()
+        props.onConfirmed?.()
         if (props.client) {
           void googleDisconnect
             .request(props.client, { account: email, revoke }, { failWhenDisconnected: true })

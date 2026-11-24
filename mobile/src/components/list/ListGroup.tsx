@@ -160,6 +160,8 @@ type ListRowProps = {
   navigates?: boolean
   /** Draws a check: the row is the picked option. */
   selected?: boolean
+  /** A checkbox row that draws its own tick: its state for screen readers. */
+  checked?: boolean
   destructive?: boolean
   /** An action, not a setting (e.g. "Open sign-in page"): the title in the accent, like Home's "Pair a desktop". */
   accent?: boolean
@@ -194,6 +196,7 @@ export function ListRow({
   accessory,
   navigates = false,
   selected,
+  checked,
   destructive = false,
   accent = false,
   strong = false,
@@ -297,7 +300,9 @@ export function ListRow({
       accessibilityRole={accessibilityRole ?? (selected === undefined ? 'button' : 'radio')}
       accessibilityLabel={accessibilityLabel ?? (value ? `${title}, ${value}` : title)}
       accessibilityState={
-        selected === undefined ? inertState : { ...inertState, checked: selected, selected }
+        selected === undefined
+          ? { ...inertState, ...(checked !== undefined && { checked }) }
+          : { ...inertState, checked: selected, selected }
       }
       testID={testID}
       style={({ pressed }) => [...rowStyle, pressed && listRowStyles.pressed]}

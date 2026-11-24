@@ -4789,7 +4789,6 @@
       "empty": "Nenhum espaço de trabalho",
       "loadFailed": "Não foi possível carregar os espaços de trabalho deste host",
       "noFilterMatches": "Nenhum espaço de trabalho corresponde aos filtros",
-      "noMatches": "Nenhum espaço de trabalho encontrado",
       "reopen": "Reabrir para atualizar",
       "reopenDetail": "Este host lista os espaços de trabalho em um formato que esta página ainda não reconhece.",
       "loading": "Carregando espaços…",
@@ -5141,10 +5140,7 @@
     }
   },
   "bots": {
-    "section": {
-      "scrollLeft": "Rolar para a esquerda · {{amount}} ocultos",
-      "scrollRight": "Rolar para a direita · {{amount}} ocultos"
-    },
+    "section": {},
     "link": {
       "pairTitle": "Emparelhar um computador",
       "pairRequired": "Para abrir este link, emparelhe este telefone com um computador e abra o link novamente.",
@@ -5223,7 +5219,6 @@
     "lookAround": {
       "looking": "Procurando…",
       "save": "Salvar",
-      "detail": "Lê apps e projetos conectados para sugerir próximos passos. Somente leitura. Cada olhada usa seu plano de agente, e o Orca precisa estar em execução no host.",
       "lookNow": "Dar uma olhada agora",
       "notYet": "Ainda não",
       "backToLookAround": "Voltar para Dar uma olhada"
@@ -5238,7 +5233,6 @@
     "groups": {
       "group": "Grupo",
       "peerTold": "{{from}} avisou {{to}}",
-      "startAConversationWithThisGroupMentionBots": "Comece uma conversa com este grupo. Mencione bots com @Nome ou @everyone.",
       "items": {
         "emptyTitle": "Ainda não há itens deste grupo",
         "needsYouCount_one": "{{count}} precisa de você",
@@ -5279,8 +5273,6 @@
     "tidyUp": {
       "title": "Manutenção da memória",
       "never": "Ainda não",
-      "footer": "Altera só arquivos de memória. Usa seu plano de agente, como um chat curto. O Orca precisa estar em execução no seu computador.",
-      "undoNote": "Desfazer restaura MEMORY.md ao estado anterior a esta arrumação, de uma vez. O histórico completo e a edição da memória ficam no seu computador, em Configurações → Memória.",
       "backToTidyUp": "Voltar para Manutenção da memória"
     },
     "items": {
@@ -5301,8 +5293,7 @@
         "title": "Item",
         "placeOf": "{{index}} de {{total}}",
         "previous": "Item anterior",
-        "next": "Próximo item",
-        "subWhere": "Item {{number}} · {{chat}}"
+        "next": "Próximo item"
       },
       "write": {
         "offline": "{{host}} está offline."
@@ -5311,7 +5302,6 @@
       "readFailedClosedPage": "Não foi possível ler mais itens fechados.",
       "skillLimit": "Mensagem não enviada. Selecione no máximo {{limit}} arquivos de habilidade e tente novamente.",
       "ask": {
-        "notSentYet": "ainda não enviado",
         "replaced": "O agente fez uma nova pergunta. Leia e responda.",
         "replacedByNewer": "Substituída por uma pergunta mais recente",
         "skipped": "Ignoradas"
@@ -5350,7 +5340,6 @@
       },
       "rotate": {
         "open": "Rotacionar chave…",
-        "title": "Rotacionar a chave de “{{automation}}”?",
         "confirm": "Rotacionar chave",
         "note": "A URL recebe uma nova chave. Atualize todos os remetentes com ela.",
         "overlap": "Manter a chave antiga funcionando por 24 horas",
@@ -5366,19 +5355,15 @@
         "add": "Adicionar segredo de assinatura…",
         "generatedTitle": "Segredo de assinatura pronto",
         "done": "Concluído",
-        "generatedNote": "Copie-o nas configurações de webhook do {{sender}}. De agora em diante, as chamadas precisam ter a assinatura dele.",
         "copy": "Copiar segredo",
         "copied": "Segredo copiado",
         "changeTitle": "Alterar segredo de assinatura",
         "addTitle": "Adicionar segredo de assinatura",
-        "note": "O Orca então aceita só chamadas assinadas com este segredo, então uma URL vazada sozinha não consegue iniciar “{{automation}}”.",
         "sender": "Remetente",
         "modeGenerate": "O Orca cria um",
         "modePaste": "Colar o do remetente",
         "generateNote": "O Orca cria este segredo. Depois você o copia no {{sender}}.",
         "paste": "Segredo do {{sender}}",
-        "pasteNote": "Use isto quando o remetente fornecer o próprio segredo.",
-        "generate": "Gerar segredo",
         "save": "Salvar",
         "saved": "Segredo de assinatura salvo",
         "changeOpen": "Alterar segredo de assinatura…",
@@ -5412,7 +5397,6 @@
       "hookCount_one": "{{count}} hook",
       "hookCount_other": "{{count}} hooks",
       "name": "Webhooks",
-      "hooks": "Hooks",
       "addInChat": "Adicionar no chat",
       "setUpDraft": "Configure um webhook que ",
       "resumed": "Webhook retomado",
@@ -5479,7 +5463,6 @@
         "unverifiableDetail": "Não é possível acessar o computador de {{bot}}"
       },
       "back": "Voltar para Webhooks",
-      "howToCallShort": "Qualquer ferramenta ou script pode fazer POST na URL de um hook. Cada hook inicia uma automação.",
       "hookCount_many": "{{count}} hooks"
     },
     "errors": {
@@ -5870,6 +5853,7 @@
     },
     "usageLimit": {
       "continuesAt": "Continua às {{time}}",
+      "continues": "Continua às {{time}}",
       "hitLimit": "Limite atingido · reinicia às {{time}}"
     }
   },

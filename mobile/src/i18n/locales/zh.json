@@ -1040,7 +1040,6 @@
           "done": "已完成",
           "waiting": "等待你处理",
           "working": "工作中",
-          "you": "你",
           "stopped": "已停止"
         },
         "account": {
@@ -1844,6 +1843,7 @@
         "exitPlanMode": "退出计划模式",
         "pastedTextLabel": "粘贴的文本",
         "botChats": "聊天",
+        "botFor": "用途：{{detail}}",
         "backToBots": "返回 bots 列表",
         "loadingBotChats": "正在加载 {{name}} 的聊天…",
         "noOtherChats": "没有其他聊天",
@@ -1908,9 +1908,9 @@
       }
     },
     "hostOfflineBanner": {
-      "offline": "{{host}} 已离线",
+      "offline": "无法连接 {{host}}",
       "reconnecting": "正在重新连接 {{host}}…",
-      "asOf": "显示截至 {{time}} 的内容"
+      "asOf": "截至 {{time}}"
     },
     "offlineAsOfTime": {
       "yesterday": "昨天 {{time}}"
@@ -5419,7 +5419,6 @@
   "webShell": {
     "shellStateScreen": {
       "checkingHost": "正在检查主机",
-      "screenNeedsUpdate": "此页面需要更新版本的 Orca。请更新 Orca Mobile 和此主机上的 Orca，然后重试",
       "connectToDownload": "连接到此主机以下载最新版本的应用",
       "documentLoadFailed": "无法打开已下载的应用",
       "downloadFailed": "无法从此主机下载最新版本的应用",
@@ -5474,7 +5473,6 @@
       "empty": "暂无工作区",
       "loadFailed": "无法从此主机加载工作区",
       "noFilterMatches": "没有符合筛选条件的工作区",
-      "noMatches": "没有匹配的工作区",
       "reopen": "重新打开以更新",
       "reopenDetail": "此页面尚无法识别此主机的工作区列表格式",
       "loading": "正在加载工作区…",
@@ -5721,7 +5719,6 @@
       "agent": "智能体",
       "agentSameAsBot": "与 {{name}} 相同",
       "agentInChat": "此聊天的智能体",
-      "agentInChatHelp": "在聊天中的运行会沿用该聊天的智能体",
       "resultsTo": "结果发送到",
       "resultsToThread": "事件所在的话题",
       "resultsToChannel": "频道",
@@ -5735,12 +5732,9 @@
       "linearIssueInvalid": "请输入接收结果的 Linear 议题，例如 ENG-123",
       "letBotReact": "让 {{name}} 做出回应",
       "letBotReactHelp": "每个结果都会开启一个新回合，让 {{name}} 据此采取行动",
-      "threadNeedsEvents": "仅限事件触发、每次新建对话",
-      "threadUnsupported": "Orca Cloud 暂不支持此功能",
-      "channelNeedsSlack": "请先连接 Slack",
-      "linearNeedsLinear": "请先连接 Linear",
       "time": "时间",
-      "minute": "分钟"
+      "minute": "分钟",
+      "runs": "运行"
     },
     "botEvents": {
       "label": "事件",
@@ -6117,7 +6111,6 @@
       "save": "保存",
       "back": "返回设置",
       "title": "巡视",
-      "detail": "读取已连接的应用和项目，建议下一步。只读。每次巡视都会消耗你的智能体套餐额度，且主机上必须正在运行 Orca",
       "on": "建议下一步",
       "every": "频率",
       "weekdaysOnly": "仅限工作日",
@@ -6127,7 +6120,8 @@
       "notYet": "尚未巡视",
       "focusPlaceholder": "等我处理的 PR、#eng 中的问题、本周到期的议题",
       "focusDetail": "可选。留空则会查找任何等待你处理的事",
-      "backToLookAround": "返回巡视"
+      "backToLookAround": "返回巡视",
+      "footer": "只读。每次巡视都会消耗你的智能体套餐额度"
     },
     "new": {
       "failed": "无法创建 bot",
@@ -6171,8 +6165,6 @@
       "hide": "隐藏 {{name}} 的工作区"
     },
     "section": {
-      "scrollLeft": "向左滚动 · 隐藏 {{amount}} 个",
-      "scrollRight": "向右滚动 · 隐藏 {{amount}} 个",
       "title": "Bots",
       "summary": "{{title}}，{{total}} 个 bot，{{attention}} 个需要你处理，{{unread}} 个未读，{{working}} 个工作中",
       "newBot": "新建 bot",
@@ -6194,7 +6186,6 @@
       "onlyWhenMentioned": "仅在被提及时",
       "stopValue": "停止 {{value0}}",
       "replyToValue": "回复 {{value0}}",
-      "waitingForTheNativeSession": "正在等待原生会话…",
       "create": "创建",
       "removingDefault": "移除 {{name}} 后，\"回复\"将改为\"仅在被提及时\"",
       "loadEarlierMessages": "加载更早的消息",
@@ -6205,7 +6196,6 @@
       "peerAsked": "{{from}} 向 {{to}} 提问",
       "peerTold": "{{from}} 通知了 {{to}}",
       "peerFollowedUp": "{{bot}} 跟进了",
-      "startAConversationWithThisGroupMentionBots": "开始与此群组对话。使用 @名称 或 @everyone 提及 bots",
       "items": {
         "emptyTitle": "此群组还没有事项",
         "needsYouCount_one": "{{count}} 项需要你处理",
@@ -6232,7 +6222,6 @@
       "needsLocalBot": "此群组至少需要一个位于这台电脑上的 bot",
       "remoteOnComputer": "请在 {{host}} 上的 Orca 中添加或移除其他电脑上的 bots",
       "handoffsPaused": "已在 {{count}} 次移交后暂停。回复即可继续",
-      "peerReplyRead": "{{reader}} 已读 {{peer}} 的回复",
       "deleteTitle": "要删除 {{name}} 吗？",
       "deleteDescription": "其中的 bots 不会被删除",
       "deleteConfirm": "删除群组",
@@ -6688,7 +6677,6 @@
       "never": "尚未整理",
       "tidying": "正在整理…",
       "now": "立即整理",
-      "footer": "只会更改记忆文件。会消耗你的智能体套餐额度，和一次简短聊天差不多。电脑上必须正在运行 Orca",
       "merged": "合并了 {{count}} 行重复内容",
       "replaced": "标记为已替换：{{fact}}",
       "filed": "将 {{count}} 行归入 memory/{{topic}}.md",
@@ -6699,11 +6687,11 @@
       "tidied": "已整理",
       "undone": "已撤销",
       "undoAll": "撤销这次整理",
-      "undo": "撤销",
-      "undoNote": "撤销会一次性将 MEMORY.md 恢复到这次整理之前的状态。完整历史和记忆编辑请在电脑上的\"设置 → 记忆\"中进行",
       "summaryTitle": "上次整理",
       "undoStale": "此后又运行了一次更新的整理。请先查看再撤销",
-      "backToTidyUp": "返回记忆维护"
+      "backToTidyUp": "返回记忆维护",
+      "footerShort": "只会更改记忆文件。会消耗你的智能体套餐额度",
+      "undoNoteShort": "将 MEMORY.md 恢复到这次整理之前的状态"
     },
     "search": {
       "pausedMatches_one": "{{count}} 个已暂停的匹配项",
@@ -6809,8 +6797,7 @@
         "retry": "重试",
         "discard": "放弃",
         "mayHaveArrived": "可能已送达",
-        "replyingTo": "回复：{{question}}。转到该问题",
-        "waitingOn": "正在等待"
+        "replyingTo": "回复：{{question}}。转到该问题"
       },
       "comment": {
         "offline": "{{host}} 已离线。你的评论已保留，它恢复连接后即可再次评论",
@@ -6853,7 +6840,6 @@
       "loading": "正在加载事项…",
       "view": {
         "title": "事项",
-        "subWhere": "事项 {{number}} · {{chat}}",
         "canceledNote": "已取消：",
         "doneNote": "已完成：",
         "links": "链接",
@@ -6932,17 +6918,10 @@
         "snoozedMany": "已将 {{count}} 个事项暂缓至 {{when}}"
       },
       "ask": {
-        "recommended": "推荐",
-        "heldCount_other": "{{count}} 条回答尚未发送，<send>仍然发送</send>",
-        "typeAnswer": "输入你的回答",
-        "notSentYet": "尚未发送",
-        "previous": "上一个问题",
-        "step": "第 {{n}} 个，共 {{total}} 个",
-        "next": "下一个问题",
-        "heldCount_one": "{{count}} 条回答尚未发送，<send>仍然发送</send>",
         "replaced": "智能体提出了新问题。请先阅读，再回复",
         "replacedByNewer": "已由较新的问题取代",
-        "skipped": "已跳过"
+        "skipped": "已跳过",
+        "notNow": "暂不"
       },
       "write": {
         "unknown": "发送时连接中断，内容可能已经送达。重新连接后请先查看\"活动\"，再决定是否重新发送",
@@ -7146,7 +7125,6 @@
       },
       "rotate": {
         "open": "轮换密钥…",
-        "title": "要轮换\"{{automation}}\"的密钥吗？",
         "confirm": "轮换密钥",
         "note": "URL 将获得新的密钥。请用它更新所有发送方",
         "overlap": "旧密钥继续有效 24 小时",
@@ -7155,29 +7133,29 @@
         "stopCancels_one": "适用于密钥泄露的情况。经旧密钥接收、仍在等待的 {{count}} 个调用将被取消",
         "stopCancels_other": "适用于密钥泄露的情况。经旧密钥接收、仍在等待的 {{count}} 个调用将被取消",
         "stopNote": "适用于密钥泄露的情况",
-        "done": "密钥已轮换。请复制新的 URL"
+        "done": "密钥已轮换。请复制新的 URL",
+        "action": "轮换"
       },
       "secret": {
         "add": "添加签名密钥…",
         "generatedTitle": "签名密钥已就绪",
         "done": "完成",
-        "generatedNote": "请将其复制到 {{sender}} 的 Webhook 设置中。此后，调用必须带有用它生成的签名",
         "copy": "复制密钥",
         "copied": "已复制密钥",
         "changeTitle": "更改签名密钥",
         "addTitle": "添加签名密钥",
-        "note": "之后 Orca 只接受用此密钥签名的调用，因此仅凭泄露的 URL 无法启动\"{{automation}}\"",
         "sender": "发送方",
         "modeGenerate": "由 Orca 生成",
         "modePaste": "粘贴发送方的密钥",
         "generateNote": "此密钥由 Orca 生成。接下来请将其复制到 {{sender}} 中",
         "paste": "{{sender}} 密钥",
-        "pasteNote": "当发送方提供了自己的密钥时使用此项",
-        "generate": "生成密钥",
         "save": "保存",
         "saved": "签名密钥已保存",
         "changeOpen": "更改签名密钥…",
-        "back": "返回签名密钥"
+        "back": "返回签名密钥",
+        "copyInto": "请将其复制到 {{sender}} 的 Webhook 设置中",
+        "title": "签名密钥",
+        "create": "创建"
       },
       "delete": {
         "open": "删除 Webhook…",
@@ -7207,7 +7185,6 @@
       "hookCount_one": "{{count}} 个 Webhook",
       "hookCount_other": "{{count}} 个 Webhook",
       "name": "Webhook",
-      "hooks": "Webhook",
       "addInChat": "在聊天中添加",
       "setUpDraft": "设置一个 Webhook，用于 ",
       "resumed": "Webhook 已恢复",
@@ -7274,8 +7251,7 @@
         "unverifiableDetail": "无法连接到 {{bot}} 的电脑"
       },
       "copiedKey": "已复制密钥",
-      "back": "返回 Webhook",
-      "howToCallShort": "任何工具或脚本都可以向 Webhook 的 URL 发送 POST 请求。每个 Webhook 启动一个自动化"
+      "back": "返回 Webhook"
     },
     "errors": {
       "generic": "出了点问题，请重试"
@@ -7572,9 +7548,7 @@
         "tryIt": "在任意频道或私信中试试",
         "openInSlack": "在 Slack 中给它发消息",
         "preview": {
-          "you": "你",
-          "askPlain": "@{{name}} 总结一下这个话题",
-          "reply": "收到，马上处理"
+          "askPlain": "@{{name}} 总结一下这个话题"
         },
         "pick": "选择一个 Slack 工作区",
         "another": "连接其他工作区"
@@ -7597,7 +7571,14 @@
       "replies": "回复",
       "postAs": {
         "title": "发布身份",
-        "changeOn": "在 {{host}} 上更改"
+        "changeOn": "在 {{host}} 上更改",
+        "orcaUser": "Orca 用户",
+        "viaOrca": "{{name}}（通过 Orca）",
+        "sample": "那之后就发布吧",
+        "linePlain": "你从 Orca 回复 Slack 话题时，会以 {{name}} 的身份发布",
+        "approve": "在 Slack 中批准",
+        "waitingOn": "切换为 {{name}} 需要 {{installer}} 在 Slack 中批准",
+        "waiting": "切换为 {{name}} 需要在 Slack 中获得批准"
       },
       "token": {
         "open": "获取配置令牌",
@@ -7607,20 +7588,23 @@
         "label": "配置刷新令牌",
         "paste": "粘贴",
         "accessPasted": "这是 Access Token。请复制它旁边的 Refresh Token",
-        "kept": "Orca Cloud 会加密保存此令牌，之后在此工作区添加 bots 只需点击一下"
+        "kept": "Orca Cloud 会加密保存此令牌，之后在此工作区添加 bots 只需点击一下",
+        "step2Title": "选择工作区",
+        "step3Title": "粘贴 Refresh Token"
+      },
+      "reconnect": {
+        "whyNeeded": "Orca 没有此工作区可用的 Slack 令牌",
+        "continue": "继续",
+        "stopped": "Slack 已不再接受 {{host}} 使用的令牌"
       },
       "problem": {
         "otherUser": "另一个 Slack 账号批准了此连接",
         "otherUserNext": "登录了另一个 Slack 账号的人批准了 Slack 链接，因此 {{bot}} 无法以你的身份操作。请获取新链接，并在登录你自己的 Slack 账号后批准",
         "expired": "Slack 登录未完成",
-        "expiredNext": "Slack 链接在有人批准连接前已过期"
-      },
-      "reconnect": {
-        "whyHost": "每台电脑各自保存 Slack 令牌。Slack 已不再接受 {{host}} 使用的令牌",
-        "paste": "粘贴新令牌以重新连接",
-        "whyNeeded": "Orca 没有此工作区可用的 Slack 令牌",
-        "pasteNeeded": "粘贴令牌以继续",
-        "continue": "继续"
+        "expiredNext": "Slack 链接在有人批准连接前已过期",
+        "code": "代码",
+        "computer": "电脑",
+        "workspace": "工作区"
       }
     },
     "cloudSignIn": {
@@ -7660,11 +7644,9 @@
         "design": "设计"
       },
       "search": "搜索应用",
-      "allShort": "全部",
       "onBot": "{{bot}} 的应用",
       "noMatch": "没有与\"{{query}}\"匹配的应用",
       "connectors": "连接器",
-      "add": "添加",
       "composio": {
         "connectTitle": "连接 Composio",
         "once": "只需连接一次，即可用于你的所有 bots",
@@ -7703,14 +7685,16 @@
         "box": "文件和文件夹",
         "miro": "白板、便签和框架",
         "reddit": "帖子、评论和子版块"
-      }
+      },
+      "added": "已添加",
+      "filter": "筛选",
+      "filterActive": "筛选，{{filter}}",
+      "all": "所有应用"
     },
     "connectors": {
       "back": "返回连接器",
       "addOrg": "添加组织",
       "addWorkspace": "添加工作区",
-      "manage": "管理",
-      "emptyNote": "让大家在 Slack、GitHub 和 Linear 中联系 {{name}}，并让它在你的 Google 及其他应用中工作",
       "addAnotherWorkspace": "添加其他工作区",
       "backShort": "返回",
       "addGitHubAccess": "添加仓库或组织",
@@ -7869,9 +7853,6 @@
         "full": "完全访问权限",
         "fullDetail": "直接运行命令，无需询问",
         "chatsDetail": "初始采用你的聊天权限设置",
-        "askLine": "运行命令前会请求批准。你自己的允许规则仍然适用",
-        "fullLine": "运行命令时不询问",
-        "chatsLine": "按你的聊天设置请求批准",
         "origin": "来自 {{who}} 的链接",
         "originAnonymous": "来自分享链接",
         "back": "返回",
@@ -7945,7 +7926,6 @@
         "none": "无",
         "byline": "{{who}} · {{date}} · 未经审核",
         "someone": "某人",
-        "oneFlag": "{{summary}}：{{flag}}，位于 {{where}}",
         "oneNote": "1 条笔记",
         "notes": "{{count}} 条笔记",
         "updated": "{{who}} 更新了此 bot。请重新检查",
@@ -7956,7 +7936,8 @@
         "flagLine": "{{flag}}，第 {{line}} 行",
         "off": "关闭",
         "suggested": "建议 · {{when}}",
-        "memoryIndex": "它的记忆索引，包含分享的笔记"
+        "memoryIndex": "它的记忆索引，包含分享的笔记",
+        "flagIn": "{{where}} 中：{{flag}}"
       },
       "lines": "{{count}} 行",
       "backToSharing": "返回分享",
@@ -8011,7 +7992,8 @@
         "sharedBy": "由 {{who}} 分享",
         "viewOriginal": "查看原始版本",
         "originalGone": "已不可用"
-      }
+      },
+      "sameLinkShort": "已制作的副本保持不变"
     },
     "settingsView": {
       "sharing": "分享",
@@ -8058,9 +8040,6 @@
     "skills": {
       "count_one": "{{count}} 个技能",
       "count_other": "{{count}} 个技能",
-      "showMore": "再显示 {{count}} 个",
-      "remote": "位于另一台主机。{{bot}} 运行在 {{host}} 上，因此暂时无法加载这些技能",
-      "missing": "此项目已不在 Orca 中",
       "none": "此项目中还没有技能",
       "own": "{{bot}} 自己的技能",
       "title": "技能",
@@ -8074,7 +8053,11 @@
       "noneShort": "没有技能",
       "back": "返回技能",
       "search": "搜索项目",
-      "noMatch": "没有匹配搜索的项目"
+      "noMatch": "没有匹配搜索的项目",
+      "remoteShort": "位于另一台主机",
+      "missingShort": "已不在 Orca 中",
+      "remove": "移除",
+      "removeProject": "移除 {{project}}"
     },
     "whoCanAsk": {
       "cap": "此处最多 {{count}} 人",
@@ -8126,19 +8109,15 @@
         "connectTitle": "连接 Linear",
         "close": "关闭",
         "tryIt": "在任意 Linear 议题上试试",
-        "orLabel": "或添加标签",
-        "actsOnHost": "Orca 会在 {{host}} 上以该 Linear 用户的身份操作"
+        "orLabelLine": "或添加标签 {{label}}"
       },
       "connect": {
         "another": "使用其他工作区",
-        "who": "{{workspace}} 中的 {{name}}",
-        "pickWorkspace": "登录并选择 {{name}} 要在其中工作的 Linear 工作区",
-        "button": "连接 Linear",
-        "handoff": "Linear 的登录页已在那台电脑上 Orca 的浏览器中打开。请选择工作区并点击 Authorize，完成后这里会自动更新",
-        "waitingOn": "请在 {{host}} 上完成 Linear 登录…",
         "stuck": "卡在显示\"Could not find OAuth client\"的 Linear 页面上？Orca 的 Linear 应用尚未向此工作区开放。拥有该应用的工作区的管理员必须将其设为公开",
         "pick": "选择一个 Linear 工作区",
-        "turnOn": "启用 {{name}}"
+        "handoffPick": "选择工作区并点击 Authorize",
+        "signIn": "登录 Linear",
+        "pickSubtitle": "选择 {{name}} 工作的工作区"
       },
       "address": "linear.app/{{urlKey}}",
       "account": {
@@ -8174,8 +8153,7 @@
         "close": "关闭",
         "tryIt": "在任意议题或 PR 中试用",
         "preview": {
-          "ask": "评审这个 PR",
-          "reply": "收到，马上处理"
+          "ask": "评审这个 PR"
         },
         "pushesOnHost": "{{name}} 会在 {{host}} 上使用该电脑的 git 凭据推送代码"
       },
@@ -8183,8 +8161,8 @@
         "removeNote": "大家将无法再在 GitHub 上向它提问，它的 GitHub 人员名单也会被清空。Orca 应用不会被卸载",
         "removeConfirm": "移除",
         "finishSetup": "完成设置",
-        "addAccount": "添加另一个 GitHub 账户",
-        "refresh": "刷新"
+        "refresh": "刷新",
+        "addAnotherAccount": "添加另一个账户"
       },
       "allRepositories": "{{account}} 的所有仓库",
       "account": {
@@ -8195,14 +8173,12 @@
       "addMore": "添加仓库或组织",
       "checkingInstalls": "正在检查 GitHub 上的更改…",
       "connect": {
-        "pickRepositories": "登录并选择 {{name}} 可以在哪些仓库中工作",
         "readsOnly": "Orca 只会读取你的 GitHub 用户名和 ID",
-        "button": "连接 GitHub",
-        "handoff": "GitHub 的登录页已在那台电脑上 Orca 的浏览器中打开。请登录并选择仓库，完成后这里会自动更新",
-        "waitingOn": "请在 {{host}} 上完成 GitHub 登录…",
         "requested": "已请求组织所有者批准 Orca 应用",
         "notInstalled": "Orca 应用尚未安装在你的任何仓库上",
-        "turnOn": "启用 {{name}}"
+        "handoffPick": "登录并选择仓库",
+        "signIn": "登录 GitHub",
+        "pickSubtitle": "选择它可以使用的仓库"
       },
       "allRepositoriesShort": "所有仓库"
     },
@@ -8217,7 +8193,10 @@
       "signedInAs": "已以 {{who}} 身份登录",
       "continueOn": "在 {{host}} 上继续",
       "openSignInPage": "打开登录页面",
-      "cancel": "取消"
+      "cancel": "取消",
+      "signInTo": "登录 {{app}}",
+      "updatesWhenDone": "完成后这里会自动更新",
+      "turnOnShort": "启用"
     },
     "google": {
       "isOn": "{{name}} 已启用 Google",
@@ -8252,32 +8231,30 @@
         "removeConfirm": "移除",
         "signedOutOnHost": "{{host}} 上未连接",
         "uses": "可使用的服务",
-        "who": "谁可以使用",
         "whoNote": "任何可以向 {{name}} 提问的人，都能让它读取和发送你的邮件、日历和文件",
         "removeFrom": "从 {{name}} 移除 Google…"
       },
       "fix": {
         "turnOn": "启用",
         "copyForAdmin": "复制给管理员",
-        "checkAgain": "重新检查"
+        "checkAgain": "重新检查",
+        "allowAgain": "再次允许"
       },
       "adminRequest": "请在 Google 管理控制台（安全性 › API 控件 › 管理第三方应用访问权限）中将此 Google 应用标记为\"可信\"：{{clientId}}",
       "copied": "已复制。请发送给你的 Google 管理员",
       "state": {
         "ready": "就绪",
         "apiOff": "已在 Google Cloud 中停用",
-        "notAllowed": "你未授权",
         "adminBlocked": "已被你公司的 Google 管理员阻止",
-        "error": "无法检查"
+        "error": "无法检查",
+        "notAllowed": "你没有允许"
       },
       "headline": {
-        "ended": "Google 访问权限已失效。请重新连接",
         "connected": "Google 已连接",
         "toFixOne": "快完成了：还有 1 个问题需要解决",
-        "toFix": "快完成了：还有 {{count}} 个问题需要处理"
+        "toFix": "快完成了：还有 {{count}} 个问题需要处理",
+        "ended": "Google 访问已结束。"
       },
-      "signInOnHost": "在 {{host}} 上重新登录 Google",
-      "addOnHost": "请在 {{host}} 上的 Orca 中添加服务或其他账户",
       "defaultBadge": "默认",
       "setDefault": "设为默认",
       "shareButton": "分享配置",
@@ -8293,7 +8270,11 @@
         "confirm": "断开连接",
         "removeFromHost": "从 {{host}} 移除",
         "revoke": "移除并在 Google 撤销授权"
-      }
+      },
+      "reconnect": "重新连接",
+      "addAccount": "添加另一个账号",
+      "signIn": "登录 Google",
+      "handoff": "选择你的账号，然后选择\"允许\""
     },
     "saveFailed": "无法保存",
     "sheet": {
@@ -8372,7 +8353,6 @@
       "terminalRunDesktopOnly": "终端运行 · 请在电脑上的\"自动化\"中打开",
       "searchFailed": "无法搜索此 bot 的聊天",
       "searchRetry": "重试",
-      "loadingChats": "正在加载聊天",
       "handedOverInline": "已移交",
       "fromClosedChatInline": "来自已关闭的聊天",
       "statusUnknown": "状态未知",
@@ -8415,10 +8395,14 @@
     },
     "usageLimit": {
       "continuesAt": "将于 {{time}} 继续",
+      "continues": "将于 {{time}} 继续",
       "hitLimit": "已达上限 · {{time}} 重置"
     },
     "upcoming": {
       "needsSignIn": "需要登录"
+    },
+    "memoryHistory": {
+      "tidyUp": "整理"
     }
   },
   "hostMutation": {

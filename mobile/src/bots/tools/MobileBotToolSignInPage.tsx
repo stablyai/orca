@@ -13,7 +13,7 @@ import { themedStyleSheet } from '../../theme/themed-styles'
 import { useMobileColorScheme } from '../../theme/use-mobile-color-scheme'
 import type { BotToolPhoneSignIn } from './use-bot-tool-phone-sign-in'
 
-function StepNumber({ n }: { n: number }) {
+export function StepNumber({ n }: { n: number }) {
   return (
     <View style={styles.number}>
       <Text style={styles.numberText}>{n}</Text>

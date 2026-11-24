@@ -1,6 +1,7 @@
 import type { PluginBlockNotice } from './catalog/plugin-kill-list'
 import type { PluginCatalogType } from './catalog/plugin-catalog-types'
 import type { PluginExecutionProfile } from './contributions/plugin-execution-profile'
+import type { ResolvedPluginPanelPathIcon } from './contributions/plugin-panel-path-icon'
 import type { PluginHostImages } from './images/plugin-image-url'
 import type { PluginStatusBarItemContribution } from './contributions/plugin-status-bar-item-contribution'
 
@@ -12,6 +13,9 @@ export type PluginHostPanel = {
   title: string
   /** Lucide icon name declared in the plugin manifest. */
   icon?: string
+  /** Inline SVG path icon, defaults applied. Absent on older hosts; older clients ignore it and
+   *  show `puzzle`, which is why it does not reuse `icon`. */
+  iconPath?: ResolvedPluginPanelPathIcon
   tabKey: `plugin:${string}`
 }
 

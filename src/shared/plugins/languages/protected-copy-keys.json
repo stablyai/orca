@@ -688,6 +688,7 @@
     "bots.access.reject",
     "bots.access.titleMany",
     "bots.access.titleOne",
+    "bots.automations.deleteDescription",
     "bots.connect.signOut.action",
     "bots.connect.signOut.botsAndOneOther",
     "bots.connect.signOut.botsAndOthers",
