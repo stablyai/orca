@@ -259,6 +259,37 @@ export function enqueuePRRefresh(
   drainer.schedule()
 }
 
+/** Queue an 'active' read of `candidate`, as a row shown again does, and resolve with the next
+ *  outcome for its request, whichever surface's read that is; null when none lands in `waitMs` or
+ *  the candidate can't be read. A late read still reaches every surface. */
+export function readPRRefreshOutcome(
+  candidate: GitHubPRRefreshCandidate,
+  waitMs: number
+): Promise<PRRefreshOutcome | null> {
+  if (validateCandidate(candidate)) {
+    return Promise.resolve(null)
+  }
+  if (waitMs <= 0) {
+    enqueuePRRefresh(candidate, 'active', 40)
+    return Promise.resolve(null)
+  }
+  const key = refreshKey(candidate)
+  return new Promise((resolve) => {
+    const settle = (outcome: PRRefreshOutcome | null): void => {
+      clearTimeout(timer)
+      stop()
+      resolve(outcome)
+    }
+    const stop = events.addOutcomeObserver((read, outcome) => {
+      if (refreshKey(read) === key) {
+        settle(outcome)
+      }
+    })
+    const timer = setTimeout(() => settle(null), waitMs)
+    enqueuePRRefresh(candidate, 'active', 40)
+  })
+}
+
 export function reportVisiblePRRefreshCandidates(
   candidates: GitHubPRRefreshCandidate[],
   generation: number,

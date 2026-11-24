@@ -6,4 +6,15 @@ import type { ScopedWorktreeReads } from '../runtime/workspaces/catalog/scoped-w
 /** A worktree of this host by selector; `reads` shares each repo's read across one batch. */
 export type BotWorkWorkspaceShow = (
   ...args: [selector: string, requiredHostId?: undefined, reads?: ScopedWorktreeReads]
-) => Promise<Pick<Worktree, 'displayName' | 'branch' | 'head' | 'linkedPR' | 'suppressedGitHubPR'>>
+) => Promise<
+  Pick<
+    Worktree,
+    | 'displayName'
+    | 'branch'
+    | 'head'
+    | 'linkedPR'
+    | 'suppressedGitHubPR'
+    | 'linkedWorkItem'
+    | 'linkedItems'
+  >
+>

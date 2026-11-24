@@ -13,8 +13,10 @@ import {
   findLinkForSession,
   type ExternalConversationLinkStore
 } from '../external-conversations/external-conversation-links'
-import { readWorkspaceReviewPR } from '../../shared/sidebar-list/feed-facts/workspace-review-facts'
-import type { RuntimeStore } from '../runtime/construction/runtime-store-contract'
+import {
+  readWorkspacePR,
+  type WorkspacePRReadStore
+} from '../github/pull-requests/refresh/workspace-pr-read'
 import { getProfileUserDataPath } from '../orca-profiles/profile-storage-paths'
 import type { OrcaRuntimeService } from '../runtime/orca-runtime'
 import type { OrchestrationDb } from '../runtime/orchestration/db/orchestration-db'
@@ -47,10 +49,7 @@ export type BotWorkRuntime = Pick<
 > & {
   showManagedTerminalWorkspace: BotWorkWorkspaceShow
   linkStore: () =>
-    | (ExternalConversationLinkStore & {
-        getRepos: () => readonly Repo[]
-        getGitHubCache: RuntimeStore['getGitHubCache']
-      })
+    | (ExternalConversationLinkStore & WorkspacePRReadStore & { getRepos: () => readonly Repo[] })
     | null
 }
 
@@ -66,17 +65,21 @@ export function botWorkHostOf(db: OrchestrationDb, dispatchId: string): BotWorkH
 }
 
 /** One batch's workspace reader; `reads`: its repo reads, shared by every workspace it reads.
- *  `exists`: path checks shared too, only where a 'gone' never closes anything (item views). */
+ *  `exists`: path checks shared too, only where a 'gone' never closes anything (item views).
+ *  `prReadBy`: until when it waits for stale PRs' reads again; by default it only starts them. */
 export function workspaceReader(
   runtime: BotWorkRuntime,
   reads: ScopedWorktreeReads = new Map(),
-  exists?: Map<string, boolean>
+  exists?: Map<string, boolean>,
+  prReadBy = 0
 ): (worker: BotWorkWorker) => Promise<BotWorkWorkspace | 'gone' | null> {
   return async (worker) => {
     if (worker.host !== 'local') {
       return readRemoteWorkspace(runtime, worker)
     }
-    return worker.worktreeId ? readLocalWorkspace(runtime, worker.worktreeId, reads, exists) : null
+    return worker.worktreeId
+      ? readLocalWorkspace(runtime, worker.worktreeId, prReadBy, reads, exists)
+      : null
   }
 }
 
@@ -91,6 +94,7 @@ function existsOnce(key: string, check: () => boolean, known?: Map<string, boole
 async function readLocalWorkspace(
   runtime: BotWorkRuntime,
   worktreeId: string,
+  prReadBy: number,
   reads?: ScopedWorktreeReads,
   exists?: Map<string, boolean>
 ): Promise<BotWorkWorkspace | 'gone' | null> {
@@ -114,8 +118,9 @@ async function readLocalWorkspace(
     return 'gone'
   }
   const worktree = await runtime.showManagedTerminalWorkspace(`id:${worktreeId}`, undefined, reads)
-  // The PR the workspace's row shows: the desktop's cached read, never a GitHub call of its own.
-  const pr = readWorkspaceReviewPR(worktree, repo, store.getGitHubCache().pr)
+  // The PR the workspace's row shows, read again through the row's own refresh when it is stale.
+  const wait = Math.max(0, prReadBy - Date.now())
+  const pr = await readWorkspacePR(store, { ...worktree, id: worktreeId }, repo, wait)
   return {
     name: worktree.displayName || worktree.branch,
     branch: worktree.branch || null,
@@ -174,7 +179,7 @@ export function runtimeBotWork(
       return store
     },
     workers: (dispatchIds) => readWorkers(runtime, dispatchIds),
-    workspaces: () => workspaceReader(runtime),
+    workspaces: (prReadBy) => workspaceReader(runtime, undefined, undefined, prReadBy),
     turnAddress: (sessionId, message) => readTurnAddress(runtime, sessionId, message),
     conversationTitle: (address) => {
       if (address.source === 'chat') {

@@ -3,6 +3,7 @@ import type { BotWorkListResult } from '../../../../shared/bots/bot-work-list'
 import type { Bot } from '../../../../shared/bot-types'
 import { BotWorkForget, BotWorkList } from '../../../../shared/rpc-contract/bots-work-params'
 import { botOfSession } from '../../../bots/bot-session-tabs'
+import { BOT_WORK_ASKED_PR_WAIT_MS } from '../../../bots/bot-work-record'
 import { defineMethod, InvalidArgumentError, type RpcContext } from '../core'
 
 /** A session id names a chat only on its own host, so a paired client's claim names none. */
@@ -36,7 +37,8 @@ export const BOT_WORK_METHODS = [
     handler: async (params, context): Promise<BotWorkListResult> => {
       context.runtime.bots.assertEnabled()
       const bot = botOf(params, context)
-      return { items: await context.runtime.botWork.list(bot.id), botName: bot.name }
+      const items = await context.runtime.botWork.list(bot.id, BOT_WORK_ASKED_PR_WAIT_MS)
+      return { items, botName: bot.name }
     }
   }),
   defineMethod({

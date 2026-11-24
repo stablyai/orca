@@ -34,12 +34,12 @@ export type PRCacheView<T extends CachedPR = CachedPR> = Readonly<
   Record<string, { data: T | null } | undefined>
 >
 
-/** Cached PR for the workspace branch, excluding one the user unlinked. */
-export function readWorkspaceReviewPR<T extends CachedPR>(
-  worktree: Pick<Worktree, 'branch' | 'linkedPR' | 'suppressedGitHubPR'>,
+/** The cache entry for the workspace branch's PR, under the first key that has one. */
+export function workspaceReviewPREntry<E extends { data: CachedPR | null }>(
+  worktree: Pick<Worktree, 'branch'>,
   repo: Pick<Repo, 'id' | 'path' | 'connectionId' | 'executionHostId'> | undefined,
-  prCache: PRCacheView<T>
-): T | null {
+  prCache: Readonly<Record<string, E | undefined>>
+): E | null {
   const branch = worktree.branch.replace(/^refs\/heads\//, '')
   if (!repo || !branch) {
     return null
@@ -47,12 +47,27 @@ export function readWorkspaceReviewPR<T extends CachedPR>(
   const keys = getGitHubPRCacheKeyCandidates(repo, branch)
   // Legacy keys lack host identity; only local repos may use them.
   const lookup = !repo.connectionId && !repo.executionHostId ? keys : keys.slice(0, 1)
-  const entry = lookup.map((key) => prCache[key]).find((candidate) => candidate != null)
-  const pr = entry?.data
+  return lookup.map((key) => prCache[key]).find((candidate) => candidate != null) ?? null
+}
+
+/** The PR a workspace row shows, excluding one the user unlinked. */
+export function shownWorkspaceReviewPR<T extends CachedPR>(
+  worktree: Pick<Worktree, 'linkedPR' | 'suppressedGitHubPR'>,
+  pr: T | null | undefined
+): T | null {
   if (!pr || (typeof pr.number === 'number' && isGitHubPRSuppressed(worktree, pr.number))) {
     return null
   }
   return pr
+}
+
+/** Cached PR for the workspace branch, excluding one the user unlinked. */
+export function readWorkspaceReviewPR<T extends CachedPR>(
+  worktree: Pick<Worktree, 'branch' | 'linkedPR' | 'suppressedGitHubPR'>,
+  repo: Pick<Repo, 'id' | 'path' | 'connectionId' | 'executionHostId'> | undefined,
+  prCache: PRCacheView<T>
+): T | null {
+  return shownWorkspaceReviewPR(worktree, workspaceReviewPREntry(worktree, repo, prCache)?.data)
 }
 
 export function readWorkspaceReviewFact(

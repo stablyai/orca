@@ -11,6 +11,7 @@ import {
   type PRRefreshValidationDenialReason
 } from '../../github/pull-requests/refresh/pr-refresh-validation-backoff'
 import type { Store } from '../../persistence/loading-store/store'
+import type { ProjectRuntimeResolutionStore } from '../../workspaces/execution-host/local-project-runtime-resolution'
 import {
   getLocalProjectGhExecOptions,
   type LocalProjectGhExecOptions
@@ -154,7 +155,7 @@ export function getGitHubRepoConnectionId(repo: Repo): string | null {
 }
 
 export function getGitHubLocalGitOptionArgs(
-  store: Store,
+  store: ProjectRuntimeResolutionStore,
   repo: Repo
 ): [] | [LocalProjectGhExecOptions] {
   const localGitOptions = getLocalProjectGhExecOptions(store, repo)
@@ -186,7 +187,7 @@ export async function readGitHubRepoUnlessWslStopped<T>(
 }
 
 export function applyRegisteredRepoToPRRefreshCandidate(
-  store: Store,
+  store: ProjectRuntimeResolutionStore,
   repo: Repo,
   candidate: GitHubPRRefreshCandidate
 ): GitHubPRRefreshCandidate {
