@@ -41,8 +41,16 @@ export class SpoolFile {
   private removalQueued = false
   /** A new file starts empty even if its predecessor's unlink failed and left a torn row behind. */
   private truncateOnOpen = true
-  /** Attaches waiting on file work; a removal frees them, since a retired file has nothing to read. */
-  private readonly removalWaiters = new Set<() => void>()
+  /** Settles once the latest write is done; later file work (a compaction) doesn't hold it. */
+  private writesDone: Promise<void> = Promise.resolve()
+  /** Resolved by the next removal, since a retired file has nothing left to read. */
+  private removed = this.nextRemoval()
+  /** One wait shared by every attach until a write or removal changes what it waits for. */
+  private sharedWait: {
+    writes: Promise<void>
+    removed: Promise<void>
+    wait: Promise<void>
+  } | null = null
   private disposed = false
 
   constructor(
@@ -115,6 +123,7 @@ export class SpoolFile {
         }
       })
       .catch(() => {})
+    this.writesDone = this.io
     return true
   }
 
@@ -179,10 +188,8 @@ export class SpoolFile {
     this.index.clear()
     this.writtenBytes = 0
     this.truncateOnOpen = true
-    for (const resolve of this.removalWaiters) {
-      resolve()
-    }
-    this.removalWaiters.clear()
+    this.removed.resolve()
+    this.removed = this.nextRemoval()
     if (this.removalQueued) {
       return
     }
@@ -196,20 +203,34 @@ export class SpoolFile {
       .catch(() => {})
   }
 
-  /** Resolves once queued file work is done, or once the file is removed, whichever comes first. */
-  settledOrRemoved(): Promise<void> {
-    let removed!: () => void
-    const wait = new Promise<void>((resolve) => {
-      removed = resolve
-      this.removalWaiters.add(resolve)
-    })
-    return Promise.race([this.io, wait]).finally(() => this.removalWaiters.delete(removed))
+  /**
+   * Resolves once every write queued so far is done, or once the file is removed. A compaction
+   * after them isn't waited for: it reads this file and renames a copy in, so a reader sees either.
+   */
+  writtenOrRemoved(): Promise<void> {
+    const { writesDone: writes, removed } = this
+    if (this.sharedWait?.writes !== writes || this.sharedWait.removed !== removed.promise) {
+      this.sharedWait = {
+        writes,
+        removed: removed.promise,
+        wait: Promise.race([writes, removed.promise])
+      }
+    }
+    return this.sharedWait.wait
   }
 
   dispose(): Promise<void> {
     this.disposed = true
     this.remove()
     return this.io
+  }
+
+  private nextRemoval(): { promise: Promise<void>; resolve: () => void } {
+    let resolve!: () => void
+    const promise = new Promise<void>((done) => {
+      resolve = done
+    })
+    return { promise, resolve }
   }
 
   private async closeOpenHandle(): Promise<void> {

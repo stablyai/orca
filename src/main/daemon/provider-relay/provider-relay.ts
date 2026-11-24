@@ -126,9 +126,17 @@ export class ProviderRelay {
     return this.attachment?.clientId ?? null
   }
 
-  /** Ended, its exit sent to a client and fully acked: nothing left that a client could still need. */
+  /**
+   * Ended, its exit sent to a client and fully acked: nothing left that a client could still need.
+   * A client mid-attach hasn't had the exit yet, so a release during its replay can't remove it.
+   */
   get finished(): boolean {
-    return this.exitDelivered && this.stdoutEnded && this.spool.drained
+    return (
+      this.exitDelivered &&
+      this.stdoutEnded &&
+      this.spool.drained &&
+      (this.attachment === null || this.exitSentTo === this.attachment)
+    )
   }
 
   async attach(

@@ -173,10 +173,12 @@ export class ProviderRelayHost {
   ): Promise<ProviderRelayAttachResult> {
     // An ended relay's expiry keeps running through attaches: it lives at most a day after it ends.
     const relay = this.requireRelay(relayId)
-    const result = await relay.attach(clientId, stream, typeof fromSeq === 'number' ? fromSeq : 0)
-    // An ended relay with nothing left to ack is done once a client has seen its outcome.
-    this.removeIfFinished(relay)
-    return result
+    try {
+      return await relay.attach(clientId, stream, typeof fromSeq === 'number' ? fromSeq : 0)
+    } finally {
+      // An ended relay with nothing left to ack is done once a client has seen its outcome.
+      this.removeIfFinished(relay)
+    }
   }
 
   write(clientId: string, relayId: unknown, data: unknown): void {
