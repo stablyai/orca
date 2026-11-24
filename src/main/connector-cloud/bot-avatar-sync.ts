@@ -268,7 +268,8 @@ export class BotAvatarSync {
         ? createHash('sha256').update(signedIn).digest('hex').slice(0, 16)
         : null
       // The drawing the cloud last took for this bot, kept across restarts by the icon store.
-      const shown = await this.deps.bots.slackIcons.shown(bot.id)
+      const shown =
+        parsed.kind === 'mascot' && !icon ? await this.deps.bots.slackIcons.shown(bot.id) : null
       // The window draws a new look right after the write: until it does, Slack keeps the last drawing.
       left =
         parsed.kind === 'mascot' &&
