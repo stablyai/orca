@@ -6,8 +6,6 @@ import { ProviderRelayOpenWork, ProviderRelayWorkReader } from './provider-relay
 
 export { readProviderRelayDetachPolicy } from './provider-relay-work-markers'
 
-/** A chat that turned out busy is looked at again after this, not after a whole idle window. */
-const BUSY_RECHECK_MS = 60_000
 type IdleStopHost = {
   attached: () => boolean
   live: () => boolean
@@ -32,6 +30,8 @@ export class ProviderRelayIdleStop {
   private reader: ProviderRelayWorkReader | null = null
   private work: ProviderRelayOpenWork | null = null
   private armed = false
+  /** Busy when last checked: the next agent line starts a fresh window. */
+  private waitingForLine = false
   private lastActivityAt = Date.now()
   private timer: ReturnType<typeof setTimeout> | null = null
 
@@ -83,12 +83,14 @@ export class ProviderRelayIdleStop {
     }
     this.work = policy?.open ? this.openWorkAtDetach(policy.open) : null
     this.armed = this.work !== null
+    this.waitingForLine = false
     this.lastActivityAt = Date.now()
     this.schedule(this.armed ? (this.policy?.idleStopMs ?? null) : null)
   }
 
   disarm(): void {
     this.armed = false
+    this.waitingForLine = false
     this.work = null
     this.clearTimer()
   }
@@ -98,6 +100,11 @@ export class ProviderRelayIdleStop {
     this.lastActivityAt = Date.now()
     if (this.armed && this.work && this.reader) {
       this.reader.read(line).forEach((change) => this.work?.apply(change))
+    }
+    // Only an agent line can end a detached chat's work, so a busy one waits for it, not a timer.
+    if (this.armed && this.waitingForLine) {
+      this.waitingForLine = false
+      this.schedule(this.policy?.idleStopMs ?? null)
     }
   }
 
@@ -153,7 +160,7 @@ export class ProviderRelayIdleStop {
       return
     }
     if (this.work.busy || this.host.pendingCount() > 0) {
-      this.schedule(BUSY_RECHECK_MS)
+      this.waitingForLine = true
       return
     }
     this.armed = false

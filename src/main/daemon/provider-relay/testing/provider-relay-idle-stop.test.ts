@@ -68,8 +68,12 @@ describe('provider relay idle stop', () => {
     r.state.pending = 1
     await vi.advanceTimersByTimeAsync(3 * IDLE_MS)
     expect(r.stop).not.toHaveBeenCalled()
+    // Detached, only the agent's own line can settle a request; the busy check waits for it.
     r.state.pending = 0
-    await vi.advanceTimersByTimeAsync(IDLE_MS + 120_000)
+    await vi.advanceTimersByTimeAsync(3 * IDLE_MS)
+    expect(r.stop).not.toHaveBeenCalled()
+    r.line(JSON.stringify({ method: 'serverRequest/resolved', params: { requestId: 1 } }))
+    await vi.advanceTimersByTimeAsync(IDLE_MS + 1_000)
     expect(r.stop).toHaveBeenCalledTimes(1)
   })
 

@@ -3,6 +3,7 @@ import type {
   ProviderRelayWorkMarker
 } from '../protocol/daemon-provider-relay-protocol'
 import { leadingJsonEnvelope } from '../../../shared/json-stream/json-rpc-record-prefix'
+import { mayHideKey } from './provider-relay-pending-requests'
 
 const MAX_MARKERS = 16
 const MAX_NAME_CHARS = 128
@@ -186,9 +187,9 @@ function scannedName(line: string): string | null | undefined {
     : undefined
 }
 
-/** JSON may spell a value with escapes (`\/`, `\u00..`); such lines skip the value prefilter. */
+/** A value spelled with escapes (`\/`, an escaped ASCII letter) can't be found as a substring. */
 function mayEscapeValue(line: string): boolean {
-  return line.includes('\\/') || line.includes('\\u')
+  return line.includes('\\/') || mayHideKey(line)
 }
 
 /**

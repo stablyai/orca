@@ -111,9 +111,11 @@ export async function installOnJournal(
     ...(catalogOwner.modelCatalog ? { modelCatalog: catalogOwner.modelCatalog } : {})
   })
   // Relayed output is acked once the writes covering it landed; streamed text is flushed only on ask.
-  installProviderRelayDurability((sessionId, force) =>
-    force ? host.flushStreamedEvents(sessionId) : host.flushStreamedEvents(sessionId, true)
-  )
+  // A forced ack (the daemon's ask) saves streamed text only when some is still unsaved.
+  installProviderRelayDurability(async (sessionId, force) => {
+    const saved = await host.flushStreamedEvents(sessionId, true)
+    return saved || (force && host.flushStreamedEvents(sessionId))
+  })
   if (deps.attentionDelivery) {
     const installed = host
     const delivery = deps.attentionDelivery

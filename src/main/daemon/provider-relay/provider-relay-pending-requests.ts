@@ -50,7 +50,7 @@ const MAX_CLIENT_LINE_CHARS = 256 * 1024 * 1024
 /** JSON may spell a key or method with escapes (`"m\u0065thod"`, `\u002f`); such lines take the slow path. */
 const ESCAPED_LETTER = /\\u00[2-7][0-9a-fA-F]/
 
-function mayHideKey(line: string): boolean {
+export function mayHideKey(line: string): boolean {
   return line.includes('\\u00') && ESCAPED_LETTER.test(line)
 }
 
