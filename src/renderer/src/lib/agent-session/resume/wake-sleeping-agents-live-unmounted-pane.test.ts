@@ -163,12 +163,36 @@ describe('background wake of a pane whose PTY the host still holds', () => {
     // The record's own tab exists, so recovery mounts that tab and its pane cold-restores the
     // record; the sweep must not queue a second --resume writer in a new tab (it did before,
     // accumulating one empty duplicate tab per worktree open).
-    expect(await wakeAndSettle()).toBe('empty')
+    expect(await wakeAndSettle()).toBe('resumed')
 
     const state = useAppStore.getState()
     expect(queuedResumes()).toEqual([])
     expect(state.sleepingAgentSessionsByPaneKey[PANE_KEY]).toBeDefined()
     expect(hasSleepingAgentWakeRequest(state.sleepingAgentSessionsByPaneKey[PANE_KEY]!)).toBe(true)
+  })
+
+  // #36623: desktop activation reaches the gate directly, without the phone wake dispatcher.
+  it('mounts the preserved pane in place on a desktop project open', async () => {
+    useAppStore.setState({
+      ...unmountedLivePaneState(),
+      activeWorktreeId: WT,
+      terminalLayoutsByTabId: {
+        'tab-live': {
+          root: { type: 'leaf', leafId: LEAF_ID },
+          activeLeafId: LEAF_ID,
+          expandedLeafId: null,
+          ptyIdsByLeafId: {}
+        }
+      }
+    })
+
+    // No live PTY binding left by the project close, so activation alone must not fork a resume tab.
+    expect(await gateWorktreeAgentActivation(WT)).toBe('resumed')
+
+    expect(queuedResumes()).toEqual([])
+    expect(
+      hasSleepingAgentWakeRequest(useAppStore.getState().sleepingAgentSessionsByPaneKey[PANE_KEY]!)
+    ).toBe(true)
   })
 
   // #21235: the host re-keyed the live PTY onto a new tab, so the record's pane has no layout.
@@ -239,5 +263,64 @@ describe('background wake of a pane whose PTY the host still holds', () => {
     // Consuming the mark on mount releases ownership again, so a later sweep is not misled.
     expect(takeSleepingAgentWakeRequest(record)).toBe(true)
     expect(recordPaneIsOwnedByPreservedPane(record, useAppStore.getState())).toBe(false)
+  })
+
+  it('lapses a wake mark whose pane never mounted', () => {
+    vi.useFakeTimers()
+    try {
+      const record = unmountedLivePaneState().sleepingAgentSessionsByPaneKey![PANE_KEY]!
+      markSleepingAgentWakeRequest(record)
+      expect(hasSleepingAgentWakeRequest(record)).toBe(true)
+      vi.advanceTimersByTime(5 * 60_000 + 1)
+      expect(hasSleepingAgentWakeRequest(record)).toBe(false)
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  // #11598: a tab can hold two panes, one of them put to sleep on purpose.
+  it('does not wake an explicitly slept sibling pane when the record resumes in the shared tab', async () => {
+    const SIBLING_LEAF_ID = '22222222-2222-4222-8222-222222222222'
+    const SIBLING_PANE_KEY = makePaneKey('tab-live', SIBLING_LEAF_ID)
+    const base = unmountedLivePaneState()
+    const sibling: SleepingAgentSessionRecord = {
+      ...liveRecord(),
+      paneKey: SIBLING_PANE_KEY,
+      providerSession: { key: 'session_id', id: 'sibling-session' },
+      state: 'done',
+      origin: 'worktree-sleep',
+      restoreOnTabOpenOnly: true
+    }
+    const splitState: Partial<AppState> = {
+      ...base,
+      terminalLayoutsByTabId: {
+        'tab-live': {
+          root: {
+            type: 'split',
+            direction: 'horizontal',
+            first: { type: 'leaf', leafId: LEAF_ID },
+            second: { type: 'leaf', leafId: SIBLING_LEAF_ID }
+          },
+          activeLeafId: LEAF_ID,
+          expandedLeafId: null,
+          ptyIdsByLeafId: { [LEAF_ID]: LIVE_PTY_ID }
+        }
+      },
+      sleepingAgentSessionsByPaneKey: { [PANE_KEY]: liveRecord(), [SIBLING_PANE_KEY]: sibling }
+    }
+    useAppStore.setState(splitState)
+
+    await wakeAndSettle()
+
+    // The routed record's pane mounts; the explicitly slept sibling keeps its own wake for its tab open.
+    expect(
+      hasSleepingAgentWakeRequest(useAppStore.getState().sleepingAgentSessionsByPaneKey[PANE_KEY]!)
+    ).toBe(true)
+    expect(
+      hasSleepingAgentWakeRequest(
+        useAppStore.getState().sleepingAgentSessionsByPaneKey[SIBLING_PANE_KEY]!
+      )
+    ).toBe(false)
+    expect(queuedResumes()).toEqual([])
   })
 })

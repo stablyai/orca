@@ -17,6 +17,43 @@ const mainPaneStartInFlight = (paneKey: string): boolean => {
   return status === 'starting' || status === 'resuming' || status === 'failed'
 }
 
+/** The pane is running its own resume and has not bound a PTY yet, so it owns its record meanwhile. */
+const paneResumeAttemptInFlight = (session: ConnectPanePtySession): boolean =>
+  !session.disposed &&
+  session.transport.getPtyId() === null &&
+  (session.transportConnectInFlightSince !== null ||
+    pendingSpawnByPaneKey.has(session.pendingSpawnKey) ||
+    // Why the request flag and cacheKey: the dispatch window before main publishes a
+    // status has no other in-flight signal, and a legacy record paneKey is not the key
+    // main publishes under — the session's stable pane key is.
+    session.mainPaneStartRequestInFlight ||
+    mainPaneStartInFlight(session.cacheKey))
+
+/**
+ * Holds the record while this pane's own attempt runs. Consuming the wake mark hands ownership from the
+ * dispatcher's promise to the attempt, and the sweep must not read the gap before the PTY binds as
+ * unowned and fork a duplicate resume tab. Self-releases once the attempt settles, and is tracked on the
+ * session so releaseHiddenAgentResumeHold can drop it with the pane.
+ */
+const holdPaneResumeAttempt = (session: ConnectPanePtySession, paneKey: string): void => {
+  if (session.agentResumeAttemptHold && session.agentResumeAttemptHoldPaneKey === paneKey) {
+    return
+  }
+  if (session.agentResumeAttemptHold && session.agentResumeAttemptHoldPaneKey) {
+    releasePaneResumeHold(session.agentResumeAttemptHoldPaneKey, session.agentResumeAttemptHold)
+  }
+  const hold = (): boolean => {
+    const inFlight = paneResumeAttemptInFlight(session)
+    if (!inFlight) {
+      releasePaneResumeHold(paneKey, hold)
+    }
+    return inFlight
+  }
+  session.agentResumeAttemptHold = hold
+  session.agentResumeAttemptHoldPaneKey = paneKey
+  holdPaneResumeUntilShown(paneKey, hold)
+}
+
 /** Defer hidden restores through the hibernation wake until reveal; visible panes and explicit background wakes run immediately (#7145). */
 export function deferHiddenAgentResume(
   session: ConnectPanePtySession,
@@ -38,30 +75,7 @@ export function deferHiddenAgentResume(
         session.hiddenAgentResumeReleased = true
       }
       if (!session.disposed) {
-        // Why the hold: the visible restore runs async after this bypass, and before it binds a
-        // PTY the sweep would see no mark, no live PTY and fork a duplicate. The predicate owns
-        // exactly the attempt's in-flight window, self-releases once it reads false, and is also
-        // tracked for releaseHiddenAgentResumeHold so a disposed pane cannot pin its session graph.
-        const paneKey = recordEntry.paneKey
-        const visibleHold = (): boolean => {
-          const inFlight =
-            !session.disposed &&
-            session.transport.getPtyId() === null &&
-            (session.transportConnectInFlightSince !== null ||
-              pendingSpawnByPaneKey.has(session.pendingSpawnKey) ||
-              // Why the request flag and cacheKey: the dispatch window before main publishes a
-              // status has no other in-flight signal, and a legacy record paneKey is not the key
-              // main publishes under — the session's stable pane key is.
-              session.mainPaneStartRequestInFlight ||
-              mainPaneStartInFlight(session.cacheKey))
-          if (!inFlight) {
-            releasePaneResumeHold(paneKey, visibleHold)
-          }
-          return inFlight
-        }
-        session.visibleAgentResumeHold = visibleHold
-        session.visibleAgentResumeHoldPaneKey = paneKey
-        holdPaneResumeUntilShown(paneKey, visibleHold)
+        holdPaneResumeAttempt(session, recordEntry.paneKey)
       }
     }
     return false
@@ -69,6 +83,9 @@ export function deferHiddenAgentResume(
   if (takeSleepingAgentWakeRequest(recordEntry.record)) {
     // Why: later fallbacks in this same connect must not hold what the background wake released.
     session.hiddenAgentResumeReleased = true
+    // Why the hold: the released restore starts async through main, and before it binds a PTY the
+    // sweep would see no mark, no live PTY and fork a duplicate.
+    holdPaneResumeAttempt(session, recordEntry.paneKey)
     return false
   }
   const start: () => Promise<string | null> = wake ?? session.wakeHibernatedAgentPane
@@ -121,11 +138,11 @@ export function releaseHiddenAgentResumeHold(session: ConnectPanePtySession): vo
   if (session.hiddenAgentResumeHold && session.hiddenAgentResumeHoldKey) {
     releasePaneResumeHold(session.hiddenAgentResumeHoldKey, session.hiddenAgentResumeHold)
   }
-  // The visible bypass's attempt hold is anonymous to the hidden flow; drop it here too or the
-  // registry entry pins the pane's session graph until its pane key is reused.
-  if (session.visibleAgentResumeHold && session.visibleAgentResumeHoldPaneKey) {
-    releasePaneResumeHold(session.visibleAgentResumeHoldPaneKey, session.visibleAgentResumeHold)
-    session.visibleAgentResumeHold = null
+  // The attempt's own hold is anonymous to the hidden flow; drop it here too or the registry entry
+  // pins the pane's session graph until its pane key is reused.
+  if (session.agentResumeAttemptHold && session.agentResumeAttemptHoldPaneKey) {
+    releasePaneResumeHold(session.agentResumeAttemptHoldPaneKey, session.agentResumeAttemptHold)
+    session.agentResumeAttemptHold = null
   }
 }
 

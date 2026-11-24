@@ -4,10 +4,7 @@ import { requestBackgroundTerminalWorktreeMount } from '@/components/terminal/wo
 import { useAppStore } from '@/store/index'
 import { isWorkspaceSleepRecord } from '../../../../../shared/workspace/lifecycle/workspace-sleep'
 import { resumeSleepingAgentSessionsForWorktree } from './resume-sleeping-agent-session'
-import {
-  getSleepingRecordTabId,
-  requestSleepingAgentWakeOnMount
-} from './sleeping-agent-wake-requests'
+import { getSleepingRecordTabId } from './sleeping-agent-wake-requests'
 import { resolveActivationPtyListScope } from '../../workspace/activation/worktree-activation-pty-inventory'
 import { gateWorktreeAgentActivation } from '../../workspace/activation/worktree-agent-activation-gate'
 import { getProviderSessionClaimKey } from '../../../../../shared/agent-session/lifecycle/resume/sleeping-record-legacy-pane-key'
@@ -207,8 +204,9 @@ export function wakeSleepingAgentsForWorktreeInBackground(
   if (worktreeRecords.length === 0) {
     return
   }
-  // Only passive completed-hibernation records need fresh-connect mounting; nonpassive recovery resumes in the record's own pane once mounted.
-  const targetTabIds = new Set<string>()
+  // Only passive completed-hibernation records need fresh-connect mounting; active records mount inside
+  // the activation gate, after the host proves their PTYs exited, so each resumes in its own pane.
+  const passiveTabIds = new Set<string>()
   let hasUntargetablePassiveRecord = false
   // Phone workspace opens must preserve explicit sleep until each tab opens (#11598). Filter before canonicalization so lazy records cannot steal/delete active hibernation claims.
   const backgroundWakeRecords = worktreeRecords.filter(
@@ -217,34 +215,16 @@ export function wakeSleepingAgentsForWorktreeInBackground(
   for (const record of getCanonicalPassiveWakeRecords(backgroundWakeRecords, wokenClaimKeys)) {
     const tabId = getSleepingRecordTabId(record)
     if (tabId) {
-      targetTabIds.add(tabId)
+      passiveTabIds.add(tabId)
     } else {
       hasUntargetablePassiveRecord = true
     }
   }
-  // Why mount nonpassive records' own tabs too: their panes cold-restore the record in place, and
-  // the wake-on-mount mark the mount records tells the sweep the pane owns its record — otherwise
-  // every open forks a duplicate resume tab for each pane whose PTY died with the project close.
-  const liveTabIds = new Set((state.tabsByWorktree[worktreeId] ?? []).map((tab) => tab.id))
-  for (const record of backgroundWakeRecords) {
-    if (activationTreatsNoteAsFinished(record)) {
-      continue
-    }
-    const tabId = getSleepingRecordTabId(record)
-    if (tabId !== null && liveTabIds.has(tabId)) {
-      targetTabIds.add(tabId)
-    }
-  }
-  if (targetTabIds.size > 0 || hasUntargetablePassiveRecord) {
-    // A whole-worktree mount sends no tab IDs, so its dispatch marks no wake requests; mark the
-    // targeted records here or the sweep below forks duplicates for them.
-    if (hasUntargetablePassiveRecord && targetTabIds.size > 0) {
-      requestSleepingAgentWakeOnMount(worktreeId, [...targetTabIds])
-    }
+  if (passiveTabIds.size > 0 || hasUntargetablePassiveRecord) {
     // If tab identity is unresolved, mount the whole workspace rather than strand recovery.
     dispatchBackgroundMount(
       worktreeId,
-      hasUntargetablePassiveRecord ? undefined : [...targetTabIds]
+      hasUntargetablePassiveRecord ? undefined : [...passiveTabIds]
     )
   }
   const resumeOptions = {
@@ -255,9 +235,12 @@ export function wakeSleepingAgentsForWorktreeInBackground(
   }
   // Inactive panes look unowned locally even with live host PTYs; require host inventory to prove exit (STA-3859). Paired runtimes instead retain per-pane mirror parking.
   if (resolveActivationPtyListScope(useAppStore.getState(), worktreeId)) {
+    // The gate mounts each preserved pane only after its inventory proves the PTY exited.
     void gateWorktreeAgentActivation(worktreeId, resumeOptions)
     return
   }
+  // No inventory can be read (paired runtime or an unresolved route), so nothing may authorize a writer
+  // here: the sweep parks or blocks these records, and mounting a pane would start its `--resume` anyway.
   resumeSleepingAgentSessionsForWorktree(worktreeId, resumeOptions)
 }
 

@@ -10,6 +10,7 @@ import { parseWorkspaceKey } from '../../../../../shared/workspace/identity/work
 import { worktreeIdsEqual } from '../../../../../shared/worktree/id'
 import { listActivationPtySessions } from './worktree-activation-pty-inventory'
 import { resumeSleepingAgentSessionsForWorktree } from '../../agent-session/resume/resume-sleeping-agent-session'
+import { requestInPlaceResumeMounts } from '../../agent-session/resume/preserved-pane-resume-mounts'
 import type { ResumeSleepingAgentSessionsOptions } from '../../agent-session/resume/sleeping-agent-session-launch'
 import '../../agent-session/resume/sleeping-agent-pane-ownership'
 import { getProviderSessionClaimKey } from '../../../../../shared/agent-session/lifecycle/resume/sleeping-record-legacy-pane-key'
@@ -42,6 +43,8 @@ type ActivationGateDeps = {
   listSurfaceOwners: (worktreeId: string) => Promise<LiveTerminalSurfaceOwnerIndex | null>
   hasStructuredSession?: (worktreeId: string) => Promise<boolean | StructuredActivationInventory>
   resume: (worktreeId: string, options?: ResumeSleepingAgentSessionsOptions) => number
+  /** Mounts preserved panes whose PTYs the inventory just proved exited, so they resume in place; returns how many it targeted. */
+  mountInPlaceResumes?: (worktreeId: string, hostClaimedKeys: ReadonlySet<string>) => number
 }
 
 export type WorktreeAgentActivationOutcome =
@@ -267,9 +270,12 @@ export async function runWorktreeAgentActivationGate(
   ) {
     return 'blocked'
   }
+  // Mount preserved panes only now: the inventory above proved these sessions' PTYs exited (STA-3859),
+  // so each pane can cold-restore its record in place instead of the sweep forking a duplicate tab (#36623).
+  const mountedInPlace = deps.mountInPlaceResumes?.(worktreeId, claims.keys) ?? 0
   const launched = deps.resume(worktreeId, { skipClaimKeys: claims.keys })
   // Empty directs caller to seed, not a claim the host has nothing; caller rechecks its own guards.
-  return launched > 0
+  return launched > 0 || mountedInPlace > 0
     ? 'resumed'
     : liveSurfaceAdopted
       ? 'adopted'
@@ -305,6 +311,7 @@ export function gateWorktreeAgentActivation(
         : listActivationPtySessions(useAppStore.getState(), worktreeId),
     listSurfaceOwners: readWorktreeLiveTerminalSurfaceOwners,
     hasStructuredSession: readWorktreeStructuredActivationInventory,
+    mountInPlaceResumes: requestInPlaceResumeMounts,
     resume
   }).finally(() => {
     if (inFlightByWorktreeId.get(worktreeId) === gate) {
