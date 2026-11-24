@@ -1526,6 +1526,7 @@ html.native-shell .app-layout {
 
 /* Modal inline pointer styles must not turn noninteractive labels into hit targets. */
 [data-radix-popper-content-wrapper]:has(> [data-slot='tooltip-content'].pointer-events-none),
+[data-radix-popper-content-wrapper]:has(> [data-workspace-board-moved-hint]),
 [data-slot='tooltip-content'].pointer-events-none {
   pointer-events: none !important;
 }
