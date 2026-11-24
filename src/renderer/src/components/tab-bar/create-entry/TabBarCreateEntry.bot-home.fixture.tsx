@@ -40,11 +40,11 @@ const settle = (): Promise<void> => new Promise((resolve) => setTimeout(resolve,
 
 // This case's bot RPCs, so it checks only what its own Enter started; reset and rewired per case.
 const sentRpcs: { method: string; params: unknown }[] = []
-let runtimeBeforeCase: unknown
+let runtimeBeforeCase: PropertyDescriptor | undefined
 
 function recordBotRpcs(): void {
   sentRpcs.length = 0
-  runtimeBeforeCase = window.api.runtime
+  runtimeBeforeCase = Object.getOwnPropertyDescriptor(window.api, 'runtime')
   stubBots([bot])
   const runtime = window.api.runtime as {
     call: (args: { method: string }) => Promise<unknown>
@@ -61,8 +61,13 @@ function recordBotRpcs(): void {
   })
 }
 
+// Put back the bridge's own property as it was, so cases never stack wrappers on each other.
 function restoreRuntime(): void {
-  Reflect.set(window.api, 'runtime', runtimeBeforeCase)
+  if (runtimeBeforeCase) {
+    Object.defineProperty(window.api, 'runtime', runtimeBeforeCase)
+  } else {
+    Reflect.deleteProperty(window.api, 'runtime')
+  }
 }
 
 // The row's own label, without the avatar's initial or the detail after it.
