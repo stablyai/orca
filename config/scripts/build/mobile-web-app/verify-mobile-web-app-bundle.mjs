@@ -34,8 +34,9 @@ export function mobileWebAppBundleMaxAssets(routeCount, imageCount, catalogChunk
 // fetched only for the active language, never before the first route. Code keeps its own fence.
 export const MOBILE_WEB_APP_BUNDLE_MAX_CATALOG_CHUNKS = 10
 export const MOBILE_WEB_APP_BUNDLE_MAX_CATALOG_BYTES = 3 * 1024 * 1024
-// The host sends a catalog's JSON in one reply, which must fit a 1 MiB relay frame once encrypted.
-export const MOBILE_WEB_APP_HOST_CATALOG_MAX_BYTES = 384 * 1024
+// A budget, not a frame limit: the host sends a catalog as plain JSON in one reply, gzipped per frame,
+// under the 4 MiB REMOTE_RUNTIME_MAX_OUTBOUND_JSON_BYTES; this keeps the first-paint read short.
+export const MOBILE_WEB_APP_HOST_CATALOG_MAX_BYTES = 1024 * 1024
 
 // Our own fence on the page's code, well inside the phone contract (32 MiB total, 10 MiB per asset in
 // manifest-contract.ts); routes are split and the entry is capped below, so no one asset nears 10 MiB.
@@ -271,7 +272,7 @@ export async function verifyMobileWebAppBundle({ bundleDir = defaultBundleDir } 
   if (oversized) {
     fail(
       `the ${oversized.locale} host catalog is ${String(oversized.byteLength)} bytes, over the ` +
-        `${String(MOBILE_WEB_APP_HOST_CATALOG_MAX_BYTES)} one reply carries`
+        `host catalog budget of ${String(MOBILE_WEB_APP_HOST_CATALOG_MAX_BYTES)}`
     )
   }
   const onDemandBytes = assertOnDemandFits(await outfitSheetsOnDemand(manifest, bundleDir))
