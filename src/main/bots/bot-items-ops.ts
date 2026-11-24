@@ -23,6 +23,7 @@ export const BOT_ITEMS_OPS = [
   'usageLimitWaitUids',
   'orcaComment',
   'ownerComment',
+  'ownerCommentByRequest',
   'ownerStatus',
   'ownerSnooze',
   'latestEventId',

@@ -32,6 +32,10 @@ export const BOTS_ITEMS_RUNTIME_CAPABILITY = 'bots.items.v1' as const
 export const BOTS_ITEM_COMMENT_ATTACHMENTS_RUNTIME_CAPABILITY =
   'bots.item-comment-attachments.v1' as const
 
+// Item uploads can start independently of the lifetime of the conversation that filed the item.
+export const BOTS_ITEM_ATTACHMENT_STAGING_RUNTIME_CAPABILITY =
+  'bots.item-attachment-staging.v1' as const
+
 // Host dedupes the owner's item comments by `requestId` (bots.items.owner.comment): a repeat returns the
 // comment already made. An older host refuses the field, so a client sends it only where advertised.
 export const BOTS_ITEM_COMMENT_REQUEST_ID_RUNTIME_CAPABILITY =
@@ -88,6 +92,7 @@ export const BOT_RUNTIME_CAPABILITIES = [
   BOTS_CHAT_MENTIONS_RUNTIME_CAPABILITY,
   BOTS_ITEMS_RUNTIME_CAPABILITY,
   BOTS_ITEM_COMMENT_ATTACHMENTS_RUNTIME_CAPABILITY,
+  BOTS_ITEM_ATTACHMENT_STAGING_RUNTIME_CAPABILITY,
   BOTS_ITEM_COMMENT_REQUEST_ID_RUNTIME_CAPABILITY,
   BOTS_ITEM_COMMENT_QUESTION_ID_RUNTIME_CAPABILITY,
   BOTS_ITEM_COMMENT_PLAIN_RUNTIME_CAPABILITY,

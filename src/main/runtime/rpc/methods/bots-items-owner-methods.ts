@@ -1,5 +1,6 @@
 // `bots.items.owner.*`: the owner's panel, on the desktop or a paired phone; an agent's CLI is refused.
 // Every comment and status change mails the item's chat, one mail per action and chat; a snooze mails none.
+import type { z } from 'zod'
 import {
   BOT_ITEM_LIMITS,
   BOT_ITEM_OPEN_STATUSES,
@@ -18,11 +19,11 @@ import {
 import { AGENT_SESSION_ATTACHMENTS_DIR_NAME } from '../../../../shared/agent-session/agent-session-attachments'
 import { BotItemError } from '../../../bots/bot-item-error'
 import { admitBotItemCommentAttachments } from '../../../bots/bot-item-comment-attachments'
+import { botMailSession } from '../../../bots/bot-mail-chat'
 import {
   getAgentSessionAttachmentClaimer,
   getAgentSessionAttachmentStore
 } from '../../../native-chat/agent-session-attachments/agent-session-attachment-store-registry'
-import { botChatTakingMail } from './bots-chats'
 import type { BotItemOwnerActor } from '../../../bots/bot-items-input'
 import type { BotItemRecord } from '../../../bots/bot-items-schema'
 import type { BotItemsRemote } from '../../../bots/bot-items-ops'
@@ -178,44 +179,74 @@ const COMMENT = defineMethod({
     const { botItems } = context.runtime
     const store = botItems.store()
     const item = await resolveItem(store, params.item)
-    const bot = context.runtime.bots.list().find((entry) => entry.id === item.ownerBotId)
-    if (params.images?.length || params.text.includes(AGENT_SESSION_ATTACHMENTS_DIR_NAME)) {
-      // The attachment store and its claims come up with the structured chat host.
-      await context.runtime.ensureStructuredAgentSessionHost().catch(() => undefined)
-    }
-    // Admitted and claimed for the item's chat before the event: a failed write leaves only a claim
-    // that chat already prunes, and a retry re-claims the same uploads.
-    const { images } = await admitBotItemCommentAttachments(
-      {
-        store: getAgentSessionAttachmentStore(),
-        // This host's own window: a dropped on-disk image is copied in; a paired client sends store paths.
-        local: context.caller?.kind === 'desktop',
-        claim: getAgentSessionAttachmentClaimer(),
-        chat: async () => (bot ? botChatTakingMail(context.runtime, bot, item.chatId) : null)
-      },
-      params.text,
-      params.images ?? []
-    )
-    const outcome = await store.ownerComment(
-      item.uid,
-      params.text,
-      actor,
-      images,
-      undefined,
-      params.requestId,
-      params.questionId === undefined ? undefined : (parseBotItemEventId(params.questionId) ?? -1),
-      params.plain === true,
-      params.skills,
-      params.skipped
-    )
+    const eventId = await postOwnerComment(store, item, params, context, actor)
     botItems.changed([item])
     // The comment is stored and its mail owed: the reply never waits on the chat taking it.
     void botItems
       .sendOwedMail()
       .catch((error: unknown) => console.warn('[bots] items: mailing a comment failed', error))
-    return { eventId: outcome.eventId === null ? null : botItemEventId(outcome.eventId) }
+    return { eventId: eventId === null ? null : botItemEventId(eventId) }
   }
 })
+
+async function postOwnerComment(
+  store: BotItemsRemote,
+  item: BotItemRecord,
+  params: z.output<typeof BotItemsOwnerComment>,
+  { runtime, caller }: RpcContext,
+  actor: BotItemOwnerActor
+): Promise<number | null> {
+  const hasAttachments =
+    params.images?.length || params.text.includes(AGENT_SESSION_ATTACHMENTS_DIR_NAME)
+  const requestId = params.requestId
+  const posted = () => (requestId ? store.ownerCommentByRequest(item.uid, requestId) : null)
+  // A reply may have committed before the response was lost. Its uploads need not still exist.
+  const replay = hasAttachments ? await posted() : null
+  if (replay !== null) {
+    return replay
+  }
+  if (hasAttachments) {
+    await runtime.ensureStructuredAgentSessionHost().catch(() => undefined)
+  }
+  const attached = await admitBotItemCommentAttachments(
+    {
+      store: getAgentSessionAttachmentStore(),
+      local: caller?.kind === 'desktop',
+      claim: getAgentSessionAttachmentClaimer(),
+      chat: async () => {
+        const bot = runtime.bots.list().find((entry) => entry.id === item.ownerBotId)
+        return bot
+          ? { sessionId: await botMailSession(runtime, bot, item.chatId), title: null }
+          : null
+      }
+    },
+    params.text,
+    params.images ?? []
+  ).catch(async (error: unknown) => {
+    // A concurrent retry can have committed while admission was in flight.
+    const prior = await posted()
+    if (prior === null) {
+      throw error
+    }
+    return prior
+  })
+  if (typeof attached === 'number') {
+    return attached
+  }
+  const outcome = await store.ownerComment(
+    item.uid,
+    attached.text,
+    actor,
+    attached.images,
+    undefined,
+    requestId,
+    params.questionId === undefined ? undefined : (parseBotItemEventId(params.questionId) ?? -1),
+    params.plain === true,
+    params.skills,
+    params.skipped
+  )
+  return outcome.eventId
+}
 
 const STATUS = defineMethod({
   name: 'bots.items.owner.status',

@@ -1,6 +1,7 @@
 import * as z from 'zod'
 import {
   agentSessionAttachmentAppends,
+  agentSessionAttachmentUploadDestination,
   base64DecodedByteLength,
   type AgentSessionAttachmentUploadCommitResult
 } from '../../../../src/shared/agent-session/agent-session-attachments'
@@ -63,7 +64,7 @@ export async function uploadMobileAgentSessionAttachment(
 ): Promise<AgentSessionAttachmentUploadCommitResult> {
   const { uploadId } = attachmentUploadStart.interpret(
     await attachmentUploadStart.request(client, {
-      sessionId: args.sessionId,
+      ...agentSessionAttachmentUploadDestination(args.sessionId),
       name: args.name,
       byteLength: base64DecodedByteLength(args.base64)
     })

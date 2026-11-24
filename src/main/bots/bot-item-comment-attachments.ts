@@ -83,14 +83,7 @@ export async function admitBotItemCommentAttachments(
     : commentText.trim()
       ? `${commentText.trimEnd()}\n\n${references}`
       : references
-  const body: AgentJournalMessageItem = {
-    kind: 'message',
-    role: 'user',
-    blocks: [
-      { type: 'text', text },
-      ...images.map(({ path }) => ({ type: 'image-ref' as const, path }))
-    ]
-  }
+  const body = botItemCommentAttachmentBody(text, images)
   if (agentSessionAttachmentReferences(store.rootDir, body).size === 0) {
     return { text, images }
   }
@@ -98,15 +91,37 @@ export async function admitBotItemCommentAttachments(
   if (!chat) {
     throw refused(botFailure('commentChatDeleted'))
   }
-  if (!deps.claim) {
+  await claimBotItemCommentAttachments(deps.claim, chat.sessionId, body)
+  return { text, images }
+}
+
+export function botItemCommentAttachmentBody(
+  text: string,
+  images: readonly Pick<BotItemCommentImage, 'path'>[]
+): AgentJournalMessageItem {
+  return {
+    kind: 'message',
+    role: 'user',
+    blocks: [
+      { type: 'text', text },
+      ...images.map(({ path }) => ({ type: 'image-ref' as const, path }))
+    ]
+  }
+}
+
+export async function claimBotItemCommentAttachments(
+  claim: AgentSessionAttachmentClaimer | null,
+  sessionId: string,
+  body: AgentJournalMessageItem
+): Promise<void> {
+  if (!claim) {
     throw refused(botFailure('commentAttachFailed'))
   }
-  await claimAttachmentBody(deps.claim, [chat.sessionId], body, {
+  await claimAttachmentBody(claim, [sessionId], body, {
     logPrefix: '[bots] items: claiming comment attachments failed',
     retry: botFailure('commentAttachFailed'),
     refused
   })
-  return { text, images }
 }
 
 function refused(failure: BotFailure): BotItemError {

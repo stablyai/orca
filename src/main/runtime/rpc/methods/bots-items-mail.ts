@@ -7,7 +7,17 @@ import {
   BOT_ITEM_MAIL_ID_PREFIX,
   BOT_ITEM_MAIL_SENDER
 } from '../../../../shared/bots/bot-item-note-runs'
-import { botMailSession } from '../../../bots/bot-mail-chat'
+import { botMailSession, botMailSessionStillCurrent } from '../../../bots/bot-mail-chat'
+import {
+  botItemCommentAttachmentBody,
+  claimBotItemCommentAttachments
+} from '../../../bots/bot-item-comment-attachments'
+import { hasAttachmentStoreReference } from '../../../bots/bot-attachment-images'
+import {
+  getAgentSessionAttachmentClaimer,
+  getAgentSessionAttachmentStore
+} from '../../../native-chat/agent-session-attachments/agent-session-attachment-store-registry'
+import { agentSessionAttachmentReferences } from '../../../native-chat/agent-session-attachments/agent-session-attachment-references'
 import type { BotItemNoteBy } from '../../../../shared/bots/bot-item-note'
 import { appendBotItemNote, botItemNote } from '../../../bots/bot-item-chat-notes'
 import { botItemChangeMail, botItemMailImages } from '../../../bots/bot-items-mail-text'
@@ -72,9 +82,17 @@ export async function sendBotItemMail(
   if (!mail || !bot) {
     return true
   }
-  const sessionId = await botMailSession(runtime, bot, owed.chatId)
-  const to = `orca_session_id:${sessionId}`
+  let sessionId = await botMailSession(runtime, bot, owed.chatId)
   const images = botItemMailImages(owed.changes)
+  const ownerText = owed.changes
+    .flatMap(({ event }) =>
+      event.kind === 'commented' &&
+      event.actor.kind === 'owner' &&
+      typeof event.data.text === 'string'
+        ? [event.data.text]
+        : []
+    )
+    .join('\n')
   const asker = answerAskedIn(owed)
   const payload = JSON.stringify({
     botItems: owed.changes.map(({ event, item }) => ({
@@ -89,6 +107,38 @@ export async function sendBotItemMail(
     // checks it is that chat (conversation-ask-answer.ts).
     ...(asker ? { askedInConversation: asker } : {})
   })
+  if (
+    owed.changes[0]?.event.actor.kind === 'owner' &&
+    (images.length > 0 || hasAttachmentStoreReference(ownerText))
+  ) {
+    const store = getAgentSessionAttachmentStore()
+    if (!store) {
+      return false
+    }
+    const body = botItemCommentAttachmentBody(
+      ownerText,
+      images.map((path) => ({ path }))
+    )
+    if (agentSessionAttachmentReferences(store.rootDir, body).size > 0) {
+      // The comment's first claim protects its uploads. If the chat changed, the same outbox entry
+      // now claims them for the actual recipient before the mailbox can see them.
+      for (let attempt = 0; ; attempt++) {
+        await claimBotItemCommentAttachments(getAgentSessionAttachmentClaimer(), sessionId, body)
+        if (botMailSessionStillCurrent(runtime, bot.id, owed.chatId, sessionId)) {
+          break
+        }
+        const current = runtime.bots.list().find((entry) => entry.id === bot.id)
+        if (!current) {
+          return true
+        }
+        if (attempt === 1) {
+          return false
+        }
+        sessionId = await botMailSession(runtime, current, owed.chatId)
+      }
+    }
+  }
+  const to = `orca_session_id:${sessionId}`
   db.insertMessage({
     id,
     from: BOT_ITEM_MAIL_SENDER,

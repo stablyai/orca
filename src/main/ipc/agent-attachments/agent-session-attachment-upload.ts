@@ -6,6 +6,7 @@ import { basename } from 'node:path'
 import {
   AGENT_SESSION_ATTACHMENT_CHUNK_BYTES,
   AGENT_SESSION_ATTACHMENT_MAX_BYTES,
+  agentSessionAttachmentUploadDestination,
   agentSessionPastedImageName,
   type AgentSessionAttachmentClipboardTarget,
   type AgentSessionAttachmentPathUploadResult,
@@ -91,7 +92,7 @@ async function uploadAttachment(
 ): Promise<AgentSessionAttachmentUploadCommitResult> {
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: uploadStart's handler returns this shape.
   const { uploadId } = (await call('agentSessionAttachment.uploadStart', {
-    sessionId,
+    ...agentSessionAttachmentUploadDestination(sessionId),
     name: file.name,
     byteLength: file.byteLength
   })) as AgentSessionAttachmentUploadStartResult
