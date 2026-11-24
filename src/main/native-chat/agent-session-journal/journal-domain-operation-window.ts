@@ -129,11 +129,16 @@ export function readJournalDomainOperationWindow(
     earliest === null ? null : anchors.withoutTurnAhead ? earliest : marginBefore(scope, earliest)
   const end = earliest !== null && bounded ? windowEnd(scope, reaches) : null
   if (indexed && start !== null) {
-    // A newest-turns window stops reading a family at its first member older than the window: the
-    // window must widen to it, which the whole read below answers.
+    // A newest-turns window stops reading a family at its first member older than the window, and
+    // takes the whole read instead: the window widens to it, or past what the stopped walk left out.
     const older = (send: Send) => recent && reachesBefore([send], null, start ?? Infinity)
+    const known = new Set(sends.map((send) => send.messageId))
     const placed = windowSends(scope, start, end ?? Number.MAX_SAFE_INTEGER)
     sends = withSends(scope, sends, placed, older)
+    if (sends.some((send) => !known.has(send.messageId) && older(send))) {
+      indexed = false
+      sends = sendHeads(scope)
+    }
   }
   let kept: Send[] = []
   // A held send's own rows, and the head it was sent at, are held too: a turn may claim a send by
