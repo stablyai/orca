@@ -71,7 +71,7 @@ export class ConnectorReach {
     this.unreachable = false
     this.refusal = null
     this.unauthorized = false
-    this.missed = false
+    // A call outside the poll that missed still waits for the next poll's answer.
     if (changed) {
       this.onChanged()
     }

@@ -12,6 +12,7 @@ import type { ConnectorBotAvatarRequest } from '../../shared/connector-bot-slack
 import type { BotController } from '../bots/bot-controller'
 import type { BotSlackIcons } from '../bots/bot-slack-icon-store'
 import { BotAvatarOwed } from './bot-avatar-owed'
+import type { ConnectorBack } from './connector-reach'
 import { BotAvatarShown } from './bot-avatar-shown'
 import { botsCloudClient } from './bots-cloud-client'
 import type { ConnectorCloud } from './connector-cloud'
@@ -100,9 +101,9 @@ export class BotAvatarSync {
   }
 
   /** Owed drawings go again; a fresh step (a sign-in, an outage ending) also renews sends on their way. */
-  retryOwed(fresh = false): void {
-    this.writes += fresh ? 1 : 0
-    for (const botId of this.owed.take(fresh)) {
+  retryOwed(why: ConnectorBack): void {
+    this.writes += why === 'answered' ? 0 : 1
+    for (const botId of this.owed.take(why)) {
       this.sent.delete(botId)
       if (!this.sending.has(botId)) {
         this.resend(botId)
@@ -298,8 +299,9 @@ export class BotAvatarSync {
       this.prepared.delete(bot.id)
       // The picture may have changed while this one was on its way: only then is the roster read again.
       // While bots are off, turning them on reads it again.
+      // Not a real step for other bots: ones owed a drawing keep waiting for theirs.
       if (this.changedWhileSending.delete(bot.id) && this.deps.bots.enabled()) {
-        this.pass()
+        this.pass(true)
       }
     } else if (refused && stepped) {
       // A bot write meanwhile may have registered it, or changed its picture: that write's own pass skipped
@@ -308,7 +310,7 @@ export class BotAvatarSync {
     } else if (refused && carried) {
       // The cloud doesn't know this bot yet, and the picture is a drawing: its bytes wait for a real step
       // (the write that links the bot is one) rather than going again on the backoff timer.
-      this.owed.add(bot.id)
+      this.owed.add(bot.id, true)
     } else if (refused) {
       // The cloud doesn't know this bot: it is asked again less and less often, or after a write.
       const before = this.refused.get(bot.id)

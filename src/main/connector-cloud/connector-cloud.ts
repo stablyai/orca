@@ -15,7 +15,7 @@ import {
   type ConnectorTokenMint
 } from './connector-transport'
 import { ConnectorTurnEvents } from './connector-turn-events'
-import { type ConnectorBack, ConnectorReach } from './connector-reach'
+import { ConnectorReach } from './connector-reach'
 import type { ConnectorReplyJournal } from './connector-reply-outbox'
 import { connectorRefResolver, type ConnectorRefResolver } from './connector-ref-resolution'
 import { postConnectorOutboxReply } from './connector-replies'
@@ -75,21 +75,20 @@ export class ConnectorCloud {
     return this.activeAccount()
   }
 
-  private noteAccount(): void {
+  private noteAccount(again = false): void {
     const account = this.signingOut ? null : this.options.account()
     if (account !== this.lastAccount) {
       this.lastAccount = account
       this.options.onAccountSwitched?.()
-      if (account) {
-        this.reach.back('signedIn')
-      }
+      again = true
+    }
+    if (account && again) {
+      this.reach.back('signedIn')
     }
   }
 
   /** Orca Cloud answers again after it (or a call outside the poll) didn't, or a sign-in: a send may go. */
-  onBack(listener: (why: ConnectorBack) => void): () => void {
-    return this.reach.onBack(listener)
-  }
+  readonly onBack: ConnectorReach['onBack'] = (listener) => this.reach.onBack(listener)
 
   /** From now on, hold the poll whenever an Orca account is signed in and the machine wants the connection. */
   connect(): void {
@@ -131,11 +130,12 @@ export class ConnectorCloud {
 
   /** The desktop signed in, switched accounts or refreshed its sign-in. */
   accountChanged(): void {
-    // A new sign-in may lift a stop the cloud made; a fresh client asks again.
-    if (this.clientStop) {
+    // A new sign-in may lift a stop the cloud made: a fresh client asks again, and owed sends go again.
+    const stopped = this.clientStop !== null
+    if (stopped) {
       this.stopClient()
     }
-    this.noteAccount()
+    this.noteAccount(stopped)
     this.reconcile()
     this.options.onStatusChanged?.()
   }
