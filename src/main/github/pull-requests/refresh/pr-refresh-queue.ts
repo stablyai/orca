@@ -220,7 +220,8 @@ export class PRRefreshQueue {
         cacheKey: candidate.cacheKey,
         branch: candidate.branch,
         currentHeadOid: candidate.currentHeadOid ?? null,
-        isSelected: candidate.isSelected
+        // A reader that doesn't know selection keeps a shown row's.
+        isSelected: candidate.isSelected ?? existing.candidate.isSelected
       }
     }
     return { alias, key, dueAt, coalesced: true }

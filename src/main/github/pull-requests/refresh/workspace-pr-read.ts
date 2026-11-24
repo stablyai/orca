@@ -1,7 +1,7 @@
 // A workspace's PR read outside its sidebar row (the agent work list): the shared PR cache that row
 // reads. A stale entry is read again as background work on the shared PR refresh queue (budgeted,
-// coalesced, rate-limit and cadence aware), and the outcome is written back to that cache here in
-// main, so readers see it with no window open; an open window applies it as it does any read.
+// coalesced, rate-limit and cadence aware). Main applies the queue's refresh events to its cache as
+// a window does, so readers see them with no window open.
 import {
   getRepoExecutionHostId,
   LOCAL_EXECUTION_HOST_ID
@@ -9,7 +9,7 @@ import {
 import type { PRInfo } from '../../../../shared/github/pull-requests/pull-request-types'
 import type {
   GitHubPRRefreshCandidate,
-  PRRefreshOutcome
+  GitHubPRRefreshEvent
 } from '../../../../shared/github/pull-requests/refresh/pull-request-refresh-types'
 import { resolvePRBranchFallback } from '../../../../shared/github/pull-requests/refresh/pr-branch-fallback-rule'
 import { getGitHubPRCacheKeyCandidates } from '../../../../shared/github/cache/github-cache-key'
@@ -23,8 +23,8 @@ import type { Worktree } from '../../../../shared/worktree/types'
 import type { PersistedState } from '../../../../shared/orca-profiles/persisted-state-types'
 import { applyRegisteredRepoToPRRefreshCandidate } from '../../../ipc/source-control/github-repo-routing'
 import type { ProjectRuntimeResolutionStore } from '../../../workspaces/execution-host/local-project-runtime-resolution'
-import { aliasFromCandidate, refreshIntervalForCandidate } from './pr-refresh-candidate-policy'
-import { addPRRefreshOutcomeObserver, enqueuePRRefresh } from './pr-refresh-coordinator'
+import { hasStaleHead, refreshIntervalForCandidate } from './pr-refresh-candidate-policy'
+import { addPRRefreshEventListener, enqueuePRRefresh } from './pr-refresh-coordinator'
 
 type PRCacheEntry = PersistedState['githubCache']['pr'][string] & {
   fetchedHeadOid?: string | null
@@ -33,6 +33,7 @@ type PRCacheEntry = PersistedState['githubCache']['pr'][string] & {
 export type WorkspacePRReadStore = ProjectRuntimeResolutionStore & {
   getGitHubCache: () => PersistedState['githubCache']
   setGitHubCache?: (cache: PersistedState['githubCache']) => void
+  getRepos: () => readonly Repo[]
 }
 
 export type WorkspacePRReadWorktree = Pick<
@@ -83,10 +84,17 @@ export function workspacePRRefreshCandidate(
   })
 }
 
-/** Whether the queue should read this answer again: a final state never; otherwise once the
- *  cadence's interval has passed (none under Off). */
+/** Whether the queue should read this answer again: a final state never, nor a branch that had no
+ *  PR while its head and link stay the same; otherwise once the cadence's interval has passed. */
 function needsRead(candidate: GitHubPRRefreshCandidate, now: number): boolean {
   if (candidate.cachedPRState === 'merged' || candidate.cachedPRState === 'closed') {
+    return false
+  }
+  if (
+    candidate.cachedHasPR === false &&
+    candidate.linkedPRNumber == null &&
+    !hasStaleHead(candidate)
+  ) {
     return false
   }
   const interval = refreshIntervalForCandidate(candidate)
@@ -96,47 +104,38 @@ function needsRead(candidate: GitHubPRRefreshCandidate, now: number): boolean {
   return candidate.cachedFetchedAt == null || now - candidate.cachedFetchedAt >= interval
 }
 
-// Cache keys this module queued a read for, with the store their outcome is written back to.
-const queuedReads = new Map<string, WorkspacePRReadStore>()
-let observing = false
+// The store the refresh events write back to: the one this host's readers read.
+let writeBackStore: WorkspacePRReadStore | null = null
 
-function writeBack(
-  store: WorkspacePRReadStore,
-  cacheKey: string,
-  outcome: Exclude<PRRefreshOutcome, { kind: 'upstream-error' }>,
-  headOid: string | null
-): void {
+/** Writes each completed read the windows are sent to main's cache too, as a window applies it, for
+ *  a repo still registered; the store keeps a newer entry and the cache's bound. */
+function writeBack(event: GitHubPRRefreshEvent): void {
+  const store = writeBackStore
+  const outcome = event.outcome
+  if (!store?.setGitHubCache || !outcome || outcome.kind === 'upstream-error') {
+    return
+  }
+  const repoIds = new Set(store.getRepos().map((repo) => repo.id))
   const cache = store.getGitHubCache()
-  const known = cache.pr[cacheKey]
-  if (!store.setGitHubCache || (known && known.fetchedAt >= outcome.fetchedAt)) {
-    return
-  }
-  const entry: PRCacheEntry = {
-    data: outcome.kind === 'found' ? outcome.pr : null,
-    fetchedAt: outcome.fetchedAt,
-    fetchedHeadOid: headOid
-  }
-  store.setGitHubCache({ ...cache, pr: { ...cache.pr, [cacheKey]: entry } })
-}
-
-function observeQueuedReads(): void {
-  if (observing) {
-    return
-  }
-  observing = true
-  addPRRefreshOutcomeObserver((candidate, outcome, aliases) => {
-    // A failure keeps the key queued: the queue's backoff gates the next read, its success lands.
-    if (outcome.kind === 'upstream-error') {
-      return
-    }
-    for (const alias of aliases.length > 0 ? aliases : [aliasFromCandidate(candidate)]) {
-      const store = queuedReads.get(alias.cacheKey)
-      if (store) {
-        queuedReads.delete(alias.cacheKey)
-        writeBack(store, alias.cacheKey, outcome, alias.currentHeadOid ?? null)
+  const entries: Record<string, PRCacheEntry> = {}
+  for (const alias of event.aliases) {
+    const known = cache.pr[alias.cacheKey]
+    if (
+      alias.repoId &&
+      repoIds.has(alias.repoId) &&
+      (!known || known.fetchedAt < outcome.fetchedAt)
+    ) {
+      entries[alias.cacheKey] = {
+        data: outcome.kind === 'found' ? outcome.pr : null,
+        fetchedAt: outcome.fetchedAt,
+        fetchedHeadOid: alias.currentHeadOid ?? null
       }
     }
-  })
+  }
+  if (Object.keys(entries).length === 0) {
+    return
+  }
+  store.setGitHubCache({ ...cache, pr: { ...cache.pr, ...entries } })
 }
 
 /** The PR the workspace's row shows, from the shared cache, never waiting on GitHub; a stale entry
@@ -146,6 +145,10 @@ export function readWorkspacePR(
   worktree: WorkspacePRReadWorktree,
   repo: Repo
 ): PRInfo | null {
+  if (!writeBackStore) {
+    addPRRefreshEventListener(writeBack)
+  }
+  writeBackStore = store
   const entry = workspaceReviewPREntry(worktree, repo, store.getGitHubCache().pr)
   const cached = shownWorkspaceReviewPR(worktree, entry?.data)
   let candidate: GitHubPRRefreshCandidate | null
@@ -156,8 +159,6 @@ export function readWorkspacePR(
     return cached
   }
   if (candidate && needsRead(candidate, Date.now())) {
-    observeQueuedReads()
-    queuedReads.set(candidate.cacheKey, store)
     enqueuePRRefresh(candidate, 'swr', WORKSPACE_PR_READ_PRIORITY)
   }
   return cached

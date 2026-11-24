@@ -3,18 +3,19 @@ import type { PRInfo } from '../../../../shared/github/pull-requests/pull-reques
 import type { PersistedState } from '../../../../shared/orca-profiles/persisted-state-types'
 import type { Repo } from '../../../../shared/repository/repo-types'
 import { setPRAutoRefreshCadence } from '../../../../shared/source-control/hosted-review/review-refresh-policy'
-import type { PRRefreshOutcomeObserver } from './pr-refresh-event-publisher'
-import { addPRRefreshOutcomeObserver, enqueuePRRefresh } from './pr-refresh-coordinator'
+import type { GitHubPRRefreshEvent } from '../../../../shared/github/pull-requests/refresh/pull-request-refresh-types'
+import { withNewerCacheEntries } from '../../../../shared/github/cache/github-cache-bounds'
+import { addPRRefreshEventListener, enqueuePRRefresh } from './pr-refresh-coordinator'
 import { readWorkspacePR, type WorkspacePRReadWorktree } from './workspace-pr-read'
 
 vi.mock('./pr-refresh-coordinator', () => ({
-  addPRRefreshOutcomeObserver: vi.fn(),
+  addPRRefreshEventListener: vi.fn(),
   enqueuePRRefresh: vi.fn()
 }))
 const enqueue = vi.mocked(enqueuePRRefresh)
-let observer: PRRefreshOutcomeObserver | undefined
-vi.mocked(addPRRefreshOutcomeObserver).mockImplementation((next) => {
-  observer = next
+let broadcast: ((event: GitHubPRRefreshEvent) => void) | undefined
+vi.mocked(addPRRefreshEventListener).mockImplementation((next) => {
+  broadcast = next
   return () => {}
 })
 
@@ -44,12 +45,13 @@ function pr(state: PRInfo['state']): PRInfo {
 }
 
 /** A main-process store with no window: only this module writes its cache. */
-function storeWith(data: PRInfo, ageMs: number) {
+function storeWith(data: PRInfo | null, ageMs: number, repos: Repo[] = [repo]) {
   let cache: PersistedState['githubCache'] = {
-    pr: { [cacheKey]: { data, fetchedAt: NOW - ageMs } },
+    pr: { [cacheKey]: { data, fetchedAt: NOW - ageMs, fetchedHeadOid: 'abc123' } as never },
     issue: {}
   }
   return {
+    getRepos: () => repos,
     getGitHubCache: () => cache,
     setGitHubCache: (next: PersistedState['githubCache']) => {
       cache = next
@@ -77,8 +79,42 @@ describe('a workspace PR read outside its row', () => {
     // The branch is deleted on merge: the read finds the PR by its cached number.
     expect(candidate).toMatchObject({ cacheKey, branch: 'fix-list', fallbackPRNumber: 42 })
 
-    observer!(candidate, { kind: 'found', pr: pr('merged'), fetchedAt: NOW + 1_000 }, [])
+    // The read's refresh event, as every window is sent it, with none open here.
+    broadcast!({
+      sequence: 1,
+      reason: 'swr',
+      aliases: [{ ...candidate, repoId: repo.id }],
+      outcome: { kind: 'found', pr: pr('merged'), fetchedAt: NOW + 1_000 }
+    })
     expect(readWorkspacePR(store, worktree, repo)?.state).toBe('merged')
+    expect(enqueue).toHaveBeenCalledTimes(1)
+  })
+
+  it("keeps main's newer read when a window saves an older copy of the cache", () => {
+    const older = { data: pr('open'), fetchedAt: NOW - HOUR }
+    const newer = { data: pr('merged'), fetchedAt: NOW }
+    const saved = withNewerCacheEntries({ [cacheKey]: newer }, { [cacheKey]: older })
+    expect(saved[cacheKey]).toBe(newer)
+  })
+
+  it('writes nothing back for a repo no longer registered', () => {
+    const store = storeWith(pr('open'), HOUR)
+    readWorkspacePR(store, worktree, repo)
+    const removed = storeWith(pr('open'), HOUR, [])
+    readWorkspacePR(removed, worktree, repo)
+    broadcast!({
+      sequence: 2,
+      reason: 'swr',
+      aliases: [{ cacheKey, repoId: repo.id, repoPath: repo.path, branch: 'fix-list' }],
+      outcome: { kind: 'found', pr: pr('merged'), fetchedAt: NOW + 1_000 }
+    })
+    expect(readWorkspacePR(removed, worktree, repo)?.state).toBe('open')
+  })
+
+  it('never probes again a branch that had no PR while its head and link are unchanged', () => {
+    readWorkspacePR(storeWith(null, 24 * HOUR), worktree, repo)
+    expect(enqueue).not.toHaveBeenCalled()
+    readWorkspacePR(storeWith(null, 24 * HOUR), { ...worktree, head: 'def456' }, repo)
     expect(enqueue).toHaveBeenCalledTimes(1)
   })
 

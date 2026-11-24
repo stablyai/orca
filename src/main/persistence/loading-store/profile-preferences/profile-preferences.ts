@@ -27,6 +27,7 @@ import type { StoreRuntimeState } from '../store-runtime-state'
 import { persistGithubCache } from '../github-cache/github-cache-persistence'
 import type { WriteSchedulingOperations } from '../profile-writing/write-scheduling'
 import { scheduleSave } from '../profile-writing/write-scheduling'
+import { withNewerPRReads } from '../../../../shared/github/cache/github-cache-bounds'
 import { bumpLocalWorktreeScanGeneration } from '../../../workspaces/catalog/local-worktree-scan-generation'
 
 type ProfilePreferencesRuntime = Pick<
@@ -210,9 +211,11 @@ export class ProfilePreferences {
     return this[profilePreferencesContext].runtime.state.githubCache
   }
 
+  /** Windows save their whole cache and main writes its own reads: a newer PR read stays. */
   setGitHubCache(cache: PersistedState['githubCache']): void {
+    const { runtime } = this[profilePreferencesContext]
     // Cache polls write a sidecar at flush; scheduling a full profile save here amplifies every poll.
-    this[profilePreferencesContext].runtime.state.githubCache = cache
+    runtime.state.githubCache = withNewerPRReads(runtime.state.githubCache, cache)
     this[profilePreferencesContext].runtime.githubCacheDirty = true
     persistGithubCache(this[profilePreferencesContext].runtime, 'routine')
     for (const listener of this[profilePreferencesContext].runtime.githubCacheWriteListeners) {

@@ -73,6 +73,13 @@ export function addPRRefreshOutcomeObserver(observer: PRRefreshOutcomeObserver):
   return events.addOutcomeObserver(observer)
 }
 
+/** Every refresh event the windows apply to their PR cache, also sent with no window open. */
+export function addPRRefreshEventListener(
+  listener: Parameters<PRRefreshEventPublisher['addEventListener']>[0]
+): () => void {
+  return events.addEventListener(listener)
+}
+
 export function setPRRefreshRegistrationCheck(check: PRRefreshRegistrationCheck | null): void {
   drainer.registrationCheck = check
 }
@@ -181,6 +188,14 @@ export function clearVisiblePRRefreshWindow(windowId: number): void {
  *  report again: a row whose failure is still current gets that failure's own retry, others the
  *  follow-up the cadence gives them. Either stays automatic, so the next Off retires it. */
 export function retimePRRefreshesForCadence(): void {
+  if (getPRAutoRefreshCadence() === 'off') {
+    // Background revalidation is timed work too; a host job (a client waiting on it) stays.
+    for (const entry of queue.values()) {
+      if (entry.reason === 'swr' && !entry.hosted && !entry.watch) {
+        queue.delete(entry.key)
+      }
+    }
+  }
   const failureRetries = retry.retimeErrors(queue)
   queue.retimeVisible((key, candidate) => visibility.candidate(key, candidate))
   retimeQueuedErrorRetries(queue, retry, (key, candidate) => visibility.candidate(key, candidate))

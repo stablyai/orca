@@ -23,6 +23,7 @@ const DIAGNOSTIC_BREADCRUMB_MIN_INTERVAL_MS = 30_000
 export class PRRefreshEventPublisher {
   private sequence = 0
   private readonly observers = new Set<PRRefreshOutcomeObserver>()
+  private readonly eventListeners = new Set<(event: GitHubPRRefreshEvent) => void>()
   private readonly counters = { enqueued: 0, coalesced: 0, skipped: 0, backgroundPauses: 0 }
 
   addOutcomeObserver(observer: PRRefreshOutcomeObserver): () => void {
@@ -48,6 +49,12 @@ export class PRRefreshEventPublisher {
     }
   }
 
+  /** Every event the windows are sent, also with no window open. */
+  addEventListener(listener: (event: GitHubPRRefreshEvent) => void): () => void {
+    this.eventListeners.add(listener)
+    return () => this.eventListeners.delete(listener)
+  }
+
   nextSequence(): number {
     this.sequence += 1
     return this.sequence
@@ -59,6 +66,13 @@ export class PRRefreshEventPublisher {
       sequence: sequenceOverride ?? this.nextSequence()
     } as GitHubPRRefreshEvent
     prRefreshRenderers().sendToTrustedUI('gh:prRefreshEvent', payload)
+    for (const listener of this.eventListeners) {
+      try {
+        listener(payload)
+      } catch (error) {
+        console.warn('[pr-refresh] event listener failed', error)
+      }
+    }
   }
 
   record(
