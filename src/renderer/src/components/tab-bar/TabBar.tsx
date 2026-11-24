@@ -11,7 +11,13 @@ import { renderTabBarSurface } from './strip/tab-bar-surface'
 import { useTabBarItemActions } from './model/use-tab-bar-item-actions'
 import { useActiveClientHostedBrowserRowId } from '@/runtime/browser/client-hosting/client-hosted-browser-row-state'
 import { useEditorGroupFileDropOwner } from '../editor/file-drop/use-editor-group-file-drop-owner'
-import { useBotForWorkspace, useBotGroupForWorkspace } from '../bots/bot-workspace'
+import {
+  findBotByWorkspace,
+  useBotForWorkspace,
+  useBotGroupForWorkspace
+} from '../bots/bot-workspace'
+import { useBots, useBotsEnabled } from '@/lib/bot-catalog'
+import { parseWorkspaceKey } from '../../../../shared/workspace/identity/workspace-scope'
 import { useTranslate } from '@/i18n/use-translate'
 import { useTabStripScrollMemory } from './strip/tab-strip-scroll-memory'
 import { useTabDragActive } from '../tab-group/drag/tab-drag-context'
@@ -91,12 +97,16 @@ function TabBarInner(props: TabBarProps): React.JSX.Element {
     generatedTabTitlesEnabled: runtime.generatedTabTitlesEnabled,
     statusByRelativePath: runtime.statusByRelativePath
   })
-  const firstChat = projectedItems.orderedItems.find((item) => item.type === 'agent-session')
-  const homeBot = useBotForWorkspace(
-    worktreeId,
-    firstChat?.type === 'agent-session' ? firstChat.data.executionHostId : undefined
+  const botsEnabled = useBotsEnabled()
+  const bots = useBots(botsEnabled && parseWorkspaceKey(worktreeId)?.type === 'folder')
+  // Each chat asks for the bot on its own host, as its row does, so a mixed-host group never borrows another's Home.
+  const pinnedHomeId = useMemo(
+    () =>
+      findPinnedHomeTabId(projectedItems.orderedItems, (hostId) =>
+        findBotByWorkspace(bots, worktreeId, hostId)
+      ),
+    [projectedItems.orderedItems, bots, worktreeId]
   )
-  const pinnedHomeId = findPinnedHomeTabId(projectedItems.orderedItems, homeBot)
   // Why memoized: dnd-kit re-renders every tab in a context whose items array changes identity.
   const orderedItems = useMemo(
     () => withPinnedHomeFirst(projectedItems.orderedItems, pinnedHomeId, itemIdOf),

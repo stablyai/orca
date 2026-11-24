@@ -119,7 +119,7 @@ function BotHomeTabsFixture({
             <div className="w-10 min-w-0 @max-[203px]/tab-strip:hidden group-has-[[data-pinned-home-with-strip]]/tab-strip-row:@max-[243px]/tab-strip:hidden" />
             <div className="flex min-w-0 items-center gap-0.5 overflow-hidden pr-0.5 pl-1.5">
               <div className="h-6 w-[47px] shrink-0 rounded-md bg-muted @max-[163px]/tab-strip:hidden group-has-[[data-pinned-home-with-strip]]/tab-strip-row:@max-[203px]/tab-strip:hidden" />
-              <div className="size-7 shrink-0 rounded-md bg-muted" />
+              <div className="size-7 shrink-0 rounded-md bg-muted @max-[114px]/tab-strip:hidden group-has-[[data-pinned-home-with-strip]]/tab-strip-row:@max-[154px]/tab-strip:hidden" />
             </div>
           </div>
         </div>

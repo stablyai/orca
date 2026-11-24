@@ -10,9 +10,16 @@ import {
 } from './pinned-home-tab'
 
 const homeBot = { chatSessionId: 'home-chat' }
+const onBotPage = (): typeof homeBot => homeBot
+const offBotPage = (): null => null
 
-function chatTab(id: string, entityId: string): Tab & { contentType: 'agent-session' } {
+function chatTab(
+  id: string,
+  entityId: string,
+  extra: Partial<Tab> = {}
+): Tab & { contentType: 'agent-session' } {
   return {
+    ...extra,
     id,
     entityId,
     groupId: 'group',
@@ -26,20 +33,20 @@ function chatTab(id: string, entityId: string): Tab & { contentType: 'agent-sess
   }
 }
 
-function chatItem(id: string, entityId: string): TabBarItem {
+function chatItem(id: string, entityId: string, extra: Partial<Tab> = {}): TabBarItem {
   return {
     type: 'agent-session',
     id,
     unifiedTabId: id,
     isPinned: false,
-    data: chatTab(id, entityId)
+    data: chatTab(id, entityId, extra)
   }
 }
 
 describe('findPinnedHomeTabId', () => {
   it("takes the bot's Home out of the scroller when it leads the order", () => {
     const items = [chatItem('home', 'home-chat'), chatItem('side', 'side-chat')]
-    expect(findPinnedHomeTabId(items, homeBot)).toBe('home')
+    expect(findPinnedHomeTabId(items, onBotPage)).toBe('home')
   })
 
   it('pins Home when a restored layout or a new tab put other tabs ahead of it', () => {
@@ -48,12 +55,30 @@ describe('findPinnedHomeTabId', () => {
       chatItem('side-b', 'side-b-chat'),
       chatItem('home', 'home-chat')
     ]
-    expect(findPinnedHomeTabId(items, homeBot)).toBe('home')
+    expect(findPinnedHomeTabId(items, onBotPage)).toBe('home')
+  })
+
+  it("asks each chat's own host, so a chat on another host never stands in for Home", () => {
+    const items = [
+      chatItem('other-host-home', 'home-chat', { executionHostId: 'runtime:other' }),
+      chatItem('home', 'home-chat', { executionHostId: 'local' })
+    ]
+    const localBotOnly = (hostId: Tab['executionHostId']): typeof homeBot | null =>
+      hostId === 'local' ? homeBot : null
+    expect(findPinnedHomeTabId(items, localBotOnly)).toBe('home')
+  })
+
+  it('prefers a published Home over a preview of it, as Home placement does', () => {
+    const items = [
+      chatItem('preview', 'home-chat', { isPreview: true }),
+      chatItem('home', 'home-chat')
+    ]
+    expect(findPinnedHomeTabId(items, onBotPage)).toBe('home')
   })
 
   it('pins nothing outside a bot page or with no tabs', () => {
-    expect(findPinnedHomeTabId([chatItem('home', 'home-chat')], null)).toBeNull()
-    expect(findPinnedHomeTabId([], homeBot)).toBeNull()
+    expect(findPinnedHomeTabId([chatItem('home', 'home-chat')], offBotPage)).toBeNull()
+    expect(findPinnedHomeTabId([], onBotPage)).toBeNull()
   })
 })
 
@@ -69,6 +94,7 @@ describe('withPinnedHomeFirst', () => {
     ])
   })
 
+  // Identity is the contract here: dnd-kit re-renders every tab when its items array changes identity.
   it('keeps the same array when Home already leads or nothing is pinned', () => {
     const leading = ['home', 'a']
     expect(withPinnedHomeFirst(leading, 'home', id)).toBe(leading)
@@ -80,11 +106,14 @@ describe('withPinnedHomeFirst', () => {
 describe('withBotHomeFirstTabIds', () => {
   it("counts the bot's Home first, as the tab bar shows it", () => {
     const groupTabs = [chatTab('side-a', 'side-a-chat'), chatTab('home', 'home-chat')]
-    expect(withBotHomeFirstTabIds(['side-a', 'home'], groupTabs, homeBot)).toEqual([
+    expect(withBotHomeFirstTabIds(['side-a', 'home'], groupTabs, onBotPage)).toEqual([
       'home',
       'side-a'
     ])
-    expect(withBotHomeFirstTabIds(['side-a', 'home'], groupTabs, null)).toEqual(['side-a', 'home'])
+    expect(withBotHomeFirstTabIds(['side-a', 'home'], groupTabs, offBotPage)).toEqual([
+      'side-a',
+      'home'
+    ])
   })
 })
 
@@ -93,9 +122,8 @@ describe('stripSortableIdsWithoutPinnedHome', () => {
     expect(stripSortableIdsWithoutPinnedHome(['home', 'a', 'b'], 'home')).toEqual(['a', 'b'])
   })
 
-  it('keeps the same array when nothing is pinned', () => {
-    const ids = ['a', 'b']
-    expect(stripSortableIdsWithoutPinnedHome(ids, null)).toBe(ids)
+  it('keeps every id when nothing is pinned', () => {
+    expect(stripSortableIdsWithoutPinnedHome(['a', 'b'], null)).toEqual(['a', 'b'])
   })
 })
 
@@ -107,13 +135,17 @@ describe('pinnedHomeDropIndicators', () => {
 
   it('leaves drops elsewhere in the strip on their tab', () => {
     const indicators = new Map([['side-3', 'left' as const]])
-    expect(pinnedHomeDropIndicators(indicators, 'home', 'side-0')).toBe(indicators)
+    expect([...pinnedHomeDropIndicators(indicators, 'home', 'side-0')]).toEqual([
+      ['side-3', 'left']
+    ])
     const afterFirst = new Map([['side-0', 'right' as const]])
-    expect(pinnedHomeDropIndicators(afterFirst, 'home', 'side-0')).toBe(afterFirst)
+    expect([...pinnedHomeDropIndicators(afterFirst, 'home', 'side-0')]).toEqual([
+      ['side-0', 'right']
+    ])
   })
 
   it('changes nothing when Home is not pinned', () => {
     const indicators = new Map([['side-0', 'left' as const]])
-    expect(pinnedHomeDropIndicators(indicators, null, 'side-0')).toBe(indicators)
+    expect([...pinnedHomeDropIndicators(indicators, null, 'side-0')]).toEqual([['side-0', 'left']])
   })
 })

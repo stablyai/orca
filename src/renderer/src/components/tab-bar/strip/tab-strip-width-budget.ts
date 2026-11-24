@@ -23,3 +23,17 @@ export const PANE_ACTIONS_HIDE_BELOW_PX = 114
 export const FOLDED_PANE_ACTIONS_HIDE_BELOW_PX = 78
 /** Quick commands hide below this: 114 + 47 widest trigger + 2 gap. */
 export const QUICK_COMMANDS_HIDE_BELOW_PX = 163
+
+// A bot's pinned Home (PinnedHomeTabSlot, rendered-tab-strip, and the pane header's pinned-Home
+// selectors in TabGroupPanel, TabGroupStripActions and TabGroupPaneActionsMenu use these literals).
+/** Home keeps this width until only the "+N" chip is left beside it. */
+export const PINNED_HOME_WIDTH_PX = 144
+/** Home's label hides whole below this: 84 idle titled tab + 16 working/unread dot + 14 color dot. */
+export const PINNED_HOME_LABEL_MIN_PX = 114
+/** Home's color dot hides below this: 44 idle icon tab + 16 + 14. */
+export const PINNED_HOME_COLOR_DOT_MIN_PX = 74
+/** Home's pin hides below this: 44 + 16. */
+export const PINNED_HOME_PIN_MIN_PX = 60
+/** Home beside other tabs adds a second tab floor, so each strip threshold above moves up by this:
+ * "+" 126, pane ⋯ 154 (118 folded), quick commands 203, drag handle 243. */
+export const PINNED_HOME_EXTRA_FLOOR_PX = TAB_STRIP_FLOOR_PX

@@ -75,7 +75,7 @@ export function resolveRenderedTabStrip({
 /**
  * Below 86px (40 tab floor + 36 "+" + 8 action padding + 2 sub-pixel slack) "+" would only clip; hide it whole so Tab
  * never lands on it. Empty groups keep it. A pinned Home beside other tabs adds a second 40px floor, so "+" hides below
- * 126px there and the shortcut opens a new terminal instead.
+ * 126px there (PINNED_HOME_EXTRA_FLOOR_PX) and the shortcut opens a new terminal instead.
  */
 export function newTabButtonHideClassName(strip: RenderedTabStrip, hasHiddenTabs: boolean): string {
   if (strip.orderedItems.length + strip.clientHostedBrowserRows.length === 0 && !hasHiddenTabs) {

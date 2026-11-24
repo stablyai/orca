@@ -50,6 +50,7 @@ const state = {
 describe('resolveTabNumberShortcutTarget', () => {
   it("counts a bot's Home first, as its tab bar shows it", () => {
     const homeBot = (): { chatSessionId: string } => ({ chatSessionId: 'home-chat' })
+    // Called per chat with its own host, as the tab bar asks.
     expect(resolveTabNumberShortcutTarget(state, 0, homeBot)?.id).toBe('home')
     expect(resolveTabNumberShortcutTarget(state, 1, homeBot)?.id).toBe('side-a')
   })
