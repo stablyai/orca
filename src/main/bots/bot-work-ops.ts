@@ -7,6 +7,7 @@ export const BOT_WORK_OPS = [
   'live',
   'addressRows',
   'liveRows',
+  'recentClosedRows',
   'isOpen',
   'bind',
   'close',

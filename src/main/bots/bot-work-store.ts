@@ -109,6 +109,25 @@ export class BotWorkStore {
       : this.rows('closed_at IS NULL')
   }
 
+  recentClosedRows(botId: string): BotWorkRow[] {
+    return this.db
+      .prepare(
+        `SELECT work.* FROM bot_work AS work
+         WHERE work.bot_id = ? AND work.closed_at IS NOT NULL
+           AND work.close_reason IN ('stopped', 'start_failed', 'workspace_gone')
+           AND NOT EXISTS (
+             SELECT 1 FROM bot_work AS reset
+             WHERE reset.bot_id = work.bot_id AND reset.source = work.source
+               AND reset.external_id = work.external_id AND reset.generation > work.generation
+               AND reset.close_reason = 'owner_reset'
+           )
+         ORDER BY work.closed_at DESC, work.created_at DESC, work.id
+         LIMIT 50`
+      )
+      .all(botId)
+      .flatMap((row) => rowOf(row) ?? [])
+  }
+
   /** Still live, as this generation. */
   isOpen(ref: BotWorkRef): boolean {
     return (

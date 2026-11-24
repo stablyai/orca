@@ -36,7 +36,11 @@ export const BOT_WORK_METHODS = [
     handler: async (params, context): Promise<BotWorkListResult> => {
       context.runtime.bots.assertEnabled()
       const bot = botOf(params, context)
-      return { items: await context.runtime.botWork.list(bot.id), botName: bot.name }
+      return {
+        items: await context.runtime.botWork.list(bot.id, params.all),
+        botName: bot.name,
+        ...(params.all ? { historyIncluded: true } : {})
+      }
     }
   }),
   defineMethod({
