@@ -3955,12 +3955,6 @@
       "privacyPolicy": "隐私政策",
       "support": "支持"
     },
-    "nativeChatText": {
-      "weight": "字重",
-      "weightLight": "细体",
-      "weightRegular": "常规",
-      "weightMedium": "中等"
-    },
     "nativeChatSettingsScreen": {
       "defaultViewDescription": "选择受支持的智能体会话（Claude、Codex 及其他支持聊天的智能体）在此设备上的打开方式。终端显示原始 CLI；聊天界面则显示与桌面应用类似的聊天界面。您仍可通过长按菜单切换单个会话的视图",
       "defaultViewHeading": "默认视图",
@@ -3970,6 +3964,10 @@
       "title": "聊天界面"
     },
     "nativeChatText": {
+      "weight": "字重",
+      "weightLight": "细体",
+      "weightRegular": "常规",
+      "weightMedium": "中等",
       "heading": "文字",
       "footer": "在聊天中双指缩放即可调整文字大小，调整结果会保存在这里",
       "size": "文字大小",
