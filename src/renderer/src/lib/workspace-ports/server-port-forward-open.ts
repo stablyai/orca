@@ -45,7 +45,7 @@ export async function openServerLoopbackInSystemBrowser(
   environmentId: string,
   /** The workspace the link or page belongs to; null for the server's own listeners. */
   worktreeId: string | null | undefined,
-  /** Opens the forwarded address; a link chooser passes one that reports the shell's answer. */
+  /** Opens the forwarded address; resolving `false` means it did not open (superseded or refused). */
   openSystem: (url: string) => Promise<unknown> = openSystemHttpLink
 ): Promise<boolean> {
   let url: URL
@@ -124,7 +124,7 @@ export async function openServerLoopbackInSystemBrowser(
     )
     return false
   }
-  await openSystem(target)
+  const opened = (await openSystem(target)) !== false
   if (created) {
     toast.success(
       translate(
@@ -132,13 +132,16 @@ export async function openServerLoopbackInSystemBrowser(
         'Forwarded port {{port}} from {{host}}',
         { port, host }
       ),
-      {
-        description: translate(
-          'auto.lib.workspace.ports.serverPortForward.opened',
-          'Opened {{address}} in your default browser.',
-          { address: new URL(target).host }
-        )
-      }
+      // Say the page opened only when it did.
+      opened
+        ? {
+            description: translate(
+              'auto.lib.workspace.ports.serverPortForward.opened',
+              'Opened {{address}} in your default browser.',
+              { address: new URL(target).host }
+            )
+          }
+        : undefined
     )
   }
   return true

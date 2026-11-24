@@ -4,7 +4,12 @@ import { useAppStore } from '@/store/index'
 import { openOwnedHttpLink, type HttpLinkAdmission } from './http-link-routing'
 
 const toastError = vi.hoisted(() => vi.fn())
-vi.mock('sonner', () => ({ toast: { error: toastError, success: vi.fn() } }))
+const toastSuccess = vi.hoisted(() => vi.fn())
+vi.mock('sonner', () => ({ toast: { error: toastError, success: toastSuccess } }))
+// The server answers the port-forward capability probe; the forward itself goes through window.api.
+vi.mock('@/runtime/rpc/compatibility/runtime-capability-proof', () => ({
+  runtimeEnvironmentSupportsCapability: () => Promise.resolve(true)
+}))
 
 const ENV = 'env-1'
 const SERVER = { kind: 'runtime', runtimeEnvironmentId: ENV } as const
@@ -47,6 +52,7 @@ beforeEach(() => {
   openUrl.mockReset()
   openUrl.mockResolvedValue(undefined)
   toastError.mockReset()
+  toastSuccess.mockReset()
   // No live forward API: a link with no existing forward can only be refused, never hang on a call.
   const current = globalThis.window ?? {}
   Object.assign(globalThis, {
@@ -84,6 +90,42 @@ describe('a System Browser open of a paired server localhost link', () => {
       await openInSystemBrowser('http://localhost:3000/app', SERVER, isCurrentRequest)
     ).toEqual(['superseded'])
     expect(openUrl).not.toHaveBeenCalled()
+  })
+
+  // A forward this click creates: the toast says the page opened only when it did.
+  function serverCreatesForward(): void {
+    const ensure = vi.fn(() =>
+      Promise.resolve({
+        created: true,
+        entry: {
+          id: 'f2',
+          connectionId: ENV,
+          localPort: 41001,
+          remoteHost: 'localhost',
+          remotePort: 3001
+        }
+      })
+    )
+    Object.assign(window.api, { runtimeEnvironments: { portForwards: { ensure } } })
+  }
+
+  it('says a newly forwarded page opened once the shell takes it', async () => {
+    serverCreatesForward()
+    expect(await openInSystemBrowser('http://localhost:3001/', SERVER)).toEqual(['admitted'])
+    expect(openUrl.mock.calls.map(([url]) => url)).toEqual(['http://localhost:41001/'])
+    expect(toastSuccess.mock.calls[0]?.[1]).toHaveProperty('description')
+  })
+
+  it('does not claim an open when a newer link superseded the new forward', async () => {
+    serverCreatesForward()
+    let checks = 0
+    const isCurrentRequest = (): boolean => (checks += 1) === 1
+    expect(await openInSystemBrowser('http://localhost:3001/', SERVER, isCurrentRequest)).toEqual([
+      'superseded'
+    ])
+    expect(openUrl).not.toHaveBeenCalled()
+    expect(toastSuccess).toHaveBeenCalledTimes(1)
+    expect(toastSuccess.mock.calls[0]?.[1]).toBeUndefined()
   })
 
   it('admits a link from this computer straight from the shell (control)', async () => {

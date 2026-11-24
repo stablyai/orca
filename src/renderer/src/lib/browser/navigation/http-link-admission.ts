@@ -85,9 +85,13 @@ export function openOwnedSystemHttpLinkAdmitted(
   void openOwnedSystemHttpLink(url, owner, opts.worktreeId, (resolved) => {
     if (isCurrentRequest?.() === false) {
       settle('superseded')
-      return Promise.resolve()
+      return Promise.resolve(false)
     }
-    return openSystemHttpLink(resolved).then(settle)
+    // Resolves whether the page opened, so a new forward's toast only claims an open that happened.
+    return openSystemHttpLink(resolved).then((outcome) => {
+      settle(outcome)
+      return outcome === 'admitted'
+    })
   }).then((reached) => {
     if (!reached) {
       settle('refused')
