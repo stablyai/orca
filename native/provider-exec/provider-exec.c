@@ -916,8 +916,6 @@ static size_t row_top(struct watcher *w, struct tree_scan *scan, size_t *top, si
     return found;
 }
 
-// Admits every launchd orphan in a session a member holds, the first time that session is seen.
-// Only a session read between two identity checks of a member is that member's session.
 // The first root in sid's run, which carries the run's opened flag, or root_count if there is none.
 static size_t session_first(const struct launchd_tree *t, pid_t sid) {
     size_t low = 0;
@@ -938,6 +936,8 @@ static int session_unopened(const struct launchd_tree *t, pid_t sid) {
     return first < t->root_count && !t->roots[first].opened;
 }
 
+// Admits every launchd orphan in a session a member holds, the first time that session is seen.
+// Only a session read between two identity checks of a member is that member's session.
 static void open_session(struct tree_scan *scan, struct launchd_tree *t, pid_t sid) {
     size_t low = session_first(t, sid);
     if (low == t->root_count || t->roots[low].opened) {
@@ -1170,6 +1170,13 @@ static void seen_member(struct watcher *w, const struct proc_row *row) {
     }
 }
 
+// Only a read that shows the PID gone or reused retires a member; a failed read is doubt.
+static int member_gone(const struct proc_row *row) {
+    struct proc_row now;
+    int read = read_row(row->pid, &now);
+    return read == 0 || (read == 1 && (now.start != row->start || now.zombie));
+}
+
 // Earlier-proven members this sweep didn't reach: still signalled through their own handle, and
 // dropped from the record once gone.
 static int signal_unseen_known(struct watcher *w, int signal_number, int *doubt) {
@@ -1181,13 +1188,9 @@ static int signal_unseen_known(struct watcher *w, int signal_number, int *doubt)
             struct proc_row row = {.pid = item.pid, .start = item.start};
             if (deliver_to_member(w, &row, signal_number)) {
                 live++;
+            } else if (member_gone(&row)) {
+                continue;
             } else {
-                // Only a read that shows the PID gone or reused retires it; a failed read is doubt.
-                struct proc_row now;
-                int read = read_row(item.pid, &now);
-                if (read == 0 || (read == 1 && (now.start != item.start || now.zombie))) {
-                    continue;
-                }
                 *doubt = 1;
             }
         }
@@ -1212,8 +1215,17 @@ static int probe_known_members(struct watcher *w, int signal_number) {
 // Without the subreaper no new member can be proven, but those proven earlier still are the chat's,
 // so they keep getting signals through their own handles until they are gone.
 static int anchor_lost(struct watcher *w, int signal_number) {
-    int live = probe_known_members(w, signal_number);
-    return live > 0 ? live : TREE_UNPROVABLE;
+    int live = 0;
+    int doubt = 0;
+    for (size_t i = 0; i < w->known.count; i++) {
+        struct proc_row row = {.pid = w->known.items[i].pid, .start = w->known.items[i].start};
+        if (deliver_to_member(w, &row, signal_number)) {
+            live++;
+        } else if (!member_gone(&row)) {
+            doubt = 1;
+        }
+    }
+    return live > 0 ? live : doubt ? -1 : TREE_UNPROVABLE;
 }
 #endif
 
