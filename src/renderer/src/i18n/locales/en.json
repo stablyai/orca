@@ -392,7 +392,15 @@
     },
     "serverPage": {
       "download": {
-        "started": "Downloading to {{path}} on {{host}}"
+        "started": "Downloading to {{path}} on {{host}}",
+        "saveHere": "Save to this computer",
+        "copying": "Downloading {{filename}} to this computer…",
+        "copied": "Saved to {{path}}",
+        "copyFailed": "Couldn't save {{filename}} to this computer.",
+        "showInFolder": "Show in Folder"
+      },
+      "print": {
+        "failed": "Couldn't save the page as a PDF"
       }
     },
     "clientHosted": {
@@ -429,6 +437,12 @@
       "pending": "Reopening…",
       "caveat": "This opens a new page on the remote host at this page’s last address. Signed-in and other transient page state may differ, and a page that came from a form submission opens blank.",
       "failed": "Couldn't open this page on the remote host. Check the connection and try again."
+    },
+    "deviceMove": {
+      "toThisComputer": "Open on this computer",
+      "toHost": "Open on {{host}}",
+      "tooltip": "Opens this address in a new tab on the other side and closes this one. You may need to sign in again.",
+      "failedToThisComputer": "Couldn't open this page on this computer."
     },
     "sshRoute": {
       "preparingTitle": "Connecting through the SSH host",
@@ -572,12 +586,21 @@
         "imported_other": "Imported {{count}} cookies for {{domains}}. Reload the page to use them.",
         "failed": "Cookie import failed: {{reason}}"
       },
-      "sshPage": {
+      "routedPage": {
         "label": "Browsers on this device",
         "destination": "Imports into the browser for {{host}}.",
-        "hostAgents": "Agents on {{host}} can use these sign-ins, but can’t read the cookies.",
+        "hostAgents": "Agents on {{host}} can use these sign-ins, but can’t read the cookies."
+      },
+      "sshPage": {
         "stored": "Stored in the browser for {{host}}.",
         "googleCookiesSkipped": "Google cookies were not imported. Open a page that browses through {{host}}, then sign into Google."
+      },
+      "picker": {
+        "menuItem": "Import Cookies…",
+        "search": "Search profiles",
+        "lastUsed": "Last used",
+        "noMatches": "No matches",
+        "googleNote": "Google logins aren’t imported"
       }
     },
     "passwords": {
@@ -613,6 +636,25 @@
     },
     "loadStall": {
       "waitingForHost": "Waiting for {{host}}…"
+    },
+    "profileCookieClear": {
+      "label": "Cookies",
+      "action": "Clear cookies…",
+      "rowLocal": "Signs you out of every site in {{profile}} on this computer.",
+      "rowServer": "Signs you out of every site in {{profile}} on {{host}}, both in pages on this computer and in streamed pages.",
+      "rowSsh": "Signs you out of every site in {{profile}} for {{host}}.",
+      "unavailable": "Unavailable for this profile on the selected host.",
+      "confirmTitle": "Clear cookies in {{profile}} on {{host}}?",
+      "confirmTitleLocal": "Clear cookies in {{profile}} on this computer?",
+      "confirmDescriptionServer": "This signs you out of every site in this profile, both in pages on this computer and in streamed pages. Other profiles and hosts keep their cookies.",
+      "confirmDescription": "This signs you out of every site in this profile. Other profiles and hosts keep their cookies.",
+      "clear": "Clear",
+      "cancel": "Cancel",
+      "cleared": "Cleared cookies in {{profile}} on {{host}}.",
+      "clearedLocal": "Cleared cookies in {{profile}} on this computer.",
+      "failed": "Couldn't clear cookies in {{profile}} on {{host}}. Try again.",
+      "failedLocal": "Couldn't clear cookies in {{profile}} on this computer. Try again.",
+      "sshHostOption": "{{host}} (SSH)"
     }
   },
   "editor": {
@@ -1101,6 +1143,9 @@
           "sleep": "sleep",
           "performance": "performance"
         }
+      },
+      "sessionHost": {
+        "sshDetail": "Pages for this SSH host open on this computer."
       }
     },
     "agents": {
@@ -1202,8 +1247,8 @@
       "chatUnavailableOnWindows": "{{value0}} Chat isn't available on Windows yet, so {{value0}} opens in a terminal on this host. Chats on a macOS or Linux host still work.",
       "undetectedCommandHint": "If the {{agent}} CLI is installed outside PATH, enter the full path to its executable on this host.",
       "agentActions": "{{agent}} actions",
-      "showDetails": "Show details",
-      "hideDetails": "Hide details",
+      "showAgentDetails": "Show {{agent}} details",
+      "hideAgentDetails": "Hide {{agent}} details",
       "defaultAutoBadge": "Default · Auto",
       "newAgentsTitle": "New agents",
       "defaultSurfaceServerDescription": "The default for agents {{host}} starts itself, such as from its CLI or orchestration workers. Agents you open from this computer follow This computer's choice."
@@ -2667,8 +2712,24 @@
           "tab": {
             "open": {
               "urlFailed": "Unable to open URL.",
-              "searchFailed": "Unable to search with {{value0}}."
+              "searchFailed": "Unable to search with {{value0}}.",
+              "failure": {
+                "stageError": "Error · {{value0}} · {{value1}}",
+                "hostNotFound": "Workspace's computer wasn't found.",
+                "linkBlocked": "Link open was blocked.",
+                "notWebLink": "Not a web link."
+              }
             }
+          }
+        },
+        "ports": {
+          "serverPortForward": {
+            "updateServer": "Couldn't forward port {{port}} from {{host}}. Update Orca on {{host}} and try again.",
+            "failed": "Couldn't forward port {{port}} from {{host}}. Check the connection and try again.",
+            "forwarded": "Forwarded port {{port}} from {{host}}",
+            "opened": "Opened {{address}} in your default browser.",
+            "otherMachine": "Couldn't forward port {{port}}: this workspace doesn't run on {{host}} itself.",
+            "useSshPorts": "Couldn't forward port {{port}} from {{host}}. Forward it in Ports, then try again."
           }
         }
       },
@@ -2811,14 +2872,18 @@
         }
       },
       "activateAiVaultStructuredSession": {
-        "unavailable": "The structured agent session is not available yet. Retry in a moment.",
         "gone": "This chat is no longer on this host, so it cannot be reopened here.",
         "hostCannotOpen": "This chat can't be reopened until Orca is updated.",
         "notLocatedNamed": "Orca can't find where {{agent}} is running, so it can't open it.",
         "notLocated": "Orca can't find where this agent is running, so it can't open it.",
         "worktreeDeleted": "The worktree was deleted.",
         "projectRemoved": "The project was removed from Orca.",
-        "folderWorkspaceRemoved": "The folder workspace was removed."
+        "folderWorkspaceRemoved": "The folder workspace was removed.",
+        "chatStillStarting": "This chat is still starting. Try again in a moment.",
+        "chatOpenFailed": "Couldn't open this chat.",
+        "chatOpenRetry": "Retry",
+        "chatOpenShowDetails": "Show details",
+        "chatOpenHideDetails": "Hide details"
       },
       "ephemeralVmWorktreeCreation": {
         "sparseCheckoutUnsupported": "Provisioned-root recipes do not support sparse checkout."
@@ -2981,7 +3046,11 @@
       "projectHostSetupOptions": {
         "locationNotSet": "Project location not set",
         "hostLocalGitProject": "No matched Git remote for this project",
-        "hostLocalFolderProject": "Folder projects can't link to other hosts"
+        "hostLocalFolderProject": "Folder projects can't link to other hosts",
+        "pendingNotSetUp": "Project tracked on this host but not set up",
+        "pendingSettingUp": "Project setup is in progress",
+        "pendingError": "Project setup needs attention",
+        "pendingUnsupported": "Project is unsupported on this host"
       },
       "updateCheckClickOptions": {
         "releaseHint": "{{rcKey}}+click checks the latest RC; {{perfKey}}+click checks the latest perf build.",
@@ -5201,6 +5270,7 @@
             "downloadAlreadyLocal": "'{{value0}}' is already on this computer.",
             "downloadFolderUnsupported": "Folder '{{value0}}' can't be downloaded from this host.",
             "downloadOpenFailed": "Failed to download '{{value0}}'.",
+            "openLinkInThisGroupRefused": "Couldn't open the link in this group",
             "openInThisGroupRefused": "Couldn't open {{value0}} in this group",
             "openInNewTab": "Open in new tab"
           },
@@ -7289,13 +7359,6 @@
           "uncountedChangesLost": "Uncommitted changes will be lost",
           "moreLoadedPaths": "and {{value0}} more loaded paths"
         },
-        "DeleteWorktreeLineageNotice": {
-          "a940f3c96e": "Child workspaces will be deleted",
-          "alsoDeletesChildren_one": "Deleting this workspace also deletes {{count}} child workspace.",
-          "alsoDeletesChildren_other": "Deleting this workspace also deletes {{count}} child workspaces.",
-          "moreChildren_one": "+{{count}} more",
-          "moreChildren_other": "+{{count}} more"
-        },
         "ImportedWorktreesVisibilityLine": {
           "b7a87dc32f": "Show worktree",
           "ad99f4eea9": "Keep hidden",
@@ -9010,18 +9073,14 @@
         },
         "BrowserProfileRow": {
           "8e636cae25": "Profile \"{{value0}}\" removed.",
-          "2d4bea7f35": "Default cookies cleared.",
           "796d846483": "No cookies imported",
           "c29648fe5b": "Active",
           "b4c167764d": "Imported {{value0}} cookies from file into {{value1}}.",
           "a3f8c2d1e0b4": "Imported {{value0}} cookies from {{value1}} ({{value2}}) into {{value3}}.",
           "b4e9d3f2a1c5": "Imported {{value0}} cookies from {{value1}} into {{value2}}.",
           "c5a273a809": "From {{value0}}",
-          "4054c458e1": "Clear default cookies",
           "80bffd32bf": "Import cookies",
-          "bd7d68f138": "From file…",
-          "3b662becd5": "Clear cookies in the Default profile?",
-          "f159cf5a3e": "This may sign you out of sites in this profile."
+          "bd7d68f138": "From file…"
         },
         "BrowserUseComputerUseNotice": {
           "79209b37b9": "If cookie import is not the right fit, Computer Use can control local apps and may use existing logged-in browser sessions where applicable. Install the Orca Computer Use skill; macOS also requires privacy permissions.",
@@ -18978,8 +19037,6 @@
             "ed8f54509d": "Default",
             "e5d31de1a9": "Viewport Size",
             "56f94f4ffa": "From File…",
-            "eb280bfb11": "From {{value0}}",
-            "2293adf620": "Import Cookies",
             "cf7cdc67ef": "New Profile…",
             "7b838540c7": "Browser menu",
             "a7a86702b3": "Created and switched to {{value0}} profile",
@@ -20314,9 +20371,7 @@
         "typeHtml": "HTML"
       },
       "BrowserCookieImportMachineNotice": {
-        "clientLabel": "Browsers on this device",
         "remoteLabel": "Browsers on {{value0}}",
-        "clientNoteLocalStorage": "Imports read this device’s browsers. Cookies are stored locally.",
         "remoteNoteRemoteStorage": "Imports read browsers on {{value0}}. Cookies are stored on that machine, and a permission prompt may appear on its screen."
       },
       "native": {
@@ -21109,6 +21164,8 @@
         "historyUnreadable": "Orca couldn't read this chat's saved history.",
         "historyUnusable": "Unable to load this chat.",
         "historyUnavailable": "Orca couldn't open this chat's history right now.",
+        "diskFull": "The disk on the computer running this chat is full.",
+        "freeDiskSpace": "Free up space on that disk, then try again.",
         "savedInOtherFolder": "This conversation was saved in another folder.",
         "savedByNewerOrca": "Chats were saved by a newer Orca.",
         "updateOrcaToKeepUsing": "Update Orca to keep using them.",
@@ -21649,7 +21706,6 @@
         "terminalRequired": "Answer this OMP question in the terminal.",
         "openTerminal": "Answer in terminal",
         "recommended": "Recommended",
-        "stepAnswered": "{{value0}}, answered",
         "stepOf": "{{value0}} of {{value1}}",
         "answered": "Answered",
         "title": "Question",
@@ -21823,7 +21879,8 @@
           "handedOff": "Handed off to",
           "task": "Task from",
           "update": "Update from",
-          "message": "Message from"
+          "message": "Message from",
+          "notSentYet": "not sent yet"
         },
         "kind": {
           "started": "Started",
@@ -22150,7 +22207,8 @@
         "oneComment": "1 comment",
         "comments": "{{count}} comments",
         "unavailable": "Preview unavailable.",
-        "retry": "Retry"
+        "retry": "Retry",
+        "retryKeyHint": "Preview unavailable. Press {{key}} to retry."
       },
       "webPeek": {
         "unavailable": "No preview for this page."
@@ -22737,7 +22795,6 @@
       },
       "googleOffer": {
         "useAccount": "Use {{email}} for Google.",
-        "useAnother": "Use another account",
         "reconnect": "Reconnect {{email}}",
         "use": "Use {{email}}",
         "staysDefault": "{{email}} stays the default"
@@ -22750,20 +22807,13 @@
         "openWorker": "Open worker",
         "remoteOwner": "Stop or clear this from the computer it runs on",
         "restore": "Show in dock again",
-        "unavailable": "Worker status unavailable",
-        "empty": "0 workers",
+        "alreadyStopped": "Already stopped",
+        "cantStop": "Can't stop now",
         "clearAllLabel_one": "Clear failed worker",
         "clearAllLabel_other": "Clear all {{count}} failed workers",
-        "clearAll": "Clear all",
-        "attention": "Needs attention",
-        "openWork": "Open work",
-        "orderHeld": "Order held",
-        "statusChanged": "Status changed",
         "loadingWorker": "Loading worker…",
         "resultUnavailable": "Worker result unavailable",
-        "showLatest": "Show latest",
         "workersRegion": "Workers",
-        "timeUnavailable": "Status time unavailable",
         "doneResult": "Done · open result",
         "clearName": "Clear {{name}}",
         "stopUnavailable": "Stop {{name}} · {{title}} unavailable · {{reason}}",
@@ -22810,12 +22860,17 @@
         "queuedQuestions": "Queued worker questions",
         "showQuestion": "Show {{name}} question",
         "show": "Show",
-        "showName": "Show {{name}}",
-        "startedAt": " · Started {{time}} · {{elapsed}} elapsed",
-        "contactUnavailable": " · Last confirmed contact unavailable",
         "runningCount": "{{count}} running",
         "cleared_one": "Cleared 1 worker",
-        "cleared_other": "Cleared {{count}} workers"
+        "cleared_other": "Cleared {{count}} workers",
+        "stopAll": "Stop all",
+        "clearFailed": "Clear failed",
+        "pillLabel_one": "{{count}} worker, latest: {{title}}",
+        "pillLabel_other": "{{count}} workers, latest: {{title}}",
+        "unlistedDetail": "Some background work isn’t listed here",
+        "unlisted": "Background work running",
+        "unread": "Workers couldn’t load",
+        "unreadDetail": "Workers will show here once they load"
       },
       "webhookSetup": {
         "heading": "Set up a webhook",
@@ -23909,12 +23964,13 @@
       "downloadSize": "{{size}} MB download.",
       "downloading": "Downloading {{done}} MB.",
       "downloadingOf": "Downloading {{done}} MB of {{total}} MB.",
-      "external": "Uses the copy of {{agent}} found on this host.",
-      "extracting": "Extracting {{agent}}.",
+      "external": "Uses your own {{agent}}",
+      "externalShort": "Uses your own copy",
+      "extracting": "Unpacking {{agent}}…",
+      "extractingShort": "Unpacking…",
       "failed": "Installation failed. Try again.",
       "cancelFailed": "Couldn't cancel the installation. Try again.",
       "install": "Install {{agent}}",
-      "installManaged": "Install Orca's copy",
       "installedByOrca": "Installed by Orca · {{version}}",
       "notInstalled": "Not installed.",
       "progress": "{{agent}} download",
@@ -23933,7 +23989,8 @@
       "unavailable": "{{agent}} is not available on this host.",
       "update": "Update",
       "updateTo": "Update to {{version}}",
-      "verifying": "Checking the downloaded runtime.",
+      "verifying": "Verifying…",
+      "verifyingAgent": "Verifying {{agent}}…",
       "installTitle": "Install {{agent}} to start chatting",
       "continueTitle": "Install {{agent}} to continue",
       "heroBody": "One-time {{size}} MB download. It's shared by {{agent}} chats on the computer running this chat.",
@@ -23951,7 +24008,7 @@
       "checkingTitle": "Checking the download",
       "progressOf": "{{done}} of {{total}} MB",
       "unpackingDetail": "Unpacking the runtime",
-      "checkingDetail": "Checking the downloaded runtime",
+      "checkingDetail": "Verifying {{agent}}…",
       "stepDownload": "Download",
       "stepUnpack": "Unpack",
       "stepCheck": "Check"
@@ -23983,7 +24040,6 @@
       "showDetails": "Show {{name}}'s task and reply",
       "task": "Task",
       "openFailed": "{{name}}: {{detail}}",
-      "chatUnavailable": "This host cannot open the chat. Try again.",
       "terminalExited": "This terminal has exited.",
       "openOnHost": "Open this agent on {{host}}.",
       "cannotLocate": "This host cannot locate this agent. Try again.",
@@ -23996,11 +24052,10 @@
     },
     "orchestration": {
       "workerAutoClose": {
-        "running": "Temporary orchestration worker · Closes 2 minutes after it finishes",
-        "finished": "Temporary orchestration worker finished · Closes in {{countdown}}",
         "keepOpen": "Keep open",
         "bannerRunning": "Orchestration worker · Closes 2 minutes after it finishes",
         "bannerFinished": "Orchestration worker finished · Closes in {{countdown}}",
+        "bannerFinishedStatus": "Orchestration worker finished · Closes soon",
         "boundRunning": "Closes with {{worker}}",
         "boundFinished": "{{worker}} finished · Closes in {{countdown}}",
         "boundFallbackName": "its worker"
@@ -24467,6 +24522,9 @@
     "scanTooLarge": "Quick Open scan too large ({{reason}})."
   },
   "checksPanel": {
+    "commentsUnavailable": "Could not load comments.",
+    "linkedReviewUnavailable": "Could not load the linked pull request.",
+    "loadingReviewDetails": "Loading review details…",
     "unlinked": {
       "title": "Pull request unlinked",
       "description": "PR #{{number}} is hidden for this workspace. Link it again to restore checks and review details.",
@@ -25292,7 +25350,7 @@
       "signInRequired": "Sign in again to use this account",
       "signInAgain": "Sign in again",
       "usageSignInLabel": "Sign in again",
-      "usageSignInMessage": "The selected Claude account needs you to sign in again. Open Settings > AI Provider Accounts, or choose System default.",
+      "usageSignInMessage": "This account needs you to sign in again.",
       "signIn": "Sign in",
       "moreSignInOptions": "More sign-in options",
       "copySignInLink": "Copy sign-in link instead",
@@ -25451,8 +25509,6 @@
     "setupTerminalTitle": "Setup",
     "delete": {
       "detachingChildren": "Detaching children...",
-      "childrenPreservedTitle": "Child workspaces will be kept",
-      "childrenCannotBeKeptTitle": "Child workspaces cannot be kept",
       "childrenPreservedDescription": "Direct children will become top-level workspaces. Their files, terminals, and nested children will be kept.",
       "detachChildren": "Detach and keep child workspaces",
       "nestedChildrenCannotBeKept": "Child workspace folders inside this workspace must be moved outside it before they can be kept.",
@@ -25484,7 +25540,11 @@
       "singleTitle": "Delete {{name}}?",
       "forceExplanation": "Git couldn’t delete it because it has changes. Force delete removes them anyway.",
       "errorDetails": "Details",
-      "changesIncomplete": "Some changes couldn’t be fully checked."
+      "changesIncomplete": "Some changes couldn’t be fully checked.",
+      "parentWorkspace": "Parent workspace",
+      "workspacesToReview": "Workspaces to review",
+      "workspaceDetails": "Selected workspace details",
+      "workspaceKept": "Will be kept"
     }
   },
   "projectBoard": {
@@ -26804,6 +26864,7 @@
     "waitForImageUploads": "Wait for images to finish uploading, then retry Create PR."
   },
   "agentPicker": {
+    "refreshModels": "Refresh models",
     "catalogUnsupportedLaunch": "{{agent}} models are unavailable on this host. Your current choices still apply.",
     "catalogLoadFailed": "Could not load {{agent}} models.",
     "catalogLoading": "Loading models…",
@@ -27360,7 +27421,6 @@
       "waitingForUntil": "Waiting for {{label}} · until {{time}}",
       "waitingCount": "Waiting on {{count}} events",
       "settings": "Bot settings…",
-      "hostDisconnected": "{{host}} disconnected",
       "disconnected": "Disconnected",
       "runsOn": "Runs on {{host}}"
     },
@@ -28078,7 +28138,8 @@
       "runNow": "Run now",
       "openOnPage": "Open on Automations page",
       "pauseShort": "Pause",
-      "resumeShort": "Resume"
+      "resumeShort": "Resume",
+      "nextAt": "next {{time}}"
     },
     "access": {
       "thisComputer": "this computer",
@@ -28508,23 +28569,12 @@
       "newThreadHint": "starts fresh",
       "newThreadTab": "New thread",
       "items": {
-        "thisGroup": "This group",
-        "thread": "Thread",
-        "all": "All their work",
         "orNames": "{{names}} or {{last}}",
         "emptyBotsNeedsYou": "Nothing from {{names}} needs you",
         "emptyBots": "No items from {{names}}",
         "emptyTitle": "No items from this group yet",
-        "emptyBody": "When {{names}} take something on in this group, it shows up here.",
-        "showAll": "Show all their work",
         "filterNamed": "Filter items, filtered by {{filter}}",
-        "filterBot": "Bot",
-        "outside_one": "{{count}} more outside this group",
-        "outside_other": "{{count}} more outside this group",
-        "outsideRoom_one": "{{count}} more outside this room",
-        "outsideRoom_other": "{{count}} more outside this room",
-        "outsideThread_one": "{{count}} more outside this thread",
-        "outsideThread_other": "{{count}} more outside this thread"
+        "filterBot": "Bot"
       },
       "panel": {
         "membersMore": "Members: {{names}} and {{count}} more",
@@ -28644,13 +28694,10 @@
       "hostChoice": {
         "description": "Choose how {{bot}} signs in to your Gmail, Calendar and Drive.",
         "orca": "Orca hosted",
-        "comingSoon": "Coming soon",
-        "orcaNote": "Sign in with Google. Nothing to set up.",
+        "soon": "Soon",
+        "orcaNote": "Sign in with Google.",
         "self": "Self hosted",
-        "selfNote": "You make your own Google Cloud app, so your sign-in stays on your computer. Nothing goes through Orca’s servers.",
-        "stepApp": "{{bot}} opens Google Cloud and sets up the app",
-        "stepSignIn": "You tick Google’s terms box and sign in",
-        "stepCheck": "{{bot}} checks that Gmail, Calendar and Drive work",
+        "selfNote": "Your own Google app.",
         "continue": "Continue"
       },
       "connectDescription": "Give your bots access to Gmail, Calendar and Drive. Your sign-in stays on {{host}}.",
@@ -28718,7 +28765,14 @@
         "noAccount": "Google signed in, but the host sent no account.",
         "alreadyRunning": "A Google sign-in is already running. Finish or cancel it first.",
         "notWaiting": "No Google sign-in is waiting. Start again."
-      }
+      },
+      "accessBlocked": "Seeing ‘Access blocked’?",
+      "setUpNewApp": "Set up a new Google app",
+      "useAnother": "Use another account",
+      "useAnotherSignIn": "Sign in with Google",
+      "useAnotherSignInDetail": "Uses your current Google app",
+      "setUpNewAppDetail": "If your current app doesn’t work for this account or organization",
+      "updateToSetUpNewApp": "Update Orca on {{host}} to set up a new Google app."
     },
     "googleSetup": {
       "receipt": {
@@ -30086,12 +30140,7 @@
       },
       "cancel": {
         "confirmMany": "Cancel {{count}}",
-        "confirmOne": "Cancel item",
-        "keep": "Keep",
-        "placeholder": "Reason",
-        "titleMany": "Cancel {{count}} items?",
-        "titleOne": "Cancel {{title}}?",
-        "why": "The bot sees the reason. Nothing is deleted."
+        "keep": "Keep"
       },
       "chat": {
         "added": "Added {{items}}",
@@ -30165,7 +30214,6 @@
         "title": "title"
       },
       "filter": {
-        "chat": "Chat",
         "clearAll": "Clear filters",
         "label": "Filter items",
         "needsYou": "Needs you only",
@@ -30191,8 +30239,7 @@
         "automationEnded": "Ended"
       },
       "menu": {
-        "cancel": "Cancel…",
-        "canceled": "Canceled…",
+        "cancel": "Cancel",
         "done": "Done",
         "waiting": "Waiting…"
       },
@@ -30228,10 +30275,8 @@
         "activity": "Activity",
         "canceledNote": "Canceled:",
         "doneNote": "Done:",
-        "links": "Links",
         "showLess": "Show less",
         "showMore": "Show more",
-        "subWhere": "Item {{number}} · {{chat}}",
         "showEarlier": "Show earlier",
         "next": "Next item",
         "previous": "Previous item",
@@ -30243,7 +30288,10 @@
         "firstItem": "First item",
         "lastItem": "Last item",
         "deleted": "This item was deleted.",
-        "moreLinks": "{{count}} more links",
+        "linkCount": "{{count}} links",
+        "reply": "Reply",
+        "replyAbove": "Reply, above",
+        "replyBelow": "Reply, below",
         "loading": "Loading item…"
       },
       "loading": "Loading items…",
@@ -30269,15 +30317,17 @@
         "pickCustom": "Custom time"
       },
       "ask": {
-        "heldCount_one": "{{count}} answer not sent yet, <send>send anyway</send>",
-        "heldCount_other": "{{count}} answers not sent yet, <send>send anyway</send>",
-        "next": "Next question",
         "notSentYet": "not sent yet",
-        "previous": "Previous question",
         "recommended": "Recommended",
-        "step": "{{n}} of {{total}}",
         "typeAnswer": "Type your answer",
-        "replaced": "The agent asked a new question. Read it, then reply."
+        "replaced": "The agent asked a new question. Read it, then reply.",
+        "replacedByNewer": "Replaced by a newer question",
+        "skipped": "Skipped",
+        "send": "Send",
+        "sending": "Sending…",
+        "sendSome": "Send {{count}}/{{total}}",
+        "sendSomeLabel": "Send {{count}} of {{total}} answers",
+        "changeAnswer": "{{question}}: {{answer}}. Change answer"
       },
       "readMoreClosedFailed": "Reading more Closed items failed",
       "wait": {
@@ -30874,7 +30924,8 @@
     "navigationLabel": "App navigation",
     "toolsLabel": "App tools",
     "workspaces": "Workspaces",
-    "more": "More"
+    "more": "More",
+    "pageRegion": "Page"
   },
   "chats": {
     "delete": {

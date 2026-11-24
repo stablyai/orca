@@ -21,7 +21,7 @@
     },
     "claude": {
       "usageSignInLabel": "もう一度サインイン",
-      "usageSignInMessage": "選択した Claude アカウントは再度サインインが必要です。設定 > AI プロバイダーアカウントを開くか、システムのデフォルトを選択してください。"
+      "usageSignInMessage": "このアカウントは再度サインインが必要です。"
     }
   },
   "agentHistory": {
@@ -392,6 +392,13 @@
     "queuedMessages": {
       "deleteAll": "すべて削除",
       "editMessage": "メッセージを編集",
+      "showLess": "表示を減らす",
+      "moreCount_one": "他 {{count}} 件",
+      "moreCount_other": "他 {{count}} 件",
+      "deleteMessage": "メッセージを削除",
+      "queuedCount_one": "送信待ちのメッセージ {{count}} 件",
+      "queuedCount_other": "送信待ちのメッセージ {{count}} 件",
+      "foldNeedsAttention": "{{more}}、確認が必要なメッセージがあります",
       "pausedState": "一時停止中",
       "queuedState": "キュー待ち",
       "resume": "再開",
@@ -2425,6 +2432,7 @@
       "images_one": "画像 {{count}} 枚",
       "images_other": "画像 {{count}} 枚",
       "moreActions": "その他の操作",
+      "you": "あなた",
       "send": "送信",
       "sendAgainHint": "このメッセージを再送信",
       "sendHint": "このメッセージを送信",
@@ -2534,6 +2542,7 @@
       "unsavedMarkdown": "Markdown の未保存の変更",
       "urlPrompt": "URL を入力してください。空欄のままにすると新規タブが開きます。",
       "allowAutoClose": "自動終了を許可",
+      "agents": "Agent",
       "renameTerminalFailed": "ターミナルの名前を変更できませんでした。{{reason}}"
     },
     "sourceControlLaunchAgent": {
@@ -2747,6 +2756,8 @@
       "conversationCleared": "この会話はクリアされました。",
       "goalsUnsupported": "この Agent は目標に対応していません。",
       "historyUnavailable": "Orca は現在このチャットの履歴を開けませんでした。",
+      "diskFull": "このチャットを実行しているコンピューターのディスクがいっぱいです。",
+      "freeDiskSpace": "そのディスクの空き容量を増やしてから、もう一度お試しください。",
       "savedInOtherFolder": "この会話は別のフォルダーに保存されています。",
       "historyUnreadable": "Orca はこのチャットの保存済み履歴を読み取れませんでした。",
       "historyUnusable": "このチャットを読み込めません。",
@@ -2852,12 +2863,30 @@
     "nativeChatView": {
       "linkedMessageMissing": "そのメッセージが見つかりませんでした。"
     },
+    "tabsSheet": {
+      "needsYou": "確認が必要",
+      "working": "作業中",
+      "everythingElse": "その他",
+      "closeTab": "{{title}} を閉じる"
+    },
+    "tabRows": {
+      "browser": "ブラウザ",
+      "markdown": "Markdown ノート",
+      "file": "ファイル",
+      "chat": "チャット",
+      "terminal": "ターミナル"
+    },
     "browserProfile": {
       "title": "プロファイル",
       "default": "デフォルト"
     },
     "tabBar": {
+      "oneTab": "1 個のタブ",
       "tabCount": "{{count}} 個のタブ",
+      "anotherNeedsYou": "別のタブで確認が必要です",
+      "actionsHint": "このタブの操作を表示します",
+      "next": "次のタブ",
+      "previous": "前のタブ",
       "hint": "すべてのタブを表示"
     }
   },
@@ -3437,6 +3466,9 @@
       "planModelUnavailable": "モデル「{{model}}」は {{label}} で利用できません。",
       "planModelWithoutThinking": "モデル「{{model}}」は思考の強度設定に対応していません。",
       "planThinkingLevelInvalid": "思考レベル「{{level}}」は {{model}} では無効です。",
+      "commandTemplateEmptyDictationCleanup": "音声入力のクリーンアップ用のコマンドテンプレートが空です。",
+      "dictationCleanupAgentUnsupported": "設定 -> 音声 -> クリーンアップ で、AI クリーンアップに対応した Agent を選択してください。対応している Agent: {{agents}}、またはカスタムコマンド。",
+      "agentCannotGenerateDictationCleanup": "Agent「{{agent}}」は音声入力のクリーンアップに対応していません。対応している Agent: {{agents}}、またはカスタムコマンド。",
       "promptTooLargeForArgument": "{{label}} のプロンプトが大きすぎるため、単一のコマンドライン引数として渡せません。ステージする変更を減らして、もう一度お試しください。",
       "promptTooLargeForWindows": "{{label}} のプロンプトが Windows のコマンドラインには大きすぎます。ステージする変更を減らして、もう一度お試しください。",
       "pullRequestDetailsUnparseable": "生成された PR の詳細を解析できませんでした。",
@@ -4410,7 +4442,7 @@
             "cursor": {
               "expired": {
                 "label": "サインインの有効期限切れ",
-                "message": "Orca を実行しているコンピュータのターミナルで cursor-agent login を実行し、使用状況を再試行してください。"
+                "message": "Orca を実行しているコンピュータのターミナルで cursor-agent login を実行し、使用状況の取得を再試行してください。"
               }
             },
             "usage": {
@@ -4519,6 +4551,10 @@
     }
   },
   "bots": {
+    "section": {
+      "scrollLeft": "左にスクロール · 非表示 {{amount}} 件",
+      "scrollRight": "右にスクロール · 非表示 {{amount}} 件"
+    },
     "link": {
       "pairTitle": "コンピュータをペアリング",
       "pairRequired": "このリンクを開くには、このスマートフォンをコンピュータとペアリングしてから、もう一度リンクを開いてください。",
@@ -4615,26 +4651,12 @@
       "peerTold": "{{from}} が {{to}} に伝えました",
       "startAConversationWithThisGroupMentionBots": "このグループで会話を始めましょう。@名前 または @everyone でボットをメンションできます。",
       "items": {
-        "thisGroup": "このグループ",
-        "thread": "スレッド",
-        "all": "すべての作業",
-        "orNames": "{{names}} または {{last}}",
-        "outsideRoom_one": "このルーム外にあと {{count}} 件",
-        "outsideRoom_other": "このルーム外にあと {{count}} 件",
-        "outsideThread_one": "このスレッド外にあと {{count}} 件",
-        "outsideThread_other": "このスレッド外にあと {{count}} 件",
-        "outside_one": "このグループ外にあと {{count}} 件",
-        "outside_other": "このグループ外にあと {{count}} 件",
         "emptyTitle": "このグループの項目はまだありません",
-        "emptyBody": "{{names}} がこのグループで何かを引き受けると、ここに表示されます。",
         "needsYouCount_one": "{{count}} 件が対応待ち",
         "needsYouCount_other": "{{count}} 件が対応待ち",
         "workingCount_one": "実行中 {{count}} 件",
         "workingCount_other": "実行中 {{count}} 件",
         "filterBot": "ボット",
-        "outsideRoom": "このルーム外にあと {{count}} 件",
-        "outsideThread": "このスレッド外にあと {{count}} 件",
-        "outside": "このグループ外にあと {{count}} 件",
         "needsYouCount": "{{count}} 件が対応待ち",
         "workingCount": "実行中 {{count}} 件"
       },
@@ -4672,8 +4694,7 @@
     },
     "items": {
       "filter": {
-        "clearAll": "フィルターをクリア",
-        "chat": "チャット"
+        "clearAll": "フィルターをクリア"
       },
       "tab": "アイテム",
       "activity": {
@@ -4700,7 +4721,9 @@
       "skillLimit": "メッセージは送信されませんでした。選択するスキルファイルを {{limit}} 個以内にして、もう一度お試しください。",
       "ask": {
         "notSentYet": "まだ送信されていません",
-        "replaced": "Agent が新たな質問をしました。確認してから返信してください。"
+        "replaced": "Agent が新たな質問をしました。確認してから返信してください。",
+        "replacedByNewer": "新しい質問に置き換えられました",
+        "skipped": "スキップ済み"
       }
     },
     "needs": {

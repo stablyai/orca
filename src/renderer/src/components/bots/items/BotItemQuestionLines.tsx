@@ -2,8 +2,8 @@
 // replies. While the item waits on it, the open line reads as a title and its recommended reply is
 // filled; the card's Needs you tag carries the color.
 // One question: a quick reply posts its words as the owner's comment, and Alt- or Shift-click puts them
-// in the comment box to add to first; Type your answer leads to the box. Several: one line at a time
-// (BotItemQuestionStep), answers held until the last. Answered, a line reads "Question → answer", muted,
+// in the comment box to add to first; Type your answer leads to the box. Several: every line at once
+// (BotItemQuestionStep), picks held until Send. Answered, a line reads "Question → answer", muted,
 // and the answer's own card is not drawn again.
 import { Pencil } from 'lucide-react'
 import { useTranslate } from '@/i18n/use-translate'
@@ -17,6 +17,7 @@ import {
   botItemAnswerWords,
   botItemUnsentAnswers
 } from '../../../../../shared/bots/bot-item-answer-lines'
+import type { BotItemAskEnd } from '../../../../../shared/bots/bot-item-question-answers'
 import type { BotItemEvent } from '../../../../../shared/bots/bot-items'
 import { BotItemMarkdown } from './BotItemMarkdown'
 import {
@@ -28,7 +29,8 @@ import {
   BOT_ITEM_OPEN_QUESTION,
   BotItemQuestionStep
 } from './BotItemQuestionStep'
-import { useBotItemHeldAnswers, type BotItemQuickReplyActions } from './use-bot-item-question-steps'
+import { useBotItemHeldAnswers } from './bot-item-held-answers'
+import type { BotItemQuickReplyActions } from './use-bot-item-question-steps'
 
 const NO_ANSWERS: readonly (BotItemEvent | null)[] = []
 const NO_HELD_SCOPE = 'bot-item-answers:none'
@@ -40,6 +42,7 @@ export function BotItemQuestionLines({
   waiting,
   answers = NO_ANSWERS,
   byOrder,
+  ended = null,
   actions,
   className
 }: {
@@ -54,6 +57,8 @@ export function BotItemQuestionLines({
   answers?: readonly (BotItemEvent | null)[]
   /** Per line, answered only by a comment naming no line: that comment shows as itself. */
   byOrder?: readonly boolean[]
+  /** Why its open lines take no answer: a later ask replaced them, or the owner skipped them. */
+  ended?: BotItemAskEnd | null
   /** While it waits, what its quick replies do; absent where the item takes no comment. */
   actions?: BotItemQuickReplyActions
   /** Its spacing from the body above; by default a gap under a body. */
@@ -65,7 +70,8 @@ export function BotItemQuestionLines({
   const several = shape.decisions.length > 1
   // Answers held for an ask the agent no longer waits on (it asked again): its draft, until sent.
   const stored = useBotItemHeldAnswers(heldScope ?? NO_HELD_SCOPE, shape)
-  const sent = actions?.sent?.askId === askId ? actions.sent.answers : null
+  // Its sends on their way: shown on their lines until the host's read has them.
+  const sent = actions?.sent?.get(askId) ?? null
   const answered = shape.decisions.map((_, index) => {
     // A line being stepped shows its held answer; with several questions, a comment that named no
     // line shows as itself, not as the line's answer.
@@ -110,7 +116,7 @@ export function BotItemQuestionLines({
                 // Not sent: into the box, to send as a comment.
                 onClick={() => {
                   actions.recover(botItemAnswersText(shape, unsent))
-                  stored.hold([])
+                  stored.hold(stored.held.map((entry, index) => (sent?.[index] ? entry : null)))
                 }}
               />
             )
@@ -171,6 +177,13 @@ export function BotItemQuestionLines({
           )
         })}
       </div>
+      {ended && answered.some((words, index) => !words && !unsent?.[index]) ? (
+        <div className="mt-1.5 text-xs text-muted-foreground">
+          {ended === 'skipped'
+            ? t('bots.items.ask.skipped', 'Skipped')
+            : t('bots.items.ask.replacedByNewer', 'Replaced by a newer question')}
+        </div>
+      ) : null}
     </div>
   )
 }

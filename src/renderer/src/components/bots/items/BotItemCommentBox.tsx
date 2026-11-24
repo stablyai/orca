@@ -98,6 +98,7 @@ function BotItemCommentField({
   nav,
   question,
   onShowQuestion,
+  describedBy,
   ref
 }: {
   bot: Bot
@@ -115,6 +116,8 @@ function BotItemCommentField({
   onShowQuestion?: (eventId: string) => void
   /** The item pane's previous / next arrows, between the attach and mic buttons. */
   nav?: React.ReactNode
+  /** The Activity entry this comment would answer, read with the box once Reply led there. */
+  describedBy?: string
   ref?: Ref<BotItemCommentBoxHandle>
 }): React.JSX.Element {
   const t = useTranslate()
@@ -128,7 +131,7 @@ function BotItemCommentField({
   const composer = useRef<NativeChatComposerHandle | null>(null)
   useKeepFloatingTerminalTriggerClear(box)
   const dictation = useNativeChatDictation(input, false)
-  const access = useBotItemCommentAttachments(bot, item, attachTo)
+  const { session, blocked } = useBotItemCommentAttachments(bot, item, attachTo)
   const [activeSuggestion, setActiveSuggestion] = useState(0)
   const { picker, mentions, commentSkills } = useBotItemCommentPickers({
     bot,
@@ -163,15 +166,14 @@ function BotItemCommentField({
     draftScopeKey: scopeKey,
     targetPtyId: null,
     terminalTabId: scopeKey,
-    structuredWorktreeId: access.session ? attachTo?.worktreeId : undefined,
-    structuredSession: access.session ?? undefined,
-    disabled: !access.session || hidden,
+    structuredWorktreeId: session ? attachTo?.worktreeId : undefined,
+    structuredSession: session ?? undefined,
+    disabled: !session || hidden,
     attachResolvedPaths: attachments.attachResolvedPaths,
     pendingChips: attachments.pendingChips,
     setNotice
   })
-  const { blocked } = access
-  const ownerOfSession = fileDrops.resolveAttachmentOwner
+  const { resolveAttachmentOwner: ownerOfSession } = fileDrops
   // Pastes say why nothing attaches where the item's chat can't take files.
   const resolveAttachmentOwner = useCallback(
     (): NativeChatAttachmentOwner =>
@@ -186,7 +188,7 @@ function BotItemCommentField({
     setDraft,
     setCaret,
     setActiveSuggestion,
-    targetKey: JSON.stringify([scopeKey, access.session?.sessionId]),
+    targetKey: JSON.stringify([scopeKey, session?.sessionId]),
     disabled: false,
     resolveAttachmentOwner,
     attachResolvedPaths: attachments.attachResolvedPaths,
@@ -315,11 +317,7 @@ function BotItemCommentField({
       keyDown(event)
     }
   })
-  const settle = (): void => {
-    if (input.current) {
-      events.onImeSettled(input.current)
-    }
-  }
+  const settle = () => input.current && events.onImeSettled(input.current)
   const editorCompositionStart = useLatestHandler(() => ime.setComposing(true))
   const editorCompositionEnd = useLatestHandler(() => {
     ime.setComposing(false)
@@ -389,7 +387,7 @@ function BotItemCommentField({
           </div>
         ) : null}
         <div className={cn('flex flex-wrap items-end gap-0.5', nav && BOT_ITEM_TOOL_ROW_TOUCH_FIT)}>
-          {access.session ? <NativeChatAttachButton onAttach={fileDrops.pickAttachments} /> : null}
+          {session ? <NativeChatAttachButton onAttach={fileDrops.pickAttachments} /> : null}
           <div ref={field} className={cn('min-w-0 flex-1', stacked && 'order-first basis-full')}>
             <NativeChatPromptEditor
               key={scopeKey}
@@ -400,6 +398,7 @@ function BotItemCommentField({
               initialValue={draft}
               disabled={false}
               aria-label={t('bots.items.comment.label', 'Comment')}
+              aria-describedby={describedBy}
               aria-expanded={mentions.autocomplete.mode !== 'none'}
               aria-controls={mentions.autocomplete.mode !== 'none' ? picker.listboxId : undefined}
               placeholder={reply.placeholder}

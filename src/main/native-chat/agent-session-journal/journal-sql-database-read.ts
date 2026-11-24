@@ -49,6 +49,7 @@ export type JournalSqlDatabaseRead =
   | { kind: 'receipt'; scope: CommandReceiptScope; operationId: string }
   | { kind: 'epoch'; sessionId: string }
   | { kind: 'sessions'; after: string | null }
+  | { kind: 'chat-exists'; sessionId: string }
   | { kind: 'retired-heads'; after: string | null; through: string | null }
   | { kind: 'attachment-claims'; after: number }
   | { kind: 'attachment-sweeps'; after: string | null }
@@ -64,6 +65,7 @@ export type JournalSqlDatabaseReadResult =
   | { kind: 'receipt'; receipt: ReturnType<typeof readCommandReceipt> }
   | { kind: 'epoch'; epoch: string | null }
   | { kind: 'sessions'; sessionIds: string[] }
+  | { kind: 'chat-exists'; exists: boolean }
   | { kind: 'legacy-compares'; compares: JournalLegacyCompare[] }
   | { kind: 'retired-heads'; heads: JournalRetiredHead[]; through: string | null }
   | {
@@ -212,6 +214,13 @@ function read(
     }
     case 'forgotten-chats':
       return { kind: 'forgotten-chats', sessionIds: readForgottenJournalChats(db, operation.after) }
+    case 'chat-exists':
+      return {
+        kind: 'chat-exists',
+        exists: !!db
+          .prepare('SELECT 1 FROM journal_chat_state WHERE session_id=?')
+          .get(operation.sessionId)
+      }
     case 'deleted-chats':
       return { kind: 'deleted-chats', chats: readDeletedChats(db) }
   }

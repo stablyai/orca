@@ -3,7 +3,10 @@ import type { BrowserRouteGuestLifecycleClaim } from './browser-route-page-autho
 import type { BrowserRouteGuestState } from './browser-route-webcontents-state'
 import type { WebContents } from 'electron'
 import { normalizeBrowserNavigationUrl } from '../../../../shared/browser/navigation/browser-url'
-import { whenBrowserExtensionsReadyForPage } from '../../extensions/profile-sessions/browser-extension-page-start'
+import {
+  FIRST_LOAD_WAIT_MS,
+  whenBrowserExtensionsReadyForPage
+} from '../../extensions/profile-sessions/browser-extension-page-start'
 
 /** The controlled bootstrap document has finished and stopped before this owner starts. */
 export function initializeBrowserRouteGuest(
@@ -115,7 +118,8 @@ export function initializeClaimedBrowserRouteGuest(
     return Promise.reject(new Error('browser_client_page_initialization_stale'))
   }
   // Same bounded hold as a local tab, so content scripts register before the page commits.
-  const extensionsReady = whenBrowserExtensionsReadyForPage(state.guest)
+  // Main's 3 s bound: this runs in a command, holding one of the host's shared handler slots.
+  const extensionsReady = whenBrowserExtensionsReadyForPage(state.guest, FIRST_LOAD_WAIT_MS)
   return extensionsReady
     ? extensionsReady.then(() => initializeBrowserRouteGuest(state.guest, url, signal, isCurrent))
     : initializeBrowserRouteGuest(state.guest, url, signal, isCurrent)

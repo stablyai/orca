@@ -3,7 +3,11 @@ import {
   clearClientHostedBrowserCloseIntents,
   recordClientHostedBrowserCloseIntents
 } from '@/runtime/browser/closing/client-hosted-browser-close-intents'
-import { getBrowserSettingsHostId, updateDefaultBrowserProfileForHost } from './browser-host-state'
+import {
+  getBrowserProfileHostId,
+  getBrowserSettingsHostId,
+  updateDefaultBrowserProfileForHost
+} from './browser-host-state'
 import { parseExecutionHostId } from '../../../../../../shared/execution-host/execution-host'
 
 export function createBrowserHostActions(
@@ -40,7 +44,7 @@ export function createBrowserHostActions(
 
     setBrowserSessionHostId: async (hostId) => {
       const parsed = parseExecutionHostId(hostId)
-      if (parsed?.kind !== 'local' && parsed?.kind !== 'runtime') {
+      if (!parsed) {
         return
       }
       const nextHostId = parsed.id
@@ -55,7 +59,12 @@ export function createBrowserHostActions(
       await Promise.all([get().fetchBrowserSessionProfiles(), get().fetchDetectedBrowsers()])
     },
 
+    // An SSH host's pages use this computer's default pick, so picking one there sets that.
     setDefaultBrowserSessionProfileId: (profileId) =>
-      updateDefaultBrowserProfileForHost(get, getBrowserSettingsHostId(get()), () => profileId)
+      updateDefaultBrowserProfileForHost(
+        get,
+        getBrowserProfileHostId(getBrowserSettingsHostId(get())),
+        () => profileId
+      )
   }
 }

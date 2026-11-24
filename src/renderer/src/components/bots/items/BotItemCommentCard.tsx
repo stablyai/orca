@@ -32,10 +32,8 @@ import { botItemActorName } from '../../../../../shared/bots/bot-item-actor-name
 import { botItemQuestionShape } from '../../../../../shared/bots/bot-item-ask'
 import { BotItemQuestionLines } from './BotItemQuestionLines'
 import { BOT_ITEM_COMMENT_ATTRIBUTE } from './bot-item-comment-reveal'
-import {
-  botItemHeldAnswersScope,
-  type BotItemQuickReplyActions
-} from './use-bot-item-question-steps'
+import { botItemHeldAnswersScope } from './bot-item-held-answers'
+import type { BotItemQuickReplyActions } from './use-bot-item-question-steps'
 
 /** The asking comment's question, ruled off across the card's full width, its words still on the body's
  *  edge: bleeds past the body's `pl-7` and the card's `px-2`, then pads back. It stops a pixel short of
@@ -81,7 +79,7 @@ function Avatar({
 
 type CommentEntry = Pick<
   Extract<BotItemActivityEntry, { kind: 'comment' }>,
-  'event' | 'replyTo' | 'answers' | 'byOrder'
+  'event' | 'replyTo' | 'answers' | 'byOrder' | 'ended'
 > & { waiting?: boolean }
 
 export function BotItemCommentCard({
@@ -202,6 +200,7 @@ export function BotItemCommentCard({
               waiting={waiting}
               answers={entry.answers}
               byOrder={entry.byOrder}
+              ended={entry.ended}
               actions={quickReplies}
               // Ruled off only below something: a question with no body stays under the name.
               className={waiting && shape.body.trim() ? QUESTION_RULE : undefined}

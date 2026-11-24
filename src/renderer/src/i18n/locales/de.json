@@ -261,6 +261,30 @@
       "existingWhy": "{{distro}} läuft bereits als Host, daher laufen Git, Dateien und Terminals nativ in Linux statt über die Windows-Dateifreigabe.",
       "existingAccept": "Auf Host hinzufügen"
     },
+    "hiddenProjects": {
+      "hidden": "{{name}} ausgeblendet",
+      "hiddenDescription": "Die zugehörigen Terminals und Agenten laufen weiter. Unter „Ausgeblendete Projekte“ unterhalb der Liste lässt es sich wieder anzeigen.",
+      "undo": "Rückgängig machen",
+      "hideFailed": "{{name}} konnte nicht ausgeblendet werden. Möglicherweise benötigt der zugehörige Host ein Orca-Update.",
+      "showFailed": "{{name}} konnte nicht wieder angezeigt werden.",
+      "listLabel": "Ausgeblendete Projekte",
+      "show": "Anzeigen",
+      "showAriaLabel": "{{name}} in der Seitenleiste anzeigen",
+      "settingsTitle": "Aus der Seitenleiste ausblenden",
+      "settingsDescription": "Blendet die Kopie des Projekts auf diesem Host in der Seitenleiste, den Projektauswahlen und der Arbeitsbereichsauswahl aus. Die zugehörigen Terminals, Agenten und Automatisierungen laufen weiter. Auf einem gekoppelten Orca-Server wird es dadurch für alle ausgeblendet, die mit diesem Server verbunden sind.",
+      "settingsToggleLabel": "{{name}} aus der Seitenleiste ausblenden",
+      "keywordHide": "Ausblenden",
+      "keywordHidden": "Ausgeblendet",
+      "keywordSidebar": "Seitenleiste",
+      "hideFromSidebar": "Aus der Seitenleiste ausblenden",
+      "sectionTitle": "Ausgeblendete Projekte ({{count}})",
+      "allHidden": "Alle Projekte sind ausgeblendet. Unter „Ausgeblendete Projekte“ unten lässt sich eines wieder anzeigen.",
+      "undoGone": "{{name}} wurde aus Orca entfernt.",
+      "settingsGroup": "Seitenleiste",
+      "showOnHostAriaLabel": "{{name}} auf {{host}} in der Seitenleiste anzeigen",
+      "keywordShow": "Anzeigen",
+      "keywordUnhide": "Wieder einblenden"
+    },
     "cardSlot": {
       "needYouCount": "{{count}} brauchen dich",
       "needsYou": "Braucht dich"
@@ -368,6 +392,12 @@
       "pending": "Wird erneut geöffnet…",
       "caveat": "Dies öffnet auf dem Remote-Host eine neue Seite mit der zuletzt verwendeten Adresse dieser Seite. Der Anmeldestatus und andere vorübergehende Seitenzustände können abweichen. Eine durch Formularübermittlung entstandene Seite wird leer geöffnet.",
       "failed": "Diese Seite konnte auf dem Remote-Host nicht geöffnet werden. Die Verbindung prüfen und erneut versuchen."
+    },
+    "deviceMove": {
+      "toThisComputer": "Auf diesem Computer öffnen",
+      "toHost": "Auf {{host}} öffnen",
+      "tooltip": "Öffnet diese Adresse in einem neuen Tab auf der anderen Seite und schließt diesen. Eventuell musst du dich erneut anmelden.",
+      "failedToThisComputer": "Diese Seite konnte auf diesem Computer nicht geöffnet werden."
     },
     "sshRoute": {
       "preparingTitle": "Verbindung über den SSH-Host wird hergestellt",
@@ -511,12 +541,21 @@
         "imported_other": "{{count}} Cookies für {{domains}} importiert. Zur Verwendung die Seite neu laden.",
         "failed": "Cookie-Import fehlgeschlagen: {{reason}}"
       },
-      "sshPage": {
+      "routedPage": {
         "label": "Browser auf diesem Gerät",
         "destination": "Importiert in den Browser für {{host}}.",
-        "hostAgents": "Agents auf {{host}} können diese Anmeldungen nutzen, aber die Cookies nicht lesen.",
+        "hostAgents": "Agents auf {{host}} können diese Anmeldungen nutzen, aber die Cookies nicht lesen."
+      },
+      "sshPage": {
         "stored": "Im Browser für {{host}} gespeichert.",
         "googleCookiesSkipped": "Google-Cookies wurden nicht importiert. Öffne eine Seite, die über {{host}} surft, und melde dich dann bei Google an."
+      },
+      "picker": {
+        "menuItem": "Cookies importieren…",
+        "search": "Profile suchen",
+        "lastUsed": "Zuletzt verwendet",
+        "noMatches": "Keine Treffer",
+        "googleNote": "Kein Import von Google-Logins"
       }
     },
     "passwords": {
@@ -946,7 +985,10 @@
       "defaultSurfaceSetAllTerminal": "Alle auf Terminal setzen",
       "modelListFallback": "Integrierte Liste. Orca konnte von diesem Host keine Modellliste abrufen.",
       "chatUnavailableOnWindows": "{{value0}} Chat ist unter Windows noch nicht verfügbar, daher öffnet sich {{value0}} auf diesem Host in einem Terminal. Chats auf einem macOS- oder Linux-Host funktionieren weiterhin.",
-      "undetectedCommandHint": "Wenn die {{agent}}-CLI außerhalb von PATH installiert ist, gib den vollständigen Pfad zu ihrer ausführbaren Datei auf diesem Host ein."
+      "undetectedCommandHint": "Wenn die {{agent}}-CLI außerhalb von PATH installiert ist, gib den vollständigen Pfad zu ihrer ausführbaren Datei auf diesem Host ein.",
+      "agentActions": "Aktionen für {{agent}}",
+      "defaultAutoBadge": "Standard · Auto",
+      "newAgentsTitle": "Neue Agenten"
     },
     "followSymlinkedDirectoriesKeywords": {
       "symlink": "Symbolischer Link",
@@ -1095,6 +1137,11 @@
       "saving": "Wird gespeichert…",
       "save": "Formatierer speichern",
       "710343e374": "Formatierungsbefehl"
+    },
+    "voice": {
+      "cleanup": {
+        "recipeDescription": "Diktierten Text vor dem Einfügen nachbearbeiten."
+      }
     },
     "bots": {
       "tidyUp": {
@@ -1930,12 +1977,16 @@
         }
       },
       "activateAiVaultStructuredSession": {
-        "unavailable": "Die strukturierte Agenten-Sitzung ist noch nicht verfügbar. In Kürze erneut versuchen.",
         "gone": "Dieser Chat befindet sich nicht mehr auf diesem Host und kann hier daher nicht erneut geöffnet werden.",
         "hostCannotOpen": "Dieser Chat kann erst nach einer Aktualisierung von Orca erneut geöffnet werden.",
         "worktreeDeleted": "Der Worktree wurde gelöscht.",
         "projectRemoved": "Das Projekt wurde aus Orca entfernt.",
-        "folderWorkspaceRemoved": "Der Ordner-Arbeitsbereich wurde entfernt."
+        "folderWorkspaceRemoved": "Der Ordner-Arbeitsbereich wurde entfernt.",
+        "chatStillStarting": "Chat startet noch. Versuche es gleich erneut.",
+        "chatOpenFailed": "Chat konnte nicht geöffnet werden.",
+        "chatOpenRetry": "Erneut versuchen",
+        "chatOpenShowDetails": "Details anzeigen",
+        "chatOpenHideDetails": "Details ausblenden"
       },
       "ephemeralVmWorktreeCreation": {
         "sparseCheckoutUnsupported": "Rezepte mit bereitgestelltem Stammverzeichnis unterstützen keinen Sparse-Checkout."
@@ -2065,7 +2116,11 @@
       "projectHostSetupOptions": {
         "locationNotSet": "Projektverzeichnis nicht festgelegt",
         "hostLocalGitProject": "Kein passendes Git-Remote für dieses Projekt",
-        "hostLocalFolderProject": "Ordnerprojekte lassen sich nicht mit anderen Hosts verknüpfen"
+        "hostLocalFolderProject": "Ordnerprojekte lassen sich nicht mit anderen Hosts verknüpfen",
+        "pendingNotSetUp": "Projekt auf diesem Host erfasst, aber nicht eingerichtet",
+        "pendingSettingUp": "Projekteinrichtung läuft",
+        "pendingError": "Projekteinrichtung erfordert Aufmerksamkeit",
+        "pendingUnsupported": "Projekt wird auf diesem Host nicht unterstützt"
       },
       "workspacePortScan": {
         "serverSshUpdateRequired": "Aktualisieren Sie den Server, um Ports auf seinen SSH-Hosts anzuzeigen.",
@@ -3898,6 +3953,8 @@
             "4c2990886e": "{{value0}}/{{value1}} gelöscht",
             "86ba852118": "{{value0}}, {{value1}} fehlgeschlagen",
             "archivedStatus": "Archiviert",
+            "mergedStatus": "Gemergt",
+            "unchangedStatus": "Keine neuen Commits",
             "74f6c16279": "Zurück"
           },
           "backgroundRemoval": {
@@ -5953,7 +6010,9 @@
           "updateSkipped": "Aktualisierung übersprungen: {{value0}}",
           "updateAvailable": "Aktualisierung verfügbar",
           "repairAvailable": "Reparatur verfügbar",
-          "installAvailable": "Installation verfügbar"
+          "installAvailable": "Installation verfügbar",
+          "otherBuild": "Von einer anderen Orca-Version installiert",
+          "otherBuildKept": "Beibehalten: von einer anderen Orca-Version geschrieben"
         },
         "installResult": {
           "installed": "Installiert und überprüft.",
@@ -6157,13 +6216,6 @@
           "changesLost_one": "{{count}} nicht committete Änderung geht verloren",
           "changesLost_other": "{{count}} nicht committete Änderungen gehen verloren",
           "uncountedChangesLost": "Nicht committete Änderungen gehen verloren"
-        },
-        "DeleteWorktreeLineageNotice": {
-          "a940f3c96e": "Untergeordnete Arbeitsbereiche werden gelöscht",
-          "alsoDeletesChildren_one": "Beim Löschen dieses Arbeitsbereichs wird auch {{count}} untergeordneter Arbeitsbereich gelöscht.",
-          "alsoDeletesChildren_other": "Beim Löschen dieses Arbeitsbereichs werden auch {{count}} untergeordnete Arbeitsbereiche gelöscht.",
-          "moreChildren_one": "+{{count}} weiterer",
-          "moreChildren_other": "+{{count}} weitere"
         },
         "ImportedWorktreesVisibilityLine": {
           "b7a87dc32f": "Worktree anzeigen",
@@ -7420,6 +7472,14 @@
           "inProgress": "In Bearbeitung",
           "inReview": "In Prüfung",
           "done": "Fertig"
+        },
+        "AddProjectMenu": {
+          "changeProjectHost": "Projekt-Host: {{host}}",
+          "projectHost": "Projekt-Host",
+          "addRemoteHost": "Remote-Host hinzufügen…",
+          "browseFolder": "Ordner durchsuchen…",
+          "cloneFromUrl": "Von URL klonen…",
+          "createNewProject": "Neues Projekt erstellen…"
         }
       },
       "shared": {
@@ -7827,7 +7887,6 @@
         },
         "BrowserProfileRow": {
           "8e636cae25": "Profil „{{value0}}“ entfernt.",
-          "2d4bea7f35": "Cookies des Standardprofils gelöscht.",
           "796d846483": "Keine Cookies importiert",
           "c29648fe5b": "Aktiv",
           "b4c167764d": "{{value0}} Cookies aus einer Datei in {{value1}} importiert.",
@@ -7835,10 +7894,7 @@
           "b4e9d3f2a1c5": "{{value0}} Cookies aus {{value1}} in {{value2}} importiert.",
           "c5a273a809": "Aus {{value0}}",
           "80bffd32bf": "Cookies importieren",
-          "bd7d68f138": "Aus Datei…",
-          "4054c458e1": "Cookies des Standardprofils löschen",
-          "3b662becd5": "Cookies im Standardprofil löschen?",
-          "f159cf5a3e": "Dadurch wirst du möglicherweise auf Websites in diesem Profil abgemeldet."
+          "bd7d68f138": "Aus Datei…"
         },
         "BrowserUseComputerUseNotice": {
           "79209b37b9": "Falls der Cookie-Import nicht geeignet ist, kann Computer Use lokale Apps steuern und gegebenenfalls bestehende angemeldete Browser-Sitzungen nutzen. Den Orca Computer Use-Skill installieren; unter macOS sind zusätzlich Datenschutzberechtigungen erforderlich.",
@@ -8540,6 +8596,10 @@
           "workerAutoReleaseDescription": "Schließt das Terminal oder den Chat eines Workers 2 Minuten nach Abschluss, sofern du nicht „Offen halten“ wählst. Wenn er erneut arbeitet, beginnen die 2 Minuten nach dem Abschluss von vorn.",
           "workerAutoReleaseKeywordClose": "schließen",
           "workerAutoReleaseKeywordRelease": "freigeben",
+          "coordinatorApprovalsTitle": "Koordinatoren dürfen Berechtigungsanfragen von Workern genehmigen",
+          "coordinatorApprovalsDescription": "Ein Koordinator-Agent kann eine Berechtigungsanfrage eines Workers mit einer Begründung zulassen. „Zulassen“ und „Ablehnen“ bleiben sichtbar, und die erste Antwort gilt. Gilt für Worker, die auf diesem Computer laufen.",
+          "coordinatorApprovalsKeywordApprove": "Genehmigen",
+          "coordinatorApprovalsKeywordPermission": "Berechtigung",
           "8a94078d05": "Agenten-Orchestrierung"
         },
         "OrchestrationSetupCard": {
@@ -11359,7 +11419,10 @@
               "shortcutDescription": "Die Taste, die das Diktieren startet.",
               "shortcutKeyword": "Tastatur",
               "keepLoadedTitle": "Modell geladen lassen",
-              "gpuKeyword": "Grafikkarte"
+              "gpuKeyword": "Grafikkarte",
+              "cleanupDescription": "Mit dem Agenten Zeichensetzung, Zahlen und gesprochene Korrekturen vor dem Einfügen des Texts korrigieren.",
+              "cleanupKeyword": "Korrekturwort",
+              "cleanupScratchKeyword": "Das zurücknehmen"
             }
           }
         },
@@ -12112,6 +12175,7 @@
         "PluginRemoveDialog": {
           "cancel": "Abbrechen",
           "remove": "Plugin entfernen",
+          "pausesAutomations": "Vom Plugin erstellte Automatisierungen werden pausiert und bleiben auch nach einer erneuten Installation pausiert.",
           "title": "{{value0}} entfernen?",
           "description": "Seine Daten werden ebenfalls entfernt."
         },
@@ -13421,7 +13485,8 @@
           "sources": "Katalogquellen…"
         },
         "PluginSettingsOverview": {
-          "offTitle": "Plugins sind deaktiviert"
+          "offTitle": "Plugins sind deaktiviert",
+          "offAutomations": "Von Plugins erstellte Automatisierungen werden pausiert und bleiben auch nach dem erneuten Aktivieren der Plugins pausiert."
         },
         "pluginContributions": {
           "dark": "Dunkel",
@@ -13494,6 +13559,21 @@
         },
         "SettingsSearchableSelect": {
           "noMatches": "Keine Treffer."
+        },
+        "RepositoryRemoveProjectSection": {
+          "filesNoteVmRecipe": "VM-Rezepte bestimmen, ob ihre Umgebungen und Dateien gelöscht werden.",
+          "filesNote": "Die Dateien bleiben auf der Festplatte, sodass sich das Projekt später wieder hinzufügen lässt.",
+          "hostCount_one": "{{count}} Host",
+          "hostCount_other": "{{count}} Hosts",
+          "checkoutCount_one": "{{count}} Checkout",
+          "checkoutCount_other": "{{count}} Checkouts",
+          "removeButton": "Entfernen…",
+          "dialogTitle": "{{name}} entfernen?",
+          "terminalWarning_one": "{{count}} offenes Terminal in diesem Projekt wird geschlossen.",
+          "terminalWarning_other": "{{count}} offene Terminals in diesem Projekt werden geschlossen.",
+          "cancel": "Abbrechen",
+          "confirm": "Entfernen",
+          "unknownHost": "Unbekannter Host"
         },
         "PluginAuthor": {
           "publisher": "Herausgeber",
@@ -17449,8 +17529,6 @@
             "ed8f54509d": "Standard",
             "e5d31de1a9": "Größe des Anzeigebereichs",
             "56f94f4ffa": "Aus Datei…",
-            "eb280bfb11": "Aus {{value0}}",
-            "2293adf620": "Cookies importieren",
             "cf7cdc67ef": "Profil erstellen…",
             "7b838540c7": "Browsermenü",
             "a7a86702b3": "Profil {{value0}} erstellt und aktiviert",
@@ -17617,7 +17695,10 @@
           "execution": "Ausführung",
           "notRunYet": "Noch nicht ausgeführt",
           "usageDetail_one": "{{tokens}} Token · {{known}}/{{count}} Ausführung gemeldet",
-          "usageDetail_other": "{{tokens}} Token · {{known}}/{{count}} Ausführungen gemeldet"
+          "usageDetail_other": "{{tokens}} Token · {{known}}/{{count}} Ausführungen gemeldet",
+          "createdBy": "Erstellt von",
+          "createdByPluginTitle": "Plugin {{plugin}}",
+          "createdByEnded": "Plugin entfernt oder deaktiviert; es muss vor Änderungen an dieser Automatisierung um Erlaubnis bitten"
         },
         "AutomationEditorDialog": {
           "fb1896a5e7": "Abbrechen",
@@ -18711,9 +18792,7 @@
         "typeHtml": "HTML"
       },
       "BrowserCookieImportMachineNotice": {
-        "clientLabel": "Browser auf diesem Gerät",
         "remoteLabel": "Browser auf {{value0}}",
-        "clientNoteLocalStorage": "Beim Import werden die Browser dieses Geräts ausgelesen. Cookies werden lokal gespeichert.",
         "remoteNoteRemoteStorage": "Beim Import werden die Browser auf {{value0}} ausgelesen. Cookies werden auf diesem Computer gespeichert, und auf dessen Bildschirm erscheint möglicherweise eine Berechtigungsabfrage."
       },
       "native": {
@@ -19363,6 +19442,8 @@
         "historyUnreadable": "Orca konnte den gespeicherten Verlauf dieses Chats nicht lesen.",
         "historyUnusable": "Dieser Chat konnte nicht geladen werden.",
         "historyUnavailable": "Orca konnte den Verlauf dieses Chats gerade nicht öffnen.",
+        "diskFull": "Der Datenträger auf dem Computer, auf dem dieser Chat läuft, ist voll.",
+        "freeDiskSpace": "Gib auf diesem Datenträger Speicherplatz frei und versuche es dann erneut.",
         "savedInOtherFolder": "Diese Unterhaltung wurde in einem anderen Ordner gespeichert.",
         "savedByNewerOrca": "Die Chats wurden mit einer neueren Orca-Version gespeichert.",
         "updateOrcaToKeepUsing": "Orca aktualisieren, um sie weiter zu verwenden.",
@@ -19843,7 +19924,6 @@
         "terminalRequired": "Diese OMP-Frage im Terminal beantworten.",
         "openTerminal": "Im Terminal antworten",
         "recommended": "Empfohlen",
-        "stepAnswered": "{{value0}}, beantwortet",
         "stepOf": "{{value0}} von {{value1}}",
         "answered": "Beantwortet",
         "title": "Frage",
@@ -19872,7 +19952,9 @@
           "file": "Plandatei",
           "reviewTitle": "Vorgeschlagenen Plan prüfen",
           "refineHint": "„Plan verfeinern“ schließt das Review, damit Änderungswünsche gesendet werden können."
-        }
+        },
+        "answerNotApplied": "{{name}}: Die Antwort hat diese Anfrage nicht erreicht",
+        "answerWorkerEnded": "{{name}} wurde beendet, daher ist diese Anfrage geschlossen"
       },
       "launchPromptNotDelivered": "Nicht zugestellt — Terminal prüfen",
       "subagents": {
@@ -20043,6 +20125,7 @@
         "reconnect": "Erneut verbinden",
         "stopped": "{{distro}} ist gestoppt",
         "start": "Starten",
+        "connecting": "Verbindung mit {{distro}} wird hergestellt…",
         "unverifiable": "Orca konnte nicht prüfen, ob {{distro}} läuft",
         "startToSend": "Starte {{distro}}, um zu senden.",
         "startDistro": "{{distro}} starten"
@@ -20588,7 +20671,10 @@
             "dirty": "Geändert",
             "unpushed": "Nicht gepusht",
             "unknown": "Unbekannt"
-          }
+          },
+          "ignoredFilesBlocker": "Ignorierte lokale Dateien",
+          "ignoredFilesNamed": "Ignorierte Dateien: {{value0}}",
+          "ignoredFilesUnchecked": "Ignorierte Dateien nicht vollständig geprüft"
         }
       },
       "creation": {
@@ -20619,6 +20705,9 @@
           "line_other": "Nicht gespeicherte Änderungen in {{count}} Dateien werden verworfen: {{files}}"
         },
         "ignoredFilesUnchecked": "Ignorierte Dateien konnten nicht vollständig geprüft werden"
+      },
+      "atRiskLocalFiles": {
+        "namesAndMore": "{{names}} und weitere"
       }
     },
     "agentSessionContinuation": {
@@ -20846,7 +20935,13 @@
           "listening": "{{model}} hört ebenfalls zu…",
           "heardLabel": "{{model}} hat verstanden",
           "heardNothing": "Keine Wörter. Sprich lauter.",
-          "heardFailed": "{{model}} konnte die Aufnahme nicht transkribieren."
+          "heardFailed": "{{model}} konnte die Aufnahme nicht transkribieren.",
+          "cleaningUp": "Wird nachbearbeitet…",
+          "tryCleanup": "Nachbearbeitung testen",
+          "cleanupFailed": "Nachbearbeitung fehlgeschlagen: {{reason}}",
+          "cleanupTimedOut": "Die Nachbearbeitung hat zu lange gedauert.",
+          "cleanupOff": "Die KI-Nachbearbeitung ist deaktiviert.",
+          "afterCleanup": "Nach der Nachbearbeitung · {{agent}}, {{model}} · {{seconds}} s"
         },
         "silenceStop": {
           "off": "Aus",
@@ -20873,6 +20968,44 @@
         },
         "gpu": {
           "description": "Schalte es aus, wenn Diktieren deinen Computer einfriert."
+        },
+        "cleanup": {
+          "consent": {
+            "goesToKnown": "{{company}}, über {{agent}} auf diesem Computer. Wird auf deinen {{plan}}-Tarif angerechnet.",
+            "goesToAgent": "An das Ziel, an das {{agent}} auf diesem Computer laut Konfiguration Prompts sendet.",
+            "sentLabel": "Gesendet",
+            "sent": "Der diktierte Text, dein Vokabular und deine Anweisungen.",
+            "notSentLabel": "Nicht gesendet",
+            "notSent": "Audio, Dateien oder Bildschirminhalte.",
+            "goesToLabel": "Ziel",
+            "waitLabel": "Wartezeit",
+            "wait": "Der Text wird einige Sekunden später eingefügt.",
+            "title": "KI-Nachbearbeitung aktivieren?",
+            "description": "Nach jedem Diktat sendet Orca den Text an {{agent}}, um ihn vor dem Einfügen nachzubearbeiten.",
+            "cancel": "Abbrechen",
+            "confirm": "Aktivieren"
+          },
+          "instructions": {
+            "label": "Anweisungen",
+            "custom": "Eigene Anweisungen.",
+            "builtIn": "Integriert: Zeichensetzung, Zahlen und Korrekturen berichtigen. Meinen Wortlaut beibehalten.",
+            "edit": "Bearbeiten",
+            "emptyHint": "Für die integrierten Anweisungen leer lassen.",
+            "reset": "Zurücksetzen",
+            "cancel": "Abbrechen",
+            "save": "Speichern"
+          },
+          "saveFailed": "Die KI-Nachbearbeitung konnte nicht gespeichert werden.",
+          "noAgent": "Kein Agent kann die KI-Nachbearbeitung ausführen. Unten einen auswählen.",
+          "title": "Nachbearbeitung",
+          "label": "KI-Nachbearbeitung",
+          "description": "Korrigiert Zeichensetzung, Zahlen und gesprochene Korrekturen vor dem Einfügen des Texts. Sendet den Text an {{agent}}, niemals Audio.",
+          "anAgent": "einen KI-Agenten",
+          "agent": "Agent und Modell",
+          "agentDescription": "Wird auf diesem Computer ausgeführt. Ein kleines, schnelles Modell hält die Wartezeit kurz.",
+          "correctionWord": "Korrekturwort",
+          "correctionWordDescription": "Mit diesem Wort lässt sich das gerade Gesagte zurücknehmen: „um vier, {{word}}, um fünf“.",
+          "correctionWordOff": "Keines"
         },
         "keepLoaded": {
           "label": "Modell geladen lassen",
@@ -20985,12 +21118,13 @@
       "downloadSize": "Download: {{size}} MB.",
       "downloading": "{{done}} MB werden heruntergeladen.",
       "downloadingOf": "{{done}} MB von {{total}} MB werden heruntergeladen.",
-      "external": "Verwendet die auf diesem Host gefundene Installation von {{agent}}.",
-      "extracting": "{{agent}} wird entpackt.",
+      "external": "Verwendet deine eigene {{agent}}-Installation",
+      "externalShort": "Verwendet deine eigene Installation",
+      "extracting": "{{agent}} wird entpackt…",
+      "extractingShort": "Wird entpackt…",
       "failed": "Installation fehlgeschlagen. Erneut versuchen.",
       "cancelFailed": "Die Installation konnte nicht abgebrochen werden. Erneut versuchen.",
       "install": "{{agent}} installieren",
-      "installManaged": "Orcas Version installieren",
       "notInstalled": "Nicht installiert.",
       "progress": "Download von {{agent}}",
       "readFailed": "{{agent}} konnte auf diesem Host nicht überprüft werden. Erneuter Versuch.",
@@ -21007,7 +21141,8 @@
       "thisComputer": "dieser Computer",
       "unavailable": "{{agent}} ist auf diesem Host nicht verfügbar.",
       "update": "Aktualisieren",
-      "verifying": "Die heruntergeladene Laufzeitumgebung wird überprüft.",
+      "verifying": "Wird überprüft…",
+      "verifyingAgent": "{{agent}} wird überprüft…",
       "installTitle": "{{agent}} installieren, um einen Chat zu starten",
       "continueTitle": "{{agent}} installieren, um fortzufahren",
       "heroBody": "Einmaliger Download von {{size}} MB. Alle Chats mit {{agent}} auf dem Computer, auf dem dieser Chat läuft, verwenden ihn gemeinsam.",
@@ -21025,7 +21160,7 @@
       "checkingTitle": "Download wird überprüft",
       "progressOf": "{{done}} von {{total}} MB",
       "unpackingDetail": "Laufzeitumgebung wird entpackt",
-      "checkingDetail": "Heruntergeladene Laufzeitumgebung wird überprüft",
+      "checkingDetail": "{{agent}} wird überprüft…",
       "stepDownload": "Herunterladen",
       "stepUnpack": "Entpacken",
       "stepCheck": "Überprüfen"
@@ -21039,11 +21174,10 @@
     },
     "orchestration": {
       "workerAutoClose": {
-        "running": "Temporärer Orchestrierungs-Worker · Wird 2 Minuten nach Abschluss geschlossen",
-        "finished": "Temporärer Orchestrierungs-Worker abgeschlossen · Schließt in {{countdown}}",
         "keepOpen": "Offen halten",
         "bannerRunning": "Orchestrierungs-Worker · Wird 2 Minuten nach Abschluss geschlossen",
-        "bannerFinished": "Orchestrierungs-Worker abgeschlossen · Schließt in {{countdown}}"
+        "bannerFinished": "Orchestrierungs-Worker abgeschlossen · Schließt in {{countdown}}",
+        "bannerFinishedStatus": "Orchestrierungs-Worker abgeschlossen · Wird bald geschlossen"
       }
     },
     "wslHostMark": {
@@ -21056,7 +21190,9 @@
     },
     "tabGroup": {
       "splitPaneLanding": {
-        "newAgent": "Neuer Agent"
+        "newAgent": "Neuer Agent",
+        "searchAgentsAndFiles": "Agenten und Dateien suchen",
+        "searchShort": "Suchen"
       }
     },
     "contextualTours": {
@@ -21068,7 +21204,16 @@
       }
     },
     "dictation": {
-      "stoppedAfterSilenceSeconds": "Nach {{seconds}} Sekunden Stille gestoppt"
+      "stoppedAfterSilenceSeconds": "Nach {{seconds}} Sekunden Stille gestoppt",
+      "cleanupNotice": {
+        "timedOut": "Die Nachbearbeitung hat zu lange gedauert. Der Text wurde wie gehört eingefügt.",
+        "failed": "Nachbearbeitung fehlgeschlagen. Der Text wurde wie gehört eingefügt.",
+        "dismiss": "Ausblenden"
+      },
+      "DictationIndicator": {
+        "cleaningUp": "Wird nachbearbeitet…",
+        "skipCleanup": "Nachbearbeitung überspringen"
+      }
     },
     "toastFallbacks": {
       "worktreeCreateFailed": "Worktree konnte nicht erstellt werden.",
@@ -21599,7 +21744,10 @@
         "kimiProviderLimited": "Kimi hat ein Anbieterlimit erreicht oder der Anbieter ist ausgelastet. Vor einem erneuten Versuch warten oder die Anfragehäufigkeit reduzieren.",
         "kimiContextOverflow": "Der Kontext von Kimi ist ausgeschöpft. Den Prompt kürzen oder eine neue Sitzung starten und erneut versuchen.",
         "kimiConfigInvalid": "Die Konfiguration von Kimi ist ungültig. Vor einem erneuten Versuch die Modell- und Anbieterkonfiguration auf dem Ausführungshost prüfen.",
-        "kimiContinueSessionConflict": "Kimi hat widersprüchliche Optionen erhalten: --continue, --session. Vor einem erneuten Versuch das Textgenerierungsrezept oder die CLI-Argumente korrigieren."
+        "kimiContinueSessionConflict": "Kimi hat widersprüchliche Optionen erhalten: --continue, --session. Vor einem erneuten Versuch das Textgenerierungsrezept oder die CLI-Argumente korrigieren.",
+        "commandTemplateEmptyDictationCleanup": "Die Befehlsvorlage für die Diktatnachbearbeitung ist leer.",
+        "dictationCleanupAgentUnsupported": "Unter Einstellungen -> Spracheingabe -> Nachbearbeitung einen unterstützten Agenten für die KI-Nachbearbeitung auswählen. Unterstützte Agenten: {{agents}} oder Benutzerdefinierter Befehl.",
+        "agentCannotGenerateDictationCleanup": "Agent „{{agent}}“ unterstützt keine Diktatnachbearbeitung. Unterstützte Agenten: {{agents}} oder Benutzerdefinierter Befehl."
       },
       "enableSourceControlAi": "KI für die Quellcodeverwaltung unter Einstellungen -> Git aktivieren.",
       "chooseBaseBranch": "Vor dem Generieren einen Basis-Branch auswählen.",
@@ -22102,6 +22250,7 @@
       "changed": "Das native Konto hat sich geändert. Vor dem Start von agy erneut ein gespeichertes Konto auswählen.",
       "refresh": "Konten aktualisieren",
       "usage": "Nutzung aktualisieren",
+      "usageWithReading": "Nutzung aktualisieren ({{reading}})",
       "usageReading": "Sitzung: {{session}} · Wöchentlich: {{weekly}}",
       "saved": "Gespeichertes Google-Konto",
       "remove": "Entfernen",
@@ -22122,7 +22271,23 @@
       "lastReading": "{{reading}} · Ausgelesen {{time}}",
       "noReading": "Nutzung unbekannt: noch nicht ausgelesen",
       "fd47b5a5dd": "Antigravity-Konten",
-      "apiKeyGet": "API-Schlüssel abrufen"
+      "personalOption": "Dein persönlicher Google AI-Tarif",
+      "enterpriseOption": "Lizenz deiner Organisation",
+      "apiKeyGet": "API-Schlüssel abrufen",
+      "location": "Standort",
+      "enterpriseFieldsShort": "Projekt und Standort eingeben.",
+      "chatUseMethod": "Erneut anmelden, um {{method}} zu verwenden",
+      "loadFailed": "Die agy-Konten konnten nicht geladen werden",
+      "loading": "Konten werden geladen…",
+      "notSignedIn": "Nicht angemeldet",
+      "runAgy": "agy auf diesem Host zum Anmelden ausführen",
+      "signInHelp": "Hilfe zur Anmeldung",
+      "currentLogin": "Aktuelle agy-Anmeldung",
+      "currentNotSaved": "Aktuelle agy-Anmeldung · nicht gespeichert",
+      "noEmailNotSaved": "agy hat keine E-Mail-Adresse gemeldet · nicht gespeichert",
+      "saveShort": "Speichern",
+      "readAt": "Ausgelesen {{time}}",
+      "active": "Aktiv"
     },
     "claude": {
       "added": "Konto hinzugefügt. Das Konto auswählen, um es beim nächsten Start von Claude zu verwenden.",
@@ -22136,7 +22301,7 @@
       "signInRequired": "Erneute Anmeldung erforderlich, um dieses Konto zu verwenden",
       "signInAgain": "Erneut anmelden",
       "usageSignInLabel": "Erneut anmelden",
-      "usageSignInMessage": "Für das ausgewählte Claude-Konto ist eine erneute Anmeldung erforderlich. Einstellungen > Konten für KI-Anbieter öffnen oder „Systemstandard“ auswählen.",
+      "usageSignInMessage": "Für dieses Konto ist eine erneute Anmeldung erforderlich.",
       "signIn": "Anmelden",
       "moreSignInOptions": "Weitere Anmeldeoptionen",
       "copySignInLink": "Stattdessen Anmeldelink kopieren",
@@ -24050,7 +24215,6 @@
     "row": {
       "runsOn": "Läuft auf {{host}}",
       "disconnected": "Getrennt",
-      "hostDisconnected": "{{host}}: getrennt",
       "idle": "Inaktiv",
       "paused": "Pausiert",
       "reading": "Liest deine Nachricht",
@@ -24071,7 +24235,10 @@
         "lastItem": "Letztes Element",
         "previous": "Vorheriges Element",
         "next": "Nächstes Element",
-        "subWhere": "Element {{number}} · {{chat}}"
+        "linkCount": "{{count}} Links",
+        "reply": "Antworten",
+        "replyAbove": "Antworten, weiter oben",
+        "replyBelow": "Antworten, weiter unten"
       },
       "activity": {
         "linked": "hat {{links}} verknüpft",
@@ -24107,7 +24274,9 @@
       },
       "ask": {
         "notSentYet": "noch nicht gesendet",
-        "replaced": "Der Agent hat eine neue Frage gestellt. Lies sie und antworte dann."
+        "replaced": "Der Agent hat eine neue Frage gestellt. Lies sie und antworte dann.",
+        "replacedByNewer": "Durch eine neuere Frage ersetzt",
+        "skipped": "Übersprungen"
       },
       "readMoreClosedFailed": "Weitere geschlossene Einträge konnten nicht gelesen werden"
     },
@@ -24432,7 +24601,24 @@
       }
     }
   },
+  "plugins": {
+    "actionConfirmation": {
+      "cancel": "Abbrechen",
+      "deleteAutomation": "{{plugin}} möchte die Automatisierung „{{automation}}“ löschen",
+      "deleteAutomationDetail": "Diese Automatisierung wurde nicht vom Plugin erstellt. Ihr Zeitplan wird gestoppt und sie wird aus „Automatisierungen“ entfernt.",
+      "delete": "Löschen",
+      "changeAutomation": "{{plugin}} möchte die Automatisierung „{{automation}}“ ändern",
+      "changeAutomationDetail": "Diese Automatisierung wurde nicht vom Plugin erstellt. Das Plugin würde Folgendes ändern: {{fields}}.",
+      "change": "Ändern",
+      "changeElevatedAutomationDetail": "Diese Automatisierung führt ihren Agenten mit zusätzlichen, von dir gewählten Einstellungen aus (Argumenten, einem Berechtigungsmodus oder einem Vorprüfungsbefehl). Das Plugin würde Folgendes ändern: {{fields}}.",
+      "newPrompt": "Neuer Prompt: „{{prompt}}“",
+      "unknownProject": "einem unbekannten Projekt",
+      "automationNewWorkspaces": "Automatisierung {{id}}: bei jedem Lauf in einem neuen Arbeitsbereich von {{project}}, nach Zeitplan {{schedule}}.",
+      "automationInWorkspace": "Automatisierung {{id}}: in {{project}} / {{workspace}}, nach Zeitplan {{schedule}}."
+    }
+  },
   "agentPicker": {
+    "refreshModels": "Modelle aktualisieren",
     "catalogUnsupportedLaunch": "Modelle für {{agent}} sind auf diesem Host nicht verfügbar. Deine aktuelle Auswahl gilt weiterhin.",
     "catalogEmpty": "Für {{agent}} sind keine Modelle verfügbar.",
     "setByArguments": "Durch Argumente festgelegt",
@@ -24568,6 +24754,15 @@
       "deleteFailed": "{{model}} konnte nicht gelöscht werden.",
       "dismiss": "Schließen",
       "cancelDownload": "Download abbrechen"
+    }
+  },
+  "usage": {
+    "failure": {
+      "unavailable": "Die Nutzung ist nicht verfügbar. Zum erneuten Verbinden „Aktualisieren“ versuchen.",
+      "setting": "Die Änderung der Erfassung konnte nicht bestätigt werden. Erneut versuchen, die Einstellung zu ändern.",
+      "refresh": "Die vorherige Aktualisierung konnte nicht abgeschlossen werden. „Aktualisieren“ erneut versuchen.",
+      "read": "Die Nutzung konnte nicht geladen werden. „Aktualisieren“ erneut versuchen.",
+      "retry": "Aktualisieren"
     }
   },
   "crashReport": {

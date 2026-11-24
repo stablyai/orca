@@ -14,6 +14,7 @@ import {
   assertCurrentBrowserClientPageRenderer
 } from './browser-client-page-command-admission'
 import { BrowserClientPageCommandError } from './browser-client-page-command-failure'
+import { browserClientPageDesktopDataRefusal } from './browser-client-page-desktop-data-refusal'
 import { sameBrowserClientPageAuthority } from '../../client-hosts/commands/browser-client-host-command-authority'
 import type {
   BrowserClientPageLifecycleRegistry,
@@ -73,6 +74,11 @@ export async function executeBrowserClientPageAutomationCommand(
   assertCurrentBrowserClientPageRenderer(page.renderer)
   const method = event.command.method
   refuseDesktopFileAccess(method, event.command.params)
+  // An older server still forwards these; refuse with the sentence a newer one gives up front.
+  const dataRefusal = browserClientPageDesktopDataRefusal(method, event.command.params)
+  if (dataRefusal) {
+    throw new BrowserClientPageCommandError(dataRefusal.code, { detail: dataRefusal.message })
+  }
   const agent = event.command.agent !== false
   const run = (
     params: Record<string, unknown>,

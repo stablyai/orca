@@ -4,7 +4,7 @@
 // posts its words as the owner's comment; Type your answer leads to the box. Several: one line at a
 // time (MobileBotItemQuestionStep), answers held until the last. Answered, a line reads
 // "Question → answer", muted, and the answer's own card is not drawn again.
-import { View, type StyleProp, type ViewStyle } from 'react-native'
+import { Text, View, type StyleProp, type ViewStyle } from 'react-native'
 import {
   botItemQuickReplyText,
   type BotItemQuestionShape
@@ -14,10 +14,13 @@ import {
   botItemAnswerWords,
   botItemUnsentAnswers
 } from '../../../../src/shared/bots/bot-item-answer-lines'
+import type { BotItemAskEnd } from '../../../../src/shared/bots/bot-item-question-answers'
 import type { BotItemEvent } from '../../../../src/shared/bots/bot-items'
 import type { BotItemQuickReplyActions } from '../../../../src/shared/bots/use-bot-item-question-steps'
 import { MobileMarkdown } from '../../components/markdown/MobileMarkdown'
-import { spacing } from '../../theme/mobile-theme'
+import { useMobileTranslation } from '../../i18n/use-mobile-translation'
+import { INLINE_TEXT_SELECTION } from '../../platform/text-selection/inline-text-selection'
+import { colors, spacing } from '../../theme/mobile-theme'
 import { themedStyleSheet } from '../../theme/themed-styles'
 import {
   MobileBotItemAnswerLine,
@@ -37,6 +40,7 @@ export function MobileBotItemQuestionLines({
   waiting,
   answers = NO_ANSWERS,
   byOrder,
+  ended = null,
   actions,
   disabled = false,
   style
@@ -52,6 +56,8 @@ export function MobileBotItemQuestionLines({
   answers?: readonly (BotItemEvent | null)[]
   /** Per line, answered only by a comment naming no line: that comment shows as itself. */
   byOrder?: readonly boolean[]
+  /** Why its open lines take no answer: a later ask replaced them, or the owner skipped them. */
+  ended?: BotItemAskEnd | null
   /** While it waits, what its quick replies do; absent where the item takes no comment. */
   actions?: BotItemQuickReplyActions
   /** The host can't take a comment now (offline). */
@@ -59,6 +65,7 @@ export function MobileBotItemQuestionLines({
   /** Its spacing from the body above; by default a gap under a body. */
   style?: StyleProp<ViewStyle>
 }) {
+  const t = useMobileTranslation()
   const steps = actions?.steps?.askId === askId ? actions.steps : null
   const several = shape.decisions.length > 1
   // Answers held for an ask the agent no longer waits on (it asked again): its draft, until sent.
@@ -121,7 +128,11 @@ export function MobileBotItemQuestionLines({
         return (
           // A decision's question is unique within its ask.
           <View key={decision.question}>
-            <MobileMarkdown content={decision.question} tone={open ? 'strong' : 'muted'} />
+            <MobileMarkdown
+              content={decision.question}
+              tone={open ? 'strong' : 'muted'}
+              rangeSelectable={INLINE_TEXT_SELECTION}
+            />
             {open && actions && decision.replies.length > 0 ? (
               <View style={styles.chips}>
                 {decision.replies.map((reply) => (
@@ -139,6 +150,13 @@ export function MobileBotItemQuestionLines({
           </View>
         )
       })}
+      {ended && answered.some((words, index) => !words && !unsent?.[index]) ? (
+        <Text style={styles.ended}>
+          {ended === 'skipped'
+            ? t('bots.items.ask.skipped', 'Skipped')
+            : t('bots.items.ask.replacedByNewer', 'Replaced by a newer question')}
+        </Text>
+      ) : null}
     </View>
   )
 }
@@ -147,5 +165,6 @@ const styles = themedStyleSheet(() => ({
   spaced: { marginTop: spacing.lg },
   one: { gap: spacing.md },
   several: { gap: 6 },
+  ended: { fontSize: 12, lineHeight: 16, color: colors.textMuted },
   chips: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm, marginTop: 10 }
 }))

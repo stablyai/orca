@@ -29,8 +29,6 @@ function WorkerPane({
       <PaneTopWarningBanner
         tone={action ? 'neutral' : countingDown ? 'warning' : 'accent'}
         icon={action ? undefined : Timer}
-        badge={action ? undefined : 'Temporary'}
-
         title={title}
         primaryAction={
           <Button type="button" variant={action ? 'outline' : 'default'} size="xs">
