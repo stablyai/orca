@@ -36,7 +36,7 @@ export function installCodexAccountRestartIpcHandlers(deps: CodexAccountRestartI
     (_event, args: CodexAccountRestartStopRequest) =>
       codexAccountRestartStops.request(args, {
         resolveOccupant: (request) => resolveCodexRestartOccupant(current(), request),
-        stop: (occupant) => stopCodexRestartOccupant(current, occupant)
+        stop: (occupant, authorize) => stopCodexRestartOccupant(current, occupant, authorize)
       })
   )
   getPtyIpc().handle(
@@ -107,12 +107,17 @@ export function resolveCodexRestartOccupant(
 
 async function stopCodexRestartOccupant(
   current: () => CodexAccountRestartIpcDeps,
-  occupant: CodexRestartOccupant
-): Promise<CodexRestartStopOutcome> {
+  occupant: CodexRestartOccupant,
+  authorize: () => boolean
+): Promise<CodexRestartStopOutcome | 'not-authorized'> {
   await current().getLocalPtyProviderStartupPromise(LOCAL_EXECUTION_HOST_ID)
   const provider = tryGetProviderForPty(occupant.ptyId)
   if (!provider?.killFenced) {
     return 'service-outdated'
+  }
+  // The last boundary main controls: Dismiss or reselection during the waits above sends nothing.
+  if (!authorize()) {
+    return 'not-authorized'
   }
   let outcome: Awaited<ReturnType<NonNullable<typeof provider.killFenced>>>
   try {

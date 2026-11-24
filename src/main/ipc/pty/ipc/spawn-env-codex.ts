@@ -1,6 +1,7 @@
 import { isNativeWindowsLocalPtySpawn } from '../../../runtime/terminal/output/terminal-model-query-authority'
 import { resolvePtySpawnHostEnv } from '../host-env/spawn-host-env'
 import type { PtyIpcSpawnState } from './spawn-state'
+import type { GlobalSettings } from '../../../../shared/settings/global-settings-types'
 import { resolveCodexAccountRestartResume } from '../account-restart/codex-account-restart-resume-gate'
 
 export async function assemblePtyIpcSpawnCodexEnv(ctx: PtyIpcSpawnState): Promise<void> {
@@ -42,7 +43,7 @@ export async function assemblePtyIpcSpawnCodexEnv(ctx: PtyIpcSpawnState): Promis
     wslPassiveRestore: args.wslPassiveRestore === true,
     requestedAgentTeamsPath: ctx.requestedAgentTeamsPath,
     provider: ctx.provider,
-    deps: ctx.deps,
+    deps: withLaunchAccountSnapshot(ctx),
     mark: (phase) => ctx.spawnTiming.mark(phase)
   }).catch((error: unknown) => {
     restartResume.unspend?.()
@@ -76,4 +77,40 @@ export function restoreUnstartedCodexAccountRestart(ctx: PtyIpcSpawnState): void
   const unspend = ctx.unspendCodexAccountRestart
   ctx.unspendCodexAccountRestart = null
   unspend?.()
+}
+
+// Attribution must name the account the child actually got, not one selected later before publication.
+function withLaunchAccountSnapshot(ctx: PtyIpcSpawnState): PtyIpcSpawnState['deps'] {
+  const select = ctx.deps.getSelectedCodexHomePath
+  if (!select) {
+    return ctx.deps
+  }
+  return {
+    ...ctx.deps,
+    getSelectedCodexHomePath: (...selectArgs: Parameters<typeof select>) => {
+      ctx.codexLaunchSettings = snapshotCodexLaunchSettings(ctx.deps.getSettings?.())
+      return select(...selectArgs)
+    }
+  }
+}
+
+function snapshotCodexLaunchSettings(
+  settings: GlobalSettings | undefined
+): GlobalSettings | undefined {
+  if (!settings) {
+    return undefined
+  }
+  return {
+    ...settings,
+    ...(settings.activeCodexManagedAccountIdsByRuntime
+      ? {
+          activeCodexManagedAccountIdsByRuntime: {
+            ...settings.activeCodexManagedAccountIdsByRuntime
+          }
+        }
+      : {}),
+    ...(settings.codexManagedAccounts
+      ? { codexManagedAccounts: [...settings.codexManagedAccounts] }
+      : {})
+  }
 }

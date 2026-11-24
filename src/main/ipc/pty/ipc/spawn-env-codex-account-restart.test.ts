@@ -2,16 +2,22 @@ import { describe, expect, it, vi } from 'vitest'
 
 const { hostEnv } = vi.hoisted(() => ({
   hostEnv: {
-    resolvePtySpawnHostEnv: vi.fn(async () => ({
-      codexResumeLaunch: { droppedResumeArgv: false },
-      launchCommand: 'codex resume thread-1',
-      baseEnv: {},
-      env: {},
-      selectedCodexHomePath: null,
-      codexResumeHomeSelected: false,
-      skipCodexHomeEnv: false,
-      stripInheritedOrcaCodexHome: false
-    }))
+    resolvePtySpawnHostEnv: vi.fn(
+      async (args: { deps: { getSelectedCodexHomePath?: () => unknown } }) => {
+        // The real assembly picks the launch home here.
+        await args.deps.getSelectedCodexHomePath?.()
+        return {
+          codexResumeLaunch: { droppedResumeArgv: false },
+          launchCommand: 'codex resume thread-1',
+          baseEnv: {},
+          env: {},
+          selectedCodexHomePath: null,
+          codexResumeHomeSelected: false,
+          skipCodexHomeEnv: false,
+          stripInheritedOrcaCodexHome: false
+        }
+      }
+    )
   }
 }))
 vi.mock('../host-env/spawn-host-env', () => hostEnv)
@@ -52,6 +58,7 @@ async function admitProvenStop(): Promise<void> {
 function spawnState(): PtyIpcSpawnState {
   const fields = {
     args: { ...pane, launchAgent: 'codex', resumeProviderSession: session },
+    deps: {},
     terminalRuntimeOptions: {},
     validatedLeafId: pane.leafId,
     preAdoptedStablePane: null,
@@ -117,5 +124,22 @@ describe('Codex env assembly for an account restart resume', () => {
         providerSession: session
       })
     ).resolves.toEqual({ kind: 'pinned' })
+  })
+
+  it('attributes the child with the account selected when its home was chosen', async () => {
+    pane = nextPane()
+    const settings = { activeCodexManagedAccountId: 'account-a', codexManagedAccounts: [] }
+    const ctx = spawnState()
+    Object.assign(ctx, {
+      args: { ...pane, launchAgent: 'codex' },
+      deps: {
+        getSettings: () => settings,
+        getSelectedCodexHomePath: () => '/homes/account-a'
+      }
+    })
+    await assemblePtyIpcSpawnCodexEnv(ctx)
+    // The user switches before the spawn publishes its attribution.
+    settings.activeCodexManagedAccountId = 'account-b'
+    expect(ctx.codexLaunchSettings?.activeCodexManagedAccountId).toBe('account-a')
   })
 })

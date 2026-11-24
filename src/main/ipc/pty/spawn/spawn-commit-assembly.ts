@@ -59,6 +59,8 @@ export type PtySpawnCommitState = {
   result: PtySpawnResult
   provider: IPtyProvider
   cwd: string | undefined
+  /** Selection read when the launch home was chosen; absent lanes attribute with current settings. */
+  codexLaunchSettings?: GlobalSettings
   metadataLeafId: string | null
   pendingRegistrationClaim?: PtyRegistrationClaim
   pendingRegistrationPtyId: string | null

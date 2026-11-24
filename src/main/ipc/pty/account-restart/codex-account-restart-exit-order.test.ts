@@ -14,13 +14,17 @@ type HoistedState = {
   exitListener: ((payload: ExitPayload) => void) | null
   killFenced: Mock<(...args: unknown[]) => Promise<PtyFencedTerminationOutcome>>
   fencedTerminationSupported: boolean
+  selectedAccount: string
+  providerStartup: Promise<void> | undefined
 }
 
 const h = vi.hoisted((): HoistedState => ({
   handlers: new Map(),
   exitListener: null,
   killFenced: vi.fn<(...args: unknown[]) => Promise<PtyFencedTerminationOutcome>>(),
-  fencedTerminationSupported: true
+  fencedTerminationSupported: true,
+  selectedAccount: 'new',
+  providerStartup: undefined
 }))
 
 vi.mock('../pty-host-bindings', () => ({
@@ -92,7 +96,7 @@ vi.mock('../../../codex/configuration/homes/codex-pane-account-registry', () => 
   })
 }))
 vi.mock('../../../codex-accounts/account-management/runtime-selection', () => ({
-  getSelectedCodexAccountIdForTarget: () => 'new'
+  getSelectedCodexAccountIdForTarget: () => h.selectedAccount
 }))
 vi.mock('../../../pty/process-retirement/pty-exit-proof', () => ({
   PtyExitProof: { from: () => ({}) }
@@ -139,7 +143,7 @@ function setup() {
     store: undefined,
     // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the restart path reads only these runtime fields.
     runtime: runtime as never,
-    getLocalPtyProviderStartupPromise: () => undefined,
+    getLocalPtyProviderStartupPromise: () => h.providerStartup,
     shutdownProviderAndDetectExit: vi.fn(),
     rememberSyntheticKillExit: vi.fn(),
     sendPtyExitToRenderer,
@@ -187,6 +191,8 @@ describe('account restart exits arriving out of order', () => {
   beforeEach(() => {
     h.handlers.clear()
     h.fencedTerminationSupported = true
+    h.selectedAccount = 'new'
+    h.providerStartup = undefined
   })
 
   it('delivers one restart exit when the stream exit beats the stop receipt', async () => {
@@ -312,7 +318,7 @@ describe('account restart exits arriving out of order', () => {
       store: undefined,
       // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the restart path reads only these runtime fields.
       runtime: t.runtime as never,
-      getLocalPtyProviderStartupPromise: () => undefined,
+      getLocalPtyProviderStartupPromise: () => h.providerStartup,
       shutdownProviderAndDetectExit: vi.fn(),
       rememberSyntheticKillExit: vi.fn(),
       sendPtyExitToRenderer: nextWindowSend,
@@ -344,5 +350,42 @@ describe('account restart exits arriving out of order', () => {
       }
     )
     expect(t.runtime.onPtyExit).toHaveBeenCalledTimes(1)
+  })
+
+  it('sends no stop when Dismiss lands while main waits for the terminal service', async () => {
+    const t = setup()
+    let releaseStartup!: () => void
+    h.providerStartup = new Promise<void>((resolve) => {
+      releaseStartup = resolve
+    })
+    const result = t.request()
+    await vi.waitFor(() =>
+      expect(
+        codexAccountRestartStops.withdraw({
+          worktreeId: 'wt',
+          tabId: 'tab',
+          leafId: t.pane.leafId,
+          opId: `op-${t.pane.ptyId}`
+        })
+      ).toBe(true)
+    )
+    releaseStartup()
+    await expect(result).resolves.toMatchObject({ outcome: 'not-started', reason: 'withdrawn' })
+    expect(h.killFenced).not.toHaveBeenCalled()
+  })
+
+  it('sends no stop when the user selects the old account again during that wait', async () => {
+    const t = setup()
+    let releaseStartup!: () => void
+    h.providerStartup = new Promise<void>((resolve) => {
+      releaseStartup = resolve
+    })
+    const result = t.request()
+    await Promise.resolve()
+    await Promise.resolve()
+    h.selectedAccount = 'old'
+    releaseStartup()
+    await expect(result).resolves.toMatchObject({ outcome: 'not-started', reason: 'not-stale' })
+    expect(h.killFenced).not.toHaveBeenCalled()
   })
 })

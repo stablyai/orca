@@ -29,7 +29,7 @@ describe('Codex account restart stop admission', () => {
     const d = deps()
     const result = await stops.request({ ...pane, opId: 'op-1' }, d)
     expect(d.stop).toHaveBeenCalledTimes(1)
-    expect(d.stop).toHaveBeenCalledWith(occupant)
+    expect(d.stop).toHaveBeenCalledWith(occupant, expect.any(Function))
     expect(result).toEqual({ outcome: 'stopped', opIds: ['op-1'] })
   })
 

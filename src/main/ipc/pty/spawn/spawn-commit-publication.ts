@@ -52,7 +52,7 @@ export function publishCommittedPtySpawn(input: PtySpawnCommitInput): PtySpawnOu
     pinnedByResume: state.codexResumeHomeSelected,
     launchCodexHomePath: state.selectedCodexHomePath,
     target: state.codexSelectionTarget,
-    settings: deps.getSettings?.()
+    settings: state.codexLaunchSettings ?? deps.getSettings?.()
   })
   if (input.hiddenDelivery === 'renderer-scoped' && input.initiallyHidden) {
     markRendererScopedHiddenAtCommit(state)

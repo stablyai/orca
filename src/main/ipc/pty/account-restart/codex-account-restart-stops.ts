@@ -5,58 +5,28 @@ import type {
   CodexAccountRestartStopResult,
   CodexAccountRestartWithdrawRequest
 } from '../../../../shared/agent-accounts/codex/codex-account-restart-stop'
+import type {
+  CodexAccountRestartStopDeps,
+  CodexRestartExitClassification,
+  CodexRestartExitObservation,
+  CodexRestartOccupant,
+  CodexRestartProvenance,
+  CodexRestartResumeDecision,
+  CodexRestartStopOutcome
+} from './codex-account-restart-types'
 
 export type {
   CodexAccountRestartNotStartedReason,
+  CodexAccountRestartStopDeps,
   CodexAccountRestartStopRequest,
-  CodexAccountRestartStopResult
+  CodexAccountRestartStopResult,
+  CodexRestartExitClassification,
+  CodexRestartExitObservation,
+  CodexRestartOccupant,
+  CodexRestartProvenance,
+  CodexRestartResumeDecision,
+  CodexRestartStopOutcome
 }
-
-/** The conversation the stopped process was writing, captured before the stop. */
-export type CodexRestartProvenance = {
-  threadId: string
-  transcriptPath: string
-}
-
-export type CodexRestartOccupant = {
-  ptyId: string
-  incarnationId: string
-  provenance: CodexRestartProvenance
-}
-
-/**
- * `ended` (root and every captured writer gone) is the only writer proof; `ended-unproven` stopped
- * the root but could not verify its descendants. `refused` and `service-outdated` sent no signal.
- */
-export type CodexRestartStopOutcome =
-  | 'ended'
-  | 'ended-unproven'
-  | 'refused'
-  | 'service-outdated'
-  | 'unknown'
-
-export type CodexAccountRestartStopDeps = {
-  /** Re-derives the pane's eligible occupant from host facts, or the reason it has none. */
-  resolveOccupant: (
-    request: CodexAccountRestartStopRequest
-  ) => CodexRestartOccupant | CodexAccountRestartNotStartedReason
-  /** Dispatches the exact-incarnation fenced stop. */
-  stop: (occupant: CodexRestartOccupant) => Promise<CodexRestartStopOutcome>
-}
-
-export type CodexRestartExitObservation = 'stream' | 'host-loss' | 'fenced-receipt' | 'attach-miss'
-/** `restart`: the first logical exit of a restart-stopped incarnation; `duplicate`: drop it. */
-export type CodexRestartExitClassification = 'ordinary' | 'restart' | 'duplicate'
-
-export type CodexRestartResumeDecision =
-  | { kind: 'none' }
-  | { kind: 'pinned' }
-  | {
-      kind: 'selected'
-      providerSession: AgentProviderSessionMetadata
-      /** Puts the intent back for the next resume when this launch fails before commit. */
-      unspend: () => void
-    }
 
 type RestartIntentState = 'pending' | 'ready' | 'withdrawn'
 
@@ -272,22 +242,23 @@ export class CodexAccountRestartStops {
   ): Promise<CodexAccountRestartStopResult> {
     // Yield once so a same-tick second click or Dismiss lands before the stop is authorized.
     await Promise.resolve()
-    const recheck = deps.resolveOccupant(request)
-    if (mark.withdrawn || typeof recheck === 'string' || !sameOccupant(recheck, occupant)) {
+    let denial = this.authorizationDenial(request, occupant, mark, deps)
+    const authorize = (): boolean => {
+      denial = this.authorizationDenial(request, occupant, mark, deps)
+      return denial === null
+    }
+    let outcome: CodexRestartStopOutcome | 'not-authorized' = 'not-authorized'
+    if (denial === null) {
+      try {
+        outcome = await deps.stop(occupant, authorize)
+      } catch {
+        outcome = 'unknown'
+      }
+    }
+    if (outcome === 'not-authorized') {
       // A stale choice at the authorization boundary sends zero stop requests.
       this.retireMark(mark)
-      const reason = mark.withdrawn
-        ? 'withdrawn'
-        : typeof recheck === 'string'
-          ? recheck
-          : 'superseded'
-      return { outcome: 'not-started', reason, opIds: [...mark.opIds] }
-    }
-    let outcome: CodexRestartStopOutcome
-    try {
-      outcome = await deps.stop(occupant)
-    } catch {
-      outcome = 'unknown'
+      return { outcome: 'not-started', reason: denial ?? 'superseded', opIds: [...mark.opIds] }
     }
     const opIds = [...mark.opIds]
     if ((outcome === 'refused' || outcome === 'service-outdated') && !mark.delivered) {
@@ -300,6 +271,23 @@ export class CodexAccountRestartStops {
     // Host loss and ambiguous attempts are never proof: the resume stays on the pinned account.
     mark.state = mark.writerProof && !mark.withdrawn ? 'ready' : 'withdrawn'
     return mark.writerProof ? { outcome: 'stopped', opIds } : { outcome: 'unknown', opIds }
+  }
+
+  /** Null when the user's answer and the pane's occupant still stand; otherwise why not. */
+  private authorizationDenial(
+    request: CodexAccountRestartStopRequest,
+    occupant: CodexRestartOccupant,
+    mark: RestartMark,
+    deps: CodexAccountRestartStopDeps
+  ): CodexAccountRestartNotStartedReason | null {
+    if (mark.withdrawn) {
+      return 'withdrawn'
+    }
+    const recheck = deps.resolveOccupant(request)
+    if (typeof recheck === 'string') {
+      return recheck
+    }
+    return sameOccupant(recheck, occupant) ? null : 'superseded'
   }
 
   private installMark(mark: RestartMark): void {

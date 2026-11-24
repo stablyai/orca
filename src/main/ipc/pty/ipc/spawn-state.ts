@@ -1,3 +1,4 @@
+import type { GlobalSettings } from '../../../../shared/settings/global-settings-types'
 import type { PtySpawnSizeSeed } from '../spawn/spawn-options-assembly'
 import type { StartupCwdFallback } from '../../../../shared/shell/launch/startup-cwd-fallback'
 import type { PtyRegistrationClaim } from '../../../runtime/terminal/records/runtime-terminal-state-records'
@@ -99,6 +100,8 @@ export type PtyIpcSpawnState = {
   preSpawnHiddenMarkId: string | null
   /** Restores a spent account-restart intent when this spawn fails or retires before its process starts. */
   unspendCodexAccountRestart: (() => void) | null
+  /** Account selection as read when the launch home was chosen; publication attributes the child with it. */
+  codexLaunchSettings?: GlobalSettings
 }
 
 export function createPtyIpcSpawnState(
