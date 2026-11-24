@@ -23,6 +23,7 @@ function formatChat(chat: BotChatRow, address: string, now: number): string {
       `${BOT_CHAT_ID_PREFIX}${chat.id}`,
       name,
       ...(active ? [`active ${active}`] : []),
+      ...(chat.neverStarted ? ['(never started)'] : []),
       ...(chat.self ? ['(this chat)'] : []),
       ...(chat.home && !chat.closed ? [`<- where --to ${address} lands`] : [])
     ].join('  '),

@@ -10,6 +10,17 @@ import { closeWorkspaceBrowserTab } from '@/lib/browser/workspace/workspace-brow
 import { isEditorTabContentType } from '@/store/slices/editor/tabs/editor-tab-content-type'
 import { admitStructuredAgentSession } from '@/lib/agent-session/structured-agent-session-busy'
 import { useRunningTerminalCloseConfirmStore } from '@/store/slices/tabs/closing/running-terminal-close-confirm'
+import { readBots } from '@/lib/bot-catalog-snapshot'
+import { botOfHomeWorkspace } from '../../../../../../shared/bots/bot-homes'
+
+/** A bot home's chat tab closes to the background and its agent keeps going, so "Stop the agent?"
+ *  would be false there. With bots off a home is a plain folder and keeps the prompt. */
+function closesToBotBackground(worktreeId: string): boolean {
+  return (
+    useAppStore.getState().settings?.botsEnabled !== false &&
+    botOfHomeWorkspace(readBots(), worktreeId) !== null
+  )
+}
 
 export function createWorkspaceTabCloseCommands({
   worktreeId,
@@ -57,7 +68,8 @@ export function createWorkspaceTabCloseCommands({
       }
       if (
         !opts?.skipRunningProcessConfirm &&
-        useAppStore.getState().settings?.skipCloseTerminalWithRunningProcessConfirm !== true
+        useAppStore.getState().settings?.skipCloseTerminalWithRunningProcessConfirm !== true &&
+        !closesToBotBackground(worktreeId)
       ) {
         void admitStructuredAgentSession(
           worktreeId,

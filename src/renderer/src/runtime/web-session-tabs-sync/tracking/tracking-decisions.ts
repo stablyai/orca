@@ -1,4 +1,5 @@
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../../shared/workspace/identity/floating-workspace-id'
+import { noteChatTabShowings } from '../../native-chat/tab-retirement/chat-tab-showings'
 import type { RuntimeMobileSessionTabsResult } from '../../../../../shared/remote-runtime/session-graph/runtime-session-contracts'
 import {
   latestSessionTabsSnapshotByWorktree,
@@ -68,6 +69,7 @@ export function decideWebSessionTabsSnapshot(
     // Why: removed worktrees can stop publishing, so clean up their tracking now instead of waiting for a replacement snapshot that may never arrive.
     // Retraction does not retire the live publisher; its same-epoch republication must return. receivedFrame fences delayed predecessors instead.
     clearWebSessionTabsTrackingForWorktree(environmentId, snapshot.worktree)
+    noteChatTabShowings(snapshot, { kind: 'environment', environmentId })
     queueAcceptedWebSessionTerminalSnapshot(snapshot, environmentId)
     return WEB_SESSION_TABS_FRAME_APPLIED
   }
@@ -134,6 +136,8 @@ export function decideWebSessionTabsSnapshot(
   })
   trackWebSessionTabsWorktree(environmentId, snapshot.worktree)
   recordAcceptedWebSessionTabsEnvironment(environmentId, snapshot)
+  // Only an accepted frame names its chat tabs' showings: a retired or outranked one never does.
+  noteChatTabShowings(snapshot, { kind: 'environment', environmentId })
   // Why: a mounted mirror that exhausted bounded polling needs fresh host evidence without subscribing to every store write.
   queueAcceptedWebSessionTerminalSnapshot(snapshot, environmentId)
   return WEB_SESSION_TABS_FRAME_APPLIED

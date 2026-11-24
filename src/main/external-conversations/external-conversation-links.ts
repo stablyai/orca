@@ -1,3 +1,7 @@
+import {
+  structuredAgentSessionPaneKey,
+  structuredAgentSessionTabId
+} from '../../shared/agent-session/view/structured-agent-session-projection'
 import type { AgentMessageSource } from '../../shared/agent-session/journal/agent-session-message-source'
 import { isConversationReport } from './external-conversation-turn-opener'
 import { z } from 'zod'
@@ -296,6 +300,23 @@ export function findLinkForPane(
   paneKey: string
 ): LinkedConversation | null {
   return linkIndex(store).byPane.get(paneKey) ?? null
+}
+
+/** The outside thread one of these chat sessions is linked to (by pane), if any. */
+export function chatLinkSource(
+  store: ExternalConversationLinkStore,
+  sessionIds: readonly string[]
+): ConversationKey['source'] | null {
+  for (const sessionId of sessionIds) {
+    const linked = findLinkForPane(
+      store,
+      structuredAgentSessionPaneKey(structuredAgentSessionTabId(sessionId), sessionId)
+    )
+    if (linked) {
+      return linked.link.source
+    }
+  }
+  return null
 }
 
 export function findConversationChat(

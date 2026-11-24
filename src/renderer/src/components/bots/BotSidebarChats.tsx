@@ -23,6 +23,7 @@ import type { Worktree } from '../../../../shared/worktree/types'
 import { BotChatStatusSlot, useBotChatLabel } from './BotChatOriginIcon'
 import { BotChatPaging, BotChatRowEnd, useBotChatPress } from './BotChatRowControls'
 import type { BotChatTree } from './use-bot-chat-tree'
+import { BOT_CHAT_ROW_ATTRIBUTE, BotChatEndMenu, openRowMenuFromKeyboard } from './BotChatEndMenu'
 import { openBotSession } from './bot-session-open'
 import { botSidebarEntryKey } from './bot-sidebar-entry-keys'
 import { useBotsRevealRequest } from './bots-sidebar-reveal-context'
@@ -177,41 +178,47 @@ function BotSidebarChat({
   return (
     <div className="flex flex-col gap-1">
       {/* Its label names the slot's kind and state; pr-0.5 puts the chevron on the bot chevron's edge. */}
-      <div
-        role="button"
-        data-bot-sidebar-chat={chat.chatId}
-        aria-label={[label, trailing].filter(Boolean).join(' · ')}
-        // The chat whose tab is in front reads as the current row, as the open workspace's does.
-        aria-current={active ? 'true' : undefined}
-        tabIndex={0}
-        aria-expanded={foldable ? open : undefined}
-        className={cn(
-          'group/bot-chat flex h-6 min-w-0 cursor-pointer items-center gap-1.5 rounded-md pr-0.5 pl-1 text-xs text-muted-foreground outline-none hover:bg-sidebar-accent focus-visible:ring-[3px] focus-visible:ring-ring/50',
-          active && 'bg-sidebar-accent'
-        )}
-        onClick={pressRow}
-        onKeyDown={(event) => {
-          if (event.key === 'Enter' || event.key === ' ') {
-            event.preventDefault()
-            pressRow(event)
-          }
-        }}
-      >
-        <BotChatStatusSlot chat={chat} />
-        <span
+      <BotChatEndMenu bot={bot} chat={chat}>
+        <div
+          role="button"
+          data-bot-sidebar-chat={chat.chatId}
+          {...{ [BOT_CHAT_ROW_ATTRIBUTE]: '' }}
+          aria-label={[label, trailing].filter(Boolean).join(' · ')}
+          // The chat whose tab is in front reads as the current row, as the open workspace's does.
+          aria-current={active ? 'true' : undefined}
+          tabIndex={0}
+          aria-expanded={foldable ? open : undefined}
           className={cn(
-            'min-w-0 flex-1 truncate text-foreground',
-            (chat.unread || active) && 'font-semibold'
+            'group/bot-chat flex h-6 min-w-0 cursor-pointer items-center gap-1.5 rounded-md pr-0.5 pl-1 text-xs text-muted-foreground outline-none hover:bg-sidebar-accent focus-visible:ring-[3px] focus-visible:ring-ring/50',
+            active && 'bg-sidebar-accent'
           )}
+          onClick={pressRow}
+          onKeyDown={(event) => {
+            if (openRowMenuFromKeyboard(event)) {
+              return
+            }
+            if (event.key === 'Enter' || event.key === ' ') {
+              event.preventDefault()
+              pressRow(event)
+            }
+          }}
         >
-          {title}
-        </span>
-        <BotChatRowEnd
-          text={trailing}
-          fold={foldable ? { open, name: title, onToggle: () => toggle(open) } : null}
-          className="max-w-[60%]"
-        />
-      </div>
+          <BotChatStatusSlot chat={chat} />
+          <span
+            className={cn(
+              'min-w-0 flex-1 truncate text-foreground',
+              (chat.unread || active) && 'font-semibold'
+            )}
+          >
+            {title}
+          </span>
+          <BotChatRowEnd
+            text={trailing}
+            fold={foldable ? { open, name: title, onToggle: () => toggle(open) } : null}
+            className="max-w-[60%]"
+          />
+        </div>
+      </BotChatEndMenu>
       {open ? (
         <div className="ml-3 flex flex-col gap-1">
           <AttachedWorktreeCards

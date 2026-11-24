@@ -1,3 +1,4 @@
+import { noteChatTabShowings } from '../native-chat/tab-retirement/chat-tab-showings'
 import type {
   RuntimeMobileSessionTabsRemovedResult,
   RuntimeMobileSessionTabsResult
@@ -194,6 +195,7 @@ export function applyLocalStructuredSessionTabSnapshots<
       continue
     }
     const effectiveSnapshot = suppressCancelledStructuredSessionTabs(snapshot, { kind: 'local' })
+    noteChatTabShowings(effectiveSnapshot, { kind: 'local' })
     for (const tab of effectiveSnapshot.tabs) {
       if (tab.type === 'agent-session') {
         options.onAcceptedAgentSession?.(snapshot.worktree, tab.sessionId)

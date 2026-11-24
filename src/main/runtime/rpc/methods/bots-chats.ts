@@ -1,5 +1,6 @@
 // `bots.chats`: a bot's chats that mail can reach, newest first, so a bot can pick one by title and
 // last ask and send it `--chat <id>`.
+import { structuredAgentSessionTurnRefusal } from '../../../native-chat/agent-session-wire/operations/structured-agent-session-turn-gate'
 import type { Bot } from '../../../../shared/bot-types'
 import type { BotChatRow } from '../../../../shared/bots/bot-chat-row'
 import type { AgentSessionConversationView } from '../../../../shared/agent-session/lifecycle/leases/agent-session-conversation-view'
@@ -105,8 +106,13 @@ export async function botChatTakingMail(
     return null
   }
   const store = readAgentSessionRecordStore()
-  const live = store ? lineageLiveSession(store, row.id) : null
-  return { title: row.title, sessionId: live?.sessionId ?? row.id }
+  const sessionId = (store ? lineageLiveSession(store, row.id) : null)?.sessionId ?? row.id
+  // A chat being ended still lists; a retryable refusal, never a quiet fall back to the Home Chat.
+  const refused = structuredAgentSessionTurnRefusal(sessionId)
+  if (refused) {
+    throw new Error(refused.refusal.message)
+  }
+  return { title: row.title, sessionId }
 }
 
 /** `bot list`'s count of a bot's chats, naming the asking one when it is among them. */
@@ -149,6 +155,7 @@ export function botChatRecordRow(
     lastActivityAt: turn?.at ?? record.updatedAt,
     lastAsked: turn?.prompt ?? null,
     lastSaid: turn?.reply ?? null,
+    ...(record.neverStarted ? { neverStarted: true as const } : {}),
     home: id === homeRoot
   }
 }

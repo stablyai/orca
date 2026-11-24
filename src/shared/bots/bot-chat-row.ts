@@ -8,6 +8,8 @@ export type BotChatRow = {
   lastActivityAt: number
   lastAsked: string | null
   lastSaid: string | null
+  /** No agent ever started in it: an empty chat. Absent from an older host. */
+  neverStarted?: true
   /** The bot's Home Chat, which `--to bot:<name>` without --chat reaches. */
   home: boolean
   /** The chat asking for the list. */
