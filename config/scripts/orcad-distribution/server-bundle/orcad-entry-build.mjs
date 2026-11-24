@@ -45,6 +45,8 @@ export const ORCAD_CHILD_ENTRY_POINTS = {
     'src/main/codex/history/cleanup/codex-rollout-history-references-worker-entry.ts',
   codexProjectTrust: 'src/main/codex/trust/project-trust/codex-project-trust-worker-entry.ts',
   claudeConversationFork: 'src/main/claude/transcripts/claude-conversation-fork-worker-entry.ts',
+  claudeHistoryImport:
+    'src/main/native-chat/agent-session-journal/history-import/journal-claude-import-worker-entry.ts',
   usageScanWorker: 'src/main/usage/scan-worker/usage-scan-worker-entry.ts',
   sttWorker: 'src/main/speech/stt-worker.ts',
   computerSidecar: 'src/main/computer/computer-sidecar.ts',

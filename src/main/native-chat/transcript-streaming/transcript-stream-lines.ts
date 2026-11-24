@@ -55,21 +55,26 @@ export async function* splitTranscriptStreamLines(
   stream: AsyncIterable<Buffer | string>,
   maxRecordBytes = Infinity
 ): AsyncGenerator<TranscriptLine> {
+  for await (const records of splitTranscriptStreamLineBatches(stream, maxRecordBytes)) {
+    yield* records
+  }
+}
+
+export async function* splitTranscriptStreamLineBatches(
+  stream: AsyncIterable<Buffer | string>,
+  maxRecordBytes: number
+): AsyncGenerator<TranscriptLine[]> {
   let records: TranscriptLine[] = []
   const framer = createTranscriptLineFramer((line, byteLength, terminated) => {
     records.push({ line, byteLength, terminated })
   }, maxRecordBytes)
   for await (const chunk of stream) {
     framer.write(chunk)
-    for (const record of records) {
-      yield record
-    }
+    yield records
     records = []
   }
   framer.end()
-  for (const record of records) {
-    yield record
-  }
+  yield records
 }
 
 /** Frame chunks synchronously so native decoding avoids a promise per record. */
