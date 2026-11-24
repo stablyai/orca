@@ -1,6 +1,6 @@
 import type { PairedRuntimeConnection } from '../pairing/paired-runtime-connection'
 // Share envelopes across CLI/desktop/non-Electron clients without client-to-client imports.
-import { z } from 'zod'
+import * as z from 'zod'
 import type { OrchestrationCompatibilityEvidence } from '../../orchestration/orchestration-compatibility-evidence'
 import type { RemoteOwnedPeerRun } from '../../orchestration/remote-owned-wire'
 

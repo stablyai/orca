@@ -1,6 +1,8 @@
 import type { OrcaRuntimeRpcServer } from '../runtime/rpc/server/runtime-rpc'
 import { resolveAdvertisedPairingEndpoint } from '../runtime/rpc/server/pairing/network/pairing-endpoint'
 import { assertServeProjectRoot, renderServePairingQr } from './serve-pairing-output'
+import { createMobileWebUrl } from '../runtime/rpc/server/runtime-rpc-pairing-types'
+import { findBundledMobileWebBundleRoot } from '../runtime/rpc/methods/mobile-delivery/bundled-mobile-web-bundle'
 import type { ServeReadiness, ServeReadinessOutput } from './serve-readiness'
 
 export async function buildServePairingReadiness(
@@ -39,6 +41,10 @@ export async function buildServePairingReadiness(
           endpoint: offer.endpoint,
           deviceId: offer.deviceId,
           webClientUrl: offer.webClientUrl,
+          mobileWebUrl:
+            options.mobilePairing && (await findBundledMobileWebBundleRoot())
+              ? createMobileWebUrl(offer.endpoint, offer.pairingUrl)
+              : null,
           scope: options.mobilePairing ? 'mobile' : 'runtime',
           qr: options.mobilePairing ? await renderServePairingQr(offer.pairingUrl) : null
         }

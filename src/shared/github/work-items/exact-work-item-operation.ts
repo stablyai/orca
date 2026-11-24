@@ -1,4 +1,4 @@
-import { z } from 'zod'
+import * as z from 'zod'
 import { SlugRepo } from '../../rpc-contract/github/github-repo-target-params'
 import { ExpectedRuntimeSourceSchema } from '../../remote-runtime/rpc/runtime-rpc-envelope'
 

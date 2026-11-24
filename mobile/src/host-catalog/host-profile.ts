@@ -1,4 +1,4 @@
-import { z } from 'zod'
+import * as z from 'zod'
 import '../../../src/shared/remote-runtime/pairing/mobile-relay-pairing-offer'
 import {
   MobileRelayEndpointSchema,

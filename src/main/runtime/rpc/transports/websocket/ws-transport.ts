@@ -3,7 +3,8 @@ import { createServer as createHttpServer, type Server as HttpServer } from 'nod
 import type { Socket } from 'node:net'
 import { WebSocketServer, type WebSocket } from 'ws'
 import type { RpcTransport } from '../../transport'
-import { answerWithoutWebClient, createStaticWebClientHandler } from './static-web-client-handler'
+import { createStaticWebClientHandler } from './static-web-client-handler'
+import { findBundledMobileWebBundleRoot } from '../../methods/mobile-delivery/bundled-mobile-web-bundle'
 import {
   attachNodeWebSocketLifecycle,
   clearNodeWebSocketPreAuthTimer,
@@ -45,6 +46,8 @@ export type WebSocketTransportOptions = {
   preAuthTimeoutMs?: number
   // Serve browser assets from the pairing server to avoid another listener.
   staticRoot?: string
+  // Finds the phone page's bundle, served to browsers at MOBILE_WEB_BROWSER_PATH; defaults to the install's.
+  mobileWebRoot?: () => Promise<string | undefined>
   // Source-address policy checked at TCP accept; absent admits every source.
   sourceGuard?: WebSocketSourceGuard
   // Retry persisted fallback first so previously paired endpoints remain reachable (STA-1511).
@@ -63,6 +66,7 @@ export class WebSocketTransport implements RpcTransport {
   private readonly heartbeat: RemoteRuntimeServerHeartbeat
   private readonly preAuthTimeoutMs: number
   private readonly staticRoot: string | undefined
+  private readonly mobileWebRoot: () => Promise<string | undefined>
   private readonly sourceGuard: WebSocketSourceGuard | undefined
   private readonly fallbackPort: number | undefined
   private readonly preferPinnedPort: boolean
@@ -92,6 +96,7 @@ export class WebSocketTransport implements RpcTransport {
     heartbeatNow,
     preAuthTimeoutMs,
     staticRoot,
+    mobileWebRoot = findBundledMobileWebBundleRoot,
     sourceGuard,
     fallbackPort,
     preferPinnedPort,
@@ -107,6 +112,7 @@ export class WebSocketTransport implements RpcTransport {
     )
     this.preAuthTimeoutMs = preAuthTimeoutMs ?? PRE_AUTH_TIMEOUT_MS
     this.staticRoot = staticRoot
+    this.mobileWebRoot = mobileWebRoot
     this.sourceGuard = sourceGuard
     this.fallbackPort = fallbackPort
     this.preferPinnedPort = preferPinnedPort === true
@@ -223,7 +229,7 @@ export class WebSocketTransport implements RpcTransport {
     await assertPortNotShadowingListener(this.host, port)
     // Without an HTTP request listener, plain HTTP hangs instead of receiving 404 (#30100).
     const httpServer = createHttpServer(
-      this.staticRoot ? createStaticWebClientHandler(this.staticRoot) : answerWithoutWebClient
+      createStaticWebClientHandler(this.staticRoot, this.mobileWebRoot)
     )
 
     await new Promise<void>((resolve, reject) => {

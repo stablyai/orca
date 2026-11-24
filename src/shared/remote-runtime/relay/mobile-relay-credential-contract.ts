@@ -1,4 +1,4 @@
-import { z } from 'zod'
+import * as z from 'zod'
 
 const OpaqueIdSchema = z.string().min(1).max(128)
 const Base64Url32ByteSchema = z.string().regex(/^[A-Za-z0-9_-]{43}$/)

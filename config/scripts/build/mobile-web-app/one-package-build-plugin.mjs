@@ -36,12 +36,20 @@ const PACKAGE_BUILD_REDIRECTS = [
   },
   {
     // These subpaths resolve to the CommonJS build, which keeps all of sha2 (sha512 too); the esm one shakes.
+    // Resolved from mobile/ so src/shared importers take the app's copy, not a second one from the root.
     from: '@noble/hashes/sha256',
-    to: '@noble/hashes/esm/sha256.js'
+    to: '@noble/hashes/esm/sha256.js',
+    fromMobile: true
   },
   {
     from: '@noble/hashes/utils',
-    to: '@noble/hashes/esm/utils.js'
+    to: '@noble/hashes/esm/utils.js',
+    fromMobile: true
+  },
+  {
+    from: '@noble/hashes/hkdf',
+    to: '@noble/hashes/esm/hkdf.js',
+    fromMobile: true
   },
   {
     // react-native-web pins an older color parser than expo-router's; every importer takes expo-router's,
@@ -103,7 +111,7 @@ export const packageBuildPlugin = {
       const { path, namespace, sideEffects, errors } = await build.resolve(redirect.to, {
         kind: args.kind,
         importer: args.importer,
-        resolveDir: via ? via.resolveDir : args.resolveDir,
+        resolveDir: via ? via.resolveDir : redirect.fromMobile ? mobileDir : args.resolveDir,
         pluginData: { [PACKAGE_BUILD_PLUGIN_NAME]: true }
       })
       // An upgrade that moves the target fails the build instead of shipping both copies again.

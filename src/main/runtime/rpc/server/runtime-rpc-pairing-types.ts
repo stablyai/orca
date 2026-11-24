@@ -17,6 +17,7 @@ import type {
   RelayDeviceBinding,
   RelayRevokeOutboxItem
 } from '../../mobile-cloud-relay/pairing/relay-revoke-outbox'
+import { MOBILE_WEB_BROWSER_PATH } from '../../../../shared/mobile-web-bundle/mobile-web-browser-path'
 
 export const DEFAULT_WS_PORT = 6768
 
@@ -132,6 +133,16 @@ export function createWebClientUrl(endpoint: string, pairingUrl: string): string
   url.pathname = webClientPathForEndpoint(url.pathname)
   url.search = ''
   // Credential-bearing pairing fragments stay out of proxy logs and Referer headers.
+  url.hash = `pairing=${encodeURIComponent(pairingUrl)}`
+  return url.toString()
+}
+
+/** The phone page for a browser; its assets sit at the origin root, so a proxy path prefix is dropped. */
+export function createMobileWebUrl(endpoint: string, pairingUrl: string): string {
+  const url = new URL(endpoint)
+  url.protocol = url.protocol === 'wss:' ? 'https:' : 'http:'
+  url.pathname = MOBILE_WEB_BROWSER_PATH
+  url.search = ''
   url.hash = `pairing=${encodeURIComponent(pairingUrl)}`
   return url.toString()
 }
