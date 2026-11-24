@@ -1826,7 +1826,11 @@
       "projectHostSetupOptions": {
         "locationNotSet": "Emplacement du projet non défini",
         "hostLocalGitProject": "Ce projet n'a pas de dépôt Git distant correspondant",
-        "hostLocalFolderProject": "Les projets de dossier ne peuvent pas être liés à d'autres hôtes"
+        "hostLocalFolderProject": "Les projets de dossier ne peuvent pas être liés à d'autres hôtes",
+        "pendingNotSetUp": "Projet suivi sur cet hôte mais non configuré",
+        "pendingSettingUp": "Configuration du projet en cours",
+        "pendingError": "La configuration du projet nécessite votre attention",
+        "pendingUnsupported": "Projet non pris en charge sur cet hôte"
       },
       "workspacePortScan": {
         "serverSshUpdateRequired": "Mettez à jour le serveur pour voir les ports de ses hôtes SSH.",

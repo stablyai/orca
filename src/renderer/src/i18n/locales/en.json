@@ -3042,7 +3042,11 @@
       "projectHostSetupOptions": {
         "locationNotSet": "Project location not set",
         "hostLocalGitProject": "No matched Git remote for this project",
-        "hostLocalFolderProject": "Folder projects can't link to other hosts"
+        "hostLocalFolderProject": "Folder projects can't link to other hosts",
+        "pendingNotSetUp": "Project tracked on this host but not set up",
+        "pendingSettingUp": "Project setup is in progress",
+        "pendingError": "Project setup needs attention",
+        "pendingUnsupported": "Project is unsupported on this host"
       },
       "updateCheckClickOptions": {
         "releaseHint": "{{rcKey}}+click checks the latest RC; {{perfKey}}+click checks the latest perf build.",

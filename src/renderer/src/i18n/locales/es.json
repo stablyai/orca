@@ -1560,7 +1560,11 @@
       },
       "projectHostSetupOptions": {
         "hostLocalGitProject": "Este proyecto no tiene remoto de Git coincidente",
-        "hostLocalFolderProject": "Los proyectos de carpeta no pueden vincularse a otros hosts"
+        "hostLocalFolderProject": "Los proyectos de carpeta no pueden vincularse a otros hosts",
+        "pendingNotSetUp": "Proyecto registrado en este host, pero sin configurar",
+        "pendingSettingUp": "La configuración del proyecto está en curso",
+        "pendingError": "La configuración del proyecto requiere atención",
+        "pendingUnsupported": "El proyecto no es compatible con este host"
       },
       "updateCheckClickOptions": {
         "releaseHint": "{{rcKey}}+clic busca la versión candidata (RC) más reciente. {{perfKey}}+clic busca la compilación más reciente para pruebas de rendimiento.",

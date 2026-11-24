@@ -2398,7 +2398,11 @@
       "projectHostSetupOptions": {
         "locationNotSet": "尚未设置项目位置",
         "hostLocalGitProject": "此项目没有匹配的 Git 远程仓库",
-        "hostLocalFolderProject": "文件夹项目无法关联到其他主机"
+        "hostLocalFolderProject": "文件夹项目无法关联到其他主机",
+        "pendingNotSetUp": "已在此主机跟踪项目，但尚未设置",
+        "pendingSettingUp": "项目设置进行中",
+        "pendingError": "项目设置需要处理",
+        "pendingUnsupported": "此主机不支持该项目"
       },
       "updateCheckClickOptions": {
         "releaseHint": "按住 {{rcKey}} 点击可检查最新候选版本（RC），按住 {{perfKey}} 点击可检查最新性能测试版。",

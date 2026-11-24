@@ -2112,7 +2112,11 @@
       "projectHostSetupOptions": {
         "locationNotSet": "Projektverzeichnis nicht festgelegt",
         "hostLocalGitProject": "Kein passendes Git-Remote für dieses Projekt",
-        "hostLocalFolderProject": "Ordnerprojekte lassen sich nicht mit anderen Hosts verknüpfen"
+        "hostLocalFolderProject": "Ordnerprojekte lassen sich nicht mit anderen Hosts verknüpfen",
+        "pendingNotSetUp": "Projekt auf diesem Host erfasst, aber nicht eingerichtet",
+        "pendingSettingUp": "Projekteinrichtung läuft",
+        "pendingError": "Projekteinrichtung erfordert Aufmerksamkeit",
+        "pendingUnsupported": "Projekt wird auf diesem Host nicht unterstützt"
       },
       "workspacePortScan": {
         "serverSshUpdateRequired": "Aktualisieren Sie den Server, um Ports auf seinen SSH-Hosts anzuzeigen.",

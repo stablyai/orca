@@ -2077,7 +2077,11 @@
       "projectHostSetupOptions": {
         "locationNotSet": "프로젝트 위치가 설정되지 않음",
         "hostLocalGitProject": "이 프로젝트에 일치하는 Git 원격이 없습니다",
-        "hostLocalFolderProject": "폴더 프로젝트는 다른 호스트에 연결할 수 없습니다"
+        "hostLocalFolderProject": "폴더 프로젝트는 다른 호스트에 연결할 수 없습니다",
+        "pendingNotSetUp": "이 호스트에서 추적 중이지만 프로젝트가 설정되지 않음",
+        "pendingSettingUp": "프로젝트 설정 진행 중",
+        "pendingError": "프로젝트 설정에 확인이 필요함",
+        "pendingUnsupported": "이 호스트에서 지원되지 않는 프로젝트"
       },
       "updateCheckClickOptions": {
         "releaseHint": "{{rcKey}}+클릭으로 최신 출시 후보(RC)를, {{perfKey}}+클릭으로 최신 성능 테스트 빌드를 확인합니다.",
