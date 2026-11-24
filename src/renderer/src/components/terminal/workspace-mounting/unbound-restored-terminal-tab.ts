@@ -7,17 +7,6 @@ export type UnboundRestoredTabState = Pick<
   'ptyIdsByTabId' | 'terminalLayoutsByTabId' | 'pendingStartupByTabId'
 >
 
-/** Deferred admission still has a tab to warm; unbound restored tabs wait until shown, so they never count. */
-export function hasWarmableDeferredTab(
-  state: UnboundRestoredTabState & Pick<AppState, 'tabsByWorktree'>,
-  worktreeId: string,
-  mountableTabIds: ReadonlySet<string>
-): boolean {
-  return (state.tabsByWorktree[worktreeId] ?? []).some(
-    (tab) => !mountableTabIds.has(tab.id) && !isUnboundRestoredTerminalTab(tab, state)
-  )
-}
-
 /**
  * A saved tab with no PTY anywhere and nothing queued to start. Mounting it hidden would only start a
  * fresh shell or a fresh agent nobody asked for; with many such tabs one worktree activation can

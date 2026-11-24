@@ -2,6 +2,7 @@ import { useEffect, useRef } from 'react'
 import { useAppStore } from '@/store'
 import {
   isActivationAdmissionEligible,
+  markActivationAdmissionDrained,
   pickNextActivationDeferredTabId,
   scheduleActivationDeferredAdmission
 } from './activation-deferred-tab-admission'
@@ -57,6 +58,11 @@ export function useActivationDeferredTabAdmission(
         activationDeferredMountTabIdsByWorktreeRef.current.get(worktreeId)
       )
       if (!nextTabId) {
+        const restriction = backgroundMountTabIdsByWorktreeRef.current.get(worktreeId)
+        // Only unbound tabs remain; base drained here, so the hidden overlays it gated mount again.
+        if (restriction && markActivationAdmissionDrained(restriction)) {
+          setBackgroundMountRevision((revision) => revision + 1)
+        }
         return
       }
       revealActivationDeferredTabs({
