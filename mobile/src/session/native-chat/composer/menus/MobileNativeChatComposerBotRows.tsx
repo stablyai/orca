@@ -28,15 +28,11 @@ export function MobileNativeChatComposerBotRow({
   const { bot } = row
   switch (row.kind) {
     case 'bot': {
-      const purpose = row.detail
-        ? t('components.native-chat.composer.botFor', 'For: {{detail}}', { detail: row.detail })
-        : null
-      // A paused bot keeps what it is for, which may be what `@` found it by, as on the desktop.
       const note = bot.paused
-        ? [t('bots.chat.mentionPaused', 'Paused'), purpose].filter(Boolean).join(' · ')
+        ? t('bots.chat.mentionPaused', 'Paused')
         : bot.own
           ? t('bots.chat.mentionOwnChats', 'Your other chats')
-          : purpose
+          : null
       return (
         <View style={[styles.row, bot.paused && styles.dimmed]}>
           <Pressable

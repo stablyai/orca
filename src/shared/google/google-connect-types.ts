@@ -66,8 +66,8 @@ export type GoogleStatusView = {
    * too old to keep one, where a second account would break those calls.
    */
   defaultAccount?: string | null
-  /** The bots on this host whose Google toggle is on. */
-  bots: { id: string; name: string }[]
+  /** The bots on this host whose Google toggle is on; `accounts` absent is every account. */
+  bots: { id: string; name: string; accounts?: string[] }[]
 }
 
 /** The link the person opens; `redirectUri` is where Google sends the browser back to. */

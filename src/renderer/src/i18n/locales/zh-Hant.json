@@ -13527,13 +13527,6 @@
             "c76693e456": "無法載入此工作區的檔案："
           },
           "GitHistoryPanel": {
-            "cf7cad58d2": "尚無提交",
-            "d0fb0f4bf2": "重新整理提交記錄",
-            "9f7535d22b": "引用是指向該確切提交的分支或標籤名稱。它們僅出現在 Git 具有該提交的命名引用的位置。",
-            "9289ba0cb9": "什麼是引用？",
-            "d836037d02": "提交",
-            "8232c8b2f2": "開啟提交 {{value0}}: {{value1}}",
-            "e5e81e59a6": "調整提交記錄高度",
             "6d1e0a7c3b": "無法載入提交檔案"
           },
           "HostedReviewActions": {
@@ -13896,7 +13889,58 @@
             "markResolved": "標記為已解決",
             "keepFile": "保留檔案",
             "keepDeletion": "保留刪除",
-            "refreshAll": "全部重新整理"
+            "refreshAll": "全部重新整理",
+            "baseUpToDate": "已是最新",
+            "rebaseOperationInProgress": "請等待目前的 Git 作業完成",
+            "rebaseButton": "重定基底",
+            "rebaseConflictCount_other": "{{count}} 個衝突",
+            "rebasePaused": "重定基底已暫停",
+            "rebaseResolveConflictsFirst": "請先解決衝突",
+            "rebaseAbort": "中止",
+            "rebaseContinue": "繼續",
+            "continueRebasePausedAgain": "重定基底在下一個衝突處暫停",
+            "continueRebaseFailed": "繼續重定基底失敗",
+            "rebaseAutostashConflict": "已重定基底。你未提交的變更無法乾淨地重新套用，已儲存在 stash 中。",
+            "rebaseStoppedByGit": "Git 暫停了重定基底",
+            "continueRebaseUnconfirmed": "無法確認結果。原始碼控制已重新整理以顯示目前狀態。",
+            "noRebaseInProgress": "沒有進行中的重定基底",
+            "rebaseStopMovedOn": "重定基底已經繼續進行。請查看面板後再試一次。",
+            "rebaseEmptyStep": "此步驟沒有可提交的內容。請中止重定基底，或在終端機中完成它。",
+            "rebaseStepUnreadableShort": "檢查失敗",
+            "rebaseCheckAgain": "再次檢查",
+            "rebaseRetryInspect": "重試",
+            "rebaseRetryInspectLabel": "重新檢查重定基底步驟",
+            "rebaseStoppedFinishInTerminal": "Git 已在此步驟暫停。請在終端機中完成或中止。",
+            "rebaseCheckingStep": "正在檢查重定基底步驟",
+            "rebaseEmptyStepShort": "空步驟",
+            "rebaseAbortLabel": "中止重定基底",
+            "scopeFileCount_one": "{{count}} 個檔案",
+            "scopeFileCount_other": "{{count}} 個檔案",
+            "scopeCommitCount_one": "{{count}} 次提交",
+            "scopeCommitCount_other": "{{count}} 次提交",
+            "scopeUncommitted": "未提交",
+            "scopeAllChanges": "所有變更",
+            "scopeNone": "無",
+            "scopeOpenDiff": "開啟差異",
+            "scopeShowAll": "顯示所有變更",
+            "scopeLoadingBranchChanges": "正在載入分支變更…",
+            "scopeBranchCommits": "此分支上的提交",
+            "scopeRecentCommits": "最近提交",
+            "scopeCompareTo": "與 {{ref}} 比較",
+            "scopeFilterCommits": "篩選提交",
+            "scopeCommitsFailed": "無法載入提交。",
+            "scopeFilesFailed": "無法載入檔案。",
+            "scopeLoadingFiles": "正在載入檔案…",
+            "scopeNoSharedHistory": "與 {{ref}} 沒有共同歷史記錄",
+            "scopeRetryCommits": "重試",
+            "scopeLoadingCommits": "正在載入提交…",
+            "scopeNoMatchingCommits": "沒有相符的提交",
+            "scopeNoBranchCommitsYet": "此分支上還沒有提交",
+            "scopeNoCommitsYet": "還沒有提交",
+            "scopeOlderHistory": "在 Git Graph 中查看更早的歷史",
+            "scopeNoUncommitted": "沒有未提交的變更。",
+            "scopeCommitFiles": "檔案",
+            "gitGraphButton": "圖譜"
           },
           "SourceControlAgentActionDialog": {
             "8e856842d1": "無法啟動選定的代理程式。",
@@ -14325,10 +14369,8 @@
                   "titlePublishBranchFirst": "請先發布分支再同步提交",
                   "titleUseForcePush": "使用「提交並強制推送」；遠端只有本機提交的舊版本",
                   "titleCommitThenPullPush": "先提交，再拉取並推送",
-                  "rebaseFromNamedBase": "以 {{baseRef}} 為基準進行變基",
                   "rebaseFromBase": "以基準分支進行變基",
                   "rebaseChooseRemoteBase": "選擇要作為變基基準的遠端分支",
-                  "rebaseDirtyHint": "嘗試變基；git 可能要求先提交或儲藏本機變更",
                   "rebaseWithLatestFrom": "使用 {{baseRef}} 的最新提交，對目前分支進行變基",
                   "blockedCommitFirst": "請先提交變更",
                   "blockedCheckOutBranchFirst": "請先檢出分支",
@@ -14350,7 +14392,6 @@
                   "titleCommitAndPush": "提交已暫存的變更並推送",
                   "commitForcePush": "提交並強制推送",
                   "commitPush": "提交並推送",
-                  "titleOperationInProgress": "操作進行中…",
                   "titleAbortRebaseInProgress": "中止進行中的變基",
                   "titleAbortMergeInProgress": "中止進行中的合併",
                   "titleNothingToPushTo": "沒有可推送至 {{upstreamName}} 的內容",
@@ -14401,7 +14442,13 @@
                   "titleManualForcePush_other": "使用 lease 強制推送 {{count}} 筆本機提交，以更新 {{upstreamName}}。",
                   "titleUnpublishedForcePushBranch": "使用 lease 強制推送此分支，並視需要設定上游分支。",
                   "titleUnpublishedForcePushCount_one": "使用 lease 強制推送此分支的 {{count}} 筆提交，並視需要設定上游分支。",
-                  "titleUnpublishedForcePushCount_other": "使用 lease 強制推送此分支的 {{count}} 筆提交，並視需要設定上游分支。"
+                  "titleUnpublishedForcePushCount_other": "使用 lease 強制推送此分支的 {{count}} 筆提交，並視需要設定上游分支。",
+                  "rebaseOntoNamedBase": "重定基底到 {{base}}",
+                  "rebaseCommitOrStashFirst": "請先提交或暫存變更",
+                  "continueRebase": "繼續重定基底",
+                  "titleContinueRebase": "繼續已暫停的重定基底",
+                  "rebaseFromNamedBase": "以 {{baseRef}} 為基準進行變基",
+                  "rebaseDirtyHint": "嘗試變基；git 可能要求先提交或儲藏本機變更"
                 }
               },
               "primary": {
@@ -14444,7 +14491,8 @@
                   "e9b5d1f470": "在建立 {{value0}} 之前檢出一個分支。",
                   "f0c6e2a581": "此分支尚未準備好建立 {{value0}}。",
                   "8f9a0b1c2d": "沒有可提交的內容。分支已是最新狀態。",
-                  "h3i4j5k607": "正在檢查此分支是否可以建立 {{value0}}…"
+                  "h3i4j5k607": "正在檢查此分支是否可以建立 {{value0}}…",
+                  "nothingToCommit": "沒有可提交的內容"
                 }
               },
               "branch": {
@@ -14730,12 +14778,7 @@
             "f8a2c4d1e0": "檔案總管搜尋模式"
           },
           "GitHistoryCommitFiles": {
-            "b2c3d4e5f6": "此提交沒有檔案變更",
-            "c3d4e5f6a7": "開啟所有變更"
-          },
-          "GitHistoryRow": {
-            "2f9c41ab07": "顯示提交 {{value0}} 中的檔案：{{value1}}",
-            "4a8d9e0c1f": "隱藏提交 {{value0}} 中的檔案：{{value1}}"
+            "b2c3d4e5f6": "此提交沒有檔案變更"
           },
           "GitHistoryCommitContextMenu": {
             "7b1c4e9a02": "在瀏覽器中開啟提交",
@@ -18878,7 +18921,8 @@
         "thisComputer": "此電腦"
       },
       "runtimeGitSyncClient": {
-        "completeMergeNeedsNewerHost": "完成合併需要此主機上有較新版本的 Orca。請更新該主機上的 Orca。"
+        "completeMergeNeedsNewerHost": "完成合併需要此主機上有較新版本的 Orca。請更新該主機上的 Orca。",
+        "continueRebaseNeedsNewerHost": "繼續重定基底需要此主機上較新版本的 Orca。請在該主機上更新 Orca。"
       },
       "runtimeGitWorkingTreeClient": {
         "resolveConflictNeedsNewerHost": "解決衝突需要此主機上有較新版本的 Orca。請更新該主機上的 Orca。"
@@ -19421,7 +19465,6 @@
         "moreControls": "更多聊天控制項",
         "exitPlanMode": "結束計畫模式",
         "permissionAppliesNextMessage": "{{saved}} 將從下一則訊息生效；目前使用 {{active}}",
-        "botFor": "用途：{{detail}}",
         "bots": "機器人",
         "backToBots": "返回機器人",
         "loadingBotChats": "正在載入 {{name}} 的聊天…"
@@ -24624,7 +24667,8 @@
     "branchCreated": "已在 {{commit}} 建立 {{branch}}",
     "branchName": "分支名稱",
     "invalidBranchName": "此分支名稱無效。請選擇其他名稱。",
-    "createBranchFailed": "Orca 無法建立分支。請在終端機中檢查此儲存庫，然後重試。"
+    "createBranchFailed": "Orca 無法建立分支。請在終端機中檢查此儲存庫，然後重試。",
+    "openDiff": "開啟差異"
   },
   "speechModelUpdate": {
     "update": "更新",
