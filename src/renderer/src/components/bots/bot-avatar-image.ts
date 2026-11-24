@@ -1,11 +1,12 @@
 // Where a bot's picture loads from: a bundled mascot, or its uploaded PNG read once per version.
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { readBotAvatarPng } from '@/lib/bot-catalog'
 import { botRefKey, type BotOnHost, type BotRef } from '@/lib/bot-hosts'
 import { parseBotAvatar } from '../../../../shared/bot-avatar'
 import type { Bot } from '../../../../shared/bot-types'
 import { wornBotOutfit } from '../../../../shared/bots/bot-avatar-outfit'
 import { useBotMascotLayers, type BotOutfitArt, type BotPictureSize } from './bot-mascot-look'
+import { botShapePicture } from './bot-shape-picture'
 
 // Each bot's current upload only (by botRefKey), so a replaced picture is let go; a failed read is retried next time.
 // `read`: the finished read, for a caller that may not ask the host now.
@@ -63,7 +64,10 @@ export function useBotAvatarLook(
     size
   )
   const upload = useUploadSrc(bot)
-  return mascot ?? { src: upload, outfit: null }
+  const isShape = parsed?.kind === 'shape'
+  const color = bot.avatarColor
+  const shape = useMemo(() => (isShape ? botShapePicture(color) : null), [isShape, color])
+  return mascot ?? { src: shape ?? upload, outfit: null }
 }
 
 function useUploadSrc(bot: AvatarBot): string | null {

@@ -1,4 +1,5 @@
 import React, { useEffect, useId } from 'react'
+import { isWebClientLocation } from '@/app-shell/platform/web-client-location'
 import { openBotSettings } from './bot-settings-open'
 import { ChevronDown, Copy, Pause, Play, Server, Settings, Trash2 } from 'lucide-react'
 import { toast } from 'sonner'
@@ -82,7 +83,19 @@ export function BotRow({
   const handleDelete = useDeleteBot(bot)
   return (
     <BotSidebarRow
-      avatar={<BotAvatar bot={bot} className="size-8 rounded-md text-sm" />}
+      avatar={
+        <BotAvatar
+          bot={bot}
+          className="size-8 rounded-md text-sm"
+          shapeState={
+            isWebClientLocation()
+              ? undefined
+              : !bot.paused && !offline && status === 'working'
+                ? 'working'
+                : 'idle'
+          }
+        />
+      }
       name={bot.name}
       workspaceId={workspaceId}
       hostId={bot.hostId}

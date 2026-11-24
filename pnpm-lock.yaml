@@ -557,6 +557,9 @@ importers:
       node-gyp:
         specifier: 12.4.0
         version: 12.4.0
+      open-bot-avatar:
+        specifier: 0.3.0
+        version: 0.3.0
       oxc-transform-react:
         specifier: ~0.152.0
         version: 0.152.0
@@ -6922,6 +6925,9 @@ packages:
 
   oniguruma-to-es@4.3.6:
     resolution: {integrity: sha512-csuQ9x3Yr0cEIs/Zgx/OEt9iBw9vqIunAPQkx19R/fiMq2oGVTgcMqO/V3Ybqefr1TBvosI6jU539ksaBULJyA==}
+
+  open-bot-avatar@0.3.0:
+    resolution: {integrity: sha512-3P0o8eiClHHiLr7lIFZE/WxUtqHLjVb0xQ0PqYzA48XG/oQlWyeIdcY0egK6H8AgFuoY1aKVhc8QKSaj4z5ZOw==}
 
   opentype.js@2.0.0:
     resolution: {integrity: sha512-kCyjv6xdDY1W/jLWZ/L3QhhTlKUqDZMQ5+Jdlw12b3dXkKNpYBqqlMMj0YDQPShWFTMwgZI1hG14kN3XUDSg/A==}
@@ -14272,6 +14278,8 @@ snapshots:
       oniguruma-parser: 0.12.2
       regex: 6.1.0
       regex-recursion: 6.0.2
+
+  open-bot-avatar@0.3.0: {}
 
   opentype.js@2.0.0: {}
 

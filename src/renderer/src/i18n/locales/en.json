@@ -27861,6 +27861,7 @@
       "action": "Switch to {{agent}}"
     },
     "avatar": {
+      "shapeMug": "Animated mug",
       "intake": {
         "tooBig": "That image is over 10 MB.",
         "type": "Orca can't read that image. Try PNG or JPEG.",

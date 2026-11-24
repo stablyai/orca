@@ -1,4 +1,4 @@
-import React, { useRef, useState } from 'react'
+import React, { useMemo, useRef, useState } from 'react'
 import { Trans } from 'react-i18next'
 import { ImageUp } from 'lucide-react'
 import { Button } from '@/components/ui/button'
@@ -25,10 +25,12 @@ import {
   useGenerateFace
 } from './AvatarGenerateFace'
 import { BotPictureRowFold } from './BotPictureRowFold'
+import { botShapePicture } from './bot-shape-picture'
 import { readAvatarCapability } from './avatar-generation-capability-store'
 import {
   CUSTOM_FACE,
   GENERATE_FACE,
+  SHAPE_FACE,
   isGeneratedCustom,
   pictureFaceOrder,
   type GenerateSlot,
@@ -40,7 +42,7 @@ export const BOT_PICTURE_DROP_OUTLINE =
   'rounded-md in-data-[bot-picture-drop]:ring-[1.5px] in-data-[bot-picture-drop]:ring-foreground/35 in-data-[bot-picture-drop]:ring-inset'
 
 /** Which picture is chosen: a mascot by its place in PICKABLE_BOT_MASCOT_IDS, or the custom one. */
-export type BotPictureValue = { kind: 'mascot'; index: number } | { kind: 'custom' }
+export type BotPictureValue = { kind: 'mascot'; index: number } | { kind: 'custom' | 'shape' }
 
 /** A picture that is not a mascot (an upload, or an older emoji), shown just after mascot `after` (-1: first). */
 export type BotPictureCustom = {
@@ -75,9 +77,11 @@ export function pictureMascotIndex(
   return value.kind === 'mascot' ? value.index : Math.max(0, custom?.after ?? 0)
 }
 
-/** Whether the color and outfit apply: a mascot does, and so does a retired one; an image does not. */
+/** Whether the color and outfit apply: a mascot does, and so does a retired one; an image or the shape does not. */
 export function pictureTakesLook(value: BotPictureValue, custom: BotPictureCustom | null): boolean {
-  return value.kind === 'mascot' || custom === null || Boolean(custom.mascot)
+  return (
+    value.kind !== 'shape' && (value.kind === 'mascot' || custom === null || Boolean(custom.mascot))
+  )
 }
 
 /** A bot's picture: a carousel of the mascots (plus any custom picture); upload, paste or drop your own. */
@@ -92,6 +96,7 @@ export function BotPicturePicker({
   onColorChange,
   outfit = null,
   onOutfitChange,
+  withShape = false,
   intake: sharedIntake,
   footer
 }: {
@@ -111,6 +116,7 @@ export function BotPicturePicker({
   outfit?: BotAvatarOutfit | null
   /** Shows the outfits under a mascot. */
   onOutfitChange?: (outfit: BotAvatarOutfit | null) => void
+  withShape?: boolean
   /** An intake that outlives this picker (New bot's picture button), so a decode survives the popover
    *  closing and one order holds across both surfaces; its owner places the picture. */
   intake?: BotAvatarIntake
@@ -123,12 +129,15 @@ export function BotPicturePicker({
   // A click onto Generate puts the cursor in its field; arrow keys leave focus on the carousel.
   const byPointer = useRef(false)
   const showingCustom = value.kind === 'custom' && custom !== null
+  const showingShape = value.kind === 'shape'
   const mascotIndex = pictureMascotIndex(value, custom)
   // One step back from the face selected at open reaches Generate; it keeps that place while open.
   const [generateSlot] = useState<GenerateSlot>(() =>
     showingCustom
       ? { before: 'custom', after: custom.after }
-      : { before: 'mascot', index: mascotIndex }
+      : showingShape
+        ? { before: 'shape' }
+        : { before: 'mascot', index: mascotIndex }
   )
   // Generate is current while chosen, even before it holds a picture; selected is applied.
   const [onGenerate, setOnGenerate] = useState(false)
@@ -148,16 +157,22 @@ export function BotPicturePicker({
   // With Generate, the user's own picture lives in its slot: one tile, never two. An older
   // picture with no image (an emoji) keeps its own face.
   const customInSlot = withGenerate && Boolean(custom?.src) && !custom?.mascot
+  // The shape stays offered while it is the bot's picture, even where it can't be chosen anew.
+  const offerShape = withShape || showingShape
   const order = pictureFaceOrder(
     custom && !customInSlot ? custom.after : null,
-    withGenerate ? generateSlot : null
+    withGenerate ? generateSlot : null,
+    offerShape
   )
+  const shapeSrc = useMemo(() => (offerShape ? botShapePicture(color) : null), [offerShape, color])
   const currentKey: PictureFaceKey =
     withGenerate && (onGenerate || (showingCustom && customInSlot))
       ? GENERATE_FACE
       : showingCustom
         ? CUSTOM_FACE
-        : (PICKABLE_BOT_MASCOT_IDS[mascotIndex] ?? PICKABLE_BOT_MASCOT_IDS[0])
+        : showingShape
+          ? SHAPE_FACE
+          : (PICKABLE_BOT_MASCOT_IDS[mascotIndex] ?? PICKABLE_BOT_MASCOT_IDS[0])
   const generating = currentKey === GENERATE_FACE
   const lookOf = useBotMascotTileLooks(outfit, 'large')
   // The description field mounts the first time Generate is current, not with every open, and stays
@@ -196,7 +211,9 @@ export function BotPicturePicker({
         ? custom?.mascot
           ? { ...mascotFace(custom.mascot, lookOf(custom.mascot), color), key }
           : { key, src: custom?.src ?? null, fallback: custom?.fallback ?? '' }
-        : mascotFace(key, lookOf(key), color)
+        : key === SHAPE_FACE
+          ? { key, src: shapeSrc, fallback: '' }
+          : mascotFace(key, lookOf(key), color)
   )
   // Every picture an intake takes, shared or not and even the same image again, leaves Generate and
   // wins the slot back from a picture made earlier.
@@ -229,6 +246,8 @@ export function BotPicturePicker({
       }
     } else if (key === CUSTOM_FACE) {
       onChange({ kind: 'custom' })
+    } else if (key === SHAPE_FACE) {
+      onChange({ kind: 'shape' })
     } else if (key) {
       onChange({ kind: 'mascot', index: PICKABLE_BOT_MASCOT_IDS.indexOf(key) })
     }
@@ -302,17 +321,22 @@ export function BotPicturePicker({
               ? t('bots.avatar.generate.face', 'Generate a picture')
               : showingCustom
                 ? custom.description
-                : t('bots.new.pictureMascot', 'Mascot {{n}} of {{total}}', {
-                    n: mascotIndex + 1,
-                    total: PICKABLE_BOT_MASCOT_IDS.length
-                  })
+                : showingShape
+                  ? t('bots.avatar.shapeMug', 'Animated mug')
+                  : t('bots.new.pictureMascot', 'Mascot {{n}} of {{total}}', {
+                      n: mascotIndex + 1,
+                      total: PICKABLE_BOT_MASCOT_IDS.length
+                    })
           }
           onIndexChange={(index) => select(order[index])}
         />
         {/* On Generate the description field takes the swatches' place; the rows cross-fade. */}
         <BotPictureRowFold open={!generating}>
           {onColorChange || onOutfitChange ? (
-            <BotPictureRowFold open={pictureTakesLook(value, custom)}>
+            <BotPictureRowFold
+              // The shape is drawn in the bot's color, so its row keeps the swatches.
+              open={showingShape ? Boolean(onColorChange) : pictureTakesLook(value, custom)}
+            >
               <BotPictureLook
                 id={
                   (showingCustom ? custom.mascot : undefined) ??
@@ -322,7 +346,8 @@ export function BotPicturePicker({
                 color={color}
                 onColorChange={onColorChange}
                 outfit={outfit}
-                onOutfitChange={onOutfitChange}
+                // The shape takes a color but wears no outfit.
+                onOutfitChange={showingShape ? undefined : onOutfitChange}
               />
             </BotPictureRowFold>
           ) : null}

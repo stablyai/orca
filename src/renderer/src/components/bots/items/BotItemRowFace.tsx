@@ -1,10 +1,11 @@
-import { useContext, useSyncExternalStore } from 'react'
+import { useContext, useMemo, useSyncExternalStore } from 'react'
 import { parseBotAvatar } from '../../../../../shared/bot-avatar'
 import type { Bot } from '../../../../../shared/bot-types'
 import { botFallback } from '../../../../../shared/bots/bot-avatar-fallback'
 import { BotAvatar, BotAvatarTile } from '../BotAvatar'
 import { wornBotOutfit } from '../../../../../shared/bots/bot-avatar-outfit'
 import { useBotMascotLayers } from '../bot-mascot-look'
+import { botShapePicture } from '../bot-shape-picture'
 import {
   BotGroupFacePicturesContext,
   BotItemFaceFolded,
@@ -48,9 +49,13 @@ function BotPanelFace({
     bot.avatarColor,
     wornBotOutfit(bot.avatarOutfit)
   )
+  // The opt-in shape shows still here; only the sidebar row animates it.
+  const isShape = parsed?.kind === 'shape'
+  const color = bot.avatarColor
+  const shape = useMemo(() => (isShape ? botShapePicture(color) : null), [isShape, color])
   return (
     <BotAvatarTile
-      src={look?.src ?? upload}
+      src={look?.src ?? shape ?? upload}
       outfit={look?.outfit}
       fallback={botFallback(bot)}
       className={FACE_CLASS}

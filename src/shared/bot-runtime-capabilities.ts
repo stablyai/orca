@@ -61,6 +61,10 @@ export const BOTS_AVATAR_COLOR_RUNTIME_CAPABILITY = 'bots.avatar-color.v1' as co
 // Host stores what a picture wears (bots.update and bots.create `avatarOutfit`); offered only where advertised, as colors are.
 export const BOTS_AVATAR_OUTFIT_RUNTIME_CAPABILITY = 'bots.avatar-outfit.v1' as const
 
+// Host build accepts the opt-in shape picture (`mascot:shape-mug`) in bots.update; it only stores the string, so
+// other clients of the host may still not know it and show the initial.
+export const BOTS_AVATAR_SHAPE_RUNTIME_CAPABILITY = 'bots.avatar-shape.v1' as const
+
 // Host takes chat image attachments on group room posts (bots.groups.send `images`, store `@path`s in text)
 // and delivers them as image blocks to addressed members; an older host takes text only.
 export const BOTS_GROUP_ATTACHMENTS_RUNTIME_CAPABILITY = 'bots.group-attachments.v1' as const
@@ -96,6 +100,7 @@ export const BOT_RUNTIME_CAPABILITIES = [
   BOTS_SESSION_LINKS_RUNTIME_CAPABILITY,
   BOTS_AVATAR_COLOR_RUNTIME_CAPABILITY,
   BOTS_AVATAR_OUTFIT_RUNTIME_CAPABILITY,
+  BOTS_AVATAR_SHAPE_RUNTIME_CAPABILITY,
   BOTS_HOME_PIN_RUNTIME_CAPABILITY,
   BOTS_ITEM_WAITING_CAPABILITY,
   BOTS_ITEM_CANCEL_NO_REASON_CAPABILITY

@@ -13,17 +13,13 @@ import {
   savedPictureDescription,
   useSavedPictureDescription
 } from '@/components/bots/generated-avatar-descriptions'
-import {
-  isUploadAvatar,
-  mascotAvatar,
-  parseBotAvatar,
-  PICKABLE_BOT_MASCOT_IDS
-} from '../../../../../shared/bot-avatar'
+import { isUploadAvatar, parseBotAvatar } from '../../../../../shared/bot-avatar'
 import type { Bot } from '../../../../../shared/bot-types'
 import type { BotUpdateParams } from '../../../../../shared/rpc-contract/bots-params'
 import { wornBotOutfit, type BotAvatarOutfit } from '../../../../../shared/bots/bot-avatar-outfit'
 import { botRefKey } from '@/lib/bot-hosts'
 import { beginBotHostUpdate } from '@/lib/bot-host-refresh'
+import { choiceKey, savedChoice, type PictureKey } from './bot-picture-choice'
 import { useBotLookSave } from './use-bot-look-save'
 import { useSaveOnClose } from './use-save-on-close'
 
@@ -44,29 +40,9 @@ type KeptPicture = {
   replaced?: KeptPicture | null
 }
 
-/** A choice compared by value: the mascot's avatar, or which kept picture. */
-type PictureKey = string
-
-function choiceKey(choice: BotPictureValue, kept: KeptPicture | null): PictureKey {
-  return choice.kind === 'mascot'
-    ? mascotAvatar(PICKABLE_BOT_MASCOT_IDS[choice.index] ?? PICKABLE_BOT_MASCOT_IDS[0])
-    : `custom:${kept?.id ?? -1}`
-}
-
-// The carousel's place of a mascot it offers; -1 for anything else, a retired mascot included.
-function pickableIndex(avatar: string | null): number {
-  const parsed = parseBotAvatar(avatar)
-  return parsed?.kind === 'mascot' ? PICKABLE_BOT_MASCOT_IDS.indexOf(parsed.id) : -1
-}
-
-function savedChoice(avatar: string | null): BotPictureValue {
-  const index = pickableIndex(avatar)
-  return index >= 0 ? { kind: 'mascot', index } : { kind: 'custom' }
-}
-
 // A picture the carousel doesn't offer (an upload, an emoji, a retired mascot) is kept as the bot's own.
 function keptFrom(avatar: string | null, id: number, after: number): KeptPicture | null {
-  return pickableIndex(avatar) >= 0 ? null : { id, avatar, png: null, after }
+  return savedChoice(avatar).kind === 'custom' ? { id, avatar, png: null, after } : null
 }
 
 type SaveLoop = {
@@ -144,7 +120,7 @@ export function useBotPictureSetting(
   }
 
   const send = async (choice: BotPictureValue): Promise<boolean> => {
-    if (choice.kind === 'mascot') {
+    if (choice.kind !== 'custom') {
       return (await update({ avatar: choiceKey(choice, null) })) !== null
     }
     const target = live.kept
@@ -301,7 +277,7 @@ export function useBotPictureSetting(
     if (live.saving || live.timer || live.desired !== live.saved) {
       return
     }
-    const savedAvatar = live.savedChoice.kind === 'mascot' ? live.saved : live.kept?.avatar
+    const savedAvatar = live.savedChoice.kind === 'custom' ? live.kept?.avatar : live.saved
     if (bot.avatar === savedAvatar) {
       return
     }

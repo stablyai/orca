@@ -3,7 +3,8 @@ import type { Bot } from '../../../../shared/bot-types'
 import { useBotAvatarLook } from './bot-avatar-image'
 import type { BotOnHost } from '@/lib/bot-hosts'
 import { botFallback } from '../../../../shared/bots/bot-avatar-fallback'
-import { parseBotAvatar } from '../../../../shared/bot-avatar'
+import { BOT_SHAPE_AVATAR, parseBotAvatar } from '../../../../shared/bot-avatar'
+import { AnimatedBotShape } from './AnimatedBotShape'
 import { BOT_MASCOT_URLS } from './bot-mascots'
 import type { BotOutfitArt, BotPictureSize } from './bot-mascot-look'
 
@@ -12,13 +13,15 @@ export function BotAvatar({
   bot,
   size,
   className,
-  style
+  style,
+  shapeState
 }: {
   bot: Pick<Bot, 'id' | 'name' | 'avatar' | 'avatarColor' | 'avatarOutfit'> & BotOnHost
   /** 'large' for a picture over about 48 px, so an outfit draws its large art. */
   size?: BotPictureSize
   className?: string
   style?: React.CSSProperties
+  shapeState?: 'idle' | 'working'
 }): React.JSX.Element {
   const look = useBotAvatarLook(bot, size)
   return (
@@ -28,7 +31,11 @@ export function BotAvatar({
       fallback={botFallback(bot)}
       className={className}
       style={style}
-    />
+    >
+      {shapeState && bot.avatar === BOT_SHAPE_AVATAR && look.src ? (
+        <AnimatedBotShape src={look.src} color={bot.avatarColor} state={shapeState} />
+      ) : null}
+    </BotAvatarTile>
   )
 }
 
@@ -59,13 +66,15 @@ export function BotAvatarTile({
   fallback,
   outfit,
   className,
-  style
+  style,
+  children
 }: {
   src: string | null
   fallback: string
   outfit?: BotOutfitArt | null
   className?: string
   style?: React.CSSProperties
+  children?: React.ReactNode
 }): React.JSX.Element {
   return (
     <span
@@ -77,11 +86,12 @@ export function BotAvatarTile({
         className
       )}
     >
-      {src ? (
-        <img src={src} alt="" draggable={false} className="size-full object-cover" />
-      ) : (
-        fallback
-      )}
+      {children ??
+        (src ? (
+          <img src={src} alt="" draggable={false} className="size-full object-cover" />
+        ) : (
+          fallback
+        ))}
       {src && outfit ? <OutfitArt art={outfit} /> : null}
     </span>
   )

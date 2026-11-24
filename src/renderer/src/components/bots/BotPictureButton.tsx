@@ -1,8 +1,10 @@
 // A bot's picture, edited where it shows: a click opens the picture picker in a popover.
 import { useBotHostHas } from '@/lib/bot-host-status'
+import { isWebClientLocation } from '@/app-shell/platform/web-client-location'
 import {
   BOTS_AVATAR_COLOR_RUNTIME_CAPABILITY,
-  BOTS_AVATAR_OUTFIT_RUNTIME_CAPABILITY
+  BOTS_AVATAR_OUTFIT_RUNTIME_CAPABILITY,
+  BOTS_AVATAR_SHAPE_RUNTIME_CAPABILITY
 } from '../../../../shared/bot-runtime-capabilities'
 import { Pencil } from 'lucide-react'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
@@ -31,6 +33,7 @@ export function BotPictureButton({
   const t = useTranslate()
   const colors = useBotHostHas(bot.hostId, BOTS_AVATAR_COLOR_RUNTIME_CAPABILITY)
   const outfits = useBotHostHas(bot.hostId, BOTS_AVATAR_OUTFIT_RUNTIME_CAPABILITY)
+  const shapes = useBotHostHas(bot.hostId, BOTS_AVATAR_SHAPE_RUNTIME_CAPABILITY)
   // The note is only for a mascot's color and outfit, which Slack doesn't get; an image (one being
   // generated included) has neither.
   const look = pictureTakesLook(picture.value, picture.custom)
@@ -89,6 +92,7 @@ export function BotPictureButton({
             onColorChange={colors ? picture.pickColor : undefined}
             outfit={picture.outfit}
             onOutfitChange={outfits ? picture.pickOutfit : undefined}
+            withShape={shapes && !isWebClientLocation()}
             footer={slackNote}
           />
         </div>

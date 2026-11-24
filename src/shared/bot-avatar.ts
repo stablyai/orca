@@ -68,12 +68,15 @@ export const MIN_BOT_AVATAR_SOURCE_SIDE = 128
 
 export type ParsedBotAvatar =
   | { kind: 'mascot'; id: BotMascotId }
+  | { kind: 'shape' }
   /** `version` names the upload's bytes, so a new one is never shown from an old cache. */
   | { kind: 'upload'; version: string }
   | { kind: 'emoji'; emoji: string }
 
 const MASCOT_PREFIX = 'mascot:'
 const UPLOAD_PREFIX = 'upload:'
+// Older clients treat an unknown mascot as an initial.
+export const BOT_SHAPE_AVATAR = 'mascot:shape-mug'
 
 export function isBotMascotId(value: string): value is BotMascotId {
   return BOT_MASCOT_IDS.some((id) => id === value)
@@ -95,6 +98,9 @@ export function isUploadAvatar(value: string | null): boolean {
 export function parseBotAvatar(value: string | null): ParsedBotAvatar | null {
   if (!value) {
     return null
+  }
+  if (value === BOT_SHAPE_AVATAR) {
+    return { kind: 'shape' }
   }
   if (value.startsWith(MASCOT_PREFIX)) {
     const id = value.slice(MASCOT_PREFIX.length)
