@@ -26,7 +26,7 @@ import { useMobileColorScheme } from '../../theme/use-mobile-color-scheme'
 import type { RpcClient } from '../../transport/rpc/rpc-client-contract'
 import type { PhoneBot } from '../host-bots-operations'
 import { MobileBotTextButton } from '../MobileBotTextButton'
-import { MobileConnectorSourceIcon } from '../MobileConnectorSourceIcon'
+import { MobileConnectorLogo } from '../MobileConnectorSourceIcon'
 import { slackErrorMessage } from './mobile-slack-copy'
 import { MobileConnectorTryIt } from './MobileConnectorTryIt'
 import { SlackPickStep, SlackProblemStep } from './MobileSlackSetupSteps'
@@ -162,7 +162,7 @@ export function MobileBotSlackSetup(props: {
       }
     />
   )
-  const mark = <MobileConnectorSourceIcon source="slack" size={28} />
+  const mark = <MobileConnectorLogo source="slack" size={28} />
   const body = (() => {
     switch (step.kind) {
       case 'checking':

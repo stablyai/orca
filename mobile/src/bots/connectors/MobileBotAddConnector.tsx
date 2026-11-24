@@ -23,7 +23,7 @@ import { SettingsSection } from '../../settings/settings-screen-frame'
 import { colors, radii } from '../../theme/mobile-theme'
 import { themedStyleSheet } from '../../theme/themed-styles'
 import { useMobileColorScheme } from '../../theme/use-mobile-color-scheme'
-import { MobileConnectorSourceIcon, MobileGoogleMark } from '../MobileConnectorSourceIcon'
+import { MobileConnectorLogo } from '../MobileConnectorSourceIcon'
 import type { RpcClient } from '../../transport/rpc/rpc-client-contract'
 import { AppLogo } from './MobileBotComposio'
 import { useComposioCatalog } from './use-composio-catalog'
@@ -103,22 +103,22 @@ export function MobileBotAddConnector(props: {
     slack: {
       name: BOT_CONNECTOR_NAMES.slack,
       line: t('bots.apps.line.slack', 'Messages and mentions'),
-      icon: <MobileConnectorSourceIcon source="slack" size={ICON} />
+      icon: <MobileConnectorLogo source="slack" size={ICON} />
     },
     github: {
       name: BOT_CONNECTOR_NAMES.github,
       line: t('bots.apps.line.github', 'Mentions and events on issues and PRs'),
-      icon: <MobileConnectorSourceIcon source="github" size={ICON} />
+      icon: <MobileConnectorLogo source="github" size={ICON} />
     },
     linear: {
       name: BOT_CONNECTOR_NAMES.linear,
       line: t('bots.apps.line.linear', 'Assigned issues and mentions'),
-      icon: <MobileConnectorSourceIcon source="linear" size={ICON} />
+      icon: <MobileConnectorLogo source="linear" size={ICON} />
     },
     google: {
       name: BOT_CONNECTOR_NAMES.google,
       line: t('bots.apps.line.google', 'Gmail, Calendar and Drive, as you'),
-      icon: <MobileGoogleMark size={ICON} />
+      icon: <MobileConnectorLogo source="google" size={ICON} />
     },
     webhooks: {
       name: t('bots.webhooks.name', 'Webhooks'),

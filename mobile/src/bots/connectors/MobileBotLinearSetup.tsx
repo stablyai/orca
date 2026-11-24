@@ -17,7 +17,7 @@ import { SettingsNote, SettingsSection } from '../../settings/settings-screen-fr
 import { colors } from '../../theme/mobile-theme'
 import type { RpcClient } from '../../transport/rpc/rpc-client-contract'
 import type { PhoneBot } from '../host-bots-operations'
-import { MobileConnectorSourceIcon } from '../MobileConnectorSourceIcon'
+import { MobileConnectorLogo } from '../MobileConnectorSourceIcon'
 import { ConnectorHandoff, useFollowHost } from './MobileConnectorAccountParts'
 import { connectorAccountErrorMessage, linearWorkspaceLabel } from './mobile-connector-account-copy'
 import { MobileConnectorTryIt } from './MobileConnectorTryIt'
@@ -194,7 +194,7 @@ export function MobileBotLinearSetup(props: {
   )
   const workspaceRow = (workspace: ConnectorLinearWorkspace) => (
     <ListRow
-      leading={<MobileConnectorSourceIcon source="linear" size={20} />}
+      leading={<MobileConnectorLogo source="linear" size={20} />}
       title={workspace.name}
       subtitle={t('bots.connect.signedInAs', 'Signed in as {{who}}', {
         who: workspace.userName || workspace.userId
@@ -210,7 +210,7 @@ export function MobileBotLinearSetup(props: {
       case 'failed':
         return (
           <MobileStateView
-            iconElement={<MobileConnectorSourceIcon source="linear" size={28} />}
+            iconElement={<MobileConnectorLogo source="linear" size={28} />}
             title={error(step.code)}
             action={
               step.code === BOT_LINEAR_OFF || !props.online
@@ -236,7 +236,7 @@ export function MobileBotLinearSetup(props: {
               }
             >
               <ListRow
-                leading={<MobileConnectorSourceIcon source="linear" size={20} />}
+                leading={<MobileConnectorLogo source="linear" size={20} />}
                 title={BOT_CONNECTOR_NAMES.linear}
                 subtitle={t(
                   'bots.linear.connect.pickSubtitle',
@@ -292,7 +292,7 @@ export function MobileBotLinearSetup(props: {
               {step.workspaces.map((entry) => (
                 <ListRow
                   key={entry.workspaceId}
-                  leading={<MobileConnectorSourceIcon source="linear" size={20} />}
+                  leading={<MobileConnectorLogo source="linear" size={20} />}
                   title={linearWorkspaceLabel(entry.name, entry.urlKey)}
                   navigates
                   onPress={() => setPicked(entry.workspaceId)}

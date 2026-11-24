@@ -11,7 +11,7 @@ import { SettingsSection } from '../../settings/settings-screen-frame'
 import { colors } from '../../theme/mobile-theme'
 import type { RpcClient } from '../../transport/rpc/rpc-client-contract'
 import type { PhoneBot } from '../host-bots-operations'
-import { MobileConnectorSourceIcon } from '../MobileConnectorSourceIcon'
+import { MobileConnectorLogo } from '../MobileConnectorSourceIcon'
 import { readSlack } from './use-phone-bot-slack'
 
 /** Each workspace's name as one of the host's bots there reads it (one read per bot, again once the
@@ -73,7 +73,7 @@ export function SlackPickStep(props: {
       {props.teamIds.map((teamId) => (
         <ListRow
           key={teamId}
-          leading={<MobileConnectorSourceIcon source="slack" size={20} />}
+          leading={<MobileConnectorLogo source="slack" size={20} />}
           title={names.get(teamId) ?? teamId}
           navigates
           disabled={!props.online}
@@ -109,7 +109,7 @@ export function SlackProblemStep(props: {
     <>
       <SettingsSection first>
         <ListRow
-          leading={<MobileConnectorSourceIcon source="slack" size={20} />}
+          leading={<MobileConnectorLogo source="slack" size={20} />}
           title={
             other
               ? t(
