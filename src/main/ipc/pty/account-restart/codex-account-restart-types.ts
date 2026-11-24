@@ -55,3 +55,30 @@ export type CodexRestartResumeDecision =
       /** Puts the intent back for the next resume when this launch fails before commit. */
       unspend: () => void
     }
+
+export function isValidRestartRequest(
+  r: Partial<CodexAccountRestartStopRequest> | null | undefined
+): r is CodexAccountRestartStopRequest {
+  return Boolean(
+    r &&
+    typeof r.worktreeId === 'string' &&
+    r.worktreeId &&
+    typeof r.tabId === 'string' &&
+    r.tabId &&
+    typeof r.leafId === 'string' &&
+    r.leafId &&
+    typeof r.ptyId === 'string' &&
+    r.ptyId &&
+    typeof r.opId === 'string' &&
+    r.opId
+  )
+}
+
+export function isSameRestartOccupant(a: CodexRestartOccupant, b: CodexRestartOccupant): boolean {
+  return (
+    a.ptyId === b.ptyId &&
+    a.incarnationId === b.incarnationId &&
+    a.provenance.threadId === b.provenance.threadId &&
+    a.provenance.transcriptPath === b.provenance.transcriptPath
+  )
+}

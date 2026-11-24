@@ -132,4 +132,23 @@ describe('account restart stop admission races', () => {
     await expect(result).resolves.toMatchObject({ outcome: 'not-started', reason: 'superseded' })
     expect(stop).not.toHaveBeenCalled()
   })
+
+  it('a refused Retry keeps an earlier ambiguous attempt able to end the process as a restart', async () => {
+    const stops = new CodexAccountRestartStops()
+    const first = heldStopDeps()
+    const ambiguous = stops.request(request('op-a'), first.deps)
+    await vi.waitFor(() => expect(first.stop).toHaveBeenCalledTimes(1))
+    first.release('unknown')
+    await expect(ambiguous).resolves.toMatchObject({ outcome: 'unknown' })
+    const retry = heldStopDeps()
+    const refused = stops.request(request('op-b'), retry.deps)
+    await vi.waitFor(() => expect(retry.stop).toHaveBeenCalledTimes(1))
+    retry.release('refused')
+    await expect(refused).resolves.toMatchObject({ outcome: 'not-started', reason: 'refused' })
+    // The earlier signal lands late: it is still the pane-keeping restart exit.
+    expect(stops.classifyExit('pty-a', 'inc-a', 'stream')).toBe('restart')
+    await expect(stops.resolveResume({ paneKey, providerSession: session })).resolves.toEqual({
+      kind: 'pinned'
+    })
+  })
 })

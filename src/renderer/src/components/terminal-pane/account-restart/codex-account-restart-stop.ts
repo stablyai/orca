@@ -18,6 +18,8 @@ export async function stopCodexPaneForAccountRestart(
 ): Promise<'handled' | 'fallback'> {
   const operation = { ...pane, opId: mintOpId() }
   currentOperationByPtyId.set(pane.ptyId, operation)
+  // The notice's target names its generation: a newer switch makes this reply stale.
+  const noticeTarget = noticeTargetOf(pane.ptyId)
   let result: CodexAccountRestartStopResult
   try {
     result = await window.api.pty.stopCodexForAccountRestart(operation)
@@ -26,7 +28,11 @@ export async function stopCodexPaneForAccountRestart(
   }
   const current = currentOperationByPtyId.get(pane.ptyId)
   // A joined click shares the stop, so its opId is in the reply too; Dismiss removed the row's operation.
-  if (!current || !result.opIds.includes(current.opId)) {
+  if (
+    !current ||
+    !result.opIds.includes(current.opId) ||
+    noticeTargetOf(pane.ptyId) !== noticeTarget
+  ) {
     return 'handled'
   }
   currentOperationByPtyId.delete(pane.ptyId)
@@ -44,6 +50,10 @@ export async function stopCodexPaneForAccountRestart(
     store.reopenCodexRestartPrompt(pane.ptyId)
   }
   return 'handled'
+}
+
+function noticeTargetOf(ptyId: string): string | null | undefined {
+  return useAppStore.getState().codexRestartNoticeByPtyId?.[ptyId]?.nextAccountId
 }
 
 /** Dismiss during a stop: the stop in flight still settles, but its resume stays on the old account. */

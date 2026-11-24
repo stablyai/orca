@@ -1,8 +1,19 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { CodexAccountRestartStopResult } from '../../../../../shared/agent-accounts/codex/codex-account-restart-stop'
 
-const { store } = vi.hoisted(() => ({
-  store: { clearCodexRestartNotice: vi.fn(), reopenCodexRestartPrompt: vi.fn() }
+type NoticeTargets = Record<string, { nextAccountId?: string | null }>
+type StoreState = {
+  clearCodexRestartNotice: ReturnType<typeof vi.fn>
+  reopenCodexRestartPrompt: ReturnType<typeof vi.fn>
+  codexRestartNoticeByPtyId: NoticeTargets
+}
+
+const { store } = vi.hoisted((): { store: StoreState } => ({
+  store: {
+    clearCodexRestartNotice: vi.fn(),
+    reopenCodexRestartPrompt: vi.fn(),
+    codexRestartNoticeByPtyId: {}
+  }
 }))
 vi.mock('@/store/index', () => ({ useAppStore: { getState: () => store } }))
 
@@ -36,6 +47,7 @@ describe('renderer account restart stop', () => {
     _testing.setOpIdMinter(() => `op-${++opCounter}`)
     store.clearCodexRestartNotice.mockClear()
     store.reopenCodexRestartPrompt.mockClear()
+    store.codexRestartNoticeByPtyId = { 'pty-a': { nextAccountId: 'account-b' } }
   })
   afterEach(() => {
     _testing.reset()
@@ -120,5 +132,15 @@ describe('renderer account restart stop', () => {
     const { withdraw } = heldReplies()
     withdrawCodexPaneAccountRestart('pty-a')
     expect(withdraw).not.toHaveBeenCalled()
+  })
+
+  it('drops a reply that settles after the notice moved to a newer account switch', async () => {
+    const { replies } = heldReplies()
+    const pending = stopCodexPaneForAccountRestart(pane)
+    store.codexRestartNoticeByPtyId = { 'pty-a': { nextAccountId: 'account-c' } }
+    replies[0]({ outcome: 'not-started', reason: 'refused', opIds: ['op-1'] })
+    await pending
+    expect(store.reopenCodexRestartPrompt).not.toHaveBeenCalled()
+    expect(store.clearCodexRestartNotice).not.toHaveBeenCalled()
   })
 })

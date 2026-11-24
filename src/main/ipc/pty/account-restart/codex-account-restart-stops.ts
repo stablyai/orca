@@ -14,6 +14,7 @@ import type {
   CodexRestartResumeDecision,
   CodexRestartStopOutcome
 } from './codex-account-restart-types'
+import { isValidRestartRequest, isSameRestartOccupant } from './codex-account-restart-types'
 
 export type {
   CodexAccountRestartNotStartedReason,
@@ -39,6 +40,8 @@ type RestartMark = {
   delivered: boolean
   writerProof: boolean
   withdrawn: boolean
+  /** An earlier attempt on this incarnation ended ambiguously and may still end the process. */
+  earlierEffectPossible: boolean
   state: RestartIntentState
   settled: Promise<void>
 }
@@ -57,33 +60,6 @@ export function codexAccountRestartPaneKey(
   return `${request.worktreeId}\0${request.tabId}\0${request.leafId}`
 }
 
-function isValidRequest(
-  r: Partial<CodexAccountRestartStopRequest> | null | undefined
-): r is CodexAccountRestartStopRequest {
-  return Boolean(
-    r &&
-    typeof r.worktreeId === 'string' &&
-    r.worktreeId &&
-    typeof r.tabId === 'string' &&
-    r.tabId &&
-    typeof r.leafId === 'string' &&
-    r.leafId &&
-    typeof r.ptyId === 'string' &&
-    r.ptyId &&
-    typeof r.opId === 'string' &&
-    r.opId
-  )
-}
-
-function sameOccupant(a: CodexRestartOccupant, b: CodexRestartOccupant): boolean {
-  return (
-    a.ptyId === b.ptyId &&
-    a.incarnationId === b.incarnationId &&
-    a.provenance.threadId === b.provenance.threadId &&
-    a.provenance.transcriptPath === b.provenance.transcriptPath
-  )
-}
-
 /** Main's one register of account-restart stops: admission, exit classification and the resume gate. */
 export class CodexAccountRestartStops {
   private readonly inFlightByPane = new Map<string, InFlightStop>()
@@ -98,7 +74,7 @@ export class CodexAccountRestartStops {
     request: CodexAccountRestartStopRequest,
     deps: CodexAccountRestartStopDeps
   ): Promise<CodexAccountRestartStopResult> {
-    if (!isValidRequest(request)) {
+    if (!isValidRestartRequest(request)) {
       return Promise.resolve({
         outcome: 'not-started',
         reason: 'invalid',
@@ -121,6 +97,9 @@ export class CodexAccountRestartStops {
         opIds: [request.opId]
       })
     }
+    // A Retry on the same process inherits the earlier attempt's possible effect and delivered exit.
+    const previous = this.markByPane.get(paneKey)
+    const sameProcess = previous?.incarnationId === occupant.incarnationId ? previous : undefined
     let settle!: () => void
     const mark: RestartMark = {
       paneKey,
@@ -128,9 +107,10 @@ export class CodexAccountRestartStops {
       incarnationId: occupant.incarnationId,
       provenance: occupant.provenance,
       opIds: new Set([request.opId]),
-      delivered: false,
+      delivered: sameProcess?.delivered ?? false,
       writerProof: false,
       withdrawn: false,
+      earlierEffectPossible: sameProcess?.earlierEffectPossible ?? false,
       state: 'pending',
       settled: new Promise<void>((resolve) => {
         settle = resolve
@@ -257,16 +237,19 @@ export class CodexAccountRestartStops {
     }
     if (outcome === 'not-authorized') {
       // A stale choice at the authorization boundary sends zero stop requests.
-      this.retireMark(mark)
+      this.retireUnlessEarlierEffect(mark)
       return { outcome: 'not-started', reason: denial ?? 'superseded', opIds: [...mark.opIds] }
     }
     const opIds = [...mark.opIds]
     if ((outcome === 'refused' || outcome === 'service-outdated') && !mark.delivered) {
-      this.retireMark(mark)
+      this.retireUnlessEarlierEffect(mark)
       return { outcome: 'not-started', reason: outcome, opIds }
     }
     if (outcome === 'ended') {
       mark.writerProof = true
+    }
+    if (outcome === 'unknown') {
+      mark.earlierEffectPossible = true
     }
     // Host loss and ambiguous attempts are never proof: the resume stays on the pinned account.
     mark.state = mark.writerProof && !mark.withdrawn ? 'ready' : 'withdrawn'
@@ -287,7 +270,16 @@ export class CodexAccountRestartStops {
     if (typeof recheck === 'string') {
       return recheck
     }
-    return sameOccupant(recheck, occupant) ? null : 'superseded'
+    return isSameRestartOccupant(recheck, occupant) ? null : 'superseded'
+  }
+
+  // A refused Retry must not erase an earlier ambiguous attempt: its late exit is still a restart exit.
+  private retireUnlessEarlierEffect(mark: RestartMark): void {
+    if (mark.earlierEffectPossible) {
+      mark.state = 'withdrawn'
+      return
+    }
+    this.retireMark(mark)
   }
 
   private installMark(mark: RestartMark): void {
