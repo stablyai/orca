@@ -164,8 +164,11 @@ export class ProviderRelaySpool {
   async attach(fromSeq: number): Promise<number> {
     const generation = ++this.attachGeneration
     this.mode = 'replaying'
-    // A new client has confirmed nothing yet, so kept lines can't be released past the floor for it.
+    // A new client has confirmed nothing yet, so kept lines can't be released past the floor for it,
+    // and it hasn't been asked to ack anything.
     this.clientAcked = this.acked
+    this.ackAsked = false
+    this.ackAskedSeq = 0
     this.updatePressure()
     const current = (): boolean =>
       generation === this.attachGeneration && this.mode === 'replaying' && !this.disposed
@@ -250,10 +253,12 @@ export class ProviderRelaySpool {
   /** Pause at the cap, resume below half of it, so acks near the cap don't flap the agent's stdout. */
   private updatePressure(): void {
     const [kept, keptCap] = this.pressure(false)
+    // While paused, kept lines that alone keep it from resuming count as reaching the cap.
+    const keptLimit = this.paused ? keptCap / 2 : keptCap
     if (
       this.keeping &&
       this.mode === 'attached' &&
-      kept >= keptCap &&
+      kept >= keptLimit &&
       this.clientAcked > this.acked
     ) {
       // A kept span reaching the cap can't be kept whole; holding it would stall the agent. Only the

@@ -28,6 +28,8 @@ export class SpoolFile {
   private handle: FileHandle | null = null
   /** The not-yet-started write, so appends coalesce without reordering around a removal. */
   private queued: SpoolWrite | null = null
+  /** Every write not yet started; a removal empties them all, so retired records aren't held. */
+  private readonly waiting = new Set<SpoolWrite>()
   /** Bumped when the file is removed, so batches queued before that never write into a new one. */
   private epoch = 0
   /** Bytes written to this file, acked rows included, so a file kept across acks can be compacted. */
@@ -66,8 +68,10 @@ export class SpoolFile {
     const write: SpoolWrite = { chunk: encoded, records: [record], bytes }
     const epoch = this.epoch
     this.queued = write
+    this.waiting.add(write)
     this.io = this.io
       .then(async () => {
+        this.waiting.delete(write)
         if (this.queued === write) {
           this.queued = null
         }
@@ -119,8 +123,11 @@ export class SpoolFile {
             this.writtenBytes -= before - after
           }
         } catch {
-          // The file is still whole, only larger; later lines stay in memory so it stops growing.
-          this.failed = true
+          // The file is still whole, only larger; later lines stay in memory so it stops growing. A
+          // file removed meanwhile was replaced, and the replacement is fine.
+          if (epoch === this.epoch) {
+            this.failed = true
+          }
         }
       })
       .catch(() => {})
@@ -142,11 +149,15 @@ export class SpoolFile {
 
   /** Also runs with no record indexed: a first append that failed may still have created the file. */
   remove(): void {
-    // A queued write holds only acked records, so it is dropped rather than written.
-    if (this.queued) {
-      this.queued.chunk = ''
-      this.queued = null
+    // Queued writes hold only acked records, so they are dropped rather than written.
+    for (const write of this.waiting) {
+      this.pendingBytes -= write.bytes
+      write.chunk = ''
+      write.records = []
+      write.bytes = 0
     }
+    this.waiting.clear()
+    this.queued = null
     this.epoch++
     this.index.clear()
     this.writtenBytes = 0
