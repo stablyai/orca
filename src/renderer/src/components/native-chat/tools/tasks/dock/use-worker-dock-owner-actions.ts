@@ -23,6 +23,8 @@ export type WorkerDockResultDialogState = {
 }
 
 const message = (value: unknown) => (value instanceof Error ? value.message : String(value))
+/** A failure no Retry can change, such as a Stop for a worker that has already settled. */
+class FinalWorkerDockError extends Error {}
 
 export function useWorkerDockOwnerActions(
   target: RuntimeClientTarget,
@@ -97,7 +99,13 @@ export function useWorkerDockOwnerActions(
       setFailure(null)
       setPending((current) => new Set([...current, ...ids]))
       void request()
-        .catch((value) => setFailure({ message: message(value), retry: attempt }))
+        .catch((value) =>
+          setFailure(
+            value instanceof FinalWorkerDockError
+              ? { message: message(value) }
+              : { message: message(value), retry: attempt }
+          )
+        )
         .finally(() => setPending((current) => new Set([...current].filter((id) => !ids.has(id)))))
     }
     attempt()
@@ -136,11 +144,11 @@ export function useWorkerDockOwnerActions(
         const block = stopBlock?.(row, party)
         return block
           ? Promise.reject(
-              new Error(
-                block === 'settled'
-                  ? t('components.native-chat.workerDock.alreadyStopped', 'Already stopped')
-                  : t('components.native-chat.workerDock.cantStop', "Can't stop now")
-              )
+              block === 'settled'
+                ? new FinalWorkerDockError(
+                    t('components.native-chat.workerDock.alreadyStopped', 'Already stopped')
+                  )
+                : new Error(t('components.native-chat.workerDock.cantStop', "Can't stop now"))
             )
           : callRuntimeRpc(target, 'orchestration.workerDockStop', {
               party,

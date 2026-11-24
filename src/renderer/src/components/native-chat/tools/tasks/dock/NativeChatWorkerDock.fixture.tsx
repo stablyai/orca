@@ -3,6 +3,7 @@ import { nativeChatAppearanceStyle } from '../../../appearance/native-chat-appea
 import { NativeChatBackgroundTasksStatus } from '../NativeChatBackgroundTasksStatus'
 import { NativeChatWorkerDockFrame } from './NativeChatWorkerDockFrame'
 import type { WorkerDockRowView } from './WorkerDockRow'
+import { WorkerDockFailureStrip } from './WorkerDockFailureStrip'
 import { NativeChatComposerField } from '../../../composer/editor/NativeChatComposerField'
 import { FloatingTerminalToggleButton } from '../../../../floating-terminal/trigger/FloatingTerminalToggleButton'
 import { FLOATING_TERMINAL_TRIGGER_POSITION_STORAGE_KEY } from '../../../../floating-terminal/trigger/floating-terminal-trigger-position'
@@ -116,7 +117,8 @@ function dock(expanded: boolean, list: readonly WorkerDockRowView[]) {
 function botChat(
   expanded: boolean,
   list: readonly WorkerDockRowView[] = rows,
-  note = 'Both fix workers are running in parallel; ORCA-20 needs your approval.'
+  note = 'Both fix workers are running in parallel; ORCA-20 needs your approval.',
+  failureMessage?: string
 ) {
   return (
     <div
@@ -127,6 +129,9 @@ function botChat(
       <p className="text-sm text-chat-foreground">{note}</p>
       <div className="rounded-xl border border-chat-composer-border bg-chat-composer-surface p-1.5 shadow-xs">
         {dock(expanded, list)}
+        {failureMessage ? (
+          <WorkerDockFailureStrip failure={{ message: failureMessage }} onDismiss={noop} />
+        ) : null}
         <p className="px-2 py-2 text-sm text-muted-foreground">
           Ask anything, / for commands, @ for context
         </p>
@@ -276,4 +281,34 @@ export const composerOverSend320 = defineFixture({
   width: 320,
   setup: savePositionOverSend,
   render: () => composerChat(false)
+})
+
+// Keyboard focus on the first row's Stop, at the roster's clipped edge.
+async function focusFirstStop(frame: HTMLElement) {
+  const stop = frame.querySelector<HTMLElement>('[data-worker-dock-action="dock:1"]')
+  if (!stop) {
+    throw new Error('Stop button not found')
+  }
+  // Chromium's focusVisible option draws the keyboard ring for a scripted focus.
+  stop.focus({ focusVisible: true })
+  await new Promise((resolve) => setTimeout(resolve, 100))
+}
+
+export const stopFocused360 = defineFixture({
+  width: 360,
+  render: () => botChat(true),
+  interact: focusFirstStop
+})
+
+// A Retry pressed after the worker settled: nothing is sent, the line says why, and no Retry is
+// left to press.
+export const retryAfterSettle360 = defineFixture({
+  width: 360,
+  render: () =>
+    botChat(
+      true,
+      rows,
+      'Both fix workers are running in parallel; ORCA-20 needs your approval.',
+      'Already stopped'
+    )
 })

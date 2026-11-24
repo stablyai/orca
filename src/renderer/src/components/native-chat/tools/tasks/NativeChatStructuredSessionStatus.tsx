@@ -1,4 +1,3 @@
-import { useTranslate } from '@/i18n/use-translate'
 import {
   lazy,
   Suspense,
@@ -17,8 +16,8 @@ import { openOrchestrationCrewAgent } from '@/lib/agent-session/open/open-agent-
 import { useWorkerDockOwnerActions } from './dock/use-worker-dock-owner-actions'
 import { workerDockStopBlock } from './dock/worker-dock-stop-check'
 import { useWorkerDockGestureHeld } from './dock/NativeChatWorkerDockFrame'
+import { WorkerDockFailureStrip } from './dock/WorkerDockFailureStrip'
 import { useLatestHandler } from '@/lib/use-latest-handler'
-import { Button } from '@/components/ui/button'
 import { NativeChatBackgroundTasksStatus } from './NativeChatBackgroundTasksStatus'
 import { NativeChatCrewBackgroundTasksStatus } from './NativeChatCrewBackgroundTasksStatus'
 import type { StructuredSessionBackgroundTasksView } from '../../../../../../shared/agent-session/view/structured-session-background-tasks-view'
@@ -64,7 +63,6 @@ export function NativeChatStructuredSessionStatus(props: {
 }): React.JSX.Element {
   // The chat's crew, when it has one: the strip then shows even with no background work.
   const crew = useNativeChatCrew(useContext(NativeChatCrewContext))
-  const t = useTranslate()
   const [expanded, setExpanded] = useState<{ sessionId: string; expanded: boolean } | null>(null)
   const childRowContext = useStructuredSessionChildRowContext(
     props.paneKey,
@@ -276,17 +274,7 @@ export function NativeChatStructuredSessionStatus(props: {
         </Suspense>
       ) : null}
       {failure && !dialog ? (
-        <div role="alert" className="px-4 py-1 text-xs text-muted-foreground">
-          {failure.message}
-          {failure.retry ? (
-            <Button variant="ghost" size="xs" onClick={failure.retry}>
-              {t('components.native-chat.workerDock.retry', 'Retry')}
-            </Button>
-          ) : null}
-          <Button variant="ghost" size="xs" onClick={owner.dismissFailure}>
-            {t('components.native-chat.workerDock.dismiss', 'Dismiss')}
-          </Button>
-        </div>
+        <WorkerDockFailureStrip failure={failure} onDismiss={owner.dismissFailure} />
       ) : null}
       {dialog ? (
         <Suspense fallback={null}>

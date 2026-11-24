@@ -149,6 +149,8 @@ it('sends no Retry Stop once a metadata-only update settled the worker', async (
   fireEvent.click(screen.getByRole('button', { name: 'Retry' }))
   expect(await screen.findByText('Already stopped')).toBeInTheDocument()
   expect(screen.queryByText('Worker status unavailable')).toBeNull()
+  // A settled worker can't be stopped again, so the line offers no Retry.
+  expect(screen.queryByRole('button', { name: 'Retry' })).toBeNull()
   expect(stopCalls()).toHaveLength(1)
 })
 
