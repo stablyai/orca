@@ -132,11 +132,13 @@ export function createBrowserCookieImportActions(
         })
       )
       try {
-        const result = (await window.api.browser.sessionImportFromBrowser({
-          profileId,
-          browserFamily,
-          browserProfile
-        })) as BrowserCookieImportResult
+        const result: BrowserCookieImportResult = await window.api.browser.sessionImportFromBrowser(
+          {
+            profileId,
+            browserFamily,
+            browserProfile
+          }
+        )
         if (result.ok) {
           get().recordFeatureInteraction?.('cookie-import')
           set((state) =>
