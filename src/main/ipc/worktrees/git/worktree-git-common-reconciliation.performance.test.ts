@@ -74,6 +74,8 @@ function removeWorktreeEntry(entry: string): void {
 }
 
 let focus: (() => void) | null = null
+let reveal: (() => void) | null = null
+let visible = true
 let events: WorktreeBasePollEvent[] = []
 
 async function startReconciliation(): Promise<
@@ -83,7 +85,7 @@ async function startReconciliation(): Promise<
     commonDirPath: COMMON,
     pollIntervalMs: POLL_INTERVAL_MS,
     visibility: {
-      isWindowVisible: () => true,
+      isWindowVisible: () => visible,
       onWindowBecameVisible: () => () => {},
       onWindowFocused: (listener) => {
         focus = listener
@@ -98,6 +100,10 @@ async function startReconciliation(): Promise<
     onEvents: (next) => events.push(...next)
   })
   await reconciliation.ensureStarted()
+  reveal = () => {
+    visible = true
+    reconciliation.notifyWindowBecameVisible()
+  }
   return reconciliation
 }
 
@@ -106,6 +112,7 @@ beforeEach(() => {
   fs.nodes.clear()
   fs.stats = 0
   events = []
+  visible = true
   put(join('/', 'repo'), true)
   put(COMMON, true)
   put(WORKTREES, true)
@@ -129,6 +136,7 @@ it('leaves the fleet alone between five-minute sweeps while the watcher is prima
 
 it('still converges on worktrees added or removed outside Orca with no watcher event', async () => {
   const { unsubscribe: stop } = await startReconciliation()
+  await vi.advanceTimersByTimeAsync(30_000)
   const added = addWorktreeEntry('outside-add')
   focus?.()
   await vi.advanceTimersByTimeAsync(0)
@@ -167,4 +175,30 @@ it('reconciles on focus again after a polling-fallback restart', async () => {
   await vi.advanceTimersByTimeAsync(0)
   expect(events).toContainEqual({ type: 'create', path: added })
   await reconciliation.unsubscribe()
+})
+
+it('never scans more than the old 30 s cadence when focus changes every 30 s', async () => {
+  const { unsubscribe: stop } = await startReconciliation()
+  fs.stats = 0
+  for (let step = 0; step < 20; step += 1) {
+    await vi.advanceTimersByTimeAsync(30_000)
+    focus?.()
+  }
+  await vi.advanceTimersByTimeAsync(0)
+  // The old cadence spent 129,220 stats in ten idle minutes.
+  expect(fs.stats).toBeLessThanOrEqual(129_220)
+  await stop()
+})
+
+it('forces a full sweep when the window is revealed after a short hide', async () => {
+  const { unsubscribe: stop } = await startReconciliation()
+  visible = false
+  // `git worktree lock` without an entry-directory timestamp change and with the watcher event lost.
+  const locked = join(WORKTREES, 'w5', 'locked')
+  fs.nodes.set(locked, { dir: false, mtimeMs: fs.clock++, ino: fs.ino++ })
+  await vi.advanceTimersByTimeAsync(61_000)
+  reveal?.()
+  await vi.advanceTimersByTimeAsync(0)
+  expect(events.some((event) => event.path.startsWith(join(WORKTREES, 'w5')))).toBe(true)
+  await stop()
 })

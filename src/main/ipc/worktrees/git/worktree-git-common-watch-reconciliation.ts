@@ -13,8 +13,8 @@ import { createSingleFlight } from './single-flight-promise'
 const NARROW_WATCH_RECONCILIATION_TICKS = 150
 // Each timed reconciliation sweeps every leaf, keeping the five-minute bound for coarse-timestamp filesystems.
 const RECONCILIATION_FULL_SCAN_EVERY_TICKS = 1
-// Focus runs the gated per-entry check at most as often as the old 30 s cadence.
-const FOCUS_RECONCILIATION_MIN_TICKS = 15
+// Focus and reveal scan at most as often as the old 30 s cadence, counting timed sweeps.
+const ON_DEMAND_RECONCILIATION_MIN_TICKS = 15
 
 type GitCommonWatchReconciliationOptions = {
   commonDirPath: string
@@ -43,16 +43,9 @@ export function createGitCommonWatchReconciliation({
 }: GitCommonWatchReconciliationOptions): GitCommonWatchReconciliation {
   const worktreesDir = join(commonDirPath, 'worktrees')
   let subscription: GitCommonPollingSubscription | null = null
-  let lastFocusReconcileAt = 0
   let unsubscribeFocus: (() => void) | undefined
   const handleFocus = (): void => {
-    const now = Date.now()
-    if (now - lastFocusReconcileAt < pollIntervalMs * FOCUS_RECONCILIATION_MIN_TICKS) {
-      return
-    }
-    if (subscription?.poke()) {
-      lastFocusReconcileAt = now
-    }
+    subscription?.poke()
   }
   const starting = createSingleFlight()
   let generation = 0
@@ -115,6 +108,7 @@ export function createGitCommonWatchReconciliation({
           () => [],
           {
             reconciliationFullScanEveryTicks: RECONCILIATION_FULL_SCAN_EVERY_TICKS,
+            minOnDemandScanIntervalMs: pollIntervalMs * ON_DEMAND_RECONCILIATION_MIN_TICKS,
             onRootMissing: (initial) => {
               if (shouldKeepBaseline()) {
                 if (initial) {

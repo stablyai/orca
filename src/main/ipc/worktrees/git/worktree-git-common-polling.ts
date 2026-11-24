@@ -112,7 +112,7 @@ async function snapshotGitCommon(
 }
 
 export type GitCommonPollingSubscription = WorktreeBaseSubscription & {
-  /** Run a gated check now without moving the timed sweep; false when a check is already running or hidden. */
+  /** Run a gated check now without moving the timed sweep; false when skipped (busy, hidden or scanned recently). */
   poke: () => boolean
 }
 
@@ -121,6 +121,8 @@ export type GitCommonPollingOptions = {
   reconciliationFullScanEveryTicks?: number
   /** Missing snapshots can outlive the native owner they originally retired. */
   onRootMissing?: (initial: boolean) => void
+  /** Pokes and reveal sweeps skip when any scan started this recently, so they never add work beyond the old cadence. */
+  minOnDemandScanIntervalMs?: number
 }
 
 // Require misses on separate ticks before distrusting the directory gate for the whole catalog.
@@ -144,6 +146,11 @@ export async function startGitCommonPolling(
   // Filesystems can ignore child renames in directory metadata; detected misses force ungated sweeps.
   let entryDirGateTrusted = true
   let dirGateMissTicks = 0
+  const minOnDemandScanIntervalMs = options.minOnDemandScanIntervalMs
+  let lastScanStartedAt = performance.now()
+  const scannedRecently = (): boolean =>
+    minOnDemandScanIntervalMs !== undefined &&
+    performance.now() - lastScanStartedAt < minOnDemandScanIntervalMs
   let snapshot = await snapshotGitCommon(
     commonDirPath,
     undefined,
@@ -184,6 +191,7 @@ export async function startGitCommonPolling(
     ticking = true
     // Measure start-to-start cadence so scan duration does not add a full interval of lag.
     const startedAt = Date.now()
+    lastScanStartedAt = performance.now()
     if (!poked) {
       tickCount++
     }
@@ -251,7 +259,11 @@ export async function startGitCommonPolling(
   }
 
   const unsubscribeVisibility = visibility.onWindowBecameVisible(() => {
-    if (disposed || !parkedWhileHidden) {
+    if (disposed) {
+      return
+    }
+    // A hide shorter than the interval never parks a tick, so reconciliation forces its reveal sweep directly.
+    if (!parkedWhileHidden && (minOnDemandScanIntervalMs === undefined || scannedRecently())) {
       return
     }
     parkedWhileHidden = false
@@ -264,7 +276,7 @@ export async function startGitCommonPolling(
 
   return {
     poke: () => {
-      if (disposed || ticking || !visibility.isWindowVisible()) {
+      if (disposed || ticking || !visibility.isWindowVisible() || scannedRecently()) {
         return false
       }
       void tick(false, true)
