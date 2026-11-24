@@ -8,7 +8,10 @@ import type {
   LiveTextReaders
 } from './structured-agent-session-event-sink'
 import { CHAT_LIVE_TEXT_SUBSCRIBER_BYTES } from '../../retention/subscriber-live-text-cap'
-import { noteReplyTextGrowth } from '../../../../shared/agent-session/view/live-read/agent-session-text-append'
+import {
+  noteKnownReplyTextGrowth,
+  noteReplyTextGrowth
+} from '../../../../shared/agent-session/view/live-read/agent-session-text-append'
 
 /** Characters of live text one stream offers. Two snapshots (one sending, one waiting) at two bytes
  *  a character stay well inside a viewer's cap, so a long reply never ends its viewers' streams;
@@ -32,7 +35,13 @@ export class StructuredAgentSessionLiveTextRows {
   // An unchanged row keeps its object, so its wire form and a subscriber's last send are reused.
   private readonly shown = new Map<
     string,
-    { placement: Placement; length: number; item: AgentJournalRenderItem }
+    {
+      placement: Placement
+      length: number
+      item: AgentJournalRenderItem
+      text: string
+      stream: object | undefined
+    }
   >()
   private readonly release: (() => void) | undefined
 
@@ -43,7 +52,9 @@ export class StructuredAgentSessionLiveTextRows {
     >,
     /** The row's text, or undefined when it is longer than `maxLength` (read without copying it). */
     private readonly text: (key: string, maxLength: number) => string | undefined,
-    private readonly body: (key: string, text: string) => AgentJournalItemBody | null
+    private readonly body: (key: string, text: string) => AgentJournalItemBody | null,
+    /** The source's stream for a row; a longer read of the same one extends the last. */
+    private readonly streamOf?: (key: string) => object | undefined
   ) {
     // Translators own lifecycle flushes; a write barrier must not force saves of streaming rows.
     this.release = sink.bindLiveText?.({
@@ -96,7 +107,12 @@ export class StructuredAgentSessionLiveTextRows {
       }
       budget -= text.length
       const shown = this.shown.get(key)
-      if (shown?.placement === placement && shown.length === text.length) {
+      const stream = this.streamOf?.(key)
+      if (
+        shown?.placement === placement &&
+        shown.length === text.length &&
+        shown.stream === stream
+      ) {
         items.push(shown.item)
         continue
       }
@@ -104,8 +120,13 @@ export class StructuredAgentSessionLiveTextRows {
       if (body) {
         const item = { ...placement.row, body }
         appendOnlyRows.add(item)
-        noteReplyTextGrowth(item, shown?.placement === placement ? shown.item : undefined)
-        this.shown.set(key, { placement, length: text.length, item })
+        if (shown?.placement === placement && stream !== undefined && shown.stream === stream) {
+          // The same append-only stream read longer: it extends the last read without a scan.
+          noteKnownReplyTextGrowth(item, text, shown.item, shown.text)
+        } else {
+          noteReplyTextGrowth(item, shown?.placement === placement ? shown.item : undefined)
+        }
+        this.shown.set(key, { placement, length: text.length, item, text, stream })
         items.push(item)
       }
     }

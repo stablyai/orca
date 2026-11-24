@@ -47,6 +47,21 @@ export function noteReplyTextGrowth(
   }
 }
 
+/** Records growth a source already guarantees (an append-only stream read twice), without
+ *  scanning the reply: `item` carries `text`, which extends `previous`'s text `base`. */
+export function noteKnownReplyTextGrowth(
+  item: AgentJournalRenderItem,
+  text: string,
+  previous: AgentJournalRenderItem,
+  base: string
+): void {
+  if (replyText(item) === text && replyText(previous) === base && text.length > base.length) {
+    knownGrowth.set(item, base)
+  } else {
+    noteReplyTextGrowth(item, previous)
+  }
+}
+
 /** Whether `item`'s `text` starts with `base`. */
 export function textExtends(item: AgentJournalRenderItem, text: string, base: string): boolean {
   return knownGrowth.get(item) === base || text.startsWith(base)
