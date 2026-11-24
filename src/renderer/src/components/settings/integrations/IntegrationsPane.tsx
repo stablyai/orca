@@ -1,7 +1,5 @@
-import {
-  AzureDevOpsIntegrationCard,
-  GiteaIntegrationCard
-} from '../../integrations/source-control/token-source-control-integration-cards'
+import { AzureDevOpsIntegrationCard } from '../../integrations/source-control/token-source-control-integration-cards'
+import { GiteaIntegrationCard } from '../../integrations/source-control/gitea-integration-card'
 import { BitbucketIntegrationCard } from '../../integrations/source-control/bitbucket-integration-card'
 import {
   GitHubIntegrationCard,
@@ -9,7 +7,6 @@ import {
 } from '../../integrations/source-control/cli-source-control-integration-cards'
 import { JiraIntegrationCard } from '../../integrations/task-trackers/jira-integration-card'
 import { LinearIntegrationCard } from '../../integrations/task-trackers/linear-integration-card'
-import { GiteaTaskIntegrationCard } from '../../integrations/task-trackers/gitea-integration-card'
 import { IntegrationCardPresentationProvider } from '../../integrations/presentation/integration-card-presentation'
 import { useIntegrationProviderStatusRefresh } from '../../../runtime/hosts/observations/use-integration-provider-status-refresh'
 import { SettingsGroup } from '../section-layout/SettingsGroup'
@@ -75,9 +72,6 @@ export function IntegrationsPane(): React.JSX.Element {
           </ProviderRow>
           <ProviderRow>
             <JiraIntegrationCard />
-          </ProviderRow>
-          <ProviderRow>
-            <GiteaTaskIntegrationCard />
           </ProviderRow>
         </SettingsGroup>
       </div>

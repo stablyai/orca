@@ -1,4 +1,5 @@
 import { defineMethod } from '../../../core'
+import { _resetPreflightCache } from '../../../../../preflight/agent-detection'
 import {
   connect,
   disconnect,
@@ -31,13 +32,22 @@ export const GITEA_METHODS = [
     name: 'gitea.connect',
     permission: 'accounts-admin',
     params: GiteaConnectParams,
-    handler: async (params) => connect(params)
+    handler: async (params) => {
+      const result = await connect(params)
+      if (result.ok) {
+        _resetPreflightCache()
+      }
+      return result
+    }
   }),
   defineMethod({
     name: 'gitea.disconnect',
     permission: 'accounts-admin',
     params: GiteaServerIdParams,
-    handler: async (params) => disconnect(params.serverId)
+    handler: async (params) => {
+      await disconnect(params.serverId)
+      _resetPreflightCache()
+    }
   }),
   defineMethod({
     name: 'gitea.testConnection',

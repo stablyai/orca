@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { GiteaConnectDialog } from '@/components/integrations/task-trackers/gitea-connect-dialog'
+import { GiteaConnectDialog } from '@/components/integrations/source-control/gitea-connect-dialog'
 import { Button } from '@/components/ui/button'
 import { TaskSourceShowInTasksStep } from './TaskSourceShowInTasksStep'
 import { TaskSourceStepRow } from './TaskSourceStepRow'

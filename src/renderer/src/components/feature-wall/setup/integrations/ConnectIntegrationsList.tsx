@@ -1,9 +1,7 @@
 import { Fragment, useState } from 'react'
 import { Trans } from 'react-i18next'
-import {
-  AzureDevOpsIntegrationCard,
-  GiteaIntegrationCard
-} from '@/components/integrations/source-control/token-source-control-integration-cards'
+import { AzureDevOpsIntegrationCard } from '@/components/integrations/source-control/token-source-control-integration-cards'
+import { GiteaIntegrationCard } from '@/components/integrations/source-control/gitea-integration-card'
 import { BitbucketIntegrationCard } from '@/components/integrations/source-control/bitbucket-integration-card'
 import {
   GitHubIntegrationCard,

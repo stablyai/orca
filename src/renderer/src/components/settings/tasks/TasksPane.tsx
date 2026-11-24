@@ -24,7 +24,6 @@ import {
   resolveStickyAutoExpandedTaskProvider
 } from './task-source-setup-state'
 import {
-  GITEA_INTEGRATION_SECTION_ID,
   JIRA_INTEGRATION_SECTION_ID,
   LINEAR_INTEGRATION_SECTION_ID
 } from '../../integrations/task-trackers/task-provider-integration-section-ids'
@@ -34,6 +33,7 @@ import { useTaskSourceProviderReadiness } from './use-task-source-provider-readi
 import { translate } from '@/i18n/i18n'
 import { useTranslate } from '@/i18n/use-translate'
 import { SettingsGroup } from '../section-layout/SettingsGroup'
+import { INTEGRATION_SETTING_TARGET_IDS } from '../integrations/integrations-search'
 
 type TasksPaneProps = {
   settings: GlobalSettings
@@ -244,7 +244,7 @@ export function TasksPane({ settings, updateSettings }: TasksPaneProps): React.J
                   canHide={canHide}
                   onToggleVisible={() => toggleProvider('gitea')}
                   onConnected={() => void refreshGiteaStatus()}
-                  onOpenIntegrations={() => openIntegrations(GITEA_INTEGRATION_SECTION_ID)}
+                  onOpenIntegrations={() => openIntegrations(INTEGRATION_SETTING_TARGET_IDS.gitea)}
                 />
               ) : (
                 <CodeHostSetupSteps
