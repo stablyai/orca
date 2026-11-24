@@ -1,8 +1,19 @@
 import { describe, expect, it } from 'vitest'
-import { contrastRatio, hexToRgb, mix, over } from '../../../../shared/color/rgba-contrast'
+import {
+  contrastRatio,
+  hexToRgb,
+  mix,
+  over,
+  type Rgba
+} from '../../../../shared/color/rgba-contrast'
 import { applyPluginAppTheme } from './document-theme'
 import { safePluginThemeTokens, type ColorProbe } from './plugin-theme-tokens'
-import { TAB_CONTRAST_MIX_TOKEN, tabContrastMix } from './tab-contrast-mix'
+import { UNFOCUSED_SPLIT_GROUP_OPACITY } from '../../components/tab-group/panel/split-group-dim'
+import {
+  TAB_CONTRAST_MIX_TOKEN,
+  UNFOCUSED_TAB_LABEL_DARKEN,
+  tabContrastMix
+} from './tab-contrast-mix'
 
 const probe: ColorProbe = (value) => (/^#[0-9a-f]{3,6}$/i.test(value) ? hexToRgb(value) : null)
 
@@ -26,8 +37,23 @@ const BUILT_INS = {
   }
 } as const
 
+/** Rounded to 8 bits per channel, as Chrome paints a color-mix or a composite. */
+const paintedRgb = (color: Rgba): Rgba => [
+  Math.round(color[0]),
+  Math.round(color[1]),
+  Math.round(color[2]),
+  1
+]
+
 const recess = (foreground: string, bar: string, percent: number) =>
-  mix(hexToRgb(foreground), hexToRgb(bar), percent)
+  paintedRgb(mix(hexToRgb(foreground), hexToRgb(bar), percent))
+
+/** A label on a tab fill in an unfocused split group, dimmed over the page. */
+const unfocusedRatio = (fill: Rgba, label: Rgba, page: string) => {
+  const dim = (color: Rgba) =>
+    paintedRgb(mix(color, hexToRgb(page), UNFOCUSED_SPLIT_GROUP_OPACITY * 100))
+  return contrastRatio(dim(fill), dim(label))
+}
 
 /** Safe tokens and the mix painted for them, as applyPluginAppTheme computes both. */
 function paint(tokens: Record<string, string>, base: 'light' | 'dark') {
@@ -39,6 +65,62 @@ describe('tabContrastMix', () => {
   it('paints the full depth for the built-in colors', () => {
     expect(paint({}, 'light').mix).toBe(8)
     expect(paint({}, 'dark').mix).toBe(11)
+  })
+
+  it('keeps the built-in light inactive label at 4.5:1 in an unfocused split group', () => {
+    const fill = recess('#0a0a0a', '#ffffff', paint({}, 'light').mix)
+    const muted = hexToRgb('#696969')
+    // As is, the dimmed group takes the label under 4.5:1 at the full depth.
+    expect(unfocusedRatio(fill, muted, '#ffffff')).toBeLessThan(4.5)
+    const darkened = paintedRgb(mix(hexToRgb('#000000'), muted, UNFOCUSED_TAB_LABEL_DARKEN))
+    expect(unfocusedRatio(fill, darkened, '#ffffff')).toBeGreaterThanOrEqual(4.5)
+  })
+
+  it("stops short where a theme's own inactive label would drop under 4.5:1 in an unfocused split", () => {
+    const tokens = { '--tab-inactive-foreground': '#696969' }
+    const { safe, mix: percent } = paint(tokens, 'light')
+    expect(safe).toEqual(tokens)
+    expect(percent).toBeLessThan(8)
+    const fill = recess('#0a0a0a', '#ffffff', percent)
+    expect(unfocusedRatio(fill, hexToRgb('#696969'), '#ffffff')).toBeGreaterThanOrEqual(4.5)
+  })
+
+  it('picks a depth whose painted fill keeps the label at 4.5:1', () => {
+    const tokens = {
+      '--background': '#ffffff',
+      '--card': '#ffffff',
+      '--foreground': '#232323',
+      '--muted-foreground': '#6c6c6c'
+    }
+    // Unrounded, 8% reads 4.50:1; Chrome paints #ededed, which reads 4.49:1.
+    const exact = mix(hexToRgb('#232323'), hexToRgb('#ffffff'), 8)
+    expect(contrastRatio(exact, hexToRgb('#6c6c6c'))).toBeGreaterThanOrEqual(4.5)
+    expect(contrastRatio(recess('#232323', '#ffffff', 8), hexToRgb('#6c6c6c'))).toBeLessThan(4.5)
+    const { mix: percent } = paint(tokens, 'light')
+    expect(percent).toBeLessThan(8)
+    const fill = recess('#232323', '#ffffff', percent)
+    expect(contrastRatio(fill, hexToRgb('#6c6c6c'))).toBeGreaterThanOrEqual(4.5)
+  })
+
+  it("keeps the tabs apart where a light theme sets only the active tab's fill", () => {
+    const tokens = { '--tab-active': '#ebebeb' }
+    const { safe, mix: percent } = paint(tokens, 'light')
+    expect(safe).toEqual(tokens)
+    // The full depth would paint the inactive tabs #ebebeb too.
+    expect(recess('#0a0a0a', '#ffffff', 8)).toEqual(hexToRgb('#ebebeb'))
+    const separation = (at: number) =>
+      contrastRatio(recess('#0a0a0a', '#ffffff', at), hexToRgb('#ebebeb'))
+    expect(separation(percent)).toBeGreaterThanOrEqual(separation(4))
+  })
+
+  it("keeps the tabs apart where a dark theme sets only the inactive tab's fill", () => {
+    const tokens = { '--tab-inactive': '#2f2f2f' }
+    const { safe, mix: percent } = paint(tokens, 'dark')
+    expect(safe).toEqual(tokens)
+    expect(recess('#f0f0f0', '#171717', 11)).toEqual(hexToRgb('#2f2f2f'))
+    const separation = (at: number) =>
+      contrastRatio(recess('#f0f0f0', '#171717', at), hexToRgb('#2f2f2f'))
+    expect(separation(percent)).toBeGreaterThanOrEqual(separation(6))
   })
 
   it('paints the full depth on a tinted light tab bar that sets no tab colors', () => {
@@ -58,16 +140,16 @@ describe('tabContrastMix', () => {
     const tokens = {
       '--background': '#ffffff',
       '--muted': '#ffffff',
-      '--foreground': '#6e6e6e',
-      '--muted-foreground': '#717171'
+      '--foreground': '#282828',
+      '--muted-foreground': '#6e6e6e'
     }
-    // The full depth would take the label from passing to 4.45:1.
-    expect(contrastRatio(recess('#6e6e6e', '#ffffff', 8), hexToRgb('#717171'))).toBeLessThan(4.5)
+    // The full depth would take the label from passing to 4.40:1.
+    expect(contrastRatio(recess('#282828', '#ffffff', 8), hexToRgb('#6e6e6e'))).toBeLessThan(4.5)
     const { mix: percent } = paint(tokens, 'light')
     expect(percent).toBeLessThan(8)
     expect(percent).toBeGreaterThan(4)
-    const inactive = recess('#6e6e6e', '#ffffff', percent)
-    expect(contrastRatio(inactive, hexToRgb('#717171'))).toBeGreaterThanOrEqual(4.5)
+    const inactive = recess('#282828', '#ffffff', percent)
+    expect(contrastRatio(inactive, hexToRgb('#6e6e6e'))).toBeGreaterThanOrEqual(4.5)
   })
 
   it('keeps the old depth where inactive tab text was already under 4.5:1', () => {

@@ -178,7 +178,11 @@
     --tab-active-indicator,
     var(--tab-active-foreground, var(--foreground))
   );
-  --color-tab-inactive-foreground: var(--tab-inactive-foreground, var(--muted-foreground));
+  /* --tab-inactive-label is set only in a light unfocused split group (below). */
+  --color-tab-inactive-foreground: var(
+    --tab-inactive-foreground,
+    var(--tab-inactive-label, var(--muted-foreground))
+  );
   /* Active right sidebar tool line: the theme's tab indicator, else the foreground it always used. */
   --color-activity-bar-indicator: var(--tab-active-indicator, var(--foreground));
   /* The theme's accent where one is set (link color); the built-in note blue otherwise. */
@@ -370,6 +374,13 @@
     var(--foreground) var(--tab-contrast-mix),
     var(--tab-bar, var(--card))
   );
+}
+
+/* An unfocused split group paints at 95% opacity (split-group-dim.ts), which takes muted tab text
+   on the recessed light tabs under 4.5:1. Darken the fallback label there; a theme's own
+   --tab-inactive-foreground still wins. Keep the 10% in sync with tab-contrast-mix.ts. */
+.light [data-unfocused-split-group] {
+  --tab-inactive-label: color-mix(in srgb, #000 10%, var(--muted-foreground));
 }
 
 .dark {
