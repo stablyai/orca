@@ -318,6 +318,9 @@ describe('provider relay kept lines', () => {
     ])
     expect(pending.kept.attachDetails(5).outstanding).toBeUndefined()
     expect(pending.kept.records().map((record) => record.seq)).toEqual([1, 3])
+    // The agent's exit clears held requests, never what the next app needs to open it.
+    pending.clear()
+    expect(pending.kept.records().map((record) => record.seq)).toEqual([1, 3])
   })
 
   it('keeps nothing for a malformed spec, and drops a kept line its too-large successor replaced', () => {

@@ -93,28 +93,55 @@ const GROK_MARKERS: ProviderRelayWorkMarker[] = [
 ]
 
 /**
- * A call Orca or the dialect turned into a background task or subagent (keyed by its call id, as
- * Qwen Code, CodeBuddy and Droid are) ends with the call's own final update.
+ * A call Orca turned into a background task at its turn's end (Qwen Code, CodeBuddy) ends with the
+ * call's own final update. Droid closes a backgrounded subagent's call while the subagent still
+ * runs, so subagents never end this way: such an agent is kept rather than stopped early.
  */
-const CALL_END_MARKERS: ProviderRelayWorkMarker[] = ['task', 'subagent'].flatMap((group) =>
-  ['completed', 'failed'].map((status) => ({
-    group,
-    name: 'session/update',
-    effect: 'end' as const,
-    when: [kind('tool_call_update'), { path: [...UPDATE, 'status'], is: status }],
-    key: keyAt('toolCallId')
-  }))
+const CALL_END_MARKERS: ProviderRelayWorkMarker[] = ['completed', 'failed'].map((status) => ({
+  group: 'task',
+  name: 'session/update',
+  effect: 'end',
+  when: [kind('tool_call_update'), { path: [...UPDATE, 'status'], is: status }],
+  key: keyAt('toolCallId')
+}))
+
+/** OpenCode's subagents are child sessions, opened and closed by their status reports. */
+const OPENCODE_CHILD_STATUS: [string, 'start' | 'end'][] = [
+  ['created', 'start'],
+  ['running', 'start'],
+  ['completed', 'end'],
+  ['failed', 'end'],
+  ['interrupted', 'end']
+]
+const OPENCODE_MARKERS: ProviderRelayWorkMarker[] = both('opencode/session/child_update').flatMap(
+  (name) =>
+    OPENCODE_CHILD_STATUS.map(([status, effect]) => ({
+      group: 'subagent',
+      name,
+      effect,
+      when: [
+        { path: ['params', 'type'], is: 'status' },
+        { path: ['params', 'status'], is: status }
+      ],
+      key: [[['params', 'childSessionId']]]
+    }))
 )
+
+const DIALECT_MARKERS = new Map<string, ProviderRelayWorkMarker[]>([
+  ['grok', GROK_MARKERS],
+  ['opencode', OPENCODE_MARKERS],
+  ['opencode2', OPENCODE_MARKERS]
+])
 
 /**
  * What the open app's idle stop counts for an ACP chat while no app is attached: its prompt, and
- * the background tasks and subagents the agent reports: a call's final update ends one keyed by
- * its call id, and Grok's own task and subagent lines open and close its others.
+ * the background tasks and subagents the agent reports: a call's final update ends a task keyed by
+ * its call id, and Grok's and OpenCode's own task and subagent lines open and close the others.
  */
 export function acpRelayWorkMarkers(agent: string): ProviderRelayWorkMarkers {
   return {
     agent: acpRelayAgent(agent),
-    markers: [...CALL_END_MARKERS, ...(agent === 'grok' ? GROK_MARKERS : [])],
+    markers: [...CALL_END_MARKERS, ...(DIALECT_MARKERS.get(agent) ?? [])],
     requests: PROMPT_REQUESTS
   }
 }

@@ -29,7 +29,8 @@ function commonPrefix(values: readonly string[]): string {
 /**
  * Session state a relay keeps for the next attach, as `relaySpawn` named it: the latest answer to
  * each named client request, the latest agent line matching each marker, and the named requests
- * still unanswered (or answered within the next replay).
+ * still unanswered (or answered within the next replay). It outlives the agent's exit, so an
+ * agent that ended while no app was attached still opens and hands its last output on.
  */
 export class ProviderRelayKeptState {
   private spec: ProviderRelayKeepSpec | null = null
@@ -53,13 +54,6 @@ export class ProviderRelayKeptState {
   /** An answer this state waits for may be on any line. */
   get awaiting(): boolean {
     return this.awaited.size > 0
-  }
-
-  clear(): void {
-    this.kept.clear()
-    this.chars = 0
-    this.awaited.clear()
-    this.answered.clear()
   }
 
   /** Kept lines in seq order, sent on attach before held requests. */

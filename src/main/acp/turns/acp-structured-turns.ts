@@ -245,7 +245,8 @@ export class AcpStructuredTurns {
     const answered = earlier ?? this.deps.connection.prompt(send.prompt, meta)
     // A compaction's reply stays in the relay until it ends, so after a restart it is judged whole.
     const release = promptId.startsWith('compact:') ? this.deps.connection.holdAcks?.() : null
-    void answered.then(release, release)
+    // Always handled here: the prompt's own failure is handled below.
+    void answered.then(release, () => release?.())
     if (this.steers.length > 0 || this.preparingSteers > 0) {
       this.cancelForSteer()
     }
