@@ -109,11 +109,15 @@ export function createRemoteBrowserGuestToolsTransport({
         .filter(([, waitRequestId]) => requestId === undefined || waitRequestId === requestId)
         .map(([controller]) => controller)
       // Ask the host to settle the pick first; aborting alone would leave its overlay armed until the call closes.
-      const cancelled = await inInputOrder(() =>
-        call<{ cancelled: boolean }>('browser.grab.cancel', { requestId }, { page })
-          .then((result) => result?.cancelled ?? false)
-          .catch(() => false)
+      // Not queued: an enable ahead of it in the queue waits for its page, and the host must see this
+      // cancel meanwhile so the enable never arms.
+      const cancelled = await call<{ cancelled: boolean }>(
+        'browser.grab.cancel',
+        { requestId },
+        { page }
       )
+        .then((result) => result?.cancelled ?? false)
+        .catch(() => false)
       for (const controller of cancelledSelections) {
         controller.abort()
       }
