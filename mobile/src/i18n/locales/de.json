@@ -254,9 +254,7 @@
     },
     "message": {
       "copyMessage": "Nachricht kopieren",
-      "forkFromResponse": "Ab dieser Antwort abzweigen",
-      "scrollMessageToTop": "Diese Nachricht ganz nach oben scrollen",
-      "forkFromResponseHint": "Ein neuer Chat mit dieser vollständigen Antwort bis zum Ende des Durchgangs"
+      "forkFromResponse": "Ab dieser Antwort abzweigen"
     },
     "messageActionsSheet": {
       "clipboardRejected": "Die Zwischenablage hat den Text abgewiesen.",
@@ -286,10 +284,8 @@
     },
     "nativeChatToolLine": {
       "added": "Hinzugefügt",
-      "copyCommand": "Befehl kopieren",
       "deleted": "Gelöscht",
       "durationHours": "{{hours}} h {{minutes}} min {{seconds}} s",
-      "durationMilliseconds": "{{milliseconds}} ms",
       "durationMinutes": "{{minutes}} min {{seconds}} s",
       "durationSeconds": "{{seconds}} s",
       "edited": "Bearbeitet",
@@ -2375,11 +2371,8 @@
     },
     "nativeChatRenderData": {
       "defaultAgentLabel": "dem Agenten",
-      "emptySubtitle": "Von {{agent}} Code prüfen, Ausgaben erklären oder eine Änderung vornehmen lassen.",
       "emptyTitle": "Chat mit {{agent}} starten",
-      "errorSubtitle": "Das Protokoll konnte nicht gelesen werden. Zurück zum Terminal wechseln, um weiterzuarbeiten.",
       "errorTitle": "Unterhaltung konnte nicht geladen werden",
-      "notFoundSubtitle": "Eine Nachricht senden, um eine Unterhaltung zu starten, oder die Terminalansicht öffnen, um die aktuelle Aktivität von {{agent}} zu sehen.",
       "notFoundTitle": "Unterhaltung noch nicht gefunden"
     },
     "nativeChatToggleAction": {

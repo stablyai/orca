@@ -254,9 +254,7 @@
     },
     "message": {
       "copyMessage": "메시지 복사",
-      "forkFromResponse": "이 응답에서 분기",
-      "scrollMessageToTop": "이 메시지를 맨 위로 스크롤",
-      "forkFromResponseHint": "이 턴의 끝까지 전체 응답이 포함된 새 채팅"
+      "forkFromResponse": "이 응답에서 분기"
     },
     "messageActionsSheet": {
       "clipboardRejected": "클립보드에서 텍스트를 거부했습니다.",
@@ -286,10 +284,8 @@
     },
     "nativeChatToolLine": {
       "added": "추가",
-      "copyCommand": "명령 복사",
       "deleted": "삭제",
       "durationHours": "{{hours}}시간 {{minutes}}분 {{seconds}}초",
-      "durationMilliseconds": "{{milliseconds}}ms",
       "durationMinutes": "{{minutes}}분 {{seconds}}초",
       "durationSeconds": "{{seconds}}초",
       "edited": "수정",
@@ -2550,11 +2546,8 @@
     },
     "nativeChatRenderData": {
       "defaultAgentLabel": "에이전트",
-      "emptySubtitle": "{{agent}}에게 코드 확인, 출력 설명 또는 변경을 요청하세요.",
       "emptyTitle": "{{agent}}과(와) 채팅 시작",
-      "errorSubtitle": "대화 기록을 읽을 수 없습니다. 계속 작업하려면 터미널로 다시 전환하세요.",
       "errorTitle": "대화를 로드할 수 없습니다.",
-      "notFoundSubtitle": "메시지를 보내 대화를 시작하거나, 터미널 보기에서 {{agent}}이(가) 무엇을 하는지 확인하세요.",
       "notFoundTitle": "아직 이 대화를 찾을 수 없습니다."
     },
     "nativeChatToggleAction": {

@@ -258,9 +258,7 @@
     },
     "message": {
       "copyMessage": "Copiar mensaje",
-      "forkFromResponse": "Crear una rama desde esta respuesta",
-      "scrollMessageToTop": "Desplazar este mensaje hacia arriba",
-      "forkFromResponseHint": "Un chat nuevo con esta respuesta completa, hasta el final de su turno"
+      "forkFromResponse": "Crear una rama desde esta respuesta"
     },
     "messageActionsSheet": {
       "clipboardRejected": "El portapapeles rechazó el texto.",
@@ -290,10 +288,8 @@
     },
     "nativeChatToolLine": {
       "added": "Añadió",
-      "copyCommand": "Copiar comando",
       "deleted": "Eliminó",
       "durationHours": "{{hours}} h {{minutes}} min {{seconds}} s",
-      "durationMilliseconds": "{{milliseconds}} ms",
       "durationMinutes": "{{minutes}} min {{seconds}} s",
       "durationSeconds": "{{seconds}} s",
       "edited": "Editó",
@@ -2450,11 +2446,8 @@
     },
     "nativeChatRenderData": {
       "defaultAgentLabel": "el agente",
-      "emptySubtitle": "Pide que {{agent}} inspeccione código, explique la salida o haga un cambio.",
       "emptyTitle": "Inicia un chat con {{agent}}",
-      "errorSubtitle": "No se pudo leer la transcripción. Vuelva a la terminal para seguir trabajando.",
       "errorTitle": "No se pudo cargar la conversación",
-      "notFoundSubtitle": "Envía un mensaje para iniciar una conversación o abre la vista de terminal para ver qué está haciendo {{agent}}.",
       "notFoundTitle": "Aún no se encuentra esta conversación"
     },
     "nativeChatToggleAction": {

@@ -344,9 +344,7 @@
     },
     "message": {
       "copyMessage": "复制消息",
-      "forkFromResponse": "从此回复创建分支",
-      "scrollMessageToTop": "将此消息滚动到顶部",
-      "forkFromResponseHint": "新聊天将包含本轮结束前的完整回复"
+      "forkFromResponse": "从此回复创建分支"
     },
     "messageActionsSheet": {
       "clipboardRejected": "剪贴板拒绝接收该文本",
@@ -378,10 +376,8 @@
     },
     "nativeChatToolLine": {
       "added": "添加了",
-      "copyCommand": "复制命令",
       "deleted": "删除了",
       "durationHours": "{{hours}} 小时 {{minutes}} 分 {{seconds}} 秒",
-      "durationMilliseconds": "{{milliseconds}} 毫秒",
       "durationMinutes": "{{minutes}} 分 {{seconds}} 秒",
       "durationSeconds": "{{seconds}} 秒",
       "edited": "编辑了",
@@ -1729,8 +1725,6 @@
     },
     "native-chat": {
       "turnDiff": {
-        "changedFiles_one": "{{count}} 个已更改的文件",
-        "changedFiles_other": "{{count}} 个已更改的文件",
         "partial": "部分差异",
         "showMoreFiles": "再显示 {{count}} 个"
       },
@@ -3295,11 +3289,8 @@
     },
     "nativeChatRenderData": {
       "defaultAgentLabel": "智能体",
-      "emptySubtitle": "让 {{agent}} 检查代码、解释输出或进行更改",
       "emptyTitle": "与 {{agent}} 开始聊天",
-      "errorSubtitle": "无法读取记录。请切回终端继续工作",
       "errorTitle": "无法加载对话",
-      "notFoundSubtitle": "发送消息以开始对话，或打开终端视图，查看 {{agent}} 正在做什么",
       "notFoundTitle": "暂未找到此对话"
     },
     "nativeChatToggleAction": {

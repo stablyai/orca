@@ -1065,8 +1065,8 @@
         "earlierMessages_other": "{{count}} earlier messages in the thread"
       },
       "turnDiff": {
-        "changedFiles_one": "{{count}} changed file",
-        "changedFiles_other": "{{count}} changed files"
+        "changed_one": "Changed {{count}} file",
+        "changed_other": "Changed {{count}} files"
       },
       "workerDock": {
         "taskCount_one": "{{count}} task",

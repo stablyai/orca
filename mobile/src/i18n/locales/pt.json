@@ -274,9 +274,7 @@
     },
     "message": {
       "copyMessage": "Copiar mensagem",
-      "forkFromResponse": "Criar ramificação a partir desta resposta",
-      "scrollMessageToTop": "Rolar esta mensagem para o topo",
-      "forkFromResponseHint": "Um novo chat com toda esta resposta, até o fim do turno"
+      "forkFromResponse": "Criar ramificação a partir desta resposta"
     },
     "messageActionsSheet": {
       "clipboardRejected": "A área de transferência rejeitou o texto.",
@@ -306,10 +304,8 @@
     },
     "nativeChatToolLine": {
       "added": "Adicionou",
-      "copyCommand": "Copiar comando",
       "deleted": "Excluiu",
       "durationHours": "{{hours}}h {{minutes}}min {{seconds}}s",
-      "durationMilliseconds": "{{milliseconds}}ms",
       "durationMinutes": "{{minutes}}min {{seconds}}s",
       "durationSeconds": "{{seconds}}s",
       "edited": "Editou",
@@ -1309,11 +1305,8 @@
         "exitPlanMode": "Sair do modo de planejamento"
       },
       "turnDiff": {
-        "changedFiles_one": "{{count}} arquivo alterado",
-        "changedFiles_other": "{{count}} arquivos alterados",
         "partial": "Diff parcial",
-        "showMoreFiles": "Mostrar mais {{count}}",
-        "changedFiles_many": "{{count}} arquivos alterados"
+        "showMoreFiles": "Mostrar mais {{count}}"
       },
       "goal": {
         "sentAsGoal": "Enviado como objetivo"
@@ -2811,11 +2804,8 @@
     },
     "nativeChatRenderData": {
       "defaultAgentLabel": "o agente",
-      "emptySubtitle": "Peça que {{agent}} inspecione o código, explique a saída ou faça uma alteração.",
       "emptyTitle": "Inicie um chat com {{agent}}",
-      "errorSubtitle": "Não foi possível ler a transcrição. Alterne de volta para o terminal para continuar trabalhando.",
       "errorTitle": "Não foi possível carregar a conversa",
-      "notFoundSubtitle": "Envie uma mensagem para iniciar uma conversa ou abra a visualização do terminal para ver o que {{agent}} está fazendo.",
       "notFoundTitle": "Conversa ainda não encontrada"
     },
     "nativeChatToggleAction": {

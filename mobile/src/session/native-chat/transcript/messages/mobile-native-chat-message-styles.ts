@@ -1,5 +1,5 @@
 import { StyleSheet } from 'react-native'
-import { colors, radii, spacing, typography } from '../../../../theme/mobile-theme'
+import { colors, feedback, radii, spacing, typography } from '../../../../theme/mobile-theme'
 import { themedStyleSheet } from '../../../../theme/themed-styles'
 
 export const TEXT_SIZE = 17
@@ -48,7 +48,7 @@ export const styles = themedStyleSheet(() => ({
     minHeight: 32
   },
   reasoningPressed: {
-    opacity: 0.6
+    opacity: feedback.pressedOpacity
   },
   reasoningHeadline: {
     color: colors.textMuted,

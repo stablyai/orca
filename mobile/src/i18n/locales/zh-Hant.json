@@ -254,9 +254,7 @@
     },
     "message": {
       "copyMessage": "複製訊息",
-      "forkFromResponse": "從此回覆建立分支",
-      "scrollMessageToTop": "將此訊息捲動到頂端",
-      "forkFromResponseHint": "新聊天將包含此回合結束前的完整回覆"
+      "forkFromResponse": "從此回覆建立分支"
     },
     "messageActionsSheet": {
       "clipboardRejected": "無法將文字複製到剪貼簿。",
@@ -286,10 +284,8 @@
     },
     "nativeChatToolLine": {
       "added": "新增了",
-      "copyCommand": "複製命令",
       "deleted": "刪除了",
       "durationHours": "{{hours}} 小時 {{minutes}} 分 {{seconds}} 秒",
-      "durationMilliseconds": "{{milliseconds}} 毫秒",
       "durationMinutes": "{{minutes}} 分 {{seconds}} 秒",
       "durationSeconds": "{{seconds}} 秒",
       "edited": "編輯了",
@@ -2369,11 +2365,8 @@
     },
     "nativeChatRenderData": {
       "defaultAgentLabel": "代理程式",
-      "emptySubtitle": "請 {{agent}} 檢查程式碼、解釋輸出內容，或進行修改。",
       "emptyTitle": "開始與 {{agent}} 聊天",
-      "errorSubtitle": "無法讀取記錄。請切回終端機繼續工作。",
       "errorTitle": "無法載入對話",
-      "notFoundSubtitle": "傳送訊息以開始對話，或開啟終端機檢視，查看 {{agent}} 正在做什麼。",
       "notFoundTitle": "目前還找不到這段對話"
     },
     "nativeChatToggleAction": {
