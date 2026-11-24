@@ -46,17 +46,18 @@ function recordBotRpcs(): void {
   sentRpcs.length = 0
   runtimeBeforeCase = Object.getOwnPropertyDescriptor(window.api, 'runtime')
   stubBots([bot])
-  const runtime = window.api.runtime as {
-    call: (args: { method: string }) => Promise<unknown>
-  }
-  const answer = runtime.call
+  // The stubbed bridge from stubBots: its own `call` answers everything but the start.
+  const runtime: unknown = window.api.runtime
+  const stubbed = typeof runtime === 'object' && runtime !== null ? runtime : {}
+  const answer: unknown = Reflect.get(stubbed, 'call')
   Reflect.set(window.api, 'runtime', {
-    ...runtime,
-    call: async (args: { method: string; params?: unknown }) => {
+    ...stubbed,
+    call: async (args: { method: string; params?: unknown }): Promise<unknown> => {
       sentRpcs.push({ method: args.method, params: args.params })
-      return args.method === 'bots.session.start'
-        ? { ok: true, result: { sessionId: 'side-chat' } }
-        : answer(args)
+      if (args.method === 'bots.session.start') {
+        return { ok: true, result: { sessionId: 'side-chat' } }
+      }
+      return typeof answer === 'function' ? Reflect.apply(answer, stubbed, [args]) : undefined
     }
   })
 }
@@ -191,9 +192,11 @@ export const codex = searchCase('codex', async () => {
   document.querySelector<HTMLInputElement>('input[role="combobox"]')?.form?.requestSubmit()
   await settle()
   const starts = sentRpcs.slice(before).filter((rpc) => rpc.method === 'bots.session.start')
-  const params = starts[0]?.params as { botId?: string; agent?: string } | undefined
+  const params = starts[0]?.params
+  const field = (name: string): unknown =>
+    typeof params === 'object' && params !== null ? Reflect.get(params, name) : undefined
   expect(
-    starts.length === 1 && params?.botId === bot.id && params.agent === 'codex',
+    starts.length === 1 && field('botId') === bot.id && field('agent') === 'codex',
     `Enter starts one Codex side chat with ${bot.id} (sent ${JSON.stringify(sentRpcs.slice(before))})`
   )
 })

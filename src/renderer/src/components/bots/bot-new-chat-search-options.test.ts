@@ -3,11 +3,24 @@ import type { Bot } from '../../../../shared/bot-types'
 import { findMatchingTabAgentLaunchOptions } from '../tab-bar/create-entry/tab-agent-launch-options'
 import { buildBotNewChatSearchOptions } from './bot-new-chat-search-options'
 
-const bot = {
+const bot: Bot = {
   id: 'release-helper',
   name: 'Release helper',
-  agent: 'claude'
-} as Bot
+  hostId: 'local',
+  folder: 'release-helper',
+  folderWorkspaceId: 'fw-release-helper',
+  agent: 'claude',
+  avatar: null,
+  paused: false,
+  notifications: { needsPermission: true, taskComplete: true, couldNotFinish: true },
+  members: [],
+  slack: null,
+  linear: null,
+  github: null,
+  chatSessionId: 'release-helper-chat',
+  createdAt: 0,
+  updatedAt: 0
+}
 
 const options = buildBotNewChatSearchOptions(bot, [
   { agent: 'claude' },
