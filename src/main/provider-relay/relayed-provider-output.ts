@@ -1,8 +1,14 @@
 import type { Readable } from 'node:stream'
 import type { ProviderRelayDataEvent } from '../daemon/protocol/daemon-provider-relay-protocol'
+import { RelayedProviderConsumption } from './relayed-provider-consumption'
 
 /** Acks batch this long after output; the daemon asks sooner (relayAckWanted) when it holds a lot. */
 const ACK_DELAY_MS = 1_000
+/**
+ * A held replay is handed on in slices of about this much text, yielding between them: the
+ * stream hands a slice to its reader in one run, so the slice bounds main's longest run.
+ */
+const RELEASE_SLICE_CHARS = 64 * 1024
 
 /**
  * The provider's view of its open streamed items: it sees every agent line with its seq before the
@@ -12,8 +18,6 @@ const ACK_DELAY_MS = 1_000
 export type ProviderRelayAckFloor = {
   observe: (seq: number, line: string) => void
   floor: () => number | null
-  /** A line that needs no ack of its own (a keep-alive); the next real line's ack covers it. */
-  quiet?: (line: string) => boolean
 }
 
 type OutputOptions = {
@@ -44,6 +48,16 @@ export class RelayedProviderOutput {
   /** Requests already handed on, so a replay or reattach never asks the user twice. */
   private readonly deliveredPending = new Set<number>()
   private held: { seq: number | null; line: string }[] | null
+  /** How far a held replay has been handed on; it stays held until the slices reach the end. */
+  private releasedTo = 0
+  private releasing: Promise<void> | null = null
+  private readonly consumption = new RelayedProviderConsumption(() => {
+    if (this.consumption.upTo(this.pushedSeq) > this.ackedSeq) {
+      this.scheduleAck()
+    }
+  })
+  /** The hook the stream's record reader calls (`claim`, then `taken` per record). */
+  readonly recordTaking = this.consumption.taking
   private ackTimer: ReturnType<typeof setTimeout> | null = null
   private acking: Promise<void> = Promise.resolve()
   private stopped = false
@@ -57,9 +71,11 @@ export class RelayedProviderOutput {
     if (fromSeq !== undefined) {
       this.pushedSeq = fromSeq
       this.ackedSeq = fromSeq
+      this.consumption.reset(fromSeq)
     }
     if (this.held) {
       this.held = []
+      this.releasedTo = 0
     }
     this.deliveredSeq = this.pushedSeq
     return this.pushedSeq
@@ -92,12 +108,32 @@ export class RelayedProviderOutput {
     return this.held !== null
   }
 
-  release(): void {
-    const held = this.held
-    this.held = null
-    for (const entry of held ?? []) {
-      this.push(entry.seq, entry.line)
+  /** Hands held output on in order, in slices; settles once nothing is held. */
+  release(): Promise<void> {
+    if (!this.held) {
+      return Promise.resolve()
     }
+    this.releasing ??= new Promise<void>((resolve) => {
+      const slice = () => {
+        const held = this.held ?? []
+        let chars = 0
+        while (this.releasedTo < held.length) {
+          const entry = held[this.releasedTo++] as { seq: number | null; line: string }
+          this.push(entry.seq, entry.line)
+          chars += entry.line.length + 1
+          if (chars >= RELEASE_SLICE_CHARS && this.releasedTo < held.length) {
+            setImmediate(slice)
+            return
+          }
+        }
+        this.held = null
+        this.releasedTo = 0
+        this.releasing = null
+        resolve()
+      }
+      slice()
+    })
+    return this.releasing
   }
 
   /** Acks everything handed on now, after its durability barrier; `force` saves live text first. */
@@ -136,10 +172,10 @@ export class RelayedProviderOutput {
     }
     if (seq !== null && seq > this.pushedSeq) {
       this.pushedSeq = seq
-      if (!line || !this.options.ackFloor?.quiet?.(line)) {
-        this.scheduleAck()
-      }
+      this.scheduleAck()
     }
+    // The reader makes no record of a blank line, so it counts as the cursor alone.
+    this.consumption.pushed(line !== null && /\S/.test(line), this.pushedSeq)
   }
 
   private scheduleAck(): void {
@@ -164,7 +200,9 @@ export class RelayedProviderOutput {
     this.acking = this.acking.then(async () => {
       // The daemon's ask (its cap) releases the floor; the forced save keeps the text.
       const floor = force ? null : (this.options.ackFloor?.floor() ?? null)
-      const target = floor === null ? this.pushedSeq : Math.min(this.pushedSeq, floor - 1)
+      // Only what the chat's reader took: a paused reader's lines are replayed after a crash.
+      const taken = this.consumption.upTo(this.pushedSeq)
+      const target = floor === null ? taken : Math.min(taken, floor - 1)
       if (target <= this.ackedSeq || this.stopped) {
         return
       }

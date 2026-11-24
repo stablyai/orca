@@ -2,7 +2,11 @@ import type {
   ProviderRelayDetachPolicy,
   ProviderRelayRecord
 } from '../protocol/daemon-provider-relay-protocol'
-import { ProviderRelayOpenWork, ProviderRelayWorkReader } from './provider-relay-work-markers'
+import {
+  isProviderRelayQuietLine,
+  ProviderRelayOpenWork,
+  ProviderRelayWorkReader
+} from './provider-relay-work-markers'
 
 export { readProviderRelayDetachPolicy } from './provider-relay-work-markers'
 
@@ -35,6 +39,7 @@ export class ProviderRelayIdleStop {
   private waitingForLine = false
   private lastActivityAt = Date.now()
   private timer: ReturnType<typeof setTimeout> | null = null
+  private quietNames: ReadonlySet<string> = new Set()
 
   constructor(private readonly host: IdleStopHost) {}
 
@@ -104,6 +109,11 @@ export class ProviderRelayIdleStop {
   }
 
   /** Called for every stdout line; attached it costs nothing, since the app counts the work. */
+  /** A transport-only line the policy names: neither forwarded, spooled nor counted as activity. */
+  quiet(line: string): boolean {
+    return isProviderRelayQuietLine(line, this.quietNames)
+  }
+
   observeAgentLine(line: string): void {
     this.lastActivityAt = Date.now()
     if (this.armed && this.work && this.reader) {
@@ -121,6 +131,7 @@ export class ProviderRelayIdleStop {
       this.reader = new ProviderRelayWorkReader(policy.markers)
     }
     this.policy = policy
+    this.quietNames = new Set(policy.quiet ?? [])
     this.host.workRequests?.(policy.workRequests ?? [])
   }
 

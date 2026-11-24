@@ -10,6 +10,7 @@ import type {
 import { RELAY_WRITE_CHUNK_CHARS } from '../daemon/protocol/daemon-provider-relay-protocol'
 import type { ProviderRelayChannel } from './provider-relay-channel'
 import { RelayedProviderOutput, type ProviderRelayAckFloor } from './relayed-provider-output'
+import type { ProviderRelayRecordTaking } from './relayed-provider-consumption'
 
 /** The daemon refuses input past its queue cap; the write is offered again after this. */
 const INPUT_FULL_RETRY_MS = 50
@@ -38,7 +39,16 @@ export type RelayedProviderChildOptions = {
  */
 export class RelayedProviderChild extends EventEmitter implements ProviderChild {
   readonly pid: number
-  readonly stdout = new Readable({ read() {} })
+  readonly stdout: Readable & { relayRecords: ProviderRelayRecordTaking } = Object.assign(
+    new Readable({ read() {} }),
+    {
+      relayRecords: {
+        claim: () => this.output.recordTaking.claim(),
+        taken: () => this.output.recordTaking.taken(),
+        uncounted: () => this.output.recordTaking.uncounted()
+      }
+    }
+  )
   readonly stderr = new Readable({ read() {} })
   readonly stdin: Writable
   readonly ready: Promise<void>
@@ -138,12 +148,13 @@ export class RelayedProviderChild extends EventEmitter implements ProviderChild 
 
   /** Lets held output through, in order, once the consumer can route it. */
   releaseOutput(): void {
-    this.output.release()
-    const parked = this.parkedEnd
-    this.parkedEnd = null
-    if (parked) {
-      this.end(parked.exit, parked.lost)
-    }
+    void this.output.release().then(() => {
+      const parked = this.parkedEnd
+      this.parkedEnd = null
+      if (parked) {
+        this.end(parked.exit, parked.lost)
+      }
+    })
   }
 
   kill(signal?: NodeJS.Signals | number): boolean {

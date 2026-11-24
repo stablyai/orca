@@ -63,6 +63,8 @@ export type ProviderRelayWorkMarkers = {
   /** A fresh tracker per attach, so acks never pass the start of a streamed item still open. */
   ackFloor?: () => ProviderRelayAckFloor
   requests?: readonly string[]
+  /** Transport-only lines (a keep-alive) by top-level name; the daemon drops them. */
+  quiet?: readonly string[]
 }
 
 /** The provider's open work at detach, keyed as its markers key it. */
@@ -113,6 +115,7 @@ function policyFor(
     idleStopMs: route?.idleStopMs() ?? null,
     markers: [...markers.markers],
     ...(markers.requests ? { workRequests: [...markers.requests] } : {}),
+    ...(markers.quiet ? { quiet: [...markers.quiet] } : {}),
     ...(open ? { open } : {})
   }
 }

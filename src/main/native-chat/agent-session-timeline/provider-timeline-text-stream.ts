@@ -29,17 +29,38 @@ export type ProviderTimelineStream = {
   stoppedIn: string | null
 }
 
+/** Whether a stream's text is live (unsaved) in `epoch`, given whether it has buffered text. */
+export function providerTimelineTextIsLive(
+  stream: ProviderTimelineStream,
+  epoch: string,
+  buffered: boolean
+): boolean {
+  return (
+    stream.committed?.epoch === epoch && buffered && !stream.closing && stream.stoppedIn === null
+  )
+}
+
+/** Whether any of `streams` has live text, without joining any stream's buffered text. */
+export function providerTimelineHasLiveText(
+  streams: Iterable<ProviderTimelineStream>,
+  epoch: string,
+  buffered: (id: string) => boolean
+): boolean {
+  for (const stream of streams) {
+    if (providerTimelineTextIsLive(stream, epoch, buffered(stream.id))) {
+      return true
+    }
+  }
+  return false
+}
+
 export function providerTimelineLiveText(
   stream: ProviderTimelineStream,
   epoch: string,
   snapshot: { text: string } | null
 ): AgentJournalRenderItem[] {
   const committed = stream.committed
-  return !committed ||
-    committed.epoch !== epoch ||
-    !snapshot ||
-    stream.closing ||
-    stream.stoppedIn !== null
+  return !committed || !snapshot || !providerTimelineTextIsLive(stream, epoch, true)
     ? []
     : [
         {

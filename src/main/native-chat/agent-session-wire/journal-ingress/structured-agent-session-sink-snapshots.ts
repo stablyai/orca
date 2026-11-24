@@ -10,24 +10,32 @@ export type StructuredAgentSessionSnapshotSource = (
   recipient: StructuredAgentSessionSnapshotRecipient
 ) => { release: () => void; adopted: Promise<void> }
 
+/** A stream owner's unsaved text; `has` answers without building it. */
+export type StructuredAgentSessionLiveTextSource = {
+  read(epoch: string): readonly AgentJournalRenderItem[]
+  has(epoch: string): boolean
+  flush(): void
+}
+
 /** One acquisition's saved facts, replaced whole per epoch, and the holds a replacement places. */
 export class StructuredAgentSessionSinkSnapshots {
-  private readonly liveSources = new Set<{
-    read(epoch: string): readonly AgentJournalRenderItem[]
-    flush(): void
-  }>()
+  private readonly liveSources = new Set<StructuredAgentSessionLiveTextSource>()
 
-  bindLiveText = (source: {
-    read(epoch: string): readonly AgentJournalRenderItem[]
-    flush(): void
-  }): (() => void) => {
+  bindLiveText = (source: StructuredAgentSessionLiveTextSource): (() => void) => {
     this.liveSources.add(source)
     return () => {
       this.liveSources.delete(source)
     }
   }
-  readLiveText = (epoch: string): readonly AgentJournalRenderItem[] =>
-    this.held || this.closed ? [] : [...this.liveSources].flatMap((source) => source.read(epoch))
+  readLiveText = (epoch: string | null): readonly AgentJournalRenderItem[] =>
+    epoch === null || this.held || this.closed
+      ? []
+      : [...this.liveSources].flatMap((source) => source.read(epoch))
+  hasLiveText = (epoch: string | null): boolean =>
+    epoch !== null &&
+    !this.held &&
+    !this.closed &&
+    [...this.liveSources].some((source) => source.has(epoch))
   flushLiveText = (): void => {
     this.liveSources.forEach((source) => source.flush())
   }

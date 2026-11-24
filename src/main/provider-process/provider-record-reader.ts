@@ -3,6 +3,7 @@ import {
   createIncrementalNdjsonFramer,
   type NdjsonRejectedRecord
 } from '../../shared/json-stream/main-process-ndjson-framer'
+import type { ProviderRelayRecordTaking } from '../provider-relay/relayed-provider-consumption'
 
 /**
  * Far above valid replies (large diffs and image turns have passed 16 MB), but bounds what one
@@ -10,7 +11,10 @@ import {
  */
 export const PROVIDER_RECORD_MAX_LINE_BYTES = 128 * 2 ** 20
 
-type RecordReaderStream = Pick<Readable, 'on' | 'pause' | 'resume' | 'setEncoding'>
+type RecordReaderStream = Pick<Readable, 'on' | 'pause' | 'resume' | 'setEncoding'> & {
+  /** A relayed agent's stream: each record is reported once handled, so acks never pass it. */
+  relayRecords?: ProviderRelayRecordTaking
+}
 
 export type ProviderRecordReader = {
   pause: () => void
@@ -24,7 +28,31 @@ export function createProviderRecordReader(input: {
   onFatal: (error: Error) => void
 }): ProviderRecordReader {
   let paused = false
-  const framer = createIncrementalNdjsonFramer(input.onRecord, input.onRejected, {
+  const records = input.stdout.relayRecords
+  records?.claim()
+  const onRecord = records
+    ? (record: unknown, line: string) => {
+        try {
+          input.onRecord(record, line)
+        } finally {
+          records.taken()
+        }
+      }
+    : input.onRecord
+  const onRejected = records
+    ? (rejected: NdjsonRejectedRecord) => {
+        try {
+          input.onRejected(rejected)
+        } finally {
+          if (rejected.kind === 'line-too-long' && rejected.droppedCompleteRecords) {
+            records.uncounted()
+          } else {
+            records.taken()
+          }
+        }
+      }
+    : input.onRejected
+  const framer = createIncrementalNdjsonFramer(onRecord, onRejected, {
     maxLineBytes: PROVIDER_RECORD_MAX_LINE_BYTES,
     shouldPause: () => paused
   })

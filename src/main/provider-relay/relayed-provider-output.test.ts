@@ -1,6 +1,7 @@
 import { Readable } from 'node:stream'
 import { describe, expect, it, vi } from 'vitest'
 import { RelayedProviderOutput } from './relayed-provider-output'
+import { createProviderRecordReader } from '../provider-process/provider-record-reader'
 
 function rig(passWhileHeld?: (line: string) => boolean) {
   const stdout = new Readable({ read() {} })
@@ -100,5 +101,58 @@ describe('relayed provider output', () => {
     await releaseDurable()
     await asked
     expect(acks).toEqual([1])
+  })
+
+  it('acks only the records a paused reader took, so a crash replays the rest', async () => {
+    const stdout = new Readable({ read() {} })
+    const acks: number[] = []
+    const output = new RelayedProviderOutput({
+      stdout,
+      ack: async (seq) => {
+        acks.push(seq)
+      }
+    })
+    const taken: number[] = []
+    // The journal's drain pauses the reader after its first record.
+    const reader = createProviderRecordReader({
+      stdout: Object.assign(stdout, { relayRecords: output.recordTaking }),
+      onRecord: (record) => {
+        taken.push((record as { n: number }).n)
+        if (taken.length === 1) {
+          reader.pause()
+        }
+      },
+      onRejected: () => {},
+      onFatal: () => {}
+    })
+    output.restartAt(0)
+    for (const n of [1, 2, 3]) {
+      output.line('relayData', n, JSON.stringify({ n }))
+    }
+    await settle()
+    await output.settle()
+    expect(taken).toEqual([1])
+    expect(acks).toEqual([1])
+    reader.resume()
+    await settle()
+    await output.settle()
+    expect(taken).toEqual([1, 2, 3])
+    expect(acks).toEqual([1, 3])
+  })
+
+  it('hands a large held replay on in order, with lines that came during it after it', async () => {
+    const { output, seen } = rig(() => false)
+    output.restartAt(0)
+    for (let seq = 1; seq <= 50_000; seq += 1) {
+      output.line('relayData', seq, `line-${seq}`)
+    }
+    const released = output.release()
+    // Lines that come during the replay queue behind it.
+    output.line('relayData', 50_001, 'line-50001')
+    await released
+    await settle()
+    expect(output.holding).toBe(false)
+    expect(seen).toHaveLength(50_001)
+    expect(seen.every((line, index) => line === `line-${index + 1}`)).toBe(true)
   })
 })

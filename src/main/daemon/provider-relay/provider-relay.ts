@@ -73,7 +73,7 @@ export class ProviderRelay {
     })
     this.lines = new ProviderRelayLineReader({
       spillPath: `${options.spoolPath}.line`,
-      onLine: (line, bytes) => this.appendLine(line, bytes),
+      onLine: (line, bytes) => void (this.idleStop.quiet(line) || this.appendLine(line, bytes)),
       onBusy: (busy) => {
         this.readerBusy = busy
         this.updateReading()

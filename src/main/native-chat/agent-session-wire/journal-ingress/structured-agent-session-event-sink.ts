@@ -20,7 +20,10 @@ import type { JournalStepOutcome } from '../../agent-session-journal/writing/jou
 import { estimateStructuredAgentSessionItemBytes } from './structured-agent-session-event-sink-estimate'
 import { StructuredAgentSessionSinkQueue } from './structured-agent-session-event-sink-queue'
 import { structuredAgentSessionEphemeralPublications } from './structured-agent-session-ephemeral-publications'
-import type { StructuredAgentSessionSnapshotSource } from './structured-agent-session-sink-snapshots'
+import type {
+  StructuredAgentSessionLiveTextSource,
+  StructuredAgentSessionSnapshotSource
+} from './structured-agent-session-sink-snapshots'
 import type { ClaudeJournalSnapshot } from '../../../claude/subagents/claude-subagent-journaled-identities'
 import { structuredAgentSessionJournalAppendOptions } from './structured-agent-session-journal-append-options'
 import { createStructuredAgentSessionResolvedAppend } from './structured-agent-session-resolved-append'
@@ -65,10 +68,7 @@ export type StructuredAgentSessionRevisionOptions = StructuredAgentSessionItemAp
 
 export type StructuredAgentSessionEventSink = StructuredAgentSessionTransitionSink & {
   /** Reads the existing stream owner; no text is copied into the sink. */
-  bindLiveText?(source: {
-    read(epoch: string): readonly AgentJournalRenderItem[]
-    flush(): void
-  }): () => void
+  bindLiveText?(source: StructuredAgentSessionLiveTextSource): () => void
   publishLiveText?(): StructuredAgentSessionSinkAdmission
   observeExit?: exits.StructuredAgentSessionExitObservation['record']
   /** Adapters report only their acquisition's own spontaneous root exit, never a requested close. */
@@ -169,6 +169,7 @@ export type DeferredStructuredAgentSessionEventSink = {
   unbind(): void
   followSnapshots(source: StructuredAgentSessionSnapshotSource): Promise<void>
   liveText(): readonly AgentJournalRenderItem[]
+  hasLiveText(): boolean
   seal(): void
   close(): void
   drained(): Promise<StructuredAgentSessionSinkBarrier>
@@ -320,6 +321,7 @@ export function createDeferredStructuredAgentSessionEventSink(deps: {
     unbind: () => queue.unbind(),
     followSnapshots: (source) => queue.snapshots.follow(source),
     liveText: queue.liveText,
+    hasLiveText: queue.hasLiveText,
     seal: () => queue.seal(),
     close: () => {
       queue.flushLiveText()

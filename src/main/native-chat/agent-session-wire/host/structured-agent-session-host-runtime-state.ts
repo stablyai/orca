@@ -268,7 +268,7 @@ export class StructuredAgentSessionHostRuntimeState {
       await this.childWork?.drainChildWork(sessionId)
       await this.requireSuccessfulBarrier(sink()?.drained() ?? ok)
     }
-    return !landed || !sink()?.liveText().length
+    return !landed || !sink()?.hasLiveText()
   }
 
   async lifecycleBarrier(sessionId: string): Promise<StructuredAgentSessionSinkBarrier> {

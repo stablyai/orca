@@ -39,6 +39,8 @@ export type AgentSessionDeltaCoalescer = {
   forget: (key: string) => void
   dispose: () => void
   snapshot: (key: string) => AgentSessionDeltaSnapshot | null
+  /** Whether `snapshot` would return one, without joining its text. */
+  has: (key: string) => boolean
   dirty: () => { key: string; snapshot: AgentSessionDeltaSnapshot }[]
   /** External writes satisfy the current snapshot until more text arrives. */
   markFlushed: (key: string) => void
@@ -198,6 +200,7 @@ export function createAgentSessionDeltaCoalescer(
       evictable.clear()
       totalRetainedBytes = 0
     },
+    has: (key) => streams.has(key),
     snapshot: (key) => {
       const stream = streams.get(key)
       return stream

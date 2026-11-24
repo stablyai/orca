@@ -104,12 +104,11 @@ export function readProviderRelayDetachPolicy(value: unknown): ProviderRelayDeta
   const { idleStopMs } = policy
   const markers = Array.isArray(policy.markers) ? policy.markers.map(readMarker) : null
   const open = readOpen(policy.open)
-  const { workRequests } = policy
-  const requestsOk =
-    workRequests === undefined ||
-    (Array.isArray(workRequests) &&
-      workRequests.length <= MAX_MARKERS &&
-      workRequests.every(isName))
+  const { workRequests, quiet } = policy
+  const names = (value: unknown) =>
+    value === undefined ||
+    (Array.isArray(value) && value.length <= MAX_MARKERS && value.every(isName))
+  const requestsOk = names(workRequests) && names(quiet)
   if (
     !(idleStopMs === null || (typeof idleStopMs === 'number' && idleStopMs > 0)) ||
     !markers ||
@@ -124,6 +123,7 @@ export function readProviderRelayDetachPolicy(value: unknown): ProviderRelayDeta
     idleStopMs: idleStopMs === null ? null : Math.min(idleStopMs, 2 ** 31 - 1),
     markers: markers as ProviderRelayWorkMarker[],
     ...(workRequests ? { workRequests: workRequests as string[] } : {}),
+    ...(quiet ? { quiet: quiet as string[] } : {}),
     ...(open ? { open } : {})
   }
 }
@@ -187,6 +187,18 @@ function scannedName(line: string): string | null | undefined {
   return complete && !properties.some((p) => p.key === 'method' || p.key === 'type')
     ? null
     : undefined
+}
+
+/** A keep-alive is a few dozen chars; a longer line is never transport-only. */
+const QUIET_MAX_CHARS = 256
+
+/** True for a short line whose top-level name is one of `names` (a transport-only line). */
+export function isProviderRelayQuietLine(line: string, names: ReadonlySet<string>): boolean {
+  if (names.size === 0 || line.length > QUIET_MAX_CHARS) {
+    return false
+  }
+  const name = scannedName(line)
+  return typeof name === 'string' && names.has(name)
 }
 
 /** A value spelled with escapes (`\/`, an escaped ASCII letter) can't be found as a substring. */

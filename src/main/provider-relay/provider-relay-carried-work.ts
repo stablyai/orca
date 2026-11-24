@@ -61,8 +61,7 @@ export class ProviderRelayCarriedWork {
         floor?.observe(seq, line)
         this.observe(line)
       },
-      floor: () => floor?.floor() ?? null,
-      ...(floor?.quiet ? { quiet: floor.quiet } : {})
+      floor: () => floor?.floor() ?? null
     }
   }
 }

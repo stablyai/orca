@@ -68,6 +68,11 @@ export type ProviderRelayDetachPolicy = {
   /** Client request methods that are work until the agent answers them (an ACP `session/prompt`). */
   workRequests?: string[]
   /**
+   * Transport-only agent lines (a keep-alive), by top-level `method` (else `type`): the daemon
+   * neither forwards nor spools them. Only a short line is checked.
+   */
+  quiet?: string[]
+  /**
    * Work open when a detach was sent, as task keys per marker group. Only a detach carries it, and
    * only a detach that carries it can idle-stop: a stream that just dropped keeps the agent running.
    */
