@@ -14,6 +14,7 @@ import { AntigravityChatAuthConfigSchema } from '../../../../../shared/agent-acc
 import { getAntigravityAccountService } from '../../../../antigravity/native-account-host'
 import { agentModelCatalogStore } from '../../../../native-chat/agent-model-catalog/agent-model-catalog-store'
 import {
+  readAgySignInInBackground,
   restartIdleAgyChats,
   sharedAgyLaunchHome,
   withAntigravityChatBackend
@@ -208,6 +209,7 @@ export const ANTIGRAVITY_ACCOUNT_METHODS = [
       }
       dispose = subscribeAntigravityChatSignIn(() => emit(readAntigravityChatSignInStatus(owner)))
       emit(readAntigravityChatSignInStatus(owner))
+      readAgySignInInBackground(ctx.runtime)
     }
   }),
   defineMethod({
@@ -246,7 +248,10 @@ export const ANTIGRAVITY_ACCOUNT_METHODS = [
     name: 'accounts.antigravityChatAuthDetect',
     permission: 'accounts-admin',
     params: null,
-    handler: (_, ctx) => detectChatAuth(ctx.runtime)
+    handler: (_, ctx) => {
+      readAgySignInInBackground(ctx.runtime)
+      return detectChatAuth(ctx.runtime)
+    }
   }),
   defineMethod({
     name: 'accounts.antigravityChatApiKeySave',

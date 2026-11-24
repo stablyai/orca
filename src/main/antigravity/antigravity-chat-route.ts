@@ -8,6 +8,7 @@ import { AntigravityChatAuthConfigSchema } from '../../shared/agent-accounts/ant
 import { assertAntigravityChatAuthPublished } from './antigravity-chat-auth-publication'
 import { checkAntigravityHostAcp, checkAntigravityHostAcpCompatible } from './antigravity-host-acp'
 import { agyCredentialPresence } from './agy-credential-presence'
+import { antigravityChatSignIn } from './antigravity-chat-account'
 
 export type AntigravityAgySignIn = 'signedIn' | 'signedOut' | 'unknown' | 'notInstalled'
 
@@ -74,6 +75,12 @@ export async function antigravityAgySignIn(
 ): Promise<AntigravityAgySignIn> {
   const answer = await readAgySignIn(input)
   lastAgySignIn = answer
+  // Every surface showing agy's sign-in reads it from here, and re-reads when it changes.
+  const auth = answer === 'signedIn' || answer === 'signedOut' ? answer : null
+  const shown = antigravityChatSignIn.get().value
+  if (auth && shown.auth !== auth) {
+    antigravityChatSignIn.set({ ...shown, auth })
+  }
   return answer
 }
 

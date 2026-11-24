@@ -39,6 +39,14 @@ async function hostChatRoute(runtime: OrcaRuntimeService) {
   return { agy: input ? await antigravityAgySignIn(input) : ('unknown' as const), orcaHome: false }
 }
 
+/** Asks agy's sign-in for Google-account chats without waiting, so every surface that subscribes
+ *  to it (a chat, Settings) gets an answer, not only the one that asked first. */
+export function readAgySignInInBackground(runtime: OrcaRuntimeService): void {
+  void hostChatRoute(runtime).catch((error: unknown) =>
+    console.warn("[antigravity] agy's sign-in couldn't be read:", error)
+  )
+}
+
 /** The HOME new host agy chats launch with, when it shares the login an account switch changes;
  *  a login shell or the agent's settings can set one other than Orca's own. Unknown after
  *  LAUNCH_HOME_WAIT_MS, or when unreadable. */
