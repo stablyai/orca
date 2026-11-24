@@ -283,6 +283,24 @@ describe('a Google sign-in that fails after Google returned', () => {
     expect(logged).toEqual(['[google] sign-in failed at token exchange: owner_silent'])
   })
 
+  it('says the device stopped answering when it went quiet before a save that failed', async () => {
+    const file = join(
+      home.dir,
+      '.orca',
+      'google',
+      'accounts',
+      `${Buffer.from('me@gmail.com').toString('base64url')}.enc`
+    )
+    mkdirSync(file, { recursive: true })
+    writeFileSync(join(file, 'keep'), 'x')
+    const { page } = await failedSignIn((_init, stop) => {
+      stop('silent')
+      return tokens()
+    })
+    expect(page).toContain('The device that started this sign-in stopped answering.')
+    expect(page).not.toContain('Orca couldn’t save the Google account')
+  })
+
   it('says the account couldn’t be saved when writing it fails', async () => {
     // A folder where the account's file goes: reading it finds nothing, writing it fails.
     const file = join(

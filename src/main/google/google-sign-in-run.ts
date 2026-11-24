@@ -36,6 +36,7 @@ import {
   GOOGLE_CALLBACK_PATH,
   GOOGLE_RETURN_HOLD,
   GOOGLE_RETURN_PAGES,
+  googleFailedReturnPage,
   googleRedirectUri,
   isGoogleReturnFor,
   readGoogleCallback,
@@ -239,13 +240,7 @@ export async function runGoogleSignIn(
     tab.held?.answer(GOOGLE_RETURN_PAGES.signedIn)
     return record
   } catch (error) {
-    tab.held?.answer(
-      channel.stopped() === 'cancelled'
-        ? GOOGLE_RETURN_PAGES.cancelled
-        : GOOGLE_RETURN_PAGES.notSignedIn(
-            error instanceof Error ? error.message : 'Return to Orca and try again.'
-          )
-    )
+    tab.held?.answer(googleFailedReturnPage(channel.stopped(), error))
     throw error
   }
 }
