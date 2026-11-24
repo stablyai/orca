@@ -4,10 +4,10 @@ import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import Database from '../sqlite/sync-database'
 import { readHermesTranscriptPage, readHermesTranscriptSignal } from './transcript-hermes-sqlite'
-import { OPENCODE_TRANSCRIPT_MAX_ROW_BYTES } from './transcript-opencode-part-blocks'
+import { OPENCODE_TRANSCRIPT_MAX_ROW_BYTES } from './transcript-history/opencode/transcript-opencode-part-blocks'
 import { AGENT_SESSION_HOST_STATUS_COPY } from '../../shared/agent-session/view/agent-session-host-status-rows'
 import { handleOpenCodeSqliteRequest } from '../ai-vault/scanners/opencode/reader-transport/session-scanner-opencode-sqlite-dispatch'
-import { subscribeOpenCodeNativeChatTranscript } from './transcript-opencode-subscribe'
+import { subscribeOpenCodeNativeChatTranscript } from './transcript-history/opencode/transcript-opencode-subscribe'
 
 const directories: string[] = []
 afterEach(() => {

@@ -1,5 +1,5 @@
-import { getRuntimeGitStatus } from '@/runtime/runtime-git-status-client'
-import { getRuntimeGitUpstreamStatus } from '@/runtime/runtime-git-sync-client'
+import { getRuntimeGitStatus } from '@/runtime/source-control/git/runtime-git-status-client'
+import { getRuntimeGitUpstreamStatus } from '@/runtime/source-control/git/runtime-git-sync-client'
 import { getBranchLineTotalMergeBase } from './branch-line-total-request-gate'
 import {
   clearAutomaticPushTargetUpstreamStatusCache,
@@ -11,14 +11,13 @@ import type {
   GitStatusResult,
   GitUpstreamStatus
 } from '../../../../../../shared/git/status/git-status-types'
-import type { RuntimeClientTarget } from '../../../../../../shared/runtime-client-target'
-import type { ExecutionHostId } from '../../../../../../shared/execution-host'
+import type { RuntimeClientTarget } from '../../../../../../shared/remote-runtime/host-catalog/runtime-client-target'
+import type { ExecutionHostId } from '../../../../../../shared/execution-host/execution-host'
 import type { GitPushTarget } from '../../../../../../shared/worktree/types'
 import {
   beginAutomaticUpstreamRefresh,
   beginStrictUpstreamRefresh,
   claimAutomaticUpstreamRefreshApply,
-  clearGitStatusRefreshOrderingStateForTests,
   finishAutomaticUpstreamRefresh,
   shouldApplyAutomaticUpstreamRefresh,
   type AutomaticRefreshOrder
@@ -40,6 +39,7 @@ export type GitStatusRefreshDeps = {
     options?: {
       runtimeTarget?: RuntimeClientTarget | null
       applyUpstreamStatus?: boolean
+      background?: boolean
     }
   ) => Promise<GitUpstreamStatus | null>
 }
@@ -52,7 +52,8 @@ async function fetchAndApplyAutomaticUpstreamStatus({
   pushTarget,
   deps,
   order,
-  shouldApply
+  shouldApply,
+  background
 }: {
   /** The worktree owner's transport. */
   target: RuntimeClientTarget
@@ -63,6 +64,7 @@ async function fetchAndApplyAutomaticUpstreamStatus({
   deps: GitStatusRefreshDeps
   order: AutomaticRefreshOrder
   shouldApply?: () => boolean
+  background?: boolean
 }): Promise<GitUpstreamStatus | null> {
   if (!shouldApplyAutomaticUpstreamRefresh(worktreeId, order, shouldApply)) {
     return null
@@ -72,10 +74,7 @@ async function fetchAndApplyAutomaticUpstreamStatus({
     worktreePath,
     connectionId,
     pushTarget,
-    {
-      runtimeTarget: target,
-      applyUpstreamStatus: false
-    }
+    { runtimeTarget: target, applyUpstreamStatus: false, background }
   )
   if (!upstreamStatus) {
     if (pushTarget) {
@@ -95,11 +94,6 @@ async function fetchAndApplyAutomaticUpstreamStatus({
   }
   deps.setUpstreamStatus(worktreeId, upstreamStatus)
   return upstreamStatus
-}
-
-export function clearGitStatusRefreshOrderingForTests(): void {
-  clearGitStatusRefreshOrderingStateForTests()
-  clearAutomaticPushTargetUpstreamStatusCache()
 }
 
 export async function refreshGitStatusForWorktree({
@@ -183,7 +177,8 @@ export async function refreshGitStatusForWorktree({
         pushTarget,
         deps,
         order: refreshOrder,
-        shouldApply: request?.shouldApply
+        shouldApply: request?.shouldApply,
+        background: request?.admissionTier === 'background'
       })
       if (upstreamStatus) {
         // Briefly reuse unchanged automatic comparisons because explicit targets require several Git subprocesses.
@@ -215,7 +210,8 @@ export async function refreshGitStatusForWorktree({
           connectionId,
           deps,
           order: refreshOrder,
-          shouldApply: request?.shouldApply
+          shouldApply: request?.shouldApply,
+          background: request?.admissionTier === 'background'
         })
         return
       }
@@ -232,7 +228,8 @@ export async function refreshGitStatusForWorktree({
       pushTarget,
       deps,
       order: refreshOrder,
-      shouldApply: request?.shouldApply
+      shouldApply: request?.shouldApply,
+      background: request?.admissionTier === 'background'
     })
   } finally {
     finishAutomaticUpstreamRefresh(worktreeId)

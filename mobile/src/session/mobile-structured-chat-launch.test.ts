@@ -3,13 +3,13 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import pageAsyncStorage, {
   publishPageStorage,
   refreshPageTerminalShortcuts
-} from '../mobile-web-shell/bridge/page-async-storage'
+} from '../mobile-web-shell/bridge/page-storage/page-async-storage'
 import { AGENT_LAUNCH_SURFACE_RUNTIME_CAPABILITY } from '../../../src/shared/agent-launch/contracts/agent-launch-runtime-capability'
-import { AGENT_SESSION_AGENTS_METHOD } from '../../../src/shared/agent-session/agent-session-registered-agents'
-import { STRUCTURED_AGENT_SESSION_REGISTERED_AGENTS_RUNTIME_CAPABILITY } from '../../../src/shared/agent-session/structured-agent-session-surface-capabilities'
+import { AGENT_SESSION_AGENTS_METHOD } from '../../../src/shared/agent-session/agent-discovery/agent-session-registered-agents'
+import { STRUCTURED_AGENT_SESSION_REGISTERED_AGENTS_RUNTIME_CAPABILITY } from '../../../src/shared/agent-session/capabilities/structured-agent-session-surface-capabilities'
 import { HERMES_TRANSCRIPT_RUNTIME_CAPABILITY } from '../../../src/shared/native-chat/native-chat-hermes-capability'
-import type { RpcClient } from '../transport/rpc-client'
-import type { RpcResponse } from '../transport/types'
+import type { RpcClient } from '../transport/rpc/rpc-client-contract'
+import type { RpcResponse } from '../transport/rpc/rpc-wire-types'
 import {
   loadMobileStructuredChatLaunchContext,
   mobileNewTabHostLaunchSurface,
@@ -54,7 +54,7 @@ function client(sendRequest: RpcClient['sendRequest']): RpcClient {
 
 describe('mobileStructuredChatLaunchSurface', () => {
   it('asks for chat only for a registered agent the transcript overlay does not cover', () => {
-    expect(mobileStructuredChatLaunchSurface('hermes', chatHost)).toBe('chat')
+    expect(mobileStructuredChatLaunchSurface('hermes', chatHost)).toBeUndefined()
     expect(mobileStructuredChatLaunchSurface('claude', chatHost)).toBeUndefined()
     expect(mobileStructuredChatLaunchSurface('gemini', chatHost)).toBeUndefined()
     expect(
@@ -80,11 +80,11 @@ describe('mobileStructuredChatLaunchSurface', () => {
         row.opensAsChat ? [row.agent] : []
       )
 
-    expect(hinted(chatHost)).toEqual(['claude', 'codex', 'grok', 'antigravity'])
+    expect(hinted(chatHost)).toEqual(['claude', 'codex', 'grok'])
     expect(mobileNewTabHostLaunchSurface('claude', chatHost)).toBeUndefined()
     expect(mobileNewTabHostLaunchSurface('codex', chatHost)).toBeUndefined()
     expect(mobileNewTabHostLaunchSurface('grok', chatHost)).toBeUndefined()
-    expect(mobileNewTabHostLaunchSurface('antigravity', chatHost)).toBe('chat')
+    expect(mobileNewTabHostLaunchSurface('antigravity', chatHost)).toBeUndefined()
     expect(mobileNewTabHostLaunchSurface('gemini', chatHost)).toBeUndefined()
     expect(mobileNewTabHostLaunchSurface('hermes', chatHost)).toBe('terminal')
 
@@ -193,9 +193,9 @@ describe('loadMobileStructuredChatLaunchContext', () => {
     })
     expect(context.canRequestSurface).toBe(true)
     expect(context.registeredAgents).toEqual(['hermes', 'claude'])
-    expect(mobileStructuredChatLaunchSurface('hermes', { ...context, defaultView: 'chat' })).toBe(
-      'chat'
-    )
+    expect(
+      mobileStructuredChatLaunchSurface('hermes', { ...context, defaultView: 'chat' })
+    ).toBeUndefined()
     expect(mobileStructuredChatLaunchSurface('claude', context)).toBeUndefined()
   })
 
@@ -238,7 +238,7 @@ describe('loadMobileStructuredChatLaunchContext', () => {
       hostCapabilities: null
     })
     expect(fromShell.defaultView).toBe('chat')
-    expect(mobileStructuredChatLaunchSurface('hermes', fromShell)).toBe('chat')
+    expect(mobileStructuredChatLaunchSurface('hermes', fromShell)).toBeUndefined()
 
     publishPageStorage({}, () => true, 'host-1', '/h/host-1/session/wt-1')
     refreshPageTerminalShortcuts({ 'orca:defaultSessionView': 'chat' }, [])
@@ -247,6 +247,6 @@ describe('loadMobileStructuredChatLaunchContext', () => {
       hostCapabilities: null
     })
     expect(refreshed.defaultView).toBe('chat')
-    expect(mobileStructuredChatLaunchSurface('hermes', refreshed)).toBe('chat')
+    expect(mobileStructuredChatLaunchSurface('hermes', refreshed)).toBeUndefined()
   })
 })

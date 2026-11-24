@@ -10,12 +10,6 @@ a real desktop, the per-phase numbers attribute latency to a specific hop rather
 
 The handshake itself lives in `phone-e2ee-v2-session.mjs`, a plain-JS port of the mobile client
 session so it runs outside the React Native bundle.
-`phone-e2ee-desktop-parity.test.mjs` pins that port to the desktop responder
-in `src/main/runtime/rpc/mobile-e2ee-v2-desktop-session.ts`. It runs in the normal unit suite, so
-a change to the transcript encoding, key schedule, or frame layout fails there instead of leaving
-a bench that quietly measures a handshake nobody ships. The four other `*.test.mjs` files in this
-directory cover the invocation guards, the state file, the region verdicts, and pairing-link
-decoding, and none of them opens a socket.
 
 ## Security rules
 
@@ -33,8 +27,7 @@ No script here has a production default. Every one of them refuses to open a soc
 `--director=<origin>` or `ORCA_RELAY_BENCH_DIRECTOR`. Without those, they print usage and exit 2.
 That keeps an accidental or automated invocation inert instead of live traffic.
 
-The guards are in `relay-bench-invocation.mjs` and `relay-bench-state-file.mjs`, and
-`relay-bench-invocation.test.mjs` / `relay-bench-state-file.test.mjs` pin them:
+The guards are in `relay-bench-invocation.mjs` and `relay-bench-state-file.mjs`:
 
 | Guard                     | What it stops                                                                                                                       |
 | ------------------------- | ----------------------------------------------------------------------------------------------------------------------------------- |

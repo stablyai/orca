@@ -21,3 +21,21 @@ export function hermesAcpLoadSessionId(
   const target = resumeFrom?.providerSessionId.trim() ?? ''
   return UUID_SESSION_ID.test(target) ? target : null
 }
+
+/** A Hermes resume with neither a transcript importer nor an ACP uuid cannot attach. */
+export function hermesLoadAttach(
+  agent: string,
+  resumeFrom: { providerSessionId: string } | undefined,
+  transcriptImport: unknown
+): {
+  unsupported: boolean
+  fields: { acpLoadSessionId: string } | Record<string, never>
+  apply: <T extends object>(replay: T) => T
+} {
+  const acpLoadSessionId = hermesAcpLoadSessionId(agent, resumeFrom)
+  return {
+    unsupported: Boolean(resumeFrom && !transcriptImport && !acpLoadSessionId),
+    fields: acpLoadSessionId ? { acpLoadSessionId } : {},
+    apply: (replay) => (acpLoadSessionId ? { ...replay, acpLoadSessionId } : replay)
+  }
+}

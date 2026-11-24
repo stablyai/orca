@@ -2,7 +2,7 @@ import { hermesResumeSessionId } from '../../shared/hermes-session-id'
 import {
   resumeInvocationFromOptions,
   type StructuredAgentSessionHistory
-} from '../native-chat/structured-agent-cli-conversations'
+} from '../native-chat/conversation-adoption/structured-agent-cli-conversations'
 
 export const HERMES_SESSION_HISTORY: StructuredAgentSessionHistory = {
   rowAgents: ['hermes'],

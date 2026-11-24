@@ -1,5 +1,6 @@
 import { spawnProcess } from '@orca/process-host'
-import type { ProcessSpec, SpawnedProcess } from '@orca/process-host/process-spec'
+import type { ChildProcess } from 'node:child_process'
+import type { ProcessSpec } from '@orca/process-host/process-spec'
 
 // The pipe closes even on SIGKILL; a live/reused owner PID always vetoes cleanup.
 const SCOPE_DEATH_WATCH_SCRIPT = `
@@ -24,10 +25,10 @@ type ScopeDeathWatchOptions = {
   /** Stopping the owned daemon scope also reaps its bound terminal slice. */
   daemonScope: string | null
   log: (event: string, details?: Record<string, unknown>) => void
-  spawn?: (spec: ProcessSpec) => SpawnedProcess
+  spawn?: (spec: ProcessSpec) => ChildProcess
 }
 
-export function startDaemonScopeDeathWatch(options: ScopeDeathWatchOptions): SpawnedProcess | null {
+export function startDaemonScopeDeathWatch(options: ScopeDeathWatchOptions): ChildProcess | null {
   const { daemonScope: unit, log } = options
   if (!unit) {
     return null

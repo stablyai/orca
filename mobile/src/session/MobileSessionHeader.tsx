@@ -1,15 +1,18 @@
-import { useRef, useState } from 'react'
-import { StyleSheet, View } from 'react-native'
+import { useRef, useState, useSyncExternalStore } from 'react'
+import { StyleSheet, View, type HostInstance } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
-import { ChevronLeft, GitBranch, MoreHorizontal, PanelLeftOpen } from 'lucide-react-native'
-import { NavBar } from '../components/nav-bar/NavBar'
+import { ChevronLeft, ListChecks, MoreHorizontal, PanelLeftOpen } from 'lucide-react-native'
+import { MobileBotAvatar } from '../bots/MobileBotAvatar'
+import { NavBar, NavBarRefreshLine } from '../components/nav-bar/NavBar'
+import { useRefreshHint } from '../query/refresh-hint'
 import { NavBarButton } from '../components/nav-bar/NavBarButton'
 import { MobileSessionHeaderMoreMenu } from './MobileSessionHeaderMoreMenu'
-import { MobileSessionTabStrip } from './MobileSessionTabStrip'
+import { MobileSourceControlButton } from './MobileSourceControlButton'
+import { MobileSessionTabBar } from './tabs/MobileSessionTabBar'
 import { MobileSessionTitleBlock } from './MobileSessionTitleBlock'
-import type { SessionTitleCard } from './use-session-title-card'
+import type { SessionTitleCard } from './tabs/use-session-title-card'
 import { styles } from './mobile-session-styles'
-import { spacing } from '../theme/mobile-theme'
+import { colors, spacing } from '../theme/mobile-theme'
 import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
 import { useHostSidebarReveal } from '../layout/host-sidebar-reveal'
@@ -29,7 +32,7 @@ export function MobileSessionHeader({
   const t = useMobileTranslation()
   const {
     hostId,
-    isFolderWorkspaceRoute,
+    worktreeId,
     isFloatingWorkspaceRoute,
     presentedConnState,
     forceReconnectHost,
@@ -41,26 +44,40 @@ export function MobileSessionHeader({
     showConnectionRetry,
     connectionEscalated,
     terminalSummary,
-    handlePanelTap
+    handlePanelTap,
+    routeBot,
+    botStatus,
+    itemsOnPhone,
+    botPanel,
+    openBotPanel,
+    terminalResume,
+    connState
   } = controller
+  // A switched-back terminal shows its last screen at once; only a slow catch-up shows the refresh line.
+  const catchingUp = useSyncExternalStore(terminalResume.subscribe, terminalResume.anyCatchingUp)
+  // While offline the header already says so; a resume queued for the reconnect isn't a refresh.
+  const showRefreshLine = useRefreshHint(catchingUp && connState === 'connected')
   const layout = useResponsiveLayout()
   const [headerWidth, setHeaderWidth] = useState<number | null>(null)
-  const moreRef = useRef<View>(null)
+  const moreRef = useRef<HostInstance>(null)
   const revealSidebar = useHostSidebarReveal()
   const topChrome = useTopChromeSpace()
   const sideRail = useShellSideRail()
   // Why: a sideways phone is ~390pt tall, so the tabs share the top bar instead of taking a second row.
   const hasTabs = visibleTabs.length > 0
   const tabsInTopBar = (layout.isLandscapePhone || sideRail) && hasTabs
-  // Bar buttons otherwise leave less than two readable tabs on a narrow header.
+  // Bar buttons otherwise leave the tab bar too narrow to read on a narrow header.
   const actionsCollapsed = tabsInTopBar && (headerWidth ?? layout.width) < 600
-  const sourceControlInBar =
-    !isFolderWorkspaceRoute && !isFloatingWorkspaceRoute && !actionsCollapsed
+  // A bot's screen has no source control (its home isn't a repository): Items takes its place.
+  const itemsInBar = itemsOnPhone && routeBot !== null
+  const homeChatId = routeBot?.bot.chatSessionId
+  const sourceControlInBar = !isFloatingWorkspaceRoute && !actionsCollapsed && !itemsInBar
   const tabStrip = hasTabs ? (
-    <MobileSessionTabStrip
+    <MobileSessionTabBar
       controller={controller}
       inTopBar={tabsInTopBar}
       actionsCollapsed={actionsCollapsed}
+      homeChatId={homeChatId ?? null}
     />
   ) : null
   const leading = (
@@ -87,10 +104,15 @@ export function MobileSessionHeader({
   const titleBlock =
     !sideRail || !hasTabs || showConnectionRetry || connectionEscalated ? (
       <MobileSessionTitleBlock
-        title={worktreeName || t('session.header.terminalTitle', 'Terminal')}
+        title={
+          routeBot
+            ? routeBot.bot.name
+            : worktreeName || t('session.header.terminalTitle', 'Terminal')
+        }
+        leading={routeBot ? <MobileBotAvatar avatar={routeBot.avatar} size={18} /> : undefined}
         connState={presentedConnState}
         details={details}
-        meta={terminalSummary}
+        meta={botStatus && presentedConnState === 'connected' ? botStatus.line : terminalSummary}
         centered={!tabsInTopBar}
         showConnectionRetry={showConnectionRetry}
         onRetry={() => {
@@ -102,11 +124,26 @@ export function MobileSessionHeader({
     ) : null
   const trailing = (
     <>
-      {sourceControlInBar ? (
+      {itemsInBar ? (
         <NavBarButton
+          active={botPanel !== null}
+          accessibilityLabel={
+            routeBot.needsYou > 0
+              ? t('session.header.itemsNeedYou', 'Items, {{count}} need you', {
+                  count: routeBot.needsYou
+                })
+              : t('session.header.items', 'Items')
+          }
+          icon={ListChecks}
+          badge={{ count: routeBot.needsYou, color: colors.agentQuestion }}
+          onPress={() => openBotPanel({ tab: 'items' })}
+        />
+      ) : null}
+      {sourceControlInBar ? (
+        <MobileSourceControlButton
+          hostId={hostId}
+          worktreeId={worktreeId}
           active={activePanel === 'sourceControl'}
-          accessibilityLabel={t('session.header.openSourceControl', 'Open source control')}
-          icon={GitBranch}
           onPress={() => handlePanelTap('sourceControl')}
         />
       ) : null}
@@ -161,6 +198,7 @@ export function MobileSessionHeader({
           )}
         </View>
         {tabsInTopBar ? null : tabStrip}
+        {showRefreshLine ? <NavBarRefreshLine /> : null}
       </SafeAreaView>
       <MobileSessionHeaderMoreMenu
         controller={controller}

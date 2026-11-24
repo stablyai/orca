@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { acpLaunchSpecFor } from '../acp/acp-launch-specs'
+import { acpLaunchSpecFor } from '../acp/launch/acp-launch-registry'
 import { decideAgentLaunchMode } from '../agent-launch/agent-launch-mode'
 import { structuredAgentRuntimeRegistration } from '../runtime/agent-session/installation/structured-agent-runtime-registrations'
 
@@ -31,20 +31,20 @@ describe('Hermes ACP registration', () => {
         approvalEnforcement: 'orca'
       }
     })
-    expect(registration?.launchCheck).toBeUndefined()
-    const spec = acpLaunchSpecFor('hermes')
-    expect(spec?.args({ fullAccess: false, pluginDir: '/plugin' })).toEqual(['acp'])
-    expect(spec?.args({ fullAccess: true, pluginDir: '/plugin' })).toEqual(['--yolo', 'acp'])
-    expect(spec?.historyCatchUp).toBeUndefined()
-    expect(spec?.permissionModeConfig).toBeUndefined()
-    expect(spec?.transcriptImport).toBeNull()
-    expect(spec?.modelDiscovery).toEqual({
-      kind: 'unavailable',
-      reason: 'Hermes lists its models only in a chat session'
+    expect(registration?.launchCheck).toMatchObject({
+      minimumVersions: ['0.23.0'],
+      versionArgs: ['acp']
     })
-    expect(spec?.authMethod?.({ advertised: ['hermes-setup', 'openrouter'], env: {} })).toBe(
-      'openrouter'
-    )
-    expect(spec?.authMethod?.({ advertised: ['hermes-setup'], env: {} })).toBeUndefined()
+    const spec = acpLaunchSpecFor('hermes')
+    expect(spec?.args({ fullAccess: false, pluginDirs: ['/plugin'] })).toEqual(['acp'])
+    expect(spec?.args({ fullAccess: true, pluginDirs: ['/plugin'] })).toEqual(['acp'])
+    expect(spec?.historyCatchUp).toBeUndefined()
+    expect(spec?.permissionModeConfig?.fullAccessAnswersRequests).toBe(true)
+    expect(spec?.modelDiscovery).toMatchObject({
+      kind: 'session',
+      listingNamesConfiguredModel: false,
+      inPrivateFolder: true,
+      listsOnDemand: true
+    })
   })
 })

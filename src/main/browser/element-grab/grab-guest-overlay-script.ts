@@ -1,4 +1,4 @@
-import { BROWSER_GRAB_SELECTED_ATTRIBUTE } from '../../../shared/browser-annotation-viewport-bridge'
+import { BROWSER_GRAB_SELECTED_ATTRIBUTE } from '../../../shared/browser/annotations/browser-annotation-viewport-bridge'
 
 export const GRAB_GUEST_OVERLAY_SCRIPT = `  var host = document.createElement('div');
   host.id = '__orca-grab-host';

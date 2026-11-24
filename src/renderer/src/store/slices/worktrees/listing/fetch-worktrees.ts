@@ -1,18 +1,15 @@
-import { ipcOrRuntimeTargetForHostId } from '@/runtime/runtime-client-target'
-import type {
-  DirectSshWorktreeFetchOptions,
-  WorktreeFetchOptions,
-  WorktreeSlice
-} from '../../worktree-helpers'
-import type { HostQualifiedDetectedWorktreeResult } from '../../../../../../shared/detected-worktree-provider-contract'
+import { ipcOrRuntimeTargetForHostId } from '@/runtime/rpc/targets/runtime-client-target'
+import type { DirectSshWorktreeFetchOptions, WorktreeFetchOptions } from './worktree-fetch-options'
+import type { WorktreeSlice } from '../worktree-slice-contract'
+import type { HostQualifiedDetectedWorktreeResult } from '../../../../../../shared/worktree/catalog/detected-worktree-provider-contract'
 import { isStaleWorktreeCatalogPublication } from './worktree-catalog-version-state'
 import type { WorktreeSliceGet, WorktreeSliceSet } from './worktree-slice-types'
 import {
   LOCAL_EXECUTION_HOST_ID,
   getRepoExecutionHostId,
   parseExecutionHostId
-} from '../../../../../../shared/execution-host'
-import { findRepoForHost } from '../../repo-host-identity'
+} from '../../../../../../shared/execution-host/execution-host'
+import { findRepoForHost } from '../../../repos/repo-host-identity'
 import { getCurrentDirectSshAuthority } from './direct-ssh-authority'
 import { listDetectedWorktreesForRepoCoalesced } from './detected-worktree-refresh'
 import { staleDetectedWorktreeProviderResult } from './detected-worktree-refresh-admission'
@@ -23,9 +20,13 @@ import {
 } from './worktree-host-ownership'
 import { fetchKnownSshWorktreesForRepo } from './known-ssh-worktree-fetch'
 import { mergeFetchedWorktrees } from './fetched-worktree-merge'
+import { listingMetadataCoverage } from './workspace-metadata-coverage'
 import { notifyRuntimeScopeForbiddenIfNeeded } from './runtime-scope-forbidden-toast'
 import { refreshRemoteWorktreeLineageBestEffort } from '../metadata/worktree-lineage-refresh'
-import { selectWorktreesByRepo } from '../../../workspace-record-selectors'
+import {
+  selectDetectedWorktreesByRepo,
+  selectWorktreesByRepo
+} from '../../../workspaces/catalog/workspace-record-fields'
 
 export function createFetchWorktrees(
   set: WorktreeSliceSet,
@@ -54,6 +55,8 @@ export function createFetchWorktrees(
     try {
       const ownerState = get()
       const requestStartedWorktrees = selectWorktreesByRepo(ownerState)[repoId]
+      const requestStartedDetectedWorktrees =
+        selectDetectedWorktreesByRepo(ownerState)[repoId]?.worktrees
       const repoOwners = ownerState.repos.filter((repo) => repo.id === repoId)
       const ownerWasMissingAtStart = repoOwners.length === 0
       const hasLocalOwner = repoOwners.some(
@@ -90,7 +93,8 @@ export function createFetchWorktrees(
         connectionId: repoOwner?.connectionId,
         knownWorktreeIds: getKnownWorktreeIdsForPurge(ownerState, repoId, hostId),
         isStaleCatalogPublication: (result) =>
-          isStaleWorktreeCatalogPublication(get(), repoId, hostId, result.catalogVersion)
+          isStaleWorktreeCatalogPublication(get(), repoId, hostId, result.catalogVersion),
+        ...(options?.forceFresh ? { forceFresh: true } : {})
       })
       if (refresh.status !== 'admitted') {
         return directCallerAuthority ? refresh.providerResult : false
@@ -98,6 +102,7 @@ export function createFetchWorktrees(
       if (options?.requireAuthoritative && !refresh.result.authoritative) {
         return directCallerAuthority ? (refresh.providerResult ?? false) : false
       }
+      const metadata = listingMetadataCoverage(get(), repoId, hostId, refresh)
       const outcome = mergeFetchedWorktrees(set, get, {
         repoId,
         hostId,
@@ -107,9 +112,13 @@ export function createFetchWorktrees(
             ? ownerState.repos
             : undefined,
         requestStartedWorktrees,
+        requestStartedDetectedWorktrees,
         setup,
-        refresh
+        refresh: metadata.refresh
       })
+      if (outcome === 'applied') {
+        metadata.settle((id, fetchOptions) => get().fetchWorktrees(id, fetchOptions))
+      }
       switch (outcome) {
         case 'applied':
           break
@@ -118,7 +127,7 @@ export function createFetchWorktrees(
           if (directCallerAuthority) {
             return refresh.providerResult ?? false
           }
-          return relistIfStale ? fetchWorktreesAttempt(repoId, options, false) : false
+          return relistIfStale ? await fetchWorktreesAttempt(repoId, options, false) : false
         case 'not-current':
           return directCallerAuthority
             ? (staleDetectedWorktreeProviderResult(refresh) ?? false)

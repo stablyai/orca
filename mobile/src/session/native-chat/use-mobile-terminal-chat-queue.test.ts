@@ -1,14 +1,14 @@
 import { createElement } from 'react'
 import { act, create, type ReactTestRenderer } from 'react-test-renderer'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import type { RpcClient } from '../../transport/rpc-client'
+import type { RpcClient } from '../../transport/rpc/rpc-client-contract'
 import { useMobileTerminalChatQueue } from './use-mobile-terminal-chat-queue'
 import {
   NativeChatTerminalQueueRequest,
   type NativeChatTerminalQueueSnapshot
 } from '../../../../src/shared/native-chat/native-chat-terminal-queue'
 import { NATIVE_CHAT_TERMINAL_QUEUE_CAPABILITY } from '../../../../src/shared/native-chat/native-chat-terminal-queue-capability'
-import { UNCONFIRMED_SEND_MESSAGE } from './use-mobile-native-chat-unconfirmed-sends'
+import { UNCONFIRMED_SEND_MESSAGE } from './composer/delivery/use-mobile-native-chat-unconfirmed-sends'
 
 describe('mobile Hermes terminal queue', () => {
   let renderer: ReactTestRenderer | null = null
@@ -70,7 +70,7 @@ describe('mobile Hermes terminal queue', () => {
     function Harness({ enabled = true }: { enabled?: boolean }) {
       api = useMobileTerminalChatQueue({
         client,
-        terminal: 'term',
+        activeHandleRef: { current: 'term' },
         enabled,
         hostCapabilities: [NATIVE_CHAT_TERMINAL_QUEUE_CAPABILITY],
         appendText
@@ -130,7 +130,7 @@ describe('mobile Hermes terminal queue', () => {
     function Harness() {
       api = useMobileTerminalChatQueue({
         client,
-        terminal: 'term',
+        activeHandleRef: { current: 'term' },
         enabled: true,
         hostCapabilities: [NATIVE_CHAT_TERMINAL_QUEUE_CAPABILITY],
         appendText: () => true,
@@ -197,7 +197,7 @@ describe('mobile Hermes terminal queue', () => {
     function Harness({ enabled = true }: { enabled?: boolean }) {
       api = useMobileTerminalChatQueue({
         client,
-        terminal: 'term',
+        activeHandleRef: { current: 'term' },
         enabled,
         hostCapabilities: [NATIVE_CHAT_TERMINAL_QUEUE_CAPABILITY],
         appendText: () => true
@@ -279,7 +279,7 @@ describe('mobile Hermes terminal queue', () => {
     function Harness({ enabled = true }: { enabled?: boolean }) {
       api = useMobileTerminalChatQueue({
         client,
-        terminal: 'term',
+        activeHandleRef: { current: 'term' },
         enabled,
         hostCapabilities: [NATIVE_CHAT_TERMINAL_QUEUE_CAPABILITY],
         appendText: () => true
@@ -370,7 +370,7 @@ describe('mobile Hermes terminal queue', () => {
     function Harness({ enabled = true }: { enabled?: boolean }) {
       api = useMobileTerminalChatQueue({
         client,
-        terminal: 'term',
+        activeHandleRef: { current: 'term' },
         enabled,
         hostCapabilities: [NATIVE_CHAT_TERMINAL_QUEUE_CAPABILITY],
         appendText: () => true,

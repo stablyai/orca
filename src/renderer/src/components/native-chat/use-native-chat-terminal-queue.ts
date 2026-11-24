@@ -1,11 +1,14 @@
-import { RuntimeRpcCallError } from '@/runtime/runtime-rpc-result'
-import { isRecoverableRemoteRuntimeConnectionError } from '../../../../shared/remote-runtime/remote-runtime-client-error-classification'
-import { createBrowserUuid } from '@/lib/browser-uuid'
+import { RuntimeRpcCallError } from '@/runtime/rpc/calls/runtime-rpc-result'
+import {
+  isRecoverableRemoteRuntimeConnectionError,
+  toRemoteRuntimeClientErrorLike
+} from '../../../../shared/remote-runtime/remote-runtime-client-error-classification'
+import { createNonSecureContextUuid as createBrowserUuid } from '../../../../shared/identifiers/non-secure-context-uuid'
 import { useCallback, useEffect, useMemo, useRef, useState, type RefObject } from 'react'
-import { callRuntimeRpc } from '@/runtime/runtime-rpc-client'
-import { getRemoteRuntimePtyOwner } from '@/runtime/runtime-terminal-stream'
+import { callRuntimeRpc } from '@/runtime/rpc/calls/runtime-rpc-call'
+import { getRemoteRuntimePtyOwner } from '@/runtime/hosted-terminals/identity/remote-runtime-pty-owner'
 import { toHostSessionPaneKey } from '../../../../shared/workspace-layout/terminal-surface-id'
-import type { RuntimeClientTarget } from '../../../../shared/runtime-client-target'
+import type { RuntimeClientTarget } from '../../../../shared/remote-runtime/host-catalog/runtime-client-target'
 import {
   NATIVE_CHAT_TERMINAL_QUEUE_CAPABILITY,
   NativeChatTerminalQueueSnapshotSchema,
@@ -13,9 +16,10 @@ import {
   type NativeChatTerminalQueueSnapshot
 } from '../../../../shared/native-chat/native-chat-terminal-queue'
 import { projectQueuedMessageCards } from '../../../../shared/agent-session/view/structured-agent-session-queued-cards'
-import type { StructuredAgentSessionQueuedMessagesController } from './use-structured-agent-session-queued-messages'
-import { useStructuredAgentSessionHostCapabilityState } from '@/runtime/structured-agent-session-host-capability'
-import type { NativeChatComposerHandle } from './native-chat-composer-types'
+import type { StructuredAgentSessionQueuedMessagesController } from './queue/use-structured-agent-session-queued-messages'
+import { installWindowVisibilityInterval } from '@/lib/window-activity/window-visibility-interval'
+import { useStructuredAgentSessionHostCapabilityState } from '@/runtime/native-chat/host-capabilities/structured-agent-session-host-capability'
+import type { NativeChatComposerHandle } from './composer/native-chat-composer-types'
 
 export function useNativeChatTerminalQueue(args: {
   paneKey: string
@@ -49,13 +53,8 @@ export function useNativeChatTerminalQueue(args: {
   const enabled = args.enabled && available
   const scope = `${environmentId ?? ''}:${paneKey}:${ptyId ?? ''}`
   const current = useRef(scope)
-  current.current = scope
   const generation = useRef(0)
   const seenEnabled = useRef(enabled)
-  if (seenEnabled.current !== enabled) {
-    seenEnabled.current = enabled
-    generation.current += 1
-  }
   const [held, setHeld] = useState<{
     scope: string
     snapshot: NativeChatTerminalQueueSnapshot
@@ -116,6 +115,13 @@ export function useNativeChatTerminalQueue(args: {
     [enabled, ptyId, scope, paneKey, environmentId]
   )
   useEffect(() => {
+    current.current = scope
+    if (seenEnabled.current !== enabled) {
+      seenEnabled.current = enabled
+      generation.current += 1
+    }
+  }, [scope, enabled])
+  useEffect(() => {
     if (!enabled) {
       return
     }
@@ -133,9 +139,9 @@ export function useNativeChatTerminalQueue(args: {
       reading = false
     }
     void poll()
-    const timer = setInterval(() => void poll(), 1_000)
+    const stop = installWindowVisibilityInterval({ run: () => void poll(), intervalMs: 1_000 })
     return () => {
-      clearInterval(timer)
+      stop()
       setHeld(null)
     }
   }, [enabled, request])
@@ -178,7 +184,13 @@ export function useNativeChatTerminalQueue(args: {
         }
       },
       steerHead: () => false,
-      isWorking: snapshot?.activity.state === 'working'
+      isWorking: snapshot?.activity.state === 'working',
+      holds: (messageId) =>
+        snapshot?.queuedMessages.some((card) => card.messageId === messageId) === true,
+      agentMail: [],
+      agentMailEditable: () => false,
+      mailLeads: false,
+      stopping: false
     }),
     [snapshot, request, appendText]
   )
@@ -189,7 +201,7 @@ export function useNativeChatTerminalQueue(args: {
       } catch (error) {
         if (
           error instanceof RuntimeRpcCallError &&
-          !isRecoverableRemoteRuntimeConnectionError(error)
+          !isRecoverableRemoteRuntimeConnectionError(toRemoteRuntimeClientErrorLike(error))
         ) {
           return false
         }

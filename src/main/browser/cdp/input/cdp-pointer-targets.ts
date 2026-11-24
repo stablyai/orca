@@ -1,5 +1,6 @@
 import type { WebContents } from 'electron'
-export type BrowserMouseModifier = 'cmd' | 'ctrl' | 'alt' | 'shift'
+import type { BrowserMouseModifier } from '../../../../shared/rpc-contract/browser/browser-params'
+export type { BrowserMouseModifier }
 
 type CdpMouseButton = 'left' | 'middle' | 'right'
 
@@ -202,6 +203,8 @@ export async function resolveMobileTouchClickPoint(
   try {
     const result = await dbg.sendCommand('Runtime.evaluate', {
       expression: mobileTouchClickExpression(x, y, radius, allowDomActivation),
+      // A tap is the user's gesture; without it Chromium silently refuses the file picker it opens.
+      userGesture: true,
       returnByValue: true,
       silent: true
     })

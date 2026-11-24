@@ -2,15 +2,15 @@ import { AGENT_LAUNCH_SURFACE_RUNTIME_CAPABILITY } from '../../../src/shared/age
 import {
   AGENT_SESSION_AGENTS_METHOD,
   decodeAgentSessionAgentsResult
-} from '../../../src/shared/agent-session/agent-session-registered-agents'
+} from '../../../src/shared/agent-session/agent-discovery/agent-session-registered-agents'
 import { isNativeChatSupportedAgent } from '../../../src/shared/native-chat/native-chat-agent-support'
 import { HERMES_TRANSCRIPT_RUNTIME_CAPABILITY } from '../../../src/shared/native-chat/native-chat-hermes-capability'
-import { STRUCTURED_AGENT_SESSION_REGISTERED_AGENTS_RUNTIME_CAPABILITY } from '../../../src/shared/agent-session/structured-agent-session-surface-capabilities'
-import type { RpcClient } from '../transport/rpc-client'
+import { STRUCTURED_AGENT_SESSION_REGISTERED_AGENTS_RUNTIME_CAPABILITY } from '../../../src/shared/agent-session/capabilities/structured-agent-session-surface-capabilities'
+import type { RpcClient } from '../transport/rpc/rpc-client-contract'
 import {
   hostStatusProbe,
   readProbedHostCapabilities
-} from '../transport/host-status-probe-operations'
+} from '../transport/connection/host-status-probe-operations'
 import { loadDefaultSessionView, type MobileSessionView } from '../storage/session-view-preferences'
 
 export type MobileStructuredChatLaunchContext = {

@@ -1,4 +1,4 @@
-import type { Repo } from '../../../../shared/repo-types'
+import type { Repo } from '../../../../shared/repository/repo-types'
 import { resolveLocalProjectRuntimesForRepos } from '../../../workspaces/execution-host/local-project-runtime-resolution'
 import type { RegisteredWorktreeRootStore as RootStore } from './registered-worktree-root-store'
 import { getWorktreeMirrorDistroForRuntime } from '../../../workspaces/execution-host/project-runtime-git-options'

@@ -1,4 +1,4 @@
-import type { WorkspaceKey } from '../workspace-scope'
+import type { WorkspaceKey } from '../workspace/identity/workspace-scope'
 
 export type WorktreeLineageOrigin = 'orchestration' | 'cli' | 'manual'
 export type WorktreeLineageCaptureConfidence = 'explicit' | 'inferred'
@@ -10,6 +10,8 @@ export type WorktreeLineageCaptureSource =
   | 'orchestration-context'
   | 'active-workspace'
   | 'manual-action'
+  /** A workspace moved under a bot's home: the bot's task, not part of a folder's work. */
+  | 'bot-hand-over'
 
 /** The caller's own context that implied a parent for a create on another machine. */
 export type CrossStoreInferredSource = Extract<
@@ -60,6 +62,12 @@ export type WorkspaceLineage = {
   createdByTerminalHandle?: string
   createdAt: number
 }
+
+/** The parts of a workspace record (list 2) a reader needs to place the child under its parent. */
+export type WorkspaceLineageEdge = Pick<
+  WorkspaceLineage,
+  'parentWorkspaceKey' | 'parentInstanceId' | 'childInstanceId'
+>
 
 /** A parent saved in another Orca store; `instanceId` is identity, `workspaceKey` only a hint. */
 export type CrossStoreParentRef = {

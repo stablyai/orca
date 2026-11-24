@@ -14,8 +14,8 @@ import type {
 } from '../../../shared/ai-vault/search/ai-vault-search-types'
 import type { AiVaultSearchSettings } from '../../../shared/ai-vault/search/ai-vault-search-settings'
 import type { SessionSearchHostScope } from '../../ai-vault-search/session-search-service'
-import type { SessionSearchScanRoots } from '../../ai-vault-search/session-search-scan-roots'
-import type { ReadAiVaultFirstUserPromptArgs } from '../session-first-user-prompt-read'
+import type { SessionSearchScanRoots } from '../../ai-vault-search/discovery/session-search-scan-roots'
+import type { ReadAiVaultFirstUserPromptArgs } from '../prompts/session-first-user-prompt-read'
 import type { SessionParseCachePersistenceOptions } from '../parse-cache/session-parse-cache-persistence'
 import type { AiVaultScanOptions } from '../session-scanner-types'
 import type { AiVaultScanWork } from '../../../shared/ai-vault/scanning/ai-vault-scan-progress'
@@ -130,6 +130,7 @@ export type AiVaultServiceResultValue =
   | { operation: 'searchClear'; value: null }
 
 export type AiVaultServiceChildMessage =
+  | { type: 'trace'; record: unknown }
   | { type: 'sessionSearchRoots'; id: number }
   | {
       type: 'ready'
@@ -166,6 +167,9 @@ export function isAiVaultServiceChildMessage(value: unknown): value is AiVaultSe
     return false
   }
   const message = value as Record<string, unknown>
+  if (message.type === 'trace') {
+    return true
+  }
   if (message.type === 'ready') {
     return message.protocol === AI_VAULT_SERVICE_PROTOCOL_VERSION && Number.isInteger(message.pid)
   }

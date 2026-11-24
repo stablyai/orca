@@ -2,17 +2,17 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 const createMobileStructuredAgentSession = vi.hoisted(() => vi.fn())
 
-vi.mock('./mobile-structured-agent-session-launch', () => ({
+vi.mock('./native-chat/agent-session/mobile-structured-agent-session-launch', () => ({
   createMobileStructuredAgentSession
 }))
-vi.mock('../platform/haptics', () => ({
+vi.mock('../platform/haptics/haptics', () => ({
   triggerSuccess: vi.fn(),
   triggerError: vi.fn()
 }))
 
-import { STRUCTURED_AGENT_SESSION_RESUME_HISTORY_RUNTIME_CAPABILITY } from '../../../src/shared/agent-session/structured-agent-session-surface-capabilities'
+import { STRUCTURED_AGENT_SESSION_RESUME_HISTORY_RUNTIME_CAPABILITY } from '../../../src/shared/agent-session/capabilities/structured-agent-session-surface-capabilities'
 import { switchMobileHermesTerminalToChat } from './mobile-hermes-terminal-chat-switch'
-import type { PendingSessionSelection } from './pending-session-selection'
+import type { PendingSessionSelection } from './tabs/pending-session-selection'
 
 const SESSION_ID = '11111111-1111-4111-8111-111111111111'
 const TERMINAL_SESSION_ID = '20261031_144415_71256d'

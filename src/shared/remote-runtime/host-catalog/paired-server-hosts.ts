@@ -1,19 +1,19 @@
-import { parseExecutionHostId, type ExecutionHostId } from '../../execution-host'
-import { buildExecutionHostRegistry } from '../../execution-host-registry'
-import type { ExecutionHostHealth } from '../../execution-host-health'
+import { parseExecutionHostId, type ExecutionHostId } from '../../execution-host/execution-host'
+import { buildExecutionHostRegistry } from '../../execution-host/execution-host-registry'
+import type { ExecutionHostHealth } from '../../execution-host/execution-host-health'
 import {
   pickerExecutionHosts,
   type ManagedOrcadDeploymentSummary
-} from '../../managed-orcad-execution-host'
-import type { RuntimeCompatVerdict } from '../../protocol-compat'
+} from '../../execution-host/managed-orcad-execution-host'
+import type { RuntimeCompatVerdict } from '../protocol/protocol-compat'
 import type { RuntimeEnvironmentSource } from './runtime-environments'
 import {
   isRuntimeHostContactRevoked,
   lastVerifiedRuntimeStatus,
   type RuntimeEnvironmentStatus
 } from '../host-status/runtime-host-status'
-import type { SshConnectionState } from '../../ssh-types'
-import { getPairedDeviceIdsByEnvironment } from '../../workspace-creator-visibility'
+import type { SshConnectionState } from '../ssh/ssh-types'
+import { getPairedDeviceIdsByEnvironment } from '../../workspace-view/workspace-creator-visibility'
 
 export type PairedServerHostInputs = {
   environments: readonly {

@@ -2,15 +2,18 @@ import type {
   LegacyAdoptionRow,
   LegacyCompatibilityPrincipalRow,
   LegacyPrincipalRole
-} from '../../types'
+} from '../orchestration-records'
 import { OrchestrationError } from '../../orchestration-error'
-import { LEGACY_RUN_ID, LEGACY_CONTRACT_VERSION } from '../contract-constants'
+import { ORCHESTRATION_LEGACY_RUN_ID as LEGACY_RUN_ID } from '../../../../../shared/orchestration/orchestration-rpc-contract'
+import { LEGACY_CONTRACT_VERSION } from '../contract-constants'
 import { generateId } from '../generated-id'
 import type { OrchestrationDb } from '../orchestration-db'
+import { LEGACY_ADOPTION_COLUMN_LIST } from '../row-column-lists'
 
 export function getLegacyAdoption(this: OrchestrationDb): LegacyAdoptionRow | undefined {
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the column list names every column of the row type, and a missing one fails compilation.
   return this.db
-    .prepare('SELECT * FROM legacy_adoptions WHERE source_run_id = ?')
+    .prepare(`SELECT ${LEGACY_ADOPTION_COLUMN_LIST} FROM legacy_adoptions WHERE source_run_id = ?`)
     .get(LEGACY_RUN_ID) as LegacyAdoptionRow | undefined
 }
 

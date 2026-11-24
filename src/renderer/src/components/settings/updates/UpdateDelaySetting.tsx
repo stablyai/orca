@@ -2,7 +2,7 @@ import type React from 'react'
 import { useId, useState } from 'react'
 import { CircleCheck, Clock, Info, Loader2 } from 'lucide-react'
 import { useAppStore } from '../../../store/index'
-import { useNow } from '@/hooks/use-now'
+import { useNow } from '@/lib/window-activity/use-now'
 import { Button } from '../../ui/button'
 import { Label } from '../../ui/label'
 import { Progress } from '../../ui/progress'
@@ -10,16 +10,18 @@ import { Tooltip, TooltipContent, TooltipTrigger } from '../../ui/tooltip'
 import { SearchableSetting } from '../section-layout/SearchableSetting'
 import { SettingsSegmentedControl } from '../form-controls/SettingsFormControls'
 import { translate } from '@/i18n/i18n'
+import { useIntlLocale, useTranslate, type Translate } from '@/i18n/use-translate'
 import { formatUiRelativeTime } from '@/i18n/relative-time-format'
 import { uiNumberFormat } from '@/i18n/ui-intl-formatters'
-import { openAppHttpLinkFromAnchor } from '@/lib/app-http-link-open'
-import type { DelayedUpdate, UpdateStatus } from '../../../../../shared/update-status-types'
-import { getReleaseNotesUrlForVersion } from '../../../../../shared/release-channel'
+import { openAppHttpLinkFromAnchor } from '@/lib/browser/navigation/app-http-link-open'
+import type { DelayedUpdate, UpdateStatus } from '../../../../../shared/updater/update-status-types'
+import { getReleaseNotesUrlForVersion } from '../../../../../shared/updater/release-channel'
+import { getOrcaCloudTeamCapabilities } from '../../../../../shared/orca-profiles/orca-cloud-team-policy'
 import {
   isDelayedUpdatePending,
   normalizeUpdateDelayDays,
   UPDATE_DELAY_DAY_OPTIONS
-} from '../../../../../shared/update-delay'
+} from '../../../../../shared/updater/update-delay'
 import {
   formatUpdateDelayDate,
   getUpdateDelayDescription,
@@ -36,12 +38,12 @@ const DAY_UNIT_FORMAT: Intl.NumberFormatOptions = {
   unitDisplay: 'long'
 }
 
-function formatDelayDays(days: number): string {
+function formatDelayDays(days: number, t: Translate = translate, intlLocale?: string): string {
   if (days === 0) {
-    return translate('settings.updateDelay.none', 'None')
+    return t('settings.updateDelay.none', 'None')
   }
   // Intl pluralizes and localizes "1 day" / "7 days" without per-locale catalog entries.
-  return uiNumberFormat(DAY_UNIT_FORMAT).format(days)
+  return uiNumberFormat(DAY_UNIT_FORMAT, intlLocale).format(days)
 }
 
 // Re-check so the held-release panel reflects the new delay without waiting a day.
@@ -56,7 +58,12 @@ function canRecheckAfterDelayChange(status: UpdateStatus): boolean {
 }
 
 export function UpdateDelaySetting(): React.JSX.Element {
+  const t = useTranslate()
+  const intlLocale = useIntlLocale()
   const delayDays = useAppStore((s) => normalizeUpdateDelayDays(s.settings?.updateDelayDays))
+  const teamDelayDays = useAppStore(
+    (s) => getOrcaCloudTeamCapabilities(s.orcaProfileAuthStatus)?.teamPolicy?.updateDelayDays
+  )
   const updateSettings = useAppStore((s) => s.updateSettings)
   const updateStatus = useAppStore((s) => s.updateStatus)
   const [lastDelayedUpdate, setLastDelayedUpdate] = useState<DelayedUpdate | undefined>()
@@ -74,8 +81,8 @@ export function UpdateDelaySetting(): React.JSX.Element {
   const now = useNow(MINUTE_MS, Boolean(delayedUpdate))
   const labelId = useId()
   const descriptionId = useId()
-  const title = getUpdateDelayTitle()
-  const description = getUpdateDelayDescription()
+  const title = getUpdateDelayTitle(t)
+  const description = getUpdateDelayDescription(t)
   const options = UPDATE_DELAY_DAY_OPTIONS.includes(delayDays)
     ? UPDATE_DELAY_DAY_OPTIONS
     : [...UPDATE_DELAY_DAY_OPTIONS, delayDays].sort((a, b) => a - b)
@@ -106,7 +113,7 @@ export function UpdateDelaySetting(): React.JSX.Element {
         'security',
         'supply chain'
       ]}
-      className="space-y-3"
+      className="space-y-3 py-3"
     >
       <div className="space-y-2">
         <div className="flex items-center gap-1.5">
@@ -116,7 +123,7 @@ export function UpdateDelaySetting(): React.JSX.Element {
               <Button
                 variant="ghost"
                 size="icon-xs"
-                aria-label={translate('settings.updateDelay.info', 'About Update Delay')}
+                aria-label={t('settings.updateDelay.ab7e864374', 'About update delay')}
               >
                 <Info className="size-3.5" />
               </Button>
@@ -129,22 +136,37 @@ export function UpdateDelaySetting(): React.JSX.Element {
             {description}
           </span>
         </div>
-        <SettingsSegmentedControl
-          value={delayDays}
-          onChange={setDelayDays}
-          ariaLabelledBy={labelId}
-          ariaDescribedBy={descriptionId}
-          size="sm"
-          wrap
-          options={options.map((days) => ({ value: days, label: formatDelayDays(days) }))}
-        />
+        {teamDelayDays === undefined ? (
+          <SettingsSegmentedControl
+            value={delayDays}
+            onChange={setDelayDays}
+            ariaLabelledBy={labelId}
+            ariaDescribedBy={descriptionId}
+            size="sm"
+            wrap
+            options={options.map((days) => ({
+              value: days,
+              label: formatDelayDays(days, t, intlLocale)
+            }))}
+          />
+        ) : (
+          <p className="text-settings-detail text-muted-foreground">
+            {t('settings.updateDelay.teamManaged', 'Set by your team')}
+            {' · '}
+            {formatDelayDays(teamDelayDays, t, intlLocale)}
+          </p>
+        )}
       </div>
       {delayedUpdate ? (
         <DelayedUpdatePanel
           delayedUpdate={delayedUpdate}
           now={now}
           checking={checking}
-          onSkipDelayOnce={() => void window.api.updater.check({ ignoreUpdateDelay: true })}
+          onSkipDelayOnce={
+            teamDelayDays === undefined
+              ? () => void window.api.updater.check({ ignoreUpdateDelay: true })
+              : undefined
+          }
         />
       ) : null}
     </SearchableSetting>
@@ -155,7 +177,7 @@ type DelayedUpdatePanelProps = {
   delayedUpdate: DelayedUpdate
   now: number
   checking: boolean
-  onSkipDelayOnce: () => void
+  onSkipDelayOnce?: () => void
 }
 
 export function DelayedUpdatePanel({
@@ -164,21 +186,23 @@ export function DelayedUpdatePanel({
   checking,
   onSkipDelayOnce
 }: DelayedUpdatePanelProps): React.JSX.Element {
+  const t = useTranslate()
+  const intlLocale = useIntlLocale()
   const releasedAt = Date.parse(delayedUpdate.releasedAt)
   const availableAt = Date.parse(delayedUpdate.availableAt)
   const total = Math.max(availableAt - releasedAt, 1)
   const percent = Math.min(100, Math.max(0, ((now - releasedAt) / total) * 100))
   const cleared = !isDelayedUpdatePending(delayedUpdate, now)
   // Absolute release dates avoid rounding clashes like "3 days ago" against a 3-day delay.
-  const released = formatUpdateDelayDate(releasedAt)
-  const relative = formatUiRelativeTime(availableAt - now)
+  const released = formatUpdateDelayDate(releasedAt, intlLocale)
+  const relative = formatUiRelativeTime(availableAt - now, intlLocale)
   const availableLabel =
     availableAt - now < DAY_MS
-      ? translate('settings.updateDelay.availableSoon', 'Available to you {{relative}}', {
+      ? t('settings.updateDelay.availableSoon', 'Available to you {{relative}}', {
           relative
         })
-      : translate('settings.updateDelay.availableOn', 'Available to you {{date}} ({{relative}})', {
-          date: formatUpdateDelayDate(availableAt),
+      : t('settings.updateDelay.availableOn', 'Available to you {{date}} ({{relative}})', {
+          date: formatUpdateDelayDate(availableAt, intlLocale),
           relative
         })
   const Icon = cleared ? CircleCheck : Clock
@@ -189,15 +213,15 @@ export function DelayedUpdatePanel({
         <div className="space-y-0.5">
           <p className="text-xs font-medium text-foreground">
             {cleared
-              ? translate('settings.updateDelay.clearedTitle', 'Orca {{version}} is ready', {
+              ? t('settings.updateDelay.clearedTitle', 'Orca {{version}} is ready', {
                   version: delayedUpdate.version
                 })
-              : translate('settings.updateDelay.heldTitle', 'Orca {{version}} is on hold', {
+              : t('settings.updateDelay.heldTitle', 'Orca {{version}} is on hold', {
                   version: delayedUpdate.version
                 })}
           </p>
           <p className="text-pretty text-xs text-muted-foreground">
-            {translate('settings.updateDelay.released', 'Released {{released}}', { released })}
+            {t('settings.updateDelay.released', 'Released {{released}}', { released })}
             {cleared ? null : ` · ${availableLabel}`}
           </p>
         </div>
@@ -206,7 +230,7 @@ export function DelayedUpdatePanel({
             value={percent}
             getValueLabel={() => availableLabel}
             className="h-1"
-            aria-label={translate(
+            aria-label={t(
               'settings.updateDelay.progress',
               'Time until Orca {{version}} is available',
               { version: delayedUpdate.version }
@@ -214,21 +238,21 @@ export function DelayedUpdatePanel({
           />
         )}
         <div className="flex items-center gap-3">
-          {cleared ? null : (
+          {!cleared && onSkipDelayOnce ? (
             <Button
               variant="outline"
               size="xs"
               onClick={onSkipDelayOnce}
               disabled={checking}
-              title={translate(
+              title={t(
                 'settings.updateDelay.skipDelayOnceHint',
                 'Check for this release now. Your delay setting stays the same.'
               )}
             >
               {checking ? <Loader2 className="animate-spin" /> : null}
-              {translate('settings.updateDelay.skipDelayOnce', 'Skip Delay Once')}
+              {t('settings.updateDelay.ee1d96f74a', 'Skip delay once')}
             </Button>
-          )}
+          ) : null}
           <a
             href={getReleaseNotesUrlForVersion(delayedUpdate.version)}
             target="_blank"
@@ -236,10 +260,7 @@ export function DelayedUpdatePanel({
             rel="noopener noreferrer"
             className="text-xs text-muted-foreground underline hover:text-foreground"
           >
-            {translate(
-              'auto.components.settings.GeneralUpdateSettingsSection.8a52ca1d02',
-              'Release notes'
-            )}
+            {t('auto.components.settings.GeneralUpdateSettingsSection.8a52ca1d02', 'Release notes')}
           </a>
         </div>
       </div>

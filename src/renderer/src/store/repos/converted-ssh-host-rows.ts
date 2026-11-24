@@ -3,7 +3,7 @@ import {
   getRepoExecutionHostId,
   parseExecutionHostId,
   toSshExecutionHostId
-} from '../../../../shared/execution-host'
+} from '../../../../shared/execution-host/execution-host'
 
 type ConvertedHostRows = Pick<
   AppState,

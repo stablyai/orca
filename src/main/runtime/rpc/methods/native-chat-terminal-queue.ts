@@ -1,9 +1,9 @@
 import { defineMethod } from '../core'
 import type { OrcaRuntimeService } from '../../orca-runtime'
 import { NativeChatTerminalQueueRequest } from '../../../../shared/native-chat/native-chat-terminal-queue'
-import { AgentSessionJournal } from '../../../native-chat/agent-session-journal/journal-store'
+import { openAgentSessionJournal } from '../../../native-chat/agent-session-journal/journal-store-factory'
 import { TerminalChatQueue } from '../../../native-chat/terminal-chat-queue'
-import { getStructuredAgentSessionHost } from '../../../native-chat/agent-session-wire/structured-agent-session-registry'
+import { getStructuredAgentSessionHost } from '../../../native-chat/agent-session-wire/host/structured-agent-session-registry'
 
 const queues = new WeakMap<OrcaRuntimeService, Map<string, Promise<TerminalChatQueue>>>()
 
@@ -31,7 +31,7 @@ async function terminalQueue(
     if (!host) {
       throw new Error('terminal_chat_queue_host_unavailable')
     }
-    const journal = new AgentSessionJournal({
+    const journal = await openAgentSessionJournal({
       identity: {
         sessionId: `terminal-chat:${terminal}`,
         workspaceId: leaf.worktreeId,
@@ -41,7 +41,6 @@ async function terminalQueue(
       },
       database: host.deps.journalDatabase
     })
-    await journal.open()
     const queue = new TerminalChatQueue(
       journal,
       () => runtime.getHermesChatActivity(terminal),
@@ -86,10 +85,10 @@ async function terminalQueue(
       }
     )
     let timer: ReturnType<typeof setInterval> | undefined
-    const wake = () => {
-      const pending = journal.queuedMessages
-        .list()
-        .some((card) => card.state === 'waiting' || card.state === 'returned')
+    const wake = async (): Promise<void> => {
+      const pending = (await journal.queuedMessages.list()).some(
+        (card) => card.state === 'waiting' || card.state === 'returned'
+      )
       if (!pending) {
         clearInterval(timer)
         timer = undefined
@@ -108,8 +107,10 @@ async function terminalQueue(
         timer.unref()
       }
     }
-    const unobserve = journal.observeCommits(wake)
-    wake()
+    const unobserve = journal.observeCommits(() => {
+      void wake()
+    })
+    void wake()
     runtime.registerSubscriptionCleanup(`nativeChatTerminalQueue:${terminal}`, () => {
       clearInterval(timer)
       unobserve()

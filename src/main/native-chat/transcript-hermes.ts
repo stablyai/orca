@@ -6,9 +6,9 @@ import {
   readOpenCodeTranscriptPageViaWorker,
   readOpenCodeTranscriptSignalViaWorker
 } from '../ai-vault/scanners/opencode/reader-transport/session-scanner-opencode-sqlite-worker-spawn'
-import { needsWslHostResolution } from './host-readable-transcript-path'
-import { parseSshTranscriptPath } from './ssh-transcript-path'
-import type { OpenCodeTranscriptDeps } from './transcript-opencode'
+import { needsWslHostResolution } from './transcript-discovery/host-readable-transcript-path'
+import { parseSshTranscriptPath } from './transcript-filesystem/ssh-transcript-path'
+import type { OpenCodeTranscriptDeps } from './transcript-history/opencode/transcript-opencode'
 import type { ResolveSessionFileOptions } from './session-file-resolver'
 
 export function canReadHermesTranscriptHere(options: ResolveSessionFileOptions): boolean {

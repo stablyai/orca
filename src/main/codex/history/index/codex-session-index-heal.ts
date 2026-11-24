@@ -1,8 +1,9 @@
 import { dirname, join } from 'node:path'
 import { resolveCodexCommand } from '../../../codex-cli/command'
 import { isTransientSqliteContention } from '../../../sqlite/sqlite-read-failure'
+import { isMissingProviderExecutable } from '../../../provider-process/provider-executable-missing'
 import { CODEX_SHORT_LIVED_PROBE_APP_SERVER_ARGS } from '../../../codex-cli/codex-read-only-app-server-args'
-import { buildWslCodexAppServerArgs } from '../../../codex-accounts/wsl-codex-command'
+import { buildWslCodexAppServerArgs } from '../../../codex-cli/wsl-codex-command'
 import { resolveWslExecutablePath } from '../../../wsl/execution/wsl-executable-path'
 import { getCodexSessionBackfillStateDirPath } from '../../configuration/homes/codex-home-paths'
 import { resolveCodexSessionBackfillPaths } from '../backfill/codex-session-backfill'
@@ -189,8 +190,9 @@ export async function readCodexThreadsForIndexHeal<T extends { threadId: string 
     const batch = threads.slice(offset, offset + readsPerServerSession)
     const timeoutMs = HEAL_BATCH_TIMEOUT_BASE_MS + HEAL_BATCH_TIMEOUT_PER_READ_MS * batch.length
     const settled: CodexSettledThreadRead[] = []
+    const invocation = buildInvocation(codexHomePath, timeoutMs)
     try {
-      await runSession(buildInvocation(codexHomePath, timeoutMs), async (rpc) => {
+      await runSession(invocation, async (rpc) => {
         let nextIndex = 0
         const worker = async (): Promise<void> => {
           while (nextIndex < batch.length && !shouldStop()) {
@@ -210,6 +212,10 @@ export async function readCodexThreadsForIndexHeal<T extends { threadId: string 
       }
       if (isCodexAppServerUnsupportedError(error)) {
         return 'unsupported'
+      }
+      // Without a Codex CLI there is nothing to heal yet; retry quietly once it is installed.
+      if (isMissingProviderExecutable(error, invocation.command)) {
+        return 'aborted'
       }
       console.warn('[codex-session-index-heal] Heal batch aborted:', error)
       return 'aborted'

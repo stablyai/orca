@@ -1,10 +1,10 @@
 import { describe, expect, it } from 'vitest'
-import { isAgentSessionProviderHandleLink } from '../../../shared/agent-session/lifecycle/agent-session-provider-handle'
+import { isAgentSessionProviderHandleLink } from '../../../shared/agent-session/lifecycle/provider-handles/agent-session-provider-handle'
 import {
   attachFingerprintFields,
   reserveRequestFor,
   type AgentSessionAttachParams
-} from './structured-agent-session-attach'
+} from './acquisition/structured-agent-session-attach'
 
 const SESSION_ID = '11111111-1111-4111-8111-111111111111'
 

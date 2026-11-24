@@ -1,19 +1,24 @@
 import { createHash } from 'node:crypto'
 import { statSync } from 'node:fs'
 import { openOpenCodeDatabaseReadonly } from '../ai-vault/scanners/opencode/sqlite/session-scanner-opencode-sqlite-open'
-import { asRecord, extractString, timestampMs } from '../ai-vault/session-scanner-values'
 import { columnExists, tableExists } from '../opencode-usage/schema-helpers'
 import type { NativeChatBlock, NativeChatMessage } from '../../shared/native-chat/native-chat-types'
-import { openCodeTranscriptPageLimit } from '../../shared/opencode-transcript-page-limit'
+import { openCodeTranscriptPageLimit } from '../../shared/agent-session/lifecycle/provider-handles/opencode-transcript-page-limit'
 import { agentSessionHostStatusBody } from '../../shared/agent-session/view/agent-session-host-status-rows'
-import { claudeContentBlocks, toolResultOutput } from './transcript-record-blocks'
-import { OPENCODE_TRANSCRIPT_MAX_ROW_BYTES } from './transcript-opencode-part-blocks'
-import { rowsOf } from './transcript-opencode-row-budget'
+import { asRecord } from '../ai-vault/parsing/session-record-fields'
+import { extractString } from '../../shared/text/trimmed-string'
+import { timestampMs } from '../ai-vault/parsing/session-record-time'
+import {
+  claudeContentBlocks,
+  toolResultOutput
+} from './transcript-decoding/transcript-record-blocks'
+import { OPENCODE_TRANSCRIPT_MAX_ROW_BYTES } from './transcript-history/opencode/transcript-opencode-part-blocks'
+import { rowsOf } from './transcript-history/opencode/transcript-opencode-row-budget'
 import type {
   OpenCodeTranscriptItem,
   OpenCodeTranscriptPage,
   OpenCodeTranscriptSignal
-} from './transcript-opencode-sqlite-query'
+} from './transcript-history/opencode/transcript-opencode-sqlite-query'
 import type SyncDatabase from '../sqlite/sync-database'
 
 type HermesMessageRow = {

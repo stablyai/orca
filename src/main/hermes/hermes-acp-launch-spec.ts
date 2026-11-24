@@ -1,28 +1,92 @@
-import type { AcpLaunchSpec } from '../acp/acp-launch-specs'
+import { join } from 'node:path'
+import type { AcpLaunchSpec } from '../acp/launch/acp-launch-contract'
 import { HERMES_ACP_DIALECT } from '../acp/acp-dialects/hermes-dialect'
-import { agentSessionSignInFor } from '../../shared/agent-session/lifecycle/agent-session-sign-in'
-import { hermesAcpAccountBinding } from './hermes-acp-account'
-import { HERMES_SESSION_HISTORY } from './hermes-session-history'
+import { directoryAccountBinding, type AcpAccountBinding } from '../acp/launch/acp-account-binding'
+import { isLegacyAgentSessionAccountHome } from '../../shared/agent-session/lifecycle/accounts/agent-session-account-home'
+import { agentSessionSetupFor } from '../../shared/agent-session/lifecycle/launch/agent-session-setup-commands'
+import {
+  resumeInvocationFromOptions,
+  type StructuredAgentSessionHistory
+} from '../native-chat/conversation-adoption/structured-agent-cli-conversations'
+import {
+  getHermesHome,
+  resolveDefaultHermesHome,
+  resolveHermesActiveProfileHome
+} from './hermes-default-home'
+import { HERMES_TRANSCRIPT_IMPORT } from './hermes-transcript-import'
+import { deliverHermesInstructions } from '../acp/launch/acp-instructions'
+import { publishHermesSessionToolEnv } from './hermes-session-tool-env'
 
-// `hermes acp --yolo` is rejected; the parent CLI consumes `--yolo` before `acp`.
+// Chats and terminals share the profile's session store; `--resume` also takes a session title.
+const HERMES_SESSION_HISTORY: StructuredAgentSessionHistory = {
+  rowAgents: ['hermes'],
+  rowSessionId: (link) => link.handle.nativeId,
+  parseResumeArgs: (args) =>
+    resumeInvocationFromOptions(args, {
+      targetless: ['-c', '--continue'],
+      markers: ['-r', '--resume']
+    })
+}
+
+const hermesHome = (homePath: string, env: NodeJS.ProcessEnv) =>
+  resolveDefaultHermesHome({ homeDir: homePath, env })
+
+// Pin the profile Hermes runs now, so a later `hermes profile use` cannot move a named profile's
+// chats to another store. A chat on the default profile still follows it, as Hermes itself does.
+function hermesAccountBinding(): AcpAccountBinding {
+  const root = directoryAccountBinding('HERMES_HOME', hermesHome)
+  return {
+    ...root,
+    resolve: async (input) => {
+      const home = await root.resolve(input)
+      return isLegacyAgentSessionAccountHome(home)
+        ? { ...home, path: await resolveHermesActiveProfileHome(home.path) }
+        : home
+    }
+  }
+}
+
 export const HERMES_LAUNCH_SPEC: AcpLaunchSpec = {
   agent: 'hermes',
   command: 'hermes',
-  args: ({ fullAccess }) => (fullAccess ? ['--yolo', 'acp'] : ['acp']),
+  // No bypass flag: Hermes freezes launch flags into the session, so full access answers requests.
+  args: () => ['acp'],
   env: {},
+  // Bare `--version` checks for updates over the network first.
+  versionArgs: ['acp'],
   dialect: HERMES_ACP_DIALECT,
-  loginCommand: agentSessionSignInFor('hermes')?.loginCommand ?? [],
-  // `hermes-setup` is interactive and authenticates only after credentials exist.
-  authMethod: ({ advertised }) => advertised.find((id) => id !== 'hermes-setup'),
-  account: hermesAcpAccountBinding(),
-  installDirectories: () => [],
-  // Replay frames carry no turn id, so catch-up would fail the attach. Journals reopen themselves.
-  compaction: true,
-  modelDiscovery: {
-    kind: 'unavailable',
-    reason: 'Hermes lists its models only in a chat session'
+  loginCommand: agentSessionSetupFor('hermes')?.loginCommand ?? [],
+  account: hermesAccountBinding(),
+  // The installers' command folders: ~/.local/bin, and the home's own bin on Windows.
+  installDirectories: ({ env, homePath }) => [
+    join(homePath, '.local', 'bin'),
+    join(getHermesHome(env, homePath), 'bin')
+  ],
+  // 0.23.0 restored ACP after the gateway rewrite broke it.
+  minimumVersions: ['0.23.0'],
+  // Its modes only gate edits; command approvals follow the profile, so Orca answers them in full access.
+  permissionModeConfig: {
+    values: { ask: 'ask', 'accept-edits': 'workspace_session', 'full-access': 'session' },
+    fullAccessAnswersRequests: true
   },
-  // Sessions live in SQLite, not transcript files.
-  transcriptImport: null,
-  sessionHistory: HERMES_SESSION_HISTORY
+  // Only a session lists models, and Hermes stores it at session/new without an ACP delete, so its
+  // own CLI deletes the listing session once the process exits.
+  modelDiscovery: {
+    kind: 'session',
+    listingNamesConfiguredModel: false,
+    inPrivateFolder: true,
+    listsOnDemand: true,
+    discardSession: async ({ sessionId, runAgent }) => {
+      await runAgent(['sessions', 'delete', '--yes', sessionId])
+    }
+  },
+  instructions: deliverHermesInstructions,
+  instructionsInWorkspace: true,
+  compaction: true,
+  compactionInstructions: true,
+  transcriptImport: HERMES_TRANSCRIPT_IMPORT,
+  sessionHistory: HERMES_SESSION_HISTORY,
+  keepsEverySession: true,
+  // Tools run in the profile's gateway, which outlives the chat that started it and serves the rest.
+  sharedToolProcess: { publishSessionEnv: publishHermesSessionToolEnv }
 }

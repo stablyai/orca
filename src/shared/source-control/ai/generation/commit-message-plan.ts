@@ -1,8 +1,13 @@
 import {
+  generationArgumentText,
+  generationOptionTokens,
+  type GenerationArgument
+} from './generation-argument'
+import {
   textGenerationFailure,
   type TextGenerationFailureFields
-} from '../../../text-generation-failure-copy'
-import { findOptionOccurrence } from '../../../command-option-occurrence'
+} from '../../../text-generation/text-generation-failure-copy'
+import { findOptionOccurrence } from '../../../cli/command-option-occurrence'
 import { planAgentBinary } from '../../../agent-launch/startup/agent-command-plan'
 
 import type { CommandTemplateBackslash } from './commit-message-prompt'
@@ -18,9 +23,18 @@ import {
   planAdditionalAgentArgs,
   compactRecipeOptions
 } from './commit-message-generation-options'
+import {
+  taskPolicyRecipeArgs,
+  codexRecipeConfigArgs,
+  applySingletonOptionOverrides
+} from './commit-message-recipe-options'
 import type { TuiAgent } from '../../../agent-launch/catalog/tui-agent'
-import { mergeOpenCodeGenerationArgs } from '../../../opencode-generation-command'
-import { buildAntigravityGenerationInput } from '../../../antigravity-generation-stream'
+import {
+  isDirectOpenCodeGenerationCommand,
+  openCodeGenerationLauncherBoundary,
+  mergeOpenCodeGenerationArgs
+} from '../../../text-generation/launch/opencode-generation-command'
+import { buildAntigravityGenerationInput } from '../../../text-generation/output/antigravity-generation-stream'
 
 // Share pure request/prompt-to-spawn validation and argv planning between local main and SSH JSON-RPC generators.
 
@@ -33,24 +47,31 @@ export type CommitMessagePlanInput = {
   customAgentCommand?: string
   agentCommandOverride?: string
   agentArgs?: string
+  /** The prompt is the user's own words, not a repo task: the agent gets no tools where its CLI allows. */
+  toolFree?: boolean
 }
 
-export type CommitMessagePlan = {
+export type CommitMessagePlan<Argument = string> = {
   binary: string
-  args: string[]
+  args: Argument[]
   /** Non-null when the prompt should be piped via stdin. */
   stdinPayload: string | null
   /** Execution-host-owned prompt attachment, materialized only when starting the process. */
   promptFile?: { content: string; argIndex: number }
+  /** Task-owned UTF-8 policy artifacts, materialized on the execution host. */
+  taskFiles?: { name: string; content: string; argIndex?: number; interpolateDirectory?: boolean }[]
+  policyProbeArgs?: string[]
   /** Human-readable label used in error prefixes (e.g. "Claude failed: ..."). */
   label: string
   /** Leading command assignments, applied on the execution host. */
   env?: Record<string, string>
   outputFormat?: 'opencode-json' | 'antigravity-stream-json' | 'kimi-stream-json'
+  /** Resolved native-task inputs; the receiving execution runtime owns the server. */
+  openCodeTask?: { prefixArgs: string[]; runArgs: string[] }
 }
 
 export type CommitMessagePlanResult =
-  | { ok: true; plan: CommitMessagePlan }
+  | { ok: true; plan: CommitMessagePlan; localArgs: GenerationArgument[] }
   | ({ ok: false } & TextGenerationFailureFields)
 
 const DEFAULT_SINGLETON_OPTIONS: readonly (readonly string[])[] = [['--model']]
@@ -61,91 +82,14 @@ const ANTIGRAVITY_FORMAT_OPTIONS = [
   '-output-format'
 ]
 
-function applyRecipeOptionOverride(args: {
-  generatedArgs: string[]
-  recipeArgs: string[]
-  aliases: readonly string[]
-  valueOptions: readonly string[]
-}): { generatedArgs: string[]; recipeArgs: string[] } {
-  const recipeOption = findRecipeOption(args.recipeArgs, args.aliases, args.valueOptions)
-  const generatedOption = findRecipeOption(
-    args.generatedArgs,
-    args.aliases,
-    args.valueOptions,
-    0,
-    false
-  )
-  if (!recipeOption || !generatedOption) {
-    return { generatedArgs: args.generatedArgs, recipeArgs: args.recipeArgs }
-  }
-
-  const overrideTokens = args.recipeArgs.slice(
-    recipeOption.index,
-    recipeOption.index + recipeOption.consumed
-  )
-  return {
-    generatedArgs: [
-      ...args.generatedArgs.slice(0, generatedOption.index),
-      ...overrideTokens,
-      ...args.generatedArgs.slice(generatedOption.index + generatedOption.consumed)
-    ],
-    recipeArgs: [
-      ...args.recipeArgs.slice(0, recipeOption.index),
-      ...args.recipeArgs.slice(recipeOption.index + recipeOption.consumed)
-    ]
-  }
-}
-
-/** User recipe args outrank override prefixes, which outrank generated singleton values. */
-function applySingletonOptionOverrides(args: {
-  generatedArgs: string[]
-  prefixArgs: string[]
-  recipeArgs: string[]
-  singletonOptions: readonly (readonly string[])[]
-  valueOptions: readonly string[]
-}): { generatedArgs: string[]; prefixArgs: string[]; recipeArgs: string[] } {
-  let generatedArgs = args.generatedArgs
-  let prefixArgs = args.prefixArgs
-  let recipeArgs = args.recipeArgs
-
-  for (const aliases of args.singletonOptions) {
-    recipeArgs = compactRecipeOptions(recipeArgs, aliases, args.valueOptions, true)
-    prefixArgs = compactRecipeOptions(prefixArgs, aliases, args.valueOptions, true)
-    const recipeOption = findRecipeOption(recipeArgs, aliases, args.valueOptions)
-    const prefixOption = findRecipeOption(prefixArgs, aliases, args.valueOptions)
-    const prefixHasTerminator =
-      findOptionOccurrence(prefixArgs, ['--'], false, args.valueOptions, 0, false) !== null
-    if (recipeOption && !prefixHasTerminator) {
-      prefixArgs = compactRecipeOptions(prefixArgs, aliases, args.valueOptions)
-    } else if (prefixOption && !prefixHasTerminator) {
-      const generatedOption = findRecipeOption(generatedArgs, aliases, args.valueOptions, 0, false)
-      if (generatedOption) {
-        generatedArgs = [
-          ...generatedArgs.slice(0, generatedOption.index),
-          ...generatedArgs.slice(generatedOption.index + generatedOption.consumed)
-        ]
-      }
-      continue
-    }
-    const withRecipe = applyRecipeOptionOverride({
-      generatedArgs,
-      recipeArgs,
-      aliases,
-      valueOptions: args.valueOptions
-    })
-    generatedArgs = withRecipe.generatedArgs
-    recipeArgs = withRecipe.recipeArgs
-  }
-
-  return { generatedArgs, prefixArgs, recipeArgs }
-}
-
 function insertAdditionalAgentArgs(args: {
-  baseArgs: string[]
-  agentArgs: string[]
+  baseArgs: GenerationArgument[]
+  agentArgs: GenerationArgument[]
   promptDelivery: 'argv' | 'stdin' | 'file'
-  prompt: string
-}): string[] {
+  prompt?: GenerationArgument
+  /** Built-in argv, whose `--` before the prompt ends options; a custom `--` may pass args through a wrapper. */
+  builtIn?: boolean
+}): GenerationArgument[] {
   if (!args.agentArgs.length) {
     return args.baseArgs
   }
@@ -157,10 +101,16 @@ function insertAdditionalAgentArgs(args: {
   }
   if (
     args.promptDelivery === 'argv' &&
-    args.prompt.length > 0 &&
+    args.prompt !== undefined &&
+    generationArgumentText(args.prompt).length > 0 &&
     args.baseArgs.at(-1) === args.prompt
   ) {
-    return [...args.baseArgs.slice(0, -1), ...args.agentArgs, args.prompt]
+    const insertAt = args.builtIn && args.baseArgs.at(-2) === '--' ? -2 : -1
+    return [
+      ...args.baseArgs.slice(0, insertAt),
+      ...args.agentArgs,
+      ...args.baseArgs.slice(insertAt)
+    ]
   }
   return [...args.baseArgs, ...args.agentArgs]
 }
@@ -183,18 +133,19 @@ export function planCommitMessageGeneration(
     if (!agentArgs.ok) {
       return agentArgs
     }
+    const localArgs = insertAdditionalAgentArgs({
+      baseArgs: planned.localArgs,
+      agentArgs: agentArgs.args,
+      promptDelivery: planned.stdinPayload === null ? 'argv' : 'stdin',
+      prompt: planned.trailingPrompt
+    })
     return {
       ok: true,
+      localArgs,
       plan: {
         binary: planned.binary,
-        args: insertAdditionalAgentArgs({
-          baseArgs: planned.args,
-          agentArgs: agentArgs.args,
-          promptDelivery: planned.stdinPayload === null ? 'argv' : 'stdin',
-          prompt
-        }),
+        args: localArgs.map(generationArgumentText),
         stdinPayload: planned.stdinPayload,
-        // Custom commands lack friendly names; use the binary in error labels.
         label: planned.binary,
         ...(planned.env ? { env: planned.env } : {})
       }
@@ -231,7 +182,11 @@ export function planCommitMessageGeneration(
   }
 
   const argvPrompt =
-    spec.promptDelivery === 'file' ? '@{prompt-file}' : spec.promptDelivery === 'argv' ? prompt : ''
+    spec.promptDelivery === 'file'
+      ? '@{prompt-file}'
+      : spec.promptDelivery === 'argv'
+        ? { value: prompt, literal: true as const }
+        : ''
   const agentArgs = planAdditionalAgentArgs(input.agentArgs, input.backslash)
   if (!agentArgs.ok) {
     return agentArgs
@@ -243,17 +198,18 @@ export function planCommitMessageGeneration(
   const prefixArgs =
     input.agentId === 'antigravity'
       ? compactRecipeOptions(command.prefixArgs, ANTIGRAVITY_FORMAT_OPTIONS)
-      : command.prefixArgs
+      : taskPolicyRecipeArgs(input.agentId, command.prefixArgs)
   const recipeArgs =
     input.agentId === 'antigravity'
       ? compactRecipeOptions(agentArgs.args, ANTIGRAVITY_FORMAT_OPTIONS)
-      : agentArgs.args
+      : taskPolicyRecipeArgs(input.agentId, agentArgs.args)
   const baseArgs = spec.buildArgs({
     prompt: argvPrompt,
     model: input.model,
     thinkingLevel: input.thinkingLevel,
     strictMcp: options.strictMcp,
     legacyToolPolicy: options.legacyToolPolicy,
+    toolFree: input.toolFree,
     userArgs: [...prefixArgs, ...recipeArgs]
   })
   // Replace singleton values rather than stack them: yargs arrays crash CLIs such as OpenCode model.split.
@@ -271,27 +227,45 @@ export function planCommitMessageGeneration(
           baseArgs: merged.generatedArgs,
           agentArgs: merged.recipeArgs,
           promptDelivery: spec.promptDelivery,
-          prompt: argvPrompt
+          prompt: argvPrompt,
+          builtIn: true
         })
   const generationArgs = mergeOpenCodeGenerationArgs(
     input.agentId,
     command.binary,
-    merged.prefixArgs,
+    merged.prefixArgs.map(generationArgumentText),
     args
   )
   const formatOption =
     input.agentId === 'opencode' || input.agentId === 'opencode2'
-      ? findOptionOccurrence(generationArgs, ['--format'], true)
+      ? findOptionOccurrence(generationOptionTokens(generationArgs), ['--format'], true)
       : null
   const kimiFormatOption =
     input.agentId === 'kimi'
       ? findRecipeOption(generationArgs, ['--output-format'], KIMI_VALUE_OPTIONS)
       : null
+  const directOpenCode = isDirectOpenCodeGenerationCommand(
+    command.binary,
+    merged.prefixArgs.map(generationArgumentText)
+  )
+  const launcherBoundary = openCodeGenerationLauncherBoundary(
+    command.binary,
+    merged.nativePrefixArgs.map(generationArgumentText)
+  )
+  const nativePrefixArgs =
+    launcherBoundary === null
+      ? merged.nativePrefixArgs
+      : merged.nativePrefixArgs.slice(0, launcherBoundary)
+  const nativeRunOptions =
+    launcherBoundary === null
+      ? merged.nativePrefixOptions
+      : [...merged.nativePrefixOptions, ...merged.nativePrefixArgs.slice(launcherBoundary)]
   return {
     ok: true,
+    localArgs: generationArgs,
     plan: {
       binary: command.binary,
-      args: generationArgs,
+      args: generationArgs.map(generationArgumentText),
       stdinPayload:
         input.agentId === 'antigravity'
           ? buildAntigravityGenerationInput(prompt)
@@ -307,6 +281,33 @@ export function planCommitMessageGeneration(
           }
         : {}),
       label: spec.label,
+      ...(input.agentId === 'codex'
+        ? {
+            policyProbeArgs: [
+              ...compactRecipeOptions(merged.prefixArgs.map(generationArgumentText), [
+                '--model',
+                '-m'
+              ]),
+              ...codexRecipeConfigArgs(merged.recipeArgs.map(generationArgumentText))
+            ]
+          }
+        : {}),
+      ...(input.agentId === 'antigravity'
+        ? { policyProbeArgs: merged.prefixArgs.map(generationArgumentText) }
+        : {}),
+      ...(input.agentId === 'opencode' || input.agentId === 'opencode2'
+        ? {
+            openCodeTask: {
+              prefixArgs: directOpenCode ? [] : nativePrefixArgs.map(generationArgumentText),
+              runArgs: directOpenCode
+                ? generationArgs.slice(1).map(generationArgumentText)
+                : [
+                    ...nativeRunOptions.map(generationArgumentText),
+                    ...args.slice(1).map(generationArgumentText)
+                  ]
+            }
+          }
+        : {}),
       ...(formatOption?.value === 'json' ? { outputFormat: 'opencode-json' as const } : {}),
       ...(kimiFormatOption?.value === 'stream-json'
         ? { outputFormat: 'kimi-stream-json' as const }
