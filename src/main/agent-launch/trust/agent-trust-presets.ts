@@ -147,7 +147,8 @@ export function markMistralVibeWorkspaceTrusted(
   env: Record<string, string | undefined>,
   home: string
 ): void {
-  const trustFile = join(vibeHome(env, home), 'trusted_folders.toml')
+  // Why: a relative VIBE_HOME is resolved from where Vibe starts, which is the workspace.
+  const trustFile = join(vibeHome(env, home, workspacePath), 'trusted_folders.toml')
   if (vibeTrustStatus(trustFile, workspacePath) === 'trusted') {
     return
   }
@@ -164,9 +165,22 @@ export function markMistralVibeWorkspaceTrusted(
   writeFileAtomically(trustFile, stringifyToml({ trusted, untrusted }), { mode: 0o600 })
 }
 
-/** `VIBE_HOME` moves the store; Vibe resolves `~` itself, so an unset var means `<agentHome>/.vibe`. */
-function vibeHome(env: Record<string, string | undefined>, home: string): string {
-  return env.VIBE_HOME ? resolve(env.VIBE_HOME) : join(home, '.vibe')
+/**
+ * `VIBE_HOME` moves the store; Vibe resolves it with `Path(...).expanduser().resolve()`, so a `~`
+ * prefix means the agent's home and a relative path means the folder the agent was started in.
+ */
+function vibeHome(
+  env: Record<string, string | undefined>,
+  home: string,
+  startFolder: string
+): string {
+  const raw = env.VIBE_HOME
+  if (!raw) {
+    return join(home, '.vibe')
+  }
+  const expanded =
+    raw === '~' || raw.startsWith('~/') || raw.startsWith('~\\') ? join(home, raw.slice(1)) : raw
+  return resolve(startFolder, expanded)
 }
 
 /**

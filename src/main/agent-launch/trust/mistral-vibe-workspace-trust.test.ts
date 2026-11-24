@@ -47,6 +47,22 @@ describe('markMistralVibeWorkspaceTrusted', () => {
     expect(parsed).toEqual({ trusted: [workspace], untrusted: [] })
   })
 
+  it('expands a ~ VIBE_HOME against the agent home, the way Vibe does', () => {
+    markMistralVibeWorkspaceTrusted(workspace, { VIBE_HOME: '~/vibe-alt' }, home)
+
+    const parsed = parseToml(readFileSync(join(home, 'vibe-alt', 'trusted_folders.toml'), 'utf-8'))
+    expect(parsed).toEqual({ trusted: [workspace], untrusted: [] })
+  })
+
+  it('resolves a relative VIBE_HOME from the folder the agent starts in', () => {
+    markMistralVibeWorkspaceTrusted(workspace, { VIBE_HOME: 'alt-store' }, home)
+
+    const parsed = parseToml(
+      readFileSync(join(workspace, 'alt-store', 'trusted_folders.toml'), 'utf-8')
+    )
+    expect(parsed).toEqual({ trusted: [workspace], untrusted: [] })
+  })
+
   it('moves the workspace out of untrusted, which Vibe checks first', () => {
     writeLists([], [workspace])
 
