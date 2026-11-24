@@ -1,4 +1,4 @@
-import { RUNTIME_AUTOMATIC_WORK_RUNTIME_CAPABILITY } from '../../../../../shared/host-runtime-capabilities'
+import { RUNTIME_AUTOMATIC_WORK_RUNTIME_CAPABILITY } from '../../../../../shared/remote-runtime/protocol/host-runtime-capabilities'
 import { callRuntimeRpc } from '../../rpc/calls/runtime-rpc-call'
 import { runtimeEnvironmentSupportsCapability } from '../../rpc/compatibility/runtime-capability-proof'
 import { runtimeTargetForOwnerEnvironment } from '../../rpc/targets/runtime-client-target'

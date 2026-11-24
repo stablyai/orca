@@ -1,12 +1,15 @@
 import { captureRuntimeEnvironmentRequestRevision } from '@/runtime/rpc/environment-revisions/runtime-environment-revision'
 import type { BrowserSlice, BrowserSliceGet, BrowserSliceSet } from '../browser-slice-contract'
-import type { BrowserSessionProfile } from '../../../../../../shared/browser-workspace-types'
+import type { BrowserSessionProfile } from '../../../../../../shared/browser/workspaces/browser-workspace-types'
 import type {
   BrowserProfileCreateResult,
   BrowserProfileDeleteResult,
   BrowserProfileListResult
 } from '../../../../../../shared/browser/runtime/runtime-browser-contracts'
-import { parseExecutionHostId, type ExecutionHostId } from '../../../../../../shared/execution-host'
+import {
+  parseExecutionHostId,
+  type ExecutionHostId
+} from '../../../../../../shared/execution-host/execution-host'
 import { callRuntimeRpc } from '@/runtime/rpc/calls/runtime-rpc-call'
 import {
   getBrowserProfilesForHost,
@@ -114,9 +117,11 @@ export function createBrowserProfileListActions(
       return undefined
     },
 
-    createBrowserSessionProfile: async (scope, label) => {
-      const hostId = getBrowserSettingsHostId(get())
-      const runtimeEnvironmentId = getBrowserSettingsRuntimeEnvironmentId(get())
+    createBrowserSessionProfile: async (scope, label, requestedHostId) => {
+      const hostId = requestedHostId ?? getBrowserSettingsHostId(get())
+      const parsedHostId = parseExecutionHostId(hostId)
+      const runtimeEnvironmentId =
+        parsedHostId?.kind === 'runtime' ? parsedHostId.environmentId : null
       if (runtimeEnvironmentId) {
         try {
           const result = await callRuntimeRpc<BrowserProfileCreateResult>(

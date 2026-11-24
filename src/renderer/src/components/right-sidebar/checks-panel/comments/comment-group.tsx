@@ -21,7 +21,7 @@ import {
 import type {
   GitHubReactionContent,
   PRComment
-} from '../../../../../../shared/github/comment-types'
+} from '../../../../../../shared/github/comments/comment-types'
 import {
   getPRCommentGroupId,
   type PRCommentGroup

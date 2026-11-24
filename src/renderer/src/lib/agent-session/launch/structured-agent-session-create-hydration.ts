@@ -1,6 +1,6 @@
 import { hasStructuredAgentLaunchCancellationTombstonePersisted } from './structured-agent-session-launch-persistence'
 import { wasStructuredAgentLaunchClosedByLocalCancel } from './structured-agent-session-local-launch-cancel'
-import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../../shared/layout-owner-switch'
+import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../../shared/workspace-layout/layout-owner-switch'
 import { getStructuredAgentSessionReadOwner } from '@/components/native-chat/session/structured/read/structured-agent-session-read-owner'
 import { noteStructuredAgentSessionFence } from '@/components/native-chat/session/structured/delivery/structured-agent-session-send-attempt'
 import type { AgentSessionHistoryPage } from '../../../../../shared/agent-session/agent-session-wire'

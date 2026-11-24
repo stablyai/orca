@@ -8,7 +8,7 @@ import {
   type ChecksPanelRecoveryAction,
   type ChecksPanelReviewState,
   type ChecksPanelReviewStateInput
-} from '../checks-panel-review-state-model'
+} from '../review-state/checks-panel-review-state-model'
 import { concurrentLookupDetail } from './checks-panel-review-copy'
 
 type KeyedCopy = { key: string; fallback: string }

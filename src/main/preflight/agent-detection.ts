@@ -3,17 +3,20 @@ import type {
   PathSource,
   ShellHydrationFailureReason
 } from '../../shared/shell/launch/shell-path-hydration-types'
-import { hydrateShellPath, mergePathSegments } from '../startup/hydrate-shell-path'
+import {
+  hydrateShellPath,
+  mergePathSegments
+} from '../startup/shell-environment/hydrate-shell-path'
 import { getAzureDevOpsAuthStatus } from '../azure-devops/client'
 import { getBitbucketAuthStatus } from '../bitbucket/client'
 import { getGiteaAuthStatus } from '../gitea/client'
 import { _resetKnownHostsCache } from '../gitlab/projects/gitlab-known-host-probe'
 import { mergePersistedWindowsPathAsync } from '../pty/environment/windows-environment-path'
-import type { WslPreflightTarget } from '../ipc/preflight-wsl-agent-detection'
+import type { WslPreflightTarget } from '../ipc/preflight/preflight-wsl-agent-detection'
 import {
   getPreflightWslTarget,
   type PreflightRuntimeContext
-} from '../ipc/preflight-runtime-target'
+} from '../ipc/preflight/preflight-runtime-target'
 
 export type { PreflightRuntimeContext }
 import { hydrateShellPathForAgentDetection } from '../ipc/command-path/agent-detection-shell-path'
@@ -22,12 +25,14 @@ import {
   execLocalPreflightCommandOrThrow,
   findRunnableLocalCommand,
   isCommandAvailable
-} from '../ipc/preflight-command-exec'
+} from '../ipc/preflight/preflight-command-exec'
+import { buildLocalPreflightEnv } from '../ipc/preflight/preflight-local-env'
+import { withConfiguredProxyEnv } from '../network/configured-proxy-child-env'
 import { quotePosixShell } from '../../shared/shell/launch/shell-argument-quoting'
 import {
   detectRemoteWindowsTerminalCapabilities,
   type RemoteWindowsTerminalCapabilities
-} from '../ipc/preflight-remote-windows-terminal-capabilities'
+} from '../ipc/preflight/preflight-remote-windows-terminal-capabilities'
 import { invalidateWslGuestEnvironment } from '../wsl/execution/wsl-guest-environment'
 import { prunePreflightWslCache } from '../wsl/discovery/preflight-wsl-cache'
 import { assertWslDistroRunningForExec } from '../wsl/discovery/wsl-background-exec-gate'
@@ -177,7 +182,10 @@ async function isGlabAuthenticated(probe: CommandRuntime): Promise<boolean> {
   try {
     await (probe.wslTarget
       ? execCommandInWslOrThrow(probe.wslTarget, `${quotePosixShell('glab')} auth status`)
-      : execLocalPreflightCommandOrThrow(probe.binary ?? 'glab', ['auth', 'status']))
+      : execLocalPreflightCommandOrThrow(probe.binary ?? 'glab', ['auth', 'status'], {
+          // `auth status` calls the GitLab API, so it needs the Settings proxy too.
+          env: withConfiguredProxyEnv(buildLocalPreflightEnv())
+        }))
     return true
   } catch (error) {
     const stdout = (error as { stdout?: string }).stdout ?? ''

@@ -2,7 +2,7 @@ import { mkdirSync, realpathSync, statSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
-import { isRootLikePath } from '../providers/pty-path-safety'
+import { isRootLikePath } from '../providers/working-directory/path-safety'
 
 // Folder names predate the generic probe naming; keep them so existing dirs are reused.
 const HIDDEN_PROBE_CWD_DIR = 'rate-limit-pty-cwd'

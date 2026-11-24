@@ -1,120 +1,55 @@
-import { describe, expect, it } from 'vitest'
-import type { AgentJournalItemBody } from '../../../../shared/agent-session/journal/agent-session-journal-types'
+import { expect, it } from 'vitest'
 import { CodexUsageLimits } from './codex-usage-limits'
-import { createCodexJournalTranslator } from '../journal/codex-structured-journal-translation'
+import { readAgentSessionFailureFact } from '../../../../shared/agent-session/failures/agent-session-failure'
 
-const RESETS_AT_S = Math.floor(Date.now() / 1000) + 3 * 24 * 3600
-const CODEX_WORDS = "You've hit your usage limit. Try again in 3 days."
+// Codex writes the time in its own local zone, which is this process's zone on the same host.
+const NOW = new Date(2026, 10, 22, 14, 0).getTime()
 
-function translatorWithRows() {
-  const bodies: AgentJournalItemBody[] = []
-  const translator = createCodexJournalTranslator({
-    primaryThreadId: () => 'thread',
-    sink: {
-      appendItem: (_identity, body) => bodies.push(body),
-      appendTombstone: () => {},
-      publish: () => {}
-    }
-  })
-  const notify = (method: string, params: Record<string, unknown>) =>
-    translator.handle({
-      type: 'notification',
-      sessionId: 'session',
-      threadId: 'thread',
-      method,
-      params
-    })
-  return { bodies, translator, notify }
+function resetOf(message: string, limits = new CodexUsageLimits(() => NOW, true)) {
+  const fact = readAgentSessionFailureFact(
+    limits.failure({ error: { message, codexErrorInfo: 'usageLimitExceeded' } })
+  )
+  return fact?.kind === 'usageLimitReached' ? fact.usageLimit?.resetsAt : 'not a usage limit'
 }
 
-describe('a Codex usage limit', () => {
-  it('names the spent window and its reset from the last usage report', () => {
-    const { bodies, translator, notify } = translatorWithRows()
-    notify('account/rateLimits/updated', {
-      rateLimits: {
-        limitId: 'codex',
-        primary: { usedPercent: 40, windowDurationMins: 300, resetsAt: RESETS_AT_S - 3600 },
-        secondary: { usedPercent: 100, windowDurationMins: 10080, resetsAt: RESETS_AT_S }
-      }
-    })
-    notify('account/rateLimits/updated', {
-      rateLimits: {
-        primary: { usedPercent: 41, windowDurationMins: 300, resetsAt: RESETS_AT_S - 3600 }
-      }
-    })
-    notify('error', {
-      threadId: 'thread',
-      turnId: 'turn',
-      willRetry: false,
-      error: { codexErrorInfo: 'usageLimitExceeded', message: CODEX_WORDS }
-    })
+it("reads the reset Codex's error text names when no report gave one", () => {
+  const plus =
+    'You’ve hit your usage limit. Upgrade to Pro (https://chatgpt.com/explore/pro), visit https://chatgpt.com/settings/usage to purchase more credits or try again at 3:05 PM.'
+  // The text drops seconds, so the reset is read as the end of the named minute.
+  expect(resetOf(plus)).toBe(new Date(2026, 10, 22, 15, 6).getTime())
+  expect(resetOf('You’ve hit your usage limit. Try again at Nov 23rd, 2026 12:30 AM.')).toBe(
+    new Date(2026, 10, 23, 0, 31).getTime()
+  )
+  expect(resetOf('You’ve hit your usage limit. Try again at Dec 1st, 2026 11:00 PM.')).toBe(
+    new Date(2026, 11, 1, 23, 1).getTime()
+  )
+})
 
-    expect(bodies.filter((body) => body.kind === 'status')).toEqual([
-      expect.objectContaining({
-        tone: 'warning',
-        text: 'Codex hit its weekly limit.',
-        failure: {
-          kind: 'usageLimitReached',
-          usageLimit: { window: 'weekly', resetsAt: RESETS_AT_S * 1000 },
-          detail: { text: CODEX_WORDS, audience: 'person' }
-        }
-      })
-    ])
-    translator.dispose()
-  })
-  it('takes the reset from a nearly spent window when the rejection outruns the last report', () => {
-    const limits = new CodexUsageLimits()
-    const rejectedWith = (primaryPercent: number, code = 'usageLimitExceeded') => {
-      limits.observe('notification:account/rateLimits/updated', {
-        rateLimits: {
-          limitId: 'codex',
-          primary: { usedPercent: primaryPercent, windowDurationMins: 300, resetsAt: RESETS_AT_S },
-          secondary: { usedPercent: 70, windowDurationMins: 10080, resetsAt: RESETS_AT_S + 3600 }
-        }
-      })
-      return limits.failure({ error: { codexErrorInfo: code, message: CODEX_WORDS } })?.usageLimit
-    }
-    expect(rejectedWith(99)).toEqual({ window: 'session', resetsAt: RESETS_AT_S * 1000 })
-    expect(rejectedWith(50)).toBeUndefined()
-    expect(rejectedWith(99, 'rateLimitExceeded')).toBeUndefined()
+it('never guesses a reset the text does not name exactly', () => {
+  for (const message of [
+    'You’ve hit your usage limit. Try again later.',
+    'You’ve hit your usage limit. Try again at Feb 30th, 2027 3:05 PM.',
+    'You’ve hit your usage limit. Try again at 13:05 PM.',
+    // Earlier today: not a reset still to come.
+    'You’ve hit your usage limit. Try again at 9:15 AM.'
+  ]) {
+    expect(resetOf(message)).toBeUndefined()
+  }
+})
 
-    limits.observe('notification:account/rateLimits/updated', {
-      rateLimits: {
-        primary: { usedPercent: 99, windowDurationMins: 300, resetsAt: 1_000_000 },
-        secondary: { usedPercent: 95, windowDurationMins: 10080, resetsAt: RESETS_AT_S }
-      }
-    })
-    expect(
-      limits.failure({ error: { codexErrorInfo: 'usageLimitExceeded', message: CODEX_WORDS } })
-        ?.usageLimit
-    ).toEqual({ window: 'weekly', resetsAt: RESETS_AT_S * 1000 })
-  })
-  it('merges null account updates and keeps unnamed exhausted windows in reset calculation', () => {
-    const limits = new CodexUsageLimits()
-    const observe = (rateLimits: Record<string, unknown>) =>
-      limits.observe('notification:account/rateLimits/updated', { rateLimits })
-    const failure = (code = 'usageLimitExceeded') =>
-      limits.failure({
-        error: { codexErrorInfo: code, message: CODEX_WORDS }
-      })
-    observe({
+it("keeps the report's reset over the text's", () => {
+  const limits = new CodexUsageLimits(() => NOW, true)
+  const reported = new Date(2026, 10, 22, 16, 0).getTime()
+  limits.observe('notification:account/rateLimits/updated', {
+    rateLimits: {
       limitId: 'codex',
-      primary: { usedPercent: 100, windowDurationMins: 300, resetsAt: RESETS_AT_S }
-    })
-    observe({
-      limitId: null,
-      primary: { usedPercent: 100, windowDurationMins: 43200, resetsAt: RESETS_AT_S + 3600 }
-    })
-    expect(failure()?.usageLimit).toEqual({ resetsAt: (RESETS_AT_S + 3600) * 1000 })
-    observe({ secondary: { usedPercent: 100, windowDurationMins: 10080 } })
-    expect(failure('rateLimitExceeded')?.usageLimit).toBeUndefined()
-    observe({
-      secondary: null,
-      planType: 'free',
-      primary: { usedPercent: 100, resetsAt: RESETS_AT_S }
-    })
-    expect(failure()?.usageLimit).toEqual({ resetsAt: RESETS_AT_S * 1000 })
-    observe({ primary: null })
-    expect(failure()?.usageLimit).toBeUndefined()
+      primary: { usedPercent: 100, windowDurationMins: 300, resetsAt: reported / 1000 }
+    }
   })
+  expect(resetOf('You’ve hit your usage limit. Try again at 3:05 PM.', limits)).toBe(reported)
+})
+
+it("ignores the text's time when Codex runs elsewhere (WSL, SSH, a remote host)", () => {
+  const elsewhere = new CodexUsageLimits(() => NOW, false)
+  expect(resetOf('You’ve hit your usage limit. Try again at 3:05 PM.', elsewhere)).toBeUndefined()
 })

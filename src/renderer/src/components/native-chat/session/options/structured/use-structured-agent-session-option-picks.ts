@@ -1,6 +1,6 @@
 import { useCallback } from 'react'
 import type { AgentType } from '../../../../../../../shared/agent-status/contracts/agent-status-types'
-import type { RuntimeClientTarget } from '../../../../../../../shared/runtime-client-target'
+import type { RuntimeClientTarget } from '../../../../../../../shared/remote-runtime/host-catalog/runtime-client-target'
 import {
   structuredAgentSessionOptionPicks,
   type StructuredAgentSessionOptionState

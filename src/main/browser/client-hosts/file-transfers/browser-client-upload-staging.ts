@@ -7,8 +7,8 @@ import {
   BROWSER_CLIENT_FILE_CHANNEL_MAX_FILES_PER_COMMAND,
   BROWSER_CLIENT_FILE_CHANNEL_TRANSFER_MAX_BYTES
 } from '../../../../shared/browser/client-hosting/browser-client-file-channel-protocol'
-import { normalizeBrowserDownloadFilename } from '../../../../shared/browser-download-filename'
-import { removeTree } from '../../../../shared/windows-transient-lock-removal'
+import { normalizeBrowserDownloadFilename } from '../../../../shared/browser/downloads/browser-download-filename'
+import { removeTree } from '../../../../shared/file-write/windows-transient-lock-removal'
 
 export type BrowserClientStagedUpload = {
   stagingId: string

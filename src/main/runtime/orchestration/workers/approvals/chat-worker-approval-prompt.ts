@@ -1,18 +1,19 @@
 /** A chat worker's permission prompt is its own journal item: Orca reads it there and answers it
  *  through the chat's ordinary prompt response, so the worker's chat and Orca share one record. */
 import { getStructuredAgentSessionHost } from '../../../../native-chat/agent-session-wire/host/structured-agent-session-registry'
-import { structuredAgentSessionPayloadFingerprint } from '../../../../../shared/agent-session/lifecycle/structured-agent-session-mutation'
+import { structuredAgentSessionPayloadFingerprint } from '../../../../../shared/agent-session/lifecycle/operations/structured-agent-session-mutation'
 import type { AgentJournalApprovalItem } from '../../../../../shared/agent-session/journal/agent-session-journal-types'
 import { mintAgentSessionOperationId } from '../../mailbox/structured-pointer/structured-pointer-operation-id'
+import { workerApprovalDecisionOf, workerApprovalOption } from './worker-approval'
 import {
-  workerApprovalDecisionOf,
-  workerApprovalOption,
+  ORCHESTRATION_APPROVAL_CALLER_PREFIX,
+  ORCHESTRATION_COORDINATOR_APPROVAL_CALLER_PREFIX,
+  ORCHESTRATION_PERSON_APPROVAL_CALLER_PREFIX,
   type WorkerApprovalDecision,
   type WorkerApprovalOutcome
-} from './worker-approval'
+} from '../../../../../shared/orchestration/approvals/worker-approval-payload'
 
-/** Marks a prompt Orca answered for a coordinator or a person, so the chat's own closer leaves it alone. */
-export const ORCHESTRATION_APPROVAL_CALLER_PREFIX = 'trusted-local:orchestration:approval:'
+export { ORCHESTRATION_APPROVAL_CALLER_PREFIX }
 
 export type ChatWorkerPrompt = { revision: number; body: AgentJournalApprovalItem }
 export type ChatWorkerPromptReader = (
@@ -27,8 +28,7 @@ export const readChatWorkerPrompt: ChatWorkerPromptReader = async (sessionId, it
   if (!host) {
     throw new Error('No chat host is running.')
   }
-  const snapshot = await host.journalCurrentRead(sessionId)
-  const item = snapshot.items.find((candidate) => candidate.itemId === itemId)
+  const item = await host.approvalPrompt(sessionId, itemId)
   return item?.body.kind === 'approval' ? { revision: item.revision, body: item.body } : null
 }
 
@@ -56,9 +56,18 @@ export type ChatWorkerApprovalAnswer =
   | { ok: true; prompt: ChatWorkerPrompt; optionLabel: string }
   | {
       ok: false
-      code: 'approval_not_open' | 'approval_option_missing' | 'approval_refused'
+      code:
+        | 'approval_not_open'
+        | 'approval_option_missing'
+        | 'approval_refused'
+        | 'approval_requires_person'
       message: string
     }
+
+/** Why an agent's allow was refused: the worker's own agent says only a person may approve it. */
+export function personOnlyMessage(approvalId: string): string {
+  return `The worker's agent lets only a person approve ${approvalId}, so it stays with the user. You can deny it with a reason, or leave it.`
+}
 
 /** Answer as Orca with the one option the decision may pick; the chat checks the revision it read. */
 export async function answerChatWorkerApproval(input: {
@@ -66,6 +75,8 @@ export async function answerChatWorkerApproval(input: {
   approvalId: string
   dispatchId: string
   decision: WorkerApprovalDecision
+  /** An agent answers for the coordinator: the agent's person-only prompts stay with the person. */
+  byAgent?: boolean
   readPrompt?: ChatWorkerPromptReader
 }): Promise<ChatWorkerApprovalAnswer> {
   const { sessionId, approvalId, decision } = input
@@ -86,6 +97,11 @@ export async function answerChatWorkerApproval(input: {
   if (!prompt) {
     return notOpen
   }
+  // A prompt answered meanwhile is not open, whoever may answer it.
+  const open = prompt.body.resolution.state === 'pending'
+  if (open && decision === 'allow' && input.byAgent && prompt.body.personOnly) {
+    return { ok: false, code: 'approval_requires_person', message: personOnlyMessage(approvalId) }
+  }
   const option = workerApprovalOption(prompt.body.options, decision)
   if (!option) {
     return {
@@ -97,7 +113,8 @@ export async function answerChatWorkerApproval(input: {
           : `Approval ${approvalId} offers no way to allow just this request. A person must answer it on the worker.`
     }
   }
-  const callerKey = `${ORCHESTRATION_APPROVAL_CALLER_PREFIX}${input.dispatchId}`
+  // The worker's chat names who answered: the coordinator, or a person in its chat.
+  const callerKey = `${input.byAgent ? ORCHESTRATION_COORDINATOR_APPROVAL_CALLER_PREFIX : ORCHESTRATION_PERSON_APPROVAL_CALLER_PREFIX}${input.dispatchId}`
   const { resolution } = prompt.body
   // A retry of this Dispatch's own answer: the same receipt, and no second effect.
   if (

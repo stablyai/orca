@@ -6,14 +6,14 @@ import type {
   UnrestoredPortForward,
   EnrichedDetectedPort,
   SshTargetSummary
-} from '../../../../../shared/ssh-types'
+} from '../../../../../shared/remote-runtime/ssh/ssh-types'
 import { buildRemovedSshTargetCleanupPatch } from './ssh-target-cleanup'
 import {
   collectSshTargetGenerations,
   sshTargetGenerationsEqual,
   sshTargetLabelsEqual
 } from './ssh-target-metadata'
-import { persistedUIValuesEqual as sshConnectionStatesEqual } from '../../../../../shared/persisted-ui-equality'
+import { persistedUIValuesEqual as sshConnectionStatesEqual } from '../../../../../shared/collections/persisted-ui-equality'
 import { createBoundedGenerationMap } from '../../../lib/bounded-generation-map'
 
 export type SshCredentialRequest = {

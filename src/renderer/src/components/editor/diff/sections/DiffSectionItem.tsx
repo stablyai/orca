@@ -5,12 +5,15 @@ import type { DiffOnMount } from '@monaco-editor/react'
 import type { editor as monacoEditor } from 'monaco-editor'
 import { detectLanguage } from '../../../../../../shared/editor-language/editor-language-detect'
 import { useAppStore } from '@/store/index'
-import { useEditorTypography } from '@/hooks/use-editor-typography'
+import { useEditorTypography } from '@/lib/editor/appearance/use-editor-typography'
 import { useDiffCommentDecorator } from '../../../diff-comments/useDiffCommentDecorator'
 import { applyDiffEditorLineNumberOptions } from '../monaco-view/diff-editor-line-number-options'
 import { DiffSectionHeader } from './DiffSectionHeader'
 import { isDiffComment } from '@/lib/source-control/review/comments/diff-comment-compat'
-import { installEditorSaveShortcut, installMonacoEditorFindShortcut } from '../../editor-shortcuts'
+import {
+  installEditorSaveShortcut,
+  installMonacoEditorFindShortcut
+} from '../../commands/editor-shortcuts'
 import { DiffSectionBody } from './DiffSectionBody'
 import { useDiffSectionLayoutMetrics } from './useDiffSectionLayoutMetrics'
 import { getLiveDiffSectionRenderLimit } from './diff-section-live-render-limit'
@@ -18,7 +21,7 @@ import { useDiffSectionFallbackCleanup } from './useDiffSectionFallbackCleanup'
 import { submitDiffSectionComment } from './diff-section-comment-submit'
 import type { DiffSectionItemProps } from './diff-section-item-props'
 import { useDiffSectionModelLifecycle } from './use-diff-section-model-lifecycle'
-import { hasLayoutBox } from '@/hooks/virtualized-hidden-row-measurement'
+import { hasLayoutBox } from '@/lib/list-interaction/virtualized-hidden-row-measurement'
 import { DiffSectionSaveConflictBar } from './DiffSectionSaveConflictBar'
 
 export function DiffSectionItem({

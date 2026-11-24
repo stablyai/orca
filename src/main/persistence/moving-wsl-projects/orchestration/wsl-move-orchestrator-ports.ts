@@ -1,6 +1,7 @@
 /** What the move orchestrator (D3a) reads and drives, so tests and production share one shape. */
 import type {
   WslMovePreview,
+  WslMoveRequest,
   WslMoveResult
 } from '../../../../shared/wsl-move/wsl-move-driver-types'
 import type { WslMoveUseLocallyResult } from '../../../../shared/wsl-move/wsl-moved-project'
@@ -29,11 +30,11 @@ export type WslMoveOrchestratorPorts = {
    */
   prepareHost: (distro: string, stillWanted: () => boolean) => Promise<WslMoveHostReadiness>
   /** E11: the user's Remove of the distro's host has not proven its server stopped. */
-  hostRemovalPending: (distro: string) => boolean
+  hostRemovalPending: (distro: string) => boolean | Promise<boolean>
   /** Whether the distro has a WSL host record or bridge projects; a distro with neither is pruned. */
-  isDistroInUse: (distro: string) => boolean
+  isDistroInUse: (distro: string) => boolean | Promise<boolean>
   /** Whether the distro still has a WSL host record; never connects. */
-  hasHost: (distro: string) => boolean
+  hasHost: (distro: string) => boolean | Promise<boolean>
   /** Whether the distro's host connection is ready now; never connects. Gates timer steps. */
   isHostReady: (distro: string) => boolean
   /** `userAsked`: the user's own step may finish a committed earlier move now, reloading the window. */
@@ -42,7 +43,12 @@ export type WslMoveOrchestratorPorts = {
    * Runs the move. `stillWanted` turns false once the user released or snoozed the distro; the
    * port checks it after its own waits (the window's panes) and refuses rather than start.
    */
-  start: (distro: string, stillWanted: () => boolean) => Promise<WslMoveResult>
+  start: (
+    distro: string,
+    stillWanted: () => boolean,
+    /** The preview's mapped drives (refused if they map elsewhere by now) and what it showed moving. */
+    fromPreview: Pick<WslMoveRequest, 'mappedDrives' | 'previewMoving'>
+  ) => Promise<WslMoveResult>
   finishedMove: (distro: string) => WslMoveFinishedMove | null
   /** R38: reads the registry and, when ready, the host's catalog; never boots the distro. */
   checkMovedDistro: (distro: string, move: WslMoveFinishedMove) => Promise<WslMovedDistroVerdict>

@@ -1,7 +1,7 @@
-import { hasClosedTerminalTabRecord } from '../../../../../shared/workspace-layout/closed-terminal-tab-tombstones'
-import { LOCAL_EXECUTION_HOST_ID } from '../../../../../shared/execution-host'
-import type { PersistedState } from '../../../../../shared/persisted-state-types'
-import { normalizeWorkspaceSessionKeyToWorkspaceId } from '../../../../../shared/workspace-scope'
+import { hasClosedTerminalTabRecord } from '../../../../../shared/workspace-layout/terminal-surfaces/closed-terminal-tab-tombstones'
+import { LOCAL_EXECUTION_HOST_ID } from '../../../../../shared/execution-host/execution-host'
+import type { PersistedState } from '../../../../../shared/orca-profiles/persisted-state-types'
+import { normalizeWorkspaceSessionKeyToWorkspaceId } from '../../../../../shared/workspace/identity/workspace-scope'
 import type { WorkspaceSessionState } from '../../../../../shared/workspace-session/workspace-session-state-types'
 import { keepUnsavedDrafts } from '../../../../../shared/workspace-session/workspace-session-draft-retention'
 import {

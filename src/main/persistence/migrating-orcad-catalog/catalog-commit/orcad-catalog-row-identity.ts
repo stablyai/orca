@@ -1,5 +1,5 @@
 import { serializeOrcadMigrationValue } from '../../../../shared/orcad-migration/orcad-migration-manifest'
-import type { Repo } from '../../../../shared/repo-types'
+import type { Repo } from '../../../../shared/repository/repo-types'
 
 export function selectNewRows<T extends { id: string }>(
   incoming: T[],

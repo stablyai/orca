@@ -1,26 +1,36 @@
 import type { Session, WebContents } from 'electron'
-import '../../../../shared/constants'
+import '../../../../shared/orca-profiles/constants'
 import { ORCA_BROWSER_BLANK_URL } from '../../../../shared/browser/browser-blank-page'
 import {
   isBlankBrowserPopupUrl,
-  normalizeBrowserPopupUrl
+  normalizeBrowserPopupUrl,
+  waitsForPopupOpener,
+  type NewBrowserTabPopupRequest
 } from '../../guest-lifecycle/popups/browser-popup-new-tab-intent'
 import { enforceBrowserRouteWebRtcPolicy } from '../../network/egress/browser-route-webrtc-policy'
 import { trackBrowserGuestInputGesture } from '../../guest-lifecycle/input/browser-guest-input-gesture'
-import type { BrowserGuestInputGesture } from '../../guest-lifecycle/input/browser-guest-input-gesture'
+import type {
+  BrowserGuestInputGesture,
+  ObservedBrowserGuestGesture
+} from '../../guest-lifecycle/input/browser-guest-input-gesture'
 import {
   registerBrowserRouteGuestPopup,
   releaseBrowserRouteGuestPopup
 } from './browser-route-guest-popup-ownership'
 import { ROUTE_POPUP_WINDOW_OPTIONS } from './browser-route-guest-popup-window-options'
 import type { BrowserRouteGuestPopupWindow } from './browser-route-guest-popup-window-options'
-import { openPopupWithOriginBar } from '../../guest-lifecycle/popups/presentation/popup-origin-bar-window'
+import {
+  discardPopupChildWindow,
+  openPopupWithOriginBar,
+  popupChildOpener
+} from '../../guest-lifecycle/popups/presentation/popup-origin-bar-window'
 import type { PopupChildWindowOptions } from '../../guest-lifecycle/popups/presentation/browser-popup-window-contract'
 import {
   allowNativeBrowserPopup,
   isNativeBrowserPopupRequest
 } from '../../guest-lifecycle/popups/presentation/browser-popup-native-window'
 import { allowPageUnload } from '../../guest-lifecycle/navigation/browser-guest-unload-policy'
+import { trackBrowserPopupUserAgentDemand } from '../../guest-lifecycle/manager/navigation/browser-guest-frame-user-agent-demand'
 
 export const MAX_BROWSER_ROUTE_GUEST_POPUPS = 4
 
@@ -28,6 +38,19 @@ export type BrowserRouteGuestPopupDependencies = {
   getPartitionForSession: (session: Session) => string | null
   /** Route guests replace the manager's popup handler, so a denial is otherwise entirely silent. */
   reportBlockedPopup?: (input: { openerWebContentsId: number; url: string }) => void
+  popupReleased?: (opener: WebContents) => void
+  /** The manager's new-tab policy; true when it answered the request. */
+  openNewTabPopup?: (
+    source: WebContents,
+    request: NewBrowserTabPopupRequest,
+    observed: ObservedBrowserGuestGesture | null,
+    childOpener?: Electron.WebFrameMain | null
+  ) => boolean
+  /** A person's own input in a popup takes its opener's page back from the agent. */
+  releaseAgentLead?: (openerWebContentsId: number) => void
+  isAgentCommandShownHere?: (webContentsId: number) => boolean
+  /** Injected input reaching this popup now is a paired viewer's, not an agent's. */
+  isPersonCommandRunning?: (webContentsId: number) => boolean
   openPopupWindow?: (
     options: PopupChildWindowOptions,
     targetUrl: string,
@@ -61,13 +84,18 @@ export function createBrowserRouteGuestPopupController(input: {
   const popups = new Set<BrowserRouteGuestPopupWindow>()
   const gestures = new Set<BrowserGuestInputGesture>()
   const popupWebContentsIds = new Set<number>()
-  const openerGesture = trackBrowserGuestInputGesture(input.opener)
+  const { isAgentCommandShownHere } = input.dependencies
+  const openerGesture = trackBrowserGuestInputGesture(input.opener, { isAgentCommandShownHere })
   gestures.add(openerGesture)
   // Only disposal is permanent; navigation authority may return after reconnect.
   let disposed = false
 
   const navigationAllowed = (url: string): boolean =>
     input.isNavigationAllowed(isBlankBrowserPopupUrl(url) ? ORCA_BROWSER_BLANK_URL : url)
+
+  // Authority can be revoked while Chromium creates a child, so createWindow asks again.
+  const routePermits = (url: string | null): url is string =>
+    !disposed && url !== null && navigationAllowed(url)
 
   const onPopupNavigate = (event: Electron.Event, url: string): void => {
     if (disposed || !normalizeBrowserPopupUrl(url) || !navigationAllowed(url)) {
@@ -95,7 +123,19 @@ export function createBrowserRouteGuestPopupController(input: {
     if (!enforceBrowserRouteWebRtcPolicy(contents, () => {})) {
       return false
     }
-    const gesture = trackBrowserGuestInputGesture(contents)
+    const gesture = trackBrowserGuestInputGesture(contents, {
+      isAgentCommandShownHere,
+      onActivatingInput: (byAgent) => {
+        if (byAgent && !input.dependencies.isPersonCommandRunning?.(contents.id)) {
+          return
+        }
+        try {
+          input.dependencies.releaseAgentLead?.(input.opener.id)
+        } catch {
+          // A destroyed opener has no lead left to release.
+        }
+      }
+    })
     gestures.add(gesture)
     try {
       contents.setWindowOpenHandler(buildWindowOpenHandler(contents, gesture))
@@ -103,6 +143,7 @@ export function createBrowserRouteGuestPopupController(input: {
       contents.on('will-redirect', onPopupNavigate)
       // Popups skip attachGuestPolicies, so install its unload rule here.
       contents.on('will-prevent-unload', allowPageUnload)
+      trackBrowserPopupUserAgentDemand(contents)
       // Register before first navigation so downloads can resolve the root page.
       registerPopupOwnership(popupWebContentsId)
       if (disposed || !navigationAllowed(ORCA_BROWSER_BLANK_URL)) {
@@ -148,8 +189,11 @@ export function createBrowserRouteGuestPopupController(input: {
   }
 
   const releasePopupOwnership = (popupWebContentsId: number): void => {
-    popupWebContentsIds.delete(popupWebContentsId)
+    const owned = popupWebContentsIds.delete(popupWebContentsId)
     releaseBrowserRouteGuestPopup(popupWebContentsId)
+    if (owned) {
+      input.dependencies.popupReleased?.(input.opener)
+    }
   }
 
   const openPopup = (options: PopupChildWindowOptions, targetUrl: string): WebContents => {
@@ -170,15 +214,22 @@ export function createBrowserRouteGuestPopupController(input: {
     gesture: BrowserGuestInputGesture
   ): (details?: PopupRequest) => Electron.WindowOpenHandlerResponse {
     return (details) => {
-      const clicked = gesture.consume()
+      const observed = gesture.consume()
       const normalized = normalizeBrowserPopupUrl(details?.url)
-      if (
-        disposed ||
-        !normalized ||
-        popups.size >= MAX_BROWSER_ROUTE_GUEST_POPUPS ||
-        !navigationAllowed(normalized) ||
-        !clicked
-      ) {
+      const permitted = routePermits(normalized)
+      const request: NewBrowserTabPopupRequest = {
+        url: details?.url ?? normalized ?? '',
+        frameName: details?.frameName ?? '',
+        disposition: details?.disposition ?? '',
+        postBody: details?.postBody
+      }
+      if (permitted && input.dependencies.openNewTabPopup?.(source, request, observed)) {
+        return { action: 'deny' }
+      }
+      // At the cap, a request waiting on its child's opener may still become a tab, so createWindow applies the cap.
+      const capped =
+        popups.size >= MAX_BROWSER_ROUTE_GUEST_POPUPS && !waitsForPopupOpener(request, observed)
+      if (!permitted || capped || !observed) {
         if (!disposed) {
           reportBlockedPopup(details?.url)
         }
@@ -198,6 +249,7 @@ export function createBrowserRouteGuestPopupController(input: {
           opener: source,
           options,
           background: details?.disposition === 'background-tab',
+          showWhenAppActive: observed.byAgent,
           canPresent: () => !disposed && navigationAllowed(ORCA_BROWSER_BLANK_URL),
           onCreated: (nativeOptions) => openPopup(nativeOptions, details?.url ?? normalized)
         })
@@ -205,16 +257,35 @@ export function createBrowserRouteGuestPopupController(input: {
       return {
         action: 'allow',
         overrideBrowserWindowOptions: options,
-        createWindow: (options: PopupChildWindowOptions) =>
-          openPopup(
+        createWindow: (options: PopupChildWindowOptions) => {
+          // A child created after revocation is not a tab; openPopup rejects it.
+          if (
+            routePermits(normalized) &&
+            input.dependencies.openNewTabPopup?.(
+              source,
+              request,
+              observed,
+              popupChildOpener(options)
+            )
+          ) {
+            return discardPopupChildWindow(options, request.url)
+          }
+          // Only a child that kept its opener reaches here past the cap.
+          if (popups.size >= MAX_BROWSER_ROUTE_GUEST_POPUPS) {
+            reportBlockedPopup(request.url)
+            return discardPopupChildWindow(options, request.url)
+          }
+          return openPopup(
             {
               ...options,
+              showWhenAppActive: observed.byAgent,
               // Reopening a POST by URL would discard its body.
               loadInitialUrl:
                 !options.webContents && !details?.postBody && !isBlankBrowserPopupUrl(normalized)
             },
             details?.url ?? normalized
           )
+        }
       }
     }
   }

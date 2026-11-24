@@ -1,4 +1,4 @@
-import type { CliInstallStatus } from '../../../shared/cli-install-types'
+import type { CliInstallStatus } from '../../../shared/cli/cli-install-types'
 import { CliCommandInstallation } from '../installation/cli-command-installation'
 import { isWindowsUserPathPermissionError } from '../installation/cli-install-errors'
 import { samePathEntry, splitPathEntries } from './cli-install-path-format'

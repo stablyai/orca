@@ -1,13 +1,13 @@
-import type { GlobalSettings } from '../../../../shared/global-settings-types'
-import type { Repo } from '../../../../shared/repo-types'
+import type { GlobalSettings } from '../../../../shared/settings/global-settings-types'
+import type { Repo } from '../../../../shared/repository/repo-types'
 import {
   getRepoExecutionHostId,
   getSettingsFocusedExecutionHostId,
   LOCAL_EXECUTION_HOST_ID,
   normalizeHostPart,
   type ExecutionHostId
-} from '../../../../shared/execution-host'
-import { getRepoHostIdentity } from '../../../../shared/repo-host-identity'
+} from '../../../../shared/execution-host/execution-host'
+import { getRepoHostIdentity } from '../../../../shared/repository/repo-host-identity'
 
 type RepoIdentityParts = Pick<Repo, 'id' | 'connectionId' | 'executionHostId'>
 

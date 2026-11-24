@@ -1,5 +1,5 @@
 import { realpath } from 'node:fs/promises'
-import { normalizeRuntimePathForComparison } from '../../../shared/cross-platform-path'
+import { normalizeRuntimePathForComparison } from '../../../shared/file-access/cross-platform-path'
 
 async function realpathKey(path: string): Promise<string | null> {
   try {

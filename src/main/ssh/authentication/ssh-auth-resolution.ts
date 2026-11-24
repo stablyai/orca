@@ -1,6 +1,6 @@
 import { existsSync } from 'node:fs'
 import type { BaseAgent, ParsedKey } from 'ssh2'
-import type { SshTarget } from '../../../shared/ssh-types'
+import type { SshTarget } from '../../../shared/remote-runtime/ssh/ssh-types'
 import type { SshResolvedConfig } from '../config/ssh-g-config-resolution'
 import { createIdentityFilteredAgent } from './ssh-agent-identity-filter'
 import { loadSsh2 } from './ssh2-module-load'

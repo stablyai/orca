@@ -13,7 +13,7 @@ import {
 import { translate } from '@/i18n/i18n'
 import { useTranslate, type Translate } from '@/i18n/use-translate'
 import { basename } from '@/lib/path'
-import { notebookVenvParent } from '../../../../../../shared/notebook-venv-location'
+import { notebookVenvParent } from '../../../../../../shared/editor/notebooks/notebook-venv-location'
 import { cancelSetup, createVirtualEnvironment, installIpykernel } from './ipynb-kernel-session'
 import { ipykernelInstallCommand, venvSetupCommand } from './ipynb-kernel-setup-commands'
 import type { KernelSetup } from './ipynb-kernel-store'

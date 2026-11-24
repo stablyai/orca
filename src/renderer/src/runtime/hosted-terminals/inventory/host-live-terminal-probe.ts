@@ -1,6 +1,6 @@
-import type { RuntimeTerminalListResult } from '../../../../../shared/runtime-terminal-contracts'
-import type { RuntimeRpcResponse } from '../../../../../shared/runtime-rpc-envelope'
-import { hostScopeCensusIsComplete } from '../../../../../shared/runtime-listing-host-scope'
+import type { RuntimeTerminalListResult } from '../../../../../shared/terminal/runtime/runtime-terminal-contracts'
+import type { RuntimeRpcResponse } from '../../../../../shared/remote-runtime/rpc/runtime-rpc-envelope'
+import { hostScopeCensusIsComplete } from '../../../../../shared/execution-host/runtime-listing-host-scope'
 
 /** Probe PTY controller plus daemon inventory, not the session mirror: unpublished live terminals and empty hosts look identical there. unverifiable never means none; lost contact proves no exit. */
 export type HostLiveTerminalProbeVerdict = 'live' | 'none' | 'unverifiable'
@@ -94,8 +94,4 @@ export function probeHostLiveTerminals(
     })
   inFlightProbeByEnvironment.set(key, probe)
   return probe
-}
-
-export function clearHostLiveTerminalProbesForTests(): void {
-  inFlightProbeByEnvironment.clear()
 }

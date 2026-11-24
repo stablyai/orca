@@ -6,7 +6,7 @@ import { basename, dirname, join, resolve } from 'node:path'
 import {
   APPIMAGE_SOURCE_RECORD_NAME,
   isAppImageCacheKey
-} from '../../../shared/appimage-cache-identity'
+} from '../../../shared/desktop-distribution/appimage/appimage-cache-identity'
 
 import { resolveCachedAppImagePayloadRoot } from './appimage-cache-layout'
 import { inspectAppImageGenerationLeases } from './appimage-generation-lease'

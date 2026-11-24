@@ -3,7 +3,8 @@ import { recordRuntimeTerminalInputForPtyId } from './runtime-terminal-input-rec
 import { callRuntimeRpc } from '../../rpc/calls/runtime-rpc-call'
 import { getRemoteRuntimePtyOwner } from '../identity/remote-runtime-pty-owner'
 import type { TerminalInputKind } from '../../../../../shared/terminal/input/terminal-input-kind'
-import type { RuntimeTerminalSend } from '../../../../../shared/runtime-terminal-send-contract'
+import { noteTerminalWebglAtlasTyping } from '@/lib/pane-manager/terminal-rendering/terminal-webgl-atlas-rebuild-interaction'
+import type { RuntimeTerminalSend } from '../../../../../shared/terminal/runtime/runtime-terminal-send-contract'
 
 const DESKTOP_RUNTIME_CLIENT = { id: 'orca-desktop', type: 'desktop' } as const
 
@@ -15,6 +16,10 @@ export function sendRuntimePtyInput(
   const tooLarge = isTerminalInputTooLargeWithDeferredMeasurement(data)
   if (tooLarge === true) {
     return false
+  }
+  if (inputKind === 'driving') {
+    // Native chat controls and other runtime writes are user input too; they hold atlas rebuilds like typing.
+    noteTerminalWebglAtlasTyping()
   }
   if (tooLarge !== false) {
     // Yield before validating/dispatching fire-and-forget paste-sized input to avoid blocking renderer.

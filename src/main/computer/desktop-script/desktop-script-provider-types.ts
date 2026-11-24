@@ -1,11 +1,12 @@
 import type {
   ComputerActionMetadata,
   ComputerProviderCapabilities
-} from '../../../shared/computer-use-runtime-types'
+} from '../../../shared/computer/computer-use-runtime-types'
 
 export type NativeMethod =
   | 'handshake'
   | 'listApps'
+  | 'launchApp'
   | 'listWindows'
   | 'getAppState'
   | 'click'
@@ -20,7 +21,7 @@ export type NativeMethod =
 
 export type NativeActionMethod = Exclude<
   NativeMethod,
-  'handshake' | 'listApps' | 'listWindows' | 'getAppState'
+  'handshake' | 'listApps' | 'launchApp' | 'listWindows' | 'getAppState'
 >
 
 export type BridgeFrame = {
@@ -40,6 +41,7 @@ export type BridgeElement = {
   className?: string
   value?: string
   isSelected?: boolean
+  isDisabled?: boolean
   nativeWindowHandle?: number
   frame?: BridgeFrame | null
   actions?: string[]
@@ -57,7 +59,8 @@ export type BridgeSnapshot = {
   windowId?: number | null
   windowIndex?: number | null
   windowBounds?: BridgeFrame | null
-  screenshotPngBase64?: string | null
+  screenshotBase64?: string | null
+  screenshotFormat?: 'png' | 'jpeg' | null
   screenshotWidth?: number | null
   screenshotHeight?: number | null
   screenshotScale?: number | null
@@ -77,6 +80,12 @@ export type BridgeSnapshot = {
   focusedElementId?: number | null
   selectedText?: string | null
   elements?: BridgeElement[]
+  /** Set by the client when treeLines show only this element's subtree. */
+  rootElementIndex?: number
+  /** Cache only: for elements a subtree read returned, the root of the latest read that returned them. */
+  subtreeReadRoots?: ReadonlyMap<number, number>
+  /** Cache only: the next index a subtree read may assign, so dropped indexes are never reused. */
+  nextElementIndex?: number
 }
 
 export type BridgeWindow = {
@@ -118,6 +127,9 @@ export type BridgeResponse = {
     pid: number
   }
   windows?: BridgeWindow[]
+  /** launch_app: false when the app was already running. */
+  launched?: boolean
+  delivery?: 'background' | 'foreground'
   snapshot?: BridgeSnapshot
   action?: ComputerActionMetadata
 }
@@ -128,6 +140,8 @@ export type BridgeRequest = {
   requestId?: number
   app?: string
   element?: BridgeElement
+  /** get_app_state renders only this element's subtree. */
+  root?: BridgeElement
   fromElement?: BridgeElement
   toElement?: BridgeElement
   x?: number
@@ -149,5 +163,10 @@ export type BridgeRequest = {
   windowId?: number
   windowIndex?: number
   noScreenshot?: boolean
+  screenshotFormat?: 'jpeg'
+  screenshotScale?: number
+  screenshotMaxEdge?: number
   restoreWindow?: boolean
+  /** launch_app: let the started app take the foreground. */
+  activate?: boolean
 }

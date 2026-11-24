@@ -1,6 +1,6 @@
 import {
-  OPENCODE_CAPTURE_RECORD_LIMIT,
-  OPENCODE_CAPTURE_TEXT_LIMIT
+  captureWithTextBudget,
+  OPENCODE_CAPTURE_RECORD_LIMIT
 } from '../opencode/sqlite/opencode-transcript-capture-limits'
 import type {
   AiVaultSession,
@@ -11,14 +11,14 @@ import {
   finalizeSession,
   updateTimeline,
   timestampIso
-} from '../../session-scanner-accumulator'
-import { addDecodedSessionMessage } from '../../session-scanner-messages'
+} from '../../parsing/session-scanner-accumulator'
+import { addDecodedSessionMessage } from '../../parsing/session-scanner-messages'
 import {
   normalizeFullFirstUserPromptText,
   shouldCaptureFullFirstUserPrompt
-} from '../../session-scanner-first-user-prompt'
-import { normalizeTitleText } from '../../session-scanner-text-normalization'
-import { asRecord } from '../../session-scanner-record-value'
+} from '../../prompts/session-scanner-first-user-prompt'
+import { normalizeTitleText } from '../../parsing/session-scanner-text-normalization'
+import { asRecord } from '../../parsing/session-record-fields'
 import {
   extractOpenCode2MessageText,
   decodeOpenCode2Message,
@@ -297,21 +297,8 @@ export async function captureOpenCode2SqliteSession(args: {
   sessionId: string
   platform: NodeJS.Platform
 }): Promise<{ session: AiVaultSession | null; messages: TranscriptMessage[] }> {
-  const messages: TranscriptMessage[] = []
-  let captured = 0
-  // Budget decoded text, not stored rows: tool state blobs dwarf what the transcript keeps (#28791).
-  const sink: TranscriptMessageSink = {
-    active: true,
-    push: (message) => {
-      captured += message.text.length
-      if (captured > OPENCODE_CAPTURE_TEXT_LIMIT) {
-        throw new Error(
-          'OpenCode 2 transcript exceeds capture limits; no partial read was published'
-        )
-      }
-      messages.push(message)
-    }
-  }
-  const session = await parseOpenCode2SqliteSession({ ...args, messages: sink })
-  return { session, messages }
+  const { result, messages } = captureWithTextBudget('OpenCode 2', (sink) =>
+    parseOpenCode2SqliteSession({ ...args, messages: sink })
+  )
+  return { session: await result, messages }
 }

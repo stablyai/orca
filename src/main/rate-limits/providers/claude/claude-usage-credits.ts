@@ -1,4 +1,7 @@
-import type { ExtraUsageBalance, RateLimitWindow } from '../../../../shared/rate-limit-types'
+import type {
+  ExtraUsageBalance,
+  RateLimitWindow
+} from '../../../../shared/agent-usage/rate-limits/rate-limit-types'
 
 const MONTHLY_WINDOW_MINUTES = 43_200
 

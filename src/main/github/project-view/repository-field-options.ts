@@ -1,27 +1,22 @@
-import {
-  acquire,
-  extractExecError,
-  ghExecFileAsync,
-  noteRepositoryRateLimitSpend,
-  projectGhExecOptions,
-  projectHostAuthenticationError,
-  release,
-  repositoryRateLimitGuard,
-  runGraphql,
-  validateSlugArgs
-} from './internals'
+import { acquire, release } from '../execution/github-operation-slots'
+import { extractExecError } from '../../git/command-runner/process-capture/exec-error'
+import { ghExecFileAsync } from '../../git/command-runner/hosted-cli/gh-exec-file'
+import { noteRepositoryRateLimitSpend, repositoryRateLimitGuard } from '../api/rate-limit'
+import { projectGhExecOptions, projectHostAuthenticationError } from './project-host-execution'
+import { runGraphql } from './project-graphql'
+import { validateSlugArgs } from './project-argument-validation'
 import { classifyProjectError, rateLimitedError } from './project-error-classification'
-import type { GitHubAssignableUser } from '../../../shared/github/pull-request-types'
+import type { GitHubAssignableUser } from '../../../shared/github/pull-requests/pull-request-types'
 import type {
   ListAssignableUsersBySlugResult,
   ListIssueTypesBySlugResult,
   ListLabelsBySlugResult
-} from '../../../shared/github/project-result-types'
+} from '../../../shared/github/projects/project-result-types'
 import type {
   ListAssignableUsersBySlugArgs,
   ListIssueTypesBySlugArgs,
   ListLabelsBySlugArgs
-} from '../../../shared/github/project-request-types'
+} from '../../../shared/github/projects/project-request-types'
 
 export async function listLabelsBySlug(
   args: ListLabelsBySlugArgs

@@ -1,8 +1,12 @@
 import type { ComponentType } from 'react'
 import type { LucideProps } from 'lucide-react'
 import type { SettingsSearchEntry } from '@/components/settings/search/settings-search'
-import { parseExecutionHostId, type ExecutionHostId } from '../../../../../shared/execution-host'
-import type { RuntimeClientTarget } from '../../../../../shared/runtime-client-target'
+import {
+  parseExecutionHostId,
+  type ExecutionHostId
+} from '../../../../../shared/execution-host/execution-host'
+import type { RuntimeClientTarget } from '../../../../../shared/remote-runtime/host-catalog/runtime-client-target'
+import type { Bot } from '../../../../../shared/bot-types'
 
 export type SettingsNavIcon = ComponentType<LucideProps>
 export type SettingsNavInstallStatus =
@@ -15,6 +19,7 @@ export type SettingsNavInstallStatus =
 
 const SETTINGS_NAV_TARGETS = [
   'general',
+  'workspace-cleanup',
   'integrations',
   'accounts',
   'browser',
@@ -43,7 +48,9 @@ const SETTINGS_NAV_TARGETS = [
   'artifacts',
   'session-history',
   'share-skills',
+  'shared-links',
   'automations',
+  'bots',
   'orca-account',
   'linear',
   'setup-guide',
@@ -74,6 +81,7 @@ export const BROWSER_USER_AGENT_SETTINGS_TARGET_ID = 'browser-user-agent'
 export const CODEX_TERMINAL_SERVER_ISOLATION_SETTINGS_TARGET_ID =
   'agents-codex-terminal-server-isolation'
 export const GLOBAL_WORKTREE_VISIBILITY_SETTINGS_TARGET_ID = 'general-global-worktree-visibility'
+export const NODE_DIST_MIRROR_SETTINGS_TARGET_ID = 'advanced-node-dist-mirror'
 
 export type SettingsNavigationTarget = {
   pane: SettingsNavTarget
@@ -81,8 +89,11 @@ export type SettingsNavigationTarget = {
   hostId?: ExecutionHostId
   /** Host to select in the page-level Host picker; the project-host `hostId` does not move it. */
   hostScope?: RuntimeClientTarget
+  /** With pane `bots`, the bot whose page opens. */
   sectionId?: string
   intent?: (typeof SETTINGS_NAV_INTENTS)[number]
+  /** Move keyboard focus to the subsection's first control once it is revealed. */
+  focusFirstControl?: boolean
 }
 
 function isRuntimeClientTarget(value: unknown): value is RuntimeClientTarget {
@@ -111,7 +122,8 @@ export function isSettingsNavigationTarget(value: unknown): value is SettingsNav
     (target.hostScope === undefined || isRuntimeClientTarget(target.hostScope)) &&
     (target.sectionId === undefined || typeof target.sectionId === 'string') &&
     (target.intent === undefined ||
-      (typeof target.intent === 'string' && SETTINGS_NAV_INTENT_SET.has(target.intent)))
+      (typeof target.intent === 'string' && SETTINGS_NAV_INTENT_SET.has(target.intent))) &&
+    (target.focusFirstControl === undefined || typeof target.focusFirstControl === 'boolean')
   )
 }
 
@@ -124,6 +136,8 @@ export type SettingsNavSection = {
   group: string
   badge?: string
   installStatus?: SettingsNavInstallStatus
+  /** A bot's page: its nav row shows the bot's avatar in place of the icon. */
+  bot?: Pick<Bot, 'id' | 'name' | 'avatar' | 'hostId'>
 }
 
 export type SettingsNavGroup = {

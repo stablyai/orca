@@ -4,8 +4,8 @@ import {
   disconnectRegisteredSshTarget,
   removeRegisteredSshTarget
 } from '../ipc/ssh/ssh-session-teardown'
-import type { EphemeralVmRecipeConnection } from '../../shared/ephemeral-vm-recipes'
-import type { SshTarget } from '../../shared/ssh-types'
+import type { EphemeralVmRecipeConnection } from '../../shared/remote-runtime/ephemeral-vm-recipes/ephemeral-vm-recipes'
+import type { SshTarget } from '../../shared/remote-runtime/ssh/ssh-types'
 import { SshHostNotServedError } from '../providers/ssh-host-not-served-error'
 
 export type RuntimeOwnedSshConnectionResult = {

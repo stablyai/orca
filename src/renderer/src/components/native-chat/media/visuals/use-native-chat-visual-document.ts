@@ -1,9 +1,10 @@
-import { useEffect, useState } from 'react'
+import { useNativeChatPaneLifetimeEffect } from '../../pane/ownership/native-chat-pane-lifetime'
+import { useCallback, useState } from 'react'
 import { ORCA_EDITOR_FILE_SAVED_EVENT } from '@/components/editor/autosave/editor-autosave'
 import { editorSavedEventView } from '@/components/editor/save/commands/editor-saved-event-view'
 import { getRuntimeTargetForFileOwner } from '@/lib/files/access/file-owner-runtime-target'
 import { useAppStore } from '@/store'
-import type { RuntimeClientTarget } from '../../../../../../shared/runtime-client-target'
+import type { RuntimeClientTarget } from '../../../../../../shared/remote-runtime/host-catalog/runtime-client-target'
 import {
   isRetryableNativeChatVisualFailure,
   peekCachedNativeChatVisual,
@@ -75,28 +76,33 @@ async function loadWithRetries(
 function useEditorSavesOf(target: RuntimeClientTarget, path: string | null): number {
   const [saves, setSaves] = useState(0)
   const environmentId = target.kind === 'environment' ? target.environmentId : null
-  useEffect(() => {
-    if (!path) {
-      return
-    }
-    const onSaved = (event: Event): void => {
-      const state = useAppStore.getState()
-      const file = editorSavedEventView(
-        state.openFiles,
-        event instanceof CustomEvent ? event.detail : null
-      )
-      // Same path on another host is another file.
-      const owner =
-        file?.filePath === path
-          ? getRuntimeTargetForFileOwner(state, file.worktreeId, file.runtimeEnvironmentId)
-          : null
-      if (owner && (owner.kind === 'environment' ? owner.environmentId : null) === environmentId) {
-        setSaves((count) => count + 1)
+  useNativeChatPaneLifetimeEffect(
+    useCallback(() => {
+      if (!path) {
+        return
       }
-    }
-    window.addEventListener(ORCA_EDITOR_FILE_SAVED_EVENT, onSaved)
-    return () => window.removeEventListener(ORCA_EDITOR_FILE_SAVED_EVENT, onSaved)
-  }, [environmentId, path])
+      const onSaved = (event: Event): void => {
+        const state = useAppStore.getState()
+        const file = editorSavedEventView(
+          state.openFiles,
+          event instanceof CustomEvent ? event.detail : null
+        )
+        // Same path on another host is another file.
+        const owner =
+          file?.filePath === path
+            ? getRuntimeTargetForFileOwner(state, file.worktreeId, file.runtimeEnvironmentId)
+            : null
+        if (
+          owner &&
+          (owner.kind === 'environment' ? owner.environmentId : null) === environmentId
+        ) {
+          setSaves((count) => count + 1)
+        }
+      }
+      window.addEventListener(ORCA_EDITOR_FILE_SAVED_EVENT, onSaved)
+      return () => window.removeEventListener(ORCA_EDITOR_FILE_SAVED_EVENT, onSaved)
+    }, [environmentId, path])
+  )
   return saves
 }
 
@@ -117,19 +123,21 @@ export function useNativeChatVisualDocument(
     state.status === 'ready' ? state.document.path : null
   )
 
-  useEffect(() => {
-    if (!enabled) {
-      return
-    }
-    const identityNow: NativeChatVisualIdentity = {
-      target: environmentId === null ? { kind: 'local' } : { kind: 'environment', environmentId },
-      sessionId,
-      file
-    }
-    const abort = new AbortController()
-    void loadWithRetries(identityNow, abort.signal, setState, saves > 0)
-    return () => abort.abort()
-  }, [enabled, environmentId, file, sessionId, saves])
+  useNativeChatPaneLifetimeEffect(
+    useCallback(() => {
+      if (!enabled) {
+        return
+      }
+      const identityNow: NativeChatVisualIdentity = {
+        target: environmentId === null ? { kind: 'local' } : { kind: 'environment', environmentId },
+        sessionId,
+        file
+      }
+      const abort = new AbortController()
+      void loadWithRetries(identityNow, abort.signal, setState, saves > 0)
+      return () => abort.abort()
+    }, [enabled, environmentId, file, sessionId, saves])
+  )
 
   return state
 }

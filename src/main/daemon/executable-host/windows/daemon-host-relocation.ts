@@ -1,7 +1,7 @@
 import { createHash, randomBytes } from 'node:crypto'
 import { existsSync, mkdirSync, readFileSync, readdirSync, renameSync, rmSync } from 'node:fs'
 import { join, win32 as winPath } from 'node:path'
-import { getAppEnvironment } from '../../../../shared/app-environment'
+import { getAppEnvironment } from '../../../../shared/app-lifecycle/app-environment'
 import {
   buildDaemonHostManifest,
   daemonHostFitsPathBudget,

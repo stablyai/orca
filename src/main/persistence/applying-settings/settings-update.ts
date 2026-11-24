@@ -1,34 +1,35 @@
 import { publishSettingsUpdate } from './settings-update-effects'
 import { legacyChatPermissionWrite } from './legacy-chat-permission-write'
 import { stampDefaultOnMigrationGuards } from './default-on-migration-guards'
-import { normalizeNativeChatAppearanceSettings } from '../../../shared/native-chat/native-chat-appearance-settings'
-import type { GlobalSettings } from '../../../shared/global-settings-types'
+import { normalizeNativeChatAppearanceSettings } from '../../../shared/native-chat/settings/native-chat-appearance-settings'
+import type { GlobalSettings } from '../../../shared/settings/global-settings-types'
 import { normalizeDisabledTuiAgents } from '../../../shared/agent-launch/catalog/tui-agent-selection'
 import {
   normalizeAgentDefaultSurface,
   normalizeNativeChatProviderChoices
-} from '../../../shared/native-chat/native-chat-providers'
+} from '../../../shared/native-chat/settings/native-chat-providers'
 import { resolveNestedWorkerMaxDepth } from '../../../shared/orchestration/workers/nested-worker-depth'
 import { sanitizeAgentLaunchProfileUpdates } from '../../../shared/agent-launch/choices/tui-agent-launch-defaults'
 import { normalizeTerminalQuickCommands } from '../../../shared/terminal/quick-commands/terminal-quick-commands'
 import { assertTerminalQuickCommandsStorable } from '../../../shared/terminal/quick-commands/terminal-quick-command-prompt-limit'
 import { normalizeTerminalCustomThemes } from '../../../shared/terminal-themes/terminal-custom-themes'
 import { normalizePluginOwnedSettings } from '../../../shared/plugins/capabilities/plugin-owned-settings'
-import { legacyMatchTerminalSidebarWrite } from '../../../shared/plugin-theme-settings'
+import { legacyMatchTerminalSidebarWrite } from '../../../shared/plugins/appearance/plugin-theme-settings'
 import { normalizeTerminalDefaultShell } from '../../../shared/shell/launch/terminal-default-shell'
 import { normalizeTerminalCursorStyleDefault } from '../../../shared/terminal/appearance/terminal-cursor-style-settings'
 import { normalizeDesktopTerminalScrollbackRows } from '../../../shared/terminal/replay/terminal-scrollback-policy'
 import { normalizeTerminalMinimumContrastRatio } from '../../../shared/terminal-themes/terminal-minimum-contrast-settings'
 import { normalizeTaskProviderSettings } from '../../../shared/work-items/task-providers'
-import { normalizeOpenInApplications } from '../../../shared/open-in-applications'
-import { normalizeTerminalShortcutPolicy } from '../../../shared/keybindings'
+import { normalizeOpenInApplications } from '../../../shared/editor/launch/open-in-applications'
+import { normalizeTerminalShortcutPolicy } from '../../../shared/keybindings/effective'
 import { normalizeSourceControlGroupOrder } from '../../../shared/source-control/listing/source-control-group-order'
-import { normalizeAppIconId } from '../../../shared/app-icon'
-import { normalizeUiLanguage } from '../../../shared/ui-language'
-import { normalizeWorktreeVisibilityDefaults } from '../../../shared/external-worktree-visibility'
+import { normalizeAppIconId } from '../../../shared/app-lifecycle/identity/app-icon'
+import { normalizeUiLanguage } from '../../../shared/i18n/ui-language'
+import { normalizeWorktreeVisibilityDefaults } from '../../../shared/worktree/visibility/external-worktree-visibility'
 import { normalizePRBotAuthorOverrides } from '../../../shared/source-control/review-comments/pr-bot-author-overrides'
-import { normalizeMachineName } from '../../../shared/machine-name'
-import type { PersistedState } from '../../../shared/persisted-state-types'
+import { normalizeMachineName } from '../../../shared/remote-runtime/host-metadata/machine-name'
+import { normalizeWorkspaceCleanupRules } from '../../../shared/workspace-cleanup/workspace-cleanup-policy'
+import type { PersistedState } from '../../../shared/orca-profiles/persisted-state-types'
 import {
   addMobilePairingCustomAddress,
   normalizeMobilePairingCustomAddress,
@@ -77,6 +78,9 @@ export function updateSettings(
   if ('showMenuBarIcon' in updates) {
     sanitizedUpdates.showMenuBarIcon = updates.showMenuBarIcon === true
   }
+  if ('linuxTilingWindowMode' in updates) {
+    sanitizedUpdates.linuxTilingWindowMode = updates.linuxTilingWindowMode === true
+  }
   if ('artifactSharingEnabled' in updates) {
     sanitizedUpdates.artifactSharingEnabled = updates.artifactSharingEnabled === true
   }
@@ -111,6 +115,11 @@ export function updateSettings(
         external: 'hide'
       })
     }
+  }
+  if ('workspaceCleanupPolicy' in updates) {
+    sanitizedUpdates.workspaceCleanupPolicy = normalizeWorkspaceCleanupRules(
+      updates.workspaceCleanupPolicy
+    )
   }
   sanitizeAgentLaunchProfileUpdates(sanitizedUpdates, updates)
   if ('nativeChatPermissionMode' in updates || 'agentPermissionDefault' in updates) {

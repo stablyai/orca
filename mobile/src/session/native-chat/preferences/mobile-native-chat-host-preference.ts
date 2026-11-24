@@ -7,7 +7,7 @@ import {
   subscribeSharedClientEvents,
   type SharedClientEvent
 } from '../../../transport/connection/shared-client-events'
-import { nativeChatQueueFollowUps } from '../../../../../src/shared/native-chat/input/native-chat-follow-up-behavior'
+import { nativeChatQueueFollowUps } from '../../../../../src/shared/native-chat/input/composer/native-chat-follow-up-behavior'
 
 /** A desktop chat setting the host pushes live: its read, its change event and its ready-snapshot field. */
 export type MobileNativeChatHostPreferenceKind = {

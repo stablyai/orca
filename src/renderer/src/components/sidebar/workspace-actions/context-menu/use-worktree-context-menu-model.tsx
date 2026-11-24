@@ -9,7 +9,7 @@ import {
   hasSleepableWorkspaceActivity,
   useWorkspaceLineageMenuActions
 } from './workspace-lineage-menu-actions'
-import { parseWorkspaceKey } from '../../../../../../shared/workspace-scope'
+import { parseWorkspaceKey } from '../../../../../../shared/workspace/identity/workspace-scope'
 import { getDeleteStateForWorktreeHost } from '../deletion/worktree-delete-state-host-match'
 import {
   EMPTY_AGENT_STATUS_BY_PANE_KEY,
@@ -26,7 +26,11 @@ import {
   selectMenuScopedMap,
   shouldRemoveProjectFromContextMenu
 } from './worktree-context-menu-policy'
-import { useWorktreeContextMenuCommands } from './use-worktree-context-menu-commands'
+import {
+  type OpenedWorktreeDeleteTarget,
+  useWorktreeContextMenuCommands
+} from './use-worktree-context-menu-commands'
+import { selectWorkspaceShowsUnread } from '../../workspace-card/slots/worktree-card-slot-rollup'
 import {
   useWorktreeParentPickerTransition,
   type PendingParentPicker
@@ -71,7 +75,11 @@ export function useWorktreeContextMenuModel({
   const deleteState = useAppStore((s) =>
     getDeleteStateForWorktreeHost(worktree, s.deleteStateByWorktreeId)
   )
-  const [menuOpen, setMenuOpen] = useState(false)
+  // Delete stays tied to the checkout that opened the menu, including after a same-key replacement.
+  const [openedDeleteTarget, setOpenedDeleteTarget] = useState<OpenedWorktreeDeleteTarget | null>(
+    null
+  )
+  const menuOpen = openedDeleteTarget !== null
   // Capture Option/Alt at menu open so Developer visibility cannot move items under the pointer.
   const [developerMenuRevealed, setDeveloperMenuRevealed] = useState(false)
   const [menuPoint, setMenuPoint] = useState({ x: 0, y: 0 })
@@ -111,6 +119,10 @@ export function useWorktreeContextMenuModel({
   )
   const unifiedTabsByWorktree = useAppStore((s) =>
     selectMenuScopedMap(menuOpen, s.unifiedTabsByWorktree, EMPTY_UNIFIED_TABS_BY_WORKTREE)
+  )
+  // The menu offers what the card shows: unread when any agent result or the flag is unread.
+  const showsUnread = useAppStore((s) =>
+    menuOpen ? selectWorkspaceShowsUnread(s, worktree) : worktree.isUnread
   )
   const agentStatusByPaneKey = useAppStore((s) =>
     selectMenuScopedMap(menuOpen, s.agentStatusByPaneKey, EMPTY_AGENT_STATUS_BY_PANE_KEY)
@@ -216,14 +228,25 @@ export function useWorktreeContextMenuModel({
 
   const setMenuOpenState = useCallback(
     (open: boolean) => {
-      setMenuOpen(open)
+      setOpenedDeleteTarget(
+        open
+          ? {
+              worktree: {
+                id: worktree.id,
+                instanceId: worktree.instanceId,
+                hostId: worktree.hostId
+              },
+              folderWorkspaceId
+            }
+          : null
+      )
       if (!open) {
         // Why: the reveal is per-open, so a later plain right-click can't inherit it.
         setDeveloperMenuRevealed(false)
       }
       onOpenChange?.(open)
     },
-    [onOpenChange]
+    [folderWorkspaceId, onOpenChange, worktree.hostId, worktree.id, worktree.instanceId]
   )
 
   useEffect(() => {
@@ -281,6 +304,7 @@ export function useWorktreeContextMenuModel({
     isMultiContext,
     moveProjectToGroup,
     onAssignWorkspaceStatus,
+    openedDeleteTarget,
     openModal,
     repo,
     scopeRef,
@@ -288,6 +312,7 @@ export function useWorktreeContextMenuModel({
     setMenuOpenState,
     setWorkspaceUnreadByUser,
     setWorktreesPinnedAndReveal,
+    showsUnread,
     sleepableWorktrees,
     subtreeSleepableWorktrees,
     statusesForWorktree,
@@ -322,15 +347,22 @@ export function useWorktreeContextMenuModel({
         return
       }
       const sidebar = scopeRef.current?.closest('[data-worktree-sidebar]')
-      if (sidebar instanceof HTMLElement) {
-        sidebar.focus({ preventScroll: true })
+      if (!(sidebar instanceof HTMLElement)) {
+        return
       }
+      const active = sidebar.ownerDocument.activeElement
+      // Why: an outside click, or a dialog opened by an item, already owns focus (#46550).
+      if (active && active !== sidebar.ownerDocument.body && !sidebar.contains(active)) {
+        return
+      }
+      sidebar.focus({ preventScroll: true })
     },
     [openPendingParentPicker]
   )
 
   return {
     ...commands,
+    showsUnread,
     activeContextWorktrees,
     batchDeleteWorktrees,
     browserTabsByWorktree,

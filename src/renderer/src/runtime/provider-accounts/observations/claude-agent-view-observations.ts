@@ -1,8 +1,8 @@
-import type { RuntimeClientTarget } from '../../../../../shared/runtime-client-target'
+import type { RuntimeClientTarget } from '../../../../../shared/remote-runtime/host-catalog/runtime-client-target'
 import {
   CLAUDE_AGENT_VIEW_SUBSCRIBE,
   ClaudeAgentViewSnapshot
-} from '../../../../../shared/claude-agent-view'
+} from '../../../../../shared/agent-hook-listener/providers/claude/view/claude-agent-view'
 import { subscribeRuntimeRpc } from '../../rpc/subscriptions/runtime-rpc-subscribe'
 
 type Resource = {

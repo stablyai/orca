@@ -1,5 +1,5 @@
 import * as z from 'zod'
-import { salvagingArray, salvagedOptional } from '../../../../src/shared/zod-salvage'
+import { salvagingArray, salvagedOptional } from '../../../../src/shared/validation/zod-salvage'
 
 // Require an inventory/handle for strip reconciliation; salvage individual malformed rows without erasing valid ones.
 export const sessionTerminalInventorySchema = z.looseObject({

@@ -5,12 +5,16 @@ import type {
   ComputerUsePermissionId,
   ComputerUsePermissionState,
   ComputerUsePermissionStatus
-} from '../../../../../shared/computer-use-permissions-types'
+} from '../../../../../shared/computer/computer-use-permissions-types'
+import { ORCA_CLOUD_TEAM_POLICY_FLAGS } from '../../../../../shared/orca-profiles/orca-cloud-team-policy'
 import { useAppStore } from '@/store/index'
+import { useOrcaTeamFeatureBlocked } from '@/lib/orca-team-policy'
 import { Button } from '../../ui/button'
 import { Badge } from '../../ui/badge'
 import { ComputerUseSkillSetupPanel } from './ComputerUseSkillSetupPanel'
 import { SettingsGroup } from '../section-layout/SettingsGroup'
+import { SettingsRow } from '../form-controls/SettingsFormControls'
+import { COMPUTER_USE_SETTINGS_TARGET_ID } from './computer-use-search'
 import { translate } from '@/i18n/i18n'
 import { useTranslate, type Translate } from '@/i18n/use-translate'
 
@@ -65,6 +69,22 @@ function statusClass(status: ComputerUsePermissionStatus | undefined): string {
 }
 
 export function ComputerUsePane(): React.JSX.Element {
+  const t = useTranslate()
+  const blocked = useOrcaTeamFeatureBlocked(ORCA_CLOUD_TEAM_POLICY_FLAGS.computerUse)
+  if (blocked) {
+    return (
+      <SettingsGroup id={COMPUTER_USE_SETTINGS_TARGET_ID}>
+        <SettingsRow
+          label={t('settings.computerUse.teamDisabled', 'Computer Use is turned off by your team.')}
+          control={null}
+        />
+      </SettingsGroup>
+    )
+  }
+  return <ComputerUseSetup />
+}
+
+function ComputerUseSetup(): React.JSX.Element {
   const t = useTranslate()
   const [platform, setPlatform] = useState<NodeJS.Platform | null>(null)
   const [states, setStates] = useState<ComputerUsePermissionState[]>([])
@@ -292,7 +312,7 @@ export function ComputerUsePane(): React.JSX.Element {
   return (
     <div className="space-y-8">
       {isMac ? (
-        <SettingsGroup>
+        <SettingsGroup id={COMPUTER_USE_SETTINGS_TARGET_ID}>
           <div className="flex flex-wrap items-start justify-between gap-4 py-4">
             <div className="space-y-1">
               <div className="flex items-center gap-2 text-sm font-medium">
@@ -384,8 +404,9 @@ export function ComputerUsePane(): React.JSX.Element {
         </SettingsGroup>
       ) : null}
 
-      <SettingsGroup>
-        <div className="py-4">
+      <SettingsGroup id={isMac ? undefined : COMPUTER_USE_SETTINGS_TARGET_ID}>
+        {/* The inline panel adds pt-1.5 of its own; this evens the top inset with the bottom. */}
+        <div className="pb-4 pt-2.5">
           <ComputerUseSkillSetupPanel />
         </div>
       </SettingsGroup>

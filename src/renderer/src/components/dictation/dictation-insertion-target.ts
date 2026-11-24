@@ -1,5 +1,5 @@
-import { yieldToEventLoop } from '../../../../shared/event-loop-yield'
-import { getUtf8ChunkEndIndex } from '../../../../shared/utf8-byte-limits'
+import { yieldToEventLoop } from '../../../../shared/concurrency/event-loop-yield'
+import { getUtf8ChunkEndIndex } from '../../../../shared/text/utf8-byte-limits'
 import {
   TEXT_CONTROL_PASTE_CHUNK_MAX_BYTES,
   TEXT_CONTROL_PASTE_DIRECT_MAX_BYTES,
@@ -13,9 +13,9 @@ import {
 import {
   DICTATION_TEXT_BLOCK_SELECTOR,
   dictationSeparators
-} from '../../../../shared/dictation-transcript-spacing'
-import { focusedBrowserPageId } from '@/hooks/resolve-zoom-target'
-import { DICTATION_FOCUS_INPUT_EVENT } from './dictation-control-events'
+} from '../../../../shared/speech/dictation/dictation-transcript-spacing'
+import { focusedBrowserPageId } from '@/app-shell/chrome/resolve-zoom-target'
+import { BROWSER_KEYBOARD_PROXY_SELECTOR } from '@/lib/text-input/focus/editable-target'
 
 /** Each returns whether the text landed. */
 type ComposerInsert = (text: string) => boolean
@@ -34,6 +34,43 @@ export type DictationInsertionTarget =
 
 const composerTargets = new WeakMap<HTMLElement, ComposerInsert>()
 const terminalTargets = new Map<string, TerminalInput>()
+
+type DictationInputOwner = {
+  focusInput: () => void
+  /** Claims focus outside its root that no other pane owns, such as the page body. */
+  ownsOutsideFocus?: (active: Element | null) => boolean
+}
+const inputOwners = new Map<HTMLElement, DictationInputOwner>()
+
+/** Dictation started with no field focused goes to the input of the innermost owning pane that holds focus. */
+export function registerDictationInputOwner(
+  root: HTMLElement,
+  owner: DictationInputOwner
+): () => void {
+  inputOwners.set(root, owner)
+  return () => {
+    if (inputOwners.get(root) === owner) {
+      inputOwners.delete(root)
+    }
+  }
+}
+
+function focusOwnedInput(): void {
+  const active = document.activeElement
+  for (let node = active; node; node = node.parentElement) {
+    const owner = node instanceof HTMLElement ? inputOwners.get(node) : undefined
+    if (owner) {
+      owner.focusInput()
+      return
+    }
+  }
+  for (const owner of inputOwners.values()) {
+    if (owner.ownsOutsideFocus?.(active)) {
+      owner.focusInput()
+      return
+    }
+  }
+}
 
 /** A late transcript lands in the composer's draft even after focus left its editor; the composer spaces it. */
 export function registerDictationComposerTarget(
@@ -70,7 +107,7 @@ export function captureInsertionTarget(): DictationInsertionTarget | null {
   if (focused) {
     return focused
   }
-  document.dispatchEvent(new Event(DICTATION_FOCUS_INPUT_EVENT))
+  focusOwnedInput()
   return readFocusedInsertionTarget()
 }
 
@@ -96,6 +133,11 @@ function readFocusedInsertionTarget(): DictationInsertionTarget | null {
     if (paneElement && tabId && Number.isFinite(paneId)) {
       return { kind: 'terminal', tabId, paneId, pane: paneElement }
     }
+    return null
+  }
+
+  // A streamed page's keyboard proxy is cleared after each insertion, so it can't space dictation.
+  if (activeElement.matches(BROWSER_KEYBOARD_PROXY_SELECTOR)) {
     return null
   }
 

@@ -3,7 +3,8 @@ import type { PtyRegistrationClaim } from '../../../runtime/terminal/records/run
 import { PaneOwnerContentionError } from './pane-spawn-operation'
 import type { Store } from '../../../persistence/loading-store/store'
 import type { OrcaRuntimeService } from '../../../runtime/orca-runtime'
-import type { IPtyProvider, PtySpawnResult } from '../../../providers/pty-provider-contract'
+import type { IPtyProvider } from '../../../providers/pty/provider-contract'
+import type { PtySpawnResult } from '../../../providers/pty/spawn-result'
 import {
   isCurrentPtyExit,
   ptyIncarnationById,
@@ -11,10 +12,10 @@ import {
   setAdoptedPtyOwnership,
   setPtyOwnership
 } from '../provider/ownership-state'
-import { LOCAL_EXECUTION_HOST_ID } from '../../../../shared/execution-host'
+import { LOCAL_EXECUTION_HOST_ID } from '../../../../shared/execution-host/execution-host'
 import { finishPtyShutdown, isPtyAlreadyGoneError } from '../provider/liveness'
 import { PtyExitProof } from '../../../pty/process-retirement/pty-exit-proof'
-import { errorMessage } from '../../../../shared/error-message'
+import { errorMessage } from '../../../../shared/errors/error-message'
 import { retirePersistedStablePaneOwner } from './stable-owner'
 
 /** Track before saving; failed save/stop must not make a potentially live process disappear from ownership. */

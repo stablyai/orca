@@ -1,4 +1,7 @@
-import { throwIfAiVaultScanCancelled, waitForAiVaultScan } from '../ai-vault-scan-cancellation'
+import {
+  throwIfAiVaultScanCancelled,
+  waitForAiVaultScan
+} from '../scan-lifecycle/ai-vault-scan-cancellation'
 import { createQoderSessionResumeState } from '../scanners/qoder/session-scanner-qoder-parser'
 import type { AiVaultSession } from '../../../shared/ai-vault/contracts/ai-vault-types'
 import { inSessionParseFileLane } from './session-parse-file-lane'
@@ -28,6 +31,7 @@ import {
   mergeSkippedTranscriptRecords,
   type SkippedTranscriptRecord
 } from '../transcripts/session-transcript-record-budget'
+import { isCursorAcpSessionStorePath } from '../../../shared/ai-vault/session-display/cursor-acp-session-path'
 import {
   enrichSessionFromSidecar,
   reuseUnchangedSidecarSession,
@@ -56,7 +60,9 @@ function resumableStateFactoryFor(
       return (messages) =>
         createCodexSessionResumeState(candidate.file, candidate.codexHome, messages)
     case 'cursor':
-      return (messages) => createCursorSessionResumeState(candidate.file, messages)
+      return isCursorAcpSessionStorePath(candidate.file.path)
+        ? null
+        : (messages) => createCursorSessionResumeState(candidate.file, messages)
     case 'copilot':
       return (messages) => createCopilotSessionResumeState(candidate.file, messages)
     case 'droid':

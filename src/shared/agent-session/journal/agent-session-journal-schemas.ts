@@ -5,11 +5,15 @@
 // Older rewind replaces unknown turn/tool/resolution states with placeholders and blocks with raw-JSON text, retaining unknown bodies.
 // History pages lack row v: extensions must also remain safe for older clients.
 
+import { BOT_JOURNAL_ITEM_BODIES } from './agent-session-journal-bot-item-schemas'
+import { BoundedPayload, ProviderFrame } from './agent-session-journal-bounded-payload-schema'
 import * as z from 'zod'
-import { AgentSessionContextUsageSchema } from '../agent-session-context-usage-schema'
+import { AgentSessionContextUsageSchema } from '../conversation-context/agent-session-context-usage-schema'
 import { AgentJournalThreadGoalStateSchema } from './agent-session-journal-thread-goal-schema'
 import { AgentSessionFailureFactSchema } from '../failures/agent-session-failure-fact-schema'
 import { knownTags, openDiscriminatedUnion } from './agent-session-journal-open-union'
+import { SubagentEntry } from './agent-session-journal-subagent-schema'
+import { AgentJournalApprovalSubjectSchema } from './agent-session-journal-approval-subject-schema'
 import type {
   AgentJournalItemBody,
   AgentJournalMessageItem,
@@ -18,40 +22,18 @@ import type {
 } from './agent-session-journal-types'
 import { AGENT_JOURNAL_PROMPT_INTENTS } from './agent-session-journal-types'
 
-const BoundedPayload = z.object({
-  head: z.string(),
-  byteLength: z.number(),
-  digest: z.string(),
-  truncated: z.boolean()
-})
-
-const ProviderFrame = z.object({
-  provider: z.string(),
-  kind: z.string(),
-  payload: BoundedPayload
-})
-
 const ToolMetadata = {
   mcpIdentity: z.object({ server: z.string(), tool: z.string() }).optional(),
   exitCode: z.number().int().optional(),
   durationMs: z.number().nonnegative().optional(),
-  webSearchResults: z.array(z.object({ title: z.string(), url: z.string() })).optional()
+  webSearchResults: z.array(z.object({ title: z.string(), url: z.string() })).optional(),
+  outputImagePaths: z.array(z.string()).optional()
 }
 
 /** Provider IDs are opaque; reject all-whitespace values without rewriting valid IDs. */
 const ProviderCallId = z
   .string()
   .refine((value) => value.trim().length > 0, 'callId must contain a non-whitespace character')
-
-/** Keep lifecycle strings open so newer states do not make persisted rows malformed. */
-const SubagentEntry = z.object({
-  id: z.string(),
-  label: z.string(),
-  state: z.string().min(1),
-  tokens: z.number().optional(),
-  startedAt: z.number().optional(),
-  settledAt: z.number().optional()
-})
 
 /** Skip unknown block types, but reject malformed payloads of known types. */
 const Block = openDiscriminatedUnion(
@@ -136,7 +118,8 @@ const Question = z.object({
   multiSelect: z.boolean(),
   options: z.array(PromptOption),
   freeTextQuestionId: z.string().optional(),
-  freeTextInput: FreeTextInput.optional()
+  freeTextInput: FreeTextInput.optional(),
+  skippable: z.literal(true).optional()
 })
 
 const Resolution = z.object({
@@ -167,14 +150,6 @@ const ApprovalMatchedAskRule = z.object({
   ruleContent: z.string().optional()
 })
 
-const KnownApprovalSubject = z.discriminatedUnion('kind', [
-  z.object({ kind: z.literal('plan'), text: z.string().min(1), filePath: z.string().optional() })
-])
-export const AGENT_JOURNAL_APPROVAL_SUBJECT_KINDS = knownTags(KnownApprovalSubject)
-/** Open like blocks; a subject this build cannot draw is never approvable here
- *  (agent-session-approval-subject.ts). */
-const ApprovalSubject = openDiscriminatedUnion(KnownApprovalSubject)
-
 const MessageBody = z.object({
   kind: z.literal('message'),
   role: z.string().min(1),
@@ -189,6 +164,7 @@ const MessageBody = z.object({
   state: z.string().min(1).optional(),
   completedAt: z.number().finite().optional()
 })
+const MessageMetadata = MessageBody.omit({ blocks: true })
 
 /** A turn's lifecycle, as the turn item and the legacy status row both carry it. */
 const TurnLifecycleFields = {
@@ -208,7 +184,8 @@ const KnownItemBody = z.discriminatedUnion('kind', [
   z.object({
     kind: z.literal('agent-start'),
     dispatchId: z.string().min(1),
-    task: z.string()
+    task: z.string(),
+    agent: z.string().min(1).optional()
   }),
   z.object({
     kind: z.literal('agent-handoff'),
@@ -227,16 +204,23 @@ const KnownItemBody = z.discriminatedUnion('kind', [
     endedAs: z.string().min(1).optional(),
     output: BoundedPayload.optional()
   }),
-  z.object({ kind: z.literal('diff'), path: z.string(), patch: BoundedPayload }),
+  z.object({
+    kind: z.literal('diff'),
+    path: z.string(),
+    paths: z.array(z.string()).optional(),
+    patch: BoundedPayload
+  }),
   z.object({
     kind: z.literal('approval'),
     title: z.string(),
     displayName: z.string().optional(),
+    toolName: z.string().optional(),
     description: z.string().optional(),
     decisionReason: z.string().optional(),
     blockedPath: z.string().optional(),
     matchedAskRule: ApprovalMatchedAskRule.optional(),
-    subject: ApprovalSubject.optional(),
+    subject: AgentJournalApprovalSubjectSchema.optional(),
+    personOnly: z.literal(true).optional(),
     detail: z.string().nullable(),
     options: z.array(PromptOption),
     resolution: Resolution
@@ -267,14 +251,21 @@ const KnownItemBody = z.discriminatedUnion('kind', [
     threadGoal: AgentJournalThreadGoalStateSchema.optional(),
     failure: AgentSessionFailureFactSchema.optional(),
     orcaStop: z.object({ cause: z.string().min(1) }).optional(),
-    forkedFrom: z.object({ sessionId: z.string().min(1) }).optional()
+    forkedFrom: z
+      .object({
+        sessionId: z.string().min(1),
+        sourceForked: z.literal(true).optional(),
+        sourceMissing: z.literal(true).optional()
+      })
+      .optional()
   }),
   z.object({
     kind: z.literal('turn'),
     ...TurnLifecycleFields,
     contextUsage: AgentSessionContextUsageSchema.optional(),
     providerTurnId: z.string().min(1).optional()
-  })
+  }),
+  ...BOT_JOURNAL_ITEM_BODIES
 ])
 
 /** Every body kind this build knows; a body of another kind is kept as-is and drawn by nobody. */
@@ -332,6 +323,11 @@ export function isAdmissibleAgentJournalMessageBody(
   value: unknown
 ): value is AgentJournalMessageItem {
   return MessageBody.safeParse(value).success
+}
+
+/** Plain text snapshots validate their unchanged block shape before entering the narrow writer. */
+export function isAdmissibleAgentJournalMessageMetadata(value: unknown): boolean {
+  return MessageMetadata.safeParse(value).success
 }
 
 export function isAdmissibleAgentJournalRenderItem(

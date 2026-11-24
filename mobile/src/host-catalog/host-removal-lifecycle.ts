@@ -1,4 +1,5 @@
 import type { QueryClient } from '@tanstack/react-query'
+import { discardConnectionLogs } from '../diagnostics/connection/persisted-connection-log-store'
 import { wipeHostStore } from '../device-store/device-store'
 import {
   deleteHostPageCache,
@@ -8,6 +9,8 @@ import { unregisterPushForRemovedHost } from '../notifications/push-registration
 import { forgetNativeHostQueries } from '../query/native-query-persistence'
 import { forgetHostDescriptor } from '../host-descriptors/host-descriptor-store'
 import { removeHost } from './host-store'
+import { forgetKeptBots } from '../bots/kept-server-bot-listings'
+import { forgetBotAvatarClients } from '../bots/bot-avatar-uploads'
 
 export async function removeHostAndCloseClient(
   hostId: string,
@@ -27,8 +30,11 @@ export async function removeHostAndCloseClient(
   forgetHostDescriptor(hostId)
   // Before the wipe, so nothing this world still holds is written back after it.
   forgetNativeHostQueries(queryClient, hostId)
+  forgetKeptBots(hostId)
+  forgetBotAvatarClients(hostId)
   // After commit, cache cleanup must not delay/fail removal; later eviction can reclaim failures.
   void forgetHostUpdateFailures(hostId).catch(() => undefined)
   void deleteHostPageCache(hostId).catch(() => undefined)
   void wipeHostStore(hostId).catch(() => undefined)
+  void discardConnectionLogs(hostId).catch(() => undefined)
 }

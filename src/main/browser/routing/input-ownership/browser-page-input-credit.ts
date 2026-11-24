@@ -1,7 +1,14 @@
 import { isRecentBrowserGuestInput } from '../../guest-lifecycle/input/browser-guest-input-gesture'
-import type { RpcCallerIdentity } from '../../../runtime/rpc/rpc-caller-identity'
+import {
+  isAgentRpcCaller,
+  type RpcCallerIdentity
+} from '../../../runtime/rpc/callers/rpc-caller-identity'
 
-type Runner = { pairedDeviceId: string | null }
+type Runner = {
+  pairedDeviceId: string | null
+  /** A person sent it: a viewer's relayed click or key press, not an agent's CLI. */
+  person: boolean
+}
 
 /** The paired client whose click or key press reached a tab last, so a tab it opens follows that client. */
 export class BrowserPageInputCredit {
@@ -23,7 +30,10 @@ export class BrowserPageInputCredit {
     execute: () => Promise<T>
   ): Promise<T> {
     const runner: Runner = {
-      pairedDeviceId: caller?.kind === 'paired-device' ? caller.deviceId : null
+      // An agent's CLI moves no one's view, even when it calls with a device's pairing.
+      pairedDeviceId:
+        caller?.kind === 'paired-device' && !isAgentRpcCaller(caller) ? caller.deviceId : null,
+      person: caller !== undefined && !isAgentRpcCaller(caller)
     }
     this.runnerByPageId.set(browserPageId, runner)
     try {
@@ -33,6 +43,11 @@ export class BrowserPageInputCredit {
         this.runnerByPageId.delete(browserPageId)
       }
     }
+  }
+
+  /** The command running on the page now is a person's, so input reaching it is theirs. */
+  isRunningPersonCommand(browserPageId: string): boolean {
+    return this.runnerByPageId.get(browserPageId)?.person === true
   }
 
   /** Activating input reached the page; the running command's paired client, if any, owns what it opens. */

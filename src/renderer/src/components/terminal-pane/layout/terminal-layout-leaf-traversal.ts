@@ -1,5 +1,5 @@
 import type { TerminalPaneLayoutNode } from '../../../../../shared/workspace-layout/terminal-tab-types'
-import '../../../../../shared/workspace-layout/terminal-pane-tree'
+import '../../../../../shared/workspace-layout/terminal-topology/terminal-pane-tree'
 
 export function getLeftmostLeafId(node: TerminalPaneLayoutNode): string {
   return node.type === 'leaf' ? node.leafId : getLeftmostLeafId(node.first)

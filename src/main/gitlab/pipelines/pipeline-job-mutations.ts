@@ -2,8 +2,8 @@ import type {
   GitLabJobTraceResult,
   GitLabPipelineJob,
   GitLabRetryJobResult
-} from '../../../shared/gitlab-types'
-import type { IssueSourcePreference } from '../../../shared/repo-types'
+} from '../../../shared/gitlab/gitlab-types'
+import type { IssueSourcePreference } from '../../../shared/repository/repo-types'
 import { acquire, release } from '../requests/glab-request-admission'
 import {
   classifyGlabError,
@@ -11,13 +11,16 @@ import {
   isMissingJobLogError
 } from '../requests/glab-error-classification'
 import { glabHostnameArgs, glabRepoExecOptions } from '../projects/gitlab-project-ref-resolution'
-import { glabExecFileAsync } from '../../git/command-runner/glab-exec-file'
+import { glabExecFileAsync } from '../../git/command-runner/hosted-cli/glab-exec-file'
 import type { LocalGitExecOptions } from '../projects/gitlab-known-host-probe'
 import type { ProjectRef } from '../projects/project-ref-parser'
 import { encodedProject } from '../projects/project-path-encoding'
 import { gitLabRunTimes } from './gitlab-run-times'
 import { withProjectRef } from '../merge-requests/merge-request-project-resolution'
-import { codeHostFailure, classifiedFailure } from '../../../shared/code-host-failure-copy'
+import {
+  codeHostFailure,
+  classifiedFailure
+} from '../../../shared/source-control/code-host-failure-copy'
 
 // Large traces need more than the runner default; the renderer also bounds the call.
 const JOB_TRACE_EXEC_TIMEOUT_MS = 60_000

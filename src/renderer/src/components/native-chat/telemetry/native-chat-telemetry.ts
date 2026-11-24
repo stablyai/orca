@@ -1,8 +1,8 @@
 // Share native-chat event names and agent-kind mapping across tab toggles and composer sends.
 
 import { track } from '../../../diagnostics/telemetry/telemetry'
-import { tuiAgentToAgentKind } from '../../../../../shared/agent-kind'
-import type { NativeChatRuntime } from '../../../../../shared/telemetry-native-feature-event-schemas'
+import { tuiAgentToAgentKind } from '../../../../../shared/agent-status/identity/agent-kind'
+import type { NativeChatRuntime } from '../../../../../shared/telemetry/schemas/telemetry-native-feature-event-schemas'
 import type { TuiAgent } from '../../../../../shared/agent-launch/catalog/tui-agent'
 
 /** Accept broad chat identities and narrow unknowns to telemetry other; callers need no unsafe TuiAgent cast. */
@@ -39,16 +39,6 @@ export function emitNativeChatMessageSent(args: {
   })
 }
 
-export function emitNativeChatPickerOpened(args: {
-  agent: NativeChatTelemetryAgent
-  prefix: '/' | '$'
-}): void {
-  track('native_chat_picker_opened', {
-    agent_kind: resolveAgentKind(args.agent),
-    prefix: args.prefix === '/' ? 'slash' : 'dollar'
-  })
-}
-
 export function emitNativeChatPickerItemAccepted(args: {
   agent: NativeChatTelemetryAgent
   itemKind: 'command' | 'skill'
@@ -56,27 +46,5 @@ export function emitNativeChatPickerItemAccepted(args: {
   track('native_chat_picker_item_accepted', {
     agent_kind: resolveAgentKind(args.agent),
     item_kind: args.itemKind
-  })
-}
-
-export function emitNativeChatSendClassified(args: {
-  agent: NativeChatTelemetryAgent
-  outcome: 'chat' | 'command' | 'unknown-token'
-}): void {
-  track('native_chat_send_classified', {
-    agent_kind: resolveAgentKind(args.agent),
-    outcome: args.outcome
-  })
-}
-
-export function emitNativeChatSkillDiscovery(args: {
-  agent: NativeChatTelemetryAgent
-  outcome: 'ready' | 'error' | 'timeout' | 'unavailable'
-  executionHostKind: 'local' | 'runtime' | 'ssh'
-}): void {
-  track('native_chat_skill_discovery', {
-    agent_kind: resolveAgentKind(args.agent),
-    outcome: args.outcome,
-    execution_host_kind: args.executionHostKind
   })
 }

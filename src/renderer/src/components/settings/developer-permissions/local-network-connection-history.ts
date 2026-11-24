@@ -1,4 +1,4 @@
-import type { LocalNetworkConnectionTestResult } from '../../../../../shared/developer-permissions-types'
+import type { LocalNetworkConnectionTestResult } from '../../../../../shared/app-lifecycle/permissions/developer-permissions-types'
 
 const STORAGE_KEY = 'orca.developer-permissions.local-network-last-success.v1'
 

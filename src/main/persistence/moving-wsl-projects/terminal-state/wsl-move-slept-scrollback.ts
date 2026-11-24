@@ -3,6 +3,7 @@
  * Sleep and carries it as a `terminal-history` blob (checkpoint, cwd and size) for the host's own
  * daemon to cold-restore once. Each document is spooled to a file; only hashes stay in memory.
  */
+import type { WslMappedDrive } from '../../../../shared/wsl-move/wsl-mapped-drive-paths'
 import { createHash } from 'node:crypto'
 import { closeSync, mkdirSync, openSync, readSync, rmSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
@@ -23,7 +24,7 @@ import {
 import type { WorkspaceSessionState } from '../../../../shared/workspace-session/workspace-session-state-types'
 import type { WslMoveRequest } from '../../../../shared/wsl-move/wsl-move-driver-types'
 import { parsePtySessionId } from '../../../../shared/terminal/pty/lifecycle/pty-session-id-format'
-import { collectLeafIds } from '../../../../shared/workspace-layout/terminal-pane-layout-tree'
+import { collectLeafIds } from '../../../../shared/workspace-layout/terminal-topology/terminal-pane-layout-tree'
 import type { ColdRestoreInfo } from '../../../daemon/history/restoration/terminal-history-cold-restore-info'
 import type { TerminalCheckpointFile } from '../../../daemon/protocol/daemon-checkpoint-file'
 import type { OrcadMigrationBlobSource } from '../../../managed-server/migration/transfers/orcad-migration-blob-coordinator'
@@ -60,13 +61,14 @@ export async function readSleptScrollback(
   distro: string,
   migrationId: string,
   workspaceIds: readonly string[],
-  reported: readonly WslMoveRestoreHintPane[] = []
+  reported: readonly WslMoveRestoreHintPane[] = [],
+  mappedDrives: readonly WslMappedDrive[] = []
 ): Promise<WslMoveSleptScrollback> {
   if (!deps.sleptScrollback) {
     return emptyWslMoveSleptScrollback()
   }
   return deps
-    .sleptScrollback(panes, distro, migrationId, workspaceIds, reported)
+    .sleptScrollback(panes, distro, migrationId, workspaceIds, reported, mappedDrives)
     .catch((error: unknown) => {
       console.warn('[wsl-move] Slept terminal history unreadable:', error)
       return {
@@ -174,7 +176,8 @@ export async function readWslMoveSleptScrollbackFromHistory(
   spoolRoot: string,
   /** What the tab bar calls it; an id means nothing to the user. */
   tabTitle: (tabId: string) => string | null = () => null,
-  now: () => Date = () => new Date()
+  now: () => Date = () => new Date(),
+  mappedDrives: readonly WslMappedDrive[] = []
 ): Promise<WslMoveSleptScrollback> {
   const buffers = new Map<string, WslMoveSleptBuffer>()
   const problems: string[] = []
@@ -206,7 +209,8 @@ export async function readWslMoveSleptScrollbackFromHistory(
         continue
       }
       const shellCwd = pane.shellCwd && /^\/(?!\/)/.test(pane.shellCwd) ? pane.shellCwd : null
-      const cwd = shellCwd ?? wslMoveHostLinuxCwd(detection.restoreInfo.cwd, pane, distro)
+      const cwd =
+        shellCwd ?? wslMoveHostLinuxCwd(detection.restoreInfo.cwd, pane, distro, mappedDrives)
       const document: OrcadMigrationTerminalHistoryDocument = {
         version: ORCAD_MIGRATION_TERMINAL_HISTORY_VERSION,
         paneKey: pane.paneKey,

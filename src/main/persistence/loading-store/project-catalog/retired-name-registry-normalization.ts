@@ -4,7 +4,7 @@ import {
   compactRetiredNames,
   isEmptyRetiredNameRegistry,
   type RetiredNameRegistry
-} from '../../../../shared/worktree/retired-name-registry'
+} from '../../../../shared/worktree/naming/retired-name-registry'
 
 function normalizeRetiredNameRegistry(row: unknown): RetiredNameRegistry {
   const isPlainArray = Array.isArray(row)

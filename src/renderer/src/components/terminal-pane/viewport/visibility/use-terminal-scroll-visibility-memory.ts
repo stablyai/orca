@@ -21,6 +21,7 @@ type VisibleScrollSnapshot = {
 }
 
 type UseTerminalScrollVisibilityMemoryArgs = {
+  terminalManager: PaneManager | null
   managerRef: React.RefObject<PaneManager | null>
   isVisibleRef: React.RefObject<boolean>
   visibleResumeCompleteRef: React.RefObject<boolean>
@@ -38,6 +39,7 @@ const FOLLOW_OUTPUT_FLUSH_CHARS = 256 * 1024
 
 export function useTerminalScrollVisibilityMemory({
   managerRef,
+  terminalManager,
   isVisibleRef,
   visibleResumeCompleteRef,
   paneCount
@@ -163,11 +165,18 @@ export function useTerminalScrollVisibilityMemory({
     [applyPendingFollowOutputRequests]
   )
 
-  useEffect(() => cancelPendingFollowOutputFrames, [cancelPendingFollowOutputFrames])
+  useEffect(
+    () => () => {
+      cancelPendingFollowOutputFrames()
+      visibleScrollSnapshotsRef.current.clear()
+      pendingFollowOutputPaneIdsRef.current.clear()
+    },
+    [terminalManager, cancelPendingFollowOutputFrames]
+  )
 
   useEffect(() => {
     const manager = managerRef.current
-    if (!manager) {
+    if (!terminalManager || manager !== terminalManager) {
       return
     }
     const panes = manager.getPanes()
@@ -178,7 +187,7 @@ export function useTerminalScrollVisibilityMemory({
         pendingFollowOutputPaneIdsRef.current.delete(paneId)
       }
     }
-  }, [managerRef, paneCount])
+  }, [terminalManager, managerRef, paneCount])
 
   return {
     captureViewportPositions,

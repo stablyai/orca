@@ -3,31 +3,53 @@ import { parseTerminalKittyKeyboardFlags } from '../../../../shared/terminal/pro
 import { boundSnapshot } from './daemon-durable-history-snapshot'
 import { DaemonPtySessionControl } from '../adapter/daemon-pty-session-control'
 import { isUnknownRequestTypeError } from '../../endpoint/identity/daemon-endpoint-errors'
-import { focusLossReportSupport } from '../../protocol/daemon-protocol-version'
+import {
+  focusLossReportSupport,
+  REPAINT_REQUEST_PROTOCOL_VERSION
+} from '../../protocol/daemon-protocol-version'
 import { DAEMON_SESSION_SCROLLBACK_ROWS } from '../../sessions/daemon-session-scrollback-window'
 import type { GetSnapshotResult } from '../../protocol/daemon-rpc-contract'
-import type { PtyProviderBufferSnapshot } from '../../../providers/pty-provider-contract'
+import type {
+  TerminalSnapshot,
+  TerminalVisibleProjectionSnapshot
+} from '../../protocol/terminal-snapshot'
+import type {
+  PtyProviderBufferSnapshot,
+  PtyProviderBufferSnapshotOptions
+} from '../../../providers/pty/provider-contract'
 
 const DURABLE_HISTORY_OVERLAY_DEADLINE_MS = 5_000
 
 export abstract class DaemonPtyBufferSnapshots extends DaemonPtySessionControl {
+  supportsVisibleProjectionSnapshot(): boolean {
+    return this.client.supportsVisibleProjectionSnapshot()
+  }
+
   async getBufferSnapshot(
     id: string,
-    opts: { scrollbackRows?: number } = {}
+    opts: PtyProviderBufferSnapshotOptions = {}
   ): Promise<PtyProviderBufferSnapshot | null> {
     if (!this.supportsAuthoritativeBufferSnapshots) {
       return null
     }
     try {
-      const scrollbackRows = normalizeDesktopTerminalSnapshotRows(opts.scrollbackRows)
-      const result = await this.client.request<GetSnapshotResult>('getSnapshot', {
+      const visibleProjection = opts.visibleProjection && this.supportsVisibleProjectionSnapshot()
+      const scrollbackRows = opts.visibleProjection
+        ? 0
+        : normalizeDesktopTerminalSnapshotRows(opts.scrollbackRows)
+      const { snapshot } = await this.client.request<
+        GetSnapshotResult<TerminalSnapshot | TerminalVisibleProjectionSnapshot>
+      >('getSnapshot', {
         sessionId: id,
-        ...(scrollbackRows !== undefined ? { scrollbackRows } : {})
+        ...(scrollbackRows !== undefined ? { scrollbackRows } : {}),
+        ...(visibleProjection ? { visibleProjection: true } : {})
       })
-      const snapshot = result.snapshot
       // Older v19 snapshots lack the absolute sequence needed to reconcile data queued on the other socket.
       if (!snapshot || typeof snapshot.outputSequence !== 'number') {
         return null
+      }
+      if ('visibleProjection' in snapshot) {
+        return visibleProjection ? this.toProviderBufferSnapshot(snapshot) : null
       }
       const restored =
         this.historyManager &&
@@ -42,29 +64,33 @@ export abstract class DaemonPtyBufferSnapshots extends DaemonPtySessionControl {
   }
 
   protected toProviderBufferSnapshot(
-    snapshot: NonNullable<GetSnapshotResult['snapshot']>
+    snapshot: TerminalSnapshot | TerminalVisibleProjectionSnapshot
   ): PtyProviderBufferSnapshot | null {
     if (typeof snapshot.outputSequence !== 'number') {
       return null
     }
     const kittyKeyboardFlags = parseTerminalKittyKeyboardFlags(snapshot.modes.kittyKeyboardFlags)
     return {
-      data: snapshot.rehydrateSequences + snapshot.snapshotAnsi,
-      frameRestoreAnsi: snapshot.frameRestoreAnsi,
-      scrollbackAnsi: snapshot.scrollbackAnsi,
+      ...('visibleProjection' in snapshot
+        ? { data: '', visibleProjection: snapshot.visibleProjection }
+        : {
+            data: snapshot.rehydrateSequences + snapshot.snapshotAnsi,
+            frameRestoreAnsi: snapshot.frameRestoreAnsi,
+            scrollbackAnsi: snapshot.scrollbackAnsi,
+            oscLinks: snapshot.oscLinks,
+            ...(snapshot.pendingEscapeTailAnsi
+              ? { pendingEscapeTailAnsi: snapshot.pendingEscapeTailAnsi }
+              : {})
+          }),
       cols: snapshot.cols,
       rows: snapshot.rows,
       cwd: snapshot.cwd,
       lastTitle: snapshot.lastTitle,
       seq: snapshot.outputSequence,
       source: 'headless',
-      oscLinks: snapshot.oscLinks,
       alternateScreen: snapshot.modes.alternateScreen,
       // Preserve known zero keyboard flags; absence means the source cannot report them.
       ...(kittyKeyboardFlags !== undefined ? { kittyKeyboardFlags } : {}),
-      ...(snapshot.pendingEscapeTailAnsi
-        ? { pendingEscapeTailAnsi: snapshot.pendingEscapeTailAnsi }
-        : {}),
       ...(snapshot.terminalOwner ? { terminalOwner: snapshot.terminalOwner } : {})
     }
   }
@@ -196,6 +222,12 @@ export abstract class DaemonPtyBufferSnapshots extends DaemonPtySessionControl {
       }
       // A v55 daemon from 1.4.251 predates the request; its replacement is asked again.
       this.focusLossReportRejected = true
+    }
+  }
+
+  async requestRepaint(id: string): Promise<void> {
+    if (this.protocolVersion >= REPAINT_REQUEST_PROTOCOL_VERSION) {
+      await this.client.request('requestRepaint', { sessionId: id })
     }
   }
 

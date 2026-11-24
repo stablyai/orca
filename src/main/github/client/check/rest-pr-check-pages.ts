@@ -1,12 +1,12 @@
 import { z } from 'zod'
-import { extractExecError } from '../../../git/exec-error'
-import { ghExecFileAsync } from '../../gh-utils'
-import { githubHostExecOptions, type GitHubApiRepository } from '../../github-api-repository'
-import { noteRepositoryRateLimitSpend } from '../../rate-limit'
+import { extractExecError } from '../../../git/command-runner/process-capture/exec-error'
+import { ghExecFileAsync } from '../../../git/command-runner/hosted-cli/gh-exec-file'
+import { githubHostExecOptions } from '../../repositories/github-repository-host'
+import type { GitHubRepositoryIdentity as GitHubApiRepository } from '../../../../shared/github/repositories/repository-identity'
+import { noteRepositoryRateLimitSpend } from '../../api/rate-limit'
 import type { GhExecOptions } from '../github-exec-scope'
 import { assertRateLimitBudget } from '../lookup/pr-lookup-rate-limit'
-import { isPendingApprovalSuiteWithoutRuns } from './pr-checks-response-mapping'
-import { PENDING_APPROVAL_ROLLUP_ROW } from './pr-check-rollup'
+import { isPendingApprovalSuiteWithoutRuns, PENDING_APPROVAL_ROLLUP_ROW } from './pr-check-rollup'
 
 const checkRunSchema = z.object({
   id: z.number().optional(),
@@ -37,6 +37,9 @@ const checkSuiteSchema = z.object({
   conclusion: z.string().nullable(),
   app: z.object({ name: z.string().nullish(), slug: z.string().nullish() }).nullish()
 })
+
+export type RestCheckRun = z.infer<typeof checkRunSchema>
+export type RestCommitStatus = z.infer<typeof commitStatusSchema>
 
 async function readPages<T>(
   repository: GitHubApiRepository,

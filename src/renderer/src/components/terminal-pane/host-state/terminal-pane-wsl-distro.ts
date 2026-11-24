@@ -3,7 +3,7 @@ import {
   getCachedWindowsTerminalCapabilities,
   hasCachedWindowsTerminalCapabilities
 } from '@/runtime/hosts/capabilities/windows-terminal-capabilities'
-import { parseWslUncPath } from '../../../../../shared/wsl-paths'
+import { parseWslUncPath } from '../../../../../shared/file-access/wsl-paths'
 
 type PaneWslDistroState = Parameters<typeof getLocalProjectExecutionRuntimeContext>[0]
 

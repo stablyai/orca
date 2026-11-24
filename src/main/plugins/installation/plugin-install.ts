@@ -33,7 +33,7 @@ import {
   isSameGitRepository,
   splitQualifiedPluginKey
 } from '../../../shared/plugins/catalog/plugin-marketplace'
-import { readPluginManifestText } from '../plugin-manifest-file'
+import { readPluginManifestText } from '../artifacts/plugin-manifest-file'
 import { pluginCatalogTakeoverError } from './plugin-catalog-install-guard'
 
 export type { PluginInstallResult } from './plugin-install-staging'
@@ -171,6 +171,8 @@ export async function installPluginFromMarketplace(input: {
   manifestError?: (manifest: PluginManifest) => string | null
   /** Only replace an install from this marketplace; set by auto-update so Remove wins a race. */
   requireInstalled?: boolean
+  requireMissing?: boolean
+  expectedInstalledContentHash?: string
 }): Promise<PluginInstallResult> {
   const source = pluginInstallSourceSchema.parse({
     kind: 'marketplace',
@@ -185,6 +187,15 @@ export async function installPluginFromMarketplace(input: {
   }
   return serializePluginMutation(input.pluginsDir, async () => {
     const entry = (await readPluginLockfile(input.pluginsDir)).plugins[input.expectedPluginKey]
+    if (input.requireMissing && entry) {
+      return { ok: false, error: 'plugin is already installed' }
+    }
+    if (
+      input.expectedInstalledContentHash &&
+      input.expectedInstalledContentHash !== entry?.contentHash
+    ) {
+      return { ok: false, error: 'plugin changed before its required release installed' }
+    }
     const installedFrom = entry?.source.kind === 'marketplace' ? entry.source.marketplace : null
     if (input.requireInstalled && installedFrom?.url !== input.marketplace.url) {
       return { ok: false, error: 'plugin was removed before its update installed' }

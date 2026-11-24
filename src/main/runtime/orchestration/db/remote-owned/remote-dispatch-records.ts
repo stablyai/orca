@@ -66,28 +66,37 @@ export function getRemoteDispatch(
     | undefined
 }
 
-/** Newest first, in one Run or every Run, with the state of the link each came home under. */
+type RemoteDispatchListRow = RemoteDispatchRow & {
+  link_state: RemoteRunLinkRow['state'] | null
+  server_name: string | null
+}
+
+/** Newest first, in one Run or every Run, with the state of the link each came home under. Two
+ *  statements, not `? IS NULL OR`, so a named Run reads through its index. */
 export function listRemoteDispatches(
   db: OrchestrationDb,
   scope: { runId?: string; limit: number }
-): (RemoteDispatchRow & { link_state: RemoteRunLinkRow['state'] | null })[] {
-  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the record's columns plus the joined link state.
-  return db.db
-    .prepare(
-      `SELECT record.*, link.state AS link_state FROM remote_dispatches record
-       LEFT JOIN remote_run_links link ON link.conversation_id = record.conversation_id
-       WHERE (? IS NULL OR record.run_id = ?) ORDER BY record.rowid DESC LIMIT ?`
-    )
-    .all(scope.runId ?? null, scope.runId ?? null, scope.limit) as (RemoteDispatchRow & {
-    link_state: RemoteRunLinkRow['state'] | null
-  })[]
+): RemoteDispatchListRow[] {
+  const select = `SELECT record.*, link.state AS link_state, link.server_name AS server_name
+    FROM remote_dispatches record
+    LEFT JOIN remote_run_links link ON link.conversation_id = record.conversation_id`
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the record's columns plus the joined link's state and name.
+  return (
+    scope.runId === undefined
+      ? db.db.prepare(`${select} ORDER BY record.rowid DESC LIMIT ?`).all(scope.limit)
+      : db.db
+          .prepare(`${select} WHERE record.run_id = ? ORDER BY record.rowid DESC LIMIT ?`)
+          .all(scope.runId, scope.limit)
+  ) as RemoteDispatchListRow[]
 }
 
 export function countRemoteDispatches(db: OrchestrationDb, runId: string | undefined): number {
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: COUNT(*) returns one number.
-  const row = db.db
-    .prepare('SELECT COUNT(*) AS count FROM remote_dispatches WHERE (? IS NULL OR run_id = ?)')
-    .get(runId ?? null, runId ?? null) as { count: number }
+  const row = (
+    runId === undefined
+      ? db.db.prepare('SELECT COUNT(*) AS count FROM remote_dispatches').get()
+      : db.db.prepare('SELECT COUNT(*) AS count FROM remote_dispatches WHERE run_id = ?').get(runId)
+  ) as { count: number }
   return row.count
 }
 
@@ -287,6 +296,9 @@ export type RemoteOwnedQuestionRow = {
   run_id: string
   environment_id: string
   dispatch_id: string
+  taken_by: string | null
+  awaiting: 1 | null
+  ended: 'answered' | 'unanswered' | 'dropped' | null
 }
 
 /** A question a remote worker asked here, which its server answers. */
@@ -298,4 +310,13 @@ export function getRemoteOwnedQuestion(
   return db.db
     .prepare('SELECT * FROM remote_owned_questions WHERE message_id = ?')
     .get(messageId) as RemoteOwnedQuestionRow | undefined
+}
+
+/** Its answer reached the worker's computer: no notice is owed, even after one went. */
+export function recordRemoteAskAnswered(db: OrchestrationDb, messageId: string): void {
+  db.db
+    .prepare(
+      `UPDATE remote_owned_questions SET ended = 'answered', awaiting = NULL WHERE message_id = ?`
+    )
+    .run(messageId)
 }

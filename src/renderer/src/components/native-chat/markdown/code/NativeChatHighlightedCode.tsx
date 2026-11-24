@@ -1,5 +1,5 @@
 import { memo } from 'react'
-import { useHighlightedSyntax } from '@/hooks/use-highlighted-syntax'
+import { useHighlightedSyntax } from '@/lib/syntax-highlighting/use-highlighted-syntax'
 import type { SyntaxLine } from '@/lib/syntax-highlighting/incremental-syntax-tokenizer'
 import { SYNTAX_FONT_STYLE, type SyntaxToken } from '@/lib/syntax-highlighting/syntax-highlighter'
 

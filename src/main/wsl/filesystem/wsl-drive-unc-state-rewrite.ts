@@ -4,10 +4,10 @@
  * Git for Windows with their terminals still in the distro. Pure; the caller writes the result.
  */
 import { composeWorktreeHostIdentity } from '../../../shared/worktree/host-qualified-identity'
-import { LOCAL_EXECUTION_HOST_ID } from '../../../shared/execution-host'
-import type { PersistedState } from '../../../shared/persisted-state-types'
+import { LOCAL_EXECUTION_HOST_ID } from '../../../shared/execution-host/execution-host'
+import type { PersistedState } from '../../../shared/orca-profiles/persisted-state-types'
 import type { LocalWindowsRuntimePreference } from '../../../shared/execution-host/project-runtime-preference'
-import type { Project } from '../../../shared/project-types'
+import type { Project } from '../../../shared/project/project-types'
 import type { WorktreeMeta } from '../../../shared/worktree/meta-types'
 import {
   getRepoMainWorktreeId,
@@ -15,12 +15,16 @@ import {
   splitWorktreeIdForFilesystem
 } from '../../../shared/worktree/id'
 import { PTY_SESSION_ID_SEPARATOR } from '../../../shared/terminal/pty/lifecycle/pty-session-id-format'
-import { isWorkspaceKey, parseWorkspaceKey } from '../../../shared/workspace-scope'
-import { withCrossStoreChildKey } from '../../../shared/worktree/cross-store-lineage-records'
-import { WSL_DRIVE_UNC_STATE_DISPOSITIONS } from '../../../shared/wsl-drive-unc-state-dispositions'
+import {
+  isWorkspaceKey,
+  parseWorkspaceKey
+} from '../../../shared/workspace/identity/workspace-scope'
+import { withCrossStoreChildKey } from '../../../shared/worktree/lineage/cross-store-lineage-records'
+import { WSL_DRIVE_UNC_STATE_DISPOSITIONS } from '../../../shared/wsl-move/wsl-drive-unc-state-dispositions'
 import { wslMoveRepoPaths } from '../../persistence/moving-wsl-projects/manifest-scope/wsl-move-scope'
+import { isLocalFolderWorkspace, isLocalRepo } from './wsl-drive-unc-project-scope'
 import { withoutDiscoveryShadows } from './wsl-drive-unc-discovery-shadows'
-import { wslUncDrivePathToWindows } from '../../../shared/wsl-paths'
+import { wslUncDrivePathToWindows } from '../../../shared/file-access/wsl-paths'
 import {
   createWslDriveUncRewriter,
   mergeWslDriveUncKeyedEntries,
@@ -138,9 +142,13 @@ function collectRewriteRoots(
   const repoIds = new Set(scope.repoIds)
   const folderWorkspaceIds = new Set(scope.folderWorkspaceIds)
   const roots = [
-    ...saved.repos.filter((repo) => repoIds.has(repo.id)).flatMap(wslMoveRepoPaths),
+    ...saved.repos
+      .filter((repo) => repoIds.has(repo.id) && isLocalRepo(repo))
+      .flatMap(wslMoveRepoPaths),
     ...saved.folderWorkspaces
-      .filter((folder) => folderWorkspaceIds.has(folder.id))
+      .filter(
+        (folder) => folderWorkspaceIds.has(folder.id) && isLocalFolderWorkspace(saved, folder)
+      )
       .map((folder) => folder.folderPath)
   ]
   const ids = createWslDriveUncRewriter({
@@ -177,7 +185,7 @@ function collectRewrittenWorktreeIds(
   for (const childKey of Object.keys(state.crossStoreLineageByChildKey ?? {})) {
     recorder.identity(childKey)
   }
-  for (const repo of state.repos) {
+  for (const repo of state.repos.filter(isLocalRepo)) {
     recorder.identity(getRepoMainWorktreeId(repo))
   }
   return ids
@@ -248,10 +256,10 @@ function withConvertedGroupFolders(
     const members = [
       ...state.repos
         .filter((repo) => repo.projectGroupId === group.id)
-        .map((repo) => repoIds.has(repo.id)),
+        .map((repo) => repoIds.has(repo.id) && isLocalRepo(repo)),
       ...state.folderWorkspaces
         .filter((folder) => folder.projectGroupId === group.id)
-        .map((folder) => folderWorkspaceIds.has(folder.id))
+        .map((folder) => folderWorkspaceIds.has(folder.id) && isLocalFolderWorkspace(state, folder))
     ]
     const parentPath = group.parentPath && wslUncDrivePathToWindows(group.parentPath, distro)
     return parentPath && members.length > 0 && members.every(Boolean)

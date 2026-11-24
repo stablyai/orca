@@ -1,14 +1,14 @@
 import { randomUUID } from 'node:crypto'
-import { getAppEnvironment } from '../../../shared/app-environment'
+import { getAppEnvironment } from '../../../shared/app-lifecycle/app-environment'
 import { childProcessHasExited } from '@orca/process-host/process-tree-termination'
-import type { DaemonReplaceReason } from '../../../shared/daemon-lifecycle-telemetry'
+import type { DaemonReplaceReason } from '../../../shared/telemetry/daemon-lifecycle-telemetry'
 import { DaemonClient } from '../transport/client/daemon-client'
 import {
   DaemonEndpointOwnershipError,
   holdDaemonAdoptionLease,
   reconcileDaemonPidOwnership
 } from './daemon-endpoint-adoption'
-import { LOCAL_PTY_STARTUP_FAIL_OPEN_TIMEOUT_MS } from '../../startup/first-window-startup-services'
+import { LOCAL_PTY_STARTUP_FAIL_OPEN_TIMEOUT_MS } from '../../startup/pty-startup/first-window-startup-services'
 import {
   DAEMON_CHILD_STARTUP_TIMEOUT_MS,
   DaemonEndpointUnavailableError,
@@ -37,6 +37,7 @@ import {
 } from './daemon-spawner'
 import { PROTOCOL_VERSION } from '../protocol/daemon-protocol-version'
 import { prepareDaemonReplacement } from './daemon-replacement-preflight'
+import { resolveDaemonFdClosingExec } from './daemon-fd-closing-exec'
 import { ensureDaemonSocketDir } from '../endpoint/publication/daemon-socket-endpoint-path'
 import { inspectDaemonHostImage } from '../executable-host/linux/daemon-host-image'
 import { noteSeveredDaemon } from '../providers/lifecycle/daemon-host-image-state'
@@ -200,6 +201,7 @@ export function createOutOfProcessLauncher(
           `[daemon] AppImage daemon host fallback reason=${generation.fallback}: starting it on Electron, ${appImage ? 'from its own mount' : 'from the current mount'}`
         )
       }
+      const fdClosingExec = await resolveDaemonFdClosingExec()
       let launched
       try {
         launched = await launchDaemonChild({
@@ -215,6 +217,7 @@ export function createOutOfProcessLauncher(
           launchNonce,
           macosLoginSessionWatch,
           startupTimeoutMs,
+          fdClosingExec,
           ...(spawnAdmission ? { spawnAdmission } : {})
         })
       } catch (error) {

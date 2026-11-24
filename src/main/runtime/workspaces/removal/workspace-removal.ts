@@ -12,8 +12,11 @@ import {
   getRepoExecutionHostId,
   parseExecutionHostId,
   type ExecutionHostId
-} from '../../../../shared/execution-host'
-import { finishAcceptedWorktreeRemoval } from '../../../workspaces/removal/worktree-background-removal'
+} from '../../../../shared/execution-host/execution-host'
+import {
+  finishAcceptedWorktreeRemoval,
+  waitForWorktreeRemovalAcceptance
+} from '../../../workspaces/removal/worktree-background-removal'
 import { preservedBranchCleanupScopeKey } from '../../../../shared/git/branches/preserved-branch-cleanup'
 import {
   getRuntimeWorktreeRemovalOptionsKey,
@@ -30,13 +33,15 @@ import { authorizeUnregisteredWindowsRemoval } from '../../../git/worktrees/remo
 import { findRegisteredDeletableWorktree } from '../../../workspaces/removal/worktree-removal-safety'
 import { removeRuntimeUnregisteredWorktree } from './runtime-unregistered-worktree-removal'
 import { removeStaleLocalWorktreeRegistration } from '../../../workspaces/removal/local-worktree-removal-recovery'
-import { cleanupUnusedWorktreePushTargetRemote } from '../../../ipc/worktree-remote'
+import { cleanupUnusedWorktreePushTargetRemote } from '../../../ipc/worktrees/worktree-remote'
 import { removeRuntimeRegisteredLocalWorktree } from './runtime-registered-local-worktree-removal'
 import { removeOrphanOrFolderWorktree } from './workspace-registration-removal'
 import {
   assertWslMoveWorkspaceWritable,
   isWslMoveSourceHost
 } from '../../../persistence/moving-wsl-projects/quiescence/wsl-move-scope-guard'
+import { worktreeHostIdentity } from '../../../persistence/worktree-meta-host-identity'
+import { archiveMarkStep } from '../archive/workspace-archive-checkout'
 
 export abstract class OrcaRuntimeWithRemoveManagedWorktree extends RuntimeWorkspaceMetadata {
   abstract removeWorktreeMetadataAndHistory(
@@ -90,25 +95,22 @@ export abstract class OrcaRuntimeWithRemoveManagedWorktree extends RuntimeWorksp
     // Why: a retry or a second client asking while Git still deletes joins that removal.
     const pending = this.joinPendingWorktreeRemoval(removalTarget.id, options)
     if (pending) {
+      await waitForWorktreeRemovalAcceptance(removalTarget.id, cleanupHostId)
       return options.waitForBackgroundRemoval ? await pending : { removing: true }
     }
-    const emitRemoved = (): void =>
-      this.emitWorktreeLifecycle({
-        kind: 'removed',
-        worktreeId: removalTarget.id,
-        path: removalTarget.path
-      })
+    // Identity read now: the purge drops the row before listeners hear `removed`.
+    const removed = {
+      kind: 'removed' as const,
+      worktreeId: removalTarget.id,
+      path: removalTarget.path,
+      ...worktreeHostIdentity(store, removalTarget.id, fenceHostId)
+    }
+    const emitRemoved = (): void => this.emitWorktreeLifecycle(removed)
     const cleanupScopeKey = preservedBranchCleanupScopeKey({
       worktreeId: removalTarget.id,
       hostId: cleanupHostId
     })
-    const optionsKey = getRuntimeWorktreeRemovalOptionsKey({
-      force,
-      runHooks,
-      allowUnverifiedPtyStop,
-      allowFailedArchiveHook,
-      deleteBranch: options.deleteBranch
-    })
+    const optionsKey = getRuntimeWorktreeRemovalOptionsKey(options)
     const inFlightRemoval = this.removeManagedWorktreeInFlight.get(
       cleanupScopeKey,
       removalTarget.id,
@@ -264,6 +266,7 @@ export abstract class OrcaRuntimeWithRemoveManagedWorktree extends RuntimeWorksp
             this.stopPtysForDestructiveWorktreeRemoval(removalTarget.id, {
               allowUnverifiedStop: allowUnverifiedPtyStop
             }),
+          beforeCheckoutDelete: archiveMarkStep(options, store, removalTarget.id, removalHostId!),
           closeWatchers: (path) => this.closeFileWatchersForRemoval(path),
           preserveBranchHead: (result, fallbackHead) =>
             this.preservedBranchCleanup.preserveHead(result, fallbackHead),

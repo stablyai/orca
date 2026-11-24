@@ -3,11 +3,11 @@ import {
   LOCAL_EXECUTION_HOST_ID,
   parseExecutionHostId,
   type ExecutionHostId
-} from '../../../../../../shared/execution-host'
+} from '../../../../../../shared/execution-host/execution-host'
 import { normalizeWorkspaceAttachmentUpdate } from '../../../../../../shared/workspace-attachments/workspace-attachments'
-import { CLEARED_HOSTED_REVIEW_LINK_UPDATES } from '../../../../../../shared/worktree/hosted-review-links'
+import { CLEARED_HOSTED_REVIEW_LINK_UPDATES } from '../../../../../../shared/worktree/hosted-review/hosted-review-links'
 import { getRepoIdFromWorktreeId } from '../../../../../../shared/worktree/id'
-import type { HostedReviewClearUpdates } from '../../../../../../shared/worktree/hosted-review-branch-ownership'
+import type { HostedReviewClearUpdates } from '../../../../../../shared/worktree/hosted-review/hosted-review-branch-ownership'
 
 // Why this module: worktree ids repeat across hosts (`repoId::path`), so branch-switch review
 // clears are keyed by id plus the copy's owner and never by the bare id.

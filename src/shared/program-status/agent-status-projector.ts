@@ -28,6 +28,7 @@ import { ProgramStatusRecordSet, type ProgramStatusRecord } from './records'
 const APP_TO_AGENT_TYPE: Readonly<Record<string, string>> = {
   'claude-code': 'claude',
   'grok-build': 'grok',
+  'kimi-code': 'kimi',
   'kiro-cli': 'kiro'
 }
 

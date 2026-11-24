@@ -1,7 +1,7 @@
 import type { TerminalNoticeLifetime } from '@/components/terminal-pane/provider-notices/terminal-notice-lifetime'
-import { captureWorktreeTerminalNoticeRemoval } from '../../../terminals/terminal-notice-removal'
-import type { TerminalTabRetirementState } from '../../../terminals/terminal-tab-retirement'
-import type { ExecutionHostId } from '../../../../../../shared/execution-host'
+import { captureWorktreeTerminalNoticeRemoval } from '../../../terminals/retirement/terminal-notice-removal'
+import type { TerminalTabRetirementState } from '../../../terminals/retirement/terminal-tab-retirement'
+import type { ExecutionHostId } from '../../../../../../shared/execution-host/execution-host'
 import {
   captureWorkspaceChatDraftKeys,
   deleteWorkspaceChatDraftOwners,

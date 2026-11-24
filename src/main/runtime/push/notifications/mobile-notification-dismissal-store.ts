@@ -4,7 +4,7 @@ import {
   parseKeyedJsonRows
 } from '../../../sqlite/row-cache/keyed-json-row-cache'
 import { nextRetryDelayMs } from '../../../sqlite/row-cache/row-cache-failure'
-import type { DeliveredNotificationIdentity } from '../../../../shared/mobile-notification-identity'
+import type { DeliveredNotificationIdentity } from '../../../../shared/notifications/mobile-notification-identity'
 import {
   applyDismissalEvent,
   dismissalRows,

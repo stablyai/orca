@@ -1,12 +1,12 @@
 import { defineMethod } from '../../../core'
-import type { GlobalSettings } from '../../../../../../shared/global-settings-types'
+import type { GlobalSettings } from '../../../../../../shared/settings/global-settings-types'
 import type { ResolvedSourceControlAiGenerationParams } from '../../../../../../shared/source-control/ai/source-control-ai-operation-resolution'
 import {
   GitDiscoverCommitMessageModels,
   GitGenerateCommitMessage,
   GitGeneratePullRequestFields,
   WorktreeSelector
-} from '../../../../../../shared/rpc-contract/git-params'
+} from '../../../../../../shared/rpc-contract/source-control/git-params'
 
 type CommitMessageGenerationOverride = {
   commitMessageAi?: GlobalSettings['commitMessageAi']

@@ -1,4 +1,4 @@
-import type { RuntimePairingReach } from '../../../../../../shared/runtime-pairing-reach'
+import type { RuntimePairingReach } from '../../../../../../shared/remote-runtime/pairing/runtime-pairing-reach'
 
 export const RUNTIME_PAIRING_LOOPBACK_ADDRESS = '127.0.0.1'
 
@@ -18,6 +18,7 @@ export const runtimePairingLinkCache: {
   runtimePairingUrl: string | null
   webClientUrl: string | null
   runtimePairingDeviceId: string | null
+  grantStatus: 'unknown' | 'unused' | 'used' | 'removed'
   expiresAt: number | null
 } = {
   selectedAddress: '',
@@ -27,6 +28,7 @@ export const runtimePairingLinkCache: {
   runtimePairingUrl: null,
   webClientUrl: null,
   runtimePairingDeviceId: null,
+  grantStatus: 'unknown',
   expiresAt: null
 }
 
@@ -34,6 +36,7 @@ export function clearGeneratedRuntimePairingLink(): void {
   runtimePairingLinkCache.runtimePairingUrl = null
   runtimePairingLinkCache.webClientUrl = null
   runtimePairingLinkCache.runtimePairingDeviceId = null
+  runtimePairingLinkCache.grantStatus = 'unknown'
   runtimePairingLinkCache.generatedAddress = null
   runtimePairingLinkCache.expiresAt = null
 }
@@ -48,6 +51,7 @@ export function cacheGeneratedRuntimePairingLink(args: {
   runtimePairingLinkCache.runtimePairingUrl = args.pairingUrl
   runtimePairingLinkCache.webClientUrl = args.webClientUrl
   runtimePairingLinkCache.runtimePairingDeviceId = args.deviceId
+  runtimePairingLinkCache.grantStatus = 'unknown'
   runtimePairingLinkCache.generatedAddress = args.address
   runtimePairingLinkCache.expiresAt = args.expiresAt
 }

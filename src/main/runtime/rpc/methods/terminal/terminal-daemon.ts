@@ -1,5 +1,5 @@
-import { TerminalLimitUpdateParams } from '../../../../../shared/rpc-contract/terminal-limit-params'
-import { TerminalDaemonRestartSeveredParams } from '../../../../../shared/rpc-contract/terminal-daemon-params'
+import { TerminalLimitUpdateParams } from '../../../../../shared/rpc-contract/terminal/terminal-limit-params'
+import { TerminalDaemonRestartSeveredParams } from '../../../../../shared/rpc-contract/terminal/terminal-daemon-params'
 import {
   readSeveredDaemonStatus,
   restartSeveredDaemon

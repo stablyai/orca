@@ -1,5 +1,5 @@
-import { toRuntimeExecutionHostId } from '../../../../../../shared/execution-host'
-import { useEffect, useMemo, useRef } from 'react'
+import { toRuntimeExecutionHostId } from '../../../../../../shared/execution-host/execution-host'
+import { useEffect, useMemo, useRef, useSyncExternalStore } from 'react'
 import { useShallow } from 'zustand/react/shallow'
 import {
   registerAgentSubjectReadCapture,
@@ -10,7 +10,7 @@ import {
 import { findStructuredAgentSessionReadOwner } from '../structured/read/structured-agent-session-read-owner-registry'
 import { structuredAttentionReadObservation } from './structured-attention-read-observation'
 import { useAppStore } from '@/store'
-import type { RuntimeClientTarget } from '../../../../../../shared/runtime-client-target'
+import type { RuntimeClientTarget } from '../../../../../../shared/remote-runtime/host-catalog/runtime-client-target'
 import {
   structuredAgentSessionOwnerForTab,
   structuredAgentSessionTargetForHost
@@ -30,6 +30,10 @@ import {
   getStructuredAgentSessionTabs,
   type StructuredTab
 } from '../status/structured-agent-session-tabs'
+import {
+  readBotBackgroundSessionTabs,
+  subscribeBotBackgroundSessionTabs
+} from '../../../bots/bot-background-sessions'
 
 /** Subscribe per open tab: attention needs that tab’s surface/liveness, and reading it retires its host-pushed phone alerts. */
 function StructuredAgentSessionAttention({
@@ -253,9 +257,15 @@ export function StructuredAgentSessionAttentionBridge(): React.JSX.Element {
   const tabs = useAppStore(
     useShallow((state) => getStructuredAgentSessionTabs(state.unifiedTabsByWorktree))
   )
+  const background = useSyncExternalStore(
+    subscribeBotBackgroundSessionTabs,
+    readBotBackgroundSessionTabs,
+    readBotBackgroundSessionTabs
+  )
   return (
     <>
-      {tabs.map((tab) => (
+      {/* A bot's thread or run has no tab until it is opened, and still notifies. */}
+      {[...background, ...tabs].map((tab) => (
         <StructuredAgentSessionAttention key={`${tab.id}:${tab.entityId}`} tab={tab} />
       ))}
     </>

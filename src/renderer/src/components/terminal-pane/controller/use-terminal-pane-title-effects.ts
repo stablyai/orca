@@ -4,9 +4,9 @@ import { usePaneTitleOverlayGeometry } from '../titles/use-pane-title-overlay-ge
 import { useRestoredBannerPanePruning } from '../session-restore/use-restored-banner-pane-pruning'
 import { useTerminalShutdownBufferCapture } from '../snapshots/use-terminal-shutdown-buffer-capture'
 import { usePaneTitleRenameBlurIntent } from '../titles/use-pane-title-rename-blur-intent'
-import type { TerminalPaneCloseController } from '../layout/close/use-terminal-pane-close-actions'
+import type { TerminalPaneMountedController } from '../mounting/use-terminal-pane-lifecycle-stage'
 
-export function useTerminalPaneTitleEffects(controller: TerminalPaneCloseController): void {
+export function useTerminalPaneTitleEffects(controller: TerminalPaneMountedController): void {
   const {
     clearedScrollbackLeafIdsRef,
     containerRef,
@@ -14,6 +14,7 @@ export function useTerminalPaneTitleEffects(controller: TerminalPaneCloseControl
     isolatedPaneKey,
     isVisible,
     managerRef,
+    terminalManager,
     paneCount,
     paneLayoutRevision,
     paneTitles,
@@ -31,9 +32,10 @@ export function useTerminalPaneTitleEffects(controller: TerminalPaneCloseControl
     worktreeId
   } = controller
 
-  useTerminalPaneAttention({ managerRef, paneCount, tabId })
+  useTerminalPaneAttention({ terminalManager, managerRef, paneCount, tabId })
 
   useRestoredBannerTitleSpace({
+    terminalManager,
     isVisible,
     managerRef,
     paneCount,
@@ -45,6 +47,7 @@ export function useTerminalPaneTitleEffects(controller: TerminalPaneCloseControl
   })
 
   usePaneTitleOverlayGeometry({
+    terminalManager,
     containerRef,
     expandedPaneId,
     isolatedPaneKey,
@@ -59,7 +62,12 @@ export function useTerminalPaneTitleEffects(controller: TerminalPaneCloseControl
     shouldMeasureHiddenStartup
   })
 
-  useRestoredBannerPanePruning({ managerRef, paneCount, setSessionRestoredBannerPaneIds })
+  useRestoredBannerPanePruning({
+    terminalManager,
+    managerRef,
+    paneCount,
+    setSessionRestoredBannerPaneIds
+  })
 
   useTerminalShutdownBufferCapture({
     clearedScrollbackLeafIdsRef,

@@ -1,11 +1,11 @@
 import type { AppState } from '../../types'
 import type { TerminalTab } from '../../../../../shared/workspace-layout/terminal-tab-types'
-import { getTerminalActivationSpawnSuppression } from '../../terminals/terminal-activation-spawn-suppression'
+import { getTerminalActivationSpawnSuppression } from '../../terminals/pty/terminal-activation-spawn-suppression'
 import {
   replaceRecordEntries,
   replaceTabBuckets,
   tabBucketDraft
-} from '../../keyed-record-transitions'
+} from '../../record-transitions/keyed-record-transitions'
 
 /**
  * Tags a worktree's wakeable terminal tabs for an activation spawn, optionally bumping their

@@ -2,11 +2,11 @@
  * Keep worktree.create's PTY/handle contract for older clients.
  * operationId adds durable at-most-once execution and recorded replay; unknown outcomes refuse, while stranded-surface recovery remains separate. */
 
-import { agentLaunchFeatureRequirement } from '../../agent-launch-feature-requirement'
+import { agentLaunchFeatureRequirement } from '../../startup/agent-launch-feature-requirement'
 import { AgentLaunchTabClosedError } from '../../../../../shared/agent-launch/contracts/agent-launch-tab-closed'
 import { computeAgentLaunchFingerprint } from '../../../../../shared/agent-launch/contracts/agent-launch-operation'
 import type { AgentLaunchResult } from '../../../../../shared/agent-launch/contracts/agent-launch-intent'
-import { agentSessionOperationKey } from '../../../../../shared/agent-session/lifecycle/agent-session-operation-ledger'
+import { agentSessionOperationKey } from '../../../../../shared/agent-session/lifecycle/operations/agent-session-operation-ledger'
 import {
   WorktreeCreateCollisionError,
   WORKTREE_CREATE_COLLISION_CODE
@@ -32,7 +32,7 @@ import {
   AgentLaunch,
   AgentLaunchReplay,
   type AgentLaunchParams
-} from '../../../../../shared/rpc-contract/agent-launch-params'
+} from '../../../../../shared/rpc-contract/agent-launch/agent-launch-params'
 import { agentLaunchSurfaceFactory } from './agent-launch-surfaces'
 import { prepareAgentHandoffCard } from './agent-launch-handoff-card'
 import {
@@ -66,7 +66,7 @@ async function runAgentLaunch(
   view: AgentLaunchView,
   replaySafe?: ReplaySafeLaunch
 ): Promise<AgentLaunchResult> {
-  const callerNavigationId = agentLaunchCallerNavigationId(intent.target, context)
+  const callerNavigationId = agentLaunchCallerNavigationId(context)
   const result = await executeAgentLaunch({
     runtime: context.runtime,
     intent,
@@ -75,13 +75,14 @@ async function runAgentLaunch(
       context,
       replaySafe?.attachOperationId,
       replaySafe?.callerKey,
-      callerNavigationId !== null,
+      // Worktree creation keeps host-wide chat activation, so a windowless host's other clients open the new worktree on the chat.
+      callerNavigationId !== null && intent.target.kind !== 'create-worktree',
       replaySafe?.terminalSpawn,
       view
     ),
     workspaces: agentLaunchWorkspaceFactory(context, intent.agent),
     // The tab is shown as it is published, not after a prompt that can take a minute to land.
-    onSurfacePublished: (surface) => {
+    onSurfacePublished: async (surface) => {
       try {
         context.agentLaunchPolicy?.onSurfacePublished?.(surface)
       } catch (error) {
@@ -89,7 +90,7 @@ async function runAgentLaunch(
       }
       view.early?.surfacePublished(surface)
       replaySafe?.recordSurface(withPlacement(surface, view))
-      selectLaunchedTab(context, surface, view.presentation, callerNavigationId)
+      await selectLaunchedTab(context, surface, view.presentation, callerNavigationId)
     }
   })
   return withPlacement(result, view)

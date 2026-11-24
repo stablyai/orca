@@ -1,5 +1,8 @@
 import { defineMethod } from '../../core'
-import { ReferenceFind, ReferenceList } from '../../../../../shared/rpc-contract/reference-params'
+import {
+  ReferenceFind,
+  ReferenceList
+} from '../../../../../shared/rpc-contract/references/reference-params'
 
 export const REFERENCE_METHODS = [
   defineMethod({

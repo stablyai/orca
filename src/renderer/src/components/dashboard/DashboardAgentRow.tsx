@@ -4,24 +4,24 @@ import {
   opensClaudeParentConversation,
   viewClaudeAgentFromRow
 } from '@/lib/agent-session/navigation/claude-agent-row-view'
-import { useClaudeAgentRowView } from './use-claude-agent-row-view'
+import { useClaudeAgentRowView } from './rows/use-claude-agent-row-view'
 import {
   AgentStateDot,
   agentStateLabel,
   agentStateProgressLabel,
   type AgentDotState
-} from '@/components/AgentStateDot'
+} from '@/components/agent/status/AgentStateDot'
 import { AgentTypeIcon } from '@/components/agent/icons/agent-type-icon'
 import { formatAgentTypeLabel } from '../../../../shared/agent-status/presentation/agent-type-label'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
-import { DashboardAgentRowMessage } from './DashboardAgentRowMessage'
-import { DashboardAgentRowTrailingControls } from './DashboardAgentRowTrailingControls'
-import { DashboardAgentRowToolStep } from './DashboardAgentRowToolStep'
+import { DashboardAgentRowMessage } from './rows/DashboardAgentRowMessage'
+import { DashboardAgentRowTrailingControls } from './rows/DashboardAgentRowTrailingControls'
+import { DashboardAgentRowToolStep } from './rows/DashboardAgentRowToolStep'
 import { programStatusAttentionLine } from '../../../../shared/program-status/presentation'
 import {
   agentRowToolInput,
   showsAgentToolPreview
-} from '@/lib/agent-status/presentation/agent-row-tool-preview'
+} from '../../../../shared/agent-status/presentation/agent-row-tool-preview'
 import { resolveRowProgramStatus } from '@/lib/program-status/agent-row-presentation'
 import { agentRowStoppingLabel } from '@/lib/agent-status/presentation/agent-row-stopping-label'
 import {
@@ -31,20 +31,21 @@ import {
 import {
   agentRowDisplayDotState,
   agentRowDotState as asDotState
-} from '@/lib/agent-status/presentation/agent-row-dot-state'
+} from '../../../../shared/agent-row-dot-state'
 import {
   agentMainAgentVerdict,
   agentVerdictDisplayMark
 } from '../../../../shared/agent-status/lifecycle/agent-main-agent-verdict'
-import { agentVerdictStatusLine } from '@/lib/agent-status/presentation/agent-verdict-status-line'
-import type { DashboardAgentRow as DashboardAgentRowData } from './useDashboardData'
+import { agentToolDisplayName } from '../../../../shared/agent-status/presentation/agent-tool-preview'
+import { agentVerdictStatusLine } from '../../../../shared/agent-status/presentation/agent-verdict-status-line'
+import type { DashboardAgentRow as DashboardAgentRowData } from './rows/dashboard-agent-row'
 import { getAgentRowPrimaryText } from '../../../../shared/agent-status/presentation/agent-row-primary-text'
-import { useAgentRowConversationName } from './use-agent-row-conversation-name'
-import { lastEnteredDoneAt } from './agent-finished-timestamp'
+import { useAgentRowConversationName } from './rows/use-agent-row-conversation-name'
+import { lastEnteredDoneAt } from './rows/agent-finished-timestamp'
 import {
   agentChildRowMessageLine,
   agentChildRowNoUpdateLabel
-} from '@/components/agent-child-row-text'
+} from '@/components/agent/status/agent-child-row-text'
 import { translate } from '@/i18n/i18n'
 import { useTranslate, type Translate } from '@/i18n/use-translate'
 import { useUiLanguageRevision } from '@/i18n/use-ui-language-revision'
@@ -187,7 +188,7 @@ const DashboardAgentRow = React.memo(function DashboardAgentRow({
   const stoppingLabel = agentRowStoppingLabel(agent.entry, agent.state, t)
   const showsTool = showsAgentToolPreview(agent.state) && !isMonitoring && stoppingLabel === null
   const { presentation, dotStateOverride } = resolveRowProgramStatus(agent)
-  const toolName = showsTool ? (agent.entry.toolName?.trim() ?? '') : ''
+  const toolName = showsTool ? agentToolDisplayName(agent.entry.toolName) : ''
   // Why the fallback: a hook-owned row without a tool line still shows what the program says it does.
   const toolInput = showsTool
     ? agentRowToolInput(agent.entry, agent.state) || presentation.message || ''
@@ -215,11 +216,15 @@ const DashboardAgentRow = React.memo(function DashboardAgentRow({
       : [formatAgentTypeLabel(agent.agentType), model].filter(Boolean).join(' · ')
   // Surface failed main-agent outcomes even while subagents continue running.
   const dotState: AgentDotState = dotStateOverride ?? agentRowDisplayDotState(agent)
-  const dotTooltipLabel = agentStateProgressLabel(
+  const dotStatusLabel = agentStateProgressLabel(
     dotState,
     presentation.progress,
     stateDotTooltipLabel(agent, dotState, now)
   )
+  const dotTooltipLabel =
+    isUnvisited && dotState === 'done'
+      ? t('workspace.activity.unreadLabel', '{{status}} · Unread', { status: dotStatusLabel })
+      : dotStatusLabel
   // Unverifiable rows expose elapsed silence in their timestamp slot; do not hide their only content in a tooltip.
   const noUpdateLabel = dotState === 'unverifiable' ? rowNoUpdateLabel(agent, now) : null
 
@@ -260,6 +265,7 @@ const DashboardAgentRow = React.memo(function DashboardAgentRow({
         sendTargetStatus === 'sending' && 'cursor-progress opacity-75',
         sendTargetStatus === 'disabled' && 'cursor-default opacity-60'
       )}
+      data-workspace-agent-row=""
       data-focused-agent-pane={highlighted ? 'true' : undefined}
       data-current={view?.current ? 'true' : undefined}
       aria-current={view?.current ? 'true' : undefined}
@@ -313,6 +319,7 @@ const DashboardAgentRow = React.memo(function DashboardAgentRow({
                 size={stateDotSize}
                 title={null}
                 progress={presentation.progress}
+                unread={isUnvisited}
               />
             </span>
           </TooltipTrigger>

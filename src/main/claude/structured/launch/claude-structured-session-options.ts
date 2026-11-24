@@ -12,7 +12,7 @@ import {
   type StructuredAgentSessionLiveOptions
 } from '../../../native-chat/agent-session-wire/options/structured-agent-session-option-models'
 import { wireClaudeModels, type WireClaudeModel } from './claude-structured-catalog-listing'
-import { decodeStructuredAgentSessionOptionValue } from '../../../../shared/agent-session/options/structured-agent-session-option-codec'
+import { decodeStructuredAgentSessionOptionValue } from '../../../../shared/agent-session/options/selection/structured-agent-session-option-codec'
 
 export function claudeObservedEffort(
   effort: string | null | undefined,
@@ -205,6 +205,11 @@ function observeClaudeSettingsReadback(
 /** Effort and Fast change through a control this CLI never answers. */
 const CLAUDE_CLI_UPDATE_REQUIRED = { supported: false, reason: 'cli-update-required' }
 
+/** A picked model replaces the fallback in every report, before the turn that applies it. */
+export function claudeShownFallbackModel(session: ClaudeSession): string | undefined {
+  return session.modelFallback?.picked ? undefined : session.modelFallback?.model
+}
+
 /** Reuse the initialize catalog and held options without another CLI request. */
 export function claudeStructuredSessionOptionsFrom(
   session: ClaudeSession,
@@ -213,9 +218,8 @@ export function claudeStructuredSessionOptionsFrom(
   const discovered = listedModels(catalog ? { models: catalog } : null)
   const listed = discovered.length > 0 ? discovered : seedModels()
   const current = readClaudeCurrentModel(session)
-  const reportsPick = !session.modelPickAwaitingTurn
   const model = current.id === 'default' ? undefined : current.id
-  const models = structuredAgentSessionOptionModels(listed, model, (row) => ({
+  const models = structuredAgentSessionOptionModels('claude', listed, model, (row) => ({
     ...row,
     resolvedModel: null
   }))
@@ -231,7 +235,7 @@ export function claudeStructuredSessionOptionsFrom(
     session.reportedOptions.fastMode ??
     (session.fastModeState === undefined ? undefined : session.fastModeState !== 'off')
   const confirmed = [
-    ...(current.confirmed && reportsPick ? ['model'] : []),
+    ...(current.confirmed ? ['model'] : []),
     ...(effort && session.confirmedOptions.has('effort') ? ['effort'] : []),
     ...(fastMode !== undefined &&
     (session.confirmedOptions.has('fastMode') || !session.options.has('fastMode'))
@@ -244,8 +248,8 @@ export function claudeStructuredSessionOptionsFrom(
     ...(changesLive ? {} : { effortFixed: true as const }),
     current: {
       model,
-      reportedModel: reportsPick ? session.reportedOptions.reportedModel : undefined,
       reportedPermissionMode: session.reportedOptions.reportedPermissionMode,
+      fallbackModel: claudeShownFallbackModel(session),
       ...(effort ? { effort } : {}),
       ...(fastMode !== undefined ? { fastMode } : {}),
       ...(session.fastModeState ? { fastModeState: session.fastModeState } : {}),

@@ -5,7 +5,7 @@ import type {
   OrcaProfileOrgMemberMutationResult,
   OrcaProfileOrgMemberRemoveArgs,
   OrcaProfileOrgMembersListResult
-} from '../../../shared/orca-profiles'
+} from '../../../shared/orca-profiles/orca-profiles'
 import type { ActiveOrcaProfileState } from '../profile-index-store'
 import { ensureActiveOrcaProfile } from '../profile-index-store'
 import type { OrcaCloudAuthConfig } from '../cloud-auth/profile-cloud-auth-config'

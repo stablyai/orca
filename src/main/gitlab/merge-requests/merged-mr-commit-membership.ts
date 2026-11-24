@@ -1,5 +1,6 @@
 import { createHash } from 'node:crypto'
 import {
+  COMMIT_ID_SET_RETENTION,
   MergedReviewMembershipMemo,
   type MergedReviewCommitMembership
 } from '../../source-control/merged-review-membership-memo'
@@ -11,14 +12,9 @@ import { glabHostnameArgs, glabRepoExecOptions } from '../projects/gitlab-projec
 import type { LocalGitExecOptions } from '../projects/gitlab-known-host-probe'
 import type { ProjectRef } from '../projects/project-ref-parser'
 import { encodedProject } from '../projects/project-path-encoding'
+import { mergedReviewHeadIsEquivalent } from '../../source-control/merged-review-head-equivalence'
 
-const membershipMemo = new MergedReviewMembershipMemo<ReadonlySet<string>>({
-  weight: (ids) => 1024 + 256 * ids.size,
-  maxWeight: 16 * 1024 * 1024,
-  failureWeight: 1024,
-  lru: true,
-  ttl: () => 6 * 60 * 60_000
-})
+const membershipMemo = new MergedReviewMembershipMemo(COMMIT_ID_SET_RETENTION)
 const viewers: CoalescedProbes<number | null> = new Map()
 const digest = (parts: unknown[]) =>
   createHash('sha256').update(JSON.stringify(parts)).digest('hex')
@@ -48,11 +44,6 @@ export function forgetMergedMRCommitMembership(
 ): void {
   const prefix = `${targetKey(args)}:${args.targetProjectId}:`
   membershipMemo.discardWhere((key) => key.startsWith(prefix))
-}
-
-export function resetMergedMRCommitMembershipForTest(): void {
-  membershipMemo.clear()
-  viewers.clear()
 }
 
 function revisionKey(headSha: unknown, diffRefs: unknown): (string | null)[] | null {
@@ -87,6 +78,7 @@ export async function mergedMRContainsHead(
     iid: number
     headOid: string
     revisionHeadSha?: string
+    baseRefName?: string
     diffRefs?: unknown
     userRefresh?: boolean
   }
@@ -142,5 +134,17 @@ export async function mergedMRContainsHead(
           load,
           { refreshFailed: args.userRefresh }
         )
-  return ids.has(args.headOid.toLowerCase()) ? 'contained' : 'not-contained'
+  if (ids.has(args.headOid.toLowerCase())) {
+    return 'contained'
+  }
+  // A local rebase mints a SHA GitLab never saw; prove it adds nothing beyond the merged MR.
+  const equivalent = await mergedReviewHeadIsEquivalent({
+    repoPath: args.repoPath,
+    connectionId: args.connectionId,
+    localGitOptions: args.localGitOptions,
+    reviewHeadOid: args.revisionHeadSha,
+    baseBranchName: args.baseRefName,
+    headOid: args.headOid
+  })
+  return equivalent ? 'contained' : 'not-contained'
 }

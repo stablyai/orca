@@ -1,7 +1,10 @@
-import type { PluginWorkerFactory } from './workers/plugin-worker-manager'
-import type { KeybindingOverrides } from '../../shared/keybindings'
-import type { PluginKillListEntry } from '../../shared/plugins/catalog/plugin-kill-list'
-import type { PluginDesktopFrameServices } from './workers/plugin-host-method-bindings'
+import type { PluginWorkerFactory } from './workers/worker-supervision/plugin-worker-startup'
+import type { KeybindingOverrides } from '../../shared/keybindings/types'
+import type {
+  PluginBlockNotice,
+  PluginKillListEntry
+} from '../../shared/plugins/catalog/plugin-kill-list'
+import type { PluginDesktopFrameServices } from './workers/host-api/plugin-host-method-bindings'
 import type { PluginStatusBarState } from './status-bar/plugin-status-bar-state'
 import type { PluginAppearanceService } from './appearance/plugin-appearance-service'
 import type { PluginEditorTypographySource } from './appearance/plugin-editor-typography'
@@ -11,10 +14,12 @@ export type PluginServiceOptions = {
   hostVersion: string
   isPluginSystemEnabled: () => boolean
   getDisabledPlugins: () => string[]
+  getRequiredPlugins?: () => readonly string[] | undefined
+  getCatalogManagingTeams?: (source: { url: string; ref: string }) => string[] | undefined
   getPluginConsents: () => Record<string, string>
   getDevPluginPaths: () => string[]
   getKeybindings?: () => KeybindingOverrides
-  getPluginKillListEntry?: (pluginKey: string) => PluginKillListEntry | null
+  getPluginKillListEntry?: (pluginKey: string) => (PluginKillListEntry & PluginBlockNotice) | null
   hostEntryPath?: string
   /** Where this release's bundled plugins live; absent where nothing is shipped. */
   bundledPluginRoot?: string

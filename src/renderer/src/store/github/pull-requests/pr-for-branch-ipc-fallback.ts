@@ -1,7 +1,7 @@
 import type {
   GitHubPRRefreshCandidate,
   GitHubPRRefreshReason
-} from '../../../../../shared/github/pull-request-refresh-types'
+} from '../../../../../shared/github/pull-requests/refresh/pull-request-refresh-types'
 
 /** The direct lookup when main has no refresh coordinator; only a manual one may start a stopped WSL distro (E9). */
 export function lookupPRForBranchOverIpc(
@@ -16,6 +16,7 @@ export function lookupPRForBranchOverIpc(
     branch: candidate.branch,
     ...(options.userRefresh === true ? { userRefresh: true } : {}),
     linkedPRNumber: candidate.linkedPRNumber ?? null,
+    ...(candidate.linkedPRUrl ? { linkedPRUrl: candidate.linkedPRUrl } : {}),
     fallbackPRNumber,
     acceptMergedFallbackPR:
       fallbackPRNumber !== null && (candidate.fallbackPRSource ?? null) !== null,

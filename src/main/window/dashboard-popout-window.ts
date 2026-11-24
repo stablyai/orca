@@ -1,21 +1,27 @@
 import { mainI18n, translateMain } from '../i18n/main-i18n'
 import { app, BrowserWindow, nativeTheme, type WebContents, type Event } from 'electron'
 import { join } from 'node:path'
-import type { Store } from '../persistence/loading-store/store'
-import { isBackgroundLaunch, showWindowWithoutStealingFocus } from './foreground-activation-policy'
-import { rectHasVisibleAreaOnAnyDisplay } from './window-bounds-validation'
-import { sendToTrustedUIRenderer } from '../ipc/ui'
-import { installPrivilegedWindowNavigationPolicy } from './privileged-window-navigation'
-import { stepUIZoomLevel, type UIZoomDirection } from '../../shared/ui-zoom-level'
-import { nativeZoomCommandMatchesKeybindings } from '../../shared/window-shortcut-policy'
+import type { NativeSettingsProjection } from '../core-desktop/native-settings-projection'
 import {
-  keybindingMatchesAction,
-  type KeybindingActionId,
-  type KeybindingInput,
-  type KeybindingOverrides
-} from '../../shared/keybindings'
+  isBackgroundLaunch,
+  showWindowWithoutStealingFocus
+} from './activation/foreground-activation-policy'
+import { rectHasVisibleAreaOnAnyDisplay } from './presentation/window-bounds-validation'
+import { sendToTrustedUIRenderer } from '../ipc/ui'
+import { installPrivilegedWindowNavigationPolicy } from './security/privileged-window-navigation'
+import {
+  stepUIZoomLevel,
+  type UIZoomDirection
+} from '../../shared/app-lifecycle/windows/ui-zoom-level'
+import { nativeZoomCommandMatchesKeybindings } from '../../shared/keybindings/window-shortcut-policy'
+import { keybindingMatchesAction } from '../../shared/keybindings/matching'
+import type {
+  KeybindingActionId,
+  KeybindingInput,
+  KeybindingOverrides
+} from '../../shared/keybindings/types'
 import { wslHostsWindowArguments } from '../wsl/host-lifecycle/wsl-host-gate'
-import { isMacAppPasteInput } from './mac-app-paste-input'
+import { isMacAppPasteInput } from './editing/mac-app-paste-input'
 
 const MIN_WIDTH = 480
 const MIN_HEIGHT = 360
@@ -101,13 +107,13 @@ function loadDashboardPopout(window: BrowserWindow): void {
   }
 }
 
-function resolveRestoredBounds(store: Store | null): {
+function resolveRestoredBounds(nativeSettings: NativeSettingsProjection | null): {
   x: number
   y: number
   width: number
   height: number
 } | null {
-  const raw = store?.getUI().dashboardPopoutBounds ?? null
+  const raw = nativeSettings?.getUI().dashboardPopoutBounds ?? null
   if (
     raw &&
     raw.width >= MIN_WIDTH &&
@@ -124,7 +130,7 @@ function resolveRestoredBounds(store: Store | null): {
 
 /** Reuse a native-framed companion window with the main preload and its own popout.html renderer. */
 export function createOrFocusDashboardPopout(
-  store: Store | null,
+  nativeSettings: NativeSettingsProjection | null,
   options: { getKeybindings?: () => KeybindingOverrides | undefined } = {}
 ): BrowserWindow {
   if (dashboardPopoutWindow && !dashboardPopoutWindow.isDestroyed()) {
@@ -140,7 +146,7 @@ export function createOrFocusDashboardPopout(
     return dashboardPopoutWindow
   }
 
-  const savedBounds = resolveRestoredBounds(store)
+  const savedBounds = resolveRestoredBounds(nativeSettings)
 
   // Serve-only: this window lists saved WSL hosts and their Connect, as the main window does.
   const wslArguments = wslHostsWindowArguments()
@@ -177,12 +183,12 @@ export function createOrFocusDashboardPopout(
   // Apply persisted app zoom or the popout always opens at 100%.
   window.webContents.on('dom-ready', () => {
     if (!window.isDestroyed()) {
-      window.webContents.setZoomLevel(store?.getUI().uiZoomLevel ?? 0)
+      window.webContents.setZoomLevel(nativeSettings?.getUI().uiZoomLevel ?? 0)
     }
   })
   // Compare against last app zoom, not live window zoom, so local changes persist until app-wide zoom actually changes.
-  let lastFollowedZoomLevel = store?.getUI().uiZoomLevel ?? 0
-  const unsubscribeUIChanged = store?.onUIChanged((ui) => {
+  let lastFollowedZoomLevel = nativeSettings?.getUI().uiZoomLevel ?? 0
+  const unsubscribeUIChanged = nativeSettings?.onUIChanged((ui) => {
     const level = ui.uiZoomLevel ?? 0
     if (level === lastFollowedZoomLevel) {
       return
@@ -244,7 +250,10 @@ export function createOrFocusDashboardPopout(
       if (bounds.width < MIN_WIDTH || bounds.height < MIN_HEIGHT) {
         return
       }
-      store?.updateUI({ dashboardPopoutBounds: bounds })
+      void nativeSettings?.requestCoreWrite({
+        kind: 'ui',
+        updates: { dashboardPopoutBounds: bounds }
+      })
     }, 500)
   }
   window.on('resize', saveBounds)

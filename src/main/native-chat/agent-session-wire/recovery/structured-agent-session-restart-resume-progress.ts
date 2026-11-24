@@ -2,13 +2,16 @@ import { randomUUID } from 'node:crypto'
 import type { StructuredAgentSessionContinuationOutcome } from './structured-agent-session-restart-continuation'
 import type { AgentSessionStatusSummary } from '../../../../shared/agent-session/agent-session-wire'
 import type { StructuredAgentSessionRestartOfferSession } from './structured-agent-session-restart-offer-withdrawal'
+import type { RestartContinuationOptions } from './structured-agent-session-restart-resume-contract'
+import type { StructuredAgentSessionResumeCandidate } from './structured-agent-session-restart-resume-set'
 
 type Phase = NonNullable<AgentSessionStatusSummary['restartResume']>['phase']
 
 /** Progress belongs to one live action, independent of durable recovery records. */
 export function createRestartResumeProgress(
   sessions: ReadonlyMap<string, StructuredAgentSessionRestartOfferSession>,
-  publish: ((sessionId: string) => void) | undefined
+  publish: ((sessionId: string) => void) | undefined,
+  { onReserved }: RestartContinuationOptions = {}
 ) {
   const operationId = randomUUID()
   const owned = new Map<string, StructuredAgentSessionRestartOfferSession>()
@@ -16,6 +19,11 @@ export function createRestartResumeProgress(
   let active = true
   return {
     skipped,
+    /** The chats this action reserved, told before any agent starts; the rest are skipped. */
+    reserved(eligible: readonly string[], rows: StructuredAgentSessionResumeCandidate[]): void {
+      this.skipExcluded(eligible, rows)
+      onReserved?.(rows)
+    },
     skipExcluded(requested: readonly string[], admitted: readonly { sessionId: string }[]): void {
       const admittedIds = new Set(admitted.map((entry) => entry.sessionId))
       for (const sessionId of new Set(requested)) {

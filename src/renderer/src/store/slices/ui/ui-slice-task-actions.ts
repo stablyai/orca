@@ -1,13 +1,13 @@
 import type { UISlice, UISliceGet, UISliceSet } from './ui-slice-contract'
 import { findPrevLiveNonTaskStackHistoryIndex } from './workspace-navigation-history'
-import { hasFeatureInteraction } from '../../../../../shared/feature-interactions'
+import { hasFeatureInteraction } from '../../../../../shared/feature-education/interactions/feature-interactions'
 import {
   normalizeVisibleTaskProviders,
   restoreAvailableDefaultTaskProvider,
   resolveVisibleTaskProvider
 } from '../../../../../shared/work-items/task-providers'
 import { PER_REPO_FETCH_LIMIT } from '../../../../../shared/work-items/work-item-pagination'
-import { isGitRepoKind } from '../../../../../shared/repo-kind'
+import { isGitRepoKind } from '../../../../../shared/repository/repo-kind'
 import { presetToQuery } from './ui-slice-hydration-sanitizers'
 
 const LINEAR_TASK_PREFETCH_LIMIT = 36

@@ -7,7 +7,10 @@ import {
   BROWSER_CLIENT_EXPECT_URL_HOST_CAPABILITY
 } from '../../../../shared/browser/client-hosting/browser-client-automation-protocol'
 import { BROWSER_CLIENT_FILE_CHANNEL_HOST_CAPABILITY } from '../../../../shared/browser/client-hosting/browser-client-file-channel-protocol'
-import type { BrowserClientHostLeaseAuthority } from '../../../../shared/browser/client-hosting/browser-client-host-protocol'
+import {
+  BROWSER_CLIENT_PAGE_INITIALIZATION_CAPABILITY,
+  type BrowserClientHostLeaseAuthority
+} from '../../../../shared/browser/client-hosting/browser-client-host-protocol'
 import type { PairedRuntimeConnection } from '../../../../shared/remote-runtime/pairing/paired-runtime-connection'
 import {
   getPreferredPairedRuntimeConnection,
@@ -32,7 +35,10 @@ import {
   executeBrowserClientPageAutomation,
   retireBrowserClientPageAutomation
 } from '../../client-pages/execution/browser-client-page-automation-runtime'
-import { selectBrowserClientPageRenderer } from '../../client-pages/renderer/browser-client-page-renderer-runtime'
+import {
+  selectBrowserClientPageRenderer,
+  whenBrowserClientPageRendererAvailable
+} from '../../client-pages/renderer/browser-client-page-renderer-runtime'
 import { PairedRuntimeBrowserClientHostComposition } from './paired-runtime-browser-client-host-composition'
 import { PairedRuntimeBrowserClientHost } from './paired-runtime-browser-client-host'
 import {
@@ -85,6 +91,7 @@ const browserClientHosts =
       const routes = registerBrowserClientHostEnvironmentRoutes(
         input.environmentId,
         downloadRelay,
+        (browserPageId) => executor?.pageCookieJar(browserPageId) ?? null,
         (params) => executor?.recordPublishedPageUrl(params)
       )
       return new PairedRuntimeBrowserClientHostComposition({
@@ -108,7 +115,13 @@ const browserClientHosts =
             retireAutomation: retireBrowserClientPageAutomation,
             fileChannel,
             uploadStaging,
-            onPageUnavailable
+            claimRelayedDownload: (guestWebContentsId) =>
+              browserManager.claimNextDownload(guestWebContentsId, null),
+            // A window reload loses every guest before its new renderer attaches; recreating them earlier fails for good.
+            onPageUnavailable: (browserPageId, generation) =>
+              whenBrowserClientPageRendererAvailable(() =>
+                onPageUnavailable(browserPageId, generation)
+              )
           })
           return executor
         },
@@ -122,12 +135,14 @@ const browserClientHosts =
             browserHostClientId: getBrowserClientHostId(),
             hostCapabilities: [
               'webview',
+              BROWSER_CLIENT_PAGE_INITIALIZATION_CAPABILITY,
               BROWSER_CLIENT_PROFILE_SWITCH_CAPABILITY,
               BROWSER_CLIENT_AUTOMATION_HOST_CAPABILITY,
               BROWSER_CLIENT_EXPECT_URL_HOST_CAPABILITY,
               BROWSER_CLIENT_FILE_CHANNEL_HOST_CAPABILITY
             ],
             handler,
+            acquireInitialization: (event) => executor?.acquireInitialization(event),
             getPageInventory,
             pageReconciliationProtocolVersion: 1,
             fileChannelProtocolVersion: 1,

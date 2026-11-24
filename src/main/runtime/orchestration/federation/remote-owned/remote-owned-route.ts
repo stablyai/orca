@@ -7,14 +7,15 @@ import {
 } from '../../../rpc/methods/orchestration/access/orchestration-method-access'
 import { emptyWorkerListPage } from '../../../rpc/methods/orchestration/worker/worker-list-method'
 import { ORCHESTRATION_FLEET_PAGE_MAX } from '../../../../../shared/orchestration/fleet/orchestration-fleet-projection'
-import { ORCA_SESSION_ADDRESS_PREFIX } from '../../../../../shared/orca-session-address-prefix'
-import { WorkerStartParams } from '../../../../../shared/rpc-contract/orchestration-worker-start-params'
+import { ORCA_SESSION_ADDRESS_PREFIX } from '../../../../../shared/agent-session/identity/orca-session-address-prefix'
+import { WorkerStartParams } from '../../../../../shared/rpc-contract/orchestration/orchestration-worker-start-params'
 import { isOrchestrationMutation } from '../../../../../shared/orchestration/orchestration-rpc-contract'
 import type { OrchestrationDb } from '../../db/orchestration-db'
 import { runLifecycleWriteTransaction } from '../../db/lifecycle-write-transaction-runner'
 import {
   getRemoteDispatch,
-  getRemoteOwnedQuestion
+  getRemoteOwnedQuestion,
+  recordRemoteAskAnswered
 } from '../../db/remote-owned/remote-dispatch-records'
 import { adoptRemoteAttempt } from '../../db/remote-owned/remote-placements'
 import {
@@ -78,7 +79,7 @@ export async function routeRemoteOwnedCall(
   const record = subject.dispatchId ? getRemoteDispatch(db, subject.dispatchId) : undefined
   if (request.method === 'orchestration.workerShow' && record) {
     // A status read is this Orca's record, never a call there: instant whatever the server is doing.
-    return { handled: true, result: remoteWorkerShow(runtime, record) }
+    return { handled: true, result: await remoteWorkerShow(runtime, record) }
   }
   const forward = remoteForwardKey(
     runtime,
@@ -104,14 +105,16 @@ export async function routeRemoteOwnedCall(
       }
       return {
         handled: true,
-        result: settleUnansweredAbandon(runtime, subject.link, subject.dispatchId)
+        result: await settleUnansweredAbandon(runtime, subject.link, subject.dispatchId)
       }
     }
   }
-  return {
-    handled: true,
-    result: await forwardToLink(runtime, subject, request.method, access, values, forward)
+  const result = await forwardToLink(runtime, subject, request.method, access, values, forward)
+  if (request.method === 'orchestration.reply' && subject.questionId) {
+    // The answer never runs this Orca's reply, so its question's ending is recorded here.
+    recordRemoteAskAnswered(db, subject.questionId)
   }
+  return { handled: true, result }
 }
 
 /** `--on <server>`: a start, a list, or a receipt lookup there; send and reply --on to anything else stay peer mail. */
@@ -128,7 +131,7 @@ async function routeServerCall(
     return LOCAL
   }
   checkDeclaredOrchestrationAccess(access, values, ctx)
-  const server = runtime.resolveOrchestrationWorkerServer(on)
+  const server = await runtime.resolveOrchestrationWorkerServer(on)
   const db = runtime.getOrchestrationDb()
   if (request.method === 'orchestration.workerStart') {
     if (
@@ -208,7 +211,7 @@ async function routeServerCall(
   }
 }
 
-type RemoteSubject = { link: RemoteRunLinkRow; dispatchId?: string }
+type RemoteSubject = { link: RemoteRunLinkRow; dispatchId?: string; questionId?: string }
 
 /** The worker or question a call names, when a paired server owns it. Tasks stay in this Orca's graph. */
 function remoteSubject(
@@ -229,7 +232,7 @@ function remoteSubject(
     const conversationId = record?.conversation_id ?? question?.conversation_id
     const link = conversationId ? getRemoteRunLink(db, conversationId) : undefined
     if (link) {
-      return { link, dispatchId: record?.dispatch_id }
+      return { link, dispatchId: record?.dispatch_id, questionId: question?.message_id }
     }
   }
   return undefined
@@ -259,7 +262,7 @@ async function forwardToLink(
   forward?: RemoteForwardKey
 ): Promise<unknown> {
   const db = runtime.getOrchestrationDb()
-  const server = remoteServerName(runtime, link.environment_id)
+  const server = await remoteServerName(runtime, link.environment_id)
   const params = paramsForServer(access, values)
   try {
     const answer = await callRemoteOwnedServer(runtime, link, {

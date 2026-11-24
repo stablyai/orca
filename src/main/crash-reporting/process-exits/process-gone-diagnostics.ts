@@ -1,14 +1,18 @@
 import { app } from 'electron'
-import { sanitizeCrashReportDetails } from '../../../shared/crash-report-redaction'
-import type { CrashReportDetailValue } from '../../../shared/crash-reporting'
+import { sanitizeCrashReportDetails } from '../../../shared/crash-reporting/crash-report-redaction'
+import type { CrashReportDetailValue } from '../../../shared/crash-reporting/crash-reporting'
 import { getSystemMemoryDetails, memoryKBFieldMB } from '../memory/system-memory-details'
-import { getStartupRtPrioOutcome, readZeroRtTimeLimit } from '../../startup/linux-rttime-limit'
+import {
+  getStartupRtPrioOutcome,
+  readZeroRtTimeLimit
+} from '../../startup/linux-runtime/linux-rttime-limit'
 import {
   PRE_GONE_SYSTEM_MEMORY_SAMPLE_INTERVAL_MS,
   preGoneSystemMemoryDetails,
-  resetPreGoneSystemMemorySamplingForTest,
   startPreGoneSystemMemorySampling
 } from '../memory/pre-gone-host-memory'
+import { preGonePtyTreeMemoryDetails } from '../memory/pre-gone-pty-tree-memory'
+import { observeMainMemorySample } from '../../memory/main-memory-spike-capture'
 
 type ProcessMetricLike = {
   pid?: unknown
@@ -195,10 +199,11 @@ function sampledProcessIdentities(metrics: ProcessMetricLike[]): PreGoneSampledP
 export function samplePreGoneProcessMetrics(nowMs: number = Date.now()): void {
   try {
     const metrics = app.getAppMetrics()
-    preGoneSample = {
-      details: collectProcessGoneMetricDetails(metrics),
-      processes: sampledProcessIdentities(metrics),
-      sampledAtMs: nowMs
+    const details = collectProcessGoneMetricDetails(metrics)
+    preGoneSample = { details, processes: sampledProcessIdentities(metrics), sampledAtMs: nowMs }
+    const mainMB = details.processMetricsBrowserWorkingSetMB
+    if (typeof mainMB === 'number') {
+      observeMainMemorySample(mainMB, nowMs, details)
     }
   } catch {
     // Preserve the last good sample when enumeration fails.
@@ -216,15 +221,6 @@ export function startPreGoneCrashSampling(
   preGoneSampleTimer = setInterval(() => samplePreGoneProcessMetrics(), intervalMs)
   preGoneSampleTimer.unref?.()
   startPreGoneSystemMemorySampling(systemMemoryIntervalMs)
-}
-
-export function resetPreGoneCrashSamplingForTest(): void {
-  if (preGoneSampleTimer) {
-    clearInterval(preGoneSampleTimer)
-  }
-  preGoneSampleTimer = null
-  preGoneSample = null
-  resetPreGoneSystemMemorySamplingForTest()
 }
 
 const PROCESS_METRICS_KEY_PREFIX = 'processMetrics'
@@ -309,5 +305,6 @@ export function buildProcessGoneCrashDetails(
     Object.assign(crashDetails, preGoneSampleDetails(preGoneSample, nowMs))
   }
   Object.assign(crashDetails, preGoneSystemMemoryDetails(nowMs))
+  Object.assign(crashDetails, preGonePtyTreeMemoryDetails(nowMs))
   return crashDetails
 }

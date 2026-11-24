@@ -1,10 +1,10 @@
 import type { StateCreator } from 'zustand'
 import type { AppState } from '../../types'
 import type { GitHubSlice } from '../github-slice-contract'
-import type { IssueInfo } from '../../../../../shared/github/pull-request-types'
-import { isWslDistroNotRunningRefusal } from '../../../../../shared/wsl-distro-not-running-refusal'
+import type { IssueInfo } from '../../../../../shared/github/pull-requests/pull-request-types'
+import { isWslDistroNotRunningRefusal } from '../../../../../shared/remote-runtime/wsl-hosts/wsl-distro-not-running-refusal'
 import { callRuntimeRpc } from '../../../runtime/rpc/calls/runtime-rpc-call'
-import { sourceScopedRepoCacheKey } from '../cache/cache-identity'
+import { issueCacheSuffix, sourceScopedRepoCacheKey } from '../cache/cache-identity'
 import { isFresh, withBoundedCacheEntry } from '../cache/cache-policy'
 import { inflightIssueRequests } from '../requests/request-coordination'
 import { findRepoForGitHubOwner } from '../repositories/repository-routing'
@@ -25,7 +25,7 @@ export const createIssueActions = (
     const cacheKey = sourceScopedRepoCacheKey(
       repoPath,
       repoId,
-      String(number),
+      issueCacheSuffix(number, options?.ownerRepo),
       requestSettings,
       repo?.connectionId,
       repo?.executionHostId,
@@ -56,14 +56,19 @@ export const createIssueActions = (
             ? await callRuntimeRpc<IssueInfo | null>(
                 { kind: 'environment', environmentId: requestContext.target.environmentId },
                 'github.issue',
-                { repo: requestContext.target.runtimeRepoId, number },
-                { timeoutMs: 30_000 }
+                {
+                  repo: requestContext.target.runtimeRepoId,
+                  number,
+                  ownerRepo: options?.ownerRepo
+                },
+                { timeoutMs: 30_000, background: options?.background === true }
               )
             : await window.api.gh.issue({
                 repoPath,
                 repoId,
                 number,
-                sourceContext: options?.sourceContext
+                sourceContext: options?.sourceContext,
+                ownerRepo: options?.ownerRepo
               })
         set((s) => ({
           issueCache: withBoundedCacheEntry(s.issueCache, cacheKey, {

@@ -1,20 +1,28 @@
 import type { ManagedPane } from '@/lib/pane-manager/pane-manager-types'
 import {
-  copyTerminalPaneMenuAgentSessionId,
+  copyTerminalPaneAgentSessionId,
   copyTerminalPaneMenuPaneId,
   copyTerminalPaneMenuSelection,
   copyTerminalPaneMenuTerminalId
 } from './terminal-pane-menu-copy-actions'
 import { useAppStore } from '@/store/index'
 import { makePaneKey } from '../../../../../shared/workspace-layout/stable-pane-id'
-import { resolvePaneAgentSessionId } from '../../../lib/agent-session/identity/pane-agent-session-id'
-import type { UseTerminalPaneContextMenuDeps } from '../context-menu/terminal-pane-context-menu-types'
+import { toHostSessionPaneKey } from '../../../../../shared/workspace-layout/terminal-surface-id'
+import type {
+  TerminalPaneAgentIdCopy,
+  UseTerminalPaneContextMenuDeps
+} from '../context-menu/terminal-pane-context-menu-types'
+import { tryRuntimeTargetForWorktreeOwner } from '@/store/slices/worktrees/listing/worktree-owner-target'
+import { callRuntimeRpc } from '@/runtime/rpc/calls/runtime-rpc-call'
+import { focusPanePreservingOverlays } from '@/lib/pane-manager/pane-focus/pane-overlay-focus'
+import { isDocumentBodyOrNull } from '../input/ime/terminal-ime-input-context-refresh'
 
 export function createTerminalPaneMenuCopyActions({
   paneTransportsRef,
   tabId,
+  worktreeId,
   resolveMenuPane
-}: Pick<UseTerminalPaneContextMenuDeps, 'paneTransportsRef' | 'tabId'> & {
+}: Pick<UseTerminalPaneContextMenuDeps, 'paneTransportsRef' | 'tabId' | 'worktreeId'> & {
   resolveMenuPane: () => ManagedPane | null
 }) {
   const onCopy = async (): Promise<void> => copyTerminalPaneMenuSelection(resolveMenuPane())
@@ -36,12 +44,44 @@ export function createTerminalPaneMenuCopyActions({
     return copyTerminalPaneMenuTerminalId(pane, tabId, ptyId)
   }
 
-  const onCopyAgentSessionId = async (): Promise<void> => {
-    const pane = resolveMenuPane()
-    const sessionId = pane
-      ? resolvePaneAgentSessionId(useAppStore.getState(), makePaneKey(tabId, pane.leafId))
-      : null
-    return copyTerminalPaneMenuAgentSessionId(pane, sessionId)
+  const onCopyAgentSessionId = async (): Promise<void> =>
+    copyTerminalPaneAgentSessionId(resolveMenuPane(), tabId)
+  let agentIdPane: ManagedPane | null = null
+  const agentIdCopy: TerminalPaneAgentIdCopy = {
+    // The pane's execution host names its agents, so ask the owner; a failed commit retries there.
+    resolve: async () => {
+      const pane = resolveMenuPane()
+      agentIdPane = pane
+      const target = tryRuntimeTargetForWorktreeOwner(useAppStore.getState(), worktreeId)
+      if (!pane || !target) {
+        return null
+      }
+      const result = await callRuntimeRpc<{ orcaSessionId: string | null }>(
+        target,
+        'terminal.agentId',
+        // The host matches its own pane keys, not this client's mirrored ones.
+        { paneKey: toHostSessionPaneKey(makePaneKey(tabId, pane.leafId)), worktreeId }
+      )
+      return result.orcaSessionId
+    },
+    // Like Copy Session ID: xterm needs its textarea focused for typing after the menu (#592), but
+    // a slow answer must not pull focus back from wherever the user has moved since.
+    focusPane: () => {
+      const active = document.activeElement
+      if (
+        agentIdPane &&
+        (isDocumentBodyOrNull(active, document) || agentIdPane.container.contains(active))
+      ) {
+        focusPanePreservingOverlays(agentIdPane)
+      }
+    }
   }
-  return { onCopy, onSelectAll, onCopyPaneId, onCopyTerminalId, onCopyAgentSessionId }
+  return {
+    onCopy,
+    onSelectAll,
+    onCopyPaneId,
+    onCopyTerminalId,
+    onCopyAgentSessionId,
+    agentIdCopy
+  }
 }

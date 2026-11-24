@@ -6,6 +6,7 @@ import { recoverLinearQuery } from './linear-request-recovery'
 export type LinearSdkModule = {
   LinearClient: new (options: LinearClientOptions) => LinearClient
   AuthenticationLinearError: new (...args: never[]) => Error
+  parseLinearError: (error: unknown) => Error
   LinearError: new (...args: never[]) => LinearError
 }
 
@@ -19,9 +20,38 @@ export function loadLinearSdk(): LinearSdkModule {
   return cached
 }
 
-export function createLinearClient(options: LinearClientOptions): LinearClient {
+// reauthorize: a login whose token Linear refused gets one new Authorization value, or null.
+export type LinearClientCreateOptions = LinearClientOptions & {
+  reauthorize?: () => Promise<string | null>
+}
+
+function isAuthFailure(error: unknown): boolean {
+  const sdk = loadLinearSdk()
+  return sdk.parseLinearError(error) instanceof sdk.AuthenticationLinearError
+}
+
+export function createLinearClient({
+  reauthorize,
+  ...options
+}: LinearClientCreateOptions): LinearClient {
   const client = new (loadLinearSdk().LinearClient)(options)
   const requestOptions = client.options
+  // A token that expired (say, while the Mac slept) is refreshed and the call tried once more.
+  const withLogin = <T>(run: () => Promise<T>) =>
+    reauthorize
+      ? async (): Promise<T> => {
+          try {
+            return await run()
+          } catch (error) {
+            const authorization = isAuthFailure(error) ? await reauthorize() : null
+            if (authorization === null) {
+              throw error
+            }
+            client.client.setHeader('Authorization', authorization)
+            return await run()
+          }
+        }
+      : run
   const request = client.client.request.bind(client.client)
   const rawRequest = client.client.rawRequest.bind(client.client)
   client.client.request = <Data, Variables extends Record<string, unknown>>(
@@ -31,7 +61,7 @@ export function createLinearClient(options: LinearClientOptions): LinearClient {
   ): Promise<Data> =>
     recoverLinearQuery(
       query,
-      () => request<Data, Variables>(query, variables, headers),
+      withLogin(() => request<Data, Variables>(query, variables, headers)),
       requestOptions
     )
   client.client.rawRequest = <Data, Variables extends Record<string, unknown>>(
@@ -41,7 +71,7 @@ export function createLinearClient(options: LinearClientOptions): LinearClient {
   ) =>
     recoverLinearQuery(
       query,
-      () => rawRequest<Data, Variables>(query, variables, headers),
+      withLogin(() => rawRequest<Data, Variables>(query, variables, headers)),
       requestOptions
     )
   return client

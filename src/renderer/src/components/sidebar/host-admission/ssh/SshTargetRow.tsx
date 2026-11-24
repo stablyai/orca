@@ -1,6 +1,9 @@
 import React from 'react'
 import { Loader2 } from 'lucide-react'
-import type { SshTarget, SshConnectionState } from '../../../../../../shared/ssh-types'
+import type {
+  SshTarget,
+  SshConnectionState
+} from '../../../../../../shared/remote-runtime/ssh/ssh-types'
 import { useTranslate } from '@/i18n/use-translate'
 import { isConnectingSshStatus } from '@/ssh/ssh-connection-recoverability'
 import {

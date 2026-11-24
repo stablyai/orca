@@ -8,6 +8,8 @@ const PERSISTENCE_RETRY_DELAY_MS = 200
 
 export type ConnectionLogStore = {
   append: (hostId: string, entry: ConnectionLogEntry) => void
+  /** Drops and persists empty history; later appends for the removed host are ignored. */
+  discard: (hostId: string) => Promise<void>
   flush: () => Promise<void>
   get: (hostId: string) => readonly ConnectionLogEntry[]
   hydrate: (hostId: string) => Promise<void>
@@ -27,6 +29,8 @@ export function createConnectionLogStore(
   const listenersByHost = new Map<string, Set<() => void>>()
   const hydratedHosts = new Set<string>()
   const hydrationFailedHosts = new Set<string>()
+  // Removed host ids are never reused, so late events from closing clients must not recreate history.
+  const discardedHosts = new Set<string>()
   const hydrationByHost = new Map<string, Promise<void>>()
   const activeSaveByHost = new Map<string, Promise<void>>()
   const dirtyHosts = new Set<string>()
@@ -133,6 +137,9 @@ export function createConnectionLogStore(
     const pending = persistence
       .load(hostId)
       .then((stored) => {
+        if (hydratedHosts.has(hostId)) {
+          return
+        }
         const live = entriesByHost.get(hostId) ?? []
         const seen = new Set<string>()
         const merged: ConnectionLogEntry[] = []
@@ -163,6 +170,9 @@ export function createConnectionLogStore(
 
   return {
     append(hostId, entry) {
+      if (discardedHosts.has(hostId)) {
+        return
+      }
       let entries = entriesByHost.get(hostId)
       if (!entries) {
         entries = []
@@ -174,6 +184,15 @@ export function createConnectionLogStore(
       void hydrateHost(hostId, false)
         .then(() => persist(hostId))
         .catch(() => {})
+    },
+
+    async discard(hostId) {
+      discardedHosts.add(hostId)
+      entriesByHost.delete(hostId)
+      hydratedHosts.add(hostId)
+      hydrationFailedHosts.delete(hostId)
+      notify(hostId)
+      await flushHost(hostId)
     },
 
     flush: async () => {

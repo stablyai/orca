@@ -1,16 +1,21 @@
+import { isRecord } from '../agent-status/child-work/agent-status-child-work-value-guards'
 import { parseAgentHookJson } from './request-body'
 
-export function extractAssistantTextFromLine(line: string): string | undefined {
+export function parseTranscriptRecord(line: string): Record<string, unknown> | undefined {
   let entry: unknown
   try {
     entry = parseAgentHookJson(line)
   } catch {
     return undefined
   }
-  if (typeof entry !== 'object' || entry === null) {
+  return isRecord(entry) ? entry : undefined
+}
+
+export function extractAssistantTextFromLine(line: string): string | undefined {
+  const record = parseTranscriptRecord(line)
+  if (!record) {
     return undefined
   }
-  const record = entry as Record<string, unknown>
   if (record.type === 'assistant.message') {
     const data = record.data
     if (typeof data === 'object' && data !== null) {

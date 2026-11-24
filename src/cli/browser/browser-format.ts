@@ -1,8 +1,10 @@
-import { readBrowserActionEffects } from '../../shared/browser-action-effects'
-import { writeCliScreenshotTempFile } from '../cli-screenshot-temp-file'
-import type { RuntimeRpcSuccess } from '../../shared/runtime-rpc-envelope'
+import { readBrowserActionEffects } from '../../shared/browser/automation/browser-action-effects'
+import { formatBrowserPasskeyRequest } from '../../shared/browser/prompts/browser-passkey-request'
+import { writeCliScreenshotTempFile } from '../screenshots/cli-screenshot-temp-file'
+import type { RuntimeRpcSuccess } from '../../shared/remote-runtime/rpc/runtime-rpc-envelope'
 import { formatBrowserAnnotationsAsMarkdown } from '../../shared/browser/annotations/browser-annotation-output'
 import type {
+  BrowserPasskeyRequest,
   BrowserProfileListResult,
   BrowserScreenshotResult,
   BrowserSnapshotResult,
@@ -17,8 +19,16 @@ import type {
 export function formatSnapshot(result: BrowserSnapshotResult): string {
   // Older runtimes leave url and title unset.
   const location = [result.title, result.url].filter(Boolean).join(' — ')
-  const header = [`page: ${result.browserPageId}`, ...(location ? [location] : [])].join('\n')
+  const header = [
+    `page: ${result.browserPageId}`,
+    ...(location ? [location] : []),
+    ...(result.passkeyRequest ? [formatPasskeyRequest(result.passkeyRequest)] : [])
+  ].join('\n')
   return `${header}\n${formatSnapshotBody(result.snapshot)}`
+}
+
+function formatPasskeyRequest({ origin }: BrowserPasskeyRequest): string {
+  return formatBrowserPasskeyRequest(origin, 'dialog dismiss')
 }
 
 function formatSnapshotBody(snapshot: BrowserSnapshotResult['snapshot']): string {
@@ -86,21 +96,19 @@ export function formatScreenshot(result: SavedBrowserScreenshot): string {
   return [`Screenshot saved to ${result.path} (${result.format})`, ...legend].join('\n')
 }
 
-export function formatTabList(result: BrowserTabListResult): string {
-  return formatTabListWithProfiles(result, false)
-}
-
-export function formatTabListWithProfiles(
+export function formatTabList(
   result: BrowserTabListResult,
-  showProfile: boolean
+  options: { showProfile: boolean; scopedToWorktree: boolean }
 ): string {
   if (result.tabs.length === 0) {
-    return 'No browser tabs open.'
+    return options.scopedToWorktree
+      ? 'No browser tabs open in the selected worktree. Use --worktree all to list every worktree.'
+      : 'No browser tabs open.'
   }
   return result.tabs
     .map((t) => {
       const marker = t.active ? '* ' : '  '
-      const profile = showProfile ? `  [${t.profileLabel ?? t.profileId ?? 'Unknown'}]` : ''
+      const profile = options.showProfile ? `  [${t.profileLabel ?? t.profileId ?? 'Unknown'}]` : ''
       const popup = t.openerBrowserPageId ? `  (popup opened by ${t.openerBrowserPageId})` : ''
       const unloaded = t.loaded === false ? '  (not loaded)' : ''
       return `${marker}[${t.index}] ${t.browserPageId}  ${t.title} — ${t.url}${profile}${popup}${unloaded}`
@@ -191,6 +199,14 @@ export function formatBrowserActionEffects(result: unknown): string {
   for (const error of effects.consoleErrors ?? []) {
     lines.push(`Console error: ${error}`)
   }
+  if (effects.passkeyRequest) {
+    lines.push(formatPasskeyRequest(effects.passkeyRequest))
+  }
+  if (effects.blockedPrint) {
+    lines.push(
+      `${effects.blockedPrint.origin} tried to open the system print dialog, which Orca blocked so it wouldn't take over the user's screen. To save the page as a PDF, run \`pdf\`.`
+    )
+  }
   if (effects.loading) {
     lines.push('Still loading; run `wait --load load`, then `snapshot`.')
   } else if (effects.page === undefined) {
@@ -213,4 +229,13 @@ export function formatBrowserActionEffects(result: unknown): string {
     lines.push('The page was still changing when this was read.')
   }
   return lines.length > 0 ? `\n${lines.join('\n')}` : ''
+}
+
+/** Servers name the pages a paired desktop renders, which this host's setting never reaches. */
+export function withClientHostedPagesNote(text: string, result: unknown): string {
+  const note =
+    result && typeof result === 'object' && 'clientHostedPagesNote' in result
+      ? result.clientHostedPagesNote
+      : undefined
+  return typeof note === 'string' && note ? `${text}\n${note}` : text
 }

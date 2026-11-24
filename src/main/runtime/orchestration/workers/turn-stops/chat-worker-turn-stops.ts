@@ -2,11 +2,9 @@ import type { AgentSessionStatusSummary } from '../../../../../shared/agent-sess
 import type { AgentSessionTurnCompletionEvent } from '../../../../../shared/agent-session/view/agent-session-turn-completion-wire'
 import { AGENT_DONE_QUIET_MS } from '../../../../../shared/agent-status/lifecycle/agent-transitions'
 import { chatWorkerDispatches } from './chat-worker-error-escalation'
-import {
-  reportWorkerTurnStop,
-  type WorkerTurnStopReason,
-  type WorkerTurnStopReportDeps
-} from './worker-turn-stop-report'
+import { readCoordinatorMailCount } from '../../db/messages/dispatch-read-mail'
+import type { WorkerTurnStopReportDeps } from './worker-turn-stop-report'
+import { observeWorker, type WorkerRest } from './worker-presence-report'
 import {
   readChatWorkerPrompt,
   type ChatWorkerPromptReader
@@ -18,13 +16,14 @@ import {
 import { workerApprovalPayload } from '../approvals/worker-approval'
 import type { AgentJournalApprovalItem } from '../../../../../shared/agent-session/journal/agent-session-journal-types'
 
-// Why a delay: the reporter is built with the chat host, which registers just after.
+// Defer saved-report observation until the installed host is available.
 const ADOPT_AFTER_MS = 5_000
 
 type ChatStop = {
   sessionId: string
+  /** The turn or prompt: one rest, however often it is seen. */
   stopKey: string
-  reason: WorkerTurnStopReason
+  reason: WorkerRest['reason']
   awaitsReply?: boolean
   /** A prompt event's journal item id. */
   promptId?: string
@@ -52,28 +51,54 @@ function chatStop(event: AgentSessionTurnCompletionEvent): ChatStop | null {
  *  A finished turn waits out the quiet period, as a terminal's does, and while its Dispatch is still
  *  starting: the turn that reported ends just before the follow-up it claimed hands over its task. */
 export function chatWorkerTurnStopReporter(
-  deps: WorkerTurnStopReportDeps,
-  setTimer: (run: () => void, delayMs: number) => void = (run, delayMs) => {
-    setTimeout(run, delayMs).unref?.()
+  deps: WorkerTurnStopReportDeps & { openExistingDb?: () => unknown },
+  setTimer: (run: () => void, delayMs: number) => void | (() => void) = (run, delayMs) => {
+    const timer = setTimeout(run, delayMs)
+    timer.unref?.()
+    return () => clearTimeout(timer)
   },
   readPrompt: ChatWorkerPromptReader = readChatWorkerPrompt,
-  watchJournal?: ChatJournalWatch
+  watchJournal?: ChatJournalWatch,
+  now: () => number = Date.now
 ) {
   const generations = new Map<string, number>()
-  const approvals = new ChatWorkerApprovalWatch({ ...deps, readPrompt, watchJournal })
-  setTimer(() => {
-    approvals.adopt().catch((error: unknown) => {
-      console.warn('[orchestration] chat worker approval adoption failed', error)
-    })
-  }, ADOPT_AFTER_MS)
-
-  return (
+  // A turn begins after its session's previous turn completed; a prompt arrives mid-turn and bounds nothing.
+  const previousCompletionAt = new Map<string, number>()
+  const lifetime = new AbortController()
+  const timers = new Set<() => void>()
+  const schedule = (run: () => void, delayMs: number): void => {
+    if (lifetime.signal.aborted) {
+      return
+    }
+    let cancel: void | (() => void)
+    const stop = () => {
+      cancel?.()
+      timers.delete(stop)
+    }
+    timers.add(stop)
+    cancel = setTimer(() => {
+      timers.delete(stop)
+      if (!lifetime.signal.aborted) {
+        run()
+      }
+    }, delayMs)
+  }
+  const approvals = new ChatWorkerApprovalWatch({
+    ...deps,
+    readPrompt,
+    watchJournal,
+    signal: lifetime.signal
+  })
+  const onTurnAttention = (
     event: AgentSessionTurnCompletionEvent,
     readStatus: (
       sessionId: string
     ) => Pick<AgentSessionStatusSummary, 'status' | 'lastAssistantMessage'> | undefined
   ): void => {
     try {
+      if (lifetime.signal.aborted) {
+        return
+      }
       const sessionId =
         event.type === 'completion'
           ? event.completion.sessionId
@@ -86,25 +111,38 @@ export function chatWorkerTurnStopReporter(
       // Any later edge, even one not reported (a failed or cancelled turn), supersedes a pending stop.
       const generation = (generations.get(sessionId) ?? 0) + 1
       generations.set(sessionId, generation)
+      const turnStartedAt = previousCompletionAt.get(sessionId)
+      if (event.type === 'completion') {
+        previousCompletionAt.set(sessionId, now())
+      }
       const stop = chatStop(event)
       const db = stop ? deps.getDb() : null
       if (!stop || !db) {
         return
       }
       // The Dispatch a stop belongs to is one open when it was seen.
-      const seen = new Set(
-        chatWorkerDispatches(stop.sessionId, db).map(({ dispatch }) => dispatch.id)
+      // Mail taken after the turn ended belongs to the next turn, though it lands before this report.
+      const seen = new Map(
+        chatWorkerDispatches(stop.sessionId, db).map(({ dispatch }) => [
+          dispatch.id,
+          readCoordinatorMailCount(db, dispatch.id)
+        ])
       )
       let approval: AgentJournalApprovalItem | null = null
       const deliver = (): void => {
         try {
+          if (lifetime.signal.aborted) {
+            return
+          }
           const current = deps.getDb()
           const status = readStatus(stop.sessionId)
           // A newer edge supersedes this one, and a queued follow-up already started the next turn.
           if (
             generations.get(stop.sessionId) !== generation ||
             !current ||
-            status?.status === 'working'
+            status?.status === 'working' ||
+            // A turn its own background tasks hold open is a wait, which those waits record.
+            (stop.reason === 'finished' && deps.chatWaitsOnBackground?.(stop.sessionId) === true)
           ) {
             return
           }
@@ -117,10 +155,13 @@ export function chatWorkerTurnStopReporter(
               ({ dispatch }) => current.getWorkerDispatch(dispatch.id)?.state === 'starting'
             )
           ) {
-            setTimer(deliver, AGENT_DONE_QUIET_MS)
+            schedule(deliver, AGENT_DONE_QUIET_MS)
             return
           }
           for (const { dispatch, from } of open) {
+            if (lifetime.signal.aborted) {
+              return
+            }
             const candidate =
               approval && stop.promptId
                 ? workerApprovalPayload({
@@ -131,17 +172,24 @@ export function chatWorkerTurnStopReporter(
                 : undefined
             // A prompt Orca can't answer either way is a plain prompt: only the worker's chat can.
             const payload = candidate?.allowedActions.length ? candidate : undefined
-            reportWorkerTurnStop(
+            observeWorker(
               current,
               { kind: 'local', dispatch },
               {
-                from,
-                stopKey: stop.stopKey,
-                reason: stop.reason,
-                // The payload names the prompt; the agent's prose before it adds nothing.
-                lastOutput: payload ? undefined : status?.lastAssistantMessage,
-                ...(stop.awaitsReply ? { awaitsReply: true } : {}),
-                ...(payload ? { approval: payload } : {})
+                presence: 'at-rest',
+                fence: stop.stopKey,
+                legacyStopKey: stop.stopKey,
+                rest: {
+                  from,
+                  reason: stop.reason,
+                  mailTaken: seen.get(dispatch.id),
+                  // The payload names the prompt; the agent's prose before it adds nothing.
+                  lastOutput: payload ? undefined : status?.lastAssistantMessage,
+                  // Unknown for a session's first turn seen here: a duplicate alert beats hiding a stall.
+                  turnStartedAt,
+                  ...(stop.awaitsReply ? { awaitsReply: true } : {}),
+                  ...(payload ? { approval: payload } : {})
+                }
               },
               deps
             )
@@ -156,13 +204,15 @@ export function chatWorkerTurnStopReporter(
         }
       }
       if (stop.reason === 'finished') {
-        setTimer(deliver, AGENT_DONE_QUIET_MS)
+        schedule(deliver, AGENT_DONE_QUIET_MS)
       } else if (stop.promptId) {
         // A permission prompt is reported with what it asks; anything else as a plain prompt.
         const promptId = stop.promptId
         void readPrompt(stop.sessionId, promptId)
           .then((prompt) => {
-            approval = prompt?.body.resolution.state === 'pending' ? prompt.body : null
+            if (!lifetime.signal.aborted) {
+              approval = prompt?.body.resolution.state === 'pending' ? prompt.body : null
+            }
           })
           .catch(() => undefined)
           .finally(deliver)
@@ -172,5 +222,47 @@ export function chatWorkerTurnStopReporter(
     } catch (error) {
       console.warn('[orchestration] chat worker stop report failed', error)
     }
+  }
+  return {
+    onTurnAttention,
+    start: () =>
+      schedule(() => {
+        void Promise.resolve()
+          .then(() => {
+            if (lifetime.signal.aborted) {
+              return
+            }
+            deps.openExistingDb?.()
+            return approvals.adopt()
+          })
+          .catch((error: unknown) => {
+            console.warn('[orchestration] chat worker approval adoption failed', error)
+          })
+      }, ADOPT_AFTER_MS),
+    stop: () => {
+      lifetime.abort()
+      for (const cancel of timers) {
+        cancel()
+      }
+      generations.clear()
+      previousCompletionAt.clear()
+    }
+  }
+}
+
+/** A chat worker's turn started: its rest, if any, is over. Called once per working edge, which follows
+ *  an edge that was not working, so each is a turn of its own even when no rest was recorded. */
+export function observeChatWorkerWorking(sessionId: string, deps: WorkerTurnStopReportDeps): void {
+  try {
+    const db = deps.getDb()
+    // A chat its background tasks hold working has not started a turn.
+    if (!db || deps.chatWaitsOnBackground?.(sessionId) === true) {
+      return
+    }
+    for (const { dispatch } of chatWorkerDispatches(sessionId, db)) {
+      observeWorker(db, { kind: 'local', dispatch }, { presence: 'working', newTurn: true }, deps)
+    }
+  } catch (error) {
+    console.warn('[orchestration] chat worker presence failed', error)
   }
 }

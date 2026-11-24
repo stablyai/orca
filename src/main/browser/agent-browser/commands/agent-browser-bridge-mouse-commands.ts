@@ -1,3 +1,4 @@
+import { z } from 'zod'
 import type { BrowserMouseModifier } from '../../cdp/input/cdp-pointer-targets'
 import { BrowserError } from '../../browser-error'
 import {
@@ -13,6 +14,16 @@ import { touchEmulationParams } from '../../cdp/input/guest-touch-emulation'
 import { assertRemoteCliBrowserAccess } from '../../../runtime/desktop-browser-bridge/remote-cli-browser-scope'
 import { AgentBrowserBridgePointerCommands } from './agent-browser-bridge-pointer-commands'
 import { agentBrowserSetMediaArguments } from '../protocol/agent-browser-set-media-arguments'
+import { forgetBrowserGuestInputGestures } from '../../guest-lifecycle/input/browser-guest-input-gesture'
+import { assertFinitePointerValues } from '../../cdp/input/cdp-pointer-input'
+import { assertUploadFilesExist } from '../../cdp/input/browser-upload-files'
+import { noteInjectedRightPress } from '../../guest-lifecycle/input/browser-guest-context-menu-target'
+
+const AgentBrowserDevice = z.object({
+  width: z.number().positive(),
+  height: z.number().positive(),
+  deviceScaleFactor: z.number().positive()
+})
 
 export abstract class AgentBrowserBridgeMouseCommands extends AgentBrowserBridgePointerCommands {
   async mouseClick(
@@ -49,6 +60,7 @@ export abstract class AgentBrowserBridgeMouseCommands extends AgentBrowserBridge
           assertExpectedPageUrlForStep()
           // A DOM-activated tap fires no guest input event, so credit it before it can open a link.
           this.browserManager.creditPageInput(target.webContentsId)
+          forgetBrowserGuestInputGestures(wc)
           const point =
             cdpButton === 'left'
               ? // DOM activation drops modifiers; let CDP dispatch modifier clicks.
@@ -61,6 +73,9 @@ export abstract class AgentBrowserBridgeMouseCommands extends AgentBrowserBridge
             y: point.y
           })
           if (!point.handled) {
+            if (cdpButton === 'right') {
+              noteInjectedRightPress(wc, 'mousePressed')
+            }
             await sendGuestCdpCommand(wc, 'Input.dispatchMouseEvent', {
               type: 'mousePressed',
               x: point.x,
@@ -70,6 +85,9 @@ export abstract class AgentBrowserBridgeMouseCommands extends AgentBrowserBridge
               modifiers: cdpModifiers,
               clickCount: 1
             })
+            if (cdpButton === 'right') {
+              noteInjectedRightPress(wc, 'mouseReleased')
+            }
             await sendGuestCdpCommand(wc, 'Input.dispatchMouseEvent', {
               type: 'mouseReleased',
               x: point.x,
@@ -95,6 +113,38 @@ export abstract class AgentBrowserBridgeMouseCommands extends AgentBrowserBridge
         }
       },
       { ensureSession: false }
+    )
+  }
+
+  /** A viewer's file drag, with files it staged on this host. */
+  async dropFiles(
+    x: number,
+    y: number,
+    files: string[],
+    worktreeId?: string,
+    browserPageId?: string
+  ): Promise<{ dropped: number }> {
+    return this.enqueuePageAction(
+      worktreeId,
+      browserPageId,
+      async (_sessionName, target) => {
+        assertFinitePointerValues({ x, y })
+        await assertUploadFilesExist(files)
+        const wc = this.requireTargetWebContents(target)
+        const lease = acquireElectronDebugger(wc)
+        try {
+          await this.waitForPagePaint(wc, target.webContentsId)
+          const data = { items: [], files, dragOperationsMask: 1 }
+          for (const type of ['dragEnter', 'dragOver', 'drop']) {
+            assertExpectedPageUrlForStep()
+            await sendGuestCdpCommand(wc, 'Input.dispatchDragEvent', { type, x, y, data })
+          }
+          return { dropped: files.length }
+        } finally {
+          lease.release()
+        }
+      },
+      { ensureSession: false, blockFileChooser: false }
     )
   }
 
@@ -134,6 +184,16 @@ export abstract class AgentBrowserBridgeMouseCommands extends AgentBrowserBridge
         'Emulation.setTouchEmulationEnabled',
         touchEmulationParams(mobile)
       )
+      const device = AgentBrowserDevice.safeParse(result)
+      if (device.success) {
+        // Like `viewport`: a pane smaller than the device clips what the page draws and captures.
+        this.browserManager.showAgentViewportInPane(target.webContentsId, {
+          width: device.data.width,
+          height: device.data.height,
+          deviceScaleFactor: device.data.deviceScaleFactor,
+          mobile
+        })
+      }
       return result
     })
   }

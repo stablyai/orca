@@ -2,10 +2,11 @@ import type {
   BrowserExtensionSummaryListResult,
   BrowserExtensionReloadResult
 } from '../../shared/browser/extensions/browser-extension-types'
-import type { CommandHandler } from '../dispatch'
-import { getPresentStringFlag } from '../flags'
-import { printResult } from '../format'
-import { resolveRepoPathArgument } from '../repo-path-arguments'
+import type { CommandHandler } from '../dispatch/dispatch'
+import { getPresentStringFlag } from '../arguments/flags'
+import { printResult } from '../output/command-result-output'
+import { resolveRepoPathArgument } from '../projects/repo-path-arguments'
+import { withClientHostedPagesNote } from './browser-format'
 
 export const BROWSER_EXTENSION_HANDLERS: Record<string, CommandHandler> = {
   'extension list': async ({ flags, client, json }) => {
@@ -14,17 +15,20 @@ export const BROWSER_EXTENSION_HANDLERS: Record<string, CommandHandler> = {
       'browser.extensionList',
       profileId !== undefined ? { profileId } : {}
     )
-    printResult(result, json, ({ active, extensions }) =>
-      !active
-        ? 'Browser extensions are turned off in Settings › Browser › Extensions.'
-        : extensions.length === 0
-          ? 'No browser extensions installed.'
-          : extensions
-              .map(
-                (extension) =>
-                  `${extension.id}\t${extension.name}\t${extension.version}\t${extension.enabled ? 'enabled' : 'disabled'}\t${extension.source}\t${extension.path}`
-              )
-              .join('\n')
+    printResult(result, json, (value) =>
+      withClientHostedPagesNote(
+        !value.active
+          ? 'Browser extensions are turned off in Settings › Browser › Extensions.'
+          : value.extensions.length === 0
+            ? 'No browser extensions installed.'
+            : value.extensions
+                .map(
+                  (extension) =>
+                    `${extension.id}\t${extension.name}\t${extension.version}\t${extension.enabled ? 'enabled' : 'disabled'}\t${extension.source}\t${extension.path}`
+                )
+                .join('\n'),
+        value
+      )
     )
   },
   'extension reload': async ({ flags, client, cwd, json }) => {
@@ -38,10 +42,11 @@ export const BROWSER_EXTENSION_HANDLERS: Record<string, CommandHandler> = {
           }
         : {})
     })
-    printResult(
-      result,
-      json,
-      (value) => `Reloaded extension ${value.extensionId} across all profiles where it is enabled.`
+    printResult(result, json, (value) =>
+      withClientHostedPagesNote(
+        `Reloaded extension ${value.extensionId} across all profiles where it is enabled.`,
+        value
+      )
     )
   }
 }

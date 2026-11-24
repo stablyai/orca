@@ -6,14 +6,15 @@ import {
   readLocalRuntimeCapabilitiesOrUnknown
 } from '@/runtime/hosts/capabilities/local-runtime-capabilities'
 import { selectVisibleAgentOrchestration } from '@/runtime/agent-orchestration/visible-agent-orchestration'
+import { selectWorktreeAgentOrchestration } from '@/components/sidebar/workspace-card/activity/worktree-agent-orchestration-index'
+import type { AgentStatusOrchestrationContext } from '../../../../shared/agent-status/contracts/agent-status-types'
 import { useAppStore } from '@/store/index'
 import type { AppState } from '@/store/types'
 import { translate } from '@/i18n/i18n'
 import type { Translate } from '@/i18n/use-translate'
-import type { RuntimeClientTarget } from '../../../../shared/runtime-client-target'
+import type { RuntimeClientTarget } from '../../../../shared/remote-runtime/host-catalog/runtime-client-target'
 import { ORCHESTRATION_WORKER_KEEP_OPEN_RUNTIME_CAPABILITY } from '../../../../shared/orchestration/orchestration-runtime-capabilities'
 import {
-  formatWorkerAutoCloseCountdown,
   pollWorkerAutoClose,
   publishWorkerAutoClose,
   readPublishedWorkerAutoClose,
@@ -84,20 +85,41 @@ export function workerAutoCloseKey(
 }
 
 // Changes when the pane's Dispatch or agent moves on, so the host is asked right then; null for non-workers.
-function workerActivity(state: AppState, paneKey: string): string | null {
+function workerActivity(state: AppState, paneKey: string, worktreeId?: string): string | null {
   const context = selectVisibleAgentOrchestration(state)[paneKey]
-  return context
-    ? `${context.dispatchId}:${context.dispatchStatus ?? ''}:${state.agentStatusByPaneKey[paneKey]?.state ?? ''}`
+  if (context) {
+    return dispatchActivity(state, paneKey, context)
+  }
+  if (!worktreeId) {
+    return null
+  }
+  // Any other terminal where a worker runs may be bound to it (its setup or a startup tab); the host knows.
+  const workers = Object.entries(selectWorktreeAgentOrchestration(state, worktreeId))
+  return workers.length > 0
+    ? workers
+        .map(([workerPaneKey, worker]) => dispatchActivity(state, workerPaneKey, worker))
+        .sort()
+        .join('|')
     : null
 }
 
+function dispatchActivity(
+  state: AppState,
+  paneKey: string,
+  context: AgentStatusOrchestrationContext
+): string {
+  return `${context.dispatchId}:${context.dispatchStatus ?? ''}:${state.agentStatusByPaneKey.get(paneKey)?.state ?? ''}`
+}
+
 /** The host's auto-close state for a shown pane this client knows is an orchestration worker, plus the
- *  clock its countdown ticks on. Read while `active`, again whenever its Dispatch or agent moves on. */
+ *  clock its countdown ticks on. Read while `active`, again whenever its Dispatch or agent moves on.
+ *  With `worktreeId`, a terminal that is no worker is asked too while a worker runs there. */
 export function useWorkerAutoClose(
   target: RuntimeClientTarget,
   subject: WorkerAutoCloseSubject,
   paneKey: string,
-  active: boolean
+  active: boolean,
+  worktreeId?: string
 ): { state: WorkerAutoCloseState | null; nowMs: number; keepOpen: () => void } {
   const key = workerAutoCloseKey(target, subject)
   const subscribe = useCallback(
@@ -105,7 +127,7 @@ export function useWorkerAutoClose(
     [key]
   )
   const state = useSyncExternalStore(subscribe, () => readPublishedWorkerAutoClose(key))
-  const activity = useAppStore((s) => workerActivity(s, paneKey))
+  const activity = useAppStore((s) => workerActivity(s, paneKey, worktreeId))
   const [nowMs, setNowMs] = useState(() => Date.now())
 
   useEffect(() => {
@@ -144,27 +166,6 @@ export function useWorkerAutoClose(
   }, [key])
 
   return { state: shown, nowMs, keepOpen }
-}
-
-/** The strip's line; null when no strip shows (kept open, or nothing closes the worker). */
-export function workerAutoCloseStripText(
-  state: WorkerAutoCloseState | null,
-  nowMs: number,
-  t: Translate = translate
-): string | null {
-  if (!state || state.kept) {
-    return null
-  }
-  return state.closesAt === null
-    ? t(
-        'components.orchestration.workerAutoClose.running',
-        'Temporary orchestration worker · Closes 2 minutes after it finishes'
-      )
-    : t(
-        'components.orchestration.workerAutoClose.finished',
-        'Temporary orchestration worker finished · Closes in {{countdown}}',
-        { countdown: formatWorkerAutoCloseCountdown(state.closesAt, nowMs) }
-      )
 }
 
 export function workerKeepOpenLabel(t: Translate = translate): string {

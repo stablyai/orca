@@ -1,12 +1,12 @@
 import type { TuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent'
 import { resolveResumeLaunchRecipe } from '../../../../shared/agent-launch/choices/resume-launch-recipe'
 import {
-  agentProviderSessionsEqual,
   normalizeAgentProviderSession,
   type AgentProviderSessionMetadata,
   type SleepingAgentLaunchConfig,
   type SleepingAgentSessionRecord
 } from '../../../../shared/agent-session/lifecycle/agent-session-resume'
+import { agentProviderSessionsEqual } from '../../../../shared/agent-session/lifecycle/resume/agent-provider-session-equality'
 import type { AgentStatusIpcPayload } from '../../../../shared/agent-status/contracts/agent-status-ipc-payload'
 
 /** The source pane's note on this host, else the unrecorded rule; never current settings or client Arguments. */

@@ -2,6 +2,7 @@ import { isImeOwnedKeyboardEvent } from '@/lib/text-input/ime/ime-composition-ke
 import { useCallback, useMemo, useState } from 'react'
 import { AlertCircle, Save } from 'lucide-react'
 import { computeEditorFontSize } from '../../../../../../shared/editor/editor-font-zoom'
+import { NEW_IPYNB_CONTENT } from '../../../../../../shared/editor/notebooks/new-ipynb-content'
 import { useAppStore } from '@/store/index'
 import { Button } from '@/components/ui/button'
 import {
@@ -12,9 +13,9 @@ import {
   DialogHeader,
   DialogTitle
 } from '@/components/ui/dialog'
-import { useShortcutKeyDetails } from '@/hooks/useShortcutLabel'
+import { useShortcutKeyDetails } from '@/lib/keyboard/useShortcutLabel'
 import { useTranslate } from '@/i18n/use-translate'
-import { editorShortcutMatches } from '../../editor-shortcuts'
+import { editorShortcutMatches } from '../../commands/editor-shortcuts'
 import { getShortcutPlatform } from '@/lib/keyboard/shortcut-platform'
 import { findFirstIndexedWorktree } from '@/lib/workspace/ownership/worktree-runtime-owner-index'
 import { IpynbCellToolbar, IpynbToolbarButton } from '../cells/IpynbCellToolbar'
@@ -41,7 +42,7 @@ type IpynbViewerProps = {
 }
 
 export default function IpynbViewer({
-  content,
+  content: fileContent,
   fileId,
   filePath,
   worktreeId,
@@ -50,6 +51,7 @@ export default function IpynbViewer({
   onDirtyStateHint,
   onSave
 }: IpynbViewerProps): React.JSX.Element {
+  const content = fileContent === '' ? NEW_IPYNB_CONTENT : fileContent
   const t = useTranslate()
   const editorFontZoomLevel = useAppStore((s) => s.editorFontZoomLevel)
   const rootPath = useAppStore(

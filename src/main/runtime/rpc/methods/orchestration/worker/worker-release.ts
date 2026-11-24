@@ -3,19 +3,23 @@ import { defineOrchestrationMethod } from '../access/orchestration-method-access
 import {
   releaseFederatedWorker,
   retainFederatedWorker
-} from '../../../../orchestration/legacy-remote-home/legacy-remote-home'
+} from '../../../../orchestration/legacy-remote-home/federated-worker-release'
 import { ORCHESTRATION_WORKER_LIST_METHOD } from './worker-list-method'
-import { resolvePinnedFederatedServer } from './worker-observation'
-import { archiveSummary, exposeWorkerRetainReceipt } from './worker-terminal-resource-presentation'
+import { resolvePinnedFederatedServer } from '../../../../orchestration/legacy-remote-home/pinned-federated-server'
+import {
+  archiveSummary,
+  exposeWorkerRetainReceipt
+} from './release/worker-terminal-resource-presentation'
 import {
   completeWorkerTerminalRelease,
   type WorkerReleaseReceipt
-} from './worker-release-completion'
+} from './release/worker-release-completion'
 import {
   WorkerDispatchParams,
   WorkerRetainParams
-} from '../../../../../../shared/rpc-contract/orchestration-worker-release-schemas-params'
+} from '../../../../../../shared/rpc-contract/orchestration/orchestration-worker-release-schemas-params'
 import { ORCHESTRATION_WORKER_KEEP_OPEN_METHODS } from './worker-keep-open'
+import { closeWorkerBoundTerminals } from './release/worker-bound-terminal-close'
 
 export const ORCHESTRATION_WORKER_RELEASE_METHODS = [
   defineOrchestrationMethod({
@@ -36,7 +40,7 @@ export const ORCHESTRATION_WORKER_RELEASE_METHODS = [
         db.endFederatedHomeAutoRelease(params.dispatch)
         return releaseFederatedWorker({
           runtime,
-          server: resolvePinnedFederatedServer(runtime, federated),
+          server: await resolvePinnedFederatedServer(runtime, federated),
           federated,
           dispatchId: params.dispatch,
           requestId: orchestrationMutation.requestId
@@ -68,6 +72,7 @@ export const ORCHESTRATION_WORKER_RELEASE_METHODS = [
           })
           if (reconciled.disposition === 'released') {
             runtime.notifyMessageArrived(`dispatch:${params.dispatch}`, 'status')
+            await closeWorkerBoundTerminals(runtime, db, reconciled.resource.origin_dispatch_id)
             return {
               dispatchId: params.dispatch,
               state: 'released',
@@ -110,7 +115,7 @@ export const ORCHESTRATION_WORKER_RELEASE_METHODS = [
         db.endFederatedHomeAutoRelease(params.dispatch)
         const forwarded = await retainFederatedWorker({
           runtime,
-          server: resolvePinnedFederatedServer(runtime, federated),
+          server: await resolvePinnedFederatedServer(runtime, federated),
           federated,
           dispatchId: params.dispatch,
           requestId: orchestrationMutation.requestId

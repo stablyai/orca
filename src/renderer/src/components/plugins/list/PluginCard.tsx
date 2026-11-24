@@ -1,6 +1,8 @@
 import { BadgeCheck, Check } from 'lucide-react'
 import { useIntlLocale, useTranslate } from '@/i18n/use-translate'
 import { pluginOfficialLabel } from '../presentation/plugin-official-label'
+import { pluginDisplayPublisher } from '../presentation/plugin-author'
+import { pluginDisplayText } from '../../../../../shared/plugins/plugin-display-text'
 import { Badge } from '../../ui/badge'
 import { PluginCardArt, type PluginArtPalette } from './PluginCardArt'
 import type { PluginListEntry } from './plugin-list-entries'
@@ -19,6 +21,8 @@ type PluginCardProps = {
   /** Replaces the description, e.g. an install error; keeps the two-line height. */
   notice?: { text: string; tone: 'destructive' | 'warning' }
   chips?: React.ReactNode
+  /** Replaces the install count after the publisher, e.g. "Added 3h ago". */
+  metaDetail?: string
   action: React.ReactNode
   onOpen: () => void
   onIntent?: () => void
@@ -35,6 +39,7 @@ export function PluginCard({
   palettes,
   notice,
   chips,
+  metaDetail,
   action,
   onOpen,
   onIntent,
@@ -42,6 +47,7 @@ export function PluginCard({
 }: PluginCardProps): React.JSX.Element {
   const t = useTranslate()
   const intlLocale = useIntlLocale()
+  const publisher = pluginDisplayPublisher(entry, t)
   const installCount = usePluginInstallCount(entry)
   const cover =
     servedPluginHostImages(entry.installed?.images)?.cover ??
@@ -88,7 +94,7 @@ export function PluginCard({
             <button
               type="button"
               data-plugin-row-name=""
-              aria-label={[entry.name, entry.publisher, statusText].filter(Boolean).join(', ')}
+              aria-label={[entry.name, publisher, statusText].filter(Boolean).join(', ')}
               className="text-left outline-none after:absolute after:inset-0 after:content-['']"
               onClick={onOpen}
             >
@@ -104,10 +110,15 @@ export function PluginCard({
           ) : null}
         </div>
         <p className="h-4 truncate text-xs text-muted-foreground">
-          {entry.publisher}
-          {installCount !== null ? (
+          {publisher}
+          {metaDetail ? (
+            <span data-plugin-meta-detail="">
+              {publisher ? ' · ' : ''}
+              {metaDetail}
+            </span>
+          ) : installCount !== null ? (
             <span data-plugin-install-count="">
-              {entry.publisher ? ' · ' : ''}
+              {publisher ? ' · ' : ''}
               {pluginInstallCountLabel(installCount, t, intlLocale)}
             </span>
           ) : null}
@@ -116,7 +127,7 @@ export function PluginCard({
           data-tone={notice?.tone}
           className="mt-0.5 line-clamp-2 h-9 text-xs leading-[18px] text-muted-foreground data-[tone=destructive]:text-destructive data-[tone=warning]:text-status-warning-text"
         >
-          {notice?.text ?? entry.description ?? ''}
+          {notice?.text ?? pluginDisplayText(entry.description ?? '', entry.official, t)}
         </p>
         {/* Why the footer wraps: the card clips overflow, so when chips and the action can't share a row the action drops below them instead of a chip being cut off. */}
         <div className="mt-auto flex min-h-6 flex-wrap items-center gap-x-1.5 gap-y-1 pt-1.5">

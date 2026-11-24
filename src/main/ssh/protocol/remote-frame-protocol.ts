@@ -1,4 +1,7 @@
-import { HEADER_LENGTH, MAX_MESSAGE_SIZE } from '../../../shared/relay-frame-decoder'
+import {
+  HEADER_LENGTH,
+  MAX_MESSAGE_SIZE
+} from '../../../shared/remote-runtime/relay/relay-frame-decoder'
 
 export const MessageType = {
   Regular: 1,

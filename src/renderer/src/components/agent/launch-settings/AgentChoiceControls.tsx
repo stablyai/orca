@@ -1,3 +1,5 @@
+import { modelMenuOptions } from '../../../../../shared/agent-session/options/view/model-menu-options'
+import { orderEffortLevels } from '../../../../../shared/agent-session/options/view/effort-level-order'
 import type {
   AgentChoicePatch,
   AgentDedicatedChoices
@@ -11,16 +13,18 @@ import {
   sourceControlActionAgentPicksModel,
   sourceControlActionOptions
 } from '../../../../../shared/source-control/ai/recipes/source-control-action-options'
-import { encodeCatalogOptionValue } from '../../../../../shared/agent-session/options/structured-agent-session-option-codec'
+import { encodeCatalogOptionValue } from '../../../../../shared/agent-session/options/selection/structured-agent-session-option-codec'
 import type { TuiAgent } from '../../../../../shared/agent-launch/catalog/tui-agent'
 import type { AgentSessionModelCatalogResult } from '../../../../../shared/agent-session/agent-session-wire'
 import {
   agentPickerEntryOptions,
-  agentPickerModels
+  agentPickerModels,
+  withComposedParts
 } from '../../../../../shared/agent-launch/picker/agent-launch-picker-catalog'
 import { AgentChoiceMenu } from './AgentChoiceMenu'
 import { sourceControlActionRouteHint } from './agent-choice-route-hint'
 import { useTranslate } from '@/i18n/use-translate'
+import { classifyAgentModels } from '../../../../../shared/agent-session/options/model-catalog/legacy-agent-models'
 
 const AGENT_DEFAULT_VALUE = '__agent_default__'
 
@@ -88,16 +92,40 @@ export function AgentChoiceFields({
     liveCatalog && liveCatalog.origin !== 'unknown' && liveCatalog.models.length
       ? { agent, catalog: liveCatalog, terminal: {} }
       : null
-  const listedModels = live
-    ? agentPickerModels(live).filter(({ hidden }) => !hidden)
-    : (catalog?.models ?? [])
+  const menu =
+    live && catalog && agent !== 'antigravity'
+      ? modelMenuOptions(live.catalog, {
+          agent,
+          surface: 'terminal',
+          seed: catalog,
+          newLaunch: true,
+          seedsModel: false,
+          saved: { ...(selected?.model ? { model: selected.model } : {}), ...selected?.options }
+        })
+      : undefined
+  const effort = menu?.descriptors.find(({ id }) => id === 'effort')
+  const inventory = live ? (menu?.rows ?? agentPickerModels(live)) : (catalog?.models ?? [])
+  const classes = classifyAgentModels(agent, inventory)
+  // A hidden row stays listed while it is the saved choice.
+  const listedModels = inventory.filter(
+    ({ id }) => !classes.hidden.has(id) || id === selected?.model
+  )
   const unlistedModel =
     selected?.model && !(live ? listedModels.some(({ id }) => id === selected.model) : model)
       ? selected.model
       : undefined
+  const listedRow = live
+    ? (menu?.rows ?? agentPickerModels(live)).find(({ id }) => id === selected?.model)
+    : undefined
   const liveEffort = live
     ? agentPickerEntryOptions(live, selected?.model, 'terminal').find(({ id }) => id === 'effort')
     : undefined
+  const effortKind =
+    menu && selected?.model
+      ? effort?.kind.type === 'select'
+        ? { ...effort.kind, defaultValue: '' }
+        : undefined
+      : liveEffort?.kind
   const options = sourceControlActionOptions(agent, selected?.model ?? '').flatMap((row) => {
     // CLI carrier mappings remain available to Args badges without advertising a mode control.
     if (
@@ -110,7 +138,7 @@ export function AgentChoiceFields({
       return [row]
     }
     // A listed model with no reasoning levels gets no effort menu.
-    return liveEffort ? [{ ...row, option: { ...row.option, kind: liveEffort.kind } }] : []
+    return effortKind ? [{ ...row, option: { ...row.option, kind: effortKind } }] : []
   })
   const defaultLabel = t('settings.sourceControl.actionModel.effortDefault', 'Default')
   return (
@@ -129,7 +157,11 @@ export function AgentChoiceFields({
                 defaultLabels?.model ??
                 t('settings.sourceControl.actionModel.agentDefault', 'Agent default')
             },
-            ...listedModels.map(({ id, label }) => ({ value: id, label })),
+            ...listedModels.map(({ id, label }) => ({
+              value: id,
+              label,
+              legacy: classes.legacy.has(id)
+            })),
             ...(unlistedModel ? [{ value: unlistedModel, label: unlistedModel }] : [])
           ]}
           onChange={(model) => onSelect({ model: model === AGENT_DEFAULT_VALUE ? null : model })}
@@ -158,6 +190,16 @@ export function AgentChoiceFields({
                 }
               ]
         const current = selected?.options?.[option.id]
+        const menu = [
+          {
+            value: AGENT_DEFAULT_VALUE,
+            label: defaultLabels?.options?.[option.id] ?? defaultLabel
+          },
+          ...choices,
+          ...(current && !choices.some((choice) => choice.value === current)
+            ? [{ value: current, label: current }]
+            : [])
+        ]
         return (
           <AgentChoiceMenu
             key={option.id}
@@ -165,18 +207,9 @@ export function AgentChoiceFields({
             row={layout === 'rows'}
             hint={sourceControlActionRouteHint(route, t)}
             value={current ?? AGENT_DEFAULT_VALUE}
-            disabled={disabled}
+            disabled={disabled || (option.id === 'effort' && effort?.settable === false)}
             onOpenChange={onOpenChange}
-            choices={[
-              {
-                value: AGENT_DEFAULT_VALUE,
-                label: defaultLabels?.options?.[option.id] ?? defaultLabel
-              },
-              ...choices,
-              ...(current && !choices.some((choice) => choice.value === current)
-                ? [{ value: current, label: current }]
-                : [])
-            ]}
+            choices={option.category === 'thought_level' ? orderEffortLevels(menu) : menu}
             onChange={(next) => {
               const encoded =
                 next === AGENT_DEFAULT_VALUE
@@ -185,7 +218,14 @@ export function AgentChoiceFields({
                       option.kind,
                       option.kind.type === 'boolean' ? next === 'true' : next
                     )
-              onSelect({ options: { [option.id]: encoded } })
+              onSelect(
+                withComposedParts(
+                  listedRow,
+                  selected ?? {},
+                  model?.options ?? catalog?.unknownModelOptions ?? [],
+                  { options: { [option.id]: encoded } }
+                )
+              )
             }}
           />
         )

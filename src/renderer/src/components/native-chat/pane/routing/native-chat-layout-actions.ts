@@ -2,9 +2,9 @@ import { toast } from 'sonner'
 import { translate } from '@/i18n/i18n'
 import type { AppState } from '@/store/types'
 import { useAppStore } from '@/store'
-import { requestActiveTerminalPaneSplit } from '@/components/tab-bar/request-active-terminal-pane-split'
-import { openNewTerminalTabInWorkspace } from '@/store/terminals/terminal-active-workspace-creation'
-import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../../../shared/constants'
+import { requestActiveTerminalPaneSplit } from '@/components/tab-bar/pane-actions/request-active-terminal-pane-split'
+import { openNewTerminalTabInWorkspace } from '@/store/terminals/tabs/creation/terminal-active-workspace-creation'
+import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../../../shared/workspace/identity/floating-workspace-id'
 import type { NativeChatSplitDirection } from './native-chat-pane-shortcut'
 
 export type NativeChatSplitTarget =

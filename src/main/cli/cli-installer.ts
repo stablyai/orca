@@ -1,6 +1,6 @@
 import { mkdir, unlink } from 'node:fs/promises'
 import { dirname } from 'node:path'
-import type { CliInstallStatus } from '../../shared/cli-install-types'
+import type { CliInstallStatus } from '../../shared/cli/cli-install-types'
 import {
   pruneAppImageExtractedRoots,
   removeAppImageInstalledPayloads

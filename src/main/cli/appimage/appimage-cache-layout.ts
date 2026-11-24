@@ -1,5 +1,5 @@
 import { isAbsolute, join, relative, resolve, sep } from 'node:path'
-import { isAppImageCacheKey } from '../../../shared/appimage-cache-identity'
+import { isAppImageCacheKey } from '../../../shared/desktop-distribution/appimage/appimage-cache-identity'
 import { LINUX_CLI_COMMAND_NAME } from '../packaged-assets/bundled-cli-launcher-path'
 
 export function resolveCachedAppImagePayloadRoot(

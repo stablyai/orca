@@ -1,7 +1,7 @@
 import type { NativeChatMessage } from '../../../../../../shared/native-chat/native-chat-types'
 import type { NativeChatTranscriptProjection } from '../../../../../../shared/native-chat/transcript/native-chat-transcript-projection'
-import type { NativeChatTurnJournal } from '../../../../../../shared/native-chat/transcript/native-chat-turn-membership'
-import type { NativeChatFoldUnit } from '../../../../../../shared/native-chat/transcript/native-chat-fold-units'
+import type { NativeChatTurnJournal } from '../../../../../../shared/native-chat/transcript/turns/native-chat-turn-membership'
+import type { NativeChatFoldUnit } from '../../../../../../shared/native-chat/transcript/folding/native-chat-fold-units'
 import type { NativeChatToolFoldKind } from '../../../../../../shared/native-chat/tools/native-chat-tool-fold'
 
 function sameMessage(left: NativeChatMessage, right: NativeChatMessage): boolean {

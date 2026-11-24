@@ -5,7 +5,7 @@ import type {
   OrcadMigrationManifest
 } from '../../../../shared/orcad-migration/orcad-migration-manifest'
 import { MAX_ORCAD_MIGRATION_EVICTED_RECEIPTS } from '../../../../shared/orcad-migration/orcad-migration-evicted-receipts'
-import type { PersistedState } from '../../../../shared/persisted-state-types'
+import type { PersistedState } from '../../../../shared/orca-profiles/persisted-state-types'
 import type { StoreRuntimeState } from '../../loading-store/store-runtime-state'
 import {
   orcadMigrationStagingKey,

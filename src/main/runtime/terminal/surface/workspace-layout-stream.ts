@@ -1,25 +1,27 @@
-// Reproject changed Store partitions only while subscribed; overlay live titles without reloading.
+// Reproject changed Store partitions (only the workspaces a write reported, when it did) only while subscribed; overlay live titles without reloading, rechecking only the workspaces that show a changed pane.
 // Main-owned layouts emit one records frame per operation, coalescing unscoped writes per task; window-owned layouts emit whole workspaces.
 
 import { randomUUID } from 'node:crypto'
-import type { ExecutionHostId } from '../../../../shared/execution-host'
-import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/layout-owner-switch'
-import type { LoadedWorkspaceLayout } from '../../../../shared/workspace-layout/workspace-layout-load-types'
-import type { PublishedWorkspaceLayout } from '../../../../shared/workspace-layout/workspace-layout-published'
+import type { ExecutionHostId } from '../../../../shared/execution-host/execution-host'
+import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/workspace-layout/layout-owner-switch'
+import type { LoadedWorkspaceLayoutRead } from '../../../../shared/workspace-layout/persistence/workspace-layout-load-types'
+import type { PublishedWorkspaceLayout } from '../../../../shared/workspace-layout/published-layout/workspace-layout-published'
 import {
   diffPublishedLayouts,
-  indexPublishedLayout,
-  type IndexedLayoutRecords,
   type WorkspaceLayoutRecordChange
-} from '../../../../shared/workspace-layout/workspace-layout-records'
+} from '../../../../shared/workspace-layout/published-layout/workspace-layout-records'
 import type {
   WorkspaceLayoutEvent,
   WorkspaceLayoutStreamEvent
-} from '../../../../shared/workspace-layout/workspace-layout-stream-frames'
+} from '../../../../shared/workspace-layout/published-layout/workspace-layout-stream-frames'
 import type { RuntimeStore } from '../../construction/runtime-store-contract'
-import { withLiveTitles } from './published-pane-live-titles'
-import { paneStartFactsOf, withPaneStartFacts } from './pane-start-statuses'
 import type * as PaneStartStatuses from './pane-start-statuses'
+import {
+  laidLayout,
+  shownLayouts,
+  shownRecordsOf,
+  updateShownLayouts
+} from './shown-workspace-layouts'
 import {
   workspaceLayoutFrameObserver,
   workspaceLayoutPartitionReadObserver
@@ -34,14 +36,6 @@ type LayoutListener = (event: WorkspaceLayoutStreamEvent) => void
 
 /** Partitions written by an operation or task; null when unscoped. */
 export type LayoutOperationCommit = { hostIds: readonly ExecutionHostId[] | null }
-
-type Shown = {
-  json: string
-  liveTitles: string
-  layout: PublishedWorkspaceLayout
-  /** Null sends a whole layout; otherwise index records lazily on the next diff. */
-  records?: IndexedLayoutRecords | null
-}
 
 export type WorkspaceLayoutReads = Pick<
   WorkspaceLayoutStream,
@@ -62,12 +56,15 @@ export class WorkspaceLayoutStream {
   private readonly listeners = new Set<LayoutListener>()
   private readonly commitListeners = new Set<(commit: LayoutOperationCommit) => void>()
   private readonly projection: WorkspaceLayoutProjection
-  private shown = new Map<string, Shown>()
+  private readonly shown = shownLayouts()
   private stopWatching: (() => void) | null = null
   private projecting = false
   private dirty = false
   private touched: DirtyPartitions | null = null
-  private liveTitlesDirty = false
+  /** Terminals and pane keys whose live title or start facts changed since the last flush. */
+  private liveRefs = new Set<string>()
+  /** After a failed flush, recheck every workspace once: its changed refs were dropped. */
+  private recheckAll = false
   private flushQueued = false
   private failureLogged = false
   /** Never reset: replies can retain positions across resubscriptions. */
@@ -95,7 +92,7 @@ export class WorkspaceLayoutStream {
     if (!this.projecting) {
       this.projecting = true
       this.projection.clear()
-      this.shown = new Map()
+      this.shown.clear()
       this.dirty = true
     }
     // Flush pending changes before adding the subscriber so its snapshot is current.
@@ -114,7 +111,8 @@ export class WorkspaceLayoutStream {
         this.projecting = false
         // A flush already queued finds nothing to project.
         this.dirty = false
-        this.liveTitlesDirty = false
+        this.liveRefs.clear()
+        this.recheckAll = false
         this.shown.clear()
         this.watch()
       }
@@ -132,7 +130,7 @@ export class WorkspaceLayoutStream {
   }
 
   /** Shared read-only partition while subscribed, otherwise loaded per call; tests freeze it. Null without a Store. */
-  readPartition(hostId: ExecutionHostId): LoadedWorkspaceLayout | null {
+  readPartition(hostId: ExecutionHostId): LoadedWorkspaceLayoutRead | null {
     const loaded = this.projection.loaded(hostId, this.stopWatching !== null)
     if (loaded) {
       workspaceLayoutPartitionReadObserver()?.(loaded)
@@ -140,11 +138,12 @@ export class WorkspaceLayoutStream {
     return loaded
   }
 
-  markLiveTitlesDirty(): void {
+  /** `ref` is the terminal whose title changed or the pane key whose start facts did. */
+  markLiveTitlesDirty(ref: string): void {
     if (!this.projecting) {
       return
     }
-    this.liveTitlesDirty = true
+    this.liveRefs.add(ref)
     this.schedule()
   }
 
@@ -157,7 +156,9 @@ export class WorkspaceLayoutStream {
     const wanted = this.listeners.size > 0 || this.commitListeners.size > 0
     if (wanted && !this.stopWatching) {
       const store = this.deps.store()
-      const stopWrites = store?.onWorkspaceSessionWritten?.((hostId) => this.markDirty(hostId))
+      const stopWrites = store?.onWorkspaceSessionWritten?.((hostId, workspaces, refs) =>
+        this.markDirty(hostId, workspaces, refs)
+      )
       // Switch point: a window-owned build publishes when the writes' task ends, as before.
       const stopOperations = ORCA_LAYOUT_OWNER_IS_MAIN
         ? store?.onWorkspaceSessionOperationEnded?.(() => this.flush())
@@ -188,8 +189,12 @@ export class WorkspaceLayoutStream {
     }
   }
 
-  private markDirty(hostId: ExecutionHostId | null): void {
-    this.projection.invalidate(hostId)
+  private markDirty(
+    hostId: ExecutionHostId | null,
+    workspaces?: ReadonlySet<string>,
+    refs?: ReadonlySet<string>
+  ): void {
+    this.projection.invalidate(hostId, workspaces, refs)
     this.dirty ||= this.projecting
     if (this.commitListeners.size > 0) {
       this.touched = addDirty(this.touched, hostId)
@@ -198,17 +203,18 @@ export class WorkspaceLayoutStream {
   }
 
   private flush(): void {
-    const { dirty, touched } = this
+    const { dirty, touched, liveRefs } = this
     this.touched = null
-    if (dirty || this.liveTitlesDirty) {
+    if (dirty || liveRefs.size > 0) {
       this.dirty = false
-      this.liveTitlesDirty = false
+      this.liveRefs = new Set()
       // A failed projection is logged once; it never reaches the write that notified it.
       try {
-        this.reconcile(dirty)
+        this.reconcile(dirty, liveRefs)
       } catch (error) {
         // A partial cache update requires reprojection of every partition on the next write.
         this.projection.forgetPartitions()
+        this.recheckAll = true
         this.logFailure('projection', error)
       }
     }
@@ -231,49 +237,25 @@ export class WorkspaceLayoutStream {
     }
   }
 
-  private liveTitlesOf(layout: PublishedWorkspaceLayout): (string | null)[] {
-    return layout.tabs.flatMap((tab) =>
-      (tab.terminal?.panes ?? []).map((pane) =>
-        pane.ptyId ? this.deps.liveTitle(pane.ptyId) : null
-      )
-    )
-  }
-
-  private reconcile(reproject: boolean): void {
+  private reconcile(reproject: boolean, liveRefs: ReadonlySet<string>): void {
     const next = reproject ? this.projection.project() : this.projection.published
-    const removed: string[] = []
-    for (const key of this.shown.keys()) {
-      if (!next.has(key)) {
-        removed.push(key)
-      }
-    }
-    const before = this.shown
-    const shown = new Map<string, Shown>()
-    const changed: string[] = []
-    for (const [key, { layout, json }] of next) {
-      const titles = this.liveTitlesOf(layout)
-      // Switch point: a pane's start facts are live state, laid over as its title is.
-      const starts = ORCA_LAYOUT_OWNER_IS_MAIN ? paneStartFactsOf(layout, this.deps) : null
-      const liveTitles = JSON.stringify(starts ? [titles, starts] : titles)
-      const previous = before.get(key)
-      if (previous?.json === json && previous.liveTitles === liveTitles) {
-        shown.set(key, previous)
-        continue
-      }
-      const shownLayout = withLiveTitles(layout, titles)
-      const laid = starts ? withPaneStartFacts(shownLayout, starts) : shownLayout
-      shown.set(key, { json, liveTitles, layout: laid })
-      changed.push(key)
-    }
-    this.shown = shown
+    const recheckAll = this.recheckAll
+    this.recheckAll = false
+    const observe = workspaceLayoutFrameObserver()
+    const before = observe ? new Map(this.shown) : null
+    const { removed, changed } = updateShownLayouts(this.shown, next, this.deps, {
+      liveRefs,
+      reprojected: reproject,
+      recheckAll
+    })
     // Switch point: a window-owned build sends each workspace whole, one frame each.
     if (!ORCA_LAYOUT_OWNER_IS_MAIN || !this.epoch) {
       this.deliverEach([
         ...removed.map((key): WorkspaceLayoutEvent => ({ type: 'removed', key })),
-        ...changed.map((key): WorkspaceLayoutEvent => ({
+        ...[...changed].map(([key, { current }]): WorkspaceLayoutEvent => ({
           type: 'workspace',
           key,
-          layout: shown.get(key)!.layout
+          layout: current.layout
         }))
       ])
       return
@@ -286,11 +268,14 @@ export class WorkspaceLayoutStream {
       key,
       change: 'removed'
     }))
-    for (const key of changed) {
-      const previous = before.get(key)
-      const current = shown.get(key)!
+    for (const [key, { previous, current }] of changed) {
       const change = previous
-        ? diffPublishedLayouts(key, recordsOf(previous), recordsOf(current), current.layout)
+        ? diffPublishedLayouts(
+            key,
+            shownRecordsOf(previous),
+            shownRecordsOf(current),
+            current.layout
+          )
         : { key, change: 'layout' as const, layout: current.layout }
       if (change) {
         workspaces.push(change)
@@ -301,9 +286,9 @@ export class WorkspaceLayoutStream {
     }
     const frame = { type: 'records' as const, epoch: this.epoch, seq: ++this.seq, workspaces }
     this.deliver(frame)
-    workspaceLayoutFrameObserver()?.({
+    observe?.({
       frame,
-      before: new Map([...before].map(([key, { layout }]) => [key, layout])),
+      before: new Map([...(before ?? [])].map(([key, { layout }]) => [key, layout])),
       fresh: () => this.freshLayouts(),
       titlesOnly: !reproject
     })
@@ -312,9 +297,7 @@ export class WorkspaceLayoutStream {
   private freshLayouts(): Map<string, PublishedWorkspaceLayout> {
     const fresh = new Map<string, PublishedWorkspaceLayout>()
     for (const [key, { layout }] of this.projection.projectFresh()) {
-      const titled = withLiveTitles(layout, this.liveTitlesOf(layout))
-      const starts = ORCA_LAYOUT_OWNER_IS_MAIN ? paneStartFactsOf(layout, this.deps) : null
-      fresh.set(key, starts ? withPaneStartFacts(titled, starts) : titled)
+      fresh.set(key, laidLayout(layout, this.deps))
     }
     return fresh
   }
@@ -336,11 +319,4 @@ export class WorkspaceLayoutStream {
       }
     }
   }
-}
-
-function recordsOf(shown: Shown): IndexedLayoutRecords | null {
-  if (shown.records === undefined) {
-    shown.records = indexPublishedLayout(shown.layout)
-  }
-  return shown.records
 }

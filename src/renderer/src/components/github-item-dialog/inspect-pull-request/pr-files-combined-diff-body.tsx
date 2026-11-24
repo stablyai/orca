@@ -12,7 +12,7 @@ import type { DecoratedDiffComment } from '@/components/diff-comments/decorated-
 import { CombinedDiffFileTree } from '../../editor/combined-diff/browse-files/combined-diff-file-tree'
 import type { DiffSection } from '@/components/editor/diff/sections/diff-section-types'
 import type { CombinedDiffFileTreeEntry } from '../../editor/combined-diff/resolve-changes/combined-diff-section-identity'
-import type { GitHubPRFile } from '../../../../../shared/github/pull-request-types'
+import type { GitHubPRFile } from '../../../../../shared/github/pull-requests/pull-request-types'
 import type { GitBranchChangeEntry } from '../../../../../shared/git/diff/git-diff-compare-types'
 import { PRFilesCombinedDiffToolbar } from './pr-files-combined-diff-toolbar'
 

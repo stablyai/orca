@@ -1,35 +1,33 @@
 import type { GitHubSourceCollections } from './sources/source-collections'
 import type { GitHubTaskRecordCache } from './task-records/task-record-cache'
-import type { ClassifiedError } from '../../../../shared/classified-error'
-import type { PRCheckDetail, PRCheckRunDetails } from '../../../../shared/github/check-types'
+import type { ClassifiedError } from '../../../../shared/errors/classified-error'
+import type { PRCheckDetail, PRCheckRunDetails } from '../../../../shared/github/checks/check-types'
 import type {
   GitHubCommentResult,
   GitHubReactionContent,
   PRComment
-} from '../../../../shared/github/comment-types'
+} from '../../../../shared/github/comments/comment-types'
 import type {
   GitHubPRRefreshEvent,
+  PRSnapshotReply,
   GitHubPRRefreshReason
-} from '../../../../shared/github/pull-request-refresh-types'
-import type {
-  GitHubOwnerRepo,
-  IssueInfo,
-  PRInfo
-} from '../../../../shared/github/pull-request-types'
-import type { GitHubWorkItem } from '../../../../shared/github/work-item-types'
-import type { IssueSourcePreference } from '../../../../shared/repo-types'
+} from '../../../../shared/github/pull-requests/refresh/pull-request-refresh-types'
+import type { GitHubRepositoryIdentity as GitHubOwnerRepo } from '../../../../shared/github/repositories/repository-identity'
+import type { IssueInfo, PRInfo } from '../../../../shared/github/pull-requests/pull-request-types'
+import type { GitHubWorkItem } from '../../../../shared/github/work-items/work-item-types'
+import type { IssueSourcePreference } from '../../../../shared/repository/repo-types'
 import type {
   GitHubProjectFieldMutationValue,
   GitHubProjectTable
-} from '../../../../shared/github/project-types'
+} from '../../../../shared/github/projects/project-types'
 import type {
   GetProjectViewTableResult,
   GitHubProjectMutationResult
-} from '../../../../shared/github/project-result-types'
-import type { GetProjectViewTableArgs } from '../../../../shared/github/project-request-types'
+} from '../../../../shared/github/projects/project-result-types'
+import type { GetProjectViewTableArgs } from '../../../../shared/github/projects/project-request-types'
 import type { TaskSourceContext } from '../../../../shared/work-items/task-source-context'
-import type { ExecutionHostId } from '../../../../shared/execution-host'
-import type { RuntimeClientTarget } from '../../../../shared/runtime-client-target'
+import type { ExecutionHostId } from '../../../../shared/execution-host/execution-host'
+import type { RuntimeClientTarget } from '../../../../shared/remote-runtime/host-catalog/runtime-client-target'
 import type {
   CacheEntry,
   FetchOptions,
@@ -45,6 +43,16 @@ import type {
   ProjectRowContentUpdate
 } from './projects/project-row-content'
 import type { PRRefreshState, PRRefreshStateClearToken } from './refresh/pr-refresh-state'
+
+/** One repo in a work-item fan-out. */
+export type GitHubWorkItemRepoArg = {
+  repoId: string
+  path: string
+  executionHostId?: string | null
+  sourceContext?: TaskSourceContext | null
+  /** Its host is known unreachable: answer as that request's failure without dialling. */
+  hostUnreachable?: boolean
+}
 
 export type GitHubSlice = {
   githubSourceCollections: GitHubSourceCollections
@@ -73,12 +81,18 @@ export type GitHubSlice = {
       fallbackPRSource?: GitHubPRFallbackSource | null
       reason?: GitHubPRRefreshReason
       userRefresh?: boolean
+      selected?: boolean
+      /** A refresh timer's read or retry: no use of an idle WSL host (#46567). */
+      background?: boolean
+      onReadOutcome?: (outcome: PRSnapshotReply) => void
+      signal?: AbortSignal
     }
   ) => Promise<PRInfo | null>
   fetchIssue: (
     repoPath: string,
     number: number,
-    options?: RepoScopedFetchOptions
+    /** `background`: a card's poll, which must not hold an idle WSL host up or wake it. */
+    options?: RepoScopedFetchOptions & { ownerRepo?: GitHubOwnerRepo; background?: boolean }
   ) => Promise<IssueInfo | null>
   fetchPRChecks: (
     repoPath: string,
@@ -91,6 +105,8 @@ export type GitHubSlice = {
       /** Refresh or a check action: a user act that may start a stopped WSL distro. */
       wakeWslDistro?: boolean
       userRefresh?: boolean
+      /** The checks panel's own timer: a paired host may answer at its PR auto-refresh cadence. */
+      background?: boolean
     }
   ) => Promise<PRCheckDetail[]>
   fetchPRCheckDetails: (
@@ -194,12 +210,7 @@ export type GitHubSlice = {
   ) => Promise<readonly GitHubWorkItem[] | undefined>
   /** Fan out across repos with stale-cache fallback; failedCount counts only failures without data. githubUnavailable means all eligible GitHub sources failed reachability, even if stale results remain. */
   fetchWorkItemsAcrossRepos: (
-    repos: {
-      repoId: string
-      path: string
-      executionHostId?: string | null
-      sourceContext?: TaskSourceContext | null
-    }[],
+    repos: GitHubWorkItemRepoArg[],
     perRepoLimit: number,
     displayLimit: number,
     query: string,
@@ -215,12 +226,7 @@ export type GitHubSlice = {
   >
   /** Fetch one numbered provider page. Pagination pages remain renderer-local. */
   fetchWorkItemsNextPage: (
-    repos: {
-      repoId: string
-      path: string
-      executionHostId?: string | null
-      sourceContext?: TaskSourceContext | null
-    }[],
+    repos: GitHubWorkItemRepoArg[],
     perRepoLimit: number,
     displayLimit: number,
     query: string,
@@ -236,12 +242,7 @@ export type GitHubSlice = {
   >
   /** Count items and derive pages from the largest per-repo result set. */
   countWorkItemsAcrossRepos: (
-    repos: {
-      repoId: string
-      path: string
-      executionHostId?: string | null
-      sourceContext?: TaskSourceContext | null
-    }[],
+    repos: GitHubWorkItemRepoArg[],
     query: string,
     perRepoLimit: number,
     options?: Pick<FetchOptions, 'wakeWslDistro'>

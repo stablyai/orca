@@ -1,7 +1,7 @@
-import { isFolderRepo } from '../../../../../../shared/repo-kind'
+import { isFolderRepo } from '../../../../../../shared/repository/repo-kind'
 import { translate } from '@/i18n/i18n'
 import type { Translate } from '@/i18n/use-translate'
-import type { Repo } from '../../../../../../shared/repo-types'
+import type { Repo } from '../../../../../../shared/repository/repo-types'
 import type { Worktree } from '../../../../../../shared/worktree/types'
 
 type WorktreeRepoRef = Pick<Worktree, 'repoId'>
@@ -63,11 +63,10 @@ function getBatchDeleteDescription(
   }
   return t(
     'auto.components.sidebar.DeleteWorktreeDialog.removeBatchGit',
-    'Remove <target>{{count}} workspaces</target> from git and delete their workspace folders.',
+    'Deletes {{count}} worktrees and their branches (kept if unmerged).',
     {
       count,
-      defaultValue_one:
-        'Remove <target>{{count}} workspace</target> from git and delete its workspace folder.'
+      defaultValue_one: 'Deletes {{count}} worktree and its branch (kept if unmerged).'
     }
   )
 }
@@ -102,7 +101,7 @@ export function getDeleteWorktreeDialogCopy(
           )
         : t(
             'auto.components.sidebar.DeleteWorktreeDialog.deleteSingleWorktreeAndBranch',
-            'Deletes the worktree and its branch (kept if unmerged).'
+            'Deletes the worktree, local changes, and its branch if merged.'
           ),
     mainWorktreeBlocker: args.isFolderWorkspaceDelete
       ? t(
@@ -157,4 +156,34 @@ export function getDeleteWorktreeLineageDialogDescription(
         'Remove <target/> and <descendants>{{count}} child workspace</descendants> from git and delete their workspace folders.'
     }
   )
+}
+
+export function getDeleteWorktreeDialogTitle(
+  args: {
+    isBatchDelete: boolean
+    deleteAllLineage: boolean
+    name: string
+    worktreeCount: number
+    childWorkspaceCount: number
+  },
+  t: Translate = translate
+): string {
+  const { name } = args
+  if (args.isBatchDelete) {
+    return t('worktree.delete.batchTitle', 'Delete {{count}} workspaces?', {
+      count: args.worktreeCount
+    })
+  }
+  if (args.deleteAllLineage) {
+    return t(
+      'worktree.delete.withChildrenTitle',
+      'Delete {{name}} and {{count}} child workspaces?',
+      {
+        name,
+        count: args.childWorkspaceCount,
+        defaultValue_one: 'Delete {{name}} and {{count}} child workspace?'
+      }
+    )
+  }
+  return t('worktree.delete.singleTitle', 'Delete {{name}}?', { name })
 }

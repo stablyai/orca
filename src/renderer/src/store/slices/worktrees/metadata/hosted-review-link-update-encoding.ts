@@ -1,7 +1,7 @@
 import type { WorktreeMeta } from '../../../../../../shared/worktree/meta-types'
 import type { Worktree } from '../../../../../../shared/worktree/types'
 import type { RuntimeWorktreeMetaUpdates } from '../listing/worktree-slice-types'
-import type { HostedReviewLinkKey } from '../../../../../../shared/worktree/hosted-review-links'
+import type { HostedReviewLinkKey } from '../../../../../../shared/worktree/hosted-review/hosted-review-links'
 
 export function getHostedReviewLinkForMetaRefresh(
   updates: Partial<WorktreeMeta>,

@@ -1,4 +1,4 @@
-import type { SkillSourceKind } from '../../../../../shared/skills'
+import type { SkillSourceKind } from '../../../../../shared/skills/discovery/skills'
 import { translate } from '@/i18n/i18n'
 import type { Translate } from '@/i18n/use-translate'
 

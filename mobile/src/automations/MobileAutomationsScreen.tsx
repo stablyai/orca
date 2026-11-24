@@ -4,19 +4,19 @@ import { useRef, useState } from 'react'
 import { useLocalSearchParams } from 'expo-router'
 import { View } from 'react-native'
 import { ChevronLeft } from 'lucide-react-native'
-import { normalizeExecutionHostId } from '../../../src/shared/execution-host'
+import { normalizeExecutionHostId } from '../../../src/shared/execution-host/execution-host'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { firstParam } from '../navigation/route-param-reader'
 import { useRouteHandoff } from '../navigation/route-handoff'
 import { useHostClient } from '../transport/connection/host-client-hooks'
 import { useHostDisplay } from '../host-descriptors/use-host-display'
 import { useHostProfile } from '../host-catalog/use-host-profile'
-import { useHostProtocolGates } from '../components/host-protocol-gates-context'
+import { useHostProtocolGates } from '../components/host-connection/host-protocol-gates-context'
 import { NavBar, NavBarTitleButton } from '../components/nav-bar/NavBar'
 import { NavBarButton } from '../components/nav-bar/NavBarButton'
-import { PickerModal, type PickerOption } from '../components/PickerModal'
+import { PickerModal, type PickerOption } from '../components/sheets/PickerModal'
 import { useBottomDrawerFollowUp } from '../components/bottom-drawer/use-bottom-drawer-follow-up'
-import { useReachableServerClients } from '../worktree/use-reachable-server-clients'
+import { useReachableServerClients } from '../worktree/execution-hosts/use-reachable-server-clients'
 import { AutomationManager } from './AutomationManager'
 import { leaveThrough, type AutomationLeaveGuard } from './AutomationEditorNavigation'
 import { automationStyles as styles } from './automation-styles'
@@ -24,16 +24,22 @@ import { automationStyles as styles } from './automation-styles'
 export function MobileAutomationsScreen() {
   const t = useMobileTranslation()
   useMobileColorScheme()
-  const params = useLocalSearchParams<{ hostId?: string | string[]; new?: string | string[] }>()
+  const params = useLocalSearchParams<{
+    hostId?: string | string[]
+    new?: string | string[]
+    automation?: string | string[]
+    server?: string | string[]
+  }>()
   const hostId = firstParam(params.hostId)
   // Spent once the user picks another host, so switching back doesn't reopen the editor.
   const [creating, setCreating] = useState(firstParam(params.new) === '1')
+  const [opening, setOpening] = useState(firstParam(params.automation) || undefined)
   const { client } = useHostClient(hostId)
   const { hostCapabilities } = useHostProtocolGates()
   const { servers, serverClients } = useReachableServerClients(client, hostCapabilities)
   const host = useHostProfile(hostId)
   const hostTitle = useHostDisplay(host).title
-  const [authority, setAuthority] = useState('paired')
+  const [authority, setAuthority] = useState(firstParam(params.server) || 'paired')
   const [pickingHost, setPickingHost] = useState(false)
   const leaveGuard = useRef<AutomationLeaveGuard | null>(null)
   // A discard prompt may follow, so switch once the picker's sheet is gone.
@@ -83,38 +89,55 @@ export function MobileAutomationsScreen() {
         hostId={hostId}
         client={selectedClient}
         startInEditor={creating}
+        startOnAutomation={opening}
         leaveGuard={leaveGuard}
         executionHost={
           authority === 'paired' ? undefined : (normalizeExecutionHostId(authority) ?? undefined)
         }
-        renderHeader={(tabs) => (
-          <NavBar
-            leading={
-              <NavBarButton
-                icon={ChevronLeft}
-                accessibilityLabel={t('automations.mobile.back', 'Back')}
-                onPress={() => router.back()}
-              />
-            }
-            title={title}
-            subtitle={hostLabel}
-            center={
-              hostOptions.length > 1 ? (
-                <NavBarTitleButton
-                  title={title}
-                  subtitle={hostLabel}
-                  onPress={() => setPickingHost(true)}
-                  accessibilityLabel={t(
-                    'automations.mobile.chooseHost',
-                    'Automations on {{host}}, choose another host',
-                    { host: hostLabel }
-                  )}
+        renderHeader={(tabs, bar) =>
+          bar.page ? (
+            <NavBar
+              leading={
+                <NavBarButton
+                  icon={ChevronLeft}
+                  accessibilityLabel={t('automations.mobile.back', 'Back')}
+                  onPress={bar.page.onBack}
                 />
-              ) : undefined
-            }
-            accessory={tabs}
-          />
-        )}
+              }
+              title={bar.page.title}
+              subtitle={bar.page.subtitle}
+              trailing={bar.trailing}
+            />
+          ) : (
+            <NavBar
+              leading={
+                <NavBarButton
+                  icon={ChevronLeft}
+                  accessibilityLabel={t('automations.mobile.back', 'Back')}
+                  onPress={() => router.back()}
+                />
+              }
+              title={title}
+              subtitle={hostLabel}
+              center={
+                hostOptions.length > 1 ? (
+                  <NavBarTitleButton
+                    title={title}
+                    subtitle={hostLabel}
+                    onPress={() => setPickingHost(true)}
+                    accessibilityLabel={t(
+                      'automations.mobile.chooseHost',
+                      'Automations on {{host}}, choose another host',
+                      { host: hostLabel }
+                    )}
+                  />
+                ) : undefined
+              }
+              trailing={bar.trailing}
+              accessory={tabs}
+            />
+          )
+        }
       />
       <PickerModal
         visible={pickingHost}
@@ -126,6 +149,7 @@ export function MobileAutomationsScreen() {
             hostPicker.closeThen(() =>
               leaveThrough(leaveGuard, () => {
                 setCreating(false)
+                setOpening(undefined)
                 setAuthority(next)
               })
             )

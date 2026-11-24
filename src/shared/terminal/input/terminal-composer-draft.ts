@@ -1,3 +1,5 @@
+import { isStockPlaceholder } from './terminal-composer-stock-placeholder'
+
 export type TerminalCursorContext = {
   rows: string[]
   typedRows: string[]
@@ -30,7 +32,8 @@ type TerminalComposerMatch = TerminalComposerDraft & { placeholder: boolean }
 const COMPOSER_PROMPT_PREFIX = /^\s*[\u276F\u203A\u00BB]\s?/
 const COMPOSER_FRAME_LINE = /^[\u2500\u2501-]{8,}\s*$/
 const COMPOSER_TOP_FRAME_PREFIX = /^[\u2500\u2501-]{8,}/
-const CODEX_FOOTER_LINE = /^\s*(?:gpt-\S+|o\d\S*)\s+[\u00B7\u2022]\s+\S.*$/i
+// Codex can follow the model with reasoning effort and service tier (`gpt-5.4 high Fast`).
+const CODEX_FOOTER_LINE = /^\s*(?:gpt-\S+|o\d\S*)(?:\s+[\w-]+){0,2}\s+[\u00B7\u2022]\s+\S.*$/i
 
 function composerContinuationRows(
   context: TerminalCursorContext,
@@ -103,34 +106,6 @@ function findCodexFooterIndex(context: TerminalCursorContext): number {
     return -1
   }
   return isCodexFooterRow(context, status) ? status : -1
-}
-
-// Codex before 0.152 rotated these (codex-rs/tui/src/chatwidget.rs PLACEHOLDERS, SIDE_PLACEHOLDERS).
-const STOCK_PLACEHOLDERS: ReadonlySet<string> = new Set([
-  'Ask Codex to do anything',
-  'Ask a follow-up question',
-  'Explain this codebase',
-  'Summarize recent commits',
-  'Implement {feature}',
-  'Find and fix a bug in @filename',
-  'Write tests for @filename',
-  'Improve documentation in @filename',
-  'Run /review on my current changes',
-  'Use /skills to list available skills',
-  'Check recently modified functions for compatibility',
-  'How many files have been modified?',
-  'Will this algorithm scale well?'
-])
-
-function isStockPlaceholder(
-  afterCursor: string,
-  continuationRows: { text: string; wrapped: boolean }[]
-): boolean {
-  const text = [afterCursor, ...continuationRows.map((row) => row.text)]
-    .join(' ')
-    .replace(/\s+/g, ' ')
-    .trim()
-  return /^Try\s+["\u201C]/.test(text) || STOCK_PLACEHOLDERS.has(text)
 }
 
 // Why: Claude's default caret hides the native cursor and parks it at a painted caret cell. That paint
@@ -325,8 +300,17 @@ export function readTerminalComposerTypedText(
   return boxed ? boxed.text : (detectTerminalComposer(context, true)?.text ?? null)
 }
 
+/** True when a verified composer paints only a placeholder, suggestion or dim hint right of its cursor. */
 export function hasTerminalComposerPlaceholder(
   context: TerminalCursorContext | null | undefined
 ): boolean {
-  return detectTerminalComposer(context)?.placeholder === true
+  if (!context?.rawAfterCursor.trim()) {
+    return false
+  }
+  // Why: the IME overlay redraws the row from the cursor without cell attributes, so a dim tail turns white.
+  const onlyDimAfterCursor = !context.afterCursor.trim() || isCaretOverDimSuggestion(context)
+  return (
+    (onlyDimAfterCursor && readTerminalComposerTypedText(context) !== null) ||
+    detectTerminalComposer(context)?.placeholder === true
+  )
 }

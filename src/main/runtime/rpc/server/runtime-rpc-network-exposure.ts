@@ -1,5 +1,5 @@
-import { WebSocketTransport } from '../ws-transport'
-import { writeWsFallbackPort } from '../ws-fallback-port-store'
+import { WebSocketTransport } from '../transports/websocket/ws-transport'
+import { writeWsFallbackPort } from '../transports/websocket/ws-fallback-port-store'
 import { RuntimeRpcLifecycle } from './runtime-rpc-lifecycle'
 import { WS_BIND_HOST_ALL_INTERFACES, WS_BIND_HOST_LOOPBACK } from './runtime-rpc-pairing-types'
 

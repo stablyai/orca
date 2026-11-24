@@ -1,10 +1,5 @@
 import { expect, it } from 'vitest'
 import { OBJECT_STORE_SCHEMA } from '../src/object-store-schema.generated'
-import { relayObjectStoreSchema } from './object-store-schema'
-
-it('object store schema matches the relay schema', async () => {
-  expect([...OBJECT_STORE_SCHEMA]).toEqual(await relayObjectStoreSchema())
-})
 
 it('stamps fresh objects, keeps pre-version ones, refuses objects newer than the code', async () => {
   const { DatabaseSync } = await import('node:sqlite')

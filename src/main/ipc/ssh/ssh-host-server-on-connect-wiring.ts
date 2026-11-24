@@ -1,15 +1,15 @@
-import { getAppEnvironment } from '../../../shared/app-environment'
+import { getAppEnvironment } from '../../../shared/app-lifecycle/app-environment'
 import {
   getManagedOrcadFenceEnvironmentId,
   managedOrcadServerName
-} from '../../../shared/managed-orcad-ssh-owner'
+} from '../../../shared/remote-runtime/ssh/managed-orcad-ssh-owner'
 import { listEnvironments } from '../../../shared/remote-runtime/host-store/runtime-environment-store'
 import { findOrcadMigrationSourceCutoverForTarget } from '../../persistence/migrating-orcad-catalog/cutover-journals/orcad-migration-cutover-journal'
 import { abandonOrcadConversion } from '../../managed-server/migration/cutover/orcad-conversion-abandon'
 import { retainOrcadMigrationSource } from '../../persistence/migrating-orcad-catalog/retained-source/orcad-migration-source-retention'
 import { enableMovedOrcadAutomationsForTarget } from '../../persistence/migrating-orcad-catalog/retained-source/orcad-migration-moved-automations'
-import { hasOrcadTemplate } from '../../orcad/orcad-artifact-materializer'
-import { isOrcadHostUnavailableFixableOnHost } from '../../orcad/orcad-host-unavailable'
+import { hasOrcadTemplate } from '../../orcad/artifact-slots/orcad-artifact-materializer'
+import { isOrcadHostUnavailableFixableOnHost } from '../../orcad/diagnostics/orcad-host-unavailable'
 import { managedServerUpdateDeps } from '../../ssh/host-server/managed-server-update-deps'
 import { ensureOrcadManagedTunnel } from '../../managed-server/lifecycle/orcad-managed-tunnel'
 import { verifyOrcadManagedServing } from '../../managed-server/lifecycle/orcad-managed-serving-verify'
@@ -34,7 +34,6 @@ import { knownSshHostPlatform } from '../../ssh/remote-host/ssh-host-platform-me
 import { knownOrcadTunnelTransport } from '../../managed-server/lifecycle/orcad-tunnel-transport-memo'
 import { getSshTargetRegistryStore } from '../../ssh/targets/ssh-target-registry'
 import { releaseUnreachableOrcadSetup } from '../../managed-server/migration/cutover/orcad-unreachable-setup-release'
-import { getCurrentMainWindow } from './ssh-ipc-context'
 import { broadcastSshState } from './ssh-renderer-broadcast'
 import { connectInFlight } from './ssh-connect-attempt-registry'
 import { startLegacyRelayBridge } from '../../ssh/legacy-relay/bridge/legacy-relay-bridge-registry'
@@ -45,13 +44,13 @@ export function hostServerOnConnectDeps(userDataPath: string): HostServerOnConne
   const claims = registry.getOrcadRuntimeClaims()
   const store = registry.getOrcadMigrationSource()
   const appVersion = getAppEnvironment().getVersion()
-  const isRegistered = (environmentId: string): boolean =>
-    listEnvironments(userDataPath).some((entry) => entry.id === environmentId)
+  const isRegistered = async (environmentId: string): Promise<boolean> =>
+    (await listEnvironments(userDataPath)).some((entry) => entry.id === environmentId)
   return {
     // A fence alone may be unfinished setup; only registered servers count.
-    managedEnvironmentId: (target) => {
+    managedEnvironmentId: async (target) => {
       const environmentId = getManagedOrcadFenceEnvironmentId(target)
-      return environmentId && isRegistered(environmentId) ? environmentId : null
+      return environmentId && (await isRegistered(environmentId)) ? environmentId : null
     },
     ensureTunnel: async (environmentId) => {
       await ensureOrcadManagedTunnel(userDataPath, environmentId)
@@ -64,7 +63,7 @@ export function hostServerOnConnectDeps(userDataPath: string): HostServerOnConne
       }
       await retainOrcadMigrationSource(userDataPath, head.migrationId, store)
       // Retry what earlier connects could not reach the server to re-enable.
-      const environment = listEnvironments(userDataPath).find(
+      const environment = (await listEnvironments(userDataPath)).find(
         (entry) => entry.id === head.destinationEnvironmentId
       )
       return environment
@@ -141,7 +140,7 @@ export function hostServerOnConnectDeps(userDataPath: string): HostServerOnConne
       const environmentId =
         getManagedOrcadFenceEnvironmentId(target) ??
         getManagedOrcadFenceEnvironmentId(registry.getTarget(target.id))
-      if (environmentId && !isRegistered(environmentId)) {
+      if (environmentId && !(await isRegistered(environmentId))) {
         claims.release(target.id, environmentId)
         await claims.flush()
       }
@@ -181,7 +180,7 @@ export function hostServerOnConnectDeps(userDataPath: string): HostServerOnConne
         return
       }
       setSshHostServerStatus(target.id, { kind: 'setting-up', phase })
-      broadcastSshState(getCurrentMainWindow, target.id, {
+      broadcastSshState(target.id, {
         targetId: target.id,
         status: 'connecting',
         error: null,

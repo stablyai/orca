@@ -4,6 +4,9 @@ import type { LinearIssueWriteRecord } from './linear-issue-write-support'
 export type LinearIssueListOptions = {
   teamId?: string
   attributeFilter?: LinearIssueAttributeFilter | null
+  /** Skip description and labels when the caller only returns summaries. */
+  summaryOnly?: boolean
+  signal?: AbortSignal
 }
 
 export type LinearIssueNode = {
@@ -69,18 +72,15 @@ export type LinearIssuePageRequest = {
 export type LinearIssueConnectionLoader = (
   page: LinearIssuePageRequest
 ) => Promise<LinearIssueConnection | null | undefined>
-export const LINEAR_ISSUE_NODE_FIELDS = `
+const LINEAR_ISSUE_SUMMARY_FIELDS = `
   id
   identifier
   title
-  branchName
-  description
   url
   dueDate
   priority
   estimate
   updatedAt
-  labelIds
   state {
     name
     type
@@ -102,11 +102,30 @@ export const LINEAR_ISSUE_NODE_FIELDS = `
     displayName
     avatarUrl
   }
+`
+
+const LINEAR_ISSUE_EXTRA_FIELDS = `
+  branchName
+  description
+  labelIds
   labels(first: 50) {
     nodes {
       id
       name
     }
+  }
+`
+
+export const LINEAR_ISSUE_NODE_FIELDS = `
+  ${LINEAR_ISSUE_SUMMARY_FIELDS}
+  ${LINEAR_ISSUE_EXTRA_FIELDS}
+`
+
+// Why: agent listings read every page, so they skip the heavy fields they never return.
+const LINEAR_ISSUE_LIST_FIELDS = `
+  ${LINEAR_ISSUE_SUMMARY_FIELDS}
+  ... @include(if: $detail) {
+    ${LINEAR_ISSUE_EXTRA_FIELDS}
   }
 `
 
@@ -125,11 +144,12 @@ export const ALL_ISSUES_QUERY = `
     $first: Int,
     $after: String,
     $filter: IssueFilter,
-    $orderBy: PaginationOrderBy
+    $orderBy: PaginationOrderBy,
+    $detail: Boolean = true
   ) {
     issues(first: $first, after: $after, filter: $filter, orderBy: $orderBy) {
       nodes {
-        ${LINEAR_ISSUE_NODE_FIELDS}
+        ${LINEAR_ISSUE_LIST_FIELDS}
       }
       pageInfo {
         hasNextPage
@@ -144,12 +164,13 @@ export const VIEWER_ASSIGNED_ISSUES_QUERY = `
     $first: Int,
     $after: String,
     $filter: IssueFilter,
-    $orderBy: PaginationOrderBy
+    $orderBy: PaginationOrderBy,
+    $detail: Boolean = true
   ) {
     viewer {
       assignedIssues(first: $first, after: $after, filter: $filter, orderBy: $orderBy) {
         nodes {
-          ${LINEAR_ISSUE_NODE_FIELDS}
+          ${LINEAR_ISSUE_LIST_FIELDS}
         }
         pageInfo {
           hasNextPage
@@ -165,12 +186,13 @@ export const VIEWER_CREATED_ISSUES_QUERY = `
     $first: Int,
     $after: String,
     $filter: IssueFilter,
-    $orderBy: PaginationOrderBy
+    $orderBy: PaginationOrderBy,
+    $detail: Boolean = true
   ) {
     viewer {
       createdIssues(first: $first, after: $after, filter: $filter, orderBy: $orderBy) {
         nodes {
-          ${LINEAR_ISSUE_NODE_FIELDS}
+          ${LINEAR_ISSUE_LIST_FIELDS}
         }
         pageInfo {
           hasNextPage

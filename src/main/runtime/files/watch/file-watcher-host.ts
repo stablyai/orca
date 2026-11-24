@@ -1,7 +1,6 @@
 import type { FsChangeEvent } from '../../../../shared/file-watch/filesystem-change-event'
 import {
   forgetRuntimeWatcherProcessRoot,
-  resetRuntimeWatcherProcessForTest,
   subscribeViaRuntimeWatcherProcess
 } from '../../../ipc/filesystem/watcher-process/parcel-watcher-process'
 import type { WatcherProcessEvent } from '../../../ipc/filesystem/watcher-process/parcel-watcher-process-protocol'
@@ -20,7 +19,7 @@ import {
   RUNTIME_FILE_WATCH_CRAWL_TIMEOUT_MS,
   RUNTIME_FILE_WATCH_MAX_SETUP_ATTEMPTS
 } from '../../../../shared/file-watch/runtime-file-watch-limits'
-import { PromiseSettlementWaiters } from '../../../../shared/promise-settlement-waiters'
+import { PromiseSettlementWaiters } from '../../../../shared/concurrency/promise-settlement-waiters'
 
 const RUNTIME_FILE_WATCH_IGNORE_OPTIONS = buildParcelWatcherIgnoreOptions(WATCHER_IGNORE_DIRS)
 const RUNTIME_FILE_WATCH_EVENT_LIMIT = 200
@@ -310,20 +309,4 @@ function waitForRuntimeRootStart(
 
 function createRuntimeRootAbortError(): Error {
   return new Error('file watcher subscription aborted')
-}
-
-export function resetRuntimeRootWatchersForTest(): void {
-  for (const root of runtimeRootWatches.values()) {
-    root.closed = true
-    root.generation++
-    root.abortController.abort()
-    root.subscribers.clear()
-    void root.subscription?.unsubscribe()
-  }
-  runtimeRootWatches.clear()
-  resetRuntimeWatcherProcessForTest()
-}
-
-export function getRuntimeRootWatchWaiterCountForTest(rootPath: string): number {
-  return runtimeRootWatches.get(rootPath)?.startWaiters.waiterCount ?? 0
 }

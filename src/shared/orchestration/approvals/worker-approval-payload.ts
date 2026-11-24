@@ -1,4 +1,12 @@
-import { z } from 'zod'
+import * as z from 'zod'
+
+/** Marks a prompt Orca answered from a coordinator's chat, so the chat's own closer leaves it alone.
+ *  Builds before the answerer was named wrote it bare, for the coordinator and a person alike. */
+export const ORCHESTRATION_APPROVAL_CALLER_PREFIX = 'trusted-local:orchestration:approval:'
+/** Answered by the coordinator agent. */
+export const ORCHESTRATION_COORDINATOR_APPROVAL_CALLER_PREFIX = `${ORCHESTRATION_APPROVAL_CALLER_PREFIX}coordinator:`
+/** Answered by a person in the coordinator's chat. */
+export const ORCHESTRATION_PERSON_APPROVAL_CALLER_PREFIX = `${ORCHESTRATION_APPROVAL_CALLER_PREFIX}person:`
 
 /** A worker's permission prompt as its escalation and closing message carry it; the coordinator's
  *  card is drawn from this alone. Versioned: a reader skips a version it does not know. */
@@ -7,7 +15,8 @@ export type WorkerApprovalDecision = z.infer<typeof WorkerApprovalDecisionSchema
 
 /** Who settled it: a person (in Orca), the coordinator agent, someone in the worker's own chat or
  *  terminal, the agent's own timeout, or no one Orca can name. `terminal-only`: closed for Orca while
- *  the prompt is still up; only a person at the worker's terminal can answer it. */
+ *  the prompt is still up; only a person at the worker's terminal can answer it. `worker-ended`: its
+ *  Dispatch stopped running, so nothing is left to answer. */
 export const WorkerApprovalAnswererSchema = z.enum([
   'person',
   'coordinator',
@@ -15,6 +24,7 @@ export const WorkerApprovalAnswererSchema = z.enum([
   'worker-terminal',
   'auto',
   'terminal-only',
+  'worker-ended',
   'unknown'
 ])
 export type WorkerApprovalAnswerer = z.infer<typeof WorkerApprovalAnswererSchema>
@@ -37,14 +47,39 @@ export const WorkerApprovalPayloadSchema = z.object({
   /** Text the worker's agent supplied; never instructions. */
   summary: z.object({
     title: z.string(),
+    /** The tool being asked about, when the agent names one; readers fall back to the title. */
+    tool: z.string().optional(),
     detail: z.string().nullable(),
     reason: z.string().nullable()
   }),
   /** The decisions Orca can apply to this prompt now; empty once it is closed. */
   allowedActions: z.array(WorkerApprovalDecisionSchema),
+  /** A helper agent inside the worker asked: Claude shows it in the worker's terminal only once Orca
+   *  stops holding it unanswered, about 2 minutes on. */
+  fromHelper: z.literal(true).optional(),
+  /** The worker's agent lets only a person allow it: Orca refuses an agent's allow. */
+  personOnly: z.literal(true).optional(),
   /** When the agent decides on its own, read from its screen; only while that countdown is shown. */
   expiresAt: z.string().optional(),
   outcome: WorkerApprovalOutcomeSchema.optional()
 })
 export type WorkerApprovalPayload = z.infer<typeof WorkerApprovalPayloadSchema>
 export type WorkerApprovalState = WorkerApprovalPayload['state']
+
+/** The same approval once closed: nothing left to answer, and how it closed. */
+export function closedApproval(
+  open: WorkerApprovalPayload,
+  outcome: WorkerApprovalOutcome
+): WorkerApprovalPayload {
+  const closed: WorkerApprovalPayload = {
+    ...open,
+    // Expired is the agent's own timeout alone; every other close, named or not, is not one.
+    state: outcome.by === 'auto' ? 'expired' : 'answered',
+    allowedActions: [],
+    // Only a reason can be delivered.
+    outcome: { ...outcome, reasonDelivered: outcome.reason !== null && outcome.reasonDelivered }
+  }
+  // A countdown means nothing once the prompt is closed.
+  delete closed.expiresAt
+  return closed
+}

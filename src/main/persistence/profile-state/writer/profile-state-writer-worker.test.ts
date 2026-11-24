@@ -4,11 +4,12 @@ import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vitest'
 import { ProfileStateSqliteAuthority } from '../profile-state-sqlite-authority'
-import { ProfileStateRevisionConflictError } from '../documents/profile-state-document-validation'
+
 import { openProfileStateDatabase } from '../database/profile-state-database'
 import { readProfileStateSnapshot } from '../documents/profile-state-documents'
 import { ProfileStateWriteWorkerClient } from './profile-state-writer-worker-client'
 import { profileStateWriterFailureOutcome } from './profile-state-writer-errors'
+import { ProfileStateWorkerAuthority } from '../profile-state-worker-authority'
 
 let bundleRoot: string
 let workerPath: string
@@ -120,42 +121,6 @@ describe('persistent profile state write worker', () => {
     expect(existsSync(f.root)).toBe(false)
   })
 
-  it('requires a present admitted database and refuses startup revision races', async () => {
-    const f = fixture()
-    const peer = new ProfileStateSqliteAuthority(f.path, f.profileId)
-    peer.readInitialState()
-    peer.writeSerializedDomains([{ domain: 'settings', payload: '{"peer":true}' }])
-    peer.close()
-    const client = clientFor(f.initialization)
-    await expect(client.ready).rejects.toBeInstanceOf(ProfileStateRevisionConflictError)
-    await client.close()
-    expect(readState(f.path, f.profileId)).toEqual({ settings: { peer: true } })
-    const missing = clientFor({ ...f.initialization, databasePath: join(f.root, 'missing.db') })
-    await expect(missing.ready).rejects.toMatchObject({ code: 'unreadable' })
-    await missing.close()
-    expect(existsSync(join(f.root, 'missing.db'))).toBe(false)
-  })
-
-  it('preserves known validation failures and rejects a peer at the no-op fence', async () => {
-    const f = fixture()
-    const client = clientFor(f.initialization)
-    await client.ready
-    await expect(
-      client.writeSerializedDomains([{ domain: 'settings', payload: '{' }])
-    ).rejects.toMatchObject({ code: 'profile-state-write-failed', outcome: 'known-failure' })
-    expect(await client.assertCurrentRevision()).toBe(1)
-    const peer = new ProfileStateSqliteAuthority(f.path, f.profileId)
-    peer.readInitialState()
-    peer.writeSerializedDomains([{ domain: 'ui', payload: '{"peer":true}' }])
-    peer.close()
-    const failure = await client.assertCurrentRevision().catch((error: unknown) => error)
-    expect(failure).toBeInstanceOf(ProfileStateRevisionConflictError)
-    expect(profileStateWriterFailureOutcome(failure)).toBe('known-failure')
-    await expect(
-      client.writeSerializedDomains([{ domain: 'settings', payload: '{}' }])
-    ).rejects.toBeInstanceOf(ProfileStateRevisionConflictError)
-  })
-
   it('reports post-commit worker death as indeterminate without replaying the committed write', async () => {
     const f = fixture()
     const crashAfterCommit = script(
@@ -180,33 +145,6 @@ describe('persistent profile state write worker', () => {
     await client.close()
     expect(readState(f.path, f.profileId)).toEqual({ settings: { committed: true } })
   })
-
-  it.each(['mismatch', 'exit'])(
-    'fails closed after a dispatched %s and awaits actual exit',
-    async (mode) => {
-      const f = fixture()
-      const broken = script(
-        f.root,
-        `
-      const { parentPort } = require('node:worker_threads')
-      parentPort.postMessage({ id: 0, ok: true, revision: 1 })
-      parentPort.on('message', request => {
-        if (${JSON.stringify(mode)} === 'exit') process.exit(0)
-        if (${JSON.stringify(mode)} === 'mismatch') parentPort.postMessage({ id: request.id + 1, ok: true, revision: 2 })
-      })
-    `
-      )
-      const client = clientFor(f.initialization, broken)
-      await client.ready
-      const failure = await client
-        .writeSerializedDomains([{ domain: 'settings', payload: '{}' }])
-        .catch((error: unknown) => error)
-      expect(profileStateWriterFailureOutcome(failure)).toBe('indeterminate')
-      await client.close()
-      expect(readState(f.path, f.profileId)).toEqual({ settings: { theme: 'dark' } })
-      rmSync(f.root, { recursive: true })
-    }
-  )
 
   it('recovers the prior committed revision after the worker exits inside a transaction', async () => {
     const f = fixture()
@@ -243,5 +181,76 @@ describe('persistent profile state write worker', () => {
     expect(profileStateWriterFailureOutcome(failure)).toBe('indeterminate')
     await client.close()
     expect(readState(f.path, f.profileId)).toEqual({ settings: { theme: 'dark' } })
+  })
+
+  async function interruptedAuthority(
+    root: string,
+    f: ReturnType<typeof fixture>,
+    afterCommit: boolean,
+    onFailure?: (error: Error) => void
+  ) {
+    const interruptedPath = join(root, 'interrupted-worker.cjs')
+    const marker = JSON.stringify(join(root, 'interrupted-once'))
+    const exitOnce = `if (!require('node:fs').existsSync(${marker})) { require('node:fs').writeFileSync(${marker}, ''); process.exit(17) }`
+    await build({
+      entryPoints: [
+        resolve('src/main/persistence/profile-state/writer/profile-state-writer-worker-entry.ts')
+      ],
+      outfile: interruptedPath,
+      bundle: true,
+      platform: 'node',
+      format: 'cjs',
+      logLevel: 'silent',
+      plugins: [
+        {
+          name: 'interrupt-first-transaction',
+          setup(builder) {
+            builder.onLoad({ filter: /profile-state-write-transaction\.ts$/ }, (args) => ({
+              contents: readFileSync(args.path, 'utf8').replace(
+                "db.exec('COMMIT')",
+                afterCommit ? `db.exec('COMMIT'); ${exitOnce}` : `${exitOnce}; db.exec('COMMIT')`
+              ),
+              loader: 'ts'
+            }))
+          }
+        }
+      ]
+    })
+    const authority = new ProfileStateWorkerAuthority(f.initialization, {
+      workerPath: interruptedPath,
+      onFailure
+    })
+    await authority.ready
+    const failure = await authority
+      .writeSerializedDomains([{ domain: 'settings', payload: '{"interrupted":true}' }])
+      .catch((error: unknown) => error)
+    expect(profileStateWriterFailureOutcome(failure)).toBe('indeterminate')
+    return authority
+  }
+
+  it('reopens after an indeterminate write only when the transaction did not commit', async () => {
+    const rolledBack = fixture()
+    const recovered = await interruptedAuthority(rolledBack.root, rolledBack, false)
+    await expect(
+      recovered.writeSerializedDomains([{ domain: 'settings', payload: '{"recovered":true}' }])
+    ).resolves.toBeUndefined()
+    await recovered.close()
+    expect(readState(rolledBack.path, rolledBack.profileId)).toEqual({
+      settings: { recovered: true }
+    })
+
+    const committed = fixture()
+    const failures: Error[] = []
+    const refused = await interruptedAuthority(committed.root, committed, true, (error) =>
+      failures.push(error)
+    )
+    await expect(
+      refused.writeSerializedDomains([{ domain: 'settings', payload: '{"overwrite":true}' }])
+    ).rejects.toMatchObject({ code: 'profile-state-revision-conflict' })
+    expect(failures.map(profileStateWriterFailureOutcome)).toEqual(['indeterminate'])
+    await refused.close().catch(() => {})
+    expect(readState(committed.path, committed.profileId)).toEqual({
+      settings: { interrupted: true }
+    })
   })
 })

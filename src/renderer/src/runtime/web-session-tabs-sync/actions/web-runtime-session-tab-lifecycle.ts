@@ -1,10 +1,10 @@
-import type { RuntimeRpcResponse } from '../../../../../shared/runtime-rpc-envelope'
+import type { RuntimeRpcResponse } from '../../../../../shared/remote-runtime/rpc/runtime-rpc-envelope'
 import type {
   RuntimeMobileSessionTabCloseResult,
   RuntimeSessionTabCloseReason
-} from '../../../../../shared/runtime-session-contracts'
+} from '../../../../../shared/remote-runtime/session-graph/runtime-session-contracts'
 import { useAppStore } from '../../../store/index'
-import { hasRuntimeRpcErrorCode } from '../../../../../shared/runtime-rpc-error-code'
+import { hasRuntimeRpcErrorCode } from '../../../../../shared/remote-runtime/rpc/runtime-rpc-error-code'
 import { unwrapRuntimeRpcResult } from '../../rpc/calls/runtime-rpc-result'
 import { toRuntimeWorktreeSelector } from '../../rpc/targets/runtime-worktree-selector'
 import {
@@ -36,7 +36,7 @@ import {
   matchesWebSessionIntentOwner
 } from '../identity/web-runtime-session-environment'
 import { refreshWebRuntimeSessionTabsSnapshot } from '../inventory/web-runtime-session-snapshot'
-import { isServerFrameDrawnWorkspace } from '../frame-drawn-server-workspace-set'
+import { isServerFrameDrawnWorkspace } from '../frame-drawn/frame-drawn-server-workspace-set'
 import { redrawServerLayoutWorkspace } from '../../workspace-layout/server/server-layout-apply-routes'
 import { userTabCloseParams } from '../closing/web-session-user-tab-close-params'
 
@@ -206,7 +206,8 @@ async function callWebRuntimeSessionTabMethod(
   }
 
   try {
-    const { resolveHostSessionTabIdForWebSessionTab } = await import('../tracking-mappings')
+    const { resolveHostSessionTabIdForWebSessionTab } =
+      await import('../identity/tracking-mappings')
     const state = useAppStore.getState()
     const hostTabId =
       resolveHostSessionTabIdForWebSessionTab(state, {

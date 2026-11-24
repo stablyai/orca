@@ -1,5 +1,6 @@
-import type { RuntimeTerminalSend } from '../../../../../shared/runtime-terminal-send-contract'
+import type { RuntimeTerminalSend } from '../../../../../shared/terminal/runtime/runtime-terminal-send-contract'
 import type { TerminalInputKind } from '../../../../../shared/terminal/input/terminal-input-kind'
+import { noteTerminalWebglAtlasTyping } from '@/lib/pane-manager/terminal-rendering/terminal-webgl-atlas-rebuild-interaction'
 import { isTerminalInputTooLargeWithDeferredMeasurement } from '../../../../../shared/terminal/input/terminal-input'
 import { readTerminalSendAcknowledgment } from '../../../../../shared/terminal/pty/lifecycle/terminal-send-acknowledgment'
 import { classifyTerminalProcessInspectionFailure } from '../../../../../shared/terminal/pty/lifecycle/terminal-process-inspection'
@@ -17,11 +18,15 @@ export async function sendRuntimePtyInputVerified(
   ptyId: string,
   data: string,
   inputKind: TerminalInputKind,
-  options?: { requireWriteSettlement?: true }
+  options?: { requireWriteSettlement?: true; requireStartupDialog?: string }
 ): Promise<boolean> {
   const tooLarge = isTerminalInputTooLargeWithDeferredMeasurement(data)
   if (typeof tooLarge === 'boolean' ? tooLarge : await tooLarge) {
     return false
+  }
+  if (inputKind === 'driving') {
+    // Native chat controls and other runtime writes are user input too; they hold atlas rebuilds like typing.
+    noteTerminalWebglAtlasTyping()
   }
   const owner = getRemoteRuntimePtyOwner(ptyId)
   if (!owner) {
@@ -53,7 +58,10 @@ export async function sendRuntimePtyInputVerified(
         terminal,
         text: data,
         client: DESKTOP_RUNTIME_CLIENT,
-        ...(options?.requireWriteSettlement ? { requireWriteSettlement: true } : {})
+        ...(options?.requireWriteSettlement ? { requireWriteSettlement: true } : {}),
+        ...(options?.requireStartupDialog !== undefined
+          ? { requireStartupDialog: options.requireStartupDialog }
+          : {})
       },
       { timeoutMs: 15_000 }
     )

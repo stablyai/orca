@@ -1,5 +1,5 @@
 // Validate blob contents before commit; install only advertised kinds after durable commit.
-import { servesWslMovedPaneHistory } from '../../../orcad/orcad-migration-wsl-destination'
+import { servesWslMovedPaneHistory } from '../../../orcad/migration/orcad-migration-wsl-destination'
 import { readFileSync, rmSync } from 'node:fs'
 import { dirname } from 'node:path'
 import type { OrcadMigrationBlobKind } from '../../../../shared/orcad-migration/orcad-migration-blob-transfer'

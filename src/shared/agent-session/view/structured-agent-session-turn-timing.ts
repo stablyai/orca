@@ -9,16 +9,16 @@ import type {
 import {
   readAgentJournalTurn,
   readAgentJournalTurnOutcome
-} from '../lifecycle/agent-session-turn-record'
+} from '../lifecycle/records/agent-session-turn-record'
 import {
   agentTurnVerdict,
   type AgentTurnOutcome
 } from '../../agent-status/lifecycle/agent-turn-outcome'
-import { structuredAgentTurnAnchors } from '../../native-chat/transcript/native-chat-turn-membership'
+import { structuredAgentTurnAnchors } from '../../native-chat/transcript/turns/native-chat-turn-membership'
 import type {
   NativeChatSettledTurn,
   NativeChatSettledTurns
-} from '../../native-chat/transcript/native-chat-turn-status'
+} from '../../native-chat/transcript/turns/native-chat-turn-status'
 import type { AgentSessionLatestTurn } from '../agent-session-wire'
 
 export type StructuredAgentTurnTiming = {
@@ -31,8 +31,6 @@ export type StructuredAgentTurnTiming = {
   completedAt?: number
   /** The provider's own measurement; used when exact host endpoints are unavailable. */
   durationMs?: number
-  /** Previous turn’s end for a send queued behind it; absent when it did not wait. */
-  queuedUntil?: number
   /** Row append’s host clock; subtract start-to-append lag from the live anchor. */
   observedAt: number
   /** The turn's verdict, the provider's or the host-observed end's; absent when unknown. */
@@ -40,8 +38,7 @@ export type StructuredAgentTurnTiming = {
 }
 
 function readTiming(
-  item: Pick<AgentJournalRenderItem, 'body' | 'observedAt'>,
-  precedingTurnEndedAt: number | undefined
+  item: Pick<AgentJournalRenderItem, 'body' | 'observedAt'>
 ): StructuredAgentTurnTiming | null {
   const turn = readAgentJournalTurn(item.body)
   if (!turn) {
@@ -64,18 +61,12 @@ function readTiming(
       ? durationMs
       : undefined
   const verdict = agentTurnVerdict({ state, outcome: readAgentJournalTurnOutcome(turn) })
-  // Exclude waiting behind the previous turn, using its end or last host revision, capped at this turn’s start.
-  const queuedUntil =
-    precedingTurnEndedAt === undefined ? undefined : Math.min(precedingTurnEndedAt, startedAt)
   return {
     state,
     startedAt,
     ...(requested !== undefined ? { requestedAt: requested } : {}),
     ...(end !== undefined ? { completedAt: end } : {}),
     ...(measured !== undefined ? { durationMs: measured } : {}),
-    ...(requested !== undefined && queuedUntil !== undefined && queuedUntil > requested
-      ? { queuedUntil }
-      : {}),
     observedAt: item.observedAt,
     ...(verdict ? { verdict } : {})
   }
@@ -95,15 +86,13 @@ function readStructuredAgentJournalTurns(
   const anchors = structuredAgentTurnAnchors(items, submissions)
   const byAnchor = new Map<string, StructuredAgentTurnTiming | null>()
   const byTurnId = new Map<string, StructuredAgentTurnTiming | null>()
-  let precedingTurnEndedAt: number | undefined
   for (const item of items) {
     const anchor = anchors.get(item.itemId)
     const turn = anchor === undefined ? null : readAgentJournalTurn(item.body)
     if (anchor === undefined || !turn) {
       continue
     }
-    const timing = readTiming(item, precedingTurnEndedAt)
-    precedingTurnEndedAt = timing?.completedAt ?? item.observedAt
+    const timing = readTiming(item)
     byTurnId.set(turn.turnId, timing)
     if (timing || turn.state === 'unverifiable') {
       byAnchor.set(anchor, timing)
@@ -127,9 +116,19 @@ export function selectStructuredAgentRunningTurnTiming(
   return readStructuredAgentJournalTurns(items).byTurnId.get(turnId) ?? null
 }
 
-/** Shared live/settled origin: queuedUntil, else opening send, else provider start; excludes time waiting behind the prior turn. */
-export function structuredAgentTurnOrigin(timing: StructuredAgentTurnTiming): number {
-  return timing.queuedUntil ?? timing.requestedAt ?? timing.startedAt
+/** The turn's opening send still awaits the host's answer, so its clock has not started. */
+export function structuredAgentTurnOpeningSendPending(
+  turnKey: string | undefined,
+  submissions: readonly AgentJournalSubmission[] = []
+): boolean {
+  return (
+    turnKey !== undefined &&
+    submissions.some(
+      (submission) =>
+        submission.dispatchState === 'pending' &&
+        agentJournalSubmissionKey(submission.clientMessageId) === turnKey
+    )
+  )
 }
 
 /** Whole seconds a settled turn ran, or null when the host never observed its end. */
@@ -139,15 +138,15 @@ export function completedStructuredAgentTurnSeconds(
   if (!timing || (timing.state !== 'completed' && timing.state !== 'interrupted')) {
     return null
   }
-  // Provider durations may begin before the live origin (turn-open, or a turn this send queued behind).
+  // A host-sent turn uses the live clock's own interval, so "Worked for" matches what it counted.
   if (timing.requestedAt !== undefined && timing.completedAt !== undefined) {
-    return Math.max(0, Math.floor((timing.completedAt - structuredAgentTurnOrigin(timing)) / 1000))
+    return Math.max(0, Math.floor((timing.completedAt - timing.startedAt) / 1000))
   }
   if (timing.durationMs !== undefined) {
     return Math.floor(timing.durationMs / 1000)
   }
   return timing.completedAt !== undefined
-    ? Math.max(0, Math.floor((timing.completedAt - structuredAgentTurnOrigin(timing)) / 1000))
+    ? Math.max(0, Math.floor((timing.completedAt - timing.startedAt) / 1000))
     : null
 }
 
@@ -158,11 +157,10 @@ export function structuredAgentTurnLocalStartedAt(
   firstSeenAt: number,
   hostNow?: number
 ): number {
-  const origin = structuredAgentTurnOrigin(timing)
   const hostElapsed =
     hostNow !== undefined && Number.isFinite(hostNow)
-      ? hostNow - origin
-      : timing.observedAt - origin
+      ? hostNow - timing.startedAt
+      : timing.observedAt - timing.startedAt
   // Clamp NTP-induced negative host elapsed so the counter cannot run backwards.
   return firstSeenAt - Math.max(0, hostElapsed)
 }
@@ -222,10 +220,7 @@ export function selectStructuredAgentTurnBars(
   return {
     settledTurns: settledTurnsOf(turns, submissions),
     runningTiming: unloaded
-      ? readTiming(
-          { body: { kind: 'turn', ...unloaded.turn }, observedAt: unloaded.observedAt },
-          undefined
-        )
+      ? readTiming({ body: { kind: 'turn', ...unloaded.turn }, observedAt: unloaded.observedAt })
       : turnId === null
         ? null
         : (turns.byTurnId.get(turnId) ?? null)

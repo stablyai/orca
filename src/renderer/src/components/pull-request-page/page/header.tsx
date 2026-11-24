@@ -20,11 +20,11 @@ import {
   DropdownMenuTrigger
 } from '@/components/ui/dropdown-menu'
 import { GitHubUserAvatar } from '@/components/github/github-user-avatar'
-import { parseOwnerRepoFromItemUrl } from '@/components/github/github-work-item-identity'
+import { parseGitHubItemRepository as parseOwnerRepoFromItemUrl } from '../../../../../shared/github/work-items/work-item-target'
 import { formatRelativeTime, getStateLabel } from '@/components/github/work-item-state-presentation'
 import { cn } from '@/lib/class-names'
 import { useIntlLocale, useTranslate } from '@/i18n/use-translate'
-import type { GitHubWorkItem } from '../../../../../shared/github/work-item-types'
+import type { GitHubWorkItem } from '../../../../../shared/github/work-items/work-item-types'
 import { getSolidStateTone } from '../presentation/state-badge'
 import { openAppHttpLink } from '@/lib/browser/navigation/app-http-link-open'
 
@@ -137,20 +137,22 @@ export function PullRequestPageHeader({
       </div>
 
       <div className="flex-none border-b border-border/60 px-6 py-5">
-        <div className="flex items-start gap-4">
-          <h1 className="min-w-0 flex-1 text-[26px] font-medium leading-snug text-foreground">
+        {/* Why: a floor rather than min-w-0 — otherwise the title shrinks away and the actions never wrap. */}
+        <div className="flex flex-wrap items-start gap-4">
+          <h1 className="min-w-40 flex-1 text-[26px] font-medium leading-snug text-foreground">
             <span className="break-words">{workItem.title}</span>
             <span className="ml-2 align-baseline text-[20px] font-normal text-muted-foreground/70">
               #{workItem.number}
             </span>
           </h1>
-          <div className="flex shrink-0 items-center gap-2">
+          <div className="flex min-w-0 items-center gap-2">
             <DropdownMenu modal={false}>
-              <ButtonGroup>
+              <ButtonGroup className="max-w-full min-w-0 items-center">
+                {/* Why: on its own line a long label is still wider than a narrow page, and nowrap would clip the chevron. */}
                 <Button
                   type="button"
                   onClick={onOpenOrUsePR}
-                  className="w-[180px] justify-center gap-1.5 whitespace-nowrap"
+                  className="h-auto min-w-[180px] max-w-full shrink justify-center whitespace-normal"
                   aria-label={
                     hasAttachedWorkspace
                       ? t(

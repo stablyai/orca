@@ -2,10 +2,13 @@ import type { StateCreator } from 'zustand'
 import type { AppState } from '../../types'
 import type { GitHubSlice } from '../github-slice-contract'
 import { toast } from 'sonner'
-import { parseGitHubIssueOrPRLink } from '../../../../../shared/github/links'
-import { githubRepoIdentityKey } from '../../../../../shared/github/repository-identity-key'
+import { parseGitHubIssueOrPRLink } from '../../../../../shared/github/repositories/links'
+import { githubRepoIdentityKey } from '../../../../../shared/github/repositories/repository-identity-key'
 import { getTaskSourceCacheScope } from '../../../../../shared/work-items/task-source-context'
-import { getRepoExecutionHostId, type ExecutionHostId } from '../../../../../shared/execution-host'
+import {
+  getRepoExecutionHostId,
+  type ExecutionHostId
+} from '../../../../../shared/execution-host/execution-host'
 import { translate } from '@/i18n/i18n'
 import { repoMatchesHostIdentity } from '../../repos/repo-host-identity'
 import {

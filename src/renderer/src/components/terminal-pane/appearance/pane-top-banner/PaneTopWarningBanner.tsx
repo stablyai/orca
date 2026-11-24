@@ -1,4 +1,4 @@
-import { useEffect, useLayoutEffect, useRef } from 'react'
+import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { TriangleAlert, type LucideIcon } from 'lucide-react'
 import { cn } from '@/lib/class-names'
 import { Badge } from '@/components/ui/badge'
@@ -79,19 +79,10 @@ const TONE_CLASSES: Record<PaneTopBannerTone, { stripClass: string; iconClass: s
   }
 }
 
-/** The strip across the top of a terminal pane, with its actions and optional Dismiss; neutral is plain state, without the warning icon. */
-export function PaneTopWarningBanner({
-  title,
-  body,
-  tone = 'warning',
-  icon,
-  badge,
-  primaryAction,
-  onDismiss,
-  onDontShowAgain,
-  onShown
-}: {
-  title: string
+export type PaneTopBannerProps = {
+  title: React.ReactNode
+  /** Moves the live region to one hidden node that announces this; pass it (empty until there is news) in every phase so the node persists. */
+  announcement?: string
   body?: React.ReactNode
   tone?: PaneTopBannerTone
   /** Replaces the warning icon; neutral and accent show none without it. */
@@ -102,9 +93,55 @@ export function PaneTopWarningBanner({
   onDismiss?: () => void
   onDontShowAgain?: () => void
   onShown?: () => void
+}
+
+/** The strip across the top of a terminal pane, with its actions and optional Dismiss; neutral is plain state, without the warning icon. */
+export function PaneTopWarningBanner(props: PaneTopBannerProps): React.JSX.Element {
+  const ref = useReservePaneTopSpace()
+  return <PaneTopBanner {...props} ref={ref} className="pane-top-banner" />
+}
+
+function BannerLiveRegion({ announcement }: { announcement: string }): React.JSX.Element {
+  const [primed, setPrimed] = useState(false)
+
+  useEffect(() => {
+    // A running worker can finish before Chromium registers the empty live region.
+    let timeout: number | undefined
+    const frame = requestAnimationFrame(() => {
+      timeout = window.setTimeout(() => setPrimed(true), 150)
+    })
+    return () => {
+      cancelAnimationFrame(frame)
+      window.clearTimeout(timeout)
+    }
+  }, [])
+
+  return (
+    <span role="status" className="sr-only">
+      {primed ? announcement : ''}
+    </span>
+  )
+}
+
+/** The pane-top banner's look without the terminal's height reservation, for panes that lay it out in flow. */
+export function PaneTopBanner({
+  title,
+  announcement,
+  body,
+  tone = 'warning',
+  icon,
+  badge,
+  primaryAction,
+  onDismiss,
+  onDontShowAgain,
+  onShown,
+  ref,
+  className
+}: PaneTopBannerProps & {
+  ref?: React.Ref<HTMLDivElement>
+  className?: string
 }): React.JSX.Element {
   const t = useTranslate()
-  const ref = useReservePaneTopSpace()
   useEffect(() => {
     onShown?.()
   }, [onShown])
@@ -114,19 +151,23 @@ export function PaneTopWarningBanner({
   return (
     <div
       ref={ref}
-      role="status"
+      role={announcement === undefined ? 'status' : undefined}
       // Why pr-24: an agent pane floats four controls (hand off, chat, split, close) over its top-right corner.
       className={cn(
-        'pane-top-banner @container border-b py-2 pr-24 pl-3 text-xs',
-        toneClasses.stripClass
+        '@container border-b py-2 pr-24 pl-3 text-xs',
+        toneClasses.stripClass,
+        className
       )}
     >
+      {announcement === undefined ? null : <BannerLiveRegion announcement={announcement} />}
       {/* Wrap actions in narrow panes using disjoint container-query properties so unlayered utilities cannot override them. */}
       <div className="@[44rem]:flex @[44rem]:items-center @[44rem]:gap-2">
         <div className="flex min-w-0 flex-1 items-start gap-2.5">
           {Icon ? (
+            // mt-px, not the 2px that centers the box: glyphs like Timer and TriangleAlert carry their
+            // weight low, so they sit optically centered on the first line only a pixel higher.
             <Icon
-              className={cn('mt-0.5 size-4 shrink-0', toneClasses.iconClass)}
+              className={cn('mt-px size-4 shrink-0', toneClasses.iconClass)}
               aria-hidden="true"
             />
           ) : null}

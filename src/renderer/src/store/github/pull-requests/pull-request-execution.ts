@@ -1,11 +1,12 @@
+import { readAppRuntimeStatuses } from '@/store/slices/runtime-status/views/app-runtime-status-binding'
 import { capturePRCheckContract } from '@/lib/source-control/checks/pr-check-observation-contract'
 import type { StateCreator } from 'zustand'
-import type { RuntimeClientTarget } from '../../../../../shared/runtime-client-target'
+import type { RuntimeClientTarget } from '../../../../../shared/remote-runtime/host-catalog/runtime-client-target'
 import type { AppState } from '../../types'
-import type { RuntimeFocusSettings } from '../../../../../shared/github/github-cache-key'
+import type { RuntimeFocusSettings } from '../../../../../shared/github/cache/github-cache-key'
 import type { GitHubSlice } from '../github-slice-contract'
-import type { Repo } from '../../../../../shared/repo-types'
-import type { PRInfo } from '../../../../../shared/github/pull-request-types'
+import type { Repo } from '../../../../../shared/repository/repo-types'
+import type { PRInfo } from '../../../../../shared/github/pull-requests/pull-request-types'
 import type { CacheEntry, GitHubPRFallbackSource } from '../cache/cache-model'
 import {
   withDirectPRRefreshSettlement,
@@ -14,25 +15,31 @@ import {
 
 import type {
   GitHubPRRefreshCandidate,
-  PRRefreshOutcome
-} from '../../../../../shared/github/pull-request-refresh-types'
+  PRSnapshotReply
+} from '../../../../../shared/github/pull-requests/refresh/pull-request-refresh-types'
 import {
   normalizeGitHubPRForBranchOutcome,
   githubPRTransportFailureOutcome
-} from '../../../../../shared/github/pull-request-for-branch-outcome'
-import { getRepoExecutionHostId } from '../../../../../shared/execution-host'
+} from '../../../../../shared/github/pull-requests/refresh/pull-request-for-branch-outcome'
+import { isPRRevalidationOnly } from '../../../../../shared/github/pull-requests/refresh/pull-request-refresh-types'
+import { getRepoExecutionHostId } from '../../../../../shared/execution-host/execution-host'
 import { callRuntimeRpc } from '../../../runtime/rpc/calls/runtime-rpc-call'
 import { inflightPRRequests, prRequestGenerations } from '../requests/request-coordination'
 import { getRuntimeRepoTarget } from '../repositories/repository-routing'
 import { isWslHostOffForForge, withForgeHostOffSkip } from '../repositories/wsl-host-off-forge'
-import { cachedPRCandidateFields } from './pr-refresh-cached-candidate-fields'
+import {
+  cachedPRCandidateFields,
+  prReadRpcOptions,
+  refetchPRByBranch
+} from './pr-refresh-cached-candidate-fields'
 import { lookupPRForBranchOverIpc } from './pr-for-branch-ipc-fallback'
 import { setGitHubPRResultCaches, shouldPreserveExistingPRForFallbackMiss } from './pr-result-cache'
 import { findWorktreeById, isStaleExactLinkedPRLookup } from '../refresh/worktree-refresh'
+import { getWorktreeGitHubPRUrl } from '../../../../../shared/worktree/github-linked-item-url'
 import {
   shouldClearBranchMismatchedLinkedOpenPR,
   shouldClearDivergedLinkedMergedPR
-} from '../../../../../shared/github/linked-pr-staleness'
+} from '../../../../../shared/github/pull-requests/refresh/linked-pr-staleness'
 import { captureLinkedReviewClearScope, clearLinkedReview } from './linked-review-clear'
 export function startPullRequestLookup(args: {
   set: Parameters<StateCreator<AppState>>[0]
@@ -84,7 +91,10 @@ export function startPullRequestLookup(args: {
         }
         return cached?.data ?? null
       }
-      const checkContract = capturePRCheckContract(get, runtimeRepo?.target ?? { kind: 'local' })
+      const checkContract = capturePRCheckContract(
+        readAppRuntimeStatuses,
+        runtimeRepo?.target ?? { kind: 'local' }
+      )
       const candidateWorktree = options?.worktreeId
         ? findWorktreeById(get(), options.worktreeId, executionHostId)
         : null
@@ -93,24 +103,39 @@ export function startPullRequestLookup(args: {
           ? captureLinkedReviewClearScope(get(), options?.worktreeId, repo)
           : undefined
       const requestHeadOid = candidateWorktree?.head ?? null
+      const linkedPRUrl =
+        candidateWorktree?.linkedPR === linkedPRNumber
+          ? getWorktreeGitHubPRUrl(candidateWorktree, linkedPRNumber)
+          : undefined
       let transportFailed = false
       const response = runtimeRepo
-        ? callRuntimeRpc<PRRefreshOutcome | PRInfo | null>(
+        ? callRuntimeRpc<PRSnapshotReply | PRInfo | null>(
             runtimeRepo.target,
             'github.prForBranch',
             {
               repo: runtimeRepo.repo.id,
               branch,
               linkedPRNumber,
+              ...(linkedPRUrl ? { linkedPRUrl } : {}),
               currentHeadOid: requestHeadOid,
               ...(options?.reason ? { reason: options.reason } : {}),
+              ...(options?.reason === 'swr'
+                ? {
+                    acceptRevalidationOnly: true,
+                    ...(options.userRefresh !== true && options.selected === true
+                      ? { selected: true }
+                      : {})
+                  }
+                : {}),
               ...(options?.userRefresh === true ? { userRefresh: true } : {}),
               ...(fallbackPRNumber !== null
                 ? { fallbackPRNumber, acceptMergedFallbackPR: fallbackPRSource !== null }
                 : {})
             },
-            { timeoutMs: 30_000, ...checkContract.sourceRpcOptions }
-          ).then((result) => normalizeGitHubPRForBranchOutcome(result))
+            { ...prReadRpcOptions(options), ...checkContract.sourceRpcOptions }
+          ).then((result) =>
+            isPRRevalidationOnly(result) ? result : normalizeGitHubPRForBranchOutcome(result)
+          )
         : (async () => {
             const candidate: GitHubPRRefreshCandidate = {
               repoId: repoId ?? '',
@@ -121,6 +146,7 @@ export function startPullRequestLookup(args: {
               worktreeId: options?.worktreeId,
               currentHeadOid: requestHeadOid,
               linkedPRNumber,
+              ...(linkedPRUrl ? { linkedPRUrl } : {}),
               fallbackPRNumber,
               fallbackPRSource,
               connectionId: repo?.connectionId ?? null,
@@ -136,14 +162,26 @@ export function startPullRequestLookup(args: {
                   ...requestOptions,
                   repoOwnerExecutionHostId: options?.repoOwnerExecutionHostId
                 })
-            return normalizeGitHubPRForBranchOutcome(response)
+            // Why: a reply without data leaves the shown PR as it is; queued work delivers the newer one.
+            return isPRRevalidationOnly(response)
+              ? response
+              : normalizeGitHubPRForBranchOutcome(response)
           })()
       const outcome = await response.catch(() => {
         transportFailed = true
         return githubPRTransportFailureOutcome()
       })
-      if (!checkContract.sourceCurrent()) {
+      if (!checkContract.sourceCurrent() || options?.signal?.aborted) {
         return cached?.data ?? null
+      }
+      if (prRequestGenerations.get(cacheKey) === generation) {
+        const inflight = inflightPRRequests.get(cacheKey)
+        if (inflight?.generation === generation) {
+          inflight.outcome = outcome
+        }
+      }
+      if (isPRRevalidationOnly(outcome)) {
+        return get().prCache[cacheKey]?.data ?? null
       }
       const pr = outcome.kind === 'found' ? outcome.pr : null
       let acceptedPR: PRInfo | null = null
@@ -225,16 +263,7 @@ export function startPullRequestLookup(args: {
             true
           )
           // Re-resolve by branch now so Checks recover this refresh instead of serving the stale linked PR.
-          void get()
-            .fetchPRForBranch(repoPath, branch, {
-              force: true,
-              repoId,
-              repoOwnerExecutionHostId: executionHostId,
-              worktreeId: options.worktreeId,
-              reason: options.reason,
-              ...(options.userRefresh === true ? { userRefresh: true } : {})
-            })
-            .catch((err) => console.warn('Branch-scoped PR refetch skipped:', err))
+          refetchPRByBranch(get(), repoPath, branch, options, { repoId, executionHostId })
         }
       }
       if (

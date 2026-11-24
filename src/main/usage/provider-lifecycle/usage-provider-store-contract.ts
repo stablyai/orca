@@ -1,5 +1,5 @@
-import type { AgentTokenSession } from '../reporting/token-usage/agent-token-usage'
-import type { AgentTokenUsage } from '../../../shared/telemetry-agent-token-usage-schema'
+import type { AgentTokenDay } from '../reporting/token-usage/agent-token-usage'
+import type { AgentTokenProvider } from '../../../shared/telemetry/schemas/telemetry-agent-token-usage-schema'
 import type { UsageScanWorktreeRef } from './usage-provider-contract'
 import type {
   UsageCacheSplitRequest,
@@ -37,12 +37,13 @@ export type UsageProviderStoreLifecycleConfig<
     integrityVerified?: boolean
   ) => State | Promise<State>
   serializeReport?: (state: State) => string
+  readFallbackCache?: (path: string) => Promise<{ state: State; integrityVerified: boolean }>
   providerId?: 'claude'
   sourceKey: SourceKey
   dataPresenceKey: DataPresenceKey
   tokenUsage?: {
-    provider: AgentTokenUsage['provider']
-    selectSessions: (state: State) => AgentTokenSession[]
+    provider: AgentTokenProvider
+    selectDays: (state: State) => AgentTokenDay[]
   }
   scan: (
     worktrees: UsageScanWorktreeRef[],

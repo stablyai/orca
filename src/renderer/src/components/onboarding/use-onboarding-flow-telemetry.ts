@@ -1,9 +1,9 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { applyDocumentTheme } from '@/app-shell/appearance/document-theme'
 import { track } from '@/diagnostics/telemetry/telemetry'
-import { ONBOARDING_FINAL_STEP } from '../../../../shared/onboarding-defaults'
-import type { GlobalSettings } from '../../../../shared/global-settings-types'
-import type { EventProps } from '../../../../shared/telemetry-events'
+import { ONBOARDING_FINAL_STEP } from '../../../../shared/onboarding/onboarding-defaults'
+import type { GlobalSettings } from '../../../../shared/settings/global-settings-types'
+import type { EventProps } from '../../../../shared/telemetry/telemetry-event-classification'
 import type { AppState } from '@/store/types'
 import {
   getGitHubTaskSourceStatus,

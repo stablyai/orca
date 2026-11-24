@@ -1,7 +1,8 @@
-import type { PipedProcessSpawner } from '@orca/process-host/process-spec'
+import type { ProviderProcessSpawner } from '../../provider-process/provider-process-spawn'
 import { spawnProcess } from '@orca/process-host'
 import { spawnManagedProviderProcess } from '../../provider-process/managed-provider-process'
-import { createClaudeChildTreeReaper } from '../../claude/claude-agent-sdk-exit-proof'
+import { awaitProviderChildSpawn } from '../../provider-process/provider-child'
+import { createClaudeChildTreeReaper } from '../../claude/child-process/claude-agent-sdk-exit-proof'
 import type { ProviderProcessLaunch } from '../../provider-process/provider-process-launch'
 import { buildCodexAppServerExitError } from './codex-app-server-exit-error'
 import { withProviderSpawnAbsence } from '../../provider-process/provider-executable-missing'
@@ -15,6 +16,7 @@ import {
 import { createCodexAppServerRecordDispatcher } from './codex-app-server-record-dispatch'
 import { createProviderRecordReader } from '../../provider-process/provider-record-reader'
 import { withProviderRequestTimeout } from '../../provider-process/provider-request-timeout'
+import { withLostProviderOutcome } from '../../provider-process/provider-process-exit-status'
 import type {
   CodexAppServerConnection,
   CodexAppServerConnectionHandlers
@@ -29,7 +31,7 @@ export const DEFAULT_CODEX_REQUEST_TIMEOUT_MS = 30_000
 async function connectCodexAppServer(
   launch: CodexAppServerLaunch,
   handlers: CodexAppServerConnectionHandlers = {},
-  spawnImpl: PipedProcessSpawner,
+  spawnImpl: ProviderProcessSpawner,
   initialize: boolean
 ): Promise<CodexAppServerConnection> {
   const managed = spawnManagedProviderProcess(launch, {
@@ -52,7 +54,7 @@ async function connectCodexAppServer(
 
   function buildExitError(cause?: Error, protocolFailure = false): Error {
     const error = buildCodexAppServerExitError(managed.stderrTail(), cause, protocolFailure)
-    return withProviderSpawnAbsence(error, managed.spawnAbsence)
+    return withLostProviderOutcome(withProviderSpawnAbsence(error, managed.spawnAbsence), child)
   }
 
   const dispatcher = createCodexAppServerRecordDispatcher({
@@ -70,12 +72,14 @@ async function connectCodexAppServer(
     if (!terminalError) {
       const error = buildExitError(cause, protocolFailure)
       terminalError = error
+      handlers.onClose?.(error)
       if (protocolFailure) {
         dispatcher.failPending(error)
       } else {
         afterProviderOutputDrains(child.stdout, () => dispatcher.failPending(error), child)
       }
     }
+    withLostProviderOutcome(terminalError, child)
     if (managed.rootVerdict === 'exited' && closesInFlight === 0 && !exitReported) {
       exitReported = true
       handlers.onExit?.(terminalError, { expected: closing })
@@ -194,6 +198,9 @@ async function connectCodexAppServer(
   }
 
   function close(): Promise<boolean> {
+    if (!closing) {
+      handlers.onClose?.(terminalError ?? new Error('codex app-server connection closed'))
+    }
     closing ||= managed.rootVerdict !== 'exited'
     closesInFlight += 1
     return managed
@@ -217,6 +224,9 @@ async function connectCodexAppServer(
   const connection: CodexAppServerConnection = {
     get pid() {
       return child.pid
+    },
+    get watcherPid() {
+      return child.watcherPid
     },
     get closed() {
       return closing || managed.rootVerdict === 'exited' || terminalError !== null
@@ -243,6 +253,7 @@ async function connectCodexAppServer(
   let handshaking = false
   try {
     // A spawn that failed has no pid; the handshake below reports why.
+    await awaitProviderChildSpawn(child)
     if (child.pid !== undefined) {
       await handlers.onSpawned?.(child.pid)
     }
@@ -268,7 +279,7 @@ async function connectCodexAppServer(
 export function spawnCodexAppServerConnection(
   launch: CodexAppServerLaunch,
   handlers: CodexAppServerConnectionHandlers = {},
-  spawnImpl: PipedProcessSpawner = spawnProcess
+  spawnImpl: ProviderProcessSpawner = spawnProcess
 ): Promise<CodexAppServerConnection> {
   return connectCodexAppServer(launch, handlers, spawnImpl, false)
 }
@@ -276,7 +287,7 @@ export function spawnCodexAppServerConnection(
 export function openCodexAppServerConnection(
   launch: CodexAppServerLaunch,
   handlers: CodexAppServerConnectionHandlers = {},
-  spawnImpl: PipedProcessSpawner = spawnProcess
+  spawnImpl: ProviderProcessSpawner = spawnProcess
 ): Promise<CodexAppServerConnection> {
   return connectCodexAppServer(launch, handlers, spawnImpl, true)
 }

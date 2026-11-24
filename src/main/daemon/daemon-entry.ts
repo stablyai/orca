@@ -1,4 +1,5 @@
 import '../memory/host-malloc-tunables-claim'
+import '../ipc/pty/host-env/inherited-orca-identity-claim'
 import { parseArgs } from './launch/daemon-command-arguments'
 import { readFileSync } from 'node:fs'
 import { startDaemon, type DaemonHandle } from './server/daemon-main'
@@ -15,7 +16,7 @@ import {
 import {
   prepareMacosTccLoginShell,
   probeMacosLoginSessionAlive
-} from '../providers/macos-tcc-login-shell'
+} from '../providers/shell-launch/macos/tcc-login-shell'
 import { MacosLoginSessionDeathWatch } from './process-scopes/macos-login-session-death-watch'
 import { readCurrentProcessMacSystemResolverHealth } from '../network/macos-system-resolver-health'
 import { readCurrentDaemonReadyIdentity } from './endpoint/identity/daemon-ready-identity'
@@ -29,10 +30,12 @@ import { startDaemonScopeDeathWatch } from './process-scopes/daemon-scope-death-
 import { isWindowsProcessTableAvailable } from '../windows/windows-process-table'
 import { leaseAppImageGenerationForCurrentProcess } from '../cli/appimage/appimage-generation-lease'
 import { createDaemonShutdownDeadline } from './launch/daemon-shutdown-deadline'
+import { setDaemonProcessName } from './daemon-process-name'
 
 async function main(): Promise<void> {
   // The parent closes startup stderr after readiness; later EPIPE errors must not kill the daemon.
   process.stderr.on('error', () => {})
+  setDaemonProcessName()
 
   const {
     socketPath,
@@ -176,6 +179,13 @@ async function main(): Promise<void> {
   daemon = await startDaemon({
     socketPath,
     tokenPath,
+    providerSpawn:
+      process.platform === 'darwin' &&
+      process.ppid === 1 &&
+      process.env.ORCA_PROVIDER_HOST === '1' &&
+      /\/(?:Orca Agents|Orca Terminal Host)\.app\/Contents\/MacOS\/(?:Orca Agents|orca-terminal-host)$/.test(
+        process.execPath
+      ),
     ...(pidPath ? { pidPath } : {}),
     ...(launchNonce ? { launchNonce } : {}),
     ...(pidPath ? { startedAtMs } : {}),

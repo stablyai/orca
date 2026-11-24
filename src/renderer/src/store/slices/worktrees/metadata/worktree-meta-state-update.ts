@@ -4,11 +4,11 @@ import {
   selectWorktreesByRepo,
   selectDetectedWorktreesByRepo
 } from '../../../workspaces/catalog/workspace-record-fields'
-import type { Repo } from '../../../../../../shared/repo-types'
+import type { Repo } from '../../../../../../shared/repository/repo-types'
 import { applyWorktreeUpdates } from './worktree-meta-update-application'
 import { applyDetectedWorktreeUpdates } from '../listing/detected-worktree-meta'
 import { getHostedReviewCacheKey } from '../../hosted-review/hosted-review-cache-identity'
-import { getGitHubPRCacheKeyCandidates } from '../../../../../../shared/github/github-cache-key'
+import { getGitHubPRCacheKeyCandidates } from '../../../../../../shared/github/cache/github-cache-key'
 
 type WorktreeMetaStateUpdate = WorktreeMetaBatchUpdate & {
   reviewRepo?: Repo

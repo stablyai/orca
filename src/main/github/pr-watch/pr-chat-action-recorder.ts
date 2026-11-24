@@ -1,5 +1,5 @@
 import type { AgentJournalItemBody } from '../../../shared/agent-session/journal/agent-session-journal-types'
-import type { PRInfo } from '../../../shared/github/pull-request-types'
+import type { PRInfo } from '../../../shared/github/pull-requests/pull-request-types'
 import { pullRequestsOpenedBy } from '../../../shared/native-chat/tools/native-chat-opened-pull-requests'
 import { nativeChatToolCallScript } from '../../../shared/native-chat/tools/native-chat-tool-call-script'
 import { gitPushUpdates, runsGitPush, type GitPushUpdate } from './git-push-update-lines'

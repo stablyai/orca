@@ -7,7 +7,7 @@ import { Label } from '@/components/ui/label'
 import type {
   SkillInstallPreview,
   SkillInstallResult
-} from '../../../../../shared/skill-install-contract'
+} from '../../../../../shared/skills/installation/skill-install-contract'
 import { SkillPackageChecklist } from './SkillPackageChecklist'
 import { checklistItemsFromVersion } from './skill-package-checklist-items'
 import { SkillInstallRiskNotice } from './SkillInstallRiskNotice'

@@ -40,7 +40,7 @@ export const DURABLE_EXIT_PROOF = {
 }
 
 /** Worker states that carry an outcome; anything else is still supposed to be running. */
-const SETTLED_WORKER_STATES = new Set(['succeeded', 'failed', 'stopped', 'abandoned'])
+export const SETTLED_WORKER_STATES = new Set(['succeeded', 'failed', 'stopped', 'abandoned'])
 
 /** Any certified termination reason proves exit independently of settlement state. */
 function hasCertifiedExit(worker: FleetLivenessSubject): boolean {
@@ -262,7 +262,11 @@ export function projectOrchestrationFleetWorker(
       worker: worker.workerState,
       dispatch: worker.dispatchStatus,
       detail: worker.workerStage,
-      activity: fresh && activity ? activity.state : 'unknown'
+      activity: fresh && activity ? activity.state : 'unknown',
+      // A stale row still names the wait it last saw; an exit ends it.
+      ...(activity?.backgroundWait && liveness.verdict !== 'exited'
+        ? { backgroundWait: activity.backgroundWait }
+        : {})
     },
     outcome,
     liveness,

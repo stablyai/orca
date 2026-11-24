@@ -9,12 +9,12 @@ import {
   formatToolInput,
   truncateToolDetail
 } from '../../../../shared/native-chat/tools/native-chat-tool-summary'
-import { isPlanApprovalSubject } from '../../../../shared/agent-session/agent-session-approval-subject'
-import { askOptionPreview } from '../../../../shared/native-chat/input/native-chat-ask-option-preview'
+import { isPlanApprovalSubject } from '../../../../shared/agent-session/requests/prompts/agent-session-approval-subject'
+import { askOptionPreview } from '../../../../shared/native-chat/input/questions/native-chat-ask-option-preview'
 import { boundJournalPromptBody } from '../../../native-chat/agent-session-journal/item-lifecycle/journal-prompt-body-bounds'
 import { claudeRecord, claudeText } from './claude-structured-item-translation'
 import { encodeClaudeQuestionOptionId } from './claude-structured-prompt-replies'
-import type { ClaudePendingPrompt } from '../../claude-prompt-registry'
+import type { ClaudePendingPrompt } from '../permissions/claude-prompt-registry'
 
 const APPROVAL_OPTIONS: readonly AgentJournalPromptOption[] = [
   { id: 'allow', label: 'Allow', intent: 'allow_once' },
@@ -53,11 +53,13 @@ export function claudeApprovalItem(prompt: ClaudePendingPrompt): AgentJournalApp
     kind: 'approval',
     title: prompt.title ?? (planSubject ? 'Review proposed plan' : `Allow ${prompt.toolName}?`),
     ...(prompt.displayName ? { displayName: prompt.displayName } : {}),
+    ...(planSubject || !prompt.toolName ? {} : { toolName: prompt.toolName }),
     ...(prompt.description ? { description: prompt.description } : {}),
     ...(prompt.decisionReason ? { decisionReason: prompt.decisionReason } : {}),
     ...(prompt.blockedPath ? { blockedPath: prompt.blockedPath } : {}),
     ...(prompt.matchedAskRule ? { matchedAskRule: prompt.matchedAskRule } : {}),
     ...(prompt.subject ? { subject: prompt.subject } : {}),
+    ...(prompt.personOnly ? { personOnly: true } : {}),
     detail: detail || null,
     options: (planSubject ? PLAN_APPROVAL_OPTIONS : APPROVAL_OPTIONS).map((option) => ({
       ...option
@@ -116,7 +118,9 @@ export function claudeQuestionItems(input: {
             ...(header ? { header } : {}),
             options: questionOptions(question, questionAddress),
             multiSelect: question.multiSelect === true,
-            freeTextQuestionId: questionAddress
+            freeTextQuestionId: questionAddress,
+            // Claude takes answers that leave a question out, as its own question card sends.
+            skippable: true
           }
         ]
       : []

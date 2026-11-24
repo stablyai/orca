@@ -3,7 +3,7 @@ import { mkdir, mkdtemp, rename, rm, stat, utimes, writeFile } from 'node:fs/pro
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 import SyncDatabase from '../../sqlite/sync-database'
-import { isolatedScanRoots } from '../../ai-vault/session-scanner-test-fixtures'
+import { isolatedScanRoots } from '../../ai-vault/scanner-fixtures/session-scanner-test-fixtures'
 import type { SessionSearchClock, SessionSearchTimerHandle } from './session-search-clock'
 import type { SessionSearchScanRoots } from '../discovery/session-search-scan-roots'
 import { assistantRecord, userRecord } from './session-search-transcript-fixtures'
