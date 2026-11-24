@@ -11,7 +11,7 @@ import {
   botMentionToken,
   splitBotMentions
 } from '../../../../../../shared/bots/bot-mention-context'
-import { QUOTE_NODE, withQuoteChipsParsed } from './native-chat-quote-blocks'
+import { codeFenceAfter, QUOTE_NODE, withQuoteChipsParsed } from './native-chat-quote-blocks'
 
 export const IMAGE_REFERENCE_NODE = 'nativeChatImageReference'
 export const FILE_REFERENCE_NODE = 'nativeChatFileReference'
@@ -132,9 +132,13 @@ export function promptTextContent(text: string, options?: { literal?: boolean })
   const lines = text.split('\n')
   const content: JSONContent[] = []
   let chips: JSONContent[] = []
+  let fence: string | undefined
   for (let index = 0; index < lines.length; index++) {
+    // Lines in a code fence are code, not quote lines.
+    fence = codeFenceAfter(fence, lines[index])
+    const quotes = !options?.literal && fence === undefined
     let end = index
-    while (!options?.literal && end < lines.length && QUOTE_LINE.test(lines[end])) {
+    while (quotes && end < lines.length && QUOTE_LINE.test(lines[end])) {
       end++
     }
     if (end > index && lines[end] === '' && end + 1 < lines.length) {

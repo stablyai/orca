@@ -3,6 +3,18 @@ import type { JSONContent } from '@tiptap/react'
 /** A quote chip: a quote "Add to chat" took. */
 export const QUOTE_NODE = 'nativeChatQuote'
 
+// A code fence line: 3 or more backticks or tildes.
+const FENCE = /^ {0,3}(`{3,}|~{3,})/
+
+/** The code fence that is open after `line`, or undefined. Markdown reads its lines as code. */
+export function codeFenceAfter(fence: string | undefined, line: string): string | undefined {
+  const mark = FENCE.exec(line)?.[1]
+  if (fence === undefined) {
+    return mark
+  }
+  return mark?.[0] === fence[0] && mark.length >= fence.length ? undefined : fence
+}
+
 // Holds the place of text with other pills: not a quote line and not blank.
 const KEPT_LINE = 'x'
 

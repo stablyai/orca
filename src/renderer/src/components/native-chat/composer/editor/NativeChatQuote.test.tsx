@@ -58,6 +58,17 @@ describe('quote chips in the composer', () => {
     )
   })
 
+  // Lines in a code fence are code, not quote lines.
+  it.each([
+    ['```\n> example\n\ncomment\n```', 0],
+    ['~~~\n> example\n\ncomment\n~~~', 0],
+    ['````\n```\n> example\n\ncomment\n````', 0],
+    ['```\ncode\n```\n> q\n\nc', 1]
+  ])('reads %j with %i quote chips', (text, count) => {
+    const nodes = (promptTextContent(text).content ?? []).flatMap((block) => block.content ?? [])
+    expect(nodes.filter((node) => node.type === 'nativeChatQuote')).toHaveLength(count)
+  })
+
   // Quoted lines at the end of the text, with no blank line after them, are text: a chip adds one.
   it('keeps quoted lines and one line end at the end of the text as text', () => {
     const { input, editor } = setup('> a\n')
