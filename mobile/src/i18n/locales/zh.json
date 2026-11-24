@@ -558,7 +558,23 @@
       "unavailable": "所选答案不可用",
       "thisPhone": "此手机",
       "computer": "电脑",
-      "otherDevice": "其他设备"
+      "otherDevice": "其他设备",
+      "questionCancelled": "问题已取消",
+      "youAnswered": "你的回答：<answer>{{answer}}</answer>",
+      "answeredCount_one": "你回答了 <answer>{{count}} 个问题</answer>",
+      "answeredCount_other": "你回答了 <answer>{{count}} 个问题</answer>",
+      "answeredCount": "你回答了 <answer>{{count}} 个问题</answer>"
+    },
+    "approvalRecord": {
+      "cancelled": "<tool>{{tool}}</tool> 的请求已取消",
+      "coordinatorAllowed": "协调者已允许 <tool>{{tool}}</tool>",
+      "coordinatorDenied": "协调者已拒绝 <tool>{{tool}}</tool>",
+      "allowedUnnamed": "已允许 <tool>{{tool}}</tool>",
+      "deniedUnnamed": "已拒绝 <tool>{{tool}}</tool>",
+      "youAllowed": "你已允许 <tool>{{tool}}</tool>",
+      "youAllowedForSession": "你已在此会话中允许 <tool>{{tool}}</tool>",
+      "youDenied": "你已拒绝 <tool>{{tool}}</tool>",
+      "youAnswered": "你回答了 <tool>{{tool}}</tool>：<answer>{{answer}}</answer>"
     },
     "sessionOptionCopy": {
       "none": "无",
@@ -1256,6 +1272,7 @@
         "deniedInTerminal": "<task>{{task}}</task> 的 <tool>{{tool}}</tool> 已在工作者的终端中拒绝",
         "allowedInChat": "<task>{{task}}</task> 的 <tool>{{tool}}</tool> 已在工作者的聊天中允许",
         "deniedInChat": "<task>{{task}}</task> 的 <tool>{{tool}}</tool> 已在工作者的聊天中拒绝",
+        "timedOut": "<task>{{task}}</task> 的 <tool>{{tool}}</tool> 已超时",
         "waitsInTerminal": "<task>{{task}}</task> 的 <tool>{{tool}}</tool> 正在工作者的终端中等待回答",
         "workerEnded": "<task>{{task}}</task> 的 <tool>{{tool}}</tool> 已关闭：工作者已结束",
         "closedUnnamed": "<task>{{task}}</task> 的 <tool>{{tool}}</tool> 已关闭，未记录回答",
@@ -2374,7 +2391,17 @@
       "offOneBody": "要开启 bots，请在 {{host}} 上打开 Orca，然后前往\"设置 › Bots › 启用 bots\"",
       "offServerBody": "要开启 bots，请在 {{desktop}} 上打开 Orca，然后前往\"设置 › Bots › 在 {{host}} 上启用 bots\"",
       "offManyTitle": "你各台电脑上的 Bots 都已关闭",
-      "offManyBody": "要开启 bots，请在每台电脑上打开 Orca，然后前往\"设置 › Bots › 启用 bots\""
+      "offManyBody": "要开启 bots，请在每台电脑上打开 Orca，然后前往\"设置 › Bots › 启用 bots\"",
+      "waits": {
+        "questions_one": "问题",
+        "questions_other": "{{count}} 个问题",
+        "access_one": "访问请求",
+        "access_other": "{{count}} 个访问请求",
+        "workers_one": "工作者",
+        "workers_other": "{{count}} 个工作者",
+        "items_one": "事项",
+        "items_other": "{{count}} 个事项"
+      }
     }
   },
   "hooks": {
@@ -6040,6 +6067,7 @@
       "memoryFiles_other": "{{count}} 个文件",
       "none": "无",
       "readFailed": "无法加载",
+      "usingChatDefault": "正在使用你的聊天默认设置",
       "sameAsChatsDetail": "使用你的聊天权限设置",
       "notifications": "通知",
       "needsPermission": "需要权限",
@@ -6221,7 +6249,10 @@
       "pickOne": "请选择一个 bot",
       "needsTwoBots": "需要 {{host}} 上有 2 个 bot",
       "stopCouldNotBeConfirmed": "无法确认是否已停止",
-      "notStarted": "尚未启动"
+      "notStarted": "尚未启动",
+      "memberCount_one": "{{count}} 个 bot",
+      "memberCount_other": "{{count}} 个 bot",
+      "memberCount": "{{count}} 个 bot"
     },
     "templates": {
       "title": "Bot 模板",
@@ -6943,7 +6974,11 @@
       "chat": "你与 {{name}} 的聊天",
       "access": "{{person}} 请求访问权限",
       "fixConnector": "打开 {{name}}",
-      "pairedAsk": "{{from}} 想给 {{name}} 发消息"
+      "pairedAsk": "{{from}} 想给 {{name}} 发消息",
+      "connectorFix": "登录或修复",
+      "questions": "{{count}} 个问题",
+      "signInApps": "登录 {{count}} 个应用",
+      "listSeparator": "、"
     },
     "chat": {
       "nothingToReport": "没有需要汇报的内容",
@@ -7315,6 +7350,7 @@
       "outfitSecurity": "保安",
       "tooBig": "该图片超过 10 MB",
       "tooSmall": "图片太小。请使用至少 128 px 的图片",
+      "color": "颜色",
       "title": "名称和头像",
       "mascot": "吉祥物",
       "choosePhoto": "从照片中选择",
@@ -7492,7 +7528,9 @@
       "copyAgain": "再次复制",
       "chooseAnother": "选择其他文件夹…",
       "chooseFolderRow": "选择文件夹…",
-      "noFolders": "没有文件夹"
+      "noFolders": "没有文件夹",
+      "more": "更多操作",
+      "makeNew": "改为新建 bot"
     },
     "host": {
       "errors": {
@@ -7631,7 +7669,7 @@
         "connectTitle": "连接 Composio",
         "once": "只需连接一次，即可用于你的所有 bots",
         "browseAll": "浏览 Composio 应用",
-        "keyOnHost": "保存在 {{host}}；机器人永远看不到"
+        "keyOnHost": "保存在 {{host}} 上；bots 永远看不到"
       },
       "close": "关闭",
       "couldNotSignIn": "无法登录 {{app}}",
@@ -7815,7 +7853,8 @@
       "heading": "已配对的服务器",
       "remove": "移除",
       "removeServer": "移除 {{server}}",
-      "unnamed": "已配对的服务器"
+      "unnamed": "已配对的服务器",
+      "footer": "这些服务器上的智能体无需你批准即可提问"
     },
     "setup": {
       "for": "用于 {{name}}",
@@ -8052,7 +8091,9 @@
       "peopleIn": "{{workspace}} 中的人员",
       "noOneNamed": "{{workspace}} 中没有名为\"{{query}}\"的人",
       "needsSlack": "请先将 {{name}} 添加到 Slack，才能从你的工作区中选择人员",
-      "noMatchDetail": "可以添加 Slack 工作区 {{workspace}} 中的成员、访客以及来自其他组织的人员。其他人会收到一条私密提示，可借此向你申请访问权限"
+      "noMatchDetail": "可以添加 Slack 工作区 {{workspace}} 中的成员、访客以及来自其他组织的人员。其他人会收到一条私密提示，可借此向你申请访问权限",
+      "add": "添加",
+      "allAdded": "他们已经可以提问"
     },
     "linear": {
       "whoCanAsk": {
@@ -8375,6 +8416,9 @@
     "usageLimit": {
       "continuesAt": "将于 {{time}} 继续",
       "hitLimit": "已达上限 · {{time}} 重置"
+    },
+    "upcoming": {
+      "needsSignIn": "需要登录"
     }
   },
   "hostMutation": {

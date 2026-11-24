@@ -27888,7 +27888,8 @@
         "accountThenCatalog": "只需连接一次，即可用于你的所有 bots。然后从 Composio 的全部应用中挑选",
         "keyStored": "存储在此电脑上，bots 永远看不到它。你的应用登录信息由 Composio 保管",
         "addKey": "添加密钥并继续",
-        "keyStoredOnHost": "存储在 {{host}} 上，bots 永远看不到它。你的应用登录信息由 Composio 保管"
+        "keyStoredOnHost": "存储在 {{host}} 上，bots 永远看不到它。你的应用登录信息由 Composio 保管",
+        "signsIn": "通过你的 Composio 账户登录"
       },
       "closeKeepsSigningIn": "登录会在浏览器中继续进行",
       "openPageAgain": "再次打开页面",
@@ -27902,7 +27903,9 @@
         "line": "{{bot}} 要使用的任意 MCP 服务器",
         "failedLine": "{{app}} 已添加到 {{bot}}，但尚未登录。请重试，或在\"设置 › 工具\"中将其移除",
         "done": "{{app}} 已添加到 {{bot}}",
-        "doneLine": "{{bot}} 从下一轮起即可使用它的工具"
+        "doneLine": "{{bot}} 从下一轮起即可使用它的工具",
+        "name": "自定义",
+        "rowLine": "任意 MCP 服务器"
       },
       "couldNotSignIn": "无法登录 {{app}}",
       "done": "完成",
@@ -27911,7 +27914,9 @@
       "viaComposio": "通过 Composio",
       "appsCaption": "应用",
       "searchComposio": "搜索 Composio 应用",
+      "searchAdded": "搜索已添加的应用",
       "search": "搜索应用",
+      "filters": "应用筛选",
       "categories": "分类",
       "addByUrl": "通过 URL 添加",
       "noMatch": "没有与\"{{query}}\"匹配的应用",
@@ -28000,7 +28005,17 @@
         "box": "文件和文件夹",
         "miro": "白板、便签和框架",
         "reddit": "帖子、评论和子版块"
-      }
+      },
+      "addAppsTitle": "为 {{bot}} 添加应用",
+      "addedCount": "已添加 {{count}} 个",
+      "addedCaption": "已添加",
+      "chip": {
+        "all": "全部",
+        "composio": "Composio",
+        "more": "更多"
+      },
+      "setUpNamed": "设置 {{name}}",
+      "setUp": "设置"
     },
     "row": {
       "paused": "已暂停",
@@ -30634,5 +30649,14 @@
     "moveLeft": "左移",
     "moveRight": "右移",
     "reset": "重置标签页顺序"
+  },
+  "tabStrip": {
+    "overflow": {
+      "chipOnlyName_other": "{{title}}，{{count}} 个标签页",
+      "entryNeedsAttention": "{{title}}，需要处理",
+      "moreTabs_other": "还有 {{count}} 个标签页",
+      "needAttention_other": "，{{count}} 个需要处理",
+      "openTabs_other": "{{count}} 个打开的标签页"
+    }
   }
 }
