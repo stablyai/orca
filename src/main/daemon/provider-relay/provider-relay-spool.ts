@@ -1,13 +1,10 @@
-import { open, unlink, type FileHandle } from 'node:fs/promises'
 import type { ProviderRelayRecord } from '../protocol/daemon-provider-relay-protocol'
-import { SpoolFileIndex } from './provider-relay-spool-file-index'
+import { SpoolFile } from './provider-relay-spool-file'
 import { SpoolMemory, type HeldRecord } from './provider-relay-spool-memory'
 import { replayMemoryTail, replaySpoolFileRecords } from './provider-relay-spool-replay'
 
 export const RELAY_SPOOL_MEMORY_CAP_BYTES = 1024 * 1024
 export const RELAY_SPOOL_FILE_CAP_BYTES = 16 * 1024 * 1024
-/** Coalesced appends stop growing here, so joining records can never pass the engine's string limit. */
-const MAX_COALESCED_WRITE_CHARS = 8 * 1024 * 1024
 /** Each record costs at least this much, so a flood of blank lines still reaches the cap. */
 const RECORD_OVERHEAD_BYTES = 64
 
@@ -29,8 +26,6 @@ type SpoolOptions = {
 
 type SpoolMode = 'attached' | 'replaying' | 'detached'
 
-type SpoolWrite = { chunk: string; records: HeldRecord[] }
-
 /**
  * Seq-numbered stdout lines awaiting the client's ack. Attached, they live in memory; detached,
  * they are appended to a private file. Acks trim; the file goes once everything in it is acked.
@@ -41,17 +36,9 @@ export class ProviderRelaySpool {
   /** Records a lost spool file held; never sendable, so they don't hold the relay open. */
   private lostThrough = 0
   private readonly memory: SpoolMemory
+  private readonly file: SpoolFile
   private mode: SpoolMode = 'detached'
-  private file: FileHandle | null = null
-  private readonly fileIndex = new SpoolFileIndex()
-  /** The not-yet-started write, so appends coalesce without reordering around a removal. */
-  private queuedWrite: SpoolWrite | null = null
-  /** A failed write keeps every later record in memory, so a full or broken disk loses nothing. */
-  private fileFailed = false
   private attachGeneration = 0
-  /** Bumped when the file is removed, so batches queued before that never write into a new one. */
-  private fileEpoch = 0
-  private io: Promise<void> = Promise.resolve()
   private paused = false
   private ackAsked = false
   private ackAskedSeq = 0
@@ -66,6 +53,13 @@ export class ProviderRelaySpool {
   constructor(private readonly options: SpoolOptions) {
     this.memoryCap = options.memoryCapBytes ?? RELAY_SPOOL_MEMORY_CAP_BYTES
     this.memory = new SpoolMemory(this.memoryCap)
+    this.file = new SpoolFile(options.path, {
+      acked: () => this.acked,
+      restore: (records) => {
+        this.memory.merge(records)
+        this.updatePressure()
+      }
+    })
     this.fileCap = options.fileCapBytes ?? RELAY_SPOOL_FILE_CAP_BYTES
   }
 
@@ -93,7 +87,7 @@ export class ProviderRelaySpool {
       line,
       bytes: utf8Bytes + RECORD_OVERHEAD_BYTES
     }
-    if (this.mode === 'detached' && !this.fileFailed) {
+    if (this.mode === 'detached' && !this.file.failed) {
       this.writeToFile(record)
     } else if (this.keepingLive) {
       // Kept as when detached, so a later attach replays it; the client still gets it live.
@@ -118,13 +112,15 @@ export class ProviderRelaySpool {
       return
     }
     const through = Math.min(seq, this.nextSeqValue - 1)
-    this.clientAcked = Math.max(this.clientAcked, through)
-    this.keeping =
-      keepFrom !== undefined &&
-      Number.isSafeInteger(keepFrom) &&
-      keepFrom <= through &&
-      !this.fileFailed
-    this.releaseThrough(this.keeping ? (keepFrom as number) - 1 : through)
+    // A late, older ack says nothing new and must not undo a later keep.
+    if (through < this.clientAcked) {
+      return
+    }
+    this.clientAcked = through
+    const floor = keepFrom !== undefined && Number.isSafeInteger(keepFrom) ? keepFrom : null
+    this.keeping = floor !== null
+    // A floor past `seq` keeps nothing the client has; with a broken file, kept lines stay in memory.
+    this.releaseThrough(floor === null ? through : Math.min(floor, through + 1) - 1)
     if (this.keepingLive) {
       this.spillMemory()
     }
@@ -135,13 +131,13 @@ export class ProviderRelaySpool {
 
   /** Attached and keeping: new and still-held lines go to the file as well as to the client. */
   private get keepingLive(): boolean {
-    return this.keeping && this.mode === 'attached' && !this.fileFailed
+    return this.keeping && this.mode === 'attached' && !this.file.failed
   }
 
   /** Memory records the client hasn't released move to the file in seq order, as on detach. */
   private spillMemory(): void {
     for (const record of this.memory.takeAll()) {
-      if (this.fileFailed) {
+      if (this.file.failed) {
         this.memory.push(record)
       } else {
         this.writeToFile(record)
@@ -156,9 +152,11 @@ export class ProviderRelaySpool {
     }
     this.acked = seq
     this.memory.releaseThrough(seq)
-    this.fileIndex.ackThrough(this.acked)
-    if (this.fileIndex.lastSeq > 0 && this.acked >= this.fileIndex.lastSeq) {
-      this.removeFile()
+    this.file.index.ackThrough(this.acked)
+    if (this.file.index.lastSeq > 0 && this.acked >= this.file.index.lastSeq) {
+      this.file.remove()
+    } else if (this.keeping) {
+      this.file.compactIfWasteful(this.fileCap)
     }
   }
 
@@ -171,16 +169,16 @@ export class ProviderRelaySpool {
     this.updatePressure()
     const current = (): boolean =>
       generation === this.attachGeneration && this.mode === 'replaying' && !this.disposed
-    await this.io
+    await this.file.io
     let after = Math.max(fromSeq, this.acked)
     // The highest seq the file should hold whole; a write that failed partway was taken out of it.
-    const fileLast = this.fileIndex.lastSeq
+    const fileLast = this.file.index.lastSeq
     const file: Awaited<ReturnType<typeof replaySpoolFileRecords>> =
       fileLast > 0
         ? await replaySpoolFileRecords({
             path: this.options.path,
             after,
-            index: this.fileIndex,
+            index: this.file.index,
             current,
             deliver: this.options.deliver,
             drained: this.options.drained
@@ -189,7 +187,7 @@ export class ProviderRelaySpool {
     if (file.outcome === 'lost' && current()) {
       // Retrying would fail the same way, so the loss is named; lost records are never claimed as sent.
       this.lostThrough = Math.max(this.lostThrough, fileLast)
-      this.removeFile()
+      this.file.remove()
       this.options.onFileLost?.()
     } else if (file.outcome !== 'done' || !current()) {
       return this.nextSeqValue - 1
@@ -217,6 +215,7 @@ export class ProviderRelaySpool {
 
   /** A takeover holds live records back until its own replay, so none reaches the new client twice. */
   suspend(): void {
+    this.clientAcked = this.acked
     // An earlier attach still replaying is superseded too, or it would keep sending to the new client.
     if (this.mode !== 'detached') {
       this.mode = 'replaying'
@@ -226,48 +225,37 @@ export class ProviderRelaySpool {
 
   detach(): Promise<void> {
     if (this.mode === 'detached') {
-      return this.io
+      return this.file.io
     }
     this.mode = 'detached'
     this.attachGeneration++
-    if (!this.fileFailed) {
+    if (!this.file.failed) {
       this.spillMemory()
     }
     this.updatePressure()
-    return this.io
+    return this.file.io
   }
 
   async dispose(): Promise<void> {
     this.disposed = true
     this.memory.takeAll()
-    this.removeFile()
-    await this.io
+    await this.file.dispose()
   }
 
   /** An ended, detached relay writes nothing more; its fd closes and the file waits for a reader. */
   closeHandle(): void {
-    this.io = this.io
-      .then(async () => {
-        if (this.mode === 'detached' && !this.queuedWrite) {
-          const file = this.file
-          this.file = null
-          await file?.close()
-        }
-      })
-      .catch(() => {})
+    this.file.closeWhenIdle(() => this.mode === 'detached')
   }
 
   /** Pause at the cap, resume below half of it, so acks near the cap don't flap the agent's stdout. */
   private updatePressure(): void {
-    const fileHeld = this.fileIndex.unackedBytes + this.memory.bytes
-    if (this.keeping && fileHeld >= this.fileCap && this.clientAcked > this.acked) {
-      // A kept item longer than the file cap can't be kept whole; holding it would stall the agent.
+    let [held, cap] = this.pressure()
+    if (this.keeping && this.mode === 'attached' && held >= cap && this.clientAcked > this.acked) {
+      // A kept span reaching the cap can't be kept whole; holding it would stall the agent. Only the
+      // live client's own acks count, so a takeover never loses lines its new client hasn't had.
       this.releaseThrough(this.clientAcked)
+      ;[held, cap] = this.pressure()
     }
-    const [held, cap] =
-      this.mode === 'detached' || this.keepingLive
-        ? [this.fileIndex.unackedBytes + this.memory.bytes, this.fileCap]
-        : [this.memory.bytes, this.memoryCap]
     const paused = !this.disposed && (this.paused ? held >= cap / 2 : held >= cap)
     // Asked once per crossing and again once answered if still crossed, so a client can ack rarely.
     // Only while streaming live: during a replay the client has nothing new to ack yet. While
@@ -284,84 +272,19 @@ export class ProviderRelaySpool {
     }
   }
 
+  private pressure(): [held: number, cap: number] {
+    return this.mode === 'detached' || this.keepingLive
+      ? [
+          Math.max(this.file.index.unackedBytes, this.file.pendingBytes) + this.memory.bytes,
+          this.fileCap
+        ]
+      : [this.memory.bytes, this.memoryCap]
+  }
+
   private writeToFile(record: HeldRecord): void {
-    if (this.disposed) {
-      return
-    }
-    let encoded: string
-    try {
-      encoded = `${JSON.stringify({ seq: record.seq, line: record.line })}\n`
-    } catch {
-      // Too large to escape: it and every later record stay in memory, so seq order holds.
-      this.fileFailed = true
+    // Too large to escape: it and every later record stay in memory, so seq order holds.
+    if (!this.file.write(record)) {
       this.memory.push(record)
-      return
     }
-    const bytes = Buffer.byteLength(encoded)
-    this.fileIndex.add(record.seq, bytes)
-    const queued = this.queuedWrite
-    if (queued && queued.chunk.length + encoded.length <= MAX_COALESCED_WRITE_CHARS) {
-      queued.chunk += encoded
-      queued.records.push(record)
-    } else {
-      const write: SpoolWrite = { chunk: encoded, records: [record] }
-      const epoch = this.fileEpoch
-      this.queuedWrite = write
-      this.io = this.io
-        .then(async () => {
-          if (this.queuedWrite === write) {
-            this.queuedWrite = null
-          }
-          if (epoch !== this.fileEpoch) {
-            return
-          }
-          if (write.chunk.length === 0 || this.fileFailed) {
-            this.keepInMemory(write)
-            return
-          }
-          try {
-            this.file ??= await open(this.options.path, 'a', 0o600)
-            // appendFile keeps writing until every byte lands; a bare write may stop short.
-            await this.file.appendFile(write.chunk)
-          } catch {
-            this.fileFailed = true
-            // An ack may have retired the whole file while this write was in flight.
-            if (epoch === this.fileEpoch) {
-              this.keepInMemory(write)
-            }
-          }
-        })
-        .catch(() => {})
-    }
-  }
-
-  /** Records a failed write didn't land go back to memory in seq order, still unacked. */
-  private keepInMemory(write: SpoolWrite): void {
-    if (write.chunk.length === 0 || this.disposed) {
-      return
-    }
-    const failed = new Set(write.records.map((record) => record.seq))
-    this.fileIndex.drop(failed)
-    this.memory.merge(write.records.filter((record) => record.seq > this.acked))
-    this.updatePressure()
-  }
-
-  /** Also runs with no record indexed: a first append that failed may still have created the file. */
-  private removeFile(): void {
-    // A queued write holds only acked records, so it is dropped rather than written.
-    if (this.queuedWrite) {
-      this.queuedWrite.chunk = ''
-      this.queuedWrite = null
-    }
-    this.fileEpoch++
-    this.fileIndex.clear()
-    this.io = this.io
-      .then(async () => {
-        const file = this.file
-        this.file = null
-        await file?.close()
-        await unlink(this.options.path).catch(() => {})
-      })
-      .catch(() => {})
   }
 }
