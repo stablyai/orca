@@ -1750,6 +1750,7 @@
         "exitPlanMode": "退出计划模式",
         "pastedTextLabel": "粘贴的文本",
         "botChats": "聊天",
+        "botFor": "用途：{{detail}}",
         "backToBots": "返回 bots 列表",
         "loadingBotChats": "正在加载 {{name}} 的聊天…",
         "noOtherChats": "没有其他聊天",
