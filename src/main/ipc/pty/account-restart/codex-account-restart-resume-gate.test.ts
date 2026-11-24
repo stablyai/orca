@@ -147,4 +147,48 @@ describe('account restart resume reopens the exact conversation', () => {
     // The failed launch keeps the intent for the next resume on a capable route.
     await expect(resume(stops)).resolves.toMatchObject({ resumeOnSelectedAccount: true })
   })
+
+  it('fails once instead of opening a shell when the stopped pane returns without its conversation', async () => {
+    const stops = new CodexAccountRestartStops()
+    const { result, release } = admitStop(stops)
+    release()
+    await result
+    const withoutConversation = { launchAgent: undefined, resumeProviderSession: undefined }
+    await expect(resume(stops, withoutConversation)).rejects.toBeInstanceOf(
+      CodexAccountRestartResumeUnavailableError
+    )
+    // Restarting the pane afterwards is an ordinary start.
+    await expect(resume(stops, withoutConversation)).resolves.toMatchObject({
+      resumeOnSelectedAccount: false
+    })
+  })
+
+  it('opens the shell normally when the stop was Dismissed, unproven or never made', async () => {
+    const unproven = new CodexAccountRestartStops()
+    const stop = admitStop(unproven, 'unknown')
+    stop.release()
+    await stop.result
+    const withoutConversation = { launchAgent: undefined, resumeProviderSession: undefined }
+    await expect(resume(unproven, withoutConversation)).resolves.toMatchObject({
+      resumeOnSelectedAccount: false
+    })
+    await expect(
+      resume(new CodexAccountRestartStops(), withoutConversation)
+    ).resolves.toMatchObject({ resumeOnSelectedAccount: false })
+  })
+
+  it('after main loss resumes exactly the recorded transcript on the old account', async () => {
+    // A fresh register stands for main after a restart: the in-memory intent is gone.
+    const decision = await resume(new CodexAccountRestartStops(), {
+      resumeProviderSession: {
+        key: 'session_id',
+        id: 'thread-1',
+        transcriptPath: ORIGINAL_TRANSCRIPT
+      }
+    })
+    expect(decision).toEqual({
+      providerSession: { key: 'session_id', id: 'thread-1', transcriptPath: ORIGINAL_TRANSCRIPT },
+      resumeOnSelectedAccount: false
+    })
+  })
 })

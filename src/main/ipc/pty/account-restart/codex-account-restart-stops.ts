@@ -187,6 +187,20 @@ export class CodexAccountRestartStops {
     return this.grantSelectedAccountResume(mark, args.providerSession)
   }
 
+  /** A proven restart whose pane comes back without its conversation must fail once, not open a shell. */
+  async refusesResumeWithoutConversation(paneKey: string): Promise<boolean> {
+    const mark = this.markByPane.get(paneKey)
+    if (!mark || mark.withdrawn) {
+      return false
+    }
+    await mark.settled
+    if (this.markByPane.get(paneKey) !== mark || mark.state !== 'ready') {
+      return false
+    }
+    this.retireMark(mark)
+    return true
+  }
+
   /** Close or rebind of the pane: its intent no longer applies. */
   forgetPane(paneKey: string): void {
     this.spentMarkByPane.delete(paneKey)

@@ -41,23 +41,23 @@ export async function resolveCodexAccountRestartResume(
     providerSession: args.resumeProviderSession,
     resumeOnSelectedAccount: false
   }
-  if (
-    args.launchAgent !== 'codex' ||
-    args.preAdopted ||
-    !args.resumeProviderSession ||
-    args.replacesPtyId ||
-    !args.worktreeId ||
-    !args.tabId ||
-    !args.leafId
-  ) {
+  if (args.preAdopted || args.replacesPtyId || !args.worktreeId || !args.tabId || !args.leafId) {
+    return passthrough
+  }
+  const paneKey = codexAccountRestartPaneKey({
+    worktreeId: args.worktreeId,
+    tabId: args.tabId,
+    leafId: args.leafId
+  })
+  if (args.launchAgent !== 'codex' || !args.resumeProviderSession) {
+    // Missing restore metadata would start a plain shell where the stopped conversation was.
+    if (await stops.refusesResumeWithoutConversation(paneKey)) {
+      throw new CodexAccountRestartResumeUnavailableError()
+    }
     return passthrough
   }
   const decision = await stops.resolveResume({
-    paneKey: codexAccountRestartPaneKey({
-      worktreeId: args.worktreeId,
-      tabId: args.tabId,
-      leafId: args.leafId
-    }),
+    paneKey,
     providerSession: args.resumeProviderSession
   })
   if (decision.kind !== 'selected') {
