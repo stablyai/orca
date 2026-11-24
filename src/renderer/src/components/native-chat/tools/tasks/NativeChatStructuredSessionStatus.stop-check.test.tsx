@@ -386,6 +386,27 @@ it('cancels a mouse hold across an outage even when a fresh Space press overlaps
   expect(stopCalls()).toHaveLength(1)
 })
 
+it('sends no Stop when a cancelled mouse press is released while a fresh touch is held', async () => {
+  const dock = renderDock()
+  const stop = screen.getByRole('button', { name: STOP })
+  fireEvent.pointerDown(stop, { button: 0, pointerId: 1, pointerType: 'mouse' })
+  outageAndRecovery(dock)
+  fireEvent.pointerDown(stop, { button: 0, pointerId: 2, pointerType: 'touch' })
+  // The mouse's own release clicks: that click is the cancelled mouse press, not the touch.
+  fireEvent.pointerUp(stop, { button: 0, pointerId: 1, pointerType: 'mouse' })
+  fireEvent.click(stop, { detail: 1 })
+  await act(async () => {})
+  expect(stopCalls()).toHaveLength(0)
+  await act(async () => new Promise((resolve) => setTimeout(resolve, 0)))
+  // The touch started after the recovery, so its own release stops, even though a touch leaves
+  // the button between its release and its click.
+  fireEvent.pointerUp(stop, { button: 0, pointerId: 2, pointerType: 'touch' })
+  fireEvent.pointerLeave(stop, { pointerId: 2, pointerType: 'touch' })
+  fireEvent.click(stop, { detail: 1 })
+  await act(async () => {})
+  expect(stopCalls()).toHaveLength(1)
+})
+
 it('keeps a held Space press cancelled when a different key is released', async () => {
   const dock = renderDock()
   const stop = screen.getByRole('button', { name: STOP })
@@ -464,4 +485,47 @@ it('leaves focus where the user moved it during the attempt', async () => {
   roster.focus()
   await rejectLate()
   expect(roster).toHaveFocus()
+})
+
+it.each([
+  ['parked before the owner unmounts', true],
+  ['parked by the line while it unmounts with its owner', false]
+])('leaves no focus handoff listener once the owner unmounts, %s', async (_name, parkFirst) => {
+  const added = new Set<EventListenerOrEventListenerObject>()
+  const add = vi.spyOn(document, 'addEventListener').mockImplementation(function (
+    this: Document,
+    type: string,
+    listener: EventListenerOrEventListenerObject | null,
+    options?: boolean | AddEventListenerOptions
+  ) {
+    if (type === 'focusin' && listener) {
+      added.add(listener)
+    }
+    EventTarget.prototype.addEventListener.call(this, type, listener, options)
+  })
+  const remove = vi.spyOn(document, 'removeEventListener').mockImplementation(function (
+    this: Document,
+    type: string,
+    listener: EventListenerOrEventListenerObject | null,
+    options?: boolean | EventListenerOptions
+  ) {
+    if (type === 'focusin' && listener) {
+      added.delete(listener)
+    }
+    EventTarget.prototype.removeEventListener.call(this, type, listener, options)
+  })
+  try {
+    if (parkFirst) {
+      await retryHeldOpen()
+    } else {
+      await failFirstStop()
+      screen.getByRole('button', { name: 'Retry' }).focus()
+    }
+    cleanup()
+    await act(async () => {})
+    expect(added.size).toBe(0)
+  } finally {
+    add.mockRestore()
+    remove.mockRestore()
+  }
 })

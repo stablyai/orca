@@ -42,9 +42,12 @@ export function WorkerDockRowAction({
   onAction: (row: WorkerDockRowView, action: 'stop' | 'clear') => void
 }) {
   const t = useTranslate()
-  // One press per input, each cleared only by its own release: a mouse press and a key press can
-  // overlap, and neither may end, or activate as, the other.
-  const pointerPress = useRef<(Press & { pointerId: number; rect: DOMRect }) | null>(null)
+  // One press per input, each cleared only by its own release: a mouse press, a touch press and a
+  // key press can overlap, and none may end, or activate as, another.
+  const pointerPresses = useRef(new Map<number, Press & { rect: DOMRect }>())
+  // The pointer press whose release produced the click that follows it, so a click activates as
+  // the press it came from, not the latest one.
+  const releasedPointer = useRef<Press | null>(null)
   const keyPress = useRef<(Press & { key: string }) | null>(null)
   const readLosses = useContext(WorkerDockFeedLossesContext)
   const [focusedAction, setFocusedAction] = useState<'stop' | 'clear' | null>(null)
@@ -110,35 +113,45 @@ export function WorkerDockRowAction({
                 if (event.button !== 0) {
                   return
                 }
+                const pointerId = event.pointerId
                 const press = {
                   ...startPress(),
-                  pointerId: event.pointerId,
                   rect: event.currentTarget.getBoundingClientRect()
                 }
-                pointerPress.current = press
+                pointerPresses.current.set(pointerId, press)
                 const end = (released: PointerEvent) => {
-                  if (released.pointerId !== press.pointerId) {
+                  if (released.pointerId !== pointerId) {
                     return
                   }
                   window.removeEventListener('pointerup', end, true)
                   window.removeEventListener('pointercancel', end, true)
-                  // After this release's click, which reads the press.
+                  if (pointerPresses.current.get(pointerId) === press) {
+                    pointerPresses.current.delete(pointerId)
+                  }
+                  if (released.type !== 'pointerup') {
+                    press.cancelled = true
+                    return
+                  }
+                  // This release's click, if any, follows it in the same task and reads the press.
+                  releasedPointer.current = press
                   setTimeout(() => {
-                    if (pointerPress.current === press) {
-                      pointerPress.current = null
+                    if (releasedPointer.current === press) {
+                      releasedPointer.current = null
                     }
                   }, 0)
                 }
                 window.addEventListener('pointerup', end, true)
                 window.addEventListener('pointercancel', end, true)
               }}
-              onPointerLeave={() => {
-                if (pointerPress.current) {
-                  pointerPress.current.cancelled = true
+              onPointerLeave={(event) => {
+                // Only a press still held: a touch leaves after its own release.
+                const current = pointerPresses.current.get(event.pointerId)
+                if (current) {
+                  current.cancelled = true
                 }
               }}
               onPointerMove={(event) => {
-                const current = pointerPress.current
+                const current = pointerPresses.current.get(event.pointerId)
                 const rect = current?.rect
                 if (
                   current &&
@@ -152,9 +165,10 @@ export function WorkerDockRowAction({
                   current.cancelled = true
                 }
               }}
-              onPointerCancel={() => {
-                if (pointerPress.current) {
-                  pointerPress.current.cancelled = true
+              onPointerCancel={(event) => {
+                const current = pointerPresses.current.get(event.pointerId)
+                if (current) {
+                  current.cancelled = true
                 }
               }}
               onKeyDown={(event) => {
@@ -175,7 +189,7 @@ export function WorkerDockRowAction({
               }}
               onBlur={() => {
                 // Without focus no held press may activate; each is cleared by its own release.
-                for (const press of [pointerPress.current, keyPress.current]) {
+                for (const press of [...pointerPresses.current.values(), keyPress.current]) {
                   if (press) {
                     press.cancelled = true
                   }
@@ -184,8 +198,9 @@ export function WorkerDockRowAction({
               }}
               onFocus={() => setFocusedAction(action)}
               onClick={(event) => {
-                // A keyboard activation clicks with detail 0, a pointer one with its click count.
-                const captured = event.detail === 0 ? keyPress.current : pointerPress.current
+                // A keyboard activation clicks with detail 0, a pointer one with its click count
+                // right after that pointer's release.
+                const captured = event.detail === 0 ? keyPress.current : releasedPointer.current
                 if (captured && !workerDockPressStillLive(captured, readLosses)) {
                   return
                 }

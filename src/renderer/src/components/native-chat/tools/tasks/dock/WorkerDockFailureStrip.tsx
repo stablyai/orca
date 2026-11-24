@@ -1,4 +1,4 @@
-import { useLayoutEffect, useRef, useState } from 'react'
+import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { useTranslate } from '@/i18n/use-translate'
 import { Button } from '@/components/ui/button'
 import type { WorkerDockFailure } from './use-worker-dock-owner-actions'
@@ -42,6 +42,9 @@ export function useWorkerDockFailureFocusHandoff(): WorkerDockFailureFocusHandof
       release
     }
   })
+  // Passive cleanup runs after every layout cleanup of the same teardown, so this also drops a
+  // claim a line parked while it unmounted with its owner.
+  useEffect(() => handoff.release, [handoff])
   return handoff
 }
 
@@ -59,8 +62,6 @@ export function WorkerDockFailureStrip({
 }) {
   const t = useTranslate()
   const root = useRef<HTMLDivElement>(null)
-  // Layout timing: the unmount cleanup runs while the line is still in the document, so it can
-  // see that focus is inside and move it before the page would get it.
   // Layout timing: the unmount cleanup runs while the line is still in the document, so it can
   // see that focus is inside and park it before the page would get it.
   useLayoutEffect(() => {
