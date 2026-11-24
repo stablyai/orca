@@ -91,9 +91,6 @@ export class ProviderRelayHost {
     ) {
       throw new Error('Invalid relay launch')
     }
-    if (this.staleFor(spec)) {
-      return { refused: 'stale-bundle' }
-    }
     const { directory, spawn } = await this.prepare()
     if (this.disposed || !this.options.acceptsWork()) {
       return { refused: 'unavailable' }
@@ -217,14 +214,6 @@ export class ProviderRelayHost {
     const relays = [...this.relays.values()]
     this.relays.clear()
     await waitAtMost(Promise.all(relays.map((relay) => relay.dispose())), DISPOSE_WAIT_MS)
-  }
-
-  private staleFor(spec: ProviderRelaySpawnSpec): boolean {
-    const { appVersion, entryPath } = this.options
-    return (
-      (appVersion ?? undefined) !== spec.appVersion ||
-      (entryPath !== null && entryPath !== spec.entryPath)
-    )
   }
 
   private requireRelay(relayId: unknown): ProviderRelay {

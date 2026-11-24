@@ -15,7 +15,8 @@ export function relaySpawnSpec(
   inheritedEnv?: Record<string, string>
 ): ProviderRelaySpawnSpec | null {
   const identity = client.getDaemonIdentity()
-  if (!identity?.providerRelay || identity.appVersion !== appVersion) {
+  // A daemon kept from another bundle relays too, when it speaks the relay protocol.
+  if (!identity?.providerRelay) {
     return null
   }
   if (!launch.cwd) {

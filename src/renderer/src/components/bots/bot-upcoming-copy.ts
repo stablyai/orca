@@ -1,5 +1,6 @@
 // How the Automations card words when things run and ran.
 import { translate } from '@/i18n/i18n'
+import { formatUiNarrowRelativeTime } from '@/i18n/relative-time-format'
 import { uiDateTimeFormat } from '@/i18n/ui-intl-formatters'
 import {
   LOOK_AROUND_EVERY,
@@ -9,6 +10,7 @@ import {
 import { formatWaitTime } from './bot-wait-copy'
 
 const CLOCK = { hour: 'numeric', minute: '2-digit' } as const
+const CLOCK_DATE = { month: 'short', day: 'numeric' } as const
 
 /** "Today at 4:00 PM", "Tomorrow at 9:00 AM", then the day: "Fri 5 PM", "Nov 14, 5 PM". */
 export function upcomingAt(at: number, now = Date.now()): string {
@@ -23,6 +25,46 @@ export function upcomingAt(at: number, now = Date.now()): string {
 }
 
 const HOUR = { hour: 'numeric' } as const
+const WEEKDAY_CLOCK = { weekday: 'short', ...CLOCK } as const
+const WEEKDAY_HOUR = { weekday: 'short', ...HOUR } as const
+const WEEKDAY = { weekday: 'short' } as const
+const MINUTE_MS = 60_000
+
+/** Calendar days from `now`'s day to `at`'s, so a daylight-saving day still counts as one. */
+function daysAhead(at: number, now: number): number {
+  const from = new Date(now)
+  from.setHours(0, 0, 0, 0)
+  const to = new Date(at)
+  to.setHours(0, 0, 0, 0)
+  return Math.round((to.getTime() - from.getTime()) / 86_400_000)
+}
+
+/** A row's next run, short enough for its end: "in 12m", "6:30 PM" or "3 PM" today, "Thu 3 AM"
+ *  tomorrow (never read as today), "Fri" within the week, then "Nov 24". */
+export function upcomingShort(at: number, now = Date.now()): string {
+  const ahead = at - now
+  if (ahead < 60 * MINUTE_MS) {
+    return formatUiNarrowRelativeTime(
+      Math.min(59, Math.max(1, Math.ceil(ahead / MINUTE_MS))),
+      'minute'
+    )
+  }
+  const onTheHour = new Date(at).getMinutes() === 0
+  const days = daysAhead(at, now)
+  const options =
+    days === 0
+      ? onTheHour
+        ? HOUR
+        : CLOCK
+      : days === 1
+        ? onTheHour
+          ? WEEKDAY_HOUR
+          : WEEKDAY_CLOCK
+        : days <= 6
+          ? WEEKDAY
+          : CLOCK_DATE
+  return uiDateTimeFormat(options).format(at)
+}
 
 function hourText(hour: number): string {
   const at = new Date()
@@ -62,8 +104,6 @@ export function everyText(setting: Pick<BotLookAround, 'every' | 'weekdaysOnly'>
 }
 
 export const pausedText = (): string => translate('bots.automations.paused', 'Paused')
-
-const CLOCK_DATE = { month: 'short', day: 'numeric' } as const
 
 /** "Ran 6:00 PM" today, "Ran yesterday", then "Ran Nov 11". */
 export function ranText(at: number, now = Date.now()): string {

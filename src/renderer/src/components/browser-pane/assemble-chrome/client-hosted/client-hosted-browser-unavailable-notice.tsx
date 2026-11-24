@@ -23,11 +23,13 @@ import { BROWSER_SCREENCAST_RUNTIME_CAPABILITY } from '../../../../../../shared/
 
 /** No guest exists here to retry; offer reopening on a capable server when hosting is unavailable or belongs to another desktop. */
 export function ClientHostedBrowserUnavailableNotice({
+  browserPageId,
   runtimeEnvironmentId,
   worktreeId,
   reopenUrl,
   placementHostClientId
 }: {
+  browserPageId: string
   runtimeEnvironmentId: string
   worktreeId: string
   reopenUrl: string
@@ -89,6 +91,7 @@ export function ClientHostedBrowserUnavailableNotice({
           <>
             <div className="text-xs leading-5 text-muted-foreground">{reopenOnServerCaveat(t)}</div>
             <ReopenBrowserPageOnServerButton
+              browserPageId={browserPageId}
               environmentId={runtimeEnvironmentId}
               worktreeId={worktreeId}
               reopenUrl={reopenUrl}

@@ -3,10 +3,7 @@ import {
   spawnRelayedCodexAppServerConnection
 } from '../../app-server/codex-app-server-connection'
 import { sharedCodexServerPool } from '../../app-server/shared-servers/codex-shared-server-pool'
-import {
-  CodexSharedServerUncontainedError,
-  windowsSharedServersAvailable
-} from '../../app-server/shared-servers/codex-shared-server-windows-job'
+import { CodexSharedServerUncontainedError } from '../../app-server/shared-servers/codex-shared-server-windows-job'
 import { codexSkillRoots } from '../launch/codex-structured-skill-roots'
 import type {
   CodexStructuredLaunch,
@@ -22,9 +19,9 @@ export function opensSharedCodexServer(open: CodexConnectionOpen): boolean {
   return sharedOpeners.has(open)
 }
 
-/** Off, or a custom Codex command: the chat spawns its own app-server (relayed on macOS and
- *  Linux). On: it leases a thread on a shared one. Windows shares only while each shared server's
- *  tree can be held in a job; otherwise it, too, keeps one server per chat. */
+/** Off, a custom Codex command, or Windows: the chat spawns its own app-server (relayed on macOS
+ *  and Linux). On: it leases a thread on a shared one. Windows can't tell one chat's processes from
+ *  another's under a shared server, so its Stop couldn't prove the chat's commands ended. */
 export function codexConnectionOpener(
   deps: Pick<CodexStructuredSessionAdapterDeps, 'openConnection' | 'sharedServers'>,
   sessionId: string,
@@ -35,7 +32,6 @@ export function codexConnectionOpener(
   /** The chat's start: cancelled or superseded, or its Stop aborted the signal. */
   startup: { attempt?: { readonly cancelled: boolean }; signal?: AbortSignal | undefined } = {},
   platform: NodeJS.Platform = process.platform,
-  windowsSharing: () => boolean = windowsSharedServersAvailable,
   pool: () => Pick<ReturnType<typeof sharedCodexServerPool>, 'open'> = sharedCodexServerPool
 ): CodexConnectionOpen {
   if (deps.openConnection) {
@@ -43,13 +39,10 @@ export function codexConnectionOpener(
   }
   // A chat's own app-server runs under the terminal daemon where it can, so it survives a restart.
   // Windows launches its own as always, and so does a bot's chat: its grants end with this app.
-  if (launch.customCommand || deps.sharedServers?.() !== true) {
+  if (launch.customCommand || platform === 'win32' || deps.sharedServers?.() !== true) {
     return platform === 'win32' || launch.appBoundGrants
       ? spawnCodexAppServerConnection
       : spawnRelayedCodexAppServerConnection(sessionId)
-  }
-  if (platform === 'win32' && !windowsSharing()) {
-    return spawnCodexAppServerConnection
   }
   const skillRoots = codexSkillRoots({
     ...(launch.visuals ? { visualsSkillsRoot: launch.visuals.skill.skillsRoot } : {}),

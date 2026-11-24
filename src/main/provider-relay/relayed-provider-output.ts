@@ -224,7 +224,14 @@ export class RelayedProviderOutput {
     let line = given
     // The floor reads each line as it is handed on: acks only ever cover what was.
     if (line && seq !== null) {
-      line = this.continuation?.line(seq, line, this.options.ackFloor) ?? line
+      const lines = this.continuation?.lines(seq, line, this.options.ackFloor) ?? [line]
+      line = lines.pop() ?? line
+      // Lines a continuation adds before this one go out ahead of it, under its seq.
+      for (const added of lines) {
+        this.options.ackFloor?.observe(seq, added)
+        this.options.stdout.push(`${added}\n`)
+        this.consumption.pushed(true, this.pushedSeq)
+      }
       this.options.ackFloor?.observe(seq, line)
     }
     if (line) {

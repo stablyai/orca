@@ -1,15 +1,14 @@
 import { createReadStream } from 'node:fs'
 import { open, rename, unlink, type FileHandle } from 'node:fs/promises'
+import { SPOOL_ROW_PREFIX_CHARS, SPOOL_ROW_SEQ } from './provider-relay-spool-row'
 
-/** Each row starts with the seq the spool wrote, so it is read without parsing the line. */
-const ROW_SEQ = /^\{"seq":(\d+),/
-/** Longer than any row's `{"seq":<n>,` prefix, so a row is decided once this much of it is read. */
-const ROW_PREFIX_CHARS = 32
 const READ_CHUNK_BYTES = 64 * 1024
 
 /** Streams rows through, keeping those after `acked`; a row is never joined, however long. */
 class RowFilter {
   bytes = 0
+  /** Rows left out, so the spool can debit what each was charged beyond its bytes. */
+  dropped = 0
   /** The start of a row too short yet to show its seq; written with the row once it is decided. */
   private undecided = ''
   private keep: boolean | null = null
@@ -27,13 +26,14 @@ class RowFilter {
     let text = piece
     if (this.keep === null) {
       text = this.undecided + piece
-      if (text.length < ROW_PREFIX_CHARS && !endsRow) {
+      if (text.length < SPOOL_ROW_PREFIX_CHARS && !endsRow) {
         this.undecided = text
         return
       }
       this.undecided = ''
-      const seq = ROW_SEQ.exec(text.slice(0, ROW_PREFIX_CHARS))
+      const seq = SPOOL_ROW_SEQ.exec(text.slice(0, SPOOL_ROW_PREFIX_CHARS))
       this.keep = seq !== null && Number(seq[1]) > this.acked
+      this.dropped += this.keep ? 0 : 1
     }
     if (this.keep && text.length > 0) {
       await this.write(text)
@@ -78,12 +78,13 @@ class RowFilter {
 /**
  * Rewrites the spool file with only rows after `acked`, so a file kept open across acks (lines kept
  * for a restart) never grows past what is still kept. It streams in chunks and yields between them,
- * so no file or row size holds the daemon's event loop. Returns the file's size before and after.
+ * so no file or row size holds the daemon's event loop. Returns the file's size before and after,
+ * and how many rows it left out.
  */
 export async function compactSpoolFile(
   path: string,
   acked: number
-): Promise<{ before: number; after: number }> {
+): Promise<{ before: number; after: number; dropped: number }> {
   const next = `${path}.compact`
   const out = await open(next, 'w', 0o600)
   const rows = new RowFilter(out, acked)
@@ -111,5 +112,5 @@ export async function compactSpoolFile(
     await unlink(next).catch(() => {})
     throw error
   }
-  return { before, after: rows.bytes }
+  return { before, after: rows.bytes, dropped: rows.dropped }
 }

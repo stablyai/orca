@@ -3,6 +3,7 @@ import { cn } from '@/lib/class-names'
 import { quietBotAnswer } from '../../../../../../shared/bot-quiet-result'
 import { isRootAgentJournalItem } from '../../../../../../shared/agent-session/journal/agent-session-journal-producer'
 import { NativeChatForkSlotContext } from '../actions/native-chat-fork-context'
+import { NativeChatBotAnswerContext } from './native-chat-bot-answer-context'
 import { nativeChatAgentRowWords } from './native-chat-message-row-words'
 import type { NativeChatMessage } from '../../../../../../shared/native-chat/native-chat-types'
 import type { deriveNativeChatRowContent } from '../../../../../../shared/native-chat/transcript/row-content/native-chat-row-content'
@@ -69,8 +70,9 @@ export function NativeChatAssistantMessageRow({
   const words = nativeChatAgentRowWords(message, t)
   const streaming = messageIsStreaming(message, activeTurnIsWorking, trailingRun)
   const inBotHome = useBotForWorkspace(useNativeChatVisualOwner()?.worktreeId ?? null) !== null
+  const inBotChat = useContext(NativeChatBotAnswerContext) || inBotHome
   const quiet = quietBotAnswer(words, {
-    botAnswer: inBotHome && message.role === 'assistant',
+    botAnswer: inBotChat && message.role === 'assistant',
     streaming,
     inAutomationTurn: props.inAutomationTurn === true,
     inActingTurn: props.inActingTurn === true

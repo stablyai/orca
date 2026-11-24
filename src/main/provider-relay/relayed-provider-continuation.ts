@@ -11,6 +11,11 @@ export type ProviderRelayItemContinuation = {
   rekey(line: string, tag: string): string
   /** A start of that continuation, as the ack floor reads one, so it is kept from its first line. */
   start(line: string, tag: string): string
+  /**
+   * The lines that end a moved item, in place of its end: by default the end, re-keyed. A provider
+   * whose end carries the whole item can put it on the saved row and retire the continuation.
+   */
+  finish?(line: string, tag: string): string[]
 }
 
 /**
@@ -29,19 +34,20 @@ export class RelayedProviderContinuation {
     private readonly truncatedThrough: number
   ) {}
 
-  line(seq: number, line: string, floor: ProviderRelayAckFloor | undefined): string {
+  /** The lines to hand on for this one: itself, re-keyed, or a moved item's finishing lines. */
+  lines(seq: number, line: string, floor: ProviderRelayAckFloor | undefined): string[] {
     const item = this.hook.item(line)
     if (!item || seq <= this.truncatedThrough) {
-      return line
+      return [line]
     }
     if (item.start) {
       this.started.add(item.key)
-      return line
+      return [line]
     }
     let tag = this.moved.get(item.key)
     if (tag === undefined) {
       if (this.started.has(item.key)) {
-        return line
+        return [line]
       }
       tag = `relay:${this.relayId}:${seq}`
       this.moved.set(item.key, tag)
@@ -50,7 +56,8 @@ export class RelayedProviderContinuation {
     if (item.end) {
       this.moved.delete(item.key)
       this.started.add(item.key)
+      return this.hook.finish?.(line, tag) ?? [this.hook.rekey(line, tag)]
     }
-    return this.hook.rekey(line, tag)
+    return [this.hook.rekey(line, tag)]
   }
 }

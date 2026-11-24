@@ -524,26 +524,23 @@ describe('shared Codex app-servers', () => {
     expect(connB.closed).toBe(false)
   })
 
-  it('never shares a server with the switch off, for a custom Codex command, or on Windows without the job exports', () => {
+  it('never shares a server with the switch off, for a custom Codex command, or on Windows', () => {
     const sharingOn = { sharedServers: () => true }
+    // On macOS and Linux the chat's own server is relayed on purpose; it is never a shared one.
     for (const platform of ['linux', 'darwin', 'win32'] as const) {
       const opener = codexConnectionOpener(sharingOn, 's', { customCommand: true }, {}, platform)
       expect(opensSharedCodexServer(opener)).toBe(false)
     }
-    expect(
-      codexConnectionOpener({ sharedServers: () => true }, 's', {}, {}, 'win32', () => false)
-    ).toBe(spawnCodexAppServerConnection)
+    // Windows can't attribute a process to one chat, so a shared server's Stop couldn't prove it.
+    const pool = () => ({ open: () => Promise.reject(new Error('shared')) })
+    expect(codexConnectionOpener(sharingOn, 's', {}, {}, 'win32', pool)).toBe(
+      spawnCodexAppServerConnection
+    )
     expect(
       opensSharedCodexServer(
         codexConnectionOpener({ sharedServers: () => false }, 's', {}, {}, 'linux')
       )
     ).toBe(false)
-    // Off on Windows never even loads the job addon.
-    const windowsSharing = vi.fn(() => true)
-    expect(
-      codexConnectionOpener({ sharedServers: () => false }, 's', {}, {}, 'win32', windowsSharing)
-    ).toBe(spawnCodexAppServerConnection)
-    expect(windowsSharing).not.toHaveBeenCalled()
   })
 
   it("marks a shared opener, so a chat's recovery never signals the server it shares", () => {
@@ -823,8 +820,7 @@ describe('shared Codex app-servers', () => {
         's',
         {},
         { signal: AbortSignal.abort() },
-        'win32',
-        () => true,
+        'linux',
         () => pool
       )
       // A fallback would try to spawn this missing command and fail differently.

@@ -8,15 +8,26 @@ import { journalDomainContextHead } from './journal-sql-continuation-context'
 import type { JournalSqlScope } from './journal-sql-scope'
 import type { SqliteRow } from '../../sqlite/sqlite-statement'
 import { readOperationWindowItems } from './journal-operation-window-rows'
+import { marginBefore } from './journal-operation-window-turn-ahead'
 import { marginAfter } from './journal-operation-window-end'
 import {
   type Send,
-  operationSends,
+  newestTurnsOnly,
+  RECENT_FAMILY_CAP,
+  boundedSends,
+  placedSends,
   readSend,
-  sendHeads,
+  seedSends,
+  wholeSends,
   windowSends,
   withSends
 } from './journal-operation-window-sends'
+import {
+  keptSends,
+  reachesBefore,
+  recentSends,
+  unanswered
+} from './journal-operation-window-held-sends'
 
 /** Where a reader's interest starts; the window runs from a turn ahead of the earliest to the head. */
 export type JournalOperationWindowAnchors = {
@@ -37,6 +48,9 @@ export type JournalOperationWindowAnchors = {
   /** A send still unanswered from before the anchors (one Orca died handing over) neither widens
    *  the window nor comes along; later ones, and ones with no rows yet, still do. */
   anchorsOnly?: boolean
+  /** With `latestTurns` alone: a read that would take the whole conversation's sends throws
+   *  `JournalWindowNotIndexed` instead, for a reader whose answer is optional and must stay cheap. */
+  indexedOnly?: boolean
   /** No turn ahead of the anchors: for readers that weigh only the anchored turns' own rows. */
   withoutTurnAhead?: boolean
   /** Tool calls come without their output text (its size and digest stay), which SQLite drops
@@ -83,12 +97,22 @@ export function readJournalDomainOperationWindow(
   ) {
     throw new Error('a window through its anchored turns is anchored by operation ids alone')
   }
-  let sends = bounded ? operationSends(scope, anchors) : sendHeads(scope)
+  // A window of the newest turns alone reads the sends placed in it and the unsettled ones, each by
+  // index, so reading whom the newest turn acts for costs the same however long the chat ran before.
+  const newestOnly = !bounded && newestTurnsOnly(anchors)
+  if (anchors.indexedOnly && !newestOnly) {
+    throw new Error('an indexed-only window is anchored by its newest turns alone')
+  }
+  const seeded = seedSends(scope, anchors, newestOnly)
+  const recent = newestOnly && seeded !== null
+  let indexed = bounded || recent
+  let sends = seeded ?? wholeSends(scope, anchors)
   const operations = resolveOperations(scope, sends, anchors)
   // Where each anchored send's own turn may reach: past the first turn after it when it names its
   // turn (a turn row naming it, or its answeredInTurn), past the second when it doesn't (an older
   // import, placed by position, whose own turn may be that first one).
   const reaches: { last: number; placed: boolean }[] = []
+  const anchorAt = anchorPositions(scope, anchors)
   const anchored = [
     ...sends.flatMap((send) => {
       if (operations.has(send.messageId)) {
@@ -105,14 +129,37 @@ export function readJournalDomainOperationWindow(
       }
       return unanswered(send) && !anchors.anchorsOnly ? send.positions : []
     }),
-    ...anchorPositions(scope, anchors)
+    ...anchorAt
   ]
   const earliest = anchored.length > 0 ? Math.min(...anchored) : null
+  const fresh = recent
+    ? recentSends(scope, sends, operations, earliest, Math.min(...anchorAt), !!anchors.anchorsOnly)
+    : sends
+  if (fresh === null) {
+    indexed = false
+  }
+  sends = fresh ?? wholeSends(scope, anchors)
   let start =
-    earliest === null ? null : anchors.withoutTurnAhead ? earliest : marginBefore(scope, earliest)
+    earliest === null
+      ? null
+      : anchors.withoutTurnAhead
+        ? earliest
+        : marginBefore(scope, earliest, anchors.indexedOnly)
   const end = earliest !== null && bounded ? windowEnd(scope, reaches) : null
-  if (bounded && start !== null) {
-    sends = withSends(scope, sends, windowSends(scope, start, end ?? Number.MAX_SAFE_INTEGER))
+  if (indexed && start !== null) {
+    // A newest-turns window takes the whole read once a family runs older than it, or past the cap.
+    const placed = placedSends(
+      scope,
+      start,
+      end ?? Number.MAX_SAFE_INTEGER,
+      recent ? RECENT_FAMILY_CAP + 1 : undefined
+    )
+    const older = (send: Send) => reachesBefore([send], null, start ?? Infinity)
+    const walked = !recent
+      ? withSends(scope, sends, placed ?? [])
+      : placed && boundedSends(scope, sends, placed, { cap: RECENT_FAMILY_CAP, older })
+    indexed = walked !== null
+    sends = walked ?? wholeSends(scope, anchors)
   }
   let kept: Send[] = []
   // A held send's own rows, and the head it was sent at, are held too: a turn may claim a send by
@@ -127,7 +174,11 @@ export function readJournalDomainOperationWindow(
     if (next === null || (start !== null && next >= start)) {
       break
     }
-    if (bounded && start !== null) {
+    if (recent && indexed) {
+      // Widening a newest-turns window means a long stretch: one whole read is cheaper.
+      indexed = false
+      sends = wholeSends(scope, anchors)
+    } else if (indexed && start !== null) {
       // The sends placed in the stretch the window just took on.
       sends = withSends(scope, sends, windowSends(scope, next, start))
     }
@@ -149,48 +200,6 @@ export function readJournalDomainOperationWindow(
       end === null &&
       (first === null || first === undefined || (start !== null && start <= Number(first)))
   }
-}
-
-/** Handed over and not answered: its turn is still to be attributed. */
-function unanswered(send: Send): boolean {
-  return send.dispatchState === 'pending' || (send.dispatchState === 'unknown' && !send.recovered)
-}
-
-/** The sends the window holds: anchored, unanswered or placed in it, with every send sharing a
- *  provider id or queued card with one, since attribution reads the first or last of those. */
-function keptSends(
-  sends: readonly Send[],
-  operations: ReadonlySet<string>,
-  start: number | null,
-  end: number | null,
-  anchorsOnly: boolean
-): Send[] {
-  const after = (position: number) =>
-    start !== null && position >= start && (end === null || position < end)
-  const kept = new Set(
-    sends.filter(
-      (send) =>
-        operations.has(send.messageId) ||
-        send.positions.some(after) ||
-        (unanswered(send) && (!anchorsOnly || send.positions.every(after)))
-    )
-  )
-  for (let grown = true; grown;) {
-    grown = false
-    const providers = new Set([...kept].flatMap((send) => send.providerItemId ?? []))
-    const cards = new Set([...kept].flatMap((send) => send.queuedMessageId ?? []))
-    for (const send of sends) {
-      if (
-        !kept.has(send) &&
-        ((send.providerItemId !== null && providers.has(send.providerItemId)) ||
-          (send.queuedMessageId !== null && cards.has(send.queuedMessageId)))
-      ) {
-        kept.add(send)
-        grown = true
-      }
-    }
-  }
-  return sends.filter((send) => kept.has(send))
 }
 
 /** Each operation's sends (its own id, every send that carried it as a queued card, and the card's
@@ -311,23 +320,6 @@ function observedSincePosition(scope: JournalSqlScope, since: number): number {
     const last = rows.at(-1)!
     before = [Number(last.sequence), Number(last.sequence_index), Number(last.ordinal)]
   }
-}
-
-/** The prompt ahead of the root turn before `sequence`: a held turn's predecessor and its opener. */
-function marginBefore(scope: JournalSqlScope, sequence: number): number {
-  const turn = scope.db
-    .prepare(`SELECT MAX(sequence) AS sequence FROM journal_items INDEXED BY journal_items_status_turn
-    WHERE session_id=? AND epoch=? AND hidden=0 AND turn_id IS NOT NULL AND root=1 AND sequence<?`)
-    .get(...scope.prefix, sequence)?.sequence
-  if (turn === null || turn === undefined) {
-    return 0
-  }
-  const user = scope.db
-    .prepare(`SELECT MAX(sequence) AS sequence FROM journal_items INDEXED BY journal_items_root_position
-    WHERE session_id=? AND epoch=? AND hidden=0 AND root=1 AND kind='message' AND message_role='user'
-    AND sequence<?`)
-    .get(...scope.prefix, Number(turn))?.sequence
-  return user === null || user === undefined ? 0 : Number(user)
 }
 
 /** The furthest any anchored send's own turn may reach; null (the head) when one may reach it. */

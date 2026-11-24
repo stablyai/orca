@@ -47,9 +47,13 @@ export type RemoteDropdownCopy = {
   useForcePushToSync: string
   branchUpToDate: string
   rebaseFromNamedBase: (baseRef: string) => string
+  // Desktop label; mobile keeps "Rebase from".
+  rebaseOntoNamedBase?: (baseRef: string) => string
   rebaseFromBase: string
   rebaseChooseRemoteBase: string
   rebaseDirtyHint: string
+  // Desktop reason when Git would refuse (no rebase.autoStash).
+  rebaseCommitOrStashFirst?: string
   rebaseWithLatestFrom: (baseRef: string) => string
   fetch: string
   fetchTitle: string
@@ -113,9 +117,11 @@ export const ENGLISH_REMOTE_DROPDOWN_COPY: RemoteDropdownCopy = {
   useForcePushToSync: 'Use Force Push — remote only has older copies of local commits',
   branchUpToDate: 'Branch is up to date',
   rebaseFromNamedBase: (baseRef) => `Rebase from ${baseRef}`,
+  rebaseOntoNamedBase: (baseRef) => `Rebase onto ${baseRef}`,
   rebaseFromBase: 'Rebase from Base',
   rebaseChooseRemoteBase: 'Choose a remote base branch to rebase from',
   rebaseDirtyHint: 'Try rebasing; git may require committing or stashing local changes first',
+  rebaseCommitOrStashFirst: 'Commit or stash changes first',
   rebaseWithLatestFrom: (baseRef) => `Rebase current branch with latest commits from ${baseRef}`,
   fetch: 'Fetch',
   fetchTitle: 'Fetch from remote without merging',

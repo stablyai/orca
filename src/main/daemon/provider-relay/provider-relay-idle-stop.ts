@@ -106,8 +106,9 @@ export class ProviderRelayIdleStop {
   disarm(): void {
     // A takeover or a dropped stream tracked nothing new, so what the last app was handed still stands.
     this.carried = this.work?.keys() ?? this.carried
-    // Ends the last app already replayed are gone; a fresh window starts its own list.
-    this.ended = this.work ? this.work.endedKeys() : this.ended
+    // Ends are handed to one app: a window that tracked nothing (a dropped stream, a takeover)
+    // passes none on, since that app may have acked them already.
+    this.ended = this.work?.endedKeys() ?? null
     this.armed = false
     this.waitingForLine = false
     this.work = null

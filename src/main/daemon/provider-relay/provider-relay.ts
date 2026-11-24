@@ -142,6 +142,8 @@ export class ProviderRelay {
     // Clamped before any wait: output arriving during the attach must stay above the cursor.
     const cursor = Math.min(fromSeq, this.spool.nextSeq - 1)
     this.idleStop.disarm()
+    // Read before the replay: lines released later through this client's own acks reached it.
+    const { truncatedThrough } = this.spool
     this.release()
     // Live records wait for this attach's own replay, or they would reach the new client twice.
     this.spool.suspend()
@@ -179,21 +181,15 @@ export class ProviderRelay {
     if (this.exitAnnounced) {
       this.sendExit()
     }
-    return this.attachResult(replayThroughSeq, pending, initializeResult !== null)
-  }
-
-  private attachResult(
-    replayThroughSeq: number,
-    pending: ProviderRelayRecord[],
-    initializeResultSent: boolean
-  ): ProviderRelayAttachResult {
     return {
       replayThroughSeq,
       pending: pending.map((record) => record.seq),
       maxClientRequestId: this.pending.maxClientRequestId,
-      initializeResultSent,
+      initializeResultSent: initializeResult !== null,
       stderrTail: this.options.managed.stderrTail(),
       exit: this.exitStatus,
+      // Lines the client already had before its cursor were never missing from its replay.
+      ...(truncatedThrough > cursor ? { truncatedThrough } : {}),
       ...this.idleStop.carriedWork()
     }
   }
