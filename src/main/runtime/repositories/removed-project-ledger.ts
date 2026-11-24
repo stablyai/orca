@@ -31,10 +31,11 @@ export async function readProjectIdentity(
   }
 }
 
-/** Call before the project row is deleted; call the returned function once teardown has finished. */
+/** Call before the project row is deleted (`openSessionIds`: the chats with an open tab right now); call the returned function once teardown has finished. */
 export function beginProjectRemoval(
   repo: Pick<Repo, 'id' | 'path' | 'kind' | 'executionHostId' | 'connectionId'>,
-  readIdentity: typeof readProjectIdentity = readProjectIdentity
+  readIdentity: typeof readProjectIdentity = readProjectIdentity,
+  openSessionIds: readonly string[] = []
 ): () => void {
   let finish = (): void => {}
   const settled = new Promise<void>((resolve) => {
@@ -46,7 +47,8 @@ export function beginProjectRemoval(
     path: repo.path,
     kind,
     executionHostId: getRepoExecutionHostId(repo),
-    identity
+    identity,
+    openSessionIds
   }))
   removed.set(repo.id, { tombstone, settled })
   return finish

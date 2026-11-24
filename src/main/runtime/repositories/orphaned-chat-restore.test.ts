@@ -11,7 +11,7 @@ import type { Repo } from '../../../shared/repository/repo-types'
 import { findAutomationRepo } from '../../../shared/automations/ownership/automation-repo-target'
 import { applyAgentSessionRecordCommand } from '../agent-session/records/agent-session-record-command'
 import type { AgentSessionRecord } from '../../../shared/agent-session/lifecycle/agent-session-record'
-import { restoreOrphanedChats } from './orphaned-chat-restore'
+import { listOpenChatSessionIds, restoreOrphanedChats } from './orphaned-chat-restore'
 import { beginProjectRemoval, resetRemovedProjectLedgerForTests } from './removed-project-ledger'
 
 const OLD = '382f7d9d-4836-4375-9a02-529501637cc7'
@@ -124,6 +124,80 @@ describe('restoreOrphanedChats', () => {
         readIdentity: sameRepo
       })
     ).toBe(0)
+  })
+})
+
+describe('chats that were open when the project was removed', () => {
+  beforeEach(() => resetRemovedProjectLedgerForTests())
+
+  const twoChats = () => {
+    const records = ['chat-1', 'chat-2', 'chat-3'].map((sessionId) => ({
+      sessionId,
+      location: { executionHostId: 'local', workspaceId: `${OLD}::${PATH}` }
+    }))
+    return {
+      records,
+      listConversations: () => records,
+      updateRecord: vi.fn(
+        async (sessionId: string, command: { kind: 'workspace'; from: string; to: string }) => {
+          const record = records.find((entry) => entry.sessionId === sessionId)
+          if (record) {
+            record.location.workspaceId = command.to
+          }
+        }
+      )
+    }
+  }
+
+  it('lists the open chat tabs of one project in tab order', () => {
+    const host = {
+      listSessionTabs: () => [
+        { sessionId: 'a', workspaceId: `${OLD}::${PATH}` },
+        { sessionId: 'b', workspaceId: `${NEW}::/other` },
+        { sessionId: 'c', workspaceId: `${OLD}::${PATH}--x` }
+      ]
+    }
+    expect(listOpenChatSessionIds(OLD, () => host)).toEqual(['a', 'c'])
+    expect(listOpenChatSessionIds(OLD, () => null)).toEqual([])
+  })
+
+  it('reopens, in the old order, only the chats whose tabs the removal closed', async () => {
+    beginProjectRemoval(oldRepo, sameRepo, ['chat-2', 'chat-1'])()
+    const showSessionTabs = vi.fn(async () => {})
+    await restoreOrphanedChats(newRepo, {
+      isLive: (id) => id === NEW,
+      chatStore: () => twoChats(),
+      chatTabs: () => ({ showSessionTabs }),
+      readIdentity: sameRepo
+    })
+    expect(showSessionTabs).toHaveBeenCalledTimes(1)
+    expect(showSessionTabs).toHaveBeenCalledWith(['chat-2', 'chat-1'])
+  })
+
+  it('reopens nothing when no chat was open, and a failed reopen does not throw', async () => {
+    beginProjectRemoval(oldRepo, sameRepo)()
+    const showSessionTabs = vi.fn(async () => {
+      throw new Error('boom')
+    })
+    await expect(
+      restoreOrphanedChats(newRepo, {
+        isLive: (id) => id === NEW,
+        chatStore: () => twoChats(),
+        chatTabs: () => ({ showSessionTabs }),
+        readIdentity: sameRepo
+      })
+    ).resolves.toBe(3)
+    expect(showSessionTabs).not.toHaveBeenCalled()
+    resetRemovedProjectLedgerForTests()
+    beginProjectRemoval(oldRepo, sameRepo, ['chat-1'])()
+    await expect(
+      restoreOrphanedChats(newRepo, {
+        isLive: (id) => id === NEW,
+        chatStore: () => twoChats(),
+        chatTabs: () => ({ showSessionTabs }),
+        readIdentity: sameRepo
+      })
+    ).resolves.toBe(3)
   })
 })
 

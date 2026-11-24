@@ -5,6 +5,7 @@ import type { AgentSessionRecord } from '../../../../shared/agent-session/lifecy
 import type { AgentSessionRecordStore } from '../../../runtime/agent-session/records/agent-session-record-store'
 import type { AgentSessionTabVisibilityOptions } from '../../../runtime/agent-session/records/agent-session-tab-table'
 import type { StructuredAgentSessionLogger } from './structured-agent-session-logger'
+import { emitStructuredSessionTabsShown } from './structured-session-tabs-shown'
 
 /** Retire durable tabs/restart offers together; advisory recovery bookkeeping must never block chat close. */
 export async function setStructuredAgentSessionTabVisibility(
@@ -104,6 +105,12 @@ export function createStructuredAgentSessionTabSurface(
     showSessionTabs: async (sessionIds: readonly string[]) => {
       const result = await host.deps.store.showSessionTabs(sessionIds)
       sessionIds.forEach(delivery.publishStatus)
+      emitStructuredSessionTabsShown(sessionIds, (error) =>
+        host.deps.logger.warn('a chat tab show listener failed', {
+          scope: 'tab-shown-listener',
+          error
+        })
+      )
       return result
     },
     notifySessionTabHidden: (sessionId: string, tabId?: string): void =>

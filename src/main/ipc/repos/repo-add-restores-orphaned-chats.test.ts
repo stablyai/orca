@@ -127,4 +127,15 @@ describe('repos:add (desktop Add project path) re-keys a removed project chats (
     finishRemoval()
     await vi.waitFor(() => expect(chats.records[0].location.workspaceId).toBe(`${repo.id}::${dir}`))
   })
+
+  it('reopens the chat tabs the removal closed (sidebar rows come back)', async () => {
+    const chats = fakeChats(`${OLD}::${dir}`)
+    const showSessionTabs = vi.fn(async () => {})
+    chatHost.current = { deps: { store: chats }, showSessionTabs }
+    beginProjectRemoval({ id: OLD, path: dir, kind: 'folder' } as Repo, undefined, ['chat-1'])()
+
+    await addViaIpc(dir)
+
+    await vi.waitFor(() => expect(showSessionTabs).toHaveBeenCalledWith(['chat-1']))
+  })
 })

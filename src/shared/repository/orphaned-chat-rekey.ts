@@ -15,6 +15,8 @@ export type RemovedProjectTombstone = {
   executionHostId: string
   /** Git: root commit(s); folder: filesystem identity. Null when it could not be read: never matches. */
   identity: string | null
+  /** Chats that had an open tab when the project was removed, in tab order (the removal closes them). */
+  openSessionIds?: readonly string[]
 }
 
 export type ChatLocationView = {

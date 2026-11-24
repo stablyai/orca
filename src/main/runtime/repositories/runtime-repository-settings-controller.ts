@@ -15,6 +15,7 @@ import { teardownStops } from '../workspaces/removal/owned-session-teardown-poli
 import { assertNoProjectWorktreeCreate } from '../../workspaces/creation/worktree-create-in-flight'
 import { releaseWorktreeCreatePreparationsForRepo } from '../../workspaces/creation/preparation/worktree-create-preparation-project-removal'
 import { beginProjectRemoval } from './removed-project-ledger'
+import { listOpenChatSessionIds } from './orphaned-chat-restore'
 
 const PROJECT_TERMINAL_STOP_BUDGET_MS = 10_000
 
@@ -201,13 +202,15 @@ export class RuntimeRepositorySettingsController {
           console.warn('[runtime] failed to stop project terminals on removal', error)
         })
     }
+    // The removal closes this project's chat tabs; a re-add reopens exactly these (#40409).
+    const openChatSessionIds = listOpenChatSessionIds(repo.id)
     await stopProjectTerminals(false)
     // Recheck both fences after stop awaits.
     assertWslMoveRepoWritable(store, repo)
     assertNoProjectWorktreeCreate(repo)
     releaseWorktreeCreatePreparationsForRepo(store, repo)
     // A re-add of this project during the teardown below waits for it before taking its chats.
-    const removalSettled = beginProjectRemoval(repo)
+    const removalSettled = beginProjectRemoval(repo, undefined, openChatSessionIds)
     try {
       store.removeProjectForHost(repo)
       // Sweep again for terminals spawned during stop. Retire chats only after the final WSL fence because that step is irreversible.
