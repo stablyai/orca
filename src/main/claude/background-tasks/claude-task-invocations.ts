@@ -91,6 +91,11 @@ export class ClaudeTaskInvocations {
       : (this.saved?.background(id, run)?.linkage.parentAgentId ?? this.saved?.parent(id, run))
   }
 
+  /** The journal has a background-task row for it, from an earlier run. */
+  savedAsBackground(id: string): boolean {
+    return this.saved?.background(id) !== undefined
+  }
+
   excludeMonitor(id: string, run?: string): void {
     this.select(id, taskAliasId(run), true).invocation.monitor = true
   }

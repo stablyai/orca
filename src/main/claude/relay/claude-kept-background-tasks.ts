@@ -14,7 +14,8 @@ export function restateKeptClaudeBackgroundTasks(
       type: 'system',
       subtype: 'task_started',
       task_id,
-      is_backgrounded: true,
+      // Foreground commands are open work too; only the journal knows which ran in the background.
+      is_backgrounded: session.childWork.taskInvocations.savedAsBackground(task_id),
       status: 'running'
     }
     session.childWork.observe(frame, session.translator?.childToolOwner)

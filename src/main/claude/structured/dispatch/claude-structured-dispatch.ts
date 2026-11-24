@@ -217,7 +217,7 @@ export async function dispatchClaudeTurn(
       }
       // A choice or message that never reached the kept agent; a CLI control error is reported as is.
       if (keptClaudeAgentCannotTake(session, error)) {
-        return await replaceKeptClaudeAgent(session, input.clientMessageId, error)
+        return await replaceKeptClaudeAgent(session, error)
       }
       if (error instanceof ClaudeEffortValidationError) {
         return {
@@ -255,7 +255,7 @@ export async function dispatchClaudeTurn(
       forgetRetiredWaiter(session, waiter)
       waiter.resolve(null)
       if (keptClaudeAgentRelay(session.connection)) {
-        return await replaceKeptClaudeAgent(session, input.clientMessageId, error)
+        return await replaceKeptClaudeAgent(session, error)
       }
       // Proven unwritten frames are rejected; ambiguous writes remain unknown.
       return { state: 'rejected', ...claudeWriteFailureRejection(error) }
@@ -283,13 +283,12 @@ function keptClaudeAgentCannotTake(session: ClaudeSession, error: unknown): bool
 /** The agent kept from before the restart can't take it: once it is proven ended, a new one does. */
 async function replaceKeptClaudeAgent(
   session: ClaudeSession,
-  clientMessageId: string | undefined,
   error: unknown
 ): Promise<{ state: 'rejected' } & ReturnType<typeof claudeWriteFailureRejection>> {
   if (!(await session.connection.close().catch(() => false))) {
     // Still possibly running: a second agent beside it would split the conversation.
     return { state: 'rejected', ...claudeWriteFailureRejection(error) }
   }
-  noteKeptClaudeAgentReplaced(session, clientMessageId)
+  noteKeptClaudeAgentReplaced(session)
   throw new StructuredAgentSessionInputNotAdmitted(undefined, 'auto')
 }

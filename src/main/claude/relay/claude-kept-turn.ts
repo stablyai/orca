@@ -1,7 +1,11 @@
 import { readAgentJournalTurn } from '../../../shared/agent-session/lifecycle/records/agent-session-turn-record'
 import { isRootAgentJournalItem } from '../../../shared/agent-session/journal/agent-session-journal-producer'
 import type { StructuredAgentSessionHistoryJournal } from '../../native-chat/agent-session-wire/journal-ingress/structured-agent-session-journal-views'
-import type { ClaudeCurrentTurn } from '../structured/turns/claude-turn-lifecycle-item'
+import { agentJournalItemKey } from '../../../shared/agent-session/journal/agent-session-journal-item-key'
+import {
+  claudeTurnLifecycleIdentity,
+  type ClaudeCurrentTurn
+} from '../structured/turns/claude-turn-lifecycle-item'
 
 /**
  * The root turn the last app left running for a kept agent. Its output since then replays into this
@@ -17,6 +21,13 @@ export async function keptClaudeTurn(
   )
   const turn = running ? readAgentJournalTurn(running.body) : null
   if (!running || !turn?.turnId || turn.startedAt === undefined) {
+    return null
+  }
+  // A command's own row (a slash command) ends through its command, not a turn record.
+  if (
+    running.itemId !==
+    agentJournalItemKey(claudeTurnLifecycleIdentity(providerSessionId, turn.turnId))
+  ) {
     return null
   }
   return {

@@ -26,8 +26,17 @@ export function claudeRelayAckFloor(): ProviderRelayAckFloor {
   const open = new Map<string, number>()
   /** Each scope's latest `message_start`, for the tool calls in its later final frames. */
   const starts = new Map<string, number>()
-  /** Unreturned tool calls, by the seq of their message's `message_start`. */
-  const tools = new Map<string, number>()
+  /** Unreturned tool calls, by the seq of their message's `message_start`, and their scope. */
+  const tools = new Map<string, { seq: number; scope: string }>()
+  const closeScope = (scope: string): void => {
+    open.delete(scope)
+    starts.delete(scope)
+    for (const [id, tool] of tools) {
+      if (tool.scope === scope) {
+        tools.delete(id)
+      }
+    }
+  }
   return {
     observe: (seq, line) => {
       // Cheap tests first: only stream starts, final assistant frames and results matter.
@@ -36,7 +45,8 @@ export function claudeRelayAckFloor(): ProviderRelayAckFloor {
         !line.includes('"message_stop"') &&
         !line.includes('"assistant"') &&
         !line.includes('"result"') &&
-        !line.includes('"tool_result"')
+        !line.includes('"tool_result"') &&
+        !line.includes('"task_notification"')
       ) {
         return
       }
@@ -50,15 +60,17 @@ export function claudeRelayAckFloor(): ProviderRelayAckFloor {
         return
       }
       if (frame.type === 'result') {
-        // A turn's end closes every stream it had, including one the CLI never finished.
-        open.clear()
-        starts.clear()
-        tools.clear()
+        // A turn's end closes its own streams, even one the CLI never finished; a background
+        // subagent's work goes on past it.
+        closeScope(scopeOf(frame))
+      } else if (frame.type === 'system' && frame.subtype === 'task_notification') {
+        // A subagent's end closes what it left open under its launching tool call.
+        closeScope(`${String(frame.session_id ?? '')}/${String(frame.tool_use_id ?? '')}`)
       } else if (frame.type === 'assistant') {
         const scope = scopeOf(frame)
         const start = starts.get(scope) ?? seq
         // The CLI sends one final frame per block, before the message's stop.
-        contentIds(frame, 'tool_use', 'id').forEach((id) => tools.set(id, start))
+        contentIds(frame, 'tool_use', 'id').forEach((id) => tools.set(id, { seq: start, scope }))
       } else if (frame.type === 'user') {
         contentIds(frame, 'tool_result', 'tool_use_id').forEach((id) => tools.delete(id))
       } else if (
@@ -79,6 +91,8 @@ export function claudeRelayAckFloor(): ProviderRelayAckFloor {
     // The CLI's keep-alive while a request is open, every 30 s: short, with nothing to save.
     quiet: (line) => line.length < 256 && line.includes('"type":"keep_alive"'),
     floor: () =>
-      open.size === 0 && tools.size === 0 ? null : Math.min(...open.values(), ...tools.values())
+      open.size === 0 && tools.size === 0
+        ? null
+        : Math.min(...open.values(), ...[...tools.values()].map((tool) => tool.seq))
   }
 }

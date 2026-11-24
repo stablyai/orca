@@ -66,5 +66,31 @@ describe('Claude relay ack floor', () => {
     )
     await output.settle()
     expect(acks).toEqual([1, 6, 8, 12])
+    // A background subagent's tool call outlives the turn that launched it, until its end.
+    output.line(
+      'relayData',
+      13,
+      frame({
+        type: 'assistant',
+        session_id: 's',
+        parent_tool_use_id: 'agent-1',
+        message: { content: [{ type: 'tool_use', id: 't2', name: 'Bash' }] }
+      })
+    )
+    output.line('relayData', 14, frame({ type: 'result', session_id: 's' }))
+    await output.settle()
+    expect(acks).toEqual([1, 6, 8, 12])
+    output.line(
+      'relayData',
+      15,
+      frame({
+        type: 'system',
+        subtype: 'task_notification',
+        session_id: 's',
+        tool_use_id: 'agent-1'
+      })
+    )
+    await output.settle()
+    expect(acks).toEqual([1, 6, 8, 12, 15])
   })
 })

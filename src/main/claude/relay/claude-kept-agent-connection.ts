@@ -1,5 +1,4 @@
 import { finished } from 'node:stream/promises'
-import { randomUUID } from 'node:crypto'
 import type { StructuredAgentSessionEventSink } from '../../native-chat/agent-session-wire/journal-ingress/structured-agent-session-event-sink'
 import {
   openClaudeStreamJsonConnection,
@@ -23,8 +22,6 @@ import { createClaudeControlSurface } from '../sdk-transport/claude-agent-sdk-co
 import { relayedClaudeChildTree } from './claude-relayed-child-tree'
 import { DaemonProtocolError } from '../../daemon/protocol/daemon-errors'
 
-const REPLAY_SLICE_MS = 8
-
 /** Present on a connection to an agent that kept running while Orca was closed. */
 export type ClaudeKeptAgentRelay = {
   /** Lets the kept output through once the chat can route it. */
@@ -44,13 +41,14 @@ export function keptClaudeAgentRelay(
   return isKeptConnection(connection) ? connection.kept : null
 }
 
-/** The one note a chat shows when its kept agent couldn't take a message and a new one did. */
-export function noteKeptClaudeAgentReplaced(
-  session: { events: StructuredAgentSessionEventSink | undefined },
-  clientMessageId: string | undefined
-): void {
+/** The one note a chat shows when its kept agent couldn't take a message and a new one did; every
+ *  message that agent turned away shares it. */
+export function noteKeptClaudeAgentReplaced(session: {
+  events: StructuredAgentSessionEventSink | undefined
+  acquisitionGeneration: string
+}): void {
   session.events?.appendItem(
-    { provider: 'orca', clientMessageId: `kept-agent-replaced:${clientMessageId ?? randomUUID()}` },
+    { provider: 'orca', clientMessageId: `kept-agent-replaced:${session.acquisitionGeneration}` },
     {
       kind: 'status',
       tone: 'neutral',
@@ -162,22 +160,21 @@ export async function openKeptClaudeAgentConnection(
     void write(line).catch(() => {})
   })
   const inbox = createClaudeUserMessageQueue()
-  const lines: string[] = []
+  // A head index, not shift(): a replay can be tens of thousands of lines.
+  let lines: string[] = []
+  let head = 0
   let partial = ''
   let draining: Promise<void> = Promise.resolve()
-  // One drain at a time, so lines keep their order across a paused read.
+  // One drain at a time, so lines keep their order across a paused read. No timer may run while
+  // lines wait here: an ack then would cover output the chat never got.
   const pump = (): Promise<void> => {
     draining = draining.then(async () => {
-      let sliceStart = performance.now()
-      for (let line = lines.shift(); line !== undefined; line = lines.shift()) {
+      while (head < lines.length) {
         await readingBarrier?.promise
-        deliver(line)
-        // A replay can be thousands of lines; let the app run between slices.
-        if (performance.now() - sliceStart > REPLAY_SLICE_MS) {
-          await new Promise((resolve) => setImmediate(resolve))
-          sliceStart = performance.now()
-        }
+        deliver(lines[head++])
       }
+      lines = []
+      head = 0
     })
     return draining
   }
