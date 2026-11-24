@@ -1,6 +1,6 @@
 import { open, unlink, type FileHandle } from 'node:fs/promises'
 import { SpoolFileIndex } from './provider-relay-spool-file-index'
-import { RECORD_OVERHEAD_BYTES, type HeldRecord } from './provider-relay-spool-memory'
+import type { HeldRecord } from './provider-relay-spool-memory'
 import { compactSpoolFile } from './provider-relay-spool-compaction'
 import { encodeSpoolRow } from './provider-relay-spool-row'
 
@@ -66,8 +66,8 @@ export class SpoolFile {
       this.failed = true
       return false
     }
-    // The row's prefix is ASCII and the line's UTF-8 size is known, so a huge line isn't rescanned.
-    const bytes = encoded.length - record.line.length + record.bytes - RECORD_OVERHEAD_BYTES
+    // Measured as written: a line decoded from invalid UTF-8 is larger than the bytes it was read as.
+    const bytes = Buffer.byteLength(encoded)
     this.index.add(record.seq, bytes)
     this.pendingBytes += bytes
     this.writtenBytes += bytes
