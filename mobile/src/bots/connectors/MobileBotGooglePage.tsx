@@ -170,6 +170,7 @@ export function MobileBotGooglePage(props: {
           <SettingsSection first={opened === shown}>
             <ListRow
               title={t('bots.google.setDefault', 'Set as default')}
+              accent
               disabled={!props.online}
               accessibilityRole="button"
               onPress={() => {
