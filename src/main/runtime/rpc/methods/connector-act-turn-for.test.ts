@@ -4,10 +4,10 @@ import type {
   AgentJournalSubmission
 } from '../../../../shared/agent-session/journal/agent-session-journal-types'
 
-const { postConnectorAction, journal } = vi.hoisted(() => ({
-  postConnectorAction: vi.fn(),
-  journal: { items: [] as unknown[], submissions: [] as unknown[] }
-}))
+const { postConnectorAction, journal } = vi.hoisted(() => {
+  const journal: { items: unknown[]; submissions: unknown[] } = { items: [], submissions: [] }
+  return { postConnectorAction: vi.fn(), journal }
+})
 vi.mock('../../../bots/bot-session-tabs', () => ({
   botOfSession: () => ({ id: 'bot-1', name: 'Scout' })
 }))
