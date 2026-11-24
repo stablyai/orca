@@ -13,7 +13,7 @@ import { acpClientInfo } from '../launch/acp-client-info'
 import * as childState from './children/acp-structured-child'
 import type { AcpSessionEvent } from '../protocol/acp-session-events'
 import type { AcpStructuredConnection } from '../process/acp-structured-connection'
-import { launchRelayedAcpAgent } from '../process/acp-kept-agent'
+import { keptAcpStartTime, launchRelayedAcpAgent } from '../process/acp-kept-agent'
 import { carryOnKeptAcpAgent } from './start/acp-kept-turn'
 import { acpAgentName } from './acp-structured-agent-definitions'
 import { AcpStructuredLane } from '../journal/acp-structured-lane'
@@ -191,7 +191,7 @@ export async function acquireAcpStructuredSession(input: {
   const identity = providerSpawnedProcessIdentity(
     acquire,
     `${spec.agent} ACP agent`,
-    deps.readProcessStartTime
+    keptAcpStartTime(relayed, deps.readProcessStartTime)
   )
   // Begin the attach window before replaying queued frames.
   // A kept agent replays no history: what it sends is live, even before its chat finished opening.
