@@ -1,6 +1,7 @@
 import type { DaemonClient } from '../daemon/transport/client/daemon-client'
 import type {
   ProviderRelayDetachPolicy,
+  ProviderRelayKeepSpec,
   ProviderRelaySpawnSpec
 } from '../daemon/protocol/daemon-provider-relay-protocol'
 import type { ProviderRelayWorkMarkers } from './provider-relay-agent-markers'
@@ -61,6 +62,8 @@ export type ProviderRelayLaunch = {
   markers: ProviderRelayWorkMarkers
   /** Reattach only: lines this lets through while the rest wait for `releaseOutput()`. */
   passWhileHeld?: (line: string) => boolean
+  /** Session state the daemon keeps for the next attach; only a daemon that can keep it relays. */
+  keep?: ProviderRelayKeepSpec
 }
 
 export type RelayedProviderProcess = {
@@ -106,11 +109,10 @@ function policyFor(
   }
 }
 
-/** Lists the daemons' kept relays once per launch (again after a daemon that didn't answer). */
-export function listProviderRelaysAtLaunch(): Promise<void> {
-  const installed = route
-  return installed ? listKeptProviderRelays(() => installed.all()) : Promise.resolve()
-}
+/** Lists the daemons' kept relays once per launch (again after a daemon that didn't answer).
+ *  Where chats don't relay there are no daemons to ask, so the listing is whole at once. */
+export const listProviderRelaysAtLaunch = (): Promise<void> =>
+  listKeptProviderRelays(async () => (route ? route.all() : []))
 
 async function connected(client: DaemonClient | null): Promise<DaemonClient | null> {
   if (!client) {
@@ -277,7 +279,8 @@ export async function launchRelayedProviderProcess(
       spec,
       relay.chatKey,
       policyFor(relay.markers),
-      relay.markers.agent
+      relay.markers.agent,
+      relay.keep
     )
   } catch {
     // An unanswered spawn may still have started the agent; the daemon ends it once no one attaches.

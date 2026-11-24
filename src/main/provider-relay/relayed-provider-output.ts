@@ -43,6 +43,10 @@ type OutputOptions = {
 export class RelayedProviderOutput {
   /** The agent's answer to the first client's `initialize`, when the relay was reattached. */
   initializeLine: string | null = null
+  /** Lines the daemon kept for this attach (session state long since acked), by seq. */
+  readonly keptLines = new Map<number, string>()
+  /** Once read, a later attach's kept lines (after a dropped stream) are not held again. */
+  private keptLinesRead = false
   /** Highest data seq handed on or held; spool lines at or below it are already seen. */
   private deliveredSeq = 0
   /** Highest data seq actually handed on; the next attach and every ack start here. */
@@ -89,6 +93,7 @@ export class RelayedProviderOutput {
       this.held = []
       this.releasedTo = 0
     }
+    this.keptLines.clear()
     this.deliveredSeq = this.pushedSeq
     return this.pushedSeq
   }
@@ -100,6 +105,14 @@ export class RelayedProviderOutput {
     if (event === 'relayInitialize') {
       this.initializeLine = line
       this.preambleArrived?.()
+      return
+    }
+    // Only an attach whose output is held for its consumer reads kept lines: a fresh spawn's
+    // re-sent ones after a dropped stream are never read, so never held.
+    if (event === 'relayKept') {
+      if (this.wantsKeptLines) {
+        this.keptLines.set(seq, line)
+      }
       return
     }
     if (event === 'relayPending') {
@@ -117,14 +130,20 @@ export class RelayedProviderOutput {
   }
 
   /**
-   * The attach reply comes on the control socket and its preamble (the initialize answer and held
-   * requests) on the stream socket, and nothing orders the two: resolves once the preamble the
+   * The attach reply comes on the control socket and its preamble (the initialize answer, held
+   * requests and kept lines) on the stream socket, and nothing orders the two: resolves once the preamble the
    * reply names is here, or after `timeoutMs` (a stream that dropped reattaches anyway).
    */
-  awaitPreamble(initialize: boolean, pendingSeqs: readonly number[], timeoutMs: number) {
+  awaitPreamble(
+    initialize: boolean,
+    pendingSeqs: readonly number[],
+    timeoutMs: number,
+    keptSeqs: readonly number[] = []
+  ) {
     const here = (): boolean =>
       (!initialize || this.initializeLine !== null) &&
-      pendingSeqs.every((seq) => this.deliveredPending.has(seq))
+      pendingSeqs.every((seq) => this.deliveredPending.has(seq)) &&
+      keptSeqs.every((seq) => this.keptLines.has(seq))
     if (here()) {
       return Promise.resolve()
     }
@@ -148,6 +167,16 @@ export class RelayedProviderOutput {
   /** Output waits for the chat to be ready (`release()`). */
   get holding(): boolean {
     return this.held !== null
+  }
+
+  /** Only an attach whose output is held for its consumer reads kept lines. */
+  get wantsKeptLines(): boolean {
+    return !this.keptLinesRead && this.held !== null
+  }
+
+  dropKeptLines(): void {
+    this.keptLinesRead = true
+    this.keptLines.clear()
   }
 
   /** Hands held output on in order, in slices; settles once nothing is held. */

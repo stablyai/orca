@@ -21,6 +21,11 @@ export class AcpBackgroundTaskTimeline {
 
   constructor(private readonly toolJoin: (callId: string) => ProviderTimelineJoin) {}
 
+  /** Tasks still running, by the id their agent names them. */
+  get runningIds(): string[] {
+    return [...this.running.keys()]
+  }
+
   reconcile(taskId: string, thread: string): ProviderTimelineEvent[] {
     return this.translate([{ taskId, state: 'unverifiable', summary: '', error: '' }], { thread })
   }

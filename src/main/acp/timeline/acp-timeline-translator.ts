@@ -9,11 +9,8 @@ import { AcpContextTimeline } from './acp-context-usage'
 import { AcpThreadGoalTimeline } from './acp-thread-goal-timeline'
 import { AcpBackgroundTaskTimeline } from './acp-background-task-timeline'
 import { AcpAgentTurns } from './acp-agent-turns'
-import {
-  GENERIC_ACP_DIALECT,
-  type AcpDialect,
-  type AcpTurnEnding
-} from '../acp-dialects/acp-dialect'
+import { GENERIC_ACP_DIALECT } from '../acp-dialects/acp-dialect'
+import type { AcpDialect, AcpTurnEnding } from '../acp-dialects/acp-dialect'
 import type { AcpAgentError } from '../transport/acp-errors'
 import { acpTurnEndEvents, AcpPromptTurns } from './acp-prompt-turns'
 
@@ -28,6 +25,7 @@ import { acpAuthenticationRequired, acpPromptErrorDetail } from '../turns/acp-pr
 import type { AcpTextDrop } from './acp-turn-messages'
 import type { PromptResponse } from '../generated/acp-protocol.generated'
 import type { NativeChatSubagentState } from '../../../shared/native-chat/native-chat-types'
+import type { AgentJournalToolCallItem } from '../../../shared/agent-session/journal/agent-session-journal-types'
 
 export type AcpTimelineTranslatorOptions = {
   sessionId: string
@@ -42,7 +40,7 @@ export class AcpTimelineTranslator {
   readonly injectsPromptIdentity: boolean
   private readonly dialect: AcpDialect
   private readonly prompts: AcpPromptTurns
-  private readonly backgroundTasks: AcpBackgroundTaskTimeline
+  readonly backgroundTasks: AcpBackgroundTaskTimeline
   /** Drained by the lane in journal order. */
   readonly subagents = new AcpSubagents()
   readonly children: AcpChildSessions
@@ -82,12 +80,15 @@ export class AcpTimelineTranslator {
   openPrompt(
     clientMessageId: string,
     at: number,
-    compactionTurn?: string
+    ...open: [compactionTurn?: string, adopted?: boolean]
   ): { promptId: string; events: ProviderTimelineEvent[] } {
     if (this.loading) {
       throw new Error('ACP prompt overlaps a prompt or load')
     }
-    const prompt = this.prompts.open(clientMessageId, at, compactionTurn)
+    const prompt = this.prompts.open(clientMessageId, at, ...open)
+    if (open[1]) {
+      this.ownership.messages.carry(prompt.promptId)
+    }
     this.agentTurns.resume()
     if (this.prompts.current?.opened) {
       this.ownership.operation().open(prompt.promptId)
@@ -154,9 +155,7 @@ export class AcpTimelineTranslator {
     this.loading = true
   }
 
-  finishLoad(): void {
-    this.loading = false
-  }
+  finishLoad = (): void => void (this.loading = false)
 
   reconcileSubagent(
     id: string,
@@ -167,9 +166,12 @@ export class AcpTimelineTranslator {
   }
 
   /** Provisionally settle missing tasks; later provider endings may revise the outcome. */
-  reconcileBackgroundTask(taskId: string): ProviderTimelineEvent[] {
-    return this.backgroundTasks.reconcile(taskId, this.options.sessionId)
-  }
+  reconcileBackgroundTask = (taskId: string): ProviderTimelineEvent[] =>
+    this.backgroundTasks.reconcile(taskId, this.options.sessionId)
+
+  /** A call the earlier app saved, so a kept agent's update to it keeps what was saved. */
+  carryTool = (saved: AgentJournalToolCallItem): void =>
+    this.ownership.tools.carry(saved, this.prompts.current?.turn)
 
   sessionEvent(event: AcpSessionEvent, at: number): ProviderTimelineEvent[] {
     const params = event.kind === 'known' ? event.notification : event.raw

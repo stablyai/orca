@@ -51,6 +51,11 @@ export class AcpSubagents {
     return this.known.has(id)
   }
 
+  /** Subagents not yet ended, by the id their agent names them. */
+  get openIds(): string[] {
+    return [...this.known].flatMap(([id, subagent]) => (subagent.ended ? [] : [id]))
+  }
+
   dispose(): void {
     this.known.clear()
     this.pending.length = 0

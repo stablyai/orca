@@ -36,6 +36,8 @@ export type AcpStructuredLaneDeps = {
   agent: string
   agentName: string
   generation: string
+  /** A relayed agent's requests are its process's: a reattach keeps their cards. */
+  requestGeneration?: string
   providerSessionId: string
   dialect: AcpDialect
   logger: StructuredAgentSessionLogger
@@ -79,6 +81,7 @@ export class AcpStructuredLane {
       sessionId: deps.sessionId,
       agent: deps.agent,
       generation: deps.generation,
+      ...(deps.requestGeneration ? { requestGeneration: deps.requestGeneration } : {}),
       namespace: deps.providerSessionId
     })
   }
@@ -159,7 +162,7 @@ export class AcpStructuredLane {
       return false
     }
     const first = this.requestIdentity.request({
-      generation: this.deps.generation,
+      generation: this.deps.requestGeneration ?? this.deps.generation,
       key: requestKey,
       incarnation: 1
     })

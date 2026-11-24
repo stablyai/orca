@@ -36,7 +36,8 @@ export function answerProviderRelayRequest(
         request.payload?.spec,
         request.payload?.chatKey,
         payload.policy,
-        payload.agent
+        payload.agent,
+        payload.keep
       )
     case 'relayAttach':
       if (!client.streamSocket) {
@@ -47,7 +48,8 @@ export function answerProviderRelayRequest(
         { socket: client.streamSocket, framing: client.streamFraming },
         relayId,
         payload.fromSeq,
-        payload.policy
+        payload.policy,
+        payload.kept
       )
     case 'relayWrite':
       // A notification can't hear a refusal, so a refused write would vanish; only requests may write.

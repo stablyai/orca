@@ -12,6 +12,11 @@ import { acpAgentName } from '../session/acp-structured-agent-definitions'
 import { placeCursorOpeningRule } from '../../cursor/cursor-opening-rule'
 import { writeFolderContextFile } from './acp-folder-context-file'
 import {
+  listProviderRelaysAtLaunch,
+  liveProviderRelayChats
+} from '../../provider-relay/app-provider-relays'
+import { keptProviderRelaysComplete } from '../../provider-relay/provider-relay-launch-inventory'
+import {
   openCodeSourceConfigDirectory,
   openCodeTakesConfigDirInstructions,
   writeOpenCodeInstructionsConfigDir
@@ -210,13 +215,29 @@ export const deliverCopilotInstructions: AcpInstructionsDelivery = async ({
 
 const cleared = new Map<string, Promise<void>>()
 
-/** Stdio children never outlive the host, and one host holds a profile, so the folder is cleared
- *  on its first use in a run. */
+/** An earlier run's leftovers go on first use in a run, except those of chats whose agent the
+ *  terminal host kept running: that agent still reads them. One host holds a profile. */
+async function clearEarlierRuns(root: string, remove: (path: string) => Promise<void>) {
+  await listProviderRelaysAtLaunch()
+  // A daemon that didn't answer may still run agents reading these; they wait for a later run.
+  if (!keptProviderRelaysComplete()) {
+    return
+  }
+  const kept = [...liveProviderRelayChats()].map(nativeChatScratchFolderName)
+  const keptBy = (name: string): boolean =>
+    kept.some((chat) => name === chat || name.startsWith(`${chat}.`) || name.startsWith(`${chat}-`))
+  for (const name of await readdir(root).catch(() => [])) {
+    if (!keptBy(name)) {
+      await remove(join(root, name))
+    }
+  }
+}
+
 async function instructionsRoot(dataDirectory: string): Promise<string> {
   const root = join(dataDirectory, 'acp-instructions')
   let clearing = cleared.get(root)
   if (!clearing) {
-    clearing = rm(root, { recursive: true, force: true }).catch(() => undefined)
+    clearing = clearEarlierRuns(root, (path) => rm(path, { recursive: true, force: true }))
     cleared.set(root, clearing)
   }
   await clearing
@@ -286,7 +307,7 @@ export async function makeAcpInstructionsFolder(
   const root = join(dataDirectory, 'acp-instructions-folders')
   let clearing = clearedFolders.get(root)
   if (!clearing) {
-    clearing = removeTreeKeepingLinkTargets(root)
+    clearing = clearEarlierRuns(root, removeTreeKeepingLinkTargets)
     clearedFolders.set(root, clearing)
   }
   await clearing

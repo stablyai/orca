@@ -104,6 +104,18 @@ export class AcpToolTimeline {
     return { events, tasks }
   }
 
+  /** A running call the earlier app saved: this run's updates to it revise what was saved. */
+  carry(saved: AgentJournalToolCallItem, turn: string | undefined): void {
+    const { callId } = saved
+    if (callId === undefined || saved.state !== 'running' || this.tools.has(callId)) {
+      return
+    }
+    this.tools.set(callId, { body: saved, ...(turn === undefined ? {} : { turn }) })
+    if (turn !== undefined) {
+      this.owners.remember(`tool:${callId}`, turn)
+    }
+  }
+
   /** The call with its whole input; a running journal copy holds only a preview. */
   wholeCall(toolCallId: string, body: AgentJournalToolCallItem): AgentJournalToolCallItem {
     const input = this.whole.get(toolCallId)?.input
