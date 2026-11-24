@@ -49,13 +49,12 @@ export type NativeChatRailTurnRows = {
   turnKeys: readonly (string | undefined)[]
 }
 
-/** The previewed turn's rows, from the rows as last saved: ids and turns don't move as text
+/** The previewed turn's rows, found on the rows as last saved: ids and turns don't move as text
  *  streams, so only the preview's text needs the newest rows. */
 export type NativeChatRailPreviewTurn = {
   turnKey: string | undefined
-  /** The turn's newest rows, `from` through `to`, where its reply sits. */
-  from: number
-  to: number
+  /** Every row of the turn, in order; another scope's note can sit between them. */
+  rows: readonly number[]
   hostReply: string
 }
 
@@ -67,12 +66,15 @@ export function nativeChatRailPreviewTurn(
   const row = messages.findIndex((message) => message.id === id)
   const item = items.find((candidate) => candidate.id === id)
   const turnKey = row === -1 ? (item?.turnKey ?? id) : turnKeys[row]
-  const to = turnKey === undefined ? -1 : turnKeys.lastIndexOf(turnKey)
-  let from = to
-  while (from > 0 && turnKeys[from - 1] === turnKey) {
-    from -= 1
+  const rows: number[] = []
+  if (turnKey !== undefined) {
+    turnKeys.forEach((key, index) => {
+      if (key === turnKey) {
+        rows.push(index)
+      }
+    })
   }
-  return { turnKey, from, to, hostReply: item?.reply ?? '' }
+  return { turnKey, rows, hostReply: item?.reply ?? '' }
 }
 
 /** The turn's reply from the newest rows, read only within the turn. */
@@ -80,13 +82,13 @@ export function nativeChatRailTurnReply(
   rows: NativeChatRailTurnRows,
   turn: NativeChatRailPreviewTurn
 ): string {
-  const { turnKey, from, to } = turn
+  const { turnKey } = turn
   const loaded =
-    turnKey === undefined || to < 0
+    turnKey === undefined || turn.rows.length === 0
       ? undefined
       : nativeChatTurnReplyPreviews(
-          rows.messages.slice(from, to + 1),
-          rows.turnKeys.slice(from, to + 1),
+          turn.rows.map((index) => rows.messages[index]!),
+          turn.rows.map(() => turnKey),
           turnKey
         ).get(turnKey)
   return loaded ?? turn.hostReply
