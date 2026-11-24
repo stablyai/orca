@@ -1,4 +1,6 @@
 import type { HostUsageLimitCut } from './structured-agent-session-usage-limit-chain'
+import type { UsageLimitAccountHolds } from './structured-agent-session-usage-limit-account-hold'
+import type { UsageLimitContinueDeps } from './structured-agent-session-usage-limit-continue-deps'
 import type { StructuredAgentSessionHostDeps as HostDeps } from '../host/structured-agent-session-host-types'
 
 export type UsageLimitCutReads = {
@@ -67,6 +69,20 @@ export class UsageLimitColdCuts {
         })
       }
       return 'unreadable'
+    }
+  }
+
+  /** Attributes the loaded chats that aren't open, which the sweep otherwise never reaches. */
+  async attributeUnopened(
+    open: ReadonlySet<string>,
+    holds: UsageLimitAccountHolds,
+    deps: Pick<UsageLimitContinueDeps, 'host' | 'now'>
+  ): Promise<void> {
+    for (const id of [...this.deps.sessions.keys()].filter((id) => !open.has(id))) {
+      const cut = await this.readForSweep(id)
+      if (cut && cut !== 'unreadable') {
+        await holds.attribute(id, deps.host, cut, deps.now())
+      }
     }
   }
 

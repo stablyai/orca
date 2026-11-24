@@ -24,7 +24,8 @@ export function usageLimitStopOf(
   const stop =
     cut.state === 'scheduled'
       ? { at: cut.continueAt ?? cut.resetsAt, auto: true }
-      : { at: cut.resetsAt, auto: false }
+      : // `continueAt` is when the account the chat now runs on is free; after a switch it is past.
+        { at: cut.continueAt ?? cut.resetsAt, auto: false }
   return stop.at + (stop.auto ? AUTO_CONTINUE_GRACE_MS : 0) > now ? stop : null
 }
 

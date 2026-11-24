@@ -115,7 +115,7 @@ export class StructuredAgentSessionUsageLimitContinue {
       }
     }
     this.cold.retain(shown)
-    this.holds.retain(shown)
+    this.holds.retain(new Set([...shown, ...this.deps.sessions.keys()]))
   }
 
   readState = (
@@ -245,6 +245,8 @@ export class StructuredAgentSessionUsageLimitContinue {
           due.push({ id, cut, at: attempt?.at ?? 0 })
         }
       }
+      // Not open, so never continued, but the limit it publishes still follows an account switch.
+      await this.cold.attributeUnopened(this.shown, this.holds, this.deps)
       due.sort((a, b) => a.at - b.at || a.cut.resetsAt - b.cut.resetsAt)
       // One at a time, since a cold send can start an agent process; the rest stay due for later
       // passes, so a reset that frees many chats does not start their agents all at once.
