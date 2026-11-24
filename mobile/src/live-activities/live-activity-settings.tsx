@@ -1,4 +1,7 @@
-import { useLiveActivityDeliveryFailed } from './live-activity-delivery-status'
+import {
+  useLiveActivityDeliveryFailed,
+  useLiveActivityCleanupPending
+} from './live-activity-delivery-status'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { AppState, Platform } from 'react-native'
 import { useFocusEffect } from 'expo-router'
@@ -11,11 +14,13 @@ import {
   loadLiveActivityPreferences,
   type LiveActivityPreferences
 } from './live-activity-preferences'
-import { setLiveActivityPreferences } from './live-activity-sync'
+import { setLiveActivityPreferences, retryLiveActivityCleanup } from './live-activity-sync'
 
 export function LiveActivitySettings() {
   const t = useMobileTranslation()
   const deliveryFailed = useLiveActivityDeliveryFailed()
+  const cleanupPending = useLiveActivityCleanupPending()
+  const revision = useRef(0)
   const [value, setValue] = useState<LiveActivityPreferences>({ enabled: false, showNames: false })
   const [authorized, setAuthorized] = useState(false)
   const [ready, setReady] = useState(false)
@@ -26,19 +31,22 @@ export function LiveActivitySettings() {
     if (busy.current) {
       return
     }
+    const current = ++revision.current
     try {
       const [preferences, allowed] = await Promise.all([
         loadLiveActivityPreferences(),
         nativeLiveActivities?.authorization() ?? false
       ])
-      if (busy.current) {
+      if (busy.current || current !== revision.current) {
         return
       }
       setValue(preferences)
       setAuthorized(allowed)
       setReady(true)
     } catch {
-      setError(true)
+      if (current === revision.current && !busy.current) {
+        setError(true)
+      }
     }
   }, [])
   useFocusEffect(
@@ -58,9 +66,10 @@ export function LiveActivitySettings() {
     return null
   }
   const change = async (next: LiveActivityPreferences) => {
-    if (busy.current) {
+    if (busy.current || (next.enabled && !value.enabled && !authorized)) {
       return
     }
+    revision.current++
     busy.current = true
     setSaving(true)
     setError(false)
@@ -68,6 +77,10 @@ export function LiveActivitySettings() {
       await setLiveActivityPreferences(next)
       setValue(next)
     } catch {
+      const saved = await loadLiveActivityPreferences().catch(() => null)
+      if (saved) {
+        setValue(saved)
+      }
       setError(true)
     } finally {
       busy.current = false
@@ -90,8 +103,8 @@ export function LiveActivitySettings() {
           accessory={
             <MobileSwitch
               accessibilityLabel={enabledLabel}
-              value={value.enabled && authorized}
-              disabled={!ready || !authorized || saving}
+              value={value.enabled}
+              disabled={!ready || saving || (!authorized && !value.enabled)}
               onValueChange={(enabled) => void change({ ...value, enabled })}
             />
           }
@@ -108,7 +121,7 @@ export function LiveActivitySettings() {
           }
         />
       </SettingsSection>
-      {deliveryFailed ? (
+      {value.enabled && deliveryFailed ? (
         <SettingsNote error>
           {t(
             'liveActivities.deliveryFailed',
@@ -128,6 +141,33 @@ export function LiveActivitySettings() {
                 'Install an iOS build with Live Activities support. Expo Go is not supported.'
               )}
         </SettingsNote>
+      ) : null}
+      {cleanupPending ? (
+        <SettingsSection
+          footer={t(
+            'liveActivities.cleanupPending',
+            'Your preference is saved. Some Live Activity cleanup is pending and will retry when the host reconnects.'
+          )}
+        >
+          <ListRow
+            title={t('liveActivities.retryCleanup', 'Retry cleanup')}
+            busy={saving}
+            onPress={() => {
+              if (busy.current) {
+                return
+              }
+              revision.current++
+              busy.current = true
+              setSaving(true)
+              void retryLiveActivityCleanup()
+                .catch(() => setError(true))
+                .finally(() => {
+                  busy.current = false
+                  setSaving(false)
+                })
+            }}
+          />
+        </SettingsSection>
       ) : null}
       {error ? (
         <SettingsNote error>

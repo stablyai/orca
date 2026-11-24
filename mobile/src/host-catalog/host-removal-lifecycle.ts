@@ -27,7 +27,9 @@ export async function removeHostAndCloseClient(
     restorePushRegistration()
     throw error
   }
-  await forgetHostLiveActivities(hostId)
+  await forgetHostLiveActivities(hostId).catch(() => {
+    console.warn('[live-activities] Host removed; activity cleanup remains pending')
+  })
   forgetHostClient(hostId)
   forgetHostDescriptor(hostId)
   // Before the wipe, so nothing this world still holds is written back after it.

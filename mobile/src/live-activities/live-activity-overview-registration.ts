@@ -1,7 +1,7 @@
 import * as Crypto from 'expo-crypto'
 import type { RpcClient } from '../transport/rpc/rpc-client-contract'
 import { nativeLiveActivities, type NativeActivity } from './native-live-activities'
-import { registerLiveActivity, unregisterLiveActivity } from './live-activity-operations'
+import { registerLiveActivity } from './live-activity-operations'
 import {
   liveActivityScopeKey,
   saveLiveActivityCohort,
@@ -21,7 +21,7 @@ export async function registerLiveActivityOverview(
   const environment = await nativeLiveActivities.environment()
   const tokenDigest = await Crypto.digestStringAsync(
     Crypto.CryptoDigestAlgorithm.SHA256,
-    activity.token
+    `${environment}:${activity.token}`
   )
   if (cohort.tokenDigest !== tokenDigest) {
     if (cohort.tokenDigest) {
@@ -113,39 +113,13 @@ export async function registerLiveActivityOverview(
   if (!coordinator) {
     return false
   }
-  for (const scope of cohort.scopes) {
-    if (scope.id !== coordinator.id) {
-      await request(scope, false)
-    }
-    if (!current()) {
-      return false
-    }
-  }
-  return true
+  const coordinatorId = coordinator.id
+  const results = await Promise.all(
+    cohort.scopes
+      .filter((scope) => scope.id !== coordinatorId)
+      .map((scope) => request(scope, false).catch(() => false))
+  )
+  return current() && results.every(Boolean)
 }
 
-export async function unregisterLiveActivityOverview(
-  activityId: string,
-  cohort: LiveActivityCohort,
-  clients: ReadonlyMap<string, RpcClient>
-): Promise<void> {
-  await Promise.all(
-    cohort.scopes.map(async (scope) => {
-      const client = clients.get(scope.hostId)
-      if (!client) {
-        return
-      }
-      await unregisterLiveActivity
-        .request(
-          client,
-          { activityId },
-          {
-            timeoutMs: 5000,
-            failWhenDisconnected: true,
-            ...(scope.executionHost ? { envelope: { executionHost: scope.executionHost } } : {})
-          }
-        )
-        .catch(() => null)
-    })
-  )
-}
+export { unregisterLiveActivityOverview } from './live-activity-retirement'

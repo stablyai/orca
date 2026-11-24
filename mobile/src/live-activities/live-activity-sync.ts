@@ -1,7 +1,6 @@
+import { deliverLiveActivityOverview } from './live-activity-overview-delivery'
 import { AppState } from 'react-native'
-import { runKeyedSerializedOperation } from '../../../src/shared/concurrency/keyed-serialized-operations'
 import type { RpcClient } from '../transport/rpc/rpc-client-contract'
-import { translate } from '../i18n/mobile-i18n'
 import { nativeLiveActivities, type NativeActivity } from './native-live-activities'
 import {
   loadLiveActivityPreferences,
@@ -14,23 +13,30 @@ import {
   type LiveActivityTrackParams
 } from './live-activity-track-contract'
 import {
-  createLiveActivityCohort,
+  cleanupLiveActivitySecrets,
   discoverLiveActivitySources,
   forgetLiveActivityCohort,
   liveActivitySourcesMatch,
-  loadLiveActivityCohort,
-  type LiveActivityCohort
+  loadLiveActivityCohort
 } from './live-activity-overview-enrollment'
+import { unregisterLiveActivityOverview } from './live-activity-overview-registration'
 import {
-  registerLiveActivityOverview,
-  unregisterLiveActivityOverview
-} from './live-activity-overview-registration'
-import { setLiveActivityDeliveryFailed } from './live-activity-delivery-status'
+  endLiveActivityOverview,
+  retireCurrentLiveActivityOverview,
+  isLiveActivityRetiring,
+  retryLiveActivityRetirements
+} from './live-activity-retirement'
+import { startLiveActivityOverview } from './live-activity-overview-start'
+import {
+  setLiveActivityDeliveryFailed,
+  setLiveActivityCleanupPending
+} from './live-activity-delivery-status'
 
 const hosts = new Map<string, RpcClient>()
-const registrations = new Map<string, Promise<void>>()
 let generation = 0
-let changingPreferences = false
+let pendingChanges = 0
+let users = 0
+let retryTimer: ReturnType<typeof setTimeout> | null = null
 let chain = Promise.resolve()
 let lastSeed: { hostId: string; input: LiveActivityTrackParams } | null = null
 
@@ -38,77 +44,59 @@ function queue<T>(run: () => Promise<T>): Promise<T> {
   const result = chain.then(run)
   chain = result.then(
     () => {},
-    () => {
-      setLiveActivityDeliveryFailed(true)
-    }
+    () => {}
   )
   return result
 }
 
-async function stopOverview(
-  activity: NativeActivity,
-  cohort: LiveActivityCohort | null
-): Promise<void> {
-  await nativeLiveActivities?.end(activity.activityId)
-  if (cohort?.overviewId === activity.linkId) {
-    await unregisterLiveActivityOverview(activity.activityId, cohort, hosts)
+function scheduleRetry(): void {
+  if (retryTimer || !users || AppState.currentState !== 'active') {
+    return
   }
-  await nativeLiveActivities?.forgetRoute(activity.linkId)
+  retryTimer = setTimeout(() => {
+    retryTimer = null
+    enqueueReconcile()
+  }, 30_000)
 }
 
-function register(activity: NativeActivity): Promise<void> {
-  return runKeyedSerializedOperation(registrations, activity.activityId, async () => {
-    if (!nativeLiveActivities) {
-      return
-    }
-    const currentActivity = (await nativeLiveActivities.activities()).find(
-      (item) => item.activityId === activity.activityId
-    )
-    if (
-      !currentActivity ||
-      !['active', 'stale'].includes(currentActivity.state) ||
-      !currentActivity.token
-    ) {
-      return
-    }
-    const revision = generation
-    const cohort = await loadLiveActivityCohort()
-    const preferences = await loadLiveActivityPreferences()
-    if (
-      cohort?.overviewId !== activity.linkId ||
-      !preferences.enabled ||
-      !(await nativeLiveActivities.authorization())
-    ) {
-      return
-    }
-    const current = (): boolean => revision === generation && !changingPreferences
-    const accepted = await registerLiveActivityOverview(
-      currentActivity,
-      cohort,
-      hosts,
-      preferences.showNames,
-      current
-    )
-    if (current()) {
-      setLiveActivityDeliveryFailed(!accepted)
-    }
-    if (!current()) {
-      await unregisterLiveActivityOverview(activity.activityId, cohort, hosts)
-    }
+function enqueueReconcile(): void {
+  void queue(reconcile).catch(() => {
+    setLiveActivityCleanupPending(true)
+    scheduleRetry()
   })
 }
 
+function register(activity: NativeActivity): Promise<boolean> {
+  if (pendingChanges) {
+    return Promise.resolve(true)
+  }
+  const revision = generation
+  return deliverLiveActivityOverview(activity, hosts, () => revision === generation)
+}
+
 async function reconcile(): Promise<void> {
-  if (!nativeLiveActivities || changingPreferences) {
+  if (!nativeLiveActivities || pendingChanges) {
     return
+  }
+  let cleanupPending = false
+  try {
+    cleanupPending = !(await retryLiveActivityRetirements(hosts))
+    await cleanupLiveActivitySecrets()
+  } catch {
+    cleanupPending = true
   }
   const preferences = await loadLiveActivityPreferences()
   const allowed = preferences.enabled && (await nativeLiveActivities.authorization())
   const cohort = await loadLiveActivityCohort()
   const activities = await nativeLiveActivities.activities()
+  let retry = false
+  let retained = false
+  let active = false
   for (const activity of activities) {
     if (cohort?.overviewId === activity.linkId && !['active', 'stale'].includes(activity.state)) {
-      await unregisterLiveActivityOverview(activity.activityId, cohort, hosts)
+      cleanupPending =
+        !(await unregisterLiveActivityOverview(activity.activityId, cohort, hosts)) ||
+        cleanupPending
       continue
     }
     if (
@@ -116,9 +104,19 @@ async function reconcile(): Promise<void> {
       activity.linkId !== cohort?.overviewId ||
       !['active', 'stale'].includes(activity.state)
     ) {
-      await stopOverview(activity, cohort)
+      try {
+        cleanupPending = !(await endLiveActivityOverview(activity, cohort, hosts)) || cleanupPending
+      } catch {
+        retained = true
+        cleanupPending = true
+      }
       continue
     }
+    if (await isLiveActivityRetiring(activity.activityId)) {
+      cleanupPending = true
+      continue
+    }
+    active = true
     const route = await nativeLiveActivities.route(activity.linkId)
     if (route?.worktreeId && route.paneKey && route.turnKey) {
       lastSeed = {
@@ -135,23 +133,40 @@ async function reconcile(): Promise<void> {
       const sources = await discoverLiveActivitySources(hosts)
       if (!liveActivitySourcesMatch(cohort, sources)) {
         generation++
-        await stopOverview(activity, cohort)
-        await forgetLiveActivityCohort()
-        if (lastSeed) {
-          await track(lastSeed.hostId, lastSeed.input)
-        }
-        return
+        cleanupPending = !(await endLiveActivityOverview(activity, cohort, hosts)) || cleanupPending
+        await forgetLiveActivityCohort(cohort.overviewId)
+        active = false
+        continue
       }
     }
-    await register(activity)
+    retry = !(await register(activity)) || retry
+  }
+  if (!allowed && !retained) {
+    await forgetLiveActivityCohort(cohort?.overviewId)
+  }
+  if (allowed && !active && lastSeed) {
+    await track(lastSeed.hostId, lastSeed.input)
+  }
+  if (!preferences.enabled) {
+    setLiveActivityDeliveryFailed(false)
+  }
+  setLiveActivityCleanupPending(cleanupPending)
+  if (retry || cleanupPending) {
+    scheduleRetry()
   }
 }
 
 export function attachLiveActivityHost(hostId: string, client: RpcClient): () => void {
   hosts.set(hostId, client)
+  const unsubscribe = client.onStateChange((state) => {
+    if (state === 'connected') {
+      enqueueReconcile()
+    }
+  })
   notifyLiveActivityPreferences()
-  void queue(reconcile).catch(() => undefined)
+  enqueueReconcile()
   return () => {
+    unsubscribe()
     if (hosts.get(hostId) === client) {
       hosts.delete(hostId)
     }
@@ -162,65 +177,91 @@ export function startLiveActivitySync(): () => void {
   if (!nativeLiveActivities) {
     return () => {}
   }
+  users++
   const token = nativeLiveActivities.addListener('onToken', (activity) => {
-    void register(activity).catch(() => setLiveActivityDeliveryFailed(true))
+    void register(activity)
+      .then((accepted) => {
+        if (!accepted) {
+          scheduleRetry()
+        }
+      })
+      .catch(() => {
+        setLiveActivityDeliveryFailed(true)
+        scheduleRetry()
+      })
   })
   const activityState = nativeLiveActivities.addListener('onState', (activity) => {
     if (activity.state === 'ended' || activity.state === 'dismissed') {
       void loadLiveActivityCohort()
-        .then((cohort) => {
+        .then(async (cohort) => {
           if (cohort?.overviewId === activity.linkId) {
-            return unregisterLiveActivityOverview(activity.activityId, cohort, hosts)
+            generation++
+            setLiveActivityDeliveryFailed(false)
+            await unregisterLiveActivityOverview(activity.activityId, cohort, hosts)
           }
         })
-        .catch(() => undefined)
+        .finally(enqueueReconcile)
+        .catch(() => setLiveActivityCleanupPending(true))
     }
   })
   const state = AppState.addEventListener('change', (value) => {
+    if (retryTimer) {
+      clearTimeout(retryTimer)
+      retryTimer = null
+    }
     if (value === 'active') {
-      void queue(reconcile).catch(() => undefined)
+      enqueueReconcile()
     }
   })
-  void queue(reconcile).catch(() => undefined)
+  enqueueReconcile()
   return () => {
+    users--
     token.remove()
     activityState.remove()
     state.remove()
+    if (!users && retryTimer) {
+      clearTimeout(retryTimer)
+      retryTimer = null
+    }
   }
 }
 
-export async function setLiveActivityPreferences(value: LiveActivityPreferences): Promise<void> {
-  generation++
-  changingPreferences = true
-  try {
+function changeLifecycle(run: () => Promise<void>, invalidateOnStart = true): Promise<void> {
+  if (invalidateOnStart) {
+    generation++
+  }
+  pendingChanges++
+  return queue(async () => {
+    try {
+      await run()
+    } finally {
+      pendingChanges--
+      notifyLiveActivityPreferences()
+      enqueueReconcile()
+    }
+  })
+}
+
+export function setLiveActivityPreferences(value: LiveActivityPreferences): Promise<void> {
+  return changeLifecycle(async () => {
     await saveLiveActivityPreferences(value)
-    const cohort = await loadLiveActivityCohort()
-    if (nativeLiveActivities) {
-      for (const activity of await nativeLiveActivities.activities()) {
-        await stopOverview(activity, cohort)
-      }
+    // Keep an in-flight enrollment valid until the preference write commits.
+    generation++
+    setLiveActivityDeliveryFailed(false)
+    try {
+      await retireCurrentLiveActivityOverview(hosts)
+    } catch {
+      setLiveActivityCleanupPending(true)
     }
-    await forgetLiveActivityCohort()
-  } finally {
-    changingPreferences = false
-    notifyLiveActivityPreferences()
-  }
-  if (value.enabled && lastSeed) {
-    const seed = lastSeed
-    await queue(() => track(seed.hostId, seed.input))
-  }
+  }, false)
 }
 
-export async function forgetHostLiveActivities(_hostId: string): Promise<void> {
-  generation++
-  const cohort = await loadLiveActivityCohort()
-  if (nativeLiveActivities) {
-    for (const activity of await nativeLiveActivities.activities()) {
-      await stopOverview(activity, cohort)
-    }
-  }
-  await forgetLiveActivityCohort()
-  notifyLiveActivityPreferences()
+export function forgetHostLiveActivities(_hostId: string): Promise<void> {
+  return changeLifecycle(() => retireCurrentLiveActivityOverview(hosts))
+}
+
+export function retryLiveActivityCleanup(): Promise<void> {
+  return queue(reconcile)
 }
 
 export function trackLiveActivity(hostId: string, raw: unknown): Promise<{ tracked: boolean }> {
@@ -233,66 +274,21 @@ async function track(
   hostId: string,
   input: LiveActivityTrackParams
 ): Promise<{ tracked: boolean }> {
+  if (pendingChanges) {
+    return { tracked: false }
+  }
   const revision = generation
-  if (!nativeLiveActivities || changingPreferences || AppState.currentState !== 'active') {
+  const current = (): boolean => revision === generation
+  const activity = await startLiveActivityOverview(hostId, input, hosts, current)
+  if (!activity) {
     return { tracked: false }
   }
-  const preferences = await loadLiveActivityPreferences()
-  if (!preferences.enabled || !(await nativeLiveActivities.authorization())) {
+  if (!current()) {
+    await endLiveActivityOverview(activity, await loadLiveActivityCohort(), hosts)
     return { tracked: false }
   }
-  const existing = (await nativeLiveActivities.activities()).find((activity) =>
-    ['active', 'stale'].includes(activity.state)
-  )
-  if (existing) {
-    await register(existing)
-    return { tracked: true }
-  }
-  const seed = { hostId, ...input }
-  if (await nativeLiveActivities.hasTurn(seed)) {
-    return { tracked: false }
-  }
-  await forgetLiveActivityCohort()
-  const sources = await discoverLiveActivitySources(hosts)
-  const cohort = await createLiveActivityCohort(
-    sources,
-    hostId,
-    () => revision === generation && !changingPreferences
-  )
-  if (!cohort) {
-    return { tracked: false }
-  }
-  const labels = {
-    working: translate('liveActivities.working', 'Working'),
-    attention: translate('liveActivities.attention', 'Needs attention'),
-    done: translate('liveActivities.done', 'Completed'),
-    failed: translate('liveActivities.failed', 'Failed'),
-    unavailable: translate('liveActivities.unavailable', 'Status unavailable'),
-    session: translate('liveActivities.session', 'Session'),
-    allHosts: translate('liveActivities.allHosts', 'All paired hosts'),
-    partial: translate('liveActivities.partial', 'Partial coverage'),
-    more: translate('liveActivities.more', 'more')
-  }
-  if (revision !== generation) {
-    return { tracked: false }
-  }
-  const activityId = await nativeLiveActivities.start(
-    cohort.overviewId,
-    { ...seed, overviewId: cohort.overviewId, scopeCount: String(cohort.scopes.length) },
-    'Orca',
-    labels
-  )
-  const activity = (await nativeLiveActivities.activities()).find(
-    (item) => item.activityId === activityId
-  )
-  if (revision !== generation) {
-    if (activity) {
-      await stopOverview(activity, cohort)
-    }
-    return { tracked: false }
-  }
-  if (activity) {
-    await register(activity)
+  if (!(await register(activity))) {
+    scheduleRetry()
   }
   return { tracked: true }
 }

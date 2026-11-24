@@ -256,7 +256,9 @@ export class HostLiveActivities {
         this.timer = null
         for (const [key, entry] of this.activities) {
           if (entry.nextAt <= Date.now()) {
-            void this.send(key, entry)
+            void this.send(key, entry).catch(() => {
+              console.warn('[live-activities] Delivery failed; retry scheduled')
+            })
           }
         }
       },
@@ -271,14 +273,20 @@ export class HostLiveActivities {
       return entry.pending
     }
     entry.dirty = false
-    const run = this.deliver(key, entry).finally(() => {
-      entry.pending = undefined
-      if (entry.dirty) {
+    const run = this.deliver(key, entry)
+      .catch((error: unknown) => {
         entry.dirty = false
-        entry.nextAt = Date.now()
-      }
-      this.schedule()
-    })
+        entry.nextAt = Date.now() + 30_000
+        throw error
+      })
+      .finally(() => {
+        entry.pending = undefined
+        if (entry.dirty) {
+          entry.dirty = false
+          entry.nextAt = Date.now()
+        }
+        this.schedule()
+      })
     entry.pending = run
     return run
   }

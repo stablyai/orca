@@ -4,7 +4,7 @@ import { LiveActivityContributionSchema, type LiveActivityContent } from '@orca-
 export const LIVE_ACTIVITY_FRESH_MS = 15 * 60_000
 const PRIORITY = { attention: 0, failed: 1, working: 2, unavailable: 3, done: 4 }
 
-export function liveActivityOverviewContent(scopes: string[], rows: SqlRow[], createdAt: number, now: number): LiveActivityContent {
+export function liveActivityOverviewContent(scopes: string[], rows: SqlRow[], createdAt: number, now: number, discoveryComplete = true): LiveActivityContent {
   const owners = new Map<string, SqlRow>()
   const bound = new Set<string>()
   const knownOwners = new Set<string>()
@@ -22,7 +22,7 @@ export function liveActivityOverviewContent(scopes: string[], rows: SqlRow[], cr
     schemaVersion: 2, state: 'unavailable', title: 'Orca',
     stateStartedAt: createdAt / 1000, updatedAt: now / 1000,
     counts: { working: 0, attention: 0, done: 0, failed: 0, unavailable: 0 },
-    sessions: [], knownSources: 0, totalSources, complete: owners.size === totalSources
+    sessions: [], knownSources: 0, totalSources, complete: discoveryComplete && owners.size === totalSources
   }
   for (const row of owners.values()) {
     const parsed = LiveActivityContributionSchema.shape.content.safeParse(JSON.parse(String(row.content)))

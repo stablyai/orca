@@ -2,6 +2,11 @@ import AsyncStorage from '@react-native-async-storage/async-storage'
 import * as Crypto from 'expo-crypto'
 import * as SecureStore from 'expo-secure-store'
 import * as z from 'zod'
+import {
+  liveActivitySecretKey,
+  rememberLiveActivitySecrets,
+  cleanLiveActivitySecrets
+} from './live-activity-enrollment-secrets'
 import { runKeyedSerializedOperation } from '../../../src/shared/concurrency/keyed-serialized-operations'
 import { loadHostCatalog } from '../host-catalog/host-store'
 import { relayHostsListRead } from '../worktree/execution-hosts/server-workspace-operations'
@@ -24,13 +29,17 @@ const cohortSchema = z.object({
 })
 export type LiveActivitySource = z.infer<typeof sourceSchema>
 export type LiveActivityCohort = z.infer<typeof cohortSchema>
-const secretKey = (overviewId: string, scopeId: string): string =>
-  `orca.activity.${overviewId}.${scopeId}`
 const randomKey = (): string => (Crypto.randomUUID() + Crypto.randomUUID()).replaceAll('-', '')
 
 async function readCohort(): Promise<LiveActivityCohort | null> {
   const raw = await AsyncStorage.getItem(KEY)
-  const parsed = cohortSchema.safeParse(raw ? JSON.parse(raw) : null)
+  let value: unknown = null
+  try {
+    value = raw ? JSON.parse(raw) : null
+  } catch {
+    return null
+  }
+  const parsed = cohortSchema.safeParse(value)
   return parsed.success ? parsed.data : null
 }
 
@@ -42,28 +51,33 @@ export async function liveActivityScopeKey(
   cohort: LiveActivityCohort,
   scopeId: string
 ): Promise<string> {
-  const value = await SecureStore.getItemAsync(secretKey(cohort.overviewId, scopeId))
+  const value = await SecureStore.getItemAsync(liveActivitySecretKey(cohort.overviewId, scopeId))
   if (!value) {
     throw new Error('Missing Live Activity enrollment')
   }
   return value
 }
 
-async function deleteCohortSecrets(cohort: LiveActivityCohort): Promise<void> {
-  await Promise.all(
-    [...cohort.scopes.map((scope) => scope.id), 'control'].map((id) =>
-      SecureStore.deleteItemAsync(secretKey(cohort.overviewId, id))
-    )
-  )
+export async function cleanupLiveActivitySecrets(): Promise<void> {
+  await runKeyedSerializedOperation(writes, KEY, async () => {
+    await cleanLiveActivitySecrets((await readCohort())?.overviewId)
+  })
 }
 
-export async function forgetLiveActivityCohort(): Promise<void> {
+export async function forgetLiveActivityCohort(expectedId?: string): Promise<void> {
   await runKeyedSerializedOperation(writes, KEY, async () => {
     const cohort = await readCohort()
-    await AsyncStorage.removeItem(KEY)
-    if (cohort) {
-      await deleteCohortSecrets(cohort)
+    if (cohort && expectedId && cohort.overviewId !== expectedId) {
+      return
     }
+    if (cohort) {
+      await rememberLiveActivitySecrets(
+        cohort.overviewId,
+        cohort.scopes.map((scope) => scope.id)
+      )
+    }
+    await AsyncStorage.removeItem(KEY)
+    await cleanLiveActivitySecrets()
   })
 }
 
@@ -71,7 +85,8 @@ export async function discoverLiveActivitySources(
   clients: ReadonlyMap<string, RpcClient>
 ): Promise<{ sources: LiveActivitySource[]; complete: boolean }> {
   const catalog = await loadHostCatalog()
-  let complete = catalog.every((host) => clients.has(host.id))
+  const snapshot = new Map(clients)
+  const surveyed = new Set<string>()
   const ids = new Set(catalog.map((host) => host.id))
   const saved = await AsyncStorage.getItem(CATALOG_KEY)
   const parsed = z.array(sourceSchema).safeParse(saved ? JSON.parse(saved) : [])
@@ -79,8 +94,9 @@ export async function discoverLiveActivitySources(
     (source) => ids.has(source.hostId) && source.executionHost
   )
   sources.push(...catalog.map((host) => ({ hostId: host.id })))
-  for (const [hostId, client] of clients) {
-    if (!ids.has(hostId)) {
+  for (const { id: hostId } of catalog) {
+    const client = snapshot.get(hostId)
+    if (!client) {
       continue
     }
     const result = await relayHostsListRead
@@ -88,9 +104,9 @@ export async function discoverLiveActivitySources(
       .then((reply) => relayHostsListRead.interpret(reply))
       .catch(() => null)
     if (!result?.accepted) {
-      complete = false
       continue
     }
+    surveyed.add(hostId)
     sources = sources.filter((source) => source.hostId !== hostId || !source.executionHost)
     sources.push(...result.value.map((host) => ({ hostId, executionHost: host.hostId })))
   }
@@ -99,7 +115,7 @@ export async function discoverLiveActivitySources(
     throw new Error('Too many Live Activity sources')
   }
   await AsyncStorage.setItem(CATALOG_KEY, JSON.stringify(sources))
-  return { sources, complete }
+  return { sources, complete: catalog.every((host) => surveyed.has(host.id)) }
 }
 
 export async function createLiveActivityCohort(
@@ -112,20 +128,18 @@ export async function createLiveActivityCohort(
       return null
     }
     const overviewId = Crypto.randomUUID()
-    const scopes: LiveActivityCohort['scopes'] = []
-    for (const source of discovery.sources) {
-      const value = randomKey()
-      const id = await Crypto.digestStringAsync(Crypto.CryptoDigestAlgorithm.SHA256, value)
-      await SecureStore.setItemAsync(secretKey(overviewId, id), value)
-      scopes.push({ ...source, id })
-    }
+    const grants = await Promise.all(
+      discovery.sources.map(async (source) => {
+        const value = randomKey()
+        const id = await Crypto.digestStringAsync(Crypto.CryptoDigestAlgorithm.SHA256, value)
+        return { scope: { ...source, id }, value }
+      })
+    )
+    const scopes = grants.map(({ scope }) => scope)
     const coordinator =
       scopes.find((scope) => scope.hostId === coordinatorHostId && !scope.executionHost) ??
       scopes.find((scope) => !scope.executionHost) ??
       scopes[0]
-    if (!coordinator) {
-      throw new Error('Live Activity coordinator unavailable')
-    }
     const cohort = {
       overviewId,
       scopes,
@@ -133,13 +147,26 @@ export async function createLiveActivityCohort(
       controlRevision: 1,
       discoveryComplete: discovery.complete
     }
-    await SecureStore.setItemAsync(secretKey(overviewId, 'control'), randomKey())
-    if (!current()) {
-      await deleteCohortSecrets(cohort)
-      return null
+    await rememberLiveActivitySecrets(
+      overviewId,
+      scopes.map((scope) => scope.id)
+    )
+    try {
+      for (const { scope, value } of grants) {
+        await SecureStore.setItemAsync(liveActivitySecretKey(overviewId, scope.id), value)
+      }
+      await SecureStore.setItemAsync(liveActivitySecretKey(overviewId, 'control'), randomKey())
+      if (!current()) {
+        await cleanLiveActivitySecrets((await readCohort())?.overviewId)
+        return null
+      }
+      await AsyncStorage.setItem(KEY, JSON.stringify(cohort))
+      await cleanLiveActivitySecrets(overviewId).catch(() => undefined)
+      return cohort
+    } catch (error) {
+      await cleanLiveActivitySecrets((await readCohort())?.overviewId).catch(() => undefined)
+      throw error
     }
-    await AsyncStorage.setItem(KEY, JSON.stringify(cohort))
-    return cohort
   })
 }
 

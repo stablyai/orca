@@ -8542,6 +8542,8 @@
     }
   },
   "liveActivities": {
+    "cleanupPending": "Your preference is saved. Some Live Activity cleanup is pending and will retry when the host reconnects.",
+    "retryCleanup": "Retry cleanup",
     "enable": "Live Activities",
     "showNames": "Show session names",
     "description": "See agent totals across paired computers and servers. Names stay hidden unless you enable them.",

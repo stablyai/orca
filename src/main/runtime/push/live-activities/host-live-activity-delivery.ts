@@ -29,6 +29,7 @@ export async function deliverHostLiveActivity(
     return
   }
   if (entry.input.bootstrap && !entry.bootstrapReady) {
+    const requested = JSON.stringify(entry.input.bootstrap)
     const accepted = await context.gateway
       .registerLiveActivityOverview({
         schemaVersion: 2,
@@ -38,6 +39,10 @@ export async function deliverHostLiveActivity(
       .catch(() => false)
     if (!accepted) {
       entry.nextAt = now + 30_000
+      return
+    }
+    if (JSON.stringify(entry.input.bootstrap) !== requested) {
+      entry.nextAt = Date.now()
       return
     }
     entry.bootstrapReady = true

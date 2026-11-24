@@ -6,23 +6,34 @@ import {
   loadLiveActivityPreferences,
   subscribeLiveActivityPreferences
 } from './live-activity-preferences'
+import { pendingLiveActivityRetirementHosts } from './live-activity-retirement'
 import { nativeLiveActivities } from './native-live-activities'
 
 export function useLiveActivityHosts(): void {
   const [ids, setIds] = useState<string[]>([])
   useAllHostClients(ids, { closeUnusedOnRelease: true })
   useEffect(() => {
-    if (!nativeLiveActivities) {
+    const bridge = nativeLiveActivities
+    if (!bridge) {
       return
     }
     let disposed = false
     let revision = 0
     const refresh = (): void => {
       const current = ++revision
-      void Promise.all([loadLiveActivityPreferences(), loadHostCatalog()])
-        .then(([preferences, catalog]) => {
+      void Promise.all([
+        loadLiveActivityPreferences(),
+        loadHostCatalog(),
+        pendingLiveActivityRetirementHosts(),
+        bridge.authorization()
+      ])
+        .then(([preferences, catalog, pending, authorized]) => {
           if (!disposed && current === revision) {
-            setIds(preferences.enabled ? catalog.map((host) => host.id) : [])
+            setIds(
+              catalog
+                .filter((host) => (preferences.enabled && authorized) || pending.includes(host.id))
+                .map((host) => host.id)
+            )
           }
         })
         .catch(() => undefined)

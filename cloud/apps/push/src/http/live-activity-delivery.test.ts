@@ -1,3 +1,4 @@
+import { LiveActivityBootstrapSchema, LiveActivityContributionSchema } from '@orca-cloud/push-contract/live-activity-messages'
 import { createHash } from 'node:crypto'
 import { expect, it } from 'vitest'
 import { createPushServerHarness } from './push-server-harness.test-fixture.js'
@@ -94,5 +95,38 @@ it('fences scope takeover, cohort changes, stale controls and an old in-flight d
     expect(current?.push.timestamp).toBe(1_700_000_001)
     expect(current?.push.content.counts.working).toBe(2)
     await store.finish(current!, 'sent')
+  } finally { await harness.close() }
+})
+
+it('does not report completion for an empty but incompletely discovered overview', async () => {
+  const harness = await createPushServerHarness()
+  try {
+    const store = new LiveActivityOverviewStore(harness.database, harness.now)
+    expect(await store.register('owner', LiveActivityBootstrapSchema.parse({ ...bootstrap,
+      scopes: [scopeId(firstKey)], discoveryComplete: false }))).toBe(true)
+    await store.contribute('owner', LiveActivityContributionSchema.parse({ ...first, content: {
+      counts: { working: 0, attention: 0, done: 0, failed: 0, unavailable: 0 }, sessions: [], complete: true
+    } }))
+    const claim = await store.claim()
+    expect([claim?.push.content.state, claim?.push.content.complete]).toEqual(['unavailable', false])
+  } finally { await harness.close() }
+})
+
+it('rejects a stale sandbox result after the same token moves to production', async () => {
+  const harness = await createPushServerHarness()
+  try {
+    const store = new LiveActivityOverviewStore(harness.database, harness.now)
+    const registration = LiveActivityBootstrapSchema.parse({ ...bootstrap, scopes: [scopeId(firstKey)] })
+    await store.register('owner', registration)
+    await store.contribute('owner', LiveActivityContributionSchema.parse(first))
+    const sandbox = await store.claim()
+    expect(sandbox?.push.apnsEnvironment).toBe('sandbox')
+    await store.register('owner', { ...registration, revision: 2, apnsEnvironment: 'production' })
+    await store.finish(sandbox!, 'dead')
+    harness.advanceClock(1000)
+    const production = await store.claim()
+    expect(production?.push.apnsEnvironment).toBe('production')
+    expect(production?.push.token).toBe('aabb')
+    expect(production?.push.content.counts.working).toBe(2)
   } finally { await harness.close() }
 })

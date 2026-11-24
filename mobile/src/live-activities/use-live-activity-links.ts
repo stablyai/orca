@@ -22,6 +22,7 @@ export function useLiveActivityLinks(): void {
   const [destination, setDestination] = useState<{
     route: LiveActivityRoute & { activityId: string }
     sessionId: string
+    deadline: number
   } | null>(null)
   const { client, state } = useHostClient(destination?.route.hostId)
 
@@ -59,6 +60,7 @@ export function useLiveActivityLinks(): void {
       }
       setDestination({
         route: { ...route, activityId: route.activityId },
+        deadline: Date.now() + 10_000,
         sessionId: pending.session
       })
     })().catch(() => {
@@ -72,17 +74,36 @@ export function useLiveActivityLinks(): void {
   }, [pending, open, router])
 
   useEffect(() => {
-    if (!destination || !client || state !== 'connected') {
+    if (!destination) {
       return
     }
     let disposed = false
-    const { route, sessionId } = destination
+    const { route, sessionId, deadline } = destination
+    const fallback = (): void => {
+      if (disposed) {
+        return
+      }
+      disposed = true
+      setDestination(null)
+      const target = getNotificationNavigationTarget({ hostId: route.hostId })
+      if (target) {
+        open(target)
+      }
+    }
+    const timer = setTimeout(fallback, Math.max(0, deadline - Date.now()))
+    const cleanup = (): void => {
+      disposed = true
+      clearTimeout(timer)
+    }
+    if (!client || state !== 'connected' || deadline <= Date.now()) {
+      return cleanup
+    }
     void resolveLiveActivitySession
       .request(
         client,
         { activityId: route.activityId, sessionId },
         {
-          timeoutMs: 10_000,
+          timeoutMs: Math.max(1, deadline - Date.now()),
           failWhenDisconnected: true,
           ...(route.executionHost ? { envelope: { executionHost: route.executionHost } } : {})
         }
@@ -95,6 +116,8 @@ export function useLiveActivityLinks(): void {
           ...(route.executionHost ? { executionHost: route.executionHost } : {})
         })
         if (!disposed) {
+          disposed = true
+          clearTimeout(timer)
           setDestination(null)
           if (target) {
             open(target)
@@ -102,16 +125,9 @@ export function useLiveActivityLinks(): void {
         }
       })
       .catch(() => {
-        if (!disposed) {
-          setDestination(null)
-          const target = getNotificationNavigationTarget({ hostId: route.hostId })
-          if (target) {
-            open(target)
-          }
-        }
+        clearTimeout(timer)
+        fallback()
       })
-    return () => {
-      disposed = true
-    }
+    return cleanup
   }, [destination, client, state, open])
 }

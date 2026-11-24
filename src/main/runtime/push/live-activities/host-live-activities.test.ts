@@ -117,3 +117,70 @@ it('keeps overlapping registrations accepted and delivers the newest terminal st
     rmSync(directory, { recursive: true, force: true })
   }
 })
+
+it('never sends a contribution against a bootstrap superseded while registration was in flight', async () => {
+  vi.useFakeTimers()
+  vi.setSystemTime(20_000)
+  const directory = mkdtempSync(join(tmpdir(), 'orca-activity-bootstrap-'))
+  const registry = new DeviceRegistry(directory)
+  const phone = registry.addDevice('Phone', 'mobile')
+  const entered = Promise.withResolvers<void>()
+  const release = Promise.withResolvers<void>()
+  let destination = ''
+  const deliveries: string[] = []
+  const host = new HostLiveActivities(
+    {
+      listAllMobileSessionTabsInventory: async () => ({ snapshots: [], authoritative: true }),
+      projectLocalAgentSessionTabs: (frame) => ({ frame, complete: true }),
+      restoreStructuredAgentSessionTabs: async () => {},
+      onMobileSessionTabsChanged: () => () => {}
+    },
+    registry,
+    {
+      registerLiveActivityOverview: async (input) => {
+        if (input.revision === 1) {
+          entered.resolve()
+          await release.promise
+        }
+        destination = input.token
+        return true
+      },
+      sendLiveActivity: async () => {
+        deliveries.push(destination)
+        return 'sent'
+      }
+    }
+  )
+  try {
+    const registration = {
+      activityId: 'activity',
+      schemaVersion: 2 as const,
+      overviewId: '33333333-3333-4333-8333-333333333333',
+      scopeKey: 'a'.repeat(64),
+      showNames: false,
+      bootstrap: {
+        revision: 1,
+        showNames: false,
+        discoveryComplete: true,
+        controlKey: 'b'.repeat(64),
+        token: 'aabb',
+        apnsEnvironment: 'sandbox' as const,
+        scopes: ['c'.repeat(64)]
+      }
+    }
+    const first = host.register(phone.deviceId, registration)
+    await entered.promise
+    const replacement = host.register(phone.deviceId, {
+      ...registration,
+      bootstrap: { ...registration.bootstrap, revision: 2, token: 'ccdd' }
+    })
+    release.resolve()
+    await Promise.all([first, replacement])
+    await vi.advanceTimersByTimeAsync(1001)
+    expect(deliveries).toEqual(['ccdd'])
+  } finally {
+    host.stop()
+    vi.useRealTimers()
+    rmSync(directory, { recursive: true, force: true })
+  }
+})

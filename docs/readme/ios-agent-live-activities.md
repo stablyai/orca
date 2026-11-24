@@ -47,7 +47,13 @@ bounded session titles through Orca's push service and APNs. The gateway masks
 titles unless the overview's control registration allows them. Native titles are
 also marked privacy-sensitive. Prompts, commands, terminal output, provider error
 details, host addresses and workspace paths are not added as metadata. Changing
-privacy or disabling the feature ends the current card and its enrollments.
+privacy or disabling the feature retires the current card. Native cleanup and
+host unregistration are recorded before delivery; disconnected hosts remain
+pending until acknowledgement or lease expiry. Foreground retries run every
+30 seconds and reconnects retry immediately. Pending cleanup keeps the required
+host clients acquired even after opt-out. Keychain allocation/deletion has a
+durable cleanup ledger, including partial failures. Settings distinguish a saved
+preference from unfinished cleanup and let users retry it.
 
 Each session row has its own link; tapping the compact overview opens Orca.
 Links contain only opaque overview/scope/session identifiers. The phone resolves
@@ -123,7 +129,9 @@ keys. Required gateway credentials remain ORCA_PUSH_APNS_KEY,
 ORCA_PUSH_APNS_KEY_ID, ORCA_PUSH_APPLE_TEAM_ID and ORCA_PUSH_APNS_TOPIC.
 Durable gateway acceptance proves enrollment, not APNs delivery on a phone.
 Token rotation without a usable authenticated host connection waits for
-reconnection. New source enrollment also requires the foreground phone.
+reconnection. Failed enrollment of any source remains a delivery failure and
+retries while the phone is foregrounded; this does not assume background JavaScript
+execution. New source enrollment also requires the foreground phone.
 
 ## Qualification
 

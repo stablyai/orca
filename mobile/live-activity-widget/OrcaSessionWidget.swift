@@ -42,7 +42,7 @@ struct OrcaSessionWidget: Widget {
       } minimal: {
         HStack(spacing: 2) {
           Image(systemName: overviewSymbol(context.isStale ? "unavailable" : context.state.state))
-          Text(context.isStale ? "?" : overviewNumber(context.state.counts.working + context.state.counts.attention + context.state.counts.failed)).monospacedDigit()
+          Text(context.isStale ? "?" : "\(context.state.complete ? "" : "≥")\(overviewNumber(context.state.counts.working + context.state.counts.attention + context.state.counts.failed))").monospacedDigit().lineLimit(1).minimumScaleFactor(0.7)
         }
           .font(.caption2)
           .accessibilityLabel(overviewSummary(context))

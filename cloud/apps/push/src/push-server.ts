@@ -76,17 +76,14 @@ export function createPushServer(
   const sessions = new PushHostSessionStore(database, now)
   const devices = new PushDeviceRegistryStore(database, now)
   const badges = new PushBadgeCountStore(database, now)
-  const deliveryStore = new DurablePushStore(
-    database,
-    now,
-    reserveRequestConnection(database, config.databasePoolMax)
-  )
+  const backgroundDatabase = reserveRequestConnection(database, config.databasePoolMax)
+  const deliveryStore = new DurablePushStore(database, now, backgroundDatabase)
   const apnsTransport = options.apnsTransport ?? (config.apns ? createApnsHttp2Transport() : null)
   const liveActivityApns = config.apns && apnsTransport
     ? new ApnsClient({ topic: config.apnsTopic, credentials: config.apns, transport: apnsTransport, now })
     : null
   const liveActivityStore = new LiveActivityOverviewStore(database, now)
-  const overviewWorker = new LiveActivityOverviewWorker(liveActivityStore, liveActivityApns)
+  const overviewWorker = new LiveActivityOverviewWorker(new LiveActivityOverviewStore(backgroundDatabase, now), liveActivityApns)
   const dispatcher = new PushDispatcher({
     devices,
     badges,

@@ -5865,6 +5865,8 @@
     }
   },
   "liveActivities": {
+    "cleanupPending": "Sua preferência foi salva. Parte da limpeza das Atividades ao Vivo está pendente e será repetida quando o host reconectar.",
+    "retryCleanup": "Tentar limpeza novamente",
     "enable": "Atividades ao Vivo",
     "showNames": "Mostrar nomes das sessões",
     "description": "Veja o total de agentes dos computadores e servidores pareados. Os nomes ficam ocultos até você ativá-los.",

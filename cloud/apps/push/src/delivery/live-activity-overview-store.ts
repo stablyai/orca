@@ -55,32 +55,32 @@ export class LiveActivityOverviewStore {
 
   async claim(): Promise<OverviewClaim | null> {
     return this.database.transaction(async (tx) => {
-      const candidates = await tx.query('SELECT overview_id FROM push_live_overviews WHERE next_at <= ? AND lease_until <= ? ORDER BY next_at LIMIT 16', [this.now(), this.now()])
+      const now = this.now()
+      const candidates = await tx.query('SELECT overview_id FROM push_live_overviews WHERE next_at <= ? AND lease_until <= ? ORDER BY next_at LIMIT 16', [now, now])
       for (const candidate of candidates) {
         const id = String(candidate.overview_id)
         if (!(await tx.tryLockScope(`live-overview:${id}`))) continue
         const [overview] = await tx.query('SELECT * FROM push_live_overviews WHERE overview_id = ?', [id])
-        if (!overview || Number(overview.next_at) > this.now() || Number(overview.lease_until) > this.now()) continue
+        if (!overview || Number(overview.next_at) > now || Number(overview.lease_until) > now) continue
         const rows = await tx.query('SELECT * FROM push_live_contributions WHERE overview_id = ?', [id])
         const scopes = JSON.parse(String(overview.scopes)) as string[]
-        const content = liveActivityOverviewContent(scopes, rows, Number(overview.created_at), this.now())
+        const content = liveActivityOverviewContent(scopes, rows, Number(overview.created_at), now, Number(overview.discovery_complete) === 1)
         if (!Number(overview.show_names)) for (const session of content.sessions) session.title = ''
-        content.complete &&= Number(overview.discovery_complete) === 1
-        const ended = Number(overview.expires_at) <= this.now()
+        const ended = Number(overview.expires_at) <= now
         if (ended) { content.state = 'unavailable'; content.complete = false }
         const identity = liveActivityOverviewIdentity(content)
-        const nextAt = Math.min(Number(overview.expires_at), this.now() + HEARTBEAT_MS, ...rows.filter((row) => !Number(row.retired) && Number(row.received_at) + LIVE_ACTIVITY_FRESH_MS > this.now()).map((row) => Number(row.received_at) + LIVE_ACTIVITY_FRESH_MS))
-        if (!ended && overview.sent_identity === identity && Number(overview.sent_at) + HEARTBEAT_MS > this.now()) {
+        const nextAt = Math.min(Number(overview.expires_at), now + HEARTBEAT_MS, ...rows.filter((row) => !Number(row.retired) && Number(row.received_at) + LIVE_ACTIVITY_FRESH_MS > now).map((row) => Number(row.received_at) + LIVE_ACTIVITY_FRESH_MS))
+        if (!ended && overview.sent_identity === identity && Number(overview.sent_at) + HEARTBEAT_MS > now) {
           await tx.query('UPDATE push_live_overviews SET next_at = ? WHERE overview_id = ?', [Math.min(nextAt, Number(overview.sent_at) + HEARTBEAT_MS), id])
           continue
         }
-        const timestamp = Math.floor(this.now() / 1000)
+        const timestamp = Math.floor(now / 1000)
         if (timestamp <= Number(overview.timestamp)) {
           await tx.query('UPDATE push_live_overviews SET next_at = ? WHERE overview_id = ?', [(Number(overview.timestamp) + 1) * 1000, id])
           continue
         }
         const lease = randomUUID()
-        await tx.query('UPDATE push_live_overviews SET lease_id = ?, lease_until = ?, timestamp = ? WHERE overview_id = ?', [lease, this.now() + 30_000, timestamp, id])
+        await tx.query('UPDATE push_live_overviews SET lease_id = ?, lease_until = ?, timestamp = ? WHERE overview_id = ?', [lease, now + 30_000, timestamp, id])
         return { id, lease, revision: Number(overview.revision), identity, nextAt,
           push: { token: String(overview.token), apnsEnvironment: String(overview.apns_environment) as 'sandbox' | 'production', timestamp, event: ended ? 'end' : 'update', content } }
       }
@@ -93,12 +93,12 @@ export class LiveActivityOverviewStore {
       await tx.lockQuotaScope(`live-overview:${claim.id}`)
       const [current] = await tx.query('SELECT * FROM push_live_overviews WHERE overview_id = ? AND lease_id = ?', [claim.id, claim.lease])
       if (!current) return
-      const sameToken = current.token === claim.push.token
-      if (sameToken && (status === 'dead' || (status === 'sent' && claim.push.event === 'end'))) {
+      const sameDestination = current.token === claim.push.token && current.apns_environment === claim.push.apnsEnvironment
+      if (sameDestination && (status === 'dead' || (status === 'sent' && claim.push.event === 'end'))) {
         await this.remove(tx, claim.id)
         return
       }
-      const sent = status === 'sent' && sameToken
+      const sent = status === 'sent' && sameDestination
       const changed = Number(current.revision) !== claim.revision
       const nextAt = changed ? this.now() : status === 'error' ? this.now() + 5000 : claim.nextAt
       await tx.query('UPDATE push_live_overviews SET lease_id = NULL, lease_until = 0, next_at = ?, sent_identity = ?, sent_at = ? WHERE overview_id = ?', [Math.max(nextAt, (claim.push.timestamp + 1) * 1000), sent ? claim.identity : current.sent_identity, sent ? this.now() : current.sent_at, claim.id])
