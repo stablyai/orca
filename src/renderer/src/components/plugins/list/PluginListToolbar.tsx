@@ -17,6 +17,7 @@ export function PluginListToolbar({
   onFilterChange,
   sort,
   onSortChange,
+  sortApplies,
   refreshBusy,
   onRefresh
 }: {
@@ -28,6 +29,8 @@ export function PluginListToolbar({
   onFilterChange: (filter: PluginListFilter) => void
   sort: PluginCatalogSort
   onSortChange: (sort: PluginCatalogSort) => void
+  /** False on tabs whose rows this sort does not order (Installed, Updates). */
+  sortApplies: boolean
   refreshBusy: boolean
   onRefresh: () => void
 }): React.JSX.Element {
@@ -44,14 +47,15 @@ export function PluginListToolbar({
       {sources.length > 0 ? (
         <PluginFilterPopover filter={filter} sources={sources} onChange={onFilterChange} />
       ) : null}
-      <Select
-        value={sort}
-        onValueChange={(value) => {
-          if (isPluginCatalogSort(value)) {
-            onSortChange(value)
-          }
-        }}
-      >
+      {sortApplies ? (
+        <Select
+          value={sort}
+          onValueChange={(value) => {
+            if (isPluginCatalogSort(value)) {
+              onSortChange(value)
+            }
+          }}
+        >
         <SelectTrigger size="sm" aria-label={sortLabel}>
           <SelectValue />
         </SelectTrigger>
@@ -72,7 +76,8 @@ export function PluginListToolbar({
             {t('auto.components.settings.PluginManager.sortName', 'Name')}
           </SelectItem>
         </SelectContent>
-      </Select>
+        </Select>
+      ) : null}
       <Tooltip>
         <TooltipTrigger asChild>
           <Button

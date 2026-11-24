@@ -34,9 +34,10 @@ function compareDates(
   if (rightValue === undefined) {
     return -1
   }
-  return (
-    (rightValue < leftValue ? -1 : rightValue > leftValue ? 1 : 0) || comparePluginKeys(left, right)
-  )
+  // Why parsed instants: listing dates carry mixed timezone offsets, so string order is not time order.
+  const rightMs = Date.parse(rightValue)
+  const leftMs = Date.parse(leftValue)
+  return (rightMs < leftMs ? -1 : rightMs > leftMs ? 1 : 0) || comparePluginKeys(left, right)
 }
 
 export function isPluginCatalogSort(value: string): value is PluginCatalogSort {

@@ -62,6 +62,20 @@ describe('plugin catalog sorting', () => {
     ).toEqual(['a', 'c', 'z', 'b'])
   })
 
+  it('orders mixed timezone offsets by instant, not by string order', () => {
+    // Why: listing dates come from many publishers; 01:00+02:00 is 23:00Z the day before.
+    expect(
+      sort(
+        [
+          entry('late', { updatedAt: '2026-01-01T01:00:00+02:00' }),
+          entry('early', { updatedAt: '2026-01-01T00:00:00Z' }),
+          entry('newest', { updatedAt: '2026-01-02T00:00:00+08:00' })
+        ],
+        'recently-updated'
+      )
+    ).toEqual(['newest', 'early', 'late'])
+  })
+
   it('sorts names without regard to case, then breaks ties by plugin key', () => {
     expect(
       sort(

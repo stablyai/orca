@@ -338,6 +338,7 @@ export function PluginManager({
             onFilterChange={setListFilter}
             sort={sort}
             onSortChange={setSort}
+            sortApplies={filter === 'all' || filter === 'available'}
             refreshBusy={catalog.refreshBusy}
             onRefresh={() => void catalog.refresh()}
           />
