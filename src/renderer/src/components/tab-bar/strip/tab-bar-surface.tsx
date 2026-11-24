@@ -39,6 +39,7 @@ import { buildTabDropIndicators } from '../model/tab-bar-item-model'
 import type { TabStripCondense } from './use-tab-strip-condense'
 import { TabStripDensityContext } from './tab-strip-density-context'
 import { TabStripOverflowChip, type TabStripEntry } from './TabStripOverflowChip'
+import { SideChatPaneMark } from './SideChatPaneMark'
 
 const EMPTY_CLIENT_HOSTED_ROWS: readonly ClientHostedBrowserRow[] = []
 
@@ -163,13 +164,7 @@ export function renderTabBarSurface(
         data-side-chat-only={sideChatOnly || undefined}
         className="group/side-chat-pane flex items-stretch h-full overflow-hidden flex-1 min-w-0"
       >
-        {sideChatOnly ? (
-          <span className="flex shrink-0 items-center border-r border-border/70 px-1.5">
-            <span className="rounded-sm border border-border bg-muted px-1 text-3xs font-medium text-muted-foreground">
-              {t('components.native-chat.currentSideChat.mark', 'btw')}
-            </span>
-          </span>
-        ) : null}
+        {sideChatOnly ? <SideChatPaneMark t={t} /> : null}
         {condense.showScrollArrows ? (
           <Tooltip>
             <TooltipTrigger asChild>
@@ -344,8 +339,10 @@ export function renderTabBarSurface(
                     }
                     menuOpen={newTabMenuOpen}
                     menuOptions={createMenuOptions}
-                    // A bot's or group's home offers its agents only through its chats, above.
-                    hideAgents={bot !== null || botGroup !== null}
+                    // A group's home offers its agents only through its thread, below; a bot's
+                    // home searches its own chats in their place.
+                    hideAgents={botGroup !== null}
+                    botHome={bot && !terminalOnly ? { bot, agentMenu } : null}
                     onLaunchAgentOption={launchAgentFromNewTabEntry}
                     onOpenDefaultTerminal={() => {
                       queueNewActiveTerminalFocusAfterNewTabMenuClose()
@@ -362,7 +359,10 @@ export function renderTabBarSurface(
                   ) : null}
                 </>
               ) : null}
-              {bot && !terminalOnly ? <BotNewChatMenuItems bot={bot} model={agentMenu} /> : null}
+              {/* While a query is typed, the bot's chats are search results above instead. */}
+              {bot && !terminalOnly && showStaticCreateMenuItems ? (
+                <BotNewChatMenuItems bot={bot} model={agentMenu} />
+              ) : null}
               {botGroup && !terminalOnly ? (
                 <>
                   <BotGroupNewThreadMenuItems group={botGroup} />

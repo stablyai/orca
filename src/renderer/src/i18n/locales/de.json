@@ -19681,7 +19681,6 @@
         "moreControls": "Weitere Chat-Steuerelemente",
         "exitPlanMode": "Planungsmodus verlassen",
         "permissionAppliesNextMessage": "{{saved}} gilt für deine nächste Nachricht; derzeit wird {{active}} verwendet",
-        "botFor": "Für: {{detail}}",
         "bots": "Bots"
       },
       "tool": {

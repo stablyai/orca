@@ -11,7 +11,7 @@ import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { SetupGuideSidebarEntry } from '../../setup-guide/SetupGuideSidebarEntry'
 import { SidebarTaskNavButton } from './SidebarTaskNavButton'
-import { HideSidebarMenu } from './sidebar-nav-controls'
+import { HideSidebarMenu, SIDEBAR_NAV_DIMMED_ICON_CLASS_NAME } from './sidebar-nav-controls'
 import { useTranslate } from '@/i18n/use-translate'
 import { lazyWithRetry } from '@/app-shell/startup/lazy-with-retry'
 import type { GlobalSettings } from '../../../../../shared/settings/global-settings-types'
@@ -110,7 +110,7 @@ const SidebarNav = React.memo(function SidebarNav() {
         className="group flex w-full items-center gap-2 rounded-md bg-worktree-sidebar-foreground/5 px-2 py-1.5 text-left text-[13px] font-medium tracking-tight text-worktree-sidebar-foreground/60 transition-colors hover:bg-worktree-sidebar-foreground/8"
       >
         <Search
-          className="size-4 shrink-0 text-worktree-sidebar-foreground/30"
+          className={`size-4 shrink-0 ${SIDEBAR_NAV_DIMMED_ICON_CLASS_NAME}`}
           strokeWidth={1.75}
         />
         <span className="flex-1">
@@ -148,7 +148,7 @@ const SidebarNav = React.memo(function SidebarNav() {
               <Files
                 className={cn(
                   'size-4 shrink-0',
-                  !artifactsActive && 'text-worktree-sidebar-foreground/30'
+                  !artifactsActive && SIDEBAR_NAV_DIMMED_ICON_CLASS_NAME
                 )}
                 strokeWidth={artifactsActive ? 2.25 : 1.75}
               />
@@ -177,7 +177,7 @@ const SidebarNav = React.memo(function SidebarNav() {
               <BookOpen
                 className={cn(
                   'size-4 shrink-0',
-                  !skillsActive && 'text-worktree-sidebar-foreground/30'
+                  !skillsActive && SIDEBAR_NAV_DIMMED_ICON_CLASS_NAME
                 )}
                 strokeWidth={skillsActive ? 2.25 : 1.75}
               />
@@ -206,7 +206,7 @@ const SidebarNav = React.memo(function SidebarNav() {
               <CalendarClock
                 className={cn(
                   'size-4 shrink-0',
-                  !automationsActive && 'text-worktree-sidebar-foreground/30'
+                  !automationsActive && SIDEBAR_NAV_DIMMED_ICON_CLASS_NAME
                 )}
                 strokeWidth={automationsActive ? 2.25 : 1.75}
               />
@@ -246,7 +246,7 @@ const SidebarNav = React.memo(function SidebarNav() {
                 <Smartphone
                   className={cn(
                     'size-4 shrink-0',
-                    !mobileActive && 'text-worktree-sidebar-foreground/30'
+                    !mobileActive && SIDEBAR_NAV_DIMMED_ICON_CLASS_NAME
                   )}
                   strokeWidth={mobileActive ? 2.25 : 1.75}
                 />
