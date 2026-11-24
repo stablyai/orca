@@ -7,6 +7,7 @@ import {
   transitionLifecycleWithDb
 } from '../lifecycle-transition'
 import type { OrchestrationDb } from '../orchestration-db'
+import { ACTIVE_REMOTE_WORKERS_FOR_LINK_SQL } from './remote-worker-capacity'
 import { writtenRow } from './written-row'
 import { escalateWorkerFailure } from '../../workers/reports/worker-failure-escalation'
 
@@ -22,6 +23,7 @@ export type RemoteRunLinkRow = {
   cancel_key: string | null
   cancel_attempt: number
   cancel_retries: number
+  cancel_owed_workers: number | null
   cancel_retry_at: number | null
   last_imported_sequence: number
   last_error: string | null
@@ -153,8 +155,9 @@ export function listOwedRemoteRunCancels(
 
 /** Part of both resets: every open link owes its server a cancel under a fresh key, and keeps its import position as the tombstone. */
 export const OWE_REMOTE_RUN_CANCELS_SQL = `
-  UPDATE remote_run_links
-    SET state = 'cancel_owed', cancel_key = 'cancel:' || lower(hex(randomblob(12))),
+  UPDATE remote_run_links AS link
+    SET cancel_owed_workers = ${ACTIVE_REMOTE_WORKERS_FOR_LINK_SQL},
+        state = 'cancel_owed', cancel_key = 'cancel:' || lower(hex(randomblob(12))),
         cancel_attempt = 0, cancel_retries = 0, cancel_retry_at = NULL, last_error = NULL
     WHERE state = 'open';
   DELETE FROM remote_placements;

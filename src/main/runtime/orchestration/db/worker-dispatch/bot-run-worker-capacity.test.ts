@@ -5,7 +5,11 @@ import {
   releaseRemotePlacement,
   reserveRemotePlacement
 } from '../remote-owned/remote-placements'
-import { openRemoteRunLink } from '../remote-owned/remote-run-links'
+import {
+  closeRemoteRunLink,
+  getRemoteRunLink,
+  openRemoteRunLink
+} from '../remote-owned/remote-run-links'
 
 let db: OrchestrationDb
 
@@ -97,4 +101,53 @@ it('shares the Run budget with paired starts before and after their server confi
   expect(() => startLocal()).toThrow('This Run already has 8 active workers.')
   releaseRemotePlacement(db, 'task_000000000002', 'task_000000000002')
   expect(place('task_000000000003').placement.state).toBe('reserved')
+})
+
+it('keeps workers in the same Run budget while a task reset owes their paired server a cancel', () => {
+  const { id: runId } = db.createRun({
+    objective: 'Reset paired tasks',
+    coordinatorHandle: null,
+    coordinatorPaneKey: null
+  })
+  const link = openRemoteRunLink(db, runId, {
+    environmentId: 'env_server',
+    name: 'Server',
+    peerFingerprint: 'fp_server'
+  })
+  for (let index = 1; index <= 8; index++) {
+    const key = String(index).padStart(12, '0')
+    const taskId = `task_${key}`
+    reserveRemotePlacement(db, {
+      link,
+      taskId,
+      requestKey: key,
+      create: { spec: 'Paired work' },
+      enforceBotRunCapacity: true
+    })
+    if (index < 8) {
+      recordRemoteStart(db, {
+        conversationId: link.conversation_id,
+        taskId,
+        requestKey: key,
+        dispatchId: `ctx_${key}`
+      })
+    }
+  }
+
+  const startLocal = () =>
+    db.createStartingWorkerDispatch({
+      taskRunId: runId,
+      taskSpec: 'Work after reset',
+      creator: { kind: 'system' },
+      maxDepth: 4,
+      startOptions: {},
+      chatLineage: true
+    })
+  db.resetTasks()
+  expect(db.listTasks({ runId })).toHaveLength(0)
+  expect(getRemoteRunLink(db, link.conversation_id)?.state).toBe('cancel_owed')
+  expect(() => startLocal()).toThrow('This Run already has 8 active workers.')
+
+  closeRemoteRunLink(db, link.conversation_id, 'Cancellation confirmed')
+  expect(startLocal().worker.state).toBe('starting')
 })

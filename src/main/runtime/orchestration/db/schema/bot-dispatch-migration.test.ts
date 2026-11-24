@@ -4,7 +4,7 @@ import { join } from 'node:path'
 import Database from '../../../../sqlite/sync-database'
 import { afterEach, describe, expect, it } from 'vitest'
 import { getRemotePlacement, reserveRemotePlacement } from '../remote-owned/remote-placements'
-import { openRemoteRunLink } from '../remote-owned/remote-run-links'
+import { getRemoteRunLink, openRemoteRunLink } from '../remote-owned/remote-run-links'
 import { OrchestrationDb } from '../orchestration-db'
 import { createRootDispatch } from '../root-dispatch-test-fixture'
 
@@ -122,7 +122,7 @@ describe('v47-v48 bot dispatch migrations', () => {
     expectCurrentSchema(path, taskId)
   })
 
-  it('adds an unknown lineage stamp to existing paired placements without losing the reservation', () => {
+  it('adds worker capacity fields to an existing paired placement without losing its reservation', () => {
     const path = dbPath()
     const db = new OrchestrationDb(path)
     const run = db.createRun({
@@ -138,6 +138,7 @@ describe('v47-v48 bot dispatch migrations', () => {
     const taskId = 'task_000000000001'
     reserveRemotePlacement(db, { link, taskId, requestKey: 'old-start', create: { spec: 'Work' } })
     db.db.exec('ALTER TABLE remote_placements DROP COLUMN chat_lineage')
+    db.db.exec('ALTER TABLE remote_run_links DROP COLUMN cancel_owed_workers')
     db.close()
 
     const reopened = new OrchestrationDb(path)
@@ -146,6 +147,10 @@ describe('v47-v48 bot dispatch migrations', () => {
         state: 'reserved',
         request_key: 'old-start',
         chat_lineage: null
+      })
+      expect(getRemoteRunLink(reopened, link.conversation_id)).toMatchObject({
+        state: 'open',
+        cancel_owed_workers: null
       })
     } finally {
       reopened.close()
