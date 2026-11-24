@@ -24,10 +24,12 @@ import { openWorkspaceBrowserTab } from '@/lib/browser/workspace/workspace-brows
 
 const EMPTY_BRANCH_CHANGE_ENTRIES: GitBranchChangeEntry[] = []
 
+type PendingCommitCompare = { completion: PromiseWithResolvers<GitCommitCompareResult> }
+
 type CommitCompareGeneration = {
   key: string
   cache: Map<string, GitCommitCompareResult>
-  pending: Map<string, Promise<GitBranchChangeEntry[]>>
+  pending: Map<string, PendingCommitCompare>
 }
 
 type GitHistoryCommitActions = {
@@ -39,6 +41,15 @@ type GitHistoryCommitActions = {
     event?: SourceControlRowOpenEvent
   ) => void
   handleCommitAction: (action: GitHistoryCommitAction, item: GitHistoryItem) => void
+}
+
+function commitDiffErrorMessage(error?: unknown): string {
+  return error instanceof Error
+    ? error.message
+    : translate(
+        'auto.components.right.sidebar.SourceControl.8a5ba6a988',
+        'Failed to load commit diff'
+      )
 }
 
 export function useGitHistoryCommitActions({
@@ -79,19 +90,18 @@ export function useGitHistoryCommitActions({
     }
   }, [generationKey])
 
-  const loadCommitFiles = useCallback(
-    async (item: GitHistoryItem): Promise<GitBranchChangeEntry[]> => {
+  const loadCommitCompare = useCallback(
+    async (item: GitHistoryItem): Promise<GitCommitCompareResult | null> => {
       if (!activeWorktreeId || !worktreePath) {
-        return EMPTY_BRANCH_CHANGE_ENTRIES
+        return null
       }
-      // Late completions write only into the generation that issued them, never the current one.
       const generation = generationRef.current
       const cached = generation.cache.get(item.id)
       if (cached) {
-        return cached.entries
+        return cached
       }
       const connectionId = sourceControlConnectionId(scope, activeWorktreeId, ownerConnectionId)
-      const request: Promise<GitBranchChangeEntry[]> = getRuntimeGitCommitCompare(
+      const request = getRuntimeGitCommitCompare(
         {
           // Compare on the repo owner, which may differ from the focused host.
           target: requireGitOwnerTarget(activeRepoTarget),
@@ -101,33 +111,39 @@ export function useGitHistoryCommitActions({
         },
         item.id
       )
-        .then((result) => {
-          if (result.summary.status !== 'ready') {
-            throw new Error(
-              result.summary.errorMessage ??
-                translate(
-                  'auto.components.right.sidebar.SourceControl.8a5ba6a988',
-                  'Failed to load commit diff'
-                )
-            )
-          }
-          // A shallow checkout can return different rows for the same commit after it deepens.
-          const latest = generation.pending.get(item.id)
-          if (latest !== request) {
-            return latest ?? generation.cache.get(item.id)?.entries ?? result.entries
-          }
+      // When the same commit is read again, existing callers follow the newer reply.
+      const completion =
+        generation.pending.get(item.id)?.completion ??
+        Promise.withResolvers<GitCommitCompareResult>()
+      const pending = { completion }
+      generation.pending.set(item.id, pending)
+      const settle = (result: GitCommitCompareResult | null, error?: unknown): void => {
+        if (generation.pending.get(item.id) !== pending) {
+          return
+        }
+        generation.pending.delete(item.id)
+        if (result?.summary.status === 'ready') {
           generation.cache.set(item.id, result)
-          return result.entries
-        })
-        .finally(() => {
-          if (generation.pending.get(item.id) === request) {
-            generation.pending.delete(item.id)
-          }
-        })
-      generation.pending.set(item.id, request)
-      return request
+          completion.resolve(result)
+        } else {
+          completion.reject(
+            error ?? new Error(result?.summary.errorMessage ?? commitDiffErrorMessage())
+          )
+        }
+      }
+      void request.then(
+        (result) => settle(result),
+        (error: unknown) => settle(null, error)
+      )
+      return completion.promise
     },
     [activeRepoTarget, activeWorktreeId, scope, worktreePath, ownerConnectionId]
+  )
+
+  const loadCommitFiles = useCallback(
+    async (item: GitHistoryItem): Promise<GitBranchChangeEntry[]> =>
+      (await loadCommitCompare(item))?.entries ?? EMPTY_BRANCH_CHANGE_ENTRIES,
+    [loadCommitCompare]
   )
 
   const openHistoryCommitDiff = useCallback(
@@ -137,13 +153,10 @@ export function useGitHistoryCommitActions({
       }
       const generation = generationRef.current
       try {
-        await (generation.pending.get(item.id) ?? loadCommitFiles(item))
+        const compare = await (generation.pending.get(item.id)?.completion.promise ??
+          loadCommitCompare(item))
         // A worktree or host change while loading drops the open; a scope change in the list does not.
-        if (generationRef.current !== generation) {
-          return
-        }
-        const cached = generation.cache.get(item.id)
-        if (!cached) {
+        if (!compare || generationRef.current !== generation) {
           return
         }
         useAppStore
@@ -151,26 +164,19 @@ export function useGitHistoryCommitActions({
           .openCommitAllDiffs(
             activeWorktreeId,
             worktreePath,
-            cached.summary,
-            cached.entries,
+            compare.summary,
+            compare.entries,
             item.subject,
             item.message,
             { placementWorkspaceId, runtimeEnvironmentId, executionHostId }
           )
       } catch (error) {
-        toast.error(
-          error instanceof Error
-            ? error.message
-            : translate(
-                'auto.components.right.sidebar.SourceControl.8a5ba6a988',
-                'Failed to load commit diff'
-              )
-        )
+        toast.error(commitDiffErrorMessage(error))
       }
     },
     [
       activeWorktreeId,
-      loadCommitFiles,
+      loadCommitCompare,
       placementWorkspaceId,
       executionHostId,
       runtimeEnvironmentId,

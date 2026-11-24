@@ -8,12 +8,14 @@ import type { GitHistoryItem } from '../../../../../../shared/git/history/git-hi
 
 const mocks = vi.hoisted(() => ({
   getRuntimeGitCommitCompare: vi.fn(),
-  openCommitAllDiffs: vi.fn()
+  openCommitAllDiffs: vi.fn(),
+  toastError: vi.fn()
 }))
 
 vi.mock('@/runtime/source-control/git/runtime-git-diff-client', () => ({
   getRuntimeGitCommitCompare: mocks.getRuntimeGitCommitCompare
 }))
+vi.mock('sonner', () => ({ toast: { error: mocks.toastError } }))
 vi.mock('@/runtime/source-control/git/runtime-git-working-tree-client', () => ({
   getRuntimeGitRemoteCommitUrl: vi.fn()
 }))
@@ -96,6 +98,65 @@ describe('useGitHistoryCommitActions context fencing', () => {
     await actions.openHistoryCommitDiff(COMMIT)
     expect(acceptedFiles).toEqual([{ path: 'changed.ts', status: 'modified' }])
     expect(mocks.openCommitAllDiffs.mock.lastCall?.[3]).toEqual(acceptedFiles)
+  })
+
+  it.each([true, false])(
+    'reports the authoritative Graph Open failure when newer settles first is %s',
+    async (newerFirst) => {
+      const older = Promise.withResolvers<GitCommitCompareResult>()
+      const newer = Promise.withResolvers<GitCommitCompareResult>()
+      mocks.getRuntimeGitCommitCompare
+        .mockReturnValueOnce(older.promise)
+        .mockReturnValueOnce(newer.promise)
+      render(<Probe worktreeId="A" />)
+      const actions = latest!
+
+      const opening = actions.openHistoryCommitDiff(COMMIT)
+      const current = actions.loadCommitFiles(COMMIT).catch(() => undefined)
+      if (newerFirst) {
+        newer.reject(new Error('Current commit compare failed'))
+        await current
+        older.resolve(compare('shallow.ts'))
+      } else {
+        older.resolve(compare('shallow.ts'))
+        await act(() => Promise.resolve())
+        newer.reject(new Error('Current commit compare failed'))
+        await current
+      }
+
+      await opening
+      expect(mocks.openCommitAllDiffs).not.toHaveBeenCalled()
+      expect(mocks.toastError.mock.lastCall?.[0]).toBe('Current commit compare failed')
+
+      mocks.getRuntimeGitCommitCompare.mockResolvedValueOnce(compare('recovered.ts'))
+      await actions.openHistoryCommitDiff(COMMIT)
+      expect(mocks.openCommitAllDiffs.mock.lastCall?.[3]).toEqual([
+        { path: 'recovered.ts', status: 'modified' }
+      ])
+    }
+  )
+
+  it('opens the authoritative Graph result when a joined older compare rejects', async () => {
+    const older = Promise.withResolvers<GitCommitCompareResult>()
+    const newer = Promise.withResolvers<GitCommitCompareResult>()
+    mocks.getRuntimeGitCommitCompare
+      .mockReturnValueOnce(older.promise)
+      .mockReturnValueOnce(newer.promise)
+    render(<Probe worktreeId="A" />)
+    const actions = latest!
+
+    const oldFiles = actions.loadCommitFiles(COMMIT).catch(() => undefined)
+    const opening = actions.openHistoryCommitDiff(COMMIT)
+    const current = actions.loadCommitFiles(COMMIT)
+    newer.resolve(compare('current.ts'))
+    await current
+    older.reject(new Error('Superseded commit compare failed'))
+
+    await Promise.all([oldFiles, opening])
+    expect(mocks.openCommitAllDiffs.mock.lastCall?.[3]).toEqual([
+      { path: 'current.ts', status: 'modified' }
+    ])
+    expect(mocks.toastError).not.toHaveBeenCalled()
   })
 
   it('keeps a late compare for the previous worktree out of the current cache', async () => {
