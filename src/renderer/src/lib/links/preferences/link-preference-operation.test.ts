@@ -91,6 +91,18 @@ describe('Remember operation', () => {
     expect(w.writes).toEqual([])
   })
 
+  it('yields when another window re-picks Ask and only the prompted flag changes', async () => {
+    const w = writer()
+    const remember = ops.beginLinkPreferenceOperation('remember', ORCA)
+    ops.noteIncomingLinkPatch(
+      { httpLinkClickBehavior: 'ask', openLinksInAppPreferencePrompted: true },
+      { httpLinkClickBehavior: 'ask', openLinksInAppPreferencePrompted: false }
+    )
+    expect(ops.admitLinkPreferenceOperation(remember, 'admitted')).toBe(false)
+    await ops.writeLinkPreference(remember, w)
+    expect(w.writes).toEqual([])
+  })
+
   it('shows no notice when the acknowledged state already carries a later change', async () => {
     const op = ops.beginLinkPreferenceOperation('remember', ORCA)
     ops.admitLinkPreferenceOperation(op, 'admitted')

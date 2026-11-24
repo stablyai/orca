@@ -284,7 +284,8 @@ export function BotItemBody({
       : null
   const links = useNativeChatLinkActions(fileContext?.fileLinkContext ?? null, pane, {
     sessionId: null,
-    isVisible: true
+    isVisible: true,
+    followsLinkMode: false
   })
   return (
     <div

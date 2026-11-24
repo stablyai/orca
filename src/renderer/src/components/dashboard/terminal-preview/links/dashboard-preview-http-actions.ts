@@ -27,7 +27,11 @@ import {
   canRememberLinkChoice,
   rememberOnAdmission
 } from '@/lib/links/preferences/link-remember-choice'
-import { httpLinkModeForLink, usesHttpLinkMode } from '@/lib/links/preferences/http-link-mode'
+import {
+  httpLinkModeForLink,
+  plainClickDestinationsFor,
+  usesHttpLinkMode
+} from '@/lib/links/preferences/http-link-mode'
 import type { DashboardCard } from '../../../../../../shared/agent-status/presentation/dashboard-snapshot'
 import type { HttpLinkSourceOwner } from '@/lib/browser/navigation/http-link-routing'
 
@@ -98,8 +102,13 @@ export function dashboardPreviewHttpActions(
       'enabled' &&
     (owner.kind === 'local' || canOpenRemoteLinkInWorkspaceBrowser(state, source.worktreeId, owner))
   )
+  // The preview has no middle-click route, so its one order is the plain-click order.
   const destinations = canOpen
-    ? httpLinkActionDestinationsFor(state.settings, owner, true, url)
+    ? plainClickDestinationsFor(
+        httpLinkActionDestinationsFor(state.settings, owner, true, url),
+        url,
+        owner
+      )
     : { primary: 'system' as const }
   // Captured when the chooser is built at click; desktop only.
   const actionContext = usesHttpLinkMode()
@@ -109,7 +118,7 @@ export function dashboardPreviewHttpActions(
     actionContext &&
     canRememberLinkChoice({
       plainClick: true,
-      mode: httpLinkModeForLink(state.settings, url, destinations),
+      mode: httpLinkModeForLink(state.settings, url, destinations, owner),
       destinations,
       actionContext
     })

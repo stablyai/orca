@@ -9,7 +9,11 @@ import { useAppStore } from '../../../../store/index'
 import type { NativeChatFileLinkContext } from './native-chat-file-link-context'
 import { resolveNativeChatHttpLinkRouting } from './native-chat-link-target-actions'
 import { handleNativeChatWebLink } from './native-chat-web-link-actions'
-import { httpLinkModeForLink, usesHttpLinkMode } from '@/lib/links/preferences/http-link-mode'
+import {
+  httpLinkModeForLink,
+  plainClickDestinationsFor,
+  usesHttpLinkMode
+} from '@/lib/links/preferences/http-link-mode'
 import { nativeChatPlainLinkClickBehavior } from './native-chat-link-click-behavior'
 import { useNativeChatFileLinkClick } from './use-native-chat-file-link-click'
 
@@ -25,7 +29,12 @@ export type NativeChatLinkActions = {
 export function useNativeChatLinkActions(
   context: NativeChatFileLinkContext | null,
   rootRef: RefObject<HTMLElement | null>,
-  scope: { sessionId: string | null; isVisible: boolean }
+  scope: {
+    sessionId: string | null
+    isVisible: boolean
+    /** Off for Markdown surfaces (bot item comments and descriptions), which keep today's routing in stage 1. */
+    followsLinkMode?: boolean
+  }
 ): NativeChatLinkActions {
   const [linkActionRequest, setLinkActionRequest] = useState<LinkActionRequest | null>(null)
   const scopeKey = JSON.stringify([
@@ -42,7 +51,12 @@ export function useNativeChatLinkActions(
     setLinkActionRequest((current) => closeLinkActionRequest(current, dismissed))
   }, [])
 
-  const onLinkClick = useNativeChatLinkClick(context, setLinkActionRequest, rootRef)
+  const onLinkClick = useNativeChatLinkClick(
+    context,
+    setLinkActionRequest,
+    rootRef,
+    scope.followsLinkMode !== false
+  )
   return {
     onLinkClick,
     linkActionRequest,
@@ -56,7 +70,8 @@ export function useNativeChatLinkActions(
 export function useNativeChatLinkClick(
   context: NativeChatFileLinkContext | null,
   request: (request: LinkActionRequest) => void,
-  rootRef: RefObject<HTMLElement | null>
+  rootRef: RefObject<HTMLElement | null>,
+  followsLinkMode = true
 ): CommentMarkdownLinkClickHandler | undefined {
   const openFileLink = useNativeChatFileLinkClick(context, request, rootRef)
   const onLinkClick = useCallback<CommentMarkdownLinkClickHandler>(
@@ -75,10 +90,21 @@ export function useNativeChatLinkClick(
       // Read at click time: settings and workspace ownership must not re-render the transcript.
       const state = useAppStore.getState()
       const anchor = event.currentTarget
-      const routing = resolveNativeChatHttpLinkRouting(state, context.worktreeId, route.url)
-      const desktopMode = usesHttpLinkMode()
-        ? httpLinkModeForLink(state.settings, route.url, routing.destinations)
-        : null
+      const routed = resolveNativeChatHttpLinkRouting(state, context.worktreeId, route.url)
+      const desktopMode =
+        followsLinkMode && usesHttpLinkMode()
+          ? httpLinkModeForLink(state.settings, route.url, routed.destinations, routed.sourceOwner)
+          : null
+      const routing = desktopMode
+        ? {
+            ...routed,
+            destinations: plainClickDestinationsFor(
+              routed.destinations,
+              route.url,
+              routed.sourceOwner
+            )
+          }
+        : routed
       // Desktop chat follows the link mode, so effective "leave to terminal" no longer blocks it.
       const plainClickBehavior = desktopMode
         ? undefined
@@ -95,7 +121,7 @@ export function useNativeChatLinkClick(
         request
       })
     },
-    [context, openFileLink, request, rootRef]
+    [context, followsLinkMode, openFileLink, request, rootRef]
   )
 
   return context ? onLinkClick : undefined

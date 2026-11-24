@@ -193,7 +193,8 @@ function WithItemViewLinks({ links }: { links: BotItemLinkView[] }): React.JSX.E
   const root = useRef<HTMLDivElement>(null)
   const actions = useNativeChatLinkActions(FOLDER_CONTEXT, root, {
     sessionId: null,
-    isVisible: true
+    isVisible: true,
+    followsLinkMode: false
   })
   return (
     <div ref={root}>

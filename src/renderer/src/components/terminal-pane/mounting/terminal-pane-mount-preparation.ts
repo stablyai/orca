@@ -249,7 +249,13 @@ export function prepareTerminalPaneMount(
         getHttpLinkSourceOwnerForPane(paneId),
         canOpenOwnedBrowserForPane(paneId)
       ),
-      url !== undefined ? { url, destinations: getHttpLinkActionDestinations(paneId, url) } : {}
+      url !== undefined
+        ? {
+            url,
+            destinations: getHttpLinkActionDestinations(paneId, url),
+            sourceOwner: getHttpLinkSourceOwnerForPane(paneId)
+          }
+        : {}
     )
   return {
     container,

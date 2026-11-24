@@ -25,7 +25,10 @@ import {
   type TerminalLinkActionContext
 } from '../terminal-link-action-request'
 import { captureLinkActionContext } from '@/lib/links/preferences/link-action-context'
-import { isDesktopLocalhostLink } from '@/lib/links/preferences/http-link-mode'
+import {
+  isDesktopLocalhostLink,
+  plainClickDestinationsFor
+} from '@/lib/links/preferences/http-link-mode'
 import {
   canRememberLinkChoice,
   rememberOnAdmission
@@ -74,7 +77,7 @@ function localhostLinkActionContext(
   return context?.rememberMode === 'ask' &&
     context.httpPlainClickBehavior === 'actions' &&
     deps.actionDestinations?.primary === 'orca' &&
-    isDesktopLocalhostLink(url)
+    isDesktopLocalhostLink(url, deps.sourceOwner)
     ? { ...context, httpPlainClickBehavior: 'open', rememberMode: 'open' }
     : context
 }
@@ -82,8 +85,20 @@ function localhostLinkActionContext(
 export function handleTerminalHttpLink(
   url: string,
   event: MouseEvent | undefined,
-  deps: UrlLinkHitTestDeps
+  input: UrlLinkHitTestDeps
 ): boolean {
+  // Middle-click keeps the setting's order; plain and Cmd/Ctrl-click put a local dev server in Orca.
+  const deps =
+    input.actionDestinations && !isTerminalMiddleClickActivation(event)
+      ? {
+          ...input,
+          actionDestinations: plainClickDestinationsFor(
+            input.actionDestinations,
+            url,
+            input.sourceOwner
+          )
+        }
+      : input
   if (isTerminalHttpLinkActivation(event)) {
     const forceDestination =
       deps.actionDestinations &&

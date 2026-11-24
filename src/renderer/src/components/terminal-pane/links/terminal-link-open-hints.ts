@@ -5,7 +5,7 @@ import {
 import type { HttpLinkSourceOwner } from '@/lib/browser/navigation/http-link-routing'
 import {
   httpLinkModeFor,
-  isDesktopLocalhostLink,
+  opensLocalhostInOrca,
   usesHttpLinkMode
 } from '@/lib/links/preferences/http-link-mode'
 import type { GlobalSettings } from '../../../../../shared/settings/global-settings-types'
@@ -91,9 +91,16 @@ export function getTerminalUrlOpenHint(options: TerminalUrlOpenHintOptions = {})
 export function getTerminalUrlLinkHint(
   settings: GlobalSettings | null | undefined,
   hintOptions: TerminalUrlOpenHintOptions,
-  link: { url?: string; destinations?: HttpLinkActionDestinations }
+  link: {
+    url?: string
+    destinations?: HttpLinkActionDestinations
+    sourceOwner?: HttpLinkSourceOwner
+  }
 ): string {
-  const localhost = link.destinations?.primary === 'orca' && isDesktopLocalhostLink(link.url)
+  const localhost =
+    link.destinations !== undefined &&
+    link.url !== undefined &&
+    opensLocalhostInOrca(link.destinations, link.url, link.sourceOwner)
   const plainClick = terminalLinkClickBehaviorFor(settings)
   return getTerminalUrlOpenHint({
     ...hintOptions,

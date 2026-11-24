@@ -26,20 +26,52 @@ export function usesHttpLinkMode(): boolean {
   return !isWebClientLocation()
 }
 
-/** Desktop localhost links open in the Orca browser in every mode: a dev server is meant to be seen beside its code. */
-export function isDesktopLocalhostLink(url: string | undefined): boolean {
-  return url !== undefined && usesHttpLinkMode() && isLoopbackHttpUrl(url)
+type LinkDestinations = { primary: 'orca' | 'system'; alternate?: 'orca' | 'system' }
+
+/** A localhost link from this machine's own process; remote loopback keeps its host's route rules. */
+export function isDesktopLocalhostLink(
+  url: string | undefined,
+  sourceOwner: { kind: string } | undefined
+): boolean {
+  return (
+    url !== undefined &&
+    sourceOwner?.kind === 'local' &&
+    usesHttpLinkMode() &&
+    isLoopbackHttpUrl(url)
+  )
 }
 
-/** One link's plain-click mode: a localhost link that can open in Orca skips the chooser. */
+/** A plain click on this link opens the Orca browser whatever the setting says. */
+export function opensLocalhostInOrca(
+  destinations: LinkDestinations,
+  url: string,
+  sourceOwner: { kind: string } | undefined
+): boolean {
+  return (
+    (destinations.primary === 'orca' || destinations.alternate === 'orca') &&
+    isDesktopLocalhostLink(url, sourceOwner)
+  )
+}
+
+/** Plain and Cmd/Ctrl-click order: a local dev server opens in the Orca browser, Shift sends it out. */
+export function plainClickDestinationsFor<D extends LinkDestinations>(
+  destinations: D,
+  url: string,
+  sourceOwner: { kind: string } | undefined
+): D | { primary: 'orca'; alternate: 'system' } {
+  return opensLocalhostInOrca(destinations, url, sourceOwner)
+    ? { primary: 'orca', alternate: 'system' }
+    : destinations
+}
+
+/** One link's plain-click mode: a local localhost link that can open in Orca skips the chooser. */
 export function httpLinkModeForLink(
   settings: Partial<HttpLinkModeSettings> | null | undefined,
   url: string,
-  destinations: { primary: 'orca' | 'system' }
+  destinations: LinkDestinations,
+  sourceOwner: { kind: string } | undefined
 ): HttpLinkMode {
-  return destinations.primary === 'orca' && isDesktopLocalhostLink(url)
-    ? 'open'
-    : httpLinkModeFor(settings)
+  return opensLocalhostInOrca(destinations, url, sourceOwner) ? 'open' : httpLinkModeFor(settings)
 }
 
 /** Settings a Remember choice writes: the browser, the open mode, and no legacy first-use prompt. */

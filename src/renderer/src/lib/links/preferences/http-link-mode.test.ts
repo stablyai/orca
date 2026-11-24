@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { httpLinkActionDestinationsFor } from '@/lib/browser/navigation/http-link-destinations'
-import { httpLinkModeFor, httpLinkModeForLink } from './http-link-mode'
+import { httpLinkModeFor, httpLinkModeForLink, plainClickDestinationsFor } from './http-link-mode'
 
 describe('desktop link-open mode', () => {
   it('keeps a valid saved mode over the terminal choice', () => {
@@ -24,23 +24,28 @@ describe('desktop link-open mode', () => {
     expect(httpLinkModeFor({ terminalLinkClickBehavior: 'none' })).toBe('open')
   })
 
-  it('opens a localhost link in Orca without asking, and leaves other links to the setting', () => {
+  it('opens a local localhost link in Orca without asking; remote and other links keep the setting', () => {
     const settings = { httpLinkClickBehavior: 'ask', openLinksInApp: false } as const
     const local = { kind: 'local' } as const
     const localhost = 'http://localhost:5173/app'
     const destinations = httpLinkActionDestinationsFor(settings, local, false, localhost)
-    expect(destinations).toEqual({ primary: 'orca', alternate: 'system' })
-    expect(httpLinkModeForLink(settings, localhost, destinations)).toBe('open')
+    // The setting's order is untouched (middle-click and choosers use it); plain clicks reorder.
+    expect(destinations).toEqual({ primary: 'system', alternate: 'orca' })
+    expect(plainClickDestinationsFor(destinations, localhost, local)).toEqual({
+      primary: 'orca',
+      alternate: 'system'
+    })
+    expect(httpLinkModeForLink(settings, localhost, destinations, local)).toBe('open')
 
     const web = 'https://example.com/'
     const webDestinations = httpLinkActionDestinationsFor(settings, local, false, web)
-    expect(webDestinations.primary).toBe('system')
-    expect(httpLinkModeForLink(settings, web, webDestinations)).toBe('ask')
+    expect(plainClickDestinationsFor(webDestinations, web, local)).toBe(webDestinations)
+    expect(httpLinkModeForLink(settings, web, webDestinations, local)).toBe('ask')
 
-    // A remote source that cannot reach Orca's browser keeps asking with its one destination.
-    const remote = { kind: 'ssh', connectionId: 'c1' } as const
-    const remoteDestinations = httpLinkActionDestinationsFor(settings, remote, false, localhost)
-    expect(remoteDestinations).toEqual({ primary: 'system' })
-    expect(httpLinkModeForLink(settings, localhost, remoteDestinations)).toBe('ask')
+    // A remote host's loopback names that host; it keeps asking, even when its browser route is open.
+    const ssh = { kind: 'ssh', connectionId: 'c1' } as const
+    const sshDestinations = httpLinkActionDestinationsFor(settings, ssh, true, localhost)
+    expect(httpLinkModeForLink(settings, localhost, sshDestinations, ssh)).toBe('ask')
+    expect(plainClickDestinationsFor(sshDestinations, localhost, ssh)).toBe(sshDestinations)
   })
 })

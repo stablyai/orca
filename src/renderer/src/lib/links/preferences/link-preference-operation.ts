@@ -84,10 +84,8 @@ export function noteIncomingLinkPatch(
   patch: Readonly<Record<string, unknown>>,
   before: Partial<GlobalSettings> | null
 ): void {
-  const changed =
-    ('openLinksInApp' in patch && patch.openLinksInApp !== before?.openLinksInApp) ||
-    ('httpLinkClickBehavior' in patch &&
-      patch.httpLinkClickBehavior !== before?.httpLinkClickBehavior)
+  // Any link field counts: re-picking Ask in another window changes only the prompted flag on upgraded profiles.
+  const changed = LINK_KEYS.some((key) => key in patch && patch[key] !== before?.[key])
   if (!changed) {
     return
   }

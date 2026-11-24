@@ -107,9 +107,7 @@ export function httpLinkActionDestinationsFor(
   if (!canSourceOwnerOpenInOrca(sourceOwner, canOpenOwnedBrowser)) {
     return { primary: 'system' }
   }
-  return settings?.openLinksInApp === true ||
-    isRemoteLoopbackHttpLink(url, sourceOwner) ||
-    isDesktopLocalhostLink(url)
+  return settings?.openLinksInApp === true || isRemoteLoopbackHttpLink(url, sourceOwner)
     ? { primary: 'orca', alternate: 'system' }
     : { primary: 'system', alternate: 'orca' }
 }
@@ -245,7 +243,7 @@ export function openRoutedHttpLink(url: string, routed: RoutedHttpLinkOptions): 
     return
   }
   // A local localhost link prefers Orca without a prompt; Shift still resolves against that preference.
-  const preferInApp = sourceOwner.kind === 'local' && isDesktopLocalhostLink(url)
+  const preferInApp = isDesktopLocalhostLink(url, sourceOwner)
   if (deps.modifierHeld) {
     // Explicit modifier routing skips the one-time preference prompt; openHttpLink resolves its destination.
     openHttpLink(url, {
