@@ -9,7 +9,6 @@ import {
 import { unpickedFastModeIsOff } from '../../../../shared/agent-session/options/model-catalog/agent-model-catalog-ownership'
 import type { AgentSessionTurnContext } from '../operations/structured-agent-session-turns'
 import { structuredAgentSessionOptionOverridesRefusal } from './structured-agent-session-option-intent'
-
 /** Capture send-specific choices or saved defaults once under the acceptance lane. */
 export function captureStructuredExecutionOptions(
   ctx: Pick<AgentSessionTurnContext, 'agents' | 'agent' | 'persistedOptions'>,
@@ -51,6 +50,33 @@ export function captureStructuredExecutionOptions(
     )
   )
   return refusal ? { refusal } : { options }
+}
+
+/** Steering reuses acceptance facts, never the next-message picker or a later provider report. */
+export async function captureStructuredSteerOptions(
+  ctx: Pick<
+    AgentSessionTurnContext,
+    'readWork' | 'fence' | 'agents' | 'agent' | 'persistedOptions'
+  >,
+  supplied?: Readonly<Record<string, string>>,
+  selection?: Readonly<Record<string, string>>
+): Promise<ReturnType<typeof captureStructuredExecutionOptions>> {
+  if (!ctx.readWork) {
+    throw new Error('current-work reader was not bound to this operation')
+  }
+  const active = await ctx.readWork({ kind: 'steer-options', fence: ctx.fence })
+  if (!active.working) {
+    return captureStructuredExecutionOptions(ctx, supplied, selection)
+  }
+  return active.options
+    ? { options: { ...active.options } }
+    : {
+        refusal: refuse(
+          'agent_session_operation_invalid',
+          { reason: 'turnActive' },
+          "The running turn's choices are unavailable. Queue this draft or send it after the turn finishes."
+        )
+      }
 }
 
 /** The model and effort the chat was created with, which its opening message runs on as a send's

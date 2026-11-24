@@ -17,12 +17,16 @@ import {
   type TurnOutcome,
   agentSessionAdmissionWriteRefusal
 } from '../operations/structured-agent-session-turns'
-import { captureStructuredExecutionOptions } from '../options/structured-agent-session-execution-options'
+import {
+  captureStructuredExecutionOptions,
+  captureStructuredSteerOptions
+} from '../options/structured-agent-session-execution-options'
 
 export type StructuredSendAdmissionParams = {
   envelope: { clientOperationId: string }
   body: AgentJournalMessageItem
   delivery?: 'queue-if-active'
+  steer?: true
   queuedImageCards?: boolean
   options?: Readonly<Record<string, string>>
   selection?: Readonly<Record<string, string>>
@@ -42,6 +46,7 @@ type SendContext = Pick<
   | 'agents'
   | 'agent'
   | 'persistedOptions'
+  | 'readWork'
 >
 
 /** Capture only live host authority; the writer decides and persists queue or immediate admission. */
@@ -63,7 +68,10 @@ export async function admitStructuredAgentSessionSend(
   params: StructuredSendAdmissionParams,
   queueOnly = false
 ): Promise<TurnOutcome<AgentSessionSendResult> | null> {
-  const captured = captureStructuredExecutionOptions(ctx, params.options, params.selection)
+  const captured =
+    params.steer && params.delivery !== 'queue-if-active'
+      ? await captureStructuredSteerOptions(ctx, params.options, params.selection)
+      : captureStructuredExecutionOptions(ctx, params.options, params.selection)
   if ('refusal' in captured) {
     return { ok: false as const, refusal: captured.refusal }
   }

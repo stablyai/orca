@@ -46,7 +46,6 @@ export function ChatBehaviorSetting({
   const t = useTranslate()
   const typedPermissions = useChatSettingsOwnPermissions()
   const query = useAppStore((state) => state.settingsSearchQuery)
-  // A host without the capability ignores the preference; the choice would do nothing.
   const hostQueuesMessages = useStructuredAgentSessionHostQueuesMessages(STRUCTURED_CHAT_HOST)
   const hostContinuesUsageLimits =
     useStructuredAgentSessionHostCapabilityState(

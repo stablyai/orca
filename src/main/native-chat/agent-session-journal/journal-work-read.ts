@@ -1,3 +1,4 @@
+import type { AgentSessionExecutionOptions } from '../../../shared/agent-session/options/protocol/agent-session-execution-options'
 import type { JournalSqlQueueFacts } from './journal-sql-queue-read'
 import type { QueuedMessageRow } from './queued-messages/queued-message-table'
 import type { JournalSqlFailure } from './journal-sql-failure'
@@ -7,6 +8,7 @@ import type { JournalCurrentWorkAuthority, JournalObserverResult } from './journ
 
 export type JournalWorkRead =
   | { kind: 'state' }
+  | { kind: 'steer-options'; fence: number }
   | {
       kind: 'input'
       now: number
@@ -22,6 +24,7 @@ export type JournalWorkRead =
   | { kind: 'attempt-ended'; clientMessageId: string }
 
 export type JournalWorkReadResult =
+  | { kind: 'steer-options'; working: boolean; options?: AgentSessionExecutionOptions }
   | { kind: 'opening-send'; opening: boolean }
   | { kind: 'state'; state: JournalObserverResult['work'] }
   | {

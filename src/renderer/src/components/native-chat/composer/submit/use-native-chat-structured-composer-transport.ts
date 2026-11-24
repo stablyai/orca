@@ -157,6 +157,9 @@ export function useNativeChatStructuredComposerTransport(args: {
             }
           : undefined,
       mcpPanel,
+      queue: controller.queue,
+      isWorking: controller.isWorking,
+      steerCapability: controller.steerCapability,
       fork: nativeChatForkCommand({ fork, sideChat }, controller.isWorking, props.agent),
       capturePresentation: controller.capturePresentation,
       ...(sideChat ? { sideChat } : {}),

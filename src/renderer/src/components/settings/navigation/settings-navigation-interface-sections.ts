@@ -21,7 +21,6 @@ export function buildInterfaceSettingsSections(
     isMac,
     isWindows,
     isWebClient,
-    hostQueuesMessages,
     typedChatPermissions,
     managedBrowserCreationEnabled,
     mobileEmulatorCreationEnabled
@@ -56,9 +55,7 @@ export function buildInterfaceSettingsSections(
         getChatPermissionSearchEntry(typedChatPermissions),
         ...getChatAppearanceSearchEntries(t),
         ...getChatTurnActivitySearchEntries(t),
-        ...getChatBehaviorSearchEntries(t).filter(
-          (entry) => hostQueuesMessages || entry.targetSectionId !== 'chat-queue-follow-ups'
-        ),
+        ...getChatBehaviorSearchEntries(t),
         ...(showDesktopOnlySettings
           ? [getChatNamingSearchEntry(), getChatInlineVisualsSearchEntry()]
           : [])
