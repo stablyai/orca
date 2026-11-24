@@ -360,7 +360,7 @@ it('holds activity during a stalled scan without spinning timers', async () => {
   await stop()
 })
 
-it('keeps the 30 s network-volume cadence at its old cost under constant activity', async () => {
+async function networkCadenceStats(activity: boolean): Promise<number> {
   const polling = await startGitCommonPolling(
     COMMON,
     (next) => events.push(...next),
@@ -371,15 +371,25 @@ it('keeps the 30 s network-volume cadence at its old cost under constant activit
     () => [],
     { reconciliationFullScanEveryTicks: 10, minOnDemandScanIntervalMs: 30_000 }
   )
-  // Real scans take time, so the timer can land while an activity check is still running.
+  // Real scans take time, so activity lands mid-scan and its retry can meet the due timed tick.
   fs.latencyMs = 1
   fs.stats = 0
-  for (let second = 0; second < 600; second += 1) {
-    await vi.advanceTimersByTimeAsync(500)
-    polling.poke()
-    await vi.advanceTimersByTimeAsync(500)
+  for (let step = 0; step < 6_000; step += 1) {
+    if (activity) {
+      polling.poke()
+    }
+    await vi.advanceTimersByTimeAsync(100)
   }
-  // The old cadence alone spent 129,220 stats here; activity checks must merge into it, not add scans.
-  expect(fs.stats).toBeLessThanOrEqual(129_220)
+  const stats = fs.stats
   await polling.unsubscribe()
+  // Let an in-flight scan finish so it does not count toward the next run.
+  await vi.advanceTimersByTimeAsync(10_000)
+  fs.latencyMs = 0
+  return stats
+}
+
+it('keeps the 30 s network-volume cadence at its old cost under constant activity', async () => {
+  const timedOnly = await networkCadenceStats(false)
+  // Activity every 100 ms must merge into the timed scans, never add one.
+  expect(await networkCadenceStats(true)).toBeLessThanOrEqual(timedOnly)
 })

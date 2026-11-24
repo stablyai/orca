@@ -149,6 +149,7 @@ export async function startGitCommonPolling(
   let dirGateMissTicks = 0
   const onDemand = createOnDemandScanGate(options.minOnDemandScanIntervalMs, visibility)
   let pokeAfterScan = false
+  let timerDueAt = 0
   let snapshot = await snapshotGitCommon(
     commonDirPath,
     undefined,
@@ -267,6 +268,7 @@ export async function startGitCommonPolling(
       0,
       Math.min(pollIntervalMs, pollIntervalMs - (Date.now() - startedAt))
     )
+    timerDueAt = performance.now() + nextDelay
     timer = setTimeout(() => void tick(), nextDelay)
     timer.unref?.()
   }
@@ -282,6 +284,7 @@ export async function startGitCommonPolling(
     void tick(true)
   })
 
+  timerDueAt = performance.now() + pollIntervalMs
   timer = setTimeout(() => void tick(), pollIntervalMs)
   timer.unref?.()
 
@@ -298,6 +301,15 @@ export async function startGitCommonPolling(
     }
     if (onDemand.scannedRecently()) {
       onDemand.retryWhenOpen(poke)
+      return false
+    }
+    // A full sweep due within the throttle window covers this activity; a check now would only precede it.
+    const fullSweepDueSoon =
+      timer !== null &&
+      onDemand.withinThrottle(timerDueAt) &&
+      ((isReconciliation && !entryDirGateTrusted) ||
+        (tickCount + 1) % (reconciliationFullScanEveryTicks ?? INDEX_BACKSTOP_TICKS) === 0)
+    if (fullSweepDueSoon) {
       return false
     }
     void tick(false, true)
