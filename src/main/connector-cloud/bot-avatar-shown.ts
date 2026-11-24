@@ -74,13 +74,16 @@ export class BotAvatarShown {
       }
     }
     // One bot's write failing again leaves the others to go.
-    this.flushing = Promise.all(due.map((botId) => this.write(botId).catch(() => {}))).then(() => {
-      this.flushing = null
-      if (this.stepWaiting) {
+    this.flushing = Promise.all(due.map((botId) => this.write(botId).catch(() => {}))).then(
+      (): Promise<void> | undefined => {
+        this.flushing = null
+        if (!this.stepWaiting) {
+          return undefined
+        }
         this.stepWaiting = false
         return this.flush()
       }
-    })
+    )
     return this.flushing
   }
 
