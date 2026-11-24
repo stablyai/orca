@@ -24,13 +24,8 @@ import type { OrchestrationDb } from '../../orchestration/db/orchestration-db'
 import type { Bot } from '../../../../shared/bot-types'
 import { commentAsMaker } from './bots-items-maker-comment'
 import { runtimeChatHost } from '../../../external-conversations/external-conversation-chat'
-import {
-  closingChatActsFor,
-  parseItemLink,
-  resolveItem,
-  writeResult,
-  writerOf
-} from './bots-items-write-support'
+import { closingChatActsFor } from './bots-items-close-acts-for'
+import { parseItemLink, resolveItem, writeResult, writerOf } from './bots-items-write-support'
 
 const ADD = defineMethod({
   name: 'bots.items.add',
