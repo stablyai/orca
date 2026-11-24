@@ -46,7 +46,16 @@ export function BotItemLinkRowStatus({
 }): React.JSX.Element | null {
   return children ? (
     <span className="flex max-w-[45%] min-w-0 shrink items-center gap-1.5 truncate text-xs text-muted-foreground">
-      {children}
+      {typeof children === 'string' ? (
+        <BotItemLinkRowStatusText>{children}</BotItemLinkRowStatusText>
+      ) : (
+        children
+      )}
     </span>
   ) : null
+}
+
+/** A status's words: in their own box, so a long one ends in an ellipsis rather than being cut. */
+export function BotItemLinkRowStatusText({ children }: { children: ReactNode }): React.JSX.Element {
+  return <span className="min-w-0 truncate">{children}</span>
 }

@@ -1,7 +1,8 @@
 import { defineFixture } from '../../../component-fixtures/component-fixture'
 import { fixtureCos } from '../../../component-fixtures/fixture-bot-panel'
 import { makeTestBotItem } from '../../../../../shared/bots/bot-item.test-fixture'
-import type { BotItem, BotItemLinkView } from '../../../../../shared/bots/bot-items'
+import type { BotItem, BotItemEvent, BotItemLinkView } from '../../../../../shared/bots/bot-items'
+import { useAppStore } from '@/store'
 import { BotItemPaneFrame } from './BotItemPane'
 import { BotItemBody } from './BotItemView'
 import type { BotItemWalkState } from './use-bot-item-walk'
@@ -83,7 +84,12 @@ const LINEAR_ISSUE = (identifier: string, title: string, state: string) => ({
 const calmStore = {
   linearIssueCache: {
     'selected::OPS-1650': LINEAR_ISSUE('OPS-1650', 'Cloud read-only access', 'In Progress'),
-    'selected::OPS-1702': LINEAR_ISSUE('OPS-1702', 'Launch checklist', 'Todo')
+    'selected::OPS-1702': LINEAR_ISSUE('OPS-1702', 'Launch checklist', 'Todo'),
+    'selected::OPS-1777': LINEAR_ISSUE(
+      'OPS-1777',
+      'Security sign-off for the stop switch',
+      'Waiting on security review'
+    )
   }
 }
 const calmThree: BotItemLinkView[] = [
@@ -99,10 +105,22 @@ const calmSeven: BotItemLinkView[] = [
   { kind: 'url', ref: 'https://linear.app/acme/issue/OPS-1702/launch-checklist' }
 ]
 
-function Calm({ shown, named = false }: { shown: BotItem; named?: boolean }): React.JSX.Element {
+const NO_EVENTS: BotItemEvent[] = []
+
+function Calm({
+  shown,
+  named = false,
+  height = 640,
+  events = NO_EVENTS
+}: {
+  shown: BotItem
+  named?: boolean
+  height?: number
+  events?: BotItemEvent[]
+}): React.JSX.Element {
   const bot = { ...fixtureCos, name: 'Sample Bot', avatar: null }
   return (
-    <div className="flex h-[640px] flex-col bg-sidebar">
+    <div className="flex flex-col bg-sidebar" style={{ height }}>
       <BotItemPaneFrame walk={walk()} offline={false} onBack={() => {}} owner={named ? bot : null}>
         {({ comment, statusSlot, nav }) => (
           <BotItemBody
@@ -113,7 +131,7 @@ function Calm({ shown, named = false }: { shown: BotItem; named?: boolean }): Re
             item={shown}
             view={{
               item: shown,
-              events: [],
+              events,
               eventsRead: true,
               hasEarlier: false,
               failed: false,
@@ -183,4 +201,88 @@ export const calmStatusMenu = defineFixture({
     trigger?.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true, button: 0 }))
     await settle()
   }
+})
+
+/** A Linear state too long for a 260px row: it truncates, the name keeps its room. */
+export const calmNarrowLongState = calmAt(260, {
+  ...calmItem,
+  links: [
+    ...calmThree,
+    { kind: 'url', ref: 'https://linear.app/acme/issue/OPS-1777/security-sign-off' }
+  ]
+})
+
+const comment = (id: string, text: string, minutes: number): BotItemEvent => ({
+  id,
+  kind: 'commented',
+  actor: { kind: 'owner' },
+  data: { text },
+  at: CALM_AT + minutes * 60_000
+})
+const CALM_EVENTS = Array.from({ length: 8 }, (_, index) =>
+  comment(`c${index}`, `Checked host ${index + 1}: stop and undo both work.`, index * 7)
+)
+
+/** A short window with full details: the pinned title and the details share one cap, and Activity
+ *  keeps the rest. */
+export const calmConstrained = defineFixture({
+  width: 340,
+  store: calmStore,
+  render: () => (
+    <Calm
+      shown={{
+        ...calmItem,
+        description: `${calmItem.description}\n\nEvery paired host needs the stop, the undo card and a named backup operator before launch.`,
+        links: calmSeven
+      }}
+      height={440}
+      events={CALM_EVENTS}
+    />
+  )
+})
+
+/** Records what each control does: app API calls, new windows and store changes, for the headless
+ *  interaction check (`window.__calmCalls`). */
+function recordCalls(): void {
+  const calls: string[] = []
+  Reflect.set(window, '__calmCalls', calls)
+  const wrap = (value: unknown, path: string): unknown => {
+    if (typeof value === 'function') {
+      return (...args: unknown[]) => {
+        calls.push(`api.${path}`)
+        return Reflect.apply(value, undefined, args)
+      }
+    }
+    if (value && typeof value === 'object') {
+      return new Proxy(value, {
+        get: (target, key) => wrap(Reflect.get(target, key), `${path}.${String(key)}`)
+      })
+    }
+    return value
+  }
+  for (const key of Object.keys(window.api)) {
+    Reflect.set(window.api, key, wrap(Reflect.get(window.api, key), key))
+  }
+  const open = window.open.bind(window)
+  window.open = (...args) => {
+    calls.push('window.open')
+    return open(...args)
+  }
+  useAppStore.subscribe((next, previous) => {
+    for (const key of Object.keys(next)) {
+      if (Reflect.get(next, key) !== Reflect.get(previous, key)) {
+        calls.push(`store.${key}`)
+      }
+    }
+  })
+}
+
+/** Seven links for the headless interaction check, at 340px and 260px. */
+export const calmInteractive = defineFixture({
+  ...calmAt(340, { ...calmItem, links: calmSeven }),
+  setup: recordCalls
+})
+export const calmInteractiveNarrow = defineFixture({
+  ...calmAt(260, { ...calmItem, links: calmSeven }),
+  setup: recordCalls
 })

@@ -40,6 +40,7 @@ import {
   BotItemLinkRowButton,
   BotItemLinkRowName,
   BotItemLinkRowStatus,
+  BotItemLinkRowStatusText,
   botItemLinkRowClassName
 } from './BotItemLinkRow'
 import {
@@ -108,7 +109,7 @@ function gitHubStatus(t: Translate, row: BotItemGitHubRow): ReactNode {
     return (
       <>
         <Dot className={row.checks === 'success' ? 'bg-status-success' : 'bg-destructive'} />
-        {checksLabel(t, row.checks)}
+        <BotItemLinkRowStatusText>{checksLabel(t, row.checks)}</BotItemLinkRowStatusText>
       </>
     )
   }
@@ -195,7 +196,9 @@ function workerStatus(t: Translate, state: BotItemWorkerState): ReactNode {
       return (
         <>
           <WorkerStateIcon state="running" />
-          {t('bots.items.link.running', 'Running')}
+          <BotItemLinkRowStatusText>
+            {t('bots.items.link.running', 'Running')}
+          </BotItemLinkRowStatusText>
         </>
       )
     case 'completed':
