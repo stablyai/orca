@@ -273,8 +273,11 @@ it('posts an agent reply to the thread only on a turn the thread owns, not one m
   // An event run sent into the chat owning its thread answers there; the same run marked for no
   // thread (as a run that took its own conversation, or went to the Chat) does not.
   const ownerRun = await ownerRouteRunMessage()
-  expect(ownerRun.answersThread).toBe(true)
+  expect(ownerRun.answersThread).toEqual(thread)
   expect(await replyIn(runMessage(ownerRun))).toBe('posted')
   const { answersThread: _dropped, ...unrouted } = ownerRun
   expect(await replyIn(runMessage(unrouted))).toBe('turn_stays_in_orca')
+  // Marked for another thread (the chat was relinked mid-run): not this conversation's.
+  const elsewhere = { ...ownerRun, answersThread: { source: 'slack', externalId: 'T0:C9:2.0:U0' } }
+  expect(await replyIn(runMessage(elsewhere))).toBe('turn_stays_in_orca')
 })

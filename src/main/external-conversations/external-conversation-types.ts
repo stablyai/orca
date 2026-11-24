@@ -49,6 +49,11 @@ export type ReplyTarget = {
   answerDeliveryId?: string
 }
 
+const sameKey = (
+  key: { source: string; externalId: string } | undefined,
+  link: ExternalConversationLink
+): boolean => key?.source === link.source && key.externalId === link.externalId
+
 export function replyTargetOf(
   { link, workspace }: { link: ExternalConversationLink; workspace: { worktreeId: string } },
   turnId: number | null,
@@ -60,10 +65,7 @@ export function replyTargetOf(
   const stamp = [
     ...(body?.connectorDelivery ? [body.connectorDelivery] : []),
     ...(body?.connectorClaim?.origin ?? [])
-  ].find(
-    (entry) =>
-      entry.conversation.source === link.source && entry.conversation.externalId === link.externalId
-  )
+  ].find((entry) => sameKey(entry.conversation, link))
   return {
     ...(stamp ? { answerDeliveryId: stamp.deliveryId } : {}),
     key: { source: link.source, externalId: link.externalId },
@@ -72,7 +74,7 @@ export function replyTargetOf(
       !!opener &&
       (conversationHeardTurn({ link }, opener) ||
         (body?.origin === 'automation-run' &&
-          readAutomationRunMessage(body.automationRun)?.answersThread === true)),
+          sameKey(readAutomationRunMessage(body.automationRun)?.answersThread, link))),
     turnId,
     worktreeId: workspace.worktreeId,
     ...(link.bot ? { bot: link.bot } : {}),

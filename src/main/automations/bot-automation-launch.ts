@@ -184,7 +184,9 @@ export function createBotAutomationDispatcher(
     const captured = captureAutomationRunMessage(automation, run, text, asker)
     // In the thread's owning chat its replies go to the thread; the run, not the turn end, posts its result.
     const automationRun =
-      captured && route.kind === 'owner' ? { ...captured, answersThread: true as const } : captured
+      captured && route.kind === 'owner'
+        ? { ...captured, answersThread: route.conversation }
+        : captured
     const fields: BotRunFields = {
       memorySource: automationRunMemoryLabel(automation.name, run.event),
       ...(run.triggeredBy ? { triggeredBy: run.triggeredBy } : {}),
