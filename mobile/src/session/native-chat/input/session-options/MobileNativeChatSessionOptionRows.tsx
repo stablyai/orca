@@ -24,6 +24,7 @@ import {
 import { sayMobileNativeChatSessionOption as say } from './native-chat-session-option-copy'
 import { orderEffortLevels } from '../../../../../../src/shared/agent-session/options/view/effort-level-order'
 import { MobileSwitch } from '../../../../components/controls/MobileSwitch'
+import { nativeChatModelSearchScore } from '../../../../../../src/shared/native-chat/input/native-chat-model-search'
 
 export function SessionOptionCaption({ children }: { children: string }): React.JSX.Element {
   useMobileColorScheme()
@@ -138,6 +139,7 @@ type DescriptorRowsProps = {
   onInvokeAction: () => void
   /** A leading mark per choice, as each permission mode has its icon. */
   choiceLeading?: (value: string) => ReactNode
+  query?: string
   /** Whether search-only choices are revealed; without it they stay off the list. */
   moreChoices?: { shown: boolean; onToggle: () => void }
 }
@@ -164,6 +166,7 @@ export function descriptorRowElements(
     onSetOption,
     onInvokeAction,
     choiceLeading,
+    query,
     moreChoices
   }: DescriptorRowsProps,
   t: Translate
@@ -233,6 +236,19 @@ export function descriptorRowElements(
       onPress={() => onSetOption(choice.value)}
     />
   )
+  const terms = query?.toLowerCase().split(/\s+/).filter(Boolean) ?? []
+  if (query !== undefined && terms.length > 0) {
+    return choices
+      .filter((choice) => {
+        return (
+          nativeChatModelSearchScore(choice.value, query, [
+            nativeChatSessionChoiceLabel(choice, say, descriptor.id),
+            choice.description ?? ''
+          ]) > 0
+        )
+      })
+      .map(choiceRow)
+  }
   // No search here, so search-only rows stay out; folded ones follow a More models toggle.
   const listed = choices.filter(
     (choice) =>
