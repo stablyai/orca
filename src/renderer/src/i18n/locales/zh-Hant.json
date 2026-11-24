@@ -611,15 +611,15 @@
       },
       "permissionsDescriptionOwnAgents": "新聊天會採用「設定 → 代理程式」中各代理程式的權限設定。",
       "launch": {
-        "on": "Chat UI 已開啟",
-        "off": "Chat UI 已關閉",
+        "on": "聊天介面已開啟",
+        "off": "聊天介面已關閉",
         "agents": "各代理程式的預設啟動模式",
-        "agentsDescription": "選擇各代理程式要在 Chat UI 或 CLI 中開啟。",
+        "agentsDescription": "選擇各代理程式要在聊天介面或 CLI 中開啟。",
         "chatDescription": "新代理程式預設會以聊天模式啟動。",
         "cliDescription": "新代理程式預設會以 CLI 啟動。",
         "turnOn": "開啟",
         "turnOff": "關閉",
-        "toggle": "預設使用 Chat UI"
+        "toggle": "預設使用聊天介面"
       }
     },
     "terminal": {
@@ -20004,7 +20004,7 @@
         "turnWorking": "此聊天的代理正在工作。請在其回合結束後再切換分支。",
         "worktree": "工作樹"
       },
-      "explicitChatWindows": "此 Agent 的聊天尚不支援 Windows。請改為在終端機中開啟。",
+      "explicitChatWindows": "此代理程式的聊天尚不支援 Windows。請改為在終端機中開啟。",
       "fork": {
         "action": "從此回覆建立分支",
         "pending": "正在從此聊天建立分支…",
@@ -21200,7 +21200,7 @@
       "demoPassword": "密碼",
       "demoCookie": "Cookie",
       "switchedNoteTitle": "新的代理程式將在聊天介面中開啟",
-      "switchedNoteBody": "偏好終端機？隨時可以切換回來：在設定中搜尋 <term>Chat UI</term>。",
+      "switchedNoteBody": "偏好終端機？隨時可以切換回來：在設定中搜尋 <term>聊天介面</term>。",
       "openSettings": "開啟設定"
     },
     "botsTeammate": {
