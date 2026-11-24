@@ -1,7 +1,8 @@
 import type { ReactElement, ReactNode } from 'react'
 import { Pressable, Text, View } from 'react-native'
-import { ShieldAlert, type LucideIcon } from 'lucide-react-native'
-import { colors, radii, spacing, typography } from '../../../../theme/mobile-theme'
+import { ChevronDown, ShieldAlert, type LucideIcon } from 'lucide-react-native'
+import { colors, pressedStyle, radii, spacing, typography } from '../../../../theme/mobile-theme'
+import { COMPOSER_CONTROL_SIZE } from '../../../../components/composer-input/composer-input-styles'
 import { themedStyleSheet } from '../../../../theme/themed-styles'
 import { useMobileColorScheme } from '../../../../theme/use-mobile-color-scheme'
 import { useMobileTranslation } from '../../../../i18n/use-mobile-translation'
@@ -30,9 +31,9 @@ export function SessionOptionCaption({ children }: { children: string }): React.
   return <Text style={styles.caption}>{children}</Text>
 }
 
+/** One target for the chat's options: the model's name (or a value), with Full access's shield. */
 export function ModelPill({
   primary,
-  secondary,
   warning,
   icon: Icon,
   leading,
@@ -41,7 +42,6 @@ export function ModelPill({
   onPress
 }: {
   primary: string
-  secondary: string | null
   warning: boolean
   icon?: LucideIcon
   /** Shown before the label, unlike `icon`, which replaces it. */
@@ -71,11 +71,15 @@ export function ModelPill({
         />
       ) : null}
       {!Icon ? (
-        <Text style={styles.pillText} numberOfLines={1} ellipsizeMode="tail">
-          <Text style={[styles.pillPrimary, disabled && styles.pillTextDisabled]}>{primary}</Text>
-          {secondary ? <Text style={styles.pillSecondary}>{`  ${secondary}`}</Text> : null}
+        <Text
+          style={[styles.pillText, disabled && styles.pillTextDisabled]}
+          numberOfLines={1}
+          ellipsizeMode="tail"
+        >
+          {primary}
         </Text>
       ) : null}
+      <ChevronDown size={14} color={colors.textMuted} strokeWidth={2.2} />
     </Pressable>
   )
 }
@@ -218,6 +222,11 @@ export function descriptorRowElements(
   }
   // A provider fallback is what runs, so the saved model stays pickable.
   const currentValue = descriptor.fallbackModel ?? descriptor.kind.currentValue
+  // An unreported effort marks nothing, rather than reading as a confirmed choice.
+  const marked =
+    descriptor.category === 'thought_level' && descriptor.valueSource === 'unknown'
+      ? undefined
+      : currentValue
   const choices =
     descriptor.category === 'thought_level'
       ? orderEffortLevels(descriptor.kind.choices)
@@ -228,7 +237,7 @@ export function descriptorRowElements(
       title={nativeChatSessionChoiceLabel(choice, say, descriptor.id)}
       subtitle={choice.description}
       leading={choiceLeading ? (choiceLeading(choice.value) ?? null) : undefined}
-      selected={choice.value === currentValue}
+      selected={choice.value === marked}
       disabled={locked}
       onPress={() => onSetOption(choice.value)}
     />
@@ -269,30 +278,24 @@ const styles = themedStyleSheet(() => ({
   pill: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 6,
+    gap: spacing.xs,
     maxWidth: '100%',
-    height: 38,
-    paddingHorizontal: 14,
+    height: COMPOSER_CONTROL_SIZE,
+    paddingLeft: 14,
+    paddingRight: 10,
     borderRadius: radii.pill,
     backgroundColor: colors.composerControl
   },
   pillText: {
     flexShrink: 1,
-    fontSize: typography.bodySize
-  },
-  pillPrimary: {
     color: colors.textPrimary,
+    fontSize: typography.bodySize,
     fontWeight: '500'
-  },
-  pillSecondary: {
-    color: colors.textMuted
   },
   pillTextDisabled: {
     color: colors.textMuted
   },
-  pressed: {
-    opacity: 0.7
-  },
+  pressed: pressedStyle,
   // A footnote under its group, lined up with the row text.
   caption: {
     color: colors.textMuted,
