@@ -25169,7 +25169,10 @@
       "runNow": "Exécuter maintenant",
       "openOnPage": "Ouvrir sur la page Automatisations",
       "pauseShort": "Pause",
-      "resumeShort": "Reprendre"
+      "resumeShort": "Reprendre",
+      "deleting": "Suppression…",
+      "deleteFailed": "Impossible de supprimer {{name}}",
+      "deleteDescription": "Supprimer <name/> et son historique d’exécution."
     },
     "access": {
       "thisComputer": "cet ordinateur",

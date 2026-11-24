@@ -25867,7 +25867,10 @@
       "runNow": "今すぐ実行",
       "openOnPage": "オートメーションページで開く",
       "pauseShort": "一時停止",
-      "resumeShort": "再開"
+      "resumeShort": "再開",
+      "deleting": "削除中…",
+      "deleteFailed": "{{name}} を削除できませんでした",
+      "deleteDescription": "<name/> とその実行履歴を削除します。"
     },
     "access": {
       "thisComputer": "このコンピュータ",

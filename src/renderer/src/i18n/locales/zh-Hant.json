@@ -24228,7 +24228,10 @@
       "runNow": "立即執行",
       "openOnPage": "在「自動化」頁面開啟",
       "pauseShort": "暫停",
-      "resumeShort": "繼續"
+      "resumeShort": "繼續",
+      "deleting": "正在刪除…",
+      "deleteFailed": "無法刪除 {{name}}",
+      "deleteDescription": "刪除 <name/> 及其執行歷程。"
     },
     "access": {
       "thisComputer": "此電腦",

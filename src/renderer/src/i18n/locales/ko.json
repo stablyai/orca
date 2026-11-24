@@ -27871,7 +27871,10 @@
       "runNow": "지금 실행",
       "openOnPage": "자동화 페이지에서 열기",
       "pauseShort": "일시 중지",
-      "resumeShort": "재개"
+      "resumeShort": "재개",
+      "deleting": "삭제 중…",
+      "deleteFailed": "{{name}}을(를) 삭제하지 못했습니다",
+      "deleteDescription": "<name/> 및 실행 기록을 삭제합니다."
     },
     "access": {
       "thisComputer": "이 컴퓨터",
