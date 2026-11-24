@@ -8,10 +8,7 @@ import {
   type ConnectorResult
 } from './connector-cloud-request'
 import { ConnectorPollClient } from './connector-poll-client'
-import {
-  ConnectorAccountTransport,
-  type ConnectorCallOptions
-} from './connector-transport'
+import { ConnectorAccountTransport, type ConnectorCallOptions } from './connector-transport'
 import { ConnectorTurnEvents } from './connector-turn-events'
 import { ConnectorReach } from './connector-reach'
 import { connectorRefResolver, type ConnectorRefResolver } from './connector-ref-resolution'
