@@ -132,9 +132,10 @@ export function useRailPageFocusRecovery(pageColumnRef: React.RefObject<HTMLElem
       disarm()
     }
     document.addEventListener('focusin', onFocusIn, true)
-    // Only a real close of an overlay that held focus can strand it; DOM churn and opens never arm this.
+    // Only a real close of an overlay that held focus can strand it; DOM churn and opens never arm this. A submenu is
+    // portaled apart from its menu, so its focused item counts too: it left the DOM with the close.
     const unsubscribe = subscribeOverlayCloses((owner) => {
-      if (owner && lastFocused && owner.contains(lastFocused)) {
+      if (owner && lastFocused && (owner.contains(lastFocused) || !lastFocused.isConnected)) {
         arm()
       }
     })

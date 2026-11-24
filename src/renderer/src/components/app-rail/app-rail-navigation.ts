@@ -109,6 +109,11 @@ export function showWorkspaceListThen(store: RailNavigationStore, action?: () =>
   return true
 }
 
+/** A rail page is hiding the (still mounted) workspace list: the list's own shortcuts must not act on hidden rows. */
+export function listHiddenByRailPage(): boolean {
+  return selectRailPageHidesWorkspaceList(useAppStore.getState())
+}
+
 /** Every rail exit from Settings goes through Settings' discard check; Cancel leaves everything as it was. */
 export function navigateFromRail(intent: () => void): void {
   void leaveSettingsThen(() => useAppStore.getState().activeView === 'settings', intent)
