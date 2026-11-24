@@ -10,6 +10,7 @@ import {
   type Page
 } from './browser-page-memory-state'
 import { noteBrowserPageClosed, noteBrowserPageOpened } from './browser-page-partition-presence'
+import { normalizeBrowserNavigationUrl } from '../../../shared/browser/navigation/browser-url'
 
 type Attach = {
   pageId: string
@@ -149,6 +150,8 @@ export function associateBrowserPageAttach(guest: Electron.WebContents): boolean
   return true
 }
 const pendingLoads = new WeakMap<Electron.WebContents, Attach>()
+// A guest's fresh first load, kept settled so tab create waits for it instead of sending it again.
+const freshLoads = new WeakMap<Electron.WebContents, { url: string; load: Promise<void> }>()
 
 /** Route pages call this only after their existing main-owned navigation grant. */
 export function startBrowserPageAttach(guest: Electron.WebContents, url?: string): boolean {
@@ -243,6 +246,10 @@ export function startBrowserPageAttach(guest: Electron.WebContents, url?: string
   })
   page.restoring = promise
   guestLoads.set(guest, promise)
+  // A page attaches only after its profile's extensions had their wait, so a second load adds nothing.
+  if (!snapshot) {
+    freshLoads.set(guest, { url: url ?? attach.url, load: promise })
+  }
   void promise
     .catch(() => {})
     .finally(() => {
@@ -265,4 +272,22 @@ export function forgetBrowserPageAttach(page: Page): void {
 
 export function hasPendingBrowserPageAttach(guest: Electron.WebContents): boolean {
   return pendingLoads.has(guest)
+}
+
+/** The attach's own first load of `url` into this page, claimed once; null when there is none. */
+export function claimBrowserPageFirstLoad(
+  pageId: string,
+  url: string
+): { guest: Electron.WebContents; load: Promise<void> } | null {
+  const guest = pages.get(pageId)?.guest
+  const fresh = guest ? freshLoads.get(guest) : undefined
+  if (!guest || !fresh || !sameNavigationUrl(fresh.url, url)) {
+    return null
+  }
+  freshLoads.delete(guest)
+  return { guest, load: fresh.load }
+}
+
+function sameNavigationUrl(a: string, b: string): boolean {
+  return (normalizeBrowserNavigationUrl(a) ?? a) === (normalizeBrowserNavigationUrl(b) ?? b)
 }

@@ -20687,7 +20687,12 @@
         "paused": "Цель приостановлена",
         "blocked": "Цель заблокирована",
         "limited": "Достигнут лимит цели",
-        "attachmentsUnsupported": "Уберите вложения перед постановкой цели."
+        "attachmentsUnsupported": "Уберите вложения перед постановкой цели.",
+        "checks_one": "{{count}} проверка",
+        "checks_few": "{{count}} проверки",
+        "checks_many": "{{count}} проверок",
+        "checks_other": "{{count}} проверки",
+        "last-check": "Последняя проверка цели"
       },
       "fileLinks": {
         "notFound": "Файл не найден: {{value0}}",
@@ -20810,7 +20815,16 @@
         "settingsRejected": "Codex не смог применить выбранные модель и усилие. Изменение цели не отправлено. Проверьте выбор и повторите попытку.",
         "settingsUnconfirmed": "Codex не подтвердил выбранные модель и усилие. Изменение цели не отправлено. Проверьте чат и повторите попытку.",
         "pauseUnconfirmed": "Codex остановился, но приостановка его цели не подтверждена. Проверьте цель, прежде чем продолжать.",
-        "stopUnconfirmed": "Codex не подтвердил остановку. Проверьте чат, прежде чем продолжать."
+        "stopUnconfirmed": "Codex не подтвердил остановку. Проверьте чат, прежде чем продолжать.",
+        "noGoal": "У Codex нет цели, которую можно изменить в этом чате. Задайте её командой /goal и описанием цели."
+      },
+      "automationResult": {
+        "openRun": "Открыть запуск",
+        "notRead": "{{name}} ещё не видит этот результат. Он будет передан с вашим следующим сообщением.",
+        "read": "{{name}}: прочитано с вашим следующим сообщением.",
+        "sentWithOne": "Отправлено с 1 результатом автоматизации",
+        "sentWithMany": "Отправлено с результатами автоматизации: {{count}}",
+        "cleared": "Поступило до очистки чата. {{name}} не получит этот результат."
       },
       "slashCommandDescriptions": {
         "agent": "Переключить активное обсуждение агента",
@@ -20978,6 +20992,27 @@
         "sourceTooltip": "Ответвление от {{name}}",
         "unknownSourceTooltip": "Ответвление от другого чата"
       },
+      "importPlan": {
+        "comes": "Будет перенесено",
+        "changed": "Будет перенесено с изменениями",
+        "already": "Уже есть",
+        "stays": "Останется в {{app}}",
+        "fromAgain": "Из {{app}}, повторно",
+        "from": "Из {{app}}",
+        "selected": "Выбрано {{chosen}} из {{total}} · ключи и данные для входа никогда не копируются",
+        "importOne": "Импортировать (1)",
+        "importMany": "Импортировать ({{count}})",
+        "askedOne": "Запрошен импорт 1 элемента",
+        "askedMany": "Запрошен импорт элементов: {{count}}"
+      },
+      "importDone": {
+        "heading": "Импорт завершён",
+        "title": "Перенесено из {{app}}: {{name}}",
+        "open": "Открыть",
+        "stayed": "Осталось в {{app}}: {{things}}. В {{app}} ничего не изменено.",
+        "unchanged": "В {{app}} ничего не изменено.",
+        "paused": "Автоматизации приостановлены, чтобы ничего не запускалось дважды. Включите их, когда старый бот будет отключён в {{app}}."
+      },
       "cardKindHidden": {
         "description": "Вы можете изменить это в любое время в разделе",
         "settingsLink": "Настройки > Интерфейс чата > Активность за ход",
@@ -20994,11 +21029,149 @@
       },
       "splitRight": "Разделить вправо",
       "splitDown": "Разделить вниз",
+      "automationRun": {
+        "waitOver": "Ожидание закончилось",
+        "scheduled": "По расписанию",
+        "runNow": "Запустить сейчас",
+        "github": "GitHub",
+        "slack": "Slack",
+        "linear": "Linear",
+        "webhook": "Вебхук",
+        "gmail": "Gmail",
+        "calendar": "Календарь",
+        "instructions": "Инструкции",
+        "event": "Событие",
+        "startError": "Ошибка",
+        "couldNotStart": "Не удалось запустить",
+        "queued": "В очереди",
+        "deadlineReached": "Срок истёк",
+        "due": "По плану: {{time}}",
+        "dueRan": "по плану {{due}}, запуск {{ran}}",
+        "reused": "Повторно использовано: {{what}}",
+        "reusedFrom": "Повторно использовано событие: {{what}} · от {{time}}",
+        "whatOn": "{{what}} в {{where}}",
+        "whatIn": "{{what}} в {{where}}",
+        "whatAt": "{{what}} · {{where}}",
+        "factsAt": "{{facts}} · {{time}}",
+        "someoneWrote": "Кто-то написал",
+        "personWrote": "Сообщение от {{name}}",
+        "callerSent": "Отправлено вызывающей стороной",
+        "external": "Внешнее содержимое · передано боту как информация, а не как инструкции",
+        "shortened": "Сокращено до 4 096 символов, как передано боту.",
+        "memberAccess": "{{name}}: в списке «Кто может обращаться» на момент запуска.",
+        "someMemberAccess": "Отправитель из списка «Кто может обращаться» на момент запуска.",
+        "otherAccess": "Не в списке «Кто может обращаться» или доступ неизвестен.",
+        "ownerAccess": "От владельца бота.",
+        "sampleCall": "Пример вызова",
+        "firstCall": "Первый вызов",
+        "webhookCall": "Вызов вебхука",
+        "openOnGitHub": "Открыть на GitHub",
+        "openInSlack": "Открыть в Slack",
+        "openInLinear": "Открыть в Linear",
+        "openLink": "Открыть ссылку",
+        "accessibleName": "Запуск автоматизации. {{label}}: {{name}}. {{reason}}.",
+        "accessibleNameAt": "Запуск автоматизации. {{label}}: {{name}}. {{reason}}. {{time}}.",
+        "accessibleNameNoReason": "Запуск автоматизации. {{label}}: {{name}}.",
+        "accessibleNameNoReasonAt": "Запуск автоматизации. {{label}}: {{name}}. {{time}}.",
+        "copyInstructions": "Копировать инструкции",
+        "copyEvent": "Копировать событие",
+        "openAutomation": "Открыть автоматизацию",
+        "sendAgain": "Отправить снова",
+        "sentAgain": "Отправлено снова",
+        "showAll": "Показать все",
+        "showLess": "Свернуть",
+        "what": {
+          "github": {
+            "issue_opened": "Задача создана",
+            "pr_opened": "Пул-реквест открыт",
+            "pr_pushed": "Отправка коммитов",
+            "pr_merged": "Слит",
+            "comment": "Комментарий",
+            "review_comment": "Комментарий к проверке",
+            "review": "Проверка",
+            "mentioned": "Упоминание",
+            "review_requested": "Запрошена проверка",
+            "assigned": "Назначено",
+            "ci_failed": "Сбой CI",
+            "ci_finished": "CI завершён",
+            "ci_passed": "CI пройден",
+            "pr_conflicted": "Конфликты",
+            "pr_closed": "Закрыт",
+            "pr_ready": "Готов к проверке",
+            "labeled": "Добавлена метка",
+            "issue_closed": "Задача закрыта",
+            "deploy_finished": "Развёртывание завершено",
+            "security_alert": "Оповещение о безопасности",
+            "workflow_finished": "Запуск рабочего процесса завершён"
+          },
+          "slack": {
+            "mentioned": "Упоминание",
+            "message": "Сообщение",
+            "reaction": "Реакция"
+          },
+          "linear": {
+            "assigned": "Назначено",
+            "mentioned": "Упоминание",
+            "issue_created": "Задача создана",
+            "issue_moved": "Задача перемещена"
+          },
+          "gmail": {
+            "new_email": "Новое письмо"
+          },
+          "calendar": {
+            "starting_soon": "Скоро начнётся встреча"
+          },
+          "other": "Событие"
+        },
+        "afterThirtyDays": "Через 30 дней",
+        "cancel": "Отмена",
+        "cancelled": "Отменено",
+        "couldNotFinish": "Не удалось завершить",
+        "createdAutomation": "Автоматизация создана",
+        "finished": "Завершено",
+        "happened": "Произошло",
+        "noDeadline": "Без срока",
+        "noReplyBy": "Нет ответа до {{time}}",
+        "nothingBy": "Ничего до {{time}}",
+        "paused": "Приостановлена",
+        "replied": "Ответ: {{actor}}",
+        "rowAccessibleName": "{{label}}: {{name}}. {{details}}",
+        "thenLine": "Затем",
+        "thenOnce": "Выполняется один раз, когда это произойдёт",
+        "thenOnceBy": "Выполняется один раз; в {{time}}, если ничего не пришло",
+        "until": "До {{time}}",
+        "updatedAutomation": "Автоматизация обновлена",
+        "waiting": "Ожидание",
+        "waitsFor": "Ожидает"
+      },
+      "eventRow": {
+        "showLess": "Свернуть",
+        "showMore": "Развернуть",
+        "running": "Выполняется",
+        "failed": "Сбой"
+      },
       "dock": {
         "label": "Поле сообщения и запросы"
       },
       "automationSaved": {
-        "openFullPage": "Открыть страницу"
+        "resultsInRuns": "результаты в каждом запуске",
+        "paused": "приостановлена",
+        "webhookHint": "Укажите этот URL в вашем сервисе",
+        "gettingUrl": "Получение URL…",
+        "editDraft": "Измените «{{name}}» так, чтобы ",
+        "resultsInEachRun": "В каждом запуске",
+        "resultsChat": "Чат",
+        "noRuns": "Запусков пока нет",
+        "recentRuns": "Последние запуски",
+        "when": "Когда",
+        "results": "Результаты",
+        "agent": "Агент",
+        "runNow": "Запустить сейчас",
+        "loading": "Загрузка",
+        "deleted": "Эта автоматизация удалена",
+        "loadFailed": "Не удалось прочитать эту автоматизацию",
+        "openFullPage": "Открыть страницу",
+        "onAgent": "на {{name}}"
       },
       "usageLimitActions": {
         "handOff": "Передать агенту"
@@ -25229,7 +25402,7 @@
       "scrollLeft": "Прокрутить влево · скрыто: {{amount}}",
       "scrollRight": "Прокрутить вправо · скрыто: {{amount}}",
       "startFromScratch": "Начать с нуля",
-      "title": "Боты"
+      "title": "Bots"
     },
     "settingsView": {
       "backToItems": "Назад на главную",

@@ -52,7 +52,8 @@ export const GoogleSetupWrite = z.object({
     z.object({ action: z.literal('answer'), card: z.enum(GOOGLE_SETUP_CARDS), values: Values }),
     z.object({ action: z.literal('done') }),
     z.object({ action: z.literal('fail'), error: Text(500) }),
-    z.object({ action: z.literal('cancel') })
+    /** `runId`: the run the owner saw, so a late Stop never ends a newer one. Absent from older clients. */
+    z.object({ action: z.literal('cancel'), runId: Text(80).optional() })
   ])
 })
 

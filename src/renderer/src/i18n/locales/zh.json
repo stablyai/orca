@@ -21556,7 +21556,7 @@
             "review_requested": "已请求评审",
             "assigned": "已分配",
             "ci_failed": "CI 失败",
-            "ci_finished": "CI 已完成",
+            "ci_finished": "CI 完成",
             "ci_passed": "CI 通过",
             "pr_conflicted": "出现冲突",
             "pr_closed": "已关闭",
