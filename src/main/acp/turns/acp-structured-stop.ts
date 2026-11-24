@@ -5,7 +5,10 @@ import {
 import type { StructuredAgentSessionAdapter } from '../../native-chat/agent-session-wire/providers/structured-agent-session-adapter'
 import { waitForPromiseWithSignal } from '../../../shared/concurrency/abort-signal-reason'
 import type { AcpStructuredSession } from '../session/acp-structured-session-contract'
-import { acpRunningPermission } from '../options/acp-live-permission-mode'
+import {
+  acpRunningPermission,
+  applyAcpLivePermissionMode
+} from '../options/acp-live-permission-mode'
 
 type AcpStoppableSession = Pick<AcpStructuredSession, 'connection' | 'lane' | 'prompts' | 'turns'>
 
@@ -87,6 +90,14 @@ export async function settleAcpPermissionTransition(
   // A pick the agent already applied live needs no stop.
   if (acpRunningPermission(session) === input.mode) {
     return true
+  }
+  // A kept agent runs the mode it had when the last app let go: it takes the chat's mode live, and
+  // its turn (one the earlier app sent, or the queued message's) is never cancelled to change it.
+  if (session.connection.kept) {
+    await applyAcpLivePermissionMode(session, input.mode, { timeoutMs: graceMs }).catch(() => {})
+    if (acpRunningPermission(session) === input.mode) {
+      return true
+    }
   }
   session.turns.interruptForPermissionTransition()
   await awaitAcpTurnEnd(session, Date.now(), graceMs, input.signal)
