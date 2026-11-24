@@ -6367,6 +6367,7 @@
         "unavailable": "No se puede contactar con esta app. Revisa la dirección e inténtalo de nuevo.",
         "noTool": "Este bot ya no tiene esa herramienta.",
         "desktopOnly": "Inicia sesión desde Orca en {{host}}.",
+        "noKeyring": "Este equipo no tiene un llavero del sistema, así que Orca no puede guardar un inicio de sesión aquí.",
         "denied": "No se permitió el acceso.",
         "expired": "El inicio de sesión caducó. Inténtalo de nuevo.",
         "couldNotSignIn": "No se pudo iniciar sesión. Inténtalo de nuevo."

@@ -30020,6 +30020,7 @@
         "unavailable": "Bu uygulamaya ulaşılamıyor. Adresi kontrol edip yeniden deneyin.",
         "noTool": "Bu botta artık o araç yok.",
         "desktopOnly": "{{host}} üzerindeki Orca’dan oturum açın.",
+        "noKeyring": "Bu bilgisayarda sistem anahtarlığı yok, bu yüzden Orca burada bir oturum açma bilgisini kaydedemez.",
         "denied": "Erişime izin verilmedi.",
         "expired": "Oturum açmanın süresi doldu. Yeniden deneyin.",
         "couldNotSignIn": "Oturum açılamadı. Yeniden deneyin."

@@ -7194,6 +7194,7 @@
         "unavailable": "无法连接此应用。请检查地址后重试",
         "noTool": "这个机器人已经没有那个工具了",
         "desktopOnly": "请在 {{host}} 上的 Orca 中登录",
+        "noKeyring": "这台电脑没有系统密钥环，Orca 无法在此保存登录信息",
         "denied": "未获得访问授权",
         "expired": "登录已过期。请重试",
         "couldNotSignIn": "无法登录。请重试"
