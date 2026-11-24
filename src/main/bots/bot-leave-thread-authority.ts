@@ -6,14 +6,9 @@ import type {
   AgentJournalRenderItem,
   AgentJournalSubmission
 } from '../../shared/agent-session/journal/agent-session-journal-types'
-import { isRootAgentJournalItem } from '../../shared/agent-session/journal/agent-session-journal-producer'
-import { agentJournalSubmissionKey } from '../../shared/agent-session/journal/agent-session-journal-item-key'
-import { isStructuredAgentSessionCommandEntry } from '../../shared/agent-session/requests/structured-agent-session-command-entry'
-import { structuredAgentTurnAnchors } from '../../shared/native-chat/transcript/turns/native-chat-turn-membership'
-import {
-  isRunningAgentJournalTurn,
-  readAgentJournalTurn
-} from '../../shared/agent-session/lifecycle/records/agent-session-turn-record'
+import { isRunningAgentJournalTurn } from '../../shared/agent-session/lifecycle/records/agent-session-turn-record'
+import { typedInOrcaByPerson } from './bot-typed-in-orca'
+import { isRootTurnRecord, turnMessages } from './bot-turn-messages'
 import { askedInThread } from '../external-conversations/external-conversation-leave-eligibility'
 
 /** stale: no turn is running, or it took no message. mixed: it took a message that isn't from a
@@ -22,35 +17,6 @@ import { askedInThread } from '../external-conversations/external-conversation-l
 export type LeaveThreadRefusal = 'leave_refused_stale' | 'leave_refused_mixed'
 
 type Conversation = { source: string; externalId: string }
-
-function isRootUserMessage(item: AgentJournalRenderItem): boolean {
-  return (
-    item.body.kind === 'message' &&
-    item.body.role === 'user' &&
-    isRootAgentJournalItem(item) &&
-    !isStructuredAgentSessionCommandEntry(item.body)
-  )
-}
-
-/** Whether a person sent it from Orca: never Orca's own message (a continue after a restart or a
- *  usage limit), nor an agent's. */
-function typedByPerson(
-  item: AgentJournalRenderItem,
-  submissions: readonly AgentJournalSubmission[]
-): boolean {
-  const sent = submissions.find(
-    (submission) =>
-      agentJournalSubmissionKey(submission.clientMessageId) === item.itemId ||
-      submission.providerItemId === item.itemId
-  )
-  // As the journal reads a personal send; Orca's continues name no sender and come from the host.
-  // A queued card handed over says nothing of who queued it here, so it is refused: they ask again.
-  return (
-    sent !== undefined &&
-    sent.queuedMessageId === undefined &&
-    (sent.source?.kind === 'user' || (sent.source === undefined && sent.origin === 'client'))
-  )
-}
 
 function eligible(
   item: AgentJournalRenderItem,
@@ -66,15 +32,7 @@ function eligible(
     return false
   }
   if (body.origin === undefined) {
-    // The owner's own message, typed in Orca: an automation's run or event is marked, never this.
-    // Sent by an agent through Orca (its CLI stamps it): never a person, whatever its source says.
-    return (
-      !body.asker &&
-      !body.memorySource &&
-      !body.automationRun &&
-      body.typedBy?.by !== 'agent' &&
-      typedByPerson(item, submissions)
-    )
+    return typedInOrcaByPerson(item, submissions)
   }
   if (body.origin !== 'connector' || body.memorySource || !body.asker) {
     return false
@@ -94,23 +52,11 @@ export function leaveThreadRefusal(
   submissions: readonly AgentJournalSubmission[],
   conversation: Conversation
 ): LeaveThreadRefusal | null {
-  const turns = items.filter(
-    (item) => isRootAgentJournalItem(item) && readAgentJournalTurn(item.body)
-  )
-  const turn = turns.at(-1)
+  const turn = items.findLast(isRootTurnRecord)
   if (!turn || !isRunningAgentJournalTurn(turn.body)) {
     return 'leave_refused_stale'
   }
-  // An opener found by journal order is never a message from before the turn ahead of it.
-  const previous = turns.at(-2)
-  const after = previous ? items.indexOf(previous) : -1
-  const opener = structuredAgentTurnAnchors(items, submissions).get(turn.itemId)
-  const messages = items.filter(
-    (item, index) =>
-      isRootUserMessage(item) &&
-      ((item.itemId === opener && index > after) ||
-        (item.turnScope?.kind === 'turn' && item.turnScope.turnItemId === turn.itemId))
-  )
+  const [messages = []] = turnMessages(items, submissions, [turn])
   if (messages.length === 0) {
     return 'leave_refused_stale'
   }

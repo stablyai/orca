@@ -390,6 +390,9 @@
       "title": "Browser page stopped",
       "failed": "The browser page stopped unexpectedly. Retry to restore it."
     },
+    "claimedDownload": {
+      "saved": "Saved to {{place}}"
+    },
     "serverPage": {
       "download": {
         "started": "Downloading to {{path}} on {{host}}",
@@ -15110,13 +15113,6 @@
             "c76693e456": "Could not load files for this workspace:"
           },
           "GitHistoryPanel": {
-            "cf7cad58d2": "No commits yet",
-            "d0fb0f4bf2": "Refresh commits",
-            "9f7535d22b": "Refs are branch or tag names pointing at that exact commit. They only appear where Git has a named ref for the commit.",
-            "9289ba0cb9": "What are refs?",
-            "d836037d02": "Commits",
-            "8232c8b2f2": "Open commit {{value0}}: {{value1}}",
-            "e5e81e59a6": "Resize commits",
             "6d1e0a7c3b": "Failed to load commit files"
           },
           "HostedReviewActions": {
@@ -15514,7 +15510,34 @@
             "rebaseStoppedFinishInTerminal": "Git paused this step. Finish it in a terminal or abort.",
             "rebaseCheckingStep": "Checking the rebase step",
             "rebaseEmptyStepShort": "Empty step",
-            "rebaseAbortLabel": "Abort rebase"
+            "rebaseAbortLabel": "Abort rebase",
+            "scopeFileCount_one": "{{count}} file",
+            "scopeFileCount_other": "{{count}} files",
+            "scopeCommitCount_one": "{{count}} commit",
+            "scopeCommitCount_other": "{{count}} commits",
+            "scopeUncommitted": "Uncommitted",
+            "scopeAllChanges": "All changes",
+            "scopeNone": "None",
+            "scopeOpenDiff": "Open diff",
+            "scopeShowAll": "Show all changes",
+            "scopeLoadingBranchChanges": "Loading branch changes…",
+            "scopeBranchCommits": "Commits on this branch",
+            "scopeRecentCommits": "Recent commits",
+            "scopeCompareTo": "Compare to {{ref}}",
+            "scopeFilterCommits": "Filter commits",
+            "scopeCommitsFailed": "Couldn't load commits.",
+            "scopeFilesFailed": "Couldn't load files.",
+            "scopeLoadingFiles": "Loading files…",
+            "scopeNoSharedHistory": "No shared history with {{ref}}",
+            "scopeRetryCommits": "Retry",
+            "scopeLoadingCommits": "Loading commits…",
+            "scopeNoMatchingCommits": "No matching commits",
+            "scopeNoBranchCommitsYet": "No commits on this branch yet",
+            "scopeNoCommitsYet": "No commits yet",
+            "scopeOlderHistory": "Older history in Git Graph",
+            "scopeNoUncommitted": "No uncommitted changes.",
+            "scopeCommitFiles": "Files",
+            "gitGraphButton": "Graph"
           },
           "SourceControlAgentActionDialog": {
             "8e856842d1": "Could not start the selected agent.",
@@ -16388,12 +16411,7 @@
             "f8a2c4d1e0": "Explorer search mode"
           },
           "GitHistoryCommitFiles": {
-            "b2c3d4e5f6": "No file changes in this commit",
-            "c3d4e5f6a7": "Open all changes"
-          },
-          "GitHistoryRow": {
-            "2f9c41ab07": "Show files in commit {{value0}}: {{value1}}",
-            "4a8d9e0c1f": "Hide files in commit {{value0}}: {{value1}}"
+            "b2c3d4e5f6": "No file changes in this commit"
           },
           "GitHistoryCommitContextMenu": {
             "7b1c4e9a02": "Open commit in browser",
@@ -30815,7 +30833,8 @@
     "branchCreated": "Created {{branch}} at {{commit}}",
     "branchName": "Branch name",
     "invalidBranchName": "This branch name is invalid. Choose a different name.",
-    "createBranchFailed": "Orca couldn't create the branch. Check this repository in a terminal, then try again."
+    "createBranchFailed": "Orca couldn't create the branch. Check this repository in a terminal, then try again.",
+    "openDiff": "Open diff"
   },
   "macosUpdateRequirement": {
     "title": "Orca updates now need macOS {{macos}}",

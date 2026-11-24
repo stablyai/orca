@@ -13307,13 +13307,6 @@
             "c76693e456": "No se pudieron cargar archivos para este espacio de trabajo:"
           },
           "GitHistoryPanel": {
-            "cf7cad58d2": "Aún no hay commits",
-            "d0fb0f4bf2": "Actualizar commits",
-            "9f7535d22b": "Las refs son nombres de ramas o tags que apuntan a ese commit exacto. Solo aparecen cuando Git tiene una ref con nombre para el commit.",
-            "9289ba0cb9": "¿Qué son las refs?",
-            "d836037d02": "Commits",
-            "8232c8b2f2": "Abrir commit {{value0}}: {{value1}}",
-            "e5e81e59a6": "Cambiar tamaño del panel de commits",
             "6d1e0a7c3b": "No se pudieron cargar los archivos del commit"
           },
           "HostedReviewActions": {
@@ -13723,7 +13716,36 @@
             "rebaseStoppedFinishInTerminal": "Git pausó este paso. Termínalo en una terminal o aborta.",
             "rebaseCheckingStep": "Comprobando el paso del rebase",
             "rebaseEmptyStepShort": "Paso vacío",
-            "rebaseAbortLabel": "Abortar rebase"
+            "rebaseAbortLabel": "Abortar rebase",
+            "scopeFileCount_one": "{{count}} archivo",
+            "scopeFileCount_other": "{{count}} archivos",
+            "scopeFileCount_many": "{{count}} archivos",
+            "scopeCommitCount_one": "{{count}} commit",
+            "scopeCommitCount_other": "{{count}} commits",
+            "scopeCommitCount_many": "{{count}} commits",
+            "scopeUncommitted": "Sin confirmar",
+            "scopeAllChanges": "Todos los cambios",
+            "scopeNone": "Ninguno",
+            "scopeOpenDiff": "Abrir diff",
+            "scopeShowAll": "Mostrar todos los cambios",
+            "scopeLoadingBranchChanges": "Cargando cambios de la rama…",
+            "scopeBranchCommits": "Commits de esta rama",
+            "scopeRecentCommits": "Commits recientes",
+            "scopeCompareTo": "Comparar con {{ref}}",
+            "scopeFilterCommits": "Filtrar commits",
+            "scopeCommitsFailed": "No se pudieron cargar los commits.",
+            "scopeFilesFailed": "No se pudieron cargar los archivos.",
+            "scopeLoadingFiles": "Cargando archivos…",
+            "scopeNoSharedHistory": "Sin historial compartido con {{ref}}",
+            "scopeRetryCommits": "Reintentar",
+            "scopeLoadingCommits": "Cargando commits…",
+            "scopeNoMatchingCommits": "No hay commits coincidentes",
+            "scopeNoBranchCommitsYet": "Aún no hay commits en esta rama",
+            "scopeNoCommitsYet": "Aún no hay commits",
+            "scopeOlderHistory": "Historial anterior en Git Graph",
+            "scopeNoUncommitted": "No hay cambios sin confirmar.",
+            "scopeCommitFiles": "Archivos",
+            "gitGraphButton": "Grafo"
           },
           "SourceControlAgentActionDialog": {
             "8e856842d1": "No se pudo iniciar el agente seleccionado.",
@@ -14601,12 +14623,7 @@
             "f8a2c4d1e0": "Modo de búsqueda del explorador"
           },
           "GitHistoryCommitFiles": {
-            "b2c3d4e5f6": "No hay cambios de archivos en este commit",
-            "c3d4e5f6a7": "Abrir todos los cambios"
-          },
-          "GitHistoryRow": {
-            "2f9c41ab07": "Mostrar archivos del commit {{value0}}: {{value1}}",
-            "4a8d9e0c1f": "Ocultar archivos del commit {{value0}}: {{value1}}"
+            "b2c3d4e5f6": "No hay cambios de archivos en este commit"
           },
           "GitHistoryCommitContextMenu": {
             "7b1c4e9a02": "Abrir commit en el navegador",
@@ -24856,7 +24873,8 @@
     "branchCreated": "Se creó {{branch}} en {{commit}}",
     "branchName": "Nombre de la rama",
     "invalidBranchName": "Este nombre de rama no es válido. Elige otro nombre.",
-    "createBranchFailed": "Orca no pudo crear la rama. Revisa este repositorio en una terminal e inténtalo de nuevo."
+    "createBranchFailed": "Orca no pudo crear la rama. Revisa este repositorio en una terminal e inténtalo de nuevo.",
+    "openDiff": "Abrir diff"
   },
   "bots": {
     "deepLink": {
