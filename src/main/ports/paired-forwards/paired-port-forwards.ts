@@ -41,15 +41,26 @@ export function listPairedPortForwards(environmentId?: string): PortForwardEntry
   return manager.listForwards(environmentId)
 }
 
+/** Servers with forwards here, including one whose first forward is still starting. */
+export function pairedPortForwardEnvironmentIds(): string[] {
+  return [
+    ...new Set([...tunnels.keys(), ...manager.listForwards().map((entry) => entry.connectionId)])
+  ]
+}
+
 export function addPairedPortForward(spec: ForwardSpec): Promise<PortForwardEntry> {
   const remoteHost = requireLoopbackRemoteHost(spec.remoteHost)
   return serializePortForwardChange(forwardChangeKey(spec.environmentId), async () => {
     await requireForwardableServer(spec.environmentId)
-    await assertIpv6LoopbackPortFree(spec.localPort)
+    // Held before any await, so a removal racing this start finds the server and closes it.
+    const tunnel = tunnelFor(spec.environmentId)
+    await assertIpv6LoopbackPortFree(spec.localPort).catch(
+      retireIdleTunnelAfter(spec.environmentId)
+    )
     const entry = await manager
       .addForward(
         spec.environmentId,
-        tunnelFor(spec.environmentId),
+        tunnel,
         spec.localPort,
         remoteHost,
         spec.remotePort,

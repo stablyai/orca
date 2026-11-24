@@ -1,14 +1,13 @@
 import { NETWORK_PORT_FORWARD_RUNTIME_CAPABILITY } from '../../../../shared/remote-runtime/protocol/workspace-ports-runtime-capabilities'
-import { toRuntimeExecutionHostId } from '../../../../shared/execution-host/execution-host'
 import { readCachedRuntimeEnvironmentCapability } from '@/runtime/rpc/compatibility/runtime-compatibility-cache'
-import { getExecutionHostIdForWorktree } from '@/lib/workspace/ownership/worktree-runtime-owner'
-import type { WorktreeRuntimeOwnerState } from '@/lib/workspace/ownership/worktree-runtime-owner-state'
+import { resolveOwner } from '@/lib/workspace/ownership/resolve-owner'
+import type { WorktreeOperationRouteState } from '@/lib/workspace/ownership/worktree-operation-route'
 import {
   getOrcadSshDeployment,
   type OrcadDeploymentLink
 } from '../../../../shared/remote-runtime/host-catalog/runtime-environments'
 
-type ServerPortForwardState = Omit<WorktreeRuntimeOwnerState, 'runtimeEnvironments'> & {
+type ServerPortForwardState = Omit<WorktreeOperationRouteState, 'runtimeEnvironments'> & {
   runtimeEnvironments?: readonly { id: string; orcadDeployment?: OrcadDeploymentLink }[]
 }
 
@@ -46,10 +45,16 @@ export function workspaceRunsOnServer(
   worktreeId: string | null | undefined
 ): boolean {
   const state = readOwnerState?.()
-  return Boolean(
-    state &&
-    worktreeId &&
-    getExecutionHostIdForWorktree(state, worktreeId) === toRuntimeExecutionHostId(environmentId)
+  if (!state || !worktreeId) {
+    return false
+  }
+  // The owner keeps a nested SSH target as its place; `local` is the server's own machine.
+  const owner = resolveOwner(state, { workspaceId: worktreeId })
+  return (
+    owner.kind === 'resolved' &&
+    owner.owner.endpoint.kind === 'environment' &&
+    owner.owner.endpoint.environmentId === environmentId &&
+    owner.owner.at === 'local'
   )
 }
 

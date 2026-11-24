@@ -15,6 +15,7 @@ import {
   configurePairedPortForwards,
   ensurePairedPortForward,
   listPairedPortForwards,
+  pairedPortForwardEnvironmentIds,
   removePairedPortForward,
   resetPairedPortForwardTunnel,
   updatePairedPortForward
@@ -78,8 +79,8 @@ export function registerRuntimeEnvironmentPortForwardHandlers(options: {
 
 /** The CLI can remove a pairing from the registry directly; its forwards stop listening here too. */
 export async function closePortForwardsOfRemovedEnvironments(userDataPath: string): Promise<void> {
-  const forwardedIds = new Set(listPairedPortForwards().map((entry) => entry.connectionId))
-  if (forwardedIds.size === 0) {
+  const forwardedIds = pairedPortForwardEnvironmentIds()
+  if (forwardedIds.length === 0) {
     return
   }
   try {
@@ -87,7 +88,7 @@ export async function closePortForwardsOfRemovedEnvironments(userDataPath: strin
       (await listEnvironments(userDataPath)).map((environment) => environment.id)
     )
     await Promise.all(
-      [...forwardedIds].filter((id) => !known.has(id)).map((id) => closePairedPortForwards(id))
+      forwardedIds.filter((id) => !known.has(id)).map((id) => closePairedPortForwards(id))
     )
   } catch (error) {
     console.warn("[runtime-environments] Closing removed servers' forwards failed:", error)
