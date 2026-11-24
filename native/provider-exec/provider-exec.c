@@ -282,6 +282,9 @@ struct watcher {
     struct identity_set termed;
     // Identities read in full without the tag, so each unrelated orphan is read once per stop.
     struct identity_set untagged;
+    // Live members the last full sweep found.
+    struct identity_set known;
+    long long next_full_ns;
     long long sweep_interval_ms;
     int group_term_pending;
     unsigned stdin_end_grace_ms;
@@ -880,6 +883,32 @@ static void record_termed(struct watcher *w, const struct proc_row *row) {
     }
 }
 
+// A member already sent TERM is only probed; one with no room to record it is not sent it, and a
+// TERM that wasn't delivered stays due. Returns whether the member is still alive.
+static int deliver_to_member(struct watcher *w, struct proc_row *row, int signal_number) {
+    int send = signal_number;
+    if (signal_number == SIGTERM && (already_termed(w, row) || !reserve_termed(w))) {
+        send = 0;
+    }
+    int sent;
+    int alive = signal_member(row, send, &sent);
+    if (alive && sent && send == SIGTERM) {
+        record_termed(w, row);
+    }
+    return alive;
+}
+
+// Between full sweeps only the members the last one found are rechecked, each by its own kernel
+// handle, so a lingering tool costs O(members) rather than a host-wide table read.
+static int probe_known_members(struct watcher *w, int signal_number) {
+    int live = 0;
+    for (size_t i = 0; i < w->known.count; i++) {
+        struct proc_row row = {.pid = w->known.items[i].pid, .start = w->known.items[i].start};
+        live += deliver_to_member(w, &row, signal_number);
+    }
+    return live;
+}
+
 // Signals each live descendant once through its kernel handle. Returns how many were alive, or -1
 // when the tree could not be read, its anchor is unproven, or a member vanished mid-sweep.
 static int sweep_once(struct watcher *w, int signal_number) {
@@ -971,6 +1000,7 @@ static int sweep_once(struct watcher *w, int signal_number) {
         dropped = 1;
     }
     live = 0;
+    w->known.count = 0;
     for (size_t i = 0; i < scan.n; i++) {
         struct proc_row *row = &scan.rows[i];
         if (!tree_member(scan.state[i]) || row->zombie) {
@@ -990,16 +1020,9 @@ static int sweep_once(struct watcher *w, int signal_number) {
             continue;
         }
 #endif
-        // A member already sent TERM is only probed; one with no room to record it is not sent it,
-        // and a TERM that wasn't delivered stays due for the next sweep.
-        int send = signal_number;
-        if (signal_number == SIGTERM && (already_termed(w, row) || !reserve_termed(w))) {
-            send = 0;
-        }
-        int sent;
-        if (signal_member(row, send, &sent)) {
-            if (sent && send == SIGTERM) {
-                record_termed(w, row);
+        if (deliver_to_member(w, row, signal_number)) {
+            if (identity_reserve(&w->known)) {
+                identity_insert(&w->known, row->pid, row->start, 0);
             }
             live++;
         } else {
@@ -1062,16 +1085,23 @@ static int tree_absent(struct watcher *w, int signal_number) {
         return 0;
     }
     w->swept_group_gone = group_gone;
-    int live = sweep_tree(w, signal_number);
-    // Back off while sweeps find nothing to act on; any member or uncertainty resets the pace.
-    long long interval = w->sweep_interval_ms > 0 ? w->sweep_interval_ms : TREE_SWEEP_INTERVAL_MS;
-    interval = live != 0 ? TREE_SWEEP_INTERVAL_MS
-                         : (interval * 2 > TREE_SWEEP_MAX_INTERVAL_MS ? TREE_SWEEP_MAX_INTERVAL_MS
-                                                                      : interval * 2);
-    w->sweep_interval_ms = interval;
-    w->next_sweep_ns = now_ns + interval * 1000000LL;
+    long long tick = (long long)TREE_SWEEP_INTERVAL_MS * 1000000LL;
+    long long last_chance = w->deadline_ns - tick;
+    // Known members are rechecked every interval; the whole table is read again only on its own
+    // backoff, once none of them is left, or in the last interval before the phase deadline.
+    int live = w->known.count > 0 ? probe_known_members(w, signal_number) : 0;
+    int full = live == 0 || now_ns >= w->next_full_ns || now_ns >= last_chance;
+    if (full) {
+        live = sweep_tree(w, signal_number);
+        long long interval =
+            w->sweep_interval_ms > 0 ? w->sweep_interval_ms : TREE_SWEEP_INTERVAL_MS;
+        w->sweep_interval_ms = interval * 2 > TREE_SWEEP_MAX_INTERVAL_MS ? TREE_SWEEP_MAX_INTERVAL_MS
+                                                                       : interval * 2;
+        w->next_full_ns = now_ns + interval * 1000000LL;
+    }
+    // While members or doubt remain, recheck each interval; otherwise wait for the next full sweep.
+    w->next_sweep_ns = live != 0 ? now_ns + tick : w->next_full_ns;
     // Backoff never skips the last sweep before the phase deadline, so a late tool still gets TERM.
-    long long last_chance = w->deadline_ns - (long long)TREE_SWEEP_INTERVAL_MS * 1000000LL;
     if (w->next_sweep_ns > last_chance && now_ns < last_chance) {
         w->next_sweep_ns = last_chance;
     }
