@@ -109,7 +109,13 @@ export async function openWorkspacePortInBrowser(args: {
     localhostLabelRoute: args.localhostLabelRoute
   })
   const openInSystemBrowser =
-    args.openInOrcaBrowser === false ? portSystemBrowserOpener(url, args.runtimeTarget) : null
+    args.openInOrcaBrowser === false
+      ? portSystemBrowserOpener(
+          url,
+          args.runtimeTarget,
+          args.port.kind === 'workspace' ? args.port.owner.worktreeId : null
+        )
+      : null
   if (openInSystemBrowser) {
     try {
       await openInSystemBrowser()

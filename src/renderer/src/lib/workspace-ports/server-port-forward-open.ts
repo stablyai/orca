@@ -8,19 +8,23 @@ import { NETWORK_PORT_FORWARD_RUNTIME_CAPABILITY } from '../../../../shared/remo
 import { isLoopbackBrowserUrl } from '../../../../shared/browser/navigation/loopback-browser-url'
 import type { RuntimeClientTarget } from '../../../../shared/remote-runtime/host-catalog/runtime-client-target'
 import { forwardedUrlForRemoteUrl } from './workspace-port-urls'
-import { serverForwardsPorts } from './server-port-forward-support'
+import { serverForwardsPorts, workspaceRunsOnServer } from './server-port-forward-support'
 
-/** How a port's URL opens in the system browser; null when only Orca's browser on its host reaches it. */
+/** How a port's URL opens in the system browser; null when only Orca's browser on its host reaches it.
+ *  `worktreeId` names the workspace a workspace port belongs to; the server's own listeners have none. */
 export function portSystemBrowserOpener(
   url: string,
-  target: RuntimeClientTarget
+  target: RuntimeClientTarget,
+  worktreeId: string | null
 ): (() => Promise<void>) | null {
   if (target.kind === 'local') {
     return () => window.api.shell.openUrl(url)
   }
   // A paired server's localhost reaches the system browser only through a forward of its port.
-  return serverForwardsPorts(target.environmentId) && isLoopbackBrowserUrl(url)
-    ? () => openServerLoopbackInSystemBrowser(url, target.environmentId)
+  return serverForwardsPorts(target.environmentId) &&
+    isLoopbackBrowserUrl(url) &&
+    (worktreeId === null || workspaceRunsOnServer(target.environmentId, worktreeId))
+    ? () => openServerLoopbackInSystemBrowser(url, target.environmentId, worktreeId)
     : null
 }
 
@@ -31,7 +35,9 @@ export function portSystemBrowserOpener(
  */
 export async function openServerLoopbackInSystemBrowser(
   rawUrl: string,
-  environmentId: string
+  environmentId: string,
+  /** The workspace the link or page belongs to; null for the server's own listeners. */
+  worktreeId: string | null | undefined
 ): Promise<void> {
   let url: URL
   try {
@@ -50,6 +56,17 @@ export async function openServerLoopbackInSystemBrowser(
     return
   }
   const host = selectExecutionHostDisplayLabel(state, toRuntimeExecutionHostId(environmentId))
+  // A workspace on an SSH host or WSL distro the server reaches has another localhost than the server's.
+  if (worktreeId !== null && !workspaceRunsOnServer(environmentId, worktreeId)) {
+    toast.error(
+      translate(
+        'auto.lib.workspace.ports.serverPortForward.otherMachine',
+        "Couldn't forward port {{port}}: this workspace doesn't run on {{host}} itself.",
+        { port, host }
+      )
+    )
+    return
+  }
   const api = window.api.runtimeEnvironments.portForwards
   const supported =
     api !== undefined &&

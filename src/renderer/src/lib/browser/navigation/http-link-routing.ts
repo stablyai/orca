@@ -184,7 +184,8 @@ function executeHttpLink(
   // A client fallback tab browses from this desktop, so it cannot reach the owner's loopback either.
   const prefersOrca =
     openLinksInApp ||
-    (!opts.allowClientBrowserFallback && isRemoteLoopbackHttpLink(url, effectiveSourceOwner))
+    (!opts.allowClientBrowserFallback &&
+      isRemoteLoopbackHttpLink(url, effectiveSourceOwner, worktreeId))
   const modifier = resolveModifierRouting(
     Boolean(opts.modifierHeld),
     prefersOrca,
@@ -281,7 +282,7 @@ function executeHttpLink(
 
   const localhostRoute = state ? localhostLabelRouteForHttpLink(url, state, sourceOwner) : null
   if (!localhostRoute) {
-    openOwnedSystemHttpLink(url, effectiveSourceOwner, openSystemHttpLink)
+    openOwnedSystemHttpLink(url, effectiveSourceOwner, worktreeId, openSystemHttpLink)
     return 'system-browser'
   }
   void openLabeledLocalhostLink(url, localhostRoute, (labeledUrl) => {

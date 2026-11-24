@@ -1,6 +1,7 @@
 import { useRuntimeEnvironmentCapability } from '@/runtime/rpc/compatibility/use-runtime-environment-capability'
 import { openAppHttpLink } from '@/lib/browser/navigation/app-http-link-open'
 import { openServerLoopbackInSystemBrowser } from '@/lib/workspace-ports/server-port-forward-open'
+import { workspaceRunsOnServer } from '@/lib/workspace-ports/server-port-forward-support'
 import { NETWORK_PORT_FORWARD_RUNTIME_CAPABILITY } from '../../../../../shared/remote-runtime/protocol/workspace-ports-runtime-capabilities'
 import {
   normalizeExternalBrowserUrl,
@@ -21,7 +22,10 @@ export function useServerPageOpenExternal(
   )
   const url = normalizeExternalBrowserUrl(redactKagiSessionToken(pageUrl))
   if (url && isLoopbackBrowserUrl(url)) {
-    return serverForwards ? () => void openServerLoopbackInSystemBrowser(url, environmentId) : null
+    // The page browses from its workspace's host; only the server's own localhost can be forwarded.
+    return serverForwards && workspaceRunsOnServer(environmentId, worktreeId)
+      ? () => void openServerLoopbackInSystemBrowser(url, environmentId, worktreeId)
+      : null
   }
   const publicUrl = getRemoteRoutedOpenableExternalUrl(pageUrl)
   return publicUrl

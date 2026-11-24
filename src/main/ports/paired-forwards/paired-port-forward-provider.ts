@@ -24,27 +24,36 @@ export class PairedPortForwardProvider implements SshPortForwardProvider<PairedP
     let closed = false
     const target = { host: options.remoteHost, port: options.remotePort }
 
-    const server = createServer({ noDelay: true, pauseOnConnect: true }, (socket) => {
-      activeSockets.add(socket)
-      socket.on('close', () => activeSockets.delete(socket))
-      socket.on('error', () => socket.destroy())
-      tunnel.open(target).then(
-        (upstream) => {
-          if (closed || socket.destroyed) {
-            upstream.destroy()
-            socket.destroy()
-            return
-          }
-          upstream.once('error', () => socket.destroy())
-          upstream.once('close', () => socket.destroy())
-          socket.once('close', () => upstream.destroy())
-          socket.pipe(upstream)
-          pipeUpstreamToClient(upstream, socket)
-          socket.resume()
-        },
-        () => socket.destroy()
-      )
-    })
+    // Half-open keeps a response flowing after a client shuts down its request side.
+    const server = createServer(
+      { noDelay: true, pauseOnConnect: true, allowHalfOpen: true },
+      (socket) => {
+        activeSockets.add(socket)
+        socket.on('close', () => activeSockets.delete(socket))
+        socket.on('error', () => socket.destroy())
+        tunnel.open(target).then(
+          (upstream) => {
+            if (closed || socket.destroyed) {
+              upstream.destroy()
+              socket.destroy()
+              return
+            }
+            upstream.once('error', () => socket.destroy())
+            // After a clean end the socket still flushes the response; only an abrupt close cuts it.
+            upstream.once('close', () => {
+              if (!socket.writableEnded) {
+                socket.destroy()
+              }
+            })
+            socket.once('close', () => upstream.destroy())
+            socket.pipe(upstream)
+            pipeUpstreamToClient(upstream, socket)
+            socket.resume()
+          },
+          () => socket.destroy()
+        )
+      }
+    )
     server.maxConnections = BROWSER_NETWORK_TUNNEL_MAX_STREAMS
 
     await listenForPortForward(server, options.localHost, options.localPort)

@@ -17,6 +17,8 @@ export class PairedPortForwardTunnel {
   private transport: PairedRuntimeBrowserNetworkTransport | null = null
   private connecting: Promise<BrowserNetworkTunnelClient> | null = null
   private outboundMemory: BrowserNetworkTunnelOutboundMemoryLease | null = null
+  // Advanced by every reset, so a startup that began before one never claims the tunnel.
+  private generation = 0
   private disposed = false
 
   constructor(
@@ -40,6 +42,7 @@ export class PairedPortForwardTunnel {
   /** Drops the live tunnel; forwards keep listening and redial on their next connection. */
   reset(error = new Error('Port forward tunnel reset')): void {
     const transport = this.transport
+    this.generation += 1
     this.transport = null
     this.connecting = null
     transport?.close(error)
@@ -81,9 +84,10 @@ export class PairedPortForwardTunnel {
   }
 
   private async startTransport(): Promise<BrowserNetworkTunnelClient> {
+    const generation = this.generation
     const connection = await this.resolveConnection()
-    if (this.disposed) {
-      throw new Error('Port forward tunnel closed')
+    if (this.disposed || this.generation !== generation) {
+      throw new Error('Port forward tunnel was reset during startup')
     }
     this.outboundMemory ??= outboundMemoryBudgets.acquire(this.environmentId)
     if (!this.outboundMemory) {
@@ -109,7 +113,7 @@ export class PairedPortForwardTunnel {
     })
     this.transport = transport
     const tunnel = await transport.start()
-    if (this.disposed || this.transport !== transport) {
+    if (this.disposed || this.transport !== transport || this.generation !== generation) {
       transport.close(new Error('Port forward tunnel superseded'))
       throw new Error('Port forward tunnel closed during startup')
     }

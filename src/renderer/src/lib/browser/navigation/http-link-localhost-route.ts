@@ -1,5 +1,5 @@
 import type { HttpLinkSourceOwner, HttpLinkStoreState } from './http-link-routing'
-import { serverForwardsPorts } from '@/lib/workspace-ports/server-port-forward-support'
+import { serverForwardsWorkspacePorts } from '@/lib/workspace-ports/server-port-forward-support'
 import { isLoopbackBrowserUrl } from '../../../../../shared/browser/navigation/loopback-browser-url'
 import {
   isLoopbackHttpUrl,
@@ -27,12 +27,13 @@ export type LocalhostLinkWorktree = {
 // unless the paired server forwards its ports here, where the system browser opens the forward.
 export function isRemoteLoopbackHttpLink(
   url: string | undefined,
-  sourceOwner: HttpLinkSourceOwner | undefined
+  sourceOwner: HttpLinkSourceOwner | undefined,
+  worktreeId?: string | null
 ): boolean {
   return (
     (sourceOwner?.kind === 'ssh' ||
       (sourceOwner?.kind === 'runtime' &&
-        !serverForwardsPorts(sourceOwner.runtimeEnvironmentId))) &&
+        !serverForwardsWorkspacePorts(sourceOwner.runtimeEnvironmentId, worktreeId))) &&
     url !== undefined &&
     isLoopbackHttpUrl(url)
   )
@@ -43,6 +44,7 @@ export function isRemoteLoopbackHttpLink(
 export function openOwnedSystemHttpLink(
   url: string,
   sourceOwner: HttpLinkSourceOwner | undefined,
+  worktreeId: string | null | undefined,
   openSystem: (url: string) => Promise<void>
 ): void {
   if (sourceOwner?.kind !== 'runtime' || !isLoopbackBrowserUrl(url)) {
@@ -52,7 +54,7 @@ export function openOwnedSystemHttpLink(
   // Loaded on demand: the opener reads the store, which imports link routing.
   void import('@/lib/workspace-ports/server-port-forward-open')
     .then(({ openServerLoopbackInSystemBrowser }) =>
-      openServerLoopbackInSystemBrowser(url, sourceOwner.runtimeEnvironmentId)
+      openServerLoopbackInSystemBrowser(url, sourceOwner.runtimeEnvironmentId, worktreeId)
     )
     .catch((error: unknown) => console.error('Failed to open the server port:', error))
 }

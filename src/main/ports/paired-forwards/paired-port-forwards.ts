@@ -44,6 +44,7 @@ export function listPairedPortForwards(environmentId?: string): PortForwardEntry
 export function addPairedPortForward(spec: ForwardSpec): Promise<PortForwardEntry> {
   const remoteHost = requireLoopbackRemoteHost(spec.remoteHost)
   return serializePortForwardChange(forwardChangeKey(spec.environmentId), async () => {
+    await requireForwardableServer(spec.environmentId)
     await assertIpv6LoopbackPortFree(spec.localPort)
     const entry = await manager
       .addForward(
@@ -109,6 +110,7 @@ export function ensurePairedPortForward(args: {
     if (existing) {
       return { entry: existing, created: false }
     }
+    await requireForwardableServer(args.environmentId)
     const tunnel = tunnelFor(args.environmentId)
     const add = (localPort: number) =>
       manager.addForward(
@@ -134,16 +136,19 @@ export function ensurePairedPortForward(args: {
   })
 }
 
-/** A person removed or disconnected the server: its forwards stop listening here. */
-export async function closePairedPortForwards(environmentId: string): Promise<void> {
-  const tunnel = tunnels.get(environmentId)
-  tunnels.delete(environmentId)
-  tunnel?.dispose()
-  const hadForwards = manager.listForwards(environmentId).length > 0
-  await manager.removeAllForwards(environmentId)
-  if (hadForwards) {
-    deps?.onChanged(environmentId)
-  }
+/** A person removed or disconnected the server: its forwards stop listening here. Queued behind
+ *  changes already underway, so none of them starts a listener after it. */
+export function closePairedPortForwards(environmentId: string): Promise<void> {
+  return serializePortForwardChange(forwardChangeKey(environmentId), async () => {
+    const tunnel = tunnels.get(environmentId)
+    tunnels.delete(environmentId)
+    tunnel?.dispose()
+    const hadForwards = manager.listForwards(environmentId).length > 0
+    await manager.removeAllForwards(environmentId)
+    if (hadForwards) {
+      deps?.onChanged(environmentId)
+    }
+  })
 }
 
 /** The server's transport was replaced; forwards keep listening and redial on their next connection. */
@@ -157,6 +162,15 @@ export async function closeAllPairedPortForwards(): Promise<void> {
   }
   tunnels.clear()
   await manager.closeAll()
+}
+
+/** Refuses a server that is removed or disconnected, before any listener binds for it. */
+async function requireForwardableServer(environmentId: string): Promise<void> {
+  const resolveConnection = deps?.resolveConnection
+  if (!resolveConnection) {
+    throw new Error('Port forwarding is not ready')
+  }
+  await resolveConnection(environmentId)
 }
 
 function tunnelFor(environmentId: string): PairedPortForwardTunnel {
