@@ -577,6 +577,8 @@
       "choiceChipRemove": "移除 {{flag}}",
       "choiceChipTooltip": "由 {{choice}} 添加，移除后使用默认值",
       "agentActions": "{{agent}} 操作",
+      "showAgentDetails": "显示 {{agent}} 详情",
+      "hideAgentDetails": "隐藏 {{agent}} 详情",
       "defaultAutoBadge": "默认 · 自动",
       "newAgentsTitle": "新智能体",
       "defaultSurfaceServerDescription": "{{host}} 自行启动的智能体（例如通过其 CLI 或编排工作者启动）所用的默认设置。你从这台电脑打开的智能体遵循\"这台电脑\"的选择"
@@ -21317,7 +21319,14 @@
         "showQuestion": "显示 {{name}} 的问题",
         "show": "显示",
         "runningCount": "{{count}} 个运行中",
-        "cleared_other": "已清除 {{count}} 个工作者"
+        "cleared_other": "已清除 {{count}} 个工作者",
+        "stopAll": "全部停止",
+        "clearFailed": "清除失败项",
+        "pillLabel_other": "{{count}} 个工作者，最新：{{title}}",
+        "unlistedDetail": "部分后台工作未在此列出",
+        "unlisted": "后台工作正在运行",
+        "unread": "无法加载工作者",
+        "unreadDetail": "工作者加载后会显示在这里"
       },
       "webhookSetup": {
         "heading": "设置 Webhook",
@@ -22026,7 +22035,7 @@
           "localFilesSection": "本地文件将丢失",
           "back": "返回",
           "deletePermanently": "永久删除",
-          "retryDescription": "这会永久删除 {{name}} 及其本地文件。",
+          "retryDescription": "这会永久删除 {{name}} 及其本地文件",
           "showMore": "再显示 {{count}} 个"
         },
         "review": {
@@ -22041,14 +22050,14 @@
           "statusLabel": "状态",
           "signalsLabel": "信号",
           "projectOnHost": "{{project}} · {{host}}",
-          "notGit": "不是 Git 工作区。请改为从 Orca 中移除该项目。",
-          "unreachable": "无法连接 {{host}}。重新连接后即可删除，或将其从 Orca 中移除。",
-          "mainCheckout": "无法删除项目的主检出。",
+          "notGit": "不是 Git 工作区。请改为从 Orca 中移除该项目",
+          "unreachable": "无法连接 {{host}}。重新连接后即可删除，或将其从 Orca 中移除",
+          "mainCheckout": "无法删除项目的主工作树",
           "uncommittedFiles_other": "{{count}} 个未提交的文件",
           "couldntCheck": "无法检查更改"
         },
         "group": {
-          "empty": "这里没有工作区。",
+          "empty": "这里没有工作区",
           "nothingLocal": "无本地内容",
           "localFiles": "有本地文件",
           "cannotDelete": "无法删除",
@@ -22058,7 +22067,7 @@
         "footer": {
           "delete_other": "删除 {{count}} 个工作区",
           "selected": "已选 {{count}} 个",
-          "waitForDelete": "请等待当前删除完成。"
+          "waitForDelete": "请等待当前删除完成"
         },
         "selectAll": {
           "partial": "已选 {{selected}}/{{total}} 个",
@@ -22071,7 +22080,7 @@
           "show": "显示"
         },
         "done": {
-          "failedLine_other": "{{count}} 个无法删除。",
+          "failedLine_other": "{{count}} 个无法删除",
           "title": "已删除 {{deleted}}/{{total}} 个工作区",
           "singleTitle": "已删除 {{deleted}}/{{total}} 个工作区",
           "button": "完成"
@@ -22084,7 +22093,7 @@
           "statusDeleting": "正在删除…",
           "statusFailed": "无法删除",
           "statusWaiting": "等待中",
-          "unconfirmed": "无法确认已删除。请刷新以检查。"
+          "unconfirmed": "无法确认已删除。请刷新以检查"
         }
       },
       "creation": {
@@ -22994,7 +23003,7 @@
       "downloading": "正在下载 {{done}} MB",
       "downloadingOf": "正在下载 {{done}} MB / {{total}} MB",
       "external": "使用你自己的 {{agent}}",
-      "externalShort": "使用你自己的副本",
+      "externalShort": "使用你自己安装的版本",
       "extracting": "正在解压 {{agent}}…",
       "extractingShort": "正在解压…",
       "failed": "安装失败，请重试",
@@ -24177,6 +24186,9 @@
     "scanTooLarge": "\"快速打开\"的扫描范围过大（{{reason}}）"
   },
   "checksPanel": {
+    "commentsUnavailable": "无法加载评论",
+    "linkedReviewUnavailable": "无法加载关联的拉取请求",
+    "loadingReviewDetails": "正在加载评审详情…",
     "unlinked": {
       "title": "拉取请求已取消关联",
       "description": "此工作区已隐藏 PR #{{number}}，请重新关联，以恢复检查和评审详情",
@@ -25194,7 +25206,11 @@
       "singleTitle": "要删除 {{name}} 吗？",
       "forceExplanation": "存在更改，Git 无法删除该工作树。强制删除仍会移除这些更改",
       "errorDetails": "详细信息",
-      "changesIncomplete": "部分更改未能完整检查"
+      "changesIncomplete": "部分更改未能完整检查",
+      "parentWorkspace": "父工作区",
+      "workspacesToReview": "待检查的工作区",
+      "workspaceDetails": "所选工作区的详情",
+      "workspaceKept": "将保留"
     }
   },
   "mediaPreview": {
@@ -28917,7 +28933,8 @@
       "runNow": "立即运行",
       "openOnPage": "在自动化页面中打开",
       "pauseShort": "暂停",
-      "resumeShort": "恢复"
+      "resumeShort": "恢复",
+      "nextAt": "下次 {{time}}"
     },
     "host": {
       "errors": {
@@ -29637,6 +29654,8 @@
         "describe": "头像描述",
         "button": "生成",
         "generating": "正在生成…",
+        "closeAnytime": "可随时关闭",
+        "failedFor": "无法为 {{name}} 生成头像",
         "cancel": "取消",
         "cancelRunning": "取消生成",
         "edit": "编辑描述",
@@ -29936,6 +29955,8 @@
     "errors": {
       "nameTaken": "已有其他 bot 使用此名称",
       "generic": "出了点问题，请重试",
+      "avatarHomeUnreadable": "无法读取已保存的头像。请重新选择",
+      "folderNotOwned": "无法验证此 bot 的文件夹",
       "avatarInvalid": "无法使用该图片。请选择 PNG 或 JPG 图片",
       "unsavedDrafts": "它的文件夹中有未保存的编辑器更改。请先保存或关闭这些更改，然后再删除"
     },
@@ -30562,7 +30583,8 @@
     "navigationLabel": "应用导航",
     "toolsLabel": "应用工具",
     "workspaces": "工作区",
-    "more": "更多"
+    "more": "更多",
+    "pageRegion": "页面"
   },
   "chats": {
     "delete": {
