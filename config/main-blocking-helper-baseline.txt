@@ -1292,6 +1292,8 @@
 2 src/main/runtime/workspaces/removal/workspace-removal.ts
 1 src/main/runtime/workspaces/workspace-removal-target.ts
 1 src/main/server/serve-pairing-readiness.ts
+1 src/main/settings-file/settings-file-sync.ts # reaches the same one-shot watch-open statSync through createSettingsFileWatching
+3 src/main/settings-file/settings-file-watching.ts # watchFileAcrossReplacement runs one statSync of ~/.orca/settings.json when each watch opens (link, and symlink target)
 2 src/main/skills/cloud/skill-cloud-auth.ts
 1 src/main/skills/cloud/skill-cloud-package-service.ts
 1 src/main/skills/discovery/claude-plugin-skill-sources-wsl.ts

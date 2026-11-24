@@ -23,7 +23,6 @@ export const PORTABLE_KEY_SPECS = {
     'restart',
     'keep'
   ),
-  experimentalConnectors: 'boolean',
   openLinksInAppInBackground: 'boolean',
   editorFontFamily: 'string',
   editorFontSize: 'number',
@@ -220,6 +219,12 @@ export const PORTABLE_KEY_SPECS = {
   experimentalAgentHibernation: 'boolean',
   agentHibernationIdleMs: 'number',
   experimentalNewWorktreeCardStyle: 'boolean',
+  experimentalSharedCodexServers: 'boolean',
+  skipNewHomeChatConfirm: 'boolean',
+  skipDeleteChatConfirm: 'boolean',
+  terminalDroppedImagesPreview: 'boolean',
+  experimentalAppRail: 'boolean',
+  automaticUpdates: 'boolean',
   compactWorktreeCards: 'boolean'
 } as const satisfies PortableSpecTable
 

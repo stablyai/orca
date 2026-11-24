@@ -162,5 +162,15 @@ export const MACHINE_KEY_TABLE = {
   voice: 'machine',
   voiceDictationModeDefaultedToAuto: 'machine',
   aiVaultSearch: 'machine',
+  agentDefaultSurfaceChosen: 'machine',
+  nativeChatAutoContinueAfterUsageLimitDefaultedOn: 'machine',
+  linuxTilingWindowMode: 'machine',
+  botsEnabled: 'machine',
+  avatarGenerationAgent: 'machine',
+  generatedAvatarDescriptions: 'machine',
+  perfNoticesOff: 'machine',
+  antigravityManagedAgyEnabled: 'machine',
+  antigravityServerAutoUpdateEnabled: 'machine',
+  antigravityGoogleSignIn: 'machine',
   settingsFileLastSeenKeys: 'machine'
 } as const satisfies Partial<Record<keyof GlobalSettings, 'machine'>>
