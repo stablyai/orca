@@ -38,7 +38,9 @@ function newJoin(): BotItemLinkJoin {
 /** A read keeps what it found finished on the turns after it replies. */
 async function itemLinkKept(dispatchId: string, join: BotItemLinkJoin) {
   const link = await itemLink(dispatchId, join)
-  await new Promise((resolve) => setImmediate(resolve))
+  for (let turn = 0; turn < 2; turn++) {
+    await new Promise((resolve) => setImmediate(resolve))
+  }
   return link
 }
 

@@ -73,8 +73,9 @@ export class BotItemLinkJoin {
     }
     let states: Map<string, LinkedWorkerState | null>
     let keep: () => void
+    let stale: () => boolean
     try {
-      ;({ states, keep } = await this.states.readStates(unique))
+      ;({ states, keep, stale } = await this.states.readStates(unique))
     } catch (error) {
       // Orchestration unreadable: every link reads `unknown`, never success or failure.
       console.warn('[bots] items: could not read linked workers', error)
@@ -104,6 +105,9 @@ export class BotItemLinkJoin {
         reads.set(ref, { ...state, pr: await pr })
       })
     )
+    if (stale()) {
+      return this.readLinkedWorkers(refs, { pullRequests })
+    }
     setImmediate(keep)
     return reads
   }
