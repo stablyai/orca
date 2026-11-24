@@ -80,6 +80,12 @@ describe('the model-wait notice', () => {
     // Capping before redacting or folding would keep neither the same line nor the inside sentinel.
     expect(words.slice(0, kept)).not.toContain(inside)
 
+    const body = {
+      kind: 'status',
+      tone: 'warning',
+      text: words,
+      failure: { kind: 'providerRetrying' }
+    }
     const feed: { onItems?: (ids: readonly string[] | null) => void } = {}
     const journal: ChatModelWaitJournal = {
       observe: (_sessionId, listener) => {
@@ -87,16 +93,7 @@ describe('the model-wait notice', () => {
         return () => {}
       },
       // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the watch reads only these fields.
-      item: async (_sessionId, itemId) =>
-        ({
-          itemId,
-          body: {
-            kind: 'status',
-            tone: 'warning',
-            text: words,
-            failure: { kind: 'providerRetrying' }
-          }
-        }) as unknown as AgentJournalRenderItem
+      item: async (_sessionId, itemId) => ({ itemId, body }) as unknown as AgentJournalRenderItem
     }
     const watch = new ChatWorkerModelWait(
       { getDb: () => db, notify: () => {}, isWaitingForMail: () => false },
