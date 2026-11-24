@@ -94,23 +94,29 @@ export type KeptCodexTurn = {
 /**
  * Background commands and subagent turns that began before the reattach: the new session's tracker
  * never saw them start, so their rows would read "status unavailable". They are restated from the
- * same history, under the same task ids, without writing any chat row.
+ * same history, under the same task ids, without writing any chat row. `ended` ([threadId, itemId])
+ * are commands that finished while no app was attached: restated as running, so the replayed end
+ * settles their rows instead of leaving them running.
  */
 export function restateKeptCodexBackgroundWork(
   tracker: Pick<CodexBackgroundTaskTracker, 'observe' | 'publishChildWork'>,
-  turns: readonly KeptCodexTurn[]
+  turns: readonly KeptCodexTurn[],
+  ended: readonly (readonly string[])[] = []
 ): void {
   if (turns.length === 0) {
     return
   }
+  const endedHere = new Set(ended.map(([threadId, itemId]) => `${threadId}\u0000${itemId}`))
   for (const { threadId, turnId, status, items } of turns) {
     const turn = { id: turnId, status: status ?? 'inProgress' }
     if (status === 'inProgress') {
       tracker.observe({ method: 'turn/started', threadId, params: { turn } })
     }
     for (const item of items) {
-      if (item.type === 'commandExecution' && item.status === 'inProgress') {
-        tracker.observe({ method: 'item/started', threadId, params: { turnId, item } })
+      const endedDetached = endedHere.has(`${threadId}\u0000${item.id}`)
+      if (item.type === 'commandExecution' && (item.status === 'inProgress' || endedDetached)) {
+        const running = endedDetached ? { ...item, status: 'inProgress' } : item
+        tracker.observe({ method: 'item/started', threadId, params: { turnId, item: running } })
       }
     }
     // A finished turn's live commands are its background work, as when the turn ended live.

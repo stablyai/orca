@@ -1,3 +1,6 @@
+import type { Readable } from 'node:stream'
+import type { NdjsonRejectedRecord } from '../../shared/json-stream/main-process-ndjson-framer'
+
 /** Lines handed on before any reader claimed them; past this, acks follow what was handed on. */
 const MAX_UNCLAIMED_LINES = 4_096
 
@@ -11,6 +14,42 @@ export type ProviderRelayRecordTaking = {
   taken: () => void
   /** The reader dropped lines without a record each, so its count no longer lines up. */
   uncounted: () => void
+}
+
+/**
+ * A framer's record callbacks, counted against a relayed stream's `relayRecords` (claimed now), so
+ * its acks never pass a record the reader hasn't handled. A plain stream's callbacks are unchanged.
+ */
+export function countedRelayRecords(
+  stream: Pick<Readable, 'on'> & { relayRecords?: ProviderRelayRecordTaking },
+  onRecord: (record: unknown, line: string) => void,
+  onRejected: (rejected: NdjsonRejectedRecord) => void
+): { onRecord: typeof onRecord; onRejected: typeof onRejected } {
+  const records = stream.relayRecords
+  if (!records) {
+    return { onRecord, onRejected }
+  }
+  records.claim()
+  return {
+    onRecord: (record, line) => {
+      try {
+        onRecord(record, line)
+      } finally {
+        records.taken()
+      }
+    },
+    onRejected: (rejected) => {
+      try {
+        onRejected(rejected)
+      } finally {
+        if (rejected.kind === 'line-too-long' && rejected.droppedCompleteRecords) {
+          records.uncounted()
+        } else {
+          records.taken()
+        }
+      }
+    }
+  }
 }
 
 /** Which seq the consumer has taken, one entry per line handed on and not yet taken. */

@@ -134,6 +134,8 @@ export type ProviderRelayAttachResult = {
    * view starts empty, so it keeps these until it sees them end, and hands them back at its detach.
    */
   openWork?: Record<string, string[][]>
+  /** Tasks the daemon saw end while detached, which the app may still show running: restate them. */
+  endedWork?: Record<string, string[][]>
 }
 
 export type ProviderRelayInfo = {

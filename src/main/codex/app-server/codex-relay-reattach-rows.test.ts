@@ -38,7 +38,34 @@ describe('codex rows across a reattach', () => {
     output.line('relayData', 6, item('item/started', 'c'))
     await output.settle(true)
     await settle()
-    expect(acks).toEqual(['4 keep 3', '5', '6'])
+    // The daemon's first ask (its memory cap) starts keeping c rather than release it.
+    expect(acks).toEqual(['4 keep 3', '5', '6 keep 6'])
+  })
+
+  it('never keeps from a floor a forced ack gave up, and an ask before any keep starts keeping', async () => {
+    const acks: string[] = []
+    const output = new RelayedProviderOutput({
+      stdout: new Readable({ read() {} }),
+      ackFloor: createCodexRelayAckFloor(),
+      durable: async () => true,
+      ack: async (seq, keepFrom) => {
+        acks.push(keepFrom === undefined ? `${seq}` : `${seq} keep ${keepFrom}`)
+      }
+    })
+    output.restartAt(0)
+    output.line('relayData', 1, item('item/started', 'a'))
+    output.line('relayData', 2, '{"method":"item/agentMessage/delta","params":{"itemId":"a"}}')
+    await output.settle()
+    // At the daemon's file cap the kept span is released; a's start is gone from the spool.
+    await output.settle(true)
+    output.line('relayData', 3, '{"method":"item/agentMessage/delta","params":{"itemId":"a"}}')
+    await output.settle()
+    expect(acks).toEqual(['2 keep 1', '2', '3'])
+    // Once a is done, the next item is kept from its start again.
+    output.line('relayData', 4, item('item/completed', 'a', 'completed'))
+    output.line('relayData', 5, item('item/started', 'b'))
+    await output.settle()
+    expect(acks).toEqual(['2 keep 1', '2', '3', '5 keep 5'])
   })
 
   it("numbers a kept chat's and its subagents' running turns as the live run did", async () => {
@@ -73,6 +100,24 @@ describe('codex rows across a reattach', () => {
     expect(ordinals.ordinalFor('main', 'turn-1', 'm1')).toBe(1)
     expect(ordinals.ordinalFor('main', 'turn-1', 'm2')).toBe(2)
     expect(ordinals.ordinalFor('sub', 'turn-s', 's2')).toBe(1)
+  })
+
+  it('restates a command that ended while no app was attached, so its replayed end settles it', () => {
+    const tracker = new CodexBackgroundTaskTracker('main')
+    const turn = {
+      threadId: 'main',
+      turnId: 'turn-1',
+      status: 'completed',
+      items: [{ type: 'commandExecution', id: 'c1', status: 'completed', command: 'npm test' }]
+    }
+    restateKeptCodexBackgroundWork(tracker, [turn], [['main', 'c1']])
+    expect(tracker.relayOpenWork(false).command).toEqual([['main', 'c1']])
+    tracker.observe({
+      method: 'item/completed',
+      threadId: 'main',
+      params: { turnId: 'turn-1', item: { ...turn.items[0], exitCode: 0 } }
+    })
+    expect(tracker.relayOpenWork(false).command ?? []).toEqual([])
   })
 
   it('restates a background command that outlived its turn before the reattach, so it reads live', () => {

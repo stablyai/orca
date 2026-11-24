@@ -135,4 +135,21 @@ describe('provider relay idle stop', () => {
     carried.observe(command('item/completed', 'completed'))
     expect(carried.merge({ turn: [], command: [] })).toEqual({ turn: [], command: [] })
   })
+
+  it('names a background command that ended while detached, once only, so the next app settles it', () => {
+    const r = rig()
+    r.detach({ turn: [], command: [[T, 'cmd-1']] })
+    r.line(command('item/completed', 'completed'))
+    r.state.attached = true
+    r.idle.disarm()
+    expect(r.idle.carriedWork()).toEqual({
+      openWork: { turn: [], command: [] },
+      endedWork: { command: [[T, 'cmd-1']] }
+    })
+    // That app restated and settled it; its own detach and the attach after list nothing ended.
+    r.detach({ turn: [], command: [] })
+    r.state.attached = true
+    r.idle.disarm()
+    expect(r.idle.carriedWork().endedWork).toBeUndefined()
+  })
 })

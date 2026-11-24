@@ -49,6 +49,8 @@ export class RelayedProviderOutput {
   private ackedSeq = 0
   /** The floor the last ack kept from (the daemon keeps lines from it on for a later attach). */
   private keptFrom: number | null = null
+  /** A forced ack released lines through here; a floor at or below it was already given up. */
+  private releasedThrough = 0
   /** Requests already handed on, so a replay or reattach never asks the user twice. */
   private readonly deliveredPending = new Set<number>()
   private preambleArrived: (() => void) | null = null
@@ -77,6 +79,7 @@ export class RelayedProviderOutput {
       this.pushedSeq = fromSeq
       this.ackedSeq = fromSeq
       this.keptFrom = null
+      this.releasedThrough = fromSeq
       this.consumption.reset(fromSeq)
     }
     if (this.held) {
@@ -237,10 +240,12 @@ export class RelayedProviderOutput {
     this.acking = this.acking.then(async () => {
       // Only what the chat's reader took: a paused reader's lines are replayed after a crash.
       const target = this.consumption.upTo(this.pushedSeq)
-      // Lines from the floor on (a streamed item still open) stay kept, so a reattach rewrites
-      // the item whole; the daemon's ask (its file cap) releases them, and the forced save keeps the text.
-      const floor = force ? null : (this.options.ackFloor?.floor() ?? null)
-      const keepFrom = floor !== null && floor <= target ? floor : null
+      // Lines from the floor on (a streamed item still open) stay kept, so a reattach rewrites the
+      // item whole. The daemon's ask while keeping (its file cap) releases them, and the forced
+      // save keeps the text; an ask before any keep (its memory cap) starts keeping instead.
+      const floor = this.options.ackFloor?.floor() ?? null
+      const usable = floor !== null && floor > this.releasedThrough && floor <= target
+      const keepFrom = usable && !(force && this.keptFrom !== null) ? floor : null
       if ((target <= this.ackedSeq && keepFrom === this.keptFrom) || this.stopped) {
         return
       }
@@ -254,6 +259,9 @@ export class RelayedProviderOutput {
         await (keepFrom === null ? this.options.ack(target) : this.options.ack(target, keepFrom))
         this.ackedSeq = Math.max(this.ackedSeq, target)
         this.keptFrom = keepFrom
+        if (force && keepFrom === null) {
+          this.releasedThrough = Math.max(this.releasedThrough, target)
+        }
       } catch {
         // Unacked output is replayed on the next attach; a later ack covers it.
       }

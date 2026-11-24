@@ -22,6 +22,7 @@ import type {
   CodexAppServerConnectionHandlers
 } from './codex-app-server-connection-types'
 import { launchRelayedProviderProcess } from '../../provider-relay/app-provider-relays'
+import { codexConnectionRelay } from './codex-app-server-relay'
 import {
   CODEX_RELAY_WORK_MARKERS,
   isCodexAnswerAbove,
@@ -280,9 +281,7 @@ async function connectCodexAppServer(
     pauseReading: recordReader.pause,
     resumeReading: recordReader.resume,
     close,
-    ...(relayed
-      ? { relay: { reattached, releaseOutput: () => relayed.child.releaseOutput() } }
-      : {})
+    ...(relayed ? { relay: codexConnectionRelay(relayed.child, reattached) } : {})
   }
 
   let handshaking = false

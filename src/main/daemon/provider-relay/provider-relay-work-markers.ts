@@ -281,6 +281,8 @@ function holds(value: unknown, test: { path: string[]; is: string; not?: true })
 /** The open tasks, per group; busy while any is open or a group outgrew its bound. */
 export class ProviderRelayOpenWork {
   private readonly groups = new Map<string, Set<string>>()
+  /** Tasks that ended here, so the next app (which never saw them start) can restate and settle them. */
+  private readonly ended = new Map<string, Set<string>>()
   private overflowed = false
 
   constructor(open: Record<string, string[][]>) {
@@ -305,6 +307,15 @@ export class ProviderRelayOpenWork {
     return open
   }
 
+  /** The tasks that ended here, as key parts per group. */
+  endedKeys(): Record<string, string[][]> | null {
+    const ended: Record<string, string[][]> = {}
+    for (const [group, tasks] of this.ended) {
+      ended[group] = [...tasks].map((key) => key.split(KEY_SEPARATOR))
+    }
+    return this.ended.size > 0 ? ended : null
+  }
+
   /** Work the daemon can't account for; the agent is never idle-stopped after it. */
   overflow(): void {
     this.overflowed = true
@@ -313,18 +324,24 @@ export class ProviderRelayOpenWork {
   apply(change: ProviderRelayWorkChange): void {
     const tasks = this.groups.get(change.group) ?? new Set<string>()
     this.groups.set(change.group, tasks)
+    const ended = this.ended.get(change.group) ?? new Set<string>()
+    const end = (key: string): void => {
+      tasks.delete(key)
+      if (ended.size < MAX_GROUP_TASKS) {
+        ended.add(key)
+        this.ended.set(change.group, ended)
+      }
+    }
     if (change.effect === 'roster') {
-      tasks.clear()
-      change.keys.forEach((key) => tasks.add(key))
+      const next = new Set(change.keys)
+      ;[...tasks].filter((key) => !next.has(key)).forEach(end)
+      next.forEach((key) => tasks.add(key))
     } else if (change.effect === 'start') {
       tasks.add(change.key)
+      ended.delete(change.key)
     } else {
       const under = change.key + KEY_SEPARATOR
-      for (const key of tasks) {
-        if (key === change.key || key.startsWith(under)) {
-          tasks.delete(key)
-        }
-      }
+      ;[...tasks].filter((key) => key === change.key || key.startsWith(under)).forEach(end)
     }
     if (tasks.size > MAX_GROUP_TASKS) {
       this.overflowed = true

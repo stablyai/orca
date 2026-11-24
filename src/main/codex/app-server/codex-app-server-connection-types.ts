@@ -46,6 +46,8 @@ export type CodexAppServerConnection = {
     readonly reattached: boolean
     /** Lets the kept output through once the chat can route it. */
     releaseOutput: () => void
+    /** Work the daemon saw end while no app was attached, keyed per marker group. */
+    endedWork: () => Record<string, string[][]> | undefined
   }
 }
 import type { ProviderProcessCloseResult } from '../../provider-process/provider-process-close'

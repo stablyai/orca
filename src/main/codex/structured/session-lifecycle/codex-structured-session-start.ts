@@ -250,7 +250,11 @@ export async function openCodexStructuredSession(
   for (const event of attempt.window.drain()) {
     event()
   }
-  restateKeptCodexBackgroundWork(session.backgroundTasks, keptTurns)
+  restateKeptCodexBackgroundWork(
+    session.backgroundTasks,
+    keptTurns,
+    connection.relay?.endedWork()?.command
+  )
   connection.relay?.releaseOutput()
   current()
   acquisitions.deleteIfCurrent(sessionId, attempt)

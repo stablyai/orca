@@ -3,6 +3,8 @@ import {
   type ProviderRelayWorkMarkers
 } from '../../provider-relay/app-provider-relays'
 import { createCodexRelayAckFloor } from './codex-relay-ack-floor'
+import type { CodexAppServerConnection } from './codex-app-server-connection-types'
+import type { RelayedProviderChild } from '../../provider-relay/relayed-provider-child'
 import { leadingJsonEnvelope } from '../../../shared/json-stream/json-rpc-record-prefix'
 
 const ENVELOPE_SCAN_CHARS = 4096
@@ -105,5 +107,17 @@ export function keptInitializeResult(line: string | null): unknown {
     return message.result ?? {}
   } catch {
     return {}
+  }
+}
+
+/** What a Codex connection exposes of its relayed app-server. */
+export function codexConnectionRelay(
+  child: Pick<RelayedProviderChild, 'releaseOutput' | 'attachResult'>,
+  reattached: boolean
+): NonNullable<CodexAppServerConnection['relay']> {
+  return {
+    reattached,
+    releaseOutput: () => child.releaseOutput(),
+    endedWork: () => child.attachResult?.endedWork
   }
 }

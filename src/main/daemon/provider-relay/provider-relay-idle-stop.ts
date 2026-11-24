@@ -34,6 +34,7 @@ export class ProviderRelayIdleStop {
   private reader: ProviderRelayWorkReader | null = null
   private work: ProviderRelayOpenWork | null = null
   private carried: Record<string, string[][]> | null = null
+  private ended: Record<string, string[][]> | null = null
   private armed = false
   /** Busy when last checked: the next agent line starts a fresh window. */
   private waitingForLine = false
@@ -95,25 +96,30 @@ export class ProviderRelayIdleStop {
   }
 
   /** The work open when an app attached, which it can't see yet; null when none was tracked. */
-  carriedWork(): { openWork?: Record<string, string[][]> } {
-    return this.carried ? { openWork: this.carried } : {}
+  carriedWork(): { openWork?: Record<string, string[][]>; endedWork?: Record<string, string[][]> } {
+    return {
+      ...(this.carried ? { openWork: this.carried } : {}),
+      ...(this.ended ? { endedWork: this.ended } : {})
+    }
   }
 
   disarm(): void {
     // A takeover or a dropped stream tracked nothing new, so what the last app was handed still stands.
     this.carried = this.work?.keys() ?? this.carried
+    // Ends the last app already replayed are gone; a fresh window starts its own list.
+    this.ended = this.work ? this.work.endedKeys() : this.ended
     this.armed = false
     this.waitingForLine = false
     this.work = null
     this.clearTimer()
   }
 
-  /** Called for every stdout line; attached it costs nothing, since the app counts the work. */
   /** A transport-only line the policy names: neither forwarded, spooled nor counted as activity. */
   quiet(line: string): boolean {
     return isProviderRelayQuietLine(line, this.quietNames)
   }
 
+  /** Called for every stdout line; attached it costs nothing, since the app counts the work. */
   observeAgentLine(line: string): void {
     this.lastActivityAt = Date.now()
     if (this.armed && this.work && this.reader) {
