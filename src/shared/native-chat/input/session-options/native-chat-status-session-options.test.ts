@@ -1,6 +1,7 @@
 import { expect, it, vi } from 'vitest'
 import { getAgentSessionOptionCatalog } from '../../../agent-session/options/agent-session-option-catalog'
 import { createNativeChatPtySessionOptions } from './native-chat-pty-session-options'
+import { decodeNativeChatAppliedSessionOptions } from './native-chat-session-option-cache'
 import {
   takeNativeChatStatusReport,
   type NativeChatStatusReportMemory
@@ -17,7 +18,7 @@ function chip(scopeKey: string, dispatchCommand: () => Promise<void> = async () 
     modelLabel: 'Model',
     dispatchCommand
   })!
-  const report = (model: string, effort: string, sessionId = 'session-a') => {
+  const report = (model: string, effort?: string, sessionId = 'session-a') => {
     const reported = takeNativeChatStatusReport(memory, scopeKey, 'claude', claude, claude.models, {
       model,
       providerSession: { id: sessionId, effort }
@@ -26,12 +27,37 @@ function chip(scopeKey: string, dispatchCommand: () => Promise<void> = async () 
       surface.reportSessionOptions(reported.values, reported.forNewModel)
     }
   }
-  const shown = (id: string) => {
-    const kind = surface.getSnapshot().find((row) => row.id === id)?.kind
-    return kind?.type === 'select' ? kind.currentValue : undefined
-  }
-  return { surface, report, shown }
+  const row = (id: string) => surface.getSnapshot().find((option) => option.id === id)
+  const shown = (id: string) => row(id)?.kind.currentValue
+  const source = (id: string) => row(id)?.valueSource
+  return { surface, report, shown, source }
 }
+
+it('fills only missing chat options from the launch, including launches without a model', async () => {
+  const empty = chip('applied-options-empty')
+  const applied = decodeNativeChatAppliedSessionOptions('claude', {
+    model: 'opus',
+    effort: 'high',
+    fastMode: 'true'
+  })
+  empty.surface.fillAppliedSessionOptions(applied)
+  expect([empty.shown('model'), empty.shown('effort'), empty.source('effort')]).toEqual([
+    'opus',
+    'high',
+    'applied'
+  ])
+  expect(empty.shown('fastMode')).toBe(true)
+
+  const picked = chip('applied-options-pick')
+  await picked.surface.setOption('effort', 'low')
+  picked.surface.fillAppliedSessionOptions(applied)
+  expect([picked.shown('effort'), picked.source('effort')]).toEqual(['low', 'dispatched'])
+
+  const reported = chip('applied-options-reported')
+  reported.report('opus')
+  reported.surface.fillAppliedSessionOptions({ effort: 'high' })
+  expect([reported.shown('effort'), reported.source('effort')]).toEqual(['high', 'applied'])
+})
 
 it('shows the live Claude effort with its model and follows an /effort change', () => {
   const { report, shown } = chip('status-report-effort')
