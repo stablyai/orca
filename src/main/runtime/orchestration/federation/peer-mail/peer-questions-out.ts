@@ -35,9 +35,32 @@ export function recordPeerQuestionOut(
     )
 }
 
+/** A handoff to a paired computer, kept only until its answer or notice comes back, so a finished
+ *  run chat that sent it stays open for the result; an ended pairing drops it without a notice. */
+export function recordPeerHandoffOut(
+  db: OrchestrationDb,
+  handoff: Parameters<typeof recordPeerQuestionOut>[1]
+): void {
+  db.db
+    .prepare(
+      `INSERT OR IGNORE INTO peer_handoffs_out (
+         message_id, conversation_id, environment_id, peer_fingerprint, asker, thread_id
+       ) VALUES (?, ?, ?, ?, ?, ?)`
+    )
+    .run(
+      handoff.messageId,
+      handoff.conversationId,
+      handoff.environmentId,
+      handoff.peerFingerprint,
+      handoff.asker,
+      handoff.threadId ?? null
+    )
+}
+
 /** Its delivery failed: nothing there will answer it, and the sender saw the failure. */
 export function forgetPeerQuestionOut(db: OrchestrationDb, messageId: string): void {
   db.db.prepare('DELETE FROM peer_questions_out WHERE message_id = ?').run(messageId)
+  db.db.prepare('DELETE FROM peer_handoffs_out WHERE message_id = ?').run(messageId)
 }
 
 /** A reply came back on this conversation: the question it answers, or is a notice for, is settled.
@@ -51,12 +74,21 @@ export function settlePeerQuestionsOut(
   const requestId = reply.botAnswer?.requestId ?? reply.notice?.requestId
   if (requestId) {
     db.db
+      .prepare('DELETE FROM peer_handoffs_out WHERE conversation_id = ? AND message_id = ?')
+      .run(conversationId, requestId)
+    db.db
       .prepare(
         `UPDATE peer_questions_out SET awaiting = NULL
          WHERE conversation_id = ? AND message_id = ? AND awaiting = 1`
       )
       .run(conversationId, requestId)
   } else if (reply.threadId) {
+    db.db
+      .prepare(
+        `DELETE FROM peer_handoffs_out
+         WHERE conversation_id = ?1 AND (message_id = ?2 OR thread_id = ?2)`
+      )
+      .run(conversationId, reply.threadId)
     db.db
       .prepare(
         `UPDATE peer_questions_out SET awaiting = NULL
@@ -86,6 +118,12 @@ export function tellUnpairedPeerQuestions(
           pairing: peerMailPairing(params.server)
         }
       : { ...params, pairing: params.currentPairing ?? null }
+  db.db
+    .prepare(
+      `DELETE FROM peer_handoffs_out
+       WHERE environment_id = ?1 AND (?2 IS NULL OR peer_fingerprint <> ?2)`
+    )
+    .run(params.environmentId, pairing)
   const waiting = db.db
     .prepare(
       `SELECT message_id, conversation_id, asker, thread_id FROM peer_questions_out

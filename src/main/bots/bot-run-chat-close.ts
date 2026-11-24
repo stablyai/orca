@@ -22,7 +22,10 @@ const EntrySchema = z.object({
   sessionId: z.string().min(1),
   botId: z.string().min(1),
   /** When its countdown last started: the run's end, or the last time it was busy or active. */
-  since: z.number()
+  since: z.number(),
+  /** Held open by something that ends on its own (a tab, an item, an answer): it sets no timer and is
+   *  checked again in the next sweep another chat starts, or once after a restart. */
+  parked: z.literal(true).optional()
 })
 type Entry = z.infer<typeof EntrySchema>
 // A later line that takes a chat off the list.
@@ -63,6 +66,8 @@ export class BotRunChatCloser {
   private entries: { path: string; byChat: Map<string, Entry>; lines: number } | null = null
   private failedAt: number | null = null
   private failures = 0
+  // Parked chats wait for a sweep, except once per launch, so a held chat never wakes an idle Orca.
+  private sweptThisLaunch = false
   private timer: ReturnType<typeof setTimeout> | undefined
   private timerAt: number | undefined
   private windows = ''
@@ -126,6 +131,7 @@ export class BotRunChatCloser {
     return this.serial(async () => {
       try {
         await this.sweepDue()
+        this.sweptThisLaunch = true
         this.failedAt = null
         this.failures = 0
       } catch (error) {
@@ -182,13 +188,16 @@ export class BotRunChatCloser {
         return null
       }
       if (chat.inUse) {
-        return { ...entry, since: this.deps.now() }
+        return this.parked(entry)
       }
       // Re-read each time: Close after can change while the checks run.
       const current = this.deps.bots().find((candidate) => candidate.id === bot.id)
       const ms = current ? this.closeAfterMs(current) : null
       const since = Math.max(entry.since, chat.lastActivityAt)
-      return ms === null || since + ms > now + SWEEP_COALESCE_MS ? { ...entry, since } : 'due'
+      const { sessionId, botId } = entry
+      return ms === null || since + ms > now + SWEEP_COALESCE_MS
+        ? { sessionId, botId, since }
+        : 'due'
     }
     const first = waiting()
     if (first !== 'due') {
@@ -196,7 +205,7 @@ export class BotRunChatCloser {
     }
     // Each of these can end, so the chat is checked again a whole Close after from now.
     if (this.deps.owesReply(entry.sessionId) || (await this.deps.busy(bot, entry.sessionId))) {
-      return { ...entry, since: this.deps.now() }
+      return this.parked(entry)
     }
     // A turn, a wake, a question, an open tab or a new Close after may come up to the close itself.
     const closed = await this.deps.close(
@@ -207,7 +216,16 @@ export class BotRunChatCloser {
       return null
     }
     const after = waiting()
-    return after === 'due' ? { ...entry, since: this.deps.now() } : after
+    return after === 'due' ? this.parked(entry) : after
+  }
+
+  private parked(entry: Entry): Entry {
+    return { sessionId: entry.sessionId, botId: entry.botId, since: this.deps.now(), parked: true }
+  }
+
+  /** When the timer fires next; undefined while nothing sets it. */
+  nextSweepAt(): number | undefined {
+    return this.timerAt
   }
 
   private async rearmNow(): Promise<void> {
@@ -245,7 +263,7 @@ export class BotRunChatCloser {
     for (const entry of byChat.values()) {
       const bot = bots.get(entry.botId)
       // A bot this profile doesn't have keeps its chats for the profile that does.
-      const ms = bot ? this.closeAfterMs(bot) : null
+      const ms = bot && !(entry.parked && this.sweptThisLaunch) ? this.closeAfterMs(bot) : null
       if (ms !== null && (next === null || entry.since + ms < next)) {
         next = entry.since + ms
       }

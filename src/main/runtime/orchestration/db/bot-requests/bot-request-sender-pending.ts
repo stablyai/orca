@@ -4,8 +4,8 @@
 import { ORCA_SESSION_ADDRESS_PREFIX } from '../../../../../shared/agent-session/identity/orca-session-address-prefix'
 import type { OrchestrationDb } from '../orchestration-db'
 
-/** Served by idx_messages_bot_request_sender, idx_peer_questions_out_asker_awaiting and
- *  idx_messages_native_direct_work; one placeholder list per part, `count` addresses each. */
+/** Served by idx_messages_bot_request_sender, idx_peer_questions_out_asker_awaiting,
+ *  idx_peer_handoffs_out_asker and idx_messages_native_direct_work; one list of `count` per part. */
 export function sessionAwaitsMailSql(count: number): string {
   const list = Array.from({ length: count }, () => '?').join(',')
   return `SELECT 1 FROM messages m
@@ -14,6 +14,8 @@ export function sessionAwaitsMailSql(count: number): string {
       AND NOT EXISTS (SELECT 1 FROM bot_request_outcomes o WHERE o.message_id = m.id)
     UNION ALL
     SELECT 1 FROM peer_questions_out WHERE awaiting = 1 AND asker IN (${list})
+    UNION ALL
+    SELECT 1 FROM peer_handoffs_out WHERE asker IN (${list})
     UNION ALL
     SELECT 1 FROM messages
     WHERE to_handle IN (${list}) AND read = 0 AND delivered_at IS NULL
@@ -26,6 +28,6 @@ export function sessionAwaitsMail(db: OrchestrationDb, sessionIds: readonly stri
   return (
     db.db
       .prepare(sessionAwaitsMailSql(addresses.length))
-      .get(...addresses, ...addresses, ...addresses) !== undefined
+      .get(...addresses, ...addresses, ...addresses, ...addresses) !== undefined
   )
 }

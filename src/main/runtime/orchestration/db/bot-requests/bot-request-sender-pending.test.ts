@@ -2,7 +2,13 @@ import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, expect, it } from 'vitest'
-import { recordPeerQuestionOut } from '../../federation/peer-mail/peer-questions-out'
+import {
+  forgetPeerQuestionOut,
+  recordPeerHandoffOut,
+  recordPeerQuestionOut,
+  settlePeerQuestionsOut,
+  tellUnpairedPeerQuestions
+} from '../../federation/peer-mail/peer-questions-out'
 import { OrchestrationDb } from '../orchestration-db'
 import { sessionAwaitsMail, sessionAwaitsMailSql } from './bot-request-sender-pending'
 
@@ -63,6 +69,33 @@ it('a chat waits on mail from its open requests, paired asks and undelivered mai
   db.recordBotRequestOutcome(handoff, 'unanswered')
   db.db.prepare('UPDATE peer_questions_out SET awaiting = NULL').run()
   expect(sessionAwaitsMail(db, ['live', 'paired'])).toBe(false)
+
+  // A handoff to a paired computer holds its chat until the answer comes back, the send fails, or
+  // the pairing ends.
+  const handOff = (messageId: string) =>
+    recordPeerHandoffOut(db, {
+      messageId,
+      conversationId: 'conversation',
+      environmentId: 'server',
+      peerFingerprint: 'fingerprint',
+      asker: 'orca_session_id:handing'
+    })
+  handOff('msg_handoff')
+  expect(sessionAwaitsMail(db, ['handing'])).toBe(true)
+  // An older paired Orca's reply names only its thread.
+  settlePeerQuestionsOut(db, 'conversation', { threadId: 'msg_handoff' })
+  expect(sessionAwaitsMail(db, ['handing'])).toBe(false)
+  handOff('msg_failed')
+  forgetPeerQuestionOut(db, 'msg_failed')
+  expect(sessionAwaitsMail(db, ['handing'])).toBe(false)
+  handOff('msg_unpaired')
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: no question awaits, so no notice reads the runtime.
+  tellUnpairedPeerQuestions({} as never, db, {
+    environmentId: 'server',
+    serverName: 'Server',
+    reason: 'Removed.'
+  })
+  expect(sessionAwaitsMail(db, ['handing'])).toBe(false)
 
   // An answer stored but not yet handed to the chat.
   const answer = db.insertMessage({

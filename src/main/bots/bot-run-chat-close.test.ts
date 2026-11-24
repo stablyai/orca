@@ -86,7 +86,7 @@ describe('BotRunChatCloser', () => {
       bots,
       chats: {
         due: { lastActivityAt: 0, kept: false },
-        renamed: { lastActivityAt: 12 * HOUR, kept: false },
+        renamed: { lastActivityAt: 26 * HOUR, kept: false },
         linked: { lastActivityAt: 0, kept: true },
         working: { lastActivityAt: 0, kept: false },
         weekly: { lastActivityAt: 0, kept: false },
@@ -123,6 +123,8 @@ describe('BotRunChatCloser', () => {
     const writes = run.writes()
     // Nothing kept is due again, so the timer doesn't refire into another sweep.
     await run.closer.sweep()
+    // Only the chat with newer activity sets the timer: a held chat never wakes an idle Orca.
+    const next = run.closer.nextSweepAt()
     run.closer.clear()
 
     expect(run.closed).toEqual(['due'])
@@ -137,6 +139,7 @@ describe('BotRunChatCloser', () => {
       'working'
     ])
     expect(run.writes()).toBe(writes)
+    expect(next).toBe(50 * HOUR)
   })
 
   it('keeps its list as long as its changes, not as long as every run ever armed', async () => {

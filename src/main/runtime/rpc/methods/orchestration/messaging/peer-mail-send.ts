@@ -22,6 +22,7 @@ import { uploadPeerMailFiles } from './peer-mail-files'
 import { PeerMailMessageType } from '../../../../../../shared/rpc-contract/orchestration/orchestration-peer-mail-params'
 import {
   forgetPeerQuestionOut,
+  recordPeerHandoffOut,
   recordPeerQuestionOut
 } from '../../../../orchestration/federation/peer-mail/peer-questions-out'
 
@@ -97,6 +98,15 @@ export async function sendPeerMail(args: {
       asker: caller.address,
       threadId: params.threadId
     })
+  } else if (type === 'handoff') {
+    recordPeerHandoffOut(db, {
+      messageId: id,
+      conversationId: conversation.conversation_id,
+      environmentId: server.environmentId,
+      peerFingerprint: conversation.peer_fingerprint,
+      asker: caller.address,
+      threadId: params.threadId
+    })
   }
   try {
     const held = await deliverPeerMail(runtime, server, conversation, {
@@ -115,7 +125,7 @@ export async function sendPeerMail(args: {
     })
     warnings.push(...held)
   } catch (error) {
-    if (type === 'question') {
+    if (type === 'question' || type === 'handoff') {
       forgetPeerQuestionOut(db, id)
     }
     throw error
