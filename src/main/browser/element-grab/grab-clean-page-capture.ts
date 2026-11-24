@@ -60,40 +60,42 @@ export async function captureCleanGuestPage(
       resolve(null)
     }, deadlineMs)
   })
-  // Re-registers until the lane is free: another capture may take it between wake-up and retry.
-  const free = await new Promise<boolean>((resolve) => {
-    const attempt = (): void => {
-      if (!isNativeCaptureBusy(guest)) {
+  // Checking the lane, submitting and recording the readback happen in one synchronous step, so two
+  // waiters woken together cannot both submit; a waiter that finds the lane taken registers again.
+  // Wrapped, because resolving with the readback promise itself would wait for it to settle.
+  const submitted = await new Promise<{ physical: Promise<ReadbackImage | null> } | null>(
+    (resolve) => {
+      const attempt = (): void => {
+        if (isNativeCaptureBusy(guest)) {
+          const cancel = whenNativeCaptureLaneFree(guest, attempt)
+          stopWaiting = () => {
+            cancel()
+            resolve(null)
+          }
+          return
+        }
         stopWaiting = () => {}
-        resolve(true)
-        return
+        if (signal.aborted || guest.isDestroyed()) {
+          resolve(null)
+          return
+        }
+        try {
+          const physical = guest.capturePage().catch(() => null)
+          occupyNativeCaptureLane(guest, physical)
+          resolve({ physical })
+        } catch {
+          resolve(null)
+        }
       }
-      const cancel = whenNativeCaptureLaneFree(guest, attempt)
-      stopWaiting = () => {
-        cancel()
-        resolve(false)
-      }
+      attempt()
     }
-    attempt()
-  })
-  if (!free) {
-    releasePaint()
-    return null
-  }
-  if (signal.aborted || guest.isDestroyed()) {
+  )
+  if (!submitted) {
     clearTimeout(deadlineTimer)
     releasePaint()
     return null
   }
-  let physical: Promise<ReadbackImage | null>
-  try {
-    physical = guest.capturePage().catch(() => null)
-  } catch {
-    clearTimeout(deadlineTimer)
-    releasePaint()
-    return null
-  }
-  occupyNativeCaptureLane(guest, physical)
+  const { physical } = submitted
   let paintCap: ReturnType<typeof setTimeout> | undefined
   let settled = false
   void physical.then(() => {

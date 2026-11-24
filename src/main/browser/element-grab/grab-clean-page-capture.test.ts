@@ -1,7 +1,33 @@
 import { EventEmitter } from 'node:events'
 import { afterEach, expect, it, vi } from 'vitest'
+import type * as CaptureLane from '../../window/visibility/native-capture-lane'
 import { captureCleanGuestPage } from './grab-clean-page-capture'
 import { RendererPublicationThrottle } from '../../window/visibility/renderer-publication-throttle'
+
+// Counts live lane registrations per target, so a test can see a wait withdrawn before its capture settles.
+const laneWaiters = vi.hoisted(() => new Map<unknown, number>())
+vi.mock('../../window/visibility/native-capture-lane', async (importOriginal) => {
+  const actual = await importOriginal<typeof CaptureLane>()
+  const whenNativeCaptureLaneFree: typeof actual.whenNativeCaptureLaneFree = (target, onFree) => {
+    let live = true
+    const end = (): void => {
+      if (live) {
+        live = false
+        laneWaiters.set(target, (laneWaiters.get(target) ?? 1) - 1)
+      }
+    }
+    laneWaiters.set(target, (laneWaiters.get(target) ?? 0) + 1)
+    const cancel = actual.whenNativeCaptureLaneFree(target, () => {
+      end()
+      onFree()
+    })
+    return () => {
+      end()
+      cancel()
+    }
+  }
+  return { ...actual, whenNativeCaptureLaneFree }
+})
 
 afterEach(() => vi.useRealTimers())
 
@@ -220,8 +246,11 @@ it('drops an owed rehide when the guest gains focus or is destroyed before the r
   const destroyed = setup()
   await vi.advanceTimersByTimeAsync(6_100)
   expect(destroyed.guest.listenerCount('destroyed')).toBe(1)
+  expect(laneWaiters.get(destroyed.guest)).toBe(1)
   destroyed.guest.emit('destroyed')
   expect(destroyed.guest.listenerCount('destroyed')).toBe(0)
+  // The rehide's lane registration itself is gone at destruction, not merely ignored at settlement.
+  expect(laneWaiters.get(destroyed.guest)).toBe(0)
   destroyed.readbacks[0]()
   await vi.advanceTimersByTimeAsync(0)
   expect(destroyed.calls).toEqual(['readback'])
@@ -233,6 +262,41 @@ it('drops an owed rehide when the guest gains focus or is destroyed before the r
   await vi.advanceTimersByTimeAsync(0)
   expect(control.calls).toEqual(['readback', 'restore'])
   expect(control.guest.listenerCount('destroyed')).toBe(0)
+})
+
+it('lets exactly one of two waiting Draws submit when the lane frees, then the other', async () => {
+  vi.useFakeTimers()
+  const readbacks: (() => void)[] = []
+  const guest = {
+    isDestroyed: () => false,
+    capturePage: () =>
+      new Promise<typeof image>((resolve) => {
+        readbacks.push(() => resolve(image))
+      })
+  }
+  const draw = (deadlineMs: number): ReturnType<typeof captureCleanGuestPage> =>
+    captureCleanGuestPage(guest, new AbortController().signal, () => () => {}, deadlineMs)
+
+  // One native readback is held (its Draw gave up); two more Draws wait behind it on the same guest.
+  const abandoned = draw(1_000)
+  await vi.advanceTimersByTimeAsync(1_000)
+  await expect(abandoned).resolves.toBeNull()
+  const first = draw(10_000)
+  const second = draw(10_000)
+  await vi.advanceTimersByTimeAsync(10)
+  expect(readbacks).toHaveLength(1)
+
+  // Both are woken together; exactly one submits and the other waits again.
+  readbacks[0]()
+  await vi.advanceTimersByTimeAsync(10)
+  expect(readbacks).toHaveLength(2)
+
+  readbacks[1]()
+  await vi.advanceTimersByTimeAsync(10)
+  expect(readbacks).toHaveLength(3)
+  readbacks[2]()
+  await expect(first).resolves.toEqual(captured)
+  await expect(second).resolves.toEqual(captured)
 })
 
 it('leaves the guest usable for the next Draw when taking the paint lease fails', async () => {
