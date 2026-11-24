@@ -9,6 +9,7 @@ import {
   createIncrementalNdjsonFramer,
   encodeNdjson
 } from '../../../shared/json-stream/main-process-ndjson-framer'
+import { countedRelayRecords } from '../../provider-relay/relayed-provider-consumption'
 import { AcpConnectionClosedError, startAcpRequestDeadline } from './acp-errors'
 import { AcpIncomingRequests } from './acp-incoming-requests'
 import { requestTimeout, resolveAcpPeerOptions, type AcpPeerOptions } from './acp-peer-limits'
@@ -63,7 +64,8 @@ export class AcpJsonRpcPeer {
       this.limits.maxIncomingRequests,
       (message) => this.diagnose(message)
     )
-    this.framer = createIncrementalNdjsonFramer(
+    const counted = countedRelayRecords(
+      input,
       (record) => this.dispatch(record),
       (rejected) => {
         if (rejected.kind === 'line-too-long') {
@@ -77,9 +79,12 @@ export class AcpJsonRpcPeer {
         } else {
           this.otherLine(rejected.line)
         }
-      },
-      { maxLineBytes: this.limits.maxLineBytes }
+      }
     )
+    // A relayed agent's acks follow the records handled here, never lines still buffered.
+    this.framer = createIncrementalNdjsonFramer(counted.onRecord, counted.onRejected, {
+      maxLineBytes: this.limits.maxLineBytes
+    })
     input.setEncoding('utf8')
     input.on('data', this.onData)
     input.on('end', this.onInputEnd)
