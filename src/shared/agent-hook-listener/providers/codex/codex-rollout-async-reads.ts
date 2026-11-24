@@ -16,9 +16,12 @@ const MAX_CONCURRENT_ROLLOUT_READS = 3
 let rolloutReadsInFlight = 0
 type RolloutReadWaiter = { batch: RolloutReadBatch; grant: (granted: boolean) => void }
 const rolloutReadQueue: RolloutReadWaiter[] = []
+// Why: sweeping only once the queue doubles keeps admission O(1) amortized and retired waiters bounded by live ones.
+const MIN_QUEUE_SWEEP_LENGTH = 16
+let queueSweepLength = MIN_QUEUE_SWEEP_LENGTH
 
-// Why: while every slot is stalled, a retired owner's queued read would otherwise wait, and hold its caller, until one frees.
-function settleUnwantedWaiters(): void {
+/** Settles queued reads whose owner retired; call when an owner ends, since a stalled slot may never free to skip them. */
+export function settleRetiredRolloutReads(): void {
   let kept = 0
   for (const waiter of rolloutReadQueue) {
     if (waiter.batch.wanted()) {
@@ -28,6 +31,7 @@ function settleUnwantedWaiters(): void {
     }
   }
   rolloutReadQueue.length = kept
+  queueSweepLength = Math.max(MIN_QUEUE_SWEEP_LENGTH, kept * 2)
 }
 
 /** A freed slot passes straight to the oldest wanted waiter, so the count never overshoots. */
@@ -99,7 +103,6 @@ export class RolloutReadBatch {
     this.held = 0
     this.released = true
     batchesHoldingBytes.delete(this)
-    settleUnwantedWaiters()
   }
 }
 
@@ -115,7 +118,9 @@ async function withRolloutReadSlot<T>(
   if (rolloutReadsInFlight < MAX_CONCURRENT_ROLLOUT_READS) {
     rolloutReadsInFlight += 1
   } else {
-    settleUnwantedWaiters()
+    if (rolloutReadQueue.length >= queueSweepLength) {
+      settleRetiredRolloutReads()
+    }
     const granted = await new Promise<boolean>((grant) => rolloutReadQueue.push({ batch, grant }))
     if (!granted) {
       return unwanted

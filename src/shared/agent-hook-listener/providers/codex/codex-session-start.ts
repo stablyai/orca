@@ -18,6 +18,7 @@ import {
   setCodexMainAgentTurnState,
   type CodexRemoteRosterAuthority
 } from './codex-state'
+import { retireCodexPaneTranscripts } from './codex-pane-transcript-retirement'
 
 /** Only a definite root replacement excludes an execution host's previous turn facts. */
 export function previousCodexTurnContext<T extends AgentHookEventPayload>(
@@ -35,8 +36,7 @@ export function previousCodexTurnContext<T extends AgentHookEventPayload>(
 
 function clearCodexSessionState(state: HookListenerState, paneKey: string): void {
   state.codexAsyncQuestionsByPaneKey.delete(paneKey)
-  state.codexSubagentRosterByPaneKey.delete(paneKey)
-  state.codexSubagentTranscriptByPaneKey.delete(paneKey)
+  retireCodexPaneTranscripts(state, paneKey)
   state.codexLeadStateByPaneKey.delete(paneKey)
 }
 

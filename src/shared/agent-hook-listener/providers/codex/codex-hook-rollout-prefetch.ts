@@ -3,6 +3,7 @@ import { parseHookPayloadForPrefetch } from '../../hook-envelope'
 import type { HookListenerState } from '../../listener-state'
 import { readString } from '../../tool-input-preview'
 import { record } from './codex-rollout-jsonl-format'
+import { settleRetiredRolloutReads } from './codex-rollout-async-reads'
 import {
   createPrefetchedRolloutReads,
   type PrefetchedRolloutReads,
@@ -115,16 +116,19 @@ export async function prefetchCodexHookRolloutReadsWithin(
   body: unknown
 ): Promise<PrefetchedRolloutReads> {
   const reads = createPrefetchedRolloutReads()
-  await new Promise<void>((resolve) => {
-    const timer = setTimeout(resolve, HOOK_PREFETCH_MAX_MS)
+  const timedOut = await new Promise<boolean>((resolve) => {
+    const timer = setTimeout(() => resolve(true), HOOK_PREFETCH_MAX_MS)
     timer.unref?.()
     const done = (): void => {
       clearTimeout(timer)
-      resolve()
+      resolve(false)
     }
     prefetchCodexHookRolloutReads(state, body, reads).then(done, done)
   })
   reads.closed = true
+  if (timedOut) {
+    settleRetiredRolloutReads()
+  }
   return reads
 }
 

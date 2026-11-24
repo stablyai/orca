@@ -7,7 +7,8 @@ vi.mock('node:fs/promises', async (importOriginal) => ({
   stat: () => new Promise((resolve) => stalled.push(() => resolve({ size: 1, isFile: () => true })))
 }))
 
-const { RolloutReadBatch, rolloutFileSizeAsync } = await import('./codex-rollout-async-reads')
+const { RolloutReadBatch, rolloutFileSizeAsync, settleRetiredRolloutReads } =
+  await import('./codex-rollout-async-reads')
 
 describe('rollout read slots', () => {
   afterEach(() => {
@@ -22,12 +23,9 @@ describe('rollout read slots', () => {
     let wanted = true
     const retired = rolloutFileSizeAsync('/retired', new RolloutReadBatch(() => wanted))
     wanted = false
-    // A later live read touching the queue settles the retired one; the stalled slots stay held.
-    void rolloutFileSizeAsync('/later', live)
+    // The owner's teardown settles it; the stalled slots stay held.
+    settleRetiredRolloutReads()
     await expect(retired).resolves.toBeNull()
     expect(stalled).toHaveLength(3)
-
-    stalled.shift()?.()
-    await vi.waitFor(() => expect(stalled).toHaveLength(3))
   })
 })
