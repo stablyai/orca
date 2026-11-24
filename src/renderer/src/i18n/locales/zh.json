@@ -21278,6 +21278,8 @@
         "remoteOwner": "请在它运行的电脑上停止或清除",
         "restore": "重新显示在停靠栏中",
         "unavailable": "工作者状态不可用",
+        "alreadyStopped": "已停止",
+        "cantStop": "暂时无法停止",
         "empty": "0 个工作者",
         "clearAllLabel_other": "清除全部 {{count}} 个失败的工作者",
         "clearAll": "全部清除",
