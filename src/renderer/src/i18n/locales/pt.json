@@ -10572,7 +10572,36 @@
             "rebaseStoppedFinishInTerminal": "O Git pausou esta etapa. Termine-a em um terminal ou aborte.",
             "rebaseCheckingStep": "Verificando a etapa do rebase",
             "rebaseEmptyStepShort": "Etapa vazia",
-            "rebaseAbortLabel": "Abortar rebase"
+            "rebaseAbortLabel": "Abortar rebase",
+            "scopeFileCount_one": "{{count}} arquivo",
+            "scopeFileCount_other": "{{count}} arquivos",
+            "scopeCommitCount_one": "{{count}} commit",
+            "scopeCommitCount_other": "{{count}} commits",
+            "scopeUncommitted": "Não commitadas",
+            "scopeAllChanges": "Todas as alterações",
+            "scopeNone": "Nenhuma",
+            "scopeOpenDiff": "Abrir diff",
+            "scopeShowAll": "Mostrar todas as alterações",
+            "scopeLoadingBranchChanges": "Carregando alterações da branch…",
+            "scopeBranchCommits": "Commits nesta branch",
+            "scopeRecentCommits": "Commits recentes",
+            "scopeCompareTo": "Comparar com {{ref}}",
+            "scopeFilterCommits": "Filtrar commits",
+            "scopeCommitsFailed": "Não foi possível carregar os commits.",
+            "scopeFilesFailed": "Não foi possível carregar os arquivos.",
+            "scopeLoadingFiles": "Carregando arquivos…",
+            "scopeNoSharedHistory": "Sem histórico em comum com {{ref}}",
+            "scopeRetryCommits": "Tentar novamente",
+            "scopeLoadingCommits": "Carregando commits…",
+            "scopeNoMatchingCommits": "Nenhum commit correspondente",
+            "scopeNoBranchCommitsYet": "Ainda não há commits nesta branch",
+            "scopeNoCommitsYet": "Ainda não há commits",
+            "scopeOlderHistory": "Histórico anterior no Git Graph",
+            "scopeNoUncommitted": "Nenhuma alteração não commitada.",
+            "scopeCommitFiles": "Arquivos",
+            "gitGraphButton": "Grafo",
+            "scopeFileCount_many": "{{count}} arquivos",
+            "scopeCommitCount_many": "{{count}} commits"
           },
           "checks": {
             "panel": {
@@ -11585,13 +11614,6 @@
             "trashFailed": "Não foi possível mover '{{name}}' para a Lixeira."
           },
           "GitHistoryPanel": {
-            "cf7cad58d2": "Ainda sem commits",
-            "d0fb0f4bf2": "Atualizar commits",
-            "9f7535d22b": "Refs são nomes de branch ou tag que apontam para esse commit exato. Eles só aparecem onde o Git tem uma ref nomeada para o commit.",
-            "9289ba0cb9": "O que são refs?",
-            "d836037d02": "Commits",
-            "8232c8b2f2": "Abrir commit {{value0}}: {{value1}}",
-            "e5e81e59a6": "Redimensionar commits",
             "6d1e0a7c3b": "Falha ao carregar os arquivos do commit"
           },
           "pull": {
@@ -11788,8 +11810,7 @@
             "f8a2c4d1e0": "Modo de busca do Explorador"
           },
           "GitHistoryCommitFiles": {
-            "b2c3d4e5f6": "Nenhuma alteração de arquivo neste commit",
-            "c3d4e5f6a7": "Abrir Todas as Alterações"
+            "b2c3d4e5f6": "Nenhuma alteração de arquivo neste commit"
           },
           "AiVaultSessionSubagents": {
             "subagentsCount": "Subagentes ({{value0}})",
@@ -11850,10 +11871,6 @@
             "importSkippedCount_other": "{{count}} arquivos ignorados.",
             "importSkippedCount_many": "{{count}} arquivos ignorados.",
             "importFailed": "Falha ao importar arquivos."
-          },
-          "GitHistoryRow": {
-            "2f9c41ab07": "Mostrar arquivos no commit {{value0}}: {{value1}}",
-            "4a8d9e0c1f": "Ocultar arquivos no commit {{value0}}: {{value1}}"
           },
           "CreateHostedReviewComposer": {
             "741ff8a0d2": "Fazer Push e Criar {{value0}}"
@@ -25388,7 +25405,8 @@
     "branchCreated": "{{branch}} criada em {{commit}}",
     "branchName": "Nome da branch",
     "invalidBranchName": "Este nome de branch é inválido. Escolha outro nome.",
-    "createBranchFailed": "O Orca não conseguiu criar a branch. Verifique este repositório em um terminal e tente novamente."
+    "createBranchFailed": "O Orca não conseguiu criar a branch. Verifique este repositório em um terminal e tente novamente.",
+    "openDiff": "Abrir diff"
   },
   "bots": {
     "deepLink": {

@@ -13600,13 +13600,6 @@
             "c76693e456": "Impossible de charger les fichiers de cet espace de travail :"
           },
           "GitHistoryPanel": {
-            "cf7cad58d2": "Aucun commit pour le moment",
-            "d0fb0f4bf2": "Actualiser les commits",
-            "9f7535d22b": "Les refs sont des noms de branche ou de tag pointant vers ce commit exact. Elles n'apparaissent que là où Git possède une ref nommée pour ce commit.",
-            "9289ba0cb9": "Que sont les refs ?",
-            "d836037d02": "Commits",
-            "8232c8b2f2": "Ouvrir le commit {{value0}} : {{value1}}",
-            "e5e81e59a6": "Redimensionner les commits",
             "6d1e0a7c3b": "Échec du chargement des fichiers du commit"
           },
           "HostedReviewActions": {
@@ -14016,7 +14009,36 @@
             "rebaseStoppedFinishInTerminal": "Git a mis cette étape en pause. Terminez-la dans un terminal ou annulez.",
             "rebaseCheckingStep": "Vérification de l’étape du rebase",
             "rebaseEmptyStepShort": "Étape vide",
-            "rebaseAbortLabel": "Annuler le rebase"
+            "rebaseAbortLabel": "Annuler le rebase",
+            "scopeFileCount_one": "{{count}} fichier",
+            "scopeFileCount_other": "{{count}} fichiers",
+            "scopeFileCount_many": "{{count}} fichiers",
+            "scopeCommitCount_one": "{{count}} commit",
+            "scopeCommitCount_other": "{{count}} commits",
+            "scopeCommitCount_many": "{{count}} commits",
+            "scopeUncommitted": "Non validées",
+            "scopeAllChanges": "Toutes les modifications",
+            "scopeNone": "Aucune",
+            "scopeOpenDiff": "Ouvrir le diff",
+            "scopeShowAll": "Afficher toutes les modifications",
+            "scopeLoadingBranchChanges": "Chargement des modifications de la branche…",
+            "scopeBranchCommits": "Commits sur cette branche",
+            "scopeRecentCommits": "Commits récents",
+            "scopeCompareTo": "Comparer à {{ref}}",
+            "scopeFilterCommits": "Filtrer les commits",
+            "scopeCommitsFailed": "Impossible de charger les commits.",
+            "scopeFilesFailed": "Impossible de charger les fichiers.",
+            "scopeLoadingFiles": "Chargement des fichiers…",
+            "scopeNoSharedHistory": "Aucun historique commun avec {{ref}}",
+            "scopeRetryCommits": "Réessayer",
+            "scopeLoadingCommits": "Chargement des commits…",
+            "scopeNoMatchingCommits": "Aucun commit correspondant",
+            "scopeNoBranchCommitsYet": "Aucun commit sur cette branche pour le moment",
+            "scopeNoCommitsYet": "Aucun commit pour le moment",
+            "scopeOlderHistory": "Historique plus ancien dans Git Graph",
+            "scopeNoUncommitted": "Aucune modification non validée.",
+            "scopeCommitFiles": "Fichiers",
+            "gitGraphButton": "Graphe"
           },
           "SourceControlAgentActionDialog": {
             "8e856842d1": "Impossible de démarrer l'agent sélectionné.",
@@ -14894,12 +14916,7 @@
             "f8a2c4d1e0": "Mode de recherche de l'explorateur"
           },
           "GitHistoryCommitFiles": {
-            "b2c3d4e5f6": "Aucune modification de fichier dans ce commit",
-            "c3d4e5f6a7": "Ouvrir toutes les modifications"
-          },
-          "GitHistoryRow": {
-            "2f9c41ab07": "Afficher les fichiers du commit {{value0}} : {{value1}}",
-            "4a8d9e0c1f": "Masquer les fichiers du commit {{value0}} : {{value1}}"
+            "b2c3d4e5f6": "Aucune modification de fichier dans ce commit"
           },
           "GitHistoryCommitContextMenu": {
             "7b1c4e9a02": "Ouvrir le commit dans le navigateur",
@@ -24877,7 +24894,8 @@
     "branchCreated": "{{branch}} créée sur {{commit}}",
     "branchName": "Nom de la branche",
     "invalidBranchName": "Ce nom de branche n’est pas valide. Choisissez un autre nom.",
-    "createBranchFailed": "Orca n’a pas pu créer la branche. Vérifiez ce dépôt dans un terminal, puis réessayez."
+    "createBranchFailed": "Orca n’a pas pu créer la branche. Vérifiez ce dépôt dans un terminal, puis réessayez.",
+    "openDiff": "Ouvrir le diff"
   },
   "bots": {
     "deepLink": {

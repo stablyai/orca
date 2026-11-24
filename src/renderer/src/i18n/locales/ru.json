@@ -14052,13 +14052,6 @@
             "c76693e456": "Не удалось загрузить файлы этого рабочего пространства:"
           },
           "GitHistoryPanel": {
-            "cf7cad58d2": "Коммитов пока нет",
-            "d0fb0f4bf2": "Обновить коммиты",
-            "9f7535d22b": "Ссылки — это имена веток или тегов, указывающих на конкретный коммит. Они отображаются только там, где у коммита есть именованная ссылка Git.",
-            "9289ba0cb9": "Что такое ссылки?",
-            "d836037d02": "Коммиты",
-            "8232c8b2f2": "Открыть коммит {{value0}}: {{value1}}",
-            "e5e81e59a6": "Изменить размер списка коммитов",
             "6d1e0a7c3b": "Не удалось загрузить файлы коммита"
           },
           "HostedReviewActions": {
@@ -14481,7 +14474,38 @@
             "rebaseStoppedFinishInTerminal": "Git приостановил этот шаг. Завершите его в терминале или прервите.",
             "rebaseCheckingStep": "Проверка шага rebase",
             "rebaseEmptyStepShort": "Пустой шаг",
-            "rebaseAbortLabel": "Прервать rebase"
+            "rebaseAbortLabel": "Прервать rebase",
+            "scopeFileCount_one": "{{count}} файл",
+            "scopeFileCount_other": "{{count}} файлов",
+            "scopeCommitCount_one": "{{count}} коммит",
+            "scopeCommitCount_other": "{{count}} коммитов",
+            "scopeUncommitted": "Незакоммиченные",
+            "scopeAllChanges": "Все изменения",
+            "scopeNone": "Нет",
+            "scopeOpenDiff": "Открыть diff",
+            "scopeShowAll": "Показать все изменения",
+            "scopeLoadingBranchChanges": "Загрузка изменений ветки…",
+            "scopeBranchCommits": "Коммиты в этой ветке",
+            "scopeRecentCommits": "Последние коммиты",
+            "scopeCompareTo": "Сравнить с {{ref}}",
+            "scopeFilterCommits": "Фильтр коммитов",
+            "scopeCommitsFailed": "Не удалось загрузить коммиты.",
+            "scopeFilesFailed": "Не удалось загрузить файлы.",
+            "scopeLoadingFiles": "Загрузка файлов…",
+            "scopeNoSharedHistory": "Нет общей истории с {{ref}}",
+            "scopeRetryCommits": "Повторить",
+            "scopeLoadingCommits": "Загрузка коммитов…",
+            "scopeNoMatchingCommits": "Нет подходящих коммитов",
+            "scopeNoBranchCommitsYet": "В этой ветке пока нет коммитов",
+            "scopeNoCommitsYet": "Пока нет коммитов",
+            "scopeOlderHistory": "Более ранняя история в Git Graph",
+            "scopeNoUncommitted": "Нет незакоммиченных изменений.",
+            "scopeCommitFiles": "Файлы",
+            "gitGraphButton": "Граф",
+            "scopeFileCount_few": "{{count}} файла",
+            "scopeFileCount_many": "{{count}} файлов",
+            "scopeCommitCount_few": "{{count}} коммита",
+            "scopeCommitCount_many": "{{count}} коммитов"
           },
           "SourceControlAgentActionDialog": {
             "8e856842d1": "Не удалось запустить выбранного агента.",
@@ -15385,12 +15409,7 @@
             "f8a2c4d1e0": "Режим поиска в проводнике"
           },
           "GitHistoryCommitFiles": {
-            "b2c3d4e5f6": "В этом коммите нет изменений файлов",
-            "c3d4e5f6a7": "Открыть все изменения"
-          },
-          "GitHistoryRow": {
-            "2f9c41ab07": "Показать файлы коммита {{value0}}: {{value1}}",
-            "4a8d9e0c1f": "Скрыть файлы коммита {{value0}}: {{value1}}"
+            "b2c3d4e5f6": "В этом коммите нет изменений файлов"
           },
           "GitHistoryCommitContextMenu": {
             "7b1c4e9a02": "Открыть коммит в браузере",
@@ -25782,7 +25801,8 @@
     "branchCreated": "Ветка {{branch}} создана на {{commit}}",
     "branchName": "Название ветки",
     "invalidBranchName": "Это имя ветки недопустимо. Выберите другое имя.",
-    "createBranchFailed": "Orca не удалось создать ветку. Проверьте этот репозиторий в терминале и повторите попытку."
+    "createBranchFailed": "Orca не удалось создать ветку. Проверьте этот репозиторий в терминале и повторите попытку.",
+    "openDiff": "Открыть diff"
   },
   "speechModelUpdate": {
     "update": "Обновить",
