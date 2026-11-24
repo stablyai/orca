@@ -31,7 +31,13 @@ export function registerSharedBotHostsHandlers(args: {
       }
     }
   })
-  const subscriptions = new Map<string, () => void>()
+  // Each stream's release by its id; null while the host's subscribe is still settling.
+  const subscriptions = new Map<string, (() => void) | null>()
+  const release = (subscriptionId: string): void => {
+    subscriptions.get(subscriptionId)?.()
+    subscriptions.delete(subscriptionId)
+  }
+  const senderStreams = new WeakMap<Electron.WebContents, Set<string>>()
   for (const channel of [
     'sharedBotHosts:list',
     'sharedBotHosts:call',
@@ -46,25 +52,36 @@ export function registerSharedBotHostsHandlers(args: {
   })
   ipcMain.handle('sharedBotHosts:subscribe', async (event, raw: { params?: unknown }) => {
     const { environmentId, method, subscriptionId } = SubscribeArgs.parse(raw)
+    const { sender } = event
     const channel = `sharedBotHosts:subscription:${subscriptionId}`
-    subscriptions.get(subscriptionId)?.()
-    const release = await hosts.subscribe(environmentId, method, raw.params, (response) => {
-      if (!event.sender.isDestroyed()) {
-        event.sender.send(channel, response)
+    release(subscriptionId)
+    subscriptions.set(subscriptionId, null)
+    let streams = senderStreams.get(sender)
+    if (!streams) {
+      const owned = new Set<string>()
+      streams = owned
+      senderStreams.set(sender, owned)
+      sender.once('destroyed', () => owned.forEach(release))
+    }
+    streams.add(subscriptionId)
+    const stop = await hosts.subscribe(environmentId, method, raw.params, (response) => {
+      if (!sender.isDestroyed()) {
+        sender.send(channel, response)
       }
     })
-    subscriptions.set(subscriptionId, release)
-    event.sender.once('destroyed', () => {
-      subscriptions.get(subscriptionId)?.()
-      subscriptions.delete(subscriptionId)
-    })
+    // Released while the host was still answering: nothing is left to keep.
+    if (subscriptions.has(subscriptionId)) {
+      subscriptions.set(subscriptionId, stop)
+    } else {
+      stop()
+    }
     return { subscribed: true }
   })
   ipcMain.removeAllListeners('sharedBotHosts:unsubscribe')
-  ipcMain.on('sharedBotHosts:unsubscribe', (_event, raw: unknown) => {
+  ipcMain.on('sharedBotHosts:unsubscribe', (event, raw: unknown) => {
     const { subscriptionId } = UnsubscribeArgs.parse(raw)
-    subscriptions.get(subscriptionId)?.()
-    subscriptions.delete(subscriptionId)
+    senderStreams.get(event.sender)?.delete(subscriptionId)
+    release(subscriptionId)
   })
   hosts.start()
   return hosts
