@@ -18,6 +18,7 @@ import { makePaneKey } from '../../../../../shared/workspace-layout/stable-pane-
 import { normalizeAgentProviderSession } from '../../../../../shared/agent-session/lifecycle/agent-session-resume'
 import type {
   AgentProviderSessionMetadata,
+  ResumableTuiAgent,
   SleepingAgentLaunchConfig
 } from '../../../../../shared/agent-session/lifecycle/agent-session-resume'
 import { resolveResumeLaunchRecipe } from '../../../../../shared/agent-launch/choices/resume-launch-recipe'
@@ -26,17 +27,23 @@ import { resolveStartupShell } from '../../../../../shared/agent-launch/startup/
 import type { AppState } from '@/store/types'
 import type { AccountRestartAgent } from '@/store/terminals/terminal-contracts'
 import type { ProjectExecutionRuntimeResolution } from '../../../../../shared/execution-host/project-execution-runtime'
+import type { TuiAgent } from '../../../../../shared/agent-launch/catalog/tui-agent'
 
-export type AgentAccountRestartStartup = {
+/** An in-place pane restart's startup: the pane's shell runs `command` once it is ready. */
+export type PaneAgentRestartStartup = {
   command: string
   startupCommandDelivery: 'shell-ready'
-  launchAgent: AccountRestartAgent
+  launchAgent: TuiAgent
   env?: Record<string, string>
   launchConfig?: SleepingAgentLaunchConfig
   resumeProviderSession?: AgentProviderSessionMetadata
 }
 
-type AccountRestartPane = {
+export type AgentAccountRestartStartup = PaneAgentRestartStartup & {
+  launchAgent: AccountRestartAgent
+}
+
+export type AccountRestartPane = {
   tabId: string
   leafId: string
   worktreeId: string
@@ -82,7 +89,26 @@ export function resolveAgentAccountRestartResumeStartup(
     : sleeping?.agent === agent
       ? sleeping.launchConfig
       : undefined
-  const resumeTarget = resolveAccountRestartLaunchTarget(state, args, projectRuntime)
+  const startup = buildPaneAgentResumeStartup({ agent, providerSession, launchConfig }, args)
+  return startup ? { ...startup, launchAgent: agent } : null
+}
+
+/** The `--resume` startup for a named conversation, with the launch recipe it was started with. */
+export function buildPaneAgentResumeStartup(
+  source: {
+    agent: ResumableTuiAgent
+    providerSession: AgentProviderSessionMetadata
+    launchConfig?: SleepingAgentLaunchConfig
+  },
+  args: AccountRestartPane
+): PaneAgentRestartStartup | null {
+  const { agent, providerSession, launchConfig } = source
+  const state = useAppStore.getState()
+  const resumeTarget = resolveAccountRestartLaunchTarget(
+    state,
+    args,
+    getLocalProjectExecutionRuntimeContext(state, args.worktreeId)
+  )
   const startupPlan = buildAgentResumeStartupPlan({
     agent,
     providerSession,
@@ -138,15 +164,29 @@ export function buildPaneAccountRestartStartup(
 export function buildCodexAccountRestartStartup(
   args: AccountRestartTarget
 ): AgentAccountRestartStartup {
+  return { ...buildPaneAgentFreshStartup('codex', args), launchAgent: 'codex' }
+}
+
+/** A fresh launch of `agent`, keeping the recorded launch command, arguments and env when known. */
+export function buildPaneAgentFreshStartup(
+  agent: TuiAgent,
+  args: AccountRestartTarget,
+  launchConfig?: SleepingAgentLaunchConfig
+): PaneAgentRestartStartup {
   const state = useAppStore.getState()
+  const overrides = state.settings?.agentCmdOverrides ?? {}
   const target = resolveAccountRestartLaunchTarget(
     state,
     args,
     getLocalProjectExecutionRuntimeContext(state, args.worktreeId)
   )
   const command = resolveAgentLaunchCommand({
-    agent: 'codex',
-    cmdOverrides: state.settings?.agentCmdOverrides ?? {},
+    agent,
+    cmdOverrides: launchConfig?.agentCommand
+      ? { ...overrides, [agent]: launchConfig.agentCommand }
+      : overrides,
+    // A recorded command already carries its arguments; pass them through one field only.
+    agentArgs: launchConfig?.agentCommand ? null : launchConfig?.agentArgs || null,
     platform: target.platform,
     agentHostPlatform: target.agentHostPlatform,
     shell: resolveStartupShell(target.platform, target.shell)
@@ -154,10 +194,13 @@ export function buildCodexAccountRestartStartup(
   if (!command.ok) {
     throw new Error(command.error)
   }
+  const env = launchConfig?.agentEnv
   return {
     command: command.command,
     startupCommandDelivery: 'shell-ready',
-    launchAgent: 'codex'
+    launchAgent: agent,
+    ...(env && Object.keys(env).length > 0 ? { env } : {}),
+    ...(launchConfig ? { launchConfig } : {})
   }
 }
 

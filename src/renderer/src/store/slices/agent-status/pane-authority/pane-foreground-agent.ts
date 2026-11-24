@@ -21,6 +21,8 @@ export type PaneForegroundAgentEntry = {
   /** True once the foreground is proven back at the shell (OSC 133;D) —
    *  process-grade launched-agent exit evidence, independent of titles. */
   shellForeground: boolean
+  /** The shell's 133;D code for the command that handed the foreground back, when it gave one. */
+  exitCode?: number
 }
 
 /** Local process-table evidence at OSC 133 boundaries supports agents without hooks/titles, below hook rows in icon priority. */
@@ -51,7 +53,8 @@ export const createPaneForegroundAgentSlice: StateCreator<
         current.routingTrusted === entry.routingTrusted &&
         current.routingRevoked === entry.routingRevoked &&
         current.routingConfirmationPending === entry.routingConfirmationPending &&
-        current.shellForeground === entry.shellForeground
+        current.shellForeground === entry.shellForeground &&
+        current.exitCode === entry.exitCode
       ) {
         return s
       }

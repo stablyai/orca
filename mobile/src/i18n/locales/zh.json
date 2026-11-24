@@ -1189,6 +1189,23 @@
     "messageTime": {
       "yesterday": "昨天 {{time}}"
     },
+    "agentPresence": {
+      "exited": "{{agent}} 已不在此终端中运行。已暂停发送，以免内容被输入到 Shell 中。",
+      "restartedNewSession": "{{agent}} 已在新会话中重新启动。之前的消息不在其上下文中。",
+      "runningAgain": "{{agent}} 已重新运行。",
+      "resumeSession": "恢复会话",
+      "startNewSession": "开始新会话",
+      "resumePreviousSession": "恢复之前的会话",
+      "resuming": "正在恢复 {{agent}}…",
+      "starting": "正在启动新的 {{agent}} 会话…",
+      "failed": {
+        "noResume": "Orca 在此终端中没有可恢复的 {{agent}} 会话。请改为开始新会话。",
+        "heldElsewhere": "另一个终端已在运行此 {{agent}} 会话。",
+        "paneUnavailable": "此终端未在你电脑上的 Orca 窗口中打开，因此无法在其中重启 {{agent}}。",
+        "noLaunchCommand": "Orca 无法在此处生成启动 {{agent}} 的命令。",
+        "didNotStart": "{{agent}} 未能启动。请检查终端后重试。"
+      }
+    },
     "pairedServerAsk": {
       "title": "{{from}} 想给这台电脑上的 {{to}} 发消息",
       "once": "允许一次",

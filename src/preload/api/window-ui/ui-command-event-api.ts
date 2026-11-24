@@ -1,4 +1,8 @@
 import type {
+  PaneAgentRestartReply,
+  PaneAgentRestartRequest
+} from '../../../shared/native-chat/agent-presence/pane-agent-restart-contract'
+import type {
   RuntimeEditorTabReveal,
   RuntimeFileOpenPosition
 } from '../../../shared/file-access/runtime-editor-file-open'
@@ -230,6 +234,11 @@ export type UiCommandEventApi = {
   onLaunchRecipe: (callback: (data: PaneLaunchRecipe) => void) => () => void
   onRevealTerminalPane: (callback: (data: TerminalPaneRevealRequest) => void) => () => void
   replyTerminalPaneReveal: (reply: TerminalPaneRevealReply) => void
+  /** A paired client asks this window to restart a pane's agent in place. */
+  onRequestPaneAgentRestart: (
+    callback: (data: PaneAgentRestartRequest & { requestId: string }) => void
+  ) => () => void
+  replyPaneAgentRestart: (reply: PaneAgentRestartReply) => void
   onApplyAgentPaneActivity: (callback: (data: AgentPaneActivityRequest) => void) => () => void
   replyAgentPaneActivity: (reply: AgentPaneActivityReply) => void
   onSplitTerminal: (callback: (data: RendererTerminalSplitRequest) => void) => () => void

@@ -114,6 +114,7 @@ export function MobileNativeChatView({
   onMicPressOut,
   inputLockReason,
   hostOutage = null,
+  agentNotice = null,
   sendErrorMessage,
   onClearSendError,
   onDismissSendError,
@@ -318,6 +319,7 @@ export function MobileNativeChatView({
         lockReason={offlineQueue.lockReason}
         waitingText={composerPlaceholder}
         hostOutage={hostOutage}
+        agentNotice={agentNotice}
       />
       <MobileNativeChatSendErrorBanner message={banner} onDismiss={onDismissSendError} />
       <MobileNativeChatQueueAbovePromptContext value={promptShown}>

@@ -737,6 +737,23 @@
         "failed": "Fehler: {{count}}"
       },
       "pasteHint": "Wenn der Browser auf einer Seite landet, die nicht lädt, ihre Adresse kopieren und hier einfügen."
+    },
+    "agentPresence": {
+      "exited": "{{agent}} läuft in diesem Terminal nicht mehr. Senden ist pausiert, damit nichts in die Shell getippt wird.",
+      "restartedNewSession": "{{agent}} wurde in einer neuen Sitzung neu gestartet. Frühere Nachrichten gehören nicht zu ihrem Kontext.",
+      "runningAgain": "{{agent}} läuft wieder.",
+      "resumeSession": "Sitzung fortsetzen",
+      "startNewSession": "Neue Sitzung starten",
+      "resumePreviousSession": "Vorherige Sitzung fortsetzen",
+      "resuming": "{{agent}} wird fortgesetzt…",
+      "starting": "Neue {{agent}}-Sitzung wird gestartet…",
+      "failed": {
+        "noResume": "Orca hat in diesem Terminal keine {{agent}}-Sitzung zum Fortsetzen. Starte stattdessen eine neue Sitzung.",
+        "heldElsewhere": "Ein anderes Terminal führt diese {{agent}}-Sitzung bereits aus.",
+        "paneUnavailable": "Dieses Terminal ist auf deinem Computer in keinem Orca-Fenster geöffnet, daher kann {{agent}} darin nicht neu gestartet werden.",
+        "noLaunchCommand": "Orca konnte keinen Befehl zum Starten von {{agent}} erstellen.",
+        "didNotStart": "{{agent}} wurde nicht gestartet. Prüfe das Terminal und versuche es erneut."
+      }
     }
   },
   "common": {

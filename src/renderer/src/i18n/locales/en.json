@@ -22811,6 +22811,26 @@
       "dock": {
         "label": "Message box and prompts"
       },
+      "agentPresence": {
+        "exited": "{{agent}} is no longer running in this terminal. Sending is paused so nothing is typed into the shell.",
+        "exitedWithCode": "{{agent}} exited (exit {{code}}). Sending is paused so nothing is typed into the shell.",
+        "stoppedBySignal": "{{agent}} was stopped by {{signal}} (exit {{code}}). Sending is paused so nothing is typed into the shell.",
+        "killed": "{{agent}} was killed (exit {{code}}, often out of memory). Sending is paused so nothing is typed into the shell.",
+        "restartedNewSession": "{{agent}} restarted in a new session. Earlier messages are not part of its context.",
+        "runningAgain": "{{agent}} is running again.",
+        "resumeSession": "Resume session",
+        "startNewSession": "Start new session",
+        "resumePreviousSession": "Resume previous session",
+        "resuming": "Resuming {{agent}}…",
+        "starting": "Starting a new {{agent}} session…",
+        "failed": {
+          "noResume": "Orca has no {{agent}} session to resume in this terminal. Start a new session instead.",
+          "heldElsewhere": "Another terminal is already running this {{agent}} session.",
+          "paneUnavailable": "This terminal is not open in an Orca window, so {{agent}} cannot be restarted in it.",
+          "noLaunchCommand": "Orca could not build a command to start {{agent}} here.",
+          "didNotStart": "{{agent}} did not start. Check the terminal, then try again."
+        }
+      },
       "googleOffer": {
         "useAccount": "Use {{email}} for Google.",
         "reconnect": "Reconnect {{email}}",

@@ -115,6 +115,10 @@ export function useMobileNativeChatOfflineQueue(args: {
     async (text, intent) => {
       // Behind anything already queued, paused or not, so messages reach the agent in the order sent.
       const waiting = readMobileNativeChatOfflineSends(scope).length > 0
+      // The settled lock can lag the exit; the raw one already refuses typing into a bare shell.
+      if (inputLockReason === 'agent-exited') {
+        return false
+      }
       if (!scope || !(offline || waiting || drainingRef.current)) {
         return send(text, intent)
       }
@@ -133,7 +137,7 @@ export function useMobileNativeChatOfflineQueue(args: {
       setMobileNativeChatDraftText(scope, (current) => (current === text ? '' : current))
       return true
     },
-    [offline, scope, send]
+    [inputLockReason, offline, scope, send]
   )
 
   const sendNow = useCallback(
@@ -198,7 +202,7 @@ export function useMobileNativeChatOfflineQueue(args: {
     ready,
     lockReason,
     composerLock: {
-      disabled: lockReason === 'waiting',
+      disabled: lockReason === 'waiting' || lockReason === 'agent-exited',
       offline: lockReason === 'disconnected'
     },
     send: queueSend,

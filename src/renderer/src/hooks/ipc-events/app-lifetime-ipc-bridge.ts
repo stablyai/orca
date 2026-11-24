@@ -48,6 +48,7 @@ import { registerPtySourceDisownedIpcBridge } from './terminal/pty-source-disown
 import { registerTerminalRequestIpcBridge } from './terminal/terminal-request-ipc-bridge'
 import { registerAgentLaunchTabIpcBridge } from '../../lib/agent-session/launch/pane/agent-launch-tab-ipc-bridge'
 import { registerTerminalPaneRevealIpcBridge } from './terminal/terminal-pane-reveal-ipc-bridge'
+import { registerPaneAgentRestartIpcBridge } from './terminal/pane-agent-restart-ipc-bridge'
 import { registerAgentPaneActivityIpcBridge } from '../../components/activity/paired-clients/agent-pane-activity-ipc-bridge'
 import { registerTerminalUiRoutingIpcBridge } from './terminal/terminal-ui-routing-ipc-bridge'
 import { registerUpdaterStatusIpcBridge } from './native-app/updater-status-ipc-bridge'
@@ -171,6 +172,7 @@ export function installAppLifetimeIpcEvents(): () => void {
   registerPtySourceDisownedIpcBridge(unsubs)
   registerTerminalUiRoutingIpcBridge(unsubs)
   registerTerminalPaneRevealIpcBridge(unsubs)
+  registerPaneAgentRestartIpcBridge(unsubs)
   registerAgentPaneActivityIpcBridge(unsubs)
   registerSessionTabIpcBridge(unsubs)
   registerMobileAndTerminalCloseIpcBridge(unsubs, backgroundWakeDispatcher.request)

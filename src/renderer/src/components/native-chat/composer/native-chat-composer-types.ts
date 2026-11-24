@@ -102,6 +102,8 @@ export type NativeChatComposerProps = {
   steerHead?: () => boolean
   /** The chat's own notices, shown in the composer's notice card above its input. */
   notices?: readonly NativeChatComposerNotice[]
+  /** Send keeps the draft and writes nothing, e.g. while the terminal's agent has exited. */
+  sendBlocked?: boolean
   /** The conversation Up/Down recalls prompts from. */
   recallSource?: NativeChatRecallSource
 }

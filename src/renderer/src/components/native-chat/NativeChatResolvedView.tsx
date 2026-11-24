@@ -51,6 +51,7 @@ import { useNativeChatFileLinkContext } from './links/actions/use-native-chat-fi
 import { useRecheckNativeChatFileLinksWhenTurnEnds } from './links/actions/use-native-chat-file-link-existence'
 import { useNativeChatLocalCommandAnswer } from './session/options/terminal/use-native-chat-local-command-answer'
 import { useNativeChatImageRuntimeContext } from './media/images/native-chat-image-runtime-context'
+import { useNativeChatAgentPresenceStatus } from './session/status/use-native-chat-agent-presence'
 
 export function NativeChatResolvedView({
   paneKey,
@@ -83,8 +84,15 @@ export function NativeChatResolvedView({
   const paneLaunchPrompt = launchPrompt?.agent === agent ? launchPrompt : null
   // Adopt the TUI’s unsent launch context into the GUI composer.
   const launchDraftSignal = useNativeChatLaunchDraftSignal({ terminalTabId, agent, session })
-  // Use the live session’s reconciled lifecycle for every working-state consumer.
-  const liveWorking = session.status === 'working'
+  const agentPresence = useNativeChatAgentPresenceStatus({
+    paneKey,
+    agent,
+    sessionId,
+    transcriptPath: transcriptPath ?? null,
+    onShowTerminal: onSwitchToTerminal
+  })
+  // Use the live session’s reconciled lifecycle for every working-state consumer; an exited agent works on nothing.
+  const liveWorking = session.status === 'working' && !agentPresence.exited
   // Preview the in-progress hook reply before its completed transcript turn arrives.
   const hookPreview = useAgentStatus(paneKey)?.lastAssistantMessage
   // Tool stdout/errors ride the same field for status-card previews; they are not the reply.
@@ -175,7 +183,8 @@ export function NativeChatResolvedView({
     transcriptPath: transcriptPath ?? null,
     messages: sessionAfterCommandBoundaries.messages,
     transcriptSettled: session.readPhase === 'ready',
-    canSend
+    // An answer typed after the agent exited would run in the shell.
+    canSend: canSend && !agentPresence.exited
   })
   const { card: shownPromptCard, collapsedCard } = promptCardPresentation
   const mountedPromptCard = shownPromptCard ?? collapsedCard
@@ -214,7 +223,12 @@ export function NativeChatResolvedView({
     }
   }, [sessionAfterCommandBoundaries, pending, pendingMessages, commandMarkers, streamingText])
   // Include pending sends when selecting view state so the first echo leaves the empty screen immediately.
-  const viewState = selectNativeChatViewState(sessionWithPending)
+  // An exited agent's stale working row must not hold an empty chat on its loading state.
+  const viewState = selectNativeChatViewState(
+    agentPresence.exited && sessionWithPending.status === 'working'
+      ? { ...sessionWithPending, status: 'ready' }
+      : sessionWithPending
+  )
 
   const isConversation = viewState.kind === 'ready'
   useEffect(() => {
@@ -238,7 +252,7 @@ export function NativeChatResolvedView({
   const { isWorking, turnActive, awaitingInput } = resolveNativeChatTerminalTurn({
     isConversation,
     working: liveWorking,
-    hookAwaitingInput: session.hookAwaitingInput === true,
+    hookAwaitingInput: session.hookAwaitingInput === true && !agentPresence.exited,
     interrupted: workingInterrupted,
     hasPromptCard: promptCard !== null
   })
@@ -356,6 +370,8 @@ export function NativeChatResolvedView({
           onSubmitted={revealLatest}
           answerCommandLocally={answerLocally}
           onSwitchToTerminal={onSwitchToTerminal}
+          notices={agentPresence.notices}
+          sendBlocked={agentPresence.exited}
           launchSeed={{ ...launchDraftSignal, ownsTabWideLaunchDraft, readTerminalDraft }}
           recallSource={{ messages: sessionWithPending.messages, commands: commandMarkers }}
         />

@@ -57,3 +57,10 @@ export const TerminalUpdateViewport = TerminalHandle.extend({
 export const TerminalSetAutoRestoreFit = z.object({
   ms: z.number().nullable()
 })
+
+export const TerminalRestartAgent = TerminalHandle.extend({
+  mode: z.enum(['resume', 'fresh']),
+  agent: requiredString('Missing agent'),
+  sessionId: z.string().min(1).max(512).nullable(),
+  transcriptPath: z.string().min(1).max(4096).nullable()
+})

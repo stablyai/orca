@@ -776,6 +776,23 @@
         "needsAuth_many": "{{count}} connexions requises"
       },
       "pasteHint": "Lorsque le navigateur arrive sur une page qui ne se charge pas, copiez son adresse et collez-la ici."
+    },
+    "agentPresence": {
+      "exited": "{{agent}} ne s'exécute plus dans ce terminal. L'envoi est en pause pour que rien ne soit tapé dans le shell.",
+      "restartedNewSession": "{{agent}} a redémarré dans une nouvelle session. Les messages précédents ne font pas partie de son contexte.",
+      "runningAgain": "{{agent}} s'exécute à nouveau.",
+      "resumeSession": "Reprendre la session",
+      "startNewSession": "Démarrer une nouvelle session",
+      "resumePreviousSession": "Reprendre la session précédente",
+      "resuming": "Reprise de {{agent}}…",
+      "starting": "Démarrage d'une nouvelle session {{agent}}…",
+      "failed": {
+        "noResume": "Orca n'a aucune session {{agent}} à reprendre dans ce terminal. Démarrez plutôt une nouvelle session.",
+        "heldElsewhere": "Un autre terminal exécute déjà cette session {{agent}}.",
+        "paneUnavailable": "Ce terminal n'est ouvert dans aucune fenêtre Orca sur votre ordinateur, donc {{agent}} ne peut pas y être redémarré.",
+        "noLaunchCommand": "Orca n'a pas pu créer de commande pour démarrer {{agent}} ici.",
+        "didNotStart": "{{agent}} n'a pas démarré. Vérifiez le terminal, puis réessayez."
+      }
     }
   },
   "common": {

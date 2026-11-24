@@ -22,7 +22,8 @@ import type { MobileNativeChatInputLockStatus } from './composer/field/MobileNat
 import type { MobileNativeChatPendingItem } from './transcript/projection/mobile-native-chat-render-data'
 import type { MobileWorkerApprovals } from './input/prompts/use-mobile-worker-approvals'
 
-export type MobileNativeChatInputLockReason = 'disconnected' | 'waiting'
+/** `agent-exited`: the pane's agent is gone, so Send would type into a bare shell. */
+export type MobileNativeChatInputLockReason = 'disconnected' | 'waiting' | 'agent-exited'
 
 export type MobileNativeChatViewProps = MobileNativeChatSendProps &
   Omit<ComponentProps<typeof MobileNativeChatPromptCard>, 'answering' | 'requiresTerminal'> & {
@@ -77,6 +78,8 @@ export type MobileNativeChatViewProps = MobileNativeChatSendProps &
     inputLockReason?: MobileNativeChatInputLockReason | null
     /** Why a `disconnected` lock holds: which host is out, and Reconnect when it can help. */
     hostOutage?: ComponentProps<typeof MobileNativeChatInputLockStatus>['hostOutage']
+    /** What became of a terminal chat's agent: exited, or back after an exit. */
+    agentNotice?: ComponentProps<typeof MobileNativeChatInputLockStatus>['agentNotice']
     // Report send failures here only while mounted; the route uses a toast otherwise.
     sendErrorMessage?: string | null
     onClearSendError?: () => void

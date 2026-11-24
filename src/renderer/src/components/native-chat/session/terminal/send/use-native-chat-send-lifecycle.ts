@@ -13,6 +13,8 @@ export function useNativeChatSendLifecycle(
   cardOwnership?: {
     /** A prompt card owns the agent's input while the composer stays mounted. */
     inputOwnedByCard: boolean
+    /** The agent exited, so the shell would run a delayed write as a command. */
+    sendBlocked?: boolean
     /** Settles the echo of a send the card retired; it keeps the user's text visible. */
     onPendingSendRetired?: (pendingId: string) => void
   }
@@ -65,14 +67,16 @@ export function useNativeChatSendLifecycle(
   // Cancel delayed Enter/image writes during commit before a swapped PTY can close or be reused.
   useLayoutEffect(() => cancelPendingSends, [cancelPendingSends, targetPtyId, terminalTabId])
 
-  const inputOwnedByCard = cardOwnership?.inputOwnedByCard === true
+  // An exited agent retires delayed writes too, or the shell would run them.
+  const writesRetired =
+    cardOwnership?.inputOwnedByCard === true || cardOwnership?.sendBlocked === true
   const onPendingSendRetired = cardOwnership?.onPendingSendRetired ?? onPendingSendCanceled
   // Card ownership makes a pending Enter an answer; retire it without typing a line-clear under the dialog.
   useLayoutEffect(() => {
-    if (inputOwnedByCard) {
+    if (writesRetired) {
       settlePendingSends(onPendingSendRetired, true)
     }
-  }, [inputOwnedByCard, onPendingSendRetired, settlePendingSends])
+  }, [writesRetired, onPendingSendRetired, settlePendingSends])
 
   return { cancelPendingSends, trackPendingSend }
 }

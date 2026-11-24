@@ -731,6 +731,23 @@
         "failed": "失敗: {{count}}"
       },
       "pasteHint": "ブラウザーが読み込めないページに移動したら、そのアドレスをコピーしてここに貼り付けてください。"
+    },
+    "agentPresence": {
+      "exited": "{{agent}} はこのターミナルで実行されていません。シェルに入力されないよう、送信を一時停止しています。",
+      "restartedNewSession": "{{agent}} が新しいセッションで再起動しました。以前のメッセージはそのコンテキストに含まれません。",
+      "runningAgain": "{{agent}} が再び実行中です。",
+      "resumeSession": "セッションを再開",
+      "startNewSession": "新しいセッションを開始",
+      "resumePreviousSession": "以前のセッションを再開",
+      "resuming": "{{agent}} を再開しています…",
+      "starting": "新しい {{agent}} セッションを開始しています…",
+      "failed": {
+        "noResume": "このターミナルには再開できる {{agent}} セッションがありません。新しいセッションを開始してください。",
+        "heldElsewhere": "別のターミナルがすでにこの {{agent}} セッションを実行しています。",
+        "paneUnavailable": "このターミナルはコンピューター上の Orca ウィンドウで開かれていないため、{{agent}} を再起動できません。",
+        "noLaunchCommand": "ここで {{agent}} を起動するコマンドを作成できませんでした。",
+        "didNotStart": "{{agent}} が起動しませんでした。ターミナルを確認してから、もう一度お試しください。"
+      }
     }
   },
   "common": {

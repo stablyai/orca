@@ -1,4 +1,4 @@
-import { useEffect } from 'react'
+import { useEffect, useMemo } from 'react'
 import type { MobileSessionItemLink } from './mobile-session-item-target'
 import { useMobileScreenDictation } from './use-mobile-screen-dictation'
 import { HOST_SESSION_ROUTE } from '../navigation/host-stack-navigation'
@@ -14,6 +14,9 @@ import { useMobileNativeChatSendError } from './native-chat/composer/delivery/us
 import { mobileNativeChatScopeKey } from './native-chat/conversation/mobile-native-chat-scope-key'
 import { mobileNativeChatOverlayInputLockReason } from './native-chat/status/mobile-native-chat-overlay-lock-reason'
 import { useMobileSendCompletionGeneration } from './use-mobile-send-completion-generation'
+import { useMobileNativeChatTrackedAgent } from './native-chat/status/use-mobile-native-chat-agent-restart'
+import { resolveMobileNativeChatSessionId } from './native-chat/conversation/mobile-native-chat-eligibility'
+import { withMobileNativeChatAgentPresence } from './native-chat/status/mobile-native-chat-agent-exit-controller'
 import type { MobileSessionFeedbackCapabilitiesModel } from './use-mobile-session-feedback-capabilities'
 
 export function useMobileSessionNativeChatDictation(
@@ -54,7 +57,7 @@ export function useMobileSessionNativeChatDictation(
     activeHandle,
     connected: connState === 'connected'
   })
-  const nativeChatController = useMobileNativeChatController({
+  const baseNativeChatController = useMobileNativeChatController({
     itemLink,
     client,
     pairedHostClient,
@@ -72,13 +75,27 @@ export function useMobileSessionNativeChatDictation(
     onQueuedEditNotice: showToast,
     onSendResolved: nativeChatSendError.clear
   })
-  const { toggleTabChatView, showNativeChat, showNativeChatRef } = nativeChatController
+  const { toggleTabChatView, showNativeChat, showNativeChatRef } = baseNativeChatController
+  const agentStatus = activeSessionTab?.type === 'terminal' ? activeSessionTab.agentStatus : null
+  const nativeChatAgentPresence = useMobileNativeChatTrackedAgent({
+    client,
+    agent: baseNativeChatController.nativeChatAgent,
+    terminal: activeSessionTab?.type === 'terminal' ? activeHandle : null,
+    active: showNativeChat && connState === 'connected',
+    statusKey: `${agentStatus?.state ?? ''}:${agentStatus?.providerSession?.id ?? ''}`,
+    sessionId: resolveMobileNativeChatSessionId(activeSessionTab)
+  })
+  const nativeChatController = useMemo(
+    () => withMobileNativeChatAgentPresence(baseNativeChatController, nativeChatAgentPresence),
+    [baseNativeChatController, nativeChatAgentPresence]
+  )
   nativeChatSendError.bannerMountedRef.current = showNativeChat
   nativeChatSendError.keepWhile(nativeChatController.nativeChatCommandRefusalCauses)
   const nativeChatOverlayInputLockReason = mobileNativeChatOverlayInputLockReason(
     activeSessionTab,
     connState,
-    nativeChatInputLockReason
+    nativeChatInputLockReason,
+    nativeChatAgentPresence.presence.exit !== null
   )
   const routeKey = nativeChatScopeKey ?? `${hostId}\0${worktreeId}`
   const getSendCompletionGeneration = useMobileSendCompletionGeneration({
