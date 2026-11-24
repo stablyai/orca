@@ -9,10 +9,8 @@ import {
   runAfterEditorFramesFlush
 } from '../../editor/save/flush/editor-pending-flush'
 import { closeTerminalTab } from './terminal-tab-actions'
-import {
-  announceKeptMixedWorkerTabs,
-  handleWorkerTabUserClose
-} from '../../tab-bar/worker-tab-user-close'
+import { handleWorkerTabUserClose } from '../../tab-bar/worker-tab-user-close'
+import { admitBulkWorkerClose } from '../../tab-bar/worker-tab-close-target'
 import { isWebRuntimeSessionActive } from '@/runtime/web-session-tabs-sync/identity/web-runtime-session-environment'
 import { closeBrowserWorkspaceTabOnHosts } from '@/runtime/browser/closing/browser-workspace-tab-close'
 import { destroyWorkspaceWebviews } from '../../../store/slices/browser/cleanup/browser-webview-cleanup'
@@ -51,17 +49,9 @@ export function useTerminalBulkCloseActions(
         .map((tab) => tab.id)
       for (const id of tabIds) {
         const unifiedTab = byId.get(id) ?? byEntity.get(id)
-        // Re-read per tab, after any flush: a worker tab hides, and one that now mixes in the user's pane
-        // stays open. A legacy-only row with a stamp has no unified tab to classify, so it stays open too.
-        if (unifiedTab?.workerTab && handleWorkerTabUserClose(unifiedTab.id, true)) {
-          continue
-        }
-        if (
-          !unifiedTab &&
-          (state.tabsByWorktree[activeWorktreeId] ?? []).some(
-            (tab) => tab.id === id && tab.workerTab
-          )
-        ) {
+        // Re-read live per target, also after a held flush: a worker tab hides, one that now mixes in the
+        // user's pane stays open, and a stamped legacy-only or ambiguous address stays open too.
+        if (handleWorkerTabUserClose(id, true)) {
           continue
         }
         // Bulk closes keep pinned tabs and tabs holding unsent browser notes open.
@@ -127,14 +117,16 @@ export function useTerminalBulkCloseActions(
   const closeTabBarTabs = useCallback(
     (tabIds: string[]) => {
       const state = useAppStore.getState()
-      announceKeptMixedWorkerTabs(state, tabIds)
+      // Counted once on the original targets; what is mixed now stays out of the whole action.
+      const kept = admitBulkWorkerClose(state, tabIds)
+      const admitted = tabIds.filter((id) => !kept.has(id))
       const tabs = activeWorktreeId ? (state.unifiedTabsByWorktree[activeWorktreeId] ?? []) : []
       const entityByTab = new Map(tabs.map((tab) => [tab.id, tab.entityId]))
       const fileIdOf = (id: string): string => entityByTab.get(id) ?? id
       // Why: a custom editor frame may still hold edits the dirty checks must see; only its tabs wait.
-      const framed = tabIds.filter((id) => hasEditorFrameFlush(state, fileIdOf(id)))
+      const framed = admitted.filter((id) => hasEditorFrameFlush(state, fileIdOf(id)))
       const framedIds = new Set(framed)
-      closeTabBarTabsNow(tabIds.filter((id) => !framedIds.has(id)))
+      closeTabBarTabsNow(admitted.filter((id) => !framedIds.has(id)))
       if (framed.length > 0) {
         runAfterEditorFramesFlush(state, framed.map(fileIdOf), () => closeTabBarTabsNow(framed))
       }

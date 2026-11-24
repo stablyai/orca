@@ -175,7 +175,13 @@ export function useTerminalPaneCloseActions(controller: TerminalPaneBindingContr
         return
       }
       const settings = useAppStore.getState().settings
+      // Cmd/Ctrl+W was admitted before the process check: when it finally runs, the tab may hold a worker.
+      const keyboardNowRefused = (): boolean =>
+        origin === 'keyboard' && handleWorkerTabUserClose(tabId)
       const close = (): void => {
+        if (keyboardNowRefused()) {
+          return
+        }
         if (!pending || pending.isCurrent()) {
           executeClosePane(paneId, 'user', origin)
         }
@@ -189,7 +195,7 @@ export function useTerminalPaneCloseActions(controller: TerminalPaneBindingContr
         act()
       }
       const confirmClose = (): void => {
-        if (pending && !pending.isCurrent()) {
+        if ((pending && !pending.isCurrent()) || keyboardNowRefused()) {
           return
         }
         confirmedCloseRef.current = close
@@ -228,7 +234,7 @@ export function useTerminalPaneCloseActions(controller: TerminalPaneBindingContr
         })
     },
     // oxlint-disable-next-line react-hooks/exhaustive-deps -- Preserve the pre-split dependency contract.
-    [executeClosePane, getCloseDialogCopyKind]
+    [executeClosePane, getCloseDialogCopyKind, tabId]
   )
   // Cmd/Ctrl+W closes the focused pane, except in a worker's tab: a pure worker hides, a mixed tab stays open.
   const handleKeyboardRequestClosePane = useCallback(

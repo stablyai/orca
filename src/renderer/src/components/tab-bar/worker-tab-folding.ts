@@ -8,7 +8,7 @@ import { workerTabGraceEndsAt, workerTabFeeds } from './worker-tab-feed-grace'
 export { RESTORED_WORKER_GRACE_MS, NEW_WORKER_GRACE_MS } from './worker-tab-feed-grace'
 import type { Tab } from '../../../../shared/workspace-layout/tab-groups/tab-types'
 import type { AppState } from '@/store/types'
-import { collectLayoutLeafIdsInOrder } from '../../../../shared/workspace-layout/terminal-topology/terminal-pane-tree'
+import { workerTabLeafIds } from './worker-tab-leaves'
 import {
   isWorkerTabFolded,
   type WorkerTabFoldContext
@@ -33,21 +33,6 @@ function sameMembers(a: ReadonlySet<string>, b: ReadonlySet<string>): boolean {
     }
   }
   return true
-}
-
-function terminalLeafIds(
-  state: Pick<AppState, 'terminalLayoutsByTabId'>,
-  tab: Tab
-): readonly string[] | undefined {
-  if (tab.contentType !== 'terminal') {
-    return undefined
-  }
-  const root = state.terminalLayoutsByTabId[tab.entityId]?.root
-  if (root) {
-    return collectLayoutLeafIdsInOrder(root)
-  }
-  const leafId = tab.workerTab?.origin.workerLeafId
-  return leafId ? [leafId] : undefined
 }
 
 export function isWorkerTabInGrace(
@@ -198,7 +183,7 @@ function buildWorkerTabFold(
     choice: (tabId) => choices?.[tabId],
     leafIds: (tabId) => {
       const tab = tabById.get(tabId)
-      return tab ? terminalLeafIds(state, tab) : undefined
+      return tab ? workerTabLeafIds(state, tab) : undefined
     },
     inGrace: (tabId) => {
       const tab = tabById.get(tabId)

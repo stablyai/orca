@@ -1,4 +1,5 @@
 import { useAppStore } from '@/store/index'
+import { indexedWorkerTab } from './worker-tab-index'
 import { workerTabContext } from './worker-tab-run-state'
 import { keepWorkerTab } from './worker-tab-hide'
 import { keepPlacedWorkerTabInState } from './worker-tab-view-actions'
@@ -16,10 +17,13 @@ export function keepWorkerTabOnUserInput(
     return
   }
   const state = useAppStore.getState()
-  const tab = state.unifiedTabsByWorktree[worktreeId]?.find(
-    (candidate) => candidate.contentType === 'terminal' && candidate.entityId === terminalTabId
-  )
-  if (!tab?.workerTab || state.workerTabStripChoiceByWorktree[worktreeId]?.[tab.id] === 'kept') {
+  // Indexed per tab array, so typing in a workspace without workers costs no scan.
+  const tab = indexedWorkerTab(state.unifiedTabsByWorktree[worktreeId], terminalTabId)
+  if (
+    tab?.contentType !== 'terminal' ||
+    tab.entityId !== terminalTabId ||
+    state.workerTabStripChoiceByWorktree[worktreeId]?.[tab.id] === 'kept'
+  ) {
     return
   }
   // Answering a prompt (1, y, Enter) while the worker needs you leaves it a worker.

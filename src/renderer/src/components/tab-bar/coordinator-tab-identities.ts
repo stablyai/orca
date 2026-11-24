@@ -72,7 +72,7 @@ export class CoordinatorTabIdentityIndex {
     this.revision++
   }
 
-  syncLayouts(state: AppState): void {
+  syncLayouts(state: AppState, changed?: (entry: IndexedCoordinatorTab) => void): void {
     if (this.layouts !== state.terminalLayoutsByTabId) {
       for (const entry of this.entries.values()) {
         const root =
@@ -80,7 +80,7 @@ export class CoordinatorTabIdentityIndex {
             ? state.terminalLayoutsByTabId[entry.tab.entityId]?.root
             : undefined
         if (entry.root !== root) {
-          this.upsert(state, entry.tab, entry.worktreeId, entry.position)
+          changed?.(this.upsert(state, entry.tab, entry.worktreeId, entry.position))
         }
       }
       this.layouts = state.terminalLayoutsByTabId

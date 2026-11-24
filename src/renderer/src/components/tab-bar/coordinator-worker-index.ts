@@ -21,6 +21,7 @@ import {
   type CoordinatorWorkerRoute
 } from './coordinator-worker-buckets'
 import { workerTabContext } from './worker-tab-run-state'
+import { isInertWorkerStamp } from './worker-tab-leaves'
 import {
   workerRowMembershipInputsUnchanged,
   captureWorkerRowMembership,
@@ -83,7 +84,8 @@ export class CoordinatorWorkerIndex {
     if (this.tabs !== state.unifiedTabsByWorktree) {
       this.syncTabs(state)
     }
-    this.identities.syncLayouts(state)
+    // A layout change can retire a stamp (its worker pane closed), so re-read those tabs too.
+    this.identities.syncLayouts(state, this.mark)
     this.runtime.update(state.runtimeAgentOrchestrationByPaneKey, this.changedContext)
     this.live.updateMap(
       state.agentStatusByPaneKey,
@@ -248,11 +250,13 @@ export class CoordinatorWorkerIndex {
 
   private refresh(state: AppState, entry: IndexedCoordinatorTab): void {
     const tab = entry.tab
-    const context = tab.workerTab
+    // A stamp whose worker leaves are all gone from a known layout is the user's tab, not a worker row.
+    const stamp = tab.workerTab && !isInertWorkerStamp(state, tab) ? tab.workerTab : undefined
+    const context = stamp
       ? workerTabContext(state, tab)
       : (this.runtime.first(entry, this.identities) ?? this.live.first(entry, this.identities))
     let worker = this.workers.get(entry)
-    if (!tab.workerTab && !context?.coordinatorIdentity) {
+    if (!stamp && !context?.coordinatorIdentity) {
       if (worker) {
         this.buckets.remove(worker, worker.buckets)
         this.workers.delete(entry)
@@ -260,8 +264,7 @@ export class CoordinatorWorkerIndex {
       return
     }
     const identity =
-      context?.coordinatorIdentity ??
-      (tab.workerTab ? currentWorkerLineage(tab.workerTab).coordinator : undefined)
+      context?.coordinatorIdentity ?? (stamp ? currentWorkerLineage(stamp).coordinator : undefined)
     const needsYou = !context?.stopped && context?.attention?.requiresAction === true
     const sameIdentity = worker && agentPublicIdentitiesEqual(worker.identity, identity)
     if (worker && worker.tab === tab && worker.context === context && sameIdentity) {

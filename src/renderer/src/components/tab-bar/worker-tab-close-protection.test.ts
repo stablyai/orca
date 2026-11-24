@@ -25,7 +25,14 @@ vi.mock('@/runtime/workspace-layout/commands/layout-apply-send', () => ({
 import { useAppStore } from '@/store'
 import { makeTabGroup, makeUnifiedTab } from '@/store/slices/tabs/tab-group.test-fixture'
 import { dispatchWorkspaceTabCommand } from '@/lib/workspace/tabs/workspace-tab-commands'
-import { keepWorkerPaneOnClose } from './worker-tab-user-close'
+import {
+  handleWorkerTabUserClose,
+  keepWorkerPaneOnClose,
+  showFoldedWorkerOfPane
+} from './worker-tab-user-close'
+import { selectWorkerTabPeekId } from './worker-tab-presentation'
+import { closeTerminalTab } from '../terminal/tab-lifecycle/terminal-tab-actions'
+import { stampedTaskTitleForRow } from '../../../../shared/orchestration/workers/worker-tab-stamp'
 import { workerTabCloseKind } from './worker-tab-view-actions'
 
 // Invariant: a close gesture this window admits never removes or moves a tab that holds a worker,
@@ -182,4 +189,142 @@ describe.each([false, true])('layout owner is main: %s', (isMain) => {
     const choices = useAppStore.getState().workerTabStripChoiceByWorktree[WT]
     expect([choices?.pure, choices?.mixed]).toEqual(['hidden', undefined])
   })
+})
+
+describe.each([false, true])('per-target checks, layout owner is main: %s', (isMain) => {
+  beforeEach(() => {
+    owner.isMain = isMain
+  })
+
+  // Closing `a` changes what `b` holds; the bulk close must see that before it reaches `b`.
+  function onClosed(id: string, then: () => void): () => void {
+    return useAppStore.subscribe((state, previous) => {
+      const was = previous.unifiedTabsByWorktree[WT]?.some((tab) => tab.id === id)
+      const is = state.unifiedTabsByWorktree[WT]?.some((tab) => tab.id === id)
+      if (was && !is) {
+        then()
+      }
+    })
+  }
+  const setRoots = (roots: Record<string, TerminalPaneLayoutNode>) =>
+    useAppStore.setState({
+      terminalLayoutsByTabId: Object.fromEntries(
+        Object.entries(roots).map(([id, root]) => [
+          id,
+          { root, activeLeafId: null, expandedLeafId: null }
+        ])
+      )
+    })
+
+  it('a target that turns mixed while earlier targets close is kept', () => {
+    seed(
+      [ordinary('anchor'), ordinary('a'), workerTab('b', 'pane', WORKER_LEAF)],
+      [{ id: 'pane', activeTabId: 'anchor', tabOrder: ['anchor', 'a', 'b'] }],
+      { b: leaf(USER_LEAF) }
+    )
+    const stop = onClosed('a', () => setRoots({ b: mixedRoot }))
+    useAppStore.getState().closeOtherTabs('anchor')
+    stop()
+    expect(tabIds()).toEqual(['anchor', 'b'])
+  })
+
+  it('a target mixed when the close was chosen stays out even if it turns ordinary meanwhile', () => {
+    seed(
+      [ordinary('anchor'), ordinary('a'), workerTab('b', 'pane', WORKER_LEAF)],
+      [{ id: 'pane', activeTabId: 'anchor', tabOrder: ['anchor', 'a', 'b'] }],
+      { b: mixedRoot }
+    )
+    const stop = onClosed('a', () => setRoots({ b: leaf(USER_LEAF) }))
+    useAppStore.getState().closeOtherTabs('anchor')
+    stop()
+    expect(tabIds()).toEqual(['anchor', 'b'])
+  })
+})
+
+it('a stamped legacy-only row or an ambiguous worker address is kept, not closed', () => {
+  seed([], [{ id: 'pane', activeTabId: null, tabOrder: [] }], {})
+  useAppStore.setState({
+    tabsByWorktree: {
+      [WT]: [
+        {
+          id: 'legacy',
+          worktreeId: WT,
+          ptyId: null,
+          title: 'Worker',
+          customTitle: null,
+          color: null,
+          sortOrder: 0,
+          createdAt: 1,
+          workerTab: workerTab('legacy', 'pane', WORKER_LEAF).workerTab
+        }
+      ]
+    }
+  })
+  expect(handleWorkerTabUserClose('legacy')).toBe(true)
+  expect(useAppStore.getState().tabsByWorktree[WT]?.map((tab) => tab.id)).toEqual(['legacy'])
+  useAppStore.setState({
+    tabsByWorktree: {},
+    unifiedTabsByWorktree: {
+      [WT]: [workerTab('same', 'pane', WORKER_LEAF)],
+      other: [makeUnifiedTab({ id: 'same', worktreeId: 'other', groupId: 'g' })]
+    }
+  })
+  expect(handleWorkerTabUserClose('same')).toBe(true)
+})
+
+it('Show peeks only a folded worker still ordered in that pane on the same host', () => {
+  seed(
+    [workerTab('stray', 'pane', WORKER_LEAF), workerTab('kept', 'pane', WORKER_LEAF)],
+    [{ id: 'pane', activeTabId: null, tabOrder: ['kept'] }],
+    { stray: leaf(WORKER_LEAF), kept: leaf(WORKER_LEAF) },
+    ['stray', 'kept']
+  )
+  useAppStore.setState({
+    groupsByWorktree: {
+      [WT]: [
+        makeTabGroup({
+          id: 'pane',
+          worktreeId: WT,
+          activeTabId: null,
+          tabOrder: ['kept'],
+          recentTabIds: ['kept', 'stray']
+        })
+      ]
+    }
+  })
+  const active = () => useAppStore.getState().groupsByWorktree[WT]?.[0]?.activeTabId
+  showFoldedWorkerOfPane(WT, 'pane', new Map([['kept', 'another-host']]))
+  expect(active()).toBeNull()
+  showFoldedWorkerOfPane(
+    WT,
+    'pane',
+    new Map([
+      ['stray', undefined],
+      ['kept', undefined]
+    ])
+  )
+  expect(active()).toBe('kept')
+})
+
+it('a stamp whose worker pane is gone is no peek and lends no task title', () => {
+  const inert = workerTab('inert', 'pane', WORKER_LEAF)
+  inert.workerTab!.origin.taskTitle = 'Task'
+  seed([inert], [{ id: 'pane', activeTabId: 'inert', tabOrder: ['inert'] }], {
+    inert: leaf(USER_LEAF)
+  })
+  expect(selectWorkerTabPeekId(useAppStore.getState(), WT, 'pane')).toBeUndefined()
+  expect(stampedTaskTitleForRow(inert, `inert:${USER_LEAF}`)).toBeUndefined()
+  expect(stampedTaskTitleForRow(inert, `inert:${WORKER_LEAF}`)).toBe('Task')
+})
+
+it('a close the worker guard consumes reports a cancel to its caller', () => {
+  seed(
+    [workerTab('mixed', 'pane', WORKER_LEAF)],
+    [{ id: 'pane', activeTabId: 'mixed', tabOrder: ['mixed'] }],
+    { mixed: mixedRoot }
+  )
+  const onCancel = vi.fn()
+  closeTerminalTab('mixed', { reason: 'user', onCancel })
+  expect(onCancel).toHaveBeenCalledTimes(1)
+  expect(tabIds()).toEqual(['mixed'])
 })

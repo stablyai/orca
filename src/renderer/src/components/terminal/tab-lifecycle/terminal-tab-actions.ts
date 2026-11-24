@@ -68,8 +68,10 @@ type CloseTerminalTabOptions = {
 
 /** Every caller declares its intent: an undeclared close must never reach a host as the user's (#37245). */
 export function closeTerminalTab(tabId: string, options: CloseTerminalTabOptions): void {
-  // A user close of a worker's tab folds it; Close tab passes `endsWorker` to really close.
+  // A user close of a worker's tab folds it or keeps it; Close tab and a pane's own close pass
+  // `endsWorker` to really close. Nothing closed, so a caller waiting on the outcome hears a cancel.
   if (options.reason === 'user' && !options.endsWorker && handleWorkerTabUserClose(tabId)) {
+    options.onCancel?.()
     return
   }
   const intent = options.reason ?? options.hostCloseReason

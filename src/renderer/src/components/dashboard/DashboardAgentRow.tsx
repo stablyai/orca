@@ -41,7 +41,7 @@ import { agentToolDisplayName } from '../../../../shared/agent-status/presentati
 import { agentVerdictStatusLine } from '../../../../shared/agent-status/presentation/agent-verdict-status-line'
 import type { DashboardAgentRow as DashboardAgentRowData } from './rows/dashboard-agent-row'
 import { getWorkerAgentRowPrimaryText } from '../../../../shared/agent-status/presentation/agent-row-primary-text'
-import { stampedTaskTitle } from '../../../../shared/orchestration/workers/worker-tab-stamp'
+import { stampedTaskTitleForRow } from '../../../../shared/orchestration/workers/worker-tab-stamp'
 import { useAgentRowConversationName } from './rows/use-agent-row-conversation-name'
 import { lastEnteredDoneAt } from './rows/agent-finished-timestamp'
 import {
@@ -177,7 +177,8 @@ const DashboardAgentRow = React.memo(function DashboardAgentRow({
   const doneAt = lastEnteredDoneAt(agent)
   const conversationName = useAgentRowConversationName(agent)
   const prompt =
-    conversationName ?? getWorkerAgentRowPrimaryText(agent.entry, stampedTaskTitle(agent.tab))
+    conversationName ??
+    getWorkerAgentRowPrimaryText(agent.entry, stampedTaskTitleForRow(agent.tab, agent.paneKey))
   // Why: prompt is '' when unknown, so fall back to the state label to keep the row labeled.
   const displayLabel =
     prompt ||

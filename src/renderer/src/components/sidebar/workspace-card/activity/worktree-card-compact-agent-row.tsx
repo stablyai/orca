@@ -16,7 +16,7 @@ import { useClaudeAgentRowView } from '@/components/dashboard/rows/use-claude-ag
 import './worktree-card-agent-summary'
 import { agentRowDisplayDotState as getAgentDotState } from '../../../../../../shared/agent-row-dot-state'
 import { getWorkerAgentRowPrimaryText } from '../../../../../../shared/agent-status/presentation/agent-row-primary-text'
-import { stampedTaskTitle } from '../../../../../../shared/orchestration/workers/worker-tab-stamp'
+import { stampedTaskTitleForRow } from '../../../../../../shared/orchestration/workers/worker-tab-stamp'
 import { useAgentRowConversationNaming } from '@/components/dashboard/rows/use-agent-row-conversation-name'
 import { ForkMarkedName } from '@/components/native-chat/fork/ForkMarkedName'
 import { forkMarkedNameText } from '@/components/native-chat/fork/fork-marked-name-text'
@@ -35,7 +35,8 @@ function getCompactAgentPrimary(
   conversationName: string | null
 ): string {
   const prompt =
-    conversationName ?? getWorkerAgentRowPrimaryText(agent.entry, stampedTaskTitle(agent.tab))
+    conversationName ??
+    getWorkerAgentRowPrimaryText(agent.entry, stampedTaskTitleForRow(agent.tab, agent.paneKey))
   return prompt || agentStateLabel(getAgentDotState(agent))
 }
 

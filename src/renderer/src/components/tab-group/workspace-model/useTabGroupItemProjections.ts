@@ -5,6 +5,7 @@ import type { BrowserWorkspace } from '../../../../../shared/browser/workspaces/
 import type { Tab, TabGroup } from '../../../../../shared/workspace-layout/tab-groups/tab-types'
 import type { TerminalTab } from '../../../../../shared/workspace-layout/terminal-tab-types'
 import { resolveUnifiedTabLabel } from '../../../../../shared/workspace-layout/tab-groups/tab-title-resolution'
+import { isInertWorkerStamp } from '../../tab-bar/worker-tab-leaves'
 import type { useAppStore } from '../../../store/index'
 import { isEditorTabContentType } from '@/store/slices/editor/tabs/editor-tab-content-type'
 import { openFileIndex } from '@/store/slices/editor/tabs/workspace-editor-files'
@@ -71,46 +72,62 @@ export function useTabGroupItemProjections({
   )
   const groupTabById = useMemo(() => new Map(groupTabs.map((item) => [item.id, item])), [groupTabs])
 
-  const terminalTabs = useMemo<TerminalTabItem[]>(
+  // Keyed by id so a layout change (a split drag) rebuilds the strip only when a stamp actually retires.
+  const inertWorkerKey = useMemo(
     () =>
       stripTabs
-        .filter((item) => item.contentType === 'terminal')
-        .map((item) => {
-          const terminalTab = terminalTabById.get(item.entityId)
-          return {
-            id: item.entityId,
-            unifiedTabId: item.id,
-            ...(item.workerTab ? { workerTab: item.workerTab } : {}),
-            ptyId: terminalTab?.ptyId ?? null,
-            worktreeId,
-            title: resolveUnifiedTabLabel(
-              {
-                ...item,
-                quickCommandLabel: item.quickCommandLabel ?? terminalTab?.quickCommandLabel,
-                generatedLabel: item.generatedLabel ?? terminalTab?.generatedTitle
-              },
-              worktreeState.generatedTabTitlesEnabled,
-              item.label
-            ),
-            defaultTitle: terminalTab?.defaultTitle,
-            quickCommandLabel: terminalTab?.quickCommandLabel ?? item.quickCommandLabel ?? null,
-            generatedTitle: terminalTab?.generatedTitle ?? item.generatedLabel ?? null,
-            // Why: the strip re-resolves this title; without the session title the first-prompt title wins.
-            aiVaultTitle: item.aiVaultTitle ?? terminalTab?.aiVaultTitle ?? null,
-            customTitle: item.customLabel ?? terminalTab?.customTitle ?? null,
-            color: item.color ?? terminalTab?.color ?? null,
-            sortOrder: item.sortOrder,
-            createdAt: item.createdAt,
-            generation: terminalTab?.generation,
-            shellOverride: terminalTab?.shellOverride,
-            startupCwd: terminalTab?.startupCwd,
-            // Why: rebuilt from the unified-tab model, so copy store-only launchAgent or the provider icon is missing until the first hook.
-            launchAgent: terminalTab?.launchAgent,
-            pendingActivationSpawn: terminalTab?.pendingActivationSpawn
-          }
-        }),
-    [stripTabs, terminalTabById, worktreeId, worktreeState.generatedTabTitlesEnabled]
+        .filter((item) => isInertWorkerStamp(worktreeState, item))
+        .map((item) => item.id)
+        .join('\0'),
+    [stripTabs, worktreeState]
   )
+  const terminalTabs = useMemo<TerminalTabItem[]>(() => {
+    const inertWorkerIds = new Set(inertWorkerKey ? inertWorkerKey.split('\0') : [])
+    return stripTabs
+      .filter((item) => item.contentType === 'terminal')
+      .map((stamped) => {
+        // A stamp whose worker pane closed leaves the user's tab: its own title, no worker chrome.
+        const item = inertWorkerIds.has(stamped.id) ? { ...stamped, workerTab: undefined } : stamped
+        const terminalTab = terminalTabById.get(item.entityId)
+        return {
+          id: item.entityId,
+          unifiedTabId: item.id,
+          ...(item.workerTab ? { workerTab: item.workerTab } : {}),
+          ptyId: terminalTab?.ptyId ?? null,
+          worktreeId,
+          title: resolveUnifiedTabLabel(
+            {
+              ...item,
+              quickCommandLabel: item.quickCommandLabel ?? terminalTab?.quickCommandLabel,
+              generatedLabel: item.generatedLabel ?? terminalTab?.generatedTitle
+            },
+            worktreeState.generatedTabTitlesEnabled,
+            item.label
+          ),
+          defaultTitle: terminalTab?.defaultTitle,
+          quickCommandLabel: terminalTab?.quickCommandLabel ?? item.quickCommandLabel ?? null,
+          generatedTitle: terminalTab?.generatedTitle ?? item.generatedLabel ?? null,
+          // Why: the strip re-resolves this title; without the session title the first-prompt title wins.
+          aiVaultTitle: item.aiVaultTitle ?? terminalTab?.aiVaultTitle ?? null,
+          customTitle: item.customLabel ?? terminalTab?.customTitle ?? null,
+          color: item.color ?? terminalTab?.color ?? null,
+          sortOrder: item.sortOrder,
+          createdAt: item.createdAt,
+          generation: terminalTab?.generation,
+          shellOverride: terminalTab?.shellOverride,
+          startupCwd: terminalTab?.startupCwd,
+          // Why: rebuilt from the unified-tab model, so copy store-only launchAgent or the provider icon is missing until the first hook.
+          launchAgent: terminalTab?.launchAgent,
+          pendingActivationSpawn: terminalTab?.pendingActivationSpawn
+        }
+      })
+  }, [
+    stripTabs,
+    terminalTabById,
+    worktreeId,
+    worktreeState.generatedTabTitlesEnabled,
+    inertWorkerKey
+  ])
 
   const editorItems = useMemo<GroupEditorItem[]>(
     () =>

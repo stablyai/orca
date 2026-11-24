@@ -1,6 +1,6 @@
 import { useMemo } from 'react'
 import { dispatchWorkspaceTabCommand } from '@/lib/workspace/tabs/workspace-tab-commands'
-import { announceKeptMixedWorkerTabs } from '@/components/tab-bar/worker-tab-user-close'
+import { admitBulkWorkerClose } from '@/components/tab-bar/worker-tab-close-target'
 import { useAppStore } from '@/store'
 
 export function useTabGroupTabCloseCommands({ worktreeId }: { worktreeId: string }) {
@@ -15,8 +15,11 @@ export function useTabGroupTabCloseCommands({ worktreeId }: { worktreeId: string
       },
       closeMany: (tabIds: string[]) => {
         // Counted once here; a tab that turns mixed while the closes run is kept without a second note.
-        announceKeptMixedWorkerTabs(useAppStore.getState(), tabIds)
+        const kept = admitBulkWorkerClose(useAppStore.getState(), tabIds)
         for (const tabId of tabIds) {
+          if (kept.has(tabId)) {
+            continue
+          }
           dispatchWorkspaceTabCommand({
             type: 'close',
             target: { kind: 'tab', worktreeId, tabId },

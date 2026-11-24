@@ -1,5 +1,6 @@
 import { indexedWorkerTab } from './worker-tab-index'
 import { workerTabCloseKind } from './worker-tab-view-actions'
+import { isInertWorkerStamp } from './worker-tab-leaves'
 import { workerTabHasNewAgent } from '../../../../shared/orchestration/workers/worker-tab-agent-identity'
 import type { IndexedCoordinatorTab } from './coordinator-tab-identities'
 import { coordinatorWorkerIndex, type IndexedCoordinatorWorker } from './coordinator-worker-index'
@@ -204,7 +205,13 @@ export function selectCoordinatorHasWorkers(state: AppState, coordinatorTabId: s
 export function selectWorkerTabPeekId(
   state: Pick<AppState, 'groupsByWorktree' | 'unifiedTabsByWorktree'> &
     Partial<
-      Pick<AppState, 'workerTabStripChoiceByWorktree' | 'workerTabPeekByGroupId' | 'workerTabsMode'>
+      Pick<
+        AppState,
+        | 'workerTabStripChoiceByWorktree'
+        | 'workerTabPeekByGroupId'
+        | 'workerTabsMode'
+        | 'terminalLayoutsByTabId'
+      >
     >,
   worktreeId: string,
   groupId: string
@@ -212,12 +219,22 @@ export function selectWorkerTabPeekId(
   if (state.workerTabsMode === 'always-open') {
     return undefined
   }
+  const tabs = state.unifiedTabsByWorktree[worktreeId]
+  // Only a tab still holding its worker peeks; a stamp whose worker pane is gone is an ordinary tab.
+  const peekable = (id: string | null | undefined): Tab | undefined => {
+    const tab = id ? tabs?.find((candidate) => candidate.id === id) : undefined
+    const layouts = state.terminalLayoutsByTabId
+    return tab?.workerTab &&
+      !(layouts && isInertWorkerStamp({ terminalLayoutsByTabId: layouts }, tab))
+      ? tab
+      : undefined
+  }
   const activeId = state.groupsByWorktree[worktreeId]?.find(
     (group) => group.id === groupId
   )?.activeTabId
-  const active = state.unifiedTabsByWorktree[worktreeId]?.find((tab) => tab.id === activeId)
-  return active?.workerTab &&
-    state.workerTabStripChoiceByWorktree?.[worktreeId]?.[active.id] !== 'kept'
-    ? active.id
-    : state.workerTabPeekByGroupId?.[groupId]
+  const active = peekable(activeId)
+  if (active && state.workerTabStripChoiceByWorktree?.[worktreeId]?.[active.id] !== 'kept') {
+    return active.id
+  }
+  return peekable(state.workerTabPeekByGroupId?.[groupId])?.id
 }

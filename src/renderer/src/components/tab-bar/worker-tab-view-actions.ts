@@ -1,7 +1,8 @@
 import type { AppState } from '@/store/types'
 import type { Tab } from '../../../../shared/workspace-layout/tab-groups/tab-types'
-import { collectLayoutLeafIdsInOrder } from '../../../../shared/workspace-layout/terminal-topology/terminal-pane-tree'
+import { workerTabLeafIds } from './worker-tab-leaves'
 import {
+  isWorkerChatIdentityConsistent,
   isWorkerTabFoldable,
   isMixedWorkerTab,
   pickVisibleLandingTabId
@@ -28,29 +29,17 @@ function findUnifiedTab(state: AppState, id: string): { tab: Tab; worktreeId: st
   return null
 }
 
-function leafIdsOf(state: AppState, tab: Tab): readonly string[] | undefined {
-  if (tab.contentType !== 'terminal') {
-    return undefined
-  }
-  const root = state.terminalLayoutsByTabId[tab.entityId]?.root
-  if (root) {
-    return collectLayoutLeafIdsInOrder(root)
-  }
-  const leafId = tab.workerTab?.origin.workerLeafId
-  return leafId ? [leafId] : undefined
-}
-
 /** A stamped worker tab whose user close should hide it instead: workers only stop by Stop worker or Close tab. */
 export function isHideableWorkerTab(state: AppState, tab: Tab): boolean {
   return (
     state.workerTabsMode !== 'always-open' &&
     Boolean(tab.workerTab) &&
-    isWorkerTabFoldable(tab, leafIdsOf(state, tab))
+    isWorkerTabFoldable(tab, workerTabLeafIds(state, tab))
   )
 }
 
 export function isMixedWorkerTabInLayout(state: AppState, tab: Tab): boolean {
-  return isMixedWorkerTab(tab, leafIdsOf(state, tab))
+  return isMixedWorkerTab(tab, workerTabLeafIds(state, tab))
 }
 
 /** How a local close gesture treats a tab: 'none' closes as usual, 'pure' hides, 'mixed' stays open. */
@@ -63,15 +52,13 @@ export function workerTabCloseKind(state: AppState, tab: Tab): WorkerTabCloseKin
     return 'none'
   }
   if (tab.contentType === 'agent-session') {
-    return 'pure'
+    // A chat bound to another agent than the stamp names is not provably the worker's.
+    return isWorkerChatIdentityConsistent(tab) ? 'pure' : 'mixed'
   }
-  // A stamped leaf id alone does not prove the tab holds nothing else, so no current layout means protected.
-  const root =
-    tab.contentType === 'terminal' ? state.terminalLayoutsByTabId[tab.entityId]?.root : null
-  if (!root) {
+  const leafIds = workerTabLeafIds(state, tab)
+  if (!leafIds) {
     return 'mixed'
   }
-  const leafIds = collectLayoutLeafIdsInOrder(root)
   const owned = workerLeafIds(stamp)
   // The worker's leaf is gone (closed, exited, taken over): the stamp is inert and the tab is the user's.
   if (!leafIds.some((leafId) => owned.has(leafId))) {

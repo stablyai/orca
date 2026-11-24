@@ -1,5 +1,6 @@
 import { workerTabHasNewAgent } from './worker-tab-agent-identity'
 import { z } from 'zod'
+import { parsePaneKey } from '../../workspace-layout/stable-pane-id'
 
 /** Durable, public agent identity: terminal agents by pane, native chats by session lineage root (survives /clear). */
 export type AgentPublicIdentity =
@@ -133,6 +134,24 @@ export function stampedTaskTitle(tab: { workerTab?: WorkerTabStamp }): string | 
   return tab.workerTab && !workerTabHasNewAgent(tab.workerTab)
     ? currentWorkerLineage(tab.workerTab).taskTitle
     : undefined
+}
+
+/** The task title for one agent row: in a terminal only the worker's own pane wears it, so the
+ *  user's pane beside it, or what is left once the worker's pane closed, keeps its own name. */
+export function stampedTaskTitleForRow(
+  tab: { workerTab?: WorkerTabStamp; contentType?: string },
+  paneKey: string
+): string | undefined {
+  if (!tab.workerTab) {
+    return undefined
+  }
+  if (tab.contentType === 'terminal') {
+    const leafId = parsePaneKey(paneKey)?.leafId
+    if (!leafId || !isWorkerLeaf(tab.workerTab, leafId)) {
+      return undefined
+    }
+  }
+  return stampedTaskTitle(tab)
 }
 
 export function isWorkerLeaf(stamp: WorkerTabStamp | undefined, leafId: string): boolean {

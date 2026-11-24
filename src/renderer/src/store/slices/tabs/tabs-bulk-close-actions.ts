@@ -2,9 +2,9 @@ import { workerTabStripOrder } from '../../../../../shared/workspace-layout/tab-
 import { selectWorkerTabPeekId } from '@/components/tab-bar/worker-tab-presentation'
 import {
   hideWorkerTabInStore,
-  workerTabCloseKind,
-  type WorkerTabCloseKind
+  workerTabCloseKind
 } from '@/components/tab-bar/worker-tab-view-actions'
+import { admitBulkWorkerClose } from '@/components/tab-bar/worker-tab-close-target'
 import { selectFoldedWorkerTabIds } from '@/components/tab-bar/worker-tab-folding'
 import {
   afterPendingTabs,
@@ -64,29 +64,25 @@ export function createTabsBulkCloseActions(
           (tab) => selected.has(tab.id) && !isTabClosePending(tab.id)
         )
       )
-      const workerKinds = new Map<string, WorkerTabCloseKind>()
-      for (const tab of tabs) {
-        if (tab.workerTab) {
-          workerKinds.set(tab.id, workerTabCloseKind(before, tab))
-        }
-      }
-      const kept = [...workerKinds.values()].filter((kind) => kind === 'mixed').length
-      if (kept > 0) {
-        // UI notes load only when a bulk close actually keeps a tab, after store construction.
-        void import('@/components/tab-bar/worker-tab-user-close')
-          .then(({ announceKeptMixedWorkerTabs }) =>
-            announceKeptMixedWorkerTabs(before, [...workerKinds.keys()])
-          )
-          .catch((error) => console.error('Worker tab close note failed', error))
-      }
+      // Counted once with one note; a tab that is mixed now stays out of the whole action.
+      const kept = admitBulkWorkerClose(before, tabIds)
       const retire = editorTabsRetirement(set, get, before, tabs)
       for (const tab of tabs) {
-        const kind = workerKinds.get(tab.id) ?? 'none'
+        if (kept.has(tab.id)) {
+          continue
+        }
+        // Re-read right before this tab's close: an earlier close may have changed what it holds.
+        const live = get()
+        const current = live.unifiedTabsByWorktree[tab.worktreeId]?.find((t) => t.id === tab.id)
+        if (!current) {
+          continue
+        }
+        const kind = workerTabCloseKind(live, current)
         if (kind === 'mixed') {
           continue
         }
         if (kind === 'pure') {
-          if (tab.isPinned || before.workerTabsMode === 'always-open') {
+          if (tab.isPinned || live.workerTabsMode === 'always-open') {
             continue
           }
           const hidden = hideWorkerTabInStore(get, tab.id)
