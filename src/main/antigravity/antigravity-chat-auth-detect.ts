@@ -1,7 +1,8 @@
-// What credentials the host's Antigravity chat could use, read from files and caches only: no server,
-// no gcloud, no agy.
+// What credentials the host's Antigravity chat could use, read from files and caches only: no
+// gcloud, no agy.
 
 import { stat } from 'node:fs/promises'
+import { homedir } from 'node:os'
 import type { AntigravityChatAuthConfig } from '../../shared/agent-accounts/antigravity/antigravity-chat-auth-config'
 import type {
   AntigravityChatApiKeyStatus,
@@ -11,14 +12,15 @@ import {
   agentPlatformCredentialsFile,
   resolveAgentPlatformProject
 } from './antigravity-agent-platform-project'
-import { hasSavedAntigravityGoogleSignIn } from './antigravity-saved-google-token'
+import { agyCredentialPresence } from './agy-credential-presence'
 
 type DetectSources = {
   /** The saved config; null while it is malformed or being saved. */
   config: () => AntigravityChatAuthConfig | null
   launchEnv: () => Promise<Readonly<Record<string, string>>>
   apiKeyStatus: () => Promise<AntigravityChatApiKeyStatus>
-  googleSignIn?: (method: AntigravityChatAuthConfig['method']) => Promise<boolean>
+  /** Whether agy keeps a Google login on this host, which both Google methods use. */
+  agyLogin?: (homePath: string) => Promise<boolean>
   liveChats: () => number
   /** Already known, never looked up here. */
   agyVersion?: () => string | null
@@ -40,13 +42,13 @@ export async function detectAntigravityChatAuth(
     config = null
   }
   const method = config?.method ?? null
-  const readGoogle = sources.googleSignIn ?? hasSavedAntigravityGoogleSignIn
-  const [env, key, personal, business] = await Promise.all([
-    sources.launchEnv(),
-    sources.apiKeyStatus(),
-    readGoogle('oauth-personal'),
-    readGoogle('oauth-business')
-  ])
+  const agyLogin =
+    sources.agyLogin ??
+    (async (homePath: string) => (await agyCredentialPresence(homePath)) === 'present')
+  const [env, key] = await Promise.all([sources.launchEnv(), sources.apiKeyStatus()])
+  // Enterprise also needs its license's project, which only Settings knows, so only a Google
+  // account reads as ready from the login alone.
+  const personal = await agyLogin(env.HOME ?? env.USERPROFILE ?? homedir())
   const agySignedOut = sources.agySignedOut?.() ?? null
   const adcAvailable = await isFile(agentPlatformCredentialsFile(env))
   // A switch to gcloud keeps a saved project, as the apply does; Enterprise's is its own.
@@ -54,7 +56,7 @@ export async function detectAntigravityChatAuth(
   const project = adcAvailable ? (await resolveAgentPlatformProject(saved, env)).project : null
   return {
     method,
-    googleSignIn: { personal, business },
+    googleSignIn: { personal, business: false },
     apiKey: {
       available: key.saved || key.inEnvironment,
       source: key.saved ? 'saved' : key.inEnvironment ? 'environment' : null

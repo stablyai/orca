@@ -10,16 +10,12 @@ import {
 import { getStructuredAgentSessionHost } from '../../../../native-chat/agent-session-wire/host/structured-agent-session-registry'
 import { resolveHostStructuredAgentLaunchEnvironment } from '../../../agent-session/launch/structured-agent-launch-support'
 import { acpHostBackendInput } from '../../../../acp/launch/acp-launch-command'
-import {
-  ANTIGRAVITY_LAUNCH_SPEC,
-  antigravityHostChatRoute
-} from '../../../../antigravity/antigravity-acp-launch-spec'
+import { ANTIGRAVITY_LAUNCH_SPEC } from '../../../../antigravity/antigravity-acp-launch-spec'
 import { getProfileUserDataPath } from '../../../../orca-profiles/profile-storage-paths'
 import type { OrcaRuntimeService } from '../../../orca-runtime'
-import type { GlobalSettings } from '../../../../../shared/settings/global-settings-types'
 import {
-  savedChatAuthIsPersonal,
-  type AntigravityChatRoute
+  antigravityAgySignIn,
+  savedChatAuthIsPersonal
 } from '../../../../antigravity/antigravity-chat-route'
 import { withTimeout } from '../../../../../shared/concurrency/promise-timeout-fallback'
 import { antigravityUsesFileStoreAsync } from '../../../../antigravity/native-file-credentials'
@@ -27,9 +23,12 @@ import { antigravityUsesFileStoreAsync } from '../../../../antigravity/native-fi
 const CHAT_BACKEND_WAIT_MS = 1_500
 const LAUNCH_HOME_WAIT_MS = 1_000
 
-/** Where new chats on this host run; an unreadable answer reads as Orca's server. */
+/** Where new chats on this host run, and agy's own sign-in for those on its home. */
 async function hostChatRoute(runtime: OrcaRuntimeService) {
   const settings = runtime.requireStore().getSettings()
+  if (!savedChatAuthIsPersonal(settings.antigravityChatAuth)) {
+    return { agy: false as const, orcaHome: true }
+  }
   const env = await resolveHostStructuredAgentLaunchEnvironment('antigravity', settings)
   const input = await acpHostBackendInput(
     ANTIGRAVITY_LAUNCH_SPEC,
@@ -37,9 +36,7 @@ async function hostChatRoute(runtime: OrcaRuntimeService) {
     getProfileUserDataPath(),
     settings
   )
-  // The settings the route answered for go with its answer, so the two never mix snapshots.
-  const route = input ? await antigravityHostChatRoute(input) : null
-  return { agy: route?.agy ?? false, orcaHome: route?.orcaHome === true, settings }
+  return { agy: input ? await antigravityAgySignIn(input) : ('unknown' as const), orcaHome: false }
 }
 
 /** The HOME new host agy chats launch with, when it shares the login an account switch changes;
@@ -63,18 +60,6 @@ export function sharedAgyLaunchHome(runtime: OrcaRuntimeService): Promise<string
   )
 }
 
-/** Which sign-in new Google-account chats use: agy whenever the route sends them there, signed in
- *  or not and installed or not, else Orca's server; none for another saved method. */
-export function antigravityGoogleSignInInUse(
-  settings: Pick<GlobalSettings, 'antigravityChatAuth'>,
-  agy: AntigravityChatRoute['agy']
-): 'agy' | 'orca' | undefined {
-  if (!savedChatAuthIsPersonal(settings.antigravityChatAuth)) {
-    return undefined
-  }
-  return agy === false ? 'orca' : 'agy'
-}
-
 /** Adds whether new chats on this host run on agy, and so on the account these rows switch. */
 export async function withAntigravityChatBackend(
   runtime: OrcaRuntimeService,
@@ -87,11 +72,7 @@ export async function withAntigravityChatBackend(
   }
   // A cold agy check takes seconds; the rows don't wait for it, and a later refresh shows it.
   const route = await withTimeout(
-    hostChatRoute(runtime).catch(() => ({
-      agy: false as const,
-      orcaHome: false,
-      settings: runtime.requireStore().getSettings()
-    })),
+    hostChatRoute(runtime).catch(() => ({ agy: 'unknown' as const, orcaHome: false })),
     CHAT_BACKEND_WAIT_MS,
     null
   )
@@ -100,13 +81,11 @@ export async function withAntigravityChatBackend(
   }
   const { agy } = route
   const version = agy === 'signedIn' ? readyAntigravityHostAcpVersion() : null
-  const inUse = antigravityGoogleSignInInUse(route.settings, agy)
   return {
     ...state,
     chatUsesAgy: agy === 'signedIn',
     chatAgySignedOut: agy === 'signedOut',
     ...(route.orcaHome ? { chatKeyOnAgy: true } : {}),
-    ...(inUse ? { chatGoogleSignInInUse: inUse } : {}),
     ...(version ? { chatAgyVersion: version } : {})
   }
 }
