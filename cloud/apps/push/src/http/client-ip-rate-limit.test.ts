@@ -54,6 +54,16 @@ describe('trusted proxy ranges', () => {
     )
   })
 
+  it('skips IPv4-mapped hops inside a configured IPv6 range', () => {
+    const policy = clientIpPolicy({
+      trustedProxyHops: 0,
+      trustedProxyAddresses: ['::ffff:203.0.113.0/120']
+    })
+    expect(clientIpFromForwardedFor('198.51.100.1, ::ffff:203.0.113.77', policy)).toBe(
+      '198.51.100.1'
+    )
+  })
+
   it("skips any address in an IPv6 forwarding rule's /64 and nothing outside it", () => {
     const policy = clientIpPolicy({
       trustedProxyHops: 0,

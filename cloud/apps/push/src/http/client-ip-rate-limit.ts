@@ -62,9 +62,12 @@ export function describeClientIpPolicy(policy: ClientIpPolicy): {
 
 function isTrustedProxy(hop: string, policy: ClientIpPolicy): boolean {
   const address = canonicalIp(hop)
+  // canonicalIp unmaps ::ffff:a.b.c.d to IPv4, so IPv6 ranges check the hop as sent.
   return (
     policy.trustedProxyAddresses.has(address) ||
-    policy.trustedProxyRanges.some((range) => rangeContains(range, address))
+    policy.trustedProxyRanges.some((range) =>
+      rangeContains(range, range.family === 6 ? hop : address)
+    )
   )
 }
 
