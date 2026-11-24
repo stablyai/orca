@@ -7,22 +7,26 @@ import {
 } from '../../../../../../src/shared/agent-session/view/messages/agent-message-presentation'
 import { agentMessagePreviewLine } from '../../../../../../src/shared/agent-session/view/messages/agent-message-preview-line'
 import { useAccessibilityAnnouncer } from '../../../../platform/accessibility/accessibility-announcer'
+import { useMobileScreenReaderOn } from '../../../../platform/accessibility/use-mobile-screen-reader-on'
 import { useMobileTranslation } from '../../../../i18n/use-mobile-translation'
 import { mobileNativeChatDisplayCopyText } from '../messages/mobile-native-chat-display-copy'
 import { mobileAgentMessageLead } from './MobileNativeChatAgentMessageCard'
 
-/** Speaks each waiting agent message that arrives while the chat is open, as its row reads; mail
- *  already waiting when the chat opens is not announced. */
+/** Speaks each waiting agent message that arrives while a screen reader runs and this chat is open
+ *  and loaded, as its row reads. What already waits when the chat opens, loads or the reader starts
+ *  is only recorded; `rows` includes a message being edited, so cancelling the edit says nothing. */
 export function useMobileWaitingAgentMailArrivalAnnouncement(
   rows: readonly NativeChatMessage[],
-  active: boolean
+  chat: { key: string; listening: boolean }
 ): void {
   const t = useMobileTranslation()
   const announce = useAccessibilityAnnouncer()
-  const seen = useRef<ReadonlySet<string> | null>(null)
+  const reader = useMobileScreenReaderOn()
+  const seen = useRef<{ key: string; ids: ReadonlySet<string> } | null>(null)
+  const listening = reader && chat.listening
   useEffect(() => {
-    const before = active ? seen.current : null
-    seen.current = active ? new Set(rows.map((row) => row.id)) : null
+    const before = listening && seen.current?.key === chat.key ? seen.current.ids : null
+    seen.current = listening ? { key: chat.key, ids: new Set(rows.map((row) => row.id)) } : null
     if (!before) {
       return
     }
@@ -47,5 +51,5 @@ export function useMobileWaitingAgentMailArrivalAnnouncement(
         }`
       )
     }
-  }, [rows, active, announce, t])
+  }, [rows, listening, chat.key, announce, t])
 }

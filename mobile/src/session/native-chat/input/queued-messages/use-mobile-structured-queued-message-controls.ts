@@ -150,7 +150,10 @@ export function useMobileStructuredQueuedMessageControls(args: {
     () => composerQueuedCards(allCards, waitingAgentMail, editor?.messageId),
     [allCards, waitingAgentMail, editor?.messageId]
   )
-  useMobileWaitingAgentMailArrivalAnnouncement(agentMail, args.chatActive)
+  useMobileWaitingAgentMailArrivalAnnouncement(waitingAgentMail, {
+    key: args.sessionKey,
+    listening: args.chatActive && args.transcriptShown && queuedMessages !== null
+  })
   const resolved = useCallback(
     (accepted: boolean): boolean => {
       if (accepted) {

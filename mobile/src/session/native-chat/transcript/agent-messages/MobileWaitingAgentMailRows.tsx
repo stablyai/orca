@@ -1,5 +1,6 @@
-import { memo, useEffect, useState } from 'react'
-import { AccessibilityInfo, Text, View, type LayoutChangeEvent } from 'react-native'
+import { memo, useState } from 'react'
+import { Text, View, type LayoutChangeEvent } from 'react-native'
+import { useMobileScreenReaderOn } from '../../../../platform/accessibility/use-mobile-screen-reader-on'
 import { Image as ImageIcon } from 'lucide-react-native'
 import type { NativeChatMessage } from '../../../../../../src/shared/native-chat/native-chat-types'
 import { useMobileTranslation } from '../../../../i18n/use-mobile-translation'
@@ -136,19 +137,4 @@ function MobileQueuedImageCount({
       <Text style={queuedMessageStyles.metaText}>{count}</Text>
     </View>
   )
-}
-
-/** Whether VoiceOver or TalkBack is running, following changes. */
-function useMobileScreenReaderOn(): boolean {
-  const [on, setOn] = useState(false)
-  useEffect(() => {
-    let live = true
-    void AccessibilityInfo.isScreenReaderEnabled().then((enabled) => live && setOn(enabled))
-    const subscription = AccessibilityInfo.addEventListener('screenReaderChanged', setOn)
-    return () => {
-      live = false
-      subscription.remove()
-    }
-  }, [])
-  return on
 }
