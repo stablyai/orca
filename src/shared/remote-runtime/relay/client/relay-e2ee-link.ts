@@ -141,6 +141,9 @@ export class RelayE2eeLink {
   }
 
   private sendRelayAuth(): void {
+    if (this.closed) {
+      return
+    }
     try {
       this.socket.send(
         JSON.stringify({
@@ -229,8 +232,8 @@ export class RelayE2eeLink {
     this.clearCloseGrace()
     this.inbound.dispose()
     this.channel.dispose()
-    this.options.onError(error)
     this.socket.close()
+    this.options.onError(error)
   }
 }
 
