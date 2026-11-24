@@ -76,6 +76,21 @@ export function connectNativeBrowserNetworkTarget(
   )
 }
 
+/** Dials this host's own loopback directly: a proxy would carry it to another machine's localhost.
+ *  Orca's own listeners stay refused unless the host opts out of the destination policy. */
+export function connectNativeLoopbackTarget(
+  target: BrowserNetworkTunnelOpen,
+  env: Record<string, string | undefined> = process.env
+): BrowserNetworkTunnelSocket {
+  const enforced = !isBrowserTunnelPolicyDisabled(env)
+  const reason = enforced ? browserTunnelTargetBlockReason(target.host, target.port) : null
+  if (reason) {
+    auditBrowserTunnelDestinationBlocked(target.host, target.port, reason)
+    throw new BrowserTunnelDestinationBlockedError(reason)
+  }
+  return (enforced ? guardedNativeDialer : nativeDialer).connect(target)
+}
+
 /** SSH/WSL routes egress elsewhere; they still must not hand out that machine's metadata. */
 export function guardRemoteBrowserNetworkConnect(
   connectTarget: BrowserNetworkExecutionRoute['connect'],

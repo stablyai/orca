@@ -5,7 +5,7 @@ import {
   BROWSER_NETWORK_TUNNEL_WINDOW_V2_FLOW_CONTROL,
   type BrowserNetworkTunnelSessionOptions
 } from '../../../../browser/network/tunnels/browser-network-tunnel-stream-state'
-import { connectNativeBrowserNetworkTarget } from '../../../../browser/network/execution-routes/browser-network-execution-route'
+import { connectNativeLoopbackTarget } from '../../../../browser/network/execution-routes/browser-network-execution-route'
 import { BrowserTunnelDestinationBlockedError } from '../../../../browser/network/tunnels/browser-network-tunnel-destination-policy'
 import { BROWSER_NETWORK_TUNNEL_WINDOW_V2_CAPABILITY } from '../../../../../shared/browser/runtime/browser-runtime-capabilities'
 import { NETWORK_PORT_FORWARD_RUNTIME_CAPABILITY } from '../../../../../shared/remote-runtime/protocol/workspace-ports-runtime-capabilities'
@@ -23,7 +23,7 @@ let nextTunnelGeneration = 1
 /** Dials only this host's own loopback; the native dial still refuses Orca's own listeners. */
 export function connectPairedPortForwardTarget(
   target: Parameters<ConnectTarget>[0],
-  connect: ConnectTarget = connectNativeBrowserNetworkTarget
+  connect: ConnectTarget = connectNativeLoopbackTarget
 ): ReturnType<ConnectTarget> {
   const host = pairedPortForwardDialHost(target.host)
   if (!host) {
