@@ -79,7 +79,8 @@ export function LookAroundRow({
   }
   const every = everyText(setting)
   const dueNow = setting.on && !looking && state?.dueNow === true
-  const nextAt = setting.on && !dueNow ? row.nextAt : null
+  // Due or looking, its next is the panel's clock standing in until the host says: no time to say.
+  const nextAt = setting.on && !looking && state?.dueNow !== true ? row.nextAt : null
   const name = t('settings.bots.lookAround.title', 'Look around')
   const setOn = (on: boolean): void => updateBotReporting(bot, { lookAround: { on } })
   const toggle = pauseResume(t, setting.on, setOn)

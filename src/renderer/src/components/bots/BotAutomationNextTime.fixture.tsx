@@ -119,6 +119,18 @@ export const mixed240 = panel(240, MIXED)
 export const mixed340 = panel(340, MIXED)
 export const mixed420 = panel(420, MIXED)
 export const later340 = panel(340, LATER)
+// A short weekday ("Fri") under a cut name at the narrowest width: the actions lay over its end.
+export const laterLong240 = panel(
+  240,
+  activity(
+    [
+      longName(release, 'Write the Friday release notes from merged pull requests'),
+      longName(monthly, 'Send the monthly spend report to finance'),
+      mentions
+    ],
+    [merge]
+  )
+)
 export const longNames240 = panel(240, LONG)
 export const longNames420 = panel(420, LONG)
 export const focusedSweep340 = panel(340, MIXED, focusRow('GitHub P0 issue sweep'))
