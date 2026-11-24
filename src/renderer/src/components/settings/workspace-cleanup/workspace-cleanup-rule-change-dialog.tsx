@@ -112,7 +112,11 @@ export function WorkspaceCleanupRuleChangeDialog({
     [rows, newKeys, currentKeys]
   )
   const projectRepoId = request?.projectRepoId
-  const identities = useMemo(() => cleanupRowIdentities(rows, projectRepoId), [rows, projectRepoId])
+  const projectName = request?.projectName
+  const identities = useMemo(
+    () => cleanupRowIdentities(rows, { repoId: projectRepoId, name: projectName }),
+    [rows, projectRepoId, projectName]
+  )
   const newRowCount = useMemo(
     () => (newKeys?.size ? rows.filter((row) => newKeys.has(cleanupChangeRowKey(row))).length : 0),
     [rows, newKeys]

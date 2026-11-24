@@ -32,15 +32,16 @@ function rows(count: number): WorkspaceCleanupPreviewRow[] {
 }
 function request(count = 3): WorkspaceCleanupRuleChangeRequest {
   const list = rows(count)
+  const newKeys = new Set([cleanupChangeRowKey(list.at(-1)!)])
   return {
     kind: 'enable',
     setting: 'merged',
     projectName: 'Example project',
     projectRepoId: 'example',
     rows: [...list.slice(-1), ...list.slice(0, -1)],
-    newKeys: new Set([cleanupChangeRowKey(list.at(-1)!)]),
+    newKeys,
     currentKeys: new Set(list.slice(0, -1).map(cleanupChangeRowKey)),
-    selection: new WorkspaceCleanupKeepSelection(list),
+    selection: new WorkspaceCleanupKeepSelection(list, [], newKeys),
     status: null
   }
 }
@@ -103,19 +104,19 @@ export const longProjectAllKept = defineFixture({
     return <Example value={value} />
   }
 })
-/** A folder workspace spans projects: another project's row names its project, and two rows
- * sharing a name show their branches. */
+/** A folder workspace spans projects: another project's row names its project, a namesake
+ * project's row shows its path, and two rows sharing a name show their branches. */
 export const crossProject = defineFixture({
-  width: 640,
   render: () => {
-    const [own, other, ...twins] = rows(4).map((row, index) =>
+    const [own, other, alike, ...twins] = rows(5).map((row, index) =>
       index ? { ...row, displayName: 'feature', branch: `feature-${index}` } : row
     )
     const sibling = { ...other, repoId: 'billing', repoName: 'Billing service', branch: 'feature' }
-    const list = [own, sibling, ...twins]
-    const selection = new WorkspaceCleanupKeepSelection(list)
-    const value = { ...request(), rows: list, newKeys: new Set<string>(), selection }
-    return <Example value={{ ...value, currentKeys: new Set() }} />
+    const namesake = { ...alike, repoId: 'example-fork', branch: 'feature' } // also "Example project"
+    const list = [own, sibling, namesake, ...twins]
+    const [none, selection] = [new Set<string>(), new WorkspaceCleanupKeepSelection(list)]
+    const value = { ...request(), rows: list, selection }
+    return <Example value={{ ...value, newKeys: none, currentKeys: none }} />
   }
 })
 /** Turning off ignored-file protection with nothing matching yet: the empty list. */
@@ -162,14 +163,15 @@ export const refreshedMixedKeep = defineFixture({
       displayName: 'refresh-added-docs',
       evaluation: { action: 'delete', reason: 'merged' }
     }
+    const added = new Set([cleanupChangeRowKey(list[2])])
     return (
       <Example
         value={{
           ...value,
           rows: [list[2], list[0], list[1]],
-          newKeys: new Set([cleanupChangeRowKey(list[2])]),
+          newKeys: added,
           currentKeys: new Set([cleanupChangeRowKey(list[0])]),
-          selection: new WorkspaceCleanupKeepSelection(list, [list[0]]),
+          selection: new WorkspaceCleanupKeepSelection(list, [list[0]], added),
           status: { added: 1, deleted: [] }
         }}
       />
@@ -188,7 +190,10 @@ export const pinError = defineFixture({
   width: 360,
   render: () => (
     <Example
-      value={{ ...request(), selection: new WorkspaceCleanupKeepSelection(rows(3), [rows(3)[0]]) }}
+      value={{
+        ...request(),
+        selection: new WorkspaceCleanupKeepSelection(rows(3), [rows(3)[0]], request().newKeys)
+      }}
       error="Couldn't keep Workspace 1. Rule not changed."
     />
   )
