@@ -3,8 +3,10 @@ import type {
   AgentSessionAttachmentPathUploadResult,
   AgentSessionAttachmentUploadTarget
 } from '../../../shared/agent-session/agent-session-attachments'
-import { resolveEnvironment } from '../../../shared/remote-runtime/host-store/runtime-environment-store'
-import { uploadExternalPathsToAgentSessionAttachments } from './agent-session-attachment-upload'
+import {
+  resolveAttachmentEnvironmentId,
+  uploadExternalPathsToAgentSessionAttachments
+} from './agent-session-attachment-upload'
 import { abortWhenRendererGone } from '../renderer-requests/renderer-lifetime-abort'
 
 export function registerAgentSessionAttachmentUploadHandlers(): void {
@@ -21,8 +23,7 @@ export function registerAgentSessionAttachmentUploadHandlers(): void {
         return await uploadExternalPathsToAgentSessionAttachments(
           {
             ...args,
-            // The manual-disconnect check keys on the resolved id, not whatever selector came in.
-            environmentId: (await resolveEnvironment(userDataPath, args.environmentId)).id,
+            environmentId: await resolveAttachmentEnvironmentId(userDataPath, args.environmentId),
             userDataPath,
             signal: lifetime.signal
           },

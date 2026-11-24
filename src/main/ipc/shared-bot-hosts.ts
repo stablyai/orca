@@ -7,6 +7,7 @@ import { NODE_RELAY_CLIENT_PLATFORM } from '../../shared/remote-runtime/relay/cl
 import type { ConnectorCloud } from '../connector-cloud/connector-cloud'
 import { SharedBotHosts } from '../bots/shared-with-me/shared-bot-hosts'
 import { sharedBotsCloud } from '../bots/shared-with-me/shared-bots-cloud'
+import { setSharedBotHostRouting } from '../bots/shared-with-me/shared-bot-host-routing'
 
 const CallArgs = z.object({ environmentId: z.string().min(1), method: z.string().min(1) })
 const SubscribeArgs = CallArgs.extend({ subscriptionId: z.string().min(1) })
@@ -87,6 +88,7 @@ export function registerSharedBotHostsHandlers(args: {
     senderStreams.get(event.sender)?.delete(subscriptionId)
     release(subscriptionId)
   })
+  setSharedBotHostRouting(hosts)
   hosts.start()
   return hosts
 }

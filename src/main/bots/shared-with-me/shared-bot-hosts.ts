@@ -277,6 +277,11 @@ export class SharedBotHosts {
       : response
   }
 
+  /** Whether `environmentId` names one of these hosts; read once `ready` has settled. */
+  reaches(environmentId: string): boolean {
+    return this.entryFor(environmentId) !== undefined
+  }
+
   private entryFor(environmentId: string): SharedBotHostEntry | undefined {
     return this.store.list().find((entry) => entry.environmentId === environmentId)
   }
