@@ -92,10 +92,13 @@ export async function addItem(
  *  there; none when the turn can't be read, which never stops the add. */
 async function originUrl(context: RpcContext, sessionId: string): Promise<string | null> {
   try {
+    // Only the running turn's own window can name a place, so the read never widens past it.
     const { turn } = await readBotTurn(
       context.runtime,
       context.runtime.getOrchestrationDb(),
-      sessionId
+      sessionId,
+      undefined,
+      true
     )
     return turn.originPlace?.url ?? null
   } catch (error) {

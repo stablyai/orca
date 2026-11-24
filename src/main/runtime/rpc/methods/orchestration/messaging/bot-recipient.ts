@@ -277,7 +277,9 @@ export async function readBotTurn(
   runtime: OrcaRuntimeService,
   db: OrchestrationDb,
   sessionId: string,
-  opening?: AgentJournalMessageItem
+  opening?: AgentJournalMessageItem,
+  /** Only the newest turns, never widened: for what the running turn alone can say. */
+  newestOnly = false
 ): Promise<{
   turn: BotActingTurn
   conversation: BotRequestConversation | null
@@ -310,7 +312,12 @@ export async function readBotTurn(
   }
   const turn = opening
     ? readBotActingTurn([openingItem(opening)], lookups, [])
-    : await readNewestBotActingTurn(await host.journalReads(sessionId), lookups)
+    : await readNewestBotActingTurn(
+        await host.journalReads(sessionId),
+        lookups,
+        undefined,
+        !newestOnly
+      )
   // The prompt that opened the turn names its event; a conversation an automation or request started keeps it.
   const triggeredBy = turn.triggeredBy ?? recorded?.triggeredBy ?? null
   return { turn, conversation, actsFor, triggeredBy }

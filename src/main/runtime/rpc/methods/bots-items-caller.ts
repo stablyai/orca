@@ -93,7 +93,7 @@ export function itemsWriter(
     bot,
     actor: { kind: 'bot', botId: bot.id, chatId },
     sessionId,
-    // Read only by writes that make an item: it lists the bot's thread chats and automation runs.
+    // Read only by writes that make an item or ask on one: it lists the bot's thread chats and runs.
     get source() {
       return runtime.botItems.chatSource(bot, chatId, root, record?.conversationName ?? null)
     }

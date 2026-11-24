@@ -17,7 +17,7 @@ import {
   placedSends,
   readSend,
   seedSends,
-  sendHeads,
+  wholeSends,
   windowSends,
   withSends
 } from './journal-operation-window-sends'
@@ -47,6 +47,9 @@ export type JournalOperationWindowAnchors = {
   /** A send still unanswered from before the anchors (one Orca died handing over) neither widens
    *  the window nor comes along; later ones, and ones with no rows yet, still do. */
   anchorsOnly?: boolean
+  /** With `latestTurns` alone: a read that would take the whole conversation's sends throws
+   *  `JournalWindowNotIndexed` instead, for a reader whose answer is optional and must stay cheap. */
+  indexedOnly?: boolean
   /** No turn ahead of the anchors: for readers that weigh only the anchored turns' own rows. */
   withoutTurnAhead?: boolean
   /** Tool calls come without their output text (its size and digest stay), which SQLite drops
@@ -96,10 +99,13 @@ export function readJournalDomainOperationWindow(
   // A window of the newest turns alone reads the sends placed in it and the unsettled ones, each by
   // index, so reading whom the newest turn acts for costs the same however long the chat ran before.
   const newestOnly = !bounded && newestTurnsOnly(anchors)
+  if (anchors.indexedOnly && !newestOnly) {
+    throw new Error('an indexed-only window is anchored by its newest turns alone')
+  }
   const seeded = seedSends(scope, anchors, newestOnly)
   const recent = newestOnly && seeded !== null
   let indexed = bounded || recent
-  let sends = seeded ?? sendHeads(scope)
+  let sends = seeded ?? wholeSends(scope, anchors)
   const operations = resolveOperations(scope, sends, anchors)
   // Where each anchored send's own turn may reach: past the first turn after it when it names its
   // turn (a turn row naming it, or its answeredInTurn), past the second when it doesn't (an older
@@ -131,7 +137,7 @@ export function readJournalDomainOperationWindow(
   if (fresh === null) {
     indexed = false
   }
-  sends = fresh ?? sendHeads(scope)
+  sends = fresh ?? wholeSends(scope, anchors)
   let start =
     earliest === null ? null : anchors.withoutTurnAhead ? earliest : marginBefore(scope, earliest)
   const end = earliest !== null && bounded ? windowEnd(scope, reaches) : null
@@ -148,7 +154,7 @@ export function readJournalDomainOperationWindow(
       ? withSends(scope, sends, placed ?? [])
       : placed && boundedSends(scope, sends, placed, { cap: RECENT_FAMILY_CAP, older })
     indexed = walked !== null
-    sends = walked ?? sendHeads(scope)
+    sends = walked ?? wholeSends(scope, anchors)
   }
   let kept: Send[] = []
   // A held send's own rows, and the head it was sent at, are held too: a turn may claim a send by
@@ -166,7 +172,7 @@ export function readJournalDomainOperationWindow(
     if (recent && indexed) {
       // Widening a newest-turns window means a long stretch: one whole read is cheaper.
       indexed = false
-      sends = sendHeads(scope)
+      sends = wholeSends(scope, anchors)
     } else if (indexed && start !== null) {
       // The sends placed in the stretch the window just took on.
       sends = withSends(scope, sends, windowSends(scope, next, start))

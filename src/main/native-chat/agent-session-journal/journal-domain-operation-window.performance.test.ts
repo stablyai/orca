@@ -9,6 +9,7 @@ import { applyJournalDomainSubmission } from './journal-domain-submission-admiss
 import { applyJournalDomainDispatch } from './journal-domain-dispatch'
 import { applyJournalDomainItem } from './journal-domain-item'
 import { readJournalDomainOperationWindow } from './journal-domain-operation-window'
+import { JournalWindowNotIndexed } from './journal-operation-window-sends'
 import { JournalSqlScope } from './journal-sql-scope'
 import { keptSends } from './journal-operation-window-held-sends'
 import type { Send } from './journal-operation-window-sends'
@@ -433,5 +434,40 @@ it('takes the whole read for a window crowded with rows rather than listing them
   expect([lookups(0), lookups(2000)]).toEqual([
     { placing: 3, sends: newest },
     { placing: 0, sends: newest }
+  ])
+})
+
+it('reads an indexed-only window of the newest turn by index, and throws where only the whole read answers', () => {
+  const read = (db: Database) => {
+    const scope = new JournalSqlScope(db, 'chat', 'epoch')
+    try {
+      const { snapshot } = readJournalDomainOperationWindow(scope, {
+        latestTurns: 1,
+        turnShape: true,
+        anchorsOnly: true,
+        indexedOnly: true
+      })
+      return {
+        rows: scope.work.rows,
+        sends: snapshot.submissions.map((send) => send.clientMessageId)
+      }
+    } catch (error) {
+      return { rows: scope.work.rows, thrown: error instanceof JournalWindowNotIndexed }
+    } finally {
+      db.close()
+    }
+  }
+  // An older unanswered send never pins this read back, however long the chat.
+  expect([read(chat(50, () => true, 0)), read(chat(500, () => true, 0))]).toEqual([
+    { rows: 18, sends: ['m48', 'm49'] },
+    { rows: 18, sends: ['m498', 'm499'] }
+  ])
+  // A family it would have to read whole: it stops at the cap and throws, never reading every send.
+  expect([
+    read(chat(200, () => true, undefined, 0, 0, 0, 'card')),
+    read(chat(500, () => true, undefined, 0, 0, 0, 'card'))
+  ]).toEqual([
+    { rows: 75, thrown: true },
+    { rows: 75, thrown: true }
   ])
 })

@@ -13,13 +13,18 @@ import {
 export async function readNewestBotActingTurn(
   reads: Pick<JournalSqlReads, 'operationWindow'>,
   lookups: BotActingTurnLookups,
-  before?: string
+  before?: string,
+  /** False reads only the newest turn, by index alone (an unreadable one throws), settling as if
+   *  it were the whole chat: enough for what that turn alone can say, such as where its work started. */
+  widen = true
 ): Promise<BotActingTurn> {
-  for (let newestTurns = 8; ; newestTurns *= 4) {
+  for (let newestTurns = widen ? 8 : 1; ; newestTurns *= 4) {
     const { snapshot, complete } = await reads.operationWindow({
       latestTurns: newestTurns,
       // Who a turn acted for is in its messages and turn rows; its tool calls would only fill memory.
-      turnShape: true
+      turnShape: true,
+      // Its own sends say all one turn can; an older unanswered one would only pin the read back.
+      ...(widen ? {} : { anchorsOnly: true, indexedOnly: true })
     })
     let items = snapshot.items
     if (before !== undefined) {
@@ -34,7 +39,7 @@ export async function readNewestBotActingTurn(
       items,
       lookups,
       snapshot.submissions,
-      complete ? null : newestTurns
+      complete || !widen ? null : newestTurns
     )
     if (turn) {
       return turn

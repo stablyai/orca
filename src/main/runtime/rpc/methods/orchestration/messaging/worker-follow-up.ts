@@ -61,6 +61,26 @@ export function planWorkerFollowUp(
   )
 }
 
+/** `send --to dispatch:<id> --item <n>`: new work for that item, which only a follow-up can take, so
+ *  the item leaves the mail's params; item mail's `--file` never goes with it. */
+export function splitForItem<P extends { item?: string; files?: string[] }>(
+  to: string,
+  params: P
+): { forItem: string | undefined; params: P } {
+  const forItem = to.startsWith('dispatch:') ? params.item : undefined
+  if (forItem === undefined) {
+    return { forItem, params }
+  }
+  if (params.files?.length) {
+    throw new OrchestrationError(
+      'invalid_argument',
+      "--file goes with --to bot:<name> --item <n>. A worker's new work names its files in --body. Nothing was sent.",
+      { effectsApplied: false }
+    )
+  }
+  return { forItem, params: { ...params, item: undefined } }
+}
+
 /** `send --to dispatch: --item`: only a finished worker's follow-up takes work for an item; a working
  *  worker's report would answer for both. Refused before anything is sent. */
 export function assertFollowUpForItem(forItem: string | undefined, followsUp: boolean): void {
@@ -92,7 +112,7 @@ async function assertSameItem(
   if (elsewhere) {
     throw new OrchestrationError(
       'invalid_argument',
-      `This worker is on another item, so it can't take work for item ${item.number}. Start one for it with \`orchestration worker-start --item ${item.number}\`. Nothing was sent.`,
+      `This worker has worked for another item, so it can't take work for item ${item.number}. Start one for it with \`orchestration worker-start --item ${item.number}\`. Nothing was sent.`,
       { effectsApplied: false }
     )
   }

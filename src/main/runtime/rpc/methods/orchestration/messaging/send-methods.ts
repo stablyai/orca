@@ -27,7 +27,12 @@ import { sendGroupMessage } from './send-group'
 import { sendFederatedControlMail } from '../../../../orchestration/legacy-remote-home/send-control-mail'
 import { orchestrationCallerIdentity } from '../runs/run-scope'
 import { assertLifecycleCallerIsNotAnotherParty } from './lifecycle-caller-fence'
-import { assertFollowUpForItem, planWorkerFollowUp, startWorkerFollowUp } from './worker-follow-up'
+import {
+  assertFollowUpForItem,
+  planWorkerFollowUp,
+  splitForItem,
+  startWorkerFollowUp
+} from './worker-follow-up'
 import { finishedWorkerSend, refuseFinishedRemoteWorker } from './finished-worker-mail'
 import { relayedDeliveryUnknownWarning, withDeliveryHoldWarning } from './send-delivery-hold'
 import {
@@ -142,10 +147,8 @@ export const ORCHESTRATION_SEND_METHODS = [
       }
 
       // `--to dispatch:<id> --item <n>`: new work for that item, which only a follow-up can take.
-      const forItem = to.startsWith('dispatch:') ? params.item : undefined
-      if (forItem !== undefined) {
-        params = { ...params, item: undefined }
-      }
+      const { forItem, params: forParams } = splitForItem(to, params)
+      params = forParams
       const botRoute = await routeBotMail(context, { params, from, to, sender, routing })
       if ('receipt' in botRoute) {
         return botRoute.receipt

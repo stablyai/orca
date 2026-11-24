@@ -4,7 +4,8 @@ import type { BotWakingPlace } from './bot-request-asker'
 
 /** The one place every request started in; none when any started elsewhere or nowhere, or when a
  *  message beside the requests (the owner's, a person's) opened work of its own. A person's place is
- *  their channel, so its link tells two threads apart. */
+ *  their channel, so its link tells two threads apart; two comments on one issue or pull request
+ *  differ only in the link's `#` anchor, which never does. */
 export function requestsOriginPlace(
   places: readonly (BotWakingPlace | undefined)[],
   besideRequests: boolean
@@ -14,8 +15,12 @@ export function requestsOriginPlace(
     first &&
     places.every(
       (place) =>
-        place?.source === first.source && place.placeId === first.placeId && place.url === first.url
+        place?.source === first.source &&
+        place.placeId === first.placeId &&
+        page(place.url) === page(first.url)
     )
     ? first
     : undefined
 }
+
+const page = (url: string | undefined) => url?.split('#')[0]

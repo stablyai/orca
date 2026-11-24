@@ -82,6 +82,16 @@ describe('where a bot turn’s work started', () => {
     expect(readBotActingTurn([requestMail(['msg_a', 'msg_b'])], lookups(mixed)).originPlace).toBe(
       undefined
     )
+    // Two comments on one issue are one place.
+    const issue = (anchor: string): BotWakingPlace => ({
+      source: 'github',
+      placeId: 'acme/app#7',
+      url: `https://github.com/acme/app/issues/7#issuecomment-${anchor}`
+    })
+    const comments = { msg_a: issue('1'), msg_b: issue('2') }
+    expect(
+      readBotActingTurn([requestMail(['msg_a', 'msg_b'])], lookups(comments)).originPlace
+    ).toEqual(issue('1'))
     expect(
       readBotActingTurn([requestMail(['msg_a', 'msg_c'])], {
         ...lookups({ msg_a: THREAD }),
