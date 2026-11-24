@@ -39,9 +39,13 @@ export async function materializeWorktreeContentPaths(
   localWorktreeGitOptions: LocalGitExecOptions,
   timing: Pick<WorktreeCreateTimingRecorder, 'time'>
 ): Promise<{ includeCopyWarning?: string }> {
-  if ((repo.symlinkPaths ?? []).length > 0) {
+  const configuredLinkSkips = collectPathSkips()
+  const symlinkPaths = repo.symlinkPaths ?? []
+  if (symlinkPaths.length > 0) {
     await timing.time('create_symlinks', () =>
-      createWorktreeLinkedPaths(repo.path, worktreePath, repo.symlinkPaths ?? [])
+      createWorktreeLinkedPaths(repo.path, worktreePath, symlinkPaths, {
+        onFailure: configuredLinkSkips.add
+      })
     )
   }
 
@@ -77,6 +81,7 @@ export async function materializeWorktreeContentPaths(
     console.warn(`[worktree-include] ${copyBudgetWarning}`)
   }
   const includeCopyWarning = [
+    configuredLinkSkips.message('Worktree Shared Paths'),
     sharedSkips.message('worktree.sharedDirectories'),
     includeSkips.message('.worktreeinclude'),
     copyFailures.message('.worktreeinclude copy'),
