@@ -214,7 +214,8 @@ async function serveBrowserNativeVerb(
       return { value: await navigator.clipboard.readText() }
     case 'native.storage.read':
       return { value: readStorage(storageReadParamsSchema.parse(params).key) }
-    // Never granted here, so the page takes its missing-grant path before asking.
+    // Never granted here, so the page takes its missing-grant path before asking; for deferred code
+    // that is importing the diagram engine from /assets/ like any other chunk.
     case 'native.media.pick':
     case 'native.media.read':
     case 'native.media.release':
@@ -228,6 +229,7 @@ async function serveBrowserNativeVerb(
     case 'native.store.rows':
     case 'native.a11y.announce':
     case 'native.link.open':
+    case 'native.bundle.deferred':
       throw new Error(`${verb} is not available in a browser`)
   }
 }
