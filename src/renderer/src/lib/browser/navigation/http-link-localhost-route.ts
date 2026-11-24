@@ -40,23 +40,31 @@ export function isRemoteLoopbackHttpLink(
 }
 
 /** Opens a link in the system browser; a paired server's own localhost opens through a forward of
- *  its port, never as this computer's localhost. */
-export function openOwnedSystemHttpLink(
+ *  its port, never as this computer's localhost. Resolves whether an address reached `openSystem`. */
+export async function openOwnedSystemHttpLink(
   url: string,
   sourceOwner: HttpLinkSourceOwner | undefined,
   worktreeId: string | null | undefined,
-  openSystem: (url: string) => Promise<void>
-): void {
+  openSystem: (url: string) => Promise<unknown>
+): Promise<boolean> {
   if (sourceOwner?.kind !== 'runtime' || !isLoopbackBrowserUrl(url)) {
-    void openSystem(url)
-    return
+    await openSystem(url)
+    return true
   }
-  // Loaded on demand: the opener reads the store, which imports link routing.
-  void import('@/lib/workspace-ports/server-port-forward-open')
-    .then(({ openServerLoopbackInSystemBrowser }) =>
-      openServerLoopbackInSystemBrowser(url, sourceOwner.runtimeEnvironmentId, worktreeId)
+  try {
+    // Loaded on demand: the opener reads the store, which imports link routing.
+    const { openServerLoopbackInSystemBrowser } =
+      await import('@/lib/workspace-ports/server-port-forward-open')
+    return await openServerLoopbackInSystemBrowser(
+      url,
+      sourceOwner.runtimeEnvironmentId,
+      worktreeId,
+      openSystem
     )
-    .catch((error: unknown) => console.error('Failed to open the server port:', error))
+  } catch (error) {
+    console.error('Failed to open the server port:', error)
+    return false
+  }
 }
 
 export function localhostLabelRouteForHttpLink(

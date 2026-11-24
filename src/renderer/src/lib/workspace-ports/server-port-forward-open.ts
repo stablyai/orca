@@ -42,13 +42,15 @@ export async function openServerLoopbackInSystemBrowser(
   rawUrl: string,
   environmentId: string,
   /** The workspace the link or page belongs to; null for the server's own listeners. */
-  worktreeId: string | null | undefined
-): Promise<void> {
+  worktreeId: string | null | undefined,
+  /** Opens the forwarded address; a link chooser passes one that reports the shell's answer. */
+  openSystem: (url: string) => Promise<unknown> = openSystemHttpLink
+): Promise<boolean> {
   let url: URL
   try {
     url = new URL(rawUrl)
   } catch {
-    return
+    return false
   }
   const port = Number(url.port) || (url.protocol === 'https:' ? 443 : 80)
   const state = useAppStore.getState()
@@ -62,7 +64,7 @@ export async function openServerLoopbackInSystemBrowser(
         { port, host }
       )
     )
-    return
+    return false
   }
   const sshTargetId = serverSshForwardTargetId(environmentId)
   const known = forwardedUrlForRemoteUrl(
@@ -70,8 +72,8 @@ export async function openServerLoopbackInSystemBrowser(
     state.portForwardsByConnection[sshTargetId ?? environmentId] ?? []
   )
   if (known) {
-    await openSystemHttpLink(known)
-    return
+    await openSystem(known)
+    return true
   }
   if (sshTargetId) {
     toast.error(
@@ -81,7 +83,7 @@ export async function openServerLoopbackInSystemBrowser(
         { port, host }
       )
     )
-    return
+    return false
   }
   const api = window.api.runtimeEnvironments.portForwards
   const supported =
@@ -98,7 +100,7 @@ export async function openServerLoopbackInSystemBrowser(
         { port, host }
       )
     )
-    return
+    return false
   }
   let target: string | null
   let created: boolean
@@ -118,9 +120,9 @@ export async function openServerLoopbackInSystemBrowser(
         { port, host }
       )
     )
-    return
+    return false
   }
-  await openSystemHttpLink(target)
+  await openSystem(target)
   if (created) {
     toast.success(
       translate(
@@ -137,4 +139,5 @@ export async function openServerLoopbackInSystemBrowser(
       }
     )
   }
+  return true
 }

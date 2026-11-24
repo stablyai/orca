@@ -2,7 +2,6 @@ import { showBrowserOpenFailure } from '../workspace/workspace-browser-open-fail
 import type { OpenHttpLinkOptions } from './http-link-destinations'
 import type { HttpLinkSourceOwner } from './http-link-routing'
 import { openOwnedSystemHttpLink } from './http-link-localhost-route'
-import { isLoopbackBrowserUrl } from '../../../../../shared/browser/navigation/loopback-browser-url'
 import type { BrowserOpenOutcome } from './browser-link-destination'
 
 export type HttpLinkAdmission = 'admitted' | 'refused' | 'failed' | 'superseded'
@@ -73,20 +72,21 @@ export async function openSystemHttpLinkResolved(url: string): Promise<void> {
   await openSystemHttpLink(url)
 }
 
-/** System-browser open for a link's owner; settles from the shell's answer. A paired server's own
- *  localhost opens through its port forward, which reports no admission, so it settles refused. */
+/** System-browser open for a link's owner, settled once from the shell's answer for the address
+ *  that reached it (a paired server's forwarded port included); refused when none did. */
 export function openOwnedSystemHttpLinkAdmitted(
   url: string,
   owner: HttpLinkSourceOwner | undefined,
   worktreeId: string | null | undefined,
   settle: (outcome: HttpLinkAdmission) => void
 ): void {
-  openOwnedSystemHttpLink(url, owner, worktreeId, (resolved) =>
+  void openOwnedSystemHttpLink(url, owner, worktreeId, (resolved) =>
     openSystemHttpLink(resolved).then(settle)
-  )
-  if (owner?.kind === 'runtime' && isLoopbackBrowserUrl(url)) {
-    settle('refused')
-  }
+  ).then((reached) => {
+    if (!reached) {
+      settle('refused')
+    }
+  })
 }
 
 export function settleHttpLinkBrowserOpen(
