@@ -1,6 +1,7 @@
 // What item mail tells the bot (Orca's voice, workflow only). The owner's and other chats' words are
 // fenced, so a comment can't pose as Orca's instructions; each mail names its event for `show --after`.
 import { fenceQuotedText, inlineUntrusted } from '../../shared/quoted-text-fence'
+import { BOT_QUIET_MARKER } from '../../shared/bot-quiet-result'
 import {
   botItemCommentImages,
   botItemCommentSkills,
@@ -118,7 +119,7 @@ export function botItemChangeMail(
       ...body,
       '',
       ...(next.length > 0 ? [next.join(' '), ''] : []),
-      `Check with \`orca bot item show <n>\` before acting: items may have changed since, and mail can repeat after a crash. If nothing needs doing, end the turn without a chat reply.`
+      `Check with \`orca bot item show <n>\` before acting: items may have changed since, and mail can repeat after a crash. If nothing needs doing, your final message is only ${BOT_QUIET_MARKER}.`
     ].join('\n')
   }
 }
@@ -237,6 +238,6 @@ export function botItemMakerCommentMail(
 ): { subject: string; body: string } {
   return {
     subject: `${makerName} commented (${itemName(item)})`,
-    body: `${makerName}, which added ${itemName(item)} for you, commented on it:\n${fenceQuotedText(commentText)}${imagesNote(images, 0, false)}\n\nCheck with \`orca bot item show ${item.number}\` before acting. If nothing needs doing, end the turn without a chat reply.`
+    body: `${makerName}, which added ${itemName(item)} for you, commented on it:\n${fenceQuotedText(commentText)}${imagesNote(images, 0, false)}\n\nCheck with \`orca bot item show ${item.number}\` before acting. If nothing needs doing, your final message is only ${BOT_QUIET_MARKER}.`
   }
 }
