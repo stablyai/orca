@@ -80,6 +80,10 @@ vi.mock('node:os', async (importOriginal) => ({
 }))
 
 import { syncSystemConfigIntoManagedCodexHome } from './codex-config-mirror'
+import {
+  applyCodexRegistrationPromotions,
+  planCodexRegistrationPromotion
+} from './config-plugin-registration-promotion'
 
 let tmpHome: string
 let userDataDir: string
@@ -165,6 +169,18 @@ describe('managed Codex config for a WSL distro config', () => {
     syncSystemConfigIntoManagedCodexHome()
     expect(readRuntimeConfig()).toContain('model = "o5"')
     expect(readRuntimeConfig()).toContain('ponytail@ponytail')
+  })
+
+  it('appends a plugin table to a CRLF config without doubling carriage returns', () => {
+    const crlfConfig = 'model = "gpt-5"\r\n'
+    const runtimeConfig = `${crlfConfig}\r\n[plugins."ponytail@ponytail"]\r\nenabled = true\r\n`
+
+    expect(
+      applyCodexRegistrationPromotions(
+        crlfConfig,
+        planCodexRegistrationPromotion(runtimeConfig, crlfConfig, new Map())
+      )
+    ).toBe(runtimeConfig)
   })
 
   it('leaves an unchanged managed copy untouched on regeneration', () => {

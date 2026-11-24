@@ -237,13 +237,14 @@ function appendRegistrationBlock(content: string, block: string, usesCrlf: boole
     .split('\n')
     .map((line) => withCrLine(line.replace(/\r$/, ''), usesCrlf))
     .join('\n')
+  // Each rendered line already carries its \r, so only the \n is left to add.
   if (content.trim() === '') {
-    return `${rendered}${eol}`
+    return `${rendered}\n`
   }
   const separator = content.endsWith(`${eol}${eol}`)
     ? ''
     : content.endsWith(eol)
       ? eol
       : `${eol}${eol}`
-  return `${content}${separator}${rendered}${eol}`
+  return `${content}${separator}${rendered}\n`
 }
