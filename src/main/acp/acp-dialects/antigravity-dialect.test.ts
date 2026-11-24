@@ -1,5 +1,6 @@
 import { expect, it } from 'vitest'
-import { antigravityListedFamilySelection, parseAgyModelListing } from './antigravity-model-listing'
+import { antigravityListedFamilySelection } from './antigravity-dialect'
+import { parseAgyModelListing } from '../../antigravity/antigravity-model-listing'
 
 // `agy models` 1.5.14: gemini-3.5-flash is a model itself, so its levels stay their own rows.
 const LISTED = parseAgyModelListing(
