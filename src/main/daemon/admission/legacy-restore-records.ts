@@ -1,6 +1,6 @@
 import { readFileSync } from 'node:fs'
 import { durableWriteTempPath, writeFileDurableSync } from '../../filesystem/durable-file-write'
-import type { LegacyRestoreRecord } from '../../../shared/host-spawn-admission'
+import type { LegacyRestoreRecord } from '../../../shared/terminal/pty/admission/spawn-admission-contract'
 import { DEFAULT_MAX_HOST_TERMINALS } from './host-terminal-ledger'
 
 // COMPAT(legacy-restore-intent): added 2026-10-11 (v1.4.214) for clients that predate

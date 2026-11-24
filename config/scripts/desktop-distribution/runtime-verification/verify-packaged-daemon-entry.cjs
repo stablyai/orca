@@ -3,14 +3,14 @@ const { spawn, spawnSync } = require('node:child_process')
 const { randomUUID } = require('node:crypto')
 const { connect } = require('node:net')
 const { tmpdir } = require('node:os')
-const { join, relative } = require('node:path')
+const { basename, join, relative } = require('node:path')
 const { setTimeout: delay } = require('node:timers/promises')
 const {
   macTerminalHostPaths
 } = require('../../macos/terminal-host-bundle/macos-terminal-host-bundle.cjs')
 const {
   daemonProtocolVersion
-} = require('../../../../src/shared/local-build-compatibility-contract.json')
+} = require('../../../../src/shared/remote-runtime/orcad-distribution/local-build-compatibility-contract.json')
 
 // Require exact asar-unpacked daemon entry on every platform; missing path indicates layout regression and must not silently skip.
 function assertPackagedDaemonEntryExists(resourcesDir) {
@@ -164,7 +164,8 @@ async function runTerminalHostRoundTrip({
   const scratch = mkdtempSync(scratchPrefix)
   const socketPath = join(scratch, 'd.sock')
   const tokenPath = join(scratch, 'token')
-  const env = { ...process.env, ORCA_USER_DATA_PATH: join(scratch, 'user-data') }
+  // POSIX sh so the probe's arithmetic does not depend on the builder's login shell (e.g. fish).
+  const env = { ...process.env, SHELL: '/bin/sh', ORCA_USER_DATA_PATH: join(scratch, 'user-data') }
   delete env.ELECTRON_RUN_AS_NODE
   const daemon = spawn(
     command[0],
@@ -266,7 +267,7 @@ async function verifyPackagedMacTerminalHostBoots(appPath, { arch, required }) {
   const stderr = []
   // Boot clone outside build tree so ancestor node_modules cannot satisfy missing packaged dependency.
   const isolated = mkdtempSync(join(tmpdir(), 'orca-terminal-host-boot-'))
-  const clone = join(isolated, 'Orca Terminal Host.app')
+  const clone = join(isolated, basename(paths.bundle))
   try {
     const cloned = spawnSync('/bin/cp', ['-cR', paths.bundle, clone], { encoding: 'utf8' })
     if (cloned.status !== 0) {

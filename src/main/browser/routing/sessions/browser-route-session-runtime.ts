@@ -1,22 +1,20 @@
 import { BrowserClientProfileMetadata } from '../../../../shared/browser/client-hosting/browser-client-profile-switch-protocol'
 import { installBrowserRoutePartitionPolicies } from './browser-session-route-policies'
+import { validateBrowserRouteProfile } from './browser-route-profile-validation'
 import { session, webContents } from 'electron'
 import { setBrowserClientRouteWebContentsProbe } from '../../client-hosts/file-transfers/browser-client-download-routing'
 import type { BrowserRoutePartitionBindingStore } from '../partitions/browser-route-partition-binding-store'
-import {
-  configureBrowserRoutePartitionBindingsForOrcaProfile,
-  currentBrowserRoutePartitionBindingStore
-} from '../partitions/browser-route-partition-binding-runtime'
+import { currentBrowserRoutePartitionBindingStore } from '../partitions/browser-route-partition-binding-runtime'
 import { releaseEvictedBrowserRoutePartitionStorage } from '../partitions/browser-route-partition-storage-dependencies'
 import { isBrowserRouteGuestPopup } from '../guest-authority/browser-route-guest-popup-ownership'
-import { browserManager } from '../../browser-manager'
+import { browserManager } from '../../guest-lifecycle/manager/browser-manager'
 import {
   isBrowserRoutePartitionRetainedByAnyOwner,
   registerBrowserRoutePartitionRetentionProbe
 } from '../partitions/browser-route-partition-retention'
 import { BrowserRouteSessionRegistry } from './browser-route-session-registry'
 import { BrowserRouteWebContentsRegistry } from '../guest-authority/browser-route-webcontents-registry'
-import { browserSessionRegistry } from '../../sessions/browser-session-registry'
+import { browserSessionRegistry } from '../../sessions/profiles/browser-session-registry'
 
 const routeWebContentsRegistryRef: {
   current: BrowserRouteWebContentsRegistry | null
@@ -43,15 +41,7 @@ const bindingStore = {
 }
 
 export const browserRouteSessionRegistry = new BrowserRouteSessionRegistry({
-  validateProfile: (browserProfileId, metadata) => {
-    if (metadata) {
-      if (BrowserClientProfileMetadata.parse(metadata).id !== browserProfileId) {
-        throw new Error('browser_route_partition_profile_unavailable')
-      }
-    } else {
-      browserSessionRegistry.requireRouteBrowserProfile(browserProfileId)
-    }
-  },
+  validateProfile: validateBrowserRouteProfile,
   getSession: (partition) => session.fromPartition(partition),
   setupPolicies: ({ partition, browserProfileId, profileMetadata }) => {
     // Default profiles arrive without metadata.
@@ -62,7 +52,11 @@ export const browserRouteSessionRegistry = new BrowserRouteSessionRegistry({
       throw new Error('browser_route_partition_profile_unavailable')
     }
     // Keep remote profile permissions in the session; their ids may collide with local profiles.
-    return installBrowserRoutePartitionPolicies(profile, partition, { sitePermissions: 'session' })
+    // The server's agents can script these pages, so pages never read the desktop clipboard.
+    return installBrowserRoutePartitionPolicies(profile, partition, {
+      sitePermissions: 'session',
+      clipboardRead: false
+    })
   },
   clearPolicies: ({ partition }) => {
     browserSessionRegistry.clearRoutePartitionPolicies(partition)
@@ -91,7 +85,13 @@ export const browserRouteWebContentsRegistry = new BrowserRouteWebContentsRegist
   retirePreparedPage: (page) => browserRouteSessionRegistry.retirePreparedPage(page),
   retirePreparedPagesOwnedByRenderer: (rendererWebContentsId) =>
     browserRouteSessionRegistry.retirePreparedPagesOwnedByRenderer(rendererWebContentsId),
-  reportBlockedPopup: (blocked) => browserManager.reportRouteGuestPopupBlocked(blocked)
+  reportBlockedPopup: (blocked) => browserManager.reportRouteGuestPopupBlocked(blocked),
+  popupReleased: (opener) => browserManager.invalidateGuestMemoryProtection(opener),
+  openNewTabPopup: (source, request, observed, childOpener) =>
+    browserManager.openNewTabPopup(source, request, observed, childOpener),
+  releaseAgentLead: (openerWebContentsId) => browserManager.releaseAgentLead(openerWebContentsId),
+  isAgentCommandShownHere: (webContentsId) => browserManager.isAgentCommandShownHere(webContentsId),
+  isPersonCommandRunning: (webContentsId) => browserManager.isPersonCommandRunning(webContentsId)
 })
 routeWebContentsRegistryRef.current = browserRouteWebContentsRegistry
 
@@ -107,10 +107,3 @@ setBrowserClientRouteWebContentsProbe((webContentsId) => {
     browserRouteSessionRegistry.getPartitionForSession(contents.session) !== null
   )
 })
-
-export function configureRouteSessionsForOrcaProfile(options: {
-  orcaProfileId: string
-  profileDirectory: string
-}): void {
-  configureBrowserRoutePartitionBindingsForOrcaProfile(options)
-}

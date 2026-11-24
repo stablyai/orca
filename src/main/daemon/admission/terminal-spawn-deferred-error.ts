@@ -1,4 +1,4 @@
-import { TERMINAL_SPAWN_DEFERRED_PREFIX } from '../../../shared/host-spawn-admission'
+import { TERMINAL_SPAWN_DEFERRED_PREFIX } from '../../../shared/terminal/pty/admission/spawn-admission-contract'
 
 export class TerminalSpawnDeferredError extends Error {
   constructor(readonly reason: string) {

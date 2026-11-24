@@ -1,7 +1,8 @@
-import type { MessageRow, QuestionRow } from '../../types'
+import type { MessageRow, QuestionRow } from '../orchestration-records'
 import { OrchestrationError } from '../../orchestration-error'
 import { exposeQuestionTimestamps } from '../utc-timestamp'
 import type { OrchestrationDb } from '../orchestration-db'
+import { generateId } from '../generated-id'
 import { handHelperMailToRun } from '../messages/helper-mailbox-hand-back'
 
 export function createQuestion(
@@ -27,7 +28,11 @@ export function createQuestion(
         `Dispatch ${params.dispatchId} is not in Run ${params.runId}.`
       )
     }
+    // A question is its own thread, set at insert so mail queued for a paired coordinator carries it.
+    const id = generateId('msg')
     const message = this.insertMessage({
+      id,
+      threadId: id,
       from: `dispatch:${params.dispatchId}`,
       to: params.to ?? `run:${params.runId}`,
       subject: 'Question',
@@ -39,9 +44,9 @@ export function createQuestion(
         question: params.question,
         options: params.options ?? []
       }),
+      senderDispatchId: dispatch.id,
       runId: params.runId
     })
-    this.db.prepare('UPDATE messages SET thread_id = ? WHERE id = ?').run(message.id, message.id)
     this.db
       .prepare(
         `INSERT INTO question_threads (
@@ -118,6 +123,7 @@ export function answerQuestion(
         `Question ${params.messageId} is closed because its Dispatch is inactive.`
       )
     }
+    this.markAsRead([question.message_id], { kind: 'reply' })
     if (question.status === 'answered') {
       if (question.answer_body !== params.body || !question.answer_message_id) {
         throw new OrchestrationError(
@@ -144,13 +150,13 @@ export function answerQuestion(
     })
     // The answer is the worker's mail; a federated worker's copy lives on its execution host.
     if (this.getFederatedDispatch(question.dispatch_id)) {
-      this.markAsReadAndDelivered([message.id])
+      this.markAsReadAndDelivered([message.id], { kind: 'orca' })
     }
     this.db
       .prepare(
         `UPDATE question_threads
          SET status = 'answered', answer_message_id = ?, answer_body = ?,
-             answered_by_generation = ?, answered_at = datetime('now')
+             answered_by_generation = ?, answered_at = datetime('now'), awaiting = NULL
          WHERE message_id = ? AND status = 'pending'`
       )
       .run(message.id, params.body, generation, question.message_id)
@@ -204,7 +210,7 @@ export function closeQuestionsForDispatch(this: OrchestrationDb, dispatchId: str
   }
   this.db
     .prepare(
-      "UPDATE question_threads SET status = 'closed', closed_at = datetime('now') WHERE dispatch_id = ? AND status = 'pending'"
+      "UPDATE question_threads SET status = 'closed', closed_at = datetime('now'), awaiting = NULL WHERE dispatch_id = ? AND status = 'pending'"
     )
     .run(dispatchId)
   return rows.map((row) => row.message_id)

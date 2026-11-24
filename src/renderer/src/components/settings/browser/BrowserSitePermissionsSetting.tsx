@@ -1,35 +1,65 @@
 // @protected-copy: saved site permission choices.
 import { useEffect, useState } from 'react'
-import type { BrowserSessionProfile } from '../../../../../shared/browser-workspace-types'
+import type { BrowserSessionProfile } from '../../../../../shared/browser/workspaces/browser-workspace-types'
 import {
   BROWSER_SITE_PERMISSIONS,
+  browserExternalAppPermissionScheme,
+  isBrowserExternalAppPermission,
   isBrowserSitePermissionDecision,
-  type BrowserSitePermission,
-  type BrowserSitePermissionEntry
-} from '../../../../../shared/browser-site-permission'
+  type BrowserSitePermissionEntry,
+  type BrowserSitePermissionKey
+} from '../../../../../shared/browser/site-settings/browser-site-permission'
 import { Label } from '../../ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../../ui/select'
 import {
+  browserExternalAppPermissionLabel,
   browserSitePermissionLabel,
   browserSitePermissionSiteName
-} from '../../browser-pane/browser-site-permission-copy'
+} from '../../browser-pane/page-prompts/browser-site-permission-copy'
 import { SearchableSetting } from '../section-layout/SearchableSetting'
 import { SettingsRow } from '../form-controls/SettingsFormControls'
 import { getBrowserSitePermissionsSearchEntry } from './browser-site-permissions-search'
-import { LOCAL_EXECUTION_HOST_ID } from '../../../../../shared/execution-host'
+import { LOCAL_EXECUTION_HOST_ID } from '../../../../../shared/execution-host/execution-host'
 import { useAppStore } from '../../../store/index'
-import { translate } from '@/i18n/i18n'
+import { useTranslate, type Translate } from '@/i18n/use-translate'
+import { translateBrowserSessionProfileLabel } from '@/lib/browser/profiles/browser-session-profile-label'
+
+// Permissions in prompt order, then apps by scheme; apps can't be blocked, only asked again.
+function sitePermissionRows(
+  entry: BrowserSitePermissionEntry,
+  t: Translate
+): { permission: BrowserSitePermissionKey; label: string; canBlock: boolean }[] {
+  const permissions = BROWSER_SITE_PERMISSIONS.filter((permission) => entry.decisions[permission])
+  // One shared prefix, so key order is scheme order.
+  const apps = Object.keys(entry.decisions).filter(isBrowserExternalAppPermission).sort()
+  return [
+    ...permissions.map((permission) => ({
+      permission,
+      label: browserSitePermissionLabel(permission, t),
+      canBlock: true
+    })),
+    ...apps.map((permission) => ({
+      permission,
+      label: browserExternalAppPermissionLabel(browserExternalAppPermissionScheme(permission), t),
+      canBlock: false
+    }))
+  ]
+}
 
 function SitePermissionRow({
   entry,
   permission,
+  label,
+  canBlock,
   onChange
 }: {
   entry: BrowserSitePermissionEntry
-  permission: BrowserSitePermission
-  onChange: (permission: BrowserSitePermission, value: string) => void
+  permission: BrowserSitePermissionKey
+  label: string
+  canBlock: boolean
+  onChange: (permission: BrowserSitePermissionKey, value: string) => void
 }): React.JSX.Element {
-  const label = browserSitePermissionLabel(permission)
+  const t = useTranslate()
   return (
     <SettingsRow
       label={label}
@@ -43,13 +73,15 @@ function SitePermissionRow({
           </SelectTrigger>
           <SelectContent align="end">
             <SelectItem value="allow">
-              {translate('settings.browser.sitePermissions.allow', 'Allow')}
+              {t('settings.browser.sitePermissions.allow', 'Allow')}
             </SelectItem>
-            <SelectItem value="block">
-              {translate('settings.browser.sitePermissions.block', 'Block')}
-            </SelectItem>
+            {canBlock ? (
+              <SelectItem value="block">
+                {t('settings.browser.sitePermissions.block', 'Block')}
+              </SelectItem>
+            ) : null}
             <SelectItem value="ask">
-              {translate('settings.browser.sitePermissions.ask', 'Ask again')}
+              {t('settings.browser.sitePermissions.ask', 'Ask again')}
             </SelectItem>
           </SelectContent>
         </Select>
@@ -62,6 +94,7 @@ const NO_PROFILES: readonly BrowserSessionProfile[] = []
 
 /** Remembered answers live on this computer, so only its own browser profiles are listed. */
 export function BrowserSitePermissionsSetting(): React.JSX.Element {
+  const t = useTranslate()
   const profiles =
     useAppStore((s) => s.browserSessionProfilesByHostId[LOCAL_EXECUTION_HOST_ID]) ?? NO_PROFILES
   const fetchBrowserSessionProfiles = useAppStore((s) => s.fetchBrowserSessionProfiles)
@@ -97,7 +130,7 @@ export function BrowserSitePermissionsSetting(): React.JSX.Element {
     }
   }, [profileId])
 
-  const changeDecision = (origin: string, permission: BrowserSitePermission, value: string) => {
+  const changeDecision = (origin: string, permission: BrowserSitePermissionKey, value: string) => {
     const writtenProfileId = profileId
     void window.api.browser
       .sitePermissionsSet({
@@ -118,7 +151,7 @@ export function BrowserSitePermissionsSetting(): React.JSX.Element {
   }
 
   return (
-    <SearchableSetting id="browser-site-permissions" {...searchEntry} className="space-y-3 py-2">
+    <SearchableSetting id="browser-site-permissions" {...searchEntry} className="space-y-3 py-3">
       <div className="flex items-center justify-between gap-3">
         <div className="space-y-0.5">
           <Label>{searchEntry.title}</Label>
@@ -129,14 +162,14 @@ export function BrowserSitePermissionsSetting(): React.JSX.Element {
             <SelectTrigger
               size="sm"
               className="max-w-48 shrink-0"
-              aria-label={translate('settings.browser.sitePermissions.profile', 'Browser profile')}
+              aria-label={t('settings.browser.sitePermissions.profile', 'Browser profile')}
             >
               <SelectValue />
             </SelectTrigger>
             <SelectContent align="end">
               {profiles.map((profile) => (
                 <SelectItem key={profile.id} value={profile.id}>
-                  {profile.label}
+                  {translateBrowserSessionProfileLabel(profile.label, profile.id)}
                 </SelectItem>
               ))}
             </SelectContent>
@@ -146,7 +179,7 @@ export function BrowserSitePermissionsSetting(): React.JSX.Element {
 
       {entries?.length === 0 ? (
         <p className="text-xs text-muted-foreground">
-          {translate(
+          {t(
             'settings.browser.sitePermissions.empty',
             'No sites have been allowed or blocked yet.'
           )}
@@ -157,18 +190,18 @@ export function BrowserSitePermissionsSetting(): React.JSX.Element {
           {entries.map((entry) => (
             <div key={entry.origin} className="rounded-md border border-border/70 px-3 py-1">
               <p className="truncate pt-2 text-sm font-medium" title={entry.origin}>
-                {browserSitePermissionSiteName(entry.origin)}
+                {browserSitePermissionSiteName(entry.origin, t)}
               </p>
-              {BROWSER_SITE_PERMISSIONS.filter((permission) => entry.decisions[permission]).map(
-                (permission) => (
-                  <SitePermissionRow
-                    key={permission}
-                    entry={entry}
-                    permission={permission}
-                    onChange={(changed, value) => changeDecision(entry.origin, changed, value)}
-                  />
-                )
-              )}
+              {sitePermissionRows(entry, t).map(({ permission, label, canBlock }) => (
+                <SitePermissionRow
+                  key={permission}
+                  entry={entry}
+                  permission={permission}
+                  label={label}
+                  canBlock={canBlock}
+                  onChange={(changed, value) => changeDecision(entry.origin, changed, value)}
+                />
+              ))}
             </div>
           ))}
         </div>

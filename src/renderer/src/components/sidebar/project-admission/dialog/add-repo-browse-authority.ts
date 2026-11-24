@@ -1,4 +1,4 @@
-import type { ParsedExecutionHost } from '../../../../../../shared/execution-host'
+import type { ParsedExecutionHost } from '../../../../../../shared/execution-host/execution-host'
 
 export type AddRepoBrowseAuthorityActions = {
   browseLocal: () => void

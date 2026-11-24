@@ -1,14 +1,32 @@
-// Keep named and OAuth popups attached to their opener; tab conversion returns null to the page.
-export function isNewBrowserTabPopupIntent(details: {
+import type { ObservedBrowserGuestGesture } from '../input/browser-guest-input-gesture'
+
+export type NewBrowserTabPopupRequest = {
   url: string
   frameName: string
   disposition: string
   postBody?: Electron.PostBody | null
-}): boolean {
+}
+
+// Keep named and OAuth popups attached to their opener; tab conversion returns null to the page.
+export function isNewBrowserTabPopupIntent(details: NewBrowserTabPopupRequest): boolean {
   return (
     isBrowserTabPopupRequest(details) &&
     !isBlankBrowserPopupUrl(details.url) &&
     !isOAuthAuthorizationUrl(details.url)
+  )
+}
+
+// A link and a featureless `window.open(url, '_blank')` arrive alike; only the created child's opener tells them apart.
+// A paired viewer can't see this desktop's child windows, so its opens stay tabs, as do unclicked opens, background tabs (no child) and file links.
+export function waitsForPopupOpener(
+  details: NewBrowserTabPopupRequest,
+  observed: ObservedBrowserGuestGesture | null
+): boolean {
+  return (
+    observed?.fromThisDesktop === true &&
+    details.disposition === 'foreground-tab' &&
+    isNewBrowserTabPopupIntent(details) &&
+    normalizeBrowserPopupUrl(details.url) !== null
   )
 }
 

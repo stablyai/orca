@@ -1,4 +1,4 @@
-import { retireRemovedNativeChatDraftPositions } from '@/components/native-chat/native-chat-draft-cache'
+import { retireRemovedNativeChatTabs } from '@/components/native-chat/session/native-chat-removed-tab-retirement'
 // Select moved tabs with the frame showing the move (L120); a later reply may already be superseded by another drag.
 
 import type { AppState } from '../../types'
@@ -6,7 +6,7 @@ import {
   dropMovedTabSelection,
   pendingMovedTabSelections,
   type MovedTabSelection
-} from '@/runtime/layout-owner-pane-intents'
+} from '@/runtime/workspace-layout/intents/layout-owner-pane-intents'
 import { tabActivationPatch } from './tabs-focus-actions'
 import { endsPreviewHere } from './preview-tab-promotion'
 import { buildActiveSurfacePatch } from './tabs-surface'
@@ -95,7 +95,7 @@ export function showFramePatch(
   const before = store.getState()
   const shown = withMovedTabSelections(before, patch)
   for (const key of rebuiltWorkspaces) {
-    retireRemovedNativeChatDraftPositions(
+    retireRemovedNativeChatTabs(
       before.unifiedTabsByWorktree[key] ?? [],
       (shown.patch.unifiedTabsByWorktree ?? before.unifiedTabsByWorktree)[key] ?? []
     )

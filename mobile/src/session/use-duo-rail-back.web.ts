@@ -1,4 +1,4 @@
-import { usePageBridgeClientIfPresent } from '../transport/client-context.web'
+import { usePageBridgeClientIfPresent } from '../transport/connection/client-context.web'
 import { performSessionRailBack } from './duo-rail-back'
 
 /** Page-served sessions use the shell's Back claim; the header path remains when that cannot run. */

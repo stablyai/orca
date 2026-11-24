@@ -1,11 +1,11 @@
 import { appendFileSync } from 'node:fs'
 import { pathToFileURL } from 'node:url'
 
-export const FULL_SHARD_COUNT = 12
+export const FULL_SHARD_COUNT = 24
 
 export function fullUnitMatrix(requestedCount = String(FULL_SHARD_COUNT)) {
-  if (!/^([2-9]|1[0-6])$/.test(requestedCount)) {
-    throw new Error('ORCA_UNIT_FULL_SHARD_COUNT must be an integer from 2 to 16')
+  if (!/^([2-9]|[12][0-9]|3[0-2])$/.test(requestedCount)) {
+    throw new Error('ORCA_UNIT_FULL_SHARD_COUNT must be an integer from 2 to 32')
   }
   const count = Number(requestedCount)
   return Array.from({ length: count }, (_, index) => ({ index: index + 1, count }))

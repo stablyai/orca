@@ -3,7 +3,7 @@ import { agentVerdictFields } from '../../../../shared/agent-status/lifecycle/ag
 import type {
   RuntimeMobileSessionAgentTab,
   RuntimeMobileSessionAgentTabStatus
-} from '../../../../shared/runtime-mobile-session-tab-contracts'
+} from '../../../../shared/remote-runtime/session-graph/runtime-mobile-session-tab-contracts'
 import {
   structuredAgentSessionPaneKey,
   structuredAgentSessionTabId

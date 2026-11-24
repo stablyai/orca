@@ -1,4 +1,4 @@
-import type { RuntimeTerminalAttention } from '../../../../shared/runtime-terminal-contracts'
+import type { RuntimeTerminalAttention } from '../../../../shared/terminal/runtime/runtime-terminal-contracts'
 import type { OrcaRuntimeService } from '../../../runtime/orca-runtime'
 import { getPtyIpc } from '../pty-host-bindings'
 import type { PtyRendererDelivery } from '../session'

@@ -1,9 +1,9 @@
 import { parseHostedRemote } from './hosted-remote-url'
 import { parseGitRemoteFetchUrls } from '../../../shared/git/remotes/git-remote-url-index'
 import { sourceRefsForTarget } from '../../../shared/git/branches/git-branch-cleanup-fetch'
-import { waitForPromiseWithSignal } from '../../../shared/abort-signal-reason'
+import { waitForPromiseWithSignal } from '../../../shared/concurrency/abort-signal-reason'
 import { DEFAULT_BASE_REF_PROBES } from '../../../shared/git/refs/git-default-base-ref'
-import { gitExecOptions, type LocalGitExecOptions } from '../repo-default-base-ref'
+import { gitExecOptions, type LocalGitExecOptions } from '../refs/resolution/repo-default-base-ref'
 import { gitExecFileAsync } from '../command-runner/git-exec-file'
 
 export async function getRemoteFileTarget(

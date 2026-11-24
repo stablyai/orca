@@ -3,7 +3,7 @@ import {
   REPO_CREATE_FAILURE_COPY as EN,
   type RepoCreateFailure,
   type RepoCreateFailureCode
-} from '../../../../../../shared/repo-create-failure-copy'
+} from '../../../../../../shared/repository/creation/repo-create-failure-copy'
 
 type CopyValues = { name: string | null; detail: string | null }
 

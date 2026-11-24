@@ -8,11 +8,11 @@ import {
   ORCAD_NODE_RUNTIME_WINDOWS_EXECUTABLE,
   ORCAD_RUNTIMES_DIRNAME,
   ORCAD_WINDOWS_PROCESS_TREE_FILENAME
-} from '../../../shared/orcad-artifacts'
+} from '../../../shared/remote-runtime/orcad-distribution/orcad-artifacts'
 import {
   ORCAD_STOP_REQUEST_FILENAME,
   ORCAD_STOP_REQUESTS_CAPABILITY
-} from '../../../shared/orcad-stop-request'
+} from '../../../shared/remote-runtime/orcad-lifecycle/orcad-stop-request'
 import { ORCAD_STDIO_BRIDGE_FUNCTION } from '../lifecycle/orcad-stdio-bridge-script'
 import {
   ORCAD_WINDOWS_FENCE_PRELUDE,

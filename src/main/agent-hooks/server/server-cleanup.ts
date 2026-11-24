@@ -1,24 +1,35 @@
+import { AgentHookServerPaneSleep } from './server-pane-sleep'
 import type { AgentProcessPresence } from '../../../shared/agent-status/process/agent-process-presence'
 import {
   admitLegacyAgentStatus,
   clearPaneCacheState,
   deleteLegacyAgentStatus
 } from '../../../shared/agent-hook-listener/listener-state'
-import { paneHasStateClaims } from '../../../shared/agent-hook-listener/pane-state-claims'
 import { AGENT_STATUS_2A_CURRENT_PRODUCER_MODE } from '../../../shared/agent-status/transport/agent-status-legacy-adapter'
 import type { AgentStatusCacheIdentity } from '../../../shared/agent-status/contracts/agent-status-ipc-payload'
 import {
   ALL_EXECUTION_HOSTS_SCOPE,
   parseExecutionHostId,
   type ExecutionHostScope
-} from '../../../shared/execution-host'
+} from '../../../shared/execution-host/execution-host'
 import { worktreeIdsEqual } from '../../../shared/worktree/id'
-import { isLocalHookConnectionId } from '../../../shared/wsl-hook-relay-contract'
+import { isLocalHookConnectionId } from '../../../shared/agent-hook-listener/transport/wsl-hook-relay-contract'
 import type { EnrichedAgentHookEventPayload } from './server-types'
-import { AgentHookServerAuthorityFences } from './server-authority-fences'
-import { recordAgentExit } from './agent-exit-evidence'
 
-export abstract class AgentHookServerCleanup extends AgentHookServerAuthorityFences {
+import { endedPresenceOf } from './agent-exit-evidence'
+
+export type EndedProcessReconciliationOptions = {
+  endedPresence?: AgentProcessPresence
+  /** The pane's shell is back: a process-less owner ended. 'proven' when the host's process
+   *  table found the shell alone, not only a command mark standing. */
+  confirmedExit?: boolean | 'proven'
+  /** Keep resume identity when the pane survives the agent. */
+  preserveResumeIdentity?: boolean
+  /** One pane's identity, already read while its row stayed unchanged. */
+  known?: { paneKey: string; identity: ReturnType<AgentHookServerCleanup['paneAgentIdentity']> }
+}
+
+export abstract class AgentHookServerCleanup extends AgentHookServerPaneSleep {
   /** Resume identity survives teardown without claiming live work. */
   protected toRetainedProviderSessionRow(
     entry: EnrichedAgentHookEventPayload | null | undefined
@@ -30,7 +41,7 @@ export abstract class AgentHookServerCleanup extends AgentHookServerAuthorityFen
     ) {
       return null
     }
-    const { launchToken: _launchToken, ...resumeIdentity } = entry
+    const { launchToken: _launchToken, paneSleep: _paneSleep, ...resumeIdentity } = entry
     return { ...resumeIdentity, providerSessionOnly: true, retainedForLiveness: true }
   }
 
@@ -58,10 +69,6 @@ export abstract class AgentHookServerCleanup extends AgentHookServerAuthorityFen
     this.scheduleStatusPersist()
     this.notifyStatusChangeListeners()
     this.emitStatusDropped(deleted.paneKey)
-  }
-
-  dropPersistedStatusEntry(identity: AgentStatusCacheIdentity): boolean {
-    return this.dropPersistedStatusEntries([identity]).length > 0
   }
 
   /** Persist and notify once for the evicted batch. */
@@ -109,46 +116,51 @@ export abstract class AgentHookServerCleanup extends AgentHookServerAuthorityFen
   }
 
   /** Reconcile dead panes whose restored PTYs may never rebuild the spawn-time ptyPaneKey mapping. */
-  reconcileEndedProcessForPaneKeys(
+  protected reconcileEndedProcess(
     paneKeys: Iterable<string>,
-    options?: {
-      endedPresence?: AgentProcessPresence
-      /** Keep resume identity when the pane survives the agent. */
-      preserveResumeIdentity?: boolean
-    }
-  ): number {
+    options: EndedProcessReconciliationOptions | undefined,
+    clearPane: (paneKey: string) => void
+  ): { cleared: number; untouched: string[] } {
+    const untouched: string[] = []
     let cleared = 0
     for (const paneKey of paneKeys) {
       const resolvedPaneKey = this.resolvePaneKeyAlias(paneKey)
-      if (options?.endedPresence) {
-        // Cleanup drops aliases, but readers may still hold either key.
-        const paneKeys = new Set([resolvedPaneKey, paneKey])
-        for (const [aliasKey, alias] of this.legacyPaneKeyAliases) {
-          if (alias.stablePaneKey === resolvedPaneKey) {
-            paneKeys.add(aliasKey)
-          }
-        }
-        recordAgentExit(this.agentExitedAtByPaneKey, paneKeys, options.endedPresence)
-        this.scheduleStatusPersist()
-      }
-      if (!this.hasLiveClaimsForPaneKey(resolvedPaneKey)) {
+      if (this.preservesStoppingAgent(resolvedPaneKey)) {
+        untouched.push(resolvedPaneKey)
         continue
       }
-      const resumeRow = options?.preserveResumeIdentity
-        ? this.toRetainedProviderSessionRow(
-            this.state.lastStatusByPaneKey.get(resolvedPaneKey) as
-              | EnrichedAgentHookEventPayload
-              | undefined
-          )
-        : null
-      const retained =
-        resumeRow && options?.endedPresence
-          ? { ...resumeRow, agentPresence: options.endedPresence }
-          : resumeRow
       const previous = this.state.lastStatusByPaneKey.get(resolvedPaneKey) as
         | EnrichedAgentHookEventPayload
         | undefined
-      this.clearPaneState(resolvedPaneKey, { emitStatusRowMutation: false })
+      let identity =
+        options?.known?.paneKey === resolvedPaneKey ? options.known.identity : undefined
+      const identityOf = () =>
+        identity === undefined ? (identity = this.paneAgentIdentity(resolvedPaneKey)) : identity
+      const endedPresence =
+        options?.endedPresence ??
+        // A process the presence probe reaches gets its exit from the probe, not a possibly newer
+        // row (WSL/SSH have no probe, so their mark stands); a shared server (tmux, OpenCode)
+        // outlives the command that finished at the pane's shell.
+        (options?.confirmedExit &&
+        (!previous?.agentPresence?.process || previous.connectionId !== null) &&
+        identityOf()?.executionHost !== 'shared'
+          ? previous
+            ? endedPresenceOf(previous)
+            : { agent: identityOf()?.status.agentType ?? 'unknown', ended: true }
+          : undefined)
+      if (endedPresence) {
+        this.recordPaneAgentExit(paneKey, endedPresence, identityOf()?.status)
+      }
+      if (!this.hasLiveClaimsForPaneKey(resolvedPaneKey)) {
+        untouched.push(resolvedPaneKey)
+        continue
+      }
+      const resumeRow = options?.preserveResumeIdentity
+        ? this.toRetainedProviderSessionRow(previous)
+        : null
+      const retained =
+        resumeRow && endedPresence ? { ...resumeRow, agentPresence: endedPresence } : resumeRow
+      clearPane(resolvedPaneKey)
       if (retained) {
         admitLegacyAgentStatus(
           this.state,
@@ -162,12 +174,7 @@ export abstract class AgentHookServerCleanup extends AgentHookServerAuthorityFen
       this.commitStatusRowMutation(previous, retained)
       cleared += 1
     }
-    return cleared
-  }
-
-  /** Include latches that can revive work even when the visible row is done. */
-  protected hasLiveClaimsForPaneKey(paneKey: string): boolean {
-    return Boolean(this.getTmuxSelectedStatus(paneKey)) || paneHasStateClaims(this.state, paneKey)
+    return { cleared, untouched }
   }
 
   dropStatusEntriesForRemovedWorktree(worktreeId: string, host?: ExecutionHostScope): void {
@@ -254,7 +261,7 @@ export abstract class AgentHookServerCleanup extends AgentHookServerAuthorityFen
     for (const [paneKey, rawEntry] of this.state.lastStatusByPaneKey) {
       const entry = rawEntry as EnrichedAgentHookEventPayload
       // Why: unstamped rows can't be attributed to one host; leave them for normal pane teardown.
-      if (entry.connectionId !== normalizedConnectionId) {
+      if (entry.paneSleep || entry.connectionId !== normalizedConnectionId) {
         continue
       }
       const deleted = this.deleteStatusEntry(paneKey, { preserveAuthority: true })
@@ -265,10 +272,11 @@ export abstract class AgentHookServerCleanup extends AgentHookServerAuthorityFen
           // A replacement remote process may reuse the pane; discard the lost owner's children.
           this.state.codexSubagentRosterByPaneKey.delete(paneKey)
           this.state.codexLeadStateByPaneKey.delete(paneKey)
+          this.state.codexAsyncQuestionsByPaneKey.delete(paneKey)
         } else if (deleted.payload.agentType === 'claude') {
           this.state.claudeSubagentRosterByPaneKey.delete(paneKey)
           this.state.claudeLeadStateByPaneKey.delete(paneKey)
-          this.state.claudeRunningNonAgentTaskPaneKeys.delete(paneKey)
+          this.state.claudeRunningNonAgentTasksByPaneKey.delete(paneKey)
           this.state.claudeActiveSessionCronPaneKeys.delete(paneKey)
           this.state.claudeLaunchedBackgroundTasksByPaneKey.delete(paneKey)
           this.state.claudeSessionOwnerByPaneKey.delete(paneKey)

@@ -1,28 +1,28 @@
 import '../../../../shared/git/admission/git-admission-state'
-import '../../../crash-reporting/main-process-lifecycle-identity'
+import '../../../crash-reporting/process-exits/main-process-lifecycle-identity'
 import { homedir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { detectInstalledAgentsWithShellPathHydration } from '../../../preflight/installed-agent-detection'
-import { listManagedSkillInstalls } from '../../../skills/skill-install-provenance'
-import { WslSkillInstallFilesystem } from '../../../skills/skill-wsl-install-filesystem'
-import { nativeSkillInstallFilesystem } from '../../../skills/skill-install-filesystem'
+import { listManagedSkillInstalls } from '../../../skills/transaction-state/skill-install-provenance'
+import { WslSkillInstallFilesystem } from '../../../skills/filesystem/skill-wsl-install-filesystem'
+import { nativeSkillInstallFilesystem } from '../../../skills/filesystem/skill-install-filesystem'
 import {
   previewSharedSkillBundleInstall,
-  previewSharedSkillInstall,
-  removeSharedSkillInstall
-} from '../../../skills/skill-install-management-service'
-import { toLinuxPath } from '../../../../shared/wsl-paths'
-import type { SkillBundleInstallPreviewRequest } from '../../../../shared/skill-bundle-install-contract'
+  previewSharedSkillInstall
+} from '../../../skills/install/skill-install-preview'
+import { removeSharedSkillInstall } from '../../../skills/managed-remove/skill-managed-remove-request'
+import { toLinuxPath } from '../../../../shared/file-access/wsl-paths'
+import type { SkillBundleInstallPreviewRequest } from '../../../../shared/skills/installation/skill-bundle-install-contract'
 import type {
   SkillInstallPreviewRequest,
   SkillInstallRequest,
   SkillRemoveRequest,
   ManagedSkillInstall
-} from '../../../../shared/skill-install-contract'
+} from '../../../../shared/skills/installation/skill-install-contract'
 import type {
   SkillUploadBeginRequest,
   SkillUploadChunkRequest
-} from '../../../../shared/skill-upload-session-contract'
+} from '../../../../shared/skills/sharing/skill-upload-session-contract'
 import {
   RuntimeSkillInstallCommands,
   SKILL_SSH_UNAVAILABLE

@@ -1,6 +1,6 @@
 import type { DaemonPtyPhysicalOwner } from './subprocess-handle'
 import type * as pty from 'node-pty'
-import { CONPTY_DA1_RESPONSE } from '../../../shared/conpty-device-attributes'
+import { CONPTY_DA1_RESPONSE } from '../../../shared/terminal/protocol/queries/conpty-device-attributes'
 
 // Bundled ConPTY queries DA1 (or CPR when inheriting the cursor) right after it starts reading
 // input, and before relaying any client output. A pane without it never reads keyboard input.
@@ -156,17 +156,10 @@ let announcementUntrusted = false
 // Logged with each respawn so a misfiring check shows up as a climbing count in the daemon log.
 let respawnCount = 0
 
-/** Test seam: reset the process-wide trust in the announcement. */
-export function _resetConptyStartupTrustForTest(): void {
-  announcementObserved = false
-  announcementUntrusted = false
-  respawnCount = 0
-}
-
 type NodePtyWindowsPane = pty.IPty & { _agent?: { _useConpty?: boolean } }
 
 // node-pty falls back to WinPTY below Windows build 18309, which never announces an input reader.
-function runsOnWinpty(proc: pty.IPty): boolean {
+export function runsOnWinpty(proc: pty.IPty): boolean {
   const pane: NodePtyWindowsPane = proc
   return pane._agent?._useConpty === false
 }

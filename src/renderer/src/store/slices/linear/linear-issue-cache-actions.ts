@@ -7,7 +7,8 @@ import type {
   LinearFetchOptions
 } from './linear-slice-contract'
 import { getSelectedWorkspaceId, linearListCacheKey, linearSearchCacheKey } from './linear-cache'
-import { consumeLinearIssueRead } from './linear-issue-publication'
+import './linear-issue-read'
+import { consumeLinearIssueRead } from './linear-issue-read-lifecycle'
 import {
   getLinearReadScope,
   normalizeListAttributeFilter,

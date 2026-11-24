@@ -1,123 +1,58 @@
-import { getNativeChatAgentProfile } from '../../../../../src/shared/native-chat/native-chat-agent-profiles'
-import type { NativeChatSendFollowUp } from '../../../../../src/shared/native-chat/input/native-chat-follow-up-behavior'
-import {
-  recordMobileNativeChatSkillPick,
-  useMobileNativeChatDraft
-} from './mobile-native-chat-draft-store'
-import { useMobileNativeChatComposerDictation } from './use-mobile-native-chat-composer-dictation'
+import { MobileSlackMirrorItem } from '../slack-mirror/MobileSlackMirrorItem'
+import { getNativeChatAgentProfile } from '../../../../../src/shared/native-chat/input/commands/native-chat-agent-profiles'
+import { recordMobileNativeChatSkillPick } from './drafts/mobile-native-chat-draft-store'
+import { useMobileNativeChatComposerDictation } from './dictation/use-mobile-native-chat-composer-dictation'
 import {
   focusMobileNativeChatTextDestination,
   pruneMobileNativeChatDraftSkills
-} from './mobile-native-chat-draft-inputs'
-import type { NativeChatSkillDiscoverySnapshot } from '../../../../../src/shared/native-chat/input/native-chat-picker-items'
+} from './drafts/mobile-native-chat-draft-inputs'
+import { MobileNativeChatComposerAllocation } from './field/MobileNativeChatComposerAllocation'
 import { useEffect, useLayoutEffect, useRef, useState } from 'react'
-import { Keyboard, type TextInput, View } from 'react-native'
-import type { NativeChatContextUsageSummary } from '../../../../../src/shared/native-chat/native-chat-context-usage-summary'
+import { Keyboard, View, type HostInstance, type TextInputInstance } from 'react-native'
 import { colors } from '../../../theme/mobile-theme'
+import { triggerSelection } from '../../../platform/haptics/haptics'
 import { useMobileColorScheme } from '../../../theme/use-mobile-color-scheme'
 import { useMobileTranslation } from '../../../i18n/use-mobile-translation'
-import { MobileNativeChatComposerMenu } from './MobileNativeChatComposerMenu'
-import { MobileNativeChatComposerField } from './MobileNativeChatComposerField'
-import { MobileNativeChatComposerAttachments } from './MobileNativeChatComposerAttachments'
-import type { PendingNativeChatFile } from './mobile-native-chat-file-attachment'
-import { MobileNativeChatComposerAttachButton } from './MobileNativeChatComposerAttachButton'
-import {
-  MobileNativeChatSessionOptionPickers,
-  type MobileNativeChatPickerPresentation,
-  type MobileNativeChatSessionOptionPickersProps
-} from '../input/MobileNativeChatSessionOptionPickers'
-import type { PendingNativeChatImage } from './mobile-native-chat-image-attachment'
-import {
-  mobileNativeChatComposerPasteHandler,
-  type MobilePastedImages
-} from './mobile-native-chat-composer-paste'
-import type { MobileComposerStructuredCatalog } from './mobile-native-chat-composer-menu'
-import { useMobileNativeChatComposerMenu } from './use-mobile-native-chat-composer-menu'
-import { mobileNativeChatComposerShowsStop } from './mobile-native-chat-composer-layout'
-import { MobileNativeChatStopButton } from '../input/MobileNativeChatStopButton'
-import { MobileNativeChatControlSwap } from '../input/mobile-native-chat-control-swap'
-import { mobileNativeChatComposerStyles as styles } from './mobile-native-chat-composer-styles'
+import { MobileNativeChatComposerSuggestions } from './menus/MobileNativeChatComposerMenu'
+import { MobileNativeChatComposerField } from './field/MobileNativeChatComposerField'
+import { MobileNativeChatComposerAttachments } from './attachments/MobileNativeChatComposerAttachments'
+import type { PendingNativeChatFile } from './attachments/mobile-native-chat-file-attachment'
+import { MobileNativeChatComposerAttachButton } from './attachments/MobileNativeChatComposerAttachButton'
+import { MobileNativeChatSessionOptionPickers } from '../input/session-options/MobileNativeChatSessionOptionPickers'
+import { useMobileNativeChatPickerPresentation } from '../input/session-options/use-mobile-native-chat-picker-presentation'
+import type { PendingNativeChatImage } from './attachments/mobile-native-chat-image-attachment'
+import { mobileNativeChatComposerPasteHandler } from './attachments/mobile-native-chat-composer-paste'
+import { useMobileNativeChatComposerMenu } from './menus/use-mobile-native-chat-composer-menu'
+import { useMobileNativeChatMentionBots } from './menus/use-mobile-native-chat-mention-bots'
+import { shownDictationPreview } from './menus/mobile-native-chat-bot-mention-display'
+import { mobileNativeChatComposerStyles as styles } from './field/mobile-native-chat-composer-styles'
 import { composerInputStyles as inputStyles } from '../../../components/composer-input/composer-input-styles'
-import { MobileNativeChatSendButton } from './MobileNativeChatSendButton'
-import { MobileNativeChatEditActions } from './MobileNativeChatEditActions'
-import { useMobileNativeChatContextRing } from './MobileNativeChatContextUsageRing'
-import type { MobileNativeChatSendIntent } from '../mobile-native-chat-send'
-import {
-  MobileNativeChatComposerMic,
-  type MobileNativeChatMicProps
-} from './MobileNativeChatComposerMic'
-import type { MobileStructuredThreadGoal } from '../../use-mobile-structured-thread-goal'
-import { useMobileNativeChatComposerGoalMode } from './use-mobile-native-chat-composer-goal-mode'
+import { MobileNativeChatComposerSendSlot } from './delivery/MobileNativeChatComposerSendSlot'
+import { MobileNativeChatEditActions } from './field/MobileNativeChatEditActions'
+import { useMobileNativeChatContextRing } from './commands/MobileNativeChatContextUsageRing'
+import type { MobileNativeChatSendIntent } from './delivery/mobile-native-chat-send'
+import { MobileNativeChatComposerMic } from './dictation/MobileNativeChatComposerMic'
+import { MobileNativeChatDictationLeading } from './dictation/MobileNativeChatDictationLeading'
+import { useMobileNativeChatComposerGoalMode } from './commands/use-mobile-native-chat-composer-goal-mode'
+import { useMobileNativeChatOrcaCommands } from './commands/use-mobile-native-chat-orca-commands'
+import { MobileNativeChatComposerPlanChip } from './commands/MobileNativeChatComposerPlanChip'
+import type { MobileNativeChatComposerProps } from './mobile-native-chat-composer-props'
+import { MobileNativeChatMcpTray } from '../mcp/MobileNativeChatMcpTray'
+import { MobileNativeChatQuoteTab } from './quotes/MobileNativeChatQuoteTab'
 import { MobileNativeChatWidthToggle } from './MobileNativeChatWidthToggle'
+export type { MobileNativeChatStructuredComposer } from './commands/mobile-native-chat-structured-composer'
 
 const NO_FILE_PATHS: string[] = []
 const NO_ATTACHMENTS: PendingNativeChatImage[] = []
 const NO_FILES: PendingNativeChatFile[] = []
 
-export type MobileNativeChatStructuredComposer = {
-  catalog: MobileComposerStructuredCatalog
-  onSlashMenuOpen: () => void
-  onSlashMenuDemand?: (open: boolean) => void
-  onAttachFiles?: () => void
-  /** Set when the host keeps phone files, so a long paste becomes a "Pasted text" file. */
-  onAttachPastedText?: (text: string) => void
-  // An uploading attachment must hold Send.
-  files: readonly PendingNativeChatFile[]
-  onRemoveFile: (id: string) => void
-  /** Null unless the host reports goals for this chat. */
-  threadGoal?: MobileStructuredThreadGoal | null
-}
-
-type Props = MobileNativeChatMicProps & {
-  // Applies dictation's edit to the draft this composer shows; false when it can no longer take it.
-  insertDictation?: (insert: (draft: string) => string) => boolean | void
-  draftScopeKey?: string | null
-  editSession?: { cancel: () => void; refuseCommand: (text: string) => boolean; locked: boolean }
-  onPickSkill?: (skill: { name: string; path: string }) => void
-  inputRef?: React.RefObject<TextInput | null>
-  // Terminal-backed chats keep curated commands and image-only attachment actions.
-  structured?: MobileNativeChatStructuredComposer | null
-  value: string
-  onChangeText: (text: string) => void
-  onSend: (text: string, intent?: MobileNativeChatSendIntent) => Promise<boolean>
-  /** While the agent works on a host that queues: what a tap on Send does and whether holding it offers the other way; null otherwise. */
-  sendFollowUp?: NativeChatSendFollowUp | null
-  /** Changes whenever the route focuses a different chat composer surface. */
-  sendSurfaceId: string
-  /** Reads the retained route's focus generation without forcing a screen render. */
-  getSendCompletionGeneration: () => number
-  getComposerEditGeneration: () => number
-  agent?: string | null
-  sessionOptions?: MobileNativeChatSessionOptionPickersProps | null
-  /** A structured chat's context-window readout; null hides the ring. */
-  contextUsage?: NativeChatContextUsageSummary | null
-  onAttachImage?: () => void
-  /** Images pasted into the field attach like a Photos pick. */
-  onPasteImages?: (paste: MobilePastedImages) => void
-  attachments?: PendingNativeChatImage[]
-  onRemoveAttachment?: (id: string) => void
-  isAttaching?: boolean
-  disabled?: boolean
-  /** Only Send is unavailable; typing, dictation and attachments still edit the draft. */
-  sendDisabled?: boolean
-  placeholder?: string
-  filePaths?: string[]
-  onNeedFiles?: (query: string) => void
-  /** The host's disk-scanned skills, loaded once a skill trigger opens. */
-  skillDiscovery?: NativeChatSkillDiscoverySnapshot
-  onNeedSkills?: () => void
-  /** Set while the agent can be stopped; Stop takes Send's slot when Send can't deliver. */
-  stop?: { onStop?: () => void; held: boolean } | null
-  /** At the screen's bottom edge: even margins and bottom corners that follow the screen's. */
-  fitScreenCorners?: boolean
-  /** On the iPhone Duo: whether the chat runs across the status column, and the switch for it. */
-  widthToggle?: { expanded: boolean; onToggle: () => void } | null
-}
+type Props = MobileNativeChatComposerProps
 
 /** What a chat's composer sends through, which the chat view hands down from its route. */
 export type MobileNativeChatSendProps = Pick<Props, 'onSend' | 'sendFollowUp'>
 
 export function MobileNativeChatComposer({
+  roomReplies,
   inputRef,
   draftScopeKey,
   insertDictation,
@@ -146,36 +81,48 @@ export function MobileNativeChatComposer({
   onMicPressIn,
   onMicPressOut,
   disabled = false,
+  offline = false,
   sendDisabled = false,
   placeholder,
   filePaths = NO_FILE_PATHS,
+  roomMentions,
   onNeedFiles,
+  fileReference,
   skillDiscovery,
   onNeedSkills,
   stop = null,
   sendFollowUp = null,
   fitScreenCorners = false,
-  widthToggle = null
+  widthToggle = null,
+  steerHead
 }: Props): React.JSX.Element {
   useMobileColorScheme()
   const t = useMobileTranslation()
-  const fallbackInputRef = useRef<TextInput>(null)
+  const fallbackInputRef = useRef<TextInputInstance>(null)
   const fieldRef = inputRef ?? fallbackInputRef
+  const groupRef = useRef<HostInstance>(null)
+  // This composer's ✕, which its own held mic may be released over.
+  const cancelRef = useRef<HostInstance>(null)
   const [focused, setFocused] = useState(false)
-  const [picker, setPicker] = useState<MobileNativeChatPickerPresentation | null>(null)
-  const request = sessionOptions?.controller.optionPickerRequest
-  const [lastRequest, setLastRequest] = useState(request)
-  if (request && lastRequest !== request) {
-    setLastRequest(request)
-    setPicker({ page: request.id, refocus: false })
-  }
+  const [picker, setPicker] = useMobileNativeChatPickerPresentation(
+    sessionOptions?.controller.optionPickerRequest
+  )
   const files = structured?.files ?? NO_FILES
   const onWebPaste = mobileNativeChatComposerPasteHandler({
-    disabled: disabled || editSession?.locked === true,
+    disabled: disabled || offline || editSession?.locked === true,
     onPasteImages,
     onAttachPastedText: structured?.onAttachPastedText
   })
+  // Only a structured chat's sends reach the host's mention context, as on the desktop.
+  const mentionBots = useMobileNativeChatMentionBots(!roomMentions && structured !== null)
   const goal = useMobileNativeChatComposerGoalMode(structured, !!editSession, sendSurfaceId)
+  const orca = useMobileNativeChatOrcaCommands({
+    structured,
+    agent,
+    sendSurfaceId,
+    editing: editSession !== undefined,
+    clearDraft: () => onChangeText('')
+  })
   const menu = useMobileNativeChatComposerMenu({
     value,
     onChangeText: (text) => {
@@ -196,13 +143,23 @@ export function MobileNativeChatComposer({
         recordMobileNativeChatSkillPick(sendSurfaceId, skill)
       }
     },
-    refuseCommand: editSession?.refuseCommand,
+    refuseCommand: editSession?.refuseCommand ?? orca.refusesPick,
+    onPickOrcaCommand: editSession ? undefined : orca.onPickCommand,
     editing: editSession !== undefined,
     goalMode: goal.menu,
     agent,
-    structuredCatalog: structured?.catalog,
+    structuredCatalog: orca.catalog,
+    interactionModeSupported:
+      editSession?.interactionModeSupported ??
+      sessionOptions?.controller.snapshot.some((entry) => entry.id === 'interactionMode'),
+    admitsInteractionMode: (mode) =>
+      sessionOptions?.controller.optionSurface?.admits?.('interactionMode', mode) === true,
+    onPickInteractionMode: (mode) => sessionOptions?.controller.setOption('interactionMode', mode),
     filePaths,
+    roomMentions,
+    mentionBots,
     onNeedFiles,
+    fileReference,
     skillDiscovery,
     onNeedSkills,
     onSlashMenuOpen: structured?.onSlashMenuOpen,
@@ -239,14 +196,6 @@ export function MobileNativeChatComposer({
     !isAttaching &&
     !filesUploading &&
     !sessionOptionDispatching
-  const showsStop = mobileNativeChatComposerShowsStop({
-    canStop: stop !== null,
-    sendBlocked: sendDisabled,
-    canSend,
-    editing: isAttaching || filesUploading || micActive,
-    draft: value,
-    attachmentCount
-  })
 
   useEffect(() => {
     mountedRef.current = true
@@ -260,11 +209,18 @@ export function MobileNativeChatComposer({
     intent?: MobileNativeChatSendIntent,
     keepFocus = false
   ): Promise<void> => {
-    if (!canSend || sendingRef.current || goal.consumeBareGoal(value, () => onChangeText(''))) {
+    if (
+      !canSend ||
+      sendingRef.current ||
+      // Before goal mode too, so an Orca command never becomes an objective.
+      orca.consume(value) ||
+      goal.consumeBareGoal(value, () => onChangeText(''))
+    ) {
       return
     }
     sendingRef.current = true
     setSending(true)
+    triggerSelection()
     const sendSurfaceGeneration = sendSurfaceGenerationRef.current
     const sendCompletionGeneration = getSendCompletionGeneration()
     const composerEditGeneration = getComposerEditGeneration()
@@ -292,20 +248,25 @@ export function MobileNativeChatComposer({
     }
   }
 
-  return (
-    <View>
-      {menu.rows.length > 0 ? (
-        <MobileNativeChatComposerMenu
-          rows={menu.rows}
-          onPick={menu.pick}
-          nestedScrollEnabled={editSession ? true : undefined}
-        />
-      ) : null}
+  const followUp = goal.sendFollowUp(sendFollowUp)
+  const headChord = goal.holdsFollowUp ? undefined : steerHead
+  const content = (
+    <View ref={groupRef} testID="native-chat-composer-group">
+      <MobileNativeChatComposerSuggestions
+        anchorRef={groupRef}
+        rows={menu.rows}
+        onPick={menu.pick}
+        onOpenBotChats={menu.openBotChats}
+        nestedScrollEnabled={editSession ? true : undefined}
+      />
       <View
         style={fitScreenCorners ? styles.composerInsetCornerFit : styles.composerInset}
         testID="native-chat-composer-inset"
       >
+        {editSession ? null : <MobileNativeChatMcpTray panel={structured?.mcpPanel} />}
+        {orca.usageSheet}
         {goal.strip}
+        {editSession ? null : <MobileNativeChatQuoteTab {...{ value, onChangeText, fieldRef }} />}
         <View
           {...contextRing.barProps}
           style={fitScreenCorners ? styles.barCornerFit : styles.bar}
@@ -319,16 +280,19 @@ export function MobileNativeChatComposer({
           />
           <MobileNativeChatComposerField
             ref={fieldRef}
-            value={value}
+            value={menu.display.text}
             skillToken={menu.skillToken}
             onChangeText={menu.onFieldChange}
             onKeyboardSubmit={() => {
               const first = menu.rows[0]
               if (first) {
                 menu.pick(first)
-                return
+              } else if (editSession || value.trim() !== '' || attachmentCount > 0) {
+                void handleSend(editSession ? undefined : { alternate: true }, true)
+              } else {
+                // Nothing of its own to send, so the head card goes; the queue decides whether it may.
+                headChord?.run(followUp?.action === 'queue' && followUp.offersChoice)
               }
-              void handleSend(editSession ? undefined : { alternate: true }, true)
             }}
             onFocus={() => {
               setFocused(true)
@@ -340,15 +304,23 @@ export function MobileNativeChatComposer({
             onWebPaste={onWebPaste}
             // Controlled only transiently right after an autocomplete insert.
             selection={menu.pendingSelection ?? undefined}
-            dictationPreview={dictation.preview}
+            dictationPreview={shownDictationPreview(dictation.preview)}
             onSelectionChange={(e) => {
-              dictation.readSelection(e)
+              dictation.readSelection(menu.dictationAnchor(e))
               menu.onSelectionChange(e.nativeEvent.selection)
             }}
             placeholder={
               goal.placeholder ??
               placeholder ??
-              t('chat.composer.placeholder', 'Ask anything, @ to mention files, / for commands')
+              (mentionBots && mentionBots.bots.length > 0
+                ? t(
+                    'bots.chat.mentionPlaceholder',
+                    'Ask anything, @ to mention bots or files, / for commands'
+                  )
+                : t(
+                    'chat.composer.placeholder',
+                    'Ask anything, @ to mention files, / for commands'
+                  ))
             }
             placeholderTextColor={colors.textMuted}
             selectionColor={colors.accentBlue}
@@ -360,75 +332,86 @@ export function MobileNativeChatComposer({
             textAlignVertical="top"
           />
           <View style={inputStyles.actionRow} testID="native-chat-composer-actions">
-            <MobileNativeChatComposerAttachButton
-              onAttachImage={onAttachImage}
-              onAttachFiles={structured?.onAttachFiles}
-              structured={structured !== null}
-              isAttaching={isAttaching}
-              disabled={disabled}
-              menu={menu}
-            />
-            {goal.chip}
-            {sessionOptions ? (
-              <MobileNativeChatSessionOptionPickers
-                {...sessionOptions}
-                sendInFlight={sending || isAttaching}
-                presentation={picker}
-                onNavigate={(page) => setPicker((current) => current && { ...current, page })}
-                onDrawerOpen={(page) => setPicker({ page, refocus: focused })}
-                onDrawerAfterClose={() => {
-                  if (picker?.refocus) {
-                    fieldRef.current?.focus()
-                  }
-                  setPicker(null)
-                }}
+            <MobileNativeChatDictationLeading
+              {...{ micActive, micStarting, micProcessing, cancelRef, trailing: contextRing.ring }}
+            >
+              <MobileNativeChatComposerAttachButton
+                onAttachImage={onAttachImage}
+                onAttachFiles={structured?.onAttachFiles}
+                structured={structured !== null}
+                isAttaching={isAttaching}
+                disabled={disabled || offline}
+                menu={menu}
               />
-            ) : null}
-            <View style={inputStyles.actionSpacer} />
-            {contextRing.ring}
-            {widthToggle ? <MobileNativeChatWidthToggle {...widthToggle} /> : null}
+              {roomReplies}
+              {sessionOptions ? (
+                <MobileNativeChatSessionOptionPickers
+                  {...sessionOptions}
+                  sendInFlight={sending || isAttaching}
+                  presentation={picker}
+                  onNavigate={(page) => setPicker((current) => current && { ...current, page })}
+                  onDrawerOpen={(page) => setPicker({ page, refocus: focused })}
+                  onDrawerAfterClose={() => {
+                    if (picker?.refocus) {
+                      fieldRef.current?.focus()
+                    }
+                    setPicker(null)
+                  }}
+                />
+              ) : null}
+              <MobileNativeChatComposerPlanChip options={sessionOptions} inputRef={fieldRef} />
+              {goal.chip}
+              {widthToggle ? <MobileNativeChatWidthToggle {...widthToggle} /> : null}
+            </MobileNativeChatDictationLeading>
             {onMicPress ? (
               <MobileNativeChatComposerMic
-                onMicPress={onMicPress}
-                micActive={micActive}
-                micStarting={micStarting}
-                micProcessing={micProcessing}
-                dictationMode={dictationMode}
-                onMicPressIn={onMicPressIn}
-                onMicPressOut={onMicPressOut}
-                disabled={disabled}
+                {...{ onMicPress, micActive, micStarting, micProcessing, dictationMode }}
+                {...{ onMicPressIn, onMicPressOut, cancelRef }}
+                disabled={disabled || offline}
               />
             ) : null}
             {editSession ? (
               <MobileNativeChatEditActions
                 canSave={canSend}
+                saving={sending}
                 onCancel={editSession.cancel}
                 onSave={() => void handleSend()}
               />
             ) : (
-              <MobileNativeChatControlSwap swapKey={showsStop && stop ? 'stop' : 'send'}>
-                {showsStop && stop ? (
-                  // Only this phone's own request holds Stop: a repeat is how a stuck stop escalates.
-                  <MobileNativeChatStopButton onStop={stop.onStop} held={stop.held} />
-                ) : (
-                  <MobileNativeChatSendButton
-                    canSend={canSend}
-                    sendFollowUp={goal.sendFollowUp(sendFollowUp)}
-                    onSend={(intent) => void handleSend(intent)}
-                  />
-                )}
-              </MobileNativeChatControlSwap>
+              <MobileNativeChatComposerSendSlot
+                {...{
+                  fieldRef,
+                  value,
+                  draftScopeKey,
+                  attachmentCount,
+                  structured,
+                  agent,
+                  followUp,
+                  canSend,
+                  sending,
+                  stop
+                }}
+                snapshot={sessionOptions?.controller.snapshot}
+                steerHead={headChord}
+                pickerOpen={menu.rows.length > 0}
+                sendDisabled={sendDisabled}
+                attaching={isAttaching || filesUploading || micActive}
+                onSend={(intent, keepFocus) => void handleSend(intent, keepFocus)}
+              />
             )}
           </View>
         </View>
+        {editSession ? null : <MobileSlackMirrorItem />}
       </View>
     </View>
   )
-}
-
-export function MobileNativeChatDraftComposer({
-  draftKey,
-  ...props
-}: Omit<Props, 'value'> & { draftKey: string | null }): React.JSX.Element {
-  return <MobileNativeChatComposer {...props} value={useMobileNativeChatDraft(draftKey)} />
+  return (
+    <MobileNativeChatComposerAllocation
+      anchorRef={groupRef}
+      fieldRef={fieldRef}
+      hasMenu={menu.rows.length > 0}
+    >
+      {content}
+    </MobileNativeChatComposerAllocation>
+  )
 }

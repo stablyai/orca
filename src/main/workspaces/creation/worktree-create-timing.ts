@@ -6,9 +6,9 @@ import type {
 import type {
   WorktreeCreateExecutionHost,
   WorktreeCreatePhase
-} from '../../../shared/worktree/create-timing-vocabulary'
+} from '../../../shared/worktree/creation/create-timing-vocabulary'
 import type { PreparationWork, WorktreeCreateInFlightHandle } from './worktree-create-concurrency'
-import { wslDistroForCommand } from '../../../shared/wsl-paths'
+import { wslDistroForCommand } from '../../../shared/file-access/wsl-paths'
 
 type TimingClock = () => number
 
