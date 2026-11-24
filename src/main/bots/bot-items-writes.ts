@@ -149,9 +149,17 @@ export class BotItemsWrites extends BotItemsEdits {
 
   /** Orca's usage-limit wait: `text` (when it resets) moves an In progress item to Waiting; null moves
    *  one Orca set Waiting this way back to In progress. Anyone else's status is left alone. */
-  usageLimitWait(uid: string, text: string | null, now = Date.now()): number | null {
+  usageLimitWait(
+    uid: string,
+    text: string | null,
+    now = Date.now(),
+    expectedVersion?: number
+  ): number | 'stale' | null {
     return this.transaction(() => {
       const item = this.get(uid)
+      if (item && expectedVersion !== undefined && item.version !== expectedVersion) {
+        return 'stale'
+      }
       const actor: BotItemActor = { kind: 'orca', why: BOT_ITEM_USAGE_LIMIT_WAIT }
       if (item?.status === 'working' && text !== null) {
         return this.moveToWait(item, text, actor, false, now)
