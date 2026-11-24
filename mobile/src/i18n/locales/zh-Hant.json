@@ -4536,7 +4536,6 @@
     "lookAround": {
       "looking": "正在查詢…",
       "save": "儲存",
-      "detail": "讀取已連線的應用程式和專案以建議下一步。唯讀。每次檢視都會使用你的代理程式方案，且主機上必須正在執行 Orca。",
       "lookNow": "立即檢視",
       "notYet": "尚未",
       "backToLookAround": "返回四處看看"
@@ -4589,8 +4588,6 @@
     "tidyUp": {
       "title": "記憶維護",
       "never": "尚未",
-      "footer": "僅更改記憶檔案。與簡短聊天一樣，會使用你的代理程式方案。你的電腦上必須正在執行 Orca。",
-      "undoNote": "復原會一次將 MEMORY.md 恢復到此次整理之前的狀態。完整歷史記錄和記憶編輯功能位於電腦上的「設定 → 記憶」。",
       "backToTidyUp": "返回記憶維護"
     },
     "items": {
@@ -4658,7 +4655,6 @@
       },
       "rotate": {
         "open": "輪換金鑰…",
-        "title": "要輪換「{{automation}}」的金鑰嗎？",
         "confirm": "輪換金鑰",
         "note": "URL 將獲得新金鑰。請用它更新每個傳送方。",
         "overlap": "舊金鑰繼續有效 24 小時",
@@ -4673,19 +4669,15 @@
         "add": "新增簽名金鑰…",
         "generatedTitle": "簽名金鑰已就緒",
         "done": "完成",
-        "generatedNote": "把它複製到 {{sender}} 的 Webhook 設定中。今後呼叫必須帶有它的簽名。",
         "copy": "複製金鑰",
         "copied": "金鑰已複製",
         "changeTitle": "更改簽名金鑰",
         "addTitle": "新增簽名金鑰",
-        "note": "之後 Orca 只接受用此金鑰簽名的呼叫，因此僅洩露 URL 無法啟動「{{automation}}」。",
         "sender": "傳送方",
         "modeGenerate": "由 Orca 生成",
         "modePaste": "貼上傳送方的金鑰",
         "generateNote": "此金鑰由 Orca 生成。接下來請把它複製到 {{sender}}。",
         "paste": "{{sender}} 金鑰",
-        "pasteNote": "當傳送方提供自己的金鑰時使用此項。",
-        "generate": "生成金鑰",
         "save": "儲存",
         "saved": "簽名金鑰已儲存",
         "changeOpen": "更改簽名金鑰…",

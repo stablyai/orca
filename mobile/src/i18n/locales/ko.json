@@ -4644,7 +4644,6 @@
     "lookAround": {
       "looking": "찾는 중…",
       "save": "저장",
-      "detail": "연결된 앱과 프로젝트를 읽고 다음 단계를 제안합니다. 읽기 전용입니다. 둘러볼 때마다 에이전트 요금제를 사용하며, 호스트에서 Orca가 실행 중이어야 합니다.",
       "lookNow": "지금 둘러보기",
       "notYet": "아직 없음",
       "backToLookAround": "둘러보기로 돌아가기"
@@ -5088,8 +5087,6 @@
     "tidyUp": {
       "title": "메모리 관리",
       "never": "아직 없음",
-      "footer": "메모리 파일만 변경합니다. 짧은 채팅처럼 에이전트 요금제를 사용합니다. 컴퓨터에서 Orca가 실행 중이어야 합니다.",
-      "undoNote": "실행 취소하면 MEMORY.md가 이 정리 이전 상태로 한 번에 돌아갑니다. 전체 기록과 메모리 편집은 컴퓨터의 설정 → 메모리에서 이용할 수 있습니다.",
       "backToTidyUp": "메모리 관리로 돌아가기"
     },
     "items": {
@@ -5188,7 +5185,6 @@
       },
       "rotate": {
         "open": "키 교체…",
-        "title": "‘{{automation}}’의 키를 교체할까요?",
         "confirm": "키 교체",
         "note": "URL에 새 키가 붙습니다. 모든 발신자를 새 키로 업데이트하세요.",
         "overlap": "이전 키를 24시간 동안 계속 유효하게 두기",
@@ -5203,19 +5199,15 @@
         "add": "서명 시크릿 추가…",
         "generatedTitle": "서명 시크릿 준비됨",
         "done": "완료",
-        "generatedNote": "{{sender}}의 웹훅 설정에 복사해 넣으세요. 이제부터 호출에는 그 서명이 있어야 합니다.",
         "copy": "시크릿 복사",
         "copied": "시크릿 복사됨",
         "changeTitle": "서명 시크릿 변경",
         "addTitle": "서명 시크릿 추가",
-        "note": "그러면 Orca는 이 시크릿으로 서명된 호출만 받으므로, URL만 유출되어서는 ‘{{automation}}’을(를) 시작할 수 없습니다.",
         "sender": "발신자",
         "modeGenerate": "Orca가 생성",
         "modePaste": "발신자의 시크릿 붙여 넣기",
         "generateNote": "Orca가 이 시크릿을 만듭니다. 다음으로 {{sender}}에 복사해 넣으세요.",
         "paste": "{{sender}} 시크릿",
-        "pasteNote": "발신자가 자체 시크릿을 제공할 때 사용하세요.",
-        "generate": "시크릿 생성",
         "save": "저장",
         "saved": "서명 시크릿 저장됨",
         "changeOpen": "서명 시크릿 변경…",

@@ -4649,7 +4649,6 @@
     "lookAround": {
       "looking": "Recherche…",
       "save": "Enregistrer",
-      "detail": "Lit les apps et projets connectés pour suggérer les prochaines étapes. Lecture seule. Chaque tour d’horizon utilise votre forfait d’agent, et Orca doit être en cours d’exécution sur l’hôte.",
       "lookNow": "Lancer un tour d’horizon",
       "notYet": "Pas encore",
       "backToLookAround": "Retour au tour d’horizon"
@@ -4704,8 +4703,6 @@
     "tidyUp": {
       "title": "Entretien de la mémoire",
       "never": "Pas encore",
-      "footer": "Modifie uniquement les fichiers de mémoire. Utilise votre forfait d’agent, comme un court chat. Orca doit être en cours d’exécution sur votre ordinateur.",
-      "undoNote": "Annuler restaure MEMORY.md tel qu’il était avant ce rangement, en une seule fois. L’historique complet et la modification de la mémoire sont disponibles sur votre ordinateur, dans Paramètres → Mémoire.",
       "backToTidyUp": "Retour à l’entretien de la mémoire"
     },
     "items": {
@@ -4773,7 +4770,6 @@
       },
       "rotate": {
         "open": "Renouveler la clé…",
-        "title": "Renouveler la clé de « {{automation}} » ?",
         "confirm": "Renouveler la clé",
         "note": "L’URL reçoit une nouvelle clé. Mettez à jour chaque expéditeur avec celle-ci.",
         "overlap": "Garder l’ancienne clé valide pendant 24 heures",
@@ -4789,19 +4785,15 @@
         "add": "Ajouter un secret de signature…",
         "generatedTitle": "Secret de signature prêt",
         "done": "Terminé",
-        "generatedNote": "Copiez-le dans les paramètres de webhook de {{sender}}. Désormais, les appels doivent porter sa signature.",
         "copy": "Copier le secret",
         "copied": "Secret copié",
         "changeTitle": "Modifier le secret de signature",
         "addTitle": "Ajouter un secret de signature",
-        "note": "Orca n’accepte alors que les appels signés avec ce secret, une URL divulguée ne suffit donc pas à lancer « {{automation}} ».",
         "sender": "Expéditeur",
         "modeGenerate": "Orca en crée un",
         "modePaste": "Coller celui de l’expéditeur",
         "generateNote": "Orca crée ce secret. Vous le copiez ensuite dans {{sender}}.",
         "paste": "Secret {{sender}}",
-        "pasteNote": "Utilisez ceci quand l’expéditeur vous donne son propre secret.",
-        "generate": "Générer un secret",
         "save": "Enregistrer",
         "saved": "Secret de signature enregistré",
         "changeOpen": "Modifier le secret de signature…",

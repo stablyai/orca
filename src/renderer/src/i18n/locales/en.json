@@ -1554,7 +1554,7 @@
         "addedMany": "Added {{count}} lines",
         "forgotMany": "Forgot {{count}} lines",
         "changedMany": "Changed {{count}} lines",
-        "chat": "Chat \"{{title}}\"",
+        "chat": "Chat “{{title}}”",
         "aChat": "A chat",
         "chatFrom": "{{chat}} · from {{source}}",
         "kept": "Orca · {{chat}} wrote over it",
