@@ -186,24 +186,43 @@ function scannedName(line: string): string | null | undefined {
     : undefined
 }
 
-/** Reads agent lines against the app's markers; a line is parsed only when its name is a marker's. */
+/** JSON may spell a value with escapes (`\/`, `\u00..`); such lines skip the value prefilter. */
+function mayEscapeValue(line: string): boolean {
+  return line.includes('\\/') || line.includes('\\u')
+}
+
+/**
+ * Reads agent lines against the app's markers. A line is parsed only when its scanned name is a
+ * marker's and it contains every value that marker's `when` requires (so a busy notification like
+ * a streaming update is parsed only when it can be the one that matters).
+ */
 export class ProviderRelayWorkReader {
-  private readonly names: ReadonlySet<string>
-  /** Substrings a line whose name the scan couldn't read must contain before it is parsed. */
-  private readonly needles: string[]
+  /** Per marker: its quoted name, and the quoted values its positive `when` tests need. */
+  private readonly needles: { name: string; quoted: string; values: string[] }[]
 
   constructor(private readonly markers: readonly ProviderRelayWorkMarker[]) {
-    this.names = new Set(markers.map((marker) => marker.name))
-    this.needles = [...this.names].map((name) => JSON.stringify(name))
+    this.needles = markers.map((marker) => ({
+      name: marker.name,
+      quoted: JSON.stringify(marker.name),
+      values: (marker.when ?? []).filter((test) => !test.not).map((test) => JSON.stringify(test.is))
+    }))
+  }
+
+  private mayMatch(line: string): boolean {
+    const scanned = scannedName(line)
+    if (scanned === null) {
+      return false
+    }
+    const escaped = mayEscapeValue(line)
+    return this.needles.some(
+      (marker) =>
+        (scanned === undefined ? line.includes(marker.quoted) : marker.name === scanned) &&
+        (escaped || marker.values.every((value) => line.includes(value)))
+    )
   }
 
   read(line: string): ProviderRelayWorkChange[] {
-    const scanned = scannedName(line)
-    if (
-      scanned === null ||
-      (scanned !== undefined && !this.names.has(scanned)) ||
-      (scanned === undefined && !this.needles.some((needle) => line.includes(needle)))
-    ) {
+    if (!this.mayMatch(line)) {
       return []
     }
     let value: unknown
