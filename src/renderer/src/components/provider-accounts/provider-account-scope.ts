@@ -48,7 +48,14 @@ export function getProviderAccountScope(
   settings: Pick<GlobalSettings, 'activeRuntimeEnvironmentId'> | null | undefined,
   t: Translate = translate
 ): ProviderHostScope {
-  const target = defaultScopeHost(settings)
+  return providerAccountScopeForTarget(defaultScopeHost(settings), t)
+}
+
+/** Scope of the host that owns a provider's credentials, when the owner is already known. */
+export function providerAccountScopeForTarget(
+  target: RuntimeClientTarget,
+  t: Translate = translate
+): ProviderHostScope {
   return {
     label: providerHostScopeLabel(target, t),
     description:

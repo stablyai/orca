@@ -1241,6 +1241,17 @@
       "goal": {
         "sentAsGoal": "Envoyé comme objectif"
       }
+    },
+    "clickUpConnectPrompt": {
+      "updateDesktop": "Mettre à jour Orca sur cet hôte",
+      "reconnectOnDesktop": "Reconnecter ClickUp sur votre ordinateur",
+      "connectOnDesktop": "Connecter ClickUp sur votre ordinateur",
+      "credentialUnreadable": "ClickUp est enregistré mais illisible : {{credentialError}}",
+      "lostConnection": "ClickUp a été déconnecté ou a rejeté le jeton enregistré. Ajoutez de nouveau votre jeton d'API personnel dans Orca sur votre ordinateur, sous Paramètres → Intégrations, puis revérifiez.",
+      "connectHint": "Ajoutez votre jeton d'API personnel ClickUp dans Orca sur votre ordinateur, sous Paramètres → Intégrations, puis revérifiez.",
+      "checkAgain": "Revérifier",
+      "unreachableTitle": "Impossible de joindre votre ordinateur",
+      "unreachableMessage": "Orca n'a pas pu lire la connexion ClickUp depuis votre ordinateur. Vérifiez qu'Orca y est ouvert, puis revérifiez."
     }
   },
   "connection": {
@@ -3599,6 +3610,39 @@
       "loadPageFailed": "La page {{page}} n’a pas pu être chargée depuis GitHub.",
       "noMoreResults": "Aucun autre résultat sur la page {{page}}."
     },
+    "itemComments": {
+      "clickUpTask": "Tâche ClickUp",
+      "openInClickUp": "Ouvrir dans ClickUp"
+    },
+    "clickUpConnection": {
+      "updateHost": "Mettez à jour Orca sur cet hôte pour parcourir ClickUp sur mobile."
+    },
+    "clickUp": {
+      "scopeAll": "Toutes",
+      "scopeAssigned": "Assignées à moi",
+      "scopeAssignedSubtitle": "Tâches qui vous sont assignées",
+      "scopeAllSubtitle": "Toutes les tâches de l'espace de travail sélectionné",
+      "closedSection": "Tâches fermées",
+      "includeClosed": "Inclure les tâches fermées",
+      "includeClosedSubtitle": "Afficher aussi les tâches terminées et fermées",
+      "statusSection": "Statut",
+      "allStatuses": "Tous les statuts",
+      "loadMore": "Charger plus de tâches",
+      "loadMoreLabel": "Charger plus",
+      "scopeTitle": "Tâches ClickUp",
+      "workspaceTitle": "Espace de travail ClickUp",
+      "workspaceHostNote": "Change aussi l'espace de travail dans Orca sur votre ordinateur.",
+      "switchWorkspaceFailed": "Échec du changement d'espace de travail",
+      "changeStatus": "Changer le statut",
+      "task": "Tâche ClickUp",
+      "loadingStatuses": "Chargement des statuts...",
+      "noStatuses": "Cette liste n'a aucun statut à choisir",
+      "loadStatusesFailed": "Échec du chargement des statuts",
+      "addCommentFailed": "Échec de l'ajout du commentaire",
+      "you": "Vous",
+      "updateFailed": "Échec de la mise à jour de la tâche",
+      "loadMoreFailed": "Échec du chargement de tâches ClickUp supplémentaires"
+    },
     "composerSource": {
       "baseFailed": "Échec de la résolution de la branche de base.",
       "forkPushWarning": "L'option « Autoriser les modifications des mainteneurs » est désactivée pour cette PR ; le push vers le fork peut être refusé par GitHub."
@@ -3684,6 +3728,7 @@
     },
     "itemActions": {
       "changeStatus": "Changer le statut",
+      "copyClickUpLink": "Copier le lien ClickUp",
       "copyGitHubLink": "Copier le lien GitHub",
       "copyLinearLink": "Copier le lien Linear",
       "creating": "Création…",
@@ -3698,6 +3743,8 @@
       "discussion": "Discussion",
       "noChecks": "Aucune vérification trouvée.",
       "noComments": "Aucun commentaire.",
+      "list": "Liste",
+      "dueDate": "Date d'échéance",
       "noPipelineRuns": "Aucune exécution de pipeline pour cette MR.",
       "noSubIssues": "Aucun sous-ticket.",
       "none": "Aucun",
@@ -3769,6 +3816,7 @@
     },
     "listSurface": {
       "connectLinearButton": "Connecter Linear",
+      "clickUpStatusFailed": "Impossible de lire le statut ClickUp",
       "connectLinearMessage": "Parcourez les issues Linear qui vous sont assignées et commencez à y travailler directement depuis Tâches.",
       "connectLinearTitle": "Connectez votre compte Linear",
       "jiraStatusFailed": "Impossible de lire le statut Jira",
@@ -3823,6 +3871,7 @@
       "pullRequests": "PRs",
       "repository": "Dépôt",
       "repositorySortDescription": "Par dépôt, puis par activité la plus récente",
+      "clickupDescription": "Tâches assignées et de l'espace de travail",
       "reviewRequestsDescription": "Demandes de revue qui vous sont assignées",
       "status": "Statut",
       "team": "Équipe",
@@ -3998,6 +4047,7 @@
     "screenChrome": {
       "newGitHubIssue": "Nouveau ticket GitHub",
       "newLinearIssue": "Nouveau ticket Linear",
+      "refreshClickUp": "Actualiser les tâches ClickUp",
       "refreshGitHub": "Actualiser le travail GitHub",
       "refreshGitLab": "Actualiser les éléments de travail GitLab",
       "refreshJira": "Actualiser les tickets Jira",
@@ -4006,7 +4056,8 @@
     },
     "searchControl": {
       "projectPlaceholder": "Rechercher dans la vue du projet…",
-      "providerPlaceholder": "Rechercher des tâches {{provider}}…"
+      "providerPlaceholder": "Rechercher des tâches {{provider}}…",
+      "clickUpPlaceholder": "Recherchez par nom ou ID, ou collez un lien de tâche ClickUp"
     },
     "smartSourceModes": {
       "allStates": "Toutes",
@@ -4025,6 +4076,7 @@
       "allSubtitle": "Tickets non résolus sur les sites sélectionnés",
       "assignedSubtitle": "Tickets non résolus qui vous sont assignés",
       "doneSubtitle": "Vos tickets récemment résolus",
+      "noClickUpTasks": "Aucune tâche ClickUp",
       "noGitHubTasks": "Aucune tâche GitHub",
       "noGitLabTasks": "Aucune tâche GitLab",
       "noJiraTasks": "Aucune tâche Jira",

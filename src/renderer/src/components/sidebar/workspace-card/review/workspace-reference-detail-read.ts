@@ -2,6 +2,7 @@ import type { LinearIssue } from '../../../../../../shared/linear/issue-types'
 import '@/store/slices/linear/linear-issue-read'
 import { consumeLinearIssueRead } from '@/store/slices/linear/linear-issue-read-lifecycle'
 import { useAppStore } from '@/store'
+import { clickupTaskCacheKey } from '@/store/slices/clickup/clickup-read-coordination'
 import type { AppState } from '@/store/types'
 import { PrioritySemaphore } from '../../../../../../shared/concurrency/priority-semaphore'
 import { getRepoExecutionHostId } from '../../../../../../shared/execution-host/execution-host'
@@ -11,6 +12,8 @@ import { issueCacheSuffix } from '@/store/github/cache/cache-identity'
 import { canReadWorkspaceReferenceReview } from './workspace-reference-review-source'
 import { isWorkspaceRepositoryAttachment } from '../metadata/worktree-attachment-editing'
 import {
+  clickupReferenceReadInput,
+  matchesClickUpWorkspaceReference,
   matchesWorkspaceReferenceUrl,
   getWorkspaceReferenceLinearWorkspaceId,
   matchWorkspaceReferenceReview,
@@ -25,6 +28,7 @@ type ReferenceCache =
   | 'hostedReviewCache'
   | 'linearIssueCache'
   | 'jiraIssueSummaryCache'
+  | 'clickupTaskCache'
   | 'issueCache'
 
 // Keep long-lived readers out of the read closures' store-snapshot scope.
@@ -82,7 +86,8 @@ export function getWorkspaceReferenceLookup(request: WorkspaceReferenceRequest, 
     return null
   }
   const scope = getTaskSourceCacheScope(sourceContext)
-  const identifier = item.identifier ?? item.linearIdentifier ?? item.jiraIdentifier
+  const identifier =
+    item.identifier ?? item.linearIdentifier ?? item.jiraIdentifier ?? item.clickupIdentifier
   if (item.provider === 'linear' && identifier && sourceContext.provider === 'linear') {
     const workspaceId = getWorkspaceReferenceLinearWorkspaceId(
       item.linearWorkspaceId,
@@ -144,6 +149,28 @@ export function getWorkspaceReferenceLookup(request: WorkspaceReferenceRequest, 
                     : issue.status.categoryKey === 'new'
                       ? 'unstarted'
                       : undefined
+            }
+          : null
+    )
+  }
+  if (item.provider === 'clickup' && identifier && sourceContext.provider === 'clickup') {
+    const readInput = clickupReferenceReadInput(item, identifier)
+    return lookup(
+      state,
+      cacheEntryReader('clickupTaskCache', clickupTaskCacheKey(state, sourceContext, readInput)),
+      () => state.fetchClickUpTask(readInput, { sourceContext }),
+      (task) =>
+        matchesClickUpWorkspaceReference(item, identifier, task)
+          ? {
+              title: task.name,
+              url: task.url,
+              stateName: task.status.name,
+              stateType:
+                task.status.type === 'open'
+                  ? 'unstarted'
+                  : task.status.type === 'custom'
+                    ? 'started'
+                    : 'completed'
             }
           : null
     )

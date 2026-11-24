@@ -29,6 +29,7 @@ import { useMobileTasksHostedCommentReviewActions } from './item-detail/use-mobi
 import { useMobileTasksGithubCheckFileActions } from './item-detail/use-mobile-tasks-github-check-file-actions'
 import { useMobileTasksGithubReplyMergeActions } from './item-detail/use-mobile-tasks-github-reply-merge-actions'
 import { useMobileTasksLinearItemActions } from './providers/linear/use-mobile-tasks-linear-item-actions'
+import { useMobileTasksClickUpItemActions } from './providers/clickup/use-mobile-tasks-clickup-item-actions'
 import { useMobileTasksTaskCreateActions } from './task-list/use-mobile-tasks-task-create-actions'
 import { useMobileTasksDetailCommentRenderers } from './item-detail/use-mobile-tasks-detail-comment-renderers'
 import { useMobileTasksPickerProjection } from './project-board/use-mobile-tasks-picker-projection'
@@ -68,10 +69,11 @@ export function MobileTasksScreen() {
   const stage29 = useMobileTasksGithubCheckFileActions(stage28)
   const stage30 = useMobileTasksGithubReplyMergeActions(stage29)
   const stage31 = useMobileTasksLinearItemActions(stage30)
-  const stage32 = useMobileTasksTaskCreateActions(stage31)
-  const stage33 = useMobileTasksDetailCommentRenderers(stage32)
-  const stage34 = useMobileTasksPickerProjection(stage33)
-  const stage35 = useMobileTasksProviderViewProjection(stage34)
-  const stage36 = useMobileTasksConnectionPresentation(stage35)
-  return MobileTasksLegacySurface({ model: stage36 })
+  const stage32 = useMobileTasksClickUpItemActions(stage31)
+  const stage33 = useMobileTasksTaskCreateActions(stage32)
+  const stage34 = useMobileTasksDetailCommentRenderers(stage33)
+  const stage35 = useMobileTasksPickerProjection(stage34)
+  const stage36 = useMobileTasksProviderViewProjection(stage35)
+  const stage37 = useMobileTasksConnectionPresentation(stage36)
+  return MobileTasksLegacySurface({ model: stage37 })
 }

@@ -1,6 +1,8 @@
 import { getLinearIssueWorkspaceName } from '../../../../src/shared/workspace/naming/workspace-name'
 import type { JiraIssue } from '../../../../src/shared/jira/jira-types'
+import type { ClickUpTask } from '../../../../src/shared/clickup/clickup-types'
 import {
+  buildClickUpWorkspaceSource,
   buildGitHubWorkspaceSource,
   buildGitLabWorkspaceSource,
   buildJiraWorkspaceSource,
@@ -11,6 +13,8 @@ import {
 } from '../../../../src/shared/new-workspace/workspace-source'
 
 type JiraIssueSource = Pick<JiraIssue, 'key' | 'title' | 'url'>
+type ClickUpTaskSource = Pick<ClickUpTask, 'id' | 'name' | 'url'> &
+  Partial<Pick<ClickUpTask, 'customId'>>
 import { resolveComposerBranchPick as resolveSharedComposerBranchPick } from '../../../../src/shared/new-workspace/composer-branch-selection'
 import type {
   MobileComposerCreateSelection,
@@ -78,6 +82,10 @@ export function buildJiraLinkedWorkItem(issue: JiraIssueSource): MobileLinkedWor
 
 export function resolveJiraAutoName(issue: JiraIssueSource): string {
   return getWorkspaceSourceName(buildJiraWorkspaceSource(issue)).seedName
+}
+
+export function resolveClickUpAutoName(task: ClickUpTaskSource): string {
+  return getWorkspaceSourceName(buildClickUpWorkspaceSource(task)).seedName
 }
 
 export function buildSmartNameSelection(args: {

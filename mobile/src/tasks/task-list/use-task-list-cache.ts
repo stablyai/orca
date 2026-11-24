@@ -15,8 +15,10 @@ type TaskListView = Pick<
   ProviderLoadActionsModel,
   | 'hostId'
   | 'items'
+  | 'clickupConnection'
   | 'jiraConnection'
   | 'provider'
+  | 'setClickUpNextPage'
   | 'setError'
   | 'setItems'
   | 'setGithubPages'
@@ -38,6 +40,7 @@ export function useTaskListCache(view: TaskListView) {
   const queryClient = useQueryClient()
   const { hostId, provider, taskUiReady } = view
   const jiraSelection = view.jiraConnection.selection
+  const clickupWorkspace = view.clickupConnection.selectedWorkspaceId
   // Set while kept rows stand in for a read in flight; drives the header's refresh line, not the list spinner.
   const [revalidating, setRevalidating] = useState(false)
   // When the rows on screen were read from the host, possibly at an earlier launch.
@@ -65,6 +68,7 @@ export function useTaskListCache(view: TaskListView) {
       shownListRef.current = hashKey(key)
       setRowsReadAt(queryClient.getQueryState(key)?.dataUpdatedAt || null)
       view.setItems(kept.items)
+      view.setClickUpNextPage(kept.clickup?.nextPage ?? null)
       if (underRead) {
         view.setError(kept.notice ?? '')
       }
@@ -109,7 +113,10 @@ export function useTaskListCache(view: TaskListView) {
   useEffect(() => {
     // A Jira list is one site's; the site chip comes from the Jira status, which a pick on the phone doesn't change.
     const jiraSiteShown = lastList?.provider !== 'jira' || lastList.site === (jiraSelection ?? null)
-    if (taskUiReady || !lastList || !jiraSiteShown) {
+    // Likewise a ClickUp list is one Workspace's, read from the status the screen has kept.
+    const clickupWorkspaceShown =
+      lastList?.provider !== 'clickup' || lastList.workspace === (clickupWorkspace ?? null)
+    if (taskUiReady || !lastList || !jiraSiteShown || !clickupWorkspaceShown) {
       return
     }
     const key = taskListKey(hostId, lastList)
@@ -125,7 +132,16 @@ export function useTaskListCache(view: TaskListView) {
         awaitingStoredRef.current = null
       }
     }
-  }, [hostId, jiraSelection, lastList, paintRows, provider, taskUiReady, whenStored])
+  }, [
+    clickupWorkspace,
+    hostId,
+    jiraSelection,
+    lastList,
+    paintRows,
+    provider,
+    taskUiReady,
+    whenStored
+  ])
 
   // Stops a replaced or abandoned read before its next repo; the kept rows stay as they were.
   const cancelRead = useCallback((): void => {

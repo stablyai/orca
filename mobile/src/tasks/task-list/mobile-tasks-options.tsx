@@ -2,6 +2,7 @@ import type { PickerOption } from '../../components/sheets/PickerModal'
 import { TaskProviderLogo } from '../../components/icons/TaskProviderLogo'
 import { colors } from '../../theme/mobile-theme'
 import {
+  resolveClickUpAutoName,
   resolveJiraAutoName,
   resolveLinearAutoName,
   resolveWorkItemAutoName
@@ -26,6 +27,7 @@ import type {
 import type { ActionableTaskItem } from '../mobile-tasks-project-workspace-types'
 import type { LinearMobileIssue as LinearIssue } from '../providers/linear/linear-mobile-issue-read'
 import { translate } from '../../i18n/mobile-i18n'
+import { PROVIDER_LABELS } from './mobile-task-view-options'
 
 type TaskOptionCopy<T extends string> = Omit<PickerOption<T>, 'label' | 'subtitle'> & {
   label: string | (() => string)
@@ -88,6 +90,18 @@ export const PROVIDER_OPTIONS = localizedTaskOptions<TaskProvider>([
     renderIcon: (selected) => (
       <TaskProviderLogo
         provider="jira"
+        size={16}
+        color={selected ? colors.textPrimary : colors.textSecondary}
+      />
+    )
+  },
+  {
+    value: 'clickup',
+    label: PROVIDER_LABELS.clickup,
+    subtitle: () => translate('tasks.options.clickupDescription', 'Assigned and workspace tasks'),
+    renderIcon: (selected) => (
+      <TaskProviderLogo
+        provider="clickup"
         size={16}
         color={selected ? colors.textPrimary : colors.textSecondary}
       />
@@ -165,6 +179,9 @@ export function taskWorkspaceFallback(item: ActionableTaskItem): string {
   if (item.provider === 'jira') {
     return item.source.key.toLowerCase()
   }
+  if (item.provider === 'clickup') {
+    return `cu-${item.source.id.toLowerCase()}`
+  }
   return item.source.identifier.toLowerCase()
 }
 
@@ -183,6 +200,8 @@ function taskWorkspaceSeedName(item: ActionableTaskItem): string {
       return resolveLinearAutoName(item.source)
     case 'jira':
       return resolveJiraAutoName(item.source)
+    case 'clickup':
+      return resolveClickUpAutoName(item.source)
   }
 }
 

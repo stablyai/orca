@@ -10,6 +10,7 @@ import {
   type PersistedHostQueryKey
 } from '../../query/host-query-persistence'
 import type { MobileJiraConnection } from '../providers/jira/jira-mobile-connection'
+import type { MobileClickUpConnection } from '../providers/clickup/clickup-mobile-connection'
 import type { TaskHydration, TaskListSnapshot } from './task-queries'
 
 // Kept apart from task-queries so the page's first-paint keys don't pull the Tasks reads into boot.
@@ -18,7 +19,7 @@ import type { TaskHydration, TaskListSnapshot } from './task-queries'
 export const TASKS_TARGET: HostQueryTarget = { exec: 'local' }
 export const NO_TASK_INPUT = {}
 
-const TASK_PROVIDERS = ['github', 'gitlab', 'linear', 'jira'] as const
+const TASK_PROVIDERS = ['github', 'gitlab', 'linear', 'jira', 'clickup'] as const
 
 // Only what draws the screen's view: agent launch settings and hook trust stay off disk, and a
 // stored copy is never acted on (the screen waits for a live read before Tasks is ready).
@@ -70,9 +71,27 @@ export const taskJiraStatusStorage: PersistedHostFamily<MobileJiraConnection> = 
   }
 }
 
+const storedClickUpSchema = z.looseObject({
+  connected: z.boolean(),
+  workspaces: z.array(z.looseObject({})),
+  selectedWorkspaceId: z.string().nullable()
+})
+
+export const taskClickUpStatusStorage: PersistedHostFamily<MobileClickUpConnection> = {
+  family: 'tasks.clickUpStatus',
+  persist: {
+    version: 1,
+    dataSchema: z.custom<MobileClickUpConnection>(
+      (data) => storedClickUpSchema.safeParse(data).success
+    ),
+    // A lost connection describes a read this launch made; a later launch starts from the status alone.
+    strip: (connection) => ({ ...connection, lostConnection: false })
+  }
+}
+
 const storedTaskItemSchema = z.looseObject({
   key: z.string(),
-  provider: z.enum(['github', 'gitlab', 'gitlabTodo', 'linear', 'jira']),
+  provider: z.enum(['github', 'gitlab', 'gitlabTodo', 'linear', 'jira', 'clickup']),
   title: z.string(),
   subtitle: z.string(),
   status: z.string(),
@@ -88,7 +107,8 @@ const storedTaskListSchema = z.object({
       sourceFallbacks: z.array(z.unknown()),
       countedTotalPages: z.number().nullable()
     })
-    .optional()
+    .optional(),
+  clickup: z.object({ nextPage: z.number().nullable() }).optional()
 })
 
 export const taskListStorage: PersistedHostFamily<TaskListSnapshot> = {
@@ -103,7 +123,9 @@ export const taskListStorage: PersistedHostFamily<TaskListSnapshot> = {
             items: snapshot.items,
             github: { ...snapshot.github, sourceErrors: [], sourceFallbacks: [] }
           }
-        : { items: snapshot.items }
+        : snapshot.clickup
+          ? { items: snapshot.items, clickup: snapshot.clickup }
+          : { items: snapshot.items }
   }
 }
 
@@ -129,7 +151,7 @@ export function taskListKey(hostId: string, params: HostQueryParams) {
   return hostQueryKey(hostId, taskListStorage.family, TASKS_TARGET, params)
 }
 
-/** What the Tasks screen draws before its first read: the view, Jira's status and which list each provider showed. */
+/** What the Tasks screen draws before its first read: the view, Jira's and ClickUp's status and which list each provider showed. */
 export function firstPaintTaskKeys(hostId: string): PersistedHostQueryKey[] {
   const keys = [
     persistedHostQueryKey(
@@ -139,6 +161,10 @@ export function firstPaintTaskKeys(hostId: string): PersistedHostQueryKey[] {
     persistedHostQueryKey(
       taskJiraStatusStorage,
       hostQueryKey(hostId, taskJiraStatusStorage.family, TASKS_TARGET, NO_TASK_INPUT)
+    ),
+    persistedHostQueryKey(
+      taskClickUpStatusStorage,
+      hostQueryKey(hostId, taskClickUpStatusStorage.family, TASKS_TARGET, NO_TASK_INPUT)
     ),
     ...TASK_PROVIDERS.map((provider) =>
       persistedHostQueryKey(taskLastListStorage, taskLastListKey(hostId, provider))

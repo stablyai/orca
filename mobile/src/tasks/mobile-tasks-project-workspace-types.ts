@@ -11,6 +11,7 @@ import type { WorkspaceAgentChoice } from '../new-workspace/creation/workspace-a
 import type { SparsePreset } from '../../../src/shared/worktree/create-types'
 import type { GitHubProjectRow } from './mobile-tasks-view-state-types'
 import type { JiraIssue } from '../../../src/shared/jira/jira-types'
+import type { ClickUpTask } from '../../../src/shared/clickup/clickup-types'
 
 export type TaskItem =
   | {
@@ -57,6 +58,15 @@ export type TaskItem =
       status: string
       updatedAt: string
       source: JiraIssue
+    }
+  | {
+      key: string
+      provider: 'clickup'
+      title: string
+      subtitle: string
+      status: string
+      updatedAt: string
+      source: ClickUpTask
     }
 
 export type ActionableTaskItem = Exclude<TaskItem, { provider: 'gitlabTodo' }>

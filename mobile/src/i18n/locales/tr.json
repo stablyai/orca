@@ -1198,6 +1198,17 @@
       "goal": {
         "sentAsGoal": "Hedef olarak gönderildi"
       }
+    },
+    "clickUpConnectPrompt": {
+      "updateDesktop": "Bu sunucudaki Orca'yı güncelleyin",
+      "reconnectOnDesktop": "Bilgisayarınızda ClickUp'ı yeniden bağlayın",
+      "connectOnDesktop": "Bilgisayarınızda ClickUp'ı bağlayın",
+      "credentialUnreadable": "ClickUp bağlantısı kayıtlı ancak okunamıyor: {{credentialError}}",
+      "lostConnection": "ClickUp bağlantısı kesildi veya kayıtlı belirteç reddedildi. Orca masaüstü uygulamasında Ayarlar → Entegrasyonlar bölümüne kişisel API belirtecinizi yeniden ekleyin, ardından yeniden kontrol edin.",
+      "connectHint": "Orca masaüstü uygulamasında Ayarlar → Entegrasyonlar bölümüne ClickUp kişisel API belirtecinizi ekleyin, ardından yeniden kontrol edin.",
+      "checkAgain": "Yeniden kontrol et",
+      "unreachableTitle": "Masaüstüne ulaşılamadı",
+      "unreachableMessage": "Orca, ClickUp bağlantısını masaüstünden okuyamadı. Orca'nın orada çalıştığından emin olun, ardından yeniden kontrol edin."
     }
   },
   "connection": {
@@ -3505,6 +3516,39 @@
       "loadPageFailed": "{{page}}. sayfa GitHub’dan yüklenemedi.",
       "noMoreResults": "{{page}}. sayfada başka sonuç yok."
     },
+    "itemComments": {
+      "clickUpTask": "ClickUp görevi",
+      "openInClickUp": "ClickUp'ta aç"
+    },
+    "clickUpConnection": {
+      "updateHost": "Mobilde ClickUp'a göz atmak için bu sunucudaki Orca'yı güncelleyin."
+    },
+    "clickUp": {
+      "scopeAll": "Tümü",
+      "scopeAssigned": "Bana atananlar",
+      "scopeAssignedSubtitle": "Size atanan görevler",
+      "scopeAllSubtitle": "Seçilen çalışma alanındaki tüm görevler",
+      "closedSection": "Kapalı görevler",
+      "includeClosed": "Kapalıları dahil et",
+      "includeClosedSubtitle": "Tamamlanan ve kapalı görevleri de göster",
+      "statusSection": "Durum",
+      "allStatuses": "Tüm durumlar",
+      "loadMore": "Daha fazla görev yükle",
+      "loadMoreLabel": "Daha fazla yükle",
+      "scopeTitle": "ClickUp görevleri",
+      "workspaceTitle": "ClickUp çalışma alanı",
+      "workspaceHostNote": "Bilgisayarınızdaki Orca'da da çalışma alanını değiştirir.",
+      "switchWorkspaceFailed": "Çalışma alanı değiştirilemedi",
+      "changeStatus": "Durumu değiştir",
+      "task": "ClickUp görevi",
+      "loadingStatuses": "Durumlar yükleniyor...",
+      "noStatuses": "Bu listede seçilebilecek durum yok",
+      "loadStatusesFailed": "Durumlar yüklenemedi",
+      "addCommentFailed": "Yorum eklenemedi",
+      "you": "Siz",
+      "updateFailed": "Görev güncellenemedi",
+      "loadMoreFailed": "Daha fazla ClickUp görevi yüklenemedi"
+    },
     "composerSource": {
       "baseFailed": "Temel branch çözümlenemedi.",
       "forkPushWarning": "Bu PR'da “Allow edits from maintainers” kapalı; fork'a push işlemi GitHub tarafından reddedilebilir."
@@ -3587,6 +3631,7 @@
     },
     "itemActions": {
       "changeStatus": "Durumu değiştir",
+      "copyClickUpLink": "ClickUp bağlantısını kopyala",
       "copyGitHubLink": "GitHub bağlantısını kopyala",
       "copyLinearLink": "Linear bağlantısını kopyala",
       "creating": "Oluşturuluyor…",
@@ -3601,6 +3646,8 @@
       "discussion": "Tartışma",
       "noChecks": "Kontrol bulunamadı.",
       "noComments": "Yorum yok.",
+      "list": "Liste",
+      "dueDate": "Son tarih",
       "noPipelineRuns": "Bu MR için pipeline çalıştırması yok.",
       "noSubIssues": "Alt sorun yok.",
       "none": "Yok",
@@ -3671,6 +3718,7 @@
     },
     "listSurface": {
       "connectLinearButton": "Linear'ı bağla",
+      "clickUpStatusFailed": "ClickUp durumu okunamadı",
       "connectLinearMessage": "Doğrudan Görevler bölümünden size atanan Linear sorunlarına göz atın ve üzerlerinde çalışmaya başlayın.",
       "connectLinearTitle": "Linear hesabınızı bağlayın",
       "jiraStatusFailed": "Jira durumu okunamadı",
@@ -3725,6 +3773,7 @@
       "pullRequests": "PR'lar",
       "repository": "Repository",
       "repositorySortDescription": "Repository'ye göre gruplama, en yeni etkinlik önce",
+      "clickupDescription": "Atanan ve çalışma alanı görevleri",
       "reviewRequestsDescription": "Size atanan inceleme istekleri",
       "status": "Durum",
       "team": "Takım",
@@ -3896,6 +3945,7 @@
     "screenChrome": {
       "newGitHubIssue": "Yeni GitHub sorunu",
       "newLinearIssue": "Yeni Linear sorunu",
+      "refreshClickUp": "ClickUp görevlerini yenile",
       "refreshGitHub": "GitHub işini yenile",
       "refreshGitLab": "GitLab iş öğelerini yenile",
       "refreshJira": "Jira sorunlarını yenile",
@@ -3904,7 +3954,8 @@
     },
     "searchControl": {
       "projectPlaceholder": "Proje görünümünde ara…",
-      "providerPlaceholder": "{{provider}} görevlerinde ara…"
+      "providerPlaceholder": "{{provider}} görevlerinde ara…",
+      "clickUpPlaceholder": "Ada veya kimliğe göre arayın ya da bir ClickUp görev bağlantısı yapıştırın"
     },
     "smartSourceModes": {
       "allStates": "Tümü",
@@ -3923,6 +3974,7 @@
       "allSubtitle": "Seçili sitelerdeki çözülmemiş sorunlar",
       "assignedSubtitle": "Size atanmış çözülmemiş sorunlar",
       "doneSubtitle": "Yakın zamanda çözülen sorunlarınız",
+      "noClickUpTasks": "ClickUp görevi yok",
       "noGitHubTasks": "GitHub görevi yok",
       "noGitLabTasks": "GitLab görevi yok",
       "noJiraTasks": "Jira görevi yok",

@@ -334,6 +334,16 @@ import {
 } from './browser/browser-screencast-params'
 import { BrowserOpenUrlParams, BrowserTabCreateParams } from './browser/browser-tab-create-params'
 import {
+  ClickUpAddTaskCommentParams,
+  ClickUpConnectParams,
+  ClickUpListStatusesParams,
+  ClickUpListTasksParams,
+  ClickUpSearchTasksParams,
+  ClickUpSelectWorkspaceParams,
+  ClickUpTaskIdParams,
+  ClickUpUpdateTaskParams
+} from './clickup/clickup-params'
+import {
   ClientEventsSubscribeParams,
   ClientEventsUnsubscribeParams
 } from './client-ui/client-events-params'
@@ -1503,6 +1513,18 @@ export const RPC_PARAMS_BY_METHOD = {
   'browser.viewport': Viewport,
   'browser.wait': Wait,
   'browser.zoom': PageZoom,
+  'clickup.addTaskComment': ClickUpAddTaskCommentParams,
+  'clickup.connect': ClickUpConnectParams,
+  'clickup.disconnect': null,
+  'clickup.getTask': ClickUpTaskIdParams,
+  'clickup.listStatuses': ClickUpListStatusesParams,
+  'clickup.listTasks': ClickUpListTasksParams,
+  'clickup.searchTasks': ClickUpSearchTasksParams,
+  'clickup.selectWorkspace': ClickUpSelectWorkspaceParams,
+  'clickup.status': null,
+  'clickup.taskComments': ClickUpTaskIdParams,
+  'clickup.testConnection': null,
+  'clickup.updateTask': ClickUpUpdateTaskParams,
   'clipboard.abortImageUpload': AbortImageUpload,
   'clipboard.appendImageUploadChunk': AppendImageUploadChunk,
   'clipboard.commitImageUpload': CommitImageUpload,

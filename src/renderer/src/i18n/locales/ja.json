@@ -15445,7 +15445,15 @@
             "crossRepoDifferentTaskSource": "GitHub URL は、選択したタスクソースとは異なる {{repo}} を指しています。",
             "crossRepoDifferentProject": "GitHub URL は、選択したプロジェクトとは異なる {{repo}} を指しています。",
             "useAsWorkspaceName": "<name>「{{name}}」</name>をワークスペース名に使用",
-            "createNewBranchNamed": "新規ブランチ <name>{{name}}</name> を作成"
+            "createNewBranchNamed": "新規ブランチ <name>{{name}}</name> を作成",
+            "searchClickUp": "ClickUp タスクを検索するか、タスクの URL を貼り付けてください",
+            "retryClickUp": "再試行",
+            "loadingClickUp": "ClickUp タスクを読み込み中…",
+            "clickupDisconnected": "このタスクをリンクするには、設定で ClickUp に接続してください",
+            "clickupRuntimeUpdate": "ClickUp をリンクするには、リモートランタイムを更新してください",
+            "clickupReadFailed": "この ClickUp タスクを読み込めませんでした",
+            "clickupLoaded": "ClickUp タスクを読み込みました",
+            "clickupMode": "ClickUp"
           },
           "ProjectCombobox": {
             "empty": "検索条件に一致するプロジェクトはありません。",
@@ -15484,7 +15492,8 @@
                   "b1418294ea": "入力を始めると GitLab の MR と Issue を検索できます。",
                   "80e7791c93": "一致するブランチはありません。",
                   "b4e65d98a6": "入力を始めると Linear の Issue を検索できます。",
-                  "5ba5d3e516": "入力を始めると Jira の Issue を検索できます。Issue の URL を貼り付けることもできます。"
+                  "5ba5d3e516": "入力を始めると Jira の Issue を検索できます。Issue の URL を貼り付けることもできます。",
+                  "clickup": "入力して ClickUp タスクを検索するか、タスクの URL を貼り付けてください。"
                 }
               }
             }
@@ -23959,7 +23968,8 @@
       "addEmoji": "絵文字を追加",
       "addEmojiTooltip": "絵文字を追加 (または : を入力)",
       "noEmojiFound": "絵文字が見つかりません",
-      "labels": "ラベル: {{labels}}"
+      "labels": "ラベル: {{labels}}",
+      "linkedClickUp": "リンク済み ClickUp {{value0}}"
     },
     "attachments": {
       "updateRuntime": "ワークスペースのリンクを変更するには、リモートランタイムを更新してください",
@@ -24829,6 +24839,17 @@
         "projectListLimit": "Jira のプロジェクト一覧がページ数の上限を超えました。代わりに JQL でプロジェクトを選択してください。",
         "invalidCloudId": "サイトが有効な Atlassian Cloud ID を返しませんでした。"
       },
+      "clickup": {
+        "notConnected": "ClickUp に接続されていません。",
+        "tokenRequired": "個人 API トークンが必要です。",
+        "connectionFailed": "ClickUp がこのトークンを確認できませんでした。個人 API トークンであること、失効していないこと、オンラインであることを確認してください。",
+        "noWorkspaces": "この ClickUp アカウントにはワークスペースがありません。",
+        "taskIdRequired": "有効な ClickUp タスク ID が必要です。",
+        "commentBodyRequired": "コメント本文が必要です。",
+        "updatesRequired": "ステータスが必要です。",
+        "updateFailed": "タスクの更新に失敗しました。",
+        "commentFailed": "コメントの追加に失敗しました。"
+      },
       "linear": {
         "notConnected": "Linear に接続されていません",
         "createFailed": "Linear での作成に失敗しました",
@@ -24845,6 +24866,91 @@
         "viewHasNoIssues": "カスタムビューに Issue が含まれていません",
         "viewHasNoProjects": "カスタムビューにプロジェクトが含まれていません"
       }
+    },
+    "clickup": {
+      "remoteCredentialCopy": "個人 API トークンで ClickUp に接続します。トークンは選択されたリモートランタイムに送信され、ランタイムがサポートする暗号化で保存されます。",
+      "localCredentialCopy": "個人 API トークンで ClickUp に接続します。トークンはローカルに保存され、ローカルランタイムストレージがサポートする場合は暗号化されます。",
+      "connectedAs": "{{name}} として接続中",
+      "checking": "セットアップ操作を表示する前に ClickUp へのアクセスを確認しています。",
+      "connectionLost": "ClickUp が保存済みのトークンを拒否しました。新しい個人 API トークンで再接続してください。",
+      "description": "ClickUp タスクを閲覧し、ステータスを更新し、そこから作業を開始できます。",
+      "statusConnected": "接続済み",
+      "statusNotConnected": "未接続",
+      "updateToken": "トークンを更新",
+      "connectAction": "ClickUp に接続",
+      "tokenName": "ClickUp API トークン",
+      "verified": "確認済み",
+      "testing": "テスト中…",
+      "test": "テスト",
+      "disconnect": "ClickUp を切断",
+      "workspaceLabel": "ワークスペース",
+      "workspaceHint": "このトークンは複数のワークスペースにアクセスできます。タスクには、ここで選択したワークスペースが表示されます。",
+      "singleTokenNote": "トークンはアクティブなランタイムに 1 つ保存され、所属しているすべての ClickUp ワークスペースを対象にします。",
+      "connectionFailed": "接続に失敗しました",
+      "reconnectTitle": "ClickUp に再接続",
+      "connectTitle": "ClickUp に接続",
+      "tokenHint": "個人 API トークンを貼り付けてください。Orca は ClickUp タスクの一覧表示、ステータスの変更、コメントの追加、リンクされたワークスペースの開始を行います。1 つのトークンで所属しているすべてのワークスペースを対象にできます。",
+      "tokenLabel": "個人 API トークン",
+      "tokenPlaceholder": "pk_...",
+      "tokenSteps": "ClickUp で Settings > Apps を開き、API Token の下の Generate を選んでコピーし、ここに貼り付けてください。",
+      "openAppsSettings": "ClickUp Settings > Apps",
+      "remoteTokenStorage": "このトークンはアクティブなリモートランタイムに保存されます。",
+      "localTokenStorage": "ローカルランタイムのトークンは、利用可能な場合は Electron の暗号化ストレージを使用してこのデバイスに保存されます。",
+      "cancel": "キャンセル",
+      "verifying": "確認中…",
+      "connect": "接続",
+      "search": {
+        "title": "ClickUp 連携",
+        "description": "個人 API トークンで ClickUp に接続して、タスクを閲覧・リンクします。",
+        "keyword": "clickup",
+        "workspace": "ワークスペース"
+      },
+      "setup": {
+        "connectTitle": "ClickUp に接続",
+        "connectDescription": "ClickUp の Settings > Apps から個人 API トークンを追加してください。1 つのトークンで所属しているすべてのワークスペースを対象にできます。",
+        "manage": "トークンを管理",
+        "add": "ClickUp へのアクセスを追加",
+        "providerLabel": "ClickUp",
+        "description": "個人 API トークンで ClickUp に接続し、タスクに表示します。"
+      },
+      "openTasks": "ClickUp タスクを開く",
+      "reconnectPromptTitle": "ClickUp に新しいトークンが必要です",
+      "connectPromptTitle": "ClickUp アカウントに接続",
+      "reconnectPromptBody": "ClickUp が保存済みのトークンを拒否しました。失効または再生成された可能性があります。タスクを引き続き閲覧するには、新しい個人 API トークンを追加してください。",
+      "connectPromptBody": "ClickUp タスクの閲覧、コメント、作業開始をここから直接行えます。",
+      "reconnectAction": "ClickUp に再接続",
+      "hide": "ClickUp を非表示",
+      "listTitle": "ClickUp タスク",
+      "retry": "再試行",
+      "emptySearchTitle": "この検索に一致する最近更新された ClickUp タスクはありません",
+      "emptyAssignedTitle": "自分に割り当てられた ClickUp タスクはありません",
+      "emptyTitle": "ClickUp タスクが見つかりません",
+      "emptySearchBody": "検索の対象は、最近更新されたタスクの名前とカスタム ID のみです。タスク ID またはリンクを貼り付けると、どのタスクでも見つけられます。",
+      "emptyAssignedBody": "「すべて」に切り替えるとこのワークスペースのすべてのタスクが表示されます。クローズ済みのタスクを含めることもできます。",
+      "emptyBody": "このワークスペースには、選択したフィルターに一致するものがありません。",
+      "loadMore": "さらに読み込む",
+      "scopeAssigned": "自分に割り当て",
+      "scopeAll": "すべて",
+      "includeClosed": "クローズ済みを含める",
+      "refresh": "ClickUp タスクを更新",
+      "statusFilter": "ステータスで絞り込み",
+      "searchPlaceholder": "タスク名または ID で検索するか、ClickUp タスクのリンクを貼り付けてください",
+      "openTaskAria": "{{value0}} を ClickUp で開く",
+      "openInClickUp": "ClickUp で開く",
+      "unknownUser": "不明",
+      "changeStatus": "ステータスを変更",
+      "noStatuses": "このリストには選択できるステータスがありません。",
+      "dueOn": "期限 {{date}}",
+      "commentPlaceholder": "ClickUp コメントを追加...",
+      "closePreview": "ClickUp タスクのプレビューを閉じる",
+      "taskTitle": "ClickUp タスク",
+      "previewDescription": "選択したタスクをプレビューし、ステータスの更新、コメント、作業開始を行えます。",
+      "commentTooLarge": "コメントが大きすぎるため、安全に送信できません。",
+      "switchWorkspaceFailed": "ClickUp ワークスペースの切り替えに失敗しました。",
+      "linkSourceUnavailable": "この ClickUp タスクをリンクできませんでした。ClickUp に再接続してから、もう一度お試しください。",
+      "connectionSuperseded": "ClickUp の接続は、より新しいリクエストに置き換えられました。",
+      "runtimeUpdateTitle": "ClickUp には新しいリモートランタイムが必要です",
+      "runtimeUpdateBody": "ClickUp を接続するには、リモートランタイムを更新してください。"
     }
   },
   "editorConflicts": {

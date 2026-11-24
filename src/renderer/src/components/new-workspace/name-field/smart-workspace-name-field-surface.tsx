@@ -10,6 +10,7 @@ import { WorkspaceEmojiSuggestionPopover } from '@/components/workspace-emoji/Wo
 import { renderSmartWorkspaceCrossRepoDialog } from './smart-workspace-cross-repo-dialog'
 import { renderSmartWorkspaceNameInput } from './smart-workspace-name-input-surface'
 import { renderSmartWorkspaceSourceResults } from './smart-workspace-source-results-surface'
+import { getClickUpSourceStatusMessage } from '../source-search/clickup-source-status-message'
 import { getJiraSourceStatusMessage } from '../source-search/jira-source-status-message'
 import type { SmartWorkspaceNameFieldController } from './use-smart-workspace-name-field-controller'
 
@@ -29,9 +30,12 @@ export function renderSmartWorkspaceNameField(
     setCommandValue,
     jiraSource,
     jiraStatusId,
+    clickupUrlSource,
+    clickupStatusId,
     linearStatusId,
     unresolvedLinearUrlIntent,
     onOpenJiraSettings,
+    onOpenClickUpSettings,
     emojiMenuOpen,
     resolvedEmojiCommandValue,
     emojiSuggestions,
@@ -93,6 +97,28 @@ export function renderSmartWorkspaceNameField(
           ) : jiraSource.errorKind === 'read-failed' ? (
             <Button type="button" variant="link" size="xs" onClick={jiraSource.retry}>
               {t('auto.components.new.workspace.SmartWorkspaceNameField.retryJira', 'Retry')}
+            </Button>
+          ) : null}
+        </div>
+      ) : null}
+      {clickupUrlSource.intent ? (
+        <div
+          id={clickupStatusId}
+          role="status"
+          aria-live="polite"
+          className={cn(
+            'flex items-center justify-between gap-2 px-1 text-xs text-muted-foreground',
+            !clickupUrlSource.loading && !clickupUrlSource.errorKind && 'sr-only'
+          )}
+        >
+          <span>{getClickUpSourceStatusMessage(clickupUrlSource, t)}</span>
+          {clickupUrlSource.errorKind === 'disconnected' && onOpenClickUpSettings ? (
+            <Button type="button" variant="link" size="xs" onClick={onOpenClickUpSettings}>
+              {t('auto.components.new.workspace.SmartWorkspaceNameField.openSettings', 'Settings')}
+            </Button>
+          ) : clickupUrlSource.errorKind === 'read-failed' ? (
+            <Button type="button" variant="link" size="xs" onClick={clickupUrlSource.retry}>
+              {t('auto.components.new.workspace.SmartWorkspaceNameField.retryClickUp', 'Retry')}
             </Button>
           ) : null}
         </div>

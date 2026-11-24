@@ -264,9 +264,23 @@ export type DetailPayload =
       issueTypeName: string
       priorityName?: string
     }
+  | {
+      provider: 'clickup'
+      taskId: string
+      description: string
+      comments: DetailComment[]
+      labels: string[]
+      assignees: string[]
+      priorityName?: string
+      listName: string
+      folderName?: string
+      dueAt?: string
+    }
 
 export function detailPayloadBody(payload: DetailPayload): string {
-  return payload.provider === 'linear' || payload.provider === 'jira'
+  return payload.provider === 'linear' ||
+    payload.provider === 'jira' ||
+    payload.provider === 'clickup'
     ? payload.description
     : payload.body
 }

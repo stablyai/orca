@@ -50,6 +50,22 @@
       ]
     },
     {
+      "name": "orca-clickup",
+      "sourcePath": "skills/orca-clickup",
+      "packageDigest": "b3a5fc7c777b1b319340f65434c041b5f1a063bd3cedc49fb0b79c48755e76d5",
+      "files": [
+        {
+          "path": "SKILL.md",
+          "size": 2584,
+          "executable": false,
+          "classification": "text",
+          "exactSha256": "72fd8cb17cd320493860fcd324ae5f6b826a94fa9d275fc783ff132ba3af700f",
+          "textNormalizedSha256": "72fd8cb17cd320493860fcd324ae5f6b826a94fa9d275fc783ff132ba3af700f",
+          "identitySha256": "72fd8cb17cd320493860fcd324ae5f6b826a94fa9d275fc783ff132ba3af700f"
+        }
+      ]
+    },
+    {
       "name": "orca-computer-use",
       "sourcePath": "skills/orca-computer-use",
       "packageDigest": "eadaf85ca053edf588758df090f1e88675c23ef36f31d111f1b9f631b0ab484f",

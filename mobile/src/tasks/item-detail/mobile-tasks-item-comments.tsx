@@ -21,6 +21,9 @@ export function taskKindLabel(item: TaskItem): string {
   if (item.provider === 'jira') {
     return 'Jira issue'
   }
+  if (item.provider === 'clickup') {
+    return translate('tasks.itemComments.clickUpTask', 'ClickUp task')
+  }
   return 'Linear ticket'
 }
 
@@ -33,6 +36,9 @@ export function taskExternalOpenLabel(item: TaskItem): string {
   }
   if (item.provider === 'jira') {
     return 'Open in Jira'
+  }
+  if (item.provider === 'clickup') {
+    return translate('tasks.itemComments.openInClickUp', 'Open in ClickUp')
   }
   return 'Open in Linear'
 }

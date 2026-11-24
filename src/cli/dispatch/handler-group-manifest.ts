@@ -2,6 +2,7 @@ import type { CommandHandler } from './dispatch'
 import { AUTH_HANDLER_GROUP } from '../accounts/auth-handler-group'
 import { BOT_HANDLER_GROUPS } from '../bots/bot-handler-groups'
 import { BROWSER_HANDLER_GROUPS } from '../browser/browser-handler-groups'
+import { CLICKUP_HANDLER_GROUP } from '../clickup/clickup-handler-group'
 import { JIRA_HANDLER_GROUP } from '../jira/jira-handler-group'
 import { LINEAR_HANDLER_GROUP } from '../linear/linear-handler-group'
 import { REFERENCE_HANDLER_GROUP } from '../references/reference-handler-group'
@@ -19,6 +20,7 @@ export type HandlerGroup = {
 
 export const HANDLER_GROUPS: readonly HandlerGroup[] = [
   JIRA_HANDLER_GROUP,
+  CLICKUP_HANDLER_GROUP,
   LINEAR_HANDLER_GROUP,
   REFERENCE_HANDLER_GROUP,
   {

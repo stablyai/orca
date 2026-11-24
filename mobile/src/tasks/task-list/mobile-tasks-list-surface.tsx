@@ -6,6 +6,7 @@ import { renderMobileTasksGitHubProjectList } from '../project-board/mobile-task
 import { renderMobileTasksLinearList } from '../providers/linear/mobile-tasks-linear-list'
 import { renderMobileTasksProviderItemList } from './mobile-tasks-provider-item-list'
 import { JiraConnectPrompt } from '../providers/JiraConnectPrompt'
+import { ClickUpConnectPrompt } from '../providers/ClickUpConnectPrompt'
 import { MobileStateView } from '../../components/feedback/MobileStateView'
 import { renderMobileTasksSupportState } from './mobile-tasks-list-state'
 
@@ -17,7 +18,9 @@ export function renderMobileTasksListSurface(
   const {
     githubMode,
     linearConnected,
+    clickupConnection,
     jiraConnection,
+    refreshClickUpConnection,
     refreshJiraConnection,
     setError,
     provider,
@@ -47,6 +50,30 @@ export function renderMobileTasksListSurface(
             err instanceof Error
               ? err.message
               : translate('tasks.listSurface.jiraStatusFailed', 'Failed to read Jira status')
+          )
+        })
+      }}
+    />
+  ) : provider === 'clickup' && clickupConnection.readState === 'unread' ? (
+    <MobileStateView
+      loading
+      title={translate('tasks.listState.loading', 'Loading tasks…')}
+      bottomInset={bottomBarHeight}
+    />
+  ) : provider === 'clickup' && !clickupConnection.connected ? (
+    <ClickUpConnectPrompt
+      credentialError={clickupConnection.credentialError}
+      unavailableReason={clickupConnection.unavailableReason}
+      lostConnection={clickupConnection.lostConnection}
+      unreachable={clickupConnection.readState === 'unreachable'}
+      disabled={!taskUiReady}
+      bottomInset={bottomBarHeight}
+      onCheckAgain={() => {
+        void refreshClickUpConnection().catch((err: unknown) => {
+          setError(
+            err instanceof Error
+              ? err.message
+              : translate('tasks.listSurface.clickUpStatusFailed', 'Failed to read ClickUp status')
           )
         })
       }}

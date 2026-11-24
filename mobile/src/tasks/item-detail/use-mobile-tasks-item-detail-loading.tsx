@@ -8,7 +8,8 @@ import type { ProviderCheckSummary } from '../../../../src/shared/github/pull-re
 import type { GitLabWorkItem } from '../mobile-tasks-provider-detail-types'
 import type { ItemDetailMetadataEffectsModel } from './use-mobile-tasks-item-detail-metadata-effects'
 import { fetchJiraIssueDetail } from '../providers/jira/mobile-jira-task-source'
-import { createJiraTask, createLinearTask } from './mobile-tasks-item-mapping'
+import { fetchClickUpTaskDetail } from '../providers/clickup/mobile-clickup-task-source'
+import { createClickUpTask, createJiraTask, createLinearTask } from './mobile-tasks-item-mapping'
 import type { HostedReviewDecision } from '../../../../src/shared/source-control/hosted-review/hosted-review-contracts'
 import { buildGitLabCheckSummary } from '../hosted-review/gitlab-check-summary'
 import { useEffect } from 'react'
@@ -239,6 +240,34 @@ export function useMobileTasksItemDetailLoading<Model extends ItemDetailLoadingI
               current.source.assignee?.accountId === issue.assignee?.accountId
             return alreadyHydrated ? current : createJiraTask(issue)
           })
+        }
+        return
+      }
+
+      if (actionItem.provider === 'clickup') {
+        const { task, comments } = await fetchClickUpTaskDetail(client, {
+          id: actionItem.source.id
+        })
+        if (!stale) {
+          setDetailPayload({
+            provider: 'clickup',
+            taskId: task.id,
+            description: task.descriptionMarkdown,
+            comments,
+            labels: task.tags,
+            assignees: task.assignees.map((user) => user.username || user.email),
+            priorityName: task.priority?.label,
+            listName: task.list.name,
+            folderName: task.folder?.name,
+            dueAt: task.dueAt ?? undefined
+          })
+          hydrateActionItem((current) =>
+            current?.provider === 'clickup' &&
+            current.source.id === task.id &&
+            current.source.updatedAt !== task.updatedAt
+              ? createClickUpTask(task)
+              : current
+          )
         }
         return
       }

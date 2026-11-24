@@ -1,4 +1,4 @@
-import type { TaskPageRuntimeHostsModel } from './use-task-page-runtime-hosts'
+import type { TaskPageClickUpConnectionModel } from './clickup/use-task-page-clickup-connection'
 import { useCallback, useMemo } from 'react'
 import { useAppStore } from '@/store/index'
 import { getJiraAccountLabel } from '@/lib/work-items/jira/jira-account-label'
@@ -21,7 +21,7 @@ import { useTaskPageSourceSummary } from './use-task-page-source-summary'
 export type TaskPageSourceAvailabilityPreludeModel = ReturnType<
   typeof useTaskPageSourceAvailabilityPrelude
 >
-export function useTaskPageSourceAvailabilityPrelude(model: TaskPageRuntimeHostsModel) {
+export function useTaskPageSourceAvailabilityPrelude(model: TaskPageClickUpConnectionModel) {
   const {
     settings,
     preflightStatus,
@@ -34,6 +34,7 @@ export function useTaskPageSourceAvailabilityPrelude(model: TaskPageRuntimeHosts
     selectedLinearWorkspace,
     selectedJiraSiteId,
     selectedJiraSite,
+    selectedClickUpWorkspace,
     taskSource,
     runtimePreflightStatusByHostId,
     taskSourceRepoContexts,
@@ -167,11 +168,26 @@ export function useTaskPageSourceAvailabilityPrelude(model: TaskPageRuntimeHosts
       selectedJiraSiteId
     ]
   )
+  const clickupTaskSourceContext = useMemo(
+    () =>
+      normalizeTaskSourceContext({
+        provider: 'clickup',
+        projectId: fallbackTaskSourceProjectId,
+        hostId: accountBackedTaskSourceHostId,
+        providerIdentity: {
+          provider: 'clickup',
+          workspaceId: selectedClickUpWorkspace?.id ?? null,
+          workspaceName: selectedClickUpWorkspace?.name ?? null
+        },
+        accountLabel: selectedClickUpWorkspace?.name ?? null
+      }),
+    [accountBackedTaskSourceHostId, fallbackTaskSourceProjectId, selectedClickUpWorkspace]
+  )
   const jiraTaskSourceScopeKey = jiraTaskSourceContext
     ? getTaskSourceCacheScope(jiraTaskSourceContext)
     : providerRuntimeContextKey
   const accountBackedTaskSourceHostAvailability = useMemo<TaskSourceHostAvailability[]>(() => {
-    if (taskSource !== 'linear' && taskSource !== 'jira') {
+    if (taskSource !== 'linear' && taskSource !== 'jira' && taskSource !== 'clickup') {
       return []
     }
     const host = hostRegistryById.get(accountBackedTaskSourceHostId)
@@ -188,11 +204,12 @@ export function useTaskPageSourceAvailabilityPrelude(model: TaskPageRuntimeHosts
     fallbackTaskSourceProjectId,
     linearTaskSourceContext,
     jiraTaskSourceContext,
+    clickupTaskSourceContext,
     jiraTaskSourceScopeKey,
     accountBackedTaskSourceHostAvailability
   })
 }
-export function useTaskPageSourceAvailability(model: TaskPageRuntimeHostsModel) {
+export function useTaskPageSourceAvailability(model: TaskPageClickUpConnectionModel) {
   const preludeModel = useTaskPageSourceAvailabilityPrelude(model)
   return useTaskPageSourceSummary(preludeModel)
 }

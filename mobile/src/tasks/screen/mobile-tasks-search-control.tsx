@@ -7,11 +7,12 @@ import { BottomSearchBar } from '../../components/nav-bar/BottomSearchBar'
 
 /** GitLab todos and unconnected sources have nothing to search. */
 export function mobileTasksSearchVisible(model: ConnectionPresentationModel): boolean {
-  const { gitlabView, jiraConnection, linearConnected, provider } = model
+  const { clickupConnection, gitlabView, jiraConnection, linearConnected, provider } = model
   return !(
     (provider === 'gitlab' && gitlabView === 'todos') ||
     (provider === 'linear' && !linearConnected) ||
-    (provider === 'jira' && !jiraConnection.connected)
+    (provider === 'jira' && !jiraConnection.connected) ||
+    (provider === 'clickup' && !clickupConnection.connected)
   )
 }
 
@@ -54,9 +55,18 @@ export function renderMobileTasksSearchControl(
                 'auto.components.TaskPage.99c2755218',
                 'Search issues or enter JQL, e.g. project = ABC'
               )
-            : translate('tasks.searchControl.providerPlaceholder', 'Search {{provider}} tasks...', {
-                provider: providerLabel
-              })
+            : provider === 'clickup'
+              ? translate(
+                  'tasks.searchControl.clickUpPlaceholder',
+                  'Search by name or ID, or paste a ClickUp task link'
+                )
+              : translate(
+                  'tasks.searchControl.providerPlaceholder',
+                  'Search {{provider}} tasks...',
+                  {
+                    provider: providerLabel
+                  }
+                )
       }
       bottomInset={insets.bottom}
       onCoveredHeightChange={onCoveredHeightChange}

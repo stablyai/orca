@@ -40,6 +40,12 @@ import {
   getGitHubLinkedWorkItemIdentity
 } from './source-selection-decisions'
 
+// Why: Jira and ClickUp links resolve through an account-backed source, so an item without one cannot be shown or refreshed.
+function requiresTaskSourceContext(item: LinkedWorkItemSummary): boolean {
+  const provider = getWorkspaceSourceProvider(item)
+  return provider === 'jira' || provider === 'clickup'
+}
+
 export function useComposerSourceContextState(input: ComposerSourceContextStateInput) {
   const {
     folderSourceRepos,
@@ -113,14 +119,14 @@ export function useComposerSourceContextState(input: ComposerSourceContextStateI
 
   const initialLinkedWorkItemSeed =
     normalizedInitialLinkedWorkItem &&
-    getWorkspaceSourceProvider(normalizedInitialLinkedWorkItem) === 'jira' &&
+    requiresTaskSourceContext(normalizedInitialLinkedWorkItem) &&
     !initialLinkedTaskSourceContext
       ? null
       : normalizedInitialLinkedWorkItem
 
   const draftLinkedWorkItemSeed =
     normalizedDraftLinkedWorkItem &&
-    getWorkspaceSourceProvider(normalizedDraftLinkedWorkItem) === 'jira' &&
+    requiresTaskSourceContext(normalizedDraftLinkedWorkItem) &&
     !draftLinkedTaskSourceContext
       ? null
       : normalizedDraftLinkedWorkItem
@@ -196,15 +202,15 @@ export function useComposerSourceContextState(input: ComposerSourceContextStateI
     })
   }, [projects, selectedRepo, selectedRepoIsGit, selectedWorkspaceTarget, taskSourceContext])
 
-  const smartNameJiraSourceContext = useMemo(() => {
+  const smartNameAccountSourceContexts = useMemo(() => {
     if (!selectedProjectId) {
-      return null
+      return { jira: null, clickup: null }
     }
     const sourceRepo = isProjectGroupTarget
       ? (folderSourceRepos.find((repo) => repo.id === repoId) ?? null)
       : selectedRepo
-    return normalizeTaskSourceContext({
-      provider: 'jira',
+    // Why: Jira's rule that SSH repositories borrow the desktop host fits any account-backed source.
+    const source = {
       projectId: selectedProjectGroup?.id ?? selectedProjectId,
       hostId: resolveJiraSourceHostId({
         workspaceHostId:
@@ -216,7 +222,11 @@ export function useComposerSourceContextState(input: ComposerSourceContextStateI
       repoId: sourceRepo?.id ?? null,
       providerIdentity: null,
       accountLabel: null
-    })
+    }
+    return {
+      jira: normalizeTaskSourceContext({ ...source, provider: 'jira' }),
+      clickup: normalizeTaskSourceContext({ ...source, provider: 'clickup' })
+    }
   }, [
     folderSourceRepos,
     isProjectGroupTarget,
@@ -254,6 +264,7 @@ export function useComposerSourceContextState(input: ComposerSourceContextStateI
     derivedGitHubTaskSourceContext,
     taskSourceContext,
     selectedRepoGitHubSourceContext,
-    smartNameJiraSourceContext
+    smartNameJiraSourceContext: smartNameAccountSourceContexts.jira,
+    smartNameClickUpSourceContext: smartNameAccountSourceContexts.clickup
   }
 }

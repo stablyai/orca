@@ -1,3 +1,4 @@
+import type { ClickUpTask } from '../../../../shared/clickup/clickup-types'
 import type { GitHubWorkItem } from '../../../../shared/github/work-items/work-item-types'
 import type { GitLabWorkItem } from '../../../../shared/gitlab/gitlab-types'
 import type { JiraIssue } from '../../../../shared/jira/jira-types'
@@ -14,6 +15,7 @@ export type CmdJTask =
   | { provider: 'jira'; issue: JiraIssue }
   | { provider: 'github'; issue: GitHubWorkItem }
   | { provider: 'gitlab'; issue: GitLabWorkItem }
+  | { provider: 'clickup'; task: ClickUpTask }
 
 export type CmdJTaskSearchResult = {
   id: string
@@ -36,28 +38,56 @@ export function isCmdJTaskSearchQuery(query: string): boolean {
   )
 }
 
+export function describeCmdJTask(task: CmdJTask): {
+  identifier: string
+  status: string
+  title: string
+  url: string
+} {
+  switch (task.provider) {
+    case 'linear':
+      return {
+        identifier: task.issue.identifier,
+        status: task.issue.state.name,
+        title: task.issue.title,
+        url: task.issue.url
+      }
+    case 'jira':
+      return {
+        identifier: task.issue.key,
+        status: task.issue.status.name,
+        title: task.issue.title,
+        url: task.issue.url
+      }
+    case 'clickup':
+      return {
+        identifier: task.task.customId ?? task.task.id,
+        status: task.task.status.name,
+        title: task.task.name,
+        url: task.task.url
+      }
+    case 'github':
+    case 'gitlab':
+      return {
+        identifier: `#${task.issue.number}`,
+        status: task.issue.state,
+        title: task.issue.title,
+        url: task.issue.url
+      }
+  }
+}
+
 export function makeCmdJTaskSearchResult(
   task: CmdJTask,
   sourceContext: TaskSourceContext,
   initialRepoId: string | null,
   hostLabel: string
 ): CmdJTaskSearchResult {
-  const identifier =
-    task.provider === 'linear'
-      ? task.issue.identifier
-      : task.provider === 'jira'
-        ? task.issue.key
-        : `#${task.issue.number}`
-  const status =
-    task.provider === 'linear'
-      ? task.issue.state.name
-      : task.provider === 'jira'
-        ? task.issue.status.name
-        : task.issue.state
+  const { identifier, status, title, url } = describeCmdJTask(task)
   return {
-    id: `task:${getTaskSourceCacheScope(sourceContext)}:${task.issue.url}`,
+    id: `task:${getTaskSourceCacheScope(sourceContext)}:${url}`,
     task,
-    title: task.issue.title,
+    title,
     identifier,
     status,
     sourceContext,

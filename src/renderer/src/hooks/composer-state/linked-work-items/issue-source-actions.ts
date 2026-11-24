@@ -33,10 +33,13 @@ type IssueSourceActionsInput = Pick<
 
 import { useCallback, useMemo } from 'react'
 import type { LinearIssue } from '../../../../../shared/linear/issue-types'
+import type { ClickUpTask } from '../../../../../shared/clickup/clickup-types'
 import type { JiraIssue } from '../../../../../shared/jira/jira-types'
 import '@/components/sidebar/workspace-creation/folder/folder-workspace-source-repos'
+import { useAccountBackedWorkItemLink } from './account-backed-work-item-link'
 import {
   buildLinearWorkspaceSource as toLinearLinkedWorkItem,
+  buildClickUpWorkspaceSource,
   buildJiraWorkspaceSource,
   buildWorkspaceSourceSelection,
   shouldApplyWorkspaceSourceAutoName
@@ -51,6 +54,7 @@ import {
   getLinkedWorkItemSuggestedName,
   getLinkedWorkItemWorkspaceName
 } from '../../../../../shared/workspace/naming/workspace-name'
+import { getClickUpTaskWorkspaceSeed } from '@/lib/work-items/clickup/clickup-task-workspace-seed'
 import { getJiraIssueKeyCasingSeedOptions } from '@/lib/work-items/jira/jira-issue-key-casing'
 import '@/lib/workspace/creation/new-workspace'
 import type { LinkedWorkItemSummary } from '@/lib/workspace/creation/new-workspace'
@@ -161,62 +165,29 @@ export function useIssueSourceActions(input: IssueSourceActionsInput) {
     ]
   )
 
+  const linkAccountBackedWorkItem = useAccountBackedWorkItemLink(input)
+
   const handleSmartJiraIssueSelect = useCallback(
     (issue: JiraIssue, sourceContext: TaskSourceContext): void => {
-      smartSourceSelectionRef.current = null
       const linkedItem: LinkedWorkItemSummary = buildJiraWorkspaceSource(issue)
-      setLinkedIssue('')
-      setLinkedPR(null)
-      setLinkedGitLabIssue(null)
-      setLinkedGitLabMR(null)
-      if (baseBranchNamesWorkspace) {
-        setBaseBranch(undefined)
-      }
-      setCompareBaseRef(undefined)
-      setPushTarget(undefined)
-      setBranchNameOverride(undefined)
-      setBranchNameOverridePreservesNameEdits(false)
-      setForkPushWarning(null)
-      branchAutoNameRef.current = ''
-      setLinkedWorkItem(linkedItem)
-      setLinkedTaskSourceContext(sourceContext)
-      const suggestedName =
+      linkAccountBackedWorkItem(
+        linkedItem,
+        sourceContext,
         getLinkedWorkItemWorkspaceName(linkedItem, getJiraIssueKeyCasingSeedOptions())?.seedName ??
-        getLinkedWorkItemSuggestedName(linkedItem)
-      // Why: the Jira lookup is async, so a name the user typed while it resolved must survive.
-      if (
-        suggestedName &&
-        shouldApplyWorkspaceSourceAutoName({
-          currentName: name,
-          lastAutoName: lastAutoNameRef.current,
-          lookupTextIsQuery: !linkedWorkItem
-        })
-      ) {
-        setName(suggestedName)
-        lastAutoNameRef.current = suggestedName
-      }
+          getLinkedWorkItemSuggestedName(linkedItem)
+      )
     },
-    [
-      name,
-      linkedWorkItem,
-      baseBranchNamesWorkspace,
-      branchAutoNameRef,
-      lastAutoNameRef,
-      setBaseBranch,
-      setBranchNameOverride,
-      setBranchNameOverridePreservesNameEdits,
-      setCompareBaseRef,
-      setForkPushWarning,
-      setLinkedGitLabIssue,
-      setLinkedGitLabMR,
-      setLinkedIssue,
-      setLinkedPR,
-      setLinkedTaskSourceContext,
-      setLinkedWorkItem,
-      setName,
-      setPushTarget,
-      smartSourceSelectionRef
-    ]
+    [linkAccountBackedWorkItem]
+  )
+
+  const handleSmartClickUpTaskSelect = useCallback(
+    (task: ClickUpTask, sourceContext: TaskSourceContext): void =>
+      linkAccountBackedWorkItem(
+        buildClickUpWorkspaceSource(task),
+        sourceContext,
+        getClickUpTaskWorkspaceSeed(task)
+      ),
+    [linkAccountBackedWorkItem]
   )
 
   const handleClearSmartNameSelection = useCallback((): void => {
@@ -289,6 +260,7 @@ export function useIssueSourceActions(input: IssueSourceActionsInput) {
   return {
     handleSmartLinearIssueSelect,
     handleSmartJiraIssueSelect,
+    handleSmartClickUpTaskSelect,
     handleClearSmartNameSelection,
     smartNameSelection
   }

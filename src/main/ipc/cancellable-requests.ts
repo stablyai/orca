@@ -5,7 +5,7 @@ function normalizeRequestId(value: unknown): string | undefined {
 const CANCEL_TOMBSTONE_TTL_MS = 30_000
 
 /** Cancel superseded work to release queue slots; tombstones preserve cancellation arriving before IPC registration. */
-export class JiraCancellableRequests {
+export class CancellableRequests {
   private readonly controllers = new Map<string, AbortController>()
   private readonly cancelTombstones = new Map<string, number>()
 

@@ -1,3 +1,4 @@
+import { replaceEqualDeep } from '@tanstack/react-query'
 import type { ClassifiedError } from '../../../../src/shared/errors/classified-error'
 import { getWorkItemPageErrorTypes } from '../../../../src/shared/github/work-items/work-item-page-errors'
 import type { RuntimeHydrationModel } from '../screen-state/use-mobile-tasks-runtime-hydration'
@@ -5,6 +6,13 @@ import {
   readJiraConnection,
   reconcileJiraConnection
 } from '../providers/jira/jira-mobile-connection'
+import {
+  clickUpHostUpdateRequiredConnection,
+  readClickUpConnection,
+  reconcileClickUpConnection,
+  reconcileClickUpReadFailure
+} from '../providers/clickup/clickup-mobile-connection'
+import { CLICKUP_RUNTIME_CAPABILITY } from '../../../../src/shared/clickup/clickup-runtime-capability'
 import {
   CROSS_REPO_DISPLAY_LIMIT,
   PER_REPO_FETCH_LIMIT,
@@ -39,7 +47,10 @@ import {
 } from './mobile-task-list-operations'
 import { githubWorkItemSearchRead } from '../providers/mobile-task-source-search-operations'
 import { linearAccountClient } from './linear-account-host'
-import { taskSettingsWrite } from '../screen-state/mobile-task-runtime-operations'
+import {
+  taskRuntimeStatusRead,
+  taskSettingsWrite
+} from '../screen-state/mobile-task-runtime-operations'
 
 export type ProviderLoadActionsInput = Pick<
   RuntimeHydrationModel,
@@ -53,6 +64,8 @@ export type ProviderLoadActionsInput = Pick<
   | 'linearAccountBindingRef'
   | 'setJiraConnection'
   | 'jiraStatusRequestIdRef'
+  | 'setClickUpConnection'
+  | 'clickupStatusRequestIdRef'
   | 'setLinearConnected'
   | 'setLinearTeams'
   | 'setLinearWorkspaces'
@@ -76,6 +89,8 @@ export function useMobileTasksProviderLoadActions<Model extends ProviderLoadActi
     linearAccountBindingRef,
     setJiraConnection,
     jiraStatusRequestIdRef,
+    setClickUpConnection,
+    clickupStatusRequestIdRef,
     setLinearConnected,
     setLinearTeams,
     setLinearWorkspaces,
@@ -95,6 +110,42 @@ export function useMobileTasksProviderLoadActions<Model extends ProviderLoadActi
       setJiraConnection((current) => reconcileJiraConnection(current, next))
     }
   }, [client, clientRef, connState, tasksSupported, setJiraConnection, jiraStatusRequestIdRef])
+
+  const refreshClickUpConnection = useCallback(async (): Promise<void> => {
+    if (!client || connState !== 'connected' || !tasksSupported) {
+      return
+    }
+    const requestId = ++clickupStatusRequestIdRef.current
+    try {
+      const runtimeStatus = taskRuntimeStatusRead.interpret(
+        await taskRuntimeStatusRead.request(client)
+      )
+      const next = runtimeStatus.capabilities?.includes(CLICKUP_RUNTIME_CAPABILITY)
+        ? await readClickUpConnection(client)
+        : clickUpHostUpdateRequiredConnection()
+      if (clientRef.current === client && clickupStatusRequestIdRef.current === requestId) {
+        // Unchanged keeps its identity, so the list read it feeds is not restarted.
+        setClickUpConnection((current) =>
+          replaceEqualDeep(current, reconcileClickUpConnection(current, next))
+        )
+      }
+    } catch (err) {
+      // A newer read owns the status now, so this failure must not surface after it succeeded.
+      if (clientRef.current !== client || clickupStatusRequestIdRef.current !== requestId) {
+        return
+      }
+      // This read superseded the hydration read, so a failure here must still leave 'unread'.
+      setClickUpConnection(reconcileClickUpReadFailure)
+      throw err
+    }
+  }, [
+    client,
+    clientRef,
+    connState,
+    tasksSupported,
+    setClickUpConnection,
+    clickupStatusRequestIdRef
+  ])
 
   const loadLinearContext = useCallback(async (): Promise<void> => {
     if (!client || connState !== 'connected' || !tasksSupported) {
@@ -283,6 +334,7 @@ export function useMobileTasksProviderLoadActions<Model extends ProviderLoadActi
   )
   return Object.assign(model, {
     refreshJiraConnection,
+    refreshClickUpConnection,
     loadLinearContext,
     persistLinearTeamSelection,
     fetchGitHubItemsPage,

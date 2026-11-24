@@ -5,6 +5,7 @@ import { Input } from '@/components/ui/input'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { WorkspaceEmojiPickerButton } from '@/components/workspace-emoji/WorkspaceEmojiPickerButton'
 import { isImeCompositionKeyDown } from '@/lib/text-input/ime/ime-composition-keyboard-event'
+import { isBlockingClickUpUrlIntent } from '../../../../../shared/new-workspace/smart-workspace-clickup-source-rows'
 import { isBlockingJiraUrlIntent } from '../../../../../shared/new-workspace/smart-workspace-source-results'
 import { isBlockingLinearUrlIntent } from '../../../../../shared/new-workspace/smart-workspace-linear-intent'
 import { isComposerFieldToFieldFocus } from './smart-workspace-source-popover-focus'
@@ -54,6 +55,8 @@ export function renderSmartWorkspaceNameInput(
     jiraSource,
     placeholder,
     jiraStatusId,
+    clickupUrlSource,
+    clickupStatusId,
     linearStatusId,
     unresolvedLinearUrlIntent,
     blockingTaskUrlResolution,
@@ -212,7 +215,9 @@ export function renderSmartWorkspaceNameInput(
           const pasted = event.clipboardData.getData('text')
           if (
             !pasted ||
-            (!isBlockingJiraUrlIntent(mode, pasted) && !isBlockingLinearUrlIntent(mode, pasted))
+            (!isBlockingJiraUrlIntent(mode, pasted) &&
+              !isBlockingClickUpUrlIntent(mode, pasted) &&
+              !isBlockingLinearUrlIntent(mode, pasted))
           ) {
             return
           }
@@ -279,7 +284,12 @@ export function renderSmartWorkspaceNameInput(
                 return
               }
             }
-            if (mode === 'jira' || jiraSource.intent) {
+            if (
+              mode === 'jira' ||
+              mode === 'clickup' ||
+              jiraSource.intent ||
+              clickupUrlSource.intent
+            ) {
               event.preventDefault()
               return
             }
@@ -303,9 +313,19 @@ export function renderSmartWorkspaceNameInput(
         }}
         placeholder={placeholder}
         disabled={disabled}
-        aria-busy={(jiraSource.intent && jiraSource.loading) || unresolvedLinearUrlIntent}
+        aria-busy={
+          (jiraSource.intent && jiraSource.loading) ||
+          (clickupUrlSource.intent && clickupUrlSource.loading) ||
+          unresolvedLinearUrlIntent
+        }
         aria-describedby={
-          jiraSource.intent ? jiraStatusId : unresolvedLinearUrlIntent ? linearStatusId : undefined
+          jiraSource.intent
+            ? jiraStatusId
+            : clickupUrlSource.intent
+              ? clickupStatusId
+              : unresolvedLinearUrlIntent
+                ? linearStatusId
+                : undefined
         }
         adornment={showEmojiPickerButton ? 'trailing' : 'none'}
         className="h-9 bg-background pl-8 text-sm"

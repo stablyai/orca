@@ -277,6 +277,7 @@ export function useComposerSourceState(
     setActiveRuntimeEnvironmentPreference:
       target.composerTargetStore.setActiveRuntimeEnvironmentPreference,
     smartNameJiraSourceContext: target.sourceContextState.smartNameJiraSourceContext,
+    smartNameClickUpSourceContext: target.sourceContextState.smartNameClickUpSourceContext,
     sourceIntentBlocksCreate: target.workspaceIdentityState.sourceIntentBlocksCreate
   })
   return {

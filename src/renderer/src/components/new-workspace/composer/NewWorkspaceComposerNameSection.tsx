@@ -23,10 +23,13 @@ type NewWorkspaceComposerNameSectionProps = Pick<
   | 'onSmartLinearIssueSelect'
   | 'onSmartJiraIssueSelect'
   | 'onOpenJiraSettings'
+  | 'onSmartClickUpTaskSelect'
+  | 'onOpenClickUpSettings'
   | 'smartNameSelection'
   | 'onClearSmartNameSelection'
   | 'smartNameGitHubSourceContext'
   | 'smartNameJiraSourceContext'
+  | 'smartNameClickUpSourceContext'
   | 'selectedRepoRequiresConnection'
   | 'selectedRepoIsGit'
   | 'branchesEnabled'
@@ -65,10 +68,13 @@ export function NewWorkspaceComposerNameSection({
   onSmartLinearIssueSelect,
   onSmartJiraIssueSelect,
   onOpenJiraSettings,
+  onSmartClickUpTaskSelect,
+  onOpenClickUpSettings,
   smartNameSelection,
   onClearSmartNameSelection,
   smartNameGitHubSourceContext,
   smartNameJiraSourceContext,
+  smartNameClickUpSourceContext,
   selectedRepoRequiresConnection,
   selectedRepoIsGit,
   branchesEnabled = true,
@@ -135,10 +141,13 @@ export function NewWorkspaceComposerNameSection({
         onLinearIssueSelect={onSmartLinearIssueSelect}
         onJiraIssueSelect={onSmartJiraIssueSelect}
         onOpenJiraSettings={onOpenJiraSettings}
+        onClickUpTaskSelect={onSmartClickUpTaskSelect}
+        onOpenClickUpSettings={onOpenClickUpSettings}
         selectedSource={smartNameSelection}
         onClearSelectedSource={onClearSmartNameSelection}
         githubSourceContext={smartNameGitHubSourceContext}
         jiraSourceContext={smartNameJiraSourceContext}
+        clickupSourceContext={smartNameClickUpSourceContext}
         disabled={selectedRepoRequiresConnection}
         disabledPlaceholder={t(
           'auto.components.NewWorkspaceComposerCard.connectProjectFirst',

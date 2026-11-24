@@ -6,22 +6,14 @@ import {
   getProvenWorkspaceReferenceIdentity,
   parseWorkspaceReferenceUrl
 } from '../../../../shared/workspace-attachments/workspace-reference-identity'
-import {
-  getLinearIssueWorkspaceName,
-  getLinkedWorkItemWorkspaceName,
-  getLinkedWorkItemSuggestedName
-} from '../../../../shared/workspace/naming/workspace-name'
 import '@/lib/workspace/creation/new-workspace'
-import type { LinkedWorkItemSummary } from '@/lib/workspace/creation/new-workspace'
-
-import { buildLinearWorkspaceSource } from '../../../../shared/new-workspace/workspace-source'
 import type { Worktree } from '../../../../shared/worktree/types'
 import {
   haveConflictingTaskSourceAccounts,
   type TaskSourceContext
 } from '../../../../shared/work-items/task-source-context'
-import type { CmdJTaskSearchResult } from './task-search-results'
-import { getJiraIssueWorkspaceSeed } from '../task-page/task-page-source-context'
+import { describeCmdJTask, type CmdJTaskSearchResult } from './task-search-results'
+import { buildCmdJLinkedWorkItem, getCmdJWorkspaceSeed } from './task-search-workspace-source'
 
 function sourceMatches(source: TaskSourceContext, target: TaskSourceContext): boolean {
   if (source.provider !== target.provider || source.hostId !== target.hostId) {
@@ -48,7 +40,15 @@ export function findCmdJTaskWorkspace(
   let identity: string | undefined
   try {
     identity = getProvenWorkspaceReferenceIdentity(
-      parseWorkspaceReferenceUrl(result.task.issue.url, result.task.provider)
+      result.task.provider === 'clickup'
+        ? {
+            provider: 'clickup',
+            type: 'issue',
+            number: 0,
+            url: result.task.task.url,
+            clickupIdentifier: result.task.task.id
+          }
+        : parseWorkspaceReferenceUrl(describeCmdJTask(result.task).url, result.task.provider)
     )
   } catch {
     return undefined
@@ -80,24 +80,8 @@ export function openCmdJTask(result: CmdJTaskSearchResult, createWorkspace = fal
   state.closeModal()
   const task = result.task
   if (createWorkspace) {
-    const linkedWorkItem: LinkedWorkItemSummary =
-      task.provider === 'linear'
-        ? buildLinearWorkspaceSource(task.issue)
-        : {
-            provider: task.provider,
-            type: 'issue',
-            number: task.provider === 'jira' ? 0 : task.issue.number,
-            title: task.issue.title,
-            url: task.issue.url,
-            ...(task.provider === 'jira' ? { jiraIdentifier: task.issue.key } : {})
-          }
-    const prefilledName =
-      task.provider === 'linear'
-        ? getLinearIssueWorkspaceName(task.issue)
-        : task.provider === 'jira'
-          ? getJiraIssueWorkspaceSeed(task.issue)
-          : (getLinkedWorkItemWorkspaceName(linkedWorkItem)?.seedName ??
-            getLinkedWorkItemSuggestedName(linkedWorkItem))
+    const linkedWorkItem = buildCmdJLinkedWorkItem(task)
+    const prefilledName = getCmdJWorkspaceSeed(task, linkedWorkItem)
     queueMicrotask(() =>
       useAppStore.getState().openModal('new-workspace-composer', {
         linkedWorkItem,
@@ -118,17 +102,23 @@ export function openCmdJTask(result: CmdJTaskSearchResult, createWorkspace = fal
       ? { ...common, openLinearIssue: task.issue, openLinearSourceContext: result.sourceContext }
       : task.provider === 'jira'
         ? { ...common, openJiraIssue: task.issue, openJiraSourceContext: result.sourceContext }
-        : task.provider === 'github'
+        : task.provider === 'clickup'
           ? {
               ...common,
-              openGitHubWorkItem: task.issue,
-              openGitHubSourceContext: result.sourceContext
+              openClickUpTask: task.task,
+              openClickUpSourceContext: result.sourceContext
             }
-          : {
-              ...common,
-              openGitLabWorkItem: task.issue,
-              openGitLabSourceContext: result.sourceContext
-            },
+          : task.provider === 'github'
+            ? {
+                ...common,
+                openGitHubWorkItem: task.issue,
+                openGitHubSourceContext: result.sourceContext
+              }
+            : {
+                ...common,
+                openGitLabWorkItem: task.issue,
+                openGitLabSourceContext: result.sourceContext
+              },
     { recordTasksInteraction: false }
   )
 }

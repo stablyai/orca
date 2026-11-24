@@ -1,4 +1,4 @@
-import type { TaskPageJiraSummaryGenerationModel } from './jira/creation/use-task-page-jira-summary-generation'
+import type { TaskPageClickUpStateModel } from './clickup/use-task-page-clickup-state'
 import { useEffect } from 'react'
 import { addAppKeyListener, removeAppKeyListener } from '@/lib/keyboard/app-keyboard-router'
 import { hasVisibleOverlay } from '@/lib/overlay-interaction/visible-overlay'
@@ -12,7 +12,7 @@ function isTextEntryTarget(target: HTMLElement): boolean {
   )
 }
 
-export function useTaskPageGlobalEffects(model: TaskPageJiraSummaryGenerationModel) {
+export function useTaskPageGlobalEffects(model: TaskPageClickUpStateModel) {
   const {
     closeTaskPage,
     closeTaskDetailPage,
@@ -37,11 +37,12 @@ export function useTaskPageGlobalEffects(model: TaskPageJiraSummaryGenerationMod
     newIssueOpen,
     selectedLinearIssue,
     selectedJiraIssue,
+    selectedClickUpTask,
     newLinearIssueOpen,
     newJiraIssueOpen
   } = model
   const githubTasksBusy = githubListPending || tasksRefreshing || tasksFiltering
-  // GitHub and Linear details replace the list in-page; the Jira detail is a Sheet that owns Esc.
+  // GitHub and Linear details replace the list in-page; the Jira and ClickUp details are Sheets that own Esc.
   const detailPageOpen =
     (taskSource === 'github' && Boolean(dialogWorkItem)) ||
     (taskSource === 'linear' && Boolean(selectedLinearIssue))
@@ -49,6 +50,7 @@ export function useTaskPageGlobalEffects(model: TaskPageJiraSummaryGenerationMod
     // Why: when a modal is open, let it own Esc dismissal.
     if (
       selectedJiraIssue ||
+      (taskSource === 'clickup' && selectedClickUpTask) ||
       newIssueOpen ||
       newLinearIssueOpen ||
       newJiraIssueOpen ||
@@ -100,7 +102,9 @@ export function useTaskPageGlobalEffects(model: TaskPageJiraSummaryGenerationMod
     newIssueOpen,
     newLinearIssueOpen,
     newJiraIssueOpen,
-    selectedJiraIssue
+    selectedJiraIssue,
+    selectedClickUpTask,
+    taskSource
   ])
   useEffect(() => {
     if (!preflightStatusCurrent || !preflightStatusChecked) {

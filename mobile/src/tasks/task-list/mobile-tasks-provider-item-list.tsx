@@ -23,8 +23,9 @@ import { formatUpdatedAt } from '../item-detail/mobile-tasks-item-mapping'
 import { taskKindLabel } from '../item-detail/mobile-tasks-item-comments'
 import type { TaskItem } from '../mobile-tasks-project-workspace-types'
 import { taskItemStateGlyph } from '../item-detail/mobile-tasks-item-state-glyph'
+import { renderMobileTasksClickUpLoadMore } from '../providers/clickup/mobile-tasks-clickup-load-more'
 
-// Where the item lives and how fresh it is; the glyph carries kind and state except for Jira and todos.
+// Where the item lives and how fresh it is; the glyph carries kind and state except for Jira, ClickUp and todos.
 function formatTaskRowMeta(item: TaskItem): string {
   const lead =
     item.provider === 'gitlabTodo'
@@ -164,7 +165,9 @@ export function renderMobileTasksProviderItemList(
               )}
             </Pressable>
           </View>
-        ) : undefined
+        ) : (
+          renderMobileTasksClickUpLoadMore(model)
+        )
       }
       renderItem={({ item: entry }) => {
         if (entry.type === 'section') {

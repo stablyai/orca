@@ -1330,6 +1330,17 @@
         "sentAsGoal": "Enviado como objetivo"
       }
     },
+    "clickUpConnectPrompt": {
+      "updateDesktop": "Atualize o Orca neste host",
+      "reconnectOnDesktop": "Reconecte o ClickUp no seu desktop",
+      "connectOnDesktop": "Conecte o ClickUp no seu desktop",
+      "credentialUnreadable": "O ClickUp está salvo, mas não pôde ser lido: {{credentialError}}",
+      "lostConnection": "O ClickUp foi desconectado ou rejeitou o token salvo. Adicione seu token de API pessoal novamente no Orca para desktop em Configurações → Integrações e verifique novamente.",
+      "connectHint": "Adicione seu token de API pessoal do ClickUp no Orca para desktop em Configurações → Integrações e verifique novamente.",
+      "checkAgain": "Verificar novamente",
+      "unreachableTitle": "Não foi possível conectar ao computador",
+      "unreachableMessage": "O Orca não conseguiu ler a conexão do ClickUp no seu computador. Confirme que o Orca está aberto lá e verifique novamente."
+    },
     "pullDownMenu": {
       "close": "Fechar menu"
     },
@@ -4188,7 +4199,8 @@
       "mergePullRequest": "Fazer merge do pull request",
       "copyLink": "Copiar link",
       "startWorkspace": "Iniciar espaço de trabalho",
-      "moreActions": "Mais ações"
+      "moreActions": "Mais ações",
+      "copyClickUpLink": "Copiar link do ClickUp"
     },
     "itemDetailContent": {
       "addSubIssue": "Adicionar sub-issue",
@@ -4214,7 +4226,9 @@
       "project": "Projeto",
       "priority": "Prioridade",
       "assignees": "Responsáveis",
-      "loading": "Carregando detalhes…"
+      "loading": "Carregando detalhes…",
+      "list": "Lista",
+      "dueDate": "Data de vencimento"
     },
     "itemDetailDrawer": {
       "refreshDetails": "Atualizar detalhes"
@@ -4276,6 +4290,7 @@
     },
     "listSurface": {
       "connectLinearButton": "Conectar Linear",
+      "clickUpStatusFailed": "Falha ao ler o status do ClickUp",
       "connectLinearMessage": "Veja as issues do Linear atribuídas a você e comece a trabalhar nelas diretamente em Tarefas.",
       "connectLinearTitle": "Conecte sua conta do Linear",
       "jiraStatusFailed": "Falha ao ler o status do Jira",
@@ -4330,6 +4345,7 @@
       "pullRequests": "PRs",
       "repository": "Repositório",
       "repositorySortDescription": "Agrupar por repositório, depois pela atividade mais recente",
+      "clickupDescription": "Tarefas atribuídas e do espaço de trabalho",
       "reviewRequestsDescription": "Solicitações de revisão atribuídas a você",
       "status": "Status",
       "team": "Equipe",
@@ -4510,6 +4526,7 @@
     "screenChrome": {
       "newGitHubIssue": "Nova issue do GitHub",
       "newLinearIssue": "Nova issue do Linear",
+      "refreshClickUp": "Atualizar tarefas do ClickUp",
       "refreshGitHub": "Atualizar trabalho do GitHub",
       "refreshGitLab": "Atualizar itens de trabalho do GitLab",
       "refreshJira": "Atualizar issues do Jira",
@@ -4518,7 +4535,8 @@
     },
     "searchControl": {
       "projectPlaceholder": "Buscar na visualização do projeto…",
-      "providerPlaceholder": "Buscar tarefas do {{provider}}…"
+      "providerPlaceholder": "Buscar tarefas do {{provider}}…",
+      "clickUpPlaceholder": "Pesquise por nome ou ID, ou cole um link de tarefa do ClickUp"
     },
     "smartSourceModes": {
       "allStates": "Todos",
@@ -4537,6 +4555,7 @@
       "allSubtitle": "Issues não resolvidas nos sites selecionados",
       "assignedSubtitle": "Issues não resolvidas atribuídas a você",
       "doneSubtitle": "Suas issues resolvidas recentemente",
+      "noClickUpTasks": "Nenhuma tarefa do ClickUp",
       "noGitHubTasks": "Nenhuma tarefa do GitHub",
       "noGitLabTasks": "Nenhuma tarefa do GitLab",
       "noJiraTasks": "Nenhuma tarefa do Jira",
@@ -4677,7 +4696,9 @@
     "itemComments": {
       "noComments": "Ainda não há comentários",
       "oneComment": "1 comentário",
-      "commentCount": "{{commentCount}} comentários"
+      "commentCount": "{{commentCount}} comentários",
+      "clickUpTask": "Tarefa do ClickUp",
+      "openInClickUp": "Abrir no ClickUp"
     },
     "listState": {
       "loading": "Carregando tarefas…"
@@ -4689,7 +4710,36 @@
     "runtimeHydration": {
       "loadFailed": "Falha ao carregar as configurações de Tarefas"
     },
-    "rerunUnsuccessful": "Repetir verificações"
+    "rerunUnsuccessful": "Repetir verificações",
+    "clickUpConnection": {
+      "updateHost": "Atualize o Orca neste host para navegar pelo ClickUp no celular."
+    },
+    "clickUp": {
+      "scopeAll": "Todas",
+      "scopeAssigned": "Atribuído a mim",
+      "scopeAssignedSubtitle": "Tarefas atribuídas a você",
+      "scopeAllSubtitle": "Todas as tarefas do espaço de trabalho selecionado",
+      "closedSection": "Tarefas fechadas",
+      "includeClosed": "Incluir fechadas",
+      "includeClosedSubtitle": "Mostrar também as tarefas concluídas e fechadas",
+      "statusSection": "Status",
+      "allStatuses": "Todos os status",
+      "loadMore": "Carregar mais tarefas",
+      "loadMoreLabel": "Carregar mais",
+      "scopeTitle": "Tarefas do ClickUp",
+      "workspaceTitle": "Espaço de trabalho do ClickUp",
+      "workspaceHostNote": "Também troca o espaço de trabalho no Orca do seu desktop.",
+      "switchWorkspaceFailed": "Falha ao trocar de espaço de trabalho",
+      "changeStatus": "Alterar status",
+      "task": "Tarefa do ClickUp",
+      "loadingStatuses": "Carregando status...",
+      "noStatuses": "Esta lista não tem status para escolher",
+      "loadStatusesFailed": "Falha ao carregar os status",
+      "addCommentFailed": "Falha ao adicionar o comentário",
+      "you": "Você",
+      "updateFailed": "Falha ao atualizar a tarefa",
+      "loadMoreFailed": "Falha ao carregar mais tarefas do ClickUp"
+    }
   },
   "terminal": {
     "keyDefinitions": {

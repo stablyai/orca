@@ -6,28 +6,6 @@ export type JiraIssueSearchFailure = {
   auth: boolean
 }
 
-/** Bound a fully consumed read by caller cancellation and a deadline, then retire its signal. */
-export async function withJiraDeadline<T>(
-  signal: AbortSignal | undefined,
-  timeoutMs: number,
-  run: (deadlineSignal: AbortSignal) => Promise<T>
-): Promise<T> {
-  const controller = new AbortController()
-  const abort = (): void => controller.abort()
-  signal?.addEventListener('abort', abort, { once: true })
-  if (signal?.aborted) {
-    controller.abort()
-  }
-  const timer = setTimeout(abort, timeoutMs)
-  try {
-    return await run(controller.signal)
-  } finally {
-    clearTimeout(timer)
-    signal?.removeEventListener('abort', abort)
-    controller.abort()
-  }
-}
-
 export function settleJiraSummaryRead<T>(read: Promise<T>, signal: AbortSignal): Promise<T> {
   if (signal.aborted) {
     return Promise.reject(new Error('Jira summary lookup aborted'))

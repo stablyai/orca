@@ -40,6 +40,7 @@ const PROVIDER_LABELS: Record<WorkspaceDetailLink['provider'], string> = {
   gitlab: 'GitLab',
   linear: 'Linear',
   jira: 'Jira',
+  clickup: 'ClickUp',
   bitbucket: 'Bitbucket',
   'azure-devops': 'Azure DevOps',
   gitea: 'Gitea'
@@ -147,7 +148,7 @@ function LinkIcon({ item }: { item: WorkspaceDetailLink }) {
   if (item.type !== 'issue') {
     return <ReviewIcon item={item} />
   }
-  if (item.provider === 'linear' || item.provider === 'jira') {
+  if (item.provider === 'linear' || item.provider === 'jira' || item.provider === 'clickup') {
     return (
       <TaskProviderLogo provider={item.provider} size={ICON_SIZE} color={colors.textSecondary} />
     )

@@ -60,6 +60,7 @@ import {
   type LinearAccountBinding
 } from '../task-list/linear-account-host'
 import { useMobileJiraConnectionState } from '../providers/jira/use-mobile-jira-connection-state'
+import { useMobileTasksClickUpState } from '../providers/clickup/use-mobile-tasks-clickup-state'
 import type { JiraIssueFilter } from '../../../../src/shared/jira/jira-types'
 
 export function useMobileTasksRouteAndItemState() {
@@ -196,6 +197,7 @@ export function useMobileTasksRouteAndItemState() {
     client: null
   })
   const [error, setError] = useState('')
+  const clickup = useMobileTasksClickUpState(client, connState, items)
   const itemState = useMobileTasksItemState()
   const itemSelection = useMobileTasksSelection(
     client,
@@ -246,6 +248,7 @@ export function useMobileTasksRouteAndItemState() {
     setShowJiraFilterPicker,
     showJiraSitePicker,
     setShowJiraSitePicker,
+    ...clickup,
     githubMode,
     setGithubMode,
     githubKind,

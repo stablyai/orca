@@ -1829,6 +1829,17 @@
     "smartRailRow": {
       "title": "智能按键栏",
       "subtitle": "根据智能体当前的操作显示相应按键"
+    },
+    "clickUpConnectPrompt": {
+      "updateDesktop": "更新此主机上的 Orca",
+      "reconnectOnDesktop": "在桌面端重新连接 ClickUp",
+      "connectOnDesktop": "在桌面端连接 ClickUp",
+      "credentialUnreadable": "ClickUp 已保存，但无法读取：{{credentialError}}",
+      "lostConnection": "ClickUp 已断开连接，或拒绝了已保存的令牌。请在 Orca 桌面端的“设置 → 集成”中重新添加你的个人 API 令牌，然后再次检查",
+      "connectHint": "请在 Orca 桌面端的“设置 → 集成”中添加你的 ClickUp 个人 API 令牌，然后再次检查",
+      "checkAgain": "再次检查",
+      "unreachableTitle": "无法连接到桌面端",
+      "unreachableMessage": "Orca 无法从桌面端读取 ClickUp 连接状态。请确认桌面端的 Orca 正在运行，然后再次检查"
     }
   },
   "connection": {
@@ -4770,6 +4781,7 @@
       "copyLink": "复制链接",
       "startWorkspace": "启动工作区",
       "moreActions": "更多操作",
+      "copyClickUpLink": "复制 ClickUp 链接",
       "copyGitHubLink": "复制 GitHub 链接",
       "copyLinearLink": "复制 Linear 链接",
       "creating": "创建中…",
@@ -4792,6 +4804,8 @@
       "priority": "优先级",
       "assignees": "负责人",
       "loading": "正在加载详情…",
+      "list": "列表",
+      "dueDate": "截止日期",
       "noPipelineRuns": "此 MR 没有运行任何管道",
       "noSubIssues": "没有子议题",
       "none": "没有任何",
@@ -4862,6 +4876,7 @@
     },
     "listSurface": {
       "connectLinearButton": "连接 Linear",
+      "clickUpStatusFailed": "读取 ClickUp 状态失败",
       "connectLinearMessage": "直接在“任务”中浏览并开始处理分配给您的 Linear 议题",
       "connectLinearTitle": "连接您的 Linear 账户",
       "jiraStatusFailed": "读取 Jira 状态失败",
@@ -4916,6 +4931,7 @@
       "pullRequests": "PR",
       "repository": "仓库",
       "repositorySortDescription": "按仓库分组，组内最新活动优先",
+      "clickupDescription": "已分配的任务和工作区任务",
       "reviewRequestsDescription": "分配给您的评审请求",
       "status": "状态",
       "team": "团队",
@@ -4954,7 +4970,9 @@
     "itemComments": {
       "noComments": "暂无评论",
       "oneComment": "1 条评论",
-      "commentCount": "{{commentCount}} 条评论"
+      "commentCount": "{{commentCount}} 条评论",
+      "clickUpTask": "ClickUp 任务",
+      "openInClickUp": "在 ClickUp 中打开"
     },
     "listState": {
       "loading": "正在加载任务…"
@@ -4967,6 +4985,35 @@
       "loadFailed": "无法加载任务设置"
     },
     "rerunUnsuccessful": "重试检查",
+    "clickUpConnection": {
+      "updateHost": "更新此主机上的 Orca，即可在手机上浏览 ClickUp"
+    },
+    "clickUp": {
+      "scopeAll": "全部",
+      "scopeAssigned": "分配给我",
+      "scopeAssignedSubtitle": "分配给你的任务",
+      "scopeAllSubtitle": "所选工作区中的每个任务",
+      "closedSection": "已关闭的任务",
+      "includeClosed": "包含已关闭",
+      "includeClosedSubtitle": "同时显示已完成和已关闭的任务",
+      "statusSection": "状态",
+      "allStatuses": "所有状态",
+      "loadMore": "加载更多任务",
+      "loadMoreLabel": "加载更多",
+      "scopeTitle": "ClickUp 任务",
+      "workspaceTitle": "ClickUp 工作区",
+      "workspaceHostNote": "同时会切换你桌面端 Orca 中的工作区",
+      "switchWorkspaceFailed": "切换工作区失败",
+      "changeStatus": "更改状态",
+      "task": "ClickUp 任务",
+      "loadingStatuses": "正在加载状态...",
+      "noStatuses": "此列表没有可选择的状态",
+      "loadStatusesFailed": "加载状态失败",
+      "addCommentFailed": "添加评论失败",
+      "you": "你",
+      "updateFailed": "更新任务失败",
+      "loadMoreFailed": "加载更多 ClickUp 任务失败"
+    },
     "pickerProjection": {
       "allRepos": "所有仓库",
       "allSites": "所有站点",
@@ -5137,6 +5184,7 @@
     "screenChrome": {
       "newGitHubIssue": "新的 GitHub 议题",
       "newLinearIssue": "新建 Linear 议题",
+      "refreshClickUp": "刷新 ClickUp 任务",
       "refreshGitHub": "刷新 GitHub 工作",
       "refreshGitLab": "刷新 GitLab 工作项",
       "refreshJira": "刷新 Jira 议题",
@@ -5145,7 +5193,8 @@
     },
     "searchControl": {
       "projectPlaceholder": "搜索项目视图…",
-      "providerPlaceholder": "搜索 {{provider}} 任务…"
+      "providerPlaceholder": "搜索 {{provider}} 任务…",
+      "clickUpPlaceholder": "按名称或 ID 搜索，或粘贴 ClickUp 任务链接"
     },
     "smartSourceModes": {
       "allStates": "全部",
@@ -5164,6 +5213,7 @@
       "allSubtitle": "所选站点中未解决的议题",
       "assignedSubtitle": "分配给您的未解决议题",
       "doneSubtitle": "分配给您且最近已解决的议题",
+      "noClickUpTasks": "没有 ClickUp 任务",
       "noGitHubTasks": "暂无 GitHub 任务",
       "noGitLabTasks": "暂无 GitLab 任务",
       "noJiraTasks": "暂无 Jira 任务",

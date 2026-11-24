@@ -41,6 +41,15 @@ export type TaskProviderErrorCode =
   | 'jira.incompleteProjectPage'
   | 'jira.projectListLimit'
   | 'jira.invalidCloudId'
+  | 'clickup.notConnected'
+  | 'clickup.tokenRequired'
+  | 'clickup.connectionFailed'
+  | 'clickup.noWorkspaces'
+  | 'clickup.taskIdRequired'
+  | 'clickup.commentBodyRequired'
+  | 'clickup.updatesRequired'
+  | 'clickup.updateFailed'
+  | 'clickup.commentFailed'
 
 export function taskProviderFailure(
   errorCode: TaskProviderErrorCode,

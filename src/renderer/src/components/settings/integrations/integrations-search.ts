@@ -2,6 +2,7 @@ import { translate } from '@/i18n/i18n'
 import { translateSearchKeyword } from '../search/settings-search-keywords'
 import { createLocalizedCatalog } from '@/i18n/localized-catalog'
 import {
+  CLICKUP_INTEGRATION_SECTION_ID,
   JIRA_INTEGRATION_SECTION_ID,
   LINEAR_INTEGRATION_SECTION_ID
 } from '../../integrations/task-trackers/task-provider-integration-section-ids'
@@ -14,7 +15,8 @@ export const INTEGRATION_SETTING_TARGET_IDS = {
   azuredevops: 'integrations-azure-devops',
   gitea: 'integrations-gitea',
   jira: JIRA_INTEGRATION_SECTION_ID,
-  linear: LINEAR_INTEGRATION_SECTION_ID
+  linear: LINEAR_INTEGRATION_SECTION_ID,
+  clickup: CLICKUP_INTEGRATION_SECTION_ID
 } as const
 
 export const getIntegrationsPaneSearchEntries = createLocalizedCatalog(() => [
@@ -234,6 +236,34 @@ export const getIntegrationsPaneSearchEntries = createLocalizedCatalog(() => [
         'auto.components.settings.integrations.search.faa0b5a0d9',
         'api key'
       ),
+      ...translateSearchKeyword(
+        'auto.components.settings.integrations.search.3c3d3d8ffa',
+        'connect'
+      ),
+      ...translateSearchKeyword(
+        'auto.components.settings.integrations.search.a626990bd2',
+        'disconnect'
+      )
+    ]
+  },
+  {
+    targetSectionId: INTEGRATION_SETTING_TARGET_IDS.clickup,
+    title: translate('taskProviders.clickup.search.title', 'ClickUp integration'),
+    description: translate(
+      'taskProviders.clickup.search.description',
+      'Connect ClickUp with a personal API token to browse and link tasks.'
+    ),
+    keywords: [
+      ...translateSearchKeyword('taskProviders.clickup.search.keyword', 'clickup'),
+      ...translateSearchKeyword(
+        'auto.components.settings.integrations.search.c450244ad7',
+        'integration'
+      ),
+      ...translateSearchKeyword(
+        'auto.components.settings.integrations.search.2ec2bd328c',
+        'api token'
+      ),
+      ...translateSearchKeyword('taskProviders.clickup.search.workspace', 'workspace'),
       ...translateSearchKeyword(
         'auto.components.settings.integrations.search.3c3d3d8ffa',
         'connect'

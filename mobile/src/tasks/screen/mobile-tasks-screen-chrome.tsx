@@ -19,7 +19,8 @@ function refreshLabels(t: Translate) {
     github: t('tasks.screenChrome.refreshGitHub', 'Refresh GitHub work'),
     gitlab: t('tasks.screenChrome.refreshGitLab', 'Refresh GitLab work items'),
     linear: t('tasks.screenChrome.refreshLinear', 'Refresh Linear'),
-    jira: t('tasks.screenChrome.refreshJira', 'Refresh Jira issues')
+    jira: t('tasks.screenChrome.refreshJira', 'Refresh Jira issues'),
+    clickup: t('tasks.screenChrome.refreshClickUp', 'Refresh ClickUp tasks')
   }
 }
 

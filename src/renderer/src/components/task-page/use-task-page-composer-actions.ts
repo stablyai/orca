@@ -34,6 +34,7 @@ export function useTaskPageComposerActions(model: TaskPageJiraListEffectsModel) 
     selectedLinearIssue,
     clearSelectedLinearIssue,
     selectedJiraIssue,
+    selectedClickUpTask,
     linearMode,
     setLinearIssues,
     setLinearLoading,
@@ -241,6 +242,7 @@ export function useTaskPageComposerActions(model: TaskPageJiraListEffectsModel) 
     hasGitHubDetail: Boolean(dialogWorkItem),
     hasGitLabDetail: Boolean(gitlabDialogItem),
     hasJiraDetail: Boolean(selectedJiraIssue),
+    hasClickUpDetail: Boolean(selectedClickUpTask),
     hasLinearIssueDetail: Boolean(selectedLinearIssue),
     hasLinearProjectContext: Boolean(selectedLinearProject),
     hasLinearViewContext: Boolean(selectedLinearCustomView)

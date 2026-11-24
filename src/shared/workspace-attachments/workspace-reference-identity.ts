@@ -1,8 +1,10 @@
-import { parseJiraIssueUrl, JIRA_ISSUE_KEY_PATTERN } from '../jira/jira-issue-url'
-import { parseLinearIssueInput, parseLinearIssueUrlIntent } from '../linear/links'
+import { parseClickUpTaskReference } from '../clickup/clickup-task-reference'
+import { JIRA_ISSUE_KEY_PATTERN } from '../jira/jira-issue-url'
+import { parseLinearIssueInput } from '../linear/links'
 import { getTaskSourceCacheScope } from '../work-items/task-source-context'
 import type { WorkspaceAttachment } from '../worktree/types'
 import { getPublicForgeProviderForHost } from '../git/remotes/public-forge-host'
+import { parseTaskTrackerReferenceUrl } from './workspace-reference-task-tracker-url'
 
 export type WorkspaceReferenceQuery =
   | { kind: 'url'; identity: string }
@@ -88,34 +90,9 @@ function parseReferenceRoute(
   url: URL,
   providerHint?: WorkspaceAttachment['provider']
 ): WorkspaceAttachment {
-  const linear = parseLinearIssueUrlIntent(url.href)
-  if (linear) {
-    url.pathname = `/${linear.organizationUrlKey.toLowerCase()}/issue/${linear.identifier}`
-    return {
-      provider: 'linear',
-      type: 'issue',
-      number: 0,
-      identifier: linear.identifier,
-      linearIdentifier: linear.identifier,
-      linearOrganizationUrlKey: linear.organizationUrlKey.toLowerCase(),
-      url: url.href
-    }
-  }
-  // Git hosts (and Bitbucket Server /repos/ file views) also serve /browse/KEY-1 paths.
-  const jira =
-    (!providerHint || providerHint === 'jira') && !url.pathname.includes('/repos/')
-      ? parseJiraIssueUrl(url.href)
-      : null
-  if (jira) {
-    url.pathname = `${jira.sitePath}/browse/${jira.issueKey}`
-    return {
-      provider: 'jira',
-      type: 'issue',
-      number: 0,
-      identifier: jira.issueKey,
-      jiraIdentifier: jira.issueKey,
-      url: url.href
-    }
+  const taskTracker = parseTaskTrackerReferenceUrl(url, providerHint)
+  if (taskTracker) {
+    return taskTracker
   }
   const gitlab = /^(\/.+)\/-\/(merge_requests|issues)\/(\d+)(?:\/.*)?$/.exec(url.pathname)
   if (gitlab && url.hostname !== 'github.com' && url.hostname !== 'linear.app') {
@@ -172,7 +149,7 @@ function parseReferenceRoute(
 }
 
 export function getWorkspaceReferenceIdentifier(item: WorkspaceAttachment): string | undefined {
-  return item.identifier ?? item.linearIdentifier ?? item.jiraIdentifier
+  return item.identifier ?? item.linearIdentifier ?? item.jiraIdentifier ?? item.clickupIdentifier
 }
 
 function externalUrl(item: WorkspaceAttachment): string | undefined {
@@ -199,8 +176,27 @@ function externalUrl(item: WorkspaceAttachment): string | undefined {
         ? `${identity.siteUrl.replace(/\/+$/, '')}/browse/${identifier}`
         : undefined
     case 'linear':
+    case 'clickup':
       return undefined
   }
+}
+
+/** Whether the identifier a ClickUp URL names is the one the stored reference carries. */
+function matchesClickUpUrlIdentifier(
+  urlIdentifier: string | undefined,
+  identifier: string | undefined
+): boolean {
+  const fromUrl = urlIdentifier ? parseClickUpTaskReference(urlIdentifier) : null
+  if (!fromUrl || !identifier) {
+    return false
+  }
+  const stored = parseClickUpTaskReference(identifier)
+  if (fromUrl.kind === 'id') {
+    // A task shown by its custom id still links to its raw-id URL, and only the API can tie the two together;
+    // only another raw id is a provable mismatch, so references saved with any other identifier keep their identity.
+    return stored?.kind !== 'id' || stored.id === fromUrl.id
+  }
+  return stored?.kind === 'custom-id' && stored.customId === fromUrl.customId
 }
 
 /** Provider-proven external identity, or undefined when the source cannot be proven. */
@@ -213,9 +209,11 @@ export function getProvenWorkspaceReferenceIdentity(item: WorkspaceAttachment): 
       if (
         parsed.provider === item.provider &&
         parsed.type === item.type &&
-        (parsed.identifier
-          ? parsed.identifier === identifier?.toUpperCase()
-          : parsed.number === item.number)
+        (item.provider === 'clickup'
+          ? matchesClickUpUrlIdentifier(parsed.clickupIdentifier, identifier)
+          : parsed.identifier
+            ? parsed.identifier === identifier?.toUpperCase()
+            : parsed.number === item.number)
       ) {
         const url = new URL(parsed.url!)
         // These hosts route case-insensitively; stored URLs keep the user's casing.

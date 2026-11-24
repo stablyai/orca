@@ -1,6 +1,7 @@
 import type React from 'react'
 import type { useAppStore } from '@/store'
 import type { parseGitHubIssueOrPRLink } from '../../../../../shared/github/repositories/links'
+import type { ClickUpTask } from '../../../../../shared/clickup/clickup-types'
 import type { GitHubWorkItem } from '../../../../../shared/github/work-items/work-item-types'
 import type { GitLabWorkItem } from '../../../../../shared/gitlab/gitlab-types'
 import type { JiraIssue, JiraSite } from '../../../../../shared/jira/jira-types'
@@ -28,12 +29,15 @@ export type SmartWorkspaceNameFieldProps = {
   onLinearIssueSelect: (issue: LinearIssue) => void
   onJiraIssueSelect?: (issue: JiraIssue, sourceContext: TaskSourceContext) => void
   onOpenJiraSettings?: () => void
+  onClickUpTaskSelect?: (task: ClickUpTask, sourceContext: TaskSourceContext) => void
+  onOpenClickUpSettings?: () => void
   selectedSource: SmartWorkspaceNameSelection | null
   onClearSelectedSource: () => void
   gitlabSourceContext?: TaskSourceContext | null
   linearSourceContext?: TaskSourceContext | null
   githubSourceContext?: TaskSourceContext | null
   jiraSourceContext?: TaskSourceContext | null
+  clickupSourceContext?: TaskSourceContext | null
   inputRef?: React.RefObject<HTMLInputElement | null>
   onPlainEnter?: () => void
   disabled?: boolean
@@ -48,7 +52,15 @@ export type SmartWorkspaceNameFieldProps = {
 }
 
 export type SmartWorkspaceNameSelection = {
-  kind: 'github-pr' | 'github-issue' | 'gitlab-mr' | 'gitlab-issue' | 'branch' | 'linear' | 'jira'
+  kind:
+    | 'github-pr'
+    | 'github-issue'
+    | 'gitlab-mr'
+    | 'gitlab-issue'
+    | 'branch'
+    | 'linear'
+    | 'jira'
+    | 'clickup'
   label: string
   url?: string
 }
@@ -103,6 +115,7 @@ export type WorkItemSourceSearchProps = Pick<
   | 'gitlabSourceContext'
   | 'linearSourceContext'
   | 'jiraSourceContext'
+  | 'clickupSourceContext'
 > & {
   sourceSelected?: boolean
   gitlabEnabled?: boolean
@@ -117,4 +130,5 @@ export type NormalizedWorkItemSourceSearchProps = WorkItemSourceSearchProps & {
   repoBackedSearchRepos: readonly RepoOption[]
   crossRepoSwitchTarget: 'project' | 'task-source'
   jiraSourceContext: TaskSourceContext | null
+  clickupSourceContext: TaskSourceContext | null
 }

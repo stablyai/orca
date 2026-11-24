@@ -1,4 +1,5 @@
 import type { GitHubWorkItem } from '../github/work-items/work-item-types'
+import type { ClickUpTask } from '../clickup/clickup-types'
 import type { GitLabWorkItem } from '../gitlab/gitlab-types'
 import type { JiraIssue } from '../jira/jira-types'
 import type { LinearIssue } from '../linear/issue-types'
@@ -19,7 +20,15 @@ export {
   isSmartWorkspaceSourceQueryWithinLimit
 } from './smart-workspace-source-query'
 
-export type SmartNameMode = 'smart' | 'github' | 'gitlab' | 'branches' | 'linear' | 'jira' | 'text'
+export type SmartNameMode =
+  | 'smart'
+  | 'github'
+  | 'gitlab'
+  | 'branches'
+  | 'linear'
+  | 'jira'
+  | 'clickup'
+  | 'text'
 
 export type SmartWorkspaceSourceRow =
   | { kind: 'use-name'; value: string; name: string }
@@ -29,6 +38,7 @@ export type SmartWorkspaceSourceRow =
   | { kind: 'branch'; value: string; refName: string; localBranchName: string; label?: string }
   | { kind: 'linear'; value: string; issue: LinearIssue }
   | { kind: 'jira'; value: string; issue: JiraIssue }
+  | { kind: 'clickup'; value: string; task: ClickUpTask }
 
 type LinearIssueSourceInput = LinearIssue[] | LinearCollectionResult<LinearIssue> | null | undefined
 
@@ -39,6 +49,7 @@ const EMPTY_HINT_BY_MODE: Record<SmartNameMode, string> = {
   branches: 'No matching branches.',
   linear: 'Start typing to search Linear issues.',
   jira: 'Start typing to search Jira issues, or paste an issue URL.',
+  clickup: 'Start typing to search ClickUp tasks, or paste a task URL.',
   text: ''
 }
 

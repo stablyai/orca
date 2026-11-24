@@ -1192,6 +1192,17 @@
       "goal": {
         "sentAsGoal": "목표로 보냄"
       }
+    },
+    "clickUpConnectPrompt": {
+      "updateDesktop": "이 호스트의 Orca 업데이트",
+      "reconnectOnDesktop": "데스크톱에서 ClickUp 다시 연결",
+      "connectOnDesktop": "데스크톱에서 ClickUp 연결",
+      "credentialUnreadable": "ClickUp이 저장되어 있지만 읽을 수 없습니다: {{credentialError}}",
+      "lostConnection": "ClickUp 연결이 해제되었거나 저장된 토큰이 거부되었습니다. Orca 데스크톱의 설정 → 연동에서 개인 API 토큰을 다시 추가한 뒤 다시 확인하세요.",
+      "connectHint": "Orca 데스크톱의 설정 → 연동에서 ClickUp 개인 API 토큰을 추가한 뒤 다시 확인하세요.",
+      "checkAgain": "다시 확인",
+      "unreachableTitle": "데스크톱에 연결하지 못했습니다",
+      "unreachableMessage": "Orca가 데스크톱에서 ClickUp 연결 상태를 읽지 못했습니다. 데스크톱에서 Orca가 실행 중인지 확인한 뒤 다시 확인하세요."
     }
   },
   "connection": {
@@ -3607,6 +3618,39 @@
       "loadPageFailed": "GitHub에서 {{page}}페이지를 불러오지 못했습니다.",
       "noMoreResults": "{{page}}페이지에 더 이상 결과가 없습니다."
     },
+    "itemComments": {
+      "clickUpTask": "ClickUp 작업",
+      "openInClickUp": "ClickUp에서 열기"
+    },
+    "clickUpConnection": {
+      "updateHost": "모바일에서 ClickUp을 둘러보려면 이 호스트의 Orca를 업데이트하세요."
+    },
+    "clickUp": {
+      "scopeAll": "모두",
+      "scopeAssigned": "나에게 할당됨",
+      "scopeAssignedSubtitle": "나에게 할당된 작업",
+      "scopeAllSubtitle": "선택한 워크스페이스의 모든 작업",
+      "closedSection": "닫힌 작업",
+      "includeClosed": "닫힌 작업 포함",
+      "includeClosedSubtitle": "완료된 작업과 닫힌 작업도 표시",
+      "statusSection": "상태",
+      "allStatuses": "모든 상태",
+      "loadMore": "작업 더 로드하기",
+      "loadMoreLabel": "더 로드하기",
+      "scopeTitle": "ClickUp 작업",
+      "workspaceTitle": "ClickUp 워크스페이스",
+      "workspaceHostNote": "데스크톱의 Orca 워크스페이스도 함께 전환됩니다.",
+      "switchWorkspaceFailed": "워크스페이스를 전환하지 못했습니다",
+      "changeStatus": "상태 변경",
+      "task": "ClickUp 작업",
+      "loadingStatuses": "상태 불러오는 중...",
+      "noStatuses": "이 목록에는 선택할 수 있는 상태가 없습니다",
+      "loadStatusesFailed": "상태를 불러오지 못했습니다",
+      "addCommentFailed": "댓글을 추가하지 못했습니다",
+      "you": "나",
+      "updateFailed": "작업을 업데이트하지 못했습니다",
+      "loadMoreFailed": "ClickUp 작업을 더 불러오지 못했습니다"
+    },
     "composerSource": {
       "baseFailed": "기본 브랜치를 확인하지 못했습니다.",
       "forkPushWarning": "이 PR에서 \"유지 관리자의 수정 허용\"이 꺼져 있어 GitHub에서 포크로의 푸시를 거부할 수 있습니다."
@@ -3689,6 +3733,7 @@
     },
     "itemActions": {
       "changeStatus": "상태 변경",
+      "copyClickUpLink": "ClickUp 링크 복사",
       "copyGitHubLink": "GitHub 링크 복사",
       "copyLinearLink": "Linear 링크 복사",
       "creating": "만드는 중…",
@@ -3703,6 +3748,8 @@
       "discussion": "토론",
       "noChecks": "체크를 찾을 수 없습니다.",
       "noComments": "댓글이 없습니다.",
+      "list": "목록",
+      "dueDate": "마감일",
       "noPipelineRuns": "이 MR에 실행된 파이프라인이 없습니다.",
       "noSubIssues": "하위 이슈가 없습니다.",
       "none": "없음",
@@ -3773,6 +3820,7 @@
     },
     "listSurface": {
       "connectLinearButton": "Linear 연결",
+      "clickUpStatusFailed": "ClickUp 상태를 읽지 못했습니다",
       "connectLinearMessage": "작업 화면에서 할당받은 Linear 이슈를 바로 살펴보고 작업을 시작하세요.",
       "connectLinearTitle": "Linear 계정 연결",
       "jiraStatusFailed": "Jira 상태를 읽지 못했습니다.",
@@ -3827,6 +3875,7 @@
       "pullRequests": "PR",
       "repository": "저장소",
       "repositorySortDescription": "저장소별로 그룹화한 후 최근 활동순 정렬",
+      "clickupDescription": "할당된 작업 및 워크스페이스 작업",
       "reviewRequestsDescription": "나에게 할당된 리뷰 요청",
       "status": "상태",
       "team": "팀",
@@ -3998,6 +4047,7 @@
     "screenChrome": {
       "newGitHubIssue": "새 GitHub 이슈",
       "newLinearIssue": "새 Linear 이슈",
+      "refreshClickUp": "ClickUp 작업 새로 고침",
       "refreshGitHub": "GitHub 작업 새로 고침",
       "refreshGitLab": "GitLab 작업 항목 새로 고침",
       "refreshJira": "Jira 이슈 새로 고침",
@@ -4006,7 +4056,8 @@
     },
     "searchControl": {
       "projectPlaceholder": "프로젝트 보기 검색…",
-      "providerPlaceholder": "{{provider}} 작업 검색…"
+      "providerPlaceholder": "{{provider}} 작업 검색…",
+      "clickUpPlaceholder": "이름 또는 ID로 검색하거나 ClickUp 작업 링크를 붙여넣으세요"
     },
     "smartSourceModes": {
       "allStates": "모두",
@@ -4025,6 +4076,7 @@
       "allSubtitle": "선택한 사이트의 미해결 이슈",
       "assignedSubtitle": "나에게 할당된 미해결 이슈",
       "doneSubtitle": "최근 해결된 내 이슈",
+      "noClickUpTasks": "ClickUp 작업 없음",
       "noGitHubTasks": "GitHub 작업 없음",
       "noGitLabTasks": "GitLab 작업 없음",
       "noJiraTasks": "Jira 작업 없음",

@@ -1,3 +1,5 @@
+import { bindClickUpTaskSourceContext } from '@/lib/work-items/clickup/clickup-task-source-context'
+import type { ClickUpWorkspace } from '../../../../../shared/clickup/clickup-types'
 import type { TaskSourceContext } from '../../../../../shared/work-items/task-source-context'
 import { getMatchingJiraSites, parseJiraIssueUrl } from '../../../../../shared/jira/jira-issue-url'
 import type { JiraSite } from '../../../../../shared/jira/jira-types'
@@ -6,6 +8,7 @@ import {
   buildGitLabWorkspaceSource,
   buildLinearWorkspaceSource,
   buildJiraWorkspaceSource,
+  buildClickUpWorkspaceSource,
   type WorkspaceSourceLinkedItem
 } from '../../../../../shared/new-workspace/workspace-source'
 import { parseGitHubIssueOrPRLink } from '../../../../../shared/github/repositories/links'
@@ -14,13 +17,14 @@ import { bindJiraIssueSourceContext } from './use-jira-url-source'
 import type { RowEntry } from '../name-field/smart-workspace-name-field-model'
 
 export type WorkItemSourceContexts = Record<
-  'github' | 'gitlab' | 'linear' | 'jira',
+  'github' | 'gitlab' | 'linear' | 'jira' | 'clickup',
   TaskSourceContext | null
 >
 export function resolveWorkItemSourceRow(
   row: RowEntry,
   contexts: WorkItemSourceContexts,
-  sites: readonly JiraSite[] = []
+  sites: readonly JiraSite[] = [],
+  clickupWorkspaces: readonly ClickUpWorkspace[] = []
 ):
   | (WorkspaceSourceLinkedItem & { identifier?: string; taskSourceContext?: TaskSourceContext })
   | null {
@@ -97,6 +101,16 @@ export function resolveWorkItemSourceRow(
           identifier: row.issue.key,
           taskSourceContext: context
         }
+      : null
+  }
+  if (row.kind === 'clickup') {
+    const taskSourceContext = bindClickUpTaskSourceContext({
+      task: row.task,
+      workspaces: clickupWorkspaces,
+      sourceContext: contexts.clickup
+    })
+    return taskSourceContext
+      ? { ...buildClickUpWorkspaceSource(row.task), taskSourceContext }
       : null
   }
   return null

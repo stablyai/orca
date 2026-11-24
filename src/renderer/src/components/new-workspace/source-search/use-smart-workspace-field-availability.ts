@@ -9,6 +9,7 @@ import {
 import { canUseGitLabSmartSource } from './smart-workspace-provider-availability'
 import type { useWorkItemSourceState } from './use-work-item-source-state'
 import { useTranslate } from '../../../i18n/use-translate'
+import { useClickUpSourceConnection } from './use-clickup-source-connection'
 
 type FieldState = ReturnType<typeof useWorkItemSourceState>
 
@@ -66,6 +67,10 @@ export function useSmartWorkspaceFieldAvailability({
 }) {
   const t = useTranslate()
   const { disabled, textOnly, repoBackedSourcesDisabled, branchesEnabled, value } = props
+  const clickupConnection = useClickUpSourceConnection({
+    enabled: !disabled && !textOnly && props.clickupSourceContext !== null,
+    sourceContext: props.clickupSourceContext
+  })
   const { mode: storedMode, setMode, setDebouncedQuery } = state
   const preflightStatusCurrent = preflightStatusContextKey === expectedPreflightContextKey
   const glabInstalled = preflightStatusCurrent ? preflightStatus?.glab?.installed : undefined
@@ -112,15 +117,21 @@ export function useSmartWorkspaceFieldAvailability({
     if (item.id === 'jira') {
       return jiraSourceConnected
     }
+    if (item.id === 'clickup') {
+      return clickupConnection.status?.connected === true
+    }
     if (item.id === 'branches') {
       return branchesEnabled && !repoBackedSourcesDisabled
     }
     return item.id !== 'text' || props.typedTextEnabled === true
   })
-  // Why: an unknown status is not a disconnect; keep a chosen Linear tab until it settles.
+  const clickupStatusPending =
+    !disabled && !textOnly && props.clickupSourceContext !== null && !clickupConnection.loaded
+  // Why: an unknown status is not a disconnect; keep a chosen Linear or ClickUp tab until it settles.
   const mode =
     availableModes.some((item) => item.id === storedMode) ||
     (storedMode === 'linear' && linearStatusPending && !textOnly) ||
+    (storedMode === 'clickup' && clickupStatusPending) ||
     (storedMode === 'gitlab' && !preflightStatusCurrent && !textOnly && !repoBackedSourcesDisabled)
       ? storedMode
       : (availableModes[0]?.id ?? 'text')
@@ -161,6 +172,7 @@ export function useSmartWorkspaceFieldAvailability({
     gitlabSourceAvailable,
     linearAvailable,
     availableModes,
-    mrStateFilters
+    mrStateFilters,
+    clickupConnection
   }
 }

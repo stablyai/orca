@@ -8,12 +8,14 @@ import {
   normalizeVisibleTaskProviders,
   resolveVisibleTaskProvider
 } from '../../../../../shared/work-items/task-providers'
+import { ClickUpIcon } from '@/components/icons/ClickUpIcon'
 import { JiraIcon } from '@/components/icons/JiraIcon'
 import { LinearIcon } from '@/components/icons/LinearIcon'
 import { Button } from '@/components/ui/button'
 import { useAppStore } from '@/store/index'
 import { SearchableSetting } from '../section-layout/SearchableSetting'
 import { CodeHostSetupSteps } from './TaskSourceCodeHostSetup'
+import { ClickUpSetupSteps } from './TaskSourceClickUpSetup'
 import { JiraSetupSteps } from './TaskSourceJiraSetup'
 import { TaskSourceLinearSetup } from './TaskSourceLinearSetup'
 import { TaskSourceProviderCard } from './TaskSourceProviderCard'
@@ -22,6 +24,7 @@ import {
   resolveStickyAutoExpandedTaskProvider
 } from './task-source-setup-state'
 import {
+  CLICKUP_INTEGRATION_SECTION_ID,
   JIRA_INTEGRATION_SECTION_ID,
   LINEAR_INTEGRATION_SECTION_ID
 } from '../../integrations/task-trackers/task-provider-integration-section-ids'
@@ -92,6 +95,18 @@ const PROVIDER_META: Record<
       )
     },
     Icon: ({ className }) => <JiraIcon className={className} />
+  },
+  clickup: {
+    get label() {
+      return translate('taskProviders.clickup.setup.providerLabel', 'ClickUp')
+    },
+    get description() {
+      return translate(
+        'taskProviders.clickup.setup.description',
+        'Connect ClickUp with a personal API token and show it in Tasks.'
+      )
+    },
+    Icon: ({ className }) => <ClickUpIcon className={className} />
   }
 }
 
@@ -101,9 +116,10 @@ export function TasksPane({ settings, updateSettings }: TasksPaneProps): React.J
   const openSettingsPage = useAppStore((s) => s.openSettingsPage)
   const openSettingsTarget = useAppStore((s) => s.openSettingsTarget)
   const checkJiraConnection = useAppStore((s) => s.checkJiraConnection)
+  const checkClickUpConnection = useAppStore((s) => s.checkClickUpConnection)
   const refreshPreflightStatus = useAppStore((s) => s.refreshPreflightStatus)
   const readinessByProvider = useTaskSourceProviderReadiness(visibleProviders)
-  useIntegrationProviderStatusRefresh()
+  const providerOwner = useIntegrationProviderStatusRefresh()
 
   // Warn only about started-then-stalled setup; untouched providers are the default.
   const stalledVisible = getStalledVisibleTaskProviders(TASK_PROVIDERS, readinessByProvider)
@@ -219,6 +235,17 @@ export function TasksPane({ settings, updateSettings }: TasksPaneProps): React.J
                   onToggleVisible={() => toggleProvider('jira')}
                   onConnected={() => void checkJiraConnection()}
                   onOpenIntegrations={() => openIntegrations(JIRA_INTEGRATION_SECTION_ID)}
+                />
+              ) : provider === 'clickup' ? (
+                <ClickUpSetupSteps
+                  owner={providerOwner}
+                  connected={readiness.connected}
+                  checking={readiness.checking}
+                  visible={visible}
+                  canHide={canHide}
+                  onToggleVisible={() => toggleProvider('clickup')}
+                  onConnected={() => void checkClickUpConnection(providerOwner)}
+                  onOpenIntegrations={() => openIntegrations(CLICKUP_INTEGRATION_SECTION_ID)}
                 />
               ) : (
                 <CodeHostSetupSteps

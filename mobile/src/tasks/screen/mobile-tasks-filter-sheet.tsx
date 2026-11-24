@@ -16,6 +16,10 @@ import {
 import { cycleMobileTasksGitHubProjectSort } from '../project-board/mobile-tasks-github-project-pickers'
 import { SheetHeader } from '../../components/nav-bar/SheetHeader'
 import { ListGroup, SectionHeader, ListRow } from '../../components/list/ListGroup'
+import {
+  clickUpFilterCount,
+  renderMobileTasksClickUpFilterSections
+} from '../providers/clickup/mobile-tasks-clickup-filter-sections'
 
 /** How many Filter & display settings differ from their defaults; the Filter chip shows it. */
 export function mobileTasksFilterCount(model: ConnectionPresentationModel): number {
@@ -39,7 +43,7 @@ export function mobileTasksFilterCount(model: ConnectionPresentationModel): numb
       (linearOrderBy !== 'priority' ? 1 : 0)
     )
   }
-  return taskSort !== 'updated' ? 1 : 0
+  return (taskSort !== 'updated' ? 1 : 0) + (provider === 'clickup' ? clickUpFilterCount(model) : 0)
 }
 
 function Section({ title, children }: { title: string; children: ReactNode }) {
@@ -251,6 +255,7 @@ export function renderMobileTasksFilterSheet(model: ConnectionPresentationModel)
             model.taskSort,
             model.setTaskSort
           )}
+          {provider === 'clickup' ? renderMobileTasksClickUpFilterSections(model) : null}
           {provider === 'jira' && appliedQuery.trim().length > 0 ? (
             <Text style={styles.filterFootnote}>
               {t(

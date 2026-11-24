@@ -5,6 +5,7 @@ import type { ProjectLoadingActionsModel } from '../project-board/use-mobile-tas
 import { clearMobileTaskCopyFeedbackTimer } from '../screen/mobile-task-copy-feedback-timer'
 import { dropFailedGitHubRepoSlugEntries } from '../project-board/github-project-repo-match'
 import { useCallback, useLayoutEffect, useEffect } from 'react'
+import { providerSupportsTaskCreate } from './mobile-tasks-create-providers'
 import { getTaskPresetQuery } from '../../../../src/shared/work-items/task-preset-query'
 import { scopeGitHubTaskSearch } from '../../../../src/shared/work-items/task-github-search'
 import {
@@ -29,6 +30,7 @@ export function useMobileTasksListAndDetailEffects(model: ProjectLoadingActionsM
     linearConnected,
     linearFilter,
     jiraFilter,
+    refreshClickUpConnection,
     refreshJiraConnection,
     linearMetadataItem,
     loadGitHubProjectTable,
@@ -53,6 +55,8 @@ export function useMobileTasksListAndDetailEffects(model: ProjectLoadingActionsM
     setLinearStatesLoading,
     setLinearSubIssueTitle,
     setLinearTeams,
+    setShowCreateTargetPicker,
+    setShowCreateTask,
     showCreateTask,
     showGitHubProjectPicker,
     taskStateHydrated,
@@ -134,6 +138,26 @@ export function useMobileTasksListAndDetailEffects(model: ProjectLoadingActionsM
     }
   }, [provider, refreshJiraConnection, taskStateHydrated])
 
+  // Pick up desktop connection changes when entering the ClickUp tab.
+  useEffect(() => {
+    if (!taskStateHydrated || provider !== 'clickup') {
+      return
+    }
+    let stale = false
+    void refreshClickUpConnection().catch((err) => {
+      if (!stale) {
+        setError(
+          err instanceof Error
+            ? err.message
+            : translate('tasks.listSurface.clickUpStatusFailed', 'Failed to read ClickUp status')
+        )
+      }
+    })
+    return () => {
+      stale = true
+    }
+  }, [provider, refreshClickUpConnection, taskStateHydrated])
+
   // Repos load beside the hydration reads, so the first list read waits on one round trip, not two.
   useEffect(() => {
     if (tasksSupported) {
@@ -198,6 +222,12 @@ export function useMobileTasksListAndDetailEffects(model: ProjectLoadingActionsM
       return
     }
     setCreatingTask(false)
+    // The sheet outlives a provider switch, and only some providers can create.
+    if (!providerSupportsTaskCreate(provider)) {
+      setShowCreateTargetPicker(false)
+      setShowCreateTask(false)
+      return
+    }
     if (provider === 'github' || provider === 'gitlab') {
       setCreateRepoId((current) =>
         current && hostedRepos.some((repo) => repo.id === current)

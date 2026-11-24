@@ -5,7 +5,8 @@ import {
 import { JiraFavouriteFilterParams } from '../../shared/rpc-contract/jira/jira-favourite-filter-params'
 import { apiBasePath, jiraRequest } from './authenticated-request'
 import { getClients } from './client'
-import { requireStrictJiraSite, withJiraDeadline } from './jira-read-failure'
+import { withRequestDeadline } from '../network/request-deadline'
+import { requireStrictJiraSite } from './jira-read-failure'
 import { acquire, release } from './request-queue'
 
 export async function listFavouriteFilters(
@@ -16,7 +17,7 @@ export async function listFavouriteFilters(
   const entries = await getClients(selection)
   requireStrictJiraSite(entries, selection, true)
   const entry = entries[0]
-  return withJiraDeadline(signal, 25_000, async (deadlineSignal) => {
+  return withRequestDeadline(signal, 25_000, async (deadlineSignal) => {
     await acquire(deadlineSignal)
     try {
       const value = await jiraRequest<unknown>(

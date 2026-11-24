@@ -3,8 +3,7 @@ import type { AppState } from '../types'
 import type { RepoSlice } from '../repos/repo-state'
 import type { FolderWorkspaceCreateResult } from '../../../../shared/folder-workspaces/folder-workspace-create'
 import { assertWorkspaceAttachmentWriteCapability } from '../../runtime/workspace-links/runtime-workspace-attachment-capabilities'
-import { WORKTREE_LINKED_WORK_ITEM_CONTEXT_RUNTIME_CAPABILITY } from '../../../../shared/remote-runtime/protocol/worktree-runtime-capabilities'
-import { assertRuntimeEnvironmentCapability } from '../../runtime/rpc/compatibility/runtime-capability-proof'
+import { assertLinkedWorkItemContextCapability } from '../../lib/work-items/linked-work-item-capability'
 import { callRuntimeRpc } from '../../runtime/rpc/calls/runtime-rpc-call'
 import { runtimeTargetForOwnerEnvironment } from '../../runtime/rpc/targets/runtime-client-target'
 import { formatFolderWorkspaceCreateError } from '../../lib/workspace/paths/folder-workspace-path-status'
@@ -23,16 +22,10 @@ export function createFolderWorkspaceCreateAction(
       // Why: a new folder has no row yet, so creation goes to the host the caller picked.
       const target = runtimeTargetForOwnerEnvironment(options.runtimeEnvironmentId)
       await assertWorkspaceAttachmentWriteCapability(target, args)
-      if (
-        target.kind === 'environment' &&
-        (args.linkedTask?.provider === 'jira' || args.linkedTaskSourceContext?.provider === 'jira')
-      ) {
-        await assertRuntimeEnvironmentCapability(
-          target.environmentId,
-          WORKTREE_LINKED_WORK_ITEM_CONTEXT_RUNTIME_CAPABILITY,
-          'Update the remote runtime to link Jira'
-        )
-      }
+      await assertLinkedWorkItemContextCapability(target, [
+        args.linkedTask?.provider,
+        args.linkedTaskSourceContext?.provider
+      ])
       const result =
         target.kind === 'local'
           ? await window.api.folderWorkspaces.create(args)

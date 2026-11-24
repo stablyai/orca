@@ -1284,6 +1284,17 @@
       "goal": {
         "sentAsGoal": "Отправлено как цель"
       }
+    },
+    "clickUpConnectPrompt": {
+      "updateDesktop": "Обновите Orca на этом сервере",
+      "reconnectOnDesktop": "Переподключите ClickUp на компьютере",
+      "connectOnDesktop": "Подключите ClickUp на компьютере",
+      "credentialUnreadable": "Данные ClickUp сохранены, но их не удалось прочитать: {{credentialError}}",
+      "lostConnection": "ClickUp был отключён или отклонил сохранённый токен. Снова добавьте личный API-токен в Orca на компьютере в разделе «Настройки → Интеграции», затем проверьте снова.",
+      "connectHint": "Добавьте личный API-токен ClickUp в Orca на компьютере в разделе «Настройки → Интеграции», затем проверьте снова.",
+      "checkAgain": "Проверить снова",
+      "unreachableTitle": "Не удалось связаться с компьютером",
+      "unreachableMessage": "Orca не удалось прочитать подключение ClickUp на компьютере. Убедитесь, что Orca запущен на нём, затем проверьте снова."
     }
   },
   "connection": {
@@ -3689,6 +3700,39 @@
       "loadPageFailed": "Не удалось загрузить страницу {{page}} из GitHub.",
       "noMoreResults": "На странице {{page}} больше нет результатов."
     },
+    "itemComments": {
+      "clickUpTask": "Задача ClickUp",
+      "openInClickUp": "Открыть в ClickUp"
+    },
+    "clickUpConnection": {
+      "updateHost": "Обновите Orca на этом сервере, чтобы просматривать ClickUp на телефоне."
+    },
+    "clickUp": {
+      "scopeAll": "Все",
+      "scopeAssigned": "Назначенные мне",
+      "scopeAssignedSubtitle": "Задачи, назначенные вам",
+      "scopeAllSubtitle": "Все задачи выбранного рабочего пространства",
+      "closedSection": "Закрытые задачи",
+      "includeClosed": "Включая закрытые",
+      "includeClosedSubtitle": "Также показывать выполненные и закрытые задачи",
+      "statusSection": "Статус",
+      "allStatuses": "Все статусы",
+      "loadMore": "Загрузить ещё задачи",
+      "loadMoreLabel": "Загрузить ещё",
+      "scopeTitle": "Задачи ClickUp",
+      "workspaceTitle": "Рабочее пространство ClickUp",
+      "workspaceHostNote": "Также переключает рабочее пространство в Orca на вашем компьютере.",
+      "switchWorkspaceFailed": "Не удалось переключить рабочее пространство",
+      "changeStatus": "Изменить статус",
+      "task": "Задача ClickUp",
+      "loadingStatuses": "Загрузка статусов...",
+      "noStatuses": "В этом списке нет статусов для выбора",
+      "loadStatusesFailed": "Не удалось загрузить статусы",
+      "addCommentFailed": "Не удалось добавить комментарий",
+      "you": "Вы",
+      "updateFailed": "Не удалось обновить задачу",
+      "loadMoreFailed": "Не удалось загрузить ещё задачи ClickUp"
+    },
     "composerSource": {
       "baseFailed": "Не удалось определить базовую ветку.",
       "forkPushWarning": "В этом PR отключена настройка «Разрешить правки сопровождающим»; GitHub может отклонить отправку в форк."
@@ -3777,6 +3821,7 @@
     },
     "itemActions": {
       "changeStatus": "Изменить статус",
+      "copyClickUpLink": "Копировать ссылку ClickUp",
       "copyGitHubLink": "Скопировать ссылку на GitHub",
       "copyLinearLink": "Скопировать ссылку на Linear",
       "creating": "Создание…",
@@ -3791,6 +3836,8 @@
       "discussion": "Обсуждение",
       "noChecks": "Проверки не найдены.",
       "noComments": "Комментариев нет.",
+      "list": "Список",
+      "dueDate": "Срок",
       "noPipelineRuns": "Для этого MR нет запусков конвейера.",
       "noSubIssues": "Нет подзадач.",
       "none": "Нет",
@@ -3863,6 +3910,7 @@
     },
     "listSurface": {
       "connectLinearButton": "Подключить Linear",
+      "clickUpStatusFailed": "Не удалось получить статус ClickUp",
       "connectLinearMessage": "Просматривайте назначенные вам задачи Linear и начинайте работу над ними прямо в разделе «Задачи».",
       "connectLinearTitle": "Подключите учётную запись Linear",
       "jiraStatusFailed": "Не удалось получить статус Jira",
@@ -3917,6 +3965,7 @@
       "pullRequests": "PR",
       "repository": "Репозиторий",
       "repositorySortDescription": "По репозиториям, внутри — сначала недавно обновлённые",
+      "clickupDescription": "Назначенные задачи и задачи рабочего пространства",
       "reviewRequestsDescription": "Запросы на проверку, назначенные вам",
       "status": "Статус",
       "team": "Команда",
@@ -4096,6 +4145,7 @@
     "screenChrome": {
       "newGitHubIssue": "Новая задача GitHub",
       "newLinearIssue": "Новая задача Linear",
+      "refreshClickUp": "Обновить задачи ClickUp",
       "refreshGitHub": "Обновить задачи GitHub",
       "refreshGitLab": "Обновить задачи GitLab",
       "refreshJira": "Обновить задачи Jira",
@@ -4104,7 +4154,8 @@
     },
     "searchControl": {
       "projectPlaceholder": "Поиск в проекте…",
-      "providerPlaceholder": "Поиск задач {{provider}}…"
+      "providerPlaceholder": "Поиск задач {{provider}}…",
+      "clickUpPlaceholder": "Ищите по названию или ID либо вставьте ссылку на задачу ClickUp"
     },
     "smartSourceModes": {
       "allStates": "Все",
@@ -4123,6 +4174,7 @@
       "allSubtitle": "Нерешённые задачи на выбранных сайтах",
       "assignedSubtitle": "Нерешённые задачи, назначенные вам",
       "doneSubtitle": "Ваши недавно решённые задачи",
+      "noClickUpTasks": "Нет задач ClickUp",
       "noGitHubTasks": "Нет задач в GitHub",
       "noGitLabTasks": "Нет задач в GitLab",
       "noJiraTasks": "Нет задач в Jira",

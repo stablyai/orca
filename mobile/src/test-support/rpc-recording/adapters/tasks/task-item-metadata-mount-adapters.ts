@@ -219,6 +219,7 @@ export function taskItemMetadataMountAdapters(
         persistTaskResumeState: () => {},
         provider: 'linear',
         refreshJiraConnection: async () => {},
+        refreshClickUpConnection: async () => {},
         query: '',
         refreshTasks: () => {},
         repoListEnsureLoaded: async () => [HOSTED_REPO],

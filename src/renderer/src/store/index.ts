@@ -20,6 +20,7 @@ import { createHostedReviewSlice } from './slices/hosted-review/hosted-review'
 import { createLinearSlice } from './slices/linear/linear'
 import { createPreflightSlice } from './slices/preflight/preflight'
 import { createJiraSlice } from './slices/jira/jira'
+import { createClickUpSlice } from './slices/clickup/clickup'
 import { createEditorSlice } from './slices/editor/create-editor-slice'
 import { createStatsSlice } from './slices/process-stats/stats'
 import { createMemorySlice } from './slices/process-stats/memory'
@@ -125,6 +126,7 @@ export const useAppStore = create<AppState>()(
               ...createLinearSlice(...a),
               ...createPreflightSlice(...a),
               ...createJiraSlice(...a),
+              ...createClickUpSlice(...a),
               ...createEditorSlice(...a),
               ...createStatsSlice(...a),
               ...createMemorySlice(...a),

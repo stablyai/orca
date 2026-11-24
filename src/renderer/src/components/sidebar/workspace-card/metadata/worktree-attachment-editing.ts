@@ -16,7 +16,9 @@ import {
 import { parseGitHubIssueOrPRLink } from '../../../../../../shared/github/repositories/links'
 import { parseGitLabIssueOrMRLink } from '../../../../../../shared/new-workspace/gitlab-links'
 import { parseLinearIssueInput } from '../../../../../../shared/linear/links'
+import { isClickUpTaskUrl } from '../../../../../../shared/clickup/clickup-task-reference'
 import { parseJiraIssueUrl } from '../../../../../../shared/jira/jira-issue-url'
+import { parseWorkspaceReferenceUrl } from '../../../../../../shared/workspace-attachments/workspace-reference-identity'
 import { isWorkItemLinkQueryTooLarge } from '../../../../../../shared/new-workspace/work-item-link-query-bounds'
 
 export const ATTACHMENT_INPUT_KINDS = [
@@ -60,6 +62,7 @@ export function workspaceAttachmentProviderLabel(item: WorkspaceAttachment): str
     gitlab: 'GitLab',
     linear: 'Linear',
     jira: 'Jira',
+    clickup: 'ClickUp',
     bitbucket: 'Bitbucket',
     'azure-devops': 'Azure DevOps',
     gitea: 'Gitea'
@@ -118,6 +121,9 @@ export function parseWorkspaceAttachmentInput(
         url: value,
         linearOrganizationUrlKey: linear.organizationUrlKey
       }
+    }
+    if (isClickUpTaskUrl(value)) {
+      return parseWorkspaceReferenceUrl(value, 'clickup')
     }
     return null
   }

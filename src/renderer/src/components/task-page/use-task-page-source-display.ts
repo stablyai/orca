@@ -26,6 +26,7 @@ export function useTaskPageSourceDisplay<Model extends TaskPageSourceDisplayInpu
     hostLabelById,
     selectedLinearWorkspace,
     selectedJiraSite,
+    selectedClickUpWorkspace,
     activeGithubTaskKind
   } = model
   // Why strict kind: Issues and PRs resolve independently; the other kind's repo is not this list's source.
@@ -39,6 +40,7 @@ export function useTaskPageSourceDisplay<Model extends TaskPageSourceDisplayInpu
   const linearWorkspaceName =
     selectedLinearWorkspace?.organizationName ?? selectedLinearWorkspace?.id ?? null
   const jiraSiteName = selectedJiraSite?.displayName ?? selectedJiraSite?.siteUrl ?? null
+  const clickupWorkspaceName = selectedClickUpWorkspace?.name ?? null
   // Why the catalog dep: it changes with the language, and the summary's own copy is translated too.
   const taskSourceContextSummary = useMemo(() => {
     const providerLabel =
@@ -51,15 +53,18 @@ export function useTaskPageSourceDisplay<Model extends TaskPageSourceDisplayInpu
         hostLabelById
       })
     }
-    if (taskSource === 'linear' || taskSource === 'jira') {
+    if (taskSource === 'linear' || taskSource === 'jira' || taskSource === 'clickup') {
       return getTaskSourceContextSummary({
         provider: taskSource,
         providerLabel,
         hostAvailability: accountBackedTaskSourceHostAvailability,
         accountHostId: accountBackedTaskSourceHostId,
         hostLabelById,
-        linearWorkspaceName,
-        jiraSiteName
+        accountLabel: {
+          linear: linearWorkspaceName,
+          jira: jiraSiteName,
+          clickup: clickupWorkspaceName
+        }[taskSource]
       })
     }
     return getTaskSourceContextSummary({
@@ -84,6 +89,7 @@ export function useTaskPageSourceDisplay<Model extends TaskPageSourceDisplayInpu
     githubMode,
     hostLabelById,
     hostRegistryById,
+    clickupWorkspaceName,
     jiraSiteName,
     linearWorkspaceName,
     selectedRepos.length,

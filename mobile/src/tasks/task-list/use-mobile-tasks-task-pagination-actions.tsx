@@ -18,6 +18,7 @@ import type { TaskItem } from '../mobile-tasks-project-workspace-types'
 import { buildPartialRepositoryNotice } from '../repositories/mobile-tasks-repository-presentation'
 import { linearAccountConnect } from './mobile-task-list-operations'
 import { linearAccountClient } from './linear-account-host'
+import { useMobileTasksClickUpPagination } from '../providers/clickup/use-mobile-tasks-clickup-pagination'
 
 function hasRepoWithFullPage(
   page: readonly Extract<TaskItem, { provider: 'github' }>[],
@@ -73,6 +74,7 @@ export function useMobileTasksTaskPaginationActions(model: TaskListLoadingModel)
     tasksSupported
   } = model
   const queryClient = useQueryClient()
+  const loadMoreClickUpTasks = useMobileTasksClickUpPagination(model)
   const connectLinearAccount = useCallback(async (): Promise<void> => {
     if (!client || connState !== 'connected' || !taskUiReady) {
       return
@@ -283,6 +285,7 @@ export function useMobileTasksTaskPaginationActions(model: TaskListLoadingModel)
   )
   return Object.assign(model, {
     connectLinearAccount,
+    loadMoreClickUpTasks,
     retryGitHubIssueSourceFetch,
     githubTotalPages,
     githubCanLoadUncountedNextPage,

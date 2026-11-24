@@ -89,6 +89,13 @@ function resolveRowContent(row: SourceRow, t: Translate): RowContent {
         subtitle: `${row.issue.key} · ${row.issue.project?.key ?? 'Jira'}`,
         status: row.issue.status?.name
       }
+    case 'clickup':
+      return {
+        icon: <TaskProviderLogo provider="clickup" size={18} color={colors.textSecondary} />,
+        title: row.task.name,
+        subtitle: `${row.task.customId ?? row.task.id} · ${row.task.list.name}`,
+        status: row.task.status.name
+      }
   }
 }
 

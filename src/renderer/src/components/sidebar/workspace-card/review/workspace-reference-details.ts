@@ -1,5 +1,7 @@
 import type { WorkspaceAttachment, Worktree } from '../../../../../../shared/worktree/types'
 import type { Repo } from '../../../../../../shared/repository/repo-types'
+import { parseClickUpTaskReference } from '../../../../../../shared/clickup/clickup-task-reference'
+import type { ClickUpTask } from '../../../../../../shared/clickup/clickup-types'
 import {
   type TaskSourceContext,
   getTaskSourceCacheScope,
@@ -69,7 +71,8 @@ export function getWorkspaceReferenceRequest(
       : item.provider === 'github' ||
           item.provider === 'gitlab' ||
           item.provider === 'linear' ||
-          item.provider === 'jira'
+          item.provider === 'jira' ||
+          item.provider === 'clickup'
         ? getWorkspaceAttachmentSourceContext(item.provider, repo, workspace)
         : null)
   return {
@@ -113,6 +116,41 @@ export function matchesWorkspaceReferenceUrl(item: WorkspaceAttachment, url: str
   )
 }
 
+/** A raw-id URL names its task for good and a Workspace-scoped custom-id URL names its Workspace; a bare custom id resolves against whichever Workspace the host has selected. */
+export function clickupReferenceReadInput(item: WorkspaceAttachment, identifier: string): string {
+  const reference = item.url ? parseClickUpTaskReference(item.url) : null
+  const namesTaskForGood =
+    reference?.kind === 'id' || (reference?.kind === 'custom-id' && reference.workspaceId !== null)
+  return item.url && namesTaskForGood ? item.url : identifier
+}
+
+/** A ClickUp reference names its task by raw id or custom id, and a pasted URL may use either form. */
+export function matchesClickUpWorkspaceReference(
+  item: WorkspaceAttachment,
+  identifier: string,
+  task: Pick<ClickUpTask, 'id' | 'customId' | 'url' | 'workspaceId'>
+): boolean {
+  const reference = item.url ? parseClickUpTaskReference(item.url) : null
+  if (reference?.kind === 'id') {
+    return reference.id.toLowerCase() === task.id.toLowerCase()
+  }
+  if (
+    reference?.kind === 'custom-id' &&
+    reference.workspaceId !== null &&
+    reference.workspaceId !== task.workspaceId
+  ) {
+    return false
+  }
+  const wanted = identifier.toLowerCase()
+  if (task.id.toLowerCase() !== wanted && task.customId?.toLowerCase() !== wanted) {
+    return false
+  }
+  return (
+    matchesWorkspaceReferenceUrl(item, task.url) ||
+    (reference?.kind === 'custom-id' && reference.customId === task.customId?.toUpperCase())
+  )
+}
+
 export function matchWorkspaceReferenceReview(
   item: WorkspaceAttachment,
   review: WorktreeCardPrDisplay | null | undefined
@@ -130,7 +168,12 @@ export function workspaceReferenceReview(
   item: WorkspaceAttachment,
   details: WorkspaceReferenceDetails | undefined
 ): WorktreeCardPrDisplay | null {
-  if (item.provider === 'linear' || item.provider === 'jira' || item.type === 'issue') {
+  if (
+    item.provider === 'linear' ||
+    item.provider === 'jira' ||
+    item.provider === 'clickup' ||
+    item.type === 'issue'
+  ) {
     return null
   }
   return (

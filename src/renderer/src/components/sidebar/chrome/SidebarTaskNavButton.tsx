@@ -1,5 +1,6 @@
 import React from 'react'
 import { EyeOff, Github, Gitlab, List } from 'lucide-react'
+import { ClickUpIcon } from '@/components/icons/ClickUpIcon'
 import { JiraIcon } from '@/components/icons/JiraIcon'
 import { LinearIcon } from '@/components/icons/LinearIcon'
 import {
@@ -215,6 +216,14 @@ export function SidebarTaskNavButton(): React.JSX.Element | null {
                 onOpen={() => openTaskPage({ taskSource: 'jira' })}
               >
                 <JiraIcon className="size-3.5" />
+              </TaskProviderShortcut>
+            ) : null}
+            {visibleTaskProviders.includes('clickup') ? (
+              <TaskProviderShortcut
+                label={t('taskProviders.clickup.openTasks', 'Open ClickUp tasks')}
+                onOpen={() => openTaskPage({ taskSource: 'clickup' })}
+              >
+                <ClickUpIcon className="size-3.5" />
               </TaskProviderShortcut>
             ) : null}
           </span>

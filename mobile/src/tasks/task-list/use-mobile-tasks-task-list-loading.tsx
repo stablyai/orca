@@ -21,6 +21,8 @@ export function useMobileTasksTaskListLoading(model: ProviderLoadActionsModel) {
     gitlabFilter,
     gitlabView,
     linearConnected,
+    clickupConnection,
+    clickupFilter,
     jiraConnection,
     jiraFilter,
     linearFilter,
@@ -35,6 +37,8 @@ export function useMobileTasksTaskListLoading(model: ProviderLoadActionsModel) {
     selectedRepoIds,
     effectiveRepoIds,
     serverRepoList,
+    setClickUpNextPage,
+    refreshClickUpConnection,
     setError,
     setGithubCurrentPage,
     setGithubPages,
@@ -91,6 +95,7 @@ export function useMobileTasksTaskListLoading(model: ProviderLoadActionsModel) {
         if (!params || (hosted && repos.length === 0)) {
           setItems([])
           resetGitHubItemsState()
+          setClickUpNextPage(null)
           return
         }
         const snapshot = await readTaskList(
@@ -104,6 +109,7 @@ export function useMobileTasksTaskListLoading(model: ProviderLoadActionsModel) {
         }
         shown(provider, params)
         setItems(snapshot.items)
+        setClickUpNextPage(snapshot.clickup?.nextPage ?? null)
         setError(snapshot.notice ?? '')
         if (snapshot.github) {
           setGithubRepoSources((current) => ({ ...current, ...snapshot.github.sources }))
@@ -129,6 +135,11 @@ export function useMobileTasksTaskListLoading(model: ProviderLoadActionsModel) {
         }
         setItems([])
         resetGitHubItemsState()
+        setClickUpNextPage(null)
+        if (provider === 'clickup') {
+          // A rejected token is cleared on the host; the status read tells the prompt that apart from a plain failure.
+          void refreshClickUpConnection().catch(() => {})
+        }
         setError(
           provider === 'linear'
             ? linearIssueReadFailureMessage(err)
@@ -159,6 +170,8 @@ export function useMobileTasksTaskListLoading(model: ProviderLoadActionsModel) {
       githubKind,
       githubMode,
       hostId,
+      clickupConnection,
+      clickupFilter,
       jiraConnection,
       jiraFilter,
       linearConnected,

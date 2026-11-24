@@ -1195,6 +1195,17 @@
       "goal": {
         "sentAsGoal": "作為目標傳送"
       }
+    },
+    "clickUpConnectPrompt": {
+      "updateDesktop": "更新此主機上的 Orca",
+      "reconnectOnDesktop": "在電腦上重新連線 ClickUp",
+      "connectOnDesktop": "在電腦上連線 ClickUp",
+      "credentialUnreadable": "ClickUp 已儲存，但無法讀取：{{credentialError}}",
+      "lostConnection": "ClickUp 已中斷連線，或拒絕了已儲存的權杖。請在 Orca 桌面版的「設定 → 整合」中重新新增您的個人 API 權杖，然後再次檢查。",
+      "connectHint": "請在 Orca 桌面版的「設定 → 整合」中新增您的 ClickUp 個人 API 權杖，然後再次檢查。",
+      "checkAgain": "再次檢查",
+      "unreachableTitle": "無法連線到桌面版",
+      "unreachableMessage": "Orca 無法從桌面版讀取 ClickUp 連線狀態。請確認桌面版的 Orca 正在執行，然後再次檢查。"
     }
   },
   "connection": {
@@ -3499,6 +3510,39 @@
       "loadPageFailed": "無法從 GitHub 載入第 {{page}} 頁。",
       "noMoreResults": "第 {{page}} 頁沒有更多結果。"
     },
+    "itemComments": {
+      "clickUpTask": "ClickUp 任務",
+      "openInClickUp": "在 ClickUp 中開啟"
+    },
+    "clickUpConnection": {
+      "updateHost": "更新此主機上的 Orca，即可在手機上瀏覽 ClickUp。"
+    },
+    "clickUp": {
+      "scopeAll": "全部",
+      "scopeAssigned": "指派給我",
+      "scopeAssignedSubtitle": "指派給您的任務",
+      "scopeAllSubtitle": "所選工作區中的每個任務",
+      "closedSection": "已關閉的任務",
+      "includeClosed": "包含已關閉",
+      "includeClosedSubtitle": "同時顯示已完成和已關閉的任務",
+      "statusSection": "狀態",
+      "allStatuses": "所有狀態",
+      "loadMore": "載入更多任務",
+      "loadMoreLabel": "載入更多",
+      "scopeTitle": "ClickUp 任務",
+      "workspaceTitle": "ClickUp 工作區",
+      "workspaceHostNote": "同時會切換您電腦上 Orca 中的工作區。",
+      "switchWorkspaceFailed": "切換工作區失敗",
+      "changeStatus": "更改狀態",
+      "task": "ClickUp 任務",
+      "loadingStatuses": "正在載入狀態...",
+      "noStatuses": "此清單沒有可選擇的狀態",
+      "loadStatusesFailed": "載入狀態失敗",
+      "addCommentFailed": "新增留言失敗",
+      "you": "您",
+      "updateFailed": "更新任務失敗",
+      "loadMoreFailed": "載入更多 ClickUp 任務失敗"
+    },
     "composerSource": {
       "baseFailed": "無法解析基礎分支。",
       "forkPushWarning": "此 PR 未啟用「允許維護者編輯」；推送至分叉存放庫可能會遭 GitHub 拒絕。"
@@ -3581,6 +3625,7 @@
     },
     "itemActions": {
       "changeStatus": "更改狀態",
+      "copyClickUpLink": "複製 ClickUp 連結",
       "copyGitHubLink": "複製 GitHub 連結",
       "copyLinearLink": "複製 Linear 連結",
       "creating": "建立中…",
@@ -3595,6 +3640,8 @@
       "discussion": "討論",
       "noChecks": "找不到檢查項目。",
       "noComments": "沒有留言。",
+      "list": "清單",
+      "dueDate": "到期日",
       "noPipelineRuns": "此 MR 沒有管線執行紀錄。",
       "noSubIssues": "沒有子議題。",
       "none": "無",
@@ -3665,6 +3712,7 @@
     },
     "listSurface": {
       "connectLinearButton": "連線 Linear",
+      "clickUpStatusFailed": "讀取 ClickUp 狀態失敗",
       "connectLinearMessage": "直接從「任務」瀏覽並開始處理指派給您的 Linear 議題。",
       "connectLinearTitle": "連線您的 Linear 帳戶",
       "jiraStatusFailed": "無法讀取 Jira 狀態",
@@ -3719,6 +3767,7 @@
       "pullRequests": "PR",
       "repository": "存放庫",
       "repositorySortDescription": "依存放庫分組，再依活動時間由新到舊排序",
+      "clickupDescription": "已指派的任務和工作區任務",
       "reviewRequestsDescription": "指派給您的審查請求",
       "status": "狀態",
       "team": "團隊",
@@ -3890,6 +3939,7 @@
     "screenChrome": {
       "newGitHubIssue": "新增 GitHub 議題",
       "newLinearIssue": "新增 Linear 議題",
+      "refreshClickUp": "重新整理 ClickUp 任務",
       "refreshGitHub": "重新整理 GitHub 工作",
       "refreshGitLab": "重新整理 GitLab 工作項",
       "refreshJira": "重新整理 Jira 議題",
@@ -3898,7 +3948,8 @@
     },
     "searchControl": {
       "projectPlaceholder": "在專案檢視中搜尋…",
-      "providerPlaceholder": "搜尋 {{provider}} 任務…"
+      "providerPlaceholder": "搜尋 {{provider}} 任務…",
+      "clickUpPlaceholder": "依名稱或 ID 搜尋，或貼上 ClickUp 任務連結"
     },
     "smartSourceModes": {
       "allStates": "全部",
@@ -3917,6 +3968,7 @@
       "allSubtitle": "所選網站中的未解決議題",
       "assignedSubtitle": "指派給您的未解決議題",
       "doneSubtitle": "指派給您且最近已解決的議題",
+      "noClickUpTasks": "沒有 ClickUp 任務",
       "noGitHubTasks": "沒有 GitHub 任務",
       "noGitLabTasks": "沒有 GitLab 任務",
       "noJiraTasks": "沒有 Jira 任務",

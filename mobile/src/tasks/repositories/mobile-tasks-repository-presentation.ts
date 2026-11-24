@@ -83,6 +83,14 @@ export function taskRepositoryMeta(
       color: repoColor(item.source.project.key)
     }
   }
+  if (item.provider === 'clickup') {
+    // ClickUp colors statuses, not lists; derive a stable list color as for Jira projects.
+    return {
+      key: item.source.list.id,
+      label: item.source.list.name,
+      color: repoColor(item.source.list.id)
+    }
+  }
   return {
     key: item.source.team.id,
     label: item.source.team.name,

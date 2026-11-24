@@ -15579,7 +15579,15 @@
             "crossRepoDifferentTaskSource": "GitHub URL'si, seçili görev kaynağından farklı olan {{repo}} reposunu gösteriyor.",
             "crossRepoDifferentProject": "GitHub URL'si, seçili projeden farklı olan {{repo}} reposunu gösteriyor.",
             "useAsWorkspaceName": "Çalışma alanı adı olarak <name>\"{{name}}\"</name> kullan",
-            "createNewBranchNamed": "<name>{{name}}</name> adlı yeni branch oluştur"
+            "createNewBranchNamed": "<name>{{name}}</name> adlı yeni branch oluştur",
+            "searchClickUp": "ClickUp görevlerini arayın veya bir görev URL'si yapıştırın",
+            "retryClickUp": "Yeniden dene",
+            "loadingClickUp": "ClickUp görevi yükleniyor…",
+            "clickupDisconnected": "Bu görevi bağlamak için Ayarlar'dan ClickUp'ı bağlayın",
+            "clickupRuntimeUpdate": "ClickUp'ı bağlamak için uzak runtime'ı güncelleyin",
+            "clickupReadFailed": "Bu ClickUp görevi yüklenemedi",
+            "clickupLoaded": "ClickUp görevi yüklendi",
+            "clickupMode": "ClickUp"
           },
           "ProjectCombobox": {
             "empty": "Aramanızla eşleşen proje yok.",
@@ -15598,6 +15606,15 @@
             "recentHeading": "Son kullanılanlar",
             "projectsHeading": "Projeler",
             "foldersHeading": "Klasörler"
+          },
+          "smart": {
+            "workspace": {
+              "empty": {
+                "hint": {
+                  "clickup": "ClickUp görevlerini aramak için yazmaya başlayın veya bir görev URL'si yapıştırın."
+                }
+              }
+            }
           }
         }
       },
@@ -23019,7 +23036,8 @@
       "showLinked_one": "Bağlantılı {{count}} inceleme ve görevi göster",
       "linkedCount_other": "{{count}} bağlantılı",
       "linkedCount_one": "{{count}} bağlantılı",
-      "labels": "Etiketler: {{labels}}"
+      "labels": "Etiketler: {{labels}}",
+      "linkedClickUp": "Bağlı ClickUp {{value0}}"
     },
     "attachments": {
       "updateRuntime": "Çalışma alanı bağlantılarını değiştirmek için uzak çalışma zamanını güncelleyin",
@@ -23775,6 +23793,17 @@
         "updateFailed": "Sorun güncellenemedi.",
         "updatesRequired": "Güncelleme nesnesi gerekli."
       },
+      "clickup": {
+        "notConnected": "ClickUp'a bağlı değil.",
+        "tokenRequired": "Kişisel API belirteci gerekli.",
+        "connectionFailed": "ClickUp bu belirteci doğrulayamadı. Kişisel bir API belirteci olduğunu, iptal edilmediğini ve çevrimiçi olduğunuzu kontrol edin.",
+        "noWorkspaces": "Bu ClickUp hesabında hiç çalışma alanı yok.",
+        "taskIdRequired": "Geçerli bir ClickUp görev kimliği gerekli.",
+        "commentBodyRequired": "Yorum metni gerekli.",
+        "updatesRequired": "Bir durum gerekli.",
+        "updateFailed": "Görev güncellenemedi.",
+        "commentFailed": "Yorum eklenemedi."
+      },
       "linear": {
         "commentFailed": "Yorum oluşturulamadı",
         "createFailed": "Linear'da oluşturma işlemi gerçekleştirilemedi",
@@ -23791,6 +23820,91 @@
         "viewIdRequired": "Özel görünüm kimliği gerekli",
         "workspaceAuthExpired": "Bu çalışma alanı için Linear kimlik doğrulamasının süresi doldu."
       }
+    },
+    "clickup": {
+      "remoteCredentialCopy": "ClickUp'ı kişisel bir API belirteci ile bağlayın. Belirteç seçilen uzak runtime'a gönderilir ve orada runtime'ın desteklediği şifrelemeyle saklanır.",
+      "localCredentialCopy": "ClickUp'ı kişisel bir API belirteci ile bağlayın. Belirteç yerel olarak saklanır ve yerel runtime depolaması destekliyorsa şifrelenir.",
+      "connectedAs": "{{name}} olarak bağlandı",
+      "checking": "Kurulum eylemleri gösterilmeden önce ClickUp erişimi kontrol ediliyor.",
+      "connectionLost": "ClickUp kayıtlı belirteci reddetti. Yeni bir kişisel API belirteci ile yeniden bağlanın.",
+      "description": "ClickUp görevlerine göz atın, durumlarını güncelleyin ve bunlardan işe başlayın.",
+      "statusConnected": "Bağlandı",
+      "statusNotConnected": "Bağlı değil",
+      "updateToken": "Belirteci güncelle",
+      "connectAction": "ClickUp'ı bağla",
+      "tokenName": "ClickUp API belirteciniz",
+      "verified": "Doğrulandı",
+      "testing": "Test ediliyor...",
+      "test": "Test et",
+      "disconnect": "ClickUp bağlantısını kes",
+      "workspaceLabel": "Çalışma alanı",
+      "workspaceHint": "Bu belirteç birden fazla çalışma alanına erişir. Görevler, burada seçilen çalışma alanını gösterir.",
+      "singleTokenNote": "Aktif runtime tek bir belirteç saklar ve ait olduğunuz tüm ClickUp çalışma alanlarını kapsar.",
+      "connectionFailed": "Bağlantı başarısız oldu",
+      "reconnectTitle": "ClickUp'ı yeniden bağla",
+      "connectTitle": "ClickUp'ı bağla",
+      "tokenHint": "Kişisel bir API belirteci yapıştırın. Orca ClickUp görevlerinizi listeler, durumlarını değiştirir, yorum ekler ve bunlara bağlı çalışma alanlarını başlatır. Tek bir belirteç ait olduğunuz tüm çalışma alanlarını kapsar.",
+      "tokenLabel": "Kişisel API belirteci",
+      "tokenPlaceholder": "pk_...",
+      "tokenSteps": "ClickUp'ta Settings > Apps bölümünü açın, API Token altında Generate'i seçin ve belirteci buraya kopyalayın.",
+      "openAppsSettings": "ClickUp Settings > Apps",
+      "remoteTokenStorage": "Bu belirteç aktif uzak runtime tarafından saklanır.",
+      "localTokenStorage": "Yerel runtime belirteçleri, mevcut olduğunda Electron şifreli depolaması kullanılarak bu cihazda saklanır.",
+      "cancel": "İptal",
+      "verifying": "Doğrulanıyor...",
+      "connect": "Bağlan",
+      "search": {
+        "title": "ClickUp entegrasyonu",
+        "description": "Görevlere göz atmak ve bunları bağlamak için ClickUp'ı kişisel bir API belirteci ile bağlayın.",
+        "keyword": "clickup",
+        "workspace": "çalışma alanı"
+      },
+      "setup": {
+        "connectTitle": "ClickUp'ı bağla",
+        "connectDescription": "ClickUp Settings > Apps bölümünden kişisel bir API belirteci ekleyin. Tek bir belirteç ait olduğunuz tüm çalışma alanlarını kapsar.",
+        "manage": "Belirteci yönet",
+        "add": "ClickUp erişimi ekle",
+        "providerLabel": "ClickUp",
+        "description": "ClickUp'ı kişisel bir API belirteci ile bağlayın ve Görevler'de gösterin."
+      },
+      "openTasks": "ClickUp görevlerini aç",
+      "reconnectPromptTitle": "ClickUp için yeni bir belirteç gerekiyor",
+      "connectPromptTitle": "ClickUp hesabınızı bağlayın",
+      "reconnectPromptBody": "ClickUp kayıtlı belirteci reddetti. İptal edilmiş veya yeniden oluşturulmuş olabilir. Görevlere göz atmaya devam etmek için yeni bir kişisel API belirteci ekleyin.",
+      "connectPromptBody": "ClickUp görevlerine göz atın, yorum yapın ve doğrudan buradan işe başlayın.",
+      "reconnectAction": "ClickUp'ı yeniden bağla",
+      "hide": "ClickUp'ı gizle",
+      "listTitle": "ClickUp görevleri",
+      "retry": "Yeniden dene",
+      "emptySearchTitle": "Bu aramayla eşleşen yakın zamanda güncellenmiş ClickUp görevi yok",
+      "emptyAssignedTitle": "Size atanmış ClickUp görevi yok",
+      "emptyTitle": "ClickUp görevi bulunamadı",
+      "emptySearchBody": "Arama yalnızca yakın zamanda güncellenen görevlerin adlarına ve özel kimliklerine bakar. Herhangi bir görevi bulmak için bir görev kimliği veya bağlantısı yapıştırın.",
+      "emptyAssignedBody": "Bu çalışma alanındaki tüm görevleri görmek için Tümü'ne geçin veya kapalı görevleri dahil edin.",
+      "emptyBody": "Bu çalışma alanında seçilen filtrelerle eşleşen bir şey yok.",
+      "loadMore": "Daha fazla yükle",
+      "scopeAssigned": "Bana atananlar",
+      "scopeAll": "Tümü",
+      "includeClosed": "Kapalıları dahil et",
+      "refresh": "ClickUp görevlerini yenile",
+      "statusFilter": "Duruma göre filtrele",
+      "searchPlaceholder": "Görevleri ada veya kimliğe göre arayın ya da bir ClickUp görev bağlantısı yapıştırın",
+      "openTaskAria": "{{value0}} öğesini ClickUp'ta aç",
+      "openInClickUp": "ClickUp'ta aç",
+      "unknownUser": "Bilinmiyor",
+      "changeStatus": "Durumu değiştir",
+      "noStatuses": "Bu listede seçilebilecek durum yok.",
+      "dueOn": "Son tarih: {{date}}",
+      "commentPlaceholder": "ClickUp yorumu ekleyin...",
+      "closePreview": "ClickUp görev önizlemesini kapat",
+      "taskTitle": "ClickUp görevi",
+      "previewDescription": "Seçilen görevi önizleyin, durumunu güncelleyin, yorum yapın ve işe başlayın.",
+      "commentTooLarge": "Yorum güvenli bir şekilde gönderilemeyecek kadar büyük.",
+      "switchWorkspaceFailed": "ClickUp çalışma alanı değiştirilemedi.",
+      "linkSourceUnavailable": "Bu ClickUp görevi bağlanamadı. ClickUp'ı yeniden bağlayın, ardından tekrar deneyin.",
+      "connectionSuperseded": "ClickUp bağlantısının yerini daha yeni bir istek aldı.",
+      "runtimeUpdateTitle": "ClickUp için daha yeni bir uzak runtime gerekiyor",
+      "runtimeUpdateBody": "ClickUp'ı bağlamak için uzak runtime'ı güncelleyin."
     },
     "jira": {
       "connectionFailed": "Bağlantı kurulamadı",

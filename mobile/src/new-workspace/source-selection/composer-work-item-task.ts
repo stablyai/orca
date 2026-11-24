@@ -40,6 +40,16 @@ export function toTaskItem(
       }
     }
   }
+  if (item.provider === 'clickup') {
+    return {
+      provider: 'clickup',
+      source: {
+        id: item.clickupIdentifier ?? '',
+        name: item.title,
+        url: item.url
+      }
+    }
+  }
   return {
     provider: 'linear',
     source: {

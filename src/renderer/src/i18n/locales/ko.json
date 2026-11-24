@@ -15947,7 +15947,15 @@
             "crossRepoDifferentTaskSource": "GitHub URL이 선택한 작업 소스와 다른 {{repo}} 저장소를 가리킵니다.",
             "crossRepoDifferentProject": "GitHub URL이 선택한 프로젝트와 다른 {{repo}} 저장소를 가리킵니다.",
             "useAsWorkspaceName": "<name>\"{{name}}\"</name>을(를) 워크스페이스 이름으로 사용",
-            "createNewBranchNamed": "새 브랜치 <name>{{name}}</name> 만들기"
+            "createNewBranchNamed": "새 브랜치 <name>{{name}}</name> 만들기",
+            "searchClickUp": "ClickUp 작업을 검색하거나 작업 URL을 붙여넣으세요",
+            "retryClickUp": "다시 시도",
+            "loadingClickUp": "ClickUp 작업 불러오는 중…",
+            "clickupDisconnected": "이 작업을 연결하려면 설정에서 ClickUp을 연결하세요",
+            "clickupRuntimeUpdate": "ClickUp을 연결하려면 원격 런타임을 업데이트하세요",
+            "clickupReadFailed": "이 ClickUp 작업을 불러오지 못했습니다",
+            "clickupLoaded": "ClickUp 작업을 불러왔습니다",
+            "clickupMode": "ClickUp"
           },
           "ProjectCombobox": {
             "empty": "검색과 일치하는 프로젝트가 없습니다.",
@@ -15986,7 +15994,8 @@
                   "b1418294ea": "입력을 시작해 GitLab MR과 이슈를 검색하세요.",
                   "80e7791c93": "일치하는 브랜치가 없습니다.",
                   "b4e65d98a6": "입력을 시작해 Linear 이슈를 검색하세요.",
-                  "5ba5d3e516": "입력을 시작해 Jira 이슈를 검색하거나 이슈 URL을 붙여넣으세요."
+                  "5ba5d3e516": "입력을 시작해 Jira 이슈를 검색하거나 이슈 URL을 붙여넣으세요.",
+                  "clickup": "입력해서 ClickUp 작업을 검색하거나 작업 URL을 붙여넣으세요."
                 }
               }
             }
@@ -25556,7 +25565,8 @@
       "addEmoji": "이모지 추가",
       "addEmojiTooltip": "이모지 추가 (또는 : 입력)",
       "noEmojiFound": "이모지를 찾을 수 없습니다",
-      "labels": "레이블: {{labels}}"
+      "labels": "레이블: {{labels}}",
+      "linkedClickUp": "연결된 ClickUp {{value0}}"
     },
     "attachments": {
       "updateRuntime": "워크스페이스 링크를 변경하려면 원격 런타임을 업데이트하세요",
@@ -26469,6 +26479,17 @@
         "projectListLimit": "Jira 프로젝트 목록이 페이지 제한을 초과했습니다. JQL로 프로젝트를 선택하세요.",
         "invalidCloudId": "사이트에서 올바른 Atlassian 클라우드 ID를 제공하지 않았습니다."
       },
+      "clickup": {
+        "notConnected": "ClickUp에 연결되어 있지 않습니다.",
+        "tokenRequired": "개인 API 토큰이 필요합니다.",
+        "connectionFailed": "ClickUp에서 이 토큰을 확인하지 못했습니다. 개인 API 토큰인지, 폐기되지 않았는지, 온라인 상태인지 확인하세요.",
+        "noWorkspaces": "이 ClickUp 계정에는 워크스페이스가 없습니다.",
+        "taskIdRequired": "올바른 ClickUp 작업 ID가 필요합니다.",
+        "commentBodyRequired": "댓글 내용이 필요합니다.",
+        "updatesRequired": "상태가 필요합니다.",
+        "updateFailed": "작업을 업데이트하지 못했습니다.",
+        "commentFailed": "댓글을 추가하지 못했습니다."
+      },
       "linear": {
         "notConnected": "Linear에 연결되지 않음",
         "createFailed": "Linear 생성 실패",
@@ -26485,6 +26506,91 @@
         "viewHasNoIssues": "사용자 지정 보기에 이슈가 없습니다",
         "viewHasNoProjects": "사용자 지정 보기에 프로젝트가 없습니다"
       }
+    },
+    "clickup": {
+      "remoteCredentialCopy": "개인 API 토큰으로 ClickUp을 연결하세요. 토큰은 선택한 원격 런타임으로 전송되어 런타임이 지원하는 암호화로 저장됩니다.",
+      "localCredentialCopy": "개인 API 토큰으로 ClickUp을 연결하세요. 토큰은 로컬에 저장되며 로컬 런타임 저장소가 지원하는 경우 암호화됩니다.",
+      "connectedAs": "{{name}}(으)로 연결됨",
+      "checking": "설정 작업을 표시하기 전에 ClickUp 액세스를 확인하는 중입니다.",
+      "connectionLost": "ClickUp에서 저장된 토큰을 거부했습니다. 새 개인 API 토큰으로 다시 연결하세요.",
+      "description": "ClickUp 작업을 둘러보고, 상태를 업데이트하고, 작업에서 바로 작업을 시작하세요.",
+      "statusConnected": "연결됨",
+      "statusNotConnected": "연결되지 않음",
+      "updateToken": "토큰 업데이트",
+      "connectAction": "ClickUp 연결",
+      "tokenName": "ClickUp API 토큰",
+      "verified": "확인됨",
+      "testing": "테스트 중...",
+      "test": "테스트",
+      "disconnect": "ClickUp 연결 해제",
+      "workspaceLabel": "워크스페이스",
+      "workspaceHint": "이 토큰은 여러 워크스페이스에 접근할 수 있습니다. 작업에는 여기에서 선택한 워크스페이스가 표시됩니다.",
+      "singleTokenNote": "토큰 하나가 활성 런타임에 저장되며 소속된 모든 ClickUp 워크스페이스를 포함합니다.",
+      "connectionFailed": "연결 실패",
+      "reconnectTitle": "ClickUp 다시 연결",
+      "connectTitle": "ClickUp 연결",
+      "tokenHint": "개인 API 토큰을 붙여넣으세요. Orca는 ClickUp 작업을 나열하고, 상태를 변경하고, 댓글을 추가하고, 작업에 연결된 워크스페이스를 시작합니다. 토큰 하나로 소속된 모든 워크스페이스를 사용할 수 있습니다.",
+      "tokenLabel": "개인 API 토큰",
+      "tokenPlaceholder": "pk_...",
+      "tokenSteps": "ClickUp에서 Settings > Apps를 열고 API Token 아래의 Generate를 선택한 뒤 복사해 여기에 붙여넣으세요.",
+      "openAppsSettings": "ClickUp Settings > Apps",
+      "remoteTokenStorage": "이 토큰은 활성 원격 런타임에 저장됩니다.",
+      "localTokenStorage": "로컬 런타임 토큰은 사용할 수 있는 경우 Electron 암호화 저장소를 사용해 이 기기에 저장됩니다.",
+      "cancel": "취소",
+      "verifying": "확인 중...",
+      "connect": "연결",
+      "search": {
+        "title": "ClickUp 연동",
+        "description": "개인 API 토큰으로 ClickUp을 연결해 작업을 둘러보고 연결하세요.",
+        "keyword": "clickup",
+        "workspace": "워크스페이스"
+      },
+      "setup": {
+        "connectTitle": "ClickUp 연결",
+        "connectDescription": "ClickUp의 Settings > Apps에서 개인 API 토큰을 추가하세요. 토큰 하나로 소속된 모든 워크스페이스를 사용할 수 있습니다.",
+        "manage": "토큰 관리",
+        "add": "ClickUp 액세스 추가",
+        "providerLabel": "ClickUp",
+        "description": "개인 API 토큰으로 ClickUp을 연결하고 작업에 표시합니다."
+      },
+      "openTasks": "ClickUp 작업 열기",
+      "reconnectPromptTitle": "ClickUp에 새 토큰이 필요합니다",
+      "connectPromptTitle": "ClickUp 계정 연결",
+      "reconnectPromptBody": "ClickUp에서 저장된 토큰을 거부했습니다. 토큰이 폐기되었거나 재생성되었을 수 있습니다. 계속 작업을 둘러보려면 새 개인 API 토큰을 추가하세요.",
+      "connectPromptBody": "ClickUp 작업을 여기에서 바로 둘러보고, 댓글을 달고, 작업을 시작하세요.",
+      "reconnectAction": "ClickUp 다시 연결",
+      "hide": "ClickUp 숨기기",
+      "listTitle": "ClickUp 작업",
+      "retry": "다시 시도",
+      "emptySearchTitle": "이 검색과 일치하는 최근 업데이트된 ClickUp 작업이 없습니다",
+      "emptyAssignedTitle": "나에게 할당된 ClickUp 작업이 없습니다",
+      "emptyTitle": "ClickUp 작업을 찾을 수 없습니다",
+      "emptySearchBody": "검색은 최근 업데이트된 작업의 이름과 사용자 지정 ID만 확인합니다. 작업 ID나 링크를 붙여넣으면 모든 작업을 찾을 수 있습니다.",
+      "emptyAssignedBody": "모두로 전환하면 이 워크스페이스의 모든 작업을 볼 수 있고, 닫힌 작업을 포함할 수도 있습니다.",
+      "emptyBody": "이 워크스페이스에서 선택한 필터와 일치하는 항목이 없습니다.",
+      "loadMore": "더 로드하기",
+      "scopeAssigned": "나에게 할당됨",
+      "scopeAll": "모두",
+      "includeClosed": "닫힌 작업 포함",
+      "refresh": "ClickUp 작업 새로 고침",
+      "statusFilter": "상태별 필터",
+      "searchPlaceholder": "이름 또는 ID로 작업을 검색하거나 ClickUp 작업 링크를 붙여넣으세요",
+      "openTaskAria": "{{value0}}을(를) ClickUp에서 열기",
+      "openInClickUp": "ClickUp에서 열기",
+      "unknownUser": "알 수 없음",
+      "changeStatus": "상태 변경",
+      "noStatuses": "이 목록에는 선택할 수 있는 상태가 없습니다.",
+      "dueOn": "마감 {{date}}",
+      "commentPlaceholder": "ClickUp 댓글 추가...",
+      "closePreview": "ClickUp 작업 미리보기 닫기",
+      "taskTitle": "ClickUp 작업",
+      "previewDescription": "선택한 작업을 미리 보고, 상태를 업데이트하고, 댓글을 달고, 작업을 시작하세요.",
+      "commentTooLarge": "댓글이 너무 커서 안전하게 제출할 수 없습니다.",
+      "switchWorkspaceFailed": "ClickUp 워크스페이스를 전환하지 못했습니다.",
+      "linkSourceUnavailable": "이 ClickUp 작업을 연결하지 못했습니다. ClickUp을 다시 연결한 뒤 다시 시도하세요.",
+      "connectionSuperseded": "더 최근 요청으로 인해 ClickUp 연결이 대체되었습니다.",
+      "runtimeUpdateTitle": "ClickUp에는 더 최신의 원격 런타임이 필요합니다",
+      "runtimeUpdateBody": "ClickUp을 연결하려면 원격 런타임을 업데이트하세요."
     }
   },
   "editorConflicts": {

@@ -6,6 +6,7 @@ import type { StateCreator } from 'zustand'
 import type { AppState } from '../../types'
 import type { GitHubWorkItem } from '../../../../../shared/github/work-items/work-item-types'
 import type { GitLabWorkItem } from '../../../../../shared/gitlab/gitlab-types'
+import type { ClickUpTask } from '../../../../../shared/clickup/clickup-types'
 import type { JiraIssue } from '../../../../../shared/jira/jira-types'
 import type { LinearIssue } from '../../../../../shared/linear/issue-types'
 import type { TaskProvider } from '../../../../../shared/work-items/task-providers'
@@ -88,6 +89,8 @@ export type TaskPageData = {
   openLinearSourceContext?: TaskSourceContext | null
   openJiraIssue?: JiraIssue
   openJiraSourceContext?: TaskSourceContext | null
+  openClickUpTask?: ClickUpTask
+  openClickUpSourceContext?: TaskSourceContext | null
 }
 
 export type NewWorkspaceDraft = {
@@ -102,7 +105,7 @@ export type NewWorkspaceDraft = {
   note: string
   attachments: string[]
   linkedWorkItem: {
-    provider?: 'github' | 'gitlab' | 'linear' | 'jira'
+    provider?: 'github' | 'gitlab' | 'linear' | 'jira' | 'clickup'
     type: 'issue' | 'pr' | 'mr'
     number: number
     title: string
@@ -110,6 +113,7 @@ export type NewWorkspaceDraft = {
     linearIdentifier?: string
     linearBranchName?: string
     jiraIdentifier?: string
+    clickupIdentifier?: string
     repoId?: string
   } | null
   /** Preserve where provider data came from, separately from the host chosen to run the workspace. */

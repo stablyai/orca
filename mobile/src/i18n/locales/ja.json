@@ -1192,6 +1192,17 @@
       "goal": {
         "sentAsGoal": "ゴールとして送信されました"
       }
+    },
+    "clickUpConnectPrompt": {
+      "updateDesktop": "このホストの Orca を更新",
+      "reconnectOnDesktop": "デスクトップで ClickUp に再接続",
+      "connectOnDesktop": "デスクトップで ClickUp に接続",
+      "credentialUnreadable": "ClickUp は保存されていますが、読み取れません：{{credentialError}}",
+      "lostConnection": "ClickUp が切断されたか、保存済みのトークンを拒否しました。デスクトップの Orca で「設定 → 連携」から個人 API トークンをもう一度追加し、再確認してください。",
+      "connectHint": "デスクトップの Orca で「設定 → 連携」から ClickUp の個人 API トークンを追加し、再確認してください。",
+      "checkAgain": "再確認",
+      "unreachableTitle": "デスクトップに接続できませんでした",
+      "unreachableMessage": "Orca がデスクトップから ClickUp の接続状況を読み取れませんでした。デスクトップで Orca が起動していることを確認し、再確認してください。"
     }
   },
   "connection": {
@@ -3579,6 +3590,7 @@
     },
     "itemActions": {
       "changeStatus": "ステータスを変更",
+      "copyClickUpLink": "ClickUp リンクをコピー",
       "copyGitHubLink": "GitHub リンクをコピーする",
       "copyLinearLink": "Linear リンクをコピーする",
       "creating": "作成中…",
@@ -3593,6 +3605,8 @@
       "discussion": "ディスカッション",
       "noChecks": "チェックが見つかりません。",
       "noComments": "コメントはありません。",
+      "list": "リスト",
+      "dueDate": "期限",
       "noPipelineRuns": "この MR のパイプライン実行履歴はありません。",
       "noSubIssues": "サブ Issue はありません。",
       "none": "なし",
@@ -3663,6 +3677,7 @@
     },
     "listSurface": {
       "connectLinearButton": "Linear に接続",
+      "clickUpStatusFailed": "ClickUp ステータスの読み取りに失敗しました",
       "connectLinearMessage": "「タスク」から、担当する Linear の Issue を確認して作業を開始できます。",
       "connectLinearTitle": "Linear アカウントを接続する",
       "jiraStatusFailed": "Jira の状態の読み取りに失敗しました。",
@@ -3717,6 +3732,7 @@
       "pullRequests": "PR",
       "repository": "リポジトリ",
       "repositorySortDescription": "リポジトリ別にグループ化し、アクティビティが新しい順に表示",
+      "clickupDescription": "割り当て済みタスクとワークスペースのタスク",
       "reviewRequestsDescription": "私に割り当てられたレビュー依頼",
       "status": "状態",
       "team": "チーム",
@@ -3727,6 +3743,39 @@
       "pageUnreachable": "ページ {{page}} は GitHub 検索で取得できる範囲を超えています。",
       "loadPageFailed": "ページ {{page}} を GitHub から読み込めませんでした。",
       "noMoreResults": "ページ {{page}} にこれ以上の結果はありません。"
+    },
+    "itemComments": {
+      "clickUpTask": "ClickUp タスク",
+      "openInClickUp": "ClickUp で開く"
+    },
+    "clickUpConnection": {
+      "updateHost": "モバイルで ClickUp を閲覧するには、このホストの Orca を更新してください。"
+    },
+    "clickUp": {
+      "scopeAll": "すべて",
+      "scopeAssigned": "自分に割り当て",
+      "scopeAssignedSubtitle": "自分に割り当てられたタスク",
+      "scopeAllSubtitle": "選択したワークスペースのすべてのタスク",
+      "closedSection": "クローズ済みのタスク",
+      "includeClosed": "クローズ済みを含める",
+      "includeClosedSubtitle": "完了済みやクローズ済みのタスクも表示します",
+      "statusSection": "ステータス",
+      "allStatuses": "すべてのステータス",
+      "loadMore": "さらにタスクを読み込む",
+      "loadMoreLabel": "さらに読み込む",
+      "scopeTitle": "ClickUp タスク",
+      "workspaceTitle": "ClickUp ワークスペース",
+      "workspaceHostNote": "デスクトップの Orca のワークスペースも切り替わります。",
+      "switchWorkspaceFailed": "ワークスペースの切り替えに失敗しました",
+      "changeStatus": "ステータスを変更",
+      "task": "ClickUp タスク",
+      "loadingStatuses": "ステータスを読み込み中...",
+      "noStatuses": "このリストには選択できるステータスがありません",
+      "loadStatusesFailed": "ステータスの読み込みに失敗しました",
+      "addCommentFailed": "コメントの追加に失敗しました",
+      "you": "あなた",
+      "updateFailed": "タスクの更新に失敗しました",
+      "loadMoreFailed": "ClickUp タスクをさらに読み込めませんでした"
     },
     "pickerProjection": {
       "allRepos": "すべてのリポジトリ",
@@ -3893,6 +3942,7 @@
     "screenChrome": {
       "newGitHubIssue": "GitHub の新規 Issue",
       "newLinearIssue": "新規 Linear Issue",
+      "refreshClickUp": "ClickUp タスクを更新",
       "refreshGitHub": "GitHub の作業を更新する",
       "refreshGitLab": "GitLab 作業項目を更新する",
       "refreshJira": "Jira Issue を更新する",
@@ -3901,7 +3951,8 @@
     },
     "searchControl": {
       "projectPlaceholder": "プロジェクトビューを検索…",
-      "providerPlaceholder": "{{provider}} のタスクを検索…"
+      "providerPlaceholder": "{{provider}} のタスクを検索…",
+      "clickUpPlaceholder": "名前または ID で検索するか、ClickUp タスクのリンクを貼り付けてください"
     },
     "smartSourceModes": {
       "allStates": "全て",
@@ -3920,6 +3971,7 @@
       "allSubtitle": "選択したサイト全体の未解決の Issue",
       "assignedSubtitle": "自分に割り当てられた未解決の Issue",
       "doneSubtitle": "最近解決された自分の Issue",
+      "noClickUpTasks": "ClickUp タスクはありません",
       "noGitHubTasks": "GitHub のタスクはありません。",
       "noGitLabTasks": "GitLab のタスクはありません。",
       "noJiraTasks": "Jira のタスクはありません。",

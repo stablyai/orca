@@ -3,7 +3,8 @@ import { apiBasePath, jiraRequest, type JiraClientForSite } from './authenticate
 import type { JiraAgileFieldIds } from './jira-issue-mapping'
 import { asRecord, asString, type JiraRecord } from './jira-record-pages'
 import { acquire, release } from './request-queue'
-import { settleJiraSummaryRead, withJiraDeadline } from './jira-read-failure'
+import { withRequestDeadline } from '../network/request-deadline'
+import { settleJiraSummaryRead } from './jira-read-failure'
 
 const SPRINT_FIELD_TYPE = 'com.pyxis.greenhopper.jira:gh-sprint'
 const STORY_POINTS_TYPE = 'com.pyxis.greenhopper.jira:jsw-story-points'
@@ -64,7 +65,7 @@ export function getAgileFieldIds(
   let pending = cache.get(key)
   if (!pending) {
     // Discovery owns a queue slot; no search may hold one while awaiting it.
-    pending = withJiraDeadline(undefined, 500, async (requestSignal) => {
+    pending = withRequestDeadline(undefined, 500, async (requestSignal) => {
       await acquire(requestSignal)
       try {
         const fields = await settleJiraSummaryRead(
