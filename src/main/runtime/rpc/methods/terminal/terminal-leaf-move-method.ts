@@ -1,4 +1,6 @@
+import { defineMethod } from '../../core'
 import { parseRemoteRuntimePtyId } from '../../../../../shared/remote-runtime/remote-runtime-pty-id'
+import { TerminalMoveLeaf } from '../../../../../shared/rpc-contract/terminal/terminal-leaf-move-params'
 import type {
   CommandOf,
   LayoutApplyReply
@@ -82,3 +84,10 @@ export async function moveLeafToNewTabOnRuntime(
   // Keep the renderer's environment-scoped identity outside the host's private PTY namespace.
   return toLeafMoveResult(reply, request)
 }
+
+export const TERMINAL_LEAF_MOVE_METHOD = defineMethod({
+  name: 'terminal.moveLeafToNewTab',
+  permission: 'workspace',
+  params: TerminalMoveLeaf,
+  handler: (params, { runtime }) => moveLeafToNewTabOnRuntime(runtime, params)
+})

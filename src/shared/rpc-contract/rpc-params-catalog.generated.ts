@@ -909,9 +909,11 @@ import { CancelUsageLimitContinueParams } from './structured-agent-session/usage
 import { CreateAgentSessionParams, EnsureAgentSessionParams } from './terminal/agent-session-params'
 import { TerminalInferCodexQuestionSkip } from './terminal/terminal-codex-question-params'
 import { TerminalDaemonRestartSeveredParams } from './terminal/terminal-daemon-params'
+import { TerminalMoveLeaf } from './terminal/terminal-leaf-move-params'
 import { TerminalLimitUpdateParams } from './terminal/terminal-limit-params'
 import { TerminalAdoptOrphans } from './terminal/terminal-orphan-params'
 import { TerminalQuickCommandsUpdate } from './terminal/terminal-quick-command-params'
+import { TerminalSignal } from './terminal/terminal-signal-params'
 import {
   TerminalAckOutput,
   TerminalMultiplex,
@@ -2068,6 +2070,7 @@ export const RPC_PARAMS_BY_METHOD = {
   'terminal.inspectProcess': TerminalInspectProcess,
   'terminal.isRunningAgent': TerminalHandle,
   'terminal.list': TerminalListParams,
+  'terminal.moveLeafToNewTab': TerminalMoveLeaf,
   'terminal.multiplex': TerminalMultiplex,
   'terminal.openInputSession': TerminalOpenInputSession,
   'terminal.read': TerminalRead,
@@ -2087,6 +2090,7 @@ export const RPC_PARAMS_BY_METHOD = {
   'terminal.setPaneTitle': TerminalSetPaneTitle,
   'terminal.setViewerColors': TerminalSetViewerColors,
   'terminal.show': TerminalHandle,
+  'terminal.signal': TerminalSignal,
   'terminal.sleep': TerminalCloseAll,
   'terminal.split': TerminalSplit,
   'terminal.stop': TerminalCloseAll,

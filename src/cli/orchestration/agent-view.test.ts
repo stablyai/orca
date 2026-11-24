@@ -54,6 +54,8 @@ describe('orchestration agent views', () => {
     callMock.mockReset()
     process.exitCode = undefined
     vi.stubEnv('ORCA_CLI_COMMAND', 'orca-dev')
+    // Pin shell quoting: host ComSpec would otherwise render per-machine cmd/PowerShell quoting.
+    vi.stubEnv('ORCA_TERMINAL_WINDOWS_SHELL', 'git-bash')
     vi.stubEnv('ORCA_TERMINAL_HANDLE', 'term_coord')
     vi.stubEnv('ORCA_AGENT_SESSION_ID', undefined)
   })

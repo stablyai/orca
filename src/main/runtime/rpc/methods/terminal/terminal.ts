@@ -10,6 +10,7 @@ import {
   TERMINAL_VIEWPORT_METHODS_BEFORE_STREAMS
 } from './terminal-viewport-methods'
 import { TERMINAL_VIEWER_COLORS_METHODS } from './terminal-viewer-colors-method'
+import { TERMINAL_LEAF_MOVE_METHOD } from './terminal-leaf-move-method'
 
 // Preserve released manifest order; keep registration composition owned by this public entry point.
 export const TERMINAL_METHODS = [
@@ -22,5 +23,6 @@ export const TERMINAL_METHODS = [
   ...TERMINAL_VIEWPORT_METHODS_AFTER_STREAMS,
   ...TERMINAL_VIEWER_COLORS_METHODS,
   ...TERMINAL_CLAUDE_AGENT_VIEW_METHODS,
-  ...TERMINAL_CODEX_QUESTION_SKIP_METHODS
+  ...TERMINAL_CODEX_QUESTION_SKIP_METHODS,
+  TERMINAL_LEAF_MOVE_METHOD
 ]

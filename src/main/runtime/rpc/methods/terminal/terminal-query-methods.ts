@@ -20,6 +20,7 @@ import {
   TerminalResolvePane,
   TerminalSetPaneTitle
 } from '../../../../../shared/rpc-contract/terminal/terminal-unary-params'
+import { TerminalSignal } from '../../../../../shared/rpc-contract/terminal/terminal-signal-params'
 
 export const TERMINAL_QUERY_METHODS = [
   defineMethod({
@@ -193,6 +194,14 @@ export const TERMINAL_QUERY_METHODS = [
     params: TerminalHandle,
     handler: async (params, { runtime }) => ({
       reset: await runtime.resetTerminalInputModes(params.terminal)
+    })
+  }),
+  defineMethod({
+    name: 'terminal.signal',
+    permission: 'workspace',
+    params: TerminalSignal,
+    handler: async (params, { runtime }) => ({
+      signal: await runtime.sendTerminalSignal(params.terminal, params.signal)
     })
   }),
   defineMethod({

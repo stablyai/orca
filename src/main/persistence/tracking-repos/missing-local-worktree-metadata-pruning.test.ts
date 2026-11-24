@@ -98,7 +98,8 @@ describe('pruneSessionlessMissingLocalWorktreeMetadataForRepo', () => {
     state.worktreeMeta[deletedId] = makeMeta(deletedId)
     const scan = capture(state)
 
-    expect(pruneCaptured(state, scan, [archivedId, deletedId])).toEqual([deletedId])
+    // Fixtures use POSIX paths; pin the platform so Windows checkouts do not fail the premise closed.
+    expect(pruneCaptured(state, scan, [archivedId, deletedId], 'linux')).toEqual([deletedId])
     expect(state.worktreeMeta[archivedId]).toMatchObject({
       comment: 'pick up after review',
       linkedPR: 42
@@ -135,7 +136,8 @@ describe('pruneSessionlessMissingLocalWorktreeMetadataForRepo', () => {
 
     const scan = capture(state)
 
-    expect(pruneCaptured(state, scan, allIds).sort()).toEqual(
+    // Fixtures use POSIX paths; pin the platform so Windows checkouts do not fail the premise closed.
+    expect(pruneCaptured(state, scan, allIds, 'linux').sort()).toEqual(
       [...terminatedIds, ...supersededIds, ...recycledIds].sort()
     )
     expect(Object.keys(state.worktreeMeta).sort()).toEqual([...liveIds].sort())
