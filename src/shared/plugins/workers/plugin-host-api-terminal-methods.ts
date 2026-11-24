@@ -28,6 +28,12 @@ const terminalListResult = z.object({
 })
 
 const terminalTargetParams = z.strictObject({ terminalId: pluginTerminalIdSchema })
+const terminalFocusParams = z.strictObject({
+  terminalId: pluginTerminalIdSchema,
+  /** Also bring Orca's window in front of other apps once it shows the terminal (host API 1.11;
+   *  older hosts refuse it with `invalid_params`). */
+  raiseWindow: z.boolean().optional()
+})
 const terminalFocusResult = z.object({
   /** False when Orca's window did not move to the terminal: a newer focus request won, or the
    *  window could not show it. */
@@ -48,13 +54,14 @@ export const PLUGIN_TERMINAL_ACTIONS_API = {
   }),
   'terminal.focus': spec({
     summary:
-      "Shows any terminal's workspace and focuses its pane, as clicking it does; desktop app only. `focused` is false when a newer focus request won or the window did not move to it.",
+      "Shows any terminal's workspace and focuses its pane, as clicking it does; desktop app only. `raiseWindow` also brings Orca's window in front of other apps. `focused` is false when a newer focus request won or the window did not move to it, and the window is then not raised.",
     since: 7,
+    paramsSince: { raiseWindow: 11 },
     scope: 'explicit-terminal',
     capability: 'workspace:write',
     mutation: true,
     surfaces: WORKER_ONLY,
-    params: terminalTargetParams,
+    params: terminalFocusParams,
     result: terminalFocusResult
   }),
   'terminal.close': spec({
