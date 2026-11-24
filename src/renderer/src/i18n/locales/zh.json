@@ -473,6 +473,9 @@
           "sleep": "休眠",
           "performance": "性能"
         }
+      },
+      "sessionHost": {
+        "sshDetail": "此 SSH 主机的页面在这台电脑上打开"
       }
     },
     "agents": {
@@ -23569,6 +23572,25 @@
     },
     "loadStall": {
       "waitingForHost": "正在等待 {{host}}…"
+    },
+    "profileCookieClear": {
+      "label": "Cookie",
+      "action": "清除 Cookie…",
+      "rowLocal": "退出这台电脑上 {{profile}} 中所有网站的登录",
+      "rowServer": "退出 {{host}} 上 {{profile}} 中所有网站的登录，包括这台电脑上的页面和串流的页面",
+      "rowSsh": "退出 {{host}} 的 {{profile}} 中所有网站的登录",
+      "unavailable": "此配置文件在所选主机上不可用",
+      "confirmTitle": "要清除 {{host}} 上 {{profile}} 中的 Cookie 吗？",
+      "confirmTitleLocal": "要清除这台电脑上 {{profile}} 中的 Cookie 吗？",
+      "confirmDescriptionServer": "这会退出此配置文件中所有网站的登录，包括这台电脑上的页面和串流的页面。其他配置文件和主机会保留各自的 Cookie",
+      "confirmDescription": "这会退出此配置文件中所有网站的登录。其他配置文件和主机会保留各自的 Cookie",
+      "clear": "清除",
+      "cancel": "取消",
+      "cleared": "已清除 {{host}} 上 {{profile}} 中的 Cookie",
+      "clearedLocal": "已清除这台电脑上 {{profile}} 中的 Cookie",
+      "failed": "无法清除 {{host}} 上 {{profile}} 中的 Cookie。请重试",
+      "failedLocal": "无法清除这台电脑上 {{profile}} 中的 Cookie。请重试",
+      "sshHostOption": "{{host}}（SSH）"
     }
   },
   "runtimeRpc": {
