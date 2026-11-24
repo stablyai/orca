@@ -1,11 +1,9 @@
 import { translate } from '@/i18n/i18n'
 import type { GitCommitCompareResult } from '../../../../../../shared/git/diff/git-diff-compare-types'
 
-type PendingCommitCompare = { completion: PromiseWithResolvers<GitCommitCompareResult> }
-
 export type CommitCompareReads = {
   cache: Map<string, GitCommitCompareResult>
-  pending: Map<string, PendingCommitCompare>
+  pending: Map<string, Promise<GitCommitCompareResult>>
 }
 
 export function commitDiffErrorMessage(error?: unknown): string {
@@ -17,35 +15,31 @@ export function commitDiffErrorMessage(error?: unknown): string {
       )
 }
 
+/** Joins the commit's read in flight, or starts one; a ready result is cached for later reads. */
 export function trackCommitCompare(
   reads: CommitCompareReads,
   commitId: string,
-  request: Promise<GitCommitCompareResult>
+  dispatch: () => Promise<GitCommitCompareResult>
 ): Promise<GitCommitCompareResult> {
-  // When the same commit is read again, existing callers follow the newer reply.
-  const completion =
-    reads.pending.get(commitId)?.completion ?? Promise.withResolvers<GitCommitCompareResult>()
-  const pending = { completion }
-  reads.pending.set(commitId, pending)
-  const settle = (result: GitCommitCompareResult | null, error?: unknown): void => {
-    if (reads.pending.get(commitId) !== pending) {
-      return
-    }
-    reads.pending.delete(commitId)
-    if (result?.summary.status === 'ready') {
-      reads.cache.set(commitId, result)
-      completion.resolve(result)
-    } else {
-      completion.reject(
-        error ?? new Error(result?.summary.errorMessage ?? commitDiffErrorMessage())
-      )
-    }
+  // Reselecting a commit before its compare settles must not ask the owner again.
+  const inFlight = reads.pending.get(commitId)
+  if (inFlight) {
+    return inFlight
   }
-  void request.then(
-    (result) => settle(result),
-    (error: unknown) => settle(null, error)
-  )
-  return completion.promise
+  const read = dispatch().then((result) => {
+    if (result.summary.status !== 'ready') {
+      throw new Error(result.summary.errorMessage ?? commitDiffErrorMessage())
+    }
+    reads.cache.set(commitId, result)
+    return result
+  })
+  reads.pending.set(commitId, read)
+  // A failed read is not kept, so Retry or a later selection reads again.
+  const release = (): void => {
+    reads.pending.delete(commitId)
+  }
+  void read.then(release, release)
+  return read
 }
 
 // Latest Open diff per owner and commit across mounts, so a reopened view's open is not overwritten by an older one.
