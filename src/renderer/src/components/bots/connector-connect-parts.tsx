@@ -160,16 +160,21 @@ export function connectorSetupFor(bot: { name: string }, hostName: string | null
     : translate('bots.setup.for', 'for {{name}}', { name: bot.name, ...HOW_TO_ASK_ESCAPED })
 }
 
-/** An escaped intro (see HOW_TO_ASK_ESCAPED) as the plain text it reads as: entities decoded, markup
- *  dropped, a line break read as a space. The compact header shows and titles this same string. */
+/** An escaped intro (see HOW_TO_ASK_ESCAPED) as the plain text it reads as: entities decoded, inline
+ *  markup dropped, a line break or paragraph edge read as a space. The compact header shows and titles
+ *  this same string. */
 function plainIntro(intro: string): string {
   // An inert parse: nothing in it runs or loads.
   const body = new DOMParser().parseFromString(intro, 'text/html').body
   for (const lineBreak of body.querySelectorAll('br')) {
     lineBreak.replaceWith(' ')
   }
-  // HTML's own whitespace collapsing: a no-break space stays as written.
-  return (body.textContent ?? '').replace(/[ \t\n\r\f]+/g, ' ').trim()
+  for (const paragraph of body.querySelectorAll('p')) {
+    paragraph.before(' ')
+    paragraph.after(' ')
+  }
+  // HTML's own whitespace: runs collapse and the ends drop, but a no-break space stays as written.
+  return (body.textContent ?? '').replace(/[ \t\n\r\f]+/g, ' ').replace(/^ | $/g, '')
 }
 
 export function ConnectorSetupHeader({
