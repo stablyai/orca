@@ -174,6 +174,14 @@ function promoteCodexRuntimeSettingsToSystemUnsafe(
   }
   const holdInManagedCopy = (): CodexSettingsPromotionPlan => {
     // Orca never writes a distro's config, so pending edits stay in the managed copy until the distro changes that key.
+    for (const [key, held] of baseline?.conflicts ?? []) {
+      // A distro edit to a held key wins even when the managed copy changed it again.
+      if (getComparableRaw(systemValues.get(key)) !== held.system) {
+        updates.delete(key)
+        conflicts.delete(key)
+        runtimeValuesToPreserve.delete(key)
+      }
+    }
     for (const [key, raw] of updates) {
       conflicts.set(key, { runtime: raw, system: getComparableRaw(systemValues.get(key)) ?? null })
       runtimeValuesToPreserve.set(key, raw)

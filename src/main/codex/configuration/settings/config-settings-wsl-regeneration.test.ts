@@ -164,8 +164,10 @@ describe('managed Codex config for a WSL distro config', () => {
     expect(readRuntimeConfig()).toContain('[mcp_servers.docs]')
     expect(readRuntimeConfig()).toMatch(/^daemon_auto_start = false # orca:/m)
 
-    // A later edit in the distro's own config wins for that key.
+    // A later edit in the distro's own config wins for that key, even if the managed copy changed it again.
     writeSystemConfig(original.replace('"gpt-5"', '"o5"'))
+    simulateCodexSettingWrite('model', '"o3"')
+    syncSystemConfigIntoManagedCodexHome()
     syncSystemConfigIntoManagedCodexHome()
     expect(readRuntimeConfig()).toContain('model = "o5"')
     expect(readRuntimeConfig()).toContain('ponytail@ponytail')
