@@ -31,9 +31,8 @@ export const FederationAttachStartParams = z.object({
    * advertising worktree.lineage.crossMachine. The new worktree nests under it. */
   crossStoreParent: CrossStoreParentRefSchema.optional(),
   /** Orchestration picked the parent; omitted by older coordinators, whose children record `cli`. */
-  crossStoreParentInferredFrom: z
-    .literal('orchestration-context')
-    .optional() /** A trusted bot-home lineage stamp from the coordinating host. */,
+  crossStoreParentInferredFrom: z.literal('orchestration-context').optional(),
+  /** A trusted bot-home lineage stamp from the coordinating host. */
   chatLineage: z.literal(true).optional()
 })
 
