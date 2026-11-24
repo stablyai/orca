@@ -14,7 +14,7 @@ export function workerKeepOpenByDefault(
   if (worktree !== 'new-child' && worktree !== 'new-top-level') {
     return false
   }
-  return !startedForBot(db, dispatchId, isBotChat)
+  return !workerStartedByBot(db, dispatchId, isBotChat)
 }
 
 /** The same default for a worker whose Dispatch lives on the server that runs it, decided here from
@@ -32,11 +32,11 @@ export function coordinatorKeepOpenByDefault(
   if (caller.orcaSessionId && isBotChat(caller.orcaSessionId)) {
     return false
   }
-  return !(caller.creatorDispatchId && startedForBot(db, caller.creatorDispatchId, isBotChat))
+  return !(caller.creatorDispatchId && workerStartedByBot(db, caller.creatorDispatchId, isBotChat))
 }
 
 // Walks the recorded creators up to the root coordinator, whose session is the Run's when unrecorded.
-function startedForBot(
+export function workerStartedByBot(
   db: OrchestrationDb,
   dispatchId: string,
   isBotChat: (sessionId: string) => boolean

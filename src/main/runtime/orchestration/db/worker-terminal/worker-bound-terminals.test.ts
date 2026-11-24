@@ -20,7 +20,8 @@ import {
 } from '../../../rpc/methods/orchestration/worker/release/worker-bound-terminal-close'
 import {
   coordinatorKeepOpenByDefault,
-  workerKeepOpenByDefault
+  workerKeepOpenByDefault,
+  workerStartedByBot
 } from '../../../rpc/methods/orchestration/worker/start/worker-keep-open-default'
 import {
   mintStructuredWorkerHandle,
@@ -142,8 +143,10 @@ describe('terminals bound to a worker', () => {
 
   it('a worker a bot started is not kept open, and its setup terminal closes with it', async () => {
     const worker = startWorker(botChat)
+    expect(workerStartedByBot(db, worker.dispatchId, isBotChat)).toBe(true)
     expect(workerKeepOpenByDefault(db, 'new-child', worker.dispatchId, isBotChat)).toBe(false)
     const helper = startWorker(personChat, 'running', worker.dispatchId)
+    expect(workerStartedByBot(db, helper.dispatchId, isBotChat)).toBe(true)
     expect(workerKeepOpenByDefault(db, 'new-child', helper.dispatchId, isBotChat)).toBe(false)
 
     const { runtime, closed } = host(worker)

@@ -18,6 +18,8 @@ import { chatAssigneeOf } from '../../../chat-assignee-admission'
 import { OrchestrationError } from '../../../../../../orchestration/orchestration-error'
 import { sendChatTask, type ChatTaskDelivery } from '../../../chat-task-delivery'
 import { dispatchTaskSource } from '../../../../../../orchestration/coordinator/dispatch/dispatch-task-source'
+import { botOfSession } from '../../../../../../../bots/bot-session-tabs'
+import { workerStartedByBot } from '../worker-keep-open-default'
 import type { AgentMessageSource } from '../../../../../../../../shared/agent-session/journal/agent-session-message-source'
 import type { WorkerTurnStartObservation } from './worker-start-turn-observation'
 import { STRUCTURED_AGENT_SESSION_STARTUP_CEILING_MS } from '../../../../../../../native-chat/agent-session-wire/startup/structured-agent-session-startup-attempt-contract'
@@ -71,7 +73,12 @@ export async function deliverWorkerDispatchPreamble(args: {
           : terminalHandle,
     devMode: args.devMode,
     cliCommand: runtime.getTerminalOrchestrationCliCommand(terminalHandle),
-    unreadMail: args.db.getLatestUnreadMessageSequence(`dispatch:${args.dispatchId}`) !== undefined
+    unreadMail: args.db.getLatestUnreadMessageSequence(`dispatch:${args.dispatchId}`) !== undefined,
+    preserveHumanCommitCredit: workerStartedByBot(
+      args.db,
+      args.dispatchId,
+      (sessionId) => botOfSession(runtime.bots, sessionId) !== null
+    )
   })
   if (chat) {
     const dispatch = args.db.getDispatchContextById(args.dispatchId)

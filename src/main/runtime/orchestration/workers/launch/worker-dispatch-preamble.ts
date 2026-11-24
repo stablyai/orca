@@ -30,6 +30,8 @@ export type PreambleParams = {
   subWorkersInOwnRun?: boolean
   // Mail already in the Dispatch's mailbox, which no wake will announce.
   unreadMail?: boolean
+  /** Bot workers carry their owner's established commit-credit rule. */
+  preserveHumanCommitCredit?: boolean
 }
 
 /** A session address names a chat worker; any other handle is a terminal. */
@@ -91,6 +93,13 @@ export function buildDispatchPreamble(params: PreambleParams): string {
     workerKind: params.workerKind ?? 'prompt-returning-agent',
     chat
   })
+  const commitCreditInstructions = params.preserveHumanCommitCredit
+    ? `
+
+=== COMMIT CREDIT ===
+When you make a commit, do not add AI/model co-author or generated-by trailers. Keep a
+Co-authored-by trailer only when it credits a genuine human contributor whose work you carry.`
+    : ''
 
   // Use one-line recipes across POSIX/PowerShell/cmd; fence comments and use plain reasons to avoid misleading Chat rendering (STA-8200).
   const header = `You are working inside Orca, a multi-agent IDE. You are a dispatched worker.
@@ -121,7 +130,7 @@ ${checkLines({ chat, unreadMail: params.unreadMail, cli, workerHandle: params.wo
   ${cli} orchestration send --from ${params.workerHandle} --type worker_done --subject "<short status>" --body "<3-sentence summary: what you did, what you found, what's left>" --task-id ${params.taskId} --dispatch-id ${params.dispatchId} --outcome succeeded
 \`\`\`
 
-${postDoneInstructions}`
+${postDoneInstructions}${commitCreditInstructions}`
 
   // Show real drift even below refusal threshold so workers notice stale artifacts early.
   const drift =
