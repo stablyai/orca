@@ -89,9 +89,9 @@ function reconcilePlan(plan: TabStripPlan, ids: readonly string[]): TabStripPlan
     return plan
   }
   const present = new Set(ids)
-  const known = new Set([plan.activeId, ...plan.iconIds, ...plan.hiddenIds])
   const iconIds = plan.iconIds.filter((id) => present.has(id))
-  const hiddenIds = ids.filter((id) => plan.hiddenIds.includes(id) || !known.has(id))
+  const shown = new Set(plan.chipOnly ? [] : [plan.activeId, ...iconIds])
+  const hiddenIds = ids.filter((id) => !shown.has(id))
   if (sameIds(iconIds, plan.iconIds) && sameIds(hiddenIds, plan.hiddenIds)) {
     return plan
   }
@@ -190,7 +190,7 @@ export function useTabStripCondense({
     replan()
   }, [replan, idsKey, activeId, frozen, heldWidths])
 
-  // Chrome-style close: keep widths while the pointer stays, so the next × lands under it.
+  // Hold widths so the next close button stays under the pointer.
   const pointerInsideRef = useRef(false)
   const snapshotRef = useRef<{
     widths: Map<string, number>
@@ -208,12 +208,9 @@ export function useTabStripCondense({
       }
       return
     }
-    const present = new Set(ids)
-    const onlyRemoved =
-      ids.length < previous.ids.length && ids.every((id) => previous.ids.includes(id))
     const snapshot = snapshotRef.current
     if (
-      !onlyRemoved ||
+      ids.length >= previous.ids.length ||
       !pointerInsideRef.current ||
       !snapshot ||
       snapshot.ids !== previous.idsKey ||
@@ -222,6 +219,12 @@ export function useTabStripCondense({
       setHeldWidths(null)
       return
     }
+    const previousIds = new Set(previous.ids)
+    if (!ids.every((id) => previousIds.has(id))) {
+      setHeldWidths(null)
+      return
+    }
+    const present = new Set(ids)
     const held = new Map([...snapshot.widths].filter(([id]) => present.has(id)))
     const activeHeld = activeId === null ? undefined : held.get(activeId)
     // An icon that just became active needs its title, so the strip reflows instead.

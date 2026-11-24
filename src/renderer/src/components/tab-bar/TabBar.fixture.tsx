@@ -347,12 +347,18 @@ const NARROW_TITLES = [
   'Shell'
 ]
 
+// Ownership is read from the store when a +N pick restores focus.
+const NARROW_STRIP_STORE = {
+  activeWorktreeId: WORKSPACE_ID,
+  activeGroupIdByWorktree: { [WORKSPACE_ID]: 'tab-width-group' }
+}
+
 function NarrowStripFixture(): React.JSX.Element {
   return <TabWidthFixture count={6} titles={NARROW_TITLES} initialActiveIndex={3} isGroupFocused />
 }
 
 function narrowStrip(width: number): ReturnType<typeof defineFixture> {
-  return defineFixture({ width, render: () => <NarrowStripFixture /> })
+  return defineFixture({ width, store: NARROW_STRIP_STORE, render: () => <NarrowStripFixture /> })
 }
 
 export const narrow640 = narrowStrip(640)
@@ -372,19 +378,28 @@ async function nextFrames(count: number): Promise<void> {
 /** Opens the "+N" list and moves keyboard focus one row, so the current row and the focused row differ. */
 async function openOverflowList(frame: HTMLElement): Promise<void> {
   await nextFrames(4)
-  frame
-    .querySelector('[data-tab-strip-overflow-chip]')
-    ?.dispatchEvent(
-      new PointerEvent('pointerdown', { bubbles: true, button: 0, pointerType: 'mouse' })
-    )
-  await new Promise((resolve) => setTimeout(resolve, 300))
+  const chip = frame.querySelector('[data-tab-strip-overflow-chip]')
+  if (!chip) {
+    throw new Error('Missing tab overflow chip')
+  }
+  chip.dispatchEvent(
+    new PointerEvent('pointerdown', { bubbles: true, button: 0, pointerType: 'mouse' })
+  )
+  await nextFrames(4)
   const focused = document.activeElement
-  focused?.dispatchEvent(new KeyboardEvent('keydown', { bubbles: true, key: 'ArrowDown' }))
+  if (!focused?.closest('[role="menu"][data-state="open"]')) {
+    throw new Error('Tab overflow menu did not open and receive focus')
+  }
+  focused.dispatchEvent(new KeyboardEvent('keydown', { bubbles: true, key: 'ArrowDown' }))
   await nextFrames(2)
+  if (!document.activeElement?.matches('[data-tab-strip-list-entry]:not([aria-current="true"])')) {
+    throw new Error('Keyboard focus did not move to a different tab')
+  }
 }
 
 export const narrowOverflowListOpen = defineFixture({
   width: 280,
+  store: NARROW_STRIP_STORE,
   render: () => <NarrowStripFixture />,
   interact: openOverflowList
 })

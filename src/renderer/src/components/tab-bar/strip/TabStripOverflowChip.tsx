@@ -187,8 +187,8 @@ export function TabStripOverflowChip({
 }): React.JSX.Element {
   const t = useTranslate()
   const [open, setOpen] = useState(false)
-  const contentRef = useRef<HTMLDivElement>(null)
   const pendingFocusIdRef = useRef<string | null>(null)
+  const floatingPanel = surface?.closest<HTMLElement>('[data-floating-terminal-panel]') ?? null
   const indexBindings = useTabIndexBindings()
   // tab.selectByIndex counts unified tabs in strip order; paired rows have no digit.
   const unifiedIndexById = useMemo(
@@ -275,27 +275,29 @@ export function TabStripOverflowChip({
           </DropdownMenuTrigger>
         </TooltipTrigger>
         <DropdownMenuContent
-          ref={contentRef}
+          portalContainer={floatingPanel}
+          data-floating-terminal-no-drag={floatingPanel ? '' : undefined}
           align="end"
           sideOffset={4}
           className="w-64 max-w-[calc(100vw-1rem)]"
           onOpenAutoFocus={(event) => {
-            if (firstHiddenAttentionId === null) {
+            if (firstHiddenAttentionId === null || !(event.target instanceof HTMLElement)) {
               return
             }
-            // An amber chip opens on the tab that needs the user, so Enter takes them there.
-            event.preventDefault()
-            const row = contentRef.current?.querySelector<HTMLElement>(
+            const row = event.target.querySelector<HTMLElement>(
               `[data-tab-strip-list-entry="${CSS.escape(firstHiddenAttentionId)}"]`
             )
-            row?.focus()
-            row?.scrollIntoView({ block: 'nearest' })
+            if (row) {
+              event.preventDefault()
+              row.focus()
+              row.scrollIntoView({ block: 'nearest' })
+            }
           }}
           onCloseAutoFocus={(event) => {
             const pickedId = pendingFocusIdRef.current
             pendingFocusIdRef.current = null
             // Closed because the group lost focus: leave focus where the user put it.
-            if (!isGroupFocused) {
+            if (!isGroupFocused || !isGroupFocusedInStore(worktreeId, groupId)) {
               event.preventDefault()
               return
             }

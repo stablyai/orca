@@ -25,7 +25,7 @@ export function useTitlebarChromeFoldObserver({
   // Cached widths of other levels are stale now and folded parts can't be measured, so re-measure
   // from full chrome (this layout pass, before paint) rather than guess.
   const shapeKeyRef = useRef(headerShapeKey)
-  // The first decision after a reset keeps the old level's hysteresis, so a width in the deadband refolds to where it was.
+  // Keep the old hysteresis until the new geometry settles, including intermediate fold levels.
   const levelBeforeResetRef = useRef<TitlebarChromeFoldLevel | null>(null)
   useLayoutEffect(() => {
     if (shapeKeyRef.current === headerShapeKey) {
@@ -33,7 +33,7 @@ export function useTitlebarChromeFoldObserver({
     }
     shapeKeyRef.current = headerShapeKey
     headerWidthByLevelRef.current = {}
-    levelBeforeResetRef.current = getTitlebarChromeFoldLevel()
+    levelBeforeResetRef.current ??= getTitlebarChromeFoldLevel()
     setTitlebarChromeFoldLevel(0)
   }, [headerShapeKey])
 
@@ -53,19 +53,17 @@ export function useTitlebarChromeFoldObserver({
       const header = controls.getBoundingClientRect().width
       const cache = headerWidthByLevelRef.current
       cache[current] = header
-      const levelBeforeReset = levelBeforeResetRef.current
-      levelBeforeResetRef.current = null
-      setTitlebarChromeFoldLevel(
-        decideTitlebarChromeFold({
-          previous: current,
-          stripWidth: strip,
-          headerWidth: header,
-          foldableWidthTo: (level) => measureFoldableWidth(controls, current, level),
-          cachedHeaderWidths: cache,
-          hysteresisFrom:
-            levelBeforeReset !== null && levelBeforeReset > current ? levelBeforeReset : current
-        })
-      )
+      const hysteresisFrom = levelBeforeResetRef.current ?? current
+      const next = decideTitlebarChromeFold({
+        previous: current,
+        stripWidth: strip,
+        headerWidth: header,
+        foldableWidthTo: (level) => measureFoldableWidth(controls, current, level),
+        cachedHeaderWidths: cache,
+        hysteresisFrom
+      })
+      levelBeforeResetRef.current = next > current && next < hysteresisFrom ? hysteresisFrom : null
+      setTitlebarChromeFoldLevel(next)
     }
     evaluate()
     const observer = new ResizeObserver(evaluate)

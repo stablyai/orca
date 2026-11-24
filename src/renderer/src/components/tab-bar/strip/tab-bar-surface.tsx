@@ -263,6 +263,7 @@ export function renderTabBarSurface(
         ) : null}
         {hiddenIds.size > 0 ? (
           <TabStripOverflowChip
+            key={resolvedGroupId}
             entries={stripEntries}
             hiddenIds={hiddenIds}
             chipOnly={chipOnly}

@@ -112,7 +112,6 @@ function mount(pane: number, approachFrom = pane): (ui: React.JSX.Element) => vo
   return rerender
 }
 
-/** A reset shows full chrome at most once, then refolds in one move; later resizes change nothing. */
 /** After a reset to full chrome, the level only refolds forward (one step per reading) to `end`. */
 function expectSingleRefold(run: number[], end: number): void {
   expect(run.length).toBeLessThanOrEqual(3)
@@ -127,7 +126,7 @@ function expectSingleRefold(run: number[], end: number): void {
 }
 
 describe('useTitlebarChromeFoldObserver header-shape reset', () => {
-  it('toggling full screen at a narrow width refolds forward without back-and-forth and ends where it started', () => {
+  it('refolds to the measured level after each fullscreen toggle', () => {
     // Strip 110 at full chrome and 176 at step 1: step 2 windowed, step 1 in full screen.
     const rerender = mount(330)
     expect(getTitlebarChromeFoldLevel()).toBe(2)
@@ -140,5 +139,15 @@ describe('useTitlebarChromeFoldObserver header-shape reset', () => {
     const rerender = mount(552, 540)
     expect(getTitlebarChromeFoldLevel()).toBe(1)
     expectSingleRefold(changeHeaderShape(rerender, { fullScreen: false, view: 'settings' }), 1)
+  })
+
+  it('keeps level 2 hysteresis through the intermediate reading after entering fullscreen', () => {
+    // The level-1 strip grows from 124px to 194px, inside the 190–197px deadband.
+    const rerender = mount(278)
+    expect(getTitlebarChromeFoldLevel()).toBe(2)
+    expectSingleRefold(changeHeaderShape(rerender, { fullScreen: true, view: 'terminal' }), 2)
+    paneWidth = 282
+    settleResizes()
+    expect(getTitlebarChromeFoldLevel()).toBe(1)
   })
 })
