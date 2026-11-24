@@ -67,15 +67,15 @@
       },
       "permissionsDescriptionOwnAgents": "新聊天遵循设置 → 智能体中各智能体的权限",
       "launch": {
-        "on": "Chat UI 已开启",
-        "off": "Chat UI 已关闭",
+        "on": "聊天界面已开启",
+        "off": "聊天界面已关闭",
         "agents": "每个智能体的默认启动模式",
-        "agentsDescription": "选择每个智能体在 Chat UI 还是 CLI 中打开",
+        "agentsDescription": "选择每个智能体在聊天界面还是 CLI 中打开",
         "chatDescription": "新智能体默认以聊天模式启动",
         "cliDescription": "新智能体默认以 CLI 启动",
         "turnOn": "开启",
         "turnOff": "关闭",
-        "toggle": "默认使用 Chat UI"
+        "toggle": "默认使用聊天界面"
       }
     },
     "terminal": {
@@ -571,7 +571,7 @@
       "defaultSurfaceSetAllChat": "全部设为聊天",
       "defaultSurfaceSetAllTerminal": "全部设为终端",
       "modelListFallback": "内置列表。Orca 无法从此主机获取模型列表",
-      "chatUnavailableOnWindows": "{{value0}} Chat 暂不支持 Windows，因此 {{value0}} 会在此主机的终端中打开。macOS 或 Linux 主机上的聊天仍可正常使用",
+      "chatUnavailableOnWindows": "{{value0}} 聊天暂不支持 Windows，因此 {{value0}} 会在此主机的终端中打开。macOS 或 Linux 主机上的聊天仍可正常使用",
       "undetectedCommandHint": "如果 {{agent}} CLI 安装在 PATH 之外，请输入其在此主机上的可执行文件完整路径",
       "permissionMixed": "混合",
       "choiceChipRemove": "移除 {{flag}}",
@@ -2401,7 +2401,7 @@
           "minimaxUnknownUsageError": "未知 MiniMax 用量错误",
           "minimaxUsageFetchFailed": "MiniMax 用量获取失败 ({{status}})",
           "noCredentials": "无凭据",
-          "noSubscriptionApiKeyBilling": "无订阅套餐 — API key 计费",
+          "noSubscriptionApiKeyBilling": "无订阅套餐 — API 密钥计费",
           "opencodeInvalidWorkspaceId": "工作区 ID 格式无效",
           "opencodeNoAuthCookie": "未找到认证 Cookie — 请从 opencode.ai DevTools 粘贴完整 Cookie 请求头",
           "opencodeNoWorkspaceId": "未找到工作区 ID — 请在设置中填写工作区 ID 覆盖",
@@ -2591,7 +2591,7 @@
         "devDescription": "仅用于调试 UI 状态",
         "devBadge": "开发",
         "devSearchNotificationPlayground": "通知测试面板",
-        "devSearchNotificationPlaygroundDescription": "触发代表性 toast 与通知状态",
+        "devSearchNotificationPlaygroundDescription": "触发代表性提示与通知状态",
         "devSearchKeywordDev": "dev",
         "devSearchKeywordToast": "toast",
         "devSearchKeywordSonner": "sonner",
@@ -5014,7 +5014,7 @@
             "34c25dfe9c": "宠物",
             "aec479308a": "宠物菜单",
             "cef0ab4636": "导入宠物包失败",
-            "2021d4f6db": "Pet 包导入需要完全重启应用(不仅是重新加载)",
+            "2021d4f6db": "宠物包导入需要完全重启应用(不仅是重新加载)",
             "f395c9a685": "导入文件失败",
             "e6234bcc17": "自定义宠物上传需要完全重启应用(不仅是重新加载)",
             "6d0a8cd179": "显示宠物",
@@ -7384,8 +7384,8 @@
           }
         },
         "LinearAgentSkillSetupPrompt": {
-          "modalTitle": "启用 Linear ticket 访问",
-          "modalPrompt": "允许代理读取和编辑已附加的 Linear ticket",
+          "modalTitle": "启用 Linear 议题访问",
+          "modalPrompt": "允许智能体读取和编辑已附加的 Linear 议题",
           "dontShowAgain": "不再显示",
           "missingSkill": "缺少 Linear 代理技能",
           "title": "设置 Linear 代理技能",
@@ -7569,13 +7569,13 @@
           "loopbackBlocked": "启用 SSH 隧道选项，或使用另一台主机的 Tailscale 或 LAN 地址创建新链接",
           "sshAlreadyExists": "该 SSH 主机已在 Orca 中",
           "sshConfigPickerLoadFailed": "无法读取 ~/.ssh/config",
-          "sshConfigPickerResolveFailed": "无法解析该 SSH config 主机",
-          "sshConfigPickerRestartRequired": "请重启 Orca 以完成 SSH config 选择器更新",
+          "sshConfigPickerResolveFailed": "无法解析该 SSH 配置主机",
+          "sshConfigPickerRestartRequired": "请重启 Orca 以完成 SSH 配置选择器更新",
           "sshConfigPickerFilled": "已从 {{value0}} 填充，请检查并保存",
           "sshConfigPickerTitle": "从 ~/.ssh/config 选择",
           "sshConfigPickerImportDescription": "选择一个主机以填写表单，或将所有新主机添加到 Orca 的主机列表",
           "sshConfigPickerFilter": "筛选主机…",
-          "sshConfigPickerHostsLabel": "SSH config 主机",
+          "sshConfigPickerHostsLabel": "SSH 配置主机",
           "sshConfigPickerLoading": "正在读取 ~/.ssh/config…",
           "sshConfigPickerEmpty": "~/.ssh/config 中没有主机",
           "sshConfigPickerNoMatch": "没有匹配的主机",
@@ -8031,7 +8031,7 @@
           "selectedEndpointStorage": "保存在本地，并发送到所选的 MiniMax 端点以刷新用量",
           "openSelectedConsole": "在浏览器中打开 {{url}} 并登录",
           "cookieSelectedEndpoint": "保存在本地，并发送到所选的 MiniMax 端点以刷新用量",
-          "copySelectedConsoleCookie": "打开所选控制台并登录，然后从开发者工具复制 Cookie 请求标头（Network → 任意 remains 请求 → Cookie）",
+          "copySelectedConsoleCookie": "打开所选控制台并登录，然后从开发者工具复制 Cookie 请求标头（网络 (Network) 面板 → 任意 remains 请求 → Cookie）",
           "apiKeySelectedEndpoint": "粘贴 MiniMax 控制台 → API 密钥中的密钥，保存在本地，并发送到所选的 MiniMax 端点以刷新用量，API 密钥优先于 Cookie",
           "apiKeyInstructions": "从 MiniMax 控制台 → API 密钥中复制密钥，已保存的 API 密钥优先于 Cookie，使用\"忘记密钥\"切换回 Cookie",
           "endpointOverseas": "海外 (platform.minimax.io)",
@@ -9081,7 +9081,7 @@
           "9b821fa19d": "# e.g. echo \"Cleaning up $ORCA_WORKSPACE_NAME\"",
           "6f90ebe3fd": "在归档或删除工作树之前运行",
           "a3fc966677": "# e.g. pnpm install cp \"$ORCA_ROOT_PATH/.env\" \"$ORCA_WORKTREE_PATH/.env\"",
-          "f0710e1c83": "创建新工作树后运行，安装 deps，复制 env 文件，运行迁移",
+          "f0710e1c83": "创建新工作树后运行，安装依赖，复制 env 文件，运行迁移",
           "8561b0665f": "首先是 orca.yaml，然后是本地命令",
           "0e8b2a520d": "忽略 orca.yaml，仅运行本地命令",
           "83dc78202a": "仅限本地",
@@ -9151,7 +9151,7 @@
           "lucideDescription": "使用仓库颜色的{{label}}图标",
           "defaultIcon": "默认",
           "cc76342291": "使用 GitHub 头像",
-          "43bf3709dd": "Repo 图标"
+          "43bf3709dd": "仓库图标"
         },
         "RepositoryPane": {
           "15a99d9b9f": "相对路径从该项目根解析",
@@ -9679,7 +9679,7 @@
           "openIntegrations": "集成",
           "connectInIntegrations": "打开集成",
           "connectJiraTitle": "连接 Jira",
-          "connectJiraDescription": "使用 API Token 或 PAT 添加 Jira Cloud 站点或自托管实例",
+          "connectJiraDescription": "使用 API 令牌或 PAT 添加 Jira Cloud 站点或自托管实例",
           "manageJira": "管理密钥",
           "addJira": "添加 Jira 访问权限",
           "githubDescription": "浏览 GitHub 议题并从中启动工作区",
@@ -10069,7 +10069,7 @@
               "39bbdebe13": "Cursor 用量"
             },
             "zcodePlan": {
-              "description": "追踪 Z.AI 或智谱（BigModel）GLM Coding Plan 的用量，选择站点并保存套餐 API key",
+              "description": "追踪 Z.AI 或智谱（BigModel）GLM Coding Plan 的用量，选择站点并保存套餐 API 密钥",
               "kw": {
                 "glm": "glm",
                 "zai": "zai",
@@ -10303,7 +10303,7 @@
             "4d5b9427b5": "启用后，关闭窗口会让 Orca 继续在系统托盘中运行，而不是退出",
             "showPinnedWorktreesInGroups": {
               "title": "也在原来的列表中显示已固定的工作树",
-              "description": "已固定的工作树会保留在 Pinned 中，同时也显示在全部、项目、状态和 PR 中",
+              "description": "已固定的工作树会保留在已固定分组中，同时也显示在全部、项目、状态和 PR 中",
               "pinned": "已固定",
               "worktree": "工作树",
               "workspace": "工作区",
@@ -10599,7 +10599,7 @@
               "a0c19119fb": "下载",
               "4438f81bfa": "文件",
               "c10e36cbd1": "全磁盘访问",
-              "05ab708ee5": "打开 macOS 隐私窗格，以访问受保护的项目和 worktree 文件",
+              "05ab708ee5": "打开 macOS 隐私窗格，以访问受保护的项目和工作树文件",
               "bbf543a3a1": "全磁盘访问",
               "7f145a3984": "窗户",
               "5610022e1e": "自动化",
@@ -10761,7 +10761,7 @@
             "750420dd9a": "控制",
             "fe62b3f09f": "控制键",
             "2a254b725e": "标签页",
-            "ca812803ea": "最近的 Tab 键顺序",
+            "ca812803ea": "最近的标签页顺序",
             "e53d585ed6": "最近或标签栏",
             "22572e99c1": "注释",
             "1ff67ba40c": "笔记",
@@ -10973,11 +10973,11 @@
             "2ec2bd328c": "API Token",
             "7345b7c3e6": "Atlassian",
             "e1263dd748": "Jira",
-            "76f6af7c57": "连接 Jira Cloud 或更新 Jira API Token 凭据",
+            "76f6af7c57": "连接 Jira Cloud 或更新 Jira API 令牌凭据",
             "8c568d761c": "PR",
             "33180e8c10": "自托管",
             "129fc59aa8": "Gitea",
-            "d0d019dc29": "通过 API Token 环境变量进行 Gitea 身份验证",
+            "d0d019dc29": "通过 API 令牌环境变量进行 Gitea 身份验证",
             "03a7b275be": "ADO",
             "ed63380247": "天蓝色 repos",
             "b38b5d27f1": "天蓝色 devops",
@@ -11274,8 +11274,8 @@
             "603c68b68c": "orca.yaml",
             "9dc60d7f6d": "GitHub",
             "ec70364df2": "工作流程",
-            "66b584bd6c": "issue 命令",
-            "2011a6a4f2": "GitHub issue 命令",
+            "66b584bd6c": "议题命令",
+            "2011a6a4f2": "GitHub 议题命令",
             "d42d1e49c0": "通过 orca.yaml 和可选本地覆盖配置的基于文件的关联议题命令",
             "c5e8bdbcbb": "默认跳过",
             "a69c5cbe90": "默认运行",
@@ -11321,7 +11321,7 @@
             "917dce844a": "分支名称",
             "8068d8d0f1": "PR",
             "5ff7fe1ade": "PR",
-            "eec39b3de6": "commit 消息",
+            "eec39b3de6": "提交信息",
             "cfad7ce5f3": "AI",
             "a47f51127e": "源代码控制",
             "6cc5c65e64": "项目特定的 git 生成覆盖",
@@ -11844,7 +11844,7 @@
                   "commitMessage": "根据已暂存的更改生成提交信息",
                   "pullRequest": "生成托管评论标题和描述",
                   "branchName": "重命名 Orca 从初始代理任务创建的分支",
-                  "fixCommitFailure": "当 commit 挂钩或 git commit 失败时启动代理",
+                  "fixCommitFailure": "当提交挂钩或 git commit 失败时启动智能体",
                   "fixChecks": "从失败的托管评审检查中启动代理",
                   "resolveConflicts": "启动用于解决本地或托管评审合并冲突的代理",
                   "customCommand": "自定义命令",
@@ -12011,8 +12011,8 @@
                 "fe9231215b": "在显示设置操作前正在检查 Linear 访问权限",
                 "disconnect_all": "断开连接",
                 "account_scope_prefix": "账户范围",
-                "2d60ec7921": "使用 API Token 连接 Jira Cloud 站点，或使用个人访问令牌或用户名和密码连接自托管 Jira，凭据会发送到所选远程运行时并以运行时支持的加密方式存储",
-                "977e360b71": "使用 API Token 连接 Jira Cloud 站点，或使用个人访问令牌或用户名和密码连接自托管 Jira，凭据存储在本地，本地运行时存储支持时会进行加密",
+                "2d60ec7921": "使用 API 令牌连接 Jira Cloud 站点，或使用个人访问令牌或用户名和密码连接自托管 Jira，凭据会发送到所选远程运行时并以运行时支持的加密方式存储",
+                "977e360b71": "使用 API 令牌连接 Jira Cloud 站点，或使用个人访问令牌或用户名和密码连接自托管 Jira，凭据存储在本地，本地运行时存储支持时会进行加密",
                 "statusConnected": "已连接",
                 "statusNotConnected": "未连接",
                 "linearTokenName": "你的 Linear API 令牌",
@@ -12305,7 +12305,7 @@
           "stopCleanup": "停止清理",
           "cleanupStopped": "清理已停止",
           "stopCleanupFailed": "无法停止云虚拟机清理",
-          "cca21fb369": "刷新 Cloud VM",
+          "cca21fb369": "刷新云虚拟机",
           "provisioning": "正在预配",
           "untrackedRuntimeHint": "Orca 从未收到这台虚拟机的详细信息，清理时只能凭实例 ID {{instanceId}} 运行销毁操作；如果失败，请在你的提供商处删除该虚拟机，然后将其从此列表中移除",
           "removeFromList": "从列表中移除",
@@ -12639,7 +12639,7 @@
           "install": "安装"
         },
         "PluginMarketplaceSourceDialog": {
-          "addFailed": "无法添加此目录。请检查 URL 和 ref",
+          "addFailed": "无法添加此目录。请检查 URL 和 Git 引用",
           "refreshFailed": "无法刷新此目录。请重试",
           "removeFailed": "无法移除此目录",
           "title": "目录来源",
@@ -12756,7 +12756,7 @@
         "PluginContributionActionEvents": {
           "worktreeCreated": "创建工作区时",
           "worktreeRemoved": "移除工作区时",
-          "agentStatusChanged": "Agent 状态变化时",
+          "agentStatusChanged": "智能体状态变化时",
           "detail": "后台代码会运行",
           "workspaceChanged": "切换工作区或其终端发生变化时",
           "editorTypographyChanged": "编辑器字体或缩放比例变化时"
@@ -13230,29 +13230,29 @@
             "mcp": "MCP 月度"
           },
           "resetIn": " — {{value0}}后重置",
-          "keySaved": "GLM Coding Plan API key 已保存",
+          "keySaved": "GLM Coding Plan API 密钥已保存",
           "keySaveFailed": "GLM Coding Plan 凭据更新失败",
           "title": "GLM Coding Plan",
-          "subtitle": "在状态栏追踪 Z.AI 或智谱（BigModel）GLM Coding Plan 用量，在此保存套餐 API key，无需安装 ZCode CLI",
-          "consoleLink": "获取 API key",
-          "keyStored": "API key 已保存 · {{value0}}",
+          "subtitle": "在状态栏追踪 Z.AI 或智谱（BigModel）GLM Coding Plan 用量，在此保存套餐 API 密钥，无需安装 ZCode CLI",
+          "consoleLink": "获取 API 密钥",
+          "keyStored": "API 密钥已保存 · {{value0}}",
           "keyStoredHelp": "仅保存在本地，并只发送到所选站点用于用量刷新，优先级高于 ZCode CLI 登录",
           "usingCli": "正在使用 ZCode CLI 登录",
           "usingCliHelp": "Orca 会从此电脑上的 ZCode CLI 凭据存储中读取所选编程套餐，你也可以在下方保存 API 密钥以直接关联套餐",
           "notConfigured": "尚未关联 GLM Coding Plan",
-          "notConfiguredHelp": "在下方保存套餐 API key，或在这台电脑上通过 ZCode CLI 登录",
+          "notConfiguredHelp": "在下方保存套餐 API 密钥，或在这台电脑上通过 ZCode CLI 登录",
           "refreshUsage": "刷新用量",
           "siteTitle": "套餐站点",
           "siteDescription": "选择你的 Coding Plan 所属控制台：国际站选 Z.AI，国内站选智谱 BigModel",
           "keyTitle": "API 密钥",
-          "keyDescription": "粘贴所选控制台 API Keys 页面中的 API key，保存在本地，系统支持时加密存储，并只发送到该站点用于用量刷新",
+          "keyDescription": "粘贴所选控制台 API Keys 页面中的 API 密钥，保存在本地，系统支持时加密存储，并只发送到该站点用于用量刷新",
           "saved": "已保存",
           "notSaved": "未保存",
-          "keyPlaceholder": "粘贴你的 GLM Coding Plan API key",
+          "keyPlaceholder": "粘贴你的 GLM Coding Plan API 密钥",
           "replace": "替换",
           "save": "保存",
-          "forgetKey": "清除 key",
-          "keyHelp": "与编码工具使用同一把套餐 key（例如 Claude Code 将 ANTHROPIC_BASE_URL 指向对应站点），切换上方站点会变更接收该 key 的主机",
+          "forgetKey": "忘记密钥",
+          "keyHelp": "与编码工具使用同一个套餐密钥（例如 Claude Code 将 ANTHROPIC_BASE_URL 指向对应站点），切换上方站点会变更接收该密钥的主机",
           "usageTitle": "套餐用量",
           "usageDescription": "已关联 Coding Plan 的实时配额窗口，随状态栏用量周期刷新",
           "planLevel": "套餐：{{value0}}",
@@ -14484,7 +14484,7 @@
             "ae743199cd": "在创建 {{value0}} 之前，请选择其他基础分支",
             "318e2a7f88": "请等待 AI 生成完成",
             "f76307c1f7": "请选择基础分支",
-            "4f76c0a9de": "基础分支必须与 head 分支不同",
+            "4f76c0a9de": "基础分支必须与源分支不同",
             "c5e4175139": "更多 {{value0}} 和远程操作",
             "78ddfd0bb4": "创建为草稿",
             "e64a632456": "main",
@@ -15112,7 +15112,7 @@
                   "blockedSyncFirst": "请先同步",
                   "blockedUnsupportedProvider": "不受支持的提供商",
                   "blockedExistingReview": "{{reviewLabel}} 已存在",
-                  "blockedForkHeadUnsupported": "不支持 fork head",
+                  "blockedForkHeadUnsupported": "不支持 Fork 头",
                   "blockedBaseNotOnRemote": "基准分支不在远程上",
                   "blockedBranchNotReady": "分支尚未就绪",
                   "titleCheckOutBranchToPush": "请先检出分支再推送提交",
@@ -15220,7 +15220,7 @@
                   "484f45c439": "{{value0}} 正在进行中...",
                   "6f7a8b9c0d": "远程操作进行中…",
                   "7f8a9b0c1d": "远程操作进行中——请等它完成后重试",
-                  "74fc171e99": "Force Push 正在进行中...",
+                  "74fc171e99": "强制推送正在进行中...",
                   "16aee3a5c1": "正在提交…",
                   "e61b0d7a3c": "请先检出分支再发布提交",
                   "1d47e850cf": "将更新推送到已关联的评审分支",
@@ -16495,7 +16495,7 @@
                   "6d2b0a84e1": "此版本不可用",
                   "needsMacAccess": "需要 macOS 访问权限",
                   "notInstalled": "未安装",
-                  "requiresOrcaDesktop": "需要 Orca Desktop"
+                  "requiresOrcaDesktop": "需要 Orca 桌面应用"
                 }
               }
             }
@@ -17873,7 +17873,7 @@
                       },
                       "name": {
                         "title": "命名，或从已有工作开始",
-                        "body": "从关联的任务开始可获得简短的 issue 或 PR 名称。留空则会根据你的第一条智能体消息自动命名"
+                        "body": "从关联的任务开始可获得简短的议题或 PR 名称。留空则会根据你的第一条智能体消息自动命名"
                       },
                       "agent": {
                         "title": "选择由哪个智能体开始工作",
@@ -17920,11 +17920,11 @@
                     },
                     "filter": {
                       "title": "筛选出你需要的工作",
-                      "body": "使用预设和搜索来缩小 issues、评审、merge requests 或任务的范围"
+                      "body": "使用预设和搜索来缩小议题、评审、合并请求或任务的范围"
                     },
                     "start": {
                       "title": "从工作项开始",
-                      "body": "在任务、issue、评审或 merge request 上点击开始或打开，即可把其上下文带入工作区"
+                      "body": "在任务、议题、评审或合并请求上点击开始或打开，即可把其上下文带入工作区"
                     }
                   },
                   "floating": {
@@ -18988,7 +18988,7 @@
             "2849ddb295": "Atlassian 邮箱",
             "70fcd360c4": "https://example.atlassian.net",
             "e176f9d0c5": "Jira Cloud 站点 URL",
-            "d785c42b8b": "使用 Jira Cloud 站点 URL、Atlassian 邮箱和 API Token 来浏览议题",
+            "d785c42b8b": "使用 Jira Cloud 站点 URL、Atlassian 邮箱和 API 令牌来浏览议题",
             "8388bdea2b": "连接 Jira 站点",
             "2e2b69e48e": "使用自托管 Jira 的基础 URL 和个人访问令牌来浏览议题",
             "b67e919bd5": "Jira 实例类型",
@@ -21074,7 +21074,7 @@
       },
       "sessionOption": {
         "noLiveTerminal": "没有可用的活动终端",
-        "commandCanceled": "输入框已关闭，Chat UI 命令已取消",
+        "commandCanceled": "输入框已关闭，聊天界面命令已取消",
         "commandRejected": "终端未接受该命令"
       },
       "sessionOptionErrors": {
@@ -21171,7 +21171,7 @@
         "turnWorking": "此聊天的智能体正在工作。请在其回合结束后再切换分支",
         "worktree": "工作树"
       },
-      "explicitChatWindows": "此 Agent 的聊天暂不支持 Windows。请改为在终端中打开",
+      "explicitChatWindows": "此智能体的聊天暂不支持 Windows。请改为在终端中打开",
       "fork": {
         "action": "从此回复创建分支",
         "pending": "正在为此聊天创建分支…",
@@ -22241,7 +22241,7 @@
           "label": "聊天界面",
           "description": "智能体在聊天中回复，消息和差异会渲染显示",
           "recommended": "推荐",
-          "terminalFallback": "不支持聊天的 Agent 会改用终端打开",
+          "terminalFallback": "不支持聊天的智能体会改用终端打开",
           "noneDetected": "已检测的智能体都不支持聊天界面"
         },
         "terminal": {
@@ -24034,7 +24034,7 @@
       "demoPassword": "密码",
       "demoCookie": "Cookie",
       "switchedNoteTitle": "新智能体将在聊天界面中打开",
-      "switchedNoteBody": "更喜欢终端？随时可以切换回来：在设置中搜索 <term>Chat UI</term>",
+      "switchedNoteBody": "更喜欢终端？随时可以切换回来：在设置中搜索 <term>聊天界面</term>",
       "openSettings": "打开设置",
       "changeInSettings": "随时可在<link>设置 → 聊天界面</link>中更改",
       "switchToTerminal": "切换到终端",
@@ -24240,7 +24240,7 @@
       "patch": "用于生成 PR 详情的当前分支与基准分支的差异",
       "firstPrompt": "此工作区或聊天中的第一个用户请求",
       "assistantMessage": "Orca 可获取的智能体初始回复",
-      "linkedIssue": "与此工作区关联的 GitHub issue 编号。未关联 GitHub issue 时为空（包括关联 GitLab 的工作区）。优先使用带指示的模板：未关联时，单独的\"Fixes #{linkedIssue}\"会变成\"Fixes #\""
+      "linkedIssue": "与此工作区关联的 GitHub 议题编号。未关联 GitHub 议题时为空（包括关联 GitLab 的工作区）。优先使用带指示的模板：未关联时，单独的\"Fixes #{linkedIssue}\"会变成\"Fixes #\""
     },
     "textGeneration": {
       "errors": {
@@ -26151,7 +26151,7 @@
       "connectionFailed": "连接失败",
       "listLabel": "Linear 列表",
       "projectNotFound": "未找到项目",
-      "issuesLoadFailed": "无法加载 Linear issue",
+      "issuesLoadFailed": "无法加载 Linear 议题",
       "apiKeyHint": "粘贴你希望 Orca 使用的 Linear 工作区的个人 API 密钥。如果该工作区已连接，Orca 会替换其已存储的密钥",
       "remoteKeyStorage": "此密钥由当前远程运行时存储",
       "localKeyStorage": "本地运行时的密钥存储在此设备上，并在可用时使用 Electron 加密存储",
@@ -26186,11 +26186,11 @@
         "notConnected": "未连接到 Jira",
         "titleRequired": "必须填写标题",
         "labelsConflict": "请提供 labels 或 labelOperations，不可同时提供两者",
-        "updateFailed": "无法更新 issue",
+        "updateFailed": "无法更新议题",
         "credentialsRequired": "必须填写站点 URL、电子邮件和 API 令牌",
         "projectRequired": "必须选择项目",
-        "issueTypeRequired": "必须选择 issue 类型",
-        "issueKeyRequired": "必须提供 issue 键",
+        "issueTypeRequired": "必须选择议题类型",
+        "issueKeyRequired": "必须提供议题键",
         "updatesRequired": "必须提供更新对象",
         "commentBodyRequired": "必须填写评论正文",
         "invalidSiteUrl": "请输入有效的 Jira 站点 URL",
@@ -26200,10 +26200,10 @@
         "connectionFailed": "连接失败",
         "invalidSiteIdentity": "请输入不含凭据的 HTTP 或 HTTPS Jira 站点 URL",
         "missingProjectIdentity": "Jira 返回的项目缺少 ID 或键",
-        "invalidIssuePage": "Jira 返回了无效的 issue 页面",
-        "incompleteIssuePage": "Jira 返回了不完整的 issue 页面",
-        "repeatedIssueToken": "Jira 返回了无效或重复的 issue 页面令牌",
-        "issueSearchLimit": "Jira issue 搜索超出了页面数量限制。请改用 JQL 选择项目",
+        "invalidIssuePage": "Jira 返回了无效的议题页面",
+        "incompleteIssuePage": "Jira 返回了不完整的议题页面",
+        "repeatedIssueToken": "Jira 返回了无效或重复的议题页面令牌",
+        "issueSearchLimit": "Jira 议题搜索超出了页面数量限制。请改用 JQL 选择项目",
         "invalidProjectPage": "Jira 返回了无效的项目页面",
         "incompleteProjectPage": "Jira 返回了不完整的项目页面",
         "projectListLimit": "Jira 项目列表超出了页面数量限制。请改用 JQL 选择项目",
@@ -26212,7 +26212,7 @@
       "linear": {
         "notConnected": "未连接到 Linear",
         "createFailed": "Linear 创建失败",
-        "createdButUnavailable": "已创建 issue，但无法获取其详情",
+        "createdButUnavailable": "已创建议题，但无法获取其详情",
         "updateFailed": "Linear 更新失败",
         "commentFailed": "无法创建评论",
         "projectCreateFailed": "Linear 项目创建失败",
@@ -26222,7 +26222,7 @@
         "projectIdRequired": "必须提供项目 ID",
         "projectNotFound": "未找到项目",
         "viewIdRequired": "必须提供自定义视图 ID",
-        "viewHasNoIssues": "自定义视图不包含 issue",
+        "viewHasNoIssues": "自定义视图不包含议题",
         "viewHasNoProjects": "自定义视图不包含项目"
       }
     }

@@ -6,7 +6,7 @@ import { runtimeBrowserCommandsFactoryIsAvailable } from '../../../browser/insta
 import {
   FileChooserAnswer,
   PagePromptAnswer,
-  ReadDownloadCopy,
+  DownloadCopyStream,
   ReadPrintPdf,
   ReleaseDownloadCopy,
   ReleasePrintPdf,
@@ -23,9 +23,10 @@ import {
   releaseBrowserPrintPdf
 } from '../../../../browser/guest-lifecycle/prompts/browser-print-viewers'
 import {
-  readBrowserDownloadCopy,
+  claimBrowserDownloadCopy,
   releaseBrowserDownloadCopy
 } from '../../../../browser/guest-lifecycle/manager/downloads/browser-download-copy-offers'
+import { streamBrowserDownloadCopy } from '../../../../browser/guest-lifecycle/manager/downloads/browser-download-copy-stream'
 import { ownerOnly } from '../bots-caller-gates'
 
 const DOWNLOAD_COPY_OWNER_ONLY = 'Only a person at a desktop can copy a download to their computer.'
@@ -81,14 +82,31 @@ export const BROWSER_SCREENCAST_METHODS = [
     params: ReleasePrintPdf,
     handler: async (params, { pairedDeviceId }) => releaseBrowserPrintPdf(pairedDeviceId, params)
   }),
-  defineMethod({
-    name: 'browser.readDownloadCopy',
+  defineStreamingMethod({
+    name: 'browser.downloadCopyStream',
     permission: 'workspace',
-    params: ReadDownloadCopy,
+    params: DownloadCopyStream,
     // Only the device the copy was offered to, and never an agent acting through it.
-    handler: async (params, context) => {
+    handler: async (params, context, emit) => {
       ownerOnly(context, DOWNLOAD_COPY_OWNER_ONLY)
-      return readBrowserDownloadCopy(context.pairedDeviceId, params)
+      const { pairedDeviceId, sendBinary, registerBinaryMessageHandler, signal } = context
+      if (!sendBinary || !registerBinaryMessageHandler) {
+        throw new BrowserError(
+          'browser_error',
+          'Copying a download needs a binary connection to the desktop.'
+        )
+      }
+      const file = await claimBrowserDownloadCopy(pairedDeviceId, params.copyId)
+      try {
+        await streamBrowserDownloadCopy(file, {
+          emit,
+          sendBinary,
+          registerBinaryMessageHandler,
+          signal
+        })
+      } finally {
+        await file.handle.close().catch(() => {})
+      }
     }
   }),
   defineMethod({

@@ -1,13 +1,17 @@
-import { useTranslate } from '@/i18n/use-translate'
-import { lazy, Suspense, useCallback, useContext, useMemo, useState } from 'react'
+import { lazy, Suspense, useCallback, useContext, useEffect, useMemo, useState } from 'react'
 import type { RuntimeClientTarget } from '../../../../../../shared/remote-runtime/host-catalog/runtime-client-target'
 import { useNativeChatPinnedWorkerApprovals } from '../../worker-approvals/native-chat-worker-approval-feed'
 import { useWorkerDockFeed } from './dock/worker-dock-feed'
 import type { WorkerDockRowView } from './dock/WorkerDockRow'
+import type { WorkerDockSnapshot } from '../../../../../../shared/orchestration/dock/worker-dock'
 import { openOrchestrationCrewAgent } from '@/lib/agent-session/open/open-agent-message-sender'
 import { useWorkerDockOwnerActions } from './dock/use-worker-dock-owner-actions'
+import { WorkerDockFeedLossesContext, workerDockStopBlock } from './dock/worker-dock-stop-check'
+import {
+  useWorkerDockFailureFocusHandoff,
+  WorkerDockFailureStrip
+} from './dock/WorkerDockFailureStrip'
 import { useLatestHandler } from '@/lib/use-latest-handler'
-import { Button } from '@/components/ui/button'
 import { NativeChatBackgroundTasksStatus } from './NativeChatBackgroundTasksStatus'
 import { NativeChatCrewBackgroundTasksStatus } from './NativeChatCrewBackgroundTasksStatus'
 import type { StructuredSessionBackgroundTasksView } from '../../../../../../shared/agent-session/view/structured-session-background-tasks-view'
@@ -53,7 +57,6 @@ export function NativeChatStructuredSessionStatus(props: {
 }): React.JSX.Element {
   // The chat's crew, when it has one: the strip then shows even with no background work.
   const crew = useNativeChatCrew(useContext(NativeChatCrewContext))
-  const t = useTranslate()
   const [expanded, setExpanded] = useState<{ sessionId: string; expanded: boolean } | null>(null)
   const childRowContext = useStructuredSessionChildRowContext(
     props.paneKey,
@@ -81,12 +84,19 @@ export function NativeChatStructuredSessionStatus(props: {
       ),
     [approvals]
   )
+  const identityById = useMemo(
+    () => new Map((feed.snapshot?.identities ?? []).map((row) => [row.id, row])),
+    [feed.snapshot?.identities]
+  )
   const workerRows = useMemo(
     () =>
       new Map(
-        [...feed.rows].map(([id, row]) => {
+        [...feed.rows].map(([id, detail]) => {
+          const row = withCurrentLifecycle(detail, identityById.get(id))
           const settled = workerDockRowSettled(row)
-          const prompt = settled ? undefined : openApprovals.get(row.dispatchId)
+          const prompt = approvalLabels(row, settled)
+            ? openApprovals.get(row.dispatchId)
+            : undefined
           return [
             id,
             !feed.available && !settled
@@ -102,13 +112,13 @@ export function NativeChatStructuredSessionStatus(props: {
           ]
         })
       ),
-    [feed.rows, feed.available, openApprovals]
+    [feed.rows, identityById, feed.available, openApprovals]
   )
   const workerIdentities = useMemo(
     () =>
       feed.snapshot?.identities.map((row) => {
         const settled = workerDockRowSettled(row)
-        const prompt = settled ? undefined : openApprovals.get(row.dispatchId)
+        const prompt = approvalLabels(row, settled) ? openApprovals.get(row.dispatchId) : undefined
         return !feed.available && !settled
           ? { ...row, state: 'unavailable' as const, changedAt: null }
           : prompt
@@ -158,20 +168,34 @@ export function NativeChatStructuredSessionStatus(props: {
       ),
     [target]
   )
-  // The rows as rendered now: a Stop pressed before the feed dropped, or a Retry, re-checks them.
-  const stopAvailable = useLatestHandler((dispatchId: string) =>
-    [...controlledWorkerRows.values()].some(
-      (row) => row.dispatchId === dispatchId && row.stoppable && row.ownerActionsAvailable
-    )
+  // Read live when a Stop or its Retry is sent, never from rows a held press kept on screen.
+  const stopBlock = useLatestHandler((row: WorkerDockRowView, party: string) =>
+    workerDockStopBlock(row, party, {
+      party: feed.party,
+      available: feed.available,
+      rows: controlledWorkerRows,
+      identities: controlledWorkerIdentities
+    })
   )
+  // A focused Retry or Dismiss leaves with the failure line; focus then moves to the next line or
+  // the dock's toggle instead of the page.
+  const failureFocus = useWorkerDockFailureFocusHandoff()
   const owner = useWorkerDockOwnerActions(
     target,
     feed.party,
     controlledWorkerIdentities,
     workerOpen,
-    stopAvailable
+    stopBlock
   )
   const { dialog, failure } = owner
+  // An attempt that ends with no failure line (it succeeded, or was dismissed) hands focus to no
+  // line: a later, unrelated failure must not take it.
+  const attemptOpen = Boolean(failure) || owner.pending.size > 0
+  useEffect(() => {
+    if (!attemptOpen) {
+      failureFocus.release()
+    }
+  }, [attemptOpen, failureFocus])
   if (crew) {
     // The suspended crew panel's strip keeps main's own view while it is enabled.
     return (
@@ -198,7 +222,7 @@ export function NativeChatStructuredSessionStatus(props: {
     )
   }
   return (
-    <>
+    <WorkerDockFeedLossesContext.Provider value={feed.readLosses}>
       <NativeChatBackgroundTasksStatus
         isVisible={props.isVisible}
         sessionId={props.sessionId}
@@ -240,17 +264,12 @@ export function NativeChatStructuredSessionStatus(props: {
         </Suspense>
       ) : null}
       {failure && !dialog ? (
-        <div role="alert" className="px-4 py-1 text-xs text-muted-foreground">
-          {failure.message}
-          {failure.retry ? (
-            <Button variant="ghost" size="xs" onClick={failure.retry}>
-              {t('components.native-chat.workerDock.retry', 'Retry')}
-            </Button>
-          ) : null}
-          <Button variant="ghost" size="xs" onClick={owner.dismissFailure}>
-            {t('components.native-chat.workerDock.dismiss', 'Dismiss')}
-          </Button>
-        </div>
+        <WorkerDockFailureStrip
+          key={`${failure.message}\0${failure.retry ? 'retry' : 'final'}`}
+          failure={failure}
+          onDismiss={owner.dismissFailure}
+          focusHandoff={failureFocus}
+        />
       ) : null}
       {dialog ? (
         <Suspense fallback={null}>
@@ -278,8 +297,39 @@ export function NativeChatStructuredSessionStatus(props: {
           />
         </Suspense>
       ) : null}
-    </>
+    </WorkerDockFeedLossesContext.Provider>
   )
 }
 
 const LOCAL: RuntimeClientTarget = { kind: 'local' }
+
+/** The identity is the current lifecycle; a cached detail can lag it (a metadata-only update
+ *  moves the identity alone). The row shows, and Stop is checked against, the identity's state. */
+function withCurrentLifecycle(
+  detail: WorkerDockRowView,
+  current: WorkerDockSnapshot['identities'][number] | undefined
+): WorkerDockRowView {
+  if (
+    !current ||
+    current.dispatchId !== detail.dispatchId ||
+    (current.state === detail.state &&
+      current.settlement === detail.settlement &&
+      current.changedAt === detail.changedAt &&
+      current.ownerActionsAvailable === detail.ownerActionsAvailable)
+  ) {
+    return detail
+  }
+  return {
+    ...detail,
+    state: current.state,
+    changedAt: current.changedAt,
+    settlement: current.settlement,
+    ownerActionsAvailable: current.ownerActionsAvailable
+  }
+}
+
+/** An open approval labels a worker as waiting on you only while it is unsettled and not already
+ *  stopping, so the label never hides that state or re-enables its Stop. */
+function approvalLabels(row: { state: WorkerDockRowView['state'] }, settled: boolean): boolean {
+  return !settled && row.state !== 'stopping'
+}

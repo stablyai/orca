@@ -148,3 +148,23 @@ it('seeds a source again after a failed cold read, and never after one that succ
   mount()
   expect(rpc.calls).toBe(2)
 })
+
+it('counts a feed loss that recovers before React renders, read live', async () => {
+  const presence = { revision: 'feed-losses:1', open: true }
+  const hook = renderHook(() =>
+    useWorkerDockFeed({ kind: 'local' }, '55555555-5555-4555-8555-555555555555', true, presence)
+  )
+  const snapshot = { revision: 1, expired: false, identities: [], rows: [], anchor: null }
+  await act(async () => {
+    rpc.event(snapshot)
+  })
+  const { readLosses } = hook.result.current
+  expect(readLosses()).toBe(0)
+  // A loss and its recovery published back to back, with no render between them.
+  rpc.event({ ...snapshot, revision: 2, unavailable: true })
+  rpc.event({ ...snapshot, revision: 3 })
+  expect(readLosses()).toBe(1)
+  await act(async () => {})
+  expect(hook.result.current.available).toBe(true)
+  expect(hook.result.current.readLosses()).toBe(1)
+})

@@ -15,6 +15,7 @@ import {
 } from '../../../../src/shared/bots/use-bot-item-question-steps'
 import { MobileMarkdown } from '../../components/markdown/MobileMarkdown'
 import { useMobileTranslation } from '../../i18n/use-mobile-translation'
+import { INLINE_TEXT_SELECTION } from '../../platform/text-selection/inline-text-selection'
 import { colors, radii, spacing, typography } from '../../theme/mobile-theme'
 import { themedStyleSheet } from '../../theme/themed-styles'
 import {
@@ -92,7 +93,9 @@ export function MobileBotItemCommentCard({
         <MobileBotItemReplyQuote text={replyTo.text} onShowQuestion={onShowQuestion ?? null} />
       ) : null}
       <MobileBotItemCommentAttachments data={event.data} {...attachments}>
-        {text.trim() ? <MobileMarkdown content={text} /> : null}
+        {text.trim() ? (
+          <MobileMarkdown content={text} rangeSelectable={INLINE_TEXT_SELECTION} />
+        ) : null}
       </MobileBotItemCommentAttachments>
       {asks ? (
         <MobileBotItemQuestionLines
