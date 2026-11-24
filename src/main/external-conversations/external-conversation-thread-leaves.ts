@@ -18,8 +18,10 @@ export function withThreadLeftLine(words: string | undefined): string {
  *  `settle` posts it alone when they didn't carry it (a failed turn, or one whose end said nothing
  *  there). Owed only while the thread is still left: an @mention since drops it. */
 export type TurnLeave = {
-  /** The turn as read, its answer (prose and final message) with the line after it. */
-  turn: <T extends { turnProse?: string; lastAssistantMessage?: string }>(turn: T) => T
+  /** The turn as read, its outbox prose with the line after it. */
+  turn: <T extends { turnProse?: string }>(turn: T) => T
+  /** The end's final message, as it goes out, with the line after it while still owed. */
+  words: (words: string | null | undefined) => string | undefined
   /** Before the outbox fill: an answer about to carry the line takes it over, saved first, so a
    *  quit after the fill never posts it again. */
   handOff: () => Promise<void>
@@ -64,12 +66,12 @@ export function turnLeave(
     // Read once the turn is: an @mention since its end began means it is no longer left.
     turn: (turn) =>
       left && outcome === 'success' && left.lines.owed(link, left.turnId)
-        ? {
-            ...turn,
-            turnProse: said(turn.turnProse, 'prose'),
-            lastAssistantMessage: said(turn.lastAssistantMessage, 'message')
-          }
+        ? { ...turn, turnProse: said(turn.turnProse, 'prose') }
         : turn,
+    words: (words) =>
+      left && outcome === 'success' && left.lines.owed(link, left.turnId)
+        ? said(words ?? undefined, 'message')
+        : (words ?? undefined),
     handOff: async () => {
       if (left && appended.prose && live()) {
         handedOff = true

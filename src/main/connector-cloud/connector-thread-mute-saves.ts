@@ -17,7 +17,24 @@ const idOf = (key: ConnectorConversation) => JSON.stringify([key.source, key.ext
 /** The thread's mute still on its way to disk, if one is: a reply waits for it, so none is silenced
  *  by a mute that then fails to save. */
 export function threadMuteSaving(key: ConnectorConversation): Promise<unknown> | undefined {
-  return saving.get(idOf(key))
+  return saving.get(idOf(key)) ?? reserved.get(idOf(key))
+}
+
+const reserved = new Map<string, Promise<unknown>>()
+
+/** A save that will run once its turn in the thread's queue comes (a leave waiting there): replies
+ *  from now on wait for it too. Call the returned release once it settled or was refused. */
+export function reserveThreadMuteSave(key: ConnectorConversation): () => void {
+  const id = idOf(key)
+  let release = (): void => {}
+  const settled = new Promise<void>((resolve) => (release = resolve))
+  reserved.set(id, settled)
+  return () => {
+    release()
+    if (reserved.get(id) === settled) {
+      reserved.delete(id)
+    }
+  }
 }
 
 /** The mute's write: settles once on disk, and rejects with the previous value kept when not.

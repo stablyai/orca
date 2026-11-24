@@ -77,6 +77,9 @@ export type ThreadMuteDeps = {
   waiting: Map<string, Promise<unknown>>
   /** The thread's mute on its way to disk (a leave saving), which a reply waits for. */
   saving?: (key: ConnectorConversation) => Promise<unknown> | undefined
+  /** Whether the cloud marks a reply that @mentions the bot. Without it nothing could bring the bot
+   *  back, so a muted thread's replies go on as if it weren't. */
+  mentionsKnown?: () => boolean
 }
 
 const ACCEPTED = { outcome: 'accepted' } as const
@@ -124,7 +127,7 @@ export function handleThreadMute(
     return null
   }
   // No link yet (a start in the same poll is still writing it), or not muted: it goes on at once.
-  const applied = thread?.muted ? applyStep(deps, delivery, record) : null
+  const applied = thread?.muted && mutes(deps) ? applyStep(deps, delivery, record) : null
   return applied && { decided: hold(deps, id, applied.decided) }
 }
 
@@ -164,9 +167,15 @@ async function decideNow(
 ): Promise<Decided> {
   const linked = deps.read(delivery.conversation)
   const applied =
-    linked && linked !== 'not_bot' && linked.muted && applyStep(deps, delivery, record, 'in_place')
+    linked &&
+    linked !== 'not_bot' &&
+    linked.muted &&
+    mutes(deps) &&
+    applyStep(deps, delivery, record, 'in_place')
   return applied ? await applied.decided : 'send'
 }
+
+const mutes = (deps: ThreadMuteDeps): boolean => deps.mentionsKnown?.() !== false
 
 /** Keeps the thread's newest deciding reply until it settles, for the replies behind it. */
 function hold<Decided>(

@@ -114,7 +114,8 @@ async function botHome(muted: { first?: true; second?: true }) {
 /** The real mute path between the real store and receipts; only the agent's turn is a stand-in. */
 function connector(
   store: ReturnType<typeof createStore>,
-  receipts = new DeliveryReceipts(() => orchestration)
+  receipts = new DeliveryReceipts(() => orchestration),
+  mentionsKnown = true
 ) {
   const turns: string[] = []
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the mute path calls only these seam members.
@@ -132,6 +133,7 @@ function connector(
     read: (key: ConnectorConversation) => readThreadMute(store, key),
     write: threadMuteSaves(store),
     saving: threadMuteSaving,
+    mentionsKnown: () => mentionsKnown,
     queued: (_key: ConnectorConversation, work?: () => Promise<unknown>) =>
       Promise.resolve(work?.()).then(() => undefined)
   }
@@ -159,7 +161,10 @@ const TURN_ID = 1_800_000_000_300
 
 /** `orca bot reply --leave-thread` from bot1's chat, which answers FIRST, while a member's request
  *  in that thread runs. */
-function leaver(store: ReturnType<typeof createStore>) {
+function leaver(
+  store: ReturnType<typeof createStore>,
+  ahead: Promise<unknown> = Promise.resolve()
+) {
   journal.items = [
     {
       itemId: 'u1',
@@ -207,7 +212,9 @@ function leaver(store: ReturnType<typeof createStore>) {
       getConnectorCloud: () => ({ cloudFeatures: () => new Set(features) }),
       getExternalConversationSeam: () => ({
         replyTarget: () => ({ key: FIRST, turnId: TURN_ID }),
+        // The thread's queue: deliveries ahead of the leave run first.
         queued: async (_key: unknown, work: () => Promise<unknown>) => {
+          await ahead
           await work()
           return undefined
         }
@@ -218,7 +225,12 @@ function leaver(store: ReturnType<typeof createStore>) {
   // What the turn's end, or a restart, posts with.
   const timers: (() => void)[] = []
   const lines = (on = store) =>
-    leaveLines({ store: on, cloud: () => cloud, setTimer: (run) => timers.push(run) })
+    leaveLines({
+      store: on,
+      cloud: () => cloud,
+      setTimer: (run) => timers.push(run),
+      flush: () => on.flushPendingOrThrowAsync({ drainToStableGeneration: false })
+    })
   const link = () => findLink(store, FIRST)!.link
   return { leave, posted, lines, link, answers, timers, features }
 }
@@ -393,12 +405,52 @@ describe('a bot that leaves its thread', () => {
     expect(readThreadMute(store, FIRST)).toMatchObject({ muted: true })
   })
 
+  it('silences a reply sent while the leave waits its turn in the thread\u2019s queue', async () => {
+    const store = await botHome({})
+    let go = (): void => {}
+    const { leave } = leaver(store, new Promise<void>((resolve) => (go = resolve)))
+    const { deliver, turns } = connector(store)
+
+    const leaving = leave()
+    const replied = deliver(send(FIRST, 'sounds good, thanks'))
+    go()
+    expect(await leaving).toEqual({ ok: true })
+    expect(await replied).toEqual({ outcome: 'accepted' })
+    expect(turns).toEqual([])
+  })
+
   it('never leaves on a cloud that can\u2019t say a reply @mentioned it', async () => {
     const store = await botHome({})
     const { leave, features } = leaver(store)
     features.length = 0
     await expect(leave()).rejects.toMatchObject({ code: 'leave_unavailable' })
     expect(readThreadMute(store, FIRST)).toEqual({ botId: 'bot1', muted: false })
+  })
+
+  it('lets every reply through on a cloud that no longer marks mentions', async () => {
+    const store = await botHome({ first: true })
+    const { deliver, turns } = connector(store, undefined, false)
+    await deliver(send(FIRST, '@Ranger please check this'))
+    expect(turns).toEqual(['@Ranger please check this'])
+  })
+
+  it('hands its line to an answer on disk first, and owes it again if the answer didn\u2019t take it', async () => {
+    const store = await botHome({})
+    const { leave, posted, lines, link } = leaver(store)
+    await leave()
+    await lines().handOff(link(), TURN_ID)
+    // Quit after the answer was saved: a restart owes nothing, so the line never posts twice.
+    await closeTestStores()
+    const reopened = createStore()
+    expect(readThreadMute(reopened, FIRST)).toEqual({ botId: 'bot1', muted: true })
+    lines(reopened).resume(() => null)
+    expect(posted).toEqual([])
+    // The fill wrote no answer: owed again, and posted on its own once.
+    const again = lines(reopened)
+    again.restore(findLink(reopened, FIRST)!.link, TURN_ID)
+    again.post(findLink(reopened, FIRST)!.link, TURN_ID)
+    await expect.poll(() => posted.length).toBe(1)
+    expect(again.owed(findLink(reopened, FIRST)!.link, TURN_ID)).toBe(false)
   })
 
   it('changes nothing when no request of the thread is running', async () => {

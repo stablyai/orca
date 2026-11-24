@@ -1,3 +1,4 @@
+import { CONNECTOR_CLOUD_MENTIONED_FEATURE } from '../../shared/connector-cloud-features'
 import { getAppEnvironment } from '../../shared/app-lifecycle/app-environment'
 import { runtimeConversationHost } from '../external-conversations/external-conversation-runtime-host'
 import { getOrcaCloudAuthConfig } from '../orca-profiles/cloud-auth/profile-cloud-auth-config'
@@ -194,6 +195,8 @@ function threadMuteDeps(runtime: OrcaRuntimeService, store: ConnectorCloudStore)
     read: (key) => readThreadMute(store, key),
     write: threadMuteSaves(store),
     saving: threadMuteSaving,
+    mentionsKnown: () =>
+      runtime.getConnectorCloud()?.cloudFeatures()?.has(CONNECTOR_CLOUD_MENTIONED_FEATURE) === true,
     queued: (key, work) =>
       runtime.getExternalConversationSeam()?.queued(key, work) ??
       Promise.resolve(work?.()).then(() => undefined)

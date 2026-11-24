@@ -65,7 +65,7 @@ export function endAdoptedTurn(
 /** Its reply posts after the owner's words: held while their post failed, until Retry or Dismiss,
  *  across a restart too. A quiet result still ends the turn, with no words. */
 export function endMirroredTurn(end: ChatTurnEnd, mirrored: SlackMirrorTurn): void {
-  void end.news.readTurn().then(async (turn) => {
+  void end.news.readTurn().then(async (read) => {
     if (!end.current()) {
       return
     }
@@ -73,14 +73,14 @@ export function endMirroredTurn(end: ChatTurnEnd, mirrored: SlackMirrorTurn): vo
     if (!end.current()) {
       return
     }
-    const read = end.leave.turn(turn)
-    const message = read.lastAssistantMessage
+    const said = read.lastAssistantMessage
+    const message = end.leave.words(said && !isQuietBotResult(said) ? said : undefined)
     mirrored.release({
       ...end.ended,
       ...end.turnFor(read),
       origin: 'local',
       mirror: true,
-      ...(message && !isQuietBotResult(message) ? { lastAssistantMessage: message } : {}),
+      ...(message ? { lastAssistantMessage: message } : {}),
       ...(end.news.outcome === 'failure'
         ? { failure: connectorFailure(read.failure, end.agent) }
         : {})
