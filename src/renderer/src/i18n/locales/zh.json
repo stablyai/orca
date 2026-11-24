@@ -472,6 +472,9 @@
           "sleep": "休眠",
           "performance": "性能"
         }
+      },
+      "sessionHost": {
+        "sshDetail": "此 SSH 主机的页面会在这台电脑上打开"
       }
     },
     "agents": {
@@ -1022,7 +1025,8 @@
       "keywordSecurity": "安全",
       "1b4d825e0e": "更新延迟",
       "ab7e864374": "关于更新延迟",
-      "ee1d96f74a": "跳过本次延迟"
+      "ee1d96f74a": "跳过本次延迟",
+      "teamManaged": "由你的团队设置"
     },
     "breadcrumb": {
       "settings": "设置",
@@ -1328,6 +1332,25 @@
       "description": "在支持此功能的桌面安装中，Orca 会在定期检查时下载符合条件的更新，并自动重启以完成安装。",
       "info": "关于自动更新",
       "saveFailed": "无法保存自动更新设置。"
+    },
+    "cloudConsole": {
+      "manageInBrowser": "在浏览器中管理",
+      "openFailed": "无法打开浏览器，请重试",
+      "teamAdmin": {
+        "title": "团队与管理员",
+        "description": "在浏览器中管理你的团队"
+      },
+      "signInFailed": "无法登录控制台",
+      "signInFailedDetail": "浏览器仍然打开了控制台，请在其中登录后继续"
+    },
+    "mobile": {
+      "teamDisabledRelay": "你的团队已关闭 Orca Relay，请使用局域网"
+    },
+    "computerUse": {
+      "teamDisabled": "你的团队已关闭“计算机控制”"
+    },
+    "artifacts": {
+      "teamDisabled": "你的团队已关闭产物分享"
     }
   },
   "menu": {
@@ -2007,8 +2030,26 @@
           "tab": {
             "open": {
               "urlFailed": "无法打开网址",
-              "searchFailed": "无法使用 {{value0}} 搜索"
+              "searchFailed": "无法使用 {{value0}} 搜索",
+              "failure": {
+                "stageError": "错误 · {{value0}} · {{value1}}",
+                "hostNotFound": "找不到工作区所在的电脑",
+                "linkBlocked": "已阻止打开链接",
+                "notWebLink": "不是网页链接"
+              }
             }
+          }
+        },
+        "ports": {
+          "serverPortForward": {
+            "updateServer": "无法从 {{host}} 转发端口 {{port}}，请更新 {{host}} 上的 Orca 后重试",
+            "failed": "无法从 {{host}} 转发端口 {{port}}，请检查连接后重试",
+            "forwarded": "已从 {{host}} 转发端口 {{port}}",
+            "opened": "已在默认浏览器中打开 {{address}}",
+            "otherMachine": "无法转发端口 {{port}}：此工作区并非运行在 {{host}} 本身上",
+            "useSshPorts": "无法从 {{host}} 转发端口 {{port}}，请先在“端口”中转发，然后重试",
+            "restoredMoved": "已将 {{host}} 的端口 {{port}} 转发到 localhost:{{localPort}}",
+            "restoredMovedReason": "这台电脑上的 localhost:{{previousPort}} 已被占用"
           }
         }
       },
@@ -4661,6 +4702,7 @@
             "downloadAlreadyLocal": "“{{value0}}”已在此电脑上",
             "downloadFolderUnsupported": "无法从此主机下载文件夹“{{value0}}”",
             "downloadOpenFailed": "下载\"{{value0}}\"失败",
+            "openLinkInThisGroupRefused": "无法在此分组中打开链接",
             "openInNewTab": "在新标签页中打开",
             "openInThisGroupRefused": "无法在此分组中打开 {{value0}}",
             "copyFilePath": "复制文件路径",
@@ -5102,6 +5144,7 @@
             "cursorUsageMenu": "Cursor 用量",
             "hiddenUsageProviders": "另有：{{value0}}",
             "zcodeUsageMenu": "Z代码使用",
+            "rateLimitResetsUnsupportedWsl_other": "可重置速率限制 {{count}} 次 · WSL 暂不支持",
             "rateLimitResetsAvailable_other": "可重置速率限制 {{count}} 次",
             "staleCodexSessions_other": "{{count}} 个 Codex 会话仍在使用旧账户",
             "4025a6f62f": "无限制",
@@ -5305,6 +5348,7 @@
             "updatedAgo": "更新于 {{time}}",
             "notYetUpdated": "尚未更新",
             "rateLimitResetsAvailable_other": "可重置速率限制 {{count}} 次",
+            "unsupportedOwner": "{{server}} 的使用量不可用",
             "fbc80d8be2": "Zen 余额",
             "c03c61f53f": "余额",
             "f6a27a3c0a": "可用 {{value0}}",
@@ -5338,6 +5382,7 @@
             "gotIt": "知道了"
           },
           "UsageRosterPanel": {
+            "wslUsageNotShown": "WSL 使用量暂不显示",
             "title": "使用量",
             "openDetails": "查看使用详情",
             "notSignedIn": "未登录",
@@ -8439,6 +8484,12 @@
             "description": "位于左侧边缘的图标栏，用于在工作区和其他页面之间切换",
             "copy": "在工作区列表左侧添加一个图标栏。“工作区”、“设置”和“帮助”会移到图标栏上，且在列表折叠时它仍保持可见",
             "toggleLabel": "切换应用栏"
+          },
+          "sharedCodexServers": {
+            "title": "共享 Codex 服务器",
+            "description": "设置相同的 Codex 聊天共享一个后台进程，而不是每个聊天各启动一个",
+            "copy": "占用内存更少，新聊天启动更快。如果共享进程崩溃，其所有聊天都会重新连接。更改后仅对这台电脑上新启动的聊天生效，远程和 WSL 主机仍为每个聊天一个进程",
+            "toggleLabel": "切换共享 Codex 服务器"
           }
         },
         "FloatingWorkspacePane": {
@@ -10612,6 +10663,12 @@
               "navigation": "导航",
               "sidebar": "侧边栏",
               "icons": "图标"
+            },
+            "sharedCodexServers": {
+              "title": "共享 Codex 服务器",
+              "description": "设置相同的 Codex 聊天共享一个后台进程，而不是每个聊天各启动一个",
+              "codex": "codex",
+              "memory": "内存"
             }
           }
         },
@@ -12493,6 +12550,7 @@
           "pathLabel": "开发插件文件夹路径",
           "placeholder": "插件文件夹路径",
           "add": "添加路径",
+          "teamDisabled": "你的团队已关闭开发文件夹",
           "reviewHelp": "只审核一次。之后的代码修改会直接运行",
           "dialogTitle": "开发文件夹"
         },
@@ -12938,6 +12996,11 @@
           "title": "Orca 账户",
           "description": "即时分享工作，并随时通过 Orca Mobile 访问桌面",
           "searchDescription": "登录或退出产物和 Orca Relay 使用的账户",
+          "managed": "你的团队管理着部分 Orca 设置",
+          "deviceReportNamedViewers": "{{teams}} 的所有者和管理员可以查看此设备的报告",
+          "deviceReportViewers": "团队所有者和管理员可以查看此设备的报告",
+          "reportingDetails": "设备报告详情",
+          "reportingDisclosure": "“设备”视图会显示你的 Orca 版本、发布渠道、设备名称、平台、更新状态、Orca 无法安装的必需插件，以及设备上次报告的时间",
           "benefitsTitle": "账户已包含",
           "artifactsTitle": "产物分享",
           "artifactsDescription": "发布 HTML 和 Markdown 文件，然后在 Orca 中管理所有分享链接",
@@ -13542,6 +13605,10 @@
           "defaultHostHelp": "现有项目保持不变",
           "defaultHostWebHelp": "此浏览器会在所选服务器上打开新项目",
           "updateAll": "全部更新",
+          "shareRowHint": "让另一个 Orca 连接到这里",
+          "manageShare": "管理",
+          "share": "共享",
+          "serversCaption": "服务器",
           "updatesCount_other": "有 {{count}} 个可用更新",
           "addServer": "添加服务器",
           "moreWaysToAdd": "添加服务器的更多方式",
@@ -13757,6 +13824,7 @@
           "customEditor": "编辑器"
         },
         "PluginManagerRows": {
+          "requiredByTeam": "团队要求",
           "reinstall": "重新安装",
           "crashedCount": "连续崩溃 {{value0}} 次",
           "crashed": "启动时崩溃",
@@ -22922,7 +22990,10 @@
         "keepOpen": "保持打开",
         "bannerRunning": "编排工作代理 · 完成后 2 分钟关闭",
         "bannerFinished": "编排工作代理已完成 · {{countdown}}后关闭",
-        "bannerFinishedStatus": "编排工作代理已完成 · 即将关闭"
+        "bannerFinishedStatus": "编排工作代理已完成 · 即将关闭",
+        "boundRunning": "随 {{worker}} 一同关闭",
+        "boundFinished": "{{worker}} 已完成 · {{countdown}}后关闭",
+        "boundFallbackName": "其工作代理"
       }
     },
     "wslHostMark": {
@@ -23290,6 +23361,19 @@
       "title": "浏览器页面已停止",
       "failed": "浏览器页面意外停止，请重试以恢复"
     },
+    "serverPage": {
+      "download": {
+        "started": "正在下载到 {{host}} 上的 {{path}}",
+        "saveHere": "保存到这台电脑",
+        "copying": "正在将 {{filename}} 下载到这台电脑…",
+        "copied": "已保存到 {{path}}",
+        "copyFailed": "无法将 {{filename}} 保存到这台电脑",
+        "showInFolder": "在文件夹中显示"
+      },
+      "print": {
+        "failed": "无法将页面保存为 PDF"
+      }
+    },
     "clientHosted": {
       "preparationFailed": "无法在此桌面上启动远程浏览器，请检查配对连接后重试",
       "unavailableTitle": "客户端托管的浏览器不可用",
@@ -23494,6 +23578,25 @@
     },
     "loadStall": {
       "waitingForHost": "正在等待 {{host}}…"
+    },
+    "profileCookieClear": {
+      "label": "Cookie",
+      "action": "清除 Cookie…",
+      "rowLocal": "退出这台电脑上 {{profile}} 中所有网站的登录",
+      "rowServer": "退出 {{host}} 上 {{profile}} 中所有网站的登录，包括这台电脑上的页面和串流页面",
+      "rowSsh": "退出 {{host}} 所用 {{profile}} 中所有网站的登录",
+      "unavailable": "所选主机上的此配置文件不可用",
+      "confirmTitle": "清除 {{host}} 上 {{profile}} 中的 Cookie？",
+      "confirmTitleLocal": "清除这台电脑上 {{profile}} 中的 Cookie？",
+      "confirmDescriptionServer": "此配置文件中所有网站都将退出登录，包括这台电脑上的页面和串流页面，其他配置文件和主机的 Cookie 会保留",
+      "confirmDescription": "此配置文件中所有网站都将退出登录，其他配置文件和主机的 Cookie 会保留",
+      "clear": "清除",
+      "cancel": "取消",
+      "cleared": "已清除 {{host}} 上 {{profile}} 中的 Cookie",
+      "clearedLocal": "已清除这台电脑上 {{profile}} 中的 Cookie",
+      "failed": "无法清除 {{host}} 上 {{profile}} 中的 Cookie，请重试",
+      "failedLocal": "无法清除这台电脑上 {{profile}} 中的 Cookie，请重试",
+      "sshHostOption": "{{host}} (SSH)"
     }
   },
   "runtimeRpc": {
@@ -24653,6 +24756,7 @@
       "googleSignInOrca": "Orca 内置登录",
       "googleSignInOrcaOption": "在此通过浏览器登录，无需 agy",
       "googleSignInUpdateFailed": "无法更改 Antigravity 使用 Google 登录的方式",
+      "chatDescriptionKeyOnAgy": "新聊天会使用下方的登录信息在 agy 上运行，与终端中的 agy 相互独立",
       "apiKeyGet": "获取 API 密钥"
     },
     "claude": {
@@ -24724,7 +24828,14 @@
         "title": "Claude 用量轮询",
         "description": "使用 Claude Code 登录凭据检查用量、额度和非活跃账号。关闭后，仅显示运行中终端会话提供的实时用量。",
         "about": "关于 Claude 用量轮询"
-      }
+      },
+      "organizationSuffix": "组织 ···{{suffix}}",
+      "personalOrganization": "个人"
+    },
+    "codex": {
+      "usageSignInLabel": "已退出登录",
+      "usageSignInMessage": "登录后即可查看使用量",
+      "usageSignInSettingsMessage": "打开“设置 → 账户”登录"
     },
     "hostSignIn": {
       "copied": "已复制",
@@ -25369,6 +25480,12 @@
     }
   },
   "updates": {
+    "installOnQuit": {
+      "title": "更新已准备就绪，可安装",
+      "summary": "退出 Orca，安装完成后重新打开",
+      "quit": "退出 Orca",
+      "later": "稍后"
+    },
     "installBlock": {
       "instancesLabel": "正在使用 Orca 的实例",
       "browserLabel": "后台浏览器",
@@ -25429,6 +25546,7 @@
       "rateLimitedInMinuteSignedOut": "已达到 GitHub 速率限制。请约一分钟后重试，或运行 `gh auth login`，以便 Orca 使用你账户的更高限额",
       "rateLimitedInMinutes_other": "已达到 GitHub 速率限制。请约 {{count}} 分钟后重试",
       "rateLimitedInMinutesSignedOut_other": "已达到 GitHub 速率限制。请约 {{count}} 分钟后重试，或运行 `gh auth login`，以便 Orca 使用你账户的更高限额",
+      "teamUpdatePolicy": "你的团队管理着 Orca 更新",
       "automaticInstallCheckpointFailed": "Orca 无法在重启前保存当前窗口。请重试安装更新。",
       "automaticInstallTerminalBusy": "重启会结束部分终端会话。Orca 会在之后检查更新时重试。",
       "macStagingTimeout": "macOS 仍在准备更新。如果长时间停留在此状态，请退出并重新打开 Orca。"
@@ -25437,6 +25555,21 @@
       "downloading": "正在下载 Orca {{version}}…",
       "installing": "正在安装 Orca {{version}}…",
       "restarting": "Orca 将自动重启"
+    },
+    "emergencyRequired": {
+      "title": "需要 Orca {{version}}",
+      "summary": "需要 Orca {{version}}，请重启以更新"
+    },
+    "teamRequired": {
+      "summary": "你的团队要求使用 Orca {{version}}，请重启以更新",
+      "title": "你的团队要求使用 Orca {{version}}",
+      "restartNow": "立即重启",
+      "countdown": "倒计时结束后，Orca 会保存你的会话并重启，运行中的智能体可能会延迟重启",
+      "waiting": "Orca 正在等待运行中的智能体结束，然后重启",
+      "retry": "Orca 会在下次启动时重试此更新",
+      "manual": "自动安装失败，请手动安装此更新",
+      "deadline": "请在 {{deadline}} 前重启，Orca 会在重启前保存你的会话",
+      "download": "打开下载页面"
     },
     "remoteUpdateBusy": "此服务器已在更新中。请在更新完成后重新检查"
   },
@@ -25513,7 +25646,11 @@
       "agents": "智能体",
       "otherTerminals": "其他终端",
       "privateBytes": "Orca 和终端已提交的内存"
-    }
+    },
+    "chatRow": {
+      "tooltip": "{{agent}} 聊天（包括其下运行的进程）"
+    },
+    "sharedAgentProcesses": "共享智能体进程"
   },
   "browserExtensions": {
     "permission": {
@@ -26353,6 +26490,7 @@
       },
       "agentInterrupted": "智能体在完成此次运行前被中断",
       "botsOff": "设置中已关闭机器人，因此 Orca 跳过了这次运行。",
+      "botsOffByTeam": "你的团队已关闭 Bots，因此 Orca 跳过了此次运行",
       "botMissing": "运行这个自动化的机器人已不存在。",
       "botFolderMissing": "机器人的文件夹已不可用。",
       "botPaused": "{{bot}} 已暂停，因此 Orca 跳过了这次运行。"
@@ -26464,7 +26602,8 @@
     "eventsWontFire": "仅按计划运行：需要 {{connectors}} 连接器",
     "webhooksOff": "无法运行：Orca Cloud 尚不支持 Webhook",
     "webhooksOffScheduled": "仅按计划运行：Orca Cloud 尚不支持 Webhook",
-    "openConnectors": "打开连接器"
+    "openConnectors": "打开连接器",
+    "hostUnreachable": "无法连接到 {{host}}，待其恢复后请重试"
   },
   "codeHost": {
     "errors": {
@@ -30039,6 +30178,13 @@
     }
   },
   "plugins": {
+    "blockedByTeam": "已被你的团队阻止",
+    "requiredFailures": {
+      "toast": "无法安装必需的插件",
+      "open": "打开插件",
+      "label": "团队要求",
+      "body": "Orca 无法安装 {{plugin}}"
+    },
     "frameSaveAs": {
       "title": "保存文件",
       "allFiles": "所有文件"
@@ -30062,6 +30208,11 @@
       "unknownProject": "未知项目",
       "automationNewWorkspaces": "自动化 {{id}}：按 {{schedule}} 运行，每次都在 {{project}} 中新建工作区",
       "automationInWorkspace": "自动化 {{id}}：在 {{project}} / {{workspace}} 中按 {{schedule}} 运行"
+    },
+    "catalog": {
+      "managedByTeam": "由你的团队管理",
+      "managedByNamedTeams": "由 {{teams}} 管理",
+      "teamPublisher": "你的团队"
     },
     "displayText": {
       "tb0b38488": "适用于 Orca 的 GitHub 主题",
@@ -30194,6 +30345,8 @@
     "modelRequiresClaude": "需要 Claude Code CLI {{version}} 或更高版本",
     "modelRequiresCodex": "需要 Codex CLI {{version}} 或更高版本",
     "modelRequires": "需要 {{product}} {{version}} 或更高版本",
+    "devinProduct": "Devin CLI",
+    "codebuddyProduct": "CodeBuddy Code",
     "commandCopied": "命令已复制",
     "commandNotCopied": "无法复制命令",
     "copyCommand": "复制",
@@ -30259,5 +30412,18 @@
       "workerOwed": "仍有编排在等待此聊天",
       "home": "托管智能体的主聊天无法删除"
     }
+  },
+  "activityBar": {
+    "moveUp": "上移",
+    "moveDown": "下移",
+    "hide": "隐藏",
+    "show": "显示 {{name}}",
+    "dragStart": "已拿起 {{name}}",
+    "dragOver": "{{name}} 悬停在 {{target}} 上",
+    "dragEnd": "已放下 {{name}}",
+    "dragCancel": "已取消移动 {{name}}",
+    "moveLeft": "左移",
+    "moveRight": "右移",
+    "reset": "重置标签页顺序"
   }
 }
