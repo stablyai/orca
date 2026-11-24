@@ -330,7 +330,13 @@ export default function EditorFileTab({
           </span>
         )}
         {isMissingFileMutation && !isRenaming && (
-          <span className="shrink-0 text-[10px] leading-none font-semibold tracking-wide text-muted-foreground">
+          <span
+            className={`shrink-0 text-[10px] leading-none font-semibold tracking-wide text-muted-foreground${
+              isActive
+                ? ''
+                : ' [.light_[data-unfocused-split-group]_&]:text-tab-inactive-foreground'
+            }`}
+          >
             {file.externalMutation}
           </span>
         )}
