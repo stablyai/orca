@@ -152,7 +152,10 @@ export abstract class BrowserManagerVisibility extends BrowserManagerState {
     }
     const ownerTabId = this.resolveBrowserTabIdForGuestWebContentsId(guestWebContentsId)
     if (ownerTabId) {
-      this.pageInputCredit.creditInput(ownerTabId, this.pageIdForGuest(guestWebContentsId))
+      // While an agent command runs in the tab, what the page prints may be that command's.
+      this.pageInputCredit.creditInput(ownerTabId, this.pageIdForGuest(guestWebContentsId), {
+        printable: !this.isAgentCommandRunningInTab(ownerTabId)
+      })
     }
   }
 

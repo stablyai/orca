@@ -57,7 +57,7 @@ export class BrowserPageInputCredit {
   }
 
   /** Activating input reached the page; the running command's paired client, if any, owns what it opens. */
-  creditInput(browserTabId: string, browserPageId: string): void {
+  creditInput(browserTabId: string, browserPageId: string, { printable = true } = {}): void {
     const pairedDeviceId = this.runnerByPageId.get(browserPageId)?.pairedDeviceId ?? null
     if (!pairedDeviceId) {
       this.withdraw(browserTabId)
@@ -73,7 +73,11 @@ export class BrowserPageInputCredit {
       }
     }
     this.creditByTabId.set(browserTabId, { pairedDeviceId, at: now })
-    this.printCreditByTabId.set(browserTabId, { pairedDeviceId, at: now })
+    if (printable) {
+      this.printCreditByTabId.set(browserTabId, { pairedDeviceId, at: now })
+    } else {
+      this.printCreditByTabId.delete(browserTabId)
+    }
   }
 
   /** An agent acts on the tab now: what the page does next is not the earlier input's. */
