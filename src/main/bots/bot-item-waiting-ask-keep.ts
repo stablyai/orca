@@ -15,7 +15,7 @@ import { eventRecordOf, eventViewOf, optionalInteger } from './bot-items-rows'
 /** The pairing rules a kept ask was worked out by; bump it with any change to what
  *  `botItemQuestionPairing` pairs. Kept asks are also keyed by the build (its commit, or on the server,
  *  whose bundle names none, its version), so any other build's are worked out again. */
-export const WAITING_ASK_RULES = 3
+export const WAITING_ASK_RULES = 4
 
 let keptBy: string | null = null
 
@@ -98,7 +98,15 @@ export function skippedQuestionsOf(
   skipped: readonly number[],
   answer: Record<string, unknown>
 ): string[] {
-  const events = itemEventRecords(db, uid).map(eventViewOf)
+  // Events before the ask pair into its entry only through the lines earlier asks asked.
+  const events = db
+    .prepare(
+      `SELECT * FROM item_events WHERE item_uid = ?
+         AND (id >= ? OR (kind = 'commented' AND json_extract(data, '$.ask') IS NOT NULL))
+       ORDER BY id`
+    )
+    .all(uid, ask)
+    .map((row) => eventViewOf(eventRecordOf(row)))
   const next = (parseBotItemEventId(events.at(-1)?.id ?? '') ?? 0) + 1
   events.push({
     id: botItemEventId(next),

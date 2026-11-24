@@ -2,7 +2,7 @@
 
 import { act } from 'react'
 import { createRoot } from 'react-dom/client'
-import { getByRole, queryByRole } from '@testing-library/react'
+import { getByLabelText, getByRole, queryByLabelText, queryByRole } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { NativeChatQuestionCard, type NativeChatQuestionCardProps } from './NativeChatQuestionCard'
 import { TooltipProvider } from '@/components/ui/tooltip'
@@ -187,7 +187,8 @@ describe('NativeChatQuestionCard', () => {
     // With nothing answered, the last step still offers Skip, which dismisses.
     expect(getByRole(container, 'button', { name: 'Skip' })).toBeTruthy()
 
-    act(() => getByRole(container, 'button', { name: 'One' }).click())
+    act(() => getByRole(container, 'button', { name: 'Previous question' }).click())
+    act(() => getByRole(container, 'button', { name: 'Previous question' }).click())
     act(() => optionRows()[1]!.click())
     act(() => vi.runAllTimers())
     skip()
@@ -250,9 +251,11 @@ describe('NativeChatQuestionCard', () => {
     ])
   })
 
-  it('jumps from the step bar, marks answered steps and moves back from step 2', () => {
+  it('steps with the header arrows, marks an answered step and moves back from step 2', () => {
     vi.useFakeTimers()
     renderCard({ prompt: { questions: [question('One'), question('Two'), question('Three')] } })
+    // The count and the two arrows are the only step controls; no per-step bar.
+    expect(container.querySelectorAll('[data-native-chat-question-step]')).toHaveLength(2)
     expect(getByRole(container, 'button', { name: 'Previous question' })).toHaveProperty(
       'disabled',
       true
@@ -261,8 +264,12 @@ describe('NativeChatQuestionCard', () => {
     act(() => optionRows()[0]!.click())
     act(() => vi.runAllTimers())
     expect(container.textContent).toContain('2 of 3')
-    expect(getByRole(container, 'button', { name: 'One, answered' })).toBeTruthy()
-    act(() => getByRole(container, 'button', { name: 'Three' }).click())
+    expect(queryByLabelText(container, 'Answered')).toBeNull()
+    act(() => getByRole(container, 'button', { name: 'Previous question' }).click())
+    expect(container.textContent).toContain('1 of 3')
+    expect(getByLabelText(container, 'Answered')).toBeTruthy()
+    act(() => getByRole(container, 'button', { name: 'Next question' }).click())
+    act(() => getByRole(container, 'button', { name: 'Next question' }).click())
     expect(container.textContent).toContain('3 of 3')
     expect(getByRole(container, 'button', { name: 'Next question' })).toHaveProperty(
       'disabled',

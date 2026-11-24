@@ -2,6 +2,7 @@
 // item views need in one round trip.
 import {
   BOT_ITEM_OPEN_STATUSES,
+  type BotItemActor,
   botItemEventId,
   isOpenBotItemStatus,
   type BotItemLinkKind,
@@ -16,6 +17,7 @@ import {
   statusOf,
   text
 } from './bot-items-rows'
+import type { BotRequestAsker } from '../../shared/bots/bot-acts-for'
 import type { BotItemEventRecord, BotItemLinkRecord, BotItemRecord } from './bot-items-schema'
 import { BotItemsTables } from './bot-items-tables'
 
@@ -32,6 +34,11 @@ export type BotItemListQuery = {
   /** The last row of the previous page. */
   cursor?: { at: number; number: number }
 }
+
+/** Events back from an item's newest a close is looked for; one further back reads as unknown. */
+const CLOSE_LOOKBACK_EVENTS = 200
+
+export type BotItemClose = { actor: BotItemActor; actsFor: readonly BotRequestAsker[] | null }
 
 export class BotItemsReads extends BotItemsTables {
   /** Links of a kind to any of these refs, across items. */
@@ -124,6 +131,33 @@ export class BotItemsReads extends BotItemsTables {
         lastActivityAt: Number(row.last_activity_at),
         snoozedUntil: optionalInteger(row, 'snoozed_until')
       }))
+  }
+
+  /** The close each item's `closedAt` names: who made it, and whom its chat acted for when it says.
+   *  Read among each item's newest events only, so comments after a close don't grow the read. */
+  closes(items: readonly { uid: string; closedAt: number }[]): Record<string, BotItemClose> {
+    const closes: Record<string, BotItemClose> = {}
+    for (const row of this.db
+      .prepare(
+        `SELECT * FROM item_events WHERE id IN (SELECT (SELECT id FROM item_events
+           WHERE item_uid = json_extract(named.value, '$.uid') AND kind = 'status'
+             AND created_at = json_extract(named.value, '$.closedAt')
+             AND json_extract(data, '$.to') IN ('done', 'canceled')
+             AND id >= COALESCE((SELECT id FROM item_events
+               WHERE item_uid = json_extract(named.value, '$.uid')
+               ORDER BY id DESC LIMIT 1 OFFSET ?), 0)
+           ORDER BY id DESC LIMIT 1) FROM json_each(?) AS named)`
+      )
+      .all(CLOSE_LOOKBACK_EVENTS - 1, JSON.stringify(items))) {
+      const event = eventRecordOf(row)
+      const { actsFor } = event.data
+      closes[event.itemUid] = {
+        actor: event.actor,
+        // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: only the host writes actsFor, from a turn's askers.
+        actsFor: Array.isArray(actsFor) ? (actsFor as BotRequestAsker[]) : null
+      }
+    }
+    return closes
   }
 
   /** What item views need, for many items in one round trip: rows, links, Needs you questions, waits

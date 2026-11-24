@@ -14,6 +14,7 @@ export const BOT_ITEMS_OPS = [
   'chatOwnsOpenItem',
   'needsYou',
   'viewRows',
+  'closes',
   'add',
   'set',
   'comment',

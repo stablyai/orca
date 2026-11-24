@@ -7457,7 +7457,6 @@
         },
         "BrowserProfileRow": {
           "8e636cae25": "Perfil \"{{value0}}\" eliminado.",
-          "2d4bea7f35": "Se borraron las cookies predeterminadas.",
           "796d846483": "No se han importado cookies",
           "c29648fe5b": "Activo",
           "b4c167764d": "Se importaron {{value0}} cookies desde un archivo a {{value1}}.",
@@ -7465,10 +7464,7 @@
           "b4e9d3f2a1c5": "Se importaron {{value0}} cookies de {{value1}} a {{value2}}.",
           "c5a273a809": "Desde {{value0}}",
           "80bffd32bf": "Importar cookies",
-          "bd7d68f138": "Desde archivo…",
-          "4054c458e1": "Borrar las cookies predeterminadas",
-          "3b662becd5": "¿Borrar las cookies del perfil predeterminado?",
-          "f159cf5a3e": "Es posible que se cierre tu sesión en sitios de este perfil."
+          "bd7d68f138": "Desde archivo…"
         },
         "BrowserUseComputerUseNotice": {
           "79209b37b9": "Si importar cookies no encaja, Computer Use puede controlar apps locales y usar sesiones de navegador existentes donde aplique. Instala el skill Orca Computer Use; macOS también requiere permisos de privacidad.",
@@ -17207,8 +17203,6 @@
             "ed8f54509d": "Por defecto",
             "e5d31de1a9": "Tamaño de la ventana gráfica",
             "56f94f4ffa": "Desde archivo…",
-            "eb280bfb11": "Desde {{value0}}",
-            "2293adf620": "Importar cookies",
             "cf7cdc67ef": "Nuevo perfil…",
             "7b838540c7": "Menú del navegador",
             "a7a86702b3": "Creado y cambiado al perfil {{value0}}",
@@ -19495,7 +19489,6 @@
         "terminalRequired": "Responda esta pregunta OMP en la terminal.",
         "openTerminal": "Responder en la terminal",
         "recommended": "Recomendado",
-        "stepAnswered": "{{value0}}, respondida",
         "stepOf": "{{value0}} de {{value1}}",
         "answered": "Respondida",
         "title": "Pregunta",
@@ -21409,6 +21402,13 @@
       "sshPage": {
         "stored": "Guardado en el navegador de {{host}}.",
         "googleCookiesSkipped": "No se importaron las cookies de Google. Abre una página que navegue a través de {{host}} e inicia sesión en Google."
+      },
+      "picker": {
+        "menuItem": "Importar cookies…",
+        "search": "Buscar perfiles",
+        "lastUsed": "Usado por última vez",
+        "noMatches": "Sin coincidencias",
+        "googleNote": "No se importan sesiones de Google"
       }
     },
     "passwords": {
@@ -24782,7 +24782,6 @@
     "row": {
       "runsOn": "Se ejecuta en {{host}}",
       "disconnected": "Desconectado",
-      "hostDisconnected": "{{host}} desconectado",
       "idle": "Inactivo",
       "paused": "En pausa",
       "reading": "Leyendo tu mensaje",

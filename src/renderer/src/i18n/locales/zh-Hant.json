@@ -514,6 +514,13 @@
       "sshPage": {
         "stored": "已儲存到 {{host}} 的瀏覽器。",
         "googleCookiesSkipped": "未匯入 Google Cookie。請開啟一個透過 {{host}} 瀏覽的頁面，然後登入 Google。"
+      },
+      "picker": {
+        "menuItem": "匯入 Cookie…",
+        "search": "搜尋設定檔",
+        "lastUsed": "上次使用",
+        "noMatches": "沒有相符項目",
+        "googleNote": "Google 登入資訊未匯入"
       }
     },
     "passwords": {
@@ -7702,7 +7709,6 @@
         },
         "BrowserProfileRow": {
           "8e636cae25": "已刪除設定檔「{{value0}}」。",
-          "2d4bea7f35": "預設 cookie 已清除。",
           "796d846483": "沒有匯入 cookie",
           "c29648fe5b": "目前",
           "b4c167764d": "已從檔案將 {{value0}} 個 Cookie 匯入到 {{value1}}。",
@@ -7710,10 +7716,7 @@
           "b4e9d3f2a1c5": "已從 {{value1}} 匯入 {{value0}} 個 Cookie 到 {{value2}}。",
           "c5a273a809": "從 {{value0}}",
           "80bffd32bf": "匯入 Cookie",
-          "bd7d68f138": "從檔案...",
-          "4054c458e1": "清除預設 cookie",
-          "3b662becd5": "要清除預設設定檔中的 cookie 嗎？",
-          "f159cf5a3e": "這可能會讓你登出此設定檔中的網站。"
+          "bd7d68f138": "從檔案..."
         },
         "BrowserUseComputerUseNotice": {
           "79209b37b9": "如果 cookie 匯入不合適，「電腦使用」可以控制本機應用程式，並可視情況使用瀏覽器現有的已登入工作階段。安裝 Orca Computer Use 技能； macOS 還需要隱私權限。",
@@ -17296,8 +17299,6 @@
             "ed8f54509d": "預設",
             "e5d31de1a9": "檢視區大小",
             "56f94f4ffa": "從檔案...",
-            "eb280bfb11": "從 {{value0}}",
-            "2293adf620": "匯入 Cookie",
             "cf7cdc67ef": "新增設定檔…",
             "7b838540c7": "瀏覽器選單",
             "a7a86702b3": "建立並切換到 {{value0}} 設定檔",
@@ -19618,7 +19619,6 @@
         "terminalRequired": "請在終端機中回答這個 OMP 問題。",
         "openTerminal": "在終端機中回答",
         "recommended": "推薦",
-        "stepAnswered": "{{value0}}，已回答",
         "stepOf": "第 {{value0}} 個，共 {{value1}} 個",
         "answered": "已回答",
         "title": "問題",
@@ -23868,7 +23868,6 @@
     "row": {
       "runsOn": "在 {{host}} 上執行",
       "disconnected": "已中斷連線",
-      "hostDisconnected": "{{host}} 已中斷連線",
       "idle": "閒置",
       "paused": "已暫停",
       "reading": "正在閱讀你的訊息",
