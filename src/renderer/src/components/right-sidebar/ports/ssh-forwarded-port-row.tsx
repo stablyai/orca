@@ -9,15 +9,12 @@ import {
 } from '@/lib/workspace-ports/workspace-port-urls'
 import type { PortForwardEntry } from '../../../../../shared/remote-runtime/ssh/ssh-types'
 import { useTranslate } from '@/i18n/use-translate'
-import { removePortForward, type PortForwardOwner } from './port-forward-owner'
 
 export function SshForwardedPortRow({
-  owner,
   entry,
   onEdit,
   onOpenInBrowser
 }: {
-  owner: PortForwardOwner
   entry: PortForwardEntry
   onEdit: () => void
   onOpenInBrowser: (event?: React.MouseEvent<HTMLButtonElement>) => void
@@ -30,12 +27,12 @@ export function SshForwardedPortRow({
   const handleRemove = useCallback(async () => {
     setRemoving(true)
     try {
-      await removePortForward(owner, entry.id)
+      await window.api.ssh.removePortForward({ id: entry.id })
     } catch {}
     if (mountedRef.current) {
       setRemoving(false)
     }
-  }, [entry.id, mountedRef, owner])
+  }, [entry.id, mountedRef])
 
   const handleCopy = useCallback(() => {
     void window.api.ui.writeClipboardText(forwardedAddress)

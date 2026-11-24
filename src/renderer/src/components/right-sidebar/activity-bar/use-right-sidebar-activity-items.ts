@@ -9,7 +9,7 @@ import { getDefaultRightSidebarActivityItems } from './right-sidebar-default-act
 import {
   getPortsPanelOwnerKey,
   portsPanelHostForOwnerKey,
-  portsPanelReachesRemoteHost
+  portsPanelReachesSshHost
 } from '../ports/ports-panel-host'
 import {
   collectInstalledPluginTabKeys,
@@ -83,9 +83,10 @@ export function useRightSidebarActivityItems({
   const connectorsNeedingOwner = needs.filter((need) => need.kind === 'connector').length
   const hasChatWorkers = useFocusedChatWorkers(rightSidebarOpen && !isBot).workers.length > 0
   // Why the owner: a managed server's workspace names its server, not an SSH connection.
-  const hasRemoteHost = useAppStore((s) =>
-    portsPanelReachesRemoteHost(
-      portsPanelHostForOwnerKey(getPortsPanelOwnerKey(s, activeWorktreeId))
+  const hasSshHost = useAppStore((s) =>
+    portsPanelReachesSshHost(
+      portsPanelHostForOwnerKey(getPortsPanelOwnerKey(s, activeWorktreeId)),
+      s.runtimeEnvironments
     )
   )
   const pluginSystemEnabled = useAppStore((s) => s.settings?.pluginSystemEnabled === true)
@@ -144,12 +145,12 @@ export function useRightSidebarActivityItems({
       getVisibleRightSidebarActivityItems(activityItems, {
         isFolder,
         isFolderWorkspace,
-        hasRemoteHost,
+        hasSshHost,
         isBot,
         isGroupHome,
         hasChatWorkers
       }),
-    [activityItems, isFolder, isFolderWorkspace, hasRemoteHost, isBot, isGroupHome, hasChatWorkers]
+    [activityItems, isFolder, isFolderWorkspace, hasSshHost, isBot, isGroupHome, hasChatWorkers]
   )
 
   const activeFolderWorkspaceKey = isFolderWorkspace ? (activeWorktreeId ?? null) : null

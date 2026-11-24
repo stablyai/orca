@@ -24,7 +24,6 @@ import { registerBrowserTabActivateIpcBridge } from './browser/browser-tab-activ
 import { registerBrowserStateIpcBridge } from './browser/browser-state-ipc-bridge'
 import { registerContentCreationIpcBridge } from '../../lib/simulator/launch/content-creation-ipc-bridge'
 import { registerDirectSshStateIpcBridge } from './direct-ssh/direct-ssh-state-ipc-bridge'
-import { registerRuntimePortForwardsIpcBridge } from './runtime-events/runtime-port-forwards-ipc-bridge'
 import { registerEphemeralVmLifecycleIpcBridge } from '../../runtime/ephemeral-vm/ephemeral-vm-lifecycle-ipc-bridge'
 import { registerMobileAndTerminalCloseIpcBridge } from './mobile-driver/mobile-terminal-close-ipc-bridge'
 import { registerMobileDriverIpcBridge } from './mobile-driver/mobile-driver-ipc-bridge'
@@ -126,7 +125,6 @@ export function installAppLifetimeIpcEvents(): () => void {
   const unsubscribeRuntimeEnvironmentStore = registerRuntimeClientIpcBridge(unsubs, worktreeRuntime)
   registerBackgroundWorktreeRemovalBridge(unsubs)
   registerWslHostIpcBridge(unsubs)
-  registerRuntimePortForwardsIpcBridge(unsubs)
   registerEphemeralVmLifecycleIpcBridge(unsubs)
   registerProjectCatalogIpcBridge(
     unsubs,

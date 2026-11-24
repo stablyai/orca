@@ -23,10 +23,7 @@ type AcceptedSocket = {
 }
 
 /** Admits a loopback client once its owner checks out. Chromium can't authenticate to SOCKS, so the owner is the only credential. */
-export function createSocksClientAdmission(
-  /** Names the listener in logs, e.g. a port forward. */
-  listener = 'browser SOCKS'
-): (socket: Socket, admit: () => void) => void {
+export function createSocksClientAdmission(): (socket: Socket, admit: () => void) => void {
   const logged = new Set<string>()
   const logOnce = (verdict: SocksClientOwnerVerdict): void => {
     const key = verdict.allowed
@@ -43,11 +40,11 @@ export function createSocksClientAdmission(
     console.warn(
       verdict.allowed
         ? verdict.unchecked
-          ? `[browser-tunnel] ${listener} clients are checked for loopback only: ${verdict.unchecked}.`
-          : `[browser-tunnel] Admitted a ${listener} connection from this app's own process whose account could not be read (${verdict.unreadableOwnProcess}).`
+          ? `[browser-tunnel] Browser SOCKS clients are checked for loopback only: ${verdict.unchecked}.`
+          : `[browser-tunnel] Admitted a browser SOCKS connection from this app's own process whose account could not be read (${verdict.unreadableOwnProcess}).`
         : verdict.reason === 'foreign-owner'
-          ? `[browser-tunnel] Refused a ${listener} connection from ${verdict.owner}; only this user may use it.`
-          : `[browser-tunnel] Refused a ${listener} connection: could not confirm its owner (${verdict.detail}).`
+          ? `[browser-tunnel] Refused a browser SOCKS connection from ${verdict.owner}; only this user's browser may use it.`
+          : `[browser-tunnel] Refused a browser SOCKS connection: could not confirm its owner (${verdict.detail}).`
     )
   }
   return (socket, admit) => {

@@ -32,8 +32,7 @@ export function resolveNativeChatHttpLinkRouting(
       state.settings,
       sourceOwner,
       canOpenRemoteLinkInWorkspaceBrowser(state, worktreeId, sourceOwner),
-      url,
-      worktreeId
+      url
     )
   }
 }

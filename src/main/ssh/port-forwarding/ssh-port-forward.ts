@@ -1,8 +1,9 @@
 import type { SshConnection } from '../connection/ssh-connection'
+import { Ssh2PortForwardProvider } from './ssh2-port-forward-provider'
+import { SystemSshPortForwardProvider } from './system-ssh-port-forward-provider'
 import type { PortForwardEntry } from '../../../shared/remote-runtime/ssh/ssh-types'
 import type {
   PortForwardCloseReason,
-  PortForwardConnection,
   SshPortForwardProvider,
   StartedPortForward
 } from './ssh-port-forward-provider'
@@ -13,7 +14,7 @@ const TEARDOWN_START_WAIT_MS = 3_000
 /** Overtaken starts hold nothing; do not roll back an edit after connection teardown. */
 export class PortForwardTornDownError extends Error {
   constructor() {
-    super('The connection closed while this port forward was starting.')
+    super('The SSH session closed while this port forward was starting.')
     this.name = 'PortForwardTornDownError'
   }
 }
@@ -30,17 +31,19 @@ type SshPortForwardManagerCallbacks = {
   onForwardClosed?: (entry: PortForwardEntry, reason: PortForwardCloseReason) => void
 }
 
-/** Owns forwards' listeners for any connection kind; each provider bridges one kind. */
-export class SshPortForwardManager<TConnection extends PortForwardConnection = SshConnection> {
-  private forwards = new Map<string, StartedPortForward<TConnection>>()
+export class SshPortForwardManager {
+  private forwards = new Map<string, StartedPortForward>()
   private inTransit = new Set<ForwardInTransit>()
   private nextId = 1
-  private providers: SshPortForwardProvider<TConnection>[]
+  private providers: SshPortForwardProvider[]
   private callbacks: SshPortForwardManagerCallbacks
 
   constructor(
-    callbacks: SshPortForwardManagerCallbacks,
-    providers: SshPortForwardProvider<TConnection>[]
+    callbacks: SshPortForwardManagerCallbacks = {},
+    providers: SshPortForwardProvider[] = [
+      new Ssh2PortForwardProvider(),
+      new SystemSshPortForwardProvider()
+    ]
   ) {
     this.callbacks = callbacks
     this.providers = providers
@@ -52,7 +55,7 @@ export class SshPortForwardManager<TConnection extends PortForwardConnection = S
 
   async addForward(
     connectionId: string,
-    conn: TConnection,
+    conn: SshConnection,
     localPort: number,
     remoteHost: string,
     remotePort: number,
@@ -72,7 +75,7 @@ export class SshPortForwardManager<TConnection extends PortForwardConnection = S
   private async addForwardWithId(
     id: string,
     connectionId: string,
-    conn: TConnection,
+    conn: SshConnection,
     localPort: number,
     remoteHost: string,
     remotePort: number,
@@ -87,14 +90,14 @@ export class SshPortForwardManager<TConnection extends PortForwardConnection = S
       throw new Error('SSH connection is not established')
     }
 
-    let forward: StartedPortForward<TConnection> | null = null
+    let forward: StartedPortForward | null = null
     const starting: ForwardInTransit = {
       kind: 'starting',
       connectionId,
       closed: false,
       settled: Promise.resolve()
     }
-    const settled = (async (): Promise<StartedPortForward<TConnection>> => {
+    const settled = (async (): Promise<StartedPortForward> => {
       const started = await provider.start(conn, {
         id,
         connectionId,
@@ -132,7 +135,7 @@ export class SshPortForwardManager<TConnection extends PortForwardConnection = S
 
   async updateForward(
     id: string,
-    conn: TConnection,
+    conn: SshConnection,
     localPort: number,
     remoteHost: string,
     remotePort: number,
@@ -222,7 +225,7 @@ export class SshPortForwardManager<TConnection extends PortForwardConnection = S
     await this.closeAndSettle(connectionId)
   }
 
-  async closeStaleForwards(connectionId: string, conn: TConnection): Promise<void> {
+  async closeStaleForwards(connectionId: string, conn: SshConnection): Promise<void> {
     const stale = [...this.forwards.entries()]
       .filter(([, forward]) => forward.entry.connectionId === connectionId)
       .filter(([, forward]) => forward.isLive?.(conn) === false)

@@ -1,6 +1,5 @@
 import {
   isRemoteLoopbackHttpLink,
-  openOwnedSystemHttpLink,
   localhostLabelRouteForHttpLink,
   openLabeledLocalhostLink
 } from './http-link-localhost-route'
@@ -138,8 +137,7 @@ export function canHttpLinkOpenInSourceGroup(
   return state ? canOpenLinkInSourceGroup(state, workspaceId, sourceTabId) : false
 }
 
-/** The one renderer route to the system browser for an address already resolved for it. */
-export async function openSystemHttpLink(url: string): Promise<void> {
+async function openSystemHttpLink(url: string): Promise<void> {
   try {
     await window.api.shell.openUrl(url)
   } catch {
@@ -185,8 +183,7 @@ function executeHttpLink(
   // A client fallback tab browses from this desktop, so it cannot reach the owner's loopback either.
   const prefersOrca =
     openLinksInApp ||
-    (!opts.allowClientBrowserFallback &&
-      isRemoteLoopbackHttpLink(url, effectiveSourceOwner, worktreeId))
+    (!opts.allowClientBrowserFallback && isRemoteLoopbackHttpLink(url, effectiveSourceOwner))
   const modifier = resolveModifierRouting(
     Boolean(opts.modifierHeld),
     prefersOrca,
@@ -283,7 +280,7 @@ function executeHttpLink(
 
   const localhostRoute = state ? localhostLabelRouteForHttpLink(url, state, sourceOwner) : null
   if (!localhostRoute) {
-    openOwnedSystemHttpLink(url, effectiveSourceOwner, worktreeId, openSystemHttpLink)
+    void openSystemHttpLink(url)
     return 'system-browser'
   }
   void openLabeledLocalhostLink(url, localhostRoute, (labeledUrl) => {

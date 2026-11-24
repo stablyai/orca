@@ -1,6 +1,4 @@
 import type { HttpLinkSourceOwner, HttpLinkStoreState } from './http-link-routing'
-import { serverForwardsWorkspacePorts } from '@/lib/workspace-ports/server-port-forward-support'
-import { isLoopbackBrowserUrl } from '../../../../../shared/browser/navigation/loopback-browser-url'
 import {
   isLoopbackHttpUrl,
   parseLoopbackUrlWithPort,
@@ -23,40 +21,16 @@ export type LocalhostLinkWorktree = {
   projectId?: string
 }
 
-// Why: a remote process's loopback URL names its own host; only that host's Orca browser reaches it,
-// unless the paired server forwards its ports here, where the system browser opens the forward.
+// Why: a remote process's loopback URL names its own host; only that host's Orca browser reaches it.
 export function isRemoteLoopbackHttpLink(
   url: string | undefined,
-  sourceOwner: HttpLinkSourceOwner | undefined,
-  worktreeId?: string | null
+  sourceOwner: HttpLinkSourceOwner | undefined
 ): boolean {
   return (
-    (sourceOwner?.kind === 'ssh' ||
-      (sourceOwner?.kind === 'runtime' &&
-        !serverForwardsWorkspacePorts(sourceOwner.runtimeEnvironmentId, worktreeId))) &&
+    (sourceOwner?.kind === 'runtime' || sourceOwner?.kind === 'ssh') &&
     url !== undefined &&
     isLoopbackHttpUrl(url)
   )
-}
-
-/** Opens a link in the system browser; a paired server's own localhost opens through a forward of
- *  its port, never as this computer's localhost. */
-export function openOwnedSystemHttpLink(
-  url: string,
-  sourceOwner: HttpLinkSourceOwner | undefined,
-  worktreeId: string | null | undefined,
-  openSystem: (url: string) => Promise<void>
-): void {
-  if (sourceOwner?.kind !== 'runtime' || !isLoopbackBrowserUrl(url)) {
-    void openSystem(url)
-    return
-  }
-  // Loaded on demand: the opener reads the store, which imports link routing.
-  void import('@/lib/workspace-ports/server-port-forward-open')
-    .then(({ openServerLoopbackInSystemBrowser }) =>
-      openServerLoopbackInSystemBrowser(url, sourceOwner.runtimeEnvironmentId, worktreeId)
-    )
-    .catch((error: unknown) => console.error('Failed to open the server port:', error))
 }
 
 export function localhostLabelRouteForHttpLink(

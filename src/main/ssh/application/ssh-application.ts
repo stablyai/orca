@@ -3,8 +3,6 @@ import type { OrcaRuntimeService } from '../../runtime/orca-runtime'
 import { SshConnectionStore } from '../targets/ssh-connection-store'
 import { SshConnectionManager } from '../connection/ssh-connection-manager'
 import { SshPortForwardManager } from '../port-forwarding/ssh-port-forward'
-import { Ssh2PortForwardProvider } from '../port-forwarding/ssh2-port-forward-provider'
-import { SystemSshPortForwardProvider } from '../port-forwarding/system-ssh-port-forward-provider'
 import {
   getSshTargetRegistryStore,
   setSshConnectionManagerResolver,
@@ -82,13 +80,7 @@ export async function startSshApplication({
     // Window re-registration must not re-gate hosts already signed in during this process.
     awaitSignInForCredentialHosts(getSshTargetRegistryStore()!)
   }
-  setPortForwardManager(
-    portForwardManager ??
-      new SshPortForwardManager({}, [
-        new Ssh2PortForwardProvider(),
-        new SystemSshPortForwardProvider()
-      ])
-  )
+  setPortForwardManager(portForwardManager ?? new SshPortForwardManager())
   portForwardManager!.setCallbacks({
     onForwardClosed: (entry, reason) => {
       if (reason.kind === 'unexpected-exit') {

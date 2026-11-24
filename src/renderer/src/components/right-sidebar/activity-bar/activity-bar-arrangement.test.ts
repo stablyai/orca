@@ -100,7 +100,7 @@ describe('activity bar arrangement', () => {
     const folderItems = getVisibleRightSidebarActivityItems([...defaults, plugin], {
       isFolder: true,
       isFolderWorkspace: true,
-      hasRemoteHost: false,
+      hasSshHost: false,
       isBot: false,
       isGroupHome: false,
       hasChatWorkers: false
@@ -152,7 +152,7 @@ describe('activity bar arrangement', () => {
     const botItems = getVisibleRightSidebarActivityItems(defaults, {
       isFolder: true,
       isFolderWorkspace: true,
-      hasRemoteHost: false,
+      hasSshHost: false,
       isBot: true,
       isGroupHome: false,
       hasChatWorkers: false

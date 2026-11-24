@@ -126,7 +126,7 @@ const BOT_PAGE_ITEMS_WITH_PLUGIN = getVisibleRightSidebarActivityItems(
       }
     ]).map((item) => ({ ...item, labeledTab: true }))
   ],
-  { isFolder: true, isFolderWorkspace: true, hasRemoteHost: false, isBot: true }
+  { isFolder: true, isFolderWorkspace: true, hasSshHost: false, isBot: true }
 )
 
 export const withPluginPanel = defineFixture({
@@ -192,7 +192,7 @@ const BOT_PAGE_ITEMS_WITH_SEVEN_PLUGINS = getVisibleRightSidebarActivityItems(
       }))
     ).map((item) => ({ ...item, labeledTab: true }))
   ],
-  { isFolder: true, isFolderWorkspace: true, hasRemoteHost: false, isBot: true }
+  { isFolder: true, isFolderWorkspace: true, hasSshHost: false, isBot: true }
 )
 
 export const pluginPanelOpenFromMore = defineFixture({

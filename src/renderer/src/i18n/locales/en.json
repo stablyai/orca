@@ -2721,16 +2721,6 @@
               }
             }
           }
-        },
-        "ports": {
-          "serverPortForward": {
-            "updateServer": "Couldn't forward port {{port}} from {{host}}. Update Orca on {{host}} and try again.",
-            "failed": "Couldn't forward port {{port}} from {{host}}. Check the connection and try again.",
-            "forwarded": "Forwarded port {{port}} from {{host}}",
-            "opened": "Opened {{address}} in your default browser.",
-            "otherMachine": "Couldn't forward port {{port}}: this workspace doesn't run on {{host}} itself.",
-            "useSshPorts": "Couldn't forward port {{port}} from {{host}}. Forward it in Ports, then try again."
-          }
         }
       },
       "worktree": {

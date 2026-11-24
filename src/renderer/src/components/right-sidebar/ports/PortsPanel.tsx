@@ -8,7 +8,6 @@ import { SshPortsPanel } from './ssh-ports-panel'
 import { HostScopedPortsPanel } from './host-scoped-ports-panel'
 import {
   getPortsPanelOwnerKey,
-  portsPanelForwardEnvironmentId,
   portsPanelForwardTargetId,
   portsPanelHostForOwnerKey
 } from './ports-panel-host'
@@ -45,7 +44,6 @@ export default function PortsPanel({ isVisible }: { isVisible: boolean }): React
           isVisible={isVisible}
           runtimeTarget={host.target}
           sshForwardTargetId={sshForwardTargetId}
-          forwardEnvironmentId={portsPanelForwardEnvironmentId(host, sshForwardTargetId)}
         />
       )
     case 'host-scoped':

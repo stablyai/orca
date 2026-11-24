@@ -30,26 +30,20 @@ import { LocalPortDetailsDialog } from './local-port-details-dialog'
 import { SshForwardedPortsSection } from './ssh-forwarded-ports-section'
 import { SshPortForwardDialog, type PortForwardDialogState } from './ssh-port-forward-dialog'
 import { portForwardKey, portForwardRemoteHost } from './port-forward-remote-host'
-import { portForwardOwnerKey, type PortForwardOwner } from './port-forward-owner'
 import type { PortForwardEntry } from '../../../../../shared/remote-runtime/ssh/ssh-types'
-import { useRuntimeEnvironmentCapability } from '@/runtime/rpc/compatibility/use-runtime-environment-capability'
-import { NETWORK_PORT_FORWARD_RUNTIME_CAPABILITY } from '../../../../../shared/remote-runtime/protocol/workspace-ports-runtime-capabilities'
 
 const NO_FORWARDS: readonly PortForwardEntry[] = []
 
 export function LocalWorkspacePortsPanel({
   isVisible,
   runtimeTarget,
-  sshForwardTargetId = null,
-  forwardEnvironmentId = null
+  sshForwardTargetId = null
 }: {
   isVisible: boolean
   /** The endpoint that owns the active workspace, even if the sidebar is focused elsewhere. */
   runtimeTarget: RuntimeClientTarget | null
   /** A managed server's SSH host, whose connection carries this client's forwards. */
   sshForwardTargetId?: string | null
-  /** A paired server whose own connection carries this client's forwards. */
-  forwardEnvironmentId?: string | null
 }): React.JSX.Element {
   const t = useTranslate()
   const activeWorktree = useActiveWorktree()
@@ -64,33 +58,16 @@ export function LocalWorkspacePortsPanel({
   const setWorkspacePortScanRefreshing = useAppStore((s) => s.setWorkspacePortScanRefreshing)
   const [detailsPort, setDetailsPort] = useState<WorkspacePort | null>(null)
   const [forwardDialog, setForwardDialog] = useState<PortForwardDialogState>({ mode: 'closed' })
-  const forwardOwner = useMemo<PortForwardOwner | null>(
-    () =>
-      sshForwardTargetId
-        ? { kind: 'ssh', targetId: sshForwardTargetId }
-        : forwardEnvironmentId
-          ? { kind: 'runtime', environmentId: forwardEnvironmentId }
-          : null,
-    [forwardEnvironmentId, sshForwardTargetId]
-  )
   const forwards = useAppStore((s) =>
-    forwardOwner
-      ? (s.portForwardsByConnection[portForwardOwnerKey(forwardOwner)] ?? NO_FORWARDS)
+    sshForwardTargetId
+      ? (s.portForwardsByConnection[sshForwardTargetId] ?? NO_FORWARDS)
       : NO_FORWARDS
   )
-  // Older servers have no network.portForward, and web clients can't listen here, so neither offers Forward.
-  const serverForwards = useRuntimeEnvironmentCapability(
-    window.api.runtimeEnvironments.portForwards ? forwardEnvironmentId : null,
-    NETWORK_PORT_FORWARD_RUNTIME_CAPABILITY
-  )
-  const sshConnected = useAppStore(
+  const canForward = useAppStore(
     (s) =>
       sshForwardTargetId !== null &&
       s.sshConnectionStates.get(sshForwardTargetId)?.status === 'connected'
   )
-  const canForward = forwardOwner?.kind === 'ssh' ? sshConnected : serverForwards
-  const showForwarded =
-    forwardOwner !== null && (forwardOwner.kind === 'ssh' || serverForwards || forwards.length > 0)
   const forwardedKeys = useMemo(
     () => new Set(forwards.map((entry) => portForwardKey(entry.remoteHost, entry.remotePort))),
     [forwards]
@@ -242,20 +219,20 @@ export function LocalWorkspacePortsPanel({
 
   const handleForwardPort = useCallback(
     (port: WorkspacePort) => {
-      if (!forwardOwner) {
+      if (!sshForwardTargetId) {
         return
       }
       setForwardDialog({
         mode: 'add',
-        owner: forwardOwner,
         defaults: {
           remotePort: port.port,
           remoteHost: portForwardRemoteHost(port.connectHost),
-          label: port.processName
+          label: port.processName,
+          targetId: sshForwardTargetId
         }
       })
     },
-    [forwardOwner]
+    [sshForwardTargetId]
   )
   const isPortForwarded = useCallback(
     (port: WorkspacePort) => forwardedKeys.has(portForwardKey(port.connectHost, port.port)),
@@ -311,10 +288,9 @@ export function LocalWorkspacePortsPanel({
         </Tooltip>
       </div>
 
-      {forwardOwner && showForwarded && (
+      {sshForwardTargetId && (
         <SshForwardedPortsSection
-          owner={forwardOwner}
-          canAdd={canForward}
+          connectionId={sshForwardTargetId}
           onOpenDialog={setForwardDialog}
         />
       )}
@@ -395,6 +371,7 @@ export function LocalWorkspacePortsPanel({
       {/* Stays mounted across workspace switches; the open dialog keeps its pinned target. */}
       <SshPortForwardDialog
         state={forwardDialog}
+        activeConnectionId={sshForwardTargetId}
         onClose={() => setForwardDialog({ mode: 'closed' })}
       />
     </div>

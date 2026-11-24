@@ -9,9 +9,10 @@ import { BrowserToolbarMenu } from '../assemble-chrome/toolbar/BrowserToolbarMen
 import { BrowserPageDeviceMoveItem } from '../navigate/device-move/browser-page-device-move-item'
 import type { BrowserPageSiteDisplaySource } from '../assemble-chrome/toolbar/browser-page-site-display-source'
 import { BrowserPageStateChips } from '../assemble-chrome/address-bar/browser-address-chips'
-import { toDisplayUrl } from '../describe-page/browser-page-url-display'
-import { useServerPageOpenExternal } from '../describe-page/use-server-page-open-external'
+import { getOpenableExternalUrl, toDisplayUrl } from '../describe-page/browser-page-url-display'
 import { isBlankBrowserUrl } from '@/lib/browser/palette/browser-palette-search'
+import { openAppHttpLink } from '@/lib/browser/navigation/app-http-link-open'
+import { resolveRemoteFailureExternalUrl } from '../../../../../shared/browser/navigation/browser-url'
 import { useServerBrowserPageProfileId } from '../assemble-chrome/profile-routing/use-server-browser-page-profile-id'
 import BrowserAddressBar from '../assemble-chrome/address-bar/BrowserAddressBar'
 import type { BrowserAddressBarEditSessionBinding } from '../assemble-chrome/address-bar/use-browser-address-bar-edit-session'
@@ -118,8 +119,9 @@ export function RemoteBrowserPageToolbar({
       onReload(intent === 'hard-reload')
     }
   }
-  // The host's loopback opens through a forward of its port, never this machine's own.
-  const onOpenExternal = useServerPageOpenExternal(pageUrl, runtimeEnvironmentId, worktreeId)
+  const openableUrl = getOpenableExternalUrl(pageUrl)
+  // The host's loopback address would open this machine's, not the page's.
+  const externalUrl = openableUrl ? resolveRemoteFailureExternalUrl(openableUrl) : null
   return (
     <BrowserChromeToolbar
       closeTabOwner={{ worktreeId, browserPageId }}
@@ -213,7 +215,9 @@ export function RemoteBrowserPageToolbar({
             onFind,
             onHardReload: stopHardReloadSupported ? () => runReloadTrigger('hard-reload') : null,
             onOpenDevTools: null,
-            onOpenExternal,
+            onOpenExternal: externalUrl
+              ? () => void openAppHttpLink(externalUrl, { worktreeId, destination: 'system' })
+              : null,
             deviceMoveItem: (
               <BrowserPageDeviceMoveItem
                 target={{
