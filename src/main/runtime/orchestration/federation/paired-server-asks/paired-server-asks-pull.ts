@@ -14,8 +14,7 @@ import type { OrchestrationWorkerServer } from '../environment-transport'
 import {
   getAnnouncedPairing,
   recordAnnouncedPairing,
-  rerouteServer,
-  REVERSED_CONVERSATION_SQL
+  rerouteServer
 } from '../../db/federation/paired-server-asks-store'
 
 const STATUS_TIMEOUT_MS = 15_000
@@ -164,32 +163,52 @@ export function owesAnnouncement(db: OrchestrationDb, asks: PairedServerAsks): b
   return getAnnouncedPairing(db, asks.serverKey)?.pairingFingerprint !== asks.pairing
 }
 
-/** The server answered under this pairing: it is announced, and the one it replaced is ended. */
-export function noteAnnounced(db: OrchestrationDb, asks: PairedServerAsks, seenAs: string): void {
+/** The server answered under this pairing: it is announced, and when it replaced an earlier one,
+ *  what any other pairing of this server left here ends in the same write: its owed replies are retired (the server told their
+ *  askers when it ended that pairing) and its held asks go unanswered, since no answer could go
+ *  back. A failed write leaves the announcement owed, so the next answered pull settles them.
+ *  Returns the agents whose waiting cards went. */
+export function noteAnnounced(
+  db: OrchestrationDb,
+  asks: PairedServerAsks,
+  seenAs: string
+): string[] {
   const earlier = getAnnouncedPairing(db, asks.serverKey)
-  runLifecycleWriteTransaction(db.db, 'paired_server_announced', () => {
+  const dropped = runLifecycleWriteTransaction(db.db, 'paired_server_announced', () => {
     recordAnnouncedPairing(db, asks.serverKey, {
       environmentId: asks.environmentId,
       pairingFingerprint: asks.pairing,
       serverSeenFingerprint: seenAs
     })
     if (
-      earlier &&
-      (earlier.pairingFingerprint !== asks.pairing || earlier.serverSeenFingerprint !== seenAs)
+      !earlier ||
+      (earlier.pairingFingerprint === asks.pairing && earlier.serverSeenFingerprint === seenAs)
     ) {
-      // Retire old replies with the announcement so a retry can settle them after a failed write.
-      db.db
-        .prepare(
-          `UPDATE federation_relay_items SET acked_at = datetime('now')
-           WHERE direction = 'to_home' AND acked_at IS NULL AND dispatch_id IN (
-             SELECT c.conversation_id FROM peer_mail_conversations c
-             WHERE c.role = 'peer' AND c.environment_id = ? AND c.peer_fingerprint <> ?
-               AND ${REVERSED_CONVERSATION_SQL})`
-        )
-        .run(asks.environmentId, asks.pairing)
+      return []
     }
+    db.db
+      .prepare(
+        `UPDATE federation_relay_items SET acked_at = datetime('now')
+         WHERE direction = 'to_home' AND acked_at IS NULL AND dispatch_id IN (
+           SELECT conversation_id FROM paired_server_owed_returns
+           WHERE environment_id = ? AND peer_fingerprint <> ?)`
+      )
+      .run(asks.environmentId, asks.pairing)
+    // Held under a conversation of another pairing (or none this computer can name): dropped.
+    const stale = `FROM paired_server_asks AS a
+      WHERE a.environment_id = ?1 AND NOT EXISTS (
+        SELECT 1 FROM peer_mail_conversations c
+        WHERE c.conversation_id = a.conversation_id AND c.role = 'peer'
+          AND c.peer_fingerprint = ?2)`
+    const cards = db.db
+      .prepare(`SELECT a.bot_id ${stale} AND a.state = 'card'`)
+      .all(asks.environmentId, asks.pairing)
+      .map((row) => String(row.bot_id))
+    db.db.prepare(`DELETE ${stale}`).run(asks.environmentId, asks.pairing)
+    return cards
   })
   delete asks.wire.previousPairing
+  return [...new Set(dropped)]
 }
 
 /** The same server answers under a pairing the old one's rows don't name: they follow it, but only

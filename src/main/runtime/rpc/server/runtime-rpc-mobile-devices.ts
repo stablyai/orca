@@ -10,7 +10,10 @@ import type {
   DelegatedMobileDeviceSyncResult
 } from '../../../../shared/remote-runtime/pairing/delegated-mobile-device-contract'
 import { RuntimeRpcRequestAdmission } from './runtime-rpc-request-admission'
-import { settleRemovedPairedClient } from '../../orchestration/federation/client-asks/client-ask-queue'
+import {
+  recordRemovedPairedClient,
+  settleRemovedPairedClient
+} from '../../orchestration/federation/client-asks/client-ask-queue'
 
 // Why: below dispatch so a caller-bound RPC context can revoke and mint mobile devices.
 export class RuntimeRpcMobileDevices extends RuntimeRpcRequestAdmission {
@@ -64,6 +67,10 @@ export class RuntimeRpcMobileDevices extends RuntimeRpcRequestAdmission {
           return false
         }
         this.queuePushUnregister(deviceId, device.pushRegistration?.registrationId)
+      }
+      if (device.scope === 'runtime') {
+        // Its pairings' end is durable before the revoke, so telling askers survives a crash.
+        recordRemovedPairedClient(this.runtime, device)
       }
       registry.removeDevice(deviceId)
       if (device.scope === 'mobile') {

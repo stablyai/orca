@@ -5,6 +5,11 @@
 // claim; `environment_id` is only the pairing to reach it by, rewritten when it answers under another.
 import type { OrchestrationDb } from '../orchestration-db'
 
+/** A conversation a paired server opened for its agents' asks carries a `generateId('peerconv')` id;
+ *  the relay keys replies by conversation, so a row an older build stored under any other id (a
+ *  Dispatch's) is never read as one. For `peer_mail_conversations` aliased `c`. */
+export const REVERSED_CONVERSATION_SQL = `c.conversation_id GLOB 'peerconv_${'[0-9a-fA-F]'.repeat(12)}'`
+
 export const PAIRED_SERVER_ASKS_SCHEMA_SQL = `
 CREATE TABLE IF NOT EXISTS paired_server_introductions (
   server_key             TEXT NOT NULL,
@@ -46,9 +51,6 @@ CREATE TABLE IF NOT EXISTS paired_server_announced (
   pairing_fingerprint     TEXT NOT NULL,
   server_seen_fingerprint TEXT NOT NULL
 );
--- The reverse conversations of one pairing to a server, in id order: a return page walks them.
-CREATE INDEX IF NOT EXISTS idx_peer_mail_conversations_reversed
-  ON peer_mail_conversations(environment_id, peer_fingerprint, conversation_id) WHERE role = 'peer';
 `
 
 export type PairedServerAskRow = {
@@ -284,20 +286,39 @@ export function recordAnnouncedPairing(
     )
 }
 
-/** A conversation a paired server opened for its agents' asks carries a `generateId('peerconv')` id;
- *  the relay keys replies by conversation, so a row an older build stored under any other id (a
- *  Dispatch's) is never read as one. For `peer_mail_conversations` aliased `c`. */
-export const REVERSED_CONVERSATION_SQL = `c.conversation_id GLOB 'peerconv_${'[0-9a-fA-F]'.repeat(12)}'`
+/** Whether this computer since announced another pairing than `pairing` to the server it reaches
+ *  as `environmentId`. That announcement settled what was owed or held under `pairing` in its own
+ *  write, so nothing is queued, imported or admitted under it after: none of it could ever go back. */
+export function isReplacedServerPairing(
+  db: OrchestrationDb,
+  environmentId: string,
+  pairing: string
+): boolean {
+  return (
+    db.db
+      .prepare(
+        `SELECT 1 FROM paired_server_announced
+         WHERE environment_id = ? AND pairing_fingerprint <> ? LIMIT 1`
+      )
+      .get(environmentId, pairing) !== undefined
+  )
+}
+
+// Each server owed anything, one index seek per server: never a walk of every owed conversation.
+const OWED_ENVIRONMENTS_SQL = `WITH RECURSIVE owed(environment_id) AS (
+    SELECT MIN(environment_id) FROM paired_server_owed_returns
+    UNION ALL
+    SELECT (SELECT MIN(o.environment_id) FROM paired_server_owed_returns o
+      WHERE o.environment_id > owed.environment_id)
+    FROM owed WHERE owed.environment_id IS NOT NULL)
+  SELECT environment_id FROM owed WHERE environment_id IS NOT NULL`
 
 /** Servers this computer has a reason to pull asks from: something routed by them, or a reply owed. */
 export const PAIRED_SERVER_ASK_ENVIRONMENTS_SQL = `
 SELECT environment_id FROM paired_server_introductions
 UNION SELECT environment_id FROM paired_server_allowances
 UNION SELECT environment_id FROM paired_server_asks
-UNION SELECT c.environment_id FROM peer_mail_conversations c
-  WHERE c.role = 'peer' AND c.environment_id IS NOT NULL AND ${REVERSED_CONVERSATION_SQL}
-    AND EXISTS (SELECT 1 FROM federation_relay_items i
-      WHERE i.dispatch_id = c.conversation_id AND i.direction = 'to_home' AND i.acked_at IS NULL)`
+UNION SELECT environment_id FROM (${OWED_ENVIRONMENTS_SQL})`
 
 /** One server's arm of the pull loop's reason to run. */
 export const PAIRED_SERVER_ASK_WANTS_SQL = `
@@ -307,10 +328,7 @@ SELECT 1 FROM paired_server_allowances WHERE environment_id = ?1
 UNION ALL
 SELECT 1 FROM paired_server_asks WHERE environment_id = ?1
 UNION ALL
-SELECT 1 FROM peer_mail_conversations c
-  WHERE c.role = 'peer' AND c.environment_id = ?1 AND ${REVERSED_CONVERSATION_SQL}
-    AND EXISTS (SELECT 1 FROM federation_relay_items i
-      WHERE i.dispatch_id = c.conversation_id AND i.direction = 'to_home' AND i.acked_at IS NULL)`
+SELECT 1 FROM paired_server_owed_returns WHERE environment_id = ?1`
 
 /** Whether a server's loop pulls for asks: then it waits on the server's first status read. */
 export function pairedServerAsksWanted(db: OrchestrationDb, environmentId: string): boolean {

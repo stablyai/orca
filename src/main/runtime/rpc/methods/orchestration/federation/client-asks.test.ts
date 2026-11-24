@@ -12,9 +12,12 @@ import {
   peerMailRelayWants
 } from '../../../../orchestration/federation/peer-mail/peer-mail-relay-environments'
 import {
+  recordRemovedPairedClient,
+  replayUnsettledClientPairingEnds,
   settleRemovedPairedClient,
   withdrawClientAsksOf
 } from '../../../../orchestration/federation/client-asks/client-ask-queue'
+import { registerPairedDeviceCredentials } from '../../../../orchestration/federation/client-asks/client-ask-ended-pairings'
 import { RpcDispatcher } from '../../../dispatcher'
 import { ORCHESTRATION_METHODS } from '../orchestration'
 
@@ -247,6 +250,50 @@ describe('agents here messaging agents on a paired computer', () => {
       /^Client A was removed from this Orca's paired computers\. Your question msg_/
     )
     expect(await ask()).toMatchObject({ ok: false, error: { code: 'remote_runtime_unavailable' } })
+  })
+
+  it('finishes a removal interrupted before its askers were told at the next start, once, and leaves a registered computer alone', async () => {
+    await pull()
+    await ask({ type: 'question', subject: 'Removed computer' })
+    const other = { deviceId: 'device_b', fingerprint: 'fp_b' }
+    await fromClient(
+      'orchestration.peerMailPull',
+      { waitMs: 0, clientAsks: asks('session_b', { installationId: 'install_b' }) },
+      other
+    )
+    await ask({ type: 'question', subject: 'Offline computer', onClient: 'install_b' })
+    // Both ends were recorded before their revoke; only device_a's revoke happened. Telling its
+    // asker fails part way (after the notice, before the queue is dropped), as a crash would.
+    recordRemovedPairedClient(runtime, { deviceId: 'device_a', name: 'Client A' })
+    recordRemovedPairedClient(runtime, { deviceId: 'device_b', name: 'Client B' })
+    const notify = vi.spyOn(runtime, 'notifyMessageArrived').mockImplementationOnce(() => {
+      throw new Error('interrupted')
+    })
+    settleRemovedPairedClient(runtime, { deviceId: 'device_a', name: 'Client A' })
+    notify.mockRestore()
+    expect(told()).toHaveLength(1)
+
+    startRuntime()
+    const registry = new Map([['device_b', 'fp_b']])
+    registerPairedDeviceCredentials(runtime, (deviceId) => registry.get(deviceId) ?? null)
+    replayUnsettledClientPairingEnds(runtime)
+    replayUnsettledClientPairingEnds(runtime)
+
+    expect(told()).toHaveLength(1)
+    expect(told()[0]).toMatch(/^Client A was removed from this Orca's paired computers\./)
+    const unsettled = db.db
+      .prepare('SELECT environment_id FROM ended_client_pairings WHERE settled_at IS NULL')
+      .all()
+    // The registered computer's end waits: its revoke never happened, and its next pull revives it.
+    expect(unsettled).toEqual([{ environment_id: 'client:device_b/install_b' }])
+    const queued = db.db
+      .prepare(
+        `SELECT c.environment_id FROM federation_relay_items i
+         JOIN peer_mail_conversations c ON c.conversation_id = i.dispatch_id
+         WHERE i.direction = 'to_worker' AND i.acked_at IS NULL`
+      )
+      .all()
+    expect(queued).toEqual([{ environment_id: 'client:device_b/install_b' }])
   })
 
   it('on a re-pair, tells only askers of the pairing the computer names, not a copy sharing its id', async () => {

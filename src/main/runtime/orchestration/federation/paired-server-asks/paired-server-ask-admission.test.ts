@@ -7,6 +7,7 @@ import {
   dropPairedServerAsk,
   getPairedServerAsk,
   holdPairedServerAsk,
+  recordAnnouncedPairing,
   type PairedServerAskRow
 } from '../../db/federation/paired-server-asks-store'
 import { heldAskPairing, stillAdmits } from './paired-server-ask-admission'
@@ -70,6 +71,25 @@ describe('what admitting a held ask from a paired server checks', () => {
       .run(row.message_id)
     expect(stillAdmits(db, row, 'docs')).toBe(false)
     dropPairedServerAsk(db, row.message_id)
+    expect(stillAdmits(db, row, 'docs')).toBe(false)
+  })
+
+  it('admits at commit only while the pairing it came under is the one announced to that server', () => {
+    open('peerconv_0000000000c1', 'peer')
+    const row = held('peerconv_0000000000c1')
+    recordAnnouncedPairing(db, 'fingerprint_s', {
+      environmentId: 'env_s',
+      pairingFingerprint: 'fingerprint_a',
+      serverSeenFingerprint: 'seen_a'
+    })
+    expect(stillAdmits(db, row, 'docs')).toBe(true)
+
+    // Re-paired, and announced, while it waited: its answer could never go back.
+    recordAnnouncedPairing(db, 'fingerprint_s', {
+      environmentId: 'env_s',
+      pairingFingerprint: 'fingerprint_b',
+      serverSeenFingerprint: 'seen_b'
+    })
     expect(stillAdmits(db, row, 'docs')).toBe(false)
   })
 })

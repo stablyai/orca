@@ -157,4 +157,42 @@ describe("the card of an ask to a paired computer's agent", () => {
     })
     expect(readClientAskOutcome(db, 'msg_status')).toEqual(NOTHING)
   })
+
+  it("keeps a handoff's card to its own reply once a later ask shares the thread it opened", () => {
+    issue('msg_handoff')
+    returned(conversationId, 'msg_handoff_reply', 'msg_handoff', 'On it.')
+    // The unambiguous case: alone in its thread, its first reply is its own.
+    expect(readClientAskOutcome(db, 'msg_handoff')).toMatchObject({
+      outcome: 'answered',
+      answer: 'On it.'
+    })
+
+    // A later question and handoff sent into the handoff's thread, and their replies.
+    issue('msg_later_question', { type: 'question', threadId: 'msg_handoff' })
+    issue('msg_later_handoff', { type: 'handoff', threadId: 'msg_handoff' })
+    db.insertPeerMailMessage({
+      conversationId,
+      remoteParty: 'bot:Literature',
+      message: {
+        id: 'msg_later_answer',
+        from: 'Literature',
+        to: ASKER,
+        subject: 'Re: Ask',
+        body: 'The later answer.',
+        threadId: 'msg_handoff',
+        payload: JSON.stringify({ requestId: 'msg_later_question', botAnswer: true })
+      }
+    })
+    returned(conversationId, 'msg_later_question_declined', 'msg_handoff', 'Declined.')
+
+    // Only what names the handoff could be its own now: its earlier plain reply is ambiguous.
+    expect(readClientAskOutcome(db, 'msg_handoff')).toEqual(NOTHING)
+    returned(conversationId, 'msg_handoff_declined', 'msg_handoff', 'Declined on Client A.')
+    expect(readClientAskOutcome(db, 'msg_handoff')).toEqual({
+      outcome: 'dropped',
+      answer: null,
+      mailIds: ['msg_handoff_declined'],
+      chatId: null
+    })
+  })
 })

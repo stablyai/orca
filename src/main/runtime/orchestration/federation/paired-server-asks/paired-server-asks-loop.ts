@@ -23,6 +23,7 @@ import {
 } from './paired-server-asks-pull'
 import { admitPairedServerAsks } from './paired-server-ask-admission'
 import { flushPairedServerReturns } from './paired-server-ask-returns'
+import { notifyPairedServerCardsChanged } from './paired-server-card-notices'
 import {
   importPairedServerItem,
   PAIRED_SERVER_ITEM_KINDS,
@@ -165,13 +166,17 @@ export function pairedServerPullParams(asks: PairedServerAsks | null | undefined
 
 /** The server answered: a pairing not announced yet is announced now. */
 export function notePairedServerAnswer(
+  runtime: Pick<OrcaRuntimeService, 'notifyBotsChanged'>,
   db: OrchestrationDb,
   asks: PairedServerAsks | null | undefined,
   response: unknown
 ): void {
   const seenAs = Answered.safeParse(response).data?.clientAsks?.seenAs
   if (asks && seenAs && (owesAnnouncement(db, asks) || asks.wire.previousPairing)) {
-    noteAnnounced(db, asks, seenAs)
+    const dropped = noteAnnounced(db, asks, seenAs)
+    if (dropped.length > 0) {
+      notifyPairedServerCardsChanged(runtime, dropped)
+    }
   }
 }
 

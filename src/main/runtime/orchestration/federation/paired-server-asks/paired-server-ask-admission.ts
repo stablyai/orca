@@ -6,10 +6,12 @@ import { OrchestrationError } from '../../orchestration-error'
 import { ClientAskPayload } from '../../../../../shared/rpc-contract/orchestration/orchestration-peer-mail-params'
 import { deliverPeerMailToBot } from '../../../rpc/methods/orchestration/federation/peer-mail-bot-delivery'
 import { peerMailSenderSnapshot } from '../peer-mail/peer-mail-sender-snapshot'
+import { peerMailPairing } from '../peer-mail/peer-mail-delivery'
 import { isGeneratedId } from '../../db/generated-id'
 import {
   dropPairedServerAsk,
   getPairedServerAsk,
+  isReplacedServerPairing,
   listPairedServerAsks,
   type PairedServerAskRow
 } from '../../db/federation/paired-server-asks-store'
@@ -34,12 +36,17 @@ export function heldAskPairing(db: OrchestrationDb, row: PairedServerAskRow): st
  *  decline, removal or replacement since, or a name lookup landing on another bot, admits nothing. */
 export function stillAdmits(db: OrchestrationDb, row: PairedServerAskRow, botId: string): boolean {
   const current = getPairedServerAsk(db, row.message_id)
+  const pairing = heldAskPairing(db, row)
   return (
     botId === row.bot_id &&
     current?.state === 'admit' &&
     current.bot_id === row.bot_id &&
     current.server_key === row.server_key &&
-    current.conversation_id === row.conversation_id
+    current.conversation_id === row.conversation_id &&
+    // Still the pairing this computer announced: a re-pair since settled the ask (its answer
+    // could never go back), even when its announcement could not drop the row before this write.
+    pairing !== undefined &&
+    !isReplacedServerPairing(db, row.environment_id, pairing)
   )
 }
 
@@ -60,10 +67,15 @@ async function admit(runtime: OrcaRuntimeService, row: PairedServerAskRow): Prom
     return
   }
   // Named as this computer's own catalog names it, never as the server says.
-  const serverName = await runtime
+  const server = await runtime
     .resolveOrchestrationWorkerServer(row.environment_id)
-    .then((server) => toSafeDisplayLine(server.name))
-    .catch(() => '')
+    .catch(() => undefined)
+  // Re-paired here and not announced yet: it waits, and that announcement settles it, since its
+  // answer could not go back. A server not in the catalog now is admitted as before (offline).
+  if (server && peerMailPairing(server) !== pairing) {
+    return
+  }
+  const serverName = server ? toSafeDisplayLine(server.name) : ''
   try {
     const routed = await deliverPeerMailToBot(
       runtime,

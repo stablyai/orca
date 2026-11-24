@@ -70,6 +70,32 @@ const REPLIES_SQL = `SELECT m.id, m.body, m.payload, p.conversation_id FROM mess
   WHERE m.thread_id = ?1 AND (p.conversation_id = ?2 OR p.conversation_id IS NULL)
   ORDER BY m.rowid`
 
+// Another ask this Orca sent that computer on the same conversation, in the thread this ask opened:
+// a seek on the client-ask thread index.
+const SHARED_THREAD_SQL = `SELECT 1 FROM federation_relay_items
+  WHERE kind = 'client_ask' AND dispatch_id = ?1 AND json_extract(payload, '$.threadId') = ?2
+    AND direction = 'to_worker' AND message_id <> ?2 LIMIT 1`
+
+const DECLINED = '_declined'
+
+/** The ask a returned reply names: the one it declines or answers; null for a plain reply. */
+function namedAsk(reply: { id: string; payload: string | null }): string | null {
+  if (reply.id.endsWith(DECLINED)) {
+    return reply.id.slice(0, -DECLINED.length)
+  }
+  try {
+    const payload: unknown = reply.payload ? JSON.parse(reply.payload) : null
+    return typeof payload === 'object' &&
+      payload !== null &&
+      'requestId' in payload &&
+      typeof payload.requestId === 'string'
+      ? payload.requestId
+      : null
+  } catch {
+    return null
+  }
+}
+
 /** How an ask to a paired computer's agent stands here: declined on that computer's notice, answered
  *  by its agent's answer, or not answered when its question settled without one (this Orca's unpair
  *  or re-pair notice for it, shown as the answer is). A handoff, which awaits no answer, takes its
@@ -86,6 +112,10 @@ export function readClientAskOutcome(
   }
   const conversationId = String(issued.dispatch_id)
   const ownThread = typeof issued.thread_id !== 'string' || issued.thread_id === messageId
+  // A plain reply in the thread this ask opened is its own only while no later ask shares that
+  // thread; once one does, only a reply that names this ask is.
+  const plainIsOwn =
+    ownThread && db.db.prepare(SHARED_THREAD_SQL).get(conversationId, messageId) === undefined
   const question = db.db
     .prepare('SELECT awaiting FROM peer_questions_out WHERE message_id = ? AND conversation_id = ?')
     .get(messageId, conversationId)
@@ -102,7 +132,7 @@ export function readClientAskOutcome(
     }))
     .filter((reply) =>
       reply.fromComputer
-        ? ownThread || names(reply)
+        ? names(reply) || (plainIsOwn && namedAsk(reply) === null)
         : // tellUnpairedPeerQuestions names the question it settles.
           reply.body.includes(`Your question ${messageId} there will not be answered`)
     )

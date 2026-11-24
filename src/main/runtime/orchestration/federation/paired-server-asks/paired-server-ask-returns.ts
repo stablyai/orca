@@ -3,7 +3,6 @@
 import { z } from 'zod'
 import type { OrcaRuntimeService } from '../../../orca-runtime'
 import type { FederationRelayItemRow } from '../../db/orchestration-records'
-import { REVERSED_CONVERSATION_SQL } from '../../db/federation/paired-server-asks-store'
 import type { PairedServerAsks } from './paired-server-asks-pull'
 
 const RETURN_TIMEOUT_MS = 15_000
@@ -25,14 +24,11 @@ const startAfterByRuntime = new WeakMap<object, Map<string, string>>()
 
 // The conversations a page draws from: those this server opened under this pairing (mail owed under
 // an older one never goes to whatever answers now) that owe anything, in id order after `?3`. It
-// walks the reverse-conversation index and probes each one's owed rows, so a page costs what it
-// takes, never the whole backlog.
-const OWING_SQL = `SELECT c.conversation_id FROM peer_mail_conversations c
-  WHERE c.role = 'peer' AND c.environment_id = ?1 AND c.peer_fingerprint = ?2
-    AND c.conversation_id > ?3 AND ${REVERSED_CONVERSATION_SQL}
-    AND EXISTS (SELECT 1 FROM federation_relay_items i
-      WHERE i.dispatch_id = c.conversation_id AND i.direction = 'to_home' AND i.acked_at IS NULL)
-  ORDER BY c.conversation_id LIMIT ${PAGE}`
+// seeks the owed list by pairing, so a page costs what it takes: never the conversations that owe
+// nothing, nor another server's or pairing's backlog.
+const OWING_SQL = `SELECT conversation_id FROM paired_server_owed_returns
+  WHERE environment_id = ?1 AND peer_fingerprint = ?2 AND conversation_id > ?3
+  ORDER BY conversation_id LIMIT ${PAGE}`
 
 /** One page: each conversation's oldest owed rows, from the one after `startAfter`, round again. */
 function pageOf(

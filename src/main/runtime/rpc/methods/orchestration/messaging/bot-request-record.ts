@@ -42,6 +42,21 @@ function pulledFromServer(
   return conversation?.role === 'peer' && conversation.environment_id !== null
 }
 
+/** Whether `messageId` is a bot request this computer pulled from a paired server (see
+ *  `pulledFromServer`), by its stored record and the conversation its mail is filed under. */
+export function isPulledServerRequest(db: OrchestrationDb, messageId: string): boolean {
+  const request = db.getBotRequest(messageId)
+  if (!request) {
+    return false
+  }
+  try {
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: only sendBotRequest writes this column, from a BotRequestRecord.
+    return pulledFromServer(db, messageId, JSON.parse(request.record) as BotRequestRecord)
+  } catch {
+    return false
+  }
+}
+
 function actsForNoOne(record: BotRequestRecord): BotRequestRecord {
   return { ...record, askers: [{ kind: 'unknown' }], askedBy: [{ kind: 'unknown' }] }
 }

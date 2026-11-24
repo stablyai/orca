@@ -6,10 +6,17 @@ import type { OrchestrationDb } from '../../db/orchestration-db'
 import type { MessageRow } from '../../db/orchestration-records'
 import { forgetPeerQuestionOut, tellUnpairedPeerQuestions } from '../peer-mail/peer-questions-out'
 import { notifyPeerMailQueued } from '../peer-mail/peer-mail-waiters'
-import { clientDeviceEnvironmentPattern, CLIENT_ENVIRONMENT_PREFIX } from './client-ask-environment'
+import {
+  clientDeviceEnvironmentPattern,
+  clientEnvironmentParts,
+  CLIENT_ENVIRONMENT_PREFIX
+} from './client-ask-environment'
 import { forgetClientAskDevice } from './client-ask-listeners'
 import {
   clientPairingScopeSql,
+  listUnsettledClientPairings,
+  markClientPairingsSettled,
+  pairedDeviceCredential,
   recordEndedClientPairings,
   type ClientPairingScope
 } from './client-ask-ended-pairings'
@@ -117,9 +124,10 @@ function endClientPairings(
 ): void {
   const db = runtime.getOrchestrationDb()
   // First, and durably: from here on a reply on one of these conversations is refused, after a
-  // restart too, even if telling their askers below fails part way.
+  // restart too, and an ending that fails part way below is finished then (see
+  // `replayUnsettledClientPairingEnds`).
   for (const environmentId of environmentIds) {
-    recordEndedClientPairings(db, environmentId, scope)
+    recordEndedClientPairings(db, environmentId, scope, { serverName, reason })
   }
   for (const environmentId of environmentIds) {
     tellUnpairedPeerQuestions(runtime, db, {
@@ -133,6 +141,7 @@ function endClientPairings(
     const told = runLifecycleWriteTransaction(db.db, 'client_pairing_ended', () => {
       const notices = tellDroppedReplies(runtime, db, { environmentId, scope, serverName, reason })
       dropQueuedClientItems(db, environmentId, scope)
+      markClientPairingsSettled(db, environmentId, scope)
       return notices
     })
     for (const message of told) {
@@ -176,8 +185,64 @@ export function settleReplacedClientPairing(
   )
 }
 
+/** Before a paired computer's device is removed: its pairings' end is recorded first, durably, so a
+ *  crash or failure between the revoke and telling its askers is finished at the next start. A
+ *  failure is logged, never thrown: it must not stop the revoke. */
+export function recordRemovedPairedClient(
+  runtime: OrcaRuntimeService,
+  device: { deviceId: string; name: string }
+): void {
+  try {
+    const db = runtime.getOrchestrationDb()
+    const told = { serverName: device.name, reason: removedReason(device.name) }
+    for (const environmentId of clientDeviceEnvironments(db, device.deviceId)) {
+      recordEndedClientPairings(db, environmentId, {}, told)
+    }
+  } catch (error) {
+    console.warn('[orchestration] Recording a removed paired computer failed:', error)
+  }
+}
+
+/** At start: an ending whose askers or queue were never settled is finished, once the device
+ *  registry shows it ended (the device is gone or holds another credential). One the registry still
+ *  holds is left alone: its revoke never happened, and its next pull revives it. Idempotent: what
+ *  was told or dropped already is not again. A failure is logged; the next start tries again. */
+export function replayUnsettledClientPairingEnds(runtime: OrcaRuntimeService): void {
+  try {
+    // A profile with no database yet ended no pairing: nothing to open for.
+    const db = runtime.getExistingOrchestrationDb()
+    for (const ended of db ? listUnsettledClientPairings(db) : []) {
+      const deviceId = clientEnvironmentParts(ended.environmentId)?.deviceId
+      const held = deviceId ? pairedDeviceCredential(runtime, deviceId) : undefined
+      if (held === undefined || held === ended.pairing) {
+        continue
+      }
+      endClientPairings(runtime, [ended.environmentId], ended.serverName, ended.reason, {
+        only: ended.pairing
+      })
+    }
+  } catch (error) {
+    console.warn('[orchestration] Finishing an interrupted paired-computer removal failed:', error)
+  }
+}
+
+function removedReason(name: string): string {
+  return `${name} was removed from this Orca's paired computers.`
+}
+
+function clientDeviceEnvironments(db: OrchestrationDb, deviceId: string): string[] {
+  return db.db
+    .prepare(
+      `SELECT DISTINCT environment_id FROM peer_mail_conversations
+       WHERE role = 'home' AND environment_id LIKE ? ESCAPE '\\'`
+    )
+    .all(clientDeviceEnvironmentPattern(deviceId))
+    .map((row) => String(row.environment_id))
+}
+
 /** A paired computer's device was removed here: its askers are told, and it stops listening. A
- *  failure is logged, never thrown: the revoke itself already happened. */
+ *  failure is logged, never thrown: the revoke itself already happened, and its recorded end is
+ *  finished at the next start. */
 export function settleRemovedPairedClient(
   runtime: OrcaRuntimeService,
   device: { deviceId: string; name: string }
@@ -195,18 +260,11 @@ function settleRemovedClientDevice(
 ): void {
   forgetClientAskDevice(runtime, device.deviceId)
   const db = runtime.getOrchestrationDb()
-  const environmentIds = db.db
-    .prepare(
-      `SELECT DISTINCT environment_id FROM peer_mail_conversations
-       WHERE role = 'home' AND environment_id LIKE ? ESCAPE '\\'`
-    )
-    .all(clientDeviceEnvironmentPattern(device.deviceId))
-    .map((row) => String(row.environment_id))
   endClientPairings(
     runtime,
-    environmentIds,
+    clientDeviceEnvironments(db, device.deviceId),
     device.name,
-    `${device.name} was removed from this Orca's paired computers.`
+    removedReason(device.name)
   )
 }
 

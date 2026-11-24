@@ -96,8 +96,7 @@ export function retirePairedServerRoute(runtime: OrcaRuntimeService, environment
     .prepare(
       `UPDATE federation_relay_items SET acked_at = datetime('now')
        WHERE direction = 'to_home' AND acked_at IS NULL AND dispatch_id IN (
-         SELECT c.conversation_id FROM peer_mail_conversations c
-         WHERE c.role = 'peer' AND c.environment_id = ? AND ${REVERSED_CONVERSATION_SQL})`
+         SELECT conversation_id FROM paired_server_owed_returns WHERE environment_id = ?)`
     )
     .run(environmentId)
 }

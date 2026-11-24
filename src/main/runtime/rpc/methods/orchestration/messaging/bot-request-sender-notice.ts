@@ -14,6 +14,7 @@ import { mayNameSession } from './session-recipient'
 import {
   peerMailSender,
   peerMailSenderLabel,
+  isReplacedPairingConversation,
   queuePeerMailReply
 } from '../../../../orchestration/federation/peer-mail/peer-mail-delivery'
 import { notifyPeerMailQueued } from '../../../../orchestration/federation/peer-mail/peer-mail-waiters'
@@ -106,7 +107,12 @@ function tellPeerSender(
   // The outcome and its queued notice commit together.
   const queued = runLifecycleWriteTransaction(db.db, 'bot_request_peer_notice', () => {
     settled()
-    if (!db.recordBotRequestOutcome(request.id, outcome)) {
+    // Its pairing was replaced since (checked in this write): the server told the sender then,
+    // and a notice queued now would never go, so it ends here untold, as a sender that is gone.
+    if (
+      !db.recordBotRequestOutcome(request.id, outcome) ||
+      isReplacedPairingConversation(db, conversation.conversation_id)
+    ) {
       return false
     }
     queuePeerMailReply(db, conversation.conversation_id, generateId('msg'), {

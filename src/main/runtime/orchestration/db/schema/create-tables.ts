@@ -11,6 +11,7 @@ import { REMOTE_OWNED_SCHEMA_SQL } from '../remote-owned/remote-owned-schema-sql
 import { PEER_RUN_SCHEMA_SQL } from '../peer-runs/peer-run-queue-sql'
 import { WORKER_PRESENCE_SCHEMA_SQL } from '../worker-presence/worker-presence-store'
 import { PAIRED_SERVER_ASKS_SCHEMA_SQL } from '../federation/paired-server-asks-store'
+import { ensurePairedServerOwedReturns } from '../federation/paired-server-owed-returns'
 import { WORKER_BOUND_TERMINAL_SCHEMA_SQL } from '../worker-terminal/worker-bound-terminals'
 import { CLIENT_ASKS_SCHEMA_SQL } from '../../federation/client-asks/client-ask-ended-pairings'
 
@@ -39,6 +40,7 @@ export function createTables(this: OrchestrationDb): void {
       'ALTER TABLE remote_dispatches ADD COLUMN task_settled_here INTEGER NOT NULL DEFAULT 0'
     )
   }
+  ensurePairedServerOwedReturns(this.db)
   this.createMailboxDeliveryIndexesIfPossible()
   this.db.exec(DERIVED_DELIVERY_SCHEMA_SQL)
 }

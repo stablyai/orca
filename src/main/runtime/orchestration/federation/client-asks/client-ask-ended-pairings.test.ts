@@ -41,7 +41,12 @@ describe("whether a paired computer's conversation can still take a reply", () =
     isEndedClientPairing(owner, db, { environmentId: ENVIRONMENT, deviceId: 'device_a', pairing })
 
   it('ends only the pairing a re-pair names, until that pairing pulls again', () => {
-    recordEndedClientPairings(db, ENVIRONMENT, { only: 'fp_a' })
+    recordEndedClientPairings(
+      db,
+      ENVIRONMENT,
+      { only: 'fp_a' },
+      { serverName: 'Laptop', reason: 'x' }
+    )
 
     expect(ended('fp_a')).toBe(true)
     expect(ended('fp_b')).toBe(false)

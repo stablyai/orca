@@ -12,11 +12,21 @@ CREATE TABLE IF NOT EXISTS ended_client_pairings (
   environment_id         TEXT NOT NULL,
   peer_fingerprint       TEXT NOT NULL,
   ended_at               TEXT NOT NULL DEFAULT (datetime('now')),
+  -- Who its askers hear it from and why, kept so an interrupted ending can finish after a restart.
+  server_name            TEXT NOT NULL DEFAULT '',
+  reason                 TEXT NOT NULL DEFAULT '',
+  -- Set once its askers were told and its queue dropped; null: that is still owed.
+  settled_at             TEXT,
   PRIMARY KEY (environment_id, peer_fingerprint)
 );
--- An ask's card finds the ask it names by its id alone.
+CREATE INDEX IF NOT EXISTS idx_ended_client_pairings_unsettled
+  ON ended_client_pairings(environment_id) WHERE settled_at IS NULL;
+-- An ask's card finds the ask it names by its id alone, and any later ask in the thread it opened.
 CREATE INDEX IF NOT EXISTS idx_federation_relay_client_asks
-  ON federation_relay_items(message_id) WHERE kind = 'client_ask';`
+  ON federation_relay_items(message_id) WHERE kind = 'client_ask';
+CREATE INDEX IF NOT EXISTS idx_federation_relay_client_ask_threads
+  ON federation_relay_items(dispatch_id, json_extract(payload, '$.threadId'))
+  WHERE kind = 'client_ask';`
 
 /** The credential fingerprint a paired device holds now: null once it was removed, undefined when
  *  there is no registry to tell. */
@@ -32,20 +42,68 @@ export function registerPairedDeviceCredentials(
   credentialsByOwner.set(owner, credentialOf)
 }
 
+/** The credential fingerprint the device registry holds for `deviceId` now (see
+ *  `PairedDeviceCredential`). */
+export function pairedDeviceCredential(
+  owner: ClientAskListenerOwner,
+  deviceId: string
+): string | null | undefined {
+  return credentialsByOwner.get(owner)?.(deviceId)
+}
+
 /** The pairing's end is recorded for these conversations: all of the environment's but
- *  `scope.keep`, which it still pulls with, or only `scope.only`. */
+ *  `scope.keep`, which it still pulls with, or only `scope.only`. Unsettled until
+ *  `markClientPairingsSettled`: its askers are owed a notice, and the queue a drop. */
 export function recordEndedClientPairings(
+  db: OrchestrationDb,
+  environmentId: string,
+  scope: ClientPairingScope,
+  told: { serverName: string; reason: string }
+): void {
+  db.db
+    .prepare(
+      `INSERT INTO ended_client_pairings (environment_id, peer_fingerprint, server_name, reason)
+       SELECT DISTINCT environment_id, peer_fingerprint, ?4, ?5 FROM peer_mail_conversations
+       WHERE role = 'home' AND environment_id = ?1 AND ${clientPairingScopeSql('peer_fingerprint')}
+       ON CONFLICT(environment_id, peer_fingerprint) DO UPDATE SET
+         server_name = excluded.server_name, reason = excluded.reason, settled_at = NULL`
+    )
+    .run(environmentId, scope.keep ?? null, scope.only ?? null, told.serverName, told.reason)
+}
+
+/** Its askers were told and its queue dropped, in the write that did so. */
+export function markClientPairingsSettled(
   db: OrchestrationDb,
   environmentId: string,
   scope: ClientPairingScope
 ): void {
   db.db
     .prepare(
-      `INSERT OR IGNORE INTO ended_client_pairings (environment_id, peer_fingerprint)
-       SELECT DISTINCT environment_id, peer_fingerprint FROM peer_mail_conversations
-       WHERE role = 'home' AND environment_id = ?1 AND ${clientPairingScopeSql('peer_fingerprint')}`
+      `UPDATE ended_client_pairings SET settled_at = datetime('now')
+       WHERE environment_id = ?1 AND settled_at IS NULL AND ${clientPairingScopeSql('peer_fingerprint')}`
     )
     .run(environmentId, scope.keep ?? null, scope.only ?? null)
+}
+
+/** Ended pairings whose askers or queue were never settled (a crash or failure part way). */
+export function listUnsettledClientPairings(db: OrchestrationDb): {
+  environmentId: string
+  pairing: string
+  serverName: string
+  reason: string
+}[] {
+  return db.db
+    .prepare(
+      `SELECT environment_id, peer_fingerprint, server_name, reason FROM ended_client_pairings
+       WHERE settled_at IS NULL`
+    )
+    .all()
+    .map((row) => ({
+      environmentId: String(row.environment_id),
+      pairing: String(row.peer_fingerprint),
+      serverName: String(row.server_name),
+      reason: String(row.reason)
+    }))
 }
 
 /** Which pairings of an environment an end touches: all but `keep`, or only `only`; neither: all. */
@@ -62,7 +120,7 @@ export function isEndedClientPairing(
   db: OrchestrationDb,
   conversation: { environmentId: string; deviceId: string; pairing: string }
 ): boolean {
-  const held = credentialsByOwner.get(owner)?.(conversation.deviceId)
+  const held = pairedDeviceCredential(owner, conversation.deviceId)
   if (held !== undefined && held !== conversation.pairing) {
     return true
   }

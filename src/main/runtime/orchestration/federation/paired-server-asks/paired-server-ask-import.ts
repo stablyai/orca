@@ -12,7 +12,7 @@ import {
 import type { PeerMailSender } from '../../../../../shared/rpc-contract/orchestration/orchestration-peer-mail-params'
 import { botOfAddress, parseBotAddress } from '../../../../../shared/bot-roster'
 import { toSafeDisplayLine } from '../../../../../shared/text/display-text-safety'
-import { queuePeerMailReply } from '../peer-mail/peer-mail-delivery'
+import { isReplacedPairingConversation, queuePeerMailReply } from '../peer-mail/peer-mail-delivery'
 import { notifyPeerMailQueued } from '../peer-mail/peer-mail-waiters'
 import { peerMailSenderSnapshot } from '../peer-mail/peer-mail-sender-snapshot'
 import { storePeerMailForAgent } from '../../../rpc/methods/orchestration/federation/peer-mail-agent-store'
@@ -21,6 +21,7 @@ import {
   getPairedServerAsk,
   holdPairedServerAsk,
   isIntroduced,
+  isReplacedServerPairing,
   isServerAllowed,
   isServerKnown,
   type PairedServerAskRow
@@ -65,7 +66,9 @@ export function declinePairedServerAsk(
   // Under any other id (an older build's row) the notice would join a Dispatch's queued reports.
   if (
     !isGeneratedId(ask.conversationId, 'peerconv') ||
-    isDeclined(db, ask.conversationId, ask.messageId)
+    isDeclined(db, ask.conversationId, ask.messageId) ||
+    // Its pairing was replaced: the server told the asker then, and this could never go back.
+    isReplacedPairingConversation(db, ask.conversationId)
   ) {
     return
   }
@@ -210,6 +213,14 @@ export async function importPairedServerItem(
   if (!isGeneratedId(item.conversationId, 'peerconv')) {
     console.warn(
       `[orchestration] Dropped ${item.messageId} from a paired server: it names no conversation`
+    )
+    return { card: false }
+  }
+  // Pulled under a pairing this computer has since replaced (a pull that was waiting when it was
+  // re-made): that announcement settled it, so nothing of it is taken now.
+  if (isReplacedServerPairing(db, asks.environmentId, asks.pairing)) {
+    console.warn(
+      `[orchestration] Dropped ${item.messageId} from a paired server: its pairing was replaced`
     )
     return { card: false }
   }

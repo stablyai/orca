@@ -17,6 +17,7 @@ import type { OrcaRuntimeService } from '../../../orca-runtime'
 import type { OrchestrationDb } from '../../db/orchestration-db'
 import type { PeerMailConversationRow } from '../../db/federation/peer-mail-store'
 import { generateId, isGeneratedId } from '../../db/generated-id'
+import { isReplacedServerPairing } from '../../db/federation/paired-server-asks-store'
 import { OrchestrationError } from '../../orchestration-error'
 import type { OrchestrationWorkerServer } from '../environment-transport'
 
@@ -185,6 +186,20 @@ export async function deliverPeerMail(
   return warnings.flatMap((warning) => PeerMailDeliveryHeld.safeParse(warning).data ?? [])
 }
 
+/** Whether a conversation a paired server opened here came under a pairing this computer has since
+ *  replaced with another to that server (see `isReplacedServerPairing`). */
+export function isReplacedPairingConversation(
+  db: OrchestrationDb,
+  conversationId: string
+): boolean {
+  const conversation = db.getPeerMailConversation(conversationId)
+  return (
+    conversation?.role === 'peer' &&
+    conversation.environment_id !== null &&
+    isReplacedServerPairing(db, conversation.environment_id, conversation.peer_fingerprint)
+  )
+}
+
 /** Queues one reply on a conversation a paired Orca opened here, for it to pull. The relay keys it by
  *  conversation, so under any id but a peer conversation's (a row an older build stored) it would
  *  join that id's queue, a Dispatch's reports: refused, nothing queued. */
@@ -198,6 +213,15 @@ export function queuePeerMailReply(
     throw new OrchestrationError(
       'request_mismatch',
       `Conversation ${conversationId} is not one this Orca can answer over. Nothing was sent.`,
+      NOTHING_SENT
+    )
+  }
+  // Checked in the write that queues it: a re-pair announced before it settled the old pairing's
+  // queue, so a reply queued after would wait for good, owed to a pairing nothing returns to.
+  if (isReplacedPairingConversation(db, conversationId)) {
+    throw new OrchestrationError(
+      'request_mismatch',
+      `The pairing conversation ${conversationId} came on was replaced. Nothing was sent.`,
       NOTHING_SENT
     )
   }

@@ -203,7 +203,7 @@ export class PeerMailRelay {
     if (!this.isCurrent(environmentId, loop)) {
       return
     }
-    asksLoop.notePairedServerAnswer(loop.db, loop.asks, response)
+    asksLoop.notePairedServerAnswer(this.runtime, loop.db, loop.asks, response)
     const { items } = PulledPeerMail.parse(response)
     if (items.length === 0) {
       return

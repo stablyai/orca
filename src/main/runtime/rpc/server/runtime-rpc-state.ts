@@ -1,6 +1,7 @@
 import { randomBytes } from 'node:crypto'
 import { pairedDeviceCredentials } from './pairing/device-principal'
 import { registerPairedDeviceCredentials } from '../../orchestration/federation/client-asks/client-ask-ended-pairings'
+import { replayUnsettledClientPairingEnds } from '../../orchestration/federation/client-asks/client-ask-queue'
 import type { RuntimeTransportMetadata } from '../../../../shared/remote-runtime/bootstrap/runtime-bootstrap'
 import type { OrcaRuntimeService } from '../../orca-runtime'
 import { RpcDispatcher } from '../dispatcher'
@@ -250,5 +251,11 @@ export class RuntimeRpcState {
     this.clientConnectionLog?.close()
     this.clientConnectionLog = new RuntimeClientConnectionLog()
     return this.clientConnectionLog
+  }
+
+  /** The device registry is loaded: a paired computer's removal that was interrupted before its
+   *  askers were told finishes now. */
+  protected finishInterruptedPairedClientRemovals(): void {
+    replayUnsettledClientPairingEnds(this.runtime)
   }
 }
