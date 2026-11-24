@@ -100,15 +100,25 @@ const POWERSHELL: readonly (readonly [string, string])[] = [
   ['git status && git log -3', ALLOW],
   ['gh pr checks 12 2>&1', ALLOW],
   ["gh pr list --search 'is:open draft'", ALLOW],
-  ["gh pr list --author=@me --json 'number,title'", ALLOW],
+  ['gh pr list --author=@me --json number --json title', ALLOW],
   ["orca bot suggest --title 'Fix CI' --why 'It is red' --ask 'Fix it'", ALLOW],
   ["gh pr view 'a\u0000b'", 'a control or invisible character'],
   ['﻿git status', 'a control or invisible character'],
   ['git status\n; git log', 'a second line'],
   // cmd.exe re-parses a `.cmd` launcher's arguments, quotes or not.
-  ["orca bot list 'x&echo.pwned>file'", 'cmd.exe reads & | < > ^'],
-  ["gh pr list --search 'a|b'", 'cmd.exe reads & | < > ^'],
-  ["gh pr list --search 'a^b'", 'cmd.exe reads & | < > ^'],
+  ["orca bot list 'x&echo.pwned>file'", 'cmd.exe reads & | < > ^ % !'],
+  ["gh pr list --search 'a|b'", 'cmd.exe reads & | < > ^ % !'],
+  ["gh pr list --search 'a^b'", 'cmd.exe reads & | < > ^ % !'],
+  ["orca bot list '%GITHUB_TOKEN%'", 'cmd.exe reads & | < > ^ % !'],
+  ["orca bot suggest --title '%GITHUB_TOKEN%' --why 'x' --ask 'x'", 'cmd.exe reads & | < > ^ % !'],
+  ["orca bot list '%VAR:a=b%'", 'cmd.exe reads & | < > ^ % !'],
+  ["gh pr list --search '%OPENAI_API_KEY%'", 'cmd.exe reads & | < > ^ % !'],
+  ["orca bot list '!GITHUB_TOKEN!'", 'cmd.exe reads & | < > ^ % !'],
+  ["orca bot suggest --title 'Ship it!' --why 'x' --ask 'x'", 'cmd.exe reads & | < > ^ % !'],
+  ["orca slack check 'foo,--join'", 'cmd.exe splits a value at , or ;'],
+  ["orca slack check 'foo;--join'", 'cmd.exe splits a value at , or ;'],
+  ["gh pr list --json 'number,title'", 'cmd.exe splits a value at , or ;'],
+  ["gh pr list --search 'is:open draft' --json 'number, title'", ALLOW],
   // Curly quotes close PowerShell strings; these dashes read as `-`.
   ["gh pr view 'x’; Remove-Item f; ‘y'", 'a curly quote or dash ("’"'],
   ["gh pr view 'x‘; Remove-Item f; ’y'", 'a curly quote or dash ("‘"'],
@@ -178,7 +188,13 @@ describe('lookAroundToolDecision', () => {
     expect(lookAroundToolDecision('Bash', { command })).toEqual({ decision: 'allow' })
     onPlatform('win32')
     const answer = lookAroundToolDecision('Bash', { command })
-    expect(answer.decision === 'deny' && answer.reason).toContain('cmd.exe reads & | < > ^')
+    expect(answer.decision === 'deny' && answer.reason).toContain('cmd.exe reads & | < > ^ % !')
+    for (const value of ["'%GITHUB_TOKEN%'", "'!PATH!'"]) {
+      const expanded = lookAroundToolDecision('Bash', { command: `orca bot list ${value}` })
+      expect(expanded.decision === 'deny' && expanded.reason).toContain('% !')
+    }
+    const split = lookAroundToolDecision('Bash', { command: "orca slack check 'foo,--join'" })
+    expect(split.decision === 'deny' && split.reason).toContain('splits a value at , or ;')
   })
 
   it('names a refused tool', () => {

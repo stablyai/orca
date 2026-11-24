@@ -138,17 +138,27 @@ export function powerShellWordRefusal(parts: readonly Word[]): string | null {
       return syntaxRefusal(`"${text}" (splatting in PowerShell)`)
     }
     if (!quoted && text.includes(',')) {
-      return syntaxRefusal(`"${text}" (an array in PowerShell; quote it)`)
+      return syntaxRefusal(
+        `"${text}" (an array in PowerShell; repeat the flag per value, as in --json a --json b)`
+      )
     }
   }
   return null
 }
 
-/** On Windows a bare name may resolve to a `.cmd` or `.bat` launcher, which cmd.exe re-parses: a
- *  quoted `&`, `|`, `<`, `>` or `^` would reach it as an operator, from PowerShell or Git Bash. */
+/** On Windows a bare name may resolve to a `.cmd` or `.bat` launcher, which cmd.exe re-parses,
+ *  from PowerShell or Git Bash: a quoted `&`, `|`, `<`, `>` or `^` reaches it as an operator,
+ *  `%VAR%` and `!VAR!` expand, and a value without a space arrives unquoted, so `,` or `;` split it. */
 export function windowsLauncherWordRefusal(parts: readonly Word[]): string | null {
-  const operator = parts.find(({ text, quoted }) => quoted && /[&|<>^]/.test(text))
-  return operator
-    ? syntaxRefusal(`'${operator.text}' (cmd.exe reads & | < > ^ even in quotes on Windows)`)
-    : null
+  for (const { text, quoted } of parts) {
+    if (quoted && /[&|<>^%!]/.test(text)) {
+      return syntaxRefusal(`'${text}' (cmd.exe reads & | < > ^ % ! even in quotes on Windows)`)
+    }
+    if (quoted && /[,;]/.test(text) && !/[ \t]/.test(text)) {
+      return syntaxRefusal(
+        `'${text}' (cmd.exe splits a value at , or ; when it has no space; repeat the flag per value, as in --json a --json b)`
+      )
+    }
+  }
+  return null
 }
