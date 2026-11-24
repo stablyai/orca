@@ -4039,7 +4039,6 @@
       "checkUpdates": "检查更新",
       "checkUpdatesStatus": "检查更新，{{status}}",
       "checking": "检查中…",
-      "installedVersion": "版本 {{version}}",
       "lastCheckedDays_one": "上次检查：{{count}} 天前",
       "lastCheckedDays_other": "上次检查：{{count}} 天前",
       "lastCheckedHours_one": "上次检查：{{count}} 小时前",
@@ -4049,7 +4048,6 @@
       "lastCheckedMinutes_other": "上次检查：{{count}} 分钟前",
       "neverChecked": "从未",
       "upToDate": "已是最新",
-      "update": "更新",
       "updateToVersion": "更新至 Orca {{version}}"
     },
     "appearance": {
@@ -4091,7 +4089,6 @@
       "about": "关于",
       "appearance": "外观",
       "browser": "浏览器",
-      "chatUi": "聊天界面",
       "notifications": "通知",
       "terminal": "终端",
       "troubleshooting": "故障排查",
@@ -4106,8 +4103,7 @@
       "defaultViewHeading": "默认视图",
       "off": "关闭",
       "on": "开启",
-      "openInChatUi": "在聊天界面中打开会话",
-      "title": "聊天界面"
+      "openInChatUi": "在聊天界面中打开会话"
     },
     "nativeChatText": {
       "heading": "文字",

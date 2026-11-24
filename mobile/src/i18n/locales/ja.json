@@ -3668,7 +3668,6 @@
       "checkUpdates": "アップデートを確認",
       "checkUpdatesStatus": "アップデートを確認、{{status}}",
       "checking": "確認中…",
-      "installedVersion": "バージョン {{version}}",
       "lastCheckedDays_one": "最終確認：{{count}} 日前",
       "lastCheckedDays_other": "最終確認：{{count}} 日前",
       "lastCheckedHours_one": "最終確認：{{count}} 時間前",
@@ -3678,7 +3677,6 @@
       "lastCheckedMinutes_other": "最終確認：{{count}} 分前",
       "neverChecked": "未確認",
       "upToDate": "最新",
-      "update": "更新",
       "updateToVersion": "Orca {{version}} に更新"
     },
     "appearance": {
@@ -3720,7 +3718,6 @@
       "about": "Orca について",
       "appearance": "外観",
       "browser": "ブラウザ",
-      "chatUi": "Chat UI",
       "notifications": "通知",
       "terminal": "ターミナル",
       "troubleshooting": "トラブルシューティング",
@@ -3735,8 +3732,7 @@
       "defaultViewHeading": "デフォルトの表示",
       "off": "オフ",
       "on": "オン",
-      "openInChatUi": "セッションをチャット UI で開く",
-      "title": "Chat UI"
+      "openInChatUi": "セッションをチャット UI で開く"
     },
     "nativeChatText": {
       "heading": "テキスト",
@@ -5649,7 +5645,6 @@
     }
   },
   "bots": {
-    "section": {},
     "link": {
       "pairTitle": "コンピュータをペアリング",
       "pairRequired": "このリンクを開くには、このスマートフォンをコンピュータとペアリングしてから、もう一度リンクを開いてください。",
