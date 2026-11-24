@@ -14,6 +14,8 @@
 #endif
 #if defined(__linux__)
 #define _DEFAULT_SOURCE
+// glibc before 2.19 declares syscall() only under the older name.
+#define _BSD_SOURCE
 #endif
 
 #include <errno.h>
@@ -405,7 +407,8 @@ static int read_row(pid_t pid, struct proc_row *row) {
     snprintf(path, sizeof path, "/proc/%ld/stat", (long)pid);
     int fd = open(path, O_RDONLY | O_CLOEXEC);
     if (fd < 0) {
-        return errno == ENOENT || errno == ESRCH ? 0 : -1;
+        // hidepid hides other users' rows; the watcher could never signal those anyway.
+        return errno == ENOENT || errno == ESRCH || errno == EACCES || errno == EPERM ? 0 : -1;
     }
     char buf[1024];
     ssize_t got;
@@ -422,11 +425,12 @@ static int read_row(pid_t pid, struct proc_row *row) {
     char state;
     int ppid;
     int pgid;
+    long threads;
     unsigned long long start;
     if (fields == NULL ||
             sscanf(fields + 1,
-                " %c %d %d %*d %*d %*d %*u %*u %*u %*u %*u %*u %*u %*d %*d %*d %*d %*d %*d %llu",
-                &state, &ppid, &pgid, &start) != 4) {
+                " %c %d %d %*d %*d %*d %*u %*u %*u %*u %*u %*u %*u %*d %*d %*d %*d %ld %*d %llu",
+                &state, &ppid, &pgid, &threads, &start) != 5) {
         return -1;
     }
     row->pid = pid;
@@ -434,7 +438,8 @@ static int read_row(pid_t pid, struct proc_row *row) {
     row->pgid = pgid;
     row->uid = 0;
     row->start = (long long)start;
-    row->zombie = state == 'Z' || state == 'X';
+    // A main thread that called pthread_exit shows Z while its other threads still run.
+    row->zombie = (state == 'Z' || state == 'X') && threads <= 1;
     row->stale = 0;
     return 1;
 }
@@ -673,6 +678,9 @@ static int drop_stale_members(struct tree_scan *scan, const struct proc_row *lea
 #if !defined(SYS_pidfd_send_signal)
 #define SYS_pidfd_send_signal 424
 #endif
+#if !defined(CLOCK_BOOTTIME)
+#define CLOCK_BOOTTIME 7
+#endif
 #endif
 
 // Returns whether the member may still be alive. The kernel handle is taken before the start-time
@@ -865,11 +873,11 @@ static int sweep_tree(struct watcher *w, int signal_number) {
 #endif
 
 // Rate-limited to one table read per sweep interval.
-// During TERM grace it also sweeps while the CLI group lives, so a tool that was deferred or born
-// late still gets TERM before KILL. Absence needs the group gone before the sweep began.
+// During TERM grace and reap it also sweeps while the CLI group lives, so a tool that was deferred
+// or born late still gets its signal. Absence needs the group gone before the sweep began.
 static int tree_absent(struct watcher *w, int signal_number) {
     int group_gone = group_absent(w);
-    if (!group_gone && signal_number != SIGTERM) {
+    if (!group_gone && signal_number == 0) {
         return 0;
     }
     struct timespec now;
