@@ -20349,8 +20349,8 @@
         "fromAgain": "Erneut aus {{app}}",
         "from": "Aus {{app}}",
         "selected": "{{chosen}} von {{total}} ausgewählt · Schlüssel und Anmeldedaten werden nie kopiert",
-        "importOne": "1 Element importieren",
-        "importMany": "{{count}} Elemente importieren",
+        "importOne": "Importieren (1)",
+        "importMany": "Importieren ({{count}})",
         "askedOne": "Import von 1 Element angefordert",
         "askedMany": "Import von {{count}} Elementen angefordert"
       },
@@ -20504,6 +20504,7 @@
         "resultsInRuns": "Ergebnisse in jeder Ausführung",
         "paused": "pausiert",
         "webhookHint": "Diese URL in deinem Dienst als Ziel eintragen",
+        "gettingUrl": "URL wird abgerufen…",
         "editDraft": "Ändere „{{name}}“ so, dass ",
         "resultsInEachRun": "In jeder Ausführung",
         "resultsChat": "Chat",
