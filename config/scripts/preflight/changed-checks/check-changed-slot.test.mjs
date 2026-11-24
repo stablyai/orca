@@ -23,6 +23,10 @@ import {
 
 registerSlotHarness()
 
+/** A wait line showing exactly this place, with or without a holder after it. */
+const showsPlace = (message, place) =>
+  message === `${WAITING} ${place}` || message.startsWith(`${WAITING} ${place} `)
+
 // Production Windows runs check:changed concurrently and never loads the slot; these tests need POSIX ps or /proc.
 describe.skipIf(process.platform === 'win32')('check:changed slot queue order', () => {
   it('admits waiters one at a time in arrival order, whatever their poll rate', async () => {
@@ -222,7 +226,7 @@ process.exit(0)`)
       const messages = []
       observe(run({ staleMs: 60_000, log: (message) => messages.push(message) }))
       await until(() => messages.length > 0, 'wait message')
-      expect(messages[0].startsWith(`${WAITING} ${line} `)).toBe(true)
+      expect(showsPlace(messages[0], line)).toBe(true)
       // One ticket ahead leaves: the new count must be printed even where the sum barely moves.
       openQueue().prepare('DELETE FROM tickets_v4 WHERE id = ?').run(ids[0])
       const corrected = {
@@ -230,11 +234,7 @@ process.exit(0)`)
         100: 'Position 100 of 100.',
         101: 'Position 101 of over 100.'
       }[ahead]
-      await until(
-        () => messages.at(-1).startsWith(`${WAITING} ${corrected} `),
-        'corrected count',
-        30_000
-      )
+      await until(() => showsPlace(messages.at(-1), corrected), 'corrected count', 30_000)
       await holder()
     }, 180_000)
   }
@@ -276,7 +276,7 @@ process.exit(0)`)
         log: (message) => messages.push(message)
       })
     )
-    const line = (text) => messages.some((message) => message.startsWith(`${WAITING} ${text} `))
+    const line = (text) => messages.some((message) => showsPlace(message, text))
     await until(() => line('Position over 100 of over 100.'), 'capped line')
     // 101 + 0 ahead becomes 100 + 1: the same position and total, but now countable exactly.
     openQueue().prepare('UPDATE tickets_v4 SET lane = 1 WHERE id = ?').run(ids[0])
