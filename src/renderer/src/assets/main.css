@@ -374,6 +374,9 @@
     var(--foreground) var(--tab-contrast-mix),
     var(--tab-bar, var(--card))
   );
+}
+
+.light {
   --tab-decoration-added: color-mix(in srgb, black 15%, var(--git-decoration-added));
   --tab-decoration-renamed: color-mix(in srgb, black 20%, var(--git-decoration-renamed));
   --tab-decoration-copied: color-mix(in srgb, black 20%, var(--git-decoration-copied));
