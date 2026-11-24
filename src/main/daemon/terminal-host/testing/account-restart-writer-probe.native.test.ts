@@ -17,7 +17,7 @@ import {
 } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { afterAll, describe, expect, it } from 'vitest'
+import { afterAll, describe, expect, it, vi } from 'vitest'
 import { TerminalHost } from '../terminal-host'
 import { createPtySubprocess } from '../../pty-subprocess/pty-subprocess'
 import type { PtyFencedTerminationOutcome } from '../../../../shared/terminal/pty/lifecycle/pty-fenced-termination'
@@ -85,15 +85,15 @@ function readWrites(file: string): number[] {
     .filter((value) => Number.isFinite(value) && value > 0)
 }
 
-async function waitFor(predicate: () => boolean, timeoutMs: number): Promise<boolean> {
-  const deadline = Date.now() + timeoutMs
-  while (Date.now() < deadline) {
-    if (predicate()) {
-      return true
-    }
-    await new Promise((resolve) => setTimeout(resolve, 50))
+async function writerStarted(file: string): Promise<boolean> {
+  try {
+    await vi.waitFor(() => expect(readWrites(file).length).toBeGreaterThanOrEqual(5), {
+      timeout: 15_000
+    })
+    return true
+  } catch {
+    return false
   }
-  return predicate()
 }
 
 async function probe(scenario: Scenario) {
@@ -110,8 +110,9 @@ async function probe(scenario: Scenario) {
     launchAgent: 'codex',
     streamClient: { onData: () => {}, onExit: () => {} }
   })
-  const writing = await waitFor(() => readWrites(file).length >= 5, 15_000)
+  const writing = await writerStarted(file)
   if (scenario === 'root-exits-first') {
+    // ast-grep-ignore: test-no-real-time-wait -- the native root must really exit before the stop.
     await new Promise((resolve) => setTimeout(resolve, 1_000))
   }
   const started = host.beginFencedTermination({
@@ -123,7 +124,9 @@ async function probe(scenario: Scenario) {
   const outcome: PtyFencedTerminationOutcome = started.accepted
     ? await started.completion
     : started.result
+  // ast-grep-ignore: test-no-wall-clock -- compared with the writer's own wall-clock timestamps.
   const settledAt = Date.now()
+  // ast-grep-ignore: test-no-real-time-wait -- the probe observes real writes after the stop settles.
   await new Promise((resolve) => setTimeout(resolve, 1_500))
   const writes = readWrites(file)
   const writesAfterStop = writes.filter((at) => at > settledAt).length
@@ -160,6 +163,7 @@ describe.skipIf(!RUN_PROBE)('native writer probe for account restart', () => {
     }
   })
 
+  // Real processes, a 15s start window and a 1.5s observation window per scenario.
   it('a writer in the session tree is gone before the stop claims writersExited', async () => {
     const record = await probe('descendant-writer')
     expect(record.writerStarted).toBe(true)
@@ -167,6 +171,7 @@ describe.skipIf(!RUN_PROBE)('native writer probe for account restart', () => {
     expect(record.writesAfterStop).toBe(0)
   }, 60_000)
 
+  // Real processes, a 15s start window and a 1.5s observation window per scenario.
   it('a root that already exited is never writer evidence', async () => {
     const record = await probe('root-exits-first')
     expect(record.claimedWritersExited).toBe(false)
