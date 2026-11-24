@@ -78,6 +78,8 @@ export function useMobileStructuredQueuedMessageControls(args: {
   journalItems?: readonly AgentJournalRenderItem[]
   /** The chat draws a transcript; an empty or loading one keeps agent mail as cards, with their controls. */
   transcriptShown: boolean
+  /** The queue is the host's current one, not a saved or reloading copy. */
+  queueCurrent: boolean
   queuedMessages: readonly AgentSessionQueuedMessage[] | null
   queuePause: AgentSessionQueuePause | null
   submissions: readonly AgentJournalSubmission[]
@@ -152,7 +154,8 @@ export function useMobileStructuredQueuedMessageControls(args: {
   )
   useMobileWaitingAgentMailArrivalAnnouncement(waitingAgentMail, {
     key: args.sessionKey,
-    listening: args.chatActive && args.transcriptShown && queuedMessages !== null
+    listening:
+      args.chatActive && args.transcriptShown && args.queueCurrent && queuedMessages !== null
   })
   const resolved = useCallback(
     (accepted: boolean): boolean => {

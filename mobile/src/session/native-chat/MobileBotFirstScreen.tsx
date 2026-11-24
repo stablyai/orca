@@ -301,6 +301,8 @@ function SetupMailScroller({ after }: { after: React.ReactNode }): React.JSX.Ele
     <MobileFooterRowsScrollerContext.Provider value={viewport}>
       <ScrollView
         style={styles.mail}
+        // A tap on a row's action acts with the composer's keyboard up, as in the transcript.
+        keyboardShouldPersistTaps="handled"
         onScroll={(event) => viewport.record(event.nativeEvent)}
         scrollEventThrottle={32}
         onContentSizeChange={(_width, height) => viewport.contentResized(height)}
