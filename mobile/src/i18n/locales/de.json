@@ -4880,9 +4880,7 @@
       "addButton": "Hinzufügen",
       "sourceLabel": "Server-URL oder Startbefehl",
       "sourcePlaceholder": "https://… or npx …",
-      "scope": "Nur {{name}} bekommt es, zusätzlich zu deinen eigenen Werkzeugen.",
       "details": "Details",
-      "commandWarning": "Der Befehl läuft im Home-Ordner dieses Bots auf {{host}}. Hinzufügen oder Speichern kann ihn während der nativen Prüfung starten. Füge nur Software hinzu, der du vertraust.",
       "serverType": "Servertyp",
       "urlMode": "Mit einer URL verbinden",
       "commandMode": "Befehl ausführen",
@@ -4890,7 +4888,6 @@
       "removeTitle": "{{app}} entfernen?",
       "removeNote": "{{bot}} kann {{app}} nicht mehr verwenden. Du kannst es jederzeit wieder hinzufügen.",
       "remove": "Entfernen",
-      "signInOrca": "Funktioniert mit Claude und Codex",
       "signInMissing": "{{agent}} ist nicht angemeldet",
       "signInHeld": "Von {{agent}} verwaltet",
       "wontStart": "Startet nicht",
@@ -4952,7 +4949,17 @@
         "denied": "Der Zugriff wurde nicht erlaubt.",
         "expired": "Die Anmeldung ist abgelaufen. Versuche es erneut.",
         "couldNotSignIn": "Anmeldung nicht möglich. Versuche es erneut."
-      }
+      },
+      "trust": "Füge nur Software hinzu, der du vertraust.",
+      "argument": "Argument",
+      "removeArgument": "Argument entfernen",
+      "header": "Header",
+      "variable": "Variable",
+      "removeHeaderRow": "Header entfernen",
+      "removeVariableRow": "Variable entfernen",
+      "emptyArgument": "Leer",
+      "valueNew": "Neuer Wert",
+      "valueSaved": "Gespeichert"
     },
     "handToBot": {
       "menu": "An Bot übergeben…",
@@ -5169,6 +5176,9 @@
       },
       "webhooks": {
         "line": "Ereignisse aus jedem Tool oder Skript"
+      },
+      "composio": {
+        "keyOnHost": "Gespeichert auf {{host}}; Bots sehen ihn nie."
       }
     },
     "share": {

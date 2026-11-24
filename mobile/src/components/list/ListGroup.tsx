@@ -161,6 +161,8 @@ type ListRowProps = {
   /** Draws a check: the row is the picked option. */
   selected?: boolean
   destructive?: boolean
+  /** An action, not a setting (e.g. "Open sign-in page"): the title in the accent, like Home's "Pair a desktop". */
+  accent?: boolean
   /** Something new to read: the title bolder. */
   strong?: boolean
   onPress?: () => void
@@ -193,6 +195,7 @@ export function ListRow({
   navigates = false,
   selected,
   destructive = false,
+  accent = false,
   strong = false,
   onPress,
   onLongPress,
@@ -216,7 +219,8 @@ export function ListRow({
           listRowStyles.title,
           subtitle !== undefined && listRowStyles.titleEmphasis,
           strong && listRowStyles.titleStrong,
-          destructive && listRowStyles.titleDestructive
+          destructive && listRowStyles.titleDestructive,
+          accent && listRowStyles.titleAccent
         ]}
         numberOfLines={wrapTitle ? undefined : 1}
       >
@@ -350,6 +354,7 @@ const listRowStyles = themedStyleSheet(() => ({
   titlePrefix: { color: colors.textMuted, fontVariant: ['tabular-nums'] },
   titleStrong: { fontWeight: '700' },
   titleDestructive: { color: colors.statusRed },
+  titleAccent: { color: colors.accentBlue },
   subtitle: { fontSize: 13, color: colors.textSecondary, flexShrink: 1 },
   subtitleMono: { fontFamily: typography.monoFamily },
   value: { fontSize: 15, color: colors.textSecondary, flexShrink: 1, maxWidth: 180 },

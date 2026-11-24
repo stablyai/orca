@@ -5565,9 +5565,7 @@
       "addButton": "Adicionar",
       "sourceLabel": "URL do servidor ou comando de início",
       "sourcePlaceholder": "https://… or npx …",
-      "scope": "Só {{name}} a recebe, além das suas próprias ferramentas.",
       "details": "Detalhes",
-      "commandWarning": "O comando é executado na pasta inicial deste bot em {{host}}. Adicionar ou salvar pode iniciá-lo durante a verificação nativa. Adicione só softwares confiáveis.",
       "serverType": "Tipo de servidor",
       "urlMode": "Conectar a uma URL",
       "commandMode": "Executar um comando",
@@ -5575,7 +5573,6 @@
       "removeTitle": "Remover {{app}}?",
       "removeNote": "{{bot}} não pode mais usar {{app}}. Você pode adicioná-lo de novo quando quiser.",
       "remove": "Remover",
-      "signInOrca": "Funciona com Claude e Codex",
       "signInMissing": "{{agent}} não está conectado",
       "signInHeld": "Gerenciado por {{agent}}",
       "wontStart": "Não inicia",
@@ -5637,7 +5634,17 @@
         "denied": "O acesso não foi permitido.",
         "expired": "O login expirou. Tente novamente.",
         "couldNotSignIn": "Não foi possível fazer login. Tente novamente."
-      }
+      },
+      "trust": "Adicione apenas software em que você confia.",
+      "argument": "Argumento",
+      "removeArgument": "Remover argumento",
+      "header": "Cabeçalho",
+      "variable": "Variável",
+      "removeHeaderRow": "Remover cabeçalho",
+      "removeVariableRow": "Remover variável",
+      "emptyArgument": "Vazio",
+      "valueNew": "Novo valor",
+      "valueSaved": "Salvo"
     },
     "handToBot": {
       "menu": "Repassar a um bot…",
@@ -5855,6 +5862,9 @@
       },
       "webhooks": {
         "line": "Eventos de qualquer ferramenta ou script"
+      },
+      "composio": {
+        "keyOnHost": "Fica em {{host}}; os bots nunca a veem."
       }
     },
     "share": {

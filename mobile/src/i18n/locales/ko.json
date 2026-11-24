@@ -5404,9 +5404,7 @@
       "addButton": "추가",
       "sourceLabel": "서버 URL 또는 시작 명령",
       "sourcePlaceholder": "https://… or npx …",
-      "scope": "내 도구 외에 {{name}}만 이것을 사용합니다.",
       "details": "세부 정보",
-      "commandWarning": "명령은 {{host}}의 봇 홈 폴더에서 실행됩니다. 추가하거나 저장하면 기본 확인 중에 시작될 수 있습니다. 신뢰하는 소프트웨어만 추가하세요.",
       "serverType": "서버 유형",
       "urlMode": "URL에 연결",
       "commandMode": "명령 실행",
@@ -5414,7 +5412,6 @@
       "removeTitle": "{{app}}을(를) 제거할까요?",
       "removeNote": "{{bot}}은(는) 더 이상 {{app}}을(를) 사용할 수 없습니다. 언제든 다시 추가할 수 있습니다.",
       "remove": "제거",
-      "signInOrca": "Claude 및 Codex와 함께 작동",
       "signInMissing": "{{agent}}이(가) 로그인되지 않음",
       "signInHeld": "{{agent}}이(가) 관리",
       "wontStart": "시작되지 않음",
@@ -5476,7 +5473,17 @@
         "denied": "액세스가 허용되지 않았습니다.",
         "expired": "로그인이 만료되었습니다. 다시 시도하세요.",
         "couldNotSignIn": "로그인할 수 없습니다. 다시 시도하세요."
-      }
+      },
+      "trust": "신뢰할 수 있는 소프트웨어만 추가하세요.",
+      "argument": "인수",
+      "removeArgument": "인수 제거",
+      "header": "헤더",
+      "variable": "변수",
+      "removeHeaderRow": "헤더 제거",
+      "removeVariableRow": "변수 제거",
+      "emptyArgument": "비어 있음",
+      "valueNew": "새 값",
+      "valueSaved": "저장됨"
     },
     "handToBot": {
       "menu": "봇에게 넘기기…",
@@ -5693,6 +5700,9 @@
       },
       "webhooks": {
         "line": "모든 도구나 스크립트의 이벤트"
+      },
+      "composio": {
+        "keyOnHost": "{{host}}에 저장되며 봇은 볼 수 없습니다."
       }
     },
     "share": {
