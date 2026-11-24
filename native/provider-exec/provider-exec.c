@@ -251,6 +251,8 @@ enum { TREE_SWEEP_INTERVAL_MS = 100 };
 // signal, a gone or replaced subreaper, a foreign /proc), so once the CLI group is gone the stop
 // ends unverified at once rather than waiting out its deadlines.
 enum { TREE_UNPROVABLE = -2 };
+// reaper_start before it is known: never provable, or not read yet (a startup read failed).
+enum { REAPER_UNPROVEN = -1, REAPER_START_UNREAD = -2 };
 // Inherited by every tool the CLI starts, so one reparented to launchd is still found on macOS.
 #define TREE_TAG_NAME "ORCA_PROVIDER_TREE"
 
@@ -473,8 +475,9 @@ static int procfs_in_own_namespace(void) {
             break;
         }
     }
+    int failed = ferror(status);
     fclose(status);
-    return own;
+    return failed ? -1 : own;
 }
 
 // hidepid lets /proc omit or hide processes, a member or its parent among them, so on such a mount
@@ -818,9 +821,17 @@ static int sweep_once(struct watcher *w, int signal_number) {
     }
     int hidden_before = procfs_hides_processes();
     struct pollfd anchor = {.fd = w->reaper_fd, .events = POLLIN};
-    if (w->reaper_fd < 0 || w->reaper_start < 0 || poll(&anchor, 1, 0) != 0) {
+    if (w->reaper_fd < 0 || w->reaper_start == REAPER_UNPROVEN || poll(&anchor, 1, 0) != 0) {
         // The subreaper exited (or its pidfd is unusable), so its PID anchors nothing.
         return TREE_UNPROVABLE;
+    }
+    if (w->reaper_start == REAPER_START_UNREAD) {
+        // Its pidfd shows it is still that process, so its row read now is its own.
+        struct proc_row reaper_row;
+        if (read_row(w->reaper, &reaper_row) != 1) {
+            return -1;
+        }
+        w->reaper_start = reaper_row.start;
     }
 #else
     if (proc_signal_with_audittoken == NULL) {
@@ -1536,16 +1547,19 @@ int main(int argc, char *argv[]) {
     }
     watcher_gone_fd = watcher_alive[0];
     // A /proc from another PID namespace names other processes, so no tree is anchored on it.
-    struct proc_row reaper_row;
     // The pidfd, taken while this pid is certainly itself, turns readable once it exits.
+    watcher.reaper = getpid();
+    watcher.reaper_start = REAPER_UNPROVEN;
     watcher.reaper_fd = (int)syscall(SYS_pidfd_open, getpid(), 0);
-    if (watcher.reaper_fd >= 0 && set_cloexec(watcher.reaper_fd, 1) == 0 &&
-            procfs_in_own_namespace() == 1 && read_row(getpid(), &reaper_row) == 1) {
-        watcher.reaper = reaper_row.pid;
-        watcher.reaper_start = reaper_row.start;
-    } else {
-        watcher.reaper = getpid();
-        watcher.reaper_start = -1;
+    if (watcher.reaper_fd >= 0 && set_cloexec(watcher.reaper_fd, 1) == 0) {
+        // A read that fails now is retried on the first sweep; only a foreign /proc is lasting.
+        struct proc_row reaper_row;
+        int own = procfs_in_own_namespace();
+        if (own == 1 && read_row(getpid(), &reaper_row) == 1) {
+            watcher.reaper_start = reaper_row.start;
+        } else if (own != 0) {
+            watcher.reaper_start = REAPER_START_UNREAD;
+        }
     }
 #endif
     // Blocked across fork so a stop signal lands either before it (default action, nothing started)
