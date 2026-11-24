@@ -7,6 +7,7 @@ import {
   openDesktopStructuredSession,
   structuredSessionOpenFeedbackText
 } from './activate-ai-vault-structured-session'
+import { showChatOpenUnavailable } from './chat-open-failure-toast'
 import type { StructuredSessionOpenFeedback } from './activate-ai-vault-structured-session'
 import { useAppStore } from '@/store/index'
 import {
@@ -224,19 +225,13 @@ export async function openOrchestrationCrewAgent(
   const feedback: StructuredSessionOpenFeedback =
     target?.kind === 'chat'
       ? {
-          unavailable: () =>
-            unavailable(
-              translate(
-                'components.orchestrationCrew.chatUnavailable',
-                'This host cannot open the chat. Try again.'
-              )
-            ),
+          unavailable: (_agent, context) => showChatOpenUnavailable(context),
           gone: () => unavailable(structuredSessionOpenFeedbackText.gone()),
           hostCannotOpen: () => unavailable(structuredSessionOpenFeedbackText.hostCannotOpen()),
           notLocated: () => unavailable(structuredSessionOpenFeedbackText.notLocated())
         }
       : {
-          unavailable: () => unavailable(structuredSessionOpenFeedbackText.unavailable()),
+          unavailable: (_agent, context) => showChatOpenUnavailable(context),
           hostCannotOpen: () => unavailable(structuredSessionOpenFeedbackText.hostCannotOpen()),
           gone: () => unavailable(structuredSessionOpenFeedbackText.gone()),
           notLocated: () => unavailable(structuredSessionOpenFeedbackText.notLocated()),

@@ -2027,12 +2027,16 @@
         }
       },
       "activateAiVaultStructuredSession": {
-        "unavailable": "Структурированная сессия агента пока недоступна. Повторите попытку чуть позже.",
         "gone": "Этого чата больше нет на этом компьютере, поэтому открыть его здесь нельзя.",
         "hostCannotOpen": "Этот чат нельзя открыть повторно до обновления Orca.",
         "worktreeDeleted": "Рабочее дерево удалено.",
         "projectRemoved": "Проект удалён из Orca.",
-        "folderWorkspaceRemoved": "Рабочее пространство папки удалено."
+        "folderWorkspaceRemoved": "Рабочее пространство папки удалено.",
+        "chatStillStarting": "Чат ещё запускается. Повторите чуть позже.",
+        "chatOpenFailed": "Не удалось открыть чат.",
+        "chatOpenRetry": "Повторить",
+        "chatOpenShowDetails": "Показать подробности",
+        "chatOpenHideDetails": "Скрыть подробности"
       },
       "ephemeralVmWorktreeCreation": {
         "sparseCheckoutUnsupported": "Рецепты с подготовкой корня проекта не поддерживают выборочную выгрузку."

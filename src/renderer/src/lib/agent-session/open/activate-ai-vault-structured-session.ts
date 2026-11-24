@@ -23,9 +23,11 @@ import type {
   StructuredSessionOpenDeps
 } from '../../../../../shared/agent-session/view/open-structured-agent-session'
 import type { RuntimeClientTarget } from '../../../../../shared/remote-runtime/host-catalog/runtime-client-target'
+import { nativeChatRestartStillStarting } from '@/components/native-chat-recovery/offers/native-chat-restart-runtimes'
+import { showChatOpenUnavailable, type ChatOpenUnavailable } from './chat-open-failure-toast'
 
 type StructuredSessionActivationDeps = StructuredSessionOpenAdapterDeps & {
-  unavailable: (agent?: string) => void
+  unavailable: (agent?: string, context?: ChatOpenUnavailable) => void
   gone: (agent?: string) => void
   hostCannotOpen: (agent?: string) => void
 }
@@ -39,11 +41,6 @@ export type StructuredSessionOpenFeedback = Pick<
 
 /** The open remedies' words, so labelled opens (the orchestration panel) say the same thing. */
 export const structuredSessionOpenFeedbackText = {
-  unavailable: () =>
-    translate(
-      'auto.lib.activateAiVaultStructuredSession.unavailable',
-      'The structured agent session is not available yet. Retry in a moment.'
-    ),
   gone: () =>
     translate(
       'auto.lib.activateAiVaultStructuredSession.gone',
@@ -68,7 +65,7 @@ export const structuredSessionOpenFeedbackText = {
 }
 
 export const structuredSessionOpenFeedback: StructuredSessionOpenFeedback = {
-  unavailable: () => toast.error(structuredSessionOpenFeedbackText.unavailable()),
+  unavailable: (_agent, context) => showChatOpenUnavailable(context),
   gone: () => toast.error(structuredSessionOpenFeedbackText.gone()),
   hostCannotOpen: () => toast.error(structuredSessionOpenFeedbackText.hostCannotOpen())
 }
@@ -105,18 +102,33 @@ export function openDesktopStructuredSession(
 ): Promise<StructuredSessionOpenResult> {
   // Read when the open starts: the selection may move before it settles.
   const pairedHostId = openingPairedHostId(source, host)
+  const retry = (): void => {
+    void openDesktopStructuredSession(source, host, deps, locate, feedback).catch(() => {
+      // The retried open reports its own outcome; a thrown admission has nothing to retry.
+    })
+  }
   return openDesktopStructuredSessionInteraction(source, {
     target: host,
     deps,
     locate,
-    present: (result) =>
+    present: (result, owner) =>
       presentDesktopStructuredSession(
         result,
         source,
         feedback ?? deps ?? structuredSessionOpenFeedback,
-        pairedHostId
+        pairedHostId,
+        { owner, retry }
       )
   })
+}
+
+/** The chat an open is for, when the source names one before the host answers. */
+function openingSessionId(source: StructuredSessionOpenSource): string | undefined {
+  return source.kind === 'history'
+    ? source.structuredSession.sessionId
+    : source.kind === 'notification'
+      ? source.sessionId
+      : (source.party.orcaSessionId ?? source.fallback?.sessionId)
 }
 
 /** The host an open targets, so its same-id workspace is selected, never a twin on another host. */
@@ -165,7 +177,8 @@ function presentDesktopStructuredSession(
   result: StructuredSessionOpenResult,
   source: StructuredSessionOpenSource,
   deps: StructuredSessionOpenFeedback,
-  pairedHostId: ExecutionHostId | null
+  pairedHostId: ExecutionHostId | null,
+  opening: { owner: RuntimeClientTarget; retry: () => void }
 ): void {
   if (result.kind === 'opened') {
     const workspace = result.target.worktreeId
@@ -226,7 +239,13 @@ function presentDesktopStructuredSession(
         toast.error(structuredSessionOpenFeedbackText.notLocated(agent))
       }
     } else {
-      deps.unavailable(agent)
+      const sessionId = openingSessionId(source)
+      const { reason, code, detail } = result.failure
+      deps.unavailable(agent, {
+        starting: !!sessionId && nativeChatRestartStillStarting(opening.owner, sessionId),
+        detail: [reason, code, detail].filter(Boolean).join(' · '),
+        retry: opening.retry
+      })
     }
   }
 }

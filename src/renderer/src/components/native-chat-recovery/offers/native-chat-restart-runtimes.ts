@@ -7,6 +7,7 @@ import {
   type NativeChatRestartStore
 } from './native-chat-restart-runtime-store'
 import { localNativeChatRestartStore } from './native-chat-resume-on-restart-store'
+import { resumeRunView } from '../runs/native-chat-resume-run-view'
 
 const stores = new Map<string, NativeChatRestartStore>()
 const listeners = new Set<() => void>()
@@ -31,6 +32,22 @@ export function useNativeChatTargetRestartResuming(target: RuntimeClientTarget) 
     store?.getNativeChatRestartResuming ?? emptySnapshot,
     emptySnapshot
   )
+}
+
+/** Whether this chat is still queued or starting in its host's resume run, as the status bar's
+ *  "Resuming agents" counts it. */
+export function nativeChatRestartStillStarting(
+  target: RuntimeClientTarget,
+  sessionId: string
+): boolean {
+  const store =
+    target.kind === 'local' ? localNativeChatRestartStore : stores.get(target.environmentId)
+  const run = store?.getNativeChatRestartRun()
+  if (!run?.inFlight || !run.entries.some((entry) => entry.candidate.sessionId === sessionId)) {
+    return false
+  }
+  const view = resumeRunView(run, [], () => undefined, 'all')
+  return view.statusBySession.get(sessionId)?.kind === 'in-flight'
 }
 
 export function useNativeChatRestartRuntimes() {

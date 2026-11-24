@@ -1694,12 +1694,16 @@
         "sparseCheckoutUnsupported": "Les recettes à racine provisionnée ne prennent pas en charge le sparse checkout."
       },
       "activateAiVaultStructuredSession": {
-        "unavailable": "La session d'agent structuré n'est pas encore disponible. Réessayez dans un instant.",
         "gone": "Ce chat n'est plus sur cet hôte, il ne peut donc pas être rouvert ici.",
         "hostCannotOpen": "Ce chat ne peut pas être rouvert tant qu'Orca n'est pas mis à jour.",
         "worktreeDeleted": "Le worktree a été supprimé.",
         "projectRemoved": "Le projet a été retiré d’Orca.",
-        "folderWorkspaceRemoved": "L’espace de travail de type dossier a été retiré."
+        "folderWorkspaceRemoved": "L’espace de travail de type dossier a été retiré.",
+        "chatStillStarting": "Le chat démarre encore. Réessayez bientôt.",
+        "chatOpenFailed": "Impossible d'ouvrir ce chat.",
+        "chatOpenRetry": "Réessayer",
+        "chatOpenShowDetails": "Afficher les détails",
+        "chatOpenHideDetails": "Masquer les détails"
       },
       "worktreeJumpNavigation": {
         "filteredNotice": "Cet arbre de travail est masqué par les filtres de la barre latérale. L'espace de travail a été ouvert, mais il n'est pas affiché dans Spaces."
