@@ -32,7 +32,10 @@ type Told = { turnId: number; said: string; at: number; steps?: ConnectorTurnAct
 
 function stepsOf(list: NativeChatTaskList | null): ConnectorTurnActivityStep[] | undefined {
   const steps = list?.tasks
-    .filter((task): task is typeof task & { status: ConnectorTurnActivityStep['status'] } => task.status !== 'cancelled')
+    .filter(
+      (task): task is typeof task & { status: ConnectorTurnActivityStep['status'] } =>
+        task.status !== 'cancelled'
+    )
     .slice(0, CONNECTOR_TURN_ACTIVITY_LIMITS.maxActivitySteps)
     .map((task) => ({ title: connectorTurnActivityStepTitle(task.content), status: task.status }))
   return steps?.length ? steps : undefined
