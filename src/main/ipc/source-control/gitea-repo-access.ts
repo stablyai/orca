@@ -1,5 +1,8 @@
 import { resolve } from 'node:path'
-import { getRepoExecutionHostId } from '../../../shared/execution-host/execution-host'
+import {
+  getRepoExecutionHostId,
+  getRepoRoutingConnectionId
+} from '../../../shared/execution-host/execution-host'
 import type { TaskSourceContext } from '../../../shared/work-items/task-source-context'
 import type { Repo } from '../../../shared/repository/repo-types'
 import type { Store } from '../../persistence/loading-store/store'
@@ -60,7 +63,7 @@ export function giteaRepoTarget(args: GiteaRepoSelectorArgs, store: Store): Gite
   const repo = assertRegisteredGiteaRepo(args, store)
   return {
     repoPath: repo.path,
-    connectionId: repo.connectionId ?? null,
+    connectionId: getRepoRoutingConnectionId(repo),
     localGitOptions: wslGitOptions(store, repo)
   }
 }

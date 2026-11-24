@@ -4651,7 +4651,15 @@
           "linearViewRestoreFailed": "Failed to restore saved Linear view."
         },
         "shownCount_one": "{{count}} shown",
-        "giteaSourceLabel": "Gitea"
+        "giteaSourceLabel": "Gitea",
+        "giteaEmptyNoProjects": "No projects selected",
+        "giteaEmptyTitle": "No Gitea items",
+        "giteaEmptyNoProjectsDescription": "Select a Gitea-hosted project to see its issues and pull requests.",
+        "giteaEmptyDescription": "Nothing matches this filter in the selected projects.",
+        "giteaTypePr": "PR",
+        "startWorkspaceFromPr": "Start workspace from PR {{number}}",
+        "openInGitea": "Open in Gitea",
+        "giteaLoadFailed": "Could not load Gitea work items. Refresh to try again."
       },
       "Terminal": {
         "73768427cf": "Close",
@@ -15296,18 +15304,13 @@
           "integration": {
             "card": {
               "d4e5f6a7b8": "Connection failed.",
-              "069f07af1c": "Connected servers: {{value0}}",
-              "31b7f980fb": "Checking Gitea access before showing setup actions.",
-              "5a8cd33300": "Browse Gitea issues and pull requests, create issues, and start work.",
               "bdcb1e773f": "Add server",
               "9ce5f12a0d": "Connect Gitea",
               "3852b1fd6f": "Verified",
               "09bde44485": "Testing...",
               "2bf28d5929": "Test",
               "d0b31b4845": "Disconnect {{value0}}",
-              "f47924e554": "Each server stores one token locally, encrypted when runtime storage supports it.",
-              "c043731756": "Connect a self-hosted Gitea server with its URL and a personal access token. Credentials are stored locally and encrypted when local runtime storage supports it.",
-              "9a555db81e": "Re-check"
+              "f47924e554": "Each server stores one token locally, encrypted when runtime storage supports it."
             }
           }
         }
@@ -21199,12 +21202,8 @@
         "9986e0e679": "Merged",
         "747423c0f8": "Draft",
         "980519b0c8": "Open",
-        "0285721e62": "Failed to load Gitea tasks.",
         "5997067bee": "New issue",
-        "e3db16e7c7": "Refresh Gitea tasks",
-        "34cd2d1024": "Select a Gitea-hosted project to see its issues and pull requests.",
-        "6e1e6691d7": "Loading Gitea tasks…",
-        "00f67933b5": "No matching issues or pull requests."
+        "e3db16e7c7": "Refresh Gitea tasks"
       }
     },
     "i18n": {

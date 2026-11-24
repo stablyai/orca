@@ -13,7 +13,7 @@ import {
 } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 
 type GiteaConnectDialogProps = {
   open: boolean
@@ -30,6 +30,7 @@ export function GiteaConnectDialog({
   onOpenChange,
   onConnected
 }: GiteaConnectDialogProps): React.JSX.Element {
+  const t = useTranslate()
   const giteaConnect = useAppStore((s) => s.giteaConnect)
   const mountedRef = useMountedRef()
   const baseUrlId = useId()
@@ -93,10 +94,10 @@ export function GiteaConnectDialog({
       <DialogContent overlayClassName="z-[110]" className="z-[120] sm:max-w-md">
         <DialogHeader>
           <DialogTitle>
-            {translate('auto.components.gitea.connect.dialog.d2823a1de0', 'Connect Gitea server')}
+            {t('auto.components.gitea.connect.dialog.d2823a1de0', 'Connect Gitea server')}
           </DialogTitle>
           <DialogDescription>
-            {translate(
+            {t(
               'auto.components.gitea.connect.dialog.d076a10ae3',
               'Use a Gitea server URL and a personal access token to browse issues and review pull requests.'
             )}
@@ -112,12 +113,12 @@ export function GiteaConnectDialog({
           <div className="flex flex-col gap-3">
             <div className="space-y-2">
               <Label htmlFor={baseUrlId}>
-                {translate('auto.components.gitea.connect.dialog.690c1da1bb', 'Gitea server URL')}
+                {t('auto.components.gitea.connect.dialog.690c1da1bb', 'Gitea server URL')}
               </Label>
               <Input
                 id={baseUrlId}
                 autoFocus
-                placeholder={translate(
+                placeholder={t(
                   'auto.components.gitea.connect.dialog.83b75fa9b7',
                   'https://gitea.example.com'
                 )}
@@ -131,12 +132,12 @@ export function GiteaConnectDialog({
             </div>
             <div className="space-y-2">
               <Label htmlFor={tokenId}>
-                {translate('auto.components.gitea.connect.dialog.062ae1ea05', 'Access token')}
+                {t('auto.components.gitea.connect.dialog.062ae1ea05', 'Access token')}
               </Label>
               <Input
                 id={tokenId}
                 type="password"
-                placeholder={translate(
+                placeholder={t(
                   'auto.components.gitea.connect.dialog.79c04f358b',
                   'Gitea personal access token'
                 )}
@@ -156,14 +157,14 @@ export function GiteaConnectDialog({
               </p>
             ) : null}
             <p className="text-xs text-muted-foreground">
-              {translate(
+              {t(
                 'auto.components.gitea.connect.dialog.3ecb3e1153',
                 'Create a token in Gitea Settings → Applications with read:user, write:issue, and write:repository scopes. Limit access to the repositories you need.'
               )}
             </p>
             <p className="flex items-center gap-1.5 text-[11px] text-muted-foreground/70">
               <Lock className="size-3 shrink-0" />
-              {translate(
+              {t(
                 'auto.components.gitea.connect.dialog.4d1f2d9f21',
                 'Your token is stored locally and encrypted when local runtime storage supports it.'
               )}
@@ -176,16 +177,16 @@ export function GiteaConnectDialog({
               onClick={() => onOpenChange(false)}
               disabled={connectState === 'connecting'}
             >
-              {translate('auto.components.gitea.connect.dialog.7acfed1da5', 'Cancel')}
+              {t('auto.components.gitea.connect.dialog.7acfed1da5', 'Cancel')}
             </Button>
             <Button type="submit" disabled={!canSubmit}>
               {connectState === 'connecting' ? (
                 <>
                   <LoaderCircle className="size-4 animate-spin" />
-                  {translate('auto.components.gitea.connect.dialog.f5d526570f', 'Verifying…')}
+                  {t('auto.components.gitea.connect.dialog.f5d526570f', 'Verifying…')}
                 </>
               ) : (
-                translate('auto.components.gitea.connect.dialog.f68c3d011f', 'Connect')
+                t('auto.components.gitea.connect.dialog.f68c3d011f', 'Connect')
               )}
             </Button>
           </DialogFooter>

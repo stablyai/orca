@@ -25,48 +25,24 @@ export function GiteaConnectedServers({
   const servers = giteaStatus?.servers ?? []
 
   const handleDisconnect = async (serverId: string): Promise<void> => {
-    try {
-      await giteaDisconnect(serverId)
-      onChanged()
-    } finally {
-      // Clear results even if disconnect rejects, so the rows are not left stale.
-      if (mountedRef.current) {
-        setTestResultByServer({})
-      }
+    // A rejected disconnect still clears stale test results.
+    await giteaDisconnect(serverId).catch(() => {})
+    onChanged()
+    if (mountedRef.current) {
+      setTestResultByServer({})
     }
   }
 
   const handleTest = async (serverId: string): Promise<void> => {
     setTestingServerId(serverId)
-    setTestResultByServer(({ [serverId]: _dropped, ...rest }) => rest)
-    try {
-      const result = await giteaTestConnection(serverId)
-      if (mountedRef.current) {
-        setTestResultByServer((prev) => ({
-          ...prev,
-          [serverId]: result.ok ? { state: 'ok' } : { state: 'error', error: result.error }
-        }))
-      }
-    } catch (error) {
-      if (mountedRef.current) {
-        setTestResultByServer((prev) => ({
-          ...prev,
-          [serverId]: {
-            state: 'error',
-            error:
-              error instanceof Error
-                ? error.message
-                : t(
-                    'auto.components.settings.gitea.integration.card.d4e5f6a7b8',
-                    'Connection failed.'
-                  )
-          }
-        }))
-      }
-    } finally {
-      if (mountedRef.current) {
-        setTestingServerId(null)
-      }
+    setTestResultByServer((prev) => withoutServer(prev, serverId))
+    const result = await testServer(
+      () => giteaTestConnection(serverId),
+      t('auto.components.settings.gitea.integration.card.d4e5f6a7b8', 'Connection failed.')
+    )
+    if (mountedRef.current) {
+      setTestResultByServer((prev) => ({ ...prev, [serverId]: result }))
+      setTestingServerId(null)
     }
   }
 
@@ -148,4 +124,25 @@ export function GiteaConnectedServers({
       ) : null}
     </div>
   )
+}
+
+async function testServer(
+  run: () => Promise<{ ok: boolean; error?: string }>,
+  fallbackError: string
+): Promise<VerificationResult> {
+  try {
+    const result = await run()
+    return result.ok ? { state: 'ok' } : { state: 'error', error: result.error }
+  } catch (error) {
+    return { state: 'error', error: error instanceof Error ? error.message : fallbackError }
+  }
+}
+
+function withoutServer(
+  results: Record<string, VerificationResult>,
+  serverId: string
+): Record<string, VerificationResult> {
+  const next = { ...results }
+  delete next[serverId]
+  return next
 }

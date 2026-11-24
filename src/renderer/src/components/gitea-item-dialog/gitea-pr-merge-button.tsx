@@ -2,7 +2,7 @@ import { ChevronDown, LoaderCircle } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import type { GiteaMergeMethod } from '../../../../shared/gitea/gitea-types'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import { giteaStatusLabel } from './gitea-status-label'
 
 const MERGE_METHODS: GiteaMergeMethod[] = ['merge', 'squash', 'rebase']
@@ -18,6 +18,7 @@ export function GiteaPrMergeButton({
   merging,
   onMerge
 }: GiteaPrMergeButtonProps): React.JSX.Element {
+  const t = useTranslate()
   return (
     <div className="ml-auto">
       <Popover>
@@ -25,8 +26,8 @@ export function GiteaPrMergeButton({
           <Button size="sm" disabled={merging || mergeable === false}>
             {merging ? <LoaderCircle className="size-3.5 animate-spin" /> : null}
             {mergeable === false
-              ? translate('auto.components.gitea.pr.merge.button.2378ab4908', 'Conflicts')
-              : translate('auto.components.gitea.pr.merge.button.8e662b9b6b', 'Merge')}
+              ? t('auto.components.gitea.pr.merge.button.2378ab4908', 'Conflicts')
+              : t('auto.components.gitea.pr.merge.button.8e662b9b6b', 'Merge')}
             <ChevronDown className="size-3.5" />
           </Button>
         </PopoverTrigger>

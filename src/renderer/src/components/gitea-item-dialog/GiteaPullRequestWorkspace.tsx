@@ -1,4 +1,6 @@
+import { openAppHttpLink } from '@/lib/browser/navigation/app-http-link-open'
 import { useCallback, useState } from 'react'
+import { runGiteaMutation } from './gitea-mutation'
 import { ArrowRight, ExternalLink, GitPullRequest, LoaderCircle, Send, X } from 'lucide-react'
 import { giteaApiFor } from '@/runtime/repository-gitea/gitea-owner-api'
 import { toast } from 'sonner'
@@ -14,6 +16,7 @@ import type { Repo } from '../../../../shared/repository/repo-types'
 import type { GiteaWorkspaceSelection } from './GiteaIssueWorkspace'
 import { scoped } from './gitea-pr-request-scope'
 import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import { giteaStatusLabel } from './gitea-status-label'
 import { useGiteaPrResources } from './use-gitea-pr-resources'
 
@@ -34,6 +37,7 @@ function GiteaPullRequestWorkspaceContent({
   onUse,
   onClose
 }: GiteaPullRequestWorkspaceProps): React.JSX.Element {
+  const t = useTranslate()
   const settings = useAppStore((s) => s.settings)
   const isDark =
     settings?.theme === 'dark' ||
@@ -70,27 +74,22 @@ function GiteaPullRequestWorkspaceContent({
       return
     }
     setSubmitting(true)
-    try {
-      const result = await giteaApiFor(scope).addIssueComment(
-        scoped(scope, { number: item.number, body })
-      )
-      if (!result.ok) {
-        throw new Error(result.error)
-      }
-      setCommentDraft('')
-      setComments(await giteaApiFor(scope).issueComments(scoped(scope, { number: item.number })))
-    } catch (error) {
-      toast.error(
-        error instanceof Error
-          ? error.message
-          : translate(
-              'auto.components.GiteaPullRequestWorkspace.f5cf34ed40',
-              'Failed to add comment.'
-            )
-      )
-    } finally {
-      setSubmitting(false)
-    }
+    await runGiteaMutation(
+      async () => {
+        const result = await giteaApiFor(scope).addIssueComment(
+          scoped(scope, { number: item.number, body })
+        )
+        if (result.ok) {
+          setCommentDraft('')
+          setComments(
+            await giteaApiFor(scope).issueComments(scoped(scope, { number: item.number }))
+          )
+        }
+        return result
+      },
+      translate('auto.components.GiteaPullRequestWorkspace.f5cf34ed40', 'Failed to add comment.')
+    )
+    setSubmitting(false)
   }, [commentDraft, item, scope, submitting, setComments])
 
   const handleMerge = useCallback(
@@ -99,25 +98,16 @@ function GiteaPullRequestWorkspaceContent({
         return
       }
       setMerging(true)
-      try {
-        const result = await giteaApiFor(scope).prMerge(
-          scoped(scope, { number: item.number, method })
-        )
-        if (!result.ok) {
-          throw new Error(result.error)
-        }
+      const merged = await runGiteaMutation(
+        () => giteaApiFor(scope).prMerge(scoped(scope, { number: item.number, method })),
+        translate('auto.components.GiteaPullRequestWorkspace.d93415a77d', 'Failed to merge.')
+      )
+      setMerging(false)
+      if (merged) {
         toast.success(
           translate('auto.components.GiteaPullRequestWorkspace.22f9c29c9b', 'Pull request merged.')
         )
         setDetail((prev) => (prev ? { ...prev, state: 'merged', merged: true } : prev))
-      } catch (error) {
-        toast.error(
-          error instanceof Error
-            ? error.message
-            : translate('auto.components.GiteaPullRequestWorkspace.d93415a77d', 'Failed to merge.')
-        )
-      } finally {
-        setMerging(false)
       }
     },
     [item, merging, scope, setDetail]
@@ -128,29 +118,23 @@ function GiteaPullRequestWorkspaceContent({
       if (!scope || !item) {
         return false
       }
-      try {
-        const result = await giteaApiFor(scope).prAddReviewComment(
-          scoped(scope, { number: item.number, path, line, body })
+      return runGiteaMutation(
+        async () => {
+          const result = await giteaApiFor(scope).prAddReviewComment(
+            scoped(scope, { number: item.number, path, line, body })
+          )
+          if (result.ok) {
+            setReviewComments(
+              await giteaApiFor(scope).prReviewComments(scoped(scope, { number: item.number }))
+            )
+          }
+          return result
+        },
+        translate(
+          'auto.components.GiteaPullRequestWorkspace.c7c84081fc',
+          'Failed to add review comment.'
         )
-        if (!result.ok) {
-          throw new Error(result.error)
-        }
-        const refreshed = await giteaApiFor(scope).prReviewComments(
-          scoped(scope, { number: item.number })
-        )
-        setReviewComments(refreshed)
-        return true
-      } catch (error) {
-        toast.error(
-          error instanceof Error
-            ? error.message
-            : translate(
-                'auto.components.GiteaPullRequestWorkspace.c7c84081fc',
-                'Failed to add review comment.'
-              )
-        )
-        return false
-      }
+      )
     },
     [item, scope, setReviewComments]
   )
@@ -160,16 +144,16 @@ function GiteaPullRequestWorkspaceContent({
   const tabs: { id: Tab; label: string; count?: number }[] = [
     {
       id: 'conversation',
-      label: translate('auto.components.GiteaPullRequestWorkspace.f51240a59a', 'Conversation')
+      label: t('auto.components.GiteaPullRequestWorkspace.f51240a59a', 'Conversation')
     },
     {
       id: 'files',
-      label: translate('auto.components.GiteaPullRequestWorkspace.4f4abe43ab', 'Files'),
+      label: t('auto.components.GiteaPullRequestWorkspace.4f4abe43ab', 'Files'),
       count: files.length
     },
     {
       id: 'checks',
-      label: translate('auto.components.GiteaPullRequestWorkspace.95a6c97ba6', 'Checks'),
+      label: t('auto.components.GiteaPullRequestWorkspace.95a6c97ba6', 'Checks'),
       count: checks.length
     }
   ]
@@ -185,15 +169,12 @@ function GiteaPullRequestWorkspaceContent({
         <VisuallyHidden.Root asChild>
           <SheetTitle>
             {item?.title ??
-              translate(
-                'auto.components.GiteaPullRequestWorkspace.8e44409da0',
-                'Gitea pull request'
-              )}
+              t('auto.components.GiteaPullRequestWorkspace.8e44409da0', 'Gitea pull request')}
           </SheetTitle>
         </VisuallyHidden.Root>
         <VisuallyHidden.Root asChild>
           <SheetDescription>
-            {translate(
+            {t(
               'auto.components.GiteaPullRequestWorkspace.0a432f2c1a',
               'Review files, checks, and conversation, then merge or start work.'
             )}
@@ -209,10 +190,7 @@ function GiteaPullRequestWorkspaceContent({
                   size="icon-sm"
                   className="shrink-0"
                   onClick={onClose}
-                  aria-label={translate(
-                    'auto.components.GiteaPullRequestWorkspace.5fa5ec9fff',
-                    'Close'
-                  )}
+                  aria-label={t('auto.components.GiteaPullRequestWorkspace.5fa5ec9fff', 'Close')}
                 >
                   <X className="size-4" />
                 </Button>
@@ -221,18 +199,15 @@ function GiteaPullRequestWorkspaceContent({
                   className="shrink-0"
                   size="sm"
                 >
-                  {translate(
-                    'auto.components.GiteaPullRequestWorkspace.f88c7cf08c',
-                    'Start workspace'
-                  )}
+                  {t('auto.components.GiteaPullRequestWorkspace.f88c7cf08c', 'Start workspace')}
                   <ArrowRight className="size-4" />
                 </Button>
                 <Button
                   variant="ghost"
                   size="icon-sm"
                   className="shrink-0"
-                  onClick={() => window.api.shell.openUrl(item.url)}
-                  aria-label={translate(
+                  onClick={(event) => openAppHttpLink(item.url, { event })}
+                  aria-label={t(
                     'auto.components.GiteaPullRequestWorkspace.9813b44d73',
                     'Open in Gitea'
                   )}
@@ -320,7 +295,7 @@ function GiteaPullRequestWorkspaceContent({
                   <textarea
                     value={commentDraft}
                     onChange={(event) => setCommentDraft(event.target.value)}
-                    placeholder={translate(
+                    placeholder={t(
                       'auto.components.GiteaPullRequestWorkspace.ddc99ed766',
                       'Add a comment...'
                     )}
@@ -338,7 +313,7 @@ function GiteaPullRequestWorkspaceContent({
                     ) : (
                       <Send className="size-4" />
                     )}
-                    {translate('auto.components.GiteaPullRequestWorkspace.d646ddef48', 'Comment')}
+                    {t('auto.components.GiteaPullRequestWorkspace.d646ddef48', 'Comment')}
                   </Button>
                 </div>
               </div>

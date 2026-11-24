@@ -14699,18 +14699,13 @@
           "integration": {
             "card": {
               "d4e5f6a7b8": "Error de conexión.",
-              "069f07af1c": "Servidores conectados: {{value0}}",
-              "31b7f980fb": "Comprobando el acceso a Gitea antes de mostrar las opciones de configuración.",
-              "5a8cd33300": "Explora incidencias y pull requests de Gitea, crea incidencias y empieza a trabajar.",
               "bdcb1e773f": "Añadir servidor",
               "9ce5f12a0d": "Conectar Gitea",
               "3852b1fd6f": "Verificado",
               "09bde44485": "Probando...",
               "2bf28d5929": "Prueba",
               "d0b31b4845": "Desconectar {{value0}}",
-              "f47924e554": "Cada servidor guarda un token localmente, cifrado cuando el almacenamiento lo permite.",
-              "c043731756": "Conecta un servidor Gitea propio con su URL y un token de acceso personal. Las credenciales se guardan localmente y se cifran cuando el almacenamiento lo permite.",
-              "9a555db81e": "Volver a comprobar"
+              "f47924e554": "Cada servidor guarda un token localmente, cifrado cuando el almacenamiento lo permite."
             }
           }
         }
@@ -20722,12 +20717,8 @@
         "9986e0e679": "Mergeado",
         "747423c0f8": "Borrador",
         "980519b0c8": "Abierto",
-        "0285721e62": "No se pudieron cargar las tareas de Gitea.",
         "5997067bee": "Nueva incidencia",
-        "e3db16e7c7": "Actualizar tareas de Gitea",
-        "34cd2d1024": "Selecciona un proyecto alojado en Gitea para ver sus incidencias y pull requests.",
-        "6e1e6691d7": "Cargando tareas de Gitea…",
-        "00f67933b5": "No hay incidencias ni pull requests coincidentes."
+        "e3db16e7c7": "Actualizar tareas de Gitea"
       }
     },
     "i18n": {

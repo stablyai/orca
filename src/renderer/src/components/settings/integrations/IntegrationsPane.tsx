@@ -1,5 +1,7 @@
-import { AzureDevOpsIntegrationCard } from '../../integrations/source-control/token-source-control-integration-cards'
-import { GiteaIntegrationCard } from '../../integrations/source-control/gitea-integration-card'
+import {
+  AzureDevOpsIntegrationCard,
+  GiteaIntegrationCard
+} from '../../integrations/source-control/token-source-control-integration-cards'
 import { BitbucketIntegrationCard } from '../../integrations/source-control/bitbucket-integration-card'
 import {
   GitHubIntegrationCard,

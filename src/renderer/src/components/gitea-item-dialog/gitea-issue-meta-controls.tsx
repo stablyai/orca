@@ -1,14 +1,14 @@
 import { useAppStore } from '@/store'
 import { useState } from 'react'
+import { runGiteaMutation } from './gitea-mutation'
 import { Check, LoaderCircle, Save, Tag, UserPlus } from 'lucide-react'
-import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { cn } from '@/lib/class-names'
 import type { GiteaIssueUpdate, GiteaLabel, GiteaUser } from '../../../../shared/gitea/gitea-types'
 import type { GiteaIssueScope } from '@/store/slices/gitea/gitea'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 
 type GiteaIssueMetaControlsProps = {
   scope: GiteaIssueScope
@@ -33,6 +33,7 @@ export function GiteaIssueMetaControls({
   repoAssignees,
   onChanged
 }: GiteaIssueMetaControlsProps): React.JSX.Element {
+  const t = useTranslate()
   const [titleDraft, setTitleDraft] = useState(title)
   const [pending, setPending] = useState<string | null>(null)
 
@@ -41,24 +42,17 @@ export function GiteaIssueMetaControls({
       return
     }
     setPending(field)
-    try {
-      const result = await useAppStore.getState().updateGiteaIssue(scope, issueNumber, updates)
-      if (!result.ok) {
-        throw new Error(result.error)
-      }
-      await onChanged()
-    } catch (error) {
-      toast.error(
-        error instanceof Error
-          ? error.message
-          : translate(
-              'auto.components.gitea.issue.meta.controls.ba343731c0',
-              'Failed to update issue.'
-            )
-      )
-    } finally {
-      setPending(null)
-    }
+    await runGiteaMutation(
+      async () => {
+        const result = await useAppStore.getState().updateGiteaIssue(scope, issueNumber, updates)
+        if (result.ok) {
+          await onChanged()
+        }
+        return result
+      },
+      t('auto.components.gitea.issue.meta.controls.ba343731c0', 'Failed to update issue.')
+    )
+    setPending(null)
   }
 
   const selectedLabelNames = new Set(labelNames)
@@ -103,7 +97,7 @@ export function GiteaIssueMetaControls({
             }
           }}
           className="h-8"
-          aria-label={translate('auto.components.gitea.issue.meta.controls.63f46a8d86', 'Title')}
+          aria-label={t('auto.components.gitea.issue.meta.controls.63f46a8d86', 'Title')}
         />
         <Button
           size="sm"
@@ -127,7 +121,7 @@ export function GiteaIssueMetaControls({
             ) : (
               <Tag className="size-3.5" />
             )}
-            {translate('auto.components.gitea.issue.meta.controls.8cc407607b', 'Labels')}
+            {t('auto.components.gitea.issue.meta.controls.8cc407607b', 'Labels')}
             {labelNames.length > 0 ? (
               <span className="text-muted-foreground">{labelNames.length}</span>
             ) : null}
@@ -138,7 +132,7 @@ export function GiteaIssueMetaControls({
             <div className="popover-scroll-content scrollbar-sleek p-1">
               {repoLabels.length === 0 ? (
                 <p className="px-2 py-1.5 text-xs text-muted-foreground">
-                  {translate(
+                  {t(
                     'auto.components.gitea.issue.meta.controls.11fac85e07',
                     'No labels in this repo.'
                   )}
@@ -179,7 +173,7 @@ export function GiteaIssueMetaControls({
             ) : (
               <UserPlus className="size-3.5" />
             )}
-            {translate('auto.components.gitea.issue.meta.controls.401f7dc7a2', 'Assignees')}
+            {t('auto.components.gitea.issue.meta.controls.401f7dc7a2', 'Assignees')}
             {assigneeLogins.length > 0 ? (
               <span className="text-muted-foreground">{assigneeLogins.length}</span>
             ) : null}
@@ -190,7 +184,7 @@ export function GiteaIssueMetaControls({
             <div className="popover-scroll-content scrollbar-sleek p-1">
               {repoAssignees.length === 0 ? (
                 <p className="px-2 py-1.5 text-xs text-muted-foreground">
-                  {translate(
+                  {t(
                     'auto.components.gitea.issue.meta.controls.3cd6f5acbd',
                     'No assignable users.'
                   )}

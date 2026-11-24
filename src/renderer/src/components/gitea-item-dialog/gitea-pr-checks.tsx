@@ -1,7 +1,8 @@
+import { openAppHttpLink } from '@/lib/browser/navigation/app-http-link-open'
 import { CheckCircle2, CircleAlert, CircleDot, CircleX, ExternalLink } from 'lucide-react'
 import { cn } from '@/lib/class-names'
 import type { GiteaPRCheck } from '../../../../shared/gitea/gitea-types'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import { giteaStatusLabel } from './gitea-status-label'
 
 function stateIcon(state: GiteaPRCheck['state']): React.JSX.Element {
@@ -19,13 +20,11 @@ function stateIcon(state: GiteaPRCheck['state']): React.JSX.Element {
 }
 
 export function GiteaPrChecks({ checks }: { checks: GiteaPRCheck[] }): React.JSX.Element {
+  const t = useTranslate()
   if (checks.length === 0) {
     return (
       <p className="px-4 py-6 text-sm text-muted-foreground">
-        {translate(
-          'auto.components.gitea.pr.checks.bed82a55cd',
-          'No status checks reported for this PR.'
-        )}
+        {t('auto.components.gitea.pr.checks.bed82a55cd', 'No status checks reported for this PR.')}
       </p>
     )
   }
@@ -51,11 +50,8 @@ export function GiteaPrChecks({ checks }: { checks: GiteaPRCheck[] }): React.JSX
           {check.targetUrl ? (
             <button
               type="button"
-              onClick={() => check.targetUrl && window.api.shell.openUrl(check.targetUrl)}
-              aria-label={translate(
-                'auto.components.gitea.pr.checks.448c6113a4',
-                'Open check details'
-              )}
+              onClick={(event) => check.targetUrl && openAppHttpLink(check.targetUrl, { event })}
+              aria-label={t('auto.components.gitea.pr.checks.448c6113a4', 'Open check details')}
               className="shrink-0 rounded p-1 text-muted-foreground/60 transition-colors hover:text-foreground"
             >
               <ExternalLink className="size-3.5" />

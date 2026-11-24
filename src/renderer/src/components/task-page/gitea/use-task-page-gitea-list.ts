@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useEffectEvent, useMemo, useRef, useState } from 'react'
 import type { TaskPageProviderMetadataModel } from '../use-task-page-provider-metadata'
 import { translate } from '@/i18n/i18n'
 import { readIpcErrorDetail } from '@/runtime/errors/ipc-error'
@@ -63,6 +63,35 @@ export function useTaskPageGiteaList<Model extends GiteaListInput>(model: Model)
   // A nonce bump for the same query is a user Refresh, which rechecks unreachable hosts too.
   const lastRefreshRef = useRef({ nonce: giteaRefreshNonce, query: '' })
 
+  // Reads the latest selection and host state without re-running the load on every render.
+  const loadList = useEffectEvent((userRefresh: boolean, isStale: () => boolean) => {
+    if (selectedRepos.length === 0) {
+      setGiteaItems([])
+      setGiteaListQueryKey(currentListQueryKey)
+      setGiteaLoading(false)
+      setGiteaError(null)
+      return
+    }
+    setGiteaLoading(true)
+    setGiteaError(null)
+    recheckUnreachableTaskSourceHosts(userRefresh ? { force: true } : undefined)
+    const filter = giteaFilter === 'all' ? undefined : giteaFilter
+    void loadGiteaTaskRows(selectedRepos, filter, unreachableTaskSourceHostIds, isStale)
+      .then(({ rows, error }) => {
+        if (isStale()) {
+          return
+        }
+        setGiteaItems(rows)
+        setGiteaListQueryKey(currentListQueryKey)
+        setGiteaError(error)
+      })
+      .finally(() => {
+        if (!isStale()) {
+          setGiteaLoading(false)
+        }
+      })
+  })
+
   useEffect(() => {
     const userRefresh =
       giteaRefreshNonce !== lastRefreshRef.current.nonce &&
@@ -71,76 +100,12 @@ export function useTaskPageGiteaList<Model extends GiteaListInput>(model: Model)
     if (taskSource !== 'gitea') {
       return
     }
-    if (selectedRepos.length === 0) {
-      setGiteaItems([])
-      setGiteaListQueryKey(currentListQueryKey)
-      setGiteaLoading(false)
-      setGiteaError(null)
-      return
-    }
     let stale = false
-    setGiteaLoading(true)
-    setGiteaError(null)
-    recheckUnreachableTaskSourceHosts(userRefresh ? { force: true } : undefined)
-    const isOnUnreachableHost = (repo: Repo): boolean => {
-      const hostId = getTaskPageRepoSourceContext(repo, 'gitea')?.hostId
-      return hostId !== undefined && unreachableTaskSourceHostIds.has(hostId)
-    }
-    void mapSettledWithConcurrency(selectedRepos, GITEA_TASK_FETCH_CONCURRENCY, (repo) => {
-      // A stale selection's results are discarded below, so skip repos not yet started.
-      if (stale) {
-        return Promise.resolve({ repo, items: [] as GiteaWorkItem[] })
-      }
-      if (isOnUnreachableHost(repo)) {
-        return Promise.reject(knownUnreachableRuntimeHostError(GITEA_WEB_RPC_METHODS.listWorkItems))
-      }
-      const scope = giteaTaskRepoScope(repo)
-      return giteaApiFor(scope)
-        .listWorkItems({
-          ...scope,
-          filter: giteaFilter === 'all' ? undefined : giteaFilter,
-          limit: GITEA_TASK_LIST_LIMIT
-        })
-        .then((items) => ({ repo, items }))
-    })
-      .then((results) => {
-        if (stale) {
-          return
-        }
-        const merged: GiteaTaskRow[] = []
-        const errors: string[] = []
-        for (const result of results) {
-          if (result.status !== 'fulfilled') {
-            errors.push(
-              readIpcErrorDetail(result.reason) ??
-                translate(
-                  'auto.components.TaskPage.giteaLoadFailed',
-                  'Could not load Gitea work items. Refresh to try again.'
-                )
-            )
-            continue
-          }
-          const repoHostId = getRepoExecutionHostId(result.value.repo)
-          for (const item of result.value.items) {
-            merged.push({ ...item, repoId: result.value.repo.id, repoHostId })
-          }
-        }
-        merged.sort((a, b) => b.updatedAt.localeCompare(a.updatedAt))
-        setGiteaItems(merged)
-        setGiteaListQueryKey(currentListQueryKey)
-        // Non-Gitea repos in a mixed selection list nothing, so only an empty result surfaces errors.
-        setGiteaError(errors.length > 0 && merged.length === 0 ? errors[0] : null)
-      })
-      .finally(() => {
-        if (!stale) {
-          setGiteaLoading(false)
-        }
-      })
+    loadList(userRefresh, () => stale)
     return () => {
       stale = true
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- selectedReposKey covers every selectedRepos field read above; the array ref changes on every parent render.
-  }, [taskSource, giteaFilter, giteaRefreshNonce, selectedReposKey, unreachableTaskSourceHostKey])
+  }, [taskSource, giteaRefreshNonce, currentListQueryKey, unreachableTaskSourceHostKey])
 
   const listIsCurrent = giteaListQueryKey === currentListQueryKey
   const displayedGiteaItems = useMemo(() => {
@@ -174,3 +139,54 @@ export function useTaskPageGiteaList<Model extends GiteaListInput>(model: Model)
 export type TaskPageGiteaListModel = ReturnType<
   typeof useTaskPageGiteaList<TaskPageProviderMetadataModel>
 >
+
+/** Reads every repo on its owning host; a fetch error surfaces only when no repo listed anything. */
+async function loadGiteaTaskRows(
+  repos: readonly Repo[],
+  filter: GiteaWorkItemFilter | undefined,
+  unreachableHostIds: ReadonlySet<TaskSourceContext['hostId']>,
+  isStale: () => boolean
+): Promise<{ rows: GiteaTaskRow[]; error: string | null }> {
+  const results = await mapSettledWithConcurrency(
+    repos,
+    GITEA_TASK_FETCH_CONCURRENCY,
+    async (repo): Promise<{ repo: Repo; items: GiteaWorkItem[] }> => {
+      // A stale selection's results are discarded, so skip repos not yet started.
+      if (isStale()) {
+        return { repo, items: [] }
+      }
+      const hostId = getTaskPageRepoSourceContext(repo, 'gitea')?.hostId
+      if (hostId !== undefined && unreachableHostIds.has(hostId)) {
+        throw knownUnreachableRuntimeHostError(GITEA_WEB_RPC_METHODS.listWorkItems)
+      }
+      const scope = giteaTaskRepoScope(repo)
+      const items = await giteaApiFor(scope).listWorkItems({
+        ...scope,
+        filter,
+        limit: GITEA_TASK_LIST_LIMIT
+      })
+      return { repo, items }
+    }
+  )
+  const rows: GiteaTaskRow[] = []
+  const errors: string[] = []
+  for (const result of results) {
+    if (result.status !== 'fulfilled') {
+      errors.push(
+        readIpcErrorDetail(result.reason) ??
+          translate(
+            'auto.components.TaskPage.giteaLoadFailed',
+            'Could not load Gitea work items. Refresh to try again.'
+          )
+      )
+      continue
+    }
+    const repoHostId = getRepoExecutionHostId(result.value.repo)
+    for (const item of result.value.items) {
+      rows.push({ ...item, repoId: result.value.repo.id, repoHostId })
+    }
+  }
+  rows.sort((a, b) => b.updatedAt.localeCompare(a.updatedAt))
+  // Non-Gitea repos in a mixed selection list nothing, so only an empty result surfaces errors.
+  return { rows, error: errors.length > 0 && rows.length === 0 ? errors[0] : null }
+}

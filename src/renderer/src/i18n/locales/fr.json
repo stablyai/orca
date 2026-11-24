@@ -15071,18 +15071,13 @@
           "integration": {
             "card": {
               "d4e5f6a7b8": "Échec de la connexion.",
-              "069f07af1c": "Serveurs connectés : {{value0}}",
-              "31b7f980fb": "Vérification de l’accès à Gitea avant d’afficher les options de configuration.",
-              "5a8cd33300": "Parcourez les tickets et pull requests Gitea, créez des tickets et commencez à travailler.",
               "bdcb1e773f": "Ajouter un serveur",
               "9ce5f12a0d": "Connecter Gitea",
               "3852b1fd6f": "Vérifié",
               "09bde44485": "Test en cours...",
               "2bf28d5929": "Tester",
               "d0b31b4845": "Déconnecter {{value0}}",
-              "f47924e554": "Chaque serveur conserve un jeton localement, chiffré si le stockage le permet.",
-              "c043731756": "Connectez un serveur Gitea autohébergé avec son URL et un jeton d’accès personnel. Les identifiants sont stockés localement et chiffrés si le stockage le permet.",
-              "9a555db81e": "Revérifier"
+              "f47924e554": "Chaque serveur conserve un jeton localement, chiffré si le stockage le permet."
             }
           }
         }
@@ -21090,12 +21085,8 @@
         "9986e0e679": "Fusionnés",
         "747423c0f8": "Brouillon",
         "980519b0c8": "Ouvert",
-        "0285721e62": "Impossible de charger les tâches Gitea.",
         "5997067bee": "Nouveau ticket",
-        "e3db16e7c7": "Actualiser les tâches Gitea",
-        "34cd2d1024": "Sélectionnez un projet hébergé sur Gitea pour voir ses tickets et pull requests.",
-        "6e1e6691d7": "Chargement des tâches Gitea…",
-        "00f67933b5": "Aucun ticket ni pull request correspondant."
+        "e3db16e7c7": "Actualiser les tâches Gitea"
       }
     },
     "i18n": {

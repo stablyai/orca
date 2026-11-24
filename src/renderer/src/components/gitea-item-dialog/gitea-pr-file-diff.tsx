@@ -15,6 +15,7 @@ import type {
 } from '../../../../shared/gitea/gitea-types'
 import type { GiteaIssueScope } from '@/store/slices/gitea/gitea'
 import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import { giteaStatusLabel } from './gitea-status-label'
 
 type GiteaPrFileDiffProps = {
@@ -38,6 +39,7 @@ function GiteaPrFileDiffContent({
   reviewComments,
   onAddReviewComment
 }: GiteaPrFileDiffProps): React.JSX.Element {
+  const t = useTranslate()
   const [contents, setContents] = useState<GiteaPRFileContents | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(false)
@@ -108,10 +110,7 @@ function GiteaPrFileDiffContent({
         ) : error ? (
           <div className="flex h-[420px] flex-col items-center justify-center gap-2 text-sm text-muted-foreground">
             <span>
-              {translate(
-                'auto.components.gitea.pr.file.diff.f1a2b3c4d5',
-                'Failed to load file diff.'
-              )}
+              {t('auto.components.gitea.pr.file.diff.f1a2b3c4d5', 'Failed to load file diff.')}
             </span>
             <Button
               size="sm"
@@ -122,12 +121,12 @@ function GiteaPrFileDiffContent({
                 load()
               }}
             >
-              {translate('auto.components.gitea.pr.file.diff.e6f7a8b9c0', 'Retry')}
+              {t('auto.components.gitea.pr.file.diff.e6f7a8b9c0', 'Retry')}
             </Button>
           </div>
         ) : isBinary ? (
           <p className="px-3 py-4 text-sm text-muted-foreground">
-            {translate('auto.components.gitea.pr.file.diff.81e07de6a5', 'Binary file not shown.')}
+            {t('auto.components.gitea.pr.file.diff.81e07de6a5', 'Binary file not shown.')}
           </p>
         ) : (
           <DiffEditor

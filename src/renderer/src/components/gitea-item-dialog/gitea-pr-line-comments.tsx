@@ -4,7 +4,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import CommentMarkdown from '@/components/comment-markdown/CommentMarkdown'
 import type { GiteaPRReviewComment } from '../../../../shared/gitea/gitea-types'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 
 type GiteaPrLineCommentsProps = {
   comments: GiteaPRReviewComment[]
@@ -17,6 +17,7 @@ export function GiteaPrLineComments({
   comments,
   onAdd
 }: GiteaPrLineCommentsProps): React.JSX.Element {
+  const t = useTranslate()
   const [open, setOpen] = useState(false)
   const [line, setLine] = useState('')
   const [body, setBody] = useState('')
@@ -48,17 +49,13 @@ export function GiteaPrLineComments({
             <div key={comment.id} className="rounded-md border border-border/50 bg-background/60">
               <div className="flex items-center gap-2 border-b border-border/40 px-2.5 py-1.5 text-[11px] text-muted-foreground">
                 <span className="rounded bg-muted px-1.5 py-0.5 font-mono">
-                  {translate(
-                    'auto.components.gitea.pr.line.comments.489b36633a',
-                    'Line {{value0}}',
-                    {
-                      value0: comment.line
-                    }
-                  )}
+                  {t('auto.components.gitea.pr.line.comments.489b36633a', 'Line {{value0}}', {
+                    value0: comment.line
+                  })}
                 </span>
                 <span className="truncate font-medium text-foreground">
                   {comment.user?.login ??
-                    translate('auto.components.gitea.pr.line.comments.c01a062b92', 'Unknown')}
+                    t('auto.components.gitea.pr.line.comments.c01a062b92', 'Unknown')}
                 </span>
               </div>
               <div className="px-2.5 py-1.5">
@@ -77,11 +74,11 @@ export function GiteaPrLineComments({
               min={1}
               value={line}
               onChange={(event) => setLine(event.target.value)}
-              placeholder={translate('auto.components.gitea.pr.line.comments.4e59b0c4f8', 'Line #')}
+              placeholder={t('auto.components.gitea.pr.line.comments.4e59b0c4f8', 'Line #')}
               className="h-8 w-24"
             />
             <span className="text-[11px] text-muted-foreground">
-              {translate(
+              {t(
                 'auto.components.gitea.pr.line.comments.a43b5cc38b',
                 'New-file line number from the diff'
               )}
@@ -93,7 +90,7 @@ export function GiteaPrLineComments({
               onChange={(event) => setBody(event.target.value)}
               rows={2}
               disabled={submitting}
-              placeholder={translate(
+              placeholder={t(
                 'auto.components.gitea.pr.line.comments.02339776da',
                 'Review comment…'
               )}
@@ -110,14 +107,14 @@ export function GiteaPrLineComments({
               ) : (
                 <Send className="size-4" />
               )}
-              {translate('auto.components.gitea.pr.line.comments.317313f8af', 'Comment')}
+              {t('auto.components.gitea.pr.line.comments.317313f8af', 'Comment')}
             </Button>
           </div>
         </div>
       ) : (
         <Button variant="ghost" size="xs" onClick={() => setOpen(true)}>
           <MessageSquarePlus className="size-3.5" />
-          {translate('auto.components.gitea.pr.line.comments.6cbd906d88', 'Comment on a line')}
+          {t('auto.components.gitea.pr.line.comments.6cbd906d88', 'Comment on a line')}
         </Button>
       )}
     </div>

@@ -11,7 +11,7 @@ import {
 } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 
 type GiteaNewIssueDialogProps = {
   open: boolean
@@ -26,6 +26,7 @@ export function GiteaNewIssueDialog({
   repoName,
   onCreate
 }: GiteaNewIssueDialogProps): React.JSX.Element {
+  const t = useTranslate()
   const titleId = useId()
   const bodyId = useId()
   const [title, setTitle] = useState('')
@@ -38,16 +39,13 @@ export function GiteaNewIssueDialog({
       return
     }
     setCreating(true)
-    try {
-      const ok = await onCreate(trimmed, body.trim())
-      if (ok) {
-        setTitle('')
-        setBody('')
-        onOpenChange(false)
-      }
-    } finally {
-      // Why: always release the lock so a thrown/rejected create can't freeze the dialog.
-      setCreating(false)
+    // A rejected create must still release the lock, or the dialog freezes.
+    const ok = await onCreate(trimmed, body.trim()).catch(() => false)
+    setCreating(false)
+    if (ok) {
+      setTitle('')
+      setBody('')
+      onOpenChange(false)
     }
   }
 
@@ -56,16 +54,12 @@ export function GiteaNewIssueDialog({
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
           <DialogTitle>
-            {translate(
-              'auto.components.gitea.new.issue.dialog.db951c3a29',
-              'New issue in {{value0}}',
-              {
-                value0: repoName
-              }
-            )}
+            {t('auto.components.gitea.new.issue.dialog.db951c3a29', 'New issue in {{value0}}', {
+              value0: repoName
+            })}
           </DialogTitle>
           <DialogDescription>
-            {translate(
+            {t(
               'auto.components.gitea.new.issue.dialog.b42f72cfc5',
               'Create an issue in the selected Gitea project.'
             )}
@@ -80,7 +74,7 @@ export function GiteaNewIssueDialog({
         >
           <div className="space-y-2">
             <Label htmlFor={titleId}>
-              {translate('auto.components.gitea.new.issue.dialog.becfadf1df', 'Title')}
+              {t('auto.components.gitea.new.issue.dialog.becfadf1df', 'Title')}
             </Label>
             <Input
               id={titleId}
@@ -92,7 +86,7 @@ export function GiteaNewIssueDialog({
           </div>
           <div className="space-y-2">
             <Label htmlFor={bodyId}>
-              {translate('auto.components.gitea.new.issue.dialog.6c8b731fb2', 'Description')}
+              {t('auto.components.gitea.new.issue.dialog.6c8b731fb2', 'Description')}
             </Label>
             <textarea
               id={bodyId}
@@ -110,11 +104,11 @@ export function GiteaNewIssueDialog({
               onClick={() => onOpenChange(false)}
               disabled={creating}
             >
-              {translate('auto.components.gitea.new.issue.dialog.032fd2ed27', 'Cancel')}
+              {t('auto.components.gitea.new.issue.dialog.032fd2ed27', 'Cancel')}
             </Button>
             <Button type="submit" disabled={!title.trim() || creating}>
               {creating ? <LoaderCircle className="size-4 animate-spin" /> : null}
-              {translate('auto.components.gitea.new.issue.dialog.5e1d23a112', 'Create issue')}
+              {t('auto.components.gitea.new.issue.dialog.5e1d23a112', 'Create issue')}
             </Button>
           </DialogFooter>
         </form>
