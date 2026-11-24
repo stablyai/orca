@@ -27,8 +27,7 @@ function parseObject(line: string): JsonObject | null {
 const ENVELOPE_SCAN_CHARS = 4096
 
 const NON_SPACE = /\S/
-const isControlType = (type: string): boolean => type.startsWith('control_')
-/** Envelope fields read before the scan gives up and the line is skipped as unusual. */
+/** Envelope fields read before the scan gives up and the substring gate decides. */
 const ENVELOPE_MAX_FIELDS = 32
 
 function rpcId(value: unknown): string | null {
@@ -50,6 +49,11 @@ const ESCAPED_LETTER = /\\u00[2-7][0-9a-fA-F]/
 
 function mayHideKey(line: string): boolean {
   return line.includes('\\u00') && ESCAPED_LETTER.test(line)
+}
+
+/** A line without these substrings can't be a request, a cancel or an answer. */
+function mayCarryKey(line: string): boolean {
+  return line.includes('"id"') || line.includes('control_') || mayHideKey(line)
 }
 
 /** A held request and the record it was when its answer was seen. */
@@ -163,12 +167,9 @@ export class ProviderRelayPendingRequests {
       return true
     }
     if (!complete) {
-      // Cut by the window before its envelope ended: undecided unless a Claude frame type was read.
-      // Otherwise it isn't valid JSON.
-      const type = properties.find((property) => property.key === 'type')?.value
-      return (
-        start + head.length < line.length && !(typeof type === 'string' && !isControlType(type))
-      )
+      // Cut by the window or the field limit: undecided, so gated by substring as the base gates
+      // every line; such lines are never parsed more often than before.
+      return mayCarryKey(line)
     }
     const field = (key: string): LeadingProperty | undefined =>
       properties.find((property) => property.key === key)
@@ -228,7 +229,7 @@ export class ProviderRelayPendingRequests {
   }
 
   private observeClientLine(line: string): string | null {
-    if (!line.includes('"id"') && !line.includes('control_') && !mayHideKey(line)) {
+    if (!mayCarryKey(line)) {
       return null
     }
     const message = parseObject(line)
