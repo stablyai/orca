@@ -33,6 +33,7 @@ vi.mock('node:fs/promises', async (importOriginal) => {
   const stat = async (path: string) => {
     await fs.stall
     if (fs.latencyMs > 0) {
+      // ast-grep-ignore: test-no-real-time-wait -- runs under vi.useFakeTimers; simulates stat latency in fake time
       await new Promise((resolve) => setTimeout(resolve, fs.latencyMs))
     }
     fs.stats += 1
