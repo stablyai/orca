@@ -1,6 +1,7 @@
 // The host's Google accounts on the phone: their status, and what the desktop's GoogleAccountRow and
 // AccountList do with them (Set as default, Share setup, and Disconnect's confirm).
 import { useCallback, useEffect } from 'react'
+import { joinSentences } from '../../../../src/shared/text/sentence-joining'
 import { Share } from 'react-native'
 import { googleAppExportFileName } from '../../../../src/shared/google/google-console-setup'
 import { ConfirmContent } from '../../components/sheets/ConfirmModal'
@@ -134,26 +135,29 @@ export function GoogleDisconnectConfirm(props: {
   const nextDefault = accounts.find((account) => account.email !== defaultAccount)?.email
   const promoted =
     email === defaultAccount && nextDefault
-      ? ` ${t('bots.google.disconnect.promotes', '{{email}} becomes the default.', {
+      ? t('bots.google.disconnect.promotes', '{{email}} becomes the default.', {
           email: nextDefault
-        })}`
+        })
       : ''
   return (
     <ConfirmContent
       title={t('bots.google.disconnect.title', 'Disconnect {{email}}?', { email })}
-      message={
-        (revoke
-          ? t(
-              'bots.google.disconnect.revokeNote',
-              'Bots stop using this account here, and Google cancels Orca’s access everywhere it was allowed.'
-            )
-          : accounts.length > 1
-            ? t('bots.google.disconnect.removeOneNote', 'Bots stop using this account here.')
-            : t(
-                'bots.google.disconnect.removeNote',
-                'Bots stop using this account here. Bot settings stay, so Connect Google turns it back on.'
-              )) + promoted
-      }
+      message={joinSentences(
+        [
+          revoke
+            ? t(
+                'bots.google.disconnect.revokeNote',
+                'Bots stop using this account here, and Google cancels Orca’s access everywhere it was allowed.'
+              )
+            : accounts.length > 1
+              ? t('bots.google.disconnect.removeOneNote', 'Bots stop using this account here.')
+              : t(
+                  'bots.google.disconnect.removeNote',
+                  'Bots stop using this account here. Bot settings stay, so Connect Google turns it back on.'
+                ),
+          promoted
+        ].filter(Boolean)
+      )}
       confirmLabel={t('bots.google.disconnect.confirm', 'Disconnect')}
       destructive
       onCancel={props.onClose}

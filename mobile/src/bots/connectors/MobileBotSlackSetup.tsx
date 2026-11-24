@@ -2,6 +2,7 @@
 // for a phone. No hand-off (it needs the desktop's own Orca account) and no clipboard read on return: Paste
 // stands in for it.
 import { useState, type ReactNode } from 'react'
+import { joinSentences } from '../../../../src/shared/text/sentence-joining'
 import { ActivityIndicator, Text, View } from 'react-native'
 import { ExternalLink } from 'lucide-react-native'
 import {
@@ -193,12 +194,21 @@ export function MobileBotSlackSetup(props: {
             {step.reconnect ? (
               <SettingsNote>
                 {step.unsure
-                  ? `${t('bots.slack.reconnect.whyNeeded', 'Orca has no working Slack token for this workspace.')} ${t('bots.slack.reconnect.pasteNeeded', 'Paste a token to continue.')}`
-                  : `${t(
-                      'bots.slack.reconnect.whyHost',
-                      'Each computer keeps its own Slack token. Slack stopped accepting the one {{host}} uses.',
-                      { host: props.hostName }
-                    )} ${t('bots.slack.reconnect.paste', 'Paste a new token to reconnect.')}`}
+                  ? joinSentences([
+                      t(
+                        'bots.slack.reconnect.whyNeeded',
+                        'Orca has no working Slack token for this workspace.'
+                      ),
+                      t('bots.slack.reconnect.pasteNeeded', 'Paste a token to continue.')
+                    ])
+                  : joinSentences([
+                      t(
+                        'bots.slack.reconnect.whyHost',
+                        'Each computer keeps its own Slack token. Slack stopped accepting the one {{host}} uses.',
+                        { host: props.hostName }
+                      ),
+                      t('bots.slack.reconnect.paste', 'Paste a new token to reconnect.')
+                    ])}
               </SettingsNote>
             ) : null}
             <SettingsSection first>

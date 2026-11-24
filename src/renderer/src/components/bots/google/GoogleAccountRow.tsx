@@ -1,4 +1,5 @@
 import React, { useState } from 'react'
+import { joinSentences } from '../../../../../shared/text/sentence-joining'
 import { Ellipsis, Plus, Unplug } from 'lucide-react'
 import { toast } from 'sonner'
 import { useConfirmationDialog } from '@/components/dismiss/confirmation/confirmation-dialog-context'
@@ -95,26 +96,30 @@ export function GoogleAccountRow({
   const disconnect = async (revoke: boolean): Promise<void> => {
     const promoted =
       isDefault && nextDefault
-        ? ` ${t('bots.google.disconnect.promotes', '{{email}} becomes the default.', {
+        ? t('bots.google.disconnect.promotes', '{{email}} becomes the default.', {
             email: nextDefault
-          })}`
+          })
         : ''
     const confirmed = await confirm({
       title: t('bots.google.disconnect.title', 'Disconnect {{email}}?', {
         email: account.email
       }),
-      description:
-        (revoke
-          ? t(
-              'bots.google.disconnect.revokeNote',
-              'Bots stop using this account here, and Google cancels Orca’s access everywhere it was allowed.'
-            )
-          : google.accounts.length > 1
-            ? t('bots.google.disconnect.removeOneNote', 'Bots stop using this account here.')
-            : t(
-                'bots.google.disconnect.removeNote',
-                'Bots stop using this account here. Bot settings stay, so Connect Google turns it back on.'
-              )) + promoted,
+      description: joinSentences(
+        [
+          revoke
+            ? t(
+                'bots.google.disconnect.revokeNote',
+                'Bots stop using this account here, and Google cancels Orca’s access everywhere it was allowed.'
+              )
+            : google.accounts.length > 1
+              ? t('bots.google.disconnect.removeOneNote', 'Bots stop using this account here.')
+              : t(
+                  'bots.google.disconnect.removeNote',
+                  'Bots stop using this account here. Bot settings stay, so Connect Google turns it back on.'
+                ),
+          promoted
+        ].filter(Boolean)
+      ),
       confirmLabel: t('bots.google.disconnect.confirm', 'Disconnect'),
       confirmVariant: 'destructive'
     })

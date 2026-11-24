@@ -1,4 +1,5 @@
 import { ShortcutKeyCombo } from '../ui/ShortcutKeyCombo'
+import { joinSentences } from '../../../../shared/text/sentence-joining'
 import { WorktreeJumpPaletteTaskSearchStatus } from './tasks/worktree-jump-palette-task-search-status'
 import type React from 'react'
 import { X } from 'lucide-react'
@@ -241,36 +242,47 @@ export function WorktreeJumpPaletteSurface({
         </div>
       </div>
       <div aria-live="polite" className="sr-only">
-        {scoped
-          ? t('bots.palette.scopedStatus', 'Showing only bots. {{count}} results found.', {
-              count: controller.selectableItems.filter((item) => item.type === 'extra').length,
-              defaultValue_one: 'Showing only bots. {{count}} result found.'
-            })
-          : null}
-        {!scoped && controller.filterActive
-          ? `${t('worktreeJumpPalette.filter.ariaActiveCount', 'Filter: {{count}} active.', {
-              count: getPaletteFilterSelectionCount(controller.filter),
-              defaultValue_one: 'Filter: {{count}} active.'
-            })} `
-          : ''}
-        {scoped
-          ? null
-          : controller.deferredQuery.trim()
-            ? t('auto.components.WorktreeJumpPalette.resultsFound', '{{count}} results found.', {
-                count: resultCount,
-                defaultValue_one: '{{count}} result found.'
-              })
-            : t(
-                'auto.components.WorktreeJumpPalette.itemsAvailable',
-                '{{count}} items available.',
-                {
-                  count: resultCount,
-                  defaultValue_one: '{{count}} item available.'
-                }
-              )}
-        {controller.showCreateAction
-          ? ` ${t('auto.components.WorktreeJumpPalette.createActionAvailable', 'Create worktree action available.')}`
-          : ''}
+        {joinSentences(
+          [
+            scoped
+              ? t('bots.palette.scopedStatus', 'Showing only bots. {{count}} results found.', {
+                  count: controller.selectableItems.filter((item) => item.type === 'extra').length,
+                  defaultValue_one: 'Showing only bots. {{count}} result found.'
+                })
+              : '',
+            !scoped && controller.filterActive
+              ? t('worktreeJumpPalette.filter.ariaActiveCount', 'Filter: {{count}} active.', {
+                  count: getPaletteFilterSelectionCount(controller.filter),
+                  defaultValue_one: 'Filter: {{count}} active.'
+                })
+              : '',
+            scoped
+              ? ''
+              : controller.deferredQuery.trim()
+                ? t(
+                    'auto.components.WorktreeJumpPalette.resultsFound',
+                    '{{count}} results found.',
+                    {
+                      count: resultCount,
+                      defaultValue_one: '{{count}} result found.'
+                    }
+                  )
+                : t(
+                    'auto.components.WorktreeJumpPalette.itemsAvailable',
+                    '{{count}} items available.',
+                    {
+                      count: resultCount,
+                      defaultValue_one: '{{count}} item available.'
+                    }
+                  ),
+            controller.showCreateAction
+              ? t(
+                  'auto.components.WorktreeJumpPalette.createActionAvailable',
+                  'Create worktree action available.'
+                )
+              : ''
+          ].filter(Boolean)
+        )}
       </div>
     </CommandDialog>
   )
