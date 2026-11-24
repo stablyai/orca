@@ -8,6 +8,7 @@ import type { ActivePluginPanel } from '@/store/plugins/catalog/plugin-contribut
 import type { ActivityBarItem } from '../activity-bar/activity-bar-buttons'
 import { activityBarDragName } from '../activity-bar/activity-bar-drag-announcements'
 import {
+  builtInTabNames,
   getPluginPanelActivityItems,
   pluginPanelAccessibleTitle,
   resolvePluginPanelIcon,
@@ -124,6 +125,10 @@ it('falls back to the built-in glyph or puzzle when a host sends an invalid path
   expect(renderIcon(undefined, 'M0 0').innerHTML).toBe(puzzle)
   expect(renderIcon(undefined, { path: 'M1. 2.L-.5-1.5' }).innerHTML).toBe(puzzle)
   expect(renderIcon(undefined, { path: 'M0 0L1e39 1' }).innerHTML).toBe(puzzle)
+  expect(
+    renderIcon(undefined, { path: 'M2 2H340282350000000000000000000000000000000e-38M8 8h8' })
+      .innerHTML
+  ).toBe(puzzle)
   expect(renderIcon('database', { path: 'nope' }).innerHTML).toBe(renderIcon('database').innerHTML)
   expect(renderIcon('database').innerHTML).not.toBe(puzzle)
 })
@@ -224,6 +229,63 @@ it('keeps built-in tab names and renames a plugin panel that copies one', () => 
   const items = withDistinctPluginPanelNames([builtIn, copy])
   expect(items[0]).toBe(builtIn)
   expect(spokenNames(items)).toEqual(['Explorer', 'Explorer (acme/explorer)'])
+})
+
+it('tells tabs apart whose labels differ only by case or spacing', () => {
+  const sameOwner = withDistinctPluginPanelNames(
+    getPluginPanelActivityItems([
+      panel('ops', 'Ops', 'main', 'Job Log'),
+      panel('ops', 'Ops', 'alt', 'Job  Log')
+    ])
+  )
+  expect(spokenNames(sameOwner)).toEqual(['Ops: Job Log (ops/main)', 'Ops: Job  Log (ops/alt)'])
+  // Same-plugin twins need the panel path too; the tooltip and visible title keep the plugin's text.
+  expect(sameOwner.map((item) => item.title)).toEqual(['Job Log', 'Job  Log'])
+
+  const twoPlugins = withDistinctPluginPanelNames(
+    getPluginPanelActivityItems([
+      panel('ops-a', 'Ops', 'main', 'Job Log'),
+      panel('ops-b', 'Ops', 'main', 'job  LOG')
+    ])
+  )
+  expect(spokenNames(twoPlugins)).toEqual(['Ops: Job Log (ops-a)', 'Ops: job  LOG (ops-b)'])
+
+  // A failing tab keeps its distinct name; the error word is added after the name.
+  const failing = withDistinctPluginPanelNames(
+    getPluginPanelActivityItems(
+      [panel('ops', 'Ops', 'main', 'Job Log'), panel('ops', 'Ops', 'alt', 'Job  Log')],
+      { 'plugin:ops/alt': true }
+    )
+  )
+  expect(failing[1]?.statusIndicator).toBe('failure')
+  expect(spokenNames(failing)).toEqual(['Ops: Job Log (ops/main)', 'Ops: Job  Log (ops/alt)'])
+})
+
+it('never lets a plugin tab read as exactly a built-in tab name', () => {
+  const builtIn: ActivityBarItem = {
+    id: 'explorer',
+    icon: () => null,
+    title: 'Files',
+    shortcut: '⌘⇧E'
+  }
+  const builtInNames = builtInTabNames([builtIn])
+  expect(builtInNames).toEqual(new Set(['files']))
+  // A plugin named Files with a title of Files would otherwise read as the built-in tab.
+  expect(pluginPanelAccessibleTitle('Files', 'Files', builtInNames)).toBe('Files: Files')
+  expect(pluginPanelAccessibleTitle('Acme', 'FILES', builtInNames)).toBe('Acme: FILES')
+  expect(pluginPanelAccessibleTitle('Files', 'Files', new Set())).toBe('Files')
+
+  const [copy] = getPluginPanelActivityItems(
+    [panel('files-app', 'Files', 'main', 'Files')],
+    {},
+    builtInNames
+  )
+  if (!copy) {
+    throw new Error('expected a plugin panel item')
+  }
+  const items = withDistinctPluginPanelNames([builtIn, copy])
+  expect(items[0]).toBe(builtIn)
+  expect(spokenNames(items)).toEqual(['Files', 'Files: Files'])
 })
 
 it('announces a dragged plugin panel by its distinct name', () => {

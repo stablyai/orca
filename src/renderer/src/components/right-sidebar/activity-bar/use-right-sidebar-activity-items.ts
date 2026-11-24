@@ -5,6 +5,7 @@ import { isFolderRepo } from '../../../../../shared/repository/repo-kind'
 import { parseWorkspaceKey } from '../../../../../shared/workspace/identity/workspace-scope'
 import { getVisibleRightSidebarActivityItems } from './right-sidebar-activity-visibility'
 import {
+  builtInTabNames,
   getPluginPanelActivityItems,
   withDistinctPluginPanelNames
 } from '../plugin-panels/plugin-panel-activity-items'
@@ -106,41 +107,46 @@ export function useRightSidebarActivityItems({
   )
 
   // A bot's page labels every tab (labeledTab): Home, Connectors, Chats, Files.
-  const activityItems = useMemo<ActivityBarItem[]>(
-    () => [
-      ...getDefaultRightSidebarActivityItems({
-        t,
-        explorerShortcut,
-        sourceControlShortcut,
-        checksShortcut,
-        portsShortcut,
-        isBot,
-        showsHomeTab,
-        needsYou,
-        connectorsNeedingOwner
-      }),
-      // Append plugin tabs to preserve built-in navigation positions.
-      ...getPluginPanelActivityItems(visiblePluginPanels, pluginPanelErrors).map((item) => ({
-        ...item,
-        labeledTab: isBot
-      }))
-    ],
-    // oxlint-disable-next-line react-hooks/exhaustive-deps -- translate() reads the UI language implicitly.
-    [
-      checksShortcut,
+  const activityItems = useMemo<ActivityBarItem[]>(() => {
+    const builtInItems = getDefaultRightSidebarActivityItems({
+      t,
       explorerShortcut,
-      pluginPanelErrors,
-      visiblePluginPanels,
-      portsShortcut,
       sourceControlShortcut,
+      checksShortcut,
+      portsShortcut,
       isBot,
       showsHomeTab,
       needsYou,
-      connectorsNeedingOwner,
-      languageRevision,
-      t
+      connectorsNeedingOwner
+    })
+    return [
+      ...builtInItems,
+      // Append plugin tabs to preserve built-in navigation positions. Checked against every built-in
+      // label, not only the visible ones, so a plugin tab's name never depends on what is shown.
+      ...getPluginPanelActivityItems(
+        visiblePluginPanels,
+        pluginPanelErrors,
+        builtInTabNames(builtInItems)
+      ).map((item) => ({
+        ...item,
+        labeledTab: isBot
+      }))
     ]
-  )
+    // oxlint-disable-next-line react-hooks/exhaustive-deps -- translate() reads the UI language implicitly.
+  }, [
+    checksShortcut,
+    explorerShortcut,
+    pluginPanelErrors,
+    visiblePluginPanels,
+    portsShortcut,
+    sourceControlShortcut,
+    isBot,
+    showsHomeTab,
+    needsYou,
+    connectorsNeedingOwner,
+    languageRevision,
+    t
+  ])
 
   // Why after visibility: only tabs on screen together need names a screen reader can tell apart.
   const visibleItems = useMemo(

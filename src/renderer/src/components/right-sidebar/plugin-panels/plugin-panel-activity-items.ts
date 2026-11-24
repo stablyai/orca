@@ -72,25 +72,41 @@ export function resolvePluginPanelIcon(
 // the like counts as already naming the plugin.
 const NAME_SEPARATOR = /^\s*[:\-\u2013\u2014|\u00b7/]/
 
+const NO_NAMES: ReadonlySet<string> = new Set()
+
+/** The name a screen reader compares: whitespace collapsed, case folded. Not locale-aware, so the
+ *  same two labels compare equal on every machine. */
+function nameKey(name: string): string {
+  return name.replace(/\s+/g, ' ').trim().toLowerCase()
+}
+
+/** The normalized labels of the built-in tabs, which no plugin tab may read as exactly. */
+export function builtInTabNames(items: readonly ActivityBarItem[]): ReadonlySet<string> {
+  return new Set(items.map((item) => nameKey(item.accessibleTitle ?? item.title)))
+}
+
 /** The panel's tooltip and accessible name: its title, prefixed with the plugin name unless the
- *  title already is that name or starts with it and a separator. */
-export function pluginPanelAccessibleTitle(pluginName: string, title: string): string {
-  const name = pluginName.trim().toLocaleLowerCase()
-  const lower = title.trim().toLocaleLowerCase()
-  if (!name || lower === name) {
+ *  title already is that name or starts with it and a separator. A name that would read as exactly
+ *  a built-in tab's label is prefixed too, so a plugin tab never reads as a built-in one. */
+export function pluginPanelAccessibleTitle(
+  pluginName: string,
+  title: string,
+  builtInNames: ReadonlySet<string> = NO_NAMES
+): string {
+  const name = nameKey(pluginName)
+  if (!name) {
     return title
   }
-  return lower.startsWith(name) && NAME_SEPARATOR.test(lower.slice(name.length))
-    ? title
-    : `${pluginName}: ${title}`
+  const key = nameKey(title)
+  const alreadyNamed =
+    key === name || (key.startsWith(name) && NAME_SEPARATOR.test(key.slice(name.length)))
+  const prefixed = `${pluginName}: ${title}`
+  const named = alreadyNamed ? title : prefixed
+  return builtInNames.has(nameKey(named)) ? prefixed : named
 }
 
 function spokenName(item: ActivityBarItem): string {
   return item.accessibleTitle ?? item.title
-}
-
-function nameKey(name: string): string {
-  return name.trim().toLocaleLowerCase()
 }
 
 function nameCounts(items: readonly ActivityBarItem[]): Map<string, number> {
@@ -138,7 +154,8 @@ export function withDistinctPluginPanelNames(items: ActivityBarItem[]): Activity
 
 export function getPluginPanelActivityItems(
   panels: ActivePluginPanel[],
-  panelErrors: Readonly<Record<string, true>> = {}
+  panelErrors: Readonly<Record<string, true>> = {},
+  builtInNames: ReadonlySet<string> = NO_NAMES
 ): ActivityBarItem[] {
   return panels.map((panel) => ({
     id: panel.tabKey,
@@ -146,7 +163,7 @@ export function getPluginPanelActivityItems(
     icon: resolvePluginPanelIcon(panel.icon, panel.iconPath),
     // Manifest titles are plugin-owned and render without app-catalog translation.
     title: panel.title,
-    accessibleTitle: pluginPanelAccessibleTitle(panel.pluginName, panel.title),
+    accessibleTitle: pluginPanelAccessibleTitle(panel.pluginName, panel.title, builtInNames),
     shortcut: '',
     // Plugin panels are app-wide, so a bot's page offers them beside its own tabs.
     onBotPage: true,

@@ -82,5 +82,22 @@ it('refuses numbers past the 32-bit float range, which cut the path short in Chr
   ]) {
     expect(svgPathDataIssue(data), data).toMatch(/number at position \d+ that is too large to draw/)
   }
-  expect(svgPathDataIssue(`M0 0L1${'0'.repeat(38)}e-10 1`)).toBeNull()
+  expect(svgPathDataIssue(`M0 0L1${'0'.repeat(37)}e-10 1`)).toBeNull()
+})
+
+it('refuses an integer part near the float limit, even when the exponent scales it down', () => {
+  // The number from the review: about 3.4 is written with a 39-digit integer part.
+  const cut = 'M2 2H340282350000000000000000000000000000000e-38M8 8h8'
+  expect(svgPathDataIssue(cut)).toMatch(/number at position 6 that is too large to draw/)
+  expect(svgPathDataIssue(`M0 0L${'0'.repeat(3)}${'1'.repeat(39)}e-38 1`)).toMatch(/too large/)
+  expect(svgPathDataIssue(`M0 0L1${'0'.repeat(38)}e-10 1`)).toMatch(/too large/)
+  // Values at or above FLT_MAX are refused even when rounding would bring them back to it.
+  expect(svgPathDataIssue('M0 0L3.4028235e38 1')).toMatch(/too large/)
+  expect(svgPathDataIssue('M0 0L-3.4028235e38 1')).toMatch(/too large/)
+})
+
+it('keeps the rest of a path whose numbers are within range', () => {
+  // A neighboring spelling of the same magnitude with a 38-digit integer part.
+  expect(svgPathDataIssue('M2 2H34028235000000000000000000000000000000e-37M8 8h8')).toBeNull()
+  expect(svgPathDataIssue('M2 2H34028235e30M8 8h8')).toBeNull()
 })

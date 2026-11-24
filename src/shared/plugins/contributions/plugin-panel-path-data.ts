@@ -74,15 +74,17 @@ function readNumber(data: string, at: number): number {
 }
 
 // Why float limits: Chromium reads path numbers as 32-bit floats and stops drawing at a
-// positive exponent above 38, or an integer part or value past the float range, so `1e39`,
-// and even `0.001e39`, cut the path short. A negative exponent of any size just reads as 0.
+// positive exponent above 38, or at a value past the float range, so `1e39` and even
+// `0.001e39` cut the path short. A negative exponent of any size just reads as 0.
 const FLOAT_MAX_EXPONENT = 38
+// Why 38 digits: a spelling whose written integer part is near FLT_MAX is cut short by Chromium
+// even when its scaled value is small. `340282350000000000000000000000000000000e-38` (about 3.4)
+// was drawn only up to the first segment, with no warning, so any integer part past 38 digits is
+// refused whatever its scaled value. Anything below 1e38 is far inside the float range.
+const MAX_INTEGER_DIGITS = 38
+const FLOAT_MAX = 3.4028234663852886e38
 const POSITIVE_EXPONENT = /[eE]\+?(\d+)$/
 const INTEGER_PART = /^[+-]?(\d*)/
-
-function overflowsFloat(value: number): boolean {
-  return !Number.isFinite(Math.fround(value))
-}
 
 /** Why Chromium would not draw the number `literal`, or null. */
 function numberIssue(literal: string, at: number): string | null {
@@ -91,11 +93,14 @@ function numberIssue(literal: string, at: number): string | null {
     return `has a number at position ${at + 1} that ends with a dot; write a digit after it or drop the dot`
   }
   const exponent = POSITIVE_EXPONENT.exec(literal)?.[1]
-  const integerPart = INTEGER_PART.exec(literal)?.[1] ?? ''
+  // Why strip zeros: leading zeros are not digits of the magnitude.
+  const integerDigits = (INTEGER_PART.exec(literal)?.[1] ?? '').replace(/^0+/, '')
+  // Why `>=` and not a rounded check: a value just above FLT_MAX rounds back to FLT_MAX, so
+  // Math.fround would accept what Chromium cuts short.
   if (
     (exponent !== undefined && Number(exponent) > FLOAT_MAX_EXPONENT) ||
-    overflowsFloat(Number(integerPart || '0')) ||
-    overflowsFloat(Number(literal))
+    integerDigits.length > MAX_INTEGER_DIGITS ||
+    Math.abs(Number(literal)) >= FLOAT_MAX
   ) {
     return `has a number at position ${at + 1} that is too large to draw`
   }

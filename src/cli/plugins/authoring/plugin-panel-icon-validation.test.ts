@@ -92,6 +92,11 @@ it(
       // Why: Chromium draws nothing for `1.` and stops the path at a number past float range.
       [{ path: 'M1. 2.L-.5-1.5' }, 'icon.path has a number at position 2 that ends with a dot'],
       [{ path: 'M0 0L1e39 1' }, 'icon.path has a number at position 6 that is too large to draw'],
+      // Why: a 39-digit integer part draws only the first segment in Chromium, with no warning.
+      [
+        { path: 'M2 2H340282350000000000000000000000000000000e-38M8 8h8' },
+        'icon.path has a number at position 6 that is too large to draw'
+      ],
       [{ path: '' }, 'icon.path must not be empty'],
       [{ path: `M${' 1'.repeat(2048)}` }, 'icon.path must be at most 4096 characters'],
       [{ path: 'M0 0', viewBox: '0 0 0 24' }, 'icon.viewBox must be "0 0 W H"'],
