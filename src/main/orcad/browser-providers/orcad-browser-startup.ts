@@ -47,8 +47,7 @@ export function startOrcadBrowserProvider(options: OrcadBrowserProviderOptions):
       })
     },
     {
-      supportsEngineCapability: (capability) =>
-        provider?.supportsEngineCapability?.(capability) === true,
+      supportsGoogleCookieClear: () => provider?.supportsGoogleCookieClear?.() === true,
       identity: () => provider?.identity?.() ?? null,
       headless: true,
       clientHostingWithoutEngine: true,

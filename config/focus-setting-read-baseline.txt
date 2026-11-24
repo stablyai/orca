@@ -255,7 +255,7 @@
 1 src/renderer/src/store/slices/browser/create-browser-slice.ts
 1 src/renderer/src/store/slices/browser/hosts/browser-host-actions.ts
 6 src/renderer/src/store/slices/browser/hosts/browser-host-state.ts
-9 src/renderer/src/store/slices/browser/profiles/browser-cookie-import-actions.ts
+13 src/renderer/src/store/slices/browser/profiles/browser-cookie-import-actions.ts
 11 src/renderer/src/store/slices/browser/profiles/browser-profile-import-actions.ts
 7 src/renderer/src/store/slices/browser/profiles/browser-profile-list-actions.ts
 4 src/renderer/src/store/slices/browser/tabs/browser-tab-actions.ts

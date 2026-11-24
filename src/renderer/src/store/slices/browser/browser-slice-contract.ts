@@ -310,14 +310,7 @@ export type BrowserSlice = {
     browserProfile?: string,
     pageRoute?: BrowserPageCookieImportRoute | null
   ) => Promise<BrowserCookieImportExecutionResult>
-  /** Clears every store of one host's profile: a paired server's on both machines. `pairingRevision` is the one the person confirmed. */
-  clearBrowserProfileCookies: (target: {
-    hostId: ExecutionHostId
-    profileId: string
-    pairingRevision?: number
-    /** The paired server advertises browser.profile-cookie-clear.v1. */
-    serverClearsAnyProfile?: boolean
-  }) => Promise<boolean>
+  clearDefaultSessionCookies: () => Promise<boolean>
   browserUrlHistory: BrowserHistoryEntry[]
   addBrowserHistoryEntry: (url: string, title: string, faviconUrl?: string | null) => void
   /** Returns the removed entry so an Undo can put it back with its visit count. */

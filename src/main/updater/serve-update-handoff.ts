@@ -3,7 +3,6 @@ import { basename, dirname } from 'node:path'
 import { BROWSER_SIDECAR_OWNER_ENV } from '../../shared/browser/runtime/browser-sidecar-lifetime'
 import { app } from 'electron'
 import { quitProcess } from '../startup/quit/process-quit-request'
-import { markBrowserEngineSidecarLaunch } from '../runtime/rpc/callers/browser-engine-sidecar-launch'
 import {
   SERVE_UPDATE_HANDOFF_PATH_ENV,
   getServeUpdateHandoffPath,
@@ -86,9 +85,6 @@ export function installServeSupervisorDisconnectQuit(
 ): () => void {
   const isBrowserSidecar = process.env[BROWSER_SIDECAR_OWNER_ENV] === '1'
   delete process.env[BROWSER_SIDECAR_OWNER_ENV]
-  if (isBrowserSidecar && isServeMode) {
-    markBrowserEngineSidecarLaunch()
-  }
   if (!isServeMode || (!isBrowserSidecar && !hasServeUpdateSupervisor())) {
     return () => undefined
   }

@@ -10,7 +10,7 @@ export function getRuntimeFeatureInteractionId(
   if (method === 'browser.profileImportFromBrowser') {
     return hasBooleanResult(result, 'ok') ? 'cookie-import' : null
   }
-  if (method === 'browser.profileClearDefaultCookies' || method === 'browser.profileClearCookies') {
+  if (method === 'browser.profileClearDefaultCookies') {
     return hasBooleanResult(result, 'cleared') ? 'cookie-import' : null
   }
   // Stream control (unsubscribe, frame acks) is not a browser-use interaction.

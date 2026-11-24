@@ -1,5 +1,4 @@
 import { clearGoogleCookiesForRuntimeProfile } from '../../../browser/cookies/browser-google-cookie-clear'
-import { clearCookiesForRuntimeProfile } from '../../../browser/cookies/browser-profile-cookie-clear'
 import { browserCookieImportFailure } from '../../../../shared/browser/cookies/browser-cookie-import-failure-copy'
 import type {
   BrowserDetectProfilesResult,
@@ -326,10 +325,6 @@ export class RuntimeBrowserProfiles {
   }
 
   async browserProfileClearDefaultCookies(): Promise<BrowserProfileClearDefaultCookiesResult> {
-    return { cleared: await browserSessionRegistry.clearProfileSessionCookies('default') }
-  }
-
-  async browserProfileClearCookies(params: { profileId: string; executorRuntimeId: string }) {
-    return clearCookiesForRuntimeProfile(params, this.host.getRuntimeId())
+    return { cleared: await browserSessionRegistry.clearDefaultSessionCookies() }
   }
 }

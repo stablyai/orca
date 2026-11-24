@@ -8182,6 +8182,7 @@
         },
         "BrowserProfileRow": {
           "8e636cae25": "已删除配置文件\"{{value0}}\"",
+          "2d4bea7f35": "默认 cookie 已清除",
           "796d846483": "没有导入cookie",
           "c29648fe5b": "当前",
           "b4c167764d": "已从文件将 {{value0}} 个 Cookie 导入到 {{value1}}",
@@ -8189,7 +8190,10 @@
           "b4e9d3f2a1c5": "已从 {{value1}} 导入 {{value0}} 个 Cookie 到 {{value2}}",
           "c5a273a809": "从 {{value0}}",
           "80bffd32bf": "导入 Cookie",
-          "bd7d68f138": "从文件..."
+          "bd7d68f138": "从文件...",
+          "4054c458e1": "清除默认 cookie",
+          "3b662becd5": "要清除默认配置文件中的 cookie 吗？",
+          "f159cf5a3e": "这可能会让你退出此配置文件中的网站。"
         },
         "BrowserUseComputerUseNotice": {
           "79209b37b9": "如果 cookie 导入不合适，“计算机使用”可以控制本地应用程序，并可以在适用的情况下使用现有的登录浏览器会话。安装 Orca Computer Use 技能； macOS 还需要隐私权限。",

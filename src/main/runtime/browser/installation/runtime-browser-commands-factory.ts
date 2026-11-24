@@ -40,8 +40,7 @@ export type RuntimeBrowserCommandsFactoryOptions = {
     list(params: BrowserExtensionListParams): Promise<BrowserExtensionSummaryListResult>
     reload(params: BrowserExtensionReloadParams): Promise<BrowserExtensionReloadResult>
   }
-  /** Capabilities only the browser engine can serve; absent means none. */
-  supportsEngineCapability?: (capability: string) => boolean
+  supportsGoogleCookieClear?: () => boolean
   /** An engine process with its own identity setting; null while it can't serve one. */
   identity?: () => RuntimeBrowserIdentity | null
   /** Client pages live in this runtime's own registries, so they need no healthy engine. */
@@ -84,10 +83,10 @@ export function runtimeBrowserCommandsFactorySupportsClientHosting(): boolean {
   return runtimeBrowserCommandsFactoryIsAvailable() && currentOptions.clientHosting === true
 }
 
-export function runtimeBrowserCommandsFactorySupportsEngineCapability(capability: string): boolean {
+export function runtimeBrowserCommandsFactorySupportsGoogleCookieClear(): boolean {
   return (
     runtimeBrowserCommandsFactoryIsAvailable() &&
-    currentOptions.supportsEngineCapability?.(capability) === true
+    currentOptions.supportsGoogleCookieClear?.() === true
   )
 }
 

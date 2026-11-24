@@ -7749,6 +7749,7 @@
         },
         "BrowserProfileRow": {
           "8e636cae25": "Profil « {{value0}} » supprimé.",
+          "2d4bea7f35": "Cookies par défaut effacés.",
           "796d846483": "Aucun cookie importé",
           "c29648fe5b": "Actif",
           "b4c167764d": "{{value0}} cookies importés depuis un fichier vers {{value1}}.",
@@ -7756,7 +7757,10 @@
           "b4e9d3f2a1c5": "{{value0}} cookies importés depuis {{value1}} vers {{value2}}.",
           "c5a273a809": "Depuis {{value0}}",
           "80bffd32bf": "Importer des cookies",
-          "bd7d68f138": "Depuis un fichier…"
+          "bd7d68f138": "Depuis un fichier…",
+          "4054c458e1": "Effacer les cookies par défaut",
+          "3b662becd5": "Effacer les cookies du profil par défaut ?",
+          "f159cf5a3e": "Vous pourriez être déconnecté des sites de ce profil."
         },
         "BrowserUseComputerUseNotice": {
           "79209b37b9": "Si l'import de cookies ne convient pas, Computer Use peut contrôler des apps locales et, le cas échéant, réutiliser des sessions de navigateur déjà connectées. Installez la skill Orca Computer Use ; macOS exige aussi des autorisations de confidentialité.",

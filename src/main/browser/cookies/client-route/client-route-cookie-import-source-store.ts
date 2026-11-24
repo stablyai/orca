@@ -3,8 +3,7 @@ import { mkdir, readFile, writeFile } from 'node:fs/promises'
 import { dirname, join } from 'node:path'
 import type { BrowserSessionProfileSource } from '../../../../shared/browser/workspaces/browser-workspace-types'
 
-/** Keep import badges on this desktop because its route jars are absent from server profile records.
- *  Keyed by route: a paired server's environment id, or `sshCookieImportRoute(targetId)`. */
+/** Keep import badges on this desktop because its route jars are absent from server profile records. */
 const FILE_NAME = 'client-route-cookie-import-sources.json'
 const MAX_ENTRIES = 128
 
@@ -18,13 +17,8 @@ function storePath(): string {
   return join(app.getPath('userData'), FILE_NAME)
 }
 
-function entryKey(route: string, profileId: string): string {
-  return `${route}\u0000${profileId}`
-}
-
-/** An SSH host's route jars; environment ids are UUIDs, so they never collide with this. */
-export function sshCookieImportRoute(targetId: string): string {
-  return `ssh:${targetId}`
+function entryKey(environmentId: string, profileId: string): string {
+  return `${environmentId}\u0000${profileId}`
 }
 
 function parseSources(raw: string): StoredSources {
@@ -72,14 +66,14 @@ function change(apply: (sources: StoredSources) => StoredSources | null): Promis
 }
 
 export function recordClientRouteCookieImportSource(args: {
-  route: string
+  environmentId: string
   profileId: string
   source: BrowserSessionProfileSource
 }): Promise<void> {
   return change((sources) => {
     const next: StoredSources = {
       ...sources,
-      [entryKey(args.route, args.profileId)]: args.source
+      [entryKey(args.environmentId, args.profileId)]: args.source
     }
     const keys = Object.keys(next)
     if (keys.length > MAX_ENTRIES) {
@@ -93,10 +87,10 @@ export function recordClientRouteCookieImportSource(args: {
 }
 
 export function forgetClientRouteCookieImportSource(args: {
-  route: string
+  environmentId: string
   profileId: string
 }): Promise<void> {
-  const key = entryKey(args.route, args.profileId)
+  const key = entryKey(args.environmentId, args.profileId)
   return change((sources) => {
     if (!(key in sources)) {
       return null
@@ -108,9 +102,9 @@ export function forgetClientRouteCookieImportSource(args: {
 }
 
 export async function clientRouteCookieImportSources(
-  route: string
+  environmentId: string
 ): Promise<Record<string, BrowserSessionProfileSource>> {
-  const prefix = `${route}\u0000`
+  const prefix = `${environmentId}\u0000`
   const result: Record<string, BrowserSessionProfileSource> = {}
   for (const [key, source] of Object.entries(await load())) {
     if (key.startsWith(prefix)) {

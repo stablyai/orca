@@ -7887,6 +7887,7 @@
         },
         "BrowserProfileRow": {
           "8e636cae25": "Profil „{{value0}}“ entfernt.",
+          "2d4bea7f35": "Cookies des Standardprofils gelöscht.",
           "796d846483": "Keine Cookies importiert",
           "c29648fe5b": "Aktiv",
           "b4c167764d": "{{value0}} Cookies aus einer Datei in {{value1}} importiert.",
@@ -7894,7 +7895,10 @@
           "b4e9d3f2a1c5": "{{value0}} Cookies aus {{value1}} in {{value2}} importiert.",
           "c5a273a809": "Aus {{value0}}",
           "80bffd32bf": "Cookies importieren",
-          "bd7d68f138": "Aus Datei…"
+          "bd7d68f138": "Aus Datei…",
+          "4054c458e1": "Cookies des Standardprofils löschen",
+          "3b662becd5": "Cookies im Standardprofil löschen?",
+          "f159cf5a3e": "Dadurch wirst du möglicherweise auf Websites in diesem Profil abgemeldet."
         },
         "BrowserUseComputerUseNotice": {
           "79209b37b9": "Falls der Cookie-Import nicht geeignet ist, kann Computer Use lokale Apps steuern und gegebenenfalls bestehende angemeldete Browser-Sitzungen nutzen. Den Orca Computer Use-Skill installieren; unter macOS sind zusätzlich Datenschutzberechtigungen erforderlich.",

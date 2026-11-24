@@ -29,6 +29,5 @@ export const BROWSER_COMMANDS_WITHOUT_PAGE_ADMISSION: ReadonlySet<string> = new 
   'browserProfileDetectBrowsers',
   'browserProfileImportFromBrowser',
   'browserProfileClearGoogleCookies',
-  'browserProfileClearDefaultCookies',
-  'browserProfileClearCookies'
+  'browserProfileClearDefaultCookies'
 ])
