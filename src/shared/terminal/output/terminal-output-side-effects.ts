@@ -81,6 +81,8 @@ export type TerminalTitleTracker = {
   endProgramActivity: () => void
   /** Restore the status consumed by the latest exit candidate when process evidence disproves it. */
   restoreLastAgentExit: (confirmedStatus?: AgentStatus) => AgentStatus | null
+  /** The agent's end was proven elsewhere: its last status stops standing, silently. */
+  forgetAgentStatus: () => void
   /** Last title surfaced through onTitle, after normalization. */
   getLastNormalizedTitle: () => string | null
   /** A thinning transport owns transient scans while bytes may be gapped. Keep title scans; reset transient carries when authority returns. */
@@ -294,6 +296,9 @@ export function createTerminalTitleTracker(
     },
     restoreLastAgentExit(confirmedStatus?: AgentStatus): AgentStatus | null {
       return agentTracker?.restoreLastExit(confirmedStatus) ?? null
+    },
+    forgetAgentStatus(): void {
+      agentTracker?.forgetStatus()
     },
     getLastNormalizedTitle: () => lastEmittedTitle,
     setTransientFactScanningSuppressed(suppressed: boolean): void {

@@ -4,7 +4,8 @@ import { useEffect, useState } from 'react'
 import type { GoogleServiceChoice } from '../../../../../../src/shared/google/google-scopes'
 import {
   googleReadyChoices,
-  googleSetupBlockerIsConnect
+  googleSetupBlockerIsConnect,
+  googleSetupConnectOpen
 } from '../../../../../../src/shared/google/google-setup-card-view'
 import { useMobileTranslation } from '../../../../i18n/use-mobile-translation'
 import { googleStatusRead } from './mobile-bot-card-operations'
@@ -28,6 +29,7 @@ export function MobileGoogleSetupConnectCard({
   const t = useMobileTranslation()
   const { run, blocker, fontScale } = scope
   const done = run.steps.connect?.status === 'done'
+  const open = googleSetupConnectOpen(run)
   const stuck = blocker && googleSetupBlockerIsConnect(blocker) ? blocker : null
   return (
     <MobileGoogleSetupFrame
@@ -44,7 +46,7 @@ export function MobileGoogleSetupConnectCard({
     >
       {/* An older copy never acts, done or not; it points down while something is left to press. */}
       {!newest ? (
-        stuck || !done ? (
+        stuck || open ? (
           <MobileGoogleSetupMuted
             text={t('chat.botCards.google.movedDown', 'Continued further down.')}
             fontScale={fontScale}
@@ -63,7 +65,7 @@ export function MobileGoogleSetupConnectCard({
           }
           fontScale={fontScale}
         />
-      ) : (
+      ) : open ? (
         <MobileGoogleSetupOnComputer
           text={t(
             'chat.botCards.google.connect.onComputer',
@@ -71,7 +73,7 @@ export function MobileGoogleSetupConnectCard({
           )}
           fontScale={fontScale}
         />
-      )}
+      ) : null}
     </MobileGoogleSetupFrame>
   )
 }

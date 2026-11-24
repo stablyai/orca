@@ -1,24 +1,13 @@
 // Keep disclosures outside windowed rows so scrolling cannot erase reader choices; standalone rows fall back to local state.
 
 import { createContext, useCallback, useContext, useMemo, useState } from 'react'
-
-/** A reader's place in an opened run's box: a row, and how far into that row its top edge sits. */
-export type NativeChatRunPosition = { key: string; offset: number }
-
-/** Where the reader left an opened run's own scroll box: a row and offset, or the end. */
-export type NativeChatRunScroll = {
-  position: NativeChatRunPosition | null
-  followsEnd: boolean
-  /** Measured heights of details opened in rows the window no longer draws, so the box keeps their room. */
-  detailHeights: ReadonlyMap<string, number>
-}
+import type { VirtualItem } from '@tanstack/react-virtual'
 
 export type NativeChatDisclosureStore = {
   read: (key: string) => boolean | undefined
   /** Opening with `group` (a key prefix) closes that group's other open keys: one open at a time. */
   write: (key: string, open: boolean, group?: string) => void
-  /** Reset on disclosure writes; use a plain map so internal scrolling cannot rerender the transcript. */
-  runScroll: Map<string, NativeChatRunScroll>
+  toolRunMeasurements: Map<string, VirtualItem[]>
 }
 
 export const NativeChatDisclosureContext = createContext<NativeChatDisclosureStore | null>(null)
@@ -28,39 +17,33 @@ export const MAX_NATIVE_CHAT_DISCLOSURES = 512
 
 export function useNativeChatDisclosures(): NativeChatDisclosureStore {
   const [open, setOpen] = useState<ReadonlyMap<string, boolean>>(() => new Map())
-  const [runScroll] = useState(() => new Map<string, NativeChatRunScroll>())
-  const write = useCallback(
-    (key: string, next: boolean, group?: string) => {
-      runScroll.delete(key)
-      setOpen((current) => {
-        const others =
-          next && group !== undefined
-            ? [...current].filter(
-                ([other, open]) => open && other !== key && other.startsWith(group)
-              )
-            : []
-        if (current.get(key) === next && others.length === 0) {
-          return current
+  const [toolRunMeasurements] = useState(() => new Map<string, VirtualItem[]>())
+  const write = useCallback((key: string, next: boolean, group?: string) => {
+    setOpen((current) => {
+      const others =
+        next && group !== undefined
+          ? [...current].filter(([other, open]) => open && other !== key && other.startsWith(group))
+          : []
+      if (current.get(key) === next && others.length === 0) {
+        return current
+      }
+      const updated = new Map(current)
+      for (const [other] of others) {
+        updated.set(other, false)
+      }
+      updated.set(key, next)
+      if (updated.size > MAX_NATIVE_CHAT_DISCLOSURES) {
+        const oldest = updated.keys().next().value
+        if (oldest !== undefined && oldest !== key) {
+          updated.delete(oldest)
         }
-        const updated = new Map(current)
-        for (const [other] of others) {
-          updated.set(other, false)
-        }
-        updated.set(key, next)
-        if (updated.size > MAX_NATIVE_CHAT_DISCLOSURES) {
-          const oldest = updated.keys().next().value
-          if (oldest !== undefined && oldest !== key) {
-            updated.delete(oldest)
-          }
-        }
-        return updated
-      })
-    },
-    [runScroll]
-  )
+      }
+      return updated
+    })
+  }, [])
   return useMemo(
-    () => ({ read: (key: string) => open.get(key), write, runScroll }),
-    [open, write, runScroll]
+    () => ({ read: (key: string) => open.get(key), write, toolRunMeasurements }),
+    [open, write, toolRunMeasurements]
   )
 }
 

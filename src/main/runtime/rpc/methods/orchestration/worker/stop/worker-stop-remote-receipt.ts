@@ -12,6 +12,7 @@ export const RemoteStopReceipt = z.object({
   alreadySettled: z.boolean(),
   processAction: z.string(),
   close: z.unknown().optional(),
+  reason: z.string().optional(),
   lastError: z.string().nullable().optional(),
   helpers: z.unknown().optional()
 })

@@ -1,6 +1,9 @@
 // Pieces of the question card: another surface's look and draft for it, Enter on the card, and Escape to fold it.
-import { useEffect, useEffectEvent } from 'react'
+import { useEffect, useEffectEvent, type RefObject } from 'react'
 import { isEditableTarget } from '@/lib/text-input/focus/editable-target'
+import type { AgentJournalFreeTextInput } from '../../../../../shared/agent-session/journal/agent-session-journal-types'
+import type { AskAnswerSelection } from '../../../../../shared/native-chat/input/questions/native-chat-ask-answer'
+import type { AskPrompt } from '../../../../../shared/native-chat/input/questions/native-chat-ask-types'
 
 /** Another surface's own look for the question card. */
 export type NativeChatQuestionCardLook = {
@@ -20,6 +23,31 @@ export type NativeChatQuestionCardDraft = {
   selections: number[][]
   otherText: string[]
   onChange: (selections: number[][], otherText: string[]) => void
+}
+
+export type NativeChatQuestionCardProps = {
+  prompt: AskPrompt
+  /** Whether the snapshotted answer is still being delivered to the agent. */
+  isSubmitting?: boolean
+  isCancelling?: boolean
+  /** Deliver the chosen answer (per-question option indices + free text). */
+  onAnswer: (selections: AskAnswerSelection[]) => void
+  allowOther?: boolean | readonly boolean[]
+  freeTextInputs?: readonly (AgentJournalFreeTextInput | undefined)[]
+  /** Dismiss the prompt (sends Escape to the agent). Without it (an item's question has nothing
+   *  to dismiss) the card has no ×, and an unanswered last step shows Submit, off, instead of Skip. */
+  onCancel?: () => void
+  /** A caller that can dismiss but needs every answer returns to an unanswered step. */
+  requiresEveryAnswer?: boolean
+  /** Fold the card to a strip and give the input back, writing nothing; Escape does too. */
+  onCollapse?: () => void
+  /** Take focus when the card takes the input region; number keys pick while it holds. */
+  shouldFocus?: boolean
+  /** Paste target while the card replaces the composer. */
+  answerInputRef?: RefObject<HTMLTextAreaElement | null>
+  /** Another surface's own look for the card (an item page's open question). */
+  look?: NativeChatQuestionCardLook
+  draft?: NativeChatQuestionCardDraft
 }
 
 /** Reports the card's picks and words to its draft as they change. */

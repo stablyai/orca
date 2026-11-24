@@ -26,9 +26,10 @@ export function installOwnership(
     handle?: AgentSessionProviderHandle
     accountHome?: AgentSessionRecord['accountHome']
     acquiredAccount?: AgentSessionRecord['acquiredAccount']
+    lastTurn?: AgentSessionRecord['lastTurn']
   } = {}
 ): void {
-  const { handle, accountHome, acquiredAccount, ...ownershipOverrides } = overrides
+  const { handle, accountHome, acquiredAccount, lastTurn, ...ownershipOverrides } = overrides
   const ownership: Omit<StructuredProviderSessionOwnership, 'role' | 'key'> = {
     sessionId: 'session-alpha',
     workspaceId: 'workspace-1',
@@ -62,7 +63,8 @@ export function installOwnership(
       }
     ],
     ...(ownership.conversationName ? { conversationName: ownership.conversationName } : {}),
-    ...(acquiredAccount === undefined ? {} : { acquiredAccount })
+    ...(acquiredAccount === undefined ? {} : { acquiredAccount }),
+    ...(lastTurn ? { lastTurn } : {})
   }
   const view = {
     ...agentSessionConversationView(record),

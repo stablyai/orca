@@ -85,7 +85,9 @@ export const CONNECTOR_REFUSALS = [
   'bot_not_found',
   'bot_paused',
   // A send whose linked chat was deleted (CHAT_GONE_REFUSAL), to a cloud that then starts anew.
-  'chat_gone'
+  'chat_gone',
+  // A resume whose chat's newest turn no longer failed (NOT_FAILED_REFUSAL).
+  'not_failed'
 ] as const
 export type ConnectorRefusal = (typeof CONNECTOR_REFUSALS)[number]
 
@@ -112,6 +114,8 @@ export type ConnectorMessage = {
   later?: ConnectorLaterText[]
   /** Admitted through the account's reply outbox, with the later deliveries it carries. */
   reply?: { account: string; carried?: string[] }
+  /** Resume on a failed turn's status: delivered only while the chat it reaches still awaits it. */
+  resume?: true
 }
 
 /** A later message as the turn takes it: its words as an older Orca reads them, and its asker. */

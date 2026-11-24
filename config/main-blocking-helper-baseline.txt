@@ -105,8 +105,7 @@
 13 src/main/bots/bot-tools-host.ts
 4 src/main/bots/bot-tools-removal.ts
 5 src/main/bots/bot-tools-sign-in.ts
-3 src/main/bots/bot-work-runtime.ts
-1 src/main/bots/bot-work-store.ts
+2 src/main/bots/bot-work-runtime.ts
 1 src/main/bots/sharing/bot-share-client.ts
 1 src/main/bots/sharing/bot-share-picks-store.ts
 3 src/main/bots/sharing/bot-share-sources.ts
@@ -133,13 +132,12 @@
 8 src/main/browser/cookies/chromium/import-cookies.ts
 5 src/main/browser/cookies/chromium/prepare-import.ts
 1 src/main/browser/cookies/chromium/scan-source-rows.ts
-4 src/main/browser/cookies/client-route/browser-client-route-cookie-import.ts
-3 src/main/browser/cookies/client-route/client-route-cookie-import-source-store.ts
+1 src/main/browser/cookies/client-route/browser-client-route-cookie-import.ts
 1 src/main/browser/cookies/imports/import-cookie-file.ts
 4 src/main/browser/cookies/imports/import-validated-cookies.ts
 3 src/main/browser/cookies/route-partition/browser-route-partition-cookie-import.ts # browser cookie source detection moved here from the import IPC and client-route import
 1 src/main/browser/cookies/route-partition/browser-ssh-route-cookie-import.ts # same source detection as the local import IPC
-2 src/main/browser/cookies/session-restore/browser-session-cookie-restore.ts
+1 src/main/browser/cookies/session-restore/browser-session-cookie-restore.ts
 1 src/main/browser/cookies/session-restore/browser-session-cookie-snapshot-file.ts
 5 src/main/browser/cookies/sources/browser-cookie-detection.ts
 4 src/main/browser/cookies/sources/browser-cookie-firefox-import.ts
@@ -168,7 +166,8 @@
 1 src/main/browser/network/execution-routes/ssh-browser-network-execution-route.ts
 2 src/main/browser/network/execution-routes/wsl-browser-network-execution-route.ts
 2 src/main/browser/network/execution-routes/wsl-browser-network-relay-launch.ts
-2 src/main/browser/routing/local-host-partitions/local-ssh-browser-partitions.ts
+1 src/main/browser/routing/local-host-partitions/local-ssh-browser-partition-bindings.ts # moved with the jar binding code from local-ssh-browser-partitions.ts
+1 src/main/browser/routing/local-host-partitions/local-ssh-browser-partitions.ts
 1 src/main/browser/routing/local-host-partitions/wsl-host-browser-route-partition.ts
 4 src/main/browser/routing/partitions/browser-route-partition-binding-store.ts
 5 src/main/browser/routing/partitions/browser-route-partition-pending-deletes.ts
@@ -265,7 +264,7 @@
 4 src/main/codex-accounts/runtime-home/credentials/runtime-home-service-auth-sync.ts
 19 src/main/codex-accounts/runtime-home/legacy-host/legacy-shared-auth-migration.ts
 2 src/main/codex-accounts/runtime-home/legacy-host/legacy-shared-config-compatibility.ts
-3 src/main/codex-accounts/runtime-home/legacy-host/runtime-home-service-legacy-migration.ts
+2 src/main/codex-accounts/runtime-home/legacy-host/runtime-home-service-legacy-migration.ts
 11 src/main/codex-accounts/runtime-home/routing/runtime-home-service-home-routing.ts # Codex launch prep from #43365 already merged; unblocks main, async follow-up owed
 9 src/main/codex-accounts/runtime-home/routing/runtime-home-service-launch.ts
 8 src/main/codex-accounts/runtime-home/routing/runtime-home-service-managed-home.ts
@@ -279,6 +278,7 @@
 1 src/main/codex-usage/store.ts
 1 src/main/codex/app-server/codex-app-server-connection.ts
 2 src/main/codex/app-server/codex-app-server-session.ts
+1 src/main/codex/app-server/shared-servers/codex-shared-server-windows-job.ts # the windows-process-tree loader: one cached readFileSync per process (relay addon check)
 1 src/main/codex/codex-conversation-copy.ts
 2 src/main/codex/configuration/agent-state-file-reader.ts
 1 src/main/codex/configuration/codex-path-observation.ts
@@ -296,14 +296,14 @@
 2 src/main/codex/configuration/settings/codex-config-path-reference-rewrite.ts
 1 src/main/codex/configuration/settings/codex-config-runtime-owned-values.ts
 2 src/main/codex/configuration/settings/config-settings-baseline.ts
-1 src/main/codex/configuration/settings/config-settings-promotion-write-target.ts
-8 src/main/codex/configuration/settings/config-settings-promotion.ts
+2 src/main/codex/configuration/settings/config-settings-promotion-write-target.ts # +1 resolveThroughLinkedAncestor: realpathSync of the nearest existing folder, only when config.toml is absent or unresolvable, so a host ~/.codex linked into a WSL distro is never written (#45247)
+9 src/main/codex/configuration/settings/config-settings-promotion.ts # +1 resolvesIntoWslShare: realpath.native of a drive root only on Windows for a drive-letter target in a write-back or held-back pass (#45247)
 1 src/main/codex/configuration/settings/config-sync-stall.ts
 1 src/main/codex/configuration/shared-server/codex-daemon-socket-path-guard.ts
 1 src/main/codex/configuration/shared-server/codex-shared-server-fix.ts
 3 src/main/codex/configuration/shared-server/codex-shared-server-pane.ts
 2 src/main/codex/configuration/shared-server/codex-shared-server-probe.ts
-7 src/main/codex/configuration/toml/config-toml-atomic-write.ts # compare-before-publish re-read of config.toml so a save made after Orca read it is never overwritten (moved here from the worker-only trust transaction)
+8 src/main/codex/configuration/toml/config-toml-atomic-write.ts # compare-before-publish re-read of config.toml so a save made after Orca read it is never overwritten (moved here from the worker-only trust transaction); +1 resolvesIntoWslShare only with refuseWslTarget (promotion write-back), realpath.native only for a Windows drive-letter target (#45247)
 4 src/main/codex/configuration/toml/config-toml-runtime-owned-sections.ts
 9 src/main/codex/history/backfill/codex-session-backfill-marker.ts
 6 src/main/codex/history/backfill/codex-session-backfill.ts
@@ -467,6 +467,7 @@
 1 src/main/daemon/server/daemon-session-background-routing.ts
 1 src/main/daemon/server/daemon-terminal-admission.ts
 7 src/main/daemon/shell-readiness/shell-ready.ts
+2 src/main/daemon/terminal-host/foreground-agent-identity-check.ts # one-shot: both Windows helpers reach the addon file read once on first load (cached); the per-watch check then opens one process (microseconds)
 1 src/main/daemon/terminal-host/terminal-host-session-create.ts
 1 src/main/daemon/terminal-host/terminal-host-session-process.ts
 2 src/main/daemon/terminal-host/terminal-host-session-publish.ts
@@ -477,6 +478,7 @@
 1 src/main/daemon/transport/stream/daemon-stream-keep-tail-drop.ts
 6 src/main/devin/hook-service.ts
 2 src/main/diagnostics/main-thread-churn-probe.ts
+2 src/main/droid/droid-hook-config-files.ts # hooks.json, or legacy hooks/hooks.json while it is absent, is read on the same one-shot startup install, toggle, status and uninstall paths as settings.json
 6 src/main/droid/hook-service.ts
 11 src/main/dsh/hook-service.ts
 2 src/main/emulator/android/android-avd-boot.ts
@@ -579,11 +581,10 @@
 1 src/main/ipc/ai-vault/ai-vault-subagent-list.ts
 4 src/main/ipc/app.ts
 1 src/main/ipc/automations.ts
-3 src/main/ipc/browser/browser-client-host-cookie-import-ipc.ts
 1 src/main/ipc/browser/browser-extensions.ts
 1 src/main/ipc/browser/browser-passwords-import-ipc.ts
 1 src/main/ipc/browser/browser-passwords-ipc.ts
-6 src/main/ipc/browser/browser-session-profile-ipc.ts
+5 src/main/ipc/browser/browser-session-profile-ipc.ts
 1 src/main/ipc/browser/browser.ts
 7 src/main/ipc/cli.ts
 1 src/main/ipc/command-path/command-path-directory-worker-client.ts
@@ -772,28 +773,15 @@
 4 src/main/native-chat/agent-session-attachments/agent-session-attachment-claims.ts
 1 src/main/native-chat/agent-session-journal/context-epochs/journal-context-cursor.ts
 12 src/main/native-chat/agent-session-journal/database/journal-database.ts
-5 src/main/native-chat/agent-session-journal/database/journal-domain-migrations.ts # tail table create at store open (one-shot startup); worker-only: +2 create the retired-epoch pending table in a transaction on the journal SQL worker
+6 src/main/native-chat/agent-session-journal/database/journal-domain-migrations.ts # tail table create at store open (one-shot startup); worker-only: +2 create the retired-epoch pending table in a transaction on the journal SQL worker; +1 creates the operation-window send indexes (IF NOT EXISTS, one-shot) on the journal SQL worker
 3 src/main/native-chat/agent-session-journal/database/journal-host-database.ts
 1 src/main/native-chat/agent-session-journal/durable-rows/journal-row-table.ts
 1 src/main/native-chat/agent-session-journal/history-import/adopted-transcript-source.ts
 3 src/main/native-chat/agent-session-journal/history-import/journal-legacy-import.ts
 1 src/main/native-chat/agent-session-journal/journal-domain-import-discard.ts
-1 src/main/native-chat/agent-session-journal/journal-domain-input-eligibility.ts
-2 src/main/native-chat/agent-session-journal/journal-domain-item-display.ts
 2 src/main/native-chat/agent-session-journal/journal-domain-maintenance.ts # worker-only: the retired prune settles its pending entry on the journal SQL worker
-1 src/main/native-chat/agent-session-journal/journal-domain-queue-failures.ts
-2 src/main/native-chat/agent-session-journal/journal-domain-queue-pauses.ts
-6 src/main/native-chat/agent-session-journal/journal-domain-queue-reads.ts
 1 src/main/native-chat/agent-session-journal/journal-domain-schema.ts
-2 src/main/native-chat/agent-session-journal/journal-domain-submission-consume.ts
 1 src/main/native-chat/agent-session-journal/journal-forgotten-chats.ts
-11 src/main/native-chat/agent-session-journal/journal-sql-queue-read.ts
-1 src/main/native-chat/agent-session-journal/journal-sql-queued-messages.ts
-2 src/main/native-chat/agent-session-journal/journal-sql-status-context.ts
-1 src/main/native-chat/agent-session-journal/journal-sql-status-items.ts
-1 src/main/native-chat/agent-session-journal/journal-sql-work-read.ts
-5 src/main/native-chat/agent-session-journal/journal-stored-output-rows.ts # streamed-text tail (#43716): same SQL already in main-blocking-sqlite-baseline; journal SQL path, not a timer or handler
-10 src/main/native-chat/agent-session-journal/journal-text-tail.ts # streamed-text tail (#43716): same SQL already in main-blocking-sqlite-baseline; journal SQL path, not a timer or handler
 2 src/main/native-chat/agent-session-journal/outcomes/journal-outcome-format.ts
 4 src/main/native-chat/agent-session-journal/replay/journal-read-row.ts
 3 src/main/native-chat/agent-session-journal/replay/journal-stored-cursor.ts
@@ -884,7 +872,7 @@
 1 src/main/orcad/artifact-slots/orcad-artifact-identity.ts
 1 src/main/orcad/artifact-slots/orcad-artifact-materializer.ts
 3 src/main/orcad/artifact-slots/orcad-daemon-slot-pins.ts
-3 src/main/orcad/browser-providers/electron/electron-serve-browser-process.ts
+2 src/main/orcad/browser-providers/electron/electron-serve-browser-process.ts
 1 src/main/orcad/browser-providers/electron/electron-sidecar-profile.ts
 3 src/main/orcad/browser-providers/orcad-browser-provider.ts
 1 src/main/orcad/browser-providers/orcad-browser-startup.ts
@@ -1046,7 +1034,8 @@
 2 src/main/plugins/storage/plugin-secrets-store.ts
 2 src/main/plugins/storage/plugin-storage-store.ts
 2 src/main/ports/darwin-process-metadata.ts
-7 src/main/ports/local-workspace-platform-port-scanner.ts
+1 src/main/ports/linux-socket-owners.ts # Linux socket listing runs in the port-scan worker; the only sync call is the worker client's one existsSync per lazy worker spawn
+8 src/main/ports/local-workspace-platform-port-scanner.ts # Linux socket listing runs in the port-scan worker; the only sync call is the worker client's one existsSync per lazy worker spawn
 1 src/main/ports/local-workspace-port-scanner.ts
 1 src/main/ports/port-scan-command-client.ts
 3 src/main/preflight/agent-command-detection.ts
@@ -1160,7 +1149,7 @@
 1 src/main/runtime/mobile-cloud-relay/desktop-relay-service.ts
 2 src/main/runtime/mobile-cloud-relay/pairing/relay-revoke-outbox.ts
 4 src/main/runtime/mobile-cloud-relay/region-selection/relay-region-preference.ts
-5 src/main/runtime/orca-runtime-bots.ts
+4 src/main/runtime/orca-runtime-bots.ts
 2 src/main/runtime/orca-runtime.ts
 16 src/main/runtime/orchestration/db/attach-orchestration-db-methods.ts
 1 src/main/runtime/orchestration/db/database-file-permissions.ts
@@ -1186,12 +1175,13 @@
 10 src/main/runtime/orchestration/db/remote-owned/remote-run-links.ts
 4 src/main/runtime/orchestration/db/reset/orchestration-reset.ts
 3 src/main/runtime/orchestration/db/reset/removed-orchestration-work-read.ts
-1 src/main/runtime/orchestration/db/runs/retired-chat-runs.ts # one savepoint when a replaced or deleted Chat retires its Runs, around orchestration DB writes that were already synchronous
+1 src/main/runtime/orchestration/db/runs/retired-coordinator-runs.ts # one savepoint when a deleted chat or an ended coordinator terminal retires its Runs, around orchestration DB writes that were already synchronous
 1 src/main/runtime/orchestration/db/schema/migrate-v13-v30.ts
 1 src/main/runtime/orchestration/db/schema/migrate-v40.ts
 4 src/main/runtime/orchestration/db/schema/migrate.ts
 10 src/main/runtime/orchestration/db/schema/orchestration-schema-version-skew.ts
 1 src/main/runtime/orchestration/db/schema/structured-worker-orca-session-backfill.ts
+1 src/main/runtime/orchestration/db/schema/worker-dock-schema.ts # one backfill transaction when the worker dock tables are first installed at database open; later dock facts are written by triggers inside lifecycle statements that were already synchronous
 9 src/main/runtime/orchestration/db/tasks/task-status-transition.ts
 2 src/main/runtime/orchestration/db/tasks/task-store.ts
 5 src/main/runtime/orchestration/db/worker-dispatch/worker-dispatch-abandon.ts
@@ -1201,6 +1191,11 @@
 6 src/main/runtime/orchestration/db/worker-dispatch/worker-dispatch-start.ts
 22 src/main/runtime/orchestration/db/worker-dispatch/worker-dispatch-stop.ts
 5 src/main/runtime/orchestration/db/worker-dispatch/worker-terminal-recovery.ts
+1 src/main/runtime/orchestration/dock/worker-dock-acknowledgment.ts # only on the user's Clear, Clear all or Show in dock again click; no passive caller
+1 src/main/runtime/orchestration/dock/worker-dock-provider-failures.ts # only when a provider subagent or command fails: one transaction per failure batch, so a failure stays until the user clears it; successful child events never reach the database
+3 src/main/runtime/orchestration/dock/worker-dock-read-snapshot.ts # one consistent read transaction (BEGIN, never IMMEDIATE) per dock read: the cold seed of a visible unknown source, subscribe, a lifecycle or visible activity change of this chat's own workers, or a roster window the user loads; unrelated wakes skip it by version and hidden chats never read
+1 src/main/runtime/orchestration/dock/worker-dock-read.ts # the dock reads described for worker-dock-read-snapshot.ts, through that one helper
+1 src/main/runtime/orchestration/federation/paired-server-asks/paired-server-ask-decisions.ts # one savepoint around orchestration DB writes that were already synchronous, so a card's answer and its decline or allowance commit together
 2 src/main/runtime/orchestration/federation/peer-mail/paired-server-changes.ts # moved unchanged out of peer-mail-relay.ts: closing a removed or re-paired server's Run links
 1 src/main/runtime/orchestration/federation/peer-mail/peer-questions-out.ts # one savepoint per asker told on an unpair, around orchestration DB writes that were already synchronous
 1 src/main/runtime/orchestration/federation/remote-owned/remote-owed-actions.ts
@@ -1449,7 +1444,8 @@
 2 src/main/window/desktop-integration/macos-press-and-hold-default.ts
 1 src/main/windows/windows-administrator-restart.ts
 2 src/main/windows/windows-directory-acl.ts
-11 src/main/windows/windows-process-table.ts
+1 src/main/windows/windows-job-object.ts # the windows-process-tree loader: one cached readFileSync per process (relay addon check)
+12 src/main/windows/windows-process-table.ts # the windows-process-tree loader: one cached readFileSync per process (relay addon check)
 3 src/main/worker-threads/forked-child-entry-path.ts
 2 src/main/worker-threads/worker-send-ledger.ts
 2 src/main/workspace-hooks/hook-orca-cli-env.ts
@@ -1517,7 +1513,7 @@
 5 src/main/wsl/orcad/wsl-orcad-instance-adoption.ts
 1 src/main/wsl/orcad/wsl-orcad-liveness-wiring.ts
 1 src/main/wsl/orcad/wsl-orcad-pairing-repair.ts
-6 src/main/zcode/hook-service.ts
+7 src/main/zcode/hook-service.ts # zcode-app-cli setting.json is read on the same one-shot startup, toggle and uninstall paths as config.json
 3 src/main/zcode/zcode-plan-credential-commands.ts
 3 src/main/zcode/zcode-v2-plan-credentials.ts
 13 src/shared/agent-hook-listener/claude-session-continuation.ts

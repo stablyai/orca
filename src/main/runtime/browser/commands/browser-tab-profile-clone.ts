@@ -70,6 +70,10 @@ async function createBesideEnginePage(
     })
     return { browserPageId: created.browserPageId, sourceBrowserPageId }
   }
+  // Deleted while the source resolved: the copy would mount in a retired partition.
+  if (!browserSessionRegistry.getProfile(profile.id)) {
+    throw new BrowserError('invalid_argument', `Browser profile ${profile.id} was not found`)
+  }
   const created = await createBrowserTabInRenderer(
     host,
     sourceTab.url,

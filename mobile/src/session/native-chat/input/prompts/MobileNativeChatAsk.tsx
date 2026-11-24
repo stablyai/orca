@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { Keyboard, Pressable, ScrollView, Text, View } from 'react-native'
 import { Check } from 'lucide-react-native'
 import {
@@ -15,6 +15,7 @@ import {
   askQuestionShowsPreviews,
   askConfirmLabel,
   askTypedText,
+  askUnansweredRequired,
   toggleAskOption
 } from '../../../../../../src/shared/native-chat/input/questions/native-chat-ask-card-rules'
 import { colors, pressedStyle } from '../../../../theme/mobile-theme'
@@ -46,17 +47,15 @@ type Props = {
   /** Per question; structured prompts hide "Other…" where the provider takes no free text. */
   allowOther?: readonly boolean[]
   freeTextInputs?: readonly (AgentJournalFreeTextInput | undefined)[]
-  /** Tapping a choice is the whole answer: no Cancel or Skip, only the fold chevron. */
-  choiceOnly?: true
-  /** Under the question: what the card's owner adds, e.g. a worker prompt's countdown. */
-  note?: ReactNode
+  /** Why the last answer didn't go, in the footer between Cancel and Send. */
+  notice?: string | null
   /** Each question's identity: when the prompt drops one (answered elsewhere), the rest keep their picks. */
   questionKeys?: readonly string[]
 }
 
 function confirmLabels(t: Translate) {
   return {
-    submit: t('chat.ask.submit', 'Submit'),
+    submit: t('chat.ask.send', 'Send'),
     next: t('chat.ask.next', 'Next'),
     skip: t('chat.ask.skip', 'Skip')
   }
@@ -75,8 +74,7 @@ export function MobileNativeChatAsk({
   onCollapse,
   allowOther,
   freeTextInputs,
-  choiceOnly,
-  note,
+  notice,
   questionKeys
 }: Props): React.JSX.Element | null {
   useMobileColorScheme()
@@ -196,8 +194,7 @@ export function MobileNativeChatAsk({
 
   const total = prompt.questions.length
   const isLast = index === total - 1
-  const anyAnswered = (sel = selections): boolean =>
-    prompt.questions.some((_, i) => isAnswered(i, sel))
+  const anyAnswered = (sel = selections) => prompt.questions.some((_, i) => isAnswered(i, sel))
 
   const submit = async (sel: number[][]): Promise<void> => {
     if (!anyAnswered(sel) || isLocalPending(operationRef.current) || answerPending) {
@@ -228,10 +225,11 @@ export function MobileNativeChatAsk({
 
   const advance = async (sel = selections): Promise<void> => {
     autoAdvance.cancel()
-    if (isLast) {
+    const unanswered = askUnansweredRequired(prompt.questions, (i) => isAnswered(i, sel))
+    if (isLast && unanswered === -1) {
       await submit(sel)
     } else {
-      showStep((i) => Math.min(i + 1, total - 1))
+      showStep((i) => (isLast ? unanswered : Math.min(i + 1, total - 1)))
     }
   }
 
@@ -254,11 +252,18 @@ export function MobileNativeChatAsk({
     }
   }
 
+  // Folding writes nothing, so a pick waiting to advance must not send from the hidden card.
+  const collapse =
+    onCollapse &&
+    ((): void => {
+      autoAdvance.cancel()
+      Keyboard.dismiss()
+      onCollapse()
+    })
+
+  // Send and Return only move on: leaving is Cancel's, so an empty Return never cancels.
   const confirm = (): void => {
-    const action = askConfirmAction({ isLast, anyAnswered: anyAnswered() })
-    if (action === 'cancel') {
-      void cancel('confirm')
-    } else if (action === 'proceed') {
+    if (askConfirmAction({ isLast, anyAnswered: anyAnswered(), waitsForAnswer }) === 'proceed') {
       void advance()
     }
   }
@@ -268,8 +273,20 @@ export function MobileNativeChatAsk({
   const otherSelected = (selections[index] ?? []).includes(OTHER)
   const freeTextInput = freeTextInputs?.[index]
   const currentAnswered = isAnswered(index)
-  const confirmLabel = askConfirmLabel(currentAnswered, isLast, anyAnswered())
+  // A required question offers Next or Submit, never Skip, and waits until it is answered.
+  const waitsForAnswer = q.required === true && !currentAnswered
+  const unansweredRequired = askUnansweredRequired(prompt.questions, (i) => isAnswered(i))
+  const confirmLabel = askConfirmLabel(
+    currentAnswered || waitsForAnswer,
+    isLast,
+    anyAnswered(),
+    unansweredRequired !== -1 && unansweredRequired !== index
+  )
   const confirmSkips = confirmLabel === 'skip'
+  // The last step with nothing picked: Not now leaves, so Send waits for an answer instead of skipping.
+  const skips = confirmSkips && !isLast
+  const confirmBlocked =
+    askConfirmAction({ isLast, anyAnswered: anyAnswered(), waitsForAnswer }) === 'stay'
 
   return (
     <View style={styles.card}>
@@ -319,24 +336,14 @@ export function MobileNativeChatAsk({
             content={q.question}
             style={styles.questionText}
           />
-          <MobileNativeChatCardHeaderAction
-            onCollapse={
-              onCollapse &&
-              (() => {
-                autoAdvance.cancel()
-                onCollapse()
-              })
-            }
-            disabled={sending}
-          />
+          <MobileNativeChatCardHeaderAction onCollapse={collapse} disabled={sending} />
         </View>
-        {note}
         {q.options.map((opt, optIndex) => (
           <MobileNativeChatAskOptionRow
             key={`${optIndex}:${opt.label}`}
             label={opt.label}
-            description={opt.description}
             recommended={opt.recommended}
+            description={opt.description}
             preview={opt.preview}
             onPreview={() => {
               autoAdvance.cancel()
@@ -347,8 +354,6 @@ export function MobileNativeChatAsk({
             selected={(selections[index] ?? []).includes(optIndex)}
             multi={q.multiSelect}
             disabled={submitting}
-            // A choice-only card has no Submit: the chosen choice is the control that sends.
-            pending={choiceOnly && confirmBusy && (selections[index] ?? []).includes(optIndex)}
             onPress={() => toggle(index, optIndex, q.multiSelect)}
           />
         ))}
@@ -373,41 +378,53 @@ export function MobileNativeChatAsk({
             }
             // A declared input (Pi's `input`) is one line unless it asks for more, as on desktop.
             multiline={freeTextInput ? freeTextInput.multiline === true : true}
+            onSubmitEditing={confirm}
             autoFocus
           />
         ) : null}
       </ScrollView>
 
-      {choiceOnly ? (
-        <View style={styles.choiceOnlyEnd} />
-      ) : (
-        <View style={styles.footer}>
+      <View style={styles.footer}>
+        {onCancel || collapse ? (
           <MobilePendingButton
-            label={cancelLabel ?? t('common.cancel', 'Cancel')}
+            // Cancel declines the question; with nothing to cancel the card only folds, for later.
+            label={
+              cancelLabel ??
+              (onCancel ? t('common.cancel', 'Cancel') : t('chat.ask.notNow', 'Not now'))
+            }
             pending={cancelBusy}
             disabled={sending}
-            onPress={() => void cancel('cancel')}
+            onPress={() => (onCancel ? void cancel('cancel') : collapse?.())}
             hitSlop={8}
             style={styles.cancel}
             labelStyle={styles.cancelText}
             spinnerColor={colors.textPrimary}
           />
-          {total > 1 ? (
-            <Text style={styles.progress}>
-              {index + 1}/{total}
-            </Text>
-          ) : null}
-          <MobilePendingButton
-            label={confirmLabels(t)[confirmLabel]}
-            pending={confirmBusy}
-            disabled={submitting}
-            onPress={confirm}
-            style={[styles.next, confirmSkips && styles.nextSkip]}
-            labelStyle={[styles.nextText, confirmSkips && styles.nextSkipText]}
-            spinnerColor={confirmSkips ? colors.textPrimary : colors.bgBase}
-          />
-        </View>
-      )}
+        ) : null}
+        {notice ? (
+          <Text style={styles.notice} accessibilityRole="alert">
+            {notice}
+          </Text>
+        ) : total > 1 ? (
+          <Text style={styles.progress}>
+            {index + 1}/{total}
+          </Text>
+        ) : null}
+        <MobilePendingButton
+          label={confirmLabels(t)[confirmSkips && isLast ? 'submit' : confirmLabel]}
+          pending={confirmBusy}
+          disabled={submitting || confirmBlocked || (confirmSkips && isLast)}
+          onPress={confirm}
+          style={[
+            styles.next,
+            !(onCancel || collapse) && styles.confirm,
+            skips && styles.nextSkip,
+            (confirmBlocked || (confirmSkips && isLast)) && styles.nextBlocked
+          ]}
+          labelStyle={[styles.nextText, skips && styles.nextSkipText]}
+          spinnerColor={skips ? colors.textPrimary : colors.bgBase}
+        />
+      </View>
       <MobileNativeChatOptionPreviewSheet
         options={q.options}
         viewedIndex={viewedOption}

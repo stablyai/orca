@@ -1,6 +1,5 @@
 import { defineFixture } from '../../../component-fixtures/component-fixture'
 import { Dialog } from '@/components/ui/dialog'
-import type { WorkspaceCleanupScanProgress } from '../../../../../shared/workspace-cleanup/workspace-cleanup'
 import {
   createDefaultWorkspaceCleanupFilterState,
   DEFAULT_WORKSPACE_CLEANUP_SORT
@@ -8,9 +7,10 @@ import {
 import { WorkspaceCleanupDialogHeader } from './workspace-cleanup-dialog-header'
 import { WorkspaceCleanupFilterBar } from '../browse/workspace-cleanup-filter-bar'
 import type { WorkspaceCleanupFacetCounts } from '../browse/workspace-cleanup-facet-panel-model'
-import { WorkspaceCleanupSortHeader } from '../browse/workspace-cleanup-sort-header'
+import { WorkspaceCleanupGroupCards } from './workspace-cleanup-group-cards'
+import { WorkspaceCleanupSelectAllBar } from './workspace-cleanup-select-all-bar'
+import { WorkspaceCleanupPickFooter } from './workspace-cleanup-pick-footer'
 
-const NOW = Date.now()
 const COUNTS: WorkspaceCleanupFacetCounts = {
   activity: 0,
   size: 0,
@@ -24,15 +24,6 @@ const COUNTS: WorkspaceCleanupFacetCounts = {
   safety: 0
 }
 const noop = (): void => {}
-const REFRESH_PROGRESS: WorkspaceCleanupScanProgress = {
-  scanId: 'fixture',
-  scannedAt: NOW,
-  candidates: [],
-  errors: [],
-  scannedWorktreeCount: 3,
-  totalWorktreeCount: 12
-}
-
 function Top({
   selected = 0,
   scanning = false,
@@ -52,9 +43,8 @@ function Top({
     <Dialog>
       <div className="flex flex-col border border-border bg-background">
         <WorkspaceCleanupDialogHeader
+          title="Review workspaces"
           loading={refreshing}
-          scannedAt={NOW - 30_000}
-          scanProgress={refreshing ? REFRESH_PROGRESS : null}
           onRefresh={noop}
           onClose={noop}
         />
@@ -72,19 +62,31 @@ function Top({
           hasActiveFilters={query.length > 0}
           gitEvidence={{ pendingCount: refreshing ? 4 : 0, totalCount: 5 }}
           sizeScan={sizes ? { scanning, scannedCount: 2, totalCount: 5, onRun: noop } : null}
+          sort={DEFAULT_WORKSPACE_CLEANUP_SORT}
+          onToggleSortField={noop}
           onQueryChange={noop}
           onClearFilters={noop}
           onClearAppliedFilter={noop}
         />
-        <WorkspaceCleanupSortHeader
-          sort={DEFAULT_WORKSPACE_CLEANUP_SORT}
-          selectableCount={3}
-          selectedSelectableCount={selected}
+        <WorkspaceCleanupGroupCards
+          active="nothing-local"
+          summaries={{
+            'nothing-local': { count: 46, selectedCount: selected },
+            'local-files': { count: 35, selectedCount: 0 },
+            'cannot-delete': { count: 3, selectedCount: 0 }
+          }}
+          onChange={noop}
+        />
+        <WorkspaceCleanupSelectAllBar
+          selectableCount={46}
+          selectedBulkCount={selected}
+          selectedDisplayedCount={selected}
+          onToggle={noop}
+        />
+        <WorkspaceCleanupPickFooter
           selectedCount={selected}
-          deleteDisabled={false}
-          onToggleSortField={noop}
-          onToggleSelectAll={noop}
-          onDeleteSelected={noop}
+          deleteBlocked={false}
+          onDelete={noop}
         />
       </div>
     </Dialog>

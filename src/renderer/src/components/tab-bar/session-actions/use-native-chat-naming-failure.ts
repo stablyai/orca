@@ -12,6 +12,8 @@ const noSubscription = () => () => {}
 
 export type NativeChatNamingFailureControls = {
   message: string
+  /** The host that named the chat; null when its owner is unknown. */
+  executionHostId: string | null
   /** Known before the card opens: the host check starts when the failure arrives. */
   canRegenerate: boolean
   regenerating: boolean
@@ -75,6 +77,7 @@ export function useNativeChatNamingFailure(
   }
   return {
     message: nativeChatNamingErrorText(failure.error),
+    executionHostId,
     canRegenerate: support === 'supported',
     regenerating: regenerating === true,
     regenerate,

@@ -20,7 +20,11 @@ async function callRuntimeClipboardMethod<TResult>(
     runtimeEnvironmentId,
     method,
     params,
-    timeoutMs
+    timeoutMs,
+    undefined,
+    undefined,
+    // A paste is the user's own act: it may wake an idle-stopped WSL host (#46567).
+    { wake: true }
   )
   if (!response.ok) {
     throw new Error(response.error.message)
@@ -39,7 +43,11 @@ async function saveClipboardImageBase64InRuntime(
     runtimeEnvironmentId,
     'clipboard.startImageUpload',
     { expectedBase64Length: contentBase64.length, connectionId },
-    CLIPBOARD_IMAGE_SAVE_TIMEOUT_MS
+    CLIPBOARD_IMAGE_SAVE_TIMEOUT_MS,
+    undefined,
+    undefined,
+    // A paste is the user's own act: it may wake an idle-stopped WSL host (#46567).
+    { wake: true }
   )
   if (!startResponse.ok) {
     if (

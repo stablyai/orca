@@ -75,14 +75,9 @@ export function createAgentCatalogRowHost(): {
           node.scrollLeft = offset.left
         }
         if (active && previousParent && previousParent !== parent) {
-          const destination = active.closest('[data-settings-scroll-list]')
           const cancelOnFocus = (): void => cancelAnimationFrame(frame)
           const frame = scheduleSettingsListReveal(
-            () =>
-              document.activeElement === active &&
-              active.closest('[data-settings-scroll-list]') === destination
-                ? active
-                : null,
+            () => (document.activeElement === active ? active : null),
             () => document.removeEventListener('focusin', cancelOnFocus, true)
           )
           document.addEventListener('focusin', cancelOnFocus, { capture: true, once: true })

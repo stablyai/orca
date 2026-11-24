@@ -2,8 +2,8 @@
 // for a phone. No hand-off (it needs the desktop's own Orca account) and no clipboard read on return: Paste
 // stands in for it.
 import { useState, type ReactNode } from 'react'
-import { ActivityIndicator, Text, View } from 'react-native'
-import { ExternalLink } from 'lucide-react-native'
+import { ActivityIndicator } from 'react-native'
+import { ArrowUpRight } from 'lucide-react-native'
 import {
   SLACK_CONFIG_REFRESH_TOKEN_PREFIX,
   slackAppMessagesUrl,
@@ -12,23 +12,24 @@ import {
 } from '../../../../src/shared/connector-bot-slack-contract'
 import { TextField } from '../../components/composer-input/TextField'
 import { MobileStateView } from '../../components/feedback/MobileStateView'
-import { ListRow } from '../../components/list/ListGroup'
+import { LIST_LEADING_INSET, LIST_ROW_PADDING, ListRow } from '../../components/list/ListGroup'
 import { SheetHeader } from '../../components/nav-bar/SheetHeader'
-import { SheetPrimaryButton } from '../../components/sheets/SheetPrimaryButton'
+import { StepNumber } from '../tools/MobileBotToolSignInPage'
 import { useMobileTranslation } from '../../i18n/use-mobile-translation'
 import { useBackClaim } from '../../navigation/use-back-claim'
 import { useClipboardReader } from '../../platform/clipboard/clipboard'
 import { openExternalLink } from '../../platform/external-links/external-link'
 import { SettingsNote, SettingsSection } from '../../settings/settings-screen-frame'
-import { colors, spacing } from '../../theme/mobile-theme'
+import { colors } from '../../theme/mobile-theme'
 import { themedStyleSheet } from '../../theme/themed-styles'
 import { useMobileColorScheme } from '../../theme/use-mobile-color-scheme'
 import type { RpcClient } from '../../transport/rpc/rpc-client-contract'
-import type { MobileBotAvatarSource } from '../host-bot-row-facts'
+import type { PhoneBot } from '../host-bots-operations'
 import { MobileBotTextButton } from '../MobileBotTextButton'
 import { MobileConnectorSourceIcon } from '../MobileConnectorSourceIcon'
 import { slackErrorMessage } from './mobile-slack-copy'
 import { MobileConnectorTryIt } from './MobileConnectorTryIt'
+import { SlackPickStep, SlackProblemStep } from './MobileSlackSetupSteps'
 import type { PhoneSlackView } from './use-phone-bot-slack'
 import { usePhoneSlackSetup } from './use-phone-slack-setup'
 
@@ -40,10 +41,11 @@ export function MobileBotSlackSetup(props: {
   client: RpcClient | null
   botId: string
   botName: string
-  avatar: MobileBotAvatarSource
   teamId: string | undefined
   inSlack: boolean
-  knownTeam: string | null
+  knownTeams: readonly string[]
+  /** The host's bots, whose Slack reads name the workspaces to pick from. */
+  hostBots: readonly PhoneBot[]
   slack: { view: PhoneSlackView; refresh: () => Promise<PhoneSlackView> }
   hostName: string
   online: boolean
@@ -112,26 +114,16 @@ export function MobileBotSlackSetup(props: {
         connector="slack"
         subtitle={t('bots.slack.setup.isIn', '{{name}} is in Slack', { name: props.botName })}
         heading={t('bots.slack.setup.tryIt', 'Try it in any channel or DM')}
-        ways={[
-          {
-            key: 'ask',
-            from: 'person',
-            title: installed?.installerName ?? t('bots.slack.setup.preview.you', 'You'),
-            subtitle: t('bots.slack.setup.preview.askPlain', '@{{name}} summarize this thread', {
-              name: props.botName
-            })
-          },
-          {
-            key: 'reply',
-            from: 'bot',
-            title: props.botName,
-            subtitle: t('bots.slack.setup.preview.reply', 'On it.')
-          }
-        ]}
+        prompt={{
+          text: t('bots.slack.setup.preview.askPlain', '@{{name}} summarize this thread', {
+            name: props.botName
+          })
+        }}
         more={
           installed ? (
             <ListRow
-              leading={<ExternalLink size={18} color={colors.textPrimary} />}
+              leading={<ArrowUpRight size={18} color={colors.accentBlue} />}
+              accent
               title={t('bots.slack.setup.openInSlack', 'Message it in Slack')}
               accessibilityRole="link"
               onPress={() =>
@@ -140,7 +132,6 @@ export function MobileBotSlackSetup(props: {
             />
           ) : undefined
         }
-        avatar={props.avatar}
         banner={props.banner}
         showToast={props.showToast}
         onDone={() => props.onInstalled(step.teamId)}
@@ -159,9 +150,11 @@ export function MobileBotSlackSetup(props: {
       trailing={
         tokenStep
           ? {
-              label: tokenStep.reconnect
-                ? t('bots.slack.setup.reconnectShort', 'Reconnect')
-                : t('bots.slack.setup.createShort', 'Create'),
+              label: tokenStep.unsure
+                ? t('bots.slack.reconnect.continue', 'Continue')
+                : tokenStep.reconnect
+                  ? t('bots.slack.setup.reconnectShort', 'Reconnect')
+                  : t('bots.slack.setup.createShort', 'Create'),
               disabled: !canCreate,
               onPress: () => send(trimmed)
             }
@@ -184,37 +177,52 @@ export function MobileBotSlackSetup(props: {
       case 'token':
         return (
           <>
-            {step.reconnect ? (
-              <SettingsNote>
-                {t(
-                  'bots.slack.setup.reconnect',
-                  'Slack no longer accepts this workspace’s token. Paste a new one to reconnect.'
-                )}
-              </SettingsNote>
-            ) : null}
-            <SettingsSection first>
+            <SettingsSection
+              first
+              separatorInset={LIST_LEADING_INSET}
+              footer={
+                step.reconnect
+                  ? step.unsure
+                    ? t(
+                        'bots.slack.reconnect.whyNeeded',
+                        'Orca has no working Slack token for this workspace.'
+                      )
+                    : t(
+                        'bots.slack.reconnect.stopped',
+                        'Slack stopped accepting the token {{host}} uses.',
+                        { host: props.hostName }
+                      )
+                  : t(
+                      'bots.slack.token.kept',
+                      'Orca Cloud keeps this token encrypted, so your next bots in this workspace need one click.'
+                    )
+              }
+            >
               <ListRow
-                leading={<ExternalLink size={18} color={colors.textPrimary} />}
+                leading={<StepNumber n={1} />}
                 title={t('bots.slack.token.open', 'Get config token')}
+                subtitle={t(
+                  'bots.slack.token.step1',
+                  'In Slack app settings, find “Your App Configuration Tokens” and choose Generate Token.'
+                )}
+                subtitleLines={3}
+                accessory={<ArrowUpRight size={17} color={colors.textSecondary} />}
                 accessibilityRole="link"
                 onPress={() => openExternalLink(SLACK_APPS_URL)}
               />
-            </SettingsSection>
-            <SettingsSection>
-              {[
-                t(
-                  'bots.slack.token.step1',
-                  'In Slack app settings, find “Your App Configuration Tokens” and choose Generate Token.'
-                ),
-                t('bots.slack.token.step2', 'Select the workspace for your bot.'),
-                t('bots.slack.token.step3', 'Copy the Refresh Token and paste it below.')
-              ].map((line, index) => (
-                <ListRow key={line} marker={String(index + 1)} title={line} wrapTitle />
-              ))}
-            </SettingsSection>
-            <View style={styles.field}>
+              <ListRow
+                leading={<StepNumber n={2} />}
+                title={t('bots.slack.token.step2Title', 'Pick the workspace')}
+                subtitle={t('bots.slack.token.step2', 'Select the workspace for your bot.')}
+              />
+              <ListRow
+                leading={<StepNumber n={3} />}
+                title={t('bots.slack.token.step3Title', 'Paste the Refresh Token')}
+                subtitle={t('bots.slack.token.step3', 'Copy the Refresh Token and paste it below.')}
+              />
               <TextField
-                label={t('bots.slack.token.label', 'Configuration refresh token')}
+                style={styles.tokenRow}
+                accessibilityLabel={t('bots.slack.token.label', 'Configuration refresh token')}
                 value={token}
                 onChangeText={change}
                 placeholder={TOKEN_PLACEHOLDER}
@@ -236,7 +244,7 @@ export function MobileBotSlackSetup(props: {
                   />
                 }
               />
-            </View>
+            </SettingsSection>
             {accessPasted || step.error ? (
               <SettingsNote error>
                 {accessPasted
@@ -247,62 +255,60 @@ export function MobileBotSlackSetup(props: {
                   : step.error}
               </SettingsNote>
             ) : null}
-            <SettingsNote>
-              {t(
-                'bots.slack.token.kept',
-                'Orca Cloud keeps this token encrypted, so your next bots in this workspace need one click.'
-              )}
-            </SettingsNote>
           </>
         )
       case 'ready':
         return (
-          <MobileStateView
-            iconElement={mark}
+          <SettingsSection
+            first
             title={t('bots.slack.setup.readyTitle', 'Your Slack app is ready')}
-            message={t(
+            footer={t(
               'bots.slack.setup.readyDetail',
               'Approve it in Slack to finish. If your workspace needs an admin to approve new apps, {{name}} joins once they do.',
               { name: props.botName }
             )}
           >
-            <SheetPrimaryButton
-              label={t('bots.slack.setup.approve', 'Approve in Slack')}
-              icon={ExternalLink}
+            <ListRow
+              leading={<ArrowUpRight size={18} color={colors.accentBlue} />}
+              accent
+              title={t('bots.slack.setup.approve', 'Approve in Slack')}
+              subtitle={
+                step.opened ? t('bots.slack.setup.waiting', 'Waiting for Slack…') : undefined
+              }
+              accessory={
+                step.opened ? (
+                  <ActivityIndicator size="small" color={colors.textSecondary} />
+                ) : undefined
+              }
+              accessibilityRole="link"
               disabled={!props.online}
               onPress={setup.approve}
             />
-            {step.opened ? (
-              <View style={styles.waiting}>
-                <ActivityIndicator size="small" color={colors.textSecondary} />
-                <Text style={styles.waitingText}>
-                  {t('bots.slack.setup.waiting', 'Waiting for Slack…')}
-                </Text>
-              </View>
-            ) : null}
-          </MobileStateView>
+          </SettingsSection>
+        )
+      case 'pick':
+        return (
+          <SlackPickStep
+            client={props.client}
+            hostBots={props.hostBots}
+            teamIds={step.teamIds}
+            online={props.online}
+            onPick={setup.setUp}
+            onAnother={setup.pasteToken}
+          />
         )
       case 'expired':
       case 'other-user':
         return (
-          <MobileStateView
-            iconElement={mark}
-            title={
-              step.kind === 'expired'
-                ? t('bots.slack.setup.expired', 'The install link expired.')
-                : t(
-                    'bots.slack.setup.otherUser',
-                    'Another Slack account approved it. Get a new link and approve as yourself.'
-                  )
-            }
-            action={
-              props.online
-                ? {
-                    label: t('bots.slack.setup.newLink', 'Get a new link'),
-                    onPress: () => setup.setUp(step.teamId)
-                  }
-                : null
-            }
+          <SlackProblemStep
+            kind={step.kind}
+            teamId={step.teamId}
+            client={props.client}
+            hostBots={props.hostBots}
+            botName={props.botName}
+            hostName={props.hostName}
+            online={props.online}
+            onNewLink={() => setup.setUp(step.teamId)}
           />
         )
       case 'uncertain':
@@ -326,14 +332,13 @@ export function MobileBotSlackSetup(props: {
                 accessibilityRole="checkbox"
                 onPress={() => setChecked((value) => !value)}
               />
-            </SettingsSection>
-            <View style={styles.field}>
-              <SheetPrimaryButton
-                label={t('bots.slack.setup.again', 'Set up again')}
+              <ListRow
+                title={t('bots.slack.setup.again', 'Set up again')}
+                accent
                 disabled={!checked || !props.online}
                 onPress={() => setup.setUp(step.teamId)}
               />
-            </View>
+            </SettingsSection>
           </>
         )
       case 'failed':
@@ -360,13 +365,14 @@ export function MobileBotSlackSetup(props: {
 }
 
 const styles = themedStyleSheet(() => ({
-  field: { marginTop: spacing.lg },
-  waiting: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: spacing.sm,
-    marginTop: spacing.lg
-  },
-  waitingText: { color: colors.textSecondary, fontSize: 13 }
+  // The token is the steps' last row: no box of its own, its text under the steps' titles.
+  tokenRow: {
+    borderWidth: 0,
+    borderRadius: 0,
+    backgroundColor: 'transparent',
+    outlineWidth: 0,
+    minHeight: 48,
+    paddingLeft: LIST_LEADING_INSET,
+    paddingRight: LIST_ROW_PADDING
+  }
 }))
