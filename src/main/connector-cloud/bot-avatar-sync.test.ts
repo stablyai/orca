@@ -5,7 +5,7 @@ import { join } from 'node:path'
 import { afterEach, expect, it, vi } from 'vitest'
 import type * as z from 'zod'
 import type { Bot } from '../../shared/bot-types'
-import type { ConnectorResult } from './connector-cloud-request'
+import { type ConnectorResult, SIGNED_OUT } from './connector-cloud-request'
 import { botSlackIconLook } from '../../shared/bots/bot-slack-icon'
 import { localBotHomeFilesystem } from '../bots/bot-home'
 import {
@@ -225,6 +225,7 @@ it('leaves a drawn icon the cloud failed to take for the next real step, not the
       }
     },
     cloud: () => ({
+      knownAccount: () => 'acct-1',
       call: async <T extends z.ZodType>(
         _path: string,
         body: unknown,
@@ -364,6 +365,7 @@ it('sends only drawings of the latest look through every edit, a plain look incl
       }
     },
     cloud: () => ({
+      knownAccount: () => 'acct-1',
       call: async <T extends z.ZodType>(
         _path: string,
         body: unknown,
@@ -639,4 +641,49 @@ it('takes up the account a sign-in left while a sign-out was running', () => {
   expect(connector.knownAccount()).toBeNull()
   connector.signOutFinished()
   expect(connector.knownAccount()).toBe('acct-2')
+})
+
+it('sends nothing and starts no timer for a look changed while signed out', async () => {
+  vi.useFakeTimers()
+  try {
+    let bot = {
+      id: 'bot-1',
+      folderWorkspaceId: 'home-1',
+      avatar: 'mascot:A1',
+      avatarColor: '#1f2126',
+      avatarOutfit: null,
+      slack: { appId: 'A1', teamId: 'T1' },
+      github: null
+    }
+    let calls = 0
+    const sync = new BotAvatarSync({
+      bots: {
+        enabled: () => true,
+        list: () => [bot],
+        readAvatarImage: async () => null,
+        slackIcons: {
+          shownRecords: new BotSlackIconShownRecords({
+            read: async () => null,
+            write: async () => {},
+            exists: () => true
+          }),
+          read: async () => null
+        }
+      },
+      cloud: () => ({
+        knownAccount: () => null,
+        call: async () => {
+          calls += 1
+          return SIGNED_OUT
+        }
+      })
+    })
+    bot = { ...bot, avatarColor: '#ffffff' }
+    sync.changed()
+    await vi.advanceTimersByTimeAsync(10 * 60_000)
+    expect(calls).toBe(0)
+    expect(vi.getTimerCount()).toBe(0)
+  } finally {
+    vi.useRealTimers()
+  }
 })

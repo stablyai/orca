@@ -31,7 +31,7 @@ const MAX_REFUSED_WAIT_MS = 30 * 60_000
 const MAX_CONCURRENT_SENDS = 4
 
 export class BotAvatarSync {
-  private readonly sent = new BotAvatarSent(() => this.deps.cloud()?.knownAccount?.())
+  private readonly sent = new BotAvatarSent(() => this.deps.cloud()?.knownAccount())
   // One send per bot at a time, so an older picture never lands after a newer one; the picture in flight.
   private readonly sending = new Map<string, string>()
   // Per bot, the avatar the cloud refused as an unknown bot, and until when it waits.
@@ -62,9 +62,7 @@ export class BotAvatarSync {
         list: () => SyncedBot[]
         slackIcons: Pick<BotSlackIcons, 'read' | 'shownRecords'>
       }
-      cloud: () =>
-        | (Pick<ConnectorCloud, 'call'> & Partial<Pick<ConnectorCloud, 'knownAccount'>>)
-        | null
+      cloud: () => (Pick<ConnectorCloud, 'call'> & Pick<ConnectorCloud, 'knownAccount'>) | null
     }
   ) {
     this.lookup = createBotLookupIndex(() => this.deps.bots.list())
@@ -226,7 +224,8 @@ export class BotAvatarSync {
       return
     }
     const cloud = this.deps.cloud()
-    if (!cloud) {
+    // Signed out, nothing can be taken and nothing waits on a timer: the next sign-in's pass sends it.
+    if (!cloud || this.sent.account() === null) {
       return
     }
     this.sending.set(bot.id, avatar)

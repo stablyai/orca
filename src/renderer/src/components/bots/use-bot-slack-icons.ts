@@ -8,7 +8,12 @@ import { useEffect } from 'react'
 import { readBotsEnabled, subscribeToBotChanges, useBotsEnabled } from '@/lib/bot-catalog'
 import { onBotHostCameBack } from '@/lib/bot-host-link-read'
 import { BOTS_CHANGED_EVENT } from '@/lib/bots-changed-window-event'
-import { readBotHostIds, readBotHostState, readHostBots } from '@/lib/bot-catalog-snapshot'
+import {
+  readBotHostIds,
+  readBotHostState,
+  readBots,
+  readHostBots
+} from '@/lib/bot-catalog-snapshot'
 import { botRefKey } from '@/lib/bot-hosts'
 import { botHostHas } from '@/lib/bot-host-status'
 import { parseBotAvatar } from '../../../../shared/bot-avatar'
@@ -52,6 +57,8 @@ function clearFailure(bot: Pick<Bot, 'hostId' | 'id'>): void {
 // detail of the list) costs one compare for that host. Per bot, its record as last looked at, by its save
 // time, picture fields and links: a list rebuilt around a deleted bot asks nothing about the bots it only
 // moved.
+// Every listed host's bots as the catalog last flattened them: the same list until some host's list changes.
+let lastListed: readonly Bot[] | null = null
 const seenHosts = new Map<ExecutionHostId, readonly Bot[]>()
 const seen = new Map<string, string>()
 
@@ -223,6 +230,12 @@ function publishLooks(all = false): void {
   if (!readBotsEnabled()) {
     return
   }
+  // A notice that changed no host's list (a Needs you count, say) keeps this the same list: one check.
+  const listed = readBots()
+  if (!all && listed === lastListed) {
+    return
+  }
+  lastListed = listed
   const hostIds = readBotHostIds()
   for (const hostId of hostIds) {
     const bots = readHostBots(hostId)
@@ -241,9 +254,9 @@ function publishLooks(all = false): void {
     }
   }
   if (seenHosts.size > hostIds.length) {
-    const listed = new Set(hostIds)
+    const stillListed = new Set(hostIds)
     for (const [hostId, before] of seenHosts) {
-      if (!listed.has(hostId)) {
+      if (!stillListed.has(hostId)) {
         seenHosts.delete(hostId)
         prune(hostId, before, [])
       }
@@ -309,6 +322,7 @@ export function useBotSlackIcons(): void {
       window.removeEventListener('focus', retryAll)
       window.removeEventListener(BOTS_CHANGED_EVENT, hostSettingsChanged)
       // Off, nothing here is kept: no lists, no waiting attempts, and the one running stops at its next check.
+      lastListed = null
       seenHosts.clear()
       seen.clear()
       handled.clear()

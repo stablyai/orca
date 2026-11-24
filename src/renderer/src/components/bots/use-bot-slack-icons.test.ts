@@ -15,6 +15,7 @@ vi.mock('@/lib/bot-catalog', () => ({
 vi.mock('@/lib/bot-catalog-snapshot', () => ({
   readBotHostState: () => 'live',
   readBotHostIds: () => [],
+  readBots: () => listed,
   readHostBots: () => listed
 }))
 vi.mock('@/lib/bot-host-status', () => ({ botHostHas: () => true }))
