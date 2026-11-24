@@ -5,6 +5,7 @@ import { disposeDesktopBrowserBridge } from '../../ipc/browser/desktop-browser-b
 import { browserManager } from '../../browser/guest-lifecycle/manager/browser-manager'
 import { settleTeardownWithinDeadline, type NamedQuitTeardown } from './quit-teardown-deadline'
 import { quitTeardownStartGate } from './quit-teardown-start-gate'
+import { abortPluginGitForShutdown } from '../../plugins/installation/plugin-git-repository'
 import { destroySystemTray } from '../../tray/system-tray'
 import { shutdownTelemetry } from '../../telemetry/client'
 import { shutdownObservability } from '../../observability/index'
@@ -99,6 +100,8 @@ function installWillQuitHandler(): void {
     if (!quitTeardownStartGate.tryStart(event)) {
       return
     }
+    // Not awaited: kills catalog clones so git cannot outlive Orca; the startup sweep catches leftovers.
+    abortPluginGitForShutdown()
     const updateQuitInProgress = isQuittingForUpdate()
     const coreTeardowns = beginDesktopCoreShutdown(
       state.core,
