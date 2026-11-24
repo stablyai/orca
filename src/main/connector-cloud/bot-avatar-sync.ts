@@ -43,6 +43,11 @@ function lookOf(bot: SyncedBot): string | null {
   return look
 }
 
+// What the cloud took for a bot, and under which account (its hash).
+function sentKey(account: string | null, picture: string): string {
+  return `${account ?? ''}|${picture}`
+}
+
 // What the cloud is sent for a bot: its picture and, for a mascot, its look.
 function pictureKey(bot: SyncedBot): string {
   return `${bot.avatar ?? ''}|${lookOf(bot) ?? ''}`
@@ -153,6 +158,8 @@ export class BotAvatarSync {
     }
     let waiting = false
     const present = new Set<string>()
+    // A picture taken under another account is sent again: that account's connector may not have it.
+    const account = BotSlackIconShownRecords.accountKey(this.deps.cloud()?.signedInAccount?.())
     for (const bot of this.deps.bots.list()) {
       present.add(bot.id)
       // A bot that no longer needs its drawn icon (unlinked, or another kind of picture) lets its bytes go;
@@ -172,7 +179,7 @@ export class BotAvatarSync {
         }
         continue
       }
-      if (this.sent.get(bot.id) === pictureKey(bot)) {
+      if (this.sent.get(bot.id) === sentKey(account, pictureKey(bot))) {
         this.queued.delete(bot.id)
         continue
       }
@@ -248,6 +255,7 @@ export class BotAvatarSync {
     let refused = false
     let carried = false
     let left = false
+    let sentAs: string | null = null
     try {
       const png = parsed.kind === 'upload' ? await this.deps.bots.readAvatarImage(bot.id) : null
       const icon = parsed.kind === 'mascot' ? await this.mascotIcon(bot) : null
@@ -261,6 +269,7 @@ export class BotAvatarSync {
       const shown = parsed.kind === 'mascot' && !icon ? await this.shown.get(bot.id) : null
       // Read after the last wait, so the hold-back and the record go by the account the send goes as.
       const account = BotSlackIconShownRecords.accountKey(cloud.signedInAccount?.())
+      sentAs = account
       // The window draws a new look right after the write: until it does, Slack keeps the last drawing.
       left =
         parsed.kind === 'mascot' &&
@@ -298,7 +307,7 @@ export class BotAvatarSync {
       this.resend(bot.id)
     } else if (sent) {
       this.owed.delete(bot.id)
-      this.sent.set(bot.id, avatar)
+      this.sent.set(bot.id, sentKey(sentAs, avatar))
       // Kept only for a retry: once taken, its bytes are let go.
       this.prepared.delete(bot.id)
       // The picture may have changed while this one was on its way: only then is the roster read again.

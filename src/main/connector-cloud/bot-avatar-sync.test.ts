@@ -467,3 +467,52 @@ it('keeps no record for a drawing another account may have taken, and keeps it t
     expect(shown !== null).toBe(kept)
   }
 })
+
+it('sends a picture again to another account that signs in, never again to the same one', async () => {
+  const bot = {
+    id: 'bot-1',
+    folderWorkspaceId: 'home-1',
+    avatar: 'mascot:A1',
+    avatarColor: null,
+    avatarOutfit: null,
+    slack: { appId: 'A1', teamId: 'T1' },
+    github: null
+  }
+  let account = 'acct-1'
+  const sentAs: string[] = []
+  const sync = new BotAvatarSync({
+    bots: {
+      enabled: () => true,
+      list: () => [bot],
+      readAvatarImage: async () => null,
+      slackIcons: {
+        shownRecords: new BotSlackIconShownRecords({
+          read: async () => null,
+          write: async () => {},
+          exists: () => true
+        }),
+        read: async () => null
+      }
+    },
+    cloud: () => ({
+      signedInAccount: () => account,
+      call: async <T extends z.ZodType>(
+        _path: string,
+        _body: unknown,
+        schema: T
+      ): Promise<ConnectorResult<z.infer<T>>> => {
+        sentAs.push(account)
+        return { ok: true, value: schema.parse(undefined) }
+      }
+    })
+  })
+  sync.changed()
+  await vi.waitFor(() => expect(sentAs).toEqual(['acct-1']))
+  sync.changed()
+  account = 'acct-2'
+  sync.changed()
+  await vi.waitFor(() => expect(sentAs).toEqual(['acct-1', 'acct-2']))
+  sync.changed()
+  await new Promise((resolve) => setImmediate(resolve))
+  expect(sentAs).toEqual(['acct-1', 'acct-2'])
+})
