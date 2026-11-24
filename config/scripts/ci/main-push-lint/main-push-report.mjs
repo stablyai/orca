@@ -43,8 +43,16 @@ export function describeLocation(diagnostic) {
   return diagnostic.file ? `${diagnostic.file}:${diagnostic.line}:${diagnostic.col}` : '(no file)'
 }
 
+// The runner reads a line that starts with `::` or contains `##[` as a workflow command, so a path
+// such as `::stop-commands::x.ts` must not reach the log as one.
+export function logText(value) {
+  return visibleText(value)
+    .replace(/^( *):/, (_, spaces) => `${spaces}\\u003a`)
+    .replaceAll('##[', '##\\u005b')
+}
+
 export function logLine(diagnostic) {
-  return visibleText(`${describeLocation(diagnostic)} ${diagnostic.rule} ${diagnostic.message}`)
+  return logText(`${describeLocation(diagnostic)} ${diagnostic.rule} ${diagnostic.message}`)
 }
 
 // Escape a value for the data part of a workflow command (`::error ...::<data>`).

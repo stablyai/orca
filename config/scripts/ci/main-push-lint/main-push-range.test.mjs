@@ -1,6 +1,6 @@
 // Pin which files a main push lints, against real shallow clones and the real oxlint.
 import { execFileSync } from 'node:child_process'
-import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import process from 'node:process'
@@ -150,6 +150,29 @@ describe('main-push lint range', () => {
       ).toEqual(odd.map((file) => `${file}:1`).toSorted())
     }
   )
+
+  it('passes a clean push under a nested oxlint config', async () => {
+    const nested = makeOrigin()
+    mkdirSync(join(nested, 'sub'))
+    const tip = commit(
+      nested,
+      {
+        '.oxlintrc.json': CONFIG,
+        'sub/.oxlintrc.json': CONFIG,
+        'sub/clean.ts': 'export {}\n',
+        'top.ts': 'export {}\n'
+      },
+      'nested config'
+    )
+    const cwd = shallowCheckout(nested)
+    const results = collectBatchResults(
+      await runOxlint(await changedLintableFiles(EMPTY_TREE_SHA, tip, cwd), {
+        cwd,
+        invocation: resolveOxlintInvocation(REPO_ROOT)
+      })
+    )
+    expect(results).toEqual({ diagnostics: [], incomplete: [], linted: 2 })
+  })
 
   it('publishes the failure before any PR lookup, and exits 1', async () => {
     const cwd = shallowCheckout(origin)

@@ -6,8 +6,9 @@ const execFileAsync = promisify(execFile)
 const MAX_BUFFER_BYTES = 64 * 1024 * 1024
 // Windows caps a whole command line at 32,767 characters; leave room for node, the bin path and options.
 const MAX_PATH_CHARS_PER_RUN = 24_000
-// oxlint prints this only after it has linted every path it accepted.
-const FINISHED_LINE = /^Finished in .* on (\d+) files? with /m
+// oxlint prints this only after it has linted every path it accepted. With nested configs it omits
+// "with N rules": `Finished in 32ms on 1 file using 18 threads.`
+const FINISHED_LINE = /^Finished in .* on (\d+) files? (?:with \d+ rules? )?using /m
 
 export function batchPaths(files, maxChars = MAX_PATH_CHARS_PER_RUN) {
   const batches = []

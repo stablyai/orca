@@ -10,10 +10,10 @@ import {
   escapeAnnotationData,
   escapeAnnotationProperty,
   logLine,
+  logText,
   markdownText,
   renderAttributionSummary,
-  renderLintSummary,
-  visibleText
+  renderLintSummary
 } from './main-push-report.mjs'
 import { collectBatchResults, runOxlint } from './oxlint-batches.mjs'
 import { attributeFiles, createGithubApi, describeAttribution } from './push-attribution.mjs'
@@ -64,9 +64,7 @@ function reportIncomplete(incomplete, reporter) {
       batch.files.length > MAX_LOGGED_PATHS
         ? ` and ${batch.files.length - MAX_LOGGED_PATHS} more`
         : ''
-    reporter.log(
-      `Not linted: ${batch.files.slice(0, MAX_LOGGED_PATHS).map(visibleText).join(' ')}${more}`
-    )
+    reporter.log(logText(`Not linted: ${batch.files.slice(0, MAX_LOGGED_PATHS).join(' ')}${more}`))
   }
 }
 
@@ -90,7 +88,7 @@ async function reportAttribution({ diagnostics, base, head, env, reporter, api }
     description: describeAttribution(attributions.get(file), ref)
   }))
   for (const { file, description } of rows) {
-    reporter.log(visibleText(`${file}: changed in this push by ${description}`))
+    reporter.log(logText(`${file}: changed in this push by ${description}`))
   }
   reporter.summary(renderAttributionSummary(rows))
 }

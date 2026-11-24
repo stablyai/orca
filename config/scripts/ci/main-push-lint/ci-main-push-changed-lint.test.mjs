@@ -1,7 +1,7 @@
 // Pin how the main-push lint reads oxlint output, renders untrusted paths and bounds PR attribution.
 import { readFileSync } from 'node:fs'
 import { describe, expect, it } from 'vitest'
-import { logLine, markdownText, renderLintSummary } from './main-push-report.mjs'
+import { logLine, logText, markdownText, renderLintSummary } from './main-push-report.mjs'
 import { collectBatchResults, parseGithubDiagnostics } from './oxlint-batches.mjs'
 import {
   ATTRIBUTION_LIMITS,
@@ -57,10 +57,12 @@ describe('main-push changed-file lint', () => {
       { files: ['a.ts'], failed: true, output: `${maxLines(PANE)}\n${FINISHED}` },
       { files: ['b.ts'], failed: true, output: 'thread panicked: out of memory\n' },
       { files: ['c.ts'], failed: false, output: '' },
-      { files: ['d.ts'], failed: true, output: FINISHED }
+      { files: ['d.ts'], failed: true, output: FINISHED },
+      // Nested configs drop "with N rules" from the Finished line.
+      { files: ['e.ts'], failed: false, output: 'Finished in 32ms on 1 file using 18 threads.\n' }
     ])
     expect(result.diagnostics.map((diagnostic) => diagnostic.file)).toEqual([PANE])
-    expect(result.linted).toBe(3)
+    expect(result.linted).toBe(4)
     expect(result.incomplete.map((batch) => batch.files)).toEqual([['b.ts'], ['c.ts'], ['d.ts']])
   })
 
@@ -71,7 +73,10 @@ describe('main-push changed-file lint', () => {
       'new\nline.ts',
       '<img src=x>.ts',
       '*em* [l](u) #1 @u.ts',
-      'back\\slash.ts'
+      'back\\slash.ts',
+      '::stop-commands::pause.ts',
+      '  ::warning::x.ts',
+      'a ##[group]b.ts'
     ]
     const diagnostics = hostile.map((file) => ({
       file,
@@ -98,7 +103,12 @@ describe('main-push changed-file lint', () => {
     expect(summary.match(/<\/pre>/g)).toHaveLength(1)
     for (const diagnostic of diagnostics) {
       expect(logLine(diagnostic)).not.toContain('\n')
+      // The runner would read these as workflow commands.
+      expect(logLine(diagnostic)).not.toMatch(/^\s*::|##\[/)
     }
+    expect(logText('::stop-commands::pause.ts: changed')).toBe(
+      '\\u003a:stop-commands::pause.ts: changed'
+    )
     expect(markdownText('x'.repeat(600))).toContain('… &#40;100 more characters&#41;')
   })
 
