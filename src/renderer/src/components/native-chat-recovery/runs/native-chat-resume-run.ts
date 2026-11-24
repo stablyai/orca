@@ -66,6 +66,12 @@ export function resumeRunInFlight(run: ResumeRun | null): boolean {
   return run?.inFlight ?? false
 }
 
+export function isResumeRunPendingPhase(
+  phase: NonNullable<ResumeRunHostStatus['restartResume']>['phase'] | undefined
+): boolean {
+  return phase === undefined || phase === 'queued' || phase === 'starting'
+}
+
 export function beginResumeRun(
   candidates: readonly ResumeCandidate[],
   now: number,

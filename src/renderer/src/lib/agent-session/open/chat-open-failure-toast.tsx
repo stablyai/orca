@@ -12,7 +12,7 @@ export type ChatOpenUnavailable = {
   retry?: () => void
 }
 
-const CHAT_OPEN_TOAST_ID = 'chat-open-unavailable'
+let chatOpenToastGeneration = 0
 let chatOpenFailureCount = 0
 
 export const chatOpenUnavailableText = {
@@ -30,10 +30,20 @@ export const chatOpenUnavailableText = {
 
 /** `agent` leads the details, so a toast without the name still says whose chat failed. */
 export function showChatOpenUnavailable(context: ChatOpenUnavailable = {}, agent?: string): void {
-  // One id keeps repeated clicks to one toast; sonner merges updates, so clear what this one lacks.
+  const generation = chatOpenToastGeneration
+  const retireToast = (): void => {
+    if (chatOpenToastGeneration === generation) {
+      chatOpenToastGeneration++
+    }
+  }
+  const toastOptions = {
+    id: `chat-open-unavailable-${generation}`,
+    onDismiss: retireToast,
+    onAutoClose: retireToast
+  }
   if (context.starting) {
     toast.info(chatOpenUnavailableText.stillStarting(), {
-      id: CHAT_OPEN_TOAST_ID,
+      ...toastOptions,
       description: undefined,
       action: undefined
     })
@@ -42,14 +52,18 @@ export function showChatOpenUnavailable(context: ChatOpenUnavailable = {}, agent
   const { retry } = context
   const detail = [agent, context.detail].filter(Boolean).join('\n')
   toast.error(chatOpenUnavailableText.openFailed(), {
-    id: CHAT_OPEN_TOAST_ID,
+    ...toastOptions,
     description: detail ? (
       <ChatOpenFailureDetails key={++chatOpenFailureCount} detail={detail} />
     ) : undefined,
     action: retry
       ? {
           label: translate('auto.lib.activateAiVaultStructuredSession.chatOpenRetry', 'Retry'),
-          onClick: retry
+          onClick: () => {
+            // A fast failure must survive Sonner's exit animation for the old toast.
+            retireToast()
+            retry()
+          }
         }
       : undefined
   })

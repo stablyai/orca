@@ -7,7 +7,7 @@ import {
   type NativeChatRestartStore
 } from './native-chat-restart-runtime-store'
 import { localNativeChatRestartStore } from './native-chat-resume-on-restart-store'
-import { resumeRunView } from '../runs/native-chat-resume-run-view'
+import { isResumeRunPendingPhase } from '../runs/native-chat-resume-run'
 
 const stores = new Map<string, NativeChatRestartStore>()
 const listeners = new Set<() => void>()
@@ -43,11 +43,11 @@ export function nativeChatRestartStillStarting(
   const store =
     target.kind === 'local' ? localNativeChatRestartStore : stores.get(target.environmentId)
   const run = store?.getNativeChatRestartRun()
-  if (!run?.inFlight || !run.entries.some((entry) => entry.candidate.sessionId === sessionId)) {
+  if (!run?.inFlight) {
     return false
   }
-  const view = resumeRunView(run, [], () => undefined, 'all')
-  return view.statusBySession.get(sessionId)?.kind === 'in-flight'
+  const entry = run.entries.find(({ candidate }) => candidate.sessionId === sessionId)
+  return entry !== undefined && isResumeRunPendingPhase(entry.observedStatus?.restartResume?.phase)
 }
 
 export function useNativeChatRestartRuntimes() {
