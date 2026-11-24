@@ -1,5 +1,6 @@
 import { delimiter, win32 as pathWin32 } from 'node:path'
 import { resolveWindowsShellStartupFamily } from '../../../shared/shell/launch/windows-terminal-shell'
+import { isNiubashShell } from '../../../shared/niubash-shell'
 
 export const SHELL_PATH_DELIMITER = '__ORCA_SHELL_PATH__'
 
@@ -35,6 +36,10 @@ function shellPathProbeCommand(shell: string): { args: string[]; pathDelimiter: 
     return { args: ['-ilc', command], pathDelimiter: delimiter }
   }
   if (resolveWindowsShellStartupFamily(shell) === 'posix') {
+    if (isNiubashShell(shell)) {
+      const command = `printf '%s' '${SHELL_PATH_DELIMITER}' "$PATH" '${SHELL_PATH_DELIMITER}'`
+      return { args: ['-ic', command], pathDelimiter: ';' }
+    }
     // Native children cannot resolve Git Bash /c/... PATH entries.
     const command =
       `printf '%s' '${SHELL_PATH_DELIMITER}'; cygpath -wp "$PATH"; ` +

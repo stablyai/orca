@@ -1,4 +1,5 @@
 import type { AgentStartupShell } from '../../agent-launch/startup/tui-agent-startup-shell'
+import { isNiubashShell, WINDOWS_NIUBASH_SHELL } from '../../niubash-shell'
 
 export const WINDOWS_GIT_BASH_SHELL = 'git-bash'
 
@@ -6,7 +7,8 @@ export const BUILT_IN_WINDOWS_TERMINAL_SHELLS = [
   'powershell.exe',
   'cmd.exe',
   'wsl.exe',
-  WINDOWS_GIT_BASH_SHELL
+  WINDOWS_GIT_BASH_SHELL,
+  WINDOWS_NIUBASH_SHELL
 ] as const
 
 export type BuiltInWindowsTerminalShell = (typeof BUILT_IN_WINDOWS_TERMINAL_SHELLS)[number]
@@ -20,6 +22,9 @@ export function resolveWindowsShellStartupFamily(
     return 'powershell'
   }
   if (trimmed === WINDOWS_GIT_BASH_SHELL) {
+    return 'posix'
+  }
+  if (isNiubashShell(trimmed)) {
     return 'posix'
   }
   const basename = trimmed.replaceAll('\\', '/').split('/').pop()?.toLowerCase() ?? ''
@@ -84,6 +89,8 @@ const WINDOWS_SHELL_OVERRIDE_CANONICAL_NAMES: ReadonlyMap<string, string> = new 
   // Both bash spellings already work with local/daemon PTYs; keep relay acceptance aligned.
   ['bash.exe', 'bash.exe'],
   ['bash', 'bash.exe'],
+  ['niu', WINDOWS_NIUBASH_SHELL],
+  [WINDOWS_NIUBASH_SHELL, WINDOWS_NIUBASH_SHELL],
   [WINDOWS_GIT_BASH_SHELL, WINDOWS_GIT_BASH_SHELL]
 ])
 

@@ -64,7 +64,7 @@ export function TerminalPane({
   setScrollbackMode,
   pwshAvailable,
   gitBashAvailable = false,
-  niubashAvailable: _niubashAvailable = false,
+  niubashAvailable = false,
   isWindowsTerminalHost
 }: TerminalPaneProps): React.JSX.Element {
   const t = useTranslate()
@@ -293,6 +293,7 @@ export function TerminalPane({
         updateSettings={updateSettings}
         windowsShell={windowsShell}
         gitBashAvailable={gitBashAvailable}
+        niubashAvailable={niubashAvailable}
       />
     ) : null,
     matchesSettingsSearch(searchQuery, getTerminalRenderingSearchEntries()) ? (

@@ -7,6 +7,7 @@ import { signalPosixPtyForegroundGroup } from '../../pty/process-retirement/posi
 import { ptyShellProcessId } from '../../windows/windows-pty-job'
 import { isWslAvailableAsync } from '../../wsl/discovery/wsl-availability'
 import { resolveGitBashPath } from '../../pty/shell-startup/git-bash'
+import { resolveNiubashPath } from '../../niubash'
 import { resolveProcessCwd } from '../working-directory/process-cwd'
 import {
   dataListeners,
@@ -157,13 +158,22 @@ export async function getLocalPtyProfiles(): Promise<{ name: string; path: strin
     if (gitBashPath) {
       profiles.push({ name: 'Git Bash', path: gitBashPath })
     }
+    const niubashPath = await resolveNiubashPath()
+    if (niubashPath) {
+      profiles.push({ name: 'Niubash', path: niubashPath })
+    }
     if (await isWslAvailableAsync()) {
       profiles.push({ name: 'WSL', path: 'wsl.exe' })
     }
     return profiles
   }
   const shells = ['/bin/zsh', '/bin/bash', '/bin/sh']
-  return shells.filter((s) => existsSync(s)).map((s) => ({ name: basename(s), path: s }))
+  const profiles = shells.filter((s) => existsSync(s)).map((s) => ({ name: basename(s), path: s }))
+  const niubashPath = await resolveNiubashPath()
+  if (niubashPath) {
+    profiles.push({ name: 'Niubash', path: niubashPath })
+  }
+  return profiles
 }
 
 export function onLocalPtyData(callback: DataCallback): () => void {

@@ -1680,6 +1680,7 @@ export const RPC_PARAMS_BY_METHOD = {
   'host.declareAccount': DeclareOrcaAccountParamsSchema,
   'host.declareClient': OrcadDeclareClientParamsSchema,
   'host.gitBash.isAvailable': null,
+  'host.niubash.isAvailable': null,
   'host.peerDesktops': OrcadPeerDesktopsParamsSchema,
   'host.platform': null,
   'host.pwsh.isAvailable': null,

@@ -1,5 +1,6 @@
 import type { GlobalSettings } from '../../../../../../shared/settings/global-settings-types'
 import { WINDOWS_GIT_BASH_SHELL } from '../../../../../../shared/shell/launch/windows-terminal-shell'
+import { WINDOWS_NIUBASH_SHELL } from '../../../../../../shared/niubash-shell'
 import { SettingsRow, SettingsSegmentedControl } from '../../form-controls/SettingsFormControls'
 import { SearchableSetting } from '../../section-layout/SearchableSetting'
 import { useTranslate } from '@/i18n/use-translate'
@@ -10,6 +11,7 @@ type TerminalWindowsShellSectionProps = {
   updateSettings: (updates: Partial<GlobalSettings>) => void
   windowsShell: string
   gitBashAvailable: boolean
+  niubashAvailable?: boolean
 }
 
 function windowsShellLabel(shell: string, label: string): React.JSX.Element {
@@ -24,10 +26,12 @@ function windowsShellLabel(shell: string, label: string): React.JSX.Element {
 export function TerminalWindowsShellSection({
   updateSettings,
   windowsShell,
-  gitBashAvailable
+  gitBashAvailable,
+  niubashAvailable = false
 }: TerminalWindowsShellSectionProps): React.JSX.Element {
   const t = useTranslate()
   const showGitBashOption = gitBashAvailable || windowsShell === WINDOWS_GIT_BASH_SHELL
+  const showNiubashOption = niubashAvailable || windowsShell === WINDOWS_NIUBASH_SHELL
   // New WSL choices need a distro; retain only existing WSL defaults here.
   const showWslOption = windowsShell === 'wsl.exe'
 
@@ -55,6 +59,8 @@ export function TerminalWindowsShellSection({
           'cmd',
           'command prompt',
           'git bash',
+          'niubash',
+          'niu.exe',
           'bash.exe',
           'default'
         ]}
@@ -104,6 +110,19 @@ export function TerminalWindowsShellSection({
                           'Git Bash'
                         ),
                         disabled: !gitBashAvailable
+                      }
+                    ]
+                  : []),
+                ...(showNiubashOption
+                  ? [
+                      {
+                        value: WINDOWS_NIUBASH_SHELL,
+                        label: windowsShellLabel(
+                          WINDOWS_NIUBASH_SHELL,
+                          t('auto.components.settings.TerminalPane.niubash', 'Niubash')
+                        ),
+                        ariaLabel: t('auto.components.settings.TerminalPane.niubash', 'Niubash'),
+                        disabled: !niubashAvailable
                       }
                     ]
                   : []),

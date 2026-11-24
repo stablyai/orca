@@ -64,7 +64,8 @@ describe('Niubash terminal launch', () => {
     vi.stubGlobal('process', { ...process, platform: 'win32' })
     expect(shellPathProbe('D:\\Niu Shell\\niu.exe')).toEqual({
       args: ['-ic', `printf '%s' '${SHELL_PATH_DELIMITER}' "$PATH" '${SHELL_PATH_DELIMITER}'`],
-      pathDelimiter: ';'
+      pathDelimiter: ';',
+      detached: false
     })
     expect(shellPathProbe('bash.exe').args[1]).toContain('cygpath -wp')
   })

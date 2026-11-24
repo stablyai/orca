@@ -2,6 +2,7 @@ import { Check } from 'lucide-react'
 import { useCallback, useState } from 'react'
 import type { BuiltInWindowsTerminalShell } from '../../../../shared/shell/launch/windows-terminal-shell'
 import { WINDOWS_GIT_BASH_SHELL } from '../../../../shared/shell/launch/windows-terminal-shell'
+import { WINDOWS_NIUBASH_SHELL } from '../../../../shared/niubash-shell'
 import type { GlobalSettings } from '../../../../shared/settings/global-settings-types'
 import { cn } from '@/lib/class-names'
 import { useWindowsTerminalCapabilities } from '@/runtime/hosts/capabilities/windows-terminal-capabilities'
@@ -41,7 +42,8 @@ function normalizeWindowsShell(value: string | null | undefined): BuiltInWindows
     value === 'powershell.exe' ||
     value === 'cmd.exe' ||
     value === 'wsl.exe' ||
-    value === WINDOWS_GIT_BASH_SHELL
+    value === WINDOWS_GIT_BASH_SHELL ||
+    value === WINDOWS_NIUBASH_SHELL
   ) {
     return value
   }
@@ -63,6 +65,7 @@ export function WindowsTerminalStep({
       ? [selectedWslDistroName, ...capabilities.wslDistros]
       : capabilities.wslDistros
   const showGitBashOption = capabilities.gitBashAvailable || windowsShell === WINDOWS_GIT_BASH_SHELL
+  const showNiubashOption = capabilities.niubashAvailable || windowsShell === WINDOWS_NIUBASH_SHELL
   const showWslOption = capabilities.wslAvailable || windowsShell === 'wsl.exe'
 
   const setSelectPortalHost = useCallback((node: HTMLDivElement | null) => {
@@ -107,6 +110,24 @@ export function WindowsTerminalStep({
                   'Selected, but Git Bash was not detected on this machine.'
                 ),
             disabled: !capabilities.gitBashAvailable
+          } satisfies ShellOption
+        ]
+      : []),
+    ...(showNiubashOption
+      ? [
+          {
+            value: WINDOWS_NIUBASH_SHELL,
+            label: t('auto.components.onboarding.WindowsTerminalStep.niubash', 'Niubash'),
+            description: capabilities.niubashAvailable
+              ? t(
+                  'auto.components.onboarding.WindowsTerminalStep.niubashDescription',
+                  'Uses native Bash-compatible niu.exe without WSL or MSYS.'
+                )
+              : t(
+                  'auto.components.onboarding.WindowsTerminalStep.niubashUnavailable',
+                  'Selected, but Niubash was not detected on this machine.'
+                ),
+            disabled: !capabilities.niubashAvailable
           } satisfies ShellOption
         ]
       : []),

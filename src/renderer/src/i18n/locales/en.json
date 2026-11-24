@@ -5497,7 +5497,8 @@
             "1a8af49530": "CMD Prompt",
             "2148f65e04": "PowerShell",
             "7a9b4af2af": "Scroll tabs left",
-            "232e075b07": "Scroll tabs right"
+            "232e075b07": "Scroll tabs right",
+            "niubash": "Niubash"
           },
           "TabBarCreateEntry": {
             "d62d63b807": "Create file",
@@ -10625,7 +10626,8 @@
           "82e19f00f0": "Terminal interaction",
           "8f3e7bc91f": "Copy on select",
           "8abcfcf8d3": "Word separators",
-          "e9c84d0338": "Default shell"
+          "e9c84d0338": "Default shell",
+          "niubash": "Niubash"
         },
         "TerminalSettingsPreview": {
           "a63953a48a": "Preview {{value0}} theme",
@@ -16634,7 +16636,10 @@
           "loadingDistros": "Loading distributions",
           "windowsDefault": "Windows default",
           "rightClickBehavior": "Right-click behavior",
-          "rightClickBehaviorDescription": "Pick the terminal mouse behavior that matches your Windows muscle memory."
+          "rightClickBehaviorDescription": "Pick the terminal mouse behavior that matches your Windows muscle memory.",
+          "niubash": "Niubash",
+          "niubashDescription": "Uses native Bash-compatible niu.exe without WSL or MSYS.",
+          "niubashUnavailable": "Selected, but Niubash was not detected on this machine."
         },
         "mac": {
           "notification": {
