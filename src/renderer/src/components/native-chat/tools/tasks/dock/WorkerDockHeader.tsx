@@ -35,17 +35,20 @@ export function WorkerDockHeader({
   stopAll?: { pending: boolean; onStop: () => void }
 }) {
   const t = useTranslate()
+  const showStopAll = expanded && Boolean(stopAll)
+  const showClearAll = expanded && clearable >= 2
   return (
     <div
       data-worker-dock-header=""
-      className={cn('flex shrink-0 items-center gap-1 pr-2', narrow ? 'min-h-11' : 'min-h-9')}
+      className={cn('flex shrink-0 items-center gap-1', narrow ? 'min-h-11' : 'min-h-9')}
     >
+      {/* Full-width summary, so its hover fill reaches the bar's right edge. */}
       <button
         ref={summary}
         type="button"
         aria-expanded={expanded}
         aria-controls={expanded ? listId : undefined}
-        className="flex min-h-9 min-w-0 flex-1 items-center gap-2 rounded-lg pl-3 pr-2 sm:pl-4 text-left text-xs font-medium text-foreground hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
+        className="flex min-h-9 min-w-0 flex-1 items-center gap-2 pl-3 pr-2 sm:pl-4 text-left text-xs font-medium text-foreground hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
         onClick={() => {
           onToggle()
         }}
@@ -76,43 +79,47 @@ export function WorkerDockHeader({
           className={cn('size-3 shrink-0', expanded && 'rotate-180')}
         />
       </button>
-      {expanded && stopAll ? (
-        <Button
-          variant="ghost"
-          size="xs"
-          aria-disabled={stopAll.pending}
-          onClick={() => {
-            if (!stopAll.pending) {
-              stopAll.onStop()
-            }
-          }}
-        >
-          {stopAll.pending
-            ? t('components.native-chat.workerDock.stopping', 'Stopping…')
-            : t('components.native-chat.workerDock.stop', 'Stop')}
-        </Button>
-      ) : null}
-      {expanded && clearable >= 2 ? (
-        <Button
-          type="button"
-          variant="ghost"
-          size="xs"
-          aria-label={t(
-            'components.native-chat.workerDock.clearAllLabel',
-            'Clear all {{count}} failed workers',
-            { count: clearable, defaultValue_one: 'Clear failed worker' }
-          )}
-          aria-disabled={clearing}
-          onClick={() => {
-            if (clearing) {
-              return
-            }
-            onClear()
-            summary.current?.focus()
-          }}
-        >
-          {t('components.native-chat.workerDock.clearAll', 'Clear all')}
-        </Button>
+      {showStopAll || showClearAll ? (
+        <div className="flex shrink-0 items-center gap-1 pr-2">
+          {showStopAll && stopAll ? (
+            <Button
+              variant="ghost"
+              size="xs"
+              aria-disabled={stopAll.pending}
+              onClick={() => {
+                if (!stopAll.pending) {
+                  stopAll.onStop()
+                }
+              }}
+            >
+              {stopAll.pending
+                ? t('components.native-chat.workerDock.stopping', 'Stopping…')
+                : t('components.native-chat.workerDock.stop', 'Stop')}
+            </Button>
+          ) : null}
+          {showClearAll ? (
+            <Button
+              type="button"
+              variant="ghost"
+              size="xs"
+              aria-label={t(
+                'components.native-chat.workerDock.clearAllLabel',
+                'Clear all {{count}} failed workers',
+                { count: clearable, defaultValue_one: 'Clear failed worker' }
+              )}
+              aria-disabled={clearing}
+              onClick={() => {
+                if (clearing) {
+                  return
+                }
+                onClear()
+                summary.current?.focus()
+              }}
+            >
+              {t('components.native-chat.workerDock.clearAll', 'Clear all')}
+            </Button>
+          ) : null}
+        </div>
       ) : null}
     </div>
   )

@@ -28,7 +28,7 @@ import {
   googleClientImport,
   googleSetupStart
 } from './bot-connector-account-operations'
-import type { PhoneGoogle } from './MobileBotGooglePage'
+import type { PhoneGoogle } from './phone-google-accounts'
 
 export function MobileBotGoogleConnect(props: {
   client: RpcClient | null
@@ -230,36 +230,17 @@ export function MobileBotGoogleConnect(props: {
       <SettingsSection>
         <ListRow
           title={t('bots.google.hostChoice.self', 'Self hosted')}
-          subtitle={t(
-            'bots.google.hostChoice.selfNote',
-            'You make your own Google Cloud app, so your sign-in stays on your computer. About 10 minutes.'
-          )}
-          subtitleLines={3}
+          subtitle={t('bots.google.hostChoice.selfNote', 'Your own Google app.')}
           selected
           accessibilityRole="radio"
         />
         <ListRow
           title={t('bots.google.hostChoice.orca', 'Orca hosted')}
-          subtitle={t('bots.google.hostChoice.orcaNote', 'Sign in with Google. Nothing to set up.')}
-          value={t('bots.google.hostChoice.comingSoon', 'Coming soon')}
+          subtitle={t('bots.google.hostChoice.orcaNote', 'Sign in with Google.')}
+          value={t('bots.google.hostChoice.soon', 'Soon')}
           disabled
           accessibilityRole="radio"
         />
-      </SettingsSection>
-      <SettingsSection title={t('bots.google.hostChoice.steps', 'Steps')}>
-        {[
-          t('bots.google.hostChoice.stepApp', '{{bot}} opens Google Cloud and sets up the app', {
-            bot: bot.name
-          }),
-          t('bots.google.hostChoice.stepSignIn', 'You tick Google’s terms box and sign in'),
-          t(
-            'bots.google.hostChoice.stepCheck',
-            '{{bot}} checks that Gmail, Calendar and Drive work',
-            { bot: bot.name }
-          )
-        ].map((line, index) => (
-          <ListRow key={line} marker={String(index + 1)} title={line} wrapTitle />
-        ))}
       </SettingsSection>
       <SettingsSection>
         <ListRow

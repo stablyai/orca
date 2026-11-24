@@ -1,8 +1,8 @@
 import { useIntlLocale, useTranslate } from '@/i18n/use-translate'
 import { workerDockKindLabel, workerDockStateLabel } from './worker-dock-labels'
 import { memo } from 'react'
-import { Circle, CircleAlert, CircleDashed, CircleHelp, CirclePause, Loader2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
+import { AgentStateDot, type AgentDotState } from '@/components/agent/status/AgentStateDot'
 import { WorkerDockRowAction } from './WorkerDockRowAction'
 import { useNowSnapshot } from '@/lib/window-activity/use-now'
 import { formatShortTimeAgo } from '@/lib/time-format/short-time-ago'
@@ -41,6 +41,30 @@ export type WorkerDockRowView = WorkerDockEntry & {
   /** The open question a needs-you worker asked, shown in full on the lead row. */
   question?: string
 }
+/** The shared agent-state glyph for a dock row; null when the state can't be read, so nothing shows. */
+function workerDockDotState(row: WorkerDockRowView): AgentDotState | null {
+  if (row.retired) {
+    return 'done'
+  }
+  switch (row.state) {
+    case 'starting':
+    case 'running':
+    case 'saving':
+    case 'stopping':
+      return 'working'
+    case 'waiting':
+    case 'coordinator':
+    case 'needs-you':
+      return 'waiting'
+    case 'idle':
+      return 'idle'
+    case 'failed':
+    case 'unexpected':
+      return 'failed'
+    case 'unavailable':
+      return null
+  }
+}
 export const WorkerDockRow = memo(function WorkerDockRow({
   row,
   narrow,
@@ -73,28 +97,19 @@ export const WorkerDockRow = memo(function WorkerDockRow({
     visible && row.startedAt !== null && row.state === 'running'
   )
   const failed = row.state === 'failed' || row.state === 'unexpected'
+  // An unreadable state has no label: the row shows its name, title, age and Stop only.
+  const unreadable = row.state === 'unavailable' && !row.retired
   const state = row.retired
     ? t('components.native-chat.workerDock.doneResult', 'Done · open result')
-    : workerDockStateLabel(t, row.state)
+    : unreadable
+      ? ''
+      : workerDockStateLabel(t, row.state)
   const stateTone = failed
     ? 'text-destructive'
     : row.state === 'needs-you'
       ? 'text-chat-warning'
       : 'text-muted-foreground'
-  const Icon = failed
-    ? CircleAlert
-    : row.state === 'needs-you'
-      ? CircleHelp
-      : row.state === 'idle'
-        ? CirclePause
-        : row.state === 'running' ||
-            row.state === 'starting' ||
-            row.state === 'stopping' ||
-            row.state === 'saving'
-          ? Loader2
-          : row.state === 'unavailable'
-            ? CircleDashed
-            : Circle
+  const dot = workerDockDotState(row)
   // A remote chat's worker is shown, not driven, here: its row says where to act instead.
   const remote = row.kind === 'worker' && row.ownerActionsAvailable === false
   const tooltip = `${row.name} · ${row.title}${row.model ? ` · ${row.model}` : ''}${row.startedAt ? t('components.native-chat.workerDock.startedAt', ' · Started {{time}} · {{elapsed}} elapsed', { time: new Date(row.startedAt).toLocaleString(locale), elapsed }) : ''}${t('components.native-chat.workerDock.contactUnavailable', ' · Last confirmed contact unavailable')}${remote ? ` · ${t('components.native-chat.workerDock.remoteOwner', 'Stop or clear this from the computer it runs on')}` : ''}`
@@ -102,23 +117,26 @@ export const WorkerDockRow = memo(function WorkerDockRow({
     (failed || row.state === 'unavailable' || row.state === 'stopping') && row.reason
       ? row.reason
       : null
-  const icon = (
-    <Icon
-      aria-hidden="true"
-      className={cn(
-        'mt-0.5 size-4 shrink-0',
-        stateTone,
-        (row.state === 'running' || row.state === 'starting' || row.state === 'stopping') &&
-          !row.retired &&
-          'animate-spin motion-reduce:animate-none'
-      )}
+  // An unreadable state keeps the glyph column's width but draws nothing.
+  const icon = dot ? (
+    <AgentStateDot
+      state={dot}
+      size="sm"
+      title={null}
+      className={cn((lead || narrow) && 'mt-1.5')}
     />
+  ) : (
+    <span aria-hidden="true" className="size-2.5 shrink-0" />
   )
   return (
     <div
       data-worker-dock-row={row.id}
       data-worker-dock-lead={lead ? '' : undefined}
-      className="group/worker relative flex min-w-0 items-start text-foreground"
+      className={cn(
+        'group/worker relative flex min-w-0 items-start text-foreground',
+        // The fill spans the Stop column too, so no strip stays unfilled.
+        !lead && 'hover:bg-accent'
+      )}
     >
       {lead ? (
         <div
@@ -171,10 +189,10 @@ export const WorkerDockRow = memo(function WorkerDockRow({
           type="button"
           data-worker-dock-open={row.id}
           className={cn(
-            'flex min-w-0 flex-1 items-start gap-2 px-4 py-2 text-left hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring',
+            'flex min-w-0 flex-1 items-start gap-2 px-4 py-2 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring',
             narrow ? 'pr-0' : 'items-center'
           )}
-          aria-label={`${row.name} · ${row.title} · ${state}${row.reason ? ` · ${row.reason}` : ''}${remote ? ` · ${t('components.native-chat.workerDock.remoteOwner', 'Stop or clear this from the computer it runs on')}` : ''}`}
+          aria-label={`${row.name} · ${row.title}${state ? ` · ${state}` : ''}${row.reason ? ` · ${row.reason}` : ''}${remote ? ` · ${t('components.native-chat.workerDock.remoteOwner', 'Stop or clear this from the computer it runs on')}` : ''}`}
           title={tooltip}
           onClick={(event) => onOpen(row, event.currentTarget)}
         >
@@ -208,7 +226,7 @@ export const WorkerDockRow = memo(function WorkerDockRow({
                 compact && narrow && 'contents'
               )}
             >
-              {mixed || row.state !== 'running' || row.retired ? (
+              {(mixed || row.state !== 'running' || row.retired) && (mixed || state) ? (
                 <span
                   data-worker-dock-state=""
                   className={cn(
@@ -217,8 +235,12 @@ export const WorkerDockRow = memo(function WorkerDockRow({
                     narrow ? (compact ? 'shrink-0' : 'block') : 'max-w-40 truncate'
                   )}
                 >
-                  {mixed ? `${workerDockKindLabel(t, row.kind)} · ` : ''}
-                  {row.state === 'running' && !row.retired ? '' : state}
+                  {[
+                    mixed ? workerDockKindLabel(t, row.kind) : '',
+                    row.state === 'running' && !row.retired ? '' : state
+                  ]
+                    .filter(Boolean)
+                    .join(' · ')}
                 </span>
               ) : null}
               {reason ? (
@@ -238,7 +260,7 @@ export const WorkerDockRow = memo(function WorkerDockRow({
               ) : null}
             </span>
           </span>
-          {modelColumn && !narrow ? (
+          {modelColumn && !narrow && (row.model || !unreadable) ? (
             <span className="max-w-25 truncate text-xs text-muted-foreground">
               {row.model ? subagentModelLabel(row.model) : '—'}
             </span>

@@ -187,6 +187,7 @@ export function restartCutOfMarker(
     cause: marker.trigger,
     turnId: marker.work.id,
     ...(restartActivityWaitsOnPerson(marker.activity) ? { waitingOnPerson: true as const } : {}),
+    ...(marker.activity?.state === 'done' ? { leadDone: true as const } : {}),
     ...(marker.exitUnproven ? { exitUnproven: true as const } : {})
   }
 }

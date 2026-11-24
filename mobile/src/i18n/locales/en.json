@@ -426,7 +426,7 @@
     },
     "claude": {
       "usageSignInLabel": "Sign in again",
-      "usageSignInMessage": "The selected Claude account needs you to sign in again. Open Settings > AI Provider Accounts, or choose System default."
+      "usageSignInMessage": "This account needs you to sign in again."
     },
     "codex": {
       "usageSignInLabel": "Signed out"
@@ -2129,6 +2129,12 @@
     }
   },
   "browser": {
+    "clientHost": {
+      "openOnNamed": "Open on {{device}}",
+      "openOn": "Open on another computer",
+      "offlineNamed": "{{device}} is offline",
+      "offline": "The computer showing this page is offline"
+    },
     "addressField": {
       "urlPlaceholder": "URL"
     },
@@ -2180,6 +2186,41 @@
       "certificateProceedFailed": "Orca could not approve this certificate request. Retry the page and try again.",
       "certificateChallengeUnavailable": "This certificate request is no longer available. Retry the page to request a new one.",
       "certificateProceedNeedsHostUpdate": "Update Orca on this host to accept certificate warnings from your phone."
+    },
+    "pagePrompt": {
+      "downloadStarted": "Downloading to {{path}} on the host",
+      "downloadSaved": "Saved to {{path}} on the host",
+      "downloadCanceled": "Download canceled.",
+      "downloadFailed": "Couldn't finish the download.",
+      "answerFailed": "That answer did not reach the page.",
+      "openFailed": "Couldn't open an app for this {{scheme}} link.",
+      "localFiles": "Local files",
+      "ask": {
+        "camera": "Use your camera",
+        "microphone": "Use your microphone",
+        "location": "Know your location",
+        "notifications": "Show notifications",
+        "clipboard": "See text and images copied to the clipboard",
+        "midi": "Use your MIDI devices",
+        "windowManagement": "Manage windows on all your displays",
+        "idleDetection": "Know when you are actively using this device",
+        "localNetwork": "Access apps on this device and devices on your local network"
+      },
+      "fileTitle": "This file wants to",
+      "permissionTitle": "{{site}} wants to",
+      "block": "Block",
+      "allow": "Allow",
+      "signInTitle": "Sign in",
+      "signInDescription": "{{origin}} is asking for a username and password.",
+      "signInInsecure": "Your connection to this site isn't private.",
+      "signInRetry": "That username or password didn't work.",
+      "signIn": "Sign in",
+      "openLinkTitle": "Open this {{scheme}} link?",
+      "openLinkDescription": "{{origin}} wants to open another application.",
+      "openLinkAnonymous": "A page in the browser wants to open another application.",
+      "openLink": "Open link",
+      "username": "Username",
+      "password": "Password"
     }
   },
   "files": {
@@ -3060,6 +3101,8 @@
       "historyUnreadable": "Orca couldn't read this chat's saved history.",
       "historyUnusable": "Unable to load this chat.",
       "historyUnavailable": "Orca couldn't open this chat's history right now.",
+      "diskFull": "The disk on the computer running this chat is full.",
+      "freeDiskSpace": "Free up space on that disk, then try again.",
       "savedInOtherFolder": "This conversation was saved in another folder.",
       "savedByNewerOrca": "Chats were saved by a newer Orca.",
       "updateOrcaToKeepUsing": "Update Orca to keep using them.",
@@ -5671,6 +5714,8 @@
       "hide": "Hide {{name}}’s workspaces"
     },
     "section": {
+      "scrollLeft": "Scroll left · {{amount}} hidden",
+      "scrollRight": "Scroll right · {{amount}} hidden",
       "title": "Bots",
       "summary": "{{title}}, {{total}} bots, {{attention}} need you, {{unread}} unread, {{working}} working",
       "newBot": "New bot",
@@ -6477,13 +6522,7 @@
       },
       "cancel": {
         "keep": "Keep",
-        "confirmMany": "Cancel {{count}}",
-        "titleMany": "Cancel {{count}} items?",
-        "titleOne": "Cancel {{title}}?",
-        "why": "The bot sees the reason. Nothing is deleted.",
-        "placeholder": "Reason",
-        "confirmOne": "Cancel item",
-        "offline": "{{host}} is offline. Your reason is kept; {{action}} works again when it’s back."
+        "confirmMany": "Cancel {{count}}"
       },
       "wait": {
         "titleOne": "What is {{title}} waiting on?",
@@ -6551,7 +6590,9 @@
         "next": "Next question",
         "heldCount_one": "{{count}} answer not sent yet, <send>send anyway</send>",
         "heldCount_other": "{{count}} answers not sent yet, <send>send anyway</send>",
-        "replaced": "The agent asked a new question. Read it, then reply."
+        "replaced": "The agent asked a new question. Read it, then reply.",
+        "replacedByNewer": "Replaced by a newer question",
+        "skipped": "Skipped"
       },
       "readFailedClosedPage": "Couldn’t read more closed items.",
       "skillLimit": "Message not sent. Keep at most {{limit}} selected skill files and try again."
@@ -7619,7 +7660,7 @@
         "off": "Linear is coming soon.",
         "replaced": "Linear didn’t finish. A newer Linear or GitHub connect may have replaced it. Start again.",
         "wrongAccount": "This sign-in was started from another Orca account. Connect Linear again from this one.",
-        "alreadyLinked": "This Orca account is linked to another Linear user in that workspace. Unlink it in Settings › Bots › Linear first.",
+        "alreadyLinked": "This Orca account is linked to another Linear user in that workspace. Unlink it from ⋯ on the Linear page first.",
         "notAMember": "Only full members of the Linear workspace can pick people from it.",
         "rateLimited": "Too many tries. Wait a minute, then try again.",
         "unavailable": "Linear did not answer. Try again."
@@ -7657,7 +7698,8 @@
       },
       "address": "linear.app/{{urlKey}}",
       "account": {
-        "unlink": "Unlink Linear account"
+        "unlink": "Unlink Linear account",
+        "reconnect": "Reconnect"
       }
     },
     "github": {
@@ -7673,7 +7715,7 @@
         "off": "GitHub is coming soon.",
         "replaced": "GitHub didn’t finish. A newer Linear or GitHub connect may have replaced it. Start again.",
         "wrongAccount": "This sign-in was started from another Orca account. Sign in with GitHub again from this one.",
-        "alreadyLinked": "This Orca account is linked to another GitHub user. Unlink it in Settings › Bots › GitHub first.",
+        "alreadyLinked": "This Orca account is linked to another GitHub user. Unlink it from ⋯ on the GitHub page first.",
         "unavailable": "GitHub did not answer. Try again."
       },
       "setup": {
@@ -7696,11 +7738,14 @@
       "connection": {
         "removeNote": "People can no longer ask it on GitHub, and its GitHub people are cleared. The Orca app stays installed.",
         "removeConfirm": "Remove",
-        "finishSetup": "Finish setup"
+        "finishSetup": "Finish setup",
+        "addAccount": "Add another GitHub account",
+        "refresh": "Refresh"
       },
       "allRepositories": "All repositories of {{account}}",
       "account": {
-        "unlink": "Unlink GitHub account"
+        "unlink": "Unlink GitHub account",
+        "reconnect": "Reconnect"
       },
       "howToAskPlain": "Mention {{mention}} {{handle}} … on an issue or pull request.",
       "addMore": "Add repositories or an organization",
@@ -7748,14 +7793,10 @@
         "continue": "Continue",
         "description": "Choose how {{bot}} signs in to your Gmail, Calendar and Drive.",
         "self": "Self hosted",
-        "selfNote": "You make your own Google Cloud app, so your sign-in stays on your computer. About 10 minutes.",
+        "selfNote": "Your own Google app.",
         "orca": "Orca hosted",
-        "orcaNote": "Sign in with Google. Nothing to set up.",
-        "comingSoon": "Coming soon",
-        "steps": "Steps",
-        "stepApp": "{{bot}} opens Google Cloud and sets up the app",
-        "stepSignIn": "You tick Google’s terms box and sign in",
-        "stepCheck": "{{bot}} checks that Gmail, Calendar and Drive work"
+        "orcaNote": "Sign in with Google.",
+        "soon": "Soon"
       },
       "importFromTeam": "Import a setup file from your team",
       "service": {
@@ -7792,7 +7833,23 @@
         "toFix": "Almost there: {{count}} things to fix"
       },
       "signInOnHost": "Sign in to Google again on {{host}}",
-      "moreOnHost": "Add a service or share the setup in Orca on {{host}}."
+      "addOnHost": "Add a service or another account in Orca on {{host}}.",
+      "defaultBadge": "Default",
+      "setDefault": "Set as default",
+      "shareButton": "Share setup",
+      "share": {
+        "copied": "Copied. Send it to your teammates."
+      },
+      "disconnect": {
+        "title": "Disconnect {{email}}?",
+        "revokeNote": "Bots stop using this account here, and Google cancels Orca’s access everywhere it was allowed.",
+        "removeOneNote": "Bots stop using this account here.",
+        "removeNote": "Bots stop using this account here. Bot settings stay, so Connect Google turns it back on.",
+        "promotes": "{{email}} becomes the default.",
+        "confirm": "Disconnect",
+        "removeFromHost": "Remove from {{host}}",
+        "revoke": "Remove and revoke at Google"
+      }
     },
     "failures": {
       "lookUnfinished": "The last look didn't finish.",
@@ -7891,6 +7948,10 @@
       "removeServer": "Remove {{server}}",
       "tooltip": "Bots and agents on these servers can ask {{name}} without asking you each time.",
       "unnamed": "Paired server"
+    },
+    "usageLimit": {
+      "continuesAt": "Continues at {{time}}",
+      "hitLimit": "Hit limit · resets {{time}}"
     }
   },
   "mobileWebShell": {
