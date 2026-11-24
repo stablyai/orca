@@ -289,9 +289,9 @@ it('reads the newest turns with the same work however many turns came before the
     anchorsOnly: true
   })
   db.close()
-  // The whole read plus the unanswered send's own read (it and its queued card); a window of its
+  // The whole read plus the unanswered send's own row, which found it; a window of its
   // anchors alone holds no older send, so that send never pins it back.
-  expect([own.work.rows, pinned.work.rows, whole.work.rows]).toEqual([74, 2001, 1999])
+  expect([own.work.rows, pinned.work.rows, whole.work.rows]).toEqual([74, 2000, 1999])
   expect(anchored.snapshot.submissions.map((send) => send.clientMessageId)).toEqual(long.sends)
   expect(snapshot.submissions.map((send) => send.clientMessageId)).toContain('m0')
 })

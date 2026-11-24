@@ -117,12 +117,16 @@ export function readJournalDomainOperationWindow(
     ...anchorAt
   ]
   const earliest = anchored.length > 0 ? Math.min(...anchored) : null
-  // The whole read is cheaper than reading by index the long stretch such a send pins the window to.
+  // The whole read is cheaper than reading by index the long stretch a send it holds pins it back
+  // to. An old unanswered send settles that alone; only otherwise are the unsettled sends' families read.
   const newest = Math.min(...anchorAt)
-  const held = recent
-    ? keptSends(sends, operations, newest, null, anchors.anchorsOnly === true)
-    : []
-  if (recent && reachesBefore(held, earliest, newest)) {
+  let pinned = (earliest ?? Infinity) < newest
+  if (recent && !pinned) {
+    sends = withSends(scope, [], sends)
+    const held = keptSends(sends, operations, newest, null, anchors.anchorsOnly === true)
+    pinned = reachesBefore(held, earliest, newest)
+  }
+  if (recent && pinned) {
     indexed = false
     sends = sendHeads(scope)
   }

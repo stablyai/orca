@@ -217,17 +217,14 @@ export function seedSends(
 }
 
 /** Every send still handed over and unanswered (pending, or unknown and not recovered), wherever it
- *  sits, by the index that keeps exactly those: a recovered one is read only when the window holds it. */
+ *  sits, by the index that keeps exactly those: a recovered one is read only when the window holds it.
+ *  The sends sharing a provider id or queued card with them are the caller's to add. */
 function unsettledSends(scope: JournalSqlScope): Send[] {
-  return withSends(
+  return sendHeads(
     scope,
+    "AND (dispatch_state='pending' OR (dispatch_state='unknown' AND recovered=0))",
     [],
-    sendHeads(
-      scope,
-      "AND (dispatch_state='pending' OR (dispatch_state='unknown' AND recovered=0))",
-      [],
-      'journal_submission_recovery'
-    )
+    'journal_submission_recovery'
   )
 }
 
