@@ -52,10 +52,15 @@ export abstract class RuntimeUnmountedSleptAgents extends RuntimeSleptMailboxWak
     return unmountedSleptLeaf(slept.record, slept.pane)
   }
 
-  /** Every slept agent whose tab isn't mounted, for the terminal list. */
-  protected *unmountedSleptAgents(): Iterable<RuntimeLeafRecord> {
+  /** Every slept agent whose tab isn't mounted, for the terminal list; a scoped list reads its workspace's. */
+  protected *unmountedSleptAgents(worktreeId?: string): Iterable<RuntimeLeafRecord> {
     this.watchSleepingMail()
-    for (const record of this.sleepingRecords.values()) {
+    const records = worktreeId
+      ? [...this.sleepingRecordIndex.panesIn(worktreeId)].flatMap(
+          (pane) => this.sleepingRecords.get(pane) ?? []
+        )
+      : this.sleepingRecords.values()
+    for (const record of records) {
       const leaf = record.terminalHandle
         ? this.unmountedSleptAgentLeaf(record.terminalHandle)
         : null

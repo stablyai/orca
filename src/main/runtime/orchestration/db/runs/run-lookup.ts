@@ -31,6 +31,15 @@ const RUNS_BOUND_TO_PANE_SQL = `SELECT ${RUN_COLUMN_LIST} FROM runs
          WHERE coordinator_pane_key IS NOT NULL AND legacy = 0
            AND ${RUN_PANE_KEY_MATCH_SUFFIX_SQL} = ?
          ORDER BY rowid DESC`
+// Only Runs whose mailbox has unread mail undelivered or held by a pointer reservation (getMailboxesWithPointerWork).
+const RUNS_WITH_POINTER_WORK_BOUND_TO_PANE_SQL = `SELECT id, coordinator_pane_key FROM runs
+         WHERE coordinator_pane_key IS NOT NULL AND legacy = 0
+           AND ${RUN_PANE_KEY_MATCH_SUFFIX_SQL} = ?
+           AND EXISTS (SELECT 1 FROM messages
+             WHERE to_handle = 'run:' || runs.id AND read = 0
+               AND delivery_contract = 'current_delivery'
+               AND (delivered_at IS NULL OR pointer_enter_pending > 0))
+         ORDER BY rowid DESC`
 // Predicates match the partial indexes idx_runs_current_pane_exact/_leaf (created on every open).
 const CURRENT_RUN_FOR_EXACT_PANE_SQL = `SELECT ${RUN_COLUMN_LIST} FROM runs
          WHERE legacy = 0 AND coordinator_pane_key IS NOT NULL AND coordinator_pane_key = ?
@@ -151,6 +160,37 @@ export function runsBoundToPane(this: OrchestrationDb, paneKey: string): RunRow[
   )
 }
 
+/** The newest Run `runsBoundToPane` returns, read row by row so older Runs are not loaded. */
+export function firstRunBoundToPane(this: OrchestrationDb, paneKey: string): RunRow | undefined {
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: RUN_COLUMN_LIST projects the schema-owned Run row.
+  const rows = this.db
+    .prepare(RUNS_BOUND_TO_PANE_SQL)
+    .iterate(paneKeyMatchSuffix(paneKey)) as Iterable<RunRow>
+  for (const run of rows) {
+    if (
+      run.coordinator_pane_key !== null &&
+      isEquivalentPaneKey(run.coordinator_pane_key, paneKey)
+    ) {
+      return run
+    }
+  }
+  return undefined
+}
+
+/** Ids of the Runs bound to the pane whose mailbox has pointer work, newest first; Runs without mail are not read. */
+export function runIdsWithPointerWorkBoundToPane(this: OrchestrationDb, paneKey: string): string[] {
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the query projects these two run columns.
+  const rows = this.db
+    .prepare(RUNS_WITH_POINTER_WORK_BOUND_TO_PANE_SQL)
+    .all(paneKeyMatchSuffix(paneKey)) as { id: string; coordinator_pane_key: string | null }[]
+  return rows
+    .filter(
+      (run) =>
+        run.coordinator_pane_key !== null && isEquivalentPaneKey(run.coordinator_pane_key, paneKey)
+    )
+    .map((run) => run.id)
+}
+
 export function getRunRaw(this: OrchestrationDb, id: string): RunRow | undefined {
   return this.db.prepare(RUN_BY_ID_SQL).get(id) as RunRow | undefined
 }
@@ -230,6 +270,8 @@ export type RunLookupMethods = {
   listRuns: typeof listRuns
   getCurrentRunForPane: typeof getCurrentRunForPane
   runsBoundToPane: typeof runsBoundToPane
+  firstRunBoundToPane: typeof firstRunBoundToPane
+  runIdsWithPointerWorkBoundToPane: typeof runIdsWithPointerWorkBoundToPane
   getCurrentRunForCoordinator: typeof getCurrentRunForCoordinator
   getCoordinatedRun: typeof getCoordinatedRun
   runsBoundToCoordinator: typeof runsBoundToCoordinator
@@ -246,6 +288,8 @@ export function attachRunLookup(ctor: { prototype: object }): void {
     listRuns,
     getCurrentRunForPane,
     runsBoundToPane,
+    firstRunBoundToPane,
+    runIdsWithPointerWorkBoundToPane,
     getCurrentRunForCoordinator,
     getCoordinatedRun,
     runsBoundToCoordinator,

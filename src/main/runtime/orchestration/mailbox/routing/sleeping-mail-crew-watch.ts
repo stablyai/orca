@@ -9,11 +9,14 @@ import type { SleptMailboxWake } from './slept-mailbox-wake'
 
 type SleepingMailScope = { mailboxes: Iterable<string>; panes: Iterable<string> }
 
-/** Crew changes that name mailboxes, Dispatches or parties re-check those; one that names nothing
- *  (an owner rebinding, say) re-checks only the mailboxes already owed to sleepers. Watched only
- *  while some agent sleeps, so with none crew writes keep their "nobody listening" shortcut. */
+/** Crew changes that name mailboxes, Dispatches or parties re-check those; ones that name nothing
+ *  (an owner rebinding, say) re-check the mailboxes already owed to sleepers, at most once a
+ *  second. Watched only while some agent sleeps, so with none crew writes keep their "nobody
+ *  listening" shortcut. */
 export class SleepingMailCrewWatch {
   private stop: (() => void) | null = null
+  private owedRecheck: ReturnType<typeof setTimeout> | null = null
+  private lastOwedRecheck = -Infinity
 
   constructor(
     private readonly runtimeChanges: () => CrewChanges,
@@ -25,9 +28,12 @@ export class SleepingMailCrewWatch {
     if (wanted && !this.stop) {
       const changed = (facets: CrewInvalidation): void => {
         if (facets.has('traffic') || facets.has('topology') || facets.has('records')) {
-          this.publish(
-            sleepingMailChangeScope(facets) ?? { mailboxes: [...this.owedMailboxes()], panes: [] }
-          )
+          const scope = sleepingMailChangeScope(facets)
+          if (scope) {
+            this.publish(scope)
+          } else {
+            this.recheckOwed()
+          }
         }
       }
       // Idle: this reader reads no names, so crew writes skip their names comparison for it.
@@ -36,11 +42,29 @@ export class SleepingMailCrewWatch {
       this.stop = () => {
         fromRuntime()
         fromSessions()
+        if (this.owedRecheck) {
+          clearTimeout(this.owedRecheck)
+          this.owedRecheck = null
+        }
       }
     } else if (!wanted && this.stop) {
       this.stop()
       this.stop = null
     }
+  }
+
+  private recheckOwed(): void {
+    if (this.owedRecheck) {
+      return
+    }
+    this.owedRecheck = setTimeout(
+      () => {
+        this.owedRecheck = null
+        this.lastOwedRecheck = Date.now()
+        this.publish({ mailboxes: [...this.owedMailboxes()], panes: [] })
+      },
+      Math.max(0, this.lastOwedRecheck + 1_000 - Date.now())
+    )
   }
 }
 

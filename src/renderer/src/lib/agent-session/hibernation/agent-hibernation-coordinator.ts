@@ -37,6 +37,7 @@ import type { AppState } from '@/store/types'
 import { parsePaneKey } from '../../../../../shared/workspace-layout/stable-pane-id'
 import { toRuntimePtyId } from './agent-hibernation-pane-eligibility'
 import type { TerminalTab } from '../../../../../shared/workspace-layout/terminal-tab-types'
+import { ReplacedListLookup } from './replaced-list-lookup'
 
 export const AGENT_HIBERNATION_TICK_MS = 60 * 1000
 
@@ -60,17 +61,9 @@ type AgentHibernationCoordinatorState = {
 
 const MAX_REFUSED_RETRY_MS = 16 * 60_000
 
-const tabIndexes = new WeakMap<readonly TerminalTab[], Map<string, TerminalTab>>()
-
-/** One index per tabs array, so a drain's one-pane re-checks share it until the tabs change. */
-function terminalTabById(tabs: readonly TerminalTab[]): Map<string, TerminalTab> {
-  let index = tabIndexes.get(tabs)
-  if (!index) {
-    index = new Map(tabs.map((tab) => [tab.id, tab]))
-    tabIndexes.set(tabs, index)
-  }
-  return index
-}
+// A one-pane re-check finds its tab and its bound process without re-reading a sibling's edit.
+const paneTabs = new ReplacedListLookup<TerminalTab>((tab) => tab.id)
+const paneBindings = new ReplacedListLookup<string>((ptyId) => ptyId)
 
 /** Narrows a re-check to the one pane about to sleep. */
 type TargetPane = { tabId: string; paneKey: string }
@@ -93,7 +86,7 @@ function snapshotFromState(
   pane?: TargetPane
 ): AgentHibernationPlannerSnapshot {
   const worktreeTabs = targetWorktreeId ? (state.tabsByWorktree[targetWorktreeId] ?? []) : []
-  const paneTab = pane ? terminalTabById(worktreeTabs).get(pane.tabId) : undefined
+  const paneTab = pane ? paneTabs.find(worktreeTabs, pane.tabId) : undefined
   const ptyIdsByTabId = pane ? paneTabBindings(state, pane) : state.ptyIdsByTabId
   return {
     settings: state.settings,
@@ -139,24 +132,14 @@ function snapshotFromState(
   }
 }
 
-const bindingSets = new WeakMap<readonly string[], ReadonlySet<string>>()
 const NO_BINDINGS: readonly string[] = []
 
-/** A tab's bound processes as a set, built once per binding list, so each one-pane check is a lookup. */
-function tabBindingSet(state: AppState, tabId: string): ReadonlySet<string> {
-  const bound = state.ptyIdsByTabId[tabId] ?? NO_BINDINGS
-  let set = bindingSets.get(bound)
-  if (!set) {
-    set = new Set(bound)
-    bindingSets.set(bound, set)
-  }
-  return set
-}
-
-/** The pane's tab bound to just the pane's own live processes; a read-only plan input, not a layout write. */
+/** The pane's tab bound to just the pane's own live process; a read-only plan input, not a layout write. */
 function paneTabBindings(state: AppState, pane: TargetPane): Record<string, string[]> {
-  const bound = tabBindingSet(state, pane.tabId)
-  return Object.fromEntries([[pane.tabId, panePtyIds(state, pane).filter((id) => bound.has(id))]])
+  const bound = state.ptyIdsByTabId[pane.tabId] ?? NO_BINDINGS
+  // The planner reads bound processes under their runtime id, so one of the pane's ids is enough.
+  const live = panePtyIds(state, pane).find((id) => paneBindings.find(bound, id) !== undefined)
+  return Object.fromEntries([[pane.tabId, live ? [live] : []]])
 }
 
 /** The target pane's own process, under its window and runtime ids: siblings in its split are not read. */
@@ -319,4 +302,6 @@ export function stopAgentHibernationCoordinator(): void {
   coordinator.unsubscribeVisibility = null
   coordinator.confirmationState = {}
   coordinator.refusedCandidates.clear()
+  paneTabs.clear()
+  paneBindings.clear()
 }

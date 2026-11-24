@@ -20,3 +20,32 @@ it.each([100, 1_000])('retains no input of %i hosts added then removed', (count)
   const cached = (index as unknown as { inputs: ReadonlyMap<string, unknown> }).inputs
   expect([...cached.keys()]).toEqual(['local'])
 })
+
+it.each([100, 1_000])(
+  'one workspace reads only its own of %i sleep records, and a removed record leaves no bucket',
+  (count) => {
+    const index = new SleepingMailRecordIndex()
+    const records: Record<string, SleepingAgentSessionRecord> = {}
+    for (let entry = 0; entry < count; entry++) {
+      const paneKey = `tab:${String(entry).padStart(8, '0')}-1111-4111-8111-111111111111`
+      records[paneKey] = {
+        paneKey,
+        worktreeId: `wt-${entry}`,
+        agent: 'claude',
+        origin: 'worktree-sleep',
+        state: 'done',
+        prompt: '',
+        providerSession: { key: 'session_id', id: `slept-${entry}` },
+        capturedAt: 1,
+        updatedAt: 1
+      }
+    }
+    index.refresh('local', records, () => {})
+    expect([...index.panesIn('wt-0')]).toHaveLength(1)
+    index.refresh('local', NONE, () => {})
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the per-workspace bucket is the retention under test.
+    const buckets = (index as unknown as { panesByWorktree: ReadonlyMap<string, unknown> })
+      .panesByWorktree
+    expect(buckets.size).toBe(0)
+  }
+)

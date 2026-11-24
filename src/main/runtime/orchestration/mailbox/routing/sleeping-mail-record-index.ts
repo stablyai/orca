@@ -57,6 +57,8 @@ export class SleepingMailRecordIndex {
   private readonly panesByHandle = new Map<string, string>()
   /** Obligated panes per host, with the record each was indexed under. */
   private readonly hosts = new Map<string, Map<string, SleepingAgentSessionRecord>>()
+  private readonly hostByPane = new Map<string, string>()
+  private readonly panesByWorktree = new Map<string, Set<string>>()
   private readonly inputs = new Map<string, Readonly<Record<string, SleepingAgentSessionRecord>>>()
   /** Panes whose sleep reached main after its first read: mail sent while they went to sleep found
    *  no record, so their first re-check also reads the Runs and Dispatches they own. */
@@ -79,6 +81,16 @@ export class SleepingMailRecordIndex {
     return (leafId && this.panesByLeaf.get(leafId)) || paneKey
   }
 
+  /** The panes whose sleep record is in this workspace. */
+  panesIn(worktreeId: string): Iterable<string> {
+    return this.panesByWorktree.get(worktreeId) ?? []
+  }
+
+  /** The host whose session holds the pane's sleep record. */
+  hostOf(paneKey: string): string | null {
+    return this.hostByPane.get(paneKey) ?? this.hostByPane.get(this.currentPane(paneKey)) ?? null
+  }
+
   paneForHandle(handle: string): string | null {
     return this.panesByHandle.get(handle) ?? null
   }
@@ -91,6 +103,18 @@ export class SleepingMailRecordIndex {
       this.panesByHandle.set(handle, pane)
     } else if (this.panesByHandle.get(handle) === pane) {
       this.panesByHandle.delete(handle)
+    }
+  }
+
+  private indexWorktree(worktreeId: string | undefined, pane: string, present: boolean): void {
+    if (!worktreeId) {
+      return
+    }
+    const panes = this.panesByWorktree.get(worktreeId)
+    if (present) {
+      this.panesByWorktree.set(worktreeId, (panes ?? new Set()).add(pane))
+    } else if (panes?.delete(pane) && panes.size === 0) {
+      this.panesByWorktree.delete(worktreeId)
     }
   }
 
@@ -141,7 +165,12 @@ export class SleepingMailRecordIndex {
       const pane = record.paneKey
       const before = previous.get(pane)
       next.set(pane, record)
+      if (before && before.worktreeId !== record.worktreeId) {
+        this.indexWorktree(before.worktreeId, pane, false)
+      }
       this.records.set(pane, record)
+      this.hostByPane.set(pane, host)
+      this.indexWorktree(record.worktreeId, pane, true)
       this.indexLeaf(pane, true)
       if (before?.terminalHandle !== record.terminalHandle) {
         this.indexHandle(before?.terminalHandle, pane, false)
@@ -158,6 +187,8 @@ export class SleepingMailRecordIndex {
       if (!next.has(pane)) {
         this.records.delete(pane)
         this.arrivals.delete(pane)
+        this.hostByPane.delete(pane)
+        this.indexWorktree(previous.get(pane)?.worktreeId, pane, false)
         this.indexLeaf(pane, false)
         this.indexHandle(previous.get(pane)?.terminalHandle, pane, false)
         maintained.add(pane)

@@ -218,8 +218,20 @@ it.each([
       lastTerminalInputAtByPaneKey: typedInput,
       shutdownCompletedAgentPaneForHibernation: async (
         _worktreeId: string,
-        options: { stillEligible: () => Promise<boolean> }
+        options: { tabId: string; stillEligible: () => Promise<boolean> }
       ) => {
+        if (ownerKind === 'non-runtime') {
+          // A sibling's edit lands during admission: the store replaces the tabs list and this tab's bindings.
+          const state = work.state as {
+            tabsByWorktree: Record<string, unknown[]>
+            ptyIdsByTabId: Record<string, string[]>
+          }
+          state.tabsByWorktree = { wt: [...state.tabsByWorktree.wt] }
+          state.ptyIdsByTabId = {
+            ...state.ptyIdsByTabId,
+            [options.tabId]: [...state.ptyIdsByTabId[options.tabId]]
+          }
+        }
         if (await options.stillEligible()) {
           slept += 1
         }

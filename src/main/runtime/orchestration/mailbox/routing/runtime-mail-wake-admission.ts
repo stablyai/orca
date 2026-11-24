@@ -6,6 +6,8 @@ import { OrcaRuntimeWithPruneMobileSessionTabGroupLayout } from '../../../sessio
 import type { RuntimePtyWorktreeRecord } from '../../../terminal/records/runtime-terminal-state-records'
 import type { MailWakeInvocations } from './mail-wake-invocations'
 import type { MailWakeAttempts } from './mail-wake-attempts'
+import type { SleepingMailRecordIndex } from './sleeping-mail-record-index'
+import { normalizeExecutionHostId } from '../../../../../shared/execution-host/execution-host'
 
 export abstract class RuntimeMailWakeAdmission extends OrcaRuntimeWithPruneMobileSessionTabGroupLayout {
   protected abstract readonly mailWakeInvocations: MailWakeInvocations
@@ -13,6 +15,7 @@ export abstract class RuntimeMailWakeAdmission extends OrcaRuntimeWithPruneMobil
   protected abstract settleMailWakeAttempt(record: SleptMailRecord): void
   protected abstract hasSleepingMailForPane(paneKey: string): boolean
   protected abstract sleepingMailRecord(paneKey: string): SleptMailRecord | null
+  protected abstract readonly sleepingRecordIndex: SleepingMailRecordIndex
   protected abstract readonly sleptMailboxWake: SleptMailboxWake
   protected abstract watchSleepingMail(): void
   protected abstract owesAnySleepingMail(): boolean
@@ -64,13 +67,20 @@ export abstract class RuntimeMailWakeAdmission extends OrcaRuntimeWithPruneMobil
       openTab: record.restoreOnTabOpenOnly === true,
       failed,
       liveShell,
-      // Only the open-it-yourself wording names the workspace.
+      // Only the open-it-yourself wording names the workspace, and not when it says "its tab".
       workspaceName:
-        waking || resuming || liveShell
+        waking || resuming || liveShell || (!failed && record.restoreOnTabOpenOnly === true)
           ? undefined
-          : this.resolvedWorktrees.peek()?.worktrees.find((row) => row.id === record.worktreeId)
-              ?.displayName
+          : this.sleepingRecordWorkspaceName(record)
     }
+  }
+
+  /** The record's workspace by its host and id, so a receipt reads one catalog row. */
+  private sleepingRecordWorkspaceName(record: SleptMailRecord): string | undefined {
+    const hostId = normalizeExecutionHostId(this.sleepingRecordIndex.hostOf(record.paneKey))
+    return hostId
+      ? this.resolvedWorktrees.lookup(hostId, record.worktreeId)?.displayName
+      : undefined
   }
 
   protected confirmMailWake(record: SleptMailRecord): void {

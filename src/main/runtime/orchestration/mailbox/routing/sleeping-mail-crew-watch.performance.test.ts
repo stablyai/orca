@@ -1,6 +1,7 @@
-import { expect, it } from 'vitest'
+import { afterEach, expect, it, vi } from 'vitest'
+import { CrewChanges } from '../../crew/crew-changes'
 import type { RuntimeClientEvent } from '../../../../../shared/remote-runtime/session-graph/runtime-client-events'
-import { retryOnHostConnect } from './sleeping-mail-crew-watch'
+import { retryOnHostConnect, SleepingMailCrewWatch } from './sleeping-mail-crew-watch'
 
 function hostEvent(targetId: string, status: string): RuntimeClientEvent {
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the host-edge reader reads only type, targetId and state.status.
@@ -33,5 +34,39 @@ it.each([100, 1_000])(
     }
     expect(retries).toBe(count)
     expect(connected.size).toBe(0)
+  }
+)
+
+afterEach(() => {
+  vi.useRealTimers()
+})
+
+it.each([100, 1_000])(
+  'a burst of %i crew changes that name nothing re-checks the owed mailboxes once a second',
+  async (count) => {
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout', 'Date'] })
+    const changes = new CrewChanges()
+    const owed = Array.from({ length: count }, (_, index) => `run:owed-${index}`)
+    let rechecked = 0
+    const watch = new SleepingMailCrewWatch(
+      () => changes,
+      (scope) => {
+        rechecked += [...scope.mailboxes].length
+      },
+      () => owed
+    )
+    watch.sync(true)
+    try {
+      for (let second = 0; second < 3; second += 1) {
+        for (let change = 0; change < count; change += 1) {
+          changes.notify(new Set(['topology']))
+        }
+        await vi.advanceTimersByTimeAsync(1_000)
+      }
+      // Three seconds of changes: three re-checks of the owed set, not one per change.
+      expect(rechecked).toBeLessThanOrEqual(3 * count)
+    } finally {
+      watch.sync(false)
+    }
   }
 )

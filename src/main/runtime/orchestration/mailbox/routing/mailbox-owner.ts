@@ -1,5 +1,6 @@
 import type { AgentStatus } from '../../../../../shared/agent-status/title/agent-title-core'
 import type { OrchestrationDb } from '../../db/orchestration-db'
+import type { RunRow } from '../../db/orchestration-records'
 
 /** A live terminal mail pointers are typed into, keyed by its PTY rather than any window pane. */
 export type OrchestrationMailboxTerminal = {
@@ -62,9 +63,11 @@ export class OrchestrationMailboxOwner {
       return null
     }
     const { handle: terminalHandle, paneKeys } = terminal
-    const runs = this.runsBoundToTerminal(db, terminal)
     // A coordinator of several Runs owns each one's mailbox; unnamed mail goes to its current Run.
-    const run = runs.find((bound) => requestedMailbox === `run:${bound.id}`) ?? runs[0]
+    const run =
+      requestedMailbox === undefined
+        ? this.currentRunBoundToTerminal(db, terminal)
+        : this.requestedRunBoundToTerminal(db, terminal, requestedMailbox)
     if (run) {
       return this.resolveRunMailbox(db, terminal, run.id, requestedMailbox, options)
     }
@@ -111,18 +114,35 @@ export class OrchestrationMailboxOwner {
       return []
     }
     const db = this.deps.getDb()
-    const others = db
-      ? this.runsBoundToTerminal(db, terminal)
-          .map((run) => `run:${run.id}`)
+    // One indexed query for the bound Runs that have mail; a Run without mail has nothing to deliver.
+    const withMail = db
+      ? terminal.paneKeys
+          .flatMap((paneKey) => db.runIdsWithPointerWorkBoundToPane?.(paneKey) ?? [])
+          .map((id) => `run:${id}`)
           .filter((handle) => handle !== mailboxHandle)
       : []
-    // One query instead of probing every finished Run; a Run without mail has nothing to deliver.
-    const withMail = db && others.length > 0 ? db.getMailboxesWithPointerWork(others) : new Set()
-    return [mailboxHandle, ...new Set(others.filter((handle) => withMail.has(handle)))]
+    return [mailboxHandle, ...new Set(withMail)]
   }
 
   private runsBoundToTerminal(db: OrchestrationDb, terminal: OrchestrationMailboxTerminal) {
     return terminal.paneKeys.flatMap((paneKey) => db.runsBoundToPane?.(paneKey) ?? [])
+  }
+
+  /** The first Run `runsBoundToTerminal` would return, without loading the older ones. */
+  private currentRunBoundToTerminal(
+    db: OrchestrationDb,
+    terminal: OrchestrationMailboxTerminal
+  ): RunRow | undefined {
+    return firstDefined(terminal.paneKeys, (paneKey) => db.firstRunBoundToPane?.(paneKey))
+  }
+
+  private requestedRunBoundToTerminal(
+    db: OrchestrationDb,
+    terminal: OrchestrationMailboxTerminal,
+    requestedMailbox: string
+  ): RunRow | undefined {
+    const runs = this.runsBoundToTerminal(db, terminal)
+    return runs.find((bound) => requestedMailbox === `run:${bound.id}`) ?? runs[0]
   }
 
   routeForeignDirectMessages(terminal: OrchestrationMailboxTerminal): RoutedOrchestrationMailbox[] {
