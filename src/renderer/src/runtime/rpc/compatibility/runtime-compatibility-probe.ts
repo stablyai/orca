@@ -2,7 +2,7 @@ import type { RuntimeRpcResponse } from '../../../../../shared/remote-runtime/rp
 import type { RuntimeStatus } from '../../../../../shared/remote-runtime/session-graph/runtime-session-contracts'
 import { assertRuntimeStatusCompatible } from './runtime-protocol-compat'
 import { callRuntimeEnvironmentWithRevision } from '../calls/runtime-rpc-environment-call'
-import { unwrapRuntimeRpcResult } from '../calls/runtime-rpc-result'
+import { RuntimeRpcCallError, unwrapRuntimeRpcResult } from '../calls/runtime-rpc-result'
 import {
   compatibilityEntry,
   getCachedRuntimeCompatibilityCheck,
@@ -92,6 +92,16 @@ export async function getRuntimeEnvironmentStatus(
   timeoutMs?: number
 ): Promise<RuntimeStatus> {
   const trimmed = environmentId.trim()
+  // The share answers no status: refused as the host would, never sent to the paired-server registry.
+  if (sharedBotHostFor({ kind: 'environment', environmentId: trimmed })) {
+    const method = 'status.get'
+    // Read by its code, as from a host that lacks the method; never shown.
+    throw new RuntimeRpcCallError({
+      id: method,
+      ok: false,
+      error: { code: 'method_not_found', message: method }
+    })
+  }
   const entry = compatibilityEntry()
   // Publish before awaiting so concurrent cold capability reads share this status probe.
   const check = (async () => {

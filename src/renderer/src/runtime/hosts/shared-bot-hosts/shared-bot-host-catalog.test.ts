@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { SharedBotHostView } from '../../../../../shared/bots/shared-bot-hosts'
 import { ensureRuntimeEnvironmentCompatible } from '../../rpc/compatibility/runtime-compatibility-probe'
+import { runtimeEnvironmentSupportsCapability } from '../../rpc/compatibility/runtime-capability-proof'
 import { installSharedBotHostCatalog } from './shared-bot-host-catalog'
 
 const HOST: SharedBotHostView = {
@@ -37,6 +38,10 @@ afterEach(() => {
 describe('what a teammate’s Orca asks a shared agent’s host', () => {
   it('probes no status: the host answers none to a share', async () => {
     await expect(ensureRuntimeEnvironmentCompatible(HOST.environmentId)).resolves.toBeNull()
+    // A capability read refuses as the host would; the paired-server registry is never asked.
+    await expect(
+      runtimeEnvironmentSupportsCapability(HOST.environmentId, 'agent-session.rewind')
+    ).rejects.toMatchObject({ code: 'method_not_found' })
     expect(environmentCall).not.toHaveBeenCalled()
     expect(call).not.toHaveBeenCalled()
   })
