@@ -81,7 +81,7 @@ export class ConnectorCloud {
       this.lastAccount = account
       this.options.onAccountSwitched?.()
       if (account) {
-        this.reach.back('signedIn')
+        this.reach.accountSwitched()
       }
     }
   }

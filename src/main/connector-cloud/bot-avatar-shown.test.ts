@@ -24,3 +24,25 @@ it('writes the kept-drawing record again after a failed write, so a restart stil
   await shown.mark('bot-1', drawing)
   expect(onDisk).toEqual(drawing)
 })
+
+it('writes a record whose write failed again on its own, with no other upload', async () => {
+  let onDisk: BotSlackIconShown | null = null
+  let failNext = true
+  const shown = new BotAvatarShown(
+    {
+      shown: async () => onDisk,
+      markShown: async (_botId, value) => {
+        if (failNext) {
+          failNext = false
+          throw new Error('disk full')
+        }
+        onDisk = value
+      }
+    },
+    () => true
+  )
+  const drawing = { account: 'a1b2', mascot: 'G1' }
+  await expect(shown.mark('bot-1', drawing)).rejects.toThrow('disk full')
+  await shown.flush()
+  expect(onDisk).toEqual(drawing)
+})

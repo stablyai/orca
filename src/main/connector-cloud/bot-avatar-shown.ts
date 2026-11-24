@@ -45,6 +45,23 @@ export class BotAvatarShown {
     }
   }
 
+  /** Writes again the records whose write failed, on the next poll answer or bot write, so a passing disk
+   *  error doesn't leave a restart sending older art. Nothing to write costs nothing. */
+  async flush(): Promise<void> {
+    for (const botId of this.unsaved) {
+      if (!this.exists(botId)) {
+        this.unsaved.delete(botId)
+        continue
+      }
+      try {
+        await this.store.markShown(botId, this.byBot.get(botId) ?? null)
+        this.unsaved.delete(botId)
+      } catch {
+        return
+      }
+    }
+  }
+
   keys(): IterableIterator<string> {
     return this.byBot.keys()
   }

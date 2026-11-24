@@ -99,11 +99,13 @@ export class BotAvatarSync {
     this.writes++
     this.refused.clear()
     this.owed.clear()
+    void this.shown.flush()
     this.pass()
   }
 
   /** Owed drawings go again; a fresh step (a sign-in, an outage ending) also renews sends on their way. */
   retryOwed(why: ConnectorBack): void {
+    void this.shown.flush()
     this.writes += why === 'signedIn' ? 1 : 0
     this.recoveries += why === 'recovered' ? 1 : 0
     for (const botId of this.owed.take(why)) {

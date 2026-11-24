@@ -33,14 +33,16 @@ it('lets only the poll say the cloud answered, and only its own outage say it re
   expect(backs).toEqual(['answered', 'answered', 'recovered', 'recovered'])
 })
 
-it('counts a sign-in that also switched the account once', async () => {
+it('counts a sign-in that also switched the account once, and every other sign-in', () => {
   const reach = new ConnectorReach(() => {})
   const backs: ConnectorBack[] = []
   reach.onBack((why) => backs.push(why))
-  reach.back('signedIn')
+  // One sign-in: its account switch, then its own hook in the same turn.
+  reach.accountSwitched()
   reach.back('signedIn')
   expect(backs).toEqual(['signedIn'])
-  await Promise.resolve()
+  // Two more sign-ins completing in that same turn each count.
   reach.back('signedIn')
-  expect(backs).toEqual(['signedIn', 'signedIn'])
+  reach.back('signedIn')
+  expect(backs).toEqual(['signedIn', 'signedIn', 'signedIn'])
 })

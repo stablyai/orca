@@ -19,7 +19,8 @@ export class ConnectorReach {
   private readonly backListeners = new Set<(why: ConnectorBack) => void>()
   // A `/poll` got no answer or a 5xx since the cloud last took one: its next taken poll ends that outage.
   private pollDown = false
-  private signInThisTurn = false
+  // An account switch whose sign-in hook hasn't followed yet (it follows in the same synchronous turn).
+  private switchUnclaimed = false
 
   constructor(private readonly onChanged: () => void) {}
 
@@ -28,17 +29,25 @@ export class ConnectorReach {
     return () => this.backListeners.delete(listener)
   }
 
+  /** The account switched: a sign-in step, which the same sign-in's own `back('signedIn')` right after
+   *  doesn't repeat. Another sign-in, even in the same turn, still counts. */
+  accountSwitched(): void {
+    this.emit('signedIn')
+    this.switchUnclaimed = true
+    queueMicrotask(() => {
+      this.switchUnclaimed = false
+    })
+  }
+
   back(why: ConnectorBack): void {
-    // A sign-in that also switched the account says so twice in one turn: it is one step.
-    if (why === 'signedIn') {
-      if (this.signInThisTurn) {
-        return
-      }
-      this.signInThisTurn = true
-      queueMicrotask(() => {
-        this.signInThisTurn = false
-      })
+    if (why === 'signedIn' && this.switchUnclaimed) {
+      this.switchUnclaimed = false
+      return
     }
+    this.emit(why)
+  }
+
+  private emit(why: ConnectorBack): void {
     for (const listener of this.backListeners) {
       listener(why)
     }
