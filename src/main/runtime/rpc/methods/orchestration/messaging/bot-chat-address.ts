@@ -13,6 +13,7 @@ import { OrchestrationError } from '../../../../orchestration/orchestration-erro
 import type { OrcaRuntimeService } from '../../../../orca-runtime'
 import type { Bot } from '../../../../../../shared/bot-types'
 import { resolveItem } from '../../bots-items-write-support'
+import { botChatTakingMail } from '../../bots-chats'
 import { refuse } from './bot-recipient'
 import { mayReachBot, sendToBot } from './bot-request-send'
 import { itemMailFilesBody, withItemMailFiles } from './bot-item-mail-files'
@@ -61,7 +62,8 @@ export async function routeBotMail(
   return mail.images === input.images ? { to } : { to, body: itemMailFilesBody(mail) }
 }
 
-/** `--item <n>` names the chat that owns item n, or the Home Chat once that chat is gone. */
+/** `--item <n>` names the chat that owns item n, or the Home Chat once that chat is gone or closed,
+ *  as the item's own change mail goes. */
 async function chatForItem(
   runtime: OrcaRuntimeService,
   to: string,
@@ -85,7 +87,7 @@ async function chatForItem(
     )
   }
   const owning = runtime.botItems.owningChat(record)
-  return owning.gone ? undefined : owning.id
+  return owning.gone || !(await botChatTakingMail(runtime, bot, owning.id)) ? undefined : owning.id
 }
 
 function addressedBot(runtime: OrcaRuntimeService, to: string, flag: string): Bot {
