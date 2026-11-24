@@ -152,7 +152,7 @@ describe('what a bot gets from a read', () => {
     })
   })
 
-  it('bounds a --only answer as the printed lines are bounded, whatever the cloud sends', () => {
+  it('bounds a --only answer to its one message, as the printed lines are bounded, whatever the cloud sends', () => {
     const answer = botReadResult(
       {
         messages: [
@@ -161,9 +161,14 @@ describe('what a bot gets from a read', () => {
             author: 'Sam',
             at: 1,
             text: 'fwd',
-            files: Array.from({ length: 30 }, (_, index) => ({ id: `F${index}`, name: 'a.txt' })),
+            files: [
+              { id: 'F0', name: 'n'.repeat(2_000) },
+              ...Array.from({ length: 29 }, (_, index) => ({ id: `F${index + 1}`, name: 'a.txt' }))
+            ],
             shared: [
               {
+                author: 'A'.repeat(300),
+                ref: `slack:T1:C1:1.1:${'1'.repeat(120)}`,
                 url: `https://acme.slack.com/archives/C1/p1?${'x'.repeat(600)}`,
                 text: 'w'.repeat(100_000)
               }
@@ -171,11 +176,19 @@ describe('what a bot gets from a read', () => {
             links: Array.from({ length: 30 }, (_, index) => ({
               url: `https://example.com/${index}`
             }))
-          }
+          },
+          ...Array.from({ length: 1_000 }, (_, index) => ({
+            ref: `slack:T1:C1:1.1:2.${index}`,
+            author: 'Sam',
+            at: 1,
+            text: 'more',
+            shared: [{ text: 'w'.repeat(2_000) }]
+          }))
         ]
       },
       true
     )
+    expect(JSON.stringify(answer).length).toBeLessThan(5_000)
     expect(answer).toEqual({
       messageParts: true,
       messages: [
@@ -184,8 +197,11 @@ describe('what a bot gets from a read', () => {
           author: 'Sam',
           at: 1,
           text: 'fwd',
-          files: Array.from({ length: 10 }, (_, index) => ({ id: `F${index}`, name: 'a.txt' })),
-          shared: [{ text: 'w'.repeat(2_000), cut: true }],
+          files: [
+            { id: 'F0', name: 'n'.repeat(1_024) },
+            ...Array.from({ length: 9 }, (_, index) => ({ id: `F${index + 1}`, name: 'a.txt' }))
+          ],
+          shared: [{ author: 'A'.repeat(200), text: 'w'.repeat(2_000), cut: true }],
           links: Array.from({ length: 3 }, (_, index) => ({ url: `https://example.com/${index}` })),
           partsLeftOut: 20 + 27
         }

@@ -254,8 +254,14 @@ export function botReadResult(
   answer: Record<string, unknown>,
   only: boolean
 ): Record<string, unknown> {
-  const messages = Array.isArray(answer.messages)
-    ? answer.messages.flatMap((raw) => {
+  // --only names one message: anything after the first is not what the bot asked for.
+  const listed = Array.isArray(answer.messages)
+    ? only
+      ? answer.messages.slice(0, 1)
+      : answer.messages
+    : undefined
+  const messages = listed
+    ? listed.flatMap((raw) => {
         const message = Message.safeParse(raw)
         if (!message.success) {
           return []
