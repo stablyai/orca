@@ -126,8 +126,11 @@ export function useSourceControlCommitFlows(foundation: SourceControlPanelFounda
     conflictOperation,
     operationStore,
     rebaseStopUnread:
-      resolveRebaseContinueState(foundation.rebaseStop, foundation.activeGitStatusHead) ===
-      'unknown',
+      resolveRebaseContinueState(
+        foundation.rebaseStop,
+        foundation.activeGitStatusHead,
+        foundation.rebaseStopInspectFailure
+      ) === 'unknown',
     refreshActiveGitStatusAfterMutation,
     refreshBranchCompareRef,
     refreshGitHistoryRef,

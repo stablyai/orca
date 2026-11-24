@@ -14095,7 +14095,19 @@
             "continueRebaseUnconfirmed": "Das Ergebnis ließ sich nicht bestätigen. Die Quellcodeverwaltung wurde aktualisiert und zeigt den aktuellen Stand.",
             "noRebaseInProgress": "Kein Rebase in Arbeit",
             "rebaseStopMovedOn": "Der Rebase ist bereits weitergegangen. Prüfe das Panel und versuche es erneut.",
-            "rebaseEmptyStep": "In diesem Schritt gibt es nichts zu committen. Brich den Rebase ab oder schließe ihn im Terminal ab."
+            "rebaseEmptyStep": "In diesem Schritt gibt es nichts zu committen. Überspringe ihn oder brich den Rebase ab.",
+            "skipRebaseStepFailed": "Dieser Rebase-Schritt ließ sich nicht überspringen",
+            "rebaseStepUnreadable": "Dieser Rebase-Schritt ließ sich nicht prüfen",
+            "rebaseStepUnreadableShort": "Schritt nicht geprüft",
+            "rebaseRetryInspect": "Erneut versuchen",
+            "rebaseRetryInspectLabel": "Rebase-Schritt erneut prüfen",
+            "rebaseSkipStep": "Überspringen",
+            "rebaseSkipStepLabel": "Diesen Rebase-Schritt überspringen",
+            "rebaseSkipStepReason": "In diesem Schritt gibt es nichts zu committen. Überspringen verwirft ihn und macht weiter.",
+            "rebaseStoppedFinishInTerminal": "Git hat diesen Schritt angehalten. Schließe ihn im Terminal ab oder brich ab.",
+            "rebaseCheckingStep": "Rebase-Schritt wird geprüft",
+            "rebaseEmptyStepShort": "Leerer Schritt",
+            "rebaseAbortLabel": "Rebase abbrechen"
           },
           "SourceControlAgentActionDialog": {
             "8e856842d1": "Der ausgewählte Agent konnte nicht gestartet werden.",

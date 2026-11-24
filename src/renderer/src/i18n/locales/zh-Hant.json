@@ -13914,7 +13914,19 @@
             "continueRebaseUnconfirmed": "無法確認結果。原始碼控制已重新整理以顯示目前狀態。",
             "noRebaseInProgress": "沒有進行中的重定基底",
             "rebaseStopMovedOn": "重定基底已經繼續進行。請查看面板後再試一次。",
-            "rebaseEmptyStep": "此步驟沒有可提交的內容。請中止重定基底，或在終端機中完成它。"
+            "rebaseEmptyStep": "此步驟沒有可提交的內容。請略過此步驟或中止重定基底。",
+            "skipRebaseStepFailed": "無法略過此重定基底步驟",
+            "rebaseStepUnreadable": "無法檢查此重定基底步驟",
+            "rebaseStepUnreadableShort": "無法檢查步驟",
+            "rebaseRetryInspect": "重試",
+            "rebaseRetryInspectLabel": "重新檢查重定基底步驟",
+            "rebaseSkipStep": "略過",
+            "rebaseSkipStepLabel": "略過此重定基底步驟",
+            "rebaseSkipStepReason": "此步驟沒有可提交的內容。略過會捨棄此步驟並繼續。",
+            "rebaseStoppedFinishInTerminal": "Git 已在此步驟暫停。請在終端機中完成或中止。",
+            "rebaseCheckingStep": "正在檢查重定基底步驟",
+            "rebaseEmptyStepShort": "空步驟",
+            "rebaseAbortLabel": "中止重定基底"
           },
           "SourceControlAgentActionDialog": {
             "8e856842d1": "無法啟動選定的代理程式。",

@@ -151,6 +151,35 @@ describe('continueRebase against real git', () => {
     await expect(detectConflictOperation(repoPath)).resolves.toBe('rebase')
   })
 
+  it('skips an empty step only at the stop it was shown, then pauses at the next conflict', async () => {
+    const { repoPath, git, write } = createFeatureBehindConflictingMain()
+    expect(() => git('rebase', '--apply', 'main')).toThrow()
+    git('checkout', '--ours', 'a.txt')
+    git('add', 'a.txt')
+    const emptyStop = await continueRebase(repoPath, 'continue', {
+      expected: await stopToken(repoPath)
+    })
+    expect(emptyStop.outcome).toBe('empty')
+
+    // A token from another stop must not drop this one.
+    await expect(
+      continueRebase(repoPath, 'skip', {
+        expected: { ...emptyStop.stop!, step: `${emptyStop.stop!.step}9` }
+      })
+    ).resolves.toMatchObject({ outcome: 'stale' })
+
+    const skipped = await continueRebase(repoPath, 'skip', { expected: emptyStop.stop })
+    expect(skipped.outcome).toBe('conflicted')
+    expect(git('diff', '--name-only', '--diff-filter=U')).toBe('b.txt\n')
+    write('b.txt', 'resolved b\n')
+    git('add', 'b.txt')
+    await expect(
+      continueRebase(repoPath, 'continue', { expected: skipped.stop })
+    ).resolves.toMatchObject({ outcome: 'completed', branch: 'feature' })
+    // The skipped pick left nothing of the feature's change to a.txt.
+    expect(git('show', 'HEAD:a.txt')).toBe(git('show', 'main:a.txt'))
+  })
+
   it('treats the merge backend dropping an empty pick before the next conflict as conflicted', async () => {
     const { repoPath, git } = createFeatureBehindConflictingMain()
     expect(() => git('rebase', '--merge', 'main')).toThrow()

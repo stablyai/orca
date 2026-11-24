@@ -42,6 +42,7 @@ export function useSourceControlWorktreeOperationState({
   const isContinuingRebase = useStore(operationView, (s) => s.isContinuingRebase)
   const rebaseAutoStash = useStore(operationView, (s) => s.rebaseAutoStash)
   const rebaseStop = useStore(operationView, (s) => s.rebaseStop)
+  const rebaseStopInspectFailure = useStore(operationView, (s) => s.rebaseStopInspectFailure)
   const orcaRebase = useStore(operationView, (s) => s.orcaRebase)
   const remoteActionError = useStore(operationView, (s) => s.remoteActionError)
   const activeRemoteActionSequence = useStore(operationView, (s) =>
@@ -70,7 +71,9 @@ export function useSourceControlWorktreeOperationState({
     operationStore.setState({
       observedConflictOperation: conflictOperation,
       // A stop reading belongs to one paused rebase; any operation change retires it.
-      ...(observedConflictOperation !== conflictOperation ? { rebaseStop: null } : {}),
+      ...(observedConflictOperation !== conflictOperation
+        ? { rebaseStop: null, rebaseStopInspectFailure: null }
+        : {}),
       ...(remoteActionError &&
       remoteActionErrorSettledByConflictOperation(
         remoteActionError,
@@ -96,6 +99,7 @@ export function useSourceControlWorktreeOperationState({
     recordBranchSwitchOutcome,
     rebaseAutoStash,
     rebaseStop,
+    rebaseStopInspectFailure,
     orcaRebase,
     remoteActionError,
     updateCommitDraft

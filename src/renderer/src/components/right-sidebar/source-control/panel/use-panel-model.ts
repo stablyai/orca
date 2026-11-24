@@ -64,6 +64,7 @@ export function useSourceControlPanelModel() {
     refreshActiveGitStatusAfterMutation,
     remoteStatus,
     rebaseStop,
+    rebaseStopInspectFailure,
     activeGitStatusHead,
     rebaseAutoStash,
     remoteStatusForActions,
@@ -99,6 +100,7 @@ export function useSourceControlPanelModel() {
     hasTrackedChanges: grouped.staged.length > 0 || grouped.unstaged.length > 0,
     rebaseAutoStash,
     rebaseStop,
+    rebaseStopInspectFailure,
     statusHead: activeGitStatusHead,
     isBusy:
       isCommitting ||

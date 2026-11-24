@@ -110,7 +110,9 @@ export function SourceControlPanelReady(props: SourceControlPanelReadyProps) {
                   isContinuingRebase: model.isContinuingRebase,
                   onRebase: () => model.handleActionInvoke('rebase_base'),
                   onAbortRebase: () => void model.handleAbortRebase(),
-                  onContinueRebase: () => void model.handleContinueRebase()
+                  onContinueRebase: () => void model.handleContinueRebase(),
+                  onSkipRebaseStep: () => void model.handleSkipRebaseStep(),
+                  onRetryRebaseInspect: model.handleRetryRebaseInspect
                 }
           }
         />

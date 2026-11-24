@@ -19,7 +19,8 @@ export type GitConflictOperation = 'merge' | 'rebase' | 'cherry-pick' | 'revert'
  */
 export type RebaseFromBaseResult = { autostashConflict?: boolean; integratedUpstreamOid?: string }
 /** inspect: read the current stop only; continue: run git rebase --continue at that stop. */
-export type ContinueRebaseAction = 'continue' | 'inspect'
+// skip drops the current step (`git rebase --skip`); the panel offers it only for an empty step.
+export type ContinueRebaseAction = 'continue' | 'inspect' | 'skip'
 /** One stop of one rebase run (incarnation = onto + orig-head). Continue refuses any other. */
 export type RebaseStopToken = {
   head: string | null

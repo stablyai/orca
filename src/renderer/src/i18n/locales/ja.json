@@ -14094,7 +14094,19 @@
             "continueRebaseUnconfirmed": "結果を確認できませんでした。ソース管理を更新して現在の状態を表示しました。",
             "noRebaseInProgress": "進行中のリベースはありません",
             "rebaseStopMovedOn": "リベースはすでに先へ進んでいます。パネルを確認してもう一度お試しください。",
-            "rebaseEmptyStep": "このステップにはコミットする内容がありません。リベースを中止するか、ターミナルで完了してください。"
+            "rebaseEmptyStep": "このステップにはコミットする内容がありません。スキップするか、リベースを中止してください。",
+            "skipRebaseStepFailed": "このリベースステップをスキップできませんでした",
+            "rebaseStepUnreadable": "このリベースステップを確認できませんでした",
+            "rebaseStepUnreadableShort": "ステップを確認できません",
+            "rebaseRetryInspect": "再試行",
+            "rebaseRetryInspectLabel": "リベースステップを再確認",
+            "rebaseSkipStep": "スキップ",
+            "rebaseSkipStepLabel": "このリベースステップをスキップ",
+            "rebaseSkipStepReason": "このステップにはコミットする内容がありません。スキップすると破棄して次に進みます。",
+            "rebaseStoppedFinishInTerminal": "Git がこのステップで一時停止しました。ターミナルで完了するか、中止してください。",
+            "rebaseCheckingStep": "リベースステップを確認中",
+            "rebaseEmptyStepShort": "空のステップ",
+            "rebaseAbortLabel": "リベースを中止"
           },
           "SourceControlAgentActionDialog": {
             "8e856842d1": "選択した Agent を開始できませんでした。",

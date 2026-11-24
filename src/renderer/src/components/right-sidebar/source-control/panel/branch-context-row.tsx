@@ -142,6 +142,7 @@ export function SourceControlBranchContextRow({
         actions={rebase}
         unresolvedCount={rebase.state.unresolvedCount}
         continueState={rebase.state.continueState}
+        inspectFailureMessage={rebase.state.inspectFailureMessage}
       />
     ) : null
 

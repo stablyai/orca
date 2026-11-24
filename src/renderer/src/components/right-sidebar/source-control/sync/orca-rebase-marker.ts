@@ -33,14 +33,16 @@ export function recordRebaseStopReading(
       ? {
           token: result.stop,
           branch: result.branch ?? null,
-          continueBlocked: result.outcome === 'empty' || result.outcome === 'stopped'
+          blocked:
+            result.outcome === 'empty' || result.outcome === 'stopped' ? result.outcome : null
         }
       : null,
+    rebaseStopInspectFailure: null,
     ...(finishedOrcaRebase ? { orcaRebase: finishedOrcaRebase } : {})
   })
 }
 
-/** Applies only to the same branch and the same upstream tip, while still diverged. */
+/** Applies only to the same branch, upstream tip and old-copy count, while still diverged. */
 export function orcaRebaseMarkerMatches(
   marker: OrcaRebaseMarker,
   branchName: string,
@@ -51,7 +53,8 @@ export function orcaRebaseMarkerMatches(
     marker.branch === branchName &&
     remoteStatus.upstreamOid === marker.upstreamOid &&
     remoteStatus.ahead > 0 &&
-    remoteStatus.behind > 0
+    remoteStatus.behind > 0 &&
+    (marker.behind === undefined || remoteStatus.behind === marker.behind)
   )
 }
 

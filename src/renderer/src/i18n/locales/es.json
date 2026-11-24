@@ -13718,7 +13718,19 @@
             "continueRebaseUnconfirmed": "No se pudo confirmar el resultado. Control de código se actualizó para mostrar el estado actual.",
             "noRebaseInProgress": "No hay ningún rebase en curso",
             "rebaseStopMovedOn": "El rebase ya avanzó. Revisa el panel e inténtalo de nuevo.",
-            "rebaseEmptyStep": "No hay nada que confirmar en este paso. Aborta el rebase o termínalo en una terminal."
+            "rebaseEmptyStep": "No hay nada que confirmar en este paso. Omítelo o aborta el rebase.",
+            "skipRebaseStepFailed": "No se pudo omitir este paso del rebase",
+            "rebaseStepUnreadable": "No se pudo comprobar este paso del rebase",
+            "rebaseStepUnreadableShort": "No se pudo comprobar",
+            "rebaseRetryInspect": "Reintentar",
+            "rebaseRetryInspectLabel": "Volver a comprobar el paso del rebase",
+            "rebaseSkipStep": "Omitir",
+            "rebaseSkipStepLabel": "Omitir este paso del rebase",
+            "rebaseSkipStepReason": "No hay nada que confirmar en este paso. Omitir lo descarta y continúa.",
+            "rebaseStoppedFinishInTerminal": "Git pausó este paso. Termínalo en una terminal o aborta.",
+            "rebaseCheckingStep": "Comprobando el paso del rebase",
+            "rebaseEmptyStepShort": "Paso vacío",
+            "rebaseAbortLabel": "Abortar rebase"
           },
           "SourceControlAgentActionDialog": {
             "8e856842d1": "No se pudo iniciar el agente seleccionado.",
