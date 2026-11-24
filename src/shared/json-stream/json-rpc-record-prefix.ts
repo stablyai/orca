@@ -78,9 +78,11 @@ function skipJsonLiteral(value: string, start: number): number | null {
  * the scan ends at the first object or array value (its key is still listed), so an envelope's
  * `params`/`result` payload is never walked.
  */
+type LeadingScanOptions = { stopAtContainer?: boolean; maxFields?: number }
+
 export function leadingJsonProperties(
   prefix: string,
-  options: { stopAtContainer?: boolean } = {}
+  options: LeadingScanOptions = {}
 ): LeadingProperty[] {
   return leadingJsonEnvelope(prefix, options).properties
 }
@@ -91,7 +93,7 @@ export function leadingJsonProperties(
  */
 export function leadingJsonEnvelope(
   prefix: string,
-  options: { stopAtContainer?: boolean } = {}
+  options: LeadingScanOptions = {}
 ): { properties: LeadingProperty[]; complete: boolean } {
   const properties: LeadingProperty[] = []
   let complete = false
@@ -113,7 +115,7 @@ export function leadingJsonEnvelope(
     return { properties, complete }
   }
   cursor += 1
-  while (properties.length < 8) {
+  while (properties.length < (options.maxFields ?? 8)) {
     skipWhitespace()
     const keyEnd = readJsonStringEnd(prefix, cursor)
     if (keyEnd === null) {

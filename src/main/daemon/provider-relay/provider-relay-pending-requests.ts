@@ -26,7 +26,10 @@ function parseObject(line: string): JsonObject | null {
  */
 const ENVELOPE_SCAN_CHARS = 4096
 
-const LEADING_BRACE = /^\s*\{/
+const NON_SPACE = /\S/
+const isControlType = (type: string): boolean => type.startsWith('control_')
+/** Envelope fields read before the scan gives up and the line is skipped as unusual. */
+const ENVELOPE_MAX_FIELDS = 32
 
 function rpcId(value: unknown): string | null {
   return typeof value === 'number' || typeof value === 'string'
@@ -145,31 +148,43 @@ export class ProviderRelayPendingRequests {
 
   /** False for a line the envelope alone shows is none of those, which is nearly every line. */
   private mayClassify(line: string): boolean {
-    const head = line.length > ENVELOPE_SCAN_CHARS ? line.slice(0, ENVELOPE_SCAN_CHARS) : line
-    if (!LEADING_BRACE.test(head)) {
+    const start = line.search(NON_SPACE)
+    if (start === -1 || line[start] !== '{') {
       return false
     }
-    const { properties, complete } = leadingJsonEnvelope(head, { stopAtContainer: true })
+    const head = line.slice(start, start + ENVELOPE_SCAN_CHARS)
+    const { properties, complete } = leadingJsonEnvelope(head, {
+      stopAtContainer: true,
+      maxFields: ENVELOPE_MAX_FIELDS
+    })
+    const keys = new Set(properties.map((property) => property.key))
+    if (keys.size !== properties.length) {
+      // JSON.parse keeps a repeated key's last value, which the gate must not second-guess.
+      return true
+    }
+    if (!complete) {
+      // Cut by the window before its envelope ended: undecided unless a Claude frame type was read.
+      // Otherwise it isn't valid JSON.
+      const type = properties.find((property) => property.key === 'type')?.value
+      return (
+        start + head.length < line.length && !(typeof type === 'string' && !isControlType(type))
+      )
+    }
     const field = (key: string): LeadingProperty | undefined =>
       properties.find((property) => property.key === key)
     const method = field('method')?.value
     const type = field('type')?.value
     if (typeof method === 'string') {
-      // A notification has no id; one cut before its fields end may still have one.
-      return method === RESOLVED_METHOD || field('id') !== undefined || !complete
+      return method === RESOLVED_METHOD || field('id') !== undefined
     }
-    if (typeof type === 'string') {
-      return (
-        type === 'control_request' ||
-        type === 'control_cancel_request' ||
-        (type === 'control_response' && this.awaitingInitialize)
-      )
+    if (this.awaitingInitialize && (field('result') || field('error'))) {
+      return true
     }
-    if (field('method') || field('type')) {
-      return false
-    }
-    // No method or type read: an answer, or a line cut before its envelope was read.
-    return !complete || (this.awaitingInitialize && Boolean(field('result') || field('error')))
+    return (
+      type === 'control_request' ||
+      type === 'control_cancel_request' ||
+      (type === 'control_response' && this.awaitingInitialize)
+    )
   }
 
   /**
