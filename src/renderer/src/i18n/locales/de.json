@@ -393,6 +393,12 @@
       "caveat": "Dies öffnet auf dem Remote-Host eine neue Seite mit der zuletzt verwendeten Adresse dieser Seite. Der Anmeldestatus und andere vorübergehende Seitenzustände können abweichen. Eine durch Formularübermittlung entstandene Seite wird leer geöffnet.",
       "failed": "Diese Seite konnte auf dem Remote-Host nicht geöffnet werden. Die Verbindung prüfen und erneut versuchen."
     },
+    "deviceMove": {
+      "toThisComputer": "Auf diesem Computer öffnen",
+      "toHost": "Auf {{host}} öffnen",
+      "tooltip": "Öffnet diese Adresse in einem neuen Tab auf der anderen Seite und schließt diesen. Eventuell musst du dich erneut anmelden.",
+      "failedToThisComputer": "Diese Seite konnte auf diesem Computer nicht geöffnet werden."
+    },
     "sshRoute": {
       "preparingTitle": "Verbindung über den SSH-Host wird hergestellt",
       "errorTitle": "SSH-Routing für den Browser nicht verfügbar",
@@ -1971,12 +1977,16 @@
         }
       },
       "activateAiVaultStructuredSession": {
-        "unavailable": "Die strukturierte Agenten-Sitzung ist noch nicht verfügbar. In Kürze erneut versuchen.",
         "gone": "Dieser Chat befindet sich nicht mehr auf diesem Host und kann hier daher nicht erneut geöffnet werden.",
         "hostCannotOpen": "Dieser Chat kann erst nach einer Aktualisierung von Orca erneut geöffnet werden.",
         "worktreeDeleted": "Der Worktree wurde gelöscht.",
         "projectRemoved": "Das Projekt wurde aus Orca entfernt.",
-        "folderWorkspaceRemoved": "Der Ordner-Arbeitsbereich wurde entfernt."
+        "folderWorkspaceRemoved": "Der Ordner-Arbeitsbereich wurde entfernt.",
+        "chatStillStarting": "Chat startet noch. Versuche es gleich erneut.",
+        "chatOpenFailed": "Chat konnte nicht geöffnet werden.",
+        "chatOpenRetry": "Erneut versuchen",
+        "chatOpenShowDetails": "Details anzeigen",
+        "chatOpenHideDetails": "Details ausblenden"
       },
       "ephemeralVmWorktreeCreation": {
         "sparseCheckoutUnsupported": "Rezepte mit bereitgestelltem Stammverzeichnis unterstützen keinen Sparse-Checkout."
@@ -2106,7 +2116,11 @@
       "projectHostSetupOptions": {
         "locationNotSet": "Projektverzeichnis nicht festgelegt",
         "hostLocalGitProject": "Kein passendes Git-Remote für dieses Projekt",
-        "hostLocalFolderProject": "Ordnerprojekte lassen sich nicht mit anderen Hosts verknüpfen"
+        "hostLocalFolderProject": "Ordnerprojekte lassen sich nicht mit anderen Hosts verknüpfen",
+        "pendingNotSetUp": "Projekt auf diesem Host erfasst, aber nicht eingerichtet",
+        "pendingSettingUp": "Projekteinrichtung läuft",
+        "pendingError": "Projekteinrichtung erfordert Aufmerksamkeit",
+        "pendingUnsupported": "Projekt wird auf diesem Host nicht unterstützt"
       },
       "workspacePortScan": {
         "serverSshUpdateRequired": "Aktualisieren Sie den Server, um Ports auf seinen SSH-Hosts anzuzeigen.",
@@ -6202,13 +6216,6 @@
           "changesLost_one": "{{count}} nicht committete Änderung geht verloren",
           "changesLost_other": "{{count}} nicht committete Änderungen gehen verloren",
           "uncountedChangesLost": "Nicht committete Änderungen gehen verloren"
-        },
-        "DeleteWorktreeLineageNotice": {
-          "a940f3c96e": "Untergeordnete Arbeitsbereiche werden gelöscht",
-          "alsoDeletesChildren_one": "Beim Löschen dieses Arbeitsbereichs wird auch {{count}} untergeordneter Arbeitsbereich gelöscht.",
-          "alsoDeletesChildren_other": "Beim Löschen dieses Arbeitsbereichs werden auch {{count}} untergeordnete Arbeitsbereiche gelöscht.",
-          "moreChildren_one": "+{{count}} weiterer",
-          "moreChildren_other": "+{{count}} weitere"
         },
         "ImportedWorktreesVisibilityLine": {
           "b7a87dc32f": "Worktree anzeigen",
@@ -21111,12 +21118,13 @@
       "downloadSize": "Download: {{size}} MB.",
       "downloading": "{{done}} MB werden heruntergeladen.",
       "downloadingOf": "{{done}} MB von {{total}} MB werden heruntergeladen.",
-      "external": "Verwendet die auf diesem Host gefundene Installation von {{agent}}.",
-      "extracting": "{{agent}} wird entpackt.",
+      "external": "Verwendet deine eigene {{agent}}-Installation",
+      "externalShort": "Verwendet deine eigene Installation",
+      "extracting": "{{agent}} wird entpackt…",
+      "extractingShort": "Wird entpackt…",
       "failed": "Installation fehlgeschlagen. Erneut versuchen.",
       "cancelFailed": "Die Installation konnte nicht abgebrochen werden. Erneut versuchen.",
       "install": "{{agent}} installieren",
-      "installManaged": "Orcas Version installieren",
       "notInstalled": "Nicht installiert.",
       "progress": "Download von {{agent}}",
       "readFailed": "{{agent}} konnte auf diesem Host nicht überprüft werden. Erneuter Versuch.",
@@ -21133,7 +21141,8 @@
       "thisComputer": "dieser Computer",
       "unavailable": "{{agent}} ist auf diesem Host nicht verfügbar.",
       "update": "Aktualisieren",
-      "verifying": "Die heruntergeladene Laufzeitumgebung wird überprüft.",
+      "verifying": "Wird überprüft…",
+      "verifyingAgent": "{{agent}} wird überprüft…",
       "installTitle": "{{agent}} installieren, um einen Chat zu starten",
       "continueTitle": "{{agent}} installieren, um fortzufahren",
       "heroBody": "Einmaliger Download von {{size}} MB. Alle Chats mit {{agent}} auf dem Computer, auf dem dieser Chat läuft, verwenden ihn gemeinsam.",
@@ -21151,7 +21160,7 @@
       "checkingTitle": "Download wird überprüft",
       "progressOf": "{{done}} von {{total}} MB",
       "unpackingDetail": "Laufzeitumgebung wird entpackt",
-      "checkingDetail": "Heruntergeladene Laufzeitumgebung wird überprüft",
+      "checkingDetail": "{{agent}} wird überprüft…",
       "stepDownload": "Herunterladen",
       "stepUnpack": "Entpacken",
       "stepCheck": "Überprüfen"
@@ -24226,7 +24235,10 @@
         "lastItem": "Letztes Element",
         "previous": "Vorheriges Element",
         "next": "Nächstes Element",
-        "subWhere": "Element {{number}} · {{chat}}"
+        "linkCount": "{{count}} Links",
+        "reply": "Antworten",
+        "replyAbove": "Antworten, weiter oben",
+        "replyBelow": "Antworten, weiter unten"
       },
       "activity": {
         "linked": "hat {{links}} verknüpft",
@@ -24606,6 +24618,7 @@
     }
   },
   "agentPicker": {
+    "refreshModels": "Modelle aktualisieren",
     "catalogUnsupportedLaunch": "Modelle für {{agent}} sind auf diesem Host nicht verfügbar. Deine aktuelle Auswahl gilt weiterhin.",
     "catalogEmpty": "Für {{agent}} sind keine Modelle verfügbar.",
     "setByArguments": "Durch Argumente festgelegt",

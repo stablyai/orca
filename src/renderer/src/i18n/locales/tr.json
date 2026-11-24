@@ -393,6 +393,12 @@
       "caveat": "Bu işlem, uzak sunucuda bu sayfanın son adresinde yeni bir sayfa açar. Oturum açma durumu ve diğer geçici sayfa verileri farklı olabilir, form gönderiminden gelen bir sayfa boş açılır.",
       "failed": "Bu sayfa uzak sunucuda açılamadı. Bağlantıyı kontrol edip tekrar deneyin."
     },
+    "deviceMove": {
+      "toThisComputer": "Bu bilgisayarda aç",
+      "toHost": "{{host}} üzerinde aç",
+      "tooltip": "Bu adresi diğer tarafta yeni bir sekmede açar ve bunu kapatır. Yeniden oturum açmanız gerekebilir.",
+      "failedToThisComputer": "Bu sayfa bu bilgisayarda açılamadı."
+    },
     "sshRoute": {
       "preparingTitle": "SSH sunucusu üzerinden bağlanılıyor",
       "errorTitle": "SSH tarayıcı yönlendirmesi kullanılamıyor",
@@ -2052,12 +2058,16 @@
         }
       },
       "activateAiVaultStructuredSession": {
-        "unavailable": "Yapılandırılmış ajan oturumu henüz kullanılamıyor. Bir süre sonra tekrar deneyin.",
         "gone": "Bu sohbet artık bu sunucuda değil, bu yüzden burada yeniden açılamıyor.",
         "hostCannotOpen": "Orca güncellenene kadar bu sohbet yeniden açılamaz.",
         "worktreeDeleted": "Çalışma ağacı silindi.",
         "projectRemoved": "Proje Orca'dan kaldırıldı.",
-        "folderWorkspaceRemoved": "Klasör çalışma alanı kaldırıldı."
+        "folderWorkspaceRemoved": "Klasör çalışma alanı kaldırıldı.",
+        "chatStillStarting": "Sohbet hâlâ başlatılıyor. Birazdan tekrar deneyin.",
+        "chatOpenFailed": "Bu sohbet açılamadı.",
+        "chatOpenRetry": "Tekrar dene",
+        "chatOpenShowDetails": "Ayrıntıları göster",
+        "chatOpenHideDetails": "Ayrıntıları gizle"
       },
       "ephemeralVmWorktreeCreation": {
         "sparseCheckoutUnsupported": "Sağlanmış kök tarifleri sparse checkout'u desteklemez."
@@ -2199,7 +2209,11 @@
       },
       "projectHostSetupOptions": {
         "hostLocalGitProject": "Bu projenin eşleşen bir Git uzak deposu yok",
-        "hostLocalFolderProject": "Klasör projeleri diğer sunuculara bağlanamaz"
+        "hostLocalFolderProject": "Klasör projeleri diğer sunuculara bağlanamaz",
+        "pendingNotSetUp": "Proje bu sunucuda izleniyor ancak kurulmadı",
+        "pendingSettingUp": "Proje kurulumu sürüyor",
+        "pendingError": "Proje kurulumu dikkat gerektiriyor",
+        "pendingUnsupported": "Proje bu sunucuda desteklenmiyor"
       },
       "updateCheckClickOptions": {
         "releaseHint": "{{rcKey}}+tıklama en son sürüm adayını (RC), {{perfKey}}+tıklama ise en son performans testi derlemesini denetler.",
@@ -6286,13 +6300,6 @@
           "changesLost_one": "{{count}} commit'lenmemiş değişiklik kaybolacak",
           "changesLost_other": "{{count}} commit'lenmemiş değişiklik kaybolacak",
           "uncountedChangesLost": "Commit'lenmemiş değişiklikler kaybolacak"
-        },
-        "DeleteWorktreeLineageNotice": {
-          "a940f3c96e": "Alt çalışma alanları silinecek",
-          "alsoDeletesChildren_other": "Bu çalışma alanı silindiğinde {{count}} alt çalışma alanı da silinir.",
-          "alsoDeletesChildren_one": "Bu çalışma alanı silindiğinde {{count}} alt çalışma alanı da silinir.",
-          "moreChildren_other": "+{{count}} tane daha",
-          "moreChildren_one": "+{{count}} tane daha"
         },
         "ImportedWorktreesVisibilityLine": {
           "b7a87dc32f": "Çalışma ağacını göster",
@@ -21235,12 +21242,13 @@
       "downloadSize": "{{size}} MB indirme.",
       "downloading": "{{done}} MB indiriliyor.",
       "downloadingOf": "{{total}} MB verinin {{done}} MB kadarı indiriliyor.",
-      "external": "Bu ana makinede bulunan {{agent}} kopyasını kullanır.",
-      "extracting": "{{agent}} arşivden çıkarılıyor.",
+      "external": "Kendi {{agent}} kopyanızı kullanır",
+      "externalShort": "Kendi kopyanızı kullanır",
+      "extracting": "{{agent}} arşivden çıkarılıyor…",
+      "extractingShort": "Arşivden çıkarılıyor…",
       "failed": "Kurulum başarısız oldu. Yeniden deneyin.",
       "cancelFailed": "Kurulum iptal edilemedi. Yeniden deneyin.",
       "install": "{{agent}} yükle",
-      "installManaged": "Orca'nın kopyasını yükle",
       "notInstalled": "Yüklü değil.",
       "progress": "{{agent}} indirmesi",
       "readFailed": "Bu ana makinede {{agent}} kontrol edilemedi. Yeniden deneniyor.",
@@ -21257,7 +21265,8 @@
       "thisComputer": "bu bilgisayar",
       "unavailable": "{{agent}} bu ana makinede kullanılamıyor.",
       "update": "Güncelle",
-      "verifying": "İndirilen çalışma zamanı kontrol ediliyor.",
+      "verifying": "Doğrulanıyor…",
+      "verifyingAgent": "{{agent}} doğrulanıyor…",
       "installTitle": "Sohbete başlamak için {{agent}} yükleyin",
       "continueTitle": "Devam etmek için {{agent}} yükleyin",
       "heroBody": "Bir defaya mahsus {{size}} MB indirilir. Bu sohbeti çalıştıran bilgisayardaki {{agent}} sohbetleri tarafından ortak kullanılır.",
@@ -21275,7 +21284,7 @@
       "checkingTitle": "İndirme kontrol ediliyor",
       "progressOf": "{{done}} / {{total}} MB",
       "unpackingDetail": "Çalışma zamanı arşivden çıkarılıyor",
-      "checkingDetail": "İndirilen çalışma zamanı kontrol ediliyor",
+      "checkingDetail": "{{agent}} doğrulanıyor…",
       "stepDownload": "İndir",
       "stepUnpack": "Arşivden çıkar",
       "stepCheck": "Kontrol et"
@@ -24345,7 +24354,10 @@
         "lastItem": "Son öğe",
         "previous": "Önceki öğe",
         "next": "Sonraki öğe",
-        "subWhere": "Öğe {{number}} · {{chat}}"
+        "linkCount": "{{count}} bağlantı",
+        "reply": "Yanıtla",
+        "replyAbove": "Yukarıdaki soruyu yanıtla",
+        "replyBelow": "Aşağıdaki soruyu yanıtla"
       },
       "activity": {
         "linked": "{{links}} bağlantılarını bağladı",
@@ -24725,6 +24737,7 @@
     }
   },
   "agentPicker": {
+    "refreshModels": "Modelleri yenile",
     "catalogUnsupportedLaunch": "{{agent}} modelleri bu sunucuda kullanılamıyor. Geçerli seçimleriniz uygulanmaya devam eder.",
     "catalogEmpty": "{{agent}} için kullanılabilir model yok.",
     "setByArguments": "Argümanlarınızla ayarlandı",

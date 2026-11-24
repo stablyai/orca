@@ -27,6 +27,8 @@ const TILE = 'size-28 rounded-xl'
 /** A picture the Generate slot shows: the one just made, or the user's own picture in use. */
 export type SlotPicture = { src: string; description: string }
 
+export type GenerateFaceDraft = { value: string; onChange: (value: string) => void }
+
 /**
  * The Generate face's state, shared by its tile and the line under the carousel. `applied` is the
  * user's own picture (generated earlier, uploaded, pasted or dropped); it holds the slot unless a
@@ -37,7 +39,8 @@ export function useGenerateFace(
   /** False when a picture taken in since it was asked for keeps the slot. */
   onResult: (result: GeneratedAvatar) => boolean,
   applied: SlotPicture | null,
-  onStart?: () => void
+  onStart?: () => void,
+  draft?: GenerateFaceDraft
 ) {
   // A picture taken in after the last one made (an upload, an undo) wins the slot back.
   const [superseded, setSuperseded] = useState(false)
@@ -48,7 +51,8 @@ export function useGenerateFace(
   const picture: SlotPicture | null = made
     ? { src: `data:image/png;base64,${made.png}`, description: made.description }
     : applied
-  const [description, setDescription] = useState('')
+  const [ownDescription, setDescription] = useState('')
+  const description = draft?.value ?? ownDescription
   // Editing reopens the description field under a picture already made.
   const [editing, setEditing] = useState(false)
   // Bumped to move focus into the field; `select` also selects its text for retyping.
@@ -67,7 +71,11 @@ export function useGenerateFace(
     supersede: () => setSuperseded(true),
     description,
     setDescription: (next: string) => {
-      setDescription(next)
+      if (draft) {
+        draft.onChange(next)
+      } else {
+        setDescription(next)
+      }
       generation.clearError()
     },
     editing,

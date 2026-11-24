@@ -17,6 +17,7 @@ export function WorkerDockResultDialog({
   onClose,
   onOpen,
   onRestore,
+  onReturnFocus,
   ownerActionsAvailable
 }: {
   result: WorkerDockResult | null
@@ -24,6 +25,9 @@ export function WorkerDockResultDialog({
   onClose: () => void
   onOpen: () => void
   onRestore: () => void
+  /** Where focus goes once the dialog lets go of it: the dialog's own focus restore cannot reach a
+   *  row the card unmounted meanwhile. */
+  onReturnFocus: () => void
   ownerActionsAvailable: boolean
 }) {
   const t = useTranslate()
@@ -36,7 +40,13 @@ export function WorkerDockResultDialog({
         }
       }}
     >
-      <DialogContent scrollable>
+      <DialogContent
+        scrollable
+        onCloseAutoFocus={(event) => {
+          event.preventDefault()
+          onReturnFocus()
+        }}
+      >
         <DialogHeader>
           <DialogTitle>
             {result

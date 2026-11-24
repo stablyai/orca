@@ -109,7 +109,6 @@ export function MobileBotGroupRoom({
     group: anyRoomGroup,
     apply,
     bots,
-    needsYou,
     itemReads,
     itemMemberIds,
     loadEarlier
@@ -374,7 +373,6 @@ export function MobileBotGroupRoom({
           groupId={groupId}
           hostId={hostId}
           bots={bots}
-          needsYou={needsYou}
           reads={itemReads}
           memberIds={itemMemberIds}
           online={connected}

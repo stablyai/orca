@@ -78,24 +78,12 @@ function linkSummary(links: readonly BotItemLinkView[]): string[] {
   for (const link of links) {
     const pr = link.kind === 'pr' || link.kind === 'dispatch' ? link.pr : null
     if (pr?.shown) {
-      parts.push(
-        `#${pr.number} ${pr.state === 'merged' || pr.state === 'closed' ? pr.state : checksWords(pr.checks)}`
-      )
+      parts.push(`#${pr.number}`)
     } else if (pr && !pr.shown) {
       parts.push('PR not shown for server work yet')
     }
   }
   return [...new Set(parts)]
-}
-
-const CHECK_WORDS: Record<string, string> = {
-  failure: 'CI failing',
-  success: 'CI green',
-  pending: 'CI running'
-}
-
-function checksWords(checks: string | null): string {
-  return (checks !== null ? CHECK_WORDS[checks] : undefined) ?? 'open'
 }
 
 function age(at: number, now: number): string {
@@ -150,7 +138,7 @@ function linkLine(link: BotItemLinkView): string {
   switch (link.kind) {
     case 'dispatch': {
       const pr = link.pr?.shown
-        ? ` · #${link.pr.number} ${link.pr.state === 'merged' || link.pr.state === 'closed' ? link.pr.state : checksWords(link.pr.checks)}`
+        ? ` · PR #${link.pr.number} ${link.pr.url}`
         : link.pr
           ? ' · PR not shown for server work yet'
           : ''
@@ -158,9 +146,7 @@ function linkLine(link: BotItemLinkView): string {
       return `dispatch:${link.ref}${link.latest ? ` (now ${link.latest})` : ''} · ${link.title ?? 'worker'} · ${link.state}${link.host ? ` on ${link.host}` : ''}${pr}${report}`
     }
     case 'pr':
-      return link.pr?.shown
-        ? `pr:${link.ref} · ${link.pr.state === 'merged' || link.pr.state === 'closed' ? link.pr.state : checksWords(link.pr.checks)}`
-        : `pr:${link.ref}`
+      return link.pr?.shown ? `pr:${link.ref} · ${link.pr.url}` : `pr:${link.ref}`
     case 'url':
     case 'file':
       return `${link.kind}:${link.ref}`

@@ -32,10 +32,8 @@ import { botItemActorName } from '../../../../../shared/bots/bot-item-actor-name
 import { botItemQuestionShape } from '../../../../../shared/bots/bot-item-ask'
 import { BotItemQuestionLines } from './BotItemQuestionLines'
 import { BOT_ITEM_COMMENT_ATTRIBUTE } from './bot-item-comment-reveal'
-import {
-  botItemHeldAnswersScope,
-  type BotItemQuickReplyActions
-} from './use-bot-item-question-steps'
+import { botItemHeldAnswersScope } from './bot-item-held-answers'
+import type { BotItemQuickReplyActions } from './use-bot-item-question-steps'
 
 /** The asking comment's question, ruled off across the card's full width, its words still on the body's
  *  edge: bleeds past the body's `pl-7` and the card's `px-2`, then pads back. It stops a pixel short of

@@ -138,6 +138,12 @@
       "caveat": "Cela ouvre une nouvelle page sur l'hôte distant à la dernière adresse de cette page. L'état de la page connectée et celui des autres pages transitoires peuvent différer, et une page provenant d'une soumission de formulaire s'ouvre en blanc.",
       "failed": "Impossible d'ouvrir cette page sur l'hôte distant. Vérifiez la connexion et réessayez."
     },
+    "deviceMove": {
+      "toThisComputer": "Ouvrir sur cet ordinateur",
+      "toHost": "Ouvrir sur {{host}}",
+      "tooltip": "Ouvre cette adresse dans un nouvel onglet de l'autre côté et ferme celui-ci. Vous devrez peut-être vous reconnecter.",
+      "failedToThisComputer": "Impossible d'ouvrir cette page sur cet ordinateur."
+    },
     "sshRoute": {
       "preparingTitle": "Connexion via l'hôte SSH",
       "errorTitle": "Routage du navigateur SSH indisponible",
@@ -1688,12 +1694,16 @@
         "sparseCheckoutUnsupported": "Les recettes à racine provisionnée ne prennent pas en charge le sparse checkout."
       },
       "activateAiVaultStructuredSession": {
-        "unavailable": "La session d'agent structuré n'est pas encore disponible. Réessayez dans un instant.",
         "gone": "Ce chat n'est plus sur cet hôte, il ne peut donc pas être rouvert ici.",
         "hostCannotOpen": "Ce chat ne peut pas être rouvert tant qu'Orca n'est pas mis à jour.",
         "worktreeDeleted": "Le worktree a été supprimé.",
         "projectRemoved": "Le projet a été retiré d’Orca.",
-        "folderWorkspaceRemoved": "L’espace de travail de type dossier a été retiré."
+        "folderWorkspaceRemoved": "L’espace de travail de type dossier a été retiré.",
+        "chatStillStarting": "Le chat démarre encore. Réessayez bientôt.",
+        "chatOpenFailed": "Impossible d'ouvrir ce chat.",
+        "chatOpenRetry": "Réessayer",
+        "chatOpenShowDetails": "Afficher les détails",
+        "chatOpenHideDetails": "Masquer les détails"
       },
       "worktreeJumpNavigation": {
         "filteredNotice": "Cet arbre de travail est masqué par les filtres de la barre latérale. L'espace de travail a été ouvert, mais il n'est pas affiché dans Spaces."
@@ -1820,7 +1830,11 @@
       "projectHostSetupOptions": {
         "locationNotSet": "Emplacement du projet non défini",
         "hostLocalGitProject": "Ce projet n'a pas de dépôt Git distant correspondant",
-        "hostLocalFolderProject": "Les projets de dossier ne peuvent pas être liés à d'autres hôtes"
+        "hostLocalFolderProject": "Les projets de dossier ne peuvent pas être liés à d'autres hôtes",
+        "pendingNotSetUp": "Projet suivi sur cet hôte mais non configuré",
+        "pendingSettingUp": "Configuration du projet en cours",
+        "pendingError": "La configuration du projet nécessite votre attention",
+        "pendingUnsupported": "Projet non pris en charge sur cet hôte"
       },
       "workspacePortScan": {
         "serverSshUpdateRequired": "Mettez à jour le serveur pour voir les ports de ses hôtes SSH.",
@@ -6021,15 +6035,6 @@
           "changesLost_many": "{{count}} modifications non commitées seront perdues",
           "uncountedChangesLost": "Les modifications non commitées seront perdues",
           "moreLoadedPaths": "et {{value0}} autres chemins chargés"
-        },
-        "DeleteWorktreeLineageNotice": {
-          "a940f3c96e": "Les espaces de travail enfants seront supprimés",
-          "alsoDeletesChildren_one": "Supprimer cet espace de travail supprime également {{count}} espace de travail enfant.",
-          "alsoDeletesChildren_other": "Supprimer cet espace de travail supprime également {{count}} espaces de travail enfants.",
-          "alsoDeletesChildren_many": "Supprimer cet espace de travail supprime également {{count}} espaces de travail enfants.",
-          "moreChildren_one": "+{{count}} de plus",
-          "moreChildren_other": "+{{count}} de plus",
-          "moreChildren_many": "+{{count}} de plus"
         },
         "ImportedWorktreesVisibilityLine": {
           "b7a87dc32f": "Afficher le worktree",
@@ -21213,12 +21218,13 @@
       "downloadSize": "Téléchargement de {{size}} Mo.",
       "downloading": "Téléchargement de {{done}} Mo.",
       "downloadingOf": "Téléchargement de {{done}} Mo sur {{total}} Mo.",
-      "external": "Utilise la copie de {{agent}} trouvée sur cet hôte.",
-      "extracting": "Extraction de {{agent}}.",
+      "external": "Utilise votre propre {{agent}}",
+      "externalShort": "Utilise votre propre copie",
+      "extracting": "Décompression de {{agent}}…",
+      "extractingShort": "Décompression…",
       "failed": "L'installation a échoué. Réessayez.",
       "cancelFailed": "Impossible d'annuler l'installation. Réessayez.",
       "install": "Installer {{agent}}",
-      "installManaged": "Installer la copie d'Orca",
       "notInstalled": "Non installé.",
       "progress": "Téléchargement de {{agent}}",
       "readFailed": "Impossible de vérifier {{agent}} sur cet hôte. Nouvel essai en cours.",
@@ -21235,7 +21241,8 @@
       "thisComputer": "cet ordinateur",
       "unavailable": "{{agent}} n'est pas disponible sur cet hôte.",
       "update": "Mettre à jour",
-      "verifying": "Vérification de l’environnement téléchargé.",
+      "verifying": "Vérification…",
+      "verifyingAgent": "Vérification de {{agent}}…",
       "installTitle": "Installez {{agent}} pour commencer à discuter",
       "continueTitle": "Installez {{agent}} pour continuer",
       "heroBody": "Téléchargement unique de {{size}} Mo, partagé par les conversations {{agent}} sur l’ordinateur qui exécute cette conversation.",
@@ -21253,7 +21260,7 @@
       "checkingTitle": "Vérification du téléchargement",
       "progressOf": "{{done}} sur {{total}} Mo",
       "unpackingDetail": "Décompression de l'environnement d'exécution",
-      "checkingDetail": "Vérification de l'environnement d'exécution téléchargé",
+      "checkingDetail": "Vérification de {{agent}}…",
       "stepDownload": "Télécharger",
       "stepUnpack": "Décompresser",
       "stepCheck": "Vérifier"
@@ -23943,6 +23950,7 @@
     }
   },
   "agentPicker": {
+    "refreshModels": "Actualiser les modèles",
     "catalogUnsupportedLaunch": "Les modèles de {{agent}} sont indisponibles sur cet hôte. Vos choix actuels s'appliquent toujours.",
     "catalogEmpty": "{{agent}} n’a aucun modèle disponible.",
     "search": "Rechercher, p. ex. Opus 5.5…",
@@ -24823,7 +24831,10 @@
         "lastItem": "Dernier élément",
         "previous": "Élément précédent",
         "next": "Élément suivant",
-        "subWhere": "Élément {{number}} · {{chat}}"
+        "linkCount": "{{count}} liens",
+        "reply": "Répondre",
+        "replyAbove": "Répondre, plus haut",
+        "replyBelow": "Répondre, plus bas"
       },
       "activity": {
         "linked": "a lié {{links}}",

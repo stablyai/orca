@@ -1315,6 +1315,12 @@
       "caveat": "Isso abre uma nova página no host remoto no último endereço desta página. O login e outros estados temporários da página podem ser diferentes, e uma página originada de um envio de formulário abre em branco.",
       "failed": "Não foi possível abrir esta página no host remoto. Verifique a conexão e tente novamente."
     },
+    "deviceMove": {
+      "toThisComputer": "Abrir neste computador",
+      "toHost": "Abrir em {{host}}",
+      "tooltip": "Abre este endereço em uma nova aba do outro lado e fecha esta. Talvez seja necessário entrar novamente.",
+      "failedToThisComputer": "Não foi possível abrir esta página neste computador."
+    },
     "sshRoute": {
       "preparingTitle": "Conectando através do host SSH",
       "errorTitle": "Roteamento de navegador via SSH indisponível",
@@ -3158,12 +3164,16 @@
         }
       },
       "activateAiVaultStructuredSession": {
-        "unavailable": "A sessão estruturada do agente ainda não está disponível. Tente novamente em um momento.",
         "gone": "Este chat não está mais neste host, então não pode ser reaberto aqui.",
         "hostCannotOpen": "Este chat não pode ser reaberto até que o Orca seja atualizado.",
         "worktreeDeleted": "A worktree foi excluída.",
         "projectRemoved": "O projeto foi removido do Orca.",
-        "folderWorkspaceRemoved": "O espaço de trabalho de pasta foi removido."
+        "folderWorkspaceRemoved": "O espaço de trabalho de pasta foi removido.",
+        "chatStillStarting": "O chat ainda está iniciando. Tente em breve.",
+        "chatOpenFailed": "Não foi possível abrir este chat.",
+        "chatOpenRetry": "Tentar novamente",
+        "chatOpenShowDetails": "Mostrar detalhes",
+        "chatOpenHideDetails": "Ocultar detalhes"
       },
       "ephemeralVmWorktreeCreation": {
         "sparseCheckoutUnsupported": "Receitas de raiz provisionada não suportam sparse checkout."
@@ -3297,7 +3307,11 @@
       "projectHostSetupOptions": {
         "locationNotSet": "Local do projeto não definido",
         "hostLocalGitProject": "Este projeto não tem um remoto Git correspondente",
-        "hostLocalFolderProject": "Projetos de pasta não podem ser vinculados a outros hosts"
+        "hostLocalFolderProject": "Projetos de pasta não podem ser vinculados a outros hosts",
+        "pendingNotSetUp": "Projeto rastreado neste host, mas não configurado",
+        "pendingSettingUp": "Configuração do projeto em andamento",
+        "pendingError": "A configuração do projeto precisa de atenção",
+        "pendingUnsupported": "Projeto não suportado neste host"
       },
       "workspacePortScan": {
         "serverSshUpdateRequired": "Atualize o servidor para ver as portas nos hosts SSH dele.",
@@ -13052,15 +13066,6 @@
           "7726a16374": "Cancelar",
           "046751dbfb": "Adicione esta pasta como um projeto separado do Orca."
         },
-        "DeleteWorktreeLineageNotice": {
-          "a940f3c96e": "Os espaços de trabalho filhos serão excluídos",
-          "alsoDeletesChildren_one": "Excluir este espaço de trabalho também exclui {{count}} espaço de trabalho filho.",
-          "alsoDeletesChildren_other": "Excluir este espaço de trabalho também exclui {{count}} espaços de trabalho filhos.",
-          "alsoDeletesChildren_many": "Excluir este espaço de trabalho também exclui {{count}} espaços de trabalho filhos.",
-          "moreChildren_one": "+{{count}} a mais",
-          "moreChildren_other": "+{{count}} a mais",
-          "moreChildren_many": "+{{count}} a mais"
-        },
         "WorkspaceKanbanDrawerHeader": {
           "f369f5c5a3": "Fechar",
           "e1a34450fc": "Organize os espaços de trabalho por status e abra os cartões de espaço de trabalho.",
@@ -22734,12 +22739,13 @@
       "downloadSize": "Download de {{size}} MB.",
       "downloading": "Baixando {{done}} MB.",
       "downloadingOf": "Baixando {{done}} MB de {{total}} MB.",
-      "external": "Usa a cópia do {{agent}} encontrada neste host.",
-      "extracting": "Extraindo {{agent}}.",
+      "external": "Usa o seu próprio {{agent}}",
+      "externalShort": "Usa a sua própria cópia",
+      "extracting": "Descompactando {{agent}}…",
+      "extractingShort": "Descompactando…",
       "failed": "A instalação falhou. Tente novamente.",
       "cancelFailed": "Não foi possível cancelar a instalação. Tente novamente.",
       "install": "Instalar {{agent}}",
-      "installManaged": "Instalar a cópia do Orca",
       "notInstalled": "Não instalado.",
       "progress": "Download do {{agent}}",
       "readFailed": "Não foi possível verificar o {{agent}} neste host. Tentando novamente.",
@@ -22756,7 +22762,8 @@
       "thisComputer": "este computador",
       "unavailable": "O {{agent}} não está disponível neste host.",
       "update": "Atualizar",
-      "verifying": "Verificando o ambiente de execução baixado.",
+      "verifying": "Verificando…",
+      "verifyingAgent": "Verificando {{agent}}…",
       "installTitle": "Instale o {{agent}} para começar a conversar",
       "continueTitle": "Instale o {{agent}} para continuar",
       "heroBody": "Download único de {{size}} MB. Ele é compartilhado pelos chats do {{agent}} no computador que executa este chat.",
@@ -22774,7 +22781,7 @@
       "checkingTitle": "Verificando o download",
       "progressOf": "{{done}} de {{total}} MB",
       "unpackingDetail": "Descompactando o ambiente de execução",
-      "checkingDetail": "Verificando o ambiente de execução baixado",
+      "checkingDetail": "Verificando {{agent}}…",
       "stepDownload": "Baixar",
       "stepUnpack": "Descompactar",
       "stepCheck": "Verificar"
@@ -22861,7 +22868,6 @@
       "copyAddress": "Copiar endereço",
       "showDetails": "Mostrar a tarefa e a última mensagem de {{name}}",
       "task": "Tarefa",
-      "chatUnavailable": "Este host não pode abrir o chat. Tente novamente.",
       "terminalExited": "Este terminal foi encerrado.",
       "openOnHost": "Abra este agente em {{host}}.",
       "cannotLocate": "Este host não pode localizar este agente. Tente novamente.",
@@ -24461,6 +24467,7 @@
     }
   },
   "agentPicker": {
+    "refreshModels": "Atualizar modelos",
     "catalogUnsupportedLaunch": "Os modelos de {{agent}} não estão disponíveis neste host. Suas escolhas atuais continuam valendo.",
     "catalogEmpty": "{{agent}} não tem modelos disponíveis.",
     "search": "Pesquisar, por exemplo, Opus 5.5…",
@@ -25342,7 +25349,10 @@
         "lastItem": "Último item",
         "previous": "Item anterior",
         "next": "Próximo item",
-        "subWhere": "Item {{number}} · {{chat}}"
+        "linkCount": "{{count}} links",
+        "reply": "Responder",
+        "replyAbove": "Responder, acima",
+        "replyBelow": "Responder, abaixo"
       },
       "activity": {
         "linked": "vinculou {{links}}",
