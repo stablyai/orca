@@ -2,9 +2,15 @@ import { useEffect, useState } from 'react'
 import { FolderOpen } from 'lucide-react'
 import { floatingWorkspaceUnavailableReason } from '@/components/floating-terminal/workspace/floating-workspace-availability'
 import type { GlobalSettings } from '../../../../../shared/settings/global-settings-types'
+import {
+  DEFAULT_FLOATING_PANEL_OPACITY,
+  MIN_FLOATING_PANEL_OPACITY,
+  resolveFloatingPanelOpacity
+} from '../../../../../shared/settings/floating-panel-opacity'
 import type { FloatingTerminalTriggerLocation } from '../../../../../shared/ui-chrome/ui-chrome-types'
 import { Button } from '../../ui/button'
 import { Input } from '../../ui/input'
+import { Slider } from '../../ui/slider'
 import { ToggleGroup, ToggleGroupItem } from '../../ui/toggle-group'
 import { SearchableSetting } from '../section-layout/SearchableSetting'
 import { SettingsRow, SettingsSwitchRow } from '../form-controls/SettingsFormControls'
@@ -84,6 +90,8 @@ export function FloatingWorkspacePane({
     return null
   }
 
+  const opacityLabel = t('settings.floatingWorkspace.panelOpacity', 'Floating panel opacity')
+
   return (
     <SettingsGroup>
       <SearchableSetting
@@ -101,7 +109,9 @@ export function FloatingWorkspacePane({
           'note',
           'global',
           'quick panel',
-          'launch directory'
+          'launch directory',
+          opacityLabel,
+          t('settings.floatingWorkspace.transparency', 'transparency')
         ]}
         className="divide-y divide-border"
       >
@@ -129,6 +139,24 @@ export function FloatingWorkspacePane({
               floatingTerminalEnabled: !settings.floatingTerminalEnabled
             })
           }}
+        />
+
+        <SettingsRow
+          label={opacityLabel}
+          description={t(
+            'settings.floatingWorkspace.panelOpacityDescription',
+            'Lower the opacity to see terminals and other content behind the floating panel.'
+          )}
+          control={
+            <FloatingPanelOpacitySlider
+              label={opacityLabel}
+              opacity={resolveFloatingPanelOpacity(settings.floatingTerminalPanelOpacity)}
+              disabled={unavailableReason !== null}
+              onChange={(floatingTerminalPanelOpacity) =>
+                updateSettings({ floatingTerminalPanelOpacity })
+              }
+            />
+          }
         />
 
         <SettingsRow
@@ -199,5 +227,43 @@ export function FloatingWorkspacePane({
         />
       </SearchableSetting>
     </SettingsGroup>
+  )
+}
+
+function FloatingPanelOpacitySlider({
+  label,
+  opacity,
+  disabled,
+  onChange
+}: {
+  label: string
+  opacity: number
+  disabled: boolean
+  onChange: (opacity: number) => void
+}): React.JSX.Element {
+  const savedPercent = Math.round(opacity * 100)
+  const [draft, setDraft] = useState({ savedPercent, percent: savedPercent })
+  if (draft.savedPercent !== savedPercent) {
+    setDraft({ savedPercent, percent: savedPercent })
+  }
+  const valueLabel = `${draft.percent}%`
+
+  return (
+    <div className="flex w-48 max-w-full items-center gap-2">
+      <Slider
+        min={MIN_FLOATING_PANEL_OPACITY * 100}
+        max={DEFAULT_FLOATING_PANEL_OPACITY * 100}
+        step={5}
+        disabled={disabled}
+        value={[draft.percent]}
+        thumbLabels={[label]}
+        thumbValueLabels={[valueLabel]}
+        onValueChange={([percent]) => setDraft({ savedPercent, percent })}
+        onValueCommit={([percent]) => onChange(percent / 100)}
+      />
+      <span className="w-10 shrink-0 text-right text-xs tabular-nums text-muted-foreground">
+        {valueLabel}
+      </span>
+    </div>
   )
 }

@@ -2035,6 +2035,11 @@
     },
     "artifacts": {
       "teamDisabled": "Artifact sharing is turned off by your team."
+    },
+    "floatingWorkspace": {
+      "panelOpacity": "Floating panel opacity",
+      "transparency": "transparency",
+      "panelOpacityDescription": "Lower the opacity to see terminals and other content behind the floating panel."
     }
   },
   "menu": {

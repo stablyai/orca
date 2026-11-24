@@ -23,6 +23,7 @@ import { DEFAULT_SOURCE_CONTROL_GROUP_ORDER } from '../source-control/listing/so
 import { DESKTOP_TERMINAL_SCROLLBACK_ROWS_DEFAULT } from '../terminal/replay/terminal-scrollback-policy'
 import { NESTED_WORKER_MAX_DEPTH_DEFAULT } from '../orchestration/workers/nested-worker-depth'
 import { getDefaultWorkspaceCleanupRules } from '../workspace-cleanup/workspace-cleanup-policy'
+import { DEFAULT_FLOATING_PANEL_OPACITY } from './floating-panel-opacity'
 
 export function buildDefaultSettings(args: {
   workspaceDir: string
@@ -210,6 +211,7 @@ export function buildDefaultSettings(args: {
     floatingTerminalTrustedCwds: [],
     floatingTerminalCwdMigratedToAppWorkspace: true,
     floatingTerminalTriggerLocation: 'floating-button',
+    floatingTerminalPanelOpacity: DEFAULT_FLOATING_PANEL_OPACITY,
     notifications: args.notifications,
     diffDefaultView: 'inline',
     diffWordWrap: false,
