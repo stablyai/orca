@@ -1,6 +1,5 @@
 import { randomUUID } from 'node:crypto'
-import { constants } from 'node:fs'
-import { copyFile, link, rename, rm, stat } from 'node:fs/promises'
+import { link, open, rename, rm, stat } from 'node:fs/promises'
 import { dirname, join } from 'node:path'
 import { errnoCodeOrUnknown } from '../../../../shared/errors/errno-code'
 import { isENOENT } from '../../../filesystem/local-file-io/filesystem-path-containment'
@@ -81,8 +80,8 @@ const NO_HARD_LINK_CODES = new Set(['EPERM', 'ENOTSUP', 'EOPNOTSUPP', 'ENOSYS', 
 
 /**
  * Moves the finished file to the first name nothing holds, never replacing a file: a link (or, on
- * a volume without links, an exclusive copy) fails when the name was taken while it downloaded,
- * and the next free name is tried.
+ * a volume without links, an exclusively created placeholder it then replaces) fails when the name
+ * was taken while it downloaded, and the next free name is tried.
  */
 export async function promoteDownloadedFileWithoutOverwrite(
   tempPath: string,
@@ -93,10 +92,17 @@ export async function promoteDownloadedFileWithoutOverwrite(
   let hardLinks = true
   for (let attempt = 0; attempt < 8; attempt += 1) {
     try {
-      await (hardLinks
-        ? link(tempPath, target)
-        : copyFile(tempPath, target, constants.COPYFILE_EXCL))
-      await cleanupLocalTransferPath(tempPath)
+      if (hardLinks) {
+        await link(tempPath, target)
+        await cleanupLocalTransferPath(tempPath)
+      } else {
+        await (await open(target, 'wx')).close()
+        // The placeholder is ours, so a failed move leaves no empty file behind.
+        await rename(tempPath, target).catch(async (error: unknown) => {
+          await cleanupLocalTransferPath(target)
+          throw error
+        })
+      }
       return target
     } catch (error) {
       const code = errnoCodeOrUnknown(error)
@@ -105,10 +111,6 @@ export async function promoteDownloadedFileWithoutOverwrite(
       } else if (hardLinks && NO_HARD_LINK_CODES.has(code)) {
         hardLinks = false
       } else {
-        if (!hardLinks) {
-          // The exclusive copy made it, so a part-written copy is ours to remove.
-          await cleanupLocalTransferPath(target)
-        }
         throw error
       }
     }
