@@ -84,6 +84,9 @@ export type BridgeHostOptions = {
   /** A request or subscription bound for another host than this one (a shared agent's, over the
    *  phone's own link), which this connection's verdict doesn't hold. */
   bypassesVerdict?: (message: DesktopBound) => boolean
+  /** Settles once `bypassesVerdict` names every frame it will; a frame it names only then leaves the
+   *  verdict's hold then. */
+  bypassesVerdictSettled?: Promise<void>
   // Inherit handshake state on client-driven rebuild: the session id/page do not change, so no new ready or BridgeShellReplaced arrives.
   sessionEstablished: boolean
   // Inherit the live Back claim alongside handshake state; the page is never told to re-claim after client replacement.

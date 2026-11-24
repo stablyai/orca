@@ -32,19 +32,15 @@ function sharedAgentOf(
 
 /**
  * Whether a page frame goes to one of this phone's shared agents rather than the computer: such a
- * frame needs no verdict from the computer, which may be off. A `runtime:` frame read before the
- * phone's shared agents are loaded counts as one; its call waits for them and then goes to the
- * computer if it names none.
+ * frame needs no verdict from the computer, which may be off. None does before the phone's shared
+ * agents are loaded: until then a frame waits for the computer's verdict, or for the load.
  */
 export function namesPhoneSharedAgent(
   agents: Pick<PhoneSharedAgents, 'loaded' | 'find'>,
   pairedHostId: string,
   envelope: RpcEnvelopeFields | undefined
 ): boolean {
-  if (runtimeTarget(envelope) === null) {
-    return false
-  }
-  return !agents.loaded() || sharedAgentOf(agents, pairedHostId, envelope) !== undefined
+  return agents.loaded() && sharedAgentOf(agents, pairedHostId, envelope) !== undefined
 }
 
 // One view per client and computer, so screens that compare clients see the same one.
@@ -85,7 +81,8 @@ export function routeSharedAgentCalls(
     probeLivenessNow: client.probeLivenessNow && (() => client.probeLivenessNow?.()),
     close: () => client.close(),
     sendRequest: async (method: string, params?: unknown, options?: SendRequestOptions) => {
-      if (runtimeTarget(options?.envelope) !== null) {
+      // Read in the same turn as the verdict's check once loaded, so the two agree.
+      if (!agents.loaded() && runtimeTarget(options?.envelope) !== null) {
         await agents.ready()
       }
       const agent = sharedAgentOf(agents, pairedHostId, options?.envelope)
@@ -125,11 +122,11 @@ export function routeSharedAgentCalls(
  *  taken off it, and which frames those are, which the computer's verdict doesn't hold. */
 export function sharedAgentBridgeRoutes(client: RpcClient, pairedHostId: string) {
   const agents = phoneSharedAgents()
-  // Loaded before the page's first frame where it can be: a shared agent's call waits for it.
-  void agents.ready()
   return {
     client: routeSharedAgentCalls(client, pairedHostId, agents),
     bypassesVerdict: (message: { envelope?: RpcEnvelopeFields }) =>
-      namesPhoneSharedAgent(agents, pairedHostId, message.envelope)
+      namesPhoneSharedAgent(agents, pairedHostId, message.envelope),
+    // Loaded before the page's first frame where it can be; one that waited for it leaves then.
+    bypassesVerdictSettled: agents.ready()
   }
 }

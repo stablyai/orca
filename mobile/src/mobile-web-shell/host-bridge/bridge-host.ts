@@ -75,6 +75,7 @@ export function createBridgeHost(options: BridgeHostOptions): BridgeHost {
   const { postJson, sendJson, send, sendError } = frames
 
   const verdict = createBridgeVerdictHold(readHostStatus, sendError, bypassesVerdict)
+  void options.bypassesVerdictSettled?.then(() => !closed && verdict.releaseBypassing(dispatch))
   const subscriptions = new BridgeHostSubscriptions({
     client,
     holdReplay: verdict.holdReplay,

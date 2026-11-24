@@ -131,15 +131,16 @@ export class PhoneSharedAgentHeld {
   /**
    * Reads the share's held states. A message Orca Cloud lists keeps its state; one it doesn't is gone
    * (delivered and aged out) once a read that began after it was held answers. No clock is compared.
+   * False when Orca Cloud didn't answer.
    */
-  async refresh(entry: PhoneSharedAgent): Promise<void> {
+  async refresh(entry: PhoneSharedAgent): Promise<boolean> {
     if (entry.held.length === 0) {
-      return
+      return true
     }
     const read = ++this.reads
     const answer = await phoneSharedAgentCloud(entry).held()
     if (!answer.ok) {
-      return
+      return false
     }
     for (const held of answer.value.held) {
       this.states.set(held.clientMessageId, held.state)
@@ -154,6 +155,7 @@ export class PhoneSharedAgentHeld {
       this.deps.store.put({ ...current, held: kept })
     }
     this.deps.changed()
+    return true
   }
 
   isWaiting(held: Held): boolean {

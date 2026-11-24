@@ -26,6 +26,8 @@ export type BridgeVerdictHold = {
   holdReplay: (id: string, resend: () => void) => boolean
   // On the verdict opening: re-send init if what the page last heard changed, then send what waited.
   publish: (resendInit: () => void, dispatch: (message: DesktopBound) => void) => void
+  // Sends the waiting frames `bypassesVerdict` now names (it names more once it has loaded).
+  releaseBypassing: (dispatch: (message: DesktopBound) => void) => void
   // The document ended; parked frames never left the phone, so a disposal fails them definitely.
   settle: (notify: boolean) => void
   noteInit: () => void
@@ -97,6 +99,11 @@ export function createBridgeVerdictHold(
         resends.forEach((resend) => resend())
         take().forEach(dispatch)
       }
+    },
+    releaseBypassing: (dispatch) => {
+      const leaving = parked.filter(bypassesVerdict)
+      parked = parked.filter((message) => !leaving.includes(message))
+      leaving.forEach(dispatch)
     },
     settle: (notify) => {
       replays.clear()

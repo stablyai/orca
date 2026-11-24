@@ -34,6 +34,10 @@ import type { RpcClient } from '../../transport/rpc/rpc-client-contract'
 import { HELD_WAIT_MS } from './phone-shared-agent-held'
 import { PhoneSharedAgents } from './phone-shared-agents'
 import { namesPhoneSharedAgent, routeSharedAgentCalls } from './shared-agent-call-routing'
+import {
+  createBridgeVerdictHold,
+  type DesktopBound
+} from '../../mobile-web-shell/host-bridge/bridge-host-verdict-hold'
 
 const ConnectorShareHoldRequestBody = z.object({ sealed: z.string() })
 const HOST = nacl.box.keyPair()
@@ -94,9 +98,11 @@ function computer() {
 
 type CloudCall = { url: string; method: string; authorization: string; body: unknown }
 
-function cloud() {
+/** Orca Cloud's share endpoints; the first `failedReads` reads of held states fail. */
+function cloud(failedReads = 0) {
   const calls: CloudCall[] = []
   let states: { clientMessageId: string; state: string }[] = []
+  let reads = 0
   vi.stubGlobal('fetch', async (url: string, init: RequestInit) => {
     const headers = new Headers(init.headers)
     const body = typeof init.body === 'string' ? JSON.parse(init.body) : undefined
@@ -106,8 +112,11 @@ function cloud() {
       authorization: headers.get('authorization') ?? '',
       body
     })
-    return init.method === 'POST'
-      ? Response.json({ status: 'held' })
+    if (init.method === 'POST') {
+      return Response.json({ status: 'held' })
+    }
+    return ++reads <= failedReads
+      ? Response.json({ error: 'unavailable' }, { status: 503 })
       : Response.json({ v: 1, held: states })
   })
   return { calls, setStates: (next: typeof states) => (states = next) }
@@ -135,7 +144,6 @@ describe('a page’s call to a shared agent', () => {
     const held = cloud()
     // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: routing reads only sendRequest and subscribe of the computer's client.
     const page = routeSharedAgentCalls(desktop.client as unknown as RpcClient, 'computer-1', agents)
-    expect(namesPhoneSharedAgent(agents, 'computer-1', SHARED.envelope)).toBe(true)
     await agents.syncComputer('computer-1', desktop.client)
 
     const first = await page.sendRequest('agentSession.send', send('m1'), SHARED)
@@ -197,5 +205,75 @@ describe('a page’s call to a shared agent', () => {
       namesPhoneSharedAgent(agents, 'computer-1', { executionHost: 'runtime:a-paired-server' })
     ).toBe(false)
     expect(namesPhoneSharedAgent(agents, 'computer-2', SHARED.envelope)).toBe(false)
+  })
+
+  it('keeps reading held states while one waits, backing off while Orca Cloud does not answer', async () => {
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] })
+    try {
+      const agents = new PhoneSharedAgents(() => 1_000)
+      const desktop = computer()
+      const held = cloud(1)
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: routing reads only sendRequest and subscribe of the computer's client.
+      const page = routeSharedAgentCalls(
+        desktop.client as unknown as RpcClient,
+        'computer-1',
+        agents
+      )
+      await agents.syncComputer('computer-1', desktop.client)
+      await page.sendRequest('agentSession.send', send('m1'), SHARED)
+      const reads = () => held.calls.filter((call) => call.method === 'GET').length
+
+      await vi.advanceTimersByTimeAsync(30_000)
+      expect(reads()).toBe(1)
+      held.setStates([{ clientMessageId: 'm1', state: 'delivered' }])
+      // The failed read waits twice as long before the next.
+      await vi.advanceTimersByTimeAsync(30_000)
+      expect(reads()).toBe(1)
+      await vi.advanceTimersByTimeAsync(30_000)
+      expect(reads()).toBe(2)
+      expect(agents.views('computer-1')[0]?.held.map((message) => message.state)).toEqual([
+        'delivered'
+      ])
+      // Nothing waits, so nothing reads again.
+      await vi.advanceTimersByTimeAsync(10 * 60_000)
+      expect(reads()).toBe(2)
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+})
+
+describe('a page frame before the phone’s shared agents are loaded', () => {
+  it('waits for the computer’s verdict, and only a shared agent’s leaves once they load', async () => {
+    const first = new PhoneSharedAgents(() => 1_000)
+    cloud()
+    await first.syncComputer('computer-1', computer().client)
+    await vi.waitFor(() => expect(appStorage.size).toBe(1))
+
+    // A cold launch: the kept agents are still being read when the page's frames arrive.
+    const agents = new PhoneSharedAgents(() => 1_000)
+    const frame = (id: string, executionHost: string): DesktopBound => ({
+      v: 1,
+      type: 'request',
+      id,
+      method: 'bots.chatTree',
+      params: {},
+      envelope: { executionHost }
+    })
+    const hold = createBridgeVerdictHold(
+      () => null,
+      () => {},
+      (message) => namesPhoneSharedAgent(agents, 'computer-1', message.envelope)
+    )
+    expect(hold.admit(frame('shared', 'runtime:env-1'))).toBe(false)
+    expect(hold.admit(frame('server', 'runtime:a-paired-server'))).toBe(false)
+
+    await agents.ready()
+    const sent: string[] = []
+    hold.releaseBypassing((message) => sent.push(message.id))
+    expect(sent).toEqual(['shared'])
+    // The paired server's frame still waits for the computer's verdict.
+    hold.releaseBypassing((message) => sent.push(message.id))
+    expect(sent).toEqual(['shared'])
   })
 })

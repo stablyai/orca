@@ -25,8 +25,10 @@ import { PhoneSharedAgentStore, type PhoneSharedAgent } from './phone-shared-age
 
 type Link = SharedHostRelayLink<PhoneSharedAgent>
 
-// While a message waits, Orca Cloud is asked how it stands this often (the desktop's busy read).
+// While a message waits, Orca Cloud is asked how it stands this often (the desktop's busy read),
+// backing off to at most HELD_POLL_MAX_MS while it doesn't answer.
 const HELD_POLL_MS = 30_000
+const HELD_POLL_MAX_MS = 5 * 60_000
 
 const failure = (method: string, code: string, message: string): RpcFailure => ({
   id: method,
@@ -55,6 +57,7 @@ export class PhoneSharedAgents {
   private readonly listeners = new Set<() => void>()
   private readonly held: PhoneSharedAgentHeld
   private heldTimer: ReturnType<typeof setTimeout> | null = null
+  private heldReadFailures = 0
 
   constructor(private readonly now: () => number = Date.now) {
     this.held = new PhoneSharedAgentHeld({
@@ -81,24 +84,32 @@ export class PhoneSharedAgents {
    * while one still waits: a delivered message lets that chat's later sends go live again.
    */
   async refreshHeld(entries = this.store.list()): Promise<void> {
-    await Promise.all(
+    const answered = await Promise.all(
       entries
         .filter((entry) => entry.held.some((held) => this.held.isWaiting(held)))
         .map((entry) => this.held.refresh(entry))
     )
+    this.heldReadFailures = answered.includes(false) ? this.heldReadFailures + 1 : 0
+    this.pollHeld()
   }
 
   private pollHeld(): void {
     const waiting = this.store
       .list()
       .some((entry) => entry.held.some((held) => this.held.isWaiting(held)))
-    if (!waiting || this.heldTimer) {
+    if (!waiting) {
+      clearTimeout(this.heldTimer ?? undefined)
+      this.heldTimer = null
       return
     }
+    if (this.heldTimer) {
+      return
+    }
+    const delay = Math.min(HELD_POLL_MS * 2 ** this.heldReadFailures, HELD_POLL_MAX_MS)
     this.heldTimer = setTimeout(() => {
       this.heldTimer = null
       void this.refreshHeld()
-    }, HELD_POLL_MS)
+    }, delay)
   }
 
   onChanged(listener: () => void): () => void {
