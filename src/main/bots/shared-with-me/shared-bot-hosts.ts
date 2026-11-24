@@ -10,22 +10,19 @@ import type { RelayClientPlatform } from '../../../shared/remote-runtime/relay/c
 import type { RuntimeRpcResponse } from '../../../shared/remote-runtime/rpc/runtime-rpc-envelope'
 import type { RpcResponse } from '../../../shared/remote-runtime/rpc/rpc-response-shape'
 import { relayStreamError } from '../../../shared/remote-runtime/relay/client/relay-rpc-streams'
-import { SendParams } from '../../../shared/rpc-contract/structured-agent-session/structured-agent-session-params'
 import { SharedBotHostLink } from './shared-bot-host-link'
 import {
   newSharedBotHostEntry,
   SharedBotHostStore,
   type SharedBotHostEntry
 } from './shared-bot-host-store'
-import { handOffSharedBotMessage } from './shared-bot-hand-off'
-import { nextPairingStep, sendsHeld, type MineShare } from './shared-bot-pairing'
+import { SharedBotHeldSends, sharedBotFailure as failure } from './shared-bot-held-sends'
+import { nextPairingStep, type MineShare } from './shared-bot-pairing'
 import type { SharedBotsCloud } from './shared-bots-cloud'
 
 // New shares and invites resolve within this; pairing and held messages are read sooner.
 const IDLE_POLL_MS = 10 * 60 * 1000
 const BUSY_POLL_MS = 30 * 1000
-
-type HeldState = MineShare['held'][number]['state']
 
 export type SharedBotHostsDeps = {
   userDataPath: string
@@ -35,17 +32,14 @@ export type SharedBotHostsDeps = {
   now?: () => number
 }
 
-const failure = (id: string, code: string, message: string): RuntimeRpcResponse<unknown> => ({
-  id,
-  ok: false,
-  error: { code, message }
-})
-
 export class SharedBotHosts {
   private readonly store: SharedBotHostStore
   private readonly links = new Map<string, SharedBotHostLink>()
-  private shares = new Map<string, MineShare>()
-  private heldStates = new Map<string, HeldState>()
+  // Null until the cloud first answers: every kept share is listed meanwhile, none dropped.
+  private shares: Map<string, MineShare> | null = null
+  private readonly held: SharedBotHeldSends
+  private refreshing: Promise<void> | null = null
+  private refreshAgain = false
   private timer: ReturnType<typeof setTimeout> | null = null
   private readonly now: () => number
   private loaded: Promise<void> | null = null
@@ -53,6 +47,21 @@ export class SharedBotHosts {
   constructor(private readonly deps: SharedBotHostsDeps) {
     this.store = new SharedBotHostStore(deps.userDataPath)
     this.now = deps.now ?? Date.now
+    this.held = new SharedBotHeldSends({
+      store: this.store,
+      cloud: deps.cloud,
+      now: this.now,
+      changed: () => {
+        this.publish()
+        void this.refresh()
+      }
+    })
+  }
+
+  /** The kept shares are loaded, so `views` lists them. */
+  ready(): Promise<void> {
+    this.loaded ??= this.store.load()
+    return this.loaded
   }
 
   start(): void {
@@ -71,7 +80,7 @@ export class SharedBotHosts {
 
   views(): SharedBotHostView[] {
     return this.store.list().flatMap((entry) =>
-      this.shares.has(entry.shareId)
+      this.shares === null || this.shares.has(entry.shareId)
         ? [
             {
               environmentId: entry.environmentId,
@@ -86,20 +95,37 @@ export class SharedBotHosts {
     )
   }
 
-  /** Reads the account's shares, follows each one's pairing, and schedules the next read. */
-  async refresh(): Promise<void> {
-    this.loaded ??= this.store.load()
-    await this.loaded
+  /** Reads the account's shares, follows each one's pairing, and schedules the next read. One read
+   *  at a time: one asked for meanwhile runs once after it, so no older answer lands last. */
+  refresh(): Promise<void> {
+    if (this.refreshing) {
+      this.refreshAgain = true
+      return this.refreshing
+    }
+    this.refreshing = (async () => {
+      do {
+        this.refreshAgain = false
+        await this.readMine()
+      } while (this.refreshAgain)
+    })().finally(() => {
+      this.refreshing = null
+    })
+    return this.refreshing
+  }
+
+  private async readMine(): Promise<void> {
+    await this.ready()
     if (this.timer) {
       clearTimeout(this.timer)
       this.timer = null
     }
     const cloud = this.deps.cloud()
+    const askedAt = this.now()
     const answer = cloud ? await cloud.mine() : null
     // Signed out: the account's shares, keys and links go with it.
     const shares = answer?.ok ? answer.value.shares : answer?.error === 'signed_out' ? [] : null
     if (shares) {
-      this.applyMine(shares)
+      this.applyMine(shares, askedAt)
       await Promise.all(this.store.list().map((entry) => this.advance(entry)))
     }
     this.publish()
@@ -110,21 +136,21 @@ export class SharedBotHosts {
         (entry) =>
           !entry.resume ||
           this.linkFor(entry).current() !== 'live' ||
-          entry.held.some((held) => this.isWaiting(held))
+          entry.held.some((held) => this.held.isWaiting(held))
       )
     this.timer = setTimeout(() => void this.refresh(), busy ? BUSY_POLL_MS : IDLE_POLL_MS)
     this.timer.unref?.()
   }
 
   async call(environmentId: string, method: string, params: unknown) {
-    await this.loaded
+    await this.ready()
     const entry = this.entryFor(environmentId)
     if (!entry) {
       return failure(method, SHARED_BOT_HOST_ERRORS.offline, 'This agent is no longer shared.')
     }
     const link = await this.reach(entry)
     if (method === 'agentSession.send') {
-      const handedOff = await this.handOffSend(entry, link, params)
+      const handedOff = await this.held.send(entry, link, params)
       if (handedOff) {
         return handedOff
       }
@@ -132,7 +158,12 @@ export class SharedBotHosts {
     if (link !== 'live') {
       return this.offline(entry, method)
     }
-    return this.withMeta(entry, await this.linkFor(entry).request(method, params))
+    try {
+      return this.withMeta(entry, await this.linkFor(entry).request(method, params))
+    } catch {
+      // The link closed or timed out under the request: an answer the window can read.
+      return this.offline(entry, method)
+    }
   }
 
   async subscribe(
@@ -141,7 +172,7 @@ export class SharedBotHosts {
     params: unknown,
     onResponse: (response: RuntimeRpcResponse<unknown>) => void
   ): Promise<() => void> {
-    await this.loaded
+    await this.ready()
     const entry = this.entryFor(environmentId)
     if (!entry || (await this.reach(entry)) !== 'live') {
       onResponse(
@@ -161,16 +192,15 @@ export class SharedBotHosts {
     })
   }
 
-  private applyMine(shares: readonly MineShare[]): void {
-    this.shares = new Map(shares.map((share) => [share.shareId, share]))
-    this.heldStates = new Map(
-      shares.flatMap((share) => share.held.map((held) => [held.clientMessageId, held.state]))
-    )
+  private applyMine(shares: readonly MineShare[], askedAt: number): void {
+    const current = new Map(shares.map((share) => [share.shareId, share]))
+    this.shares = current
+    this.held.applyMine(shares)
     const gone = new Set(
       this.store
         .list()
         .map((entry) => entry.shareId)
-        .filter((shareId) => !this.shares.has(shareId))
+        .filter((shareId) => !current.has(shareId))
     )
     for (const shareId of gone) {
       this.links.get(shareId)?.close()
@@ -198,8 +228,7 @@ export class SharedBotHosts {
         ...(share.avatarUrl ? { avatarUrl: share.avatarUrl } : {}),
         ...(share.hostKey ? { hostKey: share.hostKey } : {}),
         ...(offer ? { offer } : {}),
-        // A held message's chip lasts as long as the cloud reports it.
-        held: entry.held.filter((held) => this.heldStates.has(held.clientMessageId))
+        held: entry.held.filter((held) => this.held.kept(held, askedAt))
       })
     }
   }
@@ -207,7 +236,7 @@ export class SharedBotHosts {
   /** Accepts; dials a fresh invite at once so it is spent before it expires, and an online host so
    *  its agent is listed live. */
   private async advance(entry: SharedBotHostEntry): Promise<void> {
-    const share = this.shares.get(entry.shareId)
+    const share = this.shares?.get(entry.shareId)
     if (!share) {
       return
     }
@@ -229,61 +258,9 @@ export class SharedBotHosts {
   /** The link once any dial this entry can make has settled. */
   private async reach(entry: SharedBotHostEntry) {
     const link = this.linkFor(entry)
-    const share = this.shares.get(entry.shareId)
+    const share = this.shares?.get(entry.shareId)
     const step = share ? nextPairingStep(entry, share, this.now()) : null
     return step?.kind === 'connect' ? link.connect(step.credential) : link.settled()
-  }
-
-  private async handOffSend(
-    entry: SharedBotHostEntry,
-    link: Awaited<ReturnType<SharedBotHosts['reach']>>,
-    params: unknown
-  ): Promise<RuntimeRpcResponse<unknown> | null> {
-    const send = SendParams.safeParse(params).data
-    const sessionId = send?.envelope.sessionId
-    const clientMessageId = send?.envelope.clientOperationId
-    const { hostKey } = entry
-    if (
-      !send ||
-      !sessionId ||
-      !clientMessageId ||
-      !hostKey ||
-      !sendsHeld(entry, link, { sessionId }, this.heldStates)
-    ) {
-      return null
-    }
-    const cloud = this.deps.cloud()
-    const result = cloud
-      ? await handOffSharedBotMessage(
-          cloud,
-          { ...entry, hostKey },
-          {
-            chat: { sessionId },
-            clientMessageId,
-            blocks: send.body.blocks,
-            sentAt: this.now()
-          }
-        )
-      : null
-    if (result?.kind === 'held') {
-      const current = this.store.get(entry.shareId) ?? entry
-      this.store.put({ ...current, held: [...current.held, result.held] })
-      this.heldStates.set(clientMessageId, 'waiting')
-      void this.refresh()
-      return failure(
-        'agentSession.send',
-        SHARED_BOT_HOST_ERRORS.held,
-        `Waiting for ${entry.ownerName}’s computer`
-      )
-    }
-    if (result?.kind === 'too-large') {
-      return failure(
-        'agentSession.send',
-        SHARED_BOT_HOST_ERRORS.tooLarge,
-        `Too large to hold; send it when ${entry.ownerName}’s computer is online`
-      )
-    }
-    return link === 'live' ? null : this.offline(entry, 'agentSession.send')
   }
 
   private offline(entry: SharedBotHostEntry, method: string): RuntimeRpcResponse<unknown> {
@@ -298,10 +275,6 @@ export class SharedBotHosts {
     return response.ok
       ? { ...response, _meta: { runtimeId: response._meta?.runtimeId ?? entry.environmentId } }
       : response
-  }
-
-  private isWaiting(held: SharedBotHostEntry['held'][number]): boolean {
-    return (this.heldStates.get(held.clientMessageId) ?? 'waiting') === 'waiting'
   }
 
   private entryFor(environmentId: string): SharedBotHostEntry | undefined {

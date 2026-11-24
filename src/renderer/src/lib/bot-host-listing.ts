@@ -36,6 +36,7 @@ import { noteBotHostCameBack } from './bot-host-link-read'
 import type { SharedBotHostView } from '../../../shared/bots/shared-bot-hosts'
 import {
   readSharedBotHosts,
+  sharedBotHostsHydrated,
   subscribeSharedBotHosts
 } from '@/runtime/hosts/shared-bot-hosts/shared-bot-host-catalog'
 
@@ -48,6 +49,8 @@ export type BotHostListingInput = BotHostListingStoreState & {
   runtimeStatusByEnvironmentId: RuntimeStatuses
   /** Agents other people shared with this account: listed live while their relay link is. */
   sharedBotHosts: readonly SharedBotHostView[]
+  /** Whether `sharedBotHosts` is main's answer yet; before it, no shared agent's kept list is dropped. */
+  sharedBotHostsHydrated: boolean
 }
 
 type HostRead = {
@@ -101,7 +104,7 @@ export function computeBotHostListing(
  * re-reads through its own bots-changed event, so every bot view reads that one server again.
  */
 export function syncBotHostListing(input: BotHostListingInput, webClient: boolean): void {
-  if (input.runtimeEnvironmentCatalogHydrated) {
+  if (input.runtimeEnvironmentCatalogHydrated && input.sharedBotHostsHydrated) {
     retainKeptBotHostLists(
       new Map([
         ...(input.runtimeEnvironments ?? []).map((env): [ExecutionHostId, string] => [
@@ -157,7 +160,7 @@ export function emitPairedBotsStreamCameBack(environmentId: string): void {
 }
 
 /** Starts following the store; local-only windows never pass the reference gate, so they do no work. */
-type BotHostListingStore = Omit<BotHostListingInput, 'sharedBotHosts'>
+type BotHostListingStore = Omit<BotHostListingInput, 'sharedBotHosts' | 'sharedBotHostsHydrated'>
 
 export function installBotHostListing(
   store: {
@@ -173,7 +176,8 @@ export function installBotHostListing(
       {
         ...pickListingState(state),
         runtimeStatusByEnvironmentId: statuses,
-        sharedBotHosts: readSharedBotHosts()
+        sharedBotHosts: readSharedBotHosts(),
+        sharedBotHostsHydrated: sharedBotHostsHydrated()
       },
       webClient
     )

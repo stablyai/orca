@@ -122,6 +122,11 @@ export class SharedBotHostLink {
           onAuthenticated: () => {
             void this.afterAuthenticated(client, credential).then(
               () => {
+                // Closed while the resume credential settled: this link is no longer the live one.
+                if (this.client !== client) {
+                  resolve('unpaired')
+                  return
+                }
                 this.setLink('live')
                 resolve('live')
               },

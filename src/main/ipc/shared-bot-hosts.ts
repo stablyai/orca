@@ -45,7 +45,11 @@ export function registerSharedBotHostsHandlers(args: {
   ]) {
     ipcMain.removeHandler(channel)
   }
-  ipcMain.handle('sharedBotHosts:list', () => hosts.views())
+  // Answered once the kept shares are loaded, so the window never reads an empty list as "none".
+  ipcMain.handle('sharedBotHosts:list', async () => {
+    await hosts.ready()
+    return hosts.views()
+  })
   ipcMain.handle('sharedBotHosts:call', (_event, raw: { params?: unknown }) => {
     const { environmentId, method } = CallArgs.parse(raw)
     return hosts.call(environmentId, method, raw.params)

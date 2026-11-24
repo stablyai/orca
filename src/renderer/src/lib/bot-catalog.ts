@@ -43,7 +43,8 @@ import {
   stampBotHost,
   subscribeToBotChanges
 } from './bot-catalog-snapshot'
-import { withKeptBotHomes } from './bot-host-kept-homes'
+import { withKeptBotHomes, withSharedBotHomes } from './bot-host-kept-homes'
+import { useSharedBotHosts } from '@/runtime/hosts/shared-bot-hosts/shared-bot-host-catalog'
 import type { FolderWorkspace } from '../../../shared/folder-workspaces/folder-workspace-types'
 import { selectFolderWorkspaces } from '@/store/workspaces/catalog/workspace-record-fields'
 import {
@@ -53,7 +54,10 @@ import {
   refreshBots
 } from './bot-host-refresh'
 import { botHostTarget, botTarget, callBotRpc, ownBotHost, type BotRef } from './bot-hosts'
-import type { ExecutionHostId } from '../../../shared/execution-host/execution-host'
+import {
+  toRuntimeExecutionHostId,
+  type ExecutionHostId
+} from '../../../shared/execution-host/execution-host'
 import {
   getRuntimeTargetHostId,
   runtimeTargetEnvironmentId
@@ -92,14 +96,24 @@ export function useBots(enabled = true): readonly Bot[] {
 /** The bots' and groups' homes: the store's, and each away server's kept homes. Other folder
  * workspaces' writes (activity, unread) keep this identity. */
 export function useBotHomeWorkspaces(
-  bots: readonly BotHomeOwner[],
+  bots: readonly (BotHomeOwner & { name: string })[],
   groups: readonly BotHomeOwner[]
 ): readonly FolderWorkspace[] {
   const selectHomes = useMemo(() => createBotHomesSelector([...bots, ...groups]), [bots, groups])
   const homes = useAppStore(useShallow(selectHomes))
   // The listed hosts change when a server is first listed from its kept read.
   const hostIds = useSyncExternalStore(subscribe, readBotHostIds, readBotHostIds)
-  return useMemo(() => withKeptBotHomes(homes, hostIds), [homes, hostIds])
+  // A shared agent's home is its own, read from it as soon as its host lists it.
+  const sharedHosts = useSharedBotHosts()
+  return useMemo(
+    () =>
+      withSharedBotHomes(
+        withKeptBotHomes(homes, hostIds),
+        bots,
+        new Set(sharedHosts.map((host) => toRuntimeExecutionHostId(host.environmentId)))
+      ),
+    [bots, homes, hostIds, sharedHosts]
+  )
 }
 
 const NO_FOLDERS: readonly FolderWorkspace[] = []

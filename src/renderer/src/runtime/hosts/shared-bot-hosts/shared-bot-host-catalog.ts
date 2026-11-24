@@ -9,10 +9,13 @@ import {
 } from '../../../../../shared/execution-host/execution-host'
 
 let views: readonly SharedBotHostView[] = []
+// Until main first answers, the list says nothing about which shares are gone.
+let hydrated = false
 const listeners = new Set<() => void>()
 
 function setViews(next: readonly SharedBotHostView[]): void {
   views = next
+  hydrated = true
   for (const listener of listeners) {
     listener()
   }
@@ -24,8 +27,17 @@ export function installSharedBotHostCatalog(): () => void {
   void window.api.sharedBotHosts.list().then(setViews, () => {})
   return () => {
     stop()
-    setViews([])
+    views = []
+    hydrated = false
+    for (const listener of listeners) {
+      listener()
+    }
   }
+}
+
+/** Whether main has said which agents are shared with this account, so a missing one is gone. */
+export function sharedBotHostsHydrated(): boolean {
+  return hydrated
 }
 
 export function readSharedBotHosts(): readonly SharedBotHostView[] {

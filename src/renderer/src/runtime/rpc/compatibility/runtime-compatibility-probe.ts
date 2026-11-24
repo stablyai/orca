@@ -10,6 +10,7 @@ import {
   runtimeCompatibilityChecks
 } from './runtime-compatibility-cache'
 import { RUNTIME_IDLE_STOPPED_ERROR_CODE } from '../../../../../shared/remote-runtime/orcad-lifecycle/orcad-idle-stop-signal'
+import { sharedBotHostFor } from '../../hosts/shared-bot-hosts/shared-bot-host-catalog'
 
 function isIdleStopRefusal(error: unknown): boolean {
   return (
@@ -30,6 +31,10 @@ export async function ensureRuntimeEnvironmentCompatible(
     wake?: boolean
   } = {}
 ): Promise<RuntimeStatus | null> {
+  // A shared agent's host answers only its share's methods, never a status: nothing to probe.
+  if (sharedBotHostFor({ kind: 'environment', environmentId })) {
+    return null
+  }
   const cached = getCachedRuntimeCompatibilityCheck(environmentId, options)
   if (cached) {
     try {

@@ -3,6 +3,9 @@
 
 export type SharedBotHostLink = 'live' | 'connecting' | 'offline' | 'unpaired'
 
+/** A held message as Orca Cloud last reported it: waiting for the host, in its journal, or refused. */
+export type SharedBotHeldState = 'waiting' | 'delivered' | 'not_sent'
+
 export type SharedBotHostView = {
   environmentId: string
   shareId: string
