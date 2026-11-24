@@ -20037,7 +20037,10 @@
         "paused": "Pausiertes Ziel",
         "blocked": "Ziel blockiert",
         "limited": "Ziel eingeschränkt",
-        "attachmentsUnsupported": "Vor dem Festlegen eines Ziels die Anhänge entfernen."
+        "attachmentsUnsupported": "Vor dem Festlegen eines Ziels die Anhänge entfernen.",
+        "checks_one": "{{count}} Prüfung",
+        "checks_other": "{{count}} Prüfungen",
+        "last-check": "Letzte Zielprüfung"
       },
       "fileLinks": {
         "notFound": "Datei nicht gefunden: {{value0}}",
@@ -20161,7 +20164,16 @@
         "settingsRejected": "Codex konnte das ausgewählte Modell und den Denkaufwand nicht anwenden. Diese Zieländerung wurde nicht gesendet. Die Auswahl prüfen und erneut versuchen.",
         "settingsUnconfirmed": "Codex hat das ausgewählte Modell und den Denkaufwand nicht bestätigt. Diese Zieländerung wurde nicht gesendet. Den Chat prüfen und erneut versuchen.",
         "pauseUnconfirmed": "Codex wurde gestoppt, aber das Pausieren des Ziels wurde nicht bestätigt. Das Ziel vor dem Fortfahren prüfen.",
-        "stopUnconfirmed": "Codex konnte „Stoppen“ nicht bestätigen. Den Chat vor dem Fortfahren prüfen."
+        "stopUnconfirmed": "Codex konnte „Stoppen“ nicht bestätigen. Den Chat vor dem Fortfahren prüfen.",
+        "noGoal": "Codex hat in diesem Chat kein Ziel, das geändert werden kann. Mit /goal und anschließender Zielbeschreibung ein Ziel festlegen."
+      },
+      "automationResult": {
+        "openRun": "Ausführung öffnen",
+        "notRead": "{{name}} hat das noch nicht gelesen. Es wird mit deiner nächsten Nachricht gesendet.",
+        "read": "{{name}} hat das mit deiner nächsten Nachricht gelesen.",
+        "sentWithOne": "Mit 1 Automatisierungsergebnis gesendet",
+        "sentWithMany": "Mit {{count}} Automatisierungsergebnissen gesendet",
+        "cleared": "Ist eingetroffen, bevor der Chat geleert wurde. Es wird nicht an {{name}} gesendet."
       },
       "slashCommandDescriptions": {
         "clearConversation": "Gespräch leeren",
@@ -20329,6 +20341,27 @@
         "sourceTooltip": "Abgezweigt von {{name}}",
         "unknownSourceTooltip": "Von einem anderen Chat abgezweigt"
       },
+      "importPlan": {
+        "comes": "Wird übernommen",
+        "changed": "Wird mit Änderungen übernommen",
+        "already": "Bereits vorhanden",
+        "stays": "Bleibt in {{app}}",
+        "fromAgain": "Erneut aus {{app}}",
+        "from": "Aus {{app}}",
+        "selected": "{{chosen}} von {{total}} ausgewählt · Schlüssel und Anmeldedaten werden nie kopiert",
+        "importOne": "1 Element importieren",
+        "importMany": "{{count}} Elemente importieren",
+        "askedOne": "Import von 1 Element angefordert",
+        "askedMany": "Import von {{count}} Elementen angefordert"
+      },
+      "importDone": {
+        "heading": "Import abgeschlossen",
+        "title": "{{name}} wurde aus {{app}} übernommen",
+        "open": "Öffnen",
+        "stayed": "In {{app}} verblieben: {{things}}. In {{app}} wurde nichts geändert.",
+        "unchanged": "In {{app}} wurde nichts geändert.",
+        "paused": "Automatisierungen sind pausiert, damit nichts doppelt läuft. Wieder aktivieren, sobald der alte Bot in {{app}} ausgeschaltet ist."
+      },
       "cardKindHidden": {
         "description": "Das kannst du jederzeit hier ändern:",
         "settingsLink": "Einstellungen > Chat-Oberfläche > Durchgangsaktivität",
@@ -20343,11 +20376,148 @@
       },
       "splitRight": "Rechts teilen",
       "splitDown": "Unten teilen",
+      "automationRun": {
+        "waitOver": "Warten beendet",
+        "scheduled": "Geplant",
+        "runNow": "Jetzt ausführen",
+        "github": "GitHub",
+        "slack": "Slack",
+        "linear": "Linear",
+        "webhook": "Webhook",
+        "gmail": "Gmail",
+        "calendar": "Kalender",
+        "instructions": "Anweisungen",
+        "event": "Ereignis",
+        "startError": "Fehler",
+        "couldNotStart": "Start fehlgeschlagen",
+        "queued": "In der Warteschlange",
+        "deadlineReached": "Frist erreicht",
+        "due": "Fällig: {{time}}",
+        "dueRan": "fällig {{due}}, ausgeführt {{ran}}",
+        "reused": "Erneut verwendet: {{what}}",
+        "reusedFrom": "Erneut verwendetes Ereignis: {{what}} · von {{time}}",
+        "whatOn": "{{what}} in {{where}}",
+        "whatIn": "{{what}} in {{where}}",
+        "whatAt": "{{what}} · {{where}}",
+        "factsAt": "{{facts}} · {{time}}",
+        "someoneWrote": "Jemand hat geschrieben",
+        "personWrote": "{{name}} hat geschrieben",
+        "callerSent": "Der Aufrufer hat gesendet",
+        "external": "Externer Inhalt · als Information an den Bot gesendet, nicht als Anweisungen",
+        "shortened": "Auf 4.096 Zeichen gekürzt, wie an den Bot gesendet.",
+        "memberAccess": "{{name}} stand bei der Ausführung auf der Liste „Wer fragen darf“.",
+        "someMemberAccess": "Jemand von der Liste „Wer fragen darf“ hat dies bei der Ausführung gesendet.",
+        "otherAccess": "Nicht auf der Liste „Wer fragen darf“ oder Zugriff unbekannt.",
+        "ownerAccess": "Vom Inhaber des Bots.",
+        "sampleCall": "Beispielaufruf",
+        "firstCall": "Erster Aufruf",
+        "webhookCall": "Webhook-Aufruf",
+        "openOnGitHub": "Auf GitHub öffnen",
+        "openInSlack": "In Slack öffnen",
+        "openInLinear": "In Linear öffnen",
+        "openLink": "Link öffnen",
+        "accessibleName": "Automatisierungsausführung. {{label}}: {{name}}. {{reason}}.",
+        "accessibleNameAt": "Automatisierungsausführung. {{label}}: {{name}}. {{reason}}. {{time}}.",
+        "accessibleNameNoReason": "Automatisierungsausführung. {{label}}: {{name}}.",
+        "accessibleNameNoReasonAt": "Automatisierungsausführung. {{label}}: {{name}}. {{time}}.",
+        "copyInstructions": "Anweisungen kopieren",
+        "copyEvent": "Ereignis kopieren",
+        "openAutomation": "Automatisierung öffnen",
+        "sendAgain": "Erneut senden",
+        "sentAgain": "Erneut gesendet",
+        "showAll": "Alle anzeigen",
+        "showLess": "Weniger anzeigen",
+        "what": {
+          "github": {
+            "issue_opened": "Issue geöffnet",
+            "pr_opened": "Pull Request geöffnet",
+            "pr_pushed": "Push",
+            "pr_merged": "Gemergt",
+            "comment": "Kommentar",
+            "review_comment": "Review-Kommentar",
+            "review": "Review",
+            "mentioned": "Erwähnung",
+            "review_requested": "Review angefordert",
+            "assigned": "Zugewiesen",
+            "ci_failed": "CI fehlgeschlagen",
+            "ci_finished": "CI abgeschlossen",
+            "ci_passed": "CI erfolgreich",
+            "pr_conflicted": "Konflikte",
+            "pr_closed": "Geschlossen",
+            "pr_ready": "Bereit zum Review",
+            "labeled": "Label hinzugefügt",
+            "issue_closed": "Issue geschlossen",
+            "deploy_finished": "Bereitstellung abgeschlossen",
+            "security_alert": "Sicherheitswarnung",
+            "workflow_finished": "Workflow-Ausführung abgeschlossen"
+          },
+          "slack": {
+            "mentioned": "Erwähnung",
+            "message": "Nachricht",
+            "reaction": "Reaktion"
+          },
+          "linear": {
+            "assigned": "Zugewiesen",
+            "mentioned": "Erwähnung",
+            "issue_created": "Issue erstellt",
+            "issue_moved": "Issue verschoben"
+          },
+          "gmail": {
+            "new_email": "Neue E-Mail"
+          },
+          "calendar": {
+            "starting_soon": "Meeting beginnt bald"
+          },
+          "other": "Ereignis"
+        },
+        "afterThirtyDays": "Nach 30 Tagen",
+        "cancel": "Abbrechen",
+        "cancelled": "Abgebrochen",
+        "couldNotFinish": "Abschluss fehlgeschlagen",
+        "createdAutomation": "Automatisierung erstellt",
+        "finished": "Abgeschlossen",
+        "happened": "Eingetreten",
+        "noDeadline": "Keine Frist",
+        "noReplyBy": "Keine Antwort bis {{time}}",
+        "nothingBy": "Nichts bis {{time}}",
+        "paused": "Pausiert",
+        "replied": "{{actor}} hat geantwortet",
+        "rowAccessibleName": "{{label}}: {{name}}. {{details}}",
+        "thenLine": "Danach",
+        "thenOnce": "Läuft einmal, sobald es eintritt",
+        "thenOnceBy": "Läuft einmal; um {{time}}, falls bis dahin nichts eintritt",
+        "until": "Bis {{time}}",
+        "updatedAutomation": "Automatisierung aktualisiert",
+        "waiting": "Wartet",
+        "waitsFor": "Wartet auf"
+      },
+      "eventRow": {
+        "showLess": "Weniger anzeigen",
+        "showMore": "Mehr anzeigen",
+        "running": "Wird ausgeführt",
+        "failed": "Fehlgeschlagen"
+      },
       "dock": {
         "label": "Nachrichtenfeld und Abfragen"
       },
       "automationSaved": {
-        "openFullPage": "Seite öffnen"
+        "resultsInRuns": "Ergebnisse in jeder Ausführung",
+        "paused": "pausiert",
+        "webhookHint": "Diese URL in deinem Dienst als Ziel eintragen",
+        "editDraft": "Ändere „{{name}}“ so, dass ",
+        "resultsInEachRun": "In jeder Ausführung",
+        "resultsChat": "Chat",
+        "noRuns": "Noch keine Ausführungen",
+        "recentRuns": "Letzte Ausführungen",
+        "when": "Wann",
+        "results": "Ergebnisse",
+        "agent": "Agent",
+        "runNow": "Jetzt ausführen",
+        "loading": "Wird geladen",
+        "deleted": "Diese Automatisierung wurde gelöscht",
+        "loadFailed": "Diese Automatisierung konnte nicht geladen werden",
+        "openFullPage": "Seite öffnen",
+        "onAgent": "mit {{name}}"
       },
       "usageLimitActions": {
         "handOff": "An Agenten übergeben"
