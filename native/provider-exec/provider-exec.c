@@ -264,9 +264,11 @@ struct identity {
     int value;
 };
 
+// Lookups see the sorted prefix; items appended past it join on the next settle.
 struct identity_set {
     struct identity *items;
     size_t count;
+    size_t sorted;
     size_t capacity;
 };
 
@@ -320,7 +322,7 @@ static int compare_identity(pid_t pid, long long start, const struct identity *i
 // Index of the first item not below (pid, start).
 static size_t identity_position(const struct identity_set *set, pid_t pid, long long start) {
     size_t low = 0;
-    size_t high = set->count;
+    size_t high = set->sorted;
     while (low < high) {
         size_t middle = low + (high - low) / 2;
         if (compare_identity(pid, start, &set->items[middle]) > 0) {
@@ -334,8 +336,8 @@ static size_t identity_position(const struct identity_set *set, pid_t pid, long 
 
 static struct identity *identity_find(const struct identity_set *set, pid_t pid, long long start) {
     size_t at = identity_position(set, pid, start);
-    return at < set->count && compare_identity(pid, start, &set->items[at]) == 0 ? &set->items[at]
-                                                                                    : NULL;
+    return at < set->sorted && compare_identity(pid, start, &set->items[at]) == 0 ? &set->items[at]
+                                                                                     : NULL;
 }
 
 static int identity_reserve(struct identity_set *set) {
@@ -360,7 +362,36 @@ static void identity_insert(struct identity_set *set, pid_t pid, long long start
     memmove(&set->items[at + 1], &set->items[at], (set->count - at) * sizeof *set->items);
     set->items[at] = (struct identity){.pid = pid, .start = start, .value = value};
     set->count++;
+    set->sorted = set->count;
 }
+
+#if defined(__APPLE__)
+static int compare_identities(const void *a, const void *b) {
+    const struct identity *right = b;
+    return compare_identity(((const struct identity *)a)->pid, ((const struct identity *)a)->start,
+        right);
+}
+
+// Batched inserts, so identities arriving out of order cost one sort rather than a shift each.
+static void identity_append(struct identity_set *set, pid_t pid, long long start) {
+    set->items[set->count++] = (struct identity){.pid = pid, .start = start};
+}
+
+static void identity_settle(struct identity_set *set) {
+    if (set->sorted == set->count) {
+        return;
+    }
+    qsort(set->items, set->count, sizeof *set->items, compare_identities);
+    size_t kept = 0;
+    for (size_t i = 0; i < set->count; i++) {
+        if (kept == 0 || compare_identities(&set->items[kept - 1], &set->items[i]) != 0) {
+            set->items[kept++] = set->items[i];
+        }
+    }
+    set->count = kept;
+    set->sorted = kept;
+}
+#endif
 
 struct proc_row {
     pid_t pid;
@@ -804,7 +835,7 @@ static int tagged_once(struct watcher *w, const struct proc_row *row) {
     }
     int tagged = carries_tree_tag(row->pid, w->tree_tag);
     if (tagged == 0 && identity_reserve(&w->untagged)) {
-        identity_insert(&w->untagged, row->pid, row->start, 0);
+        identity_append(&w->untagged, row->pid, row->start);
     }
     return tagged == 1;
 }
@@ -1042,6 +1073,7 @@ static int resolve_members(struct watcher *w, struct tree_scan *scan) {
             scan->state[i] = TREE_OUTSIDE;
         }
     }
+    identity_settle(&w->untagged);
     result = 0;
 done:
     free(t.top);
@@ -1197,6 +1229,7 @@ static int signal_unseen_known(struct watcher *w, int signal_number, int *doubt)
         w->known.items[kept++] = item;
     }
     w->known.count = kept;
+    w->known.sorted = kept;
     return live;
 }
 
@@ -1336,6 +1369,15 @@ static int sweep_once(struct watcher *w, int signal_number) {
         if (row->pgid == w->group) {
             if (w->group_term_pending) {
                 record_termed(w, row);
+            }
+            // Remembered too, so one that later leaves the group and its session is still the chat's.
+            int settled = 1;
+#if defined(__linux__)
+            settled = row->start < scan_tick;
+#endif
+            if (settled && identity_reserve(&w->known)) {
+                identity_insert(&w->known, row->pid, row->start, 0);
+                seen_member(w, row);
             }
             continue;
         }
