@@ -140,9 +140,7 @@ export function NativeChatStructuredSession(props: Omit<NativeChatStructuredView
     needsFailureFacts || props.agent === 'claude'
   )
   const deliveryNotices = useStructuredAgentSessionDeliveryNotices({
-    pending: controller.pending,
-    submissions: controller.submissions,
-    journalItems: controller.journalItems,
+    ...controller,
     startFailures,
     agentName: agentLabel
   })

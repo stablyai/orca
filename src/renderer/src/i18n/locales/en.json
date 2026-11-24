@@ -22903,6 +22903,12 @@
         "sampleCall": "Sample call",
         "sampleNote": "Starts a real run",
         "send": "Send"
+      },
+      "sharedHeld": {
+        "waiting": "Waiting for {{owner}}’s computer",
+        "notSent": "Not sent",
+        "sendAgain": "Send again",
+        "notHeld": "Couldn’t send it again"
       }
     },
     "tab": {

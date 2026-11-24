@@ -1,6 +1,10 @@
 // The agents shared with this Orca account: found on Orca Cloud, paired over Orca Relay, and reached by
 // the window as hosts of their own. A message to a host that is away is held in Orca Cloud.
+import { randomUUID } from 'node:crypto'
+import { z } from 'zod'
 import {
+  isSharedBotNewChatId,
+  newSharedBotChatId,
   SHARED_BOT_HOST_ERRORS,
   type SharedBotHostView
 } from '../../../shared/bots/shared-bot-hosts'
@@ -27,6 +31,14 @@ import type { SharedBotHomes } from './shared-bot-home'
 // New shares and invites resolve within this; pairing and held messages are read sooner.
 const IDLE_POLL_MS = 10 * 60 * 1000
 const BUSY_POLL_MS = 30 * 1000
+
+const SessionParams = z.looseObject({ sessionId: z.string() })
+const EnvelopeParams = z.looseObject({ envelope: SessionParams })
+
+/** The chat a call names, as `sessionId` or in its mutation envelope. */
+const sessionIdOf = (params: unknown): string | undefined =>
+  SessionParams.safeParse(params).data?.sessionId ??
+  EnvelopeParams.safeParse(params).data?.envelope.sessionId
 
 export type SharedBotHostsDeps = {
   userDataPath: string
@@ -99,7 +111,9 @@ export class SharedBotHosts {
               botName: entry.botName,
               ownerName: entry.ownerName,
               homeWorkspaceId: entry.homeWorkspaceId ?? null,
-              link: this.linkFor(entry).current()
+              link: this.linkFor(entry).current(),
+              holds: entry.hostKey !== undefined,
+              held: this.held.views(entry)
             }
           ]
         : []
@@ -157,7 +171,11 @@ export class SharedBotHosts {
     this.timer.unref?.()
   }
 
-  async call(environmentId: string, method: string, params: unknown) {
+  async call(
+    environmentId: string,
+    method: string,
+    params: unknown
+  ): Promise<RuntimeRpcResponse<unknown>> {
     await this.ready()
     const entry = this.entryFor(environmentId)
     if (!entry) {
@@ -170,7 +188,17 @@ export class SharedBotHosts {
         return handedOff
       }
     }
-    if (link !== 'live') {
+    // A new chat while the host is away: a placeholder until its first held message starts it there.
+    if (method === 'bots.session.start' && link !== 'live' && entry.hostKey) {
+      return {
+        id: method,
+        ok: true,
+        result: { sessionId: newSharedBotChatId(randomUUID()) },
+        _meta: { runtimeId: entry.environmentId }
+      }
+    }
+    // The host doesn't know a placeholder chat yet; nothing of it can be read there.
+    if (link !== 'live' || isSharedBotNewChatId(sessionIdOf(params))) {
       return sharedBotOffline(entry, method)
     }
     try {
@@ -189,7 +217,11 @@ export class SharedBotHosts {
   ): Promise<() => void> {
     await this.ready()
     const entry = this.entryFor(environmentId)
-    if (!entry || (await this.reach(entry)) !== 'live') {
+    if (
+      !entry ||
+      isSharedBotNewChatId(sessionIdOf(params)) ||
+      (await this.reach(entry)) !== 'live'
+    ) {
       onResponse(
         entry
           ? sharedBotOffline(entry, method)
@@ -205,6 +237,13 @@ export class SharedBotHosts {
           : failure(method, SHARED_BOT_HOST_ERRORS.offline, error)
       )
     })
+  }
+
+  /** Sends a held message the host refused again; false when it isn't one, or wasn't held. */
+  async sendAgain(environmentId: string, clientMessageId: string): Promise<boolean> {
+    await this.ready()
+    const entry = this.entryFor(environmentId)
+    return entry ? this.held.sendAgain(entry, clientMessageId) : false
   }
 
   /** Applies the cloud's list; returns the kept shares it no longer lists, now removed. */

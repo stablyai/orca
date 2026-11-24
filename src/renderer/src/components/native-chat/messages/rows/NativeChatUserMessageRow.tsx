@@ -2,7 +2,7 @@ import { NativeChatSetupButton } from '../../host-access/NativeChatSetupButton'
 import { NativeChatTranscriptSignInNotice } from '../../host-access/NativeChatSignInRow'
 import { NativeChatUserBubble } from './NativeChatUserBubble'
 import { NativeChatTextAttachments } from '../../media/text/NativeChatTextAttachments'
-import { Goal } from 'lucide-react'
+import { Clock, Goal } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/class-names'
 import { AUTOMATION_RESULT_NOTE_COPY } from '../../../../../../shared/bots/bot-automation-result-note'
@@ -241,12 +241,23 @@ function NativeChatDeliveryLine({
 }): React.JSX.Element {
   const t = useTranslate()
   return (
-    <div className="flex max-w-[85%] flex-wrap items-center gap-2 text-2xs text-destructive/80">
+    <div
+      className={cn(
+        'flex max-w-[85%] flex-wrap items-center gap-2 text-2xs',
+        notice.waiting ? 'gap-1.5 text-chat-foreground-faint' : 'text-destructive/80'
+      )}
+    >
+      {notice.waiting ? <Clock className="size-3 shrink-0" aria-hidden /> : null}
       <span className="min-w-0 break-words">{notice.text}</span>
       <NativeChatSetupButton failureKind={notice.failureKind} rowId={rowId} />
       {notice.onSend ? (
         <Button type="button" variant="ghost" size="xs" onClick={notice.onSend}>
           {t('components.native-chat.queuedMessages.send', 'Send')}
+        </Button>
+      ) : null}
+      {notice.onSendAgain ? (
+        <Button type="button" variant="ghost" size="xs" onClick={notice.onSendAgain}>
+          {t('components.native-chat.sharedHeld.sendAgain', 'Send again')}
         </Button>
       ) : null}
       {notice.onEdit ? (

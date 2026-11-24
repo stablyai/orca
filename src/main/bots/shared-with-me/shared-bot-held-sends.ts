@@ -1,8 +1,11 @@
-// A teammate's messages held in Orca Cloud for a shared agent's host: where a send goes, and the held
-// states the cloud reports.
+// A teammate's messages held in Orca Cloud for a shared agent's host: where a send goes, the held
+// states the cloud reports, and Send again for one the host refused.
+import { randomUUID } from 'node:crypto'
 import {
+  isSharedBotNewChatId,
   SHARED_BOT_HOST_ERRORS,
-  type SharedBotHeldState
+  type SharedBotHeldState,
+  type SharedBotHeldView
 } from '../../../shared/bots/shared-bot-hosts'
 import type { RuntimeRpcResponse } from '../../../shared/remote-runtime/rpc/runtime-rpc-envelope'
 import { SendParams } from '../../../shared/rpc-contract/structured-agent-session/structured-agent-session-params'
@@ -21,6 +24,11 @@ export const sharedBotFailure = (
   code: string,
   message: string
 ): RuntimeRpcResponse<unknown> => ({ id, ok: false, error: { code, message } })
+
+/** The chat a session id names: a placeholder id is a new chat the host hasn't started yet. */
+export function sharedBotHeldChat(sessionId: string): SharedBotHeldMessage['chat'] {
+  return isSharedBotNewChatId(sessionId) ? { newChatId: sessionId } : { sessionId }
+}
 
 export class SharedBotHeldSends {
   private states = new Map<string, SharedBotHeldState>()
@@ -68,6 +76,16 @@ export class SharedBotHeldSends {
     return this.state(held) === 'waiting'
   }
 
+  views(entry: SharedBotHostEntry): SharedBotHeldView[] {
+    return entry.held.map((held) => ({
+      clientMessageId: held.clientMessageId,
+      sessionId: 'sessionId' in held.chat ? held.chat.sessionId : held.chat.newChatId,
+      text: held.text,
+      sentAt: held.sentAt,
+      state: this.state(held)
+    }))
+  }
+
   /**
    * Holds an `agentSession.send` that can't go live, or null when it goes to the host. Once a send
    * belongs on the held queue it never goes live, held or not, so it can't overtake one waiting.
@@ -83,7 +101,7 @@ export class SharedBotHeldSends {
     if (!send || !sessionId || !clientMessageId) {
       return null
     }
-    const chat = { sessionId }
+    const chat = sharedBotHeldChat(sessionId)
     if (!sendsHeld(entry, link, chat, this.states)) {
       return link === 'live' ? null : sharedBotOffline(entry)
     }
@@ -106,13 +124,31 @@ export class SharedBotHeldSends {
     return sharedBotOffline(entry)
   }
 
+  /** Holds a refused message again under a new id, in place of the refused one. */
+  async sendAgain(entry: SharedBotHostEntry, clientMessageId: string): Promise<boolean> {
+    const refused = entry.held.find(
+      (held) => held.clientMessageId === clientMessageId && this.state(held) === 'not_sent'
+    )
+    if (!refused) {
+      return false
+    }
+    const blocks = [{ type: 'text', text: refused.text }]
+    const result = await this.hold(
+      entry,
+      { chat: refused.chat, clientMessageId: randomUUID(), blocks },
+      clientMessageId
+    )
+    return result?.kind === 'held'
+  }
+
   private async hold(
     entry: SharedBotHostEntry,
     message: {
       chat: SharedBotHeldMessage['chat']
       clientMessageId: string
       blocks: readonly { type: string }[]
-    }
+    },
+    replaces?: string
   ): Promise<HandOffResult | null> {
     const hostKey = sharedBotHostKey(entry)
     const cloud = this.deps.cloud()
@@ -125,7 +161,10 @@ export class SharedBotHeldSends {
     })
     if (result.kind === 'held') {
       const current = this.deps.store.get(entry.shareId) ?? entry
-      this.deps.store.put({ ...current, held: [...current.held, result.held] })
+      this.deps.store.put({
+        ...current,
+        held: [...current.held.filter((held) => held.clientMessageId !== replaces), result.held]
+      })
       this.states.set(result.held.clientMessageId, 'waiting')
       this.heldAtRead.set(result.held.clientMessageId, this.reads)
       this.deps.changed()

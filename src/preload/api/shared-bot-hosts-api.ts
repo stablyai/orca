@@ -10,6 +10,8 @@ export type SharedBotHostsApi = {
     method: string
     params?: unknown
   }) => Promise<RuntimeRpcResponse<unknown>>
+  /** Holds a message the host refused again, under a new id; false when nothing was held. */
+  sendAgain: (args: { environmentId: string; clientMessageId: string }) => Promise<boolean>
   subscribe: (
     args: { environmentId: string; method: string; params?: unknown },
     callback: (response: RuntimeRpcResponse<unknown>) => void

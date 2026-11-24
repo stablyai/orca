@@ -7,6 +7,7 @@ import { Input } from '@/components/ui/input'
 import { useTranslate } from '@/i18n/use-translate'
 import { activateAiVaultStructuredSession } from '@/lib/agent-session/open/activate-ai-vault-structured-session'
 import { startBotSession } from '@/lib/bot-catalog'
+import { useSharedBotHostOf } from '@/runtime/hosts/shared-bot-hosts/shared-bot-host-catalog'
 import { useBotHostOffline } from '@/lib/bot-host-views'
 import { callBotRpc } from '@/lib/bot-hosts'
 import { useAppStore } from '@/store'
@@ -79,6 +80,7 @@ function BotChatsTab({ bot }: { bot: Bot }): React.JSX.Element {
   const tree = useBotOwnChatTree(bot)
   // Its server is down: the last read shows with its actions off until it's back.
   const offline = useBotHostOffline(bot.hostId)
+  const sharedHost = useSharedBotHostOf(bot.hostId)
   const chats = useMemo(() => orderChatsTab(tree.chats), [tree.chats])
   // Its home's chats and runs, and each listed worker's own workspace.
   const stopWorkspaces = useMemo(
@@ -156,30 +158,33 @@ function BotChatsTab({ bot }: { bot: Bot }): React.JSX.Element {
       >
         {/* Outside the fieldset, so its settings open offline too and say what's unavailable. */}
         {offline ? <OfflineHeader bot={bot} /> : null}
-        <fieldset disabled={offline} className="contents">
-          <div className="flex items-center gap-1.5 px-0.5 pb-2">
-            <div className="relative min-w-0 flex-1">
-              <Search className="pointer-events-none absolute top-1/2 left-2.5 size-3.5 -translate-y-1/2 text-muted-foreground" />
-              <Input
-                value={query}
-                onChange={(event) => setQuery(event.target.value)}
-                placeholder={t('bots.chats.search', 'Search chats and workers')}
-                aria-label={t('bots.chats.search', 'Search chats and workers')}
-                density="compact"
-                inset="leadingIcon"
-              />
-            </div>
-            <Button
-              variant="outline"
-              size="xs"
-              className="h-7"
-              aria-label={newChatLabel}
-              onClick={newChat}
-            >
-              <Plus />
-              <span className="@max-[240px]:hidden">{newChatLabel}</span>
-            </Button>
+        <div className="flex items-center gap-1.5 px-0.5 pb-2">
+          <div className="relative min-w-0 flex-1">
+            <Search className="pointer-events-none absolute top-1/2 left-2.5 size-3.5 -translate-y-1/2 text-muted-foreground" />
+            <Input
+              value={query}
+              onChange={(event) => setQuery(event.target.value)}
+              placeholder={t('bots.chats.search', 'Search chats and workers')}
+              aria-label={t('bots.chats.search', 'Search chats and workers')}
+              density="compact"
+              inset="leadingIcon"
+              disabled={offline}
+            />
           </div>
+          <Button
+            variant="outline"
+            size="xs"
+            className="h-7"
+            aria-label={newChatLabel}
+            // A shared agent's new chat can wait for its computer: its first message is held.
+            disabled={offline && !sharedHost?.holds}
+            onClick={newChat}
+          >
+            <Plus />
+            <span className="@max-[240px]:hidden">{newChatLabel}</span>
+          </Button>
+        </div>
+        <fieldset disabled={offline} className="contents">
           {chats.length === 0 && tree.state !== 'ready' ? (
             tree.state === 'loading' ? (
               <BotChatsSkeleton />

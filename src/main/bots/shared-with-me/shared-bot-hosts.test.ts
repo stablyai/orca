@@ -2,6 +2,7 @@ import { existsSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import nacl from 'tweetnacl'
+import { z } from 'zod'
 import { afterEach, describe, expect, it } from 'vitest'
 import { NODE_RELAY_CLIENT_PLATFORM } from '../../../shared/remote-runtime/relay/client/node/node-relay-client-platform'
 import { SharedBotHosts } from './shared-bot-hosts'
@@ -9,9 +10,15 @@ import { UNREADABLE_ANSWER } from '../../connector-cloud/connector-cloud-request
 import { SharedBotHeldSends } from './shared-bot-held-sends'
 import { SHARED_BOT_HOSTS_FILENAME, SharedBotHostStore } from './shared-bot-host-store'
 import {
+  isSharedBotNewChatId,
   SHARED_BOT_HOST_ERRORS,
   type SharedBotHostView
 } from '../../../shared/bots/shared-bot-hosts'
+import {
+  openBotTeamShareHeldMessage,
+  sealBotTeamShareOffer
+} from '../../../shared/bots/bot-team-share-seal'
+import { NODE_PAIRED_E2EE_PRIMITIVES } from '../../../shared/remote-runtime/e2ee/node/paired-e2ee-node-primitives'
 import { structuredAgentSessionMessageSendMutation } from '../../../shared/agent-session/requests/structured-agent-session-send-mutation'
 import type { SharedBotHostEntry } from './shared-bot-host-store'
 import {
@@ -23,14 +30,13 @@ import {
 } from './shared-bot-pairing'
 import type { SharedBotsCloud } from './shared-bots-cloud'
 import { memorySharedBotHomes } from './shared-bot-home.test-fixture'
-import type { ConnectorShareAcceptRequest } from '../../../shared/connector-share-contract'
-import { NODE_PAIRED_E2EE_PRIMITIVES } from '../../../shared/remote-runtime/e2ee/node/paired-e2ee-node-primitives'
-import {
-  openBotTeamShareHeldMessage,
-  sealBotTeamShareOffer
-} from '../../../shared/bots/bot-team-share-seal'
+import type {
+  ConnectorShareAcceptRequest,
+  ConnectorShareHoldRequest
+} from '../../../shared/connector-share-contract'
 
-const HOST_KEY = Buffer.from(nacl.box.keyPair().publicKey).toString('base64')
+const HOST = nacl.box.keyPair()
+const HOST_KEY = Buffer.from(HOST.publicKey).toString('base64')
 const dirs: string[] = []
 
 afterEach(() => {
@@ -88,6 +94,7 @@ function hosts(
   now: () => number,
   hold: SharedBotsCloud['hold'] = async () => ({ ok: true, value: { status: 'held' } })
 ) {
+  const holds: [string, ConnectorShareHoldRequest][] = []
   const dir = mkdtempSync(join(tmpdir(), 'shared-bot-hosts-'))
   dirs.push(dir)
   const accepts: [string, ConnectorShareAcceptRequest][] = []
@@ -101,7 +108,10 @@ function hosts(
       accepts.push([shareId, request])
       return { ok: true, value: { status: 'queued' } }
     },
-    hold
+    hold: async (shareId, request) => {
+      holds.push([shareId, request])
+      return hold(shareId, request)
+    }
   }
   const published: string[][] = []
   const memory = memorySharedBotHomes(dir)
@@ -113,7 +123,7 @@ function hosts(
     homes: memory.homes,
     now
   })
-  return { service, accepts, published, mineReads: () => mineReads, dir, memory }
+  return { service, accepts, holds, published, mineReads: () => mineReads, dir, memory }
 }
 
 describe('shared agent pairing', () => {
@@ -180,7 +190,7 @@ describe('where a message to a shared agent goes', () => {
   it('keeps a chat’s follow-ups on the held queue until its first held message lands', () => {
     const held = entry({
       hostKey: HOST_KEY,
-      held: [{ clientMessageId: 'm1', chat, sentAt: 0 }]
+      held: [{ clientMessageId: 'm1', chat, text: 'hi', sentAt: 0 }]
     })
     expect(sendsHeld(held, 'live', chat, new Map([['m1', 'waiting' as const]]))).toBe(true)
     expect(sendsHeld(held, 'live', { sessionId: 'chat-2' }, noStates)).toBe(false)
@@ -313,7 +323,7 @@ describe('the held queue’s order', () => {
         publicKeyB64: Buffer.from(nacl.sign.keyPair().publicKey).toString('base64'),
         secretKeyB64: Buffer.from(nacl.sign.keyPair().secretKey).toString('base64')
       },
-      held: [{ clientMessageId: 'm1', chat: { sessionId: 'chat-0001' }, sentAt: 0 }]
+      held: [{ clientMessageId: 'm1', chat: { sessionId: 'chat-0001' }, text: 'hi', sentAt: 0 }]
     })
     const answer = await held.send(waiting, 'live', sendParams('chat-0001', 'm2'))
     expect(answer?.ok).toBe(false)
@@ -381,7 +391,7 @@ describe('a held message and a cloud read that cross', () => {
     // Held, then Orca quit before any read listed it; the cloud aged it out meanwhile.
     const kept = entry({
       hostKey: HOST_KEY,
-      held: [{ clientMessageId: 'm1', chat: { sessionId: 'chat-0001' }, sentAt: 0 }]
+      held: [{ clientMessageId: 'm1', chat: { sessionId: 'chat-0001' }, text: 'Hi', sentAt: 0 }]
     })
     writeFileSync(join(dir, SHARED_BOT_HOSTS_FILENAME), JSON.stringify({ v: 1, shares: [kept] }))
     const service = new SharedBotHosts({
@@ -497,5 +507,89 @@ describe('a shared agent’s home on this computer', () => {
     const store = new SharedBotHostStore(dir)
     await store.load()
     expect(store.list().map((kept) => kept.shareId)).toEqual(['share-2'])
+  })
+})
+
+const StartedChat = z.object({ sessionId: z.string() })
+
+describe('a teammate’s messages while the shared agent’s computer is away', () => {
+  const send = (sessionId: string, clientOperationId: string, text: string) =>
+    structuredAgentSessionMessageSendMutation({
+      sessionId,
+      clientOperationId,
+      expectedRuntimeFence: null,
+      body: { kind: 'message', role: 'user', blocks: [{ type: 'text', text }] }
+    })
+  const away = (held: MineShare['held'] = []) => [
+    share({ hostOnline: false, hostKey: HOST_KEY, held })
+  ]
+
+  it('starts a new chat as a placeholder whose first message is held for the host to start it', async () => {
+    const { service, holds } = hosts(
+      () => away(),
+      () => 1_000
+    )
+    await service.refresh()
+    const environmentId = service.views()[0]!.environmentId
+    const started = await service.call(environmentId, 'bots.session.start', { botId: 'bot-1' })
+    const sessionId = StartedChat.parse(started.ok ? started.result : null).sessionId
+    expect(isSharedBotNewChatId(sessionId)).toBe(true)
+    // The host doesn't know the placeholder: nothing of it is read there.
+    const read = await service.call(environmentId, 'agentSession.history', { sessionId })
+    expect(read.ok ? null : read.error.code).toBe(SHARED_BOT_HOST_ERRORS.offline)
+    const sent = await service.call(environmentId, 'agentSession.send', send(sessionId, 'm1', 'Hi'))
+    service.stop()
+    expect(sent.ok ? null : sent.error.code).toBe(SHARED_BOT_HOST_ERRORS.held)
+    const opened = openBotTeamShareHeldMessage(NODE_PAIRED_E2EE_PRIMITIVES, {
+      hostSecretKey: HOST.secretKey,
+      hostKey: HOST_KEY,
+      sealed: holds[0]![1].sealed,
+      expect: { shareId: 'share-1', botId: 'bot-1', clientMessageId: 'm1' }
+    })
+    expect(opened?.chat).toEqual({ newChatId: sessionId })
+    expect(service.views()[0]!.held).toEqual([
+      { clientMessageId: 'm1', sessionId, text: 'Hi', sentAt: 1_000, state: 'waiting' }
+    ])
+  })
+
+  it('starts no placeholder for a host that holds nothing', async () => {
+    const { service } = hosts(
+      () => [share({ hostOnline: false })],
+      () => 0
+    )
+    await service.refresh()
+    const started = await service.call(service.views()[0]!.environmentId, 'bots.session.start', {
+      botId: 'bot-1'
+    })
+    service.stop()
+    expect(started.ok ? null : started.error.code).toBe(SHARED_BOT_HOST_ERRORS.offline)
+  })
+
+  it('sends a refused message again under a new id, in its place', async () => {
+    let held: MineShare['held'] = []
+    const { service, holds } = hosts(
+      () => away(held),
+      () => 0
+    )
+    await service.refresh()
+    const environmentId = service.views()[0]!.environmentId
+    await service.call(environmentId, 'agentSession.send', send('chat-0001', 'm1', 'Check #40189'))
+    expect(await service.sendAgain(environmentId, 'm1')).toBe(false)
+    held = [{ clientMessageId: 'm1', state: 'not_sent' }]
+    await service.refresh()
+    expect(service.views()[0]!.held.map((message) => message.state)).toEqual(['not_sent'])
+    expect(await service.sendAgain(environmentId, 'm1')).toBe(true)
+    service.stop()
+    const again = holds[1]![1].clientMessageId
+    expect(again).not.toBe('m1')
+    expect(service.views()[0]!.held).toEqual([
+      {
+        clientMessageId: again,
+        sessionId: 'chat-0001',
+        text: 'Check #40189',
+        sentAt: 0,
+        state: 'waiting'
+      }
+    ])
   })
 })

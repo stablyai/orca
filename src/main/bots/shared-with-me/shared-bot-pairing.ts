@@ -105,8 +105,9 @@ const sameChat = (a: HeldChat, b: HeldChat): boolean =>
 
 /**
  * Whether a message goes to Orca Cloud's held queue instead of the relay. Only with the host's key
- * (no key, nothing can be sealed to it). Then: whenever the host can't be reached live, and also while
- * an earlier held message in the same chat hasn't landed, so a later one never overtakes it.
+ * (no key, nothing can be sealed to it). Then: whenever the host can't be reached live, for a new chat
+ * the host hasn't started yet, and while an earlier held message in the same chat hasn't landed, so a
+ * later one never overtakes it.
  */
 export function sendsHeld(
   entry: Pick<SharedBotHostEntry, 'offer' | 'hostKey' | 'held'>,
@@ -117,7 +118,7 @@ export function sendsHeld(
   if (!sharedBotHostKey(entry)) {
     return false
   }
-  if (link !== 'live') {
+  if (link !== 'live' || 'newChatId' in chat) {
     return true
   }
   return entry.held.some(

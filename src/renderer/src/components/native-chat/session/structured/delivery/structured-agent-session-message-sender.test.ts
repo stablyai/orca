@@ -83,6 +83,8 @@ describe('structured agent session message sender', () => {
       envelope: { expectedRuntimeFence: null }
     })
     expect(mocks.handBack).not.toHaveBeenCalled()
+    // The shared host's held list draws it from here on, not this send.
+    expect(getStructuredAgentSessionPendingSends('shared-chat-1')).toEqual([])
     uninstall()
     vi.unstubAllGlobals()
   })
