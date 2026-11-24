@@ -1,5 +1,5 @@
 import { useAppStateViewActive, useAppStateValue } from '@/store/retained-views/app-state-view'
-import { useCallback, useEffect, useRef } from 'react'
+import { useCallback, useEffect, useMemo } from 'react'
 import { useAppStore } from '@/store/index'
 import { useRuntimeHostStatusViewSelector } from '@/store/slices/runtime-status/views/use-runtime-status-view'
 import { getLocalAgentPreflightContext } from '@/runtime/hosts/preflight/local-preflight-context'
@@ -54,10 +54,15 @@ export function useDetectedAgents(
 ): UseDetectedAgentsResult {
   const viewActive = useAppStateViewActive()
   const target = normalizeAgentDetectionTarget(connectionId)
-  const observedRemoteTargetKeysRef = useRef<Set<string>>(
-    observationGroup
-      ? observedAgentTargetsForGroup(observationGroup.worktreeId, observationGroup.groupId)
-      : new Set()
+  const observationWorktreeId = observationGroup?.worktreeId
+  const observationGroupId = observationGroup?.groupId
+  // Keyed on the group so a strip moved to another group reads that group's hosts; resolved once, not per render.
+  const observedRemoteTargetKeys = useMemo(
+    () =>
+      observationWorktreeId && observationGroupId
+        ? observedAgentTargetsForGroup(observationWorktreeId, observationGroupId)
+        : new Set<string>(),
+    [observationWorktreeId, observationGroupId]
   )
   // Undefined ownership stays loading so remote hydration cannot flash local agents.
   const isUnknown = target === undefined
@@ -172,7 +177,7 @@ export function useDetectedAgents(
     !isLoading &&
     !isRefreshing &&
     remoteTargetKey !== null &&
-    observedRemoteTargetKeysRef.current.has(remoteTargetKey)
+    observedRemoteTargetKeys.has(remoteTargetKey)
   const localProbePending = targetKind === 'local' && (isLoading || isRefreshing)
   // Refresh the inventory’s host; refreshing local PATH while showing remote agents would silently do nothing.
   const refresh = useCallback((): Promise<TuiAgent[]> => {
@@ -203,10 +208,10 @@ export function useDetectedAgents(
       return
     }
     const isNewRemoteTarget =
-      remoteTargetKey !== null && !observedRemoteTargetKeysRef.current.has(remoteTargetKey)
+      remoteTargetKey !== null && !observedRemoteTargetKeys.has(remoteTargetKey)
     // Remember every target seen by this mount so A → B → A does not repeatedly spawn probes for empty hosts.
     if (remoteTargetKey !== null) {
-      observedRemoteTargetKeysRef.current.add(remoteTargetKey)
+      observedRemoteTargetKeys.add(remoteTargetKey)
     }
     const state = useAppStore.getState()
     if (targetKind === 'ssh' && targetId) {
@@ -253,6 +258,7 @@ export function useDetectedAgents(
     targetKind,
     targetId,
     remoteTargetKey,
+    observedRemoteTargetKeys,
     recordKey,
     pairingRevision,
     runtimeContactEpoch,

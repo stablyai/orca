@@ -16,7 +16,7 @@ import {
   useWindowsTerminalCapabilities
 } from '@/runtime/hosts/capabilities/windows-terminal-capabilities'
 import {
-  hasWindowsTerminalCapabilityHold,
+  isReturningToHeldWindowsTerminalCapabilities,
   holdWindowsTerminalCapabilitiesForReleasedStrip,
   takeWindowsTerminalCapabilityHold
 } from '@/runtime/hosts/capabilities/windows-terminal-capability-holds'
@@ -146,13 +146,24 @@ export function useTabBarRuntimeModel({
     isWebClient ||
     Boolean(worktreeConnectionId)
   const [returningStrip] = useState(
-    () => groupId !== undefined && hasWindowsTerminalCapabilityHold(worktreeId, groupId)
+    // A different host on return (e.g. host-qualified activation) takes the normal TTL load.
+    () =>
+      groupId !== undefined &&
+      isReturningToHeldWindowsTerminalCapabilities(
+        worktreeId,
+        groupId,
+        windowsTerminalCapabilityOwnerKey
+      )
   )
   useEffect(() => {
-    if (!groupId || !shouldProbeWindowsShellCapabilities) {
+    if (!groupId) {
       return
     }
+    // Runs after every dependency change too, so a hold the previous cleanup left for a still-mounted strip is dropped here.
     takeWindowsTerminalCapabilityHold(worktreeId, groupId)
+    if (!shouldProbeWindowsShellCapabilities) {
+      return
+    }
     return () => {
       // Unmounting with the group still open means its workspace released the layout; keep the answer for the return.
       holdWindowsTerminalCapabilitiesForReleasedStrip(

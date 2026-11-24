@@ -29,9 +29,13 @@ export function holdWindowsTerminalCapabilitiesForReleasedStrip(
   }
 }
 
-/** True when this strip unmounted with its group open, i.e. its workspace released the layout. */
-export function hasWindowsTerminalCapabilityHold(worktreeId: string, groupId: string): boolean {
-  return heldOwnerKeyByGroup.get(worktreeId, groupId) !== undefined
+/** True when this strip unmounted with its group open (its workspace released the layout) on this same host. */
+export function isReturningToHeldWindowsTerminalCapabilities(
+  worktreeId: string,
+  groupId: string,
+  ownerKey: string
+): boolean {
+  return heldOwnerKeyByGroup.get(worktreeId, groupId) === ownerKey
 }
 
 export function takeWindowsTerminalCapabilityHold(worktreeId: string, groupId: string): void {
