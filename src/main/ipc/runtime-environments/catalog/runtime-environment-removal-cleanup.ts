@@ -5,6 +5,7 @@ import { clearBrowserRoutePartitionStorageForEnvironment } from '../../../browse
 import { retireBrowserRoutePartitionStorageForEnvironment } from '../../../browser/routing/partitions/browser-route-partition-storage-retirement'
 import { clearRuntimeEnvironmentCapabilityEvidence } from '../connections/runtime-environment-capability-evidence'
 import { clearRuntimeEnvironmentManualDisconnect } from '../connectivity/runtime-environment-manual-disconnect'
+import { closePairedPortForwards } from '../../../ports/paired-forwards/paired-port-forwards'
 import {
   toRuntimeExecutionHostId,
   type ExecutionHostId
@@ -32,6 +33,8 @@ export function retireRemovedRuntimeEnvironment(
   }
   clearRuntimeEnvironmentCapabilityEvidence(environmentId)
   revokeRemoteFilePreviewGrants(environmentId)
+  // Its forwards stop listening here before its pairing credential goes away.
+  void closePairedPortForwards(environmentId)
   // Retained session partitions make listings advertise the removed server as a known host.
   store.removeWorkspaceSessionHost(toRuntimeExecutionHostId(environmentId))
   forgetRemoteLayoutSnapshot(store, environmentId)

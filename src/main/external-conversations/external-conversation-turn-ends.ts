@@ -197,7 +197,7 @@ export function legacyTurnWords(
   const message = turn.lastAssistantMessage
   const words =
     replied === 'not-covered' && message && ownerDmAnswer(link, turn)
-      ? connectorReplyWords(message, { bot: Boolean(link.bot), addressed: true })
+      ? connectorReplyWords(message, { bot: Boolean(link.bot) })
       : null
   return words ?? reply ?? null
 }

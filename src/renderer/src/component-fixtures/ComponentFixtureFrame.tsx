@@ -71,6 +71,9 @@ function FixtureReadySignal({ interact }: { interact: ComponentFixture['interact
     const settle = async (): Promise<void> => {
       await document.fonts.ready
       await waitForPaint()
+      if (cancelled) {
+        return
+      }
       const frame = document.getElementById(FRAME_ID)
       if (interact && frame) {
         await interact(frame)
@@ -84,7 +87,9 @@ function FixtureReadySignal({ interact }: { interact: ComponentFixture['interact
       markComponentFixtureState('ready')
     }
     settle().catch((error: unknown) => {
-      markComponentFixtureState('error', error instanceof Error ? error.message : String(error))
+      if (!cancelled) {
+        markComponentFixtureState('error', error instanceof Error ? error.message : String(error))
+      }
     })
     return () => {
       cancelled = true

@@ -916,12 +916,6 @@
           "moreLoadedPaths_one": "and {{count}} more loaded path",
           "moreLoadedPaths_other": "and {{count}} more loaded paths"
         },
-        "DeleteWorktreeLineageNotice": {
-          "alsoDeletesChildren_one": "Deleting this workspace also deletes {{count}} child workspace.",
-          "alsoDeletesChildren_other": "Deleting this workspace also deletes {{count}} child workspaces.",
-          "moreChildren_one": "+{{count}} more",
-          "moreChildren_other": "+{{count}} more"
-        },
         "HostRemoveDialog": {
           "alsoRemoveWorkspaces_one": "Also remove this workspace from Orca",
           "alsoRemoveWorkspaces_other": "Also remove these {{count}} workspaces from Orca",
@@ -1567,7 +1561,7 @@
       "reachLinear": "Comment on, update and create Linear issues as you",
       "reachPermission": "New conversations start in {{mode}}",
       "reachPermissionUnknown": "New conversations start from your chat permission setting",
-      "reachSlack": "Post in Slack as @{{name}}",
+      "reachSlack": "Post in Slack as {{name}}",
       "reject": "Reject",
       "separateBot": "A separate bot for the team gets its own permission, Google switch and tools. It still runs on {{computer}} as you.",
       "summaryMany": "You and {{count}} other people can ask {{name}}.",
@@ -1752,14 +1746,6 @@
     "groups": {
       "allBotsCount": "All bots · {{count}}",
       "correctMention": "Correct mention",
-      "items": {
-        "outsideRoom_one": "{{count}} more outside this room",
-        "outsideRoom_other": "{{count}} more outside this room",
-        "outsideThread_one": "{{count}} more outside this thread",
-        "outsideThread_other": "{{count}} more outside this thread",
-        "outside_one": "{{count}} more outside this group",
-        "outside_other": "{{count}} more outside this group"
-      },
       "mentionedCount": "{{count}} mentioned",
       "remoteAsked": "Asked on {{computer}}",
       "remoteMayAnswer": "May still answer on {{computer}}.",
@@ -1783,10 +1769,6 @@
     "items": {
       "activity": {
         "anotherAgent": "Another agent"
-      },
-      "ask": {
-        "heldCount_one": "{{count}} answer not sent yet, <send>send anyway</send>",
-        "heldCount_other": "{{count}} answers not sent yet, <send>send anyway</send>"
       },
       "pill": {
         "moveCount_one": "Move {{count}} item to",
@@ -3145,6 +3127,8 @@
         "monitorCount_other": "{{count}} monitors",
         "newQuestions_one": "{{count}} new worker question waiting on you",
         "newQuestions_other": "{{count}} new worker questions waiting on you",
+        "pillLabel_one": "{{count}} worker, latest: {{title}}",
+        "pillLabel_other": "{{count}} workers, latest: {{title}}",
         "taskCount_one": "{{count}} task",
         "taskCount_other": "{{count}} tasks",
         "workerCount_one": "{{count}} worker",
@@ -3174,6 +3158,8 @@
         "compactAfterSending": "Your earlier message is still being sent. Run /compact once it has gone.",
         "continuationSuperseded": "This chat has moved on. Check the latest messages before continuing.",
         "conversationCleared": "This conversation has been cleared.",
+        "diskFull": "The disk on the computer running this chat is full.",
+        "freeDiskSpace": "Free up space on that disk, then try again.",
         "goalsUnsupported": "This agent doesn't support goals.",
         "historyUnavailable": "Orca couldn't open this chat's history right now.",
         "historyUnreadable": "Orca couldn't read this chat's saved history.",
@@ -3306,10 +3292,6 @@
     "workspace": {
       "cleanup": {
         "browse": {
-          "forceDeleteRisk_one": "{{count}} workspace currently shows risk and may need a force delete",
-          "forceDeleteRisk_other": "{{count}} workspaces currently show risk and may need a force delete",
-          "selectAllSafetyChecked_one": "Select {{count}} safety-checked workspace",
-          "selectAllSafetyChecked_other": "Select all {{count}} safety-checked workspaces",
           "selectionVanishedCount_one": "{{count}} selected workspace no longer exists.",
           "selectionVanishedCount_other": "{{count}} selected workspaces no longer exist.",
           "selectionWithheldCount_one": "{{count}} selected workspace is hidden by the current filters and was deselected.",
@@ -3318,8 +3300,24 @@
           "workspaceCount_other": "{{count}} workspaces"
         },
         "confirm": {
-          "deletingTitle_one": "Deleting {{count}} workspace",
-          "deletingTitle_other": "Deleting {{count}} workspaces"
+          "title_one": "Delete {{count}} workspace?",
+          "title_other": "Delete {{count}} workspaces?"
+        },
+        "deleting": {
+          "title_one": "Deleting {{count}} workspace",
+          "title_other": "Deleting {{count}} workspaces"
+        },
+        "done": {
+          "failedLine_one": "{{count}} couldn't be deleted.",
+          "failedLine_other": "{{count}} couldn't be deleted."
+        },
+        "footer": {
+          "delete_one": "Delete {{count}} workspace",
+          "delete_other": "Delete {{count}} workspaces"
+        },
+        "row": {
+          "uncommittedFiles_one": "{{count}} uncommitted file",
+          "uncommittedFiles_other": "{{count}} uncommitted files"
         },
         "scan": {
           "multipleErrorsCount_one": "Could not check {{count}} repository ({{names}}). Some workspaces may be missing. Refresh to try again.",
@@ -3585,7 +3583,7 @@
         "addedMany": "Added {{count}} lines",
         "bot": "Forget, from {{chat}}",
         "changedMany": "Changed {{count}} lines",
-        "chat": "Chat \"{{title}}\"",
+        "chat": "Chat “{{title}}”",
         "chatFrom": "{{chat}} · from {{source}}",
         "edited": "Edited: {{fact}}",
         "forgot": "Forgot: {{fact}}",
@@ -3936,6 +3934,18 @@
         "noAgentAvailable": "No chat-name agent can run in this workspace.",
         "noName": "The chat-name agent returned no name."
       }
+    }
+  },
+  "tabStrip": {
+    "overflow": {
+      "chipOnlyName_one": "{{title}}, {{count}} tab",
+      "chipOnlyName_other": "{{title}}, {{count}} tabs",
+      "moreTabs_one": "{{count}} more tab",
+      "moreTabs_other": "{{count}} more tabs",
+      "needAttention_one": ", {{count}} needs attention",
+      "needAttention_other": ", {{count}} need attention",
+      "openTabs_one": "{{count}} open tab",
+      "openTabs_other": "{{count}} open tabs"
     }
   },
   "taskProviders": {

@@ -90,6 +90,8 @@ const STRUCTURED_RUNTIME_PASSTHROUGH_CODES: ReadonlySet<string> = new Set([
   'worktree_id_requires_full_path',
   // A workspace selector's choices ride in data; a plain Error('selector_ambiguous') keeps the bare code.
   'selector_ambiguous',
+  // A refused worker-start names its flag in data; a plain Error('selector_not_found') keeps the bare code.
+  'selector_not_found',
   'run_not_found',
   'run_home_unreachable',
   'run_required',

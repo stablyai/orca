@@ -15,26 +15,54 @@ const env: WakeAlertsEnv = {
   CF_GRAPHQL_USE_AE_TOKEN: '1'
 }
 
-type Run = { fired: string[]; posts: string[]; graphqlScript?: string }
-async function run(now: Partial<Row>, before: Partial<Row> = {}, opts: { minute?: number; env?: Partial<WakeAlertsEnv> } = {}): Promise<Run> {
+// The SQL answers per minute before the run's schedule: this run judges minutes 2-16 against 17-31.
+type Minutes = Record<number, Partial<Row>>
+const minutes = (now: Partial<Row>, before: Partial<Row>): Minutes => ({ 2: { ...healthy, ...now }, 17: { ...healthy, ...before } })
+const sqlAnswer = (byMinute: Minutes) => Response.json({ data: Object.entries(byMinute).map(([ago, row]) => ({ ago: String(ago), ...row })) })
+
+// ALERT_STATE as a Worker sees it, kept across runs by passing the same one.
+function memoryKv(): KVNamespace & { puts: number } {
+  const store = new Map<string, string>()
+  const kv = {
+    puts: 0,
+    get: async (key: string, type?: string) => {
+      const value = store.get(key)
+      return value === undefined ? null : type === 'json' ? JSON.parse(value) : value
+    },
+    put: async (key: string, value: string) => {
+      kv.puts++
+      store.set(key, value)
+    }
+  }
+  return kv as unknown as KVNamespace & { puts: number }
+}
+const at = (hour: number, minute: number) => Date.UTC(2026, 10, 22, hour, minute)
+
+type Run = { fired: string[]; posts: string[]; graphqlScript?: string; graphqlVars?: Record<string, string>; sql?: string }
+type Opts = { at?: number; env?: Partial<WakeAlertsEnv>; minutes?: Minutes; kv?: KVNamespace; sqlStatus?: number; cfErrors?: number | 'fail'; hookStatus?: number }
+async function run(now: Partial<Row>, before: Partial<Row> = {}, opts: Opts = {}): Promise<Run> {
   const result: Run = { fired: [], posts: [] }
   vi.stubGlobal('fetch', async (input: string, init?: RequestInit) => {
     const url = String(input)
     if (url === env.ALERT_WEBHOOK_URL) {
       result.posts.push(JSON.parse(String(init?.body)).text)
-      return new Response('ok')
+      return new Response('ok', { status: opts.hookStatus ?? 200 })
     }
     if (url === 'https://wake.test/v1/connector/wake') { return new Response(null, { status: 401 }) }
     if (url === 'https://wake.test/__health/object') { return Response.json({ ok: true }) }
     if (url.endsWith('/graphql')) {
-      result.graphqlScript = JSON.parse(String(init?.body)).variables.script
-      return Response.json({ data: { viewer: { accounts: [{ w0: [], w1: [] }] } } })
+      const body = JSON.parse(String(init?.body))
+      result.graphqlScript = body.variables.script
+      result.graphqlVars = body.variables
+      if (opts.cfErrors === 'fail') { return new Response('no', { status: 500 }) }
+      const w0 = opts.cfErrors ? [{ sum: { requests: 1000 - opts.cfErrors }, dimensions: { status: 'success' } }, { sum: { requests: opts.cfErrors }, dimensions: { status: 'scriptThrewException' } }] : []
+      return Response.json({ data: { viewer: { accounts: [{ w0, w1: [] }] } } })
     }
-    // The previous window starts 2 x 15 + 2 min ago.
-    const row = String(init?.body).includes("INTERVAL '32' MINUTE") ? { ...healthy, ...before } : { ...healthy, ...now }
-    return Response.json({ data: [row] })
+    result.sql = String(init?.body)
+    if (opts.sqlStatus) { return new Response('no', { status: opts.sqlStatus }) }
+    return sqlAnswer(opts.minutes ?? minutes(now, before))
   })
-  result.fired = await evaluate({ ...env, ...opts.env }, Date.UTC(2026, 10, 22, 10, opts.minute ?? 17))
+  result.fired = await evaluate({ ...env, ALERT_STATE: opts.kv, ...opts.env }, opts.at ?? at(10, 17))
   return result
 }
 
@@ -56,10 +84,16 @@ describe('wake alerts', () => {
     expect(r.posts[0]).toMatch(/^\[connector-wake test\] FIRING auth-refusals-low-volume/)
   })
 
-  it('fires auth-refusals above 0.5% of upgrades once, then hourly', async () => {
-    expect((await run({ refuse_401: 10 })).fired[0]).toMatch(/^FIRING auth-refusals:/)
-    expect((await run({ refuse_401: 10 }, { refuse_401: 10 })).fired).toEqual([])
-    expect((await run({ refuse_401: 10 }, { refuse_401: 10 }, { minute: 2 })).fired[0]).toMatch(/^STILL FIRING auth-refusals:/)
+  it('fires auth-refusals once, again only after an hour, and resolves once', async () => {
+    const kv = memoryKv()
+    const refused = { refuse_401: 10 }
+    expect((await run(refused, {}, { kv, at: at(10, 17) })).fired[0]).toMatch(/^FIRING auth-refusals:/)
+    expect((await run(refused, refused, { kv, at: at(10, 22) })).fired).toEqual([])
+    expect((await run(refused, refused, { kv, at: at(11, 12) })).fired).toEqual([])
+    expect((await run(refused, refused, { kv, at: at(11, 17) })).fired[0]).toMatch(/^STILL FIRING auth-refusals:/)
+    expect((await run(refused, refused, { kv, at: at(11, 22) })).fired).toEqual([])
+    expect((await run({}, refused, { kv, at: at(11, 27) })).fired).toEqual(['RESOLVED auth-refusals'])
+    expect((await run({}, {}, { kv, at: at(11, 32) })).fired).toEqual([])
   })
 
   it('fires the no-socket share above NO_SOCKET_PCT of wakes, at NO_SOCKET_MIN wakes', async () => {
@@ -94,7 +128,7 @@ describe('wake alerts', () => {
         const errors = [{ sum: { requests: 900 }, dimensions: { status: 'success' } }, { sum: { requests: 100 }, dimensions: { status: 'scriptThrewException' } }]
         return Response.json({ data: { viewer: { accounts: [{ w0: errors, w1: [] }] } } })
       }
-      return Response.json({ data: [healthy] })
+      return sqlAnswer(minutes({}, {}))
     })
     const fired = await evaluate(env, Date.UTC(2026, 10, 22, 10, 17))
     expect(fired).toEqual(['FIRING cloudflare-errors: Worker/Durable Object errors 100 = 10.0% of 1000 invocations in 15 min'])
@@ -118,9 +152,108 @@ describe('wake alerts', () => {
       if (url === env.ALERT_WEBHOOK_URL) { return new Response('ok') }
       if (url.endsWith('/v1/connector/wake')) { return new Response(null, { status: 404 }) }
       if (url.endsWith('/__health/object')) { return Response.json({ ok: true }) }
-      return Response.json({ data: [healthy] })
+      return sqlAnswer(minutes({}, {}))
     })
     const fired = await evaluate({ ...env, CF_GRAPHQL_USE_AE_TOKEN: undefined }, Date.UTC(2026, 10, 22, 10, 17))
     expect(fired).toEqual(['FIRING edge-probe: unauthenticated wake upgrade got 404, expected 401'])
+  })
+  it('reads both windows from one per-minute query, anchored to the scheduled time', async () => {
+    const atSec = at(10, 17) / 1000
+    const r = await run({})
+    expect(r.sql).toMatch(/GROUP BY ago/)
+    expect(r.sql).toContain(`intDiv(${atSec} - toUInt32(timestamp), 60) AS ago`)
+    expect(r.sql).toContain(`timestamp > toDateTime(${atSec - 32 * 60}) AND timestamp <= toDateTime(${atSec})`)
+  })
+
+  it('anchors the Cloudflare error windows to the scheduled time too', async () => {
+    const r = await run({}, {}, { at: at(10, 17) })
+    expect(r.graphqlVars).toMatchObject({
+      s0: new Date(at(10, 0)).toISOString(),
+      e0: new Date(at(10, 15)).toISOString(),
+      s1: new Date(at(9, 45)).toISOString(),
+      e1: new Date(at(10, 0)).toISOString()
+    })
+  })
+
+  it('still fires once when the run at the transition was skipped', async () => {
+    const kv = memoryKv()
+    expect((await run({}, {}, { kv, at: at(10, 12) })).fired).toEqual([])
+    // No run at 10:17; by 10:22 the failed wakes fill this window and part of the one before.
+    expect((await run({ wake_error: 3 }, { wake_error: 2 }, { kv, at: at(10, 22) })).fired).toEqual(['FIRING wake-errors: 3 wakes failed in 15 min, of 1000 wakes'])
+    expect((await run({ wake_error: 3 }, { wake_error: 3 }, { kv, at: at(10, 27) })).fired).toEqual([])
+  })
+
+  it('keeps firing state across a run whose metrics read failed', async () => {
+    const kv = memoryKv()
+    expect((await run({ wake_error: 3 }, {}, { kv, at: at(10, 17) })).fired[0]).toMatch(/^FIRING wake-errors/)
+    expect((await run({}, {}, { kv, at: at(10, 22), sqlStatus: 500 })).fired).toEqual(['alerts cannot read metrics: analytics query failed: 500'])
+    expect((await run({ wake_error: 3 }, { wake_error: 3 }, { kv, at: at(10, 27) })).fired).toEqual([])
+    // A rule that starts while a read failed fires on the next readable run.
+    expect((await run({ wake_error: 3, admin_failures: 3 }, { wake_error: 3 }, { kv, at: at(10, 32) })).fired).toEqual(['FIRING admin-failures: 3 failed admin calls in 15 min'])
+  })
+
+  it('reads an empty result as zero counts, so silent still fires on a window with no rows', async () => {
+    expect((await run({}, {}, { minutes: {} })).fired).toEqual([])
+    expect((await run({}, {}, { minutes: { 20: healthy } })).fired).toEqual(['FIRING silent: no wake events in 15 min'])
+  })
+
+  it('keeps cloudflare-errors firing while Cloudflare analytics cannot be read, and resolves on a readable zero', async () => {
+    const kv = memoryKv()
+    expect((await run({}, {}, { kv, at: at(10, 17), cfErrors: 100 })).fired[0]).toMatch(/^FIRING cloudflare-errors/)
+    expect((await run({}, {}, { kv, at: at(10, 22), cfErrors: 'fail' })).fired).toEqual([])
+    expect((await run({}, {}, { kv, at: at(11, 2), cfErrors: 'fail' })).fired).toEqual(['alerts cannot read Cloudflare analytics: cloudflare analytics query failed: 500'])
+    expect((await run({}, {}, { kv, at: at(11, 7), cfErrors: 0 })).fired).toEqual(['RESOLVED cloudflare-errors'])
+  })
+
+  it('posts a FIRING or RESOLVED again next run when the webhook rejected it', async () => {
+    const kv = memoryKv()
+    vi.spyOn(console, 'error').mockImplementation(() => {})
+    expect((await run({ wake_error: 3 }, {}, { kv, at: at(10, 17), hookStatus: 500 })).fired[0]).toMatch(/^FIRING wake-errors/)
+    expect((await run({ wake_error: 3 }, { wake_error: 3 }, { kv, at: at(10, 22) })).fired[0]).toMatch(/^FIRING wake-errors/)
+    expect((await run({ wake_error: 3 }, { wake_error: 3 }, { kv, at: at(10, 27) })).fired).toEqual([])
+    expect((await run({}, { wake_error: 3 }, { kv, at: at(10, 32), hookStatus: 500 })).fired).toEqual(['RESOLVED wake-errors'])
+    expect((await run({}, { wake_error: 3 }, { kv, at: at(10, 37) })).fired).toEqual(['RESOLVED wake-errors'])
+    expect((await run({}, {}, { kv, at: at(10, 42) })).fired).toEqual([])
+    vi.restoreAllMocks()
+  })
+
+  it('keeps silent firing while there are still no events, and resolves only when they return', async () => {
+    const kv = memoryKv()
+    const quiet = { socket_open: 0, refuse_401: 0, wakes: 0, wake_no_socket: 0, events: 0 }
+    expect((await run({}, {}, { kv, at: at(10, 17), minutes: { 20: healthy } })).fired).toEqual(['FIRING silent: no wake events in 15 min'])
+    // Both windows empty now: the start is old news, but it is still silent.
+    expect((await run({}, {}, { kv, at: at(10, 52), minutes: { 2: quiet, 17: quiet } })).fired).toEqual([])
+    expect((await run({}, {}, { kv, at: at(11, 17), minutes: { 2: quiet, 17: quiet } })).fired).toEqual(['STILL FIRING silent: no wake events in 15 min'])
+    // Events return (a few, not a reconnect surge).
+    expect((await run({}, {}, { kv, at: at(11, 22), minutes: { 2: { ...quiet, socket_open: 10, events: 30 }, 17: quiet } })).fired).toEqual(['RESOLVED silent'])
+  })
+
+  it('retries a rejected silent start through an outage that empties both windows', async () => {
+    const kv = memoryKv()
+    const quiet = { socket_open: 0, refuse_401: 0, wakes: 0, wake_no_socket: 0, events: 0 }
+    vi.spyOn(console, 'error').mockImplementation(() => {})
+    // The last events are 31 min old: just inside the window before.
+    expect((await run({}, {}, { kv, at: at(10, 17), minutes: { 31: healthy }, hookStatus: 500 })).fired).toEqual(['FIRING silent: no wake events in 15 min'])
+    // Five minutes on they are outside both windows, but it is still silent and was never announced.
+    expect((await run({}, {}, { kv, at: at(10, 22), minutes: { 2: quiet, 17: quiet } })).fired).toEqual(['FIRING silent: no wake events in 15 min'])
+    expect((await run({}, {}, { kv, at: at(10, 27), minutes: { 2: quiet, 17: quiet } })).fired).toEqual([])
+    vi.restoreAllMocks()
+  })
+
+  it('posts on every breaching run when no ALERT_STATE is bound', async () => {
+    expect((await run({ wake_error: 3 }, { wake_error: 3 })).fired[0]).toMatch(/^FIRING wake-errors/)
+  })
+
+  it('never evaluates the rules ALERTS_OFF names, and says which names match no rule', async () => {
+    const quiet = { socket_open: 0, refuse_401: 0, wakes: 0, wake_no_socket: 0, events: 0 }
+    const stopped: Minutes = { 2: quiet, 20: healthy }
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    expect((await run({}, {}, { minutes: stopped, env: { ALERTS_OFF: 'silent' } })).fired).toEqual([])
+    expect(warn).not.toHaveBeenCalled()
+    expect((await run({ admin_failures: 3 }, {}, { env: { ALERTS_OFF: ' silent , nonesuch' } })).fired[0]).toMatch(/^FIRING admin-failures/)
+    expect(warn).toHaveBeenCalledWith('connector-wake alerts: ALERTS_OFF names no rule: nonesuch')
+    const r = await run({}, {}, { env: { ALERTS_OFF: 'cloudflare-errors' } })
+    expect(r.graphqlScript).toBeUndefined()
+    warn.mockRestore()
   })
 })

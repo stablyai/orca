@@ -6,7 +6,6 @@ import { Plus } from 'lucide-react-native'
 import { botLinearWorkspaces, botSlackApps } from '../../../../src/shared/bot-types'
 import type { BotUpdateParams } from '../../../../src/shared/rpc-contract/bots-params'
 import { ListRow, LIST_LEADING_INSET } from '../../components/list/ListGroup'
-import { NavBarButton } from '../../components/nav-bar/NavBarButton'
 import { SheetHeader } from '../../components/nav-bar/SheetHeader'
 import { useMobileTranslation } from '../../i18n/use-mobile-translation'
 import { useBackClaim } from '../../navigation/use-back-claim'
@@ -14,13 +13,12 @@ import {
   rereadMobileComposio,
   useMobileComposio
 } from '../../session/native-chat/transcript/bot-cards/mobile-composio-store'
-import { SettingsNote, SettingsSection } from '../../settings/settings-screen-frame'
+import { SettingsSection } from '../../settings/settings-screen-frame'
 import { colors } from '../../theme/mobile-theme'
 import { useMobileColorScheme } from '../../theme/use-mobile-color-scheme'
 import type { RpcClient } from '../../transport/rpc/rpc-client-contract'
 import { useHostBotsEntry } from '../host-bot-store'
 import { memberRemoval } from '../bot-sheet-operations'
-import { mobileBotAvatarSource } from '../host-bot-row-facts'
 import type { PhoneBot } from '../host-bots-operations'
 import type { BotAccessRequests } from '../use-bot-access-requests'
 import { useMobileBotWebhookSettings } from '../webhooks/MobileBotWebhooks'
@@ -28,11 +26,12 @@ import { MobileBotConnectorsAddPage } from './MobileBotConnectorsAddPage'
 import type { ConnectorPage } from './connector-pages'
 import type { SettingsFeature } from '../MobileBotSettingsRoot'
 import { MobileBotConnectorAccountPage } from './MobileBotConnectorAccountPages'
-import { usePhoneGoogleStatus } from './MobileBotGooglePage'
+import { usePhoneGoogleStatus } from './phone-google-accounts'
 import { usePhoneGitHubAccount, usePhoneLinearAccount } from './use-phone-connector-account'
 import { connectorNames, connectorRows } from './connector-entry-rows'
 import { MobileBotSlackPage } from './MobileBotSlackPage'
 import { MobileBotSlackSetup } from './MobileBotSlackSetup'
+import { otherSlackTeams } from '../../../../src/shared/bots/bot-slack-setup-teams'
 import { usePhoneBotSlack } from './use-phone-bot-slack'
 import { MobileBotConnectorToolPages } from './MobileBotConnectorToolPages'
 import { useBotToolsPage } from '../tools/use-bot-tools-page'
@@ -57,8 +56,6 @@ type ConnectorsActions = {
 }
 
 type Page = ConnectorPage
-
-const ICON = 20
 
 /** The Settings row and, while open, the page that replaces Settings (or Webhooks, opened from it). */
 export function useMobileBotConnectorSettings(
@@ -105,7 +102,7 @@ function ConnectorsPage(
 ) {
   useMobileColorScheme()
   const t = useMobileTranslation()
-  const { bot, reads } = props.routeBot
+  const { bot, reads, hostKey } = props.routeBot
   const [page, setPage] = useState<Page>(props.initialPage ?? { kind: 'list' })
   const list = () => setPage({ kind: 'list' })
   useBackClaim(
@@ -119,6 +116,7 @@ function ConnectorsPage(
   const slackApps = botSlackApps(bot)
   const slack = usePhoneBotSlack(
     props.client,
+    hostKey,
     bot.id,
     reads,
     slackApps.length > 0 || page.kind === 'slack-setup'
@@ -126,11 +124,13 @@ function ConnectorsPage(
   const linearPages = page.kind === 'linear' || page.kind === 'linear-setup'
   const linear = usePhoneLinearAccount(
     props.client,
+    hostKey,
     botLinearWorkspaces(bot).length > 0 || linearPages,
     reads
   )
   const github = usePhoneGitHubAccount(
     props.client,
+    hostKey,
     bot.github !== null ||
       page.kind === 'github' ||
       page.kind === 'github-setup' ||
@@ -139,13 +139,14 @@ function ConnectorsPage(
   )
   const google = usePhoneGoogleStatus(
     props.client,
+    hostKey,
     bot.google === true || page.kind === 'google' || page.kind === 'google-connect',
     reads
   )
-  const composio = useMobileComposio(props.client, props.routeBot.hostKey, bot.id)
+  const composio = useMobileComposio(props.client, hostKey, bot.id)
   // Only the apps' URL servers are checked, as the desktop's Connectors does.
-  const tools = useBotToolsPage(props.client, bot.id, 'apps', reads)
-  const hostBots = useHostBotsEntry(props.routeBot.hostKey)?.bots ?? []
+  const tools = useBotToolsPage(props.client, bot.id, 'apps', reads, hostKey)
+  const hostBots = useHostBotsEntry(hostKey)?.bots ?? []
   const githubState = github.view.status === 'ready' ? github.view.value : null
   const githubInstallUrl = githubState?.installUrl ?? null
 
@@ -155,13 +156,11 @@ function ConnectorsPage(
         client={props.client}
         botId={bot.id}
         botName={bot.name}
-        avatar={mobileBotAvatarSource(bot)}
         teamId={page.teamId}
         inSlack={slackApps.length > 0}
-        // The workspace a later bot reuses: one another bot on this host is in.
-        knownTeam={
-          hostBots.find((other) => other.id !== bot.id && other.slack)?.slack?.teamId ?? null
-        }
+        // The workspaces a later bot reuses: those other bots on this host are in.
+        knownTeams={otherSlackTeams(hostBots, bot)}
+        hostBots={hostBots}
         slack={slack}
         hostName={props.hostName}
         online={props.online}
@@ -214,7 +213,7 @@ function ConnectorsPage(
         client={props.client}
         bot={bot}
         accessBot={props.accessBot}
-        hostKey={props.routeBot.hostKey}
+        hostKey={hostKey}
         hostBots={hostBots}
         access={props.accessRequests}
         hostName={props.hostName}
@@ -258,46 +257,27 @@ function ConnectorsPage(
     composio,
     tools: tools.tools ? { own: tools.tools.own, problems: tools.problems } : null,
     webhooksRow: props.webhooksRow,
-    rereadComposio: () => rereadMobileComposio(props.routeBot.hostKey, bot.id),
+    rereadComposio: () => rereadMobileComposio(hostKey, bot.id),
     hostName: props.hostName,
     online: props.online,
     setPage,
     save: props.online ? props.save : null,
     t
   })
-  const openAdd = () => setPage({ kind: 'add' })
   return (
     <>
       <SheetHeader
         title={t('settings.bots.connectors', 'Connectors')}
         onBack={{ label: t('bots.lookAround.back', 'Back to Settings'), onPress: props.onBack }}
-        trailingButtons={
-          <NavBarButton
-            icon={Plus}
-            accessibilityLabel={t('settings.bots.addConnector', 'Add a connector')}
-            onPress={openAdd}
-          />
-        }
       />
       {props.banner}
-      {rows.length > 0 ? (
-        <SettingsSection first separatorInset={LIST_LEADING_INSET}>
-          {rows}
-        </SettingsSection>
-      ) : (
-        <SettingsNote>
-          {t(
-            'bots.connectors.emptyNote',
-            'Let people reach {{name}} in Slack, GitHub and Linear, and let it work in your Google and other apps.',
-            { name: bot.name }
-          )}
-        </SettingsNote>
-      )}
-      <SettingsSection separatorInset={LIST_LEADING_INSET}>
+      <SettingsSection first separatorInset={LIST_LEADING_INSET}>
+        {rows}
         <ListRow
-          leading={<Plus size={ICON} color={colors.textPrimary} />}
+          key="add"
+          leading={<Plus size={18} color={colors.textMuted} />}
           title={t('settings.bots.addConnector', 'Add a connector')}
-          onPress={openAdd}
+          onPress={() => setPage({ kind: 'add' })}
         />
       </SettingsSection>
     </>

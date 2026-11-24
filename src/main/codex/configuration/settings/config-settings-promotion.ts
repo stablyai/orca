@@ -1,14 +1,13 @@
-import { mkdirSync, writeFileSync } from 'node:fs'
+import { mkdirSync } from 'node:fs'
 import { dirname, join, resolve } from 'node:path'
 import { observeAgentStateFile } from '../codex-path-observation'
 import { resolvePromotionWriteTarget } from './config-settings-promotion-write-target'
-import { observeFilePublication } from '../../../filesystem/file-content-observation'
-import {
-  assertGuardedFileCurrent,
-  ConcurrentFileEditError
-} from '../../../filesystem/concurrent-file-edit-guard'
+import { ConcurrentFileEditError } from '../../../filesystem/concurrent-file-edit-guard'
 import { writeTomlConfigAtomically } from '../toml/config-toml-atomic-write'
-import { parseWslUncPath } from '../../../../shared/file-access/wsl-paths'
+import {
+  isWslSharePath,
+  resolvesIntoWslShare
+} from '../../../wsl/filesystem/wsl-share-path-resolution'
 import { getOrcaManagedCodexHomePath, getSystemCodexHomePath } from '../homes/codex-home-paths'
 import { upsertPromotedSettingsInContent } from './codex-config-settings-upsert'
 import {
@@ -142,6 +141,10 @@ function promoteCodexRuntimeSettingsToSystemUnsafe(
     // Throw to stall the mirror rather than overwrite unreadable runtime changes.
     throw runtimeTomlObservation.error
   }
+  // A drvfs source (a distro home under /mnt/c) is the distro's own config too.
+  if (homes.systemConfigDir !== undefined || isWslSharePath(systemTomlPath)) {
+    return regenerateFromGuestPlan(observeCodexSettingsBaseline(runtimeHomePath))
+  }
   // Scalars need a baseline to distinguish stale copies from new Codex edits.
   const baselineObservation = observeCodexSettingsBaseline(runtimeHomePath)
   if (baselineObservation.kind === 'indeterminate') {
@@ -165,12 +168,21 @@ function promoteCodexRuntimeSettingsToSystemUnsafe(
     })
   }
   // Registrations can promote before the first mirror because untracked tables are additions.
-  if (updates.size === 0 && !hasCodexRegistrationEntries(runtimeTomlObservation.value)) {
+  const nothingToWrite =
+    updates.size === 0 && !hasCodexRegistrationEntries(runtimeTomlObservation.value)
+  if (nothingToWrite && conflicts.size === 0 && runtimeValuesToPreserve.size === 0) {
+    return { conflicts, runtimeValuesToPreserve, mirroredMcpServers, mirroredMcpServerRoot }
+  }
+  const writeTarget = resolvePromotionWriteTarget(systemTomlPath)
+  // A host ~/.codex can link into a distro; its config is never written and nothing is kept back.
+  if (resolvesIntoWslShare(writeTarget.path)) {
+    return regenerateFromGuestPlan(baselineObservation)
+  }
+  if (nothingToWrite) {
     return { conflicts, runtimeValuesToPreserve, mirroredMcpServers, mirroredMcpServerRoot }
   }
   // A new home may later hold auth.json, so create it owner-only.
   mkdirSync(systemHomePath, { recursive: true, mode: 0o700 })
-  const writeTarget = resolvePromotionWriteTarget(systemTomlPath)
   // Dangling dotfile links may target a parent directory that does not exist yet.
   mkdirSync(dirname(writeTarget.path), { recursive: true, mode: 0o700 })
   // Read the target before reconstructing it; registration promotion can run without a baseline.
@@ -198,22 +210,13 @@ function promoteCodexRuntimeSettingsToSystemUnsafe(
     return { conflicts, runtimeValuesToPreserve, mirroredMcpServers, mirroredMcpServerRoot }
   }
   const computedFrom = targetExists ? writeTargetObservation.value : null
-  if (targetExists && parseWslUncPath(writeTarget.path)) {
-    // WSL 9P symlink metadata is unreliable; write through to preserve the guest inode.
-    assertGuardedFileCurrent(writeTarget.path)
-    const current = observeAgentStateFile(writeTarget.path)
-    if (current.kind === 'indeterminate') {
-      throw current.error
-    }
-    if (current.kind !== 'present' || current.value !== computedFrom) {
-      return null
-    }
-    writeFileSync(writeTarget.path, nextContent, 'utf-8')
-    observeFilePublication(writeTarget.path, nextContent)
-    return { conflicts, runtimeValuesToPreserve, mirroredMcpServers, mirroredMcpServerRoot }
-  }
   // Promotion never rotated the user's config.toml.bak; keep it that way.
-  if (!writeTomlConfigAtomically(writeTarget.path, nextContent, computedFrom, { backup: false })) {
+  if (
+    !writeTomlConfigAtomically(writeTarget.path, nextContent, computedFrom, {
+      backup: false,
+      refuseWslTarget: true
+    })
+  ) {
     return null
   }
   return { conflicts, runtimeValuesToPreserve, mirroredMcpServers, mirroredMcpServerRoot }
@@ -265,6 +268,24 @@ function getComparableRaw(value: TopLevelSettingValue | undefined): string | nul
     return null
   }
   return value.multiline ? undefined : value.raw
+}
+
+/**
+ * Orca never writes a WSL distro's own config, so nothing in the managed copy is kept back:
+ * the mirror regenerates it from the distro file plus the lines the managed home owns.
+ */
+function regenerateFromGuestPlan(
+  baselineObservation: ReturnType<typeof observeCodexSettingsBaseline>
+): CodexSettingsPromotionPlan {
+  if (baselineObservation.kind === 'indeterminate') {
+    throw new Error('Codex settings baseline could not be read')
+  }
+  const baseline = baselineObservation.kind === 'present' ? baselineObservation.baseline : null
+  return {
+    ...emptyPromotionPlan(),
+    mirroredMcpServers: baseline?.mcpServers ?? new Set(),
+    mirroredMcpServerRoot: baseline?.mcpServerRoot ?? false
+  }
 }
 
 function emptyPromotionPlan(): CodexSettingsPromotionPlan {

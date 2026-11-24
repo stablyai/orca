@@ -14,8 +14,8 @@ import type { ConnectorReplyJournal } from '../connector-cloud/connector-reply-o
 import { capAnswer } from '../connector-cloud/connector-snapshot'
 import type { AgentSessionJournalReads } from '../native-chat/agent-session-journal/journal-reads'
 import { isQuietBotResult } from '../../shared/bot-quiet-result'
-import { agentJournalSubmissionKey } from '../../shared/agent-session/journal/agent-session-journal-item-key'
 import { isSlackDirectMessage } from '../../shared/connectors/slack-direct-message'
+import { agentJournalSubmissionKey } from '../../shared/agent-session/journal/agent-session-journal-item-key'
 
 export type EndedTurnReplies = {
   sessionId: string
@@ -44,8 +44,7 @@ export type FilledTurn = {
 }
 
 /** Whether the bot's owner sent the message that admitted a row (its journal body's asker): the
- *  owner proof of a row a continuation claimed, whose own stamps carry none, across a pause or a
- *  restart alike. */
+ *  owner proof of an older build's row a continuation claimed, whose own stamps carry none. */
 export type AskedByOwner = (sessionId: string, messageId: string) => Promise<boolean>
 
 /** AskedByOwner over a chat's journal: the asker of the send that admitted the row, or, for a
@@ -133,32 +132,31 @@ export function conversationReplyFill(
     if (paused) {
       return { covered, paused: true, ...paused }
     }
-    // The owner's DM rows the stamps don't mark (a continuation's claim names no asker): their
-    // admitting message says who sent them. Read only when the marker could silence them.
+    // One answer per conversation, under the rule its turn began with: its head's (its earliest row
+    // still kept, filled or not). A row an older build admitted silences the whole reply, except to
+    // its owner in their own DM.
     const markerMayQuiet = turn.bot && turn.outcome === 'success' && isQuietBotResult(turn.prose)
-    for (const row of markerMayQuiet ? own : []) {
-      const key = keyOf(row.account, row.deliveryId)
-      if (
-        isSlackDirectMessage(row.conversation) &&
-        !ownerAsked.has(key) &&
-        (await askedByOwner?.(turn.sessionId, row.messageId).catch(() => false))
-      ) {
-        ownerAsked.add(key)
+    const filling = new Set(own.map((row) => JSON.stringify([row.account, row.conversation])))
+    const silencedWhole = new Map<string, boolean>()
+    for (const row of markerMayQuiet ? rows : []) {
+      const conversation = JSON.stringify([row.account, row.conversation])
+      if (!filling.has(conversation) || silencedWhole.has(conversation)) {
+        continue
       }
+      const ownerDm =
+        row.quietRule === undefined &&
+        isSlackDirectMessage(row.conversation) &&
+        (ownerAsked.has(keyOf(row.account, row.deliveryId)) ||
+          (await askedByOwner?.(turn.sessionId, row.messageId).catch(() => false)) === true)
+      silencedWhole.set(conversation, row.quietRule === undefined && !ownerDm)
     }
     const fills: JournalConnectorReplyFill[] = []
     for (const row of own) {
-      // Decided per request: the marker can't silence an answer to its owner's own DM (recovery
-      // fills here too); a member's DM, or a thread, keeps today's silence.
-      const { outcome, prose } = connectorReplyTurnOutcome({
-        outcome: turn.outcome,
-        prose: turn.prose,
-        bot: turn.bot,
-        addressed:
-          isSlackDirectMessage(row.conversation) &&
-          ownerAsked.has(keyOf(row.account, row.deliveryId))
-      })
       const conversation = JSON.stringify([row.account, row.conversation])
+      const { outcome, prose } = connectorReplyTurnOutcome({
+        ...turn,
+        silencedWhole: silencedWhole.get(conversation) === true
+      })
       const answerDeliveryId = answers.get(conversation) ?? row.deliveryId
       fills.push({
         account: row.account,

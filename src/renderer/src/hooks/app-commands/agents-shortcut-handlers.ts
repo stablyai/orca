@@ -40,8 +40,10 @@ export function agentsScopeShortcutOwnsChord(
 export function agentsShortcutHandlers(args: {
   canRevealRightSidebar: boolean
   claim: (actionId: KeybindingActionId, run: () => void) => boolean
-  showAiVaultSearch: () => void
-  closeRightSidebar: () => void
+  actions: {
+    showAiVaultSearchKeepingScope: () => void
+    setRightSidebarOpen: (open: boolean) => void
+  }
 }): [KeybindingActionId, () => boolean][] {
   const scopeStep = (actionId: KeybindingActionId, step: 1 | -1) => (): boolean =>
     args.canRevealRightSidebar && agentsPanelHasFocus()
@@ -57,10 +59,10 @@ export function agentsShortcutHandlers(args: {
           ? args.claim('sidebar.agents.toggle', () => {
               // Why: an open Agents tab that lost focus to a tab is made active again; only a focused one closes.
               if (agentsPanelHasFocus()) {
-                args.closeRightSidebar()
+                args.actions.setRightSidebarOpen(false)
                 focusActiveTabSurface()
               } else {
-                args.showAiVaultSearch()
+                args.actions.showAiVaultSearchKeepingScope()
               }
             })
           : false
