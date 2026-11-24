@@ -1,5 +1,5 @@
 export const MIN_TERMINAL_ACCESSORY_ROWS = 1
-export const MAX_TERMINAL_ACCESSORY_ROWS = 4
+export const MAX_TERMINAL_ACCESSORY_ROWS = 6
 export const ROW_DIVIDER_ID_PREFIX = '__row_divider_'
 
 export type TerminalAccessoryLayout = {
@@ -18,7 +18,7 @@ export type TerminalAccessoryLayoutPreference = TerminalAccessoryLayout & {
   rows: string[][]
 }
 
-/** Clamps a candidate accessory row count to the supported 1–4 range. */
+/** Clamps a candidate accessory row count to the supported 1–6 range. */
 export function clampTerminalAccessoryRowCount(value: unknown): number {
   if (typeof value !== 'number' || !Number.isFinite(value)) {
     return MIN_TERMINAL_ACCESSORY_ROWS

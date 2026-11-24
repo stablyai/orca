@@ -1177,7 +1177,7 @@
       "showDirectionPadDescription": "Épingler le pavé de flèches dans la barre latérale. Sinon, la barre affiche les touches fléchées.",
       "showShortcut": "Afficher le raccourci {{label}}",
       "shortcutRows": "Rangées de raccourcis",
-      "shortcutRowsDescription": "Empiler les touches intégrées sur 1 à 4 rangées dans la barre du terminal",
+      "shortcutRowsDescription": "Empiler les touches intégrées sur 1 à 6 rangées dans la barre du terminal",
       "decreaseRows": "Réduire le nombre de rangées de raccourcis",
       "increaseRows": "Augmenter le nombre de rangées de raccourcis",
       "rowHeader": "Rangée {{row}}"

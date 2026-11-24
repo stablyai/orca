@@ -1177,7 +1177,7 @@
       "showDirectionPadDescription": "Fija la cruceta en la barra lateral. Si está desactivada, la barra muestra las teclas de flecha.",
       "showShortcut": "Mostrar atajo {{label}}",
       "shortcutRows": "Filas de atajos",
-      "shortcutRowsDescription": "Apila teclas integradas en 1 a 4 filas en la barra de la terminal",
+      "shortcutRowsDescription": "Apila teclas integradas en 1 a 6 filas en la barra de la terminal",
       "decreaseRows": "Reducir filas de atajos",
       "increaseRows": "Aumentar filas de atajos",
       "rowHeader": "Fila {{row}}"

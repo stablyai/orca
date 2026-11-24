@@ -1131,7 +1131,7 @@
       "showDirectionPadDescription": "화살표 패드를 사이드 레일에 고정합니다. 끄면 레일에 개별 화살표 키가 표시됩니다.",
       "showShortcut": "{{label}} 단축키 표시",
       "shortcutRows": "단축키 행 수",
-      "shortcutRowsDescription": "터미널 막대에 기본 키를 1~4개 행으로 쌓아 표시합니다",
+      "shortcutRowsDescription": "터미널 막대에 기본 키를 1~6개 행으로 쌓아 표시합니다",
       "decreaseRows": "단축키 행 줄이기",
       "increaseRows": "단축키 행 늘리기",
       "rowHeader": "{{row}}행"

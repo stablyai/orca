@@ -85,7 +85,7 @@ describe('terminal-accessory-layout multi-row preferences', () => {
     })
   })
 
-  it('clamps rowCount between 1 and 4 and merges trailing rows when shrinking', () => {
+  it('clamps rowCount between 1 and 6 and merges trailing rows when shrinking', () => {
     const base: TerminalAccessoryLayout = {
       rowCount: 1,
       rows: [['escape', 'tab', 'ctrlC', 'arrowUp']],
@@ -94,13 +94,13 @@ describe('terminal-accessory-layout multi-row preferences', () => {
     }
     const fourIds = ['escape', 'tab', 'ctrlC', 'arrowUp']
 
-    const grown = setTerminalAccessoryRowCount(base, 6, fourIds)
-    expect(grown.rowCount).toBe(4)
-    expect(grown.rows).toEqual([['escape', 'tab', 'ctrlC', 'arrowUp'], [], [], []])
+    const grown = setTerminalAccessoryRowCount(base, 8, fourIds)
+    expect(grown.rowCount).toBe(6)
+    expect(grown.rows).toEqual([['escape', 'tab', 'ctrlC', 'arrowUp'], [], [], [], [], []])
 
     const populated: TerminalAccessoryLayout = {
       ...grown,
-      rows: [['escape'], ['tab'], ['ctrlC'], ['arrowUp']]
+      rows: [['escape'], ['tab'], ['ctrlC'], ['arrowUp'], [], []]
     }
     const shrunk = setTerminalAccessoryRowCount(populated, 2, fourIds)
     expect(shrunk.rowCount).toBe(2)

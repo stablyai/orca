@@ -1137,7 +1137,7 @@
       "showDirectionPadDescription": "Das Steuerkreuz in der Seitenleiste anheften. Andernfalls werden dort die einzelnen Pfeiltasten angezeigt.",
       "showShortcut": "Tastenkürzel {{label}} anzeigen",
       "shortcutRows": "Kurzbefehlzeilen",
-      "shortcutRowsDescription": "Integrierte Tasten in 1 bis 4 Zeilen über der Terminalleiste anordnen",
+      "shortcutRowsDescription": "Integrierte Tasten in 1 bis 6 Zeilen über der Terminalleiste anordnen",
       "decreaseRows": "Kurzbefehlzeilen verringern",
       "increaseRows": "Kurzbefehlzeilen erhöhen",
       "rowHeader": "Zeile {{row}}"

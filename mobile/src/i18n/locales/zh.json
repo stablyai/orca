@@ -1656,7 +1656,7 @@
       "showDirectionPadDescription": "将方向键盘固定在侧边栏。关闭后，侧边栏会列出各个方向键。",
       "showShortcut": "显示 {{label}} 快捷键",
       "shortcutRows": "快捷键行数",
-      "shortcutRowsDescription": "在终端工具栏上将内置按键堆叠为 1 至 4 行",
+      "shortcutRowsDescription": "在终端工具栏上将内置按键堆叠为 1 至 6 行",
       "decreaseRows": "减少快捷键行数",
       "increaseRows": "增加快捷键行数",
       "rowHeader": "第 {{row}} 行"

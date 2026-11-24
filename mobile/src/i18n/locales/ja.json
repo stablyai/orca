@@ -1131,7 +1131,7 @@
       "showDirectionPadDescription": "矢印パッドをサイドレールに固定します。オフの場合、レールに各矢印キーが表示されます。",
       "showShortcut": "{{label}} ショートカットを表示",
       "shortcutRows": "ショートカット行数",
-      "shortcutRowsDescription": "ターミナルバーに組み込みキーを1〜4行で重ねて表示",
+      "shortcutRowsDescription": "ターミナルバーに組み込みキーを1〜6行で重ねて表示",
       "decreaseRows": "ショートカット行を減らす",
       "increaseRows": "ショートカット行を増やす",
       "rowHeader": "{{row}}行目"

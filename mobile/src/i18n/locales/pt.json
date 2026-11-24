@@ -1258,7 +1258,7 @@
       "showDirectionPadDescription": "Fixe o direcional de setas na barra lateral. Sem ele, a barra lista as teclas de seta.",
       "showShortcut": "Mostrar atalho {{label}}",
       "shortcutRows": "Linhas de atalhos",
-      "shortcutRowsDescription": "Empilha teclas integradas em 1 a 4 linhas na barra do terminal",
+      "shortcutRowsDescription": "Empilha teclas integradas em 1 a 6 linhas na barra do terminal",
       "decreaseRows": "Diminuir linhas de atalhos",
       "increaseRows": "Aumentar linhas de atalhos",
       "rowHeader": "Linha {{row}}"

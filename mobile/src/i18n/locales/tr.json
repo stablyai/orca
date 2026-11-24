@@ -1137,7 +1137,7 @@
       "showDirectionPadDescription": "Ok takımını yan çubuğa sabitleyin. Kapalıyken çubukta ayrı ok tuşları listelenir.",
       "showShortcut": "{{label}} kısayolunu göster",
       "shortcutRows": "Kısayol Satırları",
-      "shortcutRowsDescription": "Yerleşik tuşları terminal çubuğunda 1 ila 4 satır halinde yerleştir",
+      "shortcutRowsDescription": "Yerleşik tuşları terminal çubuğunda 1 ila 6 satır halinde yerleştir",
       "decreaseRows": "Kısayol satırlarını azalt",
       "increaseRows": "Kısayol satırlarını artır",
       "rowHeader": "{{row}}. Satır"

@@ -1540,7 +1540,7 @@
       "showDirectionPadDescription": "Pin the arrow pad in the side rail. Without it, the rail lists the arrow keys.",
       "showShortcut": "Show {{label}} shortcut",
       "shortcutRows": "Shortcut Rows",
-      "shortcutRowsDescription": "Stack built-in keys across 1 to 4 rows on the terminal bar",
+      "shortcutRowsDescription": "Stack built-in keys across 1 to 6 rows on the terminal bar",
       "decreaseRows": "Decrease shortcut rows",
       "increaseRows": "Increase shortcut rows",
       "rowHeader": "Row {{row}}"

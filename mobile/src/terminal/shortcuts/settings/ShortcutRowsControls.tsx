@@ -54,7 +54,7 @@ export function ShortcutRowHeader({ label }: { label: string }): React.JSX.Eleme
   )
 }
 
-/** Non-draggable row divider rendered inside DragReorderList to separate shortcut rows 2–4. */
+/** Non-draggable row divider rendered inside DragReorderList to separate shortcut rows 2–6. */
 export function ShortcutRowDivider({ label }: { label: string }): React.JSX.Element {
   useMobileColorScheme()
   return (
@@ -64,7 +64,7 @@ export function ShortcutRowDivider({ label }: { label: string }): React.JSX.Elem
   )
 }
 
-/** Stepper row in Terminal Shortcut Settings for selecting 1–4 stacked key bar rows. */
+/** Stepper row in Terminal Shortcut Settings for selecting 1–6 stacked key bar rows. */
 export function ShortcutRowsSettingRow({
   rowCount,
   onChangeRowCount
@@ -82,7 +82,7 @@ export function ShortcutRowsSettingRow({
       title={t('components.terminalShortcutSettings.shortcutRows', 'Shortcut Rows')}
       subtitle={t(
         'components.terminalShortcutSettings.shortcutRowsDescription',
-        'Stack built-in keys across 1 to 4 rows on the terminal bar'
+        'Stack built-in keys across 1 to 6 rows on the terminal bar'
       )}
       accessory={
         <View style={styles.stepper}>
