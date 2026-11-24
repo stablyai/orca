@@ -242,17 +242,23 @@ export async function startGitCommonPolling(
     if (disposed) {
       return
     }
-    if (poked) {
-      const deferred = deferredTimedTick
-      deferredTimedTick = null
-      if (deferred && !timer) {
-        void tick(deferred.forceFullScan)
-      }
-      return
-    }
     const deferred = deferredTimedTick
     deferredTimedTick = null
-    if (deferred?.forceFullScan) {
+    if (poked) {
+      if (!deferred || timer) {
+        return
+      }
+      // A gated timed tick that landed mid-poke is covered by it; forced and full-sweep ticks still run.
+      const fullSweepDue =
+        deferred.forceFullScan ||
+        (isReconciliation && !entryDirGateTrusted) ||
+        (tickCount + 1) % (reconciliationFullScanEveryTicks ?? INDEX_BACKSTOP_TICKS) === 0
+      if (fullSweepDue) {
+        void tick(deferred.forceFullScan)
+        return
+      }
+      tickCount++
+    } else if (deferred?.forceFullScan) {
       void tick(true)
       return
     }

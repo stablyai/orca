@@ -3,6 +3,7 @@ import { basename, dirname, join } from 'node:path'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import type { WorktreeBasePollEvent } from '../creation/worktree-base-directory-poller'
 import { createGitCommonWatchReconciliation } from './worktree-git-common-watch-reconciliation'
+import { startGitCommonPolling } from './worktree-git-common-polling'
 
 // Perf contract (#48030): the watcher backstop stat'ed every worktree's git metadata every 30 s while the window was
 // visible (~200 stats/s at 1,900 worktrees) even though the native watcher already reports changes.
@@ -14,13 +15,15 @@ type FsState = {
   clock: number
   ino: number
   stall: Promise<void> | null
+  latencyMs: number
 }
 const fs = vi.hoisted((): FsState => ({
   nodes: new Map(),
   stats: 0,
   clock: 1,
   ino: 1,
-  stall: null
+  stall: null,
+  latencyMs: 0
 }))
 
 vi.mock('node:fs/promises', async (importOriginal) => {
@@ -29,6 +32,9 @@ vi.mock('node:fs/promises', async (importOriginal) => {
     Object.assign(new Error(`ENOENT: ${path}`), { code: 'ENOENT' })
   const stat = async (path: string) => {
     await fs.stall
+    if (fs.latencyMs > 0) {
+      await new Promise((resolve) => setTimeout(resolve, fs.latencyMs))
+    }
     fs.stats += 1
     const node = fs.nodes.get(String(path))
     if (!node) {
@@ -145,6 +151,7 @@ beforeEach(() => {
   fs.nodes.clear()
   fs.stats = 0
   fs.stall = null
+  fs.latencyMs = 0
   events = []
   visible = true
   put(join('/', 'repo'), true)
@@ -350,4 +357,28 @@ it('holds activity during a stalled scan without spinning timers', async () => {
   await vi.advanceTimersByTimeAsync(0)
   expect(events).toContainEqual({ type: 'create', path: added })
   await stop()
+})
+
+it('keeps the 30 s network-volume cadence at its old cost under constant activity', async () => {
+  const polling = await startGitCommonPolling(
+    COMMON,
+    (next) => events.push(...next),
+    30_000,
+    { isWindowVisible: () => true, onWindowBecameVisible: () => () => {} },
+    undefined,
+    false,
+    () => [],
+    { reconciliationFullScanEveryTicks: 10, minOnDemandScanIntervalMs: 30_000 }
+  )
+  // Real scans take time, so the timer can land while an activity check is still running.
+  fs.latencyMs = 1
+  fs.stats = 0
+  for (let second = 0; second < 600; second += 1) {
+    await vi.advanceTimersByTimeAsync(500)
+    polling.poke()
+    await vi.advanceTimersByTimeAsync(500)
+  }
+  // The old cadence alone spent 129,220 stats here; activity checks must merge into it, not add scans.
+  expect(fs.stats).toBeLessThanOrEqual(129_220)
+  await polling.unsubscribe()
 })

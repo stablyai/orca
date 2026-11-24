@@ -29,6 +29,11 @@ export function createOnDemandScanGate(
         })
   return {
     scanStarted: (timedOrForced) => {
+      // This scan covers any activity that armed a retry before it started.
+      if (retry) {
+        clearTimeout(retry)
+        retry = null
+      }
       hiddenAt = null
       lastScanStartedAt = performance.now()
       if (timedOrForced) {
