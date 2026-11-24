@@ -7,7 +7,7 @@ import { botFailure } from '../../../../../shared/bots/bot-failure-copy'
 import { useGoogleAccountChoice } from './GoogleAccountsChoice'
 
 // The bot as its host has it: another window took b@x.com off after this picker opened.
-const host = vi.hoisted(() => ({ googleAccounts: ['a@x.com'] as string[] }))
+const host = vi.hoisted((): { googleAccounts: string[] } => ({ googleAccounts: ['a@x.com'] }))
 const toastError = vi.hoisted(() => vi.fn())
 const sameSet = (a: readonly string[], b: readonly string[]) =>
   a.length === b.length && a.every((entry) => b.includes(entry))
@@ -15,7 +15,11 @@ const sameSet = (a: readonly string[], b: readonly string[]) =>
 vi.mock('sonner', () => ({ toast: { error: toastError } }))
 vi.mock('@/lib/bot-host-refresh', () => ({ refreshBotHost: async () => {} }))
 vi.mock('@/runtime/rpc/calls/runtime-rpc-call', () => ({
-  callRuntimeRpc: async (_target: unknown, method: string, params: Record<string, unknown>) => {
+  callRuntimeRpc: async (
+    _target: unknown,
+    method: string,
+    params: { basedOn?: { accounts?: string[] }; accounts?: string[] }
+  ) => {
     if (method === 'google.status') {
       const account = (email: string) => ({
         email,
@@ -31,20 +35,19 @@ vi.mock('@/runtime/rpc/calls/runtime-rpc-call', () => ({
       }
     }
     // google.bot.set, checked the way the host checks basedOn.
-    const basedOn = params.basedOn as { accounts: string[] }
-    if (!sameSet(basedOn.accounts, host.googleAccounts)) {
+    if (!sameSet(params.basedOn?.accounts ?? [], host.googleAccounts)) {
       throw new RuntimeRpcCallError({
         id: '1',
-        ok: false,
+        ok: false as const,
         error: {
           code: 'invalid_argument',
           message: 'changed',
           data: { botFailure: botFailure('googleAccountsChanged') }
         },
         _meta: { runtimeId: 'r' }
-      } as never)
+      })
     }
-    host.googleAccounts = params.accounts as string[]
+    host.googleAccounts = params.accounts ?? []
     return {}
   }
 }))
