@@ -22,6 +22,7 @@ import { keybindingMatchesAction } from '../../../../../../shared/keybindings/ma
 import { translate } from '@/i18n/i18n'
 import { isEditableTarget } from '@/lib/text-input/focus/editable-target'
 import { addAppKeyListener, removeAppKeyListener } from '@/lib/keyboard/app-keyboard-router'
+import { tryHandleFileExplorerDotfilesShortcut } from './file-explorer-dotfiles-shortcut'
 
 export function shouldIgnoreFileExplorerKeyTarget(target: EventTarget | null): boolean {
   return (
@@ -148,13 +149,24 @@ export function useFileExplorerKeys(opts: {
       if (inlineInputRef.current) {
         return
       }
+      const platform = getShortcutPlatform()
+      if (
+        tryHandleFileExplorerDotfilesShortcut({
+          event: e,
+          platform,
+          keybindings,
+          activeWorktreeId: activeWorktreeIdRef.current,
+          containerRef: opts.containerRef
+        })
+      ) {
+        return
+      }
       if (shouldIgnoreFileExplorerKeyTarget(e.target)) {
         return
       }
 
       // Undo owns the whole shell, including Radix’s scrollbar sibling outside the viewport.
       const inExplorer = focusInExplorer()
-      const platform = getShortcutPlatform()
       const wantUndo =
         keybindingMatchesAction('fileExplorer.undo', e, platform, keybindings) &&
         fileExplorerHasUndo()

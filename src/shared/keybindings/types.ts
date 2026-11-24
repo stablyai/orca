@@ -111,6 +111,7 @@ export type KeybindingActionId =
   | 'fileExplorer.copyPath'
   | 'fileExplorer.copyRelativePath'
   | 'fileExplorer.delete'
+  | 'fileExplorer.toggleDotfiles'
   | 'settings.search'
   | 'terminal.copySelection'
   | 'terminal.selectAll'
