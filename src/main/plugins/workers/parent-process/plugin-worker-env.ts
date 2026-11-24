@@ -90,16 +90,19 @@ export function buildPluginWorkerEnv(
   let inheritedProxyUrl = false
   let inheritedBypassRules = false
   for (const [key, value] of Object.entries(baseEnv)) {
-    if (typeof value !== 'string' || !isProxyKey(key)) {
+    if (typeof value !== 'string' || !isProxyKey(key) || value.trim() === '') {
+      continue
+    }
+    if (!isProxyUrlKey(key)) {
+      // A bypass list is a list of hosts, not a URL: `localhost:8080` would parse as a login if it
+      // went through the URL check, so it is copied verbatim.
+      inheritedBypassRules = true
+      env[key] = value
       continue
     }
     // An inherited proxy, even one held back for its login, still owns the route: the worker must
     // not end up on the Settings proxy instead, which is a different host the user did not pick here.
-    if (isProxyUrlKey(key)) {
-      inheritedProxyUrl = true
-    } else {
-      inheritedBypassRules = true
-    }
+    inheritedProxyUrl = true
     if (!hasProxyUserinfo(value)) {
       env[key] = value
     }
@@ -124,6 +127,16 @@ export function buildPluginWorkerEnv(
         // Node's fetch and http only read the proxy variables when this is on, and a proxy that
         // exists only in Settings has no way to have set it.
         env.NODE_USE_ENV_PROXY = '1'
+      }
+      if (settingsProxyEnv.HTTPS_PROXY) {
+        try {
+          if (new URL(settingsProxyEnv.HTTPS_PROXY).protocol === 'socks5:') {
+            // Node has no SOCKS support; undici reads a SOCKS route only from this undici-only name.
+            env.UNDICI_HTTPS_PROXY = settingsProxyEnv.HTTPS_PROXY
+          }
+        } catch {
+          // A value that will not parse as a URL is not a route Node can use either.
+        }
       }
     }
   }

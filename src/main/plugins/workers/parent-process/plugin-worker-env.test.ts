@@ -201,4 +201,39 @@ describe('buildPluginWorkerEnv', () => {
     const env = buildPluginWorkerEnv({ ...sessionEnv, NODE_USE_ENV_PROXY: undefined }, 'linux')
     expect(env.NODE_USE_ENV_PROXY).toBe('1')
   })
+
+  it('treats an empty inherited proxy as absent, not as a route', () => {
+    setNetworkProxySettingsSource(() => ({
+      httpProxyUrl: 'http://settings-proxy.example:8080',
+      httpProxyBypassRules: ''
+    }))
+    const env = buildPluginWorkerEnv({ ...sessionEnv, HTTPS_PROXY: '   ' }, 'linux')
+    expect(env.HTTPS_PROXY).toBe('http://settings-proxy.example:8080')
+  })
+
+  it('keeps a bypass list whose entries carry ports', () => {
+    const env = buildPluginWorkerEnv(
+      { ...sessionEnv, NO_PROXY: 'localhost:8080,.internal:443' },
+      'linux'
+    )
+    expect(env.NO_PROXY).toBe('localhost:8080,.internal:443')
+  })
+
+  it('gives a Settings SOCKS proxy the undici name that Node reads', () => {
+    setNetworkProxySettingsSource(() => ({
+      httpProxyUrl: 'socks5://proxy.example:1080',
+      httpProxyBypassRules: ''
+    }))
+    const env = buildPluginWorkerEnv(sessionEnv, 'linux')
+    expect(env.UNDICI_HTTPS_PROXY).toBe('socks5://proxy.example:1080')
+  })
+
+  it('does not add an undici name for an HTTP proxy', () => {
+    setNetworkProxySettingsSource(() => ({
+      httpProxyUrl: 'http://settings-proxy.example:8080',
+      httpProxyBypassRules: ''
+    }))
+    const env = buildPluginWorkerEnv(sessionEnv, 'linux')
+    expect(env).not.toHaveProperty('UNDICI_HTTPS_PROXY')
+  })
 })
