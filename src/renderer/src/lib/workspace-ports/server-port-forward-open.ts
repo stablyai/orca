@@ -29,7 +29,9 @@ export function portSystemBrowserOpener(
   return serverForwardsPorts(target.environmentId) &&
     isLoopbackBrowserUrl(url) &&
     (worktreeId === null || workspaceRunsOnServer(target.environmentId, worktreeId))
-    ? () => openServerLoopbackInSystemBrowser(url, target.environmentId, worktreeId)
+    ? async () => {
+        await openServerLoopbackInSystemBrowser(url, target.environmentId, worktreeId)
+      }
     : null
 }
 

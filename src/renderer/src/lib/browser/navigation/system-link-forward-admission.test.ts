@@ -34,9 +34,9 @@ async function openInSystemBrowser(
       outcomes.push(outcome)
     }
   })
-  for (let i = 0; i < 5; i += 1) {
-    await flush()
-  }
+  await vi.waitFor(() => expect(outcomes.length).toBeGreaterThan(0))
+  // Settles once: a later answer for the same open must not add a second outcome.
+  await flush()
   return outcomes
 }
 
