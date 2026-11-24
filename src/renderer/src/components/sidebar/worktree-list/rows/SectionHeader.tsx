@@ -312,7 +312,8 @@ export function renderWorktreeSectionHeaderRow(
           >
             <div
               className={cn(
-                'flex size-4 shrink-0 items-center justify-center rounded-[4px]',
+                'flex shrink-0 items-center justify-center rounded-[4px]',
+                row.repo ? 'size-[18px]' : 'size-4',
                 repoHeaderColor ? 'text-muted-foreground' : headerVisual.tone
               )}
             >
