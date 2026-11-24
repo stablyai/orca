@@ -19,7 +19,7 @@ export function botWorkerLineStatus(worker: BotChatTreeWorker): WorktreeStatus |
       return 'done'
     case 'failed':
       return 'failed'
-    default:
+    case 'unreachable':
       return null
   }
 }
