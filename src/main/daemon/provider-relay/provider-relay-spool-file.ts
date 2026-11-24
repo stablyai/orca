@@ -85,42 +85,49 @@ export class SpoolFile {
     this.pendingBytes += WAITING_WRITE_OVERHEAD_BYTES
     this.io = this.io
       .then(async () => {
-        this.waiting.delete(write)
-        if (this.queued === write) {
-          this.queued = null
-        }
-        // Once started, a write is the one in flight; only those still queued count as pending.
-        this.pendingBytes -= write.bytes + WAITING_WRITE_OVERHEAD_BYTES
-        this.hooks.pendingChanged()
-        if (epoch !== this.epoch) {
-          return
-        }
-        if (write.chunk.length === 0 || this.failed) {
-          this.restore(write)
-          return
-        }
         try {
-          if (!this.handle) {
-            this.handle = await open(this.path, this.truncateOnOpen ? 'w' : 'a', 0o600)
-            // A removal while this opened means a new file, which must still start empty.
-            if (epoch === this.epoch) {
-              this.truncateOnOpen = false
-            }
-          }
-          // appendFile keeps writing until every byte lands; a bare write may stop short.
-          await this.handle.appendFile(write.chunk)
-        } catch {
-          // An ack may have retired the whole file while this write was in flight; its replacement
-          // is a new file, and this failure says nothing about it.
-          if (epoch === this.epoch) {
-            this.failed = true
-            this.restore(write)
-          }
+          await this.runWrite(write, epoch)
+        } finally {
+          this.writeFinished(ordinal)
         }
       })
       .catch(() => {})
-      .finally(() => this.writeFinished(ordinal))
     return true
+  }
+
+  private async runWrite(write: SpoolWrite, epoch: number): Promise<void> {
+    this.waiting.delete(write)
+    if (this.queued === write) {
+      this.queued = null
+    }
+    // Once started, a write is the one in flight; only those still queued count as pending.
+    this.pendingBytes -= write.bytes + WAITING_WRITE_OVERHEAD_BYTES
+    this.hooks.pendingChanged()
+    if (epoch !== this.epoch) {
+      return
+    }
+    if (write.chunk.length === 0 || this.failed) {
+      this.restore(write)
+      return
+    }
+    try {
+      if (!this.handle) {
+        this.handle = await open(this.path, this.truncateOnOpen ? 'w' : 'a', 0o600)
+        // A removal while this opened means a new file, which must still start empty.
+        if (epoch === this.epoch) {
+          this.truncateOnOpen = false
+        }
+      }
+      // appendFile keeps writing until every byte lands; a bare write may stop short.
+      await this.handle.appendFile(write.chunk)
+    } catch {
+      // An ack may have retired the whole file while this write was in flight; its replacement
+      // is a new file, and this failure says nothing about it.
+      if (epoch === this.epoch) {
+        this.failed = true
+        this.restore(write)
+      }
+    }
   }
 
   /** Acked rows are dropped in bulk once they pass `capBytes`, so a kept file stays bounded. */

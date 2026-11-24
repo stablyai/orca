@@ -49,7 +49,7 @@ export class ProviderRelaySpool {
   /** The client's last ack named a floor to keep (an open streamed item), so lines go to the file too. */
   private keeping = false
   private disposed = false
-  /** Ends the current attach's wait for writes once it is superseded, so its call can return. */
+  /** Ends the current attach's waits once it is superseded, so its call returns even on a stalled disk. */
   private cancelWait: (() => void) | null = null
   private readonly memoryCap: number
   private readonly fileCap: number
@@ -180,10 +180,17 @@ export class ProviderRelaySpool {
     this.updatePressure()
     const current = (): boolean =>
       generation === this.attachGeneration && this.mode === 'replaying' && !this.disposed
+    let cancelWrites = (): void => {}
+    const superseded = new Promise<void>((resolve) => {
+      this.cancelWait = () => {
+        cancelWrites()
+        resolve()
+      }
+    })
     // Writes are waited for only when the file holds records this replay reads.
     if (this.file.index.lastSeq > Math.max(fromSeq, this.acked)) {
       const wait = this.file.waitForWrites()
-      this.cancelWait = wait.cancel
+      cancelWrites = wait.cancel
       await wait.done
       // A superseded attach reads nothing, so a stalled write can't make each one reread the file.
       if (!current()) {
@@ -195,14 +202,18 @@ export class ProviderRelaySpool {
     const fileLast = this.file.index.lastSeq
     const file: Awaited<ReturnType<typeof replaySpoolFileRecords>> =
       fileLast > after
-        ? await replaySpoolFileRecords({
-            path: this.options.path,
-            after,
-            index: this.file.index,
-            current,
-            deliver: this.options.deliver,
-            drained: this.options.drained
-          })
+        ? // A read stalled on the disk sends nothing more once superseded, and the call returns.
+          await Promise.race([
+            replaySpoolFileRecords({
+              path: this.options.path,
+              after,
+              index: this.file.index,
+              current,
+              deliver: this.options.deliver,
+              drained: this.options.drained
+            }),
+            superseded.then(() => ({ outcome: 'stale' as const, highest: after }))
+          ])
         : { outcome: 'done', highest: after }
     if (file.outcome === 'lost' && current()) {
       // Retrying would fail the same way, so the loss is named; lost records are never claimed as sent.
