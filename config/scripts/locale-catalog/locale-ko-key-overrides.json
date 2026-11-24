@@ -2487,10 +2487,10 @@
     "ko": "템플릿"
   },
   "auto.components.settings.computerUseSummary.checkingDescription": {
-    "ko": "Orca가 Computer Use 도우미의 macOS 개인정보 보호 권한을 확인하고 있습니다."
+    "ko": "Orca가 컴퓨터 사용 도우미의 macOS 개인정보 보호 권한을 확인하고 있습니다."
   },
   "auto.components.settings.computerUseSummary.checkingTitle": {
-    "ko": "Computer Use 액세스 확인 중입니다."
+    "ko": "컴퓨터 사용 액세스 확인 중입니다."
   },
   "auto.components.settings.computerUseSummary.permissionsRequired": {
     "ko": "에이전트가 앱 창을 조작하려면 먼저 {{value0}} 권한{{value1}}이 필요합니다."
@@ -2502,13 +2502,13 @@
     "ko": "요청하면 에이전트가 앱 창을 검사하고 조작할 수 있습니다."
   },
   "auto.components.settings.computerUseSummary.readyTitle": {
-    "ko": "Computer Use를 사용할 준비가 되었습니다."
+    "ko": "컴퓨터 사용 기능을 이용할 준비가 되었습니다."
   },
   "auto.components.settings.computerUseSummary.unavailableDescription": {
-    "ko": "{{value0}} 때문에 Computer Use 권한을 사용할 수 없습니다."
+    "ko": "{{value0}} 때문에 컴퓨터 사용 권한을 사용할 수 없습니다."
   },
   "auto.components.settings.computerUseSummary.unavailableTitle": {
-    "ko": "Computer Use를 사용할 수 없습니다."
+    "ko": "컴퓨터 사용 기능을 이용할 수 없습니다."
   },
   "auto.components.settings.developer.permissions.search.00e954319e": {
     "ko": "Whisper"
@@ -3801,7 +3801,7 @@
     "ko": "재설정 사용 중…"
   },
   "auto.components.status.bar.StatusBar.6d1042aa6f": {
-    "ko": "활성 계정의 Codex rate-limit 재설정 크레딧 1회를 사용해 재설정 가능한 사용량 창을 즉시 초기화합니다."
+    "ko": "활성 계정의 Codex 사용량 한도 재설정 크레딧 1회를 사용해 재설정 가능한 사용량 구간을 즉시 초기화합니다."
   },
   "auto.components.status.bar.StatusBar.972a1ff497": {
     "ko": "Codex 한도를 재설정할까요?"

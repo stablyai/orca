@@ -10,6 +10,8 @@ import { applyJournalDomainDispatch } from './journal-domain-dispatch'
 import { applyJournalDomainItem } from './journal-domain-item'
 import { readJournalDomainOperationWindow } from './journal-domain-operation-window'
 import { JournalSqlScope } from './journal-sql-scope'
+import { keptSends } from './journal-operation-window-held-sends'
+import type { Send } from './journal-operation-window-sends'
 import { codexTurnLifecycleIdentity } from '../../codex/structured/journal/codex-structured-journal-translation-turns'
 import { codexProviderHandle } from '../../../shared/agent-session/lifecycle/provider-handles/agent-session-provider-handle-encoding'
 import { agentSessionSendBodyFingerprint } from '../../../shared/agent-session/requests/structured-agent-session-send-mutation'
@@ -41,7 +43,23 @@ const facts = {
 }
 
 /** A chat of `turns` finished turns, each opened by its own send. */
-function chat(turns: number, linkedAt: (index: number) => boolean = () => true): Database {
+function chat(
+  turns: number,
+  linkedAt: (index: number) => boolean = () => true,
+  /** This send is handed over and never answered: no dispatch, no turn. */
+  unansweredAt?: number,
+  /** Sends before this index were recovered in doubt after a crash: unknown, never unanswered. */
+  recoveredBelow = 0,
+  /** Tool calls the last turn ran, as a long agent turn does. */
+  lastTurnTools = 0,
+  /** Messages the last turn wrote, as a long agent turn does. */
+  lastTurnMessages = 0,
+  /** Every send in one family: a chain (each shares a provider id with one neighbour and a card with
+   *  the other), one queued card they all carry, or one answering turn they all name (the newest).
+   *  Or `unsettled`: every send before the newest ten handed over, and never known answered. */
+  family?: 'chain' | 'card' | 'answered' | 'unsettled'
+): Database {
+  const chained = family === 'chain'
   const directory = mkdtempSync(join(tmpdir(), 'orca-operation-window-'))
   directories.push(directory)
   const db = new Database(join(directory, 'journal.sqlite'))
@@ -78,31 +96,57 @@ function chat(turns: number, linkedAt: (index: number) => boolean = () => true):
             source: { kind: 'user' },
             handoverRecorded: true,
             // Each send carried a queued card, as agent mail to a member chat does.
-            queuedMessageId: `card-${index}`
+            queuedMessageId:
+              family === 'card'
+                ? 'card'
+                : chained
+                  ? `card-${Math.floor(index / 2)}`
+                  : `card-${index}`
           }
         },
         facts,
         now++
       )
     )
+    if (index === unansweredAt) {
+      continue
+    }
     transaction(() =>
       applyJournalDomainDispatch(
         db,
         target,
         {
           kind: 'dispatch',
-          input: {
-            clientMessageId: id,
-            fence: 1,
-            state: 'accepted',
-            providerIdentity: {
-              provider: 'codex',
-              threadId: 'thread',
-              turnId: 'echo',
-              ordinal: index
-            },
-            ...(linked ? { answeredInTurn: { turn, via: 'start' as const } } : {})
-          }
+          input:
+            index < recoveredBelow || (family === 'unsettled' && index < turns - 10)
+              ? {
+                  clientMessageId: id,
+                  fence: 1,
+                  state: 'unknown',
+                  ...(index < recoveredBelow ? { recovered: true as const } : {})
+                }
+              : {
+                  clientMessageId: id,
+                  fence: 1,
+                  state: 'accepted',
+                  providerIdentity: {
+                    provider: 'codex',
+                    threadId: 'thread',
+                    turnId: 'echo',
+                    ordinal: chained ? Math.floor((index + 1) / 2) : index
+                  },
+                  ...(linked
+                    ? {
+                        answeredInTurn: {
+                          turn:
+                            family === 'answered'
+                              ? codexTurnLifecycleIdentity('chat', `turn-${turns - 1}`)
+                              : turn,
+                          via: 'start' as const
+                        }
+                      }
+                    : {})
+                }
         },
         now++
       )
@@ -125,6 +169,38 @@ function chat(turns: number, linkedAt: (index: number) => boolean = () => true):
         },
         now++
       )
+    )
+  }
+  for (let message = 0; message < lastTurnMessages; message += 1) {
+    applyJournalDomainItem(
+      db,
+      target,
+      {
+        kind: 'item',
+        identity: { provider: 'orca', clientMessageId: `note-${message}` },
+        body: { kind: 'message', role: 'assistant', blocks: [{ type: 'text', text: 'note' }] },
+        options: { turnScope: { kind: 'thread' }, fence: 1 }
+      },
+      now++
+    )
+  }
+  for (let call = 0; call < lastTurnTools; call += 1) {
+    applyJournalDomainItem(
+      db,
+      target,
+      {
+        kind: 'item',
+        identity: { provider: 'orca', clientMessageId: `call-${call}` },
+        body: {
+          kind: 'tool-call',
+          name: 'shell',
+          callId: `call-${call}`,
+          input: {},
+          state: 'completed'
+        },
+        options: { turnScope: { kind: 'thread' }, fence: 1 }
+      },
+      now++
     )
   }
   db.exec('COMMIT')
@@ -187,4 +263,175 @@ it('keeps every anchored turn when one send names its turn and another is placed
     item.body.kind === 'turn' ? [item.body.turnId] : []
   )
   expect(turnIds).toEqual(expect.arrayContaining(['turn-0', 'turn-5']))
+})
+
+// Whom a bot's newest turn acts for is read from a window of its newest turns, on every bot request,
+// Slack post and item add. Guards that read: its work stays fixed however long the chat ran before.
+it('reads the newest turns with the same work however many turns came before them', () => {
+  const read = (turns: number, recovered = 0) => {
+    const db = chat(turns, () => true, undefined, recovered)
+    const scope = new JournalSqlScope(db, 'chat', 'epoch')
+    const { snapshot } = readJournalDomainOperationWindow(scope, {
+      latestTurns: 8,
+      turnShape: true
+    })
+    db.close()
+    return {
+      examined: scope.work.rows,
+      sends: snapshot.submissions.map((send) => send.clientMessageId),
+      turns: snapshot.items.flatMap((item) => (item.body.kind === 'turn' ? [item.body.turnId] : []))
+    }
+  }
+  const short = read(50)
+  const long = read(500)
+  expect(long.examined).toBe(short.examined)
+  expect([short.examined, read(500, 491).examined]).toEqual([72, 72])
+  expect(long.sends).toEqual(Array.from({ length: 9 }, (_, index) => `m${491 + index}`))
+  expect(long.turns).toEqual(Array.from({ length: 9 }, (_, index) => `turn-${491 + index}`))
+  // A long agent turn's tool calls are never listed to find its sends, and change nothing it reads:
+  // each stretch a send read lists keys on the index that holds no tool rows.
+  const listed = (tools: number) => {
+    const db = chat(50, () => true, undefined, 0, tools)
+    const prepare = db.prepare.bind(db)
+    const statements = new Set<string>()
+    db.prepare = (sql: string) => (statements.add(sql), prepare(sql))
+    const { snapshot } = readJournalDomainOperationWindow(
+      new JournalSqlScope(db, 'chat', 'epoch'),
+      { latestTurns: 8, turnShape: true }
+    )
+    const stretches = [...statements].flatMap((sql) => {
+      const plan = prepare(`EXPLAIN QUERY PLAN ${sql}`)
+        .all()
+        .map((step) => String(step.detail))
+      return plan.some((step) => step.startsWith('SEARCH send'))
+        ? plan.filter((step) => /journal_items .*sequence>\?/.test(step))
+        : []
+    })
+    db.close()
+    return { stretches, sends: snapshot.submissions.map((send) => send.clientMessageId) }
+  }
+  const few = listed(0)
+  expect(listed(1000)).toEqual(few)
+  expect(few.stretches.length).toBeGreaterThan(0)
+  expect(few.stretches.every((step) => step.includes('journal_items_send_place'))).toBe(true)
+  // Sends recovered in doubt long ago are settled for attribution: they add no work as they pile up.
+  expect(read(500, 491).examined).toBe(read(50, 41).examined)
+  // A send still unanswered anywhere is the turn still to be attributed: kept, as the whole read does,
+  // and with the window pinned back to it the read costs no more than that whole read.
+  const db = chat(500, () => true, 0)
+  const pinned = new JournalSqlScope(db, 'chat', 'epoch')
+  const { snapshot } = readJournalDomainOperationWindow(pinned, { latestTurns: 8, turnShape: true })
+  const whole = new JournalSqlScope(db, 'chat', 'epoch')
+  readJournalDomainOperationWindow(whole, { latestTurns: 8, turnShape: true, afterSequence: -1 })
+  const own = new JournalSqlScope(db, 'chat', 'epoch')
+  const anchored = readJournalDomainOperationWindow(own, {
+    latestTurns: 8,
+    turnShape: true,
+    anchorsOnly: true
+  })
+  db.close()
+  // The whole read plus the unanswered send's own row, which found it; a window of its
+  // anchors alone holds no older send, so that send never pins it back.
+  expect([own.work.rows, pinned.work.rows, whole.work.rows]).toEqual([74, 2000, 1999])
+  expect(anchored.snapshot.submissions.map((send) => send.clientMessageId)).toEqual(long.sends)
+  expect(snapshot.submissions.map((send) => send.clientMessageId)).toContain('m0')
+})
+
+it('walks a family of sends linked by provider id and queued card once, however long it is', () => {
+  // Send i shares a provider id with i+1 when i is even and a queued card when odd; only the newest
+  // sits in the window, so the whole chain is held through its links.
+  const family = (size: number) => {
+    let reads = 0
+    const sends = Array.from({ length: size }, (_, index): Send => {
+      const link = (odd: boolean, at: number) => (at % 2 === (odd ? 1 : 0) ? `l${at}` : null)
+      const provider = link(false, index) ?? link(false, index - 1)
+      const card = link(true, index) ?? link(true, index - 1)
+      return {
+        messageId: `m${index}`,
+        itemId: `i${index}`,
+        ordinal: index,
+        dispatchState: 'accepted',
+        recovered: false,
+        get providerItemId() {
+          reads++
+          return provider
+        },
+        get queuedMessageId() {
+          reads++
+          return card
+        },
+        submittedSequence: null,
+        positions: [index],
+        answeredSequence: null
+      }
+    })
+    const kept = keptSends(sends, new Set(), size - 1, null, false)
+    return { kept: kept.length, reads }
+  }
+  expect([family(100), family(1000)]).toEqual([
+    { kept: 100, reads: 798 },
+    { kept: 1000, reads: 7998 }
+  ])
+})
+
+it('stops reading a long send family at its first member older than the newest turns', () => {
+  // Every send is in one family running back through the chat, from the newest send (unanswered or
+  // not): the first older member settles the whole read, so the rest is never walked by index.
+  const extra = (
+    turns: number,
+    unanswered: boolean,
+    family: 'chain' | 'card' | 'answered' | 'unsettled' = 'chain'
+  ) => {
+    const db = chat(turns, () => true, unanswered ? turns - 1 : undefined, 0, 0, 0, family)
+    const pinned = new JournalSqlScope(db, 'chat', 'epoch')
+    const read = readJournalDomainOperationWindow(pinned, { latestTurns: 8, turnShape: true })
+    const whole = new JournalSqlScope(db, 'chat', 'epoch')
+    const all = readJournalDomainOperationWindow(whole, {
+      latestTurns: 8,
+      turnShape: true,
+      afterSequence: -1
+    })
+    db.close()
+    const ids = (window: typeof read) =>
+      window.snapshot.submissions.map((send) => send.clientMessageId)
+    expect(ids(read)).toEqual(ids(all))
+    return pinned.work.rows - whole.work.rows
+  }
+  expect([extra(50, true), extra(500, true), extra(50, false), extra(500, false)]).toEqual([
+    31, 31, 46, 46
+  ])
+  // One card every send carries: each lookup lists at most the cap, however wide the family.
+  expect([extra(200, true, 'card'), extra(500, true, 'card')]).toEqual([67, 67])
+  expect([extra(200, false, 'card'), extra(500, false, 'card')]).toEqual([110, 110])
+  // One answering turn, in the window, that every send names: the window's own lookup stops at the cap.
+  expect([extra(200, false, 'answered'), extra(500, false, 'answered')]).toEqual([74, 74])
+  // Unsettled sends piled up before the newest turns: their lookup stops at the cap too.
+  expect([extra(200, false, 'unsettled'), extra(500, false, 'unsettled')]).toEqual([65, 65])
+})
+
+it('takes the whole read for a window crowded with rows rather than listing them to place its sends', () => {
+  const lookups = (messages: number) => {
+    const db = chat(50, () => true, undefined, 0, 0, messages)
+    const prepare = db.prepare.bind(db)
+    let placing = 0
+    db.prepare = (sql: string) => {
+      placing +=
+        sql.includes('journal_items_send_place') && sql.includes('journal_submission') ? 1 : 0
+      return prepare(sql)
+    }
+    const { snapshot } = readJournalDomainOperationWindow(
+      new JournalSqlScope(db, 'chat', 'epoch'),
+      {
+        latestTurns: 8,
+        turnShape: true
+      }
+    )
+    db.close()
+    return { placing, sends: snapshot.submissions.map((send) => send.clientMessageId) }
+  }
+  const newest = Array.from({ length: 9 }, (_, index) => `m${41 + index}`)
+  expect([lookups(0), lookups(2000)]).toEqual([
+    { placing: 3, sends: newest },
+    { placing: 0, sends: newest }
+  ])
 })

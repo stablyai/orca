@@ -89,6 +89,7 @@ export function AzureDevOpsActiveContent({
       <PRCommentsList
         comments={data.comments}
         commentsLoading={data.loading && data.comments.length === 0}
+        loadingSkeleton={data.loading && data.comments.length === 0}
         reviewKind="PR"
         commentsDisabled
         selectionContextKey={stateRequestKey}

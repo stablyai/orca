@@ -212,6 +212,8 @@ export function HostWorkspaceList({
         catalogError={state.catalogError}
         search={state.search}
         activeFilterCount={controller.activeFilterCount}
+        pausedBotMatches={sectionsResult.pausedBotMatches}
+        onShowPausedBots={sectionsResult.showPausedBots}
         bottomInset={hasRows ? 0 : Math.max(bottomBarHeight, insets.bottom)}
         onClearSearch={() => state.setSearch('')}
         onReconnect={hostId && forceReconnectHost ? () => void forceReconnectHost(hostId) : null}

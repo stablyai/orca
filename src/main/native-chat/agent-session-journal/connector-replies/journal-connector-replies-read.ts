@@ -74,6 +74,7 @@ function replyRowOf(row: Record<string, unknown>): JournalConnectorReplyRow {
     ...(row.claim_message_id === null || row.claim_message_id === undefined
       ? {}
       : { claimMessageId: String(row.claim_message_id) }),
+    ...(row.quiet_rule === 'trailing' ? { quietRule: 'trailing' as const } : {}),
     // An unfilled row's failure is its usage-limit cut's, kept for that cut's close.
     ...(outcome === undefined && row.failure_json !== null && row.failure_json !== undefined
       ? { cutFailure: JSON.parse(String(row.failure_json)) }

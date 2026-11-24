@@ -10,7 +10,6 @@ import HostedReviewActions from '../../hosted-review/provider-actions/HostedRevi
 import { GitHubPRStackMap } from '../../hosted-review/provider-actions/GitHubPRStackMap'
 import { SourceControlAgentActionDialog } from '../../source-control/ai/SourceControlAgentActionDialog'
 import { ChecksPanelUpdatedAtMetadata } from './checks-panel-updated-at-metadata'
-import { getChecksPanelRefreshErrorBannerLine } from '../../hosted-review/provider-actions/github-refresh-error-copy'
 import { resolveChecksPanelHostedReviewModifierDestination } from '../review-actions/checks-panel-hosted-review-click-routing'
 import { clearPendingPRCommentAiAck } from '../comments/pr-comments-ai-launch-ack'
 import {
@@ -28,9 +27,17 @@ import { ChecksPanelReviewHeader } from './review-header'
 import { AzureDevOpsActiveContent } from './azure-devops-active-content'
 
 export function ChecksPanelActiveContent({
-  model
+  model,
+  refreshError,
+  coldChecks,
+  coldComments,
+  commentsError
 }: {
   model: ChecksPanelActiveContentModel
+  refreshError: string | null
+  coldChecks: boolean
+  coldComments: boolean
+  commentsError: string | null
 }): React.JSX.Element | null {
   const t = useTranslate()
   const {
@@ -47,12 +54,13 @@ export function ChecksPanelActiveContent({
     canTargetPRComments,
     checks,
     checksError,
+    checksLoaded,
     checksLoading,
     claimedCommentResolutionRef,
     commentResolutionLaunchAcceptedRef,
     comments,
+    commentsLoaded,
     commentsDisabledReason,
-    commentsError,
     commentsLoading,
     commentsSelectionClearRequest,
     conflictDetailsRefreshing,
@@ -86,7 +94,6 @@ export function ChecksPanelActiveContent({
     manualRefreshError,
     pendingCommentResolutionRef,
     pr,
-    prRefreshState,
     refreshHostedReviewAfterMutation,
     repo,
     resolveCommentsWithAIDisabledReason,
@@ -117,11 +124,6 @@ export function ChecksPanelActiveContent({
     settings,
     Boolean(activeWorktreeId)
   )
-  // A classified GitHub failure says more than a manual one, so it wins; one banner either way.
-  const refreshError =
-    (activeReview.provider === 'github' && prRefreshState?.status === 'error'
-      ? getChecksPanelRefreshErrorBannerLine(prRefreshState.errorType, t)
-      : null) ?? manualRefreshError
   return (
     <div ref={setChecksPanelContentRef} className="flex-1 overflow-auto scrollbar-sleek">
       {refreshError ? (
@@ -241,12 +243,18 @@ export function ChecksPanelActiveContent({
         </>
       )}
       {/* Conflicts can prevent checks running; do not claim no checks are configured before resolving them. */}
-      {!(activeConflictReview && checks.length === 0 && !gitLabPipelineCheck && !checksLoading) && (
+      {(!activeConflictReview ||
+        checks.length > 0 ||
+        gitLabPipelineCheck ||
+        coldChecks ||
+        (checksError && !manualRefreshError)) && (
         <ChecksList
           checks={checks}
           pipelineCheck={gitLabPipelineCheck}
           checksError={manualRefreshError ? null : checksError}
           checksLoading={checksLoading}
+          loadingSkeleton={coldChecks}
+          checksRead={checksLoaded}
           checkDetailsContextKey={stateRequestKey}
           onLoadCheckDetails={handleLoadCheckDetails}
           githubRepository={pr?.prRepo ?? null}
@@ -288,6 +296,8 @@ export function ChecksPanelActiveContent({
         comments={comments}
         commentsError={manualRefreshError ? null : commentsError}
         commentsLoading={commentsLoading}
+        loadingSkeleton={coldComments}
+        commentsRead={commentsLoaded}
         reviewKind={reviewShortLabel}
         commentsDisabled={!canTargetPRComments}
         commentsDisabledReason={commentsDisabledReason}

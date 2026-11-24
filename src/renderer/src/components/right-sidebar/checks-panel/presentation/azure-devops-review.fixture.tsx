@@ -142,6 +142,7 @@ export const azureDevOpsReadOnlyReview = defineFixture({
       <PRCommentsList
         comments={comments}
         commentsLoading={false}
+        loadingSkeleton={false}
         reviewKind="PR"
         commentsDisabled
       />

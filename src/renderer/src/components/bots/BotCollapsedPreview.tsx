@@ -107,7 +107,8 @@ export function BotCollapsedPreview({
     })
   )
   const [openCardKey, setOpenCardKey] = useState<string | null>(null)
-  const [focusedKey, setFocusedKey] = useState<string | null>(null)
+  const [focusedFace, setFocusedFace] = useState<{ key: string; keyboard: boolean } | null>(null)
+  const focusedKey = focusedFace?.key ?? null
   const { ordered, indexByKey, attentionCount } = useMemo(() => {
     const ordered = rankBotsForPreview(facts).map((fact) => ({
       fact,
@@ -138,7 +139,6 @@ export function BotCollapsedPreview({
     trackRef,
     trackWidth,
     totalWidth,
-    badgeWidth,
     overflow,
     before,
     after,
@@ -171,7 +171,7 @@ export function BotCollapsedPreview({
     setOpenCardKey(null)
   }
   if (focusedKey !== null && !indexByKey.has(focusedKey)) {
-    setFocusedKey(null)
+    setFocusedFace(null)
   }
   const openChat = (bot: Bot): void => {
     setOpenCardKey(null)
@@ -197,106 +197,123 @@ export function BotCollapsedPreview({
   return (
     <span
       ref={previewRef}
-      className="pointer-events-none relative isolate flex min-w-0 flex-1 items-center justify-center gap-1 pr-1 pl-0.5"
+      className={cn(
+        'pointer-events-none isolate flex min-w-0 flex-1 items-center pr-1 pl-0.5',
+        overflow ? 'justify-start' : 'justify-center'
+      )}
       data-bot-preview=""
     >
-      {overflow ? (
+      <span
+        className="relative min-w-0"
+        style={{ width: trackWidth, height: PREVIEW_TRACK_HEIGHT }}
+      >
         <BotPreviewEdge
           direction={-1}
           count={before}
           attention={Math.min(before, attentionCount)}
           signal={ordered[0]?.signal ?? null}
-          width={badgeWidth}
           onPage={page}
         />
-      ) : null}
-      <span
-        ref={trackRef}
-        className="scrollbar-none relative min-w-0 overflow-x-auto"
-        style={{ width: trackWidth, height: PREVIEW_TRACK_HEIGHT }}
-        data-bot-preview-track=""
-        onScroll={syncWindow}
-      >
-        <span className="relative block h-full" style={{ width: totalWidth }}>
-          {renderedIndexes.map((index) => {
-            const { fact, key, signal } = ordered[index]!
-            const isCurrent = index === currentIndex
-            const cardOpen = key === openCardKey
-            return (
-              <ActivityThreadHoverCardRoot
-                key={key}
-                open={cardOpen}
-                onOpenChange={(open) =>
-                  setOpenCardKey(
-                    open ? key : (currentKey) => (currentKey === key ? null : currentKey)
-                  )
-                }
-                pointerOpenMode={openCardKey === null ? 'rest' : 'immediate'}
-                closeDelay={120}
-                trigger={
-                  <button
-                    type="button"
-                    aria-label={label(fact, t)}
-                    aria-current={isCurrent || undefined}
-                    className={cn(
-                      FACE_CLASS_NAME,
-                      isCurrent ? 'ring-sidebar-foreground' : 'ring-sidebar hover:ring-sidebar-ring'
-                    )}
-                    style={{ left: botPreviewFaceStart(index) }}
-                    onFocus={(event) => {
-                      setFocusedKey(key)
-                      if (event.currentTarget.matches(':focus-visible')) {
-                        revealAvatar(index)
-                      }
-                    }}
-                    onBlur={() => setFocusedKey(null)}
-                    onClick={() => openChat(fact.bot)}
-                  >
-                    <BotAvatar bot={fact.bot} className="size-5 rounded-full text-2xs" />
-                    {index >= firstVisible && index < endVisible ? (
-                      <BotPreviewPip
-                        signal={signal}
-                        animateWorking={index >= firstFull && index < endFull}
+        <span
+          ref={trackRef}
+          className="scrollbar-none relative block size-full overflow-x-auto"
+          data-bot-preview-track=""
+          onScroll={syncWindow}
+        >
+          <span className="relative block h-full" style={{ width: totalWidth }}>
+            {renderedIndexes.map((index) => {
+              const { fact, key, signal } = ordered[index]!
+              const isCurrent = index === currentIndex
+              const cardOpen = key === openCardKey
+              return (
+                <ActivityThreadHoverCardRoot
+                  key={key}
+                  open={cardOpen}
+                  onOpenChange={(open) =>
+                    setOpenCardKey(
+                      open ? key : (currentKey) => (currentKey === key ? null : currentKey)
+                    )
+                  }
+                  pointerOpenMode={openCardKey === null ? 'rest' : 'immediate'}
+                  closeDelay={120}
+                  trigger={
+                    <button
+                      type="button"
+                      aria-label={label(fact, t)}
+                      aria-current={isCurrent || undefined}
+                      className={cn(
+                        FACE_CLASS_NAME,
+                        isCurrent
+                          ? 'ring-sidebar-foreground'
+                          : 'ring-sidebar hover:ring-sidebar-ring'
+                      )}
+                      style={{ left: botPreviewFaceStart(index) }}
+                      onFocus={(event) => {
+                        const keyboard = event.currentTarget.matches(':focus-visible')
+                        setFocusedFace({ key, keyboard })
+                        if (keyboard) {
+                          revealAvatar(index)
+                        }
+                      }}
+                      onBlur={() => setFocusedFace(null)}
+                      onClick={() => openChat(fact.bot)}
+                    >
+                      <BotAvatar bot={fact.bot} className="size-5 rounded-full text-2xs" />
+                      {index >= firstFull && index < endFull ? (
+                        <BotPreviewPip signal={signal} />
+                      ) : null}
+                    </button>
+                  }
+                >
+                  {cardOpen ? (
+                    <HoverCardContent
+                      side="top"
+                      sideOffset={8}
+                      collisionPadding={8}
+                      variant="workspace-details"
+                      motion="none"
+                      className="max-h-(--radix-hover-card-content-available-height)"
+                    >
+                      <CollapsedBotHoverDetails
+                        fact={fact}
+                        showHostOnFocus={focusedFace?.key === key && focusedFace.keyboard}
+                        onOpenHome={() => openHomePanel(fact.bot)}
                       />
-                    ) : null}
-                  </button>
-                }
-              >
-                {cardOpen ? (
-                  <HoverCardContent
-                    side="top"
-                    sideOffset={8}
-                    collisionPadding={8}
-                    variant="workspace-details"
-                    motion="none"
-                    className="max-h-(--radix-hover-card-content-available-height)"
-                  >
-                    <CollapsedBotHoverDetails
-                      fact={fact}
-                      onOpenHome={() => openHomePanel(fact.bot)}
-                    />
-                  </HoverCardContent>
-                ) : null}
-              </ActivityThreadHoverCardRoot>
-            )
-          })}
+                    </HoverCardContent>
+                  ) : null}
+                </ActivityThreadHoverCardRoot>
+              )
+            })}
+          </span>
         </span>
-      </span>
-      {overflow ? (
         <BotPreviewEdge
           direction={1}
           count={after}
           attention={Math.max(0, attentionCount - (ordered.length - after))}
           signal={ordered[ordered.length - after]?.signal ?? null}
-          width={badgeWidth}
           onPage={page}
         />
-      ) : null}
+      </span>
     </span>
   )
 }
 
-function CollapsedBotHoverDetails({ fact, onOpenHome }: { fact: Facts; onOpenHome: () => void }) {
+function CollapsedBotHoverDetails({
+  fact,
+  showHostOnFocus,
+  onOpenHome
+}: {
+  fact: Facts
+  showHostOnFocus: boolean
+  onOpenHome: () => void
+}) {
   const details = useBotRowDetails(fact.bot, fact.home)
-  return <BotHoverDetails bot={fact.bot} details={details} onOpenHome={onOpenHome} />
+  return (
+    <BotHoverDetails
+      bot={fact.bot}
+      details={details}
+      showHostOnFocus={showHostOnFocus}
+      onOpenHome={onOpenHome}
+    />
+  )
 }

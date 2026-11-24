@@ -34,7 +34,7 @@ export function AutomationEditorPromptSection({
   )
 
   return (
-    <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden px-8 py-6">
+    <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden px-8 py-6 @max-[35rem]:flex-none">
       {draft.scheduleWarning ? (
         <div className="mb-4 rounded-md border border-border bg-muted/40 px-3 py-2 text-xs text-muted-foreground">
           {draft.scheduleWarning}

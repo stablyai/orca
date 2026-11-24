@@ -1,6 +1,7 @@
 import { useEffect, useMemo } from 'react'
 import type { BridgeNativeVerb } from '../mobile-web-shell/bridge/native-capabilities/bridge-native-verbs'
 import type { BRIDGE_STORE_VERB } from '../mobile-web-shell/bridge/native-capabilities/bridge-store-verb'
+import type { BRIDGE_DEFERRED_CODE_VERB } from '../mobile-web-shell/bridge/protocol/bridge-frame-fields'
 import { useMediaHandleRegistry } from '../mobile-web-shell/native-capabilities/use-media-handle-registry'
 import { createNativeAudioCapture } from './audio-capture/native-audio'
 import {
@@ -11,12 +12,17 @@ import { createNativeSpeechServer } from './speech/native-speech'
 import { nativeSpeechDeviceEngine } from './speech/native-speech-device'
 import { serveNativeClipboardVerb } from './clipboard/native-clipboard'
 import { serveNativeAnnounceVerb } from './accessibility/native-accessibility-announce'
+import { serveNativeLinkOpenVerb } from './external-links/native-link-open-verb'
 import { createNativeMediaVerbServer } from './media-picking/native-media'
 import { discardStagedMedia, nativeMediaDeviceDeps } from './media-picking/native-media-device'
 
 export type NativeDeviceVerb = Exclude<
   BridgeNativeVerb,
-  'native.storage.read' | 'native.pdf.view' | 'native.image.act' | typeof BRIDGE_STORE_VERB
+  | 'native.storage.read'
+  | 'native.pdf.view'
+  | 'native.image.act'
+  | typeof BRIDGE_STORE_VERB
+  | typeof BRIDGE_DEFERRED_CODE_VERB
 >
 
 // Tie stateful audio/media handlers to the page session so replacement documents cannot inherit abandoned microphones or staged handles.
@@ -43,6 +49,9 @@ export function useNativeDeviceVerbs(
       }
       if (verb === 'native.a11y.announce') {
         return Promise.resolve(serveNativeAnnounceVerb(params))
+      }
+      if (verb === 'native.link.open') {
+        return serveNativeLinkOpenVerb(params)
       }
       if (verb === 'native.audio.start') {
         return speech.mayCapture().then((may) =>
