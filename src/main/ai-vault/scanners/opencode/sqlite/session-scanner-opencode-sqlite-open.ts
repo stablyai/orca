@@ -56,7 +56,7 @@ export function readOpenCodeDatabase<T>(args: {
 export function openCodeDatabaseScanIssue(
   dbPath: string,
   error: unknown,
-  agent: 'opencode' | 'zcode' | 'hermes' = 'opencode'
+  agent: 'opencode' | 'zcode' | 'hermes' | 'devin' = 'opencode'
 ): AiVaultScanIssue {
   const name = basename(dbPath)
   const label = aiVaultAgentLabel(agent)

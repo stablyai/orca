@@ -9,9 +9,11 @@ import {
 } from '../../wsl/discovery/wsl-home-unless-stopped'
 import { filterPathsToRunningWslDistrosAsync } from '../../wsl/filesystem/wsl-running-path-filter'
 import type { AiVaultScanOptions } from '../session-scanner-types'
+import { getManagedDataAccountService } from '../../managed-data-accounts/service'
 import { managedOpenCodeAccountDataDirs } from '../../opencode/accounts/opencode-managed-account-data-dirs'
 import { antigravityChatBrainDir } from '../../antigravity/antigravity-chat-home'
 import { getProfileUserDataPath } from '../../orca-profiles/profile-storage-paths'
+import { defaultDevinCliDirectory } from '../scanners/devin/session-scanner-devin-sources'
 import { prepareOpenCodeWslReaders } from '../scanners/opencode/reader-transport/opencode-wsl-runtime-preparation'
 
 // Configure sources through the runtime service; headless serve never runs window-only IPC registration.
@@ -38,6 +40,7 @@ type LocalAiVaultScanRoots = Required<
     | 'wslOpenCodeReaders'
     | 'claudeProfileProjectsDirs'
     | 'opencodeAccountDataDirs'
+    | 'devinAccountCliDirs'
     | 'antigravityChatBrainDir'
   >
 
@@ -58,6 +61,7 @@ export async function resolveLocalAiVaultScanRoots(): Promise<{
     }).catch(() => configuredAdditionalCodexHomePaths().filter((home) => !isWslUncPath(home))),
     scanWslHomeDirs()
   ])
+  const devinAccountCliDirs = managedDevinCliDirectories()
   return {
     wslConfirmed: wsl.confirmed,
     roots: {
@@ -68,12 +72,27 @@ export async function resolveLocalAiVaultScanRoots(): Promise<{
       // Scanner workers have no account router; supply profile roots from this process.
       claudeProfileProjectsDirs: claudeProfileHistoryDirs('projects'),
       opencodeAccountDataDirs: managedOpenCodeAccountDataDirs(),
+      devinAccountCliDirs,
       // The chat host's state root, as structured-session-account-home resolves it.
       antigravityChatBrainDir: antigravityChatBrainDir(getProfileUserDataPath()),
-      wslOpenCodeReaders: await prepareOpenCodeWslReaders(wsl.homes),
+      wslOpenCodeReaders: await prepareOpenCodeWslReaders(
+        wsl.homes,
+        [defaultDevinCliDirectory(), ...devinAccountCliDirs].map((dir) => join(dir, 'sessions.db'))
+      ),
       // Runtime-addressed callers restamp host-local results at the RPC edge instead of rescanning.
       executionHostId: LOCAL_EXECUTION_HOST_ID
     }
+  }
+}
+
+function managedDevinCliDirectories(): string[] {
+  try {
+    return getManagedDataAccountService()
+      .transcriptEnvironments('devin')
+      .map((env) => join(env.XDG_DATA_HOME, 'devin', 'cli'))
+  } catch (error) {
+    console.warn('[ai-vault] Could not read Devin managed accounts:', error)
+    return []
   }
 }
 

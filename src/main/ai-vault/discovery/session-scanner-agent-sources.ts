@@ -13,6 +13,7 @@ import {
 } from '../../../shared/ai-vault/session-display/ai-vault-session-log-resource'
 import { isClineSessionMetadataPath } from '../scanners/cline/session-scanner-cline-parser'
 import { cursorChatMetaPath } from '../scanners/cursor/session-scanner-cursor-chat-meta'
+import { defaultDevinCliDirectory } from '../scanners/devin/session-scanner-devin-sources'
 import { devinSessionsDbDependencyPath } from '../scanners/devin/session-scanner-devin-db'
 import { resolveKimiSessionsDir } from '../scanners/kimi/session-scanner-kimi-paths'
 import { resolveMuseSessionsDir } from '../../../shared/agent-hook-listener/providers/muse/muse-session-log'
@@ -51,19 +52,6 @@ export function piSessionHistorySessionsDir(): string {
   )
 }
 const PRIME_AGENT_SESSIONS_DIR = primeAgentSessionsDirFromEnv()
-const DEVIN_TRANSCRIPTS_DIR = join(
-  resolveAbsoluteDirOverride(
-    process.env.DEVIN_HOME,
-    process.platform === 'win32'
-      ? join(process.env.APPDATA?.trim() || join(homedir(), 'AppData', 'Roaming'), 'devin', 'cli')
-      : join(
-          process.env.XDG_DATA_HOME?.trim() || join(homedir(), '.local', 'share'),
-          'devin',
-          'cli'
-        )
-  ),
-  'transcripts'
-)
 const KIRO_SESSIONS_DIR = join(resolveKiroHomeDir(), 'sessions', 'cli')
 const DROID_SESSIONS_DIR = join(homedir(), '.factory', 'sessions')
 const DROID_PROJECTS_DIR = join(homedir(), '.factory', 'projects')
@@ -172,18 +160,16 @@ export const AI_VAULT_AGENT_SOURCES: AiVaultAgentSourceTable = {
   },
   devin: {
     rootDirs: (options, wslHomeDirs) => [
-      ...sessionRootDirs(options.devinTranscriptsDir ?? DEVIN_TRANSCRIPTS_DIR, wslHomeDirs, [
-        '.local',
-        'share',
-        'devin',
-        'cli',
-        'transcripts'
-      ]),
-      // Devin 3000.10.31 exports ATIF to agent_logs by default.
-      ...(options.devinTranscriptsDir ? [] : [join(dirname(DEVIN_TRANSCRIPTS_DIR), 'agent_logs')]),
-      ...wslHomeDirs.map((homeDir) =>
-        join(homeDir, '.local', 'share', 'devin', 'cli', 'agent_logs')
-      )
+      ...(options.devinTranscriptsDir
+        ? [options.devinTranscriptsDir]
+        : [
+            join(defaultDevinCliDirectory(), 'transcripts'),
+            join(defaultDevinCliDirectory(), 'agent_logs')
+          ]),
+      ...[
+        ...(options.devinAccountCliDirs ?? []),
+        ...wslHomeDirs.map((home) => join(home, '.local', 'share', 'devin', 'cli'))
+      ].flatMap((cliDir) => ['transcripts', 'agent_logs'].map((dir) => join(cliDir, dir)))
     ],
     mergeRootDiscoveries: true,
     extensions: ['.json'],

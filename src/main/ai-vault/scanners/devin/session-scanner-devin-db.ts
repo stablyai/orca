@@ -164,7 +164,7 @@ function readDevinSessionsIndex(dbPath: string): DevinSessionsIndex {
   })
 }
 
-function unixSecondsToIso(value: unknown): string | null {
+export function unixSecondsToIso(value: unknown): string | null {
   const seconds = numberValue(value)
   if (seconds <= 0) {
     return null

@@ -23,5 +23,5 @@ export function parseOpenCodeSqliteCaptureValue(value: unknown): OpenCodeSqliteC
   // Match parse-leg trust in session metadata so capture validation does not exclude otherwise listed sessions.
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the worker builds this with the repo's own reader; only the structured clone sits between.
   const session = (record.session ?? null) as AiVaultSession | null
-  return { session, messages }
+  return { session, messages, ...(record.incomplete === true ? { incomplete: true } : {}) }
 }

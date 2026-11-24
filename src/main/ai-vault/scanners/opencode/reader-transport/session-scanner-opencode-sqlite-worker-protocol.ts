@@ -88,6 +88,7 @@ export type OpenCodeSqliteListValue = {
 export type OpenCodeSqliteCaptureValue = {
   session: AiVaultSession | null
   messages: TranscriptMessage[]
+  incomplete?: true
 }
 
 export type OpenCodeSqliteWorkerResponse =

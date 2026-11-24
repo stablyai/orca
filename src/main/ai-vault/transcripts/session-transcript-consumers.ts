@@ -21,6 +21,8 @@ export type TranscriptMessageSink = {
   /** A later duplicate JSON array replaces every message emitted from the earlier array. */
   drain?: () => Promise<void>
   reset?: () => void
+  /** Discard the read for consumers while allowing a bounded preview to be returned. */
+  markIncomplete?: () => void
 }
 
 export const NO_TRANSCRIPT_MESSAGES: TranscriptMessageSink = {

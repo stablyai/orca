@@ -1,8 +1,4 @@
 import {
-  captureHermesSqliteSessionViaWorker,
-  parseHermesSqliteSessionViaWorker
-} from '../scanners/hermes/session-scanner-hermes-worker'
-import {
   throwIfAiVaultScanCancelled,
   waitForAiVaultScan
 } from '../scan-lifecycle/ai-vault-scan-cancellation'
@@ -24,12 +20,8 @@ import { splitOpenCodeSqliteCandidate } from '../../../shared/agent-session/life
 import { parseJcodeSessionFile } from '../scanners/jcode/session-scanner-jcode-parser'
 import { parseKiroSessionFile } from '../scanners/kiro/session-scanner-kiro-parser'
 import {
-  captureOpenCodeSqliteSessionViaWorker,
-  captureOpenCode2SqliteSessionViaWorker,
-  captureZcodeSqliteSessionViaWorker,
-  parseOpenCode2SqliteSessionViaWorker,
-  parseOpenCodeSqliteSessionViaWorker,
-  parseZcodeSqliteSessionViaWorker
+  captureForHost,
+  parseForHost
 } from '../scanners/opencode/reader-transport/session-scanner-opencode-sqlite-worker-spawn'
 import { parseClaudeSessionFile } from '../scanners/claude/session-scanner-primary-parsers'
 import { parseGeminiSessionFile } from '../scanners/gemini/session-scanner-gemini-parsers'
@@ -53,29 +45,17 @@ async function readOpenCodeSqliteCandidate(
   agent?: SqliteReaderAgent
 ): Promise<AiVaultSession | null> {
   throwIfAiVaultScanCancelled(signal)
-  const request = { ...sqliteCandidate, platform, signal }
+  const request = { ...sqliteCandidate, platform, signal, agent }
   if (!messages?.active) {
-    const parse =
-      agent === 'opencode2'
-        ? parseOpenCode2SqliteSessionViaWorker
-        : agent === 'zcode'
-          ? parseZcodeSqliteSessionViaWorker
-          : agent === 'hermes'
-            ? parseHermesSqliteSessionViaWorker
-            : parseOpenCodeSqliteSessionViaWorker
-    const session = await waitForAiVaultScan(parse(request), signal)
+    const session = await waitForAiVaultScan(parseForHost(request), signal)
     throwIfAiVaultScanCancelled(signal)
     return session
   }
-  const capture =
-    agent === 'opencode2'
-      ? captureOpenCode2SqliteSessionViaWorker
-      : agent === 'zcode'
-        ? captureZcodeSqliteSessionViaWorker
-        : agent === 'hermes'
-          ? captureHermesSqliteSessionViaWorker
-          : captureOpenCodeSqliteSessionViaWorker
-  const result = await waitForAiVaultScan(capture(request), signal)
+  const result = await waitForAiVaultScan(captureForHost(request), signal)
+  if (result.incomplete) {
+    messages.markIncomplete?.()
+    return result.session
+  }
   for (const message of result.messages) {
     throwIfAiVaultScanCancelled(signal)
     messages.push(message)
@@ -160,8 +140,12 @@ export async function parseAgentSessionFile(
       return parseDroidSessionFile(candidate.file, platform, messages)
     case 'cline':
       return parseClineSessionFile(candidate.file, platform, messages, signal)
-    case 'devin':
-      return parseDevinSessionFile(candidate.file, platform, messages, signal)
+    case 'devin': {
+      const sqliteCandidate = splitOpenCodeSqliteCandidate(candidate.file.path, 'devin')
+      return sqliteCandidate
+        ? readOpenCodeSqliteCandidate(sqliteCandidate, platform, messages, signal, 'devin')
+        : parseDevinSessionFile(candidate.file, platform, messages, signal)
+    }
     case 'kimi':
       return parseKimiSessionFile(candidate.file, platform, messages, signal)
     case 'muse':

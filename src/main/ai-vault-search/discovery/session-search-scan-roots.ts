@@ -77,7 +77,7 @@ function constituentRoots(
   discovery: SessionFileDiscovery
 ): string[] {
   const declared = AI_VAULT_AGENT_SOURCES[discovery.agent]?.rootDirs(roots, wslHomeDirs) ?? []
-  if (declared.includes(discovery.rootDir)) {
+  if (discovery.sqliteContainer || declared.includes(discovery.rootDir)) {
     return [discovery.rootDir]
   }
   // Merged discoveries use declared roots; custom sources without declarations report real directories.

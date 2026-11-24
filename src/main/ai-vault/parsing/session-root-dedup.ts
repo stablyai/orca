@@ -1,4 +1,5 @@
 import { antigravitySessionOrigin } from '../../../shared/agent-session/lifecycle/provider-handles/antigravity-session-origin'
+import { splitOpenCodeSqliteCandidate } from '../../../shared/agent-session/lifecycle/provider-handles/opencode-sqlite-session-path'
 import type { AiVaultSession } from '../../../shared/ai-vault/contracts/ai-vault-types'
 import {
   codexSessionAliasKey,
@@ -18,8 +19,11 @@ function sessionAliasKey(session: AiVaultSession): string | null {
     const codexKey = codexSessionAliasKey(session)
     return codexKey ? `codex\0${codexKey}` : null
   }
-  // Sibling exports share an index; different installs and WSL distros do not.
-  const cliDir = session.filePath.split(/[\\/]/).slice(0, -2).join('/')
+  const sqlite = splitOpenCodeSqliteCandidate(session.filePath, 'devin')
+  const cliDir = (sqlite?.dbPath ?? session.filePath)
+    .split(/[\\/]/)
+    .slice(0, sqlite ? -1 : -2)
+    .join('/')
   return `devin\0${session.executionHostId}\0${cliDir}\0${session.sessionId}`
 }
 
@@ -36,6 +40,13 @@ function sessionAliasBeats(candidate: AiVaultSession, best: AiVaultSession): boo
   }
   if (candidate.agent !== 'devin') {
     return codexSessionAliasBeats(candidate, best)
+  }
+  const candidateSqlite = splitOpenCodeSqliteCandidate(candidate.filePath, 'devin') !== null
+  const bestSqlite = splitOpenCodeSqliteCandidate(best.filePath, 'devin') !== null
+  if (candidateSqlite !== bestSqlite) {
+    const candidateHasMessages = candidate.messageCount > 0
+    const bestHasMessages = best.messageCount > 0
+    return candidateHasMessages !== bestHasMessages ? candidateHasMessages : candidateSqlite
   }
   const candidateTime = sessionSortTime(candidate)
   const bestTime = sessionSortTime(best)

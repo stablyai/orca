@@ -1,4 +1,3 @@
-import { parseHermesSqliteSessionViaWorker } from '../scanners/hermes/session-scanner-hermes-worker'
 import type {
   AiVaultAgent,
   AiVaultSession,
@@ -11,11 +10,7 @@ import {
 import { wslGatedStat } from '../../native-chat/transcript-filesystem/wsl-transcript-fs-access'
 import { parseAgentSessionFile } from '../parsing/session-scanner-agent-parser'
 import { withFullFirstUserPromptCapture } from './session-scanner-first-user-prompt-capture'
-import {
-  parseOpenCodeSqliteSessionViaWorker,
-  parseOpenCode2SqliteSessionViaWorker,
-  parseZcodeSqliteSessionViaWorker
-} from '../scanners/opencode/reader-transport/session-scanner-opencode-sqlite-worker-spawn'
+import { parseForHost } from '../scanners/opencode/reader-transport/session-scanner-opencode-sqlite-worker-spawn'
 import { splitOpenCodeSqliteCandidate } from '../../../shared/agent-session/lifecycle/provider-handles/opencode-sqlite-session-path'
 import type { FileWithMtime } from '../session-scanner-types'
 import type { OpenCodeWslRuntime } from '../scanners/opencode/reader-transport/session-scanner-opencode-wsl-runtime'
@@ -73,41 +68,29 @@ async function parseSessionForFullFirstUserPrompt(args: {
   sessionId?: string
   codexHome: string | null
 }): Promise<AiVaultSession | null> {
+  const { agent, filePath, sessionId } = args
   // Full capture must run in the actual reader, including WSL guests.
   if (
-    args.agent === 'opencode' ||
-    args.agent === 'opencode2' ||
-    args.agent === 'zcode' ||
-    args.agent === 'hermes'
+    agent === 'opencode' ||
+    agent === 'opencode2' ||
+    agent === 'zcode' ||
+    agent === 'hermes' ||
+    agent === 'devin'
   ) {
-    const parse =
-      args.agent === 'opencode2'
-        ? parseOpenCode2SqliteSessionViaWorker
-        : args.agent === 'zcode'
-          ? parseZcodeSqliteSessionViaWorker
-          : args.agent === 'hermes'
-            ? parseHermesSqliteSessionViaWorker
-            : parseOpenCodeSqliteSessionViaWorker
-    const fromSynthetic = splitOpenCodeSqliteCandidate(args.filePath, args.agent)
-    if (fromSynthetic) {
-      return parse({
+    const sqlite =
+      splitOpenCodeSqliteCandidate(filePath, agent) ??
+      (agent !== 'devin' && sessionId ? { dbPath: filePath, sessionId } : null)
+    if (sqlite) {
+      return parseForHost({
+        ...sqlite,
+        agent: agent === 'opencode' ? undefined : agent,
         fullFirstUserPrompt: true,
-        dbPath: fromSynthetic.dbPath,
-        sessionId: fromSynthetic.sessionId,
-        platform: process.platform
-      })
-    }
-    if (args.sessionId) {
-      return parse({
-        fullFirstUserPrompt: true,
-        dbPath: args.filePath,
-        sessionId: args.sessionId,
         platform: process.platform
       })
     }
   }
 
-  const file = await fileWithMtimeForPath(args.filePath, args.agent)
+  const file = await fileWithMtimeForPath(filePath)
   if (!file) {
     return null
   }
@@ -122,19 +105,7 @@ async function parseSessionForFullFirstUserPrompt(args: {
   )
 }
 
-async function fileWithMtimeForPath(
-  filePath: string,
-  agent: AiVaultAgent
-): Promise<FileWithMtime | null> {
-  // OpenCode dbPath#sessionId is synthetic; # in another agent's filename does not bypass stat.
-  if (agent === 'opencode' && splitOpenCodeSqliteCandidate(filePath)) {
-    return {
-      path: filePath,
-      mtimeMs: 0,
-      modifiedAt: new Date(0).toISOString()
-    }
-  }
-
+async function fileWithMtimeForPath(filePath: string): Promise<FileWithMtime | null> {
   try {
     // Use the parser's scan lane so stat cannot jump the live-transcript queue.
     const info = await wslGatedStat(filePath, 'scan')
