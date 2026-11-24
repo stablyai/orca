@@ -333,36 +333,40 @@ describe('main-push lint policy', { timeout: GIT_TEST_TIMEOUT_MS }, () => {
       await expectDebuggerError({ origin, before, after }, 'm/x.ts')
     })
 
-    it('treats a link through a directory name and then .. as unreadable, so its scope is linted', async () => {
-      // alias -> step/.. where step -> real/child: the file system lands in real/, not the root.
-      const origin = makeOrigin()
-      commit(
-        origin,
-        {
-          '.oxlintrc.json': LENIENT,
-          'rules.json': LENIENT,
-          'real/rules.json': LENIENT,
-          'real/child/keep.txt': 'x',
-          'm/x.ts': DEBUGGER
-        },
-        'setup'
-      )
-      symlinkSync('real/child', join(origin, 'step'))
-      symlinkSync('step/..', join(origin, 'alias'))
-      symlinkSync('../alias/rules.json', join(origin, 'm/.oxlintrc.json'))
-      const before = commit(origin, {}, 'links')
-      const after = commit(origin, { 'real/rules.json': CONFIG }, 'tighten the real rules')
-      expect(await planFor({ origin, before, after })).toMatchObject({
-        dirs: ['m'],
-        policies: [
+    // alias -> step/.. where step -> real/child: the file system lands in real/, not the root. `.` and empty
+    // segments do not change that.
+    it.each(['step/..', 'step/./..', 'step//..'])(
+      'treats a link to %s as unreadable, so its scope is linted',
+      async (aliasTarget) => {
+        const origin = makeOrigin()
+        commit(
+          origin,
           {
-            paths: [],
-            why: "alias points through a directory name and then '..', so its scope is linted on every push"
-          }
-        ]
-      })
-      await expectDebuggerError({ origin, before, after }, 'm/x.ts')
-    })
+            '.oxlintrc.json': LENIENT,
+            'rules.json': LENIENT,
+            'real/rules.json': LENIENT,
+            'real/child/keep.txt': 'x',
+            'm/x.ts': DEBUGGER
+          },
+          'setup'
+        )
+        symlinkSync('real/child', join(origin, 'step'))
+        symlinkSync(aliasTarget, join(origin, 'alias'))
+        symlinkSync('../alias/rules.json', join(origin, 'm/.oxlintrc.json'))
+        const before = commit(origin, {}, 'links')
+        const after = commit(origin, { 'real/rules.json': CONFIG }, 'tighten the real rules')
+        expect(await planFor({ origin, before, after })).toMatchObject({
+          dirs: ['m'],
+          policies: [
+            {
+              paths: [],
+              why: "alias points through a directory name and then '..', so its scope is linted on every push"
+            }
+          ]
+        })
+        await expectDebuggerError({ origin, before, after }, 'm/x.ts')
+      }
+    )
 
     it('resolves a linked config’s extends from the link, and ignores the stored copy’s neighbour', async () => {
       const files = {

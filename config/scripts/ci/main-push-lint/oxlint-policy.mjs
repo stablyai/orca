@@ -111,12 +111,10 @@ function resolveFrom(from, target) {
 // as text could name the wrong file: such a target counts as unreadable.
 async function linkTarget(link, sha, cwd) {
   const raw = await git(['cat-file', 'blob', sha], cwd)
-  const segments = raw.split('/')
+  // `.` and empty segments do not move, so `name/./..` and `name//..` are `name/..` too.
+  const segments = raw.split('/').filter((segment) => segment !== '' && segment !== '.')
   if (
-    segments.some(
-      (segment, index) =>
-        segment === '..' && index > 0 && !['', '.', '..'].includes(segments[index - 1])
-    )
+    segments.some((segment, index) => segment === '..' && index > 0 && segments[index - 1] !== '..')
   ) {
     return { unreadable: `${link} points through a directory name and then '..'` }
   }
