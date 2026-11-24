@@ -21,7 +21,6 @@
 #include <poll.h>
 #include <signal.h>
 #include <stdio.h>
-#include <stdint.h>
 #include <stdlib.h>
 #include <string.h>
 #include <sys/types.h>
@@ -40,6 +39,8 @@
 #include <mach/mach.h>
 #include <sys/proc.h>
 #include <sys/sysctl.h>
+// Newer than the deployment target; where it is missing no detached tool is ever signalled.
+extern int proc_signal_with_audittoken(audit_token_t *audittoken, int sig) __attribute__((weak_import));
 #endif
 
 enum { OWNER_FD = 3, GATE_FD = 4, STATUS_FD = 5, OUTCOME_FD = 6, INPUT_FD = 7 };
@@ -252,7 +253,6 @@ struct watcher {
     pid_t reaper;
     long long reaper_start;
     long long leader_start;
-    uint64_t leader_unique;
     char tree_tag[64];
     long long next_sweep_ns;
     unsigned stdin_end_grace_ms;
@@ -348,21 +348,6 @@ static struct proc_row *read_table(size_t *count) {
     return NULL;
 }
 
-// The kernel's unique IDs never repeat within a boot and keep the original parent's after
-// reparenting (proc_info flavor 17, struct proc_uniqidentifierinfo).
-struct unique_ids {
-    uint8_t uuid[16];
-    uint64_t unique;
-    uint64_t parent;
-    int32_t id_version;
-    uint32_t original_parent_version;
-    uint64_t reserved[2];
-};
-
-static int read_unique_ids(pid_t pid, struct unique_ids *ids) {
-    return proc_pidinfo(pid, 17, 0, ids, sizeof *ids) == (int)sizeof *ids;
-}
-
 // Reads the environment the process was exec'd with; unreadable means not provably ours.
 static int carries_tree_tag(pid_t pid, const char *tag) {
     static char *args;
@@ -382,17 +367,22 @@ static int carries_tree_tag(pid_t pid, const char *tag) {
     if (sysctl(mib, 3, args, &size, NULL, 0) != 0 || size < sizeof(int)) {
         return 0;
     }
-    // An empty argv[0] is indistinguishable from the exec path's padding, so every string after
-    // that path is checked; an argument can only match by already holding this chat's random tag.
-    const char *p = memchr(args + sizeof(int), '\0', size - sizeof(int));
+    int argc;
+    memcpy(&argc, args, sizeof argc);
+    // Only environment entries count. An empty argv[0] merges into the exec path's padding, which
+    // can only hide a tag (a miss), never admit one.
+    const char *p = memchr(args + sizeof argc, '\0', size - sizeof argc);
     const char *end = args + size;
+    while (p != NULL && p < end && *p == '\0') {
+        p++;
+    }
     size_t tag_length = strlen(tag);
-    while (p != NULL && p < end) {
+    for (int i = 0; p != NULL && p < end && (i < argc || *p != '\0'); i++) {
         const char *z = memchr(p, '\0', (size_t)(end - p));
         if (z == NULL) {
             return 0;
         }
-        if ((size_t)(z - p) == tag_length && memcmp(p, tag, tag_length) == 0) {
+        if (i >= argc && (size_t)(z - p) == tag_length && memcmp(p, tag, tag_length) == 0) {
             return 1;
         }
         p = z + 1;
@@ -537,11 +527,6 @@ static int tree_root(struct watcher *w, const struct tree_scan *scan, const stru
     if (row->ppid != 1 || row->uid != geteuid() || row->start < w->leader_start || row->zombie) {
         return 0;
     }
-    // Its original parent started no earlier than the leader: never a launchd job or older daemon.
-    struct unique_ids ids;
-    if (!read_unique_ids(row->pid, &ids) || ids.parent < w->leader_unique) {
-        return 0;
-    }
     pid_t sid = getsid(row->pid);
     int owned = (sid > 0 && member_session(scan, sid)) || carries_tree_tag(row->pid, w->tree_tag);
     return owned && same_identity(row);
@@ -647,7 +632,7 @@ static int drop_stale_members(struct tree_scan *scan, const struct proc_row *lea
 // check, so the signal reaches that process or none: a pidfd on Linux, an audit token (which
 // carries the PID version) on macOS. A member whose handle is refused is never signalled, and
 // counts as alive unless it is gone.
-static int signal_member(const struct proc_row *row, int signal_number) {
+static int signal_member(struct proc_row *row, int signal_number) {
 #if defined(__linux__)
     int fd = (int)syscall(SYS_pidfd_open, row->pid, 0);
     if (fd < 0) {
@@ -671,16 +656,16 @@ static int signal_member(const struct proc_row *row, int signal_number) {
         mach_port_deallocate(mach_task_self(), name);
     }
     int alive = same_identity(row);
-    if (alive && held && signal_number != 0) {
+    if (alive && held && signal_number != 0 && proc_signal_with_audittoken != NULL) {
         proc_signal_with_audittoken(&token, signal_number);
     }
     return alive;
 #endif
 }
 
-// Signals each live descendant once, by PID after re-checking its start time. Returns how many
-// were alive, or -1 when the tree could not be read or its anchor's identity is unproven.
-static int sweep_tree(struct watcher *w, int signal_number) {
+// Signals each live descendant once through its kernel handle. Returns how many were alive, or -1
+// when the tree could not be read, its anchor is unproven, or a member vanished mid-sweep.
+static int sweep_once(struct watcher *w, int signal_number) {
     struct tree_scan scan = {0};
     scan.rows = read_table(&scan.n);
     if (scan.rows == NULL) {
@@ -718,14 +703,20 @@ static int sweep_tree(struct watcher *w, int signal_number) {
     }
     live = 0;
     for (size_t i = 0; i < scan.n; i++) {
-        const struct proc_row *row = &scan.rows[i];
+        struct proc_row *row = &scan.rows[i];
         // The CLI group gets its own signal, so its members are never signalled twice.
-        if (scan.state[i] == 1 && !row->zombie && row->pgid != w->group &&
-                signal_member(row, signal_number)) {
+        if (scan.state[i] != 1 || row->zombie || row->pgid == w->group) {
+            continue;
+        }
+        if (signal_member(row, signal_number)) {
             live++;
+        } else {
+            // It may have forked after the table was read and exited since.
+            dropped = 1;
         }
     }
-    // A dropped member may live on under a new parent, so this sweep cannot prove the tree empty.
+    // A dropped member may live on under a new parent, or in a child born after the table was read,
+    // so this sweep cannot prove the tree empty.
     if (dropped && live == 0) {
         live = -1;
     }
@@ -734,6 +725,17 @@ done:
     free(scan.state);
     free(scan.chain);
     free(scan.sids);
+    return live;
+}
+
+// /proc is read one row at a time, so on Linux only two empty scans in a row prove the tree gone.
+static int sweep_tree(struct watcher *w, int signal_number) {
+    int live = sweep_once(w, signal_number);
+#if defined(__linux__)
+    if (live == 0) {
+        live = sweep_once(w, signal_number);
+    }
+#endif
     return live;
 }
 #else
@@ -1085,10 +1087,6 @@ static _Noreturn void run_leader(struct watcher *watcher, char *command[]) {
         fail(EXIT_BOOTSTRAP);
     }
     watcher->leader_start = leader_row.start;
-    struct unique_ids leader_ids;
-    // Without the leader's unique ID no orphan can be proven ours, so none is admitted.
-    watcher->leader_unique = read_unique_ids(watcher->group, &leader_ids) ? leader_ids.unique
-                                                                          : UINT64_MAX;
     // Random, so no unrelated process can carry it by deriving it from public process data.
     unsigned char nonce[16];
     arc4random_buf(nonce, sizeof nonce);
@@ -1308,12 +1306,21 @@ int main(int argc, char *argv[]) {
         return EXIT_BOOTSTRAP;
     }
     watcher_gone_fd = watcher_alive[0];
+    // A /proc from another PID namespace names other processes, so no tree is anchored on it.
+    char self_link[32];
+    ssize_t self_length = readlink("/proc/self", self_link, sizeof self_link - 1);
     struct proc_row reaper_row;
-    if (read_row(getpid(), &reaper_row) != 1) {
-        return EXIT_BOOTSTRAP;
+    if (self_length > 0) {
+        self_link[self_length] = '\0';
     }
-    watcher.reaper = reaper_row.pid;
-    watcher.reaper_start = reaper_row.start;
+    if (self_length > 0 && strtol(self_link, NULL, 10) == (long)getpid() &&
+            read_row(getpid(), &reaper_row) == 1) {
+        watcher.reaper = reaper_row.pid;
+        watcher.reaper_start = reaper_row.start;
+    } else {
+        watcher.reaper = getpid();
+        watcher.reaper_start = -1;
+    }
 #endif
     // Blocked across fork so a stop signal lands either before it (default action, nothing started)
     // or on the leader's handler or this pid's ignore, never on the defaults in between.
