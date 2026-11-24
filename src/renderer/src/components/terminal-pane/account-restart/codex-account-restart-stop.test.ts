@@ -134,13 +134,15 @@ describe('renderer account restart stop', () => {
     expect(withdraw).not.toHaveBeenCalled()
   })
 
-  it('drops a reply that settles after the notice moved to a newer account switch', async () => {
+  it('leaves a newer account switch actionable when an older request is refused', async () => {
     const { replies } = heldReplies()
     const pending = stopCodexPaneForAccountRestart(pane)
+    // B was requested; the user then selected C, which inherited the answered state.
     store.codexRestartNoticeByPtyId = { 'pty-a': { nextAccountId: 'account-c' } }
-    replies[0]({ outcome: 'not-started', reason: 'refused', opIds: ['op-1'] })
-    await pending
-    expect(store.reopenCodexRestartPrompt).not.toHaveBeenCalled()
+    replies[0]({ outcome: 'not-started', reason: 'unsupported', opIds: ['op-1'] })
+    // Never falls back automatically for a target the user did not confirm.
+    await expect(pending).resolves.toBe('handled')
+    expect(store.reopenCodexRestartPrompt).toHaveBeenCalledWith('pty-a')
     expect(store.clearCodexRestartNotice).not.toHaveBeenCalled()
   })
 })

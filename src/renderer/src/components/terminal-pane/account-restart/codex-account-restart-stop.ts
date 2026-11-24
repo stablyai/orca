@@ -18,7 +18,7 @@ export async function stopCodexPaneForAccountRestart(
 ): Promise<'handled' | 'fallback'> {
   const operation = { ...pane, opId: mintOpId() }
   currentOperationByPtyId.set(pane.ptyId, operation)
-  // The notice's target names its generation: a newer switch makes this reply stale.
+  // The notice's target names its generation: a newer switch must get its own answer.
   const noticeTarget = noticeTargetOf(pane.ptyId)
   let result: CodexAccountRestartStopResult
   try {
@@ -28,19 +28,21 @@ export async function stopCodexPaneForAccountRestart(
   }
   const current = currentOperationByPtyId.get(pane.ptyId)
   // A joined click shares the stop, so its opId is in the reply too; Dismiss removed the row's operation.
-  if (
-    !current ||
-    !result.opIds.includes(current.opId) ||
-    noticeTargetOf(pane.ptyId) !== noticeTarget
-  ) {
+  if (!current || !result.opIds.includes(current.opId)) {
     return 'handled'
   }
   currentOperationByPtyId.delete(pane.ptyId)
+  const store = useAppStore.getState()
+  if (noticeTargetOf(pane.ptyId) !== noticeTarget && result.outcome !== 'stopped') {
+    // The notice moved to a newer switch while this request ran: settle it by asking again, so the
+    // current prompt is visible and input is not left blocked; never act on it automatically.
+    store.reopenCodexRestartPrompt(pane.ptyId)
+    return 'handled'
+  }
   // Only lanes main does not stop locally (SSH, paired runtime) keep the replacement restart.
   if (result.outcome === 'not-started' && result.reason === 'unsupported') {
     return 'fallback'
   }
-  const store = useAppStore.getState()
   if (result.outcome === 'stopped') {
     // The exit arrives as a restart exit; the pane's normal resume picks up the selected account.
     store.clearCodexRestartNotice(pane.ptyId)
