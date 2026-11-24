@@ -35,7 +35,7 @@ function sharingHosts(replies: Reply[]) {
   }
   const transport = new ConnectorAccountTransport(
     'https://cloud.test',
-    async () => ({ ok: true, value: { connectorToken: 't', expiresAt: Date.now() + 3_600_000 } }),
+    async () => ({ ok: true, value: { connectorToken: 't', expiresAt: Number.MAX_SAFE_INTEGER } }),
     fetchImpl
   )
   const published: SharedBotHostsState[] = []
