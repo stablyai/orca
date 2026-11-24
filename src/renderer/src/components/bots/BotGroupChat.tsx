@@ -18,6 +18,7 @@ import {
   type BotGroupMessage,
   type BotGroupTurn as Turn
 } from '../../../../shared/bots/bot-group'
+import { botGroupTurnRows, botGroupTurnSilent } from '../../../../shared/bots/bot-group-member-turn'
 import { NativeChatComposer } from '../native-chat/composer/NativeChatComposer'
 import { NativeChatPaneFileDropSurface } from '../native-chat/attachments/intake/NativeChatPaneFileDropSurface'
 import { useBotGroupComposerRoom } from './use-bot-group-composer-room'
@@ -99,6 +100,25 @@ export function BotGroupChat({
   useBotGroupRoomRead(group?.folderWorkspaceId, isVisible)
   const loaded = data?.messages ?? EMPTY_MESSAGES
   const messages = useMemo(() => botGroupRoomOrder(loaded), [loaded])
+  // A post whose every turn said only the quiet marker told the room nothing: the room keeps no
+  // line of it either.
+  const quietPosts = useMemo(() => {
+    const quiet = new Set<string>()
+    for (const message of messages) {
+      if (
+        message.turns.length > 0 &&
+        message.turns.every((turn) =>
+          botGroupTurnSilent(
+            turn,
+            botGroupTurnRows(turn, sessions.get(turn.sessionId)?.groupTurnItems)
+          )
+        )
+      ) {
+        quiet.add(message.id)
+      }
+    }
+    return quiet
+  }, [messages, sessions])
   const readers = useMemo(() => {
     if (!group) {
       return []
@@ -319,7 +339,7 @@ export function BotGroupChat({
                           runtimeContext={roomContext?.runtimeContext ?? null}
                           onScrollMessageToTop={follow.scrollMessageToTop}
                         />
-                      ) : (
+                      ) : quietPosts.has(message.id) ? null : (
                         <BotGroupPeerRequestLine message={message} />
                       )}
                       {message.turns.map((turn) => (

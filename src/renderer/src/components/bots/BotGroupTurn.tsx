@@ -24,6 +24,7 @@ import {
   type BotGroupTurn as Turn,
   withBotGroupTurnAnswer
 } from '../../../../shared/bots/bot-group'
+import { botGroupTurnRows, botGroupTurnSilent } from '../../../../shared/bots/bot-group-member-turn'
 import type { BotGroupSession } from './BotGroupSessionReader'
 import type { NativeChatTurnStatus } from '../../../../shared/native-chat/transcript/turns/native-chat-turn-status'
 
@@ -64,7 +65,7 @@ export const BotGroupTurn = memo(function BotGroupTurn({
   onStop: (botId: string) => void
   onReply: (botId: string) => void
   scrollMessageToTop: (element: HTMLElement) => void
-}): React.JSX.Element {
+}): React.JSX.Element | null {
   const t = useTranslate()
   useUiLanguageRevision()
   const [expanded, setExpanded] = useState(false)
@@ -82,10 +83,7 @@ export const BotGroupTurn = memo(function BotGroupTurn({
   const { src, outfit } = useBotAvatarLook(bot)
   const submissions = session?.submissions ?? noItems
   const readTurn = session?.groupTurnItems
-  const items = useMemo(
-    () => turn.frozenItems ?? readTurn?.(turn.operationId, turn.workerDispatchIds) ?? noItems,
-    [turn.frozenItems, turn.operationId, turn.workerDispatchIds, readTurn]
-  )
+  const items = useMemo(() => botGroupTurnRows(turn, readTurn), [turn, readTurn])
   const canonical = items.find((item) => item.body.kind === 'turn')
   const lifecycle = canonical?.body.kind === 'turn' ? canonical.body : null
   const submission = submissions.find(
@@ -233,6 +231,10 @@ export const BotGroupTurn = memo(function BotGroupTurn({
       : rejection
         ? t('bots.groups.notStarted', 'Not started')
         : undefined
+  // A member turn that ended saying only the quiet marker told the room nothing: it draws nothing.
+  if (botGroupTurnSilent(turn, items)) {
+    return null
+  }
   return (
     <BotGroupTranscriptOwner
       context={files}
