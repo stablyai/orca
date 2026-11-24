@@ -1,6 +1,11 @@
-import { describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { z } from 'zod'
 import { requestConnector } from '../../../connector-cloud/connector-cloud-request'
+const logins = vi.hoisted(() => ({ clear: vi.fn() }))
+vi.mock('../../../linear/accounts/linear-login-store', () => ({
+  clearWorkspaceLogin: logins.clear
+}))
+
 import { BOT_LINKS_LIST as list, BOT_LINKS_UNLINK as unlink } from './bots-links'
 
 type Context = Parameters<typeof list.handler>[1]
@@ -36,6 +41,17 @@ function host(answer: (method: string, path: string) => Response) {
 
 const json = (body: unknown, status = 200): Response =>
   new Response(JSON.stringify(body), { status, headers: { 'content-type': 'application/json' } })
+
+const linearLink = (workspaceId: string, userId: string) => ({
+  source: 'linear',
+  workspaceId,
+  workspaceName: 'Acme Linear',
+  userId,
+  name: userId,
+  linkedAt: 1
+})
+
+afterEach(() => logins.clear.mockReset())
 
 describe('bots.links.*', () => {
   it('lists several links per source and skips a source this build does not know', async () => {
@@ -114,13 +130,33 @@ describe('bots.links.*', () => {
   it('unlinks exactly the named link, with each segment encoded', async () => {
     const { calls, context } = host(() => new Response(null, { status: 204 }))
     const result = await unlink.handler(
-      { source: 'linear', workspaceId: 'org/1', userId: 'user 2' },
+      { source: 'slack', workspaceId: 'T/1', userId: 'user 2' },
       context
     )
     expect(result).toEqual({ ok: true, value: undefined })
-    expect(calls).toEqual([
-      { method: 'DELETE', path: '/v1/connector/links/linear/org%2F1/user%202' }
-    ])
+    expect(calls).toEqual([{ method: 'DELETE', path: '/v1/connector/links/slack/T%2F1/user%202' }])
+    expect(logins.clear).not.toHaveBeenCalled()
+  })
+
+  it("forgets a Linear workspace's login with its last link there, not before", async () => {
+    const left: unknown[] = [linearLink('org-1', 'dana')]
+    const { context } = host((method) =>
+      method === 'DELETE' ? new Response(null, { status: 204 }) : json({ links: left })
+    )
+    await unlink.handler({ source: 'linear', workspaceId: 'org-1', userId: 'mara' }, context)
+    expect(logins.clear).not.toHaveBeenCalled()
+
+    left.length = 0
+    await unlink.handler({ source: 'linear', workspaceId: 'org-1', userId: 'dana' }, context)
+    expect(logins.clear).toHaveBeenCalledExactlyOnceWith('org-1')
+  })
+
+  it('keeps the Linear login when the unlink fails', async () => {
+    const { context } = host((method) =>
+      method === 'DELETE' ? json({ error: 'not_linked' }, 404) : json({ links: [] })
+    )
+    await unlink.handler({ source: 'linear', workspaceId: 'org-1', userId: 'x' }, context)
+    expect(logins.clear).not.toHaveBeenCalled()
   })
 
   it("answers not_linked for a link that isn't the caller's", async () => {

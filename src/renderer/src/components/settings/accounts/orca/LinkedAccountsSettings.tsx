@@ -1,14 +1,13 @@
 // Linked accounts for a host's Orca account: this computer's, or a paired server's (`hostName`).
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
+import { SettingsSubsectionHeader } from '@/components/settings/form-controls/SettingsFormControls'
 import { useConfirmationDialog } from '@/components/dismiss/confirmation/confirmation-dialog-context'
 import { translate } from '@/i18n/i18n'
 import { useTranslate } from '@/i18n/use-translate'
 import { isPairedWebClientWindow } from '@/app-shell/chrome/desktop-window-chrome'
 import { BOT_CONNECTORS } from '@/components/bots/bot-connectors'
-import { botGitHubErrorMessage } from '@/components/bots/github/bot-github-copy'
-import { botLinearErrorMessage } from '@/components/bots/linear/bot-linear-copy'
-import { botSlackErrorMessage } from '@/components/bots/slack/bot-slack-copy'
+import { connectorTripErrorMessage } from '@/components/bots/connector-trip-copy'
 import { connectorLinksCalls } from '@/lib/bot-connector-host-calls'
 import { refreshBotGitHub } from '@/lib/bot-github-state'
 import { refreshBotLinear } from '@/lib/bot-linear-state'
@@ -54,24 +53,6 @@ function refreshSource(hostId: ExecutionHostId, source: ConnectorLinkSource): Pr
       : Promise.resolve()
 }
 
-/** What a failed trip says here, in the source's own words. */
-function tripErrorMessage(
-  source: ConnectorConnectSource,
-  code: string,
-  hostName: string | null
-): string {
-  switch (source) {
-    case 'github':
-      return botGitHubErrorMessage(code, hostName)
-    case 'linear':
-      return botLinearErrorMessage(code, hostName)
-    case 'slack':
-      return code === BOT_SLACK_SIGN_IN_OFF
-        ? translate('settings.linkedAccounts.slackOff', 'Linking Slack isn’t available yet.')
-        : botSlackErrorMessage(code, hostName)
-  }
-}
-
 function useTrip(
   hostId: ExecutionHostId,
   source: ConnectorConnectSource,
@@ -87,7 +68,7 @@ function useTrip(
   }
   return {
     waiting: false,
-    error: tripErrorMessage(source, view.error, hostName),
+    error: connectorTripErrorMessage(source, view.error, hostName),
     // A cloud from before Sign in with Slack: no Link to offer until it has one.
     canLink: view.error !== BOT_SLACK_SIGN_IN_OFF
   }
@@ -114,14 +95,17 @@ export function LinkedAccountsSettings({
   }
   if (view.status === 'failed') {
     return (
-      <div className="flex items-center gap-3">
-        <p className="min-w-0 flex-1 text-sm text-muted-foreground">
-          {linksErrorMessage(view.error, hostName)}
-        </p>
-        <Button size="sm" variant="outline" onClick={() => void refreshConnectorLinks(hostId)}>
-          {t('settings.linkedAccounts.retry', 'Try again')}
-        </Button>
-      </div>
+      <section className="space-y-3">
+        <SettingsSubsectionHeader title={t('settings.linkedAccounts.title', 'Linked accounts')} />
+        <div className="flex items-center gap-3">
+          <p className="min-w-0 flex-1 text-sm text-muted-foreground">
+            {linksErrorMessage(view.error, hostName)}
+          </p>
+          <Button size="sm" variant="outline" onClick={() => void refreshConnectorLinks(hostId)}>
+            {t('settings.linkedAccounts.retry', 'Try again')}
+          </Button>
+        </div>
+      </section>
     )
   }
 
@@ -135,10 +119,15 @@ export function LinkedAccountsSettings({
     const service =
       BOT_CONNECTORS.find((connector) => connector.id === entry.source)?.label ?? entry.source
     const confirmed = await confirm({
-      title: t('settings.linkedAccounts.unlinkTitle', 'Unlink {{name}} on {{service}}?', {
-        name: entry.workspaceName || entry.name || entry.userId,
-        service
-      }),
+      title: entry.workspaceName
+        ? t('settings.linkedAccounts.unlinkTitleIn', 'Unlink {{name}} in {{workspace}}?', {
+            name: entry.name || entry.userId,
+            workspace: entry.workspaceName
+          })
+        : t('settings.linkedAccounts.unlinkTitle', 'Unlink {{name}} on {{service}}?', {
+            name: entry.name || entry.userId,
+            service
+          }),
       description: entry.workspaceName
         ? t(
             'settings.linkedAccounts.unlinkNoteWorkspace',

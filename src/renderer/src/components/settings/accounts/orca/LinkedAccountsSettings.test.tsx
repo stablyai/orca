@@ -83,7 +83,7 @@ describe('Linked accounts', () => {
     await screen.findByText('Acme Partners')
     fireEvent.click(screen.getAllByRole('button', { name: 'Unlink' })[1]!)
     const dialog = await screen.findByRole('dialog')
-    expect(within(dialog).getByText('Unlink Acme Partners on Slack?')).toBeTruthy()
+    expect(within(dialog).getByText('Unlink mara in Acme Partners?')).toBeTruthy()
     expect(asked.some(({ method }) => method === 'bots.links.unlink')).toBe(false)
     fireEvent.click(within(dialog).getByRole('button', { name: 'Unlink' }))
     await waitFor(() =>

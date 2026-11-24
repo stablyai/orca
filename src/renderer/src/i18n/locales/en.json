@@ -2048,7 +2048,8 @@
       "unlinkTitle": "Unlink {{name}} on {{service}}?",
       "unlinkNoteWorkspace": "Bots shared with you won’t know it’s you in that workspace.",
       "unlinkNote": "Bots shared with you won’t know it’s you on {{service}}.",
-      "slackOff": "Linking Slack isn’t available yet."
+      "slackOff": "Linking Slack isn’t available yet.",
+      "unlinkTitleIn": "Unlink {{name}} in {{workspace}}?"
     }
   },
   "menu": {
@@ -27733,7 +27734,9 @@
         "notInstalled": "Add this bot to Slack first.",
         "signedOut": "Sign in to Orca Cloud to connect Slack.",
         "unreachable": "Orca Cloud could not be reached. Check your connection and try again.",
-        "handOffExpired": "That hand-off expired or was already used. Try again."
+        "handOffExpired": "That hand-off expired or was already used. Try again.",
+        "tripExpired": "Slack didn’t finish. A newer sign-in may have replaced it. Start again.",
+        "wrongAccount": "This sign-in was started from another Orca account. Sign in with Slack again from this one."
       },
       "howToAsk": "Mention <code>@{{name}}</code> in a channel, or send it a direct message.",
       "handOff": {
@@ -27807,6 +27810,9 @@
         "otherDevice": "Approve on another device",
         "linkLabel": "Slack approval link",
         "copied": "Copied"
+      },
+      "connect": {
+        "linked": "Slack linked."
       }
     },
     "whoCanAsk": {
