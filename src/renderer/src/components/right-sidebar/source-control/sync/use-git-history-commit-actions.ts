@@ -24,7 +24,11 @@ import { openWorkspaceBrowserTab } from '@/lib/browser/workspace/workspace-brows
 
 const EMPTY_BRANCH_CHANGE_ENTRIES: GitBranchChangeEntry[] = []
 
-type CommitCompareGeneration = { key: string; cache: Map<string, GitCommitCompareResult> }
+type CommitCompareGeneration = {
+  key: string
+  cache: Map<string, GitCommitCompareResult>
+  pending: Map<string, Promise<GitBranchChangeEntry[]>>
+}
 
 type GitHistoryCommitActions = {
   loadCommitFiles: (item: GitHistoryItem) => Promise<GitBranchChangeEntry[]>
@@ -64,10 +68,14 @@ export function useGitHistoryCommitActions({
       ? (sourceControlConnectionId(scope, activeWorktreeId, ownerConnectionId) ?? null)
       : null
   ])
-  const generationRef = useRef<CommitCompareGeneration>({ key: generationKey, cache: new Map() })
+  const generationRef = useRef<CommitCompareGeneration>({
+    key: generationKey,
+    cache: new Map(),
+    pending: new Map()
+  })
   useEffect(() => {
     if (generationRef.current.key !== generationKey) {
-      generationRef.current = { key: generationKey, cache: new Map() }
+      generationRef.current = { key: generationKey, cache: new Map(), pending: new Map() }
     }
   }, [generationKey])
 
@@ -83,7 +91,7 @@ export function useGitHistoryCommitActions({
         return cached.entries
       }
       const connectionId = sourceControlConnectionId(scope, activeWorktreeId, ownerConnectionId)
-      const result = await getRuntimeGitCommitCompare(
+      const request: Promise<GitBranchChangeEntry[]> = getRuntimeGitCommitCompare(
         {
           // Compare on the repo owner, which may differ from the focused host.
           target: requireGitOwnerTarget(activeRepoTarget),
@@ -93,17 +101,31 @@ export function useGitHistoryCommitActions({
         },
         item.id
       )
-      if (result.summary.status !== 'ready') {
-        throw new Error(
-          result.summary.errorMessage ??
-            translate(
-              'auto.components.right.sidebar.SourceControl.8a5ba6a988',
-              'Failed to load commit diff'
+        .then((result) => {
+          if (result.summary.status !== 'ready') {
+            throw new Error(
+              result.summary.errorMessage ??
+                translate(
+                  'auto.components.right.sidebar.SourceControl.8a5ba6a988',
+                  'Failed to load commit diff'
+                )
             )
-        )
-      }
-      generation.cache.set(item.id, result)
-      return result.entries
+          }
+          // A shallow checkout can return different rows for the same commit after it deepens.
+          const latest = generation.pending.get(item.id)
+          if (latest !== request) {
+            return latest ?? generation.cache.get(item.id)?.entries ?? result.entries
+          }
+          generation.cache.set(item.id, result)
+          return result.entries
+        })
+        .finally(() => {
+          if (generation.pending.get(item.id) === request) {
+            generation.pending.delete(item.id)
+          }
+        })
+      generation.pending.set(item.id, request)
+      return request
     },
     [activeRepoTarget, activeWorktreeId, scope, worktreePath, ownerConnectionId]
   )
@@ -115,7 +137,7 @@ export function useGitHistoryCommitActions({
       }
       const generation = generationRef.current
       try {
-        await loadCommitFiles(item)
+        await (generation.pending.get(item.id) ?? loadCommitFiles(item))
         // A worktree or host change while loading drops the open; a scope change in the list does not.
         if (generationRef.current !== generation) {
           return

@@ -41,12 +41,12 @@ import { useGitHistoryCommitActions } from './use-git-history-commit-actions'
 
 const COMMIT: GitHistoryItem = { id: 'c1', parentIds: [], subject: 'c1', message: 'c1' }
 
-function compare(path: string): GitCommitCompareResult {
+function compare(path: string, commitOid = COMMIT.id): GitCommitCompareResult {
   return {
     summary: {
-      commitOid: 'c1',
+      commitOid,
       parentOid: 'p1',
-      compareRef: 'c1',
+      compareRef: commitOid,
       baseRef: 'p1',
       changedFiles: 1,
       status: 'ready'
@@ -74,6 +74,30 @@ afterEach(() => {
 })
 
 describe('useGitHistoryCommitActions context fencing', () => {
+  it('opens the files accepted by the latest read of a reselected commit', async () => {
+    const older = Promise.withResolvers<GitCommitCompareResult>()
+    const newer = Promise.withResolvers<GitCommitCompareResult>()
+    const other: GitHistoryItem = { id: 'c2', parentIds: [], subject: 'c2', message: 'c2' }
+    mocks.getRuntimeGitCommitCompare
+      .mockReturnValueOnce(older.promise)
+      .mockResolvedValueOnce(compare('other.ts', other.id))
+      .mockReturnValueOnce(newer.promise)
+    render(<Probe worktreeId="A" />)
+    const actions = latest!
+
+    const firstRead = actions.loadCommitFiles(COMMIT)
+    await actions.loadCommitFiles(other)
+    const latestRead = actions.loadCommitFiles(COMMIT)
+    newer.resolve(compare('changed.ts'))
+    const acceptedFiles = await latestRead
+    older.resolve(compare('shallow.ts'))
+    await firstRead
+
+    await actions.openHistoryCommitDiff(COMMIT)
+    expect(acceptedFiles).toEqual([{ path: 'changed.ts', status: 'modified' }])
+    expect(mocks.openCommitAllDiffs.mock.lastCall?.[3]).toEqual(acceptedFiles)
+  })
+
   it('keeps a late compare for the previous worktree out of the current cache', async () => {
     const fromA = Promise.withResolvers<GitCommitCompareResult>()
     mocks.getRuntimeGitCommitCompare.mockReturnValueOnce(fromA.promise)
