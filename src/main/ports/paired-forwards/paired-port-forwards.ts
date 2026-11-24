@@ -45,14 +45,16 @@ export function addPairedPortForward(spec: ForwardSpec): Promise<PortForwardEntr
   const remoteHost = requireLoopbackRemoteHost(spec.remoteHost)
   return serializePortForwardChange(forwardChangeKey(spec.environmentId), async () => {
     await assertIpv6LoopbackPortFree(spec.localPort)
-    const entry = await manager.addForward(
-      spec.environmentId,
-      tunnelFor(spec.environmentId),
-      spec.localPort,
-      remoteHost,
-      spec.remotePort,
-      spec.label
-    )
+    const entry = await manager
+      .addForward(
+        spec.environmentId,
+        tunnelFor(spec.environmentId),
+        spec.localPort,
+        remoteHost,
+        spec.remotePort,
+        spec.label
+      )
+      .catch(retireIdleTunnelAfter(spec.environmentId))
     deps?.onChanged(spec.environmentId)
     return entry
   })
@@ -126,7 +128,7 @@ export function ensurePairedPortForward(args: {
       // Lost races and privileged ports move on to the next number.
       entry = await add(candidate).catch(() => null)
     }
-    entry ??= await add(0)
+    entry ??= await add(0).catch(retireIdleTunnelAfter(args.environmentId))
     deps?.onChanged(args.environmentId)
     return { entry, created: true }
   })
@@ -177,6 +179,14 @@ function retireIdleTunnel(environmentId: string): void {
   }
   tunnels.get(environmentId)?.dispose()
   tunnels.delete(environmentId)
+}
+
+/** A failed first forward leaves no tunnel behind for a server with nothing forwarded. */
+function retireIdleTunnelAfter(environmentId: string): (error: unknown) => never {
+  return (error) => {
+    retireIdleTunnel(environmentId)
+    throw error
+  }
 }
 
 function requireLoopbackRemoteHost(remoteHost: string): string {
