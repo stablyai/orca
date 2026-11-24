@@ -7,7 +7,8 @@ import {
 
 // Worker-only. `exec` leaves one ls process (no pipeline) so a timeout or quit kill ends the whole listing; directory
 // arguments (one per process, not per fd) keep a busy machine under the exec argument limit.
-const LISTING_SCRIPT = 'exec ls -ln /proc/[0-9]*/fd 2>/dev/null'
+// -q prints control characters (newlines included) as '?', so no open file's name can forge a header or row.
+const LISTING_SCRIPT = 'exec ls -lnq /proc/[0-9]*/fd 2>/dev/null'
 const MAX_LINE_CHARS = 4096
 // LC_ALL=C pins `ls -ln` to `mode links uid gid size Mon DD HH:MM|YYYY fd -> target`: 11 fields for an fd row.
 const FD_ROW_FIELDS = 11
