@@ -317,7 +317,8 @@ export function MobileBotComposioKey(props: ComposioScope & { onClose: () => voi
       ) : null}
       <SettingsSection first={!rejected}>
         <ListRow
-          leading={<ArrowUpRight size={18} color={colors.textPrimary} />}
+          leading={<ArrowUpRight size={18} color={colors.accentBlue} />}
+          accent
           title={t('bots.composio.key.getKey', 'Get a key')}
           accessibilityRole="link"
           onPress={() => openConnectorLink(COMPOSIO_PAGES.apiKeys)}

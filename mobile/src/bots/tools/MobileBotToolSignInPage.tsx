@@ -94,7 +94,8 @@ export function MobileBotToolSignInPage(props: {
       ) : attempt?.url || !attempt ? (
         <SettingsSection>
           <ListRow
-            leading={<ArrowUpRight size={18} color={colors.textPrimary} />}
+            leading={<ArrowUpRight size={18} color={colors.accentBlue} />}
+            accent
             title={
               attempt
                 ? t('bots.tools.signIn.openAgain', 'Open page again')
