@@ -106,9 +106,9 @@ export abstract class OrcaRuntimeWithGroupFolderSetup extends OrcaRuntimeWithGet
         worktree
           ? this.createTerminal(selector, { ...options, ...launchContext }, worktree)
           : this.createTerminal(selector, { ...options, ...launchContext }),
-      pasteDraft: (handle, draft) => this.pasteStartupDraftWhenReady(handle, draft),
-      sendFollowup: (handle, followup, terminal) => {
-        void this.deliverStartupFollowup(handle, followup, { terminalCreation: terminal })
+      pasteDraft: (handle, draft, guard) => this.pasteStartupDraftWhenReady(handle, draft, guard),
+      sendFollowup: (handle, followup, terminal, guard) => {
+        void this.deliverStartupFollowup(handle, followup, { ...guard, terminalCreation: terminal })
       },
       provision: (options) =>
         this.provisionManagedWorktreeTerminals({ ...options, ...launchContext }, worktree),

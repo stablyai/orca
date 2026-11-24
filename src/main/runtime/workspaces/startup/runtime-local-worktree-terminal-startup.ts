@@ -1,6 +1,5 @@
 import { formatTerminalStartFailure } from '../../../../shared/terminal/pty/lifecycle/terminal-start-failure'
 import { readableWslDistroHoldText } from '../../../../shared/remote-runtime/wsl-hosts/wsl-distro-stopped-hold'
-import { paneIdentity } from '../../terminal/identity/runtime-terminal-pane-identity'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/workspace-layout/layout-owner-switch'
 import { shouldSeedWorktreePrimaryTerminal } from '../../../../shared/worktree/creation/worktree-first-surface'
 import type { CreateWorktreeResult } from '../../../../shared/worktree/create-types'
@@ -11,29 +10,23 @@ import type { WorktreeStartupLaunch } from '../../../../shared/worktree/creation
 import type { AgentLaunchRuntime } from '../../../../shared/agent-launch/startup/agent-launch-runtime'
 import { createSequencedSetupAgentCommands } from '../../../../shared/agent-launch/startup/setup-agent-sequencing'
 import { getSetupRunnerCommandPlatformForPath } from '../../../../shared/agent-launch/startup/setup-runner-command'
-import type { RuntimeTerminalCreate } from '../../../../shared/terminal/runtime/runtime-terminal-create-contract'
-import type { TerminalCreateOptions } from '../../terminal/launch/terminal-create-options'
 import { ownerSurfacing } from '../../terminal/launch/terminal-presentation'
 import type { RuntimeManagedWorktreeCreateArgs } from '../creation/runtime-managed-worktree-create-types'
 import type {
   WorktreeStartupDraftPaste,
   WorktreeStartupFollowup
 } from './runtime-worktree-agent-startup'
+import {
+  startStartupAgentTerminal,
+  startupAgentTerminalOptions,
+  startupEffectApproval,
+  type StartupAgentTerminalPorts
+} from './runtime-startup-agent-terminal'
 import type { WorktreeTerminalProvisioningArgs } from './runtime-worktree-terminal-provisioning'
 
-export type RuntimeLocalWorktreeTerminalPorts = {
+export type RuntimeLocalWorktreeTerminalPorts = StartupAgentTerminalPorts & {
   canSpawn: boolean
   provisionInBackground?: () => boolean
-  createTerminal: (
-    selector: string,
-    options: TerminalCreateOptions
-  ) => Promise<RuntimeTerminalCreate>
-  pasteDraft: (handle: string, draft: WorktreeStartupDraftPaste) => void
-  sendFollowup: (
-    handle: string,
-    followup: WorktreeStartupFollowup,
-    terminal: RuntimeTerminalCreate
-  ) => void
   provision: (
     options: WorktreeTerminalProvisioningArgs
   ) => Promise<{ setupSpawned: boolean; setupTerminalHandle: string | null }>
@@ -108,45 +101,39 @@ export async function startRuntimeLocalWorktreeTerminals(args: {
 
   // Main owns failed agent startup too, keeping its reason visible without a terminal service.
   if (sequencedStartup && (ports.canSpawn || ORCA_LAYOUT_OWNER_IS_MAIN)) {
+    const approval = startupEffectApproval(request)
     try {
       const launchRuntime = args.startupLaunchRuntime
       if (launchRuntime instanceof Error && !ORCA_LAYOUT_OWNER_IS_MAIN) {
         throw launchRuntime
       }
-      const terminal = await ports.createTerminal(`id:${worktree.id}`, {
-        command: sequencedStartup.command,
-        ...(request.startupCwd ? { cwd: request.startupCwd } : {}),
-        ...paneIdentity(request.startupPaneKey),
-        ...(request.startupTitle ? { title: request.startupTitle } : {}),
-        ...(setup && startup ? { claudeAgentTeamsSourceCommand: startup.command } : {}),
-        env: sequencedStartup.env,
-        ...(sequencedStartup.launchConfig ? { launchConfig: sequencedStartup.launchConfig } : {}),
-        ...(args.createdWithAgent ? { launchAgent: args.createdWithAgent } : {}),
-        ...(launchRuntime instanceof Error
-          ? { startFailure: launchRuntime }
-          : launchRuntime
-            ? { launchRuntime }
-            : {}),
-        ...(sequencedStartup.viewMode ? { viewMode: sequencedStartup.viewMode } : {}),
-        startupCommandDelivery: sequencedStartup.startupCommandDelivery,
-        telemetry: sequencedStartup.telemetry,
-        // Keep failed starts visible in their panes.
-        ...(ORCA_LAYOUT_OWNER_IS_MAIN ? { keepPaneOnStartFailure: true as const } : {}),
-        ...ownerSurfacing(shouldActivate)
+      const terminal = await startStartupAgentTerminal({
+        worktreeId: worktree.id,
+        approval,
+        ports,
+        options: {
+          ...startupAgentTerminalOptions({
+            request,
+            startup: sequencedStartup,
+            launchRuntime,
+            ...(args.createdWithAgent ? { createdWithAgent: args.createdWithAgent } : {})
+          }),
+          ...(request.startupTitle ? { title: request.startupTitle } : {}),
+          ...(setup && startup ? { claudeAgentTeamsSourceCommand: startup.command } : {}),
+          ...ownerSurfacing(shouldActivate)
+        },
+        onStartupTerminalCreated: request.onStartupTerminalCreated,
+        ...(args.draftPaste ? { draftPaste: args.draftPaste } : {}),
+        ...(args.startupFollowup ? { startupFollowup: args.startupFollowup } : {})
       })
-      request.onStartupTerminalCreated?.(terminal)
-      if (args.draftPaste) {
-        ports.pasteDraft(terminal.handle, args.draftPaste)
-      }
-      if (args.startupFollowup) {
-        ports.sendFollowup(terminal.handle, args.startupFollowup, terminal)
-      }
       didSpawnStartup = true
       startupTerminalHandle = terminal.handle
       startupTerminalTabId = terminal.tabId ?? null
       startupTerminalPaneKey = terminal.paneKey ?? null
       startupTerminalPtyId = terminal.ptyId ?? null
     } catch (error) {
+      // A refusal is the caller's answer, not a startup failure to warn about.
+      approval.assertAllowed()
       warning = appendFailure(warning, worktree.path, 'startup', error)
     }
   }

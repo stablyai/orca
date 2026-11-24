@@ -86,6 +86,26 @@ export function runtimeStub(options: AgentLaunchRuntimeStubOptions = {}) {
     getStructuredAgentSessionCreateSupport: vi.fn(
       async () => options.createSupport ?? { supported: true }
     ),
+    resolveStructuredAgentSessionCreateIntent: vi.fn(async (params) => ({
+      envelope: params.envelope,
+      location: {
+        executionHostId: 'local',
+        wslDistro: null,
+        workspaceId: 'workspace-1',
+        workspaceKind: 'git-worktree'
+      },
+      provider: params.agent,
+      agent: params.agent,
+      accountHome: {
+        variable: params.agent === 'claude' ? 'CLAUDE_CONFIG_DIR' : 'CODEX_HOME',
+        path: params.agent === 'claude' ? '/host/.claude' : '/host/.codex'
+      },
+      options:
+        params.agent === 'claude'
+          ? { model: 'opus', effort: 'high' }
+          : { model: 'gpt-5.6-sol', effort: 'medium' },
+      runtimeKind: 'native'
+    })),
     dedupeWorktreeCreate: vi.fn(
       (repo: string, key: string | undefined, run: () => Promise<unknown>) => {
         if (!key) {
@@ -103,7 +123,11 @@ export function runtimeStub(options: AgentLaunchRuntimeStubOptions = {}) {
       }
     ),
     showRepo: vi.fn(async () => ({ id: 'repo-1' })),
-    createFolderWorkspace: vi.fn(async (_input: Record<string, unknown>) => ({ id: 'fw-new' })),
+    createFolderWorkspace: vi.fn(
+      async (_input: Record<string, unknown>): Promise<Record<string, unknown>> => ({
+        id: 'fw-new'
+      })
+    ),
     createManagedWorktree: vi.fn(async (args: Record<string, unknown>) => {
       reportPromptCarry(options, args.onStartupPromptCarry, args.startupPrompt)
       if (args.startupAgent && options.startupTerminalPaneKey) {

@@ -103,6 +103,11 @@ export type RuntimeManagedWorktreeCreateArgs = {
   allowLocalBaseFallback?: boolean
   cliProvenance?: CliWorkspaceProvenance
   creatorProvenance?: Worktree['creatorProvenance']
+  /** Trusted in-process callers revalidate approval after each wait: right before the startup agent
+   *  spawns and before its draft or prompt is written. A throw keeps the workspace and starts no agent. */
+  beforeEffect?: () => void
+  /** A request that ended while its workspace was created starts no agent and delivers no prompt. */
+  signal?: AbortSignal
   startup?: WorktreeStartupLaunch
   startupDraft?: string
   /** Reuse the launch-selected draft agent without changing caller-requested createdWithAgent. */

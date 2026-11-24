@@ -107,6 +107,12 @@ export function agentLaunchSurfaceFactory(
         ...(atRest ? { atRest: true as const } : {}),
         ...(firstMessage ? { firstMessage } : {}),
         beforeEffect,
+        // The send and the tab publication await before registration; approval is asked again right before delivery.
+        beforeDelivery: () => {
+          beforeEffect?.()
+          assertAgentPromptRequestActive(signal ?? context.signal)
+          return true
+        },
         signal: signal ?? context.signal,
         activate:
           !callerPresentsSurface &&

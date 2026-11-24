@@ -4,6 +4,7 @@ import { holdTerminalInputCustody } from '../../terminal/wait/terminal-input-cus
 import type { WorktreeStartupDraftPaste } from './runtime-worktree-agent-startup'
 import {
   waitForWorktreeStartupDraft,
+  type StartupPromptDeliveryGuard,
   type WorktreeStartupReadinessHost
 } from './runtime-worktree-startup-readiness'
 
@@ -19,7 +20,8 @@ export type StartupDraftCustodyHost = {
 export function pasteStartupDraftInCustody(
   host: StartupDraftCustodyHost,
   handle: string,
-  draft: WorktreeStartupDraftPaste
+  draft: WorktreeStartupDraftPaste,
+  guard: StartupPromptDeliveryGuard = {}
 ): void {
   const ptyId = host.readiness.getPtyId(handle)
   const target = ptyId ? host.readPty(ptyId) : undefined
@@ -41,7 +43,10 @@ export function pasteStartupDraftInCustody(
         { ...host.readiness, getPtyId: () => target.ptyId },
         handle,
         draft.agent,
-        { signal: stop.signal, afterSetup: true }
+        {
+          signal: guard.signal ? AbortSignal.any([stop.signal, guard.signal]) : stop.signal,
+          afterSetup: true
+        }
       )
       if (!readyPtyId) {
         assertLive()
@@ -52,6 +57,8 @@ export function pasteStartupDraftInCustody(
       if (host.isStopRequested(target.ptyId)) {
         throw new Error('terminal_not_writable')
       }
+      // The agent took time to be ready; its caller is approved again right before the paste.
+      guard.beforeWrite?.()
       host.readiness.write(target.ptyId, `\x1b[200~${draft.content}\x1b[201~`, 'launch')
     }
   ).catch((error) => console.warn('[worktree-create] failed to paste startup draft:', error))

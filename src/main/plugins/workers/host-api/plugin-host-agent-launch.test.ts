@@ -2,6 +2,7 @@ import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { z } from 'zod'
+import type { RuntimeTerminalCreate } from '../../../../shared/terminal/runtime/runtime-terminal-create-contract'
 import type * as WorktreeScanCache from '../../../git/worktrees/catalog/worktree-scan-cache'
 import type * as WorktreeListing from '../../../git/worktrees/catalog/worktree-listing'
 import { settledWriteStub } from '../../../providers/testing/settled-pty-write-stub'
@@ -40,9 +41,16 @@ const COMPOSER = readFileSync(
   'utf8'
 )
 
-function coldLaunch() {
+/** The ports a workspace create hands the agent it starts; a launch into an existing workspace never reaches them. */
+class StartupPortsRuntime extends OrcaRuntimeService {
+  startupPorts() {
+    return this.localWorktreeTerminalPorts({}, () => {})
+  }
+}
+
+function coldLaunch(withPrompt = true) {
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: this fixture supplies the repo/worktree storage used by terminal creation.
-  const runtime = new OrcaRuntimeService(makeStore() as never)
+  const runtime = new StartupPortsRuntime(makeStore() as never)
   const logs: string[] = []
   let ready = false
   let approved = true
@@ -78,6 +86,12 @@ function coldLaunch() {
       }
     })
   })
+  const assertActive = (signal?: AbortSignal): void => {
+    signal?.throwIfAborted()
+    if (!approved) {
+      throw pluginHostCallRevoked()
+    }
+  }
   const services = bindPluginHostServices({
     pluginsDataDir: '/unused-plugin-agent-test-data',
     delegate: {
@@ -96,22 +110,23 @@ function coldLaunch() {
       executePluginHostCall({
         pluginId: 'test.agent-handoff',
         method: 'agent.launch',
-        params: { workspaceId: 'repo-1::/tmp/worktree-a', agent: 'zcode', prompt: PROMPT },
+        params: {
+          workspaceId: 'repo-1::/tmp/worktree-a',
+          agent: 'zcode',
+          ...(withPrompt ? { prompt: PROMPT } : {})
+        },
         surface: 'worker',
         grantedCapabilities: ['agent:launch'],
         services,
         audit: { record: async () => {} },
         scope: {
           signal,
-          assertActive: () => {
-            signal?.throwIfAborted()
-            if (!approved) {
-              throw pluginHostCallRevoked()
-            }
-          },
+          assertActive: () => assertActive(signal),
           log: (line) => logs.push(line)
         }
       }),
+    assertActive,
+    startupPorts: () => runtime.startupPorts(),
     revokeApproval: () => {
       approved = false
     },
@@ -183,6 +198,50 @@ describe('plugin launch prompt delivery', () => {
       throw new Error(receipt.error)
     }
     await vi.advanceTimersByTimeAsync(0)
+    launch.revokeApproval()
+    launch.showComposer()
+    await vi.runAllTimersAsync()
+
+    expect(launch.writes).toEqual([])
+  })
+
+  /** An agent a workspace create started, without a prompt of the launch's own. */
+  async function startedAgent() {
+    const launch = coldLaunch(false)
+    const receipt = await launch.launch(new AbortController().signal)
+    if (!receipt.ok) {
+      throw new Error(receipt.error)
+    }
+    const { terminalId } = z.object({ terminalId: z.string() }).parse(receipt.value)
+    return { launch, terminalId }
+  }
+
+  /** The draft and follow-up a create owes its startup agent, each approved again right before it is written. */
+  function handOverStartupPrompts(launch: ReturnType<typeof coldLaunch>, terminalId: string): void {
+    const ports = launch.startupPorts()
+    const guard = { beforeWrite: () => launch.assertActive() }
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: a follow-up's readiness reads only the handle and the PTY its launch spawned.
+    const terminal = { handle: terminalId, ptyId: PTY_ID } as RuntimeTerminalCreate
+    ports.pasteDraft(terminalId, { agent: 'zcode', content: PROMPT }, guard)
+    ports.sendFollowup(terminalId, { agent: 'zcode', prompt: PROMPT }, terminal, guard)
+  }
+
+  it('delivers a startup draft and follow-up to the ready agent while their caller is approved', async () => {
+    vi.useFakeTimers()
+    const { launch, terminalId } = await startedAgent()
+    handOverStartupPrompts(launch, terminalId)
+    launch.showComposer()
+    await vi.runAllTimersAsync()
+
+    // The draft is pasted once; the follow-up pastes, then submits.
+    const pasted = `\x1b[200~${PROMPT}\x1b[201~`
+    expect(launch.writes.map((write) => write.text).toSorted()).toEqual(['\r', pasted, pasted])
+  })
+
+  it('keeps a startup draft and follow-up from the agent once their caller is revoked while it comes up', async () => {
+    vi.useFakeTimers()
+    const { launch, terminalId } = await startedAgent()
+    handOverStartupPrompts(launch, terminalId)
     launch.revokeApproval()
     launch.showComposer()
     await vi.runAllTimersAsync()

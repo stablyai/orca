@@ -25,6 +25,7 @@ import { recordCreatedWorktreeLineage as recordCreatedWorktreeLineageState } fro
 import {
   deliverStartupFollowupPrompt,
   type StartupFollowupPromptOptions,
+  type StartupPromptDeliveryGuard,
   type WorktreeStartupReadinessHost
 } from './runtime-worktree-startup-readiness'
 import {
@@ -211,7 +212,11 @@ export abstract class OrcaRuntimeWithActivateManagedWorktree extends OrcaRuntime
     return recordCreatedWorktreeLineageState(this.store, worktree, lineageResolution)
   }
 
-  protected pasteStartupDraftWhenReady(handle: string, draft: WorktreeStartupDraftPaste): void {
+  protected pasteStartupDraftWhenReady(
+    handle: string,
+    draft: WorktreeStartupDraftPaste,
+    guard: StartupPromptDeliveryGuard = {}
+  ): void {
     pasteStartupDraftInCustody(
       {
         readiness: this.getWorktreeStartupReadinessHost(),
@@ -221,7 +226,8 @@ export abstract class OrcaRuntimeWithActivateManagedWorktree extends OrcaRuntime
         isStopRequested: (ptyId) => this.isPtyStopRequested(ptyId)
       },
       handle,
-      draft
+      draft,
+      guard
     )
   }
 

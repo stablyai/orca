@@ -53,6 +53,8 @@ export function agentLaunchFolderWorkspaceCreator(
         ? toAgentLaunchPreferences(options, startupAgent)
         : undefined,
       startupAccountEnv: accountEnv ? { ...accountEnv } : undefined,
+      // The create starts the agent after its store write; approval is asked again right before.
+      beforeEffect,
       onWorkspaceCreated,
       onStartupTerminalCreated: (terminal) => {
         startupTerminalCreation = terminal

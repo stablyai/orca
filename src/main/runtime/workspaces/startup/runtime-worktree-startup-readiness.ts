@@ -42,6 +42,12 @@ export type StartupFollowupPromptOptions = {
   terminalCreation?: TerminalReadinessCreation
 }
 
+/** A startup prompt's live approval: an abort ends its readiness wait, a throw sends nothing. */
+export type StartupPromptDeliveryGuard = Pick<
+  StartupFollowupPromptOptions,
+  'signal' | 'beforeWrite'
+>
+
 /** A post-start agent's first prompt: its process in front can still drop typed text (#10336). */
 export async function deliverStartupFollowupPrompt(
   runtime: TerminalPromptRuntime,
