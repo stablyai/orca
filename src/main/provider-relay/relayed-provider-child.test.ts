@@ -6,7 +6,7 @@ const policy = () => ({ idleStopMs: null, markers: [] })
 
 describe('relayed provider child', () => {
   it('an agent that exits during the attach still hands on its last output before its exit', async () => {
-    let sink: ProviderRelaySink | null = null
+    let sink = null as ProviderRelaySink | null
     const channel = {
       bind: (_relayId: string, bound: ProviderRelaySink) => {
         sink = bound
@@ -42,7 +42,7 @@ describe('relayed provider child', () => {
   })
 
   it('an agent that exits while its output is held for a reattach waits for the chat, then ends', async () => {
-    let sink: ProviderRelaySink | null = null
+    let sink = null as ProviderRelaySink | null
     const acks: number[] = []
     const channel = {
       bind: (_relayId: string, bound: ProviderRelaySink) => {
