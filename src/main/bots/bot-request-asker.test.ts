@@ -162,6 +162,8 @@ describe('a turn the owner typed in Orca', () => {
       typedBy: { by: 'device', deviceId: 'd2', accountId: 'a2', account: 'Sam', own: false }
     }
     expect(chat([otherAccount, OWNER_SEND])).toEqual(dana)
+    const { account: _unnamed, ...nameless } = otherAccount.typedBy
+    expect(chat([{ ...typed, typedBy: nameless }, OWNER_SEND])).toEqual(dana)
     // An event automation's prompt acts for its conversation.
     expect(chat([{ ...typed, memorySource: 'Webhook deploys' }, { origin: 'host' }])).toEqual(dana)
   })

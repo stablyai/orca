@@ -6,7 +6,6 @@ import type {
   AgentJournalSubmission
 } from '../../shared/agent-session/journal/agent-session-journal-types'
 import { agentJournalSubmissionKey } from '../../shared/agent-session/journal/agent-session-journal-item-key'
-import { otherPersonTypistOf } from '../../shared/agent-session/journal/agent-journal-typed-by'
 
 function sentByPerson(
   item: AgentJournalRenderItem,
@@ -54,6 +53,6 @@ export function typedInOrcaByOwner(
   return (
     typedInOrcaByPerson(item, submissions) &&
     item.body.kind === 'message' &&
-    otherPersonTypistOf(item.body.typedBy) === undefined
+    !(item.body.typedBy?.by === 'device' && item.body.typedBy.own === false)
   )
 }
