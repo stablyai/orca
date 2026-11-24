@@ -315,7 +315,7 @@ export function BotItemQuestionStep({
                 BOT_ITEM_CHIP,
                 CHIP_ACTION,
                 CHIP_OWN_WORDS,
-                iconOnly && 'size-8 shrink-0 justify-center self-start rounded-md p-0'
+                iconOnly && 'size-8 shrink-0 justify-center self-start rounded-full p-0'
               )}
               onClick={() => ownWords(index, null)}
             >
