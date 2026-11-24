@@ -34,8 +34,13 @@ export function useGoogleAccountChoice(
   save: () => Promise<boolean>
 } {
   const view = useGoogleHost(botTarget(bot))
-  // `basedOn`: the bot's Google when the owner started ticking, so saving can't undo a newer edit.
-  const [picked, setPicked] = useState<{ chosen: string[]; basedOn: GoogleBotRead } | null>(null)
+  // When the owner started ticking: the bot's Google, so saving can't undo a newer edit, and the
+  // accounts shown, so an older host's every-account save still covers one declined then signed out.
+  const [picked, setPicked] = useState<{
+    chosen: string[]
+    basedOn: GoogleBotRead
+    shown: string[]
+  } | null>(null)
   const [saving, setSaving] = useState(false)
   const initial =
     view.status === 'ready'
@@ -47,10 +52,12 @@ export function useGoogleAccountChoice(
         )
       : []
   const chosen = picked?.chosen ?? initial
+  const shownNow = view.status === 'ready' ? view.google.accounts.map((a) => a.email) : []
   const setChosen: React.Dispatch<React.SetStateAction<string[]>> = (update) =>
     setPicked((current) => ({
       chosen: typeof update === 'function' ? update(current?.chosen ?? initial) : update,
-      basedOn: current?.basedOn ?? googleBotRead(bot)
+      basedOn: current?.basedOn ?? googleBotRead(bot),
+      shown: current?.shown ?? shownNow
     }))
   const save = async (): Promise<boolean> => {
     const next = googleAccountChoiceSave(chosen)
@@ -64,7 +71,7 @@ export function useGoogleAccountChoice(
             accounts: next.accounts,
             confirmedAskers: botAskerKeys(bot),
             basedOn: picked?.basedOn ?? googleBotRead(bot),
-            shownAccounts: view.status === 'ready' ? view.google.accounts.map((a) => a.email) : []
+            shownAccounts: [...(picked?.shown ?? []), ...shownNow]
           }
         : {}
     ).then(
