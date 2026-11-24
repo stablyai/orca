@@ -93,6 +93,8 @@ export const MOBILE_BOT_RPC_METHODS = [
   'bots.slack.members',
   'bots.slack.remove',
   'bots.slack.saveGrant',
+  // Gated on bots.slack-post-as.v1; older hosts refuse it here.
+  'bots.slack.setPostAs',
   'bots.slack.setUpApp',
   'bots.slack.state',
   'bots.suggestions.dismiss',
