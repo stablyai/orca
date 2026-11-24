@@ -3,6 +3,7 @@ import { waitForPromiseWithSignal } from '../../../../shared/concurrency/abort-s
 import { ClaudeImportResourceError } from './journal-claude-import-resource-error'
 import type {
   ClaudeImportEntry,
+  ClaudeImportFieldFragment,
   ClaudeImportHeader,
   ClaudeImportItem,
   ClaudeImportItemPart,
@@ -25,6 +26,36 @@ function isFragmentObject(value: unknown): value is FragmentObject {
   return typeof value === 'object' && value !== null
 }
 
+export function applyClaudeImportFieldFragment(
+  root: FragmentObject,
+  entry: ClaudeImportFieldFragment
+): void {
+  const path = entry.path
+  let target = root
+  for (let index = 0; index < path.length - 1; index++) {
+    const child = target[path[index]!]
+    if (!isFragmentObject(child)) {
+      throw new ClaudeImportResourceError('Unexpected Claude import fragment path.')
+    }
+    target = child
+  }
+  const key = path.at(-1)!
+  let value = entry.kind === 'wide-field' ? entry.value : entry.text
+  if (entry.kind === 'wide-text') {
+    const previous = target[key]
+    if (typeof previous !== 'string') {
+      throw new ClaudeImportResourceError('Unexpected Claude import text fragment.')
+    }
+    value = `${previous}${entry.text}`
+  }
+  Object.defineProperty(target, key, {
+    value,
+    enumerable: true,
+    configurable: true,
+    writable: true
+  })
+}
+
 function decodeImportEntries(): (entry: ClaudeImportEntry) => ClaudeImportItemPart | undefined {
   let wide: FragmentObject | undefined
   return (entry) => {
@@ -34,30 +65,7 @@ function decodeImportEntries(): (entry: ClaudeImportEntry) => ClaudeImportItemPa
         return
       case 'wide-field':
       case 'wide-text': {
-        const path = entry.path
-        let target = wide!
-        for (let index = 0; index < path.length - 1; index++) {
-          const child = target[path[index]!]
-          if (!isFragmentObject(child)) {
-            throw new ClaudeImportResourceError('Unexpected Claude import fragment path.')
-          }
-          target = child
-        }
-        const key = path.at(-1)!
-        let value = entry.kind === 'wide-field' ? entry.value : entry.text
-        if (entry.kind === 'wide-text') {
-          const previous = target[key]
-          if (typeof previous !== 'string') {
-            throw new ClaudeImportResourceError('Unexpected Claude import text fragment.')
-          }
-          value = `${previous}${entry.text}`
-        }
-        Object.defineProperty(target, key, {
-          value,
-          enumerable: true,
-          configurable: true,
-          writable: true
-        })
+        applyClaudeImportFieldFragment(wide!, entry)
         return
       }
       case 'wide-end': {

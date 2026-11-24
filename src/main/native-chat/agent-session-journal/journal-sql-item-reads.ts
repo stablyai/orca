@@ -1,4 +1,8 @@
-import { boundedStoredJson, boundedStoredJsonSql } from './journal-stored-json-bounds'
+import {
+  readJournalClaudeRecovery,
+  type JournalClaudeRecoveryRead,
+  type JournalClaudeRecoveryReadResult
+} from './journal-claude-recovery-reads'
 import { readJournalStoredItem } from './journal-stored-output-rows'
 import type Database from '../../sqlite/sync-database'
 import {
@@ -8,7 +12,12 @@ import {
   type JournalHistoryReadOptions,
   type JournalHistoryPrompt
 } from './journal-history-items'
-import { journalDomainHistoryOpeners, journalDomainUserItemIds } from './journal-sql-history-items'
+import {
+  journalCanonicalItemId,
+  journalDomainUserItemIds,
+  journalHistoryItemSource,
+  journalVisibleItem
+} from './journal-sql-history-items'
 import { readItemsByKindPage } from './journal-items-by-kind-page'
 import type {
   AgentJournalItemBody,
@@ -61,6 +70,7 @@ export type JournalSqlItemRead =
   | JournalContinuationRead
   | { kind: 'restart-cut' }
   | JournalSqlLifecycleRead
+  | JournalClaudeRecoveryRead
 
 export type JournalSqlItemReadResult =
   | { kind: 'items-by-kind'; items: AgentJournalRenderItem[]; nextOrdinal: number | null }
@@ -77,6 +87,7 @@ export type JournalSqlItemReadResult =
   | JournalContinuationReadResult
   | { kind: 'restart-cut'; cut: JournalRestartCut }
   | JournalSqlLifecycleReadResult
+  | JournalClaudeRecoveryReadResult
 
 export type JournalDomainItemRead = Exclude<JournalSqlItemRead, JournalSqlLifecycleRead>
 export type JournalDomainItemReadResult = Exclude<
@@ -106,30 +117,24 @@ export function readJournalDomainItems(
         items: operation.itemIds.map((itemId) => ({ itemId, canonicalItemId: canonical(itemId) }))
       }
     }
-    case 'history-items': {
-      const canonical = journalCanonicalItemId(db, prefix)
-      const removed = db.prepare(`SELECT
-        EXISTS(SELECT 1 FROM journal_item_tombstones WHERE session_id=?1 AND epoch=?2 AND item_id=?3)
-        OR EXISTS(SELECT 1 FROM journal_items WHERE session_id=?1 AND epoch=?2 AND item_id=?3 AND hidden=1)
-        AS removed`)
+    case 'claude-recovery-fingerprints':
+    case 'claude-recovery-slices':
+    case 'claude-recovery-origin':
+      return readJournalClaudeRecovery(
+        db,
+        prefix,
+        () => journalHistoryItemSource(db, prefix),
+        operation
+      )
+    case 'history-items':
       return {
         kind: 'history-items',
         items: readJournalHistoryItems(
-          {
-            canonicalItemId: canonical,
-            item: (itemId) => journalVisibleItem(db, prefix, itemId),
-            presentationRemoved: (key) => Boolean(removed.get(...prefix, canonical(key))!.removed),
-            ...(operation.options?.includeOpeners
-              ? {
-                  turnsOpenedBy: (itemId: string) => journalDomainHistoryOpeners(db, prefix, itemId)
-                }
-              : {})
-          },
+          journalHistoryItemSource(db, prefix, operation.options?.includeOpeners),
           operation.itemIds,
           operation.options
         )
       }
-    }
     case 'claude-history-prompts':
       return {
         kind: 'claude-history-prompts',
@@ -232,28 +237,6 @@ export function readJournalDomainItems(
 }
 
 type Prefix = readonly [string, string]
-
-/** An item's journal id: a provider echo's (a Claude turn's opener) reads as the row it aliases. */
-export function journalCanonicalItemId(db: Database.Database, prefix: Prefix) {
-  const alias = db.prepare(`SELECT item_id FROM journal_item_aliases
-    WHERE session_id=? AND epoch=? AND provider_item_id=?`)
-  return (key: string): string => {
-    const row = alias.get(...prefix, key)
-    return row ? String(row.item_id) : key
-  }
-}
-
-export function journalVisibleItem(
-  db: Database.Database,
-  prefix: Prefix,
-  itemId: string
-): AgentJournalRenderItem | null {
-  const row = db
-    .prepare(`SELECT ${boundedStoredJsonSql('payload_json', 'payload_json')} FROM journal_items
-    WHERE session_id=? AND epoch=? AND item_id=? AND hidden=0`)
-    .get(...prefix, itemId)
-  return row ? readJournalStoredItem(db, prefix, boundedStoredJson(row, 'payload_json')) : null
-}
 
 /** The input order's newest turn: latest position, then the greatest item ID among ties. */
 export function newestJournalDomainTurnOrClear(

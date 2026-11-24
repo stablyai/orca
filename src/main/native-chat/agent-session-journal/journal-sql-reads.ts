@@ -243,7 +243,12 @@ export function journalSqlReads(
     cursor: async () => (await metadata()).cursor,
     physicalCursor: async () => (await metadata()).physicalCursor,
     lastActivityAt: async () => (await metadata()).lastActivityAt,
-    historyOrigin: async () => (await metadata()).historyOrigin,
+    historyOrigin: async () =>
+      (await read({ kind: 'metadata', includeHistoryOrigin: true })).historyOrigin,
+    claudeRecoveryFingerprints: (request) =>
+      read({ kind: 'claude-recovery-fingerprints', ...request }),
+    claudeRecoverySlices: (request) => read({ kind: 'claude-recovery-slices', ...request }),
+    claudeRecoveryOrigin: (request) => read({ kind: 'claude-recovery-origin', ...request }),
     item,
     itemDetail: async (itemId) => (await read({ kind: 'item-detail', itemId })).item,
     itemBody: async (itemId) => (await item(itemId))?.body ?? null,

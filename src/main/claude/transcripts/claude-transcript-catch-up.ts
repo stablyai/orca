@@ -1,13 +1,14 @@
-import { prepareClaudeTranscriptCapacityRecovery } from './claude-transcript-capacity-recovery'
+import {
+  prepareClaudeTranscriptCapacityRecovery,
+  readClaudeRecoveryOrigin
+} from './claude-transcript-capacity-recovery'
 import {
   nativeCopyIds,
-  usableJournalHistoryOrigin,
-  type JournalHistoryOrigin
+  type NativeCopyOrigin
 } from '../../native-chat/agent-session-journal/context-epochs/journal-history-origin'
 import { recoverClaudeTranscript } from './claude-transcript-recovery'
 import { join } from 'node:path'
 import { stat } from 'node:fs/promises'
-import { isRootAgentJournalItem } from '../../../shared/agent-session/journal/agent-session-journal-producer'
 import type { StructuredAgentSessionEventSink } from '../../native-chat/agent-session-wire/journal-ingress/structured-agent-session-event-sink'
 import {
   HistoryCatchUpCapacityError,
@@ -38,10 +39,9 @@ const DEFAULT_CLAUDE_CATCH_UP_TIMEOUT_MS = 30_000
 export type ClaudeTranscriptCatchUpOutcome = boolean | { kind: 'capacity'; deadline: number }
 type ClaudeHistoryView = {
   physicalCursor: AgentJournalCursor
-  origin: JournalHistoryOrigin | null
+  origin: NativeCopyOrigin | null
   covered?: ReadonlySet<string>
   hasRows: boolean
-  newest: { key: string; sequence: number; index: number } | null
 }
 
 /** Display-only reconciliation; capacity recovery runs in a separate invocation after open. */
@@ -70,37 +70,19 @@ export async function catchUpClaudeTranscript(input: {
     ...(input.assertCurrent ? { assertCurrent: input.assertCurrent } : {}),
     timeoutMs: input.timeoutMs ?? DEFAULT_CLAUDE_CATCH_UP_TIMEOUT_MS,
     ...(input.logger ? { logger: input.logger } : {}),
-    readView: (history): Promise<ClaudeHistoryView> =>
-      captureHistoryCatchUpView(history, async () => {
+    readView: (history, signal): Promise<ClaudeHistoryView> =>
+      captureHistoryCatchUpView(history, async (cursor) => {
+        if (input.mode === 'recovery') {
+          return { hasRows: false, origin: null }
+        }
         const hasRows = await history.reads.hasItems()
-        let newest: { key: string; sequence: number; index: number } | null = null
-        await history.reads.visitItems(
-          { kinds: ['turn'] },
-          (key, sequence, _body, linkage, item) => {
-            if (!isRootAgentJournalItem(linkage)) {
-              return
-            }
-            const index = item.sequenceIndex ?? 0
-            if (
-              !newest ||
-              sequence > newest.sequence ||
-              (sequence === newest.sequence && index > newest.index)
-            ) {
-              newest = { key, sequence, index }
-            }
-          }
+        const origin = await readClaudeRecoveryOrigin(
+          history.reads.claudeRecoveryOrigin,
+          cursor,
+          input.providerSessionId,
+          () => signal.throwIfAborted()
         )
-        const origin = await history.reads.historyOrigin()
-        const copy = usableJournalHistoryOrigin(origin)
-        const covered =
-          copy?.kind === 'native_copy' &&
-          copy.unit === 'claude-entry' &&
-          copy.agent === 'claude' &&
-          copy.providerHandle.kind === 'claude' &&
-          copy.providerHandle.sessionId === input.providerSessionId
-            ? nativeCopyIds(copy)
-            : undefined
-        return { hasRows, newest, origin, covered }
+        return { hasRows, origin, covered: origin ? nativeCopyIds(origin) : undefined }
       }),
     prepare: async ({ view, history, signal, deadline, check, yieldTurn, warn }) => {
       const claudeProjectsDir = join(input.claudeConfigDir, 'projects')
@@ -128,8 +110,7 @@ export async function catchUpClaudeTranscript(input: {
         capacity = { kind: 'capacity', deadline }
         return null
       }
-      const copy = usableJournalHistoryOrigin(planned.origin)
-      const recovery = planned.covered && copy?.kind === 'native_copy' ? copy : null
+      const recovery = planned.origin
       const copiedLeaf = recovery?.ids.at(-1) ?? input.leafUuid
       const sourceFrontier = recovery?.sourceFrontier
       if (recovery?.sourceConsumedBytes !== undefined) {

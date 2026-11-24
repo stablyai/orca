@@ -40,11 +40,15 @@ export function shortenedJsonSql(json: string, maxBytes = LIMIT / 2): string {
     FROM (SELECT CASE ${cut('$.body.output')} ${cut('$.body.patch')} END AS shortened LIMIT 1))`
 }
 
+export class JournalStoredJsonSizeError extends Error {}
+
 /** The selected JSON text, or a refusal of the read when the stored value was too large to load. */
 export function boundedStoredJson(row: Record<string, unknown>, as: string): unknown {
   const bytes = row[`${as}_bytes`]
   if (typeof bytes === 'number' && bytes > LIMIT && row[as] == null) {
-    throw new Error(`journal stored item (${bytes} bytes) exceeds ${LIMIT} bytes`)
+    throw new JournalStoredJsonSizeError(
+      `journal stored item (${bytes} bytes) exceeds ${LIMIT} bytes`
+    )
   }
   return row[as]
 }

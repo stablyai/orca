@@ -114,9 +114,10 @@ export function readJournalDomainEntity(
     case 'metadata': {
       const head = db
         .prepare(`SELECT last_sequence,retained_sequence,highest_fence,
-        last_activity_at,context_boundary,history_origin_json,queue_revision FROM journal_chat_state
+        last_activity_at,context_boundary,queue_revision,
+        CASE WHEN ? THEN history_origin_json END AS history_origin_json FROM journal_chat_state
         WHERE session_id=? AND epoch=?`)
-        .get(...prefix)!
+        .get(operation.includeHistoryOrigin ? 1 : 0, ...prefix)!
       const sequence = Number(head.last_sequence)
       const historyOrigin: JournalHistoryOrigin | null =
         head.history_origin_json === null ? null : JSON.parse(String(head.history_origin_json))

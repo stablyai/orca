@@ -1,3 +1,8 @@
+import { Worker } from 'node:worker_threads'
+import { serialize } from 'node:v8'
+import { readJournalSqlPoint } from '../../native-chat/agent-session-journal/journal-sql-point-read'
+import { withTestAgentSessionDatabase } from '../../runtime/agent-session/records/agent-session-record-store-persistence.test-fixture'
+import { agentJournalItemKey } from '../../../shared/agent-session/journal/agent-session-journal-item-key'
 import { afterEach, expect, it, vi } from 'vitest'
 import type * as NodeFs from 'node:fs'
 import type * as NodeFsPromises from 'node:fs/promises'
@@ -463,7 +468,7 @@ it('restores a saved batch over 16 MiB and replaces only the whole newest suffix
 
 it('restores whole standalone and embedded tool inputs within their saved call', async () => {
   const c = await chat('batch')
-  const toolInput = { path: 'file.txt', content: '\\"é'.repeat(16_000) }
+  const toolInput = { path: 'file.txt', content: '\\"é'.repeat(170_000) }
   const call = (id: string) => ({ type: 'tool_use', id, name: 'Write', input: toolInput })
   const source = [
     { uuid: 'standalone', parentUuid: null, content: [call('single-call')] },
@@ -520,23 +525,141 @@ it('restores whole standalone and embedded tool inputs within their saved call',
   ])
 })
 
-it('keeps prior history and leaves the source uncertified when a saved row cannot be read alone', async () => {
-  const c = await chat('batch')
-  const text = 'whole'.repeat(240_000)
+async function saveLargeAnswer(c: Awaited<ReturnType<typeof chat>>, text: string) {
+  const identity = { provider: 'claude', sessionId: PROVIDER, uuid: 'new-answer' } as const
   await writeFile(
     c.filePath,
     `${JSON.stringify({
       type: 'assistant',
-      uuid: 'new-answer',
+      uuid: identity.uuid,
       parentUuid: 'old-leaf',
       message: { content: text }
-    })}\n`
+    })}
+`
   )
   await c.journal.appendItem(
-    { provider: 'claude', sessionId: PROVIDER, uuid: 'new-answer' },
+    identity,
     { kind: 'message', role: 'assistant', blocks: [{ type: 'text', text }] },
     { fence: 1, turnScope: { kind: 'thread' } }
   )
+  return identity
+}
+
+function recoveryReceivedBytes(): number[] {
+  const messages: number[] = []
+  const emit = Worker.prototype.emit
+  vi.spyOn(Worker.prototype, 'emit').mockImplementation(function (this: Worker, event, ...args) {
+    const [reply] = args
+    if (
+      event === 'message' &&
+      reply &&
+      typeof reply === 'object' &&
+      (reply.type === 'point' ||
+        reply.type === 'committed' ||
+        reply.kind === 'page' ||
+        reply.kind === 'imported')
+    ) {
+      messages.push(
+        serialize({ type: 'message', bytes: serialize(reply), seq: 1, more: false }).byteLength
+      )
+    }
+    return emit.call(this, event, ...args)
+  })
+  return messages
+}
+
+// PR #45200: a whole saved answer crosses the reader boundary in bounded replies.
+it('commits a 2 MiB saved answer without a worker reply above 512 KiB', async () => {
+  const c = await chat('batch')
+  const text = `${'😀"'.repeat(419_430)}\n`
+  await saveLargeAnswer(c, text)
+  const messages = recoveryReceivedBytes()
+  expect(
+    await catchUpClaudeTranscript({
+      sessionId: SESSION,
+      providerSessionId: PROVIDER,
+      leafUuid: 'old-leaf',
+      claudeConfigDir: c.config,
+      cwd: c.cwd,
+      sink: c.deferred.sink,
+      mode: 'recovery'
+    })
+  ).toBe(true)
+  expect(messages.length).toBeGreaterThan(6)
+  expect(Math.max(...messages)).toBeLessThanOrEqual(512 * 1024)
+  expect((await c.items()).map(({ body }) => body)).toEqual([
+    { kind: 'message', role: 'assistant', blocks: [{ type: 'text', text }] },
+    expect.objectContaining({ presentation: 'continued-outside-recent' })
+  ])
+})
+
+it('rejects staged restoration when the saved revision changes before its first slice', async () => {
+  const c = await chat('batch')
+  const text = 'original'.repeat(100_000)
+  const identity = await saveLargeAnswer(c, text)
+  const read = c.journal.reads.claudeRecoverySlices
+  const revised = {
+    kind: 'message',
+    role: 'assistant',
+    blocks: [{ type: 'text', text: 'new saved revision' }]
+  } as const
+  c.journal.reads.claudeRecoverySlices = async (operation) => {
+    await c.journal.appendItem(
+      identity,
+      { ...revised, blocks: [...revised.blocks] },
+      { fence: 1, turnScope: { kind: 'thread' } }
+    )
+    return read(operation)
+  }
+  const plan = await prepareCapacityRecovery(c)
+  expect('operation' in plan).toBe(false)
+  expect(plan).not.toHaveProperty('historyOrigin', expect.anything())
+  expect(await c.journal.reads.historyOrigin()).toBeNull()
+  expect((await c.items()).map(({ body }) => body)).toEqual([
+    expect.objectContaining({ kind: 'turn' }),
+    { kind: 'message', role: 'assistant', blocks: [{ type: 'text', text: 'old answer' }] },
+    revised
+  ])
+})
+
+it('records a probe receipt after a singleton fingerprint cannot fit a page', async () => {
+  const c = await chat('batch')
+  const text = 'x'.repeat(30_000)
+  const identity = await saveLargeAnswer(c, text)
+  await c.journal.appendItem(
+    identity,
+    {
+      kind: 'message',
+      role: 'assistant',
+      blocks: [
+        { type: 'text', text },
+        { type: 'tool-call', callId: 'id'.repeat(270_000), name: 'Write', input: {} }
+      ]
+    },
+    { fence: 1, turnScope: { kind: 'thread' } }
+  )
+  const providerHandle = { kind: 'claude', sessionId: PROVIDER, leafUuid: 'old-leaf' }
+  const ids = Array.from(
+    { length: 18_000 },
+    (_, index) => `previous-source-entry-${index.toString().padStart(10, '0')}`
+  )
+  await withTestAgentSessionDatabase(c.cwd, (db) =>
+    db.prepare('UPDATE journal_chat_state SET history_origin_json=? WHERE session_id=?').run(
+      JSON.stringify({
+        providerHandle,
+        raw: {
+          version: 1,
+          kind: 'native_copy',
+          agent: 'claude',
+          unit: 'claude-entry',
+          providerHandle,
+          ids
+        }
+      }),
+      SESSION
+    )
+  )
+  const messages = recoveryReceivedBytes()
   await catchUpClaudeTranscript({
     sessionId: SESSION,
     providerSessionId: PROVIDER,
@@ -546,13 +669,17 @@ it('keeps prior history and leaves the source uncertified when a saved row canno
     sink: c.deferred.sink,
     mode: 'recovery'
   })
-  expect((await c.items()).map(({ body }) => body)).toEqual([
-    expect.objectContaining({ kind: 'turn' }),
-    { kind: 'message', role: 'assistant', blocks: [{ type: 'text', text: 'old answer' }] },
-    { kind: 'message', role: 'assistant', blocks: [{ type: 'text', text }] },
-    expect.objectContaining({ presentation: 'continued-outside-unloaded' })
-  ])
-  expect(await c.journal.reads.historyOrigin()).toBeNull()
+  expect(messages.length).toBeGreaterThan(4)
+  expect(Math.max(...messages)).toBeLessThanOrEqual(512 * 1024)
+  expect(await c.journal.reads.historyOrigin()).toMatchObject({
+    raw: { ids, sourceFrontier: 'new-answer', sourceConsumedBytes: (await stat(c.filePath)).size }
+  })
+  expect(await c.journal.reads.itemBody(agentJournalItemKey(identity))).toMatchObject({
+    blocks: [
+      { type: 'text', text },
+      { type: 'tool-call', name: 'Write' }
+    ]
+  })
 })
 
 it('keeps the prior epoch if the newest item cannot fit whole', async () => {
@@ -627,8 +754,23 @@ it('hashes 512 equal-length saved blocks once each', async () => {
     )
   }
   await writeFile(c.filePath, `${rows.join('\n')}\n`)
-  const digest = vi.spyOn(payloadBounds, 'digestPayload')
   const plan = await prepareCapacityRecovery(c)
   expect('operation' in plan && plan.operation.items).toHaveLength(17)
+  const cursor = await c.journal.reads.physicalCursor()
+  const digest = vi.spyOn(payloadBounds, 'digestPayload')
+  await withTestAgentSessionDatabase(c.cwd, (db) => {
+    const result = readJournalSqlPoint(db, {
+      sessionId: SESSION,
+      operation: {
+        kind: 'claude-recovery-fingerprints',
+        cursor,
+        keys: Array.from({ length: 16 }, (_, row) =>
+          agentJournalItemKey({ provider: 'claude', sessionId: PROVIDER, uuid: `blocks-${row}` })
+        ),
+        after: { ordinal: 0, offset: 0 }
+      }
+    })
+    expect(result).toMatchObject({ kind: 'claude-recovery-fingerprints', next: null })
+  })
   expect(digest).toHaveBeenCalledTimes(512)
 })

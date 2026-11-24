@@ -18,7 +18,10 @@ import {
 } from './database/journal-legacy-source'
 import { compareJournalLegacyChat } from './database/journal-legacy-compare'
 import { installWorkerSendLedger } from '../../worker-threads/worker-send-ledger'
-import { measureJournalReaderReply } from './journal-sql-reader-reply-limit'
+import {
+  journalReaderReplyLimit,
+  measureJournalReaderReply
+} from './journal-sql-reader-reply-limit'
 import {
   forceJournalReaderReplyCredit,
   JOURNAL_READER_REPLY_CREDIT_WAIT_MS,
@@ -47,9 +50,9 @@ let fork: { id: number; preparation: JournalForkPreparation } | undefined
 const conversions = new Map<number, JournalDomainImport['pages']>()
 const replyCredit = creditGrant(workerData.replyCredit)
 let requests = Promise.resolve()
-function reply(message: JournalSqlReaderReply): void {
+function reply(message: JournalSqlReaderReply, limit?: number): void {
   // An oversized reply fails its request instead of the receiving thread running out of memory.
-  const { reply: limited, bytes } = measureJournalReaderReply(message)
+  const { reply: limited, bytes } = measureJournalReaderReply(message, limit)
   // Releases free other readers' state, so they never wait behind credit.
   if (bytes === undefined || !replyCredit || limited.type === 'released') {
     port.postMessage(limited)
@@ -128,6 +131,7 @@ port.on('message', ({ id, operation }: JournalSqlReaderRequest) => {
 })
 
 async function handle(id: number, operation: JournalSqlReaderRequest['operation']): Promise<void> {
+  const limit = journalReaderReplyLimit(operation)
   try {
     if (!db) {
       throw new Error('journal SQL reader is unavailable')
@@ -172,7 +176,7 @@ async function handle(id: number, operation: JournalSqlReaderRequest['operation'
         })
         break
       case 'point':
-        reply({ type: 'point', id, result: readJournalSqlPoint(db, operation.request) })
+        reply({ type: 'point', id, result: readJournalSqlPoint(db, operation.request) }, limit)
         break
       case 'database':
         reply({ type: 'database', id, result: readJournalSqlDatabase(db, operation.operation) })
@@ -252,14 +256,11 @@ async function handle(id: number, operation: JournalSqlReaderRequest['operation'
       port.close()
       return
     }
-    reply({
-      type: 'failed',
-      id,
-      error:
-        operation.kind === 'conversion-prepare' || operation.kind === 'conversion-storage'
-          ? journalSqlSourceFailure(error)
-          : journalSqlFailure(error)
-    })
+    const failure =
+      operation.kind === 'conversion-prepare' || operation.kind === 'conversion-storage'
+        ? journalSqlSourceFailure(error)
+        : journalSqlFailure(error)
+    reply({ type: 'failed', id, error: failure }, limit)
   }
 }
 

@@ -1,12 +1,14 @@
+import { setImmediate } from 'node:timers/promises'
+import { applyClaudeImportFieldFragment } from '../../native-chat/agent-session-journal/history-import/journal-claude-import-window'
+import type { JournalClaudeRecoveryRead } from '../../native-chat/agent-session-journal/journal-claude-recovery-reads'
+import type { AgentSessionJournalReads } from '../../native-chat/agent-session-journal/journal-reads'
+import { CLAUDE_IMPORT_PAGE_BYTES } from '../../native-chat/agent-session-journal/history-import/journal-claude-import-worker-protocol'
 import { agentJournalItemKey } from '../../../shared/agent-session/journal/agent-session-journal-item-key'
 import type {
   AgentJournalCursor,
   AgentJournalItemIdentity
 } from '../../../shared/agent-session/journal/agent-session-journal-identity'
-import {
-  usableJournalHistoryOrigin,
-  type NativeCopyOrigin
-} from '../../native-chat/agent-session-journal/context-epochs/journal-history-origin'
+import type { NativeCopyOrigin } from '../../native-chat/agent-session-journal/context-epochs/journal-history-origin'
 import {
   MAX_LEGACY_IMPORT_RETAINED_BYTES,
   prepareJsonlTranscriptImport
@@ -92,7 +94,7 @@ export async function prepareClaudeTranscriptCapacityRecovery(
         MAX_LEGACY_IMPORT_RETAINED_BYTES -
         Buffer.byteLength(JSON.stringify(notice(sourceSkippedRecords))),
       page: (items, remaining, checkTransfer) =>
-        keepSavedRecoveryText(items, history.reads, remaining, () => {
+        keepSavedRecoveryText(items, history.reads, input.physicalCursor, remaining, () => {
           checkTransfer()
           check()
         })
@@ -103,7 +105,11 @@ export async function prepareClaudeTranscriptCapacityRecovery(
     warn('replacement-unreadable', prepared.ok ? undefined : prepared.error)
     const batch = createHistoryCatchUpBatch()
     const noticeKey = agentJournalItemKey(noticeIdentity)
-    const notices = await history.reads.historyItems([noticeKey])
+    const notices = await history.reads.historyItems([noticeKey], {
+      includePlacement: false,
+      maxReplyBytes: CLAUDE_IMPORT_PAGE_BYTES
+    })
+    check()
     const notice = notices.find(({ key }) => key === noticeKey)
     if (
       prepared.ok ||
@@ -124,15 +130,6 @@ export async function prepareClaudeTranscriptCapacityRecovery(
         batch.push(mutation)
       }
     }
-    const previous = usableJournalHistoryOrigin(await history.reads.historyOrigin())
-    const ids =
-      previous?.kind === 'native_copy' &&
-      previous.agent === 'claude' &&
-      previous.unit === 'claude-entry' &&
-      previous.providerHandle.kind === 'claude' &&
-      previous.providerHandle.sessionId === input.providerSessionId
-        ? previous.ids
-        : []
     // Refused scratch or worker certifies the unchanged source with one bounded probe, so a reopen
     // doesn't repeat the refused import; unreadable or changed sources stay uncertified.
     const receipt = prepared.ok
@@ -141,6 +138,14 @@ export async function prepareClaudeTranscriptCapacityRecovery(
         ? await probeRefusedSource(input.filePath, check)
         : undefined
     check()
+    const previous = receipt
+      ? await readClaudeRecoveryOrigin(
+          history.reads.claudeRecoveryOrigin,
+          input.physicalCursor,
+          input.providerSessionId,
+          check
+        )
+      : null
     const historyOrigin: NativeCopyOrigin | undefined = receipt
       ? {
           version: 1,
@@ -152,7 +157,7 @@ export async function prepareClaudeTranscriptCapacityRecovery(
             sessionId: input.providerSessionId,
             leafUuid: input.leafUuid || null
           },
-          ids,
+          ids: previous?.ids ?? [],
           sourceFrontier: receipt.sourceFrontier,
           sourceConsumedBytes: receipt.sourceConsumedBytes,
           sourceMtimeMs: receipt.sourceMtimeMs
@@ -197,4 +202,29 @@ export async function prepareClaudeTranscriptCapacityRecovery(
       items: [...prepared.items, notice(prepared.sourceSkippedRecords ?? 0)]
     }
   }
+}
+
+export async function readClaudeRecoveryOrigin(
+  read: AgentSessionJournalReads['claudeRecoveryOrigin'],
+  cursor: AgentJournalCursor,
+  providerSessionId: string,
+  check: () => void
+): Promise<NativeCopyOrigin | null> {
+  const origin: { header?: Omit<NativeCopyOrigin, 'ids'>; ids?: string[] } = {}
+  let after:
+    | Extract<JournalClaudeRecoveryRead, { kind: 'claude-recovery-origin' }>['after']
+    | null = { ordinal: 0, offset: 0 }
+  while (after) {
+    check()
+    const page = await read({ cursor, providerSessionId, after })
+    check()
+    for (const fragment of page.fragments) {
+      applyClaudeImportFieldFragment(origin, fragment)
+    }
+    after = page.next
+    if (after) {
+      await setImmediate()
+    }
+  }
+  return origin.header && origin.ids ? { ...origin.header, ids: origin.ids } : null
 }

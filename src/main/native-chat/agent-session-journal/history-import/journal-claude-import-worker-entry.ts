@@ -6,7 +6,10 @@ import { installWorkerSendLedger } from '../../../worker-threads/worker-send-led
 import { importClaudeTranscript } from './journal-claude-import'
 import { ClaudeImportResourceError } from './journal-claude-import-resource-error'
 import { claudeImportPages } from './journal-claude-import-pages'
-import { CLAUDE_IMPORT_PAGE_BYTES } from './journal-claude-import-worker-protocol'
+import {
+  CLAUDE_IMPORT_PAGE_BYTES,
+  CLAUDE_IMPORT_REPLY_FRAMING_BYTES
+} from './journal-claude-import-worker-protocol'
 import type {
   ClaudeImportPage,
   ClaudeImportWork,
@@ -39,7 +42,10 @@ port.on('message', (request: ClaudeImportWorkerRequest) => {
 })
 
 function send(response: ClaudeImportWorkerResponse): void {
-  if (serialize(response).byteLength > CLAUDE_IMPORT_PAGE_BYTES) {
+  if (
+    serialize(response).byteLength >
+    CLAUDE_IMPORT_PAGE_BYTES - CLAUDE_IMPORT_REPLY_FRAMING_BYTES
+  ) {
     port.postMessage({ kind: 'resource', message: 'A Claude import reply exceeds the page limit.' })
   } else {
     port.postMessage(response)

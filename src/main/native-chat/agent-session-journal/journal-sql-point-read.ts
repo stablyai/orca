@@ -173,6 +173,9 @@ function read(
     case 'continuation-context':
     case 'continuation-spill':
     case 'restart-cut':
+    case 'claude-recovery-fingerprints':
+    case 'claude-recovery-slices':
+    case 'claude-recovery-origin':
     case 'history-items':
     case 'claude-history-prompts':
     case 'canonical-item-ids':

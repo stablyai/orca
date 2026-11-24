@@ -1,7 +1,24 @@
+import {
+  CLAUDE_IMPORT_PAGE_BYTES,
+  CLAUDE_IMPORT_REPLY_FRAMING_BYTES
+} from './history-import/journal-claude-import-worker-protocol'
 import { serialize } from 'node:v8'
 import { describeWorkerMessage } from '../../worker-threads/worker-message-shape'
 import { journalSqlFailure } from './journal-sql-failure'
-import type { JournalSqlReaderReply } from './journal-sql-reader-protocol'
+import type { JournalSqlReaderReply, JournalSqlReaderRequest } from './journal-sql-reader-protocol'
+
+export function journalReaderReplyLimit(operation: JournalSqlReaderRequest['operation']) {
+  if (operation.kind !== 'point') {
+    return undefined
+  }
+  const point = operation.request.operation
+  const bounded =
+    point.kind.startsWith('claude-recovery-') ||
+    (point.kind === 'metadata' && !point.includeHistoryOrigin) ||
+    (point.kind === 'history-items' && point.options?.maxReplyBytes === CLAUDE_IMPORT_PAGE_BYTES)
+  // Credit metadata and the hosted message envelope are added after measurement.
+  return bounded ? CLAUDE_IMPORT_PAGE_BYTES - CLAUDE_IMPORT_REPLY_FRAMING_BYTES : undefined
+}
 
 /**
  * Main deserializes every reader reply into the ~3.25 GB V8 heap it shares with all workers; a
@@ -53,12 +70,15 @@ export function measureJournalReaderReply<T extends { type: string }>(
   reply: T,
   limit = JOURNAL_READER_REPLY_BYTE_LIMIT
 ): { reply: T | Extract<JournalSqlReaderReply, { type: 'failed' }>; bytes?: number } {
-  if (reply.type === 'failed' || !('id' in reply) || typeof reply.id !== 'number') {
+  if (!('id' in reply) || typeof reply.id !== 'number') {
+    return { reply }
+  }
+  if (reply.type === 'failed' && limit === JOURNAL_READER_REPLY_BYTE_LIMIT) {
     return { reply }
   }
   const { bytes, exceeds } = replyBytes(reply, limit)
   if (!exceeds) {
-    return bytes === undefined ? { reply } : { reply, bytes }
+    return bytes === undefined || reply.type === 'failed' ? { reply } : { reply, bytes }
   }
   return {
     reply: {

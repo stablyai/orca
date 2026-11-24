@@ -1,24 +1,36 @@
 import { setImmediate } from 'node:timers/promises'
 import { agentJournalItemKey } from '../../../shared/agent-session/journal/agent-session-journal-item-key'
 import type { NativeChatBlock } from '../../../shared/native-chat/native-chat-types'
-import { digestPayload } from '../../native-chat/agent-session-journal/item-lifecycle/journal-payload-bounds'
+import type { AgentJournalCursor } from '../../../shared/agent-session/journal/agent-session-journal-identity'
+import { applyClaudeImportFieldFragment } from '../../native-chat/agent-session-journal/history-import/journal-claude-import-window'
 import type { ClaudeImportItem } from '../../native-chat/agent-session-journal/history-import/journal-claude-import-worker-protocol'
-import {
-  isJournalHistoryItemsSizeFailure,
-  type JournalHistoryItem
-} from '../../native-chat/agent-session-journal/journal-history-items'
+import type {
+  JournalClaudeRecoveryRead,
+  JournalClaudeRecoveryReadResult
+} from '../../native-chat/agent-session-journal/journal-claude-recovery-reads'
 import type { AgentSessionJournalReads } from '../../native-chat/agent-session-journal/journal-reads'
 
 const KEYS_PER_READ = 32
-const SAVED_REPLY_BYTES = 1024 * 1024
 const MARKER = /\n\[Orca: output truncated — (\d+) bytes total, digest ([0-9a-f]{12})\]$/
 
 type Target = { previousBytes: number; replace: (value: unknown) => void }
 type TargetIndex = Map<number, Map<string, Target[]>>
+type Fingerprint = Extract<
+  JournalClaudeRecoveryReadResult,
+  { kind: 'claude-recovery-fingerprints' }
+>['fingerprints'][number]
+type Slice = Extract<JournalClaudeRecoveryRead, { kind: 'claude-recovery-slices' }>
+type RecoveryReads = Pick<
+  AgentSessionJournalReads,
+  'claudeRecoveryFingerprints' | 'claudeRecoverySlices'
+>
+type Match = { key: string; fingerprint: Fingerprint; targets: Target[] }
+
 type Restoration = {
   entry: ClaudeImportItem
   position: number
   minimumBytes: number
+  matches: Match[]
   text?: TargetIndex
   inputs?: Map<string, TargetIndex>
 }
@@ -100,7 +112,8 @@ async function indexItem(
   const plan: Restoration = {
     entry,
     position,
-    minimumBytes: entry.bytes + 1
+    minimumBytes: entry.bytes + 1,
+    matches: []
   }
   const { body } = entry.item
   if (body.kind === 'message') {
@@ -117,119 +130,90 @@ async function indexItem(
   return plan
 }
 
-type Candidate = { value: unknown; encoded: string; callId?: string; ordinal: number }
-
-function savedCandidates(body: NonNullable<JournalHistoryItem['item']>['body']) {
-  const byLength = new Map<number, Candidate[]>()
-  let ordinal = 0
-  const index = (value: unknown, encoded: string, callId?: string) => {
-    const length = Buffer.byteLength(encoded)
-    const candidates = byLength.get(length) ?? []
-    byLength.set(length, candidates)
-    candidates.push({ value, encoded, callId, ordinal: ordinal++ })
+function matchSavedField(plan: Restoration, key: string, fingerprint: Fingerprint): void {
+  const { callId, byteLength, digest, jsonBytes } = fingerprint
+  const index = callId ? plan.inputs?.get(callId) : plan.text
+  const digests = index?.get(byteLength)
+  const marker = callId ? digest : digest.slice(0, 12)
+  const targets = digests?.get(marker)
+  if (!targets) {
+    return
   }
-  const tool = (call: Tool) => {
-    if (call.callId) {
-      index(call.input, JSON.stringify(call.input) ?? 'null', call.callId)
-    }
+  digests!.delete(marker)
+  plan.matches.push({ key, fingerprint, targets })
+  for (const target of targets) {
+    plan.minimumBytes += jsonBytes
+    plan.entry.bytes += jsonBytes - target.previousBytes
   }
-  if (body.kind === 'message') {
-    for (const block of body.blocks) {
-      if (block.type === 'text') {
-        index(block.text, block.text)
-      } else if (block.type === 'tool-result') {
-        index(block.output, block.output)
-      } else if (block.type === 'tool-call') {
-        tool(block)
-      }
-    }
-  } else if (body.kind === 'tool-call') {
-    tool(body)
-    if (body.output && !body.output.truncated) {
-      index(body.output.head, body.output.head)
-    }
-  }
-  return byLength
 }
 
-function matchSavedRow(
-  item: NonNullable<JournalHistoryItem['item']>,
-  plans: ReadonlySet<Restoration>,
-  hashes: Map<number, string>,
-  remainingBytes: number
-): void {
-  for (const [length, candidates] of savedCandidates(item.body)) {
-    for (const candidate of candidates) {
-      for (const plan of plans) {
-        if (plan.minimumBytes > remainingBytes) {
-          continue
-        }
-        const index = candidate.callId ? plan.inputs?.get(candidate.callId) : plan.text
-        const bucket = index?.get(length)
-        if (!bucket?.size) {
-          continue
-        }
-        let digest = hashes.get(candidate.ordinal)
-        if (digest === undefined) {
-          digest = digestPayload(candidate.encoded)
-          hashes.set(candidate.ordinal, digest)
-        }
-        const key = candidate.callId ? digest : digest.slice(0, 12)
-        const targets = bucket.get(key)
-        if (!targets) {
-          continue
-        }
-        bucket.delete(key)
-        const bytes = candidate.callId ? length : Buffer.byteLength(JSON.stringify(candidate.value))
-        for (const target of targets) {
-          plan.minimumBytes += bytes
-          if (plan.minimumBytes > remainingBytes) {
-            plan.entry.bytes = Infinity
-            break
-          }
-          target.replace(candidate.value)
-          plan.entry.bytes += bytes - target.previousBytes
-        }
+async function restoreMatches(
+  kept: Restoration[],
+  epoch: string,
+  read: RecoveryReads['claudeRecoverySlices'],
+  check: () => void
+): Promise<void> {
+  const rows = new Map<
+    string,
+    {
+      row: Pick<Slice, 'key' | 'canonicalItemId' | 'revision'>
+      fields: Map<string, { field: Fingerprint['field']; targets: Target[] }>
+    }
+  >()
+  for (const plan of kept) {
+    for (const { key, fingerprint, targets } of plan.matches) {
+      const { field, canonicalItemId, revision } = fingerprint
+      const rowKey = JSON.stringify([key, canonicalItemId, revision])
+      const group = rows.get(rowKey) ?? {
+        row: { key, canonicalItemId, revision },
+        fields: new Map()
+      }
+      rows.set(rowKey, group)
+      const fieldKey = JSON.stringify(field)
+      const match = group.fields.get(fieldKey) ?? { field, targets: [] }
+      group.fields.set(fieldKey, match)
+      for (const target of targets) {
+        match.targets.push(target)
       }
     }
   }
-}
-
-async function* readSavedRows(
-  keys: readonly string[],
-  reads: Pick<AgentSessionJournalReads, 'historyItems'>,
-  check: () => void,
-  needed: (key: string) => boolean
-): AsyncGenerator<readonly JournalHistoryItem[]> {
-  check()
-  const requested = keys.filter(needed)
-  if (!requested.length) {
-    return
-  }
-  let saved: readonly JournalHistoryItem[]
-  try {
-    saved = await reads.historyItems(requested, {
-      includePlacement: false,
-      maxReplyBytes: SAVED_REPLY_BYTES
-    })
-  } catch (error) {
-    check()
-    if (!isJournalHistoryItemsSizeFailure(error) || requested.length < 2) {
-      throw error
+  for (const { row, fields } of rows.values()) {
+    const matches = [...fields.values()]
+    const addresses = matches.map(({ field }) => field)
+    const values: Record<string, unknown> = {}
+    let after: Slice['after'] | null = { ordinal: 0, offset: 0 }
+    while (after) {
+      check()
+      const page = await read({
+        epoch,
+        ...row,
+        fields: addresses,
+        after
+      })
+      check()
+      for (const fragment of page.fragments) {
+        applyClaudeImportFieldFragment(values, fragment)
+      }
+      after = page.next
+      await setImmediate()
     }
-    const middle = Math.floor(requested.length / 2)
-    yield* readSavedRows(requested.slice(0, middle), reads, check, needed)
-    yield* readSavedRows(requested.slice(middle), reads, check, needed)
-    return
+    for (const [ordinal, { targets }] of matches.entries()) {
+      for (const target of targets) {
+        target.replace(values[ordinal])
+      }
+      if (ordinal % 256 === 255) {
+        await setImmediate()
+        check()
+      }
+    }
   }
-  check()
-  yield saved
 }
 
-/** Restore only payloads whose full size and digest match the clipped import. */
+/** Resolve exact retained costs before reading any matched values. */
 export async function keepSavedRecoveryText(
   entries: ClaudeImportItem[],
-  reads: Pick<AgentSessionJournalReads, 'historyItems'>,
+  reads: RecoveryReads,
+  cursor: AgentJournalCursor,
   remainingBytes: number,
   check: () => void
 ): Promise<void> {
@@ -239,10 +223,9 @@ export async function keepSavedRecoveryText(
   const trim = () => {
     // Unmatched fields can shrink when restored. Only stop on a lower bound.
     let bytes = 0
-    for (const plan of plans) {
+    for (const plan of plans.slice(0, cutoff)) {
       bytes += plan.minimumBytes
       if (bytes > remainingBytes) {
-        plan.entry.bytes = Infinity
         cutoff = plan.position
         return
       }
@@ -263,47 +246,43 @@ export async function keepSavedRecoveryText(
     }
   }
   trim()
-  const needed = (key: string) => byKey.get(key)!.some((plan) => plan.position < cutoff)
-  // Aliases can name the same saved revision even when they were split into different reads.
-  const hashes = new Map<string, Map<number, string>>()
   const keys = [...byKey.keys()]
+  const needed = (key: string) => byKey.get(key)!.some((plan) => plan.position < cutoff)
   for (let start = 0; start < keys.length; start += KEYS_PER_READ) {
-    for await (const rows of readSavedRows(
-      keys.slice(start, start + KEYS_PER_READ),
-      reads,
-      check,
-      needed
-    )) {
-      const canonical = new Map<
-        string,
-        {
-          item: NonNullable<JournalHistoryItem['item']>
-          plans: Set<Restoration>
-        }
-      >()
-      for (const row of rows) {
-        if (!row.item || row.removed) {
-          continue
-        }
-        const key = JSON.stringify([row.canonicalItemId, row.item.revision])
-        const group = canonical.get(key) ?? { item: row.item, plans: new Set<Restoration>() }
-        for (const plan of byKey.get(row.key) ?? []) {
+    const requested = keys.slice(start, start + KEYS_PER_READ).filter(needed)
+    if (!requested.length) {
+      continue
+    }
+    let after: Slice['after'] | null = { ordinal: 0, offset: 0 }
+    while (after && requested.slice(after.ordinal).some(needed)) {
+      check()
+      const page = await reads.claudeRecoveryFingerprints({ cursor, keys: requested, after })
+      check()
+      for (const fingerprint of page.fingerprints) {
+        const key = requested[fingerprint.keyIndex]!
+        for (const plan of byKey.get(key)!) {
           if (plan.position < cutoff) {
-            group.plans.add(plan)
+            matchSavedField(plan, key, fingerprint)
           }
-        }
-        canonical.set(key, group)
-      }
-      for (const [key, { item, plans }] of canonical) {
-        const digests = hashes.get(key) ?? new Map<number, string>()
-        matchSavedRow(item, plans, digests, remainingBytes)
-        if (digests.size) {
-          hashes.set(key, digests)
         }
       }
       trim()
+      after = page.next
       await setImmediate()
-      check()
     }
   }
+
+  let bytes = 0
+  let kept = 0
+  for (const plan of plans.slice(0, cutoff)) {
+    bytes += plan.entry.bytes + 1
+    if (bytes > remainingBytes) {
+      break
+    }
+    kept++
+  }
+  if (kept < entries.length) {
+    entries[kept]!.bytes = Infinity
+  }
+  await restoreMatches(plans.slice(0, kept), cursor.epoch, reads.claudeRecoverySlices, check)
 }

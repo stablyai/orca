@@ -6,7 +6,7 @@ import type { AgentJournalRenderItem } from '../../../shared/agent-session/journ
 import type { AgentJournalCursor } from '../../../shared/agent-session/journal/agent-session-journal-identity'
 import { journalContextEpoch } from './context-epochs/journal-context-epoch'
 import type { JournalSqlScope } from './journal-sql-scope'
-import { journalCanonicalItemId } from './journal-sql-item-reads'
+import { journalCanonicalItemId } from './journal-sql-history-items'
 
 export type JournalRewindTarget = {
   cursor: AgentJournalCursor

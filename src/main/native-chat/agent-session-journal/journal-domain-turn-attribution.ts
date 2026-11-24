@@ -10,7 +10,7 @@ import { journalTurnAnsweredMessages } from '../../../shared/agent-session/journ
 import { isRootAgentJournalItem } from '../../../shared/agent-session/journal/agent-session-journal-producer'
 import { readAgentJournalTurn } from '../../../shared/agent-session/lifecycle/records/agent-session-turn-record'
 import { journalDomainContextHead } from './journal-sql-continuation-context'
-import { journalCanonicalItemId, journalVisibleItem } from './journal-sql-item-reads'
+import { journalCanonicalItemId, journalVisibleItem } from './journal-sql-history-items'
 import type { JournalSqlScope } from './journal-sql-scope'
 
 /** Whom a turn acts for rests on its opener and the deliveries it answered (connectorReplyTurnStamps).

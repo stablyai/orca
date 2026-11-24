@@ -8,6 +8,7 @@ type ImportInput = Parameters<typeof importClaudeTranscript>[0]
 type ImportResult = Awaited<ReturnType<typeof importClaudeTranscript>>
 
 export const CLAUDE_IMPORT_PAGE_BYTES = 512 * 1024
+export const CLAUDE_IMPORT_REPLY_FRAMING_BYTES = 64
 export const CLAUDE_IMPORT_PAGE_ENTRIES = 256
 
 export type ClaudeImportWork = Omit<ImportInput, 'signal'>
@@ -24,11 +25,14 @@ export type ClaudeImportItemPart =
   | { kind: 'block'; block: NativeChatBlock }
   | { kind: 'end' }
 
-export type ClaudeImportEntry =
-  | ClaudeImportItemPart
-  | { kind: 'wide-start' }
+export type ClaudeImportFieldFragment =
   | { kind: 'wide-field'; path: string[]; value: unknown }
   | { kind: 'wide-text'; path: string[]; text: string }
+
+export type ClaudeImportEntry =
+  | ClaudeImportItemPart
+  | ClaudeImportFieldFragment
+  | { kind: 'wide-start' }
   | { kind: 'wide-end' }
 
 export type ClaudeImportPage = { kind: 'page'; entries: ClaudeImportEntry[]; done: boolean }

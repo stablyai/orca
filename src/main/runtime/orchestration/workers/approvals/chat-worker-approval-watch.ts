@@ -66,6 +66,7 @@ export class ChatWorkerApprovalWatch {
           sessionId,
           () => void this.check(sessionId),
           (publication) =>
+            publication.kind === 'reset' ||
             !publication.commit ||
             publication.commit.items.some((item) => approvals.has(item.itemId))
         )

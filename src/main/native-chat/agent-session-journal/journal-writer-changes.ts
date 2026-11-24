@@ -35,6 +35,7 @@ export type JournalWriterPublication = {
 
 export type JournalWriterCommit = {
   dropped?: true
+  historyReset?: true
   forkInstalled?: { epoch: string; boundary: { kind: 'start' } | { kind: 'item'; itemId: string } }
   openRecovery?: JournalOpenRecoveryResult
   requestEvents?: JournalRequestEvent[]

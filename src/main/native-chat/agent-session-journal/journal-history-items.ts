@@ -10,10 +10,6 @@ export const JOURNAL_HISTORY_ITEMS_LIMIT = 4_096
 const JOURNAL_HISTORY_ITEMS_BYTES = 16 * 1024 * 1024
 const HISTORY_WORKSPACE_TOO_LARGE = 'history-workspace-too-large'
 
-export function isJournalHistoryItemsSizeFailure(error: unknown): boolean {
-  return error instanceof Error && error.message === HISTORY_WORKSPACE_TOO_LARGE
-}
-
 export type JournalHistoryItem = {
   key: string
   canonicalItemId: string

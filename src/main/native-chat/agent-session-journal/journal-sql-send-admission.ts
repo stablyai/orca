@@ -1,3 +1,4 @@
+import { readJournalSqlAcceptedInputs } from './journal-sql-accepted-inputs'
 import type Database from '../../sqlite/sync-database'
 import { pendingPromptsAllUnanswerableHere } from '../../../shared/agent-session/requests/prompts/agent-session-approval-subject'
 import { refuse } from '../../../shared/agent-session/failures/agent-session-wire-refusals'
@@ -130,16 +131,18 @@ export function applyJournalSqlSendAdmission(
     })
   }
   const reopenFloor = facts.reopenFloor ?? null
+  const effectiveReopen = Math.max(
+    Number(head.queue_reopened_sequence),
+    reopenFloor?.epoch === scope.epoch ? reopenFloor.sequence : 0
+  )
   let resumeInterrupted = false
   if (
     operation.fromPerson &&
     facts.identity.agent === 'claude' &&
     !operation.queueOnly &&
     eligibility.prompts.length === 0 &&
-    Math.max(
-      Number(head.queue_reopened_sequence),
-      reopenFloor?.epoch === scope.epoch ? reopenFloor.sequence : 0
-    ) > Number(head.queue_resumed_sequence) &&
+    effectiveReopen > Number(head.queue_resumed_sequence) &&
+    effectiveReopen > readJournalSqlAcceptedInputs(db, scope.prefix).latestPersonAcceptedSequence &&
     db
       .prepare(`SELECT 1 FROM journal_queue_cards AS card INDEXED BY journal_queue_order
         CROSS JOIN journal_submission_attempts AS attempt INDEXED BY journal_submission_head
