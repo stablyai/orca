@@ -13,10 +13,10 @@ import { BotCancelledWaitSchema } from './bots/bot-cancelled-waits'
 import { BotAvatarColorSchema } from './bots/bot-avatar-color'
 import { BotStoredOutfitSchema } from './bots/bot-avatar-outfit'
 
-/** Native-chat agents a bot cannot run on yet; each waits on a live check of its preamble delivery. */
-export const BOT_HELD_BACK_AGENTS = ['muse'] as const
+/** Native-chat agents waiting on a live check of their preamble delivery. */
+export const BOT_HELD_BACK_AGENTS = [] as const
 
-/** Bots run in a native chat; every native-chat agent but the held-back ones. */
+/** Agents with native chat and standing-instruction support. */
 export const BOT_AGENTS = [
   'claude',
   'codex',
@@ -40,7 +40,8 @@ export const BOT_AGENTS = [
   'qwen-code',
   'cline',
   'devin',
-  'codebuddy'
+  'codebuddy',
+  'muse'
 ] as const satisfies readonly Exclude<NativeChatAgent, (typeof BOT_HELD_BACK_AGENTS)[number]>[]
 
 /** Agents the previous release's bot schema reads; it drops bots on any other agent when it loads. */
@@ -62,11 +63,8 @@ export function splitBotsByOlderBuildSupport(bots: readonly Bot[]): {
   const readable: Bot[] = []
   const newer: Bot[] = []
   for (const bot of bots) {
-    if (BOT_AGENTS_OLDER_BUILDS_READ.has(bot.agent)) {
-      readable.push(bot)
-    } else {
-      newer.push(bot)
-    }
+    const destination = BOT_AGENTS_OLDER_BUILDS_READ.has(bot.agent) ? readable : newer
+    destination.push(bot)
   }
   return { readable, newer }
 }

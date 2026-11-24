@@ -2,6 +2,7 @@ import { join } from 'node:path'
 import { directoryAccountBinding } from '../acp/launch/acp-account-binding'
 import type { AcpLaunchSpec } from '../acp/launch/acp-launch-contract'
 import { agentSessionSetupFor } from '../../shared/agent-session/lifecycle/launch/agent-session-setup-commands'
+import { deliverMuseBotInstructions } from './muse-bot-instructions'
 
 export const MUSE_LAUNCH_SPEC: AcpLaunchSpec = {
   agent: 'muse',
@@ -24,6 +25,9 @@ export const MUSE_LAUNCH_SPEC: AcpLaunchSpec = {
     sessionFolderArgs: () => ['--no-session-log']
   },
   keepsEverySession: true,
+  // Muse reads the folder's rules at session/new and session/load.
+  instructions: deliverMuseBotInstructions,
+  instructionsInWorkspace: true,
   transcriptImport: null,
   sessionHistory: {
     rowAgents: ['muse'],
