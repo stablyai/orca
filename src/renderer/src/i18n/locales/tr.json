@@ -643,20 +643,20 @@
     "profileCookieClear": {
       "label": "Çerezler",
       "action": "Çerezleri temizle…",
-      "rowLocal": "Bu bilgisayarda {{profile}} profilindeki tüm sitelerden oturumunuzu kapatır.",
-      "rowServer": "{{host}} üzerinde {{profile}} profilindeki tüm sitelerden oturumunuzu kapatır; bu, hem bu bilgisayardaki sayfaları hem de akışla gelen sayfaları kapsar.",
-      "rowSsh": "{{host}} için {{profile}} profilindeki tüm sitelerden oturumunuzu kapatır.",
-      "unavailable": "Seçili sunucuda bu profil için kullanılamıyor.",
-      "confirmTitle": "{{host}} üzerinde {{profile}} profilindeki çerezler temizlensin mi?",
-      "confirmTitleLocal": "Bu bilgisayarda {{profile}} profilindeki çerezler temizlensin mi?",
-      "confirmDescriptionServer": "Bu işlem, hem bu bilgisayardaki sayfalarda hem de akışla gelen sayfalarda bu profildeki tüm sitelerden oturumunuzu kapatır. Diğer profiller ve sunucular çerezlerini korur.",
-      "confirmDescription": "Bu işlem, bu profildeki tüm sitelerden oturumunuzu kapatır. Diğer profiller ve sunucular çerezlerini korur.",
+      "rowLocal": "Bu bilgisayarda {{profile}} içindeki tüm sitelerdeki oturumunuzu kapatır.",
+      "rowServer": "{{host}} üzerinde {{profile}} içindeki tüm sitelerdeki oturumunuzu kapatır; hem bu bilgisayardaki sayfalarda hem de akışla gelen sayfalarda geçerlidir.",
+      "rowSsh": "{{host}} için {{profile}} içindeki tüm sitelerdeki oturumunuzu kapatır.",
+      "unavailable": "Seçili ana bilgisayarda bu profil kullanılamıyor.",
+      "confirmTitle": "{{host}} üzerinde {{profile}} içindeki çerezler temizlensin mi?",
+      "confirmTitleLocal": "Bu bilgisayarda {{profile}} içindeki çerezler temizlensin mi?",
+      "confirmDescriptionServer": "Bu işlem, bu profildeki tüm sitelerdeki oturumunuzu kapatır; hem bu bilgisayardaki sayfalarda hem de akışla gelen sayfalarda geçerlidir. Diğer profiller ve sunucular çerezlerini korur.",
+      "confirmDescription": "Bu işlem, bu profildeki tüm sitelerdeki oturumunuzu kapatır. Diğer profiller ve sunucular çerezlerini korur.",
       "clear": "Temizle",
       "cancel": "İptal",
-      "cleared": "{{host}} üzerinde {{profile}} profilindeki çerezler temizlendi.",
-      "clearedLocal": "Bu bilgisayarda {{profile}} profilindeki çerezler temizlendi.",
-      "failed": "{{host}} üzerinde {{profile}} profilindeki çerezler temizlenemedi. Yeniden deneyin.",
-      "failedLocal": "Bu bilgisayarda {{profile}} profilindeki çerezler temizlenemedi. Yeniden deneyin.",
+      "cleared": "{{host}} üzerinde {{profile}} içindeki çerezler temizlendi.",
+      "clearedLocal": "Bu bilgisayarda {{profile}} içindeki çerezler temizlendi.",
+      "failed": "{{host}} üzerinde {{profile}} içindeki çerezler temizlenemedi. Yeniden deneyin.",
+      "failedLocal": "Bu bilgisayarda {{profile}} içindeki çerezler temizlenemedi. Yeniden deneyin.",
       "sshHostOption": "{{host}} (SSH)"
     }
   },
@@ -1541,11 +1541,11 @@
       "manageInBrowser": "Tarayıcıda yönet",
       "openFailed": "Tarayıcı açılamadı. Yeniden deneyin.",
       "teamAdmin": {
-        "title": "Ekip ve yönetim",
-        "description": "Ekibinizi tarayıcınızda yönetin."
+        "title": "Ekip ve yönetici",
+        "description": "Ekibinizi tarayıcıda yönetin."
       },
       "signInFailed": "Konsolda oturumunuz açılamadı",
-      "signInFailedDetail": "Konsol tarayıcınızda açıldı. Devam etmek için orada oturum açın."
+      "signInFailedDetail": "Tarayıcınız konsolu yine de açtı. Devam etmek için orada oturum açın."
     },
     "mobile": {
       "teamDisabledRelay": "Orca Relay ekibiniz tarafından kapatıldı. LAN kullanın."
@@ -2719,21 +2719,21 @@
               "failure": {
                 "stageError": "Hata · {{value0}} · {{value1}}",
                 "hostNotFound": "Çalışma alanının bilgisayarı bulunamadı.",
-                "linkBlocked": "Bağlantının açılması engellendi.",
-                "notWebLink": "Web bağlantısı değil."
+                "linkBlocked": "Bağlantıyı açma engellendi.",
+                "notWebLink": "Bir web bağlantısı değil."
               }
             }
           }
         },
         "ports": {
           "serverPortForward": {
-            "updateServer": "{{host}} üzerinden {{port}} portu yönlendirilemedi. {{host}} üzerindeki Orca’yı güncelleyip yeniden deneyin.",
-            "failed": "{{host}} üzerinden {{port}} portu yönlendirilemedi. Bağlantıyı kontrol edip yeniden deneyin.",
-            "forwarded": "{{host}} üzerinden {{port}} portu yönlendirildi",
+            "updateServer": "{{host}} üzerindeki {{port}} portu yönlendirilemedi. {{host}} üzerindeki Orca'yı güncelleyip yeniden deneyin.",
+            "failed": "{{host}} üzerindeki {{port}} portu yönlendirilemedi. Bağlantıyı kontrol edip yeniden deneyin.",
+            "forwarded": "{{host}} üzerindeki {{port}} portu yönlendirildi",
             "opened": "{{address}} varsayılan tarayıcınızda açıldı.",
-            "otherMachine": "{{port}} portu yönlendirilemedi: Bu çalışma alanı doğrudan {{host}} üzerinde çalışmıyor.",
-            "useSshPorts": "{{host}} üzerinden {{port}} portu yönlendirilemedi. Portu Portlar bölümünden yönlendirip yeniden deneyin.",
-            "restoredMoved": "{{port}} portu {{host}} üzerinden localhost:{{localPort}} adresine yönlendirildi",
+            "otherMachine": "{{port}} portu yönlendirilemedi: bu çalışma alanı {{host}} üzerinde doğrudan çalışmıyor.",
+            "useSshPorts": "{{host}} üzerindeki {{port}} portu yönlendirilemedi. Portlar bölümünde yönlendirip yeniden deneyin.",
+            "restoredMoved": "{{host}} üzerindeki {{port}} portu localhost:{{localPort}} adresine yönlendirildi",
             "restoredMovedReason": "localhost:{{previousPort}} bu bilgisayarda kullanımda."
           }
         }
@@ -5873,8 +5873,8 @@
             "staleCodexSessions_other": "{{count}} Codex oturumu hâlâ eski hesapta.",
             "staleCodexSessions_one": "{{count}} Codex oturumu hâlâ eski hesapta.",
             "confirmHostReset": "Bu işlem, {{host}} üzerindeki {{account}} hesabından bir Codex kota sıfırlama kredisi kullanır ve uygun kullanım dönemlerini hemen sıfırlar.",
-            "rateLimitResetsUnsupportedWsl_one": "{{count}} sıfırlama kullanılabilir · henüz WSL'de yok",
-            "rateLimitResetsUnsupportedWsl_other": "{{count}} sıfırlama kullanılabilir · henüz WSL'de yok",
+            "rateLimitResetsUnsupportedWsl_one": "{{count}} sıfırlama hakkı kullanılabilir · WSL'de henüz yok",
+            "rateLimitResetsUnsupportedWsl_other": "{{count}} sıfırlama hakkı kullanılabilir · WSL'de henüz yok",
             "signedOutAccounts": "Oturum kapalı",
             "addAnotherAccount": "Başka hesap ekle…",
             "windowWeeks": "{{value0}} hf",
@@ -9341,8 +9341,8 @@
           },
           "sharedCodexServers": {
             "title": "Paylaşılan Codex sunucuları",
-            "description": "Aynı yapılandırmayı kullanan Codex sohbetleri, her sohbet için ayrı bir işlem başlatmak yerine tek bir arka plan işlemini paylaşır.",
-            "copy": "Bu seçenek bellek tüketimini azaltır ve yeni sohbetlerin daha hızlı açılmasını sağlar. Paylaşılan işlem çökerse ona bağlı tüm sohbetler yeniden bağlanır. Ayar, değişiklikten sonra bu bilgisayarda başlatılan sohbetler için geçerlidir. Uzak sunucularda ve WSL'de her sohbet ayrı bir işlem kullanmaya devam eder.",
+            "description": "Aynı kurulumdaki Codex sohbetleri, her sohbet için ayrı bir arka plan işlemi başlatmak yerine tek bir işlemi paylaşır.",
+            "copy": "Daha az bellek kullanır ve yeni sohbetleri daha hızlı başlatır. Paylaşılan bir işlem çökerse tüm sohbetleri yeniden bağlanır. Bu ayarı değiştirdikten sonra bu bilgisayarda başlatılan sohbetlere uygulanır; uzak ve WSL sunucuları sohbet başına bir işlem tutmaya devam eder.",
             "toggleLabel": "Paylaşılan Codex sunucularını aç veya kapat"
           }
         },
@@ -11571,7 +11571,7 @@
             },
             "sharedCodexServers": {
               "title": "Paylaşılan Codex sunucuları",
-              "description": "Aynı yapılandırmayı kullanan Codex sohbetleri, her sohbet için ayrı bir işlem başlatmak yerine tek bir arka plan işlemini paylaşır.",
+              "description": "Aynı kurulumdaki Codex sohbetleri, her sohbet için ayrı bir arka plan işlemi başlatmak yerine tek bir işlemi paylaşır.",
               "codex": "codex",
               "memory": "bellek"
             }
@@ -13752,11 +13752,11 @@
           "title": "Orca Hesabı",
           "description": "Çalışmanızı anında paylaşın ve nerede olursanız olun Orca Mobile'dan masaüstünüze ulaşın.",
           "searchDescription": "Artifact'ler ve Orca Relay tarafından kullanılan hesapta oturum açın veya kapatın.",
-          "managed": "Bazı Orca ayarlarını ekibiniz yönetiyor.",
-          "deviceReportNamedViewers": "{{teams}} ekibindeki sahipler ve yöneticiler bu cihazın raporlarını görebilir.",
-          "deviceReportViewers": "Ekip sahipleri ve yöneticileri bu cihazın raporlarını görebilir.",
+          "managed": "Orca ayarlarının bir kısmı ekibiniz tarafından yönetiliyor.",
+          "deviceReportNamedViewers": "{{teams}} içindeki sahipler ve yöneticiler bu cihazdan gelen raporları görüntüleyebilir.",
+          "deviceReportViewers": "Ekip sahipleri ve yöneticileri bu cihazdan gelen raporları görüntüleyebilir.",
           "reportingDetails": "Cihaz raporlama ayrıntıları",
-          "reportingDisclosure": "Cihazlar görünümü Orca sürümünüzü, sürüm kanalınızı, cihaz adınızı, platformunuzu, güncelleme durumunuzu, Orca’nın yükleyemediği zorunlu eklentileri ve cihazın son rapor gönderdiği zamanı gösterir.",
+          "reportingDisclosure": "Cihazlar görünümü; Orca sürümünüzü, yayın kanalını, cihaz adını, platformu, güncelleme durumunu, Orca'nın yükleyemediği gerekli eklentileri ve cihazın en son ne zaman rapor verdiğini gösterir.",
           "benefitsTitle": "Hesabınıza dahil",
           "artifactsTitle": "Artifact paylaşımı",
           "artifactsDescription": "HTML ve Markdown dosyalarını yayınlayın, ardından paylaşılan her bağlantıyı Orca'dan yönetin.",
@@ -14420,7 +14420,7 @@
           "overYourSsh": "SSH bağlantınız üzerinden",
           "installViaSsh": "SSH üzerinden yükle",
           "newerThanApp": "Bu uygulamadan daha yeni (v{{version}})",
-          "shareRowHint": "Başka bir Orca örneğinin buraya bağlanmasına izin verin.",
+          "shareRowHint": "Başka bir Orca'nın buraya bağlanmasına izin verin.",
           "manageShare": "Yönet",
           "share": "Paylaş",
           "serversCaption": "Sunucular"
@@ -14709,7 +14709,7 @@
           "shownOf": "{{value0}} / {{value1}}"
         },
         "PluginManagerRows": {
-          "requiredByTeam": "Ekibiniz tarafından zorunlu tutuluyor",
+          "requiredByTeam": "Ekibiniz için gerekli",
           "reinstall": "Yeniden yükle",
           "crashedCount": "Art arda {{value0}} kez çöktü",
           "crashed": "Başlatılırken çöktü",
@@ -21690,12 +21690,12 @@
         "stateUnverifiableCount": "Durum bilgisi alınamıyor: {{value0}}",
         "stateWaitingCount": "{{value0}} bekliyor",
         "stateWorkingCount": "{{value0}} çalışıyor",
-        "openAgent": "{{value0}} aç",
-        "needsAttention_one": "{{count}} dikkat gerektiriyor",
-        "needsAttention_other": "{{count}} öğe ilgilenmenizi bekliyor",
-        "workerBadge": "Alt ajan",
+        "openAgent": "Aç: {{value0}}",
+        "needsAttention_one": "{{count}} ilgilenmenizi bekliyor",
+        "needsAttention_other": "{{count}} ilgilenmenizi bekliyor",
+        "workerBadge": "Çalışan",
         "subagentBadge": "Alt ajan",
-        "nameInMessage": "Mesaja {{name}} ekle"
+        "nameInMessage": "Mesaja ekle: {{name}}"
       },
       "jumpToLatest": "En son öğeye git",
       "newRowsAnnouncement": "Siz yokken yeni mesajlar geldi",
@@ -21715,10 +21715,10 @@
         "hostUpdateRequired": "Sohbet arayüzünde devam etmek için bu sunucudaki Orca'yı güncelleyin.",
         "notSavedYet": "{{agent}} bu sohbeti henüz kaydetmedi. Yanıt verdikten sonra yeniden deneyin.",
         "exitUnconfirmed": "{{agent}} bu sohbeti başka bir terminalde yürütüyor. Oradan çıkın veya o terminali kapatın, ardından yeniden deneyin.",
-        "exitUnconfirmedFromTerminal": "{{agent}} bu sohbeti hâlâ bu terminalde yürütüyor. Burada {{agent}} oturumunu sonlandırın, ardından sohbeti Oturum geçmişi bölümünden açın.",
-        "terminalChanged": "{{agent}} ajanının çalıştığı terminal, kapatılmadan önce değişti. Bu yüzden Orca terminali açık bıraktı. Yeniden deneyin.",
-        "terminalExitUnproven": "Orca, {{agent}} ajanının terminalini kapattı ancak ajanın durduğunu doğrulayamadığı için sohbeti açmadı. Ana bilgisayar bağlantısını kontrol edip sohbeti Oturum geçmişi bölümünden açın.",
-        "resumeFailed": "{{agent}} sohbette devam edemedi. Bu terminali ve ana bilgisayar bağlantısını kontrol edip yeniden deneyin."
+        "exitUnconfirmedFromTerminal": "{{agent}} bu konuşmayı hâlâ bu terminalde yürütüyor. Burada {{agent}} uygulamasından çıkın, ardından bu konuşmayı Oturum Geçmişi bölümünden açın.",
+        "terminalChanged": "{{agent}} uygulamasını çalıştıran terminal kapanmadan önce değiştiği için Orca terminali açık bıraktı. Yeniden deneyin.",
+        "terminalExitUnproven": "Orca, {{agent}} terminalini kapattı ancak durduğunu doğrulayamadığı için sohbet açılmadı. Ana makine bağlantısını kontrol edin, ardından konuşmayı Oturum Geçmişi bölümünden açın.",
+        "resumeFailed": "{{agent}} sohbette devam edemedi. Bu terminali ve ana makine bağlantısını kontrol edin, ardından yeniden deneyin."
       },
       "state": {
         "loading": {
@@ -21879,18 +21879,18 @@
         "mainAgent": "Ana ajan",
         "promptFromMain": "Ana ajandan gelen istem",
         "backTo": "Geri dön: {{value0}}",
-        "path": "Alt ajanın yolu",
+        "path": "Alt ajan yolu",
         "stateHeading": {
           "completed": "Tamamlandı",
           "working": "Çalışıyor",
           "idle": "Boşta",
           "failed": "Başarısız",
           "stopped": "Durduruldu",
-          "unverifiable": "Durum bilgisi kullanılamıyor"
+          "unverifiable": "Durum bilgisi alınamıyor"
         },
         "noSteps": "Henüz adım yok",
-        "beforeClear": "Bu alt ajan sohbet temizlenmeden önce çalıştı",
-        "stoppedBeforeReply": "Yanıt vermeden durdu",
+        "beforeClear": "Bu alt ajan, sohbet temizlenmeden önce çalıştı",
+        "stoppedBeforeReply": "Yanıt vermeden önce durduruldu",
         "noReply": "Yanıt vermeden sona erdi"
       },
       "rewind": {
@@ -22041,7 +22041,7 @@
         "showLessRows": "Daha az göster",
         "moreRows": "+{{value0}} daha",
         "editReturned": "Düzenlediğiniz metin sohbet kutusunda.",
-        "commandsUnsupported": "Komutlar sıraya alınmış bir mesaja kaydedilemez.",
+        "commandsUnsupported": "Komutlar kuyruktaki bir mesajda kaydedilemez.",
         "imageCount": "{{count}} görsel",
         "queuedCount_one": "{{count}} kuyrukta",
         "queuedCount_other": "{{count}} kuyrukta"
@@ -22134,7 +22134,7 @@
         "unavailable": "Bu sayfanın önizlemesi yok."
       },
       "workers": {
-        "stopUnconfirmed": "Orca alt ajanın durduğunu doğrulayamadı."
+        "stopUnconfirmed": "Orca, çalışanın durduğunu doğrulayamadı."
       },
       "connectorAsker": {
         "anApp": "Bir uygulama",
@@ -22368,9 +22368,9 @@
         "accessibleName": "Çatal: {{name}}",
         "sourceTooltip": "{{name}} sohbetinin çatalı",
         "unknownSourceTooltip": "Başka bir sohbetin çatalı",
-        "commandDescription": "Sohbeti son yanıtından dallandır",
-        "commandNothing": "Henüz dallandırılabilecek bir yanıt yok.",
-        "commandTakesNoText": "Yalnızca /fork komutunu gönderin, ardından yeni sohbete yazın."
+        "commandDescription": "Bu sohbeti en son yanıtından çatalla",
+        "commandNothing": "Henüz çatallanacak bir yanıt yok.",
+        "commandTakesNoText": "/fork komutunu tek başına gönderin, ardından yeni sohbete yazın."
       },
       "importPlan": {
         "comes": "İçe aktarılacak",
@@ -22451,17 +22451,17 @@
         "hidden": "Orca artık CI sonuç satırlarını göstermeyecek"
       },
       "sideChat": {
-        "description": "Bu sohbetin yanında ayrı bir sohbet dalı açıp soru sor",
+        "description": "Bu sohbetin yanındaki bir çatalda yan soru sor",
         "argumentHint": "<question>",
         "pill": "Yan sohbet",
-        "placeholder": "Yan bir soru sorun",
-        "notReady": "Yan sohbetler henüz hazır değil. Biraz sonra yeniden deneyin.",
+        "placeholder": "Yan soru sorun",
+        "notReady": "Yan sohbetler henüz hazır değil. Birazdan yeniden deneyin.",
         "replyRunning": "Bu yanıt tamamlandığında kullanılabilir.",
         "noReply": "İlk yanıttan sonra kullanılabilir.",
-        "textOnly": "Yan sohbetler yalnızca metin kabul eder. Ekleri kaldırıp soruyu yeniden gönderin.",
-        "questionNotSent": "Sorunuz {{agent}} ajanına ulaşmadı",
+        "textOnly": "Yan sohbetler yalnızca metin kabul eder. Ekleri kaldırın, ardından yeniden gönderin.",
+        "questionNotSent": "{{agent}} sorunuzu almadı",
         "questionNotSentDetail": "Sorunuz hâlâ bu sohbette. Yeniden denemek için /btw komutunu tekrar gönderin.",
-        "questionUnconfirmed": "{{agent}}, sorunuzun yan sohbete ulaştığını doğrulayamadı",
+        "questionUnconfirmed": "{{agent}}, yan sohbetin sorunuzu aldığını doğrulayamadı",
         "questionUnconfirmedDetail": "Yeniden sormadan önce yan sohbeti kontrol edin. Sorunuz hâlâ bu sohbette."
       },
       "urlRequest": {
@@ -22662,8 +22662,8 @@
       },
       "typedBy": {
         "anotherComputer": "başka bir bilgisayar",
-        "fromVia": "{{name}} tarafından {{computer}} üzerinden",
-        "fromViaPhone": "{{name}} tarafından {{phone}} cihazında yazıldı, {{computer}} üzerinden gönderildi"
+        "fromVia": "{{name}} tarafından {{computer}} üzerinden gönderildi",
+        "fromViaPhone": "{{name}} tarafından {{phone}} üzerinde yazıldı, {{computer}} üzerinden gönderildi"
       },
       "eventRow": {
         "showLess": "Daha az göster",
@@ -22747,27 +22747,27 @@
         "staysDefault": "{{email}} varsayılan hesap olarak kalacak"
       },
       "workerDock": {
-        "commandOutputPending": "Komut çıktısı henüz hazır değil.",
+        "commandOutputPending": "Komut çıktısı henüz kullanılamıyor.",
         "notNow": "Şimdi değil",
         "retry": "Yeniden dene",
         "dismiss": "Kapat",
-        "openWorker": "Alt ajanı aç",
-        "remoteOwner": "Bunu çalıştığı bilgisayardan durdurun veya temizleyin",
-        "restore": "Dock'ta yeniden göster",
+        "openWorker": "Çalışanı aç",
+        "remoteOwner": "Bunu, çalıştığı bilgisayardan durdurun veya temizleyin",
+        "restore": "Listede yeniden göster",
         "alreadyStopped": "Zaten durduruldu",
         "cantStop": "Şu anda durdurulamıyor",
         "clearAllLabel_one": "Başarısız çalışanı temizle",
         "clearAllLabel_other": "Başarısız {{count}} çalışanın tümünü temizle",
         "loadingWorker": "Çalışan yükleniyor…",
-        "resultUnavailable": "Çalışanın sonucu alınamıyor",
+        "resultUnavailable": "Çalışan sonucu kullanılamıyor",
         "showDetails": "Ayrıntıları göster",
         "hideDetails": "Ayrıntıları gizle",
         "close": "Kapat",
         "workersRegion": "Çalışanlar",
         "doneResult": "Tamamlandı · sonucu aç",
-        "clearName": "{{name}} adlı çalışanı temizle",
-        "stopUnavailable": "{{name}} adlı çalışanı durdur · {{title}} kullanılamıyor · {{reason}}",
-        "stopName": "{{name}} adlı çalışanı durdur · {{title}}",
+        "clearName": "Temizle: {{name}}",
+        "stopUnavailable": "Durdur: {{name}} · {{title}} kullanılamıyor · {{reason}}",
+        "stopName": "Durdur: {{name}} · {{title}}",
         "stopping": "Durduruluyor…",
         "clear": "Temizle",
         "stop": "Durdur",
@@ -22777,19 +22777,19 @@
         "idle": "Boşta",
         "saving": "Sonuç kaydediliyor…",
         "failed": "Başarısız",
-        "unexpected": "Beklenmedik şekilde durdu",
-        "unavailableState": "Durum bilgisi kullanılamıyor",
+        "unexpected": "Beklenmedik biçimde durdu",
+        "unavailableState": "Durum bilgisi alınamıyor",
         "needsYou": "Sizi bekliyor",
-        "worker": "Alt ajan",
+        "worker": "Çalışan",
         "agent": "Ajan",
         "command": "Komut",
         "workflow": "İş akışı",
-        "monitor": "İzle",
+        "monitor": "İzleyici",
         "task": "Görev",
         "taskCount_one": "{{count}} görev",
         "taskCount_other": "{{count}} görev",
-        "workerCount_one": "{{count}} alt ajan",
-        "workerCount_other": "{{count}} alt ajan",
+        "workerCount_one": "{{count}} çalışan",
+        "workerCount_other": "{{count}} çalışan",
         "commandCount_one": "{{count}} komut",
         "commandCount_other": "{{count}} komut",
         "workflowCount_one": "{{count}} iş akışı",
@@ -22798,29 +22798,29 @@
         "monitorCount_other": "{{count}} izleyici",
         "agentCount_one": "{{count}} ajan",
         "agentCount_other": "{{count}} ajan",
-        "stoppedByYou": "Siz durdurdunuz",
+        "stoppedByYou": "Sizin tarafınızdan durduruldu",
         "finished": "Tamamlandı",
-        "failedCount": "Başarısız: {{count}}",
+        "failedCount": "{{count}} başarısız",
         "needsYouCount": "{{count}} sizi bekliyor",
-        "newQuestions_one": "Çalışanlardan gelen {{count}} yeni soru yanıtınızı bekliyor",
-        "newQuestions_other": "Çalışanlardan gelen {{count}} yeni soru yanıtınızı bekliyor",
-        "waitingOnYouName": "{{name}} · Yanıtınızı bekliyor",
-        "moreQuestions": "{{count}} tane daha yanıtınızı bekliyor",
-        "questions": "{{count}} tanesi yanıtınızı bekliyor",
-        "queuedQuestions": "Sıradaki çalışan soruları",
-        "showQuestion": "{{name}} adlı çalışanın sorusunu göster",
+        "newQuestions_one": "Sizi bekleyen {{count}} yeni çalışan sorusu",
+        "newQuestions_other": "Sizi bekleyen {{count}} yeni çalışan sorusu",
+        "waitingOnYouName": "{{name}} · Sizi bekliyor",
+        "moreQuestions": "{{count}} tane daha sizi bekliyor",
+        "questions": "{{count}} sizi bekliyor",
+        "queuedQuestions": "Kuyruktaki çalışan soruları",
+        "showQuestion": "Soruyu göster: {{name}}",
         "show": "Göster",
         "runningCount": "{{count}} çalışıyor",
-        "cleared_one": "1 alt ajan temizlendi",
-        "cleared_other": "{{count}} alt ajan temizlendi",
+        "cleared_one": "1 çalışan temizlendi",
+        "cleared_other": "{{count}} çalışan temizlendi",
         "stopAll": "Tümünü durdur",
-        "clearFailed": "Başarısız olanları temizle",
-        "pillLabel_one": "{{count}} alt ajan, en son: {{title}}",
-        "pillLabel_other": "{{count}} alt ajan, en son: {{title}}",
+        "clearFailed": "Başarısızları temizle",
+        "pillLabel_one": "{{count}} çalışan, en son: {{title}}",
+        "pillLabel_other": "{{count}} çalışan, en son: {{title}}",
         "unlistedDetail": "Bazı arka plan işleri burada listelenmiyor",
         "unlisted": "Arka plan işi çalışıyor",
-        "unread": "Alt ajanlar yüklenemedi",
-        "unreadDetail": "Alt ajanlar yüklendiğinde burada görünür"
+        "unread": "Çalışanlar yüklenemedi",
+        "unreadDetail": "Çalışanlar yüklendiğinde burada görünecek"
       },
       "webhookSetup": {
         "heading": "Webhook kur",
@@ -24132,7 +24132,7 @@
         "bannerFinishedStatus": "Orkestrasyon çalışanı tamamlandı · Yakında kapanır",
         "boundRunning": "{{worker}} ile birlikte kapanır",
         "boundFinished": "{{worker}} tamamlandı · {{countdown}} içinde kapanır",
-        "boundFallbackName": "çalışanı"
+        "boundFallbackName": "ilgili çalışan"
       }
     },
     "wslHostMark": {
@@ -25459,7 +25459,7 @@
       "googleSignInOrca": "Orca’nın yerleşik oturum açma yöntemi",
       "googleSignInOrcaOption": "Buradan tarayıcınızla oturum açın; agy gerekmez",
       "googleSignInUpdateFailed": "Antigravity’nin Google ile oturum açma yöntemi değiştirilemedi.",
-      "chatDescriptionKeyOnAgy": "Yeni sohbetler aşağıdaki oturumla agy üzerinde çalışır; terminaldeki agy oturumundan ayrı tutulur."
+      "chatDescriptionKeyOnAgy": "Yeni sohbetler, aşağıdaki oturum açma bilgisiyle agy üzerinde çalışır ve terminaldeki agy'den ayrı tutulur."
     },
     "claude": {
       "added": "Hesap eklendi. Başlatacağınız bir sonraki Claude'da kullanmak için bu hesabı seçin.",
@@ -25538,7 +25538,7 @@
       "personalOrganization": "Kişisel"
     },
     "codex": {
-      "usageSignInLabel": "Oturum kapalı",
+      "usageSignInLabel": "Oturum açılmadı",
       "usageSignInMessage": "Kullanımı görmek için oturum açın.",
       "usageSignInSettingsMessage": "Oturum açmak için Ayarlar → Hesaplar bölümünü açın."
     },
@@ -25715,7 +25715,7 @@
       "listFailed": "Projeler listelenemedi",
       "organizations": "Kuruluşlar",
       "viewFailed": "Proje görünümü getirilemedi",
-      "chooseProject": "Proje seç"
+      "chooseProject": "Bir proje seçin"
     },
     "error": {
       "notFoundState": "Bu proje veya görünüm bulunamadı.",
@@ -25935,8 +25935,8 @@
   "updates": {
     "installOnQuit": {
       "title": "Güncelleme yüklenmeye hazır",
-      "summary": "Orca’dan çıkın. Yükleme bittikten sonra yeniden açın.",
-      "quit": "Orca’dan Çık",
+      "summary": "Orca'dan çıkın. Yüklemeden sonra yeniden açın.",
+      "quit": "Orca'dan çık",
       "later": "Daha sonra"
     },
     "installBlock": {
@@ -26016,14 +26016,14 @@
       "summary": "Orca {{version}} gerekli. Güncellemek için yeniden başlatın."
     },
     "teamRequired": {
-      "summary": "Ekibiniz Orca {{version}} sürümünü zorunlu tutuyor. Güncellemek için yeniden başlatın.",
-      "title": "Ekibiniz Orca {{version}} sürümünü zorunlu tutuyor",
+      "summary": "Ekibiniz Orca {{version}} sürümünü gerektiriyor. Güncellemek için yeniden başlatın.",
+      "title": "Ekibiniz Orca {{version}} sürümünü gerektiriyor",
       "restartNow": "Şimdi yeniden başlat",
-      "countdown": "Orca, geri sayımdan sonra oturumlarınızı kaydedip yeniden başlayacak. Etkin ajanlar yeniden başlatmayı geciktirebilir.",
-      "waiting": "Orca yeniden başlamadan önce etkin ajanları bekliyor.",
-      "retry": "Orca bu güncellemeyi bir sonraki açılışta yeniden deneyecek.",
-      "manual": "Otomatik yükleme başarısız oldu. Bu güncellemeyi elle yükleyin.",
-      "deadline": "{{deadline}} tarihine kadar yeniden başlatın. Orca yeniden başlamadan önce oturumlarınızı kaydeder.",
+      "countdown": "Geri sayım bittikten sonra Orca oturumlarınızı kaydedip yeniden başlatacak. Etkin ajanlar yeniden başlatmayı geciktirebilir.",
+      "waiting": "Orca yeniden başlatmadan önce etkin ajanları bekliyor.",
+      "retry": "Orca bu güncellemeyi bir sonraki başlatışında yeniden deneyecek.",
+      "manual": "Otomatik yükleme yapılamadı. Bu güncellemeyi elle yükleyin.",
+      "deadline": "{{deadline}} öncesinde yeniden başlatın. Orca yeniden başlatmadan önce oturumlarınızı kaydeder.",
       "download": "İndirmeleri aç"
     },
     "remoteUpdateBusy": "Bu sunucu zaten güncelleniyor. Güncelleme tamamlandığında yeniden kontrol edin."
@@ -26259,7 +26259,7 @@
       "privateBytes": "Orca, ajanlar ve terminaller için ayrılmış bellek"
     },
     "chatRow": {
-      "tooltip": "Altında çalışan işlemler dahil {{agent}} sohbeti"
+      "tooltip": "{{agent}} sohbeti ve altında çalışan işlemler dahil"
     },
     "sharedAgentProcesses": "Paylaşılan ajan işlemleri"
   },
@@ -26991,7 +26991,7 @@
       },
       "botProviderErrorNotSaved": "Botun turu başarısız oldu ancak bu çalıştırmada sağlayıcının hatası kaydedilmedi. Asıl sohbette daha fazla ayrıntı olabilir.",
       "botsOff": "Botlar Ayarlar’da kapalı olduğu için Orca bu çalıştırmayı atladı.",
-      "botsOffByTeam": "Botlar ekibiniz tarafından kapatıldığı için Orca bu çalıştırmayı atladı.",
+      "botsOffByTeam": "Bots ekibiniz tarafından kapatıldığı için Orca bu çalıştırmayı atladı.",
       "botMissing": "Bu otomasyonun adına çalıştığı bot artık yok.",
       "botFolderMissing": "Botun klasörü artık kullanılamıyor.",
       "botPaused": "{{bot}} duraklatıldığı için Orca bu çalıştırmayı atladı.",
@@ -27115,7 +27115,7 @@
     "webhooksOff": "Çalışmayacak: Orca Cloud henüz webhook’ları desteklemiyor",
     "webhooksOffScheduled": "Yalnızca zamanlamaya göre çalışır: Orca Cloud henüz webhook’ları desteklemiyor",
     "openConnectors": "Bağlayıcıları aç",
-    "hostUnreachable": "{{host}} bilgisayarına ulaşılamadı. Yeniden bağlandığında tekrar deneyin."
+    "hostUnreachable": "{{host}} sunucusuna ulaşılamadı. Yeniden bağlandığında tekrar deneyin."
   },
   "codeHost": {
     "errors": {
@@ -30644,9 +30644,9 @@
   "plugins": {
     "blockedByTeam": "Ekibiniz tarafından engellendi.",
     "requiredFailures": {
-      "toast": "Zorunlu bir eklenti yüklenemedi",
-      "open": "Eklentileri Aç",
-      "label": "Ekibiniz tarafından zorunlu tutuluyor",
+      "toast": "Gerekli bir eklenti yüklenemedi",
+      "open": "Eklentileri aç",
+      "label": "Ekibiniz için gerekli",
       "body": "Orca {{plugin}} eklentisini yükleyemedi."
     },
     "frameSaveAs": {
@@ -30681,10 +30681,10 @@
     "displayText": {
       "tb0b38488": "Orca için GitHub Temaları",
       "tb8aa98fc": "Orca için VS Code Varsayılan Temaları",
-      "tfc425a57": "Multipass Sanal Makine Tarifleri",
-      "t0f9f5503": "GitHub'ın kendi VS Code temaları: Light Default, Dark Default, Dark Dimmed ve bunların yüksek karşıtlık seçenekleri.",
-      "t0b4f7e19": "VS Code'un varsayılan renk temalarının resmî olmayan uyarlamaları: Dark Modern, Light Modern, Dark+ ve Light+.",
-      "tc86eed7d": "Geçici Multipass çalışma alanları için gözden geçirilmiş bir başlangıç yaşam döngüsü."
+      "tfc425a57": "Multipass VM Tarifleri",
+      "t0f9f5503": "GitHub'ın kendi VS Code temaları: Light Default, Dark Default, Dark Dimmed ve yüksek kontrastlı varyantlar.",
+      "t0b4f7e19": "VS Code'un varsayılan renk temalarının resmî olmayan portları: Dark Modern, Light Modern, Dark+ ve Light+.",
+      "tc86eed7d": "Tek kullanımlık Multipass çalışma alanları için gözden geçirilmiş bir başlangıç yaşam döngüsü."
     }
   },
   "checks": {
@@ -31002,11 +31002,11 @@
     "moveUp": "Yukarı taşı",
     "moveDown": "Aşağı taşı",
     "hide": "Gizle",
-    "show": "{{name}} panelini göster",
-    "dragStart": "{{name}} öğesi tutuldu",
+    "show": "{{name}} öğesini göster",
+    "dragStart": "{{name}} alındı",
     "dragOver": "{{name}}, {{target}} üzerinde",
     "dragEnd": "{{name}} bırakıldı",
-    "dragCancel": "{{name}} öğesini taşıma iptal edildi",
+    "dragCancel": "{{name}} taşıma iptal edildi",
     "moveLeft": "Sola taşı",
     "moveRight": "Sağa taşı",
     "reset": "Sekme sırasını sıfırla"
