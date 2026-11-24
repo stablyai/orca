@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { PRInfo } from '../../../../shared/github/pull-requests/pull-request-types'
 import type { Repo } from '../../../../shared/repository/repo-types'
 import { readPRRefreshOutcome } from './pr-refresh-coordinator'
@@ -16,6 +16,7 @@ const worktree: WorkspacePRReadWorktree = {
   linkedPR: null
 }
 const cacheKey = 'repo-1::fix-list'
+const NOW = Date.parse('2026-11-23T12:00:00Z')
 
 function pr(state: PRInfo['state']): PRInfo {
   return {
@@ -34,17 +35,21 @@ function pr(state: PRInfo['state']): PRInfo {
 function storeWith(data: PRInfo, ageMs: number) {
   return {
     getGitHubCache: () => ({
-      pr: { [cacheKey]: { data, fetchedAt: Date.now() - ageMs } },
+      pr: { [cacheKey]: { data, fetchedAt: NOW - ageMs } },
       issue: {}
     })
   }
 }
 
-beforeEach(() => read.mockReset())
+beforeEach(() => {
+  read.mockReset()
+  vi.useFakeTimers({ now: NOW })
+})
+afterEach(() => vi.useRealTimers())
 
 describe('a workspace PR read outside its row', () => {
   it('reads a stale open PR again and shows the merge, by number once the branch is gone', async () => {
-    read.mockResolvedValue({ kind: 'found', pr: pr('merged'), fetchedAt: Date.now() })
+    read.mockResolvedValue({ kind: 'found', pr: pr('merged'), fetchedAt: NOW })
     const shown = await readWorkspacePR(storeWith(pr('open'), 60 * 60_000), worktree, repo, 1_000)
     expect(shown?.state).toBe('merged')
     expect(read).toHaveBeenCalledTimes(1)
