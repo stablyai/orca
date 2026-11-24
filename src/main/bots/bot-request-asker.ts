@@ -30,9 +30,9 @@ export type BotWakingPlace = {
   url?: string
   /** The message itself as an action ref, from the cloud; a reaction goes on it. */
   messageRef?: string
-  /** An automation's event whose run posts its results back to this thread: only then is it where
-   *  the turn's work started, since another setting means the owner wants them elsewhere. */
-  resultsHere?: true
+  /** An automation's event whose run posts its results somewhere else (none, its Chat, another
+   *  channel): the owner wants them there, so it is not where the turn's work started. */
+  resultsElsewhere?: true
 }
 
 /** What the running turn acts for. */

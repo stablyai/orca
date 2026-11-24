@@ -35,6 +35,20 @@ const automationPrompt = row({
   memorySource: 'automation:a1'
 })
 
+const personMessage = row({
+  kind: 'message',
+  role: 'user',
+  blocks: [{ type: 'text', text: 'why is it slow?' }],
+  origin: 'connector',
+  asker: {
+    source: 'slack',
+    userId: 'U1',
+    role: 'owner',
+    place: { kind: 'channel', id: 'C1' },
+    url: THREAD.url
+  }
+})
+
 const requestMail = (messageIds: string[]): AgentJournalRenderItem =>
   row({
     kind: 'message',
@@ -68,18 +82,24 @@ const lookups = (
 
 describe('where a bot turn’s work started', () => {
   it('follows work from the thread that woke a run into the chat it was handed to, and no further', () => {
-    const answered: BotWakingPlace = { ...THREAD, resultsHere: true }
-    expect(readBotActingTurn([automationPrompt], lookups({}, answered)).originPlace).toEqual(
-      answered
-    )
+    expect(readBotActingTurn([automationPrompt], lookups({}, THREAD)).originPlace).toEqual(THREAD)
     // An automation whose results go elsewhere (none, its Chat, another channel) names no thread.
-    expect(readBotActingTurn([automationPrompt], lookups({}, THREAD)).originPlace).toBe(undefined)
+    const elsewhere: BotWakingPlace = { ...THREAD, resultsElsewhere: true }
+    expect(readBotActingTurn([automationPrompt], lookups({}, elsewhere)).originPlace).toBe(
+      undefined
+    )
+    // A person's message in a thread is that thread.
+    expect(readBotActingTurn([personMessage], lookups({})).originPlace).toEqual({
+      source: 'slack',
+      placeId: 'C1',
+      url: THREAD.url
+    })
     expect(
       readBotActingTurn([requestMail(['msg_a'])], lookups({ msg_a: THREAD })).originPlace
     ).toEqual(THREAD)
     // A turn only a worker's report woke reads the turn before it, but never takes its thread.
     const report = { ...requestMail(['msg_report']), itemId: 'm2', sequence: 2 }
-    expect(readBotActingTurn([automationPrompt, report], lookups({}, answered)).originPlace).toBe(
+    expect(readBotActingTurn([automationPrompt, report], lookups({}, THREAD)).originPlace).toBe(
       undefined
     )
     // Another thread in the same channel, or no place at all, never takes the thread's place.

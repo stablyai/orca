@@ -30,7 +30,7 @@ export const originOf = (
   places: (BotWakingPlace | undefined)[]
 ): { originPlace?: BotWakingPlace } => {
   const originPlace = requestsOriginPlace(
-    places.map((place) => (place?.resultsHere ? place : undefined)),
+    places.map((place) => (place?.resultsElsewhere ? undefined : place)),
     false
   )
   return originPlace ? { originPlace } : {}

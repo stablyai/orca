@@ -9,6 +9,7 @@ import { dispatchItemUid, lineageAncestors } from '../../../../../bots/bot-item-
 import { resolveItem } from '../../bots-items-write-support'
 import { BOT_ITEM_ORIGIN_PREFIX } from '../../bots-items-worker-origin'
 import type { OrchestrationDb } from '../../../../orchestration/db/orchestration-db'
+import { parseWorkerTerminalPriorOwnerIds } from '../../../../orchestration/db/pane-key-match'
 import {
   carryWorkerResumeSession,
   resolveWorkerLineage
@@ -103,10 +104,18 @@ async function assertSameItem(
 ): Promise<void> {
   const store = ctx.runtime.botItems.store()
   const item = await resolveItem(store, forItem)
-  // The worker's steps: the addressed one's and its newest one's, which a handed-over terminal can
-  // part. Their starts settle it without a lookup; else two items linking them are enough to tell.
+  // The worker's steps: the addressed one's, its newest one's and those of every earlier owner of its
+  // terminal, which a handed-over terminal parts. Their starts settle it without a lookup; else two
+  // items linking them are enough to tell.
+  const priorOwners = parseWorkerTerminalPriorOwnerIds(
+    plan.resource?.prior_owner_dispatch_ids ?? '[]'
+  )
   const steps = [
-    ...new Set([...lineageAncestors(db, plan.addressed), ...lineageAncestors(db, plan.latest.id)])
+    ...new Set(
+      [plan.addressed, plan.latest.id, ...(priorOwners ?? [])].flatMap((id) =>
+        lineageAncestors(db, id)
+      )
+    )
   ]
   const elsewhere =
     steps.some((id) => (dispatchItemUid(db, id) ?? item.uid) !== item.uid) ||

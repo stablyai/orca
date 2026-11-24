@@ -292,7 +292,7 @@ export async function readBotTurn(
       automationPlace(
         runtime,
         sessionId,
-        run && { automationId: run.automation.id, runId: run.runId }
+        run && { automationId: run.automation.id, runId: run.runId, trigger: run.trigger }
       ),
     conversationWorkspaceId: workspaceId
   }

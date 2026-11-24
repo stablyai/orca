@@ -11,7 +11,7 @@ import type { OrcaRuntimeService } from '../../../../orca-runtime'
 function runningAutomationRun(
   runtime: OrcaRuntimeService,
   sessionId: string,
-  recorded?: { automationId: string; runId: string }
+  recorded?: { automationId: string; runId: string; trigger: string }
 ) {
   const running = (
     recorded
@@ -25,8 +25,12 @@ function runningAutomationRun(
 export function automationPlace(
   runtime: OrcaRuntimeService,
   sessionId: string,
-  recorded?: { automationId: string; runId: string }
+  recorded?: { automationId: string; runId: string; trigger: string }
 ): BotWakingPlace | null {
+  // A scheduled, manual or wait run's prompt names no event, so no run need be read.
+  if (recorded && recorded.trigger !== 'event') {
+    return null
+  }
   const run = runningAutomationRun(runtime, sessionId, recorded)
   const event = run?.trigger === 'event' ? run.event : undefined
   if (!run || !event?.subject || !isConnectorSource(event.source)) {
@@ -36,7 +40,7 @@ export function automationPlace(
     source: event.source,
     placeId: event.subject,
     ...(event.url ? { url: event.url } : {}),
-    ...(resultsToThread(runtime, run.automationId) ? { resultsHere: true as const } : {})
+    ...(resultsToThread(runtime, run.automationId) ? {} : { resultsElsewhere: true as const })
   }
 }
 
