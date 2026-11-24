@@ -4,10 +4,6 @@ import { WORKTREE_ROW_LAYOUT } from '../worktree/row-presentation/worktree-list-
 import { themedStyleSheet } from '../theme/themed-styles'
 
 export const hostScreenSecondaryStyles = themedStyleSheet(() => ({
-  errorText: {
-    color: colors.statusRed,
-    fontSize: typography.bodySize
-  },
   list: {
     paddingBottom: spacing.lg
   },
