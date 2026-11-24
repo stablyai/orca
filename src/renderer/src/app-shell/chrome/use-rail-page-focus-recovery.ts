@@ -35,6 +35,29 @@ function resolvePageFocusTarget(column: HTMLElement): HTMLElement | null {
   return null
 }
 
+const OVERLAY_ROLES = '[role="menu"], [role="dialog"], [role="alertdialog"], [role="listbox"]'
+
+/**
+ * The overlays that own `element`'s focus: its overlay, plus each parent menu reached through a submenu's trigger
+ * (`aria-labelledby`), since a submenu is portaled apart from the menu it belongs to.
+ */
+function overlaysOwning(element: Element | null): Element[] {
+  const owners: Element[] = []
+  let node = element
+  while (node && owners.length < 6) {
+    const overlay = node.closest(OVERLAY_ROLES)
+    if (!overlay) {
+      break
+    }
+    owners.push(overlay)
+    const triggerId = overlay.getAttribute('aria-labelledby')
+    const trigger = triggerId ? document.getElementById(triggerId) : null
+    // A dialog is labelled by its own title; only a trigger outside the overlay leads to a parent menu.
+    node = trigger && !overlay.contains(trigger) ? trigger : null
+  }
+  return owners
+}
+
 // A rendered page with nothing focusable gets this many frames to settle before focus falls back to the page itself.
 const SETTLED_FRAMES_BEFORE_FALLBACK = 10
 
@@ -124,18 +147,19 @@ export function useRailPageFocusRecovery(pageColumnRef: React.RefObject<HTMLElem
         frame = requestAnimationFrame(tick)
       }
     }
-    // The last element that took focus, so a close can tell whether focus was inside the closed overlay.
-    let lastFocused: Element | null = document.activeElement
+    // The overlays that owned focus when it last moved, recorded then, before any teardown: a later close can only
+    // strand focus if the closing overlay is one of them.
+    let focusOwners = overlaysOwning(document.activeElement)
     // Any focus that lands meanwhile, from the user, a page or a modal, ends this attempt.
     const onFocusIn = (event: FocusEvent): void => {
-      lastFocused = event.target instanceof Element ? event.target : null
+      focusOwners = overlaysOwning(event.target instanceof Element ? event.target : null)
       disarm()
     }
     document.addEventListener('focusin', onFocusIn, true)
-    // Only a real close of an overlay that held focus can strand it; DOM churn and opens never arm this. A submenu is
-    // portaled apart from its menu, so its focused item counts too: it left the DOM with the close.
+    // Only a real close of an overlay that owned focus can strand it; DOM churn, opens and unrelated dismissals (a
+    // control outside the menu that took focus and then went away) never arm this.
     const unsubscribe = subscribeOverlayCloses((owner) => {
-      if (owner && lastFocused && (owner.contains(lastFocused) || !lastFocused.isConnected)) {
+      if (owner && focusOwners.some((o) => o === owner || owner.contains(o) || o.contains(owner))) {
         arm()
       }
     })
