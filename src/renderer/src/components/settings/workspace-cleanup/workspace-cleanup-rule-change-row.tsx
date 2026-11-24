@@ -7,12 +7,13 @@ import { Checkbox } from '../../ui/checkbox'
 import { WorkspaceCleanupWorkspaceLine } from './workspace-cleanup-workspace-line'
 import { WorkspaceCleanupReasonChip } from './workspace-cleanup-reason-chip'
 import { cleanupChangeRowKey } from './workspace-cleanup-row-key'
+import { cleanupRowAccessibleName, type CleanupRowIdentity } from './workspace-cleanup-row-identity'
 
 export function WorkspaceCleanupRuleChangeRow({
   row,
   keep,
   isNew,
-  project,
+  identity,
   position,
   total,
   disabled,
@@ -23,7 +24,7 @@ export function WorkspaceCleanupRuleChangeRow({
   row: WorkspaceCleanupPreviewRow
   keep: boolean
   isNew: boolean
-  project: boolean
+  identity: CleanupRowIdentity | undefined
   position: number | undefined
   total: number
   disabled: boolean
@@ -34,12 +35,13 @@ export function WorkspaceCleanupRuleChangeRow({
   const t = useTranslate()
   const newId = useId()
   const key = cleanupChangeRowKey(row)
+  const name = cleanupRowAccessibleName(row, identity)
   return (
     <div
       role="listitem"
       aria-setsize={total}
       aria-posinset={position}
-      aria-label={row.displayName}
+      aria-label={name}
       className="flex min-w-0 items-center gap-2 border-b border-border py-2"
     >
       {isNew ? (
@@ -47,7 +49,12 @@ export function WorkspaceCleanupRuleChangeRow({
           {t('components.settings.workspaceCleanup.change.new', 'New')}
         </span>
       ) : null}
-      <WorkspaceCleanupWorkspaceLine workspace={row} hideProject={project} className="flex-1" />
+      <WorkspaceCleanupWorkspaceLine
+        workspace={row}
+        hideProject={!identity?.showProject}
+        detail={identity?.detail}
+        className="flex-1"
+      />
       {row.evaluation.action !== 'keep' ? (
         <span className="hidden sm:inline-flex">
           <WorkspaceCleanupReasonChip reason={row.evaluation.reason} prNumber={row.prNumber} />
@@ -71,10 +78,10 @@ export function WorkspaceCleanupRuleChangeRow({
               ? t(
                   'components.settings.workspaceCleanup.pinAndKeep.named',
                   'Pin and keep {{name}}',
-                  { name: row.displayName }
+                  { name }
                 )
               : t('components.settings.workspaceCleanup.enable.keepNamed', 'Keep {{name}}', {
-                  name: row.displayName
+                  name
                 })
           }
         />

@@ -8,11 +8,14 @@ export class WorkspaceCleanupKeepSelection {
   private readonly listeners = new Set<() => void>()
   private visibleCount = 0
   private visibleBytes = 0
+  private visibleNewCount = 0
   private snapshot = this.capture()
 
+  /** `newKeys` lets the dialog tell kept New rows from kept existing ones without a row scan. */
   constructor(
     rows: readonly WorkspaceCleanupPreviewRow[],
-    selected: Iterable<WorkspaceCleanupPreviewRow> = []
+    selected: Iterable<WorkspaceCleanupPreviewRow> = [],
+    private readonly newKeys: ReadonlySet<string> = new Set()
   ) {
     this.visible = new Map(rows.map((row) => [cleanupChangeRowKey(row), row]))
     for (const row of selected) {
@@ -25,6 +28,7 @@ export class WorkspaceCleanupKeepSelection {
       count: this.selected.size,
       visibleCount: this.visibleCount,
       visibleBytes: this.visibleBytes,
+      visibleNewCount: this.visibleNewCount,
       has: (key: string) => this.selected.has(key)
     }
   }
@@ -42,6 +46,9 @@ export class WorkspaceCleanupKeepSelection {
     if (visible) {
       this.visibleCount += checked ? 1 : -1
       this.visibleBytes += (checked ? 1 : -1) * (visible.sizeBytes ?? 0)
+      if (this.newKeys.has(key)) {
+        this.visibleNewCount += checked ? 1 : -1
+      }
     }
   }
   toggle(row: WorkspaceCleanupPreviewRow): void {
@@ -55,10 +62,15 @@ export class WorkspaceCleanupKeepSelection {
   rows(): IterableIterator<WorkspaceCleanupPreviewRow> {
     return this.selected.values()
   }
-  copyFor(rows: readonly WorkspaceCleanupPreviewRow[], allowed: ReadonlySet<string>) {
+  copyFor(
+    rows: readonly WorkspaceCleanupPreviewRow[],
+    allowed: ReadonlySet<string>,
+    newKeys: ReadonlySet<string> = new Set()
+  ) {
     return new WorkspaceCleanupKeepSelection(
       rows,
-      [...this.rows()].filter((row) => allowed.has(cleanupChangeRowKey(row)))
+      [...this.rows()].filter((row) => allowed.has(cleanupChangeRowKey(row))),
+      newKeys
     )
   }
   getSnapshot = () => this.snapshot

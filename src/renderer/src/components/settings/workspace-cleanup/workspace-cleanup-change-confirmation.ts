@@ -110,7 +110,7 @@ async function complete(
       throw new Error('workspace_cleanup_identity_unknown')
     }
   }
-  const kept = pending.selection.copyFor(rows, allKeys)
+  const kept = pending.selection.copyFor(rows, allKeys, added)
   if (!pending.reviewed) {
     throw new Error('workspace_cleanup_review_unavailable')
   }

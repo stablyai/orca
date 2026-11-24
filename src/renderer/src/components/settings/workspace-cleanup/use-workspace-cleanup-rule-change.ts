@@ -194,7 +194,7 @@ export function useWorkspaceCleanupRuleChange({
       if (!active(token)) {
         return
       }
-      const request = createCleanupChangeRequest(comparison, intent, next, projectName)
+      const request = createCleanupChangeRequest(comparison, intent, next, projectName, repoId)
       if (!request) {
         await commit(next, comparison.read, token, comparison.next)
         return

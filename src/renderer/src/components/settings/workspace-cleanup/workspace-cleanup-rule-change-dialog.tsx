@@ -13,6 +13,7 @@ import {
 } from '../../ui/dialog'
 import { VirtualizedList } from '../../ui/virtualized-list'
 import { WorkspaceCleanupRuleChangeRow } from './workspace-cleanup-rule-change-row'
+import { cleanupRowIdentities } from './workspace-cleanup-row-identity'
 import {
   WorkspaceCleanupChangeFeedback,
   type CleanupPinFailure
@@ -34,6 +35,8 @@ export type WorkspaceCleanupRuleChangeRequest = {
   kind: 'enable' | 'change' | 'inherit' | 'disable-ignored-files'
   setting: WorkspaceCleanupConfirmedSetting
   projectName?: string
+  /** The project whose rule is changing; rows from its folder siblings in other projects name theirs. */
+  projectRepoId?: string
   rows: WorkspaceCleanupPreviewRow[]
   newKeys: ReadonlySet<string>
   currentKeys: ReadonlySet<string>
@@ -108,13 +111,16 @@ export function WorkspaceCleanupRuleChangeDialog({
     () => (newKeys && currentKeys ? cleanupExistingRuleNotice(rows, newKeys, currentKeys) : null),
     [rows, newKeys, currentKeys]
   )
-  // The note matters only while a row that isn't New will still be deleted.
+  const projectRepoId = request?.projectRepoId
+  const identities = useMemo(() => cleanupRowIdentities(rows, projectRepoId), [rows, projectRepoId])
+  const newRowCount = useMemo(
+    () => (newKeys?.size ? rows.filter((row) => newKeys.has(cleanupChangeRowKey(row))).length : 0),
+    [rows, newKeys]
+  )
+  // The note matters only while a row that isn't New will still be deleted. Counts, not a row
+  // scan, so each Keep toggle stays constant work however long the list is.
   const deletesExisting =
-    selected.visibleCount < rows.length &&
-    rows.some((row) => {
-      const key = cleanupChangeRowKey(row)
-      return !newKeys?.has(key) && !request?.selection.has(key)
-    })
+    rows.length - newRowCount > selected.visibleCount - selected.visibleNewCount
   const reviewed = request?.reviewed
   const proposedRules = reviewed
     ? reviewed.change.scope === 'global'
@@ -315,7 +321,7 @@ export function WorkspaceCleanupRuleChangeDialog({
                     row={row}
                     keep={selected.has(key)}
                     isNew={request?.newKeys.has(key) ?? false}
-                    project={Boolean(project)}
+                    identity={identities.get(key)}
                     position={positions.get(key)}
                     total={rows.length}
                     disabled={confirming || settling}

@@ -65,7 +65,8 @@ export function createCleanupChangeRequest(
   comparison: WorkspaceCleanupPolicyComparison,
   intent: CleanupChangeIntent,
   change: WorkspaceCleanupPolicyChange,
-  projectName?: string
+  projectName?: string,
+  projectRepoId?: string | null
 ): (WorkspaceCleanupRuleChangeRequest & { intent: CleanupChangeIntent }) | null {
   const rows = cleanupDestructiveRows(comparison.next)
   const current = cleanupDestructiveRows(comparison.current)
@@ -78,10 +79,11 @@ export function createCleanupChangeRequest(
     kind: intent.kind,
     setting: intent.setting,
     projectName,
+    projectRepoId: projectRepoId ?? undefined,
     rows: cleanupNewRowsFirst(rows, newKeys),
     newKeys,
     currentKeys: new Set(current.map(cleanupChangeRowKey)),
-    selection: new WorkspaceCleanupKeepSelection(rows),
+    selection: new WorkspaceCleanupKeepSelection(rows, [], newKeys),
     reviewed: { state: structuredClone(comparison.read.state), change: structuredClone(change) },
     status: null,
     intent

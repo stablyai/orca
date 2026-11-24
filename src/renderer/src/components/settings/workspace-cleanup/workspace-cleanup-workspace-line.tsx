@@ -7,10 +7,13 @@ export function WorkspaceCleanupWorkspaceLine({
   workspace,
   trailing,
   className,
-  hideProject = false
+  hideProject = false,
+  detail
 }: {
   workspace: Pick<WorkspaceCleanupWorkspaceRef, 'displayName' | 'repoName'>
   hideProject?: boolean
+  /** Tells apart rows whose name and project match, such as a branch or path. */
+  detail?: string
   trailing?: React.ReactNode
   className?: string
 }): React.JSX.Element {
@@ -19,6 +22,9 @@ export function WorkspaceCleanupWorkspaceLine({
       <span className="min-w-0 truncate text-sm font-medium text-foreground">
         {workspace.displayName}
       </span>
+      {detail ? (
+        <span className="min-w-0 shrink-[2] truncate text-xs text-muted-foreground">{detail}</span>
+      ) : null}
       {hideProject ? null : (
         <span className="inline-flex min-w-0 max-w-48 shrink-[4] items-center gap-1 text-xs text-muted-foreground">
           <Folder className="size-3 shrink-0" aria-hidden="true" />

@@ -36,6 +36,7 @@ function request(count = 3): WorkspaceCleanupRuleChangeRequest {
     kind: 'enable',
     setting: 'merged',
     projectName: 'Example project',
+    projectRepoId: 'example',
     rows: [...list.slice(-1), ...list.slice(0, -1)],
     newKeys: new Set([cleanupChangeRowKey(list.at(-1)!)]),
     currentKeys: new Set(list.slice(0, -1).map(cleanupChangeRowKey)),
@@ -100,6 +101,21 @@ export const longProjectAllKept = defineFixture({
       value.selection.toggle(row)
     }
     return <Example value={value} />
+  }
+})
+/** A folder workspace spans projects: another project's row names its project, and two rows
+ * sharing a name show their branches. */
+export const crossProject = defineFixture({
+  width: 640,
+  render: () => {
+    const [own, other, ...twins] = rows(4).map((row, index) =>
+      index ? { ...row, displayName: 'feature', branch: `feature-${index}` } : row
+    )
+    const sibling = { ...other, repoId: 'billing', repoName: 'Billing service', branch: 'feature' }
+    const list = [own, sibling, ...twins]
+    const selection = new WorkspaceCleanupKeepSelection(list)
+    const value = { ...request(), rows: list, newKeys: new Set<string>(), selection }
+    return <Example value={{ ...value, currentKeys: new Set() }} />
   }
 })
 /** Turning off ignored-file protection with nothing matching yet: the empty list. */
