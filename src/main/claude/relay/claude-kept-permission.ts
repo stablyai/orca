@@ -38,6 +38,9 @@ async function applyBuildMode(
   mode: PermissionMode,
   timeoutMs: number | undefined
 ): Promise<void> {
+  // The chat now wants this mode from this process: leaving Plan, a refused Full access and the
+  // next reattach all read it, not the mode the agent was launched in.
+  session.launchIntent = { ...session.launchIntent, permissionMode: mode }
   if (claudeInPlan(session)) {
     // Plan stays until the user leaves it; leaving it returns to this mode.
     session.appliedInputOptions.set('buildPermissionMode', mode)

@@ -17,6 +17,8 @@ type Reading = {
   parents: Map<string, Map<string | undefined, AgentJournalProducerLinkage>>
   backgrounds: Map<string, ClaudeBackgroundTaskIndex>
   subagents: Set<string>
+  /** Subagents told to outlive their turn; the rest ran in the foreground. */
+  backgroundSubagents: Set<string>
 }
 
 /** The saved facts a Claude acquisition reads in one observation, before translating. */
@@ -36,6 +38,7 @@ export type ClaudeJournalSnapshot = {
     }
   ][]
   subagents: string[]
+  backgroundSubagents?: string[]
   threadGoal: JournalThreadGoalSource
 }
 
@@ -83,6 +86,7 @@ export function readClaudeJournalSnapshot(journal: ClaudeLinkageJournal): Claude
       }
     ]),
     subagents: [...reading.subagents],
+    backgroundSubagents: [...reading.backgroundSubagents],
     threadGoal: journal.threadGoalSource()
   }
 }
@@ -110,6 +114,8 @@ export class ClaudeJournaledSubagents {
     selectClaudeBackgroundTask(this.read()?.backgrounds.get(taskId), run)
 
   isSubagent = (taskId: string): boolean => this.read()?.subagents.has(taskId) === true
+  isBackgroundSubagent = (taskId: string): boolean =>
+    this.read()?.backgroundSubagents.has(taskId) === true
 
   /** Dereference the acquisition's current snapshot; a replacement swaps it whole. */
   private read(): Reading | null {
@@ -129,7 +135,8 @@ export class ClaudeJournaledSubagents {
             }
           ])
         ),
-        subagents: new Set(snapshot.subagents)
+        subagents: new Set(snapshot.subagents),
+        backgroundSubagents: new Set(snapshot.backgroundSubagents ?? [])
       }
     }
     return this.reading
@@ -142,7 +149,8 @@ function read(journal: Pick<ClaudeLinkageJournal, 'visitItemsWithLinkage'>): Rea
     attemptByAgent: new Map(),
     parents: new Map(),
     backgrounds: new Map(),
-    subagents: new Set()
+    subagents: new Set(),
+    backgroundSubagents: new Set()
   }
   journal.visitItemsWithLinkage((itemId, _sequence, body, linkage) => {
     if (linkage.agentId !== undefined && linkage.producerKind === 'agent') {
@@ -162,6 +170,11 @@ function read(journal: Pick<ClaudeLinkageJournal, 'visitItemsWithLinkage'>): Rea
     if (body.kind === 'message' && linkage.agentId === undefined) {
       for (const entry of body.blocks.flatMap(namedSubagents)) {
         reading.subagents.add(entry.id)
+      }
+      for (const block of body.blocks) {
+        if (block.type === 'subagent' && block.background === true) {
+          reading.backgroundSubagents.add(block.id)
+        }
       }
     }
   })

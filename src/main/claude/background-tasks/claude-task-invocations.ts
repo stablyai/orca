@@ -26,6 +26,7 @@ export class ClaudeTaskInvocations {
       background: (id: string, run?: string) => ClaudeBackgroundTaskDescriptor | undefined
       parent: (id: string, run?: string) => string | undefined
       isSubagent?: (id: string) => boolean
+      isBackgroundSubagent?: (id: string) => boolean
     }
   ) {}
 
@@ -92,10 +93,12 @@ export class ClaudeTaskInvocations {
       : (this.saved?.background(id, run)?.linkage.parentAgentId ?? this.saved?.parent(id, run))
   }
 
-  /** The journal has a background-task row for it, or a subagent row: a subagent still running
-   *  after its turn ended is a background one. Foreground commands have neither. */
+  /** The journal has a background-task row for it, or a subagent row saved as told to outlive
+   *  its turn. Foreground commands and subagents have neither. */
   savedAsBackground(id: string): boolean {
-    return this.saved?.background(id) !== undefined || this.savedAsSubagent(id)
+    return (
+      this.saved?.background(id) !== undefined || this.saved?.isBackgroundSubagent?.(id) === true
+    )
   }
 
   savedAsSubagent(id: string): boolean {

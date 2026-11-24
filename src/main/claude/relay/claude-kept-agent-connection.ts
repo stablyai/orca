@@ -237,8 +237,9 @@ export async function openKeptClaudeAgentConnection(
     readingBarrier?.resolve()
     readingBarrier = null
     responder.dispose()
-    // A lost daemon may have dropped output Claude saved; only a seen end proves the journal whole.
-    if (child.outcomeLost !== true) {
+    // Only an agent Orca itself ended is known read to its end: one that ended on its own may have
+    // left output a lost daemon or an unreadable spool never relayed.
+    if (closing && child.outcomeLost !== true) {
       readToEnd.add(chatKey)
     }
     terminalError = withLostProviderOutcome(

@@ -18,23 +18,27 @@ describe('a kept Claude agent across a reattach', () => {
             }
           : undefined,
       parent: () => undefined,
-      isSubagent: (id) => id === 'a1'
+      isSubagent: (id) => id === 'a1' || id === 'g1',
+      isBackgroundSubagent: (id) => id === 'a1'
     })
     const session = {
       childWork: new ClaudeChildWorkDecoder(saved),
       backgroundTasks: new ClaudeBackgroundTaskTracker()
     }
-    restateKeptClaudeBackgroundTasks(session, ['b1', 'f1', 'a1'], true)
-    expect([...session.childWork.live.keys()]).toEqual(['b1', 'f1', 'a1'])
+    restateKeptClaudeBackgroundTasks(session, ['b1', 'f1', 'a1', 'g1'], true)
+    expect([...session.childWork.live.keys()]).toEqual(['b1', 'f1', 'a1', 'g1'])
     expect(session.childWork.live.get('f1')?.backgrounded).toBe(false)
-    // A subagent the journal knows, still running after its turn, is a background one.
+    // A foreground subagent mid-turn stays foreground, so a steer can still background it.
+    expect(session.childWork.live.get('g1')?.backgrounded).toBe(false)
+    // A subagent the journal saved as told to outlive its turn is a background one.
     expect(session.childWork.live.get('a1')?.backgrounded).toBe(true)
     expect(session.childWork.live.get('a1')?.kind).toBe('agent')
     expect(session.backgroundTasks.goalBackgroundWork).toBe('live')
     expect(claudeRelayOpenWork({ ...session, providerSessionId: 's' }, false).task).toEqual([
       ['b1'],
       ['f1'],
-      ['a1']
+      ['a1'],
+      ['g1']
     ])
     const ended = {
       type: 'system',
@@ -44,7 +48,7 @@ describe('a kept Claude agent across a reattach', () => {
     }
     session.childWork.observe(ended)
     session.backgroundTasks.observe(ended)
-    expect([...session.childWork.live.keys()]).toEqual(['f1', 'a1'])
+    expect([...session.childWork.live.keys()]).toEqual(['f1', 'a1', 'g1'])
     expect(session.backgroundTasks.goalBackgroundWork).toBe('live')
   })
 
