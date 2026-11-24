@@ -16,15 +16,16 @@ export async function continueRuntimeGitRebase(
 ): Promise<ContinueRebaseResult> {
   const { expected } = request
   const target = context.target
-  if (target.kind === 'local' || !context.worktreeId) {
-    return window.api.git.continueRebase({
-      worktreePath: resolveLocalWorktreePath(context),
-      connectionId: context.connectionId,
-      action,
-      expected
-    })
-  }
   try {
+    if (target.kind === 'local' || !context.worktreeId) {
+      // On the web client this is a runtime call too, so an older host answers method_not_found here.
+      return await window.api.git.continueRebase({
+        worktreePath: resolveLocalWorktreePath(context),
+        connectionId: context.connectionId,
+        action,
+        expected
+      })
+    }
     return await callRuntimeRpc<ContinueRebaseResult>(
       target,
       'git.continueRebase',
@@ -37,7 +38,7 @@ export async function continueRuntimeGitRebase(
       { timeoutMs: 120_000, ...(action === 'inspect' ? { background: true, wake: false } : {}) }
     )
   } catch (error) {
-    if (error instanceof RuntimeRpcCallError && error.code === 'method_not_found') {
+    if (isMethodNotFound(error)) {
       return {
         outcome: 'failed',
         message: translate(
@@ -55,13 +56,13 @@ export async function readRuntimeGitRebaseAutoStash(
   context: RuntimeGitContext
 ): Promise<boolean | 'unsupported'> {
   const target = context.target
-  if (target.kind === 'local' || !context.worktreeId) {
-    return window.api.git.rebaseAutoStash({
-      worktreePath: resolveLocalWorktreePath(context),
-      connectionId: context.connectionId
-    })
-  }
   try {
+    if (target.kind === 'local' || !context.worktreeId) {
+      return await window.api.git.rebaseAutoStash({
+        worktreePath: resolveLocalWorktreePath(context),
+        connectionId: context.connectionId
+      })
+    }
     const result = await callRuntimeRpc<{ autoStash: boolean }>(
       target,
       'git.rebaseAutoStash',
@@ -70,9 +71,13 @@ export async function readRuntimeGitRebaseAutoStash(
     )
     return result.autoStash
   } catch (error) {
-    if (error instanceof RuntimeRpcCallError && error.code === 'method_not_found') {
+    if (isMethodNotFound(error)) {
       return 'unsupported'
     }
     throw error
   }
+}
+
+function isMethodNotFound(error: unknown): boolean {
+  return error instanceof RuntimeRpcCallError && error.code === 'method_not_found'
 }
