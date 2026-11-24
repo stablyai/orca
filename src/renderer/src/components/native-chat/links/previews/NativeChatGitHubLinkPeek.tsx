@@ -3,11 +3,13 @@ import {
   useEffect,
   useEffectEvent,
   useMemo,
+  useState,
   useSyncExternalStore,
   type ReactNode
 } from 'react'
 import { useAppStore } from '@/store/index'
 import { Button } from '@/components/ui/button'
+import { cn } from '@/lib/class-names'
 import { GitHubIcon } from '@/components/icons/GitHubIcon'
 import { GitHubUserAvatar } from '@/components/github/github-user-avatar'
 import { WorkItemStateBadge } from '@/components/github/work-item-state-badge'
@@ -176,21 +178,46 @@ function GitHubPeekContent({
   const t = useTranslate()
   const { state, retry } = useNativeChatHoverPreview(lookup.key, lookup.read, lookup.load)
   const retryKey = useContext(LinkPeekRetryContext)
-  const reportRetry = useEffectEvent((failedLookup: boolean) =>
-    retryKey?.report(failedLookup ? retry : null)
+  // A retry keeps the failed card's layout until it answers: the card must not shrink or lose its
+  // focused Retry from under the pointer or the key that asked, or another link's card takes over.
+  const [retrying, setRetrying] = useState(false)
+  if (retrying && state.status !== 'loading') {
+    setRetrying(false)
+  }
+  const pendingRetry = retrying && state.status === 'loading'
+  const startRetry = () => {
+    setRetrying(true)
+    retry()
+  }
+  const reportRetry = useEffectEvent((status: typeof state.status, pending: boolean) =>
+    retryKey?.report(
+      status === 'failed'
+        ? { status: 'failed', retry: startRetry }
+        : pending
+          ? { status: 'retrying' }
+          : { status: 'idle' }
+    )
   )
   useEffect(() => {
-    reportRetry(state.status === 'failed')
-  }, [state.status])
-  useEffect(() => () => reportRetry(false), [])
-  const failed = state.status === 'failed' && failedFallback !== undefined
+    reportRetry(state.status, pendingRetry)
+  }, [state.status, pendingRetry])
+  useEffect(() => () => reportRetry('ready', false), [])
+  const failed = (state.status === 'failed' || pendingRetry) && failedFallback !== undefined
   if (otherRepoFallback && state.status !== 'ready' && !failed) {
     return otherRepoFallback
   }
   const unavailable = (
     <div className="flex items-center gap-1 text-xs text-muted-foreground">
       <span>{t('components.native-chat.githubPeek.unavailable', 'Preview unavailable.')}</span>
-      <Button variant="link" size="xs" onClick={retry}>
+      {/* Still focusable while the retry runs, so focus stays put; a second press does nothing. */}
+      <Button
+        variant="link"
+        size="xs"
+        aria-disabled={pendingRetry || undefined}
+        aria-busy={pendingRetry || undefined}
+        className={cn(pendingRetry && 'cursor-default opacity-50 hover:no-underline')}
+        onClick={pendingRetry ? undefined : startRetry}
+      >
         {t('components.native-chat.githubPeek.retry', 'Retry')}
       </Button>
       {/* The link announces the key with the failure; this shows it. */}
@@ -248,7 +275,7 @@ function GitHubPeekContent({
           {failedFallback}
           {unavailable}
         </>
-      ) : otherRepoFallback !== undefined ? null : state.status === 'loading' ? (
+      ) : otherRepoFallback !== undefined ? null : state.status === 'loading' && !pendingRetry ? (
         <div aria-hidden className="flex flex-col gap-1.5 motion-safe:animate-pulse">
           <div className="h-3.5 w-11/12 rounded bg-muted" />
           <div className="h-3.5 w-1/2 rounded bg-muted" />

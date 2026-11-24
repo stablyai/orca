@@ -7,7 +7,7 @@ import { NativeChatWebPeekBody } from './NativeChatWebLinkPeek'
 import { NativeChatLinkPeekContext } from './native-chat-link-peek-context'
 import { previewableWebUrl } from './native-chat-web-link-preview'
 import { CARD_OFFSET, sideWithRoom, WINDOW_MARGIN, type PeekSide } from './link-peek-side'
-import { LinkPeekRetryContext } from './link-peek-retry-context'
+import { LinkPeekRetryContext, type LinkPeekRetryState } from './link-peek-retry-context'
 import { parseGitHubIssueOrPRLink } from '../../../../../../shared/github/repositories/links'
 
 /** Hover or focus a link to preview it: PRs and issues on its repo's GitHub host, or what a web page says about itself. */
@@ -111,16 +111,16 @@ function LinkPeekCard({
   const [open, setOpen] = useState(false)
   const [placed, setPlaced] = useState<PeekSide>(side)
   const trigger = useRef<HTMLSpanElement>(null)
-  const retry = useRef<(() => void) | null>(null)
+  const lookup = useRef<LinkPeekRetryState>({ status: 'idle' })
   const [failed, setFailed] = useState(false)
   const retryContext = useMemo(
     () =>
       retryKey
         ? {
             key: retryKey,
-            report: (next: (() => void) | null) => {
-              retry.current = next
-              setFailed(next !== null)
+            report: (next: LinkPeekRetryState) => {
+              lookup.current = next
+              setFailed(next.status === 'failed')
             }
           }
         : null,
@@ -204,18 +204,23 @@ function LinkPeekCard({
             }
           }}
           onKeyDown={(event) => {
-            const run = retry.current
+            const state = lookup.current
             if (
-              run &&
-              retryKey &&
-              event.key.toLowerCase() === retryKey &&
-              !event.altKey &&
-              !event.ctrlKey &&
-              !event.metaKey
+              !retryKey ||
+              state.status === 'idle' ||
+              event.key.toLowerCase() !== retryKey ||
+              event.altKey ||
+              event.ctrlKey ||
+              event.metaKey
             ) {
-              event.preventDefault()
-              event.stopPropagation()
-              run()
+              return
+            }
+            // The key is the card's while it has failed or is retrying: it must not reach the page
+            // (the item pane types it into its draft). A held key retries once, not on every repeat.
+            event.preventDefault()
+            event.stopPropagation()
+            if (state.status === 'failed' && !event.repeat) {
+              state.retry()
             }
           }}
         >
