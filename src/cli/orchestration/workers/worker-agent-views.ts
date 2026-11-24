@@ -86,6 +86,9 @@ type WorkerListRow = {
   dispatchId: string
   taskId: string
   state: string
+  startedAt?: string
+  effort?: string
+  lastActivity?: string
   outcome?: string
   liveness?: string
   agent?: string
@@ -117,6 +120,9 @@ export const WORKER_LIST_VIEW: OrchestrationAgentView<ScopedWorkerList, WorkerLi
         dispatchId: worker.dispatchId,
         taskId: worker.taskId,
         state: worker.workerState,
+        startedAt: worker.startedAt,
+        effort: worker.effort ?? undefined,
+        lastActivity: lastActivity(projection),
         outcome:
           projection?.outcome && projection.outcome !== worker.workerState
             ? projection.outcome
