@@ -20,6 +20,7 @@ import {
   captureNativeChatGallery,
   type NativeChatGalleryEntry
 } from './native-chat-image-gallery-capture'
+import { joinSentences } from '../../../../../../../shared/text/sentence-joining'
 import { NativeChatImageGalleryDialog } from './NativeChatImageGalleryDialog'
 
 const FENCE_ACCESS = chatImageAccess()
@@ -71,7 +72,7 @@ function stepAnnouncement(
       : position === count
         ? t('components.native-chat.imageGallery.lastImage', 'Last image.')
         : ''
-  return end ? `${step} ${end}` : step
+  return end ? joinSentences([step, end]) : step
 }
 
 /** A subagent view over this list makes it inert without changing the tab's visibility. */

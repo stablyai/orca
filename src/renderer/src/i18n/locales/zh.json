@@ -20110,8 +20110,8 @@
         "historyUnreadable": "Orca 无法读取此聊天的已保存历史记录",
         "historyUnusable": "无法加载此聊天",
         "historyUnavailable": "Orca 目前无法打开此聊天的历史记录",
-        "diskFull": "运行此聊天的电脑磁盘已满。",
-        "freeDiskSpace": "请释放该磁盘空间后重试。",
+        "diskFull": "运行此聊天的电脑磁盘已满",
+        "freeDiskSpace": "请释放该磁盘空间后重试",
         "savedInOtherFolder": "此对话保存在另一个文件夹中",
         "savedByNewerOrca": "这些聊天由更新版本的 Orca 保存",
         "updateOrcaToKeepUsing": "请更新 Orca 以继续使用这些聊天",
@@ -20546,7 +20546,15 @@
         "linkActions": "链接操作"
       },
       "imageGallery": {
-        "loadFailed": "无法加载 {{name}}"
+        "scopeHelp": "打开预览时这部分聊天附近的图片。更靠上或更靠下的图片不包括在内。关闭后重新打开即可更新",
+        "description": "此视图中的图片：第 {{position}} 张，共 {{count}} 张。{{help}}",
+        "stepAnnouncement": "此视图中的第 {{position}} 张图片（共 {{count}} 张）：{{title}}",
+        "firstImage": "第一张图片",
+        "lastImage": "最后一张图片",
+        "loading": "正在加载图片…",
+        "loadFailed": "无法加载 {{name}}",
+        "closedImageChanged": "由于有图片发生变化，预览已关闭。打开缩略图即可获取当前图片集",
+        "closedChatChanged": "由于聊天发生变化，预览已关闭。打开缩略图即可获取当前图片集"
       },
       "launchPromptNotDelivered": "未送达 — 请检查终端",
       "taskList": {
@@ -23364,6 +23372,9 @@
     "serverPage": {
       "download": {
         "started": "正在下载到 {{host}} 上的 {{path}}"
+      },
+      "print": {
+        "failed": "无法将页面另存为 PDF"
       }
     },
     "clientHosted": {
@@ -23521,8 +23532,8 @@
       },
       "routedPage": {
         "label": "此设备上的浏览器",
-        "destination": "导入到 {{host}} 的浏览器。",
-        "hostAgents": "{{host}} 上的智能体可以使用这些登录状态，但无法读取 Cookie。"
+        "destination": "导入到 {{host}} 的浏览器",
+        "hostAgents": "{{host}} 上的智能体可以使用这些登录状态，但无法读取 Cookie"
       },
       "sshPage": {
         "stored": "已存储到 {{host}} 的浏览器",
@@ -24734,7 +24745,7 @@
       "signInRequired": "请重新登录以使用此账户",
       "signInAgain": "重新登录",
       "usageSignInLabel": "重新登录",
-      "usageSignInMessage": "此账户需要您重新登录。",
+      "usageSignInMessage": "此账户需要你重新登录",
       "signIn": "登录",
       "moreSignInOptions": "更多登录选项",
       "copySignInLink": "改为复制登录链接",
@@ -25447,7 +25458,9 @@
   "updates": {
     "installOnQuit": {
       "title": "请手动重启 Orca",
-      "summary": "Orca 无法自动重启。请退出 Orca，等更新安装完成后再重新打开"
+      "summary": "Orca 无法自动重启。请退出 Orca，等更新安装完成后再重新打开",
+      "quit": "退出 Orca",
+      "later": "稍后"
     },
     "installBlock": {
       "instancesLabel": "正在使用 Orca 的实例",
@@ -28541,7 +28554,14 @@
         "noAccount": "Google 已登录，但主机没有发送账号",
         "alreadyRunning": "已有 Google 登录正在进行。请先完成或取消它",
         "notWaiting": "没有等待中的 Google 登录。请重新开始"
-      }
+      },
+      "accessBlocked": "看到\"已屏蔽访问权限\"？",
+      "setUpNewApp": "设置新的 Google 应用",
+      "useAnother": "使用其他账户",
+      "useAnotherSignIn": "使用 Google 登录",
+      "useAnotherSignInDetail": "使用你当前 Google 应用",
+      "setUpNewAppDetail": "如果你当前应用不适用于此账户或组织",
+      "updateToSetUpNewApp": "在 {{host}} 上更新 Orca 后才能设置新的 Google 应用"
     },
     "toolApp": {
       "address": "地址",
