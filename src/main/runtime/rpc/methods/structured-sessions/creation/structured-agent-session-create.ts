@@ -99,6 +99,7 @@ export async function prepareStructuredAgentSessionCreateForWorktree(args: {
     agent: args.agent,
     callerKey: args.caller.callerKey,
     structuredAgentCliSourceEvidence,
+    ...(args.atRest === true && !args.firstMessage ? { allowClosingPaneKeys: true } : {}),
     ...(args.resumeFrom ? { resumeFrom: args.resumeFrom } : {}),
     ...(args.forkFrom ? { forkFrom: args.forkFrom } : {})
   })

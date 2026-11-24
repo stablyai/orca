@@ -13,7 +13,9 @@ export const ResumeSource = lazyZodSchema(() =>
           paneKey: Identifier('Invalid pane key')
         })
         .strict()
-        .optional()
+        .optional(),
+      /** Panes the caller closes only after an at-rest create succeeds; ignored on non-at-rest attaches. */
+      closingPaneKeys: z.array(Identifier('Invalid pane key')).max(256).optional()
     })
     .strict()
 )

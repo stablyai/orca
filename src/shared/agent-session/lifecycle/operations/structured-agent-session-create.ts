@@ -14,6 +14,8 @@ export type StructuredAgentSessionResumeSource = {
   providerSessionId: string
   /** Host-owned pane evidence; send only with the CLI-source create capability. */
   cliSource?: { workspaceId: string; paneKey: string }
+  /** Panes the caller closes after at-rest create succeeds; send only with the create-closing-panes capability. */
+  closingPaneKeys?: readonly string[]
 }
 
 /** The source chat and the response whose turn the fork copies through. */

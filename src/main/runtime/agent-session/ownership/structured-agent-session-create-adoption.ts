@@ -37,6 +37,8 @@ export type StructuredAgentSessionCreateIntentInput = {
   callerKey?: string
   forkFrom?: { sessionId: string; throughItemId: string }
   resumeFrom?: StructuredAgentSessionResumeSource
+  /** Only an at-rest create without an opening turn may exempt panes the caller closes after create succeeds. */
+  allowClosingPaneKeys?: boolean
   structuredAgentCliSourceEvidence?: StructuredAgentCliSourceEvidence
 }
 
