@@ -291,7 +291,7 @@ async function finishInterruptedLocalWorktreeRemoval(
           ...markerOpts
         })
       } else if (still === 'empty') {
-        await removeEmptyLeftoverDirectory(record.worktreePath)
+        await removeEmptyLeftoverDirectory(record.worktreePath, rootKey)
       }
       result = await finishUnregisteredWorktreeRemoval(
         repo.path,

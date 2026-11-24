@@ -176,10 +176,19 @@ async function isEmptyLeftoverDirectory(
     return false
   }
   // A reviewed removal recorded its root: an empty folder made at the path since is someone else's.
-  if (rootKey !== undefined && (!root || checkoutDirectoryKey(root) !== rootKey)) {
+  if (!root || (rootKey !== undefined && checkoutDirectoryKey(root) !== rootKey)) {
     return false
   }
-  return (await readdir(worktreePath).catch(() => null))?.length === 0
+  if ((await readdir(worktreePath).catch(() => null))?.length !== 0) {
+    return false
+  }
+  // Enumeration reads the path again: it must still be the directory checked above.
+  return await isSameDirectory(worktreePath, checkoutDirectoryKey(root))
+}
+
+async function isSameDirectory(worktreePath: string, key: string): Promise<boolean> {
+  const now = await lstat(worktreePath, { bigint: true }).catch(() => null)
+  return Boolean(now && isRealDirectory(now) && checkoutDirectoryKey(now) === key)
 }
 
 /** The root a removal reviewed, while it still carries the review or after Retry dropped it. */
@@ -190,7 +199,20 @@ export function recordedRootKey(
 }
 
 /** `rmdir` only: it fails rather than delete anything that appeared since the folder was found empty. */
-export async function removeEmptyLeftoverDirectory(worktreePath: string): Promise<void> {
+export async function removeEmptyLeftoverDirectory(
+  worktreePath: string,
+  rootKey: string | undefined
+): Promise<void> {
+  // Checked again right before rmdir, which itself only takes a path; already gone is done.
+  if (rootKey !== undefined) {
+    const now = await lstat(worktreePath, { bigint: true }).catch(() => null)
+    if (!now) {
+      return
+    }
+    if (!isRealDirectory(now) || checkoutDirectoryKey(now) !== rootKey) {
+      throw unregisteredFolderRefusal(worktreePath)
+    }
+  }
   try {
     await rmdir(worktreePath)
   } catch (error) {
