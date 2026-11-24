@@ -1,8 +1,8 @@
 import { describe, expect, it } from 'vitest'
 import { journalItemHasSideEffects, toolCallHasSideEffects } from './tool-call-side-effects'
 
-// The thread's "check before asking again" note and the hidden retry both hang on this: a call that
-// may have acted must never pass as a read.
+// The thread's "check before asking again" note hangs on this: a call that may have acted must
+// never pass as a read.
 describe('toolCallHasSideEffects', () => {
   it('passes only calls known to read', () => {
     const reads: [string, unknown][] = [
@@ -36,7 +36,12 @@ describe('toolCallHasSideEffects', () => {
       ['Bash', { command: "sed -n '1w /tmp/x' a" }],
       ['Bash', { command: 'sort -uo out in' }],
       ['Bash', { command: 'orca orchestration check' }],
-      ['Bash', { command: 'cat a > /dev/nullx' }]
+      ['Bash', { command: 'cat a > /dev/nullx' }],
+      ['Bash', { command: 'sed -n 1p -i a.ts' }],
+      ['Bash', { command: 'gh api -iXDELETE repos/o/r/git/refs/heads/main' }],
+      ['Bash', { command: 'git grep -nOrm foo' }],
+      ['Bash', { command: 'git grep --open=rm foo' }],
+      ['Bash', { command: 'sort --o=out in' }]
     ]
     expect(reads.filter(([name, input]) => toolCallHasSideEffects(name, input))).toEqual([])
     expect(acts.filter(([name, input]) => !toolCallHasSideEffects(name, input))).toEqual([])

@@ -48,20 +48,26 @@ const READ_PROGRAMS: Record<string, (args: readonly string[]) => boolean> = {
   rg: (args) => !args.some((word) => /^--(pre|hostname-bin)/.test(word)),
   find: (args) => !args.some((word) => /^-(exec|execdir|ok|okdir|delete|fprint|fls)/.test(word)),
   tree: (args) => !args.some((word) => /^-[^-]*o/.test(word)),
-  file: () => true,
+  file: (args) => !args.some((word) => /^-[^-]*C/.test(word) || namesOption(word, ['--compile'])),
   stat: () => true,
   du: () => true,
   df: () => true,
   which: () => true,
-  date: () => true,
+  date: (args) => !args.some((word) => /^-[^-]*s/.test(word) || namesOption(word, ['--set'])),
   whoami: () => true,
-  sort: (args) => !args.some((word) => /^(-[^-]*o|--output|--compress-program)/.test(word)),
+  sort: (args) =>
+    !args.some(
+      (word) => /^-[^-]*o/.test(word) || namesOption(word, ['--output', '--compress-program'])
+    ),
   uniq: (args) => args.length <= 1,
   cut: () => true,
   tr: () => true,
   jq: () => true,
   // Only `sed -n '<lines>p'`: a sed script can write files (w) or run commands (e).
-  sed: ([flag, script]) => flag === '-n' && /^\$?\d*(,\$?\d*)?p$/.test(script ?? ''),
+  sed: ([flag, script, ...files]) =>
+    flag === '-n' &&
+    /^\$?\d*(,\$?\d*)?p$/.test(script ?? '') &&
+    !files.some((word) => word.startsWith('-')),
   diff: () => true,
   cmp: () => true,
   basename: () => true,
@@ -92,12 +98,21 @@ const GIT_READS = new Set([
   'rev-list'
 ])
 
+const GIT_REFUSED = [
+  '--output',
+  '--exec',
+  '--ext-diff',
+  '--textconv',
+  '--open-files-in-pager',
+  '--upload-pack',
+  '--receive-pack'
+]
+
 function gitReads(args: readonly string[]): boolean {
   const [sub, ...rest] = args
   if (
     args.some(
-      (word) =>
-        word.startsWith('-c') || /^(-O|--output|--exec|--ext-diff|--open-files-in-pager)/.test(word)
+      (word) => word.startsWith('-c') || /^-[^-]*[oO]/.test(word) || namesOption(word, GIT_REFUSED)
     )
   ) {
     return false
@@ -116,7 +131,11 @@ function ghReads(args: readonly string[]): boolean {
     return false
   }
   if (group === 'api') {
-    return !args.some((word) => /^(-X|--method|-f|-F|--field|--raw-field|--input)/.test(word))
+    return !args.some(
+      (word) =>
+        /^-[^-]*[XfF]/.test(word) ||
+        namesOption(word, ['--method', '--field', '--raw-field', '--input'])
+    )
   }
   return group === 'search' || (sub !== undefined && GH_READS.has(sub))
 }
@@ -156,8 +175,16 @@ function orcaReads(args: readonly string[]): boolean {
   )
 }
 
+/** Whether a long option names one of `options`: programs take any unique prefix (`--o=x`). */
+function namesOption(word: string, options: readonly string[]): boolean {
+  const name = word.split('=')[0]!
+  return (
+    name.startsWith('--') && name.length > 2 && options.some((option) => option.startsWith(name))
+  )
+}
+
 /** `bash -lc '<command>'` as Codex wraps it: the inner command is what runs. */
-function unwrapShell(command: string): string {
+export function unwrapShell(command: string): string {
   const wrapped = /^(?:\S*\/)?(?:ba|z)?sh\s+-l?c\s+'((?:[^']|'\\'')*)'$/.exec(command.trim())
   return wrapped ? wrapped[1]!.replace(/'\\''/g, "'") : command.trim()
 }
