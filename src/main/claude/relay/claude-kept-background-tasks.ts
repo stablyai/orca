@@ -5,7 +5,8 @@ import type { ClaudeSession } from '../structured/claude-structured-session-stat
  * each still-open one is restated as live (the journal already has its row, so none is written).
  */
 export function restateKeptClaudeBackgroundTasks(
-  session: Pick<ClaudeSession, 'childWork' | 'backgroundTasks' | 'translator'>,
+  session: Pick<ClaudeSession, 'childWork' | 'backgroundTasks'> &
+    Partial<Pick<ClaudeSession, 'translator'>>,
   taskIds: readonly string[]
 ): void {
   for (const task_id of taskIds) {
