@@ -109,12 +109,20 @@ export abstract class RateLimitServicePolling extends RateLimitServiceFetchQueue
           MAX_ACTIVE_FAILURE_REFETCH_MS
         )
       : MIN_REFETCH_MS
-    return now - this.lastActiveFailureRetryAtByProvider[provider] >= throttleMs
+    const elapsed = now - this.lastActiveFailureRetryAtByProvider[provider]
+    return elapsed < 0 || elapsed >= throttleMs
   }
 
   protected getActiveWindowRefreshPlan(now: number): ActiveWindowRefreshPlan {
     const retryableFailures: ActiveRateLimitProvider[] = []
     for (const { provider, limits } of this.getActiveProviderState()) {
+      if (
+        provider === 'codex' &&
+        limits?.status !== 'error' &&
+        this.codexGateIsRecent(limits, now)
+      ) {
+        continue
+      }
       if (!limits || limits.status === 'idle' || limits.status === 'fetching') {
         return { kind: 'full' }
       }
@@ -123,7 +131,7 @@ export abstract class RateLimitServicePolling extends RateLimitServiceFetchQueue
           continue
         }
         const checkedAt = this.providerCheckedAt(provider, limits)
-        if (checkedAt === null || now - checkedAt >= MIN_REFETCH_MS) {
+        if (checkedAt === null || now < checkedAt || now - checkedAt >= MIN_REFETCH_MS) {
           return { kind: 'full' }
         }
         continue
@@ -135,6 +143,9 @@ export abstract class RateLimitServicePolling extends RateLimitServiceFetchQueue
           continue
         }
         if (this.failureRetryDue(provider, now)) {
+          if (!INDIVIDUALLY_REFRESHABLE_PROVIDERS.has(provider)) {
+            return { kind: 'full' }
+          }
           retryableFailures.push(provider)
         }
       }
@@ -146,6 +157,20 @@ export abstract class RateLimitServicePolling extends RateLimitServiceFetchQueue
     return { kind: 'providers', providers: retryableFailures }
   }
 
+  private codexGateIsRecent(reading: ProviderRateLimits | null, now: number): boolean {
+    const gate = this.lastCodexFullGate
+    if (
+      !gate ||
+      gate.generation !== this.codexFetchGeneration ||
+      !this.isSameCodexTarget(gate.target, this.codexFetchTarget) ||
+      gate.reading !== reading
+    ) {
+      return false
+    }
+    const elapsed = now - gate.at
+    return elapsed >= 0 && elapsed < MIN_REFETCH_MS
+  }
+
   protected async runActiveWindowRefreshPlan(plan: ActiveWindowRefreshPlan): Promise<void> {
     if (plan.kind === 'none') {
       return
@@ -155,7 +180,7 @@ export abstract class RateLimitServicePolling extends RateLimitServiceFetchQueue
       if (!this.isFetching) {
         const now = Date.now()
         for (const { provider, limits } of this.getActiveProviderState()) {
-          if (limits?.status === 'error') {
+          if (limits?.status === 'error' && !this.shouldSkipAutomatedFetch(provider, limits)) {
             this.lastActiveFailureRetryAtByProvider[provider] = now
           }
         }
@@ -172,14 +197,6 @@ export abstract class RateLimitServicePolling extends RateLimitServiceFetchQueue
     const now = Date.now()
     for (const provider of plan.providers) {
       this.lastActiveFailureRetryAtByProvider[provider] = now
-    }
-
-    const canRefreshIndividually = plan.providers.every((provider) =>
-      INDIVIDUALLY_REFRESHABLE_PROVIDERS.has(provider)
-    )
-    if (!canRefreshIndividually) {
-      await this.fetchAll()
-      return
     }
 
     // Dedicated cycles retry failing providers without rereading healthy debounced siblings.

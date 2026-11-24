@@ -79,6 +79,12 @@ export abstract class RateLimitServiceState {
   protected activeFetchAbortControllers = new Set<AbortController>()
   protected fetchIdleResolvers: (() => void)[] = []
   protected codexFetchGeneration = 0
+  protected lastCodexFullGate: {
+    at: number
+    generation: number
+    target: NormalizedCodexAccountSelectionTarget
+    reading: ProviderRateLimits | null
+  } | null = null
   protected claudeFetchGeneration = 0
   protected claudeUsageAbortController = new AbortController()
   protected liveClaudeUsage: ProviderRateLimits | null = null

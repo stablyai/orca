@@ -152,7 +152,7 @@ export function createProviderAccountServices(
   }))
   rateLimits.setClaudeOAuthUsageEnabledResolver(() => store.getSettings().claudeOAuthUsageEnabled)
   // Hidden Muse meters must not spawn the Muse CLI.
-  rateLimits.setMuseUsageEnabledResolver(() => store.getUI().statusBarItems.includes('muse'))
+  rateLimits.setMuseUsageEnabledResolver(() => store.isStatusBarItemEnabled('muse'))
   rateLimits.setNetworkProxySettingsResolver(() => store.getSettings())
   rateLimits.setInactiveClaudeAccountsResolver(() => {
     const settings = store.getSettings()

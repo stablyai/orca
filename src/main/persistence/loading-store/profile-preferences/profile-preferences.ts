@@ -1,4 +1,6 @@
 import { normalizeFeatureTipIds } from '../../../../shared/feature-education/feature-tips'
+import { DEFAULT_STATUS_BAR_ITEMS } from '../../../../shared/status-bar/status-bar-defaults'
+import type { StatusBarItem } from '../../../../shared/ui-chrome/ui-chrome-types'
 import type { GlobalSettings } from '../../../../shared/settings/global-settings-types'
 import { retireAtRestCommandSettings } from '../../../native-chat/agent-session-wire/options/at-rest-command-context'
 import { createAgentModelCatalogSettingsExpiry } from '../../../native-chat/agent-model-catalog/agent-model-catalog-account-expiry'
@@ -151,6 +153,11 @@ export class ProfilePreferences {
     return normalizeFeatureTipIds(
       this[profilePreferencesContext].runtime.state.ui?.featureTipsSeenIds
     )
+  }
+
+  isStatusBarItemEnabled(item: StatusBarItem): boolean {
+    const items = this[profilePreferencesContext].runtime.state.ui?.statusBarItems
+    return (items ?? DEFAULT_STATUS_BAR_ITEMS).includes(item)
   }
 
   getUI(): PersistedState['ui'] {

@@ -27,7 +27,8 @@ export abstract class RateLimitServiceFullCycleApplication extends RateLimitServ
     options?: { force?: boolean }
   ): Promise<void> {
     const museBeforeFetch = this.state.muse
-    const museResultPromise = this.startMuseUsageFetch(signal)
+    const museEnabled = this.museUsageEnabledResolver?.() ?? true
+    const museResultPromise = this.startMuseUsageFetch(signal, museEnabled)
     const prepared = await this.prepareFetchAllCycle(signal, options)
     if (!prepared) {
       return
@@ -192,6 +193,8 @@ export abstract class RateLimitServiceFullCycleApplication extends RateLimitServ
         : this.state.minimax
     })
 
+    // Bind the gate to the Codex reading this cycle published before other providers settle.
+    const codexReading = this.state.codex
     const [grokSettled, cursorSettled, zcodeSettled] = await Promise.all([
       grokResultPromise,
       cursorResultPromise,
@@ -246,7 +249,17 @@ export abstract class RateLimitServiceFullCycleApplication extends RateLimitServ
       return
     }
     const muse = settleSiblingProviderResult('muse', museSettled)
-    this.trackActiveFailureStreak('muse', muse)
+    if (museEnabled) {
+      this.trackActiveFailureStreak('muse', muse)
+    }
+    this.lastCodexFullGate = latestCodexHome.skip
+      ? {
+          at: Date.now(),
+          generation: codexGeneration,
+          target: codexTarget,
+          reading: codexReading
+        }
+      : null
     this.updateState({
       ...this.state,
       muse: this.applyStalePolicy(muse, museBeforeFetch)
@@ -254,8 +267,10 @@ export abstract class RateLimitServiceFullCycleApplication extends RateLimitServ
   }
 
   // Started before the shared preparation awaits; hidden meters skip the CLI spawn entirely.
-  private startMuseUsageFetch(signal: AbortSignal): Promise<SettledProviderResult> {
-    const enabled = this.museUsageEnabledResolver?.() ?? true
+  private startMuseUsageFetch(
+    signal: AbortSignal,
+    enabled: boolean
+  ): Promise<SettledProviderResult> {
     const previous = this.state.muse
     const beforeFetch = enabled
       ? this.withFetchingStatus(previous, 'muse')
