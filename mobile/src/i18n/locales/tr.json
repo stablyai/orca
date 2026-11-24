@@ -4727,7 +4727,6 @@
       "hookCount_one": "{{count}} hook",
       "hookCount_other": "{{count}} hook",
       "name": "Webhook'lar",
-      "hooks": "Hook'lar",
       "addInChat": "Sohbette ekle",
       "setUpDraft": "Şunu yapan bir webhook kur: ",
       "resumed": "Webhook devam ettirildi",
@@ -4793,8 +4792,7 @@
         "unverifiable": "Doğrulanamıyor",
         "unverifiableDetail": "{{bot}} botunun bilgisayarına ulaşılamıyor"
       },
-      "back": "Webhook'lara dön",
-      "howToCallShort": "Herhangi bir araç veya betik bir webhook'un URL'sine POST isteği gönderebilir. Her webhook bir otomasyon başlatır."
+      "back": "Webhook'lara dön"
     },
     "errors": {
       "generic": "Bir sorun oluştu. Tekrar deneyin."

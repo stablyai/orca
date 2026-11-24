@@ -5251,7 +5251,6 @@
       "hookCount_one": "훅 {{count}}개",
       "hookCount_other": "훅 {{count}}개",
       "name": "웹훅",
-      "hooks": "훅",
       "addInChat": "채팅에서 추가",
       "setUpDraft": "다음과 같은 웹훅을 설정해 주세요: ",
       "resumed": "웹훅이 재개됨",
@@ -5317,8 +5316,7 @@
         "unverifiable": "확인 불가",
         "unverifiableDetail": "{{bot}}의 컴퓨터에 연결할 수 없습니다"
       },
-      "back": "웹훅으로 돌아가기",
-      "howToCallShort": "도구나 스크립트에서 훅의 URL로 POST 요청을 보낼 수 있습니다. 각 훅은 자동화 하나를 시작합니다."
+      "back": "웹훅으로 돌아가기"
     },
     "errors": {
       "generic": "문제가 발생했습니다. 다시 시도하세요."

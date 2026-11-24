@@ -6852,8 +6852,6 @@
       "hookCount_one": "{{count}} hook",
       "hookCount_other": "{{count}} hooks",
       "name": "Webhooks",
-      "howToCallShort": "Any tool or script can POST to a hook’s URL. Each hook starts one automation.",
-      "hooks": "Hooks",
       "addInChat": "Add in chat",
       "setUpDraft": "Set up a webhook that ",
       "resumed": "Webhook resumed",
@@ -7305,11 +7303,9 @@
         "design": "Design"
       },
       "search": "Search apps",
-      "allShort": "All",
       "onBot": "On {{bot}}",
       "noMatch": "No app matches “{{query}}”.",
       "connectors": "Connectors",
-      "add": "Add",
       "composio": {
         "connectTitle": "Connect Composio",
         "once": "Once, for all your bots",
@@ -7348,14 +7344,16 @@
         "box": "Files and folders",
         "miro": "Boards, sticky notes and frames",
         "reddit": "Posts, comments and subreddits"
-      }
+      },
+      "added": "Added",
+      "filter": "Filter",
+      "filterActive": "Filter, {{filter}}",
+      "all": "All apps"
     },
     "connectors": {
       "back": "Back to Connectors",
       "addOrg": "Add org",
       "addWorkspace": "Add workspace",
-      "manage": "Manage",
-      "emptyNote": "Let people reach {{name}} in Slack, GitHub and Linear, and let it work in your Google and other apps.",
       "addAnotherWorkspace": "Add another workspace",
       "backShort": "Back",
       "addGitHubAccess": "Add repositories or organizations",

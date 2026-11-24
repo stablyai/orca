@@ -4808,7 +4808,6 @@
       "hookCount_one": "フック {{count}} 件",
       "hookCount_other": "フック {{count}} 件",
       "name": "Webhooks",
-      "hooks": "フック",
       "addInChat": "チャットで追加",
       "setUpDraft": "次のような Webhook を設定してください: ",
       "resumed": "Webhook を再開しました",
@@ -4874,8 +4873,7 @@
         "unverifiable": "検証できません",
         "unverifiableDetail": "{{bot}} のコンピュータに接続できません"
       },
-      "back": "Webhooks に戻る",
-      "howToCallShort": "どのツールやスクリプトからでも Webhook の URL に POST できます。各 Webhook は 1 つのオートメーションを開始します。"
+      "back": "Webhooks に戻る"
     },
     "errors": {
       "generic": "問題が発生しました。再試行してください。"

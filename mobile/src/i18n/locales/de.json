@@ -4727,7 +4727,6 @@
       "hookCount_one": "{{count}} Hook",
       "hookCount_other": "{{count}} Hooks",
       "name": "Webhooks",
-      "hooks": "Hooks",
       "addInChat": "Im Chat hinzufügen",
       "setUpDraft": "Richte einen Webhook ein, der ",
       "resumed": "Webhook fortgesetzt",
@@ -4793,8 +4792,7 @@
         "unverifiable": "Nicht überprüfbar",
         "unverifiableDetail": "Der Computer von {{bot}} ist nicht erreichbar"
       },
-      "back": "Zurück zu den Webhooks",
-      "howToCallShort": "Jedes Tool oder Skript kann per POST an die URL eines Hooks senden. Jeder Hook startet eine Automatisierung."
+      "back": "Zurück zu den Webhooks"
     },
     "errors": {
       "generic": "Etwas ist schiefgelaufen. Versuche es erneut."

@@ -4943,7 +4943,6 @@
       "hookCount_one": "{{count}} хук",
       "hookCount_other": "Хуков: {{count}}",
       "name": "Вебхуки",
-      "hooks": "Хуки",
       "addInChat": "Добавить в чате",
       "setUpDraft": "Настрой вебхук, который ",
       "resumed": "Вебхук возобновлён",
@@ -5011,8 +5010,7 @@
       },
       "back": "Назад к вебхукам",
       "hookCount_few": "{{count}} хука",
-      "hookCount_many": "{{count}} хуков",
-      "howToCallShort": "Любой инструмент или скрипт может отправить POST на URL хука. Каждый хук запускает одну автоматизацию."
+      "hookCount_many": "{{count}} хуков"
     },
     "errors": {
       "generic": "Что-то пошло не так. Попробуйте ещё раз."

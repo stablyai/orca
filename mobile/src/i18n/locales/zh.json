@@ -7054,7 +7054,6 @@
       "hookCount_one": "{{count}} 个 Webhook",
       "hookCount_other": "{{count}} 个 Webhook",
       "name": "Webhook",
-      "hooks": "Webhook",
       "addInChat": "在聊天中添加",
       "setUpDraft": "设置一个 Webhook，用于 ",
       "resumed": "Webhook 已恢复",
@@ -7120,8 +7119,7 @@
         "unverifiable": "无法验证",
         "unverifiableDetail": "无法连接到 {{bot}} 的电脑"
       },
-      "back": "返回 Webhook",
-      "howToCallShort": "任何工具或脚本都可以向 Webhook 的 URL 发送 POST 请求。每个 Webhook 启动一个自动化"
+      "back": "返回 Webhook"
     },
     "errors": {
       "generic": "出了点问题，请重试"
@@ -7496,11 +7494,9 @@
         "design": "设计"
       },
       "search": "搜索应用",
-      "allShort": "全部",
       "onBot": "{{bot}} 的应用",
       "noMatch": "没有与“{{query}}”匹配的应用",
       "connectors": "连接器",
-      "add": "添加",
       "composio": {
         "connectTitle": "连接 Composio",
         "once": "只需连接一次，即可用于你的所有 bots",
@@ -7539,14 +7535,16 @@
         "box": "文件和文件夹",
         "miro": "白板、便签和框架",
         "reddit": "帖子、评论和子版块"
-      }
+      },
+      "added": "已添加",
+      "filter": "筛选",
+      "filterActive": "筛选，{{filter}}",
+      "all": "所有应用"
     },
     "connectors": {
       "back": "返回连接器",
       "addOrg": "添加组织",
       "addWorkspace": "添加工作区",
-      "manage": "管理",
-      "emptyNote": "让大家在 Slack、GitHub 和 Linear 中联系 {{name}}，并让它在你的 Google 及其他应用中工作",
       "addAnotherWorkspace": "添加其他工作区",
       "backShort": "返回",
       "addGitHubAccess": "添加仓库或组织",
