@@ -8,8 +8,7 @@ describe('a kept Claude agent across a reattach', () => {
   it('restates a background task started before it, which reads live until it ends', () => {
     const session = {
       childWork: new ClaudeChildWorkDecoder(),
-      backgroundTasks: new ClaudeBackgroundTaskTracker(),
-      translator: undefined
+      backgroundTasks: new ClaudeBackgroundTaskTracker()
     }
     restateKeptClaudeBackgroundTasks(session, ['b1'])
     expect([...session.childWork.live.keys()]).toEqual(['b1'])
