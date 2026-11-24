@@ -183,6 +183,22 @@ describe('managed Codex config for a WSL distro config', () => {
     ).toBe(runtimeConfig)
   })
 
+  it('does not bring back a plugin the distro dropped when the baseline predates plugin tracking', () => {
+    writeSystemConfig('model = "gpt-5"\n\n[plugins."old@market"]\nenabled = true\n')
+    wslTestState.wslPath = systemConfigPath()
+    syncSystemConfigIntoManagedCodexHome()
+    const baselinePath = join(runtimeConfigPath(), '..', '.orca-config-settings-baseline.json')
+    const stored = JSON.parse(readFileSync(baselinePath, 'utf-8'))
+    delete stored.registrations
+    delete stored.mcpServers
+    writeFileSync(baselinePath, JSON.stringify(stored), 'utf-8')
+    writeSystemConfig('model = "gpt-5"\n')
+
+    syncSystemConfigIntoManagedCodexHome()
+
+    expect(readRuntimeConfig()).not.toContain('old@market')
+  })
+
   it('leaves an unchanged managed copy untouched on regeneration', () => {
     writeSystemConfig(
       'model = "gpt-5"\n\n[hooks.state."/home/u/.codex/hooks.json:stop:0:0"]\ntrusted_hash = "sha256:abc"\n\n[projects."/home/u/repo"]\ntrust_level = "trusted"\n'

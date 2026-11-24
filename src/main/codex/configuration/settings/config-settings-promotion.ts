@@ -183,8 +183,8 @@ function promoteCodexRuntimeSettingsToSystemUnsafe(
       runtimeValuesToPreserve,
       mirroredMcpServers,
       mirroredMcpServerRoot,
-      // Without a baseline, runtime-only plugins cannot be told apart from ones the distro dropped.
-      heldRegistrationBaseline: baseline?.registrations
+      // Without tracked plugins, runtime-only ones cannot be told apart from ones the distro dropped.
+      heldRegistrationBaseline: baseline?.registrationsTracked ? baseline.registrations : undefined
     }
   }
   // A drvfs source (a distro home under /mnt/c) is the distro's own config too.

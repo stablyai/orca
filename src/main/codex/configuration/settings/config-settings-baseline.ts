@@ -19,6 +19,8 @@ export type CodexSettingsBaseline = {
   conflicts: ReadonlyMap<string, CodexSettingsConflict>
   /** Absent registrations were never mirrored, so runtime-only tables count as additions. */
   registrations: ReadonlyMap<string, ReadonlyMap<string, string>>
+  /** Read-only: false for files from builds that may predate plugin tracking. */
+  registrationsTracked?: boolean
   /** MCP server names the last mirror copied from the canonical source. */
   mcpServers: ReadonlySet<string>
   mcpServerRoot: boolean
@@ -83,6 +85,8 @@ function readParsedCodexSettingsBaseline(
       settings,
       conflicts,
       registrations: readStoredRegistrations(parsed.registrations),
+      // The always-written MCP list arrived after plugin tracking.
+      registrationsTracked: parsed.mcpServers !== undefined,
       mcpServers: readStoredMcpServers(parsed.mcpServers),
       // Older mirrors owned the whole MCP root; retain that removal policy for one pass.
       mcpServerRoot: parsed.mcpServers === undefined || parsed.mcpServerRoot === true
