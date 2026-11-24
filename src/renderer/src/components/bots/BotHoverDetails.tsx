@@ -41,10 +41,12 @@ export function useBotRowDetails(bot: Bot, home: FolderWorkspace) {
 export function BotHoverDetails({
   bot,
   details,
+  showHostOnFocus,
   onOpenHome
 }: {
   bot: Bot
   details: ReturnType<typeof useBotRowDetails>
+  showHostOnFocus: boolean
   onOpenHome: () => void
 }): React.JSX.Element {
   const { workspaceId, status, hostLabel, offline, description, line, now } = details
@@ -69,7 +71,11 @@ export function BotHoverDetails({
         <BotAvatar bot={bot} className="size-10 rounded-lg text-sm" />
         <div className="flex min-w-0 flex-1 flex-col gap-1 self-center">
           <div className="flex min-w-0 items-center gap-1.5">
-            <BotHoverHostIcon hostId={bot.hostId} hostLabel={hostLabel} />
+            <BotHoverHostIcon
+              hostId={bot.hostId}
+              hostLabel={hostLabel}
+              showOnFocus={showHostOnFocus}
+            />
             <Tooltip>
               <TooltipTrigger asChild>
                 <div className="min-w-0 truncate text-[13px] leading-4 font-semibold text-foreground">
@@ -127,10 +133,12 @@ export function BotHoverDetails({
 
 function BotHoverHostIcon({
   hostId,
-  hostLabel
+  hostLabel,
+  showOnFocus
 }: {
   hostId: ExecutionHostId
   hostLabel: string | null
+  showOnFocus: boolean
 }): React.JSX.Element {
   const t = useTranslate()
   // A paired browser's local runtime is the server running Orca.
@@ -149,7 +157,7 @@ function BotHoverHostIcon({
     return selectExecutionHostDisplayLabel(state, hostId, { t })
   })
   return (
-    <Tooltip>
+    <Tooltip key={showOnFocus ? 'focus' : 'hover'} defaultOpen={showOnFocus}>
       <TooltipTrigger asChild>
         <span
           role="img"
