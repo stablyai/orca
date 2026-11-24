@@ -29,6 +29,8 @@ import {
 
 export { GoogleSetupError, isPersonOwnedStep, type GoogleSetupActor }
 
+const FINISHED_OUTSIDE_NOTE = 'Finished outside the card: Google is connected and ready.'
+
 const FileSchema = z.object({ runs: z.record(z.string(), GoogleSetupRunSchema).default({}) })
 
 export type GoogleSetupChange =
@@ -53,6 +55,8 @@ export type GoogleSetupChange =
   | { action: 'done' }
   /** Orca's own reading that the key didn't arrive; never sent by a bot. */
   | { action: 'key-missed'; reason?: string }
+  /** Orca's own reading that a working sign-in shows these handed steps finished; never sent by a bot. */
+  | { action: 'finished-outside'; steps: GoogleSetupStep[] }
   | { action: 'fail'; error: string }
   | { action: 'cancel' }
 
@@ -288,6 +292,16 @@ function applyChange(
       return
     case 'key-missed':
       run.keyMissed = { at: now, ...(change.reason ? { reason: change.reason } : {}) }
+      return
+    case 'finished-outside':
+      if (actor === 'bot') {
+        throw new GoogleSetupError(PERSON_FINISHES)
+      }
+      for (const step of change.steps) {
+        if (run.steps[step]?.status === 'needs-user') {
+          run.steps[step] = { status: 'done', at: now, note: FINISHED_OUTSIDE_NOTE }
+        }
+      }
       return
     case 'done':
       run.state = 'done'

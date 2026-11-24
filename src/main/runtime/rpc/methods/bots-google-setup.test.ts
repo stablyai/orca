@@ -1,17 +1,21 @@
-import { mkdtempSync, rmSync } from 'node:fs'
+import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { GoogleSetupRuns } from '../../../google/google-setup-runs'
 import { googleSetupKeyBlocker } from '../../../../shared/google/google-setup-blocker'
 import type { GoogleClientView } from '../../../../shared/google/google-client-config'
+import type { GoogleAccountView } from '../../../../shared/google/google-connect-types'
 import type { RpcContext } from '../core'
 
-const state = vi.hoisted((): { runs: GoogleSetupRuns | null; offers: number; lines: string[] } => ({
-  runs: null,
-  offers: 0,
-  lines: []
-}))
+const state = vi.hoisted(
+  (): {
+    runs: GoogleSetupRuns | null
+    offers: number
+    lines: string[]
+    accounts: GoogleAccountView[]
+  } => ({ runs: null, offers: 0, lines: [], accounts: [] })
+)
 const BOT = { id: 'bot-1', name: 'Ada', google: true, chatSessionId: 'chat-1' }
 const OLD_CLIENT: GoogleClientView = {
   clientId: 'old',
@@ -27,7 +31,9 @@ vi.mock('../../../google/google-setup-runs', async (importOriginal) => ({
 vi.mock('../../../google/google-connect', () => ({
   getGoogleConnect: () => ({
     client: async () => OLD_CLIENT,
-    accounts: async () => [],
+    accounts: async () => state.accounts,
+    checkAccounts: async () => state.accounts,
+    checkClient: async () => null,
     clientCheck: async () => null
   })
 }))
@@ -56,9 +62,13 @@ vi.mock('./bots-connector-offer', () => ({
 }))
 
 const { GOOGLE_SETUP_METHODS } = await import('./bots-google-setup')
-const [, write, , start] = GOOGLE_SETUP_METHODS
-if (write.name !== 'bots.googleSetup.write' || start.name !== 'bots.googleSetup.start') {
-  throw new Error('bots.googleSetup.write or start moved')
+const [read, write, , start] = GOOGLE_SETUP_METHODS
+if (
+  read.name !== 'bots.googleSetup.read' ||
+  write.name !== 'bots.googleSetup.write' ||
+  start.name !== 'bots.googleSetup.start'
+) {
+  throw new Error('bots.googleSetup.read, write or start moved')
 }
 
 // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the write handler reads only bots and lookAround here.
@@ -77,6 +87,7 @@ beforeEach(() => {
   state.runs = runs
   state.offers = 0
   state.lines = []
+  state.accounts = []
 })
 afterEach(() => rmSync(dir, { recursive: true, force: true }))
 
@@ -168,5 +179,88 @@ describe('bots.googleSetup.start from Orca with newApp', () => {
     const again = await start.handler({ botId: BOT.id, from: 'settings', newApp: true }, context)
     expect(again.run).toEqual(first.run)
     expect(state.lines).toHaveLength(1)
+  })
+})
+
+describe('a step handed to the owner that they finished outside its card', () => {
+  const account = (state: 'ready' | 'api-disabled'): GoogleAccountView => ({
+    email: 'dana@acme.com',
+    status: 'connected',
+    connectedAt: 5,
+    services: [
+      { service: 'gmail', state: 'ready' },
+      { service: 'calendar', state }
+    ]
+  })
+  // A run saved by an earlier build: publish handed to the owner, who published in Google Cloud and
+  // signed in, so only that step's Done holds it.
+  const saveStuckRun = () =>
+    writeFileSync(
+      join(dir, 'runs.json'),
+      JSON.stringify({
+        runs: {
+          [BOT.id]: {
+            id: 'run-1',
+            botId: BOT.id,
+            state: 'running',
+            mode: 'guide-browser',
+            steps: {
+              account: { status: 'done', by: 'user', at: 2 },
+              project: { status: 'done', by: 'user', at: 2 },
+              apis: { status: 'done', by: 'user', at: 2 },
+              branding: { status: 'done', by: 'user', at: 2 },
+              links: { status: 'done', by: 'user', at: 2 },
+              publish: { status: 'needs-user', at: 3, note: 'Press Publish app.' },
+              client: { status: 'done', by: 'user', at: 4 },
+              connect: { status: 'done', by: 'user', at: 5 }
+            },
+            account: 'dana@acme.com',
+            services: ['gmail', 'calendar'],
+            answers: {},
+            startedAt: 1,
+            updatedAt: 5,
+            revision: 9
+          }
+        }
+      })
+    )
+
+  it('finishes an old stuck run on the next read once every chosen service is ready', async () => {
+    saveStuckRun()
+    state.accounts = [account('ready')]
+    const result = await read.handler({ botId: BOT.id }, context)
+    expect(result.blocker).toBeNull()
+    expect(runs.get(BOT.id)).toMatchObject({
+      state: 'done',
+      steps: { publish: { status: 'done', note: expect.stringContaining('outside the card') } }
+    })
+    expect(runs.get(BOT.id)?.steps.publish?.by).toBeUndefined()
+  })
+
+  it("lets the bot's done finish it", async () => {
+    saveStuckRun()
+    state.accounts = [account('ready')]
+    const result = await write.handler({ botToken: 't', change: { action: 'done' } }, context)
+    expect(result).toMatchObject({ run: { state: 'done' }, blocker: null })
+  })
+
+  it('keeps waiting on the owner while a chosen service is not ready', async () => {
+    saveStuckRun()
+    state.accounts = [account('api-disabled')]
+    await read.handler({ botId: BOT.id }, context)
+    await expect(
+      write.handler({ botToken: 't', change: { action: 'done' } }, context)
+    ).rejects.toThrow()
+    expect(runs.get(BOT.id)).toMatchObject({
+      state: 'running',
+      steps: { publish: { status: 'needs-user' } }
+    })
+  })
+
+  it('never lets the bot record it', () => {
+    saveStuckRun()
+    expect(() =>
+      runs.apply(BOT.id, 'bot', { action: 'finished-outside', steps: ['publish'] })
+    ).toThrow()
   })
 })
