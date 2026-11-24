@@ -33,6 +33,11 @@ export const PLUGIN_HANDLER_GROUPS: readonly HandlerGroup[] = [
     load: async () => (await import('./plugin-runtime.js')).PLUGIN_RUNTIME_HANDLERS
   },
   {
+    name: 'plugin-settings',
+    keys: ['plugin settings get', 'plugin settings set'],
+    load: async () => (await import('./plugin-settings.js')).PLUGIN_SETTINGS_HANDLERS
+  },
+  {
     name: 'plugin-dev-watch',
     keys: ['plugin dev watch'],
     load: async () => (await import('./dev-watch/plugin-dev-watch.js')).PLUGIN_DEV_WATCH_HANDLERS

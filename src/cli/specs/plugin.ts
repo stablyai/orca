@@ -2,6 +2,7 @@ import type { CommandSpec } from '../discovery/command-spec'
 import { CLI_GLOBAL_FLAGS as GLOBAL_FLAGS } from '../../shared/cli/cli-argument-boundary'
 import { LOCAL_COMMAND_FLAGS } from '../arguments/args'
 import { PLUGIN_TEMPLATE_NAMES } from '../plugins/authoring/plugin-template-names'
+import { PLUGIN_SETTINGS_COMMAND_SPECS } from './plugin-settings'
 import { PLUGIN_DEV_HOOK_COMMAND_SPEC, PLUGIN_DEV_REQUEST_COMMAND_SPEC } from './plugin-dev-request'
 
 const TEMPLATES = PLUGIN_TEMPLATE_NAMES.join('|')
@@ -125,6 +126,7 @@ const APPROVE_NOTE =
   'Content-only plugins (themes, icons, syntaxes, translations) need no approval. Anything that runs code or acts in Orca fails with approval_required, which lists exactly what it would be granted, why, and the command to re-run with --approve <fingerprint>. The fingerprint is bound to that plugin, version, files and access; anything different needs a new one.'
 
 export const PLUGIN_RUNTIME_COMMAND_SPECS: CommandSpec[] = [
+  ...PLUGIN_SETTINGS_COMMAND_SPECS,
   {
     path: ['plugin', 'list'],
     summary: 'List plugins on the Orca host with their status and access level',

@@ -6,12 +6,21 @@ import {
 } from '../../../shared/plugins/contributions/plugin-settings-values'
 import { getPluginsDataDir, type ValidDiscoveredPlugin } from '../discovery/plugin-discovery'
 import { PluginKvStore } from './plugin-storage-store'
+import type { PluginService } from '../plugin-service'
 
 type SettingsHost = {
   findValidPlugin: (pluginKey: string) => ValidDiscoveredPlugin | null
   userDataPath: string
   /** Tells open panels and a running worker that `key` changed. */
   dataChanged: (pluginKey: string, key: string) => void
+}
+
+export function pluginDeclaredSettingsHost(service: PluginService): SettingsHost {
+  return {
+    findValidPlugin: (pluginKey) => service.findValidPlugin(pluginKey),
+    userDataPath: service.options.userDataPath,
+    dataChanged: (pluginKey, key) => service.panelBridge.dataChanged(pluginKey, 'settings', key)
+  }
 }
 
 function store(host: SettingsHost, pluginKey: string): PluginKvStore {

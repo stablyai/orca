@@ -569,6 +569,24 @@ would be granted and the command to re-run with `--approve <fingerprint>`. `orca
 `orca plugin install <owner/repo[@ref]>` installs a published plugin the same way, with the Orca
 host's own Git credentials for private repositories, and `orca plugin update` keeps it current.
 
+Scripts and agents can read and change `contributes.settings` with the same validation,
+store and change notifications as Settings → Plugins:
+
+```sh
+orca plugin settings get local.notes --json
+orca plugin settings get local.notes board --json
+orca plugin settings set local.notes board '"backlog"' --json
+orca plugin settings set local.notes enabled false --json
+orca plugin settings set local.notes board null --json
+```
+
+`get` returns `{ pluginKey, settings, values }`, including defaults; an unset key without a
+default is absent from `values`. `set` accepts a JSON value for one declared key; `null`
+removes its override and restores the default. Values such as `false`, `0` and `""` remain
+values. Both commands use the selected host (`--environment` works), require `host-admin`,
+and never access `orca.secrets` or undeclared settings. Older hosts fail with
+`runtime_unsupported` and need an update.
+
 Orca watches development folders and reloads the plugin when its manifest or files change.
 Theme, syntax and translation edits show up as you save. Panels and workers are not bound to
 their files in development, so saving does not ask for approval again; adding a capability or

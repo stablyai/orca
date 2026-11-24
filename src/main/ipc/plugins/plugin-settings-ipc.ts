@@ -4,6 +4,7 @@ import { isQualifiedPluginKey } from '../../../shared/plugins/frames/plugin-tab-
 import type { PluginService } from '../../plugins/plugin-service'
 import {
   readPluginDeclaredSettings,
+  pluginDeclaredSettingsHost,
   writePluginDeclaredSetting
 } from '../../plugins/storage/plugin-declared-settings'
 
@@ -15,12 +16,7 @@ const writeArgsSchema = z
 
 /** The plugin settings Orca's Settings page shows and edits (`contributes.settings`). */
 export function registerPluginSettingsHandlers(pluginService: PluginService): void {
-  const host = () => ({
-    findValidPlugin: (pluginKey: string) => pluginService.findValidPlugin(pluginKey),
-    userDataPath: pluginService.options.userDataPath,
-    dataChanged: (pluginKey: string, key: string) =>
-      pluginService.panelBridge.dataChanged(pluginKey, 'settings', key)
-  })
+  const host = () => pluginDeclaredSettingsHost(pluginService)
   ipcMain.handle('plugins:getSettings', async (_event, args: unknown) => {
     await pluginService.whenReady()
     return readPluginDeclaredSettings(host(), readArgsSchema.parse(args).pluginKey)
