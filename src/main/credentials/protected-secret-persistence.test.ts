@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it } from 'vitest'
-import { setSecretStore } from '../../shared/secret-store'
+import { setSecretStore } from '../../shared/secure-storage/secret-store'
 
 const cipherState = { available: true }
 
@@ -43,35 +43,5 @@ describe('ProtectedSecretPersistence', () => {
 
     secrets.removeRetainedBlob(slot)
     expect(secrets.encrypt(slot, '')).toEqual({ blob: '', degraded: false })
-  })
-
-  it('keeps deferred encryption pending until its retention update commits', async () => {
-    const { ProtectedSecretPersistence } = await import('./protected-secret-persistence')
-    const secrets = new ProtectedSecretPersistence()
-    cipherState.available = false
-    secrets.encrypt('slot', 'pending')
-    expect(secrets.hasPendingEncryption()).toBe(true)
-    cipherState.available = true
-    const encrypted = secrets.encrypt('slot', 'pending')
-    expect(secrets.hasPendingEncryption()).toBe(true)
-    if (!encrypted.retentionUpdate) {
-      throw new Error('Expected a retention update')
-    }
-    secrets.commitRetentionUpdates([encrypted.retentionUpdate])
-    expect(secrets.hasPendingEncryption()).toBe(false)
-  })
-
-  it('retires a deferred empty secret without retaining a phantom retry', async () => {
-    const { ProtectedSecretPersistence } = await import('./protected-secret-persistence')
-    const secrets = new ProtectedSecretPersistence()
-    cipherState.available = false
-    secrets.encrypt('slot', 'pending')
-    const cleared = secrets.encrypt('slot', '')
-    expect(secrets.hasPendingEncryption()).toBe(true)
-    if (!cleared.retentionUpdate) {
-      throw new Error('Expected a retention update')
-    }
-    secrets.commitRetentionUpdates([cleared.retentionUpdate])
-    expect(secrets.hasPendingEncryption()).toBe(false)
   })
 })

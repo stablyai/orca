@@ -1,7 +1,7 @@
 import {
   expandWindowsEnvironmentVariables,
   expandWindowsPathEnvironmentVariables
-} from '../../../shared/windows-environment-expansion'
+} from '../../../shared/shell/launch/windows-environment-expansion'
 
 export function resolvePathEnvKey(
   env: NodeJS.ProcessEnv | Record<string, string | undefined>,

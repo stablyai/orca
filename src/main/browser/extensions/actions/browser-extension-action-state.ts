@@ -117,6 +117,12 @@ export function iconFromPathSpec(spec: unknown): BrowserExtensionActionIcon | nu
   return Object.keys(paths).length > 0 ? { kind: 'path', paths } : null
 }
 
+export function manifestHasOptionsPage(extension: Electron.Extension): boolean {
+  const manifest: { options_ui?: { page?: unknown }; options_page?: unknown } =
+    extension.manifest ?? {}
+  return typeof (manifest.options_ui?.page ?? manifest.options_page) === 'string'
+}
+
 /** Defaults come from manifest.action (MV3) or browser_action (MV2). */
 export function readManifestActionDefaults(
   manifest: Record<string, unknown> | undefined,

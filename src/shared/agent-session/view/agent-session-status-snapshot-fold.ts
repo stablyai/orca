@@ -4,27 +4,34 @@ import type { AgentSessionStatusEvent, AgentSessionStatusSummary } from '../agen
 
 export type AgentSessionStatusSnapshot = ReadonlyMap<string, AgentSessionStatusSummary>
 
+/** Summaries an event carries; `end` and other frames carry none. */
+function eventSummaries(event: AgentSessionStatusEvent): readonly AgentSessionStatusSummary[] {
+  return event.type === 'snapshot' ? event.sessions : event.type === 'status' ? [event.session] : []
+}
+
 /** Merge snapshots: restarting hosts restore asynchronously and may first publish empty. Dropping retained rows would flicker; end changes nothing. */
 export function foldAgentSessionStatusEvent(
   snapshot: AgentSessionStatusSnapshot,
   event: AgentSessionStatusEvent
 ): AgentSessionStatusSnapshot {
-  if (event.type === 'snapshot') {
-    if (event.sessions.length === 0) {
-      return snapshot
-    }
-    const next = new Map(snapshot)
-    for (const session of event.sessions) {
-      next.set(session.sessionId, session)
-    }
-    return next
+  if (eventSummaries(event).length === 0) {
+    return snapshot
   }
-  if (event.type === 'status') {
-    const next = new Map(snapshot)
-    next.set(event.session.sessionId, event.session)
-    return next
+  const next = new Map(snapshot)
+  applyAgentSessionStatusEvent(next, event)
+  return next
+}
+
+/** The same merge on an owned map, returning the sessions it wrote so only their readers are woken. */
+export function applyAgentSessionStatusEvent(
+  snapshot: Map<string, AgentSessionStatusSummary>,
+  event: AgentSessionStatusEvent
+): string[] {
+  const summaries = eventSummaries(event)
+  for (const session of summaries) {
+    snapshot.set(session.sessionId, session)
   }
-  return snapshot
+  return summaries.map((session) => session.sessionId)
 }
 
 /** Contact loss removes live host execution/Stop claims only; retain everything else because disconnect is no proof of exit. Preserve identity if unchanged. */
@@ -33,28 +40,47 @@ export function revokeAgentSessionStatusLive(
 ): AgentSessionStatusSnapshot {
   let next: Map<string, AgentSessionStatusSummary> | null = null
   for (const [sessionId, summary] of snapshot) {
-    if (
-      !summary.hostExecutionOwned &&
-      !summary.stopping &&
-      !summary.restartResume &&
-      summary.runtimePermission === null
-    ) {
-      continue
+    const revoked = revokedLiveSummary(summary)
+    if (revoked) {
+      next ??= new Map(snapshot)
+      next.set(sessionId, revoked)
     }
-    next ??= new Map(snapshot)
-    const {
-      hostExecutionOwned: _owned,
-      hostExecutionPhase: _phase,
-      stopping: _stopping,
-      restartResume: _restartResume,
-      ...retained
-    } = summary
-    next.set(sessionId, {
-      ...retained,
-      runtimePermission: null
-    })
   }
   return next ?? snapshot
+}
+
+/** The same revocation on an owned map, returning the sessions it changed. */
+export function revokeAgentSessionStatusLiveInPlace(
+  snapshot: Map<string, AgentSessionStatusSummary>
+): string[] {
+  const changed: string[] = []
+  for (const [sessionId, summary] of snapshot) {
+    const revoked = revokedLiveSummary(summary)
+    if (revoked) {
+      snapshot.set(sessionId, revoked)
+      changed.push(sessionId)
+    }
+  }
+  return changed
+}
+
+function revokedLiveSummary(summary: AgentSessionStatusSummary): AgentSessionStatusSummary | null {
+  if (
+    !summary.hostExecutionOwned &&
+    !summary.stopping &&
+    !summary.restartResume &&
+    summary.runtimePermission === null
+  ) {
+    return null
+  }
+  const {
+    hostExecutionOwned: _owned,
+    hostExecutionPhase: _phase,
+    stopping: _stopping,
+    restartResume: _restartResume,
+    ...retained
+  } = summary
+  return { ...retained, runtimePermission: null }
 }
 
 /** A provider head is a query dependency, never a client-side ownership index. */

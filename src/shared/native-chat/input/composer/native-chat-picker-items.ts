@@ -1,0 +1,327 @@
+import type { DiscoveredSkill, SkillSourceKind } from '../../../skills/discovery/skills'
+import * as reportedSkills from './native-chat-reported-skill'
+import type * as Commands from '../commands/native-chat-slash-commands'
+import { stripUnsafeDisplayCharacters } from '../../../text/display-text-safety'
+import {
+  compareDiscoveredSkills,
+  comparePickerSkills,
+  limitSkillsAcrossScopes
+} from './native-chat-picker-skill-selection'
+
+export type NativeChatPickerItem =
+  | {
+      kind: 'command'
+      id: string
+      name: string
+      /** Exactly what a pick inserts — the form the agent invokes. */
+      token: string
+      description?: string
+      /** How the provider says the command is invoked, e.g. `<objective>`. */
+      argumentHint?: string
+      aliases?: readonly string[]
+      skillCollision: boolean
+      orcaOwned?: true
+      /** The provider reported this as its built-in command. */
+      builtin?: true
+    }
+  | {
+      kind: 'skill'
+      id: string
+      name: string
+      token: string
+      description: string | null
+      /** How the session says the skill is invoked, e.g. `<target>`. */
+      argumentHint?: string
+      sources: { sourceKind: SkillSourceKind; skillFilePath: string }[]
+      /** The file the agent selects this skill by, when the agent reported it; a pick sends it. */
+      path?: string
+      /** Distinguishes same-named reported files independently of description or scanner scope. */
+      location?: string
+    }
+
+export type NativeChatSkillDiscoverySnapshot = {
+  status: 'idle' | 'loading' | 'ready' | 'error'
+  skills: readonly DiscoveredSkill[]
+  errorKind?: 'unavailable' | 'timeout' | 'host' | 'unknown'
+}
+
+/** Only unclassify namesake commands a scanned skill can replace. Never override host-owned dispatch (/compact).
+ * OpenCode 1.x mixes skills into commands: require matching skill descriptions; otherwise its real command takes precedence. */
+export function classifyPickerCommands(
+  commands: readonly Commands.SlashCommandSuggestion[],
+  skills: readonly DiscoveredSkill[],
+  options: { reportMayListSkills: boolean; isSendCommand: (name: string) => boolean }
+): readonly Commands.SlashCommandSuggestion[] {
+  const skillDescriptions = options.reportMayListSkills
+    ? new Set(skills.map((skill) => `${skill.name}\0${normalizedDescription(skill.description)}`))
+    : null
+  return commands.map((command) => {
+    const unclassified =
+      (command.kindUnspecified === true ||
+        skillDescriptions?.has(`${command.name}\0${normalizedDescription(command.description)}`) ===
+          true) &&
+      !options.isSendCommand(command.name)
+    if (unclassified === (command.kindUnspecified === true)) {
+      return command
+    }
+    const { kindUnspecified: _dropped, ...classified } = command
+    return unclassified ? { ...command, kindUnspecified: true } : classified
+  })
+}
+
+function normalizedDescription(description: string | null | undefined): string {
+  return description?.replace(/\s+/g, ' ').trim() ?? ''
+}
+
+const COMMAND_RESULT_LIMIT = 50
+const SKILL_RESULT_LIMIT = 500
+
+export function buildNativeChatPickerItems(
+  commands: readonly Commands.SlashCommandSuggestion[],
+  skills: readonly DiscoveredSkill[],
+  query: string,
+  skillSigil: '/' | '$',
+  sessionSkills?: readonly Commands.NativeChatSessionSkill[],
+  /** Override both group limits; a caller that needs every skill passes Infinity. */
+  limit?: number,
+  /** `$` matches skill names only, so a shell word like `$CODEX_HOME` never hits a description. */
+  trigger: '/' | '$' = '/',
+  commandAvailable?: (name: string) => boolean
+): NativeChatPickerItem[] {
+  // Only shared sigils collide: /review and $review remain separate.
+  const sharedSigil = skillSigil === '/'
+  // Before Claude classifies its catalog, a skill arrives as an unclassified command carrying its hint.
+  const unclassified = new Map(
+    commands.filter((command) => command.kindUnspecified).map((command) => [command.name, command])
+  )
+  const mergedSkills = mergeNativeChatSkills(skills, sessionSkills, unclassified, skillSigil)
+  const skillNames = new Set(mergedSkills.map((skill) => skill.name))
+  const available = commandAvailable
+    ? commands.filter(({ name }) => commandAvailable(name))
+    : commands
+  const orcaNames = new Set(available.filter((c) => c.orcaOwned).map((command) => command.name))
+  const resolvedCommands = available.filter(
+    (command) =>
+      command.orcaOwned ||
+      !(
+        orcaNames.has(command.name) ||
+        (sharedSigil && command.kindUnspecified && skillNames.has(command.name))
+      )
+  )
+  // Orca runs its own rows whatever the skills are called, so a namesake skill keeps its row.
+  const commandNames = new Set(
+    resolvedCommands.filter((command) => !command.orcaOwned).map((command) => command.name)
+  )
+  const commandItems = rankItems(
+    resolvedCommands.map((command, index) => ({
+      item: {
+        kind: 'command' as const,
+        // Curated command names are dispatch tokens; sanitize untrusted skill text only.
+        id: `command:${command.name}`,
+        name: command.name,
+        token: `/${command.name}`,
+        description: command.description ? sanitizePickerText(command.description, 240) : undefined,
+        argumentHint: command.argumentHint
+          ? sanitizePickerText(command.argumentHint, 80)
+          : undefined,
+        ...(command.aliases ? { aliases: command.aliases } : {}),
+        skillCollision: sharedSigil && !command.orcaOwned && skillNames.has(command.name),
+        ...(command.orcaOwned ? { orcaOwned: true as const } : {}),
+        ...(command.builtin ? { builtin: true as const } : {})
+      },
+      stableOrder: index
+    })),
+    query
+  )
+  const skillItems = rankItems(
+    mergedSkills
+      .filter((skill) => !(sharedSigil && commandNames.has(skill.name)))
+      .map((item, index) => ({ item, stableOrder: index })),
+    query,
+    trigger === '/'
+  )
+  const skillLimit = limit ?? SKILL_RESULT_LIMIT
+  return [
+    ...commandItems.slice(0, limit ?? COMMAND_RESULT_LIMIT),
+    ...(query ? skillItems.slice(0, skillLimit) : limitSkillsAcrossScopes(skillItems, skillLimit))
+  ]
+}
+
+function mergeNativeChatSkills(
+  skills: readonly DiscoveredSkill[],
+  sessionSkills: readonly Commands.NativeChatSessionSkill[] | undefined,
+  unclassified: ReadonlyMap<string, Commands.SlashCommandSuggestion>,
+  skillSigil: '/' | '$'
+): Extract<NativeChatPickerItem, { kind: 'skill' }>[] {
+  const exactPaths = new Map<string, DiscoveredSkill>()
+  for (const skill of skills) {
+    if (skill.installed && !exactPaths.has(skill.skillFilePath)) {
+      exactPaths.set(skill.skillFilePath, skill)
+    }
+  }
+  const byName = new Map<string, DiscoveredSkill[]>()
+  for (const skill of exactPaths.values()) {
+    const safeName = reportedSkills.getSafeSkillName(skill)
+    if (!safeName) {
+      continue
+    }
+    const namedSkills = byName.get(safeName) ?? []
+    namedSkills.push({ ...skill, name: safeName })
+    byName.set(safeName, namedSkills)
+  }
+  const discovered = new Map(
+    [...byName.entries()].map(([name, namedSkills]) => [
+      name,
+      pickerSkill(name, namedSkills, skillSigil)
+    ])
+  )
+  // Session reports determine loaded skills (including plugin roots/setting-source filters); disk scans enrich matching descriptions/scope only.
+  // Each reported file gets its own row so same-named skills remain explicitly selectable.
+  const nameCounts = new Map<string, number>()
+  const firstReportedByName = new Map<string, Commands.NativeChatSessionSkill>()
+  for (const skill of sessionSkills ?? []) {
+    nameCounts.set(skill.name, (nameCounts.get(skill.name) ?? 0) + 1)
+    if (!firstReportedByName.has(skill.name)) {
+      firstReportedByName.set(skill.name, skill)
+    }
+  }
+  const located = (sessionSkills ?? []).flatMap((skill) =>
+    skill.path && reportedSkills.isTokenSafe(skill.name)
+      ? [
+          reportedSkills.locatedPickerSkill(
+            skill,
+            skill.path,
+            exactPaths.get(skill.path),
+            skillSigil,
+            (nameCounts.get(skill.name) ?? 0) > 1
+          )
+        ]
+      : []
+  )
+  const names =
+    sessionSkills !== undefined
+      ? [
+          ...sessionSkills
+            .filter((skill) => !skill.path)
+            .map((skill) => skill.name)
+            .filter(reportedSkills.isTokenSafe),
+          ...[...discovered.keys()].filter((name) => unclassified.has(name))
+        ]
+      : [...discovered.keys()]
+  return [
+    ...located,
+    ...[...new Set(names)].map((name) =>
+      reportedSkills.withReportedSkillCopy(
+        discovered.get(name) ?? pickerSkill(name, [], skillSigil),
+        firstReportedByName.get(name) ?? unclassified.get(name)
+      )
+    )
+  ].sort(comparePickerSkills)
+}
+
+function pickerSkill(
+  name: string,
+  namedSkills: readonly DiscoveredSkill[],
+  skillSigil: '/' | '$'
+): Extract<NativeChatPickerItem, { kind: 'skill' }> {
+  const sorted = [...namedSkills].sort(compareDiscoveredSkills)
+  return {
+    kind: 'skill' as const,
+    id: `skill:${name}`,
+    name,
+    token: `${skillSigil}${name}`,
+    description: sorted[0]?.description ? sanitizePickerText(sorted[0].description, 240) : null,
+    sources: sorted.map((skill) => ({
+      sourceKind: skill.sourceKind,
+      skillFilePath: skill.skillFilePath
+    }))
+  }
+}
+
+function rankItems<T extends NativeChatPickerItem>(
+  entries: { item: T; stableOrder: number }[],
+  query: string,
+  matchDescriptions = true
+): T[] {
+  if (!query) {
+    return entries.map((entry) => entry.item)
+  }
+  return entries
+    .map((entry) => ({ ...entry, rank: getMatchRank(entry.item, query, matchDescriptions) }))
+    .filter((entry) => entry.rank !== null)
+    .sort((a, b) => a.rank! - b.rank! || a.stableOrder - b.stableOrder)
+    .map((entry) => entry.item)
+}
+
+// Commands render before skills, and Enter uses this index into that same order.
+// An exact name in the later section has to beat a fuzzy name in the earlier one.
+export function preferredNativeChatPickerIndex(
+  items: readonly NativeChatPickerItem[],
+  query: string
+): number {
+  let bestIndex = 0
+  let bestRank = Number.POSITIVE_INFINITY
+  for (let index = 0; index < items.length; index += 1) {
+    const rank = getMatchRank(items[index], query, true)
+    if (rank !== null && rank < bestRank) {
+      bestRank = rank
+      bestIndex = index
+    }
+  }
+  return bestIndex
+}
+
+const NO_ALIASES: readonly string[] = []
+
+function getMatchRank(
+  item: Pick<NativeChatPickerItem, 'name' | 'description'> & { aliases?: readonly string[] },
+  query: string,
+  matchDescriptions: boolean
+): number | null {
+  const normalizedQuery = query.toLowerCase()
+  let rank = getNameRank(item.name.toLowerCase(), normalizedQuery)
+  for (const alias of item.aliases ?? NO_ALIASES) {
+    // A provider's own name match outranks an alias match of the same tier.
+    const aliasRank = getNameRank(alias, normalizedQuery)
+    if (aliasRank !== null && (rank === null || aliasRank + 0.5 < rank)) {
+      rank = aliasRank + 0.5
+    }
+  }
+  if (rank !== null) {
+    return rank
+  }
+  if (matchDescriptions && item.description?.toLowerCase().includes(normalizedQuery)) {
+    return 4
+  }
+  return null
+}
+
+function getNameRank(name: string, query: string): number | null {
+  if (name === query) {
+    return 0
+  }
+  if (name.startsWith(query)) {
+    return 1
+  }
+  if (name.includes(query)) {
+    return 2
+  }
+  return isSubsequence(query, name) ? 3 : null
+}
+
+function isSubsequence(query: string, value: string): boolean {
+  let queryIndex = 0
+  for (const character of value) {
+    if (character === query[queryIndex]) {
+      queryIndex += 1
+    }
+    if (queryIndex === query.length) {
+      return true
+    }
+  }
+  return false
+}
+
+function sanitizePickerText(value: string, maxLength: number): string {
+  return stripUnsafeDisplayCharacters(value).slice(0, maxLength)
+}

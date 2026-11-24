@@ -2,8 +2,8 @@ import React, { useMemo } from 'react'
 import type { Editor } from '@tiptap/react'
 import EmojiPicker, { EmojiStyle, Theme, type EmojiClickData } from 'emoji-picker-react'
 import { Popover, PopoverAnchor, PopoverContent } from '@/components/ui/popover'
-import { useDocumentDarkTheme } from '@/hooks/use-document-dark-theme'
-import { translate } from '@/i18n/i18n'
+import { useDocumentDarkTheme } from '@/hooks/theme/use-document-dark-theme'
+import { useTranslate } from '@/i18n/use-translate'
 import { useDismissWhenEditorHidden } from './use-dismiss-when-editor-hidden'
 
 type RichMarkdownEmojiMenuProps = {
@@ -21,6 +21,7 @@ export function RichMarkdownEmojiMenu({
   top,
   onClose
 }: RichMarkdownEmojiMenuProps): React.JSX.Element {
+  const t = useTranslate()
   const isDark = useDocumentDarkTheme()
   useDismissWhenEditorHidden(anchorElement, onClose)
   const virtualRef = useMemo(
@@ -48,7 +49,7 @@ export function RichMarkdownEmojiMenu({
         sideOffset={0}
         collisionPadding={8}
         style={{ colorScheme: isDark ? 'dark' : 'light' }}
-        aria-label={translate(
+        aria-label={t(
           'auto.components.editor.RichMarkdownEmojiMenu.chooseEmoji',
           'Choose an emoji'
         )}
@@ -63,7 +64,7 @@ export function RichMarkdownEmojiMenu({
             lazyLoadEmojis
             onEmojiClick={insertEmoji}
             previewConfig={{ showPreview: false }}
-            searchPlaceHolder={translate(
+            searchPlaceHolder={t(
               'auto.components.settings.RepositoryIconPicker.searchEmojiPlaceholder',
               'Search emoji'
             )}

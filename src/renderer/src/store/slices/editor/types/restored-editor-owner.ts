@@ -1,5 +1,5 @@
-import type { ExecutionHostId } from '../../../../../../shared/execution-host'
-import type { EditorFileOperationProvenance } from '@/lib/editor-file-operation-owner'
+import type { ExecutionHostId } from '../../../../../../shared/execution-host/execution-host'
+import type { EditorFileOperationProvenance } from '@/lib/editor/file-operations/editor-file-operation-provenance'
 
 export type RestoredEditorOwnerMigration = {
   fileId: string

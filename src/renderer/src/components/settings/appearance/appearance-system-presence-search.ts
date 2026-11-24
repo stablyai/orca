@@ -1,15 +1,15 @@
 import { translate } from '@/i18n/i18n'
 import { createLocalizedCatalog } from '@/i18n/localized-catalog'
-import { getRendererAppPlatform } from '@/lib/renderer-app-platform'
-import { isWebClientLocation } from '@/lib/web-client-location'
+import { getRendererAppPlatform } from '@/app-shell/platform/renderer-app-platform'
+import { isWebClientLocation } from '@/app-shell/platform/web-client-location'
 import type { SettingsSearchEntry } from '../search/settings-search'
 import { translateSearchKeyword } from '../search/settings-search-keywords'
 
 const getSystemTrayEntryCatalog = createLocalizedCatalog((): SettingsSearchEntry[] => [
   {
     title: translate(
-      'auto.components.settings.appearance.search.9a115966d3',
-      'Minimize to Tray on Close'
+      'auto.components.settings.appearance.search.d408ece868',
+      'Minimize to tray on close'
     ),
     description: translate(
       'auto.components.settings.appearance.search.4d5b9427b5',
@@ -49,7 +49,7 @@ const getSystemTrayEntryCatalog = createLocalizedCatalog((): SettingsSearchEntry
 
 const getMenuBarIconEntryCatalog = createLocalizedCatalog((): SettingsSearchEntry[] => [
   {
-    title: translate('settings.appearance.menuBarIcon.title', 'Show Menu Bar Icon'),
+    title: translate('settings.appearance.menuBarIcon.026624e2ec', 'Show menu bar icon'),
     description: translate(
       'settings.appearance.menuBarIcon.description',
       'Keep an Orca shortcut and activity indicator in the macOS menu bar.'

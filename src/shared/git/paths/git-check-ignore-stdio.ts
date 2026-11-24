@@ -46,4 +46,4 @@ export function parseGitCheckIgnorePaths(stdout: string): string[] {
   }
   return paths
 }
-import { iterateNulDelimitedFields } from '../../nul-delimited-fields'
+import { iterateNulDelimitedFields } from '../commands/nul-delimited-fields'

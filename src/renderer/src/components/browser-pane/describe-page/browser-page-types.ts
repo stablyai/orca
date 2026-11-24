@@ -1,15 +1,16 @@
-import type { RuntimeBrowserClientPlacement } from '../../../../../shared/runtime-browser-placement'
-import type { Dispatch, MutableRefObject, SetStateAction } from 'react'
+import type { RuntimeBrowserClientPlacement } from '../../../../../shared/browser/client-hosting/runtime-browser-placement'
+import type { Dispatch, MutableRefObject, RefObject, SetStateAction } from 'react'
 import type {
   BrowserAnnotationIntent,
   BrowserGrabPayload,
   BrowserPageAnnotation,
   GrabIntent
-} from '../../../../../shared/browser-grab-types'
-import type { BrowserContextMenuRequestedEvent } from '../../../../../shared/browser-guest-events'
-import type { BrowserPage as BrowserPageState } from '../../../../../shared/browser-workspace-types'
-import type { GrabModeHook } from '../annotate/useGrabMode'
-import type { BrowserOverlayViewport } from './browser-annotation-geometry'
+} from '../../../../../shared/browser/element-grab/browser-grab-types'
+import type { BrowserContextMenuRequestedEvent } from '../../../../../shared/browser/guest-lifecycle/browser-guest-events'
+import type { BrowserPage as BrowserPageState } from '../../../../../shared/browser/workspaces/browser-workspace-types'
+import type { BrowserPageLoadingOwner } from '@/lib/browser/browser-page-loading-ownership'
+import type { GrabModeHook } from '../annotate/grab/useGrabMode'
+import type { BrowserOverlayViewport, OverlayRectSource } from './browser-annotation-geometry'
 
 export type BrowserTabPageState = Partial<
   Pick<
@@ -17,6 +18,12 @@ export type BrowserTabPageState = Partial<
     'title' | 'loading' | 'faviconUrl' | 'canGoBack' | 'canGoForward' | 'loadError'
   >
 >
+
+export type BrowserPageStateWriter = (
+  pageId: string,
+  updates: BrowserTabPageState,
+  loadingOwner?: BrowserPageLoadingOwner
+) => void
 
 export type BrowserPageUrlSetter = (
   tabId: string,
@@ -30,8 +37,6 @@ export type BrowserChromeShortcutScope =
   | 'inactive'
   | 'owned-target'
   | 'owned-target-focused'
-
-export type { GrabIntent } from '../../../../../shared/browser-grab-types'
 
 export type BrowserPageContextMenuState = Pick<
   BrowserContextMenuRequestedEvent,
@@ -62,7 +67,8 @@ export type BrowserPageGrabAnnotationsOptions = {
   containerRef: MutableRefObject<HTMLDivElement | null>
   trackingContainer?: HTMLDivElement | null
   trackingScroller?: HTMLDivElement | null
-  webviewRef: MutableRefObject<Electron.WebviewTag | null>
+  /** The guest's drawn surface: a webview, or a streamed frame scaled from the remote viewport. */
+  guestSurfaceRef: RefObject<OverlayRectSource | null>
   setBrowserOverlayViewport: Dispatch<SetStateAction<BrowserOverlayViewport>>
   browserAnnotationsLength: number
 }
@@ -76,6 +82,8 @@ export type BrowserPageGrabAnnotations = {
   setGrabToast: Dispatch<SetStateAction<BrowserPageGrabToastState | null>>
   grabToastTimerRef: MutableRefObject<ReturnType<typeof setTimeout> | undefined>
   dismissGrabToast: () => void
+  /** Copies a grab screenshot; `onSettled` runs only while that copy still owns the toast. */
+  copyGrabScreenshot: (dataUrl: string, onSettled: (copied: boolean) => void) => void
   handleGrabCopy: () => void
   handleGrabCopyScreenshot: () => void
   grabMenuActionTakenRef: MutableRefObject<boolean>
@@ -129,6 +137,23 @@ export type BrowserPageAnnotationTrayProps = {
     intent: BrowserAnnotationIntent,
     imagePaths: string[]
   ) => void
+}
+
+export type BrowserPagePaneProps = {
+  browserTab: BrowserPageState
+  workspaceId: string
+  worktreeId: string
+  sessionProfileId: string | null
+  sessionPartition: string | null
+  isActive: boolean
+  chromeShortcutScope: BrowserChromeShortcutScope
+  isAutomationVisible: boolean
+  isMobileDriven: boolean
+  isRemotelyViewed: boolean
+  isMountAdmitted?: boolean
+  inputLocked: boolean
+  onUpdatePageState: (tabId: string, updates: BrowserTabPageState) => void
+  onSetUrl: BrowserPageUrlSetter
 }
 
 export type ClientHostedBrowserPagePaneProps = {

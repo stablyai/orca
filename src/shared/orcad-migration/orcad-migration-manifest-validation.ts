@@ -9,8 +9,8 @@ import {
   assertLocalWslScopeMatchesPayload,
   parseLocalWslSource
 } from './orcad-migration-wsl-source-validation'
-import type { ProjectGroup } from '../project-group-types'
-import type { Repo } from '../repo-types'
+import type { ProjectGroup } from '../project/groups/project-group-types'
+import type { Repo } from '../repository/repo-types'
 import {
   MAX_ORCAD_MIGRATION_FOLDER_WORKSPACES,
   MAX_ORCAD_MIGRATION_REPOSITORIES,
@@ -25,7 +25,7 @@ import {
 import {
   assertOrcadMigrationDormantStateReferences,
   parseOrcadMigrationDormantState
-} from '../orcad-migration-dormant-state-validation'
+} from './orcad-migration-dormant-state-validation'
 
 export { MAX_ORCAD_MIGRATION_FOLDER_WORKSPACES, MAX_ORCAD_MIGRATION_REPOSITORIES }
 export const ORCAD_MIGRATION_MANIFEST_VERSION = 1 as const
@@ -44,7 +44,7 @@ export function parseOrcadMigrationManifest(value: unknown): OrcadMigrationManif
   const migrationId = requiredString(value.migrationId, 'migrationId')
   const createdAt = requiredDate(value.createdAt, 'createdAt')
   const source = parseSource(value.source)
-  const payload = parsePayload(value.payload)
+  const payload = parseOrcadMigrationCatalogPayload(value.payload)
   const manifestSha256 = requiredString(value.manifestSha256, 'manifestSha256')
   if (!/^[a-f0-9]{64}$/.test(manifestSha256)) {
     throw new Error('orcad_migration_manifest_digest_invalid')
@@ -102,7 +102,8 @@ export function normalizeOrcadMigrationImportReceipts(
   }, [])
 }
 
-function parsePayload(value: unknown): OrcadMigrationCatalogPayload {
+/** Without the manifest's size bound: commit also checks a payload rebuilt with blob-borne rows. */
+export function parseOrcadMigrationCatalogPayload(value: unknown): OrcadMigrationCatalogPayload {
   if (!isRecord(value)) {
     throw new Error('orcad_migration_manifest_payload_invalid')
   }

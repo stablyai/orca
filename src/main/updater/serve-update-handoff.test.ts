@@ -6,7 +6,7 @@ import {
   SERVE_UPDATE_HANDOFF_PATH_ENV,
   getServeUpdateHandoffPath,
   parseServeUpdateHandoffState
-} from '../../shared/serve-update-handoff'
+} from '../../shared/remote-runtime/serve-supervisor/serve-update-handoff'
 
 const { appMock, getCanonicalUserDataPathMock } = vi.hoisted(() => ({
   appMock: { getVersion: vi.fn(() => '1.0.51'), quit: vi.fn() },

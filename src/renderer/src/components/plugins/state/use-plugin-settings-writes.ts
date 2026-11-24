@@ -1,6 +1,6 @@
 import { isPluginAutoUpdateOn } from '../../../../../shared/plugins/catalog/plugin-update-policy'
 import { useCallback, useState, type MutableRefObject } from 'react'
-import type { GlobalSettings } from '../../../../../shared/global-settings-types'
+import type { GlobalSettings } from '../../../../../shared/settings/global-settings-types'
 import { translate } from '@/i18n/i18n'
 
 const saveFailed = (): string =>

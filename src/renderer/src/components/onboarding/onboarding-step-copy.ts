@@ -51,10 +51,7 @@ export const stepCopy = {
       )
     },
     get subtitle() {
-      return translate(
-        'components.onboarding.theme.subtitle',
-        'Choose light or dark, then optionally a theme. Change either any time in Settings.'
-      )
+      return translate('components.onboarding.theme.changeAnyTime', 'Change any time in Settings.')
     }
   },
   notifications: {

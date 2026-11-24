@@ -1,15 +1,17 @@
-import { useCallback, useMemo, useSyncExternalStore } from 'react'
+import { useAppViewExternalStore } from '@/store/retained-views/app-state-view'
+import { useCallback, useMemo } from 'react'
 import { useShallow } from 'zustand/react/shallow'
-import type { GlobalSettings } from '../../../../shared/global-settings-types'
-import { parseExecutionHostId } from '../../../../shared/execution-host'
+import type { GlobalSettings } from '../../../../shared/settings/global-settings-types'
+import { parseExecutionHostId } from '../../../../shared/execution-host/execution-host'
 import { lastVerifiedRuntimeStatus } from '../../../../shared/remote-runtime/host-status/runtime-host-status'
 import type { AppState } from '@/store/types'
+import { readRuntimeStatuses } from '@/store/slices/runtime-status/views/runtime-status-owner'
 import {
-  buildAgentLaunchRouteInput,
+  resolveAgentLaunchOwner,
   type ProspectiveWorkspace
-} from '@/lib/agent-launch-route-input'
-import { workspaceKindForWorktreeId } from '../../../../shared/workspace-launch-kind'
-import { getRuntimeEnvironmentRevision } from '@/runtime/runtime-environment-revision'
+} from '@/lib/agent-session/launch/routing/agent-launch-route-input'
+import { workspaceKindForWorktreeId } from '../../../../shared/agent-launch/contracts/workspace-launch-kind'
+import { getRuntimeEnvironmentRevision } from '@/runtime/rpc/environment-revisions/runtime-environment-revision'
 import {
   type AgentLaunchPreferences,
   type Snapshot,
@@ -18,7 +20,8 @@ import {
   acquire,
   snapshotKey,
   cachedSnapshot,
-  effectiveAgentLaunchPreferences
+  effectiveAgentLaunchPreferences,
+  isInheritedAgentLaunchPreferences
 } from './host-agent-launch-preferences-resource'
 
 const cancelled = (): DOMException => new DOMException('Agent preferences cancelled', 'AbortError')
@@ -31,17 +34,14 @@ function preferencesForWorkspace(state: AppState, workspace: ProspectiveWorkspac
       ? { agentLaunchChoices: state.settings.agentLaunchChoices }
       : {})
   }
-  const host = parseExecutionHostId(
-    buildAgentLaunchRouteInput(state, { agent: 'claude', workspace }).executionHostId
-  )
+  const host = parseExecutionHostId(resolveAgentLaunchOwner(state, workspace).executionHostId)
   const owner =
     host?.kind === 'runtime'
       ? {
           environmentId: host.environmentId,
           pairingRevision: getRuntimeEnvironmentRevision(host.environmentId),
-          runtimeId: lastVerifiedRuntimeStatus(
-            state.runtimeStatusByEnvironmentId.get(host.environmentId)
-          )?.runtimeId
+          runtimeId: lastVerifiedRuntimeStatus(readRuntimeStatuses().get(host.environmentId))
+            ?.runtimeId
         }
       : null
   return { desktop, owner }
@@ -108,6 +108,30 @@ export async function ensureAgentLaunchPreferences(
   }
 }
 
+// Takes the whole subscription so contact/open stay inputs; React Compiler keys a callback on the fields it reads.
+function subscribeHostPreferences(
+  subscription: {
+    environmentId: string | undefined
+    pairingRevision: number | undefined
+    runtimeId: string | null | undefined
+    active: boolean
+  },
+  listener: () => void
+): () => void {
+  if (!subscription.environmentId || !subscription.active) {
+    return () => {}
+  }
+  return acquire(
+    resource({
+      environmentId: subscription.environmentId,
+      pairingRevision: subscription.pairingRevision,
+      runtimeId: subscription.runtimeId ?? undefined
+    }),
+    listener,
+    true
+  )
+}
+
 export function useHostAgentMenuSettings(
   owner: {
     executionHostId: string
@@ -146,7 +170,8 @@ export function useHostAgentMenuSettings(
       preferences.agentDefaultArgs,
       preferences.agentPermissionDefault,
       preferences.agentPermissionOverrides,
-      snapshot === null
+      snapshot === null,
+      isInheritedAgentLaunchPreferences(preferences)
     ] as const
   })
   const [
@@ -156,33 +181,22 @@ export function useHostAgentMenuSettings(
     agentDefaultArgs,
     agentPermissionDefault,
     agentPermissionOverrides,
-    pending
-  ] = useSyncExternalStore(
+    pending,
+    inherited
+  ] = useAppViewExternalStore(
     useCallback(
-      (listener: () => void) => {
-        if (!subscription.environmentId || !subscription.active) {
-          return () => {}
-        }
-        return acquire(
-          resource({
-            environmentId: subscription.environmentId,
-            pairingRevision: subscription.pairingRevision,
-            runtimeId: subscription.runtimeId ?? undefined
-          }),
-          listener,
-          true
-        )
-      },
+      (listener: () => void) => subscribeHostPreferences(subscription, listener),
       [subscription]
     ),
     () => effectiveSnapshot(undefined),
     () => effectiveSnapshot(undefined)
   )
   if (!environmentId) {
-    return { settings: desktopSettings, pending: false }
+    return { settings: desktopSettings, pending: false, inherited: false }
   }
   return {
     pending,
+    inherited,
     settings: {
       ...desktopSettings,
       defaultTuiAgent,

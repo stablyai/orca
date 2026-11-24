@@ -4,6 +4,7 @@ import { existsSync, mkdirSync, mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import path from 'node:path'
 import { spawnProcess } from '@orca/process-host'
+import { resolvePnpmCliInvocation } from '../../tool-invocation/pnpm-cli-invocation.mjs'
 import { getDefaultSeedSource, seedDevProfile } from './dev-profile-seed.mjs'
 
 const USAGE = `Usage: pnpm dev:fresh [--] [--keep] [--seed-from[=<profile dir>]] [-- <pnpm dev args>]
@@ -70,9 +71,10 @@ try {
 }
 
 console.error(`[dev-fresh-profile] using userData=${profileDir}`)
+const pnpm = resolvePnpmCliInvocation()
 const child = spawnProcess({
-  program: 'pnpm',
-  args: ['dev', ...options.devArgs],
+  program: pnpm.command,
+  args: [...pnpm.prefixArgs, 'dev', ...options.devArgs],
   env: {
     ...process.env,
     ORCA_DEV_USER_DATA_PATH: profileDir,

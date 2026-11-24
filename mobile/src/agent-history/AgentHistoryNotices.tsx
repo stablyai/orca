@@ -1,12 +1,16 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
-import { AccessibilityInfo, Pressable, ScrollView, Text, View } from 'react-native'
-import { mobileSessionReviewCommentStyles } from '../session/mobile-session-review-comment-styles'
-import { TriangleAlert, X } from 'lucide-react-native'
+import { useState } from 'react'
+import { ActivityIndicator, Pressable, ScrollView, Text, View } from 'react-native'
+import { TriangleAlert } from 'lucide-react-native'
 import { colors, radii, spacing, typography, pressedStyle } from '../theme/mobile-theme'
 import { themedStyleSheet } from '../theme/themed-styles'
 import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
-import { AutoHeight } from '../components/AutoHeight'
+import type { AgentHistoryRestartOffer } from './use-agent-history-restart-offer'
+import type { AgentHistoryHandoffLaunchNotice } from './use-agent-history-handoff'
+import { useLaunchedAgentOpener } from '../session/agent-launch/launched-agent-opener'
+import { useClipboardWriter } from '../platform/clipboard/clipboard'
+import { AutoHeight, Presence } from '../components/motion/AutoHeight'
+import { HostRouteNoticeBanner } from '../components/host-connection/HostRouteNoticeBanner'
 import type { AiVaultScanIssue } from '../../../src/shared/ai-vault/contracts/ai-vault-types'
 import {
   aiVaultScanIssueKey,
@@ -110,24 +114,108 @@ export function AgentHistoryResumeNotice({
   message,
   onDismiss
 }: {
-  message: string
+  message: string | null
   onDismiss: () => void
 }) {
-  useMobileColorScheme()
-  const t = useMobileTranslation()
   return (
-    <View style={[styles.notice, styles.noticeRow]}>
-      <Text style={styles.noticeText}>{message}</Text>
-      <Pressable
-        style={({ pressed }) => pressed && pressedStyle}
-        onPress={onDismiss}
-        hitSlop={12}
-        accessibilityRole="button"
-        accessibilityLabel={t('agentHistory.panel.dismissNotice', 'Dismiss')}
-      >
-        <X size={14} color={colors.textMuted} strokeWidth={2.2} />
-      </Pressable>
-    </View>
+    <Presence>
+      {message ? <HostRouteNoticeBanner message={message} onDismiss={onDismiss} /> : null}
+    </Presence>
+  )
+}
+
+/** A handed-off agent the user should look at: its host's note, or the context it did not get to copy in. */
+export function AgentHistoryHandoffNotice({
+  notice,
+  onDismiss
+}: {
+  notice: AgentHistoryHandoffLaunchNotice | null
+  onDismiss: () => void
+}) {
+  const t = useMobileTranslation()
+  const clipboard = useClipboardWriter()
+  const openAgent = useLaunchedAgentOpener(notice?.opens ?? null)
+  const [copied, setCopied] = useState<{ prompt: string; ok: boolean } | null>(null)
+  const prompt = notice?.prompt
+  const state = prompt && copied?.prompt === prompt ? copied : null
+  const message = !prompt
+    ? (notice?.warning ?? '')
+    : !state
+      ? t(
+          'session.prAiTriageLaunch.promptNotSent',
+          "The agent started, but the prompt wasn't sent."
+        )
+      : state.ok
+        ? t('agentHistory.handoff.promptCopied', 'Prompt copied. Open the agent to paste it.')
+        : t('components.agentLaunchNotice.copyFailed', "Couldn't copy")
+  const open = openAgent
+    ? { label: t('automations.mobile.openAgent', 'Open agent'), onPress: openAgent }
+    : undefined
+  return (
+    <Presence>
+      {notice ? (
+        <HostRouteNoticeBanner
+          message={message}
+          action={
+            prompt && !state?.ok
+              ? {
+                  label: t('components.agentLaunchNotice.copyPrompt', 'Copy prompt'),
+                  onPress: () => {
+                    clipboard.writeText(prompt).then(
+                      () => setCopied({ prompt, ok: true }),
+                      () => setCopied({ prompt, ok: false })
+                    )
+                  }
+                }
+              : open
+          }
+          onDismiss={onDismiss}
+        />
+      ) : null}
+    </Presence>
+  )
+}
+
+/** Desktop's resume-after-restart offer, as the phone's notice strip: "3 chats were interrupted · Resume all". */
+export function AgentHistoryInterruptedNotice({ offer }: { offer: AgentHistoryRestartOffer }) {
+  const t = useMobileTranslation()
+  const { count, failedCount, requestFailed, resuming } = offer
+  const shown = count > 0 || failedCount > 0 || requestFailed
+  const message = requestFailed
+    ? t('agentHistory.interrupted.failed', "Couldn't resume the interrupted chats.")
+    : count > 0
+      ? count === 1
+        ? t('agentHistory.interrupted.count_one', '{{count}} chat was interrupted', { count })
+        : t('agentHistory.interrupted.count_other', '{{count}} chats were interrupted', { count })
+      : failedCount === 1
+        ? t('agentHistory.interrupted.failedCount_one', "{{count}} chat couldn't resume", {
+            count: failedCount
+          })
+        : t('agentHistory.interrupted.failedCount_other', "{{count}} chats couldn't resume", {
+            count: failedCount
+          })
+  const action =
+    !resuming && (count > 0 || requestFailed)
+      ? {
+          label: requestFailed
+            ? t('common.retry', 'Retry')
+            : t('agentHistory.interrupted.resumeAll', 'Resume all'),
+          onPress: offer.resumeAll
+        }
+      : undefined
+  return (
+    <Presence>
+      {shown ? (
+        <HostRouteNoticeBanner
+          message={message}
+          leading={
+            resuming ? <ActivityIndicator size="small" color={colors.textSecondary} /> : undefined
+          }
+          action={action}
+          onDismiss={offer.dismiss}
+        />
+      ) : null}
+    </Presence>
   )
 }
 
@@ -176,34 +264,3 @@ const styles = themedStyleSheet(() => ({
     fontSize: typography.metaSize
   }
 }))
-export function useAgentHistoryResumeToast() {
-  const [message, setMessage] = useState<string | null>(null)
-  const timer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined)
-  useEffect(() => () => clearTimeout(timer.current), [])
-  const showToast = useCallback((text: string) => {
-    clearTimeout(timer.current)
-    setMessage(text)
-    // The toast has no focus or live region, so announce it on both platforms.
-    AccessibilityInfo.announceForAccessibility(text)
-    timer.current = setTimeout(() => setMessage(null), 3_000)
-  }, [])
-  return { message, showToast }
-}
-
-export function AgentHistoryResumeToast({
-  message,
-  bottomInset
-}: {
-  message: string | null
-  bottomInset: number
-}) {
-  useMobileColorScheme()
-  return message ? (
-    <View
-      pointerEvents="none"
-      style={[mobileSessionReviewCommentStyles.toast, { bottom: bottomInset + spacing.lg }]}
-    >
-      <Text style={mobileSessionReviewCommentStyles.toastText}>{message}</Text>
-    </View>
-  ) : null
-}

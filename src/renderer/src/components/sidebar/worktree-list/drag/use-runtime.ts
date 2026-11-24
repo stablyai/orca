@@ -24,7 +24,9 @@ export function useWorktreeDragRuntime(args: {
   const { worktreeDragSessionRef, statusDropAnchorsRef, onWorkspaceBoardDragPreviewCancel } = args
   const [dragOverStatus, setDragOverStatus] = useState<WorkspaceStatus | null>(null)
   const [pinDragOver, setPinDragOver] = useState(false)
-  const [nativeLineageDropTargetId, setNativeLineageDropTargetId] = useState<string | null>(null)
+  const [nativeLineageDropTargetIdentity, setNativeLineageDropTargetIdentity] = useState<
+    string | null
+  >(null)
   const [worktreeDragState, setWorktreeDragState] = useState<WorktreeRowDragState>(
     WORKTREE_ROW_DRAG_INITIAL_STATE
   )
@@ -56,7 +58,7 @@ export function useWorktreeDragRuntime(args: {
   const cleanupWorktreePointerDrag = useCallback(() => {
     const drag = worktreePointerDragRef.current
     cancelWorktreePointerAutoscroll()
-    setNativeLineageDropTargetId(null)
+    setNativeLineageDropTargetIdentity(null)
     if (!drag) {
       return
     }
@@ -92,8 +94,8 @@ export function useWorktreeDragRuntime(args: {
       setDragOverStatus,
       pinDragOver,
       setPinDragOver,
-      nativeLineageDropTargetId,
-      setNativeLineageDropTargetId,
+      nativeLineageDropTargetIdentity,
+      setNativeLineageDropTargetIdentity,
       worktreeDragState,
       setWorktreeDragState,
       worktreePointerDragRef,
@@ -112,7 +114,7 @@ export function useWorktreeDragRuntime(args: {
       cancelWorktreePointerAutoscroll,
       clearWorktreeDrag,
       dragOverStatus,
-      nativeLineageDropTargetId,
+      nativeLineageDropTargetIdentity,
       pinDragOver,
       worktreeDragState
     ]

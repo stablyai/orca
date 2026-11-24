@@ -1,6 +1,10 @@
-import { requireNativeModule, requireNativeViewManager } from 'expo-modules-core'
+import {
+  requireNativeModule,
+  requireOptionalNativeModule,
+  requireNativeViewManager
+} from 'expo-modules-core'
 import type { ComponentType, RefAttributes } from 'react'
-import type { NativeSyntheticEvent, ViewProps } from 'react-native'
+import { Platform, type NativeSyntheticEvent, type ViewProps } from 'react-native'
 import type { MobileWebShellLoadStatePayload } from './load-state'
 
 /** One raw JSON envelope, exactly as the page posted it. Parsing is the caller's. */
@@ -14,7 +18,7 @@ export type OrcaMobileWebShellViewProps = ViewProps & {
   generationDirectory: string
   /** `[A-Za-z0-9_-]{1,128}`. Scopes the private origin, so every mount must mint a fresh one. */
   sessionId: string
-  // Bridge is off by default with nothing registered. Opt-in on Android below WEB_MESSAGE_LISTENER/Chromium 88 fails isolation-unavailable instead of loading unfenced.
+  // Bridge is off by default with nothing registered. Opt-in on Android below WEB_MESSAGE_LISTENER/Chromium 83 fails isolation-unavailable instead of loading unfenced.
   bridgeEnabled?: boolean
   onLoadState?: (event: NativeSyntheticEvent<MobileWebShellLoadStatePayload>) => void
   // Raw JSON from window.orcaBridge; native silently rejects other origins/frames/WebViews and envelopes above 640 KiB (MobileWebShellBridge.maxMessageByteCount).
@@ -49,6 +53,50 @@ export function presentPdf(uri: string): Promise<void> {
   return requireNativeModule<{ presentPdf: (uri: string) => Promise<void> }>(
     'OrcaMobileWebShell'
   ).presentPdf(uri)
+}
+
+type ImageModule = {
+  shareImage: (uri: string, mime: string) => Promise<void>
+  saveImageToPhotos: (uri: string, mime: string) => Promise<void>
+}
+
+// iOS takes a file:// URI; Android takes a FileProvider content:// URI and grants the chosen app read access.
+export function shareImage(uri: string, mime: string): Promise<void> {
+  return requireNativeModule<ImageModule>('OrcaMobileWebShell').shareImage(uri, mime)
+}
+
+// iOS asks for add-only Photos access; Android writes to Pictures/Orca. Rejects with code native_image_permission_denied when refused.
+export function saveImageToPhotos(uri: string, mime: string): Promise<void> {
+  return requireNativeModule<ImageModule>('OrcaMobileWebShell').saveImageToPhotos(uri, mime)
+}
+
+// iOS only: starts WebKit's helper processes ahead of the first page. Later calls are no-ops.
+export function warmUpWebShell(): void {
+  if (Platform.OS !== 'ios') {
+    return
+  }
+  // A binary built before warmUp existed has the module without the function.
+  const shell = requireOptionalNativeModule<{ warmUp?: () => void }>('OrcaMobileWebShell')
+  if (typeof shell?.warmUp === 'function') {
+    shell.warmUp()
+  }
+}
+
+export type WebViewProvider = { name: string; version: string; hasShellFeatures: boolean }
+
+// Android only: the WebView provider and whether it has the shell's fences. Null when unknown.
+export function currentWebViewProvider(): WebViewProvider | null {
+  if (Platform.OS !== 'android') {
+    return null
+  }
+  const shell = requireOptionalNativeModule<{
+    currentWebViewProvider?: () => WebViewProvider | null
+  }>('OrcaMobileWebShell')
+  try {
+    return shell?.currentWebViewProvider?.() ?? null
+  } catch {
+    return null
+  }
 }
 
 export {

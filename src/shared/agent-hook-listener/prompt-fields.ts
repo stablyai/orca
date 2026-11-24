@@ -1,7 +1,7 @@
 import {
   isCompactContinuationUserTurnText,
   isKnownHarnessInjectedUserTurnText
-} from '../harness-injected-user-turns'
+} from '../agent-session/journal/harness-injected-user-turns'
 import { capOpenCodeHookText } from './listener-limits'
 import type { HookListenerState } from './listener-state'
 import type { ToolSnapshot } from './listener-event'
@@ -153,5 +153,10 @@ export function resolveToolState(
         : update.lastAssistantMessageIsToolOutput
   }
   state.lastToolByPaneKey.set(paneKey, merged)
+  // Only text this event carried can answer its turn; cached and tool-output text never can.
+  state.eventReplyCandidate =
+    update.lastAssistantMessageIsToolOutput || update.clearLastAssistantMessage
+      ? undefined
+      : update.lastAssistantMessage
   return merged
 }

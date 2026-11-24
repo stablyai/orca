@@ -4,44 +4,9 @@
   "family": "settings.task-workspace-create",
   "namedDeltas": [],
   "values": {
-    "037515630624": {
+    "05adb87d6ce7": {
       "name": "worktree.create#1",
-      "ordinal": 8,
-      "args": [
-        {
-          "name": "method",
-          "value": "worktree.create"
-        },
-        {
-          "name": "params",
-          "value": {
-            "activate": true,
-            "baseBranch": "main",
-            "createdWithAgent": "claude",
-            "displayName": "Recorded pull request",
-            "displayNameKind": "generated",
-            "linkedPR": 7,
-            "name": "pr-7",
-            "repo": "id:repo-1",
-            "setupDecision": "inherit",
-            "startupDraft": "https://github.com/o/r/pull/7"
-          }
-        },
-        {
-          "name": "options",
-          "value": {
-            "timeoutMs": 600000
-          }
-        }
-      ],
-      "settlement": {
-        "status": "pending",
-        "startedAt": 0
-      }
-    },
-    "138f771c1c0e": {
-      "name": "worktree.create#1",
-      "ordinal": 8,
+      "ordinal": 10,
       "args": [
         {
           "name": "method",
@@ -74,7 +39,7 @@
         "startedAt": 0,
         "settledAt": 0,
         "value": {
-          "id": "frame-3",
+          "id": "frame-4",
           "ok": true,
           "result": {
             "warning": "shallow clone",
@@ -85,10 +50,12 @@
         }
       }
     },
-    "20a51a1f4413": {
-      "name": "navigation",
-      "ordinal": 13,
-      "value": "/h/host-1/session/wt-2?name=Recorded+pull+request&created=1&warning=shallow+clone"
+    "309131e40068": {
+      "name": "setupPrompt",
+      "ordinal": 14,
+      "value": {
+        "$rpc": "null"
+      }
     },
     "33e3b949d4c5": {
       "creating": {
@@ -98,6 +65,13 @@
       "settings": {
         "defaultTuiAgent": "codex",
         "disabledTuiAgents": []
+      }
+    },
+    "368fc7089e62": {
+      "name": "workspaceCreateDraft",
+      "ordinal": 13,
+      "value": {
+        "$rpc": "null"
       }
     },
     "3a020ef7bb19": {
@@ -151,9 +125,9 @@
         "disabledTuiAgents": ["claude"]
       }
     },
-    "76e970794904": {
+    "7fd7aa8fcc86": {
       "name": "creatingKey",
-      "ordinal": 14,
+      "ordinal": 16,
       "value": {
         "$rpc": "null"
       }
@@ -204,24 +178,95 @@
       "ordinal": 4,
       "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"settings.get\"}"
     },
-    "aad9a752c611": {
-      "name": "workspaceCreateDraft",
-      "ordinal": 11,
-      "value": {
-        "$rpc": "null"
+    "b097945e1fcc": {
+      "name": "repo.hooks#1",
+      "ordinal": 8,
+      "args": [
+        {
+          "name": "method",
+          "value": "repo.hooks"
+        },
+        {
+          "name": "params",
+          "value": {
+            "createSource": {
+              "baseBranch": "main",
+              "kind": "base"
+            },
+            "repo": "id:repo-1"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "pending",
+        "startedAt": 0
       }
     },
-    "ae917606f5e3": {
+    "b150740b777b": {
       "name": "worktree.create#1",
-      "ordinal": 9,
-      "json": "{\"id\":\"frame-3\",\"deviceToken\":\"recording-device\",\"method\":\"worktree.create\",\"params\":{\"repo\":\"id:repo-1\",\"name\":\"pr-7\",\"displayName\":\"Recorded pull request\",\"displayNameKind\":\"generated\",\"setupDecision\":\"inherit\",\"activate\":true,\"startupDraft\":\"https://github.com/o/r/pull/7\",\"createdWithAgent\":\"claude\",\"baseBranch\":\"main\",\"linkedPR\":7}}"
+      "ordinal": 11,
+      "json": "{\"id\":\"frame-4\",\"deviceToken\":\"recording-device\",\"method\":\"worktree.create\",\"params\":{\"repo\":\"id:repo-1\",\"name\":\"pr-7\",\"displayName\":\"Recorded pull request\",\"displayNameKind\":\"generated\",\"setupDecision\":\"inherit\",\"activate\":true,\"startupDraft\":\"https://github.com/o/r/pull/7\",\"createdWithAgent\":\"claude\",\"baseBranch\":\"main\",\"linkedPR\":7}}"
     },
-    "cc60f9d62cad": {
-      "name": "actionItem",
-      "ordinal": 10,
-      "value": {
-        "$rpc": "null"
+    "bf298d064a99": {
+      "name": "repo.hooks#1",
+      "ordinal": 9,
+      "json": "{\"id\":\"frame-3\",\"deviceToken\":\"recording-device\",\"method\":\"repo.hooks\",\"params\":{\"repo\":\"id:repo-1\",\"createSource\":{\"kind\":\"base\",\"baseBranch\":\"main\"}}}"
+    },
+    "d027fcec3ffa": {
+      "name": "repo.hooks#1",
+      "ordinal": 8,
+      "args": [
+        {
+          "name": "method",
+          "value": "repo.hooks"
+        },
+        {
+          "name": "params",
+          "value": {
+            "createSource": {
+              "baseBranch": "main",
+              "kind": "base"
+            },
+            "repo": "id:repo-1"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-3",
+          "ok": true,
+          "result": {
+            "hasHooksFile": false,
+            "hooks": {
+              "$rpc": "null"
+            },
+            "setupRunPolicy": "run-by-default",
+            "source": {
+              "$rpc": "null"
+            }
+          }
+        }
       }
+    },
+    "d1326f406695": {
+      "name": "navigation",
+      "ordinal": 15,
+      "value": "/h/host-1/session/wt-2?name=Recorded+pull+request&created=1&warning=shallow+clone"
     },
     "e32768eed86f": {
       "name": "worktree.resolvePrBase#1",
@@ -274,17 +319,17 @@
         "$rpc": "undefined"
       }
     },
-    "ec46783c7fad": {
-      "name": "setupPrompt",
-      "ordinal": 12,
-      "value": {
-        "$rpc": "null"
-      }
-    },
     "ed3a7d6bc894": {
       "name": "error",
       "ordinal": 2,
       "value": ""
+    },
+    "fbf2ffe3d253": {
+      "name": "actionItem",
+      "ordinal": 12,
+      "value": {
+        "$rpc": "null"
+      }
     }
   },
   "recording": {
@@ -306,8 +351,8 @@
       {
         "id": "pr-base-resolved",
         "observation": {
-          "sender": ["8ac371cf7234", "e32768eed86f", "037515630624"],
-          "payloads": ["975f2ff9a730", "3a020ef7bb19", "ae917606f5e3"],
+          "sender": ["8ac371cf7234", "e32768eed86f", "b097945e1fcc"],
+          "payloads": ["975f2ff9a730", "3a020ef7bb19", "bf298d064a99"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "submit": "9270aeb7d9c6"
@@ -319,8 +364,8 @@
       {
         "id": "created-from-pr-base",
         "observation": {
-          "sender": ["8ac371cf7234", "e32768eed86f", "138f771c1c0e"],
-          "payloads": ["975f2ff9a730", "3a020ef7bb19", "ae917606f5e3"],
+          "sender": ["8ac371cf7234", "e32768eed86f", "d027fcec3ffa", "05adb87d6ce7"],
+          "payloads": ["975f2ff9a730", "3a020ef7bb19", "bf298d064a99", "b150740b777b"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "submit": "eb79a9b3682a"
@@ -330,11 +375,11 @@
             "4d3dd1938fc5",
             "ed3a7d6bc894",
             "e445683fd6a5",
-            "cc60f9d62cad",
-            "aad9a752c611",
-            "ec46783c7fad",
-            "20a51a1f4413",
-            "76e970794904"
+            "fbf2ffe3d253",
+            "368fc7089e62",
+            "309131e40068",
+            "d1326f406695",
+            "7fd7aa8fcc86"
           ]
         }
       }

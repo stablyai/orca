@@ -1,8 +1,8 @@
 // Main places live local terminals absent from every pane at startup/window load, reusing their free recorded pane or creating a tab.
 
 import { randomUUID } from 'node:crypto'
-import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../shared/constants'
-import type { ExecutionHostId } from '../../../../shared/execution-host'
+import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../shared/workspace/identity/floating-workspace-id'
+import type { ExecutionHostId } from '../../../../shared/execution-host/execution-host'
 import { parsePaneKey } from '../../../../shared/workspace-layout/stable-pane-id'
 import type {
   CommandOf,

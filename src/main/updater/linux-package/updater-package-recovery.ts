@@ -11,13 +11,13 @@ import {
 import type {
   LinuxPackageInstallInstructions,
   LinuxPackageInstallRecovery
-} from '../../../shared/update-status-types'
+} from '../../../shared/updater/update-status-types'
 import { UpdaterInstallSupport } from '../lifecycle/updater-install-support'
 import {
   updaterCodedMessage,
   updaterFailureText,
   type UpdaterFailureCode
-} from '../../../shared/updater-failure-copy'
+} from '../../../shared/updater/updater-failure-copy'
 
 const LINUX_PACKAGE_RECOVERY_CODES: Record<
   LinuxPackageRecoveryUnavailableReason,

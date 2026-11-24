@@ -2,7 +2,7 @@ import { readFileSync } from 'node:fs'
 import {
   parseLinuxStartTicks,
   readBootIdentity
-} from '../../../agent-hooks/managed-hook-owner-identity'
+} from '../../../agent-hooks/installation/locking/managed-hook-owner-identity'
 
 /** Self-reported identity avoids relying on launcher PIDs that may belong to wrappers. */
 export type DaemonReadyIdentity = {

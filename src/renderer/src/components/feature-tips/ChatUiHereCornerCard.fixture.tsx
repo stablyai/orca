@@ -1,4 +1,4 @@
-import { createGlobalSettingsFixture } from '../../../../shared/global-settings-test-fixture'
+import { createGlobalSettingsFixture } from '../../../../shared/settings/global-settings-test-fixture'
 import { defineFixture } from '../../component-fixtures/component-fixture'
 import { ChatUiHereCornerCard } from './ChatUiHereCornerCard'
 

@@ -1,28 +1,42 @@
+import { MobileSessionBotIdentity } from './native-chat/MobileSessionBotIdentity'
+import { MobileBotCardHostProvider } from './native-chat/transcript/bot-cards/MobileBotCardHostProvider'
+import { nativeChatTerminalRunner } from './native-chat/native-chat-terminal-runner'
 import { useCallback, useMemo, useState } from 'react'
-import { computeActiveTerminalKeyboardLift } from '../terminal/terminal-keyboard-avoidance-lift'
-import { terminalPaneDirection, terminalPaneKeyboardLayout } from './mobile-terminal-pane-layout'
-import { Animated, View, Text, Pressable, ActivityIndicator } from 'react-native'
-import { saveTerminalTextScale } from '../storage/preferences'
-import { MobileBrowserPane } from '../browser/MobileBrowserPane'
-import { TerminalPaneView } from './TerminalPaneView'
+import { computeActiveTerminalKeyboardLift } from '../terminal/keyboard/terminal-keyboard-avoidance-lift'
+import {
+  terminalPaneDirection,
+  terminalPaneKeyboardLayout
+} from '../terminal/session/pane-layout/mobile-terminal-pane-layout'
+import { View, Text, Pressable, ActivityIndicator } from 'react-native'
+import { MobileBrowserTabBody } from '../browser/MobileBrowserTabBody'
+import { TerminalPaneView } from '../terminal/session/pane-layout/TerminalPaneView'
+import { MountedTerminalPanes } from '../terminal/session/pane-layout/mounted-terminal-lru'
 import { MobileNativeChatOverlay } from './native-chat/MobileNativeChatOverlay'
-import { MobileAgentMessageProvider } from './native-chat/transcript/MobileAgentMessageProvider'
+import { mobileSessionNativeChatHostOutage } from './native-chat/status/mobile-native-chat-host-outage'
+import { MobileAgentMessageProvider } from './native-chat/transcript/agent-messages/MobileAgentMessageProvider'
+import { MobileNativeChatForkProvider } from './MobileNativeChatForkProvider'
 import { useMobileAgentMessageNavigation } from './use-mobile-agent-message-navigation'
-import { MobileNativeChatDictationPreviewContext } from './native-chat/composer/mobile-native-chat-dictation-preview-context'
-import { MobileDictationMeterContext } from './mobile-dictation-meter-context'
-import { resolveMobileNativeChatSessionId } from './native-chat/mobile-native-chat-eligibility'
+import { MobileNativeChatDictationPreviewContext } from './native-chat/composer/dictation/mobile-native-chat-dictation-preview-context'
+import { resolveMobileNativeChatSessionId } from './native-chat/conversation/mobile-native-chat-eligibility'
 import { colors } from '../theme/mobile-theme'
 import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
 import { styles } from './mobile-session-styles'
+import { renderAnimatedToast } from '../components/feedback/TransientToast'
 import type { MobileSessionController } from './use-mobile-session-controller'
+import { useMobileSessionContentKeyboardLift } from '../terminal/session/input-controls/use-mobile-session-keyboard-lift'
+import { useOpenUrlInOrca } from '../browser/tab-navigation/use-open-url-in-orca'
+import { useMobileTerminalLinkOpen } from '../terminal/session/links/use-mobile-terminal-link-open'
 import { useWorkspaceExecutionHost } from '../navigation/workspace-execution-host'
-import { useHostProfile } from '../transport/use-host-profile'
-import { useHostDisplay } from '../transport/use-host-display'
-import { FileReader } from './MobileSessionFileReader'
+import { useOpenHostAccounts } from '../accounts/use-open-mobile-accounts'
+import { useHostProfile } from '../host-catalog/use-host-profile'
+import { useHostDisplay } from '../host-descriptors/use-host-display'
+import { FileReader } from '../files/session-documents/MobileSessionFileReader'
 import { MobileSessionContentState } from './MobileSessionContentState'
-import { MarkdownReader } from './MobileSessionMarkdownReader'
-import { loadMarkdownPreviewImage } from '../files/mobile-markdown-image-source'
+import { MarkdownReader } from '../files/session-documents/MobileSessionMarkdownReader'
+import { markdownTabDraftKey } from '../drafts/document-edit-draft-rows'
+import { workspaceDraftRowKey } from '../drafts/durable-draft-rows'
+import { loadMarkdownPreviewImage } from '../files/markdown/mobile-markdown-image-source'
 
 export function MobileSessionActiveContent({
   controller
@@ -37,18 +51,15 @@ export function MobileSessionActiveContent({
   const {
     hostId,
     worktreeId,
-    insets,
     client,
     terminals,
     terminalTextScale,
-    setTerminalTextScale,
-    terminalTextScaleRevisionRef,
+    commitPinchedTextScale,
+    terminalFontStyle,
     activeHandle,
     terminalSplitActive,
     visibleTerminalHandles,
     notifyTerminalPaneFrame,
-    markdownDocs,
-    fileDocs,
     diffComments,
     diffCommentBusy,
     createError,
@@ -76,17 +87,17 @@ export function MobileSessionActiveContent({
     sendDiffCommentsToAgent,
     sendingDiffCommentIds,
     updateMarkdownLocalContent,
-    copyMarkdownLocalContent,
+    copyMarkdownText,
     copyMarkdownPath,
     discardMarkdownLocalContent,
     saveMarkdownTab,
     setTerminalWebViewRef,
+    releaseTerminalDocument,
     handleTerminalWebReady,
     notifyTerminalFrame,
     notifyTerminalCellBoxChange,
     handleFileTap,
     handleNativeChatFileTap,
-    handleTerminalOpenUrl,
     handleTerminalInput,
     handleTerminalQueryReply,
     handleSelectionMode,
@@ -105,32 +116,20 @@ export function MobileSessionActiveContent({
     isPendingTerminalRecoveryParked,
     retryPendingTerminalRecovery,
     showLoadingState,
-    showEmptyState,
-    keyboardLift,
-    activeTerminalKeyboardLift,
-    toastAnimatedStyle,
-    createTabBusy,
-    handleCreateBrowserRef,
-    isFloatingWorkspaceRoute
+    showEmptyState
   } = controller
-  // Why: a browser tab needs a real worktree and a connected host known to stream it; elsewhere
-  // only the phone's browser is offered, so the sheet never shows a choice that would refuse.
-  const canOpenUrlInOrca =
-    client !== null &&
-    controller.presentedConnState === 'connected' &&
-    !isFloatingWorkspaceRoute &&
-    browserScreencastSupported === true
-  const openUrlInOrca = useMemo(
-    () =>
-      canOpenUrlInOrca ? (url: string) => void handleCreateBrowserRef.current?.(url) : undefined,
-    [canOpenUrlInOrca, handleCreateBrowserRef]
-  )
+  const { keyboardLift, activeTerminalKeyboardLift, toastAnimatedStyle } =
+    useMobileSessionContentKeyboardLift(controller)
+  const openUrlInOrca = useOpenUrlInOrca(controller)
+  const terminalLinks = useMobileTerminalLinkOpen(controller, openUrlInOrca)
   const hostProfile = useHostProfile(hostId)
   const hostTitle = useHostDisplay(hostProfile).title
+  const nativeChatHostOutage = mobileSessionNativeChatHostOutage(controller, hostTitle, t)
   const nativeChatImageSource = useMemo(
     () => (client ? { client, worktreeId } : undefined),
     [client, worktreeId]
   )
+  const openNativeChatAccounts = useOpenHostAccounts(controller.router, hostId)
   const navigateToSender = useCallback(
     (senderWorktreeId: string, paneKey: string) => {
       const execution = executionHost ? `&executionHost=${encodeURIComponent(executionHost)}` : ''
@@ -148,13 +147,18 @@ export function MobileSessionActiveContent({
     controller
   )
   const { presentedConnState, showOfflineState, forceReconnectHost } = controller
+  // Review notes are for working-tree diffs only.
+  const fileTabTakesNotes =
+    activeFileTab?.diffSource === 'staged' || activeFileTab?.diffSource === 'unstaged'
+  const toast = renderAnimatedToast(toastMessage, toastAnimatedStyle)
   const content =
     showLoadingState || showEmptyState || showOfflineState ? (
       <MobileSessionContentState
         connState={presentedConnState}
         hostName={hostTitle}
+        lastTabs={controller.visibleTabs.length > 0 ? { hostId, worktreeId } : null}
         loading={showLoadingState}
-        creating={createTabBusy}
+        creating={controller.createTabBusy}
         createError={createError}
         onReconnect={forceReconnectHost ? () => void forceReconnectHost(hostId) : null}
         onRetryTabs={() => void retryPendingTerminalRecovery()}
@@ -167,11 +171,15 @@ export function MobileSessionActiveContent({
       <View style={styles.markdownFrame}>
         <MarkdownReader
           documentId={activeMarkdownTab.id}
-          doc={markdownDocs.get(activeMarkdownTab.id)}
+          draftKey={markdownTabDraftKey(
+            { hostId, executionHost, worktreeId },
+            activeMarkdownTab.id
+          )}
+          doc={controller.markdownDocs.get(activeMarkdownTab.id)}
           onRefresh={() => void readMarkdownTab(activeMarkdownTab)}
           onChange={(content) => updateMarkdownLocalContent(activeMarkdownTab.id, content)}
           onSave={() => void saveMarkdownTab(activeMarkdownTab)}
-          onCopy={() => void copyMarkdownLocalContent(activeMarkdownTab.id)}
+          onCopy={(text) => void copyMarkdownText(text)}
           onCopyPath={() => void copyMarkdownPath(activeMarkdownTab)}
           onDiscard={() => discardMarkdownLocalContent(activeMarkdownTab)}
           loadImageSource={(path) =>
@@ -179,23 +187,28 @@ export function MobileSessionActiveContent({
           }
           keyboardLift={keyboardLift}
         />
-        {toastMessage && (
-          <Animated.View pointerEvents="none" style={[styles.toast, toastAnimatedStyle]}>
-            <Text style={styles.toastText}>{toastMessage}</Text>
-          </Animated.View>
-        )}
+        {toast}
       </View>
     ) : activeFileTab ? (
       <View style={styles.markdownFrame}>
         <FileReader
           documentId={JSON.stringify([hostId, executionHost, worktreeId, activeFileTab.id])}
           client={client}
-          doc={fileDocs.get(activeFileTab.id)}
+          doc={controller.fileDocs.get(activeFileTab.id)}
           title={activeFileTab.title || t('session.activeContent.fileTitle', 'File')}
           relativePath={activeFileTab.relativePath}
           language={activeFileTab.language}
+          noteDraftKey={
+            fileTabTakesNotes
+              ? workspaceDraftRowKey(
+                  'fileNote',
+                  { hostId, executionHost, worktreeId },
+                  activeFileTab.relativePath
+                )
+              : undefined
+          }
           diffCommentActions={
-            activeFileTab.diffSource === 'staged' || activeFileTab.diffSource === 'unstaged'
+            fileTabTakesNotes
               ? {
                   comments: diffComments,
                   sendingCommentIds: sendingDiffCommentIds,
@@ -208,30 +221,23 @@ export function MobileSessionActiveContent({
               : undefined
           }
         />
-        {toastMessage && (
-          <Animated.View pointerEvents="none" style={[styles.toast, toastAnimatedStyle]}>
-            <Text style={styles.toastText}>{toastMessage}</Text>
-          </Animated.View>
-        )}
+        {toast}
       </View>
     ) : activeBrowserTab ? (
       <View style={styles.browserFrame}>
         {/* Why: pane owns imperative frame refs; don't render a stale frame while the old stream effect cleans up. */}
-        <MobileBrowserPane
+        <MobileBrowserTabBody
           key={activeBrowserTab.browserPageId ?? activeBrowserTab.id}
           client={client}
           worktreeId={worktreeId}
           tab={activeBrowserTab}
           screencastSupported={browserScreencastSupported}
+          hostSupport={controller.browserHostSupport}
           keyboardLift={keyboardLift}
-          bottomInset={insets.bottom}
+          bottomInset={controller.insets.bottom}
           onToast={showToast}
         />
-        {toastMessage && (
-          <Animated.View pointerEvents="none" style={[styles.toast, toastAnimatedStyle]}>
-            <Text style={styles.toastText}>{toastMessage}</Text>
-          </Animated.View>
-        )}
+        {toast}
       </View>
     ) : activePendingTerminalTab ? (
       <View style={styles.emptyState}>
@@ -266,113 +272,119 @@ export function MobileSessionActiveContent({
       </View>
     ) : (
       <View style={styles.terminalFrame}>
-        {terminals.map((terminal) => (
-          <TerminalPaneView
-            key={terminal.handle}
-            handle={terminal.handle}
-            active={terminal.handle === activeHandle}
-            visible={
-              visibleTerminalHandles?.includes(terminal.handle) ?? terminal.handle === activeHandle
-            }
-            splitIndex={
-              terminalSplitActive && visibleTerminalHandles.includes(terminal.handle)
-                ? visibleTerminalHandles.indexOf(terminal.handle)
-                : undefined
-            }
-            splitDirection={paneDirection}
-            splitFrame={paneFrame}
-            keyboardInset={keyboardLift}
-            title={terminal.title}
-            onFrame={notifyTerminalPaneFrame}
-            keyboardLift={
-              terminal.handle !== activeHandle &&
-              !(terminalSplitActive && visibleTerminalHandles.includes(terminal.handle))
-                ? 0
-                : terminalSplitActive
-                  ? computeActiveTerminalKeyboardLift({
-                      keyboardLift: terminalPaneKeyboardLayout(
-                        paneFrame,
-                        paneDirection,
-                        visibleTerminalHandles.indexOf(terminal.handle),
-                        keyboardLift
-                      ).occlusion,
-                      metrics: controller.terminalKeyboardMetrics.get(terminal.handle),
-                      terminalFrameHeight:
-                        controller.getTerminalPaneViewport(terminal.handle).terminalFrameRef.current
-                          ?.height ?? 0
-                    })
-                  : activeTerminalKeyboardLift
-            }
-            terminalTheme={terminal.terminalTheme}
-            textScale={terminalTextScale}
-            onTextScaleChange={(scale) => {
-              // Why: pinch-to-zoom reports a new preset; persist it so the size sticks across panes and launches.
-              terminalTextScaleRevisionRef.current += 1
-              setTerminalTextScale(scale)
-              void saveTerminalTextScale(scale)
-            }}
-            onRef={setTerminalWebViewRef}
-            onWebReady={handleTerminalWebReady}
-            onCellBoxChange={notifyTerminalCellBoxChange}
-            onSelectionMode={handleSelectionMode}
-            onSelectionCopy={handleSelectionCopy}
-            onSelectionEvicted={handleSelectionEvicted}
-            onClipboardWrite={handleClipboardWrite}
-            onModesChanged={handleModesChanged}
-            onKeyboardAvoidanceMetrics={handleKeyboardAvoidanceMetrics}
-            onHaptic={handleHaptic}
-            onTerminalInput={handleTerminalInput}
-            onTerminalQueryReply={handleTerminalQueryReply}
-            onTerminalInteraction={handleTerminalInteraction}
-            onTerminalTap={handleTerminalTap}
-            onFileTap={handleFileTap}
-            onOpenUrl={handleTerminalOpenUrl}
-          />
-        ))}
+        <MountedTerminalPanes terminals={terminals} visibleHandles={visibleTerminalHandles}>
+          {(terminal) => (
+            <TerminalPaneView
+              key={terminal.handle}
+              handle={terminal.handle}
+              active={terminal.handle === activeHandle}
+              visible={visibleTerminalHandles.includes(terminal.handle)}
+              splitIndex={
+                terminalSplitActive && visibleTerminalHandles.includes(terminal.handle)
+                  ? visibleTerminalHandles.indexOf(terminal.handle)
+                  : undefined
+              }
+              splitDirection={paneDirection}
+              splitFrame={paneFrame}
+              keyboardInset={keyboardLift}
+              title={terminal.title}
+              onFrame={notifyTerminalPaneFrame}
+              keyboardLift={
+                terminal.handle !== activeHandle &&
+                !(terminalSplitActive && visibleTerminalHandles.includes(terminal.handle))
+                  ? 0
+                  : terminalSplitActive
+                    ? computeActiveTerminalKeyboardLift({
+                        keyboardLift: terminalPaneKeyboardLayout(
+                          paneFrame,
+                          paneDirection,
+                          visibleTerminalHandles.indexOf(terminal.handle),
+                          keyboardLift
+                        ).occlusion,
+                        metrics: controller.terminalKeyboardMetrics.get(terminal.handle),
+                        terminalFrameHeight:
+                          controller.getTerminalPaneViewport(terminal.handle).terminalFrameRef
+                            .current?.height ?? 0
+                      })
+                    : activeTerminalKeyboardLift
+              }
+              terminalTheme={terminal.terminalTheme}
+              hostSettings={controller.terminalHostSettings}
+              textScale={terminalTextScale}
+              fontStyle={terminalFontStyle}
+              onTextScaleChange={commitPinchedTextScale}
+              onRef={setTerminalWebViewRef}
+              onDocumentReleased={releaseTerminalDocument}
+              onWebReady={handleTerminalWebReady}
+              onCellBoxChange={notifyTerminalCellBoxChange}
+              onSelectionMode={handleSelectionMode}
+              onSelectionCopy={handleSelectionCopy}
+              onSelectionEvicted={handleSelectionEvicted}
+              onClipboardWrite={handleClipboardWrite}
+              onModesChanged={handleModesChanged}
+              onKeyboardAvoidanceMetrics={handleKeyboardAvoidanceMetrics}
+              onHaptic={handleHaptic}
+              onTerminalInput={handleTerminalInput}
+              onTerminalQueryReply={handleTerminalQueryReply}
+              onTerminalInteraction={handleTerminalInteraction}
+              onTerminalTap={handleTerminalTap}
+              onFileTap={handleFileTap}
+              onOpenUrl={terminalLinks.handleTerminalOpenUrl}
+            />
+          )}
+        </MountedTerminalPanes>
         <MobileNativeChatDictationPreviewContext.Provider value={chatDictationPreview}>
-          <MobileDictationMeterContext.Provider value={dictation.meter}>
-            <MobileAgentMessageProvider
-              key={JSON.stringify([hostId, executionHost, worktreeId])}
-              tabs={controller.sessionTabs}
-              terminals={controller.terminals}
-              scopeKey={nativeChatImageSource}
-              open={openSender}
-            >
-              <MobileNativeChatOverlay
-                controller={nativeChatController}
-                imageSource={nativeChatImageSource}
-                worktreePath={controller.worktreePath}
-                connState={controller.connState}
-                activeSessionTabId={controller.activeSessionTab?.id}
-                onOpenFile={handleNativeChatFileTap}
-                images={nativeChatImages}
-                structuredComposer={nativeChatStructuredComposer}
-                onMicPress={dictationEnabled ? handleDictationToggle : undefined}
-                micActive={dictation.isStarting || dictation.isRecording}
-                micStarting={dictation.isStarting}
-                micProcessing={dictation.isProcessing}
-                dictationMode={dictationMode}
-                onMicPressIn={handleDictationPressIn}
-                onMicPressOut={handleDictationPressOut}
-                inputLockReason={nativeChatOverlayInputLockReason}
-                sendErrorMessage={nativeChatSendError.message}
-                onClearSendError={nativeChatSendError.clear}
-                sendSurfaceId={controller.nativeChatScopeKey ?? ''}
-                sessionId={resolveMobileNativeChatSessionId(controller.activeSessionTab)}
-                getSendCompletionGeneration={controller.getSendCompletionGeneration}
-                keyboardInset={keyboardLift}
-                // A workspace routed to another server stops with that server, whose name the phone lacks.
-                hostName={executionHost === undefined && hostProfile ? hostTitle : null}
-                onOpenUrlInOrca={openUrlInOrca}
-              />
-            </MobileAgentMessageProvider>
-          </MobileDictationMeterContext.Provider>
+          <MobileAgentMessageProvider
+            key={JSON.stringify([hostId, executionHost, worktreeId])}
+            tabs={controller.sessionTabs}
+            terminals={controller.terminals}
+            scopeKey={nativeChatImageSource}
+            open={openSender}
+          >
+            <MobileNativeChatForkProvider controller={controller}>
+              <MobileBotCardHostProvider {...{ client, hostId, executionHost, hostTitle }}>
+                <MobileSessionBotIdentity controller={controller}>
+                  <MobileNativeChatOverlay
+                    controller={nativeChatController}
+                    imageSource={nativeChatImageSource}
+                    worktreePath={controller.worktreePath}
+                    connState={controller.connState}
+                    activeSessionTabId={controller.activeSessionTab?.id}
+                    onOpenFile={handleNativeChatFileTap}
+                    images={nativeChatImages}
+                    structuredComposer={nativeChatStructuredComposer}
+                    onMicPress={dictationEnabled ? handleDictationToggle : undefined}
+                    micActive={dictation.isStarting || dictation.isRecording}
+                    micStarting={dictation.isStarting}
+                    micProcessing={dictation.isProcessing}
+                    dictationMode={dictationMode}
+                    onMicPressIn={handleDictationPressIn}
+                    onMicPressOut={handleDictationPressOut}
+                    inputLockReason={nativeChatOverlayInputLockReason}
+                    sendErrorMessage={nativeChatSendError.message}
+                    onClearSendError={nativeChatSendError.clear}
+                    sendSurfaceId={controller.nativeChatScopeKey ?? ''}
+                    sessionId={resolveMobileNativeChatSessionId(controller.activeSessionTab)}
+                    getSendCompletionGeneration={controller.getSendCompletionGeneration}
+                    keyboardInset={keyboardLift}
+                    // A workspace routed to another server stops with that server, whose name the phone lacks.
+                    hostName={executionHost === undefined && hostProfile ? hostTitle : null}
+                    onOpenUrlInOrca={openUrlInOrca}
+                    linkOpenMode={controller.linkOpenMode}
+                    hostOutage={nativeChatHostOutage}
+                    onRunInTerminal={nativeChatTerminalRunner(controller)}
+                    // Accounts open on the paired host, so a chat another server runs offers none.
+                    onOpenAccounts={
+                      executionHost === undefined ? openNativeChatAccounts : undefined
+                    }
+                  />
+                </MobileSessionBotIdentity>
+              </MobileBotCardHostProvider>
+            </MobileNativeChatForkProvider>
+          </MobileAgentMessageProvider>
         </MobileNativeChatDictationPreviewContext.Provider>
-        {toastMessage && (
-          <Animated.View pointerEvents="none" style={[styles.toast, toastAnimatedStyle]}>
-            <Text style={styles.toastText}>{toastMessage}</Text>
-          </Animated.View>
-        )}
+        {terminalLinks.terminalLinkSheet}
+        {toast}
       </View>
     )
   return (

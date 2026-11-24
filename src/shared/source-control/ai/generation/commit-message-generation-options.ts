@@ -1,4 +1,5 @@
-import { findOptionOccurrence } from '../../../command-option-occurrence'
+import { generationOptionTokens, type GenerationArgument } from './generation-argument'
+import { findOptionOccurrence } from '../../../cli/command-option-occurrence'
 import {
   tokenizeCustomCommandTemplate,
   type CommandTemplateBackslash
@@ -32,14 +33,14 @@ export const KIMI_VALUE_OPTIONS = [
 ]
 
 export function findRecipeOption(
-  tokens: readonly string[],
+  tokens: readonly GenerationArgument[],
   aliases: readonly string[],
   valueOptions: readonly string[],
   startIndex = 0,
   stopAtTerminator = true
 ) {
   return findOptionOccurrence(
-    tokens,
+    generationOptionTokens(tokens),
     aliases,
     stopAtTerminator,
     valueOptions,
@@ -48,16 +49,20 @@ export function findRecipeOption(
   )
 }
 
-export function compactRecipeOptions(
-  tokens: string[],
+export function compactRecipeOptions<T extends GenerationArgument>(
+  tokens: T[],
   aliases: readonly string[],
   valueOptions: readonly string[] = [],
-  keepFirst = false
-): string[] {
-  const result: string[] = []
+  keepFirst = false,
+  takesValue: boolean | 'required' = valueOptions.length ? 'required' : true
+): T[] {
+  const result: T[] = []
   let cursor = 0
   let kept = false
-  let found = findRecipeOption(tokens, aliases, valueOptions, cursor)
+  const optionTokens = generationOptionTokens(tokens)
+  const findNext = (startIndex: number) =>
+    findOptionOccurrence(optionTokens, aliases, true, valueOptions, startIndex, takesValue)
+  let found = findNext(cursor)
   while (found) {
     const end = found.index + found.consumed
     const keepUntil = keepFirst && !kept ? end : found.index
@@ -66,7 +71,7 @@ export function compactRecipeOptions(
     }
     cursor = end
     kept = true
-    found = findRecipeOption(tokens, aliases, valueOptions, cursor)
+    found = findNext(cursor)
   }
   for (; cursor < tokens.length; cursor++) {
     result.push(tokens[cursor])

@@ -1,4 +1,4 @@
-import type { SpriteAnimation } from '../../../shared/pet-types'
+import type { SpriteAnimation } from '../../../shared/pets/pet-types'
 import {
   CODEX_PET_ANIMATIONS,
   CODEX_PET_DEFAULT_ANIMATION,
@@ -6,7 +6,7 @@ import {
   CODEX_PET_FRAME,
   CODEX_PET_SPRITESHEET_PATH,
   codexAnimationsAtUniformFps
-} from '../../../shared/codex-pet-sprite-defaults'
+} from '../../../shared/pets/codex-pet-sprite-defaults'
 
 export type PetManifestLike = {
   id?: string

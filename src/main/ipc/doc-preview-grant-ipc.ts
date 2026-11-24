@@ -5,8 +5,8 @@ import {
   DOC_PREVIEW_LINK_CLICK_CHANNEL,
   DOC_PREVIEW_MINT_GRANT_CHANNEL,
   DOC_PREVIEW_REVOKE_GRANT_CHANNEL
-} from '../../shared/doc-preview-scheme'
-import { browserManager } from '../browser/browser-manager'
+} from '../../shared/document-preview/doc-preview-scheme'
+import { browserManager } from '../browser/guest-lifecycle/manager/browser-manager'
 import { reportDocPreviewLinkClick } from '../browser/document-preview/doc-preview-guest-policy'
 import {
   authorizeDocPreviewDirectory,
@@ -37,17 +37,15 @@ function isValidGrantRequest(request: DocPreviewGrantRequest): boolean {
   if (typeof request.browserPageId !== 'string' || !request.browserPageId.trim()) {
     return false
   }
-  if (request.owner.kind === 'ssh') {
-    return Boolean(request.owner.connectionId.trim())
-  }
   return Boolean(
+    request.owner.kind === 'runtime' &&
     request.owner.environmentId.trim() &&
     request.owner.worktreeSelector.trim() &&
     request.owner.worktreeRoot.trim()
   )
 }
 
-/** Grants retain existing read scopes: SSH uses the filesystem provider and runtime uses worktree-scoped files.read. */
+/** Grants read through the owning server's worktree-scoped files.read or its file grants. */
 export function registerDocPreviewGrantHandlers(): void {
   ipcMain.handle(
     DOC_PREVIEW_MINT_GRANT_CHANNEL,

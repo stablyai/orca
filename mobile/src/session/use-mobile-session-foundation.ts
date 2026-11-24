@@ -1,22 +1,24 @@
-import { useState, useEffect } from 'react'
+import { useState } from 'react'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { useLocalSearchParams } from 'expo-router'
 import { useRouteHandoff } from '../navigation/route-handoff'
+import { STANDALONE_SESSION_PARAM } from '../navigation/host-stack-navigation'
 import { HOST_DOCK_MIN_WIDTH } from '../storage/preferences'
-import { useForceReconnect } from '../transport/host-client-hooks'
-import { useWorkspaceClient } from '../transport/use-workspace-client'
+import { useForceReconnect } from '../transport/connection/host-client-hooks'
+import { useWorkspaceClient } from '../worktree/execution-hosts/use-workspace-client'
 import {
   useLastConnectedAt,
   useReconnectAttempt
-} from '../transport/client-context-connection-metrics'
+} from '../transport/connection/client-context-connection-metrics'
 import { useResponsiveLayout } from '../layout/responsive-layout'
 import { type ActivePanel, canDockSessionPanel } from './session-panel-host'
-import { useMobilePrBranchContext } from './use-mobile-pr-branch-context'
+import { useMobilePrBranchContext } from '../source-control/review/pull-request/use-mobile-pr-branch-context'
 import { isFloatingWorkspaceWorktreeId } from './floating-workspace'
-import { useLiveWorktreeName } from './use-live-worktree-name'
+import { useLiveWorktreeName } from '../worktree/row-presentation/use-live-worktree-name'
+import { useMobileSessionProjectName } from './use-mobile-session-project-name'
 import { useMissingWorktreeBounce } from './use-missing-worktree-bounce'
 import { hostRouteWithNotice } from '../host-route-notice'
-import { useHostProtocolGates } from '../components/host-protocol-gates-context'
+import { useHostProtocolGates } from '../components/host-connection/host-protocol-gates-context'
 
 export function useMobileSessionFoundation() {
   const {
@@ -24,19 +26,28 @@ export function useMobileSessionFoundation() {
     worktreeId,
     name: routeWorktreeName,
     created,
-    warning: createdWarning
+    warning: createdWarning,
+    [STANDALONE_SESSION_PARAM]: standaloneParam
   } = useLocalSearchParams<{
     hostId: string
     worktreeId: string
     name?: string
     created?: string
     warning?: string
+    [STANDALONE_SESSION_PARAM]?: string
   }>()
   const isFolderWorkspaceRoute = worktreeId.startsWith('folder:')
   const isFloatingWorkspaceRoute = isFloatingWorkspaceWorktreeId(worktreeId)
   const router = useRouteHandoff()
   const insets = useSafeAreaInsets()
-  const { client, clientId, state: connState, pairedHostClient } = useWorkspaceClient(hostId)
+  const {
+    client,
+    clientId,
+    state: connState,
+    pairedHostClient,
+    pairedHostState,
+    workspaceServer
+  } = useWorkspaceClient(hostId)
   const { hostCapabilities } = useHostProtocolGates()
   const reconnectAttempts = useReconnectAttempt(hostId)
   const lastConnectedAt = useLastConnectedAt(hostId)
@@ -45,12 +56,20 @@ export function useMobileSessionFoundation() {
     name: worktreeName,
     path: worktreePath,
     hostId: worktreeHostId,
+    branch: worktreeBranch,
     resolution: worktreeResolution
   } = useLiveWorktreeName({
     client,
     connState,
     routeName: routeWorktreeName,
     worktreeId
+  })
+  const worktreeRepo = useMobileSessionProjectName({
+    hostId,
+    client,
+    connState,
+    worktreeId,
+    executionHost: worktreeHostId
   })
   useMissingWorktreeBounce({
     hostId,
@@ -69,11 +88,9 @@ export function useMobileSessionFoundation() {
       dockWidth: HOST_DOCK_MIN_WIDTH
     })
   // Clear dock selection when rotation makes it too narrow so it cannot survive into push/overlay layout.
-  useEffect(() => {
-    if (!canDockPanel && activePanel !== null) {
-      setActivePanel(null)
-    }
-  }, [canDockPanel, activePanel])
+  if (!canDockPanel && activePanel !== null) {
+    setActivePanel(null)
+  }
   // Gate hosted reviews on repo provider without paying for unused branch identity reads.
   const { isGithubRepo: prIsGithubRepo, repoLoaded: prRepoContextLoaded } =
     useMobilePrBranchContext({
@@ -83,11 +100,9 @@ export function useMobileSessionFoundation() {
       worktreeId,
       includeBranchIdentity: false
     })
-  useEffect(() => {
-    if (prRepoContextLoaded && !prIsGithubRepo && activePanel === 'pr') {
-      setActivePanel(null)
-    }
-  }, [activePanel, prRepoContextLoaded, prIsGithubRepo])
+  if (prRepoContextLoaded && !prIsGithubRepo && activePanel === 'pr') {
+    setActivePanel(null)
+  }
   const initialCreateWarning = typeof createdWarning === 'string' ? createdWarning.trim() : ''
   return {
     hostId,
@@ -98,11 +113,14 @@ export function useMobileSessionFoundation() {
     isFolderWorkspaceRoute,
     isFloatingWorkspaceRoute,
     router,
+    standalone: standaloneParam === '1',
     insets,
     client,
     clientId,
     connState,
     pairedHostClient,
+    pairedHostState,
+    workspaceServer,
     hostCapabilities,
     reconnectAttempts,
     lastConnectedAt,
@@ -110,6 +128,8 @@ export function useMobileSessionFoundation() {
     worktreeName,
     worktreePath,
     worktreeHostId,
+    worktreeBranch,
+    worktreeRepo,
     worktreeResolution,
     isWideLayout,
     activePanel,

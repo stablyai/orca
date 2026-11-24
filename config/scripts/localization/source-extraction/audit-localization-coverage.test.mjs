@@ -1,128 +1,80 @@
+import { readFileSync } from 'node:fs'
+import path from 'node:path'
 import { describe, expect, it } from 'vitest'
+import { collectLocalizationCandidates, findNewCandidates } from './audit-localization-coverage.mjs'
 
-import { collectLocalizationCandidates, isSkippedFile } from './audit-localization-coverage.mjs'
+const root = process.cwd()
+const scan = (file, source, options = {}) =>
+  collectLocalizationCandidates(path.join(root, file), source, root, options).map(
+    ({ kind, text }) => `${kind}: ${text}`
+  )
 
-const ROOT = process.cwd()
-
-function candidates(fileName, source) {
-  return collectLocalizationCandidates(`${ROOT}/src/renderer/src/${fileName}`, source, ROOT)
-}
-
-describe('localization coverage candidates', () => {
-  it('sees copy guarded by a nullish or logical fallback', () => {
-    const reports = candidates(
-      'Sample.tsx',
-      `export function Sample({ label, connecting }) {
-        return <span>{label ?? (connecting ? 'Connecting…' : 'Idle')}</span>
-      }`
-    )
-
-    expect(reports.map((report) => report.text)).toEqual(['Connecting…', 'Idle'])
-  })
-
-  it('sees copy nested inside a conditional JSX guard', () => {
-    const reports = candidates(
-      'Sample.tsx',
-      `export function Sample({ show }) {
-        return <div>{show && <button aria-label="Retry the sync" />}</div>
-      }`
-    )
-
-    expect(reports.map((report) => report.text)).toEqual(['Retry the sync'])
-  })
-
-  it('ignores CSS and script bodies but still sees copy beside them', () => {
-    const reports = candidates(
-      'Sample.tsx',
-      `export function Sample() {
-        return (
-          <div>
-            <style>{'.card { color: red; } .card::after { content: "Loading styles" }'}</style>
-            <script>{'window.started = "Started the demo"'}</script>
-            <p>Choose a workspace</p>
-          </div>
-        )
-      }`
-    )
-
-    expect(reports.map((report) => report.text)).toEqual(['Choose a workspace'])
-  })
-
-  it('ignores literals used as comparison operands', () => {
-    const reports = candidates(
-      'Sample.tsx',
-      `export function Sample({ phase }) {
-        return <span>{phase === 'workspace conflict' ? phase : null}</span>
-      }`
-    )
-
-    expect(reports).toEqual([])
-  })
-
-  it('sees static templates and every dynamic template part in visible calls', () => {
-    const reports = candidates(
-      'Sample.ts',
-      'confirm(`Retry the sync`); alert(`Reconnect ${host} after ${attempts} attempts`);'
-    )
-
-    expect(reports.map(({ text, dynamic }) => ({ text, dynamic }))).toEqual([
-      { text: 'Retry the sync', dynamic: false },
-      { text: 'Reconnect', dynamic: true },
-      { text: 'after', dynamic: true },
-      { text: 'attempts', dynamic: true }
+describe('localization coverage audit', () => {
+  it('flags catalog data the English catalog has no key for', () => {
+    const source =
+      "export const BOT_MCP_APPS = [{ id: 'x', name: 'X', line: 'Read the new things' }]"
+    expect(scan('src/shared/bots/bot-mcp-apps.ts', source, { catalogEnglish: new Set() })).toEqual([
+      'catalog-data:line: Read the new things'
     ])
+    expect(
+      scan('src/shared/bots/bot-mcp-apps.ts', source, {
+        catalogEnglish: new Set(['Read the new things'])
+      })
+    ).toEqual([])
+    const quoted = "export const BOT_MCP_APPS = [{ 'line': 'Read the new things' }]"
+    expect(
+      scan('src/shared/bots/bot-mcp-apps.ts', quoted, {
+        catalogEnglish: new Set(['Read the new things'])
+      })
+    ).toEqual([])
   })
 
-  it('ignores nested class properties and translations while seeing sibling copy', () => {
-    const reports = candidates(
-      'Sample.tsx',
-      [
-        'const config = {',
-        '  className: { label: "Hidden class copy" },',
-        '  classNames: ["Hidden token", { title: "Hidden nested token" }],',
-        '  title: `Connect ${host}`,',
-        '  message: "Reconnect the host",',
-        '  description: t("connection.ready", "Ready now")',
-        '};',
-        'export const view = <span>{t("connection.banner", { label: "Connection banner" })}</span>;'
-      ].join('\n')
-    )
+  it('passes the shipped app catalogs against the shipped English catalog', () => {
+    const english = new Set()
+    const walk = (node) =>
+      typeof node === 'string' ? english.add(node) : Object.values(node).forEach(walk)
+    walk(JSON.parse(readFileSync('src/renderer/src/i18n/locales/en.json', 'utf8')))
+    for (const file of [
+      'src/shared/bots/bot-mcp-apps.ts',
+      'src/shared/composio/composio-curated-apps.ts'
+    ]) {
+      const hits = scan(file, readFileSync(file, 'utf8'), { catalogEnglish: english })
+      expect(hits.filter((hit) => hit.startsWith('catalog-data:'))).toEqual([])
+    }
+  })
 
-    expect(reports.map(({ text, dynamic }) => ({ text, dynamic }))).toEqual([
-      { text: 'Connect', dynamic: true },
-      { text: 'Reconnect the host', dynamic: false }
+  it('flags a prose error message thrown in bots UI code, not codes or translated text', () => {
+    const source = [
+      "throw new Error('Reading more items failed')",
+      "throw new Error(ok ? 'bot_avatar_invalid' : 'The upload went wrong')",
+      "throw new Error('bot_avatar_type')",
+      "throw new Error(translate('bots.x', 'Already translated text'))"
+    ].join('\n')
+    expect(scan('src/renderer/src/components/bots/x.ts', source)).toEqual([
+      'error-message: Reading more items failed',
+      'error-message: The upload went wrong'
     ])
+    expect(scan('mobile/src/bots/x.ts', source)).toHaveLength(2)
+    expect(scan('src/renderer/src/components/terminal/x.ts', source)).toEqual([])
   })
 
-  it('keeps traversing calls and callbacks to find nested JSX attributes and text', () => {
-    const reports = candidates(
-      'Sample.tsx',
-      `export function Sample() {
-        return <div>{select(true, () => <button title={'Retry after reconnect'}>Reconnect now</button>)}</div>
-      }`
-    )
-
-    expect(reports.map((report) => report.text)).toEqual(['Retry after reconnect', 'Reconnect now'])
-  })
-})
-
-describe('localization coverage file skipping', () => {
-  function skipped(relativePath) {
-    return isSkippedFile(ROOT, `${ROOT}/${relativePath}`)
-  }
-
-  it('skips test-only modules that sit beside their spec', () => {
-    expect(skipped('src/renderer/src/components/browser-pane/stream-test-harness.ts')).toBe(true)
-    expect(skipped('src/renderer/src/runtime/browser-tab-creation-test-rig.ts')).toBe(true)
-    expect(skipped('src/renderer/src/hooks/ipc-events-test-fixtures.ts')).toBe(true)
-    expect(skipped('src/renderer/src/lib/session-test-state.ts')).toBe(true)
-    expect(skipped('src/renderer/src/store/slices/routing-fixture.ts')).toBe(true)
-    expect(skipped('src/renderer/src/components/tab-bar/icon-stub.fixture.tsx')).toBe(true)
-  })
-
-  it('still scans shipped modules whose names merely mention a fixture concept', () => {
-    expect(skipped('src/renderer/src/components/browser-pane/fixture-picker.tsx')).toBe(false)
-    expect(skipped('src/renderer/src/components/settings/fixtures-panel.tsx')).toBe(false)
-    expect(skipped('src/renderer/src/components/browser-pane/BrowserPane.tsx')).toBe(false)
+  it('lets a path-only allowlist entry cover a whole agent-facing file', () => {
+    const reports = [
+      {
+        filePath: 'src/shared/bots/agent.ts',
+        kind: 'object-property:message',
+        text: 'A',
+        dynamic: false
+      },
+      {
+        filePath: 'src/shared/bots/ui.ts',
+        kind: 'object-property:message',
+        text: 'B',
+        dynamic: false
+      }
+    ]
+    expect(
+      findNewCandidates(reports, [{ filePath: 'src/shared/bots/agent.ts', reason: 'agent text' }])
+    ).toEqual([reports[1]])
   })
 })

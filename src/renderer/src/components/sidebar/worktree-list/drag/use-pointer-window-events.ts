@@ -6,7 +6,7 @@ import type {
 } from './drop-commit-context'
 import { commitWorktreePointerDrop } from './pointer-commit'
 import type { WorktreePointerDrag } from './row-state'
-import { addAppKeyListener, removeAppKeyListener } from '@/lib/app-keyboard-router'
+import { addAppKeyListener, removeAppKeyListener } from '@/lib/keyboard/app-keyboard-router'
 
 const SIDEBAR_POINTER_DRAG_THRESHOLD_PX = 4
 

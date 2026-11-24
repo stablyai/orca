@@ -1,9 +1,12 @@
-import type { ReactNode, Ref } from 'react'
+import { useCallback, useRef, type ReactNode, type Ref } from 'react'
 import {
+  Pressable,
+  StyleSheet,
   Text,
   TextInput,
   View,
   type StyleProp,
+  type TextInputInstance,
   type TextInputProps,
   type ViewStyle
 } from 'react-native'
@@ -13,7 +16,7 @@ import { composerInputStyles as styles } from './composer-input-styles'
 import { useInputFocus } from './use-input-focus'
 
 type TextFieldProps = Omit<TextInputProps, 'style' | 'placeholderTextColor' | 'selectionColor'> & {
-  inputRef?: Ref<TextInput>
+  inputRef?: Ref<TextInputInstance>
   /** An icon before the text, e.g. Search. */
   leading?: ReactNode
   /** A control after the text, e.g. a clear chip. */
@@ -39,9 +42,23 @@ export function TextField({
 }: TextFieldProps): React.JSX.Element {
   useMobileColorScheme()
   const focus = useInputFocus({ onFocus, onBlur })
+  const ownInputRef = useRef<TextInputInstance>(null)
+  const bindInputRef = useCallback(
+    (node: TextInputInstance | null) => {
+      ownInputRef.current = node
+      if (typeof inputRef === 'function') {
+        return inputRef(node)
+      }
+      if (inputRef) {
+        inputRef.current = node
+      }
+      return undefined
+    },
+    [inputRef]
+  )
   const input = (
     <TextInput
-      ref={inputRef}
+      ref={bindInputRef}
       editable={editable}
       placeholderTextColor={colors.textMuted}
       selectionColor={colors.accentBlue}
@@ -55,12 +72,23 @@ export function TextField({
     <View
       style={[styles.field, focus.focused && styles.focused, !editable && styles.disabled, style]}
     >
-      {leading}
+      {editable ? (
+        <Pressable
+          accessible={false}
+          focusable={false}
+          tabIndex={-1}
+          onPress={() => ownInputRef.current?.focus()}
+          style={StyleSheet.absoluteFill}
+        />
+      ) : null}
+      {leading != null ? <View pointerEvents="none">{leading}</View> : null}
       {label ? (
-        <View style={styles.labelledText}>
-          <Text style={styles.fieldLabel} numberOfLines={1}>
-            {label}
-          </Text>
+        <View style={styles.labelledText} pointerEvents="box-none">
+          <View pointerEvents="none">
+            <Text style={styles.fieldLabel} numberOfLines={1}>
+              {label}
+            </Text>
+          </View>
           {input}
         </View>
       ) : (

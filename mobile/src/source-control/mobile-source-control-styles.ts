@@ -1,8 +1,8 @@
 import { StyleSheet } from 'react-native'
 import { colors, radii, spacing, typography } from '../theme/mobile-theme'
 import { themedStyleSheet, themedStyles } from '../theme/themed-styles'
-import { diffStyles } from './mobile-source-control-diff-styles'
-import { listStyles } from './mobile-source-control-list-styles'
+import { diffStyles } from './changes/mobile-source-control-diff-styles'
+import { listStyles } from './changes/mobile-source-control-list-styles'
 
 const baseStyles = themedStyleSheet(() => ({
   container: {
