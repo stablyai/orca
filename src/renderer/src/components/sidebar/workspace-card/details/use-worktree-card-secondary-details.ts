@@ -9,6 +9,7 @@ import { toast } from 'sonner'
 import type { GitHubWorkItem } from '../../../../../../shared/github/work-items/work-item-types'
 import { translate } from '@/i18n/i18n'
 import { openWorkspaceBrowserTab } from '@/lib/browser/workspace/workspace-browser-tab-open'
+import { openFailureDetail } from '@/lib/browser/workspace/workspace-browser-tab-presentation'
 import './WorktreeCardMeta'
 import { hasWorktreeCardDetails } from '../metadata/WorktreeCardMetaBadges'
 import { usePromptCacheCountdownStartedAt } from '../activity/CacheTimer'
@@ -129,7 +130,8 @@ export function useWorktreeCardSecondaryDetails({
         toast.error(
           error instanceof Error
             ? error.message
-            : translate('auto.lib.workspace.browser.tab.open.urlFailed', 'Unable to open URL.')
+            : translate('auto.lib.workspace.browser.tab.open.urlFailed', 'Unable to open URL.'),
+          { description: openFailureDetail(error) ?? undefined }
         )
       })
     },

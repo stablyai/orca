@@ -2669,7 +2669,8 @@
           "tab": {
             "open": {
               "urlFailed": "Unable to open URL.",
-              "searchFailed": "Unable to search with {{value0}}."
+              "searchFailed": "Unable to search with {{value0}}.",
+              "failureReason": "Reason: {{value0}}"
             }
           }
         }

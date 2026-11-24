@@ -1,4 +1,5 @@
 import { translate } from '@/i18n/i18n'
+import { recordRendererCrashBreadcrumb } from '@/diagnostics/crash-reporting/crash-breadcrumb-recorder'
 import { SEARCH_ENGINE_LABELS } from '../../../../../shared/browser/navigation/browser-url'
 import type { WorkspaceBrowserTabIntent } from './workspace-browser-tab-open'
 
@@ -43,15 +44,31 @@ export function intentPresentation(
   }
 }
 
-// Keep friendly query-free messages and diagnostic causes, logging only the reason because callers surface message alone and cause could expose typed URLs/queries.
+/** A failed open: `message` is the friendly copy, `reason` the URL-free cause shown beside it. */
+export class WorkspaceBrowserOpenError extends Error {
+  constructor(
+    message: string,
+    readonly reason: string,
+    cause?: unknown
+  ) {
+    super(message, { cause: new Error(reason, cause === undefined ? undefined : { cause }) })
+  }
+}
+
+// The reason alone (never `cause`) is logged and shown, so a typed URL or search query stays out.
 export function openFailure(message: string, reason: string, cause?: unknown): Error {
-  // Why: callers only surface `message`, so log the reason here or a failed open
-  // leaves no trace at all. The reason alone — never `cause` — keeps the typed
-  // URL and search query out of the console.
   console.warn(`[workspace-browser-tab-open] ${reason}`)
-  return new Error(message, {
-    cause: new Error(reason, cause === undefined ? undefined : { cause })
-  })
+  recordRendererCrashBreadcrumb('workspace_browser_tab_open_failed', { reason })
+  return new WorkspaceBrowserOpenError(message, reason, cause)
+}
+
+/** The toast detail for a failed open, so a report names its cause; null for other errors. */
+export function openFailureDetail(error: unknown): string | null {
+  return error instanceof WorkspaceBrowserOpenError
+    ? translate('auto.lib.workspace.browser.tab.open.failureReason', 'Reason: {{value0}}', {
+        value0: error.reason
+      })
+    : null
 }
 
 export function validateTarget(url: string): boolean {

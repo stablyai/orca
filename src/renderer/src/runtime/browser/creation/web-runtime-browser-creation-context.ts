@@ -51,6 +51,8 @@ export type CreateWebRuntimeSessionBrowserTabArgs = {
   stagedTitle?: string
   stagedFocusAddressBar?: boolean
   failureLogMode?: 'details' | 'operation-only'
+  /** Receives a failed create's machine error code, so the caller can say why. */
+  onFailureCode?: (code: string | null) => void
   placementPreference?: BrowserClientHostPlacementPreference
 }
 

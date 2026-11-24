@@ -14,6 +14,7 @@ import {
 } from '../../links/placement/link-open-intent'
 import type { LinkOpenIntent, LinkSourceState } from '../../links/placement/link-open-intent'
 import { translate } from '@/i18n/i18n'
+import { openFailureDetail } from '../workspace/workspace-browser-tab-presentation'
 import { isFloatingWorkspaceId } from '../../../../../shared/workspace/identity/floating-workspace-worktree'
 import { toast } from 'sonner'
 import { reselectWorkspaceKeepingHost } from '../../workspace/ownership/active-workspace-host'
@@ -142,7 +143,8 @@ function reportHttpLinkBrowserOpenFailure(error: unknown): void {
   toast.error(
     error instanceof Error
       ? error.message
-      : translate('auto.lib.workspace.browser.tab.open.urlFailed', 'Unable to open URL.')
+      : translate('auto.lib.workspace.browser.tab.open.urlFailed', 'Unable to open URL.'),
+    { description: openFailureDetail(error) ?? undefined }
   )
 }
 

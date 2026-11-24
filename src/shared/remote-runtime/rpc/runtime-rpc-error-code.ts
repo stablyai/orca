@@ -55,3 +55,28 @@ export function hasRuntimeRpcErrorCode(error: unknown, expectedCode: string): bo
   }
   return false
 }
+
+// Machine tokens only (snake_case), so a logged code can never carry a URL or user text.
+const MACHINE_CODE = /^[a-z][a-z0-9_]{0,63}$/
+
+/** The first machine error code along the cause chain, for diagnostics that must not log messages. */
+export function readRuntimeRpcErrorCode(error: unknown): string | null {
+  const seen = new Set<unknown>()
+  let current = error
+  while (current && typeof current === 'object' && !seen.has(current)) {
+    seen.add(current)
+    const candidate = current as {
+      cause?: unknown
+      code?: unknown
+      error?: { code?: unknown }
+      response?: { error?: { code?: unknown } }
+    }
+    for (const code of [candidate.code, candidate.error?.code, candidate.response?.error?.code]) {
+      if (typeof code === 'string' && MACHINE_CODE.test(code)) {
+        return code
+      }
+    }
+    current = candidate.cause
+  }
+  return null
+}

@@ -1,5 +1,9 @@
 import { useAppStore } from '../../../store/index'
-import { hasRuntimeRpcErrorCode } from '../../../../../shared/remote-runtime/rpc/runtime-rpc-error-code'
+import {
+  hasRuntimeRpcErrorCode,
+  readRuntimeRpcErrorCode
+} from '../../../../../shared/remote-runtime/rpc/runtime-rpc-error-code'
+import { recordRendererCrashBreadcrumb } from '@/diagnostics/crash-reporting/crash-breadcrumb-recorder'
 import { clearWebSessionFocusIntentIfMatches } from '../../web-session-tabs-sync/navigation/web-session-focus-intent'
 import {
   claimWebSessionBrowserPlacementGroupCleanup,
@@ -26,6 +30,15 @@ const DEFINITIVE_BROWSER_CREATE_FAILURE_CODES = [
 
 function isDefinitiveBrowserCreateFailure(error: unknown): boolean {
   return DEFINITIVE_BROWSER_CREATE_FAILURE_CODES.some((code) => hasRuntimeRpcErrorCode(error, code))
+}
+
+/** The failure's machine code (never its message, which can name the URL). */
+export function browserCreateFailureCode(error: unknown): string | null {
+  return (
+    readRuntimeRpcErrorCode(error) ??
+    DEFINITIVE_BROWSER_CREATE_FAILURE_CODES.find((code) => hasRuntimeRpcErrorCode(error, code)) ??
+    null
+  )
 }
 
 type WebRuntimeBrowserCreationFailure = {
@@ -93,7 +106,14 @@ export function finishWebRuntimeBrowserCreationFailure(
   if (error instanceof StagedWebRuntimeBrowserTabCancelledError) {
     console.warn('[web-runtime-session] browser tab was closed before its create finished')
   } else if (args.failureLogMode === 'operation-only') {
-    console.warn('[web-runtime-session] failed to create browser tab')
+    // Why the code: without it a failed link open left only a generic toast (P0 "Unable to open URL").
+    const code = browserCreateFailureCode(error)
+    args.onFailureCode?.(code)
+    console.warn(`[web-runtime-session] failed to create browser tab (${code ?? 'no code'})`)
+    recordRendererCrashBreadcrumb('web_runtime_browser_create_failed', {
+      code,
+      createAttempted: context.createAttempted
+    })
   } else {
     console.warn(
       '[web-runtime-session] failed to create browser tab:',
