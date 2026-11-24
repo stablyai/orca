@@ -149,9 +149,9 @@ export function botItemQuickReplyText(
     : reply.label
 }
 
-/** Per question of the ask, the "Question →" head `line` starts with, else undefined. Older builds'
- *  heads count only when none of this build's does, so one question's old head never takes a line
- *  another's current head names. */
+/** Per question of the ask, the "Question →" head `line` starts with, else undefined. An older build's
+ *  head counts only when longer than every current head that matches, so one question's old head never
+ *  takes a line another's current head names. */
 export function botItemLineHeads(
   shape: BotItemQuestionShape,
   line: string
@@ -160,9 +160,12 @@ export function botItemLineHeads(
     botItemQuestionLeads(decision.question).map((lead) => `${lead} →`)
   )
   const current = heads.map(([head]) => (line.startsWith(head) ? head : undefined))
-  return current.some(Boolean)
-    ? current
-    : heads.map((older) => older.slice(1).find((head) => line.startsWith(head)))
+  const longest = Math.max(0, ...current.map((head) => head?.length ?? 0))
+  return heads.map(
+    (older, index) =>
+      current[index] ??
+      older.slice(1).find((head) => head.length > longest && line.startsWith(head))
+  )
 }
 
 /** Whether `text` is what question `index`'s quick reply posts, as this build or an older one wrote it. */

@@ -87,4 +87,14 @@ it("keeps a line on the question it names when another's old line reads the same
     [],
     [{ label: 'No', recommended: false }]
   ])
+  // A shorter current head that also matches leaves a longer old one its line.
+  const lead = botItemQuestionShape({
+    ask: {
+      questions: [
+        { prompt: 'Keep', options: [] },
+        { prompt: 'Keep → `_x_`?', options: [] }
+      ]
+    }
+  })
+  expect(botItemNamedAnswers(lead, 'Keep → x? → No')).toEqual([null, 'No'])
 })
