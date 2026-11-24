@@ -10,6 +10,8 @@ export type RuntimeCallOptions = {
   legacyTerminalPrompt?: true
   terminalPromptPreflight?: { runtimeId: string | null }
   requestSelection?: RuntimeRequestSelection
+  /** Local transport only: budget for requestSelection's status; timeoutMs starts once it is accepted. */
+  selectionStatusTimeoutMs?: number
 } & RuntimeOrchestrationEnvelope
 
 export class RuntimeClientError extends Error {

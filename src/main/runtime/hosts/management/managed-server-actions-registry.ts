@@ -9,6 +9,10 @@ import type {
   OrcadManagedRuntimeStatus,
   OrcadManagedStopResult
 } from '../../../../shared/remote-runtime/orcad-lifecycle/orcad-managed-runtime'
+import {
+  MANAGED_SERVER_LIMITED_FORCE_RUNTIME_CAPABILITY,
+  MANAGED_SERVER_RUNTIME_CAPABILITY
+} from '../../../../shared/remote-runtime/protocol/host-runtime-capabilities'
 
 export type ManagedServerActions = {
   status: (selector: string) => Promise<OrcadManagedRuntimeStatus>
@@ -37,4 +41,11 @@ export function registerManagedServerActions(actions: ManagedServerActions | nul
 
 export function getManagedServerActions(): ManagedServerActions | null {
   return registered
+}
+
+/** One list, so a host never advertises managed servers without limited force for a bare forced update. */
+export function managedServerRuntimeCapabilities(): string[] {
+  return registered
+    ? [MANAGED_SERVER_RUNTIME_CAPABILITY, MANAGED_SERVER_LIMITED_FORCE_RUNTIME_CAPABILITY]
+    : []
 }

@@ -14,7 +14,7 @@ import {
   isKeepaliveFrame,
   RuntimeRpcEnvelopeSchema
 } from '../../../shared/remote-runtime/rpc/runtime-rpc-envelope'
-import { RuntimeClientError, RuntimeRpcFailureError } from './types'
+import { RuntimeClientError, RuntimeRpcFailureError, type RuntimeCallOptions } from './types'
 
 import { MAX_TIMER_DELAY_MS, isSafeTimerDelayMs } from '../../../shared/concurrency/timer-delay'
 import { runtimeAccessDeniedError } from './runtime-access-denied'
@@ -27,6 +27,18 @@ const TRANSIENT_DISCONNECT_NEXT_STEPS = [
   "Do not run 'orca open' to recover. Run it only if the user asks, or if 'orca status --json' reports Orca is not running or still cannot connect after about 30 seconds of retries."
 ]
 
+/** Local transport options: the status budget travels only with a selection; paired transport takes neither. */
+export function localSelectionOptions(
+  options?: RuntimeCallOptions
+): Pick<RuntimeCallOptions, 'requestSelection' | 'selectionStatusTimeoutMs'> | undefined {
+  return options?.requestSelection
+    ? {
+        requestSelection: options.requestSelection,
+        selectionStatusTimeoutMs: options.selectionStatusTimeoutMs
+      }
+    : undefined
+}
+
 export async function sendRequest<TResult>(
   metadata: RuntimeMetadata,
   method: string,
@@ -38,10 +50,12 @@ export async function sendRequest<TResult>(
   options: {
     classifySocketError?: (error: Error) => RuntimeClientError | null
     requestSelection?: RuntimeRequestSelection
+    selectionStatusTimeoutMs?: number
   } = {}
 ): Promise<RuntimeRpcResponse<TResult>> {
   const { classifySocketError = runtimeAccessDeniedError, requestSelection } = options
-  if (!isSafeTimerDelayMs(timeoutMs)) {
+  const preflightTimeoutMs = requestSelection ? options.selectionStatusTimeoutMs : undefined
+  if (!isSafeTimerDelayMs(timeoutMs) || !isSafeTimerDelayMs(preflightTimeoutMs ?? timeoutMs)) {
     throw new RuntimeClientError(
       'invalid_argument',
       `Runtime request timeout must be an integer between 0 and ${MAX_TIMER_DELAY_MS}ms.`
@@ -76,7 +90,7 @@ export async function sendRequest<TResult>(
     let awaitingStatus = statusRequestId !== null
     let selectedParams = params
 
-    const timeout = setTimeout(() => {
+    function onTimeout(): void {
       if (settled) {
         return
       }
@@ -89,8 +103,10 @@ export async function sendRequest<TResult>(
           'Timed out waiting for the Orca runtime to respond.'
         )
       )
-    }, timeoutMs)
+    }
 
+    // The status preflight gets its own short budget; the request's budget starts once it is accepted.
+    let timeout = setTimeout(onTimeout, preflightTimeoutMs ?? timeoutMs)
     const finish = (
       result: { ok: true; response: RuntimeRpcResponse<TResult> } | { ok: false; error: Error }
     ): void => {
@@ -225,6 +241,10 @@ export async function sendRequest<TResult>(
             return
           }
           awaitingStatus = false
+          if (preflightTimeoutMs !== undefined) {
+            clearTimeout(timeout)
+            timeout = setTimeout(onTimeout, timeoutMs)
+          }
           send(requestId, method, selectedParams)
           continue
         }

@@ -37,10 +37,7 @@ import {
   RUNTIME_PROTOCOL_VERSION
 } from '../../../shared/remote-runtime/protocol/protocol-version'
 
-import {
-  MANAGED_SERVER_RUNTIME_CAPABILITY,
-  REMOTE_RUNTIME_SHARED_CONTROL_CAPABILITY
-} from '../../../shared/remote-runtime/protocol/host-runtime-capabilities'
+import { REMOTE_RUNTIME_SHARED_CONTROL_CAPABILITY } from '../../../shared/remote-runtime/protocol/host-runtime-capabilities'
 import { SESSION_TABS_AUTHORITATIVE_INVENTORY_RUNTIME_CAPABILITY } from '../../../shared/remote-runtime/protocol/session-tabs-runtime-capabilities'
 import {
   TERMINAL_PROMPT_DELIVERY_RUNTIME_CAPABILITY,
@@ -65,7 +62,7 @@ import { isWindowsProcessStartTimeAvailable } from '../../windows/windows-proces
 import { WORKTREE_CREATE_RESULT_TTL_MS } from '../workspaces/creation/worktree-create-idempotency'
 
 import { MACHINE_NAME_PUBLISH_WAIT_MS } from './platform-probe/runtime-machine-name'
-import { getManagedServerActions } from './management/managed-server-actions-registry'
+import { managedServerRuntimeCapabilities } from './management/managed-server-actions-registry'
 import { isRemoteServerUpdaterConfigured } from './management/remote-server-updater'
 import { REMOTE_SERVER_UPDATE_CAPABILITY } from '../../../shared/remote-runtime/host-catalog/remote-server-update'
 import { getRecipeVmWaker } from '../workspaces/sleep/recipe-vm-waker-registry'
@@ -146,9 +143,7 @@ export abstract class OrcaRuntimeWithGetStatus extends RuntimeWorkspaceChangeEve
     }
     capabilities.push(...orcaAccountRuntimeCapabilities())
     capabilities.push(...googleRuntimeCapabilities())
-    if (getManagedServerActions()) {
-      capabilities.push(MANAGED_SERVER_RUNTIME_CAPABILITY)
-    }
+    capabilities.push(...managedServerRuntimeCapabilities())
     if (getRecipeVmWaker()) {
       capabilities.push(HOST_RECIPE_VM_WAKE_CAPABILITY)
     }

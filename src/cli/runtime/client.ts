@@ -17,7 +17,7 @@ import { getDefaultUserDataPath, readMetadata } from './profile/metadata'
 import { getCliStatus, getOfflineRuntimeAdmission } from './status/status'
 import type { OfflineRuntimeAdmission } from './status/status'
 import { projectRemoteAppStatus } from '../../shared/remote-runtime/session-graph/cli-app-status-projection'
-import { sendRequest } from './connection/transport'
+import { localSelectionOptions, sendRequest } from './connection/transport'
 import { attachMutationRecovery, isRequestUnsent } from './connection/client-error-recovery'
 import { RuntimeClientError, RuntimeRpcFailureError } from './connection/types'
 import type { RuntimeCallOptions } from './connection/types'
@@ -186,7 +186,7 @@ export class RuntimeClient {
         effectiveTimeoutMs,
         envelope,
         expectedRuntimeSource,
-        options?.requestSelection ? { requestSelection: options.requestSelection } : undefined
+        localSelectionOptions(options)
       )
     } catch (error) {
       // A pre-send refusal has no outcome to recover; retry advice would resend the same bytes.

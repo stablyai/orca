@@ -11,73 +11,20 @@ import {
   ORCAD_RECOVERY_CHANGED_STATE_CODE,
   isOrcadUncountedTerminalsDeferral
 } from '../../shared/remote-runtime/orcad-lifecycle/orcad-managed-runtime'
-import { MANAGED_SERVER_RUNTIME_CAPABILITY } from '../../shared/remote-runtime/protocol/host-runtime-capabilities'
-import type { RuntimeStatus } from '../../shared/remote-runtime/session-graph/runtime-session-contracts'
+import { MANAGED_SERVER_LIMITED_FORCE_RUNTIME_CAPABILITY } from '../../shared/remote-runtime/protocol/host-runtime-capabilities'
 import type { CommandHandler, HandlerContext } from '../dispatch/dispatch'
 import { getRequiredStringFlag } from '../arguments/flags'
 import { printResult } from '../output/command-result-output'
 import { RuntimeClientError } from '../runtime/connection/types'
 import type { RuntimeRpcSuccess } from '../../shared/remote-runtime/rpc/runtime-rpc-envelope'
 import { formatManagedServerStatus } from './managed-server-format'
-import { reportAfterClosedConnection } from './managed-server-reconnect'
+import { callExpectingRestart, callManagedServer } from './managed-server-request'
 
-const UNSUPPORTED_MESSAGE =
-  'This Orca runtime cannot manage servers over SSH. Run this on the computer whose Orca desktop app deployed the server, after updating Orca there.'
-
-// Windows promotion and readiness waits can take ten minutes; allow headroom on slow hosts.
-export const MANAGED_SERVER_ACTION_TIMEOUT_MS = 20 * 60_000
-const READ_ONLY_METHODS = new Set(['managedServer.status'])
-
-function unsupported(): RuntimeClientError {
-  return new RuntimeClientError('incompatible_runtime', UNSUPPORTED_MESSAGE)
-}
-
-async function callManagedServer<TResult>(
-  { client }: HandlerContext,
-  method: string,
-  params: Record<string, unknown>
-): Promise<RuntimeRpcSuccess<TResult>> {
-  const status = await client.call<RuntimeStatus>('status.get')
-  if (!status.result.capabilities?.includes(MANAGED_SERVER_RUNTIME_CAPABILITY)) {
-    throw unsupported()
-  }
-  const readOnly = READ_ONLY_METHODS.has(method)
-  try {
-    return await client.call<TResult>(
-      method,
-      params,
-      readOnly ? undefined : { timeoutMs: MANAGED_SERVER_ACTION_TIMEOUT_MS }
-    )
-  } catch (error) {
-    if (error instanceof RuntimeClientError && error.code === 'method_not_found') {
-      throw unsupported()
-    }
-    // The runtime continues the action after this client times out.
-    if (!readOnly && error instanceof RuntimeClientError && error.code === 'runtime_timeout') {
-      throw new RuntimeClientError(
-        'managed_server_in_progress',
-        'Stopped waiting, but the desktop may still be running this action. Check `orca environment status` before retrying.'
-      )
-    }
-    throw error
-  }
-}
-
-/** Null once the restart's outcome was reported from status instead. */
-async function callExpectingRestart<TResult>(
-  context: HandlerContext,
-  method: string,
-  params: { selector: string } & Record<string, unknown>
-): Promise<RuntimeRpcSuccess<TResult> | null> {
-  try {
-    return await callManagedServer<TResult>(context, method, params)
-  } catch (error) {
-    if (!(error instanceof RuntimeClientError) || error.code !== 'runtime_unavailable') {
-      throw error
-    }
-    await reportAfterClosedConnection(context, { selector: params.selector })
-    return null
-  }
+function olderDesktopForce(): RuntimeClientError {
+  return new RuntimeClientError(
+    'incompatible_runtime',
+    "This Orca desktop app is too old for --force alone: it would end the server's terminals, so nothing was sent. Update the desktop app, or re-run with --force --yes to update anyway and end them."
+  )
 }
 
 function selectorOf(context: HandlerContext): { selector: string } {
@@ -135,7 +82,14 @@ export const MANAGED_SERVER_HANDLERS: Record<string, CommandHandler> = {
     const response = await callExpectingRestart<OrcadManagedDeployResult>(
       context,
       'managedServer.update',
-      params
+      params,
+      // An older desktop gives bare force full force, which can end uncounted terminals unasked.
+      force && !endInProcessTerminals
+        ? {
+            capability: MANAGED_SERVER_LIMITED_FORCE_RUNTIME_CAPABILITY,
+            missing: olderDesktopForce
+          }
+        : undefined
     )
     if (!response) {
       return
