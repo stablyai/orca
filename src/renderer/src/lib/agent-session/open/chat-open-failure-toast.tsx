@@ -51,11 +51,10 @@ export function showChatOpenUnavailable(context: ChatOpenUnavailable = {}, agent
   }
   const { retry } = context
   const detail = [agent, context.detail].filter(Boolean).join('\n')
+  const failureId = ++chatOpenFailureCount
   toast.error(chatOpenUnavailableText.openFailed(), {
     ...toastOptions,
-    description: detail ? (
-      <ChatOpenFailureDetails key={++chatOpenFailureCount} detail={detail} />
-    ) : undefined,
+    description: detail ? <ChatOpenFailureDetails key={failureId} detail={detail} /> : undefined,
     action: retry
       ? {
           label: translate('auto.lib.activateAiVaultStructuredSession.chatOpenRetry', 'Retry'),
