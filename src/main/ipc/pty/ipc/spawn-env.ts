@@ -3,14 +3,14 @@ import {
   makePaneKey,
   parseLegacyNumericPaneKey
 } from '../../../../shared/workspace-layout/stable-pane-id'
-import { isOpaqueRemintedPaneKey } from '../../../../shared/pane-key-alias'
-import { isValidTerminalTabId } from '../../../../shared/workspace-layout/terminal-tab-id'
+import { isOpaqueRemintedPaneKey } from '../../../../shared/workspace-layout/pane-key-alias'
+import { isValidTerminalTabId } from '../../../../shared/workspace-layout/terminal-surfaces/terminal-tab-id'
 import { LocalPtyProvider } from '../../../providers/local-pty/local-pty-provider'
 import { resolvePathEnvKey } from '../../../pty/environment/windows-path-segment-merge'
 import { routesFreshSpawnsToLocalProvider } from '../host-env/fresh-spawn-routing'
 import { parseValidPaneKey } from '../pane/key-state'
 import { shouldRefreshNativeClaudeAgentTeamsEnv } from '../pane/launch-authority'
-import { selectWindowJcodeRuntimeDir, stampPtySpawnPaneEnv } from '../spawn-pane-env'
+import { selectWindowJcodeRuntimeDir, stampPtySpawnPaneEnv } from '../host-env/spawn-pane-env'
 import type { PtyIpcSpawnState } from './spawn-state'
 import { assemblePtyIpcSpawnCodexEnv } from './spawn-env-codex'
 import { prepareAntigravityAccountForLaunch } from '../../../antigravity/native-account-launch'

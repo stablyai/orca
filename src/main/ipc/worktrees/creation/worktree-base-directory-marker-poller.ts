@@ -1,8 +1,8 @@
 import { readdir, stat } from 'node:fs/promises'
 import type { Dirent } from 'node:fs'
 import { join } from 'node:path'
-import { normalizeRuntimePathForComparison } from '../../../../shared/cross-platform-path'
-import { forEachWithConcurrency } from '../../../../shared/map-with-concurrency'
+import { normalizeRuntimePathForComparison } from '../../../../shared/file-access/cross-platform-path'
+import { forEachWithConcurrency } from '../../../../shared/concurrency/map-with-concurrency'
 import type {
   WorktreeBaseRepoWatchConfig,
   WorktreeBaseWatchTarget

@@ -1,4 +1,4 @@
-import { ownRetainedString } from '../../../own-retained-string'
+import { ownRetainedString } from '../../../text/own-retained-string'
 import { parseTerminalKittyKeyboardFlags } from './terminal-kitty-keyboard-flags'
 
 // Carry split PTY/SSH escapes while bounding malformed streams.
@@ -26,7 +26,8 @@ export class TerminalKittyKeyboardModeTracker {
   private mainStackComplete = true
   private altStackComplete = true
   private alternateScreenActive = false
-  private alternateScreenSwitchObserved = false
+  private scannedCharacters = 0
+  private lastAlternateScreenSwitchOffset = -1
   // Constructor zero proves nothing for an existing PTY; ground only on fresh-PTY reset, proven snapshot or absolute mode output.
   private baselineProven = false
   // modifyOtherKeys gates the same keys when apps such as pi fall back after an unanswered Kitty query.
@@ -63,7 +64,17 @@ export class TerminalKittyKeyboardModeTracker {
   }
 
   get hasObservedAlternateScreenSwitch(): boolean {
-    return this.alternateScreenSwitchObserved
+    return this.lastAlternateScreenSwitchOffset !== -1
+  }
+
+  /** Checkpoint at the end of the scanned input, including any incomplete escape. */
+  get scanPosition(): number {
+    return this.scannedCharacters
+  }
+
+  /** A split switch belongs to a capture only if its escape began during that capture. */
+  hasObservedAlternateScreenSwitchSince(scanPosition: number): boolean {
+    return this.lastAlternateScreenSwitchOffset >= scanPosition
   }
 
   /** Full reset to a fresh PTY: known-inactive on both screens. */
@@ -81,7 +92,7 @@ export class TerminalKittyKeyboardModeTracker {
     this.mainStackComplete = true
     this.altStackComplete = true
     this.alternateScreenActive = false
-    this.alternateScreenSwitchObserved = false
+    this.lastAlternateScreenSwitchOffset = -1
     this.modifyOtherKeysState = 0
   }
 
@@ -138,6 +149,8 @@ export class TerminalKittyKeyboardModeTracker {
     if (this.scanTail.length === 0 && !chunk.includes('\x1b') && !chunk.includes('\x9b')) {
       return
     }
+    const inputOffset = this.scannedCharacters - this.scanTail.length
+    this.scannedCharacters += chunk.length
     const input = this.scanTail + chunk
     this.scanTail = this.extractScanTail(input)
     const kittyModeRe =
@@ -150,7 +163,7 @@ export class TerminalKittyKeyboardModeTracker {
         const tail = this.scanTail
         this.reset()
         this.scanTail = tail
-        this.alternateScreenSwitchObserved = true
+        this.lastAlternateScreenSwitchOffset = inputOffset + match.index
         continue
       }
       if (match[0].endsWith('!p')) {
@@ -158,7 +171,7 @@ export class TerminalKittyKeyboardModeTracker {
         continue
       }
       if (match[1] !== undefined) {
-        this.applyScreenSwitch(match[1], match[2] === 'h')
+        this.applyScreenSwitch(match[1], match[2] === 'h', inputOffset + match.index)
         continue
       }
       if (match[3] === undefined) {
@@ -187,13 +200,13 @@ export class TerminalKittyKeyboardModeTracker {
     this.altStackComplete = true
   }
 
-  private applyScreenSwitch(params: string, enabled: boolean): void {
+  private applyScreenSwitch(params: string, enabled: boolean, offset: number): void {
     for (const rawParam of params.split(';')) {
       const param = Number(rawParam)
       if (param !== 47 && param !== 1047 && param !== 1049) {
         continue
       }
-      this.alternateScreenSwitchObserved = true
+      this.lastAlternateScreenSwitchOffset = offset
       // Mirror xterm’s unconditional 47/1047/1049 slot swaps, including repeated enables/disables; carry proof with each numeric slot.
       if (enabled) {
         this.mainFlags = this.currentFlags

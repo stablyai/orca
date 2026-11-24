@@ -1,5 +1,5 @@
-import type { StructuredAgentSessionAdapter } from '../../../native-chat/agent-session-wire/structured-agent-session-adapter'
-import type { StructuredAgentSessionProviderOpenInput } from '../../../native-chat/agent-session-wire/structured-agent-session-provider-open-contract'
+import type { StructuredAgentSessionAdapter } from '../../../native-chat/agent-session-wire/providers/structured-agent-session-adapter'
+import type { StructuredAgentSessionProviderOpenInput } from '../../../native-chat/agent-session-wire/startup/structured-agent-session-provider-open-contract'
 import { codexStartFailure } from '../../app-server/codex-startup-outcome'
 import { recoverCodexRewind } from '../threads/codex-structured-rewind'
 import {

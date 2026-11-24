@@ -1,4 +1,4 @@
-import { focusPanePreservingOverlays } from './pane-overlay-focus'
+import { focusPanePreservingOverlays } from './pane-focus/pane-overlay-focus'
 import type {
   ManagedPane,
   ManagedPaneInternal,
@@ -6,10 +6,14 @@ import type {
   PaneActivationOptions
 } from './pane-manager-types'
 import type { PaneManagerHost } from './pane-manager-host'
-import { applyPaneOpacity, applyDividerStyles, applyRootBackground } from './pane-divider'
-import { createPaneDOM, openTerminal } from './pane-lifecycle'
-import { suspendTerminalCursorBlink } from './pane-cursor-blink-suspension'
-import { shouldFollowMouseFocus } from './focus-follows-mouse'
+import {
+  applyPaneOpacity,
+  applyDividerStyles,
+  applyRootBackground
+} from './pane-layout/pane-divider'
+import { openTerminal } from './pane-lifecycle'
+import { createPaneDOM } from '@/lib/pane-manager/pane-dom-creation'
+import { shouldFollowMouseFocus } from './pane-focus/focus-follows-mouse'
 import { toPublicPane } from './pane-public-view'
 
 export function applyManagedPaneStyles(host: PaneManagerHost): void {
@@ -87,11 +91,8 @@ export function createManagedPaneInternal(
       handleManagedPaneMouseEnter(host, paneId, event)
     }
   )
+  // A pane mounted behind a hidden surface defers WebGL, so its DOM blink stays focus-gated and needs no suspension.
   pane.webglAttachmentDeferred = host.isRenderingSuspended()
-  if (host.isRenderingSuspended()) {
-    // A pane that mounts behind a hidden surface never sees suspendPaneRendering().
-    suspendTerminalCursorBlink(pane.terminal)
-  }
   host.panes.set(id, pane)
   host.identities.register(id, leafId)
   return pane

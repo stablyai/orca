@@ -1,4 +1,4 @@
-import type { DeliveryRow, MessageRow, QuestionRow, RunRow } from '../types'
+import type { DeliveryRow, MessageRow, QuestionRow, RunRow } from './orchestration-records'
 
 export const SQLITE_UTC_TIMESTAMP_RE = /^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}(?:\.\d+)?$/
 

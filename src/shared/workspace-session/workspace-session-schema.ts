@@ -3,18 +3,18 @@ import { z } from 'zod'
 import {
   leafStringsSchema,
   terminalLayoutSnapshotSchema
-} from '../workspace-layout/terminal-layout-snapshot-schema'
-import { closedTerminalPaneSchema } from '../workspace-layout/closed-terminal-panes'
-import { closedTerminalTabTombstoneSchema } from '../workspace-layout/closed-terminal-tab-tombstones'
+} from '../workspace-layout/terminal-topology/terminal-layout-snapshot-schema'
+import { closedTerminalPaneSchema } from '../workspace-layout/terminal-surfaces/closed-terminal-panes'
+import { closedTerminalTabTombstoneSchema } from '../workspace-layout/terminal-surfaces/closed-terminal-tab-tombstones'
 
-import type { TabGroupLayoutNode } from '../tab-types'
+import type { TabGroupLayoutNode } from '../workspace-layout/tab-groups/tab-types'
 import type { TuiAgent } from '../agent-launch/catalog/tui-agent'
 import type { WorkspaceSessionState } from './workspace-session-state-types'
-import { terminalTabIdSchema } from '../workspace-layout/terminal-tab-id-schema'
-import { terminalSurfaceTombstoneSchema } from '../workspace-layout/terminal-surface-tombstone-schema'
-import { parseExecutionHostId, type ExecutionHostId } from '../execution-host'
+import { terminalTabIdSchema } from '../workspace-layout/terminal-surfaces/terminal-tab-id-schema'
+import { terminalSurfaceTombstoneSchema } from '../workspace-layout/terminal-surfaces/terminal-surface-tombstone-schema'
+import { parseExecutionHostId, type ExecutionHostId } from '../execution-host/execution-host'
 import { isTuiAgent } from '../agent-launch/catalog/tui-agent-config'
-import { type WorkspaceKey, isWorkspaceKey } from '../workspace-scope'
+import { type WorkspaceKey, isWorkspaceKey } from '../workspace/identity/workspace-scope'
 import {
   browserHistoryEntriesSchema,
   workspaceDocHistoryEntriesSchema,
@@ -29,8 +29,13 @@ import {
   tabContentTypeSchema,
   workspaceVisibleTabTypeSchema
 } from './workspace-session-tab-type-schema'
-import { salvagedField, salvagedOptional, salvagingArray, salvagingRecord } from '../zod-salvage'
-import { isStructuredAgentId } from '../agent-session/lifecycle/agent-session-provider-handle-encoding'
+import {
+  salvagedField,
+  salvagedOptional,
+  salvagingArray,
+  salvagingRecord
+} from '../validation/zod-salvage'
+import { isStructuredAgentId } from '../agent-session/lifecycle/provider-handles/agent-session-provider-handle-encoding'
 
 const workspaceKeySchema = z.custom<WorkspaceKey>(
   (value) => typeof value === 'string' && isWorkspaceKey(value)
@@ -47,7 +52,8 @@ export const terminalTabSchema = z.object({
     .object({
       agent: z.enum(['claude', 'codex']),
       sessionId: z.string(),
-      title: z.string()
+      title: z.string(),
+      kind: z.enum(['named', 'fallback']).optional().catch(undefined)
     })
     .nullable()
     .optional()
@@ -92,7 +98,8 @@ const tabSchema = z.object({
     .object({
       agent: z.enum(['claude', 'codex']),
       sessionId: z.string(),
-      title: z.string()
+      title: z.string(),
+      kind: z.enum(['named', 'fallback']).optional().catch(undefined)
     })
     .nullable()
     .optional()
@@ -228,6 +235,14 @@ export const workspaceSessionStateSchema: z.ZodType<WorkspaceSessionState> = z.o
   remoteSessionIdsByTabId: salvagedOptional(
     'remoteSessionIdsByTabId',
     salvagingRecord(terminalTabIdSchema, z.string())
+  ),
+  desktopRelayOwnerByTabId: salvagedOptional(
+    'desktopRelayOwnerByTabId',
+    salvagingRecord(terminalTabIdSchema, z.string())
+  ),
+  desktopRelayAdoptionVersion: salvagedOptional(
+    'desktopRelayAdoptionVersion',
+    z.number().int().nonnegative()
   ),
   // Why: the sort comparator in order-empty-query-worktrees.ts would produce NaN
   // (undefined sort order) from a NaN or Infinity persisted here.

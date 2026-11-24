@@ -6,8 +6,10 @@ import {
   SUBAGENT_TRANSCRIPT_PREFIX,
   subagentTranscriptsDirFor
 } from '../ai-vault/scanners/claude/session-scanner-subagent-transcripts'
-import { asRecord, extractString, parseJsonObject } from '../ai-vault/session-scanner-values'
-import { splitTranscriptStreamLines } from './transcript-stream-lines'
+import { asRecord } from '../ai-vault/parsing/session-record-fields'
+import { extractString } from '../../shared/text/trimmed-string'
+import { parseJsonObject } from '../ai-vault/parsing/session-json-object'
+import { splitTranscriptStreamLines } from './transcript-streaming/transcript-stream-lines'
 import {
   closeTranscriptHandle,
   openTranscriptFile,
@@ -15,7 +17,7 @@ import {
   readTranscriptFile,
   transcriptFileStat,
   wslGatedReaddir
-} from './wsl-transcript-fs-access'
+} from './transcript-filesystem/wsl-transcript-fs-access'
 
 const CODEX_THREAD_ID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
 const CLAUDE_CHILD_ID = /^[A-Za-z0-9_-]{1,128}$/

@@ -3,7 +3,7 @@ import { useOpenHostStackRoute } from '../navigation/use-open-host-stack-route'
 import { mobileSessionRouteTarget, type MobileSessionRouteParams } from './mobile-session-route'
 
 export function useOpenMobileSession(): (params: MobileSessionRouteParams) => void {
-  const openHostStackRoute = useOpenHostStackRoute()
+  const openHostStackRoute = useOpenHostStackRoute(true)
 
   return useCallback(
     (params) => {

@@ -1,5 +1,8 @@
 import { useLayoutEffect } from 'react'
-import { scrollTopCache, setWithLRU } from '@/lib/scroll-cache'
+import {
+  scrollTopCache,
+  setWithLRU
+} from '@/components/editor/model-lifetime/retention/editor-view-state-cache'
 import type { MarkdownPreviewFoundation } from '../surface/use-markdown-preview-foundation'
 
 export function useMarkdownPreviewScrollViewport({

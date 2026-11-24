@@ -1,5 +1,5 @@
 import type { RuntimeManagedWorktreeCreateArgs } from './runtime-managed-worktree-create-types'
-import { getBranchConflictKind } from '../../../git/repo-branch-conflict'
+import { getBranchConflictKind } from '../../../git/refs/resolution/repo-branch-conflict'
 import { getSelectedReviewBranch } from '../../integrations/reviews/selected-review-branch'
 import { resolveCreateBranchName } from './runtime-worktree-create-git'
 

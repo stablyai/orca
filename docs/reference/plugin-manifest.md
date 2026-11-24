@@ -32,7 +32,7 @@ Add `"$schema": "https://raw.githubusercontent.com/stablyai/orca/main/docs/schem
 | `contributes` | object | no | 1.4.160 | What the plugin adds to Orca. Every point defaults to empty. |
 | `contributes.panels` | [PanelContribution](#panelcontribution)[] | no | 1.4.160 | Sidebar panels. At most 64. |
 | `contributes.commands` | [CommandContribution](#commandcontribution)[] | no | 1.4.160 | Command palette entries. At most 256. |
-| `contributes.events` | [EventContribution](#eventcontribution)[] | no | 1.4.160 | Events delivered to the plugin worker. At most 4. |
+| `contributes.events` | [EventContribution](#eventcontribution)[] | no | 1.4.160 | Events delivered to the plugin worker. At most 5. |
 | `contributes.hooks` | [HookContribution](#hookcontribution)[] | no | 1.4.248 | Hooks the worker runs before or after Orca acts; Orca waits only on plugins that list one. At most 8. |
 | `contributes.languagePacks` | [LanguagePackContribution](#languagepackcontribution)[] | no | 1.4.160 | Interface translations. At most 16. |
 | `contributes.keybindings` | [KeybindingContribution](#keybindingcontribution)[] | no | 1.4.160 | Keyboard shortcuts for contributed commands. At most 256. |
@@ -40,6 +40,7 @@ Add `"$schema": "https://raw.githubusercontent.com/stablyai/orca/main/docs/schem
 | `contributes.themes` | [ThemeContribution](#themecontribution)[] | no | 1.4.245 | App color themes. At most 64. |
 | `contributes.terminalThemes` | [ThemeContribution](#themecontribution)[] | no | 1.4.245 | Terminal ANSI palettes. At most 64. |
 | `contributes.iconThemes` | [ThemeContribution](#themecontribution)[] | no | 1.4.245 | File icon themes. At most 32. |
+| `contributes.fonts` | [FontContribution](#fontcontribution)[] | no | 1.4.253 | Font families for the terminal, editor and interface font pickers. At most 8. |
 | `contributes.syntaxes` | [SyntaxContribution](#syntaxcontribution)[] | no | 1.4.245 | Syntax highlighting for editor languages. At most 16. |
 | `contributes.customEditors` | [CustomEditorContribution](#customeditorcontribution)[] | no | 1.4.245 | Editors that open files of given types in the editor tab. At most 16. |
 | `contributes.newFiles` | [NewFileContribution](#newfilecontribution)[] | no | 1.4.245 | Untitled files the user can create from the + menu and the command palette. At most 16. |
@@ -66,7 +67,7 @@ A sidebar panel. Requires the `sandboxed-ui` execution profile or higher.
 | --- | --- | --- | --- | --- |
 | `id` | string | yes | 1.4.160 | Panel id, unique among this plugin's panels. The reserved names `constructor` and `prototype` are refused. Example: `"dashboard"` |
 | `title` | string | yes | 1.4.160 | Title shown on the panel tab and its tooltip. Example: `"Dashboard"` |
-| `icon` | `"activity"` \| `"bar-chart-3"` \| `"bell"` \| `"blocks"` \| `"book"` \| `"bot"` \| `"bug"` \| `"calendar"` \| `"cloud"` \| `"code"` \| `"database"` \| `"file-text"` \| `"flag"` \| `"folder"` \| `"gauge"` \| `"globe"` \| `"hammer"` \| `"layers"` \| `"lightbulb"` \| `"package"` \| `"plug"` \| `"puzzle"` \| `"rocket"` \| `"star"` \| `"terminal"` \| `"wrench"` \| `"zap"` \| `"add"` \| `"remove"` \| `"delete"` \| `"edit"` \| `"refresh"` \| `"search"` \| `"settings"` \| `"check"` \| `"close"` \| `"info"` \| `"warning"` \| `"error"` \| `"open-external"` \| `"copy"` \| `"download"` \| `"upload"` \| `"play"` \| `"pause"` \| `"stop"` \| `"more"` \| `"expand"` \| `"collapse"` \| `"next"` \| `"filter"` \| `"branch"` \| `"file"` \| `"agent"` \| `"link"` | no | 1.4.160 | Icon shown in the right-sidebar activity bar. Defaults to `plug`. Example: `"database"` |
+| `icon` | `"activity"` \| `"bar-chart-3"` \| `"bell"` \| `"blocks"` \| `"book"` \| `"bot"` \| `"bug"` \| `"calendar"` \| `"cloud"` \| `"code"` \| `"database"` \| `"file-text"` \| `"flag"` \| `"folder"` \| `"gauge"` \| `"globe"` \| `"hammer"` \| `"layers"` \| `"lightbulb"` \| `"package"` \| `"plug"` \| `"puzzle"` \| `"rocket"` \| `"star"` \| `"terminal"` \| `"wrench"` \| `"zap"` \| `"add"` \| `"remove"` \| `"delete"` \| `"edit"` \| `"refresh"` \| `"search"` \| `"settings"` \| `"check"` \| `"close"` \| `"info"` \| `"warning"` \| `"error"` \| `"open-external"` \| `"copy"` \| `"download"` \| `"upload"` \| `"play"` \| `"pause"` \| `"stop"` \| `"more"` \| `"expand"` \| `"collapse"` \| `"next"` \| `"filter"` \| `"branch"` \| `"file"` \| `"agent"` \| `"link"` \| object | no | 1.4.160 | Icon shown in the right-sidebar activity bar. Defaults to `puzzle`. Either a built-in name, or (manifest format 2, needs `engines.orca` `>=1.4.274`) an object with inline SVG path data that Orca draws in the theme color: `path` (required; up to 4096 characters of SVG path data starting with `M`, separated only by spaces, tabs, line breaks and commas), `viewBox` (`"0 0 W H"`, W and H from 1 to 1024; default `"0 0 24 24"`) and `mode` (`stroke`, the default, draws a 2-unit outline with round caps and joins like Lucide, which assumes a viewBox of about 24, so validation warns when W or H is above 48; `fill` fills the shape). Unknown keys are refused. SVG files are not supported. In format 2, an object icon that isn't a valid path icon, or a string ending in `.svg`, shows `puzzle` with a warning; any other value (a misspelled name, `null`, an array, a number or a boolean) is a manifest error. Format 1 shows `puzzle` with a warning for any icon that isn't a built-in name. Orca draws a single `<path>`: for an icon made of several `<path>` elements or other shapes (`<circle>`, `<rect>`, `<line>`), convert each shape to path commands and join every `d` into one `path`. Example: `{ "path": "M4 4h16v16H4z", "mode": "stroke" }`. Example: `"database"` |
 | `entry` | string | yes | 1.4.160 | What the panel runs: an HTML page for `ui: "html"`, a `.js`/`.mjs` module for `ui: "components"`. Either may instead be a `.ts`/`.tsx`/`.mts`/`.jsx` file, which Orca transpiles when it loads (needs `engines.orca` `>=1.4.246`; an `html` panel then gets a generated page around it). It is trusted code: install panels you trust. Relative to the plugin root; `..` segments and Windows device names such as `CON` are refused. Example: `"dist/panel.html"` |
 | `ui` | `"html"` \| `"components"` | no | 1.4.246 | How the panel draws its UI. `html` (default) shows `entry` as a web page in an isolated frame; `components` runs `entry` as a hidden module and Orca draws the component tree it returns with its own controls. Example: `"components"` |
 
@@ -84,11 +85,11 @@ A command palette entry. Requires the `declarative` execution profile or higher.
 
 ## EventContribution
 
-An event subscription. Requires `main`, the `trusted-worker` execution profile and the capability of the event's domain: `workspace:read` for workspace events, `agent:read` for agent events.
+An event subscription. Requires `main`, the `trusted-worker` execution profile and the capability of the event's domain: `workspace:read` for workspace events, `agent:read` for agent events. Editor events need no capability.
 
 | Field | Type | Required | Since | Description |
 | --- | --- | --- | --- | --- |
-| `on` | `"workspace.created"` \| `"workspace.removed"` \| `"agent.status.changed"` \| `"workspace.changed"` | yes | 1.4.160 | Event delivered to the plugin worker. |
+| `on` | `"workspace.created"` \| `"workspace.removed"` \| `"agent.status.changed"` \| `"workspace.changed"` \| `"editor.typography.changed"` | yes | 1.4.160 | Event delivered to the plugin worker. |
 
 ## HookContribution
 
@@ -136,6 +137,25 @@ A titled theme file.
 | `id` | string | yes | 1.4.245 | Theme id, unique within its family in this plugin. The reserved names `constructor` and `prototype` are refused. Example: `"dusk"` |
 | `title` | string | yes | 1.4.245 | Name shown in the theme picker. Example: `"Dusk"` |
 | `path` | string | yes | 1.4.245 | JSON theme file, at most 16 KiB. Relative to the plugin root; `..` segments and Windows device names such as `CON` are refused. Example: `"themes/dusk.json"` |
+
+## FontContribution
+
+A font family the user can pick for the terminal, editor or interface. It applies only once picked.
+
+| Field | Type | Required | Since | Description |
+| --- | --- | --- | --- | --- |
+| `family` | string | yes | 1.4.253 | Family name shown in the font pickers. Orca adds the plugin id, so a plugin font never replaces an installed or built-in font of the same name. Example: `"Geist"` |
+| `faces` | [FontFaceContribution](#fontfacecontribution)[] | yes | 1.4.253 | The family's files, at most 8. All of a plugin's font files together may be at most 8 MB. |
+
+## FontFaceContribution
+
+One file of a font family.
+
+| Field | Type | Required | Since | Description |
+| --- | --- | --- | --- | --- |
+| `path` | string | yes | 1.4.253 | WOFF or WOFF2 file, at most 2 MB; its first bytes must match its extension. TTF, OTF and font collections are refused. Relative to the plugin root; `..` segments and Windows device names such as `CON` are refused. Example: `"fonts/Geist-Variable.woff2"` |
+| `weight` | string | no | 1.4.253 | CSS weight this file draws, or a range for a variable font. Defaults to `400`. Example: `"400"` |
+| `style` | `"normal"` \| `"italic"` | no | 1.4.253 | Whether this file is the italic face. Defaults to `normal`. |
 
 ## SyntaxContribution
 
@@ -217,7 +237,7 @@ A host API the plugin may call once the user consents.
 
 | Field | Type | Required | Since | Description |
 | --- | --- | --- | --- | --- |
-| `kind` | `"workspace:read"` \| `"workspace:write"` \| `"agent:read"` \| `"agent:launch"` \| `"terminal:send"` \| `"terminal:read"` \| `"notifications:show"` \| `"storage:own"` \| `"secrets:own"` \| `"settings:own"` \| `"appearance:write"` | yes | 1.4.160 | Capability granted on user consent. |
+| `kind` | `"workspace:read"` \| `"workspace:write"` \| `"agent:read"` \| `"agent:launch"` \| `"terminal:send"` \| `"terminal:read"` \| `"notifications:show"` \| `"storage:own"` \| `"secrets:own"` \| `"settings:own"` \| `"appearance:write"` \| `"workspace:create"` \| `"automation:read"` \| `"automation:write"` \| `"history:read"` | yes | 1.4.160 | Capability granted on user consent. |
 
 ## Screenshot
 

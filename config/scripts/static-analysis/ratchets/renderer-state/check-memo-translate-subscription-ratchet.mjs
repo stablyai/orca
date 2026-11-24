@@ -15,7 +15,7 @@ const HEADER = [
 
 const COMMENT = /\/\*[\s\S]*?\*\/|(?<![:'"`\\])\/\/.*$/gm
 const TRANSLATE_CALL = /\btranslate\(/
-const SUBSCRIPTION_CALL = /\b(?:useUiLanguageRevision|useTranslation)\(/
+const SUBSCRIPTION_CALL = /\b(?:useUiLanguageRevision|useTranslation|useTranslate|useIntlLocale)\(/
 const MEMO_CALL = /\b(?:React\.)?memo\(\s*(?:function\s+([\w$]+)|([\w$]+)\s*[,)])/g
 const TOP_LEVEL_BOUNDARY = /^[^\s)}\]]/gm
 

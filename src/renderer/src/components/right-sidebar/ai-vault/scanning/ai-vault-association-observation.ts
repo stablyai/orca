@@ -1,11 +1,11 @@
 import { useMemo } from 'react'
 import { useAppStore } from '@/store/index'
-import { getStructuredAgentSessionStatusFeed } from '@/runtime/structured-agent-session-status-feed'
-import { structuredAgentSessionTargetForHost } from '@/runtime/structured-agent-session-owner'
+import { getStructuredAgentSessionStatusFeed } from '@/runtime/native-chat/status/structured-agent-session-status-feed'
+import { structuredAgentSessionTargetForHost } from '@/runtime/native-chat/session-ownership/structured-agent-session-owner'
 import {
   type ExecutionHostScope,
   toRuntimeExecutionHostId
-} from '../../../../../../shared/execution-host'
+} from '../../../../../../shared/execution-host/execution-host'
 import { invalidateAiVaultSessionResults } from './ai-vault-session-result-cache'
 
 /** List and search activate the same host feeds, independently of open chat tabs. */

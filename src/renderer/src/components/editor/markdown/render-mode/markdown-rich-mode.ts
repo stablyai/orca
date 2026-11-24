@@ -2,7 +2,8 @@ import { defaultSchema } from 'rehype-sanitize'
 import { normalizeDetailsOpeningTag } from '../../rich-markdown/details/details-markdown-html'
 import {
   getRichMarkdownPassthroughOutput,
-  getRichMarkdownRoundTripOutput
+  getRichMarkdownRoundTripOutput,
+  hasRichMarkdownReferenceDefinition
 } from './markdown-round-trip'
 import { extractFrontMatter } from '../source-scanning/markdown-frontmatter'
 import {
@@ -12,6 +13,9 @@ import {
 import { translate } from '@/i18n/i18n'
 import { encodeRawMarkdownHtmlForRichEditor } from '../../rich-markdown/raw-source/raw-markdown-html'
 import { createRichMarkdownEditorCodec } from '../../rich-markdown/document/rich-markdown-source-transport'
+
+// Why: eligibility re-runs on every edit, so this caps full-document parser cost.
+const FULL_ROUND_TRIP_MAX_CODE_UNITS = 50_000
 
 export type MarkdownRichModeUnsupportedReason =
   | 'html-or-jsx'
@@ -51,16 +55,6 @@ const UNSUPPORTED_PATTERNS: UnsupportedMatch[] = [
     pattern: /<\/?[A-Za-z][\w.:-]*(?:\s[^<>]*)?\/?>/
   },
   {
-    reason: 'reference-links',
-    get message() {
-      return translate(
-        'auto.components.editor.markdown.rich.mode.2fd2b44073',
-        'Editable only in code mode because this file contains reference-style links.'
-      )
-    },
-    pattern: /^\[[^\]]+\]:\s+\S+/m
-  },
-  {
     reason: 'footnotes',
     get message() {
       return translate(
@@ -69,6 +63,17 @@ const UNSUPPORTED_PATTERNS: UnsupportedMatch[] = [
       )
     },
     pattern: /^\[\^[^\]]+\]:\s+/m
+  },
+  {
+    reason: 'reference-links',
+    get message() {
+      return translate(
+        'auto.components.editor.markdown.rich.mode.2fd2b44073',
+        'Editable only in code mode because this file contains reference-style links.'
+      )
+    },
+    // Why: `[label]: ` also opens prose, so the rich parser confirms a real definition.
+    pattern: /^\[[^\]]+\]:\s+\S+/m
   }
 ]
 
@@ -103,14 +108,22 @@ export function getMarkdownRichModeUnsupportedReason(
     if (matcher.reason === 'html-or-jsx') {
       continue
     }
-    if (matcher.pattern.test(contentWithoutCode)) {
-      return matcher.reason
+    if (!matcher.pattern.test(contentWithoutCode)) {
+      continue
     }
+    if (
+      matcher.reason === 'reference-links' &&
+      body.length <= FULL_ROUND_TRIP_MAX_CODE_UNITS &&
+      !hasRichMarkdownReferenceDefinition(body)
+    ) {
+      continue
+    }
+    return matcher.reason
   }
 
   if (hasHtml) {
     const roundTripOutput =
-      body.length > 50_000
+      body.length > FULL_ROUND_TRIP_MAX_CODE_UNITS
         ? getLargeMarkdownRoundTripOutput(body, htmlMatcher!.pattern)
         : getRichMarkdownRoundTripOutput(body)
     if (roundTripOutput && preservesEmbeddedHtml(contentWithoutCode, roundTripOutput)) {

@@ -1,5 +1,5 @@
 import type { GitBranchChangeStatus } from '../status/git-status-types'
-import type { LargeDiffRenderLimit } from '../../large-diff-render-limit'
+import type { LargeDiffRenderLimit } from '../../source-control/diff/large-diff-render-limit'
 
 // Mobile consumes git-status-types.ts directly to avoid this desktop aggregate.
 
@@ -65,6 +65,8 @@ export type GitDiffBinaryResult = {
   modifiedDeleted?: boolean
   /** A side passed the 10 MiB read cap: too large to diff, not necessarily binary. Older clients show it as binary. */
   tooLarge?: boolean
+  /** Set by a remote client, never the host: the host refused the diff as too large to send over the connection. */
+  tooLargeForConnection?: boolean
 } & (
   | { originalIsBinary: true; modifiedIsBinary: boolean }
   | { originalIsBinary: boolean; modifiedIsBinary: true }

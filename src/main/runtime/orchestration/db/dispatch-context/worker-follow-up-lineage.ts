@@ -1,38 +1,72 @@
+import { sleepingAgentLaunchConfigSchema } from '../../../../../shared/workspace-session/workspace-session-sleeping-agents'
 import { resolveWorkerLineageFacts, FOLLOW_UP_MESSAGE_TYPES } from './worker-follow-up-plan'
-export { FOLLOW_UP_MESSAGE_TYPES } from './worker-follow-up-plan'
+
 import {
   normalizeAgentProviderSession,
-  type AgentProviderSessionMetadata
+  type AgentProviderSessionMetadata,
+  type SleepingAgentLaunchConfig
 } from '../../../../../shared/agent-session/lifecycle/agent-session-resume'
 import {
   getConnectionExecutionHostId,
   type ExecutionHostId
-} from '../../../../../shared/execution-host'
-import type { ExactWorkerProviderSession } from '../../../../../shared/orchestration-worker-output'
+} from '../../../../../shared/execution-host/execution-host'
+import type { ExactWorkerProviderSession } from '../../../../../shared/orchestration/workers/orchestration-worker-output'
 import type { TuiAgent } from '../../../../../shared/agent-launch/catalog/tui-agent'
 import { isTuiAgent } from '../../../../../shared/agent-launch/catalog/tui-agent-config'
-import { isLocalHookConnectionId } from '../../../../../shared/wsl-hook-relay-contract'
-import type { DispatchContextRow } from '../../types'
-import type { WorkerTerminalResourceRow } from '../../worker-terminal-ownership'
+import { agentProviderSessionsEqual } from '../../../../../shared/agent-session/lifecycle/resume/agent-provider-session-equality'
+import { isLocalHookConnectionId } from '../../../../../shared/agent-hook-listener/transport/wsl-hook-relay-contract'
+import type { DispatchContextRow } from '../orchestration-records'
+import type { WorkerTerminalResourceRow } from '../../terminal-authority/release/worker-terminal-ownership'
 import type { OrchestrationDb } from '../orchestration-db'
-import { parseOrcaSessionAddress } from '../../../../../shared/orca-session-address'
-import { isStructuredWorkerHandle } from '../../../../../shared/structured-worker-handle'
+import { DISPATCH_CONTEXT_COLUMN_LIST } from '../row-column-lists'
+import { parseOrcaSessionAddress } from '../../../../../shared/agent-session/identity/orca-session-address'
+import { isStructuredWorkerHandle } from '../../../../../shared/orchestration/workers/structured-worker-handle'
 
 /** The conversation a closed terminal worker reopens in, as the resume path takes it. */
 export type WorkerResumeSession = {
   agent: TuiAgent
   providerSession: AgentProviderSessionMetadata
   captureHostId: ExecutionHostId
+  /** The recipe the worker launched with; its pane's own record is gone once it closes (#37693). */
+  launchConfig?: SleepingAgentLaunchConfig
 }
 
 export function getFollowUpDispatch(
   db: Pick<OrchestrationDb, 'db'>,
   dispatchId: string
 ): DispatchContextRow | undefined {
-  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: SELECT * over this table is exactly its row shape.
+  // Explicit projection so SyncDatabase caches this per-lineage-step statement; `SELECT *` never is.
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the column list names every column of the row type, and a missing one fails compilation.
   return db.db
-    .prepare('SELECT * FROM dispatch_contexts WHERE follow_up_of_dispatch_id = ?')
+    .prepare(
+      `SELECT ${DISPATCH_CONTEXT_COLUMN_LIST} FROM dispatch_contexts WHERE follow_up_of_dispatch_id = ?`
+    )
     .get(dispatchId) as DispatchContextRow | undefined
+}
+
+/** Whether a report's task id names a Task from earlier in its Dispatch's follow-up chain, which a
+ *  worker that ran them all may still quote. Its own Task, or any other, is not. */
+export function isEarlierTaskOfDispatch(
+  db: { getDispatchContextById(dispatchId: string): DispatchContextRow | undefined },
+  dispatch: Pick<DispatchContextRow, 'id' | 'task_id' | 'follow_up_of_dispatch_id'>,
+  taskId: string
+): boolean {
+  const seen = new Set([dispatch.id])
+  for (
+    let earlier = dispatch.follow_up_of_dispatch_id
+      ? db.getDispatchContextById(dispatch.follow_up_of_dispatch_id)
+      : undefined;
+    earlier && !seen.has(earlier.id);
+    earlier = earlier.follow_up_of_dispatch_id
+      ? db.getDispatchContextById(earlier.follow_up_of_dispatch_id)
+      : undefined
+  ) {
+    if (earlier.task_id === taskId) {
+      return taskId !== dispatch.task_id
+    }
+    seen.add(earlier.id)
+  }
+  return false
 }
 
 export type WorkerLineage = {
@@ -84,10 +118,18 @@ export function readWorkerResumeSession(
     const providerSession = normalizeAgentProviderSession(
       'providerSession' in parsed ? parsed.providerSession : undefined
     )
+    const launchConfig = sleepingAgentLaunchConfigSchema.parse(
+      'launchConfig' in parsed ? parsed.launchConfig : undefined
+    )
     return isTuiAgent(agent) &&
       providerSession &&
       (connectionId === null || typeof connectionId === 'string')
-      ? { agent, providerSession, captureHostId: getConnectionExecutionHostId(connectionId) }
+      ? {
+          agent,
+          providerSession,
+          captureHostId: getConnectionExecutionHostId(connectionId),
+          ...(launchConfig ? { launchConfig } : {})
+        }
       : null
   } catch {
     return null
@@ -107,10 +149,13 @@ export function recordWorkerResumeSession(
   const connectionId = isLocalHookConnectionId(session.connectionId)
     ? null
     : (session.connectionId ?? null)
+  const launchConfig =
+    session.launchConfig ?? recordedLaunchConfigOf(db, resourceId, session, connectionId)
   const value = JSON.stringify({
     agent: session.agent,
     providerSession: session.providerSession,
-    connectionId
+    connectionId,
+    ...(launchConfig ? { launchConfig } : {})
   })
   // A repeat of the stored conversation writes nothing.
   db.db
@@ -118,6 +163,23 @@ export function recordWorkerResumeSession(
       'UPDATE worker_terminal_resources SET resume_session = ? WHERE id = ? AND resume_session IS NOT ?'
     )
     .run(value, resourceId, value)
+}
+
+/** The recipe this row already holds for the same conversation: a capture after the agent exited no
+ *  longer reads its launch, but the conversation it reports is still the one that launch started. */
+function recordedLaunchConfigOf(
+  db: OrchestrationDb,
+  resourceId: string,
+  session: ExactWorkerProviderSession,
+  connectionId: string | null
+): SleepingAgentLaunchConfig | undefined {
+  const stored = readWorkerResumeSession(db.getWorkerTerminalResource(resourceId))
+  return stored &&
+    stored.agent === session.agent &&
+    stored.captureHostId === getConnectionExecutionHostId(connectionId) &&
+    agentProviderSessionsEqual(session.agent, stored.providerSession, session.providerSession)
+    ? stored.launchConfig
+    : undefined
 }
 
 /** A reopened worker keeps its conversation until its own pane reports one. */

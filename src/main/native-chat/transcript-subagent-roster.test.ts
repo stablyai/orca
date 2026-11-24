@@ -1,8 +1,8 @@
 import { describe, expect, it } from 'vitest'
 import { nativeChatSubagentActivities } from '../../shared/native-chat/input/native-chat-activity'
 import { projectNativeChatTranscript } from '../../shared/native-chat/transcript/native-chat-transcript-projection'
-import { decodeClaudeTranscriptLine } from './transcript-line-decoders-claude'
-import { decodeCodexTranscriptLine } from './transcript-line-decoders-codex'
+import { decodeClaudeTranscriptLine } from './transcript-decoding/transcript-line-decoders-claude'
+import { decodeCodexTranscriptLine } from './transcript-decoding/transcript-line-decoders-codex'
 
 function decoded(lines: readonly unknown[], agent: 'codex' | 'claude' = 'codex') {
   return lines.flatMap((line, index) => {

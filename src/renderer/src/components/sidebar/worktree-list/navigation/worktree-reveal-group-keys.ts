@@ -2,21 +2,22 @@ import type { AppState } from '@/store/types'
 import {
   getWorktreeExecutionHostId,
   type ExecutionHostId
-} from '../../../../../../shared/execution-host'
-import type { ProjectGroup } from '../../../../../../shared/project-group-types'
-import type { Repo } from '../../../../../../shared/repo-types'
+} from '../../../../../../shared/execution-host/execution-host'
+import type { ProjectGroup } from '../../../../../../shared/project/groups/project-group-types'
+import type { Repo } from '../../../../../../shared/repository/repo-types'
 import type { WorktreeLineage } from '../../../../../../shared/worktree/lineage-types'
 import type { WorkspaceStatusDefinition, Worktree } from '../../../../../../shared/worktree/types'
-import { getHostSectionCollapseKey } from '../../../../../../shared/sidebar-list/host-section-collapse'
+import { getHostSectionCollapseKey } from '../../../../../../shared/sidebar-list/hosts/host-section-collapse'
 import { getWorktreeHostIdentity } from '../../../../../../shared/worktree/host-qualified-identity'
-import { getWorktreeLineageGroupKey } from '../../../../../../shared/sidebar-list/group-keys'
-import type { ProjectGroupingModel } from '../../../../../../shared/project-section-grouping'
-import type { WorktreeOccurrencePlan } from '../../../../../../shared/worktree-occurrence-plan'
+import { getWorktreeLineageGroupKey } from '../../../../../../shared/sidebar-list/sections/group-keys'
+import type { ProjectGroupingModel } from '../../../../../../shared/sidebar-list/sections/project-section-grouping'
+import type { WorktreeOccurrencePlan } from '../../../../../../shared/sidebar-list/lineage/worktree-occurrence-plan'
 import type {
   PinnedWorktreeDisplayPolicy,
   WorktreeGroupBy
 } from '../../../../../../shared/sidebar-list/row-types'
 import { planSidebarRows } from '../../../../../../shared/sidebar-list/sidebar-row-plan'
+import type { SidebarLineageParentIdentities } from '../../../../../../shared/sidebar-list/lineage/worktree-lineage-projection'
 import { createSidebarPRGroupReader } from '../grouping/pr-group-key'
 
 export function getWorktreeRevealCollapsedGroupKeys(args: {
@@ -26,6 +27,8 @@ export function getWorktreeRevealCollapsedGroupKeys(args: {
   visibleWorktrees?: readonly Worktree[]
   filterRepoIds?: readonly string[]
   worktreeLineageById: Readonly<Record<string, WorktreeLineage>>
+  /** Needed only without an occurrence plan, so a parent on another machine is revealed too. */
+  lineageParentIdentities?: SidebarLineageParentIdentities
   repoMap: Map<string, Repo>
   defaultHostId: ExecutionHostId
   hostScopedGroups: boolean
@@ -53,6 +56,7 @@ export function getWorktreeRevealCollapsedGroupKeys(args: {
       workspaceStatuses: args.workspaceStatuses,
       projectOrderBy: 'manual',
       lineageById: { ...args.worktreeLineageById },
+      lineageParentIdentities: args.lineageParentIdentities,
       worktreeMap: new Map(args.worktrees.map((row) => [row.id, row])),
       nestLineage: true,
       projectGroups: args.projectGroups,

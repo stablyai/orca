@@ -1,4 +1,4 @@
-import type { NativeChatSubscriptionFrame } from '../../../../preload/api-types'
+import type { NativeChatSubscriptionFrame } from '../../../../preload/api/native-chat/native-chat-api'
 import type {
   NativeChatMessage,
   NativeChatTurnLifecycle
@@ -8,9 +8,9 @@ import {
   applyAppend,
   replaceList,
   type NativeChatMerger
-} from '../../../../shared/native-chat/native-chat-merge'
-import type { ReadState } from './native-chat-live-session-contract'
-import type { NativeChatReadRetryTimer } from './native-chat-read-retry-timer'
+} from '../../../../shared/native-chat/transcript/streaming/native-chat-merge'
+import type { ReadState } from './session/terminal/read/native-chat-live-session-contract'
+import type { NativeChatReadRetryTimer } from './session/terminal/read/native-chat-read-retry-timer'
 
 export type NativeChatSubagentSeed = readonly NativeChatSubagentActivity[] | null
 
@@ -30,6 +30,10 @@ export type NativeChatLiveFrameSink = {
     append: (lifecycle: NativeChatTurnLifecycle | undefined) => void
   }
   flags: { frameArrived: boolean; transcriptPending: boolean }
+  /** Main's live session bumps the snapshot identity the pane uses to reset scroll. */
+  setTranscriptSnapshot?: (epoch: number) => void
+  /** Keep a provider row intact when the snapshot is longer than the window. */
+  boundWindow?: (messages: readonly NativeChatMessage[], limit: number) => NativeChatMessage[]
 }
 
 /** Apply one subscribe frame. Task-list frames never start a transcript generation. */
@@ -62,11 +66,15 @@ export function applyNativeChatLiveFrame(
       return
     }
     sink.flags.frameArrived = true
+    sink.setTranscriptSnapshot?.(sink.epochRef.current)
     sink.lifecycle.replace(frame.lifecycle)
-    replaceList(sink.appendMerger, frame.messages)
+    const messages = sink.boundWindow
+      ? sink.boundWindow(frame.messages, sink.limitRef.current)
+      : frame.messages
+    replaceList(sink.appendMerger, messages)
     sink.setAppended([])
     sink.setRead({ phase: 'ready', messages: sink.appendMerger.list })
-    sink.setHasMore(frame.hasMore)
+    sink.setHasMore(sink.boundWindow ? frame.hasMore || messages !== frame.messages : frame.hasMore)
     return
   }
   sink.lifecycle.append(frame.lifecycle)

@@ -1,17 +1,17 @@
 import {
   getTeamMembersOrThrow as getLinearTeamMembersOrThrow,
   getTeamStatesOrThrow as getLinearTeamStatesOrThrow
-} from '../../../linear/teams'
+} from '../../../linear/teams/linear-team-queries'
 import { isLinearUuid } from '../../../../shared/linear/uuid'
-import { getIssueByUuidForAgent as getLinearIssueByUuidForAgent } from '../../../linear/linear-issue-lookups'
-import { linearError } from '../../../linear/issue-context/errors'
-import { readLinearIssueContext } from '../../../linear/issue-context/read-context'
+import { getIssueByUuidForAgent as getLinearIssueByUuidForAgent } from '../../../linear/issues/linear-issue-lookups'
+import { linearError } from '../../../linear/issues/context/linear-access-errors'
+import { readLinearIssueContext } from '../../../linear/issues/context/read-issue-context'
 import type {
   LinearIssueTaskUpdateRequest,
   LinearSaveIssueRequest,
   LinearCurrentIssueContextHints
 } from '../../../../shared/linear/agent-access'
-import type { LinearIssueUpdate } from '../../../../shared/issue-mutation-types'
+import type { LinearIssueUpdate } from '../../../../shared/work-items/issue-mutation-types'
 import type { LinearAgentWriteTarget } from './linear-agent-write-target'
 import { RuntimeLinearLabelWriteCommands } from './runtime-linear-label-write-commands'
 

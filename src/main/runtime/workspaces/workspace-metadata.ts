@@ -2,7 +2,7 @@ import type {
   RemoteFetchResult,
   RemoteTrackingBase
 } from '../repositories/runtime-remote-fetch-controller'
-import type { WorktreeBaseStatusEvent } from '../../../shared/worktree/base-ref-drift-types'
+import type { WorktreeBaseStatusEvent } from '../../../shared/worktree/base-refs/base-ref-drift-types'
 import { probeRuntimeWorktreeDrift } from './metadata/runtime-worktree-drift-probe'
 import type { WorktreeMeta } from '../../../shared/worktree/meta-types'
 import type { GitPushTarget } from '../../../shared/worktree/types'
@@ -10,9 +10,47 @@ import {
   persistRuntimeManagedWorktreeSortOrder,
   updateRuntimeManagedWorktreeMetadata
 } from './metadata/runtime-managed-worktree-metadata'
+import type { CrossStoreParentRef } from '../../../shared/worktree/lineage-types'
 import { RuntimeWorktreeReviewBase } from './metadata/runtime-worktree-review-base'
+import type { WorkspaceKey } from '../../../shared/workspace/identity/workspace-scope'
+import {
+  folderWorkspaceKey,
+  parseWorkspaceKey
+} from '../../../shared/workspace/identity/workspace-scope'
+import { getRepoIdFromWorktreeId } from '../../../shared/worktree/id'
+import { WORKSPACE_RECORD_DOMAINS } from '../../persistence/profile-save-domains'
+import { countUnreadWorkspaces } from './metadata/unread-workspace-count'
+
+function writesWorkspaceRecords(domains: readonly string[] | undefined): boolean {
+  return domains === undefined || WORKSPACE_RECORD_DOMAINS.some((d) => domains.includes(d))
+}
 
 export abstract class RuntimeWorkspaceMetadata extends RuntimeWorktreeReviewBase {
+  countUnreadWorkspaces(): number {
+    return countUnreadWorkspaces(this.store)
+  }
+
+  onWorkspaceRecordsWritten(listener: () => void): () => void {
+    return (
+      this.store?.onStateWritten?.((domains) => {
+        if (writesWorkspaceRecords(domains)) {
+          listener()
+        }
+      }) ?? (() => {})
+    )
+  }
+
+  /** Every unread write (window, phone, CLI, activation) lands in a workspace record; activity stamps that keep the flags are skipped. */
+  onUnreadStateWritten(listener: () => void): () => void {
+    return (
+      this.store?.onStateWritten?.((domains, options) => {
+        if (!options?.preservesUnreadState && writesWorkspaceRecords(domains)) {
+          listener()
+        }
+      }) ?? (() => {})
+    )
+  }
+
   recordOptimisticReconcileToken(worktreeId: string): string {
     return this.worktreeBaseReconciliation.recordToken(worktreeId)
   }
@@ -61,6 +99,9 @@ export abstract class RuntimeWorkspaceMetadata extends RuntimeWorktreeReviewBase
       pushTarget?: GitPushTarget | null
       lineage?: {
         parentWorktree?: string
+        matchFolderWorkspaces?: boolean
+        crossStoreParent?: CrossStoreParentRef
+        crossStoreParentIsBotHome?: true
         noParent?: boolean
       }
     }
@@ -68,19 +109,65 @@ export abstract class RuntimeWorkspaceMetadata extends RuntimeWorktreeReviewBase
     if (!this.store) {
       throw new Error('runtime_unavailable')
     }
+    // A folder workspace's only lineage is its workspace link; other fields stay git-only as before.
+    const { lineage, ...rest } = updates
+    const folder =
+      lineage?.noParent === true && Object.values(rest).every((value) => value === undefined)
+        ? this.resolveFolderWorkspaceSelector(worktreeSelector)
+        : null
+    if (folder) {
+      const folderKey = folderWorkspaceKey(folder.id)
+      this.store.removeWorkspaceLineage?.((link) => link.childWorkspaceKey === folderKey)
+      this.invalidateResolvedWorktreeCache()
+      this.notifyFolderWorkspaceChanged()
+      return this.showManagedWorktree(worktreeSelector)
+    }
     return updateRuntimeManagedWorktreeMetadata({
       selector: worktreeSelector,
       updates,
       store: this.store,
       ports: {
         resolveWorktree: (selector) => this.resolveGitWorktreeSelector(selector),
+        resolveParent: (selector, options) => this.worktreeLineage.resolveParent(selector, options),
         validateParent: (worktree, parent) => this.worktreeLineage.validateParent(worktree, parent),
+        readStoreInstallationId: () => this.worktreeLineage.readStoreInstallationId(),
         invalidateResolved: () => this.invalidateResolvedWorktreeCache(),
         invalidateScan: (repoId) => this.invalidateWorktreeScanCacheForRepo(repoId),
         notifyChanged: (repoId) => this.notifyWorktreesChanged(repoId),
         showWorktree: (selector) => this.showManagedWorktree(selector)
       }
     })
+  }
+
+  /** Drops every link under a deleted bot's home on this host: same-store ones, and ones to a home on
+   *  the computer `homeInstallationId` names. */
+  releaseBotHome(botHomeKey: WorkspaceKey, homeInstallationId?: string): { released: number } {
+    const store = this.requireStore()
+    const released = [
+      ...(store.removeWorkspaceLineage?.((lineage) => lineage.parentWorkspaceKey === botHomeKey) ??
+        []),
+      ...(homeInstallationId
+        ? (store.removeCrossStoreWorkspaceLineage?.(
+            ({ parent }) =>
+              parent.workspaceKey === botHomeKey && parent.installationId === homeInstallationId
+          ) ?? [])
+        : [])
+    ]
+    if (released.length === 0) {
+      return { released: 0 }
+    }
+    this.invalidateResolvedWorktreeCache()
+    this.notifyFolderWorkspaceChanged()
+    const repoIds = new Set(
+      released.flatMap((key) => {
+        const parsed = parseWorkspaceKey(key)
+        return parsed?.type === 'worktree' ? [getRepoIdFromWorktreeId(parsed.worktreeId)] : []
+      })
+    )
+    for (const repoId of repoIds) {
+      this.notifyWorktreesChanged(repoId)
+    }
+    return { released: released.length }
   }
 
   persistManagedWorktreeSortOrder(

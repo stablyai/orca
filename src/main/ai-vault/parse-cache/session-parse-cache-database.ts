@@ -1,3 +1,4 @@
+import { startSpan } from '../../observability/tracer'
 // Scanner-owned per-transcript rows persist changes without rewriting or capping the full working set.
 import { isSqliteCorruption } from '../../sqlite/sqlite-read-failure'
 import { hardenSqliteDatabaseFiles } from '../../sqlite/harden-database-files'
@@ -24,7 +25,7 @@ import {
 } from '../transcripts/session-transcript-record-budget'
 
 // Bump for row-layout or cached-semantic changes; mismatched databases are discarded.
-export const SESSION_PARSE_CACHE_SCHEMA_VERSION = 9
+export const SESSION_PARSE_CACHE_SCHEMA_VERSION = 10
 
 const SCHEMA_SQL = `
 CREATE TABLE IF NOT EXISTS meta(key TEXT PRIMARY KEY, value TEXT NOT NULL);
@@ -44,6 +45,25 @@ CREATE TABLE IF NOT EXISTS rows(
 );
 CREATE INDEX IF NOT EXISTS rows_seen_at ON rows(seen_at);
 `
+// Reparse rows cached before a parser fix once, without a schema bump. The pending gate is the
+// outer loop, so later opens skip the rows scan.
+function rowsRepairSql(versionKey: string, rowFilter: string): string {
+  return `
+DELETE FROM rows WHERE rowid IN (
+  SELECT rows.rowid
+  FROM (SELECT 1 WHERE NOT EXISTS (
+    SELECT 1 FROM meta WHERE key = '${versionKey}' AND value = '1'
+  )) AS pending CROSS JOIN rows
+  WHERE ${rowFilter}
+);
+INSERT OR REPLACE INTO meta(key, value) VALUES ('${versionKey}', '1');
+`
+}
+const ROWS_REPAIR_SQL =
+  // Grok rows (summary.json) cached before the synthetic-turn filter.
+  rowsRepairSql('grok_rows_version', "rows.path GLOB '*[/\\]summary.json'") +
+  // Pi rows cached before session_info names became titles.
+  rowsRepairSql('pi_title_rows_version', `instr(rows.session, '"agent":"pi"') > 0`)
 // Rows hold transcript-derived preview text; keep the directory user-only.
 const PRIVATE_DIRECTORY_MODE = 0o700
 // A ~2.3 KB row fills most of a 4 KB page; 8 KB pages fit three.
@@ -194,9 +214,11 @@ export class SessionParseCacheDatabase {
     if (db === null) {
       return fallback
     }
+    const span = startSpan('aiVault.parseCache.sqlite')
     try {
       return operation(db)
     } catch (error) {
+      span.fail(error instanceof Error ? error : String(error))
       console.debug('[ai-vault] session parse cache database failed', error)
       if (isSqliteCorruption(error)) {
         this.close()
@@ -211,6 +233,8 @@ export class SessionParseCacheDatabase {
         }
       }
       return fallback
+    } finally {
+      span.end()
     }
   }
 }
@@ -218,7 +242,7 @@ export class SessionParseCacheDatabase {
 function openDatabase(path: string): SyncDatabase {
   const db = openVersionedCacheDatabase(path, {
     version: SESSION_PARSE_CACHE_SCHEMA_VERSION,
-    sql: SCHEMA_SQL,
+    sql: `${SCHEMA_SQL}${ROWS_REPAIR_SQL}`,
     directoryMode: PRIVATE_DIRECTORY_MODE,
     pageSize: PAGE_SIZE,
     afterSchema: ensureScopeCwdsTable

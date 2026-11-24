@@ -1,8 +1,11 @@
 import { readFile, realpath } from 'node:fs/promises'
 import { posix } from 'node:path'
-import { WslHostWindowsDriveRefusalError } from '../../../../shared/wsl-host-windows-drive-refusal'
-import { isWslHostOrcadProcess } from '../../../ipc/wsl-guest-windows-drive-path'
-import { parseWindowsDriveMountInfo, type WindowsDriveMount } from '../../wsl-guest-drive-mountinfo'
+import { WslHostWindowsDriveRefusalError } from '../../../../shared/remote-runtime/wsl-hosts/wsl-host-windows-drive-refusal'
+import { isWslHostOrcadProcess } from '../../../wsl/filesystem/wsl-guest-windows-drive-path'
+import {
+  parseWindowsDriveMountInfo,
+  type WindowsDriveMount
+} from '../../../wsl/filesystem/wsl-guest-drive-mountinfo'
 
 export type WslHostWindowsDriveGuardDeps = {
   isWslHost: () => boolean

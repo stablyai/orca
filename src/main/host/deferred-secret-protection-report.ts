@@ -1,4 +1,4 @@
-import { runAfterFirstWindowShown } from '../startup/first-window-deferral'
+import { runAfterFirstWindowShown } from '../startup/main-window/first-window-deferral'
 import { reportSecretProtectionGap } from './secret-protection-report'
 
 /** Defer diagnostic keyring probes: locked Linux keyrings can block startup for 76s (STA-5765). */

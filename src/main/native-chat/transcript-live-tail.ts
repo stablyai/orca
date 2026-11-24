@@ -6,7 +6,7 @@ import {
   readNativeChatTranscriptTailFile,
   type NativeChatLineDecoder
 } from './transcript-tail-reader'
-import type { NativeChatTurnLifecycleDecoder } from './transcript-turn-lifecycle'
+import type { NativeChatTurnLifecycleDecoder } from './transcript-decoding/transcript-turn-lifecycle'
 
 type LiveTailPage = {
   messages: NativeChatMessage[]

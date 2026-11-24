@@ -1,12 +1,8 @@
-import {
-  assertPositiveInt,
-  projectGhExecOptions,
-  runGraphql,
-  validateSlugArgs,
-  type GraphqlVars
-} from './internals'
-import type { GitHubProjectMutationResult } from '../../../shared/github/project-result-types'
-import type { UpdateIssueTypeBySlugArgs } from '../../../shared/github/project-request-types'
+import { assertPositiveInt, validateSlugArgs } from './project-argument-validation'
+import { projectGhExecOptions } from './project-host-execution'
+import { runGraphql, type GraphqlVars } from './project-graphql'
+import type { GitHubProjectMutationResult } from '../../../shared/github/projects/project-result-types'
+import type { UpdateIssueTypeBySlugArgs } from '../../../shared/github/projects/project-request-types'
 
 export async function updateIssueTypeBySlug(
   args: UpdateIssueTypeBySlugArgs

@@ -13,8 +13,8 @@ import {
   isJiraImageMimeType
 } from '../../../shared/jira/jira-attachment-image'
 import { withJiraDeadline } from '../jira-read-failure'
-import { PrioritySemaphore } from '../../../shared/priority-semaphore'
-import { waitForPromiseWithSignal } from '../../../shared/abort-signal-reason'
+import { PrioritySemaphore } from '../../../shared/concurrency/priority-semaphore'
+import { waitForPromiseWithSignal } from '../../../shared/concurrency/abort-signal-reason'
 
 const downloads = new PrioritySemaphore(3)
 const interests = new Map<string, { controller: AbortController; readers: number }>()

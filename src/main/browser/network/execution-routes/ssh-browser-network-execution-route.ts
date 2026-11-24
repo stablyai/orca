@@ -1,34 +1,41 @@
-import type { DirectSshAuthority, SshProviderEpoch } from '../../../../shared/ssh-types'
+import type {
+  DirectSshAuthority,
+  SshProviderEpoch
+} from '../../../../shared/remote-runtime/ssh/ssh-types'
 import type { SshConnection } from '../../../ssh/connection/ssh-connection'
 import type { SshConnectionManager } from '../../../ssh/connection/ssh-connection-manager'
 import type { Client as SshClient, ClientChannel } from 'ssh2'
-import type { BrowserNetworkTunnelOpen } from '../../../../shared/browser-network-tunnel-protocol'
+import type { BrowserNetworkTunnelOpen } from '../../../../shared/browser/network/tunnels/browser-network-tunnel-protocol'
 import {
   loadHostProxyEnvironment,
   readSshHostProxyEnvironment
-} from '../../../ssh/ssh-host-proxy-environment'
+} from '../../../ssh/remote-host/ssh-host-proxy-environment'
 import {
   startSystemSshDynamicForwardProcess,
   type SystemSshDynamicForwardProcess
-} from '../../../ssh/system-transport/system-ssh-dynamic-forward-process'
+} from '../../../ssh/system-transport/forwarding/system-ssh-dynamic-forward-process'
 import { BrowserNetworkDeferredSocket } from './browser-network-deferred-socket'
-import {
-  browserNetworkExecutionHostKey,
-  type BrowserNetworkExecutionRoute,
-  type BrowserNetworkExecutionRouteContext,
-  openConnectedSocket
-} from './browser-network-execution-route'
-import {
-  connectThroughBrowserNetworkTunnelProxy,
-  type BrowserNetworkTunnelDialer
-} from '../tunnels/browser-network-tunnel-proxy-connect'
-import {
-  selectBrowserNetworkTunnelProxy,
-  type BrowserNetworkTunnelProxy
-} from '../tunnels/browser-network-tunnel-proxy-selection'
-import type { BrowserNetworkTunnelSocket } from '../tunnels/browser-network-tunnel-stream-state'
+import './browser-network-execution-route'
+import { browserNetworkExecutionHostKey } from '../../../../shared/browser/client-hosting/browser-network-execution-host'
+import type {
+  BrowserNetworkExecutionRoute,
+  BrowserNetworkExecutionRouteContext
+} from './browser-network-execution-route-contract'
+import { openConnectedSocket } from '../tunnels/browser-network-connected-socket'
+import { selectBrowserNetworkTunnelProxy } from '../tunnels/browser-network-tunnel-proxy-selection'
 import { openExecutionRouteSocketAsDuplex } from '../tunnels/execution-route-socket-duplex'
 import { SystemSshSocksClientSocket } from '../tunnels/system-ssh-socks-client-socket'
+import { probeSsh2BrowserEgress, probeSystemSshBrowserEgress } from './ssh-browser-egress-probe'
+import {
+  createSshHostRelayRoute,
+  launchSshBrowserNetworkHostRelay,
+  type LaunchHostRelay
+} from './ssh-browser-network-host-relay'
+import {
+  finishSshBrowserNetworkRoute,
+  isSshBrowserNetworkRouteBaseCurrent,
+  type SshBrowserNetworkRouteBase
+} from './ssh-browser-network-route-base'
 
 export type SshBrowserNetworkExecutionRouteDependencies = {
   connectionManager: Pick<SshConnectionManager, 'getConnection'>
@@ -42,6 +49,7 @@ export type SshBrowserNetworkExecutionRouteDependencies = {
     connection: SshConnection,
     signal: AbortSignal
   ) => Promise<Record<string, string>>
+  launchHostRelay?: LaunchHostRelay
 }
 
 export async function resolveSshBrowserNetworkExecutionRoute(
@@ -93,74 +101,58 @@ export async function resolveSshBrowserNetworkExecutionRoute(
     releaseInvalidation()
     throw new Error('browser_tunnel_execution_host_stale')
   }
-  const base = {
+  const base: SshBrowserNetworkRouteBase = {
     key: browserNetworkExecutionHostKey(host),
     authority,
     connection,
     invalidation,
     releaseInvalidation,
-    dependencies,
+    connectionManager: dependencies.connectionManager,
+    isCurrentAuthority: dependencies.isCurrentAuthority,
     // Destinations leave from the host, so the host's proxy applies, never this machine's Orca setting.
     selectProxy: (target: BrowserNetworkTunnelOpen) =>
       selectBrowserNetworkTunnelProxy(target, null, hostProxyEnvironment())
   }
+  const launchHostRelay = dependencies.launchHostRelay ?? launchSshBrowserNetworkHostRelay
   const client = connection.getClient()
   if (client) {
-    return createSsh2ExecutionRoute(base, client)
+    // Once per route, never per connection: hosts that forward normally keep forwarding directly.
+    if ((await probeSsh2BrowserEgress(connection)) === 'refused') {
+      return (
+        (await createSshHostRelayRoute(base, launchHostRelay)) ??
+        createSsh2ExecutionRoute(base, client, true)
+      )
+    }
+    return createSsh2ExecutionRoute(base, client, false)
   }
   if (!connection.usesSystemSshTransport()) {
     releaseInvalidation()
     throw new Error('browser_tunnel_execution_host_unavailable')
   }
-  return createSystemSshExecutionRoute(base, dependencies.startDynamicForward)
-}
-
-type RouteBase = {
-  key: string
-  authority: DirectSshAuthority
-  connection: SshConnection
-  invalidation: AbortController
-  releaseInvalidation: () => void
-  dependencies: SshBrowserNetworkExecutionRouteDependencies
-  selectProxy: (target: BrowserNetworkTunnelOpen) => BrowserNetworkTunnelProxy
+  return createSystemSshExecutionRoute(
+    base,
+    dependencies.startDynamicForward ?? defaultStartDynamicForward,
+    launchHostRelay
+  )
 }
 
 function createSsh2ExecutionRoute(
-  base: RouteBase,
-  client: SshClient
+  base: SshBrowserNetworkRouteBase,
+  client: SshClient,
+  forwardingBlocked: boolean
 ): BrowserNetworkExecutionRoute {
-  const sockets = new Set<BrowserNetworkTunnelSocket>()
-  let closed = false
-  const isValid = (): boolean =>
-    !closed &&
-    !base.invalidation.signal.aborted &&
-    base.connection.getClient() === client &&
-    base.connection.getState().status === 'connected' &&
-    base.dependencies.connectionManager.getConnection(base.authority.targetId) ===
-      base.connection &&
-    base.dependencies.isCurrentAuthority(base.authority)
-  const close = (): void => {
-    if (closed) {
-      return
-    }
-    closed = true
-    base.releaseInvalidation()
-    base.invalidation.abort()
-    for (const socket of sockets) {
-      socket.destroy()
-    }
-    sockets.clear()
-  }
+  const isCurrent = (): boolean =>
+    isSshBrowserNetworkRouteBaseCurrent(base) && base.connection.getClient() === client
   const forwardOut = (target: BrowserNetworkTunnelOpen): Promise<ClientChannel> =>
     new Promise((resolve, reject) => {
-      if (!isValid()) {
+      if (!isCurrent()) {
         reject(new Error('browser_tunnel_execution_host_stale'))
         return
       }
       client.forwardOut('127.0.0.1', 0, target.host, target.port, (error, channel) => {
         if (error) {
           reject(error)
-        } else if (!isValid()) {
+        } else if (!isCurrent()) {
           channel.close()
           reject(new Error('browser_tunnel_execution_host_stale'))
         } else {
@@ -168,29 +160,29 @@ function createSsh2ExecutionRoute(
         }
       })
     })
-  const dialer: BrowserNetworkTunnelDialer = {
-    connect: (target) => {
-      const socket = new BrowserNetworkDeferredSocket()
-      forwardOut(target).then(
-        (channel) => socket.attach(channel),
-        (error: unknown) => socket.fail(asError(error))
-      )
-      return socket
-    },
-    openTransport: forwardOut
-  }
-  return {
-    key: base.key,
-    isValid,
-    whenInvalidated: abortPromise(base.invalidation.signal),
-    connect: (target) => track(sockets, connectFromHost(base, dialer, target)),
-    close
-  }
+  return finishSshBrowserNetworkRoute(base, {
+    isValid: () => base.connection.getClient() === client,
+    forwardingBlocked,
+    dialer: {
+      connect: (target) => {
+        const socket = new BrowserNetworkDeferredSocket()
+        forwardOut(target).then(
+          (channel) => socket.attach(channel),
+          (error: unknown) => socket.fail(asError(error))
+        )
+        return socket
+      },
+      openTransport: forwardOut
+    }
+  })
 }
 
 async function createSystemSshExecutionRoute(
-  base: RouteBase,
-  startDynamicForward: SshBrowserNetworkExecutionRouteDependencies['startDynamicForward'] = defaultStartDynamicForward
+  base: SshBrowserNetworkRouteBase,
+  startDynamicForward: NonNullable<
+    SshBrowserNetworkExecutionRouteDependencies['startDynamicForward']
+  >,
+  launchHostRelay: LaunchHostRelay
 ): Promise<BrowserNetworkExecutionRoute> {
   let forward: SystemSshDynamicForwardProcess
   try {
@@ -200,90 +192,57 @@ async function createSystemSshExecutionRoute(
     base.invalidation.abort()
     throw error
   }
-  const sockets = new Set<BrowserNetworkTunnelSocket>()
-  let closed = false
-  const isValid = (): boolean =>
-    !closed &&
-    !base.invalidation.signal.aborted &&
-    forward.process.exitCode === null &&
-    forward.process.signalCode === null &&
-    base.connection.getState().status === 'connected' &&
-    base.dependencies.connectionManager.getConnection(base.authority.targetId) ===
-      base.connection &&
-    base.dependencies.isCurrentAuthority(base.authority)
+  const stopForward = async (): Promise<void> => {
+    forward.dispose()
+    await forward.close()
+  }
+  let forwardingBlocked = false
+  if ((await probeSystemSshBrowserEgress(forward)) === 'refused') {
+    const relay = await createSshHostRelayRoute(base, launchHostRelay).catch(
+      async (error: unknown) => {
+        await stopForward()
+        throw error
+      }
+    )
+    if (relay) {
+      await stopForward()
+      return relay
+    }
+    forwardingBlocked = true
+  }
+  const forwardAlive = (): boolean =>
+    forward.process.exitCode === null && forward.process.signalCode === null
   const forwardTo = (target: BrowserNetworkTunnelOpen): SystemSshSocksClientSocket =>
     new SystemSshSocksClientSocket(target, (signal) =>
       openConnectedSocket({ host: '127.0.0.1', port: forward.localPort }, signal)
     )
-  const dialer: BrowserNetworkTunnelDialer = {
-    connect: forwardTo,
-    openTransport: (endpoint, signal) => {
-      const socket = forwardTo(endpoint)
-      signal.addEventListener('abort', () => socket.destroy(), { once: true })
-      return openExecutionRouteSocketAsDuplex(socket)
-    }
-  }
   const onExit = (): void => base.invalidation.abort()
   const onError = (): void => base.invalidation.abort()
   forward.process.once('exit', onExit)
   forward.process.once('error', onError)
-  if (!isValid()) {
+  const closeForward = async (): Promise<void> => {
     forward.process.off('exit', onExit)
     forward.process.off('error', onError)
-    forward.dispose()
-    await forward.close()
+    await stopForward()
+  }
+  if (!isSshBrowserNetworkRouteBaseCurrent(base) || !forwardAlive()) {
+    await closeForward()
     base.releaseInvalidation()
     throw new Error('browser_tunnel_execution_host_stale')
   }
-  const close = async (): Promise<void> => {
-    if (closed) {
-      return
-    }
-    closed = true
-    base.releaseInvalidation()
-    base.invalidation.abort()
-    forward.process.off('exit', onExit)
-    forward.process.off('error', onError)
-    for (const socket of sockets) {
-      socket.destroy()
-    }
-    sockets.clear()
-    forward.dispose()
-    await forward.close()
-  }
-  return {
-    key: base.key,
-    isValid,
-    whenInvalidated: abortPromise(base.invalidation.signal),
-    connect: (target) => {
-      if (!isValid()) {
-        // A bare destroy reaches the session as a pre-connect close; its siblings all fail loudly.
-        const socket = new BrowserNetworkDeferredSocket()
-        queueMicrotask(() => socket.fail(new Error('browser_tunnel_execution_host_stale')))
-        return socket
+  return finishSshBrowserNetworkRoute(base, {
+    isValid: forwardAlive,
+    forwardingBlocked,
+    close: closeForward,
+    dialer: {
+      connect: forwardTo,
+      openTransport: (endpoint, signal) => {
+        const socket = forwardTo(endpoint)
+        signal.addEventListener('abort', () => socket.destroy(), { once: true })
+        return openExecutionRouteSocketAsDuplex(socket)
       }
-      return track(sockets, connectFromHost(base, dialer, target))
-    },
-    close
-  }
-}
-
-/** Dials from the host through its proxy, so a host that only reaches the internet that way still browses. */
-function connectFromHost(
-  base: RouteBase,
-  dialer: BrowserNetworkTunnelDialer,
-  target: BrowserNetworkTunnelOpen
-): BrowserNetworkTunnelSocket {
-  return connectThroughBrowserNetworkTunnelProxy(target, base.selectProxy(target), dialer)
-}
-
-function track(
-  sockets: Set<BrowserNetworkTunnelSocket>,
-  socket: BrowserNetworkTunnelSocket
-): BrowserNetworkTunnelSocket {
-  sockets.add(socket)
-  socket.on('close', () => sockets.delete(socket))
-  return socket
+    }
+  })
 }
 
 function defaultStartDynamicForward(
@@ -292,16 +251,10 @@ function defaultStartDynamicForward(
 ): Promise<SystemSshDynamicForwardProcess> {
   return startSystemSshDynamicForwardProcess(
     connection.getTarget(),
-    connection.getSystemSshBuildArgsOptions(),
+    // The egress probe reads the host's answer from stderr, which a quiet LogLevel would hide.
+    { ...connection.getSystemSshBuildArgsOptions(), logChannelFailures: true },
     signal
   )
-}
-
-function abortPromise(signal: AbortSignal): Promise<void> {
-  if (signal.aborted) {
-    return Promise.resolve()
-  }
-  return new Promise((resolve) => signal.addEventListener('abort', () => resolve(), { once: true }))
 }
 
 function asError(error: unknown): Error {

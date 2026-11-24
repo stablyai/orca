@@ -1,10 +1,10 @@
-import { waitForPromiseWithSignal } from '../../../../shared/abort-signal-reason'
+import { waitForPromiseWithSignal } from '../../../../shared/concurrency/abort-signal-reason'
 import {
   linearError,
   sanitizeLinearErrorMessage,
   type LinearAgentAccessError
-} from '../../../linear/issue-context/errors'
-import { LinearWriteFailure } from '../../../linear/linear-issue-write-support'
+} from '../../../linear/issues/context/linear-access-errors'
+import { LinearWriteFailure } from '../../../linear/issues/linear-issue-write-support'
 
 export async function runLinearWriteAction<Owner, Result>(
   resolveOwner: (signal: AbortSignal) => Promise<Owner>,

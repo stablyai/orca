@@ -2,12 +2,12 @@
 
 import { agentJournalItemSubagentId } from '../../agent-session/journal/agent-session-journal-producer'
 import type { NativeChatMessage, NativeChatSubagentState } from '../native-chat-types'
-import { namedSubagents } from '../transcript/native-chat-subagent-items'
+import { namedSubagents } from '../transcript/subagents/native-chat-subagent-items'
 import {
   canReplaceSubagentState,
   isSubagentGroupFallbackText,
   normalizeSubagentState
-} from '../transcript/native-chat-subagent-summary'
+} from '../transcript/subagents/native-chat-subagent-summary'
 import { nativeChatToolSubagentActivities } from './native-chat-tool-subagents'
 
 const ACTIVITY_LIMIT = 160

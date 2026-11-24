@@ -155,7 +155,7 @@ jobs:
         uses: actions/cache@v5
         with:
           path: ~/Library/Caches/orca-node-runtime
-          key: orca-node-runtime-mac-${{ hashFiles('src/shared/node-runtime-pin.ts') }}
+          key: orca-node-runtime-mac-${{ hashFiles('src/shared/node-runtime/node-runtime-pin.ts') }}
 
       - name: Cache electron-builder downloads
         if: steps.freshness.outputs.should_build == 'true'
@@ -167,6 +167,11 @@ jobs:
           key: electron-builder-mac-${{ hashFiles('pnpm-lock.yaml') }}
           restore-keys: |
             electron-builder-mac-
+
+      # Restore-keys bring back every older Electron zip; drop them so the next save keeps only this version.
+      - name: Prune stale Electron downloads
+        shell: bash
+        run: if [ -f config/scripts/electron-installation/prune-electron-download-cache.mjs ]; then node config/scripts/electron-installation/prune-electron-download-cache.mjs; fi
 
       # Install x64 and arm64 optional natives for both packaged macOS targets.
       - name: Install dependencies
@@ -235,7 +240,7 @@ jobs:
         env:
           NODE_OPTIONS: --max-old-space-size=4096
           # Leave dev identity unset so official-only stable/rc telemetry stays silent.
-          ORCA_DIAGNOSTICS_TOKEN_URL: https://www.onorca.dev/diagnostics/token
+          ORCA_DIAGNOSTICS_TOKEN_URL: https://orca.dev/diagnostics/token
 
       # After the app build so nothing that cleans out/ can drop it; electron-builder ships it.
       - name: Download the orcad deployment template
@@ -329,6 +334,18 @@ jobs:
           private-key: ${{ secrets.HOURLY_RELEASE_APP_PRIVATE_KEY }}
           owner: stablyai
           repositories: orca-daily
+
+      # Builder cannot write this field, so older macOS updaters would install a build that won't launch.
+      - name: Gate the update manifest on the minimum macOS
+        if: steps.freshness.outputs.should_build == 'true'
+        shell: bash
+        env:
+          GH_TOKEN: ${{ steps.app_token_final.outputs.token }}
+          TAG: ${{ steps.release.outputs.tag }}
+        run: |
+          set -euo pipefail
+          node config/scripts/desktop-distribution/macos/gate-mac-update-manifests.mjs dist
+          gh release upload "$TAG" dist/*-mac.yml --repo "$DAILY_REPO" --clobber
 
       # Verify latest-mac.yml before exposing its release to prevent picker downloads returning 404.
       - name: Verify update manifest published

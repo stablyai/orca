@@ -2,7 +2,7 @@ import { useMemo, useRef, useState } from 'react'
 import { Ban, ChevronLeft, Users, X } from 'lucide-react'
 import { Popover, PopoverAnchor, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { translate } from '@/i18n/i18n'
-import { cn } from '@/lib/utils'
+import { cn } from '@/lib/class-names'
 import {
   nativeChatListedSubagents,
   nativeChatSubagentActivities,

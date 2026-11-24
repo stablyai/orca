@@ -10,9 +10,9 @@ import {
 } from '../../../../shared/native-chat/tools/native-chat-tool-identity'
 import type { AgentJournalItemBody } from '../../../../shared/agent-session/journal/agent-session-journal-types'
 import type { NativeChatBlock } from '../../../../shared/native-chat/native-chat-types'
-import { CODEX_ASYNC_QUESTION_TOOL } from '../../../../shared/codex-async-question-input'
-import { journalPayload } from '../../../native-chat/agent-session-journal/journal-payload-bounds'
-import { unhandledProviderFrameJournalItem } from '../../../native-chat/agent-session-wire/unhandled-provider-frame'
+import { CODEX_ASYNC_QUESTION_TOOL } from '../../../../shared/native-chat/input/questions/codex-async-question-input'
+import { journalPayload } from '../../../native-chat/agent-session-journal/item-lifecycle/journal-payload-bounds'
+import { unhandledProviderFrameJournalItem } from '../../../native-chat/agent-session-wire/providers/unhandled-provider-frame'
 import { codexImageItemBody } from './codex-image-item-translation'
 import { commandActionFacts } from './codex-command-action-class'
 import {
@@ -20,9 +20,10 @@ import {
   type CodexHelperName
 } from './codex-collab-agent-item-translation'
 import { codexItemRunState } from './codex-item-run-state'
+import { codexFileChangePatch } from './codex-file-change-patch'
 import { readRecord, readString, readTextContent } from '../../app-server/codex-item-field-readers'
 import type { CodexThreadItem } from './codex-thread-item-identity'
-import { journalReasoningBody } from '../../../native-chat/agent-session-journal/journal-reasoning-row'
+import { journalReasoningBody } from '../../../native-chat/agent-session-journal/item-lifecycle/journal-reasoning-row'
 
 export function codexMessageBlocks(item: CodexThreadItem): NativeChatBlock[] {
   const text =
@@ -112,17 +113,18 @@ function fileChangeItem(item: CodexThreadItem): CodexJournalItem {
         const record = typeof change === 'object' && change !== null ? readRecord(change) : {}
         const path = readString(record, 'path')
         const diff = readString(record, 'diff')
-        return path && diff ? [{ path, diff }] : []
+        return path && diff ? [{ path, diff, kind: record.kind }] : []
       })
     : []
   if (changes.length === 0 || codexItemRunState(item) !== 'completed') {
     return fileChangeToolCall(item)
   }
-  const patch = changes.map((change) => change.diff).join('\n')
+  const patch = codexFileChangePatch(changes)
   return {
     body: {
       kind: 'diff',
       path: changes.length === 1 ? changes[0]!.path : `${changes.length} files`,
+      ...(changes.length > 1 ? { paths: changes.map((change) => change.path) } : {}),
       patch: journalPayload(patch)
     },
     handled: true

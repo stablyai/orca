@@ -1,24 +1,105 @@
 import type { ParsedAgentStatusPayload } from '../../../../shared/agent-status/contracts/agent-status-types'
 import { isAgentStatusHeldOpenByChildWork } from '../../../../shared/agent-status/lifecycle/agent-lead-status-fold'
+import { AGENT_STATUS_STALE_AFTER_MS } from '../../../../shared/agent-status/contracts/agent-status-freshness'
 import type { EnrichedAgentHookEventPayload } from '../server-types'
 
 // Long tool calls can be hook-silent; allow sustained disagreement before yielding to OSC 7501.
 export const HOOK_SILENCE_BEFORE_PROGRAM_STATUS_FALLBACK_MS = 2 * 60 * 1000
 
+// Captured agy 1.5 runs woke the parent about 100 ms after its subagent's Stop; this leaves slack.
+export const ANTIGRAVITY_PARENT_WAKE_GRACE_MS = 2000
+
+/** Re-offered agy done reports, so one that arrived before its subagent's Stop is retried only once. */
+type TerminalStatusEventIdentity = { paneKey: string }
+const retriedAntigravityDones = new WeakSet<TerminalStatusEventIdentity>()
+
+function isAntigravityHelperHeldDone(
+  previous: EnrichedAgentHookEventPayload,
+  payload: ParsedAgentStatusPayload
+): boolean {
+  return (
+    payload.state === 'done' &&
+    payload.sessionBoundary !== true &&
+    previous.payload.agentType === 'antigravity' &&
+    previous.payload.workingMode !== 'monitoring' &&
+    isAgentStatusHeldOpenByChildWork(previous.payload)
+  )
+}
+
+/** agy's done can beat its subagent's Stop hook (PTY vs HTTP), so a refused one is retried after the grace. */
+export function antigravityRefusedDoneRetryMs(
+  previous: EnrichedAgentHookEventPayload | undefined,
+  payload: ParsedAgentStatusPayload,
+  yieldEndsAt: number | undefined,
+  event: TerminalStatusEventIdentity
+): number | undefined {
+  if (
+    yieldEndsAt !== Infinity ||
+    previous?.observation?.origin !== 'hook' ||
+    !isAntigravityHelperHeldDone(previous, payload) ||
+    retriedAntigravityDones.has(event)
+  ) {
+    return undefined
+  }
+  return ANTIGRAVITY_PARENT_WAKE_GRACE_MS
+}
+
+export function markAntigravityDoneRetried<T extends TerminalStatusEventIdentity>(event: T): T {
+  retriedAntigravityDones.add(event)
+  return event
+}
+
+function isOpenCodeAgent(agentType: string | undefined): boolean {
+  return agentType === 'opencode' || agentType === 'opencode2'
+}
+
+/** OpenCode's OSC 7501 covers every session sharing its folder's tabs; its hook covers only the pane's own. */
+export function isOpenCodeHookRow(
+  row: Pick<EnrichedAgentHookEventPayload, 'observation' | 'payload'>
+): boolean {
+  return row.observation?.origin === 'hook' && isOpenCodeAgent(row.payload.agentType)
+}
+
 /** Hook precedence ends at this time; undefined means no yield, Infinity means silence cannot end it. */
 export function programStatusHookYieldEndsAt(
   previous: EnrichedAgentHookEventPayload | undefined,
   payload: ParsedAgentStatusPayload,
-  programWorkingSince?: number
+  programWorkingSince?: number,
+  antigravityHelpersIdleAt?: number
 ): number | undefined {
   if (previous?.observation?.origin !== 'hook' || previous.providerSessionOnly === true) {
     return undefined
+  }
+  // OpenCode's OSC 7501 idle means every session rests, so only that can overrule a silent hook.
+  if (
+    isOpenCodeHookRow(previous) &&
+    isOpenCodeAgent(payload.agentType) &&
+    payload.state !== 'done'
+  ) {
+    return Infinity
   }
   const sameAgent =
     payload.agentType === undefined || payload.agentType === previous.payload.agentType
   // Different app IDs can be forks; only a completed hook agent lets a different program take over immediately.
   if (!sameAgent && previous.payload.state === 'done') {
     return undefined
+  }
+  // agy reports no end for a backgrounded command that never exits, so its hold lapses after hook silence.
+  if (
+    payload.state === 'done' &&
+    payload.sessionBoundary !== true &&
+    previous.payload.agentType === 'antigravity' &&
+    previous.payload.workingMode === 'monitoring' &&
+    isAgentStatusHeldOpenByChildWork(previous.payload)
+  ) {
+    return previous.receivedAt + AGENT_STATUS_STALE_AFTER_MS
+  }
+  // When the last subagent ends after its parent's turn, agy's done is its only end signal.
+  // A parent wake follows the run's latest hook, which may be a busy Stop after the subagent's.
+  if (antigravityHelpersIdleAt !== undefined && isAntigravityHelperHeldDone(previous, payload)) {
+    return (
+      Math.max(antigravityHelpersIdleAt, previous.receivedAt) + ANTIGRAVITY_PARENT_WAKE_GRACE_MS
+    )
   }
   // Hook and program child rosters cannot settle or reopen each other's turns.
   if (
@@ -30,11 +111,19 @@ export function programStatusHookYieldEndsAt(
   ) {
     return Infinity
   }
-  // Settled turns are naturally silent; a later wait must prove intervening program work.
-  if (previous.payload.state === 'done' && payload.state === 'waiting') {
-    return programWorkingSince !== undefined && programWorkingSince > previous.receivedAt
+  // A settled turn yields only to program work begun after it (a replayed done keeps its own time):
+  // Codex re-reports the settled turn's working while a background terminal it started runs.
+  if (
+    previous.payload.state === 'done' &&
+    (payload.state === 'waiting' || payload.state === 'working')
+  ) {
+    const doneAt = previous.evidenceObservedAt ?? previous.receivedAt
+    if (programWorkingSince === undefined || programWorkingSince <= doneAt) {
+      return Infinity
+    }
+    return payload.state === 'waiting'
       ? undefined
-      : Infinity
+      : previous.receivedAt + HOOK_SILENCE_BEFORE_PROGRAM_STATUS_FALLBACK_MS
   }
   // A question sends no hooks while open, so a `working` that began before it (e.g. re-sent by the
   // lease renewal) proves nothing; a working transition after it keeps the silence fallback.
