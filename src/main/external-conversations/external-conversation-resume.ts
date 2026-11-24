@@ -3,7 +3,7 @@ import type { ConversationChat, ConversationChatHost } from './external-conversa
 import { refused, type Delivery } from './external-conversation-types'
 import { turnOpenerOf } from './external-conversation-ended-turn'
 import type { LinkedConversation } from './external-conversation-links'
-import { conversationHeardTurn } from './external-conversation-restart-cuts'
+import { conversationHeardTurn } from './external-conversation-turn-opener'
 
 /** Idle with its newest turn failed and not resumed: what a thread's Resume continues. As a person's
  *  message the continue lifts the queue's pause, so what waited there runs after it. An unreadable

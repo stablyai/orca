@@ -9,6 +9,7 @@ import { readAgentJournalTurn } from '../../shared/agent-session/lifecycle/recor
 import type { AgentSessionJournalReads } from '../native-chat/agent-session-journal/journal-reads'
 import { readJournalTurnOpenerRows } from '../native-chat/agent-session-journal/journal-turn-opener-rows'
 import { readAutomationRunMessage } from '../../shared/automations/automation-run-message'
+import type { ExternalConversationLink } from '../../shared/connectors/external-conversation-link'
 
 /** Resolve the completed request's persisted opener, never a newer turn or a joined delivery. */
 /** The ended turn's own row: its lifecycle record, or the item the turn id names. */
@@ -80,6 +81,32 @@ export function isConversationReport(body: AgentJournalRenderItem['body']): bool
       (sender) =>
         sender.toConversation && (sender.relation !== 'worker' || notice.mailbox.startsWith('run:'))
     )
+  )
+}
+
+/** Whether the conversation was told of the turn this message opened: its own delivery, a
+ *  continuation of its requests, mail finishing its ask (as ChatTurns hears them), or the owner's
+ *  message the Slack mirror posted there. */
+export function conversationHeardTurn(
+  { link }: { link: ExternalConversationLink },
+  opener: AgentJournalRenderItem | null | undefined
+): boolean {
+  const body = opener?.body
+  if (!opener || body?.kind !== 'message') {
+    return false
+  }
+  if (link.mirrorPosts?.[opener.itemId]?.state === 'posted') {
+    return true
+  }
+  const names = (conversation: { source: string; externalId: string } | undefined) =>
+    conversation?.source === link.source && conversation.externalId === link.externalId
+  return (
+    names(body.connectorConversation) ||
+    names(body.connectorDelivery?.conversation) ||
+    Boolean(body.connectorClaim?.origin.some((stamp) => names(stamp.conversation))) ||
+    // A plain linked chat answers one conversation, so any connector message is its delivery.
+    (!link.bot && body.origin === 'connector') ||
+    (link.bot?.kind !== 'bot-chat' && isConversationReport(body))
   )
 }
 

@@ -13,7 +13,7 @@ import {
 import type { ExternalConversationSeam } from './external-conversation-seam'
 import { turnOpenerOf } from './external-conversation-ended-turn'
 import { getStructuredAgentSessionHost } from '../native-chat/agent-session-wire/host/structured-agent-session-registry'
-import { isConversationReport } from './external-conversation-turn-opener'
+import { conversationHeardTurn } from './external-conversation-turn-opener'
 import { conversationPane } from './external-conversation-types'
 
 type TurnEnded = Extract<ConversationEvent, { kind: 'turn-ended' }>
@@ -37,32 +37,6 @@ export type RestartCutTurnEndsDeps = {
   /** When this process started: every turn the last run told is older, every turn of this run newer. */
   startedAt: number
   now: () => number
-}
-
-/** Whether the conversation was told of the turn this message opened: its own delivery, a
- *  continuation of its requests, mail finishing its ask (as ChatTurns hears them), or the owner's
- *  message the Slack mirror posted there. */
-export function conversationHeardTurn(
-  { link }: LinkedConversation,
-  opener: AgentJournalRenderItem | null | undefined
-): boolean {
-  const body = opener?.body
-  if (!opener || body?.kind !== 'message') {
-    return false
-  }
-  if (link.mirrorPosts?.[opener.itemId]?.state === 'posted') {
-    return true
-  }
-  const names = (conversation: { source: string; externalId: string } | undefined) =>
-    conversation?.source === link.source && conversation.externalId === link.externalId
-  return (
-    names(body.connectorConversation) ||
-    names(body.connectorDelivery?.conversation) ||
-    Boolean(body.connectorClaim?.origin.some((stamp) => names(stamp.conversation))) ||
-    // A plain linked chat answers one conversation, so any connector message is its delivery.
-    (!link.bot && body.origin === 'connector') ||
-    (link.bot?.kind !== 'bot-chat' && isConversationReport(body))
-  )
 }
 
 export async function restartCutTurnEnds(deps: RestartCutTurnEndsDeps): Promise<TurnEnded[]> {

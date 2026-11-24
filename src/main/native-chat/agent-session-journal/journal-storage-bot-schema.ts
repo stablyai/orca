@@ -157,6 +157,7 @@ export const storedAutomationRun = z.object({
   scheduledFor: z.number().optional(),
   wait: storedWaitEnded.ending.optional(),
   toConversation: z.literal(true).optional(),
+  answersThread: z.literal(true).optional(),
   event: z
     .object({
       source: z.string(),

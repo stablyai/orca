@@ -15,6 +15,7 @@ import {
 import { postConnectorAction } from '../../../connector-cloud/connector-actions'
 import { actionGoesToSlack, slackActionArgs } from '../../../connector-cloud/connector-slack-text'
 import { cloudConversation } from '../../../../shared/connectors/connector-cloud-contract'
+import { CONNECTOR_SOURCE_NAMES } from '../../../../shared/connectors/external-conversation-link'
 import {
   chatPaneKey,
   runtimeChatHost
@@ -113,9 +114,9 @@ export function actFailure(
     : new ConnectorActError('connector_refused', `Orca Cloud refused it (${reason}).`)
 }
 
-/** The one gate for every agent reply (text, files, buttons, reactions): it posts to the chat's
- *  conversation only on a turn that conversation owns (one of its deliveries opened it, or
- *  conversationTurn holds), never on one other mail woke, whose note told the agent it stays in Orca. */
+/** The one gate for every agent reply (text, files, buttons, reactions): it reaches the chat's
+ *  conversation only on a turn that conversation owns (its message, mail finishing its ask, or a run
+ *  for its thread opened it, or conversationTurn holds), never on one other mail woke. */
 export function refuseReplyOutsideTurn(
   runtime: Pick<
     OrcaRuntimeService,
@@ -128,12 +129,13 @@ export function refuseReplyOutsideTurn(
   if (
     seam &&
     target &&
-    !target.answerDeliveryId &&
+    !target.turnFromConversation &&
     !seam.conversationTurn(runtimeChatHost(runtime), target.sessionId)
   ) {
+    const source = CONNECTOR_SOURCE_NAMES[target.key.source]
     throw new ConnectorActError(
       'turn_stays_in_orca',
-      `Nothing was posted: ${target.place} didn't wake this turn, so it stays in Orca. Put what your owner needs in your final message, and a file on an item with \`orca bot item comment <n> --file <path>\`.`
+      `Nothing was sent to ${source}: something in Orca woke this turn, not its ${source} conversation, so the turn stays in Orca. Put what your owner needs in your final message, and a file on an item with \`orca bot item comment <n> --file <path>\`.`
     )
   }
 }

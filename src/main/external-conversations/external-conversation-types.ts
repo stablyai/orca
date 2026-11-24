@@ -1,3 +1,5 @@
+import { readAutomationRunMessage } from '../../shared/automations/automation-run-message'
+import { conversationHeardTurn } from './external-conversation-turn-opener'
 import type { AgentJournalRenderItem } from '../../shared/agent-session/journal/agent-session-journal-types'
 import type { ConnectorMessageTiming } from '../../shared/connector-asker-prompt'
 import {
@@ -35,6 +37,9 @@ export type ReplyTarget = {
   key: ConversationKey
   /** The linked chat's session, whose running turn says whether a reply goes there now. */
   sessionId: string
+  /** The running turn's opener came from this conversation (conversationHeardTurn), or is a run sent
+   *  into the chat that owns its event's thread. */
+  turnFromConversation: boolean
   turnId: number | null
   worktreeId: string
   bot?: ExternalConversationBot
@@ -63,6 +68,11 @@ export function replyTargetOf(
     ...(stamp ? { answerDeliveryId: stamp.deliveryId } : {}),
     key: { source: link.source, externalId: link.externalId },
     sessionId: link.sessionId,
+    turnFromConversation:
+      !!opener &&
+      (conversationHeardTurn({ link }, opener) ||
+        (body?.origin === 'automation-run' &&
+          readAutomationRunMessage(body.automationRun)?.answersThread === true)),
     turnId,
     worktreeId: workspace.worktreeId,
     ...(link.bot ? { bot: link.bot } : {}),

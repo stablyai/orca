@@ -38,6 +38,8 @@ export type AutomationRunMessage = {
   wait?: WaitEnding
   /** A wait its chat's thread made: the run's answer goes to that thread (chat.toConversation). */
   toConversation?: true
+  /** Sent into the chat that owns its event's thread: replies mid-run go there; the run posts its result. */
+  answersThread?: true
   event?: AutomationRunMessageEvent
   /** UTF-16 length of the saved prompt at the head of the sent text. */
   instructionsLength: number
@@ -106,6 +108,7 @@ export const AutomationRunMessageSchema = z.object({
   scheduledFor: finite.optional(),
   wait: WaitEndingSchema.optional(),
   toConversation: z.literal(true).optional(),
+  answersThread: z.literal(true).optional(),
   event: EventSchema.optional(),
   instructionsLength: z.number().int().nonnegative()
 })

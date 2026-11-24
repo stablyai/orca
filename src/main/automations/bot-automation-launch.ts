@@ -176,17 +176,20 @@ export function createBotAutomationDispatcher(
             Boolean(automation.on?.length)
           )
         : automationRunPrompt(automation.prompt, run.event, asker)
-    const automationRun = captureAutomationRunMessage(automation, run, text, asker)
-    const fields: BotRunFields = {
-      memorySource: automationRunMemoryLabel(automation.name, run.event),
-      ...(run.triggeredBy ? { triggeredBy: run.triggeredBy } : {}),
-      ...(automationRun ? { automationRun } : {})
-    }
     const { runsIn } = target
     const chosenChat = automation.bot?.chat?.sessionId
     const saved = automation.bot?.resultsTo ?? 'chat'
     const route: ThreadRoute =
       saved === 'thread' ? await threadRoute(threads, run, runsIn) : { kind: 'take' }
+    const captured = captureAutomationRunMessage(automation, run, text, asker)
+    // In the thread's owning chat its replies go to the thread; the run, not the turn end, posts its result.
+    const automationRun =
+      captured && route.kind === 'owner' ? { ...captured, answersThread: true as const } : captured
+    const fields: BotRunFields = {
+      memorySource: automationRunMemoryLabel(automation.name, run.event),
+      ...(run.triggeredBy ? { triggeredBy: run.triggeredBy } : {}),
+      ...(automationRun ? { automationRun } : {})
+    }
     // A new conversation that never opened has no chat to show why: the bot's Chat does.
     const destination: BotRunChat =
       route.kind === 'owner'
