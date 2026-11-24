@@ -5,6 +5,7 @@ import { useAppStore } from '../../../store/index'
 import { useTranslate } from '@/i18n/use-translate'
 import { shouldFocusMobileDriverAction } from '../mobile-driver/mobile-driver-overlay-focus'
 import { awaitsCodexRestartAnswer } from './codex-restart-notice-state'
+import { withdrawCodexPaneAccountRestart } from './codex-account-restart-stop'
 
 function isInsideHiddenTree(element: HTMLElement): boolean {
   return element.closest('[aria-hidden="true"], [hidden], [inert]') !== null
@@ -39,6 +40,7 @@ export default function CodexRestartChip({
 
   const handleDismiss = (): void => {
     useAppStore.getState().dismissCodexRestartNotices([ptyId])
+    withdrawCodexPaneAccountRestart(ptyId)
     onReturnFocus()
     // Clear the persisted launch record too, or startup recreates this answered renderer notice.
     void window.api.codexAccounts.forgetStalePanes({ ptyIds: [ptyId] }).catch((err: unknown) => {
