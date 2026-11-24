@@ -91,11 +91,20 @@ function forgetOperation(ptyId: string): void {
   }
 }
 
-/** A prompt that went away or changed target withdraws the answer given to it, in main too. */
+/**
+ * A prompt that changed target, or went away while its process is still in the pane (the user chose
+ * the launch account again), withdraws the answer given to it, in main too. The accepted stop's own
+ * exit unbinds the process from the pane and removes the notice; that is not a withdrawal.
+ */
 function watchNoticeGenerations(): void {
   stopWatchingNotices ??= useAppStore.subscribe(() => {
+    const state = useAppStore.getState()
     for (const [ptyId, operation] of currentOperationByPtyId) {
-      if (noticeGenerationOf(ptyId) !== operation.generation) {
+      const generation = noticeGenerationOf(ptyId)
+      const retargeted = generation !== undefined && generation !== operation.generation
+      const clearedWhileRunning =
+        generation === undefined && (state.ptyIdsByTabId?.[operation.tabId] ?? []).includes(ptyId)
+      if (retargeted || clearedWhileRunning) {
         withdrawCodexPaneAccountRestart(ptyId)
       }
     }

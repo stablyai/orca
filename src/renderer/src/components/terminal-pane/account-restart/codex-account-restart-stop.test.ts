@@ -6,6 +6,7 @@ type StoreState = {
   clearCodexRestartNotice: ReturnType<typeof vi.fn>
   reopenCodexRestartPrompt: ReturnType<typeof vi.fn>
   codexRestartNoticeByPtyId: NoticeTargets
+  ptyIdsByTabId: Record<string, string[]>
 }
 
 const { store } = vi.hoisted((): { store: StoreState } => ({
@@ -70,6 +71,7 @@ describe('renderer account restart stop', () => {
     store.clearCodexRestartNotice.mockClear()
     store.reopenCodexRestartPrompt.mockClear()
     store.codexRestartNoticeByPtyId = { 'pty-a': { nextAccountId: 'account-b', generation: 1 } }
+    store.ptyIdsByTabId = { tab: ['pty-a'] }
   })
   afterEach(() => {
     _testing.reset()
@@ -211,5 +213,18 @@ describe('renderer account restart stop', () => {
       'leaf'
     )
     expect(releasePane).toHaveBeenCalledWith({ worktreeId: 'wt', tabId: 'tab', leafId: 'leaf' })
+  })
+
+  it("the accepted stop's own exit removing the notice is not a withdrawal", async () => {
+    const { replies, withdraw } = heldReplies()
+    const pending = stopCodexPaneForAccountRestart(pane)
+    // The restart exit unbinds the stopped process from the pane and its notice goes with it.
+    store.ptyIdsByTabId = { tab: [] }
+    store.codexRestartNoticeByPtyId = {}
+    notifyStore()
+    expect(withdraw).not.toHaveBeenCalled()
+    replies[0]({ outcome: 'stopped', opIds: ['op-1'] })
+    await pending
+    expect(store.clearCodexRestartNotice).toHaveBeenCalledWith('pty-a')
   })
 })

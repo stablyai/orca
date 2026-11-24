@@ -5,6 +5,7 @@ import type {
 } from '../../../shared/agent-accounts/managed-account-types'
 import type { GlobalSettings } from '../../../shared/settings/global-settings-types'
 import { parseWslUncPath } from '../../../shared/file-access/wsl-paths'
+import { bumpCodexSelectionEpoch } from './codex-selection-epoch'
 import type { Store } from '../../persistence/loading-store/store'
 import type { RateLimitService } from '../../rate-limits/service/rate-limit-service'
 import type { CodexRuntimeHomeService } from '../runtime-home-service'
@@ -189,6 +190,12 @@ export class CodexAccountSelection {
 
   // Notify every window of changes made by the CLI, paired clients, or other windows.
   saveSettings(patch: Partial<GlobalSettings>): void {
+    if (
+      'activeCodexManagedAccountId' in patch ||
+      'activeCodexManagedAccountIdsByRuntime' in patch
+    ) {
+      bumpCodexSelectionEpoch()
+    }
     this.dependencies.store.updateSettings(patch, { notifyListeners: true })
   }
 
@@ -241,6 +248,7 @@ export class CodexAccountSelection {
     if (!changed) {
       return
     }
+    bumpCodexSelectionEpoch()
     this.dependencies.store.updateSettings({
       activeCodexManagedAccountId: nextSelection.host,
       activeCodexManagedAccountIdsByRuntime: nextSelection

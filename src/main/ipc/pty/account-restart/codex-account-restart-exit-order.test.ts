@@ -113,6 +113,7 @@ import { ptyIncarnationById } from '../provider/ownership-state'
 import { TerminalIntentionalStops } from '../../../runtime/terminal/stop/terminal-intentional-stops'
 import { installCodexAccountRestartIpcHandlers } from './codex-account-restart-ipc'
 import { codexAccountRestartStops } from './codex-account-restart-stops'
+import { bumpCodexSelectionEpoch } from '../../../codex-accounts/account-management/codex-selection-epoch'
 import { releaseAbsentPaneOwner } from '../pane/absent-pane-owner'
 import { redeliverOwedCodexRestartExits } from './codex-account-restart-redelivery'
 import type { PtyIpcSession } from '../session'
@@ -495,6 +496,23 @@ describe('account restart exits arriving out of order', () => {
       outcome: 'not-started',
       reason: 'resume-unavailable'
     })
+    expect(h.killFenced).not.toHaveBeenCalled()
+  })
+
+  it('sends no stop when the user reselects, even back to the same account, during the wait', async () => {
+    const t = setup()
+    let releaseStartup!: () => void
+    h.providerStartup = new Promise<void>((resolve) => {
+      releaseStartup = resolve
+    })
+    const result = t.request()
+    await Promise.resolve()
+    await Promise.resolve()
+    // B, then A, then B again: the selected account matches, but the answer was for the old choice.
+    bumpCodexSelectionEpoch()
+    bumpCodexSelectionEpoch()
+    releaseStartup()
+    await expect(result).resolves.toMatchObject({ outcome: 'not-started', reason: 'superseded' })
     expect(h.killFenced).not.toHaveBeenCalled()
   })
 })

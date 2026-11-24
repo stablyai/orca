@@ -8,6 +8,7 @@ import { makePaneKey } from '../../../../shared/workspace-layout/stable-pane-id'
 import type { GlobalSettings } from '../../../../shared/settings/global-settings-types'
 import { agentHookServer } from '../../../agent-hooks/server/agent-hook-server'
 import { getSelectedCodexAccountIdForTarget } from '../../../codex-accounts/account-management/runtime-selection'
+import { getCodexSelectionEpoch } from '../../../codex-accounts/account-management/codex-selection-epoch'
 import { peekLoadedCodexPaneAccount } from '../../../codex/configuration/homes/codex-pane-account-registry'
 import { PtyExitProof } from '../../../pty/process-retirement/pty-exit-proof'
 import { getPtyIpc } from '../pty-host-bindings'
@@ -123,7 +124,9 @@ export function resolveCodexRestartOccupant(
   return {
     ptyId,
     incarnationId,
-    provenance: { threadId: session.id, transcriptPath }
+    provenance: { threadId: session.id, transcriptPath },
+    // Any later selection write (even back to the same account) supersedes this answer.
+    selectionEpoch: getCodexSelectionEpoch()
   }
 }
 

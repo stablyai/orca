@@ -14,6 +14,8 @@ export type CodexRestartOccupant = {
   ptyId: string
   incarnationId: string
   provenance: CodexRestartProvenance
+  /** The account-selection epoch the user's answer was given in. */
+  selectionEpoch?: number
 }
 
 /**
@@ -84,6 +86,7 @@ export function isSameRestartOccupant(a: CodexRestartOccupant, b: CodexRestartOc
     a.ptyId === b.ptyId &&
     a.incarnationId === b.incarnationId &&
     a.provenance.threadId === b.provenance.threadId &&
-    a.provenance.transcriptPath === b.provenance.transcriptPath
+    a.provenance.transcriptPath === b.provenance.transcriptPath &&
+    a.selectionEpoch === b.selectionEpoch
   )
 }
