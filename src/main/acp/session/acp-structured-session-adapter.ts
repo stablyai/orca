@@ -35,6 +35,7 @@ import {
   closeAcpChildSessions,
   stopAcpChildren
 } from '../turns/acp-structured-child-stop'
+import { acpRelayOpenWork } from '../process/acp-relay-work-markers'
 import * as childState from './children/acp-structured-child'
 import { AcpStructuredChildren } from './children/acp-structured-child-lifecycle'
 import { AcpConversationCopies } from '../conversation-copy/acp-conversation-copies'
@@ -255,6 +256,18 @@ export class AcpStructuredSessionAdapter implements SessionAdapter {
     return session?.spec.agent === 'omp' && !session.connection.exited
       ? Promise.resolve('unknown')
       : undefined
+  }
+
+  /** The open work a detached agent's idle stop counts; OMP's, like its open-app idle, is unknown. */
+  relayOpenWork = (sessionId: string): Record<string, string[][]> | null => {
+    const session = this.children.sessions.get(sessionId)
+    const translator = session?.lane?.translator
+    return !translator || session.spec.agent === 'omp'
+      ? null
+      : acpRelayOpenWork({
+          tasks: translator.backgroundTasks.runningIds,
+          subagents: translator.subagents.openIds
+        })
   }
 
   holdsLiveProviderProcess = (sessionId: string, generation: string): boolean => {

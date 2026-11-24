@@ -31,6 +31,8 @@ export type AcpStructuredConnection = Pick<
 > & {
   readonly lastCloseResult?: AcpAgentConnection['lastCloseResult']
   readonly lostBeforeExit?: AcpAgentConnection['lostBeforeExit']
+  readonly kept?: AcpAgentConnection['kept']
+  holdAcks?: AcpAgentConnection['holdAcks']
 }
 
 export type ConnectAcpAgent<Connection = AcpStructuredConnection> = (

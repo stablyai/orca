@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto'
 import type { AcpItemOwnership } from './acp-item-ownership'
 import type { SessionUpdate } from '../generated/acp-protocol.generated'
 import type { ProviderTimelineTextChannel } from '../../native-chat/agent-session-timeline/provider-timeline-event'
@@ -23,6 +24,8 @@ export type AcpTextDrop = {
 
 export class AcpTurnMessages {
   private readonly turns = new Map<string, MessagePosition>()
+  /** Turns an earlier app began: its saved messages hold the first ordinals, so these never reuse them. */
+  private readonly carried = new Map<string, string>()
 
   constructor(private readonly owners: AcpItemOwnership) {}
 
@@ -115,14 +118,23 @@ export class AcpTurnMessages {
       state.ordinal += 1
       state.channel = update.sessionUpdate
     }
-    return `turn-message:${JSON.stringify([turn, state.ordinal])}`
+    const carried = this.carried.get(turn)
+    const position = carried ? [turn, state.ordinal, carried] : [turn, state.ordinal]
+    return `turn-message:${JSON.stringify(position)}`
+  }
+
+  carry(turn: string): void {
+    // Each reattach's own, so a second restart in one turn doesn't reuse the first's rows.
+    this.carried.set(turn, `carried:${randomUUID()}`)
   }
 
   dispose(): void {
     this.turns.clear()
+    this.carried.clear()
   }
 
   end(turn: string): void {
     this.turns.delete(turn)
+    this.carried.delete(turn)
   }
 }

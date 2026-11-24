@@ -2,8 +2,7 @@ import type { Readable, Writable } from 'node:stream'
 import {
   readAcpResponse,
   type AcpResponse,
-  type AcpRequestOptions,
-  type AcpPendingResponse
+  type AcpRequestOptions
 } from './acp-response-settlement'
 
 import {
@@ -20,6 +19,7 @@ import { detachProviderStreamErrorHandler } from '../../provider-process/provide
 import { ProviderOutputEnd } from '../../provider-process/provider-output-end'
 import { acpRpcEnvelopeSchema, type AcpJsonRpcMessage } from './acp-rpc-envelope'
 import { rejectUnreadableAcpReply, settleAcpReply } from './acp-peer-reply'
+import { AcpPendingCalls } from './acp-pending-calls'
 
 export type AcpRequestContext = { id: string | number | null; signal: AbortSignal }
 export type AcpPeerHandlers = {
@@ -35,11 +35,11 @@ export type AcpPeerHandlers = {
   onOtherLine?: (line: string, cut?: boolean) => void
 }
 export class AcpJsonRpcPeer {
-  private readonly pending = new Map<number, AcpPendingResponse>()
+  readonly calls = new AcpPendingCalls(() => this.terminalError ?? this.outputEnd.error)
+  private readonly pending = this.calls.pending
   private readonly incoming: AcpIncomingRequests
   private readonly writer: AcpWriteQueue
   private readonly framer: ReturnType<typeof createIncrementalNdjsonFramer>
-  private nextId = 1
   private terminalError?: Error
   private readonly outputEnd: ProviderOutputEnd
   private drainingNotifications = false
@@ -126,7 +126,7 @@ export class AcpJsonRpcPeer {
     } catch (error) {
       return Promise.reject(error)
     }
-    const id = this.nextId++
+    const id = this.calls.nextId()
     const controller = new AbortController()
     return new Promise((resolve, reject) => {
       const settle = (response: AcpResponse): void => {
@@ -201,11 +201,7 @@ export class AcpJsonRpcPeer {
     this.outputEnd.detach()
     this.terminalError = error
     this.writer.close(error)
-    for (const pending of this.pending.values()) {
-      clearTimeout(pending.timer)
-      pending.reject(error)
-    }
-    this.pending.clear()
+    this.calls.rejectAll(error)
     this.incoming.close(error)
     try {
       this.handlers.onClose?.(error)

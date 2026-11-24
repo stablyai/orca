@@ -19,6 +19,8 @@ export type DaemonEndpointIdentity = {
   providerSpawn?: true
   /** Serves the relay RPCs (v63+); absent on Windows until agents can be tied to the daemon. */
   providerRelay?: true
+  /** Honors `relaySpawn`'s `keep` and sends `relayKept` lines on attach. */
+  providerRelayKeep?: true
 }
 
 export type HelloResponse = {

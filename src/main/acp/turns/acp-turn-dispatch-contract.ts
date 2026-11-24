@@ -12,7 +12,7 @@ export type AcpDispatchSettlement = { clientMessageId: string } & (
 )
 
 export type AcpStructuredTurnsDeps = {
-  connection: Pick<AcpStructuredConnection, 'prompt' | 'cancel'>
+  connection: Pick<AcpStructuredConnection, 'prompt' | 'cancel' | 'holdAcks'>
   withdrawRequests: () => void
   lane: AcpStructuredLane
   agentName: string

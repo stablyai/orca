@@ -79,7 +79,8 @@ export class ProviderRelayHost {
     spec: ProviderRelaySpawnSpec | undefined,
     chatKey: unknown,
     policy?: unknown,
-    agent?: unknown
+    agent?: unknown,
+    keep?: unknown
   ): Promise<ProviderRelaySpawnResult> {
     if (!this.supported || this.disposed || !this.options.acceptsWork()) {
       return { refused: 'unavailable' }
@@ -107,9 +108,7 @@ export class ProviderRelayHost {
       }
     )
     const failure: { error: (Error & { code?: unknown }) | null } = { error: null }
-    managed.child.on('error', (error: Error & { code?: unknown }) => {
-      failure.error ??= error
-    })
+    managed.child.on('error', (error: Error & { code?: unknown }) => void (failure.error ??= error))
     const relay = new ProviderRelay({
       relayId,
       chatKey,
@@ -125,6 +124,7 @@ export class ProviderRelayHost {
       onDetached: () => this.expireWhenAbandoned(relay)
     })
     relay.idleStopPolicy.configure(readProviderRelayDetachPolicy(policy))
+    relay.pending.kept.configure(keep)
     this.relays.set(relayId, relay)
     await managed.child.ready?.catch(() => {})
     // Shutdown during the launch closes this agent; the caller must not be told it runs.
@@ -153,11 +153,13 @@ export class ProviderRelayHost {
     stream: ProviderRelayStream,
     relayId: unknown,
     fromSeq: unknown,
-    policy?: unknown
+    policy?: unknown,
+    kept?: unknown
   ): Promise<ProviderRelayAttachResult> {
     // An ended relay's expiry keeps running through attaches: it lives at most a day after it ends.
     const relay = this.requireRelay(relayId)
     relay.idleStopPolicy.configure(readProviderRelayDetachPolicy(policy))
+    relay.pending.kept.sendOnAttach = kept === true
     try {
       return await relay.attach(clientId, stream, typeof fromSeq === 'number' ? fromSeq : 0)
     } finally {

@@ -128,6 +128,21 @@ export class RelayedProviderChild extends EventEmitter implements ProviderChild 
     return this.output.initializeLine
   }
 
+  /** Lines the daemon kept for this relay, by the seq they were spooled at; names are in `attachResult.kept`. */
+  get keptLines(): ReadonlyMap<number, string> {
+    return this.output.keptLines
+  }
+
+  /** Read once at reattach; a stream-drop reattach sends them again. */
+  /** Output from here on is replayed to the next app until the release (see the output's hold). */
+  holdAcks(): () => void {
+    return this.output.holdAcks()
+  }
+
+  dropKeptLines(): void {
+    this.output.dropKeptLines()
+  }
+
   get handedOff(): boolean {
     return this.state === 'detached'
   }
@@ -137,13 +152,17 @@ export class RelayedProviderChild extends EventEmitter implements ProviderChild 
     this.output.restartAt(fromSeq)
     this.unbind = this.options.channel.bind(this.relayId, {
       line: (event, seq, line) => this.output.line(event, seq, line),
-      ackWanted: () => void this.output.settle(true),
+      ackWanted: () => void this.output.ackWanted(),
       exit: (exit) => this.onExit(exit),
       disconnected: () => void this.reattach()
     })
     try {
-      const result = await this.options.channel.attach(this.relayId, fromSeq, this.options.policy())
-      await this.output.awaitPreamble(result.initializeResultSent, result.pending, PREAMBLE_WAIT_MS)
+      const { channel } = this.options
+      const kept = this.output.wantsKeptLines
+      const result = await channel.attach(this.relayId, fromSeq, this.options.policy(), kept)
+      const keptSeqs = kept ? (result.kept ?? []).map((line) => line.seq) : []
+      const { initializeResultSent, pending } = result
+      await this.output.awaitPreamble(initializeResultSent, pending, PREAMBLE_WAIT_MS, keptSeqs)
       this.attachResult = result
       const { continuation } = this.options
       if (continuation) {

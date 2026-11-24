@@ -302,7 +302,7 @@ export class AcpSessionRuntime {
     }
   }
 
-  private handleNotification(method: string, params: unknown): void {
+  protected handleNotification(method: string, params: unknown): void {
     if (method !== 'session/update') {
       try {
         this.options.onExtensionNotification?.(method, params)

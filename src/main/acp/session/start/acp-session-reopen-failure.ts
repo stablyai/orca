@@ -77,11 +77,15 @@ export async function acpListedSessionFolder(
   sessionId: string,
   input: {
     initialized: InitializeResponse
-    connection: Pick<AcpStructuredConnection, 'listSessions'>
+    connection: Pick<AcpStructuredConnection, 'listSessions' | 'kept'>
     assertStarting: () => void
   }
 ): Promise<string | null> {
-  if (input.initialized.agentCapabilities?.sessionCapabilities?.list == null) {
+  // A kept agent still runs the session where it is; nothing moved.
+  if (
+    input.connection.kept ||
+    input.initialized.agentCapabilities?.sessionCapabilities?.list == null
+  ) {
     return null
   }
   let cursor: string | undefined

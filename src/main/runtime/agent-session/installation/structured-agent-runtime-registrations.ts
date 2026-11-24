@@ -216,6 +216,11 @@ function createAcpAdapter(
           : createAcpAgentConnection),
       onChildWorkEvidence: (sessionId, evidence, producer) =>
         context.host()?.publishChildWorkEvidence(sessionId, evidence, producer),
+      keptWork: async (sessionId) => {
+        const work = await context.host()?.currentWork(sessionId)
+        const send = work?.restatedSubmissions().at(-1)?.clientMessageId
+        return { turnId: work?.activeTurnId() ?? null, unansweredSendId: send ?? null }
+      },
       ...(deps.readProcessStartTime ? { readProcessStartTime: deps.readProcessStartTime } : {}),
       onDispatchSettledLate: followUps.onDispatchSettledLate,
       logger: deps.logger,
