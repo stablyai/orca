@@ -10,7 +10,8 @@ import type {
   ShellOpenLocalPathResult
 } from '../../../shared/shell/opening/shell-open-types'
 import type { RuntimeFileOpenPosition } from '../../../shared/file-access/runtime-editor-file-open'
-import { MAX_REPO_ICON_UPLOAD_BYTES } from '../../../shared/repository/appearance/repo-icon'
+import { MAX_REPO_ICON_SOURCE_BYTES } from '../../../shared/repository/appearance/repo-icon'
+import { IMAGE_FILE_MIME_TYPES } from '../../../shared/file-preview/image-mime-types'
 import {
   repoIconPickFailure,
   type RepoIconPickResult
@@ -37,10 +38,6 @@ import {
 } from './shell-owned-path-target'
 import { inspectLinkedFile } from './linked-file-inspection'
 import { registerShellPathExistenceHandlers } from './shell-path-existence-handlers'
-
-const REPO_ICON_IMAGE_MIME_TYPES: Record<string, string> = {
-  '.png': 'image/png'
-}
 
 async function openInFileManager(
   pathValue: string,
@@ -277,7 +274,7 @@ export function registerShellHandlers(
         filters: [
           {
             name: translateMain('native.dialog.repoIconImages', 'Repo icon images'),
-            extensions: ['png']
+            extensions: Object.keys(IMAGE_FILE_MIME_TYPES).map((extension) => extension.slice(1))
           }
         ]
       },
@@ -289,14 +286,14 @@ export function registerShellHandlers(
 
     const filePath = result.filePaths[0]
     const extension = extname(filePath).toLowerCase()
-    const mimeType = REPO_ICON_IMAGE_MIME_TYPES[extension]
+    const mimeType = IMAGE_FILE_MIME_TYPES[extension]
     if (!mimeType) {
-      return repoIconPickFailure('notPng')
+      return repoIconPickFailure('unsupportedImage')
     }
 
     const stats = await stat(filePath)
-    if (stats.size > MAX_REPO_ICON_UPLOAD_BYTES) {
-      return repoIconPickFailure('tooLarge')
+    if (!stats.isFile() || stats.size > MAX_REPO_ICON_SOURCE_BYTES) {
+      return repoIconPickFailure('sourceTooLarge')
     }
 
     const buffer = await readFile(filePath)
