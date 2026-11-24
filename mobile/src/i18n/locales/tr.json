@@ -1163,7 +1163,7 @@
           "checkFailed": "Orca şu hizmetleri kontrol edemedi: {{services}}."
         },
         "ownerStep": "3 adımdan {{step}}. adım",
-        "adminRequest": "Google Yönetici Konsolu’nda Güvenlik › API denetimleri › Üçüncü taraf uygulama erişimini yönet yolunu izleyip şu Google uygulamasını “Güvenilir” olarak işaretleyin: {{clientId}}"
+        "adminRequest": "Lütfen Admin console’da (Security › API controls › Manage third-party app access) bu Google uygulamasını Trusted olarak işaretleyin: {{clientId}}"
       },
       "importDone": {
         "heading": "İçe aktarma tamamlandı",
@@ -3190,7 +3190,7 @@
       "diffLoadFailed": "Diff yüklenemedi",
       "reviewNotesLoadFailed": "İnceleme notları yüklenemedi",
       "commitLoadFailed": "Bu commit yüklenemedi",
-      "commitDiffUnavailable": "Commit farkı görüntülenemiyor"
+      "commitDiffUnavailable": "Commit diff’i kullanılamıyor"
     },
     "diffReviewQueue": {
       "committedOnBranch": "Branch'te commit'lendi",
@@ -3982,7 +3982,7 @@
     },
     "documentReaders": {
       "markdownFailed": "Markdown yüklenemedi",
-      "diffFailed": "Fark önizlemesi yüklenemedi",
+      "diffFailed": "Diff önizlemesi yüklenemedi",
       "fileFailed": "Dosya önizlemesi yüklenemedi",
       "outsideWorkspace": "Bu dosya çalışma alanının dışında. Görüntülemek için masaüstü uygulamasında açın."
     },
@@ -6547,7 +6547,7 @@
         "checkAgain": "Yeniden kontrol et",
         "allowAgain": "Yeniden izin ver"
       },
-      "adminRequest": "Google Yönetici Konsolu’nda Güvenlik › API denetimleri › Üçüncü taraf uygulama erişimini yönet yolunu izleyip şu Google uygulamasını “Güvenilir” olarak işaretleyin: {{clientId}}",
+      "adminRequest": "Lütfen Admin console’da (Security › API controls › Manage third-party app access) bu Google uygulamasını Trusted olarak işaretleyin: {{clientId}}",
       "copied": "Kopyalandı. Google yöneticinize gönderin.",
       "state": {
         "ready": "Hazır",

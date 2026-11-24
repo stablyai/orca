@@ -646,7 +646,7 @@
       "rowLocal": "Bu bilgisayarda {{profile}} içindeki tüm sitelerdeki oturumunuzu kapatır.",
       "rowServer": "{{host}} üzerinde {{profile}} içindeki tüm sitelerdeki oturumunuzu kapatır; hem bu bilgisayardaki sayfalarda hem de akışla gelen sayfalarda geçerlidir.",
       "rowSsh": "{{host}} için {{profile}} içindeki tüm sitelerdeki oturumunuzu kapatır.",
-      "unavailable": "Seçili sunucuda bu profil için kullanılamıyor.",
+      "unavailable": "Seçili sunucuda bu profil için çerez temizleme kullanılamıyor.",
       "confirmTitle": "{{host}} üzerinde {{profile}} içindeki çerezler temizlensin mi?",
       "confirmTitleLocal": "Bu bilgisayarda {{profile}} içindeki çerezler temizlensin mi?",
       "confirmDescriptionServer": "Bu işlem, bu profildeki tüm sitelerdeki oturumunuzu kapatır; hem bu bilgisayardaki sayfalarda hem de akışla gelen sayfalarda geçerlidir. Diğer profiller ve sunucular çerezlerini korur.",
@@ -687,9 +687,9 @@
       }
     },
     "diffTooLarge": {
-      "title": "Dosya, farkları göstermek için çok büyük",
-      "detail": "Dosyanın sürümlerinden biri 10 MB’tan büyük; Orca bu nedenle metin farkını göstermek için dosyayı yüklemiyor.",
-      "connectionDetail": "Bu fark, uzak bağlantı üzerinden açılamayacak kadar büyük."
+      "title": "Dosya, diff için çok büyük",
+      "detail": "Dosyanın sürümlerinden biri 10 MB’tan büyük; bu nedenle Orca dosyayı metin diff’i için yüklemiyor.",
+      "connectionDetail": "Bu diff, uzak bağlantı üzerinden açılamayacak kadar büyük."
     },
     "gitBlame": {
       "uncommitted": "Commit edilmemiş değişiklikler",
@@ -22271,7 +22271,7 @@
         "connectTerminal": "Terminalde bir sağlayıcıya bağlan",
         "statusTerminal": "Terminalde durumu görüntüle",
         "themesTerminal": "Terminalde tema seç",
-        "diffTerminal": "Fark görüntüleyicisini terminalde aç",
+        "diffTerminal": "Diff görüntüleyicisini terminalde aç",
         "editorTerminal": "Düzenleyicinizi terminalde açın",
         "debugTerminal": "Hata ayıklama bilgilerini terminalde görüntüle",
         "helpTerminal": "Yardımı terminalde göster",
@@ -28800,7 +28800,7 @@
         "titleAccount": "{{email}} hesabını bağlamak için oturum açın",
         "title": "Bağlanmak için oturum açın",
         "note": "Google’ın oturum açma sayfası tarayıcınızda açılır. Google oturum bilgileriniz bu bilgisayarda kalır.",
-        "warning": "Bu uygulama size ait ve yeni oluşturulduğu için Google bir uyarı gösterir. “Gelişmiş”i, ardından “Orca’ya git”i seçin ve sonraki ekrandaki tüm kutuları işaretleyin.",
+        "warning": "Bu uygulama size ait ve yeni oluşturulduğu için Google bir uyarı gösterir. Advanced’i, ardından Go to Orca’yı seçin ve sonraki ekrandaki tüm kutuları işaretleyin.",
         "noteOnHost": "Google’ın oturum açma sayfası {{host}} üzerindeki Orca tarayıcısında açılır. Google oturum bilgileriniz {{host}} üzerinde kalır."
       },
       "connected": {
@@ -29637,8 +29637,8 @@
       },
       "signIn": "Google’da oturum aç",
       "waiting": "Google bağlantısını tarayıcınızda tamamlayın.",
-      "waitingHowPersonal": "Hesabınızı seçin. Google önce onayınızı ister: “Devam et”e, ardından “İzin ver”e tıklayın.",
-      "waitingHow": "Hesabınızı seçip “İzin ver”e tıklayın.",
+      "waitingHowPersonal": "Hesabınızı seçip Allow’a tıklayın. Google önce onay ister: Continue’ya tıklayın.",
+      "waitingHow": "Hesabınızı seçip Allow’a tıklayın.",
       "openAgain": "Yeniden aç",
       "choice": {
         "gmail": "Gmail",
@@ -29664,7 +29664,7 @@
         "copyForAdmin": "Yöneticinize göndermek için kopyalayın",
         "checkAgain": "Yeniden kontrol et"
       },
-      "adminRequest": "Google Yönetici Konsolu’nda Güvenlik › API denetimleri › Üçüncü taraf uygulama erişimini yönet yolunu izleyip şu Google uygulamasını “Güvenilir” olarak işaretleyin: {{clientId}}",
+      "adminRequest": "Lütfen Admin console’da (Security › API controls › Manage third-party app access) bu Google uygulamasını Trusted olarak işaretleyin: {{clientId}}",
       "shareButton": "Kurulumu paylaş",
       "setUpTime": "Yaklaşık 10 dakika",
       "haveSetupFile": "Ekibiniz size bir kurulum dosyası verdi mi?",
@@ -30361,7 +30361,7 @@
         "cancel": "İptal",
         "checking": "Kontrol ediliyor…",
         "replace": "Anahtarı değiştir",
-        "add": "Tuş ekle",
+        "add": "Anahtar ekle",
         "rejectedLine": "Composio artık kayıtlı anahtarı kabul etmiyor. Yeni bir anahtar yapıştırın.",
         "line": "Composio anahtarının son karakterleri: {{hint}}",
         "lineNoHint": "Composio anahtarı",
