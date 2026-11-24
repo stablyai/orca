@@ -5568,7 +5568,6 @@
       "access": "Access",
       "whoCanAsk": "Who can ask",
       "deleteBot": "Delete bot…",
-      "agentDetail": "Used for bot conversations and automations. A new model applies to new conversations; the Home Chat keeps its current one.",
       "accountChecking": "Checking…",
       "signedOut": "Signed out of Orca",
       "computerFoot": "Its connectors, tools and files live on {{host}}.",
@@ -5588,7 +5587,6 @@
       "model": "Model",
       "effort": "Effort",
       "backToAgent": "Back to Agent and model",
-      "chatDefaultNote": "Using your chat default. Background runs use your Agents setting.",
       "useChatDefaults": "Use chat defaults",
       "modelDefault": "Default",
       "signInChanged": "Orca sign-in changed",
@@ -5599,7 +5597,8 @@
       "memoryFiles_one": "{{count}} file",
       "memoryFiles_other": "{{count}} files",
       "none": "None",
-      "readFailed": "Couldn’t load"
+      "readFailed": "Couldn’t load",
+      "usingChatDefault": "Using your chat default."
     },
     "saveFailed": "Couldn’t save",
     "sheet": {
@@ -6974,7 +6973,6 @@
       "nameLabel": "Bot name",
       "mascot": "Mascot",
       "mascotN": "Mascot {{n}} of {{total}}",
-      "background": "Background color",
       "outfit": "Outfit",
       "outfitNone": "No outfit",
       "outfitTie": "Tie",
@@ -6989,7 +6987,8 @@
       "choosePhoto": "Choose from Photos",
       "slackToo": "Changes your bot’s picture in Slack too.",
       "tooBig": "That image is over 10 MB.",
-      "tooSmall": "Too small. Use an image at least 128 px."
+      "tooSmall": "Too small. Use an image at least 128 px.",
+      "color": "Color"
     },
     "agentSwitch": {
       "title": "Switch {{name}} to {{agent}}?",
@@ -7142,15 +7141,12 @@
       "lookingOn": "Looking on {{host}}…",
       "foundOn": "{{count}} found on {{host}}",
       "otherApp": "Another app…",
-      "otherAppNote": "Your old bot copies its files for you",
       "noneFoundNote": "No bots found in OpenClaw (~/.openclaw), Hermes (~/.hermes) or OpenBot.",
       "sendStep": "Send your old bot this message",
-      "copiedNote": "Copied. Paste it to your old bot wherever you chat with it.",
       "copyAgain": "Copy again",
       "copyMessage": "Copy message",
       "seeMessage": "See the message",
       "addStep": "Add the folder it made",
-      "addStepNote": "It saves a folder ending in -export in Downloads on {{host}}.",
       "folderItems_one": "{{count}} item",
       "folderItems_other": "{{count}} items",
       "removePath": "Remove {{name}}",
@@ -7160,16 +7156,15 @@
       "replyLabel": "Its reply",
       "title": "Import from another app",
       "newBot": "New bot",
-      "exportDescription": "Ask your old bot for a copy of itself, then give the copy to your new bot.",
-      "description": "Your new bot reads the old one and sets itself up.",
       "nameAnother": "Name a new bot",
-      "importedBefore": "{{bot}} came from this bot",
       "update": "Update {{bot}}",
       "updateDraft": "Bring over anything new from {{name}} in {{app}}.",
       "keysStay": "Keys and logins stay behind",
       "nudgeOne": "We found a bot in {{app}}.",
       "nudgeMany": "We found {{count}} bots in {{app}}.",
-      "noFolders": "No folders"
+      "noFolders": "No folders",
+      "more": "More actions",
+      "makeNew": "Make a new bot instead"
     },
     "host": {
       "errors": {
