@@ -1,9 +1,5 @@
 export type PeekSide = 'top' | 'bottom' | 'left' | 'right'
 
-/** A region a card stays inside instead of the whole window: its edges, `WINDOW_MARGIN` in from them,
- *  and the widest the card may be there. */
-export type PeekBounds = { boundary: Element; maxWidth: number }
-
 /** The card's `w-96`. */
 const CARD_WIDTH = 384
 export const CARD_OFFSET = 4

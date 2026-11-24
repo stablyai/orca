@@ -49,9 +49,8 @@ import {
 } from './bot-item-github-peek-content'
 import { useBotItemLivePr, useBotItemPrWorkspacesVisible } from './use-bot-item-live-pr'
 import { botItemLinksOrder } from './bot-item-links-order'
-import { useLinearTitle } from './bot-item-linear-title'
-import { BOT_ITEM_PANE_CARD_MARGIN, botItemPaneBounds } from './bot-item-pane-bounds'
-import type { PeekBounds } from '@/components/native-chat/links/previews/link-peek-side'
+import { BOT_ITEM_PANE_CARD_MARGIN, botItemPaneBoundary } from './bot-item-pane-bounds'
+import { usePeekBounds } from '@/components/native-chat/links/previews/use-peek-bounds'
 
 /** Rows shown before "N more". */
 export const BOT_ITEM_LINKS_SHOWN = 5
@@ -136,7 +135,8 @@ function GitHubRow({ row: hostRow }: { row: BotItemGitHubRow }): React.JSX.Eleme
       githubFallback={fallback.pending}
       githubFailedFallback={fallback.failed}
       retryKey={GITHUB_RETRY_KEY}
-      boundTo={botItemPaneBounds}
+      boundTo={botItemPaneBoundary}
+      fullTitle
     >
       {button}
     </NativeChatLinkPeek>
@@ -145,40 +145,32 @@ function GitHubRow({ row: hostRow }: { row: BotItemGitHubRow }): React.JSX.Eleme
   )
 }
 
-/** A web link. A Linear issue reads as its key and the title Orca's Linear cache has for it, with
- *  "Linear" for its state: the cache can't yet prove which host and sign-in read an issue's state. */
+/** A web link. A Linear issue reads as its key, with "Linear" for its state: nothing is borrowed from
+ *  Orca's Linear cache, which can't yet prove that a cached title or state is this link's issue, read
+ *  by a source this bot's pane may use. */
 function WebRow({ row }: { row: Extract<BotItemLinkRow, { kind: 'web' }> }): React.JSX.Element {
   const t = useTranslate()
-  const linearTitle = useLinearTitle(row.linear)
   const openWeb = useOpenWeb()
-  const name = linearTitle ? `${row.title} ${linearTitle}` : row.title
   return (
     <BotItemLinkRowButton
       name={
         row.linear ? (
-          <span className="min-w-0 truncate">{name}</span>
+          <span className="min-w-0 truncate">{row.title}</span>
         ) : (
           <BotItemLinkRowMiddleTruncated text={row.title} />
         )
       }
       status={row.linear ? t('bots.items.link.linear', 'Linear') : null}
-      tip={row.linear ? `${name} · ${row.tip}` : row.url}
+      tip={row.linear ? `${row.title} · ${row.tip}` : row.url}
       onClick={(event) => openWeb(row.url, event)}
     />
   )
 }
 
-function workerStatus(t: Translate, state: BotItemWorkerState): ReactNode {
+function workerStatusLabel(t: Translate, state: BotItemWorkerState): string {
   switch (state) {
     case 'working':
-      return (
-        <>
-          <WorkerStateIcon state="running" />
-          <BotItemLinkRowStatusText>
-            {t('bots.items.link.running', 'Running')}
-          </BotItemLinkRowStatusText>
-        </>
-      )
+      return t('bots.items.link.running', 'Running')
     case 'completed':
     case 'missing':
       return t('bots.items.link.done', 'Done')
@@ -212,27 +204,29 @@ function WorkerRow({
   const worker = botItemWorkerRow(link)
   const open = botChatTreeWorkerOpen(bot, worker)
   const canStop = workerCanStop(link)
+  const state = workerStatusLabel(t, link.state)
   const { stopping, stop } = useWorkerStop(worker.dispatchId ?? '')
   const rowRef = useRef<HTMLDivElement | null>(null)
-  const [bounds, setBounds] = useState<PeekBounds | null>(null)
+  const [cardOpen, setCardOpen] = useState(false)
+  const bounds = usePeekBounds(cardOpen, rowRef, botItemPaneBoundary)
   return (
-    <HoverCard
-      openDelay={400}
-      closeDelay={100}
-      onOpenChange={(next) => {
-        if (next && rowRef.current) {
-          setBounds(botItemPaneBounds(rowRef.current))
-        }
-      }}
-    >
+    <HoverCard openDelay={400} closeDelay={100} onOpenChange={setCardOpen}>
       <div ref={rowRef} className="group/worker flex min-w-0 items-center">
         <HoverCardTrigger asChild>
           <button type="button" disabled={!open} onClick={open} className={botItemLinkRowClassName}>
             <BotItemLinkRowName>
               <span className="min-w-0 truncate">{worker.title}</span>
             </BotItemLinkRowName>
-            <BotItemLinkRowStatus ownsStopSlot={canStop}>
-              {workerStatus(t, link.state)}
+            {/* A worker row has no tooltip: a state cut by its cap reads whole on hover here. */}
+            <BotItemLinkRowStatus ownsStopSlot={canStop} title={state}>
+              {link.state === 'working' ? (
+                <>
+                  <WorkerStateIcon state="running" />
+                  <BotItemLinkRowStatusText>{state}</BotItemLinkRowStatusText>
+                </>
+              ) : (
+                state
+              )}
             </BotItemLinkRowStatus>
           </button>
         </HoverCardTrigger>
@@ -264,7 +258,11 @@ function WorkerRow({
         variant="workspace-details"
         collisionPadding={BOT_ITEM_PANE_CARD_MARGIN}
         collisionBoundary={bounds?.boundary}
-        style={bounds ? { maxWidth: bounds.maxWidth } : undefined}
+        style={
+          bounds
+            ? { maxWidth: bounds.maxWidth, maxHeight: `min(28rem, ${bounds.maxHeight}px)` }
+            : undefined
+        }
       >
         <WorkerActivityDetails
           title={worker.title}

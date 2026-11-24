@@ -23,9 +23,8 @@ export function useGitHubLinkPeekFallback(
 ): { pending: ReactNode; failed: ReactNode } {
   return useMemo(() => {
     const name = (
-      <div className="line-clamp-2 text-sm font-semibold text-foreground [overflow-wrap:anywhere]">
-        {title}
-      </div>
+      // Whole, never clamped: the card is the row's only way to its full title.
+      <div className="text-sm font-semibold text-foreground [overflow-wrap:anywhere]">{title}</div>
     )
     return {
       pending: (

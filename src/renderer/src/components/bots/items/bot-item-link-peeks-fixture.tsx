@@ -184,11 +184,14 @@ export const linkBlock = (links: BotItemLinkView[] = LINKS) => (
   </div>
 )
 
-/** A narrow item pane at the window's right edge, beside the rest of the window. */
+/** A narrow item pane at the window's right edge, beside the rest of the window: its cards stay inside
+ *  it, as in the item page. */
 export const narrowLinkBlock = () => (
   <div className="flex">
     <div className="flex-1" />
-    <div className="w-[360px] border-l border-border">{linkBlock()}</div>
+    <div data-bot-item-pane="" className="w-[360px] border-l border-border">
+      {linkBlock()}
+    </div>
   </div>
 )
 

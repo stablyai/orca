@@ -40,20 +40,25 @@ export function BotItemLinkRowName({ children }: { children: ReactNode }): React
   return <span className="flex min-w-0 flex-1 truncate">{children}</span>
 }
 
-/** A row's state, right: the app's own short words, which never shrink, so only the name truncates.
- *  While the Links block has a Stop button (`data-stop-slot`), the state leaves its width free, so it
- *  ends where the stoppable row's state does; that row's own state (`ownsStopSlot`) sits beside Stop. */
+/** A row's state, right. It never takes more than 45% of the row, so the name keeps its room; a state
+ *  past that ends in an ellipsis and reads whole in the row's tooltip (`title` where the row has
+ *  none). While the Links block has a Stop button (`data-stop-slot`), the state leaves its width
+ *  free, so it ends where the stoppable row's state does; that row's own state (`ownsStopSlot`)
+ *  sits beside Stop. */
 export function BotItemLinkRowStatus({
   ownsStopSlot = false,
+  title,
   children
 }: {
   ownsStopSlot?: boolean
+  title?: string
   children: ReactNode
 }): React.JSX.Element | null {
   return children ? (
     <span
+      title={title}
       className={cn(
-        'flex shrink-0 items-center gap-1.5 text-xs text-muted-foreground',
+        'flex max-w-[45%] min-w-0 shrink-0 items-center gap-1.5 text-xs text-muted-foreground',
         // Stop's `ml-0.5 size-5`.
         !ownsStopSlot && 'group-data-[stop-slot]/links:mr-[22px]'
       )}

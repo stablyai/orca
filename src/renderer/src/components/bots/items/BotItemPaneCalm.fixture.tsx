@@ -1,3 +1,4 @@
+import { useEffect, useState } from 'react'
 import { defineFixture } from '../../../component-fixtures/component-fixture'
 import { fixtureCos } from '../../../component-fixtures/fixture-bot-panel'
 import { makeTestBotItem } from '../../../../../shared/bots/bot-item.test-fixture'
@@ -19,12 +20,17 @@ const walk = (): BotItemWalkState => ({
   markGone: () => {},
   close: () => null
 })
-const workerLink = (ref: string, title: string, working: boolean): BotItemLinkView => ({
+const workerLink = (
+  ref: string,
+  title: string,
+  working: boolean,
+  settled: 'completed' | 'unknown' = 'completed'
+): BotItemLinkView => ({
   kind: 'dispatch',
   ref,
   latest: null,
   title,
-  state: working ? 'working' : 'completed',
+  state: working ? 'working' : settled,
   host: null,
   startedAt: 1_700_000_000_000,
   settledAt: working ? null : 1_700_000_600_000,
@@ -65,7 +71,8 @@ const calmPr = (
     checkedAt: CALM_AT
   }
 })
-// Linear titles as Orca's Linear cache holds them; rows show no state from it.
+// Linear titles and states as Orca's Linear cache holds them. Rows show neither: the cache can't prove a
+// read belongs to the link's issue and this pane's source, so a Linear row is its key and "Linear".
 const LINEAR_ISSUE = (identifier: string, title: string) => ({
   data: {
     id: identifier,
@@ -235,4 +242,57 @@ export const calmConstrained = defineFixture({
       events={CALM_EVENTS}
     />
   )
+})
+
+// The same item edited in place: a line moves from Done when to the description, so no block box and
+// no total height changes, only where the lines end. The cut must follow (compare calmEditFresh).
+const EDIT_BEFORE: BotItem = {
+  ...calmItem,
+  description: 'Runbook first, then the undo card.',
+  doneMeans:
+    'The owner has the stop and the undo card, cloud access is verified read-only on every paired host, and a backup operator is named for launch day',
+  links: calmThree
+}
+const EDIT_AFTER: BotItem = {
+  ...EDIT_BEFORE,
+  description:
+    'Runbook first, then the undo card, then a dry run of the global stop on one paired host.',
+  doneMeans:
+    'The owner has the stop and the undo card, cloud access is verified read-only, and a backup operator is named'
+}
+
+function EditedInPlace(): React.JSX.Element {
+  const [shown, setShown] = useState(EDIT_BEFORE)
+  useEffect(() => {
+    const edit = setTimeout(() => setShown(EDIT_AFTER), 300)
+    return () => clearTimeout(edit)
+  }, [])
+  return <Calm shown={shown} height={405} />
+}
+
+export const calmEditInPlace = defineFixture({
+  width: 340,
+  store: calmStore,
+  render: () => <EditedInPlace />,
+  interact: async () => {
+    await settle(600)
+  }
+})
+
+export const calmEditFresh = defineFixture({
+  width: 340,
+  store: calmStore,
+  render: () => <Calm shown={EDIT_AFTER} height={405} />
+})
+
+/** 260px with Stop's slot reserved and the longest state the app writes: names keep their room. */
+export const calmNarrowLongStatus = calmAt(260, {
+  ...calmItem,
+  doneMeans: null,
+  links: [
+    workerLink('ctx_stop', 'Stop runbook review on every paired host', true),
+    workerLink('ctx_lost', 'Relay drain check on the backup host', false, 'unknown'),
+    calmPr(46210, 'Undo card copy for the launch-day global stop', 'failure'),
+    { kind: 'url', ref: 'https://linear.app/acme/issue/OPS-1650/cloud-read-only-access' }
+  ]
 })
