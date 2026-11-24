@@ -119,7 +119,11 @@ export function BotGoogleCard({
       status={
         settingUp ? { label: t('bots.google.bot.settingUp', 'Setting up'), tone: 'neutral' } : null
       }
-      fix={connected ? null : { label: t('bots.google.connect', 'Connect Google'), onClick: setUp }}
+      fix={
+        connected || settingUp
+          ? null
+          : { label: t('bots.google.connect', 'Connect Google'), onClick: setUp }
+      }
       actions={{
         ...(connected && defaultAccount !== undefined
           ? {
