@@ -23,7 +23,8 @@ export const CONNECTOR_CONTRACT_VERSION = 1
 
 export { CONNECTOR_PATHS } from './connector-cloud-paths'
 
-/** The shared-app services an owner connects in one browser trip. */
+/** The services a person connects in one browser trip (connect-messages.ts in the cloud contract;
+ *  connector-mirrored-constants.test.ts keeps them equal). */
 export const CONNECTOR_CONNECT_SOURCES = ['linear', 'github', 'slack'] as const
 export type ConnectorConnectSource = (typeof CONNECTOR_CONNECT_SOURCES)[number]
 

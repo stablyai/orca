@@ -6,6 +6,10 @@ import { z } from 'zod'
 // it links the person in the Slack workspace they signed in to (the redeem's workspace is the Slack
 // team) and installs nothing, so install answers 'none'.
 
+// The sources a person connects in one browser trip, each at `${CONNECTOR_PATHS[source]}/connect`.
+export const CONNECTOR_CONNECT_SOURCES = ['linear', 'github', 'slack'] as const
+export type ConnectorConnectSource = (typeof CONNECTOR_CONNECT_SOURCES)[number]
+
 // 32 random bytes, base64url: the loopback's nonce, and the one-time result code.
 export const CONNECTOR_CONNECT_CODE_PATTERN = /^[A-Za-z0-9_-]{43}$/
 const Code = z.string().regex(CONNECTOR_CONNECT_CODE_PATTERN)
