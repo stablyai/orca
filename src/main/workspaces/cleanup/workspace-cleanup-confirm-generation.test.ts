@@ -77,9 +77,15 @@ it('samples a newly eligible workspace in a post-click comparison while an older
   const older = runner.previewChange(change, state)
   await oldRead.promise
   eligible = true
-  const confirmation = await runner.previewChange(change, state, true)
-  expect(confirmation.next.rows.map((row) => row.displayName)).toEqual(['New'])
-  expect(confirmation.next.rows[0].evaluation).toEqual({ action: 'delete', reason: 'merged' })
-  finishOld.resolve()
+  const confirmation = runner.previewChange(change, state, true)
+  try {
+    // A fresh sample, not a join onto the deferred older comparison: a join fails here at once.
+    await vi.waitFor(() => expect(collect).toHaveBeenCalledTimes(2), { timeout: 30_000 })
+    const result = await confirmation
+    expect(result.next.rows.map((row) => row.displayName)).toEqual(['New'])
+    expect(result.next.rows[0].evaluation).toEqual({ action: 'delete', reason: 'merged' })
+  } finally {
+    finishOld.resolve()
+  }
   expect((await older).next.rows).toEqual([])
 })

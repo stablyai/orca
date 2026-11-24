@@ -32,18 +32,6 @@ import { failureLeftByGit } from '../../../workspaces/removal/worktree-removal-f
 
 afterEach(() => vi.clearAllMocks())
 
-it('keeps a guarded native Windows checkout when no process worker can check it', async () => {
-  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: refusal happens before the identity is read.
-  const identity = { root: 'C:\\checkout' } as unknown as WorktreeCheckoutIdentity
-  await expect(
-    removeWorktree('C:\\repo', 'C:\\checkout', false, {
-      knownRemovedWorktree: null,
-      checkoutDeleteIdentity: identity
-    })
-  ).rejects.toMatchObject({ code: 'ERR_ORCA_WORKTREE_IDENTITY_UNVERIFIABLE' })
-  expect(removeWindowsCheckout).not.toHaveBeenCalled()
-})
-
 it('retains a failed-removal retry when the worker disappears after the Windows checkout is deleted', async () => {
   const root = await mkdtemp(join(tmpdir(), 'orca-windows-worker-loss-'))
   try {

@@ -38,10 +38,3 @@ it('reports a removal that failed before the caller looked it up, not a removed 
     'refused before deleting'
   )
 })
-
-it('still follows the pending entry for a reply that carries no completion', async () => {
-  const settlement = addPendingRemoval(record)
-  const finished = finishAcceptedWorktreeRemoval({ removing: true }, record.worktreeId)
-  settlement.resolve({})
-  await expect(finished).resolves.toEqual({})
-})

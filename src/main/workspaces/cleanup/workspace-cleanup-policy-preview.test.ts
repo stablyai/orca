@@ -182,54 +182,40 @@ it('previews a project while saved Off, excludes other projects, and keeps polic
   })
 })
 
-it.each(['project', 'global'] as const)(
-  'rejects a proposal bound to an older %s owner snapshot before previewing',
-  async (scope) => {
-    const store = createStore()
-    const repo = {
-      id: 'project',
-      path: testState.dir,
-      displayName: 'Fixture',
-      badgeColor: 'gray',
-      addedAt: 1
-    }
-    store.addRepo(repo)
-    const active = {
-      ...getDefaultWorkspaceCleanupRules(),
-      inactive: { enabled: true, afterDays: 30, action: 'delete' as const }
-    }
-    if (scope === 'global') {
-      store.updateSettings({ workspaceCleanupPolicy: active })
-    } else {
-      store.updateRepo(repo, { workspaceCleanupPolicy: { mode: 'custom', rules: active } })
-    }
-    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: a rejected policy snapshot must never acquire workspace evidence.
-    const runtime = { getWorktreePs: async () => ({ worktrees: [], truncated: false }) } as never
-    const runner = new WorkspaceCleanupRunner({ store, runtime, historyDirectory: testState.dir })
-    const expected = runner.readPolicy(scope === 'global' ? null : repo.id).state
-    const proposed = { ...active, merged: { enabled: true } }
-    const change: WorkspaceCleanupPolicyChange =
-      scope === 'global'
-        ? { scope, rules: proposed }
-        : { scope, repoId: repo.id, policy: { mode: 'custom', rules: proposed } }
-    const newer = { ...active, inactive: { ...active.inactive, enabled: false } }
-    if (scope === 'global') {
-      store.updateSettings({ workspaceCleanupPolicy: newer })
-    } else {
-      store.updateRepo(repo, { workspaceCleanupPolicy: { mode: 'custom', rules: newer } })
-    }
-    await store.runDurableMutation(() => ({ value: true, persist: 'if-dirty' }))
-    expect(() => runner.previewChange(change, expected)).toThrow(
-      'workspace_cleanup_policy_conflict'
-    )
-    expect(
-      scope === 'global'
-        ? readPersistedState().settings.workspaceCleanupPolicy
-        : readPersistedState().repos.find((row) => row.id === 'project')?.workspaceCleanupPolicy
-    ).toMatchObject(
-      scope === 'global'
-        ? { merged: { enabled: false }, inactive: { enabled: false } }
-        : { mode: 'custom', rules: { merged: { enabled: false }, inactive: { enabled: false } } }
-    )
+// The global owner refuses the same stale snapshot through the save path; the project scope is the divergent one.
+it('rejects a proposal bound to an older project owner snapshot before previewing', async () => {
+  const store = createStore()
+  const repo = {
+    id: 'project',
+    path: testState.dir,
+    displayName: 'Fixture',
+    badgeColor: 'gray',
+    addedAt: 1
   }
-)
+  store.addRepo(repo)
+  const active = {
+    ...getDefaultWorkspaceCleanupRules(),
+    inactive: { enabled: true, afterDays: 30, action: 'delete' as const }
+  }
+  store.updateRepo(repo, { workspaceCleanupPolicy: { mode: 'custom', rules: active } })
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: a rejected policy snapshot must never acquire workspace evidence.
+  const runtime = { getWorktreePs: async () => ({ worktrees: [], truncated: false }) } as never
+  const runner = new WorkspaceCleanupRunner({ store, runtime, historyDirectory: testState.dir })
+  const expected = runner.readPolicy(repo.id).state
+  const proposed = { ...active, merged: { enabled: true } }
+  const change: WorkspaceCleanupPolicyChange = {
+    scope: 'project',
+    repoId: repo.id,
+    policy: { mode: 'custom', rules: proposed }
+  }
+  const newer = { ...active, inactive: { ...active.inactive, enabled: false } }
+  store.updateRepo(repo, { workspaceCleanupPolicy: { mode: 'custom', rules: newer } })
+  await store.runDurableMutation(() => ({ value: true, persist: 'if-dirty' }))
+  expect(() => runner.previewChange(change, expected)).toThrow('workspace_cleanup_policy_conflict')
+  expect(
+    readPersistedState().repos.find((row) => row.id === 'project')?.workspaceCleanupPolicy
+  ).toMatchObject({
+    mode: 'custom',
+    rules: { merged: { enabled: false }, inactive: { enabled: false } }
+  })
+})

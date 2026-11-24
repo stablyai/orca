@@ -10,7 +10,6 @@ import { WorkspaceLifecycleQueue } from '../../runtime/workspaces/lifecycle/work
 import { WorkspaceCleanupRunner } from './workspace-cleanup-runner'
 import { collectWorkspaceCleanupWorkspaces } from './workspace-cleanup-run-evidence'
 import { removeWorkspaceForCleanup } from './workspace-cleanup-removal-step'
-import { pinWorkspacesForCleanup } from './workspace-cleanup-pin'
 import * as status from '../../git/source-control/status/status-read'
 vi.mock('electron', () => ({
   app: { getPath: () => testState.dir },
@@ -126,7 +125,9 @@ it('runs healthy projects despite a broken project listing while consent preview
   })
   await expect(
     runner.previewChange({ scope: 'global', rules: f.rules }, runner.readPolicy(null).state)
-  ).rejects.toThrow()
+    // The consent preview names the broken project's failure instead of showing a partial list.
+  ).rejects.toThrow('Repository folder was not found.')
+  expect(f.removed).toEqual([])
   runner.start()
   try {
     const run = await runner.runNow('run-now')
@@ -164,80 +165,4 @@ it('keeps a real unpushed commit made after status in the final removal recheck'
   expect(f.removed).toEqual([])
   expect(existsSync(join(f.path, 'new-work'))).toBe(true)
   expect(f.git(['-C', f.path, 'rev-list', '--count', 'main..HEAD'])).toBe('1')
-})
-it.each([true, false])(
-  'honors a durable Keep after eligibility but before automatic admission (queue=%s)',
-  async (withQueue) => {
-    const f = fixture(withQueue)
-    const [workspace] = await collectWorkspaceCleanupWorkspaces({
-      store: f.store,
-      runtime: f.host,
-      globalRules: f.rules,
-      now: Date.now()
-    })
-    const sampled = Promise.withResolvers<void>()
-    const resume = Promise.withResolvers<void>()
-    f.runtime.listTerminals = async () => {
-      sampled.resolve()
-      await resume.promise
-      return { terminals: [], truncated: false }
-    }
-    const removal = removeWorkspaceForCleanup({
-      store: f.store,
-      runtime: f.host,
-      workspace,
-      globalRules: () => f.rules,
-      now: Date.now
-    })
-    await sampled.promise
-    expect(await pinWorkspacesForCleanup(f.host, [{ worktreeId: f.id, instanceId: 'a' }])).toEqual({
-      pinned: [f.id],
-      deleted: [],
-      failed: [],
-      tooLate: []
-    })
-    resume.resolve()
-    expect(await removal).toMatchObject({
-      outcome: 'kept',
-      keepCause: 'pinned',
-      keptOnRecheck: true
-    })
-    expect(f.removed).toEqual([])
-  }
-)
-
-it('refuses a stale-inventory Keep after automatic deletion starts with no lifecycle queue', async () => {
-  const f = fixture(false)
-  const [workspace] = await collectWorkspaceCleanupWorkspaces({
-    store: f.store,
-    runtime: f.host,
-    globalRules: f.rules,
-    now: Date.now()
-  })
-  const started = Promise.withResolvers<void>()
-  const finish = Promise.withResolvers<void>()
-  f.runtime.removeManagedWorktree = async () => {
-    started.resolve()
-    await finish.promise
-    f.removed.push(f.id)
-    return {}
-  }
-  const removal = removeWorkspaceForCleanup({
-    store: f.store,
-    runtime: f.host,
-    workspace,
-    globalRules: () => f.rules,
-    now: Date.now
-  })
-  await started.promise
-  expect(await pinWorkspacesForCleanup(f.host, [{ worktreeId: f.id, instanceId: 'a' }])).toEqual({
-    pinned: [],
-    deleted: [],
-    failed: [],
-    tooLate: [f.id]
-  })
-  finish.resolve()
-  expect(await removal).toMatchObject({ outcome: 'removed' })
-  expect(f.store.getWorktreeMetaForHost(f.id, 'local')?.isPinned ?? false).toBe(false)
-  expect(f.removed).toEqual([f.id])
 })

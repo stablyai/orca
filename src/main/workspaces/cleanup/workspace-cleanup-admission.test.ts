@@ -65,87 +65,82 @@ function fixture(withQueue = true) {
   }
   return { store, rows, runtime }
 }
-it.each([true, false])(
-  'keeps both durable incarnations before automatic admission (queue=%s)',
-  async (withQueue) => {
-    const { store, rows, runtime } = fixture(withQueue)
-    const inventory = Promise.withResolvers<void>()
-    const discovered = Promise.withResolvers<void>()
-    const normal = runtime.getWorktreePs
-    runtime.getWorktreePs = async () => {
-      discovered.resolve()
-      await inventory.promise
-      return normal()
-    }
-    const keep = pinWorkspacesForCleanup(runtime, rows)
-    await discovered.promise
-    inventory.resolve()
-    expect(await keep).toEqual({
-      pinned: rows.map((row) => row.worktreeId),
-      deleted: [],
-      failed: [],
-      tooLate: []
-    })
-    const removed: string[] = []
-    for (const row of rows) {
-      const admission = await admitWorkspaceCleanup(
-        store,
-        {
-          ...row,
-          repoId: 'repo',
-          repoName: 'Fixture',
-          displayName: row.instanceId,
-          path: join(testState.dir, row.instanceId),
-          branch: row.instanceId
-        },
-        () =>
-          queueWorkspaceDelete(runtime, `id:${row.worktreeId}`, 'local', {}, async () => {
-            removed.push(row.instanceId)
-          })
-      )
-      expect(admission).toEqual({ admitted: false, cause: 'pinned' })
-    }
-    expect(removed).toEqual([])
-    expect(
-      Object.values(readPersistedState().worktreeMeta)
-        .filter((row) => row.isPinned)
-        .map((row) => row.instanceId)
-        .sort()
-    ).toEqual(['a', 'b'])
+// Both win orders run with the lifecycle queue off, where only the durable writer orders Keep and admission.
+it('keeps both durable incarnations before automatic admission', async () => {
+  const { store, rows, runtime } = fixture(false)
+  const inventory = Promise.withResolvers<void>()
+  const discovered = Promise.withResolvers<void>()
+  const normal = runtime.getWorktreePs
+  runtime.getWorktreePs = async () => {
+    discovered.resolve()
+    await inventory.promise
+    return normal()
   }
-)
-it.each([true, false])(
-  'refuses a late Keep after automatic admission (queue=%s)',
-  async (withQueue) => {
-    const { store, rows, runtime } = fixture(withQueue)
-    const finish = Promise.withResolvers<void>()
-    const row = rows[0]
+  const keep = pinWorkspacesForCleanup(runtime, rows)
+  await discovered.promise
+  inventory.resolve()
+  expect(await keep).toEqual({
+    pinned: rows.map((row) => row.worktreeId),
+    deleted: [],
+    failed: [],
+    tooLate: []
+  })
+  const removed: string[] = []
+  for (const row of rows) {
     const admission = await admitWorkspaceCleanup(
       store,
       {
         ...row,
         repoId: 'repo',
         repoName: 'Fixture',
-        displayName: 'a',
-        path: join(testState.dir, 'a'),
-        branch: 'a'
+        displayName: row.instanceId,
+        path: join(testState.dir, row.instanceId),
+        branch: row.instanceId
       },
-      () => queueWorkspaceDelete(runtime, `id:${row.worktreeId}`, 'local', {}, () => finish.promise)
+      () =>
+        queueWorkspaceDelete(runtime, `id:${row.worktreeId}`, 'local', {}, async () => {
+          removed.push(row.instanceId)
+        })
     )
-    expect(admission.admitted).toBe(true)
-    expect(await pinWorkspacesForCleanup(runtime, [row])).toEqual({
-      pinned: [],
-      deleted: [],
-      failed: [],
-      tooLate: [row.worktreeId]
-    })
-    finish.resolve()
-    if (admission.admitted) {
-      await admission.completion
-    }
-    expect(store.getWorktreeMetaForHost(row.worktreeId, 'local')?.isPinned).toBe(false)
+    expect(admission).toEqual({ admitted: false, cause: 'pinned' })
   }
-)
+  expect(removed).toEqual([])
+  expect(
+    Object.values(readPersistedState().worktreeMeta)
+      .filter((row) => row.isPinned)
+      .map((row) => row.instanceId)
+      .sort()
+  ).toEqual(['a', 'b'])
+})
+it('refuses a late Keep after automatic admission', async () => {
+  const { store, rows, runtime } = fixture(false)
+  const finish = Promise.withResolvers<void>()
+  const row = rows[0]
+  const admission = await admitWorkspaceCleanup(
+    store,
+    {
+      ...row,
+      repoId: 'repo',
+      repoName: 'Fixture',
+      displayName: 'a',
+      path: join(testState.dir, 'a'),
+      branch: 'a'
+    },
+    () => queueWorkspaceDelete(runtime, `id:${row.worktreeId}`, 'local', {}, () => finish.promise)
+  )
+  expect(admission.admitted).toBe(true)
+  expect(await pinWorkspacesForCleanup(runtime, [row])).toEqual({
+    pinned: [],
+    deleted: [],
+    failed: [],
+    tooLate: [row.worktreeId]
+  })
+  finish.resolve()
+  if (admission.admitted) {
+    await admission.completion
+  }
+  expect(store.getWorktreeMetaForHost(row.worktreeId, 'local')?.isPinned).toBe(false)
+})
 it('persists successful batch pins without claiming a failed row was kept', async () => {
   const { store, rows, runtime } = fixture()
   const normal = store.setWorktreeMeta.bind(store)

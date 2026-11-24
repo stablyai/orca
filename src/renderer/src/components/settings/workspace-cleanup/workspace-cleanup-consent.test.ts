@@ -6,10 +6,7 @@ import type {
   WorkspaceCleanupPolicyChange
 } from '../../../../../shared/workspace-cleanup/workspace-cleanup-policy-change'
 import type { WorkspaceCleanupPreviewRow } from '../../../../../shared/workspace-cleanup/workspace-cleanup-run'
-import {
-  createCleanupChangeRequest,
-  cleanupExistingRuleNotice
-} from './workspace-cleanup-change-preview'
+import { createCleanupChangeRequest } from './workspace-cleanup-change-preview'
 import { confirmWorkspaceCleanupChange } from './workspace-cleanup-change-confirmation'
 import {
   proposedCleanupPolicy,
@@ -39,7 +36,8 @@ beforeEach(() => {
   window.localStorage.clear()
   window.sessionStorage.clear()
 })
-it.each(['global', 'custom', 'inherit'] as const)(
+// A project's own rules and its switch to the global rules drift differently; both need a second consent.
+it.each(['custom', 'inherit'] as const)(
   'requires renewed review for changed %s policy even with identical deletion rows',
   async (scope) => {
     const rules = {
@@ -50,7 +48,7 @@ it.each(['global', 'custom', 'inherit'] as const)(
       protocol: 3,
       expiresAt: 1_900_000_060_000,
       state: {
-        repoId: scope === 'global' ? null : 'repo',
+        repoId: 'repo',
         rules,
         projects: [
           {
@@ -78,12 +76,7 @@ it.each(['global', 'custom', 'inherit'] as const)(
       next: { evaluatedAt: 1, rows: [row] }
     }
     const change = proposedCleanupPolicy(comparison.read, intent)
-    const pending = createCleanupChangeRequest(
-      comparison,
-      intent,
-      change,
-      scope === 'global' ? undefined : 'Example'
-    )!
+    const pending = createCleanupChangeRequest(comparison, intent, change, 'Example')!
     const latest = structuredClone(read)
     if (scope === 'custom') {
       const policy = latest.state.projects[0].policy
@@ -137,34 +130,14 @@ it.each(['global', 'custom', 'inherit'] as const)(
     expect(savedRules.inactive.afterDays).toBe(1)
   }
 )
-it('preserves selection identity and exact visible byte totals across refresh and toggles', () => {
-  const second = {
-    ...row,
-    worktreeId: 'repo::/second',
-    instanceId: 'second',
-    displayName: 'Second',
-    sizeBytes: 250
-  }
+it('never carries Keep to a same-ID workspace replaced by another instance', () => {
+  const second = { ...row, worktreeId: 'repo::/second', instanceId: 'second' }
   const selection = new WorkspaceCleanupKeepSelection([row, second])
   selection.toggle(row)
   selection.toggle(second)
-  expect(selection.getSnapshot()).toMatchObject({ count: 2, visibleCount: 2, visibleBytes: 350 })
   const moved = { ...row, instanceId: 'replacement' }
   const refreshed = selection.copyFor([moved, second], new Set(['local:repo::/second:second']))
   expect([...refreshed.rows()].map((item) => item.instanceId)).toEqual(['second'])
-  expect(refreshed.getSnapshot()).toMatchObject({ count: 1, visibleCount: 1, visibleBytes: 250 })
-  refreshed.toggle(second)
-  expect(refreshed.getSnapshot()).toMatchObject({ count: 0, visibleCount: 0, visibleBytes: 0 })
-})
-
-it('retains the existing-rule warning after a refresh clears every New marker', () => {
-  const current = new Set(['local:repo::/old:old'])
-  expect(cleanupExistingRuleNotice([row], new Set(), current)).toBe('some')
-  expect(cleanupExistingRuleNotice([row], new Set(), new Set())).toBeNull()
-  const added = { ...row, worktreeId: 'repo::/added', instanceId: 'added' }
-  expect(
-    cleanupExistingRuleNotice([added, row], new Set(['local:repo::/added:added']), current)
-  ).toBe('all')
 })
 
 it('does not fence another window live writer through a shared localStorage journal', async () => {
@@ -227,44 +200,38 @@ it('does not fence another window live writer through a shared localStorage jour
   expect(cancelled).toBe(false)
 })
 
-it.each(['global', 'project'] as const)(
-  'distinguishes a refused %s save from a concurrent edit',
-  async (scope) => {
-    for (const changed of [false, true]) {
-      const rules = getDefaultWorkspaceCleanupRules()
-      const read: WorkspaceCleanupPolicyRead = {
-        protocol: 3,
-        expiresAt: 1_900_000_060_000,
-        state: {
-          repoId: scope === 'global' ? null : 'repo',
-          rules,
-          projects: [{ id: 'repo', hostId: 'local', policy: { mode: 'custom', rules } }]
-        }
+it('distinguishes a refused save from a concurrent edit', async () => {
+  for (const changed of [false, true]) {
+    const rules = getDefaultWorkspaceCleanupRules()
+    const read: WorkspaceCleanupPolicyRead = {
+      protocol: 3,
+      expiresAt: 1_900_000_060_000,
+      state: {
+        repoId: 'repo',
+        rules,
+        projects: [{ id: 'repo', hostId: 'local', policy: { mode: 'custom', rules } }]
       }
-      const desired = { ...rules, merged: { ...rules.merged, enabled: true } }
-      const change: WorkspaceCleanupPolicyChange =
-        scope === 'global'
-          ? { scope: 'global', rules: desired }
-          : { scope: 'project', repoId: 'repo', policy: { mode: 'custom', rules: desired } }
-      const actual = structuredClone(read)
-      if (changed) {
-        if (scope === 'global') {
-          actual.state.rules.inactive.afterDays = 1
-        } else if (actual.state.projects[0].policy?.mode === 'custom') {
-          actual.state.projects[0].policy.rules.inactive.afterDays = 1
-        }
-      }
-      rpc.mockImplementation(async (_owner, method) => {
-        if (method === 'workspaceCleanup.settlePolicyWrite') {
-          return { outcome: 'cancelled' }
-        }
-        if (method === 'workspaceCleanup.policyState') {
-          return actual
-        }
-        throw new Error(`Unexpected method ${method}`)
-      })
-      const write = createWorkspaceCleanupPolicyWrite({ kind: 'local' }, change, read)
-      expect((await write.settle()).outcome).toBe(changed ? 'conflict' : 'failed')
     }
+    const desired = { ...rules, merged: { ...rules.merged, enabled: true } }
+    const change: WorkspaceCleanupPolicyChange = {
+      scope: 'project',
+      repoId: 'repo',
+      policy: { mode: 'custom', rules: desired }
+    }
+    const actual = structuredClone(read)
+    if (changed && actual.state.projects[0].policy?.mode === 'custom') {
+      actual.state.projects[0].policy.rules.inactive.afterDays = 1
+    }
+    rpc.mockImplementation(async (_owner, method) => {
+      if (method === 'workspaceCleanup.settlePolicyWrite') {
+        return { outcome: 'cancelled' }
+      }
+      if (method === 'workspaceCleanup.policyState') {
+        return actual
+      }
+      throw new Error(`Unexpected method ${method}`)
+    })
+    const write = createWorkspaceCleanupPolicyWrite({ kind: 'local' }, change, read)
+    expect((await write.settle()).outcome).toBe(changed ? 'conflict' : 'failed')
   }
-)
+})

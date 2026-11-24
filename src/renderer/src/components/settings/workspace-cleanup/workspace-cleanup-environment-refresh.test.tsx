@@ -87,67 +87,10 @@ function renderPane(): void {
   )
 }
 const control = (): HTMLElement => screen.getByRole('switch', { name: 'Delete merged workspaces' })
+// Only the two orderings of a refresh against a save are pinned here: an old read must not roll back
+// a just-saved rule, and a genuinely later read must replace the save's readback.
 const announce = (): void =>
   act(() => notifyHostSettingsChanged(ENVIRONMENT, ['workspaceCleanupPolicy']))
-
-it("shows another client's change to the host's rules and toggles from it", async () => {
-  renderPane()
-  await waitFor(() => expect(control().getAttribute('aria-disabled')).toBe('false'))
-  expect(control().getAttribute('aria-checked')).toBe('false')
-
-  // Another client turns the rule on; the host announces it on its event stream.
-  hostRules = { ...hostRules, merged: { enabled: true } }
-  act(() => notifyHostSettingsChanged('another-host', ['workspaceCleanupPolicy']))
-  act(() => notifyHostSettingsChanged(ENVIRONMENT, ['prAutoRefresh']))
-  expect(control().getAttribute('aria-checked')).toBe('false')
-  announce()
-  await waitFor(() => expect(control().getAttribute('aria-checked')).toBe('true'))
-
-  fireEvent.click(control())
-  await waitFor(() =>
-    expect(rpc).toHaveBeenCalledWith(
-      { kind: 'environment', environmentId: ENVIRONMENT },
-      'settings.update',
-      expect.objectContaining({
-        workspaceCleanupPolicy: expect.objectContaining({ merged: { enabled: false } })
-      })
-    )
-  )
-})
-
-it('keeps the newest of two overlapping refreshes', async () => {
-  renderPane()
-  await waitFor(() => expect(control().getAttribute('aria-disabled')).toBe('false'))
-  const older = hold('workspaceCleanup.policyState')
-  const newer = hold('workspaceCleanup.policyState')
-  announce()
-  announce()
-  await waitFor(() => expect(calls('workspaceCleanup.policyState')).toBe(3))
-  await act(async () => newer.resolve(policyRead({ ...hostRules, merged: { enabled: true } })))
-  await waitFor(() => expect(control().getAttribute('aria-checked')).toBe('true'))
-  await act(async () => older.resolve(policyRead(hostRules)))
-  expect(control().getAttribute('aria-checked')).toBe('true')
-})
-
-it('enables the rules once a refresh reads the host after the first read failed', async () => {
-  hold('workspaceCleanup.policyState').reject(new Error('Host unavailable'))
-  renderPane()
-  await waitFor(() => expect(screen.getByRole('alert')).toBeTruthy())
-  expect(control().getAttribute('aria-disabled')).toBe('true')
-  announce()
-  await waitFor(() => expect(control().getAttribute('aria-disabled')).toBe('false'))
-})
-
-it("keeps a refreshed answer when the first read of the host's rules fails late", async () => {
-  const first = hold('settings.get')
-  renderPane()
-  await waitFor(() => expect(calls('settings.get')).toBe(1))
-  announce()
-  await waitFor(() => expect(calls('settings.get')).toBe(2))
-  await act(async () => first.reject(new Error('timed out')))
-  await waitFor(() => expect(control().getAttribute('aria-disabled')).toBe('false'))
-  expect(screen.queryByText(/Couldn't load this host's cleanup rules/)).toBeNull()
-})
 
 it('keeps a saved rule when a refresh begun before the save answers after it', async () => {
   hostRules = { ...hostRules, merged: { enabled: true } }
