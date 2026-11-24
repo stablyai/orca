@@ -24,7 +24,7 @@ describe('ACP relay item continuation', () => {
     const run = () => {
       hook.reset()
       const cut = new RelayedProviderContinuation(hook, 'r1', 10)
-      return replay.map((line, at) => idOf(cut.line(11 + at, line, undefined)))
+      return replay.map((line, at) => idOf(cut.lines(11 + at, line, undefined)[0] ?? ''))
     }
     const first = run()
     expect(first).toEqual(['relay:r1:11:m1', 'relay:r1:11:m1', undefined, 'm2'])
