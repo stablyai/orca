@@ -72,7 +72,10 @@ export async function sendMobileStructuredAgentSessionMessage(input: {
   if (outcome.error !== null) {
     input.onError(outcome.error)
   }
-  if (outcome.outcome === 'accepted' && result.status === 'accepted') {
+  if (
+    (outcome.outcome === 'accepted' || outcome.outcome === 'queued') &&
+    result.status === 'accepted'
+  ) {
     input.onAccepted?.(result.cursor)
   }
   return outcome.outcome

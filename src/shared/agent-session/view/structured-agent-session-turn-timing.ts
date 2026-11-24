@@ -1,6 +1,7 @@
 // Durable host-clock lifecycle endpoints/provider durations keep settled timing identical on desktop/mobile without client clocks.
 
 import { agentJournalSubmissionKey } from '../journal/agent-session-journal-item-key'
+import { agentJournalSubmissionsDifferOnlyInStamp } from '../journal/agent-session-journal-written-stamp'
 import type {
   AgentJournalRenderItem,
   AgentJournalSubmission,
@@ -211,5 +212,31 @@ export function selectStructuredAgentTurnBars(
   return {
     settledTurns: settledTurnsOf(turns, submissions),
     runningTiming: timing?.state === 'running' ? timing : null
+  }
+}
+
+/** Per-view projection: receipt updates can reuse timing derived from the same submission facts. */
+export function createStructuredAgentTurnBarsSelector(): typeof selectStructuredAgentTurnBars {
+  let previous: {
+    items: readonly AgentJournalRenderItem[]
+    submissions: readonly AgentJournalSubmission[]
+    turnId: string | null
+    latestTurn: AgentSessionLatestTurn | null | undefined
+    bars: ReturnType<typeof selectStructuredAgentTurnBars>
+  } | null = null
+  return (items, submissions, turnId, latestTurn) => {
+    if (
+      previous?.items === items &&
+      previous.turnId === turnId &&
+      previous.latestTurn === latestTurn &&
+      (previous.submissions === submissions ||
+        agentJournalSubmissionsDifferOnlyInStamp(previous.submissions, submissions))
+    ) {
+      previous.submissions = submissions
+      return previous.bars
+    }
+    const bars = selectStructuredAgentTurnBars(items, submissions, turnId, latestTurn)
+    previous = { items, submissions, turnId, latestTurn, bars }
+    return bars
   }
 }

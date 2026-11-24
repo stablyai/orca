@@ -234,17 +234,16 @@ export function reduceStructuredAgentSession(
   const activity = event.activity !== undefined ? event.activity : state.activity
   const promptSuggestion =
     event.promptSuggestion !== undefined ? event.promptSuggestion : state.promptSuggestion
-  const liveItems = liveItemsWithinWindow(state, event.batch.items)
+  const { items: incoming, removedItemIds, submissions } = event.batch
+  const liveItems = liveItemsWithinWindow(state, incoming)
   // Fold every roster revision even outside the window; trimmed rows retain their sequence.
   const subagentRoster = foldStructuredAgentSubagentRoster(
     state.subagentRoster ?? NO_STRUCTURED_AGENT_SUBAGENT_ROSTER,
-    event.batch.items,
-    event.batch.removedItemIds
+    incoming,
+    removedItemIds
   )
-  const journalUnchanged =
-    liveItems.length === 0 &&
-    event.batch.removedItemIds.length === 0 &&
-    event.batch.submissions.length === 0
+  const itemsUnchanged = liveItems.length === 0 && removedItemIds.length === 0
+  const journalUnchanged = itemsUnchanged && submissions.length === 0
   if (
     event.batch.cursor.sequence === state.cursor?.sequence &&
     journalUnchanged &&
@@ -268,11 +267,9 @@ export function reduceStructuredAgentSession(
   ) {
     return state
   }
-  const merged = journalUnchanged
-    ? state.items
-    : mergeItems(state.items, liveItems, event.batch.removedItemIds)
-  // Retained items already fit the limits, which only grow, so an unchanged journal skips the scan.
-  const items = journalUnchanged
+  const merged = itemsUnchanged ? state.items : mergeItems(state.items, liveItems, removedItemIds)
+  // Retained items already fit the limits, which only grow.
+  const items = itemsUnchanged
     ? merged
     : trimRetainedItems(
         merged,
@@ -281,8 +278,8 @@ export function reduceStructuredAgentSession(
         LIVE_TRIM_SLACK_OWN_ITEMS
       )
   const outsideWindow = [
-    ...(liveItems.length < event.batch.items.length
-      ? event.batch.items.filter((item) => !liveItems.includes(item))
+    ...(liveItems.length < incoming.length
+      ? incoming.filter((item) => !liveItems.includes(item))
       : []),
     ...merged.slice(0, merged.length - items.length)
   ]
@@ -295,11 +292,13 @@ export function reduceStructuredAgentSession(
     items,
     subagentRoster,
     // A trim leaves older items behind the cursor, so paging must stay offered.
-    hasOlder: agentSessionHasOlderTranscript(items, items.length < merged.length || state.hasOlder),
+    hasOlder: itemsUnchanged
+      ? state.hasOlder
+      : agentSessionHasOlderTranscript(items, items.length < merged.length || state.hasOlder),
     submissions:
-      event.batch.submissions.length === 0 && event.batch.removedItemIds.length === 0
+      submissions.length === 0 && removedItemIds.length === 0
         ? state.submissions
-        : mergeSubmissions(state.submissions, event.batch.submissions, items),
+        : mergeSubmissions(state.submissions, submissions, items, itemsUnchanged),
     status: 'ready',
     error: undefined,
     readRefusal: undefined,

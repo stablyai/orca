@@ -102,6 +102,7 @@ function QueuedMessageCardContents({
   const t = useMobileTranslation()
   const narrow = useWindowDimensions().width < QUEUED_ROW_NARROW_WIDTH
   const returned = card.state === 'returned'
+  const actionable = card.hold !== 'sending'
   // A card that needs attention offers its retry, Send, which is what its caption names.
   const busy = busyControl !== undefined
   const steers = agentWorking && !card.needsAttention && queuedMessageCardSteers(card)
@@ -180,7 +181,7 @@ function QueuedMessageCardContents({
             </Text>
           ) : null}
         </View>
-        {card.waitsForAgent ? null : (
+        {actionable && !card.waitsForAgent ? (
           <MobilePendingButton
             label={
               steers
@@ -217,17 +218,19 @@ function QueuedMessageCardContents({
             disabled={busy || steerHeld}
             onPress={onSend}
           />
-        )}
-        <MobilePendingButton
-          label={t('session.queuedMessageCardRow.moreActions', 'More actions')}
-          iconOnly
-          icon={<MoreHorizontal size={16} color={colors.textSecondary} strokeWidth={2} />}
-          style={styles.moreButton}
-          spinnerColor={colors.textSecondary}
-          pending={busyControl === 'more'}
-          disabled={busy}
-          onPress={onMore}
-        />
+        ) : null}
+        {actionable ? (
+          <MobilePendingButton
+            label={t('session.queuedMessageCardRow.moreActions', 'More actions')}
+            iconOnly
+            icon={<MoreHorizontal size={16} color={colors.textSecondary} strokeWidth={2} />}
+            style={styles.moreButton}
+            spinnerColor={colors.textSecondary}
+            pending={busyControl === 'more'}
+            disabled={busy}
+            onPress={onMore}
+          />
+        ) : null}
       </View>
       {returned && card.caption ? (
         <View style={styles.expandedBody}>

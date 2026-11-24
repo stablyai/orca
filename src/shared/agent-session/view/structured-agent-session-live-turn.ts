@@ -141,7 +141,18 @@ export function latestTurnAfterStructuredAgentSessionBatch(
 ): AgentSessionLatestTurn | null | undefined {
   const { items, removedItemIds, submissions } = event.batch
   const carriesRows = items.length > 0 || removedItemIds.length > 0 || submissions.length > 0
-  return carriesRows || event.latestTurn !== undefined ? event.latestTurn : previous
+  const next = carriesRows || event.latestTurn !== undefined ? event.latestTurn : previous
+  return sameLatestTurn(previous, next) ? previous : next
+}
+
+function sameLatestTurn(
+  left: AgentSessionLatestTurn | null | undefined,
+  right: AgentSessionLatestTurn | null | undefined
+): boolean {
+  return (
+    left === right ||
+    (left != null && right != null && JSON.stringify(left) === JSON.stringify(right))
+  )
 }
 
 /** Row-carrying batches restate actionable prompts; missing fields from older hosts clear prior claims. */
@@ -179,8 +190,7 @@ export function restatesStructuredAgentSessionHostWork(
   }
 ): boolean {
   return (
-    (event.latestTurn === undefined ||
-      JSON.stringify(event.latestTurn) === JSON.stringify(state.latestTurn)) &&
+    (event.latestTurn === undefined || sameLatestTurn(event.latestTurn, state.latestTurn)) &&
     (event.actionablePromptIds === undefined ||
       event.actionablePromptIds.join('\n') === state.actionablePromptIds?.join('\n')) &&
     (event.working === undefined || event.working === state.working)

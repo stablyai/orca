@@ -106,12 +106,10 @@ export function useMobileStructuredAgentSession(
   })
   const { contextUsageSupport, accountUsageReported, ...optionFields } = options
 
-  const { status, epoch } = state
-  const linked = useMemo(
+  const { approvalPrompt, questionPrompt, navigation, promptIdentity } = useMemo(
     () => mobileStructuredLinkedPrompts(state, args.itemLink, sessionId),
     [state, args.itemLink, sessionId]
   )
-  const { approvalPrompt, questionPrompt } = linked
   const { respondPermission, respondQuestion } = useMobileStructuredPromptResponses({
     approvalItemId: approvalPrompt?.itemId,
     questionItemId: questionPrompt?.itemId,
@@ -131,11 +129,11 @@ export function useMobileStructuredAgentSession(
   })
   const isWorking = mobileStructuredAgentSessionWorking(state)
   const queueSendsNext = structuredAgentSessionQueueSendsNext(state.nextQueuedMessageId, isWorking)
-  const transcript = { agent, state, optimistic: sends.optimistic, sessionKey, turnId }
-  const { clearing, messages, receipts, timing, onClearSent } = useMobileStructuredTranscript(
-    transcript,
-    isWorking || queueSendsNext
-  )
+  const { clearing, messages, receipts, timing, onClearSent, sendingCards } =
+    useMobileStructuredTranscript(
+      { agent, state, optimistic: sends.optimistic, sessionKey, turnId },
+      isWorking || queueSendsNext
+    )
   const backgroundTasks = useMobileStructuredBackgroundTasks({
     sessionKey,
     state,
@@ -217,7 +215,6 @@ export function useMobileStructuredAgentSession(
     send: sendWithOutcomeUngated
   })
   useMobileStructuredThreadGoalSend(goal.sendRef, sendWithOutcome)
-  const unresolvedFailureRows = useMobileUnresolvedFailureRows(state.items)
   const usageLimit = useMobileNativeChatUsageLimit(args, state, {
     busy: isWorking || queueSendsNext || sendsOut.sending(),
     send: sendWithOutcome
@@ -229,10 +226,11 @@ export function useMobileStructuredAgentSession(
     journalItems: state.items,
     transcriptShown: messages.length > 0,
     // A saved or reloading copy is not this chat's current queue yet.
-    queueCurrent: status !== 'loading' && savedAt === null,
+    queueCurrent: state.status !== 'loading' && savedAt === null,
     queuedMessages,
     queuePause,
     submissions: state.submissions,
+    sending: sendingCards,
     agentWorking: isWorking,
     imagesCapable: hostSupport?.queuedMessageImageEdit === true,
     skillsCapable: hostSupport?.queuedMessageSkillsEdit === true,
@@ -240,6 +238,7 @@ export function useMobileStructuredAgentSession(
     editCapable: hostSupport ? hostSupport.queuedMessageEdit === true : null,
     chatActive: enabled,
     enabled: enabled && connected,
+    appendComposerText: args.appendComposerText,
     mutate,
     ...(onActionResolved ? { onActionResolved } : {})
   })
@@ -258,17 +257,18 @@ export function useMobileStructuredAgentSession(
     journal: { items: state.items, submissions: state.submissions },
     contextUsage: useMobileStructuredContextUsage(state.items, contextUsageSupport, state.epoch),
     visualSource: useMobileNativeChatVisualSource(client, sessionId),
-    ...useMobileStructuredAsyncQuestions(args, epoch),
+    ...useMobileStructuredAsyncQuestions(args, state.epoch),
     imagePreviewsByMessageId: sends.imagePreviewsByMessageId,
     submissions: state.submissions,
     session: {
-      itemNavigation: savedAt === null ? linked.navigation : null,
+      itemNavigation: savedAt === null ? navigation : null,
       messages,
-      status,
+      status: state.status,
       // A stored copy can't answer "is this ask still open?" until a live frame confirms it.
-      transcriptLoading: status === 'loading' || savedAt !== null,
+      transcriptLoading: state.status === 'loading' || savedAt !== null,
       error: state.error,
-      readFailedFinally: status === 'error' && isFinalAgentSessionReadRefusal(state.readRefusal),
+      readFailedFinally:
+        state.status === 'error' && isFinalAgentSessionReadRefusal(state.readRefusal),
       clearing,
       hasMore: state.hasOlder && olderPages !== 'unavailable' && !clearing,
       loadingEarlier: olderPages === 'loading',
@@ -286,7 +286,7 @@ export function useMobileStructuredAgentSession(
     holdUnconfirmed: sends.holdUnconfirmed,
     cancel: () => void stopPress.track(() => requestCancel()),
     cancelPrompt: (prompt?: { itemId: string; expectedRevision: number }) =>
-      requestCancel(prompt ?? linked.promptIdentity),
+      requestCancel(prompt ?? promptIdentity),
     receipts,
     actionablePromptIds: state.actionablePromptIds,
     permission: projectStructuredPermission(approvalPrompt),
@@ -305,6 +305,6 @@ export function useMobileStructuredAgentSession(
     accountUsage: useMobileStructuredAccountUsage(args, accountUsageReported),
     rewind,
     usageLimit,
-    unresolvedFailureRows
+    unresolvedFailureRows: useMobileUnresolvedFailureRows(state.items)
   }
 }

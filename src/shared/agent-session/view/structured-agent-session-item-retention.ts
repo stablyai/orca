@@ -4,6 +4,7 @@ import type {
 } from '../journal/agent-session-journal-types'
 import { agentJournalSubmissionKey } from '../journal/agent-session-journal-item-key'
 import { isRootAgentJournalItem } from '../journal/agent-session-journal-producer'
+import { agentJournalSubmissionDiffersOnlyInStamp } from '../journal/agent-session-journal-written-stamp'
 
 // Above initial 300-row reads plus a page; trims remain pageable. Count own rows so hidden child output cannot crowd out the conversation.
 export const MAX_RETAINED_OWN_ITEMS = 1024
@@ -55,11 +56,20 @@ const MAX_RETAINED_SUBMISSIONS = 256
 export function mergeSubmissions(
   current: readonly AgentJournalSubmission[],
   incoming: readonly AgentJournalSubmission[],
-  items: readonly AgentJournalRenderItem[]
+  items: readonly AgentJournalRenderItem[],
+  itemsUnchanged = false
 ): AgentJournalSubmission[] {
   const byId = new Map(current.map((submission) => [submission.clientMessageId, submission]))
+  let reuseRetention = itemsUnchanged
   for (const submission of incoming) {
+    if (reuseRetention) {
+      const before = byId.get(submission.clientMessageId)
+      reuseRetention = !!before && agentJournalSubmissionDiffersOnlyInStamp(before, submission)
+    }
     byId.set(submission.clientMessageId, submission)
+  }
+  if (reuseRetention) {
+    return [...byId.values()]
   }
   const sorted = [...byId.values()].sort((left, right) => left.submittedAt - right.submittedAt)
   const itemIds = new Set(

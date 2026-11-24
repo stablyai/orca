@@ -206,6 +206,42 @@ it('opens a priority steer at its matched start after the parent ends', () => {
   })
 })
 
+it('opens and can stop a late steer from its echo on CLIs without lifecycle frames', async () => {
+  let interrupts = 0
+  const f = fixture({
+    interrupt: async () => {
+      interrupts += 1
+      return undefined
+    }
+  })
+  waitForReplay(f.session, false, SENT, 'key', 'opener', 1000)
+  f.frame(echo(SENT), 2000)
+  f.frame(output, 2500)
+  const { waiter } = waitForReplay(f.session, false, FOLLOW_UP, 'key', 'steer', 3000)
+  waiter.steers = true
+  f.frame({ type: 'result', subtype: 'success', uuid: RESULT, session_id: SESSION }, 4000)
+  f.frame(echo(FOLLOW_UP), 5000)
+  f.frame({ ...output, uuid: '3a020300-f901-4791-930d-483e74e819d6' }, 5500)
+
+  expect(f.receipts).toEqual([])
+  expect(f.turns().map((item) => item.body)).toMatchObject([
+    { turnId: SENT, state: 'running', startedAt: 2000 },
+    { turnId: SENT, state: 'completed', startedAt: 2000 },
+    { turnId: FOLLOW_UP, state: 'running', startedAt: 5000, requestedAt: 3000 }
+  ])
+  expect(f.settled.at(-1)).toEqual({
+    clientMessageId: 'steer',
+    providerIdentity: { provider: 'claude', sessionId: SESSION, uuid: FOLLOW_UP }
+  })
+  expect(
+    await cancelClaudeStructuredTurn({
+      request: { sessionId: 'chat', fence: 3 },
+      sessions: new Map([['chat', f.session]])
+    })
+  ).toEqual({ cancelled: true })
+  expect(interrupts).toBe(1)
+})
+
 it.each([false, true])('keeps a steer in its open turn (cut-short step %s)', (cutShort) => {
   const f = fixture()
   waitForReplay(f.session, false, SENT, 'key', 'opener', 1000)

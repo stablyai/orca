@@ -220,11 +220,12 @@ function settleLiveDispatch(
   if (isUserReplay && (ownOpener || joinsTurn)) {
     cycle?.confirmProviderCycle()
   }
-  if (isUserReplay && steers && !joinsTurn && !ownOpener) {
+  const startedSteer = steers && waiter.commandLifecycle === 'started'
+  if (isUserReplay && startedSteer && !joinsTurn && !ownOpener) {
     cycle?.suppressReopen()
   }
   settleWaiter(session, waiter, uuid, onSettledLate, joinsTurn ? joinedTurn(session) : undefined)
-  return isUserReplay && !joinsTurn && !steers
+  return isUserReplay && !joinsTurn && !startedSteer
     ? { requestedAt: waiter.requestedAt, clientMessageId: waiter.clientMessageId }
     : null
 }

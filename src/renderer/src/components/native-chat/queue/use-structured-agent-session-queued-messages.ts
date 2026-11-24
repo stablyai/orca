@@ -29,10 +29,7 @@ import {
 } from '../../../../../shared/agent-session/view/structured-agent-session-queued-cards'
 import { useStructuredAgentSessionWaitingAgentMail } from './use-structured-agent-session-waiting-agent-mail'
 import type { NativeChatMessage } from '../../../../../shared/native-chat/native-chat-types'
-import {
-  pendingQueueSendsOnTheirWay,
-  sendingQueuedMessageCards
-} from './structured-agent-session-sending-queued-cards'
+import { sendingQueuedMessageCards } from '../../../../../shared/agent-session/view/structured-agent-session-sending-queued-cards'
 import type {
   AdmitStructuredAgentSessionAction,
   CaptureStructuredAgentSessionPresentation,
@@ -125,12 +122,10 @@ export function useStructuredAgentSessionQueuedMessages(args: {
         steersInTranscript: true
       }),
       ...sendingQueuedMessageCards(
-        pendingQueueSendsOnTheirWay(
-          sending,
-          (queuedMessages ?? []).map((message) => message.messageId),
-          isWorking,
-          submissions
-        )
+        sending.filter((entry) => entry.phase === 'sending'),
+        (queuedMessages ?? []).map((message) => message.messageId),
+        isWorking,
+        submissions
       )
     ],
     [isWorking, sending, queuePause, queuedMessages, submissions]

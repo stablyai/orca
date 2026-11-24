@@ -8,6 +8,7 @@ import {
 import type { StructuredAgentSessionState } from '../../../../../../src/shared/agent-session/view/live-read/structured-agent-session-reducer'
 import type { StructuredAgentSessionOptimisticMessage } from '../../../../../../src/shared/agent-session/view/structured-agent-session-message-projection'
 import { pendingSendsOutsideQueuedCards } from '../../../../../../src/shared/agent-session/view/structured-agent-session-sending'
+import { sendingQueuedMessageCards } from '../../../../../../src/shared/agent-session/view/structured-agent-session-sending-queued-cards'
 import { createStructuredAgentSessionMessageProjection } from '../../../../../../src/shared/agent-session/view/structured-agent-session-message-stream'
 import { tuiAgentDisplayName } from '../../../../../../src/shared/agent-launch/catalog/tui-agent-display-names'
 import { withNativeChatCutTurnNotices } from '../../../../../../src/shared/native-chat/transcript/turns/native-chat-cut-turn-notice'
@@ -91,28 +92,33 @@ export function useMobileStructuredTranscript(
     []
   )
   const questionTranscript = useMemo(() => mobileStructuredTranscript.stream(), [])
-  const transcriptPending = useMemo(
-    () =>
-      pendingSendsOutsideQueuedCards(
-        optimistic,
-        (state.queuedMessages ?? []).map((message) => message.messageId),
-        isWorking
-      ),
-    [optimistic, state.queuedMessages, isWorking]
+  const heldIds = useMemo(
+    () => (state.queuedMessages ?? []).map((message) => message.messageId),
+    [state.queuedMessages]
   )
-  const messages = useMemo(
-    () =>
-      // The goal strip on the composer shows goal state, as on desktop.
-      omitNativeChatThreadGoalRows(
-        projectMessages(transcriptItems, transcriptPending, state.submissions)
-      ),
+  const transcriptPending = useMemo(
+    () => pendingSendsOutsideQueuedCards(optimistic, heldIds, isWorking),
+    [optimistic, heldIds, isWorking]
+  )
+  const sendingCards = useMemo(
+    () => sendingQueuedMessageCards(optimistic, heldIds, isWorking, state.submissions),
+    [optimistic, heldIds, isWorking, state.submissions]
+  )
+  const projectedMessages = useMemo(
+    () => projectMessages(transcriptItems, transcriptPending, state.submissions),
     [transcriptItems, transcriptPending, state.submissions, projectMessages]
+  )
+  // The goal strip on the composer shows goal state, as on desktop.
+  const messages = useMemo(
+    () => omitNativeChatThreadGoalRows(projectedMessages),
+    [projectedMessages]
   )
   return {
     clearing,
     onClearSent,
     timing: useMobileStructuredAgentTurnTiming(state, turnId, transcriptPending, transcriptItems),
     messages,
+    sendingCards,
     receipts: questionTranscript(transcriptItems).receipts
   }
 }

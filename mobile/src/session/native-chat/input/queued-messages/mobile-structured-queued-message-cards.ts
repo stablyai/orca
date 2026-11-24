@@ -46,7 +46,6 @@ function queuedMessageCardCaption(
       return card.waitsForAgent
         ? "Couldn't send — tap Send to retry once the agent finishes"
         : "Couldn't send — tap Send to retry"
-    // The phone draws no card for a send still on its way.
     case 'sending':
     case 'turn':
     case 'queue-paused':
@@ -62,9 +61,20 @@ export function mobileQueuedMessageCards(
     queuePaused?: boolean
     agentName?: string
     statedFailures?: readonly AgentSessionFailureFact[]
+    sending?: readonly QueuedMessageCard[]
+    order?: readonly AgentSessionQueuedMessage[] | null
   } = {}
 ): MobileQueuedMessageCard[] {
-  return projectQueuedMessageCards(queuedMessages, submissions, facts).map((card) => ({
+  const cards = projectQueuedMessageCards(queuedMessages, submissions, facts)
+  // Reorder preview changes positions without making a hidden handoff visible again.
+  const byId = new Map(cards.map((card) => [card.messageId, card]))
+  const ordered = facts.order
+    ? facts.order.flatMap(({ messageId }) => {
+        const card = byId.get(messageId)
+        return card ? [card] : []
+      })
+    : cards
+  return [...ordered, ...(facts.sending ?? [])].map((card) => ({
     ...card,
     line: queuedMessageCardLine({
       ...card,

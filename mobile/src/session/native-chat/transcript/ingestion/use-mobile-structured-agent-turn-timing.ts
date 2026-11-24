@@ -7,7 +7,7 @@ import type { NativeChatSettledTurns } from '../../../../../../src/shared/native
 import type { AgentSessionLatestTurn } from '../../../../../../src/shared/agent-session/agent-session-wire'
 import type { NativeChatTurnJournal } from '../../../../../../src/shared/native-chat/transcript/turns/native-chat-turn-membership'
 import type { StructuredAgentHostClock } from '../../../../../../src/shared/agent-session/view/live-read/structured-agent-session-reducer'
-import { selectStructuredAgentTurnBars } from '../../../../../../src/shared/agent-session/view/structured-agent-session-turn-timing'
+import { createStructuredAgentTurnBarsSelector } from '../../../../../../src/shared/agent-session/view/structured-agent-session-turn-timing'
 import { structuredAgentSessionSendingItemIds } from '../../../../../../src/shared/agent-session/view/structured-agent-session-sending'
 import type { StructuredAgentSessionOptimisticMessage } from '../../../../../../src/shared/agent-session/view/structured-agent-session-message-projection'
 import {
@@ -40,10 +40,8 @@ export function useMobileStructuredAgentTurnTiming(
   turnJournal: MobileNativeChatTurnJournal
   workingStartedAt: number | null
 } {
-  const { settledTurns, runningTiming } = useMemo(
-    () => selectStructuredAgentTurnBars(items, submissions, turnId, latestTurn),
-    [items, submissions, turnId, latestTurn]
-  )
+  const selectTurnBars = useMemo(() => createStructuredAgentTurnBarsSelector(), [])
+  const { settledTurns, runningTiming } = selectTurnBars(items, submissions, turnId, latestTurn)
   const sendingItemIds = useMemo(
     () => structuredAgentSessionSendingItemIds(optimistic, submissions),
     [optimistic, submissions]

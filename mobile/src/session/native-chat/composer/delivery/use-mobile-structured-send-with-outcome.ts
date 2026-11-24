@@ -260,7 +260,7 @@ export function useMobileStructuredSendWithOutcome(args: {
         onAccepted: (cursor) => acknowledge(send.clientMessageId, cursor),
         onError: onSendError
       })
-      if (outcome === 'rejected' || outcome === 'queued') {
+      if (outcome === 'rejected') {
         reject(send.clientMessageId)
       } else if (outcome === 'unknown') {
         // Answers and continuations have no box to return to: drop the bubble with a warning. The composer re-holds its sends to hand them back.

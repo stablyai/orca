@@ -15,7 +15,10 @@ import type {
   AgentSessionQueuePause
 } from '../../../../../../src/shared/agent-session/requests/agent-session-queued-message-wire'
 import type { AgentSessionSendResult } from '../../../../../../src/shared/agent-session/agent-session-wire'
-import { queuedMessagesQueuePause } from '../../../../../../src/shared/agent-session/view/structured-agent-session-queued-cards'
+import {
+  queuedMessagesQueuePause,
+  type QueuedMessageCard
+} from '../../../../../../src/shared/agent-session/view/structured-agent-session-queued-cards'
 import {
   composerQueuedCards,
   createWaitingAgentMailRows
@@ -83,6 +86,7 @@ export function useMobileStructuredQueuedMessageControls(args: {
   queuedMessages: readonly AgentSessionQueuedMessage[] | null
   queuePause: AgentSessionQueuePause | null
   submissions: readonly AgentJournalSubmission[]
+  sending?: readonly QueuedMessageCard[]
   agentWorking?: boolean
   mutate: MobileStructuredAgentMutate
   // Without a live composer or a successful copy, Edit must refuse.
@@ -107,35 +111,33 @@ export function useMobileStructuredQueuedMessageControls(args: {
     messages: queuedMessages,
     reorderCapable: args.reorderCapable === true
   })
-  const orderedMessages = composerActions.messages
   const agentWorking = args.agentWorking === true
   // Only a returned card's caption reads the transcript, so streaming leaves the cards alone otherwise.
   const failureItems = queuedMessages?.some((draft) => draft.state === 'returned')
     ? (args.journalItems ?? NO_ITEMS)
     : null
-  const allCards = useMemo(() => {
-    const visibleCards = mobileQueuedMessageCards(queuedMessages, submissions, {
+  const allCards = useMemo(
+    () =>
+      mobileQueuedMessageCards(queuedMessages, submissions, {
+        agentWorking,
+        queuePaused: queuePause !== null,
+        agentName: args.agentName,
+        statedFailures: failureItems ? agentSessionVisibleFailureFacts(failureItems) : [],
+        sending: args.sending,
+        order: composerActions.messages
+      }),
+    [
       agentWorking,
-      queuePaused: queuePause !== null,
-      agentName: args.agentName,
-      statedFailures: failureItems ? agentSessionVisibleFailureFacts(failureItems) : []
-    })
-    // Preview changes display order; published membership and current handoff visibility stay intact.
-    const visibleById = new Map(visibleCards.map((card) => [card.messageId, card]))
-    return (orderedMessages ?? []).flatMap((message) => {
-      const card = visibleById.get(message.messageId)
-      return card ? [card] : []
-    })
-  }, [
-    agentWorking,
-    args.agentName,
-    failureItems,
-    orderedMessages,
-    queuePause,
-    queuedMessages,
-    submissions,
-    t
-  ])
+      args.agentName,
+      args.sending,
+      failureItems,
+      composerActions.messages,
+      queuePause,
+      queuedMessages,
+      submissions,
+      t
+    ]
+  )
   const { begin: beginInlineEdit, editor } = useMobileStructuredQueuedEdit({
     ...args,
     enabled: args.enabled && args.editCapable === true,
@@ -294,15 +296,12 @@ export function useMobileStructuredQueuedMessageControls(args: {
     (messageId: string): boolean => editableIds.has(messageId),
     [editableIds]
   )
-  const holds = useCallback(
-    (messageId: string): boolean => allCards.some((card) => card.messageId === messageId),
-    [allCards]
-  )
   // Delete all also takes the waiting agent mail the transcript draws, as it did when that was a card.
   const clearIds = useMemo(
     () => allCards.filter((card) => card.hold !== 'sending').map((card) => card.messageId),
     [allCards]
   )
+  const holds = useCallback((messageId: string) => clearIds.includes(messageId), [clearIds])
 
   return {
     cards,
