@@ -4557,7 +4557,6 @@
     "groups": {
       "group": "Grup",
       "peerTold": "{{from}}, {{to}} botuna bildirdi",
-      "startAConversationWithThisGroupMentionBots": "Bu grupla bir konuşma başlatın. Botları @Ad veya @everyone ile anın.",
       "items": {
         "emptyTitle": "Bu gruptan henüz öğe yok",
         "needsYouCount_one": "{{count}} sizi bekliyor",

@@ -4659,7 +4659,6 @@
     "groups": {
       "group": "그룹",
       "peerTold": "{{from}}이(가) {{to}}에게 알림",
-      "startAConversationWithThisGroupMentionBots": "이 그룹과 대화를 시작하세요. @이름 또는 @everyone으로 봇을 멘션하세요.",
       "items": {
         "emptyTitle": "이 그룹의 항목이 아직 없음",
         "needsYouCount_one": "확인 필요 {{count}}개",

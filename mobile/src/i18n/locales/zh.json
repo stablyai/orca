@@ -6071,7 +6071,6 @@
       "onlyWhenMentioned": "仅在被提及时",
       "stopValue": "停止 {{value0}}",
       "replyToValue": "回复 {{value0}}",
-      "waitingForTheNativeSession": "正在等待原生会话…",
       "create": "创建",
       "removingDefault": "移除 {{name}} 后，“回复”将改为“仅在被提及时”",
       "loadEarlierMessages": "加载更早的消息",
@@ -6082,7 +6081,6 @@
       "peerAsked": "{{from}} 向 {{to}} 提问",
       "peerTold": "{{from}} 通知了 {{to}}",
       "peerFollowedUp": "{{bot}} 跟进了",
-      "startAConversationWithThisGroupMentionBots": "开始与此群组对话。使用 @名称 或 @everyone 提及 bots",
       "items": {
         "emptyTitle": "此群组还没有事项",
         "needsYouCount_one": "{{count}} 项需要你处理",
@@ -6109,7 +6107,6 @@
       "needsLocalBot": "此群组至少需要一个位于这台电脑上的 bot",
       "remoteOnComputer": "请在 {{host}} 上的 Orca 中添加或移除其他电脑上的 bots",
       "handoffsPaused": "已在 {{count}} 次移交后暂停。回复即可继续",
-      "peerReplyRead": "{{reader}} 已读 {{peer}} 的回复",
       "deleteTitle": "要删除 {{name}} 吗？",
       "deleteDescription": "其中的 bots 不会被删除",
       "deleteConfirm": "删除群组",

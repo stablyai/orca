@@ -4557,7 +4557,6 @@
     "groups": {
       "group": "Gruppe",
       "peerTold": "{{from}} hat {{to}} Bescheid gegeben",
-      "startAConversationWithThisGroupMentionBots": "Starte eine Unterhaltung mit dieser Gruppe. Erwähne Bots mit @Name oder @everyone.",
       "items": {
         "emptyTitle": "Noch keine Elemente aus dieser Gruppe",
         "needsYouCount_one": "{{count}} braucht dich",

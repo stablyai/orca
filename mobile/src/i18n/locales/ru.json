@@ -4767,7 +4767,6 @@
     "groups": {
       "group": "Группа",
       "peerTold": "{{from}} сообщил {{to}}",
-      "startAConversationWithThisGroupMentionBots": "Начните разговор с этой группой. Упоминайте ботов через @Имя или @everyone.",
       "items": {
         "emptyTitle": "В этой группе пока нет элементов",
         "needsYouCount_one": "{{count}} требует внимания",

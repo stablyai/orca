@@ -22,17 +22,13 @@ import { MobileBotGroupItems } from './MobileBotGroupItems'
 import { MobileBotGroupRepliesSheet } from './MobileBotGroupRepliesSheet'
 import { MobileBotGroupApprovalDock } from './MobileBotGroupApprovalDock'
 import { botGroupReplyDraft } from '../../../src/shared/bots/bot-group-mentions'
-import {
-  mobileBotGroupSessionOptions,
-  useMobileBotGroupComposer
-} from './use-mobile-bot-group-composer'
+import { useMobileBotGroupComposer } from './use-mobile-bot-group-composer'
 import { MobileBotGroupDeleteConfirm } from './MobileBotGroupDeleteConfirm'
 import { botGroupMenuActions } from './bot-group-menu-actions'
 import { botGroupRoomOrder } from '../../../src/shared/bots/bot-group-room-order'
 import { groupNewThread, groupSend, groupStop } from './bot-group-operations'
 import { MobileBotGroupRoomBar } from './MobileBotGroupRoomBar'
 import { MobileBotFaceStack } from './MobileBotFaceStack'
-import { mobileBotAvatarSource } from './host-bot-row-facts'
 import { useMobileBotGroupTranscript } from './use-mobile-bot-group-transcript'
 import { randomV4Uuid } from '../platform/random-v4-uuid'
 import { groupStyles as styles } from './mobile-bot-group-styles'
@@ -49,6 +45,9 @@ import { MobileNativeChatSendErrorBanner } from '../session/native-chat/status/M
 import { useMobileBotGroupDraft } from './use-mobile-bot-group-draft'
 import { MobileNativeChatInputLockStatus } from '../session/native-chat/composer/field/MobileNativeChatInputLockStatus'
 import type { MobileNativeChatHostOutage } from '../session/native-chat/status/mobile-native-chat-host-outage'
+
+/** The group's picture before its name, a chat avatar's 24pt slot. */
+const NAV_FACES = 24
 
 export function MobileBotGroupRoom({
   client,
@@ -135,16 +134,16 @@ export function MobileBotGroupRoom({
       }) ?? [],
     [group?.members, bots, data?.messages]
   )
-  const { recipientId, roomMentions, audience, photos, attachPhotos } = useMobileBotGroupComposer(
-    group,
-    bots,
-    composerDraft,
-    client,
-    hostCapabilities?.includes(BOTS_GROUP_ATTACHMENTS_RUNTIME_CAPABILITY) === true,
-    setError
-  )
+  const { recipientId, roomMentions, faces, audience, photos, attachPhotos } =
+    useMobileBotGroupComposer(
+      group,
+      bots,
+      composerDraft,
+      client,
+      hostCapabilities?.includes(BOTS_GROUP_ATTACHMENTS_RUNTIME_CAPABILITY) === true,
+      setError
+    )
   const selectedMember = group?.members.find((member) => member.botId === recipientId)
-  const chosen = selectedMember && sessions.get(selectedMember.sessionId)
   const stop = async (botId?: string) => {
     try {
       const result = groupStop.interpret(
@@ -161,8 +160,6 @@ export function MobileBotGroupRoom({
       setError(botFailureMessage(error) ?? String(error))
     }
   }
-  const working =
-    group?.members.some((member) => sessions.get(member.sessionId)?.isWorking) ?? false
   const startThread = async () => {
     if (startingThread) {
       return
@@ -177,10 +174,8 @@ export function MobileBotGroupRoom({
       setStartingThread(false)
     }
   }
-  const memberFaces = (group?.members ?? []).flatMap((member) => {
-    const bot = bots.find((bot) => bot.id === member.botId)
-    return bot ? [{ id: bot.id, avatar: mobileBotAvatarSource(bot) }] : []
-  })
+  const workingCount =
+    group?.members.filter((member) => sessions.get(member.sessionId)?.isWorking).length ?? 0
   return (
     <View
       style={[
@@ -209,6 +204,16 @@ export function MobileBotGroupRoom({
           />
         }
         title={anyRoomGroup?.name ?? t('bots.groups.group', 'Group')}
+        titleLeading={
+          faces.length > 0 ? <MobileBotFaceStack faces={faces} slot={NAV_FACES} /> : undefined
+        }
+        subtitle={
+          workingCount > 0
+            ? t('bots.groups.workingCount', '{{count}} working', { count: workingCount })
+            : faces.length > 0
+              ? t('bots.groups.memberCount', '{{count}} bots', { count: faces.length })
+              : undefined
+        }
         trailing={
           <>
             {itemsOnPhone ? (
@@ -237,7 +242,7 @@ export function MobileBotGroupRoom({
         />
       ) : null}
       <MobileNativeChatComposerMenuHost style={styles.grow}>
-        <MobileBotGroupTranscript client={client} roomId={roomId} data={data}>
+        <MobileBotGroupTranscript client={client} roomId={roomId} data={data} members={faces}>
           {data?.hasEarlier ? (
             <Pressable accessibilityRole="button" onPress={() => void loadEarlier()}>
               <Text style={styles.notice}>
@@ -285,19 +290,21 @@ export function MobileBotGroupRoom({
           isAttaching={photos.uploading}
           roomMentions={roomMentions}
           roomReplies={
-            <ModelPill
-              primary={t('bots.groups.repliesValue', 'Replies: {{value0}}', { value0: audience })}
-              secondary={null}
-              warning={false}
-              accessibleName={t('bots.groups.repliesValue', 'Replies: {{value0}}', {
-                value0: audience
-              })}
-              disabled={!group || !connected}
-              onPress={() => setMenu('replies')}
-            />
+            // The row's free width, so a long name truncates on the +'s line instead of wrapping.
+            <View style={styles.repliesSlot}>
+              <ModelPill
+                primary={t('bots.groups.repliesValue', 'Replies: {{value0}}', { value0: audience })}
+                secondary={null}
+                warning={false}
+                accessibleName={t('bots.groups.repliesValue', 'Replies: {{value0}}', {
+                  value0: audience
+                })}
+                disabled={!group || !connected}
+                onPress={() => setMenu('replies')}
+              />
+            </View>
           }
-          sessionOptions={mobileBotGroupSessionOptions(chosen)}
-          stop={working ? { held: false, onStop: () => void stop() } : null}
+          stop={workingCount > 0 ? { held: false, onStop: () => void stop() } : null}
           onSend={async (text) => {
             if (!group) {
               return false
@@ -335,7 +342,7 @@ export function MobileBotGroupRoom({
           t,
           newThread: {
             renderIcon: () => (
-              <MobileBotFaceStack faces={memberFaces} slot={20} ringColor={colors.sheetSurface} />
+              <MobileBotFaceStack faces={faces} slot={20} ringColor={colors.sheetSurface} />
             ),
             disabled: !connected || startingThread,
             onPress: () => void startThread()
