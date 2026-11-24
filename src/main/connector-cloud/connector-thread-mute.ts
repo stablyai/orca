@@ -1,6 +1,7 @@
 // Per-thread mute for a bot's Slack thread, decided before the agent sees the message: once the bot
 // has left the thread (`orca bot reply --leave-thread`), later replies stop reaching it until someone
 // @mentions it. The bot's own posts (a background run's result, an automation) still go out.
+// A bot set to answer its threads only when @mentioned takes every thread's replies the same way.
 import type {
   ConnectorConversation,
   ConnectorDelivery,
@@ -81,6 +82,9 @@ export type ThreadMuteDeps = {
   /** Whether the cloud marks a reply that @mentions the bot. Without it nothing could bring the bot
    *  back, so a muted thread's replies go on as if it weren't. */
   mentionsKnown?: () => boolean
+  /** Whether the bot answers its channel threads only when @mentioned (its Slack setting); with no
+   *  bot, for a thread not linked yet, whether any bot here does. */
+  mentionsOnly?: (botId: string | null) => boolean
 }
 
 const ACCEPTED = { outcome: 'accepted' } as const
@@ -127,8 +131,16 @@ export function handleThreadMute(
   if (thread === 'not_bot') {
     return null
   }
-  // No link yet (a start in the same poll is still writing it), or not muted: it goes on at once.
-  const applied = thread?.muted && mutes(deps, delivery) ? applyStep(deps, delivery, record) : null
+  if (!thread) {
+    // No link yet (a start in the same poll is still writing it): it goes on at once, unless a bot
+    // here may silence it, when it is decided once the start has said whose thread it is.
+    if (!unmentioned(deps, null, delivery)) {
+      return null
+    }
+    const decided = inPlace(deps, delivery, record, async () => false)
+    return { decided: hold(deps, id, decided) }
+  }
+  const applied = applyStep(deps, delivery, record, linkedStep(deps, thread, delivery))
   return applied && { decided: hold(deps, id, applied.decided) }
 }
 
@@ -170,10 +182,34 @@ async function decideNow(
   const applied =
     linked &&
     linked !== 'not_bot' &&
-    linked.muted &&
-    mutes(deps, delivery) &&
-    applyStep(deps, delivery, record, 'in_place')
+    applyStep(deps, delivery, record, linkedStep(deps, linked, delivery), 'in_place')
   return applied ? await applied.decided : 'send'
+}
+
+/** What a send to a linked thread does: the thread's own mute decides first, then its bot's setting. */
+function linkedStep(
+  deps: ThreadMuteDeps,
+  thread: { botId: string; muted: boolean },
+  delivery: SendDelivery
+): ThreadMuteStep {
+  if (thread.muted && mutes(deps, delivery)) {
+    return threadMuteStep(true, delivery)
+  }
+  return unmentioned(deps, thread.botId, delivery) ? 'silence' : 'send'
+}
+
+/** Whether the bot's setting silences the send: the bot answers its threads only when @mentioned and
+ *  this reply doesn't mention it. Nothing is kept, so the next reply without a mention is silenced
+ *  too. Any mention the cloud marks goes on, an app's or another bot's included: the setting only
+ *  narrows what the bot would have answered. A cloud known not to mark mentions lets every reply on. */
+function unmentioned(deps: ThreadMuteDeps, botId: string | null, delivery: SendDelivery): boolean {
+  return (
+    !delivery.resume &&
+    !delivery.mentioned &&
+    !delivery.bareMention &&
+    deps.mentionsKnown?.() !== false &&
+    deps.mentionsOnly?.(botId) === true
+  )
 }
 
 // A cloud known not to mark mentions lets every reply through; a bare @mention it still names
@@ -202,11 +238,11 @@ function applyStep(
   deps: ThreadMuteDeps,
   delivery: SendDelivery,
   record: RecordHandled,
+  step: ThreadMuteStep,
   // Already in its place in the thread's queue, so an unmute saves there and queues nothing more.
   place?: 'in_place'
 ): ThreadMuteOutcome | null {
   const key = delivery.conversation
-  const step = threadMuteStep(true, delivery)
   if (step === 'send') {
     return null
   }

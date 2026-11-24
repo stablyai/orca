@@ -198,6 +198,10 @@ function threadMuteDeps(runtime: OrcaRuntimeService, store: ConnectorCloudStore)
     // Not known yet (no client runs): keep muting; only a cloud known to lack it lets replies on.
     mentionsKnown: () =>
       runtime.getConnectorCloud()?.cloudFeatures()?.has(CONNECTOR_CLOUD_MENTIONED_FEATURE) ?? true,
+    mentionsOnly: (botId) =>
+      (store.getBots?.() ?? []).some(
+        (bot) => (botId === null || bot.id === botId) && bot.slackThreadReplies === 'mentions'
+      ),
     queued: (key, work) =>
       runtime.getExternalConversationSeam()?.queued(key, work) ??
       Promise.resolve(work?.()).then(() => undefined)

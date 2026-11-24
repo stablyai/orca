@@ -42,7 +42,6 @@ const FEATURES = [
   'batchedSends',
   'ownDmChats',
   'askerNote',
-  'slackThreadReplies',
   CONNECTOR_REPLIES_OUTBOX_FEATURE,
   CONNECTOR_WAKE_FEATURE,
   CONNECTOR_RESUME_FEATURE

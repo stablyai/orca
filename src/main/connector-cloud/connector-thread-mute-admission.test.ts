@@ -122,7 +122,9 @@ function connector(
   store: ReturnType<typeof createStore>,
   receipts = new DeliveryReceipts(() => orchestration),
   mentionsKnown = true,
-  queue?: ThreadMuteDeps['queued']
+  queue?: ThreadMuteDeps['queued'],
+  // The bots set to answer their threads only when mentioned.
+  mentionsOnly: readonly string[] = []
 ) {
   const turns: string[] = []
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the mute path calls only these seam members.
@@ -141,6 +143,8 @@ function connector(
     write: threadMuteSaves(store),
     saving: threadMuteSaving,
     mentionsKnown: () => mentionsKnown,
+    mentionsOnly: (botId: string | null) =>
+      botId === null ? mentionsOnly.length > 0 : mentionsOnly.includes(botId),
     queued:
       queue ??
       ((_key: ConnectorConversation, work?: () => Promise<unknown>) =>
@@ -306,6 +310,39 @@ describe('a muted bot thread', () => {
     await deliver(send(FIRST, 'thanks'))
     expect(readThreadMute(store, FIRST)).toEqual({ botId: 'bot1', muted: false })
     expect(turns).toEqual(['look here too', 'can you look', 'thanks'])
+  })
+})
+
+describe('a bot set to answer its threads only when mentioned', () => {
+  it('admits one turn per mention in every thread of its, with nothing kept on the thread', async () => {
+    const store = await botHome({})
+    const { deliver, turns } = connector(store, undefined, true, undefined, ['bot1'])
+
+    const quiet = send(FIRST, 'fyi, the build is green')
+    expect(await deliver(quiet)).toEqual({ outcome: 'accepted' })
+    // A resend replays the silence, never decided again.
+    expect(await deliver(quiet)).toEqual({ outcome: 'accepted' })
+    await deliver(send(ELSEWHERE, 'same over here'))
+    expect(turns).toEqual([])
+
+    const mention = send(FIRST, 'can you look at the failing test', { mentioned: true })
+    expect(await deliver(mention)).toEqual({ outcome: 'accepted' })
+    expect(await deliver(mention)).toEqual({ outcome: 'accepted' })
+    await deliver(send(FIRST, 'thanks'))
+    // The other bot following the same thread still answers every reply.
+    await deliver(send(SECOND, 'and you?'))
+    expect(turns).toEqual(['can you look at the failing test', 'and you?'])
+    expect(readThreadMute(store, FIRST)).toEqual({ botId: 'bot1', muted: false })
+  })
+
+  it('answers every reply again once the setting is off', async () => {
+    const store = await botHome({})
+    const only = ['bot1']
+    const { deliver, turns } = connector(store, undefined, true, undefined, only)
+    await deliver(send(FIRST, 'fyi'))
+    only.length = 0
+    await deliver(send(FIRST, 'what do you think?'))
+    expect(turns).toEqual(['what do you think?'])
   })
 })
 

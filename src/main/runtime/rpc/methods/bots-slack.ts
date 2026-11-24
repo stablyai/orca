@@ -18,7 +18,7 @@ import {
 } from '../../../connector-cloud/bots-cloud-client'
 import { botSlackApps, type Bot, type BotSlackApp } from '../../../../shared/bot-types'
 import { CONNECT_ACCOUNT_CHANGED } from '../../../connector-cloud/connector-connect'
-import { CONNECTOR_CLOUD_SLACK_THREAD_REPLIES_FEATURE } from '../../../../shared/connector-cloud-features'
+import { CONNECTOR_CLOUD_MENTIONED_FEATURE } from '../../../../shared/connector-cloud-features'
 import type { OrcaRuntimeService } from '../../orca-runtime'
 import { defineMethod, type RpcContext } from '../core'
 
@@ -91,7 +91,7 @@ export const BOT_SLACK_METHODS = [
                 context.runtime
                   .getConnectorCloud()
                   ?.cloudFeatures()
-                  ?.has(CONNECTOR_CLOUD_SLACK_THREAD_REPLIES_FEATURE) === true
+                  ?.has(CONNECTOR_CLOUD_MENTIONED_FEATURE) === true
             }
           }
         : result
