@@ -76,11 +76,13 @@ export function agentHookRuntimeDeps(
       withSavedStatusGroup: (visit) => server.withSavedStructuredStatusGroup(visit),
       publish: (summary, subject) => server.ingestStructuredStatus(summary, subject),
       forget: (subject) => server.dropStructuredStatus(subject),
-      publishChildWork: (subject, evidence, provider) =>
-        server.ingestStructuredChildWork(subject, evidence, provider),
+      publishChildWork: (subject, evidence, provider, authority) =>
+        server.ingestStructuredChildWork(subject, evidence, provider, authority),
       readChildWork: (subject) => server.getStructuredChildWorkViews(subject),
       readChildWorkRecords: (subject) => server.getStructuredChildWork(subject),
-      readChildWorkHandles: (subject) => server.getStructuredChildWorkHandles(subject)
+      readChildWorkHandles: (subject) => server.getStructuredChildWorkHandles(subject),
+      readCommandDetail: (subject, childWorkId) =>
+        server.getStructuredCommandDetail(subject, childWorkId)
     },
     readHookCliWriterObservation: (row) => server.readCliWriterObservation(row),
     // A command mark retires the pane's launch and proves an agent's exit, on every host.

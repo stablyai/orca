@@ -8,6 +8,7 @@ import type {
   AgentSessionSubscribeEvent
 } from '../../../../../shared/agent-session/agent-session-wire'
 import type { AgentSessionBackgroundTaskState } from '../../../../../shared/agent-session/background-tasks/agent-session-background-task-wire'
+import type { AgentSessionCommandDetailTuple } from '../../../../../shared/agent-session/background-tasks/agent-session-command-details'
 import type { QueuePublication } from '../../delivery/structured-agent-session-queued-publication'
 import { boundedFrames } from '../history/agent-session-bounded-frames'
 import { rememberSubscriberHostWork } from './agent-session-subscriber-live-text'
@@ -31,7 +32,27 @@ export type SubscriberFieldState = {
   /** Deduplicate canonical state before reader-specific projection. */
   queuePublication?: QueuePublication
   backgroundTasks?: string
+  /** This reader's audience projection, applied before fitting, fingerprint and comparison. */
+  projectBackgroundTasks?: (
+    state: AgentSessionBackgroundTaskState | null
+  ) => AgentSessionBackgroundTaskState | null
+  /** The last roster sent carried at least one exact-command tuple. Set only at emission. */
+  detailCredit?: boolean
+  /** That roster as sent (projected), kept while it holds credit. */
+  creditedRoster?: AgentSessionBackgroundTaskState
+  /** The fence on the frame that carried it. */
+  creditedFence?: number
 }
+
+/** What a background-task lane entry sends, sampled in one synchronous host read when it runs. */
+export type BackgroundTaskLaneRead =
+  | { kind: 'roster'; fence: number; state: AgentSessionBackgroundTaskState | null }
+  | {
+      kind: 'availability'
+      fence: number
+      /** Re-checks credited tuples against current authority; never reopens the conversation. */
+      keep: (tuples: readonly AgentSessionCommandDetailTuple[]) => AgentSessionCommandDetailTuple[]
+    }
 
 export type SubscriberFieldHooks = {
   readCommands?: (
@@ -46,6 +67,8 @@ export type SubscriberFieldHooks = {
   ) => QueuePublication | null | undefined | Promise<QueuePublication | null | undefined>
   /** Read expensive child-derived rosters only when a frame owes them. */
   readBackgroundTasks?: (sessionId: string) => AgentSessionBackgroundTaskState | null
+  /** The fence and roster (or, without a conversation, availability) a lane entry sends. */
+  readBackgroundTaskLane?: (sessionId: string) => BackgroundTaskLaneRead | undefined
 }
 
 type SubscriberFrame = {
@@ -56,6 +79,7 @@ type SubscriberFrame = {
   attachedQueued: boolean
   queued: QueuePublication | undefined
   backgroundTasks: string | undefined
+  backgroundTaskState: AgentSessionBackgroundTaskState | null | undefined
 }
 
 export function backgroundTaskFingerprint(state: AgentSessionBackgroundTaskState | null): string {
@@ -133,7 +157,8 @@ async function buildSubscriberFrame(
     attachedQueued,
     queued,
     backgroundTasks:
-      backgroundTasks === undefined ? undefined : backgroundTaskFingerprint(backgroundTasks)
+      backgroundTasks === undefined ? undefined : backgroundTaskFingerprint(backgroundTasks),
+    backgroundTaskState: backgroundTasks
   }
 }
 
@@ -146,12 +171,32 @@ function subscriberBackgroundTasks(
   if (event.type === 'end') {
     return undefined
   }
-  if (event.backgroundTasks !== undefined) {
-    return event.backgroundTasks
+  const state =
+    event.backgroundTasks !== undefined
+      ? event.backgroundTasks
+      : event.type !== 'batch' || subscriber.backgroundTasks === undefined
+        ? hooks.readBackgroundTasks?.(subscriber.sessionId)
+        : undefined
+  return state === undefined || !subscriber.projectBackgroundTasks
+    ? state
+    : subscriber.projectBackgroundTasks(state)
+}
+
+/** Credit, the credited roster and its fence move together, only after a roster was sent. */
+function recordDetailCredit(
+  subscriber: SubscriberFieldState & { fence: number },
+  state: AgentSessionBackgroundTaskState | null,
+  fence: number
+): void {
+  if (state?.commandDetailsAvailable?.length) {
+    subscriber.creditedRoster = state
+    subscriber.detailCredit = true
+    subscriber.creditedFence = fence
+    return
   }
-  return event.type !== 'batch' || subscriber.backgroundTasks === undefined
-    ? hooks.readBackgroundTasks?.(subscriber.sessionId)
-    : undefined
+  subscriber.creditedRoster = undefined
+  subscriber.detailCredit = false
+  subscriber.creditedFence = undefined
 }
 
 /** Capable phones receive a small invalidation hint instead of the inventory. */
@@ -213,6 +258,11 @@ export async function emitSubscriberFrame(
   }
   if (built.backgroundTasks !== undefined) {
     subscriber.backgroundTasks = built.backgroundTasks
+    // The one place credit is set, for every roster-bearing frame kind.
+    if (built.backgroundTaskState !== undefined) {
+      const fence = event.type !== 'end' ? (event.fence ?? subscriber.fence) : subscriber.fence
+      recordDetailCredit(subscriber, built.backgroundTaskState, fence)
+    }
   }
   rememberSubscriberHostWork(subscriber, event)
 }

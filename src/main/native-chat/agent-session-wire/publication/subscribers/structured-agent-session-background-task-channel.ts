@@ -24,6 +24,13 @@ import type {
 } from '../../host/structured-agent-session-host-types'
 import { structuredAgentSessionConversationFence } from '../../host/structured-agent-session-provider-child'
 import { HISTORY_PAGE_CONTENT_BUDGET_BYTES } from '../history/agent-session-history-page-bounds'
+import {
+  commandDetailTupleOf,
+  type AgentSessionCommandDetailTuple
+} from '../../../../../shared/agent-session/background-tasks/agent-session-command-details'
+import type { StructuredCommandDetailRecord } from '../../observations/structured-agent-session-status-ownership'
+import { eligibleStructuredCommandDetail } from '../../command-details/structured-command-detail-eligibility'
+import type { BackgroundTaskLaneRead } from './agent-session-subscriber-frame-fields'
 
 /** Derive modern/legacy rosters from child records; null hides the strip only when no known/unlisted work remains. */
 export class StructuredAgentSessionBackgroundTaskChannel {
@@ -36,9 +43,40 @@ export class StructuredAgentSessionBackgroundTaskChannel {
       sessionId: string
     ) => Promise<StructuredAgentSessionHostSession>,
     private readonly currentWork: StructuredAgentSessionClientDelivery['readCurrentWork'],
-    private readonly readChildWork: (sessionId: string) => AgentChildWorkView[] | undefined,
-    private readonly childWorkIncomplete: (sessionId: string) => boolean = () => false
-  ) {}
+    private readonly childWork: {
+      readChildWork: (sessionId: string) => AgentChildWorkView[] | undefined
+      childWorkIncomplete?: (sessionId: string) => boolean
+      readCommandDetail?: (
+        sessionId: string,
+        childWorkId: string
+      ) => StructuredCommandDetailRecord | null
+    }
+  ) {
+    subscribers.hooks.readBackgroundTaskLane = this.laneRead
+    this.stopRecordWakes = deps.store.onRecordsChanged?.(this.recordsChanged) ?? (() => {})
+  }
+
+  private readonly stopRecordWakes: () => void
+
+  /** Owner, lease and handle commits can withdraw an open command's authority with no child or
+   *  journal event: wake the readers holding credit for it. */
+  private readonly recordsChanged = (sessionIds: readonly string[]): void => {
+    for (const sessionId of sessionIds) {
+      this.publish(sessionId, true)
+    }
+  }
+
+  dispose(): void {
+    this.stopRecordWakes()
+  }
+
+  private readChildWork(sessionId: string): AgentChildWorkView[] | undefined {
+    return this.childWork.readChildWork(sessionId)
+  }
+
+  private childWorkIncomplete(sessionId: string): boolean {
+    return this.childWork.childWorkIncomplete?.(sessionId) ?? false
+  }
 
   handoffStatus = (sessionId: string) => structuredAgentSessionOwnerStatus(this.deps, sessionId)
 
@@ -129,13 +167,49 @@ export class StructuredAgentSessionBackgroundTaskChannel {
     })
   }
 
-  publish(sessionId: string): void {
+  /** With the conversation gone, credited readers still get an availability-only replacement;
+   *  nothing reopens, installs or attaches it. */
+  publish(sessionId: string, creditedOnly = false): void {
+    this.subscribers.republishBackgroundTasks(
+      sessionId,
+      creditedOnly || !this.sessions.get(sessionId)
+    )
+  }
+
+  /** One synchronous read of fence and state, decided when the lane entry runs. */
+  laneRead = (sessionId: string): BackgroundTaskLaneRead => {
+    const fence = structuredAgentSessionConversationFence(this.deps.store, sessionId)
     if (this.sessions.get(sessionId)) {
-      this.subscribers.republishBackgroundTasks(
-        sessionId,
-        structuredAgentSessionConversationFence(this.deps.store, sessionId)
-      )
+      return { kind: 'roster', fence, state: this.read(sessionId) }
     }
+    return {
+      kind: 'availability',
+      fence,
+      keep: (tuples) => tuples.filter((tuple) => this.commandDetail(sessionId, tuple) !== null)
+    }
+  }
+
+  /** The exact command for one listed tuple, or null; the RPC and availability share it. */
+  commandDetail(sessionId: string, tuple: AgentSessionCommandDetailTuple): string | null {
+    return eligibleStructuredCommandDetail({
+      conversation: this.deps.store.getConversation(sessionId),
+      membershipCurrent: this.deps.sessionMembershipCurrent?.(sessionId) ?? true,
+      detail: this.childWork.readCommandDetail?.(sessionId, tuple.childWorkId) ?? null,
+      tuple
+    })
+  }
+
+  private commandDetailsAvailable(
+    sessionId: string,
+    views: readonly AgentChildWorkView[]
+  ): AgentSessionCommandDetailTuple[] {
+    if (!(this.deps.sessionMembershipCurrent?.(sessionId) ?? true)) {
+      return []
+    }
+    return views
+      .filter((view) => view.kind === 'command')
+      .map(commandDetailTupleOf)
+      .filter((tuple) => this.commandDetail(sessionId, tuple) !== null)
   }
 
   /** Child records define the roster even after the provider releases the session. */
@@ -150,6 +224,7 @@ export class StructuredAgentSessionBackgroundTaskChannel {
     }
     const stops = this.deps.adapter.backgroundTaskStops?.(sessionId)
     const { tasks, settledTasks } = structuredChildWorkLegacyTasks(views, session.params.provider)
+    const commandDetailsAvailable = this.commandDetailsAvailable(sessionId, views)
     return {
       state: 'monitoring',
       ...(workerDock ? { workerDock } : {}),
@@ -158,7 +233,8 @@ export class StructuredAgentSessionBackgroundTaskChannel {
       ...(stops?.supportsTaskStop ? { supportsTaskStop: true } : {}),
       ...(stops?.supportsStopAll ? {} : { supportsStopAll: false }),
       children: views,
-      ...(incomplete ? { incomplete: true } : {})
+      ...(incomplete ? { incomplete: true } : {}),
+      ...(commandDetailsAvailable.length > 0 ? { commandDetailsAvailable } : {})
     }
   }
 }

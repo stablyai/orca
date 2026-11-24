@@ -92,6 +92,9 @@ export async function installOnJournal(
     observeCommittedRows: observePRWatchCommittedRows,
     ...(deps.onSessionStatusChanged ? { onSessionStatusChanged: deps.onSessionStatusChanged } : {}),
     ...(deps.readWorkerDockPresence ? { readWorkerDockPresence: deps.readWorkerDockPresence } : {}),
+    ...(deps.sessionMembershipCurrent
+      ? { sessionMembershipCurrent: deps.sessionMembershipCurrent }
+      : {}),
     ...(deps.statusSink ? { statusSink: deps.statusSink } : {}),
     ...(deps.conversationNaming
       ? { conversationNaming: withProviderNaming(deps.conversationNaming, nameProvider) }

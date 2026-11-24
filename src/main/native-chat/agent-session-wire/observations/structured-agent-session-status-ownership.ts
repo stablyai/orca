@@ -21,6 +21,15 @@ import type {
   StatusFeedSession,
   StructuredAgentSessionStatusFeedDeps
 } from './structured-agent-session-status-feed-deps'
+import type {
+  StructuredChildWorkAuthority,
+  StructuredCommandDetailSlot
+} from '../command-details/structured-command-detail-slots'
+
+export type StructuredCommandDetailRecord = {
+  record: AgentChildWorkRecord
+  slot: StructuredCommandDetailSlot | undefined
+}
 
 export type StructuredAgentSessionStatusPublisher = {
   publish: (
@@ -33,15 +42,22 @@ export type StructuredAgentSessionStatusPublisher = {
 export type StructuredAgentSessionStatusSink = StructuredAgentSessionStatusPublisher & {
   withSavedStatusGroup?: (visit: (sink: StructuredAgentSessionStatusPublisher) => void) => void
   /** Address evidence by the parent row’s landed subject. */
+  /** `authority`: only a current bound Codex producer at the conversation's owner fence. */
   publishChildWork?: (
     subject: AgentStatusStructuredSessionSubject,
     evidence: AgentChildWorkEvidence[],
-    provider: AgentSessionRecord['provider']
+    provider: AgentSessionRecord['provider'],
+    authority?: StructuredChildWorkAuthority
   ) => AgentChildWorkReconcileOutcome | null | void
   readChildWork?: (subject: AgentStatusStructuredSessionSubject) => AgentChildWorkView[]
   /** Includes host-only facts omitted from views. */
   readChildWorkRecords?: (subject: AgentStatusStructuredSessionSubject) => AgentChildWorkRecord[]
   readChildWorkHandles?: (subject: AgentStatusStructuredSessionSubject) => ReadonlySet<string>
+  /** One child of this exact parent by its indexed ID, with its private exact command if any. */
+  readCommandDetail?: (
+    subject: AgentStatusStructuredSessionSubject,
+    childWorkId: string
+  ) => StructuredCommandDetailRecord | null
 }
 
 export type CapturedChildWorkStops = {
@@ -56,7 +72,18 @@ export class StructuredAgentSessionStatusOwnership {
   private readonly landed = new Set<string>()
   private readonly open = new StructuredAgentSessionOpenChildWork()
 
-  constructor(private readonly sink: () => StructuredAgentSessionStatusSink | undefined) {}
+  /** The producer authority of the delivery being admitted right now, in this same stack only. */
+  private authority: StructuredChildWorkAuthority | undefined
+
+  constructor(
+    private readonly deps: () => Pick<
+      StructuredAgentSessionStatusFeedDeps,
+      'statusSink' | 'onSubjectForgotten'
+    >
+  ) {}
+
+  private readonly sink = (): StructuredAgentSessionStatusSink | undefined =>
+    this.deps().statusSink?.()
 
   matchesLocation(sessionId: string, location: AgentSessionExecutionLocation): boolean {
     const subject = this.subjects.get(sessionId)
@@ -88,16 +115,18 @@ export class StructuredAgentSessionStatusOwnership {
       throw new Error('Structured status requires its full trusted execution location')
     }
     const previous = this.subjects.get(summary.sessionId)
-    if (
-      previous &&
-      serializeAgentStatusSubject(previous) !== serializeAgentStatusSubject(subject)
-    ) {
+    const relocated =
+      previous && serializeAgentStatusSubject(previous) !== serializeAgentStatusSubject(subject)
+    if (relocated) {
       sink.forget(previous)
     }
     this.subjects.set(summary.sessionId, subject)
     this.landed.delete(summary.sessionId)
     sink.publish(summary, subject)
     this.landed.add(summary.sessionId)
+    if (relocated) {
+      this.deps().onSubjectForgotten?.(summary.sessionId)
+    }
   }
 
   /** Publish children only after parent landing; track all provider edges independently of display admission. */
@@ -144,7 +173,7 @@ export class StructuredAgentSessionStatusOwnership {
       return
     }
     this.observeChildWork(sessionId, evidence)
-    const apply = () => {
+    const apply = (boundFence?: number) => {
       if (deps.sessions.get(sessionId) === session && !deps.rowRetired?.(sessionId)) {
         try {
           this.establish(sessionId, session.params.location, session.params.provider, deps.now())
@@ -155,11 +184,26 @@ export class StructuredAgentSessionStatusOwnership {
             error
           })
         }
-        publish(session)
+        // Never stamp a fence on an unfenced, synthetic, replaced or late producer callback.
+        const ownerFence = deps.getConversation(sessionId)?.currentFence
+        const authority =
+          boundFence !== undefined &&
+          boundFence > 0 &&
+          session.params.provider === 'codex' &&
+          ownerFence === boundFence &&
+          this.matchesLocation(sessionId, session.params.location)
+            ? { fence: boundFence }
+            : undefined
+        this.authority = authority
+        try {
+          publish(session)
+        } finally {
+          this.authority = undefined
+        }
       }
     }
     if (producer?.publishChildWork) {
-      producer.publishChildWork(evidence, apply)
+      producer.publishChildWork(evidence, (_journal, fence) => apply(fence))
     } else {
       apply()
     }
@@ -178,7 +222,7 @@ export class StructuredAgentSessionStatusOwnership {
     if (!subject || !this.landed.has(sessionId)) {
       return
     }
-    this.sink()?.publishChildWork?.(subject, evidence, provider)
+    this.sink()?.publishChildWork?.(subject, evidence, provider, this.authority)
   }
 
   admitChildWork(
@@ -264,6 +308,19 @@ export class StructuredAgentSessionStatusOwnership {
       : undefined
   }
 
+  /** No parent landing means no stored child to read. */
+  readCommandDetail(sessionId: string, childWorkId: string): StructuredCommandDetailRecord | null {
+    const subject = this.subjects.get(sessionId)
+    try {
+      return subject && this.landed.has(sessionId)
+        ? (this.sink()?.readCommandDetail?.(subject, childWorkId) ?? null)
+        : null
+    } catch {
+      // An unreadable store proves nothing: no exact command.
+      return null
+    }
+  }
+
   forget(sessionId: string): void {
     this.open.forget(sessionId)
     const subject = this.subjects.get(sessionId)
@@ -273,5 +330,6 @@ export class StructuredAgentSessionStatusOwnership {
     this.landed.delete(sessionId)
     this.sink()?.forget(subject)
     this.subjects.delete(sessionId)
+    this.deps().onSubjectForgotten?.(sessionId)
   }
 }

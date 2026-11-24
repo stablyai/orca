@@ -30,12 +30,13 @@ export type SubscriberLiveText = {
 type LaneEntry =
   | { kind: 'ordered'; since: number; run: () => Promise<unknown> }
   | { kind: 'catch-up'; since: number; catchUp: SubscriberCatchUp }
-  | { kind: 'background-tasks'; since: number; fence: number }
+  | { kind: 'background-tasks'; since: number }
   | { kind: 'live-text'; since: number; liveText: SubscriberLiveText }
 
 export type SubscriberDeliveryLaneRunners = {
   catchUp: (catchUp: SubscriberCatchUp) => Promise<unknown>
-  backgroundTasks: (fence: number) => Promise<unknown>
+  /** Reads fence and roster together when it runs. */
+  backgroundTasks: () => Promise<unknown>
   liveText: (liveText: SubscriberLiveText) => Promise<unknown>
   /** Undefined when the two cannot be one delivery. */
   mergeCatchUp: (
@@ -90,15 +91,12 @@ export class SubscriberDeliveryLane {
     this.add({ kind: 'catch-up', since: this.runners.now(), catchUp: next })
   }
 
-  /** The refresh reads current state when it runs; the newest fence stands. */
-  backgroundTasks(fence: number): void {
-    const index = this.openIndex('background-tasks')
-    const entry = index === undefined ? undefined : this.pending[index]
-    if (entry?.kind === 'background-tasks') {
-      entry.fence = fence
+  /** The refresh reads its fence and state together when it runs; one waiting entry covers all. */
+  backgroundTasks(): void {
+    if (this.openIndex('background-tasks') !== undefined) {
       return
     }
-    this.add({ kind: 'background-tasks', since: this.runners.now(), fence })
+    this.add({ kind: 'background-tasks', since: this.runners.now() })
   }
 
   /**
@@ -231,7 +229,7 @@ export class SubscriberDeliveryLane {
       case 'catch-up':
         return this.runners.catchUp(entry.catchUp)
       case 'background-tasks':
-        return this.runners.backgroundTasks(entry.fence)
+        return this.runners.backgroundTasks()
       case 'live-text':
         return this.runners.liveText(entry.liveText)
     }

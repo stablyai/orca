@@ -42,6 +42,8 @@ export type AgentSessionSubscribeInput = {
   liveTextShown?: boolean
   /** Hands the stream a setter for when its viewer says it is shown or hidden. */
   onLiveTextShown?: (set: (shown: boolean) => void) => void
+  /** This reader's audience projection of the roster, before fitting and comparison. */
+  projectBackgroundTasks?: SubscriberFieldState['projectBackgroundTasks']
 }
 
 export type AgentSessionSubscriberEmit = (event: AgentSessionSubscribeEvent) => void

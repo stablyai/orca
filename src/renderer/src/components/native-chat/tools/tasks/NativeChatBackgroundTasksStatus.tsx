@@ -1,4 +1,5 @@
 import { useTranslate } from '@/i18n/use-translate'
+import { commandDetailTupleOf } from '../../../../../../shared/agent-session/background-tasks/agent-session-command-details'
 import { workerDockKindLabel } from './dock/worker-dock-labels'
 import { useMemo } from 'react'
 import type { AgentSessionBackgroundTask } from '../../../../../../shared/agent-session/background-tasks/agent-session-background-task-wire'
@@ -163,6 +164,9 @@ export function NativeChatBackgroundTasksStatus(liveProps: {
             resultId: null,
             stoppable: backgroundTaskRowStopId(row, props.supportsTaskStop) !== null,
             providerId: row.providerId,
+            ...(view && row.kind === 'command'
+              ? { commandDetail: commandDetailTupleOf(view) }
+              : {}),
             // Stopped through this chat's own session, which a remote chat reaches too; only
             // orchestration workers carry the desktop-local owner gate.
             ownerActionsAvailable: true

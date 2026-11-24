@@ -11,6 +11,7 @@ import { startStructuredAgentSessionReadTransport } from './structured-agent-ses
 import { withDocumentSavesOnly } from './document-viewer-visibility'
 import { createStructuredAgentSessionPRLinkObserver } from './structured-agent-session-pr-link-observer'
 import { nativeChatShowsPromptSuggestions } from '../../../../../../../shared/native-chat/settings/native-chat-appearance-settings'
+import { createCommandDetailAuthority } from '../../../../../../../shared/agent-session/view/live-read/command-detail-authority'
 
 import { createStructuredAgentSessionReadActivity } from './structured-agent-session-read-activity'
 import { createStructuredAgentSessionOlderPageLoader } from './structured-agent-session-older-page-loader'
@@ -88,6 +89,8 @@ export function createReadOwner(
       setSnapshot({ ...snapshot, current: false })
     }
   }
+  // Never inside markStale's `current` guard: contact can be lost while already stale.
+  const commandDetails = createCommandDetailAuthority()
   const setProviderSession = (providerSession: AgentProviderSessionMetadata | undefined): void => {
     if (!agentProviderSessionsEqual(undefined, snapshot.providerSession, providerSession)) {
       setSnapshot({ ...snapshot, providerSession })
@@ -142,7 +145,16 @@ export function createReadOwner(
     if (snapshot.state.epoch === null) {
       apply({ type: 'loading' })
     }
+    // Each run's generations restart at one, so credit names this run as well.
+    const transportInstance = {}
+    const creditScope = (generation: number) => ({ transport: transportInstance, generation })
     const transport = startStructuredAgentSessionReadTransport({
+      credit: {
+        openGenerationAdvanced: (generation) => commandDetails.invalidate(creditScope(generation)),
+        subscribeCursor: (generation, cursor) =>
+          commandDetails.seed(creditScope(generation), cursor),
+        observeFrame: (event, generation) => commandDetails.observe(creditScope(generation), event)
+      },
       showsPromptSuggestions: nativeChatShowsPromptSuggestions(effects.getState().settings),
       replyText,
       subscribeRetryNow: effects.subscribeRetryNow,
@@ -167,7 +179,10 @@ export function createReadOwner(
         apply({ type: 'error', message, refusal })
       },
       getCursor: () => snapshot.state.cursor,
-      onContactLost: markStale,
+      onContactLost: () => {
+        commandDetails.invalidate(null)
+        markStale()
+      },
       onHistoryReadInvalidated: invalidateOlderPages,
       hydrate: snapshot.state.epoch === null ? hydrate : undefined,
       sessionId,
@@ -178,6 +193,7 @@ export function createReadOwner(
       captureActiveHistoryReadGuard = () => retiredHistoryRead
       transport.dispose()
       stopActiveRun = null
+      commandDetails.invalidate(null)
       markStale()
     }
   }
@@ -290,6 +306,7 @@ export function createReadOwner(
       }
     },
     subscribeCommandsChanged: (listener) => subscribeTo(commandListeners, listener),
+    commandDetails: { open: commandDetails.open, inspect: commandDetails.inspect },
     loadOlder: createStructuredAgentSessionOlderPageLoader({
       target,
       sessionId,

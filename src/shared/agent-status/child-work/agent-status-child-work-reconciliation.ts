@@ -15,6 +15,7 @@ import {
   settleAgentChildWork,
   agentChildWorkRunVerdict,
   type AgentChildWorkEvidenceContext,
+  type AgentChildWorkLiveAdmissionObserver,
   type AgentChildWorkReconcileOutcome
 } from './agent-status-child-work-evidence-admission'
 import {
@@ -27,6 +28,8 @@ import {
 export type AgentChildWorkReconcileInput = AgentChildWorkEvidenceScope & {
   admission: AgentChildWorkAdmission
   evidence: readonly AgentChildWorkEvidence[]
+  /** Only provider live edges reach it; synthesized operation updates never do. */
+  liveAdmission?: AgentChildWorkLiveAdmissionObserver
 }
 
 type ReconcileContext = AgentChildWorkEvidenceContext
@@ -158,7 +161,13 @@ export function reconcileAgentChildWorkEvidence(
       continue
     }
     if (edge.type === 'live') {
-      applyAgentChildWorkLive(ctx, edge.child, edge.observedAt, edge.restart === true)
+      applyAgentChildWorkLive(
+        ctx,
+        edge.child,
+        edge.observedAt,
+        edge.restart === true,
+        input.liveAdmission
+      )
     } else if (edge.type === 'operation') {
       applyOperation(ctx, edge)
     } else if (edge.type === 'ended') {

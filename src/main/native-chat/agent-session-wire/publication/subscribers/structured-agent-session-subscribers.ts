@@ -65,7 +65,8 @@ export class AgentSessionSubscribers {
     onInterestChanged: (id, wanted) => this.hooks.onPromptSuggestionInterest?.(id, wanted)
   })
 
-  constructor(private readonly hooks: AgentSessionSubscribersHooks = {}) {
+  // The channel that owns the roster sets `readBackgroundTaskLane` after construction.
+  constructor(readonly hooks: AgentSessionSubscribersHooks = {}) {
     trackSubscriberRetention(this)
   }
 
@@ -209,9 +210,13 @@ export class AgentSessionSubscribers {
     this.hooks.onJournalPublished?.(sessionId, journal)
   }
 
-  republishBackgroundTasks(sessionId: string, fence: number): void {
+  /** `creditedOnly`: only readers holding detail credit are owed (an authority-only wake, or the
+   *  conversation is gone). */
+  republishBackgroundTasks(sessionId: string, creditedOnly = false): void {
     for (const subscriber of this.subscribers(sessionId)) {
-      this.lanes.of(subscriber).backgroundTasks(fence)
+      if (!creditedOnly || subscriber.detailCredit) {
+        this.lanes.of(subscriber).backgroundTasks()
+      }
     }
   }
 

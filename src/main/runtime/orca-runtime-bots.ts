@@ -1,4 +1,5 @@
 import type { BotSessionHooks } from '../bots/bot-turn-ended'
+import { botGroupSessionMembershipCurrent } from '../bots/bot-group-session-access'
 import { UNSET_BOT_SESSION_HOOKS } from '../bots/bot-session-hooks-unset'
 import { sessionRepliesInSlack } from '../external-conversations/external-conversation-links'
 import { join } from 'node:path'
@@ -275,7 +276,10 @@ export abstract class OrcaRuntimeWithBots extends OrcaRuntimeWithLinearCommands 
       }),
       assertQueuedMessageAllowed: (sessionId: string, messageId: string) =>
         this.assertStructuredQueuedMessageAllowed(sessionId, messageId),
-      onMessageAdmitted: (message: AdmittedMessage) => this.onChatMessageAdmitted(message)
+      onMessageAdmitted: (message: AdmittedMessage) => this.onChatMessageAdmitted(message),
+      // The read gate's group membership, so published command availability follows it.
+      sessionMembershipCurrent: (sessionId: string) =>
+        botGroupSessionMembershipCurrent(this, sessionId)
     }
   }
 

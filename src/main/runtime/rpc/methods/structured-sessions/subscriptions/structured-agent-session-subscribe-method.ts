@@ -4,7 +4,10 @@ import { recordMobileViewOpened } from '../../../../../telemetry/mobile-client-t
 import { clientRequestsCommands } from '../structured-agent-session-policy'
 import { clientReadsCurrentRequests } from '../conversation/structured-agent-session-current-requests'
 import { clientSupportsSnapshotCatchUp } from '../history/structured-agent-session-history-capability'
-import { projectBackgroundTaskEvent } from '../history/structured-agent-session-background-task-capability'
+import {
+  backgroundTaskSubscriberProjection,
+  projectBackgroundTaskEvent
+} from '../history/structured-agent-session-background-task-capability'
 import { projectTurnItemEvent } from '../history/structured-agent-session-turn-item-capability'
 import { requireInstalledStructuredHost as requireInstalledHost } from '../creation/structured-agent-session-gate'
 import { bindStructuredAgentSessionStream } from './structured-agent-session-status-stream'
@@ -42,8 +45,10 @@ export const STRUCTURED_AGENT_SESSION_SUBSCRIBE_METHOD = defineStreamingMethod({
     if (stream.isClosed()) {
       return
     }
+    const projectBackgroundTasks = backgroundTaskSubscriberProjection(ctx)
     // Resolve once registered; the opening snapshot follows on the stream. A racing close disposes it.
     dispose = await host.subscribe({
+      ...(projectBackgroundTasks ? { projectBackgroundTasks } : {}),
       commandsOnRequest: clientRequestsCommands(ctx),
       readsCurrentRequests: clientReadsCurrentRequests(ctx),
       id: subscriptionId,

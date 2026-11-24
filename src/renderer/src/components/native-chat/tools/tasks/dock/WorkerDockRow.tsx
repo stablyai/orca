@@ -1,4 +1,5 @@
 import { useIntlLocale, useTranslate } from '@/i18n/use-translate'
+import type { AgentSessionCommandDetailTuple } from '../../../../../../../shared/agent-session/background-tasks/agent-session-command-details'
 import { workerDockKindLabel, workerDockStateLabel } from './worker-dock-labels'
 import { memo } from 'react'
 import { cn } from '@/lib/class-names'
@@ -12,6 +13,8 @@ import type { WorkerDockEntry } from '../../../../../../../shared/orchestration/
 export type WorkerDockRowView = WorkerDockEntry & {
   retired?: boolean
   providerId?: string
+  /** A modern command row's exact child invocation, pinned when its dialog opens. */
+  commandDetail?: AgentSessionCommandDetailTuple
   /** The open question a needs-you worker asked: the row's title while it waits. */
   question?: string
 }

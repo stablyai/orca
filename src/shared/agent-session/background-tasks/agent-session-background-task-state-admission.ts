@@ -3,6 +3,7 @@
 import type { AgentSessionBackgroundTaskState } from './agent-session-background-task-wire'
 import { backgroundTaskStatesEqual } from './agent-session-background-task-state-equality'
 import { decodeAgentChildWorkViews } from '../../agent-status/child-work/agent-status-child-work-view-wire'
+import { decodeCommandDetailsAvailable } from './agent-session-command-details'
 
 /** Preserve identity on repeated rosters so memoized readers skip unchanged frames. */
 export function admitAgentSessionBackgroundTaskState(
@@ -12,8 +13,14 @@ export function admitAgentSessionBackgroundTaskState(
   if (!next) {
     return next
   }
-  const { children: raw, ...rest } = next
+  const { children: raw, commandDetailsAvailable: rawAvailable, ...rest } = next
   const children = decodeAgentChildWorkViews(raw)
-  const decoded = { ...rest, ...(children ? { children } : {}) }
+  // Decoded against this same roster's children, never passed through.
+  const commandDetailsAvailable = decodeCommandDetailsAvailable(rawAvailable, children)
+  const decoded = {
+    ...rest,
+    ...(children ? { children } : {}),
+    ...(commandDetailsAvailable ? { commandDetailsAvailable } : {})
+  }
   return previous && backgroundTaskStatesEqual(decoded, previous) ? previous : decoded
 }

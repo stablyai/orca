@@ -168,6 +168,8 @@ export type StructuredAgentSessionHostSession = {
 
 export type StructuredAgentSessionHostDeps = {
   readWorkerDockPresence?: (sessionId: string) => WorkerDockPresence | undefined
+  /** The read gate's group membership, as a non-throwing predicate; absent means every session. */
+  sessionMembershipCurrent?: (sessionId: string) => boolean
   store: AgentSessionRecordStore
   adapter: StructuredAgentSessionAdapter
   /** Capabilities come from registry declarations, never adapters. */

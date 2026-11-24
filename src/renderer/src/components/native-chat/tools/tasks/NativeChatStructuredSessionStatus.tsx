@@ -163,7 +163,14 @@ export function NativeChatStructuredSessionStatus(props: {
   const [providerDetails, setProviderDetails] = useState<{
     row: WorkerDockRowView
     opener: HTMLElement
+    /** A crew's strip replaced the dialog's branch while it was open; it shows again on its own. */
+    hiddenByCrew?: boolean
   } | null>(null)
+  useEffect(() => {
+    if (crew && providerDetails && !providerDetails.hiddenByCrew) {
+      setProviderDetails({ ...providerDetails, hiddenByCrew: true })
+    }
+  }, [crew, providerDetails])
   const workerOpen = useCallback(
     (row: WorkerDockRowView) =>
       void openOrchestrationCrewAgent(
@@ -272,6 +279,7 @@ export function NativeChatStructuredSessionStatus(props: {
             sessionId={props.sessionId}
             target={target}
             onClose={() => setProviderDetails(null)}
+            reappeared={providerDetails.hiddenByCrew === true}
           />
         </Suspense>
       ) : null}

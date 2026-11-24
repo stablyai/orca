@@ -3,6 +3,7 @@ import type { StructuredAgentSessionState } from '../../../../../../../shared/ag
 import type { AgentSessionHistoryPage } from '../../../../../../../shared/agent-session/agent-session-wire'
 import type { AgentProviderSessionMetadata } from '../../../../../../../shared/agent-session/lifecycle/agent-session-resume'
 import type { NativeChatOlderPageResult } from '../../../viewport/history/native-chat-pagination'
+import type { CommandDetailAuthority } from '../../../../../../../shared/agent-session/view/live-read/command-detail-authority'
 
 export type StructuredAgentSessionReadSnapshot = {
   state: StructuredAgentSessionState
@@ -36,6 +37,8 @@ export type StructuredAgentSessionReadOwner = {
   trimHistory: () => void
   subscribe: (listener: () => void) => () => void
   subscribeCommandsChanged: (listener: () => void) => () => void
+  /** This reader's exact-command credit; openings are created only from it. */
+  commandDetails?: Pick<CommandDetailAuthority, 'open' | 'inspect'>
 }
 
 export type StructuredAgentSessionAdmission = {

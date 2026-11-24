@@ -70,6 +70,8 @@ export type StructuredAgentSessionStatusFeedDeps = {
     producer?: StructuredAgentSessionChildWorkProducer
   ) => void
   drainChildWork?: (sessionId?: string) => Promise<void>
+  /** After a subject's children were forgotten (synchronously, cascade included). */
+  onSubjectForgotten?: (sessionId: string) => void
   namingActiveSessionIds?: () => string[]
   namingFailure?: (sessionId: string) => StructuredChatNamingFailure | undefined
   onAgentStarted?: (sessionId: string) => void
