@@ -123,7 +123,7 @@
     "terminalSettings": {
       "keepPhoneSize": "Conserver à la taille téléphone (par défaut)",
       "leaveAppDescription": "Lorsque vous utilisez un terminal sur votre téléphone, Orca le réduit pour l'adapter à votre écran. Lorsque vous fermez l'application ou la mettez en arrière-plan, ce paramètre détermine s'il conserve la taille du téléphone (pour éviter que les outils CLI interactifs ne réorganisent leur affichage) ou reprend sa taille sur l'ordinateur. Vous pouvez à tout moment utiliser « Restaurer » dans la bannière sur l'ordinateur pour le redimensionner manuellement.",
-      "leaveAppHeading": "LORSQUE VOUS QUITTEZ L'APPLICATION",
+      "leaveAppHeading": "Lorsque vous quittez l'application",
       "noPairedDesktops": "Aucun ordinateur appairé pour le moment. Appairez-en un pour régler le comportement du terminal.",
       "restoreAfterMinutes_many": "Après {{count}} minutes",
       "restoreAfterMinutes_one": "Après {{count}} minute",
@@ -1165,14 +1165,14 @@
     "terminalShortcutSettings": {
       "addDescription": "Créer une combinaison de touches ou une macro de texte",
       "addShortcut": "Ajouter un raccourci personnalisé…",
-      "customShortcuts": "RACCOURCIS PERSONNALISÉS",
+      "customShortcuts": "Raccourcis personnalisés",
       "empty": "Aucun raccourci personnalisé défini pour le moment.",
       "removeShortcut": "Supprimer {{label}}",
       "resetDefaults": "Rétablir les valeurs par défaut",
       "resetDescription": "Afficher toutes les touches de raccourci intégrées dans l'ordre initial",
-      "moreKeys": "PLUS DE TOUCHES",
+      "moreKeys": "Plus de touches",
       "moreKeysDescription": "Ces touches se trouvent sous ⋯ dans la rangée de touches du terminal. Activez ou désactivez les touches pour les afficher ou les masquer, puis maintenez la poignée pour les réordonner. Les touches déjà présentes dans la rangée, comme Échap ou les flèches, ne figurent pas sous ⋯.",
-      "directionPad": "PAVÉ DIRECTIONNEL",
+      "directionPad": "Pavé directionnel",
       "showDirectionPad": "Afficher le pavé directionnel",
       "showDirectionPadDescription": "Épingler le pavé de flèches dans la barre latérale. Sinon, la barre affiche les touches fléchées.",
       "showShortcut": "Afficher le raccourci {{label}}"
@@ -2974,7 +2974,6 @@
       "checkUpdates": "Rechercher des mises à jour",
       "checkUpdatesStatus": "Rechercher des mises à jour, {{status}}",
       "checking": "Vérification…",
-      "installedVersion": "Version {{version}}",
       "lastCheckedDays_many": "Dernière vérification il y a {{count}} j",
       "lastCheckedDays_one": "Dernière vérification il y a {{count}} j",
       "lastCheckedDays_other": "Dernière vérification il y a {{count}} j",
@@ -2987,19 +2986,18 @@
       "lastCheckedMinutes_other": "Dernière vérification il y a {{count}} min",
       "neverChecked": "Jamais",
       "upToDate": "À jour",
-      "update": "Mettre à jour",
       "updateToVersion": "Mettre à jour vers Orca {{version}}"
     },
     "appearance": {
       "language": {
         "description": "L'option Système utilise la langue de cet appareil. Les demandes d'autorisation utilisent toujours la langue de l'appareil.",
-        "heading": "LANGUE",
+        "heading": "Langue",
         "systemWithCurrent": "Système ({{language}})"
       },
       "theme": {
         "dark": "Sombre",
         "description": "L'option Système utilise le thème clair ou sombre de cet appareil.",
-        "heading": "THÈME",
+        "heading": "Thème",
         "light": "Clair",
         "system": "Système"
       },
@@ -3011,7 +3009,7 @@
       "desktopBrowser": "Navigateur Orca sur l'ordinateur",
       "desktopBrowserDescription": "Ouvrir dans le navigateur diffusé depuis votre ordinateur appairé.",
       "terminalAndChatLinksDescription": "Choisissez où ouvrir les liens web que vous touchez dans la sortie du terminal et dans le chat.",
-      "linksHeading": "LIENS",
+      "linksHeading": "Liens",
       "loadFailed": "Impossible de charger les préférences du navigateur. Réessayez.",
       "openLinks": "Ouvrir les liens",
       "phoneBrowser": "Navigateur du téléphone",
@@ -3023,7 +3021,6 @@
       "about": "À propos",
       "appearance": "Apparence",
       "browser": "Navigateur",
-      "chatUi": "Chat UI",
       "notifications": "Notifications",
       "terminal": "Terminal",
       "troubleshooting": "Dépannage",
@@ -3035,11 +3032,10 @@
     },
     "nativeChatSettingsScreen": {
       "defaultViewDescription": "Choisissez comment ouvrir sur cet appareil les sessions des agents compatibles (Claude, Codex et les autres agents prenant en charge le chat). Le mode « Terminal » affiche la CLI brute ; Chat UI affiche une interface de chat similaire à celle de l'application pour ordinateur. Vous pouvez toujours changer l'affichage de chaque session via son menu accessible par un appui long.",
-      "defaultViewHeading": "VUE PAR DÉFAUT",
+      "defaultViewHeading": "Vue par défaut",
       "off": "Désactivé",
       "on": "Activé",
-      "openInChatUi": "Ouvrir les sessions dans l'interface de chat",
-      "title": "Chat UI"
+      "openInChatUi": "Ouvrir les sessions dans l'interface de chat"
     },
     "nativeNotificationDeliverySettings": {
       "loadFailed": "Impossible de charger les paramètres de réception. Rouvrez cet écran pour réessayer.",
@@ -3098,7 +3094,7 @@
       "connectDesktop": "Connectez-vous à un ordinateur pour gérer les paramètres vocaux.",
       "deleteFailed": "Échec de la suppression",
       "dictationDescription": "Dictez du texte dans n'importe quel volet actif de votre ordinateur.",
-      "dictationHeading": "DICTÉE",
+      "dictationHeading": "Dictée",
       "dictationMode": "Mode de dictée",
       "dictationModeDescription": "Bascule : appuyez une fois pour démarrer, puis à nouveau pour arrêter. Maintien : dictez tant que vous maintenez l'appui.",
       "dictationModeWithAutoDescription": "Auto : appuyez pour démarrer et arrêter ; sur votre ordinateur, maintenir le raccourci enregistre jusqu’à ce que vous relâchiez. Maintien : dictez tant que vous maintenez l’appui. Bascule : appuyez une fois pour démarrer, puis à nouveau pour arrêter.",
@@ -3111,7 +3107,7 @@
       "noneSelected": "Aucun modèle sélectionné",
       "selectModelFailed": "Impossible de sélectionner le modèle",
       "speechModel": "Modèle vocal",
-      "speechModelHeading": "MODÈLE VOCAL",
+      "speechModelHeading": "Modèle vocal",
       "title": "Voix",
       "toggleMode": "Bascule",
       "updateFailed": "Impossible de mettre à jour"
@@ -3120,7 +3116,7 @@
       "permissionOwnAll": "Paramètres propres aux agents"
     },
     "voiceTranscribeOn": {
-      "heading": "TRANSCRIRE SUR",
+      "heading": "Transcrire sur",
       "description": "Ce que ce téléphone entend reste sur ce téléphone. Automatique utilise votre ordinateur quand ce téléphone ne peut pas transcrire.",
       "automatic": "Automatique",
       "phone": "Ce téléphone",

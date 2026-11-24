@@ -123,7 +123,7 @@
     "terminalSettings": {
       "keepPhoneSize": "Mantener en tamaño de teléfono (predeterminado)",
       "leaveAppDescription": "Mientras usas un terminal en el teléfono, Orca lo reduce para ajustarlo a la pantalla. Al cerrar la aplicación o dejarla en segundo plano, este ajuste controla si el terminal mantiene el tamaño del teléfono (para que las herramientas CLI interactivas no redistribuyan su contenido) o recupera el tamaño del escritorio. Siempre puedes pulsar Restaurar en el banner del escritorio para cambiar el tamaño manualmente.",
-      "leaveAppHeading": "AL SALIR DE LA APLICACIÓN",
+      "leaveAppHeading": "Al salir de la aplicación",
       "noPairedDesktops": "Aún no hay escritorios emparejados. Empareja uno para controlar el comportamiento del terminal.",
       "restoreAfterMinutes_many": "Después de {{count}} minutos",
       "restoreAfterMinutes_one": "Después de {{count}} minuto",
@@ -1165,14 +1165,14 @@
     "terminalShortcutSettings": {
       "addDescription": "Crear una combinación de teclas o una macro de texto",
       "addShortcut": "Añadir atajo personalizado…",
-      "customShortcuts": "ATAJOS PERSONALIZADOS",
+      "customShortcuts": "Atajos personalizados",
       "empty": "Aún no hay atajos personalizados definidos.",
       "removeShortcut": "Eliminar {{label}}",
       "resetDefaults": "Restablecer valores predeterminados",
       "resetDescription": "Mostrar todas las teclas de atajo integradas en su orden original",
-      "moreKeys": "MÁS TECLAS",
+      "moreKeys": "Más teclas",
       "moreKeysDescription": "Estas teclas están bajo ⋯ en la fila de teclas del terminal. Activa o desactiva las teclas para mostrarlas u ocultarlas y mantén pulsado el asa para arrastrarlas al orden que quieras. Las teclas que ya están en la fila, como Esc o las flechas, no aparecen en ⋯.",
-      "directionPad": "CRUCETA",
+      "directionPad": "Cruceta",
       "showDirectionPad": "Mostrar cruceta",
       "showDirectionPadDescription": "Fija la cruceta en la barra lateral. Si está desactivada, la barra muestra las teclas de flecha.",
       "showShortcut": "Mostrar atajo {{label}}"
@@ -2974,7 +2974,6 @@
       "checkUpdates": "Buscar actualizaciones",
       "checkUpdatesStatus": "Buscar actualizaciones, {{status}}",
       "checking": "Comprobando…",
-      "installedVersion": "Versión {{version}}",
       "lastCheckedDays_many": "Última comprobación: hace {{count}} d",
       "lastCheckedDays_one": "Última comprobación: hace {{count}} d",
       "lastCheckedDays_other": "Última comprobación: hace {{count}} d",
@@ -2987,19 +2986,18 @@
       "lastCheckedMinutes_other": "Última comprobación: hace {{count}} min",
       "neverChecked": "Nunca",
       "upToDate": "Actualizado",
-      "update": "Actualizar",
       "updateToVersion": "Actualizar a Orca {{version}}"
     },
     "appearance": {
       "language": {
         "description": "La opción Sistema usa el idioma de este dispositivo. Las solicitudes de permiso siempre usan el idioma del dispositivo.",
-        "heading": "IDIOMA",
+        "heading": "Idioma",
         "systemWithCurrent": "Sistema ({{language}})"
       },
       "theme": {
         "dark": "Oscuro",
         "description": "La opción Sistema usa el modo claro u oscuro de este dispositivo.",
-        "heading": "TEMA",
+        "heading": "Tema",
         "light": "Claro",
         "system": "Sistema"
       },
@@ -3011,7 +3009,7 @@
       "desktopBrowser": "Navegador de Orca en el escritorio",
       "desktopBrowserDescription": "Abrir en el navegador de tu escritorio emparejado y verlo en el teléfono.",
       "terminalAndChatLinksDescription": "Elige dónde se abren los enlaces web que tocas en la salida de la terminal y en el chat.",
-      "linksHeading": "ENLACES",
+      "linksHeading": "Enlaces",
       "loadFailed": "No se pudieron cargar las preferencias del navegador. Vuelve a intentarlo.",
       "openLinks": "Abrir enlaces",
       "phoneBrowser": "Navegador del teléfono",
@@ -3023,7 +3021,6 @@
       "about": "Acerca de",
       "appearance": "Apariencia",
       "browser": "Navegador",
-      "chatUi": "Interfaz de chat",
       "notifications": "Notificaciones",
       "terminal": "Terminal",
       "troubleshooting": "Solución de problemas",
@@ -3035,11 +3032,10 @@
     },
     "nativeChatSettingsScreen": {
       "defaultViewDescription": "Elige cómo se abren en este dispositivo las sesiones de agentes compatibles (Claude, Codex y otros agentes con funciones de chat). La terminal muestra la CLI tal cual; la interfaz de chat ofrece una vista como la de la app de escritorio. También puedes cambiar la vista de cada sesión desde el menú que aparece al mantenerla pulsada.",
-      "defaultViewHeading": "VISTA PREDETERMINADA",
+      "defaultViewHeading": "Vista predeterminada",
       "off": "Desactivado",
       "on": "Activado",
-      "openInChatUi": "Abrir sesiones en la interfaz de chat",
-      "title": "Interfaz de chat"
+      "openInChatUi": "Abrir sesiones en la interfaz de chat"
     },
     "nativeNotificationDeliverySettings": {
       "loadFailed": "No se pudo cargar la configuración de entrega. Vuelve a abrir esta pantalla para reintentarlo.",
@@ -3098,7 +3094,7 @@
       "connectDesktop": "Conéctate a un escritorio para gestionar los ajustes de voz.",
       "deleteFailed": "Error al eliminar",
       "dictationDescription": "Dicta texto en cualquier panel que tenga el foco en tu escritorio.",
-      "dictationHeading": "DICTADO",
+      "dictationHeading": "Dictado",
       "dictationMode": "Modo de dictado",
       "dictationModeDescription": "Alternar: pulsa una vez para iniciar y otra para detener. Mantener pulsado: dicta sin soltar.",
       "dictationModeWithAutoDescription": "Automático: toca para iniciar y detener; en tu ordenador, mantener el atajo graba hasta que lo sueltes. Mantener pulsado: dicta sin soltar. Alternar: pulsa una vez para iniciar y otra para detener.",
@@ -3111,7 +3107,7 @@
       "noneSelected": "Ninguno seleccionado",
       "selectModelFailed": "No se pudo seleccionar el modelo",
       "speechModel": "Modelo de voz",
-      "speechModelHeading": "MODELO DE VOZ",
+      "speechModelHeading": "Modelo de voz",
       "title": "Voz",
       "toggleMode": "Alternar",
       "updateFailed": "No se pudo actualizar"
@@ -3120,7 +3116,7 @@
       "permissionOwnAll": "Configuración propia de los agentes"
     },
     "voiceTranscribeOn": {
-      "heading": "TRANSCRIBIR EN",
+      "heading": "Transcribir en",
       "description": "Lo que escucha este teléfono se queda en él. Automático usa tu ordenador cuando este teléfono no puede transcribir.",
       "automatic": "Automático",
       "phone": "Este teléfono",

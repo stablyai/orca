@@ -90,7 +90,7 @@ export function TerminalFontSection({
   const pointsLabel = terminalPointsLabel(px, t)
   return (
     <SettingsSection
-      title={t('app.terminalSettings.fontHeading', 'FONT')}
+      title={t('app.terminalSettings.fontHeading', 'Font')}
       footer={t(
         'app.terminalSettings.fontDescription',
         'Pinch in a terminal to change the size; it saves here. Only changes this device, not the desktop terminal.'

@@ -121,7 +121,7 @@
     "terminalSettings": {
       "keepPhoneSize": "Smartphone-Größe beibehalten (Standard)",
       "leaveAppDescription": "Während ein Terminal auf dem Smartphone verwendet wird, verkleinert Orca es auf die Bildschirmgröße des Smartphones. Diese Einstellung legt fest, ob es beim Schließen oder Verlassen der App in Smartphone-Größe bleibt (damit interaktive CLI-Tools ihr Layout beibehalten) oder wieder an den Desktop angepasst wird. Über „Wiederherstellen“ im Desktop-Banner lässt sich die Größe jederzeit manuell anpassen.",
-      "leaveAppHeading": "BEIM VERLASSEN DER APP",
+      "leaveAppHeading": "Beim Verlassen der App",
       "noPairedDesktops": "Noch keine Desktops gekoppelt. Einen Desktop koppeln, um das Terminalverhalten festzulegen.",
       "restoreAfterMinutes_one": "Nach {{count}} Minute",
       "restoreAfterMinutes_other": "Nach {{count}} Minuten",
@@ -1123,14 +1123,14 @@
     "terminalShortcutSettings": {
       "addDescription": "Tastenkombination oder Textmakro erstellen",
       "addShortcut": "Eigenes Tastenkürzel hinzufügen…",
-      "customShortcuts": "EIGENE TASTENKÜRZEL",
+      "customShortcuts": "Eigene Tastenkürzel",
       "empty": "Noch keine eigenen Tastenkürzel definiert.",
       "removeShortcut": "{{label}} entfernen",
       "resetDefaults": "Auf Standard zurücksetzen",
       "resetDescription": "Alle integrierten Tastenkürzel in der ursprünglichen Reihenfolge anzeigen",
-      "moreKeys": "WEITERE TASTEN",
+      "moreKeys": "Weitere Tasten",
       "moreKeysDescription": "Diese Tasten befinden sich unter ⋯ in der Terminal-Tastenleiste. Blende Tasten ein oder aus und halte den Griff gedrückt, um sie in die gewünschte Reihenfolge zu ziehen. Tasten, die bereits in der Leiste sind, etwa Esc oder die Pfeiltasten, erscheinen nicht unter ⋯.",
-      "directionPad": "STEUERKREUZ",
+      "directionPad": "Steuerkreuz",
       "showDirectionPad": "Steuerkreuz anzeigen",
       "showDirectionPadDescription": "Das Steuerkreuz in der Seitenleiste anheften. Andernfalls werden dort die einzelnen Pfeiltasten angezeigt.",
       "showShortcut": "Tastenkürzel {{label}} anzeigen"
@@ -2898,7 +2898,6 @@
       "checkUpdates": "Nach Updates suchen",
       "checkUpdatesStatus": "Nach Updates suchen, {{status}}",
       "checking": "Wird geprüft…",
-      "installedVersion": "Version {{version}}",
       "lastCheckedDays_one": "Zuletzt vor {{count}} Tag geprüft",
       "lastCheckedDays_other": "Zuletzt vor {{count}} Tagen geprüft",
       "lastCheckedHours_one": "Zuletzt vor {{count}} Std. geprüft",
@@ -2908,19 +2907,18 @@
       "lastCheckedMinutes_other": "Zuletzt vor {{count}} Min. geprüft",
       "neverChecked": "Nie",
       "upToDate": "Aktuell",
-      "update": "Aktualisieren",
       "updateToVersion": "Auf Orca {{version}} aktualisieren"
     },
     "appearance": {
       "language": {
         "description": "„System“ übernimmt die Gerätesprache. Berechtigungsabfragen verwenden immer die Gerätesprache.",
-        "heading": "SPRACHE",
+        "heading": "Sprache",
         "systemWithCurrent": "System ({{language}})"
       },
       "theme": {
         "dark": "Dunkel",
         "description": "„System“ übernimmt den hellen oder dunklen Modus des Geräts.",
-        "heading": "DESIGN",
+        "heading": "Design",
         "light": "Hell",
         "system": "System"
       },
@@ -2932,7 +2930,7 @@
       "desktopBrowser": "Orca-Browser auf dem Desktop",
       "desktopBrowserDescription": "Im gestreamten Browser des gekoppelten Desktops öffnen.",
       "terminalAndChatLinksDescription": "Auswählen, wo Weblinks aus der Terminalausgabe und dem Chat beim Antippen geöffnet werden.",
-      "linksHeading": "LINKS",
+      "linksHeading": "Links",
       "loadFailed": "Browser-Einstellungen konnten nicht geladen werden. Erneut versuchen.",
       "openLinks": "Links öffnen",
       "phoneBrowser": "Browser auf dem Smartphone",
@@ -2944,7 +2942,6 @@
       "about": "Über Orca",
       "appearance": "Darstellung",
       "browser": "Browser",
-      "chatUi": "Chat-Oberfläche",
       "notifications": "Benachrichtigungen",
       "terminal": "Terminal",
       "troubleshooting": "Fehlerbehebung",
@@ -2956,11 +2953,10 @@
     },
     "nativeChatSettingsScreen": {
       "defaultViewDescription": "Festlegen, wie Sitzungen unterstützter Agenten (Claude, Codex und anderer chatfähiger Agenten) auf diesem Gerät geöffnet werden. Das Terminal zeigt die CLI direkt an; die Chat-Oberfläche zeigt eine Chatansicht wie in der Desktop-App. Die Ansicht jeder Sitzung lässt sich weiterhin über das Menü wechseln, das durch langes Drücken geöffnet wird.",
-      "defaultViewHeading": "STANDARDANSICHT",
+      "defaultViewHeading": "Standardansicht",
       "off": "Aus",
       "on": "Ein",
-      "openInChatUi": "Sitzungen in der Chat-Oberfläche öffnen",
-      "title": "Chat-Oberfläche"
+      "openInChatUi": "Sitzungen in der Chat-Oberfläche öffnen"
     },
     "nativeNotificationDeliverySettings": {
       "loadFailed": "Zustellungseinstellungen konnten nicht geladen werden. Für einen neuen Versuch diese Ansicht erneut öffnen.",
@@ -3018,7 +3014,7 @@
       "connectDesktop": "Mit einem Desktop verbinden, um die Einstellungen für die Spracheingabe zu verwalten.",
       "deleteFailed": "Löschen fehlgeschlagen",
       "dictationDescription": "Text in jeden fokussierten Bereich auf dem Desktop diktieren.",
-      "dictationHeading": "DIKTAT",
+      "dictationHeading": "Diktat",
       "dictationMode": "Diktatmodus",
       "dictationModeDescription": "Umschalten: einmal zum Starten und erneut zum Stoppen drücken. Gedrückt halten: währenddessen diktieren.",
       "dictationModeWithAutoDescription": "Automatisch: Tippen zum Starten und Stoppen; am Computer nimmt das Gedrückthalten des Kürzels auf, bis Sie loslassen. Gedrückt halten: währenddessen diktieren. Umschalten: einmal zum Starten und erneut zum Stoppen drücken.",
@@ -3031,7 +3027,7 @@
       "noneSelected": "Keines ausgewählt",
       "selectModelFailed": "Modell konnte nicht ausgewählt werden",
       "speechModel": "Spracherkennungsmodell",
-      "speechModelHeading": "SPRACHERKENNUNGSMODELL",
+      "speechModelHeading": "Spracherkennungsmodell",
       "title": "Spracheingabe",
       "toggleMode": "Umschalten",
       "updateFailed": "Aktualisierung fehlgeschlagen"
@@ -3040,7 +3036,7 @@
       "permissionOwnAll": "Eigene Einstellungen der Agenten"
     },
     "voiceTranscribeOn": {
-      "heading": "TRANSKRIBIEREN AUF",
+      "heading": "Transkribieren auf",
       "description": "Was dieses Telefon hört, bleibt auf ihm. Automatisch nutzt deinen Computer, wenn dieses Telefon nicht transkribieren kann.",
       "automatic": "Automatisch",
       "phone": "Dieses Telefon",

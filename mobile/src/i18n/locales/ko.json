@@ -3000,7 +3000,6 @@
       "checkUpdates": "업데이트 확인",
       "checkUpdatesStatus": "업데이트 확인, {{status}}",
       "checking": "확인 중…",
-      "installedVersion": "버전 {{version}}",
       "lastCheckedDays_one": "마지막 확인: {{count}}일 전",
       "lastCheckedDays_other": "마지막 확인: {{count}}일 전",
       "lastCheckedHours_one": "마지막 확인: {{count}}시간 전",
@@ -3010,7 +3009,6 @@
       "lastCheckedMinutes_other": "마지막 확인: {{count}}분 전",
       "neverChecked": "확인한 적 없음",
       "upToDate": "최신 상태",
-      "update": "업데이트",
       "updateToVersion": "Orca {{version}} 버전으로 업데이트"
     },
     "appearance": {
@@ -3046,7 +3044,6 @@
       "about": "정보",
       "appearance": "모양",
       "browser": "브라우저",
-      "chatUi": "채팅 UI",
       "notifications": "알림",
       "terminal": "터미널",
       "troubleshooting": "문제 해결",
@@ -3061,8 +3058,7 @@
       "defaultViewHeading": "기본 보기",
       "off": "꺼짐",
       "on": "켜짐",
-      "openInChatUi": "채팅 UI로 세션 열기",
-      "title": "채팅 UI"
+      "openInChatUi": "채팅 UI로 세션 열기"
     },
     "nativeNotificationDeliverySettings": {
       "loadFailed": "알림 전송 설정을 불러오지 못했습니다. 다시 시도하려면 이 화면을 다시 여세요.",

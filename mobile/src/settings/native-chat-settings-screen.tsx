@@ -67,7 +67,7 @@ export default function NativeChatSettingsScreen({ onBack }: { onBack?: () => vo
   return (
     <GestureHandlerRootView style={settingsScreenStyles.container}>
       <SettingsScreen
-        title={t('settings.nativeChatSettingsScreen.title', 'Chat UI')}
+        title={t('settings.menuItems.chat', 'Chat')}
         onBack={onBack ?? (() => router.back())}
         overlays={
           <PickerModal<NativeChatFont>
@@ -83,7 +83,7 @@ export default function NativeChatSettingsScreen({ onBack }: { onBack?: () => vo
         <NativeChatTextPreview fontScale={nativeChatFontScale(size)} />
         <SettingsSection
           first
-          title={t('settings.nativeChatText.heading', 'TEXT')}
+          title={t('settings.nativeChatText.heading', 'Text')}
           footer={t(
             'settings.nativeChatText.footer',
             'Pinch in a chat to change it; it saves here.'
@@ -128,7 +128,7 @@ export default function NativeChatSettingsScreen({ onBack }: { onBack?: () => vo
         </SettingsSection>
 
         <SettingsSection
-          title={t('settings.nativeChatSettingsScreen.defaultViewHeading', 'DEFAULT VIEW')}
+          title={t('settings.nativeChatSettingsScreen.defaultViewHeading', 'Default view')}
           footer={t(
             'settings.nativeChatSettingsScreen.defaultViewDescription',
             'Choose how supported agent sessions (Claude, Codex, and other chat-capable agents) open on this device. Terminal shows the raw CLI; Chat UI shows a chat interface like the desktop app. You can still switch any individual session from its long-press menu.'

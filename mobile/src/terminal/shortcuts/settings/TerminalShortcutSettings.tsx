@@ -203,7 +203,7 @@ export function TerminalShortcutSettings({
       </SettingsSection>
       {hasPad ? (
         <SettingsSection
-          title={t('components.terminalShortcutSettings.directionPad', 'DIRECTION PAD')}
+          title={t('components.terminalShortcutSettings.directionPad', 'Direction pad')}
         >
           <ListRow
             key="directionPad"
@@ -232,7 +232,7 @@ export function TerminalShortcutSettings({
         </SettingsSection>
       ) : null}
       <SettingsSection
-        title={t('components.terminalShortcutSettings.moreKeys', 'MORE KEYS')}
+        title={t('components.terminalShortcutSettings.moreKeys', 'More keys')}
         footer={t(
           'components.terminalShortcutSettings.moreKeysDescription',
           'These keys sit under ⋯ on the terminal key row. Toggle keys to show or hide them, and hold the grip to drag a key into the order you want. A key already on the row, like Esc or the arrows, is left out of ⋯.'
@@ -268,7 +268,7 @@ export function TerminalShortcutSettings({
       </SettingsSection>
 
       <SettingsSection
-        title={t('components.terminalShortcutSettings.customShortcuts', 'CUSTOM SHORTCUTS')}
+        title={t('components.terminalShortcutSettings.customShortcuts', 'Custom shortcuts')}
       >
         {customKeys.length === 0 ? (
           <SettingsEmptyRow key="empty">

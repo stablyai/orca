@@ -259,7 +259,7 @@ export default function TerminalSettingsScreen() {
             />
 
             <SettingsSection
-              title={t('app.terminalSettings.leaveAppHeading', 'WHEN YOU LEAVE THE APP')}
+              title={t('app.terminalSettings.leaveAppHeading', 'When you leave the app')}
               separatorInset={LIST_LEADING_INSET}
               footer={t(
                 'app.terminalSettings.leaveAppDescription',
@@ -303,7 +303,7 @@ export default function TerminalSettingsScreen() {
           </Animated.ScrollView>
           {wide ? (
             <View style={styles.widePreview}>
-              <SectionHeader first title={t('app.terminalSettings.previewHeading', 'PREVIEW')} />
+              <SectionHeader first title={t('app.terminalSettings.previewHeading', 'Preview')} />
               {preview}
             </View>
           ) : null}

@@ -172,7 +172,7 @@
     "terminalSettings": {
       "keepPhoneSize": "Telefon boyutunda tut (varsayılan)",
       "leaveAppDescription": "Telefonunuzda terminal kullanırken Orca, terminali ekranınıza sığacak şekilde küçültür. Uygulamayı kapattığınızda veya başka bir uygulamaya geçtiğinizde bu ayar, terminalin telefon boyutunda kalmasını (etkileşimli CLI araçlarının düzeninin değişmemesi için) ya da masaüstü boyutuna geri dönmesini belirler. Boyutu elle değiştirmek için masaüstündeki bildirim çubuğunda Geri yükle seçeneğini her zaman kullanabilirsiniz.",
-      "leaveAppHeading": "UYGULAMADAN AYRILDIĞINIZDA",
+      "leaveAppHeading": "Uygulamadan ayrıldığınızda",
       "noPairedDesktops": "Henüz eşleştirilmiş masaüstü yok. Terminal davranışını ayarlamak için bir masaüstü eşleştirin.",
       "restoreAfterMinutes_one": "{{count}} dakika sonra",
       "restoreAfterMinutes_other": "{{count}} dakika sonra",
@@ -183,8 +183,8 @@
       "previewColumns_one": "{{count}} sütun",
       "previewColumns_other": "{{count}} sütun",
       "previewLabel": "Terminal önizlemesi",
-      "previewHeading": "ÖNİZLEME",
-      "fontHeading": "YAZI TİPİ",
+      "previewHeading": "Önizleme",
+      "fontHeading": "Yazı tipi",
       "fontDescription": "Boyutu değiştirmek için terminalde iki parmağınızı birbirine yaklaştırın veya uzaklaştırın. Ayar burada saklanır ve yalnızca bu cihazı etkiler; masaüstü terminali değişmez.",
       "font": "Yazı tipi",
       "size": "Boyut",
@@ -1746,14 +1746,14 @@
     "terminalShortcutSettings": {
       "addDescription": "Tuş birleşimi veya metin makrosu oluştur",
       "addShortcut": "Özel Kısayol Ekle…",
-      "customShortcuts": "ÖZEL KISAYOLLAR",
+      "customShortcuts": "Özel kısayollar",
       "empty": "Henüz özel kısayol tanımlanmadı.",
       "removeShortcut": "{{label}} kısayolunu kaldır",
       "resetDefaults": "Varsayılanlara Sıfırla",
       "resetDescription": "Tüm yerleşik kısayol tuşlarını özgün sırayla göster",
-      "moreKeys": "DİĞER TUŞLAR",
+      "moreKeys": "Diğer tuşlar",
       "moreKeysDescription": "Bu tuşlar, terminal tuş satırındaki ⋯ altında bulunur. Tuşları göstermek veya gizlemek için açıp kapatın; istediğiniz sıraya sürüklemek için tutamacı basılı tutun. Esc veya oklar gibi satırda zaten bulunan tuşlar ⋯ altında gösterilmez.",
-      "directionPad": "YÖN TUŞ TAKIMI",
+      "directionPad": "Yön tuş takımı",
       "showDirectionPad": "Yön tuş takımını göster",
       "showDirectionPadDescription": "Ok takımını yan çubuğa sabitleyin. Kapalıyken çubukta ayrı ok tuşları listelenir.",
       "showShortcut": "{{label}} kısayolunu göster"
@@ -4029,7 +4029,6 @@
       "checkUpdates": "Güncellemeleri denetle",
       "checkUpdatesStatus": "Güncellemeleri denetle, {{status}}",
       "checking": "Kontrol ediliyor…",
-      "installedVersion": "Sürüm {{version}}",
       "lastCheckedDays_one": "Son kontrol: {{count}} gün önce",
       "lastCheckedDays_other": "Son kontrol: {{count}} gün önce",
       "lastCheckedHours_one": "Son kontrol: {{count}} sa önce",
@@ -4039,19 +4038,18 @@
       "lastCheckedMinutes_other": "Son kontrol: {{count}} dk önce",
       "neverChecked": "Hiçbir zaman",
       "upToDate": "Güncel",
-      "update": "Güncelle",
       "updateToVersion": "Orca {{version}} sürümüne güncelle"
     },
     "appearance": {
       "language": {
         "description": "Sistem seçeneği bu cihazın dilini kullanır. İzin istekleri her zaman cihazın dilinde gösterilir.",
-        "heading": "DİL",
+        "heading": "Dil",
         "systemWithCurrent": "Sistem ({{language}})"
       },
       "theme": {
         "dark": "Koyu",
         "description": "Sistem seçeneği bu cihazın açık veya koyu tema ayarını kullanır.",
-        "heading": "TEMA",
+        "heading": "Tema",
         "light": "Açık",
         "system": "Sistem"
       },
@@ -4059,7 +4057,7 @@
       "usage": {
         "used": "Kullanılan",
         "remaining": "Kalan",
-        "heading": "KULLANIM YÜZDELERİ",
+        "heading": "Kullanım yüzdeleri",
         "description": "Ana Sayfa ve Hesaplar’daki kullanım çubukları, her sınırın ne kadarının kullanıldığını veya kaldığını gösterir. Bu ayar telefona kaydedilir."
       }
     },
@@ -4069,7 +4067,7 @@
       "desktopBrowser": "Masaüstündeki Orca tarayıcısı",
       "desktopBrowserDescription": "Eşleştirdiğiniz masaüstü bilgisayardan aktarılan tarayıcıda açın.",
       "terminalAndChatLinksDescription": "Terminal çıktısında ve sohbette dokunduğunuz web bağlantılarının nerede açılacağını seçin.",
-      "linksHeading": "BAĞLANTILAR",
+      "linksHeading": "Bağlantılar",
       "loadFailed": "Tarayıcı tercihleri yüklenemedi. Yeniden deneyin.",
       "openLinks": "Bağlantıları aç",
       "phoneBrowser": "Telefon tarayıcısı",
@@ -4081,23 +4079,21 @@
       "about": "Hakkında",
       "appearance": "Görünüm",
       "browser": "Tarayıcı",
-      "chatUi": "Sohbet Arayüzü",
       "notifications": "Bildirimler",
       "terminal": "Terminal",
       "troubleshooting": "Sorun Giderme",
       "voice": "Ses"
     },
     "menuScreen": {
-      "privacyPolicy": "Gizlilik Politikası",
+      "privacyPolicy": "Gizlilik politikası",
       "support": "Destek"
     },
     "nativeChatSettingsScreen": {
       "defaultViewDescription": "Desteklenen ajan oturumlarının (Claude, Codex ve sohbet destekli diğer ajanlar) bu cihazda nasıl açılacağını seçin. Terminal, CLI'yi olduğu gibi gösterir; Sohbet Arayüzü ise masaüstü uygulamasındaki gibi bir sohbet arayüzü sunar. Her oturumun görünümünü, oturuma uzun basınca açılan menüden ayrıca değiştirebilirsiniz.",
-      "defaultViewHeading": "VARSAYILAN GÖRÜNÜM",
+      "defaultViewHeading": "Varsayılan görünüm",
       "off": "Kapalı",
       "on": "Açık",
-      "openInChatUi": "Oturumları Sohbet Arayüzü ile aç",
-      "title": "Sohbet Arayüzü"
+      "openInChatUi": "Oturumları Sohbet Arayüzü ile aç"
     },
     "nativeNotificationDeliverySettings": {
       "loadFailed": "İletim ayarları yüklenemedi. Yeniden denemek için bu ekranı tekrar açın.",
@@ -4155,7 +4151,7 @@
       "connectDesktop": "Ses ayarlarını yönetmek için bir masaüstüne bağlanın.",
       "deleteFailed": "Silinemedi",
       "dictationDescription": "Masaüstünüzde odaktaki herhangi bir bölmeye metin dikte edin.",
-      "dictationHeading": "DİKTE",
+      "dictationHeading": "Dikte",
       "dictationMode": "Dikte Modu",
       "dictationModeDescription": "Aç/kapat: başlatmak için bir kez, durdurmak için tekrar basın. Basılı tut: basılı tuttuğunuz sürece dikte edin.",
       "dictationModeWithAutoDescription": "Otomatik: başlatmak ve durdurmak için dokunun; bilgisayarınızda kısayolu basılı tutmak bırakana kadar kaydeder. Basılı tut: basılı tuttuğunuz sürece dikte edin. Aç/kapat: başlatmak için bir kez, durdurmak için tekrar basın.",
@@ -4168,7 +4164,7 @@
       "noneSelected": "Seçim yok",
       "selectModelFailed": "Model seçilemedi",
       "speechModel": "Konuşma Modeli",
-      "speechModelHeading": "KONUŞMA MODELİ",
+      "speechModelHeading": "Konuşma modeli",
       "title": "Ses",
       "toggleMode": "Aç/kapat",
       "updateFailed": "Güncellenemedi",
@@ -4178,7 +4174,7 @@
       "permissionOwnAll": "Ajanların kendi ayarları"
     },
     "voiceTranscribeOn": {
-      "heading": "YAZIYA DÖKME YERİ",
+      "heading": "Yazıya dökme yeri",
       "description": "Bu telefonun duyduğu konuşma telefonda kalır. Otomatik, bu telefon yazıya dökemediğinde bilgisayarınızı kullanır.",
       "automatic": "Otomatik",
       "phone": "Bu telefon",
@@ -4192,7 +4188,7 @@
       "phoneChecking": "Kontrol ediliyor…"
     },
     "nativeChatText": {
-      "heading": "METİN",
+      "heading": "Metin",
       "footer": "Bir sohbette iki parmağınızı yaklaştırıp uzaklaştırarak boyutu değiştirin. Ayar burada saklanır.",
       "size": "Metin boyutu",
       "sizeDefault": "Varsayılan",

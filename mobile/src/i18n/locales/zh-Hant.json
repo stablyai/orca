@@ -2892,7 +2892,6 @@
       "checkUpdates": "檢查更新",
       "checkUpdatesStatus": "檢查更新，{{status}}",
       "checking": "檢查中…",
-      "installedVersion": "版本 {{version}}",
       "lastCheckedDays_one": "上次檢查：{{count}} 天前",
       "lastCheckedDays_other": "上次檢查：{{count}} 天前",
       "lastCheckedHours_one": "上次檢查：{{count}} 小時前",
@@ -2902,7 +2901,6 @@
       "lastCheckedMinutes_other": "上次檢查：{{count}} 分鐘前",
       "neverChecked": "從未",
       "upToDate": "已是最新",
-      "update": "更新",
       "updateToVersion": "更新至 Orca {{version}}"
     },
     "appearance": {
@@ -2938,7 +2936,6 @@
       "about": "關於",
       "appearance": "外觀",
       "browser": "瀏覽器",
-      "chatUi": "聊天介面",
       "notifications": "通知",
       "terminal": "終端機",
       "troubleshooting": "疑難排解",
@@ -2953,8 +2950,7 @@
       "defaultViewHeading": "預設檢視",
       "off": "關閉",
       "on": "開啟",
-      "openInChatUi": "以聊天介面開啟工作階段",
-      "title": "聊天介面"
+      "openInChatUi": "以聊天介面開啟工作階段"
     },
     "nativeNotificationDeliverySettings": {
       "loadFailed": "無法載入通知傳送設定。請重新開啟此畫面再試一次。",

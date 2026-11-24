@@ -5,19 +5,19 @@
         "system": "System",
         "light": "Light",
         "dark": "Dark",
-        "heading": "THEME",
+        "heading": "Theme",
         "description": "System follows this device’s light or dark setting."
       },
       "title": "Appearance",
       "language": {
         "systemWithCurrent": "System ({{language}})",
-        "heading": "LANGUAGE",
+        "heading": "Language",
         "description": "System follows this device’s language. Permission prompts always use the device language."
       },
       "usage": {
         "used": "Used",
         "remaining": "Remaining",
-        "heading": "USAGE PERCENTAGES",
+        "heading": "Usage percentages",
         "description": "Usage bars on Home and Accounts show how much of each limit is used or left. Saved on this phone."
       }
     },
@@ -42,8 +42,6 @@
       "lastCheckedDays_one": "Last checked {{count}}d ago",
       "lastCheckedDays_other": "Last checked {{count}}d ago",
       "updateToVersion": "Update to Orca {{version}}",
-      "update": "Update",
-      "installedVersion": "Version {{version}}",
       "checkUpdatesStatus": "Check for updates, {{status}}",
       "checkUpdates": "Check for updates"
     },
@@ -55,7 +53,7 @@
       "phoneBrowser": "Phone browser",
       "phoneBrowserDescription": "Open in Safari, Chrome, or another browser on this phone.",
       "title": "Browser",
-      "linksHeading": "LINKS",
+      "linksHeading": "Links",
       "terminalAndChatLinksDescription": "Choose where web links tapped in terminal output and chat open.",
       "loadFailed": "Could not load browser preferences. Try again.",
       "saveFailed": "Could not save browser preferences. Try again.",
@@ -64,23 +62,23 @@
     "menuItems": {
       "appearance": "Appearance",
       "terminal": "Terminal",
-      "chatUi": "Chat UI",
       "browser": "Browser",
       "voice": "Voice",
       "notifications": "Notifications",
       "troubleshooting": "Troubleshooting",
-      "about": "About"
+      "about": "About",
+      "chat": "Chat",
+      "updateAvailable": "Update available"
     },
     "nativeChatSettingsScreen": {
-      "title": "Chat UI",
-      "defaultViewHeading": "DEFAULT VIEW",
+      "defaultViewHeading": "Default view",
       "defaultViewDescription": "Choose how supported agent sessions (Claude, Codex, and other chat-capable agents) open on this device. Terminal shows the raw CLI; Chat UI shows a chat interface like the desktop app. You can still switch any individual session from its long-press menu.",
       "openInChatUi": "Open sessions in Chat UI",
       "on": "On",
       "off": "Off"
     },
     "nativeChatText": {
-      "heading": "TEXT",
+      "heading": "Text",
       "footer": "Pinch in a chat to change it; it saves here.",
       "size": "Text size",
       "sizeDefault": "Default",
@@ -151,7 +149,7 @@
       "retryCleanup": "Retry clearing pairing credentials"
     },
     "menuScreen": {
-      "privacyPolicy": "Privacy Policy",
+      "privacyPolicy": "Privacy policy",
       "support": "Support"
     },
     "uiLanguageSettingsSection": {
@@ -169,14 +167,14 @@
       "title": "Voice",
       "connectDesktop": "Connect to a desktop to manage voice settings.",
       "loadFailedMessage": "Failed to load voice settings.",
-      "dictationHeading": "DICTATION",
+      "dictationHeading": "Dictation",
       "enableDictation": "Enable Voice Dictation",
       "dictationDescription": "Dictate text into any focused pane on your desktop.",
       "dictationMode": "Dictation Mode",
       "dictationModeDescription": "Toggle: press once to start, again to stop. Hold: dictate while held.",
       "dictationModeWithAutoDescription": "Auto: tap to start and stop; on your computer, holding the shortcut records until you let go. Hold: dictate while held. Toggle: press once to start, again to stop.",
       "autoMode": "Auto",
-      "speechModelHeading": "SPEECH MODEL",
+      "speechModelHeading": "Speech model",
       "speechModel": "Speech Model",
       "loading": "Loading voice settings…"
     },
@@ -184,7 +182,7 @@
       "permissionOwnAll": "Agents' own settings"
     },
     "voiceTranscribeOn": {
-      "heading": "TRANSCRIBE ON",
+      "heading": "Transcribe on",
       "description": "Speech heard on this phone stays on it. Automatic uses your computer when this phone can’t transcribe.",
       "automatic": "Automatic",
       "phone": "This phone",
@@ -344,15 +342,15 @@
       "restoreAfterSeconds_one": "After {{count}}s",
       "restoreAfterSeconds_other": "After {{count}}s",
       "title": "Terminal",
-      "leaveAppHeading": "WHEN YOU LEAVE THE APP",
+      "leaveAppHeading": "When you leave the app",
       "leaveAppDescription": "While you're using a terminal on your phone, Orca shrinks it to fit your screen. When you close the app or switch away, this controls whether it stays at phone size (so interactive CLI tools don't reflow) or resizes back to your desktop. You can always use Restore on the desktop banner to resize manually.",
       "noPairedDesktops": "No paired desktops yet. Pair one to control terminal behavior.",
       "restoreHost": "Restore {{name}}",
       "previewColumns_one": "{{count}} column",
       "previewColumns_other": "{{count}} columns",
       "previewLabel": "Terminal preview",
-      "previewHeading": "PREVIEW",
-      "fontHeading": "FONT",
+      "previewHeading": "Preview",
+      "fontHeading": "Font",
       "fontDescription": "Pinch in a terminal to change the size; it saves here. Only changes this device, not the desktop terminal.",
       "font": "Font",
       "size": "Size",
@@ -1547,14 +1545,14 @@
     "terminalShortcutSettings": {
       "resetDefaults": "Reset Defaults",
       "resetDescription": "Show every built-in shortcut key in the original order",
-      "customShortcuts": "CUSTOM SHORTCUTS",
+      "customShortcuts": "Custom shortcuts",
       "empty": "No custom shortcuts defined yet.",
       "removeShortcut": "Remove {{label}}",
       "addShortcut": "Add Custom Shortcut…",
       "addDescription": "Create key combo or text macro",
-      "moreKeys": "MORE KEYS",
+      "moreKeys": "More keys",
       "moreKeysDescription": "These keys sit under ⋯ on the terminal key row. Toggle keys to show or hide them, and hold the grip to drag a key into the order you want. A key already on the row, like Esc or the arrows, is left out of ⋯.",
-      "directionPad": "DIRECTION PAD",
+      "directionPad": "Direction pad",
       "showDirectionPad": "Show D-pad",
       "showDirectionPadDescription": "Pin the arrow pad in the side rail. Without it, the rail lists the arrow keys.",
       "showShortcut": "Show {{label}} shortcut"

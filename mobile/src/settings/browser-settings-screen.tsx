@@ -144,7 +144,7 @@ export default function BrowserSettingsScreen({
     >
       <SettingsSection
         first
-        title={t('settings.browserSettingsScreen.linksHeading', 'LINKS')}
+        title={t('settings.browserSettingsScreen.linksHeading', 'Links')}
         footer={
           <>
             <SettingsNote>
