@@ -1,5 +1,8 @@
 import { useAppStore } from '@/store/index'
-import { runtimeEnvironmentIdOrLocalUnlessTwin } from '@/lib/workspace/ownership/worktree-runtime-owner'
+import {
+  resolveOwnerOrLocal,
+  runtimeEnvironmentIdOrLocalUnlessTwin
+} from '@/lib/workspace/ownership/worktree-runtime-owner'
 import { activateWebRuntimeSessionTab } from '@/runtime/web-session-tabs-sync/actions/web-runtime-session-tab-lifecycle'
 import {
   captureWebSessionIntentOwner,
@@ -7,7 +10,6 @@ import {
 } from '@/runtime/web-session-tabs-sync/identity/web-runtime-session-environment'
 import { resolveWebSessionVisibleTabId } from '@/runtime/web-session-tabs-sync/navigation/web-session-focus-intent'
 import { browserWorkspaceHasRemoteOwner } from '@/runtime/browser/ownership/remote-browser-tab-ownership'
-import { resolveOwnerOrLocal } from '@/lib/workspace/ownership/worktree-runtime-owner'
 import { getPtyExecutionHost } from '../../../../../shared/terminal/pty/lifecycle/terminal-execution-host'
 import {
   getConnectionExecutionHostId,

@@ -340,14 +340,18 @@ export function useWorktreeContextMenuModel({
     })
 
   const handleCloseAutoFocus = useCallback(
-    (event: Event, restoreFocus = () => restoreWorktreeMenuSidebarFocus(scopeRef.current)) => {
+    (event: Event, restoreFocus?: () => void) => {
       // Suppress Radix focus restoration to a hidden trigger that can scroll the virtual list after Sleep/Delete.
       event.preventDefault()
       if (pendingParentPickerRef.current) {
         window.setTimeout(openPendingParentPicker, 0)
         return
       }
-      restoreFocus()
+      if (restoreFocus) {
+        restoreFocus()
+        return
+      }
+      restoreWorktreeMenuSidebarFocus(scopeRef.current)
     },
     [openPendingParentPicker]
   )
