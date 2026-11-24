@@ -147,6 +147,64 @@
         }
       ],
       [
+        "expo-widgets",
+        {
+          "widgets": [
+            {
+              "name": "OrcaUsage",
+              "displayName": "Agent Usage",
+              "description": "Agent usage from your paired desktops, as Orca last saw it.",
+              "ios": {
+                "supportedFamilies": ["systemSmall", "systemMedium", "systemLarge"],
+                "configuration": {
+                  "title": "Agent Usage",
+                  "parameters": {
+                    "desktop": {
+                      "title": "Desktop",
+                      "entity": true,
+                      "type": "enum",
+                      "dynamic": true,
+                      "values": [{ "name": "Most recently updated", "value": "automatic" }],
+                      "default": "automatic"
+                    },
+                    "agentMode": {
+                      "title": "Agent Selection",
+                      "type": "enum",
+                      "values": [
+                        { "name": "Automatic (most used)", "value": "automatic" },
+                        { "name": "Choose", "value": "custom" }
+                      ],
+                      "default": "automatic"
+                    },
+                    "agents": {
+                      "title": "Agents",
+                      "visibleWhen": { "parameter": "agentMode", "equalTo": "custom" },
+                      "type": "enum",
+                      "dynamic": true,
+                      "multiple": true,
+                      "size": { "systemSmall": 2, "systemMedium": 3, "systemLarge": 6 },
+                      "values": [],
+                      "default": "automatic"
+                    },
+                    "window": {
+                      "title": "Usage Window",
+                      "type": "enum",
+                      "values": [
+                        { "name": "Automatic", "value": "automatic" },
+                        { "name": "5 hours", "value": "session" },
+                        { "name": "Weekly", "value": "weekly" },
+                        { "name": "5 hours and weekly", "value": "both" }
+                      ],
+                      "default": "automatic"
+                    }
+                  }
+                }
+              }
+            }
+          ]
+        }
+      ],
+      [
         "expo-build-properties",
         {
           "ios": {

@@ -1,5 +1,5 @@
 import { Gauge, RefreshCw } from 'lucide-react-native'
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { ActivityIndicator, Pressable, ScrollView, Text, View } from 'react-native'
 import Animated, {
   FadeIn,
@@ -28,12 +28,12 @@ import { useHostClient } from '../../transport/connection/host-client-hooks'
 import type { ConnectionState } from '../../transport/connection/connection-state'
 import type { HostProfile } from '../../host-catalog/host-profile'
 import { useHostDisplay } from '../../host-descriptors/use-host-display'
-import { formatTimeAgo } from '../../worktree/agent-lineage/agent-row-display'
 import { homeListStyles } from '../home-list-styles'
 import { MobileHomeSectionHeading } from '../MobileHomeSectionHeading'
 import { MobileHomeStats } from '../MobileHomeStats'
 import { HOME_EASE_OUT } from './home-tabs'
 import { selectHomeUsageSections, type HomeUsageCard } from './home-usage-cards'
+import { formatUsageUpdated } from './home-usage-updated-label'
 import { MobileHomeHostPill, useHomeTabHost } from './MobileHomeHostPill'
 import { MobileHomeTabHeader, MobileHomeTabHeaderButton } from './MobileHomeTabHeader'
 import { mobileHomeUsageStyles as styles } from './mobile-home-usage-styles'
@@ -42,6 +42,9 @@ import { getManagedAccountPrimaryLabel } from '../../../../src/shared/agent-acco
 const PROVIDER_TITLES: Record<ProviderKey, string> = { claude: 'Claude Code', codex: 'Codex' }
 
 /** Usage: agent account quota on one desktop, after the totals across all of them. */
+/** The usage widget's tap: which desktop it showed, if any. */
+export type UsageRefreshRequest = { id: number; hostId: string | null }
+
 export function MobileHomeUsageTab(props: {
   hosts: readonly HostProfile[]
   connectedHosts: readonly HostProfile[]
@@ -49,6 +52,10 @@ export function MobileHomeUsageTab(props: {
   accountsByHost: Record<string, AccountsSnapshot>
   stats: HomeStatsSummary | null
   bottomInset: number
+  /** Bumped when the usage widget opens this tab: shows its desktop, then refreshes once connected. */
+  refreshRequest: UsageRefreshRequest
+  /** Every paired desktop, connectable or not, so a desktop without credentials yet isn't read as unpaired. */
+  pairedHostIds: readonly string[]
   onOpenAccounts: (hostId: string) => void
 }) {
   const t = useMobileTranslation()
@@ -74,6 +81,60 @@ export function MobileHomeUsageTab(props: {
       setRefreshingHostId((current) => (current === host.id ? null : current))
     }
   }, [client, host, refreshing])
+
+  // The widget's tap: its desktop is selected once, then refreshed when connected. Picking another
+  // desktop cancels it; a desktop since unpaired falls back to refreshing the one shown.
+  const handledRefreshRequest = useRef(0)
+  const pendingRefresh = useRef<{ hostId: string | null; selected: boolean } | null>(null)
+  const pickByUser = useCallback(
+    (hostId: string) => {
+      pendingRefresh.current = null
+      pick(hostId)
+    },
+    [pick]
+  )
+  useEffect(() => {
+    const request = props.refreshRequest
+    if (request.id > handledRefreshRequest.current) {
+      handledRefreshRequest.current = request.id
+      const paired = request.hostId != null && props.pairedHostIds.includes(request.hostId)
+      pendingRefresh.current = { hostId: paired ? request.hostId : null, selected: false }
+    }
+    const pending = pendingRefresh.current
+    if (!pending) {
+      return
+    }
+    if (pending.hostId) {
+      if (!props.pairedHostIds.includes(pending.hostId)) {
+        pending.hostId = null
+      } else if (!pending.selected) {
+        // A paired desktop without credentials yet isn't selectable; wait until it is.
+        if (!props.hosts.some((candidate) => candidate.id === pending.hostId)) {
+          return
+        }
+        pending.selected = true
+        if (host?.id !== pending.hostId) {
+          pick(pending.hostId)
+          return
+        }
+      } else if (host?.id !== pending.hostId) {
+        return
+      }
+    }
+    if (connected && client) {
+      pendingRefresh.current = null
+      void refresh()
+    }
+  }, [
+    props.refreshRequest,
+    props.pairedHostIds,
+    props.hosts,
+    host,
+    pick,
+    connected,
+    client,
+    refresh
+  ])
 
   return (
     <View style={styles.screen}>
@@ -104,7 +165,7 @@ export function MobileHomeUsageTab(props: {
             host={host}
             state={props.hostStates[host.id]}
             pickerTitle={t('home.usage.showUsageFor', 'Show usage for')}
-            onPick={pick}
+            onPick={pickByUser}
           />
         ) : null}
         {props.stats ? <MobileHomeStats stats={props.stats} first /> : null}
@@ -177,13 +238,7 @@ function HostUsage(props: {
             title={PROVIDER_TITLES[section.provider]}
             first={props.first && index === 0}
             aside={
-              section.updatedAt == null
-                ? undefined
-                : now - section.updatedAt < 60_000
-                  ? t('home.usage.updatedJustNow', 'Updated just now')
-                  : t('home.usage.updatedAgo', 'Updated {{time}} ago', {
-                      time: formatTimeAgo(section.updatedAt, now)
-                    })
+              section.updatedAt == null ? undefined : formatUsageUpdated(section.updatedAt, now, t)
             }
           />
           <View style={homeListStyles.group}>

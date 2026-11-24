@@ -1627,7 +1627,10 @@
       "refresh": "Kullanımı yenile",
       "showUsageFor": "Kullanımı gösterilecek masaüstü",
       "updatedAgo": "{{time}} önce güncellendi",
-      "updatedJustNow": "Az önce güncellendi"
+      "updatedJustNow": "Az önce güncellendi",
+      "widgetAutomaticDesktop": "En son güncellenen",
+      "widgetNoAgent": "Yok",
+      "widgetResetsIn": "{{duration}} içinde sıfırlanır"
     }
   },
   "hooks": {

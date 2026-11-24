@@ -23,6 +23,7 @@
     "start:emulator": "node scripts/start-emulator.mjs"
   },
   "dependencies": {
+    "@expo/ui": "~58.0.29",
     "@formatjs/intl-pluralrules": "6.3.16",
     "@noble/hashes": "1.8.0",
     "@orca/expo-two-way-audio": "file:./packages/expo-two-way-audio",
@@ -56,6 +57,7 @@
     "expo-splash-screen": "^58.0.12",
     "expo-status-bar": "^58.0.4",
     "expo-task-manager": "~58.0.13",
+    "expo-widgets": "~58.0.29",
     "fflate": "0.8.3",
     "i18next": "26.7.2",
     "katex": "0.18.10",
@@ -105,5 +107,15 @@
     "vitest": "5.1.0",
     "ws": "^8.22.2"
   },
-  "packageManager": "pnpm@12.18.0+sha512.9d7882d5dc82147ecfc4e062aa34834e0ad0296710a1837a1115ae012127d36b7109e321ac1598a1dd0a65597681b1e99917e12ed0d749eae91187943363beb3"
+  "packageManager": "pnpm@12.18.0+sha512.9d7882d5dc82147ecfc4e062aa34834e0ad0296710a1837a1115ae012127d36b7109e321ac1598a1dd0a65597681b1e99917e12ed0d749eae91187943363beb3",
+  "expo": {
+    "autolinking": {
+      "android": {
+        "exclude": [
+          "expo-widgets",
+          "@expo/ui"
+        ]
+      }
+    }
+  }
 }

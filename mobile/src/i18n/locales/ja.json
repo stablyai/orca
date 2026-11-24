@@ -1621,7 +1621,10 @@
       "refresh": "使用状況を更新",
       "showUsageFor": "使用状況を表示するデスクトップ",
       "updatedAgo": "{{time}}前に更新",
-      "updatedJustNow": "たった今更新"
+      "updatedJustNow": "たった今更新",
+      "widgetAutomaticDesktop": "最近更新したもの",
+      "widgetNoAgent": "なし",
+      "widgetResetsIn": "{{duration}}後にリセット"
     }
   },
   "hooks": {

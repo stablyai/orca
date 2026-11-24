@@ -1621,7 +1621,10 @@
       "refresh": "사용량 새로고침",
       "showUsageFor": "사용량을 볼 데스크톱",
       "updatedAgo": "{{time}} 전 업데이트됨",
-      "updatedJustNow": "방금 업데이트됨"
+      "updatedJustNow": "방금 업데이트됨",
+      "widgetAutomaticDesktop": "가장 최근에 업데이트됨",
+      "widgetNoAgent": "없음",
+      "widgetResetsIn": "{{duration}} 후 초기화"
     }
   },
   "hooks": {

@@ -1,0 +1,479 @@
+diff --git a/plugin/build/ios/withWidgetSourceFiles.js b/plugin/build/ios/withWidgetSourceFiles.js
+index a43f48f6ac5697dae18a30e69b76030e1505e0cb..8405f3eb491f8bea3a06c22657ab4ccbfb2b7760 100644
+--- a/plugin/build/ios/withWidgetSourceFiles.js
++++ b/plugin/build/ios/withWidgetSourceFiles.js
+@@ -261,12 +261,24 @@ const parameterDefaultValue = (widgetName, parameterName, parameter)=>{
+     }
+ };
+ const parameterDeclaration = (widgetName, parameterName, parameter)=>{
++    if (isDynamicEnumParameter(parameter) && parameter.multiple === true) {
++        return `  @Parameter(title: ${JSON.stringify(parameter.title)}${arraySizeArgument(parameter)})\n  var ${parameterName}: [${entityTypeName(widgetName, parameterName)}]?`;
++    }
++    if (isDynamicEnumParameter(parameter) && parameter.entity === true) {
++        return `  @Parameter(title: ${JSON.stringify(parameter.title)})\n  var ${parameterName}: ${entityTypeName(widgetName, parameterName)}?`;
++    }
+     if (isDynamicEnumParameter(parameter)) {
+         return `  @Parameter(title: ${JSON.stringify(parameter.title)}, optionsProvider: ${optionsProviderName(widgetName, parameterName)}())\n  var ${parameterName}: String?`;
+     }
+     return `  @Parameter(title: ${JSON.stringify(parameter.title)}, default: ${parameterDefaultValue(widgetName, parameterName, parameter)})\n  var ${parameterName}: ${parameterSwiftType(widgetName, parameterName, parameter)}`;
+ };
+ const configurationValueExpression = (parameterName, parameter)=>{
++    if (isDynamicEnumParameter(parameter) && parameter.multiple === true) {
++        return `      "${parameterName}": entry.configuration.${parameterName}?.map { $0.id } as Any`;
++    }
++    if (isDynamicEnumParameter(parameter) && parameter.entity === true) {
++        return `      "${parameterName}": entry.configuration.${parameterName}?.id as Any`;
++    }
+     const rawValueAccess = parameter.type === 'enum' && !isDynamicEnumParameter(parameter) ? '.rawValue' : '';
+     return `      "${parameterName}": entry.configuration.${parameterName}${rawValueAccess}`;
+ };
+@@ -318,10 +330,105 @@ ${parameter.values.map((value)=>{
+     return ${JSON.stringify(parameter.default)}
+   }
+ }`;
++// The rows per widget family, which also makes the editor list them one by one.
++const arraySizeArgument = (parameter)=>{
++    const size = parameter.type === 'enum' ? parameter.size : undefined;
++    if (!size) return '';
++    for (const family of Object.keys(size)){
++        assertWidgetFamily(family);
++    }
++    const entries = Object.entries(size).map(([family, count])=>`.${family}: ${Number(count)}`);
++    return entries.length ? `, size: [${entries.join(', ')}]` : '';
++};
++// Apple's ParameterSummary with When(_:_:_:): parameters with visibleWhen show only while another
++// (static enum) parameter equals a value. One shared condition is supported.
++const parameterSummarySwift = (widgetName, parameters)=>{
++    const entries = Object.entries(parameters);
++    const conditional = entries.filter(([, param])=>param.visibleWhen != null);
++    if (conditional.length === 0) return '';
++    const condition = conditional[0][1].visibleWhen;
++    for (const [name, param] of conditional){
++        if (param.visibleWhen.parameter !== condition.parameter || param.visibleWhen.equalTo !== condition.equalTo) {
++            throw new Error(`Invalid visibleWhen for ${JSON.stringify(name)}: all parameters must share one condition.`);
++        }
++    }
++    const controller = parameters[condition.parameter];
++    if (controller?.type !== 'enum' || controller.dynamic === true || !controller.values.some((value)=>value.value === condition.equalTo)) {
++        throw new Error(`Invalid visibleWhen: ${JSON.stringify(condition.parameter)} must be a static enum parameter with the value ${JSON.stringify(condition.equalTo)}.`);
++    }
++    const keyPaths = (list)=>list.map(([name])=>`        \\.$${name}`).join('\n');
++    return `
++  static var parameterSummary: some ParameterSummary {
++    When(\\.$${condition.parameter}, .equalTo, ${enumTypeName(widgetName, condition.parameter)}.${condition.equalTo}) {
++      Summary {
++${keyPaths(entries)}
++      }
++    } otherwise: {
++      Summary {
++${keyPaths(entries.filter(([, param])=>param.visibleWhen == null))}
++      }
++    }
++  }
++`;
++};
++const entityTypeName = (widgetName, parameterName)=>`${widgetName}${capitalize(parameterName)}Entity`;
++const multipleEnumEntitySwift = (widgetName, parameterName, parameter)=>{
++    const entityName = entityTypeName(widgetName, parameterName);
++    return `
++// An AppEntity, so the widget editor shows option names everywhere (the default included) and, for an array, rows people can add, remove and reorder.
++struct ${entityName}: AppEntity {
++  static let typeDisplayRepresentation = TypeDisplayRepresentation(name: ${JSON.stringify(parameter.title)})
++  static let defaultQuery = ${entityName}Query()
++
++  let id: String
++  let name: String
++
++  var displayRepresentation: DisplayRepresentation {
++    DisplayRepresentation(title: LocalizedStringResource(stringLiteral: name))
++  }
++}
++
++struct ${entityName}Query: EntityQuery {
++  private func options() -> [${entityName}] {
++    widgetConfigurationOptions(
++      name: ${JSON.stringify(widgetName)},
++      parameter: ${JSON.stringify(parameterName)},
++      fallback: [
++${parameter.values
++  .map((value) => `        WidgetConfigurationOption(name: ${JSON.stringify(value.name)}, value: ${JSON.stringify(value.value)})`)
++  .join(',\n')}
++      ]
++    ).map { ${entityName}(id: $0.value, name: $0.name) }
++  }
++
++  // Keeps a pick whose option is gone from the latest list instead of dropping it.
++  func entities(for identifiers: [String]) async throws -> [${entityName}] {
++    let all = options()
++    return identifiers.map { id in all.first { $0.id == id } ?? ${entityName}(id: id, name: id) }
++  }
++
++  func suggestedEntities() async throws -> [${entityName}] {
++    options()
++  }
++${parameter.multiple === true ? '' : `
++  // The default (Apple's parameter default value) as an entity, even before the app has set the options.
++  // @Parameter(default:) would need a compile-time constant before iOS 18, so the query supplies it.
++  static func defaultEntity() -> ${entityName} {
++    Self().options().first { $0.id == ${JSON.stringify(parameter.default)} }
++      ?? ${entityName}(id: ${JSON.stringify(parameter.default)}, name: ${JSON.stringify(parameter.values.find((value) => value.value === parameter.default)?.name ?? parameter.default)})
++  }
++
++  func defaultResult() async -> ${entityName}? {
++    Self.defaultEntity()
++  }
++`}}`;
++};
+ const widgetSwift = (widget)=>{
+     const configuration = widget.ios?.configuration ?? widget.configuration;
+     const supportedFamilies = widget.ios?.supportedFamilies ?? widget.supportedFamilies ?? [];
+     const contentMarginsDisabled = widget.ios?.contentMarginsDisabled ?? widget.contentMarginsDisabled;
++    // @Parameter(size:) is iOS 17+, so the types around the intent need the widget's own availability.
++    const ios17Availability = Object.values(configuration?.parameters ?? {}).some((param)=>param.type === 'enum' && param.multiple === true && param.size != null) ? '@available(iOS 17.0, *)\n' : '';
+     if (!configuration) return `import WidgetKit
+ import SwiftUI
+ internal import ExpoWidgets
+@@ -344,23 +451,23 @@ import AppIntents
+ internal import ExpoWidgets
+ 
+ // AppIntent
+-struct ${widget.name}ConfigurationAppIntent: WidgetConfigurationIntent {
++${ios17Availability}struct ${widget.name}ConfigurationAppIntent: WidgetConfigurationIntent {
+   static var title: LocalizedStringResource = ${JSON.stringify(`${configuration?.title ?? widget.displayName} Configuration`)}
+ ${configuration?.description ? `  static var description: LocalizedStringResource = ${JSON.stringify(configuration.description)}\n` : ''}
+ ${Object.entries(configuration?.parameters ?? {}).map(([name, param])=>{
+         return parameterDeclaration(widget.name, name, param);
+     }).join('\n')}
+-
++${parameterSummarySwift(widget.name, configuration?.parameters ?? {})}
+   func perform() async throws -> some IntentResult {
+     return .result()
+   }
+ }
+ ${Object.entries(configuration?.parameters ?? {}).map(([name, param])=>{
+         if (param.type !== 'enum') return '';
+-        return isDynamicEnumParameter(param) ? dynamicEnumOptionsProviderSwift(widget.name, name, param) : staticEnumSwift(widget.name, name, param);
++        return isDynamicEnumParameter(param) ? param.multiple === true || param.entity === true ? multipleEnumEntitySwift(widget.name, name, param) : dynamicEnumOptionsProviderSwift(widget.name, name, param) : staticEnumSwift(widget.name, name, param);
+     }).join('\n')}
+ 
+-struct ${widget.name}TimelineEntry: TimelineEntry {
++${ios17Availability}struct ${widget.name}TimelineEntry: TimelineEntry {
+   let date: Date
+   public let name: String
+   public let props: [String: Any]?
+@@ -368,7 +475,7 @@ struct ${widget.name}TimelineEntry: TimelineEntry {
+   let configuration: ${widget.name}ConfigurationAppIntent
+ }
+ 
+-struct ${widget.name}TimelineProvider: AppIntentTimelineProvider {
++${ios17Availability}struct ${widget.name}TimelineProvider: AppIntentTimelineProvider {
+   func placeholder(in context: Context) -> ${widget.name}TimelineEntry {
+     ${widget.name}TimelineEntry(date: Date(), name: "${widget.name}", props: WidgetsLayoutRegistry.initialProps(for: "${widget.name}"), entryIndex: nil, configuration: ${widget.name}ConfigurationAppIntent())
+   }
+@@ -405,7 +512,7 @@ struct ${widget.name}TimelineProvider: AppIntentTimelineProvider {
+   }
+ }
+ 
+-struct ${widget.name}EntryView: View {
++${ios17Availability}struct ${widget.name}EntryView: View {
+   @Environment(\\.self) var environment
+   var entry: ${widget.name}TimelineProvider.Entry
+ 
+diff --git a/plugin/build/types/WidgetConfig.type.d.ts b/plugin/build/types/WidgetConfig.type.d.ts
+index d617583a721ade4da8e235d9deb25aa6bc5590bf..0656711161ae1365cf7429eed4759e2f8e301248 100644
+--- a/plugin/build/types/WidgetConfig.type.d.ts
++++ b/plugin/build/types/WidgetConfig.type.d.ts
+@@ -32,22 +32,36 @@ export type WidgetConfig = {
+ export type WidgetParameterString = {
+     title: string;
+     type: 'string';
++    // Apple's ParameterSummary When(_:.equalTo:_:): show only while a static enum parameter has this value.
++    visibleWhen?: { parameter: string; equalTo: string };
+     default: string;
+ };
+ export type WidgetParameterNumber = {
+     title: string;
+     type: 'number';
++    // Apple's ParameterSummary When(_:.equalTo:_:): show only while a static enum parameter has this value.
++    visibleWhen?: { parameter: string; equalTo: string };
+     default: number;
+ };
+ export type WidgetParameterBoolean = {
+     title: string;
+     type: 'boolean';
++    // Apple's ParameterSummary When(_:.equalTo:_:): show only while a static enum parameter has this value.
++    visibleWhen?: { parameter: string; equalTo: string };
+     default: boolean;
+ };
+ export type WidgetParameterEnum = {
+     title: string;
+     type: 'enum';
++    // Apple's ParameterSummary When(_:.equalTo:_:): show only while a static enum parameter has this value.
++    visibleWhen?: { parameter: string; equalTo: string };
+     dynamic?: boolean;
++    // Dynamic only: lets the user pick several values, read as an array.
++    multiple?: boolean;
++    // Dynamic only: generate an AppEntity instead of a String, so the editor shows option names, the default included. Implied by multiple.
++    entity?: boolean;
++    // With multiple: the most values each widget family takes, e.g. { systemSmall: 2 }.
++    size?: Partial<Record<WidgetFamily, number>>;
+     values: {
+         name: string;
+         value: string;
+diff --git a/plugin/src/ios/withWidgetSourceFiles.ts b/plugin/src/ios/withWidgetSourceFiles.ts
+index 33a8283dda4344993aac2f42828abce2671a37b8..77b851e52a6db1f212c5ab7a97a74c7383a4ebfd 100644
+--- a/plugin/src/ios/withWidgetSourceFiles.ts
++++ b/plugin/src/ios/withWidgetSourceFiles.ts
+@@ -265,6 +265,12 @@ const parameterDeclaration = (
+   parameterName: string,
+   parameter: WidgetParameter
+ ): string => {
++  if (isDynamicEnumParameter(parameter) && parameter.multiple === true) {
++    return `  @Parameter(title: ${JSON.stringify(parameter.title)}${arraySizeArgument(parameter)})\n  var ${parameterName}: [${entityTypeName(widgetName, parameterName)}]?`;
++  }
++  if (isDynamicEnumParameter(parameter) && parameter.entity === true) {
++    return `  @Parameter(title: ${JSON.stringify(parameter.title)})\n  var ${parameterName}: ${entityTypeName(widgetName, parameterName)}?`;
++  }
+   if (isDynamicEnumParameter(parameter)) {
+     return `  @Parameter(title: ${JSON.stringify(parameter.title)}, optionsProvider: ${optionsProviderName(widgetName, parameterName)}())\n  var ${parameterName}: String?`;
+   }
+@@ -275,6 +281,12 @@ const configurationValueExpression = (
+   parameterName: string,
+   parameter: WidgetParameter
+ ): string => {
++  if (isDynamicEnumParameter(parameter) && parameter.multiple === true) {
++    return `      "${parameterName}": entry.configuration.${parameterName}?.map { $0.id } as Any`;
++  }
++  if (isDynamicEnumParameter(parameter) && parameter.entity === true) {
++    return `      "${parameterName}": entry.configuration.${parameterName}?.id as Any`;
++  }
+   const rawValueAccess =
+     parameter.type === 'enum' && !isDynamicEnumParameter(parameter) ? '.rawValue' : '';
+   return `      "${parameterName}": entry.configuration.${parameterName}${rawValueAccess}`;
+@@ -344,11 +356,132 @@ ${parameter.values
+   }
+ }`;
+ 
++// The rows per widget family, which also makes the editor list them one by one.
++const arraySizeArgument = (parameter: WidgetParameter): string => {
++  const size = parameter.type === 'enum' ? parameter.size : undefined;
++  if (!size) return '';
++  for (const family of Object.keys(size)) {
++    assertWidgetFamily(family);
++  }
++  const entries = Object.entries(size).map(([family, count]) => `.${family}: ${Number(count)}`);
++  return entries.length ? `, size: [${entries.join(', ')}]` : '';
++};
++
++// Apple's ParameterSummary with When(_:_:_:): parameters with visibleWhen show only while another
++// (static enum) parameter equals a value. One shared condition is supported.
++const parameterSummarySwift = (
++  widgetName: string,
++  parameters: Record<string, WidgetParameter>
++): string => {
++  const entries = Object.entries(parameters);
++  const conditional = entries.filter(([, param]) => param.visibleWhen != null);
++  if (conditional.length === 0) return '';
++  const condition = conditional[0][1].visibleWhen!;
++  for (const [name, param] of conditional) {
++    if (
++      param.visibleWhen!.parameter !== condition.parameter ||
++      param.visibleWhen!.equalTo !== condition.equalTo
++    ) {
++      throw new Error(`Invalid visibleWhen for ${JSON.stringify(name)}: all parameters must share one condition.`);
++    }
++  }
++  const controller = parameters[condition.parameter];
++  if (
++    controller?.type !== 'enum' ||
++    controller.dynamic === true ||
++    !controller.values.some((value) => value.value === condition.equalTo)
++  ) {
++    throw new Error(
++      `Invalid visibleWhen: ${JSON.stringify(condition.parameter)} must be a static enum parameter with the value ${JSON.stringify(condition.equalTo)}.`
++    );
++  }
++  const keyPaths = (list: [string, WidgetParameter][]) =>
++    list.map(([name]) => `        \\.$${name}`).join('\n');
++  return `
++  static var parameterSummary: some ParameterSummary {
++    When(\\.$${condition.parameter}, .equalTo, ${enumTypeName(widgetName, condition.parameter)}.${condition.equalTo}) {
++      Summary {
++${keyPaths(entries)}
++      }
++    } otherwise: {
++      Summary {
++${keyPaths(entries.filter(([, param]) => param.visibleWhen == null))}
++      }
++    }
++  }
++`;
++};
++
++const entityTypeName = (widgetName: string, parameterName: string): string =>
++  `${widgetName}${capitalize(parameterName)}Entity`;
++
++const multipleEnumEntitySwift = (
++  widgetName: string,
++  parameterName: string,
++  parameter: Extract<WidgetParameter, { type: 'enum' }>
++): string => {
++  const entityName = entityTypeName(widgetName, parameterName);
++  return `
++// An AppEntity, so the widget editor shows option names everywhere (the default included) and, for an array, rows people can add, remove and reorder.
++struct ${entityName}: AppEntity {
++  static let typeDisplayRepresentation = TypeDisplayRepresentation(name: ${JSON.stringify(parameter.title)})
++  static let defaultQuery = ${entityName}Query()
++
++  let id: String
++  let name: String
++
++  var displayRepresentation: DisplayRepresentation {
++    DisplayRepresentation(title: LocalizedStringResource(stringLiteral: name))
++  }
++}
++
++struct ${entityName}Query: EntityQuery {
++  private func options() -> [${entityName}] {
++    widgetConfigurationOptions(
++      name: ${JSON.stringify(widgetName)},
++      parameter: ${JSON.stringify(parameterName)},
++      fallback: [
++${parameter.values
++  .map((value) => `        WidgetConfigurationOption(name: ${JSON.stringify(value.name)}, value: ${JSON.stringify(value.value)})`)
++  .join(',\n')}
++      ]
++    ).map { ${entityName}(id: $0.value, name: $0.name) }
++  }
++
++  // Keeps a pick whose option is gone from the latest list instead of dropping it.
++  func entities(for identifiers: [String]) async throws -> [${entityName}] {
++    let all = options()
++    return identifiers.map { id in all.first { $0.id == id } ?? ${entityName}(id: id, name: id) }
++  }
++
++  func suggestedEntities() async throws -> [${entityName}] {
++    options()
++  }
++${parameter.multiple === true ? '' : `
++  // The default (Apple's parameter default value) as an entity, even before the app has set the options.
++  // @Parameter(default:) would need a compile-time constant before iOS 18, so the query supplies it.
++  static func defaultEntity() -> ${entityName} {
++    Self().options().first { $0.id == ${JSON.stringify(parameter.default)} }
++      ?? ${entityName}(id: ${JSON.stringify(parameter.default)}, name: ${JSON.stringify(parameter.values.find((value) => value.value === parameter.default)?.name ?? parameter.default)})
++  }
++
++  func defaultResult() async -> ${entityName}? {
++    Self.defaultEntity()
++  }
++`}}`;
++};
++
+ const widgetSwift = (widget: WidgetConfig): string => {
+   const configuration = widget.ios?.configuration ?? widget.configuration;
+   const supportedFamilies = widget.ios?.supportedFamilies ?? widget.supportedFamilies ?? [];
+   const contentMarginsDisabled =
+     widget.ios?.contentMarginsDisabled ?? widget.contentMarginsDisabled;
++  // @Parameter(size:) is iOS 17+, so the types around the intent need the widget's own availability.
++  const ios17Availability = Object.values(configuration?.parameters ?? {}).some(
++    (param) => param.type === 'enum' && param.multiple === true && param.size != null
++  )
++    ? '@available(iOS 17.0, *)\n'
++    : '';
+   if (!configuration)
+     return `import WidgetKit
+ import SwiftUI
+@@ -372,7 +505,7 @@ import AppIntents
+ internal import ExpoWidgets
+ 
+ // AppIntent
+-struct ${widget.name}ConfigurationAppIntent: WidgetConfigurationIntent {
++${ios17Availability}struct ${widget.name}ConfigurationAppIntent: WidgetConfigurationIntent {
+   static var title: LocalizedStringResource = ${JSON.stringify(`${configuration?.title ?? widget.displayName} Configuration`)}
+ ${configuration?.description ? `  static var description: LocalizedStringResource = ${JSON.stringify(configuration.description)}\n` : ''}
+ ${Object.entries(configuration?.parameters ?? {})
+@@ -380,7 +513,7 @@ ${Object.entries(configuration?.parameters ?? {})
+     return parameterDeclaration(widget.name, name, param);
+   })
+   .join('\n')}
+-
++${parameterSummarySwift(widget.name, configuration?.parameters ?? {})}
+   func perform() async throws -> some IntentResult {
+     return .result()
+   }
+@@ -389,12 +522,14 @@ ${Object.entries(configuration?.parameters ?? {})
+   .map(([name, param]) => {
+     if (param.type !== 'enum') return '';
+     return isDynamicEnumParameter(param)
+-      ? dynamicEnumOptionsProviderSwift(widget.name, name, param)
++      ? param.multiple === true || param.entity === true
++        ? multipleEnumEntitySwift(widget.name, name, param)
++        : dynamicEnumOptionsProviderSwift(widget.name, name, param)
+       : staticEnumSwift(widget.name, name, param);
+   })
+   .join('\n')}
+ 
+-struct ${widget.name}TimelineEntry: TimelineEntry {
++${ios17Availability}struct ${widget.name}TimelineEntry: TimelineEntry {
+   let date: Date
+   public let name: String
+   public let props: [String: Any]?
+@@ -402,7 +537,7 @@ struct ${widget.name}TimelineEntry: TimelineEntry {
+   let configuration: ${widget.name}ConfigurationAppIntent
+ }
+ 
+-struct ${widget.name}TimelineProvider: AppIntentTimelineProvider {
++${ios17Availability}struct ${widget.name}TimelineProvider: AppIntentTimelineProvider {
+   func placeholder(in context: Context) -> ${widget.name}TimelineEntry {
+     ${widget.name}TimelineEntry(date: Date(), name: "${widget.name}", props: WidgetsLayoutRegistry.initialProps(for: "${widget.name}"), entryIndex: nil, configuration: ${widget.name}ConfigurationAppIntent())
+   }
+@@ -439,7 +574,7 @@ struct ${widget.name}TimelineProvider: AppIntentTimelineProvider {
+   }
+ }
+ 
+-struct ${widget.name}EntryView: View {
++${ios17Availability}struct ${widget.name}EntryView: View {
+   @Environment(\\.self) var environment
+   var entry: ${widget.name}TimelineProvider.Entry
+ 
+diff --git a/plugin/src/types/WidgetConfig.type.ts b/plugin/src/types/WidgetConfig.type.ts
+index 71fc39d8d1e16db09b55716d956109882f787654..1edf450ae184e504d3ff2a353c87a558a9846555 100644
+--- a/plugin/src/types/WidgetConfig.type.ts
++++ b/plugin/src/types/WidgetConfig.type.ts
+@@ -37,22 +37,36 @@ export type WidgetConfig = {
+ export type WidgetParameterString = {
+   title: string;
+   type: 'string';
++  // Apple's ParameterSummary When(_:.equalTo:_:): show only while a static enum parameter has this value.
++  visibleWhen?: { parameter: string; equalTo: string };
+   default: string;
+ };
+ export type WidgetParameterNumber = {
+   title: string;
+   type: 'number';
++  // Apple's ParameterSummary When(_:.equalTo:_:): show only while a static enum parameter has this value.
++  visibleWhen?: { parameter: string; equalTo: string };
+   default: number;
+ };
+ export type WidgetParameterBoolean = {
+   title: string;
+   type: 'boolean';
++  // Apple's ParameterSummary When(_:.equalTo:_:): show only while a static enum parameter has this value.
++  visibleWhen?: { parameter: string; equalTo: string };
+   default: boolean;
+ };
+ export type WidgetParameterEnum = {
+   title: string;
+   type: 'enum';
++  // Apple's ParameterSummary When(_:.equalTo:_:): show only while a static enum parameter has this value.
++  visibleWhen?: { parameter: string; equalTo: string };
+   dynamic?: boolean;
++  // Dynamic only: lets the user pick several values, read as an array.
++  multiple?: boolean;
++  // Dynamic only: generate an AppEntity instead of a String, so the editor shows option names, the default included. Implied by multiple.
++  entity?: boolean;
++  // With multiple: the most values each widget family takes, e.g. { systemSmall: 2 }.
++  size?: Partial<Record<WidgetFamily, number>>;
+   values: {
+     name: string;
+     value: string;
