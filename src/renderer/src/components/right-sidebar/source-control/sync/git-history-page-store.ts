@@ -70,9 +70,12 @@ export function nextGitHistoryRequestId(): number {
 
 export function publishGitHistory(slotKey: string, entry: GitHistoryEntry): void {
   if (!gitHistorySlots.has(slotKey) && gitHistorySlots.size >= MAX_GIT_HISTORY_SLOTS) {
-    // About to evict: mark pages that sections still read as recent, so an unread page goes first.
-    for (const readSlotKey of gitHistoryListeners.keys()) {
-      gitHistorySlots.get(readSlotKey)
+    // About to evict: drop the oldest page no section reads, so a read page stays. This walks the
+    // resident pages (at most the cap), never every subscribed slot. When every page has a reader,
+    // the least recent one goes and onEvict tells its readers.
+    const unread = gitHistorySlots.keys().find((key) => !gitHistoryListeners.has(key))
+    if (unread !== undefined) {
+      gitHistorySlots.delete(unread)
     }
   }
   gitHistorySlots.set(slotKey, entry)
