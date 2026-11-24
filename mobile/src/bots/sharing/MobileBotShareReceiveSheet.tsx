@@ -23,8 +23,8 @@ import { MobileBotTextButton } from '../MobileBotTextButton'
 import { botShareDate, botShareErrorMessage } from './bot-share-copy'
 import { MobileBotSharePasteLink } from './MobileBotSharePasteLink'
 import {
-  EMPTY_SHARE_CREATE_DRAFT,
   MobileBotShareCreate,
+  newShareCreateDraft,
   type ShareCreateDraft
 } from './MobileBotShareCreate'
 import { reviewPhoneBotShare, type PhoneShareReview } from './bot-share-receive-operations'
@@ -71,7 +71,7 @@ export function MobileBotShareReceiveSheet(props: {
   const [toolIds, setToolIds] = useState<string[]>([])
   // The review the ticks were made on.
   const shownReview = useRef<PhoneShareReview | null>(null)
-  const [draft, setDraft] = useState<ShareCreateDraft>(EMPTY_SHARE_CREATE_DRAFT)
+  const [draft, setDraft] = useState<ShareCreateDraft>(newShareCreateDraft)
   const [link, setLink] = useState('')
   const [error, setError] = useState<string | null>(null)
   // Read when a link loads, so a new list of bots doesn't send the review again.
@@ -101,7 +101,7 @@ export function MobileBotShareReceiveSheet(props: {
           shownReview.current = review
           setToolIds((ticked) => (step.again && review ? keptToolTicks(shown, review, ticked) : []))
           if (!step.again) {
-            setDraft(EMPTY_SHARE_CREATE_DRAFT)
+            setDraft(newShareCreateDraft())
           }
           setNav([])
           setStep(review ? { kind: 'review', review, updated: false } : { kind: 'stopped' })
