@@ -39,7 +39,7 @@ const OWNER = [{ kind: 'owner' as const }]
 let sequence = 0
 function firstMail(messageId: string): AgentJournalRenderItem {
   sequence += 1
-  return {
+  const item = {
     itemId: `item_${sequence}`,
     revision: 0,
     sequence,
@@ -50,7 +50,9 @@ function firstMail(messageId: string): AgentJournalRenderItem {
       blocks: [{ type: 'text', text: 'mail' }],
       from: { orchestration: { message: 'mail-notice', messages: [{ messageId }] } }
     }
-  } as unknown as AgentJournalRenderItem
+  }
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: a journal message row with only the fields the acts-for reads use.
+  return item as unknown as AgentJournalRenderItem
 }
 
 describe("a chat's acts-for when an earlier version recorded it as the owner's", () => {

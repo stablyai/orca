@@ -86,11 +86,13 @@ describe("whether a paired computer's conversation can still take a reply", () =
     // An ask under fp_b still awaits an answer: that end was never settled.
     recordPeerQuestionOut(db, {
       messageId: 'msg_waiting',
-      conversationId: db.db
-        .prepare(
-          "SELECT conversation_id FROM peer_mail_conversations WHERE peer_fingerprint = 'fp_b'"
-        )
-        .get()!.conversation_id as string,
+      conversationId: String(
+        db.db
+          .prepare(
+            "SELECT conversation_id FROM peer_mail_conversations WHERE peer_fingerprint = 'fp_b'"
+          )
+          .get()!.conversation_id
+      ),
       environmentId: ENVIRONMENT,
       peerFingerprint: 'fp_b',
       asker: 'term_s'
