@@ -116,23 +116,31 @@ export async function retireOutgrownStructuredAgentSessionChild(
     fence: child.fence,
     ...(deps.next ? { nextClientMessageId: deps.next.clientMessageId } : {})
   })
+  const reason =
+    child.phase !== 'starting' && !child.close && facts.signedOut
+      ? 'signed-out'
+      : picksNewLaunchModel(facts.nextMessage, deps.next, deps.requiresModelTransitionRestart)
+        ? 'model'
+        : (await launchedWithOtherPermissionMode(
+              session.child,
+              deps.launchPermission,
+              deps.permissionRequiresAcquisition
+            ))
+          ? 'permission-mode'
+          : (await launchedUnderOtherAccount(session.child, deps.launchAccountHome))
+            ? 'account'
+            : (await launchedWithOtherTools(session.child, deps.launchToolsChanged))
+              ? 'tools'
+              : null
   if (
-    !(
-      (child.phase !== 'starting' && !child.close && facts.signedOut) ||
-      picksNewLaunchModel(facts.nextMessage, deps.next, deps.requiresModelTransitionRestart) ||
-      (await launchedWithOtherPermissionMode(
-        session.child,
-        deps.launchPermission,
-        deps.permissionRequiresAcquisition
-      )) ||
-      (await launchedUnderOtherAccount(session.child, deps.launchAccountHome)) ||
-      (await launchedWithOtherTools(session.child, deps.launchToolsChanged))
-    ) ||
+    reason === null ||
     structuredAgentSessionChildHasOpenWork(deps.work, await deps.work.currentWork()) ||
     owesWakeUp(facts.newestTurnCompletedAt, deps.work.childWork())
   ) {
     return
   }
+  // Says why, so an agent replaced instead of changed live can be traced.
+  deps.logger.warn('replacing an outgrown agent', { scope: 'outgrown-child', sessionId, reason })
   await deps.stopAgent(sessionId).catch((error: unknown) =>
     deps.logger.warn('replacing an outgrown agent failed', {
       scope: 'outgrown-child',
