@@ -16,6 +16,7 @@ import type { DiffCommentOwner } from '@/store/slices/diff-comments/diff-comment
 import { describeClipboardWriteFailure } from '@/lib/clipboard/clipboard-write-failure'
 import { translate } from '@/i18n/i18n'
 import { useTranslate } from '@/i18n/use-translate'
+import { basename } from '@/lib/path'
 
 /** Copy and Clear at the bottom of a send menu. */
 export function NotesMenuCopyClearItems({
@@ -55,12 +56,13 @@ export async function copyNotesText(text: string): Promise<void> {
   }
 }
 
+/** One short line: callers pass relative or absolute paths, so show only the file name. */
 export function clearNotesDescription(count: number, filePath?: string): string {
   return filePath
     ? translate(
         'auto.components.right.sidebar.SourceControl.clearNotesFromFile',
         'Clear {{count}} notes from {{path}}?',
-        { count, path: filePath, defaultValue_one: 'Clear {{count}} note from {{path}}?' }
+        { count, path: basename(filePath), defaultValue_one: 'Clear {{count}} note from {{path}}?' }
       )
     : translate(
         'auto.components.right.sidebar.SourceControl.clearNotesFromWorkspace',

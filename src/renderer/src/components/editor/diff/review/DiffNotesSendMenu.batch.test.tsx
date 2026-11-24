@@ -11,6 +11,7 @@ import {
 import type { DiffComment } from '../../../../../../shared/file-review/diff-comment-types'
 import { SELF_LOCAL_AUTHORITY } from '../../../../../../shared/execution-host/host-authority'
 import { notesSendTestStore } from '../../review-note-delivery/notes-send-menu-store.test-fixture'
+import { clearNotesDescription } from '../../review-note-delivery/notes-copy-clear'
 import { DiffNotesSendMenu } from './DiffNotesSendMenu'
 
 vi.mock('@/store', async () => ({
@@ -165,13 +166,20 @@ describe('DiffNotesSendMenu batch button', () => {
     expect(copied).not.toContain('Null check in B')
   })
 
+  it('names only the file, not its folders, in the clear confirmation', () => {
+    expect(clearNotesDescription(2, '/private/tmp/sample/docs/guide.md')).toBe(
+      'Clear 2 notes from guide.md?'
+    )
+    expect(clearNotesDescription(1, 'docs\\guide.md')).toBe('Clear 1 note from guide.md?')
+  })
+
   it('clears only the notes the confirmation counted', async () => {
     const deleteByIds = vi.fn(async () => true)
     notesSendTestStore.setState({ deleteDiffCommentsByIds: deleteByIds })
     const view = renderFileMenu([A, B])
     openMenu(screen.getByRole('button', { name: 'Send 1 note to an agent' }))
     fireEvent.click(await screen.findByRole('menuitem', { name: 'Clear notes…' }))
-    expect(await screen.findByText('Clear 1 note from src/a.ts?')).toBeVisible()
+    expect(await screen.findByText('Clear 1 note from a.ts?')).toBeVisible()
 
     // A note added while the dialog is open is not part of what it asked about.
     view.rerender(
@@ -187,7 +195,7 @@ describe('DiffNotesSendMenu batch button', () => {
         />
       </TooltipProvider>
     )
-    expect(screen.getByText('Clear 1 note from src/a.ts?')).toBeVisible()
+    expect(screen.getByText('Clear 1 note from a.ts?')).toBeVisible()
     await act(async () => {
       fireEvent.click(screen.getByRole('button', { name: 'Clear Notes' }))
     })
