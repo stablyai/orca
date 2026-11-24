@@ -189,7 +189,8 @@ export const SetOptionParams = z.strictObject({
 export const OptionsParams = z.object({ sessionId: SessionId }).strict()
 export const RevealParams = OptionsParams.extend({
   botLinkTarget: BotLinkOpenTargetSchema.optional(),
-  navigation: z.literal('caller').optional()
+  // 'host' moves the host window to the chat; without it the chat is only listed there (#5435).
+  navigation: z.enum(['caller', 'host']).optional()
 }).strict()
 export const SwitchToChatParams = OptionsParams.extend({
   execution: z

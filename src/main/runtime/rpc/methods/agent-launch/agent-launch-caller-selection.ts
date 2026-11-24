@@ -66,7 +66,7 @@ export async function selectLaunchedTab(
     surface.outcome.kind === 'structured' &&
     agentLaunchTabViewerRule(context, presentation) === 'focus-window'
   ) {
-    context.runtime.focusLaunchedChatInHostWindow(surface.worktreeId, surface.outcome.sessionId)
+    context.runtime.focusChatInHostWindow(surface.worktreeId, surface.outcome.sessionId)
   }
 }
 

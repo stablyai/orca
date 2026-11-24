@@ -246,8 +246,8 @@ class OrcaRuntimeService extends OrcaRuntimeWithAgentQuestions {
     return this.notifier.publishAgentLaunchTab(request)
   }
 
-  /** The window follows a listed active chat only on its own intent (#5435), so a focused launch names it. */
-  focusLaunchedChatInHostWindow(worktreeId: string, sessionId: string): void {
+  /** The window follows a listed active chat only on its own intent (#5435), so a focused launch or a host reveal names it. */
+  focusChatInHostWindow(worktreeId: string, sessionId: string): void {
     this.notifier?.focusEditorTab?.(structuredAgentSessionHostTabId(sessionId), worktreeId, {
       userInitiated: true
     })

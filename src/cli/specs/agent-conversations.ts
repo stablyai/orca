@@ -30,6 +30,18 @@ export const AGENT_CONVERSATION_COMMAND_SPECS: CommandSpec[] = [
     examples: ['orca agent show orca_session_id:3540ecf3-47c3-4876-b825-81bf5d6b3595 --json']
   },
   {
+    path: ['agent', 'reveal'],
+    summary: "Open a chat in Orca's window, by its Orca session ID",
+    usage: 'orca agent reveal <id> [--json]',
+    allowedFlags: [...GLOBAL_FLAGS, 'id'],
+    positionalArgs: ['id'],
+    notes: [
+      "<id> is a chat's `orca_session_id:` ID from `orca agent list`. Orca switches to the chat's workspace and shows its tab, reopening it if it was closed; the chat is not started or sent anything.",
+      'A terminal agent is brought forward with `orca terminal switch`, by the handle `orca agent show` gives.'
+    ],
+    examples: ['orca agent reveal orca_session_id:3540ecf3-47c3-4876-b825-81bf5d6b3595']
+  },
+  {
     path: ['agent', 'read'],
     summary: 'Read what an agent said, by its Orca session ID',
     usage: 'orca agent read <id> [--limit <n>] [--json]',

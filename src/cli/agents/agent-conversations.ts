@@ -62,6 +62,39 @@ export const AGENT_CONVERSATION_HANDLERS: Record<string, CommandHandler> = {
     })
     printResult(result, json, formatAgentShow)
   },
+  'agent reveal': async ({ flags, client, json }) => {
+    const shown = await callAgentMethod<AgentShowResult>(client, 'agent.show', {
+      id: getRequiredStringFlag(flags, 'id')
+    })
+    const id = `${ORCA_SESSION_ADDRESS_PREFIX}${shown.result.orcaSessionId}`
+    if (shown.result.kind !== 'chat') {
+      throw new RuntimeClientError(
+        'invalid_argument',
+        `${id} is a terminal agent. Bring it forward with \`orca terminal switch\`, by the handle \`orca agent show\` gives.`
+      )
+    }
+    const revealed = await callAgentMethod<AgentRevealReply>(
+      client,
+      'agentSession.reveal',
+      { sessionId: shown.result.orcaSessionId, navigation: 'host' },
+      'open'
+    )
+    const reply = revealed.result
+    if (!reply.ok) {
+      throw new RuntimeClientError(
+        reply.refusal.code,
+        reply.refusal.message ?? "Couldn't open this chat."
+      )
+    }
+    printResult(
+      {
+        ...revealed,
+        result: { orcaSessionId: shown.result.orcaSessionId, worktreeId: reply.workspaceId }
+      },
+      json,
+      () => `Opened chat ${id}.`
+    )
+  },
   'agent read': async ({ flags, client, json }) => {
     const limit = getOptionalPositiveIntegerFlag(flags, 'limit')
     if (limit !== undefined && limit > AGENT_READ_MAX_LIMIT) {
@@ -78,7 +111,16 @@ export const AGENT_CONVERSATION_HANDLERS: Record<string, CommandHandler> = {
   }
 }
 
-async function callAgentMethod<TResult>(client: RuntimeClient, method: string, params: unknown) {
+type AgentRevealReply =
+  | { ok: true; sessionId: string; workspaceId: string; agent: string }
+  | { ok: false; refusal: { code: string; message?: string } }
+
+async function callAgentMethod<TResult>(
+  client: RuntimeClient,
+  method: string,
+  params: unknown,
+  verb: 'read' | 'open' = 'read'
+) {
   return client.call<TResult>(method, params).catch((error: unknown) => {
     if (!(error instanceof RuntimeClientError)) {
       throw error
@@ -93,7 +135,7 @@ async function callAgentMethod<TResult>(client: RuntimeClient, method: string, p
     if ([error.code, error.message].includes('structured_agent_session_unsupported')) {
       throw new RuntimeClientError(
         'incompatible_runtime',
-        "This Orca host can't read that chat from the CLI. Update Orca on that host, or check that it has chats turned on."
+        `This Orca host can't ${verb} that chat from the CLI. Update Orca on that host, or check that it has chats turned on.`
       )
     }
     if (isUnattachedAgentSessionReadRefusal(error)) {

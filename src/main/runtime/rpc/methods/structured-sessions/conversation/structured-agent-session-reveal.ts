@@ -142,7 +142,8 @@ export const STRUCTURED_AGENT_SESSION_REVEAL_METHODS = [
             publication = surface
           },
           activate: params.navigation !== 'caller',
-          ...(params.navigation ? { navigation: params.navigation } : {})
+          // Host navigation moves the window after publication; publication itself knows only the caller's.
+          ...(params.navigation === 'caller' ? { navigation: params.navigation } : {})
         })
         check()
         if (
@@ -166,6 +167,9 @@ export const STRUCTURED_AGENT_SESSION_REVEAL_METHODS = [
           throw new Error('Could not publish the chat to its caller.')
         }
         check()
+        if (params.navigation === 'host') {
+          ctx.runtime.focusChatInHostWindow(revealed.workspaceId, revealed.sessionId)
+        }
         // A bot thread is no longer new once opened anywhere.
         for (const id of new Set([params.sessionId, revealed.sessionId])) {
           ctx.runtime.markBotThreadSeen(id)
