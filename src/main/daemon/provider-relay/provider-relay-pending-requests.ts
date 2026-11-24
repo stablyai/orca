@@ -293,7 +293,7 @@ export class ProviderRelayPendingRequests {
       if (message.method === 'initialize' && this.initializeKey === null) {
         this.initializeKey = rpcId(message.id)
       }
-      this.kept.observeRequest(id, message.id, message.method)
+      this.kept.observeRequest(id, message.id, message.method, line)
       return null
     }
     if (message.type === 'control_request') {

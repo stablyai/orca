@@ -19,6 +19,8 @@ type AwaitedRequest = ProviderRelayOutstandingRequest & {
   keep: boolean
   outstanding: boolean
   since: number
+  /** The request itself, kept once the agent accepts it. */
+  request?: string
 }
 type AnsweredRequest = ProviderRelayOutstandingRequest & { seq: number; since: number }
 
@@ -121,10 +123,15 @@ export class ProviderRelayKeptState {
   }
 
   /** A client request the spec names, awaited by its id key. */
-  observeRequest(key: string | null, id: unknown, method: string): void {
+  observeRequest(key: string | null, id: unknown, method: string, line: string): void {
     const keep = this.spec?.answers.includes(method) === true
     const outstanding = this.spec?.outstanding.includes(method) === true
-    if (!key || (!keep && !outstanding) || (typeof id !== 'number' && typeof id !== 'string')) {
+    const request = this.spec?.requests?.includes(method) === true
+    if (
+      !key ||
+      !(keep || outstanding || request) ||
+      (typeof id !== 'number' && typeof id !== 'string')
+    ) {
       return
     }
     if (this.awaited.size >= MAX_AWAITED_REQUESTS) {
@@ -133,7 +140,14 @@ export class ProviderRelayKeptState {
         this.awaited.delete(oldest)
       }
     }
-    this.awaited.set(key, { id, method, keep, outstanding, since: this.lastAgentSeq })
+    this.awaited.set(key, {
+      id,
+      method,
+      keep,
+      outstanding,
+      since: this.lastAgentSeq,
+      ...(request && line.length <= MAX_KEPT_LINE_CHARS ? { request: line } : {})
+    })
   }
 
   /** An awaited request's answer: the latest success is kept, a listed one noted answered. */
@@ -150,6 +164,10 @@ export class ProviderRelayKeptState {
     // Only a success is state worth restoring; a refused request leaves the last one standing.
     if (awaited.keep && succeeded) {
       this.keepLine(`a:${awaited.method}`, record)
+    }
+    // Kept at its answer's seq, so it orders after the session start it changed.
+    if (awaited.request !== undefined && succeeded) {
+      this.keepLine(`q:${awaited.method}`, { seq: record.seq, line: awaited.request })
     }
   }
 

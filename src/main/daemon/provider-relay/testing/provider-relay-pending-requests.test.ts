@@ -340,4 +340,21 @@ describe('provider relay kept lines', () => {
     agent(pending, 2, configUpdate('x'.repeat(1024 * 1024 + 1)))
     expect(pending.kept.records()).toEqual([])
   })
+  it('keeps an accepted request whose answer says nothing, at its answer', () => {
+    const pending = new ProviderRelayPendingRequests()
+    pending.kept.configure({
+      answers: [],
+      lines: [],
+      outstanding: [],
+      requests: ['session/set_model']
+    })
+    pending.kept.sendOnAttach = true
+    client(pending, { id: 1, method: 'session/set_model', params: { modelId: 'refused' } })
+    agent(pending, 1, { id: 1, error: { code: -32000, message: 'no' } })
+    client(pending, { id: 2, method: 'session/set_model', params: { modelId: 'picked' } })
+    agent(pending, 2, { id: 2, result: {} })
+    expect(pending.kept.records().map(({ seq, line }) => [seq, JSON.parse(line).params])).toEqual([
+      [2, { modelId: 'picked' }]
+    ])
+  })
 })

@@ -22,6 +22,7 @@ import type { AcpStructuredLaunch } from '../launch/acp-structured-launch-resolu
 
 const SESSION_STARTS = ['session/new', 'session/load', 'session/resume']
 const SET_CONFIG = 'session/set_config_option'
+const SET_MODEL = 'session/set_model'
 const PROMPT = 'session/prompt'
 const STATE_UPDATES = ['config_option_update', 'current_mode_update', 'available_commands_update']
 
@@ -34,7 +35,9 @@ const ACP_RELAY_KEEP: ProviderRelayKeepSpec = {
     `"sessionUpdate": "${kind}"`
   ]),
   // An unanswered prompt is a running turn; the daemon never idle-stops it.
-  outstanding: [PROMPT]
+  outstanding: [PROMPT],
+  // Its answer is empty, so the model the user picked is read from the request.
+  requests: [SET_MODEL]
 }
 
 /** A kept state change, replayed as the `session/update` the agent sent or implied. */
@@ -53,6 +56,8 @@ export type AcpKeptAgent = {
   earlierPromptId: number | null
   /** Every line the agent sent for that prompt is in the replay, so its turn reads as live. */
   earlierPromptWhole: boolean
+  /** The model picked since that start; null: the start's own. */
+  modelId: string | null
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -91,9 +96,15 @@ export function acpKeptAgent(child: RelayedProviderChild): AcpKeptAgent {
   const attach = child.attachResult
   let sessionStart: (AcpKeptAgent['sessionStart'] & { seq: number }) | null = null
   const updates: { seq: number; update: AcpKeptUpdate }[] = []
+  let model: { seq: number; id: string } | null = null
   for (const { seq, name } of attach?.kept ?? []) {
     const line = child.keptLines.get(seq)
     if (line === undefined) {
+      continue
+    }
+    if (name === `q:${SET_MODEL}`) {
+      const id = keptModelId(line)
+      model = id === null ? model : { seq, id }
       continue
     }
     const method = name.startsWith('a:') ? name.slice(2) : null
@@ -123,7 +134,18 @@ export function acpKeptAgent(child: RelayedProviderChild): AcpKeptAgent {
       .sort((a, b) => a.seq - b.seq)
       .map((entry) => entry.update),
     earlierPromptId: typeof prompt?.id === 'number' ? prompt.id : null,
-    earlierPromptWhole: prompt?.replayedWhole === true
+    earlierPromptWhole: prompt?.replayedWhole === true,
+    modelId: model && model.seq > startSeq ? model.id : null
+  }
+}
+
+function keptModelId(line: string): string | null {
+  try {
+    const message: unknown = JSON.parse(line)
+    const params = isRecord(message) && isRecord(message.params) ? message.params : null
+    return typeof params?.modelId === 'string' ? params.modelId : null
+  } catch {
+    return null
   }
 }
 
@@ -133,9 +155,19 @@ export function restorableAcpSession(
   sessionId: string | undefined
 ): AcpSessionStarted | null {
   // One that ended while Orca was closed still opens, so its last output reaches the chat first.
-  return kept.initialize && kept.sessionStart
-    ? keptAcpSessionStart(kept.sessionStart, sessionId)
-    : null
+  const { initialize, sessionStart, modelId } = kept
+  if (!initialize || !sessionStart) {
+    return null
+  }
+  // The start reports the model it opened with; a later pick is the one the agent runs.
+  const result = isRecord(sessionStart.result) ? sessionStart.result : null
+  const models = result && isRecord(result.models) ? result.models : null
+  return keptAcpSessionStart(
+    result && models && modelId !== null
+      ? { ...sessionStart, result: { ...result, models: { ...models, currentModelId: modelId } } }
+      : sessionStart,
+    sessionId
+  )
 }
 
 /** A relayed ACP agent with the prompt turns its ack floor reads. */
