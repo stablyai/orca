@@ -3,6 +3,9 @@ import { DropdownMenuLabel } from '../../../ui/dropdown-menu'
 import { useAppStore } from '../../../../store/index'
 import { useTranslate } from '@/i18n/use-translate'
 import { isRemoteCliControlAllowed } from '../../../../../../shared/remote-runtime/ssh/ssh-remote-cli-control'
+import { parseExecutionHostId } from '../../../../../../shared/execution-host/execution-host'
+import { getBrowserSettingsHostId } from '@/store/slices/browser/hosts/browser-host-state'
+import { selectExecutionHostDisplayLabel } from '@/runtime/hosts/display/execution-host-display-label'
 import type {
   BrowserPageCookieImportRoute,
   BrowserSshPageCookieImportRoute
@@ -17,8 +20,20 @@ export function BrowserCookieImportMachineNotice({
 }): React.JSX.Element | null {
   const t = useTranslate()
   const settingsBrowsersHost = useAppStore((s) => s.detectedBrowsersHost)
+  const settingsHost = parseExecutionHostId(useAppStore(getBrowserSettingsHostId))
+  const settingsSshHostLabel = useAppStore((s) =>
+    settingsHost?.kind === 'ssh' ? selectExecutionHostDisplayLabel(s, settingsHost.id) : ''
+  )
   if (pageRoute?.kind === 'ssh') {
     return <SshPageCookieImportNotice route={pageRoute} />
+  }
+  // Settings on an SSH host fills that host's jar, the same one its pages' import fills.
+  if (!pageRoute && settingsHost?.kind === 'ssh') {
+    return (
+      <SshPageCookieImportNotice
+        route={{ sshTargetId: settingsHost.targetId, hostLabel: settingsSshHostLabel }}
+      />
+    )
   }
   // A server's This-device jar: its agents always drive these pages but never get the cookies.
   if (pageRoute?.kind === 'client-host') {

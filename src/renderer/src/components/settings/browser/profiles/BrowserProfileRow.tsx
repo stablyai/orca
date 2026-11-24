@@ -17,8 +17,6 @@ import {
   DropdownMenuSubTrigger,
   DropdownMenuTrigger
 } from '../../../ui/dropdown-menu'
-import { Tooltip, TooltipContent, TooltipTrigger } from '../../../ui/tooltip'
-import { useConfirmationDialog } from '../../../dismiss/confirmation/confirmation-dialog-context'
 import { BrowserCookieImportDisclosure } from './BrowserCookieImportDisclosure'
 import { BrowserCookieImportMachineNotice } from './BrowserCookieImportMachineNotice'
 import { useAppStore } from '../../../../store/index'
@@ -46,7 +44,6 @@ export type BrowserProfileRowProps = {
   } | null
   isActive: boolean
   onSelect: () => void
-  isDefault?: boolean
 }
 
 export function BrowserProfileRow({
@@ -54,13 +51,11 @@ export function BrowserProfileRow({
   detectedBrowsers,
   importState,
   isActive,
-  onSelect,
-  isDefault
+  onSelect
 }: BrowserProfileRowProps): React.JSX.Element {
   const t = useTranslate()
   const isImporting = importState?.profileId === profile.id && importState.status === 'importing'
   const fetchDetectedBrowsers = useAppStore((s) => s.fetchDetectedBrowsers)
-  const confirm = useConfirmationDialog()
 
   const handleImportFromBrowser = async (
     browserFamily: string,
@@ -117,35 +112,6 @@ export function BrowserProfileRow({
       )
     } else if (result.reason !== 'canceled') {
       toast.error(browserCookieImportFailureText(result))
-    }
-  }
-
-  const clearDefaultCookiesLabel = t(
-    'auto.components.settings.BrowserProfileRow.4054c458e1',
-    'Clear default cookies'
-  )
-
-  const handleClearDefaultCookies = async (): Promise<void> => {
-    const confirmed = await confirm({
-      title: t(
-        'auto.components.settings.BrowserProfileRow.3b662becd5',
-        'Clear cookies in the Default profile?'
-      ),
-      description: t(
-        'auto.components.settings.BrowserProfileRow.f159cf5a3e',
-        'This may sign you out of sites in this profile.'
-      ),
-      confirmLabel: t('browser.googleCookieClear.clear', 'Clear'),
-      confirmVariant: 'destructive'
-    })
-    if (!confirmed) {
-      return
-    }
-    const ok = await useAppStore.getState().clearDefaultSessionCookies()
-    if (ok) {
-      toast.success(
-        t('auto.components.settings.BrowserProfileRow.2d4bea7f35', 'Default cookies cleared.')
-      )
     }
   }
 
@@ -251,24 +217,7 @@ export function BrowserProfileRow({
             <BrowserCookieImportDisclosure />
           </DropdownMenuContent>
         </DropdownMenu>
-        {isDefault ? (
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <Button
-                variant="ghost"
-                size="icon"
-                className="size-7 text-muted-foreground hover:text-destructive"
-                aria-label={clearDefaultCookiesLabel}
-                onClick={() => void handleClearDefaultCookies()}
-              >
-                <Trash2 className="size-3" />
-              </Button>
-            </TooltipTrigger>
-            <TooltipContent side="top" sideOffset={4}>
-              {clearDefaultCookiesLabel}
-            </TooltipContent>
-          </Tooltip>
-        ) : (
+        {profile.scope === 'default' ? null : (
           <Button
             variant="ghost"
             size="icon"

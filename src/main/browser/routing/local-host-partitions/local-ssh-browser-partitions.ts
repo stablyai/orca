@@ -1,14 +1,6 @@
 import { app, session, webContents, type Session, type WebContents } from 'electron'
 import { closeRouteGuest } from '../guest-authority/browser-route-guest-guard'
-import { sshExecutionHostStorageIdentity } from '../identity/browser-execution-host-storage-identity'
-import {
-  deriveBrowserRoutePartition,
-  deriveLocalSshBrowserRoutePartitionStorageScope
-} from '../partitions/browser-route-identity'
-import {
-  activeBrowserRoutePartitionOrcaProfileId,
-  currentBrowserRoutePartitionBindingStore
-} from '../partitions/browser-route-partition-binding-runtime'
+import { activeBrowserRoutePartitionOrcaProfileId } from '../partitions/browser-route-partition-binding-runtime'
 import {
   isBrowserRoutePartitionRetainedByAnyOwner,
   registerBrowserRoutePartitionRetentionProbe
@@ -21,13 +13,14 @@ import {
 import { enforceBrowserRouteWebRtcPolicy } from '../../network/egress/browser-route-webrtc-policy'
 import { browserSessionRegistry } from '../../sessions/profiles/browser-session-registry'
 import {
+  bindLocalSshBrowserPartitionFor,
+  deriveLocalSshBrowserPartition
+} from './local-ssh-browser-partition-bindings'
+import {
   closeLocalSshBrowserRouteForTarget,
   probeLocalSshBrowserRouteForwarding,
   retainLocalSshBrowserRoute
 } from './local-ssh-browser-route'
-
-const AUTHORITY_CONNECTION_IDENTITY_TAG = 'orca-local-ssh-browser'
-const AUTHORITY_CONNECTION_IDENTITY_VERSION = 1
 
 type PreparedLocalSshPartition = {
   partition: string
@@ -46,15 +39,6 @@ type PendingLocalSshPartition = {
 const preparedByIdentityKey = new Map<string, PendingLocalSshPartition>()
 const preparedByPartition = new Map<string, PreparedLocalSshPartition>()
 const partitionBySession = new WeakMap<Session, string>()
-
-// Keep the identity stable across restarts to preserve cookies.
-export function localSshBrowserAuthorityConnectionIdentity(orcaProfileId: string): string {
-  return JSON.stringify([
-    AUTHORITY_CONNECTION_IDENTITY_TAG,
-    AUTHORITY_CONNECTION_IDENTITY_VERSION,
-    orcaProfileId
-  ])
-}
 
 export function isLocalSshBrowserPartition(partition: string): boolean {
   const prepared = preparedByPartition.get(partition)
@@ -80,19 +64,6 @@ export function preparedLocalSshBrowserPartition(
   }
   const { partition } = deriveLocalSshBrowserPartition(orcaProfileId, targetId, browserProfileId)
   return isLocalSshBrowserPartition(partition) ? partition : null
-}
-
-function deriveLocalSshBrowserPartition(
-  orcaProfileId: string,
-  targetId: string,
-  browserProfileId: string
-): ReturnType<typeof deriveBrowserRoutePartition> {
-  return deriveBrowserRoutePartition({
-    orcaProfileId,
-    browserProfileId,
-    authorityConnectionIdentity: localSshBrowserAuthorityConnectionIdentity(orcaProfileId),
-    executionHostIdentity: sshExecutionHostStorageIdentity(targetId)
-  })
 }
 
 export function localSshBrowserPartitionForSession(webSession: Session): string | null {
@@ -166,32 +137,11 @@ async function prepareFresh(
       throw new Error('browser_local_route_ssh_unavailable')
     }
   }
-  const derived = deriveLocalSshBrowserPartition(
+  const derived = bindLocalSshBrowserPartitionFor(
     orcaProfileId,
     input.targetId,
     input.browserProfileId
   )
-  const bindings = currentBrowserRoutePartitionBindingStore({
-    isPartitionRetained: isBrowserRoutePartitionRetainedByAnyOwner
-  })
-  const persistedFingerprint = bindings.get(derived.partition)
-  if (persistedFingerprint === null) {
-    const evicted = bindings.set(
-      derived.partition,
-      derived.bindingFingerprint,
-      deriveLocalSshBrowserRoutePartitionStorageScope({ orcaProfileId, targetId: input.targetId })
-    )
-    if (evicted.length > 0) {
-      void releaseEvictedBrowserRoutePartitionStorage(
-        evicted,
-        isBrowserRoutePartitionRetainedByAnyOwner
-      )
-    }
-  } else if (persistedFingerprint !== derived.bindingFingerprint) {
-    throw new Error('browser_route_partition_binding_conflict')
-  } else {
-    bindings.touch(derived.partition)
-  }
   storage.partition = derived.partition
   await prepareBrowserRouteSessionPolicy({
     partition: derived.partition,
