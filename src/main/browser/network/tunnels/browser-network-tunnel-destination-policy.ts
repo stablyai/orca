@@ -7,7 +7,8 @@ export const BROWSER_TUNNEL_ALLOW_ALL_DESTINATIONS_ENV =
   'ORCA_BROWSER_TUNNEL_ALLOW_ALL_DESTINATIONS'
 export const BROWSER_TUNNEL_DESTINATION_BLOCKED = 'destination_blocked'
 
-export type BrowserTunnelDestinationBlockReason = 'link_local' | 'orca_listener'
+// not_loopback: a paired port forward named a host off the server's own loopback.
+export type BrowserTunnelDestinationBlockReason = 'link_local' | 'orca_listener' | 'not_loopback'
 
 export class BrowserTunnelDestinationBlockedError extends Error {
   constructor(readonly reason: BrowserTunnelDestinationBlockReason) {

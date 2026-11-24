@@ -33,6 +33,11 @@ function controller(
   return {
     cards,
     queueCapable: true,
+    holds: () => false,
+    agentMail: [],
+    agentMailEditable: () => false,
+    mailLeads: false,
+    stopping: false,
     clearCapable: true,
     pause: null,
     resume: vi.fn(async () => true),

@@ -1,13 +1,13 @@
 // A conversation's native chat (structured session): its deliveries, prompts, turns and Stop.
 import { randomUUID } from 'node:crypto'
 import { isConversationReport } from './external-conversation-turn-opener'
+import { leaveEligibleBatch } from './external-conversation-leave-eligibility'
 import {
   endedTurn,
   endedTurnAttribution,
   type EndedChatTurn
 } from './external-conversation-ended-turn'
 export type { EndedChatTurn } from './external-conversation-ended-turn'
-import { readAgentSessionFailureFact } from '../../shared/agent-session/failures/agent-session-failure'
 import type { AgentJournalTurnOutcome } from '../../shared/agent-status/lifecycle/agent-turn-outcome'
 import { computeAgentSessionPayloadFingerprint } from '../../shared/agent-session/lifecycle/operations/agent-session-mutation-envelope'
 import type { AgentSessionMutationEnvelope } from '../../shared/agent-session/agent-session-wire'
@@ -35,7 +35,7 @@ import {
 } from '../runtime/orchestration/turn-delivery/send-agent-turn'
 import { refusalOf } from './external-conversation-chain'
 import { storedConnectorAsker } from '../../shared/connector-message-asker'
-import { connectorFailure } from './external-conversation-failure'
+import { rejectedSendRefusal } from './external-conversation-failure'
 import { refused, type ConnectorMessage, type Delivery } from './external-conversation-types'
 
 /** What the seam reads of the native-chat host. */
@@ -261,6 +261,7 @@ export async function deliverToChat(
           ...(link.bot
             ? { connectorConversation: { source: link.source, externalId: link.externalId } }
             : {}),
+          ...leaveEligibleBatch(link, asker, delivery.later),
           // Its reply outbox rows commit with this admission (design item 125).
           ...(delivery.reply && delivery.deliveryId
             ? {
@@ -293,11 +294,12 @@ export async function deliverToChat(
     }
     const dispatched = outcome.kind === 'sent' ? outcome.submission?.dispatchState : 'accepted'
     if (dispatched === 'rejected') {
-      // Why the agent couldn't take it (signed out, not installed…), for the connector to say.
-      const fact = readAgentSessionFailureFact(
-        outcome.kind === 'sent' ? outcome.submission?.rejection : undefined
+      // Why the agent couldn't take it (signed out, not installed…), or that a person's Stop did.
+      return await rejectedSendRefusal(
+        chat,
+        link,
+        outcome.kind === 'sent' ? outcome.submission : null
       )
-      return refused('agent_not_reachable', fact && connectorFailure(fact, link.agent))
     }
     return dispatched === 'unknown'
       ? { outcome: 'unknown', reason: 'writer_failed' }

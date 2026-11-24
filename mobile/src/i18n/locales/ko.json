@@ -21,7 +21,7 @@
     },
     "claude": {
       "usageSignInLabel": "다시 로그인",
-      "usageSignInMessage": "선택한 Claude 계정에 다시 로그인해야 합니다. 설정 > AI 제공자 계정을 열거나 시스템 기본값을 선택하세요."
+      "usageSignInMessage": "이 계정에 다시 로그인해야 합니다."
     }
   },
   "agentHistory": {
@@ -207,8 +207,7 @@
       "next": "다음",
       "other": "기타…",
       "skip": "건너뛰기",
-      "step": "{{step}}단계",
-      "submit": "제출"
+      "step": "{{step}}단계"
     },
     "askRow": {
       "asked": "질문:",
@@ -381,17 +380,16 @@
     "promptStrip": {
       "expand": "펼치기"
     },
-    "question": {
-      "otherReplyPlaceholder": "또는 답변을 입력하세요…",
-      "replyPlaceholder": "답변을 입력하세요…",
-      "sendReply": "답변 보내기",
-      "submit": "제출",
-      "submitCount": "제출 ({{count}})",
-      "submitSelectedOptions": "선택한 옵션 제출"
-    },
     "queuedMessages": {
       "deleteAll": "모두 삭제",
       "editMessage": "메시지 편집",
+      "showLess": "간략히 보기",
+      "moreCount_one": "{{count}}개 더 보기",
+      "moreCount_other": "{{count}}개 더 보기",
+      "deleteMessage": "메시지 삭제",
+      "queuedCount_one": "대기 중인 메시지 {{count}}개",
+      "queuedCount_other": "대기 중인 메시지 {{count}}개",
+      "foldNeedsAttention": "{{more}}, 확인이 필요한 메시지가 있습니다",
       "pausedState": "일시 중지됨",
       "queuedState": "대기 중",
       "resume": "재개",
@@ -2014,6 +2012,112 @@
       "requested": "요청됨",
       "reviewed": "리뷰 완료",
       "title": "리뷰어"
+    },
+    "tab": {
+      "updated": "{{time}} 업데이트됨",
+      "moreActions": "PR 작업 더 보기",
+      "unlinkConfirmTitle": "PR 연결을 해제할까요?",
+      "unlinkConfirmMessage": "#{{number}}은(는) GitHub에서 계속 열려 있으며, 이 워크스페이스에서는 더 이상 추적하지 않습니다.",
+      "createPullRequest": "PR 생성",
+      "mergedInto": "{{base}}에 병합됨",
+      "merged": "병합됨",
+      "cantMergeYet": "아직 병합할 수 없음:",
+      "willMergeWhenReady": "준비되면 병합 예정",
+      "mergeWhenReady": "준비되면 병합",
+      "viewedOf": "{{total}}개 중 {{viewed}}개 확인함",
+      "commentsOnFiles": "파일 {{files}}개에 댓글 {{comments}}개",
+      "filesChanged_one": "파일 {{count}}개 변경됨",
+      "filesChanged_other": "파일 {{count}}개 변경됨",
+      "editDescription": "설명 수정",
+      "edit": "편집",
+      "showLess": "접기",
+      "showMore": "더 보기"
+    },
+    "screens": {
+      "hideLog": "로그 숨기기",
+      "viewLog": "로그 보기",
+      "copyError": "오류 복사",
+      "openOnGitHub": "GitHub에서 열기",
+      "failedAfter": "{{duration}} 후 실패",
+      "failed": "실패",
+      "checkActions": "{{name}} 작업 더 보기",
+      "rerun": "재실행",
+      "copyErrorFailed": "오류를 복사하지 못했습니다.",
+      "durationSeconds": "{{seconds}}초",
+      "durationMinutes": "{{minutes}}분 {{seconds}}초",
+      "durationHours": "{{hours}}시간 {{minutes}}분",
+      "failing": "실패",
+      "fixWithAi": "AI로 수정",
+      "runningSection": "실행 중",
+      "queued": "대기 중",
+      "inProgress": "진행 중",
+      "passedSection": "통과",
+      "neutralSection": "중립",
+      "namesAndMore": "{{names}} 외 {{count}}개",
+      "running": "{{count}}개 실행 중",
+      "filterComments": "댓글 필터",
+      "commentOnPr": "#{{number}}에 댓글 달기…",
+      "unresolvedCount": "미해결 {{count}}",
+      "allCount": "전체 {{count}}",
+      "noUnresolved": "미해결 스레드가 없습니다.",
+      "resolvedCount": "해결됨 {{count}}",
+      "hideBots": "봇 숨기기",
+      "bot": "봇",
+      "commentActions": "이 댓글 작업 더 보기",
+      "replyAndMore": "{{body}} (외 {{count}}개)",
+      "severityCritical": "치명적",
+      "severityMajor": "주요",
+      "severityMinor": "경미",
+      "severityTrivial": "사소",
+      "thread": "스레드",
+      "backToComments": "댓글로 돌아가기",
+      "threadGone": "이 스레드는 더 이상 PR에 없습니다.",
+      "threadSubtitle_one": "{{author}} · 메시지 {{count}}개",
+      "threadSubtitle_other": "{{author}} · 메시지 {{count}}개",
+      "replyPlaceholder": "답글…",
+      "back": "PR로 돌아가기",
+      "noPullRequest": "이 브랜치에는 현재 PR이 없습니다.",
+      "fixWith": "{{agent}}(으)로 수정",
+      "live": "실시간",
+      "askToFix": "{{agent}}에게 수정 요청",
+      "askAiToFix": "AI에게 수정 요청"
+    },
+    "gates": {
+      "checksUnavailable": "체크를 사용할 수 없음",
+      "checksFailing_one": "체크 {{count}}개 실패",
+      "checksFailing_other": "체크 {{count}}개 실패",
+      "checksRunning_one": "체크 {{count}}개 실행 중",
+      "checksRunning_other": "체크 {{count}}개 실행 중",
+      "checksPassedSoFar": "지금까지 {{count}}개 통과",
+      "noChecks": "체크 없음",
+      "checksFinished": "체크 완료",
+      "checksPassed_one": "체크 {{count}}개 통과",
+      "checksPassed_other": "체크 {{count}}개 통과",
+      "checksNeutral": "{{count}}개 중립",
+      "threads": "리뷰 스레드",
+      "commentsUnavailable": "댓글을 사용할 수 없음",
+      "allThreadsResolved": "모든 스레드 해결됨",
+      "noThreads": "리뷰 스레드 없음",
+      "threadAuthorOnFile": "{{author}} · {{file}}",
+      "fromBots_one": "봇 스레드 {{count}}개",
+      "fromBots_other": "봇 스레드 {{count}}개",
+      "unresolvedThreads_one": "미해결 스레드 {{count}}개",
+      "unresolvedThreads_other": "미해결 스레드 {{count}}개",
+      "changesRequested": "변경 요청됨",
+      "requestedChangesBy": "{{logins}} 님이 변경을 요청함",
+      "approvedBy": "{{logins}} 님이 승인함",
+      "reviewRequestedFrom": "{{logins}} 님에게 리뷰 요청됨",
+      "reviewRequired": "리뷰 필요",
+      "noApprovals": "아직 승인 없음",
+      "approvals_one": "승인 {{count}}건",
+      "approvals_other": "승인 {{count}}건",
+      "conflictsWithBase": "{{base}}와(과) 충돌",
+      "conflicts": "병합 충돌",
+      "conflictFiles_one": "파일 {{count}}개",
+      "conflictFiles_other": "파일 {{count}}개",
+      "conflictsChecking": "충돌 확인 중",
+      "noConflictsWithBase": "{{base}}와(과) 충돌 없음",
+      "noConflicts": "충돌 없음"
     }
   },
   "session": {
@@ -2425,6 +2529,7 @@
       "images_one": "이미지 {{count}}개",
       "images_other": "이미지 {{count}}개",
       "moreActions": "추가 작업",
+      "you": "나",
       "send": "보내기",
       "sendAgainHint": "이 메시지 다시 보내기",
       "sendHint": "이 메시지 보내기",
@@ -2534,6 +2639,7 @@
       "unsavedMarkdown": "저장되지 않은 Markdown 변경 사항",
       "urlPrompt": "URL을 입력하세요. 비워 두면 새 탭이 열립니다.",
       "allowAutoClose": "자동 닫기 허용",
+      "agents": "에이전트",
       "renameTerminalFailed": "터미널 이름을 변경하지 못했습니다. {{reason}}"
     },
     "sourceControlLaunchAgent": {
@@ -2747,6 +2853,8 @@
       "conversationCleared": "이 대화는 지워졌습니다.",
       "goalsUnsupported": "이 에이전트는 목표를 지원하지 않습니다.",
       "historyUnavailable": "Orca가 지금 이 채팅의 기록을 열지 못했습니다.",
+      "diskFull": "이 채팅을 실행 중인 컴퓨터의 디스크가 가득 찼습니다.",
+      "freeDiskSpace": "해당 디스크의 공간을 확보한 후 다시 시도하세요.",
       "savedInOtherFolder": "이 대화는 다른 폴더에 저장되었습니다.",
       "historyUnreadable": "Orca가 이 채팅의 저장된 기록을 읽지 못했습니다.",
       "historyUnusable": "이 채팅을 불러올 수 없습니다.",
@@ -2846,16 +2954,35 @@
     },
     "structuredOpen": {
       "worktreeDeleted": "워크트리가 삭제되었습니다.",
+      "projectRemoved": "프로젝트가 Orca에서 제거되었습니다.",
       "folderWorkspaceRemoved": "폴더 워크스페이스가 제거되었습니다."
     },
     "nativeChatView": {
       "linkedMessageMissing": "해당 메시지를 찾을 수 없습니다."
     },
+    "tabsSheet": {
+      "needsYou": "확인 필요",
+      "working": "작업 중",
+      "everythingElse": "기타",
+      "closeTab": "{{title}} 닫기"
+    },
+    "tabRows": {
+      "browser": "브라우저",
+      "markdown": "Markdown 노트",
+      "file": "파일",
+      "chat": "채팅",
+      "terminal": "터미널"
+    },
     "browserProfile": {
       "default": "기본"
     },
     "tabBar": {
+      "oneTab": "탭 1개",
       "tabCount": "탭 {{count}}개",
+      "anotherNeedsYou": "다른 탭에서 확인이 필요합니다",
+      "actionsHint": "이 탭의 작업을 표시합니다",
+      "next": "다음 탭",
+      "previous": "이전 탭",
       "hint": "모든 탭 표시"
     }
   },
@@ -3435,6 +3562,9 @@
       "planModelUnavailable": "\"{{model}}\" 모델은 {{label}}에서 사용할 수 없습니다.",
       "planModelWithoutThinking": "\"{{model}}\" 모델은 사고 강도 설정을 지원하지 않습니다.",
       "planThinkingLevelInvalid": "{{model}}에서는 사고 강도 \"{{level}}\" 설정을 사용할 수 없습니다.",
+      "commandTemplateEmptyDictationCleanup": "받아쓰기 정리용 명령 템플릿이 비어 있습니다.",
+      "dictationCleanupAgentUnsupported": "설정 -> 음성 -> 정리에서 AI 정리를 지원하는 에이전트를 선택하세요. 지원하는 에이전트: {{agents}}, 또는 사용자 지정 명령.",
+      "agentCannotGenerateDictationCleanup": "에이전트 \"{{agent}}\"은(는) 받아쓰기 정리를 지원하지 않습니다. 지원하는 에이전트: {{agents}}, 또는 사용자 지정 명령.",
       "promptTooLargeForArgument": "{{label}} 프롬프트가 너무 커서 단일 명령줄 인수로 전달할 수 없습니다. 스테이징할 변경 사항을 줄이고 다시 시도하세요.",
       "promptTooLargeForWindows": "{{label}} 프롬프트가 Windows 명령줄에서 사용하기에 너무 큽니다. 스테이징할 변경 사항을 줄이고 다시 시도하세요.",
       "pullRequestDetailsUnparseable": "생성된 PR 세부 정보를 구문 분석할 수 없습니다.",
@@ -4088,7 +4218,6 @@
       "empty": "워크스페이스가 없습니다.",
       "loadFailed": "이 호스트에서 워크스페이스를 불러오지 못했습니다.",
       "noFilterMatches": "필터에 맞는 워크스페이스가 없습니다.",
-      "noMatches": "일치하는 워크스페이스가 없습니다.",
       "reopen": "업데이트하려면 다시 여세요",
       "reopenDetail": "이 페이지는 아직 이 호스트의 워크스페이스 목록 형식을 지원하지 않습니다."
     },
@@ -4115,7 +4244,6 @@
       "extraAgentArguments": "추가 에이전트 인수",
       "allAutomations": "모든 자동화",
       "schedule": "일정",
-      "nextRun": "다음 실행",
       "agent": "에이전트",
       "project": "프로젝트",
       "unavailable": "사용할 수 없음",
@@ -4166,7 +4294,6 @@
       "newWorkspacePerRun": "실행마다 새 작업 공간",
       "instructions": "지침",
       "runNow": "지금 실행",
-      "viewAllRuns": "모든 실행 보기",
       "savedAgent": "{{agent}}(저장됨)",
       "chooseAProjectSetUpOnThisHost": "이 호스트에 설정된 프로젝트를 선택하세요.",
       "newAutomation": "새 자동화",
@@ -4190,9 +4317,6 @@
       "letYourAgentsWorkOnASchedule": "에이전트가 일정에 따라 작업하도록 하세요",
       "createAnAutomationToRunATaskOnThisHost": "이 호스트에서 작업을 실행할 자동화를 만드세요.",
       "nextDate": "다음: {{date}}",
-      "lastResult": "최근: {{status}} · {{date}}",
-      "latestResultNotReported": "최근 결과가 보고되지 않음",
-      "sshTarget": " · SSH {{target}}",
       "reconnectToThisHostToRefreshOrMakeChangesSavedInformationRemainsAvailableBelow": "새로 고치거나 변경하려면 이 호스트에 다시 연결하세요. 저장된 정보는 아래에서 계속 확인할 수 있습니다.",
       "recentRuns": "최근 실행",
       "outcome": "결과",
@@ -4215,7 +4339,6 @@
       "fullOutputUnavailable": "전체 출력을 불러오지 못했습니다.",
       "retryFullOutput": "다시 시도",
       "noMatchingRunsInTheLoadedHistoryLoadMoreToContinue": "불러온 기록에 일치하는 실행이 없습니다. 계속하려면 더 불러오세요.",
-      "noMatchingRunsYet": "아직 일치하는 실행이 없습니다.",
       "runSummary": "{{title}}, {{status}}, {{date}}",
       "scheduled": "예약됨",
       "loadMoreRuns": "실행 더 불러오기",
@@ -4391,7 +4514,7 @@
             "remoteOwnerNotConfigured": "{{server}}에 구성되지 않음",
             "claudeUnknownOnHost": "{{server}}에서 Claude 사용량을 가져올 수 없습니다. 그곳에서 로그인하지 않았거나 API 키 결제를 사용 중일 수 있습니다.",
             "remoteOwnerSignInSavedHere": "로그인 정보는 이 컴퓨터에만 저장되어 있습니다.",
-            "f8b8dbed85": "사용량 사용할 수 없음",
+            "f8b8dbed85": "사용량을 확인할 수 없음",
             "e2c6a4f917": "Grok을 실행하여 새로 고침",
             "f90b3d7a16": "새로고침하려면 Kimi를 실행하세요.",
             "0d8d7cfe15": "Claude 세션 대기 중",
@@ -4402,7 +4525,7 @@
               }
             },
             "1804cd8c3f": "로그인 새로 고치는 중",
-            "bf2e739f18": "로그인 사용할 수 없음",
+            "bf2e739f18": "로그인할 수 없음",
             "f8f0f9d8cc": "네트워크 문제",
             "minimax": {
               "expired": {
@@ -4439,6 +4562,7 @@
     }
   },
   "bots": {
+    "section": {},
     "link": {
       "pairTitle": "컴퓨터 페어링",
       "pairRequired": "이 링크를 열려면 이 휴대폰을 컴퓨터와 페어링한 다음 링크를 다시 여세요.",
@@ -4477,7 +4601,6 @@
       "access": "접근",
       "whoCanAsk": "요청할 수 있는 사람",
       "deleteBot": "봇 삭제…",
-      "agentDetail": "봇 대화와 자동화에 사용됩니다. 새 모델은 새 대화에 적용되며, 홈 채팅은 현재 모델을 유지합니다.",
       "accountChecking": "확인 중…",
       "signedOut": "Orca에서 로그아웃했습니다",
       "orcaAccount": "Orca 계정",
@@ -4492,7 +4615,6 @@
       "onlyYou": "나만",
       "model": "모델",
       "effort": "추론 수준",
-      "chatDefaultNote": "채팅 기본값을 사용합니다. 백그라운드 실행은 에이전트 설정을 사용합니다.",
       "modelDefault": "기본값",
       "signInChanged": "Orca 로그인이 변경됨",
       "sameAsChatsDetail": "채팅 권한 설정을 사용합니다.",
@@ -4518,7 +4640,6 @@
     "lookAround": {
       "looking": "찾는 중…",
       "save": "저장",
-      "detail": "연결된 앱과 프로젝트를 읽고 다음 단계를 제안합니다. 읽기 전용입니다. 둘러볼 때마다 에이전트 요금제를 사용하며, 호스트에서 Orca가 실행 중이어야 합니다.",
       "lookNow": "지금 둘러보기",
       "notYet": "아직 없음",
       "backToLookAround": "둘러보기로 돌아가기"
@@ -4533,28 +4654,13 @@
     "groups": {
       "group": "그룹",
       "peerTold": "{{from}}이(가) {{to}}에게 알림",
-      "startAConversationWithThisGroupMentionBots": "이 그룹과 대화를 시작하세요. @이름 또는 @everyone으로 봇을 멘션하세요.",
       "items": {
-        "thisGroup": "이 그룹",
-        "thread": "스레드",
-        "all": "모든 작업",
-        "orNames": "{{names}} 또는 {{last}}",
-        "outsideRoom_one": "이 방 밖에 {{count}}개 더",
-        "outsideRoom_other": "이 방 밖에 {{count}}개 더",
-        "outsideThread_one": "이 스레드 밖에 {{count}}개 더",
-        "outsideThread_other": "이 스레드 밖에 {{count}}개 더",
-        "outside_one": "이 그룹 밖에 {{count}}개 더",
-        "outside_other": "이 그룹 밖에 {{count}}개 더",
         "emptyTitle": "이 그룹의 항목이 아직 없음",
-        "emptyBody": "{{names}}이(가) 이 그룹에서 무언가를 맡으면 여기에 표시됩니다.",
         "needsYouCount_one": "확인 필요 {{count}}개",
         "needsYouCount_other": "확인 필요 {{count}}개",
         "workingCount_one": "{{count}}개 작업 중",
         "workingCount_other": "{{count}}개 작업 중",
         "filterBot": "봇",
-        "outsideRoom": "이 방 밖에 {{count}}개 더",
-        "outsideThread": "이 스레드 밖에 {{count}}개 더",
-        "outside": "이 그룹 밖에 {{count}}개 더",
         "needsYouCount": "확인 필요 {{count}}개",
         "workingCount": "{{count}}개 작업 중"
       },
@@ -4977,14 +5083,11 @@
     "tidyUp": {
       "title": "메모리 관리",
       "never": "아직 없음",
-      "footer": "메모리 파일만 변경합니다. 짧은 채팅처럼 에이전트 요금제를 사용합니다. 컴퓨터에서 Orca가 실행 중이어야 합니다.",
-      "undoNote": "실행 취소하면 MEMORY.md가 이 정리 이전 상태로 한 번에 돌아갑니다. 전체 기록과 메모리 편집은 컴퓨터의 설정 → 메모리에서 이용할 수 있습니다.",
       "backToTidyUp": "메모리 관리로 돌아가기"
     },
     "items": {
       "filter": {
-        "clearAll": "필터 지우기",
-        "chat": "채팅"
+        "clearAll": "필터 지우기"
       },
       "tab": "항목",
       "activity": {
@@ -5000,8 +5103,7 @@
         "title": "항목",
         "placeOf": "{{total}}개 중 {{index}}번째",
         "previous": "이전 항목",
-        "next": "다음 항목",
-        "subWhere": "항목 {{number}} · {{chat}}"
+        "next": "다음 항목"
       },
       "write": {
         "offline": "{{host}}이(가) 오프라인입니다."
@@ -5010,8 +5112,9 @@
       "readFailedClosedPage": "닫힌 항목을 더 읽지 못했습니다.",
       "skillLimit": "메시지를 보내지 않았습니다. 선택한 스킬 파일을 {{limit}}개 이하로 줄인 뒤 다시 시도하세요.",
       "ask": {
-        "notSentYet": "아직 보내지 않음",
-        "replaced": "에이전트가 새 질문을 했습니다. 읽은 다음 답장하세요."
+        "replaced": "에이전트가 새 질문을 했습니다. 읽은 다음 답장하세요.",
+        "replacedByNewer": "새 질문으로 대체됨",
+        "skipped": "건너뜀"
       }
     },
     "needs": {
@@ -5078,7 +5181,6 @@
       },
       "rotate": {
         "open": "키 교체…",
-        "title": "‘{{automation}}’의 키를 교체할까요?",
         "confirm": "키 교체",
         "note": "URL에 새 키가 붙습니다. 모든 발신자를 새 키로 업데이트하세요.",
         "overlap": "이전 키를 24시간 동안 계속 유효하게 두기",
@@ -5093,19 +5195,15 @@
         "add": "서명 시크릿 추가…",
         "generatedTitle": "서명 시크릿 준비됨",
         "done": "완료",
-        "generatedNote": "{{sender}}의 웹훅 설정에 복사해 넣으세요. 이제부터 호출에는 그 서명이 있어야 합니다.",
         "copy": "시크릿 복사",
         "copied": "시크릿 복사됨",
         "changeTitle": "서명 시크릿 변경",
         "addTitle": "서명 시크릿 추가",
-        "note": "그러면 Orca는 이 시크릿으로 서명된 호출만 받으므로, URL만 유출되어서는 ‘{{automation}}’을(를) 시작할 수 없습니다.",
         "sender": "발신자",
         "modeGenerate": "Orca가 생성",
         "modePaste": "발신자의 시크릿 붙여 넣기",
         "generateNote": "Orca가 이 시크릿을 만듭니다. 다음으로 {{sender}}에 복사해 넣으세요.",
         "paste": "{{sender}} 시크릿",
-        "pasteNote": "발신자가 자체 시크릿을 제공할 때 사용하세요.",
-        "generate": "시크릿 생성",
         "save": "저장",
         "saved": "서명 시크릿 저장됨",
         "changeOpen": "서명 시크릿 변경…",
@@ -5139,7 +5237,6 @@
       "hookCount_one": "훅 {{count}}개",
       "hookCount_other": "훅 {{count}}개",
       "name": "웹훅",
-      "hooks": "훅",
       "addInChat": "채팅에서 추가",
       "setUpDraft": "다음과 같은 웹훅을 설정해 주세요: ",
       "resumed": "웹훅이 재개됨",
@@ -5205,8 +5302,7 @@
         "unverifiable": "확인 불가",
         "unverifiableDetail": "{{bot}}의 컴퓨터에 연결할 수 없습니다"
       },
-      "back": "웹훅으로 돌아가기",
-      "howToCallShort": "도구나 스크립트에서 훅의 URL로 POST 요청을 보낼 수 있습니다. 각 훅은 자동화 하나를 시작합니다."
+      "back": "웹훅으로 돌아가기"
     },
     "errors": {
       "generic": "문제가 발생했습니다. 다시 시도하세요."
@@ -5272,7 +5368,6 @@
       "colorInk": "잉크",
       "title": "이름과 사진",
       "mascot": "마스코트",
-      "background": "배경색",
       "choosePhoto": "사진에서 선택",
       "slackToo": "Slack의 봇 사진도 변경됩니다."
     },
@@ -5289,9 +5384,7 @@
       "addButton": "추가",
       "sourceLabel": "서버 URL 또는 시작 명령",
       "sourcePlaceholder": "https://… or npx …",
-      "scope": "내 도구 외에 {{name}}만 이것을 사용합니다.",
       "details": "세부 정보",
-      "commandWarning": "명령은 {{host}}의 봇 홈 폴더에서 실행됩니다. 추가하거나 저장하면 기본 확인 중에 시작될 수 있습니다. 신뢰하는 소프트웨어만 추가하세요.",
       "serverType": "서버 유형",
       "urlMode": "URL에 연결",
       "commandMode": "명령 실행",
@@ -5299,7 +5392,6 @@
       "removeTitle": "{{app}}을(를) 제거할까요?",
       "removeNote": "{{bot}}은(는) 더 이상 {{app}}을(를) 사용할 수 없습니다. 언제든 다시 추가할 수 있습니다.",
       "remove": "제거",
-      "signInOrca": "Claude 및 Codex와 함께 작동",
       "signInMissing": "{{agent}}이(가) 로그인되지 않음",
       "signInHeld": "{{agent}}이(가) 관리",
       "wontStart": "시작되지 않음",
@@ -5361,7 +5453,17 @@
         "denied": "액세스가 허용되지 않았습니다.",
         "expired": "로그인이 만료되었습니다. 다시 시도하세요.",
         "couldNotSignIn": "로그인할 수 없습니다. 다시 시도하세요."
-      }
+      },
+      "trust": "신뢰할 수 있는 소프트웨어만 추가하세요.",
+      "argument": "인수",
+      "removeArgument": "인수 제거",
+      "header": "헤더",
+      "variable": "변수",
+      "removeHeaderRow": "헤더 제거",
+      "removeVariableRow": "변수 제거",
+      "emptyArgument": "비어 있음",
+      "valueNew": "새 값",
+      "valueSaved": "저장됨"
     },
     "handToBot": {
       "menu": "봇에게 넘기기…",
@@ -5394,7 +5496,6 @@
       "rowDetail": "{{app}} {{kind}}",
       "bringOver": "가져오기",
       "otherApp": "다른 앱…",
-      "otherAppNote": "이전 봇이 파일을 대신 복사합니다",
       "noneFoundNote": "OpenClaw(~/.openclaw), Hermes(~/.hermes), OpenBot에서 봇을 찾지 못했습니다.",
       "sendStep": "이전 봇에게 이 메시지를 보내세요",
       "copyMessage": "메시지 복사",
@@ -5405,18 +5506,13 @@
       "replyLabel": "답장",
       "title": "다른 앱에서 가져오기",
       "newBot": "새 봇",
-      "exportDescription": "이전 봇에게 자신의 복사본을 요청한 다음, 그 복사본을 새 봇에게 주세요.",
-      "description": "새 봇이 이전 봇을 읽고 스스로 설정합니다.",
       "nameAnother": "새 봇 이름 지정",
-      "importedBefore": "{{bot}}은(는) 이 봇에서 왔습니다",
       "keysStay": "키와 로그인 정보는 남겨 둡니다",
       "chooseFolderTitle": "폴더 선택",
       "loadingFolders": "폴더 불러오는 중…",
       "lookingOn": "{{host}}에서 찾는 중…",
       "foundOn": "{{host}}에서 {{count}}개 찾음",
-      "copiedNote": "복사했습니다. 이전 봇과 채팅하는 곳에 붙여 넣으세요.",
       "copyAgain": "다시 복사",
-      "addStepNote": "{{host}}의 Downloads에 이름이 -export로 끝나는 폴더를 저장합니다.",
       "folderItems_one": "항목 {{count}}개",
       "folderItems_other": "항목 {{count}}개",
       "chooseAnother": "다른 폴더 선택…",
@@ -5578,6 +5674,9 @@
       },
       "webhooks": {
         "line": "모든 도구나 스크립트의 이벤트"
+      },
+      "composio": {
+        "keyOnHost": "{{host}}에 저장되며 봇은 볼 수 없습니다."
       }
     },
     "share": {
@@ -5589,6 +5688,11 @@
       "today": "오늘",
       "yesterday": "어제",
       "lastTidied": "마지막 정리 {{when}}"
+    },
+    "usageLimit": {
+      "continuesAt": "{{time}}에 계속",
+      "continues": "{{time}}에 계속",
+      "hitLimit": "한도 도달 · {{time}}에 초기화"
     }
   },
   "sidebar": {

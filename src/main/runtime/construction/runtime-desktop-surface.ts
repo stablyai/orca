@@ -35,6 +35,10 @@ export type RuntimeDesktopSurface = {
   holdRendererPublication?(windowId: number): () => void
   /** Keeps this machine's display on until the returned release runs, as Chromium does while a page is captured. */
   holdDisplayAwake?(): () => void
+  /** This machine's screen: locked, or idle long enough that its display may have slept. */
+  readScreenState?(): 'active' | 'idle' | 'locked'
+  /** Calls `listener` when this machine's screen locks, until the returned stop runs. */
+  onScreenLocked?(listener: () => void): () => void
   /** The window's renderer id, which browser page retention records as a page's creator. */
   rendererIdOfWindow?(windowId: number): number | null
   /** Whether the window holding this renderer is shown; absent on Node hosts, which have no resource view. */

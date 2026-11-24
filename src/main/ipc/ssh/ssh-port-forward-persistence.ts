@@ -1,39 +1,27 @@
-import type { SavedPortForward } from '../../../shared/remote-runtime/ssh/ssh-types'
 import { getSshTargetRegistryStore } from '../../ssh/targets/ssh-target-registry'
 import { connectionManager, portForwardManager } from './ssh-ipc-context'
 import { broadcastPortForwards } from './ssh-renderer-broadcast'
 import { PortForwardTornDownError } from '../../ssh/port-forwarding/ssh-port-forward'
+import { assertIpv6LoopbackPortFree } from '../../ssh/port-forwarding/local-forward-ipv6-loopback-probe'
 import {
-  forwardKey,
   isForwardBackingOff,
   recordForwardFailure,
   recordForwardStarted
 } from './ssh-port-forward-unrestored'
+import {
+  forwardKey,
+  nextSavedPortForwards,
+  type ForwardMapping
+} from '../../ssh/port-forwarding/saved-port-forward-list'
 
 /** Retain inactive saved forwards across edits; dropped excludes the removed/replaced mapping (#32484). */
-export function persistPortForwards(
-  targetId: string,
-  dropped?: Pick<SavedPortForward, 'localPort' | 'remoteHost' | 'remotePort'>
-): void {
-  const active = portForwardManager!.listForwards(targetId)
-  // A live forward on a saved one's local port replaced it, whatever its destination.
-  const activePorts = new Set(active.map((forward) => forward.localPort))
-  const droppedKey = dropped ? forwardKey(dropped) : null
-
+export function persistPortForwards(targetId: string, dropped?: ForwardMapping): void {
   const existing = getSshTargetRegistryStore()!.getTarget(targetId)?.portForwards ?? []
-  const unrestored = existing.filter(
-    (pf) => !activePorts.has(pf.localPort) && forwardKey(pf) !== droppedKey
+  const saved = nextSavedPortForwards(
+    portForwardManager!.listForwards(targetId),
+    existing,
+    dropped ? [dropped] : []
   )
-
-  const saved: SavedPortForward[] = [
-    ...active.map((f) => ({
-      localPort: f.localPort,
-      remoteHost: f.remoteHost,
-      remotePort: f.remotePort,
-      label: f.label
-    })),
-    ...unrestored
-  ]
   getSshTargetRegistryStore()!.updateTarget(targetId, {
     portForwards: saved.length > 0 ? saved : undefined
   })
@@ -68,6 +56,7 @@ export async function restorePortForwards(targetId: string): Promise<void> {
       return
     }
     try {
+      await assertIpv6LoopbackPortFree(saved.localPort)
       const entry = await portForwardManager!.addForward(
         targetId,
         conn,

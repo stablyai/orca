@@ -12,20 +12,40 @@ import type { ExecutionHostId } from '../../../../shared/execution-host/executio
 import { botOfHomeWorkspace } from '../../../../shared/bots/bot-homes'
 import { isBotHomeTab } from '../../../../shared/bots/bot-home-tab'
 
+// The catalog is a snapshot replaced on change; every row naming a sender looks its bot up again
+// on each redraw, so each snapshot is indexed once rather than searched per lookup.
+const homeIndexes = new WeakMap<readonly Bot[], Map<string, Bot>>()
+
+function homeIndex(bots: readonly Bot[]): Map<string, Bot> {
+  let index = homeIndexes.get(bots)
+  if (!index) {
+    index = new Map()
+    for (const bot of bots) {
+      const home = folderWorkspaceKey(bot.folderWorkspaceId)
+      // First wins, as a search from the start would: unqualified, and qualified by host.
+      if (!index.has(home)) {
+        index.set(home, bot)
+      }
+      const onHost = `${bot.hostId}\0${home}`
+      if (!index.has(onHost)) {
+        index.set(onHost, bot)
+      }
+    }
+    homeIndexes.set(bots, index)
+  }
+  return index
+}
+
 /** With `hostId`, only a bot on that host, so the same workspace id on two hosts never names the other's bot. */
 export function findBotByWorkspace(
   bots: readonly Bot[],
   workspaceId: string | null,
   hostId?: ExecutionHostId
 ): Bot | null {
-  if (!hostId) {
-    return botOfHomeWorkspace(bots, workspaceId)
+  if (!workspaceId || bots.length === 0) {
+    return null
   }
-  return (
-    bots.find(
-      (bot) => bot.hostId === hostId && folderWorkspaceKey(bot.folderWorkspaceId) === workspaceId
-    ) ?? null
-  )
+  return homeIndex(bots).get(hostId ? `${hostId}\0${workspaceId}` : workspaceId) ?? null
 }
 
 /** With bots off a home is a plain folder. */

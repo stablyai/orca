@@ -3,6 +3,7 @@
 import { useEffect, useSyncExternalStore } from 'react'
 import {
   BOTS_ITEM_COMMENT_PLAIN_RUNTIME_CAPABILITY,
+  BOTS_ITEM_COMMENT_SKIPPED_RUNTIME_CAPABILITY,
   BOTS_ITEM_COMMENT_QUESTION_ID_RUNTIME_CAPABILITY,
   BOTS_ITEM_COMMENT_REQUEST_ID_RUNTIME_CAPABILITY,
   BOTS_ITEM_COMMENT_SKILLS_RUNTIME_CAPABILITY
@@ -28,7 +29,8 @@ export function usePhoneBotItemPendingComments({
   events,
   hostName,
   showToast,
-  returnText
+  returnText,
+  refresh
 }: {
   client: RpcClient | null
   /** One item on one host. */
@@ -39,12 +41,15 @@ export function usePhoneBotItemPendingComments({
   showToast: (message: string) => void
   /** A replaced question's reply, dropped: its words back to the comment box if it is empty. */
   returnText: (text: string) => void
+  /** Re-reads the item once the host refuses a reply to a replaced question. */
+  refresh: () => void
 }) {
   const t = useMobileTranslation()
   const requestIds = useRouteCapability(BOTS_ITEM_COMMENT_REQUEST_ID_RUNTIME_CAPABILITY)
   const skills = useRouteCapability(BOTS_ITEM_COMMENT_SKILLS_RUNTIME_CAPABILITY)
   const questionIds = useRouteCapability(BOTS_ITEM_COMMENT_QUESTION_ID_RUNTIME_CAPABILITY)
   const plain = useRouteCapability(BOTS_ITEM_COMMENT_PLAIN_RUNTIME_CAPABILITY)
+  const skipped = useRouteCapability(BOTS_ITEM_COMMENT_SKIPPED_RUNTIME_CAPABILITY)
   return usePendingComments(key, events, {
     post: async (entry) => {
       const outcome = client
@@ -53,7 +58,8 @@ export function usePhoneBotItemPendingComments({
             requestId: entry.requestId ?? undefined,
             skills: entry.skills,
             questionId: entry.questionId ?? undefined,
-            plain: entry.plain
+            plain: entry.plain,
+            skipped: entry.skipped
           })
         : ({ kind: 'not-sent' } as const)
       if (outcome.kind !== 'done') {
@@ -77,9 +83,11 @@ export function usePhoneBotItemPendingComments({
             : String(error)
       ),
     returnText,
+    refresh,
     requestIds,
     questionIds,
     plain,
-    skills
+    skills,
+    skipped
   })
 }

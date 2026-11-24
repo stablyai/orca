@@ -4,9 +4,7 @@ import { ImeTextarea } from '@/lib/text-input/ime/ime-text-field'
 import { useId } from 'react'
 import { useTranslate } from '@/i18n/use-translate'
 import { cn } from '@/lib/class-names'
-
-/** BotProposalSeedSchema.purpose's limit. */
-export const PURPOSE_MAX_LENGTH = 200
+import { BOT_PURPOSE_MAX_LENGTH } from '../../../../shared/bots/bot-proposal'
 const COUNTER_FROM = 160
 
 export function NewBotPurposeField({
@@ -39,7 +37,7 @@ export function NewBotPurposeField({
           aria-invalid={tooLong || undefined}
           aria-describedby={tooLong ? counterId : undefined}
           value={value}
-          maxLength={PURPOSE_MAX_LENGTH}
+          maxLength={BOT_PURPOSE_MAX_LENGTH}
           placeholder={t('bots.new.purposePlaceholder', 'Who it is and what it does')}
           onChange={(event) => onChange(event.target.value)}
         />
@@ -54,7 +52,7 @@ export function NewBotPurposeField({
           )}
         >
           {tooLong ? `${t('bots.new.validation.identityTooLong', 'Too long')} · ` : null}
-          {value.length}/{PURPOSE_MAX_LENGTH}
+          {value.length}/{BOT_PURPOSE_MAX_LENGTH}
         </p>
       ) : null}
     </div>

@@ -94,6 +94,13 @@ export type RuntimeMobileSessionFileTab = {
   hostRuntimeEnvironmentId?: string
 }
 
+export type RuntimeMobileSessionBrowserClientHost = {
+  /** Null when the server no longer knows the desktop's name. */
+  deviceName: string | null
+  /** The desktop disconnected; the page stays listed so it can still be closed. */
+  offline?: true
+}
+
 export type RuntimeMobileSessionBrowserTab = {
   type: 'browser'
   id: string
@@ -103,6 +110,8 @@ export type RuntimeMobileSessionBrowserTab = {
   browserProfileId?: string
   executionHostKey?: string
   placement?: RuntimeBrowserPlacement
+  /** The paired desktop showing this client-placed page, for clients that list it but can't stream it. */
+  clientHost?: RuntimeMobileSessionBrowserClientHost
   url: string
   /** Current runtime initialization disposition; never saved or echoed by a renderer. */
   initializationState?: 'pending' | 'stopped'
