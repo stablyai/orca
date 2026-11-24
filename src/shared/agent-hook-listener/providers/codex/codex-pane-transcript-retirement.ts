@@ -10,5 +10,5 @@ export function retireCodexPaneTranscripts(state: HookListenerState, paneKey?: s
     state.codexSubagentRosterByPaneKey.delete(paneKey)
     state.codexSubagentTranscriptByPaneKey.delete(paneKey)
   }
-  settleRetiredRolloutReads()
+  settleRetiredRolloutReads(paneKey)
 }

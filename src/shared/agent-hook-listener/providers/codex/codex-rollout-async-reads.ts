@@ -15,33 +15,64 @@ import {
 const MAX_CONCURRENT_ROLLOUT_READS = 3
 let rolloutReadsInFlight = 0
 type RolloutReadWaiter = { batch: RolloutReadBatch; grant: (granted: boolean) => void }
-const rolloutReadQueue: RolloutReadWaiter[] = []
+// Insertion-ordered, so the first entry is the oldest waiter; a Set unlinks a settled one in O(1).
+const rolloutReadQueue = new Set<RolloutReadWaiter>()
+// Why: lets a pane's retirement settle its own waiters without scanning every other pane's.
+const queuedBatchesByOwner = new Map<string, Set<RolloutReadBatch>>()
 // Why: sweeping only once the queue doubles keeps admission O(1) amortized and retired waiters bounded by live ones.
 const MIN_QUEUE_SWEEP_LENGTH = 16
 let queueSweepLength = MIN_QUEUE_SWEEP_LENGTH
 
-/** Settles queued reads whose owner retired; call when an owner ends, since a stalled slot may never free to skip them. */
-export function settleRetiredRolloutReads(): void {
-  let kept = 0
-  for (const waiter of rolloutReadQueue) {
-    if (waiter.batch.wanted()) {
-      rolloutReadQueue[kept++] = waiter
-    } else {
-      waiter.grant(false)
+function enqueueRolloutRead(waiter: RolloutReadWaiter): void {
+  const { batch } = waiter
+  rolloutReadQueue.add(waiter)
+  batch.queued.add(waiter)
+  if (batch.owner !== undefined) {
+    const batches = queuedBatchesByOwner.get(batch.owner) ?? new Set()
+    batches.add(batch)
+    queuedBatchesByOwner.set(batch.owner, batches)
+  }
+}
+
+function settleRolloutRead(waiter: RolloutReadWaiter, granted: boolean): void {
+  const { batch } = waiter
+  rolloutReadQueue.delete(waiter)
+  batch.queued.delete(waiter)
+  if (batch.owner !== undefined && batch.queued.size === 0) {
+    const batches = queuedBatchesByOwner.get(batch.owner)
+    batches?.delete(batch)
+    if (batches?.size === 0) {
+      queuedBatchesByOwner.delete(batch.owner)
     }
   }
-  rolloutReadQueue.length = kept
-  queueSweepLength = Math.max(MIN_QUEUE_SWEEP_LENGTH, kept * 2)
+  waiter.grant(granted)
+}
+
+/** Settles queued reads whose owner retired: one pane's, or with no pane every queued read. Call when an owner
+ *  ends, since a stalled slot may never free to skip them. */
+export function settleRetiredRolloutReads(owner?: string): void {
+  if (owner !== undefined) {
+    for (const batch of queuedBatchesByOwner.get(owner) ?? []) {
+      batch.settleQueued()
+    }
+    return
+  }
+  for (const waiter of rolloutReadQueue) {
+    if (!waiter.batch.wanted()) {
+      settleRolloutRead(waiter, false)
+    }
+  }
+  queueSweepLength = Math.max(MIN_QUEUE_SWEEP_LENGTH, rolloutReadQueue.size * 2)
 }
 
 /** A freed slot passes straight to the oldest wanted waiter, so the count never overshoots. */
 function releaseRolloutReadSlot(): void {
-  for (let next = rolloutReadQueue.shift(); next; next = rolloutReadQueue.shift()) {
-    if (next.batch.wanted()) {
-      next.grant(true)
+  for (const next of rolloutReadQueue) {
+    const granted = next.batch.wanted()
+    settleRolloutRead(next, granted)
+    if (granted) {
       return
     }
-    next.grant(false)
   }
   rolloutReadsInFlight -= 1
 }
@@ -66,8 +97,23 @@ function releaseAbandonedBatches(): void {
 export class RolloutReadBatch {
   private held = 0
   private released = false
+  /** This batch's reads waiting for a slot. */
+  readonly queued = new Set<RolloutReadWaiter>()
 
-  constructor(private readonly isWanted: () => boolean = () => true) {}
+  constructor(
+    private readonly isWanted: () => boolean = () => true,
+    /** The pane whose retirement settles this batch's queued reads. */
+    readonly owner?: string
+  ) {}
+
+  /** Settles this batch's queued reads once it is no longer wanted. */
+  settleQueued(): void {
+    for (const waiter of this.queued) {
+      if (!waiter.batch.wanted()) {
+        settleRolloutRead(waiter, false)
+      }
+    }
+  }
 
   wanted(): boolean {
     return !this.released && this.isWanted()
@@ -118,10 +164,10 @@ async function withRolloutReadSlot<T>(
   if (rolloutReadsInFlight < MAX_CONCURRENT_ROLLOUT_READS) {
     rolloutReadsInFlight += 1
   } else {
-    if (rolloutReadQueue.length >= queueSweepLength) {
+    if (rolloutReadQueue.size >= queueSweepLength) {
       settleRetiredRolloutReads()
     }
-    const granted = await new Promise<boolean>((grant) => rolloutReadQueue.push({ batch, grant }))
+    const granted = await new Promise<boolean>((grant) => enqueueRolloutRead({ batch, grant }))
     if (!granted) {
       return unwanted
     }

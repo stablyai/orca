@@ -21,10 +21,10 @@ describe('rollout read slots', () => {
       void rolloutFileSizeAsync(`/stalled-${i}`, live)
     }
     let wanted = true
-    const retired = rolloutFileSizeAsync('/retired', new RolloutReadBatch(() => wanted))
+    const retired = rolloutFileSizeAsync('/retired', new RolloutReadBatch(() => wanted, 'pane'))
     wanted = false
     // The owner's teardown settles it; the stalled slots stay held.
-    settleRetiredRolloutReads()
+    settleRetiredRolloutReads('pane')
     await expect(retired).resolves.toBeNull()
     expect(stalled).toHaveLength(3)
   })
