@@ -1,5 +1,6 @@
 import { OpaqueIdSchema } from '@orca-cloud/push-contract'
 import { z } from 'zod'
+import { CONNECTOR_LIMITS } from './connector-limits.js'
 
 /** Opaque to the cloud: the machine encodes [repoHostId, repoId], or a folder's project group. */
 export const PlaceIdSchema = z.string().min(1).max(512)
@@ -10,7 +11,10 @@ export const ConnectorHostDescription = {
   hostName: z.string().min(1),
   platform: z.string().min(1),
   runtime: z.enum(CONNECTOR_HOST_RUNTIMES),
-  orcaVersion: z.string().min(1)
+  orcaVersion: z.string().min(1),
+  // The display name of the Orca account signed in on the machine, which teammates see their shared
+  // bots by; the cloud cleans it as it does every label. Absent from an older machine.
+  ownerName: z.string().min(1).max(CONNECTOR_LIMITS.maxDisplayTextLength).optional()
 }
 
 // webhook: a hook's calls. orca: a teammate's message to a bot shared with them (share-messages.ts).

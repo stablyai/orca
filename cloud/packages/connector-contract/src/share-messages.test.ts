@@ -33,6 +33,12 @@ describe('bot shares contract', () => {
     expect(ConnectorHelloRequestSchema.safeParse({ ...hello, bots: [{ ...bot, sharedWith: over }] }).success).toBe(false)
   })
 
+  it('takes the owner name only within the display length', () => {
+    const named = (ownerName: string) => ConnectorHelloRequestSchema.safeParse({ ...hello, ownerName }).success
+    expect(named('Jinwoo Hong')).toBe(true)
+    expect(named('x'.repeat(CONNECTOR_LIMITS.maxDisplayTextLength + 1))).toBe(false)
+  })
+
   it('takes invites only as normalized emails', () => {
     const invite = (email: string) =>
       ConnectorHelloRequestSchema.safeParse({ ...hello, bots: [{ ...bot, sharedWith: [{ shareId: 's1', email }] }] })
