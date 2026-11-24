@@ -25039,10 +25039,7 @@
         "lastItem": "Último elemento",
         "previous": "Elemento anterior",
         "next": "Elemento siguiente",
-        "linkCount": "{{count}} enlaces",
-        "reply": "Responder",
-        "replyAbove": "Responder, arriba",
-        "replyBelow": "Responder, abajo"
+        "linkCount": "{{count}} enlaces"
       },
       "activity": {
         "linked": "enlazó {{links}}",

@@ -25061,10 +25061,7 @@
         "lastItem": "Dernier élément",
         "previous": "Élément précédent",
         "next": "Élément suivant",
-        "linkCount": "{{count}} liens",
-        "reply": "Répondre",
-        "replyAbove": "Répondre, plus haut",
-        "replyBelow": "Répondre, plus bas"
+        "linkCount": "{{count}} liens"
       },
       "activity": {
         "linked": "a lié {{links}}",

@@ -27768,10 +27768,7 @@
         "lastItem": "마지막 항목",
         "previous": "이전 항목",
         "next": "다음 항목",
-        "linkCount": "링크 {{count}}개",
-        "reply": "답변",
-        "replyAbove": "위 질문에 답변",
-        "replyBelow": "아래 질문에 답변"
+        "linkCount": "링크 {{count}}개"
       },
       "activity": {
         "linked": "이(가) {{links}}을(를) 연결함",

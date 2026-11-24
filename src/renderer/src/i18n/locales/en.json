@@ -30343,9 +30343,6 @@
         "lastItem": "Last item",
         "deleted": "This item was deleted.",
         "linkCount": "{{count}} links",
-        "reply": "Reply",
-        "replyAbove": "Reply, above",
-        "replyBelow": "Reply, below",
         "loading": "Loading item…"
       },
       "loading": "Loading items…",

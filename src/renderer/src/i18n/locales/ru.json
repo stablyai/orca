@@ -25067,10 +25067,7 @@
         "lastItem": "Последний элемент",
         "previous": "Предыдущий элемент",
         "next": "Следующий элемент",
-        "linkCount": "Ссылки: {{count}}",
-        "reply": "Ответить",
-        "replyAbove": "Ответить на вопрос выше",
-        "replyBelow": "Ответить на вопрос ниже"
+        "linkCount": "Ссылки: {{count}}"
       },
       "activity": {
         "linked": "связал {{links}}",

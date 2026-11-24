@@ -24460,10 +24460,7 @@
         "lastItem": "Letztes Element",
         "previous": "Vorheriges Element",
         "next": "Nächstes Element",
-        "linkCount": "{{count}} Links",
-        "reply": "Antworten",
-        "replyAbove": "Antworten, weiter oben",
-        "replyBelow": "Antworten, weiter unten"
+        "linkCount": "{{count}} Links"
       },
       "activity": {
         "linked": "hat {{links}} verknüpft",

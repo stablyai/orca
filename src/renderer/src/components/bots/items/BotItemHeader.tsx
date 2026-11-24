@@ -36,8 +36,7 @@ export function BotItemHeader({
   chatTitle,
   deleted,
   onStatus,
-  snoozing,
-  reply
+  snoozing
 }: {
   bot: Bot
   item: BotItem
@@ -46,8 +45,6 @@ export function BotItemHeader({
   deleted: boolean
   onStatus: (to: BotItemStatus) => void
   snoozing: BotItemSnoozing
-  /** At the status row's end: the way to the question when it is off screen. */
-  reply?: React.ReactNode
 }): React.JSX.Element {
   const t = useTranslate()
   const now = useNow(60_000)
@@ -72,7 +69,6 @@ export function BotItemHeader({
           snoozing={snoozing}
         />
         <BotItemLinkChips bot={bot} links={item.links} chat={chatTitle} />
-        {reply ? <div className="ml-auto flex shrink-0 pl-1">{reply}</div> : null}
       </div>
       {snoozed && item.snoozedUntil !== null ? (
         <div className="-mt-1 flex min-w-0 items-center gap-1.5 text-xs text-muted-foreground">

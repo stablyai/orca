@@ -1,5 +1,5 @@
 // Where an item's Needs you entry sits against the scroller's view, and the state of a jump to it, kept
-// outside React: the entry crossing the view's edge re-renders only the header's Reply, never the page.
+// outside React: the entry crossing the view's edge re-renders only the jump pill, never the page.
 // Two IntersectionObservers on the entry's top edge say where it is; nothing is read on scroll.
 import { BOT_ITEM_NEEDS_YOU_TOP_ATTRIBUTE } from './BotItemNeedsYouMark'
 

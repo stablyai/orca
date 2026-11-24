@@ -122,7 +122,9 @@ function Pane({
 }
 
 const wait = (ms: number): Promise<void> => new Promise((resolve) => setTimeout(resolve, ms))
-const scroller = (frame: HTMLElement) => frame.querySelector<HTMLElement>('.overflow-y-auto')
+// The Activity's scroller, under the fixed top.
+const scroller = (frame: HTMLElement) =>
+  frame.querySelector<HTMLElement>('section .overflow-y-auto')
 
 async function scrollToTop(frame: HTMLElement): Promise<void> {
   const node = scroller(frame)
@@ -134,11 +136,8 @@ async function scrollToTop(frame: HTMLElement): Promise<void> {
   await wait(250)
 }
 
-async function clickReply(frame: HTMLElement, settle: number): Promise<void> {
-  const reply = Array.from(frame.querySelectorAll<HTMLButtonElement>('button')).find((button) =>
-    button.getAttribute('aria-label')?.startsWith('Reply')
-  )
-  reply?.click()
+async function clickPill(frame: HTMLElement, settle: number): Promise<void> {
+  frame.querySelector<HTMLButtonElement>('[data-native-chat-jump-latest]')?.click()
   await wait(settle)
 }
 
@@ -159,25 +158,25 @@ function both(
 
 const noteView = read(needsYou, activity('note'))
 
-// Needs you, read from the top: the entry that asked is below, so Reply points down.
+// Needs you, read from the top: the entry that asked is below, so the pill reads Needs you and points down.
 export const [needsYouBelow260, needsYouBelow340] = both(
   () => <Pane item={needsYou} view={noteView} />,
   scrollToTop
 )
 
-// Opened at the end, past the entry that asked: Reply points up.
+// Opened at the end, past the entry that asked: the Needs you pill points up.
 export const [scrolledPast260, scrolledPast340] = both(
   () => <Pane item={needsYou} view={noteView} />,
   () => wait(300)
 )
 
-// After Reply: the entry sits under the header with its amber ring, Reply is gone, the box has focus.
+// After the pill: the entry sits under the header with its amber ring, the pill is gone, the box has focus.
 export const [afterJump260, afterJump340] = both(
   () => <Pane item={needsYou} view={noteView} />,
   async (frame) => {
     await scrollToTop(frame)
     // Past the smooth scroll; shots end animations, so the ring's peak is drawn as a still frame.
-    await clickReply(frame, 1200)
+    await clickPill(frame, 1200)
     const node = frame.querySelector<HTMLElement>('[data-bot-item-needs-you]')
     if (node) {
       const amber = getComputedStyle(node).getPropertyValue('--agent-question').trim()
@@ -199,12 +198,12 @@ export const [olderHostQuestion260, olderHostQuestion340] = both(
   () => wait(300)
 )
 
-// The question is on an earlier page: Reply points up and, clicked, loads with a spinner.
+// The question is on an earlier page: the Needs you pill points up and, clicked, loads it.
 export const [pendingJump260, pendingJump340] = both(
   () => (
     <Pane item={olderHost} view={read(olderHost, activity(null).slice(9), { hasEarlier: true })} />
   ),
-  (frame) => clickReply(frame, 200)
+  (frame) => clickPill(frame, 200)
 )
 
 const remoteBot = stampBotHost('runtime:fixture-remote', bot)
@@ -275,7 +274,7 @@ const inProgress = makeTestBotItem(99, {
   links: THREE_LINKS
 })
 
-// In progress, read from the top: the made entry's date shows; no Reply.
+// In progress, read from the top: the made entry's date shows; the plain Jump to latest.
 export const [inProgress260, inProgress340] = both(
   () => <Pane item={inProgress} view={read(inProgress, activity(null))} />,
   scrollToTop
@@ -288,7 +287,7 @@ const snoozedItem = makeTestBotItem(100, {
   snoozedUntil: now + 40 * 60 * min
 })
 
-// Snoozed while it needs the owner: the snooze line under the status row, Reply still leads up.
+// Snoozed while it needs the owner: the snooze line under the status row; the pill still leads up.
 export const [snoozed260, snoozed340] = both(
   () => <Pane item={snoozedItem} view={read(snoozedItem, activity('note'))} />,
   () => wait(300)
