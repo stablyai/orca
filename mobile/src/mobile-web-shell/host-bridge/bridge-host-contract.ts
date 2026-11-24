@@ -1,3 +1,4 @@
+import type { DesktopBound } from './bridge-host-verdict-hold'
 import type { BridgeAppFrame } from '../bridge/page-lifecycle/bridge-app-resumed'
 import type { HostStatusReply } from '../../transport/hosts/host-status-reply-schema'
 import type {
@@ -80,6 +81,9 @@ export type BridgeHostOptions = {
   /** The status this connection's verdict proved for the document, read at each frame; null holds
    *  desktop-bound requests and subscriptions and reports `handshaking` until it opens. */
   readHostStatus?: () => HostStatusReply | null
+  /** A request or subscription bound for another host than this one (a shared agent's, over the
+   *  phone's own link), which this connection's verdict doesn't hold. */
+  bypassesVerdict?: (message: DesktopBound) => boolean
   // Inherit handshake state on client-driven rebuild: the session id/page do not change, so no new ready or BridgeShellReplaced arrives.
   sessionEstablished: boolean
   // Inherit the live Back claim alongside handshake state; the page is never told to re-claim after client replacement.

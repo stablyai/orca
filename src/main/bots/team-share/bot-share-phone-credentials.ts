@@ -7,10 +7,21 @@ import * as z from 'zod'
 import { shareDevicePath, UNKNOWN_SHARE_REFUSAL } from '../../../shared/connector-share-contract'
 import { writeSecureFileAsync } from '../../../shared/secure-storage/secure-file-async-write'
 import type { ConnectorCloud } from '../../connector-cloud/connector-cloud'
+import type { ConnectorResult } from '../../connector-cloud/connector-cloud-request'
 
 export type BotSharePhoneCredential = { botId: string; shareId: string; deviceId: string }
 
 type Cloud = Pick<ConnectorCloud, 'call'>
+
+/** The one call the outbox makes: a DELETE that answers nothing. */
+export type CredentialRemovalCloud = {
+  call: (
+    path: string,
+    body: undefined,
+    schema: z.ZodUndefined,
+    options: { method: 'DELETE' }
+  ) => Promise<ConnectorResult<undefined>>
+}
 
 /** Installs (or replaces) the phone's credential hash; the phone may hold messages once this is true. */
 export async function installBotSharePhoneCredential(
@@ -45,11 +56,13 @@ export class BotSharePhoneCredentialOutbox {
   private loaded: Promise<void> | null = null
   private writes: Promise<void> = Promise.resolve()
   private draining: Promise<void> | null = null
+  // A removal queued while a drain was out: that drain goes round once more for it.
+  private drainAgain = false
   private timer: ReturnType<typeof setTimeout> | null = null
 
   constructor(
     userDataPath: string,
-    private readonly cloud: () => Cloud | null
+    private readonly cloud: () => CredentialRemovalCloud | null
   ) {
     this.path = join(userDataPath, OUTBOX_FILENAME)
   }
@@ -57,17 +70,28 @@ export class BotSharePhoneCredentialOutbox {
   /** Queues the removal durably, then tries it at once. */
   async remove(phone: BotSharePhoneCredential): Promise<void> {
     await this.load()
-    if (!this.items.some((item) => item.deviceId === phone.deviceId)) {
-      await this.write([...this.items, phone])
-    }
+    await this.save((items) =>
+      items.some((item) => item.deviceId === phone.deviceId) ? null : [...items, phone]
+    )
     void this.drain()
   }
 
   /** Every queued removal the cloud has now taken is gone from the outbox. */
   drain(): Promise<void> {
-    this.draining ??= this.drainOnce().finally(() => {
-      this.draining = null
-    })
+    if (this.draining) {
+      this.drainAgain = true
+      return this.draining
+    }
+    this.draining = (async () => {
+      try {
+        do {
+          this.drainAgain = false
+          await this.drainOnce()
+        } while (this.drainAgain)
+      } finally {
+        this.draining = null
+      }
+    })()
     return this.draining
   }
 
@@ -97,7 +121,9 @@ export class BotSharePhoneCredentialOutbox {
         : null
       // A share the cloud no longer has took its phones' credentials with it.
       if (sent?.ok || (sent && sent.status === 404 && sent.error === UNKNOWN_SHARE_REFUSAL)) {
-        await this.write(this.items.filter((entry) => entry.deviceId !== item.deviceId))
+        await this.save((items) => items.filter((entry) => entry.deviceId !== item.deviceId)).catch(
+          (error: unknown) => console.warn('[bots] could not update the credential outbox', error)
+        )
       }
     }
     if (this.items.length > 0) {
@@ -122,12 +148,19 @@ export class BotSharePhoneCredentialOutbox {
     return this.loaded
   }
 
-  // Durable before the drain trusts it; one write at a time, in order.
-  private write(items: BotSharePhoneCredential[]): Promise<void> {
-    this.items = items
-    const contents = JSON.stringify(items)
+  // Durable before memory takes it, so a failed write leaves the outbox as the disk has it and a retry
+  // writes again. One write at a time, each from the items as the last one left them; `update`
+  // answers null to leave them as they are.
+  private save(
+    update: (items: readonly BotSharePhoneCredential[]) => BotSharePhoneCredential[] | null
+  ): Promise<void> {
     const write = this.writes.then(async () => {
-      await writeSecureFileAsync(this.path, contents, { durable: true })
+      const next = update(this.items)
+      if (!next) {
+        return
+      }
+      await writeSecureFileAsync(this.path, JSON.stringify(next), { durable: true })
+      this.items = next
     })
     this.writes = write.catch(() => {})
     return write

@@ -25,6 +25,9 @@ import { PhoneSharedAgentStore, type PhoneSharedAgent } from './phone-shared-age
 
 type Link = SharedHostRelayLink<PhoneSharedAgent>
 
+// While a message waits, Orca Cloud is asked how it stands this often (the desktop's busy read).
+const HELD_POLL_MS = 30_000
+
 const failure = (method: string, code: string, message: string): RpcFailure => ({
   id: method,
   ok: false,
@@ -51,17 +54,51 @@ export class PhoneSharedAgents {
   private readonly links = new Map<string, Link>()
   private readonly listeners = new Set<() => void>()
   private readonly held: PhoneSharedAgentHeld
+  private heldTimer: ReturnType<typeof setTimeout> | null = null
 
   constructor(private readonly now: () => number = Date.now) {
     this.held = new PhoneSharedAgentHeld({
       store: this.store,
       now,
-      changed: () => this.changed()
+      changed: () => {
+        this.changed()
+        this.pollHeld()
+      }
     })
   }
 
   ready(): Promise<void> {
     return this.store.load()
+  }
+
+  /** Whether `find` already answers from what the device keeps. */
+  loaded(): boolean {
+    return this.store.hasLoaded()
+  }
+
+  /**
+   * Reads Orca Cloud's states for the agents with a message waiting, and again every HELD_POLL_MS
+   * while one still waits: a delivered message lets that chat's later sends go live again.
+   */
+  async refreshHeld(entries = this.store.list()): Promise<void> {
+    await Promise.all(
+      entries
+        .filter((entry) => entry.held.some((held) => this.held.isWaiting(held)))
+        .map((entry) => this.held.refresh(entry))
+    )
+  }
+
+  private pollHeld(): void {
+    const waiting = this.store
+      .list()
+      .some((entry) => entry.held.some((held) => this.held.isWaiting(held)))
+    if (!waiting || this.heldTimer) {
+      return
+    }
+    this.heldTimer = setTimeout(() => {
+      this.heldTimer = null
+      void this.refreshHeld()
+    }, HELD_POLL_MS)
   }
 
   onChanged(listener: () => void): () => void {
@@ -97,7 +134,7 @@ export class PhoneSharedAgents {
         .filter((entry) => entry.pairedHostId === pairedHostId)
         .map(async (entry) => {
           await this.reach(entry)
-          await this.held.refresh(entry)
+          await this.refreshHeld([entry])
         })
     )
     this.changed()
@@ -224,7 +261,14 @@ export class PhoneSharedAgents {
         platform: MOBILE_RELAY_CLIENT_PLATFORM,
         entry: () => this.store.get(entry.shareId),
         save: (next) => this.store.put(next),
-        onLinkChanged: () => this.changed(),
+        onLinkChanged: (next) => {
+          this.changed()
+          // The host is back: its journal has what it took while away, so ask how they stand.
+          const current = this.store.get(entry.shareId)
+          if (next === 'live' && current) {
+            void this.refreshHeld([current])
+          }
+        },
         sign: async (current, message) =>
           nacl.sign.detached(message, PRIMITIVES.decodeBase64(current.deviceKey.secretKeyB64)),
         randomBytes: (length) => PRIMITIVES.randomBytes(length),

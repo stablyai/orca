@@ -35,7 +35,9 @@ export type BridgeVerdictHold = {
 // Frames wait rather than fail, as they would in the native client during a reconnect.
 export function createBridgeVerdictHold(
   readHostStatus: (() => HostStatusReply | null) | undefined,
-  sendError: (id: string, error: unknown) => void
+  sendError: (id: string, error: unknown) => void,
+  // A frame bound for another host than this connection's, which its verdict says nothing about.
+  bypassesVerdict: (message: DesktopBound) => boolean = () => false
 ): BridgeVerdictHold {
   // Absent only in harnesses that model no connection verdict.
   const open = (): boolean => readHostStatus === undefined || readHostStatus() !== null
@@ -65,7 +67,8 @@ export function createBridgeVerdictHold(
         !isDesktopBound(message) ||
         passes() ||
         message.method === 'status.get' ||
-        isPhoneOnlyNativeVerb(message.method)
+        isPhoneOnlyNativeVerb(message.method) ||
+        bypassesVerdict(message)
       ) {
         return true
       }

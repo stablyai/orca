@@ -20,7 +20,7 @@ import type { BridgeClearableRouteParam } from '../bridge/page-lifecycle/bridge-
 import type { BridgeSafeAreaInsets } from '../bridge/page-geometry/bridge-safe-area-insets'
 import type { BridgeFoldDivision } from '../bridge/page-geometry/bridge-fold-division'
 import type { BridgeHapticsKind } from '../bridge/native-capabilities/bridge-haptics-notify'
-import { routeSharedAgentCalls } from '../../bots/shared-agents/shared-agent-call-routing'
+import { sharedAgentBridgeRoutes } from '../../bots/shared-agents/shared-agent-call-routing'
 import { phoneSharedAgents } from '../../bots/shared-agents/phone-shared-agents'
 import { createBridgeHost } from '../host-bridge/bridge-host'
 import { latestBridgeCallbacks } from './bridge-latest-callbacks'
@@ -166,7 +166,7 @@ export function useMobileWebShellBridge(args: MobileWebShellBridgeArgs): MobileW
     const latest = argsRef.current
     // Read callbacks from the current committed ref; captured render closures would outlive their screen state.
     const host = createBridgeHost({
-      client: routeSharedAgentCalls(client, latest.hostId, phoneSharedAgents()),
+      ...sharedAgentBridgeRoutes(client, latest.hostId),
       buildId,
       sessionId,
       route: latest.route,

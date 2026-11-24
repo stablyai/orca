@@ -25,6 +25,9 @@ import type {
   PhoneSharedAgentStore
 } from './phone-shared-agent-store'
 
+// Orca Cloud's requestWaitMs: a held message not delivered by then is dropped.
+export const HELD_WAIT_MS = 24 * 60 * 60 * 1000
+
 export type HoldResult = 'held' | 'too-large' | 'failed'
 
 export class PhoneSharedAgentHeld {
@@ -43,7 +46,8 @@ export class PhoneSharedAgentHeld {
 
   /** Whether a send to `entry`'s host is held: see `sendsHeldTo`. */
   sendsHeld(entry: PhoneSharedAgent, link: SharedHostLink, chat: SharedBotHeldChat): boolean {
-    return sendsHeldTo(entry.hostKey, entry.held, link, chat, this.states)
+    const states = new Map(entry.held.map((held) => [held.clientMessageId, this.state(held)]))
+    return sendsHeldTo(entry.hostKey, entry.held, link, chat, states)
   }
 
   /** The words an `agentSession.send` would hold, or null when it isn't one this phone can hold
@@ -167,7 +171,9 @@ export class PhoneSharedAgentHeld {
     }))
   }
 
+  // Past the cloud's wait it can only have been dropped, even with no read since to say so.
   private state(held: Held): SharedBotHeldState {
-    return this.states.get(held.clientMessageId) ?? 'waiting'
+    const state = this.states.get(held.clientMessageId) ?? 'waiting'
+    return state === 'waiting' && this.deps.now() - held.sentAt >= HELD_WAIT_MS ? 'not_sent' : state
   }
 }

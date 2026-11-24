@@ -68,11 +68,19 @@ export class PhoneSharedAgentStore {
   private loaded: Promise<void> | null = null
   private writes: Promise<void> = Promise.resolve()
 
+  private isLoaded = false
+
   load(): Promise<void> {
     this.loaded ??= this.read().then((entries) => {
       this.entries = entries
+      this.isLoaded = true
     })
     return this.loaded
+  }
+
+  /** Whether `list` already says what the device keeps; before that, it lists nothing. */
+  hasLoaded(): boolean {
+    return this.isLoaded
   }
 
   list(): readonly PhoneSharedAgent[] {

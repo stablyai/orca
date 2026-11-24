@@ -1,6 +1,7 @@
 // A teammate's computer asks the shared agent's host for its phone's key through the real dispatcher:
 // the share allowlist admits it, the phone's key is a child of that computer's row, and Orca Cloud holds
 // the phone's credential before the answer. A phone's own key can't ask, and ending it leaves the cloud.
+import { randomUUID } from 'node:crypto'
 import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -13,7 +14,15 @@ import type { ConnectorCloud } from '../../../connector-cloud/connector-cloud'
 import { OrcaRuntimeService } from '../../orca-runtime'
 import type { BotShareDevice } from './pairing/bot-share-device-store'
 import { OrcaRuntimeRpcServer } from './runtime-rpc'
-import { BotShareProvisionedPhone } from '../../../../shared/bots/bot-share-phone'
+import {
+  BotShareProvisionedPhone,
+  SharedBotPhoneGrant
+} from '../../../../shared/bots/bot-share-phone'
+import { SharedBotHostStore } from '../../../bots/shared-with-me/shared-bot-host-store'
+import { SharedBotPhoneGrants } from '../../../bots/shared-with-me/shared-bot-phone-grants'
+import { routeSharedHostsThrough } from '../../../ipc/runtime-environments/requests/runtime-environment-shared-hosts'
+import { BotSharePhoneCredentialOutbox } from '../../../bots/team-share/bot-share-phone-credentials'
+import * as secureWrite from '../../../../shared/secure-storage/secure-file-async-write'
 
 const b64 = (bytes: Uint8Array) => Buffer.from(bytes).toString('base64')
 const HASH = 'h'.repeat(43)
@@ -21,6 +30,19 @@ const HASH = 'h'.repeat(43)
 class PhoneShareServer extends OrcaRuntimeRpcServer {
   callAs(device: BotShareDevice, method: string, params: unknown): Promise<unknown> {
     return this.callAsBotShareDevice(device, method, params)
+  }
+
+  /** A call from a phone paired to this computer, directly or through another computer. */
+  callAsPhone(deviceId: string, delegated: boolean, method: string, params: unknown) {
+    return this.dispatcher.dispatch(
+      { id: randomUUID(), authToken: '', method, params },
+      {
+        pairedDeviceId: deviceId,
+        clientId: deviceId,
+        clientKind: 'mobile',
+        callerScope: { kind: 'mobile', delegated }
+      }
+    )
   }
 }
 
@@ -214,5 +236,138 @@ describe('a teammate’s phone key', () => {
         method: 'DELETE'
       })
     )
+  })
+})
+
+describe('a phone the share is gone for', () => {
+  it('is refused at sign-in along with its computer, by the same share check', async () => {
+    const computer = await teammateComputer()
+    const { deviceId } = await provision(computer, phoneAsk().params)
+    const devices = server.getBotShareDevices()!
+    expect(devices.lookupDeviceKey(deviceId).kind).toBe('found')
+    bot = { ...bot, shares: [] }
+    expect(devices.lookupDeviceKey(deviceId).kind).toBe('refused')
+    expect(devices.lookupDeviceKey(computer.deviceId).kind).toBe('refused')
+  })
+})
+
+describe('a phone asking its own computer for a key', () => {
+  afterEach(() => routeSharedHostsThrough(null))
+
+  it('gets a grant through the computer’s link to the host, and a delegated phone gets nothing', async () => {
+    const computer = await teammateComputer()
+    const store = new SharedBotHostStore(userDataPath)
+    store.put({
+      shareId: 'share-alice',
+      environmentId: 'env-1',
+      botId: 'bot-1',
+      botName: 'Ivy',
+      ownerName: 'Jinwoo Hong',
+      deviceKey: { publicKeyB64: 'd', secretKeyB64: 'd' },
+      sealKey: { publicKeyB64: 's', secretKeyB64: 's' },
+      offer: {
+        v: 1,
+        relay: {
+          v: 1,
+          directorUrl: 'https://director.example',
+          cellUrl: 'https://cell.example',
+          assignmentEpoch: 1,
+          relayHostId: 'AbCdEf0123_-xyZ9',
+          inviteToken: 'i'.repeat(43),
+          e2eeFraming: 2,
+          inviteExpiresAt: INVITE_EXPIRES_AT
+        },
+        hostPublicKeyB64: server.getE2EEPublicKey()!,
+        deviceId: computer.deviceId,
+        botId: 'bot-1'
+      },
+      held: [],
+      phones: []
+    })
+    // The computer's link to the agent's host is this same host, called as the computer's share device.
+    const phones = new SharedBotPhoneGrants({
+      store,
+      listed: () => store.list(),
+      reach: async () => 'live',
+      request: async (_entry, method, params) => ({
+        id: method,
+        ok: true,
+        result: await server.callAs(computer, method, params)
+      }),
+      origin: () => 'https://cloud.example'
+    })
+    routeSharedHostsThrough({
+      ready: async () => {},
+      reaches: () => false,
+      call: async () => {
+        throw new Error('unused')
+      },
+      subscribe: async () => {
+        throw new Error('unused')
+      },
+      phones
+    })
+    const { seal, params } = phoneAsk()
+
+    const answer = await server.callAsPhone('phone-a', false, 'sharedBots.phone.provision', {
+      ...params,
+      shareId: 'share-alice'
+    })
+    const grant = SharedBotPhoneGrant.parse(answer.ok ? answer.result : null)
+    expect(grant.hostKey).toBe(server.getE2EEPublicKey())
+    const offer = openBotTeamShareOffer(NODE_PAIRED_E2EE_PRIMITIVES, {
+      sealSecretKey: seal.secretKey,
+      sealed: grant.sealedOffer,
+      expect: { botId: 'bot-1' }
+    })
+    expect(server.getBotShareDevices()!.get(offer!.deviceId)?.parentDeviceId).toBe(
+      computer.deviceId
+    )
+
+    const delegated = await server.callAsPhone('phone-b', true, 'sharedBots.phone.list', null)
+    expect(delegated.ok).toBe(false)
+    await store.flushed()
+  })
+})
+
+describe('the phone credential outbox', () => {
+  it('keeps a removal Orca Cloud refused, and one whose write failed, until a later drain takes it', async () => {
+    let answers = false
+    const deletes: string[] = []
+    const cloud = {
+      call: async (path: string) => {
+        deletes.push(path)
+        return answers
+          ? { ok: true as const, value: undefined }
+          : { ok: false as const, status: 503, error: null, retryAfterMs: null }
+      }
+    }
+    const outbox = new BotSharePhoneCredentialOutbox(userDataPath, () => cloud)
+    const phoneA = { botId: 'bot-1', shareId: 'share-alice', deviceId: 'phone-a' }
+    const phoneB = { ...phoneA, deviceId: 'phone-b' }
+    await outbox.remove(phoneA)
+    await outbox.drain()
+    expect(outbox.pending()).toEqual([phoneA])
+
+    // A write that fails leaves the outbox as the disk has it; the retry writes it.
+    const write = vi
+      .spyOn(secureWrite, 'writeSecureFileAsync')
+      .mockRejectedValueOnce(new Error('disk full'))
+    await expect(outbox.remove(phoneB)).rejects.toThrow('disk full')
+    expect(outbox.pending()).toEqual([phoneA])
+    write.mockRestore()
+    await outbox.remove(phoneB)
+    outbox.stop()
+
+    // Read back after a restart, and drained once Orca Cloud takes them.
+    const restarted = new BotSharePhoneCredentialOutbox(userDataPath, () => cloud)
+    answers = true
+    await restarted.drain()
+    restarted.stop()
+    expect(restarted.pending()).toEqual([])
+    expect(deletes.slice(-2)).toEqual([
+      '/v1/connector/bots/bot-1/shares/share-alice/devices/phone-a',
+      '/v1/connector/bots/bot-1/shares/share-alice/devices/phone-b'
+    ])
   })
 })
