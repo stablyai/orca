@@ -1,19 +1,12 @@
-import { utimesSync, writeFileSync } from 'node:fs'
 import { mkdtemp, rm, symlink, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import path from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
 import {
-  BROWSER_DOWNLOAD_COPY_FRAME_KIND,
-  BROWSER_DOWNLOAD_COPY_WINDOW_BYTES,
-  encodeBrowserDownloadCopyAck
-} from '../../../../../shared/browser/downloads/browser-download-copy-stream'
-import {
-  claimBrowserDownloadCopy,
   offerBrowserDownloadCopy,
+  readBrowserDownloadCopy,
   releaseBrowserDownloadCopy
 } from './browser-download-copy-offers'
-import { streamBrowserDownloadCopy } from './browser-download-copy-stream'
 
 const dirs: string[] = []
 
@@ -30,105 +23,34 @@ afterEach(async () => {
 })
 
 describe('browser download copy offers', () => {
-  it('streams the saved file once, only to the offered device, never more than a window ahead', async () => {
-    const bytes = Buffer.alloc(5 * BROWSER_DOWNLOAD_COPY_WINDOW_BYTES + 3)
+  it('hands the saved file only to the offered device, once, in order', async () => {
+    const bytes = Buffer.alloc(5 * 1024 * 1024 + 3)
     for (let i = 0; i < bytes.length; i += 1) {
       bytes[i] = (i * 31) % 251
     }
     const { savePath } = await savedFile(bytes)
     const copyId = (await offerBrowserDownloadCopy('desk-a', savePath))!
 
-    await expect(claimBrowserDownloadCopy('desk-b', copyId)).rejects.toThrow()
-    await expect(claimBrowserDownloadCopy(undefined, copyId)).rejects.toThrow()
+    await expect(readBrowserDownloadCopy('desk-b', { copyId, offset: 0 })).rejects.toThrow()
+    await expect(readBrowserDownloadCopy(undefined, { copyId, offset: 0 })).rejects.toThrow()
     expect(releaseBrowserDownloadCopy('desk-b', { copyId }).released).toBe(false)
 
-    const file = await claimBrowserDownloadCopy('desk-a', copyId)
-    // A replay or a second stream can't take the file again.
-    await expect(claimBrowserDownloadCopy('desk-a', copyId)).rejects.toThrow()
-
-    // The desktop: writes (copies) each frame, then acks what it has written, a turn later.
-    const received: Buffer[] = []
-    let written = 0
-    let maxAhead = 0
-    let onAck: (bytes: Uint8Array) => void = () => {}
-    const events: unknown[] = []
-    await streamBrowserDownloadCopy(file, {
-      emit: (event) => events.push(event),
-      registerBinaryMessageHandler: (handler) => {
-        onAck = handler
-        return () => {}
-      },
-      sendBinary: (frame) => {
-        expect(frame[0]).toBe(BROWSER_DOWNLOAD_COPY_FRAME_KIND)
-        received.push(Buffer.from(frame.subarray(1)))
-        const total = received.reduce((n, b) => n + b.length, 0)
-        maxAhead = Math.max(maxAhead, total - written)
-        setImmediate(() => {
-          written += frame.byteLength - 1
-          onAck(encodeBrowserDownloadCopyAck(written))
-        })
-        return true
+    const slices: Buffer[] = []
+    let offset = 0
+    for (;;) {
+      const read = await readBrowserDownloadCopy('desk-a', { copyId, offset })
+      slices.push(Buffer.from(read.contentBase64, 'base64'))
+      offset += read.bytesRead
+      if (read.eof) {
+        break
       }
-    })
-    await file.handle.close()
-
-    expect(events).toEqual([{ type: 'start', size: bytes.length }, { type: 'end' }])
-    expect(Buffer.concat(received).equals(bytes)).toBe(true)
-    expect(maxAhead).toBeLessThanOrEqual(BROWSER_DOWNLOAD_COPY_WINDOW_BYTES)
-  })
-
-  it('stops when the file is written to in place mid-copy', async () => {
-    const { savePath } = await savedFile(Buffer.alloc(3 * BROWSER_DOWNLOAD_COPY_WINDOW_BYTES))
-    const file = await claimBrowserDownloadCopy(
-      'desk-a',
-      (await offerBrowserDownloadCopy('desk-a', savePath))!
-    )
-    let onAck: (bytes: Uint8Array) => void = () => {}
-    let written = 0
-    await expect(
-      streamBrowserDownloadCopy(file, {
-        emit: () => {},
-        registerBinaryMessageHandler: (handler) => {
-          onAck = handler
-          return () => {}
-        },
-        sendBinary: (frame) => {
-          if (written === 0) {
-            // Same inode and size, new contents.
-            writeFileSync(savePath, 'x', { flag: 'r+' })
-            utimesSync(savePath, 1_000_000, 2_000_000)
-          }
-          written += frame.byteLength - 1
-          const total = written
-          setImmediate(() => onAck(encodeBrowserDownloadCopyAck(total)))
-          return true
-        }
-      })
-    ).rejects.toThrow(/changed on the server/)
-    await file.handle.close()
-  })
-
-  it('stops on an ack for bytes it never sent', async () => {
-    const { savePath } = await savedFile(Buffer.alloc(3 * BROWSER_DOWNLOAD_COPY_WINDOW_BYTES))
-    const file = await claimBrowserDownloadCopy(
-      'desk-a',
-      (await offerBrowserDownloadCopy('desk-a', savePath))!
-    )
-    let onAck: (bytes: Uint8Array) => void = () => {}
-    await expect(
-      streamBrowserDownloadCopy(file, {
-        emit: () => {},
-        registerBinaryMessageHandler: (handler) => {
-          onAck = handler
-          return () => {}
-        },
-        sendBinary: () => {
-          setImmediate(() => onAck(encodeBrowserDownloadCopyAck(Number.MAX_SAFE_INTEGER)))
-          return true
-        }
-      })
-    ).rejects.toThrow()
-    await file.handle.close()
+      // A replayed slice can't take the file a second time.
+      await expect(readBrowserDownloadCopy('desk-a', { copyId, offset: 0 })).rejects.toThrow()
+    }
+    expect(slices.length).toBeGreaterThan(1)
+    expect(Buffer.concat(slices).equals(bytes)).toBe(true)
+    // The last slice ends the offer.
+    await expect(readBrowserDownloadCopy('desk-a', { copyId, offset: 0 })).rejects.toThrow()
   })
 
   it('refuses a file swapped in at the saved path', async () => {
@@ -136,7 +58,7 @@ describe('browser download copy offers', () => {
     const copyId = (await offerBrowserDownloadCopy('desk-a', savePath))!
     await rm(savePath)
     await writeFile(savePath, 'other!')
-    await expect(claimBrowserDownloadCopy('desk-a', copyId)).rejects.toThrow()
+    await expect(readBrowserDownloadCopy('desk-a', { copyId, offset: 0 })).rejects.toThrow()
   })
 
   // Windows needs a privilege to make links.
@@ -147,7 +69,7 @@ describe('browser download copy offers', () => {
     const copyId = (await offerBrowserDownloadCopy('desk-a', savePath))!
     await rm(savePath)
     await symlink(secret, savePath)
-    await expect(claimBrowserDownloadCopy('desk-a', copyId)).rejects.toThrow()
+    await expect(readBrowserDownloadCopy('desk-a', { copyId, offset: 0 })).rejects.toThrow()
     expect(await offerBrowserDownloadCopy('desk-a', savePath)).toBeNull()
   })
 })

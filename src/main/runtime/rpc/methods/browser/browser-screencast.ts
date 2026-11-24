@@ -6,7 +6,7 @@ import { runtimeBrowserCommandsFactoryIsAvailable } from '../../../browser/insta
 import {
   FileChooserAnswer,
   PagePromptAnswer,
-  DownloadCopyStream,
+  ReadDownloadCopy,
   ReadPrintPdf,
   ReleaseDownloadCopy,
   ReleasePrintPdf,
@@ -23,10 +23,9 @@ import {
   releaseBrowserPrintPdf
 } from '../../../../browser/guest-lifecycle/prompts/browser-print-viewers'
 import {
-  claimBrowserDownloadCopy,
+  readBrowserDownloadCopy,
   releaseBrowserDownloadCopy
 } from '../../../../browser/guest-lifecycle/manager/downloads/browser-download-copy-offers'
-import { streamBrowserDownloadCopy } from '../../../../browser/guest-lifecycle/manager/downloads/browser-download-copy-stream'
 import { ownerOnly } from '../bots-caller-gates'
 
 const DOWNLOAD_COPY_OWNER_ONLY = 'Only a person at a desktop can copy a download to their computer.'
@@ -82,31 +81,14 @@ export const BROWSER_SCREENCAST_METHODS = [
     params: ReleasePrintPdf,
     handler: async (params, { pairedDeviceId }) => releaseBrowserPrintPdf(pairedDeviceId, params)
   }),
-  defineStreamingMethod({
-    name: 'browser.downloadCopyStream',
+  defineMethod({
+    name: 'browser.readDownloadCopy',
     permission: 'workspace',
-    params: DownloadCopyStream,
+    params: ReadDownloadCopy,
     // Only the device the copy was offered to, and never an agent acting through it.
-    handler: async (params, context, emit) => {
+    handler: async (params, context) => {
       ownerOnly(context, DOWNLOAD_COPY_OWNER_ONLY)
-      const { pairedDeviceId, sendBinary, registerBinaryMessageHandler, signal } = context
-      if (!sendBinary || !registerBinaryMessageHandler) {
-        throw new BrowserError(
-          'browser_error',
-          'Copying a download needs a binary connection to the desktop.'
-        )
-      }
-      const file = await claimBrowserDownloadCopy(pairedDeviceId, params.copyId)
-      try {
-        await streamBrowserDownloadCopy(file, {
-          emit,
-          sendBinary,
-          registerBinaryMessageHandler,
-          signal
-        })
-      } finally {
-        await file.handle.close().catch(() => {})
-      }
+      return readBrowserDownloadCopy(context.pairedDeviceId, params)
     }
   }),
   defineMethod({
