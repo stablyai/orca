@@ -5,10 +5,6 @@ import type {
   AgentJournalRenderItem,
   AgentJournalSubmission
 } from '../../shared/agent-session/journal/agent-session-journal-types'
-import { isRootAgentJournalItem } from '../../shared/agent-session/journal/agent-session-journal-producer'
-import { isStructuredAgentSessionCommandEntry } from '../../shared/agent-session/requests/structured-agent-session-command-entry'
-import { structuredAgentTurnAnchors } from '../../shared/native-chat/transcript/turns/native-chat-turn-membership'
-import { readAgentJournalTurn } from '../../shared/agent-session/lifecycle/records/agent-session-turn-record'
 import type { ConnectorSource } from '../../shared/connectors/external-conversation-link'
 import {
   actsForOwner,
@@ -18,6 +14,7 @@ import {
   type BotRequestAsker
 } from '../../shared/bots/bot-acts-for'
 import { typedInOrcaByOwner } from './bot-typed-in-orca'
+import { isRootTurnRecord, isRootUserMessage, turnMessages } from './bot-turn-messages'
 
 /** The conversation a request came in, as Orca Cloud names it. */
 export type BotRequestConversation = { source: ConnectorSource; externalId: string }
@@ -80,15 +77,6 @@ export type BotRequestActsFor = {
 }
 
 const MAX_REQUEST_TEXT = 500
-
-function isRootUserMessage(item: AgentJournalRenderItem): boolean {
-  return (
-    item.body.kind === 'message' &&
-    item.body.role === 'user' &&
-    isRootAgentJournalItem(item) &&
-    !isStructuredAgentSessionCommandEntry(item.body)
-  )
-}
 
 function textOf(body: AgentJournalItemBody): string | null {
   if (body.kind !== 'message') {
@@ -218,28 +206,20 @@ function turnWindows(
   submissions: readonly AgentJournalSubmission[],
   newestTurns: number | null
 ): AgentJournalRenderItem[][] {
-  const messages = items.filter(isRootUserMessage)
   // Of a bounded read, only the turns from its newest `newestTurns` root turn records on.
-  const records = items.flatMap((item, index) =>
-    isRootAgentJournalItem(item) && readAgentJournalTurn(item.body) ? [index] : []
-  )
+  const records = items.flatMap((item, index) => (isRootTurnRecord(item) ? [index] : []))
   const floor = newestTurns === null ? 0 : (records.at(-newestTurns) ?? 0)
-  const turns = items.filter(
-    (item, index) => index >= floor && item.body.kind === 'turn' && isRootAgentJournalItem(item)
-  )
+  const turns = records.filter((index) => index >= floor).map((index) => items[index]!)
   if (turns.length === 0) {
-    return newestTurns === null ? messages.map((message) => [message]).toReversed() : []
+    return newestTurns === null
+      ? items
+          .filter(isRootUserMessage)
+          .map((message) => [message])
+          .toReversed()
+      : []
   }
-  const anchors = structuredAgentTurnAnchors(items, submissions)
   // A turn with no message stays as an empty window, so the first window is always the newest turn.
-  return turns.toReversed().map((turn) => {
-    const opener = anchors.get(turn.itemId)
-    return messages.filter(
-      (message) =>
-        message.itemId === opener ||
-        (message.turnScope?.kind === 'turn' && message.turnScope.turnItemId === turn.itemId)
-    )
-  })
+  return turnMessages(items, submissions, turns.toReversed())
 }
 
 /**

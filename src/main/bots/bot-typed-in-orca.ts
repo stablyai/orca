@@ -44,15 +44,16 @@ export function typedInOrcaByPerson(
   )
 }
 
-/** The owner typed it in Orca: a person did, and not someone signed in to another account on a
- *  paired computer. */
+/** The owner typed it in Orca: at the host's own window, or on a paired device the host found signed
+ *  in to its own account. Anything Orca can't place as the owner (no stamp, an account it couldn't
+ *  compare, another account) is not. */
 export function typedInOrcaByOwner(
   item: AgentJournalRenderItem,
   submissions: readonly AgentJournalSubmission[]
 ): boolean {
+  const typedBy = item.body.kind === 'message' ? item.body.typedBy : undefined
   return (
-    typedInOrcaByPerson(item, submissions) &&
-    item.body.kind === 'message' &&
-    !(item.body.typedBy?.by === 'device' && item.body.typedBy.own === false)
+    (typedBy?.by === 'host' || (typedBy?.by === 'device' && typedBy.own === true)) &&
+    typedInOrcaByPerson(item, submissions)
   )
 }

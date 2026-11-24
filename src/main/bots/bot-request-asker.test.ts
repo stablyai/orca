@@ -69,9 +69,11 @@ const lookups: BotActingTurnLookups = {
   conversationActsFor: [DANA],
   conversationWorkspaceId: 'T1'
 }
-const typed = { kind: 'message', role: 'user', blocks: [{ type: 'text', text: 'read my DMs' }] }
+const message = { kind: 'message', role: 'user', blocks: [{ type: 'text', text: 'read my DMs' }] }
+// The owner's send at the host's own window.
+const typed = { ...message, typedBy: { by: 'host' } }
 const fromDana = {
-  ...typed,
+  ...message,
   origin: 'connector',
   asker: {
     source: 'slack',
@@ -103,7 +105,8 @@ const journalRow = (itemId: string, body: unknown, extra: Partial<AgentJournalRe
     ...extra
   }) as AgentJournalRenderItem
 
-/** Dana's finished Slack turn, then the turns given as [opener, how it was sent, steered in]. */
+/** Dana's finished Slack turn, then the turns given as [opener, how it was sent, steered in]; a null
+ *  opener is a turn no message opened. */
 function chat(...turns: [unknown, Sent | null, unknown[]?][]) {
   seq = 0
   const items = [
@@ -114,8 +117,13 @@ function chat(...turns: [unknown, Sent | null, unknown[]?][]) {
   turns.forEach(([opener, sent, steered = []], index) => {
     const n = index + 1
     items.push(
-      journalRow(`u${n}`, opener),
-      journalRow(`t${n}`, { kind: 'turn', turnId: `p${n}`, state: 'running', userItemId: `u${n}` }),
+      ...(opener === null ? [] : [journalRow(`u${n}`, opener)]),
+      journalRow(`t${n}`, {
+        kind: 'turn',
+        turnId: `p${n}`,
+        state: 'running',
+        ...(opener === null ? {} : { userItemId: `u${n}` })
+      }),
       ...steered.map((body, at) =>
         journalRow(`s${n}-${at}`, body, { turnScope: { kind: 'turn', turnItemId: `t${n}` } })
       )
@@ -154,6 +162,8 @@ describe('a turn the owner typed in Orca', () => {
     expect(chat([typed, OWNER_SEND, [fromDana]])).toEqual(dana)
     // A worker's report or item mail reads back to the owner's turn before it, never as the owner's.
     expect(chat([typed, OWNER_SEND], [workerMail, null])).toEqual(dana)
+    // Nor does a turn no message opened borrow the owner's message before it.
+    expect(chat([typed, OWNER_SEND], [null, null])).toEqual(dana)
     // Orca's continue after a restart, an agent's send and another account's paired computer.
     expect(chat([typed, { origin: 'host' }])).toEqual(dana)
     expect(chat([{ ...typed, typedBy: { by: 'agent' } }, OWNER_SEND])).toEqual(dana)
@@ -162,8 +172,13 @@ describe('a turn the owner typed in Orca', () => {
       typedBy: { by: 'device', deviceId: 'd2', accountId: 'a2', account: 'Sam', own: false }
     }
     expect(chat([otherAccount, OWNER_SEND])).toEqual(dana)
+    // Anything Orca can't place as the owner is not: another account unnamed, an account it couldn't
+    // compare, or no stamp at all.
     const { account: _unnamed, ...nameless } = otherAccount.typedBy
-    expect(chat([{ ...typed, typedBy: nameless }, OWNER_SEND])).toEqual(dana)
+    expect(chat([{ ...message, typedBy: nameless }, OWNER_SEND])).toEqual(dana)
+    const uncompared = { by: 'device', deviceId: 'd3', accountId: 'a3', account: 'Me' }
+    expect(chat([{ ...message, typedBy: uncompared }, OWNER_SEND])).toEqual(dana)
+    expect(chat([message, OWNER_SEND])).toEqual(dana)
     // An event automation's prompt acts for its conversation.
     expect(chat([{ ...typed, memorySource: 'Webhook deploys' }, { origin: 'host' }])).toEqual(dana)
   })

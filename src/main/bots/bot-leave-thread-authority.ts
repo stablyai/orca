@@ -6,14 +6,9 @@ import type {
   AgentJournalRenderItem,
   AgentJournalSubmission
 } from '../../shared/agent-session/journal/agent-session-journal-types'
-import { isRootAgentJournalItem } from '../../shared/agent-session/journal/agent-session-journal-producer'
-import { isStructuredAgentSessionCommandEntry } from '../../shared/agent-session/requests/structured-agent-session-command-entry'
-import { structuredAgentTurnAnchors } from '../../shared/native-chat/transcript/turns/native-chat-turn-membership'
-import {
-  isRunningAgentJournalTurn,
-  readAgentJournalTurn
-} from '../../shared/agent-session/lifecycle/records/agent-session-turn-record'
+import { isRunningAgentJournalTurn } from '../../shared/agent-session/lifecycle/records/agent-session-turn-record'
 import { typedInOrcaByPerson } from './bot-typed-in-orca'
+import { isRootTurnRecord, turnMessages } from './bot-turn-messages'
 import { askedInThread } from '../external-conversations/external-conversation-leave-eligibility'
 
 /** stale: no turn is running, or it took no message. mixed: it took a message that isn't from a
@@ -22,15 +17,6 @@ import { askedInThread } from '../external-conversations/external-conversation-l
 export type LeaveThreadRefusal = 'leave_refused_stale' | 'leave_refused_mixed'
 
 type Conversation = { source: string; externalId: string }
-
-function isRootUserMessage(item: AgentJournalRenderItem): boolean {
-  return (
-    item.body.kind === 'message' &&
-    item.body.role === 'user' &&
-    isRootAgentJournalItem(item) &&
-    !isStructuredAgentSessionCommandEntry(item.body)
-  )
-}
 
 function eligible(
   item: AgentJournalRenderItem,
@@ -66,23 +52,11 @@ export function leaveThreadRefusal(
   submissions: readonly AgentJournalSubmission[],
   conversation: Conversation
 ): LeaveThreadRefusal | null {
-  const turns = items.filter(
-    (item) => isRootAgentJournalItem(item) && readAgentJournalTurn(item.body)
-  )
-  const turn = turns.at(-1)
+  const turn = items.findLast(isRootTurnRecord)
   if (!turn || !isRunningAgentJournalTurn(turn.body)) {
     return 'leave_refused_stale'
   }
-  // An opener found by journal order is never a message from before the turn ahead of it.
-  const previous = turns.at(-2)
-  const after = previous ? items.indexOf(previous) : -1
-  const opener = structuredAgentTurnAnchors(items, submissions).get(turn.itemId)
-  const messages = items.filter(
-    (item, index) =>
-      isRootUserMessage(item) &&
-      ((item.itemId === opener && index > after) ||
-        (item.turnScope?.kind === 'turn' && item.turnScope.turnItemId === turn.itemId))
-  )
+  const [messages = []] = turnMessages(items, submissions, [turn])
   if (messages.length === 0) {
     return 'leave_refused_stale'
   }
