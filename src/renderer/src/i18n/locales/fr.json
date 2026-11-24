@@ -14027,6 +14027,9 @@
             "scopeCompareTo": "Comparer à {{ref}}",
             "scopeFilterCommits": "Filtrer les commits",
             "scopeCommitsFailed": "Impossible de charger les commits.",
+            "scopeFilesFailed": "Impossible de charger les fichiers.",
+            "scopeLoadingFiles": "Chargement des fichiers…",
+            "scopeNoSharedHistory": "Aucun historique commun avec {{ref}}",
             "scopeRetryCommits": "Réessayer",
             "scopeLoadingCommits": "Chargement des commits…",
             "scopeNoMatchingCommits": "Aucun commit correspondant",
@@ -24891,7 +24894,8 @@
     "branchCreated": "{{branch}} créée sur {{commit}}",
     "branchName": "Nom de la branche",
     "invalidBranchName": "Ce nom de branche n’est pas valide. Choisissez un autre nom.",
-    "createBranchFailed": "Orca n’a pas pu créer la branche. Vérifiez ce dépôt dans un terminal, puis réessayez."
+    "createBranchFailed": "Orca n’a pas pu créer la branche. Vérifiez ce dépôt dans un terminal, puis réessayez.",
+    "openDiff": "Ouvrir le diff"
   },
   "bots": {
     "deepLink": {

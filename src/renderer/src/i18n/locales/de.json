@@ -14109,6 +14109,9 @@
             "scopeCompareTo": "Mit {{ref}} vergleichen",
             "scopeFilterCommits": "Commits filtern",
             "scopeCommitsFailed": "Commits konnten nicht geladen werden.",
+            "scopeFilesFailed": "Dateien konnten nicht geladen werden.",
+            "scopeLoadingFiles": "Dateien werden geladen…",
+            "scopeNoSharedHistory": "Keine gemeinsame Historie mit {{ref}}",
             "scopeRetryCommits": "Erneut versuchen",
             "scopeLoadingCommits": "Commits werden geladen…",
             "scopeNoMatchingCommits": "Keine passenden Commits",
@@ -24999,7 +25002,8 @@
     "branchCreated": "{{branch}} bei {{commit}} erstellt",
     "branchName": "Branch-Name",
     "invalidBranchName": "Dieser Branchname ist ungültig. Wähle einen anderen Namen.",
-    "createBranchFailed": "Orca konnte den Branch nicht erstellen. Prüfe dieses Repository im Terminal und versuche es erneut."
+    "createBranchFailed": "Orca konnte den Branch nicht erstellen. Prüfe dieses Repository im Terminal und versuche es erneut.",
+    "openDiff": "Diff öffnen"
   },
   "checks": {
     "gitlabAllowedFailure": "Fehlschlag erlaubt"

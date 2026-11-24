@@ -14566,6 +14566,9 @@
             "scopeCompareTo": "{{ref}}와 비교",
             "scopeFilterCommits": "커밋 필터링",
             "scopeCommitsFailed": "커밋을 로드하지 못했습니다.",
+            "scopeFilesFailed": "파일을 로드하지 못했습니다.",
+            "scopeLoadingFiles": "파일 로드 중…",
+            "scopeNoSharedHistory": "{{ref}}와 공통 기록이 없습니다",
             "scopeRetryCommits": "다시 시도",
             "scopeLoadingCommits": "커밋 로드 중…",
             "scopeNoMatchingCommits": "일치하는 커밋 없음",
@@ -27245,7 +27248,8 @@
     "branchCreated": "{{commit}}에 {{branch}} 생성됨",
     "branchName": "브랜치 이름",
     "invalidBranchName": "이 브랜치 이름은 유효하지 않습니다. 다른 이름을 선택하세요.",
-    "createBranchFailed": "Orca가 브랜치를 만들지 못했습니다. 터미널에서 이 저장소를 확인한 후 다시 시도하세요."
+    "createBranchFailed": "Orca가 브랜치를 만들지 못했습니다. 터미널에서 이 저장소를 확인한 후 다시 시도하세요.",
+    "openDiff": "차이 열기"
   },
   "bots": {
     "deepLink": {

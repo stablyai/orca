@@ -14490,6 +14490,9 @@
             "scopeCompareTo": "Сравнить с {{ref}}",
             "scopeFilterCommits": "Фильтр коммитов",
             "scopeCommitsFailed": "Не удалось загрузить коммиты.",
+            "scopeFilesFailed": "Не удалось загрузить файлы.",
+            "scopeLoadingFiles": "Загрузка файлов…",
+            "scopeNoSharedHistory": "Нет общей истории с {{ref}}",
             "scopeRetryCommits": "Повторить",
             "scopeLoadingCommits": "Загрузка коммитов…",
             "scopeNoMatchingCommits": "Нет подходящих коммитов",
@@ -25798,7 +25801,8 @@
     "branchCreated": "Ветка {{branch}} создана на {{commit}}",
     "branchName": "Название ветки",
     "invalidBranchName": "Это имя ветки недопустимо. Выберите другое имя.",
-    "createBranchFailed": "Orca не удалось создать ветку. Проверьте этот репозиторий в терминале и повторите попытку."
+    "createBranchFailed": "Orca не удалось создать ветку. Проверьте этот репозиторий в терминале и повторите попытку.",
+    "openDiff": "Открыть diff"
   },
   "speechModelUpdate": {
     "update": "Обновить",

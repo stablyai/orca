@@ -14108,6 +14108,9 @@
             "scopeCompareTo": "{{ref}} と比較",
             "scopeFilterCommits": "コミットを絞り込む",
             "scopeCommitsFailed": "コミットを読み込めませんでした。",
+            "scopeFilesFailed": "ファイルを読み込めませんでした。",
+            "scopeLoadingFiles": "ファイルを読み込み中…",
+            "scopeNoSharedHistory": "{{ref}} と共通の履歴がありません",
             "scopeRetryCommits": "再試行",
             "scopeLoadingCommits": "コミットを読み込み中…",
             "scopeNoMatchingCommits": "一致するコミットはありません",
@@ -25594,7 +25597,8 @@
     "branchCreated": "{{commit}} に {{branch}} を作成しました",
     "branchName": "ブランチ名",
     "invalidBranchName": "このブランチ名は無効です。別の名前を選んでください。",
-    "createBranchFailed": "Orca はブランチを作成できませんでした。ターミナルでこのリポジトリを確認してから、もう一度お試しください。"
+    "createBranchFailed": "Orca はブランチを作成できませんでした。ターミナルでこのリポジトリを確認してから、もう一度お試しください。",
+    "openDiff": "差分を開く"
   },
   "bots": {
     "deepLink": {

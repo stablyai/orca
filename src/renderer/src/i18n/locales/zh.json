@@ -14601,6 +14601,9 @@
             "scopeCompareTo": "与 {{ref}} 比较",
             "scopeFilterCommits": "筛选提交",
             "scopeCommitsFailed": "无法加载提交。",
+            "scopeFilesFailed": "无法加载文件。",
+            "scopeLoadingFiles": "正在加载文件…",
+            "scopeNoSharedHistory": "与 {{ref}} 没有共同历史记录",
             "scopeRetryCommits": "重试",
             "scopeLoadingCommits": "正在加载提交…",
             "scopeNoMatchingCommits": "没有匹配的提交",
@@ -26886,7 +26889,8 @@
     "branchCreated": "已在 {{commit}} 创建 {{branch}}",
     "branchName": "分支名称",
     "invalidBranchName": "此分支名称无效。请选择其他名称。",
-    "createBranchFailed": "Orca 无法创建分支。请在终端中检查此仓库，然后重试。"
+    "createBranchFailed": "Orca 无法创建分支。请在终端中检查此仓库，然后重试。",
+    "openDiff": "打开差异"
   },
   "bots": {
     "deepLink": {

@@ -14235,6 +14235,9 @@
             "scopeCompareTo": "{{ref}} ile karşılaştır",
             "scopeFilterCommits": "Commitleri filtrele",
             "scopeCommitsFailed": "Commitler yüklenemedi.",
+            "scopeFilesFailed": "Dosyalar yüklenemedi.",
+            "scopeLoadingFiles": "Dosyalar yükleniyor…",
+            "scopeNoSharedHistory": "{{ref}} ile ortak geçmiş yok",
             "scopeRetryCommits": "Yeniden dene",
             "scopeLoadingCommits": "Commitler yükleniyor…",
             "scopeNoMatchingCommits": "Eşleşen commit yok",
@@ -25118,7 +25121,8 @@
     "branchCreated": "{{commit}} üzerinde {{branch}} oluşturuldu",
     "branchName": "Dal adı",
     "invalidBranchName": "Bu dal adı geçersiz. Farklı bir ad seçin.",
-    "createBranchFailed": "Orca dalı oluşturamadı. Bu depoyu terminalde kontrol edip yeniden deneyin."
+    "createBranchFailed": "Orca dalı oluşturamadı. Bu depoyu terminalde kontrol edip yeniden deneyin.",
+    "openDiff": "Diff aç"
   },
   "speechModelUpdate": {
     "update": "Güncelle",

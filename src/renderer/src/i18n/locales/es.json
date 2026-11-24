@@ -13734,6 +13734,9 @@
             "scopeCompareTo": "Comparar con {{ref}}",
             "scopeFilterCommits": "Filtrar commits",
             "scopeCommitsFailed": "No se pudieron cargar los commits.",
+            "scopeFilesFailed": "No se pudieron cargar los archivos.",
+            "scopeLoadingFiles": "Cargando archivos…",
+            "scopeNoSharedHistory": "Sin historial compartido con {{ref}}",
             "scopeRetryCommits": "Reintentar",
             "scopeLoadingCommits": "Cargando commits…",
             "scopeNoMatchingCommits": "No hay commits coincidentes",
@@ -24870,7 +24873,8 @@
     "branchCreated": "Se creó {{branch}} en {{commit}}",
     "branchName": "Nombre de la rama",
     "invalidBranchName": "Este nombre de rama no es válido. Elige otro nombre.",
-    "createBranchFailed": "Orca no pudo crear la rama. Revisa este repositorio en una terminal e inténtalo de nuevo."
+    "createBranchFailed": "Orca no pudo crear la rama. Revisa este repositorio en una terminal e inténtalo de nuevo.",
+    "openDiff": "Abrir diff"
   },
   "bots": {
     "deepLink": {
