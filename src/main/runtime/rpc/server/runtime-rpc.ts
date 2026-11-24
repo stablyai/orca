@@ -59,6 +59,7 @@ export class OrcaRuntimeRpcServer extends RuntimeRpcMobilePairing {
     this.transports = []
     this.metadataOwnershipWatch?.stop()
     this.metadataOwnershipWatch = null
+    this.phoneCredentialOutbox.stop()
     if (this.hostDescriptor) {
       publishHostDescriptor(this.runtime.getRuntimeId(), null)
     }

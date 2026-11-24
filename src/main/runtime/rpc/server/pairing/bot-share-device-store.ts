@@ -30,6 +30,8 @@ export type BotShareDevice = BotShareGrant & {
   pairedAt: number
   relayBinding?: RelayDeviceBinding
   parentDeviceId?: string
+  /** A phone's: the share its credential was installed with Orca Cloud under, to remove it there. */
+  shareId?: string
 }
 
 export type BotShareDeviceLookup =
@@ -50,7 +52,8 @@ const BotShareDeviceRow = z.looseObject({
   devicePublicKeyB64: z.string().refine(isDevicePublicKeyB64),
   pairedAt: z.number().finite(),
   relayBinding: z.unknown().optional(),
-  parentDeviceId: NonEmpty.optional()
+  parentDeviceId: NonEmpty.optional(),
+  shareId: NonEmpty.optional()
 })
 const BotShareDevicesFile = z.object({ v: z.literal(1), devices: z.array(z.unknown()) })
 
@@ -116,15 +119,15 @@ export class BotShareDeviceStore {
   }
 
   async add(input: Omit<BotShareDevice, 'deviceId' | 'pairedAt'>): Promise<BotShareDevice> {
-    return await this.findOrAdd(() => false, input)
+    return (await this.findOrAdd(() => false, input)).device
   }
 
-  /** The row `match` finds, else a new one from `input`, in one turn of the write queue, so
-   *  concurrent asks for the same device never make two rows. */
+  /** The row `match` finds, else a new one from `input` (`added`), in one turn of the write queue,
+   *  so concurrent asks for the same device never make two rows. */
   async findOrAdd(
     match: (device: BotShareDevice) => boolean,
     input: Omit<BotShareDevice, 'deviceId' | 'pairedAt'>
-  ): Promise<BotShareDevice> {
+  ): Promise<{ device: BotShareDevice; added: boolean }> {
     let found: BotShareDevice | undefined
     let added: BotShareDevice | undefined
     await this.save((devices) => {
@@ -139,7 +142,7 @@ export class BotShareDeviceStore {
     if (!device) {
       throw new Error('share_device_not_saved')
     }
-    return device
+    return { device, added: added !== undefined }
   }
 
   /** The devices `roots` names and every phone provisioned under them, children first. */

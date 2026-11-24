@@ -215,6 +215,11 @@ export class ConnectorCloud {
     this.options.onStatusChanged?.()
   }
 
+  /** Where Orca Cloud's connector routes are, for a device that calls them with its own credential. */
+  origin(): string {
+    return this.options.origin
+  }
+
   /** An authorized call as the signed-in account, polling or not; refused while signing out or quitting. */
   async call<TSchema extends z.ZodType>(
     path: string,

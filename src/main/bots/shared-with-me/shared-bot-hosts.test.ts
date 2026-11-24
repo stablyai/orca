@@ -74,6 +74,7 @@ function entry(overrides: Partial<SharedBotHostEntry> = {}): SharedBotHostEntry 
     deviceKey: { publicKeyB64: 'd', secretKeyB64: 'd' },
     sealKey: { publicKeyB64: 's', secretKeyB64: 's' },
     held: [],
+    phones: [],
     ...overrides
   }
 }

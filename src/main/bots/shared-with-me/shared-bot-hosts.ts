@@ -25,6 +25,7 @@ import {
 import { nextPairingStep, pinnedSharedBotOffer, type MineShare } from './shared-bot-pairing'
 import { CloudSharesSupport, type SharedBotsCloud } from './shared-bots-cloud'
 import type { SharedBotHomes } from './shared-bot-home'
+import { SharedBotPhoneGrants } from './shared-bot-phone-grants'
 
 // New shares and invites resolve within this; pairing and held messages are read sooner.
 const IDLE_POLL_MS = 10 * 60 * 1000
@@ -36,6 +37,8 @@ export type SharedBotHostsDeps = {
   /** The signed-in Orca account the cloud is read as; null signed out. */
   account: () => string | null
   platform: RelayClientPlatform
+  /** Orca Cloud's connector origin, for this computer's phones; null without a cloud. */
+  connectorOrigin?: () => string | null
   publish: (state: SharedBotHostsState) => void
   homes: SharedBotHomes
   now?: () => number
@@ -53,6 +56,8 @@ export class SharedBotHosts {
   private readonly now: () => number
   private loaded: Promise<void> | null = null
   private readonly sharing = new CloudSharesSupport(() => this.deps.account())
+  /** This computer's phones' keys to the shared agents. */
+  readonly phones: SharedBotPhoneGrants
 
   constructor(private readonly deps: SharedBotHostsDeps) {
     this.store = new SharedBotHostStore(deps.userDataPath)
@@ -65,6 +70,13 @@ export class SharedBotHosts {
         this.publish()
         void this.refresh()
       }
+    })
+    this.phones = new SharedBotPhoneGrants({
+      store: this.store,
+      listed: () => this.listed(),
+      reach: (entry) => this.reach(entry),
+      request: (entry, method, params) => this.linkFor(entry).request(method, params),
+      origin: () => deps.connectorOrigin?.() ?? null
     })
   }
 
@@ -98,23 +110,22 @@ export class SharedBotHosts {
   }
 
   views(): SharedBotHostsState['hosts'] {
-    return this.store.list().flatMap((entry) =>
-      this.shares === null || this.shares.has(entry.shareId)
-        ? [
-            {
-              environmentId: entry.environmentId,
-              shareId: entry.shareId,
-              botId: entry.botId,
-              botName: entry.botName,
-              ownerName: entry.ownerName,
-              homeWorkspaceId: entry.homeWorkspaceId ?? null,
-              link: this.linkFor(entry).current(),
-              holds: SHARED_HOSTS_HOLD_WHILE_AWAY && entry.hostKey !== undefined,
-              held: SHARED_HOSTS_HOLD_WHILE_AWAY ? this.held.views(entry) : []
-            }
-          ]
-        : []
-    )
+    return this.listed().map((entry) => ({
+      environmentId: entry.environmentId,
+      shareId: entry.shareId,
+      botId: entry.botId,
+      botName: entry.botName,
+      ownerName: entry.ownerName,
+      homeWorkspaceId: entry.homeWorkspaceId ?? null,
+      link: this.linkFor(entry).current(),
+      holds: SHARED_HOSTS_HOLD_WHILE_AWAY && entry.hostKey !== undefined,
+      held: SHARED_HOSTS_HOLD_WHILE_AWAY ? this.held.views(entry) : []
+    }))
+  }
+
+  /** The kept shares, but for those the cloud's last answer no longer lists. */
+  private listed(): SharedBotHostEntry[] {
+    return this.store.list().filter((entry) => this.shares?.has(entry.shareId) ?? true)
   }
 
   /** Reads the account's shares, follows each one's pairing, and schedules the next read. One read
@@ -290,6 +301,7 @@ export class SharedBotHosts {
       }
     } else if (step.kind === 'connect' && (step.credential.kind === 'invite' || share.hostOnline)) {
       await this.linkFor(entry).connect(step.credential)
+      await this.phones.endRemoved(entry.shareId)
     }
   }
 

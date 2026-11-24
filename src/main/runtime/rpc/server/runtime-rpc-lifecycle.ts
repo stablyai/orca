@@ -116,6 +116,8 @@ export class RuntimeRpcLifecycle extends RuntimeRpcWebSocketDispatch {
       if (pairingIdentity.ok) {
         // A connector that said hello before this (orca serve) says it again, now with hostKey.
         this.runtime.notifyBotShareHostKeyReady()
+        // Phone credential removals a quit left queued go to Orca Cloud again.
+        void this.phoneCredentialOutbox.drain()
         this.hostDescriptor = await loadHostDescriptor(this.userDataPath)
         publishHostDescriptor(this.runtime.getRuntimeId(), this.hostDescriptor)
         try {

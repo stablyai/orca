@@ -1,6 +1,7 @@
 // Hosts named by an environment id that has no pairing here: an agent shared with this Orca account,
 // reached over its share link. Every runtimeEnvironments call and stream asks this before the
-// paired-server registry, so a shared host has one route, the same as a paired server's.
+// paired-server registry, so a shared host has one route, the same as a paired server's. This
+// computer's phones reach their own keys to those hosts here too (bots-share-phone.ts).
 import type {
   RuntimeRpcFailure,
   RuntimeRpcResponse
@@ -15,7 +16,7 @@ import { SharedHostStatuses } from './runtime-environment-shared-host-status'
 
 type SharedHosts = Pick<
   SharedBotHosts,
-  'ready' | 'reaches' | 'call' | 'subscribe' | 'views' | 'store'
+  'ready' | 'reaches' | 'call' | 'subscribe' | 'views' | 'store' | 'phones'
 >
 type OnResponse = (response: RuntimeRpcResponse<unknown>) => void
 type StatusOptions = Parameters<RuntimeHostStatusOwner['refresh']>[0]
@@ -100,6 +101,14 @@ async function sharedHostRoute(selector: string): Promise<SharedHostRoute | null
       return hosts.subscribe(selector, method, params, onResponse)
     }
   }
+}
+
+/** This computer's phones' keys to the shared hosts, once the kept shares are loaded; null where no
+ *  window lists shared agents. */
+export async function sharedHostPhoneGrants(): Promise<SharedBotHosts['phones'] | null> {
+  const hosts = sharedHosts
+  await hosts?.ready()
+  return hosts?.phones ?? null
 }
 
 /** The id a selector names: a shared host's is its own; a paired server's resolves through `resolve`. */

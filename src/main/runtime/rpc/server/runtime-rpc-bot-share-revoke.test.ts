@@ -165,6 +165,8 @@ describe('revoking a teammate’s share devices', () => {
       mintBotShareOffer: vi.fn(),
       getE2EEPublicKey: vi.fn(),
       deliverBotShareHeldMessage: vi.fn(),
+      provisionBotSharePhone: vi.fn(),
+      revokeBotSharePhone: vi.fn(),
       revokeBotShareDevices: vi.fn(async () => {
         throw new Error('disk full')
       })

@@ -20,6 +20,11 @@ import {
   BotGroupUpdate
 } from '../bots/bot-group'
 import {
+  BotShareProvisionPhoneParams,
+  BotShareRevokePhoneParams,
+  SharedBotsPhoneProvisionParams
+} from '../bots/bot-share-phone'
+import {
   BrowserClientFileChannelAbortParams,
   BrowserClientFileChannelBeginParams,
   BrowserClientFileChannelReadParams,
@@ -1237,6 +1242,8 @@ export const RPC_PARAMS_BY_METHOD = {
   'automation.runs': AutomationRuns,
   'automation.show': AutomationId,
   'automation.update': AutomationUpdate,
+  'botShare.provisionPhone': BotShareProvisionPhoneParams,
+  'botShare.revokePhone': BotShareRevokePhoneParams,
   'bots.access.decide': BotAccessDecide,
   'bots.access.list': null,
   'bots.access.redeem': BotAccessRedeem,
@@ -2102,6 +2109,8 @@ export const RPC_PARAMS_BY_METHOD = {
   'settings.update': SettingsUpdate,
   'settings.updatePRBotAuthorOverride': PRBotAuthorOverrideUpdate,
   'settings.updateTerminalQuickCommands': TerminalQuickCommandsUpdate,
+  'sharedBots.phone.list': null,
+  'sharedBots.phone.provision': SharedBotsPhoneProvisionParams,
   'sidebarInputs.activityFacts': null,
   'sidebarInputs.desktopFacts': null,
   'sidebarInputs.pairedServerRows': null,

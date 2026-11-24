@@ -114,6 +114,7 @@ import { BOT_TEMPLATE_METHODS } from './bots-templates'
 import { BOT_IMPORT_METHODS } from './bots-import'
 import { BOT_SHARE_METHODS } from './bots-share'
 import { BOT_TEAM_SHARES_METHODS } from './bots-team-shares'
+import { BOT_SHARE_PHONE_METHODS } from './bots-share-phone'
 import { BOT_SHARE_RECEIVE_METHODS } from './bots-share-receive'
 import { BOT_CONNECTORS_METHOD } from './bots-connectors'
 import { BOT_TOOLS_METHODS } from './bots-tools'
@@ -185,6 +186,7 @@ const BOT_RPC_METHODS = [
   ...BOT_IMPORT_METHODS,
   ...BOT_SHARE_METHODS,
   ...BOT_TEAM_SHARES_METHODS,
+  ...BOT_SHARE_PHONE_METHODS,
   ...BOT_SHARE_RECEIVE_METHODS,
   BOT_CONNECTORS_METHOD,
   ...BOT_TOOLS_METHODS,

@@ -3,6 +3,7 @@ import type {
   RelayRevokeOutboxItem
 } from '../../mobile-cloud-relay/pairing/relay-revoke-outbox'
 import type { DeviceEntry, DeviceOrcaAccount, PairedDeviceTypist } from './pairing/device-entry'
+import type { BotShareDevice, BotShareDeviceStore } from './pairing/bot-share-device-store'
 import type { DeviceSelfRpcContext } from '../core'
 import { pairedDeviceTypistOf } from './pairing/paired-device-typist'
 import type {
@@ -11,6 +12,7 @@ import type {
 } from '../../../../shared/remote-runtime/pairing/delegated-mobile-device-contract'
 import { RuntimeRpcRequestAdmission } from './runtime-rpc-request-admission'
 import { settleRemovedPairedClient } from '../../orchestration/federation/client-asks/client-ask-queue'
+import { sharedHostPhoneGrants } from '../../../ipc/runtime-environments/requests/runtime-environment-shared-hosts'
 
 // Why: below dispatch so a caller-bound RPC context can revoke and mint mobile devices.
 export class RuntimeRpcMobileDevices extends RuntimeRpcRequestAdmission {
@@ -34,21 +36,41 @@ export class RuntimeRpcMobileDevices extends RuntimeRpcRequestAdmission {
    *  provisioned under it: Relay credential queued for revoke, row removed, sockets closed now. */
   async revokeBotShareDevices(botId: string, accountId?: string): Promise<boolean> {
     const store = this.botShareDevices
-    if (!store) {
-      return false
-    }
-    const plan = store.withChildren(
-      store
-        .list()
-        .filter(
-          (device) =>
-            device.botId === botId && (accountId === undefined || device.accountId === accountId)
+    return store
+      ? await this.endBotShareDevices(
+          store,
+          store
+            .list()
+            .filter(
+              (device) =>
+                device.botId === botId &&
+                (accountId === undefined || device.accountId === accountId)
+            )
         )
-    )
+      : false
+  }
+
+  /** Ends the phone `deviceId` its teammate's computer `parentDeviceId` asked for, and no other. */
+  async revokeBotSharePhone(parentDeviceId: string, deviceId: string): Promise<boolean> {
+    const store = this.botShareDevices
+    const phone = store?.get(deviceId)
+    return store && phone?.parentDeviceId === parentDeviceId
+      ? await this.endBotShareDevices(store, [phone])
+      : false
+  }
+
+  private async endBotShareDevices(
+    store: BotShareDeviceStore,
+    roots: readonly BotShareDevice[]
+  ): Promise<boolean> {
+    const plan = store.withChildren(roots)
     try {
       for (const device of plan) {
         // Keep the row until its Relay cleanup is durable, so a retry finds it again.
         if (device.relayBinding && !this.queueRelayDeviceRevoke(device.relayBinding)) {
+          return false
+        }
+        if (!(await this.queuePhoneCredentialRemoval(device))) {
           return false
         }
         await store.remove(device.deviceId)
@@ -100,6 +122,8 @@ export class RuntimeRpcMobileDevices extends RuntimeRpcRequestAdmission {
           return false
         }
         this.queuePushUnregister(deviceId, device.pushRegistration?.registrationId)
+        // Its keys to agents shared with this computer's account end on their hosts too.
+        void sharedHostPhoneGrants().then((phones) => phones?.forgetPhone(deviceId))
       }
       registry.removeDevice(deviceId)
       if (device.scope === 'mobile') {
@@ -194,6 +218,24 @@ export class RuntimeRpcMobileDevices extends RuntimeRpcRequestAdmission {
         deviceId: device.deviceId,
         token: device.token
       }))
+    }
+  }
+
+  /** A phone's share credential leaves Orca Cloud too, retried from its outbox until it does. */
+  private async queuePhoneCredentialRemoval(device: BotShareDevice): Promise<boolean> {
+    if (!device.shareId) {
+      return true
+    }
+    try {
+      await this.phoneCredentialOutbox.remove({
+        botId: device.botId,
+        shareId: device.shareId,
+        deviceId: device.deviceId
+      })
+      return true
+    } catch (error) {
+      console.error('[runtime] Failed to persist a phone share credential removal:', error)
+      return false
     }
   }
 
