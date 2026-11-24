@@ -98,7 +98,11 @@ async function toolReturnWithoutRequest(
   if (!wait.transcriptPath || claudeCompactingOnScreen(screen) || !wait.firstTranscriptLook()) {
     return null
   }
-  return readClaudeToolReturnWithoutRequest(wait.transcriptPath, WORKER_MODEL_WAIT_MS)
+  return readClaudeToolReturnWithoutRequest({
+    transcriptPath: wait.transcriptPath,
+    quietMs: WORKER_MODEL_WAIT_MS,
+    stillWanted: wait.stillWaiting
+  })
 }
 
 function grew(before: readonly string[], after: readonly string[]): boolean {

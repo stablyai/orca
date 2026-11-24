@@ -97,13 +97,20 @@ export function claudeToolReturnWithoutRequest(transcript: string): number | nul
   return [...batch.uses].every((id) => batch.results.has(id)) ? lastResultAt : null
 }
 
+export type ClaudeToolReturnCheck = {
+  transcriptPath: string
+  quietMs: number
+  /** False once the wait this check is for has ended: a queued check then reads nothing. */
+  stillWanted: () => boolean
+  now?: number
+}
+
 /** The tool's return time, only if it returned at least `quietMs` ago with no request since. */
 export function readClaudeToolReturnWithoutRequest(
-  transcriptPath: string,
-  quietMs: number,
-  now = Date.now()
+  input: ClaudeToolReturnCheck
 ): Promise<number | null> {
-  const check = checks.then(() => checkToolReturn(transcriptPath, quietMs, now))
+  const now = input.now ?? Date.now()
+  const check = checks.then(() => checkToolReturn(input, now))
   checks = check.catch(() => {})
   return check
 }
@@ -113,18 +120,20 @@ export function readClaudeToolReturnWithoutRequest(
 // held the event loop 596 ms).
 let checks: Promise<unknown> = Promise.resolve()
 
-async function checkToolReturn(
-  transcriptPath: string,
-  quietMs: number,
-  now: number
-): Promise<number | null> {
-  const text = await readClaudeTranscriptTailText(transcriptPath, TAIL_BYTES)
+async function checkToolReturn(input: ClaudeToolReturnCheck, now: number): Promise<number | null> {
+  if (!input.stillWanted()) {
+    return null
+  }
+  const text = await readClaudeTranscriptTailText(input.transcriptPath, TAIL_BYTES)
   if (text === null) {
     return null
   }
   await new Promise((resolve) => setImmediate(resolve))
+  if (!input.stillWanted()) {
+    return null
+  }
   const at = claudeToolReturnWithoutRequest(text)
-  return at !== null && now - at >= quietMs ? at : null
+  return at !== null && now - at >= input.quietMs ? at : null
 }
 
 const CONVERSATION_ROWS = new Set(['user', 'assistant', 'system'])

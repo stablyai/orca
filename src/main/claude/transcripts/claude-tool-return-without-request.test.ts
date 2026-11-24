@@ -144,20 +144,20 @@ describe('readClaudeToolReturnWithoutRequest', () => {
     }
   })
 
-  it('names the return only once it is older than the quiet wait, and nothing for a missing file', async () => {
+  it('names the return only once it is older than the quiet wait, and nothing for a missing file or an ended wait', async () => {
     dir = mkdtempSync(join(tmpdir(), 'claude-tool-return-'))
     const path = join(dir, 'session.jsonl')
     writeFileSync(path, transcript(...STALLED))
     const returned = Date.parse(RETURNED)
-    const tenMin = 10 * 60_000
-    await expect(readClaudeToolReturnWithoutRequest(path, tenMin, returned + tenMin)).resolves.toBe(
-      returned
-    )
-    await expect(
-      readClaudeToolReturnWithoutRequest(path, tenMin, returned + tenMin - 1)
-    ).resolves.toBeNull()
-    await expect(
-      readClaudeToolReturnWithoutRequest(join(dir, 'missing.jsonl'), tenMin, returned + tenMin)
-    ).resolves.toBeNull()
+    const quietMs = 10 * 60_000
+    const check = (transcriptPath: string, now: number, stillWanted = () => true) =>
+      readClaudeToolReturnWithoutRequest({ transcriptPath, quietMs, now, stillWanted })
+    await expect(check(path, returned + quietMs)).resolves.toBe(returned)
+    await expect(check(path, returned + quietMs - 1)).resolves.toBeNull()
+    await expect(check(join(dir, 'missing.jsonl'), returned + quietMs)).resolves.toBeNull()
+    // A hook ended the wait before the queued check ran, or while it read.
+    await expect(check(path, returned + quietMs, () => false)).resolves.toBeNull()
+    let looks = 0
+    await expect(check(path, returned + quietMs, () => ++looks < 2)).resolves.toBeNull()
   })
 })
