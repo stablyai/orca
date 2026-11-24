@@ -4,7 +4,7 @@
 // posts its words as the owner's comment; Type your answer leads to the box. Several: one line at a
 // time (MobileBotItemQuestionStep), answers held until the last. Answered, a line reads
 // "Question → answer", muted, and the answer's own card is not drawn again.
-import { Text, View, type StyleProp, type ViewStyle } from 'react-native'
+import { Pressable, Text, View, type StyleProp, type ViewStyle } from 'react-native'
 import {
   botItemQuickReplyText,
   type BotItemQuestionShape
@@ -23,7 +23,7 @@ import type { BotItemQuickReplyActions } from '../../../../src/shared/bots/use-b
 import { MobileMarkdown } from '../../components/markdown/MobileMarkdown'
 import { useMobileTranslation } from '../../i18n/use-mobile-translation'
 import { INLINE_TEXT_SELECTION } from '../../platform/text-selection/inline-text-selection'
-import { colors, spacing } from '../../theme/mobile-theme'
+import { colors, pressedStyle, spacing } from '../../theme/mobile-theme'
 import { themedStyleSheet } from '../../theme/themed-styles'
 import {
   MobileBotItemAnswerLine,
@@ -44,6 +44,7 @@ export function MobileBotItemQuestionLines({
   answers = NO_ANSWERS,
   byOrder,
   ended = null,
+  onShowLive,
   actions,
   disabled = false,
   style
@@ -61,6 +62,8 @@ export function MobileBotItemQuestionLines({
   byOrder?: readonly boolean[]
   /** Why its open lines take no answer: a later ask replaced them, or the owner skipped them. */
   ended?: BotItemAskEnd | null
+  /** Replaced: shows the ask that waits now. */
+  onShowLive?: () => void
   /** While it waits, what its quick replies do; absent where the item takes no comment. */
   actions?: BotItemQuickReplyActions
   /** The host can't take a comment now (offline). */
@@ -154,7 +157,18 @@ export function MobileBotItemQuestionLines({
           </View>
         )
       })}
-      {shownEnd ? (
+      {shownEnd === 'replaced' && onShowLive ? (
+        <Pressable
+          style={({ pressed }) => [styles.endedRow, pressed && pressedStyle]}
+          onPress={onShowLive}
+          accessibilityRole="button"
+          hitSlop={6}
+        >
+          <Text style={styles.ended}>
+            {t('bots.items.ask.replacedByNewer', 'Replaced by a newer question')}
+          </Text>
+        </Pressable>
+      ) : shownEnd ? (
         <Text style={styles.ended}>
           {shownEnd === 'skipped'
             ? t('bots.items.ask.skipped', 'Skipped')
@@ -170,5 +184,6 @@ const styles = themedStyleSheet(() => ({
   one: { gap: spacing.md },
   several: { gap: 6 },
   ended: { fontSize: 12, lineHeight: 16, color: colors.textMuted },
+  endedRow: { alignSelf: 'flex-start' },
   chips: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm, marginTop: 10 }
 }))

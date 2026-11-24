@@ -21,6 +21,7 @@ import {
 } from '../../../../../shared/bots/bot-items'
 import {
   botItemActivity,
+  botItemLiveAskKey,
   botItemNeedsYouEntryKey,
   botItemWaitEntryKey,
   botItemWorkerStopReason,
@@ -276,9 +277,10 @@ export function BotItemActivityList({
   const t = useTranslate()
   const entries = botItemActivity(item, events)
   const waitKey = botItemWaitEntryKey(item, entries)
-  const liveAskId = botItemNeedsYouEntryKey(item, entries)
+  const liveAskId = botItemLiveAskKey(entries)
   // Keep the ask mounted when its marker clears during Send.
-  const needsYouKey = quickReplies?.steps?.askId ?? (needsYou ? liveAskId : null)
+  const needsYouKey =
+    quickReplies?.steps?.askId ?? (needsYou ? botItemNeedsYouEntryKey(item, entries) : null)
   const list = useRef<HTMLDivElement | null>(null)
   // A reply's quote leads to its question, focused so Tab goes on from there.
   const jump = useCallback(
