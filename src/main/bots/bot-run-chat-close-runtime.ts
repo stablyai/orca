@@ -28,20 +28,20 @@ function liveSession(sessionId: string): string {
 }
 
 /** What held a finished run chat open may have ended (its turn, its last viewer): it counts down
- *  again. One lookup by the chat's id and its /clear root; cached per lineage change. */
+ *  again. One lookup by the chat's /clear root. */
 export function wakeRunChat(
   runtime: Pick<OrcaRuntimeService, 'botRunChatCloser'>,
   sessionId: string
 ): void {
-  const closer = runtime.botRunChatCloser
-  if (closer) {
-    const records = readAgentSessionRecordStore()
-    const root =
-      records && isOrcaSessionId(sessionId)
-        ? createCanonicalOrcaSessionResolver(records)(sessionId)
-        : sessionId
-    closer.wake([sessionId, root])
-  }
+  runtime.botRunChatCloser?.wake([sessionId])
+}
+
+/** A chat's /clear root; the resolver is cached per lineage change, so this is one map walk. */
+function rootOf(sessionId: string): string {
+  const records = readAgentSessionRecordStore()
+  return records && isOrcaSessionId(sessionId)
+    ? createCanonicalOrcaSessionResolver(records)(sessionId)
+    : sessionId
 }
 
 /** Starts the closer on this host's runtime and keeps its timer in step with Close after. */
@@ -95,16 +95,17 @@ export function startBotRunChatCloser(runtime: OrcaRuntimeService, store: Store)
           return chat ? [chat] : []
         })
       ),
+    rootOf,
     busy: async (bot, sessionId, automationChats) => {
       const live = liveSession(sessionId)
       if (automationChats.has(sessionId) || automationChats.has(live) || botTurns.running(live)) {
-        return true
+        return 'busy'
       }
       const host = getStructuredAgentSessionHost()
-      return (
-        (await host?.readUsageLimitContinue(live))?.state === 'scheduled' ||
-        (await runtime.botItems.chatHasOpenItems(bot.id, sessionId))
-      )
+      if ((await host?.readUsageLimitContinue(live))?.state === 'scheduled') {
+        return 'busy'
+      }
+      return (await runtime.botItems.chatHasOpenItems(bot.id, sessionId)) ? 'item' : null
     },
     owesReply: (sessionId) =>
       sessionAwaitsMail(runtime.getOrchestrationDb(), [sessionId, liveSession(sessionId)]),

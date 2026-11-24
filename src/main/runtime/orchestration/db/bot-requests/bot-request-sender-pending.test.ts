@@ -107,10 +107,43 @@ it('a chat waits on mail from its open requests, paired asks and undelivered mai
   db.db.prepare("UPDATE messages SET delivered_at = datetime('now') WHERE id = ?").run(answer.id)
   expect(sessionAwaitsMail(db, ['live'])).toBe(false)
 
+  // A question to an ordinary chat is owed until a reply lands in its thread.
+  const asked = db.insertMessage({
+    from: 'orca_session_id:asking',
+    to: 'orca_session_id:other',
+    subject: 'Which branch?',
+    type: 'question'
+  })
+  db.db.prepare("UPDATE messages SET delivered_at = datetime('now') WHERE id = ?").run(asked.id)
+  expect(sessionAwaitsMail(db, ['asking'])).toBe(true)
+  const reply = db.insertMessage({
+    from: 'orca_session_id:other',
+    to: 'orca_session_id:asking',
+    subject: 'Re: Which branch?',
+    threadId: asked.id
+  })
+  db.db.prepare("UPDATE messages SET delivered_at = datetime('now') WHERE id = ?").run(reply.id)
+  expect(sessionAwaitsMail(db, ['asking'])).toBe(false)
+
+  // A worker the chat started reports back to it.
+  const task = db.createTask({ runId: 'run_legacy_local', spec: 'Check the build' })
+  const { dispatch } = db.createStartingWorkerDispatch({
+    creator: { kind: 'system' },
+    maxDepth: 10,
+    taskId: task.id,
+    startOptions: { agent: 'codex' }
+  })
+  db.db
+    .prepare("UPDATE dispatch_contexts SET creator_orca_session_id = 'starter' WHERE id = ?")
+    .run(dispatch.id)
+  expect(sessionAwaitsMail(db, ['starter'])).toBe(true)
+  db.failDispatch(dispatch.id, 'stopped', { workerProcessExited: true })
+  expect(sessionAwaitsMail(db, ['starter'])).toBe(false)
+
   // Looked up by sender and recipient, never by scanning the mail.
   const plan = db.db
     .prepare(`EXPLAIN QUERY PLAN ${sessionAwaitsMailSql(2)}`)
-    .all('x', 'y', 'x', 'y', 'x', 'y')
+    .all('x', 'y', 'x', 'y', 'x', 'y', 'x', 'y', 'x', 'y')
     .map((row) => String(row.detail))
   expect(plan.filter((detail) => detail.startsWith('SCAN'))).toEqual([])
 })

@@ -34,8 +34,15 @@ export type BotRunChatCloseDeps = RunChatListFile & {
   chat: (bot: Bot, sessionId: string) => BotRunChatState | null
   /** The chats automations run in, read once per sweep. */
   automationChats: () => ReadonlySet<string>
-  /** Busy: a turn or a usage-limit wait, an open item it owns, or an automation that runs in it. */
-  busy: (bot: Bot, sessionId: string, automationChats: ReadonlySet<string>) => Promise<boolean>
+  /** Busy: a turn or a usage-limit wait, or an automation that runs in it; `item`: it owns an open
+   *  item. Null when neither. */
+  busy: (
+    bot: Bot,
+    sessionId: string,
+    automationChats: ReadonlySet<string>
+  ) => Promise<'busy' | 'item' | null>
+  /** The chat's /clear root, which the list is keyed by. */
+  rootOf: (sessionId: string) => string
   /** It asked another bot, here or on a paired computer, and the answer hasn't come back, or mail
    *  for it is still on its way. Read in the close's own lane too, so none lands on a closed chat. */
   owesReply: (sessionId: string) => boolean
@@ -76,7 +83,8 @@ export class BotRunChatCloser {
   wake(sessionIds: readonly string[]): void {
     void this.serial(async () => {
       const byChat = await this.list.load()
-      await this.unpark([...new Set(sessionIds)].flatMap((id) => byChat.get(id) ?? []))
+      const roots = new Set(sessionIds.flatMap((id) => [id, this.deps.rootOf(id)]))
+      await this.unpark([...roots].flatMap((id) => byChat.get(id) ?? []))
     })
   }
 
@@ -84,7 +92,7 @@ export class BotRunChatCloser {
   itemsChanged(botIds: readonly string[]): void {
     void this.serial(async () => {
       const byChat = await this.list.load()
-      const parked = botIds.flatMap((botId) => this.list.parkedOf(botId))
+      const parked = botIds.flatMap((botId) => this.list.heldByItemsOf(botId))
       await this.unpark(parked.flatMap((id) => byChat.get(id) ?? []))
     })
   }
@@ -94,6 +102,7 @@ export class BotRunChatCloser {
     void this.serial(async () => {
       const byChat = await this.list.load()
       const removed = [...byChat.values()].filter((entry) => entry.botId === botId)
+      removed.forEach(({ sessionId }) => this.checkedThisLaunch.delete(sessionId))
       await this.list.save(removed.map(({ sessionId }) => ({ sessionId, removed: true as const })))
       await this.rearmNow()
     })
@@ -104,6 +113,7 @@ export class BotRunChatCloser {
     const woken = entries.flatMap(({ sessionId, botId, parked }) =>
       parked ? [{ sessionId, botId, since: now }] : []
     )
+    woken.forEach(({ sessionId }) => this.checkedThisLaunch.delete(sessionId))
     await this.list.save(woken)
     for (const entry of woken) {
       const bot = this.deps.bots().find((candidate) => candidate.id === entry.botId)
@@ -170,7 +180,7 @@ export class BotRunChatCloser {
     const byChat = await this.list.load()
     const bots = new Map(this.deps.bots().map((bot) => [bot.id, bot]))
     const due = [...byChat.values()].flatMap((entry) => {
-      const bot = bots.get(entry.botId)
+      const bot = this.waitsForWake(entry) ? undefined : bots.get(entry.botId)
       const ms = bot ? this.closeAfterMs(bot) : null
       return bot && ms !== null && entry.since + ms <= now + SWEEP_COALESCE_MS
         ? [{ entry, bot }]
@@ -183,7 +193,14 @@ export class BotRunChatCloser {
     const automationChats = this.deps.automationChats()
     const changes: Line[] = []
     for (const { entry, bot } of due) {
-      const next = await this.settle(entry, bot, now, automationChats)
+      // One chat whose reads keep failing waits for a wake, and never holds up the others.
+      const next = await this.settle(entry, bot, now, automationChats).catch((error: unknown) => {
+        console.warn('[bots] could not check a finished run chat', error)
+        return this.parked(entry, true)
+      })
+      if (!next?.parked) {
+        this.checkedThisLaunch.delete(entry.sessionId)
+      }
       changes.push(next ?? { sessionId: entry.sessionId, removed: true })
     }
     await this.list.save(changes)
@@ -202,7 +219,7 @@ export class BotRunChatCloser {
         return null
       }
       if (chat.inUse) {
-        return this.parked(entry)
+        return this.parked(entry, true)
       }
       // Re-read each time: Close after can change while the checks run.
       const current = this.deps.bots().find((candidate) => candidate.id === bot.id)
@@ -218,11 +235,12 @@ export class BotRunChatCloser {
       return first
     }
     // Each of these ends on its own: the chat is parked until what ends it wakes it.
-    if (
-      this.deps.owesReply(entry.sessionId) ||
-      (await this.deps.busy(bot, entry.sessionId, automationChats))
-    ) {
-      return this.parked(entry)
+    if (this.deps.owesReply(entry.sessionId)) {
+      return this.parked(entry, true)
+    }
+    const busy = await this.deps.busy(bot, entry.sessionId, automationChats)
+    if (busy) {
+      return this.parked(entry, busy === 'item' ? 'item' : true)
     }
     // A turn, a wake, a question, an open tab or a new Close after may come up to the close itself.
     const closed = await this.deps.close(
@@ -233,12 +251,17 @@ export class BotRunChatCloser {
       return null
     }
     const after = waiting()
-    return after === 'due' ? this.parked(entry) : after
+    return after === 'due' ? this.parked(entry, true) : after
   }
 
-  private parked(entry: Entry): Entry {
+  private parked(entry: Entry, parked: NonNullable<Entry['parked']>): Entry {
     this.checkedThisLaunch.add(entry.sessionId)
-    return { sessionId: entry.sessionId, botId: entry.botId, since: this.deps.now(), parked: true }
+    return { sessionId: entry.sessionId, botId: entry.botId, since: this.deps.now(), parked }
+  }
+
+  /** Parked and already checked this launch: only what ends its hold brings it back. */
+  private waitsForWake(entry: Entry): boolean {
+    return entry.parked !== undefined && this.checkedThisLaunch.has(entry.sessionId)
   }
 
   /** When the timer fires next; undefined while nothing sets it. */
@@ -281,8 +304,7 @@ export class BotRunChatCloser {
     for (const entry of byChat.values()) {
       const bot = bots.get(entry.botId)
       // A bot this profile doesn't have keeps its chats for the profile that does.
-      const waits = entry.parked && this.checkedThisLaunch.has(entry.sessionId)
-      const ms = bot && !waits ? this.closeAfterMs(bot) : null
+      const ms = bot && !this.waitsForWake(entry) ? this.closeAfterMs(bot) : null
       if (ms !== null && (next === null || entry.since + ms < next)) {
         next = entry.since + ms
       }

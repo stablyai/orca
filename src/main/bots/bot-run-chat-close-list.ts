@@ -6,9 +6,9 @@ const EntrySchema = z.object({
   botId: z.string().min(1),
   /** When its countdown last started: the run's end, or the last time it was busy or active. */
   since: z.number(),
-  /** Held open by something that ends on its own (a viewer, an item, an answer): it sets no timer
-   *  until what ends the hold wakes it, besides one check per launch. */
-  parked: z.literal(true).optional()
+  /** Held open by something that ends on its own (a viewer, an answer, or `item`: an open item): it
+   *  sets no timer until what ends the hold wakes it, besides one check per launch. */
+  parked: z.union([z.literal(true), z.literal('item')]).optional()
 })
 export type Entry = z.infer<typeof EntrySchema>
 // A later line that takes a chat off the list.
@@ -79,8 +79,8 @@ export class RunChatList {
     return this.byChat
   }
 
-  /** The bot's chats waiting on something that ends on its own. */
-  parkedOf(botId: string): readonly string[] {
+  /** The bot's chats held open by one of its open items. */
+  heldByItemsOf(botId: string): readonly string[] {
     return [...(this.parkedByBot.get(botId) ?? [])]
   }
 
@@ -120,7 +120,7 @@ export class RunChatList {
       return
     }
     this.byChat.set(line.sessionId, line)
-    if (line.parked) {
+    if (line.parked === 'item') {
       const bot = this.parkedByBot.get(line.botId) ?? new Set<string>()
       bot.add(line.sessionId)
       this.parkedByBot.set(line.botId, bot)

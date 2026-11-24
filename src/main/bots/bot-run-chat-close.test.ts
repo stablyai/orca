@@ -18,6 +18,8 @@ function closerWith(input: {
   bots: Bot[]
   chats: Record<string, Omit<BotRunChatState, 'inUse'>>
   busy?: string[]
+  /** Owns an open item. */
+  items?: string[]
   inUse?: string[]
   /** Owes a reply from the start, or (`late`) only once its close is being admitted. */
   asked?: string[]
@@ -27,6 +29,7 @@ function closerWith(input: {
   let now = 0
   let file = ''
   let writes = 0
+  let reads = 0
   const closed: string[] = []
   const owes = new Set(input.asked)
   const inUse = new Set(input.inUse)
@@ -46,12 +49,18 @@ function closerWith(input: {
     hostDefault: () => '24h',
     ready: async () => {},
     chat: (_bot, sessionId) => {
+      reads += 1
       const chat = input.chats[sessionId]
       return chat ? { ...chat, inUse: inUse.has(sessionId) } : null
     },
     automationChats: () => new Set(input.busy?.slice(0, 1)),
+    rootOf: (sessionId) => sessionId,
     busy: async (_bot, sessionId, automationChats) =>
-      automationChats.has(sessionId) || input.busy?.includes(sessionId) === true,
+      automationChats.has(sessionId) || input.busy?.includes(sessionId)
+        ? 'busy'
+        : input.items?.includes(sessionId)
+          ? 'item'
+          : null,
     owesReply: (sessionId) => owes.has(sessionId),
     close: async (sessionId, admit) => {
       const late = input.late?.[sessionId]
@@ -76,12 +85,13 @@ function closerWith(input: {
       now = ms
     },
     writes: () => writes,
+    reads: () => reads,
     lines: () => file.split('\n').filter(Boolean).length,
     parked: () => {
       const byChat = new Map<string, boolean>()
       for (const line of file.split('\n').filter(Boolean)) {
         const parsed = JSON.parse(line)
-        byChat.set(String(parsed.sessionId), parsed.parked === true)
+        byChat.set(String(parsed.sessionId), parsed.parked !== undefined)
       }
       return [...byChat].flatMap(([id, parked]) => (parked ? [id] : []))
     },
@@ -180,13 +190,15 @@ describe('BotRunChatCloser', () => {
     const idle = { lastActivityAt: 0, kept: false }
     const run = closerWith({
       bots,
-      chats: { asked: idle, item: idle, elsewhere: idle },
+      chats: { asked: idle, item: idle, elsewhere: idle, viewed: idle },
       asked: ['asked'],
-      busy: ['unused', 'item', 'elsewhere']
+      inUse: ['viewed'],
+      items: ['item', 'elsewhere']
     })
     run.closer.arm(bots[0], 'asked')
     run.closer.arm(bots[0], 'item')
     run.closer.arm(bots[1], 'elsewhere')
+    run.closer.arm(bots[0], 'viewed')
     run.at(25 * HOUR)
     await run.closer.sweep()
     const parkedTimer = run.closer.nextSweepAt()
@@ -201,23 +213,30 @@ describe('BotRunChatCloser', () => {
     await run.closer.sweep()
     const wokenTimer = run.closer.nextSweepAt()
     const stillParked = run.parked()
+    // Parked chats already checked are not read again by a later sweep.
+    run.at(50 * HOUR)
+    const reads = run.reads()
+    await run.closer.sweep()
+    const rereads = run.reads() - reads
     run.closer.clear()
     // A new launch checks each parked chat once, then waits for its wake.
     const relaunch = run.restart()
-    relaunch.rearm()
+    const beforeLaunch = run.reads()
     await relaunch.sweep()
-    const relaunchTimer = relaunch.nextSweepAt()
-    run.at(49 * HOUR)
+    const launchReads = run.reads() - beforeLaunch
     await relaunch.sweep()
+    const secondReads = run.reads() - beforeLaunch - launchReads
     const afterCheck = relaunch.nextSweepAt()
     relaunch.clear()
 
     expect(parkedTimer).toBeUndefined()
     expect(wokenTimer).toBe(54 * HOUR)
-    expect(afterTurn.sort()).toEqual(['elsewhere', 'item'])
-    expect(stillParked).toEqual(['elsewhere'])
+    expect(afterTurn.sort()).toEqual(['elsewhere', 'item', 'viewed'])
+    expect(stillParked.sort()).toEqual(['elsewhere', 'viewed'])
+    expect(rereads).toBe(0)
     expect(run.closed).toEqual([])
-    expect(relaunchTimer).toBe(49 * HOUR)
+    expect(launchReads).toBe(2)
+    expect(secondReads).toBe(0)
     expect(afterCheck).toBe(54 * HOUR)
   })
 })
