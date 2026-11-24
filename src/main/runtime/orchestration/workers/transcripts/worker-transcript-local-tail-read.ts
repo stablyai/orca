@@ -52,7 +52,9 @@ export async function readTailLocalWorkerTranscriptPage(
     args.limit,
     args.decode,
     false,
-    endingAt?.offset,
+    // A backward page reads the snapshot its cursor records, so a concurrent append can't put the
+    // kept start past the recorded size.
+    endingAt?.offset ?? (args.backward ? before.size : undefined),
     null,
     undefined,
     undefined,
