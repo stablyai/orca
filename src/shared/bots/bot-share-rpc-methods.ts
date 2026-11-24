@@ -28,7 +28,6 @@ const BOT: BotShareMethodAccess = {
   kind: 'bot',
   botId: (params) => BotParams.safeParse(params).data?.botId
 }
-const SCOPED: BotShareMethodAccess = { kind: 'scoped' }
 
 /** The methods that name nothing: each needs its view in `botShareScopedView`, or the build fails. */
 export const BOT_SHARE_SCOPED_METHODS = [
@@ -44,7 +43,7 @@ export const BOT_SHARE_RPC_METHODS: ReadonlyMap<string, BotShareMethodAccess> = 
   string,
   BotShareMethodAccess
 >([
-  ...BOT_SHARE_SCOPED_METHODS.map((method) => [method, SCOPED] as const),
+  ...BOT_SHARE_SCOPED_METHODS.map((method) => [method, { kind: 'scoped' } as const] as const),
   ['bots.avatar.read', BOT],
   ['bots.chats', BOT],
   ['bots.chatTree', BOT],

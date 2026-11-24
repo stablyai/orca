@@ -130,7 +130,12 @@ beforeEach(() => {
       // Every chat on the host, as the owner's own stream carries them.
       subscribeStatus: ({ emit }: { emit: (event: unknown) => void }) => {
         const summary = (sessionId: string) => ({ sessionId, agent: 'claude' })
-        emit({ type: 'snapshot', sessions: SESSIONS.map(({ id }) => summary(id)) })
+        emit({
+          type: 'snapshot',
+          sessions: SESSIONS.map(({ id }) => summary(id)),
+          conversationNames: SESSIONS.map(({ id }) => ({ sessionId: id, conversationName: id })),
+          namingActiveSessionIds: SESSIONS.map(({ id }) => id)
+        })
         for (const { id } of SESSIONS) {
           emit({ type: 'status', session: summary(id) })
         }
@@ -189,7 +194,12 @@ async function call(method: string, params: unknown) {
 
 const Session = z.object({ sessionId: z.string() })
 const StatusEvent = z.discriminatedUnion('type', [
-  z.object({ type: z.literal('snapshot'), sessions: z.array(Session) }),
+  z.object({
+    type: z.literal('snapshot'),
+    sessions: z.array(Session),
+    conversationNames: z.array(Session),
+    namingActiveSessionIds: z.array(z.string())
+  }),
   z.object({ type: z.literal('status'), session: Session })
 ])
 
@@ -202,7 +212,11 @@ async function streamStatus(): Promise<string[]> {
         const event = StatusEvent.parse(response.result)
         streamed.push(
           ...(event.type === 'snapshot'
-            ? event.sessions.map((session) => `snapshot:${session.sessionId}`)
+            ? [
+                ...event.sessions.map((session) => `snapshot:${session.sessionId}`),
+                ...event.conversationNames.map((note) => `name:${note.sessionId}`),
+                ...event.namingActiveSessionIds.map((sessionId) => `naming:${sessionId}`)
+              ]
             : [`status:${event.session.sessionId}`])
         )
       }
@@ -277,6 +291,8 @@ describe('the share guard', () => {
     const theirs = [ids.alicesChat, ids.alicesSlackChat]
     expect(await streamStatus()).toEqual([
       ...theirs.map((id) => `snapshot:${id}`),
+      ...theirs.map((id) => `name:${id}`),
+      ...theirs.map((id) => `naming:${id}`),
       ...theirs.map((id) => `status:${id}`)
     ])
   })
