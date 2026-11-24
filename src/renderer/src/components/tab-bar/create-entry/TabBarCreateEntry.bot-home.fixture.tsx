@@ -45,24 +45,13 @@ let runtimeBeforeCase: PropertyDescriptor | undefined
 function recordBotRpcs(): void {
   sentRpcs.length = 0
   runtimeBeforeCase = Object.getOwnPropertyDescriptor(window.api, 'runtime')
-  stubBots([bot])
-  // The stubbed bridge from stubBots: its own `call` answers everything but the start.
-  const runtime: unknown = window.api.runtime
-  const stubbed = typeof runtime === 'object' && runtime !== null ? runtime : {}
-  const answer: unknown = Reflect.get(stubbed, 'call')
-  Reflect.set(window.api, 'runtime', {
-    ...stubbed,
-    call: async (args: { method: string; params?: unknown }): Promise<unknown> => {
-      sentRpcs.push({ method: args.method, params: args.params })
-      if (args.method === 'bots.session.start') {
-        return { ok: true, result: { sessionId: 'side-chat' } }
-      }
-      return typeof answer === 'function' ? Reflect.apply(answer, stubbed, [args]) : undefined
-    }
+  stubBots([bot], undefined, {
+    results: { 'bots.session.start': { sessionId: 'side-chat' } },
+    record: (call) => sentRpcs.push({ method: call.method, params: call.params })
   })
 }
 
-// Put back the bridge's own property as it was, so cases never stack wrappers on each other.
+// Put back the bridge's own property as it was, so cases never stack stubs on each other.
 function restoreRuntime(): void {
   if (runtimeBeforeCase) {
     Object.defineProperty(window.api, 'runtime', runtimeBeforeCase)
@@ -193,10 +182,15 @@ export const codex = searchCase('codex', async () => {
   await settle()
   const starts = sentRpcs.slice(before).filter((rpc) => rpc.method === 'bots.session.start')
   const params = starts[0]?.params
-  const field = (name: string): unknown =>
-    typeof params === 'object' && params !== null ? Reflect.get(params, name) : undefined
+  const startedCodex =
+    typeof params === 'object' &&
+    params !== null &&
+    'botId' in params &&
+    'agent' in params &&
+    params.botId === bot.id &&
+    params.agent === 'codex'
   expect(
-    starts.length === 1 && field('botId') === bot.id && field('agent') === 'codex',
+    starts.length === 1 && startedCodex,
     `Enter starts one Codex side chat with ${bot.id} (sent ${JSON.stringify(sentRpcs.slice(before))})`
   )
 })
