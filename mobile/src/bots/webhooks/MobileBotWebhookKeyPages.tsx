@@ -1,5 +1,5 @@
 // The desktop's Rotate key and signing secret dialogs, as pages inside Settings like its other confirms.
-import { useState } from 'react'
+import { useState, useSyncExternalStore } from 'react'
 import { View } from 'react-native'
 import {
   webhookAdapterGeneratesSecret,
@@ -13,7 +13,7 @@ import {
 import { TextField } from '../../components/composer-input/TextField'
 import { MobileSegmentedControl } from '../../components/controls/MobileSegmentedControl'
 import { SheetHeader } from '../../components/nav-bar/SheetHeader'
-import { SheetPrimaryButton } from '../../components/sheets/SheetPrimaryButton'
+import { ListRow } from '../../components/list/ListGroup'
 import {
   CheckRow,
   ChoiceRows,
@@ -25,7 +25,11 @@ import { useClipboardWriter } from '../../platform/clipboard/clipboard'
 import { SettingsNote, SettingsSection } from '../../settings/settings-screen-frame'
 import { spacing } from '../../theme/mobile-theme'
 import { themedStyleSheet } from '../../theme/themed-styles'
+import { MobileBotTextButton } from '../MobileBotTextButton'
 import type { PhoneWebhook } from './mobile-webhook-operations'
+
+// A made secret is copied, never shown.
+const SECRET_MASK = '••••••••'
 
 /** Rotate key…: a new key, with the old one either kept a while or stopped now. */
 export function MobileBotWebhookRotate(props: {
@@ -38,19 +42,26 @@ export function MobileBotWebhookRotate(props: {
   const t = useMobileTranslation()
   const [stopNow, setStopNow] = useState(false)
   const pending = props.hook.pendingCalls
-  const title = t('bots.webhooks.rotate.title', 'Rotate the key for “{{automation}}”?', {
-    automation: props.hook.automationName
-  })
   return (
     <>
       <SheetHeader
         title={t('bots.webhooks.rotate.confirm', 'Rotate key')}
         leading={{ label: t('bots.webhooks.cancel', 'Cancel'), onPress: props.onCancel }}
+        trailing={{
+          label: t('bots.webhooks.rotate.action', 'Rotate'),
+          onPress: () => props.onRotate(stopNow),
+          disabled: props.disabled,
+          busy: props.busy
+        }}
       />
-      <SettingsNote>
-        {`${title} ${t('bots.webhooks.rotate.note', 'The URL gets a new key. Update every sender with it.')}`}
-      </SettingsNote>
-      <SettingsSection radioGroup>
+      <SettingsSection
+        first
+        radioGroup
+        footer={t(
+          'bots.webhooks.rotate.note',
+          'The URL gets a new key. Update every sender with it.'
+        )}
+      >
         <CheckRow
           radio
           label={t('bots.webhooks.rotate.overlap', 'Keep the old key working for 24 hours')}
@@ -81,15 +92,35 @@ export function MobileBotWebhookRotate(props: {
           onPress={() => setStopNow(true)}
         />
       </SettingsSection>
-      <View style={styles.gap}>
-        <SheetPrimaryButton
-          label={t('bots.webhooks.rotate.confirm', 'Rotate key')}
-          disabled={props.disabled}
-          busy={props.busy}
-          onPress={() => props.onRotate(stopNow)}
-        />
-      </View>
     </>
+  )
+}
+
+type MadeSecret = { adapter: WebhookAdapterId; secret: string }
+// A save in flight, then its made secret until the ready page is done, outlive the page so leaving
+// mid-Generate neither loses the secret nor lets a reopened page start a second one.
+const secretSaves = new Map<string, MadeSecret | 'saving'>()
+const secretSaveListeners = new Set<() => void>()
+
+function setSecretSave(hookId: string, save: MadeSecret | 'saving' | null): void {
+  if (save) {
+    secretSaves.set(hookId, save)
+  } else {
+    secretSaves.delete(hookId)
+  }
+  secretSaveListeners.forEach((listener) => listener())
+}
+
+function onSecretSaves(listener: () => void): () => void {
+  secretSaveListeners.add(listener)
+  return () => secretSaveListeners.delete(listener)
+}
+
+/** The first of these hooks with a made secret its owner isn't done with. */
+export function useWaitingWebhookSecret(hooks: readonly PhoneWebhook[]): string | null {
+  return useSyncExternalStore(
+    onSecretSaves,
+    () => hooks.find((hook) => typeof secretSaves.get(hook.hookId) === 'object')?.hookId ?? null
   )
 }
 
@@ -110,38 +141,65 @@ export function MobileBotWebhookSecret(props: {
   const [mode, setMode] = useState<'generate' | 'paste'>('generate')
   const [secret, setSecret] = useState('')
   const [pickingSender, setPickingSender] = useState(false)
-  // A made secret is copied, never shown, and kept only until this page closes.
-  const [generated, setGenerated] = useState<string | null>(null)
+  // A made secret is copied, never shown, and kept only until its ready page is done.
+  const saved = useSyncExternalStore(onSecretSaves, () => secretSaves.get(props.hook.hookId))
+  const generated = typeof saved === 'object' ? saved : null
+  const busy = props.busy || saved === 'saving'
+  const finish = () => {
+    setSecretSave(props.hook.hookId, null)
+    props.onDone()
+  }
+  // This page owns Back on its step: it waits out a save, and on the ready page is Done.
+  useBackClaim(() => {
+    if (generated) {
+      finish()
+    } else if (!busy) {
+      props.onDone()
+    }
+    return true
+  })
   const choosesMode =
     webhookAdapterGeneratesSecret(adapter) && webhookAdapterTakesPastedSecret(adapter)
   const generates = webhookAdapterGeneratesSecret(adapter) && (!choosesMode || mode === 'generate')
   const sender = webhookAdapterName(adapter)
 
-  if (generated !== null) {
+  if (generated) {
     return (
       <>
         <SheetHeader
           title={t('bots.webhooks.secret.generatedTitle', 'Signing secret ready')}
-          trailing={{ label: t('bots.webhooks.secret.done', 'Done'), onPress: props.onDone }}
+          trailing={{ label: t('bots.webhooks.secret.done', 'Done'), onPress: finish }}
         />
-        <SettingsNote>
-          {t(
-            'bots.webhooks.secret.generatedNote',
-            'Copy it into {{sender}}’s webhook settings. From now on, calls must carry its signature.',
-            { sender }
+        <SettingsSection
+          first
+          footer={t(
+            'bots.webhooks.secret.copyInto',
+            'Copy it into {{sender}}’s webhook settings.',
+            {
+              sender: webhookAdapterName(generated.adapter)
+            }
           )}
-        </SettingsNote>
-        <View style={styles.gap}>
-          <SheetPrimaryButton
-            label={t('bots.webhooks.secret.copy', 'Copy secret')}
-            onPress={() =>
-              void clipboard.writeText(generated).then(
-                () => props.showToast(t('bots.webhooks.secret.copied', 'Secret copied')),
-                () => props.showToast(t('bots.webhooks.copyFailed', 'Couldn’t copy. Try again.'))
-              )
+        >
+          <ListRow
+            title={t('bots.webhooks.secret.title', 'Signing secret')}
+            subtitle={SECRET_MASK}
+            subtitleMono
+            accessory={
+              <MobileBotTextButton
+                label={t('bots.webhooks.copy', 'Copy')}
+                accessibilityLabel={t('bots.webhooks.secret.copy', 'Copy secret')}
+                accent
+                onPress={() =>
+                  void clipboard.writeText(generated.secret).then(
+                    () => props.showToast(t('bots.webhooks.secret.copied', 'Secret copied')),
+                    () =>
+                      props.showToast(t('bots.webhooks.copyFailed', 'Couldn’t copy. Try again.'))
+                  )
+                }
+              />
             }
           />
-        </View>
+        </SettingsSection>
       </>
     )
   }
@@ -158,15 +216,16 @@ export function MobileBotWebhookSecret(props: {
     )
   }
   const save = async () => {
-    const answer = await props.onSave(adapter, generates ? null : secret.trim())
-    if (answer === false) {
-      return
+    setSecretSave(props.hook.hookId, 'saving')
+    // A reply that won't decode rejects; it mustn't leave the hook marked as saving.
+    const answer = await props
+      .onSave(adapter, generates ? null : secret.trim())
+      .catch(() => false as const)
+    const made = generates && answer ? { adapter, secret: answer } : null
+    setSecretSave(props.hook.hookId, made)
+    if (answer !== false && !made) {
+      props.onDone()
     }
-    if (generates && answer) {
-      setGenerated(answer)
-      return
-    }
-    props.onDone()
   }
   return (
     <>
@@ -176,20 +235,37 @@ export function MobileBotWebhookSecret(props: {
             ? t('bots.webhooks.secret.changeTitle', 'Change signing secret')
             : t('bots.webhooks.secret.addTitle', 'Add signing secret')
         }
-        leading={{ label: t('bots.webhooks.cancel', 'Cancel'), onPress: props.onDone }}
+        leading={{
+          label: t('bots.webhooks.cancel', 'Cancel'),
+          onPress: props.onDone,
+          disabled: busy
+        }}
+        trailing={{
+          label: generates
+            ? t('bots.webhooks.secret.create', 'Create')
+            : t('bots.webhooks.secret.save', 'Save'),
+          onPress: () => void save(),
+          disabled: props.disabled || (!generates && secret.trim().length === 0),
+          busy
+        }}
       />
-      <SettingsNote>
-        {t(
-          'bots.webhooks.secret.note',
-          'Orca then accepts only calls signed with this secret, so a leaked URL alone can’t start “{{automation}}”.',
-          { automation: props.hook.automationName }
-        )}
-      </SettingsNote>
-      <SettingsSection>
+      <SettingsSection
+        first
+        footer={
+          generates && !choosesMode
+            ? t(
+                'bots.webhooks.secret.generateNote',
+                'Orca makes this secret. You copy it into {{sender}} next.',
+                { sender }
+              )
+            : undefined
+        }
+      >
         <DrillRow
           label={t('bots.webhooks.secret.sender', 'Sender')}
           value={sender}
           onPress={() => setPickingSender(true)}
+          disabled={busy}
         />
       </SettingsSection>
       {choosesMode ? (
@@ -206,13 +282,15 @@ export function MobileBotWebhookSecret(props: {
         />
       ) : null}
       {generates ? (
-        <SettingsNote>
-          {t(
-            'bots.webhooks.secret.generateNote',
-            'Orca makes this secret. You copy it into {{sender}} next.',
-            { sender }
-          )}
-        </SettingsNote>
+        choosesMode ? (
+          <SettingsNote>
+            {t(
+              'bots.webhooks.secret.generateNote',
+              'Orca makes this secret. You copy it into {{sender}} next.',
+              { sender }
+            )}
+          </SettingsNote>
+        ) : null
       ) : (
         <View style={styles.gap}>
           <TextField
@@ -224,28 +302,8 @@ export function MobileBotWebhookSecret(props: {
             autoCorrect={false}
             autoComplete="off"
           />
-          {choosesMode ? (
-            <SettingsNote>
-              {t(
-                'bots.webhooks.secret.pasteNote',
-                'Use this when the sender gives you its own secret.'
-              )}
-            </SettingsNote>
-          ) : null}
         </View>
       )}
-      <View style={styles.gap}>
-        <SheetPrimaryButton
-          label={
-            generates
-              ? t('bots.webhooks.secret.generate', 'Generate secret')
-              : t('bots.webhooks.secret.save', 'Save')
-          }
-          disabled={props.disabled || (!generates && secret.trim().length === 0)}
-          busy={props.busy}
-          onPress={() => void save()}
-        />
-      </View>
     </>
   )
 }

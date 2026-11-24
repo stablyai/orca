@@ -1,85 +1,39 @@
 // The bot settings picture: a step shows at once; one save at a time follows the latest choice.
-import { useEffect, useRef, useState } from 'react'
-import { toast } from 'sonner'
+import { useEffect, useEffectEvent, useRef, useState } from 'react'
 import type { BotPictureCustom, BotPictureValue } from '@/components/bots/BotPicturePicker'
-import { useBotAvatarSrc } from '@/components/bots/bot-avatar-image'
-import { botErrorMessage } from '@/components/bots/bot-presentation'
+import { useBotAvatarLook } from '@/components/bots/bot-avatar-image'
 import { botFallback } from '../../../../../shared/bots/bot-avatar-fallback'
 import { useTranslate } from '@/i18n/use-translate'
-import { readBotAvatarPng, uploadBotAvatar } from '@/lib/bot-catalog'
+import { readBotAvatarPng, readHostBots } from '@/lib/bot-catalog'
+import { botRefKey } from '@/lib/bot-hosts'
+import {
+  automaticBotPictureUploadInFlight,
+  beginBotPictureOp,
+  noteBotPictureChoice,
+  subscribeBotPictureEvents
+} from '@/components/bots/bot-picture-ops'
 import {
   generatedPictureDescription,
-  keepSavedPictureDescription,
-  savedPictureDescription,
   useSavedPictureDescription
 } from '@/components/bots/generated-avatar-descriptions'
-import {
-  isUploadAvatar,
-  mascotAvatar,
-  parseBotAvatar,
-  PICKABLE_BOT_MASCOT_IDS
-} from '../../../../../shared/bot-avatar'
+import { isUploadAvatar, parseBotAvatar } from '../../../../../shared/bot-avatar'
 import type { Bot } from '../../../../../shared/bot-types'
 import type { BotUpdateParams } from '../../../../../shared/rpc-contract/bots-params'
+import type { BotAvatarOutfit } from '../../../../../shared/bots/bot-avatar-outfit'
+import { useBotPictureLook } from './use-bot-picture-look'
 import { useSaveOnClose } from './use-save-on-close'
+import { sendBotPicture } from './bot-picture-setting-send'
+import {
+  BOT_PICTURE_SAVE_DELAY_MS,
+  choiceKey,
+  keptFrom,
+  PNG_DATA_URL_PREFIX,
+  savedChoice,
+  type KeptPicture,
+  type SaveLoop
+} from './bot-picture-setting-choices'
 
-export const BOT_PICTURE_SAVE_DELAY_MS = 500
-
-const PNG_DATA_URL_PREFIX = 'data:image/png;base64,'
-
-/**
- * The bot's own picture when it is not a mascot, kept while Settings is open so stepping back
- * restores it. `avatar` is the saved value (null until a new upload is confirmed); `png` re-sends an upload.
- */
-type KeptPicture = {
-  id: number
-  avatar: string | null
-  png: string | null
-  after: number
-  /** For an upload not yet confirmed: the kept picture it replaced, back if it is refused. */
-  replaced?: KeptPicture | null
-}
-
-/** A choice compared by value: the mascot's avatar, or which kept picture. */
-type PictureKey = string
-
-function choiceKey(choice: BotPictureValue, kept: KeptPicture | null): PictureKey {
-  return choice.kind === 'mascot'
-    ? mascotAvatar(PICKABLE_BOT_MASCOT_IDS[choice.index] ?? PICKABLE_BOT_MASCOT_IDS[0])
-    : `custom:${kept?.id ?? -1}`
-}
-
-// The carousel's place of a mascot it offers; -1 for anything else, a retired mascot included.
-function pickableIndex(avatar: string | null): number {
-  const parsed = parseBotAvatar(avatar)
-  return parsed?.kind === 'mascot' ? PICKABLE_BOT_MASCOT_IDS.indexOf(parsed.id) : -1
-}
-
-function savedChoice(avatar: string | null): BotPictureValue {
-  const index = pickableIndex(avatar)
-  return index >= 0 ? { kind: 'mascot', index } : { kind: 'custom' }
-}
-
-// A picture the carousel doesn't offer (an upload, an emoji, a retired mascot) is kept as the bot's own.
-function keptFrom(avatar: string | null, id: number, after: number): KeptPicture | null {
-  return pickableIndex(avatar) >= 0 ? null : { id, avatar, png: null, after }
-}
-
-type SaveLoop = {
-  kept: KeptPicture | null
-  src: string | null
-  /** What the carousel shows. */
-  shown: BotPictureValue
-  /** What should be saved, and what the last save confirmed. */
-  desired: PictureKey
-  saved: PictureKey
-  desiredChoice: BotPictureValue
-  savedChoice: BotPictureValue
-  saving: boolean
-  /** Kept pictures are never renumbered, so a refused upload's id is not reused. */
-  nextKeptId: number
-  timer: ReturnType<typeof setTimeout> | null
-}
+export { BOT_PICTURE_SAVE_DELAY_MS }
 
 export function useBotPictureSetting(
   bot: Bot,
@@ -94,15 +48,24 @@ export function useBotPictureSetting(
   /** The mascot's tile color shown; null is its own sky blue. */
   color: string | null
   pickColor: (color: string | null) => void
+  /** What the mascot wears shown; null is nothing. */
+  outfit: BotAvatarOutfit | null
+  pickOutfit: (outfit: BotAvatarOutfit | null) => void
+  /** A picture starts being taken in (a paste, drop or file): a choice from now. The returned call
+   *  runs once it is read, whichever way. */
+  beginIntake: () => () => void
+  /** How many pictures were uploaded so far (taken in, or a generated one picked), for telling
+   *  whether one came after a moment. */
+  uploads: () => number
 } {
   const t = useTranslate()
   const [kept, setKeptState] = useState(() => keptFrom(bot.avatar, 0, -1))
   const [shown, setShown] = useState(() => savedChoice(bot.avatar))
-  const keptSrc = useBotAvatarSrc({
+  const keptSrc = useBotAvatarLook({
     id: bot.id,
     hostId: bot.hostId,
     avatar: kept?.png ? null : (kept?.avatar ?? null)
-  })
+  }).src
   const src = kept?.png ? `${PNG_DATA_URL_PREFIX}${kept.png}` : keptSrc
   const savedDescription = useSavedPictureDescription({
     id: bot.id,
@@ -120,10 +83,26 @@ export function useBotPictureSetting(
     savedChoice: shown,
     desiredChoice: shown,
     saving: false,
+    force: false,
+    waits: 0,
     nextKeptId: 1,
     timer: null
   })
   const live = loop.current
+  const key = botRefKey(bot)
+  // While anything here is still to save, the ledger has it open, so a picture asked for now waits
+  // for its revision.
+  const op = useRef<{ end: () => void } | null>(null)
+  const syncOp = (): void => {
+    const busy = live.saving || live.timer !== null || live.desired !== live.saved || live.waits > 0
+    if (busy && !op.current) {
+      op.current = beginBotPictureOp(key)
+    } else if (!busy && op.current) {
+      const ended = op.current
+      op.current = null
+      ended.end()
+    }
+  }
   useEffect(() => {
     live.src = src
   })
@@ -136,65 +115,34 @@ export function useBotPictureSetting(
     setShown(choice)
   }
 
-  const send = async (choice: BotPictureValue): Promise<boolean> => {
-    if (choice.kind === 'mascot') {
-      return (await update({ avatar: choiceKey(choice, null) })) !== null
-    }
-    const target = live.kept
-    if (!target) {
-      return false
-    }
-    const png =
-      target.png ??
-      (isUploadAvatar(target.avatar) && live.src?.startsWith(PNG_DATA_URL_PREFIX)
-        ? live.src.slice(PNG_DATA_URL_PREFIX.length)
-        : null)
-    if (!png) {
-      // An emoji or the initial is set back directly; an upload is set only by sending its image.
-      return !isUploadAvatar(target.avatar) && (await update({ avatar: target.avatar })) !== null
-    }
-    try {
-      // Read before the upload: a picture put back keeps the caption saved with its earlier avatar.
-      const known = savedPictureDescription({
-        id: bot.id,
-        hostId: bot.hostId,
-        avatar: target.avatar
-      })
-      const saved = await uploadBotAvatar(bot, png)
-      keepSavedPictureDescription(saved, png, known)
-      if (live.kept?.id === target.id) {
-        setKept({ ...target, avatar: saved.avatar, replaced: undefined })
-      }
-      return true
-    } catch (error) {
-      toast.error(botErrorMessage(error))
-      if (live.kept?.id === target.id && target.replaced !== undefined) {
-        setKept(target.replaced)
-      }
-      return false
-    }
-  }
+  const send = (choice: BotPictureValue): Promise<boolean> =>
+    sendBotPicture(choice, { bot, live, update, setKept })
 
   // One save in flight; when it lands, the latest choice is saved if it differs.
   const kick = (): void => {
-    if (live.saving || live.desired === live.saved) {
+    if (live.saving || (live.desired === live.saved && !live.force)) {
+      syncOp()
       return
     }
-    const key = live.desired
+    live.force = false
+    const desired = live.desired
     const choice = live.desiredChoice
     live.saving = true
+    syncOp()
     void send(choice).then((ok) => {
       live.saving = false
       if (ok) {
-        live.saved = key
+        live.saved = desired
         live.savedChoice = choice
-      } else if (live.desired === key) {
+      } else if (live.desired === desired) {
         // Refused: back to what is saved, unless the owner has moved on.
         live.desired = live.saved
         live.desiredChoice = live.savedChoice
         show(live.savedChoice)
       }
       kick()
+      // A picture set elsewhere while this save was in flight shows now, whichever way it went.
+      reconcile()
     })
   }
 
@@ -217,11 +165,17 @@ export function useBotPictureSetting(
 
   const pick = (choice: BotPictureValue): void => {
     nextChoice()
+    noteBotPictureChoice(key)
     show(choice)
     if (live.timer) {
       clearTimeout(live.timer)
     }
+    // Even the saved picture is sent: a generated one being uploaded may land first, and this is newer.
+    if (automaticBotPictureUploadInFlight(key)) {
+      live.force = true
+    }
     live.timer = setTimeout(commit, BOT_PICTURE_SAVE_DELAY_MS)
+    syncOp()
   }
 
   // What the last upload replaced; its PNG is held because the upload overwrites the file.
@@ -231,8 +185,11 @@ export function useBotPictureSetting(
     png: Promise<string | null>
   } | null>(null)
 
+  const uploads = useRef(0)
   const upload = (png: string, after: number): void => {
     nextChoice()
+    noteBotPictureChoice(key)
+    uploads.current += 1
     const previous = live.kept
     const replacesUpload = isUploadAvatar(previous?.avatar ?? null)
     const shownPng = live.src?.startsWith(PNG_DATA_URL_PREFIX)
@@ -246,7 +203,12 @@ export function useBotPictureSetting(
     setKept({ id: live.nextKeptId++, avatar: null, png, after, replaced: live.kept })
     show({ kind: 'custom' })
     if (pending) {
-      void previousPng.then(commit)
+      live.waits += 1
+      syncOp()
+      void previousPng.then(() => {
+        live.waits -= 1
+        commit()
+      })
     } else {
       commit()
     }
@@ -259,8 +221,13 @@ export function useBotPictureSetting(
       return
     }
     const generation = nextChoice()
+    noteBotPictureChoice(key)
+    live.waits += 1
+    syncOp()
     void before.png.then((png) => {
+      live.waits -= 1
       if (choiceGeneration.current !== generation) {
+        syncOp()
         return
       }
       const kept = before.kept && {
@@ -270,6 +237,7 @@ export function useBotPictureSetting(
       }
       // An upload whose bytes could not be read can't be put back.
       if (kept && isUploadAvatar(kept.avatar) && !kept.png) {
+        syncOp()
         return
       }
       // A new id, so the loop sees a change and sends the restored picture.
@@ -281,58 +249,71 @@ export function useBotPictureSetting(
     })
   }
 
-  // The color saves on its own, the latest pick after a pause; until it lands it is shown as picked.
-  const [pickedColor, setPickedColor] = useState<{ color: string | null } | null>(null)
-  const colorTimer = useRef<{ timer: ReturnType<typeof setTimeout>; save: () => void } | null>(null)
-  const saveColor = (color: string | null): void => {
-    colorTimer.current = null
-    void update({ avatarColor: color }).finally(() =>
-      setPickedColor((picked) => (picked?.color === color ? null : picked))
-    )
-  }
-  const pickColor = (color: string | null): void => {
-    setPickedColor({ color })
-    if (colorTimer.current) {
-      clearTimeout(colorTimer.current.timer)
-    }
-    const save = (): void => saveColor(color)
-    colorTimer.current = { timer: setTimeout(save, BOT_PICTURE_SAVE_DELAY_MS), save }
-  }
+  const look = useBotPictureLook(bot, update)
 
   useSaveOnClose(() => {
     commit()
-    if (colorTimer.current) {
-      clearTimeout(colorTimer.current.timer)
-      colorTimer.current.save()
-    }
+    look.flush()
   })
 
-  // A picture set elsewhere (the CLI, another window) is adopted while nothing is pending here.
-  useEffect(() => {
-    if (live.saving || live.timer || live.desired !== live.saved) {
+  // A picture set elsewhere (the CLI, another window, a generated picture) is adopted while nothing is
+  // pending here.
+  const adopt = (avatar: string | null): void => {
+    if (live.saving || live.timer || live.desired !== live.saved || live.waits > 0) {
       return
     }
     const savedAvatar = live.savedChoice.kind === 'mascot' ? live.saved : live.kept?.avatar
-    if (bot.avatar === savedAvatar) {
+    if (avatar === savedAvatar) {
       return
     }
     nextChoice()
-    const choice = savedChoice(bot.avatar)
+    const choice = savedChoice(avatar)
     if (choice.kind === 'custom') {
-      setKept(keptFrom(bot.avatar, live.nextKeptId++, live.kept?.after ?? -1))
+      setKept(keptFrom(avatar, live.nextKeptId++, live.kept?.after ?? -1))
     }
     show(choice)
     live.saved = live.desired = choiceKey(choice, live.kept)
     live.savedChoice = live.desiredChoice = choice
+  }
+  // The catalog's picture now, which a save refreshes before it resolves, so it can be ahead of the bot
+  // this hook was last rendered with. Nothing to compare when the catalog doesn't list the bot.
+  const reconcile = (): void => {
+    const current = readHostBots(bot.hostId).find((entry) => entry.id === bot.id)
+    if (current) {
+      adopt(current.avatar)
+    }
+  }
+  useEffect(() => {
+    adopt(bot.avatar)
     // oxlint-disable-next-line react-hooks/exhaustive-deps -- the loop state is read through its ref
   }, [bot.avatar])
+  const onAutomaticSettled = useEffectEvent(() => {
+    // A pick still waiting is sent, even of the saved picture: it came after the generated one.
+    if (live.timer || live.saving) {
+      live.force = true
+    }
+    reconcile()
+  })
+  useEffect(
+    () =>
+      subscribeBotPictureEvents((event) => {
+        if (event.kind === 'automatic-settled' && event.key === key) {
+          onAutomaticSettled()
+        }
+      }),
+    [key]
+  )
+  // Unmounting leaves the op open: the save on close is still in flight, and ends it as it settles.
 
+  // A retired mascot kept as the bot's own picture is still drawn and dressed as that mascot.
+  const keptMascot = kept && !kept.png ? parseBotAvatar(kept.avatar) : null
   return {
     value: shown,
     custom: kept && {
       src,
       fallback: botFallback({ name: bot.name, avatar: kept.avatar }),
       after: kept.after,
+      ...(keptMascot?.kind === 'mascot' ? { mascot: keptMascot.id } : {}),
       // A generated picture's caption is the description that made it.
       description:
         generatedPictureDescription(kept.png) ??
@@ -344,7 +325,14 @@ export function useBotPictureSetting(
     pick,
     upload,
     undo,
-    color: pickedColor ? pickedColor.color : (bot.avatarColor ?? null),
-    pickColor
+    color: look.color,
+    pickColor: look.pickColor,
+    outfit: look.outfit,
+    pickOutfit: look.pickOutfit,
+    beginIntake: () => {
+      noteBotPictureChoice(key)
+      return beginBotPictureOp(key).end
+    },
+    uploads: () => uploads.current
   }
 }

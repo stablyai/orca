@@ -130,11 +130,13 @@ function createViewport(): BotItemsViewport {
   let frameBox: BotItemsViewportBox | null = null
   let stop: (() => void) | null = null
   let flushed = false
+  let layoutPending = false
   let frameScrollOnly = false
   const onFrame = (scrollOnly = false, fromFrame = false): void => {
     if (scroller) {
+      frameScrollOnly = scrollOnly && !layoutPending
+      layoutPending = false
       frameBox = readBox(scroller)
-      frameScrollOnly = scrollOnly
       const changes: (() => void)[] = []
       listeners.forEach((listener) => {
         const change = listener()
@@ -166,6 +168,7 @@ function createViewport(): BotItemsViewport {
       return () => {
         listeners.delete(listener)
         if (listeners.size === 0) {
+          layoutPending = false
           listen()
         }
       }
@@ -173,7 +176,15 @@ function createViewport(): BotItemsViewport {
     flush: () => {
       // Every group changing in one commit flushes; the first measures them all, after every change is in.
       // Before the scroller attaches there is nothing to measure; its attach measures.
-      if (flushed || !scroller || listeners.size === 0 || botItemsDocumentHidden()) {
+      if (!scroller || listeners.size === 0) {
+        return
+      }
+      if (botItemsDocumentHidden()) {
+        // A scroll can arrive before visibility recovers. It must measure the new layout.
+        layoutPending = true
+        return
+      }
+      if (flushed) {
         return
       }
       flushed = true
@@ -184,6 +195,9 @@ function createViewport(): BotItemsViewport {
     },
     attach: (nextScroller, nextList) => {
       if (nextScroller !== scroller || nextList !== list) {
+        if (nextScroller !== scroller) {
+          layoutPending = false
+        }
         scroller = nextScroller
         list = nextList
         listen()

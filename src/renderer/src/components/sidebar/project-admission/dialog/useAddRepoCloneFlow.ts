@@ -165,9 +165,11 @@ export function useAddRepoCloneFlow({
       }
       const repo =
         target.kind === 'environment'
-          ? (
+          ? // Cloning is the user's act: it may wake an idle-stopped WSL host (#46567).
+            (
               await callRuntimeRpc<{ repo: Repo }>(target, 'repo.clone', cloneArgs, {
-                timeoutMs: 10 * 60_000
+                timeoutMs: 10 * 60_000,
+                wake: true
               })
             ).repo
           : await window.api.repos.clone(cloneArgs)

@@ -1,5 +1,8 @@
+import { z } from 'zod'
 import {
+  LEGACY_SOURCE_ARTIFACTS,
   LEGACY_SOURCE_REFUSALS,
+  type LegacySourceArtifact,
   type LegacySourceRefusalReason
 } from './journal-legacy-retention-error'
 
@@ -9,6 +12,16 @@ import {
  */
 export const JOURNAL_LEGACY_RETIREMENT = 'journal.legacy-retirement.v2'
 export const LEGACY_SOURCE_REFUSAL_POLICY = 3
+/**
+ * Which inventory check a refusal saw. 2 accepts shapes earlier builds left behind; an inventory
+ * or recovery refusal saved below it is proven once more, and one saved at or above it stands. A
+ * separate field, not a policy bump, so earlier builds still honour this build's refusals.
+ */
+export const LEGACY_SOURCE_INVENTORY = 2
+const RECHECKED_WITHOUT_INVENTORY: readonly LegacySourceRefusalReason[] = [
+  'source-inventory',
+  'source-recovery'
+]
 /**
  * Per chat, the original's record and waiting text where it and this store differ, kept verbatim
  * once the original retires: no content says which side changed last, so neither is dropped.
@@ -21,6 +34,42 @@ export type JournalLegacyRetirementState = {
   kept: boolean
   convertedBy: string | null
   retirement: string | null
+  /** What this store last reported about the cleanup, so a repeat isn't sent again. */
+  reported: string | null
+}
+
+/** Where to note what was last reported; nothing else reads it. */
+export const JOURNAL_LEGACY_RETIREMENT_REPORTED = 'journal.legacy-retirement-reported.v1'
+
+/** What one walk of the proof saw, for reporting only: it decides nothing. */
+export type LegacyProofCounts = {
+  chats: number
+  /** Converted here before the proof reached them. */
+  alreadyConverted: number
+  /** Converted by the proof itself: what the proof adds to the store. */
+  newlyConverted: number
+  /** Deleted here, so kept only as the original's version. */
+  deletedHere: number
+  /** Drafts: a record and no history, so nothing converts. */
+  drafts: number
+  originals: number
+  copies: number
+}
+
+/**
+ * The proof of this original into this store finished, and this build keeps the file. A later
+ * launch reads this instead of walking again; a build that deletes walks again in full.
+ */
+export type LegacySourceHeld = {
+  version: 2
+  phase: 'held'
+  layout: LegacyProofLayout
+  proof: string
+  store: string
+  /** Null when nothing was measured: a walk resumed at the copies of a deletion cut short. */
+  counts: LegacyProofCounts | null
+  /** The proof walked every page in one run rather than resuming saved progress. */
+  whole: boolean
 }
 
 /** A proof that failed for a reason the frozen original can't outgrow, keyed to that original. */
@@ -31,10 +80,23 @@ export type LegacySourceRefusal = {
   proof: string
   store: string
   reason: LegacySourceRefusalReason
+  /** Which shapes builds left behind an inventory refusal saw; for reporting only. */
+  artifact?: LegacySourceArtifact
+  inventory?: number
 }
 
 /** The proof's page layout; progress saved under another is walked again from the start. */
 export const LEGACY_PROOF_LAYOUT = 1
+/**
+ * Progress and retiring records for an original carrying a shape only this build accepts. Builds
+ * before it check inventory on the first page alone, so they must never resume such a proof.
+ */
+export const LEGACY_PROOF_HISTORICAL_LAYOUT = 2
+export type LegacyProofLayout = typeof LEGACY_PROOF_LAYOUT | typeof LEGACY_PROOF_HISTORICAL_LAYOUT
+
+export function isLegacyProofLayout(value: unknown): value is LegacyProofLayout {
+  return value === LEGACY_PROOF_LAYOUT || value === LEGACY_PROOF_HISTORICAL_LAYOUT
+}
 /** The proof's last phases, the reconcile's copies, start at this table (after content and claims). */
 export const LEGACY_PROOF_COPIES_TABLE = 7
 
@@ -46,7 +108,7 @@ export const LEGACY_PROOF_COPIES_TABLE = 7
 export type LegacySourceRetiring = {
   version: 2
   phase: 'retiring'
-  layout: typeof LEGACY_PROOF_LAYOUT
+  layout: LegacyProofLayout
   proof: string
   store: string
 }
@@ -58,10 +120,12 @@ export type LegacySourceRetiring = {
 export type LegacySourceProving = {
   version: 2
   phase: 'proving'
-  layout: typeof LEGACY_PROOF_LAYOUT
+  layout: LegacyProofLayout
   proof: string
   store: string
   cursor: { table: number; after: string | null; epoch?: string }
+  /** What the walk counted from its first page; absent when it began from older progress. */
+  counts?: LegacyProofCounts
 }
 
 export function decodeLegacySourceProving(value: string | null): LegacySourceProving | null {
@@ -83,7 +147,7 @@ export function decodeLegacySourceProving(value: string | null): LegacySourcePro
     !('store' in data) ||
     typeof data.store !== 'string' ||
     !('layout' in data) ||
-    data.layout !== LEGACY_PROOF_LAYOUT ||
+    !isLegacyProofLayout(data.layout) ||
     !('cursor' in data) ||
     !data.cursor ||
     typeof data.cursor !== 'object'
@@ -106,10 +170,11 @@ export function decodeLegacySourceProving(value: string | null): LegacySourcePro
   return {
     version: 2,
     phase: 'proving',
-    layout: LEGACY_PROOF_LAYOUT,
+    layout: data.layout,
     proof: data.proof,
     store: data.store,
-    cursor: { table, after, ...(epoch === undefined ? {} : { epoch }) }
+    cursor: { table, after, ...(epoch === undefined ? {} : { epoch }) },
+    ...decodeCounts('counts' in data ? data.counts : undefined)
   }
 }
 
@@ -139,14 +204,41 @@ export function decodeLegacySourceRefusal(value: string | null): LegacySourceRef
     return null
   }
   const reason = LEGACY_SOURCE_REFUSALS.find((known) => known === data.reason)
-  return reason
+  const artifact = LEGACY_SOURCE_ARTIFACTS.find(
+    (known) => 'artifact' in data && known === data.artifact
+  )
+  const inventory =
+    'inventory' in data &&
+    typeof data.inventory === 'number' &&
+    data.inventory >= LEGACY_SOURCE_INVENTORY
+      ? data.inventory
+      : undefined
+  return reason && (inventory || !RECHECKED_WITHOUT_INVENTORY.includes(reason))
     ? {
         version: 2,
         phase: 'refused',
         policy: LEGACY_SOURCE_REFUSAL_POLICY,
         proof: data.proof,
         store: data.store,
-        reason
+        reason,
+        ...(artifact ? { artifact } : {}),
+        ...(inventory ? { inventory } : {})
       }
     : null
+}
+
+const COUNT = z.number().int().nonnegative()
+const LEGACY_PROOF_COUNTS = z.object({
+  chats: COUNT,
+  alreadyConverted: COUNT,
+  newlyConverted: COUNT,
+  deletedHere: COUNT,
+  drafts: COUNT,
+  originals: COUNT,
+  copies: COUNT
+})
+
+function decodeCounts(value: unknown): { counts?: LegacyProofCounts } {
+  const counts = LEGACY_PROOF_COUNTS.safeParse(value)
+  return counts.success ? { counts: counts.data } : {}
 }

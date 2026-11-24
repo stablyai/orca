@@ -262,6 +262,7 @@ export function WslHostsSection({
                     <WslMoveOrchestratorStatusLine distro={distro} />
                   ) : undefined
                 }
+                stackPrimaryActionOnNarrow={notWslHost}
                 primaryAction={
                   notWslHost ? (
                     <Button

@@ -46,6 +46,8 @@ export type JournalConnectorReplyFill = JournalConnectorReplyKey & {
   links?: ConnectorWorkLink[]
   /** How long the answered turn ran, on the machine's own clock. */
   tookMs?: number
+  /** The answering turn's turn-started `at`, as its conversation was told; absent when unknown. */
+  turnStartedAt?: number
 }
 
 /** An outbox row not yet accepted by the cloud. */
@@ -61,6 +63,10 @@ export type JournalConnectorReplyRow = JournalConnectorReplyKey & {
   /** Unfilled: the usage-limit failure its cut keeps for a close without a continuation. */
   cutFailure?: ConnectorFailure
   fill?: Omit<JournalConnectorReplyFill, keyof JournalConnectorReplyKey> & { filledAt: number }
+  /** The quiet-marker rule in effect when it was admitted: 'trailing' drops only the trailing
+   *  marker. Absent (admitted by an older build): the marker silences the whole reply, except an
+   *  owner's own DM. */
+  quietRule?: 'trailing'
 }
 
 /** Open rows a cut now owes; a failure (a usage-limit cut's, with its reset) is kept for its close. */

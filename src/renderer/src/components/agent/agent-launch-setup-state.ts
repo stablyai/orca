@@ -131,7 +131,8 @@ export function agentLaunchSetupSummary(
   entry: AgentPickerEntry,
   draft: AgentPickerDraft,
   /** The row the user picked this model from, for an entry whose own listing lacks it. */
-  picked?: AgentPickerModel
+  picked?: AgentPickerModel,
+  defaultModelLabel?: string
 ): string[] {
   const modelId = draft.choices.model
   const listed =
@@ -149,9 +150,10 @@ export function agentLaunchSetupSummary(
       : entry,
     draft
   )
-  const model =
-    state.modelInArguments || !state.currentModel
-      ? undefined
+  const model = state.modelInArguments
+    ? undefined
+    : !state.currentModel
+      ? defaultModelLabel
       : state.currentModel === TEXT_ACTION_DEFAULT_MODEL
         ? entry.textGeneration?.defaultLabel
         : (state.models.find((candidate) => candidate.id === state.currentModel)?.label ??

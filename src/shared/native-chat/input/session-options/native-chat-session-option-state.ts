@@ -14,6 +14,8 @@ export type NativeChatSessionOptionRecord = {
   agent: AgentType
   model?: TrackedNativeChatSessionOption
   valuesByModel: Record<string, Record<string, TrackedNativeChatSessionOption>>
+  /** Values the session runs while its model is unknown; tracked-option lookups use it while model is unset, and the first model report adopts them. */
+  valuesWithoutModel?: Record<string, TrackedNativeChatSessionOption>
 }
 
 export function createNativeChatSessionOptionRecord(
@@ -31,10 +33,19 @@ export function cloneNativeChatSessionOptionRecord(
     valuesByModel: Object.fromEntries(
       Object.entries(record.valuesByModel).map(([modelId, values]) => [
         modelId,
-        Object.fromEntries(Object.entries(values).map(([id, tracked]) => [id, { ...tracked }]))
+        cloneTrackedValues(values)
       ])
-    )
+    ),
+    ...(record.valuesWithoutModel
+      ? { valuesWithoutModel: cloneTrackedValues(record.valuesWithoutModel) }
+      : {})
   }
+}
+
+function cloneTrackedValues(
+  values: Record<string, TrackedNativeChatSessionOption>
+): Record<string, TrackedNativeChatSessionOption> {
+  return Object.fromEntries(Object.entries(values).map(([id, tracked]) => [id, { ...tracked }]))
 }
 
 export function isFlipOnlyMidSession(
@@ -45,17 +56,26 @@ export function isFlipOnlyMidSession(
 
 export function getTrackedSessionOption(
   record: NativeChatSessionOptionRecord,
-  modelId: string | null,
   optionId: string
 ): TrackedNativeChatSessionOption | undefined {
+  if (!record.model) {
+    return record.valuesWithoutModel?.[optionId]
+  }
+  const modelId = typeof record.model.value === 'string' ? record.model.value : null
   return modelId ? record.valuesByModel[modelId]?.[optionId] : undefined
 }
 
 export function clearTrackedSessionOption(
   record: NativeChatSessionOptionRecord,
-  modelId: string | null,
   optionId: string
 ): void {
+  if (!record.model) {
+    if (record.valuesWithoutModel) {
+      delete record.valuesWithoutModel[optionId]
+    }
+    return
+  }
+  const modelId = typeof record.model.value === 'string' ? record.model.value : null
   if (!modelId) {
     return
   }
@@ -75,6 +95,7 @@ export function clearTrackedSessionOption(
 export function clearNativeChatSessionModel(record: NativeChatSessionOptionRecord): void {
   const modelId = typeof record.model?.value === 'string' ? record.model.value : null
   record.model = undefined
+  delete record.valuesWithoutModel
   if (modelId) {
     delete record.valuesByModel[modelId]
   }
@@ -84,17 +105,16 @@ export function setTrackedSessionOption(
   record: NativeChatSessionOptionRecord,
   optionId: string,
   value: SessionOptionValue,
-  source: TrackedNativeChatSessionOption['source'],
-  /** Picker model when none is tracked; retain options dispatched under the CLI default. */
-  fallbackModelId: string | null = null
+  source: TrackedNativeChatSessionOption['source']
 ): string | null {
   if (optionId === 'model') {
     record.model = { value, source }
+    delete record.valuesWithoutModel
     return typeof value === 'string' ? value : null
   }
-  const modelId =
-    (typeof record.model?.value === 'string' ? record.model.value : null) ?? fallbackModelId
+  const modelId = typeof record.model?.value === 'string' ? record.model.value : null
   if (!modelId) {
+    record.valuesWithoutModel = { ...record.valuesWithoutModel, [optionId]: { value, source } }
     return null
   }
   record.valuesByModel[modelId] = {

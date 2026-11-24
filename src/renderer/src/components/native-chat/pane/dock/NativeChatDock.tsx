@@ -1,25 +1,39 @@
 import { useRef } from 'react'
+import { useKeepFloatingTerminalTriggerClear } from '@/components/floating-terminal/trigger/floating-terminal-trigger-keep-clear'
 import { useTranslate } from '@/i18n/use-translate'
 import { useNativeChatDockFit, useNativeChatDockFitToken } from './use-native-chat-dock-fit'
 
 /** Everything under the transcript: strips, queue, prompt cards and the composer, fitted to the pane's room. */
 export function NativeChatDock({
   shown = true,
+  keepFloatingTerminalTriggerClear = false,
   children
 }: {
   /** False (a chat whose history can never load) leaves no dock at all. */
   shown?: boolean
+  keepFloatingTerminalTriggerClear?: boolean
   children: React.ReactNode
 }): React.JSX.Element | null {
   // A separate mount, so the fit's observers start with the dock's box and stop (clearing the root's
   // fit attribute) when it goes.
-  return shown ? <NativeChatDockBox>{children}</NativeChatDockBox> : null
+  return shown ? (
+    <NativeChatDockBox keepFloatingTerminalTriggerClear={keepFloatingTerminalTriggerClear}>
+      {children}
+    </NativeChatDockBox>
+  ) : null
 }
 
-function NativeChatDockBox({ children }: { children: React.ReactNode }): React.JSX.Element {
+function NativeChatDockBox({
+  children,
+  keepFloatingTerminalTriggerClear
+}: {
+  children: React.ReactNode
+  keepFloatingTerminalTriggerClear: boolean
+}): React.JSX.Element {
   const t = useTranslate()
   const dockRef = useRef<HTMLDivElement>(null)
   useNativeChatDockFit(dockRef)
+  useKeepFloatingTerminalTriggerClear(dockRef, keepFloatingTerminalTriggerClear)
   // The last fallback scrolls the dock itself; only then is it a focusable region for arrow and Page keys.
   const scrolls = useNativeChatDockFitToken(dockRef, 'dock')
   return (

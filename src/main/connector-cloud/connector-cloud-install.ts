@@ -9,7 +9,7 @@ import type { ConnectorGitHubInstallations } from './connector-github-installati
 import type { ConnectorRuntimeKind } from './connector-machine'
 import { connectorBots, type ConnectorPlacesStore } from './connector-places'
 import { connectorAccount, desktopConnectorTokenMint } from './connector-token-mint'
-import { connectorTriggers, triggerRunEvent } from './connector-triggers'
+import { connectorTriggers, runTriggerDelivery } from './connector-triggers'
 import { hostNeedsConnector } from './connector-connection-need'
 import type { WebhookHostService } from '../webhooks/webhook-host-service'
 import { botPlaceMigrationOnHello } from '../automations/bot-automation-ref-migration'
@@ -19,7 +19,6 @@ import { BotPrWaker } from '../bots/bot-pr-events'
 import { cancelConnectorConnectsForAccountChange } from './connector-connect'
 import { getStructuredAgentSessionHost } from '../native-chat/agent-session-wire/host/structured-agent-session-registry'
 import { readDispatchWorkers } from '../runtime/rpc/methods/orchestration/worker/session-workers-method'
-import { runOwnPrGuarded, type OwnPrGuardDeps } from './own-pr-trigger-guard'
 
 // A slow GitHub read holds the first hello only this long; a later answer still says a new one.
 const FIRST_GITHUB_ANSWER_WAIT_MS = 3_000
@@ -66,7 +65,6 @@ export function createConnectorCloud({
   )
   const prWaker = new BotPrWaker({
     record: runtime.botWork,
-    store: () => runtime.botWork.store().wakes,
     now: Date.now,
     send: (address, deliveryId, message) => {
       const seam = runtime.getExternalConversationSeam()
@@ -99,10 +97,6 @@ export function createConnectorCloud({
   })
   // Batches held when Orca last quit go out when due.
   prWaker.resume()
-  const ownPrGuard: OwnPrGuardDeps = {
-    isBotWork: (pr) => runtime.isBotWorkPullRequest(pr),
-    runs: (automationId) => store.listAutomationRuns(automationId)
-  }
   return new ConnectorCloud({
     userDataPath,
     origin: resolveConnectorOrigin(process.env, environment.isPackaged()),
@@ -122,7 +116,7 @@ export function createConnectorCloud({
       bots: () =>
         connectorBots(
           store,
-          store.getSettings().botsEnabled !== false,
+          runtime.bots.enabled(),
           // Asks the cloud only for an account with a bot on GitHub.
           (store.getBots?.() ?? []).some((bot) => bot.github) ? gitHubInstallations.ids() : [],
           runtime.getConnectorCloud()?.cloudFeatures() ?? null
@@ -137,23 +131,16 @@ export function createConnectorCloud({
       },
       triggers: () =>
         connectorTriggers(store.listAutomations(), (hookId) => webhooks.pausing(hookId)),
-      runTrigger: async (delivery) => {
-        const event = triggerRunEvent(store.listAutomations(), store.getBots?.() ?? [], delivery)
-        if (event?.source === 'webhook') {
-          // Its ledger, not the run, confirms a call.
-          return webhooks.receive(delivery, event)
-        }
-        if (!event) {
-          return false
-        }
-        // The owner's own pull request starts nothing when the bot's own work opened it as them.
-        return runOwnPrGuarded(
-          ownPrGuard,
-          (id, runEvent, gate) => runtime.runAutomationForEvent(id, runEvent, gate),
-          event,
+      runTrigger: (delivery) =>
+        runTriggerDelivery(
+          {
+            automations: store.listAutomations(),
+            bots: store.getBots?.() ?? [],
+            webhook: (call, event) => webhooks.receive(call, event),
+            run: (id, event) => runtime.runAutomationForEvent(id, event)
+          },
           delivery
-        )
-      },
+        ),
       turnAutomations: (entries) =>
         turnAutomations(store.listAutomations(), store.getBots?.() ?? [], entries, {
           takes: (id, event) =>

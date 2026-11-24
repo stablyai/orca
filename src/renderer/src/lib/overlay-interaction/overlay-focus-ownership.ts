@@ -72,6 +72,19 @@ function hasDismissedFocusScope(owner: HTMLElement): boolean {
   return false
 }
 
+const closeListeners = new Set<(owner: HTMLElement | null) => void>()
+
+/**
+ * Only real closes of the shared overlay primitives (after their focus restore), with the closed content. Unlike
+ * `subscribeOverlayFocusChanges`, this does not fire on DOM mutations or when an overlay opens.
+ */
+export function subscribeOverlayCloses(listener: (owner: HTMLElement | null) => void): () => void {
+  closeListeners.add(listener)
+  return () => {
+    closeListeners.delete(listener)
+  }
+}
+
 export function subscribeOverlayFocusChanges(listener: () => void): () => void {
   listeners.add(listener)
   // Custom role-based overlays do not emit the primitives' focus-scope callbacks.
@@ -118,5 +131,7 @@ export function handleOverlayCloseAutoFocus(event: Event, handler?: FocusEventHa
       dismissedOwners.add(owner)
     }
     listeners.forEach((listener) => listener())
+    const closed = owner instanceof HTMLElement ? owner : null
+    closeListeners.forEach((listener) => listener(closed))
   })
 }

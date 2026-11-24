@@ -33,7 +33,6 @@
 1 src/main/bots/bot-tools-claude.ts
 1 src/main/bots/bot-tools-host.ts
 2 src/main/bots/bot-work-runtime.ts
-1 src/main/bots/bot-work-store.ts
 1 src/main/browser-passwords/browser-password-chromium-import.ts
 2 src/main/browser-passwords/browser-password-vault-file.ts
 2 src/main/browser/agent-browser/helper-process/agent-browser-binary.ts
@@ -47,7 +46,6 @@
 2 src/main/browser/cookies/chromium/chromium-cookie-path.ts
 4 src/main/browser/cookies/chromium/chromium-cookie-snapshot.ts
 1 src/main/browser/cookies/chromium/import-cookies.ts
-3 src/main/browser/cookies/client-route/client-route-cookie-import-source-store.ts
 2 src/main/browser/cookies/sources/browser-cookie-detection.ts
 8 src/main/browser/cookies/sources/browser-cookie-firefox-import.ts
 2 src/main/browser/cookies/sources/browser-cookie-key.ts
@@ -126,7 +124,7 @@
 23 src/main/codex-accounts/runtime-home/credentials/runtime-home-service-auth-sync.ts
 2 src/main/codex-accounts/runtime-home/credentials/runtime-home-service-wsl-core.ts
 2 src/main/codex-accounts/runtime-home/legacy-host/legacy-shared-auth-migration.ts
-19 src/main/codex-accounts/runtime-home/legacy-host/runtime-home-service-legacy-migration.ts
+18 src/main/codex-accounts/runtime-home/legacy-host/runtime-home-service-legacy-migration.ts
 1 src/main/codex-accounts/runtime-home/routing/runtime-home-service-managed-home.ts
 14 src/main/codex-accounts/runtime-home/runtime-home-service-paths.ts
 1 src/main/codex-accounts/runtime-home/runtime-home-service-sync.ts
@@ -138,8 +136,8 @@
 5 src/main/codex/configuration/homes/codex-windows-sandbox-read-grant.ts
 1 src/main/codex/configuration/settings/codex-config-path-reference-rewrite.ts
 1 src/main/codex/configuration/settings/config-settings-baseline.ts
-4 src/main/codex/configuration/settings/config-settings-promotion-write-target.ts
-3 src/main/codex/configuration/settings/config-settings-promotion.ts
+5 src/main/codex/configuration/settings/config-settings-promotion-write-target.ts # +1 realpathSync of the nearest existing folder, only when config.toml is absent or unresolvable (per promotion pass with edits to write back or values held back), so a host ~/.codex linked into a WSL distro is detected before any write (#45247)
+2 src/main/codex/configuration/settings/config-settings-promotion.ts
 1 src/main/codex/configuration/shared-server/codex-daemon-socket-path-guard.ts
 7 src/main/codex/configuration/toml/config-toml-atomic-write.ts # compare-before-publish re-read of config.toml so a save made after Orca read it is never overwritten (moved here from the worker-only trust transaction)
 4 src/main/codex/history/backfill/codex-session-backfill-marker.ts
@@ -541,6 +539,7 @@
 3 src/main/wsl/filesystem/wsl-drive-project-new-default.ts
 9 src/main/wsl/filesystem/wsl-drive-unc-conversion-stores.ts
 2 src/main/wsl/filesystem/wsl-guest-windows-drive-path.ts
+1 src/main/wsl/filesystem/wsl-share-path-resolution.ts # realpathSync.native of a drive root, only on Windows for a drive-letter config target in a promotion pass that writes back or holds values back, so a drive mapped to a distro share is never written (#45247)
 2 src/main/wsl/host-lifecycle/wsl-host-automation-wake-store.ts
 4 src/main/wsl/host-lifecycle/wsl-host-e2e-fake-connector.ts
 1 src/main/wsl/host-lifecycle/wsl-host-early-wake.ts

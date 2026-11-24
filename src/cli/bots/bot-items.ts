@@ -21,6 +21,7 @@ import {
 import { RuntimeClientError } from '../runtime/connection/types'
 import { callerChat } from '../automations/automation-caller-chat'
 import { callBots, findBot } from './bot'
+import { botItemAskAdviceWithout } from '../../shared/bots/bot-item-ask-advice'
 import { botItemAskFromFlags, botItemAskParams } from './bot-item-ask-flags'
 import { BOT_ITEM_ASK_BOOLEAN_FLAGS } from '../specs/bot-items'
 import {
@@ -56,12 +57,16 @@ function print<T extends BotItemsView>(
 }
 
 async function write(
-  { client, json }: HandlerContext,
+  { client, json, flags }: HandlerContext,
   method: string,
   params: Record<string, unknown>
 ): Promise<void> {
   const result = await callBots<BotItemWriteView>(client, method, { ...callerChat(), ...params })
-  print(result, json, formatBotItemWrite)
+  const { advice, ...view } = result.result
+  // Context read from --comment-file already follows the long-context tip; only the CLI knows.
+  const kept =
+    advice && flags.has('comment-file') ? botItemAskAdviceWithout(advice, 'long_context') : advice
+  print({ ...result, result: kept ? { ...view, advice: kept } : view }, json, formatBotItemWrite)
 }
 
 function itemId(flags: Flags): string {

@@ -33,10 +33,21 @@ export function listRatchetScripts(scriptsDir) {
     })
 }
 
+const MAIN_BLOCKING_RUNNER = path.join(
+  'static-analysis',
+  'ratchet-runner',
+  'run-main-blocking-ratchets.mjs'
+)
+const HEAVY_RATCHETS = new Set(['check-react-compiler-compat-ratchet.mjs'])
+
 function runRatchet(scriptsDir, name, root) {
   return new Promise((resolve) => {
     let output = ''
-    const child = spawn(process.execPath, [path.join(scriptsDir, name)], { cwd: root })
+    const runtime =
+      name === MAIN_BLOCKING_RUNNER && process.env.ORCA_MAIN_BLOCKING_RATCHET_RUNTIME === 'bun'
+        ? 'bun'
+        : process.execPath
+    const child = spawn(runtime, [path.join(scriptsDir, name)], { cwd: root })
     child.stdout.on('data', (chunk) => (output += chunk))
     child.stderr.on('data', (chunk) => (output += chunk))
     child.on('error', (error) =>
@@ -46,18 +57,20 @@ function runRatchet(scriptsDir, name, root) {
   })
 }
 
-// Leave cores for the overlapping localization and generated-file checks.
 async function main(root) {
   const scriptsDir = path.join(root, 'config', 'scripts')
+  const discovered = listRatchetScripts(scriptsDir).filter(
+    (name) => !MAIN_BLOCKING_RATCHETS.has(path.basename(name))
+  )
+  // Schedule the heaviest ratchets first so they do not become late stragglers.
   const pending = [
-    path.join('static-analysis', 'ratchet-runner', 'run-main-blocking-ratchets.mjs'),
-    ...listRatchetScripts(scriptsDir).filter(
-      (name) => !MAIN_BLOCKING_RATCHETS.has(path.basename(name))
-    )
+    MAIN_BLOCKING_RUNNER,
+    ...discovered.filter((name) => HEAVY_RATCHETS.has(path.basename(name))),
+    ...discovered.filter((name) => !HEAVY_RATCHETS.has(path.basename(name)))
   ]
   const failed = []
   await Promise.all(
-    Array.from({ length: Math.max(2, Math.floor(availableParallelism() / 2)) }, async () => {
+    Array.from({ length: Math.max(2, availableParallelism()) }, async () => {
       while (pending.length > 0) {
         const result = await runRatchet(scriptsDir, pending.shift(), root)
         // Whole per-script blocks, so concurrent ratchets never interleave their lines.

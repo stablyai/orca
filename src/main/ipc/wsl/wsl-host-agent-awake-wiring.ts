@@ -1,6 +1,7 @@
 /** Production wiring for keep-awake's WSL-host agents: each ready host's own session-tabs stream. */
 import type { AgentAwakeService } from '../../power/agent-awake-service'
 import { WslHostAgentAwake, type WslHostAgentAwakeDeps } from '../../power/wsl-host-agent-awake'
+import { runWslHostAgentAwakeWhileAuto } from '../../power/wsl-host-agent-awake-mode-gate'
 import {
   getWslHostService,
   onWslHostStatusesChanged
@@ -53,7 +54,7 @@ export function createQuietWslHostStreamOpener(
 ): WslHostAgentAwakeDeps['openStream'] {
   return async (environmentId, handlers) => {
     const connection = await transport.resolve(environmentId)
-    if (!connection || transport.isManuallyDisconnected(environmentId)) {
+    if (handlers.signal.aborted || !connection || transport.isManuallyDisconnected(environmentId)) {
       return 'unsupported'
     }
     let ended = false
@@ -85,7 +86,7 @@ export function createQuietWslHostStreamOpener(
         onError: (error) => onEvent({ type: 'error', code: error.code, message: error.message }),
         onClose: end
       },
-      { clientCapabilities: WSL_HOST_AGENT_AWAKE_CLIENT_CAPABILITIES }
+      { clientCapabilities: WSL_HOST_AGENT_AWAKE_CLIENT_CAPABILITIES, signal: handlers.signal }
     )
     return {
       close: () => {
@@ -96,13 +97,18 @@ export function createQuietWslHostStreamOpener(
   }
 }
 
+/** Watches ready WSL hosts only while keep-awake is Auto; mode changes start or tear it down. */
 export function startWslHostAgentAwake(service: AgentAwakeService): () => void {
-  const watcher = new WslHostAgentAwake({
-    listHosts: () => getWslHostService()?.getStatuses() ?? [],
-    onHostsChanged: onWslHostStatusesChanged,
-    openStream: createQuietWslHostStreamOpener(),
-    report: (environmentId, statuses) => service.setWslHostStatuses(environmentId, statuses),
-    now: Date.now
-  })
-  return () => watcher.dispose()
+  const openStream = createQuietWslHostStreamOpener()
+  return runWslHostAgentAwakeWhileAuto(
+    service,
+    () =>
+      new WslHostAgentAwake({
+        listHosts: () => getWslHostService()?.getStatuses() ?? [],
+        onHostsChanged: onWslHostStatusesChanged,
+        openStream,
+        report: (environmentId, statuses) => service.setWslHostStatuses(environmentId, statuses),
+        now: Date.now
+      })
+  )
 }
