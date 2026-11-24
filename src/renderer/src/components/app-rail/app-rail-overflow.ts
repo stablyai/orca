@@ -1,5 +1,5 @@
-/** One rail button (28px) plus its 4px gap; two groups with 8px between them use exactly one slot per button. */
-export const APP_RAIL_SLOT_PX = 32
+/** One rail button (28px) plus its 12px gap; two groups with 24px between them use exactly one slot per button. */
+export const APP_RAIL_SLOT_PX = 40
 
 /** Whole slots that fit in the toolbar's content height (padding already excluded). */
 export function appRailSlotCapacity(contentHeightPx: number): number {
