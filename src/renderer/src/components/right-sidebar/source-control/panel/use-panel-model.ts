@@ -101,6 +101,7 @@ export function useSourceControlPanelModel() {
     rebaseAutoStash,
     rebaseStop,
     rebaseStopInspectFailure,
+    indexObservation: foundation.rebaseIndexObservation,
     statusHead: activeGitStatusHead,
     isBusy:
       isCommitting ||

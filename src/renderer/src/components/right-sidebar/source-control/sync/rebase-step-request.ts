@@ -89,36 +89,40 @@ export async function inspectRebaseStop(
     const result = await continueRuntimeGitRebase(context, 'inspect')
     // A reading superseded by a newer HEAD's inspection must not overwrite that one.
     if (isCurrent()) {
-      if (result.outcome === 'failed') {
-        operationStore.setState({
-          ...(emptyObservation ? {} : { rebaseStop: null }),
-          rebaseStopInspectFailure: { head: statusHead, message: result.message ?? null }
-        })
-      } else if (emptyObservation && result.outcome === 'inspected') {
-        if (
-          !result.indexObservation ||
-          result.hasStagedChanges === undefined ||
-          result.indexObservation !== emptyObservation
-        ) {
-          operationStore.setState({
-            rebaseStopInspectFailure: { head: statusHead, message: null }
-          })
-        } else {
-          const token = result.stop
-          const previous = emptyStop?.token
-          const sameStop =
-            token &&
-            previous &&
-            token.head === previous.head &&
-            token.step === previous.step &&
-            token.incarnation === previous.incarnation
-          recordRebaseStopReading(
-            operationStore,
-            !sameStop || result.hasStagedChanges ? result : { ...result, outcome: 'empty' }
-          )
-        }
-      } else {
+      const token = result.stop
+      const valid =
+        result.outcome === 'inspected' &&
+        token?.head &&
+        token.step &&
+        token.incarnation &&
+        (!statusHead || token.head === statusHead) &&
+        emptyObservation &&
+        result.indexObservation === emptyObservation &&
+        result.hasStagedChanges !== undefined
+      if (result.outcome === 'not_rebasing') {
         recordRebaseStopReading(operationStore, result)
+      } else if (!valid) {
+        operationStore.setState({
+          rebaseStopInspectFailure: {
+            head: statusHead,
+            indexObservation: emptyObservation,
+            message: result.message ?? null
+          }
+        })
+      } else {
+        const previous = emptyStop?.token
+        const sameStop =
+          token &&
+          previous &&
+          token.head === previous.head &&
+          token.step === previous.step &&
+          token.incarnation === previous.incarnation
+        recordRebaseStopReading(
+          operationStore,
+          emptyStop?.blocked === 'empty' && sameStop && !result.hasStagedChanges
+            ? { ...result, outcome: 'empty' }
+            : result
+        )
       }
     }
   } catch (error) {
@@ -128,6 +132,7 @@ export async function inspectRebaseStop(
       operationStore.setState({
         rebaseStopInspectFailure: {
           head: statusHead,
+          indexObservation: emptyObservation,
           message: error instanceof Error && error.message ? error.message : null
         }
       })

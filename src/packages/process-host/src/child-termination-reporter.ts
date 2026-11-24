@@ -24,9 +24,12 @@ export function canReportChildClose(
   code: number | null,
   signal: NodeJS.Signals | null
 ): boolean {
+  if (stopping && barrier) {
+    return false
+  }
   return (
     typeof barrier !== 'object' ||
-    (!stopping && code !== null && signal === null && (barrier.isExitVerified?.() ?? true))
+    (code !== null && signal === null && (barrier.isExitVerified?.() ?? true))
   )
 }
 

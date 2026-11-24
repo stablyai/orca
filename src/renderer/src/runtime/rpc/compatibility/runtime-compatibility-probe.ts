@@ -28,8 +28,29 @@ export async function ensureRuntimeEnvironmentCompatible(
     expectedEnvironmentPairingRevision?: number
     /** The caller's own wake intent: the probe is what reaches an idle-stopped WSL host first. */
     wake?: boolean
+    background?: boolean
   } = {}
 ): Promise<RuntimeStatus | null> {
+  if (options.background) {
+    const cached = runtimeCompatibilityChecks.get(environmentId)
+    if (cached?.provenCompatible && cached.status) {
+      return cached.status
+    }
+    const response = await callRuntimeEnvironmentWithRevision({
+      environmentId,
+      method: 'status.get',
+      params: undefined,
+      timeoutMs: options.timeoutMs,
+      expectedEnvironmentPairingRevision: options.expectedEnvironmentPairingRevision,
+      background: true,
+      wake: false
+    })
+    const status = unwrapRuntimeRpcResult<RuntimeStatus>(
+      response as RuntimeRpcResponse<RuntimeStatus>
+    )
+    assertRuntimeStatusCompatible(status)
+    return status
+  }
   const cached = getCachedRuntimeCompatibilityCheck(environmentId, options)
   if (cached) {
     try {

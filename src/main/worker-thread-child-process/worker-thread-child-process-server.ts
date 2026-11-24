@@ -188,6 +188,7 @@ export function serveWorkerThreadChildProcesses(port: WorkerThreadChildPort): vo
         request.type === 'stop-owned-group')
     ) {
       queued.delete(request.id)
+      port.postMessage({ type: 'spawn-withdrawn', id: request.id })
       const signal = (request.type === 'kill' && request.signal) || 'SIGTERM'
       // A group that was never created has ended, which an owned-group stop waits to hear.
       if (waiting.request.spec.terminationBarrier) {

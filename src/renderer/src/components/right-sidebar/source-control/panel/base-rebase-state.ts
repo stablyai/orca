@@ -36,6 +36,7 @@ export type BaseRebaseInputs = {
   rebaseAutoStash: RebaseAutoStashSetting
   rebaseStop: RebaseStopReading | null
   rebaseStopInspectFailure: RebaseStopInspectFailure | null
+  indexObservation: string | null
   statusHead: string | null
   isBusy: boolean
 }
@@ -97,9 +98,15 @@ export function resolveSourceControlRebaseModel(inputs: BaseRebaseInputs) {
 export function resolveRebaseContinueState(
   rebaseStop: RebaseStopReading | null,
   statusHead: string | null,
-  inspectFailure: RebaseStopInspectFailure | null = null
+  inspectFailure: RebaseStopInspectFailure | null = null,
+  indexObservation: string | null = null
 ): RebaseContinueState {
-  if (inspectFailure && inspectFailure.head === statusHead) {
+  if (
+    inspectFailure &&
+    inspectFailure.head === statusHead &&
+    (inspectFailure.indexObservation === undefined ||
+      inspectFailure.indexObservation === indexObservation)
+  ) {
     return 'unreadable'
   }
   if (!rebaseStop) {
@@ -111,6 +118,12 @@ export function resolveRebaseContinueState(
   if (statusHead !== null && rebaseStop.token.head !== statusHead) {
     return 'unknown'
   }
+  if (!indexObservation || !rebaseStop.indexObservation) {
+    return 'unreadable'
+  }
+  if (rebaseStop.indexObservation !== indexObservation) {
+    return 'unknown'
+  }
   return rebaseStop.blocked === 'empty' ? 'empty' : rebaseStop.blocked ? 'blocked' : 'ready'
 }
 
@@ -119,7 +132,8 @@ export function resolveBaseRebaseState(inputs: BaseRebaseInputs): BaseRebaseStat
     const continueState = resolveRebaseContinueState(
       inputs.rebaseStop,
       inputs.statusHead,
-      inputs.rebaseStopInspectFailure
+      inputs.rebaseStopInspectFailure,
+      inputs.indexObservation
     )
     return {
       kind: 'rebase_paused',

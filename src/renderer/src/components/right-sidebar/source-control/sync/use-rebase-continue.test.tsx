@@ -3,6 +3,7 @@ import { act, cleanup, renderHook } from '@testing-library/react'
 import { afterEach, expect, it, vi } from 'vitest'
 import type { ContinueRebaseResult } from '../../../../../../shared/git/status/git-status-types'
 import { deferred, flush } from './rebase-hook-test-harness'
+import { resolveRebaseContinueState } from '../panel/base-rebase-state'
 import { getWorktreeOperationStore } from '../panel/worktree-operation-store'
 import { useSourceControlRebaseContinue } from './use-rebase-continue'
 
@@ -21,7 +22,9 @@ function inspected(head: string): ContinueRebaseResult {
   return {
     outcome: 'inspected',
     stop: { head, step: '1', incarnation: `rebase-merge:1:0:${head}` },
-    branch: 'feature'
+    branch: 'feature',
+    indexObservation: 'index-a',
+    hasStagedChanges: true
   }
 }
 
@@ -42,9 +45,8 @@ it('re-reads the stop when HEAD moves mid-inspect and ignores the superseded rea
     refreshBranchCompareRef: { current: noop },
     refreshGitHistoryRef: { current: noop },
     statusHead,
-    rebaseStop: null,
     inspectFailure: null,
-    indexObservation: null,
+    indexObservation: 'index-a',
     worktreePath: '/repo'
   })
   const { rerender } = renderHook(
@@ -66,7 +68,9 @@ it('re-reads the stop when HEAD moves mid-inspect and ignores the superseded rea
 it('rechecks a late empty result against the newer index observation', async () => {
   const operationStore = getWorktreeOperationStore('wt-empty-race', 'local', 'instance-1')
   const token = { head: 'S1', step: '1', incarnation: 'run-1' }
-  operationStore.setState({ rebaseStop: { token, branch: 'feature', blocked: null } })
+  operationStore.setState({
+    rebaseStop: { token, branch: 'feature', blocked: null, indexObservation: 'index-a' }
+  })
   const pending = deferred<ContinueRebaseResult>()
   git.continueRebase.mockReturnValueOnce(pending.promise).mockResolvedValueOnce({
     outcome: 'inspected',
@@ -87,8 +91,9 @@ it('rechecks a late empty result against the newer index observation', async () 
         activeWorktreeId: 'wt-empty-race',
         conflictOperation: 'rebase',
         operationStore,
-        rebaseStopUnread: !rebaseStop && !inspectFailure,
-        rebaseStop,
+        rebaseStopUnread:
+          resolveRebaseContinueState(rebaseStop, 'S1', inspectFailure, indexObservation) ===
+          'unknown',
         inspectFailure,
         indexObservation,
         refreshActiveGitStatusAfterMutation: noop,
@@ -126,7 +131,6 @@ it('rechecks a late empty result against the newer index observation', async () 
 it('keeps Retry busy until the current inspection settles', async () => {
   const operationStore = getWorktreeOperationStore('wt-retry-race', 'local', 'instance-1')
   operationStore.setState({
-    rebaseStop: null,
     rebaseStopInspectFailure: { head: 'S1', message: null }
   })
   const first = deferred<ContinueRebaseResult>()
@@ -145,9 +149,8 @@ it('keeps Retry busy until the current inspection settles', async () => {
         conflictOperation: 'rebase',
         operationStore,
         rebaseStopUnread: !rebaseStop && !inspectFailure,
-        rebaseStop,
         inspectFailure,
-        indexObservation: null,
+        indexObservation: 'index-a',
         refreshActiveGitStatusAfterMutation: noop,
         refreshBranchCompareRef: { current: noop },
         refreshGitHistoryRef: { current: noop },
@@ -184,8 +187,15 @@ it('offers Retry for a failed read or an incomplete stop even when HEAD is null'
   ).toBe('unreadable')
   expect(
     resolveRebaseContinueState(
-      { token: { head: 'S1', step: '1', incarnation: 'run' }, branch: 'feature', blocked: null },
-      'S1'
+      {
+        token: { head: 'S1', step: '1', incarnation: 'run' },
+        branch: 'feature',
+        blocked: null,
+        indexObservation: 'index-a'
+      },
+      'S1',
+      null,
+      'index-a'
     )
   ).toBe('ready')
 })
@@ -202,7 +212,7 @@ it('offers recovery after a fulfilled inspection failure and accepts a complete 
   const { result } = renderHook(() => {
     const rebaseStop = useStore(operationStore, (state) => state.rebaseStop)
     const inspectFailure = useStore(operationStore, (state) => state.rebaseStopInspectFailure)
-    const state = resolveRebaseContinueState(rebaseStop, 'S1', inspectFailure)
+    const state = resolveRebaseContinueState(rebaseStop, 'S1', inspectFailure, 'index-a')
     return {
       state,
       ...useSourceControlRebaseContinue({
@@ -211,9 +221,8 @@ it('offers recovery after a fulfilled inspection failure and accepts a complete 
         conflictOperation: 'rebase',
         operationStore,
         rebaseStopUnread: state === 'unknown',
-        rebaseStop,
         inspectFailure,
-        indexObservation: null,
+        indexObservation: 'index-a',
         refreshActiveGitStatusAfterMutation: noop,
         refreshBranchCompareRef: { current: noop },
         refreshGitHistoryRef: { current: noop },
@@ -239,7 +248,11 @@ it('ignores an inspection superseded by staging and unstaging during the read', 
     rebaseStop: { token, branch: 'feature', blocked: 'empty', indexObservation: 'index-a' }
   })
   const pending = deferred<ContinueRebaseResult>()
-  git.continueRebase.mockReturnValueOnce(pending.promise)
+  const started = deferred<void>()
+  git.continueRebase.mockImplementationOnce(() => {
+    started.resolve()
+    return pending.promise
+  })
   const target = { kind: 'local' as const }
   const noop = async () => {}
   const { useStore } = await import('zustand')
@@ -252,8 +265,9 @@ it('ignores an inspection superseded by staging and unstaging during the read', 
         activeWorktreeId: 'wt-unstage-race',
         conflictOperation: 'rebase',
         operationStore,
-        rebaseStopUnread: false,
-        rebaseStop,
+        rebaseStopUnread:
+          resolveRebaseContinueState(rebaseStop, 'S1', inspectFailure, indexObservation) ===
+          'unknown',
         inspectFailure,
         indexObservation,
         refreshActiveGitStatusAfterMutation: noop,
@@ -265,6 +279,9 @@ it('ignores an inspection superseded by staging and unstaging during the read', 
     },
     { initialProps: { indexObservation: 'index-b' } }
   )
+  await act(async () => {
+    await started.promise
+  })
   rerender({ indexObservation: 'index-a' })
   await act(async () => {
     pending.resolve({

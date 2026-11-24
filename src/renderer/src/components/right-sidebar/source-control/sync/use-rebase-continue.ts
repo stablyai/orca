@@ -1,15 +1,15 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react'
 import type { GitConflictOperation } from '../../../../../../shared/git/status/git-status-types'
 import type { SourceControlWorktreeContext } from '../listing/use-worktree-context'
 import { sourceControlConnectionId, useSourceControlScope } from '../panel/worktree-scope'
 import type {
   RebaseStopInspectFailure,
-  RebaseStopReading,
   WorktreeOperationStore
 } from '../panel/worktree-operation-store'
 import { refreshSourceControlAfterRemoteAction } from './remote-refresh'
 import type { SourceControlStatusRefresh } from './use-status-refresh'
 import { requireGitOwnerTarget } from './worktree-git-owner-target'
+import { resolveRebaseContinueState } from '../panel/base-rebase-state'
 import { inspectRebaseStop, runContinueRequest } from './rebase-step-request'
 
 export function useSourceControlRebaseContinue({
@@ -22,7 +22,6 @@ export function useSourceControlRebaseContinue({
   refreshBranchCompareRef,
   refreshGitHistoryRef,
   statusHead,
-  rebaseStop,
   inspectFailure,
   indexObservation,
   worktreePath
@@ -38,32 +37,59 @@ export function useSourceControlRebaseContinue({
   refreshGitHistoryRef: React.RefObject<() => Promise<void>>
   // The HEAD status reports; a move while still unread starts a fresh inspection.
   statusHead: string | null
-  rebaseStop: RebaseStopReading | null
   inspectFailure: RebaseStopInspectFailure | null
   indexObservation: string | null
   worktreePath: string | null
 }) {
   const scope = useSourceControlScope()
-  const [isRetryingRebaseInspect, setIsRetryingRebaseInspect] = useState(false)
+  const [retry, setRetry] = useState<{ store: WorktreeOperationStore; sequence: number } | null>(
+    null
+  )
+  const retryOwner = useRef<{ store: WorktreeOperationStore; sequence: number } | null>(null)
   const inspectAttempt = useRef(0)
-  const emptyObservation =
-    rebaseStop?.blocked === 'empty' &&
-    indexObservation &&
-    rebaseStop.indexObservation &&
-    indexObservation !== rebaseStop.indexObservation
-      ? indexObservation
-      : null
+  const latest = useRef({
+    operationStore,
+    activeWorktreeId,
+    worktreePath,
+    activeRepoTarget,
+    conflictOperation,
+    statusHead,
+    indexObservation
+  })
+  useLayoutEffect(() => {
+    latest.current = {
+      operationStore,
+      activeWorktreeId,
+      worktreePath,
+      activeRepoTarget,
+      conflictOperation,
+      statusHead,
+      indexObservation
+    }
+  }, [
+    operationStore,
+    activeWorktreeId,
+    worktreePath,
+    activeRepoTarget,
+    conflictOperation,
+    statusHead,
+    indexObservation
+  ])
+  const failureCurrent =
+    inspectFailure &&
+    inspectFailure.head === statusHead &&
+    (inspectFailure.indexObservation === undefined ||
+      inspectFailure.indexObservation === indexObservation)
+  const retryCurrent = retry?.store === operationStore
   const shouldInspect =
-    conflictOperation === 'rebase' &&
-    !(inspectFailure && inspectFailure.head === statusHead) &&
-    (rebaseStopUnread || !!emptyObservation)
+    conflictOperation === 'rebase' && !failureCurrent && (rebaseStopUnread || retryCurrent)
   useEffect(() => {
-    // An unresolved owner has no host to ask; requireGitOwnerTarget below would throw out of the effect.
     if (!shouldInspect || !activeRepoTarget || !activeWorktreeId || !worktreePath) {
       return
     }
     let current = true
     const attempt = ++inspectAttempt.current
+    const priorStop = operationStore.getState().rebaseStop
     void inspectRebaseStop(
       {
         target: requireGitOwnerTarget(activeRepoTarget),
@@ -73,12 +99,13 @@ export function useSourceControlRebaseContinue({
       },
       operationStore,
       statusHead,
-      emptyObservation,
-      emptyObservation ? rebaseStop : null,
+      indexObservation,
+      priorStop?.blocked === 'empty' ? priorStop : null,
       () => current
     ).finally(() => {
-      if (inspectAttempt.current === attempt) {
-        setIsRetryingRebaseInspect(false)
+      if (inspectAttempt.current === attempt && retryOwner.current?.store === operationStore) {
+        retryOwner.current = null
+        setRetry(null)
       }
     })
     return () => {
@@ -87,13 +114,13 @@ export function useSourceControlRebaseContinue({
   }, [
     activeRepoTarget,
     activeWorktreeId,
-    emptyObservation,
     operationStore,
-    rebaseStop,
     scope,
     shouldInspect,
     statusHead,
-    worktreePath
+    indexObservation,
+    worktreePath,
+    retry?.sequence
   ])
 
   // Continue only the complete stop that was shown.
@@ -108,6 +135,16 @@ export function useSourceControlRebaseContinue({
       conflictOperation !== 'rebase' ||
       state.isAbortingOperation ||
       !state.rebaseStop ||
+      latest.current.operationStore !== operationStore ||
+      latest.current.activeWorktreeId !== activeWorktreeId ||
+      latest.current.activeRepoTarget !== activeRepoTarget ||
+      latest.current.worktreePath !== worktreePath ||
+      resolveRebaseContinueState(
+        state.rebaseStop,
+        latest.current.statusHead,
+        state.rebaseStopInspectFailure,
+        latest.current.indexObservation
+      ) !== 'ready' ||
       state.rebaseStop.blocked !== null ||
       !state.rebaseStop.token.head ||
       !state.rebaseStop.token.step ||
@@ -149,19 +186,41 @@ export function useSourceControlRebaseContinue({
     worktreePath
   ])
   const handleContinueRebase = runRebaseStep
-  // Clearing the failure makes the stop unread again, which re-runs the inspect effect above.
   const handleRetryRebaseInspect = useCallback((): void => {
-    inspectAttempt.current++
-    setIsRetryingRebaseInspect(true)
-    operationStore.setState({
-      ...(operationStore.getState().rebaseStop?.blocked === 'empty' ? {} : { rebaseStop: null }),
-      rebaseStopInspectFailure: null
-    })
-  }, [operationStore])
+    const current = latest.current
+    if (
+      current.operationStore !== operationStore ||
+      current.activeWorktreeId !== activeWorktreeId ||
+      current.activeRepoTarget !== activeRepoTarget ||
+      current.worktreePath !== worktreePath ||
+      !current.activeRepoTarget ||
+      !current.activeWorktreeId ||
+      !current.worktreePath ||
+      current.conflictOperation !== 'rebase' ||
+      retryOwner.current?.store === operationStore
+    ) {
+      return
+    }
+    const state = operationStore.getState()
+    if (
+      resolveRebaseContinueState(
+        state.rebaseStop,
+        current.statusHead,
+        state.rebaseStopInspectFailure,
+        current.indexObservation
+      ) !== 'unreadable'
+    ) {
+      return
+    }
+    const request = { store: operationStore, sequence: ++inspectAttempt.current }
+    retryOwner.current = request
+    setRetry(request)
+    operationStore.setState({ rebaseStopInspectFailure: null })
+  }, [operationStore, activeWorktreeId, activeRepoTarget, worktreePath])
   return {
     handleContinueRebase,
     handleRetryRebaseInspect,
-    isRetryingRebaseInspect: isRetryingRebaseInspect && shouldInspect && !!activeRepoTarget
+    isRetryingRebaseInspect: retryCurrent && shouldInspect && !!activeRepoTarget
   }
 }
 

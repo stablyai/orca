@@ -44,3 +44,24 @@ it.skipIf(process.platform === 'win32')(
     expect(terminated).toBe(false)
   }
 )
+
+it.skipIf(process.platform === 'win32')(
+  'observes the completion witness after diagnostic output exceeds the capture cap',
+  async () => {
+    const termination = createWslProcessGroupTermination('fixture')
+    let terminated = false
+    const args = termination.wrapGuestArgs(['sh', '-c', 'yes x | head -c 65536 >&2']).slice(1)
+    const result = await runProcess({
+      program: 'sh',
+      args,
+      maxOutputBytes: 1024,
+      terminationBarrier: termination,
+      onChildTerminated: () => {
+        terminated = true
+      }
+    })
+    expect(result.code).toBe(0)
+    expect(termination.isExitVerified?.()).toBe(true)
+    expect(terminated).toBe(true)
+  }
+)

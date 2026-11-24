@@ -2,6 +2,8 @@ import {
   markEnvironmentUsedFromResponse,
   shouldUseCachedRequestConnection
 } from './runtime-environment-usage-response'
+import { getRuntimeEnvironmentStatusSnapshot } from '../connections/runtime-environment-request-connections'
+import { runtimeHostStatusFailure } from '../../../../shared/remote-runtime/host-status/runtime-host-status'
 import { getRuntimeEnvironmentStatus } from '../status/runtime-environment-status-probe'
 import { getPreferredPairedRuntimeConnection } from '../../../../shared/remote-runtime/host-catalog/runtime-environments'
 import { ELECTRON_REMOTE_RUNTIME_CLIENT_CAPABILITIES } from '../../../../shared/remote-runtime/protocol/electron-remote-runtime-client-capabilities'
@@ -54,6 +56,36 @@ export async function callRuntimeEnvironment(
   }
 ): Promise<Rpc.RuntimeRpcResponse<unknown>> {
   if (method === 'status.get') {
+    if (options?.background) {
+      const environment = await resolveEnvironment(userDataPath, selector)
+      const failure = runtimeEnvironmentRevisionFailure(
+        environment,
+        expectedEnvironmentPairingRevision,
+        method
+      )
+      if (failure) {
+        return failure
+      }
+      const snapshot = getRuntimeEnvironmentStatusSnapshot(environment.id)
+      if (
+        snapshot?.verification === 'verified' &&
+        !snapshot.retired &&
+        snapshot.status &&
+        snapshot.pairingRevision === (environment.pairingRevision ?? environment.createdAt) &&
+        (!environment.runtimeId || environment.runtimeId === snapshot.status.runtimeId)
+      ) {
+        return {
+          id: 'status.get',
+          ok: true,
+          result: snapshot.status,
+          _meta: { runtimeId: snapshot.status.runtimeId }
+        }
+      }
+      return runtimeHostStatusFailure(
+        'runtime_unavailable',
+        'No verified runtime status is available.'
+      )
+    }
     let statusOptions = options
     // Why: the status probe dials on its own, so a no-start caller's WSL host is checked first.
     if (options?.preparation) {

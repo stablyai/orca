@@ -87,6 +87,9 @@ export function runProcess(
       }
       if (typeof spec.terminationBarrier === 'object') {
         spec.terminationBarrier.observeStderr?.(chunk)
+        if (barrierStopping && spec.terminationBarrier.isExitVerified?.()) {
+          markBarrierTerminationVerified()
+        }
       }
     })
     // Stream errors (including stdin EPIPE) are otherwise uncaught; the exit still reaches callers.

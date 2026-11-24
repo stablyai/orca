@@ -55,6 +55,7 @@ export type RebaseStopReading = {
 export type RebaseStopInspectFailure = {
   head: string | null
   message: string | null
+  indexObservation?: string | null
 }
 
 /** Everything Source Control tracks for one worktree copy; lives past panel/section unmounts. */
