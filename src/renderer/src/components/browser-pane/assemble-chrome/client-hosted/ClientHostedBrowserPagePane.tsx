@@ -18,6 +18,7 @@ import { useBrowserClientHostedPopupNotices } from '../../navigate/browser-clien
 import { useBrowserClientHostedPermissionNotices } from '../../navigate/browser-client-hosted-permission-notices'
 import { useClientHostedBrowserIntroTour } from './use-client-hosted-browser-intro-tour'
 import { ClientHostedBrowserPageStandIn } from './client-hosted-browser-page-stand-in'
+import { useClientHostedPageAttachment } from './use-client-hosted-page-attachment'
 import { watchBrowserClientPageGuestLoss } from '../../host-guest/recovery/browser-client-page-guest-loss'
 import { useClientHostedBrowserAnnotate } from '../../annotate/use-client-hosted-browser-annotate'
 import { ClientHostedBrowserPageOverlays } from './client-hosted-browser-page-overlays'
@@ -36,7 +37,7 @@ import { useBrowserPageWebviewShortcuts } from '../../host-guest/input/use-brows
 import { useBrowserPageZoomFeedback } from '../../host-guest/viewport/use-browser-page-zoom-feedback'
 import { ClientHostedBrowserLoadFailure } from '../../navigate/client-hosted-browser-load-failure'
 import { useClientHostedPageUrlSubmission } from '../../navigate/use-client-hosted-page-url-submission'
-import { useClientPageWorkspaceFileDrop } from '../../navigate/browser-page-workspace-file-drop'
+import { useWorkspaceDocPageFileDrop } from '../../navigate/browser-page-workspace-file-drop'
 import { isBlankBrowserUrl } from '@/lib/browser/palette/browser-palette-search'
 import { useBrowserPageReloadActions } from '../../navigate/use-browser-page-reload-actions'
 import { consumeBrowserPageDeferredNavigation } from '../../navigate/browser-page-deferred-navigation'
@@ -46,6 +47,7 @@ import type { ClientHostedBrowserPagePaneProps as Props } from '../../describe-p
 import { BROWSER_DEVTOOLS_DOCK_SPLIT_CLASS_NAME } from '../../host-guest/viewport/browser-page-viewport'
 import { BrowserDevToolsDock } from '../../devtools-dock/BrowserDevToolsDock'
 import { useBrowserDevToolsDockPageFlex } from '../../devtools-dock/browser-devtools-docked-pages'
+import { useClientHostedPageSidePanelRoom } from './use-client-hosted-page-side-panel-room'
 
 export function ClientHostedBrowserPagePane(props: Props) {
   const {
@@ -62,6 +64,7 @@ export function ClientHostedBrowserPagePane(props: Props) {
   const viewportPresetId = browserTab.viewportPresetId ?? null
   const pageBox = useClientHostedBrowserPageViewport(browserTab.id, viewportPresetId)
   const devToolsPageFlex = useBrowserDevToolsDockPageFlex(browserTab.id)
+  const sidePanelRoom = useClientHostedPageSidePanelRoom(browserTab.id)
   const webviewRef = useRef<Electron.WebviewTag | null>(null)
   const addressBarInputRef = useRef<HTMLInputElement | null>(null)
   const viewportContainerRef = useRef<HTMLDivElement | null>(null)
@@ -70,7 +73,8 @@ export function ClientHostedBrowserPagePane(props: Props) {
   const loadFailureRef = useRef<BrowserGuestMetadata['loadError']>(browserTab.loadError ?? null)
   const onUpdatePageStateRef = useRef(onUpdatePageState)
   const isActiveRef = useRef(isActive)
-  const [attachmentError, setAttachmentError] = useState<string | null>(null)
+  const attach = useClientHostedPageAttachment(browserTab.id, onUpdatePageState)
+  const { attachmentError, setAttachmentError, wakeWhenShown, recoverLostGuest } = attach
   const [findOpen, setFindOpen] = useState(false)
   const [paneRoot, setPaneRoot] = useState<HTMLDivElement | null>(null)
   const updatePageStateFromGuest = useEffectEvent(onUpdatePageState)
@@ -80,15 +84,10 @@ export function ClientHostedBrowserPagePane(props: Props) {
   const browserHostGeneration = placement?.browserHostGeneration ?? null
   const pageHostGeneration = placement?.pageHostGeneration ?? null
   const initialization = useClientHostedPageInitialization(props, attachmentError, loadFailureRef)
-  const retryGuestRecoveryRef = useRef<() => void>(() => {})
   useLayoutEffect(() => {
     onUpdatePageStateRef.current = onUpdatePageState
     isActiveRef.current = isActive
-    retryGuestRecoveryRef.current = () => {
-      onUpdatePageState(browserTab.id, { loading: false })
-      setAttachmentError('browser_client_page_guest_unavailable')
-    }
-  }, [browserTab.id, isActive, onUpdatePageState])
+  }, [isActive, onUpdatePageState])
 
   const guestFocus = useWebviewGuestFocus(webviewRef)
   const shortcutOwner = { browserTabId: browserTab.id, workspaceId, isActive, chromeShortcutScope }
@@ -110,7 +109,7 @@ export function ClientHostedBrowserPagePane(props: Props) {
     browserTab: initialization.reloadPage,
     onInitializationAction: initialization.initializationAction,
     webviewRef,
-    retryGuestRecoveryRef,
+    retryGuestRecoveryRef: attach.retryGuestRecoveryRef,
     onUpdatePageStateRef
   })
 
@@ -144,7 +143,7 @@ export function ClientHostedBrowserPagePane(props: Props) {
   )
   const getAgentCursorHost = useCallback(() => webviewRef.current?.parentElement ?? null, [])
   useBrowserAgentCursor(browserTab.id, webviewRef, getAgentCursorHost)
-  const fileDrop = useClientPageWorkspaceFileDrop(browserTab.id, worktreeId, pageBox.contentRef)
+  const fileDrop = useWorkspaceDocPageFileDrop(browserTab.id, worktreeId, pageBox.contentRef)
 
   const annotate = useClientHostedBrowserAnnotate(
     props,
@@ -176,12 +175,11 @@ export function ClientHostedBrowserPagePane(props: Props) {
         viewport
       )
     } catch (error) {
-      setAttachmentError(error instanceof Error ? error.message : 'browser_client_page_unavailable')
-      return
+      const code = error instanceof Error ? error.message : 'browser_client_page_unavailable'
+      return wakeWhenShown(viewport, pageHostGeneration, code)
     }
     if (!attachment) {
-      setAttachmentError('browser_client_page_renderer_unavailable')
-      return
+      return wakeWhenShown(viewport, pageHostGeneration, 'browser_client_page_renderer_unavailable')
     }
     const webview = attachment.webview
     let guestAvailable = true
@@ -194,7 +192,7 @@ export function ClientHostedBrowserPagePane(props: Props) {
       onLost: () => {
         guestAvailable = false
         releaseGuest()
-        retryGuestRecoveryRef.current()
+        recoverLostGuest(viewport, pageHostGeneration)
       }
     })
     const publisher = startBrowserClientPageMetadataPublisher({
@@ -320,7 +318,11 @@ export function ClientHostedBrowserPagePane(props: Props) {
     pageHostGeneration,
     runtimeEnvironmentId,
     setAddressBarValueFromPage,
-    bindAnnotationGuest
+    bindAnnotationGuest,
+    attach.remountRevision,
+    setAttachmentError,
+    wakeWhenShown,
+    recoverLostGuest
   ])
 
   return (
@@ -359,7 +361,7 @@ export function ClientHostedBrowserPagePane(props: Props) {
         />
       </div>
       {annotate.banner}
-      <div className={BROWSER_DEVTOOLS_DOCK_SPLIT_CLASS_NAME}>
+      <div {...sidePanelRoom} className={BROWSER_DEVTOOLS_DOCK_SPLIT_CLASS_NAME}>
         <div
           ref={viewportContainerRef}
           className="relative min-h-0 min-w-0 flex-1 overflow-hidden bg-background"

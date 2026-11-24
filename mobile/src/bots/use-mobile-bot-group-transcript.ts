@@ -1,4 +1,5 @@
-import { useCallback, useEffect, useReducer, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useReducer, useRef, useState } from 'react'
+import { isBotAgent } from '../../../src/shared/bot-types'
 import { AppState } from 'react-native'
 import {
   reduceBotGroupTranscript,
@@ -7,12 +8,13 @@ import {
 } from '../../../src/shared/bots/bot-group-transcript'
 import type { RpcClient } from '../transport/rpc/rpc-client-contract'
 import { groupRead } from './bot-group-operations'
-import { readHostBots } from './host-bots-read'
+import { hostBotsKey, readHostBots } from './host-bots-read'
 import type { PhoneBot } from './host-bots-operations'
 import { startHostBotRefresh } from './host-bot-refresh'
 import {
   botChangeBotIds,
   botChangeConcerns,
+  botGroupRoomConcerned,
   type BotChangeKind,
   type BotChangeScope
 } from '../../../src/shared/bots/bot-change-scope'
@@ -139,13 +141,18 @@ export function useMobileBotGroupTranscript(
       if (counts) {
         setNeedsYou((last) => (sameCounts(last, counts) ? last : counts))
       }
-      if (!botChangeConcerns(changed, { kinds: ROOM_KINDS })) {
+      // A groups change naming other rooms leaves this one as it is.
+      const room =
+        botChangeConcerns(changed, { kinds: ['bot'] }) ||
+        (botChangeConcerns(changed, { kinds: ['groups'] }) &&
+          botGroupRoomConcerned(changed, groupId))
+      if (!room) {
         return
       }
       const current = ++request
       void Promise.all([
         groupRead.request(client, { groupId, threadId }),
-        readHostBots(client, hostId)
+        readHostBots(client, hostBotsKey(hostId))
       ])
         .then(([reply, bots]) => {
           if (closed || current !== request) {
@@ -192,6 +199,28 @@ export function useMobileBotGroupTranscript(
       setError(String(error))
     }
   }, [apply, client, groupId, threadId, data, setError])
+  // The members' sessions the room reads its turns from.
+  const readers = useMemo(
+    () =>
+      data?.group.members.flatMap((member) => {
+        const bot = bots.find((bot) => bot.id === member.botId)
+        return bot && isBotAgent(bot.agent)
+          ? [
+              {
+                sessionId: member.sessionId,
+                agent: bot.agent,
+                operationIds:
+                  data?.messages.flatMap((message) =>
+                    message.turns
+                      .filter((turn) => turn.sessionId === member.sessionId && !turn.revoked)
+                      .map((turn) => turn.operationId)
+                  ) ?? []
+              }
+            ]
+          : []
+      }) ?? [],
+    [data?.group.members, bots, data?.messages]
+  )
   return {
     data,
     group: room.data?.group,
@@ -200,6 +229,7 @@ export function useMobileBotGroupTranscript(
     needsYou,
     itemReads,
     itemMemberIds,
-    loadEarlier
+    loadEarlier,
+    readers
   }
 }

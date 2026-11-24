@@ -289,14 +289,12 @@ export function NativeChatQuestionCard({
           ref={surfaceRef}
           data-native-chat-dock-clip
           className={cn(
-            'native-chat-question-card-surface relative z-[1] flex min-h-0 flex-col overflow-hidden rounded-[14px] border border-primary/28 bg-chat-canvas bg-[linear-gradient(var(--color-chat-composer-surface),var(--color-chat-composer-surface))] shadow-sm',
+            'native-chat-question-card-surface relative z-[1] flex min-h-0 flex-col overflow-hidden rounded-xl border border-primary/28 bg-chat-canvas bg-[linear-gradient(var(--color-chat-composer-surface),var(--color-chat-composer-surface))] shadow-sm',
             look?.surfaceClassName
           )}
         >
           <NativeChatQuestionCardHeader
             steps={prompt.questions.map((question, i) => ({
-              // Questions never reorder within a card, so their position is their identity.
-              id: `question-${i}`,
               header:
                 question.header ||
                 t('components.native-chat.question.step', 'Step {{value0}}', { value0: i + 1 }),
@@ -323,9 +321,7 @@ export function NativeChatQuestionCard({
                 // The card's heading, one step above its body text and scaling with it; it fades while more lies below.
                 'native-chat-question-card-question min-h-[1lh] shrink overflow-y-auto px-3.5 text-[length:calc(var(--text-sm)*15/13)] leading-snug font-semibold text-foreground scrollbar-sleek',
                 // Capped at whole lines plus its own top padding, so a long question never shows a cut line.
-                total > 1
-                  ? 'max-h-[calc(4lh+var(--spacing)*0.5)] pt-0.5 [[data-native-chat-dock-fit~=card]_&]:max-h-[calc(2lh+var(--spacing)*0.5)]'
-                  : 'max-h-[calc(4lh+var(--spacing)*3)] pt-3 [[data-native-chat-dock-fit~=card]_&]:max-h-[calc(2lh+var(--spacing)*3)]',
+                'max-h-[calc(4lh+var(--spacing)*3)] pt-3 [[data-native-chat-dock-fit~=card]_&]:max-h-[calc(2lh+var(--spacing)*3)]',
                 // In a scrolling body the question keeps two lines (scrolling for the rest), so option 1 starts in view.
                 '[[data-native-chat-dock-fit~=card]_&]:shrink-0'
               )}

@@ -10,16 +10,20 @@ import {
   GitPullRequest,
   GitPullRequestClosed,
   GitPullRequestDraft,
+  Hourglass,
   Link2,
   X,
   type LucideIcon
 } from 'lucide-react'
-import type { MouseEvent, ReactNode } from 'react'
+import { useContext, type MouseEvent, type ReactNode } from 'react'
 import { useTranslate, type Translate } from '@/i18n/use-translate'
 import { cn } from '@/lib/class-names'
 import { openAppHttpLink } from '@/lib/browser/navigation/app-http-link-open'
 import { HoverScrollText } from '@/components/hover-scroll-text'
 import { useNativeChatLinkClick } from '@/components/native-chat/links/actions/native-chat-link-click-context'
+import { NativeChatLinkPeek } from '@/components/native-chat/links/previews/NativeChatLinkPeek'
+import { hasGitHubLinkPeek } from '@/components/native-chat/links/previews/NativeChatGitHubLinkPeek'
+import { NativeChatLinkPeekContext } from '@/components/native-chat/links/previews/native-chat-link-peek-context'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { useAppStore } from '@/store'
 import type { AppState } from '@/store/types'
@@ -41,6 +45,11 @@ import {
 } from '../../../../../shared/bots/bot-item-link-rows'
 import { openBotItemFile, type BotItemFileContext } from './bot-item-file-open'
 import { useBotItemLivePr } from './use-bot-item-live-pr'
+import {
+  checksLabel,
+  GITHUB_RETRY_KEY,
+  useGitHubLinkPeekFallback
+} from './bot-item-github-peek-content'
 
 const PR_ICONS: Record<NonNullable<BotItemGitHubRow['state']>, LucideIcon> = {
   open: GitPullRequest,
@@ -180,19 +189,6 @@ export function gitHubIcon(row: BotItemGitHubRow): React.JSX.Element {
   )
 }
 
-export function checksLabel(t: Translate, checks: string | null): string | null {
-  if (checks === 'success') {
-    return t('browser.newTab.checks.passing', 'Checks passing')
-  }
-  if (checks === 'failure') {
-    return t('browser.newTab.checks.failing', 'Checks failing')
-  }
-  if (checks === 'pending') {
-    return t('browser.newTab.checks.pending', 'Checks pending')
-  }
-  return null
-}
-
 /** CI only where it can still change: open and draft PRs, and only once it has an outcome. */
 function ciGlyph(t: Translate, row: BotItemGitHubRow): React.JSX.Element | null {
   if (
@@ -218,6 +214,8 @@ function GitHubRow({ row: hostRow }: { row: BotItemGitHubRow }): React.JSX.Eleme
   const row = useBotItemLivePr(hostRow)
   const t = useTranslate()
   const openWeb = useOpenWeb()
+  // Under the item page's chips, "+N" rows show the chips' GitHub card instead of the tooltip.
+  const card = hasGitHubLinkPeek(useContext(NativeChatLinkPeekContext), row.url)
   const where = `${row.showRepo ? row.repo : ''}#${row.number}`
   const tip = [
     row.state
@@ -228,30 +226,46 @@ function GitHubRow({ row: hostRow }: { row: BotItemGitHubRow }): React.JSX.Eleme
   ]
     .filter(Boolean)
     .join(' · ')
-  return (
+  const name =
+    row.title ??
+    (row.type === 'pr'
+      ? t('bots.items.link.pr', 'PR #{{number}}', {
+          number: row.number
+        })
+      : t('bots.items.link.issue', 'Issue #{{number}}', {
+          number: row.number
+        }))
+  const fallback = useGitHubLinkPeekFallback(name, tip)
+  const line = (
     <LinkRow
       icon={gitHubIcon(row)}
       title={
         <TitleWithLabel
-          title={
-            row.title ??
-            (row.type === 'pr'
-              ? t('bots.items.link.pr', 'PR #{{number}}', {
-                  number: row.number
-                })
-              : t('bots.items.link.issue', 'Issue #{{number}}', {
-                  number: row.number
-                }))
-          }
+          title={name}
           label={row.title ? where : row.showRepo ? row.repo : null}
           muted={!row.title}
         />
       }
       meta={ciGlyph(t, row)}
       metaClassName="self-center"
-      tip={tip}
+      tip={card ? undefined : tip}
       onClick={(event) => openWeb(row.url, event)}
     />
+  )
+  return card ? (
+    // Beside the "+N" list, as a worker row's card opens, so it covers no other row.
+    <NativeChatLinkPeek
+      href={row.url}
+      side="left"
+      githubFallback={fallback.pending}
+      githubFailedFallback={fallback.failed}
+      retryKey={GITHUB_RETRY_KEY}
+      overPopover
+    >
+      {line}
+    </NativeChatLinkPeek>
+  ) : (
+    line
   )
 }
 
@@ -325,6 +339,19 @@ function Row({
               void openBotItemFile(row.path, fileContext)
             }
           }}
+        />
+      )
+    case 'automation':
+      return (
+        <LinkRow
+          icon={<Hourglass className="size-3.5 text-muted-foreground" />}
+          title={row.name ?? t('bots.items.link.automation', 'Automation')}
+          tip={
+            row.active
+              ? t('bots.items.link.automationOn', 'Will wake the agent for this item')
+              : t('bots.items.link.automationEnded', 'Ended')
+          }
+          disabled={!row.active}
         />
       )
   }

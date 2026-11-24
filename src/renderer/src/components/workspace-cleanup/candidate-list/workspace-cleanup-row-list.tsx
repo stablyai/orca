@@ -13,7 +13,7 @@ import {
   findWorkspaceCleanupCandidateRepo,
   groupWorkspaceCleanupReposById
 } from '../candidate-evidence/workspace-cleanup-review-lookup'
-import { getWorkspaceCleanupCandidateHostId } from '../../../../../shared/workspace-cleanup/workspace-cleanup-host-identity'
+import type { WorkspaceCleanupGroup } from '../../../../../shared/workspace-cleanup/workspace-cleanup-groups'
 
 export type WorkspaceCleanupRowListState = {
   rows: readonly WorkspaceCleanupFacets[]
@@ -21,6 +21,9 @@ export type WorkspaceCleanupRowListState = {
   now: number
   /** Rows the scan produced before filtering; separates "empty fleet" from "no matches". */
   scannedCandidates: readonly WorkspaceCleanupCandidate[]
+  /** Search or filters are narrowing the list, which changes why a group can be empty. */
+  hasActiveFilters: boolean
+  getRowGroup: (row: WorkspaceCleanupFacets) => WorkspaceCleanupGroup
   hasScanned: boolean
   loading: boolean
   deletionPhaseByIdentity: Record<string, WorkspaceCleanupDeletionPhase>
@@ -28,7 +31,6 @@ export type WorkspaceCleanupRowListState = {
   /** Host-qualified identities (see WorkspaceCleanupFacets.identity). */
   expandedRowIds: ReadonlySet<string>
   selectedIds: ReadonlySet<string>
-  gitPendingWorktreeIds: ReadonlySet<string>
   /** Keyed by host-qualified identity so a failure marks only its own host's row. */
   rowFailures: Record<string, WorkspaceCleanupFailure>
   scrollElement: HTMLDivElement | null
@@ -50,14 +52,6 @@ export function WorkspaceCleanupRowList(props: WorkspaceCleanupRowListState): Re
   const settled = !loading && hasScanned
   const repos = useAppStore((s) => s.repos)
   const reposById = useMemo(() => groupWorkspaceCleanupReposById(repos), [repos])
-  // Count hosts across every scanned row so filtering down to one host does not hide the label.
-  const showHostLabels = useMemo(
-    () =>
-      new Set(scannedCandidates.map((candidate) => getWorkspaceCleanupCandidateHostId(candidate)))
-        .size > 1,
-    [scannedCandidates]
-  )
-  const showSizeColumn = rows.some((row) => row.sizeBytes !== null)
   return (
     <>
       {settled && scannedCount === 0 ? (
@@ -65,19 +59,25 @@ export function WorkspaceCleanupRowList(props: WorkspaceCleanupRowListState): Re
           title={t('components.workspace.cleanup.browse.noWorkspaces', 'No workspaces found.')}
         />
       ) : null}
-      {hasScanned && scannedCount > 0 && rows.length === 0 ? (
-        <WorkspaceCleanupEmptyState
-          title={t(
-            'components.workspace.cleanup.browse.noMatches',
-            'No workspaces match these filters.'
-          )}
-          description={t(
-            'components.workspace.cleanup.browse.noMatchesDescription',
-            'Every workspace is in one list — widen a facet or clear the filters.'
-          )}
-          actionLabel={t('components.workspace.cleanup.browse.clearFilters', 'Clear filters')}
-          onAction={props.onClearFilters}
-        />
+      {settled && scannedCount > 0 && rows.length === 0 ? (
+        props.hasActiveFilters ? (
+          <WorkspaceCleanupEmptyState
+            title={t(
+              'components.workspace.cleanup.browse.noMatches',
+              'No workspaces match these filters.'
+            )}
+            description={t(
+              'components.workspace.cleanup.browse.noMatchesDescription',
+              'Every workspace is in one list — widen a facet or clear the filters.'
+            )}
+            actionLabel={t('components.workspace.cleanup.browse.clearFilters', 'Clear filters')}
+            onAction={props.onClearFilters}
+          />
+        ) : (
+          <WorkspaceCleanupEmptyState
+            title={t('components.workspace.cleanup.group.empty', 'No workspaces here.')}
+          />
+        )
       ) : null}
       <WorkspaceCleanupCandidateList
         rows={rows}
@@ -90,14 +90,12 @@ export function WorkspaceCleanupRowList(props: WorkspaceCleanupRowListState): Re
             candidate={row.candidate}
             reviewInfo={row.review}
             repo={findWorkspaceCleanupCandidateRepo(row.candidate, reposById)}
-            showHostLabel={showHostLabels}
-            showSizeColumn={showSizeColumn}
+            group={props.getRowGroup(row)}
             last={rows.length > 1 && index === rows.length - 1}
             expanded={props.expandedRowIds.has(row.identity)}
             lastActivityLabel={formatWorkspaceCleanupRelativeTime(row.lastActivityAt, props.now)}
             sizeLabel={row.sizeBytes === null ? null : formatBytes(row.sizeBytes)}
             workspaceStatusLabel={row.workspaceStatusLabel}
-            gitEvidencePending={props.gitPendingWorktreeIds.has(row.worktreeId)}
             deletionPhase={props.deletionPhaseByIdentity[row.identity]}
             // Background scans leave rows interactive; only batch removal or the row’s own delete disables them.
             removing={props.deletingIdentities.has(row.identity)}

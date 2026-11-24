@@ -6,6 +6,11 @@ import type { BotRequestConversation } from './bot-request-asker'
 import type { AutomationTriggeredBy, BotRequestAsker } from '../../shared/bots/bot-acts-for'
 import type { BotRequestPurpose } from './bot-request-policy'
 import type { BotGroupPeerScope } from '../../shared/bots/bot-group-schema'
+import { clipAtWord } from '../../shared/text/surrogate-safe-text-slice'
+import {
+  pairedSenderName,
+  savedPairedSender
+} from '../../shared/orchestration/mailbox/paired-sender-name'
 import { AUTOMATION_EVENT_SOURCE_NAMES } from '../automations/automation-event-prompt'
 
 /** What Orca keeps beside the mail: never written from the sender's own fields. */
@@ -13,10 +18,15 @@ export type BotRequestRecord = {
   group?: BotGroupPeerScope
   fromBotId: string | null
   fromBotName: string | null
+  /** Sent by an agent on a computer paired with this one, either side of the pairing ('' when
+   *  unnamed; see PairedSender); `fromBotName` is then that computer's bot. */
+  fromPairedComputer?: string
+  /** Read only, from records saved before `fromPairedComputer`: a paired server's agent. */
+  fromPairedServer?: string
+  /** Read only, from records saved before `fromPairedComputer`: a paired computer (null unnamed). */
+  fromComputer?: string | null
   /** Sent by a worker that bot started, for it; the answer goes to the worker. */
   fromWorker?: boolean
-  /** Sent by an agent on a server this computer is paired to, named as this computer names it. */
-  fromPairedServer?: string
   toBotId: string
   toBotName: string
   purpose: BotRequestPurpose
@@ -75,10 +85,14 @@ const askersOf = (record: BotRequestRecord): string =>
 
 /** Who sent it, as the receiving bot reads it. */
 export function botRequestSenderName(
-  record: Pick<BotRequestRecord, 'fromBotName' | 'fromWorker' | 'fromPairedServer'>
+  record: Pick<
+    BotRequestRecord,
+    'fromBotName' | 'fromWorker' | 'fromPairedComputer' | 'fromPairedServer' | 'fromComputer'
+  >
 ): string {
-  if (record.fromPairedServer !== undefined) {
-    return `an agent on ${record.fromPairedServer || 'a server'} (paired server)`
+  const paired = savedPairedSender(record)
+  if (paired) {
+    return pairedSenderName(paired)
   }
   if (!record.fromBotName) {
     return "your owner's agent"
@@ -126,6 +140,32 @@ function answerStaysOnCard(
   return answeredOnCard(record) && record.answersRequest === undefined
 }
 
+const TITLE_MAX = 80
+/** A sender's share of a title, so the subject always has room. */
+const TITLE_SENDER_MAX = 40
+
+/** A request chat's title: a bot's own new chat is named for its subject alone; another sender's
+ *  names who sent it first. Cut on a word, within the sidebar's room. */
+export function botRequestChatTitle(
+  record: Pick<
+    BotRequestRecord,
+    | 'fromBotId'
+    | 'fromBotName'
+    | 'fromWorker'
+    | 'fromPairedComputer'
+    | 'fromPairedServer'
+    | 'fromComputer'
+  >,
+  botId: string,
+  subject: string
+): string {
+  if (record.fromBotId === botId) {
+    return clipAtWord(subject, TITLE_MAX)
+  }
+  const sender = `${clipAtWord(senderOf(record), TITLE_SENDER_MAX)}: `
+  return `${sender}${clipAtWord(subject, TITLE_MAX - sender.length)}`
+}
+
 /** What the receiving bot reads beside the message. */
 export function botRequestView(
   record: BotRequestRecord,
@@ -139,7 +179,7 @@ export function botRequestView(
       for: askers,
       ...originLine(record),
       kind: 'status: for your information; there is no job to take and nothing to answer',
-      next: `Use it in your own work if it bears on it. If it needs nothing from you, end your turn with ${BOT_QUIET_MARKER}.`
+      next: `Use it in your own work if it bears on it. If it needs nothing from you, stay silent with ${BOT_QUIET_MARKER}.`
     }
   }
   const reply = (body: string) => `orca orchestration reply --id ${messageId} --body "${body}"`
@@ -223,7 +263,7 @@ export function botAnswerView(
         ? `${ON_THE_CARD} Finish the job with it. ${ONLY_WHATS_NEW}`
         : 'Finish the job with this answer.'
       : posted
-        ? `${record.toBotName} already posted its answer where it was asked, so don't post it again; end your turn with ${BOT_QUIET_MARKER}.`
+        ? `${record.toBotName} already posted its answer where it was asked, so don't post it again; stay silent with ${BOT_QUIET_MARKER}.`
         : owners
           ? `${ON_THE_CARD} ${ONLY_WHATS_NEW}`
           : `Pass this answer on to ${askersOf(record)} as your final message.`

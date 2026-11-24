@@ -13,10 +13,7 @@ import {
   type BotTemplateSkill
 } from '../../../../shared/bots/bot-templates'
 import type { BotPackageConnector } from '../../../../shared/bots/bot-package'
-import {
-  BOT_TEMPLATE_SKILL_LINES,
-  botTemplateEventParts
-} from '../../../../shared/bots/bot-template-view'
+import { botTemplatePartWords } from '../../../../shared/bots/bot-template-text'
 
 const appIcon = (kind: BotPackageConnector) =>
   hasBotAppBrand(kind) ? (
@@ -138,6 +135,7 @@ export function NewBotTemplateParts({
     )
   }
   const { skills, events, schedules, connectors } = template
+  const words = botTemplatePartWords(template, t)
   if (!skills.length && !events.length && !schedules.length && !connectors.length) {
     return null
   }
@@ -164,13 +162,14 @@ export function NewBotTemplateParts({
                 })
           }
         >
-          {skills.map((skill) => (
+          {words.skills.map(({ skill, name, line }) => (
             <PartRow
               key={skill}
-              mono
+              // The folder name reads as code; a translated name reads as words.
+              mono={name === skill}
               icon={<BookOpen />}
-              title={skill}
-              line={BOT_TEMPLATE_SKILL_LINES[skill]}
+              title={name}
+              line={line}
               state={
                 <Switch
                   size="compact"
@@ -192,18 +191,15 @@ export function NewBotTemplateParts({
             defaultValue_one: '{{count}} automation'
           })}
         >
-          {events.map((event) => {
-            const parts = botTemplateEventParts(event.name)
-            return (
-              <PartRow
-                key={event.id}
-                icon={<Zap />}
-                title={parts.trigger}
-                line={parts.action}
-                state={t('bots.templates.stateFirstChat', 'First chat')}
-              />
-            )
-          })}
+          {words.events.map((event) => (
+            <PartRow
+              key={event.id}
+              icon={<Zap />}
+              title={event.trigger}
+              line={event.action}
+              state={t('bots.templates.stateFirstChat', 'First chat')}
+            />
+          ))}
         </PartsChip>
       ) : null}
       {schedules.length ? (
@@ -215,7 +211,7 @@ export function NewBotTemplateParts({
             defaultValue_one: '{{count}} schedule'
           })}
         >
-          {schedules.map((schedule) => (
+          {words.schedules.map((schedule) => (
             <PartRow
               key={schedule.id}
               icon={<Clock />}

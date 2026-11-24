@@ -185,6 +185,14 @@ export const browserGuestRegistrationAndDownloadsApi = {
     ipcRenderer.on('browser:audio-state-changed', listener)
     return () => ipcRenderer.removeListener('browser:audio-state-changed', listener)
   },
+  onAudioMutedChanged: (callback): (() => void) => {
+    const listener = (
+      _event: Electron.IpcRendererEvent,
+      data: Parameters<typeof callback>[0]
+    ): void => callback(data)
+    ipcRenderer.on('browser:audio-muted-changed', listener)
+    return () => ipcRenderer.removeListener('browser:audio-muted-changed', listener)
+  },
   proceedCertificate: (args) => ipcRenderer.invoke('browser:proceedCertificate', args),
   onPermissionDenied: (
     callback: (event: { browserPageId: string; permission: string; origin: string }) => void

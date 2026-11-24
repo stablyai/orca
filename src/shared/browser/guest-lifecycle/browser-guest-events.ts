@@ -72,12 +72,10 @@ export type BrowserDownloadFinishedEvent = {
   error: string | null
 }
 
-export type BrowserContextMenuRequestedEvent = {
-  browserPageId: string
+/** What a right-click landed on, read from the guest's own context-menu params. */
+export type BrowserContextMenuTarget = {
   x: number
   y: number
-  screenX: number
-  screenY: number
   pageUrl: string
   linkUrl: string | null
   selectionText: string
@@ -95,6 +93,12 @@ export type BrowserContextMenuRequestedEvent = {
   } | null
   /** Null unless the click landed on an image. `url` is the raw src, which may be data: or blob:. */
   image: { url: string; canCopy: boolean } | null
+}
+
+export type BrowserContextMenuRequestedEvent = BrowserContextMenuTarget & {
+  browserPageId: string
+  screenX: number
+  screenY: number
   /** Browser-extension items for this right-click (local extension profiles only). */
   extensionMenu?: BrowserExtensionContextMenuPayload
 }

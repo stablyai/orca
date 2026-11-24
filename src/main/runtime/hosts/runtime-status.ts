@@ -1,12 +1,18 @@
 import {
   BROWSER_GOOGLE_COOKIE_CLEAR_CAPABILITY,
+  BROWSER_PROFILE_COOKIE_CLEAR_CAPABILITY,
   BROWSER_CERTIFICATE_TRUST_RUNTIME_CAPABILITY,
+  BROWSER_PAGE_PROMPTS_RUNTIME_CAPABILITY,
   BROWSER_PAGE_ZOOM_RUNTIME_CAPABILITY,
   BROWSER_SITE_DISPLAY_RUNTIME_CAPABILITY,
+  BROWSER_AUDIO_MUTE_RUNTIME_CAPABILITY,
   BROWSER_FIND_IN_PAGE_RUNTIME_CAPABILITY,
+  BROWSER_TAB_PROFILE_SWITCH_RUNTIME_CAPABILITY,
   BROWSER_STOP_HARD_RELOAD_RUNTIME_CAPABILITY,
+  BROWSER_MOBILE_STOP_RUNTIME_CAPABILITY,
   BROWSER_CLIENT_HOST_RUNTIME_CAPABILITY,
   BROWSER_GRAB_RUNTIME_CAPABILITY,
+  BROWSER_DROP_FILES_RUNTIME_CAPABILITY,
   BROWSER_HEADLESS_RUNTIME_CAPABILITY,
   BROWSER_IDENTITY_RUNTIME_CAPABILITY,
   BROWSER_TAB_CREATE_KNOWN_ID_RUNTIME_CAPABILITY
@@ -15,7 +21,7 @@ import { orcaAccountRuntimeCapabilities } from '../../orca-profiles/orca-server-
 import { googleRuntimeCapabilities } from '../../google/google-connect'
 import {
   runtimeBrowserCommandsFactoryIsHeadless,
-  runtimeBrowserCommandsFactorySupportsGoogleCookieClear,
+  runtimeBrowserCommandsFactorySupportsEngineCapability,
   runtimeBrowserEngineIdentity,
   runtimeBrowserCommandsFactorySupportsClientHosting,
   runtimeBrowserUnavailableCause
@@ -83,8 +89,10 @@ export abstract class OrcaRuntimeWithGetStatus extends RuntimeWorkspaceChangeEve
       process.platform === 'win32' && isWindowsProcessStartTimeAvailable()
     const capabilities: NonNullable<RuntimeStatus['capabilities']> = RUNTIME_CAPABILITIES.filter(
       (capability) =>
-        (capability !== BROWSER_GOOGLE_COOKIE_CLEAR_CAPABILITY ||
-          runtimeBrowserCommandsFactorySupportsGoogleCookieClear()) &&
+        // The browser engine (an orcad's sidecar app may be older) holds the profiles these clear.
+        ((capability !== BROWSER_GOOGLE_COOKIE_CLEAR_CAPABILITY &&
+          capability !== BROWSER_PROFILE_COOKIE_CLEAR_CAPABILITY) ||
+          runtimeBrowserCommandsFactorySupportsEngineCapability(capability)) &&
         (capability !== 'browser.screencast.v1' || canBrowse) &&
         (capability !== BROWSER_CLIENT_HOST_RUNTIME_CAPABILITY || canHostClientPages) &&
         (capability !== BROWSER_TAB_CREATE_KNOWN_ID_RUNTIME_CAPABILITY ||
@@ -125,8 +133,16 @@ export abstract class OrcaRuntimeWithGetStatus extends RuntimeWorkspaceChangeEve
         BROWSER_SITE_DISPLAY_RUNTIME_CAPABILITY,
         BROWSER_STOP_HARD_RELOAD_RUNTIME_CAPABILITY,
         BROWSER_FIND_IN_PAGE_RUNTIME_CAPABILITY,
-        BROWSER_GRAB_RUNTIME_CAPABILITY
+        BROWSER_MOBILE_STOP_RUNTIME_CAPABILITY,
+        BROWSER_GRAB_RUNTIME_CAPABILITY,
+        BROWSER_AUDIO_MUTE_RUNTIME_CAPABILITY,
+        BROWSER_DROP_FILES_RUNTIME_CAPABILITY,
+        BROWSER_PAGE_PROMPTS_RUNTIME_CAPABILITY
       )
+    }
+    // Only an offscreen page swap keeps its viewers' streams; a window's webview remount does not yet.
+    if (hasOffscreen) {
+      capabilities.push(BROWSER_TAB_PROFILE_SWITCH_RUNTIME_CAPABILITY)
     }
     capabilities.push(...orcaAccountRuntimeCapabilities())
     capabilities.push(...googleRuntimeCapabilities())

@@ -94,6 +94,8 @@ export type UsageRateLimitMetadata = {
   account?: { id: string | null; email: string | null }
   /** Claude/Codex: set only on a successful reading of one saved account; older hosts omit it. */
   readingAccount?: UsageReadingAccount
+  /** Codex: the managed login this auth rejection actually came from. */
+  authFailureAccount?: UsageReadingAccount
 }
 
 export type ProviderRateLimits = {

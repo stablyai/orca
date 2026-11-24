@@ -47,6 +47,9 @@ const WebhookSummarySchema = z.looseObject({
   keyGeneration: z.number()
 })
 
+/** Owner writes fail at once while the phone can't reach the host, instead of waiting for it. */
+export const WEBHOOK_WRITE = { failWhenDisconnected: true } as const
+
 export type PhoneWebhook = z.infer<typeof WebhookSummarySchema>
 
 const WebhookCallRowSchema = z.union([

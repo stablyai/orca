@@ -36,6 +36,7 @@ import { botOwnSkillsView, linkBotOwnSkills } from '../../../bots/bot-own-skills
 import { botHomeFolder } from '../../../bots/bot-home'
 import { listedBotsFacts } from './bots-list-facts'
 import { normalizeBotSidebarView } from '../../../../shared/bots/bot-sidebar-view'
+import { OWNER_ACTS_FOR } from '../../../../shared/bots/bot-acts-for'
 import { orcaSignInServer } from '../../../bots/orca-sign-in-server'
 import { refuseUnsavedFolderDrafts } from '../../repositories/folder-workspace-deletion'
 
@@ -89,7 +90,7 @@ async function newHomeChat(params: BotChatResetParams, context: RpcContext) {
   if (caller && callerBot && (callerBot.id !== bot.id || caller !== bot.chatSessionId)) {
     throw new InvalidArgumentError('Only the bot’s own Home Chat can start a new Home Chat.')
   }
-  // Mail its old Chat never read is not carried over (dropped by the reset).
+  // Its old Chat's queued messages move over; bot requests it never read are dropped.
   const sessionId = await runtimeBotChats(runtime).reset(bot.id)
   return { sessionId }
 }
@@ -104,6 +105,7 @@ export const BOT_METHODS = [
     // threadReplies: whether it binds an event's run to its thread, for --results-to thread.
     // githubEvents2: whether it sends GitHub's newer events and label=, for trigger-options.
     // githubWorkflows: whether it sends github.workflow_finished, for trigger-options.
+    // githubCiFinished: whether it sends github.ci_finished, for trigger-options and watch-pr.
     // waits: each bot's waits still waiting, for its row; needsYou: its unstale Needs you items, for phones.
     // connectorNeedsSignIn: Orca Cloud refused this host's sign-in, so nothing reaches its bots.
     // connectorStatus: signed out, needs sign-in (the app is signed in but the connector refuses it),
@@ -123,7 +125,8 @@ export const BOT_METHODS = [
         ...(runtime.getConnectorCloud()?.botListFacts() ?? {
           threadReplies: false,
           githubEvents2: false,
-          githubWorkflows: false
+          githubWorkflows: false,
+          githubCiFinished: false
         }),
         signInServer
       }
@@ -199,16 +202,22 @@ export const BOT_METHODS = [
     permission: 'workspace',
     params: BotAvatarUpload,
     handler: async (params, { runtime }) => ({
-      bot: await runtime.bots.setAvatarImage(params.botId, Buffer.from(params.png, 'base64'))
+      bot: await runtime.bots.setAvatarImage(
+        params.botId,
+        Buffer.from(params.png, 'base64'),
+        params.expectedAvatarRevision,
+        params.expectedAvatarEpoch
+      )
     })
   }),
   defineMethod({
     name: 'bots.avatar.read',
     permission: 'workspace',
     params: BotAvatarRead,
-    handler: async (params, { runtime }) => ({
-      png: (await runtime.bots.readAvatarImage(params.botId))?.toString('base64') ?? null
-    })
+    handler: async (params, { runtime }) =>
+      params.catalogRevision === undefined
+        ? { png: (await runtime.bots.readAvatarImage(params.botId))?.toString('base64') ?? null }
+        : runtime.bots.generationRevision(params.botId, params.catalogRevision, params.catalogEpoch)
   }),
   defineMethod({
     name: 'bots.activity',
@@ -267,7 +276,9 @@ export const BOT_METHODS = [
           return null
         }
       )
-      return { sessionId: empty ?? (await startBotSession(runtime, onAgent)) }
+      // The owner's own chat, as Home Chat is: recorded so a /clear never leaves it unattributed.
+      const actsFor = { actsFor: [...OWNER_ACTS_FOR] }
+      return { sessionId: empty ?? (await startBotSession(runtime, onAgent, { actsFor })) }
     }
   })
 ]

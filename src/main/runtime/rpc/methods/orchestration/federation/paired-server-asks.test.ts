@@ -23,6 +23,14 @@ import { importPairedServerItem } from '../../../../orchestration/federation/pai
 import { activePairedServerAsks } from '../../../../orchestration/federation/paired-server-asks/paired-server-asks-loop'
 import { settleRemovedPairedServer } from '../../../../orchestration/federation/peer-mail/paired-server-changes'
 import { settlePairedServerAsksOnRemoval } from '../../../../orchestration/federation/paired-server-asks/paired-server-ask-removal'
+import { structuredMailMessage } from '../../../../orchestration/mailbox/structured-mail/structured-mail-source'
+import type { BotRequestRecord } from '../../../../../bots/bot-request-view'
+
+type BotRequestRecordShape = Pick<
+  BotRequestRecord,
+  'fromBotName' | 'fromPairedServer' | 'fromComputer'
+>
+
 import { RpcDispatcher } from '../../../dispatcher'
 import { BOT_REQUEST_OUTCOME_METHOD } from '../../bots-request-outcome'
 import type { RpcContext } from '../../../core'
@@ -298,6 +306,34 @@ describe('agents on a paired server messaging an agent on this computer', () => 
     expect(awaiting(sent.message.id)).toBeNull()
   })
 
+  it('delivers an approved card to the agent it showed, even after its name went to another', async () => {
+    await introduce()
+    const sent = await ask({ to: 'bot:Docs' })
+    await vi.waitFor(async () => expect(await cards()).toHaveLength(1))
+    vi.mocked(computer.runtime.bots.list).mockReturnValue([
+      makeTestBot({ id: 'docs', name: 'Manuals' }),
+      makeTestBot({ id: 'other', name: 'Docs' })
+    ])
+
+    await call('pairedServerAsks.decide', { messageId: sent.message.id, decision: 'once' })
+    await vi.waitFor(() => expect(computer.db.getUnreadMessages(DOCS_HOME)).toHaveLength(1))
+    expect(withChat.mock.calls.map(([botId]) => botId)).toEqual(['docs'])
+  })
+
+  it('declines an approved card whose agent was removed, never one named like its id', async () => {
+    await introduce()
+    const sent = await ask()
+    await vi.waitFor(async () => expect(await cards()).toHaveLength(1))
+    vi.mocked(computer.runtime.bots.list).mockReturnValue([
+      makeTestBot({ id: 'other', name: 'docs' })
+    ])
+
+    await call('pairedServerAsks.decide', { messageId: sent.message.id, decision: 'once' })
+    await vi.waitFor(() => expect(server.db.getUnreadMessages(ASKER)).toHaveLength(1))
+    expect(server.db.getUnreadMessages(ASKER)[0]!.body).toBe("Declined on Alice's Mac.")
+    expect(withChat).not.toHaveBeenCalled()
+  })
+
   it('hands the asker a follow-up reply straight to the agent, with no card', async () => {
     await introduce()
     const sent = await ask()
@@ -347,6 +383,54 @@ describe('agents on a paired server messaging an agent on this computer', () => 
     expect(await cards()).toEqual([])
   })
 
+  it("names the sender by this computer's name for the server, in the request and its header", async () => {
+    // The server calls itself something else: this computer's own name for it wins.
+    vi.mocked(server.runtime.readMachineName).mockReturnValue('Lab Mac')
+    await call('pairedServerAsks.allow', { environmentId: 'env_s', botId: 'docs' })
+    await listening()
+    const sent = await ask()
+
+    await vi.waitFor(() => expect(computer.db.getUnreadMessages(DOCS_HOME)).toHaveLength(1))
+    const [request] = computer.db.getUnreadMessages(DOCS_HOME)
+    expect(request!.from_handle).toBe(`${ASKER} on Lab Mac`)
+    const record = JSON.parse(computer.db.getBotRequest(sent.message.id)!.record)
+    expect(record).toMatchObject({
+      fromBotId: null,
+      fromBotName: 'Ranger',
+      fromPairedComputer: 'Build Box'
+    })
+    expect(record).not.toHaveProperty('fromPairedServer')
+    const expected = 'Ranger on Build Box'
+    expect(JSON.parse(request!.payload!).botRequest.from).toBe(expected)
+    // What the receiving chat is sent, and so what its "last asked" shows.
+    const promptHeader = () => {
+      const { body } = structuredMailMessage({
+        db: computer.db,
+        mailboxHandle: DOCS_HOME,
+        dispatchId: null,
+        message: request!,
+        cliCommand: 'orca',
+        senderSnapshot: () => ({ name: null, agent: null }),
+        followUp: undefined
+      })
+      const text = body.blocks.find((block) => block.type === 'text')
+      return text?.type === 'text' ? text.text.split('\n')[0] : undefined
+    }
+    expect(promptHeader()).toBe(`──── From: ${expected} (question) ────`)
+
+    // Records saved in the older shapes keep naming the sender after an upgrade.
+    const resave = (fields: Partial<BotRequestRecordShape>) => {
+      const { fromPairedComputer: _now, ...rest } = record
+      computer.db.db
+        .prepare('UPDATE bot_requests SET record = ? WHERE message_id = ?')
+        .run(JSON.stringify({ ...rest, ...fields }), sent.message.id)
+    }
+    resave({ fromBotName: null, fromPairedServer: 'Build Box' })
+    expect(promptHeader()).toBe('──── From: an agent on Build Box (question) ────')
+    resave({ fromBotName: 'Ranger', fromComputer: null })
+    expect(promptHeader()).toBe('──── From: Ranger on another computer (question) ────')
+  })
+
   it('always allow lets the next ask from that server in without a card', async () => {
     await introduce()
     const first = await ask()
@@ -356,7 +440,7 @@ describe('agents on a paired server messaging an agent on this computer', () => 
 
     await vi.waitFor(() => expect(computer.db.getUnreadMessages(DOCS_HOME)).toHaveLength(2))
     expect(await call('pairedServerAsks.allowances', { botId: 'docs' })).toEqual({
-      servers: [{ serverKey: 'fingerprint_s', environmentId: 'env_s' }]
+      servers: [{ serverKey: 'fingerprint_s', environmentId: 'env_s', serverName: 'Build Box' }]
     })
   })
 

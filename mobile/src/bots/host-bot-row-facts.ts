@@ -1,11 +1,16 @@
 import { parseBotAvatar, type BotMascotId } from '../../../src/shared/bot-avatar'
 import type { Bot } from '../../../src/shared/bot-types'
+import { wornBotOutfit, type BotAvatarOutfit } from '../../../src/shared/bots/bot-avatar-outfit'
 import { botFallback } from '../../../src/shared/bots/bot-avatar-fallback'
 import type { BotRowStatus } from '../../../src/shared/bots/bot-row-status'
 import type { ExecutionHostId } from '../../../src/shared/execution-host/execution-host'
 import type { BotGroup } from '../../../src/shared/bots/bot-group'
-import type { BotChatTreeChat } from '../../../src/shared/bots/bot-chat-tree'
+import type {
+  BotChatTranslate as Translate,
+  BotChatTreeChat
+} from '../../../src/shared/bots/bot-chat-tree'
 import type { BotRowLineInput } from '../../../src/shared/bots/bot-row-line'
+import type { BotSearchRange } from '../../../src/shared/bots/bot-sidebar-search'
 import type { BotSidebarLineNote } from '../../../src/shared/bots/bot-sidebar-chat-groups'
 import type {
   BotSidebarChatTrailing,
@@ -16,7 +21,7 @@ import type { botFoldLiveStatus } from '../../../src/shared/bots/bot-sidebar-wor
 
 export type MobileBotAvatarSource =
   /** `color` is its tile's, drawn behind the transparent picture; absent, the mascots' own sky blue. */
-  | { kind: 'mascot'; id: BotMascotId; color?: string }
+  | { kind: 'mascot'; id: BotMascotId; color?: string; outfit?: BotAvatarOutfit }
   /** A picture in hand, such as one just picked. */
   | { kind: 'image'; uri: string }
   /** A bot's uploaded picture, drawn once read; until then, `text`. */
@@ -26,8 +31,8 @@ export type MobileBotAvatarSource =
 /** What a bot's row draws over its home folder's row. */
 export type MobileBotRowFacts = {
   botId: string
-  /** Its chats list under it, so it folds even with no workspace. */
-  foldsChats?: true
+  /** Its chats were read: only its live and unread ones list under it, so it has no fold of its own. */
+  listsChats?: true
   avatar: MobileBotAvatarSource
   /** Rolled up with its workspaces, for the bot's own screen. */
   status: BotRowStatus
@@ -35,6 +40,8 @@ export type MobileBotRowFacts = {
   dot: BotRowStatus
   /** A folded row's glyph: its most urgent live workspace. */
   foldLive: ReturnType<typeof botFoldLiveStatus>
+  /** Its home's and workers' workspace ids, whose sessions' usage-limit stops its line says. */
+  workspaceIds: readonly string[]
   /** New Up next suggestions, counted apart from unread. */
   upNext?: number
   /** What its line reads beside the home's agent rows: its Chat, its threads' links, its waits. */
@@ -42,6 +49,9 @@ export type MobileBotRowFacts = {
   /** The first person asking for access, whom the Needs you line names. */
   askedForAccess?: string
   statusLine: string
+  /** What it's for, cut to show the match and its matched words, when a search found it by that
+   *  and not its name. */
+  searchPurpose?: { text: string; ranges: readonly BotSearchRange[] }
   paused: boolean
   /** A server's bot: its computer, and that computer's word while it is down. */
   host?: { id: ExecutionHostId; label: string; word?: string }
@@ -83,13 +93,17 @@ export type MobileBotChatLineFacts = {
 /** The bot's mascot, its upload, or its emoji or initial, as the desktop draws it. */
 export function mobileBotAvatarSource(
   /** No id: a draft, whose upload no host can answer yet. */
-  bot: Pick<Bot, 'name' | 'avatar' | 'avatarColor'> & { id?: string }
+  bot: Pick<Bot, 'name' | 'avatar' | 'avatarColor' | 'avatarOutfit'> & { id?: string }
 ): MobileBotAvatarSource {
   const parsed = parseBotAvatar(bot.avatar)
+  const outfit = wornBotOutfit(bot.avatarOutfit)
   if (parsed?.kind === 'mascot') {
-    return bot.avatarColor
-      ? { kind: 'mascot', id: parsed.id, color: bot.avatarColor }
-      : { kind: 'mascot', id: parsed.id }
+    return {
+      kind: 'mascot',
+      id: parsed.id,
+      ...(bot.avatarColor ? { color: bot.avatarColor } : {}),
+      ...(outfit ? { outfit } : {})
+    }
   }
   if (parsed?.kind === 'upload' && bot.avatar && bot.id) {
     return { kind: 'upload', botId: bot.id, avatar: bot.avatar, text: botFallback(bot) }
@@ -98,17 +112,17 @@ export function mobileBotAvatarSource(
 }
 
 // The desktop's words for a bot's state (its row's details card).
-export function botStatusLine(status: BotRowStatus, paused: boolean): string {
+export function botStatusLine(status: BotRowStatus, paused: boolean, t: Translate): string {
   if (paused) {
-    return 'Paused'
+    return t('bots.row.paused', 'Paused')
   }
   switch (status) {
     case 'working':
-      return 'Working'
+      return t('sidebar.cardSlot.working', 'Working')
     case 'permission':
-      return 'Needs permission'
+      return t('workspace.activity.permission', 'Needs permission')
     case 'active':
     case 'inactive':
-      return 'Idle'
+      return t('bots.row.idle', 'Idle')
   }
 }

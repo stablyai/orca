@@ -24,7 +24,7 @@ export type ComposerMenuRow =
 
 /** The chat's host's bots under `@`, and one level down a bot's chats. */
 export type MentionBotRow =
-  | { kind: 'bot'; id: string; bot: MentionBot; chats: boolean }
+  | { kind: 'bot'; id: string; bot: MentionBot; chats: boolean; detail?: string }
   | { kind: 'bot-back'; id: string; bot: MentionBot }
   | { kind: 'bot-chat'; id: string; bot: MentionBot; chat: BotChatRow }
   | {
@@ -134,23 +134,28 @@ function MenuRow({
             : FileText
   const description = row.kind === 'file' || row.kind === 'member' ? null : row.description
   const label = row.kind === 'file' ? row.path : row.kind === 'member' ? row.name : row.token
+  const member = row.kind === 'member'
   return (
     <Pressable
       accessibilityRole="button"
       accessibilityLabel={
         row.kind === 'skill' && row.location ? `${row.token}, ${row.location}` : label
       }
-      style={({ pressed }) => [styles.row, pressed && styles.rowPressed]}
+      style={({ pressed }) => [
+        styles.row,
+        member && styles.memberRow,
+        pressed && styles.rowPressed
+      ]}
       onPress={() => onPick(row)}
     >
       {row.kind === 'member' && row.icon ? (
-        <View style={styles.icon}>{row.icon}</View>
+        row.icon
       ) : (
         <Icon size={16} color={colors.textSecondary} strokeWidth={2} style={styles.icon} />
       )}
       <View style={styles.body}>
         <View style={styles.nameLine}>
-          <Text style={styles.name} numberOfLines={1}>
+          <Text style={[styles.name, member ? styles.memberName : styles.code]} numberOfLines={1}>
             {label}
           </Text>
           {row.kind !== 'file' && row.kind !== 'member' && row.argumentHint ? (
@@ -204,6 +209,10 @@ const styles = themedStyleSheet(() => ({
     paddingVertical: spacing.sm,
     minHeight: 44
   },
+  // A room member reads like the agent chat's `@` bot rows: a face and its name, not code.
+  memberRow: {
+    alignItems: 'center'
+  },
   rowPressed: {
     backgroundColor: colors.bgRaised
   },
@@ -222,9 +231,14 @@ const styles = themedStyleSheet(() => ({
   },
   name: {
     flexShrink: 1,
-    color: colors.textPrimary,
+    color: colors.textPrimary
+  },
+  code: {
     fontFamily: typography.monoFamily,
     fontSize: 13.5
+  },
+  memberName: {
+    fontSize: 14
   },
   hint: {
     flexShrink: 1,

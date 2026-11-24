@@ -1,4 +1,4 @@
-import { memo, useCallback, useState } from 'react'
+import { memo, useCallback, useRef, useState } from 'react'
 import { callRuntimeRpc } from '@/runtime/rpc/calls/runtime-rpc-call'
 import { Select, SelectContent, SelectGroup, SelectItem, SelectLabel } from '@/components/ui/select'
 import * as SelectPrimitive from 'radix-ui/select'
@@ -15,14 +15,62 @@ import {
 } from './remote-browser-page-input-model'
 import {
   REMOTE_OPEN_SELECT_POPUP_EXPRESSION,
+  REMOTE_SELECT_LIST_OPENED_EXPRESSION,
   buildRemoteSelectOptionChoiceExpression,
   groupRemoteSelectPopupOptions,
+  readRemoteSelectListOpenedResult,
   readRemoteSelectPopupResult,
+  type RemoteSelectListOpened,
   type RemoteSelectPopup,
   type RemoteSelectPopupGroup
 } from './remote-browser-select-popup-model'
 
 const RPC_OPTIONS = { timeoutMs: 15_000, suppressFeatureInteraction: true }
+// Keys that open a focused select's list on some host platform; the host's :open answers which.
+const SELECT_OPENING_KEYS = new Set([
+  'Space',
+  'Enter',
+  'ArrowDown',
+  'ArrowUp',
+  'Alt+ArrowDown',
+  'Alt+ArrowUp'
+])
+const FOCUS_MOVING_KEYS = new Set(['Tab', 'Shift+Tab', 'Escape'])
+// Script can move focus unseen (a dialog, a reload, an agent), so "not a select" holds only briefly.
+const NOT_SELECT_TRUSTED_MS = 2_000
+
+/** Whether the page's focused element was a select when last read, so keys typed in a text field cost no read. */
+class RemotePageSelectFocus {
+  private known: { page: string; selectFocused: boolean; at: number } | null = null
+  private epoch = 0
+
+  /** A press, Tab or Escape may have moved focus; reads already in flight no longer count. */
+  forget(): void {
+    this.epoch += 1
+    this.known = null
+  }
+
+  currentEpoch(): number {
+    return this.epoch
+  }
+
+  note(page: string, epoch: number, selectFocused: boolean): void {
+    if (epoch === this.epoch) {
+      this.known = { page, selectFocused, at: performance.now() }
+    }
+  }
+
+  /** Steady typing in a text field reads at most once per trust window. */
+  ruledOut(page: string): boolean {
+    const known = this.known
+    return Boolean(
+      known &&
+      !known.selectFocused &&
+      known.page === page &&
+      performance.now() - known.at < NOT_SELECT_TRUSTED_MS
+    )
+  }
+}
 
 type RemoteBrowserPress = {
   target: RemoteBrowserRuntimeTarget
@@ -49,7 +97,8 @@ export function useRemoteBrowserSelectPopup({
   closeMissingRemotePage,
   scheduleRemoteTabInfoRefresh,
   mountedRef,
-  setPaneNotice
+  setPaneNotice,
+  getPageUrl
 }: Omit<
   RemoteBrowserPageInputParams,
   | 'pickerAvailable'
@@ -59,27 +108,105 @@ export function useRemoteBrowserSelectPopup({
   | 'lifecycle'
   | 'createRemoteOperationToken'
 >): {
-  /** Runs in the input queue after a left press, so the next input waits for the list to open. */
+  /** Runs in the input queue right after a press's mouseDown, when the page opens its list. */
+  checkSelectListAfterPress: (press: RemoteBrowserPress & { button: string }) => void
+  /** Runs in the input queue after the release; waits only when the press opened a list. */
   readSelectPopupAfterPress: (press: RemoteBrowserPress & { button: string }) => Promise<void>
+  /** Runs in the input queue after a key reached the page; reads only when a select may have focus. */
+  readSelectPopupAfterKey: (press: RemoteBrowserPress & { key: string }) => Promise<void>
+  /** Runs in the input queue before a key or press goes to the page; see the body for why. */
+  closeSelectPopupForPageInput: () => void
   selectPopupElement: React.JSX.Element | null
 } {
   const [selectPopup, setSelectPopup] = useState<RemoteSelectPopupState | null>(null)
+  const listOpenedByPressRef = useRef<Promise<RemoteSelectListOpened | null> | null>(null)
+  const [pageFocus] = useState(() => new RemotePageSelectFocus())
+  // Another page or URL has its own focus.
+  const pageFocusKey = (pageId: string): string => `${pageId}\n${getPageUrl()}`
   // A hidden or busy pane has no frame under the list to anchor it to.
   if (selectPopup && (!isActive || busy)) {
     setSelectPopup(null)
+  }
+
+  const checkSelectListOpened = (
+    press: RemoteBrowserPress
+  ): Promise<RemoteSelectListOpened | null> =>
+    callRuntimeRpc(
+      press.target,
+      'browser.eval',
+      {
+        worktree: runtimeWorktree,
+        page: press.pageId,
+        expression: REMOTE_SELECT_LIST_OPENED_EXPRESSION
+      },
+      RPC_OPTIONS
+    ).then(readRemoteSelectListOpenedResult, () => null)
+
+  const checkSelectListAfterPress = ({
+    button,
+    ...press
+  }: RemoteBrowserPress & { button: string }): void => {
+    pageFocus.forget()
+    // Only a primary press opens a list; a page tool's press picks the element instead.
+    listOpenedByPressRef.current =
+      button === 'left' && !pagePointerOwned ? checkSelectListOpened(press) : null
   }
 
   const readSelectPopupAfterPress = async ({
     button,
     ...press
   }: RemoteBrowserPress & { button: string }): Promise<void> => {
-    // Only a primary press opens a list; a page tool's press picks the element instead.
-    if (button !== 'left' || pagePointerOwned) {
+    const listOpened = listOpenedByPressRef.current
+    listOpenedByPressRef.current = null
+    if (button !== 'left' || pagePointerOwned || !listOpened) {
       return
     }
-    let popup: RemoteSelectPopup | null = null
+    // Why: the check ran while the button was down, so for a press that opened no list it is
+    // already answered and the next input does not wait.
+    if ((await listOpened)?.open) {
+      await showOpenSelectPopup(press)
+      return
+    }
+    // A click handler can open the list instead (showPicker), so look again without holding the
+    // lane; the read then queues behind any input made meanwhile and finds the list still open.
+    // It also learns where the click left focus, which a label moves only on release.
+    const epoch = pageFocus.currentEpoch()
+    void checkSelectListOpened(press).then((afterClick) => {
+      if (afterClick) {
+        pageFocus.note(pageFocusKey(press.pageId), epoch, afterClick.selectFocused)
+      }
+      if (afterClick?.open) {
+        void enqueueRemoteInput(() => showOpenSelectPopup(press))
+      }
+    })
+  }
+
+  const readSelectPopupAfterKey = async ({
+    key,
+    ...press
+  }: RemoteBrowserPress & { key: string }): Promise<void> => {
+    if (FOCUS_MOVING_KEYS.has(key)) {
+      pageFocus.forget()
+      return
+    }
+    // Shift does not stop a key from opening the list.
+    if (!SELECT_OPENING_KEYS.has(key.replace('Shift+', ''))) {
+      return
+    }
+    if (pageFocus.ruledOut(pageFocusKey(press.pageId))) {
+      return
+    }
+    await showOpenSelectPopup(press)
+  }
+
+  const showOpenSelectPopup = async (press: RemoteBrowserPress): Promise<void> => {
+    if (!isCurrentRemoteOperationToken(press.operationToken)) {
+      return
+    }
+    const epoch = pageFocus.currentEpoch()
+    let read: ReturnType<typeof readRemoteSelectPopupResult> = null
     try {
-      popup = readRemoteSelectPopupResult(
+      read = readRemoteSelectPopupResult(
         await callRuntimeRpc(
           press.target,
           'browser.eval',
@@ -95,6 +222,10 @@ export function useRemoteBrowserSelectPopup({
       // The press already landed; a page that cannot answer just shows no list, as before.
       return
     }
+    if (read) {
+      pageFocus.note(pageFocusKey(press.pageId), epoch, read.selectFocused)
+    }
+    const popup = read?.popup ?? null
     const image = imageRef.current
     if (!image || !mountedRef.current || !isCurrentRemoteOperationToken(press.operationToken)) {
       return
@@ -109,8 +240,10 @@ export function useRemoteBrowserSelectPopup({
           })
         })
       : null
-    // A later press that opened no list replaces one an earlier, slower press left open.
-    setSelectPopup(popup && clientRect ? { ...popup, ...press, clientRect } : null)
+    // No list leaves the current one alone: the input that would close it already did.
+    if (popup && clientRect) {
+      setSelectPopup({ ...popup, ...press, clientRect })
+    }
   }
 
   // Stable, so a screencast frame re-rendering the pane does not re-render a long option list.
@@ -167,12 +300,18 @@ export function useRemoteBrowserSelectPopup({
       setPaneNotice
     ]
   )
+  // Input queued behind an opening list was made before the list showed: a press elsewhere closes
+  // it as it closes a native list, and a key goes to the page's select, which the read left focused,
+  // so the list would no longer match the page.
   const dismissSelectPopup = useCallback((): void => setSelectPopup(null), [])
   // Keys reach the page only through the frame, so arrows and typing need it focused again.
   const refocusFrame = useCallback((): void => imageRef.current?.focus(), [imageRef])
 
   return {
+    checkSelectListAfterPress,
     readSelectPopupAfterPress,
+    readSelectPopupAfterKey,
+    closeSelectPopupForPageInput: dismissSelectPopup,
     selectPopupElement: selectPopup ? (
       <RemoteBrowserSelectPopup
         popup={selectPopup}
