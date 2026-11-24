@@ -14,6 +14,11 @@ import type { PairedPortForwardTunnel } from './paired-port-forward-tunnel'
 // A desktop without IPv6 loopback can't hold [::1], and nothing local can listen there either.
 const IPV6_UNAVAILABLE = /EADDRNOTAVAIL|EAFNOSUPPORT|EPROTONOSUPPORT/
 
+/** Whether a forward also listens on [::1]; only where its connections' owner can be checked there. */
+export function holdsIpv6Loopback(platform: NodeJS.Platform): boolean {
+  return platform !== 'win32'
+}
+
 /** A loopback listener whose connections each open one stream on the server's forward tunnel. */
 export class PairedPortForwardProvider implements SshPortForwardProvider<PairedPortForwardTunnel> {
   canHandle(tunnel: PairedPortForwardTunnel): boolean {
@@ -74,9 +79,12 @@ export class PairedPortForwardProvider implements SshPortForwardProvider<PairedP
     const address = servers[0]!.address()
     const localPort = typeof address === 'object' && address ? address.port : options.localPort
     // Browsers try [::1] first for localhost, so the forward holds that address too; a later local
-    // server there could otherwise answer the forwarded link.
+    // server there could otherwise answer the forwarded link. Windows' owner lookup reads IPv4
+    // connections only, so there the forward stays IPv4 and creation's [::1] probe guards it.
     try {
-      servers.push(await listen('::1', localPort))
+      if (holdsIpv6Loopback(process.platform)) {
+        servers.push(await listen('::1', localPort))
+      }
     } catch (error) {
       if (!IPV6_UNAVAILABLE.test(error instanceof Error ? error.message : String(error))) {
         // A client may already hold the IPv4 half; close() would wait on it forever.

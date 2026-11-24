@@ -3,7 +3,7 @@ import { networkInterfaces } from 'node:os'
 import { Duplex, PassThrough } from 'node:stream'
 import { describe, expect, it } from 'vitest'
 import { browserTunnelTargetBlockReason } from '../../browser/network/tunnels/browser-network-tunnel-destination-policy'
-import { PairedPortForwardProvider } from './paired-port-forward-provider'
+import { holdsIpv6Loopback, PairedPortForwardProvider } from './paired-port-forward-provider'
 import type { PairedPortForwardTunnel } from './paired-port-forward-tunnel'
 
 function echoTunnel(opened: { host: string; port: number }[]): PairedPortForwardTunnel {
@@ -74,7 +74,7 @@ describe('PairedPortForwardProvider', () => {
     try {
       expect(await roundTrip(port, 'GET / HTTP/1.1\r\n\r\n')).toBe('GET / HTTP/1.1\r\n\r\n')
       // A browser tries [::1] first for localhost; that must reach the server too, not a local service.
-      if (hasIpv6Loopback()) {
+      if (hasIpv6Loopback() && holdsIpv6Loopback(process.platform)) {
         expect(await roundTrip(port, 'ipv6', '::1')).toBe('ipv6')
       }
       expect(opened.every((target) => target.host === 'localhost' && target.port === 5173)).toBe(
