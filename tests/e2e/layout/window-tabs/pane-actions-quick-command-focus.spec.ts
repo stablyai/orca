@@ -9,6 +9,7 @@ import {
 
 /** Six terminals in the left (owner) pane with the sidebar collapsed; split adds a right pane. */
 async function seedOwnerPane(page: Page, split: boolean): Promise<string> {
+  await page.setViewportSize({ width: 1280, height: 800 })
   await waitForSessionReady(page)
   const worktreeId = await waitForActiveWorktree(page)
   await ensureTerminalVisible(page)
@@ -55,28 +56,65 @@ async function seedOwnerPane(page: Page, split: boolean): Promise<string> {
   )
 }
 
-const foldLevel = (page: Page): Promise<number> =>
-  page.evaluate(() =>
-    Number(
-      document
-        .querySelector('[data-titlebar-fold-level]')
-        ?.getAttribute('data-titlebar-fold-level') ?? -1
-    )
-  )
+/** Owner-strip state that decides what ⋯ offers; platforms differ in header width, so read it rather than assume it. */
+function ownerStripState(page: Page, groupId: string) {
+  return page.evaluate((gid) => {
+    const strip = document.querySelector(`[data-tab-group-strip-id="${gid}"]`)
+    const shown = (element: Element | null | undefined): boolean =>
+      element instanceof HTMLElement && element.checkVisibility({ visibilityProperty: true })
+    return {
+      paneActions: shown(strip?.querySelector('[data-pane-actions-menu-trigger]')),
+      inlineQuickCommands: shown(strip?.querySelector('button[aria-label="More quick commands"]'))
+    }
+  }, groupId)
+}
 
-/** The window sets the owner pane's width: shrink until it folds, or grow until it unfolds. */
-async function resizeUntilFold(page: Page, wanted: (level: number) => boolean, widths: number[]) {
-  for (const width of widths) {
-    await page.setViewportSize({ width, height: 760 })
-    await expect.poll(() => page.evaluate(() => window.innerWidth)).toBe(width)
-    if (wanted(await foldLevel(page))) {
+/** Split panes size by ratio; an unsplit owner pane sizes by the right sidebar beside it. */
+async function setOwnerPaneWidth(page: Page, groupId: string, split: boolean, px: number) {
+  await page.evaluate(
+    ({ gid, split, px }) => {
+      const state = window.__store!.getState()
+      const strip = document.querySelector(`[data-tab-group-strip-id="${gid}"]`)
+      if (split) {
+        const row = strip?.closest('.workspace-sidebar-seam')?.getBoundingClientRect().width ?? 0
+        state.setTabGroupSplitRatio(state.activeWorktreeId!, '', px / row)
+      } else {
+        const current = strip?.getBoundingClientRect().width ?? px
+        state.setRightSidebarWidth(Math.max(200, state.rightSidebarWidth + current - px))
+      }
+    },
+    { gid: groupId, split, px }
+  )
+  await page.waitForTimeout(200)
+}
+
+/** Narrow until the titlebar folds into the strip: ⋯ shows and quick commands move into it. */
+async function foldOwnerPane(page: Page, groupId: string, split: boolean): Promise<void> {
+  for (let px = 440; px >= 200; px -= 20) {
+    await setOwnerPaneWidth(page, groupId, split, px)
+    const state = await ownerStripState(page, groupId)
+    if (state.paneActions && !state.inlineQuickCommands) {
       return
     }
   }
-  throw new Error('The owner pane never reached the wanted fold level')
+  throw new Error(
+    `Owner pane never folded: ${JSON.stringify(await ownerStripState(page, groupId))}`
+  )
 }
-const narrowWidths = Array.from({ length: 35 }, (_, i) => 1100 - i * 20)
-const wideWidths = Array.from({ length: 25 }, (_, i) => 700 + i * 40)
+
+/** Widen until the strip unfolds: quick commands return inline, and an unsplit pane drops ⋯. */
+async function unfoldOwnerPane(page: Page, groupId: string, split: boolean): Promise<void> {
+  for (let px = 520; px <= 1000; px += 40) {
+    await setOwnerPaneWidth(page, groupId, split, px)
+    const state = await ownerStripState(page, groupId)
+    if (state.inlineQuickCommands && (split || !state.paneActions)) {
+      return
+    }
+  }
+  throw new Error(
+    `Owner pane never unfolded: ${JSON.stringify(await ownerStripState(page, groupId))}`
+  )
+}
 
 /** Where focus is, relative to the owner strip, without exposing terminal text. */
 function focusTarget(page: Page, groupId: string): Promise<string> {
@@ -146,7 +184,7 @@ for (const split of [false, true]) {
       orcaPage
     }) => {
       const groupId = await seedOwnerPane(orcaPage, split)
-      await resizeUntilFold(orcaPage, (level) => level >= 1, narrowWidths)
+      await foldOwnerPane(orcaPage, groupId, split)
       await openAddFromPaneActions(orcaPage, groupId)
       await closeAddDialog(orcaPage, how)
       await expectLandingAndTabOrder(orcaPage, groupId, 'owner-pane-actions')
@@ -156,9 +194,9 @@ for (const split of [false, true]) {
       orcaPage
     }) => {
       const groupId = await seedOwnerPane(orcaPage, split)
-      await resizeUntilFold(orcaPage, (level) => level >= 1, narrowWidths)
+      await foldOwnerPane(orcaPage, groupId, split)
       await openAddFromPaneActions(orcaPage, groupId)
-      await resizeUntilFold(orcaPage, (level) => level === 0, wideWidths)
+      await unfoldOwnerPane(orcaPage, groupId, split)
       await expect(addDialog(orcaPage).getByPlaceholder('Start dev server')).toHaveValue(
         'Lint the repo'
       )
