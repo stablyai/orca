@@ -25,20 +25,49 @@ async function settleCleanCapture(
   }
 }
 
+/**
+ * Draw's whole wait for main, from before its clean is admitted (which waits for the page's load)
+ * through the readback: the bound Draw had when it captured in the renderer.
+ */
+export const DRAW_CAPTURE_DEADLINE_MS = 10_000
+
 async function captureCleanRequest(
   request: CleanCaptureRequest,
   pending: PendingCleanCapture
 ): Promise<MarkupBaseImage> {
+  let expired = false
+  let timer: ReturnType<typeof setTimeout> | undefined
+  const deadline = new Promise<null>((resolve) => {
+    timer = setTimeout(() => {
+      expired = true
+      resolve(null)
+    }, DRAW_CAPTURE_DEADLINE_MS)
+  })
   try {
-    const capture = await window.api.browser.captureCleanPage({
-      browserPageId: request.pageId,
-      requestId: request.requestId
-    })
+    const capture = await Promise.race([
+      window.api.browser.captureCleanPage({
+        browserPageId: request.pageId,
+        requestId: request.requestId
+      }),
+      deadline
+    ])
+    if (expired) {
+      // Retire this exact request in main, so it never captures or opens after Draw gave up; the
+      // page's own load is left alone.
+      if (pending.current === request) {
+        pending.current = null
+        void window.api.browser
+          .cancelGrab({ browserPageId: request.pageId, requestId: request.requestId })
+          .catch(() => {})
+      }
+      throw new Error('markup: the clean page capture timed out')
+    }
     if (!capture || pending.current !== request) {
       throw new Error('markup: the clean page capture was superseded')
     }
     return await flattenCapturedPage(capture)
   } finally {
+    clearTimeout(timer)
     if (pending.current === request) {
       pending.current = null
     }
