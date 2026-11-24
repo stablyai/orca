@@ -8,6 +8,7 @@ import {
 import { printResult } from '../output/command-result-output'
 import { RuntimeClientError } from '../runtime/connection/types'
 import { agentReadClosingLine, agentReadConnectionArgs } from './agent-read-continuation'
+import { escapeTerminalControlCharacters } from '../../shared/terminal/output/terminal-control-character-escape'
 import type { RuntimeClient } from '../runtime/client'
 import { getOptionalWorktreeSelector } from '../workspace-selection/workspace-selector'
 import {
@@ -173,12 +174,15 @@ function formatAgentRead(
   result: AgentReadResult,
   call: { limit: number | undefined; connection: readonly string[] | null; cursorRead: boolean }
 ): string {
-  // Continuation lines are indented, so a line starting with `Older:` is only ever Orca's own.
+  // Every line break (Unicode ones too) indents and controls are escaped, so a line starting with
+  // `Older:` is only ever Orca's own, on screen and to line-splitting readers.
   const lines = result.entries.map((entry) =>
-    (entry.shortened
-      ? `${formatEntry(entry)}\n[shortened to fit; open it in Orca to see it whole]`
-      : formatEntry(entry)
-    ).replace(/\r\n|\r|\n/g, '\n  ')
+    escapeTerminalControlCharacters(
+      (entry.shortened
+        ? `${formatEntry(entry)}\n[shortened to fit; open it in Orca to see it whole]`
+        : formatEntry(entry)
+      ).replace(/\r\n|[\r\u2028\u2029\u0085]/g, '\n')
+    ).replaceAll('\n', '\n  ')
   )
   const { nextCursor } = result
   if (nextCursor === undefined) {

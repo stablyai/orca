@@ -25,6 +25,9 @@ export async function agentReadConnectionArgs(
   return typeof flags.get('pairing-code') === 'string' ? null : []
 }
 
+// What Orca issues: a versioned prefix over base64url, within the decoder's length limit.
+const PRINTABLE_CURSOR = /^[A-Za-z0-9_-]{1,2048}$/
+
 /** The line that reads the next older page, or says why none can be read; null when the page
  *  is the agent's oldest. */
 export function agentReadClosingLine(
@@ -37,6 +40,10 @@ export function agentReadClosingLine(
     return result.clearedBefore
       ? "Before this: /clear. Orca can't read the earlier conversation here."
       : null
+  }
+  // The host's cursor is printed bare below, so anything but an opaque token is refused.
+  if (!PRINTABLE_CURSOR.test(nextCursor)) {
+    return `${lead} the host returned a cursor Orca won't print; read with --json to get it.`
   }
   const args = [
     'agent',
