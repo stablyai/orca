@@ -1,9 +1,9 @@
 import type { DaemonClient } from '../daemon/transport/client/daemon-client'
 import type {
   ProviderRelayDetachPolicy,
-  ProviderRelayWorkMarker,
   ProviderRelaySpawnSpec
 } from '../daemon/protocol/daemon-provider-relay-protocol'
+import type { ProviderRelayWorkMarkers } from './provider-relay-agent-markers'
 export {
   dropListedProviderRelay,
   keptProviderRelaySpawnToken,
@@ -38,7 +38,6 @@ import { withTimeout } from '../../shared/concurrency/promise-timeout-fallback'
 import { providerRelayChannel, type ProviderRelayChannel } from './provider-relay-channel'
 import { RelayedProviderChild } from './relayed-provider-child'
 import { ProviderRelayCarriedWork } from './provider-relay-carried-work'
-import type { ProviderRelayAckFloor } from './relayed-provider-output'
 import { relayedManagedProcess } from './relayed-managed-process'
 
 /** Desktop composition installs this on macOS and Linux; anywhere else chats launch as before. */
@@ -52,20 +51,7 @@ export type ProviderRelayRoute = {
   idleStopMs: () => number | null
 }
 
-/**
- * What the open app's idle stop counts, as the daemon can see it: agent lines that open and close
- * turns and background tasks, and the app's own requests that are work until answered.
- */
-export type ProviderRelayWorkMarkers = {
-  /** The agent integration, recorded with each relay; register it as reattachable. */
-  agent: string
-  markers: readonly ProviderRelayWorkMarker[]
-  /** A fresh tracker per attach, so acks never pass the start of a streamed item still open. */
-  ackFloor?: () => ProviderRelayAckFloor
-  requests?: readonly string[]
-  /** Transport-only lines (a keep-alive) by top-level name; the daemon drops them. */
-  quiet?: readonly string[]
-}
+export type { ProviderRelayWorkMarkers } from './provider-relay-agent-markers'
 
 /** The provider's open work at detach, keyed as its markers key it. */
 export type ProviderRelayOpenWork = Record<string, string[][]>
@@ -210,6 +196,7 @@ function relayedChild(
     quitting: providerRelayQuitting,
     durable: (force) => durableFor?.(launch.chatKey, force) ?? Promise.resolve(true),
     ackFloor: carried.withFloor(launch.markers.ackFloor?.()),
+    ...(launch.markers.continuation ? { continuation: launch.markers.continuation } : {}),
     ...(passWhileHeld ? { passWhileHeld } : {})
   })
   carriedFor.set(child, carried)

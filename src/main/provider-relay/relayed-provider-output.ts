@@ -1,6 +1,10 @@
 import type { Readable } from 'node:stream'
 import type { ProviderRelayDataEvent } from '../daemon/protocol/daemon-provider-relay-protocol'
 import { RelayedProviderConsumption } from './relayed-provider-consumption'
+import {
+  RelayedProviderContinuation,
+  type ProviderRelayItemContinuation
+} from './relayed-provider-continuation'
 import { withTimeout } from '../../shared/concurrency/promise-timeout-fallback'
 
 /** Acks batch this long after output; the daemon asks sooner (relayAckWanted) when it holds a lot. */
@@ -58,6 +62,8 @@ export class RelayedProviderOutput {
   /** How far a held replay has been handed on; it stays held until the slices reach the end. */
   private releasedTo = 0
   private releasing: Promise<void> | null = null
+  /** Set when the daemon dropped kept lines: items cut by that move to continuation rows. */
+  private continuation: RelayedProviderContinuation | null = null
   private readonly consumption = new RelayedProviderConsumption(() => {
     if (this.consumption.upTo(this.pushedSeq) > this.ackedSeq) {
       this.scheduleAck()
@@ -110,7 +116,6 @@ export class RelayedProviderOutput {
     if (seq <= this.deliveredSeq) {
       return
     }
-    this.options.ackFloor?.observe(seq, line)
     this.deliver(seq, this.deliveredPending.has(seq) ? null : line)
   }
 
@@ -136,6 +141,15 @@ export class RelayedProviderOutput {
       timer.unref?.()
       this.preambleArrived = () => void (here() && done())
     })
+  }
+
+  /** The daemon dropped kept lines through `truncatedThrough` (its file cap); set before release. */
+  continueAfterTruncation(
+    hook: ProviderRelayItemContinuation,
+    relayId: string,
+    truncatedThrough: number
+  ): void {
+    this.continuation = new RelayedProviderContinuation(hook, relayId, truncatedThrough)
   }
 
   /** Output waits for the chat to be ready (`release()`). */
@@ -206,7 +220,13 @@ export class RelayedProviderOutput {
     }
   }
 
-  private push(seq: number | null, line: string | null): void {
+  private push(seq: number | null, given: string | null): void {
+    let line = given
+    // The floor reads each line as it is handed on: acks only ever cover what was.
+    if (line && seq !== null) {
+      line = this.continuation?.line(seq, line, this.options.ackFloor) ?? line
+      this.options.ackFloor?.observe(seq, line)
+    }
     if (line) {
       this.options.stdout.push(`${line}\n`)
     }

@@ -2,6 +2,7 @@ import { Readable } from 'node:stream'
 import { describe, expect, it } from 'vitest'
 import { RelayedProviderOutput } from '../../provider-relay/relayed-provider-output'
 import { createCodexRelayAckFloor } from './codex-relay-ack-floor'
+import { CODEX_RELAY_ITEM_CONTINUATION } from './codex-relay-item-continuation'
 import {
   restateKeptCodexBackgroundWork,
   seedKeptCodexTurnOrdinals
@@ -66,6 +67,49 @@ describe('codex rows across a reattach', () => {
     output.line('relayData', 5, item('item/started', 'b'))
     await output.settle()
     expect(acks).toEqual(['2 keep 1', '2', '3', '5 keep 5'])
+  })
+
+  it('moves an item a cap-cut replay starts inside to one continuation row, the same on every attach', async () => {
+    const delta = (id: string) =>
+      JSON.stringify({ method: 'item/agentMessage/delta', params: { threadId: 't', itemId: id } })
+    const attach = async () => {
+      const stdout = new Readable({ read() {} })
+      const seen: string[] = []
+      stdout.on('data', (chunk: Buffer) => seen.push(...chunk.toString().trim().split('\n')))
+      const acks: string[] = []
+      const output = new RelayedProviderOutput({
+        stdout,
+        ackFloor: createCodexRelayAckFloor(),
+        passWhileHeld: () => false,
+        durable: async () => true,
+        ack: async (seq, keepFrom) => {
+          acks.push(`${seq} keep ${keepFrom}`)
+        }
+      })
+      output.restartAt(10)
+      // a started before the daemon dropped lines through 10; b starts inside the replay.
+      output.line('relayData', 11, delta('a'))
+      output.line('relayData', 12, item('item/started', 'b'))
+      output.line('relayData', 13, delta('b'))
+      output.continueAfterTruncation(CODEX_RELAY_ITEM_CONTINUATION, 'r1', 10)
+      await output.release()
+      await settle()
+      await output.settle()
+      const ids = seen.map((line) => {
+        const { params } = JSON.parse(line) as {
+          params: { itemId?: string; item?: { id: string } }
+        }
+        return params.itemId ?? params.item?.id
+      })
+      return { ids, acks }
+    }
+    const first = await attach()
+    // a's saved row keeps its text; the cut part goes to its own row. b, whole, keeps its id.
+    expect(first.ids).toEqual(['relay:r1:11:a', 'b', 'b'])
+    // The continuation is kept from its first line, so the next attach replays it whole again.
+    expect(first.acks).toEqual(['13 keep 11'])
+    const second = await attach()
+    expect(second.ids).toEqual(first.ids)
   })
 
   it("numbers a kept chat's and its subagents' running turns as the live run did", async () => {

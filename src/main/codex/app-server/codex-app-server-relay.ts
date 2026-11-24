@@ -3,6 +3,7 @@ import {
   type ProviderRelayWorkMarkers
 } from '../../provider-relay/app-provider-relays'
 import { createCodexRelayAckFloor } from './codex-relay-ack-floor'
+import { CODEX_RELAY_ITEM_CONTINUATION } from './codex-relay-item-continuation'
 import type { CodexAppServerConnection } from './codex-app-server-connection-types'
 import type { RelayedProviderChild } from '../../provider-relay/relayed-provider-child'
 import { leadingJsonEnvelope } from '../../../shared/json-stream/json-rpc-record-prefix'
@@ -35,6 +36,7 @@ const RUNNING = { path: ['params', 'item', 'status'], is: 'inProgress' }
 export const CODEX_RELAY_WORK_MARKERS: ProviderRelayWorkMarkers = {
   agent: CODEX_RELAY_AGENT,
   ackFloor: createCodexRelayAckFloor,
+  continuation: CODEX_RELAY_ITEM_CONTINUATION,
   markers: [
     { group: 'turn', name: 'turn/started', effect: 'start', key: [THREAD] },
     { group: 'turn', name: 'turn/completed', effect: 'end', key: [THREAD] },

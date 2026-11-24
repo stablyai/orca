@@ -11,6 +11,7 @@ import { RELAY_WRITE_CHUNK_CHARS } from '../daemon/protocol/daemon-provider-rela
 import type { ProviderRelayChannel } from './provider-relay-channel'
 import { RelayedProviderOutput, type ProviderRelayAckFloor } from './relayed-provider-output'
 import type { ProviderRelayRecordTaking } from './relayed-provider-consumption'
+import type { ProviderRelayItemContinuation } from './relayed-provider-continuation'
 
 /** The daemon refuses input past its queue cap; the write is offered again after this. */
 const INPUT_FULL_RETRY_MS = 50
@@ -36,6 +37,8 @@ export type RelayedProviderChildOptions = {
   /** Holds output until `releaseOutput()`, except the lines this lets through (answers to new requests). */
   passWhileHeld?: (line: string) => boolean
   ackFloor?: ProviderRelayAckFloor
+  /** Re-keys items a cap-cut replay starts inside, so they never overwrite their saved rows. */
+  continuation?: ProviderRelayItemContinuation
 }
 
 /**
@@ -139,6 +142,13 @@ export class RelayedProviderChild extends EventEmitter implements ProviderChild 
       const result = await this.options.channel.attach(this.relayId, fromSeq, this.options.policy())
       await this.output.awaitPreamble(result.initializeResultSent, result.pending, PREAMBLE_WAIT_MS)
       this.attachResult = result
+      if (result.truncatedThrough !== undefined && this.options.continuation) {
+        this.output.continueAfterTruncation(
+          this.options.continuation,
+          this.relayId,
+          result.truncatedThrough
+        )
+      }
       if (this.state === 'attaching') {
         this.state = 'attached'
       }
