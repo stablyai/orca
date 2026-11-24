@@ -77,15 +77,18 @@ function resetStore(): void {
 
 let stopCatalog: () => void = () => {}
 // Main's answers over the share link, as the owner's host would give them.
-const call = vi.fn(async ({ method }: { method: string }) => ({
-  id: method,
-  ok: true,
-  result:
-    method === 'bots.chat.open'
-      ? { sessionId: 'chat-home' }
-      : { bots: [ivy], threadReplies: false },
-  _meta: { runtimeId: SHARED.environmentId }
-}))
+// The owner's host answers its listing; anything else this test meets is refused, as the share
+// refuses `bots.chat.open` and `folderWorkspaces.list`.
+const call = vi.fn(async ({ method }: { method: string }) =>
+  method === 'bots.list'
+    ? {
+        id: method,
+        ok: true,
+        result: { bots: [ivy], threadReplies: false },
+        _meta: { runtimeId: SHARED.environmentId }
+      }
+    : { id: method, ok: false, error: { code: 'forbidden', message: method } }
+)
 
 beforeEach(async () => {
   vi.stubGlobal('api', {
@@ -134,22 +137,18 @@ describe('a shared agent’s chats on this computer', () => {
     ])
   })
 
-  it('opens its Home Chat in a tab kept here, reading only this computer’s workspaces', async () => {
+  it('opens its home here from Home, reading only this computer’s workspaces and never its owner’s Home Chat', async () => {
     call.mockClear()
     const fetchFolderWorkspaces = vi.fn(async () => {})
     useAppStore.setState({ fetchFolderWorkspaces })
     const [bot] = readHostBots(HOST)
     expect(await openBotHomeTab(bot)).toBe(true)
+    expect(useAppStore.getState().activeWorktreeId).toBe(HOME_KEY)
     expect(fetchFolderWorkspaces).toHaveBeenCalledWith({ runtimeEnvironmentId: null })
-    expect(call.mock.calls.map(([request]) => request.method)).not.toContain(
-      'folderWorkspaces.list'
-    )
-    expect(tabs()).toEqual([
-      expect.objectContaining({
-        entityId: 'chat-home',
-        executionHostId: HOST,
-        worktreeId: HOME_KEY
-      })
-    ])
+    // The owner's Home Chat is theirs: nothing of it is asked for, and no tab of it opens.
+    const asked = call.mock.calls.map(([request]) => request.method)
+    expect(asked).not.toContain('folderWorkspaces.list')
+    expect(asked).not.toContain('bots.chat.open')
+    expect(tabs()).toEqual([])
   })
 })
