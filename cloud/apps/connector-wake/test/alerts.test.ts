@@ -347,4 +347,22 @@ describe('wake alerts', () => {
     const empty = { socket_open: 0, reconnects: 0, reconnects_late: 0, drops: 0, replaced: 0, wake_error: 0 }
     expect(surge(await run(empty, empty, { env: { RECONNECT_SURGE_MIN: '0' } }))).toEqual([])
   })
+
+  it('never pages auth-refusals on 2 refusals in a small window, at any share', async () => {
+    // A window holds up to 4 of the alerts' own probe refusals; these are 2 beyond them.
+    const two = { refuse_401: 6 }
+    // 36 upgrades: 5.6% refused, which the share rule alone fired on at MIN_VOLUME 20.
+    expect((await run({ ...two, socket_open: 30 })).fired).toEqual([])
+    // 306 upgrades: 0.65%, still only 2 refusals.
+    expect((await run({ ...two, socket_open: 300 })).fired).toEqual([])
+    // 5 refusals: the share rule above the upgrade floor, the low-volume rule below it.
+    expect((await run({ refuse_401: 9, socket_open: 300 })).fired).toEqual(['FIRING auth-refusals: 401 refusals 5 = 1.62% of upgrades'])
+    expect((await run({ refuse_401: 9, socket_open: 100 })).fired).toEqual(['FIRING auth-refusals-low-volume: 401 refusals 5 in 15 min at low volume (109 upgrades)'])
+  })
+
+  it('takes its upgrade floor from AUTH_MIN_UPGRADES, never below MIN_VOLUME', async () => {
+    const refused = { refuse_401: 9, socket_open: 100 }
+    expect((await run(refused, {}, { env: { AUTH_MIN_UPGRADES: '50' } })).fired[0]).toMatch(/^FIRING auth-refusals: /)
+    expect((await run(refused, {}, { env: { AUTH_MIN_UPGRADES: '50', MIN_VOLUME: '150' } })).fired[0]).toMatch(/^FIRING auth-refusals-low-volume: /)
+  })
 })

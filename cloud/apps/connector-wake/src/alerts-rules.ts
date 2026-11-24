@@ -9,13 +9,16 @@ export type WakeAlertsEnv = AlertsEnv & {
   // no-socket-share fires above NO_SOCKET_PCT (5) percent of wakes, at >= NO_SOCKET_MIN (50) wakes.
   NO_SOCKET_PCT?: string
   NO_SOCKET_MIN?: string
+  // auth-refusals (a share of upgrades) needs at least this many upgrades per window, and never less
+  // than MIN_VOLUME; below it auth-refusals-low-volume needs LOW_VOLUME_401_MIN refusals. Default 200.
+  AUTH_MIN_UPGRADES?: string
   // Comma-separated rule ids this deployment never evaluates (e.g. 'silent' where no clients run).
   ALERTS_OFF?: string
   // Which rules are firing and when each was last posted (alerts.ts). Unbound: every breaching run posts.
   ALERT_STATE?: KVNamespace
 }
 
-export type WakeThresholds = Thresholds & { noSocketPct: number; noSocketMin: number; probesPerWindow: number }
+export type WakeThresholds = Thresholds & { noSocketPct: number; noSocketMin: number; probesPerWindow: number; authMinUpgrades: number }
 
 export const WINDOW_MIN = 15
 // The cron runs every 5 min, and each run's edge probe is one refused upgrade (refuse 401 'token').
@@ -23,6 +26,8 @@ export const WINDOW_MIN = 15
 const PROBE_EVERY_MIN = 5
 const ADMIN_FAILURES_MIN = 3
 const WAKE_ERRORS_MIN = 3
+// Refusals either auth rule needs, whatever the share: 2 refusals in a small window (one host
+// whose token keeps failing, e.g. a skewed clock after a refresh) is not worth a page.
 const LOW_VOLUME_401_MIN = 5
 // reconnect-surge. A Durable Object retirement wave (Cloudflare moving objects, mostly in Asia)
 // closes sockets 1006 and every desktop is back within 5 s: on 2026-11-24 (15:30 and 21:20 UTC)
@@ -53,7 +58,8 @@ export function thresholds(env: WakeAlertsEnv): WakeThresholds {
     ...edgeThresholds(env),
     noSocketPct: positive(env.NO_SOCKET_PCT, 5),
     noSocketMin: positive(env.NO_SOCKET_MIN, 50),
-    probesPerWindow: env.EDGE_PROBE_URL ? WINDOW_MIN / PROBE_EVERY_MIN + 1 : 0
+    probesPerWindow: env.EDGE_PROBE_URL ? WINDOW_MIN / PROBE_EVERY_MIN + 1 : 0,
+    authMinUpgrades: Math.max(positive(env.AUTH_MIN_UPGRADES, 200), positive(env.MIN_VOLUME, 200))
   }
 }
 
@@ -117,13 +123,13 @@ export const RULES: Rule[] = [
   {
     // A desktop refused at upgrade falls back to long-poll; a spike means good tokens are refused.
     id: 'auth-refusals',
-    breach: (c, t) => upgrades(c) >= t.minVolume && pct(refusals401(c, t), upgrades(c)) > 0.5,
+    breach: (c, t) => upgrades(c) >= t.authMinUpgrades && refusals401(c, t) >= LOW_VOLUME_401_MIN && pct(refusals401(c, t), upgrades(c)) > 0.5,
     describe: (c, t) => `401 refusals ${refusals401(c, t)} = ${pct(refusals401(c, t), upgrades(c)).toFixed(2)}% of upgrades`
   },
   {
     // Below the share rules' volume a handful of 401s is still worth a look.
     id: 'auth-refusals-low-volume',
-    breach: (c, t) => upgrades(c) < t.minVolume && refusals401(c, t) >= LOW_VOLUME_401_MIN,
+    breach: (c, t) => upgrades(c) < t.authMinUpgrades && refusals401(c, t) >= LOW_VOLUME_401_MIN,
     describe: (c, t) => `401 refusals ${refusals401(c, t)} in ${WINDOW_MIN} min at low volume (${upgrades(c)} upgrades)`
   },
   {
