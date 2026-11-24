@@ -72,6 +72,40 @@ it('round-trips a typed answer that would otherwise make a longer question headi
   expect(botItemNamedAnswers(shape, 'Keep → x? → No')).toEqual([null, 'No', null])
 })
 
+it('pairs a posted quick reply with the longest matching heading', () => {
+  const questions = [
+    { prompt: 'Keep', options: [{ label: 'x? → No' }] },
+    { prompt: 'Keep → x?', options: [{ label: 'No' }] }
+  ]
+  const pair = (ask: { questions: typeof questions }, text: string) =>
+    botItemQuestionPairing({ status: 'needs_you' }, [
+      {
+        id: 'e1',
+        kind: 'commented',
+        actor: { kind: 'bot', botId: 'b', chatId: 'c' },
+        data: { ask },
+        at: 1
+      },
+      {
+        id: 'e2',
+        kind: 'commented',
+        actor: { kind: 'owner' },
+        data: { text },
+        at: 2
+      }
+    ]).questions.get('e1')!
+  const ask = { questions }
+  const selected = botItemAnswersText(botItemQuestionShape({ ask }), [null, 'No'])
+  expect(selected).toBe('Keep → x? → No')
+  const paired = pair(ask, selected)
+  expect(paired.answers.map((answer) => answer?.id ?? null)).toEqual([null, 'e2'])
+  expect(paired.waiting).toBe(true)
+
+  const single = pair({ questions: [questions[0]!] }, 'x? → No')
+  expect(single.answers.map((answer) => answer?.id ?? null)).toEqual(['e2'])
+  expect(single.byOrder).toEqual([false])
+})
+
 it('reads answers and drafts written with the question line older builds wrote', () => {
   const ask = {
     questions: [
