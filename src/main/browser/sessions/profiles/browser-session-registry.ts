@@ -234,11 +234,8 @@ class BrowserSessionRegistry {
   }
 
   setupRoutePartitionPolicies(partition: string, browserProfileId: string): Promise<void> {
-    const profile = this.profiles.get(browserProfileId)
-    if (!profile) {
-      throw new Error('browser_route_partition_profile_unavailable')
-    }
-    return installBrowserRoutePartitionPolicies(profile, partition)
+    this.requireRouteBrowserProfile(browserProfileId)
+    return installBrowserRoutePartitionPolicies(this.profiles.get(browserProfileId)!, partition)
   }
 
   requireRouteBrowserProfile(browserProfileId: string): void {
