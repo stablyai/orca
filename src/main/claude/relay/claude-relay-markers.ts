@@ -23,6 +23,8 @@ const TERMINAL_STATUSES = ['completed', 'failed', 'killed', 'stopped']
 export const CLAUDE_RELAY_WORK_MARKERS: ProviderRelayWorkMarkers = {
   agent: CLAUDE_RELAY_AGENT,
   ackFloor: claudeRelayAckFloor,
+  // The CLI's keep-alive while a request is open, every 30 s; the SDK only reads a startup mark off it.
+  quiet: ['keep_alive'],
   markers: [
     {
       group: 'turn',

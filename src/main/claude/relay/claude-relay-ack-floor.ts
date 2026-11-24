@@ -88,8 +88,6 @@ export function claudeRelayAckFloor(): ProviderRelayAckFloor {
         starts.set(scopeOf(frame), seq)
       }
     },
-    // The CLI's keep-alive while a request is open, every 30 s: short, with nothing to save.
-    quiet: (line) => line.length < 256 && line.includes('"type":"keep_alive"'),
     floor: () =>
       open.size === 0 && tools.size === 0
         ? null
