@@ -22,6 +22,8 @@ export const CONNECTOR_PATHS = {
   // GET `${github}/state`; POST `…/connect` and `…/connect/redeem` (as for Linear);
   // DELETE `…/link` unlinks; PUT `…/default-bot`; GET `…/users?q=<username>` finds a GitHub user.
   github: '/v1/connector/github',
+  // POST `${slack}/connect` and `…/connect/redeem`: Sign in with Slack links the person there.
+  slack: '/v1/connector/slack',
   // GET lists pending access requests; POST `…/redeem` {v:1, token} opens one from
   // orca://bot/access-request?t=<token>; POST `…/<request id>/decision` {v:1, decision} closes one.
   accessRequests: '/v1/connector/access-requests',

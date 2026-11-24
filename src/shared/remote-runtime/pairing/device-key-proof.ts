@@ -1,6 +1,6 @@
 import nacl from 'tweetnacl'
 
-// share-send: a teammate's held message (bot-share-held-message-seal.ts), never a connection's proof.
+// share-send: a teammate's held message (bot-team-share-seal.ts), never a connection's proof.
 export type DeviceProofPurpose = 'auth' | 'redeem' | 'register' | 'share-send'
 
 const DOMAIN = 'orca-device-proof/v1'

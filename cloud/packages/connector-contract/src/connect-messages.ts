@@ -2,6 +2,9 @@ import { z } from 'zod'
 
 // Connecting Linear or GitHub in one browser trip: the owner signs in (and installs Orca there if it
 // is missing), and the browser hands the result back to the Orca that started it.
+// Slack (POST `${slack}/connect` and `…/connect/redeem`) is a sign-in only, with these same schemas:
+// it links the person in the Slack workspace they signed in to (the redeem's workspace is the Slack
+// team) and installs nothing, so install answers 'none'.
 
 // 32 random bytes, base64url: the loopback's nonce, and the one-time result code.
 export const CONNECTOR_CONNECT_CODE_PATTERN = /^[A-Za-z0-9_-]{43}$/
@@ -14,7 +17,7 @@ export const CONNECT_LOGIN_KEY_PATTERN = /^[A-Za-z0-9_-]{43}$/
 // the browser ends on a page whose "Open Orca" opens orca://<linear|github>/link?t=<result>.
 export const CONNECTOR_CONNECT_LOOPBACK_PATH = '/connector/done'
 
-// POST `${linear|github}/connect`: starts a trip for the signed-in account; a new start voids the
+// POST `${linear|github|slack}/connect`: starts a trip for the signed-in account; a new start voids the
 // account's earlier one. The loopback is given whole or not at all. switchAccount asks the service to
 // offer its account picker again ("Not you?"). loginKey (Linear): the Mac also wants the person's
 // read,write login, sealed to this X25519 key (connect-login-seal.ts); without it the trip only
@@ -46,7 +49,7 @@ export const CONNECTOR_CONNECT_INSTALL_OUTCOMES = [
   'none'
 ] as const
 
-// POST `${linear|github}/connect/redeem` {v:1, result}: links the account to whom the trip proved,
+// POST `${linear|github|slack}/connect/redeem` {v:1, result}: links the account to whom the trip proved,
 // spending the code. Only the account that started the trip may redeem it.
 export const ConnectorConnectRedeemRequestSchema = z.object({ v: z.literal(1), result: Code })
 
@@ -59,7 +62,8 @@ export const ConnectorConnectRedeemSchema = z.object({
     handle: z.string(),
     email: z.string().optional()
   }),
-  // Linear: the workspace the person signed in to; its label always includes linear.app/<urlKey>.
+  // Linear and Slack: the workspace (Slack: the team) the person signed in to; a Linear one's label
+  // always includes linear.app/<urlKey>.
   workspace: z.object({ id: z.string().min(1), name: z.string(), urlKey: z.string() }).optional(),
   install: z.enum(CONNECTOR_CONNECT_INSTALL_OUTCOMES),
   // Linear, for a start that sent loginKey: the person's login sealed to it.

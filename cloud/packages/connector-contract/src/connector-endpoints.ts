@@ -33,6 +33,9 @@ export const CONNECTOR_PATHS = {
   // `…/link` unlinks; PUT `…/default-bot` sets the bot the user's requests go to; GET
   // `…/users?q=<username>` finds a GitHub user by exact login, for a bot's Who can ask.
   github: '/v1/connector/github',
+  // POST `${slack}/connect` and `…/connect/redeem`: Sign in with Slack links the person there
+  // (connect-messages.ts).
+  slack: '/v1/connector/slack',
   // GET lists the account's pending access requests; POST `…/redeem` opens one from its link; POST
   // `…/<request id>/decision` closes one.
   accessRequests: '/v1/connector/access-requests',

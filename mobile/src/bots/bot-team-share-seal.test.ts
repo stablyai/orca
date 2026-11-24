@@ -4,9 +4,12 @@ import { NODE_PAIRED_E2EE_PRIMITIVES } from '../../../src/shared/remote-runtime/
 import { encodeDeviceProofMessage } from '../../../src/shared/remote-runtime/pairing/device-key-proof'
 import {
   openBotTeamShareHeldMessage,
+  openBotTeamShareOffer,
   sealBotTeamShareHeldMessage,
-  type BotTeamShareHeldMessage
-} from '../../../src/shared/bots/bot-team-share-held-message-seal'
+  sealBotTeamShareOffer,
+  type BotTeamShareHeldMessage,
+  type BotTeamShareOffer
+} from '../../../src/shared/bots/bot-team-share-seal'
 import { MOBILE_PAIRED_E2EE_PRIMITIVES } from '../transport/encryption/mobile-paired-e2ee-primitives'
 
 const host = nacl.box.keyPair()
@@ -82,5 +85,40 @@ describe('held message seal', () => {
       }
     })
     expect(open(asAuth)).toBeNull()
+  })
+})
+
+describe('share offer seal', () => {
+  const sealKeys = nacl.box.keyPair()
+  const offer: BotTeamShareOffer = {
+    v: 1,
+    relay: {
+      v: 1,
+      directorUrl: 'https://relay.orca.dev',
+      cellUrl: 'https://cell-1.relay.orca.dev',
+      assignmentEpoch: 3,
+      relayHostId: 'AbCdEf0123_-xyZ9',
+      inviteToken: 'A'.repeat(43),
+      inviteExpiresAt: 1_764_000_600_000,
+      e2eeFraming: 2
+    },
+    hostPublicKeyB64: b64(host.publicKey),
+    deviceId: 'share-device-1',
+    botId: 'bot-1'
+  }
+  // The host (Node) seals; the teammate's desktop and phone both open it.
+  it.each([
+    ['phone', MOBILE_PAIRED_E2EE_PRIMITIVES],
+    ['desktop', NODE_PAIRED_E2EE_PRIMITIVES]
+  ])('opens on the %s, only with its seal key and for the bot asked for', (_name, primitives) => {
+    const sealed = sealBotTeamShareOffer(NODE_PAIRED_E2EE_PRIMITIVES, {
+      sealKey: b64(sealKeys.publicKey),
+      offer
+    })
+    const openOffer = (secretKey: Uint8Array, botId = 'bot-1') =>
+      openBotTeamShareOffer(primitives, { sealSecretKey: secretKey, sealed, expect: { botId } })
+    expect(openOffer(sealKeys.secretKey)).toEqual(offer)
+    expect(openOffer(nacl.box.keyPair().secretKey)).toBeNull()
+    expect(openOffer(sealKeys.secretKey, 'bot-2')).toBeNull()
   })
 })
