@@ -138,7 +138,8 @@ export function bindProviderListeners(session: PtyIpcSession): void {
           }
         }
         // Control replies may overtake stream data; physical exit must still retire late output.
-        if (syntheticExit) {
+        // A receipt that reached no window left this stream exit owing the renderer; still send it.
+        if (syntheticExit && accountRestartExit !== 'restart-renderer-only') {
           return
         }
         // Exit cause belongs to runtime records; preserve the renderer event contract.

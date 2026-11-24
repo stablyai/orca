@@ -15,6 +15,7 @@ type HoistedState = {
   killFenced: Mock<(...args: unknown[]) => Promise<PtyFencedTerminationOutcome>>
   fencedTerminationSupported: boolean
   rendererLive: boolean
+  syntheticExit: boolean
   selectedAccount: string
   homeRoute: string
   providerStartup: Promise<void> | undefined
@@ -26,6 +27,7 @@ const h = vi.hoisted((): HoistedState => ({
   killFenced: vi.fn<(...args: unknown[]) => Promise<PtyFencedTerminationOutcome>>(),
   fencedTerminationSupported: true,
   rendererLive: true,
+  syntheticExit: false,
   selectedAccount: 'new',
   homeRoute: 'account-home',
   providerStartup: undefined
@@ -138,7 +140,7 @@ function setup() {
   const sendPtyExitToRenderer = vi.fn()
   const sessionFields = {
     runtime,
-    consumeSyntheticKillExit: () => false,
+    consumeSyntheticKillExit: () => h.syntheticExit,
     sendPtyExitToRenderer,
     acceptPtyDataForRenderer: () => {},
     mainWindow: { isDestroyed: () => false },
@@ -203,6 +205,7 @@ describe('account restart exits arriving out of order', () => {
     h.handlers.clear()
     h.fencedTerminationSupported = true
     h.rendererLive = true
+    h.syntheticExit = false
     h.selectedAccount = 'new'
     h.homeRoute = 'account-home'
     h.providerStartup = undefined
@@ -514,5 +517,42 @@ describe('account restart exits arriving out of order', () => {
     releaseStartup()
     await expect(result).resolves.toMatchObject({ outcome: 'not-started', reason: 'superseded' })
     expect(h.killFenced).not.toHaveBeenCalled()
+  })
+
+  it('receipt, then stream, then ready: the window still gets the exit once', async () => {
+    const t = setup()
+    const result = t.request()
+    await t.stopDispatched()
+    h.rendererLive = false
+    t.release({ outcome: 'ended', writersExited: true })
+    await result
+    // The stream arrives before any window is ready; the receipt registered it as synthetic.
+    h.syntheticExit = true
+    t.emitExit()
+    h.rendererLive = true
+    t.sendPtyExitToRenderer.mockClear()
+    redeliverOwedCodexRestartExits({
+      intentionalPtyStops: t.runtime.intentionalPtyStops,
+      sendPtyExitToRenderer: t.sendPtyExitToRenderer
+    })
+    expect(t.sendPtyExitToRenderer).toHaveBeenCalledTimes(1)
+    expect(t.runtime.onPtyExit).toHaveBeenCalledTimes(1)
+  })
+
+  it('drops an owed exit once a successor process owns the id', async () => {
+    const t = setup()
+    const result = t.request()
+    await t.stopDispatched()
+    h.rendererLive = false
+    t.release({ outcome: 'ended', writersExited: true })
+    await result
+    ptyIncarnationById.set(t.pane.ptyId, 'inc-successor')
+    h.rendererLive = true
+    t.sendPtyExitToRenderer.mockClear()
+    redeliverOwedCodexRestartExits({
+      intentionalPtyStops: t.runtime.intentionalPtyStops,
+      sendPtyExitToRenderer: t.sendPtyExitToRenderer
+    })
+    expect(t.sendPtyExitToRenderer).not.toHaveBeenCalled()
   })
 })

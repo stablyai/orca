@@ -134,6 +134,11 @@ export class CodexAccountRestartMarks {
   forgetPane(paneKey: string): void {
     this.spentMarkByPane.delete(paneKey)
     this.refusedPanes.delete(paneKey)
+    for (const owed of this.rendererOwed) {
+      if (owed.paneKey === paneKey) {
+        this.rendererOwed.delete(owed)
+      }
+    }
     const mark = this.markByPane.get(paneKey)
     if (mark) {
       this.retireMark(mark)
