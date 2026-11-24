@@ -5,10 +5,8 @@ import type { TerminalLinkActionContext } from '../terminal-link-action-request'
 import type * as HttpLinkDestinations from '@/lib/browser/navigation/http-link-destinations'
 import { httpLinkActionDestinationsFor } from '@/lib/browser/navigation/http-link-destinations'
 import { handleTerminalHttpLink } from './terminal-url-link-hit-testing'
-import {
-  isConfirmedLocalTerminalSource,
-  resolveTerminalHttpLinkSourceOwner
-} from './terminal-http-link-source-owner'
+import { resolveTerminalHttpLinkSourceOwner } from './terminal-http-link-source-owner'
+import { terminalPaneHttpLinkDestinations } from './terminal-pane-http-link-destinations'
 
 const { openRoutedHttpLink } = vi.hoisted(() => ({ openRoutedHttpLink: vi.fn() }))
 vi.mock('@/lib/browser/navigation/http-link-destinations', async (importOriginal) => ({
@@ -181,18 +179,17 @@ describe('the localhost shortcut needs a pane known to run on this computer', ()
   function plainClick(ptyId: string | null): LinkActionRequest[] {
     const requests: LinkActionRequest[] = []
     const pane = transport(ptyId)
-    const owner = resolveTerminalHttpLinkSourceOwner(pane)
+    // The same per-pane call the terminal mount makes for its link callbacks.
     handleTerminalHttpLink(LOCALHOST, click(), {
       worktreeId: 'w',
       sourceTabId: 'tab',
-      sourceOwner: owner,
+      sourceOwner: resolveTerminalHttpLinkSourceOwner(pane),
       linkActionContext: linkContext('actions', requests),
-      actionDestinations: httpLinkActionDestinationsFor(
+      actionDestinations: terminalPaneHttpLinkDestinations(
         { openLinksInApp: false },
-        owner,
+        pane,
         false,
-        LOCALHOST,
-        isConfirmedLocalTerminalSource(pane)
+        LOCALHOST
       )
     })
     return requests

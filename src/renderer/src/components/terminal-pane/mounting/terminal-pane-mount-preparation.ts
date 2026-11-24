@@ -4,12 +4,11 @@ import type { HttpLinkActionDestinations as TerminalHttpLinkActionDestinations }
 import type { PaneManager } from '@/lib/pane-manager/pane-manager'
 import { useAppStore } from '@/store/index'
 import { getConnectionId } from '@/lib/workspace/ownership/connection-context'
-import { httpLinkActionDestinationsFor } from '@/lib/browser/navigation/http-link-destinations'
+import { terminalPaneHttpLinkDestinations } from '../links/http/terminal-pane-http-link-destinations'
 import '@/lib/browser/workspace/workspace-browser-tab-open'
 import { canOpenRemoteLinkInWorkspaceBrowser } from '@/lib/browser/workspace/workspace-browser-route-eligibility'
 import { resolvePaneWslDistro } from '../host-state/terminal-pane-wsl-distro'
 import {
-  isConfirmedLocalTerminalSource,
   resolveTerminalHttpLinkSourceOwner,
   resolveTerminalLinkRuntimeEnvironmentId,
   resolveTerminalRuntimeHandle
@@ -121,12 +120,11 @@ export function prepareTerminalPaneMount(
       getHttpLinkSourceOwnerForPane(paneId)
     )
   const getHttpLinkActionDestinations = (paneId: number, url?: string) =>
-    httpLinkActionDestinationsFor(
+    terminalPaneHttpLinkDestinations(
       deps.settingsRef.current,
-      getHttpLinkSourceOwnerForPane(paneId),
+      paneTransports.get(paneId),
       canOpenOwnedBrowserForPane(paneId),
-      url,
-      isConfirmedLocalTerminalSource(paneTransports.get(paneId))
+      url
     )
   const getLinkActionContext = (paneId: number): TerminalLinkActionContext | null => {
     const plainClickBehavior = terminalLinkClickBehaviorFor(deps.settingsRef.current)
