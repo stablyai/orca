@@ -13,6 +13,7 @@ import {
 import TabGroupSplitLayout from '../../tab-group/TabGroupSplitLayout'
 import { useAppStore } from '../../../store/index'
 import { layoutHoldsOnlyOverlayViews } from './released-layout-eligibility'
+import { hasWarmableDeferredTab } from '../workspace-mounting/unbound-restored-terminal-tab'
 import { WorkspacePaneOverlayLayers } from './WorkspacePaneOverlayLayers'
 import type { TerminalPrewarmStage } from '../worktree-prewarm/terminal-worktree-prewarm'
 
@@ -53,6 +54,13 @@ export const WorktreeSplitSurface = React.memo(function WorktreeSplitSurface({
       tabCount: state.unifiedTabsByWorktree[worktreeId]?.length ?? 0,
       groups: state.groupsByWorktree[worktreeId]
     }))
+  )
+  // Admission skips unbound restored tabs, so their restriction can outlive admission; it must not hold overlays unmounted.
+  const hasDeferredBackgroundMounts = useAppStore(
+    (state) =>
+      backgroundMountTabIds !== null &&
+      !isVisible &&
+      hasWarmableDeferredTab(state, worktreeId, backgroundMountTabIds)
   )
   const releaseGateOpen =
     shouldColdParkTerminalPanes && !isForceParked && browserPageIds.length === 0
@@ -101,10 +109,10 @@ export const WorktreeSplitSurface = React.memo(function WorktreeSplitSurface({
         surfaceReleased={surfaceReleased}
         mountRetainedBrowserOverlay={shouldMountRetainedBrowserOverlay({
           isWorktreeVisible: isVisible,
-          hasDeferredBackgroundMounts: backgroundMountTabIds !== null,
+          hasDeferredBackgroundMounts,
           needsBrowserGuestPaint
         })}
-        mountEmulatorOverlay={isVisible || backgroundMountTabIds === null}
+        mountEmulatorOverlay={isVisible || !hasDeferredBackgroundMounts}
       />
     </div>
   )
