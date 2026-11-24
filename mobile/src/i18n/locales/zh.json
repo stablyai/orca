@@ -7418,9 +7418,7 @@
         "tryIt": "在任意频道或私信中试试",
         "openInSlack": "在 Slack 中给它发消息",
         "preview": {
-          "you": "你",
-          "askPlain": "@{{name}} 总结一下这个话题",
-          "reply": "收到，马上处理"
+          "askPlain": "@{{name}} 总结一下这个话题"
         }
       },
       "connection": {
@@ -7451,7 +7449,17 @@
         "label": "配置刷新令牌",
         "paste": "粘贴",
         "accessPasted": "这是 Access Token。请复制它旁边的 Refresh Token",
-        "kept": "Orca Cloud 会加密保存此令牌，之后在此工作区添加 bots 只需点击一下"
+        "kept": "Orca Cloud 会加密保存此令牌，之后在此工作区添加 bots 只需点击一下",
+        "step2Title": "选择工作区",
+        "step3Title": "粘贴 Refresh Token"
+      },
+      "reconnect": {
+        "stopped": "Slack 已不再接受 {{host}} 使用的令牌。"
+      },
+      "problem": {
+        "code": "代码",
+        "computer": "电脑",
+        "workspace": "工作区"
       }
     },
     "cloudSignIn": {
@@ -7948,19 +7956,15 @@
         "connectTitle": "连接 Linear",
         "close": "关闭",
         "tryIt": "在任意 Linear 议题上试试",
-        "orLabel": "或添加标签",
-        "actsOnHost": "Orca 会在 {{host}} 上以该 Linear 用户的身份操作"
+        "orLabelLine": "或添加标签 {{label}}。"
       },
       "connect": {
         "another": "使用其他工作区",
-        "who": "{{workspace}} 中的 {{name}}",
-        "pickWorkspace": "登录并选择 {{name}} 要在其中工作的 Linear 工作区",
-        "button": "连接 Linear",
-        "handoff": "Linear 的登录页已在那台电脑上 Orca 的浏览器中打开。请选择工作区并点击 Authorize，完成后这里会自动更新",
-        "waitingOn": "请在 {{host}} 上完成 Linear 登录…",
         "stuck": "卡在显示“Could not find OAuth client”的 Linear 页面上？Orca 的 Linear 应用尚未向此工作区开放。拥有该应用的工作区的管理员必须将其设为公开",
         "pick": "选择一个 Linear 工作区",
-        "turnOn": "启用 {{name}}"
+        "handoffPick": "选择工作区并点击 Authorize。",
+        "signIn": "登录 Linear",
+        "pickSubtitle": "选择 {{name}} 工作的工作区"
       },
       "address": "linear.app/{{urlKey}}",
       "account": {
@@ -7996,8 +8000,7 @@
         "close": "关闭",
         "tryIt": "在任意议题或 PR 中试用",
         "preview": {
-          "ask": "评审这个 PR",
-          "reply": "收到，马上处理"
+          "ask": "评审这个 PR"
         },
         "pushesOnHost": "{{name}} 会在 {{host}} 上使用该电脑的 git 凭据推送代码"
       },
@@ -8005,8 +8008,8 @@
         "removeNote": "大家将无法再在 GitHub 上向它提问，它的 GitHub 人员名单也会被清空。Orca 应用不会被卸载",
         "removeConfirm": "移除",
         "finishSetup": "完成设置",
-        "addAccount": "添加另一个 GitHub 账户",
-        "refresh": "刷新"
+        "refresh": "刷新",
+        "addAnotherAccount": "添加另一个账户"
       },
       "allRepositories": "{{account}} 的所有仓库",
       "account": {
@@ -8017,14 +8020,12 @@
       "addMore": "添加仓库或组织",
       "checkingInstalls": "正在检查 GitHub 上的更改…",
       "connect": {
-        "pickRepositories": "登录并选择 {{name}} 可以在哪些仓库中工作",
         "readsOnly": "Orca 只会读取你的 GitHub 用户名和 ID",
-        "button": "连接 GitHub",
-        "handoff": "GitHub 的登录页已在那台电脑上 Orca 的浏览器中打开。请登录并选择仓库，完成后这里会自动更新",
-        "waitingOn": "请在 {{host}} 上完成 GitHub 登录…",
         "requested": "已请求组织所有者批准 Orca 应用",
         "notInstalled": "Orca 应用尚未安装在你的任何仓库上",
-        "turnOn": "启用 {{name}}"
+        "handoffPick": "登录并选择仓库。",
+        "signIn": "登录 GitHub",
+        "pickSubtitle": "选择它可以使用的仓库"
       },
       "allRepositoriesShort": "所有仓库"
     },
@@ -8038,7 +8039,10 @@
       "opensOnHost": "将在 Orca 中 {{host}} 的浏览器里打开",
       "signedInAs": "已以 {{who}} 身份登录",
       "continueOn": "在 {{host}} 上继续",
-      "cancel": "取消"
+      "cancel": "取消",
+      "signInTo": "登录 {{app}}",
+      "updatesWhenDone": "完成后这里会自动更新。",
+      "turnOnShort": "启用"
     },
     "google": {
       "isOn": "{{name}} 已启用 Google",

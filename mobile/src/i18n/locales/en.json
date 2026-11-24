@@ -7207,9 +7207,7 @@
         "tryIt": "Try it in any channel or DM",
         "openInSlack": "Message it in Slack",
         "preview": {
-          "you": "You",
-          "askPlain": "@{{name}} summarize this thread",
-          "reply": "On it."
+          "askPlain": "@{{name}} summarize this thread"
         },
         "pick": "Choose a Slack workspace.",
         "another": "Connect another workspace"
@@ -7242,20 +7240,23 @@
         "label": "Configuration refresh token",
         "paste": "Paste",
         "accessPasted": "That is the Access Token. Copy the Refresh Token, the one next to it.",
-        "kept": "Orca Cloud keeps this token encrypted, so your next bots in this workspace need one click."
+        "kept": "Orca Cloud keeps this token encrypted, so your next bots in this workspace need one click.",
+        "step2Title": "Pick the workspace",
+        "step3Title": "Paste the Refresh Token"
       },
       "problem": {
         "otherUser": "A different Slack account approved the connection.",
         "otherUserNext": "Someone signed in to another Slack account approved the Slack link, so {{bot}} can’t act as you. Get a new link and approve it while signed in to your own Slack account.",
         "expired": "Slack sign-in didn’t finish.",
-        "expiredNext": "The Slack link expired before anyone approved the connection."
+        "expiredNext": "The Slack link expired before anyone approved the connection.",
+        "code": "Code",
+        "computer": "Computer",
+        "workspace": "Workspace"
       },
       "reconnect": {
-        "whyHost": "Each computer keeps its own Slack token. Slack stopped accepting the one {{host}} uses.",
-        "paste": "Paste a new token to reconnect.",
         "whyNeeded": "Orca has no working Slack token for this workspace.",
-        "pasteNeeded": "Paste a token to continue.",
-        "continue": "Continue"
+        "continue": "Continue",
+        "stopped": "Slack stopped accepting the token {{host}} uses."
       }
     },
     "cloudSignIn": {
@@ -7663,19 +7664,15 @@
         "connectTitle": "Connect Linear",
         "close": "Close",
         "tryIt": "Try it on any Linear issue",
-        "orLabel": "or add the label",
-        "actsOnHost": "Orca acts as that Linear user from {{host}}."
+        "orLabelLine": "Or add the label {{label}}."
       },
       "connect": {
         "another": "Use another workspace",
-        "who": "{{name}} in {{workspace}}",
-        "pickWorkspace": "Sign in and pick the Linear workspace {{name}} works in.",
-        "button": "Connect Linear",
-        "handoff": "Linear’s sign-in is open in Orca’s browser there. Pick the workspace and choose Authorize; this updates when you finish.",
-        "waitingOn": "Finish signing in to Linear on {{host}}…",
         "stuck": "Stuck on a Linear page that says “Could not find OAuth client”? Orca’s Linear app isn’t open to this workspace yet. An admin of the workspace that owns the app must make it public.",
         "pick": "Choose a Linear workspace.",
-        "turnOn": "Turn on {{name}}"
+        "handoffPick": "Pick the workspace and choose Authorize.",
+        "signIn": "Sign in to Linear",
+        "pickSubtitle": "Pick the workspace {{name}} works in"
       },
       "address": "linear.app/{{urlKey}}",
       "account": {
@@ -7711,8 +7708,7 @@
         "close": "Close",
         "tryIt": "Try it on any issue or PR",
         "preview": {
-          "ask": "review this PR",
-          "reply": "On it."
+          "ask": "review this PR"
         },
         "pushesOnHost": "{{name}} pushes code from {{host}} with its git login."
       },
@@ -7720,8 +7716,8 @@
         "removeNote": "People can no longer ask it on GitHub, and its GitHub people are cleared. The Orca app stays installed.",
         "removeConfirm": "Remove",
         "finishSetup": "Finish setup",
-        "addAccount": "Add another GitHub account",
-        "refresh": "Refresh"
+        "refresh": "Refresh",
+        "addAnotherAccount": "Add another account"
       },
       "allRepositories": "All repositories of {{account}}",
       "account": {
@@ -7732,14 +7728,12 @@
       "addMore": "Add repositories or an organization",
       "checkingInstalls": "Checking GitHub for changes…",
       "connect": {
-        "pickRepositories": "Sign in and choose which repositories {{name}} can work in.",
         "readsOnly": "Orca only reads your GitHub username and id.",
-        "button": "Connect GitHub",
-        "handoff": "GitHub’s sign-in is open in Orca’s browser there. Sign in and choose the repositories; this updates when you finish.",
-        "waitingOn": "Finish signing in to GitHub on {{host}}…",
         "requested": "An owner of the organization has been asked to approve the Orca app.",
         "notInstalled": "The Orca app is not on any of your repositories yet.",
-        "turnOn": "Turn on {{name}}"
+        "handoffPick": "Sign in and choose the repositories.",
+        "signIn": "Sign in to GitHub",
+        "pickSubtitle": "Choose the repositories it can work in"
       },
       "allRepositoriesShort": "all repositories"
     },
@@ -7754,7 +7748,10 @@
       "signedInAs": "Signed in as {{who}}",
       "continueOn": "Continue on {{host}}",
       "openSignInPage": "Open sign-in page",
-      "cancel": "Cancel"
+      "cancel": "Cancel",
+      "signInTo": "Sign in to {{app}}",
+      "updatesWhenDone": "This updates when you finish.",
+      "turnOnShort": "Turn on"
     },
     "google": {
       "isOn": "Google is on for {{name}}",

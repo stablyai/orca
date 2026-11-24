@@ -1,20 +1,17 @@
 // What the Slack, Linear and GitHub pages share: Who can ask on one workspace (its waiting requests and
 // people), the hand-off while a sign-in finishes on the computer or in its tab here, and the default bot picker.
 import { useEffect, useState, type ReactNode } from 'react'
-import { ActivityIndicator, AppState, Text, View } from 'react-native'
-import { ArrowUpRight, Laptop } from 'lucide-react-native'
+import { ActivityIndicator, AppState } from 'react-native'
+import { ArrowUpRight } from 'lucide-react-native'
 import type { BotMember } from '../../../../src/shared/bot-types'
 import type { ConnectorAccessRequest } from '../../../../src/shared/connector-bot-access-contract'
-import { MobileStateButton, MobileStateView } from '../../components/feedback/MobileStateView'
 import { ListRow } from '../../components/list/ListGroup'
 import { SheetHeader } from '../../components/nav-bar/SheetHeader'
 import { ConfirmContent } from '../../components/sheets/ConfirmModal'
-import { SheetPrimaryButton } from '../../components/sheets/SheetPrimaryButton'
 import { useMobileTranslation } from '../../i18n/use-mobile-translation'
 import { useBackClaim } from '../../navigation/use-back-claim'
-import { SettingsNote, SettingsSection } from '../../settings/settings-screen-frame'
-import { colors, spacing } from '../../theme/mobile-theme'
-import { themedStyleSheet } from '../../theme/themed-styles'
+import { SettingsSection } from '../../settings/settings-screen-frame'
+import { colors } from '../../theme/mobile-theme'
 import { mobileBotAccessCopy } from '../mobile-bot-access-copy'
 import type { PhoneBot } from '../host-bots-operations'
 import { MobileBotAccessDecisionContent } from '../MobileBotAccessDecision'
@@ -161,37 +158,35 @@ export function useFollowHost(on: boolean, refresh: () => Promise<void>): void {
 /** Linear's or GitHub's sign-in, open in Orca's browser on the host: the phone waits until it ends. */
 export function ConnectorHandoff(props: {
   hostName: string
+  /** What to do there, e.g. pick the workspace and choose Authorize. */
   message: string
-  waiting: string
   /** Said once the wait has run long, e.g. Linear's likely error page. */
   stuck?: string | null
   /** Shows the sign-in on this phone; null where the host can't stream it here. */
   onOpenPage: (() => void) | null
-  onCancel: () => void
 }) {
   const t = useMobileTranslation()
   return (
-    <>
-      <MobileStateView
-        iconElement={<Laptop size={28} color={colors.textPrimary} strokeWidth={1.75} />}
+    <SettingsSection
+      first
+      footer={props.stuck ?? t('bots.connect.updatesWhenDone', 'This updates when you finish.')}
+    >
+      <ListRow
+        leading={<ActivityIndicator size="small" color={colors.textSecondary} />}
         title={t('bots.connect.continueOn', 'Continue on {{host}}', { host: props.hostName })}
-        message={props.message}
-      >
-        {props.onOpenPage ? (
-          <SheetPrimaryButton
-            label={t('bots.connect.openSignInPage', 'Open sign-in page')}
-            icon={ArrowUpRight}
-            onPress={props.onOpenPage}
-          />
-        ) : null}
-        <View style={styles.waiting}>
-          <ActivityIndicator size="small" color={colors.textSecondary} />
-          <Text style={styles.waitingText}>{props.waiting}</Text>
-        </View>
-        <MobileStateButton label={t('bots.connect.cancel', 'Cancel')} onPress={props.onCancel} />
-      </MobileStateView>
-      {props.stuck ? <SettingsNote>{props.stuck}</SettingsNote> : null}
-    </>
+        wrapTitle
+        subtitle={props.message}
+      />
+      {props.onOpenPage ? (
+        <ListRow
+          leading={<ArrowUpRight size={18} color={colors.accentBlue} />}
+          accent
+          title={t('bots.connect.openSignInPage', 'Open sign-in page')}
+          accessibilityRole="link"
+          onPress={props.onOpenPage}
+        />
+      ) : null}
+    </SettingsSection>
   )
 }
 
@@ -239,14 +234,3 @@ export function ConnectorDefaultBotPage(props: {
     </>
   )
 }
-
-const styles = themedStyleSheet(() => ({
-  waiting: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: spacing.sm,
-    marginBottom: spacing.md
-  },
-  waitingText: { flexShrink: 1, color: colors.textSecondary, fontSize: 13 }
-}))
