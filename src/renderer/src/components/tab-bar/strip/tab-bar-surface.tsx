@@ -154,7 +154,7 @@ export function renderTabBarSurface(
       segments
     })
 
-  const sideChatOnly = itemProjection.sideChatOnly && clientHostedBrowserRows.length === 0
+  const sideChatOnly = itemProjection.sideChatOnly && allClientHostedBrowserRows.length === 0
   const hasTabs = orderedItems.length + clientHostedBrowserRows.length > 0
   return (
     <TabStripDensityContext value={density}>

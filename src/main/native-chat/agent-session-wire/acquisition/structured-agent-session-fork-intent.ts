@@ -26,21 +26,17 @@ export async function resolveStructuredAgentSessionForkIntent(input: {
       `${acpAgentName(input.agent)} could not reach the execution host. Reconnect to the host, then try again.`
     )
   }
-  if (input.forkFrom.current) {
-    return (
-      resolveCommittedStructuredAgentSessionAdoptionIntent({ ...input, host }) ??
-      prepareStructuredAgentSessionCurrentFork({ ...input, host, forkFrom: input.forkFrom })
-    )
-  }
   const resolved =
     resolveCommittedStructuredAgentSessionAdoptionIntent({ ...input, host }) ??
-    (await prepareStructuredAgentSessionFork({
-      ...input,
-      host,
-      sessionId: input.forkFrom.sessionId,
-      throughItemId: input.forkFrom.throughItemId,
-      envelope: { ...input.envelope, expectedRuntimeFence: null, payloadFingerprint: '' }
-    }))
+    (input.forkFrom.current
+      ? await prepareStructuredAgentSessionCurrentFork({ ...input, host, forkFrom: input.forkFrom })
+      : await prepareStructuredAgentSessionFork({
+          ...input,
+          host,
+          sessionId: input.forkFrom.sessionId,
+          throughItemId: input.forkFrom.throughItemId,
+          envelope: { ...input.envelope, expectedRuntimeFence: null, payloadFingerprint: '' }
+        }))
   // A fork in its source's workspace runs where the source runs; its copied conversation is kept
   // under that folder.
   const source = host.deps.store.getRecord(input.forkFrom.sessionId)
