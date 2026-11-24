@@ -9,6 +9,7 @@ const image = {
   toDataURL: () => 'data:image/png;base64,AA',
   getSize: () => ({ width: 8, height: 8 })
 }
+const captured = { dataUrl: 'data:image/png;base64,AA', width: 8, height: 8 }
 
 it('abandons a stalled readback at its deadline, and starts no second readback until it settles', async () => {
   vi.useFakeTimers()
@@ -32,57 +33,77 @@ it('abandons a stalled readback at its deadline, and starts no second readback u
   // Draw gives up, but paint stays held while the native readback is still in flight.
   expect(paint).toEqual(['hold'])
 
-  // The abandoned readback still owns the guest's one native slot.
-  await expect(
-    captureCleanGuestPage(guest, new AbortController().signal, holdPaint, 1_000)
-  ).resolves.toBeNull()
+  // The abandoned readback still owns the guest's capture lane: the next Draw waits, then gives up.
+  const second = captureCleanGuestPage(guest, new AbortController().signal, holdPaint, 1_000)
+  await vi.advanceTimersByTimeAsync(1_000)
+  await expect(second).resolves.toBeNull()
   expect(readbacks).toHaveLength(1)
+  expect(paint).toEqual(['hold', 'hold', 'release'])
 
   readbacks[0]()
   await vi.advanceTimersByTimeAsync(0)
-  expect(paint).toEqual(['hold', 'release'])
+  expect(paint).toEqual(['hold', 'hold', 'release', 'release'])
   const next = captureCleanGuestPage(guest, new AbortController().signal, holdPaint, 1_000)
+  await vi.advanceTimersByTimeAsync(0)
   readbacks[1]()
-  await expect(next).resolves.toEqual({ dataUrl: 'data:image/png;base64,AA', width: 8, height: 8 })
+  await expect(next).resolves.toEqual(captured)
 })
 
-it('runs the paint lease restore capture only after an abandoned readback settles', async () => {
+it('never overlaps Draw readbacks with the paint lease restore capture, in either order', async () => {
   vi.useFakeTimers()
   const throttle = new RendererPublicationThrottle()
   const calls: string[] = []
-  let finishReadback: (() => void) | undefined
+  const pending: { readback: (() => void)[]; restore: (() => void)[] } = {
+    readback: [],
+    restore: []
+  }
   const guest = {
     isDestroyed: () => false,
     isFocused: () => false,
     setBackgroundThrottling: () => {},
     capturePage: (rect?: unknown) => {
-      if (rect) {
-        // The lease's visibility restore.
-        calls.push('restore')
-        return Promise.resolve(image)
-      }
-      calls.push('readback')
+      const kind = rect ? 'restore' : 'readback'
+      calls.push(kind)
       return new Promise<typeof image>((resolve) => {
-        finishReadback = () => resolve(image)
+        pending[kind].push(() => resolve(image))
       })
     }
   }
+  const leases: boolean[] = []
+  throttle.observe(guest, (leased) => leases.push(leased))
+  const draw = (): ReturnType<typeof captureCleanGuestPage> =>
+    captureCleanGuestPage(
+      guest,
+      new AbortController().signal,
+      () => throttle.acquire(guest),
+      1_000,
+      5_000
+    )
 
-  const draw = captureCleanGuestPage(
-    guest,
-    new AbortController().signal,
-    () => throttle.acquire(guest),
-    1_000
-  )
+  // Draw abandons its readback at the deadline; the paint cap then releases the lease exactly once.
+  const abandoned = draw()
   await vi.advanceTimersByTimeAsync(1_000)
-  await expect(draw).resolves.toBeNull()
+  await expect(abandoned).resolves.toBeNull()
+  await vi.advanceTimersByTimeAsync(5_000)
+  expect(leases).toEqual([true, false])
+  // The released lease's restore waits for the readback still in flight.
   await vi.advanceTimersByTimeAsync(100)
   expect(calls).toEqual(['readback'])
 
-  finishReadback?.()
-  await vi.advanceTimersByTimeAsync(0)
+  pending.readback[0]()
   await vi.advanceTimersByTimeAsync(0)
   expect(calls).toEqual(['readback', 'restore'])
+  expect(leases).toEqual([true, false])
+
+  // The restore is still pending when the next Draw starts: Draw waits for it, then captures.
+  const next = draw()
+  await vi.advanceTimersByTimeAsync(100)
+  expect(calls).toEqual(['readback', 'restore'])
+  pending.restore[0]()
+  await vi.advanceTimersByTimeAsync(0)
+  expect(calls).toEqual(['readback', 'restore', 'readback'])
+  pending.readback[1]()
+  await expect(next).resolves.toEqual(captured)
 })
 
 it('leaves the guest usable for the next Draw when taking the paint lease fails', async () => {
@@ -94,5 +115,5 @@ it('leaves the guest usable for the next Draw when taking the paint lease fails'
   ).resolves.toBeNull()
   await expect(
     captureCleanGuestPage(guest, new AbortController().signal, () => () => {})
-  ).resolves.toEqual({ dataUrl: 'data:image/png;base64,AA', width: 8, height: 8 })
+  ).resolves.toEqual(captured)
 })

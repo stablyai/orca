@@ -1,7 +1,5 @@
 import { useWebviewInputLock } from '../host-guest/input/use-webview-input-lock'
-import { useBrowserAnnotateToolSwitch } from '../annotate/palette/use-browser-annotate-tool-switch'
-import { browserPageDocumentIdentity } from '../annotate/palette/browser-page-document-identity'
-import { useBrowserGrabShortcuts } from '../annotate/use-browser-grab-shortcuts'
+import { useBrowserPageAnnotateTools } from '../annotate/palette/use-browser-page-annotate-tools'
 import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { cn } from '@/lib/class-names'
@@ -264,31 +262,16 @@ export function BrowserPagePane({
     chromeShortcutScope,
     setFindOpen
   })
-  const toolSwitch = useBrowserAnnotateToolSwitch({
+  const toolSwitch = useBrowserPageAnnotateTools({
     grab,
-    grabIntent: grabAnnotations.grabIntent,
-    startGrabIntent: grabAnnotations.startGrabIntent,
-    cancelPendingBrowserCapture: grabAnnotations.cancelPendingBrowserCapture,
+    grabAnnotations,
     markup,
-    canPickElements: !isBlankTab && !browserTab.loadError,
-    toolTargetId: browserTab.id,
-    ...browserPageDocumentIdentity(browserTab, documentGeneration)
-  })
-  useBrowserGrabShortcuts({
-    transport: grab.transport,
-    browserTabId: browserTab.id,
+    browserTab,
+    documentGeneration,
+    isBlankTab,
+    isActive,
     workspaceId,
-    chromeShortcutScope,
-    markupIsActive: markup.isActive,
-    toolsDisabled: isBlankTab || Boolean(browserTab.loadError),
-    startGrabIntent: toolSwitch.toggleTool,
-    handleGrabActionShortcut: grabAnnotations.handleGrabActionShortcut,
-    grabIsInteractive: grab.state !== 'idle' && grab.state !== 'error',
-    palette: {
-      isActive,
-      active: toolSwitch.activeTool !== null,
-      onToolKey: toolSwitch.selectToolByKey
-    }
+    chromeShortcutScope
   })
   useBrowserPageWebviewShortcuts({
     browserTabId: browserTab.id,

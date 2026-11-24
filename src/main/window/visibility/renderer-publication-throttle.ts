@@ -1,3 +1,5 @@
+import { occupyNativeCaptureLane, pendingNativeCapture } from './native-capture-lane'
+
 export type RendererPublicationThrottleTarget = {
   isDestroyed?: () => boolean
   isFocused?: () => boolean
@@ -17,6 +19,7 @@ export class RendererPublicationThrottle {
     RendererPublicationThrottleTarget,
     ReturnType<typeof setTimeout>
   >()
+  private readonly deferredRestores = new Set<RendererPublicationThrottleTarget>()
   private readonly observers = new Map<
     RendererPublicationThrottleTarget,
     Set<(leased: boolean) => void>
@@ -66,21 +69,41 @@ export class RendererPublicationThrottle {
       // Debugger detach drains promise callbacks inside native destruction, before isDestroyed flips.
       const restore = setTimeout(() => {
         this.pendingRestores.delete(target)
-        try {
-          if (target.isDestroyed?.() === true) {
-            return
-          }
-          target.setBackgroundThrottling(true)
-          // Focused targets have no swallowed hide: embedder key status is lost under a cover.
-          if (target.isFocused?.() !== true) {
-            // Re-throttling cannot replay a swallowed hide; stayHidden capture completion can.
-            target.capturePage(REHIDE_CAPTURE_RECT, { stayHidden: true }).catch(() => {})
-          }
-        } catch {
-          // Native calls can also throw synchronously when the renderer is unavailable.
-        }
+        this.restoreWhenCaptureLaneFree(target)
       }, 0)
       this.pendingRestores.set(target, restore)
+    }
+  }
+
+  // A native capture still in flight (e.g. an abandoned Draw readback) must settle before the restore submits its own.
+  private restoreWhenCaptureLaneFree(target: RendererPublicationThrottleTarget): void {
+    if (this.leasesByTarget.has(target) || this.deferredRestores.has(target)) {
+      return
+    }
+    const busy = pendingNativeCapture(target)
+    if (busy) {
+      this.deferredRestores.add(target)
+      void busy.then(() => {
+        this.deferredRestores.delete(target)
+        this.restoreWhenCaptureLaneFree(target)
+      })
+      return
+    }
+    try {
+      if (target.isDestroyed?.() === true) {
+        return
+      }
+      target.setBackgroundThrottling(true)
+      // Focused targets have no swallowed hide: embedder key status is lost under a cover.
+      if (target.isFocused?.() !== true) {
+        // Re-throttling cannot replay a swallowed hide; stayHidden capture completion can.
+        occupyNativeCaptureLane(
+          target,
+          target.capturePage(REHIDE_CAPTURE_RECT, { stayHidden: true }).catch(() => {})
+        )
+      }
+    } catch {
+      // Native calls can also throw synchronously when the renderer is unavailable.
     }
   }
 

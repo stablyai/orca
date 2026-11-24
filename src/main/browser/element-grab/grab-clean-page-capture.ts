@@ -1,4 +1,8 @@
 import type { BrowserCleanPageCapture } from '../../../shared/browser/element-grab/browser-grab-clean-capture'
+import {
+  occupyNativeCaptureLane,
+  pendingNativeCapture
+} from '../../window/visibility/native-capture-lane'
 
 type ReadbackImage = {
   isEmpty: () => boolean
@@ -11,8 +15,6 @@ type ReadbackGuest = { isDestroyed: () => boolean; capturePage: () => Promise<Re
 export const CLEAN_CAPTURE_DEADLINE_MS = 10_000
 /** Bounds how long an abandoned readback keeps the guest unthrottled if Electron never settles it. */
 export const ABANDONED_READBACK_PAINT_CAP_MS = 60_000
-// One native readback per guest: an abandoned one still occupies its slot until Electron settles it.
-const reading = new WeakSet<ReadbackGuest>()
 
 function once(run: () => void): () => void {
   let done = false
@@ -27,9 +29,9 @@ function once(run: () => void): () => void {
 /**
  * Cancellation does not end the wait. The caller's admission stays held until Electron settles the
  * readback or the deadline abandons it, so no successor arm or capture starts while native work is
- * in flight. The paint lease lives as long as the readback itself (capped), because releasing it
- * schedules a visibility-restore capture that must not overlap this one. A cancelled capture's late
- * bytes are dropped, never handed to Draw.
+ * in flight. The guest's native capture lane is shared with the paint lease's visibility restore:
+ * Draw waits (within its deadline) for a capture already in flight, and its own readback keeps the
+ * restore from submitting until it settles. A cancelled capture's late bytes are dropped.
  */
 export async function captureCleanGuestPage(
   guest: ReadbackGuest,
@@ -38,40 +40,49 @@ export async function captureCleanGuestPage(
   deadlineMs = CLEAN_CAPTURE_DEADLINE_MS,
   paintCapMs = ABANDONED_READBACK_PAINT_CAP_MS
 ): Promise<BrowserCleanPageCapture | null> {
-  if (signal.aborted || guest.isDestroyed() || reading.has(guest)) {
+  if (signal.aborted || guest.isDestroyed()) {
     return null
   }
   let releasePaint: () => void
   try {
+    // Taking the lease first cancels a restore that has not been submitted yet.
     releasePaint = once(holdPaint())
   } catch {
-    // No lease and no readback: nothing holds the guest's slot, so the next Draw can try again.
+    return null
+  }
+  let deadlineTimer: ReturnType<typeof setTimeout> | undefined
+  const deadline = new Promise<null>((resolve) => {
+    deadlineTimer = setTimeout(() => resolve(null), deadlineMs)
+  })
+  for (let busy = pendingNativeCapture(guest); busy; busy = pendingNativeCapture(guest)) {
+    if ((await Promise.race([busy.then(() => true), deadline])) !== true) {
+      releasePaint()
+      return null
+    }
+  }
+  if (signal.aborted || guest.isDestroyed()) {
+    clearTimeout(deadlineTimer)
+    releasePaint()
     return null
   }
   let physical: Promise<ReadbackImage | null>
   try {
     physical = guest.capturePage().catch(() => null)
   } catch {
+    clearTimeout(deadlineTimer)
     releasePaint()
     return null
   }
-  reading.add(guest)
+  occupyNativeCaptureLane(guest, physical)
   let paintCap: ReturnType<typeof setTimeout> | undefined
   let settled = false
   void physical.then(() => {
     settled = true
     clearTimeout(paintCap)
-    reading.delete(guest)
     releasePaint()
   })
-  let deadline: ReturnType<typeof setTimeout> | undefined
-  const image = await Promise.race([
-    physical,
-    new Promise<null>((resolve) => {
-      deadline = setTimeout(() => resolve(null), deadlineMs)
-    })
-  ])
-  clearTimeout(deadline)
+  const image = await Promise.race([physical, deadline])
+  clearTimeout(deadlineTimer)
   if (!settled) {
     paintCap = setTimeout(releasePaint, paintCapMs)
   }
