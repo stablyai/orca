@@ -138,6 +138,12 @@
       "caveat": "Cela ouvre une nouvelle page sur l'hôte distant à la dernière adresse de cette page. L'état de la page connectée et celui des autres pages transitoires peuvent différer, et une page provenant d'une soumission de formulaire s'ouvre en blanc.",
       "failed": "Impossible d'ouvrir cette page sur l'hôte distant. Vérifiez la connexion et réessayez."
     },
+    "deviceMove": {
+      "toThisComputer": "Ouvrir sur cet ordinateur",
+      "toHost": "Ouvrir sur {{host}}",
+      "tooltip": "Ouvre cette adresse dans un nouvel onglet de l'autre côté et ferme celui-ci. Vous devrez peut-être vous reconnecter.",
+      "failedToThisComputer": "Impossible d'ouvrir cette page sur cet ordinateur."
+    },
     "sshRoute": {
       "preparingTitle": "Connexion via l'hôte SSH",
       "errorTitle": "Routage du navigateur SSH indisponible",

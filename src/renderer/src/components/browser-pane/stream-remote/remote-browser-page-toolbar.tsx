@@ -6,6 +6,7 @@ import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip
 import { useTranslate } from '@/i18n/use-translate'
 import { BrowserChromeToolbar } from '../assemble-chrome/toolbar/browser-chrome-toolbar'
 import { BrowserToolbarMenu } from '../assemble-chrome/toolbar/BrowserToolbarMenu'
+import { BrowserPageDeviceMoveItem } from '../navigate/device-move/browser-page-device-move-item'
 import type { BrowserPageSiteDisplaySource } from '../assemble-chrome/toolbar/browser-page-site-display-source'
 import { BrowserPageStateChips } from '../assemble-chrome/address-bar/browser-address-chips'
 import { getOpenableExternalUrl, toDisplayUrl } from '../describe-page/browser-page-url-display'
@@ -216,7 +217,18 @@ export function RemoteBrowserPageToolbar({
             onOpenDevTools: null,
             onOpenExternal: externalUrl
               ? () => void openAppHttpLink(externalUrl, { worktreeId, destination: 'system' })
-              : null
+              : null,
+            deviceMoveItem: (
+              <BrowserPageDeviceMoveItem
+                target={{
+                  browserPageId,
+                  worktreeId,
+                  environmentId: runtimeEnvironmentId,
+                  url: pageUrl,
+                  destination: 'client'
+                }}
+              />
+            )
           }}
           extensionsSub={null}
           streamedPage={{ environmentId: runtimeEnvironmentId, remotePageId }}

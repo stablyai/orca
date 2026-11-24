@@ -23,6 +23,7 @@ import { RemoteRuntimeEgressIndicator } from '../feedback/browser-egress-indicat
 import { BrowserChromeToolbar } from '../toolbar/browser-chrome-toolbar'
 import { BrowserReloadControl } from '../toolbar/browser-reload-control'
 import { BrowserToolbarMenu } from '../toolbar/BrowserToolbarMenu'
+import { BrowserPageDeviceMoveItem } from '../../navigate/device-move/browser-page-device-move-item'
 import { useServerBrowserPageProfileId } from '../profile-routing/use-server-browser-page-profile-id'
 import {
   BrowserExtensionToolbar,
@@ -181,7 +182,18 @@ export function ClientHostedBrowserPageToolbar({
             onOpenDevTools: () => void window.api.browser.openDevTools({ browserPageId }),
             onOpenExternal: externalUrl
               ? () => void openAppHttpLink(externalUrl, { worktreeId, destination: 'system' })
-              : null
+              : null,
+            deviceMoveItem: (
+              <BrowserPageDeviceMoveItem
+                target={{
+                  browserPageId,
+                  worktreeId,
+                  environmentId: runtimeEnvironmentId,
+                  url: browserTab.url,
+                  destination: 'server'
+                }}
+              />
+            )
           }}
           extensionsSub={
             extensionToolbar ? (

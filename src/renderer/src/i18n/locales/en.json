@@ -433,6 +433,12 @@
       "caveat": "This opens a new page on the remote host at this page’s last address. Signed-in and other transient page state may differ, and a page that came from a form submission opens blank.",
       "failed": "Couldn't open this page on the remote host. Check the connection and try again."
     },
+    "deviceMove": {
+      "toThisComputer": "Open on this computer",
+      "toHost": "Open on {{host}}",
+      "tooltip": "Opens this address in a new tab on the other side and closes this one. You may need to sign in again.",
+      "failedToThisComputer": "Couldn't open this page on this computer."
+    },
     "sshRoute": {
       "preparingTitle": "Connecting through the SSH host",
       "errorTitle": "SSH browser routing unavailable",

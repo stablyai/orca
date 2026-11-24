@@ -367,6 +367,12 @@
       "caveat": "這會在遠端主機上，以此頁面上次的網址開啟新頁面。登入狀態及其他暫存狀態可能不同；透過表單提交開啟的頁面則會顯示空白。",
       "failed": "無法在遠端主機上開啟此頁面。檢查連線並重試。"
     },
+    "deviceMove": {
+      "toThisComputer": "在這台電腦上開啟",
+      "toHost": "在 {{host}} 上開啟",
+      "tooltip": "在另一端的新分頁中開啟此位址，並關閉此分頁。你可能需要重新登入。",
+      "failedToThisComputer": "無法在這台電腦上開啟此頁面。"
+    },
     "sshRoute": {
       "preparingTitle": "透過 SSH 主機連線",
       "errorTitle": "SSH 瀏覽器路由無法使用",
