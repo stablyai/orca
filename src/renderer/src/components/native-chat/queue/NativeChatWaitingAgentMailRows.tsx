@@ -1,5 +1,12 @@
 import { memo, useContext, useState } from 'react'
 import { NativeChatAgentMessageCard } from '../messages/rows/NativeChatAgentMessageCard'
+import { agentMessageRowLead } from '../messages/rows/agent-message-row-lead'
+import { unnamedSenderLabel } from '../messages/agent-senders/native-chat-agent-message-sender-label'
+import { useTranslate, type Translate } from '@/i18n/use-translate'
+import {
+  agentMessagePrimarySender,
+  agentMessageSenderLabel
+} from '../../../../../shared/agent-session/view/messages/agent-message-presentation'
 import { NativeChatWaitingAgentMailRowsContext } from './NativeChatWaitingAgentMailActions'
 import type { NativeChatMessage } from '../../../../../shared/native-chat/native-chat-types'
 import type { OrchestrationSessionWorker } from '../../../../../shared/orchestration-session-workers'
@@ -34,7 +41,8 @@ export const NativeChatWaitingAgentMailRows = memo(
 )
 
 /** One waiting row. Far from view it keeps only its height and none of its card, so its sender's
- *  status, name and worker reach only rows near view. */
+ *  status, name and worker reach only rows near view. Held, it is still a named stop for Tab and
+ *  screen readers, and drawn while focus is in it. */
 const NativeChatWaitingAgentMailRow = memo(function NativeChatWaitingAgentMailRow({
   message
 }: {
@@ -46,6 +54,7 @@ const NativeChatWaitingAgentMailRow = memo(function NativeChatWaitingAgentMailRo
   // A row holding keyboard focus stays drawn, so scrolling it away never drops the focused button.
   const [focused, setFocused] = useState(false)
   const held = !shown && height !== null && !focused
+  const t = useTranslate()
   if (!message.from) {
     return null
   }
@@ -54,8 +63,12 @@ const NativeChatWaitingAgentMailRow = memo(function NativeChatWaitingAgentMailRo
       ref={setElement}
       data-native-chat-message-id={message.id}
       // A held row is empty, so in a flex column (setup mail block) it would shrink to nothing.
-      className="shrink-0"
+      className="shrink-0 rounded-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
       style={held ? { height } : undefined}
+      // -1 once drawn: focus that drew the card stays here until Tab moves into its controls.
+      tabIndex={held ? 0 : -1}
+      role={held ? 'group' : undefined}
+      aria-label={held ? heldRowLabel(message, message.from, t) : undefined}
       onFocus={() => setFocused(true)}
       onBlur={(event) => setFocused(event.currentTarget.contains(event.relatedTarget))}
     >
@@ -83,3 +96,17 @@ const NativeChatWaitingAgentMailCard = memo(function NativeChatWaitingAgentMailC
     </NativeChatWorkersContext.Provider>
   ) : null
 })
+
+/** What a held row says: its row's opening words, the sender's saved name, and that it waits. */
+function heldRowLabel(
+  message: NativeChatMessage,
+  from: NonNullable<NativeChatMessage['from']>,
+  t: Translate
+): string {
+  const sender = agentMessagePrimarySender(from)
+  const fallback = unnamedSenderLabel(t)
+  const name = sender
+    ? agentMessageSenderLabel({ localChat: false, snapshotName: sender.name, fallback })
+    : fallback
+  return `${agentMessageRowLead(from, message, t)} ${name}, ${t('components.native-chat.agentMessage.row.notSentYet', 'not sent yet')}`
+}
