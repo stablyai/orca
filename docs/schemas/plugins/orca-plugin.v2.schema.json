@@ -186,6 +186,131 @@
       "default": {},
       "type": "object",
       "properties": {
+        "pipelineProfiles": {
+          "default": [],
+          "description": "Versioned native task pipelines. Commands for checks are configured separately by the project owner. At most 16.",
+          "x-orca-since": "1.4.255",
+          "maxItems": 16,
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 256
+              },
+              "version": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 64
+              },
+              "title": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 120
+              },
+              "description": {
+                "type": "string",
+                "maxLength": 500
+              },
+              "roles": {
+                "type": "object",
+                "properties": {
+                  "primary": {
+                    "type": "object",
+                    "properties": {
+                      "agent": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 64
+                      },
+                      "model": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 128
+                      },
+                      "effort": {
+                        "type": "string",
+                        "enum": [
+                          "low",
+                          "medium",
+                          "high",
+                          "xhigh",
+                          "max",
+                          "ultra"
+                        ]
+                      }
+                    },
+                    "required": [
+                      "agent"
+                    ],
+                    "additionalProperties": false
+                  },
+                  "reviewer": {
+                    "type": "object",
+                    "properties": {
+                      "agent": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 64
+                      },
+                      "model": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 128
+                      },
+                      "effort": {
+                        "type": "string",
+                        "enum": [
+                          "low",
+                          "medium",
+                          "high",
+                          "xhigh",
+                          "max",
+                          "ultra"
+                        ]
+                      }
+                    },
+                    "required": [
+                      "agent"
+                    ],
+                    "additionalProperties": false
+                  }
+                },
+                "required": [
+                  "primary",
+                  "reviewer"
+                ],
+                "additionalProperties": false
+              },
+              "checks": {
+                "minItems": 1,
+                "maxItems": 16,
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 256
+                }
+              },
+              "maxFixCycles": {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 2
+              }
+            },
+            "required": [
+              "id",
+              "version",
+              "title",
+              "roles",
+              "checks",
+              "maxFixCycles"
+            ],
+            "additionalProperties": false
+          }
+        },
         "panels": {
           "default": [],
           "description": "Sidebar panels. At most 64.",

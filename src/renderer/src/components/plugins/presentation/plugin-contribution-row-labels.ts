@@ -2,6 +2,19 @@ import { translate } from '@/i18n/i18n'
 import type { Translate } from '@/i18n/use-translate'
 import type { PluginContribution } from './plugin-contributions'
 
+export function pipelineContributionRows(
+  titles: readonly string[],
+  t: Translate
+): PluginContribution[] {
+  return titles.map((title, index) => ({
+    key: `pipelineProfiles:${index}`,
+    kind: 'pipelineProfiles',
+    title,
+    detail: t('taskPipelines.label', 'Task pipeline'),
+    tone: 'default'
+  }))
+}
+
 export function withMode(
   kindLabel: string,
   mode: 'light' | 'dark' | 'unknown' | undefined,

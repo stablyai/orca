@@ -30,6 +30,7 @@ Add `"$schema": "https://raw.githubusercontent.com/stablyai/orca/main/docs/schem
 | `engines.orca` | string | yes | 1.4.160 | Oldest Orca release this plugin runs on, as `>=x.y.z`. Raise it to the newest "Since" of any field you use; a format 2 manifest needs at least `>=1.4.245`, because older Orca cannot read format 2. Example: `">=1.4.245"` |
 | `main` | string | no | 1.4.160 | Node entry run in an out-of-process plugin worker: a `.js`/`.mjs` module, or a `.ts`/`.mts` module that Orca transpiles when it loads (needs `engines.orca` `>=1.4.246`). Requires the `trusted-worker` execution profile, and is required by it, by `contributes.events`, by `contributes.hooks` and by any command without an `action`. Relative to the plugin root; `..` segments and Windows device names such as `CON` are refused. Example: `"dist/main.mjs"` |
 | `contributes` | object | no | 1.4.160 | What the plugin adds to Orca. Every point defaults to empty. |
+| `contributes.pipelineProfiles` | object[] | no | 1.4.255 | Versioned native task pipelines. Commands for checks are configured separately by the project owner. At most 16. |
 | `contributes.panels` | [PanelContribution](#panelcontribution)[] | no | 1.4.160 | Sidebar panels. At most 64. |
 | `contributes.commands` | [CommandContribution](#commandcontribution)[] | no | 1.4.160 | Command palette entries. At most 256. |
 | `contributes.events` | [EventContribution](#eventcontribution)[] | no | 1.4.160 | Events delivered to the plugin worker. At most 5. |

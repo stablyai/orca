@@ -72,6 +72,7 @@ type WorkerAgentPlacementArgs = {
   onStage: (stage: string) => void
   /** A follow-up continuing a worker; a closed one is brought back in place of a launch. */
   followUp?: WorkerFollowUp | undefined
+  requiredMode?: 'structured' | 'terminal'
 }
 
 /** Setup evidence for existing placements and failures before placement creation. */
@@ -256,6 +257,9 @@ function workerSurfaceFactory(
   }
   return {
     createStructuredSession: async ({ worktreeId }) => {
+      if (args.requiredMode === 'terminal') {
+        throw new Error('pipeline_surface_unavailable')
+      }
       recordSurfaceStage(worktreeId)
       const session = await createStructuredWorkerSessionForWorktree({
         runtime: args.runtime,
@@ -273,6 +277,9 @@ function workerSurfaceFactory(
       }
     },
     createTerminalAgent: async ({ worktreeId }) => {
+      if (args.requiredMode === 'structured') {
+        throw new Error('pipeline_surface_unavailable')
+      }
       recordSurfaceStage(worktreeId)
       const terminal = await createExistingWorktreeWorkerTerminal({
         runtime: args.runtime,

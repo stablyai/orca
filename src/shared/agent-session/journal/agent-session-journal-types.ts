@@ -12,11 +12,10 @@ import type { AgentSessionProviderContextBoundary } from '../conversation-contex
 // unreadable versions/kinds must refuse writes rather than be skipped or compacted away.
 
 import type { UnreadAgentSessionFailureFact } from '../failures/agent-session-failure'
+import type { AgentJournalTurnLifecycle } from '../lifecycle/records/agent-session-turn-lifecycle'
 import type { AgentSessionFailureRowWords } from '../failures/agent-session-failure-words'
 import type { AgentSessionQuestionAnswer } from '../requests/prompts/agent-session-question-answer'
-import type { AgentJournalTurnOutcome } from '../../agent-status/lifecycle/agent-turn-outcome'
 import type { NativeChatToolMetadata } from '../../native-chat/tools/native-chat-tool-identity'
-import type { AgentSessionContextUsage } from '../conversation-context/agent-session-context-usage'
 import type { NativeChatBlock, NativeChatRole } from '../../native-chat/native-chat-types'
 import type { AgentMessageSource } from './agent-session-message-source'
 import type { AgentSessionExecutionOptions } from '../options/protocol/agent-session-execution-options'
@@ -222,38 +221,11 @@ export type AgentJournalQuestionItem = {
   resolution: AgentJournalResolution
 }
 
-export const AGENT_JOURNAL_TURN_LIFECYCLE_STATES = [
-  'running',
-  'completed',
-  'interrupted',
-  'unverifiable'
-] as const
-export type AgentJournalTurnLifecycleState = (typeof AGENT_JOURNAL_TURN_LIFECYCLE_STATES)[number]
-
-export type AgentJournalTurnLifecycle = {
-  turnId: string
-  state: AgentJournalTurnLifecycleState
-  /** Absent/unrecognized verdict means unknown, never success. completed alone proves nothing: provider API errors also finish turns. */
-  outcome?: AgentJournalTurnOutcome
-  /** Journal key of the user item that opened the turn. A lifecycle row may key
-   *  itself when provider output opened a turn with no user item; absent means
-   *  an older host. */
-  userItemId?: string
-  startedAt?: number
-  /** Host clock at the send that opened this turn, when one is known. `startedAt`
-   *  remains the provider turn-open instant and is never rewritten. */
-  requestedAt?: number
-  completedAt?: number
-  /** The provider's own measured turn duration, preferred over the host interval. */
-  durationMs?: number
-  /** What the provider said about its context window during or after this turn.
-   *  Usually written by a later revision, since the provider answers after the end. */
-  contextUsage?: AgentSessionContextUsage
-  /** On a turn a conversation command opened: the provider turn that carried out the command,
-   *  once the provider opened one. Nothing else re-derives it after the command settles. */
-  providerTurnId?: string
-}
-
+export { AGENT_JOURNAL_TURN_LIFECYCLE_STATES } from '../lifecycle/records/agent-session-turn-lifecycle'
+export type {
+  AgentJournalTurnLifecycleState,
+  AgentJournalTurnLifecycle
+} from '../lifecycle/records/agent-session-turn-lifecycle'
 /** Provider thread-goal lifecycle. Open like other persisted vocabularies: a
  *  status a newer provider reports must not turn a row malformed. */
 export const AGENT_JOURNAL_THREAD_GOAL_STATUSES = [

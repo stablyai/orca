@@ -18,6 +18,16 @@ import type { WorkspaceCleanupRunFinishedEvent } from '../../workspace-cleanup/w
 
 export type RuntimeClientEvent =
   | {
+      type: 'pipelinesChanged'
+      projectId: string
+      workspaceId: string
+      instanceId: string
+      runId: string
+      revision: number
+      sequence: number
+      reason?: string
+    }
+  | {
       type: 'notificationAttentionAcknowledged'
       acknowledgement: NotificationAttentionAcknowledgement
     }

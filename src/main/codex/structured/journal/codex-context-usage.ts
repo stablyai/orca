@@ -6,6 +6,30 @@ import { readRecord } from '../../app-server/codex-item-field-readers'
 import type { CodexJournalActiveTurns } from './codex-structured-journal-translation-turn-state'
 import { readCodexTurnId } from '../../app-server/codex-structured-thread-facts'
 import type { CodexRowAttribution } from '../background-work/codex-subagent-linkage'
+import type { CodexUsageRawUsage } from '../../../codex-usage/codex-usage-token-delta'
+
+function usageCounter(value: unknown): CodexUsageRawUsage | null {
+  const raw = readRecord(value)
+  const fields = [
+    raw.inputTokens,
+    raw.cachedInputTokens,
+    raw.outputTokens,
+    raw.reasoningOutputTokens,
+    raw.totalTokens
+  ]
+  if (
+    !fields.every((count) => typeof count === 'number' && Number.isSafeInteger(count) && count >= 0)
+  ) {
+    return null
+  }
+  return {
+    inputTokens: Number(raw.inputTokens),
+    cachedInputTokens: Number(raw.cachedInputTokens),
+    outputTokens: Number(raw.outputTokens),
+    reasoningOutputTokens: Number(raw.reasoningOutputTokens),
+    totalTokens: Number(raw.totalTokens)
+  }
+}
 
 function positiveCount(value: unknown): number | null {
   return typeof value === 'number' && Number.isFinite(value) && value > 0 ? value : null
@@ -51,17 +75,25 @@ export function recordCodexContextUsage(input: {
   capturedAt: number
 }): void {
   const contextUsage = readCodexContextUsage(input.params, input.capturedAt)
-  if (!contextUsage) {
-    return
-  }
+  const usage = readRecord(readRecord(input.params).tokenUsage)
+  const total = usageCounter(usage.total)
+  const last = usageCounter(usage.last)
   const turnId = readCodexTurnId(input.params) ?? input.activeTurns.current(input.threadId)
   const openTurnId = turnId && input.activeTurns.has(input.threadId, turnId) ? turnId : null
   const scope = openTurnId ? input.attributionFor(input.threadId, openTurnId).turnScope : null
   const identity = scope?.kind === 'turn' ? parseAgentJournalItemKey(scope.turnItemId) : null
+  if (!contextUsage && !(identity && total && last)) {
+    return
+  }
   writeAgentJournalTurnRow(
     input.sink,
     identity ? { identity } : { newest: true },
-    { contextUsage },
+    {
+      ...(contextUsage ? { contextUsage } : {}),
+      ...(identity && total && last
+        ? { tokenAccounting: { provider: 'codex' as const, total, last } }
+        : {})
+    },
     { publish: true }
   )
 }

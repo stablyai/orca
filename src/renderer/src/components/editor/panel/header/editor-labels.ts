@@ -51,6 +51,9 @@ export function getEditorDisplayLabel(
   if (file.mode === 'git-graph') {
     return t('gitGraph.title', 'Git Graph')
   }
+  if (file.mode === 'pipeline-run') {
+    return t('pipelines.execution', 'Pipeline run')
+  }
   if (file.mode === 'check-details') {
     return file.checkRunDetails?.check.name ?? getBaseLabel(file, variant)
   }

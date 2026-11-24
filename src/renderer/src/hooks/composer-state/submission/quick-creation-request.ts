@@ -1,4 +1,7 @@
 import type { AgentStartedTelemetry } from '@/lib/workspace/creation/worktree-startup-payload'
+import type { PipelineSelection } from '../../../../../shared/pipelines/pipeline-contracts'
+import type { PipelineV2TemplateSelection } from '../../../../../shared/pipelines/v2/pipeline-v2-template-contracts'
+import { PipelineV2Task } from '../../../../../shared/pipelines/v2/pipeline-v2-contracts'
 import type { WorktreeCreationRequest } from '@/lib/workspace/creation/pending-worktree-creation'
 import type { AgentStartupPlan } from '../../../../../shared/agent-launch/startup/tui-agent-startup'
 import type { LinkedWorkItemSummary } from '@/lib/workspace/creation/new-workspace'
@@ -9,6 +12,57 @@ import type { GitPushTarget } from '../../../../../shared/worktree/types'
 import type { SetupDecision } from '../../../../../shared/worktree/create-types'
 import '@/components/sidebar/workspace-creation/folder/folder-workspace-source-repos'
 import { toFolderWorkspaceLinkedTask } from '@/components/sidebar/workspace-creation/folder/folder-workspace-source-selection'
+
+export function buildQuickPipelineTask(input: {
+  workspaceName: string
+  note: string
+  prompt: string
+  linkedWorkItem: LinkedWorkItemSummary | null
+}): string {
+  return PipelineV2Task.parse(
+    input.prompt ||
+      [
+        input.workspaceName,
+        input.note,
+        input.linkedWorkItem ? JSON.stringify(input.linkedWorkItem) : ''
+      ]
+        .filter(Boolean)
+        .join('\n')
+  )
+}
+
+export function applyPipelineStartup(request: WorktreeCreationRequest): void {
+  request.startup = undefined
+  request.startupPlan = null
+  request.creationStartup = undefined
+  request.launchDraftPrompt = undefined
+  request.quickPrompt = ''
+  request.issueCommand = undefined
+  if (request.hookPreparation) {
+    request.hookPreparation.issueCommand = undefined
+  }
+  request.setupOnly = true
+}
+
+export function bindQuickPipeline(
+  request: WorktreeCreationRequest,
+  options: QuickSubmitOptions,
+  task: Parameters<typeof buildQuickPipelineTask>[0]
+): void {
+  if (!options.pipeline) {
+    return
+  }
+  const v2 = 'engineVersion' in options.pipeline && options.pipeline.engineVersion === 2
+  if (v2 && !options.pipelineRuntimeId) {
+    throw new Error('pipeline_runtime_identity_missing')
+  }
+  request.pipeline = {
+    profile: options.pipeline,
+    ...(v2 ? { expectedRuntimeId: options.pipelineRuntimeId } : {}),
+    task: buildQuickPipelineTask({ ...task, ...(v2 ? { prompt: '' } : {}) })
+  }
+  applyPipelineStartup(request)
+}
 
 export type QuickCreationRequestInput = {
   repoId: string
@@ -61,6 +115,8 @@ export type QuickCreationRequestInput = {
 }
 
 export type QuickSubmitOptions = {
+  pipeline?: PipelineSelection | PipelineV2TemplateSelection
+  pipelineRuntimeId?: string
   onLegacyPreparationFailure?: (error: unknown) => void
   setupOnly?: boolean
   launchChoice?: AgentLaunchChoice

@@ -1,4 +1,5 @@
 import { isTerminalInputPaused } from '../../../runtime/terminal/input/terminal-input-admission'
+import { emitPipelineV2AcceptedInput } from '../../../runtime/pipelines/v2/pipeline-v2-input-events'
 import type { IpcMainEvent, IpcMainInvokeEvent } from 'electron'
 import type { PtyRendererDelivery } from '../session'
 import type { OrcaRuntimeService } from '../../../runtime/orca-runtime'
@@ -234,6 +235,15 @@ export function createPtyWriteInput(deps: {
     verify = false
   ): boolean | Promise<boolean> => {
     const observe = (accepted: boolean): boolean => {
+      if (runtime) {
+        emitPipelineV2AcceptedInput(
+          runtime,
+          { ptyId: args.id },
+          args.inputKind,
+          accepted,
+          args.data
+        )
+      }
       if (
         accepted &&
         args.inputKind === 'driving' &&

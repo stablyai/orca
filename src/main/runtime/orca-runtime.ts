@@ -19,7 +19,7 @@ import {
 } from './client/settings/runtime-workspace-view-change-events'
 import { syncPRAutoRefreshCadence } from '../github/pull-requests/refresh/pr-auto-refresh-cadence-sync'
 import { sidebarFactsRuntime } from './sidebar-inputs/orca-runtime-sidebar-temporal'
-import { OrcaRuntimeWithAgentQuestions } from './construction/orca-runtime-agent-questions'
+import { OrcaRuntimeWithPipelines } from './construction/orca-runtime-pipelines'
 import { ORCA_SIDEBAR_INPUTS_IS_MAIN } from '../../shared/sidebar-list/feed/sidebar-inputs-switch'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../shared/workspace-layout/layout-owner-switch'
 import type { RuntimeCommandSurfaceHost } from './construction/runtime-installed-command-surfaces'
@@ -32,8 +32,6 @@ import type {
   AgentLaunchPaneVerdict
 } from '../../shared/agent-launch/contracts/agent-launch-pane-verdict'
 import { registerWorktreeChangeInvalidator } from '../ipc/worktrees/listing/worktree-change-invalidators'
-import type { AgentSessionRecordStore } from './agent-session/records/agent-session-record-store'
-import { peekOpenedAgentSessionRecordStore } from './agent-session/records/agent-session-record-store-slot'
 import { createAgentLaunchRecordWarmupGate } from './construction/agent-launch-record-warmup-gate'
 import * as WorkspaceLayouts from './terminal/surface/workspace-layout-stream'
 import type { RemoteLayoutSnapshot } from '../../shared/remote-runtime/session-graph/remote-layout-snapshot'
@@ -73,9 +71,13 @@ import {
 } from './orchestration/federation/peer-mail/peer-mail-relay'
 import { structuredAgentSessionHostTabId } from '../../shared/agent-session/view/structured-agent-session-host-tab-id'
 import { runtimeBotChatTreeIndex } from '../bots/bot-chat-tree-host'
+import { restorePipelineRuntime } from './pipelines/pipeline-runtime'
 
 // oxlint-disable-next-line typescript/no-unsafe-declaration-merging -- SAFETY: The existing Linear installer supplies the canonical prototype surface.
-class OrcaRuntimeService extends OrcaRuntimeWithAgentQuestions {
+class OrcaRuntimeService extends OrcaRuntimeWithPipelines {
+  protected get pipelineHost(): OrcaRuntimeService {
+    return this
+  }
   protected override assertStructuredQueuedMessageAllowed(sessionId: string, messageId: string) {
     botGroups.assertBotGroupQueuedMessageAllowed(this, sessionId, messageId)
   }
@@ -201,7 +203,7 @@ class OrcaRuntimeService extends OrcaRuntimeWithAgentQuestions {
     return this.references.find(params)
   }
 
-  constructor(...args: ConstructorParameters<typeof OrcaRuntimeWithAgentQuestions>) {
+  constructor(...args: ConstructorParameters<typeof OrcaRuntimeWithPipelines>) {
     super(...args)
     // Headless hosts must register both invalidators themselves; they never load desktop IPC.
     registerDetectedWorktreeScanInvalidation()
@@ -216,6 +218,7 @@ class OrcaRuntimeService extends OrcaRuntimeWithAgentQuestions {
     this.botChatTreeIndex = runtimeBotChatTreeIndex(this)
     this.automation.botChat = botGroups.withGroupRoomChats(this, this.automation.botChat)
     syncPRAutoRefreshCadence(this.store)
+    restorePipelineRuntime(this)
   }
 
   /** What mobileRelay.hosts.list answers changed. */
@@ -262,7 +265,7 @@ class OrcaRuntimeService extends OrcaRuntimeWithAgentQuestions {
   }
 
   private readonly agentLaunchRecordWarmup = createAgentLaunchRecordWarmupGate({
-    isOpen: () => peekOpenedAgentSessionRecordStore() !== null,
+    isOpen: () => this.openedAgentSessionRecordStore() !== null,
     open: () => this.openAgentSessionRecordStore()
   })
 
@@ -348,11 +351,6 @@ class OrcaRuntimeService extends OrcaRuntimeWithAgentQuestions {
   /** Display-only copies of paired-server layouts. */
   getRemoteLayoutSnapshots(): Record<string, RemoteLayoutSnapshot> {
     return this.store?.getRemoteLayoutSnapshots?.() ?? {}
-  }
-
-  /** Return the already-open record store without waiting. */
-  openedAgentSessionRecordStore(): AgentSessionRecordStore | null {
-    return peekOpenedAgentSessionRecordStore()
   }
 }
 // Linear installs these methods on the final runtime prototype below.

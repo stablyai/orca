@@ -38,6 +38,7 @@ export async function sendChatTask(args: {
   /** Who the task is from (`dispatchTaskSource`), shown on the chat's card or turn. */
   from: AgentMessageSource
   preamble: string
+  onSubmitted?: (clientMessageId: string) => void
 }): Promise<ChatTaskDelivery> {
   const sessionId = args.dispatch.assignee_orca_session_id
   const host = getStructuredAgentSessionHost()
@@ -77,8 +78,10 @@ export async function sendChatTask(args: {
         `The task was refused: ${outcome.refusal.message}`
       )
     case 'queued':
+      args.onSubmitted?.(outcome.clientMessageId)
       return 'queued'
     case 'sent':
+      args.onSubmitted?.(outcome.clientMessageId)
       return preambleDispatchState(outcome.submission)
   }
 }

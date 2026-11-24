@@ -105,6 +105,7 @@ export function mergeWorktree(
         }
       : {}),
     ...(meta?.baseRef !== undefined ? { baseRef: meta.baseRef } : {}),
+    ...(meta?.pipeline ? { pipeline: meta.pipeline } : {}),
     ...(meta?.pushTarget !== undefined ? { pushTarget: meta.pushTarget } : {}),
     ...(meta?.priorWorktreeIds !== undefined ? { priorWorktreeIds: meta.priorWorktreeIds } : {}),
     workspaceStatus: meta?.workspaceStatus ?? DEFAULT_WORKSPACE_STATUS_ID,

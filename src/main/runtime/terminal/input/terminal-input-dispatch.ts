@@ -1,4 +1,6 @@
+import { OrcaRuntimeWithPtyLiveness } from './terminal-pty-liveness'
 import { agentPromptObservationSignal } from './agent-prompt-signals'
+import { emitPipelineV2AcceptedInput } from '../../pipelines/v2/pipeline-v2-input-events'
 import type { RuntimeTerminalWriteOptions } from './runtime-terminal-writer'
 import type { WriteSettlement } from '../../../../shared/terminal/pty/lifecycle/pty-write-settlement'
 import type { RuntimeLeafRecord } from '../records/runtime-terminal-state-records'
@@ -6,10 +8,7 @@ import type {
   RuntimeTerminalPromptDelivery,
   RuntimeTerminalSend
 } from '../../../../shared/terminal/runtime/runtime-terminal-send-contract'
-import { OrcaRuntimeWithResolveTerminalPane } from '../recovery/resolve-terminal-pane'
 import { wrapTerminalBracketedPasteText } from '../../../../shared/terminal/input/terminal-bracketed-paste-text'
-import { PROVEN_ABSENT_LEAF_PTY_TTL_MS } from './proven-absent-leaf-pty'
-import { pruneExpiredProvenAbsentLeafPtyVerdicts } from './proven-absent-leaf-pty-verdicts'
 import type { RuntimeAgentPromptWriteOptions } from './agent-prompt-write-options'
 import type { TerminalHandleRecord } from '../identity/terminal-handle-records'
 import {
@@ -22,7 +21,7 @@ import {
 } from '../../../../shared/agent-launch/startup/agent-prompt-injection'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/workspace-layout/layout-owner-switch'
 
-export abstract class OrcaRuntimeWithControllerKnowsPtyIsLive extends OrcaRuntimeWithResolveTerminalPane {
+export abstract class OrcaRuntimeWithControllerKnowsPtyIsLive extends OrcaRuntimeWithPtyLiveness {
   protected abstract writeTerminalAction(
     ptyId: string,
     action: { text?: string; enter?: boolean; interrupt?: boolean },
@@ -54,78 +53,6 @@ export abstract class OrcaRuntimeWithControllerKnowsPtyIsLive extends OrcaRuntim
     payload: string,
     options: RuntimeAgentPromptWriteOptions
   ): Promise<RuntimeTerminalSend>
-
-  private lastProvenAbsentLeafPtyVerdictPruneAt: number | undefined
-
-  private pruneExpiredLeafPtyVerdicts(now: number): void {
-    const lastPruneAt = this.lastProvenAbsentLeafPtyVerdictPruneAt
-    // Per-key expiry stays exact; throttle whole-cache scans on the keystroke path.
-    if (
-      lastPruneAt !== undefined &&
-      now >= lastPruneAt &&
-      now - lastPruneAt < PROVEN_ABSENT_LEAF_PTY_TTL_MS
-    ) {
-      return
-    }
-    this.lastProvenAbsentLeafPtyVerdictPruneAt = now
-    pruneExpiredProvenAbsentLeafPtyVerdicts(
-      this.provenAbsentLeafPtyVerdicts,
-      now,
-      PROVEN_ABSENT_LEAF_PTY_TTL_MS
-    )
-  }
-
-  protected controllerKnowsPtyIsLive(ptyId: string): boolean {
-    try {
-      return this.ptyController?.hasPty?.(ptyId) === true
-    } catch {
-      // Why: liveness lookup failures are doubt; doubt never gates a write.
-      return false
-    }
-  }
-
-  /** True only on controller-proven absence; live, unknown, and probe errors all answer false. */
-  protected isLeafPtyProvenAbsent(ptyId: string): Promise<boolean> {
-    this.pruneExpiredLeafPtyVerdicts(Date.now())
-    // Controller hasPty supersedes cached absence; graph-mirrored records can describe a prior process under the same id.
-    if (this.controllerKnowsPtyIsLive(ptyId)) {
-      this.provenAbsentLeafPtyVerdicts.delete(ptyId)
-      return Promise.resolve(false)
-    }
-    const verdictAt = this.provenAbsentLeafPtyVerdicts.get(ptyId)
-    if (verdictAt !== undefined) {
-      if (Date.now() - verdictAt < PROVEN_ABSENT_LEAF_PTY_TTL_MS) {
-        return Promise.resolve(true)
-      }
-      this.provenAbsentLeafPtyVerdicts.delete(ptyId)
-    }
-    const probeLiveness = this.ptyController?.probePtyLiveness?.bind(this.ptyController)
-    if (!probeLiveness) {
-      return Promise.resolve(false)
-    }
-    const inFlight = this.leafPtyAbsenceProbes.get(ptyId)
-    if (inFlight) {
-      return inFlight
-    }
-    const probe = (async () => {
-      try {
-        if ((await probeLiveness(ptyId)) !== false) {
-          return false
-        }
-        const now = Date.now()
-        this.pruneExpiredLeafPtyVerdicts(now)
-        this.provenAbsentLeafPtyVerdicts.set(ptyId, now)
-        return true
-      } catch {
-        // Why: a failed probe is unknown, and unknown never rejects a write.
-        return false
-      } finally {
-        this.leafPtyAbsenceProbes.delete(ptyId)
-      }
-    })()
-    this.leafPtyAbsenceProbes.set(ptyId, probe)
-    return probe
-  }
 
   /** The PTY a handle names right now, read without resolving or refusing the handle. */
   private handlePtyId(handle: string): string | undefined {
@@ -169,6 +96,13 @@ export abstract class OrcaRuntimeWithControllerKnowsPtyIsLive extends OrcaRuntim
         payload,
         options
       )
+      emitPipelineV2AcceptedInput(
+        this,
+        { handle },
+        options.inputKind,
+        !writeSettlement || writeSettlement.outcome === 'accepted',
+        payload
+      )
       return {
         handle,
         accepted: !writeSettlement || writeSettlement.outcome === 'accepted',
@@ -198,6 +132,13 @@ export abstract class OrcaRuntimeWithControllerKnowsPtyIsLive extends OrcaRuntim
     }
 
     const writeSettlement = await this.writeTerminalAction(leaf.ptyId, action, payload, options)
+    emitPipelineV2AcceptedInput(
+      this,
+      { handle },
+      options.inputKind,
+      !writeSettlement || writeSettlement.outcome === 'accepted',
+      payload
+    )
 
     return {
       handle,
@@ -268,7 +209,15 @@ export abstract class OrcaRuntimeWithControllerKnowsPtyIsLive extends OrcaRuntim
       await assertTerminalInputWithinLimitWithYield(payload)
       // Only opted-in calls take the extra layer, so every default caller's timing is untouched.
       if (agentPromptWriteOptsIn(options)) {
-        return await this.submitTerminalAgentPrompt(handle, pty.pty.ptyId, prompt, payload, options)
+        const result = await this.submitTerminalAgentPrompt(
+          handle,
+          pty.pty.ptyId,
+          prompt,
+          payload,
+          options
+        )
+        emitPipelineV2AcceptedInput(this, { handle }, options.inputKind, result.accepted, prompt)
+        return result
       }
       const generation = this.getPtyLifecycleGeneration(pty.pty.ptyId)
       const delivery = await this.serializeAgentPromptSubmission(
@@ -284,6 +233,7 @@ export abstract class OrcaRuntimeWithControllerKnowsPtyIsLive extends OrcaRuntim
         }
       )
       const bytesWritten = Buffer.byteLength(payload, 'utf8') + delivery.submits
+      emitPipelineV2AcceptedInput(this, { handle }, options.inputKind, true, prompt)
       return {
         handle,
         accepted: true,
@@ -303,7 +253,15 @@ export abstract class OrcaRuntimeWithControllerKnowsPtyIsLive extends OrcaRuntim
       throw new Error('terminal_not_writable')
     }
     if (agentPromptWriteOptsIn(options)) {
-      return await this.submitTerminalAgentPrompt(handle, leaf.ptyId, prompt, payload, options)
+      const result = await this.submitTerminalAgentPrompt(
+        handle,
+        leaf.ptyId,
+        prompt,
+        payload,
+        options
+      )
+      emitPipelineV2AcceptedInput(this, { handle }, options.inputKind, result.accepted, prompt)
+      return result
     }
     const generation = this.getPtyLifecycleGeneration(leaf.ptyId)
     const delivery = await this.serializeAgentPromptSubmission(leaf.ptyId, generation, async () => {
@@ -315,6 +273,7 @@ export abstract class OrcaRuntimeWithControllerKnowsPtyIsLive extends OrcaRuntim
       })
     })
     const bytesWritten = Buffer.byteLength(payload, 'utf8') + delivery.submits
+    emitPipelineV2AcceptedInput(this, { handle }, options.inputKind, true, prompt)
     return {
       handle,
       accepted: true,

@@ -23,6 +23,7 @@ import type { RuntimeNavigationTarget } from '../../../../shared/remote-runtime/
 import type { RuntimeRepoSelector } from '../catalog/runtime-repo-selector'
 
 export type RuntimeManagedWorktreeCreateArgs = {
+  pipeline?: CreateWorktreeArgs['pipeline']
   /** A create someone asked for (UI, CLI, agent or paired client): its terminals may start a stopped WSL distro. */
   wslUserAct?: true
   repoSelector: RuntimeRepoSelector
