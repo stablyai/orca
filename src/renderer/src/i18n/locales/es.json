@@ -3928,7 +3928,8 @@
           "linearProjectRestoreFailed": "No se pudo restaurar el proyecto de Linear guardado.",
           "linearViewNotFound": "No se encontró la vista de Linear guardada.",
           "linearViewRestoreFailed": "No se pudo restaurar la vista de Linear guardada."
-        }
+        },
+        "giteaSourceLabel": "Gitea"
       },
       "Terminal": {
         "73768427cf": "Cerrar",
@@ -10191,7 +10192,13 @@
           "integrationsLink": "Integraciones",
           "skillHint": ". Después de conectar Linear, los ejemplos de uso están en Ajustes → Linear.",
           "incompleteBannerBodyWithLinear": "Oculta los proveedores que no uses o expande una tarjeta y completa sus pasos. Para Linear: acceso a la API, la habilidad del agente y Mostrar en Tareas.",
-          "30255b39dc": "Proveedores de tareas"
+          "30255b39dc": "Proveedores de tareas",
+          "connectGiteaTitle": "Conectar Gitea",
+          "connectGiteaDescription": "Añade un servidor Gitea o Forgejo con un token de acceso personal.",
+          "manageGitea": "Gestionar servidores",
+          "addGitea": "Añadir servidor Gitea",
+          "giteaLabel": "casa rural",
+          "giteaDescription": "Conecta un servidor Gitea o Forgejo y muestra sus incidencias y pull requests en Tareas."
         },
         "TerminalAppearanceSection": {
           "a14a427ae4": "Grosor de la línea divisoria del panel.",
@@ -11977,7 +11984,8 @@
             "apiKey": "clave de API",
             "skill": "habilidad",
             "connect": "conectar",
-            "12d2fdff3c": "Proveedores de tareas"
+            "12d2fdff3c": "Proveedores de tareas",
+            "gitea": "gitea"
           }
         },
         "terminal": {
@@ -14686,6 +14694,25 @@
           "shownPluginCount_other": "{{count}} complementos coincidentes mostrados, incluido este",
           "samePublisher": "Más elementos incluidos como {{value0}}",
           "shownPluginCount_many": "{{count}} complementos coincidentes mostrados, incluido este"
+        },
+        "gitea": {
+          "integration": {
+            "card": {
+              "d4e5f6a7b8": "Error de conexión.",
+              "069f07af1c": "Servidores conectados: {{value0}}",
+              "31b7f980fb": "Comprobando el acceso a Gitea antes de mostrar las opciones de configuración.",
+              "5a8cd33300": "Explora incidencias y pull requests de Gitea, crea incidencias y empieza a trabajar.",
+              "bdcb1e773f": "Añadir servidor",
+              "9ce5f12a0d": "Conectar Gitea",
+              "3852b1fd6f": "Verificado",
+              "09bde44485": "Probando...",
+              "2bf28d5929": "Prueba",
+              "d0b31b4845": "Desconectar {{value0}}",
+              "f47924e554": "Cada servidor guarda un token localmente, cifrado cuando el almacenamiento lo permite.",
+              "c043731756": "Conecta un servidor Gitea propio con su URL y un token de acceso personal. Las credenciales se guardan localmente y se cifran cuando el almacenamiento lo permite.",
+              "9a555db81e": "Volver a comprobar"
+            }
+          }
         }
       },
       "right": {
@@ -20562,6 +20589,145 @@
         "notAttachedShort": "No se reconectó.",
         "dispatchRejectedShort": "El agente se negó a continuar.",
         "unsupportedShort": "Orca no puede reanudar este agente."
+      },
+      "GiteaIssueWorkspace": {
+        "47b064c003": "{{value0}} copiado",
+        "927222e135": "No se pudo copiar.",
+        "b7c8d9e0f1": "No se pudo cargar la incidencia.",
+        "2d2e69fe70": "No se pudo actualizar la incidencia.",
+        "565680a39b": "No se pudo agregar el comentario.",
+        "a792c22414": "Elemento de Gitea",
+        "01b6ea43ca": "Revisa el elemento de Gitea seleccionado y empieza a trabajar.",
+        "ce513e3ca2": "Cerrar",
+        "e849a4c80f": "Iniciar espacio de trabajo",
+        "c0d4f97901": "Cerrado",
+        "ab08895bb5": "Abierto",
+        "1ab551635b": "Reabrir",
+        "6b3c5a3144": "Cerrar issue",
+        "63cbb99973": "Abrir en Gitea",
+        "c29b657be3": "Copiar URL",
+        "ca242eaf5d": "No se proporcionó descripción.",
+        "0fee3f06ff": "Añadir un comentario...",
+        "d3e0033e0f": "Comentario"
+      },
+      "GiteaPullRequestWorkspace": {
+        "f5cf34ed40": "No se pudo agregar el comentario.",
+        "22f9c29c9b": "Pull request fusionada.",
+        "d93415a77d": "No se pudo fusionar.",
+        "c7c84081fc": "No se pudo agregar el comentario de revisión.",
+        "f51240a59a": "Conversación",
+        "4f4abe43ab": "Archivos",
+        "95a6c97ba6": "Comprobaciones",
+        "8e44409da0": "Pull request de Gitea",
+        "0a432f2c1a": "Revisa los archivos, las comprobaciones y la conversación; después fusiona o empieza a trabajar.",
+        "5fa5ec9fff": "Cerrar",
+        "f88c7cf08c": "Iniciar espacio de trabajo",
+        "9813b44d73": "Abrir en Gitea",
+        "ddc99ed766": "Añadir un comentario...",
+        "d646ddef48": "Comentario",
+        "c2d3e4f5a6": "No se pudieron cargar las comprobaciones de la PR."
+      },
+      "gitea": {
+        "issue": {
+          "comments": {
+            "8608602d16": "Comentarios",
+            "ea3f6f14a1": "Aún no hay comentarios.",
+            "6a519bdb1c": "Desconocido"
+          },
+          "meta": {
+            "controls": {
+              "ba343731c0": "No se pudo actualizar la incidencia.",
+              "63f46a8d86": "Título",
+              "8cc407607b": "Etiquetas",
+              "11fac85e07": "No hay etiquetas en este repositorio.",
+              "401f7dc7a2": "Asignados",
+              "3cd6f5acbd": "No hay usuarios asignables."
+            }
+          }
+        },
+        "pr": {
+          "checks": {
+            "bed82a55cd": "No hay comprobaciones de estado para esta PR.",
+            "448c6113a4": "Abrir detalles del check"
+          },
+          "file": {
+            "diff": {
+              "f1a2b3c4d5": "No se pudieron cargar las diferencias del archivo.",
+              "e6f7a8b9c0": "Reintentar",
+              "81e07de6a5": "No se muestra el archivo binario."
+            }
+          },
+          "line": {
+            "comments": {
+              "489b36633a": "Línea {{value0}}",
+              "c01a062b92": "Desconocido",
+              "4e59b0c4f8": "N.º de línea",
+              "a43b5cc38b": "Número de línea del archivo nuevo en las diferencias",
+              "02339776da": "Comentario de revisión…",
+              "317313f8af": "Comentario",
+              "6cbd906d88": "Comentar una línea"
+            }
+          },
+          "merge": {
+            "button": {
+              "2378ab4908": "Conflictos",
+              "8e662b9b6b": "Fusionar"
+            }
+          },
+          "tab": {
+            "body": {
+              "1fe3a05742": "No se proporcionó descripción.",
+              "413feaa83a": "En línea",
+              "5372c28376": "En paralelo",
+              "53ab0c5a49": "No hay archivos modificados."
+            }
+          }
+        },
+        "connect": {
+          "dialog": {
+            "d2823a1de0": "Conectar servidor Gitea",
+            "d076a10ae3": "Usa la URL de un servidor Gitea y un token de acceso personal para explorar incidencias y revisar pull requests.",
+            "690c1da1bb": "URL del servidor Gitea",
+            "83b75fa9b7": "https://gitea.example.com",
+            "062ae1ea05": "Token de acceso",
+            "79c04f358b": "Token de acceso personal de Gitea",
+            "3ecb3e1153": "Crea un token en Ajustes de Gitea → Aplicaciones con los permisos read:user, write:issue y write:repository. Limita el acceso a los repositorios necesarios.",
+            "4d1f2d9f21": "Tu token se guarda localmente y se cifra cuando el almacenamiento lo permite.",
+            "7acfed1da5": "Cancelar",
+            "f5d526570f": "Verificando…",
+            "f68c3d011f": "Conectar"
+          }
+        },
+        "new": {
+          "issue": {
+            "dialog": {
+              "db951c3a29": "Nueva incidencia en {{value0}}",
+              "b42f72cfc5": "Crea una incidencia en el proyecto Gitea seleccionado.",
+              "becfadf1df": "Título",
+              "6c8b731fb2": "Descripción",
+              "032fd2ed27": "Cancelar",
+              "5e1d23a112": "Crear issue"
+            }
+          }
+        }
+      },
+      "GiteaTaskList": {
+        "c07dd13940": "Todos los abiertos",
+        "ab2a229e50": "Asignado a mí",
+        "74f30cd767": "Creado ",
+        "031c70d963": "Cerrado",
+        "bf66fad935": "Todos",
+        "65a3bffe7a": "Incidencias",
+        "9b21aab4c9": "PRs",
+        "9986e0e679": "Mergeado",
+        "747423c0f8": "Borrador",
+        "980519b0c8": "Abierto",
+        "0285721e62": "No se pudieron cargar las tareas de Gitea.",
+        "5997067bee": "Nueva incidencia",
+        "e3db16e7c7": "Actualizar tareas de Gitea",
+        "34cd2d1024": "Selecciona un proyecto alojado en Gitea para ver sus incidencias y pull requests.",
+        "6e1e6691d7": "Cargando tareas de Gitea…",
+        "00f67933b5": "No hay incidencias ni pull requests coincidentes."
       }
     },
     "i18n": {
@@ -31535,6 +31701,31 @@
       "badAddCommand": "Revisa el comando mcp add: un nombre y una URL o un comando.",
       "badJson": "Revisa el JSON pegado: no se puede analizar.",
       "none": "Orca no encontró ningún servidor que pueda agregar. No se admiten servidores SSE, servidores con su propio cliente OAuth o filtros de herramientas, ni valores leídos del entorno (${VAR})."
+    }
+  },
+  "gitea": {
+    "status": {
+      "added": "Añadida",
+      "modified": "Modificado",
+      "deleted": "Eliminado",
+      "renamed": "Renombrado",
+      "copied": "copiado",
+      "changed": "Cambiado",
+      "open": "Abierto",
+      "closed": "Cerrado",
+      "merged": "Mergeado",
+      "draft": "Borrador",
+      "pending": "Pendiente",
+      "success": "Correcto",
+      "failure": "Fallo",
+      "error": "Error",
+      "warning": "Advertencia",
+      "merge": "Fusionar",
+      "squash": "Squash y merge",
+      "rebase": "Rebasar y fusionar"
+    },
+    "errors": {
+      "loadPullRequest": "No se pudieron cargar algunos datos de la pull request."
     }
   }
 }

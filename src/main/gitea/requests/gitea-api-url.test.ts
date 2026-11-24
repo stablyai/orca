@@ -59,7 +59,7 @@ describe('Gitea credential destinations', () => {
     expect(fetchMock).not.toHaveBeenCalled()
   })
 
-  it('matches a saved token to a non-default HTTPS port', () => {
+  it('matches a saved token to a non-default HTTPS port', async () => {
     vi.stubEnv('ORCA_GITEA_TOKEN', '')
     vi.stubEnv('ORCA_GITEA_API_BASE_URL', '')
     const apiBaseUrl = 'https://git.example.com:8443/api/v1'
@@ -70,7 +70,7 @@ describe('Gitea credential destinations', () => {
     if (!repo) {
       throw new Error('Missing test repository')
     }
-    expect(resolveGiteaAuth(repo)).toEqual({ apiBaseUrl, token: 'saved-token' })
+    await expect(resolveGiteaAuth(repo)).resolves.toEqual({ apiBaseUrl, token: 'saved-token' })
   })
 
   it('refuses redirects when sending a token', async () => {

@@ -177,7 +177,7 @@ describe('createGiteaSlice createGiteaIssue', () => {
     })
 
     const keys = Object.keys(store.getState().giteaWorkItems)
-    expect(keys).toEqual(['repo-2@selected:all:all:default'])
+    expect(keys).toEqual(['local:repo-2@selected:all:all:default'])
   })
 
   it('surfaces the error and preserves caches on failure', async () => {
@@ -200,12 +200,12 @@ describe('createGiteaSlice updateGiteaIssue', () => {
     const store = createTestStore()
     mockApi.gitea.issue.mockResolvedValue(issue(7))
     await store.getState().fetchGiteaIssue(scope, 7)
-    expect(store.getState().giteaIssueDetail['repo-1@selected:all#7']).toBeDefined()
+    expect(store.getState().giteaIssueDetail['local:repo-1@selected:all#7']).toBeDefined()
 
     mockApi.gitea.updateIssue.mockResolvedValue({ ok: true })
     await store.getState().updateGiteaIssue(scope, 7, { state: 'closed' })
 
-    expect(store.getState().giteaIssueDetail['repo-1@selected:all#7']).toBeUndefined()
+    expect(store.getState().giteaIssueDetail['local:repo-1@selected:all#7']).toBeUndefined()
   })
 
   it('keeps the cached issue detail on failure', async () => {
@@ -216,7 +216,7 @@ describe('createGiteaSlice updateGiteaIssue', () => {
     mockApi.gitea.updateIssue.mockResolvedValue({ ok: false, error: 'nope' })
     await store.getState().updateGiteaIssue(scope, 7, { state: 'closed' })
 
-    expect(store.getState().giteaIssueDetail['repo-1@selected:all#7']).toBeDefined()
+    expect(store.getState().giteaIssueDetail['local:repo-1@selected:all#7']).toBeDefined()
   })
 })
 
@@ -270,7 +270,9 @@ describe('createGiteaSlice connection status', () => {
     await store.getState().fetchGiteaWorkItems(otherScope, 'all')
     mockApi.gitea.updateIssue.mockResolvedValue({ ok: true })
     await store.getState().updateGiteaIssue(scope, 1, { state: 'closed' })
-    expect(Object.keys(store.getState().giteaWorkItems)).toEqual(['other@selected:all:all:default'])
+    expect(Object.keys(store.getState().giteaWorkItems)).toEqual([
+      'local:other@selected:all:all:default'
+    ])
   })
 
   it('stores status and marks it loaded on refresh', async () => {
