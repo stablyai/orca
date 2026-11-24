@@ -52,7 +52,7 @@ Tests are the exception: add one only for logic where a silent regression is cos
 
 ### Targeting Local Tests
 
-To queue full `pnpm check:changed` runs across worktrees on a busy development host, set `git config --local orca.serializeChangedChecks true`. Interrupt the runner with Ctrl+C or SIGTERM to stop and drain its active checks before the next run starts. Force-killing only the runner can leave its children running.
+On macOS and Linux, set `git config --local orca.serializeChangedChecks true` to queue full `pnpm check:changed` runs across worktrees. On Ctrl+C, SIGTERM, or terminal hangup, the runner waits for its active check process groups to stop before admitting another run. Processes that detach from those groups, or survive a force-kill of the runner, can continue independently. Windows uses the standard concurrent runner.
 
 Use `pnpm test`, not raw `vitest`: only it keeps the transform cache that makes repeat runs fast.
 

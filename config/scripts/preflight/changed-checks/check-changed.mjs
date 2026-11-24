@@ -18,7 +18,6 @@ import {
   isUnitTestFile,
   selectImportingTests
 } from './check-changed-direct-tests.mjs'
-import { acquireChangedCheckSlot } from './check-changed-slot.mjs'
 import { planChangedChecks } from './check-changed-selection.mjs'
 import { resolveOxcCliInvocation } from '../../tool-invocation/oxc-cli-invocation.mjs'
 import { resolvePnpmCliInvocation } from '../../tool-invocation/pnpm-cli-invocation.mjs'
@@ -316,23 +315,18 @@ function buildTasks(root, plan, { files, mergeBase, maxWorkers, bun, transitive 
   return tasks
 }
 
-// The physical termination callback can arrive after runProcess's caller deadline.
-async function runAdmittedProcess(runProcess, signal, spec) {
-  const { promise: drained, resolve: terminated } = Promise.withResolvers()
-  try {
-    const result = await runProcess(
-      { ...spec, signal, terminationBarrier: true, onChildTerminated: terminated },
-      'tail'
-    )
-    if (result.timedOut || signal.aborted) {
-      await drained
-    }
-    return result
-  } catch (error) {
-    if (signal.aborted) {
-      await drained
-    }
-    throw error
+function loadAdmittedProcessHost(root, signal) {
+  // The runner also supervises the build of process-host's own dist.
+  const packageRequire = createRequire(path.join(root, 'src/packages/process-host/package.json'))
+  const { require: loadSource } = packageRequire('tsx/cjs/api')
+  const supervisor = loadSource('./src/run-process.ts', packageRequire.resolve('./package.json'))
+  return {
+    runProcessSync: supervisor.runProcessSync,
+    runProcess: (spec, capture) =>
+      supervisor.runProcess(
+        { ...spec, signal, terminationBarrier: 'wait-for-posix-group' },
+        capture
+      )
   }
 }
 
@@ -379,6 +373,9 @@ async function runPool(tasks, concurrency, run, signal) {
 
 export async function main(root, argv) {
   const options = parseArgs(argv)
+  if (process.platform === 'win32') {
+    return runChangedChecks(root, options)
+  }
   const setting = spawnSync('git', ['config', '--bool', '--get', 'orca.serializeChangedChecks'], {
     cwd: root,
     encoding: 'utf8'
@@ -389,19 +386,23 @@ export async function main(root, argv) {
   if (setting.status !== 0) {
     throw new Error(setting.stderr || 'Could not read Orca check settings')
   }
+  const { acquireChangedCheckSlot } = await import('./check-changed-slot.mjs')
   const release = await acquireChangedCheckSlot()
   const controller = new AbortController()
   setMaxListeners(0, controller.signal)
   const interrupt = () => controller.abort(130)
   const terminate = () => controller.abort(143)
+  const hangup = () => controller.abort(129)
   process.on('SIGINT', interrupt)
   process.on('SIGTERM', terminate)
+  process.on('SIGHUP', hangup)
   try {
     const code = await runChangedChecks(root, options, controller.signal)
     return controller.signal.aborted ? controller.signal.reason : code
   } finally {
     process.off('SIGINT', interrupt)
     process.off('SIGTERM', terminate)
+    process.off('SIGHUP', hangup)
     release()
   }
 }
@@ -447,27 +448,22 @@ async function runChangedChecks(root, options, signal) {
   if (process.stdout.isTTY) {
     delete env.NO_COLOR
   }
+  const admittedHost = signal ? loadAdmittedProcessHost(root, signal) : null
   if (
     plan.typecheckProjects.length > 0 ||
     plan.unitTests.related.length + plan.unitTests.colocated.length > 0
   ) {
-    if (signal) {
-      // A clean checkout needs the process supervisor before its dist can be built.
-      const packageRequire = createRequire(
-        path.join(root, 'src/packages/process-host/package.json')
+    if (admittedHost) {
+      const result = await admittedHost.runProcess(
+        {
+          program: process.execPath,
+          args: ['config/scripts/workspace-package-build/build-workspace-packages.mjs'],
+          cwd: root,
+          env,
+          timeoutMs: null
+        },
+        'tail'
       )
-      const { require: loadSource } = packageRequire('tsx/cjs/api')
-      const supervisor = loadSource(
-        './src/run-process.ts',
-        packageRequire.resolve('./package.json')
-      )
-      const result = await runAdmittedProcess(supervisor.runProcess, signal, {
-        program: process.execPath,
-        args: ['config/scripts/workspace-package-build/build-workspace-packages.mjs'],
-        cwd: root,
-        env,
-        timeoutMs: null
-      })
       if (signal.aborted) {
         return signal.reason
       }
@@ -478,7 +474,7 @@ async function runChangedChecks(root, options, signal) {
       buildWorkspacePackages(root, env)
     }
   }
-  const { runProcess, runProcessSync } = await import('@orca/process-host')
+  const { runProcess, runProcessSync } = admittedHost ?? (await import('@orca/process-host'))
   const { resolvePinnedBunExecutable } =
     await import('../../tool-invocation/pinned-bun-executable.mjs')
   const bun = () => resolvePinnedBunExecutable(root, runProcessSync) ?? 'bun'
@@ -510,7 +506,7 @@ async function runChangedChecks(root, options, signal) {
       const result = await runTask(task, {
         root,
         env,
-        runProcess: signal ? (spec) => runAdmittedProcess(runProcess, signal, spec) : runProcess,
+        runProcess,
         stepTimeoutMs: options.stepTimeoutMs
       })
       running.delete(task.name)
