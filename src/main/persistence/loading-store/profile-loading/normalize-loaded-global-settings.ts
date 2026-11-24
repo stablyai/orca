@@ -32,6 +32,10 @@ import type { VoiceSettings } from '../../../../shared/speech/speech-types'
 import { dictationShortcutModeSettings } from '../../../../shared/speech/dictation/dictation-shortcut-mode'
 import type { PreparedLoadedTerminalSettings } from './prepare-loaded-terminal-settings'
 import type { PreparedLoadedProfileSettings } from './prepare-loaded-profile-settings'
+import {
+  normalizeTabMaxWidth,
+  normalizeTabWidthMode
+} from '../../../../shared/workspace-layout/tab-groups/tab-width-settings'
 
 export function normalizeLoadedGlobalSettings(
   parsed: PersistedState,
@@ -173,6 +177,8 @@ export function normalizeLoadedGlobalSettings(
     showMenuBarIcon: parsed.settings?.showMenuBarIcon !== false,
     linuxTilingWindowMode: parsed.settings?.linuxTilingWindowMode === true,
     ...migratedPortugueseUiLanguage,
+    tabWidthMode: normalizeTabWidthMode(parsed.settings?.tabWidthMode),
+    tabMaxWidth: normalizeTabMaxWidth(parsed.settings?.tabMaxWidth),
     nativeChatInheritShellEnvironment: parsed.settings?.nativeChatInheritShellEnvironment !== false,
     nativeChatShellEnvironmentVariables: normalizeNativeChatShellEnvironmentVariables(
       parsed.settings?.nativeChatShellEnvironmentVariables

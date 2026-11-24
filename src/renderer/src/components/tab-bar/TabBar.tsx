@@ -17,6 +17,8 @@ import { useTabDragActive } from '../tab-group/drag/tab-drag-context'
 import { useTabStripCondense } from './strip/use-tab-strip-condense'
 import type { TabStripEntry } from './strip/TabStripOverflowChip'
 import { useTerminalTabAttentionIds } from './terminal-tabs/use-terminal-tab-attention-ids'
+import { useAppStore } from '@/store/index'
+import { normalizeTabWidthMode } from '../../../../shared/workspace-layout/tab-groups/tab-width-settings'
 import type { TerminalTab } from '../../../../shared/workspace-layout/terminal-tab-types'
 import type { ClientHostedBrowserRow } from '../../../../shared/browser/client-hosting/client-hosted-browser-rows'
 
@@ -141,11 +143,13 @@ function TabBarInner(props: TabBarProps): React.JSX.Element {
     worktreeId
   })
   const isTabDragActive = useTabDragActive()
+  const tabWidthMode = useAppStore((s) => normalizeTabWidthMode(s.settings?.tabWidthMode))
   const condense = useTabStripCondense({
     ids: stripIds,
     activeId: activeClientHostedBrowserRowId ?? itemProjection.activeVisibleTabId,
     frozen: isTabDragActive,
-    hasOverflow: tabStripNavigation.tabStripOverflowState.hasOverflow
+    hasOverflow: tabStripNavigation.tabStripOverflowState.hasOverflow,
+    disabled: tabWidthMode === 'fit'
   })
   // Only an overflowing strip has a chip whose dot and list need attention state.
   const attentionTerminalTabs = useMemo(

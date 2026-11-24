@@ -118,6 +118,35 @@ export const getGeneralNavigationSearchEntries = createLocalizedCatalog(() => [
     ]
   },
   {
+    title: translate('settings.general.tabWidth.title', 'Tab width'),
+    description: translate(
+      'settings.general.tabWidth.description',
+      'Fit sizes every tab to its title and scrolls on overflow.'
+    ),
+    keywords: [
+      ...translateSearchKeyword('settings.general.search.keywords.tabs', 'tabs'),
+      ...translateSearchKeyword('auto.components.settings.general.search.2a254b725e', 'tab'),
+      ...translateSearchKeyword('settings.general.search.keywords.width', 'width'),
+      ...translateSearchKeyword('settings.general.search.keywords.fit', 'fit'),
+      ...translateSearchKeyword('settings.general.search.keywords.compact', 'compact'),
+      ...translateSearchKeyword('settings.general.search.keywords.narrow', 'narrow')
+    ]
+  },
+  {
+    title: translate('settings.general.tabMaxWidth.title', 'Max tab width'),
+    description: translate(
+      'settings.general.tabMaxWidth.description',
+      'Caps tab width for long titles and inline rename.'
+    ),
+    keywords: [
+      ...translateSearchKeyword('settings.general.search.keywords.tabs', 'tabs'),
+      ...translateSearchKeyword('auto.components.settings.general.search.2a254b725e', 'tab'),
+      ...translateSearchKeyword('settings.general.search.keywords.width', 'width'),
+      ...translateSearchKeyword('settings.general.search.keywords.compact', 'compact'),
+      ...translateSearchKeyword('settings.general.search.keywords.narrow', 'narrow')
+    ]
+  },
+  {
     title: translate('settings.general.previewTabs.title', 'Preview tabs'),
     description: translate(
       'settings.general.previewTabs.description',

@@ -1,5 +1,6 @@
 import { DndContext } from '@dnd-kit/core'
 import { defineFixture } from '../../../component-fixtures/component-fixture'
+import { getDefaultSettings } from '../../../../../shared/orca-profiles/constants'
 import SortableTab from './SortableTab'
 import { TabStripTooltipProvider } from '../strip/TabStripTooltipProvider'
 import { i18n } from '@/i18n/i18n'
@@ -87,6 +88,40 @@ export const defaultWidth = defineFixture({
       <ChatTab id="unnamed-fork" title="Claude Chat" forked />
     </Strip>
   )
+})
+
+export const fitWidth = defineFixture({
+  width: 1240,
+  store: {
+    settings: { ...getDefaultSettings('/home/fixture'), tabWidthMode: 'fit' }
+  },
+  render: () => (
+    <Strip>
+      <ChatTab id="original" title="hub" forked={false} />
+      <ChatTab id="fork-short" title="api" forked />
+      <ChatTab id="fork" title="Annotate capabilities" forked active />
+      <ChatTab
+        id="fork-long"
+        title="Should we regenerate the conversation title for this long forked session?"
+        forked
+      />
+    </Strip>
+  ),
+  interact: (frame) => {
+    const widths = [...frame.querySelectorAll<HTMLElement>('[data-tab-strip-slot]')].map((el) =>
+      Math.round(el.getBoundingClientRect().width)
+    )
+    const [original, forkShort, forkMedium, forkLong] = widths
+    if (
+      original !== 80 ||
+      forkShort <= 80 ||
+      forkMedium <= 150 ||
+      forkMedium >= 280 ||
+      forkLong !== 300
+    ) {
+      throw new Error(`Unexpected forked fit tab widths: ${JSON.stringify(widths)}`)
+    }
+  }
 })
 
 export const narrow = defineFixture({

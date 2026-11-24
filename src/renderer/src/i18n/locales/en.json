@@ -1436,7 +1436,11 @@
           "custom": "custom",
           "indentation": "indentation",
           "long_lines": "long lines",
-          "about": "about"
+          "about": "about",
+          "width": "width",
+          "fit": "fit",
+          "compact": "compact",
+          "narrow": "narrow"
         }
       },
       "cli": {
@@ -1448,6 +1452,16 @@
       "previewTabs": {
         "title": "Preview tabs",
         "description": "Single-clicking a file reuses one preview tab until you edit or pin it."
+      },
+      "tabWidth": {
+        "title": "Tab width",
+        "description": "Fit sizes every tab to its title and scrolls on overflow.",
+        "default": "Default",
+        "fit": "Fit"
+      },
+      "tabMaxWidth": {
+        "title": "Max tab width",
+        "description": "Caps tab width for long titles and inline rename."
       },
       "autoSave": {
         "title": "Auto save",

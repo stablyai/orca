@@ -26,6 +26,7 @@ import { useSortableTabDrag } from './use-sortable-tab-drag'
 import { useTranslate } from '@/i18n/use-translate'
 import { TAB_LABEL_WIDTH_CLASSES } from '../strip/tab-width-rules'
 import { useTabStripSlotProps } from '../strip/use-tab-strip-slot-props'
+import { normalizeTabWidthMode } from '../../../../../shared/workspace-layout/tab-groups/tab-width-settings'
 import { useTabStripPointerActivation } from '../strip/tab-strip-pointer-activation'
 import { useTabContextMenuOpening } from '../strip/tab-context-menu-opening'
 import { TerminalTabLeadingIcon } from './TerminalTabLeadingIcon'
@@ -185,8 +186,15 @@ export default function SortableTab({
   const handleMenuOpenChange = useTabContextMenuOpening(setMenuOpen, retirePendingActivation)
   const slotProps = useTabStripSlotProps(tab.id, isActive, sizing)
   const iconOnly = slotProps['data-tab-density'] === 'icon'
+  const tabWidthMode = useAppStore((s) => normalizeTabWidthMode(s.settings?.tabWidthMode))
+  // Inline-size containment collapses a w-max slot to its min-width, so drop @container/tab when intrinsically sized.
+  const useForkContainerQuery = Boolean(fork) && tabWidthMode !== 'fit' && sizing !== 'content'
   const tabTitle = tab.customTitle ?? tab.title
-  const titleNode = fork ? <ForkMarkedName name={displayTitle} narrowIcon /> : displayTitle
+  const titleNode = fork ? (
+    <ForkMarkedName name={displayTitle} narrowIcon={useForkContainerQuery} />
+  ) : (
+    displayTitle
+  )
   const tabRoot = (
     <div
       ref={setNodeRef}
@@ -202,7 +210,7 @@ export default function SortableTab({
       aria-label={identityDetail ? `${tabTitle}, ${identityDetail}` : undefined}
       {...attributes}
       {...dragListeners}
-      className={`${fork ? '@container/tab ' : ''}w-full group relative flex items-center h-full px-1.5 text-xs cursor-pointer select-none outline-none focus:outline-none focus-visible:outline-none ${getTabStripBorderClasses(hasTabsToRight, { includeTopBorder: includeTopTabBorder })} ${getDropIndicatorClasses(dropIndicator ?? null)} ${getTabRootStateClasses(isActive)}`}
+      className={`${useForkContainerQuery ? '@container/tab ' : ''}w-full group relative flex items-center h-full px-1.5 text-xs cursor-pointer select-none outline-none focus:outline-none focus-visible:outline-none ${getTabStripBorderClasses(hasTabsToRight, { includeTopBorder: includeTopTabBorder })} ${getDropIndicatorClasses(dropIndicator ?? null)} ${getTabRootStateClasses(isActive)}`}
       onDoubleClick={(e) => {
         if (isEditing) {
           return
