@@ -40,10 +40,13 @@ export async function addForwardOnFreeLocalPort(
     if (await loopbackPortAnswers(candidate)) {
       continue
     }
-    // Lost races and privileged ports move on to the next number.
-    const entry = await add(candidate).catch(() => null)
-    if (entry) {
-      return entry
+    try {
+      return await add(candidate)
+    } catch (error) {
+      // Lost races and privileged ports move on to the next number; a dead connection stops here.
+      if (!isLocalBindFailure(error)) {
+        throw error
+      }
     }
   }
   return addOnFreeOsPort(add, remove, holdsIpv6Loopback)
@@ -67,9 +70,26 @@ async function addOnFreeOsPort(
       }
       return entry
     } catch (error) {
-      if (attempt >= OS_PORT_ATTEMPTS) {
+      if (attempt >= OS_PORT_ATTEMPTS || !isLocalBindFailure(error)) {
         throw error
       }
     }
   }
+}
+
+const BIND_FAILURE_CODES = new Set(['EADDRINUSE', 'EACCES', 'EADDRNOTAVAIL'])
+const BIND_FAILURE_MESSAGE = /\b(EADDRINUSE|EACCES|EADDRNOTAVAIL)\b/
+
+/** Whether a forward failed to listen here, as opposed to its connection failing. Providers report
+ *  the bind error as a code, a cause, or only in their message. */
+function isLocalBindFailure(error: unknown): boolean {
+  if (!(error instanceof Error)) {
+    return false
+  }
+  const code = 'code' in error ? error.code : undefined
+  return (
+    (typeof code === 'string' && BIND_FAILURE_CODES.has(code)) ||
+    (typeof error.cause === 'string' && BIND_FAILURE_CODES.has(error.cause)) ||
+    BIND_FAILURE_MESSAGE.test(error.message)
+  )
 }
