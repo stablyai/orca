@@ -110,16 +110,18 @@ export class BotWorkStore {
   }
 
   recentClosedRows(botId: string): BotWorkRow[] {
+    // Older resets recorded their date and generation instead of marking the entire conversation.
     return this.db
       .prepare(
         `SELECT work.* FROM bot_work AS work
-         WHERE work.bot_id = ? AND work.closed_at IS NOT NULL
+         WHERE work.bot_id = ? AND work.closed_at IS NOT NULL AND work.forgotten = 0
            AND work.close_reason IN ('stopped', 'start_failed', 'workspace_gone')
            AND NOT EXISTS (
              SELECT 1 FROM bot_work AS reset
              WHERE reset.bot_id = work.bot_id AND reset.source = work.source
-               AND reset.external_id = work.external_id AND reset.generation > work.generation
-               AND reset.close_reason = 'owner_reset'
+               AND reset.external_id = work.external_id
+               AND reset.close_reason = 'owner_reset' AND reset.forgotten = 0
+               AND (reset.generation > work.generation OR reset.closed_at > work.closed_at)
            )
          ORDER BY work.closed_at DESC, work.created_at DESC, work.id
          LIMIT 50`
@@ -174,6 +176,20 @@ export class BotWorkStore {
             WHERE id = ? AND generation = ? AND closed_at IS NULL`
         )
         .run(now, reason, ref.rowId, ref.generation).changes > 0
+    )
+  }
+
+  /** Hide this conversation's existing work and close its live links in one write. */
+  forgetAddress(botId: string, address: BotWorkAddress, now = Date.now()): boolean {
+    return (
+      this.db
+        .prepare(
+          `UPDATE bot_work
+           SET close_reason = CASE WHEN closed_at IS NULL THEN 'owner_reset' ELSE close_reason END,
+               closed_at = COALESCE(closed_at, ?), forgotten = 1
+           WHERE bot_id = ? AND source = ? AND external_id = ? AND forgotten = 0`
+        )
+        .run(now, botId, address.source, address.externalId).changes > 0
     )
   }
 

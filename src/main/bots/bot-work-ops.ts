@@ -11,6 +11,7 @@ export const BOT_WORK_OPS = [
   'isOpen',
   'bind',
   'close',
+  'forgetAddress',
   'makeCurrent'
 ] as const satisfies readonly (keyof BotWorkStore)[]
 

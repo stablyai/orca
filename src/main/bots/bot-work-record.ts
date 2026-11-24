@@ -120,7 +120,12 @@ export class BotWorkRecord {
     )) {
       items.push(summarizeBotWork(this.deps, { row, worker, workspace }))
     }
-    return includeHistory ? [...items, ...(await readBotWorkHistory(this.deps, botId))] : items
+    if (!includeHistory) {
+      return items
+    }
+    const history = await readBotWorkHistory(this.deps, botId)
+    const closedIds = new Set(history.map((item) => item.id))
+    return [...items.filter((item) => !closedIds.has(item.id)), ...history]
   }
 
   /** The pull requests a conversation's live work opened, as its workspaces' rows show them; read
@@ -149,10 +154,7 @@ export class BotWorkRecord {
    *  starts fresh. */
   async forget(sessionId: string): Promise<boolean> {
     const turn = await this.turnOf(sessionId)
-    const store = this.deps.store()
-    const rows = turn ? await store.addressRows(turn.botId, turn.address) : []
-    const closed = await Promise.all(rows.map((row) => store.close(row, 'owner_reset')))
-    return closed.some(Boolean)
+    return turn ? this.deps.store().forgetAddress(turn.botId, turn.address) : false
   }
 
   /** A deleted bot's rows; never rejects, so its caller needn't wait. Rows a failure leaves open
