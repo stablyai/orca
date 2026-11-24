@@ -312,7 +312,7 @@
       "dirty_one": "Faça commit ou descarte {{count}} arquivo alterado antes de trocar de branch.",
       "dirty_other": "Faça commit ou descarte {{count}} arquivos alterados antes de trocar de branch.",
       "dirty_many": "Faça commit ou descarte {{count}} arquivos alterados antes de trocar de branch.",
-      "agentWorking": "Um agente está trabalhando neste workspace. Troque de branch quando ele terminar ou feche a aba dele se ele tiver parado.",
+      "agentWorking": "Um agente está trabalhando neste espaço de trabalho. Troque de branch quando ele terminar ou feche a aba dele se ele tiver parado.",
       "listFailed": "O Orca não conseguiu listar os branches locais. Tente reabrir o seletor.",
       "discoveryFailed": "O Orca não encontrou branches remotos. Você ainda pode trocar para branches locais ou criar um branch.",
       "switchFailed": "O Orca não conseguiu trocar de branch. Tente novamente.",
@@ -822,8 +822,8 @@
       "demoPassword": "senha",
       "demoCookie": "cookie",
       "openSettings": "Abrir Configurações",
-      "switchedNoteTitle": "Novos agentes serão abertos no Chat UI",
-      "switchedNoteBody": "Prefere o terminal? Volte quando quiser: procure <term>Chat UI</term> em Configurações.",
+      "switchedNoteTitle": "Novos agentes serão abertos na interface de chat",
+      "switchedNoteBody": "Prefere o terminal? Volte quando quiser: procure <term>Interface de chat</term> em Configurações.",
       "changeInSettings": "Altere a qualquer momento em <link>Configurações → Interface de chat</link>.",
       "switchToTerminal": "Mudar para terminal",
       "saveFailed": "Não foi possível ativar a interface de chat. Ative-a em Configurações → Interface de chat.",
@@ -2725,7 +2725,7 @@
         "pluginsTitle": "Plugins",
         "pluginsDescription": "Instale e gerencie plugins experimentais do Orca.",
         "tasksDescription": "Conecte provedores, instale a skill do Linear e escolha o que aparece em Tarefas.",
-        "artifactsTitle": "Artifacts",
+        "artifactsTitle": "Artefatos",
         "artifactsDescription": "Compartilhe arquivos HTML e Markdown com sua equipe e gerencie seus links públicos.",
         "automationsTitle": "Automações",
         "automationsDescription": "Agende o trabalho dos agentes e escolha se Automações aparece na barra lateral.",
@@ -5223,7 +5223,7 @@
           "runtimeReachable": "{{value0}} está acessível.",
           "updateServer": "Atualizar",
           "updatingServers": "Atualizando servidores…",
-          "sshTunnelRequired": "Tunnel SSH necessário",
+          "sshTunnelRequired": "Túnel SSH necessário",
           "serverAlreadyPaired": "Este servidor já está pareado como {{value0}}; a conexão foi atualizada.",
           "accessRevoked": "{{value0}} não aceita mais este computador. Pareie novamente com um novo link de acesso.",
           "managedAccessRevoked": "{{value0}} não aceita mais este computador, e o Orca não conseguiu parear novamente por SSH. Conecte para tentar novamente.",
@@ -6242,7 +6242,7 @@
           "anotherDeviceHelp": "Tailscale, LAN, ou outro endereço acessível",
           "localOnlyHelp": "Um navegador ou cliente Orca neste computador",
           "customAddress": "Endereço personalizado",
-          "customAddressHelp": "Tunnel SSH, proxy reverso, ou hostname personalizado",
+          "customAddressHelp": "Túnel SSH, proxy reverso, ou hostname personalizado",
           "localLink": "Link somente local",
           "localLinkHelp": "Este link só funciona em um navegador ou cliente Orca em execução neste computador.",
           "noExternalAddress": "Nenhum endereço para outro dispositivo foi encontrado. Conecte este computador a uma LAN ou Tailscale, atualize, ou escolha Endereço personalizado.",
@@ -6485,28 +6485,28 @@
         },
         "artifacts": {
           "signIn": "Entrar no Orca",
-          "title": "Artifacts",
+          "title": "Artefatos",
           "description": "Compartilhe arquivos HTML e Markdown com sua equipe e gerencie seus links públicos.",
-          "howToTitle": "Como usar Artifacts",
+          "howToTitle": "Como usar Artefatos",
           "howToDescription": "Publique arquivos HTML ou Markdown como links públicos e depois compartilhe-os com sua equipe.",
           "shareStepTitle": "Escolha um arquivo para compartilhar",
-          "shareStepDescription": "Abra um arquivo HTML ou Markdown e selecione Compartilhar como artifact, ou peça a um agente para compartilhá-lo.",
+          "shareStepDescription": "Abra um arquivo HTML ou Markdown e selecione Compartilhar como artefato, ou peça a um agente para compartilhá-lo.",
           "linkStepTitle": "Copiar o link público",
           "linkStepDescription": "Depois de publicar, copie o link e envie-o para sua equipe.",
           "manageStepTitle": "Gerencie no Orca",
-          "manageStepDescription": "Abra Artifacts na barra lateral para pré-visualizar ou remover links.",
-          "showButtonDescription": "Mostra o atalho de Artifacts na barra lateral.",
+          "manageStepDescription": "Abra Artefatos na barra lateral para pré-visualizar ou remover links.",
+          "showButtonDescription": "Mostra o atalho de Artefatos na barra lateral.",
           "openArtifactsDescriptionV2": "Pré-visualize, copie e gerencie links compartilhados através da sua conta.",
-          "signInTitle": "Entre para compartilhar artifacts",
-          "signInDescription": "Use sua conta Orca para enviar artifacts e gerenciar seus links públicos.",
+          "signInTitle": "Entre para compartilhar artefatos",
+          "signInDescription": "Use sua conta Orca para enviar artefatos e gerenciar seus links públicos.",
           "signInAgain": "Entrar novamente",
-          "enableStepTitle": "Ativar compartilhamento de artifacts",
-          "enableStepWebDescription": "Abra Configurações → Artifacts no app desktop do Orca no dispositivo host e ative a publicação.",
-          "enableStepDescription": "Ative \"Permitir publicação de links públicos de artifact\" acima.",
-          "allowPublishing": "Permitir publicação de links públicos de artifact",
-          "allowPublishingWebDescription": "Somente desktop. Abra Configurações → Artifacts no dispositivo host para alterar esta configuração.",
-          "allowPublishingDescription": "Publica arquivos HTML e Markdown como links que qualquer pessoa com a URL pode abrir. Os links existentes permanecem até que você os exclua em Artifacts.",
-          "howToDescriptionDisabled": "Ative o compartilhamento de artifacts acima para publicar arquivos HTML ou Markdown como links públicos.",
+          "enableStepTitle": "Ativar compartilhamento de artefatos",
+          "enableStepWebDescription": "Abra Configurações → Artefatos no app desktop do Orca no dispositivo host e ative a publicação.",
+          "enableStepDescription": "Ative \"Permitir publicação de links públicos de artefato\" acima.",
+          "allowPublishing": "Permitir publicação de links públicos de artefato",
+          "allowPublishingWebDescription": "Somente desktop. Abra Configurações → Artefatos no dispositivo host para alterar esta configuração.",
+          "allowPublishingDescription": "Publica arquivos HTML e Markdown como links que qualquer pessoa com a URL pode abrir. Os links existentes permanecem até que você os exclua em Artefatos.",
+          "howToDescriptionDisabled": "Ative o compartilhamento de artefatos acima para publicar arquivos HTML ou Markdown como links públicos.",
           "allowPublishingSearchDescription": "Permite que o Orca publique arquivos HTML e Markdown como links públicos.",
           "keywordArtifacts": "artifacts",
           "keywordShare": "compartilhar",
@@ -6516,8 +6516,8 @@
           "keywordHtml": "HTML",
           "keywordMarkdown": "Markdown",
           "keywordUpload": "envio",
-          "09f41ce46c": "Mostrar Botão de Artifacts",
-          "7b2b114099": "Abrir Artifacts"
+          "09f41ce46c": "Mostrar Botão de Artefatos",
+          "7b2b114099": "Abrir Artefatos"
         },
         "CliSection": {
           "8671e406f0": "Cancelar",
@@ -6718,10 +6718,10 @@
           "incompatible": "As versões do Orca não são compatíveis",
           "incompatibleHelp": "Atualize o Orca neste dispositivo e no outro host e tente novamente.",
           "interrupted": "Conexão interrompida",
-          "interruptedHelp": "A conexão parou durante a verificação. Verifique a rede ou o tunnel SSH e tente novamente.",
+          "interruptedHelp": "A conexão parou durante a verificação. Verifique a rede ou o túnel SSH e tente novamente.",
           "unavailable": "Host indisponível",
-          "unavailableHelp": "Verifique se o Orca está em execução no outro host e se a rede ou o tunnel SSH conseguem alcançar {{endpoint}}.",
-          "sshTunnelHelp": "Mantenha o tunnel ativo enquanto usa esta conexão.",
+          "unavailableHelp": "Verifique se o Orca está em execução no outro host e se a rede ou o túnel SSH conseguem alcançar {{endpoint}}.",
+          "sshTunnelHelp": "Mantenha o túnel ativo enquanto usa esta conexão.",
           "cancel": "Cancelar",
           "saveFailed": "Não foi possível salvar o host",
           "saveFailedHelp": "O host foi verificado, mas o Orca não conseguiu salvá-lo. Verifique o nome e o armazenamento local de configurações e tente novamente.",
@@ -7001,7 +7001,7 @@
           "declarativeWarning": "Somente conteúdo. Nenhum código é executado.",
           "enable": "Ativar plugin",
           "capability": {
-            "workspaceRead": "Ler nomes, branches e terminais dos workspaces",
+            "workspaceRead": "Ler nomes, branches e terminais dos espaços de trabalho",
             "notificationsShow": "Mostrar notificações na área de trabalho",
             "storage": "Guardar os próprios dados",
             "secrets": "Guardar os próprios segredos criptografados",
@@ -7407,7 +7407,7 @@
           "externalWorktrees": "Worktrees externas",
           "externalWorktreesDescription": "Escolha quais worktrees criadas fora do Orca aparecem por padrão neste host.",
           "ad65d146f6": "Apps do Abrir Em",
-          "2ffd7c4fc8": "Perguntar Antes de Excluir Artifacts",
+          "2ffd7c4fc8": "Perguntar Antes de Excluir Artefatos",
           "a8ce626e4b": "Aninhar Espaços de Trabalho",
           "c2d4beaf3a": "Perguntar Antes de Excluir Espaços de Trabalho",
           "9d0ef6a2a6": "Diretório de Espaços de Trabalho",
@@ -7520,7 +7520,7 @@
           "connected": "Conectado",
           "reconnectRequired": "Sua sessão expirou. Entre novamente para usar os recursos na nuvem.",
           "unavailable": "O login do Orca não está disponível nesta versão.",
-          "signedOut": "Entre para estender o Orca com recursos na nuvem, incluindo Artifacts e Orca Relay.",
+          "signedOut": "Entre para estender o Orca com recursos na nuvem, incluindo Artefatos e Orca Relay.",
           "checking": "Verificando o status da conta…",
           "account": "Conta do Orca",
           "signOut": "Sair",
@@ -7528,9 +7528,9 @@
           "signIn": "Entrar no Orca",
           "title": "Conta do Orca",
           "description": "Compartilhe trabalho instantaneamente e acesse seu desktop pelo Orca Mobile de onde estiver.",
-          "searchDescription": "Entre ou saia da conta usada por Artifacts e Orca Relay.",
+          "searchDescription": "Entre ou saia da conta usada por Artefatos e Orca Relay.",
           "benefitsTitle": "Incluído na sua conta",
-          "artifactsTitle": "Compartilhamento de Artifacts",
+          "artifactsTitle": "Compartilhamento de Artefatos",
           "artifactsDescription": "Publique arquivos HTML e Markdown e depois gerencie todos os links compartilhados a partir do Orca.",
           "relayTitle": "Orca Relay",
           "relayDescription": "Conecte o Orca Mobile a este desktop por rede celular ou qualquer Wi-Fi.",
@@ -9058,7 +9058,7 @@
           "description": "Links do terminal, do chat e do markdown abrem no navegador sem tirar o foco de onde você clicou."
         },
         "PluginKeybindingConsentPreview": {
-          "worktree": "Somente em um workspace"
+          "worktree": "Somente em um espaço de trabalho"
         },
         "PluginRemoveDialog": {
           "title": "Remover {{value0}}?",
@@ -9794,7 +9794,7 @@
           "downloadFailed": "Não foi possível baixar. Verifique sua conexão."
         },
         "PluginContributionActionCommand": {
-          "needsWorkspace": "Requer um workspace aberto",
+          "needsWorkspace": "Requer um espaço de trabalho aberto",
           "seeLogs": "Veja os logs abaixo",
           "run": "Executar",
           "runName": "Executar {{value0}}",
@@ -9804,7 +9804,7 @@
         "PluginContributionActionPanel": {
           "open": "Abrir painel",
           "openName": "Abrir painel: {{value0}}",
-          "needsWorkspace": "Requer um workspace aberto"
+          "needsWorkspace": "Requer um espaço de trabalho aberto"
         },
         "PluginDetailPage": {
           "stoppedBody": "Continuou falhando. Reinicie para tentar de novo.",
@@ -10184,8 +10184,8 @@
           "next": "Próxima captura"
         },
         "PluginContributionActionEvents": {
-          "worktreeCreated": "Quando um workspace é criado",
-          "worktreeRemoved": "Quando um workspace é removido",
+          "worktreeCreated": "Quando um espaço de trabalho é criado",
+          "worktreeRemoved": "Quando um espaço de trabalho é removido",
           "agentStatusChanged": "Quando o status de um agente muda",
           "detail": "Código em segundo plano é executado",
           "workspaceChanged": "Quando você muda de espaço de trabalho ou seus terminais mudam"
@@ -11509,13 +11509,13 @@
             "864111caa2": "Posição da Barra de Atividades",
             "e8e2e4ce74": "Alternar barra lateral direita",
             "441733b630": "Portas",
-            "83a10e3c44": "Checks",
+            "83a10e3c44": "Verificações",
             "0314901467": "Controle de Código-Fonte",
             "8bc2bbc3a0": "Explorador",
             "9fffaf17c1": "Alternar barra lateral direita ({{value0}})",
             "aiVaultSessionHistory": "Agentes",
             "folderWorkspaces": "Worktrees anexadas",
-            "parentPrChecks": "Checks de PR",
+            "parentPrChecks": "Verificações de PR",
             "creatingWorkspace": "Disponível quando o espaço de trabalho estiver pronto"
           },
           "GitHubPRStackMap": {
@@ -11523,8 +11523,8 @@
             "8a9bdc36c0": "mergeado",
             "568c647ccd": "rascunho",
             "bea9ade223": "conflitos",
-            "838aadf512": "checks falharam",
-            "316039b5db": "checks pendentes",
+            "838aadf512": "verificações falharam",
+            "316039b5db": "verificações pendentes",
             "4b1e5ee9d3": "alterações solicitadas",
             "9a17b5255c": "review necessário",
             "d3d97cf3f2": "aprovado",
@@ -19002,7 +19002,7 @@
           "pluginQuickActions": {
             "description": "Comando de plugin {{value0}}",
             "keyword": "comando de plugin",
-            "newFileDescription": "Cria um arquivo {{value0}} sem título no workspace ativo."
+            "newFileDescription": "Cria um arquivo {{value0}} sem título no espaço de trabalho ativo."
           }
         }
       },
@@ -21868,8 +21868,8 @@
       },
       "cardKindHidden": {
         "description": "Você pode alterar isso a qualquer momento em",
-        "settingsLink": "Configurações > Chat UI > Atividade do turno",
-        "failed": "Não foi possível salvar. Você pode desativar em Configurações > Chat UI > Atividade do turno."
+        "settingsLink": "Configurações > Interface de chat > Atividade do turno",
+        "failed": "Não foi possível salvar. Você pode desativar em Configurações > Interface de chat > Atividade do turno."
       },
       "openedPullRequests": {
         "one": "Pull request criada: {{name}}",
