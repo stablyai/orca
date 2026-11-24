@@ -39,7 +39,7 @@ function HostOption({
   const id = useId()
   return (
     // Why the ring: a disabled radio's faded border all but vanishes on the light dialog.
-    <div className="flex items-start gap-3 rounded-lg border border-border p-3 has-[[data-state=checked]]:border-foreground/60 has-[[data-state=checked]]:bg-accent [&>[data-slot=radio-group-item]:disabled]:border-muted-foreground">
+    <div className="flex items-start gap-3 rounded-lg border border-border p-3 has-disabled:bg-card has-[[data-state=checked]]:border-foreground/60 has-[[data-state=checked]]:bg-accent [&>[data-slot=radio-group-item]:disabled]:border-muted-foreground">
       <RadioGroupItem id={id} value={value} disabled={disabled} className="mt-0.5" />
       {/* Why muted, not faded: fading the card let what's behind it show through. */}
       <div
@@ -109,7 +109,7 @@ export function GoogleHostChoiceDialog({
             {file.error}
           </p>
         ) : null}
-        <DialogFooter className="flex-row flex-wrap items-center justify-end">
+        <DialogFooter className="flex-row flex-wrap items-center justify-end [&_button]:px-2.5">
           <Button
             variant="ghost"
             className="mr-auto"
@@ -118,12 +118,15 @@ export function GoogleHostChoiceDialog({
           >
             {t('bots.google.importSetupFile', 'Import file')}
           </Button>
-          <Button variant="ghost" onClick={() => onOpenChange(false)}>
-            {t('common.cancel', 'Cancel')}
-          </Button>
-          <Button onClick={() => start()}>
-            {t('bots.google.hostChoice.continue', 'Continue')}
-          </Button>
+          {/* Keep both actions on the same line when the footer wraps. */}
+          <div className="ml-auto flex items-center gap-2">
+            <Button variant="ghost" onClick={() => onOpenChange(false)}>
+              {t('common.cancel', 'Cancel')}
+            </Button>
+            <Button onClick={() => start()}>
+              {t('bots.google.hostChoice.continue', 'Continue')}
+            </Button>
+          </div>
         </DialogFooter>
       </DialogContent>
     </Dialog>

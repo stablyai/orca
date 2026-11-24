@@ -8,15 +8,15 @@ import { GoogleHostChoiceDialog } from './GoogleHostChoiceDialog'
 // own 448 cap, 340 is the narrowest it gets, which it fills. 220 stands in for the smallest window at
 // the largest zoom, where the footer wraps.
 const LONG_NAME = 'Orchestration builder for the whole team'
-let bridge: typeof window.api.googleSetup
 
 function Stage({ width, name }: { width: 480 | 340 | 220; name: string }): React.JSX.Element {
   const [box, setBox] = useState<HTMLElement | null>(null)
+  const [open, setOpen] = useState(true)
   return (
     <div ref={setBox} className="relative h-[460px] translate-x-0 bg-background" style={{ width }}>
       {box ? (
         <PortalContainerContext.Provider value={box}>
-          <GoogleHostChoiceDialog bot={{ ...base, name }} open onOpenChange={() => {}} />
+          <GoogleHostChoiceDialog bot={{ ...base, name }} open={open} onOpenChange={setOpen} />
         </PortalContainerContext.Provider>
       ) : null}
     </div>
@@ -29,9 +29,15 @@ function hostChoiceFixture(
 ) {
   return defineFixture({
     width: width + 32,
-    setup: options?.importError
-      ? () => {
-          bridge = window.api.googleSetup
+    interact: options?.importError
+      ? async (frame) => {
+          const button = [...frame.querySelectorAll('button')].find(
+            (candidate) => candidate.textContent === 'Import file'
+          )
+          if (!button) {
+            throw new Error('Import file button was not rendered.')
+          }
+          const bridge = window.api.googleSetup
           Reflect.set(window.api, 'googleSetup', {
             ...bridge,
             pickClientFile: async () => ({
@@ -39,17 +45,13 @@ function hostChoiceFixture(
               message: 'This file isn’t a Google app file. Download it again from Google Cloud.'
             })
           })
-        }
-      : undefined,
-    // Why restore: the explorer page stays warm, so the failing picker would leak into later fixtures.
-    interact: options?.importError
-      ? async () => {
-          const button = [...document.querySelectorAll('button')].find(
-            (candidate) => candidate.textContent === 'Import file'
-          )
-          button?.click()
-          await new Promise((resolve) => setTimeout(resolve, 50))
-          Reflect.set(window.api, 'googleSetup', bridge)
+          try {
+            button.click()
+            // The click handler yields before calling the picker.
+            await Promise.resolve()
+          } finally {
+            Reflect.set(window.api, 'googleSetup', bridge)
+          }
         }
       : undefined,
     render: () => <Stage width={width} name={options?.name ?? 'CoS'} />
