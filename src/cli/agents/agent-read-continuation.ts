@@ -1,9 +1,12 @@
 import type { AgentReadResult } from '../../shared/agent-conversations/agent-conversation-contracts'
 import { ORCA_SESSION_ADDRESS_PREFIX } from '../../shared/agent-session/identity/orca-session-address-prefix'
-import { quoteCliCommandArgumentForEveryShell } from '../arguments/shell-command-quote'
+import {
+  quoteCliCommandArgument,
+  quoteCliCommandArgumentForEveryShell
+} from '../arguments/shell-command-quote'
 import { resolveEnvironmentIdForStore } from '../hosts/execution-host-flag'
 import { isLocalEnvironmentSelector } from '../hosts/local-environment-selector'
-import { orchestrationCliName } from '../orchestration/agent-view'
+import { resolveOrchestrationCliExecutable } from '../orchestration/recovery/orchestration-recovery-command'
 
 /** The connection this call chose on its own command line, so the next page comes from the same
  *  host; an ambient ORCA_ENVIRONMENT is inherited, so it isn't printed. Null when it can't be
@@ -45,17 +48,26 @@ export function agentReadClosingLine(
   if (!PRINTABLE_CURSOR.test(nextCursor)) {
     return `${lead} the host returned a cursor Orca won't print; read with --json to get it.`
   }
-  const args = [
-    'agent',
-    'read',
-    `${ORCA_SESSION_ADDRESS_PREFIX}${result.orcaSessionId}`,
-    '--cursor',
-    nextCursor,
-    ...(call.limit !== undefined ? ['--limit', String(call.limit)] : []),
-    ...(call.connection ?? [])
-  ].map(quoteCliCommandArgumentForEveryShell)
+  // cmd and PowerShell run a quoted program path differently, so on Windows only a bare name runs.
+  const executable = resolveOrchestrationCliExecutable()
+  const program =
+    process.platform === 'win32' && quoteCliCommandArgument(executable) !== executable
+      ? null
+      : quoteCliCommandArgumentForEveryShell(executable)
+  const parts = [
+    program,
+    ...[
+      'agent',
+      'read',
+      `${ORCA_SESSION_ADDRESS_PREFIX}${result.orcaSessionId}`,
+      '--cursor',
+      nextCursor,
+      ...(call.limit !== undefined ? ['--limit', String(call.limit)] : []),
+      ...(call.connection ?? [])
+    ].map(quoteCliCommandArgumentForEveryShell)
+  ]
   // A value no quoting keeps inert in every shell: print the cursor alone, never a command.
-  return call.connection && args.every((arg) => arg !== null)
-    ? `${lead} ${orchestrationCliName()} ${args.join(' ')}`
+  return call.connection && parts.every((part) => part !== null)
+    ? `${lead} ${parts.join(' ')}`
     : `${lead} --cursor ${nextCursor} (repeat your last command with this --cursor)`
 }
