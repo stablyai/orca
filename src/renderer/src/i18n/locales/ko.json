@@ -878,7 +878,7 @@
         "everyWeekLine": "일주일에 한 번 오전 3시 이후, 또는 이 컴퓨터가 깨어난 후",
         "everyDescriptionAwake": "그 시간에 이 컴퓨터가 잠자기 상태이면 깨어난 후 실행됩니다. 새 채팅이 있었던 밤 이후에만 실행됩니다. 정리할 때마다 짧은 채팅처럼 {{agent}} 요금제를 사용합니다."
       },
-      "teamDisabled": "팀에서 봇을 꺼 두었습니다.",
+      "teamDisabled": "팀에서 Bots를 꺼 두었습니다.",
       "lookAround": {
         "title": "둘러보기"
       },
@@ -27238,13 +27238,13 @@
           "label": "이슈나 PR에서 {{command}}을(를) 멘션해 {{name}}에게 요청하세요. 예를 들어 “{{command}} {{ask}}”라고 쓰면 {{name}}이(가) “{{reply}}”라고 답합니다.",
           "commented": "방금 댓글 작성",
           "ask": "이 PR 리뷰해 줘",
-          "bot": "봇",
+          "bot": "bot",
           "reply": "바로 시작하겠습니다."
         }
       },
       "account": {
-        "descriptionPlural": "내 GitHub 계정들입니다. 봇이 어떤 댓글이 내 것인지 아는 데 사용됩니다.",
-        "descriptionOnHostPlural": "{{host}}의 봇이 대신 작업하고 봇을 소유하는 GitHub 사용자들입니다."
+        "descriptionPlural": "내 GitHub 계정들입니다. bots가 어떤 댓글이 내 것인지 아는 데 사용됩니다.",
+        "descriptionOnHostPlural": "{{host}}의 bots가 대신 작업하고 bots를 소유하는 GitHub 사용자들입니다."
       }
     },
     "upcoming": {
@@ -27946,7 +27946,7 @@
       "none": "페어링된 서버 없음",
       "remove": "제거",
       "search": "페어링된 서버 검색",
-      "tooltip": "이 서버의 봇과 에이전트는 매번 나에게 묻지 않고 {{name}}에게 요청할 수 있습니다.",
+      "tooltip": "이 서버의 bots와 에이전트는 매번 나에게 묻지 않고 {{name}}에게 요청할 수 있습니다.",
       "removeServer": "{{server}} 제거"
     },
     "chats": {
@@ -27991,7 +27991,7 @@
     },
     "errors": {
       "avatarHomeUnreadable": "저장된 사진을 읽지 못했습니다. 다시 선택하세요.",
-      "folderNotOwned": "이 봇의 폴더를 확인하지 못했습니다.",
+      "folderNotOwned": "이 bot의 폴더를 확인하지 못했습니다.",
       "unsavedDrafts": "봇 폴더에 저장하지 않은 편집 내용이 있습니다. 파일을 저장하거나 닫은 다음 다시 삭제하세요."
     },
     "slack": {
@@ -28026,7 +28026,7 @@
         "why": "Slack이 이 워크스페이스의 저장된 토큰을 더 이상 받지 않습니다.",
         "submit": "다시 연결",
         "about": "Slack 토큰 정보",
-        "kept": "Orca Cloud가 새 토큰을 암호화해 보관하므로, 여기에 추가하는 다음 봇부터는 클릭 한 번이면 됩니다.",
+        "kept": "Orca Cloud가 새 토큰을 암호화해 보관하므로, 여기에 추가하는 다음 bots부터는 클릭 한 번이면 됩니다.",
         "mineMac": "이 Mac의 토큰이 만료되었습니다. 새 토큰을 붙여넣으세요.",
         "mine": "이 컴퓨터의 토큰이 만료되었습니다. 새 토큰을 붙여넣으세요.",
         "paste": "다시 연결하려면 새 토큰을 붙여넣으세요.",
@@ -28129,7 +28129,7 @@
       "handoffsPaused": "인계 {{count}}회 후 일시 중지되었습니다. 계속하려면 답장하세요.",
       "pairedComputersOnly": "그룹에는 페어링된 컴퓨터의 봇만 추가할 수 있습니다.",
       "needsLocalBot": "이 그룹에는 이 컴퓨터의 봇이 하나 이상 필요합니다.",
-      "pickLocalBot": "이 컴퓨터의 봇을 선택하세요",
+      "pickLocalBot": "이 컴퓨터의 bot을 선택하세요",
       "thisComputer": "이 컴퓨터",
       "remoteNeedsChat": "{{name}}의 채팅을 한 번 연 다음 그룹에 추가하세요.",
       "remoteReplied": "{{computer}}에서 답변함",
@@ -28351,7 +28351,7 @@
       },
       "disconnect": {
         "promotes": "{{email}}이(가) 기본값이 됩니다.",
-        "removeOneNote": "여기에서 봇이 이 계정을 더 이상 사용하지 않습니다."
+        "removeOneNote": "여기에서 bots가 이 계정을 더 이상 사용하지 않습니다."
       },
       "hostChoice": {
         "soon": "출시 예정"
