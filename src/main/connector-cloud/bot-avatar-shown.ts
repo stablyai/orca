@@ -13,6 +13,10 @@ export class BotAvatarShown {
   // Per bot, its write waiting for its turn: asking again joins it, so the queue holds at most one per bot.
   private readonly waiting = new Map<string, Promise<void>>()
   private flushing: Promise<void> | null = null
+  // Unsaved bots already written again on a poll answer: they wait for a real step, never the poll's pace.
+  private readonly spent = new Set<string>()
+  // A real step asked while a flush was going: one more flush follows it.
+  private stepWaiting = false
 
   constructor(
     private readonly store: Pick<BotSlackIcons, 'shown' | 'markShown'>,
@@ -46,19 +50,36 @@ export class BotAvatarShown {
     ) {
       this.byBot.set(botId, shown)
       this.unsaved.add(botId)
+      this.spent.delete(botId)
       await this.write(botId)
     }
   }
 
-  /** Writes again the records whose write failed, on the next poll answer or bot write, so a passing disk
-   *  error doesn't leave a restart sending older art. Nothing to write costs nothing. */
-  flush(): Promise<void> {
-    // One in progress is joined, so a stuck write holds one flush however many poll answers ask. One bot's
-    // write failing again leaves the others to go.
-    this.flushing ??= Promise.all(
-      [...this.unsaved].map((botId) => this.write(botId).catch(() => {}))
-    ).then(() => {
+  /** Writes again the records whose write failed: once on the next poll answer, and again on each real step
+   *  (a bot write, a sign-in, the poll's outage ending), so a passing disk error doesn't leave a restart
+   *  sending older art and a lasting one costs the poll nothing. Nothing to write costs nothing. */
+  flush(onAnswer = false): Promise<void> {
+    // One in progress is joined, so a stuck write holds one flush however many poll answers ask.
+    if (this.flushing) {
+      this.stepWaiting ||= !onAnswer
+      return this.flushing
+    }
+    if (!onAnswer) {
+      this.spent.clear()
+    }
+    const due = [...this.unsaved].filter((botId) => !this.spent.has(botId))
+    if (onAnswer) {
+      for (const botId of due) {
+        this.spent.add(botId)
+      }
+    }
+    // One bot's write failing again leaves the others to go.
+    this.flushing = Promise.all(due.map((botId) => this.write(botId).catch(() => {}))).then(() => {
       this.flushing = null
+      if (this.stepWaiting) {
+        this.stepWaiting = false
+        return this.flush()
+      }
     })
     return this.flushing
   }
@@ -73,12 +94,14 @@ export class BotAvatarShown {
       const shown = this.byBot.get(botId)
       if (!this.exists(botId) || shown === undefined || !this.unsaved.has(botId)) {
         this.unsaved.delete(botId)
+        this.spent.delete(botId)
         return
       }
       await this.store.markShown(botId, shown)
       // A newer record marked meanwhile has its own write queued after this one.
       if (this.byBot.get(botId) === shown) {
         this.unsaved.delete(botId)
+        this.spent.delete(botId)
       }
     })
     this.waiting.set(botId, run)
@@ -93,5 +116,6 @@ export class BotAvatarShown {
   delete(botId: string): void {
     this.byBot.delete(botId)
     this.unsaved.delete(botId)
+    this.spent.delete(botId)
   }
 }
