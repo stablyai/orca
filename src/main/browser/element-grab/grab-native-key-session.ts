@@ -17,8 +17,11 @@ export class GrabNativeKeySession {
   private revision = 0
   private enabled = false
   private stopped = false
-  private pending: { revision: number; finish: (ready: boolean, retire?: boolean) => void } | null =
-    null
+  private pending: {
+    revision: number
+    finish: (ready: boolean, retire?: boolean) => void
+    supersede: (next: Promise<boolean>) => void
+  } | null = null
   private readonly unregisterSuspension: () => void
 
   constructor(
@@ -51,9 +54,9 @@ export class GrabNativeKeySession {
     if (this.stopped || this.guest.isDestroyed()) {
       return Promise.resolve(false)
     }
-    this.pending?.finish(false, false)
+    const superseded = this.pending
     const revision = ++this.revision
-    return new Promise((resolve) => {
+    const settled = new Promise<boolean>((resolve) => {
       const timer = setTimeout(() => finish(false), 1_000)
       const finish = (ready: boolean, retire = true): void => {
         clearTimeout(timer)
@@ -67,7 +70,11 @@ export class GrabNativeKeySession {
           this.stop()
         }
       }
-      this.pending = { revision, finish }
+      const supersede = (next: Promise<boolean>): void => {
+        clearTimeout(timer)
+        void next.then(resolve)
+      }
+      this.pending = { revision, finish, supersede }
       this.guest.send(GRAB_NATIVE_KEY_POLICY, {
         token: this.token,
         revision,
@@ -75,6 +82,10 @@ export class GrabNativeKeySession {
         paletteKeys: this.paletteKeys
       })
     })
+    // A request a newer one replaced reports what that one achieved: an agent suspending the keys
+    // mid-activation must not fail the activation or stop the session it superseded.
+    superseded?.supersede(settled)
+    return settled
   }
 
   private readonly onReport = (
