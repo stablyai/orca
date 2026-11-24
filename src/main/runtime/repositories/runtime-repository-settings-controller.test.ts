@@ -16,7 +16,7 @@ function makeController() {
   const updateRepo = vi.fn().mockReturnValue({ ...repo, worktreeBaseRef: undefined })
   const controller = new RuntimeRepositorySettingsController({
     // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: this settings fixture only persists updates through updateRepo.
-    getStore: () => ({ updateRepo }) as RuntimeStore,
+    getStore: () => ({ updateRepo }) as unknown as RuntimeStore,
     resolveRepo: async () => repo,
     forgetTerminalTopology: vi.fn(),
     invalidateResolvedWorktrees: vi.fn(),
