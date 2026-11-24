@@ -1,7 +1,7 @@
 // A read-only ZCode session (a bot's look-around or tidy-up) is held by an allow-list of tools, which
 // ZCode applies when it registers its own tools and to every server's, at a session's create and at
 // its resume alike; an allow-list, so a tool a later ZCode adds stays out. Nothing here relies on an
-// approval: nobody is watching to give one. (Checked live on ZCode 4.0.0: under it a write, a shell
+// approval: nobody is watching to give one. (Checked live on zcode 0.18.0: under it a write, a shell
 // command and a subagent each answer `TOOL_NOT_FOUND`, and a server's tools are not offered at all.)
 import {
   LOOK_AROUND_REFUSAL,
