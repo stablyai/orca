@@ -38,10 +38,13 @@ const AGENTS = ['claude', 'codex'] as const
 const noop = (): void => {}
 const settle = (): Promise<void> => new Promise((resolve) => setTimeout(resolve, 250))
 
-// The bot RPCs the fixture's runtime received, so a case can check what Enter started.
+// This case's bot RPCs, so it checks only what its own Enter started; reset and rewired per case.
 const sentRpcs: { method: string; params: unknown }[] = []
+let runtimeBeforeCase: unknown
 
 function recordBotRpcs(): void {
+  sentRpcs.length = 0
+  runtimeBeforeCase = window.api.runtime
   stubBots([bot])
   const runtime = window.api.runtime as {
     call: (args: { method: string }) => Promise<unknown>
@@ -58,9 +61,14 @@ function recordBotRpcs(): void {
   })
 }
 
+function restoreRuntime(): void {
+  Reflect.set(window.api, 'runtime', runtimeBeforeCase)
+}
+
+// The row's own label, without the avatar's initial or the detail after it.
 function resultLabels(): string[] {
   return [...document.querySelectorAll('[role="listbox"] [role="option"]')].map(
-    (row) => row.textContent ?? ''
+    (row) => row.querySelector(':scope > span.font-medium')?.textContent ?? ''
   )
 }
 
@@ -139,8 +147,12 @@ function searchCase(query: string, check: (frame: HTMLElement) => void | Promise
       </ConfirmationDialogProvider>
     ),
     interact: async (frame) => {
-      await openMenuAndSearch(frame, query)
-      await check(frame)
+      try {
+        await openMenuAndSearch(frame, query)
+        await check(frame)
+      } finally {
+        restoreRuntime()
+      }
     }
   })
 }
@@ -159,35 +171,35 @@ export const noQuery = searchCase('', () => {
  *  starts that side chat with the bot. */
 export const codex = searchCase('codex', async () => {
   const labels = resultLabels()
-  expect(labels[0]?.startsWith('New Codex Chat') ?? false, 'The Codex side chat ranks first')
+  expect(labels[0] === 'New Codex Chat', 'The Codex side chat ranks first')
   expect(
-    !labels.some((text) => /New (Home|Claude Code) Chat/.test(text)),
+    !labels.some((label) => label === 'New Home Chat' || label === 'New Claude Code Chat'),
     'No other chat matches "codex"'
   )
   expect(
-    document.querySelectorAll('[role="menuitem"]').length === 0 ||
-      ![...document.querySelectorAll('[role="menuitem"]')].some((item) =>
-        item.textContent?.includes('Chat')
-      ),
+    ![...document.querySelectorAll('[role="menuitem"]')].some((item) =>
+      item.textContent?.includes('Chat')
+    ),
     'The unfiltered chat list hides while searching'
   )
-  const input = document.querySelector<HTMLInputElement>('input[role="combobox"]')
-  input?.form?.requestSubmit()
+  const before = sentRpcs.length
+  document.querySelector<HTMLInputElement>('input[role="combobox"]')?.form?.requestSubmit()
   await settle()
-  const start = sentRpcs.find((rpc) => rpc.method === 'bots.session.start')
+  const starts = sentRpcs.slice(before).filter((rpc) => rpc.method === 'bots.session.start')
+  const params = starts[0]?.params as { botId?: string; agent?: string } | undefined
   expect(
-    JSON.stringify(start?.params ?? null).includes('"codex"'),
-    `Enter starts a Codex side chat (sent ${JSON.stringify(sentRpcs.map((rpc) => rpc.method))})`
+    starts.length === 1 && params?.botId === bot.id && params.agent === 'codex',
+    `Enter starts one Codex side chat with ${bot.id} (sent ${JSON.stringify(sentRpcs.slice(before))})`
   )
 })
 
 /** "home": only New Home Chat. */
 export const home = searchCase('home', () => {
-  const chats = resultLabels().filter((text) => text.includes('Chat'))
-  expect(chats.length === 1 && chats[0]!.startsWith('New Home Chat'), 'Only New Home Chat matches')
+  const chats = resultLabels().filter((label) => label.endsWith(' Chat'))
+  expect(chats.length === 1 && chats[0] === 'New Home Chat', 'Only New Home Chat matches')
 })
 
 /** A word no chat has: no chat rows at all. */
 export const noChatMatch = searchCase('readme', () => {
-  expect(!resultLabels().some((text) => text.includes(' Chat')), 'No chat matches "readme"')
+  expect(!resultLabels().some((label) => label.endsWith(' Chat')), 'No chat matches "readme"')
 })
