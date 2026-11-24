@@ -37,6 +37,8 @@ export class SpoolFile {
   private compacting = false
   /** A removal not yet run; later ones join it, since every write between them checks the epoch. */
   private removalQueued = false
+  /** A new file starts empty even if its predecessor's unlink failed and left a torn row behind. */
+  private truncateOnOpen = true
   private disposed = false
 
   constructor(
@@ -88,7 +90,10 @@ export class SpoolFile {
           return
         }
         try {
-          this.handle ??= await open(this.path, 'a', 0o600)
+          if (!this.handle) {
+            this.handle = await open(this.path, this.truncateOnOpen ? 'w' : 'a', 0o600)
+            this.truncateOnOpen = false
+          }
           // appendFile keeps writing until every byte lands; a bare write may stop short.
           await this.handle.appendFile(write.chunk)
         } catch {
@@ -164,6 +169,7 @@ export class SpoolFile {
     this.epoch++
     this.index.clear()
     this.writtenBytes = 0
+    this.truncateOnOpen = true
     if (this.removalQueued) {
       return
     }

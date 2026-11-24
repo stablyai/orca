@@ -254,13 +254,14 @@ export class ProviderRelaySpool {
   private updatePressure(): void {
     const [kept, keptCap] = this.pressure(false)
     // While paused, kept lines that alone keep it from resuming count as reaching the cap. Only when
-    // they, not queued writes, hold it: a queue drains by itself and rechecks as it does.
+    // releasing them lifts it, so queued writes alone stay under the limit: a queue drains by itself
+    // and rechecks as it does.
     const keptLimit = this.paused ? keptCap / 2 : keptCap
     if (
       this.keeping &&
       this.mode === 'attached' &&
       kept >= keptLimit &&
-      this.file.pendingBytes <= this.file.index.unackedBytes &&
+      this.file.pendingBytes < keptLimit &&
       this.clientAcked > this.acked
     ) {
       // A kept span reaching the cap can't be kept whole; holding it would stall the agent. Only the
