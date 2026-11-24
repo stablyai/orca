@@ -224,44 +224,44 @@ function QuietLine({
 
 /** A comment bubble's floor, so a short comment leaves its item's title room; never past its cap. */
 const COMMENT_MIN_WIDTH = 200
-/** A comment bubble's cap, as a share of the row: every user bubble's (messageStyles.userBubble). */
-const COMMENT_MAX_SHARE = 0.88
 
 function CommentLine({
   line,
   fontScale,
-  belowAnother,
-  minWidth
+  belowAnother
 }: {
   line: BotItemNoteLine & { kind: 'comment' }
   fontScale: number
   belowAnother: boolean
-  minWidth: number
 }): React.JSX.Element {
   useMobileColorScheme()
   const t = useMobileTranslation()
   const open = useContext(BotItemOpenContext)
-  // The chip's line as laid out, which large system text makes taller than the chip's own height.
-  const [headHeight, setHeadHeight] = useState(CHIP_HEIGHT * fontScale)
   // The comment's images go with its mail, so the [Image #N] its send wrote go, as on desktop.
   const text = stripSentImagePromptMarkers(line.text, line.images?.length ?? 0)
   return (
     // A message, so a row gap below what the note drew above it, not the lines' 3 pt.
-    <View
-      style={[
-        messageStyles.userBubble,
-        styles.comment,
-        { minWidth },
-        belowAnother && styles.belowAnother
-      ]}
-    >
-      {/* The chip's line, laid over a box of its height that adds no width: the words alone size the
+    <View style={[messageStyles.userBubble, styles.comment, belowAnother && styles.belowAnother]}>
+      {/* The chip's line is laid over a box that adds no width past the floor: the words size the
           bubble, and a long title cuts short to them instead of stretching it. */}
-      <View style={{ height: headHeight }}>
+      <View>
+        {/* The box: the floor's width, never past the bubble's cap, and the line's height at the
+            current text size, both in the first layout pass. Its blank text, the line's tallest (the
+            "On"; the chip's is shorter), is only measured. */}
         <View
-          style={styles.commentOn}
-          onLayout={(event) => setHeadHeight(event.nativeEvent.layout.height)}
+          style={[styles.commentFloor, { minHeight: CHIP_HEIGHT * fontScale }]}
+          pointerEvents="none"
+          accessibilityElementsHidden
+          importantForAccessibility="no-hide-descendants"
         >
+          <Text
+            numberOfLines={1}
+            style={[styles.commentProbe, scaledType(typography.metaSize, fontScale)]}
+          >
+            {' '}
+          </Text>
+        </View>
+        <View style={styles.commentOn}>
           <ListTodo size={12 * fontScale} strokeWidth={2} color={colors.textMuted} />
           <Text style={[styles.text, scaledType(typography.metaSize, fontScale)]}>
             {t('bots.items.chat.commentOn', 'On')}
@@ -288,29 +288,15 @@ export function MobileNativeChatBotItemNoteRow({
   fontScale: number
 }): React.JSX.Element {
   const t = useMobileTranslation()
-  const lines = noteLines(note, t)
-  // The row's inner width, so a comment's floor never passes its cap on a narrow screen.
-  const [width, setWidth] = useState<number | null>(null)
-  const minWidth =
-    width === null ? COMMENT_MIN_WIDTH : Math.min(COMMENT_MIN_WIDTH, width * COMMENT_MAX_SHARE)
   return (
-    <View
-      style={styles.row}
-      testID={mobileNativeChatRowId(rowId)}
-      onLayout={
-        lines.some((line) => line.kind === 'comment')
-          ? (event) => setWidth(event.nativeEvent.layout.width - 2 * spacing.lg)
-          : undefined
-      }
-    >
-      {lines.map((line, index) =>
+    <View style={styles.row} testID={mobileNativeChatRowId(rowId)}>
+      {noteLines(note, t).map((line, index) =>
         line.kind === 'comment' ? (
           <CommentLine
             key={`comment:${line.item.uid}`}
             line={line}
             fontScale={fontScale}
             belowAnother={index > 0}
-            minWidth={minWidth}
           />
         ) : (
           <QuietLine key={`line:${line.items[0]!.uid}`} line={line} fontScale={fontScale} />
@@ -418,10 +404,21 @@ const styles = themedStyleSheet(() => ({
   },
   // With the lines' gap, the 12 pt a note row (4) and a message row (8) leave between them.
   belowAnother: { marginTop: spacing.md - MOBILE_NATIVE_CHAT_ACTIVITY_ROW_GAP },
+  // The bubble's padding and border come off the floor; the percentage is of the bubble's room.
+  commentFloor: {
+    width: COMMENT_MIN_WIDTH - 2 * spacing.md - 2,
+    maxWidth: '100%',
+    flexDirection: 'row',
+    overflow: 'hidden'
+  },
+  commentProbe: {
+    width: 100
+  },
   commentOn: {
     position: 'absolute',
     top: 0,
     right: 0,
+    bottom: 0,
     left: 0,
     flexDirection: 'row',
     alignItems: 'center',
