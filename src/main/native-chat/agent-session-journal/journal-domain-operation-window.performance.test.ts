@@ -50,7 +50,9 @@ function chat(
   /** Sends before this index were recovered in doubt after a crash: unknown, never unanswered. */
   recoveredBelow = 0,
   /** Tool calls the last turn ran, as a long agent turn does. */
-  lastTurnTools = 0
+  lastTurnTools = 0,
+  /** Every send in one family: each shares a provider id with one neighbour and a card with the other. */
+  chained = false
 ): Database {
   const directory = mkdtempSync(join(tmpdir(), 'orca-operation-window-'))
   directories.push(directory)
@@ -88,7 +90,7 @@ function chat(
             source: { kind: 'user' },
             handoverRecorded: true,
             // Each send carried a queued card, as agent mail to a member chat does.
-            queuedMessageId: `card-${index}`
+            queuedMessageId: chained ? `card-${Math.floor(index / 2)}` : `card-${index}`
           }
         },
         facts,
@@ -115,7 +117,7 @@ function chat(
                     provider: 'codex',
                     threadId: 'thread',
                     turnId: 'echo',
-                    ordinal: index
+                    ordinal: chained ? Math.floor((index + 1) / 2) : index
                   },
                   ...(linked ? { answeredInTurn: { turn, via: 'start' as const } } : {})
                 }
@@ -330,5 +332,29 @@ it('walks a family of sends linked by provider id and queued card once, however 
   expect([family(100), family(1000)]).toEqual([
     { kept: 100, reads: 798 },
     { kept: 1000, reads: 7998 }
+  ])
+})
+
+it('stops reading a long send family at its first member older than the newest turns', () => {
+  // Every send is in one family running back through the chat, from the newest send (unanswered or
+  // not): the first older member settles the whole read, so the rest is never walked by index.
+  const extra = (turns: number, unanswered: boolean) => {
+    const db = chat(turns, () => true, unanswered ? turns - 1 : undefined, 0, 0, true)
+    const pinned = new JournalSqlScope(db, 'chat', 'epoch')
+    const read = readJournalDomainOperationWindow(pinned, { latestTurns: 8, turnShape: true })
+    const whole = new JournalSqlScope(db, 'chat', 'epoch')
+    const all = readJournalDomainOperationWindow(whole, {
+      latestTurns: 8,
+      turnShape: true,
+      afterSequence: -1
+    })
+    db.close()
+    const ids = (window: typeof read) =>
+      window.snapshot.submissions.map((send) => send.clientMessageId)
+    expect(ids(read)).toEqual(ids(all))
+    return pinned.work.rows - whole.work.rows
+  }
+  expect([extra(50, true), extra(500, true), extra(50, false), extra(500, false)]).toEqual([
+    31, 31, 46, 46
   ])
 })

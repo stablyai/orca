@@ -14,6 +14,7 @@ import {
   newestTurnsOnly,
   keptSends,
   reachesBefore,
+  recentSends,
   readSend,
   seedSends,
   sendHeads,
@@ -117,24 +118,22 @@ export function readJournalDomainOperationWindow(
     ...anchorAt
   ]
   const earliest = anchored.length > 0 ? Math.min(...anchored) : null
-  // The whole read is cheaper than reading by index the long stretch a send it holds pins it back
-  // to. An old unanswered send settles that alone; only otherwise are the unsettled sends' families read.
-  const newest = Math.min(...anchorAt)
-  let pinned = (earliest ?? Infinity) < newest
-  if (recent && !pinned) {
-    sends = withSends(scope, [], sends)
-    const held = keptSends(sends, operations, newest, null, anchors.anchorsOnly === true)
-    pinned = reachesBefore(held, earliest, newest)
-  }
-  if (recent && pinned) {
+  const fresh = recent
+    ? recentSends(scope, sends, operations, earliest, Math.min(...anchorAt), !!anchors.anchorsOnly)
+    : sends
+  if (fresh === null) {
     indexed = false
-    sends = sendHeads(scope)
   }
+  sends = fresh ?? sendHeads(scope)
   let start =
     earliest === null ? null : anchors.withoutTurnAhead ? earliest : marginBefore(scope, earliest)
   const end = earliest !== null && bounded ? windowEnd(scope, reaches) : null
   if (indexed && start !== null) {
-    sends = withSends(scope, sends, windowSends(scope, start, end ?? Number.MAX_SAFE_INTEGER))
+    // A newest-turns window stops reading a family at its first member older than the window: the
+    // window must widen to it, which the whole read below answers.
+    const older = (send: Send) => recent && reachesBefore([send], null, start ?? Infinity)
+    const placed = windowSends(scope, start, end ?? Number.MAX_SAFE_INTEGER)
+    sends = withSends(scope, sends, placed, older)
   }
   let kept: Send[] = []
   // A held send's own rows, and the head it was sent at, are held too: a turn may claim a send by
@@ -149,7 +148,11 @@ export function readJournalDomainOperationWindow(
     if (next === null || (start !== null && next >= start)) {
       break
     }
-    if (indexed && start !== null) {
+    if (recent && indexed) {
+      // Widening a newest-turns window means a long stretch: one whole read is cheaper.
+      indexed = false
+      sends = sendHeads(scope)
+    } else if (indexed && start !== null) {
       // The sends placed in the stretch the window just took on.
       sends = withSends(scope, sends, windowSends(scope, next, start))
     }

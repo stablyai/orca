@@ -101,12 +101,17 @@ export function windowSends(scope: JournalSqlScope, start: number, end: number):
 export function withSends(
   scope: JournalSqlScope,
   sends: readonly Send[],
-  more: readonly Send[]
+  more: readonly Send[],
+  /** Stops the walk once a send it reaches settles what the caller needs. */
+  until?: (send: Send) => boolean
 ): Send[] {
   const byId = new Map(sends.map((send) => [send.messageId, send]))
   let added = more.filter((send) => !byId.has(send.messageId))
   while (added.length > 0) {
     added.forEach((send) => byId.set(send.messageId, send))
+    if (until && added.some(until)) {
+      break
+    }
     const providers = [...new Set(added.flatMap((send) => send.providerItemId ?? []))]
     const cards = [...new Set(added.flatMap((send) => send.queuedMessageId ?? []))]
     const related = [
@@ -177,6 +182,26 @@ export function sendHeads(
         )
       }
     })
+}
+
+/** The unsettled `seed` with its families, or null once a send the window must hold sits before the
+ *  `newest` turns: the whole read is cheaper than reading by index the stretch it pins the window to.
+ *  Each family member of a held unanswered send is held, so the first older one ends the walk. */
+export function recentSends(
+  scope: JournalSqlScope,
+  seed: Send[],
+  operations: ReadonlySet<string>,
+  earliest: number | null,
+  newest: number,
+  anchorsOnly: boolean
+): Send[] | null {
+  const older = (send: Send) => !anchorsOnly && reachesBefore([send], null, newest)
+  if ((earliest ?? Infinity) < newest || seed.some(older)) {
+    return null
+  }
+  const sends = withSends(scope, [], seed, older)
+  const held = keptSends(sends, operations, newest, null, anchorsOnly)
+  return sends.some(older) || reachesBefore(held, earliest, newest) ? null : sends
 }
 
 /** Whether a send the window must hold sits before `first` (by its rows, or the head it was sent at). */
