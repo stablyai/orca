@@ -21,14 +21,14 @@ const READ_COMMANDS: Record<string, readonly (readonly string[])[]> = {
     ['bot', 'list'],
     ['bot', 'chats'],
     ['bot', 'item', 'list'],
-    ['bot', 'item', 'show'],
+    ['bot', 'item', true],
     ['bot', 'work', 'list'],
     ['linear', 'issue'],
     ['linear', 'search'],
     ['linear', 'list-issues'],
     ['bot', 'suggest'],
     ['automations', 'list'],
-    ['automations', 'show'],
+    ['automations', true],
     ['repo', 'list'],
     ['worktree', 'ps'],
     ['worktree', 'list']
@@ -122,15 +122,47 @@ export function unwrapShell(command: string): string {
 /** How a bot's preamble names this session's own CLI on POSIX; Orca seals the variable. */
 const BOT_CLI_PREFIX = '"${ORCA_CLI_COMMAND:-orca}" '
 
-/** Whether a shell command is one read the run may make. */
-export function lookAroundCommandAllowed(command: string): boolean {
+/** Shell syntax a look-around command may not use, named for the refusal, with the matched text or not. */
+const SHELL_SYNTAX: readonly (readonly [RegExp, string, boolean])[] = [
+  [/\n|\r/, 'a second line', false],
+  [/"/, "double quotes (use 'single quotes')", false],
+  [/&&|\|\||;/, 'chaining', true],
+  [/\|/, 'a pipe', true],
+  [/\d*(?:>>?|<)(?:&\d*-?)?/, 'a redirect', true],
+  [/&/, 'running in the background', true],
+  [/\$\(?|`/, 'expansion', true]
+]
+
+/** Names the shell syntax that kept `command` from splitting into plain words. */
+function shellSyntaxRefusal(command: string): string {
+  const unquoted = command.replace(/'[^'\n\r]*'/g, "''")
+  for (const [pattern, name, show] of SHELL_SYNTAX) {
+    const match = pattern.exec(unquoted)
+    if (match) {
+      const shown = show ? ` ("${match[0]}")` : ''
+      return `Looking around runs one plain command at a time: ${name}${shown} isn't allowed. Run one plain read, with values in 'single quotes'.`
+    }
+  }
+  const word = unquoted.split(/[ \t]+/).find((part) => part && !PLAIN_WORD.test(part))
+  return `Looking around runs one plain command at a time: "${word ?? command}" is shell syntax it can't run. Use plain words or 'single quotes'.`
+}
+
+function notARead(what: string): string {
+  return `Looking around can only read: ${what}. Suggest this as a next step instead.`
+}
+
+/** Why a shell command is not one read the run may make, or null when it is. */
+export function lookAroundCommandRefusal(command: string): string | null {
   const unwrapped = unwrapShell(command)
   const inner = unwrapped.startsWith(BOT_CLI_PREFIX)
     ? `orca ${unwrapped.slice(BOT_CLI_PREFIX.length)}`
     : unwrapped
   const parts = words(inner)
-  if (!parts || parts.length === 0) {
-    return false
+  if (!parts) {
+    return shellSyntaxRefusal(inner)
+  }
+  if (parts.length === 0) {
+    return notARead('an empty command runs nothing')
   }
   const [program, ...rest] = parts
   // A bare name, so PATH picks the real program, not `./gh` or `node_modules/.bin/git`; an
@@ -138,16 +170,28 @@ export function lookAroundCommandAllowed(command: string): boolean {
   const allowed = Object.hasOwn(READ_COMMANDS, program) ? READ_COMMANDS[program] : undefined
   const path = allowed?.find((candidate) => candidate.every((word, index) => rest[index] === word))
   if (!path) {
-    return false
+    const end = rest.findIndex((word) => !/^[a-z][a-z-]*$/.test(word))
+    const subcommand = rest.slice(0, Math.min(3, end === -1 ? 3 : end))
+    return notARead(`"${[program, ...subcommand].join(' ')}" isn't a read`)
   }
+  const name = [program, ...path].join(' ')
   const args = rest.slice(path.length)
-  if (args.some((word) => REFUSED_ARGUMENTS[program]?.(word) === true)) {
-    return false
+  const refused = args.find((word) => REFUSED_ARGUMENTS[program]?.(word) === true)
+  if (refused !== undefined) {
+    return notARead(`"${refused}" makes "${name}" more than a read`)
   }
   if (program === 'gh' && !ghStaysOnGitHub(args)) {
-    return false
+    return notARead(`"${name}" may only read github.com, without --web`)
   }
-  return path[0] !== 'branch' || args.every((word) => GIT_BRANCH_LISTING.has(word))
+  if (path[0] === 'branch' && !args.every((word) => GIT_BRANCH_LISTING.has(word))) {
+    return notARead('"git branch" may only list branches')
+  }
+  return null
+}
+
+/** Whether a shell command is one read the run may make. */
+export function lookAroundCommandAllowed(command: string): boolean {
+  return lookAroundCommandRefusal(command) === null
 }
 
 /** Claude tools that only read, or only look up other tools. */
@@ -160,18 +204,26 @@ const READ_TOOLS: ReadonlySet<string> = new Set([
   'ToolSearch'
 ])
 
-/** Claude's PreToolUse answer: an explicit allow, so a read never waits on a prompt nobody sees. */
-export function lookAroundToolDecision(toolName: string, input: unknown): 'allow' | 'deny' {
+export type LookAroundToolDecision = { decision: 'allow' } | { decision: 'deny'; reason: string }
+
+/** Claude's PreToolUse answer: an explicit allow, so a read never waits on a prompt nobody sees;
+ *  a refusal names what was refused, so the model doesn't retry variants of it. */
+export function lookAroundToolDecision(toolName: string, input: unknown): LookAroundToolDecision {
   if (READ_TOOLS.has(toolName)) {
-    return 'allow'
+    return { decision: 'allow' }
   }
   if (toolName === 'Bash' && typeof input === 'object' && input !== null && 'command' in input) {
-    return typeof input.command === 'string' && lookAroundCommandAllowed(input.command)
-      ? 'allow'
-      : 'deny'
+    const refusal =
+      typeof input.command === 'string'
+        ? lookAroundCommandRefusal(input.command)
+        : notARead('the command is missing')
+    return refusal === null ? { decision: 'allow' } : { decision: 'deny', reason: refusal }
   }
   // MCP tools, writes, web fetches, subagents and anything new.
-  return 'deny'
+  return {
+    decision: 'deny',
+    reason: `Looking around can only read: the ${toolName} tool isn't allowed. Reads run through Read, Grep, Glob or Bash; suggest anything else as a next step instead.`
+  }
 }
 
 /** A second guard for Claude: tools the CLI never offers this run. */
