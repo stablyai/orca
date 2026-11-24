@@ -12,10 +12,6 @@ const PositiveIds = z.array(z.number().int().positive())
 
 export const GiteaServerIdParams = z.object({ serverId: OptionalString }).optional().default({})
 
-export const GiteaSelectServerParams = z.object({
-  serverId: requiredString('Missing Gitea server')
-})
-
 export const GiteaConnectParams = z.object({
   baseUrl: requiredString('Missing Gitea server URL'),
   token: requiredString('Missing Gitea access token')

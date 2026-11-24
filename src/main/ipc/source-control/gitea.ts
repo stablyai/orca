@@ -4,7 +4,6 @@ import {
   connect,
   disconnect,
   getStatus,
-  selectServer,
   testConnection
 } from '../../gitea/servers/gitea-server-connection'
 import {
@@ -22,7 +21,6 @@ import {
   GiteaConnectParams,
   GiteaCreateIssue,
   GiteaIssueByNumber,
-  GiteaSelectServerParams,
   GiteaServerIdParams,
   GiteaUpdateIssue,
   GiteaWorkItemsList
@@ -57,10 +55,6 @@ export function registerGiteaHandlers(store: Store): void {
     await disconnect(GiteaServerIdParams.parse(args).serverId)
     _resetPreflightCache()
   })
-
-  ipcMain.handle('gitea:selectServer', async (_event, args: unknown) =>
-    selectServer(GiteaSelectServerParams.parse(args).serverId)
-  )
 
   ipcMain.handle('gitea:status', async () => getStatus())
 

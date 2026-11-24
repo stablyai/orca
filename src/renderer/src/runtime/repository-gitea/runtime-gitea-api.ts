@@ -21,7 +21,6 @@ export function createRuntimeGiteaApi(call: RuntimeGiteaCall): GiteaApi {
   return {
     connect: route('connect'),
     disconnect: route('disconnect'),
-    selectServer: route('selectServer'),
     status: route('status'),
     testConnection: route('testConnection'),
     listWorkItems: route('listWorkItems'),

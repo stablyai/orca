@@ -3,7 +3,6 @@ import {
   connect,
   disconnect,
   getStatus,
-  selectServer,
   testConnection
 } from '../../../../../gitea/servers/gitea-server-connection'
 import {
@@ -16,7 +15,6 @@ import {
   GiteaPullRequestChecks,
   GiteaPullRequestFileContents,
   GiteaRepoSelector,
-  GiteaSelectServerParams,
   GiteaServerIdParams,
   GiteaUpdateIssue,
   GiteaWorkItemsList
@@ -40,12 +38,6 @@ export const GITEA_METHODS = [
     permission: 'accounts-admin',
     params: GiteaServerIdParams,
     handler: async (params) => disconnect(params.serverId)
-  }),
-  defineMethod({
-    name: 'gitea.selectServer',
-    permission: 'workspace',
-    params: GiteaSelectServerParams,
-    handler: async (params) => selectServer(params.serverId)
   }),
   defineMethod({
     name: 'gitea.testConnection',

@@ -6,7 +6,6 @@ type GiteaApi = PreloadApi['gitea']
 export const giteaApi = {
   connect: (args) => ipcRenderer.invoke('gitea:connect', args),
   disconnect: (args) => ipcRenderer.invoke('gitea:disconnect', args),
-  selectServer: (args) => ipcRenderer.invoke('gitea:selectServer', args),
   status: () => ipcRenderer.invoke('gitea:status'),
   testConnection: (args) => ipcRenderer.invoke('gitea:testConnection', args),
   listWorkItems: (args) => ipcRenderer.invoke('gitea:listWorkItems', args),

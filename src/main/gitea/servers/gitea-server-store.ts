@@ -11,13 +11,11 @@ import {
 import { createIntegrationStateFileCache } from '../../credentials/integration-state-file-cache'
 import { createIntegrationTokenFileCache } from '../../credentials/integration-token-file-cache'
 import { validateGiteaApiUrl } from '../requests/gitea-api-url'
-import type { GiteaServer, GiteaServerSelection } from '../../../shared/gitea/gitea-types'
+import type { GiteaServer } from '../../../shared/gitea/gitea-types'
 
 // Server metadata in one JSON file and one encrypted token per server, like Jira sites.
 export type GiteaServerFile = {
   version: 1
-  activeServerId: string | null
-  selectedServerId: GiteaServerSelection | null
   servers: GiteaServer[]
 }
 
@@ -76,7 +74,7 @@ async function ensureDir(dir: string): Promise<void> {
 }
 
 function emptyServerFile(): GiteaServerFile {
-  return { version: 1, activeServerId: null, selectedServerId: null, servers: [] }
+  return { version: 1, servers: [] }
 }
 
 export async function hasStoredToken(serverId: string): Promise<boolean> {
@@ -103,41 +101,21 @@ async function readServerFileFromDisk(): Promise<GiteaServerFile> {
   }
   try {
     const parsed = z
-      .object({
-        servers: z.array(z.unknown()).optional(),
-        activeServerId: z.string().nullable().optional(),
-        selectedServerId: z.string().nullable().optional()
-      })
+      .object({ servers: z.array(z.unknown()).optional() })
       .parse(JSON.parse(await readFile(path, { encoding: 'utf-8' })))
     const servers = (parsed.servers ?? [])
       .map((server) => normalizeServer(server))
       .filter((server): server is GiteaServer => server !== null)
-    return {
-      version: 1,
-      activeServerId: parsed.activeServerId ?? null,
-      selectedServerId: parsed.selectedServerId ?? null,
-      servers
-    }
+    return { version: 1, servers }
   } catch {
     return emptyServerFile()
   }
 }
 
-// Drops servers whose token file is gone and repairs selections that point at them.
+// Drops servers whose token file is gone.
 async function selectableServerFile(file: GiteaServerFile): Promise<GiteaServerFile> {
   const presence = await Promise.all(file.servers.map((server) => hasStoredToken(server.id)))
-  const servers = file.servers.filter((_, index) => presence[index])
-  const activeServerId =
-    file.activeServerId && servers.some((server) => server.id === file.activeServerId)
-      ? file.activeServerId
-      : (servers[0]?.id ?? null)
-  const selectedServerId =
-    file.selectedServerId === 'all'
-      ? 'all'
-      : file.selectedServerId && servers.some((server) => server.id === file.selectedServerId)
-        ? file.selectedServerId
-        : activeServerId
-  return { version: 1, activeServerId, selectedServerId, servers }
+  return { version: 1, servers: file.servers.filter((_, index) => presence[index]) }
 }
 
 export async function getServerFile(): Promise<GiteaServerFile> {
@@ -213,16 +191,13 @@ export async function getServerForHost(
   return token ? { server, token } : null
 }
 
-/** Connected servers and tokens for a selection; 'all' skips servers that fail to decrypt. */
-export async function getServerTokens(
-  selection?: GiteaServerSelection | null
-): Promise<GiteaServerToken[]> {
+/** Connected servers and tokens; one named server rethrows a decrypt failure, all servers skip it. */
+export async function getServerTokens(serverId?: string): Promise<GiteaServerToken[]> {
   const file = await getServerFile()
-  const selected = selection ?? file.selectedServerId ?? file.activeServerId
-  const isAllSelection = selected === 'all'
+  const isAllSelection = serverId === undefined
   const servers = isAllSelection
     ? file.servers
-    : file.servers.filter((server) => server.id === (selected ?? file.activeServerId))
+    : file.servers.filter((server) => server.id === serverId)
   const tokens = await Promise.all(
     servers.map(async (server) => {
       try {

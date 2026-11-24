@@ -1,291 +1,165 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { CircleDot, GitPullRequest, LoaderCircle, Plus, RefreshCw } from 'lucide-react'
-import type { GiteaWorkItem, GiteaWorkItemFilter } from '../../../../../shared/gitea/gitea-types'
-import type { Repo } from '../../../../../shared/repository/repo-types'
-import type { GiteaIssueScope } from '@/store/slices/gitea/gitea'
-import { useAppStore } from '@/store'
+import { ArrowRight, ExternalLink } from 'lucide-react'
+import type { TaskPageComposerActionsModel } from '../use-task-page-composer-actions'
+import { useIntlLocale, useTranslate } from '@/i18n/use-translate'
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { Button } from '@/components/ui/button'
-import { cn } from '@/lib/class-names'
-import { GiteaNewIssueDialog } from '@/components/task-page/gitea/NewIssueDialog'
-import { translate } from '@/i18n/i18n'
+import { openAppHttpLink } from '@/lib/browser/navigation/app-http-link-open'
+import { giteaItemStateLabel } from './gitea-task-options'
+import type { GiteaTaskRow } from './use-task-page-gitea-list'
 
-type GiteaTypeFilter = 'all' | 'issue' | 'pull'
+const COLUMNS = 'grid-cols-[80px_minmax(0,3fr)_120px_110px_50px]'
 
-type GiteaTaskListProps = {
-  repos: Repo[]
-  makeScope: (repo: Repo) => GiteaIssueScope
-  onOpen: (repo: Repo, item: GiteaWorkItem) => void
-  projectPicker?: React.ReactNode
-}
-
-type Row = { repo: Repo; item: GiteaWorkItem }
-
-function getFilterPresets(): { id: GiteaWorkItemFilter; label: string }[] {
-  return [
-    { id: 'all', label: translate('auto.components.GiteaTaskList.c07dd13940', 'All open') },
-    {
-      id: 'assigned',
-      label: translate('auto.components.GiteaTaskList.ab2a229e50', 'Assigned to me')
-    },
-    { id: 'created', label: translate('auto.components.GiteaTaskList.74f30cd767', 'Created') },
-    { id: 'closed', label: translate('auto.components.GiteaTaskList.031c70d963', 'Closed') }
-  ]
-}
-
-function getTypeFilters(): { id: GiteaTypeFilter; label: string }[] {
-  return [
-    { id: 'all', label: translate('auto.components.GiteaTaskList.bf66fad935', 'All') },
-    { id: 'issue', label: translate('auto.components.GiteaTaskList.65a3bffe7a', 'Issues') },
-    { id: 'pull', label: translate('auto.components.GiteaTaskList.9b21aab4c9', 'PRs') }
-  ]
-}
-
-function stateLabel(item: GiteaWorkItem): string {
-  if (item.type === 'pull') {
-    if (item.state === 'merged') {
-      return translate('auto.components.GiteaTaskList.9986e0e679', 'Merged')
-    }
-    if (item.draft) {
-      return translate('auto.components.GiteaTaskList.747423c0f8', 'Draft')
-    }
-  }
-  return item.state === 'closed'
-    ? translate('auto.components.GiteaTaskList.031c70d963', 'Closed')
-    : translate('auto.components.GiteaTaskList.980519b0c8', 'Open')
-}
-
-// Self-contained Tasks-page panel for the Gitea source: fetches unified work
-// items (issues + pull requests) for the selected repos with GitHub-style
-// filters (incl. assigned-to-me) and an issue/PR toggle, and lets the user
-// start a workspace from any of them. Kept out of TaskPage.tsx to avoid growth.
-export function GiteaTaskList({
-  repos,
-  makeScope,
+export function TaskPageGiteaItemList({
+  model,
   onOpen,
-  projectPicker
-}: GiteaTaskListProps): React.JSX.Element {
-  const fetchGiteaWorkItems = useAppStore((s) => s.fetchGiteaWorkItems)
-  const cacheGeneration = useAppStore((s) => s.giteaCacheGeneration)
-  const createGiteaIssue = useAppStore((s) => s.createGiteaIssue)
-  const [rows, setRows] = useState<Row[]>([])
-  const [loading, setLoading] = useState(false)
-  const [error, setError] = useState<string | null>(null)
-  const [filter, setFilter] = useState<GiteaWorkItemFilter>('all')
-  const [typeFilter, setTypeFilter] = useState<GiteaTypeFilter>('all')
-  const [nonce, setNonce] = useState(0)
-  const [newIssueOpen, setNewIssueOpen] = useState(false)
-  const loadSeqRef = useRef(0)
-
-  // New issues target the first selected project (narrow the picker to choose).
-  const newIssueRepo = repos[0] ?? null
-
-  const load = useCallback(async () => {
-    // Why: ignore stale responses so an older load can't overwrite newer state.
-    const seq = ++loadSeqRef.current
-    if (repos.length === 0) {
-      setRows([])
-      setError(null)
-      setLoading(false)
-      return
-    }
-    setLoading(true)
-    setRows([])
-    setError(null)
-    try {
-      const results = await Promise.all(
-        repos.map(async (repo) => {
-          const items = await fetchGiteaWorkItems(makeScope(repo), filter)
-          return items.map((item) => ({ repo, item }))
-        })
-      )
-      if (seq !== loadSeqRef.current) {
-        return
-      }
-      setRows(results.flat())
-    } catch {
-      if (seq !== loadSeqRef.current) {
-        return
-      }
-      setError(translate('auto.components.GiteaTaskList.0285721e62', 'Failed to load Gitea tasks.'))
-    } finally {
-      if (seq === loadSeqRef.current) {
-        setLoading(false)
-      }
-    }
-  }, [repos, makeScope, fetchGiteaWorkItems, filter])
-
-  useEffect(() => {
-    void load()
-  }, [load, nonce, cacheGeneration])
-
-  const visibleRows = useMemo(
-    () => (typeFilter === 'all' ? rows : rows.filter(({ item }) => item.type === typeFilter)),
-    [rows, typeFilter]
-  )
-
-  const handleCreateIssue = useCallback(
-    async (title: string, body: string): Promise<boolean> => {
-      if (!newIssueRepo) {
-        return false
-      }
-      const result = await createGiteaIssue(makeScope(newIssueRepo), { title, body })
-      if (result.ok) {
-        setNonce((n) => n + 1)
-        return true
-      }
-      return false
-    },
-    [createGiteaIssue, makeScope, newIssueRepo]
-  )
-
+  onUse
+}: {
+  model: TaskPageComposerActionsModel
+  onOpen: (item: GiteaTaskRow) => void
+  onUse: (item: GiteaTaskRow) => void
+}): React.JSX.Element {
+  const t = useTranslate()
+  const intlLocale = useIntlLocale()
+  const { giteaItems, giteaLoading, giteaError, displayedGiteaItems, selectedRepos } = model
   return (
-    <div className="flex min-h-0 min-w-0 max-h-full flex-col overflow-hidden rounded-md border border-border/50 bg-muted/50 shadow-sm">
-      <div className="flex min-w-0 flex-col gap-2 border-b border-border/50 p-3">
-        <div className="flex min-w-0 items-center gap-2">
-          <div className="flex shrink-0 items-center gap-1 text-xs">
-            {getTypeFilters().map(({ id, label }) => (
-              <button
-                key={id}
-                type="button"
-                onClick={() => setTypeFilter(id)}
-                className={cn(
-                  'rounded-md border px-2.5 py-1 text-xs transition',
-                  typeFilter === id
-                    ? 'border-foreground/40 bg-foreground/90 text-background'
-                    : 'border-border/50 bg-transparent text-muted-foreground hover:bg-muted/50 hover:text-foreground'
-                )}
-              >
-                {label}
-              </button>
+    <div className="flex min-h-0 max-h-full flex-col rounded-md border border-t-0 border-border/50 bg-muted/50 overflow-hidden rounded-t-none shadow-sm">
+      <div
+        className={`flex-none grid ${COLUMNS} gap-3 border-b border-border/50 px-3 py-2 text-[10px] font-medium uppercase tracking-[0.16em] text-muted-foreground`}
+      >
+        <span>{t('auto.components.TaskPage.eb10c32872', 'ID')}</span>
+        <span>{t('auto.components.TaskPage.16cba35bee', 'Title')}</span>
+        <span>{t('auto.components.TaskPage.00b7ffb952', 'Type / State')}</span>
+        <span>{t('auto.components.TaskPage.f362667d55', 'Updated')}</span>
+        <span />
+      </div>
+      <div
+        className="min-h-0 flex-initial overflow-y-auto scrollbar-sleek"
+        style={{ scrollbarGutter: 'stable' }}
+      >
+        {giteaError ? (
+          <div className="border-b border-border px-4 py-4 text-sm text-destructive">
+            {giteaError}
+          </div>
+        ) : null}
+        {giteaLoading && giteaItems.length === 0 ? (
+          // Fill the viewport with shimmer rows to prevent a loading height jump.
+          <div className="divide-y divide-border/50">
+            {Array.from({ length: 12 }).map((_, i) => (
+              <div key={i} className={`grid w-full gap-3 px-3 py-2 ${COLUMNS}`}>
+                <div className="h-4 w-16 animate-pulse rounded bg-muted/70" />
+                <div className="h-4 w-3/5 animate-pulse rounded bg-muted/70" />
+                <div className="h-3 w-20 animate-pulse rounded bg-muted/60" />
+                <div className="h-3 w-20 animate-pulse rounded bg-muted/60" />
+                <div />
+              </div>
             ))}
           </div>
-          {projectPicker ? (
-            <div className="min-w-0 flex-1">{projectPicker}</div>
-          ) : (
-            <div className="flex-1" />
-          )}
-          {newIssueRepo ? (
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => setNewIssueOpen(true)}
-              className="shrink-0"
+        ) : null}
+        {!giteaLoading && displayedGiteaItems.length === 0 && !giteaError ? (
+          <div className="px-4 py-12 text-center">
+            <p className="text-base font-medium text-foreground">
+              {selectedRepos.length === 0
+                ? t('auto.components.TaskPage.giteaEmptyNoProjects', 'No projects selected')
+                : t('auto.components.TaskPage.giteaEmptyTitle', 'No Gitea items')}
+            </p>
+            <p className="mt-2 text-sm text-muted-foreground">
+              {selectedRepos.length === 0
+                ? t(
+                    'auto.components.TaskPage.giteaEmptyNoProjectsDescription',
+                    'Select a Gitea-hosted project to see its issues and pull requests.'
+                  )
+                : t(
+                    'auto.components.TaskPage.giteaEmptyDescription',
+                    'Nothing matches this filter in the selected projects.'
+                  )}
+            </p>
+          </div>
+        ) : null}
+        <div className="divide-y divide-border/50">
+          {displayedGiteaItems.map((item) => (
+            // div role="button": it nests an open-in-browser button, and button-in-button is invalid HTML.
+            <div
+              role="button"
+              tabIndex={0}
+              key={`${item.repoId}:${item.repoHostId}:${item.id}`}
+              onClick={() => onOpen(item)}
+              onKeyDown={(e) => {
+                if (e.target === e.currentTarget && (e.key === 'Enter' || e.key === ' ')) {
+                  e.preventDefault()
+                  onOpen(item)
+                }
+              }}
+              className={`grid w-full cursor-pointer gap-3 px-3 py-2 text-left ${COLUMNS} hover:bg-muted/50`}
             >
-              <Plus className="size-4" />
-              {translate('auto.components.GiteaTaskList.5997067bee', 'New issue')}
-            </Button>
-          ) : null}
-          <Button
-            variant="outline"
-            size="icon"
-            onClick={() => setNonce((n) => n + 1)}
-            disabled={loading}
-            aria-label={translate(
-              'auto.components.GiteaTaskList.e3db16e7c7',
-              'Refresh Gitea tasks'
-            )}
-            className="shrink-0"
-          >
-            {loading ? (
-              <LoaderCircle className="size-4 animate-spin" />
-            ) : (
-              <RefreshCw className="size-4" />
-            )}
-          </Button>
-        </div>
-        <div className="flex flex-wrap gap-2">
-          {getFilterPresets().map(({ id, label }) => (
-            <button
-              key={id}
-              type="button"
-              onClick={() => setFilter(id)}
-              className={cn(
-                'rounded-md border px-2 py-1 text-xs transition',
-                filter === id
-                  ? 'border-border/50 bg-foreground/90 text-background'
-                  : 'border-border/50 bg-transparent text-foreground hover:bg-muted/50'
-              )}
-            >
-              {label}
-            </button>
+              <span className="font-mono text-xs text-muted-foreground">#{item.number}</span>
+              <span className="flex min-w-0 items-center gap-2">
+                <span className="min-w-0 truncate text-sm">{item.title}</span>
+                {item.labels.slice(0, 3).map((label) => (
+                  <span
+                    key={label}
+                    className="shrink-0 rounded border border-border/50 px-1.5 text-[10px] text-muted-foreground"
+                  >
+                    {label}
+                  </span>
+                ))}
+              </span>
+              <span className="text-xs text-muted-foreground">
+                {item.type === 'pull'
+                  ? t('auto.components.TaskPage.giteaTypePr', 'PR')
+                  : t('auto.components.TaskPage.b1eaa18ace', 'Issue')}{' '}
+                · {giteaItemStateLabel(item)}
+              </span>
+              <span className="text-xs text-muted-foreground">
+                {item.updatedAt ? new Date(item.updatedAt).toLocaleDateString(intlLocale) : ''}
+              </span>
+              <div className="flex items-center justify-end gap-1">
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Button
+                      variant="ghost"
+                      size="icon-xs"
+                      data-contextual-tour-target="tasks-start-workspace"
+                      onClick={(event) => {
+                        event.stopPropagation()
+                        onUse(item)
+                      }}
+                      aria-label={
+                        item.type === 'pull'
+                          ? t(
+                              'auto.components.TaskPage.startWorkspaceFromPr',
+                              'Start workspace from PR {{number}}',
+                              { number: item.number }
+                            )
+                          : t(
+                              'auto.components.TaskPage.startWorkspaceFromIssue',
+                              'Start workspace from issue {{number}}',
+                              { number: item.number }
+                            )
+                      }
+                    >
+                      <ArrowRight className="size-3.5" />
+                    </Button>
+                  </TooltipTrigger>
+                  <TooltipContent side="bottom" sideOffset={6}>
+                    {t('auto.components.TaskPage.9497f2787c', 'Start workspace')}
+                  </TooltipContent>
+                </Tooltip>
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation()
+                    openAppHttpLink(item.url, { event: e })
+                  }}
+                  aria-label={t('auto.components.TaskPage.openInGitea', 'Open in Gitea')}
+                  className="text-muted-foreground hover:text-foreground"
+                >
+                  <ExternalLink className="size-3.5" />
+                </button>
+              </div>
+            </div>
           ))}
         </div>
       </div>
-
-      <div className="min-h-0 flex-1 overflow-auto scrollbar-sleek">
-        {error ? (
-          <div className="px-4 py-4 text-sm text-destructive">{error}</div>
-        ) : repos.length === 0 ? (
-          <div className="px-4 py-6 text-sm text-muted-foreground">
-            {translate(
-              'auto.components.GiteaTaskList.34cd2d1024',
-              'Select a Gitea-hosted project to see its issues and pull requests.'
-            )}
-          </div>
-        ) : loading && rows.length === 0 ? (
-          <div className="flex items-center gap-2 px-4 py-6 text-sm text-muted-foreground">
-            <LoaderCircle className="size-4 animate-spin" />
-            {translate('auto.components.GiteaTaskList.6e1e6691d7', 'Loading Gitea tasks…')}
-          </div>
-        ) : visibleRows.length === 0 ? (
-          <div className="px-4 py-6 text-sm text-muted-foreground">
-            {translate(
-              'auto.components.GiteaTaskList.00f67933b5',
-              'No matching issues or pull requests.'
-            )}
-          </div>
-        ) : (
-          <div className="divide-y divide-border/50">
-            {visibleRows.map(({ repo, item }) => (
-              <button
-                key={`${repo.id}:${item.type}:${item.number}`}
-                type="button"
-                onClick={() => onOpen(repo, item)}
-                className="flex w-full items-start gap-3 px-3 py-2.5 text-left transition-colors hover:bg-muted/60"
-              >
-                <span className="mt-0.5 shrink-0 text-muted-foreground">
-                  {item.type === 'pull' ? (
-                    <GitPullRequest className="size-4" />
-                  ) : (
-                    <CircleDot className="size-4" />
-                  )}
-                </span>
-                <span className="min-w-0 flex-1">
-                  <span className="truncate text-sm font-medium text-foreground">{item.title}</span>
-                  <span className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-muted-foreground">
-                    <span className="font-mono">#{item.number}</span>
-                    <span
-                      className={cn(
-                        'rounded px-1.5 py-0.5 text-[10px] font-medium',
-                        item.state === 'open'
-                          ? 'bg-status-success/15 text-status-success'
-                          : 'bg-muted text-muted-foreground'
-                      )}
-                    >
-                      {stateLabel(item)}
-                    </span>
-                    {repos.length > 1 ? <span className="truncate">{repo.displayName}</span> : null}
-                    {item.labels.slice(0, 3).map((label) => (
-                      <span key={label} className="truncate rounded bg-muted px-1.5 py-0.5">
-                        {label}
-                      </span>
-                    ))}
-                  </span>
-                </span>
-              </button>
-            ))}
-          </div>
-        )}
-      </div>
-
-      {newIssueRepo ? (
-        <GiteaNewIssueDialog
-          open={newIssueOpen}
-          onOpenChange={setNewIssueOpen}
-          repoName={newIssueRepo.displayName}
-          onCreate={handleCreateIssue}
-        />
-      ) : null}
     </div>
   )
 }

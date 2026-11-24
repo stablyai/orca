@@ -2,7 +2,6 @@ import type {
   GiteaConnectArgs,
   GiteaConnectionStatus,
   GiteaServer,
-  GiteaServerSelection,
   GiteaViewer
 } from '../../../shared/gitea/gitea-types'
 import {
@@ -13,7 +12,6 @@ import {
   getServerFile,
   getServerTokens,
   inServerRegistryOrder,
-  type GiteaServerFile,
   type GiteaServerToken,
   normalizeGiteaApiBaseUrl,
   saveToken,
@@ -94,13 +92,11 @@ async function fetchGiteaUser(
 export async function getStatus(): Promise<GiteaConnectionStatus> {
   // getServerFile already drops tokenless servers and repairs the selection.
   const file = await getServerFile()
-  const usableServers = await getServerTokens('all')
+  const usableServers = await getServerTokens()
   const credentialError = await getCredentialError(file.servers.map((server) => server.id))
   return {
     connected: usableServers.length > 0,
     servers: file.servers,
-    activeServerId: file.activeServerId,
-    selectedServerId: file.selectedServerId ?? file.activeServerId,
     ...(credentialError ? { credentialError } : {})
   }
 }
@@ -147,8 +143,6 @@ export async function connect(
     const file = await getServerFile()
     await writeServerFile({
       version: 1,
-      activeServerId: id,
-      selectedServerId: id,
       servers: [server, ...file.servers.filter((entry) => entry.id !== id)]
     })
   })
@@ -160,37 +154,11 @@ export async function disconnect(serverId?: string): Promise<void> {
     const file = await getServerFile()
     const ids = serverId ? [serverId] : file.servers.map((server) => server.id)
     await Promise.all(ids.map((id) => deleteToken(id)))
-    await writeServerFile(withoutServers(file, ids))
-  })
-}
-
-function withoutServers(file: GiteaServerFile, ids: readonly string[]): GiteaServerFile {
-  const servers = file.servers.filter((server) => !ids.includes(server.id))
-  // Why: don't leave active/selected pointing at a removed server.
-  const activeServerId =
-    servers.find((server) => server.id === file.activeServerId)?.id ?? servers[0]?.id ?? null
-  const selectedServerId =
-    file.selectedServerId === 'all' || servers.some((server) => server.id === file.selectedServerId)
-      ? file.selectedServerId
-      : activeServerId
-  return { version: 1, activeServerId, selectedServerId, servers }
-}
-
-export async function selectServer(
-  selection: GiteaServerSelection
-): Promise<GiteaConnectionStatus> {
-  await inServerRegistryOrder(async () => {
-    const file = await getServerFile()
-    if (selection !== 'all' && !file.servers.some((server) => server.id === selection)) {
-      return
-    }
     await writeServerFile({
-      ...file,
-      activeServerId: selection === 'all' ? file.activeServerId : selection,
-      selectedServerId: selection
+      version: 1,
+      servers: file.servers.filter((server) => !ids.includes(server.id))
     })
   })
-  return getStatus()
 }
 
 export async function testConnection(

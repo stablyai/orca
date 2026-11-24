@@ -18,14 +18,9 @@ export type GiteaViewer = {
   avatarUrl?: string
 }
 
-// A specific stored server id, or 'all' to fan a read across every server.
-export type GiteaServerSelection = string
-
 export type GiteaConnectionStatus = {
   connected: boolean
   servers?: GiteaServer[]
-  activeServerId?: string | null
-  selectedServerId?: GiteaServerSelection | null
   // Set when a stored token file exists but could not be decrypted, so the UI
   // can explain reads failing while the connection still looks saved.
   credentialError?: string

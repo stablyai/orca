@@ -1,22 +1,14 @@
 import type { StateCreator } from 'zustand'
 import type { AppState } from '../../types'
-import type { CacheEntry } from '../../github/cache/cache-model'
 import type {
   GiteaConnectionStatus,
-  GiteaIssue,
   GiteaIssueUpdate,
-  GiteaMutationResult,
-  GiteaServerSelection,
-  GiteaWorkItem,
-  GiteaWorkItemFilter
+  GiteaMutationResult
 } from '../../../../../shared/gitea/gitea-types'
 import type { TaskSourceContext } from '../../../../../shared/work-items/task-source-context'
 import { giteaApiFor } from '@/runtime/repository-gitea/gitea-owner-api'
 
 // Repo calls go to the host that owns the repo; server connections belong to this client's runtime.
-
-const CACHE_TTL = 60_000
-const MAX_CACHE_ENTRIES = 300
 
 export type GiteaIssueScope = {
   repoPath: string
@@ -29,23 +21,13 @@ export type GiteaIssueScope = {
 export type GiteaSlice = {
   giteaStatus: GiteaConnectionStatus | null
   giteaStatusLoaded: boolean
-  giteaCacheGeneration: number
-  giteaWorkItems: Record<string, CacheEntry<GiteaWorkItem[]>>
-  giteaIssueDetail: Record<string, CacheEntry<GiteaIssue | null>>
   refreshGiteaStatus: () => Promise<GiteaConnectionStatus | null>
   giteaConnect: (args: {
     baseUrl: string
     token: string
   }) => Promise<{ ok: boolean; error?: string }>
   giteaDisconnect: (serverId?: string) => Promise<void>
-  giteaSelectServer: (serverId: GiteaServerSelection) => Promise<GiteaConnectionStatus | null>
   giteaTestConnection: (serverId?: string) => Promise<{ ok: boolean; error?: string }>
-  fetchGiteaWorkItems: (
-    scope: GiteaIssueScope,
-    filter?: GiteaWorkItemFilter,
-    limit?: number
-  ) => Promise<GiteaWorkItem[]>
-  fetchGiteaIssue: (scope: GiteaIssueScope, issueNumber: number) => Promise<GiteaIssue | null>
   createGiteaIssue: (
     scope: GiteaIssueScope,
     input: { title: string; body?: string; assignees?: string[]; labelIds?: number[] }
@@ -55,39 +37,6 @@ export type GiteaSlice = {
     issueNumber: number,
     updates: GiteaIssueUpdate
   ) => Promise<GiteaMutationResult>
-  addGiteaIssueComment: (
-    scope: GiteaIssueScope,
-    issueNumber: number,
-    body: string
-  ) => Promise<GiteaMutationResult>
-}
-
-function isFresh<T>(entry: CacheEntry<T> | undefined): entry is CacheEntry<T> {
-  return entry !== undefined && Date.now() - entry.fetchedAt < CACHE_TTL
-}
-
-function evictStale<T>(cache: Record<string, CacheEntry<T>>): Record<string, CacheEntry<T>> {
-  const keys = Object.keys(cache)
-  if (keys.length <= MAX_CACHE_ENTRIES) {
-    return cache
-  }
-  const sorted = keys.sort((a, b) => (cache[a]?.fetchedAt ?? 0) - (cache[b]?.fetchedAt ?? 0))
-  const pruned: Record<string, CacheEntry<T>> = {}
-  for (const key of sorted.slice(sorted.length - MAX_CACHE_ENTRIES)) {
-    pruned[key] = cache[key]
-  }
-  return pruned
-}
-
-// Why: namespace cache keys by server context so reads don't bleed across
-// server selections. An explicit sourceContext pins the server; otherwise the
-// currently selected server (or 'all') scopes the key.
-function scopeKey(scope: GiteaIssueScope, selectedServerId?: GiteaServerSelection | null): string {
-  const repoKey = `${scope.repoOwnerExecutionHostId ?? 'local'}:${scope.repoId?.trim() || scope.repoPath}`
-  const serverKey = scope.sourceContext
-    ? JSON.stringify(scope.sourceContext)
-    : `selected:${selectedServerId ?? 'all'}`
-  return `${repoKey}@${serverKey}`
 }
 
 function requestArgs(scope: GiteaIssueScope): GiteaIssueScope {
@@ -104,9 +53,6 @@ function requestArgs(scope: GiteaIssueScope): GiteaIssueScope {
 export const createGiteaSlice: StateCreator<AppState, [], [], GiteaSlice> = (set, get) => ({
   giteaStatus: null,
   giteaStatusLoaded: false,
-  giteaCacheGeneration: 0,
-  giteaWorkItems: {},
-  giteaIssueDetail: {},
 
   refreshGiteaStatus: async () => {
     try {
@@ -122,38 +68,14 @@ export const createGiteaSlice: StateCreator<AppState, [], [], GiteaSlice> = (set
   giteaConnect: async (args) => {
     const result = await window.api.gitea.connect(args)
     if (result.ok) {
-      set((state) => ({
-        giteaWorkItems: {},
-        giteaIssueDetail: {},
-        giteaCacheGeneration: state.giteaCacheGeneration + 1
-      }))
       await get().refreshGiteaStatus()
     }
     return result.ok ? { ok: true } : { ok: false, error: result.error }
   },
 
   giteaDisconnect: async (serverId) => {
-    set((state) => ({
-      giteaWorkItems: {},
-      giteaIssueDetail: {},
-      giteaCacheGeneration: state.giteaCacheGeneration + 1
-    }))
     await window.api.gitea.disconnect(serverId ? { serverId } : undefined)
     await get().refreshGiteaStatus()
-  },
-
-  giteaSelectServer: async (serverId) => {
-    const status = await window.api.gitea.selectServer({ serverId })
-    // Why: drop caches keyed by the previous selection so a server switch can't
-    // serve stale data until TTL expiry.
-    set({
-      giteaStatus: status,
-      giteaStatusLoaded: true,
-      giteaCacheGeneration: get().giteaCacheGeneration + 1,
-      giteaWorkItems: {},
-      giteaIssueDetail: {}
-    })
-    return status
   },
 
   giteaTestConnection: async (serverId) => {
@@ -163,92 +85,13 @@ export const createGiteaSlice: StateCreator<AppState, [], [], GiteaSlice> = (set
     return result.ok ? { ok: true } : { ok: false, error: result.error }
   },
 
-  fetchGiteaWorkItems: async (scope, filter, limit) => {
-    const limitKey = typeof limit === 'number' ? String(limit) : 'default'
-    const key = `${scopeKey(scope, get().giteaStatus?.selectedServerId)}:${filter ?? 'all'}:${limitKey}`
-    const cached = get().giteaWorkItems[key]
-    if (isFresh(cached) && cached.data) {
-      return cached.data
-    }
-    const generation = get().giteaCacheGeneration
-    const items = await giteaApiFor(scope).listWorkItems({
-      ...requestArgs(scope),
-      filter,
-      limit
-    })
-    if (generation !== get().giteaCacheGeneration) {
-      return []
-    }
-    set((state) => ({
-      giteaWorkItems: evictStale({
-        ...state.giteaWorkItems,
-        [key]: { data: items, fetchedAt: Date.now() }
-      })
-    }))
-    return items
-  },
-
-  fetchGiteaIssue: async (scope, issueNumber) => {
-    const key = `${scopeKey(scope, get().giteaStatus?.selectedServerId)}#${issueNumber}`
-    const cached = get().giteaIssueDetail[key]
-    if (isFresh(cached)) {
-      return cached.data
-    }
-    const generation = get().giteaCacheGeneration
-    const issue = await giteaApiFor(scope).issue({
-      ...requestArgs(scope),
-      number: issueNumber
-    })
-    if (generation !== get().giteaCacheGeneration) {
-      return null
-    }
-    set((state) => ({
-      giteaIssueDetail: evictStale({
-        ...state.giteaIssueDetail,
-        [key]: { data: issue, fetchedAt: Date.now() }
-      })
-    }))
-    return issue
-  },
-
   createGiteaIssue: async (scope, input) => {
     const result = await giteaApiFor(scope).createIssue({ ...requestArgs(scope), ...input })
-    if (result.ok) {
-      // Invalidate cached lists for this repo so the new issue appears.
-      const prefix = `${scopeKey(scope, get().giteaStatus?.selectedServerId)}:`
-      set((state) => ({
-        giteaWorkItems: Object.fromEntries(
-          Object.entries(state.giteaWorkItems).filter(([key]) => !key.startsWith(prefix))
-        )
-      }))
-      return { ok: true, number: result.number, url: result.url }
-    }
-    return { ok: false, error: result.error }
+    return result.ok
+      ? { ok: true, number: result.number, url: result.url }
+      : { ok: false, error: result.error }
   },
 
-  updateGiteaIssue: async (scope, issueNumber, updates) => {
-    const result = await giteaApiFor(scope).updateIssue({
-      ...requestArgs(scope),
-      number: issueNumber,
-      updates
-    })
-    if (result.ok) {
-      const prefix = `${scopeKey(scope, get().giteaStatus?.selectedServerId)}:`
-      const detailKey = `${scopeKey(scope, get().giteaStatus?.selectedServerId)}#${issueNumber}`
-      set((state) => ({
-        giteaCacheGeneration: state.giteaCacheGeneration + 1,
-        giteaWorkItems: Object.fromEntries(
-          Object.entries(state.giteaWorkItems).filter(([key]) => !key.startsWith(prefix))
-        ),
-        giteaIssueDetail: Object.fromEntries(
-          Object.entries(state.giteaIssueDetail).filter(([key]) => key !== detailKey)
-        )
-      }))
-    }
-    return result
-  },
-
-  addGiteaIssueComment: async (scope, issueNumber, body) => {
-    return giteaApiFor(scope).addIssueComment({ ...requestArgs(scope), number: issueNumber, body })
-  }
+  updateGiteaIssue: async (scope, issueNumber, updates) =>
+    giteaApiFor(scope).updateIssue({ ...requestArgs(scope), number: issueNumber, updates })
 })

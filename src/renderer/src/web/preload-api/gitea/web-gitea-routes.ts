@@ -4,7 +4,6 @@ import type { GiteaApi } from '../../../../../preload/api/gitea/gitea-api'
 export const GITEA_WEB_RPC_METHODS = {
   connect: 'gitea.connect',
   disconnect: 'gitea.disconnect',
-  selectServer: 'gitea.selectServer',
   status: 'gitea.status',
   testConnection: 'gitea.testConnection',
   listWorkItems: 'gitea.listWorkItems',

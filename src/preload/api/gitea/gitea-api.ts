@@ -26,7 +26,6 @@ export type GiteaApi = {
     token: string
   }) => Promise<{ ok: true; viewer: GiteaViewer } | { ok: false; error: string }>
   disconnect: (args?: { serverId?: string }) => Promise<void>
-  selectServer: (args: { serverId: string }) => Promise<GiteaConnectionStatus>
   status: () => Promise<GiteaConnectionStatus>
   testConnection: (args?: {
     serverId?: string

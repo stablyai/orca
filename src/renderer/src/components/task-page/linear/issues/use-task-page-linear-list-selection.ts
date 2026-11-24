@@ -1,5 +1,5 @@
 import { linearIssueReadError } from '@/lib/work-items/linear/linear-read-error'
-import type { TaskPageProviderMetadataModel } from '../../use-task-page-provider-metadata'
+import type { TaskPageGiteaListModel } from '../../gitea/use-task-page-gitea-list'
 import { useState, useMemo } from 'react'
 import { LINEAR_ISSUE_LIST_MAX } from '../../../../../../shared/linear/issue-read-limits'
 import { useTranslate } from '@/i18n/use-translate'
@@ -16,7 +16,7 @@ import { useTaskPageLinearFilterSelection } from './use-task-page-linear-filter-
 export type TaskPageLinearListSelectionPreludeModel = ReturnType<
   typeof useTaskPageLinearListSelectionPrelude
 >
-export function useTaskPageLinearListSelectionPrelude(model: TaskPageProviderMetadataModel) {
+export function useTaskPageLinearListSelectionPrelude(model: TaskPageGiteaListModel) {
   const t = useTranslate()
   const {
     settings,
@@ -245,7 +245,7 @@ export function useTaskPageLinearListSelectionPrelude(model: TaskPageProviderMet
   nextModel.linearTeamOptions = linearTeamOptions
   return nextModel
 }
-export function useTaskPageLinearListSelection(model: TaskPageProviderMetadataModel) {
+export function useTaskPageLinearListSelection(model: TaskPageGiteaListModel) {
   const preludeModel = useTaskPageLinearListSelectionPrelude(model)
   return useTaskPageLinearFilterSelection(preludeModel)
 }
