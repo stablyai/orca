@@ -256,10 +256,6 @@ async function pressFocusedRetry(frame: HTMLElement) {
 
 export const retryFocusAfterSettle360 = defineFixture({
   width: 360,
-  render: () =>
-    composerChat(
-      true,
-      <RetryThenSettled />
-    ),
+  render: () => composerChat(true, <RetryThenSettled />),
   interact: pressFocusedRetry
 })

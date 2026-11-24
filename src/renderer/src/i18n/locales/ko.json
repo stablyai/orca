@@ -21758,7 +21758,6 @@
         "openWorker": "워커 열기",
         "remoteOwner": "이 워커가 실행 중인 컴퓨터에서 중지하거나 지우세요",
         "restore": "목록에 다시 표시",
-        "unavailable": "워커 상태를 확인할 수 없음",
         "alreadyStopped": "이미 중지됨",
         "cantStop": "지금은 중지할 수 없음",
         "clearAllLabel_one": "실패한 워커 지우기",
