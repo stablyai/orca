@@ -82,19 +82,20 @@ const threadWorkerReport = opener({
   }
 })
 
-async function replyIn(active: AgentJournalRenderItem) {
+/** One linked chat on one watched seam; each turn swaps the running turn's opener. */
+function linkedChat() {
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: link lookups read only these.
   const store = {
     getRepos: () => [],
     getAllWorktreeMeta: () => ({}),
     getFolderWorkspaces: () => [{ id: 'folder-1', externalConversations: [link] }]
   } as unknown as ExternalConversationLinkStore
-  const turn = { ...active, itemId: 'turn', body: { kind: 'turn-lifecycle' } }
+  let active = threadMessage
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: a reply reads only the running turn and its opener.
   const chat = {
     publishedWork: () => ({
       activeTurnOpener: active,
-      activeTurn: { item: turn },
+      activeTurn: { item: { ...active, itemId: 'turn', body: { kind: 'turn-lifecycle' } } },
       actionablePrompts: []
     }),
     subscribeTurnCompletions: () => () => {}
@@ -121,29 +122,31 @@ async function replyIn(active: AgentJournalRenderItem) {
       getConnectorCloud: () => ({ cloudFeatures: () => new Set(), reply })
     }
   } as unknown as Parameters<typeof method.handler>[1]
-  const posted = method
-    .handler({ sessionId: link.sessionId, replyId: 'r1', text: 'Screenshots attached.' }, context)
-    .then(
-      () => 'posted',
-      (error: { code?: string; message?: string }) => error.code ?? error.message
-    )
-  return { outcome: await posted, reply }
+  const replyIn = (opener: AgentJournalRenderItem) => {
+    active = opener
+    reply.mockClear()
+    return method
+      .handler({ sessionId: link.sessionId, replyId: 'r1', text: 'Screenshots attached.' }, context)
+      .then(
+        () => 'posted',
+        (error: { code?: string; message?: string }) => error.code ?? error.message
+      )
+  }
+  return { replyIn, reply }
 }
 
 afterEach(() => setStructuredAgentSessionHost(null))
 
 it('posts an agent reply to the thread only on a turn the thread owns, not one mail woke', async () => {
-  const slackTurn = await replyIn(threadMessage)
-  expect(slackTurn.outcome).toBe('posted')
-  expect(slackTurn.reply).toHaveBeenCalledWith(
+  const { replyIn, reply } = linkedChat()
+  expect(await replyIn(threadMessage)).toBe('posted')
+  expect(reply).toHaveBeenCalledWith(
     expect.objectContaining({ conversation: expect.objectContaining({ source: 'slack' }) })
   )
 
-  // Same chat, still linked to the thread: item mail woke it, so nothing goes to Slack.
-  const mailTurn = await replyIn(itemMail)
-  expect(mailTurn.outcome).toBe('turn_stays_in_orca')
-  expect(mailTurn.reply).not.toHaveBeenCalled()
+  // Next turn in the same chat, still linked to the thread: item mail woke it, so nothing goes to Slack.
+  expect(await replyIn(itemMail)).toBe('turn_stays_in_orca')
+  expect(reply).not.toHaveBeenCalled()
 
-  const reportTurn = await replyIn(threadWorkerReport)
-  expect(reportTurn.outcome).toBe('posted')
+  expect(await replyIn(threadWorkerReport)).toBe('posted')
 })
