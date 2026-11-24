@@ -1377,9 +1377,9 @@
               "027228a06b": "Impossible de trouver un espace de travail pour ces vérifications.",
               "03c1d61f83": "Impossible d'ouvrir l'espace de travail associé à ces vérifications.",
               "dfb4dd7c00": "Impossible de trouver l'espace de travail associé à ces vérifications.",
-              "9f00d7df0c": "Le prompt de correction des checks est vide. Mettez à jour les paramètres d'IA du contrôle de code source.",
+              "9f00d7df0c": "Le prompt de correction des vérifications est vide. Mettez à jour les paramètres d'IA du contrôle de code source.",
               "2ebf794906": "Aucun agent IA activé n'a été détecté sur l'hôte de cet espace de travail.",
-              "4c7f783a7a": "L'agent de checks enregistré n'est pas disponible sur l'hôte de cet espace de travail."
+              "4c7f783a7a": "L'agent de vérifications enregistré n'est pas disponible sur l'hôte de cet espace de travail."
             }
           }
         }
@@ -3230,9 +3230,9 @@
             "state": {
               "a80132573b": "GitHub calcule encore le statut de merge de cette pull request",
               "f958920f3a": "Vérification",
-              "9bd983ce8f": "GitHub indique que cette PR peut merger, mais des checks sont encore en cours",
+              "9bd983ce8f": "GitHub indique que cette PR peut merger, mais des vérifications sont encore en cours",
               "4e2507176b": "Vérifications en attente",
-              "1432ecff30": "GitHub indique que cette PR peut merger, mais certains checks ont échoué",
+              "1432ecff30": "GitHub indique que cette PR peut merger, mais certaines vérifications ont échoué",
               "87fa36ac83": "Vérifications échouées",
               "1766eb46ba": "GitHub signale que cette pull request est bloquée",
               "bf5e4c6c92": "Bloquée",
@@ -3257,12 +3257,12 @@
               "b169f943e1": "Merger quand prêt",
               "62703b1dc4": "L'auto-merge GitHub est activé pour cette pull request",
               "48d75ae118": "Désactiver l'auto-merge",
-              "a5b66afb58": "Checks réussis",
-              "fbd4f57f0a": "Checks réussis. L'éligibilité au merge sera revérifiée avant le merge.",
+              "a5b66afb58": "Vérifications réussies",
+              "fbd4f57f0a": "Vérifications réussies. L'éligibilité au merge sera revérifiée avant le merge.",
               "4ab19a62ef": "Activer l'auto-merge",
               "8f6cb3772f": "Merger automatiquement cette pull request une fois les conditions remplies",
               "def355ff38": "Peut merger",
-              "e42c5bae67": "GitHub indique que cette PR peut merger et que les checks ont réussi",
+              "e42c5bae67": "GitHub indique que cette PR peut merger et que les vérifications ont réussi",
               "cbf0113af6": "GitHub indique que cette PR peut merger",
               "autoMergeOn": "Fusion automatique activée"
             }
@@ -7831,7 +7831,7 @@
           "c47127f222": "WSL par défaut"
         },
         "CommitMessageAiPane": {
-          "ad66ff886d": "Valeurs par défaut de Source Control AI",
+          "ad66ff886d": "Valeurs par défaut de l'IA du contrôle de code source",
           "347094560b": "Utilisé par les dépôts qui héritent des valeurs par défaut globales de hosted review.",
           "2dafc7646e": "Valeurs par défaut de création de hosted review",
           "e9d46a544d": "Valeurs par défaut utilisées à l'ouverture du composer de hosted review.",
@@ -7849,7 +7849,7 @@
           "47e45cbd5a": "Commande personnalisée",
           "1ef29f8c29": "Ligne de commande qu'Orca exécute quand une recette texte utilise Commande personnalisée.",
           "2339a89104": "Ajoute des boutons IA qui exécutent l'agent sélectionné avec le modèle de commande de cette action.",
-          "d5b45a3628": "Afficher les actions Source Control AI",
+          "d5b45a3628": "Afficher les actions IA du contrôle de code source",
           "7bcad2b200": "Ajoute des recettes d'actions pour les actions commit, pull request, nom de branche et correction de Source Control.",
           "d54c64163d": "activé",
           "4ec89c319e": "agent",
@@ -8230,7 +8230,7 @@
         "IntegrationsPane": {
           "3ba07f933b": "Connectez les trackers d'issues qu'Orca peut utiliser pour parcourir les tâches et démarrer des espaces de travail avec le contexte associé.",
           "70e885705b": "Fournisseurs de tâches",
-          "1683acbac4": "Connectez les hébergeurs de code qu'Orca peut utiliser pour les pull requests, merge requests, checks et statuts de revue.",
+          "1683acbac4": "Connectez les hébergeurs de code qu'Orca peut utiliser pour les pull requests, merge requests, vérifications et statuts de revue.",
           "298c65ecac": "Fournisseurs de revue"
         },
         "KagiSessionLinkForm": {
@@ -8749,7 +8749,7 @@
           "62511a575d": "Utiliser la valeur globale",
           "show": "Afficher",
           "hide": "Masquer",
-          "showActionsLabel": "Afficher les actions Source Control AI",
+          "showActionsLabel": "Afficher les actions IA du contrôle de code source",
           "visibilityHelper": "Détermine si les boutons IA du contrôle de code source sont affichés pour ce dépôt. La génération utilisée par des fonctionnalités distinctes suit les réglages de ces fonctionnalités. Réglage global par défaut : {{value0}}."
         },
         "RepositorySourceControlAiHostedReviewDefaults": {
@@ -10049,7 +10049,7 @@
                 "93e5210da8": "message",
                 "c33cb1b982": "ai",
                 "0b946b2abe": "Ajoute des recettes d'actions pour les actions commit, pull request, nom de branche et correction de Source Control.",
-                "24dbdfca78": "Afficher les actions Source Control AI"
+                "24dbdfca78": "Afficher les actions IA du contrôle de code source"
               }
             }
           }
@@ -11358,10 +11358,10 @@
                   "8d90249d22": "gh auth login",
                   "2e44dda68a": "La CLI GitHub est installée mais non authentifiée. Exécutez cette commande dans un terminal :",
                   "7755c28af5": "Installer la CLI GitHub",
-                  "23cb5a0dee": "Installez la CLI GitHub pour activer les pull requests, les issues et les checks.",
+                  "23cb5a0dee": "Installez la CLI GitHub pour activer les pull requests, les issues et les vérifications.",
                   "6f30fc4216": "Le statut de GitHub CLI n'est pas encore disponible dans ce runtime.",
                   "6b2cfb52b4": "gh",
-                  "b4d900e7f1": "Pull requests, issues et checks via la",
+                  "b4d900e7f1": "Pull requests, issues et vérifications via la",
                   "account_scope_prefix": "Portée des comptes",
                   "statusConnected": "Connecté",
                   "statusUnavailable": "Indisponible",
@@ -11736,7 +11736,7 @@
                   "installed": "Installés",
                   "notInstalled": "Non installé",
                   "recheck": "Revérifier",
-                  "description": "Permet aux agents de lire et modifier les tâches Linear. La configuration guidée complète (connexion + skill + visibilité) se trouve dans Paramètres → Task Sources.",
+                  "description": "Permet aux agents de lire et modifier les tâches Linear. La configuration guidée complète (connexion + skill + visibilité) se trouve dans Paramètres → Sources de tâches.",
                   "copyFailed": "Échec de la copie de la commande.",
                   "copyCommand": "Copier la commande",
                   "installedDescription": "Skill d'agent installée. Pour la mettre à jour, exécutez :",
@@ -11745,7 +11745,7 @@
               },
               "search": {
                 "title": "Linear",
-                "description": "Statut de la skill Linear, exemples d'utilisation et liens vers la configuration de Task Sources.",
+                "description": "Statut de la skill Linear, exemples d'utilisation et liens vers la configuration de Sources de tâches.",
                 "linear": "linéaire",
                 "tickets": "billets",
                 "issues": "problèmes",
@@ -12178,22 +12178,22 @@
           "addAccess": "Ajouter l'accès",
           "setupSkillTitle": "2. Installer la skill de l'agent",
           "setupSkillBody": "Donne aux agents de codage /orca-linear pour la lecture, les mises à jour, le tri et la jointure de pull requests ou merge requests.",
-          "setupVisibleTitle": "3. Afficher Linear dans Tasks",
-          "setupVisibleBody": "Conserve Linear dans le sélecteur de sources Tasks et les raccourcis de la barre latérale.",
+          "setupVisibleTitle": "3. Afficher Linear dans Tâches",
+          "setupVisibleBody": "Conserve Linear dans le sélecteur de sources Tâches et les raccourcis de la barre latérale.",
           "setupTitle": "Checklist de configuration",
-          "setupBody": "Les trois sont requis pour la boucle complète Tasks + agent. Le parcours de première configuration figure aussi sous Task Sources.",
+          "setupBody": "Les trois sont requis pour la boucle complète Tâches + agent. Le parcours de première configuration figure aussi sous Sources de tâches.",
           "setupReady": "Tout est prêt",
           "setupProgress": "{{done}} sur {{total}} prêts",
           "notesTitle": "Bon à savoir",
           "notesIntro": "Quelques rappels une fois Linear connecté et la skill installée.",
           "noteLinkedTitle": "Partir d'une issue Linear",
-          "noteLinkedBody": "Les actions sur les tickets fonctionnent mieux dans un worktree créé depuis Tasks, pour que l'issue reste liée comme contexte.",
+          "noteLinkedBody": "Les actions sur les tickets fonctionnent mieux dans un worktree créé depuis Tâches, pour que l'issue reste liée comme contexte.",
           "noteSlashTitle": "Mentionner /orca-linear",
           "noteSlashBody": "Dans le chat, utilisez /orca-linear (ou demandez en langage naturel) pour que l'agent charge la skill à ce tour.",
           "noteKeysTitle": "Les clés suivent le runtime",
           "noteKeysBody": "Les clés API et les espaces de travail sont stockés pour le runtime actif.",
           "noteVisibilityTitle": "Masquer ≠ déconnecter",
-          "noteVisibilityBody": "Masquer Linear dans Task Sources le retire seulement du sélecteur. Cela ne supprime ni votre clé ni votre skill.",
+          "noteVisibilityBody": "Masquer Linear dans Sources de tâches le retire seulement du sélecteur. Cela ne supprime ni votre clé ni votre skill.",
           "setupChecking": "Vérification…",
           "setupUnverified": "Impossible de vérifier",
           "c5cd02806b": "Sources de tâches"
@@ -12209,7 +12209,7 @@
           "skillDescription": "Donne aux agents /orca-linear pour lire les tickets, publier des mises à jour, changer les états et joindre des pull requests ou merge requests.",
           "skillBlocked": "Connectez d'abord Linear, puis installez la skill pour les agents.",
           "skillPanelTitle": "Skill Linear",
-          "showDescription": "Incluez Linear dans le sélecteur de sources de la page Tasks et les raccourcis de la barre latérale."
+          "showDescription": "Incluez Linear dans le sélecteur de sources de la page Tâches et les raccourcis de la barre latérale."
         },
         "TaskSourceProviderCard": {
           "statusChecking": "Vérification…",
@@ -12221,18 +12221,18 @@
           "collapseSetup": "Réduire les étapes de configuration de {{provider}}",
           "expandSetup": "Afficher les étapes de configuration de {{provider}}",
           "statusUnverified": "Impossible de vérifier",
-          "d2d9e9707b": "Masqué dans Tasks"
+          "d2d9e9707b": "Masqué dans Tâches"
         },
         "TaskSourceShowInTasksStep": {
           "shown": "Affichée",
           "show": "Afficher",
           "hide": "Masquer",
-          "hideProviderAction": "Masquer {{provider}} dans Tasks",
-          "showProviderAction": "Afficher {{provider}} dans Tasks",
-          "lastProviderAction": "{{provider}} est affiché dans Tasks. Au moins un fournisseur doit rester visible.",
-          "lastProviderHint": "Au moins un fournisseur doit rester visible dans Tasks.",
-          "description": "Inclure ce fournisseur dans le sélecteur de sources Tasks et les raccourcis de la barre latérale.",
-          "8f0bb9edf3": "Afficher dans Tasks"
+          "hideProviderAction": "Masquer {{provider}} dans Tâches",
+          "showProviderAction": "Afficher {{provider}} dans Tâches",
+          "lastProviderAction": "{{provider}} est affiché dans Tâches. Au moins un fournisseur doit rester visible.",
+          "lastProviderHint": "Au moins un fournisseur doit rester visible dans Tâches.",
+          "description": "Inclure ce fournisseur dans le sélecteur de sources Tâches et les raccourcis de la barre latérale.",
+          "8f0bb9edf3": "Afficher dans Tâches"
         },
         "RuntimeHostAccessForm": {
           "namePlaceholder": "Station de travail Linux",
@@ -13506,9 +13506,9 @@
             "a0181a8d76": "Un agent IA a été lancé pour les conflits.",
             "058039787c": "Annuler",
             "2ab7fd4b6d": "Enregistrer",
-            "dda5924a40": "Les checks exigent une branche Git et un contexte de revue hébergée",
-            "976cefd02f": "Checks indisponibles",
-            "b5dd73a105": "Sélectionnez un espace de travail pour voir les checks",
+            "dda5924a40": "Les vérifications exigent une branche Git et un contexte de revue hébergée",
+            "976cefd02f": "Vérifications indisponibles",
+            "b5dd73a105": "Sélectionnez un espace de travail pour voir les vérifications",
             "a4ef4e0832": "Aucun espace de travail sélectionné",
             "5594400d73": "Aucune vérification cassée à corriger.",
             "abf59262fb": "Vérifiez et modifiez l'entrée de commande complète avant de démarrer un agent.",
@@ -15774,7 +15774,7 @@
             "ab2901bce6": "Vérifications",
             "d7f80060ca": "Contrôle de code source",
             "8e715588e4": "Recherche",
-            "a6c8b9e32f": "Checks réussis",
+            "a6c8b9e32f": "Vérifications réussies",
             "f4d5e1a7b2": "3 vérifications"
           },
           "ReviewShipAnimatedVisual": {
@@ -20270,7 +20270,7 @@
       },
       "sessionOption": {
         "noLiveTerminal": "Aucun terminal actif n'est disponible.",
-        "commandCanceled": "La commande de Chat UI a été annulée, car la zone de saisie a été fermée.",
+        "commandCanceled": "La commande de l’interface de chat a été annulée, car la zone de saisie a été fermée.",
         "commandRejected": "Le terminal n'a pas accepté la commande."
       },
       "sessionOptionErrors": {
@@ -20350,8 +20350,8 @@
       },
       "cardKindHidden": {
         "description": "Vous pouvez modifier cela à tout moment dans",
-        "settingsLink": "Paramètres > Chat UI > Activité des tours",
-        "failed": "Impossible d’enregistrer. Vous pouvez désactiver cela dans Paramètres > Chat UI > Activité des tours."
+        "settingsLink": "Paramètres > Interface de chat > Activité des tours",
+        "failed": "Impossible d’enregistrer. Vous pouvez désactiver cela dans Paramètres > Interface de chat > Activité des tours."
       },
       "openedPullRequests": {
         "one": "Pull request créée : {{name}}",
@@ -21564,8 +21564,8 @@
       "demoApp": "App",
       "demoPassword": "mot de passe",
       "demoCookie": "cookie",
-      "switchedNoteTitle": "Les nouveaux agents s’ouvriront dans Chat UI",
-      "switchedNoteBody": "Vous préférez le terminal ? Revenez en arrière à tout moment : recherchez <term>Chat UI</term> dans les paramètres.",
+      "switchedNoteTitle": "Les nouveaux agents s’ouvriront dans l’interface de chat",
+      "switchedNoteBody": "Vous préférez le terminal ? Revenez en arrière à tout moment : recherchez <term>interface de chat</term> dans les paramètres.",
       "openSettings": "Ouvrir les paramètres"
     },
     "botsTeammate": {
@@ -21648,7 +21648,7 @@
       "slackPrTitle": "#1284 Adapter la page de réglages à toutes les tailles d’écran",
       "slackPrBody": "Mises en page pour ordinateur et mobile, avec des tests par capture d’écran mis à jour.",
       "slackPrFiles": "6 fichiers",
-      "checksPassed": "Checks réussis",
+      "checksPassed": "Vérifications réussies",
       "question": "Déconnecter tout le monde une fois ou conserver les sessions actuelles ?",
       "answer": "Conservez les sessions actuelles.",
       "itemSafari": "Corriger le bug de connexion dans Safari",
