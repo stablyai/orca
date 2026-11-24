@@ -12,6 +12,10 @@ import { readJournalSqlUsageLimitCut } from './journal-sql-status-cuts'
 import { failureHoldsMail } from './queued-messages/queued-message-pause'
 import { applyJournalDomainSubmission } from './journal-domain-submission-admission'
 import { applyJournalDomainQueueCommand } from './journal-domain-queue-command'
+import {
+  journalDomainCarriedCards,
+  settleJournalDomainCarriedCards
+} from './journal-domain-carried-cards'
 import { finishJournalSqlCommand, journalSqlInputCoordinates } from './journal-sql-command-result'
 import {
   queuedMessagePublishedBytesRefusal,
@@ -126,6 +130,13 @@ export function applyJournalSqlSendAdmission(
       )
     })
   }
+  // A connector message's carried cards: read again here, so a Retry or edit since never sends twice.
+  const carried = journalDomainCarriedCards(db, scope, input.body, savedAt)
+  if (!carried) {
+    return superseded()
+  }
+  const settleCarried = () =>
+    settleJournalDomainCarriedCards(db, scope, id, carried, { fence: input.fence, savedAt })
   let queue = false
   if (operation.fromAgent || !pendingPromptsAllUnanswerableHere(eligibility.prompts)) {
     queue = eligibility.prompts.length > 0 || eligibility.work.working() || !!eligibility.pending
@@ -173,6 +184,7 @@ export function applyJournalSqlSendAdmission(
     if (refusal) {
       return empty({ kind: 'refused', refusal })
     }
+    const settled = settleCarried()
     const result = applyJournalDomainQueueCommand(
       db,
       stateDirectory,
@@ -198,7 +210,7 @@ export function applyJournalSqlSendAdmission(
       db,
       stateDirectory,
       command,
-      { ...result, items: [], receipts: [] },
+      { ...result, cards: [...settled.cards, ...result.cards], items: [], receipts: [] },
       {
         kind: 'admitted',
         value: {
@@ -206,12 +218,13 @@ export function applyJournalSqlSendAdmission(
           queued: { messageId: id, position: card.position, state: card.state }
         }
       } satisfies JournalSendAdmissionResult,
-      [{ kind: 'queue', epoch: target.epoch, seq: result.cursor.sequence }]
+      [...settled.coordinates, { kind: 'queue', epoch: target.epoch, seq: result.cursor.sequence }]
     )
   }
   if (operation.queueOnly) {
     return empty({ kind: 'immediate' })
   }
+  const settled = settleCarried()
   const result = applyJournalDomainSubmission(
     db,
     stateDirectory,
@@ -228,12 +241,12 @@ export function applyJournalSqlSendAdmission(
     db,
     stateDirectory,
     command,
-    result,
+    { ...result, cards: [...settled.cards, ...result.cards] },
     {
       kind: 'admitted',
       value: { clientMessageId: id, submission }
     } satisfies JournalSendAdmissionResult,
-    journalSqlInputCoordinates(target.epoch, result.coordinates),
+    [...settled.coordinates, ...journalSqlInputCoordinates(target.epoch, result.coordinates)],
     result.items.map((item) => item.itemId)
   )
 }

@@ -8,12 +8,8 @@ import type {
   ExternalConversationBot,
   ExternalConversationLink
 } from '../../shared/connectors/external-conversation-link'
-import {
-  chatPaneKey,
-  deliverToChat,
-  watchChatNews,
-  type ConversationChatHost
-} from './external-conversation-chat'
+import { chatPaneKey, watchChatNews, type ConversationChatHost } from './external-conversation-chat'
+import { deliverToChat } from './external-conversation-chat-send'
 import { HOST_CLOCK } from './external-conversation-host'
 import type { ConnectorMessage, ConversationKey, Delivery } from './external-conversation-types'
 
