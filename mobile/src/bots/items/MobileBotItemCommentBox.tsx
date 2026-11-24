@@ -4,7 +4,7 @@
 // question waits, "Replying to" names it, as on the desktop; its × sends the comment as one of its own.
 // The chat's field and mic: the session's dictation lands here while the box is its target. Photos
 // attach with the chat's + and thumbnails, each named [Image #N] in the words.
-import { useCallback, useContext, useEffect, useRef, useState } from 'react'
+import { useCallback, useContext, useEffect, useRef, useState, type RefObject } from 'react'
 import { Pressable, Text, View, type HostInstance, type TextInputInstance } from 'react-native'
 import { WifiOff, X } from 'lucide-react-native'
 import type { BotItem, BotItemCommentSkill } from '../../../../src/shared/bots/bot-items'
@@ -63,7 +63,8 @@ export function MobileBotItemCommentBox({
   question = null,
   attachTo,
   onSend,
-  showToast
+  showToast,
+  fieldRef: input
 }: {
   client: RpcClient | null
   hostId: string
@@ -85,6 +86,8 @@ export function MobileBotItemCommentBox({
   showToast: (message: string) => void
   /** The agent's question waiting on the owner (what is sent is the reply). */
   question?: BotItemWaitingQuestion | null
+  /** The field, which the page focuses for a quote. */
+  fieldRef: RefObject<TextInputInstance | null>
 }) {
   useMobileColorScheme()
   const t = useMobileTranslation()
@@ -95,7 +98,6 @@ export function MobileBotItemCommentBox({
   const [unmarked, setUnmarked] = useState<string | null>(null)
   const quote = question && unmarked !== question.id ? question : null
   const [error, setError] = useState<string | null>(null)
-  const input = useRef<TextInputInstance>(null)
   const cancelRef = useRef<HostInstance>(null)
   const { uid } = item
   const setText = useCallback(
