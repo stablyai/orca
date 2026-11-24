@@ -45,7 +45,12 @@ export class PluginCatalogImageOnDemand {
   private readonly locations = new WeakMap<PluginMarketplaceCachedSnapshot, Set<string>>()
   private readonly verified = new WeakMap<
     PluginMarketplaceRegisteredSource,
-    { commit: string; slot: CatalogRepositorySlot; keys: Set<string> }
+    {
+      commit: string
+      slot: CatalogRepositorySlot
+      keys: Set<string>
+      writing: Map<string, CheckedPluginImage>
+    }
   >()
   private readonly pending = new WeakMap<
     PluginMarketplaceCachedSnapshot,
@@ -119,7 +124,8 @@ export class PluginCatalogImageOnDemand {
     const slot = snapshotRepositorySlot(snapshot)
     const verified = this.verified.get(source)
     if (verified?.commit === commit && verified.slot === slot && verified.keys.has(key)) {
-      const cached = await this.options.cache.get(image.sha256).catch(() => null)
+      const cached =
+        verified.writing.get(key) ?? (await this.options.cache.get(image.sha256).catch(() => null))
       if (cached) {
         return cached
       }
@@ -213,6 +219,7 @@ export class PluginCatalogImageOnDemand {
 
   private async readBatch(sourceId: string, jobs: PendingImage[]): Promise<void> {
     const controller = new AbortController()
+    const cacheWrites: Promise<unknown>[] = []
     const onAbort = () => {
       if (jobs.every((job) => job.controller.signal.aborted)) {
         controller.abort()
@@ -252,17 +259,25 @@ export class PluginCatalogImageOnDemand {
         }
         const info = readPluginImageHeader(bytes)
         if (typeof info !== 'string' && validateCatalogImage(bytes, job.image, job.kind)) {
-          await this.options.cache.put(bytes).catch(() => null)
+          const asset = { bytes, mimeType: PLUGIN_IMAGE_MIME[info.format] }
           const commit = snapshot.marketplaceCommit
           const slot = snapshotRepositorySlot(snapshot)
           let verified = this.verified.get(job.source)
           if (verified?.commit !== commit || verified.slot !== slot) {
-            verified = { commit, slot, keys: new Set() }
+            verified = { commit, slot, keys: new Set(), writing: new Map() }
             this.verified.set(job.source, verified)
           }
           verified.keys.add(job.key)
+          const { writing } = verified
+          writing.set(job.key, asset)
+          cacheWrites.push(
+            this.options.cache
+              .put(bytes)
+              .catch(() => null)
+              .finally(() => writing.delete(job.key))
+          )
           for (const finish of job.subscribers) {
-            finish({ bytes, mimeType: PLUGIN_IMAGE_MIME[info.format] })
+            finish(asset)
           }
         }
       }
@@ -275,6 +290,8 @@ export class PluginCatalogImageOnDemand {
           finish(null)
         }
       }
+      // Keep the batch's bytes bounded while the disk cache catches up with delivery.
+      await Promise.all(cacheWrites)
     }
   }
 }

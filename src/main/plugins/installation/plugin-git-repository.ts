@@ -68,7 +68,9 @@ export async function runPluginGit(
       cwd,
       env: { ...process.env, GIT_ALLOW_PROTOCOL: pluginGitAllowedProtocols() },
       timeout: PLUGIN_GIT_TIMEOUT_MS,
-      signal: signal ? AbortSignal.any([signal, pluginGitShutdown.signal]) : pluginGitShutdown.signal,
+      signal: signal
+        ? AbortSignal.any([signal, pluginGitShutdown.signal])
+        : pluginGitShutdown.signal,
       // Why: abort must stop remote-https and index-pack too, and settle only once they exit.
       terminationBarrier: true,
       observeChildTermination: (lifetime) => {

@@ -196,11 +196,13 @@ describe('on-demand catalog image protocol', () => {
       findApprovedPlugin: () => null
     })
 
+    const writeCache = vi.spyOn(fixture.cache, 'put')
     const response = await handler(fixture.request({ commit }))
 
     expect(response.status).toBe(200)
     expect(response.headers.get('content-type')).toBe('image/png')
     expect(Buffer.from(await response.arrayBuffer())).toEqual(fixture.bytes)
+    await writeCache.mock.results[0]!.value
     expect(await readFile(join(fixture.root, 'images', fixture.image.sha256))).toEqual(
       fixture.bytes
     )
