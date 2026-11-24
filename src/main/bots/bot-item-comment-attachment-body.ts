@@ -25,7 +25,7 @@ export function ownerCommentAttachmentBody(
   }
   const text = typeof event.data.text === 'string' ? event.data.text : ''
   const images = botItemCommentImages(event.data)
-  return images.length > 0 || text.includes(AGENT_SESSION_ATTACHMENTS_DIR_NAME)
+  return images.length > 0 || text.toLowerCase().includes(AGENT_SESSION_ATTACHMENTS_DIR_NAME)
     ? botItemCommentAttachmentBody(text, images)
     : null
 }

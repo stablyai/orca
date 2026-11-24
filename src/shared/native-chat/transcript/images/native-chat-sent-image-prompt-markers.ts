@@ -155,7 +155,7 @@ export function remapSentImagePromptMarkers(
     if (position === undefined) {
       return marker
     }
-    return position === null ? `[Expired image #${number}]` : `[Image #${position}]`
+    return position === null ? '[Orca: image expired]' : `[Image #${position}]`
   })
 }
 

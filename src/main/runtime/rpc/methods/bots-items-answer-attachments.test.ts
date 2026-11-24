@@ -317,7 +317,10 @@ it('claims an item answer for the chat it actually mails and replays the same an
     expect(await sendBotItemMail(context.runtime, legacy!)).toBe(true)
     const delivered = mail.getMessageById(botItemMailId(legacy!.id))!
     expect(JSON.parse(delivered.payload!)).toMatchObject({ images: [surviving] })
-    expect(delivered.body).toContain('Use [Expired image #1]. [Image #1] is the rejected design.')
+    expect(delivered.body).toContain(
+      'Use [Orca: image expired]. [Image #1] is the rejected design.'
+    )
+    expect(delivered.body).toContain('attachments expired before delivery')
     expect(
       journal.db
         .prepare('SELECT session_id FROM agent_session_attachment_claims WHERE upload_id = ?')

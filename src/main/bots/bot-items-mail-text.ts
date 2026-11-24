@@ -132,7 +132,7 @@ export function botItemChangeMail(
 function commentWords(event: BotItemEventRecord, imagesBefore: number): string {
   const images = botItemCommentImages(event.data)
   const text = offsetSentImagePromptMarkers(str(event.data.text) ?? '', images.length, imagesBefore)
-  const said = text.trim() || images.length === 0 ? `:\n${fenceQuotedText(text)}` : ''
+  const said = text.trim() ? `:\n${fenceQuotedText(text)}` : ''
   return `${said}${skippedNote(event.data.skipped)}${imagesNote(images, imagesBefore)}${skillsNote(botItemCommentSkills(event.data))}`
 }
 
