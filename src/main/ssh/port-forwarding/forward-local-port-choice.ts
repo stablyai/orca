@@ -94,7 +94,8 @@ async function addOnFreeOsPort({
 }
 
 const BIND_FAILURE_CODES = new Set(['EADDRINUSE', 'EACCES', 'EADDRNOTAVAIL'])
-const BIND_FAILURE_MESSAGE = /\b(EADDRINUSE|EACCES|EADDRNOTAVAIL)\b/
+// OpenSSH reports its own -L listen failure only as `cannot listen to port: <port>`.
+const BIND_FAILURE_MESSAGE = /\b(EADDRINUSE|EACCES|EADDRNOTAVAIL)\b|cannot listen to port/
 
 /** Whether a forward failed to listen here, as opposed to its connection failing. Providers report
  *  the bind error as a code, a cause, or only in their message. */
