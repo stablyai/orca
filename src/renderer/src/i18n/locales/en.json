@@ -390,6 +390,9 @@
       "title": "Browser page stopped",
       "failed": "The browser page stopped unexpectedly. Retry to restore it."
     },
+    "claimedDownload": {
+      "saved": "Saved to {{place}}"
+    },
     "serverPage": {
       "download": {
         "started": "Downloading to {{path}} on {{host}}",
