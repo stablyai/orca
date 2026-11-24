@@ -225,19 +225,20 @@ it('claims an item answer for the chat it actually mails and replays the same an
     const [owed] = items.owedMail(0).mails
     expect(owed).toBeDefined()
     const sending = sendBotItemMail(context.runtime, owed!)
-    await Promise.race([
-      retired.promise,
-      sending.then(() => {
-        throw new Error('Mail finished before the Home replacement')
-      })
-    ])
     try {
+      await Promise.race([
+        retired.promise,
+        sending.then(() => {
+          throw new Error('Mail finished before the Home replacement')
+        })
+      ])
       await sweep()
       expect(retentionReads).toBe(0)
       await sweep()
       expect(retentionReads).toBe(1)
     } finally {
       successorReady.resolve()
+      await Promise.allSettled([sending, reset])
     }
     expect(await sending).toBe(true)
     await reset
