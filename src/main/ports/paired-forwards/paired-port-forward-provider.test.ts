@@ -41,9 +41,9 @@ function replyAfterRequestTunnel(): PairedPortForwardTunnel {
   } as unknown as PairedPortForwardTunnel
 }
 
-function roundTrip(port: number, payload: string): Promise<string> {
+function roundTrip(port: number, payload: string, host = '127.0.0.1'): Promise<string> {
   return new Promise((resolve, reject) => {
-    const socket = connect({ host: '127.0.0.1', port }, () => socket.write(payload))
+    const socket = connect({ host, port }, () => socket.write(payload))
     socket.once('data', (data) => {
       resolve(data.toString())
       socket.destroy()
@@ -53,7 +53,7 @@ function roundTrip(port: number, payload: string): Promise<string> {
 }
 
 describe('PairedPortForwardProvider', () => {
-  it('listens on loopback only, is fenced from paired tunnels, and frees the port on close', async () => {
+  it('listens on both loopbacks only, is fenced from paired tunnels, and frees the port on close', async () => {
     const opened: { host: string; port: number }[] = []
     const forward = await new PairedPortForwardProvider().start(echoTunnel(opened), {
       id: 'pf-1',
@@ -66,7 +66,12 @@ describe('PairedPortForwardProvider', () => {
     const port = forward.entry.localPort
 
     expect(await roundTrip(port, 'GET / HTTP/1.1\r\n\r\n')).toBe('GET / HTTP/1.1\r\n\r\n')
-    expect(opened).toEqual([{ host: 'localhost', port: 5173 }])
+    // A browser tries [::1] first for localhost; that must reach the server too, not a local service.
+    expect(await roundTrip(port, 'ipv6', '::1')).toBe('ipv6')
+    expect(opened).toEqual([
+      { host: 'localhost', port: 5173 },
+      { host: 'localhost', port: 5173 }
+    ])
     // Another paired client of this desktop must not chain through the forward to the server.
     expect(browserTunnelTargetBlockReason('127.0.0.1', port)).toBe('orca_listener')
 

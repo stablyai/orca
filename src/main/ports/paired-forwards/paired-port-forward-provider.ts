@@ -1,4 +1,4 @@
-import { createServer, type Socket } from 'node:net'
+import { createServer, type Server, type Socket } from 'node:net'
 import { BROWSER_NETWORK_TUNNEL_MAX_STREAMS } from '../../browser/network/tunnels/browser-network-tunnel-stream-state'
 import { reserveBrowserTunnelOrcaListenerPort } from '../../browser/network/tunnels/browser-network-tunnel-destination-policy'
 import { pipeUpstreamToClient } from '../../browser/network/tunnels/remote-browser-socks-upstream'
@@ -9,6 +9,9 @@ import type {
   StartedPortForward
 } from '../../ssh/port-forwarding/ssh-port-forward-provider'
 import type { PairedPortForwardTunnel } from './paired-port-forward-tunnel'
+
+// A desktop without IPv6 loopback can't hold [::1], and nothing local can listen there either.
+const IPV6_UNAVAILABLE = /EADDRNOTAVAIL|EAFNOSUPPORT|EPROTONOSUPPORT/
 
 /** A loopback listener whose connections each open one stream on the server's forward tunnel. */
 export class PairedPortForwardProvider implements SshPortForwardProvider<PairedPortForwardTunnel> {
@@ -24,41 +27,56 @@ export class PairedPortForwardProvider implements SshPortForwardProvider<PairedP
     let closed = false
     const target = { host: options.remoteHost, port: options.remotePort }
 
-    // Half-open keeps a response flowing after a client shuts down its request side.
-    const server = createServer(
-      { noDelay: true, pauseOnConnect: true, allowHalfOpen: true },
-      (socket) => {
-        activeSockets.add(socket)
-        socket.on('close', () => activeSockets.delete(socket))
-        socket.on('error', () => socket.destroy())
-        tunnel.open(target).then(
-          (upstream) => {
-            if (closed || socket.destroyed) {
-              upstream.destroy()
+    const accept = (socket: Socket): void => {
+      activeSockets.add(socket)
+      socket.on('close', () => activeSockets.delete(socket))
+      socket.on('error', () => socket.destroy())
+      tunnel.open(target).then(
+        (upstream) => {
+          if (closed || socket.destroyed) {
+            upstream.destroy()
+            socket.destroy()
+            return
+          }
+          upstream.once('error', () => socket.destroy())
+          // After a clean end the socket still flushes the response; only an abrupt close cuts it.
+          upstream.once('close', () => {
+            if (!socket.writableEnded) {
               socket.destroy()
-              return
             }
-            upstream.once('error', () => socket.destroy())
-            // After a clean end the socket still flushes the response; only an abrupt close cuts it.
-            upstream.once('close', () => {
-              if (!socket.writableEnded) {
-                socket.destroy()
-              }
-            })
-            socket.once('close', () => upstream.destroy())
-            socket.pipe(upstream)
-            pipeUpstreamToClient(upstream, socket)
-            socket.resume()
-          },
-          () => socket.destroy()
-        )
-      }
-    )
-    server.maxConnections = BROWSER_NETWORK_TUNNEL_MAX_STREAMS
+          })
+          socket.once('close', () => upstream.destroy())
+          socket.pipe(upstream)
+          pipeUpstreamToClient(upstream, socket)
+          socket.resume()
+        },
+        () => socket.destroy()
+      )
+    }
+    const listen = async (host: string, port: number): Promise<Server> => {
+      // Half-open keeps a response flowing after a client shuts down its request side.
+      const server = createServer(
+        { noDelay: true, pauseOnConnect: true, allowHalfOpen: true },
+        accept
+      )
+      server.maxConnections = BROWSER_NETWORK_TUNNEL_MAX_STREAMS
+      await listenForPortForward(server, host, port)
+      return server
+    }
 
-    await listenForPortForward(server, options.localHost, options.localPort)
-    const address = server.address()
+    const servers = [await listen(options.localHost, options.localPort)]
+    const address = servers[0]!.address()
     const localPort = typeof address === 'object' && address ? address.port : options.localPort
+    // Browsers try [::1] first for localhost, so the forward holds that address too; a later local
+    // server there could otherwise answer the forwarded link.
+    try {
+      servers.push(await listen('::1', localPort))
+    } catch (error) {
+      if (!IPV6_UNAVAILABLE.test(error instanceof Error ? error.message : String(error))) {
+        await new Promise((resolve) => servers[0]!.close(resolve))
+        throw error
+      }
+    }
     // This desktop's own paired clients must not reach the server's ports through this listener.
     const releaseReservation = reserveBrowserTunnelOrcaListenerPort(localPort)
 
@@ -71,9 +89,9 @@ export class PairedPortForwardProvider implements SshPortForwardProvider<PairedP
       for (const socket of activeSockets) {
         socket.destroy()
       }
-      return new Promise((resolve) => {
-        server.close(() => resolve())
-      })
+      return Promise.all(
+        servers.map((server) => new Promise<void>((resolve) => server.close(() => resolve())))
+      ).then(() => {})
     }
 
     return {

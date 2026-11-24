@@ -77,10 +77,10 @@ export function updatePairedPortForward(
   const remoteHost = requireLoopbackRemoteHost(spec.remoteHost)
   return serializePortForwardChange(forwardChangeKey(spec.environmentId), async () => {
     const current = manager.listForwards(spec.environmentId).find((entry) => entry.id === spec.id)
-    // The forward being edited answers on its own port's 127.0.0.1, never on [::1].
-    await (current?.localPort === spec.localPort
-      ? assertIpv6LoopbackPortFree(spec.localPort)
-      : assertLoopbackPortFree(spec.localPort))
+    // The forward being edited answers on its own port, and rebinds both loopbacks there itself.
+    if (current?.localPort !== spec.localPort) {
+      await assertLoopbackPortFree(spec.localPort)
+    }
     try {
       return await manager.updateForward(
         spec.id,
@@ -149,23 +149,17 @@ export function ensurePairedPortForward(args: {
   })
 }
 
-/** An OS-chosen port is free on 127.0.0.1 only; one a [::1] server holds would take the browser's localhost. */
+/** The OS picks a port free on 127.0.0.1; the listener's [::1] half can still collide, so pick again. */
 async function addOnFreeOsPort(
   add: (localPort: number) => Promise<PortForwardEntry>
 ): Promise<PortForwardEntry> {
   for (let attempt = 1; ; attempt++) {
-    const entry = await add(0)
-    // Only [::1] is probed: this forward itself now answers on 127.0.0.1.
-    const ipv6Free = await assertIpv6LoopbackPortFree(entry.localPort).then(
-      () => true,
-      () => false
-    )
-    if (ipv6Free) {
-      return entry
-    }
-    await manager.removeForwardAndWait(entry.id)
-    if (attempt >= OS_PORT_ATTEMPTS) {
-      throw new Error('No free loopback port for this forward')
+    try {
+      return await add(0)
+    } catch (error) {
+      if (attempt >= OS_PORT_ATTEMPTS) {
+        throw error
+      }
     }
   }
 }
