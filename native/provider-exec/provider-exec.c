@@ -255,6 +255,7 @@ struct watcher {
     pid_t reaper;
     long long reaper_start;
     int reaper_fd;
+    int procfs_hidden;
     long long leader_start;
     char tree_tag[64];
     long long next_sweep_ns;
@@ -470,6 +471,38 @@ static int procfs_in_own_namespace(void) {
     }
     fclose(status);
     return own;
+}
+
+// hidepid lets /proc omit or hide processes, a member or its parent among them, so on such a mount
+// no scan can prove the tree empty. Unreadable mount info counts as hidden.
+static int procfs_hides_processes(void) {
+    FILE *mounts = fopen("/proc/self/mountinfo", "re");
+    if (mounts == NULL) {
+        return 1;
+    }
+    char line[1024];
+    int hidden = 1;
+    while (fgets(line, sizeof line, mounts) != NULL) {
+        char *fields[5] = {0};
+        char *cursor = line;
+        for (int i = 0; i < 5 && cursor != NULL; i++) {
+            fields[i] = cursor;
+            cursor = strchr(cursor, ' ');
+            if (cursor != NULL) {
+                *cursor++ = '\0';
+            }
+        }
+        char *separator = cursor != NULL ? strstr(cursor, " - ") : NULL;
+        if (fields[4] == NULL || strcmp(fields[4], "/proc") != 0 || separator == NULL ||
+                strncmp(separator + 3, "proc ", 5) != 0) {
+            continue;
+        }
+        const char *option = strstr(separator, "hidepid=");
+        hidden = option != NULL && strncmp(option + 8, "0", 1) != 0 &&
+                 strncmp(option + 8, "off", 3) != 0;
+    }
+    fclose(mounts);
+    return hidden;
 }
 
 // Set by the last table read when it held a row this watcher could signal but not read.
@@ -804,7 +837,7 @@ static int sweep_once(struct watcher *w, int signal_number) {
     scan.leader_alive = leader != NULL && !leader->zombie && leader->start == w->leader_start;
 #if defined(__linux__)
     // A hidden row this watcher can signal might be a member, so the scan can't prove absence.
-    int dropped = table_has_hidden_row;
+    int dropped = table_has_hidden_row || w->procfs_hidden;
 #else
     int dropped = 0;
 #endif
@@ -1467,6 +1500,7 @@ int main(int argc, char *argv[]) {
             procfs_in_own_namespace() && read_row(getpid(), &reaper_row) == 1) {
         watcher.reaper = reaper_row.pid;
         watcher.reaper_start = reaper_row.start;
+        watcher.procfs_hidden = procfs_hides_processes();
     } else {
         watcher.reaper = getpid();
         watcher.reaper_start = -1;
