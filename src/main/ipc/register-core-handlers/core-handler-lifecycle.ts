@@ -1,9 +1,11 @@
+import type { OrcaAccountService } from '../../orca-profiles/orca-account-service'
 import type {
   AiVaultPrepareSessionResumeArgs,
   AiVaultPrepareSessionResumeResult
 } from '../../../shared/ai-vault/resume/ai-vault-resume-preparation'
 import type { OrcaRuntimeService } from '../../runtime/orca-runtime'
 import type { SettingsFileSync } from '../../settings-file/settings-file-sync-types'
+import type { RendererShutdownCheckpointService } from '../../core-desktop/renderer-shutdown-checkpoint-service'
 import { settleWithinMs } from '../../startup/quit/quit-teardown-deadline'
 
 const RELAUNCH_DISMISSAL_CLOSE_TIMEOUT_MS = 2_000
@@ -25,9 +27,9 @@ export type CoreHandlerLifecycleOptions = {
   hostInitialization?: Promise<void>
   settingsFile?: SettingsFileSync | null
   onBeforeRelaunch?: () => void | Promise<void>
-  onOrcaProfileAuthMutation?: () => void
-  onBeforeOrcaProfileSignOut?: () => void
-  onAfterOrcaProfileSignOut?: () => void
+  onQuit?: () => void
+  orcaAccount?: OrcaAccountService
+  rendererCheckpoint?: RendererShutdownCheckpointService
   getAdditionalAiVaultCodexHomePaths?: () => readonly string[]
   prepareAiVaultSessionResume?: (
     args: AiVaultPrepareSessionResumeArgs

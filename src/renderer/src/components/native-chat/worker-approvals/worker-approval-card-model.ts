@@ -1,12 +1,17 @@
-import { z } from 'zod'
-import type { AgentJournalApprovalItem } from '../../../../../shared/agent-session/journal/agent-session-journal-types'
 import type { ChatApproval } from '../../../../../shared/native-chat/input/native-chat-interactive-prompt'
 import type {
   WorkerApprovalDecision,
   WorkerApprovalPayload
 } from '../../../../../shared/orchestration/approvals/worker-approval-payload'
 import type { Translate } from '@/i18n/use-translate'
-import { normalizeToolInput } from '../../../../../shared/native-chat/tools/native-chat-tool-summary'
+import {
+  workerApprovalRecord,
+  type WorkerApprovalRecordSentence
+} from '../../../../../shared/orchestration/approvals/worker-approval-record'
+import {
+  approvalRecordDetail,
+  type NativeChatApprovalRecordLine
+} from '../prompts/native-chat-approval-record'
 
 /** The card a worker's open approval shows: its own words, and only the answers Orca can give. */
 export function workerApprovalCard(approval: WorkerApprovalPayload, t: Translate): ChatApproval {
@@ -29,109 +34,103 @@ export function isWorkerApprovalDecision(value: string): value is WorkerApproval
   return value === 'allow' || value === 'deny'
 }
 
-// A tool call's input as the agent wrote it: its shell command, when it has one.
-const ToolCommandInput = z.object({ command: z.string().optional(), cmd: z.string().optional() })
-
-/** The whole command when the detail is a tool call's input; any other detail as it is. */
-function approvalDetailCommand(detail: string | null): string | null {
-  const parsed = ToolCommandInput.safeParse(detail === null ? null : normalizeToolInput(detail))
-  const command = parsed.success ? (parsed.data.command ?? parsed.data.cmd) : undefined
-  return command?.trim() ? command : detail
+const RECORD_SENTENCES: Record<WorkerApprovalRecordSentence, (t: Translate) => string> = {
+  youAllowedFor: (t) =>
+    t(
+      'components.native-chat.approval.record.youAllowedFor',
+      'You allowed <tool>{{tool}}</tool> for <task>{{task}}</task>'
+    ),
+  youDeniedFor: (t) =>
+    t(
+      'components.native-chat.approval.record.youDeniedFor',
+      'You denied <tool>{{tool}}</tool> for <task>{{task}}</task>'
+    ),
+  coordinatorAllowed: (t) =>
+    t(
+      'components.native-chat.approval.record.coordinatorAllowed',
+      'Coordinator allowed <tool>{{tool}}</tool> for <task>{{task}}</task>'
+    ),
+  coordinatorDenied: (t) =>
+    t(
+      'components.native-chat.approval.record.coordinatorDenied',
+      'Coordinator denied <tool>{{tool}}</tool> for <task>{{task}}</task>'
+    ),
+  allowedInTerminal: (t) =>
+    t(
+      'components.native-chat.approval.record.allowedInTerminal',
+      '<tool>{{tool}}</tool> for <task>{{task}}</task> allowed in its terminal'
+    ),
+  deniedInTerminal: (t) =>
+    t(
+      'components.native-chat.approval.record.deniedInTerminal',
+      '<tool>{{tool}}</tool> for <task>{{task}}</task> denied in its terminal'
+    ),
+  allowedInChat: (t) =>
+    t(
+      'components.native-chat.approval.record.allowedInChat',
+      '<tool>{{tool}}</tool> for <task>{{task}}</task> allowed in its chat'
+    ),
+  deniedInChat: (t) =>
+    t(
+      'components.native-chat.approval.record.deniedInChat',
+      '<tool>{{tool}}</tool> for <task>{{task}}</task> denied in its chat'
+    ),
+  autoDenied: (t) =>
+    t(
+      'components.native-chat.approval.record.autoDenied',
+      '<tool>{{tool}}</tool> for <task>{{task}}</task> denied automatically after 2:00'
+    ),
+  waitsInTerminal: (t) =>
+    t(
+      'components.native-chat.approval.record.waitsInTerminal',
+      '<tool>{{tool}}</tool> for <task>{{task}}</task> waits in its terminal'
+    ),
+  workerEnded: (t) =>
+    t(
+      'components.native-chat.approval.record.workerEnded',
+      '<tool>{{tool}}</tool> for <task>{{task}}</task> closed: the worker ended'
+    ),
+  closedUnnamed: (t) =>
+    t(
+      'components.native-chat.approval.record.closedUnnamed',
+      '<tool>{{tool}}</tool> for <task>{{task}}</task> closed without a recorded answer'
+    )
 }
 
-/** A closed approval as the answered-prompt row reads it. */
-export function workerApprovalReceiptBody(
+/** A closed worker prompt as its one-line record: who answered and how, naming the tool and the
+ *  worker's task; the command and any coordinator reason open under it. */
+export function workerApprovalRecordLine(
   approval: WorkerApprovalPayload,
+  task: string,
   at: string,
   t: Translate
-): AgentJournalApprovalItem {
-  const decision = approval.outcome?.decision ?? null
+): NativeChatApprovalRecordLine {
+  const { tone, sentence, tool, opensWorker, reason } = workerApprovalRecord(approval)
   return {
-    kind: 'approval',
-    title: approval.summary.title,
-    // A tool call's input reads as its command, as the agent's own tool rows show it.
-    detail: approvalDetailCommand(approval.summary.detail),
-    options: [
-      { id: 'allow', label: t('components.native-chat.approval.allow', 'Allow') },
-      { id: 'deny', label: t('components.native-chat.approval.deny', 'Deny') }
-    ],
-    resolution: {
-      state: decision ? 'resolved' : 'cancelled',
-      selectedOptionId: decision,
-      resolvedBy: null,
-      resolvedAt: Date.parse(at)
-    }
+    tone,
+    sentence: RECORD_SENTENCES[sentence](t),
+    values: { tool, task },
+    detail: approvalRecordDetail(approval.summary.detail),
+    at: Date.parse(at),
+    ...(opensWorker ? { opensWorker } : {}),
+    // Labelled by how it reached the worker: with its answer, or as a separate message.
+    ...(reason
+      ? {
+          reason: {
+            label: reason.sentAsMessage
+              ? t(
+                  'components.native-chat.approval.reasonSentAsMessage',
+                  'Reason, sent as a message'
+                )
+              : t(
+                  'components.native-chat.approval.record.coordinatorReason',
+                  "Coordinator's reason"
+                ),
+            text: reason.text
+          }
+        }
+      : {})
   }
-}
-
-/** Who answered, from the closing message's evidence; a close it does not name says only that. */
-export function workerApprovalReceiptText(approval: WorkerApprovalPayload, t: Translate): string {
-  const outcome = approval.outcome
-  const decision = outcome?.decision ?? null
-  const by = outcome?.by
-  switch (decision === null && by !== 'terminal-only' && by !== 'worker-ended' ? 'unknown' : by) {
-    case 'person':
-      return decision === 'allow'
-        ? t('components.native-chat.approval.allowedByYou', 'Allowed by you')
-        : t('components.native-chat.approval.deniedByYou', 'Denied by you')
-    case 'coordinator':
-      return decision === 'allow'
-        ? t(
-            'components.native-chat.approval.allowedByCoordinator',
-            'Allowed by coordinator: {{reason}}',
-            {
-              reason: outcome?.reason ?? ''
-            }
-          )
-        : t('components.native-chat.approval.deniedByCoordinator', 'Denied by coordinator')
-    case 'worker-terminal':
-      return decision === 'allow'
-        ? t('components.native-chat.approval.allowedInTerminal', "Allowed in the worker's terminal")
-        : t('components.native-chat.approval.deniedInTerminal', "Denied in the worker's terminal")
-    case 'worker-chat':
-      return t('components.native-chat.approval.answeredInChat', "Answered in the worker's chat")
-    case 'auto':
-      return t('components.native-chat.approval.autoDenied', 'Auto-denied by Claude after 2:00')
-    case 'terminal-only':
-      return t(
-        'components.native-chat.approval.answerInTerminal',
-        "Answer it in the worker's terminal"
-      )
-    case 'worker-ended':
-      return t('components.native-chat.approval.workerEnded', 'No longer open · worker ended')
-    case 'unknown':
-    case undefined:
-      return t('components.native-chat.approval.closedUnnamed', 'Closed without a recorded answer')
-  }
-}
-
-/** The coordinator's deny reason, labelled by how it reached the worker: with the denial, or as a
- *  separate message. An allow's reason is in its receipt line. */
-export function workerApprovalReceiptReason(
-  approval: WorkerApprovalPayload,
-  t: Translate
-): { reason?: { label: string; text: string } } {
-  const outcome = approval.outcome
-  if (outcome?.by !== 'coordinator' || outcome.decision !== 'deny' || !outcome.reason) {
-    return {}
-  }
-  return {
-    reason: {
-      label: outcome.reasonDelivered
-        ? t('components.native-chat.approval.reason', 'Reason')
-        : t('components.native-chat.approval.reasonSentAsMessage', 'Reason, sent as a message'),
-      text: outcome.reason
-    }
-  }
-}
-
-/** Seconds left before the agent decides on its own, as m:ss; null once past or unknown. */
-export function workerApprovalTimeLeft(expiresAt: string | undefined, now: number): string | null {
-  const left = expiresAt ? Math.ceil((Date.parse(expiresAt) - now) / 1_000) : Number.NaN
-  if (!Number.isFinite(left) || left <= 0) {
-    return null
-  }
-  return `${Math.floor(left / 60)}:${String(left % 60).padStart(2, '0')}`
 }
 
 // Why 15 s: the agent's own timeout sends its closing message within moments of the countdown.

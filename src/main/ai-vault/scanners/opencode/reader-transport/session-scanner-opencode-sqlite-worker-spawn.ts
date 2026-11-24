@@ -3,15 +3,16 @@ import {
   recordSessionScanIssue,
   scanIssueTextFromError
 } from '../../../parsing/session-scan-issues'
-import { existsSync } from 'node:fs'
-import type { Worker } from 'node:worker_threads'
-import { spawnWorkerThread } from '../../../../worker-threads/worker-thread-spawn'
 import type * as AiVault from '../../../../../shared/ai-vault/contracts/ai-vault-types'
 import { throwIfSignalAborted } from '../../../../../shared/concurrency/abort-signal-reason'
 import { openCodeTranscriptPageLimit } from '../../../../../shared/agent-session/lifecycle/provider-handles/opencode-transcript-page-limit'
 import type { SessionFileCandidate } from '../../../session-scanner-types'
-import type { OpenCodeSqliteCaptureValue } from './session-scanner-opencode-sqlite-worker-protocol'
-import { OpenCodeSqliteWorkerClient } from './session-scanner-opencode-sqlite-worker-client'
+import type {
+  OpenCodeNativeChatReadRequest,
+  OpenCodeSqliteCaptureValue
+} from './session-scanner-opencode-sqlite-worker-protocol'
+import type { OpenCodeSqliteWorkerClient } from './session-scanner-opencode-sqlite-worker-client'
+import { getNativeOpenCodeSqliteClient } from './session-scanner-opencode-sqlite-shared-client'
 import {
   buildOpenCodeSqliteCandidatePath,
   splitOpenCodeSqliteCandidate
@@ -21,37 +22,11 @@ import {
   openCodeWslClient,
   openCodeWslPath
 } from './session-scanner-opencode-wsl-client'
-import { findForeignSqliteReaderEntry } from '../../../../foreign-sqlite-readers/foreign-sqlite-reader-entry-path'
 import { runOpenCodeSqliteScanRequest } from '../sqlite/session-scanner-opencode-sqlite-scan-scope'
 import {
   noteAiVaultScanDatabases,
   openAiVaultScanSource
 } from '../../../scan-lifecycle/ai-vault-scan-progress'
-
-export function resolveOpenCodeSqliteWorkerEntryPath(
-  runtimeDir = __dirname,
-  pathExists: (path: string) => boolean = existsSync
-): string {
-  return findForeignSqliteReaderEntry(runtimeDir, pathExists)
-}
-
-function defaultWorkerFactory(): Worker {
-  const workerPath = resolveOpenCodeSqliteWorkerEntryPath()
-  // Fail synchronously for missing bundles rather than waiting for an impossible worker response.
-  if (!existsSync(workerPath)) {
-    throw new Error(`OpenCode SQLite worker entry not found: ${workerPath}`)
-  }
-  return spawnWorkerThread(workerPath, { name: 'orca-opencode-sqlite-reader' })
-}
-
-let sharedClient: OpenCodeSqliteWorkerClient | null = null
-
-function getSharedClient(): OpenCodeSqliteWorkerClient {
-  sharedClient ??= new OpenCodeSqliteWorkerClient({
-    workerFactory: defaultWorkerFactory
-  })
-  return sharedClient
-}
 
 export type SqliteParseArgs = Omit<Parameters<OpenCodeSqliteWorkerClient['parse']>[0], 'agent'>
 export type SqliteCaptureArgs = Omit<Parameters<OpenCodeSqliteWorkerClient['capture']>[0], 'agent'>
@@ -151,7 +126,9 @@ async function listCandidatesForHost(
     groups.set(key, group)
   }
   const candidates = await Promise.all([
-    native.length ? getSharedClient().list({ ...args, dbPaths: native }) : Promise.resolve([]),
+    native.length
+      ? getNativeOpenCodeSqliteClient().then((client) => client.list({ ...args, dbPaths: native }))
+      : Promise.resolve([]),
     ...[...groups.values()].map(async ({ distro, paths }) => {
       const scopePaths = args.scopePaths?.length
         ? aiVaultScopePathsForWslDistro(args.scopePaths, distro)
@@ -220,7 +197,7 @@ export async function parseForHost(
 ): Promise<AiVault.AiVaultSession | null> {
   const wsl = openCodeWslPath(args.dbPath)
   if (!wsl) {
-    return getSharedClient().parse(args)
+    return (await getNativeOpenCodeSqliteClient()).parse(args)
   }
   const session = await runOpenCodeSqliteScanRequest(
     args.signal,
@@ -243,7 +220,7 @@ export async function captureForHost(
 ): Promise<OpenCodeSqliteCaptureValue> {
   const wsl = openCodeWslPath(args.dbPath)
   if (!wsl) {
-    return getSharedClient().capture(args)
+    return (await getNativeOpenCodeSqliteClient()).capture(args)
   }
   const capture = await runOpenCodeSqliteScanRequest(
     args.signal,
@@ -264,6 +241,18 @@ export async function captureForHost(
   }
 }
 
+/** A native chat read, on WSL through the distro's own reader. */
+export async function readNativeChatForHost(
+  request: Omit<OpenCodeNativeChatReadRequest, 'id'>,
+  signal?: AbortSignal
+) {
+  const wsl = openCodeWslPath(request.dbPath)
+  const client = wsl
+    ? await openCodeWslClient(wsl.distro, request.dbPath, signal)
+    : await getNativeOpenCodeSqliteClient()
+  return client.readNativeChat({ ...request, dbPath: wsl?.linuxPath ?? request.dbPath }, signal)
+}
+
 export async function readOpenCodeTranscriptPageViaWorker(
   args: {
     dbPath: string
@@ -274,15 +263,8 @@ export async function readOpenCodeTranscriptPageViaWorker(
   },
   signal?: AbortSignal
 ) {
-  const wsl = openCodeWslPath(args.dbPath)
-  const client = wsl ? await openCodeWslClient(wsl.distro, args.dbPath, signal) : getSharedClient()
-  const value = await client.readNativeChat(
-    {
-      ...args,
-      limit: openCodeTranscriptPageLimit(args.limit),
-      dbPath: wsl?.linuxPath ?? args.dbPath,
-      kind: 'native-page'
-    },
+  const value = await readNativeChatForHost(
+    { ...args, limit: openCodeTranscriptPageLimit(args.limit), kind: 'native-page' },
     signal
   )
   if (value !== null && !('items' in value)) {
@@ -299,12 +281,7 @@ export async function readOpenCodeTranscriptSignalViaWorker(
   },
   signal?: AbortSignal
 ) {
-  const wsl = openCodeWslPath(args.dbPath)
-  const client = wsl ? await openCodeWslClient(wsl.distro, args.dbPath, signal) : getSharedClient()
-  const value = await client.readNativeChat(
-    { ...args, dbPath: wsl?.linuxPath ?? args.dbPath, kind: 'native-signal' },
-    signal
-  )
+  const value = await readNativeChatForHost({ ...args, kind: 'native-signal' }, signal)
   if (value !== null && !('messageCount' in value)) {
     throw new Error('Invalid OpenCode transcript signal')
   }
@@ -316,6 +293,8 @@ export async function readOpenCodeForkCoverageViaWorker(
   signal?: AbortSignal
 ): Promise<string[]> {
   const wsl = openCodeWslPath(args.dbPath)
-  const client = wsl ? await openCodeWslClient(wsl.distro, args.dbPath, signal) : getSharedClient()
+  const client = wsl
+    ? await openCodeWslClient(wsl.distro, args.dbPath, signal)
+    : await getNativeOpenCodeSqliteClient()
   return client.readForkCoverage({ ...args, dbPath: wsl?.linuxPath ?? args.dbPath }, signal)
 }

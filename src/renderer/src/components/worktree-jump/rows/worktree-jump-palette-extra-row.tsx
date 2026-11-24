@@ -25,8 +25,19 @@ export function WorktreeJumpPaletteExtraRow({
       onSelect={() => controller.handleSelectItem(entry)}
       shape="palette-row"
     >
-      <div className={cn('flex min-w-0 flex-1 items-center gap-3', result.dimmed && 'opacity-60')}>
-        <div className="flex h-5 w-4 shrink-0 items-center justify-center self-start">
+      <div
+        className={cn(
+          'flex min-w-0 flex-1 items-center gap-3',
+          result.dimmed && 'opacity-60',
+          result.subdued && '[&_[data-slot=palette-open-tab-title]]:opacity-60'
+        )}
+      >
+        <div
+          className={cn(
+            'flex h-5 w-4 shrink-0 items-center justify-center self-start',
+            result.subdued && 'opacity-60'
+          )}
+        >
           {result.leading}
         </div>
         <div className="min-w-0 flex-1">

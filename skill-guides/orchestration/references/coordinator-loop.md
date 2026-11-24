@@ -6,10 +6,10 @@ A Task needs a Run, so create one first. Workers editing the same files at once
 need separate workspaces.
 
 ```text
-ORCA orchestration run-create --objective "<goal>"
-ORCA orchestration task-create --spec "<dependent work>" --deps <json_array>
-ORCA orchestration task-list --ready --brief
-ORCA orchestration worker-start --task <task_id> --worktree current --agent <agent>
+ORCA orchestration run-create --environment local --objective "<goal>"
+ORCA orchestration task-create --environment local --spec "<dependent work>" --deps <json_array>
+ORCA orchestration task-list --environment local --ready --brief
+ORCA orchestration worker-start --environment local --task <task_id> --worktree current --agent <agent>
 ```
 
 On every wake, start the Tasks `task-list --ready` shows.

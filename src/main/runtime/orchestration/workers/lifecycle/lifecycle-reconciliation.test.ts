@@ -341,58 +341,83 @@ describe('lifecycle reconciliation', () => {
     expect(db.getTask(task.id)?.result).toBe(result)
   })
 
-  it('surfaces a heartbeat sent from a different pane without recording liveness', () => {
+  it('keeps a federated worker report the relay import settled when mail delivery rereads it', () => {
     db = new OrchestrationDb(':memory:')
-    const task = db.createTask({ runId: 'run_legacy_local', spec: 'work' })
-    const dispatch = createRootDispatch(db, task.id, 'term_owner', `tab_w1:${LEAF_A}`)
-    const heartbeat = db.insertMessage({
-      runId: 'run_legacy_local',
-      from: 'term_other_worker',
-      to: 'term_coordinator',
-      subject: 'alive',
-      type: 'heartbeat',
-      payload: JSON.stringify({ dispatchId: dispatch.id }),
-      senderPaneKey: `tab_w2:${LEAF_B}`
+    const task = db.createTask({ runId: 'run_legacy_local', spec: 'remote work' })
+    const started = db.createStartingWorkerDispatch({
+      creator: { kind: 'system' },
+      maxDepth: Number.MAX_SAFE_INTEGER,
+      taskId: task.id,
+      startOptions: {},
+      federation: {
+        environmentId: 'environment-worker',
+        environmentName: 'worker',
+        peerFingerprint: 'peer-worker',
+        protocolVersion: 3
+      }
     })
+    const dispatchId = started.dispatch.id
+    db.reconcileFederatedWorkerStart({
+      dispatchId,
+      state: 'ready',
+      stage: 'remote_input_accepted',
+      worktreeId: 'repo::remote',
+      terminalHandle: 'term_remote'
+    })
+    const payload = JSON.stringify({ taskId: task.id, dispatchId, outcome: 'succeeded' })
+    const imported = db.importFederatedRelayItem({
+      dispatchId,
+      sequence: 1,
+      message: {
+        id: 'msg_relayed_done',
+        runId: 'run_legacy_local',
+        from: `dispatch:${dispatchId}`,
+        to: 'run:run_legacy_local',
+        subject: 'Done on the worker host',
+        body: '',
+        type: 'worker_done',
+        priority: 'normal',
+        payload
+      },
+      lifecycle: { kind: 'worker_report', taskId: task.id, outcome: 'succeeded', result: '{}' }
+    })
+    expect(db.getTask(task.id)?.status).toBe('completed')
 
-    expect(reconcileLifecycleMessage(db, heartbeat)).toMatchObject({
-      action: 'rejected',
-      code: 'sender_not_assignee'
+    expect(reconcileLifecycleMessage(db, imported.message)).toEqual({ action: 'ignored' })
+    expect(db.getMessageById('msg_relayed_done')).toMatchObject({
+      type: 'worker_done',
+      subject: 'Done on the worker host',
+      payload
     })
-    expect(db.getDispatchContextById(dispatch.id)?.last_heartbeat_at).toBeNull()
-    expect(db.getMessageById(heartbeat.id)).toMatchObject({
-      type: 'heartbeat',
-      subject: 'Rejected heartbeat: alive'
-    })
-    // Log the rejection on coordinator reread even after send-path conversion.
-    const persisted = db.getMessageById(heartbeat.id)
-    const rereadLogs: string[] = []
-    expect(
-      persisted && reconcileLifecycleMessage(db, persisted, (line) => rereadLogs.push(line))
-    ).toMatchObject({
-      action: 'rejected'
-    })
-    expect(rereadLogs.some((line) => line.includes('Heartbeat rejected'))).toBe(true)
   })
 
-  it('surfaces a foreign heartbeat that claims the assignee handle', () => {
+  it('surfaces foreign-pane heartbeats without recording liveness, even with the assignee handle', () => {
     db = new OrchestrationDb(':memory:')
     const task = db.createTask({ runId: 'run_legacy_local', spec: 'work' })
     const dispatch = createRootDispatch(db, task.id, 'term_owner', `tab_w1:${LEAF_A}`)
-    const heartbeat = db.insertMessage({
-      runId: 'run_legacy_local',
-      from: 'term_owner',
-      to: 'term_coordinator',
-      subject: 'alive',
-      type: 'heartbeat',
-      payload: JSON.stringify({ taskId: task.id, dispatchId: dispatch.id }),
-      senderPaneKey: `tab_w2:${LEAF_B}`
-    })
+    for (const from of ['term_other_worker', 'term_owner']) {
+      const heartbeat = db.insertMessage({
+        runId: 'run_legacy_local',
+        from,
+        to: 'term_coordinator',
+        subject: 'alive',
+        type: 'heartbeat',
+        payload: JSON.stringify({ dispatchId: dispatch.id }),
+        senderPaneKey: `tab_w2:${LEAF_B}`
+      })
 
-    expect(reconcileLifecycleMessage(db, heartbeat)).toMatchObject({
-      action: 'rejected',
-      code: 'sender_not_assignee'
-    })
-    expect(db.getDispatchContextById(dispatch.id)?.last_heartbeat_at).toBeNull()
+      expect(reconcileLifecycleMessage(db, heartbeat)).toMatchObject({
+        action: 'rejected',
+        code: 'sender_not_assignee'
+      })
+      expect(db.getDispatchContextById(dispatch.id)?.last_heartbeat_at).toBeNull()
+      const persisted = db.getMessageById(heartbeat.id)
+      expect(persisted).toMatchObject({ type: 'heartbeat', subject: 'Rejected heartbeat: alive' })
+      const rereadLogs: string[] = []
+      expect(
+        persisted && reconcileLifecycleMessage(db, persisted, (line) => rereadLogs.push(line))
+      ).toMatchObject({ action: 'rejected' })
+      expect(rereadLogs.some((line) => line.includes('Heartbeat rejected'))).toBe(true)
+    }
   })
 })

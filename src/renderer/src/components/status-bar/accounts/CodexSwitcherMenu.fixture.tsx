@@ -2,13 +2,20 @@ import { defineFixture } from '../../../component-fixtures/component-fixture'
 import { getDefaultSettings } from '../../../../../shared/orca-profiles/constants'
 import type { CodexManagedAccount } from '../../../../../shared/agent-accounts/managed-account-types'
 import { createEmptyRateLimitState } from '../../../../../shared/agent-usage/rate-limits/rate-limit-state-factory'
+import { setRendererUiLanguage } from '@/i18n/i18n'
 import type {
   InactiveAccountUsage,
   ProviderRateLimits,
   RateLimitWindow
 } from '../../../../../shared/agent-usage/rate-limits/rate-limit-types'
 import { makeTab } from '@/store/terminals/testing/terminal-tab.test-fixture'
+import { useAppStore } from '@/store'
+import { Toaster } from '@/components/ui/sonner'
 import { CodexSwitcherMenu } from './CodexSwitcherMenu'
+import {
+  useAccountOwnerUsage,
+  type OwnerUsageRateLimits
+} from '../usage/use-owner-usage-rate-limits'
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -26,6 +33,7 @@ type SampleAccount = {
   weekly: number | null
   error?: string
   resetsInDays: number
+  wslDistro?: string
 }
 
 const BASE_ACCOUNTS: SampleAccount[] = [
@@ -97,11 +105,11 @@ function weeklyWindow(usedPercent: number, resetsInDays: number): RateLimitWindo
   }
 }
 
-function usageFor(account: SampleAccount): ProviderRateLimits {
+function usageFor(account: SampleAccount, weeklyOnly = false): ProviderRateLimits {
   return {
     provider: 'codex',
     session:
-      account.weekly === null
+      account.weekly === null || weeklyOnly
         ? null
         : {
             usedPercent: 32,
@@ -112,7 +120,16 @@ function usageFor(account: SampleAccount): ProviderRateLimits {
     weekly: account.weekly === null ? null : weeklyWindow(account.weekly, account.resetsInDays),
     updatedAt: NOW - 60_000,
     error: account.weekly === null ? (account.error ?? 'Not signed in') : null,
-    status: account.weekly === null ? 'error' : 'ok'
+    status: account.weekly === null ? 'error' : 'ok',
+    usageMetadata: account.error
+      ? {
+          authFailureAccount: {
+            accountId: account.id,
+            runtime: account.wslDistro ? 'wsl' : 'host',
+            wslDistro: account.wslDistro ?? null
+          }
+        }
+      : undefined
   }
 }
 
@@ -121,6 +138,8 @@ function managed(account: SampleAccount): CodexManagedAccount {
     id: account.id,
     email: account.email,
     managedHomePath: `/home/me/.orca/codex/${account.id}`,
+    managedHomeRuntime: account.wslDistro ? 'wsl' : 'host',
+    wslDistro: account.wslDistro ?? null,
     providerAccountId: `provider-${account.id}`,
     workspaceLabel: account.workspace,
     workspaceAccountId: null,
@@ -130,28 +149,60 @@ function managed(account: SampleAccount): CodexManagedAccount {
   }
 }
 
+function FixtureSwitcher(props: React.ComponentProps<typeof CodexSwitcherMenu>) {
+  const rateLimits = useAppStore((state) => state.rateLimits)
+  const local = useAccountOwnerUsage({ target: { kind: 'local' }, wslHostDistro: null }, rateLimits)
+  if (props.ownerUsage.owner?.target.kind !== 'local' || !local.rateLimits.codex) {
+    return <CodexSwitcherMenu {...props} />
+  }
+  return <CodexSwitcherMenu {...props} codex={local.rateLimits.codex} ownerUsage={local} />
+}
+
 function switcherFixture(
   accounts: SampleAccount[],
   asSubmenu = false,
   staleRestart = false,
-  systemDefaultOnly = false
+  systemDefaultOnly = false,
+  remote = false
 ) {
   const [active, ...inactive] = accounts
   const codex: ProviderRateLimits = {
-    ...usageFor(active),
+    ...usageFor(active, remote),
     rateLimitResetCredits: { availableCount: 1, nextExpiresAt: NOW + 29 * DAY }
   }
   const inactiveCodexAccounts: InactiveAccountUsage[] = inactive.map((account) => ({
     accountId: account.id,
-    rateLimits: usageFor(account),
+    rateLimits: usageFor(account, remote),
     updatedAt: NOW - 60_000,
     isFetching: false
   }))
+  const rateLimits = createEmptyRateLimitState({ codex, inactiveCodexAccounts })
+  const snapshot = {
+    claude: { accounts: [], activeAccountId: null },
+    codex: { accounts: accounts.map(managed), activeAccountId: active.id },
+    rateLimits
+  }
+  const ownerUsage: OwnerUsageRateLimits = remote
+    ? {
+        owner: { target: { kind: 'environment', environmentId: 'laptop' }, wslHostDistro: null },
+        rateLimits,
+        accounts: snapshot,
+        remoteOwner: { environmentId: 'laptop', label: 'Laptop' },
+        refreshRemote: null
+      }
+    : {
+        owner: { target: { kind: 'local' }, wslHostDistro: null },
+        rateLimits,
+        accounts: null,
+        remoteOwner: null,
+        refreshRemote: null
+      }
   return defineFixture({
     width: 520,
     store: {
       settings: {
         ...getDefaultSettings('/home/me'),
+        activeRuntimeEnvironmentId: remote ? 'laptop' : null,
         codexManagedAccounts: systemDefaultOnly ? [] : accounts.map(managed),
         activeCodexManagedAccountId: systemDefaultOnly ? null : active.id,
         activeCodexManagedAccountIdsByRuntime: {
@@ -159,7 +210,12 @@ function switcherFixture(
           wsl: {}
         }
       },
-      rateLimits: createEmptyRateLimitState({ codex, inactiveCodexAccounts }),
+      rateLimits: remote
+        ? createEmptyRateLimitState({
+            codex: { ...codex, weekly: weeklyWindow(99, 1) },
+            codexTarget: { runtime: 'host', wslDistro: null }
+          })
+        : rateLimits,
       ...(staleRestart
         ? {
             tabsByWorktree: { wt1: [makeTab({ id: 'tab1', worktreeId: 'wt1' })] },
@@ -172,12 +228,26 @@ function switcherFixture(
             }
           }
         : {}),
-      fetchInactiveCodexAccountUsage: async () => {}
+      fetchInactiveCodexAccountUsage: async () => {},
+      fetchSettings: async () => {}
     },
     setup: () => {
       // Settings already carry the roster; the web bridge has no local account IPC to answer.
       window.api.codexAccounts.list = async () => ({ accounts: [], activeAccountId: null })
       window.api.claudeAccounts.list = async () => ({ accounts: [], activeAccountId: null })
+      if (remote) {
+        window.api.runtimeEnvironments.subscribe = async (_request, handlers) => {
+          queueMicrotask(() =>
+            handlers.onResponse({
+              id: 'fixture',
+              ok: true,
+              _meta: { runtimeId: 'laptop' },
+              result: { type: 'ready', snapshot }
+            })
+          )
+          return { unsubscribe: () => {}, sendBinary: () => true }
+        }
+      }
     },
     render: () => (
       <div className="flex h-[760px] items-end bg-background p-3">
@@ -185,21 +255,24 @@ function switcherFixture(
           <DropdownMenu defaultOpen modal={false}>
             <DropdownMenuTrigger>Usage</DropdownMenuTrigger>
             <DropdownMenuContent>
-              <CodexSwitcherMenu
+              <FixtureSwitcher
                 codex={codex}
-                compact={false}
-                iconOnly={false}
+                ownerUsage={ownerUsage}
                 asSubmenu
                 triggerContent="Codex"
               />
             </DropdownMenuContent>
           </DropdownMenu>
         ) : (
-          <CodexSwitcherMenu codex={codex} compact={false} iconOnly={false} />
+          <FixtureSwitcher codex={codex} ownerUsage={ownerUsage} />
         )}
+        <Toaster />
       </div>
     ),
-    interact: (frame) => {
+    interact: async (frame) => {
+      if (remote) {
+        await setRendererUiLanguage('en')
+      }
       if (asSubmenu) {
         const trigger = frame.ownerDocument.querySelector<HTMLElement>(
           '[data-slot="dropdown-menu-sub-trigger"]'
@@ -230,3 +303,24 @@ export const transientUsageFailures = switcherFixture([
   { ...BASE_ACCOUNTS[2], weekly: null, error: 'Sign-in probe timed out' },
   { ...BASE_ACCOUNTS[3], weekly: null, error: 'Session index rebuilding' }
 ])
+
+export const pairedHost = switcherFixture(BASE_ACCOUNTS.slice(0, 5), false, false, false, true)
+
+export const pairedHostWithWsl = switcherFixture(
+  [...BASE_ACCOUNTS.slice(0, 5), { ...BASE_ACCOUNTS[0], id: 'linux', wslDistro: 'Ubuntu' }],
+  false,
+  false,
+  false,
+  true
+)
+
+const revokedUsageError =
+  'failed to fetch codex rate limits: GET https://chatgpt.com/backend-api/wham/usage failed: 401 Unauthorized; content-type=text/plain; body={ "error": { "message": "Encountered invalidated oauth token for user, failing request", "type": null, "code": "token_revoked", "param": null }, "status": 401 }'
+const revokedAccounts = [
+  { ...BASE_ACCOUNTS[0], weekly: null, error: revokedUsageError },
+  ...BASE_ACCOUNTS.slice(1, 5),
+  { ...BASE_ACCOUNTS[5], error: revokedUsageError }
+]
+
+export const revokedActiveSignIn = switcherFixture(revokedAccounts, false, true)
+export const revokedRemoteSignIn = switcherFixture(revokedAccounts, false, false, false, true)

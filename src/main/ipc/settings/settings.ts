@@ -21,6 +21,7 @@ import { recordManagedHookInstallFailure } from '../../agent-hooks/installation/
 import { applyElectronProxySettings } from '../../network/proxy-settings'
 import { applyBrowserSessionProxies } from '../../browser/sessions/proxy/browser-session-proxy'
 import { applyProxyToElectronUpdaterSession } from '../../updater/lifecycle/electron-updater-proxy-session'
+import { applyAutomaticUpdatesSetting } from '../../updater/updater-service'
 import { browserSessionRegistry } from '../../browser/sessions/profiles/browser-session-registry'
 import { sanitizeNetworkSettings } from './network-settings-sanitization'
 import { normalizeAppIconId } from '../../../shared/app-lifecycle/identity/app-icon'
@@ -77,6 +78,7 @@ export function registerSettingsHandlers(
   })
 
   store.onSettingsChanged((updates, _settings, originWebContentsId) => {
+    applyAutomaticUpdatesSetting(updates.automaticUpdates)
     for (const window of BrowserWindow.getAllWindows()) {
       const isOrigin =
         originWebContentsId !== undefined && window.webContents.id === originWebContentsId

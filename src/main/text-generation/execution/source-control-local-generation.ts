@@ -30,6 +30,8 @@ export function runLocalPlanForAgent(input: {
   operation: TextGenerationOperation
   spawnAgent: SpawnSourceControlAgent
   shouldExecute?: () => boolean
+  /** How long the agent may run; the source-control default when absent. */
+  timeoutMs?: number
 }): Promise<InternalTextGenerationResult> {
   const needsPolicy = ['codex', 'kimi', 'dsh', 'antigravity', 'amp', 'muse'].includes(input.agentId)
   const wslDistro =
@@ -45,6 +47,7 @@ export function runLocalPlanForAgent(input: {
       wslDistro ? 'linux' : process.platform
     )
   }
+  const totalTimeoutMs = input.timeoutMs ?? SOURCE_CONTROL_GENERATION_TIMEOUT_MS
   const launch = (plan: CommitMessagePlan<GenerationArgument>, timeoutMs?: number) =>
     runLocalSourceControlPlan({
       plan,
@@ -54,13 +57,13 @@ export function runLocalPlanForAgent(input: {
       laneId: input.target.laneId,
       wslDistro,
       spawnAgent: input.spawnAgent,
-      timeoutMs
+      timeoutMs: timeoutMs ?? input.timeoutMs
     })
   const prepare = (): LocalProcessExecution<InternalTextGenerationResult> => {
     const result = Promise.withResolvers<InternalTextGenerationResult>()
     const canceled = new AbortController()
-    const deadlineAt = Date.now() + SOURCE_CONTROL_GENERATION_TIMEOUT_MS
-    const deadline = AbortSignal.timeout(SOURCE_CONTROL_GENERATION_TIMEOUT_MS)
+    const deadlineAt = Date.now() + totalTimeoutMs
+    const deadline = AbortSignal.timeout(totalTimeoutMs)
     const signal = AbortSignal.any([canceled.signal, deadline])
     const lane = localGenerationLaneKey(input.operation, input.target.cwd, input.target.laneId)
     const failure = (): InternalTextGenerationResult =>
@@ -70,7 +73,7 @@ export function runLocalPlanForAgent(input: {
             success: false,
             ...(deadline.aborted
               ? textGenerationFailure('timedOut', {
-                  seconds: SOURCE_CONTROL_GENERATION_TIMEOUT_MS / 1000
+                  seconds: totalTimeoutMs / 1000
                 })
               : textGenerationFailure('agentCouldNotStart', { label: input.plan.label }))
           }

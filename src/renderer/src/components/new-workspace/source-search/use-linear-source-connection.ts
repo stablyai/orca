@@ -3,6 +3,7 @@ import type { LinearIssueView } from '@/store/slices/linear/linear-issue-read-li
 import { useCallback, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { linearStatus } from '@/runtime/linear/runtime-linear-client'
 import { useAppStore } from '@/store'
+import { useRuntimeHostStatusSelector } from '@/store/slices/runtime-status/views/use-runtime-status-view'
 import { getLinearStatusReadGeneration } from '@/store/slices/linear/linear-slice-request-state'
 import { getLinearSourceScope } from '@/store/slices/linear/linear-slice-scope'
 import {
@@ -34,10 +35,10 @@ export function useLinearSourceConnection(args: {
 }): LinearSourceConnection {
   const runtimeSettings = getTaskSourceRuntimeSettings(args.sourceContext)
   const environmentId = runtimeSettings.activeRuntimeEnvironmentId
-  const runtimeRevision = useAppStore((state) => {
-    const runtime = environmentId ? state.runtimeStatusByEnvironmentId?.get(environmentId) : null
-    return `${runtime?.connectionGeneration ?? 0}:${runtime?.hostContactEpoch ?? 0}`
-  })
+  const runtimeRevision = useRuntimeHostStatusSelector(
+    environmentId,
+    (runtime) => `${runtime?.connectionGeneration ?? 0}:${runtime?.hostContactEpoch ?? 0}`
+  )
   const statusContextKey = getProviderRuntimeContextKey(runtimeSettings)
   // Why: Linear status is per host, so switching repos on one host keeps the loaded status.
   const scope = args.sourceContext ? statusContextKey : null

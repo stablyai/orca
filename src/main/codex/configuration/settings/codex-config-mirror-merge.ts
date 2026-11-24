@@ -7,6 +7,8 @@ import {
   getRevocationTomlSectionHeaderKey,
   getTomlSectionHeaderKey,
   getTomlSections,
+  definesCodexTuiBookkeepingOnlyAsTable,
+  isCodexTuiBookkeepingTomlSection,
   isRuntimePreservedTomlSection,
   isRuntimeProjectTomlSection,
   joinTomlBlocks,
@@ -21,15 +23,23 @@ export function mergeSystemCodexConfigIntoRuntime(
   mirroredMcpServerNames: ReadonlySet<string> = new Set(),
   mirroredMcpServerRoot = false
 ): string {
-  const runtimeSections = deduplicateProjectTomlSections(getTomlSections(runtimeConfig))
-  const runtimeProjectHeaders = new Set(
+  const systemSections = deduplicateProjectTomlSections(getTomlSections(systemConfig))
+  // Another spelling in ~/.codex (a [tui] key or inline table) would define the table twice.
+  const keepsTuiBookkeeping = definesCodexTuiBookkeepingOnlyAsTable(systemConfig)
+  const runtimeSections = deduplicateProjectTomlSections(getTomlSections(runtimeConfig)).filter(
+    (section) => keepsTuiBookkeeping || !isCodexTuiBookkeepingTomlSection(section)
+  )
+  const runtimeOwnedHeaders = new Set(
     runtimeSections
-      .filter((section) => isRuntimeProjectTomlSection(section))
+      .filter(
+        (section) =>
+          isRuntimeProjectTomlSection(section) || isCodexTuiBookkeepingTomlSection(section)
+      )
       .map((section) => getTomlSectionHeaderKey(section))
   )
-  const systemProjectSections = deduplicateProjectTomlSections(
-    getTomlSections(systemConfig)
-  ).filter((section) => isRuntimeProjectTomlSection(section))
+  const systemProjectSections = systemSections.filter((section) =>
+    isRuntimeProjectTomlSection(section)
+  )
   const systemUntrustedProjectHeaders = new Set(
     systemProjectSections
       .filter((section) => getProjectTrustLevel(section.block) === 'untrusted')
@@ -44,7 +54,7 @@ export function mergeSystemCodexConfigIntoRuntime(
   const systemMcpServers = readMcpServerTomlOwnership(systemConfig)
   // Mirror ordinary settings while retaining runtime trust, subject to explicit system project revocations.
   return joinTomlBlocks([
-    stripRuntimeOwnedTomlSections(systemConfig, runtimeProjectHeaders, {
+    stripRuntimeOwnedTomlSections(systemConfig, runtimeOwnedHeaders, {
       systemHomeDir: systemConfigDir,
       runtimeHookTrustKeys: getHookTrustTomlSectionKeys(runtimeSections)
     }),

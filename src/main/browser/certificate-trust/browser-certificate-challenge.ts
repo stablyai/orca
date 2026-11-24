@@ -43,7 +43,7 @@ export type PendingCertificateChallenge = {
 
 export type CertificateTrustGrant = Pick<
   PendingCertificateChallenge,
-  'guestWebContentsId' | 'secureEndpoint' | 'leafCertificateSha256' | 'error'
+  'secureEndpoint' | 'leafCertificateSha256' | 'error'
 >
 
 export function certificateChallengeIdentityMatches(

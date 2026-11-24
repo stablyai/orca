@@ -97,6 +97,10 @@ export async function runSessionSearchPass(
       })
       outOfTime = read.outOfTime
       left = read.left
+      // Rows retired as outranked copies are not deleted sources.
+      for (const path of read.retired) {
+        rows.delete(path)
+      }
     } catch (error) {
       if (!signal?.aborted) {
         throw error
@@ -127,9 +131,9 @@ export async function runSessionSearchPass(
             ? sessionSearchEmptiedRoots(previousRootsWithFiles, rootsWithFiles)
             : new Set(),
           listings: args.listings,
-          referenceOnlyRoots: swept.discoveries
-            .filter((discovery) => discovery.agent === 'hermes')
-            .map((discovery) => discovery.rootDir),
+          retiredFileRoots: swept.discoveries.flatMap((discovery) =>
+            discovery.agent === 'hermes' ? [discovery.rootDir] : (discovery.aliasRootDirs ?? [])
+          ),
           directoryLimit: RETIREMENT_DIRECTORIES_PER_PASS,
           signal
         })

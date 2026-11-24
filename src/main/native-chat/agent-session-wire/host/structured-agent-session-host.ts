@@ -15,7 +15,7 @@ import { createStructuredAgentSessionTabSurface as createTabs } from './structur
 import { flushStructuredAgentSessionHost } from '../termination/structured-agent-session-host-teardown'
 import type * as HostTypes from './structured-agent-session-host-types'
 import { StructuredAgentSessionEventRecovery as EventRecovery } from '../termination/structured-agent-session-event-recovery'
-import { StructuredAgentSessionBackgroundTaskChannel as BackgroundTasks } from '../publication/subscribers/structured-agent-session-background-task-channel'
+import { StructuredAgentSessionBackgroundTaskChannel as Background } from '../publication/subscribers/structured-agent-session-background-task-channel'
 import { StructuredAgentSessionClientDelivery } from '../publication/subscribers/structured-agent-session-client-delivery'
 import { createStructuredAgentSessionPublicationWiring } from './structured-agent-session-publication-wiring'
 import * as resume from '../recovery/structured-agent-session-restart-resume-host'
@@ -45,8 +45,8 @@ export class StructuredAgentSessionHost {
     () => this.deps,
     this.queued,
     (sessionId) => this.restartResume.onAgentStarted(sessionId),
-    (sessionId) => this.backgroundTasks.publish(sessionId),
-    (sessionId) => this.backgroundTasks.read(sessionId),
+    (sessionId) => this.background.publish(sessionId),
+    (sessionId) => this.background.read(sessionId),
     (sessionId) => this.runtimeState?.startFlights.projectsStarting(sessionId) ?? false,
     this.sessions,
     (sessionId, cut) => this.usageLimitContinue?.readState(sessionId, cut),
@@ -59,7 +59,7 @@ export class StructuredAgentSessionHost {
   private readonly lifetime: HostTypes.StructuredAgentSessionConversationLifetime
   private readonly conversationDelivery: conversation.StructuredAgentSessionConversationDelivery
   private readonly eventRecovery: EventRecovery
-  private readonly backgroundTasks: BackgroundTasks
+  private readonly background: Background
   readonly restartResume: StructuredAgentSessionRestartResume
 
   readonly usageLimitContinue: ReturnType<typeof usageLimit.start>
@@ -68,7 +68,7 @@ export class StructuredAgentSessionHost {
     // Collaborators share a logger wrapper that cannot fail the operation it reports.
     this.deps = deps = sessionLogger.withNeverThrowingLogger(deps)
     this.clientDelivery.watchAtRestCommands(deps.adapter)
-    this.backgroundTasks = new BackgroundTasks(
+    this.background = new Background(
       deps,
       this.sessions,
       this.clientDelivery.subscribers,
@@ -130,7 +130,8 @@ export class StructuredAgentSessionHost {
       // In-flight starts count as execution before a child is indexed.
       deliveryActive: (id) => this.runtimeState.hasDeliveryWork(id),
       closeStatus: (sessionId, options) => this.clientDelivery.closeSession(sessionId, options),
-      childWorkOpen: this.clientDelivery.childWorkOpen
+      childWorkOpen: this.clientDelivery.childWorkOpen,
+      viewed: (sessionId) => this.clientDelivery.subscribers.subscriberCount(sessionId) > 0
     })
     this.continuationContext = contextReader(deps, this.lifetime.conversation)
     this.usageLimitContinue = usageLimit.start(this.mutationContext(), this, this.clientDelivery)
@@ -142,7 +143,7 @@ export class StructuredAgentSessionHost {
 
   hasSession = (sessionId: string): boolean => this.sessions.has(sessionId)
   loadedSessionIds = this.sessions.loadedSessionIds
-  hasLoadedProviders = (): boolean => this.loadedSessionIds().length > 0
+  chatSessionCount = (): number => this.runtimeState.startFlights.countWith(this.loadedSessionIds())
   readonly reads = createStructuredAgentSessionConversationReads(() => ({
     ...this.lifetimeContext(),
     serialize: this.serialize,
@@ -183,16 +184,12 @@ export class StructuredAgentSessionHost {
   /** Release resources; user-close cancels cut turns, while eviction leaves their failure reportable. */
   close: typeof this.lifetime.close = (...args) => this.lifetime.close(...args)
 
+  /** Stop a finished background run's agent now, as the idle sweep would; owed work keeps it, and
+   *  so does a viewer unless `anyway`. */
+  releaseIdleSession = (id: string, anyway?: boolean) => this.lifetime.idleSweep.release(id, anyway)
+
   /** Stop hidden children too, using one bounded host snapshot. */
-  sleepWorkspace = createStructuredAgentSessionWorkspaceSleeper(() => ({
-    deps: this.deps,
-    tasks: this.tasks,
-    lifetime: this.lifetime,
-    sessions: this.sessions,
-    conversationDelivery: this.conversationDelivery,
-    runtimeState: this.runtimeState,
-    clientDelivery: this.clientDelivery
-  }))
+  sleepWorkspace = createStructuredAgentSessionWorkspaceSleeper(() => this.collaborators())
 
   serializeCreateIntent = this.tasks.serializeCreateIntent.bind(this.tasks)
 
@@ -291,17 +288,21 @@ export class StructuredAgentSessionHost {
   conversationCommand = this.conversationCommands.run
   readCommands = this.reads.readCommands
 
-  handoffStatus = (sessionId: string) => this.backgroundTasks.handoffStatus(sessionId)
+  handoffStatus = (sessionId: string) => this.background.handoffStatus(sessionId)
 
-  history: BackgroundTasks['history'] = (...args) => this.backgroundTasks.history(...args)
+  history: Background['history'] = (...args) => this.background.history(...args)
 
   readonly continuationContext: ReturnType<typeof contextReader>
 
+  /** Opens the conversation at rest, starting no agent; Orca's own notes write through it. */
+  conversation = (sessionId: string) => this.lifetime.conversation(sessionId)
   observeConversationPublications = this.sessions.observeConversationPublications
-  forkBoundary: BackgroundTasks['forkBoundary'] = (...a) => this.backgroundTasks.forkBoundary(...a)
-  savedContent = (sessionId: string) => this.backgroundTasks.savedContent(sessionId)
-  historyItem = (id: string, itemId: string) => this.backgroundTasks.historyItem(id, itemId)
-  conversationOutline = (sessionId: string) => this.backgroundTasks.conversationOutline(sessionId)
+  forkBoundary: Background['forkBoundary'] = (...a) => this.background.forkBoundary(...a)
+  savedContent = (sessionId: string) => this.background.savedContent(sessionId)
+  /** A conversation's bounded journal reads, opened at rest. */
+  journalReads = async (id: string) => (await this.conversation(id)).journal.reads
+  historyItem = (id: string, itemId: string) => this.background.historyItem(id, itemId)
+  conversationOutline = (sessionId: string) => this.background.conversationOutline(sessionId)
   namingPrompt = this.reads.namingPrompt
   approvalPrompt = this.reads.approvalPrompt
   automationRun = this.reads.automationRun
@@ -311,24 +312,21 @@ export class StructuredAgentSessionHost {
   holdMailSources = this.reads.holdMailSources
   wakeQueuedMessages = (sessionId: string) => this.queued.refresh(sessionId)
 
-  private readonly startJournal = structuredAgentStartJournal(
-    () => this.deps,
-    (sessionId) => this.lifetime.conversation(sessionId)
-  )
+  private readonly startJournal = structuredAgentStartJournal(() => this.deps, this.conversation)
   captureAgentStartDestination = this.startJournal.captureAgentStartDestination
   appendAgentStart = this.startJournal.appendAgentStart
 
   currentWork = this.clientDelivery.readCurrentWork
   currentWorkAtRest = this.reads.currentWorkAtRest
-  readCurrentRequests: BackgroundTasks['currentRequests'] = (...args) =>
-    this.backgroundTasks.currentRequests(...args)
+  readCurrentRequests: Background['currentRequests'] = (req) => this.background.currentRequests(req)
 
   observeJournalPublications = this.clientDelivery.observeJournalPublications
 
-  subscribe: BackgroundTasks['subscribe'] = (input) => this.backgroundTasks.subscribe(input)
+  subscribe: Background['subscribe'] = (input) => this.background.subscribe(input)
 
   settleLateDispatch = this.mutations.settleLateDispatch
   publishWorkChanged: (sessionId: string) => void = this.clientDelivery.publishGenerationEnded
+  publishBackgroundTasks = (sessionId: string): void => this.background.publish(sessionId)
 
   publishChildWorkEvidence = this.clientDelivery.publishChildWork
   unsubscribe = (id: string, key: string): void => this.clientDelivery.subscribers.close(id, key)
@@ -341,13 +339,21 @@ export class StructuredAgentSessionHost {
 
   subscribeTurnCompletions = this.clientDelivery.subscribeTurnCompletions
   readStatusSummary = this.clientDelivery.readStatusSummary
+  /** The usage-limit continue as the journal stands now, ahead of the next status publish. */
+  readUsageLimitContinue = async (id: string) =>
+    this.usageLimitContinue.readState(id, await this.clientDelivery.readUsageLimitCut(id))
+  publishedWork = this.clientDelivery.readPublishedWork
 
-  collaboratorsForTests = () => ({
-    sessions: this.sessions,
-    subscribers: this.clientDelivery.subscribers,
-    runtimeState: this.runtimeState,
-    conversationDelivery: this.conversationDelivery,
+  private collaborators = () => ({
+    deps: this.deps,
+    tasks: this.tasks,
     lifetime: this.lifetime,
+    sessions: this.sessions,
+    conversationDelivery: this.conversationDelivery,
+    runtimeState: this.runtimeState,
+    clientDelivery: this.clientDelivery,
+    subscribers: this.clientDelivery.subscribers,
     serialize: this.serialize
   })
+  collaboratorsForTests = this.collaborators
 }

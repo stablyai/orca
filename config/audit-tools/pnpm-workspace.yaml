@@ -5,3 +5,5 @@ allowBuilds: {}
 patchedDependencies:
   braces@3.0.3: ../patches/braces@3.0.3.patch
   minimatch@10.2.6: ../patches/minimatch@10.2.6.patch
+  picomatch@2.3.2: ../patches/picomatch@2.3.2.patch
+  picomatch@4.0.7: ../patches/picomatch@4.0.7.patch

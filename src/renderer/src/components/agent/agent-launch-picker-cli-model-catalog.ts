@@ -6,14 +6,14 @@ import {
   catalogModelsFromModelDiscovery,
   mergeDiscoveredCatalogModels
 } from '../../../../shared/native-chat/input/session-options/native-chat-discovered-catalog-models'
-import { isNativeChatSupportedAgent } from '../../../../shared/native-chat/native-chat-agent-support'
+import { isNativeChatAgent } from '../../../../shared/agent-launch/permissions/agent-chat-permission-support'
 import type { RuntimeGitContext } from '@/runtime/source-control/git/runtime-git-client-context'
 import { discoverRuntimeCommitMessageModels } from '@/runtime/source-control/git/runtime-git-generation-client'
 
 /** Agents with no structured chat have no host model catalog, so they list models through their CLI. */
 export function agentPickerListsCliModels(entry: Pick<AgentPickerEntry, 'agent'>): boolean {
   return (
-    !isNativeChatSupportedAgent(entry.agent) &&
+    !isNativeChatAgent(entry.agent) &&
     getAgentSessionOptionCatalog(entry.agent)?.listModels !== undefined
   )
 }

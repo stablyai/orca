@@ -11,8 +11,10 @@ import {
   journalSqlWorkerPath
 } from '../../../native-chat/agent-session-journal/journal-sql-worker-bundle.test-fixture'
 import { AgentSessionRecordStore } from './agent-session-record-store'
+import { readDeletedChats } from './agent-session-record-forgets'
 import { openAgentSessionRecordStoreOnce } from './agent-session-record-store-slot'
 import { ensureStructuredAgentSessionHost } from '../installation/structured-agent-session-runtime'
+import type { StructuredAgentSessionRuntimeDeps } from '../installation/structured-agent-session-runtime-contract'
 
 const TEST_HOST_ID = 'local'
 
@@ -21,7 +23,7 @@ const databases = new Map<string, Promise<JournalSqlDatabase>>()
 afterAll(closeTestAgentSessionRecordStores)
 
 export async function ensureTestStructuredAgentSessionHost(
-  deps: Parameters<typeof ensureStructuredAgentSessionHost>[0]
+  deps: StructuredAgentSessionRuntimeDeps
 ): ReturnType<typeof ensureStructuredAgentSessionHost> {
   await openTestAgentSessionRecordStoreSlot({
     stateDirectory: deps.stateDirectory,
@@ -90,7 +92,8 @@ export async function openTestAgentSessionRecordStore(
       ? journalDatabase.loadRecords()
       : journalDatabase.installRecords()),
     hostId: options.hostId ?? TEST_HOST_ID,
-    legacySessionTabIds: options.legacySessionTabIds ?? []
+    legacySessionTabIds: options.legacySessionTabIds ?? [],
+    deletedChats: await readDeletedChats(journalDatabase)
   })
 }
 

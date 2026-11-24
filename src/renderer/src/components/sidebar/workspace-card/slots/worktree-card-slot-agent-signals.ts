@@ -2,7 +2,7 @@ import type { AgentRowState } from '../../../../../../shared/agent-status/presen
 import type { AgentChildRowModel } from '../../../../../../shared/agent-status/presentation/agent-child-row-model'
 import type { DashboardAgentRow } from '@/components/dashboard/rows/dashboard-agent-row'
 import { buildAgentRowLineageTree } from '@/components/dashboard/rows/agent-row-lineage-model'
-import { agentRowDisplayDotState } from '@/lib/agent-status/presentation/agent-row-dot-state'
+import { agentRowDisplayDotState } from '../../../../../../shared/agent-row-dot-state'
 import { resolveRowProgramStatus } from '@/lib/program-status/agent-row-presentation'
 import { classifySlotLine, slotLineAt, type SlotLineSignal } from './worktree-card-slot-signal'
 

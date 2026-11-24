@@ -8,10 +8,10 @@ import { useBrowserAutomationVisiblePageIds } from '../host-guest/retention/brow
 import { getBrowserPagesForWorkspace } from './browser-pane-page-selection'
 import { BrowserMobileDriverOverlay } from './feedback/BrowserMobileDriverOverlay'
 import {
-  IDLE_BROWSER_DRIVER,
   useBrowserDriverForPage,
   useBrowserMobileDrivenPageIds
 } from '@/runtime/browser/ownership/browser-mobile-driver-state'
+import { IDLE_BROWSER_DRIVER } from '@/runtime/browser/ownership/browser-mobile-driver-store'
 import { useBrowserRemotelyViewedPageIds } from '@/runtime/browser/ownership/browser-remote-viewer-state'
 import { useContextualTour } from '@/components/contextual-tours/use-contextual-tour'
 import { getBrowserPageRuntimeEnvironmentId } from '../../../../../shared/browser/browser-page-runtime-owner'

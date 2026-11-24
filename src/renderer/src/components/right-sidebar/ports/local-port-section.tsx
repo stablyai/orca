@@ -13,7 +13,9 @@ export function LocalPortSection({
   onToggle,
   onStopPort,
   onShowDetails,
-  onOpenInBrowser
+  onOpenInBrowser,
+  onForwardPort,
+  isPortForwarded
 }: {
   id: string
   title: string
@@ -24,6 +26,9 @@ export function LocalPortSection({
   onStopPort: (port: WorkspacePort) => void
   onShowDetails: (port: WorkspacePort) => void
   onOpenInBrowser?: (port: WorkspacePort, event?: React.MouseEvent<HTMLButtonElement>) => void
+  /** Absent when this client has no SSH forward route to the port's host. */
+  onForwardPort?: (port: WorkspacePort) => void
+  isPortForwarded?: (port: WorkspacePort) => boolean
 }): React.JSX.Element | null {
   if (ports.length === 0 && !emptyText) {
     return null
@@ -59,6 +64,7 @@ export function LocalPortSection({
                   onStop={onStopPort}
                   onShowDetails={onShowDetails}
                   onOpenInBrowser={onOpenInBrowser}
+                  onForward={isPortForwarded?.(port) ? undefined : onForwardPort}
                 />
               ))
             : emptyText && <div className="py-1 text-xs text-muted-foreground">{emptyText}</div>}

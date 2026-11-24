@@ -67,18 +67,6 @@ export function findWslHostForDistro(
   return null
 }
 
-/** The host a local WSL repo could move to, spelled as the host names its distro. */
-export function wslMoveTargetForRepo(
-  repo: Pick<Repo, 'path' | 'connectionId' | 'executionHostId'>,
-  environments: readonly PublicKnownRuntimeEnvironment[]
-): string | null {
-  if (getRepoExecutionHostId(repo) !== LOCAL_EXECUTION_HOST_ID) {
-    return null
-  }
-  const distro = wslMoveDistroOfPath(repo.path)
-  return distro ? (findWslHostForDistro(environments, distro)?.distro ?? null) : null
-}
-
 function localRepo(catalog: WslMoveCatalog, id: string): Repo | undefined {
   return catalog.repos.find(
     (repo) => repo.id === id && getRepoExecutionHostId(repo) === LOCAL_EXECUTION_HOST_ID

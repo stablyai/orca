@@ -9,7 +9,11 @@ import {
 } from './visibility-state'
 import { PTY_BATCH_INTERVAL_MS } from './constants'
 import { appendPendingPtyData, makeDroppedOutputPayload, toDroppedOutputSentinel } from './pending'
-import { sendModelRestoreNeededMarker, sendPtyDataToRenderer } from './payload'
+import {
+  sendModelRestoreNeededMarker,
+  sendPtyDataToRenderer,
+  sendPtyHiddenOutputActivity
+} from './payload'
 import { shouldSendInteractiveOutputNow } from './interactive'
 import { requestDeliveryResyncForGatedPty } from './accounting'
 import { warnIfDroppingHiddenBytesForVisiblePty } from './debug-snapshot'
@@ -94,6 +98,9 @@ export function acceptPtyDataForRenderer(
     const droppedChars = payload.data.length
     const drop = recordHiddenRendererPtyDataDrop(payload.id, droppedChars)
     warnIfDroppingHiddenBytesForVisiblePty(session, payload.id, droppedChars)
+    if (drop.shouldEmitActivityNotice) {
+      sendPtyHiddenOutputActivity(session, payload.id)
+    }
     if (drop.shouldEmitRestoreMarker) {
       sendModelRestoreNeededMarker(
         session,

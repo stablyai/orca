@@ -61,6 +61,12 @@ export abstract class StructuredSessionWorkspaceScope extends OrcaRuntimeWithStr
     return { worktree, reads }
   }
 
+  /** This host's native-chat sessions of one workspace, matched on host, distro, id and kind. */
+  async listWorkspaceStructuredSessions(worktreeId: string) {
+    const location = await this.resolveStructuredAgentSessionLocation(`id:${worktreeId}`)
+    return (await this.openAgentSessionRecordStore()).listWorkspaceSessions(location)
+  }
+
   protected async resolveStructuredAgentSessionLocation(worktreeSelector: string) {
     const target = await this.resolveRuntimeFileTarget(worktreeSelector)
     return this.structuredAgentSessionLocationForTarget(target)

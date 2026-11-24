@@ -1,4 +1,5 @@
 export const TERMINAL_KITTY_SHIFT_ENTER_INPUT = '\x1b[13;2u'
+export const TERMINAL_CSI_U_CTRL_ENTER_INPUT = '\x1b[13;5u'
 
 /** Ctrl+Backspace deletes the previous word, like readline's Ctrl+W. */
 export const TERMINAL_CTRL_BACKSPACE_INPUT = '\x17'
@@ -22,4 +23,9 @@ export function encodeTerminalShiftEnter({
     return TERMINAL_KITTY_SHIFT_ENTER_INPUT
   }
   return encodeModifyOtherKeysEnter(modifyOtherKeys, 2) ?? '\x1b\r'
+}
+
+/** Un-negotiated ConPTY types CSI-u literally, so those panes keep CR (#12329). */
+export function encodeTerminalCtrlEnter(canSendCsiU: boolean): string {
+  return canSendCsiU ? TERMINAL_CSI_U_CTRL_ENTER_INPUT : '\r'
 }

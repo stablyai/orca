@@ -31,7 +31,7 @@ import {
 export const PROMPTED_AGENT_LAUNCH_TIMEOUT_MS = 90_000
 
 export const AGENT_LAUNCH_UPDATE_REQUIRED_MESSAGE =
-  'Update Orca on your computer to start an agent from your phone.'
+  'Update Orca on this host to start an agent from your phone.'
 
 // host-status-gates keeps re-reading a failed status in the background, so the user need not act.
 export const AGENT_LAUNCH_STATUS_UNREADABLE_MESSAGE = "Could not read this host's status. Retrying…"
@@ -74,6 +74,8 @@ export async function launchAgentInExistingWorkspace(args: {
   launchSource?: string
   reservation?: MobileAgentLaunchReservation
   placement?: AgentLaunchPlacement
+  /** The host starts a terminal when this falls outside the workspace. */
+  cwd?: string
   mintOperationId?: () => string
 }): Promise<MobileExistingAgentLaunch> {
   if (!supportsMobileExistingAgentLaunch(args.hostCapabilities)) {
@@ -96,6 +98,7 @@ export async function launchAgentInExistingWorkspace(args: {
       : {}),
     ...(args.launchSource ? { launchSource: args.launchSource } : {}),
     ...(args.placement ? { placement: args.placement } : {}),
+    ...(args.cwd ? { cwd: args.cwd } : {}),
     ...(args.reservation ? reservedAgentLaunchFields(args.reservation) : {})
   })
   if (args.reservation?.sessionId) {

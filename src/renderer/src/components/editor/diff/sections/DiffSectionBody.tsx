@@ -196,7 +196,7 @@ export function DiffSectionBody({
         </div>
       ) : section.diffResult?.kind === 'binary' ? (
         section.diffResult.tooLarge ? (
-          <DiffTooLargeNotice />
+          <DiffTooLargeNotice forConnection={section.diffResult.tooLargeForConnection} />
         ) : section.diffResult.isImage ? (
           // Why: without a row-local boundary the chunk load hides the whole virtualized list, which
           // then drops this overscan row, un-suspends, re-shows it, and loops into React #185.

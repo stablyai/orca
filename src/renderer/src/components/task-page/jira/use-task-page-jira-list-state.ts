@@ -12,7 +12,7 @@ import type {
   JiraPriority
 } from '../../../../../shared/jira/jira-types'
 import type { TaskPageJiraLoadError } from '@/components/task-page/jira/listing/task-page-jira-load-state'
-import type { TaskPageJiraJqlRejection } from '@/components/task-page/jira/listing/task-page-jira-search'
+import type { JiraJqlRejection } from '../../../../../shared/jira/jira-issue-input-search'
 import type { JiraPresetId } from '@/components/task-page/task-page-localized-options'
 import type {
   JiraIssueSortColumn,
@@ -58,7 +58,7 @@ export function useTaskPageJiraListState(model: TaskPageLinearViewStateModel) {
   const [jiraLoading, setJiraLoading] = useState(false)
   const [jiraError, setJiraError] = useState<TaskPageJiraLoadError | null>(null)
   const [jiraErrorDetailsOpen, setJiraErrorDetailsOpen] = useState(false)
-  const [jiraJqlRejection, setJiraJqlRejection] = useState<TaskPageJiraJqlRejection | null>(null)
+  const [jiraJqlRejection, setJiraJqlRejection] = useState<JiraJqlRejection | null>(null)
   const [jiraSearchInput, setRawJiraSearchInput] = useState('')
   const [appliedJiraSearch, setAppliedJiraSearch] = useState('')
   const [jiraHasWorkspace, setJiraLinkedView] = useState(loadJiraLinkedView)

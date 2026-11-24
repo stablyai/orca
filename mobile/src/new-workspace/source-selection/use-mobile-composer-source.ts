@@ -56,10 +56,10 @@ export function useMobileComposerSource(args: UseMobileComposerSourceArgs) {
   const { name, setName, setNameState, lastAutoNameRef, applyAutoName, isNameAutoManaged } =
     useMobileComposerName(linkedWorkItem)
 
-  const clearBaseAndBranch = useCallback(() => {
+  const clearBaseAndBranch = useCallback((nextBase: ComposerBaseState = {}) => {
     branchSelectionRef.current = null
     setBranchCreateIntent(false)
-    setBase({})
+    setBase(nextBase)
     setReuseEligibleBranch(null)
     setReuseSelectedBranch(false)
     setForkPushWarning(null)
@@ -183,7 +183,8 @@ export function useMobileComposerSource(args: UseMobileComposerSourceArgs) {
       } else {
         applyAutoName(args.suggested, name)
       }
-      clearBaseAndBranch()
+      // As desktop: Linear's suggested branch, kept through name edits.
+      clearBaseAndBranch({ branchNameOverride: args.linked.linearBranchName })
     },
     [applyAutoName, clearBaseAndBranch, lastAutoNameRef, linkedWorkItem, name, setNameState]
   )

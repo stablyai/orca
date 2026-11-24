@@ -137,6 +137,9 @@ export const uiClipboardAndWindowControlsApi = {
     ipcRenderer.invoke('clipboard:readImageThumbnail'),
   writeClipboardText: (text: string): Promise<void> =>
     ipcRenderer.invoke('clipboard:writeText', text),
+  /** For a secret: cleared from the clipboard after a minute if it's still there. */
+  writeSecretClipboardText: (text: string): Promise<{ clearsLater: boolean }> =>
+    ipcRenderer.invoke('clipboard:writeSecretText', text),
   writeTerminalClipboardText: (text: string): Promise<void> =>
     ipcRenderer.invoke('clipboard:writeTerminalText', text),
   writeSelectionClipboardText: (text: string): Promise<void> =>

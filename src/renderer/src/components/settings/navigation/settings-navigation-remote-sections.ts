@@ -30,17 +30,8 @@ import {
 import type { SettingsNavigationBuildOptions } from './settings-navigation-build-options'
 
 export function buildRemoteSettingsSections(
-  {
-    isMac,
-    isWindowsTerminalHost,
-    isWebClient,
-    isDev,
-    repos,
-    projectGroups = [],
-    projectGrouping
-  }: SettingsNavigationBuildOptions,
+  { isMac, isWebClient, isDev }: SettingsNavigationBuildOptions,
   runtimeEnvironmentsSearchEntry: SettingsNavSection['searchEntries'][number],
-  reposById: ReadonlyMap<string, Repo>,
   t: Translate = translate
 ): SettingsNavSection[] {
   const showDesktopOnlySettings = !isWebClient
@@ -64,8 +55,11 @@ export function buildRemoteSettingsSections(
       id: 'servers',
       title: t('auto.hooks.useSettingsNavigationMetadata.de0c2907a1', 'Remote Orca Servers'),
       description: isWebClient
-        ? 'Connect this browser to a saved Orca server.'
-        : 'Run Orca on another machine and work on it from here.',
+        ? t('auto.components.settings.Settings.7686cb5c36', 'Connect to a saved Orca server.')
+        : t(
+            'auto.components.settings.Settings.remoteServersDescription',
+            'Work on another machine from here.'
+          ),
       icon: Server,
       searchEntries: [runtimeEnvironmentsSearchEntry],
       group: 'remote'
@@ -155,7 +149,23 @@ export function buildRemoteSettingsSections(
             badge: getPluginsSectionPresentation(t).badge
           }
         ]
-      : []),
+      : [])
+  ]
+}
+
+/** One page per project, last in Settings as projects are last in the sidebar. */
+export function buildProjectSettingsSections(
+  {
+    isWindowsTerminalHost,
+    repos,
+    projectGroups = [],
+    projectGrouping
+  }: SettingsNavigationBuildOptions,
+  reposById: ReadonlyMap<string, Repo>,
+  t: Translate = translate
+): SettingsNavSection[] {
+  // Collapse host-specific repo rows to one project entry using the same inputs as settings panes.
+  return [
     ...projectGroups.flatMap((group) => {
       const owner = projectGroupHookOwner(group)
       return owner
@@ -173,7 +183,6 @@ export function buildRemoteSettingsSections(
           ]
         : []
     }),
-    // Collapse host-specific repo rows to one project entry using the same inputs as settings panes.
     ...buildSettingsProjectList(repos, projectGrouping).map((settingsProject) => {
       const { project, representativeRepoId, setups, checkoutLabel } = settingsProject
       const representativeRepo = reposById.get(representativeRepoId) ?? repos[0]

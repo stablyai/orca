@@ -12,3 +12,8 @@ export type SettingsFileStatus = {
   ignored: IgnoredSettingsKey[]
   message?: string
 }
+
+export type SettingsFileSyncSettings = {
+  /** Portable keys present in ~/.orca/settings.json at its last read; a key that later disappears resets to its default. */
+  settingsFileLastSeenKeys?: string[]
+}

@@ -91,6 +91,16 @@ export function restoreMobileNativeChatPickedSkills(
   saveMobileNativeChatDraft(draftKey, 'deferred')
 }
 
+/** A later pick of Orca's same-named command row decides the send, as on desktop. */
+export function forgetMobileNativeChatSkillOrigin(draftKey: string, token: string): void {
+  const current = drafts.get(draftKey)
+  if (current?.skillOrigin !== token) {
+    return
+  }
+  drafts.set(draftKey, { ...current, skillOrigin: undefined })
+  saveMobileNativeChatDraft(draftKey, 'deferred')
+}
+
 export function readMobileNativeChatSkillOrigin(draftKey: string): string | null {
   return drafts.get(draftKey)?.skillOrigin ?? null
 }
@@ -256,7 +266,8 @@ setMobileNativeChatDraftSource({
         text,
         skills: text === '' ? [] : inputs.skills,
         skillOrigin: text === '' ? undefined : drafts.get(scope)?.skillOrigin,
-        images: inputs.images.flatMap(({ path }) => (sending.has(path) ? [] : [{ path }])),
+        // A photo still uploading (no path yet) is saved once it lands.
+        images: inputs.images.flatMap(({ path }) => (!path || sending.has(path) ? [] : [{ path }])),
         files: savedMobileNativeChatFiles(inputs.files).filter((file) => !sending.has(file.path)),
         inFlight,
         queued: savedMobileNativeChatOfflineSends(scope, inFlight)

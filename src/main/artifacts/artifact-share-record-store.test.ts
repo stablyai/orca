@@ -37,15 +37,21 @@ describe('artifact share record store', () => {
     const recordsPath = join(path, 'profiles', 'local-profile', 'artifact-shares.json')
     await writeFile(recordsPath, '{broken-json')
 
-    expect(() =>
-      saveArtifactShareRecord('local-profile', path, '/repo/new.html', {
-        ...scopeA,
-        slug: 'new-artifact',
-        editToken: 'new-secret',
-        shareUrl: 'https://share.onorca.dev/a/new-artifact',
-        expiresAt: '2099-01-01T00:00:00.000Z'
-      })
-    ).toThrow(/could not be read safely/)
+    await expect(
+      saveArtifactShareRecord(
+        'local-profile',
+        path,
+        '/repo/new.html',
+        {
+          ...scopeA,
+          slug: 'new-artifact',
+          editToken: 'new-secret',
+          shareUrl: 'https://share.onorca.dev/a/new-artifact',
+          expiresAt: '2099-01-01T00:00:00.000Z'
+        },
+        () => {}
+      )
+    ).rejects.toThrow(/could not be read safely/)
     expect(await readFile(recordsPath, 'utf8')).toBe('{broken-json')
   })
 
@@ -58,10 +64,9 @@ describe('artifact share record store', () => {
 
     expect(() => clearArtifactShareRecords('local-profile', path)).not.toThrow()
     expect(isArtifactShareLifecycleCurrent('local-profile', path, lifecycle)).toBe(false)
-    const persisted = JSON.parse(await readFile(recordsPath, 'utf8')) as {
-      lifecycleNonce?: string
-      shares: object
-    }
+    const persisted: { lifecycleNonce?: string; shares: object } = JSON.parse(
+      await readFile(recordsPath, 'utf8')
+    )
     expect(persisted.lifecycleNonce).toMatch(/^[0-9a-f-]{36}$/)
     expect(persisted.shares).toEqual({})
   })

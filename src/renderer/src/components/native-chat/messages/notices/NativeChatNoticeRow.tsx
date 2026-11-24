@@ -1,14 +1,15 @@
-import {
-  CLAUDE_MODEL_FALLBACK_COPY,
-  claudeModelFallbackLabels
-} from '../../../../../../shared/native-chat/transcript/notices/claude-model-fallback'
+import { NativeChatGoalCheckNotice } from './NativeChatGoalCheckNotice'
+import { BotTidyUpLine } from '@/components/bots/BotTidyUpLine'
+import { nativeChatBotCard } from '../../native-chat-bot-cards'
+import * as Fallback from '../../../../../../shared/native-chat/transcript/notices/claude-model-fallback'
 import { NativeChatUsageLimitRow } from '../../usage/NativeChatUsageLimitRow'
 import { agentSessionGoalControlWords } from '../../session/goals/agent-session-goal-control-words'
-import { AlertCircle, AlertTriangle, Info } from 'lucide-react'
+import { AlertCircle, AlertTriangle, Info, Notebook } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { NativeChatForkedFromRow } from './NativeChatForkedFromRow'
 import { NativeChatAutoReviewDenialRow } from './NativeChatAutoReviewDenialRow'
 import { NativeChatPullRequestEventLine } from './NativeChatPullRequestEventLine'
+import { NativeChatEventRow } from '../events/NativeChatEventRow'
 import { PULL_REQUEST_EVENT_PRESENTATION } from '../../../../../../shared/native-chat/transcript/notices/native-chat-pull-request-event'
 import { NativeChatMarkdown } from '../../markdown/NativeChatMarkdown'
 import { NativeChatCodeBlock } from '../../markdown/code/NativeChatCodeBlock'
@@ -30,17 +31,33 @@ import { useNativeChatOrcaStopView } from './native-chat-orca-stop-context'
 import { NativeChatInterruptedContinueButton } from '../../usage/NativeChatInterruptedContinue'
 import { nativeChatOrcaStopRowText } from '../../../../../../shared/native-chat/transcript/continuation/native-chat-orca-stop-words'
 import { sayNativeChatOrcaStopTranslated } from './native-chat-orca-stop-words-text'
-import { agentSessionRestartNoteText } from './agent-session-restart-note-text'
+import { openBotSettings } from '@/components/bots/bot-settings-open'
 import {
-  NativeChatDetailsDisclosure,
-  ProviderFrameRow
-} from '../diagnostics/NativeChatProviderDetails'
+  BOT_CONTEXT_NOTE_COPY,
+  type BotContextChange
+} from '../../../../../../shared/bots/bot-context-note'
+import { NativeChatDividerRow } from '../../NativeChatDividerRow'
+import { agentSessionRestartNoteText } from './agent-session-restart-note-text'
+import * as Details from '../diagnostics/NativeChatProviderDetails'
 import { NativeChatSetupButton } from '../../host-access/NativeChatSetupButton'
+import {
+  isNativeChatFailureRowResolved,
+  isNativeChatSetupFailureKind,
+  useNativeChatHostSetupView
+} from '../../host-access/native-chat-host-setup'
 import { agentSessionFailureDetailText } from '../../../../../../shared/agent-session/failures/agent-session-failure-quoted-detail'
 import { readWholeAgentSessionFailureFact } from '../../../../../../shared/agent-session/failures/agent-session-failure'
 import { agentSessionFailureSentence } from '../../../../../../shared/agent-session/failures/agent-session-failure-words'
+import {
+  agentCliInstallationFailureWords,
+  sayAgentSessionFailureEnglish
+} from '../../../../../../shared/agent-session/failures/agent-session-failure-copy'
+import { structuredAgentSessionHostPlace } from '../../pane/ownership/use-structured-agent-session-host-label'
 import { sayAgentSessionFailureTranslated } from './agent-session-failure-words-text'
-import { nativeChatAntigravitySignInContent } from '../../host-access/native-chat-antigravity-settings'
+import { NativeChatTranscriptSignInNotice } from '../../host-access/NativeChatSignInRow'
+import { nativeChatSignInHostWords } from '../../host-access/native-chat-sign-in-notice'
+import { NativeChatNoticeAuthRecovery } from '../../antigravity-auth/NativeChatAntigravityAuthRecovery'
+import { NATIVE_CHAT_GOAL_CHECK_SUMMARY } from '../../../../../../shared/native-chat/transcript/turns/native-chat-thread-goal-rows'
 
 const HOST_STATUS_WORDS: Record<AgentSessionHostStatusPresentation, () => string> = {
   'history-repaired': () =>
@@ -65,6 +82,11 @@ const HOST_STATUS_WORDS: Record<AgentSessionHostStatusPresentation, () => string
     )
 }
 
+const BOT_CONTEXT_WORDS: Record<BotContextChange, () => string> = {
+  soul: () => translate('components.native-chat.botContext.soul', BOT_CONTEXT_NOTE_COPY.soul),
+  memory: () => translate('components.native-chat.botContext.memory', BOT_CONTEXT_NOTE_COPY.memory)
+}
+
 function toneClass(tone: NativeChatNoticeTone): string {
   return tone === 'warning'
     ? 'text-chat-warning'
@@ -76,19 +98,27 @@ function toneClass(tone: NativeChatNoticeTone): string {
 export function NativeChatNoticeRow({
   block,
   messageId,
+  timestamp = null,
   agentName
 }: {
   block: NativeChatTextBlock
   /** The transcript row's message, so a plan's code blocks keep their wrap past the row's mount. */
   messageId?: string
+  timestamp?: number | null
   agentName?: string
 }): React.JSX.Element {
   const t = useTranslate()
   useTranslation()
   const orcaStopView = useNativeChatOrcaStopView()
 
+  if (block.presentation === NATIVE_CHAT_GOAL_CHECK_SUMMARY) {
+    return <NativeChatGoalCheckNotice text={block.text} />
+  }
+
   if (block.presentation === PULL_REQUEST_EVENT_PRESENTATION) {
-    return <NativeChatPullRequestEventLine block={block} messageId={messageId} />
+    return (
+      <NativeChatPullRequestEventLine block={block} messageId={messageId} timestamp={timestamp} />
+    )
   }
   const look = nativeChatNoticeLook(block)
   if (look.kind === 'forked-from') {
@@ -99,17 +129,7 @@ export function NativeChatNoticeRow({
       look.label === 'contextCleared'
         ? t('components.native-chat.notices.contextCleared', NATIVE_CHAT_NOTICE_COPY.contextCleared)
         : t('components.native-chat.notices.compaction', NATIVE_CHAT_NOTICE_COPY.compaction)
-    return (
-      <div
-        role="separator"
-        aria-label={label}
-        className="flex items-center gap-3 py-2 text-xs text-chat-foreground-faint"
-      >
-        <span className="h-px flex-1 bg-border" />
-        <span>{label}</span>
-        <span className="h-px flex-1 bg-border" />
-      </div>
-    )
+    return <NativeChatDividerRow label={label} />
   }
   if (look.kind === 'command-output') {
     // Why: command output is laid out in columns; proportional type breaks its grid.
@@ -117,6 +137,30 @@ export function NativeChatNoticeRow({
       <pre className="whitespace-pre-wrap break-words font-mono text-xs text-chat-foreground">
         {block.text}
       </pre>
+    )
+  }
+  const botCard = nativeChatBotCard(block, messageId ?? '', timestamp)
+  if (botCard) {
+    return botCard
+  }
+  if (block.tidyUp) {
+    return <BotTidyUpLine note={block.tidyUp} />
+  }
+  if (block.botContext) {
+    const { botId, changed } = block.botContext
+    return (
+      <NativeChatEventRow
+        icon={<Notebook aria-hidden className="size-3.5" />}
+        timestamp={timestamp}
+      >
+        <button
+          type="button"
+          onClick={() => openBotSettings(botId, changed.length === 1 ? changed[0] : undefined)}
+          className="truncate rounded-sm text-left hover:text-chat-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+        >
+          {changed.map((change) => BOT_CONTEXT_WORDS[change]()).join(' · ')}
+        </button>
+      </NativeChatEventRow>
     )
   }
   if (look.kind === 'host-status') {
@@ -132,8 +176,8 @@ export function NativeChatNoticeRow({
       <p className="min-w-0 max-w-full select-text text-sm text-chat-foreground-faint [overflow-wrap:anywhere]">
         {t(
           'components.native-chat.notices.modelFallback',
-          CLAUDE_MODEL_FALLBACK_COPY,
-          claudeModelFallbackLabels(look)
+          Fallback.CLAUDE_MODEL_FALLBACK_COPY,
+          Fallback.claudeModelFallbackLabels(look)
         )}
       </p>
     )
@@ -190,7 +234,7 @@ export function NativeChatNoticeRow({
             )
     const payload = block.providerFrame?.payload
     return (
-      <NativeChatDetailsDisclosure summary={summary} bodyClassName={toneClass(look.tone)}>
+      <Details.NativeChatDetailsDisclosure summary={summary} bodyClassName={toneClass(look.tone)}>
         {block.text}
         {payload ? '\n\n' : ''}
         {payload?.truncated
@@ -201,7 +245,7 @@ export function NativeChatNoticeRow({
             )}\n`
           : ''}
         {payload?.head}
-      </NativeChatDetailsDisclosure>
+      </Details.NativeChatDetailsDisclosure>
     )
   }
   // Name Orca and its host as the stop cause; without host context, preserve the original words.
@@ -214,12 +258,6 @@ export function NativeChatNoticeRow({
   const continueOffered =
     orcaStop?.turnItemId !== undefined && orcaStop.turnItemId === orcaStopView.offeredTurnItemId
   const failure = readWholeAgentSessionFailureFact(block.failure)
-  const antigravitySignInContent = nativeChatAntigravitySignInContent(
-    failure?.kind,
-    agentName,
-    failure?.account,
-    t
-  )
   // Reword only text fully described by its fact; other host text may carry command advice.
   const factSurface =
     failure &&
@@ -239,6 +277,14 @@ export function NativeChatNoticeRow({
   // The host can't tell it's a WSL host; name the distro only over its plain not-installed words.
   const wslMissingSurface =
     failure?.kind === 'cliMissing' && wslDistro
+      ? (['row', 'rejection'] as const).find(
+          (surface) => block.text === agentSessionFailureSentence(failure, surface, { agentName })
+        )
+      : undefined
+  // The host calls itself this computer; a too-old CLI's words name the host as this reader does.
+  const cliTooOldSurface =
+    failure?.kind === 'startFailed' &&
+    agentCliInstallationFailureWords(failure.refusal, sayAgentSessionFailureEnglish)
       ? (['row', 'rejection'] as const).find(
           (surface) => block.text === agentSessionFailureSentence(failure, surface, { agentName })
         )
@@ -264,7 +310,14 @@ export function NativeChatNoticeRow({
             { agentName, wslDistro },
             sayAgentSessionFailureTranslated
           )
-        : (agentSessionRestartNoteText(block.text, t) ?? agentSessionGoalControlWords(block.text))
+        : failure && cliTooOldSurface
+          ? agentSessionFailureSentence(
+              failure,
+              cliTooOldSurface,
+              { agentName, hostName: structuredAgentSessionHostPlace(remoteHost, hostLabel, t) },
+              sayAgentSessionFailureTranslated
+            )
+          : (agentSessionRestartNoteText(block.text, t) ?? agentSessionGoalControlWords(block.text))
   const failureDetail = agentSessionFailureDetailText(failure)
   if (block.orcaStop === undefined && failure?.kind === 'usageLimitReached') {
     return (
@@ -290,31 +343,75 @@ export function NativeChatNoticeRow({
         : tone === 'notice'
           ? Info
           : null
-  return (
+  const details =
+    block.providerFrame || detail ? (
+      <Details.ProviderFrameRow
+        block={block}
+        detail={detail}
+        summary={t('components.native-chat.notices.details', 'Details')}
+      />
+    ) : null
+  const row = (resolved: boolean): React.JSX.Element => (
     <div
       className={cn(
         'space-y-2 text-sm text-chat-foreground',
-        Icon && 'rounded-md border border-border bg-muted/20 p-3',
-        tone && toneClass(tone)
+        Icon && !resolved && 'rounded-md border border-border bg-muted/20 p-3',
+        tone && toneClass(resolved ? 'notice' : tone)
       )}
     >
       <div className="flex items-start gap-2">
         {Icon ? <Icon aria-hidden="true" className="mt-0.5 size-4 shrink-0" /> : null}
-        <p className="min-w-0 flex-1 whitespace-pre-wrap break-words">
-          {antigravitySignInContent ?? text}
-        </p>
+        <p className="min-w-0 flex-1 whitespace-pre-wrap break-words">{text}</p>
         {continueOffered ? (
           <NativeChatInterruptedContinueButton onContinue={orcaStopView.continueNow} />
         ) : null}
       </div>
-      <NativeChatSetupButton failureKind={block.failure?.kind} />
-      {block.providerFrame || detail ? (
-        <ProviderFrameRow
-          block={block}
-          detail={detail}
-          summary={t('components.native-chat.notices.details', 'Details')}
-        />
-      ) : null}
+      <NativeChatSetupButton failureKind={block.failure?.kind} rowId={messageId} />
+      {resolved ? null : <NativeChatNoticeAuthRecovery block={block} agentName={agentName} />}
+      {details}
     </div>
   )
+  if (!named && failure?.kind === 'notSignedIn') {
+    // The fact names the failure, so an older host's longer sentence still reads as the short one;
+    // words beyond the standard sentence stay under Details.
+    const hostWords = nativeChatSignInHostWords(block.text, failure, agentName)
+    const signInDetail =
+      hostWords && detail && !hostWords.includes(detail.trim())
+        ? `${hostWords}\n\n${detail}`
+        : (hostWords ?? detail)
+    return (
+      <NativeChatTranscriptSignInNotice
+        agentName={agentName}
+        account={failure.account}
+        rowId={messageId}
+        fallback={row}
+        details={
+          block.providerFrame || signInDetail ? (
+            <Details.ProviderFrameRow
+              block={block}
+              detail={signInDetail}
+              summary={t('components.native-chat.notices.details', 'Details')}
+            />
+          ) : null
+        }
+      />
+    )
+  }
+  // Only setup failures read the setup context, so other rows skip its changes.
+  return isNativeChatSetupFailureKind(block.failure?.kind) ? (
+    <NativeChatSetupFailureRow rowId={messageId} row={row} />
+  ) : (
+    row(false)
+  )
+}
+
+/** A setup failure a later successful turn resolved reads as history: muted, with no action. */
+function NativeChatSetupFailureRow({
+  rowId,
+  row
+}: {
+  rowId: string | undefined
+  row: (resolved: boolean) => React.JSX.Element
+}): React.JSX.Element {
+  return row(isNativeChatFailureRowResolved(useNativeChatHostSetupView(), rowId))
 }
