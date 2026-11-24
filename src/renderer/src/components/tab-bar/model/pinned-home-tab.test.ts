@@ -5,13 +5,14 @@ import {
   findPinnedHomeTabId,
   pinnedHomeDropIndicators,
   stripSortableIdsWithoutPinnedHome,
+  withBotHomeFirstTabIds,
   withPinnedHomeFirst
 } from './pinned-home-tab'
 
 const homeBot = { chatSessionId: 'home-chat' }
 
-function chatItem(id: string, entityId: string): TabBarItem {
-  const data: Tab & { contentType: 'agent-session' } = {
+function chatTab(id: string, entityId: string): Tab & { contentType: 'agent-session' } {
+  return {
     id,
     entityId,
     groupId: 'group',
@@ -23,7 +24,16 @@ function chatItem(id: string, entityId: string): TabBarItem {
     sortOrder: 0,
     createdAt: 0
   }
-  return { type: 'agent-session', id, unifiedTabId: id, isPinned: false, data }
+}
+
+function chatItem(id: string, entityId: string): TabBarItem {
+  return {
+    type: 'agent-session',
+    id,
+    unifiedTabId: id,
+    isPinned: false,
+    data: chatTab(id, entityId)
+  }
 }
 
 describe('findPinnedHomeTabId', () => {
@@ -64,6 +74,17 @@ describe('withPinnedHomeFirst', () => {
     expect(withPinnedHomeFirst(leading, 'home', id)).toBe(leading)
     const plain = ['a', 'b']
     expect(withPinnedHomeFirst(plain, null, id)).toBe(plain)
+  })
+})
+
+describe('withBotHomeFirstTabIds', () => {
+  it("counts the bot's Home first, as the tab bar shows it", () => {
+    const groupTabs = [chatTab('side-a', 'side-a-chat'), chatTab('home', 'home-chat')]
+    expect(withBotHomeFirstTabIds(['side-a', 'home'], groupTabs, homeBot)).toEqual([
+      'home',
+      'side-a'
+    ])
+    expect(withBotHomeFirstTabIds(['side-a', 'home'], groupTabs, null)).toEqual(['side-a', 'home'])
   })
 })
 

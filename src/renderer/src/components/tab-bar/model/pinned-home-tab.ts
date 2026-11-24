@@ -1,5 +1,6 @@
 import type { Bot } from '../../../../../shared/bot-types'
 import { isBotHomeTab } from '../../../../../shared/bots/bot-home-tab'
+import type { Tab } from '../../../../../shared/workspace-layout/tab-groups/tab-types'
 import type { DropIndicator } from '../strip/drop-indicator'
 import type { TabBarItem } from './tab-bar-item-model'
 
@@ -32,6 +33,16 @@ export function withPinnedHomeFirst<T>(
     return items
   }
   return [items[index]!, ...items.slice(0, index), ...items.slice(index + 1)]
+}
+
+/** A group's unified tab ids in the order the tab bar shows them: the bot's Home first, as digit shortcuts count. */
+export function withBotHomeFirstTabIds(
+  orderedIds: string[],
+  groupTabs: readonly Pick<Tab, 'id' | 'contentType' | 'entityId'>[],
+  homeBot: Pick<Bot, 'chatSessionId'> | null
+): string[] {
+  const home = homeBot === null ? undefined : groupTabs.find((tab) => isBotHomeTab(tab, homeBot))
+  return withPinnedHomeFirst(orderedIds, home?.id ?? null, (id) => id)
 }
 
 /** The strip's ids: every tab but the pinned Home. */

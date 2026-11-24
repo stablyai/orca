@@ -273,7 +273,7 @@ export function renderTabBarSurface(
             entries={stripEntries}
             hiddenIds={hiddenIds}
             chipOnly={chipOnly}
-            activeId={overflowChipActiveId(strip, activeVisibleTabId, plan)}
+            activeId={overflowChipActiveId(strip, plan)}
             attentionIds={attentionIds}
             generatedTabTitlesEnabled={runtime.generatedTabTitlesEnabled}
             isGroupFocused={isGroupFocused}

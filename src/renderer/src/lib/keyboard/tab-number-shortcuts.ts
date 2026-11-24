@@ -6,6 +6,11 @@ import { dedupeTabOrder } from '../../../../shared/workspace-layout/tab-groups/t
 import type { Tab } from '../../../../shared/workspace-layout/tab-groups/tab-types'
 import { activateWebRuntimeSessionTab } from '@/runtime/web-session-tabs-sync/actions/web-runtime-session-tab-lifecycle'
 import { isWebRuntimeSessionActive } from '@/runtime/web-session-tabs-sync/identity/web-runtime-session-environment'
+import { readBots, readBotsEnabled } from '@/lib/bot-catalog'
+import { findBotByWorkspace } from '@/components/bots/bot-workspace'
+import { withBotHomeFirstTabIds } from '@/components/tab-bar/model/pinned-home-tab'
+import type { Bot } from '../../../../shared/bot-types'
+import type { ExecutionHostId } from '../../../../shared/execution-host/execution-host'
 
 type TabNumberShortcutState = Pick<
   AppState,
@@ -19,9 +24,19 @@ type TabNumberShortcutState = Pick<
   | 'worktreesByRepo'
 >
 
+type HomeBotLookup = (
+  worktreeId: string,
+  hostId: ExecutionHostId | undefined
+) => Pick<Bot, 'chatSessionId'> | null
+
+/** The bot whose page this is, found as the tab bar finds it, so digits count its pinned Home first. */
+const readHomeBot: HomeBotLookup = (worktreeId, hostId) =>
+  readBotsEnabled() ? findBotByWorkspace(readBots(), worktreeId, hostId) : null
+
 export function resolveTabNumberShortcutTarget(
   state: TabNumberShortcutState,
-  index: number
+  index: number,
+  homeBotFor: HomeBotLookup = readHomeBot
 ): Tab | null {
   if (state.activeView !== 'terminal' || state.activeWorktreeId === null || index < 0) {
     return null
@@ -42,10 +57,19 @@ export function resolveTabNumberShortcutTarget(
   )
   const tabById = new Map(groupTabs.map((tab) => [tab.id, tab]))
   // Match TabBar reconciliation: stored order is authoritative, but append mounted tabs missing during hydration/drag races.
-  const orderedIds = dedupeTabOrder([
+  const storedIds = dedupeTabOrder([
     ...group.tabOrder.filter((tabId) => tabById.has(tabId)),
     ...groupTabs.map((tab) => tab.id)
   ])
+  // The tab bar pins a bot's Home first wherever the stored order holds it; digits match what it shows.
+  const firstChat = storedIds
+    .map((tabId) => tabById.get(tabId))
+    .find((tab) => tab?.contentType === 'agent-session')
+  const orderedIds = withBotHomeFirstTabIds(
+    storedIds,
+    groupTabs,
+    homeBotFor(worktreeId, firstChat?.executionHostId)
+  )
 
   return tabById.get(orderedIds[index] ?? '') ?? null
 }

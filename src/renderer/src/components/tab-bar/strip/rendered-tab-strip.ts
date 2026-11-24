@@ -21,6 +21,8 @@ export type RenderedTabStrip = {
   stripHasTabs: boolean
   /** The strip itself renders a tab, so it keeps its 40px floor. */
   stripRendersTabs: boolean
+  /** The selected entry: a client-hosted browser row that owns selection, else the active tab. */
+  activeId: string | null
 }
 
 /** Hidden tabs are not rendered, so dnd-kit, windowing and the drop bar work over the rendered sequence only. */
@@ -29,13 +31,15 @@ export function resolveRenderedTabStrip({
   pinnedSortableIds,
   stripSortableIds,
   hiddenIds,
-  allClientHostedBrowserRows
+  allClientHostedBrowserRows,
+  activeId
 }: {
   itemProjection: TabBarItemProjection
   pinnedSortableIds: string[]
   stripSortableIds: string[]
   hiddenIds: ReadonlySet<string>
   allClientHostedBrowserRows: readonly ClientHostedBrowserRow[]
+  activeId: string | null
 }): RenderedTabStrip {
   const allItems = itemProjection.orderedItems
   const pinnedCount = pinnedSortableIds.length
@@ -63,7 +67,8 @@ export function resolveRenderedTabStrip({
     pinnedCount,
     pinnedHomeId,
     stripHasTabs: allItems.length + allClientHostedBrowserRows.length > pinnedCount,
-    stripRendersTabs: orderedItems.length + clientHostedBrowserRows.length > pinnedCount
+    stripRendersTabs: orderedItems.length + clientHostedBrowserRows.length > pinnedCount,
+    activeId
   }
 }
 
@@ -89,12 +94,8 @@ export function stripSizeClassName(strip: RenderedTabStrip): string {
 }
 
 /** The +N list marks the current tab: the pinned Home when it is active, though the plan never holds it. */
-export function overflowChipActiveId(
-  strip: RenderedTabStrip,
-  activeVisibleTabId: string | null,
-  plan: TabStripPlan
-): string | null {
-  if (strip.pinnedHomeId !== null && activeVisibleTabId === strip.pinnedHomeId) {
+export function overflowChipActiveId(strip: RenderedTabStrip, plan: TabStripPlan): string | null {
+  if (strip.pinnedHomeId !== null && strip.activeId === strip.pinnedHomeId) {
     return strip.pinnedHomeId
   }
   return plan.mode === 'condensed' ? plan.activeId : null

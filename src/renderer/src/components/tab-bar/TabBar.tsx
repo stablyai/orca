@@ -246,7 +246,8 @@ function TabBarInner(props: TabBarProps): React.JSX.Element {
         pinnedSortableIds,
         stripSortableIds,
         hiddenIds: condense.hiddenIds,
-        allClientHostedBrowserRows: clientHostedBrowserRows
+        allClientHostedBrowserRows: clientHostedBrowserRows,
+        activeId: activeStripId
       }),
       tabStripNavigation,
       tabStripDragScroll,
