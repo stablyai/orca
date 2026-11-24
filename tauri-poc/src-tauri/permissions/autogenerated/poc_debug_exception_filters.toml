@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-poc-debug-exception-filters"
+description = "Enables the poc_debug_exception_filters command without any pre-configured scope."
+commands.allow = ["poc_debug_exception_filters"]
+
+[[permission]]
+identifier = "deny-poc-debug-exception-filters"
+description = "Denies the poc_debug_exception_filters command without any pre-configured scope."
+commands.deny = ["poc_debug_exception_filters"]

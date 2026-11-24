@@ -12,6 +12,7 @@ const FolderWorkspaceSourceControl = lazy(
 const SourceControl = lazy(() => import('./source-control/panel/SourceControl'))
 const ChecksPanel = lazy(() => import('./checks-panel/ChecksPanel'))
 const PortsPanel = lazy(() => import('./ports/PortsPanel'))
+const DebugSidebarPanel = lazy(() => import('./debug/DebugSidebarPanel'))
 const AiVaultSidebarPanel = lazy(() => import('./ai-vault/panel/AiVaultSidebarPanel'))
 const FolderWorkspaceWorktreesPanel = lazy(
   () => import('./folder-workspaces/FolderWorkspaceWorktreesPanel')
@@ -59,6 +60,7 @@ export function RightSidebarPanelContent({
         {effectiveTab === 'ports' && (
           <PortsPanel isVisible={rightSidebarOpen && effectiveTab === 'ports'} />
         )}
+        {effectiveTab === 'debug' && <DebugSidebarPanel />}
         {effectiveTab === 'vault' && (
           <AiVaultSidebarPanel
             focusSearch={focusVaultSearch}

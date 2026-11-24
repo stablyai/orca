@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-poc-debug-force-step-over"
+description = "Enables the poc_debug_force_step_over command without any pre-configured scope."
+commands.allow = ["poc_debug_force_step_over"]
+
+[[permission]]
+identifier = "deny-poc-debug-force-step-over"
+description = "Denies the poc_debug_force_step_over command without any pre-configured scope."
+commands.deny = ["poc_debug_force_step_over"]

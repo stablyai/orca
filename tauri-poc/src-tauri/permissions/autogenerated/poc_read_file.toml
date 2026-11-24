@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-poc-read-file"
+description = "Enables the poc_read_file command without any pre-configured scope."
+commands.allow = ["poc_read_file"]
+
+[[permission]]
+identifier = "deny-poc-read-file"
+description = "Denies the poc_read_file command without any pre-configured scope."
+commands.deny = ["poc_read_file"]

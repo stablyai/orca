@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-poc-run-workflow-command"
+description = "Enables the poc_run_workflow_command command without any pre-configured scope."
+commands.allow = ["poc_run_workflow_command"]
+
+[[permission]]
+identifier = "deny-poc-run-workflow-command"
+description = "Denies the poc_run_workflow_command command without any pre-configured scope."
+commands.deny = ["poc_run_workflow_command"]

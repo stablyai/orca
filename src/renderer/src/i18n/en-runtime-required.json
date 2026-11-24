@@ -310,6 +310,10 @@
           "e72e6b03f4": "Rust",
           "edfcc64182": "Go"
         },
+        "debug": {
+          "breakpointCount_one": "{{count}} bp",
+          "breakpointCount_other": "{{count}} bp"
+        },
         "editor": {
           "save": {
             "bytesUpdateRequired": "Saving binary files here requires a newer Orca server. Update the Orca server and try again.",
@@ -1282,6 +1286,62 @@
                 "uploadingFiles_other": "Uploading {{count}} files to runtime…"
               }
             }
+          }
+        }
+      },
+      "workbench": {
+        "flow": {
+          "insertAcceptDesc": "AI 审查改动质量",
+          "insertAnalyzeDesc": "AI 拆解需求与定位文件",
+          "insertCliDesc": "直接执行 Shell（不走模型）",
+          "insertCommitDesc": "受 Harness 约束提交",
+          "insertImplementDesc": "AI 编写与修改代码",
+          "insertVerifyDesc": "类型检查 / 单元测试门禁"
+        },
+        "nodes": {
+          "accept": "Accept",
+          "acceptDesc": "Final review and acceptance confirmation",
+          "analyze": "Analyze",
+          "analyzeDesc": "Break down requirement and locate target files",
+          "assess": "Assess Structure",
+          "assessDesc": "Inspect boundaries and plan clean refactor",
+          "ci": "Run CI",
+          "ciDesc": "Run lint, typecheck, and changed tests",
+          "commit": "Commit",
+          "commitDesc": "Stage verified changes and create a clean commit",
+          "fix": "Apply Fix",
+          "fixCi": "Fix CI",
+          "fixCiDesc": "Fix any CI failures until all checks pass",
+          "fixDesc": "Patch root cause with minimal diff",
+          "implement": "Implement",
+          "implementDesc": "Write code changes in isolated worktree",
+          "locate": "Locate Root Cause",
+          "locateDesc": "Trace failure path and reproduce issue",
+          "refactor": "Refactor",
+          "refactorDesc": "Apply modular refactoring",
+          "regression": "Regression Check",
+          "regressionDesc": "Verify fix and ensure no regressions",
+          "review": "Code Review",
+          "reviewDesc": "Review diff quality, edge cases, and maintainability",
+          "verify": "Verify",
+          "verifyDesc": "Run lint, typecheck, and affected tests"
+        },
+        "presets": {
+          "bugfix": {
+            "desc": "Reproduce root cause, apply minimal fix, run regression checks, and accept.",
+            "name": "Bugfix Flow"
+          },
+          "devE2e": {
+            "desc": "Analyze → Implement → Run CI → Fix CI → Code Review → Commit.",
+            "name": "Full Dev Pipeline"
+          },
+          "refactor": {
+            "desc": "Assess structure, refactor cleanly, verify types/tests, and accept.",
+            "name": "Refactor Flow"
+          },
+          "standard": {
+            "desc": "Analyze requirement, implement in worktree, run checks, and verify acceptance.",
+            "name": "Standard Feature Flow"
           }
         }
       }

@@ -11,7 +11,6 @@ import {
   isFloatingWorkspacePanelFocused
 } from '@/components/floating-terminal/workspace/floating-workspace-terminal-actions'
 import {
-  createFloatingWorkspaceBrowserTab,
   createFloatingWorkspaceMarkdownTab,
   createFloatingWorkspaceTerminalTab
 } from '@/components/floating-terminal/workspace/floating-workspace-tab-creation'
@@ -30,6 +29,7 @@ import {
   launchAgentTabShortcut,
   launchFloatingWorkspaceAgentShortcut
 } from './agent-tab-shortcut-launch'
+import { handleTerminalWorkspaceBrowserShortcut } from './terminal-workspace-browser-shortcuts'
 import { handleTerminalWorkspaceEditorShortcut } from './terminal-workspace-editor-shortcuts'
 import type { TerminalActivationController } from '../tab-lifecycle/use-terminal-activation-actions'
 
@@ -41,8 +41,6 @@ export function handleTerminalWorkspaceKeyDown(
   const {
     activeWorktreeId,
     handleCloseAllFiles,
-    handleNewBrowserTab,
-    handleNewBrowserTabSplitRight,
     handleNewFile,
     handleNewSimulatorTab,
     handleNewTab,
@@ -123,33 +121,16 @@ export function handleTerminalWorkspaceKeyDown(
   if (!activeWorktreeId) {
     return
   }
-  if (!event.repeat && matchShortcut('tab.newBrowser')) {
-    event.preventDefault()
-    notifyTerminalCapture('tab.newBrowser')
-    const browserWorkspaceId = floatingWorkspaceFocused
-      ? FLOATING_TERMINAL_WORKTREE_ID
-      : activeWorktreeId
-    if (!ensureClientCreationActionAllowed(browserWorkspaceId, 'managed-browser')) {
-      return
-    }
-    if (floatingWorkspaceFocused) {
-      void createFloatingWorkspaceBrowserTab(useAppStore.getState()).catch(
-        showClientCreationActionError
-      )
-      return
-    }
-    handleNewBrowserTab()
-    return
-  }
-  if (!event.repeat && matchShortcut('tab.newBrowserSplitRight')) {
-    event.preventDefault()
-    notifyTerminalCapture('tab.newBrowserSplitRight')
-    if (
-      !floatingWorkspaceFocused &&
-      ensureClientCreationActionAllowed(activeWorktreeId, 'managed-browser')
-    ) {
-      handleNewBrowserTabSplitRight()
-    }
+  if (
+    handleTerminalWorkspaceBrowserShortcut({
+      event,
+      activeWorktreeId,
+      floatingWorkspaceFocused,
+      controller,
+      matchShortcut,
+      notifyTerminalCapture
+    })
+  ) {
     return
   }
   if (!event.repeat && mobileEmulatorEnabled && matchShortcut('tab.newSimulator')) {

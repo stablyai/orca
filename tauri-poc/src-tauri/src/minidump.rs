@@ -1,3 +1,4 @@
+#![allow(dead_code)]
 //! Native Crashpad minidump signature capture for Windows parity with the
 //! Electron crashpad-capture path. WebView2 runs its own Crashpad handler, so
 //! renderer crashes leave dumps in `EBWebView/Crashpad/reports`; pair the
@@ -5,7 +6,7 @@
 //! into the report. Upload stays off like Electron: dumps hold process memory
 //! and never leave disk.
 
-use std::collections::{HashMap, HashSet};
+use std::collections::HashMap;
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::time::UNIX_EPOCH;

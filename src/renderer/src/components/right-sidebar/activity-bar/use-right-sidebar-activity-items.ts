@@ -1,6 +1,7 @@
 import { useMemo } from 'react'
 import {
   Activity,
+  Bug,
   Plug,
   Files,
   GitBranch,
@@ -208,6 +209,12 @@ export function useRightSidebarActivityItems({
         title: t('auto.components.right.sidebar.index.441733b630', 'Ports'),
         shortcut: portsShortcut === 'Unassigned' ? '' : portsShortcut,
         sshOnly: true
+      },
+      {
+        id: 'debug',
+        icon: Bug,
+        title: t('auto.components.right.sidebar.index.debugPanelTitle', 'Debug'),
+        shortcut: ''
       },
       // Append plugin tabs to preserve built-in navigation positions.
       ...getPluginPanelActivityItems(visiblePluginPanels, pluginPanelErrors).map((item) => ({

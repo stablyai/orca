@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-poc-stat"
+description = "Enables the poc_stat command without any pre-configured scope."
+commands.allow = ["poc_stat"]
+
+[[permission]]
+identifier = "deny-poc-stat"
+description = "Denies the poc_stat command without any pre-configured scope."
+commands.deny = ["poc_stat"]

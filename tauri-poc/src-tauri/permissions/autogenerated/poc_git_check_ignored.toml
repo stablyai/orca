@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-poc-git-check-ignored"
+description = "Enables the poc_git_check_ignored command without any pre-configured scope."
+commands.allow = ["poc_git_check_ignored"]
+
+[[permission]]
+identifier = "deny-poc-git-check-ignored"
+description = "Denies the poc_git_check_ignored command without any pre-configured scope."
+commands.deny = ["poc_git_check_ignored"]

@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-poc-lsp-signature-help"
+description = "Enables the poc_lsp_signature_help command without any pre-configured scope."
+commands.allow = ["poc_lsp_signature_help"]
+
+[[permission]]
+identifier = "deny-poc-lsp-signature-help"
+description = "Denies the poc_lsp_signature_help command without any pre-configured scope."
+commands.deny = ["poc_lsp_signature_help"]

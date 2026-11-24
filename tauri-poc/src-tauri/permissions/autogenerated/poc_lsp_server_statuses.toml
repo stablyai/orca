@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-poc-lsp-server-statuses"
+description = "Enables the poc_lsp_server_statuses command without any pre-configured scope."
+commands.allow = ["poc_lsp_server_statuses"]
+
+[[permission]]
+identifier = "deny-poc-lsp-server-statuses"
+description = "Denies the poc_lsp_server_statuses command without any pre-configured scope."
+commands.deny = ["poc_lsp_server_statuses"]

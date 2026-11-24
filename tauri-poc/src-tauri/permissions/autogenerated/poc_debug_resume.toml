@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-poc-debug-resume"
+description = "Enables the poc_debug_resume command without any pre-configured scope."
+commands.allow = ["poc_debug_resume"]
+
+[[permission]]
+identifier = "deny-poc-debug-resume"
+description = "Denies the poc_debug_resume command without any pre-configured scope."
+commands.deny = ["poc_debug_resume"]

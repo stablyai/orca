@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-poc-debug-set-variable"
+description = "Enables the poc_debug_set_variable command without any pre-configured scope."
+commands.allow = ["poc_debug_set_variable"]
+
+[[permission]]
+identifier = "deny-poc-debug-set-variable"
+description = "Denies the poc_debug_set_variable command without any pre-configured scope."
+commands.deny = ["poc_debug_set_variable"]

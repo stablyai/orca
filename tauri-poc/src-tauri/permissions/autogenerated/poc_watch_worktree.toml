@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-poc-watch-worktree"
+description = "Enables the poc_watch_worktree command without any pre-configured scope."
+commands.allow = ["poc_watch_worktree"]
+
+[[permission]]
+identifier = "deny-poc-watch-worktree"
+description = "Denies the poc_watch_worktree command without any pre-configured scope."
+commands.deny = ["poc_watch_worktree"]

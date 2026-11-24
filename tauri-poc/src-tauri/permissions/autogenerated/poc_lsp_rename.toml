@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-poc-lsp-rename"
+description = "Enables the poc_lsp_rename command without any pre-configured scope."
+commands.allow = ["poc_lsp_rename"]
+
+[[permission]]
+identifier = "deny-poc-lsp-rename"
+description = "Denies the poc_lsp_rename command without any pre-configured scope."
+commands.deny = ["poc_lsp_rename"]

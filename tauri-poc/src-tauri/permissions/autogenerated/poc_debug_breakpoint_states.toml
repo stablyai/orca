@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-poc-debug-breakpoint-states"
+description = "Enables the poc_debug_breakpoint_states command without any pre-configured scope."
+commands.allow = ["poc_debug_breakpoint_states"]
+
+[[permission]]
+identifier = "deny-poc-debug-breakpoint-states"
+description = "Denies the poc_debug_breakpoint_states command without any pre-configured scope."
+commands.deny = ["poc_debug_breakpoint_states"]

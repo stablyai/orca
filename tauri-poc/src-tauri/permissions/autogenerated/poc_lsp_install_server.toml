@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-poc-lsp-install-server"
+description = "Enables the poc_lsp_install_server command without any pre-configured scope."
+commands.allow = ["poc_lsp_install_server"]
+
+[[permission]]
+identifier = "deny-poc-lsp-install-server"
+description = "Denies the poc_lsp_install_server command without any pre-configured scope."
+commands.deny = ["poc_lsp_install_server"]

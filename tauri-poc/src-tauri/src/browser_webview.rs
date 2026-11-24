@@ -3612,6 +3612,7 @@ fn is_agent_injected_input(state: &BrowserWebviewState, browser_page_id: &str) -
 
 // Why: agent-driven guest keys must not run Orca shortcuts (Electron
 // withAgentInputInjection parity). Depth-nested like the Electron side.
+#[allow(dead_code)]
 #[tauri::command]
 pub fn poc_browser_agent_input_begin(
     state: State<BrowserWebviewState>,
@@ -3631,6 +3632,7 @@ pub fn poc_browser_agent_input_begin(
     Ok(())
 }
 
+#[allow(dead_code)]
 #[tauri::command]
 pub fn poc_browser_agent_input_end(
     state: State<BrowserWebviewState>,

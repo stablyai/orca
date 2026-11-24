@@ -1,3 +1,8 @@
+[workspace]
+resolver = "2"
+members = [".", "crates/ide-core", "crates/ide-jsonrpc", "crates/ide-dap"]
+default-members = ["."]
+
 [package]
 name = "orca-tauri-poc"
 version = "0.1.0"
@@ -10,6 +15,9 @@ publish = false
 tauri-build = { version = "2.5.2", features = [] }
 
 [dependencies]
+ide-core = { path = "crates/ide-core" }
+ide-dap = { path = "crates/ide-dap" }
+ide-jsonrpc = { path = "crates/ide-jsonrpc" }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 tauri = { version = "2.9.1", features = ["image-ico", "image-png", "tray-icon", "unstable"] }
@@ -35,14 +43,31 @@ reqwest = { version = "0.13.5", default-features = false, features = [
   "multipart",
   "rustls"
 ] }
-tokio = { version = "1", features = ["sync", "time"] }
+tokio = { version = "1", features = [
+  "sync",
+  "time",
+  "process",
+  "io-util",
+  "net",
+  "macros",
+  "rt-multi-thread"
+] }
 rusqlite = { version = "0.32", features = ["bundled"] }
 ignore = "0.4"
 globset = "0.4"
 grep-searcher = "0.1"
 grep-regex = "0.1"
 grep-matcher = "0.1"
-gix = { version = "0.89", default-features = false, features = ["sha1", "sha256", "status", "blob-diff", "revision", "index", "dirwalk", "parallel"] }
+gix = { version = "0.89", default-features = false, features = [
+  "sha1",
+  "sha256",
+  "status",
+  "blob-diff",
+  "revision",
+  "index",
+  "dirwalk",
+  "parallel"
+] }
 notify = "8"
 
 [target.'cfg(windows)'.dependencies]

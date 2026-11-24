@@ -331,6 +331,10 @@
       "rootDescription": "The app shell could not finish rendering. Retry to remount it, or relaunch Orca if the error persists.",
       "webTitle": "Orca web hit a renderer error.",
       "webDescription": "Retry the web client or reconnect to the paired runtime."
+    },
+    "sidebarLayout": {
+      "switchToWork": "Switch to Work mode (sessions left, chat center)",
+      "switchToCode": "Switch to Code mode (Explorer left, chat right)"
     }
   },
   "browser": {
@@ -725,7 +729,10 @@
         "administratorRestartSummary": "Local terminals and agents will close. Windows will ask you to approve.",
         "orcaCouldNotRestart": "Orca couldn’t restart.",
         "manualAdministratorSteps": "Manual steps",
-        "restartOrca": "Restart"
+        "restartOrca": "Restart",
+        "keywordNiubash": "niubash",
+        "keywordNiu": "niu",
+        "keywordNiuExe": "niu.exe"
       },
       "limit": {
         "label": "Maximum running terminals",
@@ -1954,7 +1961,8 @@
     "openOrca": "Open Orca",
     "quit": "Quit",
     "minimizeNotice": {
-      "body": "Orca is still running in the system tray"
+      "body": "Orca is still running in the system tray",
+      "title": "Orca"
     },
     "activityWaiting": "Orca - activity waiting",
     "activityWaitingSuffix": "activity waiting"
@@ -2110,6 +2118,22 @@
         "deviceDowngraded": "This Orca server no longer supports this browser’s sign-in key (it may have been downgraded). Update the server, or pair this browser again.",
         "unauthorized": "Unauthorized. Pair this web client again.",
         "unauthorizedLinkUsedOrExpired": "Unauthorized. This pairing link may have expired or already been used. Create a new pairing link in Orca and open it."
+      },
+      "tauriNative": {
+        "dialog": {
+          "selectDownloadDestination": "Select download destination",
+          "selectMarkdownDocument": "Select markdown document",
+          "selectFloatingWorkspaceDirectory": "Select floating workspace directory",
+          "selectProjectFolder": "Select project folder",
+          "selectAttachment": "Select attachment",
+          "selectAttachments": "Select attachments",
+          "selectImage": "Select image",
+          "selectRepositoryIcon": "Select repository icon",
+          "selectAudio": "Select audio",
+          "selectDirectory": "Select directory",
+          "importWarpThemes": "Import Warp themes",
+          "importWarpThemesFolder": "Import Warp themes folder"
+        }
       }
     },
     "store": {
@@ -2306,6 +2330,13 @@
       },
       "pluginInstallLink": {
         "invalid": "That plugin link isn’t valid."
+      },
+      "codeIntelligence": {
+        "implementationsTitle": "Implementations",
+        "typeDefinitionsTitle": "Type Definitions",
+        "declarationsTitle": "Declarations",
+        "chooserTitle": "{{kind}} of {{symbol}} ({{count}})",
+        "usagesTitle": "Usages of {{symbol}} ({{count}})"
       }
     },
     "lib": {
@@ -7463,7 +7494,9 @@
           "fee535205b": "Tasks",
           "d599269755": "Hide from sidebar",
           "artifacts": "Artifacts",
-          "skills": "Skills"
+          "skills": "Skills",
+          "workflow": "Workflow",
+          "rooms": "Bots"
         },
         "SidebarRepositoryFilterSection": {
           "d3a9c4cea1": "Clear",
@@ -8546,6 +8579,14 @@
           "browseFolder": "Browse folder…",
           "cloneFromUrl": "Clone from URL…",
           "createNewProject": "Create new project…"
+        },
+        "SidebarCollapseRail": {
+          "expandSidebar": "Expand sidebar"
+        },
+        "CompactAgentRow": {
+          "pendingWaiting": "Waiting for input",
+          "pendingBlocked": "Blocked",
+          "pendingPermission": "Needs attention"
         }
       },
       "shared": {
@@ -15678,6 +15719,7 @@
             "8bc2bbc3a0": "Explorer",
             "9fffaf17c1": "Toggle right sidebar ({{value0}})",
             "aiVaultSessionHistory": "Agents",
+            "debugPanelTitle": "Debug",
             "folderWorkspaces": "Attached worktrees",
             "parentPrChecks": "PR Checks",
             "creatingWorkspace": "Available when the workspace is ready"
@@ -17820,13 +17862,7 @@
         },
         "MonacoEditor": {
           "68cb83f4a7": "Add note on selected text",
-          "fd68ae03b3": "Search in Files",
           "largePasteTooLarge": "Paste is too large."
-        },
-        "MonacoGutterContextMenu": {
-          "7b57b1b468": "Copy Remote URL",
-          "2e0b1cdc05": "Copy Rel. Path to Line",
-          "4eaa991bde": "Copy Path to Line"
         },
         "NotesSendMenu": {
           "44dc5e60a6": "Send notes",
@@ -18387,6 +18423,180 @@
           "open": "Open with default app",
           "downloadOpen": "Download & open with default app",
           "openFailed": "No app on this computer opened this file."
+        },
+        "debug": {
+          "adapterLabel": "Debug Adapter",
+          "addWatchPlaceholder": "Add watch expression...",
+          "addWatchTitle": "Add to Watches",
+          "argsLabel": "参数",
+          "attachAction": "Attach",
+          "breakpointConditionLabel": "Condition",
+          "breakpointConditionPlaceholder": "e.g. count > 10",
+          "breakpointCount": "{{count}} bp",
+          "breakpointCount_one": "{{count}} bp",
+          "breakpointCount_other": "{{count}} bp",
+          "breakpointEnabledLabel": "Enabled",
+          "breakpointHint": "Click gutter to set breakpoint",
+          "breakpointHitCountLabel": "Hit Count",
+          "breakpointHitCountPlaceholder": "e.g. 5 or >= 3",
+          "breakpointLogMessageLabel": "Log Message",
+          "breakpointLogMessagePlaceholder": "e.g. Value: {x}",
+          "breakpointUnverifiedLabel": "Unverified",
+          "breakpointVerifiedLabel": "Verified",
+          "callStackTitle": "Call Stack",
+          "cancelAction": "Cancel",
+          "clearConsoleTitle": "Clear Console",
+          "closeAction": "Close",
+          "consoleTitle": "Console / Eval",
+          "continueTitle": "Continue",
+          "cwdLabel": "目录",
+          "cwdPlaceholder": "默认当前文件所在目录",
+          "debugAction": "Debug",
+          "debugFileAction": "Debug File",
+          "doneAction": "Done",
+          "editVariableValue": "Set Value",
+          "evalPlaceholder": "Evaluate expression (Enter)...",
+          "extraJsonLabel": "额外 DAP JSON（可选，如 stopOnEntry / port）",
+          "launchConfigHeading": "启动配置",
+          "launchConfigTitle": "Debug Launch Config",
+          "launchPresetLabel": "Launch Config",
+          "manualConfigOption": "Custom Adapter...",
+          "modeAttach": "Attach (附加运行中进程)",
+          "modeLabel": "模式",
+          "modeLaunch": "Launch (启动当前文件)",
+          "muteBreakpointsTitle": "Mute Breakpoints",
+          "noFrames": "No frames",
+          "noScopes": "No scopes",
+          "notPaused": "Not paused",
+          "panelToggle": "Debug Panel",
+          "pauseTitle": "Pause",
+          "removeAction": "Remove",
+          "resumeProgramTitle": "Resume Program",
+          "runToCursorTitle": "Run to Cursor",
+          "sessionSelect": "Debug Session",
+          "smartStepIntoTitle": "Smart Step Into",
+          "smartStepPrompt": "Step into:",
+          "stdinPlaceholder": "Send stdin to program...",
+          "stepIntoTitle": "Step Into",
+          "stepOutTitle": "Step Out",
+          "stepOverTitle": "Step Over",
+          "stopTitle": "Stop Debug",
+          "threadSelect": "Thread",
+          "unmuteBreakpointsTitle": "Unmute Breakpoints",
+          "variablesTitle": "Variables",
+          "watchesTitle": "Watches",
+          "adaptersTitle": "Debug Adapters",
+          "addFunctionBreakpointPlaceholder": "Add function breakpoint (e.g. main)...",
+          "addFunctionBreakpointTitle": "Add Function Breakpoint",
+          "attachProcessTitle": "Attach to Process",
+          "breakpointsSectionTitle": "Breakpoints",
+          "breakpointsTitle": "Breakpoints",
+          "clearBreakpointsTitle": "Remove All Breakpoints",
+          "emptyBreakpoints": "No breakpoints yet. Click an editor line number or add a function breakpoint.",
+          "emptyProcesses": "No attachable processes found.",
+          "exceptionFiltersTitle": "Exception Filters",
+          "filterProcessesPlaceholder": "Filter by PID, name, or command line...",
+          "functionBreakpointLabel": "Function",
+          "functionBreakpointPlaceholder": "Function or symbol name",
+          "functionBreakpointsTitle": "Function Breakpoints",
+          "goToSourceAction": "Go to Source",
+          "installAction": "Install",
+          "installAndRetryAction": "Install & Retry",
+          "installedBadge": "Installed",
+          "installingLabel": "Installing...",
+          "lineBreakpointsTitle": "Line Breakpoints",
+          "loadingProcesses": "Scanning processes...",
+          "missingAdapterPrefix": "Adapter missing:",
+          "missingBadge": "Missing",
+          "noMatchingProcesses": "No matching processes.",
+          "onPathBadge": "PATH",
+          "refreshTitle": "Refresh",
+          "selectBreakpointHint": "Select a breakpoint to view or edit properties.",
+          "viewBreakpointsTitle": "View Breakpoints",
+          "logBadge": "log",
+          "conditionBadge": "if",
+          "adapterPython": "Python (debugpy)",
+          "adapterNode": "Node / TS (js-debug)",
+          "adapterRust": "Rust / C++ (codelldb)",
+          "adapterGo": "Go (delve)",
+          "adapterLldb": "LLDB (lldb-dap)",
+          "adapterDotnet": ".NET (netcoredbg)",
+          "adapterRuby": "Ruby (rdbg)",
+          "argsPlaceholder": "--port 3000",
+          "extraJsonPlaceholder": "{\"stopOnEntry\": true}"
+        },
+        "PlainEditableDomContextMenu": {
+          "cut": "Cut",
+          "copy": "Copy",
+          "paste": "Paste",
+          "pasteAsPlainText": "Paste as plain text",
+          "selectAll": "Select all",
+          "menuLabel": "Edit"
+        },
+        "RichMarkdownDomContextMenu": {
+          "addLink": "Add link",
+          "format": "Format",
+          "bold": "Bold",
+          "italic": "Italic",
+          "strike": "Strike",
+          "inlineCode": "Inline code",
+          "codeBlock": "Code block",
+          "quote": "Quote",
+          "paragraph": "Paragraph",
+          "bodyText": "Body text",
+          "heading1": "Heading 1",
+          "heading2": "Heading 2",
+          "heading3": "Heading 3",
+          "heading4": "Heading 4",
+          "heading5": "Heading 5",
+          "bulletList": "Bullet list",
+          "numberedList": "Numbered list",
+          "checklist": "Checklist",
+          "insert": "Insert",
+          "link": "Link",
+          "image": "Image",
+          "divider": "Divider",
+          "cut": "Cut",
+          "copy": "Copy",
+          "paste": "Paste",
+          "pasteAsPlainText": "Paste as plain text",
+          "selectAll": "Select all",
+          "menuLabel": "Markdown editing"
+        },
+        "codeIntelligence": {
+          "goToDefinition": "Go to Definition",
+          "goToTypeDefinition": "Go to Type Definition",
+          "goToImplementation": "Go to Implementation",
+          "findReferences": "Find References",
+          "renameSymbol": "Rename Symbol",
+          "fileStructure": "File Structure",
+          "cut": "Cut",
+          "copy": "Copy",
+          "paste": "Paste",
+          "selectAll": "Select All",
+          "dismissHint": "Dismiss hint",
+          "sourceLsp": "LSP",
+          "sourceSyntax": "Syntax",
+          "close": "Close",
+          "filterTargetsPlaceholder": "Filter targets by file or line content...",
+          "noMatchingLocations": "No matching locations",
+          "goToSymbol": "Go to Symbol",
+          "filterSymbolsPlaceholder": "Filter symbols in current file...",
+          "noSymbolsFound": "No symbols found in this file",
+          "renameScopeWorkspace": "Workspace",
+          "renameScopeCurrentFile": "Current file",
+          "cancelRename": "Cancel rename",
+          "applyAction": "Apply",
+          "navigateBackTitle": "Navigate Back (Alt+Left)",
+          "navigateForwardTitle": "Navigate Forward (Alt+Right)",
+          "fileStructureOutlineTitle": "File Structure / Outline (Ctrl+F12)",
+          "errorsTitle": "Errors",
+          "warningsTitle": "Warnings",
+          "languageIntelligenceTitle": "Language Intelligence ({{language}})",
+          "languageServersTitle": "Language Servers",
+          "refreshStatusTitle": "Refresh status",
+          "installingAction": "Installing...",
+          "installAction": "Install"
         }
       },
       "diff": {
@@ -18478,7 +18688,10 @@
           "dispatchedAgents_one": "{{agentType}} - dispatched {{count}} agent",
           "dispatchedAgents_other": "{{agentType}} - dispatched {{count}} agents",
           "startedAgo": "started {{time}}",
-          "doneAgo": "done {{time}}"
+          "doneAgo": "done {{time}}",
+          "sessionIdCopyFailed": "Failed to copy Session ID. Try again.",
+          "sessionIdCopied": "{{value0}} copied",
+          "sessionId": "Session ID"
         },
         "DashboardAgentRowMessage": {
           "0a01046763": "interrupted",
@@ -20568,6 +20781,258 @@
       },
       "NewWorkspaceComposerFooter": {
         "create": "Create"
+      },
+      "workbench": {
+        "flow": {
+          "requirementPlaceholder": "Describe your requirement or task (Enter to start)...",
+          "openWorktree": "Open Worktree",
+          "retryNode": "Retry Node",
+          "stop": "Stop",
+          "start": "Start Workflow",
+          "editYaml": "Edit YAML",
+          "newYaml": "New YAML",
+          "inheritAgent": "Follow ChatUI",
+          "nodeRunPlaceholder": "CLI command (e.g. pnpm tc && pnpm test)",
+          "nodePromptPlaceholder": "Node prompt / instruction...",
+          "saveNodeYaml": "Save to YAML",
+          "applyNode": "Apply",
+          "modeAgent": "AI Agent",
+          "modeCli": "CLI Command",
+          "browseFolder": "选择本地文件夹...",
+          "deleteNode": "删除",
+          "deleteNodeTitle": "删除节点",
+          "insertAcceptDesc": "AI 审查改动质量",
+          "insertAnalyzeDesc": "AI 拆解需求与定位文件",
+          "insertCliDesc": "直接执行 Shell（不走模型）",
+          "insertCommitDesc": "受 Harness 约束提交",
+          "insertImplementDesc": "AI 编写与修改代码",
+          "insertNodeHeading": "插入新节点",
+          "insertNodeTitle": "插入节点",
+          "insertVerifyDesc": "类型检查 / 单元测试门禁",
+          "moveNodeLeft": "左移节点",
+          "moveNodeRight": "右移节点",
+          "nodeNamePlaceholder": "节点名称",
+          "retry": "重试此步",
+          "runLabel": "Run {{code}}",
+          "runtimeEnvironment": "运行环境",
+          "shellAuto": "Auto (系统默认)",
+          "stepProgress": "step {{current}} of {{total}}",
+          "targetFolderHeading": "运行目录 / 项目",
+          "targetFolderTitle": "选择工作流运行目录",
+          "tplAcceptDesc": "审查改动并确认通过",
+          "tplAcceptLabel": "Diff 验收",
+          "tplAnalyzeDesc": "拆解需求并定位目标文件",
+          "tplAnalyzeLabel": "需求分析",
+          "tplCliDesc": "执行本地 Shell 命令（不消耗模型）",
+          "tplCliLabel": "CLI 命令",
+          "tplCommitDesc": "按 Harness 规范提交变更",
+          "tplCommitLabel": "规范提交",
+          "tplImplementDesc": "在工作区完成代码修改",
+          "tplImplementLabel": "编码实现",
+          "tplVerifyDesc": "运行类型检查或测试命令",
+          "tplVerifyLabel": "校验测试",
+          "viewWorktree": "查看工作区"
+        },
+        "presets": {
+          "standard": {
+            "name": "Standard Feature Flow",
+            "desc": "Analyze requirement, implement in worktree, run checks, and verify acceptance."
+          },
+          "bugfix": {
+            "name": "Bugfix Flow",
+            "desc": "Reproduce root cause, apply minimal fix, run regression checks, and accept."
+          },
+          "refactor": {
+            "name": "Refactor Flow",
+            "desc": "Assess structure, refactor cleanly, verify types/tests, and accept."
+          },
+          "devE2e": {
+            "name": "Full Dev Pipeline",
+            "desc": "Analyze → Implement → Run CI → Fix CI → Code Review → Commit."
+          }
+        },
+        "nodes": {
+          "analyze": "Analyze",
+          "analyzeDesc": "Break down requirement and locate target files",
+          "implement": "Implement",
+          "implementDesc": "Write code changes in isolated worktree",
+          "verify": "Verify",
+          "verifyDesc": "Run lint, typecheck, and affected tests",
+          "accept": "Accept",
+          "acceptDesc": "Final review and acceptance confirmation",
+          "locate": "Locate Root Cause",
+          "locateDesc": "Trace failure path and reproduce issue",
+          "fix": "Apply Fix",
+          "fixDesc": "Patch root cause with minimal diff",
+          "regression": "Regression Check",
+          "regressionDesc": "Verify fix and ensure no regressions",
+          "assess": "Assess Structure",
+          "assessDesc": "Inspect boundaries and plan clean refactor",
+          "refactor": "Refactor",
+          "refactorDesc": "Apply modular refactoring",
+          "ci": "Run CI",
+          "ciDesc": "Run lint, typecheck, and changed tests",
+          "fixCi": "Fix CI",
+          "fixCiDesc": "Fix any CI failures until all checks pass",
+          "review": "Code Review",
+          "reviewDesc": "Review diff quality, edge cases, and maintainability",
+          "commit": "Commit",
+          "commitDesc": "Stage verified changes and create a clean commit"
+        },
+        "builder": {
+          "cancel": "Cancel"
+        },
+        "harness": {
+          "title": "Harness Policy",
+          "presetOff": "Free",
+          "presetStandard": "Standard",
+          "presetCustom": "Custom",
+          "commitPerFeature": "Commit per feature",
+          "commitStyle": "Commit format",
+          "preCommitGate": "Pre-commit gate",
+          "presetGoogleCl": "Google CL",
+          "triggerLabel": "Harness: {{preset}}"
+        },
+        "dialogue": {
+          "placeholder": "Describe a task to run in an isolated worktree (Cmd/Ctrl+Enter to start)...",
+          "requireApproval": "Require approval before fix",
+          "noRepoHint": "No active repo: will track pipeline without creating a worktree",
+          "start": "Start Task",
+          "empty": "Enter a task above or start one from the Board tab.",
+          "runningStage": "running: {{stage}}",
+          "creatingWorktree": "Creating isolated worktree...",
+          "approve": "Approve",
+          "checkChanged": "Run check:changed",
+          "runReview": "Run Review",
+          "prNumberPlaceholder": "PR #",
+          "watchCi": "Watch CI",
+          "mergePr": "Merge PR",
+          "copyFeedback": "Copy Feedback",
+          "openWorktree": "Open Worktree"
+        },
+        "kanban": {
+          "reload": "Reload",
+          "noRepo": "Open a workspace repository to see its GitHub issues here.",
+          "start": "Start",
+          "todo": "Todo",
+          "doing": "Doing",
+          "review": "Review",
+          "done": "Done"
+        },
+        "schedule": {
+          "placeholder": "Add a schedule item",
+          "add": "Add"
+        }
+      },
+      "rooms": {
+        "createRoom": {
+          "nameRequired": "Name is required",
+          "created": "Room \"{{name}}\" created",
+          "failed": "Failed to create room",
+          "newRoom": "New group",
+          "title": "New group",
+          "description": "A leader bot is added automatically. You can also ask Orca Admin to do this in chat.",
+          "namePlaceholder": "Group name",
+          "briefPlaceholder": "What should this group do? (optional)",
+          "advanced": "Advanced",
+          "modelDefault": "(agent default)",
+          "effortDefault": "(default thinking)",
+          "cancel": "Cancel",
+          "create": "Create"
+        },
+        "spawnBot": {
+          "pickWorkspace": "Pick a workspace for the bot",
+          "needsName": "Bot needs a name",
+          "joined": "Bot \"{{name}}\" joined the room",
+          "failed": "Failed to spawn bot",
+          "title": "New bot",
+          "namePlaceholder": "Name (e.g. reviewer, planner)",
+          "instructionsPlaceholder": "What is this bot responsible for? (optional)",
+          "advanced": "Advanced",
+          "noWorkspace": "(no workspace)",
+          "modelDefault": "(agent default)",
+          "effortDefault": "(default thinking)",
+          "cancel": "Cancel",
+          "spawn": "Spawn"
+        },
+        "pool": {
+          "untitledSession": "(untitled session)"
+        },
+        "page": {
+          "backToRoom": "Back to room",
+          "adminRole": "Admin",
+          "directRoomHint": "Focused chat in {{room}}",
+          "homeHint": "Ask in plain language to create bots or group chats",
+          "adminLeads": "{{name}} leads this team",
+          "memberCountOnly": "{{count}} members",
+          "actions": "Room actions",
+          "manageMembers": "Manage members",
+          "deleteRoom": "Delete room",
+          "directPlaceholder": "Message {{name}}…",
+          "composerPlaceholder": "Message the team…",
+          "send": "Send",
+          "noMembers": "No members yet.",
+          "memberFailed": "Failed",
+          "removeMember": "Remove {{name}}",
+          "addMember": "Turn an open session into a bot",
+          "allSessionsAdded": "Every open agent session is already represented here.",
+          "add": "Create",
+          "addAsAdmin": "Admin",
+          "backToApp": "Back to app",
+          "refresh": "Refresh",
+          "loading": "Loading…",
+          "botFailed": "Bot failed",
+          "sendFailed": "Failed to send",
+          "deleted": "Room deleted",
+          "deleteFailed": "Failed to delete",
+          "unsupportedSessionAgent": "Unknown agent type",
+          "memberAdded": "Member added",
+          "addMemberFailed": "Failed to add member",
+          "removeMemberFailed": "Failed to remove member",
+          "pickRoom": "Pick a room, or create one on the left.",
+          "directEmptyTitle": "Message {{name}} in this room",
+          "directEmptyHint": "This is a focused room conversation. Other members do not join it unless mentioned.",
+          "retry": "Retry",
+          "memberWorking": "Working…",
+          "memberWaiting": "Waiting for approval…"
+        },
+        "roster": {
+          "modelUpdated": "Model updated",
+          "modelUpdateFailed": "Model update failed",
+          "modelUnknown": "(unknown)",
+          "title": "Team members",
+          "description": "Create a bot, turn an open session into a fresh bot, or clean up this team.",
+          "current": "Current members"
+        },
+        "sidebar": {
+          "working": "Working…",
+          "waiting": "Waiting approval…",
+          "you": "You",
+          "chiefReady": "Ready — ask it to build a team",
+          "chiefStarting": "Starting the chief…",
+          "emptyTeam": "No members yet",
+          "noMembers": "No members yet",
+          "more": "More actions",
+          "chief": "Chief",
+          "teams": "Teams",
+          "noTeams": "Ask the chief to create one."
+        },
+        "hero": {
+          "adminLeads": "{{name}} is the admin here. ",
+          "subtitle": "Describe the team or task you need. The chief can create bots and start group chats.",
+          "sayHi": "Say hi",
+          "spawnBot": "Create a bot",
+          "howTo": "Build a review team",
+          "docBot": "Create a document bot"
+        },
+        "useRoomLog": {
+          "readFailed": "Failed to read room log"
+        },
+        "useRooms": {
+          "listFailed": "Failed to list rooms",
+          "adminReady": "Orca Admin is ready in Orca HQ",
+          "seatMainBotFailed": "Failed to seat the Main Bot"
+        }
       }
     },
     "i18n": {
@@ -21275,7 +21740,8 @@
         "retryChats": "Retry",
         "permissionAppliesNextMessage": "{{saved}} applies to your next message; running {{active}}",
         "modelAndEffortValue": "{{model}} · {{effort}}",
-        "modelAndEffort": "Model and effort"
+        "modelAndEffort": "Model and effort",
+        "startAnotherAgent": "Start another agent"
       },
       "tool": {
         "exitCode": "exit {{value0}}",
@@ -29410,5 +29876,77 @@
     "title": "Some background work paused after crashing repeatedly",
     "description": "Claude chat recovery is off until you retry. Copy, rewind and Space scans resume when you start them again.",
     "retry": "Retry"
+  },
+  "tauri": {
+    "runtimeInit": {
+      "description": "Orca could not start its local runtime, so the previous connection was not reused. Retry to start it again.",
+      "hint": "If this keeps failing, the runtime log (orcad-supervisor-stderr.log) has the crash details.",
+      "retry": "Retry",
+      "title": "Local runtime failed to start"
+    }
+  },
+  "workbench": {
+    "waypoints": {
+      "asksFirst": "Asks first",
+      "close": "返回工作流配置",
+      "completed": "completed",
+      "needsYou": "waiting for you",
+      "needsYouBadge": "Needs you",
+      "running": "running",
+      "stopped": "stopped",
+      "working": "Working on step..."
+    },
+    "workflowMenu": {
+      "delete": "删除",
+      "deleteCancel": "取消",
+      "deleteConfirm": "删除",
+      "deletePresetDescription": "确定要从列表中移除预设工作流「{{name}}」吗？",
+      "deleteTitle": "删除工作流",
+      "deleteYamlDescription": "确定要删除工作流「{{name}}」吗？这将从 .orca/workflows 中移除对应的 YAML 文件。",
+      "duplicate": "创建副本",
+      "editYaml": "编辑 YAML",
+      "open": "打开工作流",
+      "rename": "重命名",
+      "saveAsYaml": "另存为 YAML 编辑"
+    },
+    "workflowNavMenu": {
+      "editHarness": "编辑 Harness 策略",
+      "newWorkflow": "新建工作流",
+      "openGuide": "YAML 语法文档",
+      "openWorkbench": "打开工作台",
+      "refresh": "刷新工作流列表",
+      "restorePresets": "恢复隐藏的预设工作流"
+    },
+    "yamlGuide": {
+      "agentModelDesc": "：可选，单独覆盖节点模型",
+      "button": "语法说明",
+      "idNameDesc": "：节点标识与显示名称",
+      "openDoc": "打开完整文档",
+      "promptDesc": "：AI 节点指令（用于 analyze/implement/accept/commit）",
+      "runDesc": "：Shell 命令（用于 cli/verify，不走大模型）",
+      "sample": "steps:\n  - id: analyze\n    name: 需求分析\n    kind: analyze\n    prompt: 分析需求并定位目标文件\n  - id: check\n    name: 类型检查\n    kind: cli\n    run: pnpm tc:web",
+      "stepsHeading": "步骤节点（steps[]）：",
+      "title": "Workflow YAML 速查",
+      "topFields": "顶层字段："
+    }
+  },
+  "source-control": {
+    "history": {
+      "label": "Commit history",
+      "loading-more": "Loading more commits…",
+      "retry": "Retry loading commits",
+      "load-more": "Load more commits",
+      "update-host": "Restart Orca or update the execution host to load older commits.",
+      "all-loaded": "All commits loaded",
+      "all-branches": "All branches",
+      "current-branch": "Current branch",
+      "scope": "History branches"
+    }
+  },
+  "chatPanel": {
+    "close": "Close chat",
+    "title": "Chat",
+    "rename": "Rename chat",
+    "newChat": "New chat"
   }
 }

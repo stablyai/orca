@@ -84,6 +84,7 @@ impl OrcadRuntime {
         }
     }
 
+    #[allow(dead_code)]
     fn take_uncaptured_exit(&self) -> Option<RuntimeUncapturedExit> {
         self.slot.lock().ok()?.uncaptured_exit.take()
     }
@@ -238,24 +239,20 @@ fn launch_runtime(resource_root: Option<&Path>) -> Result<Child, String> {
         .env("ORCA_BACKGROUND_LAUNCH", "1")
         .stdin(Stdio::piped())
         .stdout(Stdio::piped());
-    if cfg!(debug_assertions) {
-        command.stderr(Stdio::null());
-    } else {
-        let stderr_target = profile
-            .join("orcad-supervisor-stderr.log")
-            .into_os_string();
-        let _ = std::fs::create_dir_all(&profile);
-        match std::fs::OpenOptions::new()
-            .create(true)
-            .append(true)
-            .open(&stderr_target)
-        {
-            Ok(file) => {
-                command.stderr(Stdio::from(file));
-            }
-            Err(_) => {
-                command.stderr(Stdio::null());
-            }
+    let stderr_target = profile
+        .join("orcad-supervisor-stderr.log")
+        .into_os_string();
+    let _ = std::fs::create_dir_all(&profile);
+    match std::fs::OpenOptions::new()
+        .create(true)
+        .append(true)
+        .open(&stderr_target)
+    {
+        Ok(file) => {
+            command.stderr(Stdio::from(file));
+        }
+        Err(_) => {
+            command.stderr(Stdio::null());
         }
     }
     #[cfg(windows)]
@@ -267,7 +264,7 @@ fn launch_runtime(resource_root: Option<&Path>) -> Result<Child, String> {
     let mut child = command
         .spawn()
         .map_err(|error| format!("Failed to start Node supervisor: {error}"))?;
-    if !cfg!(debug_assertions) {
+    {
         let pid = child.id();
         let alive = matches!(child.try_wait(), Ok(None));
         let _ = std::fs::create_dir_all(&profile);

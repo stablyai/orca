@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-poc-lsp-references"
+description = "Enables the poc_lsp_references command without any pre-configured scope."
+commands.allow = ["poc_lsp_references"]
+
+[[permission]]
+identifier = "deny-poc-lsp-references"
+description = "Denies the poc_lsp_references command without any pre-configured scope."
+commands.deny = ["poc_lsp_references"]

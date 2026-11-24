@@ -1,7 +1,7 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
 use base64::{engine::general_purpose::STANDARD as BASE64, Engine as _};
-use serde::{Deserialize, Serialize};
+use serde::Serialize;
 use std::collections::HashMap;
 use std::collections::HashSet;
 use std::fs;
@@ -24,18 +24,26 @@ mod authorized_roots;
 // mod agent_awake;
 // mod ai_vault_delete;
 mod browser_cdp_events;
-mod browser_client_route_authority;
-mod browser_client_route_partitions;
-mod browser_client_route_sources;
-mod browser_cookie_import;
-mod browser_cookie_source_import;
+// mod browser_client_route_authority;
+// mod browser_client_route_partitions;
+// mod browser_client_route_sources;
+// mod browser_cookie_import;
+// mod browser_cookie_source_import;
 mod browser_identity;
-mod browser_session;
-mod browser_session_detection;
-mod browser_upload_staging;
+// mod browser_session;
+// mod browser_session_detection;
+// mod browser_upload_staging;
 mod browser_webview;
 mod clipboard_files;
+mod code_lsp;
+mod code_lsp_convert;
+mod code_lsp_servers;
+mod code_lsp_uri;
+mod code_nav_fallback;
 mod crash_reports;
+mod debug_adapters;
+mod debug_dap;
+mod debug_launch_discovery;
 // mod desktop_away_state;
 mod diagnostics;
 mod doc_preview;
@@ -59,6 +67,7 @@ mod second_instance;
 // mod settings_theme_directories;
 mod shell_availability;
 mod system_fonts;
+mod workflow_command;
 // mod system_tray;
 // mod terminal_desync;
 // mod updater;
@@ -151,6 +160,7 @@ fn route_menu_zoom(app: &AppHandle, direction: &str) {
 /// The zoom level the main window most recently reported through
 /// `poc_set_zoom`, used to seed a newly opened secondary window so it matches
 /// the app-wide zoom the moment it mounts (Electron's `dom-ready` handler).
+#[allow(dead_code)]
 fn main_window_zoom_level() -> f64 {
     let map = window_zoom_levels();
     map.lock()
@@ -162,6 +172,7 @@ fn main_window_zoom_level() -> f64 {
 /// Seed the label zoom map slot from the main window latest level.
 /// Called by secondary-window openers so the new window honors app-wide zoom.
 /// Only the map slot is seeded here; the factor lands on page load.
+#[allow(dead_code)]
 pub(crate) fn seed_secondary_window_zoom_level(label: &str) {
     let level = main_window_zoom_level();
     if let Ok(mut levels) = window_zoom_levels().lock() {
@@ -171,6 +182,7 @@ pub(crate) fn seed_secondary_window_zoom_level(label: &str) {
 /// Push the seeded level through set_zoom. Call only once the page has loaded,
 /// never synchronously after build: set_zoom on a just-built window can block
 /// until the webview answers, wedging the invoke and every later one.
+#[allow(dead_code)]
 pub(crate) fn apply_seeded_secondary_window_zoom(app: &AppHandle, label: &str) {
     let level = window_zoom_levels()
         .lock()
@@ -410,6 +422,7 @@ fn poc_minimize(window: WebviewWindow) -> Result<(), String> {
 /// Native OS close path consults this before prompting, mirroring the Electron
 /// hideToTrayIfEnabled guard: Windows only, setting pushed from the renderer,
 /// and no confirmed close pending.
+#[allow(dead_code)]
 fn close_should_hide_to_tray(state: &NativeWindowState) -> bool {
     // Tray removed: never hide on close. Kept so the CloseRequested branch and
     // unit tests keep compiling — just returns false.
@@ -1201,6 +1214,52 @@ fn main() {
             // local_log_tail::poc_stop_local_log_tail,
             runtime_process::poc_runtime_pairing,
             runtime_process::poc_runtime_status,
+            workflow_command::poc_run_workflow_command,
+            debug_dap::poc_debug_start,
+            debug_dap::poc_debug_set_breakpoints,
+            debug_dap::poc_debug_breakpoint_states,
+            debug_dap::poc_debug_sessions,
+            debug_dap::poc_debug_threads,
+            debug_dap::poc_debug_stack_trace,
+            debug_dap::poc_debug_scopes,
+            debug_dap::poc_debug_variables,
+            debug_dap::poc_debug_evaluate,
+            debug_dap::poc_debug_evaluate_in,
+            debug_dap::poc_debug_set_variable,
+            debug_dap::poc_debug_resume,
+            debug_dap::poc_debug_pause,
+            debug_dap::poc_debug_step_over,
+            debug_dap::poc_debug_step_into,
+            debug_dap::poc_debug_step_out,
+            debug_dap::poc_debug_force_step_over,
+            debug_dap::poc_debug_run_to,
+            debug_dap::poc_debug_step_in_targets,
+            debug_dap::poc_debug_step_in_target,
+            debug_dap::poc_debug_exception_filters,
+            debug_dap::poc_debug_set_exception_breakpoints,
+            debug_dap::poc_debug_set_function_breakpoints,
+            debug_dap::poc_debug_send_input,
+            debug_dap::poc_debug_capabilities,
+            debug_dap::poc_debug_attachable_processes,
+            debug_dap::poc_debug_stop,
+            debug_dap::poc_debug_discover_launch_configs,
+            debug_dap::poc_debug_adapter_statuses,
+            debug_dap::poc_debug_install_adapter,
+            code_lsp::poc_lsp_did_open,
+            code_lsp::poc_lsp_did_change,
+            code_lsp::poc_lsp_did_save,
+            code_lsp::poc_lsp_did_close,
+            code_lsp::poc_lsp_definition,
+            code_lsp::poc_lsp_references,
+            code_lsp::poc_lsp_hover,
+            code_lsp::poc_lsp_completion,
+            code_lsp::poc_lsp_signature_help,
+            code_lsp::poc_lsp_document_symbols,
+            code_lsp::poc_lsp_prepare_rename,
+            code_lsp::poc_lsp_rename,
+            code_lsp::poc_lsp_apply_workspace_edit,
+            code_lsp::poc_lsp_server_statuses,
+            code_lsp::poc_lsp_install_server,
             // Updater and Workspace Space window removed.
             // updater::poc_updater_get_version,
             // updater::poc_updater_get_status,
@@ -1235,6 +1294,12 @@ fn main() {
             app.manage(filesystem_download::DownloadSessions::default());
             app.manage(filesystem_download::FolderDownloadSessions::default());
             app.manage(filesystem_io::FsWatcherState::default());
+            if let Ok(local_data_dir) = app.path().app_local_data_dir() {
+                ide_dap::adapter::set_tools_root(local_data_dir.join("debug-tools"));
+                code_lsp_servers::set_lsp_tools_root(local_data_dir.join("lsp-tools"));
+            }
+            app.manage(debug_dap::DebugDapState::new(app.handle().clone()));
+            app.manage(code_lsp::CodeLspState::new(app.handle().clone()));
             let resource_root = app.path().resource_dir().ok();
             app.manage(Arc::new(OrcadRuntime::new(resource_root)));
 

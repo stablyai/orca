@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-poc-git-diff"
+description = "Enables the poc_git_diff command without any pre-configured scope."
+commands.allow = ["poc_git_diff"]
+
+[[permission]]
+identifier = "deny-poc-git-diff"
+description = "Denies the poc_git_diff command without any pre-configured scope."
+commands.deny = ["poc_git_diff"]

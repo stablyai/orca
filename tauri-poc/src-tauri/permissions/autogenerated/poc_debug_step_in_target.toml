@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-poc-debug-step-in-target"
+description = "Enables the poc_debug_step_in_target command without any pre-configured scope."
+commands.allow = ["poc_debug_step_in_target"]
+
+[[permission]]
+identifier = "deny-poc-debug-step-in-target"
+description = "Denies the poc_debug_step_in_target command without any pre-configured scope."
+commands.deny = ["poc_debug_step_in_target"]

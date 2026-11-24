@@ -6644,7 +6644,9 @@
           "fee535205b": "Задачи",
           "d599269755": "Скрыть из боковой панели",
           "artifacts": "Артефакты",
-          "skills": "Навыки"
+          "skills": "Навыки",
+          "workflow": "Workflow",
+          "rooms": "Bots"
         },
         "SidebarRepositoryFilterSection": {
           "d3a9c4cea1": "Очистить",
@@ -16891,13 +16893,7 @@
         },
         "MonacoEditor": {
           "68cb83f4a7": "Добавить заметку к выделенному тексту",
-          "fd68ae03b3": "Поиск в файлах",
           "largePasteTooLarge": "Вставляемый текст слишком большой."
-        },
-        "MonacoGutterContextMenu": {
-          "7b57b1b468": "Скопировать URL в удалённом репозитории",
-          "2e0b1cdc05": "Скопировать относительный путь со строкой",
-          "4eaa991bde": "Скопировать путь со строкой"
         },
         "NotesSendMenu": {
           "44dc5e60a6": "Отправить заметки",
@@ -17441,6 +17437,41 @@
           "tooLarge": "{{value0}} слишком велик, чтобы открыть его в {{value1}} ({{value2}}; ограничение — {{value3}}).",
           "unsupported": "{{value0}} не может прочитать этот файл из места хранения. Обновите сервер Orca, на котором он находится, или переключитесь на «Исходный код».",
           "readFailed": "Не удалось прочитать {{value0}} для {{value1}}. {{value2}}"
+        },
+        "debug": {
+          "adapterLabel": "Debug Adapter",
+          "argsLabel": "参数",
+          "attachAction": "Attach",
+          "breakpointCount_one": "{{count}} bp",
+          "breakpointCount_other": "{{count}} bp",
+          "breakpointCount_few": "{{count}} bp",
+          "breakpointCount_many": "{{count}} bp",
+          "breakpointHint": "Click gutter to set breakpoint",
+          "callStackTitle": "Call Stack",
+          "clearConsoleTitle": "Clear Console",
+          "consoleTitle": "Console / Eval",
+          "continueTitle": "Continue",
+          "cwdLabel": "目录",
+          "cwdPlaceholder": "默认当前文件所在目录",
+          "debugFileAction": "Debug File",
+          "evalPlaceholder": "Evaluate expression (Enter)...",
+          "extraJsonLabel": "额外 DAP JSON（可选，如 stopOnEntry / port）",
+          "launchConfigHeading": "启动配置",
+          "launchConfigTitle": "Debug Launch Config",
+          "modeAttach": "Attach (附加运行中进程)",
+          "modeLabel": "模式",
+          "modeLaunch": "Launch (启动当前文件)",
+          "noFrames": "No frames",
+          "noScopes": "No scopes",
+          "notPaused": "Not paused",
+          "panelToggle": "Debug Panel",
+          "pauseTitle": "Pause",
+          "stepIntoTitle": "Step Into",
+          "stepOutTitle": "Step Out",
+          "stepOverTitle": "Step Over",
+          "stopTitle": "Stop Debug",
+          "variablesTitle": "Variables",
+          "breakpointCount": "{{count}} bp"
         }
       },
       "diff": {
@@ -19565,6 +19596,118 @@
         "setting-global-off": "Доверие к папкам отключено в настройках агентов, поэтому агенты всегда спрашивают.",
         "keyword-trust": "доверие",
         "keyword-hooks": "хуки"
+      },
+      "workbench": {
+        "flow": {
+          "requirementPlaceholder": "Describe your requirement or task (Enter to start)...",
+          "openWorktree": "Open Worktree",
+          "retryNode": "Retry Node",
+          "stop": "Stop",
+          "start": "Start Workflow",
+          "editYaml": "Edit YAML",
+          "newYaml": "New YAML",
+          "inheritAgent": "Follow ChatUI",
+          "nodeRunPlaceholder": "CLI command (e.g. pnpm tc && pnpm test)",
+          "nodePromptPlaceholder": "Node prompt / instruction...",
+          "saveNodeYaml": "Save to YAML",
+          "applyNode": "Apply",
+          "modeAgent": "AI Agent",
+          "modeCli": "CLI Command",
+          "browseFolder": "选择本地文件夹...",
+          "deleteNode": "删除",
+          "deleteNodeTitle": "删除节点",
+          "insertAcceptDesc": "AI 审查改动质量",
+          "insertAnalyzeDesc": "AI 拆解需求与定位文件",
+          "insertCliDesc": "直接执行 Shell（不走模型）",
+          "insertCommitDesc": "受 Harness 约束提交",
+          "insertImplementDesc": "AI 编写与修改代码",
+          "insertNodeHeading": "插入新节点",
+          "insertNodeTitle": "插入节点",
+          "insertVerifyDesc": "类型检查 / 单元测试门禁",
+          "moveNodeLeft": "左移节点",
+          "moveNodeRight": "右移节点",
+          "nodeNamePlaceholder": "节点名称",
+          "retry": "重试此步",
+          "runLabel": "Run {{code}}",
+          "runtimeEnvironment": "运行环境",
+          "shellAuto": "Auto (系统默认)",
+          "stepProgress": "step {{current}} of {{total}}",
+          "targetFolderHeading": "运行目录 / 项目",
+          "targetFolderTitle": "选择工作流运行目录",
+          "tplAcceptDesc": "审查改动并确认通过",
+          "tplAcceptLabel": "Diff 验收",
+          "tplAnalyzeDesc": "拆解需求并定位目标文件",
+          "tplAnalyzeLabel": "需求分析",
+          "tplCliDesc": "执行本地 Shell 命令（不消耗模型）",
+          "tplCliLabel": "CLI 命令",
+          "tplCommitDesc": "按 Harness 规范提交变更",
+          "tplCommitLabel": "规范提交",
+          "tplImplementDesc": "在工作区完成代码修改",
+          "tplImplementLabel": "编码实现",
+          "tplVerifyDesc": "运行类型检查或测试命令",
+          "tplVerifyLabel": "校验测试",
+          "viewWorktree": "查看工作区"
+        },
+        "presets": {
+          "standard": {
+            "name": "Standard Feature Flow",
+            "desc": "Analyze requirement, implement in worktree, run checks, and verify acceptance."
+          },
+          "bugfix": {
+            "name": "Bugfix Flow",
+            "desc": "Reproduce root cause, apply minimal fix, run regression checks, and accept."
+          },
+          "refactor": {
+            "name": "Refactor Flow",
+            "desc": "Assess structure, refactor cleanly, verify types/tests, and accept."
+          },
+          "devE2e": {
+            "name": "Full Dev Pipeline",
+            "desc": "Analyze → Implement → Run CI → Fix CI → Code Review → Commit."
+          }
+        },
+        "nodes": {
+          "analyze": "Analyze",
+          "analyzeDesc": "Break down requirement and locate target files",
+          "implement": "Implement",
+          "implementDesc": "Write code changes in isolated worktree",
+          "verify": "Verify",
+          "verifyDesc": "Run lint, typecheck, and affected tests",
+          "accept": "Accept",
+          "acceptDesc": "Final review and acceptance confirmation",
+          "locate": "Locate Root Cause",
+          "locateDesc": "Trace failure path and reproduce issue",
+          "fix": "Apply Fix",
+          "fixDesc": "Patch root cause with minimal diff",
+          "regression": "Regression Check",
+          "regressionDesc": "Verify fix and ensure no regressions",
+          "assess": "Assess Structure",
+          "assessDesc": "Inspect boundaries and plan clean refactor",
+          "refactor": "Refactor",
+          "refactorDesc": "Apply modular refactoring",
+          "ci": "Run CI",
+          "ciDesc": "Run lint, typecheck, and changed tests",
+          "fixCi": "Fix CI",
+          "fixCiDesc": "Fix any CI failures until all checks pass",
+          "review": "Code Review",
+          "reviewDesc": "Review diff quality, edge cases, and maintainability",
+          "commit": "Commit",
+          "commitDesc": "Stage verified changes and create a clean commit"
+        },
+        "builder": {
+          "cancel": "Cancel"
+        },
+        "harness": {
+          "title": "Harness Policy",
+          "presetOff": "Free",
+          "presetStandard": "Standard",
+          "presetCustom": "Custom",
+          "commitPerFeature": "Commit per feature",
+          "commitStyle": "Commit format",
+          "preCommitGate": "Pre-commit gate",
+          "presetGoogleCl": "Google CL",
+          "triggerLabel": "Harness: {{preset}}"
+        }
       }
     },
     "i18n": {
@@ -24602,5 +24745,58 @@
     "dontSend": "Не отправлять",
     "sending": "Отправка…",
     "sendReport": "Отправить отчёт"
+  },
+  "tauri": {
+    "runtimeInit": {
+      "description": "Orca could not start its local runtime, so the previous connection was not reused. Retry to start it again.",
+      "hint": "If this keeps failing, the runtime log (orcad-supervisor-stderr.log) has the crash details.",
+      "retry": "Retry",
+      "title": "Local runtime failed to start"
+    }
+  },
+  "workbench": {
+    "waypoints": {
+      "asksFirst": "Asks first",
+      "close": "返回工作流配置",
+      "completed": "completed",
+      "needsYou": "waiting for you",
+      "needsYouBadge": "Needs you",
+      "running": "running",
+      "stopped": "stopped",
+      "working": "Working on step..."
+    },
+    "workflowMenu": {
+      "delete": "删除",
+      "deleteCancel": "取消",
+      "deleteConfirm": "删除",
+      "deletePresetDescription": "确定要从列表中移除预设工作流「{{name}}」吗？",
+      "deleteTitle": "删除工作流",
+      "deleteYamlDescription": "确定要删除工作流「{{name}}」吗？这将从 .orca/workflows 中移除对应的 YAML 文件。",
+      "duplicate": "创建副本",
+      "editYaml": "编辑 YAML",
+      "open": "打开工作流",
+      "rename": "重命名",
+      "saveAsYaml": "另存为 YAML 编辑"
+    },
+    "workflowNavMenu": {
+      "editHarness": "编辑 Harness 策略",
+      "newWorkflow": "新建工作流",
+      "openGuide": "YAML 语法文档",
+      "openWorkbench": "打开工作台",
+      "refresh": "刷新工作流列表",
+      "restorePresets": "恢复隐藏的预设工作流"
+    },
+    "yamlGuide": {
+      "agentModelDesc": "：可选，单独覆盖节点模型",
+      "button": "语法说明",
+      "idNameDesc": "：节点标识与显示名称",
+      "openDoc": "打开完整文档",
+      "promptDesc": "：AI 节点指令（用于 analyze/implement/accept/commit）",
+      "runDesc": "：Shell 命令（用于 cli/verify，不走大模型）",
+      "sample": "steps:\n  - id: analyze\n    name: 需求分析\n    kind: analyze\n    prompt: 分析需求并定位目标文件\n  - id: check\n    name: 类型检查\n    kind: cli\n    run: pnpm tc:web",
+      "stepsHeading": "步骤节点（steps[]）：",
+      "title": "Workflow YAML 速查",
+      "topFields": "顶层字段："
+    }
   }
 }

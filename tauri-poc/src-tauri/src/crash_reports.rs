@@ -1,3 +1,4 @@
+#![allow(dead_code)]
 use getrandom::fill as fill_random;
 use serde::{Deserialize, Serialize};
 use serde_json::{Map, Value};

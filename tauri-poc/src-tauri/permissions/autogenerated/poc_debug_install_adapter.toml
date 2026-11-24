@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-poc-debug-install-adapter"
+description = "Enables the poc_debug_install_adapter command without any pre-configured scope."
+commands.allow = ["poc_debug_install_adapter"]
+
+[[permission]]
+identifier = "deny-poc-debug-install-adapter"
+description = "Denies the poc_debug_install_adapter command without any pre-configured scope."
+commands.deny = ["poc_debug_install_adapter"]

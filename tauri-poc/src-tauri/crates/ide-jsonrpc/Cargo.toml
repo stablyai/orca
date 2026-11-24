@@ -1,0 +1,29 @@
+[package]
+name = "ide-jsonrpc"
+description = "Content-Length framed transport and JSON-RPC 2.0 peer from OpenIDEA (Apache-2.0)"
+version = "0.1.40"
+edition = "2024"
+license = "Apache-2.0"
+
+[dependencies]
+ide-core = { path = "../ide-core" }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+tokio = { version = "1", features = [
+  "rt-multi-thread",
+  "macros",
+  "sync",
+  "time",
+  "process",
+  "io-util",
+  "fs"
+] }
+tokio-util = { version = "0.7", features = ["rt"] }
+futures = "0.3"
+parking_lot = "0.12"
+thiserror = "2"
+tracing = "0.1"
+encoding_rs = "0.8"
+
+[dev-dependencies]
+tempfile = "3"
