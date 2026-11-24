@@ -23,7 +23,7 @@ import type { BotGroupRuntime } from './bot-group-runtime'
 import { settleDeadGroupMailTurns } from './bot-group-dead-mail-turns'
 import { reserveGroupTurns } from './bot-group-turn-reservation'
 import { botGroupTurnBody } from './bot-group-turn-body'
-import { assertRemotePoster, deliverRemoteAsks } from './bot-group-remote'
+import { deliverRemoteAsks } from './bot-group-remote'
 import { collectRemoteAnswers, presentPageAnswers } from './bot-group-remote-answers'
 import { remoteAsksFor } from './bot-group-remote-question'
 
@@ -59,7 +59,6 @@ export async function sendBotGroupMessage(
     if (group.members.length === 0) {
       throw new BotFailureError('groupEmptyBeforeSend')
     }
-    assertRemotePoster(groups, group, options.local === true)
     const bots = requireGroupBots(
       groups,
       group.members.map((member) => member.botId)
@@ -125,7 +124,7 @@ export async function sendBotGroupMessage(
   })
   // Marks its asks in flight before any reader can see the post.
   void deliverRemoteAsks(groups, message, remoteBodies)
-  groups.changed()
+  groups.changed(message.groupId)
   for (const turn of message.turns) {
     void deliverTurn(groups, message, turn)
   }
@@ -168,7 +167,7 @@ export function assertGroupQueuedMessageAllowed(
     assertTurnActive(groups, message, turn)
   } catch (error) {
     recordTurnError(groups, message.id, operationId, error)
-    groups.changed()
+    groups.changed(message.groupId)
     throw error
   }
 }
@@ -275,7 +274,7 @@ export async function deliverTurn(
   } finally {
     groups.store.delivered([turn.operationId])
     groups.deliveries.delete(turn.operationId)
-    groups.changed()
+    groups.changed(message.groupId)
   }
 }
 

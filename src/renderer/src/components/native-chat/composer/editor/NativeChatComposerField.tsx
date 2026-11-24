@@ -17,14 +17,12 @@ import { useLatestHandler } from '@/lib/use-latest-handler'
 import type { NativeChatComposerFieldProps } from '../../native-chat-composer-field-props'
 import { imeComposedSegment } from '@/lib/text-input/ime/ime-composed-segment'
 import { acceptNativeChatPromptSuggestion } from './native-chat-prompt-suggestion-accept'
-import { useKeepFloatingTerminalTriggerClear } from '../../../floating-terminal/trigger/floating-terminal-trigger-keep-clear'
 
 function noop(): void {}
 
 export type { NativeChatComposerFieldProps } from '../../native-chat-composer-field-props'
 
 export function NativeChatComposerField({
-  dock,
   editSession,
   draftScopeKey,
   positionTarget,
@@ -81,7 +79,8 @@ export function NativeChatComposerField({
   goalMode,
   agent,
   launchPrompt,
-  workspaceFooter
+  workspaceFooter,
+  sideChat
 }: NativeChatComposerFieldProps): React.JSX.Element {
   const t = useTranslate()
   const draftNotSaved = useNativeChatComposerDraftUnsaved(draftScopeKey)
@@ -187,8 +186,6 @@ export function NativeChatComposerField({
   // A launch prompt sits in a popover, so it takes the app's surface instead of the chat's.
   const launch = launchPrompt !== undefined
   const card = useRef<HTMLDivElement>(null)
-  // Only a visible structured chat passes its dock, so hidden chats register nothing.
-  useKeepFloatingTerminalTriggerClear(card, Boolean(dock) && !launch)
 
   return (
     <div
@@ -239,7 +236,6 @@ export function NativeChatComposerField({
               glowing && 'native-chat-composer-glow'
             )}
           >
-            {dock}
             {imageAttachments.length > 0 ? (
               <div className="mb-2 flex flex-wrap gap-2 px-1 pt-1.5">
                 {imageAttachments.map((attachment, index) => (
@@ -262,6 +258,7 @@ export function NativeChatComposerField({
               isComposing={imeEnterGesture.isComposing}
               initialValue={draft}
               disabled={disabled}
+              sideChat={sideChat}
               onChange={editorChange}
               onKeyDownCapture={editorKeyDownCapture}
               onBlur={editorBlur}

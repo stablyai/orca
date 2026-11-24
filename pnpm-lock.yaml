@@ -176,7 +176,7 @@ patchedDependencies:
   '@radix-ui/react-menu@2.1.24': a21d18697be25b83f91656d94ba7a64aaaf9eead32e404dacc23297c3363083b
   '@tiptap/extension-list@3.31.3': afc553bf4f7cb888dfcdc30d52b7fed589176fd1987736fd72fd1f4f7173f299
   '@tiptap/markdown@3.31.3': 4fe6aebb0d868ea9e8977f371bd088e96d5018ea8cf83a7ae3f3f924b87ee7cf
-  '@vscode/windows-process-tree@0.8.0': a09f2e8b2b4e73ef20c317af91f9e06c09abf62fa2c891d99b16f53047f596fd
+  '@vscode/windows-process-tree@0.8.0': 7d691799d520346f89866112e8d1436e990058a5384d35b32acf86057c4f435d
   '@xterm/addon-image@0.10.0-beta.331': f088c9207dac42844a542b9da8078be52351cee60585725ef189b9fd30f33f34
   '@xterm/addon-ligatures@0.11.0-beta.330': 47405b9994b5acf1b4e90b49250358c1ca03649854d59560e7732b72fe336920
   '@xterm/addon-search@0.17.0-beta.330': eee5338dd2621ece46e79c61ec06766cd7fadaf79ffdb24e2a8ab68e97ef31f0
@@ -191,7 +191,7 @@ patchedDependencies:
   minimatch@10.2.6: 4324868e550a69eee9addc4801001bee415e98339c9b2b88d6ab4fc6028741c6
   minimatch@9.0.9: c356feccb9147b4d6a1cc72b10270defcb95d14cb42ee74ddfe7219341417161
   monaco-editor@0.55.1: 53b71f7d8a7c00b76ffdb73ce83d18e31692f193f5fafa6a390e48f5b3fdd636
-  node-pty@1.1.0: 323de54927594a11e3e110e31d5350327ef0a9d527c25342ab9b770b89948c9b
+  node-pty@1.1.0: 73ee1bbdfe180147fbb215e330bc989b014a6090c89e9f8fa14ef5f4bac234ac
   oxlint-plugin-anti-slop@0.1.2: c10c871702365a0c2c59e9f1c5fb92df97cae5755d534c0a3d83c6368f6feafe
   pdfjs-dist@6.3.289: 424fde648e16c965ce45c55bdda49ecb3a4aa992c856900714c841c3f13f8415
   picomatch@4.0.4: 76f93480db68f4e3e460f56ccd209911ee596325ff3ae5fcf356a454d36536f8
@@ -246,7 +246,7 @@ importers:
         version: 3.0.2
       node-pty:
         specifier: ^1.1.0
-        version: 1.1.0(patch_hash=323de54927594a11e3e110e31d5350327ef0a9d527c25342ab9b770b89948c9b)
+        version: 1.1.0(patch_hash=73ee1bbdfe180147fbb215e330bc989b014a6090c89e9f8fa14ef5f4bac234ac)
       posthog-node:
         specifier: ^5.52.5
         version: 5.52.5
@@ -719,7 +719,7 @@ importers:
         version: 0.4.1
       '@vscode/windows-process-tree':
         specifier: 0.8.0
-        version: 0.8.0(patch_hash=a09f2e8b2b4e73ef20c317af91f9e06c09abf62fa2c891d99b16f53047f596fd)
+        version: 0.8.0(patch_hash=7d691799d520346f89866112e8d1436e990058a5384d35b32acf86057c4f435d)
       transcribe-cpp:
         specifier: 0.4.1
         version: 0.4.1
@@ -11546,7 +11546,7 @@ snapshots:
 
   '@vscode/ripgrep-universal@1.18.0': {}
 
-  '@vscode/windows-process-tree@0.8.0(patch_hash=a09f2e8b2b4e73ef20c317af91f9e06c09abf62fa2c891d99b16f53047f596fd)':
+  '@vscode/windows-process-tree@0.8.0(patch_hash=7d691799d520346f89866112e8d1436e990058a5384d35b32acf86057c4f435d)':
     dependencies:
       node-addon-api: 7.1.0
     optional: true
@@ -14227,7 +14227,7 @@ snapshots:
 
   node-int64@0.4.0: {}
 
-  node-pty@1.1.0(patch_hash=323de54927594a11e3e110e31d5350327ef0a9d527c25342ab9b770b89948c9b):
+  node-pty@1.1.0(patch_hash=73ee1bbdfe180147fbb215e330bc989b014a6090c89e9f8fa14ef5f4bac234ac):
     dependencies:
       node-addon-api: 7.1.1
 

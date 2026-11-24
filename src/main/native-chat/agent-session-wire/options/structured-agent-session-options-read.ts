@@ -162,7 +162,9 @@ export async function readStructuredAgentSessionOptions(
           (row) => row.isDefault
         )?.id
       : undefined
-  const saved = record?.options ?? {}
+  const stored = record?.options ?? {}
+  const saved =
+    agents.definition(agent)?.restingOptions.listedSelection?.(stored, options.models) ?? stored
   const model = saved.model ?? (options.current.model || selected.current.model || displayDefault)
   const projected = live?.projectCurrent?.({ ...saved, ...(model ? { model } : {}) })
   const reportedEffort = projected?.confirmed?.includes('effort') ? projected.effort : undefined

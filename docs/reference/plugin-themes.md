@@ -151,7 +151,7 @@ An app theme may add one image painted behind the window's translucent surfaces:
   Chat text sits on the chat canvas at that opacity, but at least `chatOpacity`; message bubbles,
   code blocks, approval and question cards, the composer and menus stay opaque. A chat split
   beside terminals in one tab stays opaque.
-- `chatOpacity` (optional, Orca 1.4.272 and later; 0.5 to 1, default 0.8) is the least opacity
+- `chatOpacity` (optional, Orca 1.4.274 and later; 0.5 to 1, default 0.8) is the least opacity
   of that chat canvas, so an image-led theme can let more of the picture through behind agent
   chats. `validate:plugin` reports a value outside 0.5 to 1; at runtime a lower value is raised to
   0.5 so chat text stays readable. Earlier releases ignore it and keep 0.8.

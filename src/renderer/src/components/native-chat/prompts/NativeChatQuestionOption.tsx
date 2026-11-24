@@ -1,7 +1,7 @@
 import { Check } from 'lucide-react'
 import { cn } from '@/lib/class-names'
 import { useTranslate } from '@/i18n/use-translate'
-import { nativeChatQuestionOptionLabel } from './native-chat-question-option-label'
+import { nativeChatQuestionOptionLabel } from '../../../../../shared/native-chat/input/questions/native-chat-question-option-label'
 
 // Stable, so it runs when the preview opens rather than on every render; the option list is height-capped.
 function revealPreview(element: HTMLPreElement | null): void {

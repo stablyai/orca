@@ -26,6 +26,7 @@ export function ClientHostedBrowserPageStandIn({
   if (unavailable) {
     return (
       <ClientHostedBrowserUnavailableNotice
+        browserPageId={browserPageId}
         runtimeEnvironmentId={runtimeEnvironmentId}
         worktreeId={worktreeId}
         reopenUrl={reopenUrl}
