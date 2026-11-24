@@ -46,12 +46,6 @@ const ask = worker(3, 'ORCA-20', 'Migrate the orders schema', 'needs-you', 6, {
   changedAt: minutes(1),
   question: 'Approve: run the migration against the staging copy of the orders database?'
 })
-// A long question clamps to three lines; the full text stays in the row's tooltip.
-const longAsk = {
-  ...ask,
-  question:
-    'Approve: run the migration against the staging copy of the orders database? It rewrites about 2.4 million rows and holds a table lock for roughly 40 seconds.'
-}
 const failed = worker(4, 'ORCA-21', 'Split the dock read model', 'failed', 8, {
   changedAt: minutes(3),
   reason: 'Typecheck failed: 3 errors in worker-dock-read.ts',
@@ -64,25 +58,6 @@ const rows = [
   ask,
   failed
 ]
-const longRows = [
-  longAsk,
-  failed,
-  ...[
-    'Cache the branch list per repository',
-    'Drop the duplicate status poll',
-    'Batch the sidebar badge writes',
-    'Stream the diff instead of buffering it',
-    'Reuse the parsed config between tabs',
-    'Coalesce terminal resize events',
-    'Skip hidden pane layout passes',
-    'Index session history by worktree',
-    'Defer the plugin manifest scan',
-    'Trim the startup font preload',
-    'Share one watcher per repository',
-    'Avoid re-sorting the unchanged roster'
-  ].map((title, index) => worker(10 + index, `ORCA-${30 + index}`, title, 'running', 4 + index))
-]
-
 function dock(expanded: boolean, list: readonly WorkerDockRowView[]) {
   const workerRows = new Map(list.map((row) => [row.id, row]))
   const workerIdentities = list.map(
@@ -111,32 +86,9 @@ function dock(expanded: boolean, list: readonly WorkerDockRowView[]) {
         onStop={() => {}}
         workerRows={workerRows}
         workerIdentities={workerIdentities}
+        onWorkerAction={noop}
       />
     </NativeChatWorkerDockFrame>
-  )
-}
-
-function botChat(
-  expanded: boolean,
-  list: readonly WorkerDockRowView[] = rows,
-  note = 'Both fix workers are running in parallel; ORCA-20 needs your approval.',
-  footer?: ReactNode
-) {
-  return (
-    <div
-      className="native-chat-appearance flex flex-col gap-2 bg-chat-canvas p-3"
-      style={nativeChatAppearanceStyle({})}
-    >
-      <p className="text-xs text-muted-foreground">Perf Issue · Home Chat</p>
-      <p className="text-sm text-chat-foreground">{note}</p>
-      <div className="rounded-xl border border-chat-composer-border bg-chat-composer-surface p-1.5 shadow-xs">
-        {dock(expanded, list)}
-        {footer}
-        <p className="px-2 py-2 text-sm text-muted-foreground">
-          Ask anything, / for commands, @ for context
-        </p>
-      </div>
-    </div>
   )
 }
 
@@ -145,7 +97,7 @@ const ime = { isComposing: () => false, ownsKeyDown: () => false, reset: noop, s
 
 // The real message box and floating panel button in a full-height chat pane; the shot's window
 // width decides where the button lands, so capture it with the viewport set to the fixture width.
-function composerChat(expanded: boolean) {
+function composerChat(expanded: boolean, footer?: ReactNode) {
   return (
     <div
       data-native-chat-root=""
@@ -159,7 +111,12 @@ function composerChat(expanded: boolean) {
         </p>
       </div>
       <NativeChatComposerField
-        dock={dock(expanded, rows)}
+        dock={
+          <>
+            {dock(expanded, rows)}
+            {footer}
+          </>
+        }
         draftScopeKey="fixture:worker-dock-composer"
         textareaRef={{ current: null }}
         draft="Ship both fixes once ORCA-20 is approved"
@@ -213,52 +170,6 @@ function forgetSavedPosition() {
   localStorage.removeItem(FLOATING_TERMINAL_TRIGGER_POSITION_STORAGE_KEY)
 }
 
-// Scrolls the roster part-way, then waits out its 100 ms settle so the shot shows where it rests.
-async function scrollMidway(frame: HTMLElement) {
-  const viewport = frame.querySelector<HTMLElement>(
-    '[data-native-chat-background-tasks] [role="region"]'
-  )
-  if (!viewport) {
-    throw new Error('Worker roster viewport not found')
-  }
-  viewport.scrollTop = Math.round((viewport.scrollHeight - viewport.clientHeight) / 2)
-  viewport.dispatchEvent(new Event('scroll'))
-  await new Promise((resolve) => setTimeout(resolve, 400))
-}
-
-export const botHomeChatFolded = defineFixture({ width: 720, render: () => botChat(false) })
-
-export const botHomeChatOpen = defineFixture({ width: 720, render: () => botChat(true) })
-
-export const botHomeChatNarrowFolded = defineFixture({ width: 390, render: () => botChat(false) })
-
-export const botHomeChatNarrowOpen = defineFixture({ width: 390, render: () => botChat(true) })
-
-export const botHomeChatSmallFolded = defineFixture({ width: 320, render: () => botChat(false) })
-
-export const botHomeChatSmallOpen = defineFixture({ width: 320, render: () => botChat(true) })
-
-// Nothing waits on you, so the folded header shows the failed state icon instead of the robot.
-const failedOnly = () => botChat(false, [failed], 'ORCA-21 stopped with a typecheck failure.')
-
-export const failedOnlyFolded = defineFixture({ width: 720, render: failedOnly })
-
-export const failedOnlyNarrowFolded = defineFixture({ width: 390, render: failedOnly })
-
-export const failedOnlySmallFolded = defineFixture({ width: 320, render: failedOnly })
-
-export const longListMidScroll = defineFixture({
-  width: 720,
-  render: () => botChat(true, longRows),
-  interact: scrollMidway
-})
-
-export const longListNarrowMidScroll = defineFixture({
-  width: 390,
-  render: () => botChat(true, longRows),
-  interact: scrollMidway
-})
-
 export const composerDefault390 = defineFixture({
   width: 390,
   setup: forgetSavedPosition,
@@ -296,7 +207,7 @@ async function focusFirstStop(frame: HTMLElement) {
 
 export const stopFocused360 = defineFixture({
   width: 360,
-  render: () => botChat(true),
+  render: () => composerChat(true),
   interact: focusFirstStop
 })
 
@@ -305,10 +216,8 @@ export const stopFocused360 = defineFixture({
 export const retryAfterSettle360 = defineFixture({
   width: 360,
   render: () =>
-    botChat(
+    composerChat(
       true,
-      rows,
-      'Both fix workers are running in parallel; ORCA-20 needs your approval.',
       <WorkerDockFailureStrip failure={{ message: 'Already stopped' }} onDismiss={noop} />
     )
 })
@@ -348,10 +257,8 @@ async function pressFocusedRetry(frame: HTMLElement) {
 export const retryFocusAfterSettle360 = defineFixture({
   width: 360,
   render: () =>
-    botChat(
+    composerChat(
       true,
-      rows,
-      'Both fix workers are running in parallel; ORCA-20 needs your approval.',
       <RetryThenSettled />
     ),
   interact: pressFocusedRetry

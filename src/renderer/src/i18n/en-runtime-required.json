@@ -3131,6 +3131,8 @@
         "monitorCount_other": "{{count}} monitors",
         "newQuestions_one": "{{count}} new worker question waiting on you",
         "newQuestions_other": "{{count}} new worker questions waiting on you",
+        "pillLabel_one": "{{count}} worker, latest: {{title}}",
+        "pillLabel_other": "{{count}} workers, latest: {{title}}",
         "taskCount_one": "{{count}} task",
         "taskCount_other": "{{count}} tasks",
         "workerCount_one": "{{count}} worker",
