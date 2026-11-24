@@ -213,7 +213,7 @@ export abstract class RuntimeSleptAgentWakes extends RuntimeUnmountedSleptAgents
     if (record && this.leaves.has(this.getLeafKey(record.tabId, record.leafId))) {
       return 'open'
     }
-    const leaf = this.leavesByLeafId.find(this.leaves, leafId)
+    const leaf = this.findLeafById(leafId)
     if (leaf) {
       // A reload re-mints slept names lazily; another name in the pane means this one is gone. A pane
       // mounted for its wake is unnamed until it resumes under the name its record saved.

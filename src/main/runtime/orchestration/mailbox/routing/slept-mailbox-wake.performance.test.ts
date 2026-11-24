@@ -367,3 +367,54 @@ it('one pane going to sleep retries only its own failed wake', async () => {
     db.close()
   }
 })
+
+it.each([100, 1_000])(
+  'one pane’s availability retry reads none of %i tracked mailboxes',
+  async (count) => {
+    vi.useFakeTimers({ toFake: ['setTimeout', 'Date'] })
+    const db = new OrchestrationDb(':memory:')
+    const sleepingAgentSessionsByPaneKey: Record<string, SleepingAgentSessionRecord> = {}
+    for (let index = 0; index < count; index += 1) {
+      const record = { ...sleeper(index, `folder:${index}`), restoreOnTabOpenOnly: false }
+      sleepingAgentSessionsByPaneKey[record.paneKey] = record
+      const run = db.createRun({
+        objective: 'owed',
+        coordinatorHandle: null,
+        coordinatorPaneKey: record.paneKey
+      })
+      db.insertMessage({ runId: run.id, from: 'worker', to: `run:${run.id}`, subject: 'owed' })
+    }
+    const session = { ...getDefaultWorkspaceSession(), sleepingAgentSessionsByPaneKey }
+    const runtime = new OrcaRuntimeService(
+      partialRuntimeStore({
+        getWorkspaceSession: () => session,
+        getWorkspaceSessionHostIds: () => ['local'],
+        onWorkspaceSessionWritten: () => () => {}
+      })
+    )
+    const resumeSleepingAgents = async () => false
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the pass under test calls only resumeSleepingAgents; every other member is a no-op.
+    const notifier = new Proxy(
+      {},
+      { get: (_target, key) => (key === 'resumeSleepingAgents' ? resumeSleepingAgents : vi.fn()) }
+    ) as RuntimeNotifier
+    try {
+      runtime.setOrchestrationDb(db)
+      runtime.setNotifier(notifier)
+      runtime.syncWindowGraph(1, { tabs: [], leaves: [] })
+      runtime.retrySleptMailboxWakes()
+      await vi.advanceTimersByTimeAsync(2_000)
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the tracked-mailbox read is the work under test.
+      const wakes = (runtime as unknown as { sleptMailboxWake: SleptMailboxWake }).sleptMailboxWake
+      const tracked = vi.spyOn(wakes, 'trackedMailboxes')
+      for (let retry = 0; retry < 10; retry += 1) {
+        runtime.retrySleptMailboxWakes(sleeper(0, 'folder:0').paneKey)
+      }
+      await vi.advanceTimersByTimeAsync(2_000)
+      expect(tracked).not.toHaveBeenCalled()
+    } finally {
+      runtime.setNotifier(null)
+      db.close()
+    }
+  }
+)

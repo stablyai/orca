@@ -49,3 +49,32 @@ it.each([100, 1_000])(
     expect(buckets.size).toBe(0)
   }
 )
+
+it.each([100, 1_000])(
+  'session writes that leave a host’s sleep records unchanged list none of %i saved hosts',
+  (hosts) => {
+    const index = new SleepingMailRecordIndex()
+    const saved = Array.from({ length: hosts }, (_, host) => `ssh:target-${host}`)
+    let listed = 0
+    const live = () => {
+      listed += saved.length
+      return saved
+    }
+    index.sessionWritten(
+      'local',
+      live,
+      () => NONE,
+      () => {}
+    )
+    listed = 0
+    for (let write = 0; write < 10; write++) {
+      index.sessionWritten(
+        'local',
+        live,
+        () => NONE,
+        () => {}
+      )
+    }
+    expect(listed).toBe(0)
+  }
+)

@@ -59,6 +59,19 @@ it.each([100, 1_000])(
       }
       // Each check reads the newest Run once and the one Run with mail, not every retained Run.
       expect(runRows).toBeLessThanOrEqual(2 * checks)
+      // The mail check starts from mail awaiting delivery and looks each Run up by key: no Run scan.
+      const prepare = vi.spyOn(db.db, 'prepare')
+      db.runIdsWithPointerWorkBoundToPane(PANE)
+      const sql = String(prepare.mock.calls.at(-1)?.[0])
+      prepare.mockRestore()
+      const plan = db.db
+        .prepare(`EXPLAIN QUERY PLAN ${sql}`)
+        .all('11111111-1111-4111-8111-111111111111')
+        .map((row) => String(row.detail))
+      expect(plan.some((step) => /idx_messages_/.test(step))).toBe(true)
+      expect(plan.filter((step) => /\bruns\b/.test(step))).toEqual([
+        expect.stringMatching(/^SEARCH runs USING .*\(id=\?\)$/)
+      ])
     } finally {
       db.close()
       vi.restoreAllMocks()

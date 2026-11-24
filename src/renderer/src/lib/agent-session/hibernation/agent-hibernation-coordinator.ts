@@ -28,6 +28,7 @@ import {
   resolveAgentHibernationRuntimeOwner
 } from './agent-hibernation-host-evidence'
 import type { HostPtyEvidence } from './agent-hibernation-host-evidence'
+import type { AgentHibernationRuntimeOwner } from './agent-hibernation-runtime-owner'
 import {
   getWindowParkVisible,
   subscribeWindowParkVisibility
@@ -65,8 +66,8 @@ const MAX_REFUSED_RETRY_MS = 16 * 60_000
 const paneTabs = new ReplacedListLookup<TerminalTab>((tab) => tab.id)
 const paneBindings = new ReplacedListLookup<string>((ptyId) => ptyId)
 
-/** Narrows a re-check to the one pane about to sleep. */
-type TargetPane = { tabId: string; paneKey: string }
+/** Narrows a re-check to the one pane about to sleep, under the owner its sleep was asked of. */
+type TargetPane = { tabId: string; paneKey: string; owner: AgentHibernationRuntimeOwner }
 
 const coordinator: AgentHibernationCoordinatorState = {
   interval: null,
@@ -105,7 +106,7 @@ function snapshotFromState(
     runtimeLivenessRequiredWorktreeIds: [
       ...new Set([
         ...hostEvidence.runtimeLivenessRequiredWorktreeIds,
-        ...getRuntimeLivenessTargetWorktrees(state, targetWorktreeId).keys()
+        ...getRuntimeLivenessTargetWorktrees(state, targetWorktreeId, pane?.owner).keys()
       ])
     ],
     // A one-pane check reads only its own process's driver and its own input stamp.
@@ -153,7 +154,8 @@ async function currentCandidates(now: number, targetWorktreeId?: string, pane?: 
   const hostEvidence = await collectHostPtyEvidence(
     useAppStore.getState(),
     targetWorktreeId,
-    pane?.paneKey
+    pane?.paneKey,
+    pane?.owner
   )
   const freshState = useAppStore.getState()
   // Sample binding ages from the plan’s state so a first-seen pane cannot already qualify as long-idle.
@@ -170,7 +172,8 @@ async function currentCandidates(now: number, targetWorktreeId?: string, pane?: 
     snapshotFromState(freshState, now, hostEvidence, targetWorktreeId, pane)
   )
     .filter((candidate) => {
-      const owner = resolveAgentHibernationRuntimeOwner(freshState, candidate.worktreeId)
+      const owner =
+        pane?.owner ?? resolveAgentHibernationRuntimeOwner(freshState, candidate.worktreeId)
       return (
         owner.kind === 'non-runtime' ||
         (owner.kind === 'runtime' && candidate.expectedRuntimePtyIds.length === 1)
@@ -195,11 +198,15 @@ async function hibernatePaneIfStillEligible(
     return
   }
   // Only the pane’s owner can authorize teardown; global sweeps cause C×W runtime listings for C candidates.
+  // Both checks and the stop share one owner: the stop is asked of it, so an unrelated edit during
+  // admission doesn't settle a two-host workspace's owner again.
+  const owner = resolveAgentHibernationRuntimeOwner(useAppStore.getState(), worktreeId)
   const stillEligible = async () =>
     (
       await currentCandidates(coordinator.now(), worktreeId, {
         tabId: confirmedCandidate.tabId,
-        paneKey: confirmedCandidate.paneKey
+        paneKey: confirmedCandidate.paneKey,
+        owner
       })
     ).some(
       (candidate) =>
@@ -212,7 +219,6 @@ async function hibernatePaneIfStillEligible(
   coordinator.shuttingDownCandidateIds.add(id)
   try {
     const state = useAppStore.getState()
-    const owner = resolveAgentHibernationRuntimeOwner(state, worktreeId)
     await trackAgentPaneSleep(confirmedCandidate.paneKey, () =>
       state.shutdownCompletedAgentPaneForHibernation(worktreeId, {
         paneKey: confirmedCandidate.paneKey,

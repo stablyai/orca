@@ -141,6 +141,26 @@ export class SleepingMailRecordIndex {
     return host === null ? new Set([...current, ...this.hosts.keys()]) : [host]
   }
 
+  /** A session write re-indexes its host, or every host when unnamed; returns each host's changed
+   *  panes. A named host whose records map is unchanged is skipped before any host is listed. */
+  sessionWritten(
+    hostId: string | null,
+    live: () => readonly string[],
+    recordsOf: (host: string) => Readonly<Record<string, SleepingAgentSessionRecord>>,
+    changed: (pane: string) => void
+  ): Set<string>[] {
+    const written: Set<string>[] = []
+    if (hostId !== null && this.inputs.get(hostId) === recordsOf(hostId)) {
+      return written
+    }
+    const current = live()
+    for (const host of this.affectedHosts(hostId, current)) {
+      written.push(this.refresh(host, recordsOf(host), changed))
+      this.forgetUnlessLive(host, current)
+    }
+    return written
+  }
+
   /** Re-indexes one host's records; returns the panes whose wake identity changed. A session write
    *  already copies every record, so this pass reads a few fields per record and builds nothing. */
   refresh(

@@ -1,6 +1,7 @@
 import { makePaneKey, parsePaneKey } from '../../../../../shared/workspace-layout/stable-pane-id'
 import type { RuntimeLeafRecord } from '../../../terminal/records/runtime-terminal-state-records'
 import { LeafIdIndex } from './leaf-id-index'
+import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../../shared/workspace-layout/layout-owner-switch'
 import { mailWakeObligation } from './mail-wake-obligation'
 import { RuntimeSleptMailboxWakes } from './slept-mailbox-runtime'
 import { unmountedSleptLeaf } from './unmounted-slept-leaf'
@@ -8,7 +9,22 @@ import { unmountedSleptLeaf } from './unmounted-slept-leaf'
 /** A slept agent answers by its handle whether or not the window has mounted its tab: an unmounted
  *  pane is found through the handle its saved sleep record names. */
 export abstract class RuntimeUnmountedSleptAgents extends RuntimeSleptMailboxWakes {
-  protected readonly leavesByLeafId = new LeafIdIndex()
+  private readonly leavesByLeafId = new LeafIdIndex()
+
+  /** The mounted leaf with this stable id: the identity's leaf-id candidates when it keeps them, so a
+   *  graph replacement builds nothing; otherwise one index per graph map. */
+  protected findLeafById(leafId: string): RuntimeLeafRecord | undefined {
+    if (ORCA_LAYOUT_OWNER_IS_MAIN) {
+      return this.leavesByLeafId.find(this.leaves, leafId)
+    }
+    for (const key of this.terminalIdentity.paneCandidates.leavesForId(leafId)) {
+      const leaf = this.leaves.get(key)
+      if (leaf?.leafId === leafId) {
+        return leaf
+      }
+    }
+    return undefined
+  }
 
   /** The pane an Agent-slept handle names: still on its stopped process, and not under the user's own Sleep. */
   protected sleptAgentPaneForHandle(
@@ -38,7 +54,7 @@ export abstract class RuntimeUnmountedSleptAgents extends RuntimeSleptMailboxWak
       record?.terminalHandle === handle &&
       pane &&
       mailWakeObligation(record) !== 'manual' &&
-      !this.leavesByLeafId.find(this.leaves, pane.leafId)
+      !this.findLeafById(pane.leafId)
       ? { paneKey, record, pane }
       : null
   }
@@ -52,9 +68,22 @@ export abstract class RuntimeUnmountedSleptAgents extends RuntimeSleptMailboxWak
     return unmountedSleptLeaf(slept.record, slept.pane)
   }
 
-  /** Every slept agent whose tab isn't mounted, for the terminal list; a scoped list reads its workspace's. */
-  protected *unmountedSleptAgents(worktreeId?: string): Iterable<RuntimeLeafRecord> {
+  /** Every slept agent whose tab isn't mounted, for the terminal list: a workspace-scoped list
+   *  reads its workspace's sleepers, and a list for named handles reads only those. */
+  protected *unmountedSleptAgents(
+    worktreeId?: string,
+    handles?: readonly string[]
+  ): Iterable<RuntimeLeafRecord> {
     this.watchSleepingMail()
+    if (handles) {
+      for (const handle of new Set(handles)) {
+        const leaf = this.unmountedSleptAgentLeaf(handle)
+        if (leaf && (!worktreeId || leaf.worktreeId === worktreeId)) {
+          yield leaf
+        }
+      }
+      return
+    }
     const records = worktreeId
       ? [...this.sleepingRecordIndex.panesIn(worktreeId)].flatMap(
           (pane) => this.sleepingRecords.get(pane) ?? []

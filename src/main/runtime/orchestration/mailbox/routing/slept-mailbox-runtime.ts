@@ -112,13 +112,9 @@ export abstract class RuntimeSleptMailboxWakes extends RuntimeMailWakeAdmission 
     }
   }
 
-  private refreshSleepingRecords(host: string): Set<string> {
-    return this.sleepingRecordIndex.refresh(
-      host,
-      this.store?.getWorkspaceSession?.(host)?.sleepingAgentSessionsByPaneKey ?? NO_RECORDS,
-      (pane) => this.sleptMailboxWake.refreshPane(pane)
-    )
-  }
+  private readonly sleptRecordsOf = (host: string) =>
+    this.store?.getWorkspaceSession?.(host)?.sleepingAgentSessionsByPaneKey ?? NO_RECORDS
+  private readonly reindexSleptPane = (pane: string) => this.sleptMailboxWake.refreshPane(pane)
 
   private readonly sleepingMailCrewWatch = new SleepingMailCrewWatch(
     () => this.crewChanges,
@@ -132,7 +128,7 @@ export abstract class RuntimeSleptMailboxWakes extends RuntimeMailWakeAdmission 
     }
     this.watchingSleepingMail = true
     for (const host of this.store?.getWorkspaceSessionHostIds?.() ?? ['local']) {
-      this.refreshSleepingRecords(host)
+      this.sleepingRecordIndex.refresh(host, this.sleptRecordsOf(host), this.reindexSleptPane)
     }
     this.sleepingRecordIndex.finishInitialRead()
     retryOnHostConnect(
@@ -143,10 +139,10 @@ export abstract class RuntimeSleptMailboxWakes extends RuntimeMailWakeAdmission 
     this.subscribeAgentStatusRowChanges((paneKey) => this.watchMailWakeInvocations(paneKey))
     this.sleepingMailCrewWatch.sync(this.owesAnySleepingMail())
     this.store?.onWorkspaceSessionWritten?.((hostId) => {
-      const live = this.store?.getWorkspaceSessionHostIds?.() ?? ['local']
-      for (const host of this.sleepingRecordIndex.affectedHosts(hostId, live)) {
-        const changed = this.refreshSleepingRecords(host)
-        this.sleepingRecordIndex.forgetUnlessLive(host, live)
+      const live = () => this.store?.getWorkspaceSessionHostIds?.() ?? ['local']
+      const index = this.sleepingRecordIndex
+      const written = index.sessionWritten(hostId, live, this.sleptRecordsOf, this.reindexSleptPane)
+      for (const changed of written) {
         for (const pane of changed) {
           this.watchMailWakeInvocations(pane)
           this.onSleepingRecordChanged(pane)
@@ -229,8 +225,8 @@ export abstract class RuntimeSleptMailboxWakes extends RuntimeMailWakeAdmission 
       this.resetHeldWorktreesPublication()
     }
     this.getExistingOrchestrationDb()
-    const tracked = { mailboxes: this.sleptMailboxWake.trackedMailboxes(), panes: [] }
-    const scope = paneKey !== undefined ? { panes: [paneKey] } : hostEdge ? tracked : undefined
+    const tracked = () => ({ mailboxes: this.sleptMailboxWake.trackedMailboxes(), panes: [] })
+    const scope = paneKey !== undefined ? { panes: [paneKey] } : hostEdge ? tracked() : undefined
     this.publishSleepingMail(scope, true)
   }
 

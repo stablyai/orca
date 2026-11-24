@@ -9,6 +9,7 @@ import {
   isEquivalentPaneKey
 } from '../../db/pane-key-match'
 import { potentiallyLiveRemoteAttachmentSql } from '../../db/federation/remote-attachment-liveness'
+import { mailboxesWithMailSql, mailboxOwnerIdSql } from '../../db/messages/mailboxes-with-mail-sql'
 
 /** The Runs, Dispatches and attachments this pane owns that hold mail, old Runs included. */
 function sleepingMailOwnerMailboxes(
@@ -22,7 +23,6 @@ function sleepingMailOwnerMailboxes(
   const branches = [
     {
       table: 'runs',
-      index: 'idx_runs_coordinator_pane_leaf',
       key: RUN_PANE_KEY_MATCH_SUFFIX_SQL,
       id: 'id',
       owner: 'coordinator_pane_key',
@@ -30,17 +30,17 @@ function sleepingMailOwnerMailboxes(
     },
     {
       table: 'dispatch_contexts',
-      index: 'idx_dispatch_assignee_pane_leaf',
       key: DISPATCH_PANE_KEY_MATCH_SUFFIX_SQL,
       id: 'id',
+      index: 'idx_dispatch_assignee_pane_leaf',
       owner: 'assignee_pane_key',
       live: "assignee_pane_key IS NOT NULL AND status IN ('pending', 'dispatched')"
     },
     {
       table: 'remote_dispatch_attachments',
-      index: 'idx_remote_dispatch_attachments_active_pane_suffix',
       key: REMOTE_ATTACHMENT_PANE_KEY_MATCH_SUFFIX_SQL,
       id: 'dispatch_id',
+      index: 'idx_remote_dispatch_attachments_active_pane_suffix',
       owner: 'pane_key',
       live: `pane_key IS NOT NULL AND ${remoteLive}`
     }
@@ -48,14 +48,21 @@ function sleepingMailOwnerMailboxes(
   const found: string[] = []
   for (const branch of branches) {
     const prefix = branch.table === 'runs' ? 'run:' : 'dispatch:'
-    // One statement per owner kind: the mail check runs inside SQLite, not once per owner row here.
+    // One statement per owner kind. Live Dispatches and attachments come from their partial
+    // indexes; a pane's Runs are history, so they're found from mail awaiting delivery (CROSS JOIN
+    // keeps it outer) by primary key, and Runs without mail are never visited.
+    const owners = branch.index
+      ? `FROM ${branch.table} INDEXED BY ${branch.index} WHERE ${branch.key} = ? AND ${branch.live}
+          AND EXISTS (SELECT 1 FROM messages INDEXED BY idx_messages_mail_wake_candidate
+            WHERE to_handle = '${prefix}' || ${branch.table}.${branch.id} AND read = 0
+              AND delivered_at IS NULL AND pointer_enter_pending = 0
+              AND delivery_contract = 'current_delivery')`
+      : `FROM (${mailboxesWithMailSql(prefix, false)}) AS mail
+          CROSS JOIN ${branch.table} ON ${branch.table}.${branch.id} = ${mailboxOwnerIdSql(prefix)}
+          WHERE ${branch.key} = ? AND ${branch.live}`
     const rows = db.db
-      .prepare(`SELECT '${prefix}' || ${branch.id} AS mailbox, ${branch.owner} AS owner
-      FROM ${branch.table} INDEXED BY ${branch.index} WHERE ${branch.key} = ? AND ${branch.live}
-        AND EXISTS (SELECT 1 FROM messages INDEXED BY idx_messages_mail_wake_candidate
-          WHERE to_handle = '${prefix}' || ${branch.table}.${branch.id} AND read = 0
-            AND delivered_at IS NULL AND pointer_enter_pending = 0
-            AND delivery_contract = 'current_delivery')`)
+      .prepare(`SELECT '${prefix}' || ${branch.table}.${branch.id} AS mailbox,
+        ${branch.owner} AS owner ${owners}`)
       .all(suffix)
     for (const row of rows) {
       if (
@@ -74,8 +81,8 @@ function sleepingMailOwnerMailboxes(
 }
 
 // Run and Dispatch mail reaches a sleeper on arrival, and after a restart through the restored-mail
-// repoint, so re-checks walk a pane's owner history (which grows with every Run it created) only
-// for the few panes holding a wake attempt, whose custody settles once that mail is taken.
+// repoint, so re-checks read a pane's owners with mail only for the few panes holding a wake
+// attempt, whose custody settles once that mail is taken.
 
 /** A sleeping pane's inboxes to re-check: its saved handle's (mail sent while it went to sleep
  *  found no record to wake), and its owned Runs and Dispatches while it holds a wake attempt. */
