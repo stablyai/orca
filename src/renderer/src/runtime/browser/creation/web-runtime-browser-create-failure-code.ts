@@ -31,3 +31,14 @@ const REPORTED_BROWSER_CREATE_FAILURE_CODES = [
 export function browserCreateFailureCode(error: unknown): string | null {
   return readRuntimeRpcErrorCode(error, REPORTED_BROWSER_CREATE_FAILURE_CODES)
 }
+
+/** What a failed remote open logs: only the known code for user links, whose errors can carry the URL. */
+export function browserCreateErrorForLog(
+  failureLogMode: 'details' | 'operation-only' | undefined,
+  error: unknown
+): string {
+  if (failureLogMode === 'operation-only') {
+    return browserCreateFailureCode(error) ?? 'no code'
+  }
+  return error instanceof Error ? error.message : String(error)
+}
