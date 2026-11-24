@@ -103,7 +103,7 @@ function answeredLines(
   const picked = shape.decisions.findIndex(
     (decision, index) =>
       isOpen(index) &&
-      decision.replies.some((option) => botItemIsQuickReplyText(shape, decision, option, text))
+      decision.replies.some((option) => botItemIsQuickReplyText(shape, index, option, text))
   )
   if (picked !== -1) {
     return { lines: [picked], byOrder: false }

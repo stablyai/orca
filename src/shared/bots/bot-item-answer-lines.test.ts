@@ -71,3 +71,20 @@ it('reads answers and drafts written with the question line older builds wrote',
   )?.answers
   expect(answers?.map((event) => event?.id ?? null)).toEqual([null, 'e2'])
 })
+
+it("keeps a line on the question it names when another's old line reads the same", () => {
+  const shape = botItemQuestionShape({
+    ask: {
+      questions: [
+        { prompt: 'Keep `_private_` helper?', options: [{ label: 'No' }] },
+        { prompt: 'Keep private helper?', options: [{ label: 'No' }] }
+      ]
+    }
+  })
+  const held = botItemHeldAnswersText(shape, [null, 'drop it'])
+  expect(botItemNamedAnswers(shape, held)).toEqual([null, 'drop it'])
+  expect(botItemPickedReplies(shape, { text: 'Keep private helper? → No' })).toEqual([
+    [],
+    [{ label: 'No', recommended: false }]
+  ])
+})

@@ -5,7 +5,7 @@
 // to it bumps WAITING_ASK_RULES (src/main/bots/bot-item-waiting-ask-keep.ts).
 import {
   botItemPickedReplies,
-  botItemQuestionLeads,
+  botItemLineHeads,
   botItemQuestionLine,
   botItemQuickReplyText,
   type BotItemQuestionShape
@@ -18,14 +18,10 @@ import { stripSentImagePromptMarkers } from '../native-chat/transcript/images/na
  *  questions whose first lines read the same take their lines in the ask's order, a bare "Question →"
  *  keeping an open one's place. */
 export function botItemNamedAnswers(shape: BotItemQuestionShape, text: string): (string | null)[] {
-  // Each question's leads as this build and older ones wrote them; a line takes the first that it starts with.
-  const leads = shape.decisions.map((decision) =>
-    botItemQuestionLeads(decision.question).map((lead) => `${lead} →`)
-  )
   const answers: (string | null)[] = shape.decisions.map(() => null)
   const taken = shape.decisions.map(() => false)
   for (const line of text.split('\n').map((l) => l.trim())) {
-    const heads = leads.map((options) => options.find((head) => line.startsWith(head)))
+    const heads = botItemLineHeads(shape, line)
     let best = -1
     heads.forEach((head, index) => {
       if (head === undefined) {

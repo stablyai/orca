@@ -149,16 +149,34 @@ export function botItemQuickReplyText(
     : reply.label
 }
 
-/** Whether `text` is what a quick reply posts, as this build or an older one wrote it. */
+/** Per question of the ask, the "Question →" head `line` starts with, else undefined. Older builds'
+ *  heads count only when none of this build's does, so one question's old head never takes a line
+ *  another's current head names. */
+export function botItemLineHeads(
+  shape: BotItemQuestionShape,
+  line: string
+): (string | undefined)[] {
+  const heads = shape.decisions.map((decision) =>
+    botItemQuestionLeads(decision.question).map((lead) => `${lead} →`)
+  )
+  const current = heads.map(([head]) => (line.startsWith(head) ? head : undefined))
+  return current.some(Boolean)
+    ? current
+    : heads.map((older) => older.slice(1).find((head) => line.startsWith(head)))
+}
+
+/** Whether `text` is what question `index`'s quick reply posts, as this build or an older one wrote it. */
 export function botItemIsQuickReplyText(
   shape: BotItemQuestionShape,
-  decision: BotItemDecision,
+  index: number,
   reply: BotItemQuickReply,
   text: string
 ): boolean {
-  return shape.decisions.length > 1
-    ? botItemQuestionLeads(decision.question).some((lead) => text === `${lead} → ${reply.label}`)
-    : text === reply.label
+  if (shape.decisions.length <= 1) {
+    return text === reply.label
+  }
+  const head = botItemLineHeads(shape, text)[index]
+  return head !== undefined && text === `${head} ${reply.label}`
 }
 
 /** The quick replies an owner's reply picked for each question line, none where they wrote their own
@@ -178,20 +196,20 @@ export function botItemPickedReplies(
       return decision.replies.filter((_, at) => picks.includes(at))
     }
     const quick = decision.replies.filter((option) =>
-      lines.some((line) => botItemIsQuickReplyText(shape, decision, option, line))
+      lines.some((line) => botItemIsQuickReplyText(shape, index, option, line))
     )
-    return quick.length > 0 || !decision.multi ? quick : multiPicks(shape, decision, lines)
+    return quick.length > 0 || !decision.multi ? quick : multiPicks(shape, index, lines)
   })
 }
 
 /** A pick-several line's picks sent as one answer, "A, B" (what botItemAnswersText writes for them). */
 function multiPicks(
   shape: BotItemQuestionShape,
-  decision: BotItemDecision,
+  index: number,
   lines: readonly string[]
 ): BotItemQuickReply[] {
-  const heads = botItemQuestionLeads(decision.question).map((lead) => `${lead} →`)
-  const headOf = (at: string): string | undefined => heads.find((head) => at.startsWith(head))
+  const decision = shape.decisions[index]
+  const headOf = (at: string): string | undefined => botItemLineHeads(shape, at)[index]
   const line = shape.decisions.length > 1 ? lines.find((at) => headOf(at)) : lines[0]
   const head = line === undefined ? undefined : headOf(line)
   const words = (head ? line?.slice(head.length).trim() : line) ?? ''
