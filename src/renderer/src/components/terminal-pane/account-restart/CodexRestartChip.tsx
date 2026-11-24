@@ -148,8 +148,8 @@ function LoudRestartOverlay({
         <div id={bodyId} className="text-sm leading-relaxed text-muted-foreground">
           {manual
             ? t(
-                'auto.components.CodexRestartChip.0c5d7e3a91',
-                "Can't restart automatically. Exit Codex and start it again to switch."
+                'auto.components.CodexRestartChip.5b8e1d2f40',
+                "Can't restart automatically. Exit Codex and start it again."
               )
             : t(
                 'auto.components.CodexRestartChip.9375620cc3',

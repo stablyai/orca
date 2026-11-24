@@ -3342,7 +3342,7 @@
         "c72a5fb234": "Restart",
         "d3e8a1f4b2": "Account switched",
         "9375620cc3": "Restart this session to use {{value0}}. It stays on the previous account until you do.",
-        "0c5d7e3a91": "Can't restart automatically. Exit Codex and start it again to switch.",
+        "5b8e1d2f40": "Can't restart automatically. Exit Codex and start it again.",
         "7f2e9b4c10": "Dismiss",
         "6133594b12": "Keep old account"
       },
