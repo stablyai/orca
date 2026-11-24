@@ -1,6 +1,8 @@
 // Pre-handoff gate: runs the checks a change's paths need, in parallel, printing failures in full.
 import { execFileSync, spawnSync } from 'node:child_process'
 import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs'
+import { setMaxListeners } from 'node:events'
+import { createRequire } from 'node:module'
 import { availableParallelism } from 'node:os'
 import path from 'node:path'
 import process from 'node:process'
@@ -314,6 +316,26 @@ function buildTasks(root, plan, { files, mergeBase, maxWorkers, bun, transitive 
   return tasks
 }
 
+// The physical termination callback can arrive after runProcess's caller deadline.
+async function runAdmittedProcess(runProcess, signal, spec) {
+  const { promise: drained, resolve: terminated } = Promise.withResolvers()
+  try {
+    const result = await runProcess(
+      { ...spec, signal, terminationBarrier: true, onChildTerminated: terminated },
+      'tail'
+    )
+    if (result.timedOut || signal.aborted) {
+      await drained
+    }
+    return result
+  } catch (error) {
+    if (signal.aborted) {
+      await drained
+    }
+    throw error
+  }
+}
+
 async function runTask(task, { root, env, runProcess, stepTimeoutMs }) {
   const startedAt = performance.now()
   let output = ''
@@ -342,12 +364,12 @@ async function runTask(task, { root, env, runProcess, stepTimeoutMs }) {
   return { task, ok: true, output, elapsed: seconds(startedAt) }
 }
 
-async function runPool(tasks, concurrency, run) {
+async function runPool(tasks, concurrency, run, signal) {
   const results = []
   let next = 0
   await Promise.all(
     Array.from({ length: Math.min(concurrency, tasks.length) }, async () => {
-      while (next < tasks.length) {
+      while (!signal?.aborted && next < tasks.length) {
         results.push(await run(tasks[next++]))
       }
     })
@@ -368,14 +390,23 @@ export async function main(root, argv) {
     throw new Error(setting.stderr || 'Could not read Orca check settings')
   }
   const release = await acquireChangedCheckSlot()
+  const controller = new AbortController()
+  setMaxListeners(0, controller.signal)
+  const interrupt = () => controller.abort(130)
+  const terminate = () => controller.abort(143)
+  process.on('SIGINT', interrupt)
+  process.on('SIGTERM', terminate)
   try {
-    return await runChangedChecks(root, options)
+    const code = await runChangedChecks(root, options, controller.signal)
+    return controller.signal.aborted ? controller.signal.reason : code
   } finally {
+    process.off('SIGINT', interrupt)
+    process.off('SIGTERM', terminate)
     release()
   }
 }
 
-async function runChangedChecks(root, options) {
+async function runChangedChecks(root, options, signal) {
   const startedAt = performance.now()
   const { ref, mergeBase } = resolveMergeBase(root, options.base)
   const files = collectChangedFiles(root, mergeBase)
@@ -420,7 +451,32 @@ async function runChangedChecks(root, options) {
     plan.typecheckProjects.length > 0 ||
     plan.unitTests.related.length + plan.unitTests.colocated.length > 0
   ) {
-    buildWorkspacePackages(root, env)
+    if (signal) {
+      // A clean checkout needs the process supervisor before its dist can be built.
+      const packageRequire = createRequire(
+        path.join(root, 'src/packages/process-host/package.json')
+      )
+      const { require: loadSource } = packageRequire('tsx/cjs/api')
+      const supervisor = loadSource(
+        './src/run-process.ts',
+        packageRequire.resolve('./package.json')
+      )
+      const result = await runAdmittedProcess(supervisor.runProcess, signal, {
+        program: process.execPath,
+        args: ['config/scripts/workspace-package-build/build-workspace-packages.mjs'],
+        cwd: root,
+        env,
+        timeoutMs: null
+      })
+      if (signal.aborted) {
+        return signal.reason
+      }
+      if (result.code !== 0) {
+        throw new Error(tail(result.stdout + result.stderr) || 'Workspace package build failed.')
+      }
+    } else {
+      buildWorkspacePackages(root, env)
+    }
   }
   const { runProcess, runProcessSync } = await import('@orca/process-host')
   const { resolvePinnedBunExecutable } =
@@ -446,22 +502,30 @@ async function runChangedChecks(root, options) {
     console.log(`… ${seconds(startedAt)} elapsed; running: ${active.join(', ')}`)
   }, HEARTBEAT_MS)
   heartbeat.unref()
-  const results = await runPool(tasks, concurrency, async (task) => {
-    running.set(task.name, performance.now())
-    const result = await runTask(task, {
-      root,
-      env,
-      runProcess,
-      stepTimeoutMs: options.stepTimeoutMs
-    })
-    running.delete(task.name)
-    if (result.ok) {
-      console.log(`✓ ${task.name} (${result.elapsed})`)
-    } else {
-      console.error(`\n✗ ${task.name} (${result.elapsed})\n${tail(result.output)}`)
-    }
-    return result
-  }).finally(() => clearInterval(heartbeat))
+  const results = await runPool(
+    tasks,
+    concurrency,
+    async (task) => {
+      running.set(task.name, performance.now())
+      const result = await runTask(task, {
+        root,
+        env,
+        runProcess: signal ? (spec) => runAdmittedProcess(runProcess, signal, spec) : runProcess,
+        stepTimeoutMs: options.stepTimeoutMs
+      })
+      running.delete(task.name)
+      if (result.ok) {
+        console.log(`✓ ${task.name} (${result.elapsed})`)
+      } else {
+        console.error(`\n✗ ${task.name} (${result.elapsed})\n${tail(result.output)}`)
+      }
+      return result
+    },
+    signal
+  ).finally(() => clearInterval(heartbeat))
+  if (signal?.aborted) {
+    return signal.reason
+  }
   const failed = results.filter((result) => !result.ok)
   if (failed.length > 0) {
     console.error(
