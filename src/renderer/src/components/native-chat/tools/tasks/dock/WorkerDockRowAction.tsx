@@ -53,14 +53,11 @@ export function WorkerDockRowAction({
           <TooltipTrigger asChild>
             <Button
               type="button"
-              variant="ghost-on-accent"
+              // The roster clips its edges at narrow widths, so the focus ring is drawn inside.
+              variant="ghost-on-accent-inset"
               size="icon-xs"
               data-worker-dock-action={row.id}
-              // The roster clips its edges at narrow widths, so the focus ring is drawn inside.
-              className={cn(
-                'focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring',
-                narrow ? (action === 'clear' ? 'h-6 w-11' : 'size-11') : 'size-6.5'
-              )}
+              className={cn(narrow ? (action === 'clear' ? 'h-6 w-11' : 'size-11') : 'size-6.5')}
               aria-label={
                 action === 'clear'
                   ? t('components.native-chat.workerDock.clearName', 'Clear {{name}}', {

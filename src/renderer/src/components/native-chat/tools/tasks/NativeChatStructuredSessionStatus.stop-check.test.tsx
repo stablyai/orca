@@ -9,14 +9,25 @@ import type { WorkerDockRowView } from './dock/WorkerDockRow'
 import { NativeChatWorkerDockFrame } from './dock/NativeChatWorkerDockFrame'
 import { NativeChatStructuredSessionStatus } from './NativeChatStructuredSessionStatus'
 
-const hoisted = vi.hoisted(() => ({
-  rpc: vi.fn<(target: unknown, method: string, params: unknown) => Promise<unknown>>(),
-  party: 'party-synthetic',
-  available: true,
-  rows: [] as WorkerDockRowView[],
-  // The feed's identities can move ahead of its row detail (a metadata-only update).
-  identities: null as WorkerDockSnapshot['identities'] | null
-}))
+const hoisted = vi.hoisted(() => {
+  const state: {
+    rpc: ReturnType<
+      typeof vi.fn<(target: unknown, method: string, params: unknown) => Promise<unknown>>
+    >
+    party: string
+    available: boolean
+    rows: WorkerDockRowView[]
+    // The feed's identities can move ahead of its row detail (a metadata-only update).
+    identities: WorkerDockSnapshot['identities'] | null
+  } = {
+    rpc: vi.fn<(target: unknown, method: string, params: unknown) => Promise<unknown>>(),
+    party: 'party-synthetic',
+    available: true,
+    rows: [],
+    identities: null
+  }
+  return state
+})
 vi.mock('@/runtime/rpc/calls/runtime-rpc-call', () => ({ callRuntimeRpc: hoisted.rpc }))
 vi.mock('../../worker-approvals/native-chat-worker-approval-feed', () => ({
   useNativeChatPinnedWorkerApprovals: () => []
