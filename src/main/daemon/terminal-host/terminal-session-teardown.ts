@@ -216,8 +216,9 @@ export class TerminalSessionTeardown {
                   : excludeShellBackgroundJobs(snapshot, session.shellIsRootChild),
                 session.shellIsRootChild
               ).then((verdict) => {
-                // A live or unverifiable descendant could still be writing the transcript.
-                entry.writersExited ||= verdict === 'exited'
+                // A live or unverifiable descendant could still be writing the transcript, and an
+                // empty list from a missing, duplicate or zombie root row proves nothing.
+                entry.writersExited ||= verdict === 'exited' && snapshot.root !== undefined
                 return verdict
               })
               return entry.descendantVerification
