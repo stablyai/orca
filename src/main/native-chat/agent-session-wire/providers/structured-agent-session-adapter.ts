@@ -101,8 +101,8 @@ export type AgentSessionDispatchOutcome =
       answeredInTurn?: AgentJournalAnsweredTurnIdentity
     } & AgentSessionRanOptionsEvidence)
   /** Transport admission stays pending until provider acknowledgement; elapsed time never proves unknown delivery.
-   *  `written`: the provider confirmed receipt of the send. */
-  | ({ state: 'admitted'; written?: true } & AgentSessionRanOptionsEvidence)
+   *  `writtenAt`: when the host observed provider-confirmed receipt. */
+  | ({ state: 'admitted'; writtenAt?: number } & AgentSessionRanOptionsEvidence)
   /** Generate rejection words with agentSessionFailureWords; answeredInTurn identifies an already-ended answering turn. */
   | ({
       state: 'rejected'

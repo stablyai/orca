@@ -126,10 +126,11 @@ export function observedReceipt(
 /** "Sending…" clears on this; a failed stamp only leaves it until the echo, so never fail the send over it. */
 export async function markHandoverWritten(
   ctx: AgentSessionHandoverContext,
-  clientMessageId: string
+  clientMessageId: string,
+  observedAt: number
 ): Promise<void> {
   try {
-    await ctx.journal.markDispatchWritten({ clientMessageId, fence: ctx.fence })
+    await ctx.journal.markDispatchWritten({ clientMessageId, fence: ctx.fence, observedAt })
   } catch (error) {
     console.warn('[agent-session] could not record a written send:', error)
   }

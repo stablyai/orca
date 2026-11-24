@@ -2,10 +2,8 @@ import { useMemo } from 'react'
 import type { AgentJournalSubmission } from '../../../../../../../shared/agent-session/journal/agent-session-journal-types'
 import type { AgentSessionQueuedMessage } from '../../../../../../../shared/agent-session/requests/agent-session-queued-message-wire'
 import type { StructuredAgentSessionOptimisticMessage } from '../../../../../../../shared/agent-session/view/structured-agent-session-message-projection'
-import {
-  pendingSendsOutsideQueuedCards,
-  steeringQueuedMessageEchoes
-} from '../../../queue/structured-agent-session-sending-queued-cards'
+import { pendingSendsOutsideQueuedCards } from '../../../../../../../shared/agent-session/view/structured-agent-session-sending'
+import { steeringQueuedMessageEchoes } from '../../../queue/structured-agent-session-sending-queued-cards'
 import type { StructuredAgentSessionPendingSend } from './structured-agent-session-pending-sends'
 
 /** The sends the transcript draws before the host records them: queued ones stay in their cards. */

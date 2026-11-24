@@ -226,11 +226,18 @@ export function useMobileStructuredSendWithOutcome(args: {
       if (body.blocks.length === 0) {
         return 'rejected'
       }
+      // Resolve from the chat now: a hold-menu choice made mid-turn may land after it.
+      const queues = mobileStructuredSendQueues(queueCapable, queueFollowUps, stateRef.current, {
+        alternate: intent?.alternate,
+        isWorking: mobileStructuredAgentSessionWorking(stateRef.current) || queueSendsNext,
+        stopping
+      })
       const send = {
         clientMessageId: intent?.clientMessageId ?? structuredSessionOperationId(),
         body,
         queuedAt: Date.now(),
         ...captured,
+        ...(queues ? { delivery: 'queue-if-active' as const } : {}),
         afterSequence: stateRef.current.cursor?.sequence,
         ...(stopping ? { sentWhileStopping: true as const } : {})
       }
@@ -243,14 +250,7 @@ export function useMobileStructuredSendWithOutcome(args: {
         text: wireText,
         attachments: imageAttachments,
         skills,
-        // Resolved from the chat as it is now: a hold-menu choice made mid-turn may land after it.
-        ...(mobileStructuredSendQueues(queueCapable, queueFollowUps, stateRef.current, {
-          alternate: intent?.alternate,
-          isWorking: mobileStructuredAgentSessionWorking(stateRef.current) || queueSendsNext,
-          stopping
-        })
-          ? { delivery: 'queue-if-active' as const }
-          : {}),
+        ...(send.delivery ? { delivery: send.delivery } : {}),
         ...captured,
         ...(intent?.usageLimitContinuationOfTurnItemId
           ? { usageLimitContinuationOfTurnItemId: intent.usageLimitContinuationOfTurnItemId }

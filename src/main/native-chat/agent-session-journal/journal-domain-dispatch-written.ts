@@ -53,7 +53,7 @@ export function applyJournalDomainDispatchWritten(
   }
   writeJournalDomainDispatchAttempt(db, target, {
     ...attempt,
-    submission: { ...submission, writtenAt: savedAt }
+    submission: { ...submission, writtenAt: operation.observedAt }
   })
   const sequence = cursor.sequence + 1
   appendJournalSqlEvent(
@@ -63,7 +63,7 @@ export function applyJournalDomainDispatchWritten(
     savedAt,
     // Not `submissions`: that would rebuild the queue and resend the unchanged message.
     { items: [], submissions: [], cards: [], writtenSubmissions: [operation.clientMessageId] },
-    { fence: operation.fence, observedAt: savedAt }
+    { fence: operation.fence, observedAt: operation.observedAt }
   )
   result.cursor = { epoch: target.epoch, sequence }
   result.writtenOnly = true

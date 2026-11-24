@@ -194,6 +194,7 @@ export abstract class SqlJournalAppends {
   async markDispatchWritten(input: {
     clientMessageId: string
     fence: number
+    observedAt: number
     providerReceipt?: true
   }): Promise<void> {
     await this.write({ kind: 'dispatch-written', ...input })

@@ -54,7 +54,7 @@ export async function dispatchNativeChatStructuredComposerText(
     Object.keys(request).length > 0
       ? transport.send(prompt, attachments, request)
       : transport.send(prompt, attachments)
-  if (admission instanceof Promise) {
+  if (admission !== false) {
     onPending?.()
   }
   const accepted = await admission

@@ -90,7 +90,6 @@ export function NativeChatMessageList({
   workingStartedAt,
   settledTurns,
   deliveryNotices,
-  queueSendPending = false,
   timedRows,
   awaitingInput = null,
   turnActivity,
@@ -125,7 +124,6 @@ export function NativeChatMessageList({
   /** Host durations by prompt id; otherwise fall back to a duration observed locally. */
   settledTurns?: NativeChatSettledTurns
   deliveryNotices?: ReadonlyMap<string, NativeChatDeliveryNotice>
-  queueSendPending?: boolean
   /** Rows that are not part of the conversation but happened during it, such as workers' approvals. */
   timedRows?: readonly NativeChatTimedRow[]
   /** Set while the turn waits on the reader; the live activity line yields to it. */
@@ -196,7 +194,6 @@ export function NativeChatMessageList({
     subagentId,
     notices: deliveryNotices,
     displayedIds: loadedMessageIds,
-    queueSendPending,
     workingStartedAt,
     settledTurns
   })

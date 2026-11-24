@@ -325,7 +325,6 @@ export function NativeChatStructuredSession(props: Omit<NativeChatStructuredView
                               structuredAttachments
                               runtimeContext={imageRuntimeContext}
                               deliveryNotices={deliveryNotices}
-                              queueSendPending={cards.some((card) => card.hold === 'sending')}
                               {...{ turnBot, botHome: bot.kickoff }}
                               timedRows={timedRows}
                             />

@@ -55,7 +55,7 @@ const stopFrames: Record<string, unknown>[] = [
 function fixture(connection?: Partial<ClaudeSession['connection']>) {
   const writes: AgentJournalRenderItem[] = []
   const settled: ClaudeLateDispatchOutcome[] = []
-  const receipts: { clientMessageId: string; fence: number }[] = []
+  const receipts: { clientMessageId: string; fence: number; observedAt: number }[] = []
   const dispatchWaiters: ClaudeDispatchWaiter[] = []
   const translator = createClaudeJournalTranslator({
     steerAwaitingEcho: (kind) =>
@@ -144,7 +144,7 @@ it.each([true, false])(
     const echoedUuid = 'e798686a-cd6f-4eb6-8b9a-3e3584b34ad9'
     f.frame(echo(echoedUuid, SENT), 4000)
 
-    expect(f.receipts).toEqual([{ clientMessageId: 'client-1', fence: 3 }])
+    expect(f.receipts).toEqual([{ clientMessageId: 'client-1', fence: 3, observedAt: 1500 }])
     expect(f.turns().map((item) => item.body)).toEqual([
       {
         kind: 'turn',
@@ -175,7 +175,7 @@ it('leaves an echoed fold on the existing turn', () => {
   f.frame(echo(folded), 3500)
   f.frame(lifecycle('started', folded), 4000)
   expect(f.turns()).toHaveLength(1)
-  expect(f.receipts).toEqual([{ clientMessageId: 'opener', fence: 3 }])
+  expect(f.receipts).toEqual([{ clientMessageId: 'opener', fence: 3, observedAt: 2000 }])
 })
 
 it('opens a priority steer at its matched start after the parent ends', () => {
@@ -197,8 +197,8 @@ it('opens a priority steer at its matched start after the parent ends', () => {
     { turnId: FOLLOW_UP, state: 'running', userItemId: 'orca:steer', startedAt: 6000 }
   ])
   expect(f.receipts).toEqual([
-    { clientMessageId: 'opener', fence: 3 },
-    { clientMessageId: 'steer', fence: 3 }
+    { clientMessageId: 'opener', fence: 3, observedAt: 2000 },
+    { clientMessageId: 'steer', fence: 3, observedAt: 4750 }
   ])
   expect(f.settled.at(-1)).toEqual({
     clientMessageId: 'steer',

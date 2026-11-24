@@ -129,11 +129,13 @@ export function useMobileStructuredAgentSession(
     onSendError,
     confirmRecorded: useMobileStructuredSendRecorded(client, sessionId, hostSupport)
   })
-  const transcript = { agent, state, optimistic: sends.optimistic, sessionKey, turnId }
-  const { clearing, messages, receipts, timing, onClearSent } =
-    useMobileStructuredTranscript(transcript)
   const isWorking = mobileStructuredAgentSessionWorking(state)
   const queueSendsNext = structuredAgentSessionQueueSendsNext(state.nextQueuedMessageId, isWorking)
+  const transcript = { agent, state, optimistic: sends.optimistic, sessionKey, turnId }
+  const { clearing, messages, receipts, timing, onClearSent } = useMobileStructuredTranscript(
+    transcript,
+    isWorking || queueSendsNext
+  )
   const backgroundTasks = useMobileStructuredBackgroundTasks({
     sessionKey,
     state,
@@ -222,7 +224,6 @@ export function useMobileStructuredAgentSession(
   })
   const queued = useMobileStructuredQueuedMessageControls({
     ...args,
-    appendComposerText: args.appendComposerText,
     sessionKey,
     agentName: agent ? (tuiAgentDisplayName(agent) ?? agent) : undefined,
     journalItems: state.items,

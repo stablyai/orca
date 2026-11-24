@@ -42,6 +42,7 @@ export type StructuredAgentSessionOptimisticMessage = {
   body: AgentJournalMessageItem
   /** Null when this client did not make the send and nothing dates it. */
   queuedAt: number | null
+  delivery?: 'queue-if-active'
   phase?: 'sending' | 'recorded' | 'unconfirmed'
   recordedCursor?: AgentJournalCursor
   /** In-memory placement captured at Send, independent of any acknowledgement. */

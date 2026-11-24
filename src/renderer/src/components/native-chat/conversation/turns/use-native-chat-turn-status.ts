@@ -22,7 +22,6 @@ export function useNativeChatTurnStatus({
   subagentId,
   notices,
   displayedIds,
-  queueSendPending,
   workingStartedAt,
   settledTurns
 }: {
@@ -36,7 +35,6 @@ export function useNativeChatTurnStatus({
   subagentId: string | null
   notices: ReadonlyMap<string, NativeChatDeliveryNotice> | undefined
   displayedIds: ReadonlySet<string>
-  queueSendPending: boolean
   workingStartedAt?: number | null
   /** Recorded durations (the host's journal or the transcript); they outrank what this client observed. */
   settledTurns?: NativeChatSettledTurns | null
@@ -72,7 +70,7 @@ export function useNativeChatTurnStatus({
     working,
     workingStartedAt,
     structured,
-    sendPending || (subagentId === null && queueSendPending)
+    sendPending
   )
   const activeTurnKey = liveTurnKey ?? NATIVE_CHAT_UNANCHORED_TURN_KEY
   const [timingByTurn, setTimingByTurn] = useState<NativeChatTurnTimingByTurn>({})

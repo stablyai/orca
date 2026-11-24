@@ -16,6 +16,19 @@ export function nativeChatWorkingPresentation(
   return { isWorking, turnWorking: isWorking && !sendPending }
 }
 
+/** Host-held cards and local requests expected to become cards stay out of the transcript. */
+export function pendingSendsOutsideQueuedCards<
+  Send extends { clientMessageId: string; delivery?: 'queue-if-active'; phase?: string }
+>(pending: readonly Send[], heldIds: readonly string[], isWorking: boolean): readonly Send[] {
+  const held = new Set(heldIds)
+  const next = pending.filter(
+    (entry) =>
+      !held.has(entry.clientMessageId) &&
+      !(isWorking && entry.delivery === 'queue-if-active' && entry.phase !== 'unconfirmed')
+  )
+  return next.length === pending.length ? pending : next
+}
+
 export function structuredAgentSessionSendingItemIds(
   pending: readonly { clientMessageId: string; phase?: string }[],
   submissions: readonly AgentJournalSubmission[]

@@ -19,6 +19,7 @@ import type {
 import { readClaudeFrameString } from '../startup/claude-structured-init-proof'
 import { claudeDispatchContentKey } from '../dispatch/claude-structured-dispatch-content'
 import type { AgentJournalAnsweredTurnIdentity } from '../../../../shared/agent-session/journal/agent-session-journal-types'
+import type { StructuredAgentSessionTransitionSink } from '../../../native-chat/agent-session-wire/journal-ingress/structured-agent-session-transition'
 
 /** Settle provider-proven delivery independently of replay-row acceptance reconciliation. */
 export type ClaudeLateDispatchSettlement = (input: ClaudeLateDispatchOutcome) => void
@@ -30,7 +31,7 @@ export type ClaudeReplayTurnOrigin = {
 
 type ClaudeDispatchFrameEvidence = {
   observedAt: number
-  onReceived: (receipt: { clientMessageId: string; fence: number }) => void
+  onReceived: NonNullable<StructuredAgentSessionTransitionSink['recordProviderReceipt']>
 }
 
 export function resolveClaudeReplayTurn(
@@ -47,7 +48,8 @@ export function resolveClaudeReplayTurn(
       if (evidence.received) {
         frame.onReceived({
           clientMessageId: waiter.clientMessageId,
-          fence: waiter.dispatchFence
+          fence: waiter.dispatchFence,
+          observedAt: frame.observedAt
         })
       }
       if (evidence.started) {

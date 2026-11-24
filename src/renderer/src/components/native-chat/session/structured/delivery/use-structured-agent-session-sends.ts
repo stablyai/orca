@@ -26,7 +26,7 @@ import {
 } from './structured-agent-session-pending-sends'
 import { noteStructuredAgentSessionFence } from './structured-agent-session-send-attempt'
 import { recoverLegacyStructuredAgentSessionOutbox } from './structured-agent-session-legacy-outbox'
-import { pendingSendsOutsideQueuedCards } from '../../../queue/structured-agent-session-sending-queued-cards'
+import { pendingSendsOutsideQueuedCards } from '../../../../../../../shared/agent-session/view/structured-agent-session-sending'
 import { useNativeChatPaneLifetimeEffect } from '../../../pane/ownership/native-chat-pane-lifetime'
 
 /** The open chat's view of its sends: they live in the sender, which works without this view. */

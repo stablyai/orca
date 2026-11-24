@@ -7,6 +7,7 @@ import {
 } from '../../../../../../src/shared/agent-session/conversation-context/agent-session-context-clear'
 import type { StructuredAgentSessionState } from '../../../../../../src/shared/agent-session/view/live-read/structured-agent-session-reducer'
 import type { StructuredAgentSessionOptimisticMessage } from '../../../../../../src/shared/agent-session/view/structured-agent-session-message-projection'
+import { pendingSendsOutsideQueuedCards } from '../../../../../../src/shared/agent-session/view/structured-agent-session-sending'
 import { createStructuredAgentSessionMessageProjection } from '../../../../../../src/shared/agent-session/view/structured-agent-session-message-stream'
 import { tuiAgentDisplayName } from '../../../../../../src/shared/agent-launch/catalog/tui-agent-display-names'
 import { withNativeChatCutTurnNotices } from '../../../../../../src/shared/native-chat/transcript/turns/native-chat-cut-turn-notice'
@@ -30,22 +31,25 @@ const mobileStructuredTranscript = createStructuredQuestionProjection(
 /** The chat's transcript rows, its messages with this phone's sends in flight, and the prompts they resolved.
  * From this phone's /clear press until its divider lands, the rows drawn at the press stay hidden:
  * the host stops the old agent before it writes the divider. */
-export function useMobileStructuredTranscript({
-  agent,
-  state,
-  optimistic,
-  sessionKey,
-  turnId
-}: {
-  agent: string | null
-  state: Pick<
-    StructuredAgentSessionState,
-    'epoch' | 'items' | 'submissions' | 'latestTurn' | 'working' | 'hostClock'
-  >
-  optimistic: readonly StructuredAgentSessionOptimisticMessage[]
-  sessionKey: string
-  turnId: string | null
-}) {
+export function useMobileStructuredTranscript(
+  {
+    agent,
+    state,
+    optimistic,
+    sessionKey,
+    turnId
+  }: {
+    agent: string | null
+    state: Pick<
+      StructuredAgentSessionState,
+      'epoch' | 'items' | 'submissions' | 'latestTurn' | 'working' | 'hostClock' | 'queuedMessages'
+    >
+    optimistic: readonly StructuredAgentSessionOptimisticMessage[]
+    sessionKey: string
+    turnId: string | null
+  },
+  isWorking: boolean
+) {
   const [clearSent, setClearSent] = useState<{
     sessionKey: string
     epoch: string | null
@@ -87,16 +91,27 @@ export function useMobileStructuredTranscript({
     []
   )
   const questionTranscript = useMemo(() => mobileStructuredTranscript.stream(), [])
+  const transcriptPending = useMemo(
+    () =>
+      pendingSendsOutsideQueuedCards(
+        optimistic,
+        (state.queuedMessages ?? []).map((message) => message.messageId),
+        isWorking
+      ),
+    [optimistic, state.queuedMessages, isWorking]
+  )
   const messages = useMemo(
     () =>
       // The goal strip on the composer shows goal state, as on desktop.
-      omitNativeChatThreadGoalRows(projectMessages(transcriptItems, optimistic, state.submissions)),
-    [transcriptItems, optimistic, state.submissions, projectMessages]
+      omitNativeChatThreadGoalRows(
+        projectMessages(transcriptItems, transcriptPending, state.submissions)
+      ),
+    [transcriptItems, transcriptPending, state.submissions, projectMessages]
   )
   return {
     clearing,
     onClearSent,
-    timing: useMobileStructuredAgentTurnTiming(state, turnId, optimistic, transcriptItems),
+    timing: useMobileStructuredAgentTurnTiming(state, turnId, transcriptPending, transcriptItems),
     messages,
     receipts: questionTranscript(transcriptItems).receipts
   }

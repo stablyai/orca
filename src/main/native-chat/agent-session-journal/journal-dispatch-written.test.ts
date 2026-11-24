@@ -30,7 +30,7 @@ const body = {
   blocks: [{ type: 'text' as const, text: 'look at this' }]
 }
 
-async function openJournal(): Promise<SqlAgentSessionJournal> {
+async function openJournal(now = 100): Promise<SqlAgentSessionJournal> {
   const root = await mkdtemp(join(tmpdir(), 'journal-dispatch-written-'))
   roots.push(root)
   const { journalDatabase } = await openStructuredAgentSessionSqlJournalDatabase({
@@ -49,7 +49,7 @@ async function openJournal(): Promise<SqlAgentSessionJournal> {
       agent: 'codex',
       providerHandle: codexProviderHandle('thread')
     },
-    now: () => 100
+    now: () => now
   })
   journals.push(journal)
   return journal
@@ -94,31 +94,47 @@ describe('a send the agent took', () => {
     })
 
     const before = journal.cursor()
-    await journal.markDispatchWritten({ clientMessageId: 'steer', fence: 1, providerReceipt: true })
-    await journal.markDispatchWritten({ clientMessageId: 'steer', fence: 2 })
+    await journal.markDispatchWritten({
+      clientMessageId: 'steer',
+      fence: 1,
+      observedAt: 70,
+      providerReceipt: true
+    })
+    await journal.markDispatchWritten({ clientMessageId: 'steer', fence: 2, observedAt: 71 })
     await journal.markDispatchWritten({
       clientMessageId: 'echoed',
       fence: 2,
+      observedAt: 72,
       providerReceipt: true
     })
     expect(journal.cursor()).toEqual(before)
-    await journal.markDispatchWritten({ clientMessageId: 'idle', fence: 2 })
-    await journal.markDispatchWritten({ clientMessageId: 'steer', fence: 2, providerReceipt: true })
+    await journal.markDispatchWritten({ clientMessageId: 'idle', fence: 2, observedAt: 80 })
+    await journal.markDispatchWritten({
+      clientMessageId: 'steer',
+      fence: 2,
+      observedAt: 81,
+      providerReceipt: true
+    })
     expect(journal.cursor().sequence).toBe(before.sequence + 2)
-    await journal.markDispatchWritten({ clientMessageId: 'steer', fence: 2, providerReceipt: true })
+    await journal.markDispatchWritten({
+      clientMessageId: 'steer',
+      fence: 2,
+      observedAt: 90,
+      providerReceipt: true
+    })
     expect(journal.cursor().sequence).toBe(before.sequence + 2)
 
     expect(await journal.reads.submission('idle')).toMatchObject({
       dispatchState: 'pending',
-      writtenAt: 100
+      writtenAt: 80
     })
-    expect((await journal.reads.submission('steer'))?.writtenAt).toBe(100)
+    expect((await journal.reads.submission('steer'))?.writtenAt).toBe(81)
     expect((await journal.reads.submission('echoed'))?.writtenAt).toBeUndefined()
   })
 
   // Readers without queued-image support take the image-admission route; the stamp must reach them too.
   it('pages a provider receipt before the turn start for a reader with a queued-image policy', async () => {
-    const journal = await openJournal()
+    const journal = await openJournal(200)
     await journal.appendSubmission({
       clientMessageId: 'idle',
       payloadFingerprint: 'fingerprint:idle',
@@ -147,7 +163,7 @@ describe('a send the agent took', () => {
       logger: createStructuredAgentSessionLogger()
     })
     delivery.bind({ journal, fence: 2, publish: () => {} })
-    delivery.sink.recordProviderReceipt?.({ clientMessageId: 'idle', fence: 2 })
+    delivery.sink.recordProviderReceipt?.({ clientMessageId: 'idle', fence: 2, observedAt: 150 })
     delivery.sink.appendItem(
       { provider: 'orca', clientMessageId: 'turn' },
       { kind: 'turn', turnId: 'turn', state: 'running', userItemId: 'orca:idle', startedAt: 150 },
@@ -167,7 +183,7 @@ describe('a send the agent took', () => {
       throw new Error('receipt catch-up reset')
     }
     expect(after.page.items).toEqual([])
-    expect(after.page.submissions.map((send) => send.writtenAt)).toEqual([100])
+    expect(after.page.submissions.map((send) => send.writtenAt)).toEqual([150])
     expect(after.page.window.nextCursor.sequence).toBe(before.page.liveCursor.sequence + 1)
     const next = (
       await journal.history({

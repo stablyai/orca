@@ -78,7 +78,6 @@ export function queuedMessageCardCaption(
       }
       return t('components.native-chat.queuedMessages.paused', 'Paused')
     case 'sending':
-      return t('components.native-chat.messageSending', 'Sending…')
     case 'turn':
     case 'queue-paused':
       // Plainly queued; a paused queue's header row carries the why.

@@ -45,7 +45,11 @@ export type StructuredAgentSessionTransition = {
 }
 
 export type StructuredAgentSessionTransitionSink = {
-  recordProviderReceipt?(receipt: { clientMessageId: string; fence: number }): void
+  recordProviderReceipt?(receipt: {
+    clientMessageId: string
+    fence: number
+    observedAt: number
+  }): void
   tryAppendTransition?(
     transition: StructuredAgentSessionTransition
   ): StructuredAgentSessionSinkAdmission

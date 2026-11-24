@@ -500,6 +500,7 @@ it('refuses a provider receipt issued against a retired journal epoch', () => {
           kind: 'dispatch-written',
           clientMessageId: 'send',
           fence: 1,
+          observedAt: now,
           providerReceipt: true
         },
         now + 20
