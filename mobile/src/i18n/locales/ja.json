@@ -4113,7 +4113,6 @@
       "empty": "ワークスペースがありません",
       "loadFailed": "このホストからワークスペースを読み込めませんでした。",
       "noFilterMatches": "フィルターに一致するワークスペースがありません",
-      "noMatches": "一致するワークスペースがありません",
       "reopen": "開き直して更新",
       "reopenDetail": "このページは、このホストのワークスペース一覧の形式にまだ対応していません。"
     },
@@ -4542,10 +4541,7 @@
     }
   },
   "bots": {
-    "section": {
-      "scrollLeft": "左にスクロール · 非表示 {{amount}} 件",
-      "scrollRight": "右にスクロール · 非表示 {{amount}} 件"
-    },
+    "section": {},
     "link": {
       "pairTitle": "コンピュータをペアリング",
       "pairRequired": "このリンクを開くには、このスマートフォンをコンピュータとペアリングしてから、もう一度リンクを開いてください。",
@@ -5260,6 +5256,7 @@
     },
     "usageLimit": {
       "continuesAt": "{{time}} に再開",
+      "continues": "{{time}} に再開",
       "hitLimit": "上限に到達 · {{time}} にリセット"
     }
   },

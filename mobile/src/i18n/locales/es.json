@@ -4222,7 +4222,6 @@
       "empty": "No hay espacios de trabajo",
       "loadFailed": "No se pudieron cargar los espacios de trabajo de este host",
       "noFilterMatches": "Ningún espacio de trabajo coincide con los filtros",
-      "noMatches": "No hay espacios de trabajo coincidentes",
       "reopen": "Vuelve a abrir para actualizar",
       "reopenDetail": "Este host muestra los espacios de trabajo en un formato que esta página aún no reconoce."
     },
@@ -4567,10 +4566,7 @@
     }
   },
   "bots": {
-    "section": {
-      "scrollLeft": "Desplazar a la izquierda · {{amount}} ocultos",
-      "scrollRight": "Desplazar a la derecha · {{amount}} ocultos"
-    },
+    "section": {},
     "link": {
       "pairTitle": "Vincular un ordenador",
       "pairRequired": "Para abrir este enlace, vincula este teléfono con un ordenador y vuelve a abrir el enlace.",
@@ -5291,6 +5287,7 @@
     },
     "usageLimit": {
       "continuesAt": "Continúa a las {{time}}",
+      "continues": "Continúa a las {{time}}",
       "hitLimit": "Límite alcanzado · se restablece a las {{time}}"
     }
   },

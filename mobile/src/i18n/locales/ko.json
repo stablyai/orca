@@ -4218,7 +4218,6 @@
       "empty": "워크스페이스가 없습니다.",
       "loadFailed": "이 호스트에서 워크스페이스를 불러오지 못했습니다.",
       "noFilterMatches": "필터에 맞는 워크스페이스가 없습니다.",
-      "noMatches": "일치하는 워크스페이스가 없습니다.",
       "reopen": "업데이트하려면 다시 여세요",
       "reopenDetail": "이 페이지는 아직 이 호스트의 워크스페이스 목록 형식을 지원하지 않습니다."
     },
@@ -4563,10 +4562,7 @@
     }
   },
   "bots": {
-    "section": {
-      "scrollLeft": "왼쪽으로 스크롤 · 숨겨진 봇 {{amount}}개",
-      "scrollRight": "오른쪽으로 스크롤 · 숨겨진 봇 {{amount}}개"
-    },
+    "section": {},
     "link": {
       "pairTitle": "컴퓨터 페어링",
       "pairRequired": "이 링크를 열려면 이 휴대폰을 컴퓨터와 페어링한 다음 링크를 다시 여세요.",
@@ -5703,6 +5699,7 @@
     },
     "usageLimit": {
       "continuesAt": "{{time}}에 계속",
+      "continues": "{{time}}에 계속",
       "hitLimit": "한도 도달 · {{time}}에 초기화"
     }
   },
