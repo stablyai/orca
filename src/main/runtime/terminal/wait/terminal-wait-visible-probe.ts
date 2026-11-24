@@ -112,7 +112,8 @@ export abstract class OrcaRuntimeWithStartTuiIdleVisibleReadProbe extends OrcaRu
     handle: string,
     signal?: AbortSignal
   ): Promise<{ exitCode: number | null }> {
-    const ptyId = this.getLivePtyForHandle(handle)?.pty.ptyId
+    // Why: once the window adopts the setup pane, the handle names its leaf, not a pty: record.
+    const ptyId = this.getTerminalPtyIdForHandle(handle)
     if (!ptyId) {
       throw new Error('terminal_handle_stale')
     }
