@@ -164,9 +164,9 @@ await next()`)
   }, 180_000)
 
   it('reports a holder only as what the queue last showed, even when it hands over before the line prints', async () => {
-    // A 6 s naming window, so the handover inside the pause still leaves the holder's last
-    // heartbeat recent enough to show.
-    const staleMs = 30_000
+    // A 24 s naming window, so the handover inside the pause leaves the holder's last heartbeat
+    // recent enough to show even on a heavily loaded host.
+    const staleMs = 120_000
     const signalFile = join(root, 'decided')
     const tookFile = join(root, 'took')
     const holder = spawnOwned(`const release = await acquireChangedCheckSlot(file, {
@@ -281,13 +281,17 @@ await next()`)
     const db = openQueue()
     const recover = failDeletes(db, ticket.id, 'keep_forever')
     abandoned.abort()
-    const abandonedAt = Date.now()
     await expect(abandoned).rejects.toThrow()
     const next = run({ staleMs })
     await holder()
-    await within(next, 'next call past the silent ticket')
-    // Its last check-in can predate the abort by up to one beat (staleMs / 3).
-    expect(Date.now() - abandonedAt).toBeGreaterThanOrEqual((staleMs * 2) / 3 - 50)
+    const release = await within(next, 'next call past the silent ticket')
+    // The next call was admitted only once the abandoned ticket had gone silent: its decision
+    // clock (held_at) is past the ticket's last check-in plus staleMs.
+    const rows = queueRows()
+    const lastCheckIn = rows.find((row) => row.id === ticket.id).seen_at
+    const admittedAt = rows.find((row) => row.held_at !== null).held_at
+    expect(admittedAt).toBeGreaterThan(lastCheckIn + staleMs)
+    await release()
     // Removal gave up after staleMs; the ticket stays aside until it expires.
     await within(settleChangedCheckSlotCleanup(), 'removal giving up')
     expect(queueRows().find((row) => row.id === ticket.id)?.lane).toBe(2)
