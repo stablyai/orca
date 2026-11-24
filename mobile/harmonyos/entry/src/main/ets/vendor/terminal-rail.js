@@ -51,10 +51,14 @@ function getSideRailStrip(args) {
     if (!statusColumn) {
       continue;
     }
-    const occluded = inStrip.map((region) => ({ from: region.y, to: region.y + region.height })).sort((a, b) => a.from - b.from);
+    const usableBottom = windowHeight - insets.bottom;
+    const occluded = inStrip.map((region) => ({
+      from: Math.max(region.y, insets.top),
+      to: Math.min(region.y + region.height, usableBottom)
+    })).filter((span) => span.from < span.to).sort((a, b) => a.from - b.from);
     let best = { from: 0, to: 0 };
     let cursor = insets.top;
-    for (const span of [...occluded, { from: windowHeight - insets.bottom, to: windowHeight }]) {
+    for (const span of [...occluded, { from: usableBottom, to: windowHeight }]) {
       if (span.from - cursor > best.to - best.from) {
         best = { from: cursor, to: span.from };
       }

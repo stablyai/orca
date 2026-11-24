@@ -40,7 +40,8 @@ for (const command of [
   ['--disable-warning=ExperimentalWarning', 'tools/verify/onboarding.cjs'],
   ['--disable-warning=ExperimentalWarning', 'tools/verify/host-removal-recovery.cjs'],
   ['--disable-warning=ExperimentalWarning', 'tools/verify/dictation-lifecycle.cjs'],
-  ['--disable-warning=ExperimentalWarning', 'tools/verify/appearance-lifecycle.cjs']
+  ['--disable-warning=ExperimentalWarning', 'tools/verify/appearance-lifecycle.cjs'],
+  ['--disable-warning=ExperimentalWarning', 'tools/verify/terminal-rail.cjs']
 ]) {
   const result = spawnSync(process.execPath, command, { cwd: root, stdio: 'inherit' })
   if (result.status !== 0) {

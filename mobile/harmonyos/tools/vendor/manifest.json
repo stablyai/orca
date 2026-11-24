@@ -21,7 +21,7 @@
     "tools/vendor/tweetnacl/nacl-fast.min.js": "3ec535c004aeeb225785d8e93fb33bf99f52e399bd7dfc01969b5629baea5131",
     "entry/src/main/ets/vendor/agent-list.js": "2e50780c5d0cca4898d6e53d08e3d74249a5b7510f787974843c9ab02acd65e0",
     "entry/src/main/ets/vendor/connection-diagnostics.js": "5f2724df126c5bff3fb3a1f7158b718a20779c4993bf607b4d2face2adb99a91",
-    "entry/src/main/ets/vendor/terminal-rail.js": "9365e0dda9f5299a912b5ef27ee799d54869883e69b6c400b4af16acd78ab4a4",
+    "entry/src/main/ets/vendor/terminal-rail.js": "44fe0449a3585aa4fa442eb1b5ee5ec379c510a06d1c83ae0772023c307f5987",
     "entry/src/main/ets/vendor/bundle-compat.js": "7ad72dd427a2f052a164eccc08e587b02a27413be1a404084a9357a3987d4162",
     "entry/src/main/ets/vendor/host-machine.js": "f79bd3087ce9537ac4ffa7d3dab1d46ea0fe9d0bffe139cf89d7ae6b19b7b4eb",
     "entry/src/main/ets/vendor/dictation-shortcut-mode.js": "17daa29155497ff7120bda3436fe3f2b3d27fd720ba6fd168cc8205b72b04d48",
@@ -74,7 +74,7 @@
     ]
   },
   "orcaTerminalRail": {
-    "revision": "af065542e33f7192d993b4d7730eb312043a8d16",
+    "revision": "4990c98f5d7558563c7e6aff6381eb65db7c9790",
     "esbuild": "0.28.2",
     "sources": [
       "mobile/src/layout/side-rail-strip.ts",
