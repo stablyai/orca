@@ -70,7 +70,7 @@ export function BotGroupMembersDialog({
   // In pick order, by host-qualified key: the picture and the suggested name follow it.
   const [selected, setSelected] = useState<string[]>(savedKeys)
   const [query, setQuery] = useState('')
-  const [filterFocused, setFilterFocused] = useState(false)
+  const [filterUsed, setFilterUsed] = useState(false)
   const [popped, setPopped] = useState<string | null>(null)
   const purposes = useBotPurposes()
   const [saving, setSaving] = useState(false)
@@ -99,7 +99,8 @@ export function BotGroupMembersDialog({
   const unchanged =
     group !== undefined && botGroupUnchanged({ name: group.name, botIds: savedKeys }, name, order)
   const shownBots = filterByName(allBots, query, (bot) => bot.name)
-  const showFilter = allBots.length > FILTER_FROM || (!group && (query !== '' || filterFocused))
+  // Keep the controls from moving mid-click after the user has interacted with search.
+  const showFilter = allBots.length > FILTER_FROM || (!group && (query !== '' || filterUsed))
   const noMatches = shownBots.length === 0 && query.trim() !== ''
   // Keep each row under the same parent when a computer appears or goes offline.
   const shownByHost = group ? null : Map.groupBy(shownBots, (bot) => bot.hostId)
@@ -272,7 +273,7 @@ export function BotGroupMembersDialog({
               <BotPickFilter
                 value={query}
                 onChange={setQuery}
-                onFocusChange={group ? undefined : setFilterFocused}
+                onFocus={group ? undefined : () => setFilterUsed(true)}
                 compact={!group}
               />
             ) : null}
