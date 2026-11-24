@@ -7,6 +7,7 @@ import {
 import { botItemQuestionPairing } from './bot-item-question-answers'
 import type { BotItemEvent } from './bot-items'
 import {
+  botItemAnswerWords,
   botItemAnswersText,
   botItemHeldAnswersText,
   botItemNamedAnswers,
@@ -39,6 +40,20 @@ it('leaves out of a recovery the lines a comment already answered', () => {
     null,
     'No',
     null
+  ])
+})
+
+it('shows each posted option on its own question when their headings and options match', () => {
+  const options = [{ label: 'Yes' }, { label: 'No' }]
+  const shape = botItemQuestionShape({
+    ask: {
+      questions: ['Target?\nStaging', 'Target?\nProduction'].map((prompt) => ({ prompt, options }))
+    }
+  })
+  const reply = { text: 'Target? → Yes\nTarget? → No' }
+  expect(shape.decisions.map((_, index) => botItemAnswerWords(shape, index, reply))).toEqual([
+    'Yes',
+    'No'
   ])
 })
 

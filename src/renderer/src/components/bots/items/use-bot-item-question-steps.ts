@@ -163,8 +163,9 @@ export function useBotItemQuestionSteps(
     text: string,
     paths: readonly string[],
     skills?: readonly BotItemCommentSkill[],
-    skipped?: readonly number[]
-  ): void => send(text, paths, askId, undefined, skills, skipped, { askId, shape, answers })
+    { skipped, rideAlongText }: { skipped?: readonly number[]; rideAlongText?: string } = {}
+  ): void =>
+    send(text, paths, askId, undefined, skills, skipped, { askId, shape, answers, rideAlongText })
   const pick = useLatestHandler((index: number, words: string) => {
     if (lines.includes(index)) {
       hold(stored(index, held[index] === words ? null : words))
@@ -178,13 +179,9 @@ export function useBotItemQuestionSteps(
   })
   const sendPicks = useLatestHandler((): 'sent' | 'empty' | 'none' => {
     if (picks.some(Boolean)) {
-      post(
-        picks,
-        botItemAnswersText(shape, picks),
-        [],
-        undefined,
-        lines.filter((index) => !picks[index])
-      )
+      post(picks, botItemAnswersText(shape, picks), [], undefined, {
+        skipped: lines.filter((index) => !picks[index])
+      })
       return 'sent'
     }
     return lines.length > 0 ? 'empty' : 'none'
@@ -246,7 +243,9 @@ export function useBotItemQuestionSteps(
         post(next, botItemAnswersText(shape, next), paths, skills)
       } else if (picks.some(Boolean)) {
         // The picks name their lines; the words ride along answering none.
-        post(picks, botItemRideAlongText(shape, picks, text), paths, skills)
+        post(picks, botItemRideAlongText(shape, picks, text), paths, skills, {
+          rideAlongText: text
+        })
       } else {
         send(text, paths, undefined, true, skills)
       }

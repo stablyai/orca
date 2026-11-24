@@ -105,20 +105,22 @@ export function botItemAnswerWords(
   index: number,
   reply: Record<string, unknown>
 ): string | null {
-  const picks = botItemPickedReplies(shape, reply)[index] ?? []
+  const text = typeof reply.text === 'string' ? reply.text.trim() : ''
+  const recorded = Array.isArray(reply.decisions)
+  const line = recorded ? null : botItemNamedAnswerLines(shape, text)[index]
+  const ownReply = line ? { ...reply, text: `${line.head} ${line.words}`.trim() } : reply
+  const picks = botItemPickedReplies(shape, ownReply)[index] ?? []
   if (picks.length > 0) {
     return picks.map((pick) => pick.label).join(', ')
   }
-  if (Array.isArray(reply.decisions)) {
+  if (recorded) {
     return null
   }
-  const text = typeof reply.text === 'string' ? reply.text.trim() : ''
-  const words = botItemNamedAnswers(shape, text)[index] ?? (text || null)
+  const words = line?.words || text
   // Its images show on its own card, so the [Image #N] its send wrote go; an image alone keeps its mark.
-  return (
-    words &&
-    (stripSentImagePromptMarkers(words, botItemCommentImages(reply).length).trim() || words)
-  )
+  return words
+    ? stripSentImagePromptMarkers(words, botItemCommentImages(reply).length).trim() || words
+    : null
 }
 
 /** Answers held for an earlier ask, less the lines a comment answered meanwhile: what recovering them

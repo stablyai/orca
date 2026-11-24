@@ -104,6 +104,8 @@ export type BotItemPendingIntent = {
   askId: string
   shape: BotItemQuestionShape
   answers: readonly (string | null)[]
+  /** The comment box's original words when the post quotes them to avoid answering another line. */
+  rideAlongText?: string
 }
 
 /** A post's rejection when the connection dropped after the comment went out. */

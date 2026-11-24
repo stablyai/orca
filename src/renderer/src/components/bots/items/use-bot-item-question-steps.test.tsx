@@ -2,6 +2,7 @@
 import { act, cleanup, renderHook } from '@testing-library/react'
 import { afterEach, expect, it } from 'vitest'
 import type { Bot } from '../../../../../shared/bot-types'
+import { botItemNamedAnswers } from '../../../../../shared/bots/bot-item-answer-lines'
 import { botItemAskText } from '../../../../../shared/bots/bot-item-ask'
 import type {
   BotItem,
@@ -15,7 +16,11 @@ import type {
 import { updateNativeChatComposerDraft } from '../../native-chat/drafts/native-chat-composer-draft-store'
 import { readNativeChatDraftCache } from '../../native-chat/drafts/native-chat-draft-views'
 import { botItemCommentDraftScope } from './bot-item-comment-draft'
-import { botItemClearDeliveredAnswers, botItemRefusedAnswerWords } from './bot-item-held-answers'
+import {
+  botItemClearDeliveredAnswers,
+  botItemHeldAnswersScope,
+  botItemRefusedAnswerWords
+} from './bot-item-held-answers'
 import { useBotItemQuestionSteps } from './use-bot-item-question-steps'
 
 afterEach(cleanup)
@@ -326,6 +331,25 @@ it('clears only the sent question when two that share a first line hold the same
   expect(readNativeChatDraftCache(scope)).toBe('')
 })
 
+it('keeps a newer pick on its own question when it shares the delivered answer’s heading', () => {
+  const scope = 'bot-item-answers:test:appended-shared-lead'
+  const first = { question: '# Target?\nStaging hosts', replies: [] }
+  const second = { question: GO, replies: [] }
+  const appended = { question: 'Target?\nProduction hosts', replies: [] }
+  updateNativeChatComposerDraft(scope, { text: 'Target? → Yes\nTarget? → No' }, 'immediate')
+  botItemClearDeliveredAnswers(scope, {
+    askId: 'e2',
+    shape: { body: '', decisions: [first, second] },
+    answers: ['Yes', null]
+  })
+  expect(
+    botItemNamedAnswers(
+      { body: '', decisions: [first, second, appended] },
+      readNativeChatDraftCache(scope)
+    )
+  ).toEqual([null, null, 'No'])
+})
+
 it('gives back the words of a refused send that its held picks do not keep', () => {
   const scope = 'bot-item-answers:test:refused'
   const two = {
@@ -357,12 +381,17 @@ it('gives back the words of a refused send that its held picks do not keep', () 
       `${HOSTS} → Yes\n${GO} → [Image #1]`
     )
   ).toBe('')
-  // Words riding along with the picks, as posted.
-  expect(
-    botItemRefusedAnswerWords(
-      scope,
-      { askId: 'e2', shape: two, answers: ['Yes', null] },
-      `${HOSTS} → Yes\nWait for the dry run\n> ${GO} → later`
-    )
-  ).toBe(`Wait for the dry run\n> ${GO} → later`)
+})
+
+it('restores the exact freeform draft after a refused send with a held answer', () => {
+  const uid = 'refused-ride-along'
+  const { hook, posted } = steps(uid)
+  const text = `${GO} → later\n> Keep this quote`
+  act(() => hook.result.current.steps!.pick(0, 'Yes'))
+  act(() => hook.result.current.fromBox(text, [], null))
+  const [post] = posted
+  expect(post?.text).toBe(`${HOSTS} → Yes\n> ${GO} → later\n> Keep this quote`)
+  const scope = botItemHeldAnswersScope(bot, uid, 'e2')
+  expect(readNativeChatDraftCache(scope)).toBe(`${HOSTS} → Yes`)
+  expect(botItemRefusedAnswerWords(scope, post!.intent!, post!.text)).toBe(text)
 })
