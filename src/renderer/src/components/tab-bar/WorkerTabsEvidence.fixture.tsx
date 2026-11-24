@@ -9,10 +9,8 @@ import type { AppState } from '@/store/types'
 import { Toaster } from '../ui/sonner'
 import { WorkerTabsFixtureStrip } from './worker-tabs-fixture-scene'
 import { groupId, workspace, seed, leafIds } from './worker-tabs-fixture-data'
-import WorkerTabConfirmDialog, {
-  requestWorkerTabConfirm,
-  type WorkerTabConfirmKind
-} from './WorkerTabConfirmDialog'
+import WorkerTabConfirmDialog from './WorkerTabConfirmDialog'
+import { requestWorkerTabConfirm, type WorkerTabConfirmKind } from './worker-tab-confirm-request'
 import { openCoordinatorWorkers } from './CoordinatorWorkersBadge'
 import { hideWorkerTab } from './worker-tab-hide'
 import { handleWorkerTabUserClose, keepWorkerPaneOnClose } from './worker-tab-user-close'
@@ -274,6 +272,7 @@ export const unconfirmedCloseToast = defineFixture(
 const userLeafId = '00000000-0000-4000-8000-0000000000aa'
 const mixedTab2: Partial<AppState> = {
   terminalLayoutsByTabId: {
+    ...state.terminalLayoutsByTabId,
     'tab-2': {
       root: {
         type: 'split',

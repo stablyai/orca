@@ -13,8 +13,11 @@ import {
   type WorkerListState
 } from './worker-tab-presentation'
 import { workerTabPaneKey, workerTabStopRequiresHome } from './worker-tab-run-state'
-import { requestWorkerTabClose, requestWorkerTabConfirm } from './WorkerTabConfirmDialog'
-import { explainWorkerTabHomeStop } from './worker-tab-explicit-actions'
+import {
+  explainWorkerTabHomeStop,
+  requestWorkerTabClose,
+  requestWorkerTabConfirm
+} from './worker-tab-confirm-request'
 
 let openCoordinatorTabId: string | null = null
 const openListeners = new Set<() => void>()

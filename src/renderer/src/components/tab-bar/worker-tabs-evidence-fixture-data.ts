@@ -1,7 +1,7 @@
 import type { Tab } from '../../../../shared/workspace-layout/tab-groups/tab-types'
 import type { AppState } from '@/store/types'
 import { acceptedAgentStatuses } from '@/store/slices/agent-status/status-ownership/accepted-agent-statuses'
-import { workspace, seed, tabs, leafIds } from './worker-tabs-fixture-data'
+import { workspace, seed, tabs, leafIds, singleLeafLayouts } from './worker-tabs-fixture-data'
 
 function extraWorker(index: number, title: string): Tab {
   const template = tabs[1]!
@@ -78,6 +78,7 @@ export const contexts = Object.fromEntries(
 )
 export const state: Partial<AppState> = {
   ...seed,
+  terminalLayoutsByTabId: singleLeafLayouts(allTabs),
   unifiedTabsByWorktree: { [workspace]: allTabs },
   tabsByWorktree: {
     [workspace]: allTabs.map((tab) => ({

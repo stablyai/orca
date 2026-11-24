@@ -4,7 +4,7 @@ import type { AppState } from '@/store/types'
 import { translate } from '@/i18n/i18n'
 import { createNonSecureContextUuid } from '../../../../shared/identifiers/non-secure-context-uuid'
 import type { Tab } from '../../../../shared/workspace-layout/tab-groups/tab-types'
-import { requestWorkerTabClose } from './WorkerTabConfirmDialog'
+import { requestWorkerTabClose } from './worker-tab-confirm-request'
 import { hideWorkerTab } from './worker-tab-hide'
 import { selectFoldedWorkerTabIds } from './worker-tab-folding'
 import { workerTabCloseKind } from './worker-tab-view-actions'
@@ -79,7 +79,8 @@ export function announceKeptMixedWorkerTabs(state: AppState, tabIds: readonly st
   }
   toast(
     translate('workerTabs.closeKept.bulk', 'Kept {{count}} tabs with workers', {
-      count: seen.size
+      count: seen.size,
+      defaultValue_one: 'Kept {{count}} tab with a worker'
     }),
     { id: `worker-tabs-kept:${createNonSecureContextUuid()}` }
   )
@@ -137,7 +138,8 @@ export function keepWorkerPaneOnClose(worktreeId: string, groupId: string): bool
       'workerTabs.closeKept.pane',
       'This pane has {{count}} workers · stop or close them first',
       {
-        count
+        count,
+        defaultValue_one: 'This pane has a worker · stop or close it first'
       }
     ),
     {

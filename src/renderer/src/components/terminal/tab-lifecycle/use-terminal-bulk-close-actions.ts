@@ -51,8 +51,17 @@ export function useTerminalBulkCloseActions(
         .map((tab) => tab.id)
       for (const id of tabIds) {
         const unifiedTab = byId.get(id) ?? byEntity.get(id)
-        // Re-read per tab: a worker tab hides, and one that now mixes in the user's pane stays open.
+        // Re-read per tab, after any flush: a worker tab hides, and one that now mixes in the user's pane
+        // stays open. A legacy-only row with a stamp has no unified tab to classify, so it stays open too.
         if (unifiedTab?.workerTab && handleWorkerTabUserClose(unifiedTab.id, true)) {
+          continue
+        }
+        if (
+          !unifiedTab &&
+          (state.tabsByWorktree[activeWorktreeId] ?? []).some(
+            (tab) => tab.id === id && tab.workerTab
+          )
+        ) {
           continue
         }
         // Bulk closes keep pinned tabs and tabs holding unsent browser notes open.

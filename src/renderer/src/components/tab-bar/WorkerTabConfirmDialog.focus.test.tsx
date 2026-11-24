@@ -3,7 +3,8 @@
 import { act, cleanup, render, screen, waitFor } from '@testing-library/react'
 import { afterEach, expect, it, vi } from 'vitest'
 import { makeUnifiedTab } from '@/store/slices/tabs/tab-group.test-fixture'
-import WorkerTabConfirmDialog, { requestWorkerTabConfirm } from './WorkerTabConfirmDialog'
+import WorkerTabConfirmDialog from './WorkerTabConfirmDialog'
+import { requestWorkerTabConfirm } from './worker-tab-confirm-request'
 
 vi.mock('./worker-tab-explicit-actions', () => ({
   closeWorkerTab: vi.fn(),

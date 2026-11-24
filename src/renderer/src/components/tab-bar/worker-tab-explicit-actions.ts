@@ -1,4 +1,5 @@
 import { prepareWorkerStopLanding } from './worker-stop-landing'
+import { explainWorkerTabHomeStop } from './worker-tab-confirm-request'
 import { toast } from 'sonner'
 import { useAppStore } from '@/store/index'
 import type { Tab } from '../../../../shared/workspace-layout/tab-groups/tab-types'
@@ -17,15 +18,6 @@ import {
 import type { WorkerStopReceipt } from '../../../../shared/orchestration/workers/orchestration-worker-stop-receipt'
 
 export type WorkerStopOutcome = 'stopped' | 'not-confirmed' | 'refused'
-
-export function explainWorkerTabHomeStop(): void {
-  toast.error(
-    translate(
-      'workerTabs.remote.stopFromHome',
-      "Can't stop this worker here · stop it on the computer that started it"
-    )
-  )
-}
 
 function targetFor(worktreeId: string): RuntimeClientTarget {
   const environmentId = runtimeEnvironmentIdOrLocalUnlessTwin(useAppStore.getState(), worktreeId)

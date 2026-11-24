@@ -54,8 +54,25 @@ export const terminals: TerminalTab[] = tabs.map((tab) => ({
   launchAgent: 'codex',
   workerTab: tab.workerTab
 }))
+/** One-leaf layout per tab: each worker tab holds only the leaf Orca created for it. */
+export function singleLeafLayouts(list: readonly Tab[]) {
+  return Object.fromEntries(
+    list.map((tab, index) => [
+      tab.id,
+      {
+        root: {
+          type: 'leaf' as const,
+          leafId: tab.workerTab?.origin.workerLeafId ?? leafIds[index] ?? leafIds[0]!
+        },
+        activeLeafId: null,
+        expandedLeafId: null
+      }
+    ])
+  )
+}
 export const seed = {
   activeWorktreeId: workspace,
+  terminalLayoutsByTabId: singleLeafLayouts(tabs),
   activeGroupIdByWorktree: { [workspace]: groupId },
   groupsByWorktree: {
     [workspace]: [

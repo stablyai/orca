@@ -56,7 +56,7 @@ export function isMixedWorkerTabInLayout(state: AppState, tab: Tab): boolean {
 /** How a local close gesture treats a tab: 'none' closes as usual, 'pure' hides, 'mixed' stays open. */
 export type WorkerTabCloseKind = 'none' | 'pure' | 'mixed'
 
-/** Read at action time from this window's current layout, with the same leaves the fold uses. */
+/** Read at action time from this window's current layout; a stamped terminal with no layout stays open. */
 export function workerTabCloseKind(state: AppState, tab: Tab): WorkerTabCloseKind {
   const stamp = tab.workerTab
   if (!stamp) {
@@ -65,12 +65,13 @@ export function workerTabCloseKind(state: AppState, tab: Tab): WorkerTabCloseKin
   if (tab.contentType === 'agent-session') {
     return 'pure'
   }
-  // A never-mounted tab holds only the leaf Orca created: a user leaf arrives by a split or move, which
-  // records the layout first. With neither a layout nor a stamped leaf the tab stays open.
-  const leafIds = leafIdsOf(state, tab)
-  if (!leafIds || leafIds.length === 0) {
+  // A stamped leaf id alone does not prove the tab holds nothing else, so no current layout means protected.
+  const root =
+    tab.contentType === 'terminal' ? state.terminalLayoutsByTabId[tab.entityId]?.root : null
+  if (!root) {
     return 'mixed'
   }
+  const leafIds = collectLayoutLeafIdsInOrder(root)
   const owned = workerLeafIds(stamp)
   // The worker's leaf is gone (closed, exited, taken over): the stamp is inert and the tab is the user's.
   if (!leafIds.some((leafId) => owned.has(leafId))) {

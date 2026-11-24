@@ -9,59 +9,13 @@ import {
 import { Button } from '@/components/ui/button'
 import { useTranslate } from '@/i18n/use-translate'
 import { translate } from '@/i18n/i18n'
-import type { Tab } from '../../../../shared/workspace-layout/tab-groups/tab-types'
-import { closeWorkerTab, stopWorker, explainWorkerTabHomeStop } from './worker-tab-explicit-actions'
-import { isWorkerTabKnownFinished, workerTabStopRequiresHome } from './worker-tab-run-state'
-import { useAppStore } from '@/store/index'
-
-/** stop: Stop worker; close-running: Close while it may still run; close-finished: Close on a finished row. */
-export type WorkerTabConfirmKind = 'stop' | 'close-running' | 'close-finished'
-
-type WorkerTabConfirmRequest = { kind: WorkerTabConfirmKind; worktreeId: string; tab: Tab }
-
-let current: WorkerTabConfirmRequest | null = null
-const listeners = new Set<() => void>()
-
-function publish(next: WorkerTabConfirmRequest | null): void {
-  current = next
-  for (const listener of listeners) {
-    listener()
-  }
-}
-
-/** Ask once, then run the explicit action; Cancel changes nothing. */
-export function requestWorkerTabConfirm(request: WorkerTabConfirmRequest): void {
-  if (
-    workerTabStopRequiresHome(request.tab) &&
-    (request.kind !== 'close-finished' ||
-      !isWorkerTabKnownFinished(useAppStore.getState(), request.tab))
-  ) {
-    explainWorkerTabHomeStop()
-    return
-  }
-  publish(request)
-}
-
-/** Close tab / Close: the finished-row copy only when the worker is known finished. */
-export function requestWorkerTabClose(worktreeId: string, tab: Tab, finishedRow = false): void {
-  if (workerTabStopRequiresHome(tab)) {
-    requestWorkerTabConfirm({
-      kind: isWorkerTabKnownFinished(useAppStore.getState(), tab)
-        ? 'close-finished'
-        : 'close-running',
-      worktreeId,
-      tab
-    })
-    return
-  }
-  const finished = finishedRow || isWorkerTabKnownFinished(useAppStore.getState(), tab)
-  requestWorkerTabConfirm({ kind: finished ? 'close-finished' : 'close-running', worktreeId, tab })
-}
-
-function subscribe(listener: () => void): () => void {
-  listeners.add(listener)
-  return () => listeners.delete(listener)
-}
+import { closeWorkerTab, stopWorker } from './worker-tab-explicit-actions'
+import {
+  currentWorkerTabConfirm,
+  publishWorkerTabConfirm,
+  subscribeWorkerTabConfirm,
+  type WorkerTabConfirmKind
+} from './worker-tab-confirm-request'
 
 function copy(kind: WorkerTabConfirmKind): { title: string; confirm: string } {
   switch (kind) {
@@ -91,13 +45,13 @@ function copy(kind: WorkerTabConfirmKind): { title: string; confirm: string } {
 
 export default function WorkerTabConfirmDialog(): React.JSX.Element {
   const t = useTranslate()
-  const request = useSyncExternalStore(subscribe, () => current)
+  const request = useSyncExternalStore(subscribeWorkerTabConfirm, currentWorkerTabConfirm)
   const text = request ? copy(request.kind) : null
   const confirm = (): void => {
     if (!request) {
       return
     }
-    publish(null)
+    publishWorkerTabConfirm(null)
     if (request.kind === 'stop') {
       void stopWorker(request.worktreeId, request.tab)
     } else {
@@ -105,7 +59,10 @@ export default function WorkerTabConfirmDialog(): React.JSX.Element {
     }
   }
   return (
-    <Dialog open={request !== null} onOpenChange={(isOpen) => !isOpen && publish(null)}>
+    <Dialog
+      open={request !== null}
+      onOpenChange={(isOpen) => !isOpen && publishWorkerTabConfirm(null)}
+    >
       <DialogContent
         surface="security"
         className="max-w-sm"
@@ -121,7 +78,7 @@ export default function WorkerTabConfirmDialog(): React.JSX.Element {
             variant="ghost"
             size="sm"
             data-dialog-cancel=""
-            onClick={() => publish(null)}
+            onClick={() => publishWorkerTabConfirm(null)}
           >
             {t('workerTabs.confirm.cancel', 'Cancel')}
           </Button>

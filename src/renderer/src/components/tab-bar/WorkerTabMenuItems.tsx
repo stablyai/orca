@@ -16,7 +16,7 @@ import {
 import { keepWorkerTab } from './worker-tab-hide'
 import { handleWorkerTabUserClose } from './worker-tab-user-close'
 import { workerTabCloseKind } from './worker-tab-view-actions'
-import { requestWorkerTabClose, requestWorkerTabConfirm } from './WorkerTabConfirmDialog'
+import { requestWorkerTabClose, requestWorkerTabConfirm } from './worker-tab-confirm-request'
 
 /** Keep tab (peek only) / Hide tab (worker-only tabs) / Stop worker (while running) / Close tab, for a stamped worker tab. */
 export function WorkerTabMenuItems({
