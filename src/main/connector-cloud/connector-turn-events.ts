@@ -11,7 +11,7 @@ import type {
   ConversationEvent,
   ConversationSnapshot
 } from '../external-conversations/external-conversation-events'
-import { SIGNED_OUT } from './connector-cloud-request'
+import { SIGNED_OUT, type ConnectorFailure } from './connector-cloud-request'
 import { ConnectorOutbox, type ConnectorOutboxHead, type ConnectorStamp } from './connector-outbox'
 import { ConnectorTurnEndFile } from './connector-turn-outbox-file'
 import { connectorSnapshot, jsonBytes } from './connector-snapshot'
@@ -20,11 +20,13 @@ import {
   type ConnectorSnapshotExpectation
 } from './connector-snapshot-trace'
 import { ConnectorPromptPublications } from './connector-prompt-publications'
-import { toConnectorEvent } from './connector-event-wire'
+import { answerFor, answerTextFor, toConnectorEvent } from './connector-event-wire'
+import { slackReplyBody } from './connector-slack-text'
 import type { ConnectorCallObserver } from './connector-transport'
 import {
   ConnectorReplyOutbox,
   isReplyEvent,
+  replyDeliveryIds,
   type ConnectorReplyClient,
   type ConnectorReplyJournal,
   type ConnectorReplyRoute
@@ -72,6 +74,22 @@ function eventsHeadSize(events: readonly ConnectorEvent[]): number {
   return events.length
 }
 
+/** Only a pane's newest unsent activity is worth sending: each one replaces the last in the thread. */
+function newestActivities(events: ConnectorEvent[], sent: number): ConnectorEvent[] {
+  const newest = new Map<string, number>()
+  events.forEach((event, index) => {
+    if (event.kind === 'activity') {
+      newest.set(event.paneKey, index)
+    }
+  })
+  return newest.size === 0
+    ? events
+    : events.filter(
+        (event, index) =>
+          index < sent || event.kind !== 'activity' || newest.get(event.paneKey) === index
+      )
+}
+
 /**
  * Keeps the newest turn ends and live events within their caps, never trimming the first `sent`, so memory
  * and disk hold the same set. A snapshot is never dropped: it opens its hello.
@@ -107,6 +125,8 @@ export class ConnectorTurnEvents {
   private replyFlush: (() => void) | null = null
   // Whether the current hello's answer listed replies.outbox; undefined before one.
   private repliesOutbox: boolean | undefined
+  // Delivery ids of replies refused as invalid under the current hello, held until the next one.
+  private readonly setAside = new Set<string>()
 
   constructor(
     userDataPath: string,
@@ -123,7 +143,9 @@ export class ConnectorTurnEvents {
     this.outbox = new ConnectorOutbox<ConnectorEvent>({
       headSize: eventsHeadSize,
       initial: this.stored.read(),
-      bound: (events, sent) => {
+      bound: (queued, sent) => {
+        // A superseded activity is no loss, so it owes no snapshot.
+        const events = newestActivities(queued, sent)
         const kept = boundEvents(events, sent)
         this.dropped ||= kept.length < events.length
         return kept
@@ -136,10 +158,17 @@ export class ConnectorTurnEvents {
         void this.replies.accepted(batch)
       },
       onSplit: (batch) => this.trace.split(batch),
-      onDropped: (item, stamp) => {
+      onDropped: (item, stamp, failure) => {
         this.trace.dropped(item, stamp)
-        // Its row stays unsent until the cloud takes it: a later drain hands it over again.
-        this.replies.forget([item])
+        // A reply refused as invalid can't succeed as sent under this hello: it stays in flight
+        // until the next one (its row stays unsent). Any other refusal (a 413, or a 503 outcome
+        // that doesn't stand yet) goes again later.
+        if (failure?.status === 400) {
+          replyDeliveryIds([item]).forEach((id) => this.setAside.add(id))
+          return
+        }
+        // A sibling of a held reply (one answer split across events) leaves the held ids held.
+        this.replies.forget(replyDeliveryIds([item]).filter((id) => !this.setAside.has(id)))
         this.replies.retryLater()
       }
     })
@@ -229,7 +258,11 @@ export class ConnectorTurnEvents {
     const { post, hostName } = this.replyDeps
     return {
       client: flush && {
-        post,
+        // As the events path sends it: within the older cap for a cloud without answers.long.
+        post: (reply) => {
+          const shown = slackReplyBody(reply)
+          return post({ ...shown, text: answerTextFor(shown.text, this.cloudFeatures) })
+        },
         hostName,
         push: (events) => {
           this.outbox.push(...events)
@@ -253,7 +286,8 @@ export class ConnectorTurnEvents {
       }
       return kept
     })
-    this.replies.forget(released)
+    this.replies.forget([...this.setAside, ...replyDeliveryIds(released)])
+    this.setAside.clear()
   }
 
   /** True until the next snapshot once the caps dropped an event. */
@@ -279,6 +313,13 @@ export class ConnectorTurnEvents {
       return
     }
     const wire = toConnectorEvent(event, this.cloudFeatures)
+    if (event.kind === 'turn-ended' && event.turnId === null) {
+      // Its start predates the watch, so the cloud can't place it and nothing posts.
+      console.info('[connector] turn end without its start left out', {
+        hadReply: Boolean(event.lastAssistantMessage),
+        stopReason: event.stopReason
+      })
+    }
     if (wire) {
       this.publications.bind(event, wire)
       this.outbox.push(wire)
@@ -286,21 +327,25 @@ export class ConnectorTurnEvents {
   }
 
   next(helloRev: number): ConnectorOutboxHead<ConnectorEvent> | null {
-    return this.outbox.next(helloRev)
+    const head = this.outbox.next(helloRev)
+    return (
+      head && { ...head, batch: head.batch.map((event) => answerFor(event, this.cloudFeatures)) }
+    )
   }
 
   accepted(stamp: ConnectorStamp): void {
     this.outbox.accepted(stamp)
   }
 
-  refused(stamp: ConnectorStamp): ConnectorEvent | null {
-    return this.outbox.refused(stamp)
+  refused(stamp: ConnectorStamp, failure?: ConnectorFailure): ConnectorEvent | null {
+    return this.outbox.refused(stamp, failure)
   }
 
   /** Drops everything, file included: no other account can report these turns. */
   clear(): void {
     this.stored.clear()
     this.replies.retire()
+    this.setAside.clear()
     this.outbox.restart([], () => false)
     this.trace.flush()
   }

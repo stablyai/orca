@@ -4,7 +4,7 @@ import { clientLayoutCommand } from './client-views/workspace-layout-client-comm
 import {
   closeBrowserPage,
   openBrowserPage,
-  replaceBrowserPage,
+  replaceTabContent,
   setBrowserTabProfile
 } from './commands/workspace-layout-browser-commands'
 import { applied, refuse, type Applied } from './commands/workspace-layout-command-steps'
@@ -167,8 +167,8 @@ function applyCommand(
       return openBrowserPage(model, command)
     case 'closeBrowserPage':
       return closeBrowserPage(model, command)
-    case 'replaceBrowserPage':
-      return replaceBrowserPage(model, command)
+    case 'replaceTabContent':
+      return replaceTabContent(model, command)
     case 'setBrowserTabProfile':
       return setBrowserTabProfile(model, command)
     case 'openAgentSessionTab':

@@ -1,10 +1,15 @@
 import { runProcess } from '@orca/process-host'
+import {
+  windowsPowerShellPath,
+  windowsSystem32Binary
+} from '@orca/process-host/windows-system-binary'
 import os from 'node:os'
 import { performance } from 'node:perf_hooks'
 import {
   parseTypeperfProcessOutput,
   parseWindowsProcessSample,
   TYPEPERF_COUNTERS,
+  TYPEPERF_START_COUNTER,
   type ParsedWindowsProcessSample,
   type WindowsProcessResourceRow
 } from './windows-process-sample-parsing'
@@ -29,12 +34,17 @@ let retryCimAtMs = 0
 /** `trackCpu: false` leaves the resource view's CPU baseline untouched and reports no CPU. */
 export async function enumerateWindowsProcessResources({
   trackCpu = true,
-  withNames = false
-}: { trackCpu?: boolean; withNames?: boolean } = {}): Promise<WindowsProcessResourceRow[]> {
+  withNames = false,
+  withStartTimes = false
+}: {
+  trackCpu?: boolean
+  withNames?: boolean
+  withStartTimes?: boolean
+} = {}): Promise<WindowsProcessResourceRow[]> {
   // Reuse one CIM sweep for resources and identity instead of spawning PowerShell twice per poll.
   if (processBackend === 'typeperf') {
     if (performance.now() < retryCimAtMs) {
-      return enumerateWindowsWithTypeperf(withNames)
+      return enumerateWindowsWithTypeperf(withNames, withStartTimes)
     }
     processBackend = 'cim'
   }
@@ -49,7 +59,7 @@ export async function enumerateWindowsProcessResources({
   if (trackCpu) {
     previousCpuSample = null
   }
-  return enumerateWindowsWithTypeperf(withNames)
+  return enumerateWindowsWithTypeperf(withNames, withStartTimes)
 }
 
 function applyWindowsCpuSample(sample: WindowsProcessSample): WindowsProcessResourceRow[] {
@@ -102,7 +112,7 @@ async function enumerateWindowsWithCim(withNames: boolean): Promise<WindowsProce
       `ForEach-Object { try { [string]::Join([char]9, @($_.ProcessId, $_.ParentProcessId, $_.WorkingSetSize, [string]$_.KernelModeTime, [string]$_.UserModeTime, $_.CreationDate.ToUniversalTime().Ticks, $_.PageFileUsage${nameField})) } catch {} }`
   ]
   try {
-    const stdout = await execFileText('powershell.exe', args)
+    const stdout = await execFileText(windowsPowerShellPath(), args)
     const parsed = parseWindowsProcessSample(stdout)
     return parsed.rows.length > 0 ? { ...parsed, sampledAtMs: performance.now() } : null
   } catch (err) {
@@ -112,12 +122,14 @@ async function enumerateWindowsWithCim(withNames: boolean): Promise<WindowsProce
 }
 
 async function enumerateWindowsWithTypeperf(
-  withNames: boolean
+  withNames: boolean,
+  withStartTimes: boolean
 ): Promise<WindowsProcessResourceRow[]> {
   try {
     // Immediate fallback fits the two-second poll budget without inventing CPU rates.
-    const stdout = await execFileText('typeperf.exe', [
+    const stdout = await execFileText(windowsSystem32Binary('typeperf.exe'), [
       ...TYPEPERF_COUNTERS,
+      ...(withStartTimes ? [TYPEPERF_START_COUNTER] : []),
       '-sc',
       '1',
       '-si',

@@ -22,6 +22,7 @@ import { NativeChatImageAttachments } from '../../media/images/NativeChatImageAt
 import { NativeChatForkAction } from '../actions/NativeChatForkAction'
 import type { useNativeChatWorkRun } from '../../tools/runs/use-native-chat-work-run'
 import { useTranslate } from '@/i18n/use-translate'
+import { NativeChatGalleryMessageContext } from '../../media/images/gallery/native-chat-image-gallery-context'
 
 function messageIsStreaming(
   message: NativeChatMessage,
@@ -125,7 +126,12 @@ export function NativeChatAssistantMessageRow({
           {t('bots.chat.nothingToReport', 'Nothing to report')}
         </p>
       ) : null}
-      {toolRun ? <NativeChatToolRun {...toolRun} /> : null}
+      {/* Tool runs rebuild and reorder their images as reads finish. */}
+      {toolRun ? (
+        <NativeChatGalleryMessageContext value={null}>
+          <NativeChatToolRun {...toolRun} />
+        </NativeChatGalleryMessageContext>
+      ) : null}
       {showControls ? (
         <NativeChatAgentControls
           markdown={words}
@@ -143,9 +149,9 @@ export function NativeChatAssistantMessageRow({
             !latestResponse &&
               fork?.pendingItemId !== message.id &&
               'transition-opacity can-hover:pointer-events-none can-hover:opacity-0 group-hover:pointer-events-auto group-hover:opacity-100 group-focus-within:pointer-events-auto group-focus-within:opacity-100',
-            // They hang into the gap below only when nothing left-side starts there. Never in a
+            // They hang into the gap below only above the next turn's opening row. Never in a
             // section, which keeps them inside its border.
-            actionsHang && '-mb-5'
+            actionsHang && '-mb-1'
           )}
         />
       ) : null}

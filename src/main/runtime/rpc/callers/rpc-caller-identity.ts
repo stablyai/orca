@@ -36,7 +36,7 @@ export function resolveRpcCallerIdentity(
   }
   const deviceId = transport?.pairedDeviceId?.trim()
   if (deviceId) {
-    // A false claim only gives up the person's view-following, never any authority.
+    // Leaving the claim out only lets the caller act as the person (view-following, taking a page back from an agent).
     return transport?.clientCapabilities?.includes(CLI_AGENT_CALLER_CLIENT_CAPABILITY)
       ? { kind: 'paired-device', deviceId, agent: true }
       : { kind: 'paired-device', deviceId }

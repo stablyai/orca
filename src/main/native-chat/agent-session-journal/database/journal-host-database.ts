@@ -23,6 +23,14 @@ export function journalDomainDatabasePath(stateDirectory: string): string {
   return join(stateDirectory, 'agent-session-domain.db')
 }
 
+/** The Orca version that copied this profile; its original journal stays until a later version runs. */
+export const JOURNAL_LEGACY_CONVERTED_BY = 'journal.legacy-converted-by.v1'
+
+/** This host's own release: the desktop's, or the bundle orcad stamps for itself at start. */
+export function journalRunningOrcaVersion(): string | null {
+  return process.env.ORCA_APP_VERSION?.trim() || null
+}
+
 /** What journal collaborators need from a connection owner; the SQL writer supplies its own. */
 export type JournalTransactionalDatabase = Pick<
   JournalHostDatabase,

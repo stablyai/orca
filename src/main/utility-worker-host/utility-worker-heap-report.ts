@@ -62,3 +62,41 @@ export function recordUtilityWorkerHeapPressure(
     minIntervalMs: WORKER_HEAP_BREADCRUMB_MIN_INTERVAL_MS
   })
 }
+
+/** One worker's own out-of-memory failure: its role, last reply and heap. */
+export function utilityWorkerOutOfMemoryData(
+  serviceName: string,
+  worker: HostedWorker,
+  report: UtilityWorkerHeapReport | undefined,
+  code = 'ERR_WORKER_OUT_OF_MEMORY'
+): CrashReportBreadcrumbData {
+  return {
+    serviceName,
+    role: worker.spawn.name,
+    code,
+    lastReply: worker.lastReplyType,
+    receivedMB: Math.round(worker.receivedBytes / MB),
+    ...utilityWorkerHeapData(report, [worker])
+  }
+}
+
+/** A host's exit: each worker's role, last reply and heap. */
+export function utilityWorkerHostExitData(
+  serviceName: string,
+  code: number,
+  workers: readonly HostedWorker[],
+  report: UtilityWorkerHeapReport | undefined
+): CrashReportBreadcrumbData {
+  const data: CrashReportBreadcrumbData = {
+    serviceName,
+    code,
+    workers: workers.length,
+    ...utilityWorkerHeapData(report, workers)
+  }
+  workers.forEach((worker, index) => {
+    data[`w${index}_role`] = worker.spawn.name
+    data[`w${index}_lastReply`] = worker.lastReplyType
+    data[`w${index}_receivedMB`] = Math.round(worker.receivedBytes / MB)
+  })
+  return data
+}

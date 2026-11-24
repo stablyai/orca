@@ -123,7 +123,7 @@ function CommitFilesBody({
           <span>
             {t(
               'auto.components.right.sidebar.GitHistoryCommitFiles.c3d4e5f6a7',
-              'Open all changes together'
+              'Open all changes'
             )}
           </span>
         </button>

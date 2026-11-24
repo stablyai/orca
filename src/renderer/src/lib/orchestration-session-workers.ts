@@ -74,6 +74,7 @@ function sameWorker(a: OrchestrationSessionWorker, b: OrchestrationSessionWorker
     a.liveness === b.liveness &&
     a.host === b.host &&
     a.worktreeId === b.worktreeId &&
+    a.address === b.address &&
     a.paneKey === b.paneKey &&
     a.chatSessionId === b.chatSessionId &&
     a.startedAt === b.startedAt &&
@@ -115,7 +116,8 @@ async function readFeed(feed: Feed): Promise<void> {
       feed.target,
       ORCHESTRATION_SESSION_WORKERS_METHOD,
       { session: feed.sessionId },
-      { suppressFeatureInteraction: true }
+      // A 3 s poll: no use of an idle WSL host (#46567).
+      { suppressFeatureInteraction: true, background: true }
     )
     feed.workerNotices = result.workerNotices === true
     const workers = result.workers.length === 0 ? NO_WORKERS : result.workers

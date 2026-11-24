@@ -29,18 +29,22 @@ export function useBotPicturePaste(bot: Bot): (event: React.ClipboardEvent) => v
       picture.value.kind === 'custom' && picture.custom
         ? picture.custom.after
         : pictureMascotIndex(picture.value, picture.custom)
-    void avatarPngFromBlob(image).then(
-      (png) => {
-        picture.upload(png, after)
-        toast.success(t('bots.avatar.intake.saved', 'Picture updated'), {
-          action: { label: t('bots.avatar.intake.undo', 'Undo'), onClick: picture.undo }
-        })
-      },
-      (error: unknown) => {
-        if (error instanceof BotAvatarIntakeFailure) {
-          toast.error(intakeError(error.error))
+    // A choice as the paste begins, so a picture asked for meanwhile doesn't land on top of it.
+    const settle = picture.beginIntake()
+    void avatarPngFromBlob(image)
+      .then(
+        (png) => {
+          picture.upload(png, after)
+          toast.success(t('bots.avatar.intake.saved', 'Picture updated'), {
+            action: { label: t('bots.avatar.intake.undo', 'Undo'), onClick: picture.undo }
+          })
+        },
+        (error: unknown) => {
+          if (error instanceof BotAvatarIntakeFailure) {
+            toast.error(intakeError(error.error))
+          }
         }
-      }
-    )
+      )
+      .finally(settle)
   }
 }

@@ -65,6 +65,8 @@ export async function installBrowserSessionPartitionPolicies(
     permissions?: BrowserPartitionPermissionPolicy
     applyAppWideProxy?: boolean
     userAgentExceptions?: boolean
+    /** False for a session that blocks all network itself, so no certificate exception can apply. */
+    certificateRequestGuard?: boolean
   } = {}
 ): Promise<void> {
   const { partition } = profile
@@ -81,7 +83,9 @@ export async function installBrowserSessionPartitionPolicies(
     return proxyReady
   }
 
-  browserManager.installCertificateRequestGuard(sess)
+  if (options.certificateRequestGuard !== false) {
+    browserManager.installCertificateRequestGuard(sess)
+  }
   if (options?.permissions === 'deny') {
     sess.setPermissionRequestHandler((_webContents, _permission, callback) => callback(false))
     sess.setPermissionCheckHandler(() => false)
@@ -108,6 +112,12 @@ export async function installBrowserSessionPartitionPolicies(
   )
   configuredPartitions.add(partition)
   return proxyReady
+}
+
+export function restoreBrowserSessionPartitionPolicies(profile: BrowserSessionProfile): void {
+  void installBrowserSessionPartitionPolicies(profile).catch(() => {
+    console.warn('[proxy] Failed to apply proxy to browser partition', profile.partition)
+  })
 }
 
 export function clearBrowserSessionPartitionPolicies(partition: string, sess: Session): void {

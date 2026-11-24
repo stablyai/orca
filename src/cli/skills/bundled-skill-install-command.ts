@@ -1,6 +1,9 @@
 import { homedir } from 'node:os'
 import { realpath } from 'node:fs/promises'
+import { join } from 'node:path'
 import type { CommandHandler } from '../dispatch/dispatch'
+import { rejectRemoteSelectionFlags } from '../dispatch/remote-selection-flag-rejection'
+import { isLocalEnvironmentSelector } from '../hosts/local-environment-selector'
 import { RuntimeClientError } from '../runtime/connection/types'
 import { getDefaultUserDataPath } from '../runtime/profile/metadata'
 import { getRepeatedStringFlag } from '../arguments/flags'
@@ -13,6 +16,7 @@ import type {
   BundledSkillPlan
 } from '../../shared/skills/bundled/bundled-skill-plan'
 import { isBundledSkillLeaveReason } from '../../shared/skills/bundled/bundled-skill-plan'
+import { collapseHomePath } from '../../shared/skills/bundled/bundled-skill-locations'
 import {
   BUNDLED_SKILL_LEAVE_REASON_TEXT,
   BUNDLED_SKILL_PLAN_OP_TEXT,
@@ -132,6 +136,9 @@ function describePlanOp(op: BundledSkillOp): string {
 function describeOutcomeOp(op: BundledSkillOpOutcome): string | null {
   switch (op.status) {
     case 'done':
+      if (op.backupPath) {
+        return `Old copy moved to ${op.backupPath}`
+      }
       return op.kind === 'leave' ? leaveText(op.reason) : null
     case 'changed':
       return 'Changed since it was planned; nothing was written. Run it again to re-plan.'
@@ -160,8 +167,30 @@ async function workspaceDirectory(): Promise<string> {
   return realpath(process.cwd())
 }
 
+function rejectNonlocalSkillMutationFlags(
+  flags: ReadonlyMap<string, string | boolean>,
+  verb: SkillMutationVerb
+): void {
+  const nonlocalFlags = new Map(flags)
+  // `--environment local` is this machine, which is the only place this command writes.
+  if (isLocalEnvironmentSelector(nonlocalFlags.get('environment'))) {
+    nonlocalFlags.delete('environment')
+  }
+  rejectRemoteSelectionFlags(
+    nonlocalFlags,
+    `orca skills ${verb}; it writes on the machine that runs it`,
+    {
+      nextSteps: [
+        `Run \`orca skills ${verb}\` on the machine whose agents need the skills.`,
+        'Drop the flag to write on this machine.'
+      ]
+    }
+  )
+}
+
 export function createSkillMutationHandler(verb: SkillMutationVerb): CommandHandler {
   return async ({ flags, json }) => {
+    rejectNonlocalSkillMutationFlags(flags, verb)
     const guides = await loadCanonicalGuides()
     const skillNames = resolveSelectedSkillNames(flags, guides)
     if (skillNames.length === 0) {
@@ -212,11 +241,19 @@ export function createSkillMutationHandler(verb: SkillMutationVerb): CommandHand
       (name) =>
         `${name}: not installed, so skipped. Install it with: orca skills install --skill ${name}`
     )
+    const backupFolder = collapseHomePath(
+      join(plan.homeDirectory, '.agents', '.orca-skill-backups'),
+      plan.homeDirectory
+    )
     const forceHint = hasReplaceableLeave(plan)
-      ? ['', 'Rerun with --force to replace a copy that was skipped; Orca keeps a backup of it.']
+      ? [
+          '',
+          'Rerun with --force to replace skipped copies where possible. ' +
+            `Orca moves each copy it replaces, including any extra files, to ${backupFolder} first.`
+        ]
       : []
 
-    if (flags.get('dry-run') === true) {
+    if (flags.has('dry-run')) {
       writeStdoutLine(
         json
           ? JSON.stringify(

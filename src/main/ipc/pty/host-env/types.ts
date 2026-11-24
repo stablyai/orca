@@ -28,7 +28,6 @@ export type BuildPtyHostEnvOptions = {
   /** CLIs found on this host's PATH; a plain shell installs only these agents' plugins. */
   agentsOnPath?: ReadonlySet<TuiAgent>
   claudeSubagentNavigationEnabled?: boolean
-  terminalInlineImages?: boolean
   /** Per-agent opt-out; disabled agents must not receive managed extensions. */
   disabledTuiAgents?: Iterable<unknown> | null
   networkProxySettings?: NetworkProxySettings

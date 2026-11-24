@@ -17,6 +17,8 @@ const TUI_AGENT_CONFIG_SOURCE: Record<TuiAgent, TuiAgentConfigSource> = {
   claude: {
     detectCmd: 'claude',
     promptInjectionMode: 'argv',
+    // Why: a trailing `--disallowedTools Agent` or `--debug` default arg would take the prompt as its value (#48072).
+    argvPromptSeparator: '--',
     pasteNeedsTypedRequest: true,
     // Native --prefill avoids paste-after-ready races (https://github.com/stablyai/orca/pull/926).
     draftPromptFlag: '--prefill',
@@ -90,6 +92,9 @@ const TUI_AGENT_CONFIG_SOURCE: Record<TuiAgent, TuiAgentConfigSource> = {
     submitPasteReadySignal: 'opencode-agent-row',
     // Two Windows ConPTY hosts enabled paste at ~4.8s and composer readiness at ~10s; the 8s default pasted blind. Signals arrived reliably (#22479).
     draftPasteReadyTimeoutMs: 20_000,
+    // Why: OpenCode inserts a paste asynchronously and drops an Enter that beats it, leaving `[Pasted ~N lines]` held (#45760).
+    // One retry: the paste lands well within the first recheck; a refusal after that is OpenCode's own (no model).
+    submitRetryBudgetMs: 1000,
     // Why: OpenCode decodes CSI-u Ctrl+Enter without local ConPTY kitty negotiation (#25372).
     ctrlEnterEncoding: 'csi-u',
     composerReadyCaptures: [
@@ -107,6 +112,7 @@ const TUI_AGENT_CONFIG_SOURCE: Record<TuiAgent, TuiAgentConfigSource> = {
     draftPasteReadySignal: 'render-cursor-after-bracketed-paste',
     submitPasteReadySignal: 'opencode-agent-row',
     draftPasteReadyTimeoutMs: 20_000,
+    submitRetryBudgetMs: 1000,
     composerReadyCaptures: [
       'opencode-2-0-18-timed-boot-hidden-pane',
       'opencode-2-0-21-timed-cold-standalone',
@@ -322,7 +328,7 @@ const TUI_AGENT_CONFIG_SOURCE: Record<TuiAgent, TuiAgentConfigSource> = {
     promptInjectionMode: 'stdin-after-start',
     // Its banner animates indefinitely; wait for the input box corner instead of render quiet.
     draftPasteReadySignal: 'zcode-composer-prompt',
-    composerReadyCaptures: ['zcode-composer-ready']
+    composerReadyCaptures: ['zcode-composer-ready', 'zcode-app-cli-composer-ready']
   },
   // Why: stdin-after-start's follow-up wrote before Devin's input loop existed (#26302); `devin -- <prompt>` submits reliably.
   // prettier-ignore

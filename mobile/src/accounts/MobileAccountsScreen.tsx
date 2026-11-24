@@ -24,6 +24,7 @@ import {
   type ProviderKey,
   getActiveProviderRateLimits,
   getInactiveProviderUsage,
+  getSystemDefaultProviderUsage,
   getOtherUsageProviders,
   hasActiveProviderUsage
 } from './usage/usage-selectors'
@@ -193,6 +194,7 @@ export function MobileAccountsScreen() {
         ? getActiveCodexAccountIdForRateLimitTarget(snapshot)
         : state.activeAccountId
     const activeUsage = getActiveProviderRateLimits(snapshot, provider)
+    const systemDefaultUsage = getSystemDefaultProviderUsage(snapshot, provider, activeAccountId)
     const resetCredit = provider === 'codex' ? getCodexResetCreditSummary(activeUsage, now) : null
     const Icon = provider === 'claude' ? ClaudeIcon : OpenAIIcon
     // Stored rows may name a selection or Codex target the desktop has since changed.
@@ -212,9 +214,13 @@ export function MobileAccountsScreen() {
             title={t('accounts.screen.default', 'System default')}
             subtitle={t('accounts.screen.agentLogin', "Use the agent's own login")}
             detail={
-              // Show system-default login usage for users without managed accounts.
-              activeAccountId === null && hasActiveProviderUsage(activeUsage) ? (
-                <ProviderUsageWindows limits={activeUsage} now={now} showEmptyWindows />
+              hasActiveProviderUsage(systemDefaultUsage.limits) ? (
+                <ProviderUsageWindows
+                  limits={systemDefaultUsage.limits}
+                  now={now}
+                  isFetching={systemDefaultUsage.isFetching}
+                  showEmptyWindows
+                />
               ) : undefined
             }
             accessory={busyAccountId === `${provider}:default` ? spinner : undefined}
@@ -354,14 +360,12 @@ export function MobileAccountsScreen() {
         ) : (
           <>
             {offlineBanner ? (
-              <View style={styles.offlineBanner}>
-                <HostOfflineBanner
-                  hostName={hostName}
-                  offline={offlineBanner.offline}
-                  asOf={offlineBanner.asOf}
-                  onRetry={offlineBanner.retry}
-                />
-              </View>
+              <HostOfflineBanner
+                hostName={hostName}
+                offline={offlineBanner.offline}
+                asOf={offlineBanner.asOf}
+                onRetry={offlineBanner.retry}
+              />
             ) : null}
             {renderProviderSection('claude')}
             {renderProviderSection('codex')}
