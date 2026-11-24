@@ -92,7 +92,11 @@ export type ConnectorBotSlackState = z.infer<typeof ConnectorBotSlackState>
 // GET `?team=`: that workspace's state, or with none the bot's first. `teams` lists every workspace's,
 // from a cloud with `slack.teams`.
 export const ConnectorBotSlackStateResponse = ConnectorBotSlackState.and(
-  z.object({ teams: z.array(ConnectorBotSlackState).optional() })
+  z.object({
+    teams: z.array(ConnectorBotSlackState).optional(),
+    // Added by the host from its negotiated cloud features, not from a workspace's Slack install.
+    slackThreadRepliesSupported: z.boolean().optional().catch(undefined)
+  })
 )
 export type ConnectorBotSlackStateResponse = z.infer<typeof ConnectorBotSlackStateResponse>
 

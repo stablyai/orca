@@ -25,6 +25,8 @@ import { slackTeamState } from '../../../../src/shared/connector-bot-slack-contr
 import type { PhoneSlackView } from './use-phone-bot-slack'
 import { useConnectorPeople } from './MobileConnectorAccountParts'
 import { MobileSlackPostAsPage, slackPosterNames } from './MobileSlackPostAsPage'
+import { MobileSlackThreadReplies } from './MobileSlackThreadReplies'
+import type { BotUpdateParams } from '../../../../src/shared/rpc-contract/bots-params'
 
 export function MobileBotSlackPage(props: {
   client: RpcClient | null
@@ -40,6 +42,7 @@ export function MobileBotSlackPage(props: {
   banner: ReactNode
   showToast: (message: string, durationMs?: number) => void
   removeMember: (member: BotMember) => void
+  save: (updates: BotUpdateParams['updates']) => Promise<boolean>
   onBack: () => void
   /** Finish, update or add another workspace: Connect Slack. */
   onSetUp: (teamId: string | undefined) => void
@@ -236,6 +239,17 @@ export function MobileBotSlackPage(props: {
         </SettingsSection>
       ) : null}
       {people.section}
+      {installed ? (
+        <MobileSlackThreadReplies
+          bot={bot}
+          supported={
+            slack.view.status === 'ready' && slack.view.slack.slackThreadRepliesSupported === true
+          }
+          hostName={props.hostName}
+          online={props.online}
+          save={props.save}
+        />
+      ) : null}
       {posters && postAs ? (
         <SettingsSection title={t('bots.slack.replies', 'Replies')}>
           <ListRow

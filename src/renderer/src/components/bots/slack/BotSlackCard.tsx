@@ -212,7 +212,17 @@ export function BotSlackCard({
       bot={bot}
       howToAsk={slackHowToAsk(bot)}
       people={people}
-      body={installed ? <BotSlackSection bot={bot} slack={installed} /> : undefined}
+      body={
+        installed ? (
+          <BotSlackSection
+            bot={bot}
+            slack={installed}
+            threadRepliesSupported={
+              view.status === 'ready' && view.slack.slackThreadRepliesSupported === true
+            }
+          />
+        ) : undefined
+      }
       defaultOpen={defaultOpen}
       add={
         installed

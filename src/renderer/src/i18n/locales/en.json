@@ -27636,6 +27636,15 @@
       "unsavedDrafts": "Its folder has unsaved editor changes. Save or close them, then delete again."
     },
     "slack": {
+      "threadReplies": {
+        "title": "Thread replies",
+        "label": "Only reply when mentioned in threads",
+        "detail": "Applies to this bot in every Slack workspace. DMs always get a reply. When off, replies in joined threads do not need a mention.",
+        "unsupported": "This Slack connection does not support this option yet.",
+        "waiting": "Your saved choice is not active: this Slack connection does not support it yet.",
+        "ownerOnly": "Only the bot’s owner can change this option.",
+        "failed": "Could not save. Try the switch again."
+      },
       "setup": {
         "checking": "Checking Slack…",
         "retry": "Try again",

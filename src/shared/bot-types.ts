@@ -203,6 +203,8 @@ export const BotSchema = z.object({
   /** Whether a new Slack thread the owner starts posts the owner's Orca messages back to it; absent is on.
    *  Threads others start, and the owner's teammates' DMs, start off whatever this says. */
   slackMirror: z.boolean().optional().catch(undefined),
+  /** Slack channel thread replies; absent is always. DMs always respond. */
+  slackThreadReplies: z.enum(['always', 'mentions']).optional().catch(undefined),
   /** The bot may use the Google accounts signed in on its host, for its owner's own requests. Absent is off. */
   google: z.boolean().optional(),
   /** Projects (repo ids) whose skills the bot loads when a chat starts; absent is none. */
@@ -319,9 +321,7 @@ export function slackMembersOf(
   )
 }
 
-export function botMemberSource(member: BotMember): string {
-  return member.source ?? 'slack'
-}
+export const botMemberSource = (member: BotMember): string => member.source ?? 'slack'
 
 /** The people one connector's service lets ask the bot. */
 export function botMembersFrom(members: readonly BotMember[], source: string): BotMember[] {

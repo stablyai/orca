@@ -28,7 +28,10 @@ export const CONNECTOR_FEATURES = [
   'threadCatchUp',
   'batchedSends',
   'ownDmChats',
-  'askerNote'
+  'askerNote',
+  // Negotiates a per-bot Slack thread reply choice. Until the cloud advertises support and receives
+  // that choice, an omitted field preserves its stored choice (a new bot defaults to always).
+  'slackThreadReplies'
 ] as const
 
 // The cloud uses only what a machine lists; an entry it does not know is ignored, not refused.
@@ -98,7 +101,11 @@ export const ConnectorBotSchema = z.object({
     .max(CONNECTOR_LIMITS.maxBotHandleLength)
     .regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/)
     .optional(),
-  sharedAppWorkspaces: BotWorkspacesSchema
+  sharedAppWorkspaces: BotWorkspacesSchema,
+  // Channel thread replies only; older hosts default to always. During negotiation a machine listing
+  // slackThreadReplies may omit it without clearing the saved choice. The cloud checks the raw
+  // bot-specific mention before stripping it, and keeps skipped messages available as thread context.
+  slackThreadReplies: z.enum(['always', 'mentions']).optional().catch(undefined)
 })
 
 export const ConnectorHelloRequestSchema = z
@@ -200,6 +207,8 @@ export const CONNECTOR_CLOUD_REPLY_CHOICES_FEATURE = 'reply.choices'
 // The cloud takes the `activity` event and shows it on a working thread. Kept out of
 // CONNECTOR_CLOUD_FEATURES, as prompts.audience is: only the code that reads the event lists it.
 export const CONNECTOR_CLOUD_TURN_ACTIVITY_FEATURE = 'turn.activity'
+// Kept out of CONNECTOR_CLOUD_FEATURES: only a cloud that enforces this before routing advertises it.
+export const CONNECTOR_CLOUD_SLACK_THREAD_REPLIES_FEATURE = 'slack.threadReplies'
 // Listed by a machine that keeps a reply outbox, and by a cloud that takes its `reply` events (kept
 // out of CONNECTOR_CLOUD_FEATURES: the cloud lists it only while its switch is on). Under a hello
 // whose answer doesn't list it, the machine posts the same outcomes through replies instead.

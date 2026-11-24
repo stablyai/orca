@@ -19,6 +19,7 @@ import {
 import { GITHUB_ID_PATTERN } from '../../shared/connector-bot-github-contract'
 import type { ExternalConversationBot } from '../../shared/connectors/external-conversation-link'
 import type { RuntimeStore } from '../runtime/construction/runtime-store-contract'
+import { CONNECTOR_CLOUD_SLACK_THREAD_REPLIES_FEATURE } from '../../shared/connector-cloud-features'
 
 const Place = z.tuple([z.enum(['bot', 'bot-chat']), z.string().min(1)])
 type Place = z.infer<typeof Place>
@@ -164,6 +165,9 @@ export function connectorBots(
       members: memberIds(botMembersFrom(bot.members, 'slack'), maxBotMemberIdLength, maxBotMembers),
       // Bots off reads as every bot paused: the cloud keeps the bot, so a running turn's Stop still arrives.
       paused: bot.paused || !botsEnabled,
+      ...(cloudFeatures?.has(CONNECTOR_CLOUD_SLACK_THREAD_REPLIES_FEATURE)
+        ? { slackThreadReplies: bot.slackThreadReplies ?? 'always' }
+        : {}),
       ...(plain(bot.folder, maxBotHandleLength) ? { handle: bot.folder } : {}),
       sharedAppWorkspaces: withSlackFirst(slackWorkspaces(bot), [
         ...botLinearWorkspaces(bot)

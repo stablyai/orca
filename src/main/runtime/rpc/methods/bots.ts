@@ -39,10 +39,25 @@ import { normalizeBotSidebarView } from '../../../../shared/bots/bot-sidebar-vie
 import { OWNER_ACTS_FOR } from '../../../../shared/bots/bot-acts-for'
 import { orcaSignInServer } from '../../../bots/orca-sign-in-server'
 import { refuseUnsavedFolderDrafts } from '../../repositories/folder-workspace-deletion'
+import { CONNECTOR_CLOUD_SLACK_THREAD_REPLIES_FEATURE } from '../../../../shared/connector-cloud-features'
 
 async function updateBot(params: BotUpdateParams, context: RpcContext) {
   if (params.updates.slackMirror !== undefined) {
     ownerOnly(context, 'Only the owner can change what posts to Slack')
+  }
+  if (params.updates.slackThreadReplies !== undefined) {
+    ownerOnly(context, 'Only the owner can change when the bot replies in Slack threads')
+    if (
+      params.updates.slackThreadReplies === 'mentions' &&
+      !context.runtime
+        .getConnectorCloud()
+        ?.cloudFeatures()
+        ?.has(CONNECTOR_CLOUD_SLACK_THREAD_REPLIES_FEATURE)
+    ) {
+      throw new InvalidArgumentError(
+        'Orca Cloud does not support mention-only Slack thread replies yet'
+      )
+    }
   }
   const { members, addMembers: added, permissionMode } = params.updates
   if (members !== undefined || added !== undefined || permissionMode !== undefined) {

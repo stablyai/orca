@@ -39,7 +39,8 @@ export const CONNECTOR_FEATURES = [
   'threadCatchUp',
   'batchedSends',
   'ownDmChats',
-  'askerNote'
+  'askerNote',
+  'slackThreadReplies'
 ] as const
 
 export const CONNECTOR_CLIENT_LIMITS = {
@@ -282,6 +283,8 @@ export type ConnectorBot = {
   paused: boolean
   /** How people name it where bots share one app: "@Orca reviewer", label `bot:reviewer`. */
   handle?: string
+  /** Slack channel thread replies; sent only to a cloud listing slack.threadReplies. */
+  slackThreadReplies?: 'always' | 'mentions'
   /** Workspaces of a shared-app source (Linear, GitHub installations) it answers in, with who may ask there. */
   sharedAppWorkspaces?: ConnectorBotWorkspace[]
 }

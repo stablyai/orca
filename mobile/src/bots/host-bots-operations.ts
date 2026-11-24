@@ -31,6 +31,7 @@ export const phoneBotSchema = z.looseObject({
   slack: BotSchema.shape.slack,
   // Every Slack workspace, for its Connectors rows.
   slackApps: BotSchema.shape.slackApps,
+  slackThreadReplies: BotSchema.shape.slackThreadReplies,
   linear: BotSchema.shape.linear,
   linearWorkspaces: BotSchema.shape.linearWorkspaces,
   github: BotSchema.shape.github,

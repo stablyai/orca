@@ -68,6 +68,10 @@ export const CONNECTOR_CLOUD_REPLY_CHOICES_FEATURE = 'reply.choices'
  *  as the cloud's contract keeps it. */
 export const CONNECTOR_CLOUD_TURN_ACTIVITY_FEATURE = 'turn.activity'
 
+/** The cloud filters channel thread replies before delivery using a bot's slackThreadReplies.
+ *  Advertised only by an implementation that also preserves skipped messages as thread context. */
+export const CONNECTOR_CLOUD_SLACK_THREAD_REPLIES_FEATURE = 'slack.threadReplies'
+
 /** Listed by this Orca, which keeps a reply outbox, and by a cloud that takes its `reply` events
  *  (design item 125). Its own constant, as the cloud's contract keeps it. */
 export const CONNECTOR_REPLIES_OUTBOX_FEATURE = 'replies.outbox'
