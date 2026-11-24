@@ -51,8 +51,10 @@ export class ProviderRelaySpool {
   private disposed = false
   /** Ends the current attach's waits once it is superseded, so its call returns even on a stalled disk. */
   private cancelWait: (() => void) | null = null
-  /** The file replay still running, stale or not; one at a time, so stalled takeovers can't stack readers. */
-  private reading: Promise<unknown> | null = null
+  /** A file replay is running, stale or not; one at a time, so stalled takeovers can't stack readers. */
+  private reading = false
+  /** Attaches waiting for that reader; freed when it closes its file or the file is retired. */
+  private readonly readerWaiters = new Set<() => void>()
   private readonly memoryCap: number
   private readonly fileCap: number
 
@@ -165,7 +167,7 @@ export class ProviderRelaySpool {
     }
     this.file.index.ackThrough(this.acked)
     if (this.file.index.lastSeq > 0 && this.acked >= this.file.index.lastSeq) {
-      this.file.remove()
+      this.retireFile()
     }
   }
 
@@ -182,21 +184,27 @@ export class ProviderRelaySpool {
     this.updatePressure()
     const current = (): boolean =>
       generation === this.attachGeneration && this.mode === 'replaying' && !this.disposed
-    let cancelWrites = (): void => {}
+    let cancelStep = (): void => {}
     const superseded = new Promise<void>((resolve) => {
       this.cancelWait = () => {
-        cancelWrites()
+        cancelStep()
         resolve()
       }
     })
     // Writes are waited for only when the file holds records this replay reads.
     if (this.file.index.lastSeq > Math.max(fromSeq, this.acked)) {
       const wait = this.file.waitForWrites()
-      cancelWrites = wait.cancel
+      cancelStep = wait.cancel
       await wait.done
       // A stale reader stalled on the disk is waited out rather than joined by another.
-      while (this.reading && current()) {
-        await Promise.race([this.reading, superseded])
+      while (this.reading && current() && this.file.index.lastSeq > Math.max(fromSeq, this.acked)) {
+        await new Promise<void>((resolve) => {
+          this.readerWaiters.add(resolve)
+          cancelStep = () => {
+            this.readerWaiters.delete(resolve)
+            resolve()
+          }
+        })
       }
       // A superseded attach reads nothing, so a stalled write can't make each one reread the file.
       if (!current()) {
@@ -226,7 +234,7 @@ export class ProviderRelaySpool {
     if (file.outcome === 'lost' && current()) {
       // Retrying would fail the same way, so the loss is named; lost records are never claimed as sent.
       this.lostThrough = Math.max(this.lostThrough, fileLast)
-      this.file.remove()
+      this.retireFile()
       this.options.onFileLost?.()
     } else if (file.outcome !== 'done' || !current()) {
       return this.nextSeqValue - 1
@@ -264,13 +272,24 @@ export class ProviderRelaySpool {
   }
 
   private track<T>(replay: Promise<T>): Promise<T> {
-    const reading = replay.finally(() => {
-      if (this.reading === reading) {
-        this.reading = null
-      }
+    this.reading = true
+    return replay.finally(() => {
+      this.reading = false
+      this.wakeReaderWaiters()
     })
-    this.reading = reading
-    return reading
+  }
+
+  /** A retired file has nothing left to read, so attaches waiting on its reader go on. */
+  private retireFile(): void {
+    this.file.remove()
+    this.wakeReaderWaiters()
+  }
+
+  private wakeReaderWaiters(): void {
+    for (const resolve of this.readerWaiters) {
+      resolve()
+    }
+    this.readerWaiters.clear()
   }
 
   private stopWaiting(): void {

@@ -82,7 +82,12 @@ export async function replaySpoolFile(replay: SpoolReplay): Promise<SpoolReplayO
   } catch {
     return replay.current() ? 'failed' : 'stale'
   } finally {
-    stream.destroy()
+    // Settles only once the fd is closed, so the next reader never opens beside this one.
+    if (!stream.closed) {
+      const closed = new Promise((resolve) => stream.once('close', resolve))
+      stream.destroy()
+      await closed
+    }
   }
 }
 
