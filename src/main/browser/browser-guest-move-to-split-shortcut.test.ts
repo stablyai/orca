@@ -1,38 +1,34 @@
 import { describe, expect, it, vi } from 'vitest'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../shared/workspace/identity/floating-workspace-id'
-import { setupGuestShortcutForwarding } from './guest-lifecycle/input/shortcuts/browser-guest-shortcut-forwarding'
+import { forwardGuestShortcutInput } from './guest-lifecycle/input/shortcuts/browser-guest-shortcut-dispatch'
 
 function setup(worktreeId: string): {
   send: ReturnType<typeof vi.fn>
   pressChord: () => ReturnType<typeof vi.fn>
 } {
   const send = vi.fn()
-  const on = vi.fn()
-  setupGuestShortcutForwarding({
-    browserTabId: 'tab-1',
-    guest: { on, off: vi.fn() } as unknown as Electron.WebContents,
-    resolveRenderer: () => ({ send }) as unknown as Electron.WebContents,
-    resolveWorktreeId: () => worktreeId
-  })
-  const handler = on.mock.calls.find((call) => call[0] === 'before-input-event')?.[1] as (
-    event: Electron.Event,
-    input: Electron.Input
-  ) => void
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: this branch only sends an IPC event through the resolved renderer.
+  const renderer = { send } as unknown as Electron.WebContents
   return {
     send,
     pressChord: () => {
       const preventDefault = vi.fn()
-      handler(
-        { preventDefault } as unknown as Electron.Event,
+      forwardGuestShortcutInput(
         {
-          type: 'keyDown',
+          browserTabId: 'tab-1',
+          resolveRenderer: () => renderer,
+          resolveWorktreeId: () => worktreeId,
+          forwardBrowserPageZoom: vi.fn()
+        },
+        { preventDefault, defaultPrevented: false },
+        {
           code: 'Backslash',
           key: '\\',
           alt: false,
           shift: false,
           meta: process.platform === 'darwin',
           control: process.platform !== 'darwin'
-        } as Electron.Input
+        }
       )
       return preventDefault
     }

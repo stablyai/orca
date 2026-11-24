@@ -151,7 +151,14 @@ export const uiTabAndBrowserCommandsApi = {
   },
   onMoveTabToSplit: (callback: (payload: MoveTabToSplitPayload) => void): (() => void) => {
     const listener = (_event: Electron.IpcRendererEvent, payload: unknown): void => {
-      const { direction, sourceId } = (payload ?? {}) as Partial<MoveTabToSplitPayload>
+      if (
+        !payload ||
+        typeof payload !== 'object' ||
+        !('direction' in payload) ||
+        !('sourceId' in payload)
+      )
+        return
+      const { direction, sourceId } = payload
       if (
         (direction === 'left' ||
           direction === 'right' ||

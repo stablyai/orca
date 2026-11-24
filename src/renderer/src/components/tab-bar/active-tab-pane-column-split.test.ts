@@ -1,4 +1,8 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import {
+  buildBrowserPage,
+  buildWorkspaceFromPage
+} from '@/store/slices/browser/pages/browser-page-records'
 import { useAppStore } from '../../store'
 import type { Tab } from '../../../../shared/workspace-layout/tab-groups/tab-types'
 import {
@@ -135,6 +139,8 @@ describe('active-tab-pane-column-split', () => {
         contentType: 'browser',
         entityId: 'ws-1'
       }
+      const page = buildBrowserPage('ws-1', WT, 'about:blank', undefined, undefined, 'page-1')
+      const workspace = buildWorkspaceFromPage('ws-1', WT, page, [page.id])
       useAppStore.setState({
         groupsByWorktree: {
           [WT]: [
@@ -145,9 +151,9 @@ describe('active-tab-pane-column-split', () => {
         unifiedTabsByWorktree: {
           [WT]: [unifiedTab('tab-a', 0), unifiedTab('tab-b', 1), browserTab]
         },
-        browserTabsByWorktree: { [WT]: [{ id: 'ws-1' }] },
-        browserPagesByWorkspace: { 'ws-1': [{ id: 'page-1' }] }
-      } as unknown as Parameters<typeof useAppStore.setState>[0])
+        browserTabsByWorktree: { [WT]: [workspace] },
+        browserPagesByWorkspace: { 'ws-1': [page] }
+      })
     }
 
     it('targets the guest-owning tab even when another group is active', () => {
