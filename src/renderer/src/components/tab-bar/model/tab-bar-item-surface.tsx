@@ -39,7 +39,6 @@ export type TabBarItemSurfaceRuntime = Pick<
 
 export function renderTabBarItems({
   items,
-  groupItems = items,
   props,
   runtime,
   actions,
@@ -51,8 +50,6 @@ export function renderTabBarItems({
   items: TabBarItem[]
   /** Mounted runs of `items`; gaps render as fixed-width spacers. */
   segments: readonly TabStripSegment[]
-  /** The whole group in strip order; close-others/left/right act on hidden tabs too. */
-  groupItems?: readonly TabBarItem[]
   props: TabBarItemSurfaceProps
   runtime: TabBarItemSurfaceRuntime
   actions: TabBarItemActions
@@ -104,13 +101,7 @@ export function renderTabBarItems({
     return (activeTabType === 'editor' || activeTabType === 'simulator') && activeFileId === item.id
   }
 
-  const groupIndexById = new Map(groupItems.map((item, index) => [item.id, index]))
-  const unpinnedCount = groupItems.filter((item) => !item.isPinned).length
-
-  function renderRow(item: TabBarItem): React.ReactNode {
-    const groupIndex = groupIndexById.get(item.id) ?? 0
-    // "Close others" enables at tabCount > 1: count what it closes, hidden tabs included, pinned never.
-    const closableOthers = unpinnedCount - (item.isPinned ? 0 : 1)
+  function renderRow(item: TabBarItem, index: number): React.ReactNode {
     let canToggleViewMode = false
     let isChatView = false
     let viewModeTabId: string | undefined
@@ -143,9 +134,9 @@ export function renderTabBarItems({
         worktreeId={worktreeId}
         groupId={resolvedGroupId}
         generatedTabTitlesEnabled={generatedTabTitlesEnabled}
-        tabCount={closableOthers + 1}
-        hasTabsToLeft={groupIndex > 0}
-        hasTabsToRight={groupIndex < groupItems.length - 1}
+        tabCount={items.length}
+        hasTabsToLeft={index > 0}
+        hasTabsToRight={index < items.length - 1}
         isActive={isActiveItem(item)}
         isExpanded={item.type === 'terminal' && expandedPaneByTabId[item.id] === true}
         dropIndicator={dropIndicatorByVisibleId.get(item.id) ?? null}
@@ -179,7 +170,7 @@ export function renderTabBarItems({
       continue
     }
     for (let index = segment.start; index < segment.end; index++) {
-      rows.push(renderRow(items[index]))
+      rows.push(renderRow(items[index], index))
     }
   }
   return rows
