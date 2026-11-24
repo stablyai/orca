@@ -2,6 +2,7 @@ import { z } from 'zod'
 import { pluginRelativePathSchema } from '../manifest/plugin-manifest-fields'
 import {
   PLUGIN_MANIFEST_V2_SINCE,
+  PLUGIN_THEME_CHAT_OPACITY_SINCE,
   PLUGIN_THEME_VIDEO_BACKGROUND_SINCE,
   pluginFieldDoc,
   pluginPathFieldDoc
@@ -32,7 +33,19 @@ const backgroundStyleFields = {
   position: z
     .enum(['center', 'top', 'bottom', 'left', 'right'])
     .optional()
-    .meta(pluginFieldDoc('Which edge the image anchors to. Defaults to `center`.', NEXT))
+    .meta(pluginFieldDoc('Which edge the image anchors to. Defaults to `center`.', NEXT)),
+  chatOpacity: z
+    .number()
+    .min(0.5)
+    .max(1)
+    .optional()
+    .meta(
+      pluginFieldDoc(
+        "Lowest opacity of an agent chat's canvas over the image, 0.5 to 1, so more of the image shows behind chats when Background Opacity is low. Defaults to 0.8.",
+        PLUGIN_THEME_CHAT_OPACITY_SINCE,
+        [0.6]
+      )
+    )
 }
 
 const backgroundFields = {
@@ -71,7 +84,8 @@ const tolerantBackgroundSchema = z.object({
   videoPath: backgroundFields.videoPath.catch(undefined),
   opacity: backgroundStyleFields.opacity.catch(undefined),
   size: backgroundStyleFields.size.catch(undefined),
-  position: backgroundStyleFields.position.catch(undefined)
+  position: backgroundStyleFields.position.catch(undefined),
+  chatOpacity: backgroundStyleFields.chatOpacity.catch(undefined)
 })
 
 /** Runtime keeps a theme whose background is malformed or newer; at worst it paints no image. */
