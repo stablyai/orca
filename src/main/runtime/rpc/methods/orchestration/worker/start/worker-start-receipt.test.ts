@@ -11,6 +11,7 @@ import { OrchestrationError } from '../../../../../orchestration/orchestration-e
 import type { OrcaRuntimeService } from '../../../../../orca-runtime'
 import { GitCommandTimeoutError } from '../../../../../../../shared/git/commands/git-command-timeout'
 import { failWorkerStartWithReceipt } from './worker-start-receipt'
+import { TerminalHostCapError } from '../../../../../../../shared/terminal/pty/lifecycle/terminal-host-cap-refusal'
 import { readDispatchWorkers, type SessionWorkersRuntime } from '../session-workers-method'
 
 // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: each stub has every member the code under test calls.
@@ -96,6 +97,37 @@ describe('a worker start cut before its agent ran', () => {
       .getAllMessagesForHandle(mailbox)
       .filter((message) => message.payload?.includes(dispatch.id))
     expect(told).toHaveLength(1)
+  })
+
+  it('names the host terminal cap in the receipt and the failed-start mail, never a lost worker', async () => {
+    open()
+    const dispatch = starting()
+    // The startup terminal's warning wraps the daemon's refusal before worker-start throws it.
+    const refusal = new TerminalHostCapError(256, 256)
+    const receipt = await failStart(
+      dispatch.id,
+      dispatch.task_id,
+      new Error(`Failed to create the startup terminal for /repo/wt: ${refusal.message}`)
+    )
+
+    expect(receipt).toMatchObject({
+      state: 'failed',
+      blockedReason: 'terminal_host_cap',
+      lastError: expect.stringContaining(
+        "Orca refused the worker's terminal because this host is at its terminal limit (256 of 256 terminals in use)."
+      ),
+      nextCommands: ['orca orchestration worker-list --terminal-state reclaimable --json']
+    })
+    const mailbox = dispatchReportMailbox(db, db.getDispatchContextById(dispatch.id)!)
+    const told = db
+      .getAllMessagesForHandle(mailbox)
+      .find((message) => message.payload?.includes(dispatch.id))
+    expect(told?.subject).toBe("Worker couldn't start")
+    expect(told?.body).toContain(
+      `couldn't start task "work" (${dispatch.task_id}): Orca refused the worker's terminal because this host is at its terminal limit (256 of 256 terminals in use).`
+    )
+    expect(told?.body).toContain('`orchestration worker-release --dispatch <dispatch_id>`')
+    expect(told?.body).not.toMatch(/lost|gone/)
   })
 
   it('reads a local start left unknown with no terminal as failed, but not a paired server one', async () => {

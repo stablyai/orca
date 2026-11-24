@@ -3,6 +3,7 @@
 import { useEffect, useSyncExternalStore } from 'react'
 import {
   BOTS_ITEM_COMMENT_PLAIN_RUNTIME_CAPABILITY,
+  BOTS_ITEM_COMMENT_SKIPPED_RUNTIME_CAPABILITY,
   BOTS_ITEM_COMMENT_QUESTION_ID_RUNTIME_CAPABILITY,
   BOTS_ITEM_COMMENT_REQUEST_ID_RUNTIME_CAPABILITY,
   BOTS_ITEM_COMMENT_SKILLS_RUNTIME_CAPABILITY
@@ -45,6 +46,7 @@ export function usePhoneBotItemPendingComments({
   const skills = useRouteCapability(BOTS_ITEM_COMMENT_SKILLS_RUNTIME_CAPABILITY)
   const questionIds = useRouteCapability(BOTS_ITEM_COMMENT_QUESTION_ID_RUNTIME_CAPABILITY)
   const plain = useRouteCapability(BOTS_ITEM_COMMENT_PLAIN_RUNTIME_CAPABILITY)
+  const skipped = useRouteCapability(BOTS_ITEM_COMMENT_SKIPPED_RUNTIME_CAPABILITY)
   return usePendingComments(key, events, {
     post: async (entry) => {
       const outcome = client
@@ -53,7 +55,8 @@ export function usePhoneBotItemPendingComments({
             requestId: entry.requestId ?? undefined,
             skills: entry.skills,
             questionId: entry.questionId ?? undefined,
-            plain: entry.plain
+            plain: entry.plain,
+            skipped: entry.skipped
           })
         : ({ kind: 'not-sent' } as const)
       if (outcome.kind !== 'done') {
@@ -80,6 +83,7 @@ export function usePhoneBotItemPendingComments({
     requestIds,
     questionIds,
     plain,
-    skills
+    skills,
+    skipped
   })
 }

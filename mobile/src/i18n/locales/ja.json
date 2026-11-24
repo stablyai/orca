@@ -21,7 +21,7 @@
     },
     "claude": {
       "usageSignInLabel": "もう一度サインイン",
-      "usageSignInMessage": "選択した Claude アカウントは再度サインインが必要です。設定 > AI プロバイダーアカウントを開くか、システムのデフォルトを選択してください。"
+      "usageSignInMessage": "このアカウントは再度サインインが必要です。"
     }
   },
   "agentHistory": {
@@ -207,8 +207,7 @@
       "next": "次へ",
       "other": "その他…",
       "skip": "スキップ",
-      "step": "ステップ {{step}}",
-      "submit": "送信"
+      "step": "ステップ {{step}}"
     },
     "askRow": {
       "asked": "質問:",
@@ -381,17 +380,16 @@
     "promptStrip": {
       "expand": "展開"
     },
-    "question": {
-      "otherReplyPlaceholder": "または返信を入力…",
-      "replyPlaceholder": "返信を入力…",
-      "sendReply": "返信を送信",
-      "submit": "送信",
-      "submitCount": "送信（{{count}}）",
-      "submitSelectedOptions": "選択した項目を送信"
-    },
     "queuedMessages": {
       "deleteAll": "すべて削除",
       "editMessage": "メッセージを編集",
+      "showLess": "表示を減らす",
+      "moreCount_one": "他 {{count}} 件",
+      "moreCount_other": "他 {{count}} 件",
+      "deleteMessage": "メッセージを削除",
+      "queuedCount_one": "送信待ちのメッセージ {{count}} 件",
+      "queuedCount_other": "送信待ちのメッセージ {{count}} 件",
+      "foldNeedsAttention": "{{more}}、確認が必要なメッセージがあります",
       "pausedState": "一時停止中",
       "queuedState": "キュー待ち",
       "resume": "再開",
@@ -2425,6 +2423,7 @@
       "images_one": "画像 {{count}} 枚",
       "images_other": "画像 {{count}} 枚",
       "moreActions": "その他の操作",
+      "you": "あなた",
       "send": "送信",
       "sendAgainHint": "このメッセージを再送信",
       "sendHint": "このメッセージを送信",
@@ -2534,6 +2533,7 @@
       "unsavedMarkdown": "Markdown の未保存の変更",
       "urlPrompt": "URL を入力してください。空欄のままにすると新規タブが開きます。",
       "allowAutoClose": "自動終了を許可",
+      "agents": "Agent",
       "renameTerminalFailed": "ターミナルの名前を変更できませんでした。{{reason}}"
     },
     "sourceControlLaunchAgent": {
@@ -2747,6 +2747,8 @@
       "conversationCleared": "この会話はクリアされました。",
       "goalsUnsupported": "この Agent は目標に対応していません。",
       "historyUnavailable": "Orca は現在このチャットの履歴を開けませんでした。",
+      "diskFull": "このチャットを実行しているコンピューターのディスクがいっぱいです。",
+      "freeDiskSpace": "そのディスクの空き容量を増やしてから、もう一度お試しください。",
       "savedInOtherFolder": "この会話は別のフォルダーに保存されています。",
       "historyUnreadable": "Orca はこのチャットの保存済み履歴を読み取れませんでした。",
       "historyUnusable": "このチャットを読み込めません。",
@@ -2852,12 +2854,30 @@
     "nativeChatView": {
       "linkedMessageMissing": "そのメッセージが見つかりませんでした。"
     },
+    "tabsSheet": {
+      "needsYou": "確認が必要",
+      "working": "作業中",
+      "everythingElse": "その他",
+      "closeTab": "{{title}} を閉じる"
+    },
+    "tabRows": {
+      "browser": "ブラウザ",
+      "markdown": "Markdown ノート",
+      "file": "ファイル",
+      "chat": "チャット",
+      "terminal": "ターミナル"
+    },
     "browserProfile": {
       "title": "プロファイル",
       "default": "デフォルト"
     },
     "tabBar": {
+      "oneTab": "1 個のタブ",
       "tabCount": "{{count}} 個のタブ",
+      "anotherNeedsYou": "別のタブで確認が必要です",
+      "actionsHint": "このタブの操作を表示します",
+      "next": "次のタブ",
+      "previous": "前のタブ",
       "hint": "すべてのタブを表示"
     }
   },
@@ -3437,6 +3457,9 @@
       "planModelUnavailable": "モデル「{{model}}」は {{label}} で利用できません。",
       "planModelWithoutThinking": "モデル「{{model}}」は思考の強度設定に対応していません。",
       "planThinkingLevelInvalid": "思考レベル「{{level}}」は {{model}} では無効です。",
+      "commandTemplateEmptyDictationCleanup": "音声入力のクリーンアップ用のコマンドテンプレートが空です。",
+      "dictationCleanupAgentUnsupported": "設定 -> 音声 -> クリーンアップ で、AI クリーンアップに対応した Agent を選択してください。対応している Agent: {{agents}}、またはカスタムコマンド。",
+      "agentCannotGenerateDictationCleanup": "Agent「{{agent}}」は音声入力のクリーンアップに対応していません。対応している Agent: {{agents}}、またはカスタムコマンド。",
       "promptTooLargeForArgument": "{{label}} のプロンプトが大きすぎるため、単一のコマンドライン引数として渡せません。ステージする変更を減らして、もう一度お試しください。",
       "promptTooLargeForWindows": "{{label}} のプロンプトが Windows のコマンドラインには大きすぎます。ステージする変更を減らして、もう一度お試しください。",
       "pullRequestDetailsUnparseable": "生成された PR の詳細を解析できませんでした。",
@@ -4090,7 +4113,6 @@
       "empty": "ワークスペースがありません",
       "loadFailed": "このホストからワークスペースを読み込めませんでした。",
       "noFilterMatches": "フィルターに一致するワークスペースがありません",
-      "noMatches": "一致するワークスペースがありません",
       "reopen": "開き直して更新",
       "reopenDetail": "このページは、このホストのワークスペース一覧の形式にまだ対応していません。"
     },
@@ -4410,7 +4432,7 @@
             "cursor": {
               "expired": {
                 "label": "サインインの有効期限切れ",
-                "message": "Orca を実行しているコンピュータのターミナルで cursor-agent login を実行し、使用状況を再試行してください。"
+                "message": "Orca を実行しているコンピュータのターミナルで cursor-agent login を実行し、使用状況の取得を再試行してください。"
               }
             },
             "usage": {
@@ -4519,6 +4541,7 @@
     }
   },
   "bots": {
+    "section": {},
     "link": {
       "pairTitle": "コンピュータをペアリング",
       "pairRequired": "このリンクを開くには、このスマートフォンをコンピュータとペアリングしてから、もう一度リンクを開いてください。",
@@ -4557,7 +4580,6 @@
       "access": "アクセス",
       "whoCanAsk": "質問できる人",
       "deleteBot": "ボットを削除…",
-      "agentDetail": "ボットの会話とオートメーションに使われます。新規モデルは新規会話に適用され、ホームチャットは現在のモデルのままです。",
       "accountChecking": "確認中…",
       "signedOut": "Orca からサインアウトしました",
       "orcaAccount": "Orca アカウント",
@@ -4572,7 +4594,6 @@
       "onlyYou": "自分のみ",
       "model": "モデル",
       "effort": "推論レベル",
-      "chatDefaultNote": "チャットのデフォルトを使用します。バックグラウンドの実行には「Agent」設定が使われます。",
       "modelDefault": "既定",
       "signInChanged": "Orca のサインインが変わりました",
       "sameAsChatsDetail": "チャットの権限設定を使います。",
@@ -4598,7 +4619,6 @@
     "lookAround": {
       "looking": "見回り中…",
       "save": "保存",
-      "detail": "接続済みのアプリとプロジェクトを読んで次のステップを提案します。読み取り専用です。見回りのたびに Agent のプランを使います。ホストで Orca が起動している必要があります。",
       "lookNow": "今すぐ見回り",
       "notYet": "まだ",
       "backToLookAround": "見回りに戻る"
@@ -4613,28 +4633,13 @@
     "groups": {
       "group": "グループ",
       "peerTold": "{{from}} が {{to}} に伝えました",
-      "startAConversationWithThisGroupMentionBots": "このグループで会話を始めましょう。@名前 または @everyone でボットをメンションできます。",
       "items": {
-        "thisGroup": "このグループ",
-        "thread": "スレッド",
-        "all": "すべての作業",
-        "orNames": "{{names}} または {{last}}",
-        "outsideRoom_one": "このルーム外にあと {{count}} 件",
-        "outsideRoom_other": "このルーム外にあと {{count}} 件",
-        "outsideThread_one": "このスレッド外にあと {{count}} 件",
-        "outsideThread_other": "このスレッド外にあと {{count}} 件",
-        "outside_one": "このグループ外にあと {{count}} 件",
-        "outside_other": "このグループ外にあと {{count}} 件",
         "emptyTitle": "このグループの項目はまだありません",
-        "emptyBody": "{{names}} がこのグループで何かを引き受けると、ここに表示されます。",
         "needsYouCount_one": "{{count}} 件が対応待ち",
         "needsYouCount_other": "{{count}} 件が対応待ち",
         "workingCount_one": "実行中 {{count}} 件",
         "workingCount_other": "実行中 {{count}} 件",
         "filterBot": "ボット",
-        "outsideRoom": "このルーム外にあと {{count}} 件",
-        "outsideThread": "このスレッド外にあと {{count}} 件",
-        "outside": "このグループ外にあと {{count}} 件",
         "needsYouCount": "{{count}} 件が対応待ち",
         "workingCount": "実行中 {{count}} 件"
       },
@@ -4666,14 +4671,11 @@
     "tidyUp": {
       "title": "メモリーのメンテナンス",
       "never": "まだ",
-      "footer": "変更するのはメモリーファイルだけです。短いチャットと同様に Agent のプランを使います。コンピュータで Orca が起動している必要があります。",
-      "undoNote": "元に戻すと、MEMORY.md がこの整理の前の状態に一括で戻ります。履歴全体の確認とメモリーの編集は、コンピュータの「設定 → メモリー」で行えます。",
       "backToTidyUp": "メモリーのメンテナンスに戻る"
     },
     "items": {
       "filter": {
-        "clearAll": "フィルターをクリア",
-        "chat": "チャット"
+        "clearAll": "フィルターをクリア"
       },
       "tab": "アイテム",
       "activity": {
@@ -4689,8 +4691,7 @@
         "title": "アイテム",
         "placeOf": "{{total}} 件中 {{index}} 件目",
         "previous": "前の項目",
-        "next": "次の項目",
-        "subWhere": "項目 {{number}} · {{chat}}"
+        "next": "次の項目"
       },
       "write": {
         "offline": "{{host}} はオフラインです。"
@@ -4699,8 +4700,9 @@
       "readFailedClosedPage": "クローズ済みの項目をこれ以上読み込めませんでした。",
       "skillLimit": "メッセージは送信されませんでした。選択するスキルファイルを {{limit}} 個以内にして、もう一度お試しください。",
       "ask": {
-        "notSentYet": "まだ送信されていません",
-        "replaced": "Agent が新たな質問をしました。確認してから返信してください。"
+        "replaced": "Agent が新たな質問をしました。確認してから返信してください。",
+        "replacedByNewer": "新しい質問に置き換えられました",
+        "skipped": "スキップ済み"
       }
     },
     "needs": {
@@ -4736,7 +4738,6 @@
       },
       "rotate": {
         "open": "キーを更新…",
-        "title": "「{{automation}}」のキーを更新しますか？",
         "confirm": "キーを更新",
         "note": "URL に新規キーが付きます。すべての送信元をこのキーで更新してください。",
         "overlap": "古いキーを 24 時間有効のままにする",
@@ -4751,19 +4752,15 @@
         "add": "署名シークレットを追加…",
         "generatedTitle": "署名シークレットの準備ができました",
         "done": "完了",
-        "generatedNote": "{{sender}} の Webhook 設定に貼り付けてください。今後、呼び出しにはこの署名が必要です。",
         "copy": "シークレットをコピー",
         "copied": "シークレットをコピーしました",
         "changeTitle": "署名シークレットを変更",
         "addTitle": "署名シークレットを追加",
-        "note": "Orca はこのシークレットで署名された呼び出しのみを受け付けるため、URL が漏えいしただけでは「{{automation}}」を開始できません。",
         "sender": "送信元",
         "modeGenerate": "Orca が作成",
         "modePaste": "送信元のものを貼り付け",
         "generateNote": "このシークレットは Orca が作成します。次に {{sender}} にコピーします。",
         "paste": "{{sender}} のシークレット",
-        "pasteNote": "送信元が独自のシークレットを提供する場合に使います。",
-        "generate": "シークレットを生成",
         "save": "保存",
         "saved": "署名シークレットを保存しました",
         "changeOpen": "署名シークレットを変更…",
@@ -4797,7 +4794,6 @@
       "hookCount_one": "フック {{count}} 件",
       "hookCount_other": "フック {{count}} 件",
       "name": "Webhooks",
-      "hooks": "フック",
       "addInChat": "チャットで追加",
       "setUpDraft": "次のような Webhook を設定してください: ",
       "resumed": "Webhook を再開しました",
@@ -4863,8 +4859,7 @@
         "unverifiable": "検証できません",
         "unverifiableDetail": "{{bot}} のコンピュータに接続できません"
       },
-      "back": "Webhooks に戻る",
-      "howToCallShort": "どのツールやスクリプトからでも Webhook の URL に POST できます。各 Webhook は 1 つのオートメーションを開始します。"
+      "back": "Webhooks に戻る"
     },
     "errors": {
       "generic": "問題が発生しました。再試行してください。"
@@ -4930,7 +4925,6 @@
       "colorInk": "インク",
       "title": "名前と画像",
       "mascot": "マスコット",
-      "background": "背景色",
       "choosePhoto": "写真から選択",
       "slackToo": "Slack 上のボットの画像も変更されます。"
     },
@@ -4947,9 +4941,7 @@
       "addButton": "追加",
       "sourceLabel": "サーバーの URL または起動コマンド",
       "sourcePlaceholder": "https://… or npx …",
-      "scope": "あなた自身のツールに加えて、{{name}} だけがこれを使えます。",
       "details": "詳細",
-      "commandWarning": "コマンドは {{host}} 上のボットのホームフォルダーで実行されます。追加や保存の際、ネイティブチェック中に起動することがあります。信頼できるソフトウェアだけを追加してください。",
       "serverType": "サーバーの種類",
       "urlMode": "URL に接続",
       "commandMode": "コマンドを実行",
@@ -4957,7 +4949,6 @@
       "removeTitle": "{{app}} を削除しますか？",
       "removeNote": "{{bot}} は {{app}} を使えなくなります。いつでも再追加できます。",
       "remove": "削除",
-      "signInOrca": "Claude と Codex で使えます",
       "signInMissing": "{{agent}} はサインインしていません",
       "signInHeld": "{{agent}} が管理",
       "wontStart": "起動しません",
@@ -5019,7 +5010,17 @@
         "denied": "アクセスが許可されませんでした。",
         "expired": "サインインの有効期限が切れました。もう一度お試しください。",
         "couldNotSignIn": "サインインできませんでした。もう一度お試しください。"
-      }
+      },
+      "trust": "信頼できるソフトウェアだけを追加してください。",
+      "argument": "引数",
+      "removeArgument": "引数を削除",
+      "header": "ヘッダー",
+      "variable": "変数",
+      "removeHeaderRow": "ヘッダーを削除",
+      "removeVariableRow": "変数を削除",
+      "emptyArgument": "空",
+      "valueNew": "新しい値",
+      "valueSaved": "保存済み"
     },
     "handToBot": {
       "menu": "ボットに引き渡す…",
@@ -5052,7 +5053,6 @@
       "rowDetail": "{{app}} {{kind}}",
       "bringOver": "取り込む",
       "otherApp": "別のアプリ…",
-      "otherAppNote": "古いボットがファイルをコピーしてくれます",
       "noneFoundNote": "OpenClaw（~/.openclaw）、Hermes（~/.hermes）、OpenBot にボットが見つかりませんでした。",
       "sendStep": "古いボットにこのメッセージを送ってください",
       "copyMessage": "メッセージをコピーする",
@@ -5063,18 +5063,13 @@
       "replyLabel": "その返信",
       "title": "別のアプリからインポート",
       "newBot": "新規ボット",
-      "exportDescription": "古いボットに自分のコピーを作ってもらい、そのコピーを新規ボットに渡してください。",
-      "description": "新規ボットは古いボットを読み込んで、自分で設定します。",
       "nameAnother": "新規ボットに名前を付ける",
-      "importedBefore": "{{bot}} はこのボットから作られました",
       "keysStay": "キーとログイン情報は引き継がれません",
       "chooseFolderTitle": "フォルダーを選択",
       "loadingFolders": "フォルダーを読み込み中…",
       "lookingOn": "{{host}} を検索中…",
       "foundOn": "{{host}} で {{count}} 件見つかりました",
-      "copiedNote": "コピーしました。古いボットとのチャットに貼り付けてください。",
       "copyAgain": "もう一度コピー",
-      "addStepNote": "{{host}} の「ダウンロード」に、名前が -export で終わるフォルダーを保存します。",
       "folderItems_one": "{{count}} 件の項目",
       "folderItems_other": "{{count}} 件の項目",
       "chooseAnother": "別のフォルダーを選択…",
@@ -5236,6 +5231,9 @@
       },
       "webhooks": {
         "line": "あらゆるツールやスクリプトからのイベント"
+      },
+      "composio": {
+        "keyOnHost": "{{host}} に保存され、ボットからは見えません。"
       }
     },
     "share": {
@@ -5250,6 +5248,7 @@
     },
     "usageLimit": {
       "continuesAt": "{{time}} に再開",
+      "continues": "{{time}} に再開",
       "hitLimit": "上限に到達 · {{time}} にリセット"
     }
   },

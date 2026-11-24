@@ -8,6 +8,7 @@ import {
   settleSpawnAdmission,
   type SpawnAdmissionState
 } from '../../../shared/terminal/pty/admission/host-spawn-admission'
+import type { HostTerminalUsage } from '../../../shared/terminal/runtime-policy/terminal-limit-policy'
 import {
   DEFAULT_SPAWN_ADMISSION_LIMITS,
   TERMINAL_SPAWN_REFUSED_MESSAGE,
@@ -221,6 +222,11 @@ export class TerminalSpawnGate {
     }
   }
 
+  /** Terminals on this machine as the latest admission counted them; reads no ledger. */
+  hostTerminalUsage(): HostTerminalUsage {
+    return this.host.usage(this.state, this.options.resolveMaximum?.() ?? this.host.maxTerminals)
+  }
+
   snapshot(): TerminalSpawnGateSnapshot {
     return {
       mode: this.mode,
@@ -255,7 +261,10 @@ export class TerminalSpawnGate {
     } catch {
       // Diagnostics must never change the refusal.
     }
-    throw hostTerminalCapRefusal(facts, charge)
+    throw hostTerminalCapRefusal(facts, charge, {
+      inUse: this.hostTerminalUsage().terminalsInUse,
+      limit: maximum
+    })
   }
 
   private lease(facts: SpawnRequestFacts, charge: SpawnCharge, now: number): TerminalSpawnLease {

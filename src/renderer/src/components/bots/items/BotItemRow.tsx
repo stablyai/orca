@@ -326,7 +326,7 @@ function BotItemRowView({
               <BotItemSnoozeMenuItems items={[item]} snoozing={snoozing} />
               <DropdownMenuItem onSelect={() => onAction(item, { kind: 'cancel' })}>
                 <CircleSlash />
-                {t('bots.items.menu.cancel', 'Cancel…')}
+                {t('bots.items.menu.cancel', 'Cancel')}
               </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>

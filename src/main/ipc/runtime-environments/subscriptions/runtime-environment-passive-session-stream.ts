@@ -17,7 +17,7 @@ export type PassiveSessionTransport = {
 
 export type PassiveSessionStreamOpener = (
   environmentId: string,
-  handlers: { onFrame: (frame: unknown) => void; onEnd: () => void }
+  handlers: { onFrame: (frame: unknown) => void; onEnd: () => void; signal?: AbortSignal }
 ) => Promise<{ close: () => void } | 'unsupported'>
 
 /** A separate passive socket observes an already-ready host without acquiring/waking its runtime. */
@@ -26,7 +26,11 @@ export function createPassiveSessionStreamOpener(
 ): PassiveSessionStreamOpener {
   return async (environmentId, handlers) => {
     const connection = await transport.resolve(environmentId)
-    if (!connection || transport.isManuallyDisconnected(environmentId)) {
+    if (
+      handlers.signal?.aborted ||
+      !connection ||
+      transport.isManuallyDisconnected(environmentId)
+    ) {
       return 'unsupported'
     }
     let ended = false
@@ -60,7 +64,7 @@ export function createPassiveSessionStreamOpener(
         onError: (error) => onEvent({ type: 'error', code: error.code, message: error.message }),
         onClose: end
       },
-      { clientCapabilities: PASSIVE_SESSION_CLIENT_CAPABILITIES }
+      { clientCapabilities: PASSIVE_SESSION_CLIENT_CAPABILITIES, signal: handlers.signal }
     )
     return {
       close: () => {
