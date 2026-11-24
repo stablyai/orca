@@ -4,9 +4,12 @@ import {
 } from '../../../native-chat/agent-session-wire/delivery/structured-agent-session-input-admission'
 import type { CodexTurnHost } from './codex-structured-turn-contract'
 import type { AgentJournalMessageItem } from '../../../../shared/agent-session/journal/agent-session-journal-types'
+import { waitForPromiseWithSignal } from '../../../../shared/concurrency/abort-signal-reason'
 import { checkDispatchAuthority } from './codex-structured-dispatch-authority'
 import { turnInputFor } from './codex-structured-message-options'
+import { CODEX_TURN_OPEN_WAIT_MS } from './codex-structured-turn-open-wait'
 import { readCodexTurnId } from '../../app-server/codex-structured-thread-facts'
+import { readRecord } from '../../app-server/codex-item-field-readers'
 import { isCodexAppServerRequestError } from '../../app-server/codex-app-server-request-error'
 import { isCodexAppServerUnsupportedError } from '../../app-server/codex-app-server-session'
 
@@ -66,7 +69,32 @@ export async function steerCodexTurn(
     const answer = await admission.response
     return { turnId: readCodexTurnId(answer) ?? expectedTurnId, via: 'steer' }
   } catch (error) {
-    if (isCodexAppServerRequestError(error) || isCodexAppServerUnsupportedError(error)) {
+    if (isCodexAppServerRequestError(error)) {
+      const info = readRecord(readRecord(error.data).codexErrorInfo)
+      if (
+        readRecord(info.activeTurnNotSteerable).turnKind === 'compact' &&
+        host.activeTurnIds?.has(expectedTurnId)
+      ) {
+        // turn/start rejects input too while this compaction still owns the thread.
+        const deadline = Date.now() + (input.timeoutMs ?? CODEX_TURN_OPEN_WAIT_MS)
+        while (host.activeTurnIds?.has(expectedTurnId)) {
+          const remaining = deadline - Date.now()
+          if (remaining <= 0) {
+            throw error
+          }
+          try {
+            await waitForPromiseWithSignal(
+              host.turnOpenWaits.wait(expectedTurnId, remaining),
+              input.signal
+            )
+          } finally {
+            checkDispatchAuthority(host, input.clientMessageId, input.signal, input.isCurrent)
+          }
+        }
+      }
+      return null
+    }
+    if (isCodexAppServerUnsupportedError(error)) {
       return null
     }
     throw error
