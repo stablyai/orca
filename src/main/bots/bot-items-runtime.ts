@@ -151,10 +151,10 @@ export class BotItemsHost {
     return exists ? this.store() : null
   }
 
+  /** Leaves the bots DB worker client alone: the runtime owns it, shared with the work record. */
   dispose(): void {
     this.usageLimitWaits.stop()
     this.stores.clear()
-    this.deps.db.dispose()
   }
 
   /** Where a chat came from: the bot's Home Chat, a connector thread, an automation run, a side chat. */

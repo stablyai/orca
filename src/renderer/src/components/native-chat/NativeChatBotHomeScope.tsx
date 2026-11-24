@@ -16,13 +16,19 @@ type BotHomeController = Parameters<typeof useNativeChatBotKickoffView>[1] &
 
 /** A bot Chat's kickoff view, and Stop controls that know when a new bot is first speaking. */
 export function useNativeChatBotHome(
-  session: { messages: readonly NativeChatMessage[] },
+  session: { messages: readonly NativeChatMessage[]; sessionId: string | null },
   controller: BotHomeController,
   transport: NativeChatStructuredComposerTransport,
   workspaceId: string | null,
   hostExecution: { stopping: boolean }
 ) {
-  const kickoff = useNativeChatBotKickoffView(session.messages, controller, transport, workspaceId)
+  const kickoff = useNativeChatBotKickoffView(
+    session.messages,
+    controller,
+    transport,
+    workspaceId,
+    session.sessionId
+  )
   return {
     kickoff,
     /** Its setup card stands in for the transcript, and offers what setup needs. */

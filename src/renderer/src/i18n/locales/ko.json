@@ -67,15 +67,15 @@
       },
       "permissionsDescriptionOwnAgents": "새 채팅은 설정 → 에이전트에 있는 각 에이전트의 권한을 따릅니다.",
       "launch": {
-        "on": "Chat UI 켜짐",
-        "off": "Chat UI 꺼짐",
+        "on": "채팅 UI 켜짐",
+        "off": "채팅 UI 꺼짐",
         "agents": "에이전트별 기본 실행 모드",
-        "agentsDescription": "각 에이전트를 Chat UI와 CLI 중 어디에서 열지 선택합니다.",
+        "agentsDescription": "각 에이전트를 채팅 UI와 CLI 중 어디에서 열지 선택합니다.",
         "chatDescription": "새 에이전트가 기본적으로 채팅 모드로 실행됩니다.",
         "cliDescription": "새 에이전트가 기본적으로 CLI로 실행됩니다.",
         "turnOn": "켜기",
         "turnOff": "끄기",
-        "toggle": "기본적으로 Chat UI 사용"
+        "toggle": "기본적으로 채팅 UI 사용"
       }
     },
     "terminal": {
@@ -4727,7 +4727,7 @@
             "34c25dfe9c": "애완 동물",
             "aec479308a": "애완동물 메뉴",
             "cef0ab4636": "애완동물 번들을 가져오지 못했습니다.",
-            "2021d4f6db": "Pet 번들 가져오기에는 전체 앱을 다시 시작해야 합니다(단순히 다시 로드하는 것이 아님).",
+            "2021d4f6db": "애완동물 번들 가져오기에는 전체 앱을 다시 시작해야 합니다(단순히 다시 로드하는 것이 아님).",
             "f395c9a685": "파일을 가져오지 못했습니다.",
             "e6234bcc17": "맞춤 애완동물 업로드에는 앱 전체를 다시 시작해야 합니다(단순히 다시 로드하는 것이 아님).",
             "6d0a8cd179": "애완동물 표시",
@@ -4850,13 +4850,13 @@
             "3dd7ddfae1": "Claude 세부정보 및 계정 전환 도구 열기",
             "59c6e7b4e0": "보이는 세션은 지금 다시 시작됩니다. 나머지는 해당 작업 트리가 활성화될 때 다시 시작됩니다.",
             "c676918adc": "시스템 기본값",
-            "3325d996cb": "rate-limit 새로고침",
+            "3325d996cb": "사용량 한도 새로고침",
             "cd9d7b40ff": "{{value0}} 세션 다시 시작",
             "6cd6650b4c": "세션 다시 시작",
             "25d8bbde69": "재설정 사용 중…",
             "e159fc1fd7": "지금 재설정",
             "972a1ff497": "Codex 한도를 재설정할까요?",
-            "6d1042aa6f": "활성 계정의 Codex rate-limit 재설정 크레딧 1회를 사용해 재설정 가능한 사용량 창을 즉시 초기화합니다.",
+            "6d1042aa6f": "활성 계정의 Codex 사용량 한도 재설정 크레딧 1회를 사용해 재설정 가능한 사용량 창을 즉시 초기화합니다.",
             "confirmHostReset": "{{host}}의 {{account}}에 대해 Codex 요청 한도 초기화 크레딧 1개를 사용하며, 해당되는 모든 사용량 구간이 즉시 초기화됩니다.",
             "f077f586db": "다시 묻지 않기",
             "c0e972d726": "취소",
@@ -5601,7 +5601,7 @@
           }
         },
         "UsageBreakdownSection": {
-          "7765a4c3e1": "n/a",
+          "7765a4c3e1": "해당 없음",
           "247c93ca92": "• 추정 가격"
         },
         "GrokUsagePane": {
@@ -7766,21 +7766,21 @@
           "e4a28e8894": "Codex는 {{value0}} 로그인에 새로 로그인해야 한다고 보고했습니다. 새 Codex 세션을 시작하기 전에 다시 로그인하세요.",
           "75ca9b718e": "Codex는 활성 계정에 새로 로그인해야 한다고 보고했습니다. 새 Codex 세션을 시작하기 전에 다시 인증하세요.",
           "e05d0ff737": "현재 {{value0}} Claude 로그인을 사용하세요.",
-          "2f24f244a4": "MiniMax Cookie가 필요합니다.",
-          "8e6f0cb1d8": "MiniMax Cookie가 저장되지 않았습니다.",
-          "8d61637a77": "MiniMax Cookie가 저장되었습니다.",
-          "b43e761fe5": "MiniMax Cookie 업데이트에 실패했습니다.",
+          "2f24f244a4": "MiniMax 쿠키가 필요합니다.",
+          "8e6f0cb1d8": "MiniMax 쿠키가 저장되지 않았습니다.",
+          "8d61637a77": "MiniMax 쿠키가 저장되었습니다.",
+          "b43e761fe5": "MiniMax 쿠키 업데이트에 실패했습니다.",
           "5d63bbfbec": "MiniMax",
-          "33bba5ad83": "로컬 rate-limit 가져오기에 사용할 MiniMax 세션 Cookie를 붙여넣으세요.",
+          "33bba5ad83": "로컬 사용량 한도 가져오기에 사용할 MiniMax 세션 쿠키를 붙여넣으세요.",
           "73ea15f24b": "저장됨",
           "23afe8f226": "저장되지 않음",
           "f38b9cc4bd": "교체",
           "590a3130f9": "저장",
           "9dd50d3f75": "고급",
           "174fb408f9": "MiniMax 사용량 새로 고침이 잘못된 워크스페이스나 모델을 가리키는 경우에만 이 기본값을 변경하세요.",
-          "bf160bb6c0": "Group ID 재정의",
-          "b1e2743313": "선택 항목입니다. 비워두면 Cookie의 minimax_group_id_v2가 사용됩니다.",
-          "0747d6391a": "Cookie의 Group ID 사용",
+          "bf160bb6c0": "그룹 ID 재정의",
+          "b1e2743313": "선택 항목입니다. 비워두면 쿠키의 minimax_group_id_v2가 사용됩니다.",
+          "0747d6391a": "쿠키의 그룹 ID 사용",
           "4ff2af7524": "사용 모델 이름",
           "5cf4b0f85f": "선택적인 쉼표로 구분된 모델 이름. MiniMax가 모델 관련 오류를 반환하지 않는 한 general로 두세요.",
           "3c92b0d31c": "general",
@@ -7789,15 +7789,15 @@
           "43d7a45b97": "복사 방법",
           "b8a4f21c3e": "DevTools에서 Cookie 헤더 붙여넣기",
           "53f7b8c7a2": "마지막 새로 고침: {{value0}}",
-          "31d24a4e87": "브라우저에서 로그아웃하면 Cookie가 만료됩니다.",
+          "31d24a4e87": "브라우저에서 로그아웃하면 쿠키가 만료됩니다.",
           "3a30aaf526": "방금 전",
           "24560fe830": "DevTools를 엽니다.",
-          "4cab0fa42d": "네트워크 탭으로 이동하여 Preserve log를 활성화합니다.",
+          "4cab0fa42d": "네트워크 탭으로 이동하여 로그 보존을 활성화합니다.",
           "bee4e63e1c": "페이지를 새로 고침합니다.",
           "87f814af6f": "remains로 필터링하고 coding_plan/remains 요청을 선택합니다.",
-          "435df0ee51": "Request Headers에서 Cookie 값을 복사합니다.",
+          "435df0ee51": "요청 헤더에서 Cookie 값을 복사합니다.",
           "7492fb3bba": "여기에 붙여넣고 저장을 클릭합니다.",
-          "9fec52de4b": "Cookie 복사 방법",
+          "9fec52de4b": "쿠키 복사 방법",
           "remoteServerFallback": "원격 서버",
           "loadAccountsFailed": "프로바이더 계정을 불러오지 못했습니다.",
           "accountScopePrefix": "계정 범위",
@@ -7856,7 +7856,7 @@
           "89b9a151c3": "Claude 계정",
           "bd16d363ed": "Codex 계정",
           "4d274a02f0": "OpenCode Go 세션 쿠키",
-          "4d41177f74": "MiniMax 세션 Cookie",
+          "4d41177f74": "MiniMax 세션 쿠키",
           "7e9977b560": "계정 추가",
           "109431f707": "OpenCode Go 워크스페이스 ID"
         },
@@ -11855,11 +11855,11 @@
         "computerUseSummary": {
           "permissionsRequired_one": "에이전트가 앱 창을 조작하려면 먼저 {{value0}} 권한이 필요합니다.",
           "permissionsRequired_other": "에이전트가 앱 창을 조작하려면 먼저 {{value0}} 권한이 필요합니다.",
-          "checkingTitle": "Computer Use 액세스 확인 중입니다.",
-          "checkingDescription": "Orca가 Computer Use 도우미의 macOS 개인정보 보호 권한을 확인하고 있습니다.",
-          "unavailableTitle": "Computer Use를 사용할 수 없습니다.",
-          "unavailableDescription": "{{value0}} 때문에 Computer Use 권한을 사용할 수 없습니다.",
-          "readyTitle": "Computer Use를 사용할 준비가 되었습니다.",
+          "checkingTitle": "컴퓨터 사용 액세스 확인 중입니다.",
+          "checkingDescription": "Orca가 컴퓨터 사용 도우미의 macOS 개인정보 보호 권한을 확인하고 있습니다.",
+          "unavailableTitle": "컴퓨터 사용 기능을 이용할 수 없습니다.",
+          "unavailableDescription": "{{value0}} 때문에 컴퓨터 사용 권한을 사용할 수 없습니다.",
+          "readyTitle": "컴퓨터 사용 기능을 이용할 준비가 되었습니다.",
           "readyDescription": "요청하면 에이전트가 앱 창을 검사하고 조작할 수 있습니다.",
           "permissionsTitle": "로컬 앱을 사용하려면 설정을 완료하세요."
         },
@@ -14532,7 +14532,7 @@
                 "d713f500b2": "로그 테일(마지막 200줄)",
                 "49731703ea": "작업",
                 "f2fe8a4e8f": "주석",
-                "2dd5ddabc4": "작업 흐름 #",
+                "2dd5ddabc4": "워크플로 #",
                 "aa8494ae3c": "체크 #",
                 "00e1c1658a": "완료됨",
                 "fd46a70f1a": "시작됨",
@@ -17251,7 +17251,7 @@
           "fd46a70f1a": "시작됨",
           "00e1c1658a": "완료됨",
           "aa8494ae3c": "체크 #",
-          "2dd5ddabc4": "workflow #",
+          "2dd5ddabc4": "워크플로 #",
           "1f2b980522": "체크 세부 정보 불러오는 중…",
           "d098e5529a": "출력",
           "f2fe8a4e8f": "주석",
@@ -21127,7 +21127,7 @@
       },
       "sessionOption": {
         "noLiveTerminal": "사용 가능한 활성 터미널이 없습니다.",
-        "commandCanceled": "입력창이 닫혀 Chat UI 명령이 취소되었습니다.",
+        "commandCanceled": "입력창이 닫혀 채팅 UI 명령이 취소되었습니다.",
         "commandRejected": "터미널이 명령을 수락하지 않았습니다."
       },
       "sessionOptionErrors": {
@@ -21306,8 +21306,8 @@
       },
       "cardKindHidden": {
         "description": "다음에서 언제든 변경할 수 있습니다:",
-        "settingsLink": "설정 > Chat UI > 턴 활동",
-        "failed": "저장하지 못했습니다. 설정 > Chat UI > 턴 활동에서 끌 수 있습니다."
+        "settingsLink": "설정 > 채팅 UI > 턴 활동",
+        "failed": "저장하지 못했습니다. 설정 > 채팅 UI > 턴 활동에서 끌 수 있습니다."
       },
       "ciResultLine": {
         "failingLead": "CI 실패:",
@@ -23877,8 +23877,8 @@
       "demoApp": "앱",
       "demoPassword": "비밀번호",
       "demoCookie": "쿠키",
-      "switchedNoteTitle": "새 에이전트는 Chat UI에서 열립니다",
-      "switchedNoteBody": "터미널을 선호하시나요? 설정에서 <term>Chat UI</term>를 검색하면 언제든 되돌릴 수 있습니다.",
+      "switchedNoteTitle": "새 에이전트는 채팅 UI에서 열립니다",
+      "switchedNoteBody": "터미널을 선호하시나요? 설정에서 <term>채팅 UI</term>를 검색하면 언제든 되돌릴 수 있습니다.",
       "openSettings": "설정 열기",
       "dismiss": "닫기"
     },
@@ -27482,7 +27482,9 @@
       },
       "ask": {
         "notSentYet": "아직 보내지 않음",
-        "replaced": "에이전트가 새 질문을 했습니다. 읽은 다음 답장하세요."
+        "replaced": "에이전트가 새 질문을 했습니다. 읽은 다음 답장하세요.",
+        "replacedByNewer": "새 질문으로 대체됨",
+        "skipped": "건너뜀"
       },
       "readMoreClosedFailed": "닫힌 항목을 더 읽지 못했습니다"
     },

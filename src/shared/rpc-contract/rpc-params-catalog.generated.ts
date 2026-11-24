@@ -520,6 +520,7 @@ import {
 } from './google-files-params'
 import {
   GoogleBotAccessSetParams,
+  GoogleBotConnectedParams,
   GoogleClientExportParams,
   GoogleClientImportParams,
   GoogleDefaultSetParams,
@@ -1717,6 +1718,7 @@ export const RPC_PARAMS_BY_METHOD = {
   'gitlab.updateMRState': UpdateMrState,
   'gitlab.workItemByPath': WorkItemByPath,
   'gitlab.workItemDetails': WorkItemDetailsOfGitlabParams,
+  'google.bot.connected': GoogleBotConnectedParams,
   'google.bot.set': GoogleBotAccessSetParams,
   'google.calendar.calendars': CalendarCalendarsParams,
   'google.calendar.create': CalendarCreateParams,

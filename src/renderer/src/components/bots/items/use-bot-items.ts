@@ -246,7 +246,8 @@ export function commentOnBotItem(
   requestId?: string,
   questionId?: string,
   plain = false,
-  skills: readonly BotItemCommentSkill[] = []
+  skills: readonly BotItemCommentSkill[] = [],
+  skipped: readonly number[] = []
 ): Promise<unknown> {
   return callBotRpc(bot, 'bots.items.owner.comment', {
     item: uid,
@@ -256,7 +257,8 @@ export function commentOnBotItem(
     ...(requestId ? { requestId } : {}),
     ...(questionId ? { questionId } : {}),
     ...(plain ? { plain } : {}),
-    ...(skills.length > 0 ? { skills } : {})
+    ...(skills.length > 0 ? { skills } : {}),
+    ...(skipped.length > 0 ? { skipped } : {})
   })
 }
 

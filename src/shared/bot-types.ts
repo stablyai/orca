@@ -390,7 +390,8 @@ export function botFolderName(botName: string): string {
   const slug = botName
     .normalize('NFKD')
     .toLowerCase()
-    .replace(/[^a-z0-9]+/g, '-')
+    // Why: NFKD leaves an accent as a combining mark; drop it so it doesn't split the word.
+    .replace(/(\p{M}+)|[^a-z0-9]+/gu, (_run, marks) => (marks ? '' : '-'))
     .replace(/^-+|-+$/g, '')
     .slice(0, 40)
     .replace(/-+$/, '')

@@ -180,6 +180,8 @@ export function commentOnBotItem(
     /** The ask the comment answers; `plain`: it answers none. */
     questionId?: string
     plain?: boolean
+    /** The ask's lines this answer skips. */
+    skipped?: readonly number[]
   } = {}
 ): Promise<BotItemWriteOutcome> {
   return write(async () => {
@@ -192,7 +194,8 @@ export function commentOnBotItem(
         ...(extra.requestId ? { requestId: extra.requestId } : {}),
         ...(extra.skills?.length ? { skills: [...extra.skills] } : {}),
         ...(extra.questionId ? { questionId: extra.questionId } : {}),
-        ...(extra.plain ? { plain: true } : {})
+        ...(extra.plain ? { plain: true } : {}),
+        ...(extra.skipped?.length ? { skipped: [...extra.skipped] } : {})
       },
       { failWhenDisconnected: true }
     )
