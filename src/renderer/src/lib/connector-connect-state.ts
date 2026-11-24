@@ -75,8 +75,15 @@ function set(trip: Trip, next: ConnectorConnectView): void {
   listeners.forEach((listener) => listener())
 }
 
+// What a trip's link changes on the host. A Slack sign-in only adds a link, which no host state shows.
+const REFRESH: Record<ConnectorConnectSource, (hostId: ExecutionHostId) => Promise<unknown>> = {
+  linear: refreshBotLinear,
+  github: refreshBotGitHub,
+  slack: () => Promise.resolve()
+}
+
 function refresh(hostId: ExecutionHostId, source: ConnectorConnectSource): Promise<unknown> {
-  return source === 'linear' ? refreshBotLinear(hostId) : refreshBotGitHub(hostId)
+  return REFRESH[source](hostId)
 }
 
 async function settle(

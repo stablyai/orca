@@ -129,7 +129,8 @@ export const ConnectorHelloRequestSchema = z
     triggers: z.array(z.unknown()).max(CONNECTOR_LIMITS.maxHelloTriggers).optional(),
     // Some rules didn't fit; an older machine omits it. See helloShowsHookRuleGone.
     triggersTruncated: z.boolean().optional(),
-    // The machine's pairing E2EE public key, which teammates seal held messages to; with sharedWith.
+    // The machine's pairing E2EE public key, which teammates seal held messages to. Sent by a machine
+    // that takes share_send, and only then: its presence is what tells teammates they may hand off.
     hostKey: SharePublicKeySchema.optional()
   })
   .refine((hello) => hello.bots === undefined || hello.botPages === undefined)

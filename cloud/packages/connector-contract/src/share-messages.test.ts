@@ -3,6 +3,7 @@ import { canAskBot } from './bot-askers.js'
 import { CONNECTOR_LIMITS } from './connector-limits.js'
 import { ConnectorDeliverySchema } from './delivery-messages.js'
 import { ConnectorHelloRequestSchema } from './hello-messages.js'
+import { ConnectorSharesMineSchema, SharePublicKeySchema, ShareIdSchema } from './share-messages.js'
 
 const hello = {
   v: 1,
@@ -37,6 +38,26 @@ describe('bot shares contract', () => {
     const named = (ownerName: string) => ConnectorHelloRequestSchema.safeParse({ ...hello, ownerName }).success
     expect(named('Jinwoo Hong')).toBe(true)
     expect(named('x'.repeat(CONNECTOR_LIMITS.maxDisplayTextLength + 1))).toBe(false)
+  })
+
+  it('reads a teammate list before the host sends its key, and keeps ids and keys canonical', () => {
+    const share = {
+      shareId: 's1',
+      botId: 'bot-1',
+      botName: 'Reviewer',
+      ownerName: 'Jinwoo Hong',
+      hostOnline: true,
+      state: 'ready',
+      held: []
+    }
+    expect(ConnectorSharesMineSchema.safeParse({ v: 1, shares: [share] }).success).toBe(true)
+    for (const id of ['a/b', 'a?b', '..', '']) {
+      expect(ShareIdSchema.safeParse(id).success).toBe(false)
+    }
+    const key = Buffer.alloc(32, 7).toString('base64')
+    expect(SharePublicKeySchema.safeParse(key).success).toBe(true)
+    // The same bytes with a spare bit set: decoders read it alike, so only one spelling is taken.
+    expect(SharePublicKeySchema.safeParse(`${key.slice(0, 42)}${key[42] === 'c' ? 'd' : 'B'}=`).success).toBe(false)
   })
 
   it('takes invites only as normalized emails', () => {

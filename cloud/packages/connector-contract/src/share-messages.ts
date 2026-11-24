@@ -10,8 +10,9 @@ import { CONNECTOR_LIMITS } from './connector-limits.js'
 // OpaqueIdSchema's shape, written here so the app imports this file as it is (no push-contract).
 const OpaqueIdSchema = z.string().min(1).max(128)
 
-/** The host's id for one person on a bot's share list, kept from invite to account. */
-export const ShareIdSchema = OpaqueIdSchema
+/** The host's id for one person on a bot's share list, kept from invite to account. The host mints it
+ *  random (a UUID or 16+ random bytes, base64url), so it is unique across hosts; it goes in paths as is. */
+export const ShareIdSchema = z.string().regex(/^[A-Za-z0-9_-]{1,128}$/)
 
 /** An email as a share stores and compares it: trimmed and lower case, wherever it came from. */
 export function normalizeShareEmail(email: string): string {
@@ -23,9 +24,12 @@ export const ShareEmailSchema = z
   .max(CONNECTOR_LIMITS.maxShareEmailLength)
   .refine((email) => email === normalizeShareEmail(email))
 
+// 32 bytes in canonical padded base64: the last character leaves the 2 spare bits zero.
+export const CANONICAL_KEY_B64 = /^[A-Za-z0-9+/]{42}[AEIMQUYcgkosw048]=$/
+
 // A 32-byte public key, standard padded base64 as pairing writes it: a device's Ed25519 key (its
 // relay auth and held-message signatures) or a Curve25519 key things are sealed to.
-export const SharePublicKeySchema = z.string().regex(/^[A-Za-z0-9+/]{43}=$/)
+export const SharePublicKeySchema = z.string().regex(CANONICAL_KEY_B64)
 
 // SHA-256 of a phone's share credential, base64url, as the relay keeps a resume token's.
 export const ShareCredentialHashSchema = z.string().regex(/^[A-Za-z0-9_-]{43}$/)
@@ -112,12 +116,15 @@ export const ConnectorSharesMineSchema = z.object({
       shareId: ShareIdSchema,
       botId: OpaqueIdSchema,
       botName: Name,
+      // The owner's hello ownerName, else their verified email, else the host's name: never empty.
       ownerName: Name,
       avatarUrl: z.string().url().max(2048).optional(),
       hostOnline: z.boolean(),
       state: z.enum(['ready', 'needs-accept']),
-      // The host's E2EE key, which held messages are sealed to.
-      hostKey: SharePublicKeySchema,
+      // The host's E2EE key, which held messages are sealed to: present only once the host's hello
+      // carries hostKey, which it sends when it takes share_send. Absent, the teammate's Orca holds
+      // nothing and sends only while the host is online.
+      hostKey: SharePublicKeySchema.optional(),
       // The host's answers to this account's accepts, by device key.
       offers: z
         .array(z.object({ devicePublicKey: SharePublicKeySchema, sealedOffer: z.string().min(1) }))
@@ -129,7 +136,9 @@ export const ConnectorSharesMineSchema = z.object({
 
 // POST `${shares}/<share id>/accept` (connector token): queues share_accept. Idempotent per
 // (share, device key): a repeat, as after the relay invite expired, has the host mint a fresh one.
+// Answers 202 queued; the offer comes later on `${shares}/mine`.
 export const ConnectorShareAcceptRequestSchema = z.object({ v: z.literal(1), ...DeviceAsk })
+export const ConnectorShareAcceptSchema = z.object({ status: z.literal('queued') })
 
 // POST `${shares}/<share id>/messages`, with the connector token (desktop) or
 // `Bearer <share credential>` (phone): holds one message for the host. duplicate: that
@@ -154,6 +163,7 @@ export type ConnectorShareDeviceRequest = z.infer<typeof ConnectorShareDeviceReq
 export type ShareHeldMessage = z.infer<typeof ShareHeldMessageSchema>
 export type ConnectorSharesMine = z.infer<typeof ConnectorSharesMineSchema>
 export type ConnectorShareAcceptRequest = z.infer<typeof ConnectorShareAcceptRequestSchema>
+export type ConnectorShareAccept = z.infer<typeof ConnectorShareAcceptSchema>
 export type ConnectorShareHoldRequest = z.infer<typeof ConnectorShareHoldRequestSchema>
 export type ConnectorShareHold = z.infer<typeof ConnectorShareHoldSchema>
 export type ConnectorShareHeld = z.infer<typeof ConnectorShareHeldSchema>

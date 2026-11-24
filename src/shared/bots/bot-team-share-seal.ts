@@ -17,7 +17,8 @@ import {
 // injected (desktop: Node, phone: Hermes), as the pairing handshake's is.
 
 const Id = Identifier('Invalid id', 128)
-const Curve25519Key = z.string().regex(/^[A-Za-z0-9+/]{43}=$/)
+// Canonical padded base64 of 32 bytes (the contract's CANONICAL_KEY_B64).
+const Curve25519Key = z.string().regex(/^[A-Za-z0-9+/]{42}[AEIMQUYcgkosw048]=$/)
 
 // The host's answer to a share_accept: how the device reaches the bot over the relay, the host key it
 // pins there, and its share device id. The device checks the invite's expiry when it connects and
