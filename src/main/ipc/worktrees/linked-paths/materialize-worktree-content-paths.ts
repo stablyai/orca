@@ -47,6 +47,7 @@ export async function materializeWorktreeContentPaths(
 
   const sharedSkips = collectPathSkips()
   const includeSkips = collectPathSkips()
+  const copyFailures = collectPathSkips()
   const [sharedDirectories, includePaths] = await Promise.all([
     timing.time('resolve_shared_directories', () =>
       resolveWorktreeSharedDirectories(repo.path, localWorktreeGitOptions, sharedSkips.add)
@@ -64,7 +65,9 @@ export async function materializeWorktreeContentPaths(
   const skippedCopies =
     includePaths.length > 0
       ? await timing.time('copy_worktreeinclude', () =>
-          createWorktreeCopiedPaths(repo.path, worktreePath, includePaths)
+          createWorktreeCopiedPaths(repo.path, worktreePath, includePaths, {
+            onCopyFailure: copyFailures.add
+          })
         )
       : []
   const copyBudgetWarning = formatWorktreeIncludeCopyWarning(skippedCopies)
@@ -74,6 +77,7 @@ export async function materializeWorktreeContentPaths(
   const includeCopyWarning = [
     sharedSkips.message('worktree.sharedDirectories'),
     includeSkips.message('.worktreeinclude'),
+    copyFailures.message('.worktreeinclude copy'),
     copyBudgetWarning
   ]
     .filter(Boolean)

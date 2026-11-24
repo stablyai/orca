@@ -45,7 +45,7 @@ Orca fills that gap in three complementary ways:
 1. **`worktree.sharedDirectories` in `orca.yaml`** — repo-checked-in list of **gitignored directories** to share by link (including on APFS). Use this for independent caches such as `.cache`. Entries must exist as directories in the primary checkout **and** be gitignored; tracked or missing paths are skipped.
 1. **`.worktreeinclude` at the repo root** — list of **gitignored files or directories to copy** (not symlink) into each new worktree, so each worktree owns its copy. Typical entries: `.env`, local config under `.vscode/`. Blank lines and `#` comments are allowed. Only **literal** paths are supported today — globs and negation are skipped with a warning. Paths that are tracked, missing, or not gitignored are not copied.
 
-`orca.yaml` shared directories **add to** the per-user Worktree Shared Paths list; they never replace it. Paths already shared/linked are not re-copied from `.worktreeinclude`. Orca reports configured entries it skips, including missing or tracked paths.
+`orca.yaml` shared directories **add to** the per-user Worktree Shared Paths list; they never replace it. Paths already shared/linked are not re-copied from `.worktreeinclude`. Orca warns about skipped entries, including missing or tracked paths and failed copies.
 
 In an npm, pnpm, or Yarn workspace monorepo, install dependencies in each worktree instead of sharing `node_modules`. Relative workspace links inside a shared `node_modules` can still resolve into the primary checkout, so a build can pick up the wrong branch’s code.
 

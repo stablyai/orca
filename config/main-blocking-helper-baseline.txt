@@ -534,7 +534,7 @@
 16 src/main/git/repositories/discovery/repo-git-marker-scan.ts
 2 src/main/git/worktrees/catalog/worktree-git-path.ts
 1 src/main/git/worktrees/catalog/wsl-worktree-git-path.ts
-3 src/main/git/worktrees/content-paths/worktree-shared-directories.ts
+2 src/main/git/worktrees/content-paths/worktree-shared-directories.ts
 1 src/main/github/accounts/account-binding-required-host.ts
 1 src/main/github/client/fetch/repo-slug-upstream.ts
 17 src/main/github/pr-watch/pr-head-evaluation.ts

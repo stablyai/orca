@@ -2,7 +2,7 @@ import { stat } from 'node:fs/promises'
 import { join } from 'node:path'
 import { checkIgnoredPaths } from '../../source-control/ignores/check-ignored-paths'
 import type { GitRuntimeOptions } from '../../command-runner/git-runtime-options'
-import { loadHooks } from '../../../workspace-hooks/hooks'
+import { loadHooks, loadHooksAsync } from '../../../workspace-hooks/hooks'
 import type { Repo } from '../../../../shared/repository/repo-types'
 import { mapWithConcurrency } from '../../../../shared/concurrency/map-with-concurrency'
 
@@ -55,7 +55,7 @@ export async function resolveWorktreeSharedDirectories(
   reportSkip?: (path: string, reason: string) => void
 ): Promise<string[]> {
   try {
-    const configured = loadHooks(repoPath)?.worktree?.sharedDirectories ?? []
+    const configured = (await loadHooksAsync(repoPath))?.worktree?.sharedDirectories ?? []
     if (configured.length === 0) {
       return []
     }
