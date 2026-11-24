@@ -46,22 +46,21 @@ export function NativeChatRowActionsProvider({
       worktreeId !== null && selectNativeChatForkSourceOpenable(state, statuses, worktreeId, target)
   )
   // A fork and its source share a workspace and host.
-  const openSource = useMemo(() => {
-    if (!worktreeId || !sourceOpenable) {
-      return undefined
-    }
-    async function open(sourceSessionId: string): Promise<void> {
-      await openDesktopStructuredSession(
-        {
-          kind: 'history',
-          structuredSession: { sessionId: sourceSessionId, workspaceId: worktreeId },
-          agent
-        },
-        { target, retry: () => open(sourceSessionId) }
-      )
-    }
-    return (sourceSessionId: string) => void open(sourceSessionId)
-  }, [agent, target, worktreeId, sourceOpenable])
+  const openSource = useMemo(
+    () =>
+      worktreeId && sourceOpenable
+        ? (sourceSessionId: string) =>
+            void openDesktopStructuredSession(
+              {
+                kind: 'history',
+                structuredSession: { sessionId: sourceSessionId, workspaceId: worktreeId },
+                agent
+              },
+              { target, retry: 'open' }
+            )
+        : undefined,
+    [agent, target, worktreeId, sourceOpenable]
+  )
   return (
     <NativeChatRewindContext.Provider value={chat.rewind.surface}>
       <NativeChatForkContext.Provider value={forks.fork}>

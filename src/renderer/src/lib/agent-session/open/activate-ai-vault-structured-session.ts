@@ -98,15 +98,17 @@ type DesktopStructuredSessionOpenOptions = {
   deps?: StructuredSessionActivationDeps
   locate?: StructuredSessionOpenDeps['locate']
   feedback?: StructuredSessionOpenFeedback
-  retry?: () => Promise<unknown>
+  retry?: 'open' | (() => Promise<unknown>)
 }
 
 export function openDesktopStructuredSession(
   source: StructuredSessionOpenSource,
-  { target, deps, locate, feedback, retry }: DesktopStructuredSessionOpenOptions = {}
+  options: DesktopStructuredSessionOpenOptions = {}
 ): Promise<StructuredSessionOpenResult> {
+  const { target, deps, locate, feedback, retry } = options
   // Read when the open starts: the selection may move before it settles.
   const pairedHostId = openingPairedHostId(source, target)
+  const retryOpen = retry === 'open' ? () => openDesktopStructuredSession(source, options) : retry
   return openDesktopStructuredSessionInteraction(source, {
     target,
     deps,
@@ -117,7 +119,7 @@ export function openDesktopStructuredSession(
         source,
         feedback ?? deps ?? structuredSessionOpenFeedback,
         pairedHostId,
-        { owner, retry }
+        { owner, retry: retryOpen }
       )
   })
 }
