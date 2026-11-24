@@ -36,6 +36,7 @@ import {
 import { openBotItemFile, type BotItemFileContext } from './bot-item-file-open'
 import {
   BotItemLinkRowButton,
+  BotItemLinkRowMiddleTruncated,
   BotItemLinkRowName,
   BotItemLinkRowStatus,
   BotItemLinkRowStatusText,
@@ -48,6 +49,7 @@ import {
 } from './bot-item-github-peek-content'
 import { useBotItemLivePr, useBotItemPrWorkspacesVisible } from './use-bot-item-live-pr'
 import { botItemLinksOrder } from './bot-item-links-order'
+import { useLinearTitle } from './bot-item-linear-title'
 import { BOT_ITEM_PANE_CARD_MARGIN, botItemPaneBounds } from './bot-item-pane-bounds'
 import type { PeekBounds } from '@/components/native-chat/links/previews/link-peek-side'
 
@@ -58,17 +60,6 @@ const noFolders: never[] = []
 
 function Dot({ className }: { className: string }): React.JSX.Element {
   return <span aria-hidden className={cn('block size-1.5 shrink-0 rounded-full', className)} />
-}
-
-/** A long host and path loses its middle, so the last path segment stays readable. */
-function MiddleTruncated({ text }: { text: string }): React.JSX.Element {
-  const cut = text.lastIndexOf('/') + 1
-  return (
-    <span className="flex min-w-0">
-      <span className="min-w-0 truncate">{text.slice(0, cut)}</span>
-      <span className="max-w-[60%] shrink-0 truncate">{text.slice(cut)}</span>
-    </span>
-  )
 }
 
 /** The item view's link handler: the workspace card's popover and destinations, from the bot's folder. A
@@ -154,22 +145,24 @@ function GitHubRow({ row: hostRow }: { row: BotItemGitHubRow }): React.JSX.Eleme
   )
 }
 
-/** A web link. A Linear issue reads as its key, with "Linear" for its state: Orca's Linear cache can't
- *  yet prove which host and sign-in read an issue, so no title or state is borrowed from it. */
+/** A web link. A Linear issue reads as its key and the title Orca's Linear cache has for it, with
+ *  "Linear" for its state: the cache can't yet prove which host and sign-in read an issue's state. */
 function WebRow({ row }: { row: Extract<BotItemLinkRow, { kind: 'web' }> }): React.JSX.Element {
   const t = useTranslate()
+  const linearTitle = useLinearTitle(row.linear)
   const openWeb = useOpenWeb()
+  const name = linearTitle ? `${row.title} ${linearTitle}` : row.title
   return (
     <BotItemLinkRowButton
       name={
         row.linear ? (
-          <span className="min-w-0 truncate">{row.title}</span>
+          <span className="min-w-0 truncate">{name}</span>
         ) : (
-          <MiddleTruncated text={row.title} />
+          <BotItemLinkRowMiddleTruncated text={row.title} />
         )
       }
       status={row.linear ? t('bots.items.link.linear', 'Linear') : null}
-      tip={row.linear ? `${row.title} · ${row.tip}` : row.url}
+      tip={row.linear ? `${name} · ${row.tip}` : row.url}
       onClick={(event) => openWeb(row.url, event)}
     />
   )
@@ -198,6 +191,12 @@ function workerStatus(t: Translate, state: BotItemWorkerState): ReactNode {
   }
 }
 
+/** A running worker with a dispatch can be stopped from its row. */
+function workerCanStop(link: Extract<BotItemLinkRow, { kind: 'worker' }>['link']): boolean {
+  const worker = botItemWorkerRow(link)
+  return botChatTreeWorkerRunning(worker) && Boolean(worker.dispatchId)
+}
+
 /** A worker, as the Chats tab offers it: open on click, its details card on hover or focus, and Stop
  *  beside its state while it runs, shown on hover or once Tab reaches the row. */
 function WorkerRow({
@@ -212,7 +211,7 @@ function WorkerRow({
   const t = useTranslate()
   const worker = botItemWorkerRow(link)
   const open = botChatTreeWorkerOpen(bot, worker)
-  const canStop = botChatTreeWorkerRunning(worker) && Boolean(worker.dispatchId)
+  const canStop = workerCanStop(link)
   const { stopping, stop } = useWorkerStop(worker.dispatchId ?? '')
   const rowRef = useRef<HTMLDivElement | null>(null)
   const [bounds, setBounds] = useState<PeekBounds | null>(null)
@@ -232,7 +231,9 @@ function WorkerRow({
             <BotItemLinkRowName>
               <span className="min-w-0 truncate">{worker.title}</span>
             </BotItemLinkRowName>
-            <BotItemLinkRowStatus>{workerStatus(t, link.state)}</BotItemLinkRowStatus>
+            <BotItemLinkRowStatus ownsStopSlot={canStop}>
+              {workerStatus(t, link.state)}
+            </BotItemLinkRowStatus>
           </button>
         </HoverCardTrigger>
         {canStop ? (
@@ -245,14 +246,15 @@ function WorkerRow({
                 })}
                 disabled={stopping}
                 onClick={stop}
-                // Its slot is kept while hidden, so the state beside it never moves on hover.
+                // Its slot is kept while hidden, so the state beside it never moves on hover. The
+                // block reserves the same width after every other row's state (`--stop-slot`).
                 className="invisible ml-0.5 flex size-5 shrink-0 items-center justify-center rounded-sm text-muted-foreground outline-none group-focus-within/worker:visible group-hover/worker:visible hover:bg-accent hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring/50 disabled:opacity-50"
               >
                 <Square className="size-2.5 fill-current" />
               </button>
             </TooltipTrigger>
-            {/* Beside its own row, never over the next row's state. */}
-            <TooltipContent side="left">{t('bots.activity.stop', 'Stop')}</TooltipContent>
+            {/* Above, never over this row's state or the next row's. */}
+            <TooltipContent side="top">{t('bots.activity.stop', 'Stop')}</TooltipContent>
           </Tooltip>
         ) : null}
       </div>
@@ -369,6 +371,8 @@ function LinksBlock({
   const shown = expanded ? rows : rows.slice(0, BOT_ITEM_LINKS_SHOWN)
   const more = rows.length - shown.length
   const label = t('bots.items.view.links', 'Links')
+  // While a shown row has Stop, every state keeps its slot free too, so all states share one edge.
+  const stopSlot = shown.some((row) => row.kind === 'worker' && workerCanStop(row.link))
   return (
     <section>
       <h3 className="mb-1 text-xs text-muted-foreground">{label}</h3>
@@ -376,7 +380,13 @@ function LinksBlock({
         fileLinkContext={fileContext?.fileLinkContext ?? null}
         hostId={bot.hostId}
       >
-        <ul ref={list} tabIndex={-1} aria-label={label} className="-mx-1.5 flex flex-col">
+        <ul
+          ref={list}
+          tabIndex={-1}
+          aria-label={label}
+          data-stop-slot={stopSlot || undefined}
+          className="group/links -mx-1.5 flex flex-col"
+        >
           {shown.map((row) => (
             <li key={row.key} className="min-w-0" data-bot-item-cut="row">
               <Row bot={bot} chat={chat} row={row} fileContext={fileContext} />

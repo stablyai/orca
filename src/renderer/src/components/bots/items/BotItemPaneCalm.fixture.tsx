@@ -65,6 +65,28 @@ const calmPr = (
     checkedAt: CALM_AT
   }
 })
+// Linear titles as Orca's Linear cache holds them; rows show no state from it.
+const LINEAR_ISSUE = (identifier: string, title: string) => ({
+  data: {
+    id: identifier,
+    identifier,
+    title,
+    url: `https://linear.app/acme/issue/${identifier.toLowerCase()}`,
+    state: { name: 'In Progress', type: 'started', color: '#999999' },
+    team: { id: 't1', name: 'Ops', key: 'OPS' },
+    labels: [],
+    labelIds: [],
+    priority: 0,
+    updatedAt: '2026-11-17T00:00:00Z'
+  },
+  fetchedAt: CALM_AT
+})
+const calmStore = {
+  linearIssueCache: {
+    'selected::OPS-1650': LINEAR_ISSUE('OPS-1650', 'Cloud read-only access'),
+    'selected::OPS-1702': LINEAR_ISSUE('OPS-1702', 'Launch checklist')
+  }
+}
 const calmThree: BotItemLinkView[] = [
   calmPr(46172, 'Global stop switch', 'success'),
   workerLink('ctx_stop', 'Stop runbook review', true),
@@ -128,6 +150,7 @@ function Calm({
 function calmAt(width: number, shown: BotItem, named = false) {
   return defineFixture({
     width,
+    store: calmStore,
     render: () => <Calm shown={shown} named={named} />
   })
 }
@@ -200,6 +223,7 @@ const CALM_EVENTS = Array.from({ length: 8 }, (_, index) =>
  *  keeps the rest. */
 export const calmConstrained = defineFixture({
   width: 340,
+  store: calmStore,
   render: () => (
     <Calm
       shown={{
