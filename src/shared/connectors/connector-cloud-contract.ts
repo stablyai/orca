@@ -24,7 +24,7 @@ export const CONNECTOR_CONTRACT_VERSION = 1
 export { CONNECTOR_PATHS } from './connector-cloud-paths'
 
 /** The shared-app services an owner connects in one browser trip. */
-export const CONNECTOR_CONNECT_SOURCES = ['linear', 'github'] as const
+export const CONNECTOR_CONNECT_SOURCES = ['linear', 'github', 'slack'] as const
 export type ConnectorConnectSource = (typeof CONNECTOR_CONNECT_SOURCES)[number]
 
 export const CONNECTOR_FEATURES = [
