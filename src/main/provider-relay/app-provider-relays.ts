@@ -4,14 +4,25 @@ import type {
   ProviderRelayWorkMarker,
   ProviderRelaySpawnSpec
 } from '../daemon/protocol/daemon-provider-relay-protocol'
-export { keptProviderRelaySpawnToken } from './provider-relay-launch-inventory'
+export {
+  dropListedProviderRelay,
+  keptProviderRelaySpawnToken,
+  keptRunningProviderRelayPid,
+  liveKeptProviderRelayChats as liveProviderRelayChats,
+  registerReattachableProviderRelayAgent
+} from './provider-relay-launch-inventory'
 import {
   forgetKeptProviderRelay,
+  keptProviderRelayOutstanding,
   keptProviderRelay,
   listKeptProviderRelays,
-  liveKeptProviderRelayChats,
   recheckKeptProviderRelay
 } from './provider-relay-launch-inventory'
+import {
+  KeptProviderRelayEndedError,
+  KeptProviderRelayUnreachableError
+} from './provider-relay-kept-errors'
+export { KeptProviderRelayEndedError, KeptProviderRelayUnreachableError }
 import type { ManagedProviderProcess } from '../provider-process/managed-provider-process'
 import {
   resolveProviderChildEnv,
@@ -40,6 +51,8 @@ export type ProviderRelayRoute = {
  * turns and background tasks, and the app's own requests that are work until answered.
  */
 export type ProviderRelayWorkMarkers = {
+  /** The agent integration, recorded with each relay; register it as reattachable. */
+  agent: string
   markers: readonly ProviderRelayWorkMarker[]
   requests?: readonly string[]
 }
@@ -72,16 +85,14 @@ const markersFor = new WeakMap<RelayedProviderChild, ProviderRelayWorkMarkers>()
 /** Attached children that kept running from before this app started. */
 const reattachedChildren = new WeakSet<RelayedProviderChild>()
 let quitting = false
-let durableFor: ((chatKey: string) => Promise<void> | undefined) | null = null
+let durableFor: ((chatKey: string, force: boolean) => Promise<boolean> | undefined) | null = null
 
 export function installProviderRelayRoute(installed: ProviderRelayRoute | null): void {
   route = installed
 }
 
 /** The session host's journal barrier; acks wait on it so replay after a crash loses nothing. */
-export function installProviderRelayDurability(
-  barrier: ((chatKey: string) => Promise<void> | undefined) | null
-): void {
+export function installProviderRelayDurability(barrier: typeof durableFor): void {
   durableFor = barrier
 }
 
@@ -103,34 +114,6 @@ export function listProviderRelaysAtLaunch(): Promise<void> {
   return installed ? listKeptProviderRelays(() => installed.all()) : Promise.resolve()
 }
 
-/** Chats whose agent is still running under the daemon; restart offers must leave these alone. */
-export function liveProviderRelayChats(): ReadonlySet<string> {
-  return liveKeptProviderRelayChats()
-}
-
-/** The pid of the chat's agent the daemon kept running, until this app reattaches it. */
-export function keptRunningProviderRelayPid(chatKey: string): number | null {
-  const relay = keptProviderRelay(chatKey)
-  return relay && relay.info.exit === null ? relay.info.pid : null
-}
-
-/** Ended relays found at launch are dropped once their chat cold-resumes. */
-export function dropListedProviderRelay(chatKey: string): void {
-  const relay = keptProviderRelay(chatKey)
-  if (relay) {
-    forgetKeptProviderRelay(chatKey, relay)
-    void relay.channel.close(relay.info.relayId).catch(() => {})
-  }
-}
-
-/** A kept agent that may still run must never get a second writer beside it. */
-export class KeptProviderRelayUnreachableError extends Error {
-  constructor(readonly chatKey: string) {
-    super('agent_kept_running_unreachable')
-    this.name = 'KeptProviderRelayUnreachableError'
-  }
-}
-
 /** Chats being reattached at launch: a proven-gone agent ends the rebind instead of starting anew. */
 const rebinding = new Set<string>()
 
@@ -140,13 +123,6 @@ export async function withProviderRelayRebind<T>(chatKey: string, run: () => Pro
     return await run()
   } finally {
     rebinding.delete(chatKey)
-  }
-}
-
-export class KeptProviderRelayEndedError extends Error {
-  constructor(readonly chatKey: string) {
-    super('agent_kept_running_ended')
-    this.name = 'KeptProviderRelayEndedError'
   }
 }
 
@@ -231,7 +207,7 @@ function relayedChild(
     pid,
     policy: () => policyFor(launch.markers),
     quitting: providerRelayQuitting,
-    durable: () => durableFor?.(launch.chatKey) ?? Promise.resolve(),
+    durable: (force) => durableFor?.(launch.chatKey, force) ?? Promise.resolve(true),
     ...(passWhileHeld ? { passWhileHeld } : {})
   })
 }
@@ -247,7 +223,11 @@ async function reattachListed(launch: ProviderRelayLaunch): Promise<RelayedProvi
     return null
   }
   const { channel, info } = relay
-  if (info.exit === null && info.pid !== null && (await connected(channel.client))) {
+  if (
+    keptProviderRelayOutstanding(info) &&
+    info.pid !== null &&
+    (await connected(channel.client))
+  ) {
     const child = relayedChild(channel, info.relayId, info.pid, launch, launch.passWhileHeld)
     // An agent that ended during the attach still counts: its last output reaches the chat first.
     const started = await child.start(info.ackedSeq).then(
@@ -299,7 +279,12 @@ export async function launchRelayedProviderProcess(
   const channel = providerRelayChannel(client)
   let spawned: Awaited<ReturnType<ProviderRelayChannel['spawn']>>
   try {
-    spawned = await channel.spawn(spec, relay.chatKey, policyFor(relay.markers))
+    spawned = await channel.spawn(
+      spec,
+      relay.chatKey,
+      policyFor(relay.markers),
+      relay.markers.agent
+    )
   } catch {
     // An unanswered spawn may still have started the agent; the daemon ends it once no one attaches.
     return null

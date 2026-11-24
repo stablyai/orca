@@ -32,7 +32,12 @@ export function answerProviderRelayRequest(
   const relayId = payload.relayId
   switch (request.type) {
     case 'relaySpawn':
-      return relays.spawn(request.payload?.spec, request.payload?.chatKey, payload.policy)
+      return relays.spawn(
+        request.payload?.spec,
+        request.payload?.chatKey,
+        payload.policy,
+        payload.agent
+      )
     case 'relayAttach':
       if (!client.streamSocket) {
         return Promise.reject(new Error('Daemon client connection is incomplete; reconnect'))

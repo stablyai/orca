@@ -18,7 +18,13 @@ export type ProviderRelayRequest =
   | {
       id: string
       type: 'relaySpawn'
-      payload: { spec: ProviderRelaySpawnSpec; chatKey: string; policy?: ProviderRelayDetachPolicy }
+      payload: {
+        spec: ProviderRelaySpawnSpec
+        chatKey: string
+        /** Which agent integration runs here; a build that can't reattach it ends it at launch. */
+        agent?: string
+        policy?: ProviderRelayDetachPolicy
+      }
     }
   | {
       id: string
@@ -117,6 +123,8 @@ export type ProviderRelayAttachResult = {
 export type ProviderRelayInfo = {
   relayId: string
   chatKey: string
+  /** Null for a relay spawned without one (an older app). */
+  agent: string | null
   pid: number | null
   spawnedAtMs: number
   attached: boolean

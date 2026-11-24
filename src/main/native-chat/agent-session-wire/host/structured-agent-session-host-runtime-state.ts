@@ -259,7 +259,8 @@ export class StructuredAgentSessionHostRuntimeState {
     this.refreshActivity(sessionId)
   }
 
-  async flushEventSink(sessionId: string, landed?: true): Promise<void> {
+  /** `landed` waits only for admitted writes, and is false while streamed text is still unsaved. */
+  async flushEventSink(sessionId: string, landed?: true): Promise<boolean> {
     const sink = () => this.currentEventSink(sessionId)
     const ok = Promise.resolve({ ok: true } as const)
     await this.requireSuccessfulBarrier((landed ? sink()?.landed() : sink()?.drained()) ?? ok)
@@ -267,6 +268,7 @@ export class StructuredAgentSessionHostRuntimeState {
       await this.childWork?.drainChildWork(sessionId)
       await this.requireSuccessfulBarrier(sink()?.drained() ?? ok)
     }
+    return !landed || !sink()?.liveText().length
   }
 
   async lifecycleBarrier(sessionId: string): Promise<StructuredAgentSessionSinkBarrier> {

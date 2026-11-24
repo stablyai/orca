@@ -19,6 +19,7 @@ const RELAY_TAKEN_OVER = 'Relay attach superseded by a detach or another attach'
 type RelayOptions = {
   relayId: string
   chatKey: string
+  agent?: string | null
   managed: ManagedProviderProcess
   spoolPath: string
   /** Test seam; defaults to the reader's own spill size. */
@@ -56,7 +57,7 @@ export class ProviderRelay {
   constructor(private readonly options: RelayOptions) {
     this.relayId = options.relayId
     this.chatKey = options.chatKey
-    this.idleStop = ProviderRelayIdleStop.forRelay(this, options)
+    this.idleStop = ProviderRelayIdleStop.forRelay(this, options, () => this.spool.unacked())
     const stdout = options.managed.child.stdout
     this.input = new ProviderRelayInput(options.managed.child.stdin)
     this.spool = new ProviderRelaySpool({
@@ -123,10 +124,6 @@ export class ProviderRelay {
 
   get live(): boolean {
     return this.exitStatus === null
-  }
-
-  unackedRecords(): readonly ProviderRelayRecord[] | null {
-    return this.spool.unackedInMemory()
   }
 
   get attachedClientId(): string | null {
@@ -247,6 +244,7 @@ export class ProviderRelay {
     return {
       relayId: this.relayId,
       chatKey: this.chatKey,
+      agent: this.options.agent ?? null,
       pid: this.options.managed.child.pid ?? null,
       spawnedAtMs: this.spawnedAtMs,
       attached: this.attachment !== null,

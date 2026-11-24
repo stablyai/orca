@@ -1,3 +1,4 @@
+import { registerAgentProcess } from '../memory/agent-process-registry'
 import type {
   ManagedProviderProcess,
   ProviderProcessExit
@@ -48,6 +49,13 @@ export function relayedManagedProcess(child: RelayedProviderChild): ManagedProvi
     listeners.clear()
   }
   child.once('exit', observe)
+  // Counted in resource use like a directly spawned agent, until it ends or is handed to the daemon.
+  const releaseAgentMemory = registerAgentProcess(
+    child.pid,
+    child.pid,
+    () => child.exited === null && !child.handedOff
+  )
+  child.once('close', releaseAgentMemory)
 
   const stderrTail = (): string => {
     const exit = child.exited

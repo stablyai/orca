@@ -25,8 +25,8 @@ export type RelayedProviderChildOptions = {
   policy: () => ProviderRelayDetachPolicy
   /** During quit a dropped stream is the hand-off itself, not a fault to recover from. */
   quitting?: () => boolean
-  /** Resolves once everything the consumer was handed is durable; acks wait for it. */
-  durable?: () => Promise<void>
+  /** Acks wait for it; false (streamed text not saved yet) skips the ack unless `force` saved it. */
+  durable?: (force: boolean) => Promise<boolean>
   /** Holds output until `releaseOutput()`, except the lines this lets through (answers to new requests). */
   passWhileHeld?: (line: string) => boolean
 }
@@ -112,7 +112,7 @@ export class RelayedProviderChild extends EventEmitter implements ProviderChild 
     this.output.restartAt(fromSeq)
     this.unbind = this.options.channel.bind(this.relayId, {
       line: (event, seq, line) => this.output.line(event, seq, line),
-      ackWanted: () => void this.output.settle(),
+      ackWanted: () => void this.output.settle(true),
       exit: (exit) => this.onExit(exit),
       disconnected: () => void this.reattach()
     })

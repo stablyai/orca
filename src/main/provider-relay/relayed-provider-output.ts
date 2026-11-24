@@ -8,8 +8,11 @@ type OutputOptions = {
   stdout: Readable
   /** Holds output until `release()`, except the lines this lets through (answers to new requests). */
   passWhileHeld?: (line: string) => boolean
-  /** Resolves once everything handed on is durable; a rejection leaves the output unacked. */
-  durable?: () => Promise<void>
+  /**
+   * True once everything handed on is saved; false (streamed text still live) or a rejection
+   * leaves it unacked. `force` saves live text first, for when the daemon needs the ack.
+   */
+  durable?: (force: boolean) => Promise<boolean>
   ack: (seq: number) => Promise<unknown>
 }
 
@@ -78,10 +81,10 @@ export class RelayedProviderOutput {
     }
   }
 
-  /** Acks everything handed on now, after its durability barrier. */
-  settle(): Promise<void> {
+  /** Acks everything handed on now, after its durability barrier; `force` saves live text first. */
+  settle(force = false): Promise<void> {
     this.clearAckTimer()
-    return this.ack()
+    return this.ack(force)
   }
 
   /** No more acks: the relay was handed off. */
@@ -136,7 +139,7 @@ export class RelayedProviderOutput {
     }
   }
 
-  private ack(): Promise<void> {
+  private ack(force = false): Promise<void> {
     this.acking = this.acking.then(async () => {
       const target = this.pushedSeq
       if (target <= this.ackedSeq || this.stopped) {
@@ -145,7 +148,9 @@ export class RelayedProviderOutput {
       // Wait one turn so records just parsed reach the journal before its barrier is taken.
       await new Promise((resolve) => setImmediate(resolve))
       try {
-        await this.options.durable?.()
+        if ((await this.options.durable?.(force)) === false) {
+          return
+        }
         await this.options.ack(target)
         this.ackedSeq = Math.max(this.ackedSeq, target)
       } catch {

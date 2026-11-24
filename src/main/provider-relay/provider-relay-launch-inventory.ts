@@ -21,9 +21,29 @@ const RETRY_AFTER_MS = 30_000
 /** The kept agent's own spawn token, so its reattach records the identity the process carries. */
 const spawnTokens = new Map<string, string>()
 
-/** A relay someone else is attached to belongs to another running app. */
+/** Agent integrations this build can reattach; a relay of any other is ended at launch. */
+const reattachableAgents = new Set<string>()
+
+export function registerReattachableProviderRelayAgent(agent: string): void {
+  reattachableAgents.add(agent)
+}
+
+/** Still running, or ended with output the chat hasn't taken in yet: either way the chat reattaches. */
+export function keptProviderRelayOutstanding(info: ProviderRelayInfo): boolean {
+  return info.exit === null || info.nextSeq - 1 > info.ackedSeq
+}
+
+/**
+ * A relay someone else is attached to belongs to another running app. One this build can't
+ * reattach (left by a newer build) is ended, so its chat recovers as today and never gets a second
+ * agent beside the kept one.
+ */
 async function keep(channel: ProviderRelayChannel, relays: readonly ProviderRelayInfo[]) {
   for (const info of relays) {
+    if (!info.attached && info.agent !== null && !reattachableAgents.has(info.agent)) {
+      await channel.close(info.relayId).catch(() => {})
+      continue
+    }
     if (!info.attached && info.chatKey) {
       listed.set(info.chatKey, { channel, info })
       const token = info.pid !== null && info.exit === null ? await readSpawnToken(info.pid) : null
@@ -89,10 +109,11 @@ export function keptProviderRelay(chatKey: string): KeptProviderRelay | undefine
   return listed.get(chatKey)
 }
 
+/** Chats whose agent the daemon still holds for them; restart offers must leave these alone. */
 export function liveKeptProviderRelayChats(): ReadonlySet<string> {
   const live = new Set<string>()
   for (const [chatKey, relay] of listed) {
-    if (relay.info.exit === null) {
+    if (keptProviderRelayOutstanding(relay.info)) {
       live.add(chatKey)
     }
   }
@@ -138,5 +159,20 @@ function processProvenGone(pid: number): boolean {
     return false
   } catch (error) {
     return error instanceof Error && 'code' in error && error.code === 'ESRCH'
+  }
+}
+
+/** The pid of the chat's agent the daemon kept running, until this app reattaches it. */
+export function keptRunningProviderRelayPid(chatKey: string): number | null {
+  const relay = keptProviderRelay(chatKey)
+  return relay && keptProviderRelayOutstanding(relay.info) ? relay.info.pid : null
+}
+
+/** Ended relays found at launch are dropped once their chat cold-resumes. */
+export function dropListedProviderRelay(chatKey: string): void {
+  const relay = keptProviderRelay(chatKey)
+  if (relay) {
+    forgetKeptProviderRelay(chatKey, relay)
+    void relay.channel.close(relay.info.relayId).catch(() => {})
   }
 }

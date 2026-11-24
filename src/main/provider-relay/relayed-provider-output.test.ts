@@ -9,7 +9,17 @@ function rig(passWhileHeld?: (line: string) => boolean) {
   const acks: number[] = []
   // Each barrier waits until the test says the journal has written what was handed on.
   const waiting: (() => void)[] = []
-  const durable = vi.fn(() => new Promise<void>((resolve) => waiting.push(resolve)))
+  // Streamed text the journal holds only in memory; a forced barrier saves it.
+  const journal = { liveText: false }
+  const durable = vi.fn(
+    (force: boolean) =>
+      new Promise<boolean>((resolve) =>
+        waiting.push(() => {
+          journal.liveText &&= !force
+          resolve(!journal.liveText)
+        })
+      )
+  )
   const output = new RelayedProviderOutput({
     stdout,
     durable,
@@ -24,7 +34,7 @@ function rig(passWhileHeld?: (line: string) => boolean) {
       waiting.splice(0).forEach((resolve) => resolve())
     }
   }
-  return { output, seen, acks, durable, releaseDurable }
+  return { output, seen, acks, durable, releaseDurable, journal }
 }
 
 const settle = () => new Promise((resolve) => setImmediate(resolve))
@@ -74,5 +84,21 @@ describe('relayed provider output', () => {
     await late
     expect(seen).toEqual(['answer-12', 'event-11'])
     expect(acks).toEqual([12])
+  })
+
+  it('never acks a line whose streamed text is only in memory, unless the ask saved it first', async () => {
+    const { output, acks, releaseDurable, journal } = rig()
+    output.restartAt(0)
+    output.line('relayData', 1, 'delta-1')
+    journal.liveText = true
+    const routine = output.settle()
+    await releaseDurable()
+    await routine
+    // A crash now replays delta-1, so its text is never lost.
+    expect(acks).toEqual([])
+    const asked = output.settle(true)
+    await releaseDurable()
+    await asked
+    expect(acks).toEqual([1])
   })
 })

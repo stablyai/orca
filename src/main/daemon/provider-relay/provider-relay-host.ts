@@ -101,7 +101,8 @@ export class ProviderRelayHost {
   async spawn(
     spec: ProviderRelaySpawnSpec | undefined,
     chatKey: unknown,
-    policy?: unknown
+    policy?: unknown,
+    agent?: unknown
   ): Promise<ProviderRelaySpawnResult> {
     if (!this.supported || this.disposed || !this.options.acceptsWork()) {
       return { refused: 'unavailable' }
@@ -134,6 +135,7 @@ export class ProviderRelayHost {
     const relay = new ProviderRelay({
       relayId,
       chatKey,
+      agent: typeof agent === 'string' && agent.length <= MAX_CHAT_KEY_CHARS ? agent : null,
       managed,
       spoolPath: join(directory, `${relayId}.ndjson`),
       log: this.options.log,

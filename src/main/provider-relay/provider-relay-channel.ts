@@ -73,9 +73,14 @@ export class ProviderRelayChannel {
   spawn(
     spec: ProviderRelaySpawnSpec,
     chatKey: string,
-    policy: ProviderRelayDetachPolicy
+    policy: ProviderRelayDetachPolicy,
+    agent: string
   ): Promise<ProviderRelaySpawnResult> {
-    return this.client.request('relaySpawn', { spec, chatKey, policy }, RELAY_SPAWN_TIMEOUT_MS)
+    return this.client.request(
+      'relaySpawn',
+      { spec, chatKey, agent, policy },
+      RELAY_SPAWN_TIMEOUT_MS
+    )
   }
 
   attach(

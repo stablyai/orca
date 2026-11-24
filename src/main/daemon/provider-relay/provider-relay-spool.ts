@@ -139,7 +139,7 @@ export class ProviderRelaySpool {
   }
 
   /** Unacked records, oldest first; null when some of them are only in the file. */
-  unackedInMemory(): readonly ProviderRelayRecord[] | null {
+  unacked(): readonly ProviderRelayRecord[] | null {
     const inFile = this.fileIndex.lastSeq > this.acked || this.lostThrough > this.acked
     return inFile ? null : this.memory.slice(this.memoryHead)
   }

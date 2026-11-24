@@ -46,10 +46,10 @@ export class ProviderRelayIdleStop {
         readonly working: { readonly size: number }
         workMethods: ReadonlySet<string>
       }
-      unackedRecords: () => readonly ProviderRelayRecord[] | null
       close: () => Promise<unknown>
     },
-    options: { relayId: string; log?: (event: string, details?: Record<string, unknown>) => void }
+    options: { relayId: string; log?: (event: string, details?: Record<string, unknown>) => void },
+    unacked: () => readonly ProviderRelayRecord[] | null
   ): ProviderRelayIdleStop {
     return new ProviderRelayIdleStop({
       attached: () => relay.attachedClientId !== null,
@@ -59,7 +59,7 @@ export class ProviderRelayIdleStop {
       workRequests: (methods) => {
         relay.pending.workMethods = new Set(methods)
       },
-      unacked: () => relay.unackedRecords(),
+      unacked,
       stop: () => void relay.close().catch(() => {}),
       log: (event, details) => options.log?.(event, { relayId: options.relayId, ...details })
     })
