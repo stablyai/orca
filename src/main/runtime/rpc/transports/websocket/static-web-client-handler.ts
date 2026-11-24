@@ -61,7 +61,7 @@ export function createStaticWebClientHandler(
   }
 }
 
-// Found on first request and kept once found; a dev build may produce the bundle after startup.
+// Found on first request and kept until restart, which every update does; a dev build may produce the bundle after startup.
 function readMobileWebTree(
   findRoot: () => Promise<string | undefined>
 ): () => Promise<MobileWebTree | null> {

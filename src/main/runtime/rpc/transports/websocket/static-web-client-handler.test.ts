@@ -77,8 +77,8 @@ describe('static handler serving the phone page to browsers', () => {
 
     expect((await get('/assets/unlisted.js')).status).toBe(404)
     expect((await get('/mobile-web/index.html')).status).toBe(404)
-    expect((await get('/assets/..%2Foutside.txt')).status).not.toBe(200)
-    expect((await get('/assets/../../outside.txt')).status).not.toBe(200)
+    expect((await get('/assets/..%2Foutside.txt')).status).toBe(400)
+    expect((await get('/assets/../../outside.txt')).status).toBe(404)
     expect((await get('/outside.txt')).status).toBe(404)
   })
 })

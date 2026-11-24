@@ -16,7 +16,8 @@ import {
   storageReadParamsSchema,
   type BridgeNativeVerb
 } from '../bridge/native-capabilities/bridge-native-verbs'
-import { readBrowserShellPairing } from './browser-shell-pairing'
+import { readBrowserShellPairing, writeBrowserShellPairing } from './browser-shell-pairing'
+import { exchangeBrowserShellTicket } from './browser-shell-ticket'
 import { createBrowserShellHistory } from './browser-shell-history'
 import { createBrowserShellStorage } from './browser-shell-storage'
 import { readBrowserSafeAreaInsets, readBrowserKeyboardInset } from './browser-shell-geometry'
@@ -26,19 +27,25 @@ const BROWSER_HOST_ID = 'web'
 
 // What a browser tab can do; every other grant a route declares is withheld so the page's own
 // missing-grant fallbacks take over (no camera, microphone, PDF viewer or key rail here).
-const BROWSER_SHELL_GRANTS: ReadonlySet<string> = new Set([
+const BROWSER_SHELL_GRANTS = [
   'navigate',
   'storage',
   'externalLink',
   'haptics',
   'screencastBinary',
-  'native.clipboard.write',
-  'native.clipboard.read',
   'native.storage.read'
-])
+]
+// Browsers expose the clipboard only to HTTPS and localhost pages.
+const CLIPBOARD_GRANTS = ['native.clipboard.write', 'native.clipboard.read']
 
-const withBrowserGrants = (grants: readonly string[]) =>
-  grants.filter((grant) => BROWSER_SHELL_GRANTS.has(grant))
+function browserGrantFilter(): (grants: readonly string[]) => string[] {
+  const held: ReadonlySet<string> = new Set(
+    window.isSecureContext && navigator.clipboard
+      ? [...BROWSER_SHELL_GRANTS, ...CLIPBOARD_GRANTS]
+      : BROWSER_SHELL_GRANTS
+  )
+  return (grants) => grants.filter((grant) => held.has(grant))
+}
 
 /**
  * Plays the native shell's part for the page in a plain browser: pairs from the link, opens the
@@ -46,11 +53,21 @@ const withBrowserGrants = (grants: readonly string[]) =>
  * own bridge host. False when this document has no pairing, so the page shows why it cannot start.
  */
 export async function installBrowserShell(): Promise<boolean> {
-  const openedFromLink = window.location.hash.length > 1
-  const offer = readBrowserShellPairing()
-  if (offer === null) {
+  const pairing = readBrowserShellPairing()
+  if (pairing.kind === 'refused') {
+    showBrowserShellRefusal(pairing.reason)
     return false
   }
+  if (pairing.kind === 'none') {
+    return false
+  }
+  const offer = pairing.fromLink
+    ? await exchangeBrowserShellTicket(pairing.offer, BROWSER_HOST_ID)
+    : pairing.offer
+  if (offer !== pairing.offer) {
+    writeBrowserShellPairing(offer)
+  }
+  const withBrowserGrants = browserGrantFilter()
   const manifest = MobileWebBundleManifestReadSchema.parse(
     await (await fetch(MOBILE_WEB_BROWSER_MANIFEST_PATH, { cache: 'no-cache' })).json()
   )
@@ -67,10 +84,10 @@ export async function installBrowserShell(): Promise<boolean> {
   const storage = createBrowserShellStorage(globalThis.localStorage ?? null)
   let hostStatus: HostStatusReply | null = null
   const colorScheme = window.matchMedia('(prefers-color-scheme: light)')
-  const tabHistory = createBrowserShellHistory(openedFromLink)
+  const tabHistory = createBrowserShellHistory(pairing.fromLink)
 
   const channel: OrcaBridgePageChannel = {
-    // Deliver on a later task in both directions, as a WebView does, so neither side re-enters the other.
+    // Deliver asynchronously in both directions, as a WebView does, so neither side re-enters the other.
     postMessage: (json) => {
       queueMicrotask(() => host.receive(json))
     },
@@ -213,4 +230,15 @@ async function serveBrowserNativeVerb(
     case 'native.link.open':
       throw new Error(`${verb} is not available in a browser`)
   }
+}
+
+// The page cannot start without a pairing, so say why instead of leaving a blank tab.
+function showBrowserShellRefusal(reason: string): void {
+  const notice = document.createElement('p')
+  notice.setAttribute('role', 'alert')
+  notice.textContent = reason
+  notice.style.cssText =
+    'position:fixed;inset:auto 16px 50% 16px;margin:0;font:16px/1.4 system-ui,sans-serif;' +
+    'text-align:center;color:#e5e5e5;z-index:2147483647'
+  document.body.appendChild(notice)
 }

@@ -3,7 +3,7 @@ import { createServer as createHttpServer, type Server as HttpServer } from 'nod
 import type { Socket } from 'node:net'
 import { WebSocketServer, type WebSocket } from 'ws'
 import type { RpcTransport } from '../../transport'
-import { createStaticWebClientHandler } from './static-web-client-handler'
+import { answerWithoutWebClient, createStaticWebClientHandler } from './static-web-client-handler'
 import { findBundledMobileWebBundleRoot } from '../../methods/mobile-delivery/bundled-mobile-web-bundle'
 import {
   attachNodeWebSocketLifecycle,
@@ -46,7 +46,7 @@ export type WebSocketTransportOptions = {
   preAuthTimeoutMs?: number
   // Serve browser assets from the pairing server to avoid another listener.
   staticRoot?: string
-  // Finds the phone page's bundle, served to browsers at MOBILE_WEB_BROWSER_PATH; defaults to the install's.
+  // Finds the phone page's bundle, served beside the browser client at MOBILE_WEB_BROWSER_PATH; defaults to the install's.
   mobileWebRoot?: () => Promise<string | undefined>
   // Source-address policy checked at TCP accept; absent admits every source.
   sourceGuard?: WebSocketSourceGuard
@@ -229,7 +229,10 @@ export class WebSocketTransport implements RpcTransport {
     await assertPortNotShadowingListener(this.host, port)
     // Without an HTTP request listener, plain HTTP hangs instead of receiving 404 (#30100).
     const httpServer = createHttpServer(
-      createStaticWebClientHandler(this.staticRoot, this.mobileWebRoot)
+      // The phone page rides along only where a browser client is served, so a listener without one stays 404.
+      this.staticRoot
+        ? createStaticWebClientHandler(this.staticRoot, this.mobileWebRoot)
+        : answerWithoutWebClient
     )
 
     await new Promise<void>((resolve, reject) => {
