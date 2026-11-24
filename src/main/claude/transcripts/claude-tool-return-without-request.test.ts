@@ -128,6 +128,11 @@ describe('claudeToolReturnWithoutRequest', () => {
         `${transcript(requestRow, toolA)}{"type":"assistant",\n${transcript(resultA)}`
       )
     ).toBeNull()
+    expect(
+      claudeToolReturnWithoutRequest(
+        `${transcript(requestRow)}{"type":"assistant",\n${transcript(toolA, resultA)}`
+      )
+    ).toBeNull()
   })
 })
 

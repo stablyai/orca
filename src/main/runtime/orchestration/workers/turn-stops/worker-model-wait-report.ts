@@ -109,7 +109,7 @@ function describeModelWait(notice: WorkerModelWaitNotice, task: string): string 
   const minutes = Math.round((notice.waitedMs ?? WORKER_MODEL_WAIT_MS) / 60_000)
   if (notice.toolReturnedAt !== undefined) {
     const at = new Date(notice.toolReturnedAt).toISOString()
-    return `Worker ${notice.from} has made no progress on task ${task} for ${minutes} min. It is stuck after a tool call: its transcript records no model request since the tool returned at ${at}.${seen} It is still running; nothing was stopped.`
+    return `Worker ${notice.from} has made no progress on task ${task} for ${minutes} min. Its transcript records no model request since the tool returned at ${at}, so it looks stuck after a tool call.${seen} It is still running; nothing was stopped.`
   }
   // Inferred from silence, so it names no cause.
   return `Worker ${notice.from} has made no progress on task ${task} for ${minutes} min. It may be waiting on a slow reply, stuck on a tool, or the machine may be busy.${seen} It is still running; nothing was stopped.`
