@@ -54,7 +54,7 @@ describe.skipIf(process.platform !== 'darwin' && process.platform !== 'linux')(
       await rm(dir, { recursive: true, force: true })
     })
 
-    it('stops a tool that left the CLI session, and nothing outside the tree', async () => {
+    it('stops a tool that left the CLI session, and nothing it cannot prove is the chat’s', async () => {
       dir = await mkdtemp(join(tmpdir(), 'provider-exec-tree-'))
       const binary = join(dir, 'orca-provider-exec')
       execFileSync(process.platform === 'darwin' ? 'clang' : 'cc', [
@@ -64,8 +64,8 @@ describe.skipIf(process.platform !== 'darwin' && process.platform !== 'linux')(
         '-o',
         binary
       ])
-      // The tool shell takes its own session and exits, orphaning a tagged tool and a SIP binary.
-      const tool = `'${process.execPath}' -e 'setTimeout(() => {}, 30000)' & echo $! > ${dir}/a; sleep 30 & echo $! > ${dir}/b`
+      // The tool shell takes its own session and exits, orphaning a tagged tool and an untagged one.
+      const tool = `'${process.execPath}' -e 'setTimeout(() => {}, 30000)' & echo $! > ${dir}/a; env -u ORCA_PROVIDER_TREE sleep 30 & echo $! > ${dir}/b`
       const cli = `require('child_process').spawn('/bin/sh', ['-c', ${JSON.stringify(tool)}], { detached: true, stdio: 'ignore' }).unref(); setTimeout(() => {}, 30000)`
       exec = spawn(
         binary,
@@ -100,7 +100,10 @@ describe.skipIf(process.platform !== 'darwin' && process.platform !== 'linux')(
       owner.write('term\n')
       expect(await completion).toBe('group-absent')
       // A killed orphan stays a zombie until init reaps it.
-      await expect.poll(() => tools.some(alive), { timeout: 2000 }).toBe(false)
+      await expect.poll(() => alive(tools[0]), { timeout: 2000 }).toBe(false)
+      // Linux's subreaper proves the untagged orphan is the chat's. On macOS only the tag would,
+      // and a tag never vouches for the rest of its session.
+      expect(alive(tools[1])).toBe(process.platform === 'darwin')
       expect(outsider.exitCode).toBeNull()
       expect(alive(outsider.pid!)).toBe(true)
     })

@@ -252,9 +252,12 @@ struct watcher {
     pid_t group;
     pid_t reaper;
     long long reaper_start;
+    int reaper_fd;
     long long leader_start;
     char tree_tag[64];
     long long next_sweep_ns;
+    // Members started at or after this mark have not been sent TERM yet.
+    long long term_floor;
     unsigned stdin_end_grace_ms;
     unsigned sigterm_grace_ms;
     int session;
@@ -540,24 +543,35 @@ static int same_identity(const struct proc_row *row) {
     return read_row(row->pid, &now) == 1 && now.start == row->start && !now.zombie;
 }
 
+enum { TREE_UNKNOWN, TREE_ANCESTRY, TREE_OUTSIDE, TREE_TAGGED };
+
+// TREE_ANCESTRY: kernel parent links or a proven session lead to the CLI. TREE_TAGGED: a launchd
+// orphan known only by the tag, which admits itself and its live descendants but never its
+// session, since a tag alone does not prove who else shares it.
 static int tree_root(struct watcher *w, const struct tree_scan *scan, const struct proc_row *row) {
 #if defined(__linux__)
     (void)scan;
-    return row->ppid == w->reaper;
+    return row->ppid == w->reaper ? TREE_ANCESTRY : TREE_UNKNOWN;
 #else
     if (scan->leader_alive && row->ppid == w->group) {
-        return 1;
+        return TREE_ANCESTRY;
     }
     if (row->ppid != 1 || row->uid != geteuid() || row->start < w->leader_start || row->zombie) {
-        return 0;
+        return TREE_UNKNOWN;
     }
     pid_t sid = getsid(row->pid);
-    int owned = (sid > 0 && member_session(scan, sid)) || carries_tree_tag(row->pid, w->tree_tag);
-    return owned && same_identity(row);
+    int kind = sid > 0 && member_session(scan, sid)       ? TREE_ANCESTRY
+               : carries_tree_tag(row->pid, w->tree_tag) ? TREE_TAGGED
+                                                         : TREE_UNKNOWN;
+    return kind != TREE_UNKNOWN && same_identity(row) ? kind : TREE_UNKNOWN;
 #endif
 }
 
-// 0 unknown, 1 member, 2 outside; resolved once along each ancestor chain. A stale row is
+static int tree_member(unsigned char state) {
+    return state == TREE_ANCESTRY || state == TREE_TAGGED;
+}
+
+// Resolved once along each ancestor chain; descendants take their root's kind. A stale row is
 // neither a member nor a parent.
 static void resolve_members(struct watcher *w, struct tree_scan *scan) {
     pid_t self = getpid();
@@ -565,15 +579,16 @@ static void resolve_members(struct watcher *w, struct tree_scan *scan) {
     for (size_t i = 0; i < scan->n; i++) {
         size_t depth = 0;
         size_t at = i;
-        unsigned char verdict = 2;
-        while (scan->state[at] == 0 && depth < scan->n) {
+        unsigned char verdict = TREE_OUTSIDE;
+        while (scan->state[at] == TREE_UNKNOWN && depth < scan->n) {
             scan->chain[depth++] = at;
             const struct proc_row *row = &scan->rows[at];
             if (row->stale || row->pid == self || row->pid == w->reaper || row->pid <= 1) {
                 break;
             }
-            if (tree_root(w, scan, row)) {
-                verdict = 1;
+            int root = tree_root(w, scan, row);
+            if (root != TREE_UNKNOWN) {
+                verdict = (unsigned char)root;
                 break;
             }
             const struct proc_row *parent = find_row(scan->rows, scan->n, row->ppid);
@@ -582,7 +597,7 @@ static void resolve_members(struct watcher *w, struct tree_scan *scan) {
             }
             at = (size_t)(parent - scan->rows);
         }
-        if (scan->state[at] != 0) {
+        if (scan->state[at] != TREE_UNKNOWN) {
             verdict = scan->state[at];
         }
         for (size_t d = 0; d < depth; d++) {
@@ -601,7 +616,7 @@ static void collect_member_sessions(struct watcher *w, struct tree_scan *scan) {
         size_t before = scan->sid_count;
         for (size_t i = 0; i < scan->n; i++) {
             const struct proc_row *row = &scan->rows[i];
-            if (scan->state[i] != 1 || row->zombie) {
+            if (scan->state[i] != TREE_ANCESTRY || row->zombie) {
                 continue;
             }
             pid_t sid = getsid(row->pid);
@@ -634,7 +649,8 @@ static int drop_stale_members(struct tree_scan *scan, const struct proc_row *lea
         dropped = 1;
     }
     for (size_t i = 0; i < scan->n; i++) {
-        if (scan->state[i] == 1 && !scan->rows[i].stale && !same_parent_link(&scan->rows[i])) {
+        if (tree_member(scan->state[i]) && !scan->rows[i].stale &&
+                !same_parent_link(&scan->rows[i])) {
             scan->rows[i].stale = 1;
             dropped = 1;
         }
@@ -701,6 +717,19 @@ static int sweep_once(struct watcher *w, int signal_number) {
     }
     long long scan_tick = (long long)boot.tv_sec * ticks_per_second +
                           (long long)boot.tv_nsec * ticks_per_second / 1000000000LL;
+    long long scan_mark = scan_tick;
+    struct pollfd anchor = {.fd = w->reaper_fd, .events = POLLIN};
+    if (w->reaper_fd < 0 || poll(&anchor, 1, 0) != 0) {
+        // The subreaper exited (or its pidfd is unusable), so its PID anchors nothing.
+        return -1;
+    }
+#else
+    // Start times are wall-clock microseconds.
+    struct timespec wall;
+    if (clock_gettime(CLOCK_REALTIME, &wall) != 0) {
+        return -1;
+    }
+    long long scan_mark = (long long)wall.tv_sec * 1000000LL + wall.tv_nsec / 1000;
 #endif
     scan.rows = read_table(&scan.n);
     if (scan.rows == NULL) {
@@ -740,7 +769,7 @@ static int sweep_once(struct watcher *w, int signal_number) {
     for (size_t i = 0; i < scan.n; i++) {
         struct proc_row *row = &scan.rows[i];
         // The CLI group gets its own signal, so its members are never signalled twice.
-        if (scan.state[i] != 1 || row->zombie || row->pgid == w->group) {
+        if (!tree_member(scan.state[i]) || row->zombie || row->pgid == w->group) {
             continue;
         }
 #if defined(__linux__)
@@ -749,7 +778,9 @@ static int sweep_once(struct watcher *w, int signal_number) {
             continue;
         }
 #endif
-        if (signal_member(row, signal_number)) {
+        // A member already sent TERM by an earlier sweep is only probed.
+        int send = signal_number == SIGTERM && row->start < w->term_floor ? 0 : signal_number;
+        if (signal_member(row, send)) {
             live++;
         } else {
             // It may have forked after the table was read and exited since.
@@ -760,6 +791,9 @@ static int sweep_once(struct watcher *w, int signal_number) {
     // so this sweep cannot prove the tree empty.
     if (dropped && live == 0) {
         live = -1;
+    }
+    if (signal_number == SIGTERM) {
+        w->term_floor = scan_mark;
     }
 done:
     free(scan.rows);
@@ -906,7 +940,10 @@ static _Noreturn void watch_owner(struct watcher *w) {
     for (;;) {
         int timeout = -1;
         if (w->phase != WATCH_IDLE) {
-            if (tree_absent(w, w->phase == WATCH_REAP ? SIGKILL : 0)) {
+            int sweep_signal = w->phase == WATCH_REAP         ? SIGKILL
+                               : w->phase == WATCH_TERM_GRACE ? SIGTERM
+                                                              : 0;
+            if (tree_absent(w, sweep_signal)) {
                 watcher_complete(1);
             }
             long long remaining = w->deadline_ns - monotonic_ns(w);
@@ -1316,6 +1353,8 @@ int main(int argc, char *argv[]) {
         .session = strcmp(argv[4], "session") == 0,
         .close_stdin_end = strcmp(argv[5], "stdin-end") == 0,
         .phase = WATCH_IDLE,
+        .reaper_fd = -1,
+        .term_floor = LLONG_MIN,
     };
     sigset_t fork_set;
     sigemptyset(&stop_set);
@@ -1349,7 +1388,10 @@ int main(int argc, char *argv[]) {
     watcher_gone_fd = watcher_alive[0];
     // A /proc from another PID namespace names other processes, so no tree is anchored on it.
     struct proc_row reaper_row;
-    if (procfs_in_own_namespace() && read_row(getpid(), &reaper_row) == 1) {
+    // The pidfd, taken while this pid is certainly itself, turns readable once it exits.
+    watcher.reaper_fd = (int)syscall(SYS_pidfd_open, getpid(), 0);
+    if (watcher.reaper_fd >= 0 && set_cloexec(watcher.reaper_fd, 1) == 0 &&
+            procfs_in_own_namespace() && read_row(getpid(), &reaper_row) == 1) {
         watcher.reaper = reaper_row.pid;
         watcher.reaper_start = reaper_row.start;
     } else {
