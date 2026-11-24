@@ -80,29 +80,36 @@ function useBotItemDetailsCut(scroller: HTMLElement | null): number | undefined 
       const next = pickBotItemDetailsCut(readBotItemDetailsGeometry(column), room)
       setMaxHeight((current) => (current === next ? current : next))
     }
-    const sizes = new ResizeObserver(measure)
-    const observeBlocks = (): void => {
-      sizes.disconnect()
-      sizes.observe(region)
-      sizes.observe(column)
-      if (title && title !== scroller) {
-        sizes.observe(title)
-      }
-      for (const block of column.children) {
-        sizes.observe(block)
-      }
-    }
-    const content = new MutationObserver(() => {
-      observeBlocks()
-      measure()
-    })
-    observeBlocks()
-    content.observe(column, { childList: true, subtree: true, characterData: true })
     measure()
-    return () => {
-      sizes.disconnect()
-      content.disconnect()
-    }
+    return observeBotItemDetails(column, [region, title !== scroller ? title : null], measure)
   }, [scroller])
   return maxHeight
+}
+
+/** Calls `changed` when `column`, one of its blocks, one of `around`, or the column's content changes;
+ *  returns the cleanup that ends every observer. */
+function observeBotItemDetails(
+  column: HTMLElement,
+  around: readonly (Element | null | undefined)[],
+  changed: () => void
+): () => void {
+  const sizes = new ResizeObserver(changed)
+  const observeSizes = (): void => {
+    sizes.disconnect()
+    for (const element of [...around, column, ...column.children]) {
+      if (element) {
+        sizes.observe(element)
+      }
+    }
+  }
+  const content = new MutationObserver(() => {
+    observeSizes()
+    changed()
+  })
+  observeSizes()
+  content.observe(column, { childList: true, subtree: true, characterData: true })
+  return () => {
+    sizes.disconnect()
+    content.disconnect()
+  }
 }
