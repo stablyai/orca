@@ -1,5 +1,6 @@
 import { AlertCircle, CheckCircle2, Loader2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
+import { cn } from '@/lib/class-names'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { useTranslate, type Translate } from '@/i18n/use-translate'
 import {
@@ -102,6 +103,8 @@ function BotName({ name }: { name: string }): React.JSX.Element {
   )
 }
 
+const SHORT_LITERAL_MAX = 4
+
 export function NativeChatResumeToastRow({
   row,
   name: chatName,
@@ -153,10 +156,15 @@ export function NativeChatResumeToastRow({
                         {chatName}
                       </span>
                     ) : (
-                      // Clipped, not ellipsized: a sub-pixel squeeze would turn " · " into "…".
+                      // A short one (" · ", " de ") never gives way; a long one ellipsizes, padded off the names.
                       <span
                         key={part.key}
-                        className="min-w-0 overflow-hidden whitespace-pre text-muted-foreground"
+                        className={cn(
+                          'whitespace-pre text-muted-foreground',
+                          Array.from(part.text).length > SHORT_LITERAL_MAX
+                            ? 'min-w-0 truncate px-[0.25ch]'
+                            : 'shrink-0'
+                        )}
                       >
                         {part.text}
                       </span>
