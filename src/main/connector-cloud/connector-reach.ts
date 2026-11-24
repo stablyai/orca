@@ -1,8 +1,10 @@
+import { CONNECTOR_PATHS } from '../../shared/connectors/connector-cloud-paths'
 import type { ConnectorResult } from './connector-cloud-request'
 import type { ConnectorTransport } from './connector-machine'
 
-/** Orca Cloud answering again: the poll after its own outage ('recovered'), the poll after a call outside it
- *  got no answer ('answered'), or an account signing in. */
+/** What a failed bot picture may go again on: the poll answering ('answered'), the poll answering after its
+ *  own outage ('recovered'), or a completed sign-in or account switch ('signedIn'). Only `/poll` answers
+ *  count, so the events outbox and other calls never make one. */
 export type ConnectorBack = 'recovered' | 'answered' | 'signedIn'
 
 /** Whether the running poll's calls reach Orca Cloud, and what the cloud says when it refuses them. */
@@ -15,8 +17,8 @@ export class ConnectorReach {
   unauthorized = false
 
   private readonly backListeners = new Set<(why: ConnectorBack) => void>()
-  // A call outside the poll got no answer: the poll's next answer is the cloud answering again for it.
-  private missed = false
+  // A `/poll` got no answer or a 5xx since the cloud last took one: its next taken poll ends that outage.
+  private pollDown = false
 
   constructor(private readonly onChanged: () => void) {}
 
@@ -25,29 +27,9 @@ export class ConnectorReach {
     return () => this.backListeners.delete(listener)
   }
 
-  /** A call outside the poll (a bot's picture) the cloud didn't answer, or answered with a 5xx or 429. */
-  missedOutsidePoll(result: ConnectorResult<unknown>): void {
-    if (!result.ok && (result.status === null || result.status === 429 || result.status >= 500)) {
-      this.missed = true
-    }
-  }
-
   back(why: ConnectorBack): void {
     for (const listener of this.backListeners) {
       listener(why)
-    }
-  }
-
-  /** Calls outside the poll: one Orca Cloud didn't answer makes the poll's next answer a step back. */
-  outsidePoll(transport: ConnectorTransport): Pick<ConnectorTransport, 'call'> {
-    return {
-      call: async (path, body, schema, options) => {
-        const result = await transport.call(path, body, schema, options)
-        if (!options?.signal?.aborted) {
-          this.missedOutsidePoll(result)
-        }
-        return result
-      }
     }
   }
 
@@ -57,7 +39,7 @@ export class ConnectorReach {
       call: async (path, body, schema, options) => {
         const result = await transport.call(path, body, schema, options)
         if (!options?.signal?.aborted) {
-          this.reached(result)
+          this.reached(result, path)
         }
         return result
       },
@@ -71,21 +53,15 @@ export class ConnectorReach {
     this.unreachable = false
     this.refusal = null
     this.unauthorized = false
-    // A call outside the poll that missed still waits for the next poll's answer.
     if (changed) {
       this.onChanged()
     }
   }
 
-  reached(result: ConnectorResult<unknown>): void {
+  reached(result: ConnectorResult<unknown>, path?: string): void {
     const unreachable = !result.ok && (result.status === null || result.status >= 500)
     const refusal = result.ok ? null : (result.message ?? null)
     const unauthorized = !result.ok && result.sessionRefused === true
-    const cameBack =
-      !unreachable && (this.unreachable ? 'recovered' : this.missed ? 'answered' : null)
-    if (!unreachable) {
-      this.missed = false
-    }
     if (
       this.unreachable !== unreachable ||
       this.refusal !== refusal ||
@@ -96,8 +72,13 @@ export class ConnectorReach {
       this.unauthorized = unauthorized
       this.onChanged()
     }
-    if (cameBack) {
-      this.back(cameBack)
+    // Only a `/poll` the cloud took ends its outage: a refusal from it is no answer for a picture.
+    if (path === CONNECTOR_PATHS.poll && result.ok) {
+      const recovered = this.pollDown
+      this.pollDown = false
+      this.back(recovered ? 'recovered' : 'answered')
+    } else if (path === CONNECTOR_PATHS.poll && unreachable) {
+      this.pollDown = true
     }
   }
 }

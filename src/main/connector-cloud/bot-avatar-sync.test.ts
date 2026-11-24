@@ -262,58 +262,70 @@ it('leaves a drawn icon the cloud failed to take for the next real step, not the
   expect(sent).toHaveLength(2)
   sync.retryOwed('signedIn')
   await vi.waitFor(() => expect(sent).toHaveLength(3))
+  // The poll's outage ending while a refused picture is on its way doesn't send it again either.
+  let releaseRefused = (): void => {}
+  hold = new Promise((resolve) => (releaseRefused = resolve))
+  sync.changed()
+  await vi.waitFor(() => expect(sent).toHaveLength(4))
+  sync.retryOwed('recovered')
+  hold = null
+  releaseRefused()
+  // Nothing more goes: a fifth send would have to come after the refusal's own file reads.
+  await expect(
+    vi.waitFor(() => expect(sent).toHaveLength(5), { timeout: 500, interval: 20 })
+  ).rejects.toThrow()
 
   // A real step that comes while a send is on its way, which then fails, still gets its own try.
   down = true
   let release = (): void => {}
   hold = new Promise((resolve) => (release = resolve))
   sync.changed()
-  await vi.waitFor(() => expect(sent).toHaveLength(4))
+  await vi.waitFor(() => expect(sent).toHaveLength(5))
   sync.changed()
   hold = null
   release()
-  await vi.waitFor(() => expect(sent).toHaveLength(5))
+  await vi.waitFor(() => expect(sent).toHaveLength(6))
   await vi.advanceTimersByTimeAsync(2 * 60 * 60_000)
-  expect(sent).toHaveLength(5)
+  expect(sent).toHaveLength(6)
 
   // The cloud answering again resends it once; failing again, it waits for a real step, not the poll.
   sync.retryOwed('answered')
-  await vi.waitFor(() => expect(sent).toHaveLength(6))
-  await vi.advanceTimersByTimeAsync(60_000)
-  sync.retryOwed('answered')
-  await vi.advanceTimersByTimeAsync(60_000)
-  expect(sent).toHaveLength(6)
-  // A real step that fails gets its one resend on the cloud answering again; a sign-in or the poll's own
-  // outage recovering always resends.
-  sync.changed()
   await vi.waitFor(() => expect(sent).toHaveLength(7))
   await vi.advanceTimersByTimeAsync(60_000)
   sync.retryOwed('answered')
+  await vi.advanceTimersByTimeAsync(60_000)
+  expect(sent).toHaveLength(7)
+  // A real step that fails gets its one resend on the cloud answering again; a sign-in or the poll's own
+  // outage recovering always resends.
+  sync.changed()
   await vi.waitFor(() => expect(sent).toHaveLength(8))
   await vi.advanceTimersByTimeAsync(60_000)
-  sync.retryOwed('signedIn')
+  sync.retryOwed('answered')
   await vi.waitFor(() => expect(sent).toHaveLength(9))
+  await vi.advanceTimersByTimeAsync(60_000)
+  sync.retryOwed('signedIn')
+  await vi.waitFor(() => expect(sent).toHaveLength(10))
 
   // A sign-in while the one resend is on its way: that resend failing still gets the sign-in's try.
   await vi.advanceTimersByTimeAsync(60_000)
   sync.changed()
-  await vi.waitFor(() => expect(sent).toHaveLength(10))
+  await vi.waitFor(() => expect(sent).toHaveLength(11))
   await vi.advanceTimersByTimeAsync(60_000)
   let releaseResend = (): void => {}
   hold = new Promise((resolve) => (releaseResend = resolve))
   sync.retryOwed('answered')
-  await vi.waitFor(() => expect(sent).toHaveLength(11))
+  await vi.waitFor(() => expect(sent).toHaveLength(12))
   sync.retryOwed('signedIn')
   hold = null
   releaseResend()
-  await vi.waitFor(() => expect(sent).toHaveLength(12))
+  await vi.waitFor(() => expect(sent).toHaveLength(13))
 
   // A real step (any bot write) sends it.
   await vi.advanceTimersByTimeAsync(60_000)
   up = true
   sync.changed()
-  await vi.waitFor(() => expect(sent).toHaveLength(13))
-  expect(sent[12]).toMatchObject({ kind: 'upload' })
+  await vi.waitFor(() => expect(sent).toHaveLength(14))
+  expect(sent[13]).toMatchObject({ kind: 'upload' })
   vi.useRealTimers()
 })
 

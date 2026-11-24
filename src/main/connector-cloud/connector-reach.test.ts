@@ -1,43 +1,34 @@
 import { expect, it } from 'vitest'
+import { CONNECTOR_PATHS } from '../../shared/connectors/connector-cloud-paths'
 import type { ConnectorFailure } from './connector-cloud-request'
 import { type ConnectorBack, ConnectorReach } from './connector-reach'
 
 const noAnswer: ConnectorFailure = { ok: false, status: null, error: null, retryAfterMs: null }
 const answered = { ok: true as const, value: null }
 
-it('treats the poll answering after a missed outside call as the cloud back', () => {
+it('lets only the poll say the cloud answered, and only its own outage say it recovered', () => {
   const reach = new ConnectorReach(() => {})
   const backs: ConnectorBack[] = []
   reach.onBack((why) => backs.push(why))
 
-  // A picture's call got no answer while the poll stayed healthy: the poll's next answer is the step.
-  reach.missedOutsidePoll(noAnswer)
-  reach.reached(answered)
-  reach.reached(answered)
+  reach.reached(answered, CONNECTOR_PATHS.poll)
   expect(backs).toEqual(['answered'])
 
-  // A rate limit is a miss too: the cloud may take it when it next answers.
-  reach.missedOutsidePoll({ ...noAnswer, status: 429 })
-  reach.reached(answered)
+  // The events outbox failing, then answering, is neither: nor does it make the poll's next answer a recovery.
+  reach.reached({ ...noAnswer, status: 503 }, CONNECTOR_PATHS.events)
+  reach.reached(answered, CONNECTOR_PATHS.events)
+  reach.reached(answered, CONNECTOR_PATHS.poll)
   expect(backs).toEqual(['answered', 'answered'])
-  backs.length = 1
 
-  // A refusal is an answer, not a miss; a poll that still gets none is not the cloud back yet.
-  reach.missedOutsidePoll({ ...noAnswer, status: 409 })
-  reach.reached(answered)
-  reach.missedOutsidePoll({ ...noAnswer, status: 503 })
-  reach.reached(noAnswer)
-  expect(backs).toEqual(['answered'])
-  // Its own outage recovering is a fresh step, told apart from the answer to a missed call.
-  reach.reached(answered)
-  expect(backs).toEqual(['answered', 'recovered'])
-
-  // The poll stopping (sign-out, quit, a first connect) is not the cloud back, but a missed call still waits
-  // for the next poll's answer.
-  reach.missedOutsidePoll(noAnswer)
-  reach.reached(noAnswer)
+  // The poll's own outage ending is a recovery; a refusal from it is no answer for a picture.
+  reach.reached(noAnswer, CONNECTOR_PATHS.poll)
+  reach.reached({ ...noAnswer, status: 409 }, CONNECTOR_PATHS.poll)
+  reach.reached(answered, CONNECTOR_PATHS.poll)
+  expect(backs).toEqual(['answered', 'answered', 'recovered'])
+  // A stop says nothing, and an outage that spans it still ends in a recovery.
+  reach.reached(noAnswer, CONNECTOR_PATHS.poll)
   reach.stopped()
-  expect(backs).toEqual(['answered', 'recovered'])
-  reach.reached(answered)
-  expect(backs).toEqual(['answered', 'recovered', 'answered'])
+  expect(backs).toHaveLength(3)
+  reach.reached(answered, CONNECTOR_PATHS.poll)
+  expect(backs).toEqual(['answered', 'answered', 'recovered', 'recovered'])
 })

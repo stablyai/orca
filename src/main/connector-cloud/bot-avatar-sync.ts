@@ -59,8 +59,10 @@ export class BotAvatarSync {
   private readonly queued = new Map<string, SyncedBot>()
   // Bots a pass met mid-send: their picture may have changed since.
   private readonly changedWhileSending = new Set<string>()
-  // Real steps so far (bot writes, a sign-in, an outage ending), so a failure that crossed one goes again.
+  // Real steps so far (bot writes, a sign-in), so a failure or refusal that crossed one goes again.
   private writes = 0
+  // Poll outages ended so far, so a failure (never a refusal) that crossed one goes again.
+  private recoveries = 0
   // Per bot, drawn icons kept so far, so a send that read none before one was kept is sent again.
   private readonly icons = new Map<string, number>()
   private readonly owed = new BotAvatarOwed()
@@ -102,7 +104,8 @@ export class BotAvatarSync {
 
   /** Owed drawings go again; a fresh step (a sign-in, an outage ending) also renews sends on their way. */
   retryOwed(why: ConnectorBack): void {
-    this.writes += why === 'answered' ? 0 : 1
+    this.writes += why === 'signedIn' ? 1 : 0
+    this.recoveries += why === 'recovered' ? 1 : 0
     for (const botId of this.owed.take(why)) {
       this.sent.delete(botId)
       if (!this.sending.has(botId)) {
@@ -243,6 +246,7 @@ export class BotAvatarSync {
     }
     this.sending.set(bot.id, avatar)
     const writes = this.writes
+    const recoveries = this.recoveries
     const icons = this.icons.get(bot.id)
     let sent = false
     let refused = false
@@ -325,7 +329,7 @@ export class BotAvatarSync {
       this.sent.delete(bot.id)
       // A real step that came in meanwhile still gets its try for this bot (its own pass skipped it in
       // flight); other bots already had theirs.
-      if (stepped) {
+      if (stepped || recoveries !== this.recoveries) {
         this.resend(bot.id)
       } else if (carried) {
         this.owed.add(bot.id)

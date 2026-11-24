@@ -75,19 +75,23 @@ export class ConnectorCloud {
     return this.activeAccount()
   }
 
-  private noteAccount(again = false): void {
+  private noteAccount(): void {
     const account = this.signingOut ? null : this.options.account()
     if (account !== this.lastAccount) {
       this.lastAccount = account
       this.options.onAccountSwitched?.()
-      again = true
-    }
-    if (account && again) {
-      this.reach.back('signedIn')
+      if (account) {
+        this.reach.back('signedIn')
+      }
     }
   }
 
-  /** Orca Cloud answers again after it (or a call outside the poll) didn't, or a sign-in: a send may go. */
+  /** A sign-in completed (not a refresh), even as the same account: bot pictures owed may go again. */
+  signedIn(): void {
+    this.reach.back('signedIn')
+  }
+
+  /** The poll answered (after its own outage or not), or a sign-in: a bot picture owed may go again. */
   readonly onBack: ConnectorReach['onBack'] = (listener) => this.reach.onBack(listener)
 
   /** From now on, hold the poll whenever an Orca account is signed in and the machine wants the connection. */
@@ -130,12 +134,11 @@ export class ConnectorCloud {
 
   /** The desktop signed in, switched accounts or refreshed its sign-in. */
   accountChanged(): void {
-    // A new sign-in may lift a stop the cloud made: a fresh client asks again, and owed sends go again.
-    const stopped = this.clientStop !== null
-    if (stopped) {
+    // A new sign-in may lift a stop the cloud made; a fresh client asks again.
+    if (this.clientStop) {
       this.stopClient()
     }
-    this.noteAccount(stopped)
+    this.noteAccount()
     this.reconcile()
     this.options.onStatusChanged?.()
   }
@@ -231,8 +234,7 @@ export class ConnectorCloud {
     options?: ConnectorCallOptions
   ): Promise<ConnectorResult<z.infer<TSchema>>> {
     const account = this.activeAccount()
-    const transport = account && this.reach.outsidePoll(this.transportFor(account))
-    return transport ? await transport.call(path, body, schema, options) : SIGNED_OUT
+    return account ? await this.transportFor(account).call(path, body, schema, options) : SIGNED_OUT
   }
 
   private activeAccount(): string | null {
