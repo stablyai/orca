@@ -7,6 +7,16 @@ import { callHostRoute } from '@/runtime/rpc/calls/host-route-call'
 import { hostRouteForAuthority } from '@/runtime/rpc/targets/runtime-client-target'
 import { parseWorkspaceKey } from '../../../../../shared/workspace/identity/workspace-scope'
 
+// Why local: the folder's catalog row lives on the server even when it names an SSH target.
+function folderCatalogRoute(
+  runtimeEnvironmentId: string
+): ReturnType<typeof hostRouteForAuthority> {
+  return hostRouteForAuthority({
+    endpoint: { kind: 'environment', environmentId: runtimeEnvironmentId },
+    at: 'local'
+  })
+}
+
 /** Writes a workspace's whole review-note list to the host that owns it; the base is the list it was edited from. */
 export async function writeDiffCommentsToHost(
   owner: DiffCommentOwner,
@@ -23,11 +33,7 @@ export async function writeDiffCommentsToHost(
     const updated = runtimeEnvironmentId
       ? (
           await callHostRoute<{ folderWorkspace: FolderWorkspace | null }>(
-            // Why local: the folder's catalog row lives on the server even when it names an SSH target.
-            hostRouteForAuthority({
-              endpoint: { kind: 'environment', environmentId: runtimeEnvironmentId },
-              at: 'local'
-            }),
+            folderCatalogRoute(runtimeEnvironmentId),
             'folderWorkspace.update',
             { folderWorkspaceId: scope.folderWorkspaceId, updates },
             { timeoutMs: 15_000 }
@@ -71,10 +77,36 @@ export async function writeDiffCommentsToHost(
   )
 }
 
-/** The notes a worktree's host holds now; this computer's are read through an update that changes nothing. */
-export async function readDiffCommentsFromHost(
-  owner: Extract<DiffCommentOwner, { kind: 'worktree' }>
+/** The notes a folder's catalog holds now, read from the list so the read changes nothing. */
+async function readFolderDiffCommentsFromHost(
+  owner: Extract<DiffCommentOwner, { kind: 'folder' }>
 ): Promise<DiffComment[]> {
+  const scope = parseWorkspaceKey(owner.worktreeId)
+  if (scope?.type !== 'folder') {
+    throw new Error('The workspace host is unresolved; review notes were not saved.')
+  }
+  const { folderWorkspaces } = owner.runtimeEnvironmentId
+    ? await callHostRoute<{ folderWorkspaces: FolderWorkspace[] }>(
+        folderCatalogRoute(owner.runtimeEnvironmentId),
+        'folderWorkspace.list',
+        undefined,
+        { timeoutMs: 15_000 }
+      )
+    : { folderWorkspaces: await window.api.folderWorkspaces.list() }
+  // Why last: the host's update edits the last row with an id, so that row holds the notes it merges into.
+  const held = folderWorkspaces.findLast((row) => row.id === scope.folderWorkspaceId)
+  // Why throw: without the host's list there is no safe base, and a write without one replaces it.
+  if (!held) {
+    throw new Error('This workspace was not found on its host; review notes were not saved.')
+  }
+  return held.diffComments ?? []
+}
+
+/** The notes a workspace's host holds now; this computer's worktrees are read through an update that changes nothing. */
+export async function readDiffCommentsFromHost(owner: DiffCommentOwner): Promise<DiffComment[]> {
+  if (owner.kind === 'folder') {
+    return readFolderDiffCommentsFromHost(owner)
+  }
   const { endpoint, at } = owner.authority
   if (endpoint.kind === 'self') {
     const meta = await window.api.worktrees.updateMeta({

@@ -124,27 +124,23 @@ export function enqueueDiffCommentPersist(
     let sent: DiffComment[] = []
     // What this copy last saw on disk; the host merges only the edits since then.
     // Why not always a promise: a write with nothing to re-read leaves in the turn it was dequeued in.
-    const baseFor = (
-      requested: DiffComment[]
-    ): DiffComment[] | undefined | Promise<DiffComment[]> => {
+    const baseFor = (requested: DiffComment[]): DiffComment[] | Promise<DiffComment[]> => {
       sent = requested
       const own = ownNoteIdsAfterFailure.get(floorKey)
-      const owner = mutation.owner
       if (!own) {
         return floor
       }
-      // Why no base: there is no folder re-read helper, and a failed write may still have landed,
-      // so the floor may not be what the host holds; the host replaces the list instead.
-      return owner.kind === 'worktree' ? rereadBase(owner, own, requested) : undefined
+      // Why re-read: a failed write may still have landed, so the floor may not be what the host holds.
+      // Never send no base: the host would replace the list and drop notes another device saved.
+      return rereadBase(own, requested)
     }
     const rereadBase = async (
-      owner: Extract<DiffCommentOwner, { kind: 'worktree' }>,
       own: ReadonlySet<string>,
       requested: DiffComment[]
     ): Promise<DiffComment[]> => {
       // After a failed write the host is asked what it holds: its notes this copy never listed are
       // another device's and stay; the rest become what this copy shows.
-      const held = await readDiffCommentsFromHost(owner)
+      const held = await readDiffCommentsFromHost(mutation.owner)
       const mine = new Set([...own, ...[...floor, ...requested].map((note) => note.id)])
       return held.filter((note) => mine.has(note.id)).map(normalizeDiffComment)
     }
