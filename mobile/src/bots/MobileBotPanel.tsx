@@ -86,6 +86,8 @@ export function MobileBotPanel(props: {
   /** Opens a file an item links; a path outside the bot's folder is refused with a toast. */
   onOpenFile: (path: string, showToast: (message: string) => void) => void
   home: Parameters<typeof MobileBotSettingsTab>[0]['home']
+  /** A Connect's sign-in sheet, in this host so it and the panel swap in one beat. */
+  signIn?: ReactNode
 }) {
   useMobileColorScheme()
   const t = useMobileTranslation()
@@ -299,7 +301,7 @@ export function MobileBotPanel(props: {
   }
 
   const main = (
-    <View style={styles.main}>
+    <View style={styles.root}>
       <MobileBotPanelHeader
         name={bot.name}
         sub={`${botAgentLabel(bot.agent)} · ${props.hostName}`}
@@ -405,13 +407,13 @@ export function MobileBotPanel(props: {
       />
       {accessSheet}
       {automations.sheets}
+      {props.signIn}
     </BottomDrawerModalHost>
   )
 }
 
 const styles = themedStyleSheet(() => ({
   root: { flex: 1 },
-  main: { flex: 1 },
   page: { flex: 1, backgroundColor: colors.sheetSurface },
   scroll: { flex: 1 },
   scrollContent: { paddingBottom: spacing.lg },
