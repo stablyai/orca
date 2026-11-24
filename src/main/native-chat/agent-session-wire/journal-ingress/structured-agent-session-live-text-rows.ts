@@ -108,10 +108,11 @@ export class StructuredAgentSessionLiveTextRows {
       budget -= text.length
       const shown = this.shown.get(key)
       const stream = this.streamOf?.(key)
+      // The same row again: the same live stream unchanged in length, or (without one) the same text.
       if (
         shown?.placement === placement &&
         shown.length === text.length &&
-        shown.stream === stream
+        ((stream !== undefined && shown.stream === stream) || shown.text === text)
       ) {
         items.push(shown.item)
         continue

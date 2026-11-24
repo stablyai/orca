@@ -81,3 +81,42 @@ it('never tells a reader a truncated reply extends the text it holds', () => {
   expect(cutText.startsWith(heldText)).toBe(false)
   expect(textExtends(cut, cutText, heldText)).toBe(false)
 })
+
+it('shows a recreated truncated reply, not the old row of the same length', () => {
+  let read: ((epoch: string) => readonly AgentJournalRenderItem[]) | undefined
+  const coalescer = createAgentSessionDeltaCoalescer({
+    emit: () => true,
+    schedule: () => () => {},
+    maxRetainedBytes: 1_002
+  })
+  const rows = new StructuredAgentSessionLiveTextRows(
+    {
+      bindLiveText: (source) => {
+        read = source.read
+        return () => {}
+      }
+    },
+    coalescer.textWithin,
+    (_key, text) => ({ kind: 'message', role: 'assistant', blocks: [{ type: 'text', text }] }),
+    coalescer.streamOf
+  )
+  rows.committed('reply')(
+    {
+      itemId: 'reply',
+      revision: 1,
+      sequence: 1,
+      observedAt: 1,
+      body: { kind: 'message', role: 'assistant', blocks: [] }
+    },
+    'e'
+  )
+  coalescer.append('reply', 'x'.repeat(1_003))
+  const first = textOf(read!('e')[0]!)
+  // The stream goes and a new one under the same key is cut to the same length.
+  coalescer.forget('reply')
+  coalescer.append('reply', 'z'.repeat(1_003))
+  const second = textOf(read!('e')[0]!)
+  expect(second.length).toBe(first.length)
+  expect(second).not.toBe(first)
+  expect(second.startsWith('z')).toBe(true)
+})
