@@ -118,7 +118,7 @@ async function openStartingClaudeSession(
     if (keptTurn?.kind === 'command') {
       events?.appendItem(keptTurn.identity, keptTurn.body, { turnScope: { kind: 'thread' } })
     }
-    restateKeptClaudeBackgroundTasks(session, kept.openTaskIds, keptTurn !== null)
+    restateKeptClaudeBackgroundTasks(session, kept.taskIds, keptTurn !== null)
     input.publishChildWork?.(request.sessionId, session)
   }
   if (!kept && resumesTranscript && (leafUuid || origin?.kind === 'native_copy') && events) {

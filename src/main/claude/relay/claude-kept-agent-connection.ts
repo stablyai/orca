@@ -26,8 +26,9 @@ import { DaemonProtocolError } from '../../daemon/protocol/daemon-errors'
 export type ClaudeKeptAgentRelay = {
   /** Lets the kept output through once the chat can route it. */
   releaseOutput: () => void
-  /** Background tasks still open when the last app let go, which this app saw start. */
-  openTaskIds: readonly string[]
+  /** Background tasks open when the last app let go, and those that ended since: this app never
+   *  saw them start, so each is restated and the replayed end settles one that ended. */
+  taskIds: readonly string[]
 }
 
 export type ClaudeKeptAgentConnection = ClaudeStreamJsonConnection & {
@@ -289,8 +290,13 @@ export async function openKeptClaudeAgentConnection(
     ...createClaudeControlSurface(keptQuery),
     kept: {
       releaseOutput: () => child.releaseOutput(),
-      openTaskIds: [
-        ...new Set((child.attachResult?.openWork?.task ?? []).flatMap(([id]) => id ?? []))
+      taskIds: [
+        ...new Set(
+          [
+            ...(child.attachResult?.openWork?.task ?? []),
+            ...(child.attachResult?.endedWork?.task ?? [])
+          ].flatMap(([id]) => id ?? [])
+        )
       ]
     },
     exited: exited.promise,
