@@ -527,7 +527,7 @@
         "importFailed": "Cookies aus {{browser}} konnten nicht importiert werden.",
         "importFailedTryClosing": "Cookies aus {{browser}} konnten nicht importiert werden. Zuerst {{browser}} schließen und erneut versuchen.",
         "importFailedWithLog": "Cookies aus {{browser}} konnten nicht importiert werden: {{detail}}. Details wurden in {{logPath}} gespeichert.",
-        "safariFullDiskAccess": "macOS hat den Zugriff auf Safari-Cookies verweigert. Orca unter System Settings → Privacy & Security → Full Disk Access Festplattenvollzugriff gewähren.",
+        "safariFullDiskAccess": "macOS hat den Zugriff auf Safari-Cookies verweigert. Orca unter Systemeinstellungen → Datenschutz & Sicherheit → Festplattenvollzugriff gewähren.",
         "connectionEnded": "Die Verbindung zu diesem Server wurde während des Imports beendet. Erneut verbinden und noch einmal versuchen.",
         "serverRepaired": "Dieser Server wurde während des Imports erneut gekoppelt. Erneut versuchen.",
         "macFullDiskAccess": "macOS hat den Zugriff auf Cookies von {{browser}} verweigert. Gewähre Orca unter Systemeinstellungen → Datenschutz & Sicherheit → Festplattenvollzugriff Zugriff und starte Orca neu.",
@@ -20334,8 +20334,8 @@
       },
       "cardKindHidden": {
         "description": "Das kannst du jederzeit hier ändern:",
-        "settingsLink": "Einstellungen > Chat UI > Durchgangsaktivität",
-        "failed": "Das konnte nicht gespeichert werden. Du kannst es unter Einstellungen > Chat UI > Durchgangsaktivität ausschalten."
+        "settingsLink": "Einstellungen > Chat-Oberfläche > Durchgangsaktivität",
+        "failed": "Das konnte nicht gespeichert werden. Du kannst es unter Einstellungen > Chat-Oberfläche > Durchgangsaktivität ausschalten."
       },
       "openedPullRequests": {
         "one": "Pull Request erstellt: {{name}}",
@@ -21464,8 +21464,8 @@
       "demoApp": "App",
       "demoPassword": "Passwort",
       "demoCookie": "Cookie",
-      "switchedNoteTitle": "Neue Agenten werden in Chat UI geöffnet",
-      "switchedNoteBody": "Lieber das Terminal? Du kannst jederzeit zurückwechseln: Suche in den Einstellungen nach <term>Chat UI</term>.",
+      "switchedNoteTitle": "Neue Agenten werden in der Chat-Oberfläche geöffnet",
+      "switchedNoteBody": "Lieber das Terminal? Du kannst jederzeit zurückwechseln: Suche in den Einstellungen nach <term>Chat-Oberfläche</term>.",
       "openSettings": "Einstellungen öffnen"
     },
     "botsTeammate": {
@@ -24681,9 +24681,9 @@
     "searchRefs": "Branches und Tags suchen",
     "oldServer": "Diese Orca-Version auf dem Server zeigt nur den aktuellen Branch",
     "copyBranch": "Branch-Namen kopieren",
-    "switchWorkspace": "Zum Workspace wechseln",
-    "workspaceClosed": "Dieser Branch ist nicht mehr in einem anderen Workspace geöffnet.",
-    "workspaceCheckFailed": "Dieser Workspace konnte nicht überprüft werden. Versuche es erneut, wenn die Verbindung wiederhergestellt ist.",
+    "switchWorkspace": "Zum Arbeitsbereich wechseln",
+    "workspaceClosed": "Dieser Branch ist nicht mehr in einem anderen Arbeitsbereich geöffnet.",
+    "workspaceCheckFailed": "Dieser Arbeitsbereich konnte nicht überprüft werden. Versuche es erneut, wenn die Verbindung wiederhergestellt ist.",
     "refresh": "Commits aktualisieren",
     "branchTag": "Branch / Tag",
     "graph": "Graph",
