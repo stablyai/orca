@@ -4863,7 +4863,7 @@
             "cursor": {
               "expired": {
                 "label": "サインインの有効期限切れ",
-                "message": "Orca を実行しているコンピュータのターミナルで cursor-agent login を実行し、使用状況を再試行してください。"
+                "message": "Orca を実行しているコンピュータのターミナルで cursor-agent login を実行し、使用状況の取得を再試行してください。"
               },
               "plan": "プラン"
             },
@@ -7730,7 +7730,6 @@
         },
         "BrowserProfileRow": {
           "8e636cae25": "プロファイル「{{value0}}」が削除されました。",
-          "2d4bea7f35": "デフォルトの Cookie がクリアされました。",
           "796d846483": "Cookie はインポートされません",
           "c29648fe5b": "アクティブ",
           "b4c167764d": "ファイルから {{value0}} 個の Cookie を {{value1}} にインポートしました。",
@@ -7738,10 +7737,7 @@
           "b4e9d3f2a1c5": "{{value1}} から {{value0}} 件の Cookie を {{value2}} にインポートしました。",
           "c5a273a809": "{{value0}} から",
           "80bffd32bf": "Cookie のインポート",
-          "bd7d68f138": "ファイルから…",
-          "4054c458e1": "デフォルトの Cookie をクリア",
-          "3b662becd5": "デフォルトプロファイルの Cookie をクリアしますか？",
-          "f159cf5a3e": "このプロファイルのサイトからサインアウトされる場合があります。"
+          "bd7d68f138": "ファイルから…"
         },
         "BrowserUseComputerUseNotice": {
           "79209b37b9": "Cookie のインポートが適切でない場合、コンピュータ操作はローカルアプリを制御し、該当する場合は既存のログインブラウザセッションを使用することがあります。Orca Computer Use スキルをインストールします。 macOS ではプライバシー許可も必要です。",
@@ -17584,8 +17580,6 @@
             "ed8f54509d": "デフォルト",
             "e5d31de1a9": "ビューポートのサイズ",
             "56f94f4ffa": "ファイルから…",
-            "eb280bfb11": "{{value0}} から",
-            "2293adf620": "Cookie のインポート",
             "cf7cdc67ef": "新規プロファイル…",
             "7b838540c7": "ブラウザメニュー",
             "a7a86702b3": "{{value0}} プロファイルを作成して切り替えました",
@@ -19978,7 +19972,6 @@
         "terminalRequired": "ターミナルでこの OMP の質問に答えてください。",
         "openTerminal": "ターミナルで回答する",
         "recommended": "おすすめ",
-        "stepAnswered": "{{value0}}、回答済み",
         "stepOf": "{{value0}} / {{value1}}",
         "answered": "回答済み",
         "title": "質問",
@@ -21906,6 +21899,12 @@
       "caveat": "これにより、リモートホスト上のこのページの最後のアドレスにある新規ページが開きます。サインインとその他の一時的なページの状態は異なる場合があり、フォーム送信からのページは空白で開きます。",
       "failed": "リモートホストでこのページを開けませんでした。接続を確認して再試行してください。"
     },
+    "deviceMove": {
+      "toThisComputer": "このコンピューターで開く",
+      "toHost": "{{host}} で開く",
+      "tooltip": "このアドレスを反対側の新しいタブで開き、このタブを閉じます。再度サインインが必要になる場合があります。",
+      "failedToThisComputer": "このコンピューターでこのページを開けませんでした。"
+    },
     "sshRoute": {
       "preparingTitle": "SSH ホスト経由で接続する",
       "errorTitle": "SSH ブラウザルーティングが利用できない",
@@ -22053,6 +22052,13 @@
       "sshPage": {
         "stored": "{{host}} 用のブラウザに保存しました。",
         "googleCookiesSkipped": "Google の Cookie はインポートされませんでした。{{host}} 経由で閲覧するページを開き、Google にサインインしてください。"
+      },
+      "picker": {
+        "menuItem": "Cookie のインポート…",
+        "search": "プロファイルを検索",
+        "lastUsed": "前回使用",
+        "noMatches": "一致する項目がありません",
+        "googleNote": "Google ログインは対象外です"
       }
     },
     "passwords": {
@@ -23179,7 +23185,7 @@
       "signInRequired": "このアカウントを使用するにはもう一度サインインしてください",
       "signInAgain": "もう一度サインイン",
       "usageSignInLabel": "もう一度サインイン",
-      "usageSignInMessage": "選択した Claude アカウントは再度サインインが必要です。設定 > AI プロバイダーアカウントを開くか、システムのデフォルトを選択してください。",
+      "usageSignInMessage": "このアカウントは再度サインインが必要です。",
       "signIn": "サインイン",
       "moreSignInOptions": "その他のサインインオプション",
       "copySignInLink": "代わりにサインインリンクをコピー",
@@ -24624,6 +24630,7 @@
     "waitForImageUploads": "画像のアップロードが完了するまで待ってから、もう一度 [PR を作成] を実行してください。"
   },
   "agentPicker": {
+    "refreshModels": "モデルを更新",
     "catalogUnsupportedLaunch": "このホストでは{{agent}}のモデルを利用できません。現在の選択はそのまま適用されます。",
     "catalogEmpty": "{{agent}}に利用可能なモデルはありません。",
     "search": "検索、例: Opus 5.5…",
@@ -25518,7 +25525,6 @@
     "row": {
       "runsOn": "{{host}} で実行中",
       "disconnected": "切断済み",
-      "hostDisconnected": "{{host}} は切断されています",
       "idle": "アイドル",
       "paused": "一時停止中",
       "reading": "メッセージを読んでいます",
@@ -25575,7 +25581,9 @@
       },
       "ask": {
         "notSentYet": "まだ送信されていません",
-        "replaced": "Agent が新たな質問をしました。確認してから返信してください。"
+        "replaced": "Agent が新たな質問をしました。確認してから返信してください。",
+        "replacedByNewer": "新しい質問に置き換えられました",
+        "skipped": "スキップ済み"
       },
       "readMoreClosedFailed": "クローズ済みの項目をさらに読み込めませんでした"
     },

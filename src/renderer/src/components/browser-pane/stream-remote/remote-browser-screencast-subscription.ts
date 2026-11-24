@@ -15,6 +15,7 @@ import type { RemoteBrowserViewportSize } from './remote-browser-stream-tokens'
 import type { RemoteBrowserPagePrompts } from './remote-browser-page-prompts'
 import type { RemoteBrowserHostContextMenus } from './remote-browser-host-context-menus'
 import { showRemoteBrowserDownloadNotice } from './remote-browser-download-notices'
+import { saveRemoteBrowserPagePrint } from './remote-browser-page-print'
 import { readBrowserScreencastFrameSeq } from '../../../../../shared/browser/screencast/browser-screencast-protocol'
 import { callRuntimeRpc } from '@/runtime/rpc/calls/runtime-rpc-call'
 
@@ -112,8 +113,8 @@ export async function openRemoteBrowserScreencastStream(
         pointerEvents: 1,
         pagePrompts: 1,
         contextMenus: 1,
-        // A web client's picked files have no paths to stage on the host.
-        ...(isWebClientLocation() ? {} : { fileChoosers: 1 }),
+        // A web client's picked files have no paths to stage on the host, and it can't save a printed PDF or a download.
+        ...(isWebClientLocation() ? {} : { fileChoosers: 1, prints: 1, downloadCopies: 1 }),
         agentCursor: 1,
         driverEvents: 1,
         downloads: 1,
@@ -228,7 +229,9 @@ function dispatchScreencastResponse(
     (event.type === 'downloadRequested' || event.type === 'downloadFinished') &&
     dialogPage.target.kind === 'environment'
   ) {
-    showRemoteBrowserDownloadNotice(event, dialogPage.target.environmentId)
+    showRemoteBrowserDownloadNotice(event, dialogPage.target)
+  } else if (event.type === 'print') {
+    void saveRemoteBrowserPagePrint(dialogPage, event)
   } else if (event.type === 'error') {
     events.onFailed(event.message)
   }

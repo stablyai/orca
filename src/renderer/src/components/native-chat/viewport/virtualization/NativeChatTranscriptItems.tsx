@@ -1,4 +1,5 @@
 import { stageBesideStreamedText } from '../../../../../../shared/agent-session/view/structured-agent-session-streamed-text-rows'
+import { NativeChatWaitingAgentMailRows } from '../../queue/NativeChatWaitingAgentMailRows'
 import { Fragment, useMemo } from 'react'
 import {
   NativeChatTranscriptRow,
@@ -122,10 +123,13 @@ export function NativeChatTranscriptItems({
 /** Rows drawn after the live turn's activity, outside the window: few, and the newest there are. */
 export function NativeChatWaitingTranscriptItems({
   slots,
-  context
+  context,
+  agentMail = true
 }: {
   slots: readonly NativeChatTranscriptSlot[]
   context: NativeChatTranscriptRowContext
+  /** Ends with other agents' waiting mail; rows stacked outside a conversation have none. */
+  agentMail?: boolean
 }): React.JSX.Element {
   return (
     <>
@@ -143,6 +147,7 @@ export function NativeChatWaitingTranscriptItems({
           })}
         />
       ))}
+      {agentMail ? <NativeChatWaitingAgentMailRows /> : null}
     </>
   )
 }
@@ -158,7 +163,7 @@ export function NativeChatTranscriptRowStack({
 }): React.JSX.Element {
   return (
     <div className="flex flex-col gap-5">
-      <NativeChatWaitingTranscriptItems slots={slots} context={context} />
+      <NativeChatWaitingTranscriptItems slots={slots} context={context} agentMail={false} />
     </div>
   )
 }

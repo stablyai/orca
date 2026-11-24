@@ -1,16 +1,9 @@
 import React, { useState } from 'react'
-import { Plus } from 'lucide-react'
-import { toast } from 'sonner'
 import { SettingsSubsectionHeader } from '@/components/settings/form-controls/SettingsFormControls'
 import { GoogleIcon } from '@/components/icons/GoogleIcon'
 import { Button } from '@/components/ui/button'
 import { useIntlLocale, useTranslate } from '@/i18n/use-translate'
-import { useHostBots } from '@/lib/bot-catalog'
 import { getRuntimeTargetHostId } from '@/runtime/rpc/targets/runtime-client-target'
-import { getWorktreeVisitTimestamp } from '@/lib/workspace/activation/worktree-visit-recency'
-import { useAppStore } from '@/store'
-import type { Bot } from '../../../../../shared/bot-types'
-import { folderWorkspaceKey } from '../../../../../shared/workspace/identity/workspace-scope'
 import type { ExecutionHostId } from '../../../../../shared/execution-host/execution-host'
 import type { GoogleStatusView } from '../../../../../shared/google/google-connect-types'
 import type { GoogleServiceChoice } from '../../../../../shared/google/google-scopes'
@@ -19,6 +12,11 @@ import { googleSignInChoices } from './google-account-readiness'
 import { GoogleAccountRow } from './GoogleAccountRow'
 import { GoogleServicePicker } from './GoogleServicePicker'
 import { GoogleSignInWaiting } from './GoogleSignInWaiting'
+import { GoogleSignInFailed } from './GoogleSignInTrouble'
+import { GoogleUseAnotherAccountMenu } from './GoogleUseAnotherAccountMenu'
+import { useGoogleSetupStart } from './use-google-setup-start'
+import { useGoogleHostLabel } from './use-google-host-label'
+import { useGoogleNewApp } from './use-google-new-app'
 import {
   importGoogleApp,
   refreshGoogle,
@@ -27,33 +25,6 @@ import {
 } from './google-connect-client'
 import { useGoogleClientFile } from './use-google-client-file'
 import { useGoogleSignIn } from './use-google-sign-in'
-import { NewBotDialog } from '../NewBotDialog'
-import { startGoogleSetupInChat } from './setup-cards/google-setup-run-store'
-
-function errorText(error: unknown): string {
-  return error instanceof Error ? error.message : String(error)
-}
-
-/** The host's bot whose chat the person was in last; the host's setup starts there. */
-function useLastVisitedBot(hostId: ExecutionHostId): Bot | null {
-  // That host's Google setup, so only its own bots.
-  const bots = useHostBots(hostId)
-  const visits = useAppStore((state) => state.lastVisitedAtByWorktreeId)
-  let last: Bot | null = null
-  let lastAt = -1
-  for (const bot of bots) {
-    const at =
-      getWorktreeVisitTimestamp(visits, {
-        id: folderWorkspaceKey(bot.folderWorkspaceId),
-        hostId: bot.hostId
-      }) ?? 0
-    if (at > lastAt) {
-      last = bot
-      lastAt = at
-    }
-  }
-  return last
-}
 
 /** No app on this host: a bot sets one up in its chat, or the person imports the team's file. */
 function NoApp({
@@ -64,19 +35,14 @@ function NoApp({
   file: ReturnType<typeof useGoogleClientFile>
 }): React.JSX.Element {
   const t = useTranslate()
-  const bot = useLastVisitedBot(hostId)
-  const [creating, setCreating] = useState(false)
-  const start = (target: Bot): void => {
-    void startGoogleSetupInChat(target, 'settings').catch((error: unknown) =>
-      toast.error(errorText(error))
-    )
-  }
+  const setup = useGoogleSetupStart(hostId)
+  const bot = setup.bot
   return (
     <div className="space-y-3">
       <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
         {bot ? (
           <>
-            <Button size="sm" onClick={() => start(bot)}>
+            <Button size="sm" onClick={() => setup.start()}>
               {t('bots.google.setUp', 'Set up Google')}
             </Button>
             <span className="text-xs text-muted-foreground">
@@ -84,7 +50,7 @@ function NoApp({
             </span>
           </>
         ) : (
-          <Button size="sm" onClick={() => setCreating(true)}>
+          <Button size="sm" onClick={() => setup.start()}>
             {t('bots.google.createBotToSetUp', 'New bot')}
           </Button>
         )}
@@ -108,16 +74,29 @@ function NoApp({
           {file.error}
         </p>
       ) : null}
-      {creating ? (
-        <NewBotDialog
-          open={creating}
-          onOpenChange={setCreating}
-          hosts={[hostId]}
-          onCreated={(created) => start(created)}
-        />
-      ) : null}
+      {setup.dialog}
     </div>
   )
+}
+
+/** Set up a new Google app from this panel, in the host's last-visited agent's chat. */
+function useNewAppSetup(
+  target: RuntimeClientTarget,
+  signIn: ReturnType<typeof useGoogleSignIn>
+): { newApp: () => void; notices: React.ReactNode } {
+  const setup = useGoogleSetupStart(getRuntimeTargetHostId(target))
+  const { newApp, updateNotice } = useGoogleNewApp(target, signIn, () =>
+    setup.start({ newApp: true })
+  )
+  return {
+    newApp,
+    notices: (
+      <>
+        {updateNotice}
+        {setup.dialog}
+      </>
+    )
+  }
 }
 
 /** The app is here and nobody is signed in: pick services, then Connect Google. */
@@ -125,6 +104,7 @@ function ConnectPanel({ target }: { target: RuntimeClientTarget }): React.JSX.El
   const t = useTranslate()
   const [choices, setChoices] = useState<GoogleServiceChoice[]>(['gmail'])
   const signIn = useGoogleSignIn(target)
+  const setup = useNewAppSetup(target, signIn)
   return (
     <div className="space-y-3">
       <p className="text-sm font-medium">
@@ -132,13 +112,15 @@ function ConnectPanel({ target }: { target: RuntimeClientTarget }): React.JSX.El
       </p>
       <GoogleServicePicker value={choices} onChange={setChoices} />
       {signIn.state.kind === 'waiting' ? (
-        <GoogleSignInWaiting state={signIn.state} onCancel={signIn.cancel} />
+        <GoogleSignInWaiting
+          state={signIn.state}
+          onCancel={signIn.cancel}
+          onNewApp={setup.newApp}
+        />
       ) : (
         <div className="space-y-2">
           {signIn.state.kind === 'failed' ? (
-            <p role="alert" className="text-sm text-destructive">
-              {signIn.state.error}
-            </p>
+            <GoogleSignInFailed error={signIn.state.error} onNewApp={setup.newApp} />
           ) : null}
           <Button
             size="sm"
@@ -149,11 +131,12 @@ function ConnectPanel({ target }: { target: RuntimeClientTarget }): React.JSX.El
           </Button>
         </div>
       )}
+      {setup.notices}
     </div>
   )
 }
 
-/** The accounts as rows, then Add another Google account and Share setup under them. */
+/** The accounts as rows, then Use another account and Share setup under them. */
 function AccountList({
   target,
   google,
@@ -166,6 +149,7 @@ function AccountList({
   const t = useTranslate()
   const intlLocale = useIntlLocale()
   const signIn = useGoogleSignIn(target)
+  const setup = useNewAppSetup(target, signIn)
   const client = google.client
   // Absent from a host too old to keep a default, where a second account would break its calls.
   const defaultAccount = google.defaultAccount
@@ -191,23 +175,21 @@ function AccountList({
         ))}
       </div>
       {signIn.state.kind === 'waiting' ? (
-        <GoogleSignInWaiting state={signIn.state} onCancel={signIn.cancel} />
+        <GoogleSignInWaiting
+          state={signIn.state}
+          onCancel={signIn.cancel}
+          onNewApp={setup.newApp}
+        />
       ) : signIn.state.kind === 'failed' ? (
-        <p role="alert" className="text-sm text-destructive">
-          {signIn.state.error}
-        </p>
+        <GoogleSignInFailed error={signIn.state.error} onNewApp={setup.newApp} />
       ) : null}
       <div className="flex flex-wrap items-center gap-2">
         {canAdd ? (
-          <Button
-            size="sm"
-            variant="outline"
+          <GoogleUseAnotherAccountMenu
             disabled={signIn.state.kind === 'waiting'}
-            onClick={() => connect(googleSignInChoices(fallback))}
-          >
-            <Plus />
-            {t('bots.google.addAccount', 'Add another Google account')}
-          </Button>
+            onSignIn={() => connect(googleSignInChoices(fallback))}
+            onNewApp={setup.newApp}
+          />
         ) : null}
         {client ? (
           <Button
@@ -235,21 +217,9 @@ function AccountList({
             })
           : t('bots.google.turnOnForBot', 'Turn Google on for a bot from the bot’s Connectors.')}
       </p>
+      {setup.notices}
     </div>
   )
-}
-
-/** Where the Google sign-ins live: this computer, or the paired server Settings points at. */
-function useHostLabel(target: RuntimeClientTarget): string {
-  const t = useTranslate()
-  const name = useAppStore((state) =>
-    target.kind === 'environment'
-      ? (state.runtimeEnvironments.find((entry) => entry.id === target.environmentId)?.name ?? null)
-      : null
-  )
-  return target.kind === 'local'
-    ? t('bots.google.thisComputer', 'this computer')
-    : (name ?? t('bots.google.thisServer', 'this server'))
 }
 
 /** Settings › Bots › Google: the team's app on this host, the accounts signed in, and their services. */
@@ -260,7 +230,7 @@ export function GoogleAccountSettings({
 }): React.JSX.Element | null {
   const t = useTranslate()
   const view = useGoogleHost(target)
-  const host = useHostLabel(target)
+  const host = useGoogleHostLabel(target)
   const file = useGoogleClientFile(async (text) => {
     await importGoogleApp(target, text)
   })

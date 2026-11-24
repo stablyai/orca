@@ -240,6 +240,7 @@ function reasonClause(reason: string | null | undefined): string {
 
 /** What a preamble send reads of the host. */
 type StructuredWorkerPreambleHost = StructuredAgentTurnHost & {
+  reads: Pick<StructuredAgentSessionHost['reads'], 'agentStarting'>
   deps: {
     store: Pick<
       StructuredAgentSessionHost['deps']['store'],
@@ -249,7 +250,8 @@ type StructuredWorkerPreambleHost = StructuredAgentTurnHost & {
 }
 
 /** Delivers the dispatch preamble as the worker's first turn. `pending`: the worker's agent had
- *  not taken it within the wait; the host still holds it for that agent, and never re-sends it. */
+ *  not taken it within the wait; the host still holds it for that agent, and never re-sends it.
+ *  `starting`: likewise held, because that agent is still starting. */
 export async function sendStructuredWorkerPreamble(args: {
   host: StructuredWorkerPreambleHost
   sessionId: string
@@ -259,7 +261,7 @@ export async function sendStructuredWorkerPreamble(args: {
   from: AgentMessageSource
   /** The worker start's readiness budget, which the agent's start counts against. */
   budgetMs?: number
-}): Promise<'accepted' | 'pending'> {
+}): Promise<'accepted' | 'pending' | 'starting'> {
   const body: AgentJournalMessageItem = {
     kind: 'message',
     role: 'user',
@@ -283,14 +285,11 @@ export async function sendStructuredWorkerPreamble(args: {
       expectedRuntimeFence: fence
     }
   })
-  switch (outcome.kind) {
-    case 'refused':
-      throw new Error(`The dispatch preamble was refused: ${outcome.refusal.message}`)
-    case 'queued':
-      return 'pending'
-    case 'sent':
-      return preambleDispatchState(outcome.submission)
+  if (outcome.kind === 'refused') {
+    throw new Error(`The dispatch preamble was refused: ${outcome.refusal.message}`)
   }
+  const state = outcome.kind === 'queued' ? 'pending' : preambleDispatchState(outcome.submission)
+  return state === 'pending' && args.host.reads.agentStarting(args.sessionId) ? 'starting' : state
 }
 
 /** A sent preamble's verdict: acknowledged, or held for its agent; anything else throws. */

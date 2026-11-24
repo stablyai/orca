@@ -3,6 +3,7 @@ import {
   mergedAgentModelCatalogModels
 } from './agent-model-catalog-models'
 import { configuredCatalogChoice } from './agent-model-catalog-configured-row'
+import { withSeenRows, type SeenAgentModelRows } from './agent-model-catalog-seen-rows'
 import * as modelCatalogOwnership from '../../../shared/agent-session/options/model-catalog/agent-model-catalog-ownership'
 import { fillUnknownModelEfforts } from '../../../shared/agent-session/options/model-catalog/agent-session-model-efforts'
 import type { AgentSessionUnavailable } from '../../../shared/agent-session/failures/agent-session-availability'
@@ -115,6 +116,8 @@ export type AgentModelCatalogEntry = {
   fastModeSupport?: AgentSessionFastModeSupport
   origin: 'live-session' | 'probe'
   fetchedAt: number
+  /** In memory only: rows listed in this process that the listings may lack. */
+  seen?: SeenAgentModelRows
 }
 
 export function agentModelCatalogResultFromEntry(
@@ -170,13 +173,6 @@ export function agentModelCatalogEntry(
   }
 }
 
-export function retainedAgentModelCatalogModels(
-  _previous: Pick<AgentModelCatalogEntry, 'models'> | null | undefined,
-  listing: AgentModelCatalogLiveListing
-): AgentSessionModelOption[] {
-  return listing.models
-}
-
 export function agentModelCatalogEntryWithSuccess(
   previous: AgentModelCatalogEntry | undefined,
   identity: { agent: string; fingerprint: string },
@@ -218,13 +214,12 @@ export function agentModelCatalogEntryWithSuccess(
         : null
     )
   }
-  const incoming = retainedAgentModelCatalogModels(previous, success)
   // A later listing must not forget a menu a chat confirmed; probes stay model-specific-only.
   const models =
     modelCatalogOwnership.usesModelSpecificAcpEfforts(identity.agent) ||
     modelCatalogOwnership.confirmsListedEffortAtSend(identity.agent)
-      ? fillUnknownModelEfforts(incoming, previous?.models ?? [])
-      : incoming
+      ? fillUnknownModelEfforts(success.models, previous?.models ?? [])
+      : success.models
   if (models.length === 0) {
     return null
   }
@@ -293,13 +288,14 @@ export function entryWithConfiguredDefault(
   if (samePolicy && models === live?.models) {
     return null
   }
-  return agentModelCatalogEntry(
+  const rebuilt = agentModelCatalogEntry(
     agent,
     fingerprint,
     discovered,
     live && models && models !== live.models ? { ...live, models } : live,
     samePolicy ? entry.configured : next && { ...next, at }
   )
+  return withSeenRows(rebuilt, entry.seen)
 }
 
 /** Display observations share listing lifetime but are never durable facts. */

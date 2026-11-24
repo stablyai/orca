@@ -135,13 +135,11 @@ export function useMobileBrowserPagePrompts(args: {
         return
       }
       setPrompt((open) => (open?.request.requestId === request.requestId ? null : open))
-      if (request.kind !== 'external-app' || !choice) {
+      if (request.kind !== 'external-app' || link === undefined) {
         return
       }
-      // A streamed page's link opens here, never on the host.
-      if (link !== undefined && opensHere && answered) {
-        openExternalLink(link)
-      } else if (!opensHere) {
+      // A streamed page's link opens here, never on the host. Answered first: leaving for the other app ends the stream the host takes answers from.
+      if (!opensHere || !(await openExternalLink(link))) {
         onToastRef.current(
           translate(
             'browser.pagePrompt.openFailed',

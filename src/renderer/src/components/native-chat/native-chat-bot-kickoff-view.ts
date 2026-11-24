@@ -22,6 +22,8 @@ export type NativeChatBotKickoffView = {
   sendBlockedReason: () => string | undefined
   /** The bot whose Chat it is. */
   bot: Bot | null
+  /** This chat's session, on the host that runs it. */
+  sessionId: string | null
   /** A new bot's first turn until it has spoken, which its Home shows as its first screen. */
   firstScreen: NativeChatFirstScreen | null
   /** Orca's first kickoff, where the bot's header sits; a Try again sends later ones. */
@@ -39,7 +41,8 @@ export function useNativeChatBotKickoffView(
   messages: readonly NativeChatMessage[],
   session: KickoffSession,
   transport: NativeChatStructuredComposerTransport,
-  workspaceId: string | null
+  workspaceId: string | null,
+  sessionId: string | null
 ): NativeChatBotKickoffView {
   const bot = useBotForWorkspace(workspaceId)
   const latestTransport = useRef(transport)
@@ -98,6 +101,7 @@ export function useNativeChatBotKickoffView(
     () => ({
       live,
       bot,
+      sessionId,
       firstScreen,
       firstKickoffId,
       send: (text) =>
@@ -109,6 +113,6 @@ export function useNativeChatBotKickoffView(
           ),
       sendBlockedReason: () => latestTransport.current.sendBlockedReason
     }),
-    [live, bot, firstScreen, firstKickoffId]
+    [live, bot, sessionId, firstScreen, firstKickoffId]
   )
 }

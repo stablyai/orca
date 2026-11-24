@@ -23,6 +23,12 @@ const buttonVariants = cva(
         // An outline that must read as a control on a card: its border reaches 3:1 in both themes.
         'outline-strong': `${outlineButtonClasses} border-muted-foreground/75 hover:border-muted-foreground dark:border-muted-foreground/60 dark:hover:border-muted-foreground`,
         secondary: 'bg-secondary text-secondary-foreground hover:bg-secondary/80',
+        // A notice's one solid call to action, filled with the theme's accent (its link colour, which
+        // each theme sets) and the label derived for it; the built-in accent when no label reads on
+        // the theme's. Hover moves 12% toward the neutral opposite of that label (see main.css), so
+        // it darkens under a light label and lightens under a dark one.
+        'theme-accent':
+          'bg-theme-accent-fill text-theme-accent-foreground hover:bg-theme-accent-fill-hover',
         ghost: 'hover:bg-accent hover:text-accent-foreground dark:hover:bg-accent/50',
         // A row action over its hovered row's accent fill, where ghost's accent hover would not show.
         'ghost-on-accent': `text-accent-foreground hover:bg-foreground/10 ${disabledOnAccentButtonClasses}`,

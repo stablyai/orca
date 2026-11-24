@@ -22,7 +22,7 @@
     },
     "claude": {
       "usageSignInLabel": "重新登录",
-      "usageSignInMessage": "所选 Claude 账户需要您重新登录，请打开设置 > AI 提供商账户，或选择系统默认"
+      "usageSignInMessage": "此账户需要您重新登录。"
     },
     "usage": {
       "percentLeft": "剩余 {{value}}%"
@@ -5672,7 +5672,7 @@
               "7e8bbe3cd7": "冲突",
               "b169f943e1": "准备好后合并",
               "autoMergeOn": "自动合并已开启",
-              "039c072f94": "在后面",
+              "039c072f94": "落后",
               "bf5e4c6c92": "已阻塞",
               "87fa36ac83": "检查失败",
               "4e2507176b": "检查待处理",
@@ -6059,6 +6059,8 @@
       "hide": "隐藏 {{name}} 的工作区"
     },
     "section": {
+      "scrollLeft": "向左滚动 · 隐藏 {{amount}} 个",
+      "scrollRight": "向右滚动 · 隐藏 {{amount}} 个",
       "title": "Bots",
       "summary": "{{title}}，{{total}} 个 bot，{{attention}} 个需要你处理，{{unread}} 个未读，{{working}} 个工作中",
       "newBot": "新建 bot",
@@ -6784,13 +6786,7 @@
       },
       "cancel": {
         "keep": "保留",
-        "confirmMany": "取消 {{count}} 项",
-        "titleMany": "要取消 {{count}} 个事项吗？",
-        "titleOne": "要取消“{{title}}”吗？",
-        "why": "bot 会看到原因。不会删除任何内容",
-        "placeholder": "原因",
-        "confirmOne": "取消事项",
-        "offline": "{{host}} 已离线。你填写的原因已保留，{{action}} 会在它恢复连接后重新可用"
+        "confirmMany": "取消 {{count}} 项"
       },
       "strip": {
         "view": "查看"
@@ -6831,7 +6827,9 @@
         "previous": "上一个问题",
         "step": "第 {{n}} 个，共 {{total}} 个",
         "next": "下一个问题",
-        "replaced": "智能体提出了新问题。请先阅读，再回复"
+        "replaced": "智能体提出了新问题。请先阅读，再回复",
+        "replacedByNewer": "已由较新的问题取代",
+        "skipped": "已跳过"
       },
       "write": {
         "unknown": "发送时连接中断，内容可能已经送达。重新连接后请先查看“活动”，再决定是否重新发送",
@@ -8122,14 +8120,10 @@
         "continue": "继续",
         "description": "选择 {{bot}} 登录你的 Gmail、日历和云端硬盘的方式",
         "self": "自行托管",
-        "selfNote": "你将自行创建 Google Cloud 应用，因此你的登录信息会保留在你的电脑上。大约需要 10 分钟",
+        "selfNote": "使用你自己的 Google 应用",
         "orca": "Orca 托管",
-        "orcaNote": "使用 Google 登录。无需任何设置",
-        "comingSoon": "即将推出",
-        "steps": "步骤",
-        "stepApp": "{{bot}} 打开 Google Cloud 并设置应用",
-        "stepSignIn": "你勾选 Google 的条款复选框，然后登录",
-        "stepCheck": "{{bot}} 检查 Gmail、日历和云端硬盘能否正常使用"
+        "orcaNote": "使用 Google 登录",
+        "soon": "即将推出"
       },
       "importFromTeam": "导入团队提供的配置文件",
       "service": {

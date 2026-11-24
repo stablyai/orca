@@ -21,6 +21,7 @@ import {
   sameQuestionTurnBoundary
 } from '../../native-chat/transcript/messages/structured-agent-question-projection'
 import { projectStructuredItemsToNativeChat } from './structured-agent-session-projection'
+import { deliveredAgentMailRow } from './structured-agent-session-echo-rows'
 import {
   projectStructuredAgentSessionMessageRows,
   type StructuredAgentSessionItemProjector,
@@ -121,16 +122,21 @@ function reuseMessages(
       continue
     }
     const at = previous.rowAt.get(old.id)
+    const drawn = at === undefined ? undefined : previous.output[at]
+    // A delivered agent message is drawn with its queued id; it is the same row.
+    const queuedId = drawn !== old ? drawn?.queuedMessageId : undefined
     if (
       at === undefined ||
-      previous.output[at] !== old ||
+      (drawn !== old && (!queuedId || deliveredAgentMailRow(old, queuedId) !== drawn)) ||
       !independentRow(old) ||
       !independentRow(row) ||
       !sameNativeChatRowPlacement(old, row)
     ) {
       return null
     }
-    ;(output ??= previous.output.slice())[at] = row
+    ;(output ??= previous.output.slice())[at] = queuedId
+      ? deliveredAgentMailRow(row, queuedId)
+      : row
     revisedAt.push(at)
   }
   const appended = items.slice(previous.items.length)
