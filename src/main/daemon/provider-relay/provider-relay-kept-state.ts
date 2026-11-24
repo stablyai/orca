@@ -14,7 +14,13 @@ const MARKER_SCAN_CHARS = 64 * 1024
 /** Client requests awaited for keeping or listing; a client that never gets answers can't grow the map. */
 const MAX_AWAITED_REQUESTS = 64
 
-type AwaitedRequest = ProviderRelayOutstandingRequest & { keep: boolean; outstanding: boolean }
+/** `since`: the last agent line's seq when the request was written. */
+type AwaitedRequest = ProviderRelayOutstandingRequest & {
+  keep: boolean
+  outstanding: boolean
+  since: number
+}
+type AnsweredRequest = ProviderRelayOutstandingRequest & { seq: number; since: number }
 
 function commonPrefix(values: readonly string[]): string {
   let prefix = values[0] ?? ''
@@ -39,10 +45,11 @@ export class ProviderRelayKeptState {
   /** Client requests named by the keep spec, by key, until answered. */
   private readonly awaited = new Map<string, AwaitedRequest>()
   /** Per outstanding-tracked method, the latest one answered and the seq of its answer. */
-  private readonly answered = new Map<string, ProviderRelayOutstandingRequest & { seq: number }>()
+  private readonly answered = new Map<string, AnsweredRequest>()
   /** `a:<method>` or `l:<marker>` → the latest line for it. */
   private readonly kept = new Map<string, ProviderRelayRecord>()
   chars = 0
+  private lastAgentSeq = 0
   /** The attaching app asked for kept lines (its first reattach); any other attach drops them. */
   sendOnAttach = false
 
@@ -62,7 +69,8 @@ export class ProviderRelayKeptState {
   }
 
   /** Which kept seq answers to which name, and requests the agent still owes or answered after
-   *  `afterSeq` (so the answer is in this replay), oldest first; empty ones are left out. */
+   *  `afterSeq` (so the answer is in this replay), oldest first; empty ones are left out. A request
+   *  whose every line is in the replay says so: a replayed turn then reads as the live one did. */
   attachDetails(afterSeq: number): {
     kept?: ProviderRelayKeptLine[]
     outstanding?: ProviderRelayOutstandingRequest[]
@@ -73,10 +81,19 @@ export class ProviderRelayKeptState {
     const outstanding = [
       ...[...this.answered.values()]
         .filter((request) => request.seq > afterSeq)
-        .map(({ id, method }) => ({ id, method, answered: true as const })),
+        .map(({ id, method, since }) => ({
+          id,
+          method,
+          answered: true as const,
+          ...(since >= afterSeq ? { replayedWhole: true as const } : {})
+        })),
       ...[...this.awaited.values()]
         .filter((request) => request.outstanding)
-        .map(({ id, method }) => ({ id, method }))
+        .map(({ id, method, since }) => ({
+          id,
+          method,
+          ...(since >= afterSeq ? { replayedWhole: true as const } : {})
+        }))
     ]
     return {
       ...(kept.length > 0 ? { kept } : {}),
@@ -86,6 +103,7 @@ export class ProviderRelayKeptState {
 
   /** Keeps the line under each marker it names. */
   observeAgentLine(record: ProviderRelayRecord): void {
+    this.lastAgentSeq = record.seq
     if (!this.spec || this.spec.lines.length === 0) {
       return
     }
@@ -115,7 +133,7 @@ export class ProviderRelayKeptState {
         this.awaited.delete(oldest)
       }
     }
-    this.awaited.set(key, { id, method, keep, outstanding })
+    this.awaited.set(key, { id, method, keep, outstanding, since: this.lastAgentSeq })
   }
 
   /** An awaited request's answer: the latest success is kept, a listed one noted answered. */
@@ -126,7 +144,8 @@ export class ProviderRelayKeptState {
     }
     this.awaited.delete(key)
     if (awaited.outstanding) {
-      this.answered.set(awaited.method, { id: awaited.id, method: awaited.method, seq: record.seq })
+      const { id, method, since } = awaited
+      this.answered.set(method, { id, method, seq: record.seq, since })
     }
     // Only a success is state worth restoring; a refused request leaves the last one standing.
     if (awaited.keep && succeeded) {

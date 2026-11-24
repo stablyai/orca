@@ -50,6 +50,8 @@ export type AcpKeptAgent = {
   updates: AcpKeptUpdate[]
   /** The earlier app's latest prompt the agent still owes or answers in the replay; null: none. */
   earlierPromptId: number | null
+  /** Every line the agent sent for that prompt is in the replay, so its turn reads as live. */
+  earlierPromptWhole: boolean
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -119,7 +121,8 @@ export function acpKeptAgent(child: RelayedProviderChild): AcpKeptAgent {
       .filter((entry) => entry.seq > startSeq)
       .sort((a, b) => a.seq - b.seq)
       .map((entry) => entry.update),
-    earlierPromptId: typeof prompt?.id === 'number' ? prompt.id : null
+    earlierPromptId: typeof prompt?.id === 'number' ? prompt.id : null,
+    earlierPromptWhole: prompt?.replayedWhole === true
   }
 }
 

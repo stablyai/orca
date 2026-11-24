@@ -1,5 +1,5 @@
 import type { z } from 'zod'
-import { RelayedProviderChild } from '../../provider-relay/relayed-provider-child'
+import type { RelayedProviderChild } from '../../provider-relay/relayed-provider-child'
 import type { RelayedProviderProcess } from '../../provider-relay/app-provider-relays'
 import { settleAcpSessionCall } from '../protocol/acp-session-call'
 import type { AcpPendingCalls } from '../transport/acp-pending-calls'
@@ -93,6 +93,11 @@ export class AcpKeptSession {
     return this.kept.earlierPromptId !== null
   }
 
+  /** The replay holds that prompt's every line, so its messages are numbered as the live run did. */
+  get promptReplayedWhole(): boolean {
+    return this.kept.earlierPromptWhole
+  }
+
   /** The answer to the earlier app's prompt, by its id; none listed means it never reached the
    *  agent (the earlier app quit before writing it), so its turn fails instead of hanging. */
   earlierPrompt(): Promise<PromptResponse> {
@@ -106,15 +111,15 @@ export class AcpKeptSession {
         )
   }
 
+  /** Background work the daemon still counted open at this attach, by its first key part. */
+  openWork(group: string): string[] {
+    return (this.child.attachResult?.openWork?.[group] ?? []).flatMap((key) => key[0] ?? [])
+  }
+
   /** Lets the held output through once the chat can route it. */
   releaseOutput(): void {
     this.child.releaseOutput()
   }
-}
-
-/** A relayed agent's ack hold; undefined for an agent this app spawned itself. */
-export function holdRelayAcks(child: unknown): (() => void) | undefined {
-  return child instanceof RelayedProviderChild ? child.holdAcks() : undefined
 }
 
 export function keptAcpSession(

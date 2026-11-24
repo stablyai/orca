@@ -4,6 +4,7 @@ import {
   registerReattachableProviderRelayAgent,
   type ProviderRelayWorkMarkers
 } from '../../provider-relay/app-provider-relays'
+import { ACP_SESSION_UPDATE_METHODS, createAcpRelayAckFloor } from './acp-relay-ack-floor'
 
 /**
  * These launch as today: a private temp folder is the launch's own and goes at its exit; a sign-in
@@ -29,13 +30,7 @@ export function registerAcpRelayAgent(spec: AcpLaunchSpec): void {
 const PROMPT_REQUESTS = ['session/prompt']
 
 const UPDATE = ['params', 'update']
-const GROK_SESSION_UPDATES = [
-  'session/update',
-  'x.ai/session_notification',
-  '_x.ai/session_notification',
-  'x.ai/session/update',
-  '_x.ai/session/update'
-]
+const GROK_SESSION_UPDATES = [...ACP_SESSION_UPDATE_METHODS]
 const both = (method: string): string[] => [method, `_${method}`]
 const keyAt = (...path: string[]): string[][][] => [[[...UPDATE, ...path]]]
 const kind = (sessionUpdate: string) => ({ path: [...UPDATE, 'sessionUpdate'], is: sessionUpdate })
@@ -142,6 +137,7 @@ export function acpRelayWorkMarkers(agent: string): ProviderRelayWorkMarkers {
   return {
     agent: acpRelayAgent(agent),
     markers: [...CALL_END_MARKERS, ...(DIALECT_MARKERS.get(agent) ?? [])],
+    ackFloor: createAcpRelayAckFloor,
     requests: PROMPT_REQUESTS
   }
 }

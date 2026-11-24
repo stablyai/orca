@@ -139,6 +139,8 @@ export type ProviderRelayOutstandingRequest = {
   id: number | string
   method: string
   answered?: true
+  /** Every agent line since the request is in this attach's replay. */
+  replayedWhole?: true
 }
 
 /** Why the daemon ended an agent itself; output stopped, so the chat says so instead of hanging. */

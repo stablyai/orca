@@ -133,12 +133,6 @@ export class RelayedProviderChild extends EventEmitter implements ProviderChild 
     return this.output.keptLines
   }
 
-  /** Read once at reattach; a stream-drop reattach sends them again. */
-  /** Output from here on is replayed to the next app until the release (see the output's hold). */
-  holdAcks(): () => void {
-    return this.output.holdAcks()
-  }
-
   dropKeptLines(): void {
     this.output.dropKeptLines()
   }
@@ -152,7 +146,7 @@ export class RelayedProviderChild extends EventEmitter implements ProviderChild 
     this.output.restartAt(fromSeq)
     this.unbind = this.options.channel.bind(this.relayId, {
       line: (event, seq, line) => this.output.line(event, seq, line),
-      ackWanted: () => void this.output.ackWanted(),
+      ackWanted: () => void this.output.settle(true),
       exit: (exit) => this.onExit(exit),
       disconnected: () => void this.reattach()
     })
