@@ -13,6 +13,7 @@ import {
 import { showBotSessionTab } from '../../../../../bots/bot-session-tab-show'
 import { botRequestChatTitle, type BotRequestRecord } from '../../../../../bots/bot-request-view'
 import { OrchestrationError } from '../../../../orchestration/orchestration-error'
+import { markBotRequestChat } from '../../../../orchestration/db/bot-requests/bot-request-chats-store'
 import type { OrcaRuntimeService } from '../../../../orca-runtime'
 
 /** The chat `--chat new` starts in the bot's home; it acts for whom the request is for. */
@@ -74,6 +75,12 @@ export async function admitInNewChat(
     reservation.release()
     await close()
     return admitted.receipt
+  }
+  try {
+    // Marks the chat as Orca's, so its tab may close by itself once settled (bot-chat-tab-tidy).
+    markBotRequestChat(runtime.getOrchestrationDb(), sessionId)
+  } catch (error) {
+    console.warn('[bots] could not mark a request conversation', error)
   }
   await showConversationTab(runtime, bot, sessionId)
   return admitted.receipt

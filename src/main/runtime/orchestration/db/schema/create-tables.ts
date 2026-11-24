@@ -12,10 +12,11 @@ import { PEER_RUN_SCHEMA_SQL } from '../peer-runs/peer-run-queue-sql'
 import { WORKER_PRESENCE_SCHEMA_SQL } from '../worker-presence/worker-presence-store'
 import { PAIRED_SERVER_ASKS_SCHEMA_SQL } from '../federation/paired-server-asks-store'
 import { WORKER_BOUND_TERMINAL_SCHEMA_SQL } from '../worker-terminal/worker-bound-terminals'
+import { BOT_REQUEST_CHATS_SCHEMA_SQL } from '../bot-requests/bot-request-chats-store'
 
 export function createTables(this: OrchestrationDb): void {
   this.db.exec(
-    `${createCoreTablesSql()}\n${createGraphTablesSql()}\n${REMOVED_WORK_SCHEMA_SQL}\n${BOT_REQUEST_SCHEMA_SQL}\n${BOT_REQUEST_OUTCOME_SCHEMA_SQL}\n${BOT_CONVERSATION_ACTS_FOR_SCHEMA_SQL}\n${BOT_RUN_RESEND_SCHEMA_SQL}\n${REMOTE_OWNED_SCHEMA_SQL}\n${PEER_RUN_SCHEMA_SQL}\n${WORKER_PRESENCE_SCHEMA_SQL}\n${PAIRED_SERVER_ASKS_SCHEMA_SQL}\n${WORKER_BOUND_TERMINAL_SCHEMA_SQL}`
+    `${createCoreTablesSql()}\n${createGraphTablesSql()}\n${REMOVED_WORK_SCHEMA_SQL}\n${BOT_REQUEST_SCHEMA_SQL}\n${BOT_REQUEST_OUTCOME_SCHEMA_SQL}\n${BOT_CONVERSATION_ACTS_FOR_SCHEMA_SQL}\n${BOT_RUN_RESEND_SCHEMA_SQL}\n${REMOTE_OWNED_SCHEMA_SQL}\n${PEER_RUN_SCHEMA_SQL}\n${WORKER_PRESENCE_SCHEMA_SQL}\n${PAIRED_SERVER_ASKS_SCHEMA_SQL}\n${WORKER_BOUND_TERMINAL_SCHEMA_SQL}\n${BOT_REQUEST_CHATS_SCHEMA_SQL}`
   )
   // Unreleased builds saved each send's fence as NOT NULL; nothing reads it, and new rows carry none.
   if (this.hasColumn('structured_mail_sends', 'fence')) {

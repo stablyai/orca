@@ -35,7 +35,10 @@ type ReadContext = {
   client: Pick<StructuredAgentSessionClientDelivery, 'readCommandsSettled' | 'subscribers'>
   conversation: (id: string) => Promise<StructuredAgentSessionHostSession>
   publishStatus: (id: string) => void
-  runtimeState: Pick<StructuredAgentSessionHostRuntimeState, 'startFlights'>
+  runtimeState: Pick<
+    StructuredAgentSessionHostRuntimeState,
+    'startFlights' | 'hasDeliveryWork' | 'hasPendingIngress' | 'acquireAborts'
+  >
 }
 
 /** Readers share the conversation owner; inventory never founds a journal or prepares a provider. */
@@ -213,6 +216,18 @@ export function createStructuredAgentSessionConversationReads(context: () => Rea
     agentStarting: (id: string): boolean => {
       const { runtimeState, sessions } = context()
       return runtimeState.startFlights.has(id) || sessions.get(id)?.child?.phase === 'starting'
+    },
+    /** Nothing of the chat runs or is on its way in this host: no agent attached, no start, no
+     *  delivery and no mail ingress in flight. */
+    atRest: (id: string): boolean => {
+      const { runtimeState, sessions } = context()
+      return (
+        !sessions.get(id)?.child &&
+        !runtimeState.startFlights.has(id) &&
+        !runtimeState.hasDeliveryWork(id) &&
+        !runtimeState.hasPendingIngress(id) &&
+        !runtimeState.acquireAborts.has(id)
+      )
     },
     /** A decided start's acquire is still out, and no later start's child is attached. */
     startWindingDown: (id: string): boolean => {
