@@ -53,6 +53,20 @@ export class BotItemsReads extends BotItemsTables {
       .flatMap((row) => linkRecordOf(row) ?? [])
   }
 
+  /** Up to `limit` distinct items linking any of these refs, by the ref index: enough to tell
+   *  whether any item but one holds them, without reading every link. */
+  itemsLinking(kind: BotItemLinkKind, refs: readonly string[], limit: number): string[] {
+    if (refs.length === 0) {
+      return []
+    }
+    return this.db
+      .prepare(
+        `SELECT DISTINCT item_uid FROM item_links WHERE kind = ? AND ref IN (SELECT value FROM json_each(?)) LIMIT ?`
+      )
+      .all(kind, JSON.stringify(refs), limit)
+      .map((row) => String(row.item_uid))
+  }
+
   /** An item and where its work started (its `made` event's `startedIn`), in one call: what a
    *  finished worker's report names. */
   reportFact(uid: string): { item: BotItemRecord; startedIn: string | null } | null {

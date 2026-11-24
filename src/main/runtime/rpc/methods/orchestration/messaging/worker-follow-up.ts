@@ -83,10 +83,12 @@ async function assertSameItem(
 ): Promise<void> {
   const store = ctx.runtime.botItems.store()
   const item = await resolveItem(store, forItem)
-  const linked = await store.linksTo('dispatch', lineageAncestors(db, latest.id))
+  // Its start settles it without a lookup; else two items linking its steps are enough to tell.
   const elsewhere =
     (latest.origin_ref !== null && latest.origin_ref !== `${BOT_ITEM_ORIGIN_PREFIX}${item.uid}`) ||
-    linked.some((link) => link.itemUid !== item.uid)
+    (await store.itemsLinking('dispatch', lineageAncestors(db, latest.id), 2)).some(
+      (uid) => uid !== item.uid
+    )
   if (elsewhere) {
     throw new OrchestrationError(
       'invalid_argument',
