@@ -11,11 +11,13 @@ import { structuredAgentTurnAnchors } from '../../shared/native-chat/transcript/
 import { readAgentJournalTurn } from '../../shared/agent-session/lifecycle/records/agent-session-turn-record'
 import type { ConnectorSource } from '../../shared/connectors/external-conversation-link'
 import {
+  actsForOwner,
   distinctAskers,
   OWNER_ACTS_FOR,
   type AutomationTriggeredBy,
   type BotRequestAsker
 } from '../../shared/bots/bot-acts-for'
+import { typedInOrcaByOwner } from './bot-typed-in-orca'
 
 /** The conversation a request came in, as Orca Cloud names it. */
 export type BotRequestConversation = { source: ConnectorSource; externalId: string }
@@ -46,6 +48,9 @@ export type BotActingTurn = {
   requestIds: string[]
   /** Where the message that opened the turn was asked; null for the owner's own or a bot request. */
   wokenAt: BotWakingPlace | null
+  /** The owner typed every message this turn took, in Orca: it acts for the owner, whomever its
+   *  conversation acts for. */
+  typedByOwner?: true
   /** Who did the event behind the automation prompt that opened the turn, for the record only. */
   triggeredBy?: AutomationTriggeredBy
   /** The event this turn acts on, as the host recorded it: its automation prompt's, or the one the
@@ -226,17 +231,15 @@ function turnWindows(
     return newestTurns === null ? messages.map((message) => [message]).toReversed() : []
   }
   const anchors = structuredAgentTurnAnchors(items, submissions)
-  return turns
-    .toReversed()
-    .map((turn) => {
-      const opener = anchors.get(turn.itemId)
-      return messages.filter(
-        (message) =>
-          message.itemId === opener ||
-          (message.turnScope?.kind === 'turn' && message.turnScope.turnItemId === turn.itemId)
-      )
-    })
-    .filter((window) => window.length > 0)
+  // A turn with no message stays as an empty window, so the first window is always the newest turn.
+  return turns.toReversed().map((turn) => {
+    const opener = anchors.get(turn.itemId)
+    return messages.filter(
+      (message) =>
+        message.itemId === opener ||
+        (message.turnScope?.kind === 'turn' && message.turnScope.turnItemId === turn.itemId)
+    )
+  })
 }
 
 /**
@@ -260,7 +263,7 @@ export function readBotActingTurnWithin(
   submissions: readonly AgentJournalSubmission[],
   newestTurns: number | null
 ): BotActingTurn | null {
-  for (const window of turnWindows(items, submissions, newestTurns)) {
+  for (const [index, window] of turnWindows(items, submissions, newestTurns).entries()) {
     const readings = window.map((item) => ({ item, reading: readItem(item.body, lookups) }))
     const requestIds = readings.flatMap((entry) =>
       entry.reading.kind === 'request' ? entry.reading.messageIds : []
@@ -311,6 +314,9 @@ export function readBotActingTurnWithin(
       const ran = openers.some(
         (entry) => entry.reading.kind === 'conversation' && entry.reading.run
       )
+      // Only the newest turn: one a worker's report reads back to is not the turn now running.
+      const typedByOwner =
+        index === 0 && window.every((item) => typedInOrcaByOwner(item, submissions))
       const askedBy = openers.flatMap((entry) =>
         entry.reading.kind === 'asker'
           ? [entry.reading.asker]
@@ -332,6 +338,7 @@ export function readBotActingTurnWithin(
         actingOnRequestId: null,
         requestIds: [],
         wokenAt: opener.reading.wokenAt ?? null,
+        ...(typedByOwner ? { typedByOwner: true as const } : {}),
         ...(opener.reading.kind === 'conversation' && opener.reading.triggeredBy
           ? { triggeredBy: opener.reading.triggeredBy }
           : {}),
@@ -352,4 +359,10 @@ export function readBotActingTurnWithin(
     requestIds: [],
     wokenAt: null
   }
+}
+
+/** Whether the turn acts for the owner: the owner typed it in Orca, or everyone it acts for is the
+ *  owner. Every Slack action's turnFor and the "asked by" line on owner writes read this. */
+export function turnActsForOwner(turn: Pick<BotActingTurn, 'askers' | 'typedByOwner'>): boolean {
+  return turn.typedByOwner === true || actsForOwner(turn.askers)
 }

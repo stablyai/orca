@@ -7,13 +7,13 @@ import type {
   AgentJournalSubmission
 } from '../../shared/agent-session/journal/agent-session-journal-types'
 import { isRootAgentJournalItem } from '../../shared/agent-session/journal/agent-session-journal-producer'
-import { agentJournalSubmissionKey } from '../../shared/agent-session/journal/agent-session-journal-item-key'
 import { isStructuredAgentSessionCommandEntry } from '../../shared/agent-session/requests/structured-agent-session-command-entry'
 import { structuredAgentTurnAnchors } from '../../shared/native-chat/transcript/turns/native-chat-turn-membership'
 import {
   isRunningAgentJournalTurn,
   readAgentJournalTurn
 } from '../../shared/agent-session/lifecycle/records/agent-session-turn-record'
+import { typedInOrcaByPerson } from './bot-typed-in-orca'
 import { askedInThread } from '../external-conversations/external-conversation-leave-eligibility'
 
 /** stale: no turn is running, or it took no message. mixed: it took a message that isn't from a
@@ -32,26 +32,6 @@ function isRootUserMessage(item: AgentJournalRenderItem): boolean {
   )
 }
 
-/** Whether a person sent it from Orca: never Orca's own message (a continue after a restart or a
- *  usage limit), nor an agent's. */
-function typedByPerson(
-  item: AgentJournalRenderItem,
-  submissions: readonly AgentJournalSubmission[]
-): boolean {
-  const sent = submissions.find(
-    (submission) =>
-      agentJournalSubmissionKey(submission.clientMessageId) === item.itemId ||
-      submission.providerItemId === item.itemId
-  )
-  // As the journal reads a personal send; Orca's continues name no sender and come from the host.
-  // A queued card handed over says nothing of who queued it here, so it is refused: they ask again.
-  return (
-    sent !== undefined &&
-    sent.queuedMessageId === undefined &&
-    (sent.source?.kind === 'user' || (sent.source === undefined && sent.origin === 'client'))
-  )
-}
-
 function eligible(
   item: AgentJournalRenderItem,
   submissions: readonly AgentJournalSubmission[],
@@ -66,15 +46,7 @@ function eligible(
     return false
   }
   if (body.origin === undefined) {
-    // The owner's own message, typed in Orca: an automation's run or event is marked, never this.
-    // Sent by an agent through Orca (its CLI stamps it): never a person, whatever its source says.
-    return (
-      !body.asker &&
-      !body.memorySource &&
-      !body.automationRun &&
-      body.typedBy?.by !== 'agent' &&
-      typedByPerson(item, submissions)
-    )
+    return typedInOrcaByPerson(item, submissions)
   }
   if (body.origin !== 'connector' || body.memorySource || !body.asker) {
     return false
