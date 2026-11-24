@@ -1,141 +1,13 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
-import type { TabGroupLayoutNode } from '../../../../shared/tab-types'
-import { useAppStore } from '../../store'
+import 'react'
+import type { TabGroupLayoutNode } from '../../../../shared/workspace-layout/tab-groups/tab-types'
+import { useAppStore } from '../../store/index'
 import TabGroupPanel, { type TabGroupPanelTabStrip } from './TabGroupPanel'
-import type { HoveredTabInsertion } from './useTabDragSplit'
+import type { HoveredTabInsertion } from './drag/tab-insertion'
+import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/workspace-layout/layout-owner-switch'
+import { setGroupRatioThroughLayoutOwner } from '../../runtime/workspace-layout/commands/tab-group-layout-owner-commands'
+import '../browser-pane/host-guest/drag/webview-drag-passthrough'
 
-const MIN_RATIO = 0.15
-const MAX_RATIO = 0.85
-
-function ResizeHandle({
-  direction,
-  onResizeStart,
-  onRatioChange
-}: {
-  direction: 'horizontal' | 'vertical'
-  onResizeStart: () => void
-  onRatioChange: (ratio: number) => void
-}): React.JSX.Element {
-  const isHorizontal = direction === 'horizontal'
-  const [dragging, setDragging] = useState(false)
-  const activeResizeCleanupRef = useRef<((updateDragging?: boolean) => void) | null>(null)
-
-  useEffect(
-    () => () => {
-      activeResizeCleanupRef.current?.(false)
-    },
-    []
-  )
-
-  const onPointerDown = useCallback(
-    (event: React.PointerEvent<HTMLDivElement>) => {
-      event.preventDefault()
-      // Why: a second pointer must not steal or finalize the active gesture.
-      if (activeResizeCleanupRef.current) {
-        return
-      }
-      const handle = event.currentTarget
-      const container = handle.parentElement
-      if (!container) {
-        return
-      }
-      const firstPane = handle.previousElementSibling as HTMLElement | null
-      const secondPane = handle.nextElementSibling as HTMLElement | null
-      if (!firstPane || !secondPane) {
-        return
-      }
-      onResizeStart()
-      setDragging(true)
-      handle.setPointerCapture(event.pointerId)
-      // Why: measure outside pointermove so pane writes never force a readback.
-      let rect = container.getBoundingClientRect()
-      const resizeObserver = new ResizeObserver(() => {
-        rect = container.getBoundingClientRect()
-      })
-      resizeObserver.observe(container)
-      let draggedRatio: number | null = null
-
-      const onPointerMove = (moveEvent: PointerEvent): void => {
-        if (moveEvent.pointerId !== event.pointerId || !handle.hasPointerCapture(event.pointerId)) {
-          return
-        }
-        const ratio = isHorizontal
-          ? (moveEvent.clientX - rect.left) / rect.width
-          : (moveEvent.clientY - rect.top) / rect.height
-        const clamped = Math.min(MAX_RATIO, Math.max(MIN_RATIO, ratio))
-        draggedRatio = clamped
-        // Why: direct style writes keep the drag off the store — a commit per
-        // pointermove published 60-120 global store updates/s against every
-        // subscriber (STA-3328). React re-applies identical flex on commit.
-        firstPane.style.flex = `${clamped} 1 0%`
-        secondPane.style.flex = `${1 - clamped} 1 0%`
-      }
-
-      let cleaned = false
-      const cleanup = (updateDragging = true): void => {
-        if (cleaned) {
-          return
-        }
-        cleaned = true
-        resizeObserver.disconnect()
-        if (draggedRatio !== null) {
-          onRatioChange(draggedRatio)
-        }
-        if (updateDragging) {
-          setDragging(false)
-        }
-        try {
-          if (handle.hasPointerCapture(event.pointerId)) {
-            handle.releasePointerCapture(event.pointerId)
-          }
-        } catch {
-          // Best effort: unmount cleanup can run after Chromium has already dropped capture.
-        }
-        handle.removeEventListener('pointermove', onPointerMove)
-        handle.removeEventListener('pointerup', onPointerUp)
-        handle.removeEventListener('pointercancel', onPointerCancel)
-        handle.removeEventListener('lostpointercapture', onLostPointerCapture)
-        if (activeResizeCleanupRef.current === cleanup) {
-          activeResizeCleanupRef.current = null
-        }
-      }
-
-      const onPointerUp = (upEvent: PointerEvent): void => {
-        if (upEvent.pointerId === event.pointerId) {
-          cleanup()
-        }
-      }
-
-      const onPointerCancel = (cancelEvent: PointerEvent): void => {
-        if (cancelEvent.pointerId === event.pointerId) {
-          cleanup()
-        }
-      }
-
-      const onLostPointerCapture = (lostEvent: PointerEvent): void => {
-        if (lostEvent.pointerId === event.pointerId) {
-          cleanup()
-        }
-      }
-
-      handle.addEventListener('pointermove', onPointerMove)
-      handle.addEventListener('pointerup', onPointerUp)
-      handle.addEventListener('pointercancel', onPointerCancel)
-      handle.addEventListener('lostpointercapture', onLostPointerCapture)
-      activeResizeCleanupRef.current = cleanup
-    },
-    [isHorizontal, onRatioChange, onResizeStart]
-  )
-
-  return (
-    <div
-      className={`tab-group-split-resize-handle ${
-        isHorizontal ? 'is-vertical' : 'is-horizontal'
-      }${dragging ? ' is-dragging' : ''}`}
-      onPointerDown={onPointerDown}
-    />
-  )
-}
+import { ResizeHandle } from '../pane-resize/PaneSplitResizeHandle'
 
 function SplitNode({
   node,
@@ -183,10 +55,7 @@ function SplitNode({
         groupId={node.groupId}
         worktreeId={worktreeId}
         isVisible={isWorktreeActive}
-        // Why: hidden worktrees stay mounted so their PTYs and split layouts
-        // survive worktree switches, but only the visible worktree may own the
-        // global terminal shortcuts. If an offscreen group's pane stays
-        // "focused", Cmd/Ctrl+W and split shortcuts can hit the wrong worktree.
+        // Retain hidden PTYs/layouts, but grant global terminal shortcuts only to the visible focused group.
         isFocused={isWorktreeActive && node.groupId === focusedGroupId}
         hasSplitGroups={hasSplitGroups}
         tabStrip={tabStrip}
@@ -230,8 +99,7 @@ function SplitNode({
           touchesLeftEdge={touchesLeftEdge}
           touchesBottomEdge={isHorizontal ? touchesBottomEdge : false}
           suppressLeftBorder={suppressLeftBorder}
-          // Why: the resize handle paints the inner seam — pane borders here
-          // stack into a triple-line bar beside the divider.
+          // The resize handle owns the inner seam; pane borders would stack into extra lines.
           suppressRightBorder={isHorizontal ? true : suppressRightBorder}
           suppressBottomBorder={isHorizontal ? suppressBottomBorder : true}
           isTabDragActive={isTabDragActive}
@@ -240,8 +108,15 @@ function SplitNode({
       </div>
       <ResizeHandle
         direction={node.direction}
+        thin
+        avoidTabRows={isHorizontal && tabStrip === 'attached'}
+        layoutKey={node.second}
         onResizeStart={() => recordFeatureInteraction('terminal-panes')}
-        onRatioChange={(nextRatio) => setTabGroupSplitRatio(worktreeId, nodePath, nextRatio)}
+        onRatioChange={(nextRatio) =>
+          ORCA_LAYOUT_OWNER_IS_MAIN
+            ? setGroupRatioThroughLayoutOwner(worktreeId, nodePath, nextRatio)
+            : setTabGroupSplitRatio(worktreeId, nodePath, nextRatio)
+        }
       />
       <div className="flex min-w-0 min-h-0 overflow-hidden" style={{ flex: `${1 - ratio} 1 0%` }}>
         <SplitNode
@@ -268,14 +143,7 @@ function SplitNode({
   )
 }
 
-/**
- * The chrome-free group tree: recursive splits, resize handles, and one TabGroupPanel per leaf.
- * The host owns the drag scope (WorkspaceTabDragLayer), outer chrome, and edge policy.
- *
- * Host contract: the tree's nodes size themselves as flex items (`flex-1`), so the host must
- * mount it in a flex container that owns its rect (WorktreeSplitSurface's `absolute inset-0
- * flex`, the floating panel's surface frame). In a block parent every pane collapses to 0px.
- */
+/** Host this chrome-free tree in a sized flex container or panes collapse; the host owns drag scope and outer seams. */
 export function TabGroupSplitNodeTree({
   layout,
   worktreeId,

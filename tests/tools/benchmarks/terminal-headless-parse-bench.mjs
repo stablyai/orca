@@ -1,18 +1,7 @@
 #!/usr/bin/env node
-/**
- * Decomposes cross-terminal pipeline results: feeds the same fixtures from
- * terminal-pipeline-bench through a bare @xterm/headless Terminal — no Orca
- * layers, no IPC, no rendering — to locate where throughput is lost.
- *
- * If headless xterm parses a fixture near the plain-text rate, the pipeline
- * gap for that fixture lives in Orca's layers (delivery, side-effect
- * scanning, renderer paint). If headless collapses too, the cost is intrinsic
- * to xterm.js's parser/buffer for that byte pattern.
- *
- * Usage:
- *   node tests/tools/benchmarks/terminal-headless-parse-bench.mjs
- *     [--size-mb 10] [--cols 114] [--rows 85] [--scrollback 5000]
- */
+// Feed pipeline-bench fixtures to bare @xterm/headless to separate parser/buffer cost from Orca delivery/scanning/paint.
+// Compare with plain-text rate; matching parser throughput places the pipeline gap in Orca layers.
+// Usage: node tests/tools/benchmarks/terminal-headless-parse-bench.mjs [--size-mb 10] [--cols 114] [--rows 85] [--scrollback 5000]
 import { performance } from 'node:perf_hooks'
 import xterm from '@xterm/headless'
 import { buildFixture } from './terminal-pipeline-bench.mjs'

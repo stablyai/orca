@@ -24,14 +24,23 @@ export const OUT_OF_STORE_DISPOSITIONS: readonly (WslMoveFieldDisposition & {
     newManifestSection: true,
     note: 'Blob; re-keyed by the Linux worktree id on the host.'
   },
-  { store: 'agent-hooks/last-status.json', disposition: 'rederive', item: 51 },
+  {
+    store: 'agent-hooks/last-status.db (was last-status.json)',
+    disposition: 'rederive',
+    item: 51
+  },
   {
     store: 'agent-session-journal.db',
-    disposition: 'move',
+    disposition: 'not-applicable',
     item: 52,
-    newManifestSection: true
+    note: 'Chats stay local on the desktop (owner decision C); the journal is not moved.'
   },
-  { store: 'orchestration.db', disposition: 'rewrite-desktop', item: 53 },
+  {
+    store: 'orchestration.db',
+    disposition: 'rewrite-desktop',
+    item: 53,
+    note: 'Per table in SQLITE_TABLE_DISPOSITIONS.'
+  },
   {
     store: 'codex-pane-accounts.json',
     disposition: 'not-applicable',
@@ -53,7 +62,7 @@ export const OUT_OF_STORE_DISPOSITIONS: readonly (WslMoveFieldDisposition & {
     store: 'browser partition (cookies, site storage)',
     disposition: 'rewrite-desktop',
     item: 58,
-    note: "The WSL host's route partition binds to the local profile partition (decision 3)."
+    note: "Cookies are copied once into the WSL host's route partition, else the move records why the host starts fresh (decision 3)."
   },
   {
     store: 'notifications, push, dismissals',

@@ -1,9 +1,24 @@
-import type { CommandSpec } from '../args'
-import { GLOBAL_FLAGS } from '../args'
+import type { CommandSpec } from '../discovery/command-spec'
+import { CLI_GLOBAL_FLAGS as GLOBAL_FLAGS } from '../../shared/cli/cli-argument-boundary'
 import { LINEAR_MCP_COMMAND_SPECS } from './linear-mcp'
 
 export const LINEAR_COMMAND_SPECS: CommandSpec[] = [
   ...LINEAR_MCP_COMMAND_SPECS,
+  {
+    path: ['linear', 'connect'],
+    summary: 'Connect Linear on this Orca host with an API key read from stdin',
+    usage: 'orca linear connect [--json] < key-file',
+    allowedFlags: [...GLOBAL_FLAGS],
+    notes: [
+      'Reads the key from stdin so it never lands in shell history or a process list.',
+      'Each Orca host keeps its own Linear connection: with --environment the key is saved on that paired server, not on this machine.'
+    ],
+    examples: [
+      'printf %s "$LINEAR_API_KEY" | orca linear connect',
+      'printf %s "$LINEAR_API_KEY" | orca linear connect --environment build-vm --json',
+      '$env:LINEAR_API_KEY | orca linear connect'
+    ]
+  },
   {
     path: ['linear', 'issue'],
     summary: 'Read Linear issue context for agents',
@@ -210,6 +225,35 @@ export const LINEAR_COMMAND_SPECS: CommandSpec[] = [
       'orca linear comment add --current --body-file - --json'
     ],
     notes: ['Use --body-file - to read multiline comment bodies from stdin.']
+  },
+  {
+    path: ['linear', 'comment', 'edit'],
+    summary: 'Replace the body of a Linear comment',
+    usage:
+      'orca linear comment edit <commentId> (--body <text> | --body-file <path|->) [--workspace <id>] [--json]',
+    allowedFlags: [...GLOBAL_FLAGS, 'body', 'body-file', 'workspace', 'id'],
+    positionalArgs: ['id'],
+    examples: [
+      'orca linear comment edit <commentId> --body "Updated: ready for review."',
+      'orca linear comment edit <commentId> --body-file - --json'
+    ],
+    notes: [
+      'Comment ids come from `comment add` output or `orca linear issue <id> --comments --json`.',
+      'Linear only lets a comment be edited by its author.'
+    ]
+  },
+  {
+    path: ['linear', 'comment', 'delete'],
+    destructive: true,
+    aliases: [['linear', 'comment', 'rm']],
+    summary: 'Delete a Linear comment',
+    usage: 'orca linear comment delete <commentId> [--workspace <id>] [--json]',
+    allowedFlags: [...GLOBAL_FLAGS, 'workspace', 'id'],
+    positionalArgs: ['id'],
+    examples: ['orca linear comment delete <commentId> --json'],
+    notes: [
+      'Comment ids come from `comment add` output or `orca linear issue <id> --comments --json`.'
+    ]
   },
   {
     path: ['linear', 'attach'],

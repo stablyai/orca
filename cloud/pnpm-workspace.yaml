@@ -3,3 +3,20 @@ packages:
   - packages/*
 
 minimumReleaseAge: 4320
+engineStrict: false
+
+# pnpm 10 skipped this unlisted build script; keep the binary-only install it produced.
+allowBuilds:
+  esbuild: false
+  # relay-edge (Wrangler): the platform binary comes from an optional dependency.
+  workerd: false
+
+# picomatch ReDoS (GHSA-fc5q-39xc-vjpf) has no patched release: it covers every version through
+# 4.0.7, the latest. It reaches only dev and build tooling (`pnpm audit --prod` is clean). Remove
+# this once picomatch ships a fix and an override can pin it.
+auditConfig:
+  ignoreGhsas:
+    - GHSA-fc5q-39xc-vjpf
+
+patchedDependencies:
+  picomatch@4.0.7: patches/picomatch@4.0.7.patch

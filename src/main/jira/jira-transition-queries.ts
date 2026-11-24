@@ -1,5 +1,5 @@
 import { requireStrictJiraSite } from './jira-read-failure'
-import type { JiraProjectStatusOrder, JiraTransition } from '../../shared/jira-types'
+import type { JiraProjectStatusOrder, JiraTransition } from '../../shared/jira/jira-types'
 import { acquire, release } from './request-queue'
 import { apiBasePath, JiraApiError, jiraRequest } from './authenticated-request'
 import { clearToken, getClients, isAuthError } from './client'
@@ -18,7 +18,7 @@ export async function listTransitions(
   siteId?: string | null,
   strict = false
 ): Promise<JiraTransition[]> {
-  const entries = getClients(siteId)
+  const entries = await getClients(siteId)
   requireStrictJiraSite(entries, siteId, strict)
   const entry = entries[0]
   if (!entry) {
@@ -48,7 +48,7 @@ export async function listTransitions(
     }))
   } catch (error) {
     if (isAuthError(error)) {
-      clearToken(entry.site.id)
+      await clearToken(entry)
       throw error
     }
     console.warn('[jira] listTransitions failed:', error)
@@ -65,17 +65,15 @@ export async function getProjectStatusOrder(
   projectKey: string,
   siteId?: string | null
 ): Promise<JiraProjectStatusOrder> {
-  // Why: an omitted site can resolve to the persisted "all" selection; board
-  // metadata is only truthful when exactly one Jira connection owns the project.
-  const entries = getClients(siteId)
+  // Omitted siteId can resolve to all-sites; board metadata needs one owning connection.
+  const entries = await getClients(siteId)
   const entry = entries.length === 1 ? entries[0] : undefined
   if (!entry) {
     return { statusIdsByColumn: [] }
   }
   await acquire()
   try {
-    // Why: without an explicit board picker there is no truthful way to choose
-    // among multiple project boards, so ambiguous projects keep alphabetical order.
+    // Without a board picker, ambiguous projects keep alphabetical status order.
     const params = new URLSearchParams({ projectKeyOrId: projectKey, maxResults: '2' })
     const boardsResponse = await jiraRequest<JiraPagedResponse<JiraRecord>>(
       entry,
@@ -101,8 +99,7 @@ export async function getProjectStatusOrder(
       return { statusIdsByColumn: [] }
     }
 
-    // Why: issues already carry status names and IDs, so returning board IDs
-    // avoids a second metadata request and keeps duplicate names unambiguous.
+    // Use status IDs already on issues to avoid metadata fetches and ambiguous duplicate names.
     const seenStatusIds = new Set<string>()
     const statusIdsByColumn: string[][] = []
     const boardColumns: NonNullable<JiraProjectStatusOrder['columns']> = []
@@ -130,7 +127,7 @@ export async function getProjectStatusOrder(
     return { statusIdsByColumn, ...(boardColumns.length ? { columns: boardColumns } : {}) }
   } catch (error) {
     if (isAuthError(error)) {
-      clearToken(entry.site.id)
+      await clearToken(entry)
       throw error
     }
     console.warn('[jira] getProjectStatusOrder failed:', error)

@@ -1,35 +1,22 @@
-import { getSystemPrefersDark } from '@/lib/terminal-theme'
-import type { AppState } from '@/store/types'
+import { getSystemPrefersDark } from '@/lib/terminal/appearance/terminal-theme'
 import {
   EMPTY_ACTIVE_BROWSER_TAB_ID_BY_WORKTREE,
-  EMPTY_AGENT_STATUS_BY_PANE_KEY,
   EMPTY_BROWSER_PAGES_BY_WORKSPACE,
   EMPTY_BROWSER_TABS_BY_WORKTREE,
   EMPTY_LAYOUT_BY_WORKTREE
 } from './graph-state'
 import {
-  buildRuntimeMobileAgentStatusProjection,
-  buildRuntimeMobileAgentStatusProjectionForTests,
-  resetRuntimeMobileAgentStatusProjectionCacheForTests,
-  AGENT_STATUS_SYNC_UPDATED_AT_BUCKET_MS_FOR_TESTS
-} from './agent-status-projection'
-import {
   buildRuntimeMobileBrowserProjection,
   buildRuntimeMobileEditorDraftsProjection,
   buildRuntimeMobileOpenFilesProjection,
-  buildRuntimeMobileTabsProjection,
   getBrowserPagesByWorkspace,
   getBrowserTabsByWorktree
 } from './sync-projections'
-import { resolveMobileTerminalTheme } from './mobile-terminal-theme'
+import { buildRuntimeMobileTabsProjection } from './mobile-tabs-projection'
+import { resolveMobileTerminalTheme } from '../../../../shared/terminal-themes/mobile-terminal-theme'
+import { selectFolderWorkspaces } from '@/store/workspaces/catalog/workspace-record-fields'
+import type { AppState } from '@/store/types'
 import type { RuntimeMobileSessionSyncKey } from './types'
-
-export {
-  AGENT_STATUS_SYNC_UPDATED_AT_BUCKET_MS_FOR_TESTS,
-  buildRuntimeMobileAgentStatusProjectionForTests,
-  resetRuntimeMobileAgentStatusProjectionCacheForTests
-}
-export type { RuntimeMobileSessionSyncKey } from './types'
 
 function getTerminalThemeSystemPrefersDark(
   state: Pick<AppState, 'settings'>,
@@ -65,6 +52,8 @@ export function canSkipRuntimeMobileSessionSyncKeyBuild(
     getBrowserPagesByWorkspace(state) === getBrowserPagesByWorkspace(previousState) &&
     (state.activeBrowserTabIdByWorktree ?? EMPTY_ACTIVE_BROWSER_TAB_ID_BY_WORKTREE) ===
       (previousState.activeBrowserTabIdByWorktree ?? EMPTY_ACTIVE_BROWSER_TAB_ID_BY_WORKTREE) &&
+    state.browserAudiblePageIds === previousState.browserAudiblePageIds &&
+    state.browserAudioMutedTabIds === previousState.browserAudioMutedTabIds &&
     state.openFiles === previousState.openFiles &&
     state.editorDrafts === previousState.editorDrafts &&
     state.settings === previousState.settings &&
@@ -72,9 +61,7 @@ export function canSkipRuntimeMobileSessionSyncKeyBuild(
     state.terminalLayoutsByTabId === previousState.terminalLayoutsByTabId &&
     state.runtimePaneTitlesByTabId === previousState.runtimePaneTitlesByTabId &&
     state.nativeChatLaunchDraftByTabId === previousState.nativeChatLaunchDraftByTabId &&
-    state.folderWorkspaces === previousState.folderWorkspaces &&
-    state.agentStatusEpoch === previousState.agentStatusEpoch &&
-    state.agentStatusByPaneKey === previousState.agentStatusByPaneKey
+    selectFolderWorkspaces(state) === selectFolderWorkspaces(previousState)
   )
 }
 
@@ -88,21 +75,17 @@ export function getRuntimeMobileSessionSyncKey(
   const themeSystemPrefersDark = getTerminalThemeSystemPrefersDark(state, systemPrefersDark)
   const browserTabsByWorktree = getBrowserTabsByWorktree(state)
   const browserPagesByWorkspace = getBrowserPagesByWorkspace(state)
-  const agentStatusByPaneKey = state.agentStatusByPaneKey ?? EMPTY_AGENT_STATUS_BY_PANE_KEY
   const previousBrowserTabsByWorktree = previousState
     ? getBrowserTabsByWorktree(previousState)
     : EMPTY_BROWSER_TABS_BY_WORKTREE
   const previousBrowserPagesByWorkspace = previousState
     ? getBrowserPagesByWorkspace(previousState)
     : EMPTY_BROWSER_PAGES_BY_WORKSPACE
-  const previousAgentStatusByPaneKey = previousState
-    ? (previousState.agentStatusByPaneKey ?? EMPTY_AGENT_STATUS_BY_PANE_KEY)
-    : EMPTY_AGENT_STATUS_BY_PANE_KEY
   return {
     terminalLayoutsByTabId: state.terminalLayoutsByTabId,
     runtimePaneTitlesByTabId: state.runtimePaneTitlesByTabId,
     nativeChatLaunchDraftByTabId: state.nativeChatLaunchDraftByTabId,
-    folderWorkspaces: state.folderWorkspaces,
+    folderWorkspaces: selectFolderWorkspaces(state),
     groupsByWorktree: state.groupsByWorktree,
     activeGroupIdByWorktree: state.activeGroupIdByWorktree,
     layoutByWorktree: state.layoutByWorktree ?? EMPTY_LAYOUT_BY_WORKTREE,
@@ -115,11 +98,8 @@ export function getRuntimeMobileSessionSyncKey(
     activeTabId: state.activeTabId,
     activeBrowserTabIdByWorktree:
       state.activeBrowserTabIdByWorktree ?? EMPTY_ACTIVE_BROWSER_TAB_ID_BY_WORKTREE,
-    agentStatusEpoch: state.agentStatusEpoch ?? 0,
-    agentStatusProjection:
-      canReusePrevious && agentStatusByPaneKey === previousAgentStatusByPaneKey
-        ? previousKey.agentStatusProjection
-        : buildRuntimeMobileAgentStatusProjection(agentStatusByPaneKey),
+    browserAudiblePageIds: state.browserAudiblePageIds,
+    browserAudioMutedTabIds: state.browserAudioMutedTabIds,
     generatedTabTitlesEnabled: state.settings?.tabAutoGenerateTitle === true,
     systemPrefersDark: themeSystemPrefersDark,
     terminalThemeProjection:
@@ -127,7 +107,7 @@ export function getRuntimeMobileSessionSyncKey(
       state.settings === previousState.settings &&
       previousKey.systemPrefersDark === themeSystemPrefersDark
         ? previousKey.terminalThemeProjection
-        : JSON.stringify(resolveMobileTerminalTheme(state, systemPrefersDark) ?? null),
+        : JSON.stringify(resolveMobileTerminalTheme(state.settings, systemPrefersDark) ?? null),
     tabsProjection:
       canReusePrevious && state.tabsByWorktree === previousState.tabsByWorktree
         ? previousKey.tabsProjection
@@ -143,10 +123,30 @@ export function getRuntimeMobileSessionSyncKey(
         ? previousKey.browserProjection
         : buildRuntimeMobileBrowserProjection(state),
     editorDraftsProjection:
-      canReusePrevious && state.editorDrafts === previousState.editorDrafts
+      canReusePrevious &&
+      state.editorDrafts === previousState.editorDrafts &&
+      state.openFiles === previousState.openFiles
         ? previousKey.editorDraftsProjection
-        : buildRuntimeMobileEditorDraftsProjection(state.editorDrafts)
+        : buildRuntimeMobileEditorDraftsProjection(state.editorDrafts, state.openFiles)
   }
+}
+
+function editorDraftsEqual(
+  a: ReadonlyMap<string, string>,
+  b: ReadonlyMap<string, string>
+): boolean {
+  if (a === b) {
+    return true
+  }
+  if (a.size !== b.size) {
+    return false
+  }
+  for (const [fileId, content] of a) {
+    if (b.get(fileId) !== content) {
+      return false
+    }
+  }
+  return true
 }
 
 export function runtimeMobileSessionSyncKeysEqual(
@@ -169,14 +169,14 @@ export function runtimeMobileSessionSyncKeysEqual(
     a.activeTabTypeByWorktree === b.activeTabTypeByWorktree &&
     a.activeTabId === b.activeTabId &&
     a.activeBrowserTabIdByWorktree === b.activeBrowserTabIdByWorktree &&
-    a.agentStatusEpoch === b.agentStatusEpoch &&
-    a.agentStatusProjection === b.agentStatusProjection &&
+    a.browserAudiblePageIds === b.browserAudiblePageIds &&
+    a.browserAudioMutedTabIds === b.browserAudioMutedTabIds &&
     a.generatedTabTitlesEnabled === b.generatedTabTitlesEnabled &&
     a.systemPrefersDark === b.systemPrefersDark &&
     a.terminalThemeProjection === b.terminalThemeProjection &&
     a.tabsProjection === b.tabsProjection &&
     a.openFilesProjection === b.openFilesProjection &&
     a.browserProjection === b.browserProjection &&
-    a.editorDraftsProjection === b.editorDraftsProjection
+    editorDraftsEqual(a.editorDraftsProjection, b.editorDraftsProjection)
   )
 }

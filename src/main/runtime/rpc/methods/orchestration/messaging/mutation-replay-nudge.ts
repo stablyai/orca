@@ -2,7 +2,7 @@ import type { OrcaRuntimeService } from '../../../../orca-runtime'
 import {
   attachMutationReplayNudge,
   type MutationReplayNudge
-} from '../../../orchestration-mutation-receipt'
+} from '../../../orchestration/mutations/orchestration-mutation-receipt'
 
 /** Persists the receipt (with its replay nudge) before waking recipients, for mutations whose effect is already durable. */
 export function recordReceiptBeforeNudge<T>(
@@ -56,7 +56,11 @@ export function replayMutationNudge(
   replayNudge: MutationReplayNudge
 ): void {
   if (replayNudge.kind === 'federation') {
-    runtime.ensureOrchestrationFederationRelay(replayNudge.runId)
+    if (replayNudge.environmentId !== undefined) {
+      runtime.ensureOrchestrationPeerMailRelay(replayNudge.environmentId)
+    } else {
+      runtime.ensureOrchestrationFederationRelay(replayNudge.runId)
+    }
     return
   }
   for (const target of replayNudge.targets) {

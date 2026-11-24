@@ -1,7 +1,8 @@
 import React from 'react'
-import type { GitStatusEntry } from '../../../../../../shared/git-status-types'
-import type { SourceControlViewMode } from '../../../../../../shared/ui-chrome-types'
-import type { DiscardAllArea } from '../commit/discard-all-sequence'
+import type { GitStatusEntry } from '../../../../../../shared/git/status/git-status-types'
+import type { ConflictResolution } from '../../../../../../shared/source-control/listing/source-control-entry-actions'
+import type { SourceControlViewMode } from '../../../../../../shared/ui-chrome/ui-chrome-types'
+import type { DiscardAllArea } from '../../../../../../shared/source-control/listing/source-control-discard-all-sequence'
 import {
   getSubmoduleExpansionKey,
   isExpandableSubmoduleEntry,
@@ -13,7 +14,7 @@ import { getSourceControlDirectoryActionPaths } from './directory-action-paths'
 import { SourceControlTreeDirectoryRow } from './tree-directory-rows'
 import { SubmodulePlaceholderRow } from './submodule-placeholder-row'
 import { UncommittedEntryRow } from './uncommitted-entry-row'
-import { VirtualizedList } from '../../../virtualized-list'
+import { VirtualizedList } from '../../../ui/virtualized-list'
 
 export function SourceControlSectionFileList({
   sourceControlViewMode,
@@ -39,6 +40,7 @@ export function SourceControlSectionFileList({
   activeConnectionId,
   handleOpenDiff,
   handleStage,
+  handleResolveConflict,
   handleUnstage,
   requestDiscardEntry,
   diffCommentCountByPath
@@ -66,6 +68,7 @@ export function SourceControlSectionFileList({
   activeConnectionId: string | null
   handleOpenDiff: (entry: GitStatusEntry, event?: SourceControlRowOpenEvent) => void
   handleStage: (path: string) => Promise<void>
+  handleResolveConflict: (entry: GitStatusEntry, resolution: ConflictResolution) => Promise<void>
   handleUnstage: (path: string, oldPath?: string) => Promise<void>
   requestDiscardEntry: (entry: GitStatusEntry) => void
   diffCommentCountByPath: Map<string, number>
@@ -124,6 +127,7 @@ export function SourceControlSectionFileList({
             connectionId={activeConnectionId}
             onOpen={handleOpenDiff}
             onStage={handleStage}
+            onResolveConflict={handleResolveConflict}
             onUnstage={handleUnstage}
             onDiscard={requestDiscardEntry}
             commentCount={diffCommentCountByPath.get(node.entry.path) ?? 0}
@@ -175,6 +179,7 @@ export function SourceControlSectionFileList({
             connectionId={activeConnectionId}
             onOpen={handleOpenDiff}
             onStage={handleStage}
+            onResolveConflict={handleResolveConflict}
             onUnstage={handleUnstage}
             onDiscard={requestDiscardEntry}
             commentCount={diffCommentCountByPath.get(entry.path) ?? 0}

@@ -1,8 +1,4 @@
-// Sprite-sheet keyframe CSS for the pet overlay. Kept as a pure module so the
-// pacing math is unit-testable without mounting the overlay or a DOM.
-
-// Mirror of the importer's per-frame cap (pet.ts zod schema): a hold longer than
-// this at render would freeze the overlay, so reject it on the render side too.
+// Mirror the importer’s frame-duration cap to prevent corrupted holds from freezing playback.
 const MAX_FRAME_DURATION_MS = 60_000
 
 export type SpriteAnimationCss = {
@@ -17,14 +13,12 @@ export type SpriteAnimationCssInput = {
   fps: number
   frameWidth: number
   scale: number
-  // Vertical offset selecting the animation's row on the sheet.
   rowOffsetY: number
   // Per-frame holds in ms; uneven pacing renders when they pass validation.
   frameDurationsMs: number[] | undefined
 }
 
-// Why: sprite keyframes are runtime CSS, not user-visible copy; translated CSS
-// keywords make the browser discard the animation, so keep them out of i18n.
+// Keep runtime CSS keywords outside translation so locales cannot invalidate animation.
 export function buildSpriteAnimationCss({
   keyframesId,
   frames,
@@ -38,8 +32,7 @@ export function buildSpriteAnimationCss({
   const durations = validFrameDurations(frameDurationsMs, frames)
   if (durations) {
     const totalMs = durations.reduce((sum, ms) => sum + ms, 0)
-    // Why: Codex pets hold frames unevenly (idle rests ~1.9s on its last frame).
-    // steps() can't express that, so emit one step-end stop per frame.
+    // Uneven holds require one step-end stop per frame; steps() supports only uniform pacing.
     const stops = stepEndStops(durations, totalMs, frameWidth, scale, rowOffsetY)
     if (stops) {
       return {
@@ -48,7 +41,6 @@ export function buildSpriteAnimationCss({
       }
     }
   }
-  // Uniform sheet fps: one steps() run across the row.
   const duration = Math.max(0.1, frames / Math.max(0.1, fps))
   const endX = -(frames * frameWidth * scale)
   return {
@@ -61,9 +53,7 @@ function validFrameDurations(
   frameDurationsMs: number[] | undefined,
   frames: number
 ): number[] | null {
-  // Why: Array.isArray + bounds, not a truthiness check — persisted/RPC-synced
-  // sprites are untrusted, so a corrupt non-array or out-of-range hold falls back
-  // to uniform pacing instead of throwing or freezing the overlay.
+  // Validate untrusted persisted/RPC arrays and duration bounds; fall back to uniform pacing instead of throwing/freezing.
   if (
     Array.isArray(frameDurationsMs) &&
     frameDurationsMs.length === frames &&
@@ -74,9 +64,7 @@ function validFrameDurations(
   return null
 }
 
-// Cumulative step-end stops, one per frame. Returns null (→ uniform fallback)
-// when a frame is too short to survive 4-decimal precision (two stops collapse,
-// or the final stop rounds to 100%) so no frame is silently dropped.
+// Return null when 4-decimal stops collapse or reach 100% early so uniform fallback keeps every frame visible.
 function stepEndStops(
   durations: number[],
   totalMs: number,

@@ -1,0 +1,71 @@
+{
+  "manifestVersion": 2,
+  "id": "orca-github-vscode-theme",
+  "publisher": "stablyai",
+  "name": "GitHub Themes for Orca",
+  "version": "1.0.0",
+  "execution": "data",
+  "description": "GitHub's own VS Code themes: Light Default, Dark Default, Dark Dimmed and the high-contrast variants.",
+  "license": "MIT",
+  "repository": "https://github.com/stablyai/orca-plugins/tree/main/plugins/github-vscode-theme",
+  "engines": {
+    "orca": ">=1.4.245"
+  },
+  "contributes": {
+    "themes": [
+      {
+        "id": "github-light-default",
+        "title": "GitHub Light Default",
+        "path": "themes/github-light-default.json"
+      },
+      {
+        "id": "github-light-high-contrast",
+        "title": "GitHub Light High Contrast",
+        "path": "themes/github-light-high-contrast.json"
+      },
+      {
+        "id": "github-dark-default",
+        "title": "GitHub Dark Default",
+        "path": "themes/github-dark-default.json"
+      },
+      {
+        "id": "github-dark-high-contrast",
+        "title": "GitHub Dark High Contrast",
+        "path": "themes/github-dark-high-contrast.json"
+      },
+      {
+        "id": "github-dark-dimmed",
+        "title": "GitHub Dark Dimmed",
+        "path": "themes/github-dark-dimmed.json"
+      }
+    ],
+    "terminalThemes": [
+      {
+        "id": "github-light-default",
+        "title": "GitHub Light Default",
+        "path": "terminal/github-light-default.json"
+      },
+      {
+        "id": "github-light-high-contrast",
+        "title": "GitHub Light High Contrast",
+        "path": "terminal/github-light-high-contrast.json"
+      },
+      {
+        "id": "github-dark-default",
+        "title": "GitHub Dark Default",
+        "path": "terminal/github-dark-default.json"
+      },
+      {
+        "id": "github-dark-high-contrast",
+        "title": "GitHub Dark High Contrast",
+        "path": "terminal/github-dark-high-contrast.json"
+      },
+      {
+        "id": "github-dark-dimmed",
+        "title": "GitHub Dark Dimmed",
+        "path": "terminal/github-dark-dimmed.json"
+      }
+    ]
+  },
+  "capabilities": []
+}

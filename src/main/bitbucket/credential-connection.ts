@@ -17,7 +17,8 @@ import type {
   BitbucketConnectArgs,
   BitbucketConnectResult,
   BitbucketConnectionStatus
-} from '../../shared/bitbucket-credentials'
+} from '../../shared/bitbucket/bitbucket-credentials'
+import { bitbucketConnectFailure } from '../../shared/bitbucket/bitbucket-credentials'
 
 export type { BitbucketConnectArgs, BitbucketConnectResult, BitbucketConnectionStatus }
 
@@ -37,35 +38,21 @@ function buildCandidateConfig(input: BitbucketConnectArgs): BitbucketAuthConfig 
   }
 }
 
-// Verifying against `/user` before persisting keeps the stored "connected
-// account" honest and lets the dialog reject a dead token inline.
 export async function connectBitbucket(
   input: BitbucketConnectArgs
 ): Promise<BitbucketConnectResult> {
   const config = buildCandidateConfig(input)
   if (!hasAuth(config)) {
-    return {
-      ok: false,
-      error:
-        input.authMode === 'token'
-          ? 'Enter an access token.'
-          : 'Enter both an email and an API token.'
-    }
+    return bitbucketConnectFailure(
+      input.authMode === 'token' ? 'accessTokenRequired' : 'emailAndApiTokenRequired'
+    )
   }
   const result = await fetchBitbucketUserResult(config, VERIFY_TIMEOUT_MS)
   if (!result.ok) {
-    return {
-      ok: false,
-      // Why (STA-3944): telling someone their token is invalid when the network
-      // is down sends them to regenerate a credential that was fine.
-      error:
-        result.reason === 'rejected'
-          ? 'Bitbucket rejected these credentials. Check the email and token, then try again.'
-          : 'Could not reach Bitbucket. Check your connection or the API base URL, then try again.'
-    }
+    return bitbucketConnectFailure(result.reason === 'rejected' ? 'rejected' : 'unreachable')
   }
   const account = accountNameFromUser(result.user)
-  saveBitbucketCredential({
+  await saveBitbucketCredential({
     authMode: input.authMode,
     email: config.email,
     baseUrl: normalize(input.baseUrl),
@@ -76,13 +63,12 @@ export async function connectBitbucket(
   return { ok: true, account }
 }
 
-export function disconnectBitbucket(): void {
-  clearStoredBitbucketCredential()
+export async function disconnectBitbucket(): Promise<void> {
+  await clearStoredBitbucketCredential()
 }
 
-// Reads env vars and plaintext metadata only — never decrypts — so the Settings
-// card can call it on every open without a keychain prompt.
-export function getBitbucketConnectionStatus(): BitbucketConnectionStatus {
+// Status reads must avoid keychain prompts.
+export async function getBitbucketConnectionStatus(): Promise<BitbucketConnectionStatus> {
   const env = getEnvAuthConfig()
   if (hasAuth(env)) {
     return {
@@ -95,12 +81,12 @@ export function getBitbucketConnectionStatus(): BitbucketConnectionStatus {
       baseUrl: envValue('ORCA_BITBUCKET_API_BASE_URL')
     }
   }
-  if (hasStoredBitbucketCredential()) {
-    const metadata = getStoredBitbucketMetadata()
+  if (await hasStoredBitbucketCredential()) {
+    const metadata = await getStoredBitbucketMetadata()
     return {
       configured: true,
       source: 'stored',
-      credentialProtection: getBitbucketCredentialProtection(),
+      credentialProtection: await getBitbucketCredentialProtection(),
       account: metadata?.account ?? null,
       authMode: metadata?.authMode ?? null,
       email: metadata?.email ?? null,

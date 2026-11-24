@@ -1,7 +1,6 @@
 'use strict'
 
-// Why lazy: non-Windows installs never build the addon, so requiring it at module load would
-// break any import of this package on macOS/Linux — including test collection.
+// Load lazily because non-Windows installs have no addon, including during test collection.
 let addon = null
 function getAddon() {
   if (!addon) {

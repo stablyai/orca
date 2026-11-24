@@ -1,7 +1,8 @@
+import { readdir } from 'node:fs/promises'
 import { existsSync, readdirSync } from 'node:fs'
 import { basename, dirname, join } from 'node:path'
 
-/** Return the immutable JSON artifact created when a profile first enters SQLite authority. */
+/** Immutable artifact from the initial transition to SQLite authority. */
 export function profileStateJsonExportPath(dataFile: string, revision: number): string {
   if (!Number.isSafeInteger(revision) || revision < 1) {
     throw new Error('Profile state export revision must be a positive safe integer')
@@ -9,14 +10,32 @@ export function profileStateJsonExportPath(dataFile: string, revision: number): 
   return `${dataFile}.sqlite-export.${revision}.json`
 }
 
-/** List retained rollback exports newest-first without opening SQLite. */
+/** Newest-first rollback artifacts, available even if SQLite cannot open. */
 export function profileStateJsonExportPaths(dataFile: string): readonly string[] {
   const directory = dirname(dataFile)
-  const prefix = `${basename(dataFile)}.sqlite-export.`
   if (!existsSync(directory)) {
     return []
   }
-  return readdirSync(directory)
+  return parseExportPaths(dataFile, readdirSync(directory))
+}
+
+export async function profileStateJsonExportPathsAsync(
+  dataFile: string
+): Promise<readonly string[]> {
+  try {
+    return parseExportPaths(dataFile, await readdir(dirname(dataFile)))
+  } catch (error) {
+    if (error instanceof Error && 'code' in error && error.code === 'ENOENT') {
+      return []
+    }
+    throw error
+  }
+}
+
+function parseExportPaths(dataFile: string, entries: string[]): readonly string[] {
+  const directory = dirname(dataFile)
+  const prefix = `${basename(dataFile)}.sqlite-export.`
+  return entries
     .flatMap((name) => {
       const match = new RegExp(`^${escapeRegExp(prefix)}(\\d+)\\.json$`).exec(name)
       if (match === null) {

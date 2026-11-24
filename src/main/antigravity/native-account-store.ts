@@ -1,18 +1,32 @@
-import { existsSync, lstatSync, mkdirSync, readFileSync, statSync } from 'node:fs'
+import { credentialFileExists, inCredentialFileOrder } from '../credentials/credential-file-io'
+import { lstat, mkdir, readFile, stat } from 'node:fs/promises'
 import { dirname } from 'node:path'
-import { getSecretStore } from '../../shared/secret-store'
-import { writeCredentialFileAtomic } from '../integration-credential-file'
-import type { AntigravityAccountSummary } from '../../shared/antigravity-account-types'
+import { getSecretStore } from '../../shared/secure-storage/secret-store'
+import { writeCredentialFileAtomic } from '../credentials/integration-credential-file'
+import type { AntigravityAccountSummary } from '../../shared/agent-accounts/antigravity/antigravity-account-types'
+import type {
+  ProviderRateLimits,
+  RateLimitRuntimeTarget
+} from '../../shared/agent-usage/rate-limits/rate-limit-types'
 import { parseAntigravityNativeCredential } from './native-credential-codec'
+import { readPrivateWindowsCredentialFile } from '../../shared/secure-storage/windows-credential-file-io'
 
-export type StoredAntigravityAccount = AntigravityAccountSummary & { credentials: string }
+export type StoredAntigravityUsage = {
+  target: RateLimitRuntimeTarget
+  rateLimits: ProviderRateLimits
+}
+export type StoredAntigravityAccount = Omit<AntigravityAccountSummary, 'usage'> & {
+  credentials: string
+  /** Last verified reading per runtime this account was read on. */
+  usage?: StoredAntigravityUsage[]
+}
 export type AntigravityAccountVault = {
   accounts: StoredAntigravityAccount[]
   selectedAccountId: string | null
 }
 export type AntigravityAccountStore = {
-  read(): AntigravityAccountVault
-  write(vault: AntigravityAccountVault): void
+  read(): Promise<AntigravityAccountVault>
+  write(vault: AntigravityAccountVault): Promise<void>
 }
 
 const MAX_VAULT_BYTES = 4 * 1024 * 1024
@@ -35,6 +49,18 @@ function isAccount(value: unknown): value is StoredAntigravityAccount {
   )
 }
 
+function isStoredUsage(value: unknown): value is StoredAntigravityUsage {
+  return (
+    isRecord(value) &&
+    isRecord(value.target) &&
+    (value.target.runtime === 'host' || value.target.runtime === 'wsl') &&
+    (value.target.wslDistro === null || typeof value.target.wslDistro === 'string') &&
+    isRecord(value.rateLimits) &&
+    value.rateLimits.provider === 'antigravity' &&
+    typeof value.rateLimits.updatedAt === 'number'
+  )
+}
+
 function requireProtection(): void {
   const secrets = getSecretStore()
   if (!secrets.isEncryptionAvailable() || secrets.describeProtectionGap() !== null) {
@@ -44,69 +70,92 @@ function requireProtection(): void {
   }
 }
 
-export function createEncryptedAntigravityAccountStore(path: string): AntigravityAccountStore {
+export function createEncryptedAntigravityAccountStore(
+  path: string,
+  parseCredential = parseAntigravityNativeCredential
+): AntigravityAccountStore {
   return {
-    read() {
-      if (!existsSync(path)) {
-        return { accounts: [], selectedAccountId: null }
-      }
-      requireProtection()
-      try {
-        const stat = lstatSync(path)
-        if (
-          !stat.isFile() ||
-          stat.size > MAX_VAULT_BYTES ||
-          (process.platform !== 'win32' && (stat.mode & 0o077) !== 0)
-        ) {
-          throw new Error('unsafe vault')
+    async read() {
+      return inCredentialFileOrder(`${path}.mutation`, async () => {
+        if (!(await credentialFileExists(path))) {
+          return { accounts: [], selectedAccountId: null }
         }
-        const value: unknown = JSON.parse(getSecretStore().decryptString(readFileSync(path)))
-        if (
-          !isRecord(value) ||
-          !Array.isArray(value.accounts) ||
-          !value.accounts.every(isAccount) ||
-          (value.selectedAccountId !== null && typeof value.selectedAccountId !== 'string')
-        ) {
-          throw new Error('invalid vault')
-        }
-        const ids = new Set(value.accounts.map((account) => account.id))
-        if (
-          ids.size !== value.accounts.length ||
-          (value.selectedAccountId !== null && !ids.has(value.selectedAccountId))
-        ) {
-          throw new Error('invalid selection')
-        }
-        for (const account of value.accounts) {
-          const credential = parseAntigravityNativeCredential(account.credentials)
+        requireProtection()
+        try {
+          const stat = await lstat(path)
           if (
-            credential.authMethod !== account.authMethod ||
-            credential.identity?.subject !== account.subject
+            !stat.isFile() ||
+            stat.size > MAX_VAULT_BYTES ||
+            (process.platform !== 'win32' && (stat.mode & 0o077) !== 0)
           ) {
-            throw new Error('inconsistent identity')
+            throw new Error('unsafe vault')
           }
+          const raw =
+            process.platform === 'win32'
+              ? await readPrivateWindowsCredentialFile(path, MAX_VAULT_BYTES)
+              : await readFile(path)
+          if (!raw) {
+            throw new Error('vault disappeared')
+          }
+          const value: unknown = JSON.parse(getSecretStore().decryptString(raw))
+          if (
+            !isRecord(value) ||
+            !Array.isArray(value.accounts) ||
+            !value.accounts.every(isAccount) ||
+            (value.selectedAccountId !== null && typeof value.selectedAccountId !== 'string')
+          ) {
+            throw new Error('invalid vault')
+          }
+          const ids = new Set(value.accounts.map((account) => account.id))
+          if (
+            ids.size !== value.accounts.length ||
+            (value.selectedAccountId !== null && !ids.has(value.selectedAccountId))
+          ) {
+            throw new Error('invalid selection')
+          }
+          for (const account of value.accounts) {
+            const credential = parseCredential(account.credentials)
+            // agy refreshes drop the id_token, so a saved account may hold a credential without one.
+            if (
+              credential.authMethod !== account.authMethod ||
+              (credential.identity !== null && credential.identity.subject !== account.subject)
+            ) {
+              throw new Error('inconsistent identity')
+            }
+          }
+          for (const account of value.accounts) {
+            // A malformed reading is only a lost cache entry, never a reason to reject the vault.
+            if (account.usage !== undefined) {
+              account.usage = Array.isArray(account.usage)
+                ? account.usage.filter(isStoredUsage)
+                : []
+            }
+          }
+          return { accounts: value.accounts, selectedAccountId: value.selectedAccountId }
+        } catch {
+          throw new Error(
+            'Antigravity account snapshots could not be read; the existing vault was preserved.'
+          )
         }
-        return { accounts: value.accounts, selectedAccountId: value.selectedAccountId }
-      } catch {
-        throw new Error(
-          'Antigravity account snapshots could not be read; the existing vault was preserved.'
-        )
-      }
+      })
     },
-    write(vault) {
-      requireProtection()
-      mkdirSync(dirname(path), { recursive: true, mode: 0o700 })
-      try {
-        const encrypted = getSecretStore().encryptString(JSON.stringify(vault))
-        if (encrypted.length > MAX_VAULT_BYTES) {
-          throw new Error('vault exceeds readable size')
+    async write(vault) {
+      return inCredentialFileOrder(`${path}.mutation`, async () => {
+        requireProtection()
+        await mkdir(dirname(path), { recursive: true, mode: 0o700 })
+        try {
+          const encrypted = getSecretStore().encryptString(JSON.stringify(vault))
+          if (encrypted.length > MAX_VAULT_BYTES) {
+            throw new Error('vault exceeds readable size')
+          }
+          await writeCredentialFileAtomic(path, encrypted, undefined, true)
+          if (process.platform !== 'win32' && ((await stat(path)).mode & 0o077) !== 0) {
+            throw new Error('unsafe permissions')
+          }
+        } catch {
+          throw new Error('Antigravity account snapshots could not be saved.')
         }
-        writeCredentialFileAtomic(path, encrypted)
-        if (process.platform !== 'win32' && (statSync(path).mode & 0o077) !== 0) {
-          throw new Error('unsafe permissions')
-        }
-      } catch {
-        throw new Error('Antigravity account snapshots could not be saved.')
-      }
+      })
     }
   }
 }

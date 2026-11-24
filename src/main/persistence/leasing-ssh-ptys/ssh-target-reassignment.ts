@@ -1,21 +1,22 @@
-import type { ProjectHostSetup } from '../../../shared/project-types'
-import { toSshExecutionHostId } from '../../../shared/execution-host'
-import type { PersistedState } from '../../../shared/persisted-state-types'
+import { replaceWorkspaceSessionPartitions } from '../restoring-sessions/workspace-session-partition-replacement'
+import type { ProjectHostSetup } from '../../../shared/project/project-types'
+import { toSshExecutionHostId } from '../../../shared/execution-host/execution-host'
+import type { PersistedState } from '../../../shared/orca-profiles/persisted-state-types'
 import {
   migrateFolderWorkspaceHostSshTargetId,
   migrateUiHostScopeSshTargetId,
   migrateWorkspaceSessionSshTargetId
-} from '../../ssh/ssh-target-id-migration'
-import type { ProtectedSecretPersistence } from '../../protected-secret-persistence'
-import { sshPtyOwnerLeaseSecretSlot } from '../../protected-secret-persistence'
+} from '../../ssh/targets/ssh-target-id-migration'
+import type { ProtectedSecretPersistence } from '../../credentials/protected-secret-persistence'
+import { sshPtyOwnerLeaseSecretSlot } from '../../credentials/protected-secret-persistence'
 import {
   migrateRetirementNamespaceHostIdentity,
   sshHostIdentity
-} from '../../worktree-retirement-namespace'
+} from '../../workspaces/removal/retirement/worktree-retirement-namespace'
 import {
   migrateAutomationHostFilterSshTargetId,
   migrateAutomationsForSshReadoption
-} from '../../automations/automation-ssh-readoption-migration'
+} from '../../automations/ownership/automation-ssh-readoption-migration'
 import { automationIdsPinnedToSshTarget } from '../scheduling-automations/automation-owner-projection'
 import { reassignCanonicalWorktreeMetadataHost } from './canonical-worktree-host-reassignment'
 
@@ -26,8 +27,7 @@ export type SshTargetReassignmentOperations = {
   scheduleSave: () => void
 }
 
-/** Retirement namespaces key on the endpoint a target reaches, so a rotation moves them only when
- *  the endpoint itself changed — plus any pre-identity key that embedded the row id. */
+/** Copy endpoint history but move obsolete row-ID namespaces after target rotation. */
 function migrateRetirementNamespaces(
   state: PersistedState,
   oldTargetId: string,
@@ -37,24 +37,19 @@ function migrateRetirementNamespaces(
   if (!newTarget) {
     return false
   }
-  // The removal tombstone is the only record of what endpoint the old id reached.
   const tombstone = state.removedSshTargetTombstones?.find(
     (entry) => entry.oldTargetId === oldTargetId
   )
   return migrateRetirementNamespaceHostIdentity(state.retiredWorktreeNamesByNamespace, {
-    // The row id died with the target, so nothing else can still resolve to it.
+    // Removed row IDs have no remaining owner.
     moveFrom: [toSshExecutionHostId(oldTargetId)],
-    // Endpoints are shared, not owned: a second target can still reach this host, so leave its
-    // bucket in place rather than stripping the tombstones out from under it.
+    // Another target may still use the old endpoint; retain its history.
     copyFrom: tombstone ? [sshHostIdentity(tombstone)] : [],
     to: sshHostIdentity(newTarget)
   })
 }
 
-/**
- * Re-point every repo and worktree meta pinned to a removed SSH target id onto
- * a re-added target's id so orphaned workspaces reattach. Returns re-pointed repo ids.
- */
+/** Reassign removed-target carriers to the replacement target so workspaces can reattach. */
 export function reassignSshTargetId(
   operations: SshTargetReassignmentOperations,
   oldTargetId: string,
@@ -75,19 +70,18 @@ export function reassignSshTargetId(
     if (matchesConnection) {
       repo.connectionId = newTargetId
     }
-    // Why: don't stamp executionHostId where it was unset — legacy SSH repo rows derive the host from connectionId.
+    // Unstamped legacy repos derive host identity from connectionId.
     if (matchesHost) {
       repo.executionHostId = newHostId
     }
     repoIds.add(repo.id)
   }
-  // Legacy locator rows cannot recover canonical-only metadata after target readoption.
+  // Recover canonical-only metadata before rewriting locator aliases.
   const identityResult = reassignCanonicalWorktreeMetadataHost(
     operations.state,
     oldHostId,
     newHostId
   )
-  // Re-point legacy rows unless a conflicting destination kept their canonical source in place.
   let metaChanged = false
   for (const [worktreeId, meta] of Object.entries(operations.state.worktreeMeta)) {
     if (meta.hostId === oldHostId && !identityResult.preservedWorktreeIds.has(worktreeId)) {
@@ -95,23 +89,33 @@ export function reassignSshTargetId(
       metaChanged = true
     }
   }
-  // Why: any carrier still holding the old id later throws `SSH target not found` (STA-1468); migrate them all.
-  let carrierChanged = migrateWorkspaceSessionSshTargetId(
+  // Stale carrier IDs otherwise cause SSH target not found on later use.
+  // Publish replacements: rollback of an in-flight session write keeps the previous objects.
+  let carrierChanged = false
+  const localSession = migrateWorkspaceSessionSshTargetId(
     operations.state.workspaceSession,
     oldTargetId,
     newTargetId
   )
-  for (const session of Object.values(operations.state.workspaceSessionsByHostId ?? {})) {
-    if (session && migrateWorkspaceSessionSshTargetId(session, oldTargetId, newTargetId)) {
-      carrierChanged = true
-    }
+  if (localSession) {
+    operations.state.workspaceSession = localSession
+    carrierChanged = true
   }
-  // Why: partitions are read by host id; re-key from the removed id to the new one (keep new if it already exists).
-  const partitions = operations.state.workspaceSessionsByHostId
+  const published = operations.state.workspaceSessionsByHostId
+  let partitions = replaceWorkspaceSessionPartitions(published, (session) =>
+    migrateWorkspaceSessionSshTargetId(session, oldTargetId, newTargetId)
+  )
+  // Host-keyed partitions follow the new ID; existing destinations win.
   const oldPartition = partitions?.[oldHostId]
   if (partitions && oldPartition) {
-    delete partitions[oldHostId]
-    partitions[newHostId] ??= oldPartition
+    // Rekey the private copy when there is one; never the published map.
+    const rekeyed = partitions === published ? { ...partitions } : partitions
+    delete rekeyed[oldHostId]
+    rekeyed[newHostId] ??= oldPartition
+    partitions = rekeyed
+  }
+  if (partitions !== published) {
+    operations.state.workspaceSessionsByHostId = partitions
     carrierChanged = true
   }
   if (migrateUiHostScopeSshTargetId(operations.state.ui, oldTargetId, newTargetId)) {
@@ -165,7 +169,6 @@ export function reassignSshTargetId(
       (entry) =>
         entry !== setup && entry.projectId === setup.projectId && entry.hostId === newHostId
     )
-    // Why: drop the old ghost row that would violate (projectId, hostId) uniqueness with the re-added host's setup.
     if (duplicate) {
       setupsChanged = true
       continue
@@ -178,7 +181,7 @@ export function reassignSshTargetId(
   if (setupsChanged) {
     operations.state.projectHostSetups = keptSetups
   }
-  // Why: repo-row and host-setup rewrites affect host-setup compatibility; meta-only rewrites don't, so gate the sync here.
+  // Only repo/setup edits affect host-setup compatibility.
   if (repoIds.size > 0 || setupsChanged) {
     operations.syncProjectHostSetupCompatibilityState()
   }
@@ -189,8 +192,7 @@ export function reassignSshTargetId(
     setupsChanged ||
     identityResult.changed
   ) {
-    // The rewrites above patch rows in place; the list projection caches on array
-    // identity, so a same-identity array would keep serving pre-readoption owners.
+    // Publish new array identities so cached lists see the in-place ownership rewrites.
     operations.state.repos = [...operations.state.repos]
     operations.state.automations = [...(operations.state.automations ?? [])]
     operations.state.automationRuns = [...(operations.state.automationRuns ?? [])]

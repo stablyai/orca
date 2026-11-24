@@ -1,7 +1,7 @@
-import { getRepoExecutionHostId } from '../../../../shared/execution-host'
-import type { ComputerUsePermissionStatusResult } from '../../../../shared/computer-use-permissions-types'
-import type { GlobalSettings } from '../../../../shared/global-settings-types'
-import type { Repo } from '../../../../shared/repo-types'
+import { getRepoExecutionHostId } from '../../../../shared/execution-host/execution-host'
+import type { ComputerUsePermissionStatusResult } from '../../../../shared/computer/computer-use-permissions-types'
+import type { GlobalSettings } from '../../../../shared/settings/global-settings-types'
+import type { Repo } from '../../../../shared/repository/repo-types'
 
 export type SetupScriptProbeState = {
   signature: string | null
@@ -36,7 +36,7 @@ export function getSetupScriptProbeSignature(
   if (!settings) {
     return null
   }
-  // Why: each repo's hooks are probed on its own host, so the host is part of the signature.
+  // Hook probes belong to each repo’s host, so host changes invalidate readiness.
   return JSON.stringify({
     repos: orderedGitRepos.map((repo) => ({
       id: repo.id,

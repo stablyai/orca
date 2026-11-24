@@ -137,16 +137,7 @@ runners; only the compare-and-swap algorithm is shared with the fence broker.
 ## Duplication
 
 This directory is copied verbatim into `stablyai/orca`. It has no `package.json`, no
-`node_modules`, and imports nothing outside itself — `action-contract.test.mjs` enforces all three.
+`node_modules`, and imports nothing outside itself. Keep it self-contained when updating the action.
 Cross-repo consumption via `uses: stablyai/orca/.github/actions/...@<sha>` was rejected: it would
 put public-repo code inside private app deploys that hold a production credential, and neither
 repository protects `main` today.
-
-## Tests
-
-```
-node --test .github/actions/cloud-sql-rollout-lease/
-```
-
-`storage-lease.test.mjs` drives the real compare-and-swap path against an in-memory Cloud Storage
-fake that enforces generations. No network.

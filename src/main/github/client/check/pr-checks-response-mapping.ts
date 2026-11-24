@@ -1,34 +1,28 @@
-import type { PRCheckDetail } from '../../../../shared/github/check-types'
-import { githubRepositoryWebHost, type GitHubApiRepository } from '../../github-api-repository'
+import { normalizePRCheckHeadSha } from '../../../../shared/github/checks/pr-check-head'
+import type { PRCheckDetail } from '../../../../shared/github/checks/check-types'
+import { githubRepositoryWebHost } from '../../repositories/github-repository-host'
+import type { GitHubRepositoryIdentity as GitHubApiRepository } from '../../../../shared/github/repositories/repository-identity'
 import {
   mapCheckRunRESTStatus,
   mapCheckRunRESTConclusion,
   mapCommitStatusRESTStatus,
   mapCommitStatusRESTConclusion
-} from '../../mappers'
-import type {
-  GraphQLPRChecksResponse,
-  GraphQLCheckRunContext,
-  GraphQLStatusContext,
-  GraphQLStatusCheckContext,
-  GraphQLCheckSuite,
-  RestCheckRun,
-  RestCommitStatus
-} from './pr-checks-graphql-query'
+} from '../../api/github-read-response'
+import {
+  isPendingApprovalSuiteWithoutRuns,
+  type PRCheckContext,
+  type PRCheckPages,
+  type PRCheckSuite
+} from './pr-check-rollup'
+import type { RestCheckRun, RestCommitStatus } from './rest-pr-check-pages'
 import { nullableString, nullableNumber, parseActionsRunId } from './check-detail-field-mapping'
-export function isGraphQLCheckRunContext(
-  context: GraphQLStatusCheckContext
-): context is GraphQLCheckRunContext {
-  return context.__typename === 'CheckRun'
-}
-
-export function isGraphQLStatusContext(
-  context: GraphQLStatusCheckContext
-): context is GraphQLStatusContext {
-  return context.__typename === 'StatusContext'
-}
-
-export function mapGraphQLCheckRunContext(context: GraphQLCheckRunContext): PRCheckDetail | null {
+import {
+  checkRunTimes,
+  commitStatusTimes
+} from '../../../../shared/source-control/checks/pr-check-time'
+function mapGraphQLCheckRunContext(
+  context: Extract<PRCheckContext, { __typename: 'CheckRun' }>
+): PRCheckDetail | null {
   const name = nullableString(context.name)
   if (!name) {
     return null
@@ -42,33 +36,39 @@ export function mapGraphQLCheckRunContext(context: GraphQLCheckRunContext): PRCh
     status: mapCheckRunRESTStatus(context.status ?? ''),
     conclusion: mapCheckRunRESTConclusion(context.status ?? '', context.conclusion ?? null),
     url,
+    ...checkRunTimes(context.startedAt, context.completedAt),
     ...(checkRunId !== null ? { checkRunId } : {}),
     ...(typeof workflowRunId === 'number' ? { workflowRunId } : {})
   }
 }
 
-export function mapGraphQLStatusContext(context: GraphQLStatusContext): PRCheckDetail | null {
+function mapGraphQLStatusContext(
+  context: Extract<PRCheckContext, { __typename: 'StatusContext' }>
+): PRCheckDetail | null {
   const name = nullableString(context.context)
   if (!name) {
     return null
   }
   const url = nullableString(context.targetUrl)
   const workflowRunId = parseActionsRunId(url)
+  const status = mapCommitStatusRESTStatus(context.state ?? '')
   return {
     name,
-    status: mapCommitStatusRESTStatus(context.state ?? ''),
+    status,
     conclusion: mapCommitStatusRESTConclusion(context.state ?? ''),
     url,
+    ...commitStatusTimes(status, context.createdAt),
     ...(workflowRunId !== undefined ? { workflowRunId } : {})
   }
 }
 
 export function mapRestCheckRun(checkRun: RestCheckRun): PRCheckDetail {
   return {
-    name: checkRun.name,
+    name: checkRun.name ?? '',
     status: mapCheckRunRESTStatus(checkRun.status),
     conclusion: mapCheckRunRESTConclusion(checkRun.status, checkRun.conclusion),
     url: checkRun.details_url || checkRun.html_url || null,
+    ...checkRunTimes(checkRun.started_at, checkRun.completed_at),
     ...(typeof checkRun.id === 'number' ? { checkRunId: checkRun.id } : {}),
     workflowRunId: parseActionsRunId(checkRun.details_url || checkRun.html_url || null)
   }
@@ -81,72 +81,64 @@ export function mapRestCommitStatus(status: RestCommitStatus): PRCheckDetail | n
   }
   const url = nullableString(status.target_url)
   const workflowRunId = parseActionsRunId(url)
+  const checkStatus = mapCommitStatusRESTStatus(status.state ?? '')
   return {
     name,
-    status: mapCommitStatusRESTStatus(status.state ?? ''),
+    status: checkStatus,
     conclusion: mapCommitStatusRESTConclusion(status.state ?? ''),
     url,
+    ...commitStatusTimes(checkStatus, status.created_at),
     ...(workflowRunId !== undefined ? { workflowRunId } : {})
   }
 }
 
-export function mapGraphQLPendingApprovalCheckSuite(
+function mapGraphQLPendingApprovalCheckSuite(
   ownerRepo: GitHubApiRepository,
-  suite: GraphQLCheckSuite,
-  headSha: string | null | undefined,
+  suite: PRCheckSuite,
+  headSha: string,
   index: number
 ): PRCheckDetail {
   return {
     name: getPendingApprovalCheckSuiteName(suite, headSha, index),
     status: 'completed',
     conclusion: 'action_required',
-    // Why: suite-only approval blockers have no check run; link the suite page when GraphQL exposes one.
+    // Approval blockers may have a suite URL without any check run.
     url:
       nullableString(suite.url) ??
-      (headSha ? getPendingApprovalCheckSuiteUrl(ownerRepo, headSha, suite.databaseId) : null)
+      getPendingApprovalCheckSuiteUrl(ownerRepo, headSha, suite.databaseId)
   }
 }
 
-export function mapGraphQLPRChecksResponse(
+export function mapGraphQLPRCheckPages(
   ownerRepo: GitHubApiRepository,
-  response: GraphQLPRChecksResponse
-): PRCheckDetail[] | null {
-  const pullRequest = response.data?.repository?.pullRequest
-  if (!pullRequest) {
-    return null
-  }
-  const commit = pullRequest.commits?.nodes?.[0]?.commit
-  if (!commit) {
-    return []
-  }
-
-  const contexts = commit.statusCheckRollup?.contexts?.nodes ?? []
-  const checkRunContexts = contexts.filter(isGraphQLCheckRunContext)
+  { contexts, suites, headSha }: PRCheckPages
+): PRCheckDetail[] {
+  const checkRunContexts = contexts.filter((context) => context.__typename === 'CheckRun')
   const checkRuns = checkRunContexts
     .map(mapGraphQLCheckRunContext)
     .filter((check): check is PRCheckDetail => check !== null)
   const checkRunNames = new Set(checkRuns.map((check) => check.name))
   const checkSuiteIdsWithRuns = new Set(
-    checkRunContexts
-      .map((context) => nullableNumber(context.checkSuite?.databaseId))
-      .filter((id): id is number => id !== null)
+    checkRunContexts.map((context) => context.checkSuite.databaseId)
   )
-  // Why: mixed-CI repos expose Jenkins/Prow/Tide as legacy status contexts in the same rollup; keep check-run metadata on name collisions.
+  // Include legacy statuses, but preserve richer check-run metadata on name collisions.
   const legacyStatuses = contexts
-    .filter(isGraphQLStatusContext)
+    .filter((context) => context.__typename === 'StatusContext')
     .map(mapGraphQLStatusContext)
     .filter((check): check is PRCheckDetail => check !== null && !checkRunNames.has(check.name))
-  const pendingApprovalChecks = (commit.checkSuites?.nodes ?? [])
-    .filter((suite) => suite.conclusion?.toLowerCase() === 'action_required')
-    .filter((suite) => {
-      const suiteId = nullableNumber(suite.databaseId)
-      return suiteId === null || !checkSuiteIdsWithRuns.has(suiteId)
-    })
-    .map((suite, index) =>
-      mapGraphQLPendingApprovalCheckSuite(ownerRepo, suite, pullRequest.headRefOid, index)
+  const pendingApprovalChecks = suites
+    .filter((suite) =>
+      isPendingApprovalSuiteWithoutRuns(
+        suite.conclusion,
+        checkSuiteIdsWithRuns.has(suite.databaseId)
+      )
     )
+    .map((suite, index) => mapGraphQLPendingApprovalCheckSuite(ownerRepo, suite, headSha, index))
 
-  return [...checkRuns, ...legacyStatuses, ...pendingApprovalChecks]
+  const observedHeadSha = normalizePRCheckHeadSha(headSha)
+  return [...checkRuns, ...legacyStatuses, ...pendingApprovalChecks].map((check) =>
+    observedHeadSha ? { ...check, observedHeadSha } : check
+  )
 }
 
 export function getPendingApprovalCheckSuiteName(

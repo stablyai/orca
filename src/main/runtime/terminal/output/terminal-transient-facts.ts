@@ -1,28 +1,89 @@
+import { TerminalCommandPaint, type CommandPaintMarks } from '../input/terminal-command-paint'
+import { CommandFinishArbiter, commandMarkAgent } from './command-finish-arbiter'
+import type { LaunchedAgentForeground } from '../wait/launched-agent-foreground'
+import type { TuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent'
 import { OrcaRuntimeWithScheduleWaitBlockedCheck } from '../wait/terminal-wait-blocked-checks'
-import type { PtyTransientFact } from '../../../providers/pty-provider-contract'
+import type { PtyTransientFact } from '../../../providers/pty/events'
 import type {
   TerminalSideEffectBatch,
   TerminalSideEffectFact
-} from '../../../../shared/terminal-side-effect-facts'
+} from '../../../../shared/terminal/output/terminal-side-effect-facts'
 import {
   detectAgentStatusFromTitle,
-  isCursorNativeAgentTitle,
   normalizeTerminalTitle
-} from '../../../../shared/agent-detection'
+} from '../../../../shared/agent-status/title/agent-title-status'
+import { isCursorNativeAgentTitle } from '../../../../shared/agent-status/title/agent-title-core'
 import {
   getLeafDisplayRecord,
   getPtyDisplayRecord,
   type TitleDisplayClear
-} from '../../runtime-worktree-status-projection'
+} from '../../workspaces/process-listing/runtime-worktree-status-projection'
 import type {
   RuntimeLeafRecord,
   RuntimePtyWorktreeRecord
-} from '../../runtime-terminal-state-records'
-import type { TerminalTitleFactMeta } from '../../../../shared/terminal-output-side-effects'
+} from '../records/runtime-terminal-state-records'
+import type { TerminalTitleFactMeta } from '../../../../shared/terminal/output/terminal-output-side-effects'
 
 export abstract class OrcaRuntimeWithEmitDaemonPtyTransientFact extends OrcaRuntimeWithScheduleWaitBlockedCheck {
-  protected abstract retirePtyAgentLaunchAuthority(ptyId: string): void
-  protected abstract disposeHeadlessTerminal(ptyId: string): void
+  protected abstract retirePtyAgentLaunchAuthority(ptyId: string, confirmedExit?: boolean): void
+  abstract readCommandMarkForeground(
+    ptyId: string,
+    agent: TuiAgent
+  ): Promise<LaunchedAgentForeground>
+  abstract launchedAgentHostProvesAgent(ptyId: string): boolean
+  protected abstract recheckHookAgentPresenceForPty(
+    ptyId: string,
+    exitedSince?: number
+  ): Promise<'live' | 'unverifiable' | 'exited' | null>
+
+  private readonly commandFinishes = new CommandFinishArbiter({
+    agentFor: (ptyId) => {
+      const pty = this.ptysById.get(ptyId)
+      // A host that can never find the agent in front keeps every mark, as before.
+      return pty && this.launchedAgentHostProvesAgent(ptyId) ? commandMarkAgent(pty) : null
+    },
+    incarnationOf: (ptyId) => this.ptysById.get(ptyId)?.incarnationId,
+    readForeground: (ptyId, agent) => this.readCommandMarkForeground(ptyId, agent),
+    finish: (ptyId, lanes) => {
+      if (lanes.paint) {
+        this.ptysById.get(ptyId)?.commandPaint?.settleHeldFinish(true)
+      }
+      if (lanes.authority) {
+        this.applyShellCommandFinished(ptyId, lanes.authority.exitCode)
+      }
+    },
+    dismiss: (ptyId, lanes) => {
+      if (lanes.paint) {
+        this.ptysById.get(ptyId)?.commandPaint?.settleHeldFinish(false)
+      }
+    }
+  })
+
+  /** An OSC 133;D: in a pane with an agent it counts once the foreground read finds the shell. */
+  protected noteCommandFinished(ptyId: string, exitCode: number | null): void {
+    this.commandFinishes.note(ptyId, { authority: { exitCode } })
+  }
+
+  protected noteCommandStarted(ptyId: string): void {
+    this.commandFinishes.noteCommandStarted(ptyId, 'authority')
+  }
+
+  protected noteCommandPaintMarks(ptyId: string, marks: CommandPaintMarks): void {
+    if (marks.heldFinishStarted) {
+      this.commandFinishes.noteCommandStarted(ptyId, 'paint')
+    }
+    if (marks.finishHeld) {
+      this.commandFinishes.note(ptyId, { paint: true })
+    }
+  }
+
+  private applyShellCommandFinished(ptyId: string, exitCode: number | null): void {
+    // A backgrounded pane's mark proves its agent's exit as a foreground pane's does.
+    void this.recheckHookAgentPresenceForPty(ptyId)
+    this.retirePtyAgentLaunchAuthority(ptyId, true)
+    this.recordTerminalSideEffectFact(ptyId, { kind: 'command-finished', exitCode })
+    this.openCodeRunLifetime.onCommandFinished(ptyId, exitCode)
+  }
 
   /** A transient fact the daemon detected while it held scan authority —
    *  emitted through the same fact channel as byte-scanned facts. Arrives
@@ -33,12 +94,7 @@ export abstract class OrcaRuntimeWithEmitDaemonPtyTransientFact extends OrcaRunt
         this.recordTerminalSideEffectFact(ptyId, { kind: 'bell' })
         return
       case 'command-finished':
-        this.retirePtyAgentLaunchAuthority(ptyId)
-        this.recordTerminalSideEffectFact(ptyId, {
-          kind: 'command-finished',
-          exitCode: fact.exitCode
-        })
-        this.openCodeRunLifetime.onCommandFinished(ptyId, fact.exitCode)
+        this.noteCommandFinished(ptyId, fact.exitCode)
         return
       case 'pr-link':
         this.recordTerminalSideEffectFact(ptyId, { kind: 'pr-link', link: fact.link })
@@ -48,14 +104,18 @@ export abstract class OrcaRuntimeWithEmitDaemonPtyTransientFact extends OrcaRunt
         return
       case '2031-unsubscribe':
         this.recordTerminalSideEffectFact(ptyId, { kind: '2031-unsubscribe' })
+        return
+      case 'foreground-changed':
+        this.recordTerminalSideEffectFact(ptyId, { kind: 'foreground-changed' })
     }
   }
 
-  /** The daemon keep-tail dropped this PTY's oldest undelivered output; the
-   *  next delivered chunk is discontinuous. Reset every cross-chunk parse
-   *  carry so a half-open escape from before the gap cannot corrupt what
-   *  follows, and drop the mobile headless mirror — it rebuilds from the
-   *  delivered tail / snapshot seeds instead of parsing a gapped stream. */
+  /** Input written for the CLI or another runtime client can start a command that prints nothing; the pane reads as after its own input. */
+  noteRuntimeTerminalInput(ptyId: string): void {
+    this.recordTerminalSideEffectFact(ptyId, { kind: 'foreground-changed', input: true })
+  }
+
+  /** Output gaps reset every cross-chunk parser carry and the headless mirror; rebuild from delivered suffix or snapshot instead of parsing discontinuous escapes. */
   notePtyDataGap(ptyId: string, droppedChars = 0): void {
     if (droppedChars > 0) {
       // Why: the daemon snapshot's seq counts bytes its monitoring stream
@@ -67,7 +127,9 @@ export abstract class OrcaRuntimeWithEmitDaemonPtyTransientFact extends OrcaRunt
     const pty = this.getOrCreatePtyWorktreeRecord(ptyId)
     if (pty) {
       pty.tailPendingAnsi = ''
-      pty.commandPaint = undefined
+      // Before any output, too: a gap ahead of the reattach fence still rules out its vouch.
+      pty.commandPaint ??= new TerminalCommandPaint()
+      pty.commandPaint.noteGap()
     }
     for (const leaf of this.getLeavesForPty(ptyId)) {
       leaf.tailPendingAnsi = ''
@@ -137,11 +199,12 @@ export abstract class OrcaRuntimeWithEmitDaemonPtyTransientFact extends OrcaRunt
         connectionId
       }
     }
-    if (pty?.paneKey) {
+    const recorded = this.paneOfPty(pty)
+    if (pty && recorded.paneKey) {
       return {
         worktreeId: pty.worktreeId,
-        ...(pty.tabId ? { tabId: pty.tabId } : {}),
-        paneKey: pty.paneKey,
+        ...(recorded.tabId ? { tabId: recorded.tabId } : {}),
+        paneKey: recorded.paneKey,
         connectionId
       }
     }
@@ -192,6 +255,11 @@ export abstract class OrcaRuntimeWithEmitDaemonPtyTransientFact extends OrcaRunt
       }
     }
     return null
+  }
+
+  /** The same title for main's synthetic title producer, which must see its own frames. */
+  getTrackedPtyTitle(ptyId: string): string | null {
+    return this.getTrackedRawTitleForPty(ptyId)
   }
 
   protected isLiveCursorNativeTitle(rawTitle: string, meta?: TerminalTitleFactMeta): boolean {

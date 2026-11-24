@@ -84,9 +84,7 @@ export function parseLinearIssueInput(input: string): ParsedLinearIssueInput | n
 
   try {
     const parsed = new URL(trimmed)
-    // Why: hostname alone accepts file://linear.app/..., which then passes
-    // validation and persists as a link. The GitHub parser already gates on
-    // protocol; this keeps the two in step.
+    // Require web protocols: hostname-only checks accept file://linear.app and persist unsafe links.
     if (parsed.protocol !== 'https:' && parsed.protocol !== 'http:') {
       return null
     }
@@ -195,8 +193,7 @@ export function findLinearIssueWorkspaceLookupIds(
 
   push(findLinearIssueWorkspaceIdFromStatus(intent, status))
 
-  // Why: saved API-key workspaces often omit organizationUrlKey. Probe those
-  // unknown-org workspaces and accept only an issue whose URL matches the org.
+  // Probe API-key workspaces missing organizationUrlKey; accept only matching issue-URL organizations.
   for (const workspace of status.workspaces ?? []) {
     if (!workspace.organizationUrlKey) {
       push(workspace.id)
@@ -235,8 +232,7 @@ export const LINEAR_ISSUE_LINK_CLEARED: LinearIssueLinkUpdates = {
   linkedLinearIssueOrganizationUrlKey: null
 }
 
-/** Shared by the CLI and the meta dialog so both persist identical state for
- *  identical input. Returns null when the input is neither empty nor parseable. */
+/** Share CLI/meta-dialog link state; return null for nonempty unparseable input. */
 export function buildLinearIssueLinkUpdates(input: string): LinearIssueLinkUpdates | null {
   if (input.trim() === '') {
     return { ...LINEAR_ISSUE_LINK_CLEARED }
@@ -249,9 +245,7 @@ export function buildLinearIssueLinkUpdates(input: string): LinearIssueLinkUpdat
 
   return {
     linkedLinearIssue: parsed.identifier,
-    // Both scoping fields describe the issue being REPLACED. A stale org key
-    // pins resolveLegacyLinearLinkWorkspace to the wrong org — not-found, or a
-    // silently wrong issue on a prefix collision. Nulling only costs a re-read.
+    // Clear replaced issue scope: stale org keys cause not-found or wrong-prefix matches. Clearing costs only a re-read.
     linkedLinearIssueWorkspaceId: null,
     linkedLinearIssueOrganizationUrlKey: parsed.organizationUrlKey ?? null
   }

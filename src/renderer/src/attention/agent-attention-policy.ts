@@ -7,13 +7,12 @@ import type {
 export type AgentAttentionRequest = {
   subject: AgentAttentionSubject
   reason: AgentAttentionUnreadReason
-  /**
-   * A settled turn owns the subject's attention, so its address is validated and unread is
-   * decided. A bare surface signal (a bell) only has to prove the subject is still alive.
-   */
+  /** Settled turns require address validation and decide unread; bare bell signals need only liveness proof. */
   settlesTurn: boolean
   /** Out-of-band proof the subject just produced work, used when no live session is visible. */
   hasFreshActivityEvidence: boolean
+  /** A dispatched worker finished: its coordinator gets the result, so the person gets nothing. */
+  coordinatorOnlyNews?: boolean
 }
 
 export type AgentAttentionUnreadWrite = {
@@ -31,7 +30,15 @@ export type AgentAttentionDeliveryRequest = {
 }
 
 export type AgentAttentionDecision =
-  | { admitted: false; cause: 'no-live-session' | 'unknown-surface' | 'superseded-surface' }
+  | {
+      admitted: false
+      cause:
+        | 'muted-workspace'
+        | 'coordinator-only-news'
+        | 'no-live-session'
+        | 'unknown-surface'
+        | 'superseded-surface'
+    }
   | {
       admitted: true
       unread: AgentAttentionUnreadWrite | null
@@ -44,18 +51,19 @@ export type AgentAttentionSink = {
   requestDelivery: (request: AgentAttentionDeliveryRequest) => void
 }
 
-/**
- * Decides what an attention event earns, asking the surface adapter for every fact.
- *
- * Admission and visibility are deliberately separate gates: a superseded surface is rejected
- * outright (no unread, no delivery), while a surface the user is watching is admitted and
- * delivered but earns no unread.
- */
+/** Reject superseded surfaces entirely. Viewed surfaces may deliver attention but receive no unread marker; adapter facts keep admission separate from visibility. */
 export function resolveAgentAttention(
   request: AgentAttentionRequest,
   surface: AgentAttentionSurface
 ): AgentAttentionDecision {
   const { workspaceId } = request.subject
+  // Muted workspaces get no unread, banner, sound or push.
+  if (surface.isWorkspaceMuted(workspaceId)) {
+    return { admitted: false, cause: 'muted-workspace' }
+  }
+  if (request.coordinatorOnlyNews) {
+    return { admitted: false, cause: 'coordinator-only-news' }
+  }
   const subjectKey = request.subject.surfaceKey ?? null
   const hasLiveSession = surface.hasLiveSession(request.subject)
   if (!hasLiveSession && !request.hasFreshActivityEvidence) {

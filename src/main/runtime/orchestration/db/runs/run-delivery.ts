@@ -1,7 +1,9 @@
-import type { MessageType, MessageRow, RunRow, DeliveryRow } from '../../types'
+import type { MessageType, MessageRow, RunRow, DeliveryRow } from '../orchestration-records'
 import { OrchestrationError } from '../../orchestration-error'
 import { exposeMessageListTimestamps } from '../utc-timestamp'
 import type { OrchestrationDb } from '../orchestration-db'
+import type { MailboxDeliveryBatch } from '../messages/role-mailbox-delivery'
+import type { MailTaker } from '../messages/mail-taker'
 
 export function requireCurrentConsumer(
   this: OrchestrationDb,
@@ -12,7 +14,7 @@ export function requireCurrentConsumer(
   if (!run || run.legacy === 1 || run.consumer_generation !== consumerGeneration) {
     throw new OrchestrationError(
       'consumer_fenced',
-      'This mailbox consumer has been replaced. Rebind with orchestration run-use.'
+      `Another session now coordinates Run ${runId}; stop reading this mailbox.`
     )
   }
   return run
@@ -36,19 +38,34 @@ export function getOrCreateRunDelivery(
   })
 }
 
+export function takeRunDelivery(
+  this: OrchestrationDb,
+  params: {
+    runId: string
+    consumerGeneration: number
+    wakeTypes?: MessageType[]
+    recordTaken?: (batch: MailboxDeliveryBatch) => void
+    taker: MailTaker
+  }
+): MailboxDeliveryBatch | undefined {
+  return this.takeMailboxDelivery({ ...params, mailboxHandle: `run:${params.runId}` })
+}
+
 export function acknowledgeRunDelivery(
   this: OrchestrationDb,
   params: {
     runId: string
     consumerGeneration: number
     deliveryId: string
+    taker: MailTaker
   }
 ): { delivery: DeliveryRow; duplicate: boolean } {
   return this.acknowledgeMailboxDelivery({
     runId: params.runId,
     mailboxHandle: `run:${params.runId}`,
     consumerGeneration: params.consumerGeneration,
-    deliveryId: params.deliveryId
+    deliveryId: params.deliveryId,
+    taker: params.taker
   })
 }
 
@@ -59,7 +76,7 @@ export function getRunMailboxHistory(
   types?: MessageType[]
 ): MessageRow[] {
   const address = `run:${runId}`
-  // Why: SQLite reads a negative LIMIT as unbounded, so an unsanitized caller value dumps the whole mailbox.
+  // SQLite treats negative LIMIT as unbounded; clamp it to avoid dumping the mailbox.
   const rowLimit = Math.max(1, Math.floor(limit))
   if (types && types.length > 0) {
     const placeholders = types.map(() => '?').join(',')
@@ -119,6 +136,7 @@ export function hasOutstandingRunDelivery(this: OrchestrationDb, runId: string):
 export type RunDeliveryMethods = {
   requireCurrentConsumer: typeof requireCurrentConsumer
   getOrCreateRunDelivery: typeof getOrCreateRunDelivery
+  takeRunDelivery: typeof takeRunDelivery
   acknowledgeRunDelivery: typeof acknowledgeRunDelivery
   getRunMailboxHistory: typeof getRunMailboxHistory
   getUnreadRunMailbox: typeof getUnreadRunMailbox
@@ -129,6 +147,7 @@ export function attachRunDelivery(ctor: { prototype: object }): void {
   Object.assign(ctor.prototype, {
     requireCurrentConsumer,
     getOrCreateRunDelivery,
+    takeRunDelivery,
     acknowledgeRunDelivery,
     getRunMailboxHistory,
     getUnreadRunMailbox,

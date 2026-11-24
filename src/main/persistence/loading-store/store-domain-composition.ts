@@ -1,44 +1,56 @@
 import type { StoreRuntimeState } from './store-runtime-state'
+import { WORKSPACE_SESSION_DOMAINS } from '../workspace-session-domains'
 import type { Store } from './store'
-import { LoadedStateAdaptationOperations } from './loaded-state-adaptation'
-import { LoadedCohortMigrationOperations } from './loaded-cohort-migrations'
-import { LoadedStateParsingOperations } from './loaded-state-parsing'
-import { StateSerializationSecretHandlingOperations } from './state-serialization-secret-handling'
-import { PrimaryStateWriteOperations } from './primary-state-writes'
-import { WriteSchedulingOperations } from './write-scheduling'
-import { WriteFlushBarrierOperations } from './write-flush-barriers'
-import { ProfilePreferences } from './profile-preferences'
-import { RepoLifecycleOperations } from './repo-lifecycle-operations'
-import { TerminalBindingRecoveryOperations } from './terminal-binding-recovery'
-import { SessionHostPartitionOperations } from './session-host-partitions'
-import { SessionSnapshotOperations } from './session-snapshot-operations'
-import { MetadataLineageOperations } from './metadata-lineage-operations'
-import { ProjectCollectionOperations } from './project-collection-operations'
-import { AutomationPersistence } from './automation-persistence'
-import { MobileTabSelectionPersistence } from './mobile-tab-selection-persistence'
-import { RemoteLayoutSnapshotPersistence } from '../../remote-layout-snapshot'
-import { SparsePresetPersistence } from './sparse-preset-persistence'
-import { PtyBindingPersistenceOperations } from './pty-binding-persistence'
-import { SshProfileOperations } from './ssh-profile-operations'
-import { RetiredWorktreeNamePersistence } from './retired-worktree-name-persistence'
-import { SshLeaseRecoveryOperations } from './ssh-lease-recovery-operations'
-import { OrcadSourceExportPersistence } from '../migrating-orcad-catalog/orcad-source-export'
+import { LoadedStateAdaptationOperations } from './profile-loading/loaded-state-adaptation'
+import { LoadedCohortMigrationOperations } from './profile-loading/loaded-cohort-migrations'
+import { LoadedStateParsingOperations } from './profile-loading/loaded-state-parsing'
+import { StateSerializationSecretHandlingOperations } from './profile-writing/state-serialization-secret-handling'
+import { PrimaryStateWriteOperations } from './profile-writing/primary-state-writes'
+import { scheduleSave, WriteSchedulingOperations } from './profile-writing/write-scheduling'
+import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../shared/workspace-layout/layout-owner-switch'
+import { WriteFlushBarrierOperations } from './profile-writing/write-flush-barriers'
+import { ProfilePreferences } from './profile-preferences/profile-preferences'
+import { RepoLifecycleOperations } from './project-catalog/repo-lifecycle-operations'
+import { TerminalBindingRecoveryOperations } from './terminal-bindings/terminal-binding-recovery'
+import { SessionHostPartitionOperations } from './workspace-sessions/session-host-partitions'
+import { SessionSnapshotOperations } from './workspace-sessions/session-snapshot-operations'
+import { MetadataLineageOperations } from './workspace-lineage/metadata-lineage-operations'
+import { CrossStoreLineagePersistence } from './workspace-lineage/cross-store-lineage-persistence'
+import { FolderParentLineagePersistence } from './workspace-lineage/folder-parent-lineage-persistence'
+import { ProjectCollectionOperations } from './project-catalog/project-collection-operations'
+import { AutomationPersistence } from './automation-state/automation-persistence'
+import { MobileTabSelectionPersistence } from './profile-preferences/mobile-tab-selection-persistence'
+import { BotPersistence } from './bot-state/bot-persistence'
+import { RemoteLayoutSnapshotPersistence } from '../../remote-layout-snapshot/remote-layout-snapshot-persistence'
+import { HostRepoCatalogSnapshotPersistence } from '../../host-repo-catalog-snapshot/host-repo-catalog-snapshot-persistence'
+import { SparsePresetPersistence } from './project-catalog/sparse-preset-persistence'
+import { PtyBindingPersistenceOperations } from './terminal-bindings/pty-binding-persistence'
+import { LayoutCommandPersistence } from '../terminal-topology/layout-command-persistence'
+import { SshProfileOperations } from './ssh-state/ssh-profile-operations'
+import { RetiredWorktreeNamePersistence } from './project-catalog/retired-worktree-name-persistence'
+import { SshLeaseRecoveryOperations } from './ssh-state/ssh-lease-recovery-operations'
+import { OrcadSourceExportPersistence } from '../migrating-orcad-catalog/source/catalog/orcad-source-export'
 import { OrcadCatalogImportPersistence } from '../migrating-orcad-catalog/orcad-catalog-import'
-import { OrcadMigrationBlobInstallPersistence } from '../migrating-orcad-catalog/orcad-migration-blob-install-persistence'
+import { OrcadMigrationBlobInstallPersistence } from '../migrating-orcad-catalog/blob-transfer/orcad-migration-blob-install-persistence'
 
 export type StoreDomainOperations = WriteSchedulingOperations &
   PrimaryStateWriteOperations &
   ProjectCollectionOperations &
   RepoLifecycleOperations &
   MobileTabSelectionPersistence &
+  BotPersistence &
   RemoteLayoutSnapshotPersistence &
+  HostRepoCatalogSnapshotPersistence &
   SparsePresetPersistence &
   AutomationPersistence &
   MetadataLineageOperations &
+  CrossStoreLineagePersistence &
+  FolderParentLineagePersistence &
   ProfilePreferences &
   SessionHostPartitionOperations &
   SessionSnapshotOperations &
   PtyBindingPersistenceOperations &
+  LayoutCommandPersistence &
   SshProfileOperations &
   RetiredWorktreeNamePersistence &
   SshLeaseRecoveryOperations &
@@ -61,12 +73,17 @@ export type StoreDomains = {
   sessions: SessionHostPartitionOperations
   sessionSnapshots: SessionSnapshotOperations
   metadata: MetadataLineageOperations
+  crossStoreLineage: CrossStoreLineagePersistence
+  folderParentLineage: FolderParentLineagePersistence
   projects: ProjectCollectionOperations
   automations: AutomationPersistence
   mobileTabSelections: MobileTabSelectionPersistence
+  bots: BotPersistence
   remoteLayoutSnapshots: RemoteLayoutSnapshotPersistence
+  hostRepoCatalogSnapshots: HostRepoCatalogSnapshotPersistence
   sparsePresets: SparsePresetPersistence
   ptyBindings: PtyBindingPersistenceOperations
+  layoutCommands: LayoutCommandPersistence
   sshProfiles: SshProfileOperations
   retiredWorktreeNames: RetiredWorktreeNamePersistence
   sshLeases: SshLeaseRecoveryOperations
@@ -81,14 +98,19 @@ export const STORE_DOMAIN_OPERATION_CLASSES = [
   ProjectCollectionOperations,
   RepoLifecycleOperations,
   MobileTabSelectionPersistence,
+  BotPersistence,
   RemoteLayoutSnapshotPersistence,
+  HostRepoCatalogSnapshotPersistence,
   SparsePresetPersistence,
   AutomationPersistence,
   MetadataLineageOperations,
+  CrossStoreLineagePersistence,
+  FolderParentLineagePersistence,
   ProfilePreferences,
   SessionHostPartitionOperations,
   SessionSnapshotOperations,
   PtyBindingPersistenceOperations,
+  LayoutCommandPersistence,
   SshProfileOperations,
   RetiredWorktreeNamePersistence,
   SshLeaseRecoveryOperations,
@@ -99,7 +121,7 @@ export const STORE_DOMAIN_OPERATION_CLASSES = [
 ] as const
 
 export function installStoreDomainContexts(target: Store, domains: StoreDomains): void {
-  // Each domain keeps its context under a module-private Symbol; the Store mixes in the domain methods, so it needs those symbols too.
+  // Mixed-in methods need each domain's private context symbols installed on Store too.
   for (const domain of Object.values(domains)) {
     for (const key of Object.getOwnPropertySymbols(domain)) {
       const { value } = Object.getOwnPropertyDescriptor(domain, key) ?? {}
@@ -133,7 +155,9 @@ export function createStoreDomains(runtime: StoreRuntimeState): StoreDomains {
   const remoteLayoutSnapshots = new RemoteLayoutSnapshotPersistence(runtime, scheduling)
   const sparsePresets = new SparsePresetPersistence(runtime, scheduling)
   const ptyBindings = new PtyBindingPersistenceOperations(runtime, sessions)
-  const sshProfiles = new SshProfileOperations(runtime, scheduling, repos)
+  const sshProfiles = new SshProfileOperations(runtime, scheduling, repos, () =>
+    serialization.sessionSaveBaseline.clear()
+  )
   const retiredWorktreeNames = new RetiredWorktreeNamePersistence(runtime, scheduling)
   const sshLeases = new SshLeaseRecoveryOperations(
     runtime,
@@ -156,16 +180,27 @@ export function createStoreDomains(runtime: StoreRuntimeState): StoreDomains {
     sessions,
     sessionSnapshots,
     metadata,
+    crossStoreLineage: new CrossStoreLineagePersistence(runtime, scheduling),
+    folderParentLineage: new FolderParentLineagePersistence(runtime, scheduling),
     projects,
     automations,
     mobileTabSelections,
+    bots: new BotPersistence(runtime, scheduling),
     remoteLayoutSnapshots,
+    hostRepoCatalogSnapshots: new HostRepoCatalogSnapshotPersistence(runtime, scheduling),
     sparsePresets,
     ptyBindings,
+    layoutCommands: new LayoutCommandPersistence(
+      runtime,
+      sessions,
+      // Retry persistence for terminal closes retained after failed writes; a close edits sessions only.
+      ORCA_LAYOUT_OWNER_IS_MAIN
+        ? () => scheduleSave(scheduling, WORKSPACE_SESSION_DOMAINS)
+        : undefined
+    ),
     sshProfiles,
     retiredWorktreeNames,
     sshLeases,
-    // Read-only: holds the runtime state and nothing that writes.
     orcadSourceExport: new OrcadSourceExportPersistence(runtime),
     orcadCatalogImports,
     orcadMigrationBlobInstalls: new OrcadMigrationBlobInstallPersistence(runtime)

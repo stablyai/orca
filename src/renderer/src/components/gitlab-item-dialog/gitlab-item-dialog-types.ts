@@ -1,5 +1,5 @@
-import type { GitLabWorkItem } from '../../../../shared/gitlab-types'
-import type { TaskSourceContext } from '../../../../shared/task-source-context'
+import type { GitLabWorkItem } from '../../../../shared/gitlab/gitlab-types'
+import type { TaskSourceContext } from '../../../../shared/work-items/task-source-context'
 
 export type GitLabItemDialogProps = {
   item: GitLabWorkItem | null

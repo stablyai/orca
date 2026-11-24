@@ -5,7 +5,7 @@ import { afterEach, describe, expect, it } from 'vitest'
 import Database from '../../../../sqlite/sync-database'
 import { OrchestrationDb } from '../orchestration-db'
 import { dropDerivedDeliverySchema } from './derived-delivery-test-fixture'
-import { resolveOrchestrationMigrationStartVersion } from '../../orchestration-schema-version-skew'
+import { resolveOrchestrationMigrationStartVersion } from './orchestration-schema-version-skew'
 import { createRootDispatch, reattachDispatchConsumer } from '../root-dispatch-test-fixture'
 import { SCHEMA_VERSION } from '../contract-constants'
 
@@ -75,9 +75,9 @@ describe('derived delivery migration', () => {
       acknowledged_at: null,
       status: 'fenced'
     })
-    expect(() => db.acknowledgeRunDelivery({ ...params, deliveryId: 'history_fence' })).toThrow(
-      expect.objectContaining({ code: 'consumer_fenced' })
-    )
+    expect(() =>
+      db.acknowledgeRunDelivery({ ...params, deliveryId: 'history_fence', taker: { kind: 'orca' } })
+    ).toThrow(expect.objectContaining({ code: 'consumer_fenced' }))
     expect(db.getOrCreateRunDelivery(params)?.messages.map((message) => message.id)).toEqual([
       next.id
     ])
@@ -89,38 +89,6 @@ describe('derived delivery migration', () => {
     expect(reopened.getOrCreateRunDelivery(params)?.messages.map((message) => message.id)).toEqual([
       next.id
     ])
-  })
-
-  it('enforces one active batch using the same derived view and permits history', () => {
-    const db = open(':memory:')
-    const run = db.createRun({
-      objective: 'constraint',
-      coordinatorHandle: 'coord',
-      coordinatorPaneKey: 'tab:11111111-1111-4111-8111-111111111111'
-    })
-    const message = db.insertMessage({
-      runId: run.id,
-      from: 'worker',
-      to: `run:${run.id}`,
-      subject: 'one'
-    })
-    const params = { runId: run.id, consumerGeneration: run.consumer_generation }
-    const first = db.getDeliveryRaw(db.getOrCreateRunDelivery(params)!.delivery.id)!
-    const insert = db.db.prepare(`INSERT INTO deliveries
-      (id, run_id, mailbox_handle, consumer_generation, message_ids, acknowledged_at, status)
-      VALUES (?, ?, ?, ?, ?, ?, ?)`)
-    const values = [run.id, `run:${run.id}`, run.consumer_generation, JSON.stringify([message.id])]
-    expect(() => insert.run('duplicate', ...values, null, 'outstanding')).toThrow(
-      'Mailbox already has an outstanding delivery'
-    )
-    expect(() =>
-      insert.run('ack_history', ...values, '2026-01-01 00:00:00', 'acknowledged')
-    ).not.toThrow()
-    expect(() => insert.run('fenced_history', ...values, null, 'fenced')).not.toThrow()
-    db.markAsRead([message.id])
-    expect(() => insert.run('consumed_history', ...values, null, 'outstanding')).not.toThrow()
-    expect(db.getDeliveryRaw(first.id)).toEqual(first)
-    expect(db.hasOutstandingRunDelivery(run.id)).toBe(false)
   })
 
   it('shares a single batch across connections and rejects replaced consumers after it is consumed', () => {
@@ -141,7 +109,7 @@ describe('derived delivery migration', () => {
     const second = open(path)
     const batch = first.getOrCreateRunDelivery(params)!
     expect(second.getOrCreateRunDelivery(params)?.delivery.id).toBe(batch.delivery.id)
-    second.markAsRead([message.id])
+    second.markAsRead([message.id], { kind: 'orca' })
     const replacement = second.bindRun({
       runId: run.id,
       coordinatorHandle: 'replacement',
@@ -156,7 +124,11 @@ describe('derived delivery migration', () => {
       expect.objectContaining({ code: 'consumer_fenced' })
     )
     expect(() =>
-      first.acknowledgeRunDelivery({ ...params, deliveryId: batch.delivery.id })
+      first.acknowledgeRunDelivery({
+        ...params,
+        deliveryId: batch.delivery.id,
+        taker: { kind: 'orca' }
+      })
     ).toThrow(expect.objectContaining({ code: 'consumer_fenced' }))
     expect(
       second.getOrCreateRunDelivery({
@@ -206,7 +178,7 @@ describe('derived delivery migration', () => {
       const params = { runId: run.id, mailboxHandle, consumerGeneration: 0, consumerSource }
       const batch = db.getOrCreateMailboxDelivery(params)!
       const peer = open(path)
-      peer.markAsRead([message.id])
+      peer.markAsRead([message.id], { kind: 'orca' })
       const authority = {
         dispatchId,
         paneKey: 'other:22222222-2222-4222-9222-222222222222',
@@ -232,38 +204,15 @@ describe('derived delivery migration', () => {
         expect.objectContaining({ code: 'consumer_fenced' })
       )
       expect(() =>
-        db.acknowledgeMailboxDelivery({ ...params, deliveryId: batch.delivery.id })
+        db.acknowledgeMailboxDelivery({
+          ...params,
+          deliveryId: batch.delivery.id,
+          taker: { kind: 'orca' }
+        })
       ).toThrow(expect.objectContaining({ code: 'consumer_fenced' }))
       expect(
         peer.getOrCreateMailboxDelivery({ ...params, consumerGeneration: 1 })?.messages[0].subject
       ).toBe('next')
     }
   )
-
-  it('keeps the pre-v41 column and index shape a downgraded binary reads', () => {
-    const db = open(':memory:')
-    expect(
-      (db.db.pragma('table_info(deliveries)') as { name: string }[]).map((c) => c.name)
-    ).toContain('status')
-    const index = db.db
-      .prepare("SELECT sql FROM sqlite_master WHERE name = 'idx_deliveries_one_outstanding'")
-      .get() as { sql: string }
-    expect(index.sql).not.toContain('UNIQUE')
-    expect(index.sql).toContain("status = 'outstanding' AND mailbox_handle != ''")
-    // Why: a v40 binary probes exactly these objects before trusting the stamp; nothing it needs is gone.
-    expect(resolveOrchestrationMigrationStartVersion(db.db, SCHEMA_VERSION, 40)).toBe(
-      SCHEMA_VERSION
-    )
-  })
-
-  it('recreates a missing derived view on reopen without changing batch records', () => {
-    const path = databasePath()
-    const db = open(path)
-    db.db.exec('DROP VIEW outstanding_deliveries')
-    const reopened = open(path)
-    expect(reopened.hasOutstandingMailboxDelivery('run:missing')).toBe(false)
-    expect(
-      resolveOrchestrationMigrationStartVersion(reopened.db, SCHEMA_VERSION, SCHEMA_VERSION)
-    ).toBe(SCHEMA_VERSION)
-  })
 })

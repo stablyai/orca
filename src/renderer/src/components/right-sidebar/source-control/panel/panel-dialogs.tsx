@@ -1,6 +1,6 @@
 import { toast } from 'sonner'
-import { translate } from '@/i18n/i18n'
-import { readSourceControlLaunchRecipeAgentId } from '../../../../../../shared/source-control-launch-agent-selection'
+import { useTranslate } from '@/i18n/use-translate'
+import { readSourceControlLaunchRecipeAgentId } from '../../../../../../shared/source-control/ai/source-control-launch-agent-selection'
 import {
   planSourceControlCompareBaseRefWrite,
   type SourceControlCompareBaseRefWrite
@@ -14,6 +14,7 @@ export function SourceControlPanelDialogs({
   activeWorktree,
   model
 }: SourceControlPanelReadyProps) {
+  const t = useTranslate()
   const {
     activeConnectionId,
     activeGroupId,
@@ -38,8 +39,10 @@ export function SourceControlPanelDialogs({
     pickerBaseRef,
     pullRequestGenerationDialogOpen,
     refreshBranchCompare,
+    resolveConflictsEditor,
     resolveConflictsComposerOpen,
     resolveConflictsPrompt,
+    resolveConflictsRecoveryContext,
     resolvedPendingDiffCommentsClear,
     saveLaunchActionDefault,
     setBaseRefDialogOpen,
@@ -82,7 +85,7 @@ export function SourceControlPanelDialogs({
     })
     if (!saved) {
       toast.error(
-        translate(
+        t(
           'auto.components.right.sidebar.SourceControl.e03eb08e1e',
           'Could not save the project default'
         )
@@ -112,6 +115,7 @@ export function SourceControlPanelDialogs({
       baseRefDialogOpen={baseRefDialogOpen}
       onBaseRefDialogOpenChange={setBaseRefDialogOpen}
       baseRefRepoId={activeRepo.id}
+      baseRefHostId={model.scope?.executionHostId ?? undefined}
       pickerBaseRef={pickerBaseRef}
       onSelectBaseRef={(ref) => {
         if (
@@ -154,10 +158,7 @@ export function SourceControlPanelDialogs({
       }
       usePrimaryBaseRefLabel={
         baseRefOwnedByWorktree
-          ? translate(
-              'auto.components.right.sidebar.SourceControl.3138a3323d',
-              'Use project default'
-            )
+          ? t('auto.components.right.sidebar.SourceControl.3138a3323d', 'Use project default')
           : undefined
       }
       onSetAsProjectDefault={() =>
@@ -167,14 +168,13 @@ export function SourceControlPanelDialogs({
             repoId: activeRepo.id,
             ref: pickerBaseRef
           }),
-          translate(
-            'auto.components.right.sidebar.SourceControl.032b4cd034',
-            'Saved as project default'
-          )
+          t('auto.components.right.sidebar.SourceControl.032b4cd034', 'Saved as project default')
         )
       }
       sourceControlAiActionsVisible={sourceControlAiActionsVisible}
+      resolveConflictsEditor={resolveConflictsEditor}
       resolveConflictsComposerOpen={resolveConflictsComposerOpen}
+      recoveryContext={resolveConflictsRecoveryContext}
       onResolveConflictsComposerOpenChange={setResolveConflictsComposerOpen}
       resolveConflictsPrompt={resolveConflictsPrompt}
       worktreeId={activeWorktreeId}

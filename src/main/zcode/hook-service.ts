@@ -1,30 +1,29 @@
+import { basename } from 'node:path'
 import type { SFTPWrapper } from 'ssh2'
-import type { AgentHookInstallStatus } from '../../shared/agent-hook-types'
-import {
-  buildWindowsAgentHookCurlPostCommand,
-  writeHooksJson,
-  writeManagedScript
-} from '../agent-hooks/installer-utils'
-import { refreshManagedScriptIfPresent } from '../agent-hooks/managed-hook-script-refresh'
-import {
-  readTextFileRemote,
-  writeHooksJsonRemote,
-  writeManagedScriptRemote
-} from '../agent-hooks/installer-utils-remote'
+import type { AgentHookInstallStatus } from '../../shared/agent-hook-listener/configuration/agent-hook-types'
+import { errorMessage } from '../../shared/errors/error-message'
+import { buildWindowsAgentHookCurlPostCommand } from '../agent-hooks/installation/commands/windows-agent-hook-post-command'
+import { writeHooksJson } from '../agent-hooks/installation/configuration/hooks-json-write'
+import { writeManagedScript } from '../agent-hooks/installation/scripts/managed-hook-script-write'
+import { refreshManagedScriptIfPresent } from '../agent-hooks/installation/scripts/managed-hook-script-refresh'
+import { readTextFileRemote } from '../agent-hooks/installation/remote/hook-text-files-remote'
+import { writeHooksJsonRemote } from '../agent-hooks/installation/configuration/hooks-json-remote'
+import { writeManagedScriptRemote } from '../agent-hooks/installation/scripts/managed-script-write-remote'
 import {
   buildPosixHookPayloadCapture,
   buildPosixHookSpoolLines,
-  buildWindowsHookEnvironmentGuardLines,
-  buildWindowsHookStdinDrainEpilogue
-} from '../agent-hooks/hook-stdin-contract'
-import { buildPosixAgentHookPostCommand } from '../agent-hooks/hook-post-command'
+  buildWindowsHookEnvironmentGuardLines
+} from '../agent-hooks/installation/scripts/hook-stdin-contract'
+import { buildPosixAgentHookPostCommand } from '../agent-hooks/installation/scripts/hook-post-command'
 import {
   applyZCodeManagedHooks,
+  getZCodeAppCliSettingsPath,
   getZCodeConfigPath,
   getZCodeManagedCommand,
   getZCodeManagedScriptFileName,
   getZCodeManagedScriptPath,
   getZCodePosixManagedScriptFileName,
+  getZCodeRemoteAppCliSettingsPath,
   getZCodeRemoteConfigPath,
   getZCodeRemoteManagedCommand,
   isZCodeHooksEnabled,
@@ -34,9 +33,10 @@ import {
   type ZCodeConfig
 } from './hook-settings'
 import {
-  parseZCodeConfigText,
   readZCodeConfigSource,
-  serializeZCodeConfig
+  serializeZCodeConfig,
+  toZCodeConfigSource,
+  type ZCodeConfigSource
 } from './hook-config-json'
 
 function getManagedScript(target: 'local' | 'posix' = 'local'): string {
@@ -44,12 +44,11 @@ function getManagedScript(target: 'local' | 'posix' = 'local'): string {
     return [
       '@echo off',
       'setlocal',
-      // Why: endpoint file holds the live port/token; a PTY that outlives an Orca restart carries stale env, so `call` it to refresh (else PTY env).
+      // Refresh port/token from the endpoint file so retained PTYs reach the restarted server.
       'if defined ORCA_AGENT_HOOK_ENDPOINT if exist "%ORCA_AGENT_HOOK_ENDPOINT%" call "%ORCA_AGENT_HOOK_ENDPOINT%" 2>nul',
       ...buildWindowsHookEnvironmentGuardLines(),
       buildWindowsAgentHookCurlPostCommand('zcode'),
       'exit /b 0',
-      ...buildWindowsHookStdinDrainEpilogue(),
       ''
     ].join('\r\n')
   }
@@ -58,8 +57,7 @@ function getManagedScript(target: 'local' | 'posix' = 'local'): string {
     '#!/bin/sh',
     ...buildPosixHookPayloadCapture(),
     ...buildPosixHookSpoolLines('zcode'),
-    // Why: endpoint file holds the live port/token; PTYs that outlive an Orca restart carry stale env, so source it to reach the new server (else PTY env).
-    // Why: silence the `.` builtin (2>/dev/null + `|| :`) so a TOCTOU race can't leak shell parse errors into agent transcripts (fail-open).
+    // Refresh retained PTY endpoints at invocation; silence source races/parse errors so hooks fail open without polluting transcripts.
     'if [ -n "$ORCA_AGENT_HOOK_ENDPOINT" ] && [ -r "$ORCA_AGENT_HOOK_ENDPOINT" ]; then',
     '  . "$ORCA_AGENT_HOOK_ENDPOINT" 2>/dev/null || :',
     'fi',
@@ -87,8 +85,7 @@ function buildStatus(
   const base = { agent: 'zcode' as const, configPath }
   const present = readManagedZCodeHookEvents(config, scriptFileName)
   const missing = ZCODE_HOOK_EVENTS.filter((event) => !present.has(event))
-  // Why: ZCode ships `hooks.enabled: false` by default, so registered events alone prove
-  // nothing — an install that left the flag off would never deliver a single event.
+  // ZCode defaults hooks off; require enabled as well as registered events.
   const hooksEnabled = isZCodeHooksEnabled(config)
 
   if (missing.length === 0 && hooksEnabled) {
@@ -104,85 +101,152 @@ function buildStatus(
   return { ...base, state: 'partial', managedHooksPresent: true, detail: reasons.join('; ') }
 }
 
+/** Null source means the file exists but could not be read or parsed. */
+type ZCodeHookFile = { path: string; source: ZCodeConfigSource | null; readError?: string }
+
+// zcode-app-cli creates setting.json on first launch and migrates config.json into it; a stub would pre-empt that.
+function withExistingSettingsFile(config: ZCodeHookFile, settings: ZCodeHookFile): ZCodeHookFile[] {
+  return settings.source?.text === null || settings.path === config.path
+    ? [config]
+    : [config, settings]
+}
+
+function readLocalHookFiles(): ZCodeHookFile[] {
+  const read = (path: string): ZCodeHookFile => ({ path, source: readZCodeConfigSource(path) })
+  return withExistingSettingsFile(read(getZCodeConfigPath()), read(getZCodeAppCliSettingsPath()))
+}
+
+function readHookFileStatus(
+  { path, source }: ZCodeHookFile,
+  scriptFileName: string
+): AgentHookInstallStatus {
+  return source
+    ? buildStatus(source.config, path, scriptFileName)
+    : zcodeHookError(path, `Could not read ZCode ${basename(path)}`)
+}
+
+// Upstream ZCode and zcode-app-cli each read only their own file, so both must carry the hooks.
+function combineHookFilePair(
+  config: AgentHookInstallStatus,
+  settings: AgentHookInstallStatus
+): AgentHookInstallStatus {
+  // Either file carrying hooks must keep uninstall cleanup in play, even if the other is broken.
+  const managedHooksPresent = config.managedHooksPresent || settings.managedHooksPresent
+  if (config.state === 'error' || config.state === settings.state) {
+    return { ...config, managedHooksPresent }
+  }
+  if (settings.state === 'error') {
+    return { ...settings, managedHooksPresent }
+  }
+  const incomplete =
+    config.state === 'partial' || settings.state === 'installed' ? config : settings
+  return {
+    ...incomplete,
+    state: 'partial',
+    managedHooksPresent: true,
+    detail: incomplete.detail ?? 'Orca hooks are missing from this file'
+  }
+}
+
+// Lists every file Orca edits so status and the uninstall plan disclose setting.json too.
+function combineHookFileStatuses(statuses: AgentHookInstallStatus[]): AgentHookInstallStatus {
+  const combined = statuses.reduce(combineHookFilePair)
+  const additionalConfigPaths = statuses
+    .map((status) => status.configPath)
+    .filter((path) => path !== combined.configPath)
+  return additionalConfigPaths.length > 0 ? { ...combined, additionalConfigPaths } : combined
+}
+
 export class ZCodeHookService {
   async refreshManagedScripts(): Promise<void> {
     await refreshManagedScriptIfPresent(getZCodeManagedScriptPath(), getManagedScript())
   }
 
   getStatus(): AgentHookInstallStatus {
-    const configPath = getZCodeConfigPath()
-    const source = readZCodeConfigSource(configPath)
-    if (!source) {
-      return zcodeHookError(configPath, 'Could not read ZCode config.json')
-    }
-    return buildStatus(source.config, configPath, getZCodeManagedScriptFileName())
+    const scriptFileName = getZCodeManagedScriptFileName()
+    return combineHookFileStatuses(
+      readLocalHookFiles().map((file) => readHookFileStatus(file, scriptFileName))
+    )
   }
 
   install(): AgentHookInstallStatus {
-    const configPath = getZCodeConfigPath()
     const scriptPath = getZCodeManagedScriptPath()
-    const source = readZCodeConfigSource(configPath)
-    if (!source) {
-      return zcodeHookError(configPath, 'Could not read ZCode config.json')
-    }
-
     const scriptFileName = getZCodeManagedScriptFileName()
     const command = getZCodeManagedCommand(scriptPath)
-    const nextConfig = applyZCodeManagedHooks(source.config, command, scriptFileName)
-    // Why: write the script first so config.json never points at a missing file.
-    writeManagedScript(scriptPath, getManagedScript())
-    writeHooksJson(configPath, nextConfig, {
-      serialized: serializeZCodeConfig(source.text, nextConfig)
-    })
+    const files = readLocalHookFiles()
+    // Write script before publishing config references so no event points at a missing file.
+    if (files.some((file) => file.source)) {
+      writeManagedScript(scriptPath, getManagedScript())
+    }
+    for (const { path, source } of files) {
+      if (!source) {
+        continue
+      }
+      const nextConfig = applyZCodeManagedHooks(source.config, command, scriptFileName)
+      writeHooksJson(path, nextConfig, {
+        serialized: serializeZCodeConfig(source.text, nextConfig)
+      })
+    }
     return this.getStatus()
   }
 
-  // Install the ZCode hook on an SSH execution host, where the shell contract is POSIX.
+  // SSH hook installation uses the remote POSIX contract.
   async installRemote(sftp: SFTPWrapper, remoteHome: string): Promise<AgentHookInstallStatus> {
     const remoteConfigPath = getZCodeRemoteConfigPath(remoteHome)
-    // Why: remote-Windows is out of scope; process.platform describes the local box, not the host.
+    // Remote Windows is unsupported here; local process.platform cannot describe an SSH host.
     const remoteScriptFileName = getZCodePosixManagedScriptFileName()
     const remoteScriptPath = `${remoteHome.replace(/\/$/, '')}/.orca/agent-hooks/${remoteScriptFileName}`
+    // Per-file so an unreadable setting.json still lets config.json install, matching local install().
+    const readRemote = async (path: string): Promise<ZCodeHookFile> => {
+      try {
+        const text = await readTextFileRemote(sftp, path)
+        return { path, source: toZCodeConfigSource(text, `remote ZCode ${basename(path)}`) }
+      } catch (err) {
+        return { path, source: null, readError: errorMessage(err) }
+      }
+    }
     try {
-      const body = await readTextFileRemote(sftp, remoteConfigPath)
-      const config = body === null ? {} : parseZCodeConfigText(body, 'remote ZCode config.json')
-      if (!config) {
-        return zcodeHookError(remoteConfigPath, 'Could not parse remote ZCode config.json')
-      }
-
+      const [config, settings] = await Promise.all([
+        readRemote(remoteConfigPath),
+        readRemote(getZCodeRemoteAppCliSettingsPath(remoteHome))
+      ])
+      const files = withExistingSettingsFile(config, settings)
       const command = getZCodeRemoteManagedCommand(remoteScriptPath)
-      const nextConfig = applyZCodeManagedHooks(config, command, remoteScriptFileName)
-      await writeManagedScriptRemote(sftp, remoteScriptPath, getManagedScript('posix'))
-      await writeHooksJsonRemote(sftp, remoteConfigPath, nextConfig, {
-        serialized: serializeZCodeConfig(body, nextConfig)
-      })
-
-      return {
-        agent: 'zcode',
-        state: 'installed',
-        configPath: remoteConfigPath,
-        managedHooksPresent: true,
-        detail: null
+      if (files.some((file) => file.source)) {
+        await writeManagedScriptRemote(sftp, remoteScriptPath, getManagedScript('posix'))
       }
+      const statuses: AgentHookInstallStatus[] = []
+      for (const { path, source, readError } of files) {
+        if (!source) {
+          statuses.push(
+            zcodeHookError(path, readError ?? `Could not parse remote ZCode ${basename(path)}`)
+          )
+          continue
+        }
+        const nextConfig = applyZCodeManagedHooks(source.config, command, remoteScriptFileName)
+        await writeHooksJsonRemote(sftp, path, nextConfig, {
+          serialized: serializeZCodeConfig(source.text, nextConfig)
+        })
+        statuses.push(buildStatus(nextConfig, path, remoteScriptFileName))
+      }
+      return combineHookFileStatuses(statuses)
     } catch (err) {
-      return zcodeHookError(remoteConfigPath, err instanceof Error ? err.message : String(err))
+      return zcodeHookError(remoteConfigPath, errorMessage(err))
     }
   }
 
   remove(): AgentHookInstallStatus {
-    const configPath = getZCodeConfigPath()
-    const source = readZCodeConfigSource(configPath)
-    if (!source) {
-      return zcodeHookError(configPath, 'Could not read ZCode config.json')
-    }
-    const { config: nextConfig, changed } = removeZCodeManagedHooks(
-      source.config,
-      getZCodeManagedScriptFileName()
-    )
-    if (changed) {
-      writeHooksJson(configPath, nextConfig, {
-        serialized: serializeZCodeConfig(source.text, nextConfig)
-      })
+    const scriptFileName = getZCodeManagedScriptFileName()
+    for (const { path, source } of readLocalHookFiles()) {
+      if (!source) {
+        continue
+      }
+      const { config: nextConfig, changed } = removeZCodeManagedHooks(source.config, scriptFileName)
+      if (changed) {
+        writeHooksJson(path, nextConfig, {
+          serialized: serializeZCodeConfig(source.text, nextConfig)
+        })
+      }
     }
     return this.getStatus()
   }

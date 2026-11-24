@@ -11,11 +11,7 @@ import {
 
 const WindowSafeAreaInsetsContext = createContext<EdgeInsets | null>(null)
 
-/**
- * Lays the app out clear of the window's side insets, which landscape brings: the iPhone sensor
- * housing, an Android side navigation bar or cutout. Below it the insets and frame describe the
- * padded area, so no screen pads a side twice or sizes past it.
- */
+// Pad side cutouts/navigation bars once, then expose the padded frame and insets so descendants neither pad twice nor size past it.
 export function SideSafeArea({ children }: { children: ReactNode }) {
   const insets = useSafeAreaInsets()
   const frame = useSafeAreaFrame()
@@ -37,8 +33,7 @@ export function SideSafeArea({ children }: { children: ReactNode }) {
       </SafeAreaFrameContext.Provider>
     </WindowSafeAreaInsetsContext.Provider>
   )
-  // A native SafeAreaView measures against the nearest native provider rather than the context, so
-  // one goes inside the padding; on the web it reads the context.
+  // Native SafeAreaView measures its nearest native provider, so nest one inside the padding; web reads the adjusted context.
   return (
     <View style={[styles.area, { paddingLeft: insets.left, paddingRight: insets.right }]}>
       {Platform.OS === 'web' ? area : <SafeAreaProvider>{area}</SafeAreaProvider>}
@@ -46,7 +41,7 @@ export function SideSafeArea({ children }: { children: ReactNode }) {
   )
 }
 
-/** The window's insets, for a Modal: it opens a window of its own, outside `SideSafeArea`. */
+// Modals own a separate window outside SideSafeArea and need the original window insets.
 export function useWindowSafeAreaInsets(): EdgeInsets {
   const insets = useSafeAreaInsets()
   return useContext(WindowSafeAreaInsetsContext) ?? insets

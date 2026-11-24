@@ -1,11 +1,12 @@
+import type { RuntimePtyController } from '../lifecycle/runtime-pty-controller-contract'
 import {
   addClaudeTeammateModeAuto,
   addClaudeTeammateModeInProcess,
   type ClaudeAgentTeamsMode
-} from '../../../../shared/claude-agent-teams-tmux-compat'
-import type { TerminalCreateOptions } from '../../runtime-terminal-contracts'
-import { buildClaudeAgentTeamsLaunchPlan } from '../../claude-agent-teams-shim-env'
-import { inferCapturedClaudeAgentTeamsMode } from '../../runtime-agent-launch-resolution'
+} from '../../../../shared/agent-launch/startup/claude-agent-teams-tmux-compat'
+import type { TerminalCreateOptions } from './terminal-create-options'
+import { buildClaudeAgentTeamsLaunchPlan } from './claude-agent-teams-shim-env'
+import { inferCapturedClaudeAgentTeamsMode } from './runtime-agent-launch-resolution'
 
 export async function buildRuntimeAgentTeamsLaunchPlan(args: {
   launchConfig: TerminalCreateOptions['launchConfig']
@@ -13,7 +14,10 @@ export async function buildRuntimeAgentTeamsLaunchPlan(args: {
   claudeAgentTeamsSourceCommand?: string
   claudeAgentTeamsMode?: ClaudeAgentTeamsMode
   baseEnv: Record<string, string | undefined>
-  adoptedBeforeLaunch: boolean
+  adoptedBeforeLaunch:
+    | boolean
+    | Awaited<ReturnType<NonNullable<RuntimePtyController['adoptStablePane']>>>
+    | undefined
   createTeamEnv: (shimDir: string, shimBin: string) => Record<string, string>
 }): Promise<{
   plan: Awaited<ReturnType<typeof buildClaudeAgentTeamsLaunchPlan>> | undefined

@@ -1,12 +1,17 @@
 import { OrcaRuntimeWithCreatePtyHeadlessTerminalState } from './headless-terminal-state'
-import type { TerminalOscLinkRange } from '../../../../shared/terminal-osc-link-ranges'
-import type { PtyProviderBufferSnapshot } from '../../../providers/pty-provider-contract'
-import { withTimeout } from '../../runtime-async-boundaries'
+import type { TerminalOscLinkRange } from '../../../../shared/terminal/links/terminal-osc-link-ranges'
+import type {
+  PtyProviderBufferSnapshot,
+  PtyProviderBufferSnapshotOptions
+} from '../../../providers/pty/provider-contract'
+import type { ProviderTerminalBufferWait } from '../records/runtime-terminal-state-records'
+import { withTimeout } from '../../../../shared/concurrency/promise-timeout-fallback'
+import { AUTHORITATIVE_TERMINAL_SNAPSHOT_TIMEOUT_MS } from './provider-snapshot-budget'
 
 export abstract class OrcaRuntimeWithSerializeTerminalBufferFromAvailableState extends OrcaRuntimeWithCreatePtyHeadlessTerminalState {
   protected abstract captureProviderTerminalBuffer(
     ptyId: string,
-    opts: { scrollbackRows?: number },
+    opts: PtyProviderBufferSnapshotOptions,
     generation: number
   ): Promise<PtyProviderBufferSnapshot | null>
 
@@ -121,48 +126,78 @@ export abstract class OrcaRuntimeWithSerializeTerminalBufferFromAvailableState e
 
   protected async serializeProviderTerminalBuffer(
     ptyId: string,
-    opts: { scrollbackRows?: number } = {},
+    opts: PtyProviderBufferSnapshotOptions = {},
     wait: { timeoutMs?: number; retireOnTimeout?: boolean } = {}
   ): Promise<PtyProviderBufferSnapshot | null> {
+    return (await this.awaitProviderTerminalBuffer(ptyId, opts, wait)).snapshot
+  }
+
+  /** `late` is the capture still running when the bounded wait gave up, so a caller can act once it lands. */
+  protected async awaitProviderTerminalBuffer(
+    ptyId: string,
+    opts: PtyProviderBufferSnapshotOptions = {},
+    wait: { timeoutMs?: number; retireOnTimeout?: boolean } = {}
+  ): Promise<ProviderTerminalBufferWait> {
     const generation = this.getPtyLifecycleGeneration(ptyId)
-    const scrollbackRows = Math.max(0, Math.floor(opts.scrollbackRows ?? 0))
-    let acquisition = this.providerBufferAcquisitionsByPtyId.get(ptyId)
-    if (acquisition?.generation === generation && acquisition.timedOut) {
-      return null
+    const scrollbackRows = opts.visibleProjection
+      ? 0
+      : Math.max(0, Math.floor(opts.scrollbackRows ?? 0))
+    const acquisitions = this.providerBufferAcquisitionsByPtyId.get(ptyId) ?? {}
+    // Replay readers need ANSI even while a visible projection is pending.
+    const kind =
+      opts.visibleProjection && this.ptyController?.supportsVisibleProjectionSnapshot?.(ptyId)
+        ? 'visible'
+        : 'ansi'
+    let acquisition = acquisitions[kind]
+    const ansi = acquisitions.ansi
+    if (
+      kind === 'visible' &&
+      (acquisition?.generation !== generation || acquisition.timedOut) &&
+      ansi?.generation === generation &&
+      !ansi.timedOut
+    ) {
+      acquisition = ansi
     }
     if (
-      !acquisition ||
-      acquisition.generation !== generation ||
-      acquisition.scrollbackRows < scrollbackRows
+      acquisition?.generation !== generation ||
+      (!acquisition.timedOut && acquisition.scrollbackRows < scrollbackRows)
     ) {
-      const promise = this.captureProviderTerminalBuffer(ptyId, opts, generation)
+      const captureOptions =
+        opts.visibleProjection && kind === 'ansi' ? { scrollbackRows: 0 } : opts
+      const promise = this.captureProviderTerminalBuffer(ptyId, captureOptions, generation)
       acquisition = { generation, scrollbackRows, promise, timedOut: false }
-      this.providerBufferAcquisitionsByPtyId.set(ptyId, acquisition)
+      acquisitions[kind] = acquisition
+      this.providerBufferAcquisitionsByPtyId.set(ptyId, acquisitions)
       void promise.finally(() => {
-        if (this.providerBufferAcquisitionsByPtyId.get(ptyId) === acquisition) {
-          this.providerBufferAcquisitionsByPtyId.delete(ptyId)
+        if (acquisitions[kind] === acquisition) {
+          delete acquisitions[kind]
+          if (
+            !acquisitions.ansi &&
+            !acquisitions.visible &&
+            this.providerBufferAcquisitionsByPtyId.get(ptyId) === acquisitions
+          ) {
+            this.providerBufferAcquisitionsByPtyId.delete(ptyId)
+          }
         }
       })
     }
     if (acquisition.timedOut) {
-      return null
+      return { snapshot: null, late: acquisition.promise }
     }
-    if (typeof wait.timeoutMs !== 'number') {
-      return acquisition.promise
-    }
+    // Every reader shares this bound: a provider that never answers must not hold its caller.
     const result = await withTimeout<
       { settled: true; value: PtyProviderBufferSnapshot | null } | { settled: false }
     >(
       acquisition.promise.then((value) => ({ settled: true as const, value })),
-      wait.timeoutMs,
+      wait.timeoutMs ?? AUTHORITATIVE_TERMINAL_SNAPSHOT_TIMEOUT_MS,
       { settled: false as const }
     )
     if (!result.settled) {
       if (wait.retireOnTimeout) {
         acquisition.timedOut = true
       }
-      return null
+      return { snapshot: null, late: acquisition.promise }
     }
-    return result.value
+    return { snapshot: result.value, late: null }
   }
 }

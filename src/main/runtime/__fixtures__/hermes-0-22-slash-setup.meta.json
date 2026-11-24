@@ -1,0 +1,20 @@
+{
+  "capturedAt": "2026-10-24T18:52:35.000Z",
+  "platform": "linux",
+  "command": ["hermes", "--tui"],
+  "cols": 120,
+  "rows": 31,
+  "note": "Hermes Agent v0.22.5; real PTY startup on the empty-composer placeholder, session slash acknowledgement, busy/streaming reply and completed turn against a local canned model endpoint. Working directory and session marker replaced at the same byte length; raw capture retained outside the repository.",
+  "exitCode": 0,
+  "stages": {
+    "starting": 2388,
+    "initial": 8687,
+    "reasoningDraft": 8993,
+    "reasoning": 16843,
+    "promptDraft": 17032,
+    "busy": 24809,
+    "streaming": 28330,
+    "completed": 31808,
+    "end": 31808
+  }
+}

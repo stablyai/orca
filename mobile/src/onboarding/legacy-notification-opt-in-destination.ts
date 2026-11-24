@@ -7,7 +7,6 @@ export type LegacyNotificationOptInDestination = {
   params: { steps: 'notifications'; hostId?: string }
 }
 
-/** Maps restored navigation and old deep links onto the canonical notifications step. */
 export function legacyNotificationOptInDestination(
   params: LegacyNotificationOptInParams
 ): LegacyNotificationOptInDestination {

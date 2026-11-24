@@ -1,42 +1,70 @@
-import type { ArtifactWriteRequest } from '../../../../../shared/artifacts'
-import {
-  getConnectionExecutionHostId,
-  toRuntimeExecutionHostId
-} from '../../../../../shared/execution-host'
-import type { DocPreviewGrantOwner } from '../../../../../preload/api/doc-preview-api'
+import type { ArtifactWriteRequest } from '../../../../../shared/artifacts/artifacts'
+import { toRuntimeExecutionHostId } from '../../../../../shared/execution-host/execution-host'
+import type { DocPreviewGrantOwner } from '../../../../../preload/api/document-preview/doc-preview-api'
 import { ArtifactPublishButton } from '@/components/artifacts/ArtifactPublishButton'
 import { ArtifactPublishPreparationError } from '@/components/artifacts/artifact-publish-flow'
-import type { BrowserChromeShareControl } from '@/components/browser-pane/assemble-chrome/browser-chrome-toolbar'
-import { isShareableHtmlPath } from '@/components/editor/editor-artifact-upload'
-import type { DocPreviewGrantLocation } from '@/lib/doc-preview-grants'
-import { fileArtifactSourceKey, type FileArtifactOwner } from '@/lib/file-artifact-source-key'
+import { isShareableHtmlPath } from '@/components/editor/panel/editor-artifact-upload'
+import type { DocPreviewGrantLocation } from '@/lib/browser/documents/doc-preview-grants'
+import {
+  fileArtifactSourceKey,
+  type FileArtifactOwner
+} from '@/lib/files/artifacts/file-artifact-source-key'
 import { basename } from '@/lib/path'
-import { readRuntimeFilePreview } from '@/runtime/runtime-file-read-client'
-import { callRuntimeRpc } from '@/runtime/runtime-rpc-client'
-import { relativePathInsideRoot } from '../../../../../shared/cross-platform-path'
-import type { RuntimeFilePreviewResult } from '../../../../../shared/runtime-types'
+import { callRuntimeRpc } from '@/runtime/rpc/calls/runtime-rpc-call'
+import {
+  isWindowsAbsolutePathLike,
+  normalizeRuntimePathForComparison,
+  relativePathInsideRoot
+} from '../../../../../shared/file-access/cross-platform-path'
+import type { RuntimeFilePreviewResult } from '../../../../../shared/file-content/runtime-file-read'
+import {
+  acquireTerminalArtifactGrant,
+  pinTerminalArtifactGrantTarget,
+  type TerminalArtifactGrantTarget
+} from '@/runtime/files/grants/runtime-terminal-artifact-grant'
 
 /** The host a grant reads from, spelled as the editor's route for that host. */
 export function docPreviewGrantFileOwner(owner: DocPreviewGrantOwner): FileArtifactOwner {
-  return owner.kind === 'ssh'
-    ? {
-        executionHostId: getConnectionExecutionHostId(owner.connectionId),
-        runtimeEnvironmentId: null
-      }
-    : {
-        executionHostId: toRuntimeExecutionHostId(owner.environmentId),
-        runtimeEnvironmentId: owner.environmentId
-      }
+  return {
+    executionHostId: toRuntimeExecutionHostId(owner.environmentId),
+    runtimeEnvironmentId: owner.environmentId
+  }
 }
 
-function readDocPreviewGrantFile(
+async function readDocPreviewGrantFile(
   owner: DocPreviewGrantOwner,
   filePath: string
 ): Promise<RuntimeFilePreviewResult> {
-  if (owner.kind === 'ssh') {
-    // Why the connection id is kept: dropping it would read this path on this machine.
-    const context = { target: { kind: 'local' as const }, worktreeId: null, worktreePath: null }
-    return readRuntimeFilePreview({ ...context, connectionId: owner.connectionId }, filePath)
+  if (owner.fileAccess === 'terminal-artifact') {
+    const target = { kind: 'environment' as const, environmentId: owner.environmentId }
+    const context: TerminalArtifactGrantTarget = pinTerminalArtifactGrantTarget({
+      target,
+      worktreeId: owner.worktreeSelector,
+      absolutePath: filePath
+    })
+    const grant = await acquireTerminalArtifactGrant(context)
+    const samePath =
+      grant &&
+      (isWindowsAbsolutePathLike(filePath)
+        ? normalizeRuntimePathForComparison(grant.absolutePath) ===
+          normalizeRuntimePathForComparison(filePath)
+        : grant.absolutePath === filePath)
+    if (!grant || !samePath) {
+      throw new Error('outside_grant_root')
+    }
+    return callRuntimeRpc<RuntimeFilePreviewResult>(
+      target,
+      'files.readTerminalArtifactPreview',
+      {
+        worktree: owner.worktreeSelector,
+        grantId: grant.grantId,
+        absolutePath: grant.absolutePath
+      },
+      {
+        timeoutMs: 15_000,
+        expectedEnvironmentPairingRevision: context.expectedEnvironmentPairingRevision
+      }
+    )
   }
   // The grant's own selector and root, which may be a chat's scratch folder rather than a workspace.
   const relativePath = relativePathInsideRoot(owner.worktreeRoot, filePath)
@@ -52,7 +80,7 @@ function readDocPreviewGrantFile(
 }
 
 /** Reads the document from the host its grant was minted for, never the one selected now. */
-export async function readDocPreviewArtifactRequest(
+async function readDocPreviewArtifactRequest(
   location: DocPreviewGrantLocation,
   filePath: string,
   sourceKey: string
@@ -78,17 +106,17 @@ export async function readDocPreviewArtifactRequest(
 export function buildDocPreviewShareControl(
   filePath: string,
   location: DocPreviewGrantLocation | null
-): ((control: BrowserChromeShareControl) => React.ReactNode) | undefined {
+): React.ReactNode {
   if (!location || !isShareableHtmlPath(filePath)) {
     return undefined
   }
   const sourceKey = fileArtifactSourceKey(docPreviewGrantFileOwner(location.owner), filePath)
-  return (control) => (
+  return (
     <ArtifactPublishButton
       sourceKey={sourceKey}
-      className="h-7 w-7"
+      size="icon-xs"
+      variant="muted-field-icon"
       createRequest={() => readDocPreviewArtifactRequest(location, filePath, sourceKey)}
-      {...control}
     />
   )
 }

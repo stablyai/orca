@@ -1,20 +1,26 @@
 import { RateLimitServiceResultPolicy } from './service-result-policy'
-import { fetchCodexRateLimits } from '../codex-fetcher'
-import { fetchKimiRateLimits } from '../kimi-fetcher'
+import { fetchCodexRateLimits } from '../providers/codex/codex-fetcher'
+import { withCodexReadingAccount } from '../providers/codex/codex-reading-account'
+import { fetchKimiRateLimits } from '../providers/kimi/kimi-fetcher'
 import {
   isSystemDefaultClaudeAuth,
-  type ClaudeRuntimeAuthPreparation,
-  type CodexAccountSelectionTarget,
   type MiniMaxResolvedConfig,
   type ZcodePlanResolvedConfig,
   type OpenCodeGoResolvedConfig,
-  type NormalizedCodexAccountSelectionTarget,
-  type NormalizedClaudeAccountSelectionTarget,
-  type ProviderRateLimits,
-  type RateLimitState,
   toErrorMessage
 } from './service-types'
-import type { CodexRateLimitResetOutcome } from '../../../shared/rate-limit-types'
+import type { ClaudeRuntimeAuthPreparation } from '../../claude-accounts/runtime-auth/runtime-auth-types'
+import type {
+  CodexAccountSelectionTarget,
+  NormalizedCodexAccountSelectionTarget
+} from '../../../shared/agent-accounts/codex/codex-selection-lane'
+import type { NormalizedClaudeAccountSelectionTarget } from '../../claude-accounts/selection/runtime-selection'
+import type {
+  ProviderRateLimits,
+  RateLimitState,
+  CodexRateLimitResetOutcome,
+  UsageReadingAccount
+} from '../../../shared/agent-usage/rate-limits/rate-limit-types'
 import { ApiKeyFileUnreadableError } from '../../credentials/api-key-file-unreadable-error'
 
 const CODEX_RESET_REFRESH_RETRIES = 3
@@ -47,6 +53,7 @@ export abstract class RateLimitServiceFetchTargets extends RateLimitServiceResul
   protected async resolveCodexHome(target?: CodexAccountSelectionTarget): Promise<{
     skip: boolean
     homePath: string | null
+    readingAccount?: UsageReadingAccount
   }> {
     const resolution = await this.codexHomePathResolver?.(target)
     if (!resolution) {
@@ -54,11 +61,14 @@ export abstract class RateLimitServiceFetchTargets extends RateLimitServiceResul
     }
     return resolution.kind === 'skip'
       ? { skip: true, homePath: null }
-      : { skip: false, homePath: resolution.codexHomePath }
+      : {
+          skip: false,
+          homePath: resolution.codexHomePath,
+          readingAccount: resolution.readingAccount
+        }
   }
 
-  // Why: resolving a WSL home probes wsl.exe, so it must not run before the other
-  // providers' fetches are started; chaining keeps the no-resolver path immediate.
+  // WSL home resolution probes wsl.exe; chain it so other providers start immediately.
   protected fetchKimiWithResolvedHome(): Promise<ProviderRateLimits> {
     const pendingHome = this.kimiHomeResolver?.()
     return pendingHome
@@ -150,48 +160,48 @@ export abstract class RateLimitServiceFetchTargets extends RateLimitServiceResul
       }
     }
 
-    const scopedCodex = this.applyStalePolicy(fresh, stateBeforeReset.codex)
     const currentCodexHome = await this.resolveCodexHome(target)
-    // Why: a skip has no provenance to compare, so treat it as no longer active
-    // rather than publishing this result against the system-default lane.
+    // Skips carry no provenance; never publish them as System Default usage.
     const stillActive =
       !currentCodexHome.skip &&
       this.isSameCodexTarget(this.codexFetchTarget, target) &&
       this.getCodexProvenance(target, currentCodexHome.homePath) ===
         this.getCodexProvenance(target, codexHomePath)
+    // Still the redeemed home, so its account (if it is that account's own home) took this reading.
+    const attributed = stillActive
+      ? withCodexReadingAccount(fresh, currentCodexHome.readingAccount)
+      : fresh
+    const scopedCodex = this.applyStalePolicy(attributed, stateBeforeReset.codex)
     if (stillActive) {
-      // Why: this post-redemption read is newer than every Codex fetch that
-      // started before it, so invalidate those results before publishing it.
+      // Redemption is newer than prior reads; invalidate their generations before publishing.
       this.codexFetchGeneration += 1
       this.trackActiveFailureStreak('codex', fresh)
       this.updateState({
         ...this.state,
-        codex: this.applyStalePolicy(fresh, this.state.codex)
+        codex: this.applyStalePolicy(attributed, this.state.codex)
       })
     }
 
-    // Why: the caller must receive the redeemed target even if the global UI
-    // switched targets while the provider mutation was in flight.
+    // Return the redeemed target even if global selection changed mid-request.
     return { ...stateBeforeReset, codex: scopedCodex, codexTarget: target }
   }
 
   protected shouldAllowClaudePtyFallback(
     authPreparation: ClaudeRuntimeAuthPreparation | undefined
   ): boolean {
-    // Why: Windows hidden PTY support is less reliable than host/WSL shells.
+    // Hidden Windows PTYs are less reliable; keep this supplement disabled.
     if (process.platform === 'win32') {
       return false
     }
-    // Why: system-default Claude isn't Orca-managed; refresh may read existing OAuth but must not launch Claude and trigger auth/browser flows.
+    // System Default may read OAuth but must not launch Claude auth/browser flows.
     return !isSystemDefaultClaudeAuth(authPreparation)
   }
 
   protected shouldAllowClaudeUsagePanelSupplement(): boolean {
-    // Why: keep this supplement off on Windows where hidden PTYs are still less reliable.
     return process.platform !== 'win32'
   }
 
-  protected resolveOpenCodeGoConfig(): OpenCodeGoResolvedConfig {
+  protected async resolveOpenCodeGoConfig(): Promise<OpenCodeGoResolvedConfig> {
     const config = this.openCodeGoConfigResolver?.() ?? {
       sessionCookie: '',
       workspaceIdOverride: ''
@@ -199,16 +209,16 @@ export abstract class RateLimitServiceFetchTargets extends RateLimitServiceResul
     try {
       return {
         ...config,
-        apiKey: this.openCodeGoApiKeyResolver?.() ?? '',
+        apiKey: (await this.openCodeGoApiKeyResolver?.()) ?? '',
         apiKeyError: null,
         apiKeyReadSkipped: false
       }
     } catch (error) {
-      // Why: a transient read failure says nothing about the key, so skip it this cycle without blaming it.
+      // Transient key-file failure supplies no verdict; skip this cycle without blaming credentials.
       if (error instanceof ApiKeyFileUnreadableError) {
         return { ...config, apiKey: '', apiKeyError: null, apiKeyReadSkipped: true }
       }
-      // Why: an unreadable saved key is treated as absent so the cookie and OpenCode's own key still run.
+      // Cookie/store fallback remains usable when the saved key cannot decrypt.
       return {
         ...config,
         apiKey: '',
@@ -219,10 +229,10 @@ export abstract class RateLimitServiceFetchTargets extends RateLimitServiceResul
     }
   }
 
-  protected resolveMiniMaxConfig(): MiniMaxResolvedConfig {
+  protected async resolveMiniMaxConfig(): Promise<MiniMaxResolvedConfig> {
     try {
       return {
-        config: this.miniMaxConfigResolver?.() ?? {
+        config: (await this.miniMaxConfigResolver?.()) ?? {
           sessionCookie: '',
           groupId: '',
           models: 'general',
@@ -232,7 +242,7 @@ export abstract class RateLimitServiceFetchTargets extends RateLimitServiceResul
         error: null
       }
     } catch (error) {
-      // Why: one unreadable cookie must not abort every provider's refresh; surface it as MiniMax-only state instead.
+      // Cookie failure affects MiniMax only, not sibling refreshes.
       return {
         config: {
           sessionCookie: '',
@@ -246,14 +256,14 @@ export abstract class RateLimitServiceFetchTargets extends RateLimitServiceResul
     }
   }
 
-  protected resolveZcodePlanConfig(): ZcodePlanResolvedConfig {
+  protected async resolveZcodePlanConfig(): Promise<ZcodePlanResolvedConfig> {
     try {
       return {
-        config: this.zcodePlanConfigResolver?.() ?? { site: 'zai', apiKey: '' },
+        config: (await this.zcodePlanConfigResolver?.()) ?? { site: 'zai', apiKey: '' },
         error: null
       }
     } catch (error) {
-      // Why: an undecryptable saved key must not abort every provider's refresh; surface it as ZCode-only state instead.
+      // Key decryption failure affects ZCode only, not sibling refreshes.
       return { config: { site: 'zai', apiKey: '' }, error: toErrorMessage(error) }
     }
   }

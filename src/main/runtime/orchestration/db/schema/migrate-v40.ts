@@ -10,6 +10,6 @@ export function migrateV40(this: OrchestrationDb, current: number): void {
       "ALTER TABLE remote_dispatch_attachments ADD COLUMN home_run_id TEXT NOT NULL DEFAULT ''"
     )
   }
-  // Why: workers attached by v1.4.198 keep a mailbox; without a Run their control mail is refused.
+  // Old v1.4.198 attachments need a stub home Run so control mail remains reachable.
   backfillFederatedStubHomeRuns(this.db)
 }

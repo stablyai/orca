@@ -1,14 +1,6 @@
-# Emits the main-module path and every loaded module (DLL) path for a process,
-# as a single JSON document, for the daemon-relocation spike's handle probe.
-#
-# Loaded DLLs are the update-time lock risk: the NSIS installer's CHECK_APP_RUNNING
-# sweep force-closes processes whose image is under $INSTDIR, and files a live
-# process maps cannot be replaced. A relocated host must load ZERO modules from
-# the app dir. Data files (icudtl.dat, asar) are not memory-mapped as modules, so
-# this probe covers the lock-critical set, not the entire open-handle set.
-#
-# PS 5.1 guard: $proc.Modules can be a single object (no .Count); @(...) forces
-# an array so the enumeration and count are correct for one-module processes.
+# Report process image/loaded DLLs as JSON for relocation’s lock-critical set, not all open handles (e.g. asar/icudtl.dat).
+# NSIS kills $INSTDIR processes and mapped files cannot be replaced; relocated hosts must load no app-directory modules.
+# PS 5.1: wrap Modules in @() so a single object still has array enumeration/count semantics.
 
 param(
   [Parameter(Mandatory = $true)]

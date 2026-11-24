@@ -1,11 +1,8 @@
 export const RELAY_PROTOCOL_LIMITS = {
   firstFrameDeadlineMs: 2_000,
   maxHttpBodyBytes: 4 * 1024,
-  // Why: the splice is an opaque E2EE stream; the desktop's worktree catalog
-  // response already exceeds 1MiB on large workspaces (~775KiB at 415
-  // worktrees, growing), and an oversized frame kills the session on every
-  // reconnect. 8MiB buys years of headroom; catalog pagination is the
-  // long-term fix on the desktop side.
+  // Opaque E2EE catalogs exceed 1MiB on large workspaces; oversized frames kill every reconnect.
+  // 8MiB adds headroom until desktop catalog pagination bounds responses.
   maxFrameBytes: 8 * 1024 * 1024,
   maxConnectionsPerHost: 8,
   idleTimeoutMs: 10 * 60 * 1000,

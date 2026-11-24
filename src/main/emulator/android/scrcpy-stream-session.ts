@@ -1,7 +1,8 @@
-import { spawn, type ChildProcess } from 'node:child_process'
+import type { ChildProcess } from 'node:child_process'
+import { spawnProcess } from '@orca/process-host'
 import { connect, type Socket } from 'node:net'
 import { randomBytes } from 'node:crypto'
-import { RelayFrameBuffer } from '../../../shared/relay-frame-buffer'
+import { RelayFrameBuffer } from '../../../shared/remote-runtime/relay/relay-frame-buffer'
 import type { AndroidCommandRunner } from './android-command-runner'
 import type { AndroidSdkPaths } from './android-sdk-discovery'
 import { ensureAdbOk } from './android-adb-result'
@@ -18,12 +19,10 @@ import {
   type ScrcpyVideoFrame,
   type ScrcpyVideoMeta
 } from './scrcpy-video-frame-parser'
+import { parseH264SpsPictureSize, type H264PictureSize } from './h264-sps-picture-size'
 import { emulatorProbe, emulatorProbeError } from '../emulator-probe'
 
-// A live scrcpy session validated against a real emulator. The connection
-// handshake (dummy byte, 64-byte device name, codec meta) and the server option
-// set are coupled to the pinned scrcpy server version; pure video framing is
-// unit-tested, while this orchestration is exercised live via probes.
+// Handshake and server options must match the pinned scrcpy protocol version.
 
 const DEVICE_NAME_BYTES = 64
 const DUMMY_BYTE = 1
@@ -45,25 +44,35 @@ export type ScrcpyStreamOptions = {
   maxSize?: number
 }
 
+export type ScrcpyControlTarget = {
+  // Touch positions must carry this size; the server drops events sized for another frame.
+  videoSize(): H264PictureSize | null
+  sendControl(message: Buffer): boolean
+  /** True when the server can add a UHID keyboard without changing the device's keyboard configuration. */
+  readonly uhidKeyboard?: boolean
+}
+
+// `am get-config` names the keyboard type (`-qwerty-`, or `-nokeys-` without a hardware keyboard).
+const UHID_KEYBOARD_PROBE = 'test -r /dev/uhid -a -w /dev/uhid && am get-config'
+
 function newScid(): string {
-  // scrcpy parses scid as a SIGNED 32-bit hex int, so mask to 31 bits and pad to
-  // 8 hex digits to match the server's own %08x format.
+  // scrcpy expects a signed 32-bit scid formatted as eight hex digits.
   return (randomBytes(4).readUInt32BE(0) & 0x7fffffff).toString(16).padStart(8, '0')
 }
 
-// A live scrcpy session: owns the server process, the adb tunnel, and the video
-// + control sockets. Created via ScrcpyStreamSession.start().
-export class ScrcpyStreamSession {
+export class ScrcpyStreamSession implements ScrcpyControlTarget {
   private server: ChildProcess | null = null
   private videoSocket: Socket | null = null
   private controlSocket: Socket | null = null
   private readonly pendingVideo = new RelayFrameBuffer()
   private metaSeen = false
+  private currentVideoSize: H264PictureSize | null = null
   private headerStripped = false
   private closed = false
   private readonly ready: Promise<void>
   private resolveReady: (() => void) | null = null
   private rejectReady: ((error: Error) => void) | null = null
+  uhidKeyboard = false
 
   private constructor(
     private readonly options: ScrcpyStreamOptions,
@@ -99,10 +108,18 @@ export class ScrcpyStreamSession {
 
   private async deploy(): Promise<void> {
     const { runner, sdk, serial, localJarPath } = this.options
-    ensureAdbOk(
-      await runner(sdk.adb, pushScrcpyServerArgs(serial, localJarPath, SCRCPY_DEVICE_JAR_PATH)),
-      'scrcpy server push'
-    )
+    // Probed once per session, next to the push, so key presses never spawn anything. Only a device
+    // that already has a hardware keyboard gets one: attaching the first would change its keyboard
+    // configuration and restart activities that don't handle it. Output, not exit status, decides,
+    // since adb shell before Android 7 always exits 0.
+    const [push, uhid] = await Promise.all([
+      runner(sdk.adb, pushScrcpyServerArgs(serial, localJarPath, SCRCPY_DEVICE_JAR_PATH)),
+      runner(sdk.adb, ['-s', serial, 'shell', UHID_KEYBOARD_PROBE])
+        .then((result) => /-qwerty-/.test(result.stdout))
+        .catch(() => false)
+    ])
+    ensureAdbOk(push, 'scrcpy server push')
+    this.uhidKeyboard = uhid
     const forward = ensureAdbOk(
       await runner(sdk.adb, scrcpyForwardArgs(serial, this.port, this.scid)),
       'scrcpy port forward'
@@ -119,9 +136,10 @@ export class ScrcpyStreamSession {
 
   private spawnServer(): void {
     const { sdk, serial, maxSize } = this.options
-    // The server is long-running, so spawn it directly rather than via the
-    // request/response command runner.
-    this.server = spawn(sdk.adb, startScrcpyServerArgs(serial, { scid: this.scid, maxSize }), {
+    // The command runner's timeout is unsuitable for the long-running server.
+    this.server = spawnProcess({
+      program: sdk.adb,
+      args: startScrcpyServerArgs(serial, { scid: this.scid, maxSize }),
       stdio: ['ignore', 'pipe', 'pipe']
     })
     let serverLog = ''
@@ -145,16 +163,13 @@ export class ScrcpyStreamSession {
     this.openVideoSocket(0)
   }
 
-  // adb accepts the forwarded TCP connection before the server's abstract socket
-  // exists (then resets it), so retry until the server actually delivers bytes
-  // (the dummy byte). Only then is the connection real; connect control after.
+  // adb can accept TCP before scrcpy is ready; require its dummy byte before connecting control.
   private openVideoSocket(attempt: number): void {
     if (this.closed) {
       return
     }
     const socket = connect(this.port, '127.0.0.1')
-    // A failed connect emits both 'error' and 'close'; settle once so retries
-    // (and post-delivery close) don't fan out into exponential connection storms.
+    // error and close can both fire; settle once to avoid duplicate retry chains.
     let settled = false
     const retry = (): void => {
       if (settled || this.closed) {
@@ -184,8 +199,7 @@ export class ScrcpyStreamSession {
     })
     socket.once('error', retry)
     socket.once('close', retry)
-    // adb may accept the forwarded TCP connection but never deliver if the server
-    // stalls; a short idle timeout retries instead of hanging the connect forever.
+    // Retry accepted connections that never deliver the readiness byte.
     socket.setTimeout(2000, retry)
   }
 
@@ -194,6 +208,8 @@ export class ScrcpyStreamSession {
       return
     }
     const socket = connect(this.port, '127.0.0.1')
+    // Touch messages are tiny; Nagle would hold them back behind unacknowledged writes.
+    socket.setNoDelay(true)
     socket.on('error', (error) =>
       emulatorProbeError('scrcpy.control.fail', error, { serial: this.options.serial })
     )
@@ -202,6 +218,8 @@ export class ScrcpyStreamSession {
         this.controlSocket = null
       }
     })
+    // Device messages (UHID keyboard LED reports, clipboard) are unused; reading them keeps them from backing up.
+    socket.on('data', () => {})
     this.controlSocket = socket
   }
 
@@ -227,14 +245,13 @@ export class ScrcpyStreamSession {
       }
       const meta = parseScrcpyVideoMeta(buffer.peek(12))!
       this.metaSeen = true
+      this.currentVideoSize = { width: meta.width, height: meta.height }
       emulatorProbe('scrcpy.meta', meta)
       this.callbacks.onMeta(meta)
       shouldResolveReady = true
       buffer.discard(12)
     }
-    // The parser throws on a desynced stream (e.g. an absurd frame size); catch
-    // it here so it fails the session via the normal teardown path rather than
-    // surfacing as an unhandled exception in this socket 'data' listener.
+    // Route malformed frames through session teardown instead of throwing from the data listener.
     let frames: ScrcpyVideoFrame[]
     try {
       frames = parseScrcpyVideoFrames(buffer)
@@ -248,8 +265,36 @@ export class ScrcpyStreamSession {
       this.rejectReady = null
     }
     for (const frame of frames) {
+      if (frame.config) {
+        this.updateVideoSize(frame.data)
+      }
       this.callbacks.onFrame(frame)
     }
+  }
+
+  // The encoder restarts with a new SPS when the device rotates.
+  private updateVideoSize(config: Buffer): void {
+    const size = parseH264SpsPictureSize(config)
+    const current = this.currentVideoSize
+    if (!size || (size.width === current?.width && size.height === current.height)) {
+      return
+    }
+    this.currentVideoSize = size
+    emulatorProbe('scrcpy.video.size', { serial: this.options.serial, ...size })
+  }
+
+  videoSize(): H264PictureSize | null {
+    return this.currentVideoSize
+  }
+
+  // Returns false once the control socket is gone so callers can fall back to adb.
+  sendControl(message: Buffer): boolean {
+    const socket = this.controlSocket
+    if (this.closed || !socket || socket.destroyed) {
+      return false
+    }
+    socket.write(message)
+    return true
   }
 
   private fail(message: string): void {
