@@ -5,8 +5,11 @@ import type { BotSlackIconShown, BotSlackIcons } from '../bots/bot-slack-icon-st
 // store keeps it across restarts: read once per run, written only when it changes.
 export class BotAvatarShown {
   private readonly byBot = new Map<string, BotSlackIconShown | null>()
-  // Bots whose last write failed: their next mark writes again, even with the same value.
+  // Bots whose record isn't on disk as it stands here: their next mark or flush writes it.
   private readonly unsaved = new Set<string>()
+  // Writes go one at a time, each writing the bot's record as it stands when its turn comes, so an older
+  // retry never lands after a newer record.
+  private writes: Promise<void> = Promise.resolve()
 
   constructor(
     private readonly store: Pick<BotSlackIcons, 'shown' | 'markShown'>,
@@ -40,26 +43,32 @@ export class BotAvatarShown {
     ) {
       this.byBot.set(botId, shown)
       this.unsaved.add(botId)
-      await this.store.markShown(botId, shown)
-      this.unsaved.delete(botId)
+      await this.write(botId)
     }
   }
 
   /** Writes again the records whose write failed, on the next poll answer or bot write, so a passing disk
    *  error doesn't leave a restart sending older art. Nothing to write costs nothing. */
   async flush(): Promise<void> {
-    for (const botId of this.unsaved) {
-      if (!this.exists(botId)) {
+    // One bot's write failing again leaves the others to go.
+    await Promise.all([...this.unsaved].map((botId) => this.write(botId).catch(() => {})))
+  }
+
+  private write(botId: string): Promise<void> {
+    const run = this.writes.then(async () => {
+      const shown = this.byBot.get(botId)
+      if (!this.exists(botId) || shown === undefined || !this.unsaved.has(botId)) {
         this.unsaved.delete(botId)
-        continue
-      }
-      try {
-        await this.store.markShown(botId, this.byBot.get(botId) ?? null)
-        this.unsaved.delete(botId)
-      } catch {
         return
       }
-    }
+      await this.store.markShown(botId, shown)
+      // A newer record marked meanwhile has its own write queued after this one.
+      if (this.byBot.get(botId) === shown) {
+        this.unsaved.delete(botId)
+      }
+    })
+    this.writes = run.catch(() => {})
+    return run
   }
 
   keys(): IterableIterator<string> {
