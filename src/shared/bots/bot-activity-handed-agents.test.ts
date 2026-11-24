@@ -1,6 +1,5 @@
 import { describe, expect, it } from 'vitest'
 import { AGENT_SESSION_RESTART_WORK_CONTINUATION_MESSAGE } from '../agent-session/lifecycle/stopping/agent-session-restart-continuation'
-import { CODEX_ASYNC_QUESTION_TOOL } from '../native-chat/input/questions/codex-async-question-input'
 import { handedAgentRows, type BotHandedAgentObservation } from './bot-activity-handed-agents'
 
 const agent = (
@@ -24,12 +23,18 @@ describe('an agent handed to the bot', () => {
     expect(restarted.title).toBe('fix-login')
   })
 
-  it("leaves its open question to the bot, as a recorded worker's ask, but not a permission", () => {
-    const [asking, permission] = handedAgentRows([
-      agent({ state: 'waiting', toolName: CODEX_ASYNC_QUESTION_TOOL }),
-      agent({ state: 'waiting', toolName: 'Bash' })
+  it("keeps its interactive tool question in the owner's Needs you, titled by the question", () => {
+    const [asking] = handedAgentRows([
+      agent({
+        state: 'waiting',
+        toolName: 'AskUserQuestion',
+        prompt: '──── From: BOT (bot) (handoff) ────',
+        interactivePrompt: JSON.stringify({
+          questions: [{ question: 'Deploy to staging?', options: [{ label: 'Yes' }] }]
+        })
+      })
     ])
-    expect(asking.dot).toBe('idle')
-    expect(permission.dot).toBe('waiting')
+    expect(asking.dot).toBe('waiting')
+    expect(asking.title).toBe('Deploy to staging?')
   })
 })

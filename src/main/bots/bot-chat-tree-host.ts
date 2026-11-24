@@ -2,11 +2,7 @@
 import { structuredAgentSessionStatusPaneKey } from '../../shared/agent-session/view/structured-agent-session-tab'
 import type { AgentStatusIpcPayload } from '../../shared/agent-status/contracts/agent-status-ipc-payload'
 import type { AgentListVerdict } from '../../shared/agent-status/presentation/agent-list-status'
-import {
-  handedAgentAsksBot,
-  handedAgentRows,
-  type BotHandedAgentObservation
-} from '../../shared/bots/bot-activity-handed-agents'
+import { handedAgentRows } from '../../shared/bots/bot-activity-handed-agents'
 import type { BotChatTreeRead, BotChatTreeWorker } from '../../shared/bots/bot-chat-tree'
 import {
   botChatTreeDispatchIds,
@@ -54,16 +50,12 @@ export type BotChatTreeHost = BotActivityHost & {
   pairedServerCards?: (botId: string) => boolean
 }
 
-function handedWorker(
-  row: ReturnType<typeof handedAgentRows>[number],
-  agent: BotHandedAgentObservation
-): BotChatTreeWorker {
+function handedWorker(row: ReturnType<typeof handedAgentRows>[number]): BotChatTreeWorker {
   return {
     key: row.key,
     title: row.title,
-    state: handedAgentAsksBot(agent.entry)
-      ? 'asking-bot'
-      : row.dot === 'permission' || row.dot === 'blocked' || row.dot === 'waiting'
+    state:
+      row.dot === 'permission' || row.dot === 'blocked' || row.dot === 'waiting'
         ? 'needs-you'
         : 'running',
     startedAt: row.at,
@@ -217,15 +209,9 @@ export async function readBotChatTreeParts(
     ])
     const handedAgents = await readBotHandedAgents(host, bot, rowByPaneKey, handedWorkspaces)
     extras.push(
-      ...handedAgents
-        .filter((agent) => !placedPanes.has(agent.paneKey))
-        .flatMap((agent) =>
-          handedAgentRows([agent]).map((row) => ({
-            worker: handedWorker(row, agent),
-            settled: false,
-            at: row.at
-          }))
-        )
+      ...handedAgentRows(handedAgents.filter((agent) => !placedPanes.has(agent.paneKey))).map(
+        (row) => ({ worker: handedWorker(row), settled: false, at: row.at })
+      )
     )
   }
   const built = buildBotChatTree({

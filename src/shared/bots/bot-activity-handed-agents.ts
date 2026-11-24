@@ -2,16 +2,13 @@
 // work for the bot, so Activity shows the live ones as workers and their approvals reach Needs you.
 // One another coordinator started keeps that Dispatch: its mail still goes to that coordinator, and
 // the bot takes it over by asking it (the take-over skill), never by rewriting the Dispatch.
-import type { AgentDotState } from '../agent-dot-state'
 import type { AgentStatusEntry } from '../agent-status/contracts/agent-status-types'
 import { agentRowDotState } from '../agent-row-dot-state'
 import {
   AGENT_SESSION_RESTART_CONTINUATION_MESSAGE,
   AGENT_SESSION_RESTART_WORK_CONTINUATION_MESSAGE
 } from '../agent-session/lifecycle/stopping/agent-session-restart-continuation'
-import { isAskUserQuestionTool } from '../agent-status/lifecycle/agent-question-answered-intent'
 import { parseAskFromStatus } from '../native-chat/input/native-chat-ask'
-import { CODEX_ASYNC_QUESTION_TOOL } from '../native-chat/input/questions/codex-async-question-input'
 import { botWorkerTool, clipActivityTitle } from './bot-activity-recorded-workers'
 import type { BotActivityStatus, BotWorkerRow } from './bot-activity-model'
 
@@ -30,7 +27,7 @@ export type BotHandedAgentObservation = {
 
 export function handedAgentRows(agents: readonly BotHandedAgentObservation[]): BotWorkerRow[] {
   return agents.flatMap((agent) => {
-    const dot = handedAgentDot(agent.entry)
+    const dot = agentRowDotState(agent.entry.state, agent.entry.workingMode)
     if (dot === 'done' || dot === 'failed') {
       return []
     }
@@ -53,19 +50,6 @@ export function handedAgentRows(agents: readonly BotHandedAgentObservation[]): B
       }
     ]
   })
-}
-
-/** Like a recorded worker's ask, an agent's open question is the bot's to answer, not the owner's:
- *  it never reads as Needs you. Permission prompts still do. */
-export function handedAgentAsksBot(entry: BotActivityStatus): boolean {
-  return (
-    entry.state === 'waiting' &&
-    (isAskUserQuestionTool(entry.toolName) || entry.toolName === CODEX_ASYNC_QUESTION_TOOL)
-  )
-}
-
-function handedAgentDot(entry: BotActivityStatus): AgentDotState {
-  return handedAgentAsksBot(entry) ? 'idle' : agentRowDotState(entry.state, entry.workingMode)
 }
 
 /** Orca writes these prompts itself (mail, restart notes), so they never name the agent's work. */
