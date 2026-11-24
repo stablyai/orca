@@ -25,12 +25,8 @@ function filesForFileCountPath(
   countedPaths: readonly string[] | null,
   summaryOnly: boolean
 ): NativeChatEditFileSummary[] | null {
-  const body = splitMoveMarker(stripBoundedTextMarker(patchText).text).body
-  if (unifiedPatchSections(body).sections.some((section) => section.path !== null)) {
-    return summaryOnly
-      ? editFilesFromPatchText(patchText, null, true)
-      : editFilesFromPatchText(patchText, null)
-  }
+  const bounded = stripBoundedTextMarker(patchText)
+  const body = splitMoveMarker(bounded.text).body
   const parts = splitCountedFileDiffs(body, countedPaths)
   if (!parts) {
     return null
@@ -40,7 +36,11 @@ function filesForFileCountPath(
       ? (editFilesFromPatchText(part.diff, part.path, true) ?? [])
       : (editFilesFromPatchText(part.diff, part.path) ?? [])
   )
-  return files.length > 0 ? files : null
+  if (files.length === 0) {
+    return null
+  }
+  // The marker sits on the whole payload, so a split piece cannot see that the tail was cut.
+  return bounded.truncated ? files.map((file) => ({ ...file, truncated: true })) : files
 }
 
 function splitCountedFileDiffs(
@@ -50,18 +50,12 @@ function splitCountedFileDiffs(
   if (!paths || paths.length < 2) {
     return null
   }
+  // Equal hunk counts are not file boundaries: a cut payload can leave one file's hunks and a later path.
   const blankParts = patch.split(JOINED_FILE_DIFF).filter((part) => part.trim() !== '')
-  if (blankParts.length === paths.length) {
-    return blankParts.map((diff, index) => ({ path: paths[index]!, diff }))
+  if (blankParts.length !== paths.length) {
+    return null
   }
-  const hunks = patch
-    .split(/\n(?=@@)/)
-    .map((part) => part.trim())
-    .filter((part) => part.startsWith('@@'))
-  if (hunks.length === paths.length) {
-    return hunks.map((diff, index) => ({ path: paths[index]!, diff }))
-  }
-  return null
+  return blankParts.map((diff, index) => ({ path: paths[index]!, diff }))
 }
 
 export function splitMoveMarker(patch: string): { body: string; movedTo: string | null } {
@@ -95,7 +89,7 @@ export function editFilesFromPatchText(
   countedPaths: readonly string[] | null = null
 ): NativeChatEditFileSummary[] | null {
   if (callerPath !== null && isNativeChatFileCountPath(callerPath)) {
-    // A count names no file. Headers in the patch do; otherwise the journal's paths list does.
+    // A count names no file. Only a joined diff whose blank-line parts match `paths` can.
     return filesForFileCountPath(patchText, countedPaths, summaryOnly)
   }
   // Strip journal truncation markers so they cannot become numbered content or imply a complete patch.
