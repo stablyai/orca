@@ -2,6 +2,7 @@ import { BACKGROUND_MOUNT_TERMINAL_WORKTREE_EVENT } from '@/constants/terminal'
 import type { BackgroundMountTerminalWorktreeDetail } from '@/constants/terminal'
 import { parseExecutionHostId } from '../../../../../shared/execution-host/execution-host'
 import { requestSleepingAgentWakeOnMount } from '@/lib/agent-session/resume/sleeping-agent-wake-requests'
+import { carryActivationAdmissionDrained } from './activation-deferred-tab-admission'
 
 const pendingMounts = new Map<string, BackgroundMountTerminalWorktreeDetail>()
 const requestListeners = new Set<() => void>()
@@ -307,12 +308,14 @@ export function pruneClosedBackgroundMountTabs(
       // Keep an empty-allowed activation mounted while deferred tabs still exist.
       if (retainedDeferred && retainedDeferred.size > 0) {
         restrictions.set(worktreeId, retained)
+        carryActivationAdmissionDrained(tabIds, retained)
       } else {
         restrictions.delete(worktreeId)
         mountedWorktreeIds.delete(worktreeId)
       }
     } else {
       restrictions.set(worktreeId, retained)
+      carryActivationAdmissionDrained(tabIds, retained)
     }
   }
   return changed

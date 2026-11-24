@@ -18,6 +18,16 @@ export function markActivationAdmissionDrained(restriction: ReadonlySet<string>)
   return true
 }
 
+/** Pruning closed tabs adds nothing to warm, so the replacement restriction stays drained. */
+export function carryActivationAdmissionDrained(
+  from: ReadonlySet<string>,
+  to: ReadonlySet<string>
+): void {
+  if (drainedRestrictions.has(from)) {
+    drainedRestrictions.add(to)
+  }
+}
+
 export function hasPendingBackgroundMounts(restriction: ReadonlySet<string> | null): boolean {
   return restriction !== null && !drainedRestrictions.has(restriction)
 }
