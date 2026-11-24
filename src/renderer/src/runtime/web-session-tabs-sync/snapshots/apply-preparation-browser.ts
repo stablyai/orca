@@ -52,8 +52,10 @@ export function prepareWebSessionTabsSnapshotBrowser(
   const currentUnifiedTabs = state.unifiedTabsByWorktree[worktreeId] ?? []
   const snapshotExecutionHostId = executionHostIdForSessionTabsOwner(environmentId)
   const {
-    adoptsInitialHostGroups,
+    mayAdoptInitialHostGroups,
     directlyOpened,
+    directlyOpenedWithIncomingGroup,
+    framePublishesDirectChat,
     publishedAgentSessionIds,
     claimedAgentSessionIds,
     projection
@@ -246,7 +248,10 @@ export function prepareWebSessionTabsSnapshotBrowser(
   return {
     ...base,
     targetGroupId,
-    adoptsInitialHostGroups,
+    mayAdoptInitialHostGroups,
+    directlyOpened,
+    directlyOpenedWithIncomingGroup,
+    framePublishesDirectChat,
     hostGroupIdByTabId,
     currentUnifiedTabs,
     existingTabIndex,

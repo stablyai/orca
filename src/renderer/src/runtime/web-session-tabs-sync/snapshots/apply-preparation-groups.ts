@@ -7,7 +7,11 @@ import {
 } from '../../browser/placement/web-session-browser-placement'
 import { peekWebSessionTerminalPlacementGroup } from '../../hosted-terminals/placement/web-session-terminal-placement'
 import { reconcileClientOwnedTabPlacement } from '../placement/web-session-client-owned-tab-placement'
-import { buildMirroredHostGroups, retainClientPlacedMirroredTabs } from '../placement/layout-groups'
+import {
+  buildMirroredHostGroups,
+  placeUngroupedLinkedChats,
+  retainClientPlacedMirroredTabs
+} from '../placement/layout-groups'
 import { sanitizeRecentTabIds, pushRecentTabId } from './state-equality-core'
 import { pruneTabGroupLayout } from '../placement/tab-group-layout-tree'
 import type { WebSessionTabsSyncState } from '../state'
@@ -24,6 +28,9 @@ export function prepareWebSessionTabsSnapshotGroups(
     now,
     options,
     adoptsInitialHostGroups,
+    directlyOpened,
+    directlyOpenedWithIncomingGroup,
+    hostGroupIdByTabId,
     terminalSurfaceTabs,
     mirroredBrowserTabs,
     mirroredEditorTabs,
@@ -150,7 +157,16 @@ export function prepareWebSessionTabsSnapshotGroups(
     if (snapshot.tabGroups && snapshot.tabGroups.length > 0) {
       return buildMirroredHostGroups({
         currentGroups,
-        hostGroups: snapshot.tabGroups,
+        hostGroups:
+          adoptsInitialHostGroups && directlyOpened
+            ? placeUngroupedLinkedChats(
+                snapshot.tabGroups,
+                snapshot.activeGroupId,
+                directlyOpened,
+                directlyOpenedWithIncomingGroup,
+                hostGroupIdByTabId
+              )
+            : snapshot.tabGroups,
         hostToLocalTabId,
         mirroredUnifiedIds,
         nextActiveUnifiedTabId,

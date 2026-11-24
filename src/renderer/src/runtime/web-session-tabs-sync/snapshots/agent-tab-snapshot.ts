@@ -2,6 +2,7 @@ import type { RuntimeMobileSessionAgentTab } from '../../../../../shared/remote-
 import type { RuntimeMobileSessionTabsResult } from '../../../../../shared/remote-runtime/session-graph/runtime-session-contracts'
 import type { Tab } from '../../../../../shared/workspace-layout/tab-groups/tab-types'
 import type { ExecutionHostId } from '../../../../../shared/execution-host/execution-host'
+import { hasStructuredAgentSessionLaunchCancellationTombstone } from '@/lib/agent-session/launch/structured-agent-session-launch-registry'
 import type { WebSessionTabsSyncState } from '../state'
 import {
   canAdoptInitialHostGroups,
@@ -21,8 +22,15 @@ export function prepareAgentTabSnapshot(args: {
   const receivedChats = directlyOpenedChatPublications(environmentId, snapshot.worktree)
   const occupiedIds = receivedChats ? new Set<string>() : undefined
   const currentDirectTabs: Tab[] = []
+  const directlyOpenedWithIncomingGroup = new Set<string>()
   if (receivedChats && occupiedIds) {
-    const directTabIds = new Set(Array.from(receivedChats.values(), (chat) => chat.tabId))
+    const directTabIds = new Set<string>()
+    for (const { tabId, hostTabId } of receivedChats.values()) {
+      directTabIds.add(tabId)
+      if (hostGroupIdByTabId.has(hostTabId)) {
+        directlyOpenedWithIncomingGroup.add(hostTabId)
+      }
+    }
     for (const tab of currentTabs) {
       const id = tab.id
       occupiedIds.add(id)
@@ -37,9 +45,7 @@ export function prepareAgentTabSnapshot(args: {
     currentDirectTabs,
     hostGroupIdByTabId
   )
-  // A frame that still needs the linked chat's proof cannot own its initial placement.
-  const adoptsInitialHostGroups = Boolean(
-    !directlyOpened &&
+  const mayAdoptInitialHostGroups = Boolean(
     snapshot.tabGroups?.length &&
     canAdoptInitialHostGroups(state, snapshot.worktree, executionHostId, receivedChats)
   )
@@ -51,8 +57,16 @@ export function prepareAgentTabSnapshot(args: {
   const publishedAgentSessionIds = new Set(directlyOpened?.keys())
   // A chat this frame publishes or replaces is its to rebuild.
   const claimedAgentSessionIds = new Set(publishedAgentSessionIds)
+  let framePublishesDirectChat = false
   for (const tab of snapshot.tabs) {
-    if (tab.type !== 'agent-session' || (mayProject && !mayProject(tab))) {
+    if (tab.type !== 'agent-session') {
+      continue
+    }
+    if (mayProject && !mayProject(tab)) {
+      framePublishesDirectChat ||= Boolean(
+        directlyOpened?.get(tab.sessionId)?.hostTabId === tab.id &&
+        !hasStructuredAgentSessionLaunchCancellationTombstone(snapshot.worktree, tab.sessionId)
+      )
       continue
     }
     publishedAgentSessionIds.add(tab.sessionId)
@@ -68,8 +82,10 @@ export function prepareAgentTabSnapshot(args: {
       }
     : undefined
   return {
-    adoptsInitialHostGroups,
+    mayAdoptInitialHostGroups,
     directlyOpened,
+    directlyOpenedWithIncomingGroup,
+    framePublishesDirectChat,
     publishedAgentSessionIds,
     claimedAgentSessionIds,
     projection: { occupiedIds, mayAdopt, mayProject }
