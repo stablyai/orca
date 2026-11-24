@@ -4,7 +4,7 @@ import { Button, buttonVariants } from '@/components/ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { cn } from '@/lib/class-names'
 import { useTranslate, type Translate } from '@/i18n/use-translate'
-import { LoadingSpinner } from '@/components/LoadingSpinner'
+import { LoadingSpinner } from '@/components/ui/LoadingSpinner'
 
 /** full: "Send 3 notes", short: "Send 3", icon: send icon + count. */
 export type SendNotesTier = 'full' | 'short' | 'icon'

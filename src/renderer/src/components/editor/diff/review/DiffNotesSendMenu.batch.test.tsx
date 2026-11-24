@@ -6,8 +6,7 @@ import { TooltipProvider } from '@/components/ui/tooltip'
 import type { DiffCommentOwner } from '@/store/slices/diff-comments/diff-comment-owner'
 import {
   diffCommentSendKey,
-  holdNotesForSend,
-  resetNotesInFlightForTests
+  holdNotesForSend
 } from '@/components/notes/delivery/notes-send-in-flight'
 import type { DiffComment } from '../../../../../../shared/file-review/diff-comment-types'
 import { SELF_LOCAL_AUTHORITY } from '../../../../../../shared/execution-host/host-authority'
@@ -82,7 +81,6 @@ beforeEach(() => {
 
 afterEach(() => {
   cleanup()
-  resetNotesInFlightForTests()
   vi.restoreAllMocks()
 })
 
@@ -125,14 +123,19 @@ describe('DiffNotesSendMenu batch button', () => {
     expect(notesSendTestStore.getState().agentSendPopoverTargetMode).toBeNull()
   })
 
-  it("shows Sending… while this file's notes are held, without sending the other files", () => {
-    holdNotesForSend([diffCommentSendKey(OWNER, A)], new Promise(() => undefined))
-    renderFileMenu([A, B])
+  it("shows Sending… while this file's notes are held, without sending the other files", async () => {
+    const { promise, resolve } = Promise.withResolvers<void>()
+    holdNotesForSend([diffCommentSendKey(OWNER, A)], promise)
+    try {
+      renderFileMenu([A, B])
 
-    const button = screen.getByRole('button', { name: 'Sending…' })
-    expect(button).toBeDisabled()
-    openMenu(button)
-    expect(notesSendTestStore.getState().agentSendPopoverTargetMode).toBeNull()
+      const button = screen.getByRole('button', { name: 'Sending…' })
+      expect(button).toBeDisabled()
+      openMenu(button)
+      expect(notesSendTestStore.getState().agentSendPopoverTargetMode).toBeNull()
+    } finally {
+      await act(async () => resolve())
+    }
   })
 
   it('comes back with the notes when the send fails', async () => {
