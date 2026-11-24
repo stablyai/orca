@@ -11,6 +11,7 @@ import type { PortForwardEntry } from '../../../../shared/remote-runtime/ssh/ssh
 import { NETWORK_PORT_FORWARD_RUNTIME_CAPABILITY } from '../../../../shared/remote-runtime/protocol/workspace-ports-runtime-capabilities'
 import { isLoopbackBrowserUrl } from '../../../../shared/browser/navigation/loopback-browser-url'
 import type { RuntimeClientTarget } from '../../../../shared/remote-runtime/host-catalog/runtime-client-target'
+import type { RestoredPortForwardMove } from '../../../../shared/remote-runtime/host-catalog/runtime-environment-port-forward-channel'
 import { forwardedUrlForRemoteUrl } from './workspace-port-urls'
 import { openSystemHttpLink } from '@/lib/browser/navigation/http-link-routing'
 import {
@@ -194,6 +195,46 @@ async function openThroughNewForward(
           'auto.lib.workspace.ports.serverPortForward.opened',
           'Opened {{address}} in your default browser.',
           { address: new URL(target).host }
+        )
+      }
+    )
+  }
+}
+
+/** Tells the person once that a forward restored after a restart listens on another port here. */
+export async function announceRestoredPortForwardMoves(
+  moves: readonly RestoredPortForwardMove[]
+): Promise<void> {
+  if (moves.length === 0) {
+    return
+  }
+  // A restore can land before this window has loaded its server list; main's list has the names.
+  const known = new Set(useAppStore.getState().runtimeEnvironments?.map((env) => env.id))
+  const savedNames = moves.every((move) => known.has(move.environmentId))
+    ? new Map<string, string>()
+    : new Map(
+        (await window.api.runtimeEnvironments.list().catch(() => [])).map(
+          (env): [string, string] => [env.id, env.name]
+        )
+      )
+  for (const move of moves) {
+    const host =
+      savedNames.get(move.environmentId) ??
+      selectExecutionHostDisplayLabel(
+        useAppStore.getState(),
+        toRuntimeExecutionHostId(move.environmentId)
+      )
+    toast.info(
+      translate(
+        'auto.lib.workspace.ports.serverPortForward.restoredMoved',
+        'Forwarded port {{port}} from {{host}} to localhost:{{localPort}}',
+        { port: move.remotePort, host, localPort: move.localPort }
+      ),
+      {
+        description: translate(
+          'auto.lib.workspace.ports.serverPortForward.restoredMovedReason',
+          'localhost:{{previousPort}} is in use on this computer.',
+          { previousPort: move.previousLocalPort }
         )
       }
     )
