@@ -1,4 +1,8 @@
-import { realpath, stat, statfs } from 'node:fs/promises'
+import { realpath } from 'node:fs'
+import { stat, statfs } from 'node:fs/promises'
+import { promisify } from 'node:util'
+
+const realpathNative = promisify(realpath.native)
 
 // Linux statfs f_type magics for network/FUSE filesystems, where inotify misses changes made by other hosts.
 const LINUX_NETWORK_FS_TYPES = new Set([
@@ -31,7 +35,7 @@ export async function isOnNetworkVolume(
     }
     // Mapped and subst drives resolve to their UNC or underlying path.
     try {
-      return isUncPath(await realpath.native(path))
+      return isUncPath(await realpathNative(path))
     } catch {
       return false
     }
