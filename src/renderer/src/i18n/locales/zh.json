@@ -22637,7 +22637,7 @@
           "openDirectlyIn": "直接打开方式",
           "openDirectlyInDescription": "{{modifier}}-点击以及 Orca 询问时的第一个选项。",
           "title": "打开链接",
-          "description": "聊天、终端和按钮中的链接。"
+          "description": "聊天、终端和按钮中的链接。localhost 链接始终在 Orca 浏览器中打开。"
         },
         "terminalLinkClicks": {
           "plainClickDescription": "用于终端中的文件路径。除非点击交给终端应用，网页链接遵循“打开链接”。"

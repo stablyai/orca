@@ -81,7 +81,7 @@ export type PaneManagerOptions = {
   // Why: required so dropping the wiring is a compile error — an optional hint with a
   // default would silently serve stale copy that no test can distinguish.
   // Why: paneId-scoped because the hovered pane's host decides where its links can go.
-  linkOpenHint: (paneId: number) => string
+  linkOpenHint: (paneId: number, uri?: string) => string
   formatLinkTooltip?: (
     paneId: number,
     url: string,

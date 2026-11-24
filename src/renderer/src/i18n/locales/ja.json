@@ -21413,7 +21413,7 @@
           "openDirectlyIn": "直接開く場所",
           "openDirectlyInDescription": "{{modifier}}-クリックと、Orca が確認するときの最初の選択肢。",
           "title": "リンクを開く",
-          "description": "チャット、ターミナル、ボタンのリンク。"
+          "description": "チャット、ターミナル、ボタンのリンク。localhost のリンクは常に Orca ブラウザで開きます。"
         },
         "terminalLinkClicks": {
           "plainClickDescription": "ターミナル内のファイルパス用。Web リンクは、クリックをターミナルアプリに任せない限り「リンクを開く」に従います。"

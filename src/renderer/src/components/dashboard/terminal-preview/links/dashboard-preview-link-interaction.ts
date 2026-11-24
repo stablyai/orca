@@ -10,7 +10,7 @@ import {
   type TerminalLinkClickBehavior
 } from '@/components/terminal-pane/links/gestures/terminal-link-click-behavior'
 import {
-  httpLinkModeFor,
+  httpLinkModeForLink,
   usesHttpLinkMode,
   type HttpLinkMode
 } from '@/lib/links/preferences/http-link-mode'
@@ -30,14 +30,18 @@ import {
 } from './dashboard-preview-http-actions'
 
 /** Desktop URLs follow the link mode unless plain clicks are left to the terminal app. */
-function dashboardHttpClickBehavior(settings: GlobalSettings | null): {
+function dashboardHttpClickBehavior(
+  settings: GlobalSettings | null,
+  url: string,
+  destinations: { primary: 'orca' | 'system' }
+): {
   httpPlainClickBehavior?: TerminalLinkClickBehavior
   rememberMode?: HttpLinkMode
 } {
   if (!usesHttpLinkMode() || terminalLinkClickBehaviorFor(settings) === 'none') {
     return {}
   }
-  const mode = httpLinkModeFor(settings)
+  const mode = httpLinkModeForLink(settings, url, destinations)
   return { httpPlainClickBehavior: mode === 'ask' ? 'actions' : 'open', rememberMode: mode }
 }
 
@@ -142,7 +146,7 @@ export function installDashboardPreviewLinkInteraction(
           request: deps.request,
           focusTerminal: () => terminal.focus(),
           plainClickBehavior: terminalLinkClickBehaviorFor(deps.getSettings()),
-          ...dashboardHttpClickBehavior(deps.getSettings()),
+          ...dashboardHttpClickBehavior(deps.getSettings(), uri, actions.destinations),
           middleClickBehavior: 'none',
           sourceOwner: actions.owner
         },

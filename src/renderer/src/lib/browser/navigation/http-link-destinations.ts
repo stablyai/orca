@@ -8,6 +8,7 @@ import {
   onceAdmission
 } from '@/lib/browser/navigation/http-link-routing'
 import { isRemoteLoopbackHttpLink } from '@/lib/browser/navigation/http-link-localhost-route'
+import { isDesktopLocalhostLink } from '@/lib/links/preferences/http-link-mode'
 import type {
   HttpLinkAdmission,
   HttpLinkSourceOwner
@@ -28,6 +29,8 @@ export type OpenHttpLinkOptions = {
   forceSystemBrowser?: boolean
   /** Unconditional for local sources: open inside Orca regardless of settings. */
   forceInApp?: boolean
+  /** Treat this link as if links open in Orca (desktop localhost links); force flags still win. */
+  preferInApp?: boolean
   /** The Shift escape-hatch modifier was held; resolveModifierRouting decides what it means. */
   modifierHeld?: boolean
   sourceOwner?: HttpLinkSourceOwner
@@ -104,7 +107,9 @@ export function httpLinkActionDestinationsFor(
   if (!canSourceOwnerOpenInOrca(sourceOwner, canOpenOwnedBrowser)) {
     return { primary: 'system' }
   }
-  return settings?.openLinksInApp === true || isRemoteLoopbackHttpLink(url, sourceOwner)
+  return settings?.openLinksInApp === true ||
+    isRemoteLoopbackHttpLink(url, sourceOwner) ||
+    isDesktopLocalhostLink(url)
     ? { primary: 'orca', alternate: 'system' }
     : { primary: 'system', alternate: 'orca' }
 }
@@ -239,6 +244,8 @@ export function openRoutedHttpLink(url: string, routed: RoutedHttpLinkOptions): 
     })
     return
   }
+  // A local localhost link prefers Orca without a prompt; Shift still resolves against that preference.
+  const preferInApp = sourceOwner.kind === 'local' && isDesktopLocalhostLink(url)
   if (deps.modifierHeld) {
     // Explicit modifier routing skips the one-time preference prompt; openHttpLink resolves its destination.
     openHttpLink(url, {
@@ -246,6 +253,7 @@ export function openRoutedHttpLink(url: string, routed: RoutedHttpLinkOptions): 
       allowRemoteInApp: true,
       worktreeId: deps.worktreeId,
       modifierHeld: true,
+      ...(preferInApp ? { preferInApp: true } : {}),
       sourceOwner,
       ...(deps.onBrowserOpenComplete ? { onBrowserOpenComplete: deps.onBrowserOpenComplete } : {}),
       ...(deps.onAdmission ? { onAdmission: deps.onAdmission } : {})
@@ -255,12 +263,15 @@ export function openRoutedHttpLink(url: string, routed: RoutedHttpLinkOptions): 
 
   // Why: remote sources use the persisted routing preference and never prompt the viewing client.
   const preferenceDecision =
-    sourceOwner.kind === 'local' ? deps.requestOpenLinksInAppPreference?.(url) : null
+    sourceOwner.kind === 'local' && !preferInApp
+      ? deps.requestOpenLinksInAppPreference?.(url)
+      : null
   if (preferenceDecision === null || preferenceDecision === undefined) {
     openHttpLink(url, {
       ...(linkContext ? { linkContext } : {}),
       allowRemoteInApp: true,
       worktreeId: deps.worktreeId,
+      ...(preferInApp ? { preferInApp: true } : {}),
       sourceOwner,
       ...(deps.onBrowserOpenComplete ? { onBrowserOpenComplete: deps.onBrowserOpenComplete } : {}),
       ...(deps.onAdmission ? { onAdmission: deps.onAdmission } : {})

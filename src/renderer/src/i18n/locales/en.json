@@ -23825,7 +23825,7 @@
           "openDirectlyIn": "Open directly in",
           "openDirectlyInDescription": "{{modifier}}-click and the first choice when Orca asks.",
           "title": "Open links",
-          "description": "Links in chat, terminals and buttons.",
+          "description": "Links in chat, terminals and buttons. Localhost links always open in the Orca browser.",
           "search": {
             "ask": "ask",
             "system": "system browser"

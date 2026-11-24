@@ -3,6 +3,13 @@ import {
   type HttpLinkActionDestinations
 } from '@/lib/browser/navigation/http-link-destinations'
 import type { HttpLinkSourceOwner } from '@/lib/browser/navigation/http-link-routing'
+import {
+  httpLinkModeFor,
+  isDesktopLocalhostLink,
+  usesHttpLinkMode
+} from '@/lib/links/preferences/http-link-mode'
+import type { GlobalSettings } from '../../../../../shared/settings/global-settings-types'
+import { terminalLinkClickBehaviorFor } from './gestures/terminal-link-click-behavior'
 
 export function isMacPlatform(): boolean {
   return navigator.userAgent.includes('Mac')
@@ -78,6 +85,27 @@ export function getTerminalUrlOpenHint(options: TerminalUrlOpenHintOptions = {})
   return isMacPlatform()
     ? `${prefix}⌘+click to open, or ⇧⌘+click for system browser`
     : `${prefix}Ctrl+click to open, or Shift+Ctrl+click for system browser`
+}
+
+/** A terminal URL's hover hint; a localhost link opens in Orca on a plain click, so it names Orca and offers no chooser. */
+export function getTerminalUrlLinkHint(
+  settings: GlobalSettings | null | undefined,
+  source: {
+    sourceOwner?: HttpLinkSourceOwner
+    canOpenOwnedBrowser: boolean
+    url?: string
+    destinations?: HttpLinkActionDestinations
+  }
+): string {
+  const localhost = source.destinations?.primary === 'orca' && isDesktopLocalhostLink(source.url)
+  const plainClick = terminalLinkClickBehaviorFor(settings)
+  return getTerminalUrlOpenHint({
+    ...terminalUrlOpenHintOptionsFor(settings, source.sourceOwner, source.canOpenOwnedBrowser),
+    ...(localhost ? { openLinksInApp: true } : {}),
+    showActions: usesHttpLinkMode()
+      ? !localhost && plainClick !== 'none' && httpLinkModeFor(settings) === 'ask'
+      : plainClick === 'actions'
+  })
 }
 
 export function getTerminalUrlSystemBrowserHint(): string {

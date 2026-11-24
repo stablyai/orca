@@ -25,6 +25,7 @@ import {
   type TerminalLinkActionContext
 } from '../terminal-link-action-request'
 import { captureLinkActionContext } from '@/lib/links/preferences/link-action-context'
+import { isDesktopLocalhostLink } from '@/lib/links/preferences/http-link-mode'
 import {
   canRememberLinkChoice,
   rememberOnAdmission
@@ -64,6 +65,20 @@ function isDesktopHttpLinkFallbackActivation(event: MouseEvent): boolean {
   return isTerminalOwnedLinkGesture(event)
 }
 
+// Under Ask, a localhost link that can open in Orca opens there on a plain click instead of asking.
+function localhostLinkActionContext(
+  url: string,
+  deps: UrlLinkHitTestDeps
+): TerminalLinkActionContext | null | undefined {
+  const context = deps.linkActionContext
+  return context?.rememberMode === 'ask' &&
+    context.httpPlainClickBehavior === 'actions' &&
+    deps.actionDestinations?.primary === 'orca' &&
+    isDesktopLocalhostLink(url)
+    ? { ...context, httpPlainClickBehavior: 'open', rememberMode: 'open' }
+    : context
+}
+
 export function handleTerminalHttpLink(
   url: string,
   event: MouseEvent | undefined,
@@ -81,7 +96,8 @@ export function handleTerminalHttpLink(
     return true
   }
 
-  const rememberMode = deps.linkActionContext?.rememberMode
+  const linkActionContext = localhostLinkActionContext(url, deps)
+  const rememberMode = linkActionContext?.rememberMode
   // Captured at click: the chooser's actions must not follow later focus or host changes.
   const actionContext = rememberMode
     ? captureLinkActionContext(deps.worktreeId, deps.sourceTabId)
@@ -98,7 +114,7 @@ export function handleTerminalHttpLink(
       actionContext
     })
   )
-  return requestTerminalLinkAction(event, deps.linkActionContext, {
+  return requestTerminalLinkAction(event, linkActionContext, {
     destination: deps.actionDestination ?? url,
     kind: 'url',
     ...(rememberMode && actionContext && deps.actionDestinations

@@ -6,7 +6,7 @@ import { nativeChatPlainLinkClickBehavior } from '@/components/native-chat/links
 import { isTerminalLinkDirectActivation } from '@/components/terminal-pane/links/gestures/terminal-link-activation'
 import { httpLinkDirectClickDestination } from '@/lib/browser/navigation/http-link-destinations'
 import { useAppStore } from '@/store'
-import { httpLinkModeFor, usesHttpLinkMode } from '@/lib/links/preferences/http-link-mode'
+import { httpLinkModeForLink, usesHttpLinkMode } from '@/lib/links/preferences/http-link-mode'
 import type { WorktreeCardDetailsHoverControl } from '../details/worktree-card-details-hover-state'
 import { openAppHttpLink } from '@/lib/browser/navigation/app-http-link-open'
 
@@ -39,11 +39,13 @@ export function useWorkspaceReferenceLinkActions(
     const state = useAppStore.getState()
     const anchor = event.currentTarget
     // Desktop follows the link mode (no Remember row here); the web keeps its own resolver.
-    const desktopMode = usesHttpLinkMode() ? httpLinkModeFor(state.settings) : null
+    const routing = resolveNativeChatHttpLinkRouting(state, workspaceId, url)
+    const desktopMode = usesHttpLinkMode()
+      ? httpLinkModeForLink(state.settings, url, routing.destinations)
+      : null
     const plainClickBehavior = desktopMode
       ? undefined
       : nativeChatPlainLinkClickBehavior(state.settings)
-    const routing = resolveNativeChatHttpLinkRouting(state, workspaceId, url)
     let requested = false
     const consumed = handleNativeChatWebLink(event, url, {
       worktreeId: workspaceId,

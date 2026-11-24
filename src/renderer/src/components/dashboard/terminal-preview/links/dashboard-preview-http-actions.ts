@@ -27,7 +27,7 @@ import {
   canRememberLinkChoice,
   rememberOnAdmission
 } from '@/lib/links/preferences/link-remember-choice'
-import { httpLinkModeFor, usesHttpLinkMode } from '@/lib/links/preferences/http-link-mode'
+import { httpLinkModeForLink, usesHttpLinkMode } from '@/lib/links/preferences/http-link-mode'
 import type { DashboardCard } from '../../../../../../shared/agent-status/presentation/dashboard-snapshot'
 import type { HttpLinkSourceOwner } from '@/lib/browser/navigation/http-link-routing'
 
@@ -109,7 +109,7 @@ export function dashboardPreviewHttpActions(
     actionContext &&
     canRememberLinkChoice({
       plainClick: true,
-      mode: httpLinkModeFor(state.settings),
+      mode: httpLinkModeForLink(state.settings, url, destinations),
       destinations,
       actionContext
     })

@@ -172,6 +172,7 @@ function executeHttpLink(
   // A client fallback tab browses from this desktop, so it cannot reach the owner's loopback either.
   const prefersOrca =
     openLinksInApp ||
+    opts.preferInApp === true ||
     (!opts.allowClientBrowserFallback && isRemoteLoopbackHttpLink(url, effectiveSourceOwner))
   const modifier = resolveModifierRouting(
     Boolean(opts.modifierHeld),

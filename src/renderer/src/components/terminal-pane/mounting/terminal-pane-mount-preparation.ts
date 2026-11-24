@@ -13,11 +13,7 @@ import {
   resolveTerminalLinkRuntimeEnvironmentId,
   resolveTerminalRuntimeHandle
 } from '../links/http/terminal-http-link-source-owner'
-import {
-  getTerminalFileOpenHint,
-  getTerminalUrlOpenHint,
-  terminalUrlOpenHintOptionsFor
-} from '../links/terminal-link-open-hints'
+import { getTerminalFileOpenHint, getTerminalUrlLinkHint } from '../links/terminal-link-open-hints'
 import type { LinkHandlerDeps } from '../links/files/terminal-link-handlers'
 import type { TerminalPathExistsCache } from '../links/files/terminal-path-exists-cache'
 import type { TerminalLinkActionContext } from '../links/terminal-link-action-request'
@@ -52,7 +48,7 @@ export type TerminalPaneMountPreparation = {
   unregisterRuntimeTab: () => void
   fileOpenLinkHint: string
   getPaneLinkCwd: (paneId: number) => string
-  getUrlOpenLinkHint: (paneId: number) => string
+  getUrlOpenLinkHint: (paneId: number, url?: string) => string
   getHttpLinkSourceOwnerForPane: (
     paneId: number
   ) => ReturnType<typeof resolveTerminalHttpLinkSourceOwner>
@@ -241,17 +237,13 @@ export function prepareTerminalPaneMount(
     getTabWideAgentHintLeafId: deps.getTabWideAgentHintLeafId
   })
   const fileOpenLinkHint = getTerminalFileOpenHint()
-  const getUrlOpenLinkHint = (paneId: number): string =>
-    getTerminalUrlOpenHint({
-      ...terminalUrlOpenHintOptionsFor(
-        deps.settingsRef.current,
-        getHttpLinkSourceOwnerForPane(paneId),
-        canOpenOwnedBrowserForPane(paneId)
-      ),
-      showActions: usesHttpLinkMode()
-        ? terminalLinkClickBehaviorFor(deps.settingsRef.current) !== 'none' &&
-          httpLinkModeFor(deps.settingsRef.current) === 'ask'
-        : terminalLinkClickBehaviorFor(deps.settingsRef.current) === 'actions'
+  const getUrlOpenLinkHint = (paneId: number, url?: string): string =>
+    getTerminalUrlLinkHint(deps.settingsRef.current, {
+      sourceOwner: getHttpLinkSourceOwnerForPane(paneId),
+      canOpenOwnedBrowser: canOpenOwnedBrowserForPane(paneId),
+      ...(url !== undefined
+        ? { url, destinations: getHttpLinkActionDestinations(paneId, url) }
+        : {})
     })
   return {
     container,
