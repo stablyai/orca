@@ -65,7 +65,12 @@ export function NativeChatMentionOption({
             (member.unavailable || member.dimmed) && 'opacity-50'
           )}
         >
-          <span className="max-w-[60%] min-w-0 truncate">
+          <span
+            className={cn(
+              'min-w-0 truncate',
+              (member.host || member.noteIcon || member.note) && 'max-w-[60%]'
+            )}
+          >
             <Highlighted text={member.name} hits={match?.nameHits} muted={paused} />
           </span>
           {member.host ? (

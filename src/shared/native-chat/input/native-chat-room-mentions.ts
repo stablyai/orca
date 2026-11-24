@@ -180,7 +180,7 @@ function matchDetail(
   query: readonly string[],
   whole: boolean,
   raw: string
-): NativeChatMentionHit[] | null {
+): boolean {
   const words = wordsOf(detail)
   const fits = (part: string, word: Word): boolean =>
     whole ? word.text === part : word.text.startsWith(part)
@@ -200,13 +200,10 @@ function matchDetail(
     }
     return false
   }
-  if (query.length > 0 && query.every((_, part) => assign(part, new Set()))) {
-    return [...partOfWord]
-      .map(([index, part]) => originalHit(words[index], 0, query[part].length, words[index].start))
-      .sort((a, b) => a.start - b.start)
-  }
-  const hit = matchUnspaced(detail, raw)
-  return hit ? [hit] : null
+  return (
+    (query.length > 0 && query.every((_, part) => assign(part, new Set()))) ||
+    matchUnspaced(detail, raw) !== null
+  )
 }
 
 /** Whether a pickable member's name matches, the only thing that keeps a query with a space open. */
