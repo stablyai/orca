@@ -189,6 +189,12 @@ export default function EditorFileTab({
   const tabStatusStyle = tabStatusColor
     ? { color: `var(--tab-status-ink, ${tabStatusColor})` }
     : undefined
+  const tabStatusVariables:
+    | (React.CSSProperties & { '--tab-status-mixed-ink': string })
+    | undefined =
+    tabStatus && tabStatusColor
+      ? { '--tab-status-mixed-ink': `var(--tab-decoration-${tabStatus}, ${tabStatusColor})` }
+      : undefined
 
   useEffect(() => {
     const closeMenu = (): void => setMenuOpen(false)
@@ -223,13 +229,7 @@ export default function EditorFileTab({
       {...attributes}
       {...dragListeners}
       className={`w-full group relative flex items-center h-full px-1.5 text-xs cursor-pointer select-none outline-none focus:outline-none focus-visible:outline-none ${getTabStripBorderClasses(hasTabsToRight, { includeTopBorder: includeTopTabBorder })} ${getDropIndicatorClasses(dropIndicator ?? null)} ${getTabRootStateClasses(isActive)}`}
-      style={
-        tabStatus
-          ? ({
-              '--tab-status-mixed-ink': `var(--tab-decoration-${tabStatus}, ${tabStatusColor})`
-            } as React.CSSProperties)
-          : undefined
-      }
+      style={tabStatusVariables}
       onPointerDown={(e) => {
         onPointerDown(
           e,
