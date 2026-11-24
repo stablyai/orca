@@ -40,6 +40,9 @@ export const CLIENT_EVENT_METHODS = [
           },
           { consumesTerminalSideEffects: clientKind !== 'mobile' }
         )
+        // Only a connected remote client needs worktree removals the host's own watcher cannot see.
+        const releaseWorktreeReconcile =
+          connectionId === undefined ? undefined : runtime.retainRemoteClientWorktreeReconcile()
         const unregisterHostVolunteer =
           params.browserHostRequests === true &&
           clientKind === 'runtime' &&
@@ -77,6 +80,7 @@ export const CLIENT_EVENT_METHODS = [
           subscriptionId,
           () => {
             unsubscribe()
+            releaseWorktreeReconcile?.()
             unregisterHostVolunteer?.()
             unregisterCardRenderer?.()
             unsubscribeTelemetry?.()

@@ -16,7 +16,10 @@ import { scanLocalRepoWorktreesForResolution } from './repo-worktree-resolution-
 import type { GitWorktreeInfo } from '../../../../shared/worktree/types'
 import { listStoredWorktreeRowsForRepo } from './repo-worktree-row-resolution'
 import type { ResolvedWorktree } from './runtime-worktree-path-identity'
-import { getRepoSshConnectionId } from '../../../../shared/execution-host/execution-host'
+import {
+  getRepoRoutingConnectionId,
+  getRepoSshConnectionId
+} from '../../../../shared/execution-host/execution-host'
 import {
   blockedWslDistroForPath,
   wslDistroForPath
@@ -32,6 +35,8 @@ import {
   worktreeCatalogHygienePlan
 } from '../../../ipc/worktrees/listing/worktree-catalog-observation-hygiene'
 import type { Store } from '../../../persistence/loading-store/store'
+import { isFolderRepo } from '../../../../shared/repository/repo-kind'
+import { RemoteClientWorktreeReconcile } from './remote-client-worktree-reconcile'
 import { SUPERSEDED_SCAN_RESCANS } from '../../../ipc/worktrees/listing/overtaken-scan-rerun'
 
 const lastFingerprintUnknownWarnAt = new Map<string, number>()
@@ -54,6 +59,29 @@ function warnFingerprintUnknownOnce(repoId: string, reason: string): void {
 }
 
 export abstract class RuntimeWorkspaceRepoScanRefresh extends RuntimeWorkspaceCatalog {
+  private readonly remoteClientWorktreeReconcile = new RemoteClientWorktreeReconcile({
+    listProbeableRepos: () =>
+      (this.store?.getRepos() ?? []).filter(
+        (repo) =>
+          !isFolderRepo(repo) &&
+          !getRepoRoutingConnectionId(repo) &&
+          !wslDistroForPath(
+            repo.path,
+            getLocalProjectWorktreeGitOptionsForRuntime(
+              repo,
+              resolveWorktreeScanRuntime(this.requireStore(), repo).projectRuntime
+            ).wslDistro
+          )
+      ),
+    probe: (repo) => this.startRepoWorktreeAdminFingerprintProbe(repo),
+    notifyChanged: (repoId) => this.notifyWorktreeCatalogChangedForRemoteClients(repoId)
+  })
+
+  /** Hold while a paired client is subscribed; release on disconnect. */
+  retainRemoteClientWorktreeReconcile(): () => void {
+    return this.remoteClientWorktreeReconcile.retain()
+  }
+
   /** Runtime readers accept the owner's observation for the scan TTL, then its admin-fingerprint verifier. */
   protected async readRepoWorktreeCatalog(
     repo: Repo,
