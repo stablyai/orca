@@ -264,6 +264,7 @@ struct watcher {
     } *termed;
     size_t termed_count;
     size_t termed_capacity;
+    int group_term_pending;
     unsigned stdin_end_grace_ms;
     unsigned sigterm_grace_ms;
     int session;
@@ -802,8 +803,9 @@ static int sweep_once(struct watcher *w, int signal_number) {
             continue;
         }
         // The CLI group gets its own signal; its TERM counts if a member later leaves the group.
+        // Only the sweep just before that TERM records them, so a later member still gets one.
         if (row->pgid == w->group) {
-            if (signal_number == SIGTERM) {
+            if (w->group_term_pending) {
                 record_termed(w, row);
             }
             continue;
@@ -909,7 +911,10 @@ static void kill_group(struct watcher *w) {
 
 // TERM grace starts once TERM is issued, so a late wakeup never spends it beforehand.
 static void watcher_term(struct watcher *w) {
+    // Group members seen by this sweep get the group TERM right after it.
+    w->group_term_pending = 1;
     int members = sweep_tree(w, SIGTERM);
+    w->group_term_pending = 0;
     if (kill(-w->group, SIGTERM) < 0 && errno == ESRCH && members == 0 &&
             sweep_tree(w, SIGTERM) == 0) {
         watcher_complete(1);
