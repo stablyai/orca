@@ -72,7 +72,7 @@ export function useTabBarCreateMenuController({
     worktreeId,
     newTabMenuOpen && showAgentLaunchItems,
     agentDetectionTarget,
-    { wakeOnOpen: true }
+    { wakeOnOpen: true, observationGroup: { worktreeId, groupId: resolvedGroupId } }
   )
   const [selectedPickerAgent, selectPickerAgent] = useState<AgentPickerEntry['agent']>()
   // Why: subscribed inside the open menu only; catalog reads landing here would re-render the tab bar.

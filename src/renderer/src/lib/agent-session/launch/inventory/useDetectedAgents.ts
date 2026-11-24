@@ -7,6 +7,9 @@ import { localAgentInventoryContextKey } from '@/runtime/hosts/preflight/local-p
 import { runtimeHostContactForEntry } from '../../../../../../shared/remote-runtime/host-status/runtime-host-contact'
 import { getRuntimeAgentInventoryKey } from '@/store/slices/agent-inventory/runtime-agent-inventory-key'
 import type { TuiAgent } from '../../../../../../shared/agent-launch/catalog/tui-agent'
+import { observedAgentTargetsForGroup } from './observed-agent-targets'
+
+export type AgentObservationGroup = { worktreeId: string; groupId: string }
 
 export type UseDetectedAgentsResult = {
   /** Null while detection is in flight on first load. */
@@ -45,11 +48,17 @@ function normalizeAgentDetectionTarget(
 /** Local Settings requests a complete inventory; launch surfaces use enabled agents. Remote inventories remain complete. */
 export function useDetectedAgents(
   connectionId: AgentDetectionTarget | string | null | undefined,
-  inventory: 'enabled' | 'all' = 'enabled'
+  inventory: 'enabled' | 'all' = 'enabled',
+  /** A tab group's launch surface keeps what it observed across a released layout's remount. */
+  observationGroup?: AgentObservationGroup
 ): UseDetectedAgentsResult {
   const viewActive = useAppStateViewActive()
   const target = normalizeAgentDetectionTarget(connectionId)
-  const observedRemoteTargetKeysRef = useRef<Set<string>>(new Set())
+  const observedRemoteTargetKeysRef = useRef<Set<string>>(
+    observationGroup
+      ? observedAgentTargetsForGroup(observationGroup.worktreeId, observationGroup.groupId)
+      : new Set()
+  )
   // Undefined ownership stays loading so remote hydration cannot flash local agents.
   const isUnknown = target === undefined
   const targetKind = target?.kind

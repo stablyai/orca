@@ -23,7 +23,6 @@ import {
 import type { WindowsTerminalCapabilities } from '@/runtime/hosts/capabilities/windows-terminal-capabilities'
 import { shouldShowMobileEmulatorTabIntro } from '../../emulator-pane/tab-intro/mobile-emulator-tab-intro-visibility'
 import { selectTabBarAgentProjections } from './tab-agent-types-by-tab-id'
-import { isTabStripGroupOpen } from '../strip/tab-strip-scroll-memory'
 import type { TabBarAgentProjections } from './tab-agent-types-by-tab-id'
 import { shouldShowWindowsShellMenu } from '../create-menu/windows-shell-menu-visibility'
 import { createUnifiedTabLookup } from './tab-bar-item-model'
@@ -156,14 +155,11 @@ export function useTabBarRuntimeModel({
     takeWindowsTerminalCapabilityHold(worktreeId, groupId)
     return () => {
       // Unmounting with the group still open means its workspace released the layout; keep the answer for the return.
-      if (isTabStripGroupOpen(worktreeId, groupId)) {
-        holdWindowsTerminalCapabilitiesForReleasedStrip(
-          worktreeId,
-          groupId,
-          windowsTerminalCapabilityOwnerKey,
-          isTabStripGroupOpen
-        )
-      }
+      holdWindowsTerminalCapabilitiesForReleasedStrip(
+        worktreeId,
+        groupId,
+        windowsTerminalCapabilityOwnerKey
+      )
     }
   }, [groupId, worktreeId, shouldProbeWindowsShellCapabilities, windowsTerminalCapabilityOwnerKey])
   const windowsTerminalCapabilities = useWindowsTerminalCapabilities(

@@ -1,31 +1,9 @@
 import { useLayoutEffect, useRef, type RefObject } from 'react'
-import { useAppStore } from '@/store/index'
+import { createTabGroupScopedState } from '@/lib/workspace/tabs/tab-group-scoped-state'
 
 /** A parked workspace unmounts its tab strips; each group's offset survives so returning shows the same tabs. */
-const offsetByStripKey = new Map<string, { scrollLeft: number; tabId: string | null }>()
-// Live groups only (closed ones are dropped at unmount); the cap just bounds groups closed while their strip was released.
-const MAX_REMEMBERED_STRIPS = 8192
-
-export function isTabStripGroupOpen(worktreeId: string, groupId: string): boolean {
-  return useAppStore.getState().groupsByWorktree[worktreeId]?.some((g) => g.id === groupId) ?? false
-}
-
-function rememberTabStripScroll(
-  key: string,
-  worktreeId: string,
-  scrollLeft: number,
-  tabId: string | null
-): void {
-  offsetByStripKey.delete(key)
-  if (!isTabStripGroupOpen(worktreeId, key)) {
-    return
-  }
-  offsetByStripKey.set(key, { scrollLeft, tabId })
-  const oldest = offsetByStripKey.keys().next()
-  if (offsetByStripKey.size > MAX_REMEMBERED_STRIPS && !oldest.done) {
-    offsetByStripKey.delete(oldest.value)
-  }
-}
+// Disposed with its group, so entries are bounded by open groups.
+const offsetByGroup = createTabGroupScopedState<{ scrollLeft: number; tabId: string | null }>()
 
 /** Call after the strip navigation hook so this restore lands after its mount-time reveal. */
 export function useTabStripScrollMemory(
@@ -43,7 +21,7 @@ export function useTabStripScrollMemory(
     if (!key || !strip) {
       return
     }
-    let pending = offsetByStripKey.get(key)
+    let pending = offsetByGroup.get(worktreeId, key)
     let observer: ResizeObserver | undefined
     // A hidden prewarm mounts under display:none, where scrollLeft can't apply; wait for a box.
     const applyPending = (): void => {
@@ -58,7 +36,7 @@ export function useTabStripScrollMemory(
         strip.dispatchEvent(new Event('scroll'))
       }
       pending = undefined
-      offsetByStripKey.delete(key)
+      offsetByGroup.take(worktreeId, key)
       observer?.disconnect()
     }
     applyPending()
@@ -76,7 +54,7 @@ export function useTabStripScrollMemory(
       strip.removeEventListener('scroll', onScroll)
       // An offset never applied stays saved for the next mount.
       if (!pending) {
-        rememberTabStripScroll(key, worktreeId, scrollLeft, activeTabIdRef.current)
+        offsetByGroup.set(worktreeId, key, { scrollLeft, tabId: activeTabIdRef.current })
       }
     }
   }, [key, worktreeId, tabStripRef])
