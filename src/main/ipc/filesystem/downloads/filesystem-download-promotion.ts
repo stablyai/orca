@@ -2,6 +2,7 @@ import { randomUUID } from 'node:crypto'
 import { constants } from 'node:fs'
 import { copyFile, link, rename, rm, stat } from 'node:fs/promises'
 import { dirname, join } from 'node:path'
+import { errnoCodeOrUnknown } from '../../../../shared/errors/errno-code'
 import { isENOENT } from '../../../filesystem/local-file-io/filesystem-path-containment'
 
 export function decodeDownloadedFileContent(content: string, encoding: 'utf8' | 'base64'): Buffer {
@@ -98,7 +99,7 @@ export async function promoteDownloadedFileWithoutOverwrite(
       await cleanupLocalTransferPath(tempPath)
       return target
     } catch (error) {
-      const code = (error as NodeJS.ErrnoException).code ?? ''
+      const code = errnoCodeOrUnknown(error)
       if (code === 'EEXIST') {
         target = await nextFreePath()
       } else if (hardLinks && NO_HARD_LINK_CODES.has(code)) {

@@ -4,6 +4,8 @@ import path from 'node:path'
 
 import { app } from 'electron'
 
+import { isENOENT } from '../../filesystem/local-file-io/filesystem-path-containment'
+
 import {
   buildBrowserDownloadCollisionCandidate,
   MAX_BROWSER_DOWNLOAD_COLLISION_ATTEMPTS,
@@ -37,7 +39,7 @@ async function pathExistsAsync(filePath: string): Promise<boolean> {
     return true
   } catch (error) {
     // A name we can't check is treated as taken.
-    return (error as NodeJS.ErrnoException).code !== 'ENOENT'
+    return !isENOENT(error)
   }
 }
 
