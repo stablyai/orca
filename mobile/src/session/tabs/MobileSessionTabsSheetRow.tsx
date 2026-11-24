@@ -1,6 +1,6 @@
 import type { ReactNode } from 'react'
-import { Pressable, Text, View } from 'react-native'
-import { Bell, X } from 'lucide-react-native'
+import { Pressable, StyleSheet, Text, View } from 'react-native'
+import { X } from 'lucide-react-native'
 import { TailClippedText } from '../../components/list/TailClippedText'
 import { SwipeRowActions } from '../../components/list/SwipeRowActions'
 import { AgentStateDot } from '../../agents/presentation/AgentStateDot'
@@ -9,6 +9,7 @@ import { colors, radii, spacing } from '../../theme/mobile-theme'
 import { themedStyleSheet } from '../../theme/themed-styles'
 import { useMobileColorScheme } from '../../theme/use-mobile-color-scheme'
 import type { MobileSessionTabRow, MobileSessionTabSummary } from './mobile-session-tab-rows'
+import { isPathTitle } from './MobileSessionTabBarLayer'
 
 export const TABS_SHEET_TILE_SIZE = 34
 const TILE_DOT_RING = 2
@@ -86,26 +87,52 @@ export function TabsSheetRow({
 
 export function TabsSheetTile({
   mark,
-  badge,
-  unreadBell
+  badge
 }: {
   mark: ReactNode
   badge: MobileSessionTabSummary['dotState']
-  unreadBell: boolean
 }) {
   const dot = badge && badge !== 'idle' ? badge : undefined
   return (
     <View style={tabsSheetRowStyles.tile}>
       {mark}
-      {unreadBell || dot ? (
+      {dot ? (
         <View style={tabsSheetRowStyles.tileBadge}>
-          {unreadBell ? (
-            <Bell size={10} color={colors.statusAmber} fill={colors.statusAmber} />
-          ) : dot ? (
-            <AgentStateDot state={dot} decorative />
-          ) : null}
+          <AgentStateDot state={dot} decorative />
         </View>
       ) : null}
+    </View>
+  )
+}
+
+/** The Agents list's text column: title (bold while unread) with its time, then one detail line. */
+export function TabsSheetRowText({
+  title,
+  unread,
+  time,
+  children
+}: {
+  title: ReactNode
+  unread: boolean
+  time: string
+  children: ReactNode
+}) {
+  const titleStyle = [tabsSheetRowStyles.title, unread && tabsSheetRowStyles.titleUnread]
+  return (
+    <View style={tabsSheetRowStyles.text}>
+      <View style={tabsSheetRowStyles.titleLine}>
+        {typeof title === 'string' && isPathTitle(title) ? (
+          <View style={tabsSheetRowStyles.pathTitle}>
+            <TailClippedText style={titleStyle}>{title}</TailClippedText>
+          </View>
+        ) : (
+          <Text style={[titleStyle, tabsSheetRowStyles.titleFill]} numberOfLines={1}>
+            {title}
+          </Text>
+        )}
+        {time ? <Text style={tabsSheetRowStyles.time}>{time}</Text> : null}
+      </View>
+      {children}
     </View>
   )
 }
@@ -118,12 +145,14 @@ export function TabsSheetRowDetail({ row }: { row: MobileSessionTabRow }) {
   if (!row.stateWord && row.tab.type !== 'terminal' && row.tab.type !== 'agent-session') {
     return <TailClippedText style={tabsSheetRowStyles.detail}>{row.content}</TailClippedText>
   }
-  const stateStyle =
+  const stateStyle = [
+    tabsSheetRowStyles.stateWord,
     row.dotState === 'failed'
       ? tabsSheetRowStyles.stateFailed
       : row.group === 'needs-you'
         ? tabsSheetRowStyles.stateNeedsYou
-        : undefined
+        : null
+  ]
   return (
     <Text style={tabsSheetRowStyles.detail} numberOfLines={1}>
       {row.stateWord ? <Text style={stateStyle}>{row.stateWord}</Text> : null}
@@ -137,7 +166,7 @@ export const tabsSheetRowStyles = themedStyleSheet(() => ({
   body: { paddingBottom: spacing.lg },
   // Opaque so a swipe's action stays hidden until the row slides off it.
   row: {
-    minHeight: 52,
+    minHeight: 60,
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing.md,
@@ -185,11 +214,40 @@ export const tabsSheetRowStyles = themedStyleSheet(() => ({
     backgroundColor: colors.sheetGroup
   },
   paneMark: { width: 24, alignItems: 'center' },
-  text: { flex: 1, minWidth: 0, gap: 1 },
-  title: { fontSize: 15, fontWeight: '500', color: colors.textPrimary },
-  paneTitle: { fontSize: 14, color: colors.textPrimary },
-  detail: { fontSize: 13, color: colors.textSecondary },
+  // The Agents list row's type: 15/20 title, 600 while unread, then a 14/19 line with its state word in 600.
+  text: { flex: 1, minWidth: 0, gap: spacing.xxs },
+  titleLine: { flexDirection: 'row', alignItems: 'baseline', gap: spacing.sm },
+  title: {
+    fontSize: 15,
+    lineHeight: 20,
+    fontWeight: '500',
+    color: colors.textPrimary
+  },
+  titleUnread: { fontWeight: '600' },
+  // Gives a path's tail clip the title's room as its edge.
+  pathTitle: { flex: 1, minWidth: 0 },
+  titleFill: { flex: 1, minWidth: 0 },
+  paneTitle: { fontSize: 14, lineHeight: 19, color: colors.textPrimary },
+  detail: { fontSize: 14, lineHeight: 19, color: colors.textSecondary },
+  stateWord: { fontWeight: '600' },
   stateNeedsYou: { color: colors.agentQuestionText },
   stateFailed: { color: colors.statusRed },
-  time: { fontSize: 12, color: colors.textMuted, fontVariant: ['tabular-nums'] }
+  time: { fontSize: 12, color: colors.textMuted, fontVariant: ['tabular-nums'] },
+  // Agents list's fold: chevron, then "3 older", lined up with the row text.
+  foldRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+    minHeight: 44,
+    paddingLeft: spacing.lg + TABS_SHEET_TILE_SIZE + spacing.md - spacing.xs,
+    paddingRight: spacing.lg,
+    backgroundColor: colors.sheetGroup
+  },
+  foldLabel: { fontSize: 14, color: colors.textSecondary },
+  hairline: {
+    height: StyleSheet.hairlineWidth,
+    marginLeft: spacing.lg + TABS_SHEET_TILE_SIZE + spacing.md,
+    backgroundColor: colors.borderSubtle
+  },
+  groupGap: { marginTop: spacing.lg }
 }))
