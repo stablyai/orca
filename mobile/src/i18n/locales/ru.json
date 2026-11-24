@@ -85,7 +85,7 @@
       "sourceControl": "Управление версиями"
     },
     "resume": {
-      "hostConnectionChanged": "Подключение к серверу изменилось. Повторите продолжение."
+      "hostConnectionChanged": "Подключение к серверу изменилось. Попробуйте продолжить ещё раз."
     },
     "interrupted": {
       "failed": "Не удалось продолжить прерванные чаты.",
@@ -160,7 +160,7 @@
       "title": "Сопряжение с компьютером",
       "tryAgain": "Повторить попытку",
       "codeNoLongerValid": "Этот код сопряжения истёк, уже использован или был заменён. Покажите новый код на компьютере и отсканируйте его снова.",
-      "runtimeAccessLink": "Эта ссылка предназначена для другого приложения Orca. Отсканируйте код в «Настройки → Мобильное приложение» на компьютере или выполните orca pair --mobile на сервере."
+      "runtimeAccessLink": "Эта ссылка предназначена для другого приложения Orca. Отсканируйте код в «Настройки → Мобильный доступ» на компьютере или выполните orca pair --mobile на сервере."
     },
     "terminalSettings": {
       "keepPhoneSize": "Сохранять размер для телефона (по умолчанию)",
@@ -949,7 +949,7 @@
         "handedTo": "Передано",
         "paused": "{{bot}} на паузе.",
         "botsOff": "Боты выключены.",
-        "couldNotTake": "{{bot}} не смог это взять."
+        "couldNotTake": "{{bot}} не смог взяться за это."
       },
       "offer": {
         "unknownAgent": "{{bot}} запускает агента, которого это приложение не знает. Измените, чтобы выбрать другого.",
@@ -992,7 +992,7 @@
       "webhook": {
         "title": "Вебхук",
         "starts": "Вебхук · запускает «{{automation}}»",
-        "sampleNote": "Тестовый вызов запускает настоящий запуск.",
+        "sampleNote": "Тестовый вызов запускает реальное выполнение.",
         "sendSample": "Отправить тестовый вызов",
         "secretAdd": "Добавить секрет подписи…",
         "secretChange": "Секрет подписи: {{sender}} · Изменить…",
@@ -1028,8 +1028,8 @@
           "title": "Как это настроить?",
           "why": "Вы создаёте собственное приложение Google, поэтому данные для входа остаются на вашем компьютере.",
           "doIt": "Сделайте за меня",
-          "guideHere": "Проведите меня здесь",
-          "guideBrowser": "Проведите меня в моём браузере",
+          "guideHere": "Подскажите шаги здесь",
+          "guideBrowser": "Подскажите шаги в браузере",
           "doItNote": "{{bot}} делает все шаги сам",
           "guideHereNote": "Вы нажимаете сами, в Orca",
           "guideBrowserNote": "Вы нажимаете сами, в браузере"
@@ -1117,7 +1117,7 @@
             "name": "Название приложения <b>Orca</b>, а ваш адрес электронной почты укажите как адрес поддержки.",
             "external": "Аудитория: <b>Внешняя</b>.",
             "internal": "Аудитория: <b>Внутренняя</b>.",
-            "either": "Аудитория: <b>Внешняя</b> для аккаунта Gmail, <b>Внутренняя</b> для рабочего аккаунта.",
+            "either": "Аудитория: <b>Внешняя</b> для учётной записи Gmail, <b>Внутренняя</b> для рабочей учётной записи.",
             "contact": "Ваш адрес электронной почты как контактный адрес.",
             "agree": "Отметьте <b>Я принимаю Политику в отношении пользовательских данных в сервисах Google API</b>, затем нажмите <b>Создать</b>."
           },
@@ -1145,9 +1145,9 @@
           "keyGone": "Ключ этого приложения больше не работает: он удалён в Google Cloud.",
           "keyOtherProject": "Сохранённый ключ относится к проекту {{keyProject}}, а не к {{project}}.",
           "otherAccount": "Вы вошли как {{signedIn}}, а эта настройка была для {{wanted}}.",
-          "signedOut": "Вход для {{email}} завершён.",
+          "signedOut": "Сеанс входа для {{email}} завершился.",
           "needsPermission": "Почти готово: разрешите {{services}}. Google показывает флажок для каждого; отметьте все.",
-          "apiOff": "{{services}} отключён в Google Cloud.",
+          "apiOff": "В Google Cloud отключено: {{services}}.",
           "adminBlocked": "Администратор Google в вашей компании заблокировал {{services}}.",
           "checkFailed": "Orca не смогла проверить {{services}}."
         },
@@ -1161,7 +1161,7 @@
         "stayed": "Осталось в {{app}}: {{things}}. В {{app}} ничего не изменено.",
         "unchanged": "В {{app}} ничего не изменено.",
         "paused": "Автоматизации приостановлены, чтобы ничего не запускалось дважды. Включите их, когда старый бот будет выключен в {{app}}.",
-        "soulOnComputer": "Откройте личность и память в Orca на компьютере."
+        "soulOnComputer": "Откройте душу и память в Orca на компьютере."
       },
       "importPlan": {
         "comes": "Переносится",
@@ -1463,10 +1463,10 @@
       "notStaged": "Не в индексе",
       "viewed": "Просмотрено",
       "renamedFrom": "Переименован из {{oldPath}}",
-      "threadsWhenInSync_one": "Его комментарий GitHub появится здесь, когда эта ветка совпадёт с пул-реквестом.",
-      "threadsWhenInSync_other": "Его комментарии GitHub ({{count}}) появятся здесь, когда эта ветка совпадёт с пул-реквестом.",
-      "threadsWhenInSync_few": "Его комментарии GitHub ({{count}}) появятся здесь, когда эта ветка совпадёт с пул-реквестом.",
-      "threadsWhenInSync_many": "Его комментарии GitHub ({{count}}) появятся здесь, когда эта ветка совпадёт с пул-реквестом."
+      "threadsWhenInSync_one": "Здесь появится {{count}} комментарий GitHub, когда эта ветка совпадёт с пул-реквестом.",
+      "threadsWhenInSync_other": "Здесь появятся {{count}} комментария GitHub, когда эта ветка совпадёт с пул-реквестом.",
+      "threadsWhenInSync_few": "Здесь появятся {{count}} комментария GitHub, когда эта ветка совпадёт с пул-реквестом.",
+      "threadsWhenInSync_many": "Здесь появятся {{count}} комментариев GitHub, когда эта ветка совпадёт с пул-реквестом."
     },
     "diffReviewFooter": {
       "nextFile": "Следующий файл",
@@ -1805,7 +1805,7 @@
         "noAccess": "нет доступа",
         "earlierMessages_one": "{{count}} более раннее сообщение в ветке",
         "earlierMessages_other": "{{count}} более раннего сообщения в ветке",
-        "earlierMessages_few": "{{count}} более раннего сообщения в ветке",
+        "earlierMessages_few": "{{count}} более ранних сообщения в ветке",
         "earlierMessages_many": "{{count}} более ранних сообщений в ветке",
         "via": "{{name}} через {{bot}}"
       },
@@ -2521,10 +2521,10 @@
       "failed": "Не удалось переименовать рабочее пространство. {{reason}}"
     },
     "deleteConfirm": {
-      "changes_one": "{{count}} незафиксированное изменение",
-      "changes_other": "{{count}} незафиксированного изменения",
-      "changes_few": "{{count}} незафиксированных изменения",
-      "changes_many": "{{count}} незафиксированных изменений",
+      "changes_one": "{{count}} незакоммиченное изменение",
+      "changes_other": "{{count}} незакоммиченного изменения",
+      "changes_few": "{{count}} незакоммиченных изменения",
+      "changes_many": "{{count}} незакоммиченных изменений",
       "changesAndIgnoredLost": "{{what}} и игнорируемые файлы будут потеряны",
       "lost": "{{what}} будет потеряно",
       "ignoredLost": "Игнорируемые файлы будут потеряны",
@@ -2591,7 +2591,7 @@
       "sound": "Звук уведомлений",
       "suppressWhileFocused": "Не уведомлять при просмотре",
       "suppressWhileFocusedHint": "Не уведомлять о рабочем пространстве, открытом на этом телефоне.",
-      "onlyWhenAgentNeedsInput": "Только когда агенту нужен я",
+      "onlyWhenAgentNeedsInput": "Только когда агенту нужно моё участие",
       "onlyWhenAgentNeedsInputHint": "Запросы разрешений и вопросы. Завершённые агенты пропускаются."
     }
   },
@@ -2850,7 +2850,7 @@
       "willMergeWhenReady": "Будет слит, когда будет готов",
       "mergeWhenReady": "Слить, когда будет готов",
       "viewedOf": "Просмотрено {{viewed}} из {{total}}",
-      "commentsOnFiles": "{{comments}} комментариев в {{files}} файлах",
+      "commentsOnFiles": "Комментариев: {{comments}}, файлов: {{files}}",
       "filesChanged_one": "{{count}} файл изменён",
       "filesChanged_other": "{{count}} файла изменено",
       "filesChanged_few": "{{count}} файла изменено",
@@ -2901,7 +2901,7 @@
       "openOnGitHub": "Открыть на GitHub",
       "failedAfter": "Сбой через {{duration}}",
       "failed": "Сбой",
-      "checkActions": "Ещё для {{name}}",
+      "checkActions": "Другие действия: {{name}}",
       "rerun": "Перезапустить",
       "copyErrorFailed": "Не удалось скопировать ошибку.",
       "durationSeconds": "{{seconds}} с",
@@ -2924,7 +2924,7 @@
       "resolvedCount": "Решённые: {{count}}",
       "hideBots": "Скрыть ботов",
       "bot": "бот",
-      "commentActions": "Ещё для этого комментария",
+      "commentActions": "Другие действия с комментарием",
       "replyAndMore": "{{body}} (ещё {{count}})",
       "severityCritical": "Критическая",
       "severityMajor": "Серьёзная",
@@ -3359,7 +3359,7 @@
       "forkOriginalUnavailableNamed": "{{agent}} не может создать ответвление этого ответа в «{{detail}}». Откройте этот чат и создайте ответвление оттуда.",
       "forkOriginalLatestOnly": "{{agent}} может создать ответвление только от последнего ответа в исходном чате. Откройте этот чат и создайте ответвление от его последнего ответа, когда он завершится.",
       "forkOriginalLatestOnlyNamed": "{{agent}} может создать ответвление только от последнего ответа в «{{detail}}». Откройте этот чат и создайте ответвление от его последнего ответа, когда он завершится.",
-      "antigravitySystemNotSignedIn": "Antigravity не выполнен вход. Войдите, выполнив `agy` на компьютере, где запущен этот чат, и отправьте сообщение снова.",
+      "antigravitySystemNotSignedIn": "В Antigravity не выполнен вход. Войдите, выполнив `agy` на компьютере, где запущен этот чат, и отправьте сообщение снова.",
       "unconfirmed": "Не удалось подтвердить, отправлено ли это. Повторно оно не отправлялось."
     },
     "fileReader": {
@@ -4211,7 +4211,7 @@
       "size": "Размер текста",
       "sizeDefault": "По умолчанию",
       "sizePoints": "{{size}} пт",
-      "sizeSpoken": "{{size}} пунктов",
+      "sizeSpoken": "Размер текста: {{size}}",
       "font": "Шрифт",
       "fontPickerTitle": "Шрифт чата",
       "fontSystem": "Системный",
@@ -4225,7 +4225,7 @@
       "reset": "Сбросить настройки текста",
       "previewQuestion": "Почему тест продолжения нестабилен?",
       "previewTools": "Прочитано 3 файла · Выполнено pnpm test",
-      "previewAnswer": "Тест ждёт `setTimeout(0)`, пока поток ещё сбрасывается, поэтому проходит только если сброс успевает раньше."
+      "previewAnswer": "Тест ждёт `setTimeout(0)`, пока поток ещё сбрасывается, поэтому проходит, только если сброс успевает раньше."
     }
   },
   "sourceControl": {
@@ -4301,7 +4301,7 @@
       "stageFile": "Добавьте в индекс хотя бы один файл для коммита",
       "useCommitAndForcePush": "Используйте «Закоммитить и принудительно отправить»: в удалённой ветке только старые версии локальных коммитов",
       "statusConflicts": "Конфликты",
-      "statusNothingStaged": "Ничего не в индексе",
+      "statusNothingStaged": "В индексе ничего нет",
       "statusNeedsMessage": "Нужно сообщение",
       "statusNotPublished": "Не опубликовано",
       "statusNoBranch": "Нет ветки"
@@ -4434,7 +4434,7 @@
     },
     "gitStatus": {
       "conflicts": "Конфликты",
-      "uncommitted": "Не в коммите",
+      "uncommitted": "Незакоммиченные",
       "staged": "В индексе"
     },
     "header": {
@@ -4768,7 +4768,7 @@
     "commits": {
       "branchedFrom": "Ответвлено от {{baseRef}}",
       "baseUpToDate": "Актуально",
-      "baseNewer_one": "1 более новый коммит",
+      "baseNewer_one": "{{count}} более новый коммит",
       "baseNewer_other": "{{count}} более новых коммита",
       "baseNewer_few": "{{count}} более новых коммита",
       "baseNewer_many": "{{count}} более новых коммитов",
@@ -4785,7 +4785,7 @@
       "cancelAutoMergeLabel": "Отменить автослияние",
       "mergedInto": "Слит в {{base}}",
       "merged": "Слит",
-      "genericAgent": "AI",
+      "genericAgent": "ИИ",
       "resolveWithAgent": "Разрешить с помощью {{agent}}",
       "fixWithAgent": "Исправить с помощью {{agent}}",
       "cantMergeYet": "Пока нельзя слить:",
@@ -4951,7 +4951,7 @@
       "mergeMergeRequest": "Слить запрос на слияние",
       "mergePullRequest": "Слить пул-реквест",
       "copyLink": "Скопировать ссылку",
-      "startWorkspace": "Начать рабочее пространство",
+      "startWorkspace": "Создать рабочее пространство",
       "moreActions": "Дополнительные действия"
     },
     "itemDetailContent": {
@@ -5930,7 +5930,7 @@
           "grokNotSignedIn": "Вход в Grok не выполнен — выполните grok login",
           "grokAuthInvalid": "Файл авторизации Grok повреждён",
           "grokAuthUnreadable": "Не удалось прочитать файл авторизации Grok",
-          "grokSignInExpired": "Вход в Grok истёк — выполните grok на компьютере, где запущена Orca, и при запросе войдите. Сообщение в чате не требуется.",
+          "grokSignInExpired": "Сеанс входа в Grok истёк — выполните grok на компьютере, где запущена Orca, и при запросе войдите. Сообщение в чате не требуется.",
           "grokBillingConfigMissing": "В ответе о расчётах Grok нет конфигурации",
           "grokBillingUsageMissing": "В ответе о расчётах Grok нет данных об использовании кредитов",
           "grokUsageUnauthorizedHttp": "Запрос использования Grok не авторизован (HTTP {{status}})",
@@ -5942,13 +5942,13 @@
           "codexNotSignedIn": "Вход в Codex не выполнен",
           "codexHomeUnavailable": "Домашняя папка Codex недоступна",
           "wslCodexHomeUnavailable": "Домашняя папка Codex в WSL недоступна для {{distro}}",
-          "codexRebuildingIndex": "Codex перестраивает индекс сессий; использование обновится после завершения восстановления",
+          "codexRebuildingIndex": "Codex перестраивает индекс сессий; данные об использовании обновятся после завершения восстановления",
           "chatgptAuthRequired": "Для чтения лимитов требуется аутентификация ChatGPT",
-          "claudeRateLimited": "Лимиты использования Claude сейчас исчерпаны.",
-          "claudeUsageUnavailable": "Использование Claude сейчас недоступно.",
+          "claudeRateLimited": "Получение данных об использовании Claude сейчас ограничено по частоте запросов.",
+          "claudeUsageUnavailable": "Данные об использовании Claude сейчас недоступны.",
           "claudeOauthTokenUnavailable": "Токен доступа Claude OAuth недоступен",
           "claudeKeychainUnavailable": "Учётные данные Claude в связке ключей недоступны",
-          "claudePlanUsageUnavailable": "Использование тарифа Claude недоступно для этой сессии Claude CLI.",
+          "claudePlanUsageUnavailable": "Данные об использовании тарифа Claude недоступны для этой сессии Claude CLI.",
           "waitingForClaudeSession": "Ожидание сессии Claude",
           "wslClaudeConfigUnavailable": "Конфигурация Claude в WSL недоступна для {{distro}}",
           "noCredentials": "Нет учётных данных",
@@ -5981,7 +5981,7 @@
           "codexResetUnknownOutcome": "Неизвестный результат сброса Codex",
           "codexResetIdempotencyRequired": "Требуется ключ идемпотентности для сброса Codex",
           "noSubscriptionApiKeyBilling": "Нет подписки — оплата по ключу API",
-          "claudeWaitingCredentialRotate": "Обновление использования Claude ждёт, пока действующий терминал Claude обновит свои учётные данные.",
+          "claudeWaitingCredentialRotate": "Обновление данных об использовании Claude ждёт, пока запущенный терминал Claude обновит свои учётные данные.",
           "unknown": "Неизвестная ошибка"
         }
       },
@@ -6216,15 +6216,15 @@
       "backToTidyUp": "Назад к уходу за памятью",
       "nowRunning": "Уже наводит порядок.",
       "nowBusy": "Чат ещё работает. Повторите, когда он закончит.",
-      "nowFailed": "Не удалось начать наведение порядка. Повторите попытку.",
+      "nowFailed": "Не удалось начать уборку. Повторите попытку.",
       "undoSuperseded": "Память изменилась после этой уборки, поэтому её оставили как есть.",
-      "undoFailed": "Не удалось отменить наведение порядка.",
+      "undoFailed": "Не удалось отменить уборку.",
       "everyNight": "Каждую ночь",
       "everyWeek": "Раз в неделю",
       "on": "Наводить порядок в памяти по ночам",
-      "turnedOff": "Выключено после 10 неудачных наведений порядка подряд.",
+      "turnedOff": "Выключено после 10 неудачных уборок подряд.",
       "every": "Как часто",
-      "lastTidied": "Последний порядок наведён",
+      "lastTidied": "Последняя уборка",
       "tidying": "Наводим порядок…",
       "now": "Навести порядок сейчас",
       "merged": "Объединено повторяющихся строк: {{count}}",
@@ -6236,9 +6236,9 @@
       "learned": "Узнано из чатов",
       "tidied": "Порядок наведён",
       "undone": "Отменено",
-      "undoAll": "Отменить это наведение порядка",
-      "summaryTitle": "Последнее наведение порядка",
-      "undoStale": "С тех пор было более новое наведение порядка. Проверьте его перед отменой."
+      "undoAll": "Отменить эту уборку",
+      "summaryTitle": "Последняя уборка",
+      "undoStale": "С тех пор прошла более новая уборка. Проверьте её перед отменой."
     },
     "items": {
       "filter": {
@@ -6446,10 +6446,10 @@
         "movedOne": "«{{title}}» перемещён в «{{status}}»",
         "movedMany": "Элементов перемещено в «{{status}}»: {{count}}",
         "doneFailed": "Не удалось отметить выполненным: {{why}}",
-        "moveFailed_one": "Не удалось переместить: {{why}}",
-        "moveFailed_other": "Не удалось переместить элементы ({{count}}): {{why}}",
-        "moveFailed_few": "Не удалось переместить элементы ({{count}}): {{why}}",
-        "moveFailed_many": "Не удалось переместить элементы ({{count}}): {{why}}",
+        "moveFailed_one": "Не удалось переместить {{count}} элемент: {{why}}",
+        "moveFailed_other": "Не удалось переместить {{count}} элемента: {{why}}",
+        "moveFailed_few": "Не удалось переместить {{count}} элемента: {{why}}",
+        "moveFailed_many": "Не удалось переместить {{count}} элементов: {{why}}",
         "snoozeFailed": "Не удалось отложить: {{why}}",
         "unsnoozedOne": "«{{title}}» возвращён из отложенных",
         "snoozedOne": "«{{title}}» отложен до {{when}}",
@@ -6862,7 +6862,7 @@
       "sayHi": "Поздоровайтесь с {{name}}",
       "closedShort": "закрыт",
       "needsYou": "Ждёт вас",
-      "askingBot": "Спрашивает {{name}}",
+      "askingBot": "Обращается к {{name}}",
       "handedOver": "Передан",
       "fromClosedChat": "Из закрытого чата",
       "automationTerminal": "Запуск автоматизации · терминал",
