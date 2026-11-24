@@ -11,12 +11,25 @@ import { isAgentRpcCaller, type RpcCallerIdentity } from './rpc-caller-identity'
 export function typedByOf(context: {
   caller?: RpcCallerIdentity | undefined
   clientKind?: RpcContext['clientKind']
+  callerScope?: RpcContext['callerScope']
   deviceSelf?: Pick<DeviceSelfRpcContext, 'orcaAccount'> | undefined
   runtime: Partial<Pick<OrcaRuntimeService, 'pairedDeviceAccount'>> & {
     getConnectorCloud?: () => Pick<ConnectorCloud, 'signedInAccount'> | null
   }
 }): AgentJournalTypedBy | undefined {
-  const { caller } = context
+  const { caller, callerScope } = context
+  // A shared teammate's device signed in as their share row: its account, not a claim, and never
+  // the owner's, whatever runs on that device.
+  if (callerScope?.kind === 'bot-share' && caller?.kind === 'paired-device') {
+    return {
+      by: 'device',
+      deviceId: caller.deviceId,
+      account: callerScope.name,
+      accountId: callerScope.accountId,
+      own: false,
+      verified: 'share'
+    }
+  }
   if (isAgentRpcCaller(caller)) {
     return { by: 'agent' }
   }

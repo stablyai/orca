@@ -2,6 +2,7 @@
 // for, what each message's post came to, and what the chat shows of it, on desktop and phone alike.
 import type { ConnectorAsker } from './connector-cloud-contract'
 import type { ConnectorMessageAsker } from '../connector-message-asker'
+import type { OtherPersonTypist } from '../agent-session/journal/agent-journal-typed-by'
 import type {
   ExternalConversationLink,
   ExternalConversationOpener,
@@ -43,7 +44,7 @@ export function slackMirrorDefault(
   return opener.role === 'owner' && botSetting !== false
 }
 
-type SlackMirrorGate = Pick<
+export type SlackMirrorGate = Pick<
   ExternalConversationLink,
   'mirror' | 'mirrorBlocked' | 'mirrorChosen' | 'mirrorExternal'
 >
@@ -121,15 +122,18 @@ export function slackThreadUrl(externalId: string): string | null {
   return place.threadTs ? `${base}/thread/${place.channelId}-${place.threadTs}` : base
 }
 
-/** The "You · Slack" tag's facts for the owner's message posted to the thread from Orca. */
+/** The "You · Slack" tag's facts for a message posted to the thread from Orca: the owner's, or the
+ *  other person's who typed it (a shared teammate). */
 export function slackMirrorPostedAsker(
-  link: Pick<ExternalConversationLink, 'externalId' | 'opener'>
+  link: Pick<ExternalConversationLink, 'externalId' | 'opener'>,
+  typist?: OtherPersonTypist
 ): ConnectorMessageAsker {
   const url = slackThreadUrl(link.externalId)
   return {
     source: 'slack',
-    userId: 'owner',
-    role: 'owner',
+    ...(typist
+      ? { userId: 'orca', name: typist.name, role: 'member' as const }
+      : { userId: 'owner', role: 'owner' as const }),
     place: {
       kind: link.opener?.dm ? 'direct_message' : 'channel',
       id: slackPlaceOf(link.externalId)?.channelId ?? 'slack'

@@ -5,6 +5,7 @@ import { Button } from '@/components/ui/button'
 import { SlackIcon } from '@/components/icons/SlackIcon'
 import { useTranslate } from '@/i18n/use-translate'
 import type { SlackMirrorPost } from '../../../../../shared/connectors/external-conversation-link'
+import type { OtherPersonTypist } from '../../../../../shared/agent-session/journal/agent-journal-typed-by'
 import {
   slackMirrorPostedAsker,
   slackMirrorView
@@ -20,9 +21,10 @@ export function useNativeChatSlackMirrorPost(itemId: string): SlackMirrorPost | 
 }
 
 export function NativeChatSlackMirrorTag({
-  nameless = false
+  typist
 }: {
-  nameless?: boolean
+  /** Another person typed it (a shared teammate): their sender tag names them beside this. */
+  typist?: OtherPersonTypist
 }): React.JSX.Element | null {
   const mirror = useNativeChatSlackMirrorContext()
   const say = useSlackMirrorCopy()
@@ -31,9 +33,9 @@ export function NativeChatSlackMirrorTag({
   }
   return (
     <NativeChatConnectorAskerTag
-      asker={slackMirrorPostedAsker(mirror.link)}
+      asker={slackMirrorPostedAsker(mirror.link, typist)}
       postedFrom={say(slackMirrorView(mirror.link, mirror.botName).short)}
-      nameless={nameless}
+      nameless={typist !== undefined}
     />
   )
 }

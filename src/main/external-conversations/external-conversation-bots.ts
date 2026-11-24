@@ -1,4 +1,5 @@
 // A connector conversation in a bot's home: a native chat there, checked against the bot on every delivery.
+import type { BotShare } from '../../shared/bots/bot-team-shares'
 import type { ConnectorWorkLink } from '../../shared/connector-work-link-contract'
 import type {
   ExternalConversationBot,
@@ -22,6 +23,8 @@ export type ConversationBots = {
   open(target: ExternalConversationBot): Promise<LinkableChat>
   /** The pull requests a bot conversation's work opened. */
   workLinks(link: ExternalConversationLink): Promise<ConnectorWorkLink[]>
+  /** The people the owner shared the bot with, as the host keeps them. */
+  shares(botId: string): readonly BotShare[] | undefined
 }
 
 /**

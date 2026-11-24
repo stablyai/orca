@@ -21,7 +21,7 @@ const appAsker = ConnectorAsker.parse({
 
 describe("another Slack app's request", () => {
   it('keeps that an app asked through the journal, and reads by its name', () => {
-    const stored = storedConnectorAsker('slack', appAsker)
+    const stored = storedConnectorAsker('slack', appAsker, undefined)
     expect(stored).toMatchObject({ userId: 'U0CIAPP', app: true })
     expect(readConnectorMessageAsker(stored)).toEqual(stored)
     expect(connectorAskerTagView(stored!, t)).toMatchObject({
@@ -33,7 +33,9 @@ describe("another Slack app's request", () => {
 
   it('reads as an app, never Someone, when the cloud sent no name', () => {
     const { name: _name, ...unnamed } = appAsker
-    expect(connectorAskerTagView(storedConnectorAsker('slack', unnamed)!, t).name).toBe('An app')
+    expect(connectorAskerTagView(storedConnectorAsker('slack', unnamed, undefined)!, t).name).toBe(
+      'An app'
+    )
   })
 
   it('tells the agent an app asked, not a person', () => {
@@ -44,7 +46,7 @@ describe("another Slack app's request", () => {
 
   it('reads as a person’s from a cloud that sends no app mark, or one this build can’t read', () => {
     const { app: _app, ...person } = appAsker
-    expect(storedConnectorAsker('slack', person)?.app).toBeUndefined()
+    expect(storedConnectorAsker('slack', person, undefined)?.app).toBeUndefined()
     expect(ConnectorAsker.parse({ ...appAsker, app: 'robot' }).app).toBeUndefined()
   })
 })

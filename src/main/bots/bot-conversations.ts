@@ -26,6 +26,7 @@ export function botConversations(deps: {
       const bot = deps.bots.enabled() ? find(botId) : undefined
       return !bot ? 'bot_not_found' : bot.paused ? 'bot_paused' : null
     },
+    shares: (botId) => find(botId)?.shares,
     open: async ({ kind, botId }) => {
       const bot = find(botId)
       if (!bot) {

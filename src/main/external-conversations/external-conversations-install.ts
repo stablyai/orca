@@ -75,6 +75,12 @@ export function installExternalConversations(
   if (!store) {
     return { current: () => null, slackMirror: () => null, threadSeen: () => {} }
   }
+  // Keyed by the chat's /clear root, as it was recorded.
+  const chatActsFor = (sessionId: string) =>
+    readBotConversationActsFor(
+      runtime,
+      isOrcaSessionId(sessionId) ? canonicalOrcaSessionId(sessionId) : sessionId
+    )?.actsFor
   let seam: ExternalConversationSeam | null = null
   let mirror: SlackMirror | null = null
   const linked = () => runtime.onConversationLinked?.()
@@ -93,6 +99,7 @@ export function installExternalConversations(
           const item = await reads?.item(itemId)
           return item?.body.kind === 'message' ? item.body : null
         },
+        chatActsFor,
         emitTurnEnd: (event) => seam?.tellTurnEnd(event) ?? false,
         onLinked: linked,
         signal
@@ -153,13 +160,9 @@ export function installExternalConversations(
         const label = resolve ? (await resolve(botId, 'slack', 'place', channelId)).label : null
         return label && !isRefOf('slack', label) ? label : null
       },
-      // Keyed by the chat's /clear root, as it was recorded.
       actsForOf: (sessionId) => {
-        const recorded = readBotConversationActsFor(
-          runtime,
-          isOrcaSessionId(sessionId) ? canonicalOrcaSessionId(sessionId) : sessionId
-        )
-        return recorded && threadActsFor(recorded.actsFor)
+        const actsFor = chatActsFor(sessionId)
+        return actsFor && threadActsFor(actsFor)
       },
       freesGoneChats: () =>
         runtime

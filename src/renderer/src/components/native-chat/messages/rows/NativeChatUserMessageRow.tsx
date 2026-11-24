@@ -120,7 +120,7 @@ export function NativeChatUserMessageRow({
         <div className="flex min-w-0 max-w-full justify-end gap-1.5">
           {message.typedByOther ? <NativeChatTypedByTag typist={message.typedByOther} /> : null}
           {slackPost?.state === 'posted' ? (
-            <NativeChatSlackMirrorTag nameless={message.typedByOther !== undefined} />
+            <NativeChatSlackMirrorTag typist={message.typedByOther} />
           ) : null}
         </div>
       ) : null}

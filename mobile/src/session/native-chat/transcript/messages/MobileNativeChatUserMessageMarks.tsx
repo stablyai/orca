@@ -125,7 +125,7 @@ function MobileTypedMessageTags({
         {typist ? <MobileNativeChatTypedByTag typist={typist} /> : null}
         {posted && mirror ? (
           <MobileNativeChatConnectorAskerTag
-            asker={slackMirrorPostedAsker(mirror.link)}
+            asker={slackMirrorPostedAsker(mirror.link, typist)}
             nameless={typist !== undefined}
           />
         ) : null}

@@ -14,7 +14,7 @@ import {
   watchChatNews,
   type ConversationChatHost
 } from './external-conversation-chat'
-import { HOST_CLOCK } from './external-conversation-host'
+import { HOST_CLOCK, type ExternalConversationHost } from './external-conversation-host'
 import type { ConnectorMessage, ConversationKey, Delivery } from './external-conversation-types'
 
 /** A native chat a conversation links to; chats run only on this host. */
@@ -171,7 +171,7 @@ export class ChatDeliveries {
 
   /** Linked once the chat takes the message, so a refused one never takes a shared chat's replies. */
   async deliver(
-    chats: ConversationChatHost | undefined,
+    host: Pick<ExternalConversationHost, 'chat' | 'bots'>,
     key: ConversationKey,
     chat: LinkableChat,
     delivery: ConnectorMessage & {
@@ -196,9 +196,12 @@ export class ChatDeliveries {
         sent = this.admit(chat.sessionId, delivery.deliveryId)
       }
     }
-    const outcome = await deliverToChat((await chats?.ensure()) ?? null, chatLink(key, chat), {
+    // The bot's share list vouches for the Orca account an asker's login is linked to.
+    const shares = chat.bot ? host.bots?.shares(chat.bot.botId) : undefined
+    const outcome = await deliverToChat((await host.chat?.ensure()) ?? null, chatLink(key, chat), {
       ...delivery,
-      admitted
+      admitted,
+      ...(shares ? { shares } : {})
     }).finally(() => {
       sending.delete(attempt)
       if (this.sending.get(chat.sessionId) === sending && sending.size === 0) {

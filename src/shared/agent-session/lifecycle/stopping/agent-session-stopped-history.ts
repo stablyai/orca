@@ -14,6 +14,8 @@ import {
   dispatchWasWithdrawn
 } from '../../requests/structured-agent-session-dispatch-rejection'
 import { MAX_PROMPT_BYTES } from '../../../rpc-contract/structured-agent-session/structured-agent-session-message-params'
+import { isPromptCommand, messageWords } from '../../journal/agent-journal-message-words'
+import { withShareTypistPrompt } from '../../../bots/bot-share-typist-prompt'
 
 /** The record Claude writes for its own Stop, carried after each stopped message. */
 export const STOPPED_MESSAGE_INTERRUPTED_MARKER = '[Request interrupted by user]'
@@ -30,16 +32,6 @@ export type StoppedHistoryJournal = {
 export type OwedStoppedMessage = {
   clientMessageId: string
   words: string
-}
-
-/** A command or goal, or words starting with a slash command, which only work at the prompt start:
- *  nothing may go ahead of them. */
-export function isPromptCommand(body: AgentJournalMessageItem): boolean {
-  if (body.command !== undefined || body.sentAs !== undefined) {
-    return true
-  }
-  const firstText = body.blocks.find((block) => block.type === 'text' && block.text.length > 0)
-  return firstText?.type === 'text' && firstText.text.startsWith('/')
 }
 
 /** Exclude commands/goals/agent mail and slash commands whose wording only works at the prompt start. */
@@ -134,20 +126,14 @@ export function agentSessionStoppedHistoryOwed(
       }
       const { clientMessageId, acceptedSequence } = submission
       const body = journal.body(clientMessageId)
-      const words = isOrdinaryPersonMessage(body) ? messageWords(body) : ''
+      // A shared teammate's stopped words keep their own Orca line and fence when carried.
+      const words = isOrdinaryPersonMessage(body) ? messageWords(withShareTypistPrompt(body)) : ''
       return words.length > 0 && deliveryBytes(words) + wordsBytes('x') <= MAX_PROMPT_BYTES
         ? [{ clientMessageId, words, acceptedSequence }]
         : []
     })
     .sort((left, right) => left.acceptedSequence - right.acceptedSequence)
     .map(({ clientMessageId, words }) => ({ clientMessageId, words }))
-}
-
-/** A message's words as an agent joins its text blocks. */
-export function messageWords(body: AgentJournalMessageItem): string {
-  return body.blocks
-    .flatMap((block) => (block.type === 'text' && block.text.length > 0 ? [block.text] : []))
-    .join('\n')
 }
 
 /** Deliver newest owed text then older text while total fits MAX_PROMPT_BYTES; if newest cannot fit, all remain owed. Cover even omitted messages so none arrives after newer ones. */
@@ -161,7 +147,7 @@ export function selectStoppedHistory(
   send: AgentJournalMessageItem
 ): StoppedHistoryDelivery | null {
   const messages: OwedStoppedMessage[] = []
-  let room = MAX_PROMPT_BYTES - wordsBytes(messageWords(send))
+  let room = MAX_PROMPT_BYTES - wordsBytes(messageWords(withShareTypistPrompt(send)))
   for (const entry of owed.toReversed()) {
     const cost = deliveryBytes(entry.words)
     if (cost <= room) {

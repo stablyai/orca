@@ -176,7 +176,8 @@ export const storedMessageBody = messageBody.extend({
         accountId: z.string().optional(),
         own: z.boolean().optional(),
         computer: z.string().optional(),
-        phone: z.string().optional()
+        phone: z.string().optional(),
+        verified: z.literal('share').optional()
       }),
       z.object({ by: z.literal('agent') })
     ])

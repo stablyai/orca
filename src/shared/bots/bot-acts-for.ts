@@ -2,6 +2,10 @@
 // the people a teammate's request or automation came from. Every check on whom a bot may ask reads it.
 import type { ConnectorSource } from '../connectors/external-conversation-link'
 import type { ConnectorAskerPlaceKind } from '../connectors/connector-cloud-contract'
+import {
+  shareTypistOf,
+  type AgentJournalTypedBy
+} from '../agent-session/journal/agent-journal-typed-by'
 
 /** A person a request is for; `workspaceId` is null when Orca doesn't know which workspace they asked in. */
 export type BotRequestPerson = {
@@ -22,6 +26,26 @@ export type BotRequestPerson = {
 export type BotRequestAsker = { kind: 'owner' } | BotRequestPerson | { kind: 'unknown' }
 
 export const OWNER_ACTS_FOR: readonly BotRequestAsker[] = [{ kind: 'owner' }]
+
+/** A teammate the owner shared the bot with, by their Orca account: a member, never the owner. */
+export function orcaTeammateAsker(accountId: string, name?: string): BotRequestPerson {
+  return {
+    kind: 'person',
+    source: 'orca',
+    userId: accountId,
+    ...(name ? { name } : {}),
+    workspaceId: null,
+    role: 'member'
+  }
+}
+
+/** The teammate whose share connection typed a message in Orca; null for any other message. */
+export function shareTypistAsker(
+  typedBy: AgentJournalTypedBy | undefined
+): BotRequestPerson | null {
+  const typist = shareTypistOf(typedBy)
+  return typist ? orcaTeammateAsker(typist.accountId, typist.name) : null
+}
 
 /** Whether every person named is the bots' owner, by Orca's record or the cloud's verdict. */
 export function actsForOwner(askers: readonly BotRequestAsker[]): boolean {
