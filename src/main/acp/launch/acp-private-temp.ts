@@ -14,8 +14,22 @@ const wipes = new Map<string, Promise<void>>()
 // Why: agent children bind sockets under TMPDIR; reported MCP proxy names run 43-46 bytes.
 const SOCKET_UNDER_RUN_FOLDER = `/run-XXXXXX/${'x'.repeat(56)}`
 
+export function acpRemoveFolderOptions(platform: NodeJS.Platform = process.platform): {
+  recursive: boolean
+  force: boolean
+  maxRetries: number
+  retryDelay: number
+} {
+  return {
+    recursive: true,
+    force: true,
+    maxRetries: platform === 'win32' ? 5 : 1,
+    retryDelay: 100
+  }
+}
+
 function removeFolder(path: string, logger?: StructuredAgentSessionLogger): Promise<void> {
-  return rm(path, { recursive: true, force: true }).catch((error: unknown) =>
+  return rm(path, acpRemoveFolderOptions()).catch((error: unknown) =>
     logger?.warn('ACP agent temp folder not removed', { scope: 'acp-temp', path, error })
   )
 }
