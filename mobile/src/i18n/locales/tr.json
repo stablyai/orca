@@ -207,8 +207,7 @@
       "next": "İleri",
       "other": "Diğer…",
       "skip": "Atla",
-      "step": "Adım {{step}}",
-      "submit": "Gönder"
+      "step": "Adım {{step}}"
     },
     "askRow": {
       "asked": "Soruldu:",
@@ -380,14 +379,6 @@
     },
     "promptStrip": {
       "expand": "Genişlet"
-    },
-    "question": {
-      "otherReplyPlaceholder": "Ya da bir yanıt yazın…",
-      "replyPlaceholder": "Yanıtınızı yazın…",
-      "sendReply": "Yanıt gönder",
-      "submit": "Gönder",
-      "submitCount": "Gönder ({{count}})",
-      "submitSelectedOptions": "Seçilen seçenekleri gönder"
     },
     "queuedMessages": {
       "deleteAll": "Tümünü sil",
@@ -4125,7 +4116,6 @@
       "empty": "Çalışma alanı yok",
       "loadFailed": "Bu sunucudan çalışma alanları yüklenemedi",
       "noFilterMatches": "Filtrelerle eşleşen çalışma alanı yok",
-      "noMatches": "Eşleşen çalışma alanı yok",
       "reopen": "Güncellemek için yeniden açın",
       "reopenDetail": "Bu sunucu, çalışma alanlarını bu sayfanın henüz tanımadığı bir biçimde listeliyor."
     },
@@ -4470,10 +4460,7 @@
     }
   },
   "bots": {
-    "section": {
-      "scrollLeft": "Sola kaydır · {{amount}} gizli",
-      "scrollRight": "Sağa kaydır · {{amount}} gizli"
-    },
+    "section": {},
     "link": {
       "pairTitle": "Bilgisayar eşleyin",
       "pairRequired": "Bu bağlantıyı açmak için bu telefonu bir bilgisayarla eşleyin, ardından bağlantıyı yeniden açın.",
@@ -4512,7 +4499,6 @@
       "access": "Erişim",
       "whoCanAsk": "Kimler sorabilir",
       "deleteBot": "Botu sil…",
-      "agentDetail": "Bot konuşmaları ve otomasyonlar için kullanılır. Yeni bir model yeni konuşmalara uygulanır; Ana sohbet mevcut modelini korur.",
       "accountChecking": "Kontrol ediliyor…",
       "signedOut": "Orca oturumu kapatıldı",
       "orcaAccount": "Orca hesabı",
@@ -4527,7 +4513,6 @@
       "onlyYou": "Yalnızca siz",
       "model": "Model",
       "effort": "Çaba",
-      "chatDefaultNote": "Sohbet varsayılanınız kullanılıyor. Arka plan çalıştırmaları Ajanlar ayarınızı kullanır.",
       "modelDefault": "Varsayılan",
       "signInChanged": "Orca oturumu değişti",
       "sameAsChatsDetail": "Sohbet izin ayarınızı kullanır.",
@@ -4553,7 +4538,6 @@
     "lookAround": {
       "looking": "Bakılıyor…",
       "save": "Kaydet",
-      "detail": "Sonraki adımları önermek için bağlı uygulamaları ve projeleri okur. Salt okunur. Her göz atma ajan planınızı kullanır ve Orca ana makinede çalışıyor olmalı.",
       "lookNow": "Şimdi göz at",
       "notYet": "Henüz göz atılmadı",
       "backToLookAround": "Göz at bölümüne dön"
@@ -4568,7 +4552,6 @@
     "groups": {
       "group": "Grup",
       "peerTold": "{{from}}, {{to}} botuna bildirdi",
-      "startAConversationWithThisGroupMentionBots": "Bu grupla bir konuşma başlatın. Botları @Ad veya @everyone ile anın.",
       "items": {
         "emptyTitle": "Bu gruptan henüz öğe yok",
         "needsYouCount_one": "{{count}} sizi bekliyor",
@@ -4607,8 +4590,6 @@
     "tidyUp": {
       "title": "Bellek bakımı",
       "never": "Henüz toparlanmadı",
-      "footer": "Yalnızca bellek dosyalarını değiştirir. Kısa bir sohbet gibi ajan planınızı kullanır. Orca bilgisayarınızda çalışıyor olmalı.",
-      "undoNote": "Geri al, MEMORY.md dosyasını tek seferde bu toparlamadan önceki haline döndürür. Geçmişin tamamına ve bellek düzenlemeye bilgisayarınızda, Ayarlar → Bellek bölümünden erişebilirsiniz.",
       "backToTidyUp": "Bellek bakımına dön"
     },
     "items": {
@@ -4629,8 +4610,7 @@
         "title": "Öğe",
         "placeOf": "{{index}} / {{total}}",
         "previous": "Önceki öğe",
-        "next": "Sonraki öğe",
-        "subWhere": "Öğe {{number}} · {{chat}}"
+        "next": "Sonraki öğe"
       },
       "write": {
         "offline": "{{host}} çevrimdışı."
@@ -4639,7 +4619,6 @@
       "readFailedClosedPage": "Daha fazla kapalı öğe okunamadı.",
       "skillLimit": "Mesaj gönderilmedi. En fazla {{limit}} beceri dosyası seçip yeniden deneyin.",
       "ask": {
-        "notSentYet": "henüz gönderilmedi",
         "replaced": "Ajan yeni bir soru sordu. Okuyup yanıtlayın.",
         "replacedByNewer": "Daha yeni bir soruyla değiştirildi",
         "skipped": "Atlandı"
@@ -4678,7 +4657,6 @@
       },
       "rotate": {
         "open": "Anahtarı yenile…",
-        "title": "“{{automation}}” için anahtar yenilensin mi?",
         "confirm": "Anahtarı yenile",
         "note": "URL yeni bir anahtar alır. Her göndericiyi bununla güncelleyin.",
         "overlap": "Eski anahtar 24 saat çalışmaya devam etsin",
@@ -4693,19 +4671,15 @@
         "add": "İmzalama sırrı ekle…",
         "generatedTitle": "İmzalama sırrı hazır",
         "done": "Tamamlandı",
-        "generatedNote": "Bunu {{sender}} webhook ayarlarına kopyalayın. Bundan sonra çağrılar onun imzasını taşımalı.",
         "copy": "Sırrı kopyala",
         "copied": "Sır kopyalandı",
         "changeTitle": "İmzalama sırrını değiştir",
         "addTitle": "İmzalama sırrı ekle",
-        "note": "Orca bundan sonra yalnızca bu sırla imzalanmış çağrıları kabul eder; böylece sızdırılmış bir URL tek başına “{{automation}}” otomasyonunu başlatamaz.",
         "sender": "Gönderici",
         "modeGenerate": "Orca bir tane oluşturur",
         "modePaste": "Göndericininkini yapıştır",
         "generateNote": "Bu sırrı Orca oluşturur. Ardından onu {{sender}} içine kopyalarsınız.",
         "paste": "{{sender}} sırrı",
-        "pasteNote": "Gönderici size kendi sırrını verdiğinde bunu kullanın.",
-        "generate": "Sır oluştur",
         "save": "Kaydet",
         "saved": "İmzalama sırrı kaydedildi",
         "changeOpen": "İmzalama sırrını değiştir…",
@@ -4739,7 +4713,6 @@
       "hookCount_one": "{{count}} hook",
       "hookCount_other": "{{count}} hook",
       "name": "Webhook'lar",
-      "hooks": "Hook'lar",
       "addInChat": "Sohbette ekle",
       "setUpDraft": "Şunu yapan bir webhook kur: ",
       "resumed": "Webhook devam ettirildi",
@@ -4805,8 +4778,7 @@
         "unverifiable": "Doğrulanamıyor",
         "unverifiableDetail": "{{bot}} botunun bilgisayarına ulaşılamıyor"
       },
-      "back": "Webhook'lara dön",
-      "howToCallShort": "Herhangi bir araç veya betik bir webhook'un URL'sine POST isteği gönderebilir. Her webhook bir otomasyon başlatır."
+      "back": "Webhook'lara dön"
     },
     "errors": {
       "generic": "Bir sorun oluştu. Tekrar deneyin."
@@ -4872,7 +4844,6 @@
       "colorInk": "Mürekkep",
       "title": "Ad ve resim",
       "mascot": "Maskot",
-      "background": "Arka plan rengi",
       "choosePhoto": "Fotoğraflar'dan seç",
       "slackToo": "Botunuzun Slack'teki resmini de değiştirir."
     },
@@ -4889,9 +4860,7 @@
       "addButton": "Ekle",
       "sourceLabel": "Sunucu URL'si veya başlatma komutu",
       "sourcePlaceholder": "https://… or npx …",
-      "scope": "Kendi araçlarınıza ek olarak yalnızca {{name}} bunu alır.",
       "details": "Ayrıntılar",
-      "commandWarning": "Komut, {{host}} üzerinde bu botun ana klasöründe çalışır. Eklemek veya kaydetmek, yerel kontrol sırasında onu başlatabilir. Yalnızca güvendiğiniz yazılımları ekleyin.",
       "serverType": "Sunucu türü",
       "urlMode": "Bir URL'ye bağlan",
       "commandMode": "Komut çalıştır",
@@ -4899,7 +4868,6 @@
       "removeTitle": "{{app}} kaldırılsın mı?",
       "removeNote": "{{bot}} artık {{app}} uygulamasını kullanamaz. İstediğiniz zaman yeniden ekleyebilirsiniz.",
       "remove": "Kaldır",
-      "signInOrca": "Claude ve Codex ile çalışır",
       "signInMissing": "{{agent}} oturum açmamış",
       "signInHeld": "{{agent}} tarafından tutulur",
       "wontStart": "Başlamaz",
@@ -4961,7 +4929,17 @@
         "denied": "Erişime izin verilmedi.",
         "expired": "Oturum açmanın süresi doldu. Yeniden deneyin.",
         "couldNotSignIn": "Oturum açılamadı. Yeniden deneyin."
-      }
+      },
+      "trust": "Yalnızca güvendiğiniz yazılımları ekleyin.",
+      "argument": "Argüman",
+      "removeArgument": "Argümanı kaldır",
+      "header": "Başlık",
+      "variable": "Değişken",
+      "removeHeaderRow": "Başlığı kaldır",
+      "removeVariableRow": "Değişkeni kaldır",
+      "emptyArgument": "Boş",
+      "valueNew": "Yeni değer",
+      "valueSaved": "Kaydedildi"
     },
     "handToBot": {
       "menu": "Bota devret…",
@@ -4994,7 +4972,6 @@
       "rowDetail": "{{app}} {{kind}}",
       "bringOver": "Aktar",
       "otherApp": "Başka bir uygulama…",
-      "otherAppNote": "Eski botunuz dosyalarını sizin için kopyalar",
       "noneFoundNote": "OpenClaw (~/.openclaw), Hermes (~/.hermes) veya OpenBot'ta bot bulunamadı.",
       "sendStep": "Eski botunuza bu mesajı gönderin",
       "copyMessage": "Mesajı kopyala",
@@ -5005,18 +4982,13 @@
       "replyLabel": "Yanıtı",
       "title": "Başka bir uygulamadan içe aktar",
       "newBot": "Yeni bot",
-      "exportDescription": "Eski botunuzdan kendisinin bir kopyasını isteyin, ardından kopyayı yeni botunuza verin.",
-      "description": "Yeni botunuz eskisini okur ve kendini kurar.",
       "nameAnother": "Yeni bota ad verin",
-      "importedBefore": "{{bot}} bu bottan geldi",
       "keysStay": "Anahtarlar ve girişler geride kalır",
       "chooseFolderTitle": "Klasör seçin",
       "loadingFolders": "Klasörler yükleniyor…",
       "lookingOn": "{{host}} üzerinde aranıyor…",
       "foundOn": "{{host}} üzerinde {{count}} bulundu",
-      "copiedNote": "Kopyalandı. Eski botunuzla nerede sohbet ediyorsanız oraya yapıştırın.",
       "copyAgain": "Yeniden kopyala",
-      "addStepNote": "{{host}} üzerindeki Downloads klasörüne, adı -export ile biten bir klasör kaydeder.",
       "folderItems_one": "{{count}} öğe",
       "folderItems_other": "{{count}} öğe",
       "chooseAnother": "Başka bir klasör seç…",
@@ -5178,6 +5150,9 @@
       },
       "webhooks": {
         "line": "Herhangi bir araç veya betikten gelen olaylar"
+      },
+      "composio": {
+        "keyOnHost": "{{host}} üzerinde saklanır; botlar asla görmez."
       }
     },
     "share": {
@@ -5192,6 +5167,7 @@
     },
     "usageLimit": {
       "continuesAt": "{{time}} saatinde devam eder",
+      "continues": "{{time}} saatinde devam eder",
       "hitLimit": "Limite ulaşıldı · {{time}} saatinde sıfırlanır"
     }
   },

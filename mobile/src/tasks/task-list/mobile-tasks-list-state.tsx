@@ -1,5 +1,4 @@
 import { CircleAlert, Inbox } from '../../components/icons/app-icons'
-import { StyleSheet, View } from 'react-native'
 import {
   HostOfflineBanner,
   useHostOfflineBanner
@@ -14,7 +13,6 @@ import { useForceReconnect } from '../../transport/connection/host-client-hooks'
 import { isConnectionOutage } from '../../transport/connection/connection-health'
 import { useHostDisplay } from '../../host-descriptors/use-host-display'
 import { useHostProfile } from '../../host-catalog/use-host-profile'
-import { spacing } from '../../theme/mobile-theme'
 import { translate } from '../../i18n/mobile-i18n'
 import type { ConnectionPresentationModel } from '../screen-state/use-mobile-tasks-connection-presentation'
 import { clearMobileTasksSearch } from '../screen/mobile-tasks-search-control'
@@ -147,17 +145,11 @@ export function MobileTasksOfflineBanner({ model }: { model: ConnectionPresentat
     return null
   }
   return (
-    <View style={bannerStyles.inset}>
-      <HostOfflineBanner
-        hostName={hostName}
-        offline={banner.offline}
-        asOf={banner.asOf}
-        onRetry={banner.retry}
-      />
-    </View>
+    <HostOfflineBanner
+      hostName={hostName}
+      offline={banner.offline}
+      asOf={banner.asOf}
+      onRetry={banner.retry}
+    />
   )
 }
-
-const bannerStyles = StyleSheet.create({
-  inset: { paddingHorizontal: spacing.lg, paddingBottom: spacing.sm }
-})

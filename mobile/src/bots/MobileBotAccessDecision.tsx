@@ -6,7 +6,7 @@ import { StyleSheet, Text, View } from 'react-native'
 import { Laptop, Mail, ShieldAlert, ShieldOff, type AppIcon } from '../components/icons/app-icons'
 import type { ConnectorAccessRequest } from '../../../src/shared/connector-bot-access-contract'
 import { BottomDrawer } from '../components/bottom-drawer/BottomDrawer'
-import { ListGroup, ListRow, SectionHeader } from '../components/list/ListGroup'
+import { LIST_LEADING_INSET, ListGroup, ListRow, SectionHeader } from '../components/list/ListGroup'
 import { ConfirmContent } from '../components/sheets/ConfirmModal'
 import { colors, radii, spacing, typography } from '../theme/mobile-theme'
 import { themedStyleSheet } from '../theme/themed-styles'
@@ -27,6 +27,7 @@ import type { RpcClient } from '../transport/rpc/rpc-client-contract'
 import type { BotAccessRequests } from './use-bot-access-requests'
 import { MobileConnectorSourceIcon } from './MobileConnectorSourceIcon'
 import { mobileBotAccessCopy } from './mobile-bot-access-copy'
+import { SettingsNote } from '../settings/settings-screen-frame'
 
 const ROW_ICONS: Partial<Record<AccessDecisionRow['kind'], AppIcon>> = {
   computer: Laptop,
@@ -78,12 +79,12 @@ export function MobileBotAccessDecisionContent({
         <>
           <Text style={styles.warning}>{copy.warning}</Text>
           <SectionHeader title={copy.whatTheyCanDo} first />
-          <ListGroup>
+          <ListGroup separatorInset={LIST_LEADING_INSET}>
             {copy.rows.map((row) => (
               <ListRow key={row.kind} title={row.text} leading={<RowIcon row={row} />} />
             ))}
           </ListGroup>
-          <Text style={styles.footer}>{mobileBotAccessCopy(t, 'removeAnyTime')}</Text>
+          <SettingsNote>{mobileBotAccessCopy(t, 'removeAnyTime')}</SettingsNote>
         </>
       }
       {...(onDecline
@@ -184,11 +185,5 @@ const styles = themedStyleSheet(() => ({
     textAlign: 'center',
     marginTop: spacing.sm,
     marginBottom: spacing.md
-  },
-  footer: {
-    fontSize: typography.metaSize,
-    color: colors.textSecondary,
-    marginTop: spacing.sm,
-    paddingHorizontal: spacing.xs
   }
 }))

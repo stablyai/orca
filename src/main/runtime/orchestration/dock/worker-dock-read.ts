@@ -276,6 +276,7 @@ export function readWorkerDockResult(
     title: row.title,
     outcome,
     body: row.body ?? (row.receipt ? 'Stopped by you.' : failureReason),
+    report: typeof row.body === 'string',
     at: epoch(row.changed_at),
     settlement: row.settlement ?? `worker_report:${String(row.report_id)}`,
     acknowledged: row.acknowledged === 1,

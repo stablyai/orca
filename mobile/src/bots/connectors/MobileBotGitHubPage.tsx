@@ -227,7 +227,8 @@ export function MobileBotGitHubPage(props: {
   // A cloud that links several logins lists them, and signs in again to add or refresh them.
   const signsIn = ready && state?.accounts !== undefined
   const menu = [
-    ...(state && ready
+    // The org's page has its own Add row.
+    ...(state && ready && !installation
       ? [
           {
             label: t('bots.connectors.addGitHubAccess', 'Add repositories or organizations'),
@@ -240,7 +241,7 @@ export function MobileBotGitHubPage(props: {
     ...(signsIn
       ? [
           {
-            label: t('bots.github.connection.addAccount', 'Add another GitHub account'),
+            label: t('bots.github.connection.addAnotherAccount', 'Add another account'),
             icon: Plus,
             disabled: !props.online,
             onPress: () => props.onSetUp(true)
@@ -345,7 +346,8 @@ export function MobileBotGitHubPage(props: {
             />
           ))}
           <ListRow
-            leading={<ArrowUpRight size={18} color={colors.textPrimary} />}
+            leading={<ArrowUpRight size={18} color={colors.accentBlue} />}
+            accent
             title={t('bots.github.addMore', 'Add repositories or an organization')}
             accessibilityRole="link"
             disabled={!props.online}

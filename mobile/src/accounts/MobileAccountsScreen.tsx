@@ -347,14 +347,12 @@ export function MobileAccountsScreen() {
         ) : (
           <>
             {offlineBanner ? (
-              <View style={styles.offlineBanner}>
-                <HostOfflineBanner
-                  hostName={hostName}
-                  offline={offlineBanner.offline}
-                  asOf={offlineBanner.asOf}
-                  onRetry={offlineBanner.retry}
-                />
-              </View>
+              <HostOfflineBanner
+                hostName={hostName}
+                offline={offlineBanner.offline}
+                asOf={offlineBanner.asOf}
+                onRetry={offlineBanner.retry}
+              />
             ) : null}
             {renderProviderSection('claude')}
             {renderProviderSection('codex')}

@@ -98,7 +98,8 @@ export const MOBILE_WEB_PAGE_ROUTES = [
     grants: ['navigate', 'storage', 'externalLink', 'haptics', 'native.clipboard.write'],
     optionalGrants: [DEVICE_STORE_GRANT, DIALOG_GRANT, HEADER_GRANT]
   },
-  // A group room: Back and its item hops navigate, Copy writes the clipboard, and + picks photos (all three media verbs, as a chat's).
+  // A group room: Back and its item hops navigate, Copy writes the clipboard, + picks photos and the mic dictates (all three media and audio verbs, as a chat's).
+  // The mic's optional grants match the session's: without native.speech.act the computer transcribes, without native.a11y.announce the page's live region speaks.
   {
     pathname: '/h/[hostId]/group/[groupId]',
     grants: [
@@ -109,9 +110,18 @@ export const MOBILE_WEB_PAGE_ROUTES = [
       'native.clipboard.write',
       'native.media.pick',
       'native.media.read',
-      'native.media.release'
+      'native.media.release',
+      'native.audio.start',
+      'native.audio.read',
+      'native.audio.stop'
     ],
-    optionalGrants: ['externalNavigation', 'native.image.act', DEVICE_STORE_GRANT]
+    optionalGrants: [
+      'externalNavigation',
+      'native.image.act',
+      'native.speech.act',
+      'native.a11y.announce',
+      DEVICE_STORE_GRANT
+    ]
   },
   // Session alone needs media/audio/screencast grants: native clipboard read/write, navigation/storage/external links/haptics come from actual closure callers.
   // Media pick/read/release are all-or-none; partial set can start handle upload it cannot finish. Audio start/read/stop likewise must permit closing mic; device owns wake lock.

@@ -40,6 +40,7 @@ export function WorkerDockResultDialogSlot({
           ownerActionsAvailable && dialog.result?.ownerActionsAvailable !== false
         }
         result={dialog.result}
+        row={dialog.row}
         error={dialog.error}
         onClose={onClose}
         onOpen={() => onOpen(dialog.row)}

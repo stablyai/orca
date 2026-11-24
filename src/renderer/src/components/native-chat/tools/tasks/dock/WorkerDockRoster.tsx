@@ -103,7 +103,7 @@ export function WorkerDockRoster(props: {
     props.rows,
     t
   )
-  const small = items.length <= 30
+  const smallRoster = items.length <= 30
   const activeIndex = useMemo(() => items.findIndex((row) => row.id === focused), [items, focused])
   const rowKeys = useMemo(() => items.map((item) => ({ key: item.id })), [items])
   const estimateSize = useCallback(() => WORKER_DOCK_ROW, [])
@@ -118,13 +118,14 @@ export function WorkerDockRoster(props: {
   )
   const rowWindow = useNativeChatToolRunWindow({
     rows: rowKeys,
-    scrollerRef: viewport,
+    getScrollElement: () => viewport.current,
     isVisible: props.visible,
-    drawsEveryRow: small,
+    drawsEveryRow: smallRoster,
     estimateSize,
     rangeExtractor: extractRange,
-    enabled: props.expanded && !small
+    enabled: props.expanded && !smallRoster
   })
+  const small = rowWindow.drawsEveryRow
   const virtual = rowWindow.virtualizer
   const visibleItems = rowWindow.drawn
   const [fade, setFade] = useState<string | undefined>(undefined)

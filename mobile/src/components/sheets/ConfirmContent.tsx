@@ -130,9 +130,10 @@ const styles = themedStyleSheet(() => ({
     fontWeight: '600',
     color: colors.bgBase
   },
+  // The desktop's destructive-foreground: dark ink on dark's light red, white on light's.
   destructiveText: {
     fontSize: typography.bodySize,
     fontWeight: '600',
-    color: '#fff'
+    color: colors.onStatusRed
   }
 }))

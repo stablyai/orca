@@ -218,11 +218,6 @@ export function MobileBotShareFlow(props: ShareFlowProps) {
         ) : (
           <ShareListPage list={page.list} ctx={ctx} />
         )}
-        {page.kind === 'list' && page.list === 'memory' && secret?.part?.startsWith('memory:') ? (
-          <SettingsNote error>
-            {t('bots.share.removeSecret', 'Remove the secret to publish')}
-          </SettingsNote>
-        ) : null}
       </>
     )
   }

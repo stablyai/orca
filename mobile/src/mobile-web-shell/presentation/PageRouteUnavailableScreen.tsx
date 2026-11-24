@@ -1,7 +1,14 @@
-import { Pressable, Text, View } from 'react-native'
+import { Platform, View } from 'react-native'
+import { CircleAlert, WifiOff } from '../../components/icons/app-icons'
+import { MobileStateView } from '../../components/feedback/MobileStateView'
+import { useMobileUpdateLink } from '../../components/host-connection/ProtocolBlockScreen'
+import { useHostProfile } from '../../host-catalog/use-host-profile'
+import { useHostDisplay } from '../../host-descriptors/use-host-display'
+import { useMobileTranslation } from '../../i18n/use-mobile-translation'
 import { hostStackHostRoute } from '../../navigation/host-stack-navigation'
 import { useRouteHandoff } from '../../navigation/route-handoff'
-import { colors, radii, spacing, typography } from '../../theme/mobile-theme'
+import { openExternalLink } from '../../platform/external-links/external-link'
+import { colors } from '../../theme/mobile-theme'
 import { themedStyleSheet } from '../../theme/themed-styles'
 import { useMobileColorScheme } from '../../theme/use-mobile-color-scheme'
 
@@ -9,56 +16,71 @@ import { useMobileColorScheme } from '../../theme/use-mobile-color-scheme'
 // Replace this dead end via route handoff so page navigation reaches the shell. Encode host ids with hostStackHostRoute; missing ids return to app root because /h/ has no child screen.
 export function PageRouteUnavailableScreen({
   hostId,
-  message = 'This workspace screen is not available on this host.'
+  reason = 'update'
 }: {
   hostId: string
-  message?: string
+  /** `update`: neither this app nor the host's page has the screen; either side may be behind. */
+  reason?: 'update' | 'unreachable-server'
 }) {
   useMobileColorScheme()
+  const t = useMobileTranslation()
   const router = useRouteHandoff()
-  const target = hostId === '' ? '/' : hostStackHostRoute(hostId)
-  const label = hostId === '' ? 'Back to hosts' : 'Back to workspaces'
+  const update = useMobileUpdateLink()
+  const profile = useHostProfile(hostId)
+  const title = useHostDisplay(profile).title
+  // Until its profile reads (or for an unknown id) there is no name to say.
+  const host = profile ? title : null
+  const back = {
+    label: t('common.back', 'Back'),
+    onPress: () => router.replace(hostId === '' ? '/' : hostStackHostRoute(hostId))
+  }
   return (
     <View style={styles.root} testID="mobile-web-page-route-unavailable">
-      <Text style={styles.message}>{message}</Text>
-      <Pressable
-        style={({ pressed }) => [styles.button, pressed && styles.pressed]}
-        accessibilityRole="button"
-        accessibilityLabel={label}
-        onPress={() => router.replace(target)}
-      >
-        <Text style={styles.buttonLabel}>{label}</Text>
-      </Pressable>
+      {reason === 'unreachable-server' ? (
+        <MobileStateView
+          icon={WifiOff}
+          title={t('webShell.pageRouteUnavailable.serverTitle', 'Can’t reach this server')}
+          message={
+            host
+              ? t(
+                  'webShell.pageRouteUnavailable.serverMessage',
+                  'Your phone can’t reach this workspace’s server through {{host}}.',
+                  { host }
+                )
+              : null
+          }
+          action={back}
+        />
+      ) : (
+        <MobileStateView
+          icon={CircleAlert}
+          title={t('webShell.pageRouteUnavailable.updateTitle', 'Update Orca')}
+          message={
+            host
+              ? t(
+                  'webShell.pageRouteUnavailable.updateMessage',
+                  'This screen needs a newer Orca on your phone or on {{host}}.',
+                  { host }
+                )
+              : t(
+                  'webShell.pageRouteUnavailable.updateMessageNoHost',
+                  'This screen needs a newer Orca.'
+                )
+          }
+          // A page can't tell which store installed the app (Play forbids the others), so only the
+          // shell offers its link.
+          {...(Platform.OS === 'web'
+            ? { action: back }
+            : {
+                action: { label: update.label, onPress: () => openExternalLink(update.url) },
+                secondaryAction: back
+              })}
+        />
+      )}
     </View>
   )
 }
 
 const styles = themedStyleSheet(() => ({
-  root: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: colors.bgBase,
-    paddingHorizontal: spacing.lg
-  },
-  message: {
-    fontSize: typography.bodySize,
-    color: colors.textPrimary,
-    textAlign: 'center',
-    marginBottom: spacing.lg
-  },
-  button: {
-    backgroundColor: colors.bgRaised,
-    paddingVertical: spacing.sm + 2,
-    paddingHorizontal: spacing.lg,
-    borderRadius: radii.control
-  },
-  buttonLabel: {
-    fontSize: typography.bodySize,
-    fontWeight: '600',
-    color: colors.textPrimary
-  },
-  pressed: {
-    opacity: 0.7
-  }
+  root: { flex: 1, backgroundColor: colors.bgBase }
 }))

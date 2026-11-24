@@ -130,6 +130,7 @@ export function MobileNativeChatAutomationRunRow({
   const instructions = automationRunInstructions(text, run)
   const facts = automationRunFacts(run, timestamp, wording)
   const meta = scaledType(typography.metaSize, fontScale, 4)
+  const body = scaledType(typography.metaSize, fontScale)
   const { event } = run
   const access = event ? automationRunAccess(event, say) : null
   const link = event ? automationRunEventLink(event, say) : null
@@ -141,116 +142,134 @@ export function MobileNativeChatAutomationRunRow({
     notStarted && panel?.automationIds.has(automationId)
       ? () => panel.open({ automation: automationId })
       : null
-  return (
-    <>
-      <MobileAutomationRowFrame
-        testID="automation-run-row"
-        mark={automationRunMark(run)}
-        lead={notStarted ? say('couldNotStart') : automationRunLabel(run, say)}
-        leadIsVerb={notStarted}
-        name={run.automation.name}
-        status={state === 'queued' ? say('queued') : null}
-        failed={notStarted}
-        timestamp={timestamp}
-        disclosureKey={`automation-run:${messageId}`}
-        action={
-          notStarted ? (
-            <MobileAutomationSendAgain
-              run={run}
-              resend={resend}
-              wording={wording}
-              metaStyle={meta}
-              onError={setSendError}
-            />
-          ) : null
+  // A wait that couldn't start: its name, then what happened (or why Send again was refused).
+  const subtitle = notStarted
+    ? (() => {
+        const what = [say('couldNotStart'), timestamp ? time(timestamp) : null]
+          .filter(Boolean)
+          .join(' · ')
+        const refused = sendError && resend !== 'sent' ? sendError : null
+        return {
+          label: refused ?? what,
+          node: (
+            <Text
+              // Taps on it open the row's details, like its title.
+              pointerEvents="none"
+              numberOfLines={2}
+              style={[refused ? styles.sendAgainError : styles.meta, body]}
+            >
+              {refused ?? what}
+            </Text>
+          )
         }
-        fontScale={fontScale}
-      >
-        <>
-          {error ? (
-            <>
-              <Text style={[styles.heading, meta]}>{say('startError')}</Text>
-              <Text selectable style={[styles.error, meta]}>
-                {error}
-              </Text>
-            </>
-          ) : null}
-          {earlierFailures?.map((failure) => (
-            <View key={failure.id}>
-              <Text style={[styles.heading, meta]}>
-                {[say('couldNotStart'), failure.timestamp ? time(failure.timestamp) : null]
-                  .filter(Boolean)
-                  .join(' · ')}
-              </Text>
-              <Text selectable style={[styles.error, meta]}>
-                {startErrorText(failure)}
+      })()
+    : undefined
+  return (
+    <MobileAutomationRowFrame
+      testID="automation-run-row"
+      mark={automationRunMark(run)}
+      lead={notStarted ? say('couldNotStart') : automationRunLabel(run, say)}
+      leadIsVerb={notStarted}
+      name={run.automation.name}
+      status={state === 'queued' ? say('queued') : null}
+      failed={notStarted}
+      timestamp={timestamp}
+      disclosureKey={`automation-run:${messageId}`}
+      action={
+        notStarted ? (
+          <MobileAutomationSendAgain
+            run={run}
+            resend={resend}
+            wording={wording}
+            metaStyle={meta}
+            onError={setSendError}
+          />
+        ) : null
+      }
+      subtitle={subtitle}
+      fontScale={fontScale}
+    >
+      <>
+        {error ? (
+          <>
+            <Text style={[styles.heading, meta]}>{say('startError')}</Text>
+            <Text selectable style={[styles.error, body]}>
+              {error}
+            </Text>
+          </>
+        ) : null}
+        {earlierFailures?.map((failure) => (
+          <View key={failure.id}>
+            <Text style={[styles.heading, meta]}>
+              {[say('couldNotStart'), failure.timestamp ? time(failure.timestamp) : null]
+                .filter(Boolean)
+                .join(' · ')}
+            </Text>
+            <Text selectable style={[styles.error, body]}>
+              {startErrorText(failure)}
+            </Text>
+          </View>
+        ))}
+        {instructions ? (
+          <>
+            <Text style={[styles.heading, meta]}>{say('instructions')}</Text>
+            <MobileAutomationRunInstructions
+              messageId={messageId}
+              instructions={instructions}
+              fontScale={fontScale}
+              say={say}
+            />
+            <View style={styles.actions}>
+              <MobileSourceCopyButton
+                text={instructions}
+                accessibilityLabel={say('copyInstructions')}
+              />
+              <Text style={[styles.meta, meta]}>{say('copyInstructions')}</Text>
+            </View>
+          </>
+        ) : null}
+        {openAutomation ? (
+          <Pressable accessibilityRole="link" onPress={openAutomation} style={styles.linkRow}>
+            <Text style={[styles.link, meta]}>{say('openAutomation')}</Text>
+          </Pressable>
+        ) : null}
+        {facts || event?.text ? <Text style={[styles.heading, meta]}>{say('event')}</Text> : null}
+        {facts ? <Text style={[styles.meta, meta]}>{facts}</Text> : null}
+        {link ? (
+          <Pressable
+            accessibilityRole="link"
+            onPress={() => openExternalLink(link.url)}
+            style={styles.linkRow}
+          >
+            <Text style={[styles.link, meta]}>{link.label}</Text>
+            <ArrowUpRight size={12} color={colors.textSecondary} />
+          </Pressable>
+        ) : null}
+        {event?.text ? (
+          <>
+            {/* Provenance first, so a long quote can't push it out of view. */}
+            <Text style={[styles.meta, meta]}>{say('external')}</Text>
+            <View style={styles.quote}>
+              <Text style={[styles.meta, meta]}>{automationRunQuoteAuthor(event, say)}</Text>
+              <Text selectable style={[styles.quoteText, scaledType(15, fontScale, 6)]}>
+                {event.text}
               </Text>
             </View>
-          ))}
-          {instructions ? (
-            <>
-              <Text style={[styles.heading, meta]}>{say('instructions')}</Text>
-              <MobileAutomationRunInstructions
-                messageId={messageId}
-                instructions={instructions}
-                fontScale={fontScale}
-                say={say}
+            {event.textShortened ? (
+              <Text style={[styles.meta, meta]}>{say('shortened')}</Text>
+            ) : null}
+            {access ? <Text style={[styles.meta, meta]}>{access}</Text> : null}
+            <View style={styles.actions}>
+              <MobileSourceCopyButton
+                text={automationRunEventCopyText(facts, event, say)}
+                accessibilityLabel={say('copyEvent')}
               />
-              <View style={styles.actions}>
-                <MobileSourceCopyButton
-                  text={instructions}
-                  accessibilityLabel={say('copyInstructions')}
-                />
-                <Text style={[styles.meta, meta]}>{say('copyInstructions')}</Text>
-              </View>
-            </>
-          ) : null}
-          {openAutomation ? (
-            <Pressable accessibilityRole="link" onPress={openAutomation} style={styles.linkRow}>
-              <Text style={[styles.link, meta]}>{say('openAutomation')}</Text>
-            </Pressable>
-          ) : null}
-          {facts || event?.text ? <Text style={[styles.heading, meta]}>{say('event')}</Text> : null}
-          {facts ? <Text style={[styles.meta, meta]}>{facts}</Text> : null}
-          {link ? (
-            <Pressable
-              accessibilityRole="link"
-              onPress={() => openExternalLink(link.url)}
-              style={styles.linkRow}
-            >
-              <Text style={[styles.link, meta]}>{link.label}</Text>
-              <ArrowUpRight size={12} color={colors.textSecondary} />
-            </Pressable>
-          ) : null}
-          {event?.text ? (
-            <>
-              {/* Provenance first, so a long quote can't push it out of view. */}
-              <Text style={[styles.meta, meta]}>{say('external')}</Text>
-              <View style={styles.quote}>
-                <Text style={[styles.meta, meta]}>{automationRunQuoteAuthor(event, say)}</Text>
-                <Text selectable style={[styles.quoteText, scaledType(15, fontScale, 6)]}>
-                  {event.text}
-                </Text>
-              </View>
-              {event.textShortened ? (
-                <Text style={[styles.meta, meta]}>{say('shortened')}</Text>
-              ) : null}
-              {access ? <Text style={[styles.meta, meta]}>{access}</Text> : null}
-              <View style={styles.actions}>
-                <MobileSourceCopyButton
-                  text={automationRunEventCopyText(facts, event, say)}
-                  accessibilityLabel={say('copyEvent')}
-                />
-                <Text style={[styles.meta, meta]}>{say('copyEvent')}</Text>
-              </View>
-            </>
-          ) : null}
-        </>
-      </MobileAutomationRowFrame>
-      {sendError && resend !== 'sent' ? (
-        <Text style={[styles.sendAgainError, meta]}>{sendError}</Text>
-      ) : null}
-    </>
+              <Text style={[styles.meta, meta]}>{say('copyEvent')}</Text>
+            </View>
+          </>
+        ) : null}
+      </>
+    </MobileAutomationRowFrame>
   )
 }
 

@@ -1,26 +1,25 @@
-// New bot from a reviewed link: New bot's picture, name and computer, plus the permission (Ask, picked
+// New bot from a reviewed link: New bot's picture, name, computer and agent, plus the permission (Ask, picked
 // for bots made from a link) and the review's tool ticks. Create writes the reviewed version whole.
-import { useState, type ReactNode } from 'react'
-import { Pressable, Text, View } from 'react-native'
-import { Shuffle } from '../../components/icons/app-icons'
+import { useState, type ReactNode, type ReactElement } from 'react'
+import { View } from 'react-native'
 import { isBotMascotId, mascotAvatar, randomMascotAvatar } from '../../../../src/shared/bot-avatar'
 import { BOT_NAME_MAX_LENGTH, type BotAgent } from '../../../../src/shared/bot-types'
 import { freeBotName } from '../../../../src/shared/bots/bot-template-view'
 import { TextField } from '../../components/composer-input/TextField'
-import { SectionHeader } from '../../components/list/ListGroup'
+import { ListGroup, SectionHeader } from '../../components/list/ListGroup'
 import { SheetHeader } from '../../components/nav-bar/SheetHeader'
 import { ChoiceRows, DrillRow } from '../../host-screen/workspace-options/workspace-option-rows'
 import { useMobileTranslation } from '../../i18n/use-mobile-translation'
 import { triggerError } from '../../platform/haptics/haptics'
-import { SettingsSection } from '../../settings/settings-screen-frame'
-import { colors, radii, spacing } from '../../theme/mobile-theme'
+import { SettingsNote } from '../../settings/settings-screen-frame'
+import { spacing } from '../../theme/mobile-theme'
 import { themedStyleSheet } from '../../theme/themed-styles'
 import { useMobileColorScheme } from '../../theme/use-mobile-color-scheme'
 import type { RpcClient } from '../../transport/rpc/rpc-client-contract'
 import { botCreate } from '../bot-sheet-operations'
 import type { ListedBot, PhoneBot } from '../host-bots-operations'
 import { mobileBotAvatarSource } from '../host-bot-row-facts'
-import { MobileBotAvatar } from '../MobileBotAvatar'
+import { groupFieldStyles, NewBotPicture } from '../MobileNewBotPickers'
 import { botShareErrorMessage } from './bot-share-copy'
 import { botShareMoved, type PhoneShareReview } from './bot-share-receive-operations'
 import { ReviewToolTicks } from './MobileBotShareReview'
@@ -34,16 +33,21 @@ export type ShareCreateDraft = {
   name: string | null
   /** A shuffled mascot; null keeps the shared picture. */
   avatar: string | null
+  /** Shown and sent while the link has no picture or mascot to keep, so the host never picks one unseen. */
+  blankMascot: string
   permission: SharedBotPermission
   /** Create is out; kept here too, so a picker opened meanwhile can't send a second one. */
   creating: boolean
 }
 
-export const EMPTY_SHARE_CREATE_DRAFT: ShareCreateDraft = {
-  name: null,
-  avatar: null,
-  permission: 'ask',
-  creating: false
+export function newShareCreateDraft(): ShareCreateDraft {
+  return {
+    name: null,
+    avatar: null,
+    blankMascot: randomMascotAvatar(null),
+    permission: 'ask',
+    creating: false
+  }
 }
 export function MobileBotShareCreate(props: {
   review: PhoneShareReview
@@ -56,7 +60,8 @@ export function MobileBotShareCreate(props: {
   client: RpcClient | null
   bots: readonly ListedBot[]
   agent: BotAgent
-  runsOn: ReactNode
+  pickerRows: readonly ReactElement[]
+  pickerNote: ReactNode
   ready: boolean
   onBack: () => void
   onMoved: (why: 'updated' | 'stopped' | 'expired') => void
@@ -77,7 +82,13 @@ export function MobileBotShareCreate(props: {
       props.bots.map((bot) => bot.name)
     )
   const sharedMascot = review.bot.avatar?.mascot
-  // The shared picture until the owner shuffles; Create writes a shared image itself.
+  const sharedMascotAvatar =
+    sharedMascot && isBotMascotId(sharedMascot) ? mascotAvatar(sharedMascot) : null
+  // The shared picture until the owner shuffles to another mascot; shuffling back to the shared one
+  // keeps the shared picture, an uploaded image included.
+  const chosen =
+    avatar ?? (review.avatarDataUrl || sharedMascotAvatar ? null : props.draft.blankMascot)
+  const keepsShared = !chosen || chosen === sharedMascotAvatar
   const { creating } = props.draft
   const setCreating = (next: boolean) => props.setDraft((draft) => ({ ...draft, creating: next }))
   const [error, setError] = useState<string | null>(null)
@@ -90,13 +101,8 @@ export function MobileBotShareCreate(props: {
     }
     setCreating(true)
     setError(null)
-    const picked =
-      avatar ??
-      (review.avatarDataUrl
-        ? null
-        : sharedMascot && isBotMascotId(sharedMascot)
-          ? mascotAvatar(sharedMascot)
-          : null)
+    // Create writes a shared image itself; the shared mascot gets its shared look from the host.
+    const picked = keepsShared ? (review.avatarDataUrl ? null : sharedMascotAvatar) : chosen
     try {
       const { bot } = botCreate.interpret(
         await botCreate.request(props.client, {
@@ -158,26 +164,19 @@ export function MobileBotShareCreate(props: {
       </>
     )
   }
-  const line =
-    permission === 'ask'
-      ? t(
-          'bots.share.receive.askLine',
-          'Asks before running commands. Your own allow rules still apply.'
-        )
-      : permission === 'full-access'
-        ? t('bots.share.receive.fullLine', 'Runs commands without asking.')
-        : t('bots.share.receive.chatsLine', 'Asks as your chats do.')
+  const picture = keepsShared
+    ? reviewAvatar(review)
+    : mobileBotAvatarSource({ name, avatar: chosen })
   return (
     <>
       <SheetHeader
-        titleAboveActions
         title={t('bots.new.title', 'New bot')}
         subtitle={
           review.publisher
             ? t('bots.share.receive.origin', 'From {{who}}’s link', { who: review.publisher })
             : t('bots.share.receive.originAnonymous', 'From a shared link')
         }
-        leading={{ label: t('bots.share.receive.back', 'Back'), onPress: props.onBack }}
+        onBack={{ label: t('bots.share.receive.sharedBot', 'Shared bot'), onPress: props.onBack }}
         trailing={{
           label: t('bots.new.create', 'Create'),
           onPress: () => void create(),
@@ -185,46 +184,34 @@ export function MobileBotShareCreate(props: {
           busy: creating
         }}
       />
-      {props.runsOn}
       <View style={styles.picture}>
-        <MobileBotAvatar
-          avatar={
-            // The shared mascot, picked again by shuffling, keeps its shared look: the host gives it that.
-            avatar &&
-            !(sharedMascot && isBotMascotId(sharedMascot) && avatar === mascotAvatar(sharedMascot))
-              ? mobileBotAvatarSource({ name, avatar })
-              : reviewAvatar(review)
-          }
-          size={72}
+        <NewBotPicture
+          avatar={picture}
+          onShuffle={() => setAvatar(randomMascotAvatar(chosen ?? sharedMascotAvatar))}
         />
-        <Pressable
-          style={({ pressed }) => [styles.shuffle, pressed && styles.pressed]}
-          onPress={() => setAvatar(randomMascotAvatar(avatar))}
-          hitSlop={8}
-          accessibilityRole="button"
-          accessibilityLabel={t('bots.new.shuffle', 'Another picture')}
-        >
-          <Shuffle size={14} color={colors.textSecondary} />
-        </Pressable>
       </View>
-      <TextField
-        value={name}
-        onChangeText={setName}
-        placeholder={t('bots.new.namePlaceholder', 'Name your bot')}
-        maxLength={BOT_NAME_MAX_LENGTH}
-        autoCorrect={false}
-        returnKeyType="done"
-        onSubmitEditing={() => void create()}
-      />
-      {error ? <Text style={styles.error}>{error}</Text> : null}
-      <SettingsSection>
+      <ListGroup>
+        <TextField
+          key="name"
+          value={name}
+          onChangeText={setName}
+          placeholder={t('bots.new.namePlaceholder', 'Name your bot')}
+          maxLength={BOT_NAME_MAX_LENGTH}
+          autoCorrect={false}
+          returnKeyType="done"
+          onSubmitEditing={() => void create()}
+          style={groupFieldStyles.line}
+        />
+        {props.pickerRows}
         <DrillRow
+          key="permissions"
           label={t('bots.settings.permissions', 'Permissions')}
-          value={line}
-          detail
+          value={options.find((option) => option.id === permission)?.label ?? ''}
           onPress={() => props.setPermissionsOpen(true)}
         />
-      </SettingsSection>
+      </ListGroup>
+      {props.pickerNote}
+      {error ? <SettingsNote error>{error}</SettingsNote> : null}
       {review.bot.tools.length > 0 ? (
         <>
           <SectionHeader title={shareListTitle('tools', t)} />
@@ -241,20 +228,5 @@ export function MobileBotShareCreate(props: {
 }
 
 const styles = themedStyleSheet(() => ({
-  error: { fontSize: 13, color: colors.statusRed, marginTop: spacing.sm },
-  picture: {
-    alignSelf: 'center',
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginVertical: spacing.md
-  },
-  shuffle: {
-    position: 'absolute',
-    right: -spacing.sm,
-    bottom: -spacing.sm,
-    padding: spacing.xs,
-    borderRadius: radii.pill,
-    backgroundColor: colors.bgRaised
-  },
-  pressed: { opacity: 0.7 }
+  picture: { alignItems: 'center', paddingTop: spacing.sm, paddingBottom: spacing.lg }
 }))

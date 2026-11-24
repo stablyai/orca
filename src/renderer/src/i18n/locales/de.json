@@ -13697,13 +13697,6 @@
             "c76693e456": "Die Dateien für diesen Arbeitsbereich konnten nicht geladen werden:"
           },
           "GitHistoryPanel": {
-            "cf7cad58d2": "Noch keine Commits",
-            "d0fb0f4bf2": "Commits aktualisieren",
-            "9f7535d22b": "Referenzen sind Branch- oder Tag-Namen, die genau auf diesen Commit verweisen. Sie erscheinen nur dort, wo Git eine benannte Referenz für den Commit hat.",
-            "9289ba0cb9": "Was sind Referenzen?",
-            "d836037d02": "Commits",
-            "8232c8b2f2": "Commit {{value0}} öffnen: {{value1}}",
-            "e5e81e59a6": "Größe des Commit-Bereichs ändern",
             "6d1e0a7c3b": "Commit-Dateien konnten nicht geladen werden"
           },
           "HostedReviewActions": {
@@ -14075,7 +14068,59 @@
             "markResolved": "Als gelöst markieren",
             "keepFile": "Datei behalten",
             "keepDeletion": "Löschung beibehalten",
-            "refreshAll": "Alle aktualisieren"
+            "refreshAll": "Alle aktualisieren",
+            "baseUpToDate": "Aktuell",
+            "rebaseOperationInProgress": "Warte, bis der aktuelle Git-Vorgang abgeschlossen ist",
+            "rebaseButton": "Rebase",
+            "rebaseConflictCount_one": "{{count}} Konflikt",
+            "rebaseConflictCount_other": "{{count}} Konflikte",
+            "rebasePaused": "Rebase angehalten",
+            "rebaseResolveConflictsFirst": "Löse zuerst die Konflikte",
+            "rebaseAbort": "Abbrechen",
+            "rebaseContinue": "Fortsetzen",
+            "continueRebasePausedAgain": "Rebase beim nächsten Konflikt angehalten",
+            "continueRebaseFailed": "Rebase konnte nicht fortgesetzt werden",
+            "rebaseAutostashConflict": "Rebase abgeschlossen. Deine nicht committeten Änderungen ließen sich nicht sauber erneut anwenden; sie sind im Stash gespeichert.",
+            "rebaseStoppedByGit": "Git hat den Rebase angehalten",
+            "continueRebaseUnconfirmed": "Das Ergebnis ließ sich nicht bestätigen. Die Quellcodeverwaltung wurde aktualisiert und zeigt den aktuellen Stand.",
+            "noRebaseInProgress": "Kein Rebase in Arbeit",
+            "rebaseStopMovedOn": "Der Rebase ist bereits weitergegangen. Prüfe das Panel und versuche es erneut.",
+            "rebaseEmptyStep": "In diesem Schritt gibt es nichts zu committen. Brich den Rebase ab oder schließe ihn im Terminal ab.",
+            "rebaseStepUnreadableShort": "Prüfung fehlgeschlagen",
+            "rebaseCheckAgain": "Erneut prüfen",
+            "rebaseRetryInspect": "Erneut versuchen",
+            "rebaseRetryInspectLabel": "Rebase-Schritt erneut prüfen",
+            "rebaseStoppedFinishInTerminal": "Git hat diesen Schritt angehalten. Schließe ihn im Terminal ab oder brich ab.",
+            "rebaseCheckingStep": "Rebase-Schritt wird geprüft",
+            "rebaseEmptyStepShort": "Leerer Schritt",
+            "rebaseAbortLabel": "Rebase abbrechen",
+            "scopeFileCount_one": "{{count}} Datei",
+            "scopeFileCount_other": "{{count}} Dateien",
+            "scopeCommitCount_one": "{{count}} Commit",
+            "scopeCommitCount_other": "{{count}} Commits",
+            "scopeUncommitted": "Nicht committet",
+            "scopeAllChanges": "Alle Änderungen",
+            "scopeNone": "Keine",
+            "scopeOpenDiff": "Diff öffnen",
+            "scopeShowAll": "Alle Änderungen anzeigen",
+            "scopeLoadingBranchChanges": "Branch-Änderungen werden geladen…",
+            "scopeBranchCommits": "Commits auf diesem Branch",
+            "scopeRecentCommits": "Letzte Commits",
+            "scopeCompareTo": "Mit {{ref}} vergleichen",
+            "scopeFilterCommits": "Commits filtern",
+            "scopeCommitsFailed": "Commits konnten nicht geladen werden.",
+            "scopeFilesFailed": "Dateien konnten nicht geladen werden.",
+            "scopeLoadingFiles": "Dateien werden geladen…",
+            "scopeNoSharedHistory": "Keine gemeinsame Historie mit {{ref}}",
+            "scopeRetryCommits": "Erneut versuchen",
+            "scopeLoadingCommits": "Commits werden geladen…",
+            "scopeNoMatchingCommits": "Keine passenden Commits",
+            "scopeNoBranchCommitsYet": "Noch keine Commits auf diesem Branch",
+            "scopeNoCommitsYet": "Noch keine Commits",
+            "scopeOlderHistory": "Älterer Verlauf in Git Graph",
+            "scopeNoUncommitted": "Keine nicht committeten Änderungen.",
+            "scopeCommitFiles": "Dateien",
+            "gitGraphButton": "Graph"
           },
           "SourceControlAgentActionDialog": {
             "8e856842d1": "Der ausgewählte Agent konnte nicht gestartet werden.",
@@ -14509,10 +14554,8 @@
                   "titlePublishBranchFirst": "Zum Synchronisieren von Commits zuerst den Branch veröffentlichen",
                   "titleUseForcePush": "„Committen & Push erzwingen“ verwenden — das Remote enthält nur ältere Kopien lokaler Commits",
                   "titleCommitThenPullPush": "Committen, dann pullen und pushen",
-                  "rebaseFromNamedBase": "Auf {{baseRef}} rebasen",
                   "rebaseFromBase": "Auf Basis-Branch rebasen",
                   "rebaseChooseRemoteBase": "Entfernten Basis-Branch für den Rebase auswählen",
-                  "rebaseDirtyHint": "Rebase versuchen; git erfordert eventuell zuvor das Committen oder Stashen lokaler Änderungen",
                   "rebaseWithLatestFrom": "Aktuellen Branch auf die neuesten Commits von {{baseRef}} rebasen",
                   "blockedCommitFirst": "Zuerst Änderungen committen",
                   "blockedCheckOutBranchFirst": "Zuerst einen Branch auschecken",
@@ -14534,7 +14577,6 @@
                   "titleCommitAndPush": "Vorgemerkte Änderungen committen und pushen",
                   "commitForcePush": "Committen & Push erzwingen",
                   "commitPush": "Committen & pushen",
-                  "titleOperationInProgress": "Vorgang läuft…",
                   "titleAbortRebaseInProgress": "Laufenden Rebase abbrechen",
                   "titleAbortMergeInProgress": "Laufenden Merge abbrechen",
                   "titleNothingToPushTo": "Nichts zu {{upstreamName}} zu pushen",
@@ -14585,7 +14627,13 @@
                   "titleManualForcePush_other": "Push von {{count}} lokalen Commits mit Lease erzwingen, um {{upstreamName}} zu aktualisieren.",
                   "titleUnpublishedForcePushBranch": "Push dieses Branches mit Lease erzwingen und bei Bedarf einen Upstream festlegen.",
                   "titleUnpublishedForcePushCount_one": "Push von {{count}} Branch-Commit mit Lease erzwingen und bei Bedarf einen Upstream festlegen.",
-                  "titleUnpublishedForcePushCount_other": "Push von {{count}} Branch-Commits mit Lease erzwingen und bei Bedarf einen Upstream festlegen."
+                  "titleUnpublishedForcePushCount_other": "Push von {{count}} Branch-Commits mit Lease erzwingen und bei Bedarf einen Upstream festlegen.",
+                  "rebaseOntoNamedBase": "Rebase auf {{base}}",
+                  "rebaseCommitOrStashFirst": "Committe oder stashe zuerst die Änderungen",
+                  "continueRebase": "Rebase fortsetzen",
+                  "titleContinueRebase": "Angehaltenen Rebase fortsetzen",
+                  "rebaseFromNamedBase": "Auf {{baseRef}} rebasen",
+                  "rebaseDirtyHint": "Rebase versuchen; git erfordert eventuell zuvor das Committen oder Stashen lokaler Änderungen"
                 }
               },
               "primary": {
@@ -14628,7 +14676,8 @@
                   "e9b5d1f470": "Vor dem Erstellen eines {{value0}}s einen Branch auschecken.",
                   "f0c6e2a581": "Dieser Branch ist noch nicht bereit für einen {{value0}}.",
                   "8f9a0b1c2d": "Nichts zu committen. Branch ist aktuell.",
-                  "h3i4j5k607": "Es wird geprüft, ob für diesen Branch ein {{value0}} erstellt werden kann…"
+                  "h3i4j5k607": "Es wird geprüft, ob für diesen Branch ein {{value0}} erstellt werden kann…",
+                  "nothingToCommit": "Nichts zu committen"
                 }
               },
               "branch": {
@@ -14923,12 +14972,7 @@
             "f8a2c4d1e0": "Suchmodus des Datei-Explorers"
           },
           "GitHistoryCommitFiles": {
-            "b2c3d4e5f6": "Keine Dateiänderungen in diesem Commit",
-            "c3d4e5f6a7": "Alle Änderungen öffnen"
-          },
-          "GitHistoryRow": {
-            "2f9c41ab07": "Dateien in Commit {{value0}} anzeigen: {{value1}}",
-            "4a8d9e0c1f": "Dateien in Commit {{value0}} ausblenden: {{value1}}"
+            "b2c3d4e5f6": "Keine Dateiänderungen in diesem Commit"
           },
           "GitHistoryCommitContextMenu": {
             "7b1c4e9a02": "Commit im Browser öffnen",
@@ -19137,7 +19181,8 @@
         "thisComputer": "dieser Computer"
       },
       "runtimeGitSyncClient": {
-        "completeMergeNeedsNewerHost": "Zum Abschließen eines Merge wird eine neuere Orca-Version auf diesem Host benötigt. Aktualisiere Orca auf diesem Host."
+        "completeMergeNeedsNewerHost": "Zum Abschließen eines Merge wird eine neuere Orca-Version auf diesem Host benötigt. Aktualisiere Orca auf diesem Host.",
+        "continueRebaseNeedsNewerHost": "Zum Fortsetzen eines Rebase braucht dieser Host eine neuere Orca-Version. Aktualisiere Orca auf diesem Host."
       },
       "runtimeGitWorkingTreeClient": {
         "resolveConflictNeedsNewerHost": "Zum Lösen von Konflikten wird eine neuere Orca-Version auf diesem Host benötigt. Aktualisiere Orca auf diesem Host."
@@ -19681,7 +19726,6 @@
         "moreControls": "Weitere Chat-Steuerelemente",
         "exitPlanMode": "Planungsmodus verlassen",
         "permissionAppliesNextMessage": "{{saved}} gilt für deine nächste Nachricht; derzeit wird {{active}} verwendet",
-        "botFor": "Für: {{detail}}",
         "bots": "Bots"
       },
       "tool": {
@@ -20349,8 +20393,8 @@
         "fromAgain": "Erneut aus {{app}}",
         "from": "Aus {{app}}",
         "selected": "{{chosen}} von {{total}} ausgewählt · Schlüssel und Anmeldedaten werden nie kopiert",
-        "importOne": "1 Element importieren",
-        "importMany": "{{count}} Elemente importieren",
+        "importOne": "Importieren (1)",
+        "importMany": "Importieren ({{count}})",
         "askedOne": "Import von 1 Element angefordert",
         "askedMany": "Import von {{count}} Elementen angefordert"
       },
@@ -20504,6 +20548,7 @@
         "resultsInRuns": "Ergebnisse in jeder Ausführung",
         "paused": "pausiert",
         "webhookHint": "Diese URL in deinem Dienst als Ziel eintragen",
+        "gettingUrl": "URL wird abgerufen…",
         "editDraft": "Ändere „{{name}}“ so, dass ",
         "resultsInEachRun": "In jeder Ausführung",
         "resultsChat": "Chat",
@@ -24362,8 +24407,6 @@
       "composio": {
         "withComposio": "Mit Composio"
       },
-      "allApps": "Alle Apps",
-      "onBot": "Bei {{bot}}",
       "mcp": {
         "addTitle": "{{app}} hinzufügen",
         "advanced": "Erweitert",
@@ -24565,7 +24608,10 @@
       "runNow": "Jetzt ausführen",
       "openOnPage": "Auf der Seite Automatisierungen öffnen",
       "pauseShort": "Pausieren",
-      "resumeShort": "Fortsetzen"
+      "resumeShort": "Fortsetzen",
+      "deleting": "Wird gelöscht…",
+      "deleteFailed": "{{name}} konnte nicht gelöscht werden",
+      "deleteDescription": "<name/> und den Ausführungsverlauf löschen."
     },
     "access": {
       "thisComputer": "diesem Computer",
@@ -24586,7 +24632,7 @@
       "controlBriefIfAdded": "Alle, die du hinzufügst, können hier in deinem Namen handeln.",
       "controlBriefOnHost": "Sie können auf {{computer}} in deinem Namen handeln.",
       "controlBriefIfAddedOnHost": "Alle, die du hinzufügst, können auf {{computer}} in deinem Namen handeln.",
-      "reachSlack": "Als @{{name}} in Slack posten",
+      "reachSlack": "Als {{name}} in Slack posten",
       "here": "hier",
       "thisServer": "diesem Server",
       "there": "dort",
@@ -24956,7 +25002,8 @@
     "branchCreated": "{{branch}} bei {{commit}} erstellt",
     "branchName": "Branch-Name",
     "invalidBranchName": "Dieser Branchname ist ungültig. Wähle einen anderen Namen.",
-    "createBranchFailed": "Orca konnte den Branch nicht erstellen. Prüfe dieses Repository im Terminal und versuche es erneut."
+    "createBranchFailed": "Orca konnte den Branch nicht erstellen. Prüfe dieses Repository im Terminal und versuche es erneut.",
+    "openDiff": "Diff öffnen"
   },
   "checks": {
     "gitlabAllowedFailure": "Fehlschlag erlaubt"

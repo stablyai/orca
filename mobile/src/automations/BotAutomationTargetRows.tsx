@@ -1,6 +1,7 @@
 // Where an agent's automation runs and where its results go: the desktop sidebar's Runs in, Agent and
-// Send results to, in its order, with the options that can't work yet shown with their reason.
+// Send results to, in its order, offering only the places this agent can send to.
 import { CircleOff, Hash, MessageCircle, MessageSquare } from '../components/icons/app-icons'
+import type { ReactNode } from 'react'
 import type { AgentType } from '../../../src/shared/agent-status/contracts/agent-status-types'
 import { getAgentSessionOptionLaunchCatalog } from '../../../src/shared/agent-session/options/agent-session-option-catalog'
 import type { AutomationBotTarget } from '../../../src/shared/automations/automation-definition'
@@ -52,6 +53,7 @@ function ChoiceRow<Value extends string>(props: {
     <ListRow
       title={props.title}
       subtitle={props.subtitle}
+      accessibilityLabel={props.subtitle ? `${props.title}, ${props.subtitle}` : undefined}
       navigates={!props.disabled}
       disabled={props.disabled}
       onPress={() =>
@@ -75,6 +77,8 @@ function ChoiceRow<Value extends string>(props: {
 export function BotAutomationTargetRows(props: {
   target: AutomationBotTarget
   bot: PhoneBot
+  /** The agent it runs as, first in the Runs group. */
+  botRow: ReactNode
   /** Only Slack, GitHub or Linear events start it, so each run has a thread to answer in. */
   hasEventThread: boolean
   /** The agent's computer's Orca Cloud binds an event's run to its thread. */
@@ -88,7 +92,7 @@ export function BotAutomationTargetRows(props: {
   const t = useMobileTranslation()
   const { target, bot, onChange } = props
   const name = bot.name
-  const chatLabel = t('automations.botTarget.chat', "{{name}}'s Chat", { name })
+  const chatLabel = t('automations.botTarget.chat', '{{name}}’s Chat', { name })
   const newLabel = t('automations.botTarget.runsInNew', 'A new conversation each time')
   const savedChatLabel = target.chat
     ? target.chat.title || t('automations.botTarget.runsInUntitledChat', 'An untitled chat')
@@ -127,45 +131,38 @@ export function BotAutomationTargetRows(props: {
   const icon = (Icon: typeof MessageSquare) => () => (
     <Icon size={18} color={colors.textSecondary} strokeWidth={1.8} />
   )
+  // Places this agent can't send to yet stay out of the list, unless it already sends there.
   const resultOptions: PickerOption<BotResultsToChoice>[] = [
     { value: 'chat', label: chatLabel, renderIcon: icon(MessageSquare) },
-    {
-      value: 'thread',
-      label: t('automations.botTarget.resultsToThread', "The event's thread"),
-      // A thread answer needs its own conversation each run, and an event that has a thread.
-      ...(threadReady || choice === 'thread'
-        ? {}
-        : {
-            disabled: true,
-            subtitle: props.threadReplies
-              ? t('automations.botTarget.threadNeedsEvents', 'Only events, new conversation')
-              : t('automations.botTarget.threadUnsupported', "Orca Cloud doesn't support this yet")
-          }),
-      renderIcon: icon(MessageCircle)
-    },
-    {
-      value: 'channel',
-      label: t('automations.botTarget.resultsToChannel', 'A channel'),
-      // A channel post goes through the agent's Slack app, so it needs one.
-      ...(bot.slack || choice === 'channel'
-        ? {}
-        : {
-            disabled: true,
-            subtitle: t('automations.botTarget.channelNeedsSlack', 'Connect Slack first')
-          }),
-      renderIcon: icon(Hash)
-    },
-    {
-      value: 'linear',
-      label: t('automations.botTarget.resultsToLinear', 'A Linear issue'),
-      ...(bot.linear || choice === 'linear'
-        ? {}
-        : {
-            disabled: true,
-            subtitle: t('automations.botTarget.linearNeedsLinear', 'Connect Linear first')
-          }),
-      renderIcon: () => <MobileConnectorSourceIcon source="linear" size={16} />
-    },
+    // A thread answer needs its own conversation each run, and an event that has a thread.
+    ...(threadReady || choice === 'thread'
+      ? [
+          {
+            value: 'thread' as const,
+            label: t('automations.botTarget.resultsToThread', 'The event’s thread'),
+            renderIcon: icon(MessageCircle)
+          }
+        ]
+      : []),
+    // A channel post goes through the agent's Slack app, so it needs one.
+    ...(bot.slack || choice === 'channel'
+      ? [
+          {
+            value: 'channel' as const,
+            label: t('automations.botTarget.resultsToChannel', 'A channel'),
+            renderIcon: icon(Hash)
+          }
+        ]
+      : []),
+    ...(bot.linear || choice === 'linear'
+      ? [
+          {
+            value: 'linear' as const,
+            label: t('automations.botTarget.resultsToLinear', 'A Linear issue'),
+            renderIcon: () => <MobileConnectorSourceIcon source="linear" size={16} />
+          }
+        ]
+      : []),
     {
       value: 'none',
       label: t('automations.botTarget.resultsToNone', 'Nowhere'),
@@ -173,14 +170,18 @@ export function BotAutomationTargetRows(props: {
     }
   ]
   const resultsTitle = t('automations.botTarget.resultsTo', 'Send results to')
+  const runsInTitle = t('automations.botTarget.runsIn', 'Runs in')
+  const agentTitle = t('automations.botTarget.agent', 'Agent')
 
   return (
     <>
-      <SectionHeader title={t('automations.botTarget.runsIn', 'Runs in')} />
+      <SectionHeader title={t('automations.botTarget.runs', 'Runs')} />
       <ListGroup>
+        {props.botRow}
         <ChoiceRow
-          title={runsInOptions.find((option) => option.value === runsIn)?.label ?? newLabel}
-          sheetTitle={t('automations.botTarget.runsIn', 'Runs in')}
+          title={runsInTitle}
+          subtitle={runsInOptions.find((option) => option.value === runsIn)?.label ?? newLabel}
+          sheetTitle={runsInTitle}
           value={runsIn}
           options={runsInOptions}
           present={props.present}
@@ -199,23 +200,16 @@ export function BotAutomationTargetRows(props: {
             })
           }}
         />
-      </ListGroup>
-      <SectionHeader title={t('automations.botTarget.agent', 'Agent')} />
-      <ListGroup>
         {inChat ? (
           <ListRow
-            title={t('automations.botTarget.agentInChat', "This chat's agent")}
-            subtitle={t(
-              'automations.botTarget.agentInChatHelp',
-              "A run in a chat continues on that chat's agent."
-            )}
-            disabled
+            title={agentTitle}
+            subtitle={t('automations.botTarget.agentInChat', 'This chat’s agent')}
           />
         ) : (
           <ChoiceRow
-            title={own ? botAgentLabel(own.agent) : sameAs}
-            subtitle={own ? undefined : botLine}
-            sheetTitle={t('automations.botTarget.agent', 'Agent')}
+            title={agentTitle}
+            subtitle={own ? botAgentLabel(own.agent) : botLine}
+            sheetTitle={agentTitle}
             value={own ? own.agent : SAME_AS_BOT}
             options={agentOptions}
             present={props.present}

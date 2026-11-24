@@ -13705,13 +13705,6 @@
             "c76693e456": "このワークスペースのファイルをロードできませんでした:"
           },
           "GitHistoryPanel": {
-            "cf7cad58d2": "まだコミットはありません",
-            "d0fb0f4bf2": "コミットを更新する",
-            "9f7535d22b": "Ref は、そのコミットそのものを指すブランチ名またはタグ名です。これらは、Git にコミットの名前付き参照がある場合にのみ表示されます。",
-            "9289ba0cb9": "リファレンスとは何ですか?",
-            "d836037d02": "コミット",
-            "8232c8b2f2": "コミット {{value0}}: {{value1}} を開く",
-            "e5e81e59a6": "コミットのサイズ変更",
             "6d1e0a7c3b": "コミットファイルを読み込めませんでした"
           },
           "HostedReviewActions": {
@@ -14075,7 +14068,58 @@
             "markResolved": "解決済みとしてマーク",
             "keepFile": "ファイルを残す",
             "keepDeletion": "削除を維持",
-            "refreshAll": "すべて更新"
+            "refreshAll": "すべて更新",
+            "baseUpToDate": "最新です",
+            "rebaseOperationInProgress": "現在の Git 操作が終わるまでお待ちください",
+            "rebaseButton": "リベース",
+            "rebaseConflictCount_other": "{{count}} 件の競合",
+            "rebasePaused": "リベースを一時停止中",
+            "rebaseResolveConflictsFirst": "先に競合を解決してください",
+            "rebaseAbort": "中止",
+            "rebaseContinue": "続行",
+            "continueRebasePausedAgain": "次の競合でリベースを一時停止しました",
+            "continueRebaseFailed": "リベースの続行に失敗しました",
+            "rebaseAutostashConflict": "リベースしました。未コミットの変更はきれいに再適用できず、stash に保存されています。",
+            "rebaseStoppedByGit": "Git がリベースを一時停止しました",
+            "continueRebaseUnconfirmed": "結果を確認できませんでした。ソース管理を更新して現在の状態を表示しました。",
+            "noRebaseInProgress": "進行中のリベースはありません",
+            "rebaseStopMovedOn": "リベースはすでに先へ進んでいます。パネルを確認してもう一度お試しください。",
+            "rebaseEmptyStep": "このステップにはコミットする内容がありません。リベースを中止するか、ターミナルで完了してください。",
+            "rebaseStepUnreadableShort": "確認失敗",
+            "rebaseCheckAgain": "再確認",
+            "rebaseRetryInspect": "再試行",
+            "rebaseRetryInspectLabel": "リベースステップを再確認",
+            "rebaseStoppedFinishInTerminal": "Git がこのステップで一時停止しました。ターミナルで完了するか、中止してください。",
+            "rebaseCheckingStep": "リベースステップを確認中",
+            "rebaseEmptyStepShort": "空のステップ",
+            "rebaseAbortLabel": "リベースを中止",
+            "scopeFileCount_one": "{{count}} 個のファイル",
+            "scopeFileCount_other": "{{count}} 個のファイル",
+            "scopeCommitCount_one": "{{count}} 件のコミット",
+            "scopeCommitCount_other": "{{count}} 件のコミット",
+            "scopeUncommitted": "未コミット",
+            "scopeAllChanges": "すべての変更",
+            "scopeNone": "なし",
+            "scopeOpenDiff": "差分を開く",
+            "scopeShowAll": "すべての変更を表示",
+            "scopeLoadingBranchChanges": "ブランチの変更を読み込み中…",
+            "scopeBranchCommits": "このブランチのコミット",
+            "scopeRecentCommits": "最近のコミット",
+            "scopeCompareTo": "{{ref}} と比較",
+            "scopeFilterCommits": "コミットを絞り込む",
+            "scopeCommitsFailed": "コミットを読み込めませんでした。",
+            "scopeFilesFailed": "ファイルを読み込めませんでした。",
+            "scopeLoadingFiles": "ファイルを読み込み中…",
+            "scopeNoSharedHistory": "{{ref}} と共通の履歴がありません",
+            "scopeRetryCommits": "再試行",
+            "scopeLoadingCommits": "コミットを読み込み中…",
+            "scopeNoMatchingCommits": "一致するコミットはありません",
+            "scopeNoBranchCommitsYet": "このブランチにはまだコミットがありません",
+            "scopeNoCommitsYet": "まだコミットがありません",
+            "scopeOlderHistory": "Git Graph で以前の履歴を表示",
+            "scopeNoUncommitted": "未コミットの変更はありません。",
+            "scopeCommitFiles": "ファイル",
+            "gitGraphButton": "グラフ"
           },
           "SourceControlAgentActionDialog": {
             "8e856842d1": "選択した Agent を開始できませんでした。",
@@ -14506,7 +14550,6 @@
                   "titleCommitAndPush": "ステージ済みの変更をコミットしてプッシュ",
                   "commitForcePush": "コミットとフォースプッシュ",
                   "commitPush": "コミットとプッシュ",
-                  "titleOperationInProgress": "操作が進行中です…",
                   "titleAbortRebaseInProgress": "進行中のリベースを中止",
                   "titleAbortMergeInProgress": "進行中のマージを中止",
                   "titleNothingToPushTo": "{{upstreamName}} にプッシュするものはありません",
@@ -14567,7 +14610,6 @@
                   "statusSetsUpstream": "アップストリームを設定",
                   "statusMayFail": "失敗する可能性あり",
                   "statusPublished": "公開済み",
-                  "statusStashFirst": "先に stash",
                   "statusReplaces": "↓{{behind}} を置き換え",
                   "statusCommitFirst": "先にコミット",
                   "statusReviewOpen": "{{shortLabel}} オープン中",
@@ -14586,10 +14628,8 @@
                   "titlePublishBranchFirst": "コミットを同期するには、先にブランチを公開してください",
                   "titleUseForcePush": "「コミットとフォースプッシュ」を使用してください — リモートにはローカルコミットの古いコピーしかありません",
                   "titleCommitThenPullPush": "コミットしてからプルとプッシュ",
-                  "rebaseFromNamedBase": "{{baseRef}} からリベース",
                   "rebaseFromBase": "ベースからリベース",
                   "rebaseChooseRemoteBase": "リベース元のリモートベースブランチを選択してください",
-                  "rebaseDirtyHint": "リベースを試行します。git が先にローカルの変更のコミットまたは stash を要求する場合があります",
                   "rebaseWithLatestFrom": "現在のブランチを {{baseRef}} の最新コミットでリベース",
                   "blockedCommitFirst": "先に変更をコミットしてください",
                   "blockedCheckOutBranchFirst": "先にブランチをチェックアウトしてください",
@@ -14602,7 +14642,14 @@
                   "blockedExistingReview": "{{reviewLabel}} はすでに存在します",
                   "blockedForkHeadUnsupported": "フォークのヘッドはサポートされていません",
                   "blockedBaseNotOnRemote": "ベースブランチがリモートにありません",
-                  "blockedBranchNotReady": "ブランチの準備ができていません"
+                  "blockedBranchNotReady": "ブランチの準備ができていません",
+                  "rebaseOntoNamedBase": "{{base}} にリベース",
+                  "rebaseCommitOrStashFirst": "先に変更をコミットまたはスタッシュしてください",
+                  "continueRebase": "リベースを続行",
+                  "titleContinueRebase": "一時停止中のリベースを続行",
+                  "rebaseFromNamedBase": "{{baseRef}} からリベース",
+                  "rebaseDirtyHint": "リベースを試行します。git が先にローカルの変更のコミットまたは stash を要求する場合があります",
+                  "statusStashFirst": "先に stash"
                 }
               },
               "primary": {
@@ -14645,7 +14692,8 @@
                   "e9b5d1f470": "{{value0}} を作成する前にブランチをチェックアウトしてください。",
                   "f0c6e2a581": "このブランチはまだ {{value0}} の準備ができていません。",
                   "8f9a0b1c2d": "コミットするものがありません。ブランチは最新です。",
-                  "h3i4j5k607": "このブランチが {{value0}} を作成できるか確認中…"
+                  "h3i4j5k607": "このブランチが {{value0}} を作成できるか確認中…",
+                  "nothingToCommit": "コミットする内容はありません"
                 }
               },
               "branch": {
@@ -14931,12 +14979,7 @@
             "f8a2c4d1e0": "エクスプローラー検索モード"
           },
           "GitHistoryCommitFiles": {
-            "b2c3d4e5f6": "このコミットにはファイルの変更がありません",
-            "c3d4e5f6a7": "commit されていない差分を開く"
-          },
-          "GitHistoryRow": {
-            "2f9c41ab07": "コミット {{value0}} のファイルを表示: {{value1}}",
-            "4a8d9e0c1f": "コミット {{value0}} のファイルを非表示: {{value1}}"
+            "b2c3d4e5f6": "このコミットにはファイルの変更がありません"
           },
           "GitHistoryCommitContextMenu": {
             "7b1c4e9a02": "コミットをブラウザで開く",
@@ -19247,7 +19290,8 @@
         "transitionFieldsNeedsUpdate": "ステータス変更に必要なフィールドを送信するには、リモートの Orca サーバーを更新するか、Jira でステータス変更を完了してください。"
       },
       "runtimeGitSyncClient": {
-        "completeMergeNeedsNewerHost": "マージを完了するには、このホストに新しいバージョンの Orca が必要です。このホストの Orca を更新してください。"
+        "completeMergeNeedsNewerHost": "マージを完了するには、このホストに新しいバージョンの Orca が必要です。このホストの Orca を更新してください。",
+        "continueRebaseNeedsNewerHost": "リベースを続行するには、このホストの Orca を更新する必要があります。そのホストで Orca を更新してください。"
       },
       "runtimeGitWorkingTreeClient": {
         "resolveConflictNeedsNewerHost": "競合を解決するには、このホストに新しいバージョンの Orca が必要です。このホストの Orca を更新してください。"
@@ -19810,7 +19854,6 @@
         "moreControls": "その他のチャット操作",
         "exitPlanMode": "プランモードを終了",
         "permissionAppliesNextMessage": "{{saved}} は次のメッセージから適用されます。現在は {{active}} を使用しています",
-        "botFor": "用途: {{detail}}",
         "bots": "ボット",
         "backToBots": "ボットに戻る",
         "loadingBotChats": "{{name}} のチャットを読み込み中…"
@@ -20591,7 +20634,7 @@
         "open": "開く",
         "stayed": "{{app}} に残したもの: {{things}}。{{app}} では何も変更されていません。",
         "unchanged": "{{app}} では何も変更されていません。",
-        "paused": "二重に実行されないよう、オートメーションは一時停止しています。{{app}} で古いボットをオフにしてから、オートメーションをオンにしてください。"
+        "paused": "二重に実行されないよう、オートメーションは一時停止しています。{{app}} で古いbotをオフにしてから、オートメーションをオンにしてください。"
       },
       "usage": {
         "description": "このチャットの Codex アカウントの使用量を表示",
@@ -20675,12 +20718,12 @@
         "someoneWrote": "誰かの投稿",
         "personWrote": "{{name}} の投稿",
         "callerSent": "呼び出し元が送信した内容",
-        "external": "外部コンテンツ · 指示ではなく情報としてボットに送信されました",
-        "shortened": "ボットに送信されたときと同じく、4,096 文字に短縮されています。",
+        "external": "外部コンテンツ · 指示ではなく情報としてbotに送信されました",
+        "shortened": "botに送信されたときと同じく、4,096 文字に短縮されています。",
         "memberAccess": "この実行時、{{name}} は「質問できる人」に含まれていました。",
         "someMemberAccess": "実行時に「質問できる人」に含まれていた人が送信しました。",
         "otherAccess": "「質問できる人」に含まれていないか、アクセス権が不明です。",
-        "ownerAccess": "ボットの所有者からの送信です。",
+        "ownerAccess": "botの所有者からの送信です。",
         "sampleCall": "サンプル呼び出し",
         "firstCall": "最初の呼び出し",
         "webhookCall": "Webhook 呼び出し",
@@ -25554,7 +25597,8 @@
     "branchCreated": "{{commit}} に {{branch}} を作成しました",
     "branchName": "ブランチ名",
     "invalidBranchName": "このブランチ名は無効です。別の名前を選んでください。",
-    "createBranchFailed": "Orca はブランチを作成できませんでした。ターミナルでこのリポジトリを確認してから、もう一度お試しください。"
+    "createBranchFailed": "Orca はブランチを作成できませんでした。ターミナルでこのリポジトリを確認してから、もう一度お試しください。",
+    "openDiff": "差分を開く"
   },
   "bots": {
     "deepLink": {
@@ -25666,8 +25710,6 @@
       "composio": {
         "withComposio": "Composio 経由"
       },
-      "allApps": "すべてのアプリ",
-      "onBot": "{{bot}} 上",
       "mcp": {
         "addTitle": "{{app}} を追加",
         "advanced": "詳細設定",
@@ -25869,7 +25911,10 @@
       "runNow": "今すぐ実行",
       "openOnPage": "オートメーションページで開く",
       "pauseShort": "一時停止",
-      "resumeShort": "再開"
+      "resumeShort": "再開",
+      "deleting": "削除中…",
+      "deleteFailed": "{{name}} を削除できませんでした",
+      "deleteDescription": "<name/> とその実行履歴を削除します。"
     },
     "access": {
       "thisComputer": "このコンピュータ",
@@ -25890,7 +25935,7 @@
       "controlBriefIfAdded": "追加した人は誰でもここであなたとして操作できます。",
       "controlBriefOnHost": "アクセスを許可した人は {{computer}} 上であなたとして操作できます。",
       "controlBriefIfAddedOnHost": "追加した人は誰でも {{computer}} 上であなたとして操作できます。",
-      "reachSlack": "Slack で @{{name}} として投稿する",
+      "reachSlack": "Slack で {{name}} として投稿する",
       "here": "ここ",
       "thisServer": "このサーバー",
       "there": "そこ",

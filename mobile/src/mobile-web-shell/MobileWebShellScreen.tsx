@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { Alert, Linking, View } from 'react-native'
+import { Alert, View } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { useNavigation, useNavigationContainerRef, useRouter } from 'expo-router'
 import { OrcaMobileWebShellView } from '../../modules/orca-mobile-web-shell/src/index'
@@ -21,7 +21,7 @@ import { playPageHaptic } from './native-capabilities/page-haptics'
 import { useMobileWebShellBridge } from './page-document/use-mobile-web-shell-bridge'
 import type { MobileWebShellRuntime } from './session/mobile-web-shell-runtime'
 import { useKeyboardOcclusion } from '../platform/keyboard/keyboard-occlusion'
-import { useShellNativeVerbServer } from './native-capabilities/use-shell-native-verb-server'
+import { openExternalLink } from '../platform/external-links/external-link'
 import { PageDialogLayer, usePageDialogs } from '../platform/page-dialogs/PageDialogLayer'
 import {
   PageHeaderLayer,
@@ -29,6 +29,7 @@ import {
   useShellPageHeader
 } from './page-header/PageHeaderLayer'
 import { useShellPageBack } from './routing/use-shell-page-back'
+import { useShellNativeVerbServer } from './native-capabilities/use-shell-native-verb-server'
 import { useShellStackPop } from './routing/use-shell-stack-pop'
 import { usePageLocationOnFold } from './page-geometry/page-location-on-fold'
 import { usePageOpenTarget } from './routing/page-open-target'
@@ -120,7 +121,8 @@ export function MobileWebShellScreen({
     pageFrame,
     backClaimed,
     ownsHostArea,
-    hostStatus
+    hostStatus,
+    store
   } = useMobileWebShellSession({
     hostId,
     routePathname: route.pathname,
@@ -164,19 +166,15 @@ export function MobileWebShellScreen({
     readWorkspaceKey
   } = usePageHostSnapshot(hostId, route.pathname, ownsHostArea)
   const pageDialogs = usePageDialogs(readySessionId)
+  // Create the media registry before the bridge; staged files belong to this page session.
   const serveNativeVerb = useShellNativeVerbServer({
     hostId,
     sessionId: readySessionId,
+    buildId: state.kind === 'ready' ? state.buildId : null,
+    store,
     readWorkspaceKey,
     dialogs: pageDialogs
   })
-  // Both externalLink and cancelled navigation use this filtered opener. Report device-handler failure without throwing from a native frame callback; neither path has a reply.
-  const openUrlForPage = (url: string) => {
-    void Linking.openURL(url).catch((error: unknown) => {
-      console.warn('[web-shell] could not open a URL for the page', { url, error })
-    })
-  }
-
   // Push so Back reveals the mounted page without downloading or handshaking again, unless the page replaced itself.
   const openPageRoute = (href: string, replace = false) => {
     if (overlay) {
@@ -301,7 +299,7 @@ export function MobileWebShellScreen({
     },
     onNavigate: pageHeader.leaving(openPageRoute, (result) => result !== 'current'),
     serveNativeVerb,
-    onExternalLink: openUrlForPage,
+    onExternalLink: (url) => void openExternalLink(url),
     // Reuse the app’s platform haptics mapping; device failures are already swallowed there.
     onHaptic: playPageHaptic,
     // The page has one history entry; only the native stack can handle Back.
@@ -406,7 +404,7 @@ export function MobileWebShellScreen({
             // Drop schemes outside the three allowed ones; shell-document URLs are already refused before this callback.
             return
           }
-          openUrlForPage(target)
+          void openExternalLink(target)
         }}
         onLoadState={(event) => {
           const parsed = parseMobileWebShellLoadState(event.nativeEvent)

@@ -61,6 +61,7 @@ export function MobileNativeChatCardHeaderAction<Prompt>({
 }
 
 const styles = StyleSheet.create({
-  row: { flexDirection: 'row', alignItems: 'center' },
+  // Centred on the card title's first line.
+  row: { flexDirection: 'row', alignItems: 'center', marginTop: 7 },
   action: { width: 28, height: 28, alignItems: 'center', justifyContent: 'center' }
 })

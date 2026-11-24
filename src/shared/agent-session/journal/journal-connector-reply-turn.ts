@@ -8,14 +8,21 @@ import type { JournalConnectorReplyOutcome } from './journal-connector-reply'
 // the boot scan so both say the same for the same turn.
 
 /** A delivery a turn answered, as its journal proves it. `ownerAsked`: the bot's owner sent the
- *  message that carried it (its asker), which the legacy owner-DM turn end keys on. */
+ *  message that carried it (its asker): an older build's row in their own DM keeps its words. */
 export type ConnectorReplyStamp = AgentJournalConnectorDelivery & { ownerAsked?: true }
 
 /** A bot's final words for a request: none when its quiet marker silences them. A reply that is
  *  nothing but the marker is a deliberate silence; otherwise only the trailing marker goes
- *  (addressedBotWords). */
-export function connectorReplyWords(prose: string, { bot }: { bot: boolean }): string | null {
-  return bot && isQuietBotResult(prose) ? addressedBotWords(prose) : prose
+ *  (addressedBotWords), unless `silencedWhole`: a row admitted under the older rule, where the
+ *  marker silenced the whole reply. */
+export function connectorReplyWords(
+  prose: string,
+  { bot, silencedWhole }: { bot: boolean; silencedWhole?: boolean }
+): string | null {
+  if (!bot || !isQuietBotResult(prose)) {
+    return prose
+  }
+  return silencedWhole ? null : addressedBotWords(prose)
 }
 
 /** The outcome a turn's end gives one request it answered. prose: its own root prose (empty when
@@ -24,13 +31,17 @@ export function connectorReplyTurnOutcome(turn: {
   outcome: 'success' | 'failure' | 'cancellation' | 'superseded' | 'interruption'
   prose: string
   bot: boolean
+  silencedWhole?: boolean
 }): { outcome: JournalConnectorReplyOutcome; prose?: string } {
   switch (turn.outcome) {
     case 'success': {
       if (!turn.prose.trim()) {
         return { outcome: 'no_answer' }
       }
-      const words = connectorReplyWords(turn.prose, { bot: turn.bot })
+      const words = connectorReplyWords(turn.prose, {
+        bot: turn.bot,
+        silencedWhole: turn.silencedWhole
+      })
       return words === null ? { outcome: 'quiet' } : { outcome: 'answered', prose: words }
     }
     case 'failure':

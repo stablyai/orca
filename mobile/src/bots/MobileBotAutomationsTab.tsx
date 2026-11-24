@@ -1,8 +1,8 @@
 import { Text } from 'react-native'
 import {
-  CalendarClock,
   Clock,
   History,
+  Hourglass,
   MessageSquare,
   Pencil,
   Play,
@@ -14,8 +14,7 @@ import { hasAutomationSchedule } from '../../../src/shared/automation-event-trig
 import { useNow } from '../hooks/use-now'
 import { getUiIntlLocale } from '../i18n/ui-intl-locale'
 import { botWaitTimeFormat } from '../../../src/shared/bots/bot-row-line'
-import { MobileBotTextButton } from './MobileBotTextButton'
-import { MobileStateView } from '../components/feedback/MobileStateView'
+import { MobileStateButton, MobileStateView } from '../components/feedback/MobileStateView'
 import { MobileSwitch } from '../components/controls/MobileSwitch'
 import { DrawnMenu } from '../components/menu/DrawnMenu'
 import type { ActionSheetAction } from '../components/sheets/ActionSheetModal'
@@ -26,12 +25,10 @@ import type { BotAutomationRow } from '../../../src/shared/bots/bot-automation-r
 import type { BotAutomationView } from '../../../src/shared/bots/bot-activity-schema'
 import type { SheetBot } from './bot-sheet-operations'
 import { automationWhenText, automationWontFireNote } from './mobile-bot-sheet-copy'
-import { sheetStyles } from './mobile-bot-sheet-styles'
 import { useBotAutomations } from './use-bot-automations'
 import { optionStyles } from './mobile-bot-option-styles'
-import { colors, spacing } from '../theme/mobile-theme'
+import { colors } from '../theme/mobile-theme'
 import type { PresentAutomationSheet } from '../automations/AutomationSheets'
-import { themedStyleSheet } from '../theme/themed-styles'
 import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 
 /** What an automation's ⋯ menu can do besides Run now and Delete; each is absent where it can't. */
@@ -122,17 +119,23 @@ function AutomationRow(props: {
         <ListRow
           title={automation.name}
           subtitle={automationWhenText(automation, automation.enabled)}
-          leading={<Kind size={18} color={colors.textSecondary} strokeWidth={1.8} />}
+          subtitleNote={
+            props.row.needsSignIn
+              ? {
+                  text: t('bots.upcoming.needsSignIn', 'Needs sign-in'),
+                  color: colors.agentQuestion
+                }
+              : failing
+                ? {
+                    text: t('bots.automations.couldNotFinish', 'Couldn’t finish'),
+                    color: colors.statusRed
+                  }
+                : undefined
+          }
+          leading={<Kind {...KIND_GLYPH} color={colors.textSecondary} />}
           onPress={openMenu}
           detail={
-            <>
-              {wontFire ? <Text style={optionStyles.optionRowDetail}>{wontFire}</Text> : null}
-              {failing ? (
-                <Text style={sheetStyles.alert}>
-                  {t('bots.automations.couldNotFinish', 'Couldn’t finish')}
-                </Text>
-              ) : null}
-            </>
+            wontFire ? <Text style={optionStyles.optionRowDetail}>{wontFire}</Text> : undefined
           }
           accessory={
             <MobileSwitch
@@ -166,6 +169,7 @@ function WaitRow(props: {
   return (
     <ListRow
       title={automation.name}
+      leading={<Hourglass {...KIND_GLYPH} color={colors.textSecondary} />}
       subtitle={
         by === undefined
           ? t('bots.waits.noDeadline', 'No deadline')
@@ -177,7 +181,8 @@ function WaitRow(props: {
             })
       }
       accessory={
-        <MobileBotTextButton
+        <MobileStateButton
+          inRow
           label={t('bots.waits.cancel', 'Cancel')}
           accessibilityLabel={t('bots.waits.cancelNamed', 'Cancel waiting for {{name}}', {
             name: automation.name
@@ -190,8 +195,11 @@ function WaitRow(props: {
   )
 }
 
+const KIND_GLYPH = { size: 18, strokeWidth: 1.8 } as const
+
 /** The desktop's Automations panel: each automation in the bot's home with its switch, a tap opening
- *  its menu (Run now, Edit, Edit in chat, View runs, Delete), then its waits, with Cancel. */
+ *  its menu (Run now, Edit, Edit in chat, View runs, Delete), then its waits, with Cancel, then New
+ *  automation; nothing while there's none and none can be made. */
 export function MobileBotAutomationsTab(props: {
   client: RpcClient | null
   bot: SheetBot
@@ -217,73 +225,65 @@ export function MobileBotAutomationsTab(props: {
   if (!rows) {
     return <MobileStateView loading title={t('bots.activity.loading', 'Loading activity…')} />
   }
+  if (rows.length + waits.length === 0 && !props.onNewAutomation) {
+    return null
+  }
   return (
     <>
       <SectionHeader title={t('bots.sheet.automations', 'Automations')} />
-      {rows.length + waits.length > 0 ? (
-        <ListGroup separatorInset={LIST_LEADING_INSET}>
-          {[
-            ...rows.map((row) => (
-              <AutomationRow
-                key={row.key}
-                row={row}
-                bot={props.bot}
-                disabled={!props.online || saving.has(row.automation.id)}
-                actions={props.actions}
-                onSetEnabled={(next) => void setAutomationEnabled(row.automation.id, next)}
-                onRunNow={() => void runNow(row.automation.id)}
-                onDelete={
-                  present
-                    ? () =>
-                        present({
-                          kind: 'confirm',
-                          title: t('common.delete', 'Delete'),
-                          message: t(
-                            'automations.mobile.deleteRetained',
-                            'Delete “{{name}}” and its retained runs?',
-                            { name: row.automation.name }
-                          ),
-                          confirmLabel: t('common.delete', 'Delete'),
-                          destructive: true,
-                          onConfirm: () => void remove(row.automation.id)
-                        })
-                    : null
-                }
-              />
-            )),
-            ...waits.map((row) => (
-              <WaitRow
-                key={`wait:${row.key}`}
-                row={row}
-                now={now}
-                disabled={!props.online || saving.has(row.automation.id)}
-                onCancel={() => void remove(row.automation.id)}
-              />
-            ))
-          ]}
-        </ListGroup>
-      ) : (
-        <MobileStateView
-          icon={CalendarClock}
-          title={t('bots.automations.emptyTitle', 'No automations yet')}
-          message={t('bots.automations.empty', 'Ask in chat to set up an automation.')}
-        />
-      )}
-      {props.onNewAutomation ? (
-        <ListGroup style={styles.newAutomation}>
-          <ListRow
-            title={t('bots.automations.newAutomation', 'New automation')}
-            leading={<Plus size={18} color={colors.textMuted} />}
-            onPress={props.onNewAutomation}
-          />
-        </ListGroup>
-      ) : null}
+      <ListGroup separatorInset={LIST_LEADING_INSET}>
+        {[
+          ...rows.map((row) => (
+            <AutomationRow
+              key={row.key}
+              row={row}
+              bot={props.bot}
+              disabled={!props.online || saving.has(row.automation.id)}
+              actions={props.actions}
+              onSetEnabled={(next) => void setAutomationEnabled(row.automation.id, next)}
+              onRunNow={() => void runNow(row.automation.id)}
+              onDelete={
+                present
+                  ? () =>
+                      present({
+                        kind: 'confirm',
+                        title: t('common.delete', 'Delete'),
+                        message: t(
+                          'automations.mobile.deleteRetained',
+                          'Delete “{{name}}” and its retained runs?',
+                          { name: row.automation.name }
+                        ),
+                        confirmLabel: t('common.delete', 'Delete'),
+                        destructive: true,
+                        onConfirm: () => void remove(row.automation.id)
+                      })
+                  : null
+              }
+            />
+          )),
+          ...waits.map((row) => (
+            <WaitRow
+              key={`wait:${row.key}`}
+              row={row}
+              now={now}
+              disabled={!props.online || saving.has(row.automation.id)}
+              onCancel={() => void remove(row.automation.id)}
+            />
+          )),
+          ...(props.onNewAutomation
+            ? [
+                <ListRow
+                  key="new"
+                  title={t('bots.automations.newAutomation', 'New automation')}
+                  leading={<Plus {...KIND_GLYPH} color={colors.textSecondary} />}
+                  onPress={props.onNewAutomation}
+                />
+              ]
+            : [])
+        ]}
+      </ListGroup>
     </>
   )
 }
 
 const NO_WAITS: readonly BotAutomationRow<BotAutomationView>[] = []
-
-const styles = themedStyleSheet(() => ({
-  newAutomation: { marginTop: spacing.sm }
-}))

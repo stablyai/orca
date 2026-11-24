@@ -12,7 +12,6 @@ import { useHostProtocolGates } from '../components/host-connection/host-protoco
 import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 import { colors } from '../theme/mobile-theme'
 import { NATIVE_SCREEN_HEADER, ScreenHeader } from '../components/nav-bar/ScreenHeader'
-import { isBotAgent } from '../../../src/shared/bot-types'
 import {
   BOTS_GROUP_ATTACHMENTS_RUNTIME_CAPABILITY,
   BOTS_ITEMS_RUNTIME_CAPABILITY
@@ -21,17 +20,13 @@ import { MobileBotGroupItems } from './MobileBotGroupItems'
 import { MobileBotGroupRepliesSheet } from './MobileBotGroupRepliesSheet'
 import { MobileBotGroupApprovalDock } from './MobileBotGroupApprovalDock'
 import { botGroupReplyDraft } from '../../../src/shared/bots/bot-group-mentions'
-import {
-  mobileBotGroupSessionOptions,
-  useMobileBotGroupComposer
-} from './use-mobile-bot-group-composer'
+import { useMobileBotGroupComposer } from './use-mobile-bot-group-composer'
 import { MobileBotGroupDeleteConfirm } from './MobileBotGroupDeleteConfirm'
 import { botGroupMenuActions } from './bot-group-menu-actions'
 import { botGroupRoomOrder } from '../../../src/shared/bots/bot-group-room-order'
 import { groupNewThread, groupSend, groupStop } from './bot-group-operations'
 import { MobileBotGroupRoomBar } from './MobileBotGroupRoomBar'
 import { MobileBotFaceStack } from './MobileBotFaceStack'
-import { mobileBotAvatarSource } from './host-bot-row-facts'
 import { useMobileBotGroupTranscript } from './use-mobile-bot-group-transcript'
 import { randomV4Uuid } from '../platform/random-v4-uuid'
 import { groupStyles as styles } from './mobile-bot-group-styles'
@@ -48,10 +43,15 @@ import { MobileNativeChatSendErrorBanner } from '../session/native-chat/status/M
 import { useMobileBotGroupDraft } from './use-mobile-bot-group-draft'
 import { MobileNativeChatInputLockStatus } from '../session/native-chat/composer/field/MobileNativeChatInputLockStatus'
 import type { MobileNativeChatHostOutage } from '../session/native-chat/status/mobile-native-chat-host-outage'
+import {
+  MobileBotGroupDictationScope,
+  useMobileBotGroupDictation
+} from './use-mobile-bot-group-dictation'
 
 export function MobileBotGroupRoom({
   client,
   groupId,
+  initialThreadId,
   hostId,
   visible = true,
   connected = true,
@@ -60,6 +60,8 @@ export function MobileBotGroupRoom({
 }: {
   client: RpcClient
   groupId: string
+  /** The thread a dictation's pill reopens. */
+  initialThreadId?: string
   hostId: string
   visible?: boolean
   connected?: boolean
@@ -79,7 +81,7 @@ export function MobileBotGroupRoom({
     [hostCapabilities]
   )
   // The original room, or one of the group's threads.
-  const [threadId, setThreadId] = useState<string | undefined>()
+  const [threadId, setThreadId] = useState<string | undefined>(initialThreadId)
   const roomId = threadId ?? groupId
   const composerDraft = useMobileBotGroupDraft(hostId, groupId, roomId)
   const { text: draft, edit: setDraft } = composerDraft
@@ -110,40 +112,29 @@ export function MobileBotGroupRoom({
     bots,
     itemReads,
     itemMemberIds,
-    loadEarlier
+    loadEarlier,
+    readers
   } = useMobileBotGroupTranscript(client, groupId, threadId, hostId, visible && connected, setError)
   const group = data?.group
-  const readers = useMemo(
-    () =>
-      group?.members.flatMap((member) => {
-        const bot = bots.find((bot) => bot.id === member.botId)
-        return bot && isBotAgent(bot.agent)
-          ? [
-              {
-                sessionId: member.sessionId,
-                agent: bot.agent,
-                operationIds:
-                  data?.messages.flatMap((message) =>
-                    message.turns
-                      .filter((turn) => turn.sessionId === member.sessionId && !turn.revoked)
-                      .map((turn) => turn.operationId)
-                  ) ?? []
-              }
-            ]
-          : []
-      }) ?? [],
-    [group?.members, bots, data?.messages]
-  )
-  const { recipientId, roomMentions, audience, photos, attachPhotos } = useMobileBotGroupComposer(
-    group,
-    bots,
-    composerDraft,
+  const { recipientId, roomMentions, faces, audience, photos, attachPhotos } =
+    useMobileBotGroupComposer(
+      group,
+      bots,
+      composerDraft,
+      client,
+      hostCapabilities?.includes(BOTS_GROUP_ATTACHMENTS_RUNTIME_CAPABILITY) === true,
+      setError
+    )
+  const dictation = useMobileBotGroupDictation({
     client,
-    hostCapabilities?.includes(BOTS_GROUP_ATTACHMENTS_RUNTIME_CAPABILITY) === true,
-    setError
-  )
+    connected,
+    hostId,
+    groupId,
+    threadId,
+    title: anyRoomGroup?.name ?? '',
+    draft: composerDraft
+  })
   const selectedMember = group?.members.find((member) => member.botId === recipientId)
-  const chosen = selectedMember && sessions.get(selectedMember.sessionId)
   const stop = async (botId?: string) => {
     try {
       const result = groupStop.interpret(
@@ -160,8 +151,6 @@ export function MobileBotGroupRoom({
       setError(botFailureMessage(error) ?? String(error))
     }
   }
-  const working =
-    group?.members.some((member) => sessions.get(member.sessionId)?.isWorking) ?? false
   const startThread = async () => {
     if (startingThread) {
       return
@@ -176,10 +165,8 @@ export function MobileBotGroupRoom({
       setStartingThread(false)
     }
   }
-  const memberFaces = (group?.members ?? []).flatMap((member) => {
-    const bot = bots.find((bot) => bot.id === member.botId)
-    return bot ? [{ id: bot.id, avatar: mobileBotAvatarSource(bot) }] : []
-  })
+  const workingCount =
+    group?.members.filter((member) => sessions.get(member.sessionId)?.isWorking).length ?? 0
   return (
     <View
       style={[
@@ -204,7 +191,7 @@ export function MobileBotGroupRoom({
       ))}
       <ScreenHeader
         title={anyRoomGroup?.name ?? t('bots.groups.group', 'Group')}
-        onBack={() => router.back()}
+        onBack={dictation.back}
         actions={[
           ...(itemsOnPhone
             ? [
@@ -234,7 +221,7 @@ export function MobileBotGroupRoom({
         />
       ) : null}
       <MobileNativeChatComposerMenuHost style={styles.grow}>
-        <MobileBotGroupTranscript client={client} roomId={roomId} data={data}>
+        <MobileBotGroupTranscript client={client} roomId={roomId} data={data} members={faces}>
           {data?.hasEarlier ? (
             <Pressable accessibilityRole="button" onPress={() => void loadEarlier()}>
               <Text style={styles.notice}>
@@ -263,67 +250,74 @@ export function MobileBotGroupRoom({
           hostOutage={outage}
         />
         <MobileNativeChatSendErrorBanner message={error} onDismiss={() => setError(null)} />
-        <MobileNativeChatComposer
-          value={draft}
-          onChangeText={setDraft}
-          draftScopeKey={composerDraft.key}
-          sendSurfaceId={`group:${roomId}`}
-          getSendCompletionGeneration={() => 0}
-          getComposerEditGeneration={composerDraft.getEditGeneration}
-          agent={readers.find((turn) => turn.sessionId === selectedMember?.sessionId)?.agent}
-          placeholder={t(
-            'bots.groups.composerPlaceholder',
-            'Message the group, @ to mention a bot'
-          )}
-          disabled={!connected}
-          onAttachImage={attachPhotos}
-          attachments={[...photos.images]}
-          onRemoveAttachment={photos.remove}
-          isAttaching={photos.uploading}
-          roomMentions={roomMentions}
-          roomReplies={
-            <ModelPill
-              primary={t('bots.groups.repliesValue', 'Replies: {{value0}}', { value0: audience })}
-              secondary={null}
-              warning={false}
-              accessibleName={t('bots.groups.repliesValue', 'Replies: {{value0}}', {
-                value0: audience
-              })}
-              disabled={!group || !connected}
-              onPress={() => setMenu('replies')}
-            />
-          }
-          sessionOptions={mobileBotGroupSessionOptions(chosen)}
-          stop={working ? { held: false, onStop: () => void stop() } : null}
-          onSend={async (text) => {
-            if (!group) {
-              return false
+        <MobileBotGroupDictationScope dictation={dictation} client={client}>
+          <MobileNativeChatComposer
+            {...dictation.mic}
+            value={draft}
+            onChangeText={setDraft}
+            draftScopeKey={composerDraft.key}
+            sendSurfaceId={`group:${roomId}`}
+            getSendCompletionGeneration={() => 0}
+            getComposerEditGeneration={composerDraft.getEditGeneration}
+            agent={readers.find((turn) => turn.sessionId === selectedMember?.sessionId)?.agent}
+            placeholder={t(
+              'bots.groups.composerPlaceholder',
+              'Message the group, @ to mention a bot'
+            )}
+            disabled={!connected}
+            onAttachImage={attachPhotos}
+            attachments={[...photos.images]}
+            onRemoveAttachment={photos.remove}
+            isAttaching={photos.uploading}
+            roomMentions={roomMentions}
+            roomReplies={
+              // The row's free width, so a long name truncates on the +'s line instead of wrapping.
+              <View style={styles.repliesSlot}>
+                <ModelPill
+                  primary={t('bots.groups.repliesValue', 'Replies: {{value0}}', {
+                    value0: audience
+                  })}
+                  secondary={null}
+                  warning={false}
+                  accessibleName={t('bots.groups.repliesValue', 'Replies: {{value0}}', {
+                    value0: audience
+                  })}
+                  disabled={!group || !connected}
+                  onPress={() => setMenu('replies')}
+                />
+              </View>
             }
-            composerDraft.clearForSend(text)
-            const sent = photos.images
-            photos.clearSent(sent.map((image) => image.id))
-            try {
-              const result = groupSend.interpret(
-                await groupSend.request(client, {
-                  groupId,
-                  revision: group.revision,
-                  threadId,
-                  messageId: randomV4Uuid(),
-                  text,
-                  ...(sent.length > 0 ? { images: sent.map((image) => image.path) } : {})
-                })
-              )
-              apply({ kind: 'sent', message: result.message })
-              setError(null)
-              return true
-            } catch (error) {
-              composerDraft.restoreRefused(text)
-              photos.returnRefused(sent)
-              setError(botFailureMessage(error) ?? String(error))
-              return false
-            }
-          }}
-        />
+            stop={workingCount > 0 ? { held: false, onStop: () => void stop() } : null}
+            onSend={async (text) => {
+              if (!group) {
+                return false
+              }
+              composerDraft.clearForSend(text)
+              const sent = photos.images
+              photos.clearSent(sent.map((image) => image.id))
+              try {
+                const result = groupSend.interpret(
+                  await groupSend.request(client, {
+                    groupId,
+                    revision: group.revision,
+                    threadId,
+                    messageId: randomV4Uuid(),
+                    text,
+                    ...(sent.length > 0 ? { images: sent.map((image) => image.path) } : {})
+                  })
+                )
+                apply({ kind: 'sent', message: result.message })
+                setError(null)
+                return true
+              } catch (error) {
+                composerDraft.restoreRefused(text)
+                photos.returnRefused(sent)
+                setError(botFailureMessage(error) ?? String(error))
+                return false
+              }
+            }}
+          />
+        </MobileBotGroupDictationScope>
       </MobileNativeChatComposerMenuHost>
       <ActionSheetModal
         visible={menu === 'actions'}
@@ -332,7 +326,7 @@ export function MobileBotGroupRoom({
           t,
           newThread: {
             renderIcon: () => (
-              <MobileBotFaceStack faces={memberFaces} slot={20} ringColor={colors.sheetSurface} />
+              <MobileBotFaceStack faces={faces} slot={20} ringColor={colors.sheetSurface} />
             ),
             disabled: !connected || startingThread,
             onPress: () => void startThread()

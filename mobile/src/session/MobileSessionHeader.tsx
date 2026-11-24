@@ -13,7 +13,6 @@ import { useRefreshHint } from '../query/refresh-hint'
 import { NavBarButton } from '../components/nav-bar/NavBarButton'
 import { useSessionMoreMenuGroups } from './MobileSessionHeaderMoreMenu'
 import { NativeMenu } from '../components/menu/NativeMenu'
-import { MobileBotItemsStrip } from '../bots/items/MobileBotItemsStrip'
 import { MobileSourceControlButton, useSourceControlButtonLook } from './MobileSourceControlButton'
 import { statusDotColor } from '../components/feedback/StatusDot'
 import { MobileSessionTabBar } from './tabs/MobileSessionTabBar'
@@ -58,8 +57,6 @@ export function MobileSessionHeader({
     itemsOnPhone,
     botPanel,
     openBotPanel,
-    sessionTabs,
-    activeSessionTabId,
     terminalResume,
     connState
   } = controller
@@ -80,12 +77,6 @@ export function MobileSessionHeader({
   // A bot's screen has no source control (its home isn't a repository): Items takes its place.
   const itemsInBar = itemsOnPhone && routeBot !== null
   const homeChatId = routeBot?.bot.chatSessionId
-  const activeTab = sessionTabs.find((tab) => tab.id === activeSessionTabId)
-  const onHomeChat =
-    homeChatId !== undefined &&
-    homeChatId !== null &&
-    activeTab?.type === 'agent-session' &&
-    activeTab.sessionId === homeChatId
   const sourceControlInBar = !isFloatingWorkspaceRoute && !actionsCollapsed && !itemsInBar
   const tabStrip = hasTabs ? (
     <MobileSessionTabBar
@@ -278,12 +269,6 @@ export function MobileSessionHeader({
             />
           )}
         </View>
-        {itemsInBar && onHomeChat ? (
-          <MobileBotItemsStrip
-            count={routeBot.needsYou}
-            onView={() => openBotPanel({ tab: 'items' })}
-          />
-        ) : null}
         {tabsInTopBar ? null : tabStrip}
         {showRefreshLine ? <NavBarRefreshLine /> : null}
       </SafeAreaView>
