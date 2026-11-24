@@ -7,6 +7,7 @@ import {
 } from './tab-strip-condense-plan'
 import { TITLED_TAB_STRIP_DENSITY, type TabStripDensity } from './tab-strip-density-context'
 import { TAB_ICON_ONLY_WIDTH_PX } from './tab-strip-width-budget'
+import { bindTabStripContentResizeObservers } from './tab-strip-content-resize-observers'
 
 // The strip's own border-r sits inside the surface beside the tabs.
 const STRIP_BORDER_PX = 1
@@ -180,9 +181,7 @@ export function useTabStripCondense({
     if (!surface) {
       return undefined
     }
-    const observer = new ResizeObserver(replan)
-    observer.observe(surface)
-    return () => observer.disconnect()
+    return bindTabStripContentResizeObservers(surface, replan)
   }, [surface, replan])
 
   const idsKey = ids.join('\u0000')
