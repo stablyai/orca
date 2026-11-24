@@ -6,7 +6,7 @@ import { useMobileColorScheme } from '../../theme/use-mobile-color-scheme'
 
 export const NAV_BAR_BUTTON_SIZE = 36
 
-/** Set by a sheet's header: bgRaised is the light sheet's own colour, so its buttons take a fill that reads on it. */
+/** Set by a bar on light grey (a sheet's header, a grouped page): bgRaised is that grey, so its buttons take a fill that reads on it. */
 export const NavBarButtonOnSheetContext = createContext(false)
 
 type IconProps = { size?: number; color?: string; strokeWidth?: number }
