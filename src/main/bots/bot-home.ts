@@ -144,6 +144,7 @@ type BotHomeFile = { path: string; text: string }
 
 /** Orca owns these and rewrites them whenever they differ. */
 export function generatedBotHomeFiles(bot: Bot): BotHomeFile[] {
+  const clearedLook = bot.avatarRevision ? null : undefined
   return [
     {
       path: 'AGENTS.md',
@@ -169,8 +170,8 @@ export function generatedBotHomeFiles(bot: Bot): BotHomeFile[] {
           name: bot.name,
           agent: bot.agent,
           avatar: bot.avatar,
-          avatarColor: bot.avatarColor ?? null,
-          avatarOutfit: bot.avatarOutfit ?? null,
+          avatarColor: bot.avatarColor ?? clearedLook,
+          avatarOutfit: bot.avatarOutfit ?? clearedLook,
           generatedOverMascot: bot.generatedOverMascot,
           avatarRevisionEpoch: bot.avatarRevisionEpoch,
           // Kept here as well as in the record, which saves on a debounce: after a crash the higher of
