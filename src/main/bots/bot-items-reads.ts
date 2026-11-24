@@ -1,6 +1,7 @@
 // Item reads beyond one row: a bot's list with exact counts, links by what they point at, and the rows
 // item views need in one round trip.
 import {
+  BOT_ITEM_OPEN_STATUSES,
   botItemEventId,
   isOpenBotItemStatus,
   type BotItemLinkKind,
@@ -97,6 +98,18 @@ export class BotItemsReads extends BotItemsTables {
       )
       .map(itemRecordOf)
     return { items, counts }
+  }
+
+  /** Whether one of the bot's open items belongs to this chat; reads only the bot's open items. */
+  chatOwnsOpenItem(botId: string, chatId: string): boolean {
+    return (
+      this.db
+        .prepare(
+          `SELECT 1 FROM items WHERE owner_bot_id = ? AND status IN (SELECT value FROM json_each(?))
+             AND chat_id = ? LIMIT 1`
+        )
+        .get(botId, JSON.stringify(BOT_ITEM_OPEN_STATUSES), chatId) !== undefined
+    )
   }
 
   /** Every Needs you item's bot, last activity and snooze, so the bot list counts what needs the owner. */

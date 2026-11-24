@@ -9,10 +9,12 @@ import {
 
 const MAX_TIMER_DELAY_MS = 2_147_483_647
 // Holds a week of runs from a bot that runs every minute, twice over; past it, chats of bots this
-// profile doesn't have go first, then the oldest.
+// profile doesn't have go first, then the oldest, down to 90% so a full list isn't rewritten per run.
 const MAX_TRACKED_CHATS = 20_000
-// A sweep that failed (chat records unavailable) waits this long before it tries again.
+const TRIMMED_TRACKED_CHATS = 18_000
+// A sweep that failed (chat records unavailable) waits an hour, doubling to a day.
 const FAILED_SWEEP_RETRY_MS = 60 * 60 * 1000
+const MAX_FAILED_SWEEP_RETRY_MS = 24 * 60 * 60 * 1000
 // Chats due this close together share one sweep.
 const SWEEP_COALESCE_MS = 10 * 60 * 1000
 
@@ -44,15 +46,17 @@ export type BotRunChatCloseDeps = {
   ready: () => Promise<void>
   /** Reads this one chat's record. */
   chat: (bot: Bot, sessionId: string) => BotRunChatState | null
-  /** Working, waiting on someone, open on a screen, or owning open items. */
-  busy: (bot: Bot, sessionId: string) => Promise<boolean>
-  /** Closes it unless it is working; true once it closed. */
-  close: (sessionId: string) => Promise<boolean>
+  /** `held`: someone keeps it (open on a screen or in a tab, owning an open item, or the chat an
+   *  automation runs in), so it stays open for good. `working`: a turn or a usage-limit wait. */
+  use: (bot: Bot, sessionId: string) => Promise<'held' | 'working' | 'free'>
+  /** Closes it once `admit` agrees in the session's own lane, and only while it is idle. */
+  close: (sessionId: string, admit: () => boolean) => Promise<boolean>
 }
 
 export class BotRunChatCloser {
   private entries: { path: string; byChat: Map<string, Entry> } | null = null
   private failedAt: number | null = null
+  private failures = 0
   private timer: ReturnType<typeof setTimeout> | undefined
   private timerAt: number | undefined
   private windows = ''
@@ -75,7 +79,8 @@ export class BotRunChatCloser {
         this.evict(byChat)
         await this.rewrite()
       } else {
-        await this.deps.append(this.deps.path(), `${JSON.stringify(entry)}\n`)
+        // Leading newline: a line a crash cut short never swallows this one.
+        await this.deps.append(this.deps.path(), `\n${JSON.stringify(entry)}`)
       }
       await this.rearmNow()
     })
@@ -83,11 +88,20 @@ export class BotRunChatCloser {
 
   /** A deleted bot's chats are no longer this closer's. */
   forget(botId: string): void {
+    this.drop((entry) => entry.botId === botId)
+  }
+
+  /** The chat asked another bot something: its answer comes back here, so it stays open. */
+  keepOpen(sessionId: string): void {
+    this.drop((entry) => entry.sessionId === sessionId)
+  }
+
+  private drop(match: (entry: Entry) => boolean): void {
     void this.serial(async () => {
       const byChat = await this.all()
       const before = byChat.size
       for (const [sessionId, entry] of byChat) {
-        if (entry.botId === botId) {
+        if (match(entry)) {
           byChat.delete(sessionId)
         }
       }
@@ -124,8 +138,10 @@ export class BotRunChatCloser {
       try {
         await this.sweepDue()
         this.failedAt = null
+        this.failures = 0
       } catch (error) {
         this.failedAt = this.deps.now()
+        this.failures += 1
         console.warn('[bots] closing finished run chats failed', error)
       }
       await this.rearmNow()
@@ -183,15 +199,17 @@ export class BotRunChatCloser {
     if (first !== 'due') {
       return first
     }
-    if (await this.deps.busy(bot, entry.sessionId)) {
-      return { ...entry, since: this.deps.now() }
+    const use = await this.deps.use(bot, entry.sessionId)
+    if (use !== 'free') {
+      return use === 'held' ? null : { ...entry, since: this.deps.now() }
     }
-    // A turn, a wake or a new Close after may have come while busy() ran.
-    const second = waiting()
-    if (second !== 'due') {
-      return second
+    // A turn, a wake or a new Close after may come at any point up to the close itself.
+    const closed = await this.deps.close(entry.sessionId, () => waiting() === 'due')
+    if (closed) {
+      return null
     }
-    return (await this.deps.close(entry.sessionId)) ? null : { ...entry, since: this.deps.now() }
+    const after = waiting()
+    return after === 'due' ? { ...entry, since: this.deps.now() } : after
   }
 
   private async rearmNow(): Promise<void> {
@@ -230,9 +248,11 @@ export class BotRunChatCloser {
         next = entry.since + ms
       }
     }
-    return next !== null && this.failedAt !== null
-      ? Math.max(next, this.failedAt + FAILED_SWEEP_RETRY_MS)
-      : next
+    const backoff = Math.min(
+      FAILED_SWEEP_RETRY_MS * 2 ** Math.max(0, this.failures - 1),
+      MAX_FAILED_SWEEP_RETRY_MS
+    )
+    return next !== null && this.failedAt !== null ? Math.max(next, this.failedAt + backoff) : next
   }
 
   private closeAfterMs(bot: Bot): number | null {
@@ -247,7 +267,7 @@ export class BotRunChatCloser {
       ...order.filter((entry) => known.has(entry.botId))
     ]
     byPriority
-      .slice(0, byChat.size - MAX_TRACKED_CHATS)
+      .slice(0, byChat.size - TRIMMED_TRACKED_CHATS)
       .forEach((entry) => byChat.delete(entry.sessionId))
   }
 

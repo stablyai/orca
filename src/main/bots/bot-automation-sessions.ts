@@ -151,7 +151,12 @@ export function runtimeBotAutomationSessions(runtime: OrcaRuntimeService): BotAu
         ?.releaseIdleSession(sessionId)
         .catch((error: unknown) => console.warn('[bots] could not release a finished run', error))
     },
-    closeWhenIdle: (bot, sessionId) => runtime.botRunChatCloser?.arm(bot, sessionId)
+    // Its Close after now, not as the run started.
+    closeWhenIdle: (bot, sessionId) =>
+      runtime.botRunChatCloser?.arm(
+        runtime.bots.list().find((entry) => entry.id === bot.id) ?? bot,
+        sessionId
+      )
   }
 }
 

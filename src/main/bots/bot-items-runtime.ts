@@ -3,12 +3,7 @@
 // workers started for an item linked from orchestration's record. Changes owed to an item's chat go out
 // as orchestration mail; startup sends any a crash left owed.
 import type { Bot } from '../../shared/bot-types'
-import {
-  BOT_ITEM_OPEN_STATUSES,
-  botItemEventId,
-  type BotItem,
-  type BotItemEvent
-} from '../../shared/bots/bot-items'
+import { botItemEventId, type BotItem, type BotItemEvent } from '../../shared/bots/bot-items'
 import { botItemsNeedingOwnerByBot } from '../../shared/bots/bot-item-groups'
 import { botItemQuestionView } from '../../shared/bots/bot-item-ask'
 import {
@@ -117,13 +112,7 @@ export class BotItemsHost {
     if (!store) {
       return false
     }
-    const { items } = await store.list({
-      botId,
-      statuses: BOT_ITEM_OPEN_STATUSES,
-      chatIds: [this.deps.chatRoot(chatId)],
-      limit: 1
-    })
-    return items.length > 0
+    return store.chatOwnsOpenItem(botId, this.deps.chatRoot(chatId))
   }
 
   /** Once the runtime has its bot hooks: an existing items file sends what a crash left owed and

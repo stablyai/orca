@@ -14,6 +14,7 @@ function closerWith(input: {
   bots: Bot[]
   chats: Record<string, BotRunChatState>
   busy?: string[]
+  held?: string[]
 }) {
   let now = 0
   let file = ''
@@ -35,8 +36,16 @@ function closerWith(input: {
     hostDefault: () => '24h',
     ready: async () => {},
     chat: (_bot, sessionId) => input.chats[sessionId] ?? null,
-    busy: async (_bot, sessionId) => input.busy?.includes(sessionId) ?? false,
-    close: async (sessionId) => {
+    use: async (_bot, sessionId) =>
+      input.held?.includes(sessionId)
+        ? 'held'
+        : input.busy?.includes(sessionId)
+          ? 'working'
+          : 'free',
+    close: async (sessionId, admit) => {
+      if (!admit()) {
+        return false
+      }
       closed.push(sessionId)
       return true
     }
@@ -68,9 +77,11 @@ describe('BotRunChatCloser', () => {
         working: { lastActivityAt: 0, kept: false },
         weekly: { lastActivityAt: 0, kept: false },
         forever: { lastActivityAt: 0, kept: false },
-        otherProfile: { lastActivityAt: 0, kept: false }
+        otherProfile: { lastActivityAt: 0, kept: false },
+        inTab: { lastActivityAt: 0, kept: false }
       },
-      busy: ['working']
+      busy: ['working'],
+      held: ['inTab']
     })
     for (const [bot, sessionId] of [
       [bots[0], 'due'],
@@ -80,6 +91,7 @@ describe('BotRunChatCloser', () => {
       [bots[1], 'weekly'],
       [bots[2], 'forever'],
       [bots[0], 'gone'],
+      [bots[0], 'inTab'],
       [botOf('elsewhere'), 'otherProfile']
     ] as const) {
       run.closer.arm(bot, sessionId)

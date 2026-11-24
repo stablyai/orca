@@ -1,4 +1,5 @@
 // The finished run chat closer on this host: its chat records, settings and the bot chat close.
+import { parseOrcaSessionAddress } from '../../shared/agent-session/identity/orca-session-address'
 import { appendFile, readFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { resolveHostOwnedSetting } from '../../shared/settings/host-owned-settings'
@@ -21,6 +22,17 @@ import { BotRunChatCloser } from './bot-run-chat-close'
 function liveSession(sessionId: string): string {
   const records = readAgentSessionRecordStore()
   return (records && lineageLiveSession(records, sessionId)?.sessionId) ?? sessionId
+}
+
+/** A chat that asked another bot gets the answer back, so a finished run's chat stays open for it. */
+export function keepRunChatOpenForAnswer(
+  runtime: Pick<OrcaRuntimeService, 'botRunChatCloser'>,
+  senderAddress: string
+): void {
+  const sender = parseOrcaSessionAddress(senderAddress)
+  if (sender) {
+    runtime.botRunChatCloser?.keepOpen(sender)
+  }
 }
 
 /** Starts the closer on this host's runtime and keeps its timer in step with Close after. */
@@ -61,20 +73,28 @@ export function startBotRunChatCloser(runtime: OrcaRuntimeService, store: Store)
         kept: home || linked || reach.kind !== 'reachable'
       }
     },
-    busy: async (bot, sessionId) => {
+    use: async (bot, sessionId) => {
       const live = liveSession(sessionId)
-      return (
-        botTurns.running(live) ||
-        // Open on a screen, or in a tab: closing would take it away from whoever has it up.
-        getStructuredAgentSessionHost()?.reads.viewed(live) === true ||
-        getStructuredAgentSessionHost()?.isSessionTabVisible(live) === true ||
-        (await runtime.botItems.chatHasOpenItems(bot.id, sessionId))
+      const host = getStructuredAgentSessionHost()
+      const targeted = (store.listAutomations?.() ?? []).some((automation) =>
+        [sessionId, live].includes(automation.bot?.chat?.sessionId ?? '')
       )
+      // Someone has it up, it owns work, or an automation still runs in it: it stays open.
+      if (
+        targeted ||
+        host?.reads.viewed(live) === true ||
+        host?.isSessionTabVisible(live) === true ||
+        (await runtime.botItems.chatHasOpenItems(bot.id, sessionId))
+      ) {
+        return 'held'
+      }
+      const waitingOnLimit = (await host?.readUsageLimitContinue(live))?.state === 'scheduled'
+      return botTurns.running(live) || waitingOnLimit ? 'working' : 'free'
     },
-    close: async (sessionId) =>
+    close: async (sessionId, admit) =>
       (
         await closeBotSession(runtime, liveSession(sessionId), {
-          admitClose: (work) => work.state === 'idle'
+          admitClose: (work) => work.state === 'idle' && admit()
         })
       ).stopped
   })
