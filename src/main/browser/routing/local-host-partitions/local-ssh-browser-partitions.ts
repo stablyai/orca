@@ -14,7 +14,7 @@ import { enforceBrowserRouteWebRtcPolicy } from '../../network/egress/browser-ro
 import { browserSessionRegistry } from '../../sessions/profiles/browser-session-registry'
 import {
   bindLocalSshBrowserPartitionFor,
-  boundLocalSshBrowserPartition,
+  boundLocalSshBrowserPartitionsForProfile,
   deriveLocalSshBrowserPartition
 } from './local-ssh-browser-partition-bindings'
 import { getSshTargetRegistryStore } from '../../../ssh/targets/ssh-target-registry'
@@ -257,15 +257,9 @@ browserSessionRegistry.onProfileDeleted = async (profileId) => {
   try {
     await releasePreparedPartitions((pending) => pending.browserProfileId === profileId, partitions)
     // A jar an earlier launch or a Settings import bound has no prepared record; find it by host.
-    for (const target of getSshTargetRegistryStore()?.listTargets() ?? []) {
-      try {
-        const bound = boundLocalSshBrowserPartition(target.id, profileId)
-        if (bound) {
-          partitions.add(bound)
-        }
-      } catch {
-        // A binding conflict names another identity's jar; leave it.
-      }
+    const targetIds = (getSshTargetRegistryStore()?.listTargets() ?? []).map((target) => target.id)
+    for (const bound of boundLocalSshBrowserPartitionsForProfile(targetIds, profileId)) {
+      partitions.add(bound)
     }
   } finally {
     await releaseEvictedBrowserRoutePartitionStorage(

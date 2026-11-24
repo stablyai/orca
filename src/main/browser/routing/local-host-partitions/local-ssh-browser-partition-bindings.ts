@@ -43,6 +43,25 @@ export function boundLocalSshBrowserPartition(
   return derived.partition
 }
 
+/** The jars these hosts' pages of one profile have bound; reads the binding file once for all hosts. */
+export function boundLocalSshBrowserPartitionsForProfile(
+  targetIds: readonly string[],
+  browserProfileId: string
+): string[] {
+  const orcaProfileId = activeBrowserRoutePartitionOrcaProfileId()
+  if (!orcaProfileId || targetIds.length === 0) {
+    return []
+  }
+  const bindings = currentBrowserRoutePartitionBindingStore().listBindings()
+  return targetIds.flatMap((targetId) => {
+    const derived = deriveLocalSshBrowserPartition(orcaProfileId, targetId, browserProfileId)
+    // A different fingerprint is another identity's jar.
+    return bindings.get(derived.partition)?.fingerprint === derived.bindingFingerprint
+      ? [derived.partition]
+      : []
+  })
+}
+
 /** Binds the jar this target's pages of this profile will use, so Settings can fill it before any page opens. */
 export function bindLocalSshBrowserPartition(targetId: string, browserProfileId: string): string {
   const orcaProfileId = activeBrowserRoutePartitionOrcaProfileId()

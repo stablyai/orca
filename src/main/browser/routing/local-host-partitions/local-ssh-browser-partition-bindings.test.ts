@@ -32,8 +32,11 @@ afterEach(() => {
 })
 
 it("names only the selected SSH host's jar for the selected profile, and a lookup never binds one", async () => {
-  const { bindLocalSshBrowserPartition, boundLocalSshBrowserPartition } =
-    await import('./local-ssh-browser-partition-bindings')
+  const {
+    bindLocalSshBrowserPartition,
+    boundLocalSshBrowserPartition,
+    boundLocalSshBrowserPartitionsForProfile
+  } = await import('./local-ssh-browser-partition-bindings')
   expect(boundLocalSshBrowserPartition('staging', 'work')).toBeNull()
   expect(boundLocalSshBrowserPartition('staging', 'work')).toBeNull()
 
@@ -43,4 +46,10 @@ it("names only the selected SSH host's jar for the selected profile, and a looku
   expect(boundLocalSshBrowserPartition('prod', 'work')).toBe(prodWork)
   expect(prodWork).not.toBe(stagingWork)
   expect(boundLocalSshBrowserPartition('staging', 'default')).toBeNull()
+  // Profile deletion finds every host's jar for that profile, and only those.
+  expect(boundLocalSshBrowserPartitionsForProfile(['staging', 'prod', 'gone'], 'work')).toEqual([
+    stagingWork,
+    prodWork
+  ])
+  expect(boundLocalSshBrowserPartitionsForProfile(['staging', 'prod'], 'default')).toEqual([])
 })
