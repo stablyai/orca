@@ -313,6 +313,7 @@ function NativePromptEditor({
             },
             focus: () => focusMountedNativeChatEditor(editor),
             contains: (node) => mountedEditorView(editor)?.dom.contains(node) === true,
+            caretPlaced: () => selection.isUserOwned(),
             isCaretOnVisualEdge: (edge) => nativeChatCaretOnVisualEdge(editor, edge),
             select: () => {
               editor.commands.selectAll()
@@ -379,7 +380,7 @@ function NativePromptEditor({
             }
           }
         : null,
-    [editor, scopeKey, applyPosition, textPositions]
+    [editor, scopeKey, applyPosition, textPositions, selection]
   )
   useNativeChatPromptEditorHandle(inputRef, editor, input)
   useNativeChatComposerMount(scopeKey ?? '', input, isComposing, disabled)

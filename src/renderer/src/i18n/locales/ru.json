@@ -20268,7 +20268,8 @@
         "moreControls": "Другие элементы управления чатом",
         "permissionAppliesNextMessage": "{{saved}} применяется со следующего сообщения; сейчас используется: {{active}}",
         "botFor": "Для: {{detail}}",
-        "bots": "Боты"
+        "bots": "Боты",
+        "quotePillLabel": "Цитата: {{text}}"
       },
       "tool": {
         "exitCode": "код {{value0}}",

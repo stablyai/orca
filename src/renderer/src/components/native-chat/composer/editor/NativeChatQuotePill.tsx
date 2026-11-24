@@ -2,7 +2,10 @@ import { NodeViewWrapper, type NodeViewProps } from '@tiptap/react'
 import { Quote } from 'lucide-react'
 import { useTranslate } from '@/i18n/use-translate'
 import { NativeChatPromptPill } from './NativeChatPromptPill'
-import { quotedText } from '../../../../../../shared/native-chat/input/quotes/native-chat-quote-selection'
+import {
+  quoteChipSpokenName,
+  quotedText
+} from '../../../../../../shared/native-chat/input/quotes/native-chat-quote-selection'
 
 export function NativeChatQuotePill({ node, selected }: NodeViewProps): React.JSX.Element {
   const t = useTranslate()
@@ -13,14 +16,14 @@ export function NativeChatQuotePill({ node, selected }: NodeViewProps): React.JS
       <NativeChatPromptPill
         icon={Quote}
         label={label}
-        spokenLabel={t('components.native-chat.composer.quotePillLabel', 'Quote: {{text}}', {
-          text: label
-        })}
+        spokenLabel={quoteChipSpokenName(
+          t('components.native-chat.composer.quotePillLabel', 'Quote: {{text}}', { text: label })
+        )}
         selected={selected}
         title={text}
-        // As wide as the quote, to a fixed limit; a long quote ends in an ellipsis. The margin
+        // As wide as the quote, to the line width; a long quote ends in an ellipsis. The margin
         // is the one space before the comment; the text has no space there.
-        className="me-1 max-w-[min(100%,24rem)]"
+        className="me-1 max-w-full"
       />
     </NodeViewWrapper>
   )

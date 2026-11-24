@@ -1,4 +1,5 @@
 import { Plugin, TextSelection, type Transaction } from '@tiptap/pm/state'
+import { Decoration, DecorationSet } from '@tiptap/pm/view'
 import type { Node as ProseMirrorNode } from '@tiptap/pm/model'
 import { promptLeafString, QUOTE_LINE, QUOTE_NODE } from './native-chat-prompt-document-text'
 
@@ -65,7 +66,32 @@ export function layoutQuoteChips(state: { doc: ProseMirrorNode; tr: Transaction 
   return tr
 }
 
+/**
+ * The blank line that keeps a chip's blockquote apart from a quote line above it shows no line.
+ * The text keeps it, so the agent gets the same text. A blank line that the user typed shows.
+ */
+function quoteGapDecorations(doc: ProseMirrorNode): DecorationSet {
+  const gaps: Decoration[] = []
+  doc.forEach((block, offset, index) => {
+    if (
+      block.content.size === 0 &&
+      doc.maybeChild(index + 1)?.firstChild?.type.name === QUOTE_NODE &&
+      continuesBlockquote(doc, index, 0)
+    ) {
+      gaps.push(
+        Decoration.node(offset, offset + block.nodeSize, {
+          'data-native-chat-quote-gap': '',
+          'aria-hidden': 'true',
+          class: 'h-0 overflow-hidden'
+        })
+      )
+    }
+  })
+  return DecorationSet.create(doc, gaps)
+}
+
 export const nativeChatQuoteLayout = new Plugin({
+  props: { decorations: (state) => quoteGapDecorations(state.doc) },
   appendTransaction: (transactions, _old, state) => {
     // Programmatic writes (preventUpdate) must keep the text they set.
     if (!transactions.some((tr) => tr.docChanged && !tr.getMeta('preventUpdate'))) {

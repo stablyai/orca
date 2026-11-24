@@ -20343,6 +20343,7 @@
         "skillPillLabel": "스킬: {{name}}",
         "filePillLabel": "파일: {{name}}",
         "agentPillLabel": "에이전트: {{name}}",
+        "quotePillLabel": "인용: {{text}}",
         "backToBots": "봇으로 돌아가기",
         "chatsHint": "채팅은 오른쪽 화살표",
         "loadingBotChats": "{{name}}의 채팅 불러오는 중…",

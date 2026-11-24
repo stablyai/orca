@@ -59,15 +59,7 @@ function selectText(text: string): void {
 
 it('adds a selection in item activity to the comment box as a chat quote', async () => {
   const added: string[] = []
-  render(
-    <ItemPage
-      box={{
-        acceptsText: () => true,
-        appendText: () => {},
-        insertQuote: (quote) => added.push(quote)
-      }}
-    />
-  )
+  render(<ItemPage box={{ acceptsText: () => true, insertQuote: (quote) => added.push(quote) }} />)
   selectText(COMMENT)
   fireEvent.click(await screen.findByRole('button', { name: 'Add to chat' }))
   expect(added).toEqual([`> ${COMMENT}\n> Then rebase.\n\n`])
@@ -75,9 +67,7 @@ it('adds a selection in item activity to the comment box as a chat quote', async
 
 it('offers nothing for text outside the activity', () => {
   vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] })
-  render(
-    <ItemPage box={{ acceptsText: () => true, appendText: () => {}, insertQuote: () => {} }} />
-  )
+  render(<ItemPage box={{ acceptsText: () => true, insertQuote: () => {} }} />)
   selectText('Item title outside the activity')
   act(() => vi.runAllTimers())
   expect(screen.queryByRole('button', { name: 'Add to chat' })).toBeNull()

@@ -19420,7 +19420,8 @@
         "botFor": "用途：{{detail}}",
         "bots": "機器人",
         "backToBots": "返回機器人",
-        "loadingBotChats": "正在載入 {{name}} 的聊天…"
+        "loadingBotChats": "正在載入 {{name}} 的聊天…",
+        "quotePillLabel": "引用：{{text}}"
       },
       "tool": {
         "exitCode": "結束碼 {{value0}}",

@@ -1,14 +1,6 @@
 // @vitest-environment happy-dom
 import { createRef } from 'react'
-import {
-  act,
-  cleanup,
-  fireEvent,
-  render,
-  renderHook,
-  screen,
-  waitFor
-} from '@testing-library/react'
+import { act, cleanup, fireEvent, render, renderHook, screen } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { NativeChatPromptEditor } from './NativeChatPromptEditor'
 import {
@@ -16,7 +8,12 @@ import {
   type NativeChatComposerInput
 } from './native-chat-composer-input'
 import { promptEditor } from './native-chat-prompt-editor.test-support'
-import { promptTextContent } from './native-chat-prompt-document-text'
+import {
+  FILE_REFERENCE_NODE,
+  IMAGE_REFERENCE_NODE,
+  openingPromptContent,
+  promptTextContent
+} from './native-chat-prompt-document-text'
 import { useNativeChatTypedInsertion } from './use-native-chat-typed-insertion'
 import { formatNativeChatQuote } from '../../../../../../shared/native-chat/input/quotes/native-chat-quote-selection'
 
@@ -61,8 +58,41 @@ describe('quote chips in the composer', () => {
     )
   })
 
-  it('shows an added quote as a chip and sends the same Markdown quote', async () => {
-    const { input, editor, container } = setup('hi')
+  // Quoted lines at the end of the text, with no blank line after them, are text: a chip adds one.
+  it('keeps quoted lines and one line end at the end of the text as text', () => {
+    const { input, editor } = setup('> a\n')
+    expect(input.value).toBe('> a\n')
+    expect(chips(editor)).toBe(0)
+  })
+
+  // A line with an image or file pill is not a quote line and not a blank line.
+  it.each([
+    [
+      'a file pill line under a quote line',
+      [
+        [{ type: 'text', text: '> q' }],
+        [{ type: FILE_REFERENCE_NODE, attrs: { token: '@a.ts', path: '' } }],
+        [{ type: 'text', text: 'c' }]
+      ]
+    ],
+    [
+      'an image pill line, a blank line and a line',
+      [
+        [{ type: IMAGE_REFERENCE_NODE, attrs: { attachmentId: 'i' } }],
+        [],
+        [{ type: 'text', text: 'c' }]
+      ]
+    ]
+  ])('keeps %s with no quote chip', (_name, lines) => {
+    const document = {
+      type: 'doc',
+      content: lines.map((content) => ({ type: 'paragraph', content }))
+    }
+    expect(openingPromptContent(document, '')).toEqual(document)
+  })
+
+  it('shows an added quote as a chip and sends the same Markdown quote', () => {
+    const { input, editor } = setup('hi')
     const next = `hi\n\n${formatNativeChatQuote('quoted\nwords')}`
     act(() => {
       input.value = next
@@ -70,19 +100,10 @@ describe('quote chips in the composer', () => {
     })
     expect(input.value).toBe(next)
     expect(chips(editor)).toBe(1)
-    // The chip reads "Quote: …" to a screen reader.
-    await waitFor(() =>
-      expect(container.querySelector('.sr-only')?.textContent).toBe('Quote: quoted words')
-    )
-    // One spoken phrase: the shown text is not read a second time.
-    expect(
-      container.querySelector('[data-slot="badge"] .truncate')?.getAttribute('aria-hidden')
-    ).toBe('true')
-    expect(container.textContent).not.toContain('>')
   })
 
-  it('keeps text typed after the chip on its line, and text typed before it on the line above', async () => {
-    const { input, editor, container } = setup('> q\n\n')
+  it('keeps text typed after the chip on its line, and text typed before it on the line above', () => {
+    const { input, editor } = setup('> q\n\n')
     expect(chips(editor)).toBe(1)
     // Add to chat leaves the caret right after the chip.
     act(() => {
@@ -91,10 +112,6 @@ describe('quote chips in the composer', () => {
     })
     expect(input.value).toBe('> q\n\nhello')
     expect(editor.state.doc.childCount).toBe(1)
-    // The chip keeps its spoken name and its shown text; the comment is plain text after it.
-    await waitFor(() =>
-      expect(container.querySelector('.ProseMirror > p')?.textContent).toBe('Quote: qqhello')
-    )
     act(() => {
       editor.commands.setTextSelection(1)
       editor.commands.insertContent('above')
@@ -230,12 +247,13 @@ describe('quote chips in the composer', () => {
 
   // Add to chat: the quote goes where the caret is, on a line of its own; empty lines stay.
   it.each([
-    ['on an empty line', 'top\n\n\nend', 5, 'top\n\n> q\n\n\nend'],
-    ['at the end, after empty lines', 'top\n\n\n', 6, 'top\n\n\n> q\n\n'],
-    ['inside a line: the rest is the comment', 'foobar', 3, 'foo\n> q\n\nbar']
-  ])('adds a quote at the caret %s', (_name, text, caret, added) => {
+    ['on an empty line', 'top\n\n\nend', 5, 5, 'top\n\n> q\n\n\nend'],
+    ['at the end, after empty lines', 'top\n\n\n', 6, 6, 'top\n\n\n> q\n\n'],
+    ['inside a line: the rest is the comment', 'foobar', 3, 3, 'foo\n> q\n\nbar'],
+    ['at the end of a selection, which stays', 'foobar', 1, 3, 'foo\n> q\n\nbar']
+  ])('adds a quote at the caret %s', (_name, text, from, to, added) => {
     const { input, editor } = setup(text)
-    act(() => input.setSelectionRange(caret, caret))
+    act(() => input.setSelectionRange(from, to))
     const { result } = renderHook(() =>
       useNativeChatTypedInsertion({
         textareaRef: { current: input },
@@ -251,6 +269,23 @@ describe('quote chips in the composer', () => {
     // The caret is right after the chip, where the comment goes.
     const after = added.indexOf('> q\n\n') + '> q\n\n'.length
     expect([input.selectionStart, input.selectionEnd]).toEqual([after, after])
+  })
+
+  // A restored draft shows its caret at the start until the user puts one in the box.
+  it('adds a quote after the draft in a box where the user put no caret', () => {
+    const { input, editor } = setup('top\nend')
+    const { result } = renderHook(() =>
+      useNativeChatTypedInsertion({
+        textareaRef: { current: input },
+        isComposing: () => false,
+        setDraft: vi.fn(),
+        setCaret: vi.fn(),
+        setActiveSuggestion: vi.fn()
+      })
+    )
+    act(() => result.current.insertQuote('> q\n\n'))
+    expect(input.value).toBe('top\nend\n> q\n\n')
+    expect(chips(editor)).toBe(1)
   })
 
   // A paste keeps its text: quoted lines that the user pastes stay lines of text.

@@ -19823,7 +19823,8 @@
         "botFor": "用途: {{detail}}",
         "bots": "ボット",
         "backToBots": "ボットに戻る",
-        "loadingBotChats": "{{name}} のチャットを読み込み中…"
+        "loadingBotChats": "{{name}} のチャットを読み込み中…",
+        "quotePillLabel": "引用: {{text}}"
       },
       "tool": {
         "result": "結果",

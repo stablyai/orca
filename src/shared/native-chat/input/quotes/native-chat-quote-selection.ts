@@ -97,6 +97,11 @@ export function appendNativeChatQuote(draft: string, quote: string): string {
   return kept === '' ? quote : `${kept}\n\n${quote}`
 }
 
+/** The spoken name of a quote chip ends a sentence, so it does not run into the text after it. */
+export function quoteChipSpokenName(phrase: string): string {
+  return /[.!?。！？…]$/.test(phrase) ? phrase : `${phrase}.`
+}
+
 /** The text of a quote that `formatNativeChatQuote` wrote, without its `>` marks. */
 export function quotedText(quote: string): string {
   return quote

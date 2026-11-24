@@ -84,10 +84,12 @@ export function useNativeChatTypedInsertion(args: {
     (quote: string): void => {
       const textarea = usableInput()
       if (textarea) {
-        // A quote the user adds lands at the caret, as typing it would.
-        const { value, selectionStart, selectionEnd } = textarea
-        const from = selectionStart ?? value.length
-        const next = withQuoteInserted(value, quote, from, selectionEnd ?? from)
+        // A quote lands at the caret and deletes no selected text. In a box where the user put no
+        // caret yet, the caret is at the start of a restored draft: the quote goes after the draft.
+        const { value, selectionEnd } = textarea
+        const at =
+          textarea.caretPlaced?.() === false ? value.length : (selectionEnd ?? value.length)
+        const next = withQuoteInserted(value, quote, at)
         showDraft(textarea, next.text, next.caret)
       }
     },

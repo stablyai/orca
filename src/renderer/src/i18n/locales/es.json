@@ -19298,7 +19298,8 @@
         "exitPlanMode": "Salir del modo de planificación",
         "permissionAppliesNextMessage": "{{saved}} se aplica a tu próximo mensaje; actualmente se usa {{active}}",
         "botFor": "Para: {{detail}}",
-        "bots": "Bots"
+        "bots": "Bots",
+        "quotePillLabel": "Cita: {{text}}"
       },
       "tool": {
         "result": "Resultado",

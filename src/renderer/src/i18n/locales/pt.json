@@ -20949,7 +20949,8 @@
         "moreControls": "Mais controles do chat",
         "permissionAppliesNextMessage": "{{saved}} vale para a próxima mensagem; usando {{active}} no momento",
         "botFor": "Para: {{detail}}",
-        "bots": "Bots"
+        "bots": "Bots",
+        "quotePillLabel": "Citação: {{text}}"
       },
       "tool": {
         "exitCode": "saída {{value0}}",

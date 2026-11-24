@@ -3,7 +3,10 @@ import { Quote } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { useTranslate } from '@/i18n/use-translate'
-import { quotedText } from '../../../../../shared/native-chat/input/quotes/native-chat-quote-selection'
+import {
+  quoteChipSpokenName,
+  quotedText
+} from '../../../../../shared/native-chat/input/quotes/native-chat-quote-selection'
 import { CommentMarkdownBlockLineContext } from '@/components/comment-markdown/comment-markdown-code-renderers'
 
 type HastNode = {
@@ -59,9 +62,11 @@ export function NativeChatSentQuote({ node }: { node?: HastNode }): React.JSX.El
         >
           <Quote aria-hidden="true" />
           <span className="sr-only">
-            {t('components.native-chat.composer.quotePillLabel', 'Quote: {{text}}', {
-              text: label
-            })}
+            {quoteChipSpokenName(
+              t('components.native-chat.composer.quotePillLabel', 'Quote: {{text}}', {
+                text: label
+              })
+            )}
           </span>
           <span aria-hidden="true" className="truncate">
             {label}
