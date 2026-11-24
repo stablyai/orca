@@ -254,6 +254,8 @@ describe('NativeChatQuestionCard', () => {
   it('steps with the header arrows, marks an answered step and moves back from step 2', () => {
     vi.useFakeTimers()
     renderCard({ prompt: { questions: [question('One'), question('Two'), question('Three')] } })
+    // The count and the two arrows are the only step controls; no per-step bar.
+    expect(container.querySelectorAll('[data-native-chat-question-step]')).toHaveLength(2)
     expect(getByRole(container, 'button', { name: 'Previous question' })).toHaveProperty(
       'disabled',
       true
