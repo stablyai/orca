@@ -119,6 +119,25 @@ export function agentSessionAttachmentReferences(
   return uploadIds
 }
 
+/** Claim only the remaining uploads when an older outbox entry refers to files already lost. */
+export function agentSessionAttachmentClaimWithoutUploads(
+  root: string,
+  body: AgentJournalMessageItem,
+  excluded: ReadonlySet<string>
+): AgentJournalMessageItem {
+  const kept = new Map<string, string>()
+  for (const { uploadId, text, rootStart, idEnd } of attachmentReferences(
+    root,
+    body,
+    process.platform
+  )) {
+    if (!excluded.has(uploadId)) {
+      kept.set(uploadId, text.slice(rootStart, idEnd))
+    }
+  }
+  return { ...body, blocks: [...kept.values()].map((text) => ({ type: 'text' as const, text })) }
+}
+
 /** An image block is the whole path; a text reference ends at its quote, or at whitespace because only paths without any go unquoted. */
 function referencedFileName({ block, text, rootStart, idEnd }: AttachmentReference): string | null {
   if (!/[\\/]/.test(text.charAt(idEnd))) {

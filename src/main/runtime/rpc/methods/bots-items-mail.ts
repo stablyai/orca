@@ -8,14 +8,19 @@ import {
   BOT_ITEM_MAIL_SENDER
 } from '../../../../shared/bots/bot-item-note-runs'
 import { botMailSession, botMailSessionStillCurrent } from '../../../bots/bot-mail-chat'
-import { ownerCommentAttachmentBody } from '../../../bots/bot-item-comment-attachments'
+import { ownerCommentAttachmentBody } from '../../../bots/bot-item-comment-attachment-body'
 import { agentSessionAttachmentUploadIdOfPath } from '../../../../shared/agent-session/agent-session-attachments'
+import type { AgentJournalMessageItem } from '../../../../shared/agent-session/journal/agent-session-journal-types'
 import { isAgentSessionAttachmentExpiredError } from '../../../native-chat/agent-session-attachments/agent-session-attachment-claims'
 import {
   getAgentSessionAttachmentClaimer,
-  getAgentSessionAttachmentStore
+  getAgentSessionAttachmentStore,
+  type AgentSessionAttachmentClaimer
 } from '../../../native-chat/agent-session-attachments/agent-session-attachment-store-registry'
-import { agentSessionAttachmentReferences } from '../../../native-chat/agent-session-attachments/agent-session-attachment-references'
+import {
+  agentSessionAttachmentClaimWithoutUploads,
+  agentSessionAttachmentReferences
+} from '../../../native-chat/agent-session-attachments/agent-session-attachment-references'
 import type { BotItemNoteBy } from '../../../../shared/bots/bot-item-note'
 import { appendBotItemNote, botItemNote } from '../../../bots/bot-item-chat-notes'
 import { botItemChangeMail, botItemMailImages } from '../../../bots/bot-items-mail-text'
@@ -64,6 +69,37 @@ function answerAskedIn(owed: BotItemMail): string | null {
   return null
 }
 
+async function claimItemMailUploads(
+  claim: AgentSessionAttachmentClaimer,
+  root: string,
+  sessionId: string,
+  body: AgentJournalMessageItem,
+  expired: Set<string>
+): Promise<void> {
+  let remaining = expired.size
+    ? agentSessionAttachmentClaimWithoutUploads(root, body, expired)
+    : body
+  while (remaining.blocks.length > 0) {
+    try {
+      await claim(sessionId, remaining)
+      return
+    } catch (error) {
+      if (!isAgentSessionAttachmentExpiredError(error)) {
+        throw error
+      }
+      // Older mail can name files already lost. The other files still need the recipient's claim.
+      const previous = expired.size
+      for (const { uploadId } of error.expired) {
+        expired.add(uploadId)
+      }
+      if (expired.size === previous) {
+        throw error
+      }
+      remaining = agentSessionAttachmentClaimWithoutUploads(root, body, expired)
+    }
+  }
+}
+
 /** Stores the event's mail unless it is there already; true once nothing is owed. */
 export async function sendBotItemMail(
   runtime: OrcaRuntimeService,
@@ -93,17 +129,7 @@ export async function sendBotItemMail(
     if (agentSessionAttachmentReferences(store.rootDir, attachment).size > 0) {
       // The outbox keeps the uploads until the actual recipient claims them.
       for (let attempt = 0; ; attempt++) {
-        try {
-          await claim(sessionId, attachment)
-        } catch (error) {
-          if (!isAgentSessionAttachmentExpiredError(error)) {
-            throw error
-          }
-          // An older outbox entry can already be missing files. Its text still reaches the bot.
-          for (const { uploadId } of error.expired) {
-            expired.add(uploadId)
-          }
-        }
+        await claimItemMailUploads(claim, store.rootDir, sessionId, attachment, expired)
         if (botMailSessionStillCurrent(runtime, bot.id, owed.chatId, sessionId)) {
           break
         }

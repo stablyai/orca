@@ -16,6 +16,7 @@ import { applyJournalWriterStoreEffect } from './journal-writer-store-effect'
 import {
   claimAgentSessionAttachmentsInTransaction,
   finishUploadSweep,
+  isAgentSessionUploadUnclaimed,
   markUnclaimedUploadForSweep,
   pruneAgentSessionAttachmentClaims,
   type AgentSessionAttachmentClaim
@@ -61,6 +62,7 @@ export type JournalWriterEffect =
   | {
       kind: 'sweep'
       operation:
+        | { kind: 'unclaimed'; uploadId: string }
         | { kind: 'mark'; uploadId: string; now: number }
         | { kind: 'finish'; uploadId: string }
         | { kind: 'prune'; pairs: readonly { uploadId: string; sessionId: string }[] }
@@ -122,6 +124,9 @@ export function applyJournalWriterEffect(
     }
     case 'sweep': {
       const operation = effect.operation
+      if (operation.kind === 'unclaimed') {
+        return isAgentSessionUploadUnclaimed(db, operation.uploadId)
+      }
       if (operation.kind === 'mark') {
         return markUnclaimedUploadForSweep(db, operation.uploadId, operation.now)
       }

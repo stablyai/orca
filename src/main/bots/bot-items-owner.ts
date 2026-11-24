@@ -19,7 +19,7 @@ import {
   type BotItemWriteOutcome
 } from './bot-items-input'
 import { eventRecordOf } from './bot-items-rows'
-import { ownerCommentAttachmentBody } from './bot-item-comment-attachments'
+import { ownerCommentAttachmentBody } from './bot-item-comment-attachment-body'
 import { agentSessionAttachmentReferences } from '../native-chat/agent-session-attachments/agent-session-attachment-references'
 import { skippedQuestionsOf } from './bot-item-waiting-ask-keep'
 import type { BotItemEventRecord, BotItemMail, BotItemRecord } from './bot-items-schema'

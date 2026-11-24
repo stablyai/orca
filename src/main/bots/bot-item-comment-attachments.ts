@@ -9,7 +9,6 @@ import { isAgentInlineImagePath } from '../../shared/native-chat/input/composer/
 import { formatNativeChatFileReference } from '../../shared/native-chat/input/composer/agent-image-paste'
 import {
   BOT_ITEM_COMMENT_FILE_MAX_COUNT,
-  botItemCommentImages,
   type BotItemCommentImage
 } from '../../shared/bots/bot-items'
 import { agentSessionAttachmentReferences } from '../native-chat/agent-session-attachments/agent-session-attachment-references'
@@ -23,7 +22,7 @@ import {
   type BotAttachmentStore
 } from './bot-attachment-images'
 import { BotItemError } from './bot-item-error'
-import type { BotItemEventRecord } from './bot-items-schema'
+import { botItemCommentAttachmentBody } from './bot-item-comment-attachment-body'
 
 const COMMENT_IMAGE_LABELS = {
   tooMany: 'commentImagesTooMany',
@@ -95,33 +94,6 @@ export async function admitBotItemCommentAttachments(
   }
   await claimBotItemCommentAttachments(deps.claim, chat.sessionId, body)
   return { text, images }
-}
-
-function botItemCommentAttachmentBody(
-  text: string,
-  images: readonly Pick<BotItemCommentImage, 'path'>[]
-): AgentJournalMessageItem {
-  return {
-    kind: 'message',
-    role: 'user',
-    blocks: [
-      { type: 'text', text },
-      ...images.map(({ path }) => ({ type: 'image-ref' as const, path }))
-    ]
-  }
-}
-
-export function ownerCommentAttachmentBody(
-  event: BotItemEventRecord
-): AgentJournalMessageItem | null {
-  if (event.kind !== 'commented' || event.actor.kind !== 'owner') {
-    return null
-  }
-  const text = typeof event.data.text === 'string' ? event.data.text : ''
-  const images = botItemCommentImages(event.data)
-  return images.length > 0 || hasAttachmentStoreReference(text)
-    ? botItemCommentAttachmentBody(text, images)
-    : null
 }
 
 async function claimBotItemCommentAttachments(

@@ -16,7 +16,10 @@ export type AgentSessionAttachmentSweepFacts = {
   finishSweep: (uploadId: string) => void | Promise<void>
   pruneClaims: () => void | Promise<void>
   /** Uploads waiting for a durable item mail recipient to claim them. */
-  retainedUploadIds?: () => Promise<ReadonlySet<string>>
+  retention?: {
+    isUnclaimed: (uploadId: string) => boolean | Promise<boolean>
+    uploads: () => Promise<ReadonlySet<string>>
+  }
   onUploadRemoved?: (uploadDir: string) => void
 }
 
@@ -58,7 +61,12 @@ export async function sweepAgentSessionAttachments(
     if (ageMs <= UNCLAIMED_ATTACHMENT_MAX_AGE_MS) {
       continue
     }
-    retained ??= await facts.retainedUploadIds?.()
+    if (!retained && facts.retention) {
+      if (!(await facts.retention.isUnclaimed(uploadId))) {
+        continue
+      }
+      retained = await facts.retention.uploads()
+    }
     if (retained?.has(uploadId) || !(await facts.markForSweep(uploadId, now))) {
       continue
     }

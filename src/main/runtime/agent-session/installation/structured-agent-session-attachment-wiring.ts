@@ -50,11 +50,14 @@ export function installAgentSessionAttachments(deps: {
       { kind: 'claim', claim: { sessionId, body, required: true, now: Date.now() } }
     ])
   })
+  const retainedUploadIds = deps.retainedUploadIds
   sweeper = startAgentSessionAttachmentSweeps(
     attachments,
     {
-      ...structuredAgentSessionAttachmentSweepFacts(deps.journalDatabase),
-      ...(deps.retainedUploadIds ? { retainedUploadIds: () => deps.retainedUploadIds!(root) } : {}),
+      ...structuredAgentSessionAttachmentSweepFacts(
+        deps.journalDatabase,
+        retainedUploadIds ? () => retainedUploadIds(root) : undefined
+      ),
       onUploadRemoved: publishAgentSessionUploadRemoval
     },
     {
