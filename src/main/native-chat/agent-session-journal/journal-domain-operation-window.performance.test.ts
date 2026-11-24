@@ -12,6 +12,7 @@ import { readJournalDomainOperationWindow } from './journal-domain-operation-win
 import { JournalWindowNotIndexed } from './journal-operation-window-sends'
 import { JournalSqlScope } from './journal-sql-scope'
 import { keptSends } from './journal-operation-window-held-sends'
+import { marginBefore } from './journal-operation-window-turn-ahead'
 import type { Send } from './journal-operation-window-sends'
 import { codexTurnLifecycleIdentity } from '../../codex/structured/journal/codex-structured-journal-translation-turns'
 import { codexProviderHandle } from '../../../shared/agent-session/lifecycle/provider-handles/agent-session-provider-handle-encoding'
@@ -478,4 +479,43 @@ it('reads an indexed-only window of the newest turn by index, and throws where o
     { rows: 16, sends: ['m48', 'm49'] },
     { rows: 10, thrown: true }
   ])
+})
+
+it('looks back for the turn ahead of an indexed-only window no further than the window could reach', () => {
+  // A turn resumed from the provider with no prompt of its own, after a long run of root tool calls:
+  // the prompt ahead of it sits behind every one of them.
+  const resumedAfter = (tools: number) => {
+    const db = chat(1, () => true, undefined, 0, tools)
+    db.exec('BEGIN IMMEDIATE')
+    applyJournalDomainItem(
+      db,
+      target,
+      {
+        kind: 'item',
+        identity: codexTurnLifecycleIdentity('chat', 'resumed'),
+        body: { kind: 'turn', turnId: 'resumed', state: 'completed', outcome: 'success' },
+        options: { turnScope: { kind: 'thread' }, fence: 1 }
+      },
+      1_900_000_000_000
+    )
+    db.exec('COMMIT')
+    return db
+  }
+  const lookBack = (db: Database, indexedOnly: boolean) => {
+    const scope = new JournalSqlScope(db, 'chat', 'epoch')
+    try {
+      return marginBefore(scope, Number.MAX_SAFE_INTEGER, indexedOnly)
+    } catch (error) {
+      return error instanceof JournalWindowNotIndexed ? 'thrown' : error
+    }
+  }
+  const near = resumedAfter(100)
+  const far = resumedAfter(5000)
+  try {
+    expect([lookBack(near, true), lookBack(near, false)]).toEqual([1, 1])
+    expect([lookBack(far, true), lookBack(far, false)]).toEqual(['thrown', 1])
+  } finally {
+    near.close()
+    far.close()
+  }
 })

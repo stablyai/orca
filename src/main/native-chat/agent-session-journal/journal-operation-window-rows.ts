@@ -20,7 +20,8 @@ const WINDOW_BYTES = JOURNAL_READER_REPLY_BYTE_LIMIT / 2
 const CUT_ROW_BYTES = 64 * 1024
 // Only these carry a tool output or patch to cut; any other row comes back as stored.
 const CUTTABLE = `kind IN ('tool-call','diff')`
-const INDEXED_ONLY_ROW_CAP = 4096
+/** The most rows an indexed-only window, or its look back for the turn ahead, may cover. */
+export const INDEXED_ONLY_ROW_CAP = 4096
 
 /**
  * The window's rows from `start`, sized in SQL before any is decoded, as the read projects them:

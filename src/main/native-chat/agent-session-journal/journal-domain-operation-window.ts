@@ -8,6 +8,7 @@ import { journalDomainContextHead } from './journal-sql-continuation-context'
 import type { JournalSqlScope } from './journal-sql-scope'
 import type { SqliteRow } from '../../sqlite/sqlite-statement'
 import { readOperationWindowItems } from './journal-operation-window-rows'
+import { marginBefore } from './journal-operation-window-turn-ahead'
 import { marginAfter } from './journal-operation-window-end'
 import {
   type Send,
@@ -139,7 +140,11 @@ export function readJournalDomainOperationWindow(
   }
   sends = fresh ?? wholeSends(scope, anchors)
   let start =
-    earliest === null ? null : anchors.withoutTurnAhead ? earliest : marginBefore(scope, earliest)
+    earliest === null
+      ? null
+      : anchors.withoutTurnAhead
+        ? earliest
+        : marginBefore(scope, earliest, anchors.indexedOnly)
   const end = earliest !== null && bounded ? windowEnd(scope, reaches) : null
   if (indexed && start !== null) {
     // A newest-turns window takes the whole read once a family runs older than it, or past the cap.
@@ -315,23 +320,6 @@ function observedSincePosition(scope: JournalSqlScope, since: number): number {
     const last = rows.at(-1)!
     before = [Number(last.sequence), Number(last.sequence_index), Number(last.ordinal)]
   }
-}
-
-/** The prompt ahead of the root turn before `sequence`: a held turn's predecessor and its opener. */
-function marginBefore(scope: JournalSqlScope, sequence: number): number {
-  const turn = scope.db
-    .prepare(`SELECT MAX(sequence) AS sequence FROM journal_items INDEXED BY journal_items_status_turn
-    WHERE session_id=? AND epoch=? AND hidden=0 AND turn_id IS NOT NULL AND root=1 AND sequence<?`)
-    .get(...scope.prefix, sequence)?.sequence
-  if (turn === null || turn === undefined) {
-    return 0
-  }
-  const user = scope.db
-    .prepare(`SELECT MAX(sequence) AS sequence FROM journal_items INDEXED BY journal_items_root_position
-    WHERE session_id=? AND epoch=? AND hidden=0 AND root=1 AND kind='message' AND message_role='user'
-    AND sequence<?`)
-    .get(...scope.prefix, Number(turn))?.sequence
-  return user === null || user === undefined ? 0 : Number(user)
 }
 
 /** The furthest any anchored send's own turn may reach; null (the head) when one may reach it. */
