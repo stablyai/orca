@@ -22,10 +22,12 @@ export function installOrcadConnector(
     // orcad applies no persisted proxy, so it connects once its RPC is up. Call it after RPC and
     // automations register their cleanups: cleanups run newest first, so the fence comes before both.
     connect: () => {
-      registerCleanup(() => {
+      registerCleanup(async () => {
         stopping = true
         runtime.getConnectorCloud()?.fence()
         host.stop()
+        // Records of which Slack drawing each bot shows get one bounded last try before exit.
+        await runtime.bots.slackIcons.shownRecords.finalSave()
       })
       runtime.getConnectorCloud()?.connect()
     }

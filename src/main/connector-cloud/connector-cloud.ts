@@ -78,13 +78,25 @@ export class ConnectorCloud {
     return this.activeAccount()
   }
 
+  // The account the last sign-in hook saw (null signing out or fenced for quit), from memory: no profile read.
+  readonly knownAccount = (): string | null => (this.options.isFenced() ? null : this.lastAccount)
+
   private noteAccount(): void {
     const account = this.signingOut ? null : this.options.account()
     if (account !== this.lastAccount) {
       this.lastAccount = account
       this.options.onAccountSwitched?.()
+      if (account) {
+        this.reach.accountSwitched()
+      }
     }
   }
+
+  /** A sign-in completed (not a refresh), even as the same account: bot pictures owed may go again. */
+  readonly signedIn = (): void => this.reach.back('signedIn')
+
+  /** The poll answered (after its own outage or not), or a sign-in: a bot picture owed may go again. */
+  readonly onBack: ConnectorReach['onBack'] = (listener) => this.reach.onBack(listener)
 
   /** From now on, hold the poll whenever an Orca account is signed in and the machine wants the connection. */
   connect(): void {
@@ -214,6 +226,8 @@ export class ConnectorCloud {
   /** The sign-out ended, either way; a sign-in that finished meanwhile resumes here. */
   signOutFinished(): void {
     this.signingOut = false
+    // A sign-in that finished meanwhile was seen as none: the account it left is taken up now.
+    this.noteAccount()
     this.reconcile()
     this.options.onStatusChanged?.()
   }
@@ -377,6 +391,6 @@ export class ConnectorCloud {
     if (neededSignIn) {
       this.options.onStatusChanged?.()
     }
-    this.reach.reached({ ok: true, value: undefined })
+    this.reach.stopped()
   }
 }
