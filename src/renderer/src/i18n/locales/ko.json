@@ -26241,6 +26241,7 @@
     "waitForImageUploads": "이미지 업로드가 끝날 때까지 기다린 뒤 PR 만들기를 다시 시도하세요."
   },
   "agentPicker": {
+    "refreshModels": "모델 새로고침",
     "catalogUnsupportedLaunch": "이 호스트에서는 {{agent}} 모델을 사용할 수 없습니다. 현재 선택은 그대로 적용됩니다.",
     "catalogLoadFailed": "{{agent}} 모델을 불러올 수 없습니다.",
     "catalogLoading": "모델을 불러오는 중…",
