@@ -9,7 +9,7 @@ import { BotItemChipButton } from './BotItemChipButton'
 import { gitHubIcon, useOpenWeb } from './BotItemLinks'
 import {
   checksLabel,
-  useGitHubChecksMeta,
+  useGitHubCardChecks,
   useGitHubLinkPeekFallback
 } from './bot-item-github-peek-content'
 
@@ -37,7 +37,7 @@ export function BotItemGitHubChip({ row }: { row: BotItemGitHubRow }): React.JSX
         }))
   // Until the lookup answers, and if it fails, the card says what the tooltip would have.
   const fallback = useGitHubLinkPeekFallback(label, tip)
-  const checks = useGitHubChecksMeta(row.type === 'pr' ? row.checks : null)
+  const checks = useGitHubCardChecks(row.type === 'pr' ? row.checks : null, row.checkedAt)
   const chip = (
     <BotItemChipButton
       icon={gitHubIcon(row)}

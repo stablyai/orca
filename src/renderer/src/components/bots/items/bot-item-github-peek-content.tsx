@@ -1,7 +1,8 @@
 import { Check, CircleDot, X } from 'lucide-react'
-import { useMemo, type ReactNode } from 'react'
+import { useCallback, useMemo, type ReactNode } from 'react'
 import { useTranslate, type Translate } from '@/i18n/use-translate'
 import { cn } from '@/lib/class-names'
+import type { GitHubWorkItem } from '../../../../../shared/github/work-items/work-item-types'
 
 export function checksLabel(t: Translate, checks: string | null): string | null {
   if (checks === 'success') {
@@ -17,27 +18,52 @@ export function checksLabel(t: Translate, checks: string | null): string | null 
 }
 
 /** A PR's checks in words, for its GitHub card: a hover must not read a failing PR as healthy. */
-export function useGitHubChecksMeta(checks: string | null): ReactNode {
+function GitHubChecksMeta({ checks }: { checks: string }): ReactNode {
   const t = useTranslate()
   const label = checksLabel(t, checks)
-  return useMemo(() => {
-    if (!label) {
-      return null
-    }
-    const Icon = checks === 'success' ? Check : checks === 'failure' ? X : CircleDot
-    const tone =
-      checks === 'success'
-        ? 'text-status-success'
-        : checks === 'failure'
-          ? 'text-destructive'
-          : 'text-status-warning'
-    return (
-      <span className={cn('flex shrink-0 items-center gap-0.5', tone)}>
-        <Icon aria-hidden strokeWidth={2.5} className="size-3" />
-        {label}
-      </span>
-    )
-  }, [checks, label])
+  if (!label) {
+    return null
+  }
+  const Icon = checks === 'success' ? Check : checks === 'failure' ? X : CircleDot
+  const tone =
+    checks === 'success'
+      ? 'text-status-success'
+      : checks === 'failure'
+        ? 'text-destructive'
+        : 'text-status-warning'
+  return (
+    <span className={cn('flex shrink-0 items-center gap-0.5', tone)}>
+      <Icon aria-hidden strokeWidth={2.5} className="size-3" />
+      {label}
+    </span>
+  )
+}
+
+/** The checks a PR's GitHub card shows for the PR its lookup returned: the lookup's own summary when it
+ *  carries one, else the chip's reading only if taken since the PR last changed. An older reading may
+ *  belong to an earlier push, so the card shows none rather than pass it off as current. */
+export function useGitHubCardChecks(
+  checks: string | null,
+  checkedAt: number | null
+): (item: GitHubWorkItem) => ReactNode {
+  return useCallback(
+    (item: GitHubWorkItem) => {
+      const confirmed = confirmedGitHubChecks(checks, checkedAt, item)
+      return confirmed ? <GitHubChecksMeta checks={confirmed} /> : null
+    },
+    [checks, checkedAt]
+  )
+}
+
+export function confirmedGitHubChecks(
+  checks: string | null,
+  checkedAt: number | null,
+  item: Pick<GitHubWorkItem, 'checksSummary' | 'updatedAt'>
+): string | null {
+  if (item.checksSummary) {
+    return item.checksSummary.state
+  }
+  return checkedAt !== null && checkedAt >= Date.parse(item.updatedAt) ? checks : null
 }
 
 /** A GitHub link's card before, or without, its lookup: what its chip or row already knows, never a
@@ -48,12 +74,16 @@ export function useGitHubLinkPeekFallback(
   tip: string
 ): { pending: ReactNode; failed: ReactNode } {
   return useMemo(() => {
-    const name = <div className="line-clamp-2 text-sm font-semibold text-foreground">{title}</div>
+    const name = (
+      <div className="line-clamp-2 text-sm font-semibold text-foreground [overflow-wrap:anywhere]">
+        {title}
+      </div>
+    )
     return {
       pending: (
         <div className="flex flex-col gap-1">
           {name}
-          <div className="text-xs text-muted-foreground">{tip}</div>
+          <div className="text-xs text-muted-foreground [overflow-wrap:anywhere]">{tip}</div>
         </div>
       ),
       failed: name

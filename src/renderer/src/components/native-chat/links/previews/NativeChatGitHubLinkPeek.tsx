@@ -116,8 +116,9 @@ export function NativeChatGitHubPeekBody({
 }: {
   source: GitHubPeekSource
   link: GitHubIssueOrPRLink
-  /** The PR's CI result as the caller knows it; shown while the PR is open or draft. */
-  checks?: ReactNode
+  /** The PR's CI result for the item the lookup returned, as far as the caller can confirm it;
+   *  shown while the PR is open or draft. */
+  checks?: (item: GitHubWorkItem) => ReactNode
   /** Shown above the failure line when the lookup fails, in place of `otherRepoFallback`: what the
    *  caller still knows for sure (its title), never a state the failure leaves unconfirmed. */
   failedFallback?: ReactNode
@@ -169,7 +170,7 @@ function GitHubPeekContent({
   link: GitHubIssueOrPRLink
   otherRepoFallback?: ReactNode
   failedFallback?: ReactNode
-  checks?: ReactNode
+  checks?: (item: GitHubWorkItem) => ReactNode
 }): ReactNode {
   const t = useTranslate()
   const { state, retry } = useNativeChatHoverPreview(lookup.key, lookup.read, lookup.load)
@@ -201,7 +202,7 @@ function GitHubPeekContent({
             {checks &&
             state.value.type === 'pr' &&
             (state.value.state === 'open' || state.value.state === 'draft')
-              ? checks
+              ? checks(state.value)
               : null}
             <WorkItemStateBadge
               item={state.value}
@@ -221,7 +222,7 @@ function GitHubPeekContent({
               {state.value.labels.slice(0, 4).map((label) => (
                 <span
                   key={label}
-                  className="rounded-full border border-border px-1.5 text-3xs text-muted-foreground"
+                  className="max-w-full truncate rounded-full border border-border px-1.5 text-3xs text-muted-foreground"
                 >
                   {label}
                 </span>

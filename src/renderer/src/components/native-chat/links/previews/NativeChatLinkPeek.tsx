@@ -4,7 +4,9 @@ import { NativeChatGitHubPeekBody, resolveGitHubPeekLink } from './NativeChatGit
 import { NativeChatWebPeekBody } from './NativeChatWebLinkPeek'
 import { NativeChatLinkPeekContext } from './native-chat-link-peek-context'
 import { previewableWebUrl } from './native-chat-web-link-preview'
+import { CARD_OFFSET, sideWithRoom, WINDOW_MARGIN, type PeekSide } from './link-peek-side'
 import { parseGitHubIssueOrPRLink } from '../../../../../../shared/github/repositories/links'
+import type { GitHubWorkItem } from '../../../../../../shared/github/work-items/work-item-types'
 
 /** Hover or focus a link to preview it: PRs and issues on its repo's GitHub host, or what a web page says about itself. */
 export function NativeChatLinkPeek({
@@ -16,16 +18,18 @@ export function NativeChatLinkPeek({
   children
 }: {
   href: string | undefined
-  /** Where the card opens; it flips when there is no room. */
-  side?: 'top' | 'bottom'
+  /** Where the card opens; it flips when there is no room. 'left' means beside the link: left, else
+   *  right, else below, whichever has room. */
+  side?: 'top' | 'bottom' | 'left'
   /** What a GitHub card shows until its details arrive, and if they never do, in place of the web
    *  page preview or the failure line: for a caller that already knows the item. */
   githubFallback?: ReactNode
   /** What a GitHub card shows above its failure line if the lookup fails, instead of `githubFallback`:
    *  only what stays true, so a failed card never passes off a known state as current. */
   githubFailedFallback?: ReactNode
-  /** A PR's CI result as the caller knows it, beside the GitHub card's state badge. */
-  githubChecks?: ReactNode
+  /** A PR's CI result for the item the lookup returned, beside the GitHub card's state badge: only
+   *  what the caller can confirm for it, never an older reading passed off as current. */
+  githubChecks?: (item: GitHubWorkItem) => ReactNode
   children: ReactNode
 }): ReactNode {
   const { githubRepo, githubRoutingAuthorityKey, webPreviews } =
@@ -93,16 +97,21 @@ function LinkPeekCard({
   children
 }: {
   body: ReactNode
-  side: 'top' | 'bottom'
+  side: 'top' | 'bottom' | 'left'
   children: ReactNode
 }): ReactNode {
   const [open, setOpen] = useState(false)
+  const [placed, setPlaced] = useState<PeekSide>(side)
+  const trigger = useRef<HTMLSpanElement>(null)
   const pendingOpen = useRef<ReturnType<typeof setTimeout> | undefined>(undefined)
   const cancelPendingOpen = () => clearTimeout(pendingOpen.current)
   useEffect(() => () => clearTimeout(pendingOpen.current), [])
   const scheduleOpen = () => {
     cancelPendingOpen()
-    pendingOpen.current = setTimeout(() => setOpen(true), 350)
+    pendingOpen.current = setTimeout(() => {
+      setPlaced(sideWithRoom(side, trigger.current))
+      setOpen(true)
+    }, 350)
   }
   const dismiss = () => {
     cancelPendingOpen()
@@ -147,6 +156,7 @@ function LinkPeekCard({
       >
         {/* A click opens the link (or its action popover); the peek must not sit on top of it. */}
         <span
+          ref={trigger}
           onClickCapture={dismiss}
           onAuxClickCapture={(event) => {
             if (event.button === 1) {
@@ -157,12 +167,14 @@ function LinkPeekCard({
           {children}
         </span>
       </HoverCardTrigger>
-      {/* Never wider than the window, with a margin, even at the largest zoom. */}
+      {/* Never wider or taller than the window, with a margin, even at the largest zoom: what does not
+          fit scrolls. Above popovers, so a link listed in one shows its card over it. */}
       <HoverCardContent
-        side={side}
+        side={placed}
         align="start"
-        collisionPadding={8}
-        className="w-96 max-w-[calc(100vw-1rem)]"
+        sideOffset={CARD_OFFSET}
+        collisionPadding={WINDOW_MARGIN}
+        className="scrollbar-sleek z-[70] max-h-(--radix-hover-card-content-available-height) w-96 max-w-[calc(100vw-1rem)] overflow-y-auto"
       >
         {body}
       </HoverCardContent>

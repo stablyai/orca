@@ -47,7 +47,7 @@ import { openBotItemFile, type BotItemFileContext } from './bot-item-file-open'
 import { useBotItemLivePr } from './use-bot-item-live-pr'
 import {
   checksLabel,
-  useGitHubChecksMeta,
+  useGitHubCardChecks,
   useGitHubLinkPeekFallback
 } from './bot-item-github-peek-content'
 
@@ -236,7 +236,7 @@ function GitHubRow({ row: hostRow }: { row: BotItemGitHubRow }): React.JSX.Eleme
           number: row.number
         }))
   const fallback = useGitHubLinkPeekFallback(name, tip)
-  const checks = useGitHubChecksMeta(row.type === 'pr' ? row.checks : null)
+  const checks = useGitHubCardChecks(row.type === 'pr' ? row.checks : null, row.checkedAt)
   const line = (
     <LinkRow
       icon={gitHubIcon(row)}
@@ -254,8 +254,10 @@ function GitHubRow({ row: hostRow }: { row: BotItemGitHubRow }): React.JSX.Eleme
     />
   )
   return card ? (
+    // Beside the list, as a worker row's card opens, so it covers no other row.
     <NativeChatLinkPeek
       href={row.url}
+      side="left"
       githubFallback={fallback.pending}
       githubFailedFallback={fallback.failed}
       githubChecks={checks}

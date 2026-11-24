@@ -26,49 +26,57 @@ const REPO: Repo = {
 const avatar = (color: string): string =>
   `data:image/svg+xml,${encodeURIComponent(`<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16"><rect width="16" height="16" fill="${color}"/></svg>`)}`
 
+const FAILING = 41299
+const LOADING = 41298
+// Pushed to since the chip last read its checks.
+const STALE_CHECKS = 41240
+
+const author = {
+  sam: { author: 'sam-dev', authorAvatarUrl: avatar('#7c3aed') },
+  alex: { author: 'alex-dev', authorAvatarUrl: avatar('#0891b2') }
+}
+
+const prItem = (
+  number: number,
+  title: string,
+  state: 'open' | 'merged',
+  hoursAgo: number,
+  by: (typeof author)[keyof typeof author],
+  [additions, deletions]: [number, number]
+): Omit<GitHubWorkItem, 'repoId'> => ({
+  id: `pr-${number}`,
+  type: 'pr',
+  number,
+  title,
+  state,
+  url: `https://github.com/acme/app/pull/${number}`,
+  labels: [],
+  updatedAt: new Date(now - hoursAgo * hour).toISOString(),
+  ...by,
+  additions,
+  deletions
+})
+
 const ITEMS: Record<number, Omit<GitHubWorkItem, 'repoId'>> = {
-  41230: {
-    id: 'pr-41230',
-    type: 'pr',
-    number: 41230,
-    title: 'Share dialog: view-only links by default',
-    state: 'open',
-    url: 'https://github.com/acme/app/pull/41230',
-    labels: [],
-    updatedAt: new Date(now - 2 * hour).toISOString(),
-    author: 'sam-dev',
-    authorAvatarUrl: avatar('#7c3aed'),
-    additions: 214,
-    deletions: 37
-  },
-  41236: {
-    id: 'pr-41236',
-    type: 'pr',
-    number: 41236,
-    title: 'Share link API with expiring tokens',
-    state: 'open',
-    url: 'https://github.com/acme/app/pull/41236',
-    labels: [],
-    updatedAt: new Date(now - 3 * hour).toISOString(),
-    author: 'alex-dev',
-    authorAvatarUrl: avatar('#0891b2'),
-    additions: 158,
-    deletions: 21
-  },
-  41188: {
-    id: 'pr-41188',
-    type: 'pr',
-    number: 41188,
-    title: 'Share dialog scaffolding',
-    state: 'merged',
-    url: 'https://github.com/acme/app/pull/41188',
-    labels: [],
-    updatedAt: new Date(now - 26 * hour).toISOString(),
-    author: 'alex-dev',
-    authorAvatarUrl: avatar('#0891b2'),
-    additions: 96,
-    deletions: 12
-  },
+  41230: prItem(
+    41230,
+    'Share dialog: view-only links by default',
+    'open',
+    2,
+    author.sam,
+    [214, 37]
+  ),
+  41236: prItem(41236, 'Share link API with expiring tokens', 'open', 3, author.alex, [158, 21]),
+  41188: prItem(41188, 'Share dialog scaffolding', 'merged', 26, author.alex, [96, 12]),
+  [FAILING]: prItem(FAILING, 'Share dialog keyboard shortcuts', 'open', 4, author.sam, [61, 4]),
+  [STALE_CHECKS]: prItem(
+    STALE_CHECKS,
+    'Share dialog: copy-link button (reworked)',
+    'open',
+    1,
+    author.alex,
+    [40, 9]
+  ),
   41201: {
     id: 'issue-41201',
     type: 'issue',
@@ -76,7 +84,7 @@ const ITEMS: Record<number, Omit<GitHubWorkItem, 'repoId'>> = {
     title: 'Share links open as editable for viewers',
     state: 'open',
     url: 'https://github.com/acme/app/issues/41201',
-    labels: ['bug', 'sharing'],
+    labels: ['bug', 'sharing', 'needs-design-review-before-the-next-release-train-cutoff-window'],
     updatedAt: new Date(now - 5 * hour).toISOString(),
     author: 'robin-qa',
     authorAvatarUrl: avatar('#d97706'),
@@ -84,14 +92,12 @@ const ITEMS: Record<number, Omit<GitHubWorkItem, 'repoId'>> = {
   }
 }
 
-const FAILING = 41299
-const LOADING = 41298
-
 const pr = (
   number: number,
   state: 'open' | 'merged',
   checks: string | null,
-  title: string
+  title: string,
+  checkedAt = now
 ): BotItemLinkView => ({
   kind: 'pr',
   ref: `acme/app#${number}`,
@@ -104,7 +110,7 @@ const pr = (
     checks,
     review: null,
     title,
-    checkedAt: now
+    checkedAt
   }
 })
 
@@ -131,15 +137,22 @@ const store = {
   ]
 }
 
-function signedIn(answer: 'item' | 'fail' = 'item'): () => void {
+/** `failOnce`: the first lookup of the failing PR throws and later ones answer, as a retry would find;
+ *  `window.fixtureLookups` counts the lookups. */
+function signedIn(answer: 'item' | 'fail' | 'failOnce' = 'item'): () => void {
   return () => {
+    const lookups = { count: 0 }
+    Object.assign(window, { fixtureLookups: lookups })
     const key = repoSlugCacheKey(REPO)
     if (key) {
       rememberRepoSlug(key, githubRepoIdentityKey({ owner: 'acme', repo: 'app' }))
     }
     window.api.gh.workItemByOwnerRepo = async ({ number }) => {
-      if (answer === 'fail' && number === FAILING) {
-        throw new Error('GitHub is unreachable')
+      if (number === FAILING) {
+        lookups.count += 1
+        if (answer === 'fail' || (answer === 'failOnce' && lookups.count === 1)) {
+          throw new Error('GitHub is unreachable')
+        }
       }
       if (number === LOADING) {
         return new Promise<never>(() => {})
@@ -334,7 +347,7 @@ export const activeTwinOnOtherHost = defineFixture({
 
 /** The item pane's keys and link handler, reduced to what they report: Escape the pane would take as
  *  Back (only when nothing before it claimed the key), and the link a chip opened. */
-function PaneProbe(): React.JSX.Element {
+function PaneProbe({ links }: { links?: BotItemLinkView[] }): React.JSX.Element {
   const [log, setLog] = useState<string[]>([])
   const note = (line: string) => setLog((lines) => [...lines, line])
   return (
@@ -351,7 +364,7 @@ function PaneProbe(): React.JSX.Element {
           note(`Opened ${url}`)
         }}
       >
-        {header()}
+        {header(links)}
       </NativeChatLinkClickContext>
       <div data-probe-log="" className="px-3 pb-3 font-mono text-xs text-muted-foreground">
         {log.length > 0 ? log.join(' | ') : 'No pane events'}
@@ -415,4 +428,28 @@ export const idle = defineFixture({
   store,
   setup: signedIn(),
   render: () => <PaneProbe />
+})
+
+/** The failing PR's first lookup fails and a retry answers: for driving Retry and a reopened card with
+ *  a real pointer and keyboard, on a chip and, in a short window, in the "+N" list. */
+export const retryRecovers = defineFixture({
+  width: 720,
+  store,
+  setup: signedIn('failOnce'),
+  render: () => (
+    <PaneProbe
+      links={[...LINKS, pr(FAILING, 'open', 'pending', 'Share dialog keyboard shortcuts')]}
+    />
+  )
+})
+
+/** The PR changed after the chip read its checks: the card shows the new title and no checks, rather
+ *  than the older reading beside it as if current. */
+export const staleChecksOmitted = defineFixture({
+  width: 720,
+  store,
+  setup: signedIn(),
+  render: () =>
+    header([pr(STALE_CHECKS, 'open', 'success', 'Share dialog: copy-link button', now - 3 * hour)]),
+  interact: (frame) => hover(frame, `#${STALE_CHECKS}`)
 })
