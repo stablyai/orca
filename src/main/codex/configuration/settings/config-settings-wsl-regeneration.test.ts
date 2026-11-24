@@ -221,7 +221,8 @@ describe('managed Codex config for a WSL distro config', () => {
 
   it.each([
     'model = "gpt-5"\n\n[plugins]\n"local@market" = { enabled = false }\n',
-    'model = "gpt-5"\nplugins = { "local@market" = { enabled = false } }\n'
+    'model = "gpt-5"\nplugins = { "local@market" = { enabled = false } }\n',
+    'model = "gpt-5"\nplugins = { "other@market" = { enabled = false } }\n'
   ])('keeps the managed copy valid when the distro adds a held plugin inline: %j', (inline) => {
     writeSystemConfig('model = "gpt-5"\n')
     wslTestState.wslPath = systemConfigPath()
@@ -235,9 +236,7 @@ describe('managed Codex config for a WSL distro config', () => {
 
     syncSystemConfigIntoManagedCodexHome()
 
-    expect(parseToml(readRuntimeConfig())).toMatchObject({
-      plugins: { 'local@market': { enabled: false } }
-    })
+    expect(parseToml(readRuntimeConfig())).toMatchObject(parseToml(inline))
   })
 
   it('leaves an unchanged managed copy untouched on regeneration', () => {

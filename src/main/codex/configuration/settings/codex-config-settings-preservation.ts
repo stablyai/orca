@@ -3,7 +3,8 @@ import { removePromotedSettingsFromContent } from './codex-config-settings-remov
 import { upsertPromotedSettingsInContent } from './codex-config-settings-upsert'
 import {
   applyCodexRegistrationPromotions,
-  planCodexRegistrationPromotion
+  planCodexRegistrationPromotion,
+  type CodexRegistrationPromotion
 } from './config-plugin-registration-promotion'
 import type { CodexSettingsPromotionPlan } from './config-settings-promotion'
 
@@ -27,31 +28,49 @@ export function preservePendingRuntimeEdits(
   }
   if (plan.heldRegistrationBaseline) {
     // A source Orca never writes keeps runtime plugin edits in the managed copy instead.
-    const promotions = planCodexRegistrationPromotion(
-      configs.runtimeConfig,
-      configs.systemConfig,
-      plan.heldRegistrationBaseline
-    )
-    result = applyCodexRegistrationPromotions(
+    result = applyHeldRegistrations(
       result,
-      promotions.filter(
-        (promotion) =>
-          promotion.kind !== 'append' ||
-          !sourceDefinesRegistration(configs.systemConfig, promotion.key)
-      )
+      planCodexRegistrationPromotion(
+        configs.runtimeConfig,
+        configs.systemConfig,
+        plan.heldRegistrationBaseline
+      ),
+      configs.systemConfig
     )
   }
   return { content: result, keys }
 }
 
-// Inline and dotted-key spellings escape the table-header scan; appending would define the table twice.
-function sourceDefinesRegistration(systemConfig: string, key: string): boolean {
-  const [root, ...name] = key.split(':')
+function applyHeldRegistrations(
+  content: string,
+  promotions: CodexRegistrationPromotion[],
+  systemConfig: string
+): string {
+  const fieldEdits = promotions.filter((promotion) => promotion.kind !== 'append')
+  if (fieldEdits.length === promotions.length) {
+    return applyCodexRegistrationPromotions(content, promotions)
+  }
+  const source = parseTomlOrNull(systemConfig)
+  // Inline and dotted-key spellings escape the table-header scan; appending would define a table twice.
+  const appends = promotions.filter((promotion) => {
+    if (promotion.kind !== 'append' || !source) {
+      return false
+    }
+    const [root, ...name] = promotion.key.split(':')
+    const table = source[root!]
+    return !(typeof table === 'object' && table !== null && Object.hasOwn(table, name.join(':')))
+  })
+  const withAppends = applyCodexRegistrationPromotions(content, [...appends, ...fieldEdits])
+  // An inline root table (`plugins = {}`) cannot be extended; never publish a config Codex rejects.
+  return appends.length > 0 && !parseTomlOrNull(withAppends)
+    ? applyCodexRegistrationPromotions(content, fieldEdits)
+    : withAppends
+}
+
+function parseTomlOrNull(content: string): Record<string, unknown> | null {
   try {
-    const table = parse(systemConfig)[root!]
-    return typeof table === 'object' && table !== null && Object.hasOwn(table, name.join(':'))
+    return parse(content)
   } catch {
-    // An unparseable source cannot rule out a duplicate definition.
-    return true
+    return null
   }
 }
