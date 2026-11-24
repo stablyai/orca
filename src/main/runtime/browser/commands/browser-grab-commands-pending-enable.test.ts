@@ -34,7 +34,35 @@ const hostMembers = {
 }
 // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: admission and grab are stubbed below; only these members are read.
 const host = hostMembers as unknown as RuntimeBrowserCommandHost
-type GrabGuestLookup = { resolveGrabGuest: () => Promise<unknown> }
+type GrabGuestLookup = { resolveGrabGuest: (params: { page?: string }) => Promise<unknown> }
+
+/** Holds each page's admission separately, so one page can load before another. */
+function holdEachPage(): { admit: (page: string) => void } {
+  const gates = new Map<string, { opened: Promise<void>; open: () => void }>()
+  const gate = (page: string) => {
+    let entry = gates.get(page)
+    if (!entry) {
+      let open: () => void = () => {}
+      const opened = new Promise<void>((resolve) => {
+        open = resolve
+      })
+      entry = { opened, open }
+      gates.set(page, entry)
+    }
+    return entry
+  }
+  vi.spyOn(RuntimeBrowserCommandTargets.prototype, 'withPageOperation').mockImplementation(
+    async (params, execute) => {
+      await gate(params.page ?? '').opened
+      return execute(params)
+    }
+  )
+  return { admit: (page) => gate(page).open() }
+}
+
+/** The page each arming enable addressed, in order. */
+const armedPages = (): unknown[] =>
+  sequencer.setBrowserGrabMode.mock.calls.map((call: unknown[]) => call[0])
 
 /** Holds every page admission until `admit` runs, like a page that is still loading. */
 function holdPageAdmission(): { admit: () => void } {
@@ -56,11 +84,35 @@ beforeEach(() => {
   sequencer.setBrowserGrabMode.mockClear()
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: only the private guest lookup is replaced; the commands call it with these params.
   const grabLookup = RuntimeBrowserGrab.prototype as unknown as GrabGuestLookup
-  vi.spyOn(grabLookup, 'resolveGrabGuest').mockResolvedValue({
-    browserPageId: 'page',
+  vi.spyOn(grabLookup, 'resolveGrabGuest').mockImplementation(async (params) => ({
+    browserPageId: params.page ?? 'page',
     resolveGuest: () => null
-  })
+  }))
 })
+
+// Two pages pending with the same wire request ID: each cancel reaches only the page it names.
+for (const [cancelledPage, survivingPage] of [
+  ['page-a', 'page-b'],
+  ['page-b', 'page-a']
+] as const) {
+  it(`same request ID on two pages: cancelling ${cancelledPage} leaves only ${survivingPage} to arm`, async () => {
+    const pages = holdEachPage()
+    const commands = new RuntimeBrowserCommands(host)
+    const enableA = commands.browserGrabSetMode({ page: 'page-a', enabled: true, requestId: 'r' })
+    const enableB = commands.browserGrabSetMode({ page: 'page-b', enabled: true, requestId: 'r' })
+    await expect(
+      commands.browserGrabCancel({ page: cancelledPage, requestId: 'r' })
+    ).resolves.toEqual({ cancelled: true })
+    const enables = { 'page-a': enableA, 'page-b': enableB }
+
+    // The surviving page loads first, then the cancelled one.
+    pages.admit(survivingPage)
+    await expect(enables[survivingPage]).resolves.toEqual({ ok: true, clean: false })
+    pages.admit(cancelledPage)
+    await expect(enables[cancelledPage]).resolves.toEqual({ ok: false, reason: 'not-ready' })
+    expect(armedPages()).toEqual([survivingPage])
+  })
+}
 
 it('an enable waiting for its page arms once the page is ready', async () => {
   const page = holdPageAdmission()

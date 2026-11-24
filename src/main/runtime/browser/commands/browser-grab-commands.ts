@@ -19,16 +19,29 @@ import type { BrowserAnnotationViewportBridgeMarker } from '../../../../shared/b
 import type { BrowserCommandTargetParams } from './browser-command-contracts'
 import type { RuntimeBrowserCommandTargets } from './browser-command-targets'
 import type { RuntimeBrowserTabCatalog } from '../tabs/browser-tab-catalog'
+import {
+  PageAdmissionCancelledError,
+  setPageAdmissionSignal
+} from './browser-page-admission-cancel'
 
 type ResolvedGrabGuest = { browserPageId: string; resolveGuest: () => Electron.WebContents | null }
-/** The page an enable addressed: a cancel for the same request ID on another page is not its cancel. */
-type PendingGrabEnable = { cancelled: boolean; page?: string; worktree?: string }
+/** Cancelling aborts the enable's own wait for page admission, which releases its page claim. */
+type PendingGrabEnable = { cancelled: boolean; admission: AbortController }
 // Viewers hold at most a few enables each; the cap only bounds a misbehaving client.
 const MAX_PENDING_GRAB_ENABLES = 64
 
+/** The addressed operation: the same request ID on another page or workspace is another request. */
+function pendingEnableKey(
+  params: BrowserCommandTargetParams & { requestId?: string }
+): string | null {
+  return params.requestId === undefined
+    ? null
+    : JSON.stringify([params.page ?? null, params.worktree ?? null, params.requestId])
+}
+
 /** The element picker for viewers of a page this host renders; the same guest code local panes drive over IPC. */
 export class RuntimeBrowserGrab {
-  /** Request-bound enables still waiting for page admission, keyed by request. */
+  /** Request-bound enables still waiting for page admission, keyed by page and request. */
   private readonly pendingEnables = new Map<string, PendingGrabEnable>()
 
   constructor(
@@ -83,24 +96,27 @@ export class RuntimeBrowserGrab {
     params: BrowserCommandTargetParams & { enabled: boolean; requestId?: string },
     run: () => Promise<BrowserSetGrabModeResult>
   ): Promise<BrowserSetGrabModeResult> {
-    const { requestId } = params
-    if (!params.enabled || requestId === undefined || this.pendingEnables.has(requestId)) {
+    const key = pendingEnableKey(params)
+    if (!params.enabled || key === null || this.pendingEnables.has(key)) {
       return run()
     }
     if (this.pendingEnables.size >= MAX_PENDING_GRAB_ENABLES) {
       return supersededGrabMode()
     }
-    const pending: PendingGrabEnable = {
-      cancelled: false,
-      page: params.page,
-      worktree: params.worktree
-    }
-    this.pendingEnables.set(requestId, pending)
+    const pending: PendingGrabEnable = { cancelled: false, admission: new AbortController() }
+    this.pendingEnables.set(key, pending)
+    setPageAdmissionSignal(params, pending.admission.signal)
     try {
       return await run()
+    } catch (error) {
+      // Cancelled while waiting for its page: settle now so the viewer's later input is not held.
+      if (pending.cancelled && error instanceof PageAdmissionCancelledError) {
+        return supersededGrabMode()
+      }
+      throw error
     } finally {
-      if (this.pendingEnables.get(requestId) === pending) {
-        this.pendingEnables.delete(requestId)
+      if (this.pendingEnables.get(key) === pending) {
+        this.pendingEnables.delete(key)
       }
     }
   }
@@ -109,14 +125,14 @@ export class RuntimeBrowserGrab {
     params: BrowserCommandTargetParams & { enabled: boolean; requestId?: string }
   ): Promise<BrowserSetGrabModeResult> {
     const { browserPageId, resolveGuest } = await this.resolveGrabGuest(params)
-    const pending =
-      params.requestId === undefined ? undefined : this.pendingEnables.get(params.requestId)
+    const key = pendingEnableKey(params)
+    const pending = key === null ? undefined : this.pendingEnables.get(key)
     if (pending?.cancelled) {
       return supersededGrabMode()
     }
     // From here the sequencer owns the request (it registers synchronously), so cancel goes there.
-    if (params.requestId !== undefined && this.pendingEnables.get(params.requestId) === pending) {
-      this.pendingEnables.delete(params.requestId)
+    if (key !== null && pending && this.pendingEnables.get(key) === pending) {
+      this.pendingEnables.delete(key)
     }
     return setBrowserGrabMode(browserPageId, params.enabled, resolveGuest, undefined, {
       requestId: params.requestId
@@ -154,10 +170,12 @@ export class RuntimeBrowserGrab {
     params: BrowserCommandTargetParams & { requestId?: string }
   ): Promise<{ cancelled: boolean }> {
     // An enable still waiting for its page has no sequencer owner yet; it must not arm after this.
-    const pending =
-      params.requestId === undefined ? undefined : this.pendingEnables.get(params.requestId)
-    if (pending && pending.page === params.page && pending.worktree === params.worktree) {
+    const key = pendingEnableKey(params)
+    const pending = key === null ? undefined : this.pendingEnables.get(key)
+    if (pending) {
       pending.cancelled = true
+      // Stop its wait for the page; the page's own load continues for anyone else.
+      pending.admission.abort()
       return { cancelled: true }
     }
     const { browserPageId, resolveGuest } = await this.resolveGrabGuest(params, true)
