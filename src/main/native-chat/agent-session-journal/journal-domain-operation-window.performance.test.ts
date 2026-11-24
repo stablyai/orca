@@ -12,7 +12,7 @@ import { readJournalDomainOperationWindow } from './journal-domain-operation-win
 import { JournalWindowNotIndexed } from './journal-operation-window-sends'
 import { JournalSqlScope } from './journal-sql-scope'
 import { keptSends } from './journal-operation-window-held-sends'
-import { marginBefore, newestBefore } from './journal-operation-window-turn-ahead'
+import { marginBefore } from './journal-operation-window-turn-ahead'
 import type { Send } from './journal-operation-window-sends'
 import { codexTurnLifecycleIdentity } from '../../codex/structured/journal/codex-structured-journal-translation-turns'
 import { codexProviderHandle } from '../../../shared/agent-session/lifecycle/provider-handles/agent-session-provider-handle-encoding'
@@ -24,7 +24,8 @@ import type { AgentJournalMessageItem } from '../../../shared/agent-session/jour
 // the bounded read: the rows and sends it returns stay fixed however many turns the chat ran after
 // it. The tally counts rows returned to our code, not work inside SQLite; each send read is pinned to
 // its index and was checked to key on it with EXPLAIN QUERY PLAN in review. Reverting the bound makes
-// the count grow with the later turns.
+// the count grow with the later turns. #47789's look-back contract counts work inside SQLite instead,
+// through a function wrapped around the rows it tests.
 
 const directories: string[] = []
 afterEach(() => {
@@ -482,6 +483,7 @@ it('reads an indexed-only window of the newest turn by index, and throws where o
   ])
 })
 
+// #47789: an item add's look back walked every root row ahead of a resumed turn.
 it('looks back for the turn ahead of an indexed-only window no further than the window could reach', () => {
   // A turn resumed from the provider with no prompt of its own, after a long run of root tool calls:
   // the prompt ahead of it sits behind every one of them.
@@ -521,8 +523,9 @@ it('looks back for the turn ahead of an indexed-only window no further than the 
   }
 })
 
+// #47789: an item add's look back for the turn ahead once tested every row up to its cap.
 it('stops its look back for the turn ahead at the nearest match, however long the chat ran', () => {
-  // Counts each candidate SQLite tests: the nearest prompt is two rows back at 100 and 1,000 turns.
+  // Counts each candidate SQLite tests for the prompt: the nearest is right ahead at 100 and 1,000 turns.
   const look = (turns: number) => {
     const db = chat(turns)
     let tested = 0
@@ -534,21 +537,19 @@ it('stops its look back for the turn ahead at the nearest match, however long th
     const prepare = db.prepare.bind(db)
     db.prepare = (sql: string) => {
       probes += sql.includes('OFFSET') ? 1 : 0
-      return prepare(sql)
+      const prompt = "kind='message' AND message_role='user'"
+      return prepare(sql.replaceAll(prompt, `tested(${prompt})`))
     }
-    const found = newestBefore(
+    const found = marginBefore(
       new JournalSqlScope(db, 'chat', 'epoch'),
-      'journal_items_root_position',
-      'root=1',
-      "tested(kind='message' AND message_role='user')",
       Number.MAX_SAFE_INTEGER,
       true
     )
     db.close()
-    return { found: found !== null, tested, probes }
+    return { found: found > 0, tested, probes }
   }
   expect([look(100), look(1000)]).toEqual([
-    { found: true, tested: 2, probes: 0 },
-    { found: true, tested: 2, probes: 0 }
+    { found: true, tested: 1, probes: 0 },
+    { found: true, tested: 1, probes: 0 }
   ])
 })
