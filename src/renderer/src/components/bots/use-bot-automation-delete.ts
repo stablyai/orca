@@ -30,7 +30,7 @@ export type BotAutomationDeleteIntent = {
   name: string
   /** The incarnation whose read listed the row. */
   authority: BotReadAuthority
-  /** It was asked from the folded list, which keeps it listed until the delete ends. */
+  /** The row was in trouble at admission. Keep it listed if folded while pending. */
   admittedAsTrouble: boolean
 }
 
@@ -96,7 +96,7 @@ export function useBotAutomationDelete(
   // Admission is synchronous: two Deletes in one tick admit one.
   const ops = useRef(new Map<string, DeleteOp>())
   const nextOpId = useRef(0)
-  const liveGeneration = useRef<symbol | null>(null)
+  const liveVisit = useRef<{ generation: symbol; signal: AbortSignal } | null>(null)
   const offlineNow = useRef(offline)
   const toldExpired = useRef(new WeakSet<BotAutomationHide>())
   const [tick, setTick] = useState(0)
@@ -105,10 +105,12 @@ export function useBotAutomationDelete(
     offlineNow.current = offline
   }, [offline])
   useLayoutEffect(() => {
-    liveGeneration.current = generation
+    const owner = new AbortController()
+    liveVisit.current = { generation, signal: owner.signal }
     ops.current = new Map()
     return () => {
-      liveGeneration.current = null
+      liveVisit.current = null
+      owner.abort()
     }
   }, [generation])
 
@@ -121,10 +123,10 @@ export function useBotAutomationDelete(
 
   const run = async (
     op: DeleteOp,
+    signal: AbortSignal,
     troubleClearedBy?: CheckFoldedTrouble
   ): Promise<BotAutomationDeleteOutcome> => {
-    const alive = (): boolean =>
-      liveGeneration.current === op.generation && ops.current.get(op.opKey)?.opId === op.opId
+    const alive = (): boolean => !signal.aborted && ops.current.get(op.opKey)?.opId === op.opId
     try {
       await deleteBotAutomation(bot, op.id, op.authority)
     } catch (error) {
@@ -132,7 +134,12 @@ export function useBotAutomationDelete(
       if (!alive()) {
         return 'uncertain'
       }
-      const settled = await reconcileBotAutomationDelete(error, op.authority, refreshSettled, alive)
+      const settled = await reconcileBotAutomationDelete(
+        error,
+        op.authority,
+        refreshSettled,
+        signal
+      )
       if (!alive()) {
         return 'uncertain'
       }
@@ -173,7 +180,7 @@ export function useBotAutomationDelete(
   const membership = (intent: BotAutomationDeleteIntent): DeleteMembership => {
     const latest = currentRead()
     if (
-      intent.generation !== liveGeneration.current ||
+      intent.generation !== liveVisit.current?.generation ||
       intent.botKey !== key ||
       !latest ||
       botReadAuthorityKey(latest.authority) !== botReadAuthorityKey(intent.authority)
@@ -198,15 +205,16 @@ export function useBotAutomationDelete(
     intent: BotAutomationDeleteIntent,
     troubleClearedBy?: CheckFoldedTrouble
   ): BotAutomationDeleteAdmission | null => {
-    if (!canAdmit(intent)) {
+    const visit = liveVisit.current
+    if (!visit || !canAdmit(intent)) {
       return null
     }
     const opKey = deleteOpKey(intent)
     const op: DeleteOp = { ...intent, opId: ++nextOpId.current, opKey }
     ops.current.set(opKey, op)
     mirrorOps(op.generation)
-    const settled = run(op, troubleClearedBy).finally(() => {
-      if (ops.current.get(op.opKey)?.opId === op.opId) {
+    const settled = run(op, visit.signal, troubleClearedBy).finally(() => {
+      if (!visit.signal.aborted && ops.current.get(op.opKey)?.opId === op.opId) {
         ops.current.delete(op.opKey)
         mirrorOps(op.generation)
       }

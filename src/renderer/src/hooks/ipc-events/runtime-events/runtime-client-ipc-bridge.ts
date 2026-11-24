@@ -214,7 +214,9 @@ export function registerRuntimeClientIpcBridge(
   }
 
   setRuntimeEnvironmentCatalogRefresher(async () => {
-    useAppStore.getState().setRuntimeEnvironments(await window.api.runtimeEnvironments.list())
+    const environments = await window.api.runtimeEnvironments.list()
+    useAppStore.getState().setRuntimeEnvironments(environments)
+    return environments
   })
   unsubs.push(() => setRuntimeEnvironmentCatalogRefresher(null))
   // `orca environment add/rm` edits the registry without any renderer request (#25251).

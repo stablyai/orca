@@ -58,8 +58,10 @@ const bothListed: BotActivityWithAuthority = {
     ]
   }
 }
-const revision = (pairingRevision: number): void => {
-  replaceRuntimeEnvironmentRevisions([{ id: 'paired', createdAt: 1, pairingRevision }])
+const revision = (pairingRevision: number) => {
+  const sample = [{ id: 'paired', createdAt: 1, pairingRevision }]
+  replaceRuntimeEnvironmentRevisions(sample)
+  return sample
 }
 let clock = 0
 
@@ -87,8 +89,14 @@ function scenario(
     holdActivity?: boolean
     identity?: boolean
     predecessor?: boolean
+    pairingRevision?: number
   } = {}
 ) {
+  const oldRevision = options.pairingRevision ?? 11
+  const listed: BotActivityWithAuthority = {
+    ...bothListed,
+    authority: { kind: 'environment', environmentId: 'paired', pairingRevision: oldRevision }
+  }
   if (options.warm) {
     markRuntimeEnvironmentCompatible('paired')
   }
@@ -106,7 +114,7 @@ function scenario(
       }) => {
         calls.push([method, expected])
         if (
-          expected === 11 &&
+          expected === oldRevision &&
           !(options.predecessor && method === 'bots.activity') &&
           (!options.identity || (!refused && method !== 'bots.activity'))
         ) {
@@ -137,41 +145,48 @@ function scenario(
     ['automations']
   )
   const close = read.subscribe(bot, () => {})
-  const { result } = renderHook(() =>
-    useBotAutomationDelete(
-      bot,
-      {
-        read: bothListed,
-        currentRead: () => read.snapshot(botRefKey(bot)) ?? bothListed,
-        refresh: () => read.request(bot),
-        refreshSettled: (deadline) => read.requestSettled(bot, deadline)
-      },
-      false
+  function openOwner() {
+    const { result, unmount } = renderHook(() =>
+      useBotAutomationDelete(
+        bot,
+        {
+          read: listed,
+          currentRead: () => read.snapshot(botRefKey(bot)) ?? listed,
+          refresh: () => read.request(bot),
+          refreshSettled: (deadline, canStart) => read.requestSettled(bot, deadline, canStart)
+        },
+        false
+      )
     )
-  )
+    return {
+      unmount,
+      admit: async (id = 'digest'): Promise<BotAutomationDeleteAdmission> => {
+        const admissions: BotAutomationDeleteAdmission[] = []
+        await act(async () => {
+          const admission = result.current.admit({
+            id,
+            name: 'Digest',
+            authority: listed.authority,
+            botKey: result.current.botKey,
+            generation: result.current.generation,
+            admittedAsTrouble: false
+          })
+          if (admission) {
+            admissions.push(admission)
+          }
+        })
+        expect(admissions).toHaveLength(1)
+        return admissions[0]
+      }
+    }
+  }
   return {
+    ...openOwner(),
+    openOwner,
     calls,
     close,
     activityReplies,
-    request: () => read.request(bot),
-    admit: async (id = 'digest'): Promise<BotAutomationDeleteAdmission> => {
-      const admissions: BotAutomationDeleteAdmission[] = []
-      await act(async () => {
-        const admission = result.current.admit({
-          id,
-          name: 'Digest',
-          authority: old.authority,
-          botKey: result.current.botKey,
-          generation: result.current.generation,
-          admittedAsTrouble: false
-        })
-        if (admission) {
-          admissions.push(admission)
-        }
-      })
-      expect(admissions).toHaveLength(1)
-      return admissions[0]
-    }
+    request: () => read.request(bot)
   }
 }
 
@@ -213,8 +228,7 @@ describe('reconciling a resolved pairing refusal', () => {
         () =>
           new Promise((resolve) => {
             publish = () => {
-              revision(22)
-              resolve()
+              resolve(revision(22))
             }
           })
       )
@@ -244,19 +258,20 @@ describe('reconciling a resolved pairing refusal', () => {
   })
 
   it('gives a delayed catalog and a hung Activity one shared deadline', async () => {
+    let publish = (): void => {}
     setRuntimeEnvironmentCatalogRefresher(
       () =>
         new Promise((resolve) => {
-          setTimeout(() => {
-            revision(22)
-            resolve()
-          }, 14_000)
+          publish = () => resolve(revision(22))
         })
     )
     const view = scenario({ warm: true, holdActivity: true })
     const admission = await view.admit()
     expect(view.calls).toEqual([['automation.delete', 11]])
-    await act(async () => advance(14_000))
+    await act(async () => {
+      advance(14_000)
+      publish()
+    })
     expect(view.calls).toEqual([
       ['automation.delete', 11],
       ['bots.activity', 22]
@@ -271,7 +286,7 @@ describe('reconciling a resolved pairing refusal', () => {
     setRuntimeEnvironmentCatalogRefresher(
       () =>
         new Promise((resolve) => {
-          finish = resolve
+          finish = () => resolve([])
         })
     )
     const view = scenario({ warm: true })
@@ -288,6 +303,7 @@ describe('reconciling a resolved pairing refusal', () => {
     let catalogs = 0
     setRuntimeEnvironmentCatalogRefresher(async () => {
       catalogs += 1
+      return []
     })
     const view = scenario({ warm: true })
     const admission = await view.admit()
@@ -313,11 +329,10 @@ describe('reconciling a resolved pairing refusal', () => {
             catalogReads += 1
             if (catalogReads === 1) {
               publish = () => {
-                revision(22)
-                resolve()
+                resolve(revision(22))
               }
             } else {
-              finishTrailing = resolve
+              finishTrailing = () => resolve([])
             }
           })
       )
@@ -370,9 +385,9 @@ describe('reconciling a resolved pairing refusal', () => {
         new Promise((resolve) => {
           reads += 1
           if (reads === 1) {
-            finishOlder = resolve
+            finishOlder = () => resolve(revision(11))
           } else {
-            finishFresh = resolve
+            finishFresh = () => resolve(revision(11))
           }
         })
     )
@@ -380,14 +395,12 @@ describe('reconciling a resolved pairing refusal', () => {
     const view = scenario({ warm: true, identity: true })
     const admission = await view.admit()
     await act(async () => {
-      revision(11)
       finishOlder()
     })
     await older
     expect(reads).toBe(2)
     expect(view.calls).toEqual([['automation.delete', 11]])
     await act(async () => {
-      revision(11)
       finishFresh()
     })
     await expect(admission.settled).resolves.toBe('omitted')
@@ -398,13 +411,126 @@ describe('reconciling a resolved pairing refusal', () => {
     view.close()
   })
 
+  it('disposes one catalog waiter without cancelling the shared read or the other owner', async () => {
+    let publish = (): void => {}
+    let catalogReads = 0
+    const subscribers = watchCatalogSubscribers()
+    const detach = vi.spyOn(AbortSignal.prototype, 'removeEventListener')
+    setRuntimeEnvironmentCatalogRefresher(
+      () =>
+        new Promise((resolve) => {
+          catalogReads += 1
+          if (catalogReads === 1) {
+            publish = () => resolve(revision(22))
+          } else {
+            resolve([])
+          }
+        })
+    )
+    const first = scenario({ warm: true })
+    const second = first.openOwner()
+    const abandoned = await first.admit()
+    const remaining = await second.admit('second')
+    expect(subscribers.size).toBe(2)
+    const timers = vi.getTimerCount()
+    const abortDetaches = () => detach.mock.calls.filter(([event]) => event === 'abort').length
+    const beforeDetach = abortDetaches()
+    const outcomes: string[] = []
+    void abandoned.settled.then((outcome) => outcomes.push(outcome))
+    await act(async () => first.unmount())
+    expect(outcomes).toEqual(['uncertain'])
+    expect(subscribers.size).toBe(1)
+    expect(vi.getTimerCount()).toBe(timers - 1)
+    expect(abortDetaches()).toBeGreaterThan(beforeDetach)
+    expect(catalogReads).toBe(1)
+    expect(first.calls).toEqual([
+      ['automation.delete', 11],
+      ['automation.delete', 11]
+    ])
+    const beforePublish = abortDetaches()
+    await act(async () => publish())
+    await expect(remaining.settled).resolves.toBe('uncertain')
+    expect(subscribers.size).toBe(0)
+    expect(abortDetaches()).toBeGreaterThan(beforePublish)
+    expect(first.calls).toEqual([
+      ['automation.delete', 11],
+      ['automation.delete', 11],
+      ['bots.activity', 22]
+    ])
+    second.unmount()
+    first.close()
+  })
+
+  it('cannot use an older independent publication as proof after a fresh omission', async () => {
+    let publishOlder = (): void => {}
+    const older = new Promise<void>((resolve) => {
+      publishOlder = resolve
+    }).then(() => revision(11))
+    setRuntimeEnvironmentCatalogRefresher(async () => {
+      replaceRuntimeEnvironmentRevisions([])
+      publishOlder()
+      return []
+    })
+    const view = scenario({ warm: true, identity: true })
+    const admission = await view.admit()
+    await older
+    expect(registry.getRuntimeEnvironmentRevision('paired')).toBe(11)
+    await expect(admission.settled).resolves.toBe('uncertain')
+    expect(view.calls).toEqual([['automation.delete', 11]])
+    view.close()
+  })
+
+  it.each([false, true])(
+    'rechecks sampled authority after an Activity predecessor (independent read %s)',
+    async (independent) => {
+      setRuntimeEnvironmentCatalogRefresher(async () => revision(11))
+      const view = scenario({ warm: true, identity: true, predecessor: true, holdActivity: true })
+      await act(async () => view.request())
+      const admission = await view.admit()
+      const outcomes: string[] = []
+      void admission.settled.then((outcome) => outcomes.push(outcome))
+      expect(view.calls).toEqual([
+        ['bots.activity', 11],
+        ['automation.delete', 11]
+      ])
+      await act(async () => {
+        revision(22)
+        if (independent) {
+          view.request()
+        }
+        view.activityReplies[0]()
+      })
+      expect(outcomes).toEqual(['uncertain'])
+      expect(view.calls).toEqual([
+        ['bots.activity', 11],
+        ['automation.delete', 11],
+        ...(independent ? [['bots.activity', 22]] : [])
+      ])
+      await act(async () => view.activityReplies[1]?.())
+      view.close()
+    }
+  )
+
+  it('preserves zero as a sampled same revision', async () => {
+    revision(0)
+    setRuntimeEnvironmentCatalogRefresher(async () => revision(0))
+    const view = scenario({ warm: true, identity: true, pairingRevision: 0 })
+    const admission = await view.admit()
+    await expect(admission.settled).resolves.toBe('omitted')
+    expect(view.calls).toEqual([
+      ['automation.delete', 0],
+      ['bots.activity', 0]
+    ])
+    view.close()
+  })
+
   it.each([false, true])(
     'uses a successful fresh catalog to reconcile a same-revision identity refusal (warm %s)',
     async (warm) => {
       let reads = 0
       setRuntimeEnvironmentCatalogRefresher(async () => {
         reads += 1
-        revision(11)
+        return revision(11)
       })
       const view = scenario({ warm, identity: true })
       const admission = await view.admit()
@@ -444,6 +570,7 @@ describe('reconciling a resolved pairing refusal', () => {
               release = resolve
             })
           }
+          return []
         })
       }
       const view = scenario({ warm: true, identity: true })

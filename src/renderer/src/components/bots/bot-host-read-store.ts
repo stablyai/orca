@@ -14,6 +14,7 @@ import { callBotRpcWithAuthority, type BotReadAuthority } from './bot-read-autho
 import {
   BOT_READ_SETTLE_MS,
   finishBotSettledWaiter,
+  qualifyBotSettledWaiters,
   type BotReadSettled,
   type BotSettledWaiter
 } from './bot-read-settled'
@@ -56,7 +57,11 @@ export type BotHostRead<T> = {
   requestMore: (bot: BotRef) => Promise<T | null>
   /** A whole read that starts after this ask and finishes within `BOT_READ_SETTLE_MS` of it; uncertain
    *  when that read fails, the time runs out, or the last surface closes. Needs an open surface. */
-  requestSettled: (bot: BotRef, deadline?: number) => Promise<BotReadSettled<T>>
+  requestSettled: (
+    bot: BotRef,
+    deadline?: number,
+    canStart?: () => boolean
+  ) => Promise<BotReadSettled<T>>
   /** The parts a notice can have changed in the bot's value; null: read whole. */
   partsOf: (scope: BotChangeScope | undefined, bot: BotRef) => readonly string[] | null
   subscribe: (bot: BotRef, listener: () => void) => () => void
@@ -122,14 +127,14 @@ export function createBotHostRead<T>(
     settled: BotReadSettled<T>
   ): void => finishBotSettledWaiter(entry.settled, waiter, settled)
 
-  const read = async (key: string, entry: BotReadEntry<T>): Promise<void> => {
+  const read = async (key: string, entry: BotReadEntry<T>, whole: boolean): Promise<void> => {
     const current = ++entry.latest
     entry.inFlight = true
     entry.startedAt = Date.now()
     // Parts only onto a good value: after a failed read, what it missed is unknown.
     const previous = entry.value
     const ask = botReadLoadAsk(
-      entry.parts,
+      whole ? 'whole' : entry.parts,
       entry.more.length > 0,
       Boolean(previous && !entry.failure)
     )
@@ -236,9 +241,11 @@ export function createBotHostRead<T>(
 
   const requestSettled = (
     bot: BotRef,
-    deadline = performance.now() + BOT_READ_SETTLE_MS
+    deadline = performance.now() + BOT_READ_SETTLE_MS,
+    canStart?: () => boolean
   ): Promise<BotReadSettled<T>> => {
-    const entry = entries.get(botRefKey(bot))
+    const key = botRefKey(bot)
+    const entry = entries.get(key)
     const remaining = deadline - performance.now()
     // Only an entry a surface holds is ever disposed, so no ask may create or keep one by itself.
     if (!entry || entry.listeners.size === 0 || remaining <= 0) {
@@ -248,13 +255,17 @@ export function createBotHostRead<T>(
       const waiter: BotSettledWaiter<T> = {
         minSequence: entry.latest + 1,
         deadline,
+        canStart,
         timer: null,
         resolve
       }
       // Armed at the ask: it covers a read still running, the minimum gap and the read itself.
       waiter.timer = setTimeout(() => finish(entry, waiter, { ok: false }), remaining)
       entry.settled.add(waiter)
-      request(bot)
+      if (!canStart) {
+        entry.parts = 'whole'
+      }
+      schedule(key, entry)
     })
   }
 
@@ -283,8 +294,12 @@ export function createBotHostRead<T>(
       entry.scheduled = false
       entry.timer = null
       // The last surface may have closed since the ask.
-      if (entries.get(key) === entry) {
-        void read(key, entry)
+      if (entries.get(key) !== entry) {
+        return
+      }
+      const whole = qualifyBotSettledWaiters(entry.settled)
+      if (whole || entry.parts || entry.more.length > 0) {
+        void read(key, entry, whole)
       }
     }
     const wait = now ? 0 : entry.startedAt + minIntervalMs - Date.now()

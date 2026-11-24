@@ -106,7 +106,7 @@ export function BotUpcomingSection({
   const admit = (intent: BotAutomationFocusIntent) =>
     deletion.admit(
       intent,
-      intent.folded && intent.admittedAsTrouble
+      intent.admittedAsTrouble
         ? (activity: BotActivityWithAuthority['activity']) =>
             troubleCleared(intent, botAutomationCardRows(bot, activity, now))
         : undefined
@@ -128,7 +128,6 @@ export function BotUpcomingSection({
       authority: deletion.authority,
       admittedAsTrouble: asTrouble,
       rowKey: row.key,
-      folded: !fold.open,
       saved
     }
     if (useAppStore.getState().settings?.skipDeleteAutomationConfirm) {

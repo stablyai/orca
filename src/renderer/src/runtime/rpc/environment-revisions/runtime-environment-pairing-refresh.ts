@@ -2,11 +2,13 @@
 import { hasRecentUserGestureFor } from '../calls/runtime-rpc-background-read'
 const PAIRING_CHANGED_MESSAGE = 'Runtime environment pairing changed'
 
-type CatalogRefresher = () => Promise<void>
+type CatalogRegistration = { id: string; createdAt: number; pairingRevision?: number }
+type CatalogRefresher = () => Promise<readonly CatalogRegistration[]>
+type CatalogSample = ReadonlyMap<string, number>
 
 let refreshCatalog: CatalogRefresher | null = null
-let inFlight: Promise<boolean> | null = null
-let trailing: Promise<boolean> | null = null
+let inFlight: Promise<CatalogSample | null> | null = null
+let trailing: Promise<CatalogSample | null> | null = null
 
 export function setRuntimeEnvironmentCatalogRefresher(refresher: CatalogRefresher | null): void {
   refreshCatalog = refresher
@@ -34,9 +36,9 @@ export async function refreshRuntimeEnvironmentCatalog(): Promise<void> {
 }
 
 /** The shared fresh read, with failure and an unavailable refresher reported to recovery callers. */
-export function refreshRuntimeEnvironmentCatalogWithResult(): Promise<boolean> {
+export function refreshRuntimeEnvironmentCatalogWithResult(): Promise<CatalogSample | null> {
   if (!refreshCatalog) {
-    return Promise.resolve(false)
+    return Promise.resolve(null)
   }
   if (inFlight) {
     // The running read may predate this caller's change, so queue one more for the whole burst.
@@ -52,13 +54,15 @@ export function refreshRuntimeEnvironmentCatalogWithResult(): Promise<boolean> {
   return inFlight
 }
 
-async function readCatalog(refresh: CatalogRefresher): Promise<boolean> {
+async function readCatalog(refresh: CatalogRefresher): Promise<CatalogSample | null> {
   try {
-    await refresh()
-    return true
+    const environments = await refresh()
+    return new Map(
+      environments.map(({ id, pairingRevision, createdAt }) => [id, pairingRevision ?? createdAt])
+    )
   } catch (error) {
     console.warn('[runtime-environments] Could not re-read a re-paired environment:', error)
-    return false
+    return null
   }
 }
 

@@ -14,13 +14,17 @@ import type { BotActivityWithAuthority } from './use-bot-activity'
 function waitForCatalog(
   authority: Extract<BotReadAuthority, { kind: 'environment' }>,
   pairingChanged: boolean,
-  deadline: number
+  deadline: number,
+  signal: AbortSignal
 ): Promise<number | undefined> {
-  const eligibleRevision = (fresh = false): number | undefined => {
+  const replacementRevision = (): number | undefined => {
     const current = getRuntimeEnvironmentRevision(authority.environmentId)
-    return current !== authority.pairingRevision || (fresh && !pairingChanged) ? current : undefined
+    return current !== authority.pairingRevision ? current : undefined
   }
-  const alreadyCurrent = eligibleRevision()
+  if (signal.aborted || performance.now() >= deadline) {
+    return Promise.resolve(undefined)
+  }
+  const alreadyCurrent = replacementRevision()
   if (alreadyCurrent !== undefined) {
     return Promise.resolve(alreadyCurrent)
   }
@@ -33,21 +37,25 @@ function waitForCatalog(
       finished = true
       unsubscribe()
       clearTimeout(timer)
+      signal.removeEventListener('abort', cancel)
       resolve(performance.now() < deadline ? revision : undefined)
     }
+    const cancel = (): void => finish()
     const onPublish = (): void => {
-      const published = eligibleRevision()
+      const published = replacementRevision()
       if (published !== undefined) {
         finish(published)
       }
     }
     const unsubscribe = onRuntimeEnvironmentRevisionsPublished(onPublish)
     const timer = setTimeout(() => finish(), Math.max(0, deadline - performance.now()))
+    signal.addEventListener('abort', cancel, { once: true })
     // A publication can land while the shared refresher still owes a trailing read.
     onPublish()
     if (!finished) {
-      void refreshRuntimeEnvironmentCatalogWithResult().then((refreshed) => {
-        finish(eligibleRevision(refreshed))
+      void refreshRuntimeEnvironmentCatalogWithResult().then((sample) => {
+        const sampled = sample?.get(authority.environmentId)
+        finish(!pairingChanged && sampled === authority.pairingRevision ? sampled : undefined)
       })
     }
   })
@@ -56,8 +64,11 @@ function waitForCatalog(
 export async function reconcileBotAutomationDelete(
   error: unknown,
   authority: BotReadAuthority,
-  refreshSettled: (deadline: number) => Promise<BotReadSettled<BotActivityWithAuthority>>,
-  alive: () => boolean
+  refreshSettled: (
+    deadline: number,
+    canStart?: () => boolean
+  ) => Promise<BotReadSettled<BotActivityWithAuthority>>,
+  signal: AbortSignal
 ): Promise<BotReadSettled<BotActivityWithAuthority>> {
   const deadline = performance.now() + BOT_READ_SETTLE_MS
   if (
@@ -68,14 +79,17 @@ export async function reconcileBotAutomationDelete(
     const qualifiedRevision = await waitForCatalog(
       authority,
       isRuntimeEnvironmentPairingChangedError(error),
-      deadline
+      deadline,
+      signal
     )
-    if (
-      qualifiedRevision === undefined ||
-      qualifiedRevision !== getRuntimeEnvironmentRevision(authority.environmentId)
-    ) {
-      return { ok: false }
+    const canStart = (): boolean =>
+      !signal.aborted &&
+      qualifiedRevision !== undefined &&
+      qualifiedRevision === getRuntimeEnvironmentRevision(authority.environmentId)
+    if (canStart() && performance.now() < deadline) {
+      return refreshSettled(deadline, canStart)
     }
+    return { ok: false }
   }
-  return alive() && performance.now() < deadline ? refreshSettled(deadline) : { ok: false }
+  return signal.aborted ? { ok: false } : refreshSettled(deadline, () => !signal.aborted)
 }

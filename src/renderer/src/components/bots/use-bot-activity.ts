@@ -47,7 +47,10 @@ export function useBotActivityAuthorityRead(bot: Bot | null): {
   /** Ask the shared read again. */
   refresh: () => void
   /** A read started after this ask, or uncertain (`BotHostRead.requestSettled`). */
-  refreshSettled: (deadline: number) => Promise<BotReadSettled<BotActivityWithAuthority>>
+  refreshSettled: (
+    deadline: number,
+    canStart?: () => boolean
+  ) => Promise<BotReadSettled<BotActivityWithAuthority>>
 } {
   const read = useBotHostRead(activityRead, bot)
   const botId = bot?.id ?? null
@@ -60,9 +63,12 @@ export function useBotActivityAuthorityRead(bot: Bot | null): {
     }
   }, [botId, hostId])
   const refreshSettled = useCallback(
-    (deadline: number): Promise<BotReadSettled<BotActivityWithAuthority>> =>
+    (
+      deadline: number,
+      canStart?: () => boolean
+    ): Promise<BotReadSettled<BotActivityWithAuthority>> =>
       botId && hostId
-        ? activityRead.requestSettled({ hostId, id: botId }, deadline)
+        ? activityRead.requestSettled({ hostId, id: botId }, deadline, canStart)
         : Promise.resolve({ ok: false }),
     [botId, hostId]
   )

@@ -9,7 +9,6 @@ import type {
 
 export type BotAutomationFocusIntent = BotAutomationDeleteIntent & {
   rowKey: string
-  folded: boolean
   saved: AutomationEnabledOverride | null
 }
 
@@ -21,6 +20,7 @@ type FollowedDelete = {
   awaitingClose: boolean
   restoreRow: boolean
   leftOtherwise: boolean
+  foldedPending: boolean
   outcome: BotAutomationDeleteOutcome | null
 }
 
@@ -100,6 +100,7 @@ export function useBotAutomationDeleteFocus({
       awaitingClose: dialog !== undefined,
       restoreRow: false,
       leftOtherwise: false,
+      foldedPending: false,
       outcome: null
     }
     for (const [id, previous] of followed.current) {
@@ -171,7 +172,7 @@ export function useBotAutomationDeleteFocus({
           (entry.outcome === 'omitted' && membership === 'absent') ||
           (entry.outcome === 'trouble-cleared' &&
             membership === 'listed' &&
-            intent.folded &&
+            entry.foldedPending &&
             intent.admittedAsTrouble &&
             !open &&
             troubleCleared(intent)))
@@ -196,6 +197,9 @@ export function useBotAutomationDeleteFocus({
       }
       const button = rows.get(entry.intent.rowKey)
       const stillPending = deletion.pending.get(entry.intent.id)?.opId === opId
+      if (open || stillPending) {
+        entry.foldedPending = !open && Boolean(button)
+      }
       if (button) {
         entry.order = [...rows.keys()]
         if (stillPending) {
