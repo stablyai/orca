@@ -1,8 +1,5 @@
 import type { WebFrameMain } from 'electron'
-import {
-  GRAB_EXECUTION_REQUEST,
-  type GrabExecutionResult
-} from '../../../shared/browser/element-grab/grab-execution-protocol'
+import { GRAB_EXECUTION_REQUEST } from '../../../shared/browser/element-grab/grab-execution-protocol'
 
 export type GrabDocumentScope = {
   current: boolean
@@ -14,32 +11,11 @@ export type GrabDocumentScope = {
   pendingOverlayId: string | null
 }
 
-export function freshGrabDocumentScope(): GrabDocumentScope {
-  return { current: true, frame: null, documentId: null, overlayId: null, pendingOverlayId: null }
-}
 export function sendPrivate(frame: WebFrameMain | null, message: unknown): void {
   try {
     frame?.send(GRAB_EXECUTION_REQUEST, message)
   } catch {
     /* The document may be gone. */
-  }
-}
-
-/**
- * Settles an arm the page was running (`result` null when it never reached the page). A failed arm
- * leaves the previous picker live there, so only a successful one takes over `overlayId`.
- */
-export function settleGrabOverlayArm(
-  scope: GrabDocumentScope,
-  armId: string,
-  result: GrabExecutionResult | null
-): void {
-  if (scope.pendingOverlayId !== armId) {
-    return
-  }
-  scope.pendingOverlayId = null
-  if (result?.ok && result.value === true) {
-    scope.overlayId = armId
   }
 }
 

@@ -1,5 +1,5 @@
-import { freshGrabDocumentScope, settleGrabOverlayArm } from './grab-document-scope'
 import { sendPrivate, retireGrabOverlay, type GrabDocumentScope } from './grab-document-scope'
+import { freshGrabDocumentScope, settleGrabOverlayArm } from './grab-overlay-arm'
 export { retireGrabOverlay, restoreGrabCapture } from './grab-document-scope'
 export type { GrabDocumentScope } from './grab-document-scope'
 import { randomUUID } from 'node:crypto'
