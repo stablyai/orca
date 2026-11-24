@@ -18,7 +18,7 @@ export type IgnoredPathResult = {
 
 const lastIgnoredPathResults = createFileExplorerWorktreeSnapshots<IgnoredPathResult>()
 
-export function getEffectiveFileExplorerIgnoredPaths({
+function getEffectiveFileExplorerIgnoredPaths({
   activeWorktreeId,
   canLoadIgnoredPaths,
   ignoredPathResult,
@@ -29,17 +29,17 @@ export function getEffectiveFileExplorerIgnoredPaths({
   ignoredPathResult: IgnoredPathResult | null
   worktreePath: string | null
 }): readonly string[] {
-  const ignoredPathResultMatchesCurrentWorktree =
-    ignoredPathResult !== null &&
-    ignoredPathResult.activeWorktreeId === activeWorktreeId &&
-    ignoredPathResult.worktreePath === worktreePath
-
-  if (!canLoadIgnoredPaths || !ignoredPathResultMatchesCurrentWorktree) {
+  if (!canLoadIgnoredPaths || !activeWorktreeId || !worktreePath) {
     return EMPTY_IGNORED_PATHS
   }
-
+  // Same-host switches keep Files mounted, so fall back to this workspace's last answer until git replies.
+  const result =
+    ignoredPathResult?.activeWorktreeId === activeWorktreeId &&
+    ignoredPathResult.worktreePath === worktreePath
+      ? ignoredPathResult
+      : lastIgnoredPathResults.peek(fileExplorerWorktreeSnapshotKey(activeWorktreeId, worktreePath))
   // Retain same-worktree answers while expanded-folder queries refresh to prevent ignored-row flashes.
-  return ignoredPathResult.paths
+  return result?.paths ?? EMPTY_IGNORED_PATHS
 }
 
 export function useFileExplorerIgnoredPaths({
@@ -55,14 +55,7 @@ export function useFileExplorerIgnoredPaths({
   shouldDebounceIgnoredQuery: boolean
   worktreePath: string | null
 }): readonly string[] {
-  // Opens on the workspace's last answer, kept past unmounts, until git replies again.
-  const [ignoredPathResult, setIgnoredPathResult] = useState(() =>
-    activeWorktreeId && worktreePath
-      ? (lastIgnoredPathResults.peek(
-          fileExplorerWorktreeSnapshotKey(activeWorktreeId, worktreePath)
-        ) ?? null)
-      : null
-  )
+  const [ignoredPathResult, setIgnoredPathResult] = useState<IgnoredPathResult | null>(null)
 
   useEffect(() => {
     if (!canLoadIgnoredPaths || !activeWorktreeId || !worktreePath) {
