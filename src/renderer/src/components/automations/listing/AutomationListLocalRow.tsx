@@ -158,10 +158,12 @@ export function AutomationListLocalRow({
     : formatUiAutomationSchedule(automation.rrule, t, intlLocale)
   const nextRunLabel = automation.enabled
     ? automation.bot
-      ? automationNextRunLabel(automation, relativeNow)
+      ? automationNextRunLabel(automation, relativeNow, t, intlLocale)
       : formatAutomationNextRun(automation.nextRunAt, relativeNow, t, intlLocale)
     : t('auto.components.automations.enablement.paused', 'Paused')
-  const nextRunTitle = formatAutomationDateTime(automation.nextRunAt, t, intlLocale)
+  const nextRunTitle = automation.nextRunAt
+    ? formatAutomationDateTime(automation.nextRunAt, t, intlLocale)
+    : undefined
   const isSelected = isSelectedLocal && selectedRowKey === row.key
   const movedToDistro = useAppStore(
     (state) => wslMovedProjectForAutomation(state.wslMovedProjects, automation)?.distro ?? null

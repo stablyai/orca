@@ -165,7 +165,11 @@ export function AutomationListExternalRow({
           <AutomationListNextRunCell
             enabled={entry.job.enabled}
             nextRunLabel={nextRunLabel}
-            nextRunTitle={formatExternalDate(entry.job.nextRunAt, relativeNow, t, intlLocale)}
+            nextRunTitle={
+              entry.job.enabled
+                ? formatExternalDate(entry.job.nextRunAt, relativeNow, t, intlLocale)
+                : undefined
+            }
           />
           <AutomationListLastRunCell snapshot={lastRunSnapshot} now={relativeNow} />
           <DropdownMenu>

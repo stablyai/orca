@@ -44,7 +44,9 @@ export function AutomationListNextRunCell({
           aria-hidden="true"
           className="size-1.5 shrink-0 rounded-full border border-muted-foreground"
         />
-        {t('auto.components.automations.AutomationDetail.b09b2384fd', 'Paused')}
+        <span className="truncate">
+          {t('auto.components.automations.AutomationDetail.b09b2384fd', 'Paused')}
+        </span>
       </span>
     )
   }
@@ -69,7 +71,7 @@ export function AutomationListNextRunCell({
         )}
       >
         <TriangleAlert className="size-3.5 shrink-0" />
-        {t('automations.setupTrust.listSkipped', 'Setup skipped')}
+        <span className="truncate">{t('automations.setupTrust.listSkipped', 'Setup skipped')}</span>
       </span>
     )
   }
