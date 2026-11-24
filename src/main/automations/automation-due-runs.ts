@@ -25,8 +25,9 @@ export async function runDueAutomations(input: {
     if (!automation.enabled) {
       continue
     }
+    const due = (onceDueAt(automation) ?? automation.nextRunAt) <= now
     try {
-      if ((onceDueAt(automation) ?? automation.nextRunAt) > now) {
+      if (!due) {
         recoveringIds ??= new Set(
           ctx.store
             .listAutomationRuns()
@@ -51,7 +52,11 @@ export async function runDueAutomations(input: {
         input.isActive() &&
         ctx.store.listAutomations().some((current) => current.id === automation.id)
       ) {
-        await recordUnevaluableAutomation({ runs: ctx.runs, automation, error })
+        if (due) {
+          await recordUnevaluableAutomation({ runs: ctx.runs, automation, error })
+        } else {
+          console.error('[automations] could not recover missed occurrences:', automation.id, error)
+        }
       }
     }
   }
