@@ -25994,6 +25994,7 @@
     "waitForImageUploads": "请等待图片上传完成，然后重试创建 PR"
   },
   "agentPicker": {
+    "refreshModels": "刷新模型",
     "catalogUnsupportedLaunch": "此主机上无法使用 {{agent}} 模型。当前选择仍会生效。",
     "catalogLoadFailed": "无法加载 {{agent}} 模型",
     "catalogLoading": "正在加载模型…",

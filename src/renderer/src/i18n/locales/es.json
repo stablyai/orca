@@ -23922,6 +23922,7 @@
     }
   },
   "agentPicker": {
+    "refreshModels": "Actualizar modelos",
     "catalogUnsupportedLaunch": "Los modelos de {{agent}} no están disponibles en este equipo. Tus opciones actuales se siguen aplicando.",
     "catalogEmpty": "{{agent}} no tiene modelos disponibles.",
     "search": "Buscar, p. ej., Opus 5.5…",

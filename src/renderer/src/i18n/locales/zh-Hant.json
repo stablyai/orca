@@ -24268,6 +24268,7 @@
     }
   },
   "agentPicker": {
+    "refreshModels": "重新整理模型",
     "catalogUnsupportedLaunch": "此主機上無法使用 {{agent}} 模型。目前的選擇仍會套用。",
     "catalogEmpty": "{{agent}} 沒有可用模型。",
     "setByArguments": "由引數設定",

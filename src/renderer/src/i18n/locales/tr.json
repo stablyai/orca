@@ -24725,6 +24725,7 @@
     }
   },
   "agentPicker": {
+    "refreshModels": "Modelleri yenile",
     "catalogUnsupportedLaunch": "{{agent}} modelleri bu sunucuda kullanılamıyor. Geçerli seçimleriniz uygulanmaya devam eder.",
     "catalogEmpty": "{{agent}} için kullanılabilir model yok.",
     "setByArguments": "Argümanlarınızla ayarlandı",
