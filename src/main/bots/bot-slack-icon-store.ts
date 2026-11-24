@@ -12,6 +12,7 @@ import {
   isBotSlackIconFile
 } from '../../shared/bots/bot-slack-icon'
 import type { BotHomeFilesystem } from './bot-home'
+import { type BotSlackIconShown, BotSlackIconShownRecords } from './bot-slack-icon-shown'
 
 type LookedBot = Pick<Bot, 'id' | 'avatar' | 'avatarColor' | 'avatarOutfit'>
 
@@ -129,8 +130,6 @@ export async function writeBotSlackIcon(
 // new look is drawn keeps it rather than sending the mascot id's older art.
 const SHOWN_FILE = 'shown.json'
 
-export type BotSlackIconShown = { account: string | null; mascot: string }
-
 export async function readBotSlackIconShown(
   filesystem: BotHomeFilesystem,
   root: string,
@@ -175,6 +174,12 @@ export class BotSlackIcons {
   private readonly listeners = new Set<(botId: string) => void>()
   // Per bot, the icon file last found whole, by its size and change time.
   private readonly whole = new Map<string, { path: string; size: number; mtimeMs: number }>()
+  /** Which drawing the cloud last took per bot, saved in the background and once more at quit. */
+  readonly shownRecords = new BotSlackIconShownRecords({
+    read: (botId) => this.shown(botId),
+    write: (botId, shown) => this.markShown(botId, shown),
+    exists: (botId) => this.has(botId)
+  })
 
   constructor(
     private readonly deps: {
@@ -261,21 +266,23 @@ export class BotSlackIcons {
     return readBotSlackIconShown(this.deps.filesystem, this.deps.root(), botId)
   }
 
-  /** What the cloud took for the bot now, written only when it changes; a deleted bot keeps nothing. */
+  /** What the cloud took for the bot now, written only when it changes; a deleted bot keeps nothing. A
+   *  clear always removes, since an unreadable record reads as none. */
   async markShown(botId: string, shown: BotSlackIconShown | null): Promise<void> {
-    const before = await this.shown(botId)
+    const before = shown && (await this.shown(botId))
     if (
       this.has(botId) &&
-      (before?.account !== shown?.account || before?.mascot !== shown?.mascot)
+      (!shown || before?.account !== shown.account || before?.mascot !== shown.mascot)
     ) {
       await writeBotSlackIconShown(this.deps.filesystem, this.deps.root(), botId, shown)
     }
   }
 
-  /** A deleted bot's icons go with it. */
-  forget(botId: string): Promise<void> {
+  /** A deleted bot's icons go with it, after a record save of it already on its way, so none comes back. */
+  async forget(botId: string): Promise<void> {
     this.whole.delete(botId)
-    return this.deps.filesystem.removeTree(botFolder(this.deps.root(), botId))
+    await this.shownRecords.forget(botId)
+    await this.deps.filesystem.removeTree(botFolder(this.deps.root(), botId))
   }
 
   onStored(listener: (botId: string) => void): () => void {

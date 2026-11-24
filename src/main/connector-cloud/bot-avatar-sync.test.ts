@@ -12,9 +12,9 @@ import {
   readBotSlackIcon,
   readBotSlackIconShown,
   writeBotSlackIcon,
-  writeBotSlackIconShown,
-  type BotSlackIconShown
+  writeBotSlackIconShown
 } from '../bots/bot-slack-icon-store'
+import { BotSlackIconShownRecords } from '../bots/bot-slack-icon-shown'
 import { BotAvatarSync } from './bot-avatar-sync'
 
 let home: string | null = null
@@ -49,14 +49,13 @@ afterEach(async () => {
 })
 
 // The real record of what the cloud last took, kept beside the drawings, so a new sync reads it as a restart does.
-function shownIn(folder: string): {
-  shown: (botId: string) => Promise<BotSlackIconShown | null>
-  markShown: (botId: string, shown: BotSlackIconShown | null) => Promise<void>
-} {
+function shownIn(folder: string): { shownRecords: BotSlackIconShownRecords } {
   return {
-    shown: (botId) => readBotSlackIconShown(localBotHomeFilesystem, folder, botId),
-    markShown: (botId, shown) =>
-      writeBotSlackIconShown(localBotHomeFilesystem, folder, botId, shown)
+    shownRecords: new BotSlackIconShownRecords({
+      read: (botId) => readBotSlackIconShown(localBotHomeFilesystem, folder, botId),
+      write: (botId, shown) => writeBotSlackIconShown(localBotHomeFilesystem, folder, botId, shown),
+      exists: () => true
+    })
   }
 }
 
