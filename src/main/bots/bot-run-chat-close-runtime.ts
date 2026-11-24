@@ -49,7 +49,8 @@ export function startBotRunChatCloser(runtime: OrcaRuntimeService, store: Store)
     },
     lastActivityAt: (sessionId) => {
       const record = readAgentSessionRecordStore()?.getRecord(liveSession(sessionId))
-      return record ? (record.lastTurn?.at ?? record.updatedAt) : null
+      // A wake or any later write counts: it only ever keeps the chat open longer.
+      return record ? Math.max(record.lastTurn?.at ?? 0, record.updatedAt) : null
     },
     busy: async (bot, sessionId) => {
       const live = liveSession(sessionId)
