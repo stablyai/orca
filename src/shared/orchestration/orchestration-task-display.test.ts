@@ -10,6 +10,9 @@ describe('buildOrchestrationTaskDisplayMetadata', () => {
     expect(title('\n## \n> Fix `__init__` in [the loader](https://x.test/a_b_c)')).toBe(
       'Fix __init__ in the loader'
     )
+    expect(title('**Fix `__init__` handling** and [`a_b`](https://x.test)')).toBe(
+      'Fix __init__ handling and a_b'
+    )
     expect(
       buildOrchestrationTaskDisplayMetadata({ spec: '# x', taskTitle: '# Kept' }).taskTitle
     ).toBe('# Kept')
