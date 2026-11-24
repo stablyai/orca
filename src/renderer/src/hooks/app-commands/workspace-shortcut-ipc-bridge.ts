@@ -110,16 +110,17 @@ export function registerWorkspaceShortcutIpcBridge(unsubs: (() => void)[]): void
     })
   )
 
-  const navigateWorktreeHistory = (direction: 'back' | 'forward'): void => {
+  const navigateWorktreeHistory = (direction: 'back' | 'forward'): boolean => {
     const store = useAppStore.getState()
     if (!canNavigateWorktreeHistory(store)) {
-      return
+      return false
     }
     if (direction === 'back') {
       runBuiltInOrReplacement('worktree.history.back', () => store.goBackWorktree())
     } else {
       runBuiltInOrReplacement('worktree.history.forward', () => store.goForwardWorktree())
     }
+    return true
   }
   unsubs.push(window.api.ui.onWorktreeHistoryNavigate(navigateWorktreeHistory))
 
@@ -128,8 +129,9 @@ export function registerWorkspaceShortcutIpcBridge(unsubs: (() => void)[]): void
     if (event.defaultPrevented || (event.button !== 3 && event.button !== 4)) {
       return
     }
-    event.preventDefault()
-    navigateWorktreeHistory(event.button === 3 ? 'back' : 'forward')
+    if (navigateWorktreeHistory(event.button === 3 ? 'back' : 'forward')) {
+      event.preventDefault()
+    }
   }
   window.addEventListener('mouseup', onMouseSideButton)
   unsubs.push(() => window.removeEventListener('mouseup', onMouseSideButton))

@@ -52,7 +52,7 @@ describe('mouse side buttons over Orca UI', () => {
   it('ignores other buttons and views without the history arrows', () => {
     release(0)
     store.activeView = 'settings'
-    release(3)
+    expect(release(3).defaultPrevented).toBe(false)
     expect(store.goBackWorktree).not.toHaveBeenCalled()
   })
 
