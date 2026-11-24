@@ -1,6 +1,6 @@
 import { z } from 'zod'
 import { TERMINAL_INPUT_MAX_BYTES } from '../../terminal/input/terminal-input'
-import type { PluginHookName } from '../contributions/plugin-hook-contribution'
+import { AGENT_LAUNCH_KINDS, type PluginHookName } from '../contributions/plugin-hook-contribution'
 import { PLUGIN_TERMINAL_ID_MAX_LENGTH } from '../workers/plugin-host-api'
 
 /** How long Orca waits on one plugin's hook before it carries on as if the plugin passed. */
@@ -17,6 +17,8 @@ type PluginHookSpec = {
   result: z.ZodType | null
   /** Payload fields `next(event)` may change; any other change is ignored. */
   mutable: readonly string[]
+  /** Of `mutable`, the fields this payload keeps fixed (e.g. `command` on a resume); a change to one is logged. */
+  frozen?: (payload: Record<string, unknown>) => readonly string[]
   deadlineMs: number
   summary: string
 }
@@ -78,6 +80,9 @@ export const agentLaunchBeforeHookPayloadSchema = z.object({
   terminalId: z.string().min(1).max(PLUGIN_TERMINAL_ID_MAX_LENGTH).optional(),
   /** The command line Orca runs in the terminal's shell; a prompt given at launch is part of it. */
   command: z.string().min(1).max(TERMINAL_INPUT_MAX_BYTES),
+  /** `new`, `resume` or `restore`; only plugins that list the kind in `launchKinds` see `resume` and `restore`.
+   *  Orca always sends it; absent (an event written before the field) means `new`. */
+  launchKind: z.enum(AGENT_LAUNCH_KINDS).optional(),
   /** Starts empty: variables to add or override. Orca never shows the agent's environment. */
   env: pluginHookEnvSchema
 })
@@ -154,9 +159,11 @@ export const PLUGIN_HOOK_SPECS = {
     payload: agentLaunchBeforeHookPayloadSchema,
     result: denyResultSchema,
     mutable: ['command', 'env'],
+    // A resume or restore runs the command Orca built for that session.
+    frozen: (payload) => ((payload.launchKind ?? 'new') === 'new' ? [] : ['command']),
     deadlineMs: PLUGIN_HOOK_DEFAULT_DEADLINE_MS,
     summary:
-      'Orca is about to start an agent CLI in a terminal, from any launcher (new tab, workspace create, CLI, automation, orchestration). Change `command` or add `env` with `next`, or return `{ deny }` to refuse the launch. Restores of saved sessions are not hooked.'
+      'Orca is about to start an agent CLI in a terminal, from any launcher (new tab, workspace create, CLI, automation, orchestration). Change `command` or add `env` with `next`, or return `{ deny }` to refuse the launch. `launchKind` says how the session starts: `new`, `resume` (an earlier session continued in a new terminal, e.g. the Resume action) or `restore` (Orca reopening a session it saved for a pane: at start, when a sleeping pane wakes, or on restart). Resumes and restores are hooked only for plugins that list them in `launchKinds`, and not when Orca can tell they only reattach to a running session; on those, Orca keeps its own command (a changed `command` is ignored and logged) and applies `env`. The kind comes from the caller, so to enforce a command policy on a resume or restore, deny instead of rewriting.'
   },
   'agent.prompt.before': {
     payload: agentPromptBeforeHookPayloadSchema,

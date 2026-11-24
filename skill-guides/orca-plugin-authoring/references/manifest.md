@@ -84,6 +84,7 @@ A hook Orca runs through the worker before (or after) it acts. Requires `main` a
 
 - `event` ("terminal.send" | "workspace.create.before" | "workspace.create.after" | "agent.launch.before" | "agent.prompt.before" | "agent.tool.before" | "agent.tool.after" | "editor.save.before", required, since 1.4.248): Hook the worker handles with `orca.hooks.on`.
 - `onError` ("pass" | "deny", since 1.4.248): What Orca does when this plugin's hook throws, times out, crashes or does not start: `pass` (the default) carries on as if it passed; `deny` refuses the action, naming the plugin, so a guard fails closed. Ignored for hooks that only observe.
+- `launchKinds` ("new" | "resume" | "restore"[], since 1.4.262): For `agent.launch.before` only: which starts Orca waits on this plugin for. `new` is a fresh launch, `resume` an earlier session continued in a new terminal (e.g. the Resume action), `restore` Orca reopening a session it saved for a pane (at start, when a sleeping pane wakes, or on restart). Without the field a plugin sees `new` only; a list replaces that default, so `["resume"]` alone stops it running on new launches. A resume or restore that Orca can tell only reattaches to a running session starts no process and is not hooked (best effort: a session that exits during the start is not re-checked). On `resume` and `restore` Orca keeps its own command (a changed `command` is ignored and logged) and applies `env`; the kind comes from the caller, so a plugin that enforces a command policy there must deny rather than rewrite.
 
 ## LanguagePackContribution
 

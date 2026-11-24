@@ -1,9 +1,13 @@
 import type { z } from 'zod'
 import {
   PLUGIN_HOOK_DENIED_CODE,
+  type PluginHookContribution,
   type PluginHookName
 } from '../../../shared/plugins/contributions/plugin-hook-contribution'
 import type { PluginHookChainOutcome } from '../../../shared/plugins/workers/plugin-hook-chain'
+
+/** Narrows the plugins a hook waits on to those whose contribution matches, e.g. a launch kind. */
+export type PluginHookMatch = (hook: PluginHookContribution) => boolean
 
 /**
  * Where Orca's own code meets plugin hooks. Hooks run in the plugin workers of the Orca process
@@ -13,8 +17,12 @@ import type { PluginHookChainOutcome } from '../../../shared/plugins/workers/plu
  */
 export type PluginHookRunner = {
   /** Synchronous so the common case (no plugin lists the hook) adds no await. */
-  wants(event: PluginHookName): boolean
-  run(event: PluginHookName, payload: unknown): Promise<PluginHookChainOutcome>
+  wants(event: PluginHookName, match?: PluginHookMatch): boolean
+  run(
+    event: PluginHookName,
+    payload: unknown,
+    match?: PluginHookMatch
+  ): Promise<PluginHookChainOutcome>
 }
 
 let runner: PluginHookRunner | null = null
@@ -23,8 +31,8 @@ export function setPluginHookRunner(next: PluginHookRunner | null): void {
   runner = next
 }
 
-export function pluginHookWanted(event: PluginHookName): boolean {
-  return runner?.wants(event) === true
+export function pluginHookWanted(event: PluginHookName, match?: PluginHookMatch): boolean {
+  return runner?.wants(event, match) === true
 }
 
 /** A plugin hook refused the action; the message names the plugin and its reason. */
@@ -48,12 +56,13 @@ export class PluginHookDeniedError extends Error {
 export async function runPluginHook<S extends z.ZodType>(
   event: PluginHookName,
   schema: S,
-  payload: z.output<S>
+  payload: z.output<S>,
+  match?: PluginHookMatch
 ): Promise<z.output<S>> {
-  if (!runner?.wants(event)) {
+  if (!runner?.wants(event, match)) {
     return payload
   }
-  const outcome = await runner.run(event, payload)
+  const outcome = await runner.run(event, payload, match)
   if (outcome.kind === 'deny') {
     throw new PluginHookDeniedError(event, outcome.pluginKey, outcome.reason)
   }

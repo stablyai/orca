@@ -1,6 +1,10 @@
 import { PLUGIN_V1_EVENT_ALIASES } from '../../contributions/plugin-event-contribution'
 import { PLUGIN_EVENT_PAYLOAD_SCHEMAS } from '../../events/plugin-events'
-import { isPluginHookName } from '../../contributions/plugin-hook-contribution'
+import {
+  hookEntriesFor,
+  isPluginHookName,
+  type AgentLaunchKind
+} from '../../contributions/plugin-hook-contribution'
 import { PLUGIN_HOOK_SPECS } from '../../events/plugin-hook-payloads'
 import { runPluginHookChain } from '../../workers/plugin-hook-chain'
 import { runPluginWorkerHookHandlers } from '../../workers/plugin-worker-hooks'
@@ -25,9 +29,12 @@ export type MountWorkerOptions = {
   events: readonly string[]
   /** Command ids it may register, as listed in `contributes.commands`; null skips the check. */
   commands: readonly string[] | null
-  /** Hooks Orca runs through it, as listed in `contributes.hooks` (a name, or `{ event, onError }`);
-   *  defaults to the manifest's. */
-  hooks: readonly (string | { event: string; onError?: 'pass' | 'deny' })[]
+  /** Hooks Orca runs through it, as listed in `contributes.hooks` (a name, or
+   *  `{ event, onError, launchKinds }`); defaults to the manifest's. */
+  hooks: readonly (
+    | string
+    | { event: string; onError?: 'pass' | 'deny'; launchKinds?: readonly AgentLaunchKind[] }
+  )[]
 }
 
 /** What a hook chain of this one worker decided: Orca goes on with `event`, or it was refused. */
@@ -56,9 +63,6 @@ export async function mountWorker(module: WorkerModule, options: MountWorkerOpti
     typeof hook === 'string' ? { event: hook } : hook
   )
   const hooked = new Set(hookEntries.map((hook) => hook.event))
-  const failsClosed = new Set(
-    hookEntries.filter((hook) => hook.onError === 'deny').map((hook) => hook.event)
-  )
   const tables = createPluginWorkerApiTables()
   const logs: string[] = []
   const posts: PluginWorkerPanelPost[] = []
@@ -154,6 +158,11 @@ export async function mountWorker(module: WorkerModule, options: MountWorkerOpti
             `hooks.fire: that ${event} event is not one Orca sends: ${parsed.error.issues[0]?.message ?? ''}`
           )
         }
+        // As Orca: an agent.launch.before entry runs only for the launch kinds it lists.
+        const entries = hookEntriesFor(hookEntries, event, parsed.data)
+        if (entries.length === 0) {
+          return { kind: 'continue', event: parsed.data }
+        }
         const outcome = await runPluginHookChain({
           event,
           payload: parsed.data,
@@ -162,7 +171,7 @@ export async function mountWorker(module: WorkerModule, options: MountWorkerOpti
             runPluginWorkerHookHandlers(tables.hooks.get(event) ?? [], current),
           log: (_plugin, line) => void logs.push(line),
           now: () => performance.now(),
-          failsClosed: () => failsClosed.has(event)
+          failsClosed: () => entries.some((hook) => hook.onError === 'deny')
         })
         await host.idle()
         return outcome.kind === 'deny'
