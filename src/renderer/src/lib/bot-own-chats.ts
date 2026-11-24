@@ -1,7 +1,7 @@
 // Each bot's own side chats as its host classes them, read once per host for every bot's row (then only
 // for the bots a change names), so even a folded row says what any of its chats is doing.
 import type { BotRowLineChat } from '../../../shared/bots/bot-row-line'
-import { BOT_CHATS_OWN_MAX_IDS } from '../../../shared/rpc-contract/bots-params'
+import { BOT_CHATS_OWN_MAX_IDS } from '../../../shared/rpc-contract/bot-chats-params'
 import { createBotHostPerBotRead } from './bot-host-per-bot-read'
 import type { BotRef } from './bot-hosts'
 

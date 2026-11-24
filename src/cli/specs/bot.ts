@@ -54,8 +54,18 @@ export const BOT_COMMAND_SPECS: CommandSpec[] = [
     notes: [
       ...BOT_NOTES,
       "Run from a bot's chat it lists that bot's own chats, this one marked; --bot lists another bot's. Each row starts with the chat's id, the only thing --chat takes; the title only helps match your owner's words.",
-      'Earlier Home Chats, closed when a new one started, take no mail and are hidden; --all shows them too.',
+      'Closed chats (earlier Home Chats, and finished automation run chats Orca closed) take no mail and are hidden; --all shows them too, and `orca bot reopen --chat <id>` opens one again.',
       '`orca orchestration send --to bot:<name> --chat <id> --type question|handoff` mails that chat instead of the Home Chat, and its answer comes back to you the same way. Your own other chats take mail too, --chat new starts a new one titled from --subject, and with no --chat it lands in the Home Chat; only the chat you send from is refused.'
+    ]
+  },
+  {
+    path: ['bot', 'reopen'],
+    summary: "Open one of a bot's closed chats again, with its history, so it takes mail",
+    usage: 'orca bot reopen --chat <id> [--bot <name>] [--json]',
+    allowedFlags: [...GLOBAL_FLAGS, 'bot', 'chat'],
+    notes: [
+      ...BOT_NOTES,
+      '`orca bot chats --all` lists closed chats with their ids. The chat comes back as a tab in the bot’s home; then send it mail with --chat <id> as usual.'
     ]
   },
   {

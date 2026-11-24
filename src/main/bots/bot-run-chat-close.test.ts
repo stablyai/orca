@@ -15,11 +15,15 @@ function closerWith(input: {
   chats: Record<string, BotRunChatState>
   busy?: string[]
   held?: string[]
+  /** Owes a reply from the start, or (`askedLate`) only once its close is being admitted. */
+  asked?: string[]
+  askedLate?: string[]
 }) {
   let now = 0
   let file = ''
   let writes = 0
   const closed: string[] = []
+  const owes = new Set(input.asked)
   const closer = new BotRunChatCloser({
     path: () => 'list.jsonl',
     read: async () => file,
@@ -42,7 +46,12 @@ function closerWith(input: {
         : input.busy?.includes(sessionId)
           ? 'working'
           : 'free',
+    owesReply: (sessionId) => owes.has(sessionId),
     close: async (sessionId, admit) => {
+      // A question sent from it lands between the sweep's checks and the close.
+      if (input.askedLate?.includes(sessionId)) {
+        owes.add(sessionId)
+      }
       if (!admit()) {
         return false
       }
@@ -57,11 +66,16 @@ function closerWith(input: {
       now = ms
     },
     writes: () => writes,
-    tracked: () =>
-      file
-        .split('\n')
-        .filter(Boolean)
-        .map((line) => String(JSON.parse(line).sessionId))
+    lines: () => file.split('\n').filter(Boolean).length,
+    // Replays the list as a restart reads it: the last line for a chat wins.
+    tracked: () => {
+      const byChat = new Map<string, boolean>()
+      for (const line of file.split('\n').filter(Boolean)) {
+        const parsed = JSON.parse(line)
+        byChat.set(String(parsed.sessionId), parsed.removed !== true)
+      }
+      return [...byChat].flatMap(([id, kept]) => (kept ? [id] : []))
+    }
   }
 }
 
@@ -78,10 +92,14 @@ describe('BotRunChatCloser', () => {
         weekly: { lastActivityAt: 0, kept: false },
         forever: { lastActivityAt: 0, kept: false },
         otherProfile: { lastActivityAt: 0, kept: false },
-        inTab: { lastActivityAt: 0, kept: false }
+        inTab: { lastActivityAt: 0, kept: false },
+        asked: { lastActivityAt: 0, kept: false },
+        askedLate: { lastActivityAt: 0, kept: false }
       },
       busy: ['working'],
-      held: ['inTab']
+      held: ['inTab'],
+      asked: ['asked'],
+      askedLate: ['askedLate']
     })
     for (const [bot, sessionId] of [
       [bots[0], 'due'],
@@ -92,6 +110,8 @@ describe('BotRunChatCloser', () => {
       [bots[2], 'forever'],
       [bots[0], 'gone'],
       [bots[0], 'inTab'],
+      [bots[0], 'asked'],
+      [bots[0], 'askedLate'],
       [botOf('elsewhere'), 'otherProfile']
     ] as const) {
       run.closer.arm(bot, sessionId)
@@ -104,7 +124,29 @@ describe('BotRunChatCloser', () => {
     run.closer.clear()
 
     expect(run.closed).toEqual(['due'])
-    expect(run.tracked().sort()).toEqual(['otherProfile', 'renamed', 'weekly', 'working'])
+    expect(run.tracked().sort()).toEqual([
+      'asked',
+      'askedLate',
+      'otherProfile',
+      'renamed',
+      'weekly',
+      'working'
+    ])
     expect(run.writes()).toBe(writes)
+  })
+
+  it('keeps its list as long as its changes, not as long as every run ever armed', async () => {
+    const bots = [botOf('follows'), botOf('other')]
+    const run = closerWith({ bots, chats: {} })
+    for (let index = 0; index < 3000; index += 1) {
+      run.closer.arm(bots[0], `chat-${index % 5}`)
+    }
+    run.closer.arm(bots[1], 'kept')
+    run.closer.forget('follows')
+    await run.closer.sweep()
+    run.closer.clear()
+
+    expect(run.tracked().sort()).toEqual(['kept'])
+    expect(run.lines()).toBeLessThanOrEqual(1001)
   })
 })

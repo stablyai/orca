@@ -1,6 +1,5 @@
 /** Stores mail to a bot with Orca's record of the request beside it, after the checks pass. */
 
-import { keepRunChatOpenForAnswer } from '../../../../../bots/bot-run-chat-close-runtime'
 import { isBotGroupMemberSession } from '../../../../../../shared/bots/bot-group'
 import { runtimeBotGroups } from '../../../../../bots/bot-group-runtime'
 import { randomUUID } from 'node:crypto'
@@ -285,7 +284,6 @@ async function admitBotRequestMail(
       return blockedReceipt(admission)
     }
     const { message } = admission
-    keepRunChatOpenForAnswer(runtime, args.from)
     runtimeBotGroups(runtime).noteMailed(groupScope?.operationId, target.id)
     card.write({ messageId: message.id })
     const sent = recordReceiptForPostCommitNudge(

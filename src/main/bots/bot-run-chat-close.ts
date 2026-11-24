@@ -8,10 +8,10 @@ import {
 } from '../../shared/bots/bot-run-chat-close'
 
 const MAX_TIMER_DELAY_MS = 2_147_483_647
-// Holds a week of runs from a bot that runs every minute, twice over; past it, chats of bots this
-// profile doesn't have go first, then the oldest, down to 90% so a full list isn't rewritten per run.
-const MAX_TRACKED_CHATS = 20_000
-const TRIMMED_TRACKED_CHATS = 18_000
+// The list is rewritten once its lines (changes appended since the last rewrite) pass this many per
+// tracked chat, so writes stay proportional to changes.
+const COMPACT_LINES_PER_CHAT = 2
+const COMPACT_MIN_LINES = 1000
 // A sweep that failed (chat records unavailable) waits an hour, doubling to a day.
 const FAILED_SWEEP_RETRY_MS = 60 * 60 * 1000
 const MAX_FAILED_SWEEP_RETRY_MS = 24 * 60 * 60 * 1000
@@ -25,6 +25,8 @@ const EntrySchema = z.object({
   since: z.number()
 })
 type Entry = z.infer<typeof EntrySchema>
+// A later line that takes a chat off the list.
+const RemovedSchema = z.object({ sessionId: z.string().min(1), removed: z.literal(true) })
 
 /** One of the bot's chats as the closer sees it now; null when it is gone or closed. */
 export type BotRunChatState = {
@@ -34,7 +36,7 @@ export type BotRunChatState = {
 }
 
 export type BotRunChatCloseDeps = {
-  /** This host's list, one entry per line; the last line for a chat wins. */
+  /** This host's list, one change per line; the last line for a chat wins. */
   path: () => string
   read: (path: string) => Promise<string | null>
   append: (path: string, text: string) => Promise<void>
@@ -49,12 +51,15 @@ export type BotRunChatCloseDeps = {
   /** `held`: someone keeps it (open on a screen or in a tab, owning an open item, or the chat an
    *  automation runs in), so it stays open for good. `working`: a turn or a usage-limit wait. */
   use: (bot: Bot, sessionId: string) => Promise<'held' | 'working' | 'free'>
+  /** It asked another bot, here or on a paired computer, and the answer hasn't come back. Read in
+   *  the close's own lane too, so a reply can never be owed to a chat that closed. */
+  owesReply: (sessionId: string) => boolean
   /** Closes it once `admit` agrees in the session's own lane, and only while it is idle. */
   close: (sessionId: string, admit: () => boolean) => Promise<boolean>
 }
 
 export class BotRunChatCloser {
-  private entries: { path: string; byChat: Map<string, Entry> } | null = null
+  private entries: { path: string; byChat: Map<string, Entry>; lines: number } | null = null
   private failedAt: number | null = null
   private failures = 0
   private timer: ReturnType<typeof setTimeout> | undefined
@@ -67,7 +72,8 @@ export class BotRunChatCloser {
 
   /** A run's own conversation just finished: its countdown starts now. A bot on Never tracks none. */
   arm(bot: Bot, sessionId: string): void {
-    if (this.closeAfterMs(bot) === null) {
+    const ms = this.closeAfterMs(bot)
+    if (ms === null) {
       return
     }
     const entry: Entry = { sessionId, botId: bot.id, since: this.deps.now() }
@@ -75,39 +81,21 @@ export class BotRunChatCloser {
       const byChat = await this.all()
       byChat.delete(sessionId)
       byChat.set(sessionId, entry)
-      if (byChat.size > MAX_TRACKED_CHATS) {
-        this.evict(byChat)
-        await this.rewrite()
-      } else {
-        // Leading newline: a line a crash cut short never swallows this one.
-        await this.deps.append(this.deps.path(), `\n${JSON.stringify(entry)}`)
+      await this.save([entry])
+      // Only ever earlier: a later deadline is already covered by the timer's own rearm.
+      if (this.timerAt === undefined || entry.since + ms < this.timerAt) {
+        this.setTimer(entry.since + ms)
       }
-      await this.rearmNow()
     })
   }
 
   /** A deleted bot's chats are no longer this closer's. */
   forget(botId: string): void {
-    this.drop((entry) => entry.botId === botId)
-  }
-
-  /** The chat asked another bot something: its answer comes back here, so it stays open. */
-  keepOpen(sessionId: string): void {
-    this.drop((entry) => entry.sessionId === sessionId)
-  }
-
-  private drop(match: (entry: Entry) => boolean): void {
     void this.serial(async () => {
       const byChat = await this.all()
-      const before = byChat.size
-      for (const [sessionId, entry] of byChat) {
-        if (match(entry)) {
-          byChat.delete(sessionId)
-        }
-      }
-      if (byChat.size !== before) {
-        await this.rewrite()
-      }
+      const removed = [...byChat.values()].filter((entry) => entry.botId === botId)
+      removed.forEach((entry) => byChat.delete(entry.sessionId))
+      await this.save(removed.map(({ sessionId }) => ({ sessionId, removed: true as const })))
       await this.rearmNow()
     })
   }
@@ -171,15 +159,18 @@ export class BotRunChatCloser {
       return
     }
     await this.deps.ready()
+    const changes: Line[] = []
     for (const { entry, bot } of due) {
       const next = await this.settle(entry, bot, now)
       if (next) {
         byChat.set(entry.sessionId, next)
+        changes.push(next)
       } else {
         byChat.delete(entry.sessionId)
+        changes.push({ sessionId: entry.sessionId, removed: true })
       }
     }
-    await this.rewrite()
+    await this.save(changes)
   }
 
   /** What stays of a due entry: null once the chat closed or isn't one to close, else a later start. */
@@ -199,12 +190,17 @@ export class BotRunChatCloser {
     if (first !== 'due') {
       return first
     }
-    const use = await this.deps.use(bot, entry.sessionId)
+    const use = this.deps.owesReply(entry.sessionId)
+      ? 'working'
+      : await this.deps.use(bot, entry.sessionId)
     if (use !== 'free') {
       return use === 'held' ? null : { ...entry, since: this.deps.now() }
     }
-    // A turn, a wake or a new Close after may come at any point up to the close itself.
-    const closed = await this.deps.close(entry.sessionId, () => waiting() === 'due')
+    // A turn, a wake, a question or a new Close after may come at any point up to the close itself.
+    const closed = await this.deps.close(
+      entry.sessionId,
+      () => waiting() === 'due' && !this.deps.owesReply(entry.sessionId)
+    )
     if (closed) {
       return null
     }
@@ -219,9 +215,13 @@ export class BotRunChatCloser {
       return
     }
     this.clear()
-    if (next === null) {
-      return
+    if (next !== null) {
+      this.setTimer(next)
     }
+  }
+
+  private setTimer(next: number): void {
+    this.clear()
     const timer = setTimeout(
       () => {
         if (this.timer === timer) {
@@ -259,18 +259,6 @@ export class BotRunChatCloser {
     return botRunChatCloseAfterMs(bot, this.deps.hostDefault())
   }
 
-  private evict(byChat: Map<string, Entry>): void {
-    const known = new Set(this.deps.bots().map((bot) => bot.id))
-    const order = [...byChat.values()]
-    const byPriority = [
-      ...order.filter((entry) => !known.has(entry.botId)),
-      ...order.filter((entry) => known.has(entry.botId))
-    ]
-    byPriority
-      .slice(0, byChat.size - TRIMMED_TRACKED_CHATS)
-      .forEach((entry) => byChat.delete(entry.sessionId))
-  }
-
   private windowsKey(): string {
     return JSON.stringify([
       this.deps.hostDefault(),
@@ -283,37 +271,69 @@ export class BotRunChatCloser {
     if (this.entries?.path !== path) {
       const byChat = new Map<string, Entry>()
       const text = await this.deps.read(path).catch(() => null)
+      let lines = 0
       for (const line of text?.split('\n') ?? []) {
-        const entry = parseEntry(line)
-        if (entry) {
-          byChat.delete(entry.sessionId)
-          byChat.set(entry.sessionId, entry)
+        const parsed = parseLine(line)
+        if (!parsed) {
+          continue
+        }
+        lines += 1
+        byChat.delete(parsed.sessionId)
+        if (!('removed' in parsed)) {
+          byChat.set(parsed.sessionId, parsed)
         }
       }
-      this.entries = { path, byChat }
+      this.entries = { path, byChat, lines }
     }
     return this.entries.byChat
   }
 
-  private async rewrite(): Promise<void> {
+  /** Appends the changes, or rewrites the list once the appended lines outgrow it. */
+  private async save(changes: readonly Line[]): Promise<void> {
+    if (changes.length === 0) {
+      return
+    }
     const byChat = await this.all()
-    const text = [...byChat.values()].map((entry) => `${JSON.stringify(entry)}\n`).join('')
+    const entries = this.entries
+    if (!entries) {
+      return
+    }
+    const path = this.deps.path()
     try {
-      await this.deps.write(this.deps.path(), text)
+      const lines = entries.lines + changes.length
+      if (lines > Math.max(COMPACT_MIN_LINES, byChat.size * COMPACT_LINES_PER_CHAT)) {
+        await this.deps.write(path, [...byChat.values()].map(lineText).join(''))
+        entries.lines = byChat.size
+      } else {
+        await this.deps.append(path, changes.map(lineText).join(''))
+        entries.lines = lines
+      }
     } catch (error) {
       console.warn('[bots] could not save the finished run chat list', error)
     }
   }
 }
 
-// An unreadable line leaves that chat open, as before this existed.
-function parseEntry(line: string): Entry | null {
+type Line = Entry | z.infer<typeof RemovedSchema>
+
+// Leading newline: a line a crash cut short never swallows the next one.
+function lineText(line: Line): string {
+  return `\n${JSON.stringify(line)}`
+}
+
+// An unreadable line leaves that chat as it was, so at worst it stays open.
+function parseLine(line: string): Line | null {
   if (!line.trim()) {
     return null
   }
   try {
-    const parsed = EntrySchema.safeParse(JSON.parse(line))
-    return parsed.success ? parsed.data : null
+    const json: unknown = JSON.parse(line)
+    const removed = RemovedSchema.safeParse(json)
+    if (removed.success) {
+      return removed.data
+    }
+    const entry = EntrySchema.safeParse(json)
+    return entry.success ? entry.data : null
   } catch {
     return null
   }

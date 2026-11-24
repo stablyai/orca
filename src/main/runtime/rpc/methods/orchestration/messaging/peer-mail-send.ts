@@ -86,7 +86,7 @@ export async function sendPeerMail(args: {
         ]
       : []
   const db = runtime.getOrchestrationDb()
-  if (type === 'question') {
+  if (type === 'question' || type === 'handoff') {
     // Kept until its answer or notice comes back, so an unpair can tell the asker none will;
     // recorded first, so an answer pulled before delivery returns still settles it.
     recordPeerQuestionOut(db, {

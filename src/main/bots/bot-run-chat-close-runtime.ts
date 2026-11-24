@@ -1,5 +1,4 @@
 // The finished run chat closer on this host: its chat records, settings and the bot chat close.
-import { parseOrcaSessionAddress } from '../../shared/agent-session/identity/orca-session-address'
 import { appendFile, readFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { resolveHostOwnedSetting } from '../../shared/settings/host-owned-settings'
@@ -13,6 +12,7 @@ import {
   lineageLiveSession,
   readAgentSessionRecordStore
 } from '../runtime/orchestration/addressing/session-lineage/structured-session-lineage'
+import { sessionAwaitsBotReply } from '../runtime/orchestration/db/bot-requests/bot-request-sender-pending'
 import { structuredSessionMailReach } from '../runtime/orchestration/mailbox/routing/structured-session-mail-address'
 import { botTurns } from './bot-automation-sessions'
 import { closeBotSession } from './bot-chat-session'
@@ -22,17 +22,6 @@ import { BotRunChatCloser } from './bot-run-chat-close'
 function liveSession(sessionId: string): string {
   const records = readAgentSessionRecordStore()
   return (records && lineageLiveSession(records, sessionId)?.sessionId) ?? sessionId
-}
-
-/** A chat that asked another bot gets the answer back, so a finished run's chat stays open for it. */
-export function keepRunChatOpenForAnswer(
-  runtime: Pick<OrcaRuntimeService, 'botRunChatCloser'>,
-  senderAddress: string
-): void {
-  const sender = parseOrcaSessionAddress(senderAddress)
-  if (sender) {
-    runtime.botRunChatCloser?.keepOpen(sender)
-  }
 }
 
 /** Starts the closer on this host's runtime and keeps its timer in step with Close after. */
@@ -91,6 +80,8 @@ export function startBotRunChatCloser(runtime: OrcaRuntimeService, store: Store)
       const waitingOnLimit = (await host?.readUsageLimitContinue(live))?.state === 'scheduled'
       return botTurns.running(live) || waitingOnLimit ? 'working' : 'free'
     },
+    owesReply: (sessionId) =>
+      sessionAwaitsBotReply(runtime.getOrchestrationDb(), [sessionId, liveSession(sessionId)]),
     close: async (sessionId, admit) =>
       (
         await closeBotSession(runtime, liveSession(sessionId), {

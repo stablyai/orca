@@ -1,11 +1,15 @@
 // `bots.chats`: a bot's chats that mail can reach, newest first, so a bot can pick one by title and
 // last ask and send it `--chat <id>`.
 import type { Bot } from '../../../../shared/bot-types'
-import type { BotChatRow } from '../../../../shared/bots/bot-chat-row'
+import { BOT_CHAT_ID_PREFIX, type BotChatRow } from '../../../../shared/bots/bot-chat-row'
 import type { AgentSessionConversationView } from '../../../../shared/agent-session/lifecycle/leases/agent-session-conversation-view'
 import type { BotRosterEntry } from '../../../../shared/bot-roster'
 import { botOfHomeWorkspace } from '../../../../shared/bots/bot-homes'
-import { BotChats, BotChatsSeen } from '../../../../shared/rpc-contract/bots-params'
+import {
+  BotChatReopen,
+  BotChats,
+  BotChatsSeen
+} from '../../../../shared/rpc-contract/bot-chats-params'
 import {
   formatOrcaSessionAddress,
   isOrcaSessionId
@@ -24,7 +28,8 @@ import {
 } from '../../orchestration/mailbox/routing/structured-session-mail-address'
 import { refuseUndeliverableSessionRecipientWith } from './orchestration/messaging/session-recipient'
 import { namedOrCallerBot } from './bots-caller-bot'
-import { defineMethod } from '../core'
+import { defineMethod, InvalidArgumentError } from '../core'
+import { showBotSessionTab } from '../../../bots/bot-session-tab-show'
 import type { OrcaRuntimeService } from '../../orca-runtime'
 import {
   isBotBackgroundRun,
@@ -66,7 +71,45 @@ const BOT_CHATS_SEEN_METHOD = defineMethod({
   }
 })
 
-export const BOT_CHATS_METHODS = [BOT_CHATS_METHOD, BOT_CHATS_UNSEEN_METHOD, BOT_CHATS_SEEN_METHOD]
+/** Brings a closed chat back as a tab in the bot's home, so it takes mail again; its history is kept. */
+const BOT_CHATS_REOPEN_METHOD = defineMethod({
+  name: 'bots.chats.reopen',
+  permission: 'workspace',
+  params: BotChatReopen,
+  handler: async (params, context) => {
+    const { runtime } = context
+    const { bot } = namedOrCallerBot(params, context)
+    const id = params.chatId.startsWith(BOT_CHAT_ID_PREFIX)
+      ? params.chatId.slice(BOT_CHAT_ID_PREFIX.length)
+      : params.chatId
+    const row = (await readBotChats(runtime, bot, null, true)).find((chat) => chat.id === id)
+    if (!row) {
+      throw new InvalidArgumentError(
+        `${bot.name} has no chat ${params.chatId}. orca bot chats --all lists its chats.`
+      )
+    }
+    if (!row.closed) {
+      return { reopened: false, chatId: row.id }
+    }
+    // A chat closed here comes back; one running on another computer, or not checkable, doesn't.
+    if (row.reason !== 'ended') {
+      throw new InvalidArgumentError(
+        `That chat can't be reopened from here: ${row.reason === 'other-host' ? 'it runs on another computer' : 'Orca can’t check it right now'}.`
+      )
+    }
+    const store = readAgentSessionRecordStore()
+    const live = (store && lineageLiveSession(store, row.id)?.sessionId) ?? row.id
+    await showBotSessionTab(runtime, bot, live)
+    return { reopened: true, chatId: row.id }
+  }
+})
+
+export const BOT_CHATS_METHODS = [
+  BOT_CHATS_METHOD,
+  BOT_CHATS_UNSEEN_METHOD,
+  BOT_CHATS_SEEN_METHOD,
+  BOT_CHATS_REOPEN_METHOD
+]
 
 /** A bot's chats on this host; with `all`, its closed ones (earlier Home Chats) too. */
 export async function readBotChats(
