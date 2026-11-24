@@ -7,11 +7,7 @@ import { useBotAvatarIntakeState, type BotAvatarIntake } from './use-bot-avatar-
 import type { NewBotPicture } from './use-new-bot-picture'
 import type { Bot } from '../../../../shared/bot-types'
 
-/** `intake`, when the dialog keeps one, gives Generate its turn among the pictures it takes in. */
-export function useNewBotGenerateFace(
-  picture: NewBotPicture,
-  intake?: BotAvatarIntake
-): GenerateFace {
+function useNewBotGenerateFace(picture: NewBotPicture, intake: BotAvatarIntake): GenerateFace {
   // A picture taken in after Generate was asked for keeps the slot.
   const generateTurn = useRef<(() => boolean) | null>(null)
   return useGenerateFace(
@@ -25,18 +21,16 @@ export function useNewBotGenerateFace(
     picture.custom?.src
       ? { src: picture.custom.src, description: picture.custom.description }
       : null,
-    intake
-      ? () => {
-          generateTurn.current = intake.claim()
-        }
-      : undefined,
+    () => {
+      generateTurn.current = intake.claim()
+    },
     { owner: () => ({ kind: 'draft', key: picture.choiceKey }), background: true }
   )
 }
 
 /** For an intake's `onTake`: a picture taken in is a choice for the dialog's bot from the moment it
  *  starts being read. */
-export function draftPictureTake(pictureKey: string): () => () => void {
+function draftPictureTake(pictureKey: string): () => () => void {
   return () => {
     noteBotPictureChoice(pictureKey)
     return () => {}

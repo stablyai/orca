@@ -188,6 +188,7 @@ export function useBotPictureSetting(
   const uploads = useRef(0)
   const upload = (png: string, after: number): void => {
     nextChoice()
+    noteBotPictureChoice(key)
     uploads.current += 1
     const previous = live.kept
     const replacesUpload = isUploadAvatar(previous?.avatar ?? null)

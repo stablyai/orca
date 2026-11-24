@@ -39,11 +39,13 @@ export function repairBotAvatarRevisions(
 }
 
 async function raiseBehindRecords(store: RevisionStore, homes: RevisionHomes): Promise<void> {
-  for (const { id } of store.getBots?.() ?? []) {
-    const listed = store.getBots?.().find((entry) => entry.id === id)
-    const home = listed ? await botAvatarRevision(homes, listed) : 0
-    // Read again after the await: a write since may have saved the record, and it wins.
-    const current = store.getBots?.().find((entry) => entry.id === id)
+  for (const listed of store.getBots?.() ?? []) {
+    const home = await botAvatarRevision(homes, listed)
+    if (home <= (listed.avatarRevision ?? 0)) {
+      continue
+    }
+    // Re-read before repair so a newer write or deletion during the home read wins.
+    const current = store.getBots?.().find((entry) => entry.id === listed.id)
     if (current && home > (current.avatarRevision ?? 0)) {
       store.saveBot?.({ ...current, avatarRevision: home })
     }

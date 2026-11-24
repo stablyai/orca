@@ -105,7 +105,7 @@ describe('useBotPictureSetting', () => {
     // A fake host: each write lands on `stored`, which the catalog lists.
     let stored = bot({ avatarRevision: 1 })
     mocks.catalog = [stored]
-    const update = vi.fn(async (updates: Partial<Bot>) => {
+    const update = vi.fn(async (updates: Partial<Pick<Bot, 'avatar' | 'avatarOutfit'>>) => {
       stored = { ...stored, ...updates, avatarRevision: (stored.avatarRevision ?? 0) + 1 }
       mocks.catalog = [stored]
       return stored

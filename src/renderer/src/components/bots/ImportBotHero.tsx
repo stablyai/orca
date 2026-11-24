@@ -9,6 +9,7 @@ import { BotAvatar, BotAvatarTile } from './BotAvatar'
 import { BotPicturePicker } from './BotPicturePicker'
 import type { GenerateFace } from './AvatarGenerateFace'
 import { popIn } from './BotPickList'
+import type { BotAvatarIntake } from './use-bot-avatar-intake'
 import type { NewBotPicture } from './use-new-bot-picture'
 
 const FACE_POP_MS = 420
@@ -30,7 +31,7 @@ export function ImportBotHero({
   existing,
   generate,
   disabled = false,
-  onIntakeStart
+  intake
 }: {
   /** The old bot: its initial, or null while there is none yet. `key` changes pop it in. */
   old: { key: string; initial: string | null; label: string }
@@ -41,11 +42,13 @@ export function ImportBotHero({
   generate?: GenerateFace
   /** While Create runs: the picture it took stays as it is. */
   disabled?: boolean
-  /** See BotPicturePicker. */
-  onIntakeStart?: () => () => void
+  intake: BotAvatarIntake
 }): React.JSX.Element {
   const t = useTranslate()
   const [open, setOpen] = useState(false)
+  if (disabled && open) {
+    setOpen(false)
+  }
   const running = generate?.run.kind === 'running'
   const oldRef = useRef<HTMLSpanElement>(null)
   useEffect(() => {
@@ -75,7 +78,7 @@ export function ImportBotHero({
         </Face>
       ) : (
         <Face label={t('bots.import.newBotLabel', 'New bot')}>
-          <Popover open={open && !disabled} onOpenChange={setOpen}>
+          <Popover open={open} onOpenChange={setOpen}>
             <PopoverTrigger asChild>
               <button
                 type="button"
@@ -106,7 +109,7 @@ export function ImportBotHero({
                   outfit={picture.outfit}
                   onOutfitChange={picture.onOutfitChange}
                   generate={generate}
-                  onIntakeStart={onIntakeStart}
+                  intake={intake}
                 />
               </div>
             </PopoverContent>

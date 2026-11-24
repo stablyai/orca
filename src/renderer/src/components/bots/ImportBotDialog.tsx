@@ -42,11 +42,7 @@ import { useBotCreateHost } from './bot-create-hosts'
 import { LOCAL_EXECUTION_HOST_ID } from '../../../../shared/execution-host/execution-host'
 import { useBotAgentSetup } from './use-bot-agent-setup'
 import { useNewBotHostLooks, useNewBotPicture } from './use-new-bot-picture'
-import {
-  draftPictureTake,
-  followedByPicture,
-  useNewBotGenerateFace
-} from './use-new-bot-generate-face'
+import { followedByPicture, useNewBotDialogPicture } from './use-new-bot-generate-face'
 
 export type ImportPick = { source: BotImportSource; bot: BotImportCandidate }
 
@@ -78,7 +74,7 @@ export function ImportBotDialog({
   const [creating, setCreating] = useState(false)
   // Kept by the dialog, not its hero, so a run outlives the popover and the hero swapping to a bot an
   // earlier import made while the name is cleared; only dismissing the dialog ends it.
-  const face = useNewBotGenerateFace(picture)
+  const { intake, face } = useNewBotDialogPicture(picture, creating)
 
   const picks =
     read.status === 'ready'
@@ -124,13 +120,14 @@ export function ImportBotDialog({
   const ready =
     !missing && Boolean(trimmedName) && (exporting ? exportPaths !== null : pick !== null)
   // Enter and the Create button share this, so neither creates before the agents are known.
-  const canCreate = ready && !creating && !blocked && choices.length > 0
+  const canCreate = ready && !creating && !intake.reading && !blocked && choices.length > 0
 
   const close = (): void => {
     setView('pick')
     setPicked(null)
     setExported(NO_EXPORT)
     setTypedName(null)
+    intake.dismiss()
     picture.reset()
     // A run handed to the bot made goes on; any other ends here.
     face.reset()
@@ -233,7 +230,7 @@ export function ImportBotDialog({
           existing={existing}
           generate={face}
           disabled={creating}
-          onIntakeStart={draftPictureTake(picture.choiceKey)}
+          intake={intake}
         />
         <div>
           <Label htmlFor={nameId} className="sr-only">
