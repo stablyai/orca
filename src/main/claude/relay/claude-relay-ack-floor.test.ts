@@ -31,9 +31,16 @@ describe('Claude relay ack floor', () => {
     )
     await output.settle()
     expect(acks).toEqual([1, 5])
-    // An agent that ended mid-stream still gets everything acked, so the daemon can drop it.
+    // The daemon asking for an ack (its spool is full) lets go of the floor.
     output.line('relayData', 6, stream('message_start'))
+    output.line('relayData', 7, stream('content_block_delta'))
+    await output.settle()
+    expect(acks).toEqual([1, 5])
+    await output.settle(true)
+    expect(acks).toEqual([1, 5, 7])
+    // An agent that ended mid-stream still gets everything acked, so the daemon can drop it.
+    output.line('relayData', 8, stream('message_start'))
     await output.finish()
-    expect(acks).toEqual([1, 5, 6])
+    expect(acks).toEqual([1, 5, 7, 8])
   })
 })
