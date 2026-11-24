@@ -2,6 +2,7 @@
 // home is, so its chats open in tabs this desktop keeps. Its owner's workspaces are never listed here.
 import { mkdir, rm } from 'node:fs/promises'
 import { join } from 'node:path'
+import { BotShareIdSchema } from '../../../shared/bots/bot-team-shares'
 import type { FolderWorkspace } from '../../../shared/folder-workspaces/folder-workspace-types'
 import { botsProjectGroupId, type HomeStore } from '../bot-home-workspace'
 import type { SharedBotHostStore } from './shared-bot-host-store'
@@ -19,9 +20,9 @@ export type SharedBotHomeDeps = {
   deleteFolderWorkspace: (id: string) => Promise<unknown>
 }
 
-/** `<userData>/shared-agents/<shareId>`: a share id is one safe path segment (BotShareIdSchema). */
+/** `<userData>/shared-agents/<shareId>`; checked here too, as the folder is removed recursively. */
 export function sharedBotHomeFolder(userDataPath: string, shareId: string): string {
-  return join(userDataPath, 'shared-agents', shareId)
+  return join(userDataPath, 'shared-agents', BotShareIdSchema.parse(shareId))
 }
 
 type SharedBotHomeShare = { shareId: string; botName: string; homeWorkspaceId?: string }

@@ -23,6 +23,9 @@ export const sharedBotFailure = (
 
 export class SharedBotHeldSends {
   private states = new Map<string, SharedBotHeldState>()
+  // Cloud reads begun this run, and how many had begun when each message held this run was taken.
+  private reads = 0
+  private readonly heldAtRead = new Map<string, number>()
 
   constructor(
     private readonly deps: {
@@ -41,18 +44,22 @@ export class SharedBotHeldSends {
     )
   }
 
+  /** A cloud read begins; its answer settles the holds taken before it began. */
+  beginRead(): number {
+    return ++this.reads
+  }
+
   /**
-   * A share's held messages after a cloud read, merged by id: one it lists is marked listed; one it
-   * doesn't list is dropped only once an earlier read listed it. A read that was out while a message
-   * was held can't list it yet, so it is kept, with no clock to compare.
+   * A share's held messages after the cloud read `read`: one it lists stays; one it doesn't is gone
+   * (delivered and aged out, or pruned) once that read began after the message was held. A read that
+   * was already out can't list it yet, so it is kept. One kept from an earlier run is settled by the
+   * first read. No clock is compared.
    */
-  settle(held: readonly SharedBotHeldMessage[]): SharedBotHeldMessage[] {
-    return held.flatMap((message) =>
-      this.states.has(message.clientMessageId)
-        ? [message.listed ? message : { ...message, listed: true as const }]
-        : message.listed
-          ? []
-          : [message]
+  settle(held: readonly SharedBotHeldMessage[], read: number): SharedBotHeldMessage[] {
+    return held.filter(
+      (message) =>
+        this.states.has(message.clientMessageId) ||
+        read <= (this.heldAtRead.get(message.clientMessageId) ?? 0)
     )
   }
 
@@ -120,6 +127,7 @@ export class SharedBotHeldSends {
       const current = this.deps.store.get(entry.shareId) ?? entry
       this.deps.store.put({ ...current, held: [...current.held, result.held] })
       this.states.set(result.held.clientMessageId, 'waiting')
+      this.heldAtRead.set(result.held.clientMessageId, this.reads)
       this.deps.changed()
     }
     return result

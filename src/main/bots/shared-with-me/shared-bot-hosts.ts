@@ -135,10 +135,11 @@ export class SharedBotHosts {
       this.timer = null
     }
     const cloud = this.deps.cloud()
+    const read = this.held.beginRead()
     const answer = cloud ? await cloud.mine() : null
     // Signed out: the account's shares, keys and links go with it.
     const shares = answer?.ok ? answer.value.shares : answer?.error === 'signed_out' ? [] : null
-    const gone = shares ? this.applyMine(shares) : []
+    const gone = shares ? this.applyMine(shares, read) : []
     await this.deps.homes.settle(gone, this.store)
     if (shares) {
       await Promise.all(this.store.list().map((entry) => this.advance(entry)))
@@ -208,7 +209,7 @@ export class SharedBotHosts {
   }
 
   /** Applies the cloud's list; returns the kept shares it no longer lists, now removed. */
-  private applyMine(shares: readonly MineShare[]): SharedBotHostEntry[] {
+  private applyMine(shares: readonly MineShare[], read: number): SharedBotHostEntry[] {
     const current = new Map(shares.map((share) => [share.shareId, share]))
     this.shares = current
     this.held.applyMine(shares)
@@ -239,7 +240,7 @@ export class SharedBotHosts {
         ...(share.avatarUrl ? { avatarUrl: share.avatarUrl } : {}),
         ...(share.hostKey ? { hostKey: share.hostKey } : {}),
         ...(offer ? { offer } : {}),
-        held: this.held.settle(entry.held)
+        held: this.held.settle(entry.held, read)
       })
     }
     return gone

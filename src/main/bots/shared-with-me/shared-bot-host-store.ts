@@ -19,9 +19,7 @@ const KeyPair = z.object({ publicKeyB64: Text, secretKeyB64: Text })
 export const SharedBotHeldMessage = z.object({
   clientMessageId: Text,
   chat: z.union([z.object({ sessionId: Text }), z.object({ newChatId: Text })]),
-  sentAt: z.number().int().nonnegative(),
-  // A cloud read has listed it: from then on, one that no longer lists it has settled it away.
-  listed: z.literal(true).optional()
+  sentAt: z.number().int().nonnegative()
 })
 export type SharedBotHeldMessage = z.infer<typeof SharedBotHeldMessage>
 

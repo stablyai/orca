@@ -52,7 +52,7 @@ import {
   refreshBotHost,
   refreshBots
 } from './bot-host-refresh'
-import { botHostTarget, botTarget, callBotRpc, ownBotHost, type BotRef } from './bot-hosts'
+import { botHostTarget, callBotRpc, ownBotHost, type BotRef } from './bot-hosts'
 import type { ExecutionHostId } from '../../../shared/execution-host/execution-host'
 import {
   getRuntimeTargetHostId,
@@ -63,6 +63,7 @@ import { isHome, type BotHomeOwner } from '../../../shared/bots/bot-homes'
 import { requestNativeChatComposerFocus } from '../components/native-chat/composer/focus/native-chat-composer-focus-intent'
 import { structuredAgentSessionDraftScopeKey } from '../components/native-chat/drafts/native-chat-draft-scope'
 import { botHomeHostId } from '../../../shared/bots/bot-home-host'
+import { openSharedBotChat } from './agent-session/open/shared-bot-chat-open'
 
 export { isHome, readBots, readHostBots, refreshBotHost, refreshBots, subscribeToBotChanges }
 
@@ -334,16 +335,20 @@ export async function openBotHomeTab(bot: Bot, options?: { draft?: string }): Pr
     return null
   })
   // The home must be in the catalog before it can open.
-  await useAppStore
-    .getState()
-    .fetchFolderWorkspaces({ runtimeEnvironmentId: runtimeTargetEnvironmentId(botTarget(bot)) })
+  await useAppStore.getState().fetchFolderWorkspaces({
+    runtimeEnvironmentId: runtimeTargetEnvironmentId(botHostTarget(botHomeHostId(bot)))
+  })
   if (!openBotHome(bot)) {
     return false
   }
   if (chatSessionId) {
     const worktreeId = folderWorkspaceKey(bot.folderWorkspaceId)
     // An open Home switches here; one not in this window yet opens when the host's activation arrives.
-    if (!activateStructuredAgentSessionById({ worktreeId, sessionId: chatSessionId })) {
+    // A shared agent's host keeps no tabs for this account: its Home opens in a tab kept here.
+    if (
+      !activateStructuredAgentSessionById({ worktreeId, sessionId: chatSessionId }) &&
+      openSharedBotChat({ workspaceId: worktreeId, sessionId: chatSessionId }) === null
+    ) {
       activateStructuredAgentSessionTabOnOwner(worktreeId, chatSessionId)
     }
     if (options?.draft) {

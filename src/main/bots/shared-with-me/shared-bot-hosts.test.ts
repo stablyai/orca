@@ -291,24 +291,59 @@ describe('a held message and a cloud read that cross', () => {
       now: () => 5,
       changed: () => {}
     })
-    // A read that doesn't list m1 lands on the share; it either crosses the hold or follows it.
-    const read = (listed: MineShare['held']): void => {
-      held.applyMine([share({ hostKey: HOST_KEY, held: listed })])
-      const current = store.get('share-1')!
-      store.put({ ...current, held: held.settle(current.held) })
+    // A cloud read: begun at one point, its answer applied later.
+    const begin = () => {
+      const read = held.beginRead()
+      return (listed: MineShare['held']): void => {
+        held.applyMine([share({ hostKey: HOST_KEY, held: listed })])
+        const current = store.get('share-1')!
+        store.put({ ...current, held: held.settle(current.held, read) })
+      }
     }
     const sending = held.send(store.get('share-1')!, 'offline', sendParams('chat-0001', 'm1'))
     await new Promise((resolve) => setTimeout(resolve, 0))
-    read([])
+    // Out while m1 was being held: its answer can't list it yet.
+    const crossing = begin()
     accept()
     await sending
-    read([])
+    crossing([])
     const ids = () => store.get('share-1')!.held.map((message) => message.clientMessageId)
     expect(ids()).toEqual(['m1'])
-    read([{ clientMessageId: 'm1', state: 'waiting' }])
-    expect(store.get('share-1')!.held[0]?.listed).toBe(true)
-    read([])
+    begin()([{ clientMessageId: 'm1', state: 'waiting' }])
+    expect(ids()).toEqual(['m1'])
+    begin()([])
     expect(ids()).toEqual([])
+  })
+
+  it('settles a message kept from an earlier run that the cloud no longer lists, so its chat goes live', async () => {
+    const dir = mkdtempSync(join(tmpdir(), 'shared-bot-aged-'))
+    dirs.push(dir)
+    // Held, then Orca quit before any read listed it; the cloud aged it out meanwhile.
+    const kept = entry({
+      hostKey: HOST_KEY,
+      held: [{ clientMessageId: 'm1', chat: { sessionId: 'chat-0001' }, sentAt: 0 }]
+    })
+    writeFileSync(join(dir, SHARED_BOT_HOSTS_FILENAME), JSON.stringify({ v: 1, shares: [kept] }))
+    const service = new SharedBotHosts({
+      userDataPath: dir,
+      cloud: () => ({
+        mine: async () => ({ ok: true, value: { v: 1, shares: [share({ hostKey: HOST_KEY })] } }),
+        accept: async () => ({ ok: true, value: { status: 'queued' } }),
+        hold: async () => ({ ok: true, value: { status: 'held' } })
+      }),
+      platform: NODE_RELAY_CLIENT_PLATFORM,
+      publish: () => {},
+      homes: memorySharedBotHomes(dir).homes,
+      now: () => 0
+    })
+    await service.refresh()
+    service.stop()
+    await service.flushed()
+    const store = new SharedBotHostStore(dir)
+    await store.load()
+    const settled = store.get('share-1')!
+    expect(settled.held).toEqual([])
+    expect(sendsHeld(settled, 'live', { sessionId: 'chat-0001' }, new Map())).toBe(false)
   })
 })
 

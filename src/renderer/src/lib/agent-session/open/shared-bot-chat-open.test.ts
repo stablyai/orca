@@ -11,7 +11,7 @@ import { folderWorkspaceKey } from '../../../../../shared/workspace/identity/wor
 import { installSharedBotHostCatalog } from '@/runtime/hosts/shared-bot-hosts/shared-bot-host-catalog'
 import { structuredAgentSessionTargetForTab } from '@/runtime/native-chat/session-ownership/structured-agent-session-owner'
 import { publishBots, readHostBots, setBotHostListing } from '../../bot-catalog-snapshot'
-import { openBotHome } from '../../bot-catalog'
+import { openBotHome, openBotHomeTab } from '../../bot-catalog'
 import { buildWorkspaceSessionPayload } from '../../workspace/persistence/workspace-session'
 import { activateAiVaultStructuredSession } from './activate-ai-vault-structured-session'
 
@@ -26,6 +26,10 @@ const SHARED: SharedBotHostView = {
 }
 const HOST = toRuntimeExecutionHostId(SHARED.environmentId)
 const HOME_KEY = folderWorkspaceKey('home-1')
+const tabs = () =>
+  (useAppStore.getState().unifiedTabsByWorktree[HOME_KEY] ?? []).filter(
+    (tab) => tab.contentType === 'agent-session'
+  )
 
 // The agent as its owner's host lists it: its home is a workspace this account can't see.
 const ivy: Bot = {
@@ -72,11 +76,21 @@ function resetStore(): void {
 }
 
 let stopCatalog: () => void = () => {}
+// Main's answers over the share link, as the owner's host would give them.
+const call = vi.fn(async ({ method }: { method: string }) => ({
+  id: method,
+  ok: true,
+  result:
+    method === 'bots.chat.open'
+      ? { sessionId: 'chat-home' }
+      : { bots: [ivy], threadReplies: false },
+  _meta: { runtimeId: SHARED.environmentId }
+}))
 
 beforeEach(async () => {
   vi.stubGlobal('api', {
     ...window.api,
-    sharedBotHosts: { list: async () => [SHARED], onChanged: () => () => {} }
+    sharedBotHosts: { list: async () => [SHARED], onChanged: () => () => {}, call }
   })
   stopCatalog = installSharedBotHostCatalog()
   await Promise.resolve()
@@ -104,10 +118,6 @@ describe('a shared agent’s chats on this computer', () => {
     await activateAiVaultStructuredSession({
       structuredSession: { workspaceId: HOME_KEY, sessionId: 'chat-1' }
     })
-    const tabs = () =>
-      (useAppStore.getState().unifiedTabsByWorktree[HOME_KEY] ?? []).filter(
-        (tab) => tab.contentType === 'agent-session'
-      )
     expect(tabs()).toEqual([
       expect.objectContaining({ entityId: 'chat-1', executionHostId: HOST, worktreeId: HOME_KEY })
     ])
@@ -121,6 +131,25 @@ describe('a shared agent’s chats on this computer', () => {
     useAppStore.getState().hydrateTabsSession(saved)
     expect(tabs()).toEqual([
       expect.objectContaining({ entityId: 'chat-1', executionHostId: HOST, worktreeId: HOME_KEY })
+    ])
+  })
+
+  it('opens its Home Chat in a tab kept here, reading only this computer’s workspaces', async () => {
+    call.mockClear()
+    const fetchFolderWorkspaces = vi.fn(async () => {})
+    useAppStore.setState({ fetchFolderWorkspaces })
+    const [bot] = readHostBots(HOST)
+    expect(await openBotHomeTab(bot)).toBe(true)
+    expect(fetchFolderWorkspaces).toHaveBeenCalledWith({ runtimeEnvironmentId: null })
+    expect(call.mock.calls.map(([request]) => request.method)).not.toContain(
+      'folderWorkspaces.list'
+    )
+    expect(tabs()).toEqual([
+      expect.objectContaining({
+        entityId: 'chat-home',
+        executionHostId: HOST,
+        worktreeId: HOME_KEY
+      })
     ])
   })
 })
