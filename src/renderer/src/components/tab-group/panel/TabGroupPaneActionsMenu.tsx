@@ -1,4 +1,4 @@
-import { useRef, useState, type RefObject } from 'react'
+import { useId, useRef, useState, type RefObject } from 'react'
 import { ArrowLeft, ArrowRight, Ellipsis, Plus, X } from 'lucide-react'
 import {
   DropdownMenu,
@@ -20,12 +20,15 @@ import { runBuiltInOrReplacement } from '@/lib/plugins/commands/plugin-command-r
 import { useShortcutLabel } from '@/lib/keyboard/useShortcutLabel'
 import type { TitlebarChromeFoldLevel } from '@/app-shell/chrome/titlebar-chrome-fold'
 import {
-  captureFocusBeforeRestore,
+  captureTabStripMenuFocus,
   restoreTabStripFocus
 } from '../../tab-bar/strip/tab-strip-focus-restore'
+import { isGroupFocusedInStore } from '../../tab-bar/strip/use-tab-strip-unmount-focus-restore'
 
 type TabGroupPaneActionsMenuProps = {
   isFocused: boolean
+  open: boolean
+  onOpenChange: (open: boolean) => void
   /** Only split groups can close their pane. */
   onCloseGroup?: () => void
   worktreeId: string
@@ -46,6 +49,8 @@ function isSlotHidden(slot: HTMLElement | null): boolean {
 
 export function TabGroupPaneActionsMenu({
   isFocused,
+  open,
+  onOpenChange,
   onCloseGroup,
   worktreeId,
   groupId,
@@ -54,36 +59,35 @@ export function TabGroupPaneActionsMenu({
   onNewTab
 }: TabGroupPaneActionsMenuProps): React.JSX.Element {
   const t = useTranslate()
-  const [open, setOpen] = useState(false)
+  const menuId = useId()
+  const [openedFoldLevel, setOpenedFoldLevel] = useState(foldLevel)
+  const menuFoldLevel = open ? openedFoldLevel : foldLevel
   const canGoBack = useAppStore(canGoBackWorktreeHistory)
   const canGoForward = useAppStore(canGoForwardWorktreeHistory)
   const backShortcut = useShortcutLabel('worktree.history.back')
   const forwardShortcut = useShortcutLabel('worktree.history.forward')
   const newTabShortcut = useShortcutLabel('tab.newTerminal')
-  const focusAfterCloseRef = useRef(false)
-  const showHistory = foldLevel > 0
+  const pendingNavigationRef = useRef<{ focusBefore: Element | null } | null>(null)
+  const showHistory = menuFoldLevel > 0
   const [offerQuickCommands, setOfferQuickCommands] = useState(false)
   const quickCommands = useNativeChatQuickCommandsMenu(
     offerQuickCommands ? { worktreeId, groupId } : undefined,
-    () => setOpen(false)
+    () => onOpenChange(false)
   )
   const handleOpenChange = (next: boolean): void => {
     // Why: the menu renders in a portal, so check the strip's container-query result when it opens.
     if (next) {
+      setOpenedFoldLevel(foldLevel)
       setOfferQuickCommands(isSlotHidden(quickCommandsSlotRef.current))
     }
-    setOpen(next)
-  }
-  // Why: the strip stays mounted when focus or the workspace moves away; close so it can't act on a stale group.
-  if (!isFocused && open) {
-    setOpen(false)
+    onOpenChange(next)
   }
 
   // Why: drop ⋯ whole once it can't fit beside the tab floor (and "+", unless that folded in here); the +N chip still outlasts it.
   return (
     <div
       className={
-        foldLevel === 2
+        menuFoldLevel === 2
           ? 'contents @max-[78px]/tab-strip:hidden'
           : 'contents @max-[114px]/tab-strip:hidden'
       }
@@ -106,36 +110,44 @@ export function TabGroupPaneActionsMenu({
             </DropdownMenuTrigger>
           </TooltipTrigger>
           <DropdownMenuContent
+            data-tab-strip-menu={menuId}
             align="end"
             side="bottom"
             sideOffset={4}
             onCloseAutoFocus={(event) => {
-              const restoreToStrip = focusAfterCloseRef.current
-              focusAfterCloseRef.current = false
+              const navigation = pendingNavigationRef.current
+              pendingNavigationRef.current = null
               if (!isFocused) {
                 event.preventDefault()
                 return
               }
-              if (restoreToStrip) {
-                // History may switch workspaces; only land on this strip's active tab if it is still shown.
-                event.preventDefault()
-                const focusBefore = captureFocusBeforeRestore()
-                requestAnimationFrame(() => {
-                  const strip = document.querySelector<HTMLElement>(
-                    `[data-tab-group-strip-id="${CSS.escape(groupId)}"]`
-                  )
-                  const activeSlot = strip?.querySelector<HTMLElement>(
-                    '[data-tab-strip-slot]:has([data-active="true"])'
-                  )
-                  restoreTabStripFocus({
-                    strip,
-                    slotId: activeSlot?.dataset.tabStripSlot ?? null,
-                    stillOwned: () =>
-                      useAppStore.getState().activeGroupIdByWorktree[worktreeId] === groupId,
-                    focusBefore
-                  })
-                })
+              const triggerRemoved = !onCloseGroup && foldLevel === 0
+              if (!navigation && !triggerRemoved) {
+                return
               }
+              event.preventDefault()
+              const focusBefore = navigation
+                ? navigation.focusBefore
+                : document.activeElement === document.body
+                  ? document.body
+                  : null
+              if (!focusBefore) {
+                return
+              }
+              requestAnimationFrame(() => {
+                const strip = document.querySelector<HTMLElement>(
+                  `[data-tab-group-strip-id="${CSS.escape(groupId)}"]`
+                )
+                const activeSlot = strip?.querySelector<HTMLElement>(
+                  '[data-tab-strip-slot]:has([data-active="true"])'
+                )
+                restoreTabStripFocus({
+                  strip,
+                  slotId: activeSlot?.dataset.tabStripSlot ?? null,
+                  stillOwned: () => isGroupFocusedInStore(worktreeId, groupId),
+                  focusBefore
+                })
+              })
             }}
           >
             {showHistory ? (
@@ -143,7 +155,9 @@ export function TabGroupPaneActionsMenu({
                 <DropdownMenuItem
                   disabled={!canGoBack}
                   onSelect={() => {
-                    focusAfterCloseRef.current = true
+                    pendingNavigationRef.current = {
+                      focusBefore: captureTabStripMenuFocus(null, menuId)
+                    }
                     runBuiltInOrReplacement('worktree.history.back', () =>
                       useAppStore.getState().goBackWorktree()
                     )
@@ -156,7 +170,9 @@ export function TabGroupPaneActionsMenu({
                 <DropdownMenuItem
                   disabled={!canGoForward}
                   onSelect={() => {
-                    focusAfterCloseRef.current = true
+                    pendingNavigationRef.current = {
+                      focusBefore: captureTabStripMenuFocus(null, menuId)
+                    }
                     runBuiltInOrReplacement('worktree.history.forward', () =>
                       useAppStore.getState().goForwardWorktree()
                     )
@@ -166,7 +182,7 @@ export function TabGroupPaneActionsMenu({
                   {t('auto.App.cf9099fe98', 'Go forward')}
                   <DropdownMenuShortcut>{forwardShortcut}</DropdownMenuShortcut>
                 </DropdownMenuItem>
-                {foldLevel === 2 ? (
+                {menuFoldLevel === 2 ? (
                   <DropdownMenuItem onSelect={() => onNewTab()}>
                     <Plus className="size-4" />
                     {t('auto.components.tab.bar.TabBar.b1a132357f', 'New tab')}

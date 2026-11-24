@@ -121,7 +121,8 @@ export function useAppChromeLayout() {
   useTitlebarChromeFoldObserver({
     active: leftTitlebarChromeLayout.isFloating && workspaceChromeActive,
     controlsRef: titlebarLeftControlsRef,
-    headerShapeKey: `${isFullScreen}|${settings?.showTitlebarAppName !== false}|${activeView}`
+    headerShapeKey: `${isFullScreen}|${settings?.showTitlebarAppName !== false}|${activeView}`,
+    layoutHeaderWidth: collapsedSidebarHeaderWidth
   })
 
   return {

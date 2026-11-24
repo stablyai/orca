@@ -1,4 +1,4 @@
-import { useRef } from 'react'
+import { useRef, useState } from 'react'
 import { cn } from '@/lib/class-names'
 import type { TitlebarChromeFoldLevel } from '@/app-shell/chrome/titlebar-chrome-fold'
 import { TabBarQuickCommandsButton } from '../../tab-bar/quick-commands/TabBarQuickCommandsButton'
@@ -22,6 +22,10 @@ export function TabGroupStripActions({
   onNewTab: () => void
 }): React.JSX.Element {
   const quickCommandsSlotRef = useRef<HTMLDivElement>(null)
+  const [paneActionsOpen, setPaneActionsOpen] = useState(false)
+  if (!isFocused && paneActionsOpen) {
+    setPaneActionsOpen(false)
+  }
   return (
     // Why: actions hide before the tab bar's floor is reached; min-w-0 + clipping is only a backstop so reserved spacers stay clear.
     <div
@@ -50,9 +54,11 @@ export function TabGroupStripActions({
         />
       </div>
       {/* Folded titlebar chrome moves Back/Forward (and "+") into ⋯, so it shows without splits then. */}
-      {onCloseGroup || foldLevel > 0 ? (
+      {onCloseGroup || foldLevel > 0 || paneActionsOpen ? (
         <TabGroupPaneActionsMenu
           isFocused={isFocused}
+          open={paneActionsOpen}
+          onOpenChange={setPaneActionsOpen}
           onCloseGroup={onCloseGroup}
           worktreeId={worktreeId}
           groupId={groupId}

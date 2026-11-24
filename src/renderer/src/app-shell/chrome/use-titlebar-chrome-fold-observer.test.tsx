@@ -6,7 +6,8 @@ import { act, cleanup, render } from '@testing-library/react'
 import {
   getTitlebarChromeFoldLevel,
   registerTitlebarChromeOwnerStrip,
-  useTitlebarChromeFoldLevel
+  useTitlebarChromeFoldLevel,
+  useTitlebarHeaderFoldLevel
 } from './titlebar-chrome-fold'
 import { useTitlebarChromeFoldObserver } from './use-titlebar-chrome-fold-observer'
 
@@ -17,6 +18,7 @@ let paneWidth = 0
 let fullScreen = false
 const resizeCallbacks = new Set<() => void>()
 const levels: number[] = []
+const paneLevels: number[] = []
 
 function width(element: HTMLElement): number {
   if (element.dataset.testHeader !== undefined) {
@@ -34,6 +36,7 @@ function width(element: HTMLElement): number {
 
 beforeEach(() => {
   levels.length = 0
+  paneLevels.length = 0
   resizeCallbacks.clear()
   vi.stubGlobal(
     'ResizeObserver',
@@ -65,15 +68,27 @@ afterEach(() => {
 function Shell({ shapeKey }: { shapeKey: string }): React.JSX.Element {
   const controlsRef = useRef<HTMLDivElement>(null)
   const stripRef = useRef<HTMLDivElement>(null)
-  const level = useTitlebarChromeFoldLevel()
+  const level = useTitlebarHeaderFoldLevel()
+  const paneLevel = useTitlebarChromeFoldLevel()
   useEffect(() => {
     levels.push(level)
   }, [level])
+  useEffect(() => {
+    paneLevels.push(paneLevel)
+  }, [paneLevel])
   useLayoutEffect(() => registerTitlebarChromeOwnerStrip(stripRef.current!), [])
-  useTitlebarChromeFoldObserver({ active: true, controlsRef, headerShapeKey: shapeKey })
+  useTitlebarChromeFoldObserver({
+    active: true,
+    controlsRef,
+    headerShapeKey: shapeKey,
+    layoutHeaderWidth:
+      (fullScreen ? BASE_PX.fullScreen : BASE_PX.windowed) +
+      (level < 2 ? 42 : 0) +
+      (level < 1 ? 66 : 0)
+  })
   return (
     <>
-      <div ref={controlsRef} data-test-header="">
+      <div ref={controlsRef} data-test-header="" data-titlebar-fold-level={level}>
         {level < 2 ? <span data-titlebar-fold-step="2" data-test-width="42" /> : null}
         {level < 1 ? <span data-titlebar-fold-step="1" data-test-width="66" /> : null}
       </div>
@@ -97,8 +112,12 @@ function changeHeaderShape(
   fullScreen = shape.fullScreen
   settleResizes()
   const from = levels.length
+  const paneFrom = paneLevels.length
+  const previous = getTitlebarChromeFoldLevel()
   act(() => rerender(<Shell shapeKey={`${shape.fullScreen}|${shape.view}`} />))
   settleResizes()
+  const settled = getTitlebarChromeFoldLevel()
+  expect(paneLevels.slice(paneFrom)).toEqual(settled === previous ? [] : [settled])
   return levels.slice(from)
 }
 

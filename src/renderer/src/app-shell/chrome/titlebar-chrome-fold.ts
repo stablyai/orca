@@ -72,6 +72,7 @@ export function decideTitlebarChromeFold({
 
 // Layout-only state with one writer (the app shell's observer); not persisted, so not a store slice.
 let foldLevel: TitlebarChromeFoldLevel = 0
+let measurementLevel: TitlebarChromeFoldLevel | null = null
 let ownerStrip: HTMLElement | null = null
 const listeners = new Set<() => void>()
 
@@ -87,10 +88,30 @@ function subscribe(listener: () => void): () => void {
 }
 
 export function setTitlebarChromeFoldLevel(level: TitlebarChromeFoldLevel): void {
-  if (level !== foldLevel) {
+  if (level !== foldLevel || measurementLevel !== null) {
     foldLevel = level
+    measurementLevel = null
     emit()
   }
+}
+
+export function setTitlebarChromeMeasurementLevel(level: TitlebarChromeFoldLevel): void {
+  if (measurementLevel !== level) {
+    measurementLevel = level
+    emit()
+  }
+}
+
+export function getTitlebarChromeMeasurementLevel(): TitlebarChromeFoldLevel | null {
+  return measurementLevel
+}
+
+function getTitlebarHeaderFoldLevel(): TitlebarChromeFoldLevel {
+  return measurementLevel ?? foldLevel
+}
+
+export function useTitlebarHeaderFoldLevel(): TitlebarChromeFoldLevel {
+  return useSyncExternalStore(subscribe, getTitlebarHeaderFoldLevel, getTitlebarHeaderFoldLevel)
 }
 
 export function getTitlebarChromeFoldLevel(): TitlebarChromeFoldLevel {

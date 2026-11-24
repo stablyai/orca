@@ -19,6 +19,7 @@ beforeEach(() => {
   })
   document.body.innerHTML = `
     <div id="strip"><div data-tab-strip-slot="t1"><div tabindex="0" id="t1-root"></div></div></div>
+    <div data-tab-strip-menu="menu"><button id="menu-row"></button></div>
     <textarea id="other-group-terminal"></textarea>`
   strip = document.getElementById('strip')!
 })
@@ -36,7 +37,8 @@ function Chip({ open }: { open: boolean }): null {
     surface: strip,
     activeId: 't1',
     worktreeId: 'wt',
-    groupId: 'g1'
+    groupId: 'g1',
+    menuId: 'menu'
   })
   return null
 }
@@ -52,6 +54,7 @@ async function nextFrame(): Promise<void> {
 describe('useTabStripUnmountFocusRestore', () => {
   it('focuses the active tab when the chip unmounts with its list open', async () => {
     const { rerender } = render(<Harness chip />)
+    document.getElementById('menu-row')!.focus()
     rerender(<Harness chip={false} />)
     await nextFrame()
     expect(document.activeElement?.id).toBe('t1-root')
@@ -71,9 +74,26 @@ describe('useTabStripUnmountFocusRestore', () => {
 
   it('leaves focus alone when the workspace switches before the deferred restore runs', async () => {
     const { rerender } = render(<Harness chip />)
+    document.getElementById('menu-row')!.focus()
     rerender(<Harness chip={false} />)
     useAppStore.setState({ activeWorktreeId: 'wt-other' })
     await nextFrame()
-    expect(document.activeElement).toBe(document.body)
+    expect(document.activeElement?.id).toBe('menu-row')
+  })
+
+  it('preserves focus acquired outside the strip before or after the chip unmounts', async () => {
+    const input = document.getElementById('other-group-terminal')!
+    for (const focusBeforeUnmount of [true, false]) {
+      const { rerender, unmount } = render(<Harness chip />)
+      document.getElementById('menu-row')!.focus()
+      if (focusBeforeUnmount) {
+        input.focus()
+      }
+      rerender(<Harness chip={false} />)
+      input.focus()
+      await nextFrame()
+      expect(document.activeElement).toBe(input)
+      unmount()
+    }
   })
 })

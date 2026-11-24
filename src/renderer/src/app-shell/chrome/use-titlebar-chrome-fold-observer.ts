@@ -2,7 +2,10 @@ import { useLayoutEffect, useRef, type RefObject } from 'react'
 import {
   decideTitlebarChromeFold,
   getTitlebarChromeFoldLevel,
+  getTitlebarChromeMeasurementLevel,
   setTitlebarChromeFoldLevel,
+  setTitlebarChromeMeasurementLevel,
+  useTitlebarHeaderFoldLevel,
   useTitlebarChromeOwnerStrip,
   type TitlebarChromeFoldLevel
 } from './titlebar-chrome-fold'
@@ -11,36 +14,37 @@ import {
 export function useTitlebarChromeFoldObserver({
   active,
   controlsRef,
-  headerShapeKey
+  headerShapeKey,
+  layoutHeaderWidth
 }: {
   /** The header floats over the top-left pane (left sidebar collapsed, workspace chrome shown). */
   active: boolean
   controlsRef: RefObject<HTMLDivElement | null>
   /** Changes when the header's non-folding contents change (full screen, app name, view). */
   headerShapeKey: string
+  /** The header width that the shell has applied to the pane's spacer. */
+  layoutHeaderWidth: number
 }): void {
   const ownerStrip = useTitlebarChromeOwnerStrip()
+  const headerLevel = useTitlebarHeaderFoldLevel()
   const headerWidthByLevelRef = useRef<Partial<Record<TitlebarChromeFoldLevel, number>>>({})
 
   // Cached widths of other levels are stale now and folded parts can't be measured, so re-measure
   // from full chrome (this layout pass, before paint) rather than guess.
   const shapeKeyRef = useRef(headerShapeKey)
-  // Keep the old hysteresis until the new geometry settles, including intermediate fold levels.
-  const levelBeforeResetRef = useRef<TitlebarChromeFoldLevel | null>(null)
   useLayoutEffect(() => {
     if (shapeKeyRef.current === headerShapeKey) {
       return
     }
     shapeKeyRef.current = headerShapeKey
     headerWidthByLevelRef.current = {}
-    levelBeforeResetRef.current = levelBeforeResetRef.current ?? getTitlebarChromeFoldLevel()
-    setTitlebarChromeFoldLevel(0)
+    // Only the measured header unfolds. The pane keeps its controls and focus until the new level is settled.
+    setTitlebarChromeMeasurementLevel(0)
   }, [headerShapeKey])
 
   useLayoutEffect(() => {
     const controls = controlsRef.current
     if (!active || !ownerStrip || !controls) {
-      levelBeforeResetRef.current = null
       setTitlebarChromeFoldLevel(0)
       return undefined
     }
@@ -49,20 +53,30 @@ export function useTitlebarChromeFoldObserver({
       if (strip === 0) {
         return
       }
-      const current = getTitlebarChromeFoldLevel()
+      const committed = getTitlebarChromeFoldLevel()
+      const measurement = getTitlebarChromeMeasurementLevel()
+      const current = measurement ?? committed
+      if (headerLevel !== current || controls.dataset.titlebarFoldLevel !== String(current)) {
+        return
+      }
       const header = controls.getBoundingClientRect().width
+      if (Math.abs(header - layoutHeaderWidth) > 0.5) {
+        return
+      }
       const cache = headerWidthByLevelRef.current
       cache[current] = header
-      const hysteresisFrom = levelBeforeResetRef.current ?? current
       const next = decideTitlebarChromeFold({
         previous: current,
         stripWidth: strip,
         headerWidth: header,
         foldableWidthTo: (level) => measureFoldableWidth(controls, current, level),
         cachedHeaderWidths: cache,
-        hysteresisFrom
+        hysteresisFrom: committed
       })
-      levelBeforeResetRef.current = next > current && next < hysteresisFrom ? hysteresisFrom : null
+      if (measurement === 0 && next === 1) {
+        setTitlebarChromeMeasurementLevel(1)
+        return
+      }
       setTitlebarChromeFoldLevel(next)
     }
     evaluate()
@@ -70,7 +84,7 @@ export function useTitlebarChromeFoldObserver({
     observer.observe(ownerStrip)
     observer.observe(controls)
     return () => observer.disconnect()
-  }, [active, ownerStrip, controlsRef])
+  }, [active, ownerStrip, controlsRef, headerLevel, headerShapeKey, layoutHeaderWidth])
 
   useLayoutEffect(() => () => setTitlebarChromeFoldLevel(0), [])
 }

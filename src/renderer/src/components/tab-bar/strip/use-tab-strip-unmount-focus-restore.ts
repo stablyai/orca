@@ -1,9 +1,9 @@
-import { useEffect, useLayoutEffect, useRef } from 'react'
+import { useLayoutEffect, useRef } from 'react'
 import { resolveFloatingWorkspaceSurfaceModel } from '@/components/floating-terminal/workspace/floating-workspace-surface-model'
 import { selectFloatingWorkspacePanelVisible } from '@/store/workspaces/floating/floating-workspace-panel-selector'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../../shared/workspace/identity/floating-workspace-id'
 import { useAppStore } from '../../../store'
-import { captureFocusBeforeRestore, restoreTabStripFocus } from './tab-strip-focus-restore'
+import { captureTabStripMenuFocus, restoreTabStripFocus } from './tab-strip-focus-restore'
 
 /** Read at execution from the store, so a deferred restore never trusts a stale render. */
 export function isGroupFocusedInStore(worktreeId: string, groupId: string): boolean {
@@ -26,25 +26,30 @@ export function useTabStripUnmountFocusRestore({
   surface,
   activeId,
   worktreeId,
-  groupId
+  groupId,
+  menuId
 }: {
   open: boolean
   surface: HTMLElement | null
   activeId: string | null
   worktreeId: string
   groupId: string
+  menuId: string
 }): void {
-  const latestRef = useRef({ open, surface, activeId, worktreeId, groupId })
+  const latestRef = useRef({ open, surface, activeId, worktreeId, groupId, menuId })
   useLayoutEffect(() => {
-    latestRef.current = { open, surface, activeId, worktreeId, groupId }
+    latestRef.current = { open, surface, activeId, worktreeId, groupId, menuId }
   })
-  useEffect(
+  useLayoutEffect(
     () => () => {
       const latest = latestRef.current
       if (!latest.open) {
         return
       }
-      const focusBefore = captureFocusBeforeRestore()
+      const focusBefore = captureTabStripMenuFocus(latest.surface, latest.menuId)
+      if (!focusBefore) {
+        return
+      }
       requestAnimationFrame(() =>
         restoreTabStripFocus({
           strip: latest.surface,

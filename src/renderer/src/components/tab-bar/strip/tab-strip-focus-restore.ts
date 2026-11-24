@@ -2,9 +2,16 @@ function isShown(element: HTMLElement | null | undefined): element is HTMLElemen
   return Boolean(element && element.isConnected && element.offsetParent !== null)
 }
 
-/** Remember where focus is when a menu closes, so a deferred restore can tell if the user moved it. */
-export function captureFocusBeforeRestore(): Element | null {
-  return document.activeElement
+export function captureTabStripMenuFocus(
+  strip: HTMLElement | null,
+  menuId: string
+): Element | null {
+  const active = document.activeElement
+  const menu = active?.closest('[data-tab-strip-menu]')
+  if (active && (strip?.contains(active) || menu?.getAttribute('data-tab-strip-menu') === menuId)) {
+    return active
+  }
+  return null
 }
 
 /**

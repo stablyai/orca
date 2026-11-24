@@ -26,7 +26,7 @@ import {
   registerTitlebarSidebarToggle,
   unregisterTitlebarSidebarToggle
 } from './titlebar-sidebar-toggle-ref'
-import { useTitlebarChromeFoldLevel } from './titlebar-chrome-fold'
+import { useTitlebarHeaderFoldLevel } from './titlebar-chrome-fold'
 
 type TitlebarControlRole = 'menu' | 'toggle' | 'back' | 'forward'
 type TitlebarControls = Record<TitlebarControlRole, HTMLButtonElement | null>
@@ -124,13 +124,14 @@ export function TitlebarLeftControls({ layout }: { layout: AppChromeLayout }): R
   }, [])
   useTitlebarControlFocusHandoff(controlsRef)
   // Only the floating header folds: it shares the top-left pane's strip.
-  const storedFoldLevel = useTitlebarChromeFoldLevel()
+  const storedFoldLevel = useTitlebarHeaderFoldLevel()
   const foldLevel = layout.leftTitlebarChromeLayout.isFloating ? storedFoldLevel : 0
 
   return (
     // Measure the whole row for tab-strip spacing. w-max prevents the collapsed w-0 wrapper shrinking Windows text to one glyph.
     <div
       ref={layout.titlebarLeftControlsRef}
+      data-titlebar-fold-level={foldLevel}
       className={`flex h-full shrink-0 items-center${
         layout.leftTitlebarChromeLayout.isFloating ? ' w-max' : ' w-full'
       }`}

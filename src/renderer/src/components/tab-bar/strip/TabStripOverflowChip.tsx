@@ -1,4 +1,4 @@
-import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { Check, Laptop, Smartphone } from 'lucide-react'
 import { cn } from '@/lib/class-names'
 import { useTranslate } from '@/i18n/use-translate'
@@ -21,7 +21,7 @@ import { useAppStateValue } from '@/store/retained-views/app-state-view'
 import { formatKeybindingList } from '../../../../../shared/keybindings/formatting'
 import { getEffectiveKeybindingsForAction } from '../../../../../shared/keybindings/effective'
 import { parseKeybinding } from '../../../../../shared/keybindings/parser'
-import { captureFocusBeforeRestore, restoreTabStripFocus } from './tab-strip-focus-restore'
+import { captureTabStripMenuFocus, restoreTabStripFocus } from './tab-strip-focus-restore'
 import {
   isGroupFocusedInStore,
   useTabStripUnmountFocusRestore
@@ -187,7 +187,8 @@ export function TabStripOverflowChip({
 }): React.JSX.Element {
   const t = useTranslate()
   const [open, setOpen] = useState(false)
-  const pendingFocusIdRef = useRef<string | null>(null)
+  const menuId = useId()
+  const pendingPickRef = useRef<{ id: string; focusBefore: Element | null } | null>(null)
   const floatingPanel = surface?.closest<HTMLElement>('[data-floating-terminal-panel]') ?? null
   const indexBindings = useTabIndexBindings()
   // tab.selectByIndex counts unified tabs in strip order; paired rows have no digit.
@@ -222,7 +223,7 @@ export function TabStripOverflowChip({
   useLayoutEffect(() => {
     surfaceRef.current = surface
   })
-  useTabStripUnmountFocusRestore({ open, surface, activeId, worktreeId, groupId })
+  useTabStripUnmountFocusRestore({ open, surface, activeId, worktreeId, groupId, menuId })
 
   const count = chipOnly ? entries.length : hiddenIds.size
   const countLabel = count > 99 ? '99+' : String(count)
@@ -276,6 +277,7 @@ export function TabStripOverflowChip({
         </TooltipTrigger>
         <DropdownMenuContent
           portalContainer={floatingPanel}
+          data-tab-strip-menu={menuId}
           data-floating-terminal-no-drag={floatingPanel ? '' : undefined}
           align="end"
           sideOffset={4}
@@ -294,26 +296,28 @@ export function TabStripOverflowChip({
             }
           }}
           onCloseAutoFocus={(event) => {
-            const pickedId = pendingFocusIdRef.current
-            pendingFocusIdRef.current = null
+            const pick = pendingPickRef.current
+            pendingPickRef.current = null
             // Closed because the group lost focus: leave focus where the user put it.
             if (!isGroupFocused || !isGroupFocusedInStore(worktreeId, groupId)) {
               event.preventDefault()
               return
             }
-            if (pickedId === null) {
+            if (pick === null) {
               return
             }
             event.preventDefault()
-            const focusBefore = captureFocusBeforeRestore()
+            if (!pick.focusBefore) {
+              return
+            }
             // Wait for the re-plan that brings the picked tab into view.
             requestAnimationFrame(() =>
               requestAnimationFrame(() =>
                 restoreTabStripFocus({
                   strip: surfaceRef.current,
-                  slotId: pickedId,
+                  slotId: pick.id,
                   stillOwned: () => isGroupFocusedInStore(worktreeId, groupId),
-                  focusBefore
+                  focusBefore: pick.focusBefore
                 })
               )
             )
@@ -336,7 +340,10 @@ export function TabStripOverflowChip({
                 shortcut={isGroupFocused ? shortcutForIndex(indexBindings, index) : null}
                 generatedTabTitlesEnabled={generatedTabTitlesEnabled}
                 onSelect={() => {
-                  pendingFocusIdRef.current = entry.id
+                  pendingPickRef.current = {
+                    id: entry.id,
+                    focusBefore: captureTabStripMenuFocus(surfaceRef.current, menuId)
+                  }
                   onSelect(entry)
                 }}
               />
