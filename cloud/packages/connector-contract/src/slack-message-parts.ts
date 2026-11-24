@@ -23,11 +23,14 @@ const FileSchema = z.looseObject({
   size: z.number().nullish()
 })
 const BlocksSchema = z.array(z.unknown()).nullish()
+// Read item by item, so one malformed file or block leaves out only itself.
+const ListSchema = z.array(z.unknown()).nullish()
 const InnerMessageSchema = z.looseObject({
   text: z.string().nullish(),
   blocks: BlocksSchema,
-  files: z.array(FileSchema).nullish()
+  files: ListSchema
 })
+const MessageBlockSchema = z.looseObject({ message: InnerMessageSchema.nullish() })
 const AttachmentSchema = z.looseObject({
   is_share: z.boolean().nullish(),
   is_msg_unfurl: z.boolean().nullish(),
@@ -44,16 +47,14 @@ const AttachmentSchema = z.looseObject({
   text: z.string().nullish(),
   fallback: z.string().nullish(),
   blocks: BlocksSchema,
-  files: z.array(FileSchema).nullish(),
-  message_blocks: z
-    .array(z.looseObject({ message: InnerMessageSchema.nullish() }))
-    .nullish()
+  files: ListSchema,
+  message_blocks: ListSchema
 })
 const MessageSchema = z.looseObject({
   text: z.string().nullish(),
   blocks: BlocksSchema,
-  files: z.array(FileSchema).nullish(),
-  attachments: z.array(z.unknown()).nullish()
+  files: ListSchema,
+  attachments: ListSchema
 })
 
 // Rich text's words: sections, lists, quotes and code, with links, mentions and emoji as Slack writes
@@ -70,9 +71,12 @@ const RichElement = z.looseObject({
   elements: z.array(z.unknown()).nullish()
 })
 
-function richText(node: unknown): string {
-  const element = RichElement.safeParse(node)
-  if (!element.success) {
+// Past this depth a block is left out rather than read: Slack nests far less.
+const MAX_RICH_TEXT_DEPTH = 32
+
+function richText(node: unknown, depth = 0): string {
+  const element = depth > MAX_RICH_TEXT_DEPTH ? undefined : RichElement.safeParse(node)
+  if (!element?.success) {
     return ''
   }
   const { type, text, url, elements } = element.data
@@ -92,18 +96,18 @@ function richText(node: unknown): string {
     case 'emoji':
       return element.data.name ? `:${element.data.name}:` : ''
     case 'rich_text_list':
-      return (elements ?? []).map((item) => `• ${richText(item)}`).join('\n')
+      return (elements ?? []).map((item) => `• ${richText(item, depth + 1)}`).join('\n')
     case 'rich_text_quote':
-      return richText({ type: 'rich_text_section', elements })
+      return richText({ type: 'rich_text_section', elements }, depth + 1)
         .split('\n')
         .map((line) => `> ${line}`)
         .join('\n')
     case 'rich_text_preformatted':
-      return `\`\`\`\n${richText({ type: 'rich_text_section', elements })}\n\`\`\``
+      return `\`\`\`\n${richText({ type: 'rich_text_section', elements }, depth + 1)}\n\`\`\``
     case 'rich_text':
-      return (elements ?? []).map(richText).join('\n')
+      return (elements ?? []).map((item) => richText(item, depth + 1)).join('\n')
     default:
-      return (elements ?? []).map(richText).join('')
+      return (elements ?? []).map((item) => richText(item, depth + 1)).join('')
   }
 }
 
@@ -140,6 +144,20 @@ const fileOf = (file: z.infer<typeof FileSchema>): ConnectorMessageFile | null =
       }
     : null
 
+/** Slack's file list, each read alone: a malformed one is left out and counted as bad. */
+function filesOf(raw: readonly unknown[] | null | undefined): { files: ConnectorMessageFile[]; bad: number } {
+  let bad = 0
+  const files = (raw ?? []).flatMap((item) => {
+    const file = FileSchema.safeParse(item)
+    if (!file.success) {
+      bad += 1
+      return []
+    }
+    return fileOf(file.data) ?? []
+  })
+  return { files, bad }
+}
+
 const threadOfLink = (link: string | null | undefined): string | undefined => {
   try {
     const thread = link ? new URL(link).searchParams.get('thread_ts') : null
@@ -152,16 +170,17 @@ const threadOfLink = (link: string | null | undefined): string | undefined => {
 function sharedOf(
   attachment: z.infer<typeof AttachmentSchema>,
   workspaceId: string
-): { shared: ConnectorSharedMessage; files: ConnectorMessageFile[] } {
-  const inner = (attachment.message_blocks ?? []).flatMap((block) => (block.message ? [block.message] : []))
+): { shared: ConnectorSharedMessage; files: ConnectorMessageFile[]; bad: number } {
+  const inner = (attachment.message_blocks ?? []).flatMap((block) => {
+    const message = MessageBlockSchema.safeParse(block).data?.message
+    return message ? [message] : []
+  })
   const words =
     slackMessageText(attachment) ||
     inner.map((message) => slackMessageText(message)).join('\n') ||
     attachment.fallback ||
     ''
-  const files = [...(attachment.files ?? []), ...inner.flatMap((message) => message.files ?? [])].flatMap(
-    (file) => fileOf(file) ?? []
-  )
+  const { files, bad } = filesOf([...(attachment.files ?? []), ...inner.flatMap((message) => message.files ?? [])])
   const { channel_id: channel, ts } = attachment
   const team = attachment.channel_team ?? workspaceId
   const ref =
@@ -187,7 +206,8 @@ function sharedOf(
       text: words.slice(0, MESSAGE_PART_LIMITS.maxSharedText),
       ...(words.length > MESSAGE_PART_LIMITS.maxSharedText ? { cut: true as const } : {})
     },
-    files
+    files,
+    bad
   }
 }
 
@@ -225,7 +245,7 @@ export function slackMessageParts(raw: unknown, workspaceId: string): ConnectorM
     (attachment.is_msg_unfurl === true && Boolean(attachment.channel_id) && Boolean(attachment.ts))
   const allShares = attachments.filter(isShared).map((attachment) => sharedOf(attachment, workspaceId))
   // A share past the limit is left out with its files.
-  left += allShares.slice(MESSAGE_PART_LIMITS.maxShared).reduce((sum, share) => sum + share.files.length, 0)
+  left += allShares.slice(MESSAGE_PART_LIMITS.maxShared).reduce((sum, share) => sum + share.files.length + share.bad, 0)
   const shares = keep(allShares, MESSAGE_PART_LIMITS.maxShared)
   const links = keep(
     attachments.filter((attachment) => !isShared(attachment)).flatMap((attachment) => linkOf(attachment) ?? []),
@@ -239,8 +259,11 @@ export function slackMessageParts(raw: unknown, workspaceId: string): ConnectorM
     left += files.length - kept.length
     return kept
   }
-  const files = take((message.files ?? []).flatMap((file) => fileOf(file) ?? []))
-  const shared = shares.map(({ shared: item, files: inner }) => {
+  const own = filesOf(message.files)
+  left += own.bad
+  const files = take(own.files)
+  const shared = shares.map(({ shared: item, files: inner, bad }) => {
+    left += bad
     const kept = take(inner)
     return kept.length > 0 ? { ...item, files: kept } : item
   })

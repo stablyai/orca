@@ -146,4 +146,44 @@ describe('slack message parts', () => {
     expect(slackMessageText({ text: 'ship it', blocks })).toBe('ship it <https://example.com|here>')
     expect(slackMessageText({ text: 'something else', blocks })).toBe('something else')
   })
+
+  it('leaves out a malformed file or block alone, counting it, and a too-deep block’s words', () => {
+    let deep: unknown = { type: 'text', text: 'too deep' }
+    for (let level = 0; level < 20_000; level += 1) {
+      deep = { type: 'rich_text_section', elements: [deep] }
+    }
+    const parts = slackMessageParts(
+      {
+        files: [file('F1'), { name: 'no id.png' }],
+        blocks: [{ type: 'rich_text', elements: [deep] }],
+        attachments: [
+          {
+            is_share: true,
+            channel_id: 'C2',
+            ts: '1700000000.000100',
+            text: 'the deploy log',
+            files: [{ id: 42 }, file('F2')],
+            message_blocks: ['not a block', { message: { files: [file('F3')] } }]
+          }
+        ]
+      },
+      'T1'
+    )
+    expect(parts).toEqual({
+      files: [{ id: 'F1', name: 'F1.png', type: 'image/png', size: 2048 }],
+      shared: [
+        {
+          ref: 'slack:T1:C2:1700000000.000100:1700000000.000100',
+          at: 1700000000000,
+          text: 'the deploy log',
+          files: [
+            { id: 'F2', name: 'F2.png', type: 'image/png', size: 2048 },
+            { id: 'F3', name: 'F3.png', type: 'image/png', size: 2048 }
+          ]
+        }
+      ],
+      partsLeftOut: 2
+    })
+    expect(slackMessageText({ text: 'fwd', blocks: [{ type: 'rich_text', elements: [deep] }] })).toBe('fwd')
+  })
 })

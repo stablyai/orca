@@ -13,29 +13,30 @@ const File = z.object({
 })
 type MessageFile = z.infer<typeof File>
 
-// One bad element is left out; the rest, and the message, still go.
-const listOf = <T>(item: z.ZodType<T>, max: number) =>
+// One bad element is left out; the rest, and the message, still go. What is past a part's limit
+// stays here so the count of what isn't shown includes it.
+const listOf = <T>(item: z.ZodType<T>) =>
   z
     .array(z.unknown())
     .transform((items) =>
-      items
-        .flatMap((entry) => {
-          const parsed = item.safeParse(entry)
-          return parsed.success ? [parsed.data] : []
-        })
-        .slice(0, max)
+      items.flatMap((entry) => {
+        const parsed = item.safeParse(entry)
+        return parsed.success ? [parsed.data] : []
+      })
     )
     .optional()
     .catch(undefined)
 
+const LIMITS = { files: 10, shared: 3, links: 3, sharedUrl: 512 } as const
+
 const Shared = z.object({
   author: z.string().optional().catch(undefined),
   ref: z.string().optional().catch(undefined),
-  url: z.string().optional().catch(undefined),
+  url: z.string().max(LIMITS.sharedUrl).optional().catch(undefined),
   at: z.number().int().nonnegative().max(8_640_000_000_000_000).optional().catch(undefined),
   text: z.string().transform((text) => text.slice(0, 2_000)),
   cut: z.literal(true).optional().catch(undefined),
-  files: listOf(File, 10)
+  files: listOf(File)
 })
 const Link = z.object({
   url: z.string().transform((url) => url.slice(0, 1_000)),
@@ -52,9 +53,9 @@ const Link = z.object({
 })
 
 const MessageParts = z.object({
-  files: listOf(File, 10),
-  shared: listOf(Shared, 3),
-  links: listOf(Link, 3),
+  files: listOf(File),
+  shared: listOf(Shared),
+  links: listOf(Link),
   partsLeftOut: z.number().int().positive().optional().catch(undefined)
 })
 export type MessageParts = z.infer<typeof MessageParts>
@@ -105,10 +106,10 @@ export function messagePartsLines(value: unknown): string[] {
       listed += 1
     }
   }
-  for (const file of parts.files ?? []) {
+  for (const file of (parts.files ?? []).slice(0, LIMITS.files)) {
     add(fileLine(file, ''))
   }
-  for (const shared of parts.shared ?? []) {
+  for (const shared of (parts.shared ?? []).slice(0, LIMITS.shared)) {
     const ref = checkedSlackRef(shared.ref)
     const facts = [
       [
@@ -122,11 +123,11 @@ export function messagePartsLines(value: unknown): string[] {
     add(
       `[Orca: ${facts} ${MARKER}]\n${fenceQuotedText([url, shared.text].filter(Boolean).join('\n'))}`
     )
-    for (const file of shared.files ?? []) {
+    for (const file of (shared.files ?? []).slice(0, LIMITS.files)) {
       add(fileLine(file, ' in that shared message'))
     }
   }
-  for (const link of parts.links ?? []) {
+  for (const link of (parts.links ?? []).slice(0, LIMITS.links)) {
     add(
       `[Orca: a link preview in it ${MARKER}]\n${fenceQuotedText(
         [link.url, link.title, link.text].filter(Boolean).join('\n')
@@ -143,29 +144,58 @@ export function messagePartsLines(value: unknown): string[] {
     : lines
 }
 
-const FORWARDED_PARTS = new Set(['shared', 'links', 'partsLeftOut'])
+// What a read's answer, each message in it and each file may carry to a bot. Anything else the
+// cloud sends is dropped, so someone else's words can't ride in under another name.
+const READ_FIELDS = ['target', 'messages', 'before', 'note', 'download', 'facts']
+const MESSAGE_FIELDS = [
+  'ref',
+  'label',
+  'exact',
+  'key',
+  'author',
+  'app',
+  'text',
+  'at',
+  'url',
+  'files'
+]
+const FORWARDED_FIELDS = ['shared', 'links', 'partsLeftOut']
+const FILE_FIELDS = ['id', 'name', 'type', 'size']
+const DOWNLOAD_FIELDS = [...FILE_FIELDS, 'data', 'url', 'ticket']
+const REF_FIELDS = ['ref', 'label', 'exact', 'key']
 
-/** A read's answer as a bot gets it. Shared messages and link previews are someone else's words, so
- *  they stay only on a read the bot asked for with --only, which this machine marks; any other read
- *  drops them, whatever the cloud sent. The marker is this machine's, never the cloud's. */
+const isRecord = (value: unknown): value is Record<string, unknown> =>
+  typeof value === 'object' && value !== null && !Array.isArray(value)
+const picked = (
+  value: Record<string, unknown>,
+  fields: readonly string[]
+): Record<string, unknown> =>
+  Object.fromEntries(
+    fields.filter((field) => Object.hasOwn(value, field)).map((field) => [field, value[field]])
+  )
+
+/** A read's answer as a bot gets it, rebuilt from the fields a read has. Shared messages and link
+ *  previews are someone else's words, so they stay only on a read the bot asked for with --only,
+ *  which this machine marks; any other read drops them, whatever the cloud sent. */
 export function botReadResult(
   answer: Record<string, unknown>,
   only: boolean
 ): Record<string, unknown> {
-  const { messageParts: _cloudMarker, ...result } = answer
-  if (only) {
-    return { ...result, messageParts: true }
+  const result = picked(answer, READ_FIELDS)
+  const fields = only ? [...MESSAGE_FIELDS, ...FORWARDED_FIELDS] : MESSAGE_FIELDS
+  const message = (value: Record<string, unknown>) => {
+    const kept = picked(value, fields)
+    return Array.isArray(kept.files)
+      ? { ...kept, files: kept.files.filter(isRecord).map((file) => picked(file, FILE_FIELDS)) }
+      : kept
   }
-  return Array.isArray(result.messages)
-    ? {
-        ...result,
-        messages: result.messages.map((message: unknown) =>
-          typeof message === 'object' && message !== null
-            ? Object.fromEntries(
-                Object.entries(message).filter(([key]) => !FORWARDED_PARTS.has(key))
-              )
-            : message
-        )
-      }
-    : result
+  return {
+    ...result,
+    ...(isRecord(result.target) ? { target: picked(result.target, REF_FIELDS) } : {}),
+    ...(isRecord(result.download) ? { download: picked(result.download, DOWNLOAD_FIELDS) } : {}),
+    ...(Array.isArray(result.messages)
+      ? { messages: result.messages.filter(isRecord).map(message) }
+      : {}),
+    ...(only ? { messageParts: true } : {})
+  }
 }
