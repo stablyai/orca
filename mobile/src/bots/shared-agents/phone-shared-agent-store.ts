@@ -62,8 +62,6 @@ const PhoneSharedAgentSecrets = z.object({
 export type PhoneSharedAgent = z.infer<typeof PhoneSharedAgentListing> &
   z.infer<typeof PhoneSharedAgentSecrets>
 
-const LISTING_KEYS = Object.keys(PhoneSharedAgentListing.shape)
-
 /** Read once; every change is kept in memory at once and written behind, in order. */
 export class PhoneSharedAgentStore {
   private entries: PhoneSharedAgent[] = []
@@ -109,11 +107,8 @@ export class PhoneSharedAgentStore {
 
   // The index after the secrets, so a listed entry always has its secrets to read.
   private write(secrets: () => Promise<void>): void {
-    const index = JSON.stringify(
-      this.entries.map((entry) =>
-        Object.fromEntries(LISTING_KEYS.map((key) => [key, entry[key as keyof PhoneSharedAgent]]))
-      )
-    )
+    // The listing schema drops every key it doesn't name, the secrets among them.
+    const index = JSON.stringify(this.entries.map((entry) => PhoneSharedAgentListing.parse(entry)))
     this.writes = this.writes
       .then(secrets)
       .then(() => AsyncStorage.setItem(INDEX_KEY, index))

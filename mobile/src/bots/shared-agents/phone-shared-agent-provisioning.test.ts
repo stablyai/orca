@@ -18,6 +18,7 @@ vi.mock('../../host-credentials/pairing-keychain', () => ({
 }))
 vi.mock('react-native', () => ({ Platform: { OS: 'ios' } }))
 
+import { SharedBotsPhoneProvisionParams } from '../../../../src/shared/bots/bot-share-phone'
 import { sealBotTeamShareOffer } from '../../../../src/shared/bots/bot-team-share-seal'
 import { hashRelayCredential } from '../../../../src/shared/remote-runtime/relay/relay-credential-hash'
 import type { RpcResponse } from '../../../../src/shared/remote-runtime/rpc/rpc-response-shape'
@@ -35,14 +36,14 @@ const share = {
   environmentId: 'env-1'
 }
 
-type Ask = { devicePublicKey: string; sealKey: string; credentialHash: string }
+type Ask = SharedBotsPhoneProvisionParams
 
 /** The computer, answering as the host would: the offer sealed to the phone, under `hostKey`. */
 function computer(hostKey = PINNED) {
   const asks: Ask[] = []
   const client = {
     sendRequest: async (_method: string, params?: unknown): Promise<RpcResponse> => {
-      const ask = params as Ask
+      const ask = SharedBotsPhoneProvisionParams.parse(params)
       asks.push(ask)
       const offer = {
         v: 1 as const,
