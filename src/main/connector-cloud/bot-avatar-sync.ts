@@ -12,6 +12,7 @@ import type { BotController } from '../bots/bot-controller'
 import type { BotSlackIcons } from '../bots/bot-slack-icon-store'
 import type { BotSlackIconShownRecords } from '../bots/bot-slack-icon-shown'
 import { BotAvatarOwed } from './bot-avatar-owed'
+import { connectorStopNeedsSignIn, SIGNED_OUT } from './connector-cloud-request'
 import { BotAvatarSent, lookOf, pictureKey } from './bot-avatar-sent'
 import type { ConnectorBack } from './connector-reach'
 import { botsCloudClient } from './bots-cloud-client'
@@ -237,6 +238,7 @@ export class BotAvatarSync {
     let carried = false
     let left = false
     let sentAs: string | null = null
+    let signInNeeded = false
     try {
       const png = parsed.kind === 'upload' ? await this.deps.bots.readAvatarImage(bot.id) : null
       const icon = parsed.kind === 'mascot' ? await this.mascotIcon(bot) : null
@@ -270,6 +272,9 @@ export class BotAvatarSync {
         )
       }
       refused = result?.ok === false && result.error === 'unknown_bot'
+      signInNeeded =
+        result?.ok === false &&
+        (result.error === SIGNED_OUT.error || connectorStopNeedsSignIn(result.error))
     } catch (error) {
       console.error('Failed to send the bot’s picture to the cloud:', error)
     }
@@ -324,7 +329,9 @@ export class BotAvatarSync {
       // flight); other bots already had theirs.
       if (stepped || recoveries !== this.recoveries) {
         this.resend(bot.id)
-      } else if (carried) {
+      } else if (carried || signInNeeded) {
+        // A drawing, or any picture while the account must sign in again, waits for a real step (the
+        // sign-in is one), never the minute timer.
         this.owed.add(bot.id)
       } else {
         this.retryLater()

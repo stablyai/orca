@@ -687,3 +687,59 @@ it('sends nothing and starts no timer for a look changed while signed out', asyn
     vi.useRealTimers()
   }
 })
+
+it('leaves a picture the account must sign in again for to the sign-in, never the minute timer', async () => {
+  vi.useFakeTimers()
+  try {
+    let bot = {
+      id: 'bot-1',
+      folderWorkspaceId: 'home-1',
+      avatar: 'mascot:A1',
+      avatarColor: '#1f2126',
+      avatarOutfit: null,
+      slack: { appId: 'A1', teamId: 'T1' },
+      github: null
+    }
+    let calls = 0
+    let refusing = true
+    const sync = new BotAvatarSync({
+      bots: {
+        enabled: () => true,
+        list: () => [bot],
+        readAvatarImage: async () => null,
+        slackIcons: {
+          shownRecords: new BotSlackIconShownRecords({
+            read: async () => null,
+            write: async () => {},
+            exists: () => true
+          }),
+          read: async () => null
+        }
+      },
+      cloud: () => ({
+        knownAccount: () => 'acct-1',
+        call: async <T extends z.ZodType>(
+          _path: string,
+          _body: unknown,
+          schema: T
+        ): Promise<ConnectorResult<z.infer<T>>> => {
+          calls += 1
+          return refusing
+            ? { ok: false, status: 403, error: 'recent_sign_in_required', retryAfterMs: null }
+            : { ok: true, value: schema.parse(undefined) }
+        }
+      })
+    })
+    bot = { ...bot, avatarColor: '#ffffff' }
+    sync.changed()
+    await vi.advanceTimersByTimeAsync(10 * 60_000)
+    expect(calls).toBe(1)
+    expect(vi.getTimerCount()).toBe(0)
+    refusing = false
+    sync.retryOwed('signedIn')
+    await vi.advanceTimersByTimeAsync(0)
+    expect(calls).toBe(2)
+  } finally {
+    vi.useRealTimers()
+  }
+})
