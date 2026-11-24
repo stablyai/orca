@@ -138,6 +138,7 @@ function hosts(
   const memory = memorySharedBotHomes(dir)
   const service = new SharedBotHosts({
     userDataPath: dir,
+    account: () => 'ada',
     cloud: () => cloud,
     platform: NODE_RELAY_CLIENT_PLATFORM,
     publish: (state) => published.push(state.hosts.map((view) => view.shareId)),
@@ -417,6 +418,7 @@ describe('a held message and a cloud read that cross', () => {
     writeFileSync(join(dir, SHARED_BOT_HOSTS_FILENAME), JSON.stringify({ v: 1, shares: [kept] }))
     const service = new SharedBotHosts({
       userDataPath: dir,
+      account: () => 'ada',
       cloud: () => ({
         mine: async () => ({ ok: true, value: { v: 1, shares: [share({ hostKey: HOST_KEY })] } }),
         accept: async () => ({ ok: true, value: { status: 'queued' } }),
@@ -444,6 +446,7 @@ describe('a shared agent’s home on this computer', () => {
     const views: SharedBotHostView[][] = []
     const service = new SharedBotHosts({
       userDataPath: dir,
+      account: () => 'ada',
       cloud: () => ({
         mine: async () => ({ ok: true, value: { v: 1, shares } }),
         accept: async () => ({ ok: true, value: { status: 'queued' } }),

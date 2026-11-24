@@ -20,7 +20,7 @@ type Reply = 'shares' | 'not-found' | 'unreachable'
 
 /** The account's SharedBotHosts over the real shares client and connector transport; each read of
  *  the shares route gets the next reply. */
-function sharingHosts(replies: Reply[]) {
+function sharingHosts(replies: Reply[], account: () => string | null = () => 'ada') {
   const dir = mkdtempSync(join(tmpdir(), 'shared-bot-sharing-'))
   dirs.push(dir)
   const fetchImpl: typeof globalThis.fetch = async (input) => {
@@ -41,6 +41,7 @@ function sharingHosts(replies: Reply[]) {
   const published: SharedBotHostsState[] = []
   const hosts = new SharedBotHosts({
     userDataPath: dir,
+    account,
     cloud: () => sharedBotsCloud(transport),
     platform: NODE_RELAY_CLIENT_PLATFORM,
     publish: (state) => published.push(state),
@@ -75,12 +76,30 @@ describe('whether this account’s Orca Cloud takes shares', () => {
     }
   })
 
+  it('forgets one account’s answer when another signs in, even when its read fails', async () => {
+    let account = 'ada'
+    const { hosts, published } = sharingHosts(['shares', 'unreachable', 'shares'], () => account)
+    try {
+      await hosts.refresh()
+      expect(published.at(-1)!.sharing).toBe(true)
+      account = 'grace'
+      await hosts.refresh()
+      expect(published.map((state) => state.sharing)).toEqual([true, null, null])
+      await hosts.refresh()
+      expect(published.at(-1)!.sharing).toBe(true)
+    } finally {
+      hosts.stop()
+      await hosts.flushed()
+    }
+  })
+
   it('says no without an Orca Cloud', async () => {
     const dir = mkdtempSync(join(tmpdir(), 'shared-bot-sharing-'))
     dirs.push(dir)
     const published: SharedBotHostsState[] = []
     const hosts = new SharedBotHosts({
       userDataPath: dir,
+      account: () => 'ada',
       cloud: () => null,
       platform: NODE_RELAY_CLIENT_PLATFORM,
       publish: (state) => published.push(state),

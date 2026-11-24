@@ -42,6 +42,7 @@ async function awayHost(hostKey?: string) {
   const holds: ConnectorShareHoldRequest[] = []
   const hosts = new SharedBotHosts({
     userDataPath,
+    account: () => 'ada',
     homes: memorySharedBotHomes(userDataPath).homes,
     platform: NODE_RELAY_CLIENT_PLATFORM,
     cloud: () => ({

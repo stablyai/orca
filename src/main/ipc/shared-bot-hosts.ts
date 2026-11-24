@@ -31,6 +31,7 @@ export function registerSharedBotHostsHandlers(args: {
       const cloud = args.cloud()
       return cloud ? sharedBotsCloud(cloud) : null
     },
+    account: () => args.cloud()?.signedInAccount() ?? null,
     publish: (state: SharedBotHostsState) => {
       for (const window of BrowserWindow.getAllWindows()) {
         if (!window.webContents.isDestroyed()) {

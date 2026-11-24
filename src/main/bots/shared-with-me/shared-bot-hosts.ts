@@ -22,7 +22,7 @@ import {
   sharedBotOffline
 } from './shared-bot-held-sends'
 import { nextPairingStep, pinnedSharedBotOffer, type MineShare } from './shared-bot-pairing'
-import { sharesSupported, type SharedBotsCloud } from './shared-bots-cloud'
+import { CloudSharesSupport, type SharedBotsCloud } from './shared-bots-cloud'
 import type { SharedBotHomes } from './shared-bot-home'
 
 // New shares and invites resolve within this; pairing and held messages are read sooner.
@@ -32,6 +32,8 @@ const BUSY_POLL_MS = 30 * 1000
 export type SharedBotHostsDeps = {
   userDataPath: string
   cloud: () => SharedBotsCloud | null
+  /** The signed-in Orca account the cloud is read as; null signed out. */
+  account: () => string | null
   platform: RelayClientPlatform
   publish: (state: SharedBotHostsState) => void
   homes: SharedBotHomes
@@ -49,8 +51,7 @@ export class SharedBotHosts {
   private timer: ReturnType<typeof setTimeout> | null = null
   private readonly now: () => number
   private loaded: Promise<void> | null = null
-  // Whether the account's Orca Cloud takes shares, from its last answer on the shares route.
-  private sharing: boolean | null = null
+  private readonly sharing = new CloudSharesSupport(() => this.deps.account())
 
   constructor(private readonly deps: SharedBotHostsDeps) {
     this.store = new SharedBotHostStore(deps.userDataPath)
@@ -92,7 +93,7 @@ export class SharedBotHosts {
   }
 
   state(): SharedBotHostsState {
-    return { hosts: this.views(), sharing: this.sharing }
+    return { hosts: this.views(), sharing: this.sharing.value }
   }
 
   views(): SharedBotHostsState['hosts'] {
@@ -144,8 +145,7 @@ export class SharedBotHosts {
     }
     const cloud = this.deps.cloud()
     const read = this.held.beginRead()
-    const answer = cloud ? await cloud.mine() : null
-    this.sharing = sharesSupported(answer, this.sharing)
+    const answer = await this.sharing.read(cloud, () => this.publish())
     // Signed out: the account's shares, keys and links go with it.
     const shares = answer?.ok ? answer.value.shares : answer?.error === 'signed_out' ? [] : null
     const gone = shares ? this.applyMine(shares, read) : []
