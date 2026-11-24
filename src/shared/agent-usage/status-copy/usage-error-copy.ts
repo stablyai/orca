@@ -31,14 +31,19 @@ function isUsageRateLimitError(p: UsageStatusCopySource): boolean {
 }
 
 /** Whole minutes until a stored Retry-After allows another check, or null when none is known. */
-function usageRetryMinutes(p: UsageStatusCopySource): number | null {
+function usageRetryMinutes(p: UsageStatusCopySource, nowMs: number): number | null {
   const retryAtMs = p.usageMetadata?.retryAtMs
   if (typeof retryAtMs !== 'number') {
     return null
   }
-  const remainingMs = retryAtMs - Date.now()
+  const remainingMs = retryAtMs - nowMs
   // A window that already elapsed is no longer a reason for the check to stay parked.
   return remainingMs > 0 ? Math.max(1, Math.ceil(remainingMs / 60_000)) : null
+}
+
+/** True while a rate-limited read still carries a retry time, so its label changes as that time passes. */
+export function hasPendingUsageRetry(p: UsageStatusCopySource): boolean {
+  return isUsageRateLimitError(p) && typeof p.usageMetadata?.retryAtMs === 'number'
 }
 
 const USAGE_AUTH_ERROR_PATTERNS = [
@@ -82,7 +87,9 @@ export function isClaudeUsageWaitingForClaude(p: UsageStatusCopySource): boolean
 
 export function getProviderUsageStatusLabel(
   p: UsageStatusCopySource,
-  t: UsageCopyTranslate
+  t: UsageCopyTranslate,
+  /** Clock the caller re-renders on; passing it keeps the retry countdown moving. */
+  nowMs: number = Date.now()
 ): string {
   if (p.usageMetadata?.ownerNotSetUp) {
     return getOwnerNotSetUpLabel(p.usageMetadata.ownerNotSetUp, t)
@@ -153,7 +160,7 @@ export function getProviderUsageStatusLabel(
   if (isUsageRateLimitError(p)) {
     // Why: "Limited" read as "this account's quota is used up" when it only meant Orca's check
     // was throttled; name the check and, when known, when it may retry.
-    const retryMinutes = usageRetryMinutes(p)
+    const retryMinutes = usageRetryMinutes(p, nowMs)
     return retryMinutes === null
       ? t('auto.components.status.bar.tooltip.usageCheckRateLimited.label', 'Usage check limited')
       : t(

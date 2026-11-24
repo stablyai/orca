@@ -23,6 +23,7 @@ import { getOwnerNotSetUpLabelParts } from '../../../../../shared/agent-usage/st
 import {
   getProviderUsageErrorMessage,
   getProviderUsageStatusLabel,
+  hasPendingUsageRetry,
   isClaudeUsageWaitingForClaude
 } from '../../../../../shared/agent-usage/status-copy/usage-error-copy'
 import { getTightestUsageSection, getUsageHeadlineSection } from './usage-headline-sections'
@@ -269,10 +270,12 @@ export function ProviderSegment({
   const provider = p?.provider ?? 'claude'
   const usageFormat = useAppStore((state) => state.statusBarUsageFormat)
   const template = resolveStatusBarUsageTemplate(usageFormat, provider)
-  const statusLabel = p ? getProviderUsageStatusLabel(p, t) : ''
   // Why: not a problem; Claude updates its own login the next time it runs.
   const calm = p ? isClaudeUsageWaitingForClaude(p) : false
   const calmClock = useNow(60_000, calm && p?.status === 'error')
+  // Why: the retry label counts down, so a parked check needs a tick to drop its stale minute.
+  const retryClock = useNow(60_000, p ? hasPendingUsageRetry(p) : false)
+  const statusLabel = p ? getProviderUsageStatusLabel(p, t, retryClock) : ''
   const tightest = p
     ? mode === 'compact'
       ? getUsageHeadlineSection(p, t, 'all')

@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { getProviderUsageStatusLabel } from './usage-error-copy'
+import { getProviderUsageStatusLabel, hasPendingUsageRetry } from './usage-error-copy'
 
 const NOW = Date.parse('2026-11-24T12:00:00Z')
 
@@ -46,5 +46,34 @@ describe('getProviderUsageStatusLabel for a rate-limited usage check', () => {
   it('uses the plain check label when the reading carries no retry time', () => {
     const usage = { provider: 'claude', error: 'rate limited' }
     expect(getProviderUsageStatusLabel(usage, translate)).toBe('Usage check limited')
+  })
+
+  it('recounts the wait against the clock the caller renders on', () => {
+    const usage = {
+      provider: 'claude',
+      error: 'rate limited',
+      usageMetadata: { failureKind: 'rate-limited', retryAtMs: NOW + 12 * 60_000 }
+    }
+    expect(getProviderUsageStatusLabel(usage, translate, NOW)).toBe(
+      'Usage check limited, retry in 12m'
+    )
+    expect(getProviderUsageStatusLabel(usage, translate, NOW + 10 * 60_000)).toBe(
+      'Usage check limited, retry in 2m'
+    )
+    expect(getProviderUsageStatusLabel(usage, translate, NOW + 13 * 60_000)).toBe(
+      'Usage check limited'
+    )
+  })
+
+  it('flags a parked check so the caller keeps a clock running for it', () => {
+    expect(
+      hasPendingUsageRetry({
+        provider: 'claude',
+        error: 'rate limited',
+        usageMetadata: { failureKind: 'rate-limited', retryAtMs: NOW + 60_000 }
+      })
+    ).toBe(true)
+    expect(hasPendingUsageRetry({ provider: 'claude', error: 'rate limited' })).toBe(false)
+    expect(hasPendingUsageRetry({ provider: 'claude', error: 'boom' })).toBe(false)
   })
 })
