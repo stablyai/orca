@@ -186,7 +186,7 @@ async function resolveBotLinkHome(
         {
           deps: {
             ...structuredSessionOpenFeedback,
-            ...pairedBotThreadOpenDeps(signal, current, (args) =>
+            ...pairedBotThreadOpenDeps(workspaceId, signal, current, (args) =>
               navigate(() => activateStructuredAgentSessionById(args))
             )
           },

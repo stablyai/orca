@@ -71,6 +71,7 @@ const defaultDeps: StructuredSessionOpenAdapterDeps = {
 }
 
 export function pairedBotThreadOpenDeps(
+  linkedWorkspaceId: string,
   signal: AbortSignal,
   current: () => boolean,
   activate: StructuredSessionOpenAdapterDeps['activate']
@@ -82,7 +83,10 @@ export function pairedBotThreadOpenDeps(
     activate,
     reveal: (target) => revealStructuredSession({ ...target, signal }),
     refresh: async ({ worktreeId, sessionId }, owner) => {
-      if (current() && owner.kind === 'environment') {
+      if (!current()) {
+        return
+      }
+      if (owner.kind === 'environment' && worktreeId === linkedWorkspaceId) {
         const timeout = new AbortController()
         const requestSignal = AbortSignal.any([signal, timeout.signal])
         await withStructuredSessionRestoreTimeout(
@@ -99,6 +103,8 @@ export function pairedBotThreadOpenDeps(
           ),
           () => timeout.abort()
         )
+      } else {
+        await defaultDeps.refresh({ worktreeId, sessionId }, owner)
       }
     }
   }

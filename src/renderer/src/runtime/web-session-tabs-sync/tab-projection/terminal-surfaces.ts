@@ -72,7 +72,8 @@ export function buildMirroredAgentTabs(
   fallbackGroupId: string,
   sortOffset: number,
   currentUnifiedTabs: readonly Tab[],
-  now: number
+  now: number,
+  mayAdopt: (tab: Tab) => boolean = () => true
 ): MirroredAgentTab[] {
   const agentTabs = snapshot.tabs
     .filter(isAgentSessionTab)
@@ -91,13 +92,16 @@ export function buildMirroredAgentTabs(
     const existing =
       currentUnifiedTabs.find(
         (candidate) =>
-          candidate.contentType === 'agent-session' && candidate.entityId === tab.sessionId
+          candidate.contentType === 'agent-session' &&
+          candidate.entityId === tab.sessionId &&
+          mayAdopt(candidate)
       ) ??
       currentUnifiedTabs.find(
         (candidate) =>
           !replacementIds.has(candidate.id) &&
           candidate.contentType === 'agent-session' &&
-          candidate.entityId === tab.replacesSessionId
+          candidate.entityId === tab.replacesSessionId &&
+          mayAdopt(candidate)
       )
     if (existing) {
       replacementTabs.set(tab.sessionId, existing)
@@ -111,7 +115,8 @@ export function buildMirroredAgentTabs(
         (candidate) =>
           !replacementIds.has(candidate.id) &&
           candidate.contentType === 'agent-session' &&
-          candidate.entityId === tab.sessionId
+          candidate.entityId === tab.sessionId &&
+          mayAdopt(candidate)
       )
     const launch = readStructuredAgentLaunchRecord(tab.sessionId)
     const address =

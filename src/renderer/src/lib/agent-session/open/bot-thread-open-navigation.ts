@@ -1,6 +1,5 @@
 import { useAppStore } from '@/store'
 import type { AppState } from '@/store/types'
-import { selectActiveTabForWorktree } from '@/store/slices/tabs/active-tab-selection'
 import { cancelPendingBotThreadOpen } from './bot-thread-open-lifecycle'
 
 export type BotThreadNavigate = <T>(action: () => T) => T
@@ -17,13 +16,23 @@ function changedSelection(state: AppState, previous: AppState): boolean {
   if (
     !workspace ||
     state.activeView !== 'terminal' ||
-    (state.unifiedTabsByWorktree[workspace] === previous.unifiedTabsByWorktree[workspace] &&
-      state.groupsByWorktree[workspace] === previous.groupsByWorktree[workspace] &&
+    (state.groupsByWorktree[workspace] === previous.groupsByWorktree[workspace] &&
       state.activeGroupIdByWorktree[workspace] === previous.activeGroupIdByWorktree[workspace])
   ) {
     return false
   }
-  const active = selectActiveTabForWorktree(state, workspace)
+  const previousGroup = previous.activeGroupIdByWorktree[workspace]
+  const currentGroup = state.activeGroupIdByWorktree[workspace]
+  const currentId = state.groupsByWorktree[workspace]?.find(
+    (group) => group.id === currentGroup
+  )?.activeTabId
+  const previousId = previous.groupsByWorktree[workspace]?.find(
+    (group) => group.id === previousGroup
+  )?.activeTabId
+  if (!currentId || (currentId === previousId && currentGroup === previousGroup)) {
+    return false
+  }
+  const active = state.unifiedTabsByWorktree[workspace]?.find((tab) => tab.id === currentId)
   // A mirror can supply the first visible tab. Only a new local focus visit competes with the link.
   return (
     active?.lastFocusedAt !== undefined &&

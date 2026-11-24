@@ -6,6 +6,7 @@ import TabBar from '../tab-bar/TabBar'
 
 import { TabGroupStripActions } from './panel/TabGroupStripActions'
 import { useTabGroupWorkspaceModel } from './workspace-model/useTabGroupWorkspaceModel'
+import { cancelPendingBotThreadOpen } from '@/lib/agent-session/open/bot-thread-open-lifecycle'
 import { closeTerminalTab } from '../terminal/tab-lifecycle/terminal-tab-actions'
 import { resolveGroupTabFromVisibleId } from './workspace-model/tab-group-visible-id'
 import { getTabPaneBodyDroppableId } from './drag/useTabDragSplit'
@@ -276,7 +277,10 @@ export default function TabGroupPanel({
           ? { opacity: UNFOCUSED_SPLIT_GROUP_OPACITY }
           : undefined
       }
-      onPointerDown={commands.focusGroup}
+      onPointerDown={() => {
+        cancelPendingBotThreadOpen()
+        commands.focusGroup()
+      }}
       // Why: keyboard/AT focus can enter a split group without a pointer event, so sync group focus to DOM focus for global shortcuts.
       onFocusCapture={commands.focusGroup}
     >

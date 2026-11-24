@@ -3,6 +3,7 @@ import { getRuntimeEnvironmentConnectionGeneration } from '@/store/slices/runtim
 import type { RuntimeMobileSessionTabsResult } from '../../../../../shared/remote-runtime/session-graph/runtime-session-contracts'
 import { hostSnapshotAffirmsWorktreeContents } from '../../../../../shared/remote-runtime/session-graph/host-session-snapshot-authority'
 import { toRuntimeExecutionHostId } from '../../../../../shared/execution-host/execution-host'
+import { structuredAgentSessionOwnerForTab } from '../../native-chat/session-ownership/structured-agent-session-owner'
 import { callRuntimeRpcResponse } from '../../rpc/calls/runtime-rpc-call'
 import { getRuntimeEnvironmentRegistration } from '../../rpc/environment-revisions/runtime-environment-revision'
 import { toRuntimeWorktreeSelector } from '../../rpc/targets/runtime-worktree-selector'
@@ -88,10 +89,13 @@ export async function readPairedChatTab(args: {
   const state = useAppStore.getState()
   const executionHostId = toRuntimeExecutionHostId(environmentId)
   const currentTabs = state.unifiedTabsByWorktree[worktreeId] ?? []
+  const isOwnerTab = (tab: (typeof currentTabs)[number]) =>
+    structuredAgentSessionOwnerForTab(state, tab) === executionHostId
   if (
     currentTabs.some(
       (tab) =>
         tab.contentType === 'agent-session' &&
+        isOwnerTab(tab) &&
         (tab.entityId === sessionId || tab.entityId === chat.replacesSessionId)
     )
   ) {
@@ -108,7 +112,8 @@ export async function readPairedChatTab(args: {
     }),
     currentTabs.length,
     currentTabs,
-    now
+    now,
+    isOwnerTab
   )
   if (!mirror) {
     return
@@ -125,6 +130,7 @@ export async function readPairedChatTab(args: {
     existingGroup?.id
   )
   const previousEpoch = latestReceivedSessionTabsSnapshotByWorktree.get(key)?.publicationEpoch
+  const initialGroupId = state.groupsByWorktree[worktreeId]?.length ? undefined : tab.groupId
   recordDirectlyOpenedChat(environmentId, worktreeId, sessionId, {
     tabId: tab.id,
     hostTabId: chat.id,
@@ -134,6 +140,7 @@ export async function readPairedChatTab(args: {
     runtimeId,
     publicationEpoch: snapshot.publicationEpoch,
     snapshotVersion: snapshot.snapshotVersion,
-    previousEpoch
+    previousEpoch,
+    initialGroupId
   })
 }

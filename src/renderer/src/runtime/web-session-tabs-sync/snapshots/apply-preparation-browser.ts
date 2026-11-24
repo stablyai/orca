@@ -29,7 +29,10 @@ import { shouldRetainStructuredAgentSessionLaunchTab } from '@/lib/agent-session
 import { executionHostIdForSessionTabsOwner } from '../../native-chat/local-sessions/local-structured-session-owner'
 import { isAgentSessionTabOfAnotherHost } from '../identity/mirror-row-ownership'
 import { isUnlistedCreatedChat } from '@/lib/agent-session/launch/pane/structured-agent-session-unlisted-created-chats'
-import { retainDirectlyOpenedChats } from '../tracking/directly-opened-chat-tabs'
+import {
+  directlyOpenedChatPublications,
+  retainDirectlyOpenedChats
+} from '../tracking/directly-opened-chat-tabs'
 
 export function prepareWebSessionTabsSnapshotBrowser(
   base: ReturnType<typeof prepareWebSessionTabsSnapshotBase>
@@ -50,6 +53,39 @@ export function prepareWebSessionTabsSnapshotBrowser(
   const targetGroupId = chooseTargetGroupId(state, snapshot)
   const hostGroupIdByTabId = buildHostGroupIdByTabId(snapshot.tabGroups)
   const currentUnifiedTabs = state.unifiedTabsByWorktree[worktreeId] ?? []
+  const snapshotExecutionHostId = executionHostIdForSessionTabsOwner(environmentId)
+  const receivedChats = directlyOpenedChatPublications(environmentId, worktreeId)
+  const currentGroups = state.groupsByWorktree[worktreeId]
+  const currentLayout = state.layoutByWorktree[worktreeId]
+  const initialGroup =
+    currentGroups?.length === 1 &&
+    currentLayout?.type === 'leaf' &&
+    currentLayout.groupId === currentGroups[0].id
+      ? currentGroups[0]
+      : undefined
+  const adoptsInitialHostGroups = Boolean(
+    initialGroup &&
+    receivedChats &&
+    snapshot.tabGroups?.length &&
+    initialGroup.tabOrder.length === receivedChats.size &&
+    [...receivedChats.values()].some((chat) => chat.initialGroupId === initialGroup.id) &&
+    currentUnifiedTabs.every(
+      (tab) =>
+        tab.executionHostId === snapshotExecutionHostId &&
+        receivedChats.get(tab.entityId)?.tabId === tab.id
+    )
+  )
+  const directlyOpenedTabIds =
+    receivedChats &&
+    new Map(
+      currentUnifiedTabs.flatMap((tab) =>
+        tab.executionHostId === snapshotExecutionHostId &&
+        tab.contentType === 'agent-session' &&
+        receivedChats.get(tab.entityId)?.tabId === tab.id
+          ? [[tab.entityId, tab.id] as const]
+          : []
+      )
+    )
   const directlyOpened = retainDirectlyOpenedChats(
     environmentId,
     snapshot,
@@ -80,7 +116,6 @@ export function prepareWebSessionTabsSnapshotBrowser(
       claimedAgentSessionIds.add(tab.replacesSessionId)
     }
   }
-  const snapshotExecutionHostId = executionHostIdForSessionTabsOwner(environmentId)
   const agentSessionsAffirmed = hostSnapshotAffirmsAgentSessions(snapshot)
   const existingTabIndex = buildWebSessionExistingTabIndex({ unifiedTabs: currentUnifiedTabs })
   const reconcilesBrowserTabs =
@@ -166,7 +201,10 @@ export function prepareWebSessionTabsSnapshotBrowser(
     targetGroupId,
     mirroredTerminalTabEntries.length + mirroredBrowserTabs.length + mirroredEditorTabs.length,
     currentUnifiedTabs,
-    now
+    now,
+    directlyOpenedTabIds
+      ? (tab) => (directlyOpenedTabIds.get(tab.entityId) ?? tab.id) === tab.id
+      : undefined
   )
   if (directlyOpened) {
     mirroredAgentTabs.push(...directlyOpened.values())
@@ -261,6 +299,8 @@ export function prepareWebSessionTabsSnapshotBrowser(
   return {
     ...base,
     targetGroupId,
+    adoptsInitialHostGroups,
+    directlyOpened,
     hostGroupIdByTabId,
     currentUnifiedTabs,
     existingTabIndex,

@@ -1,5 +1,6 @@
 import type { RuntimeMobileSessionTabsResult } from '../../../../../shared/remote-runtime/session-graph/runtime-session-contracts'
 import type { Tab } from '../../../../../shared/workspace-layout/tab-groups/tab-types'
+import { toRuntimeExecutionHostId } from '../../../../../shared/execution-host/execution-host'
 import { getRuntimeEnvironmentConnectionGeneration } from '@/store/slices/runtime-status/runtime-status-connection-generation'
 import { getRuntimeEnvironmentRegistration } from '../../rpc/environment-revisions/runtime-environment-revision'
 import {
@@ -8,7 +9,10 @@ import {
   type MirroredAgentTab
 } from '../state'
 import { isWebSessionTabsWorktreeRemovalFrame } from './session-tabs-inventory-absence'
-import { isCurrentSessionTabsRuntimeFrame } from './publisher-identity-fences'
+import {
+  isCurrentSessionTabsRuntimeFrame,
+  sameSessionTabsPublicationLineage
+} from './publisher-identity-fences'
 
 type ChatPublication = {
   tabId: string
@@ -20,9 +24,17 @@ type ChatPublication = {
   publicationEpoch: string
   snapshotVersion: number
   previousEpoch?: string
+  initialGroupId?: string
 }
 
 const directlyOpenedChats = new Map<string, Map<string, ChatPublication>>()
+
+export function directlyOpenedChatPublications(
+  environmentId: string,
+  worktreeId: string
+): ReadonlyMap<string, ChatPublication> | undefined {
+  return directlyOpenedChats.get(sessionTabsFreshnessKey(environmentId, worktreeId))
+}
 
 export function forgetDirectlyOpenedChat(
   environmentId: string,
@@ -88,16 +100,25 @@ export function retainDirectlyOpenedChats(
   }
   const registration = getRuntimeEnvironmentRegistration(environmentId)
   const generation = getRuntimeEnvironmentConnectionGeneration(environmentId)
+  const host = toRuntimeExecutionHostId(environmentId)
   const retained = new Map<string, MirroredAgentTab>()
   for (const tab of currentTabs) {
     const proof = entries.get(tab.entityId)
-    if (tab.contentType !== 'agent-session' || !proof || tab.id !== proof.tabId) {
+    if (
+      tab.contentType !== 'agent-session' ||
+      tab.executionHostId !== host ||
+      !proof ||
+      tab.id !== proof.tabId
+    ) {
       continue
     }
-    const earlier =
-      snapshot.publicationEpoch === proof.publicationEpoch
-        ? snapshot.snapshotVersion < proof.snapshotVersion
-        : snapshot.publicationEpoch === proof.previousEpoch
+    const earlier = sameSessionTabsPublicationLineage(
+      snapshot.publicationEpoch,
+      proof.publicationEpoch
+    )
+      ? snapshot.snapshotVersion < proof.snapshotVersion
+      : proof.previousEpoch !== undefined &&
+        sameSessionTabsPublicationLineage(snapshot.publicationEpoch, proof.previousEpoch)
     if (
       earlier &&
       registration === proof.registration &&

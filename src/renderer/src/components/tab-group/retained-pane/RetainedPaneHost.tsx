@@ -1,5 +1,6 @@
 import { useCallback, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { SYNC_FIT_PANES_EVENT } from '@/constants/terminal'
+import { cancelPendingBotThreadOpen } from '@/lib/agent-session/open/bot-thread-open-lifecycle'
 import { tabGroupBodyAnchorName } from './tab-group-body-anchor'
 import { subscribeTabGroupBodyRect, type TabGroupBodyRect } from './tab-group-body-geometry'
 import { UNFOCUSED_SPLIT_GROUP_OPACITY } from '../panel/split-group-dim'
@@ -150,7 +151,10 @@ export function RetainedPaneHost({
       {...identity}
       inert={!isVisible}
       aria-hidden={!isVisible}
-      onPointerDown={focusGroup}
+      onPointerDown={() => {
+        cancelPendingBotThreadOpen()
+        focusGroup()
+      }}
       onFocusCapture={focusGroup}
     >
       {awaitsFirstFallbackRect ? null : children}
