@@ -1,6 +1,6 @@
 import type { ProviderRelayRecord } from '../protocol/daemon-provider-relay-protocol'
 import {
-  leadingJsonProperties,
+  leadingJsonEnvelope,
   type LeadingProperty
 } from '../../../shared/json-stream/json-rpc-record-prefix'
 
@@ -19,6 +19,14 @@ function parseObject(line: string): JsonObject | null {
   }
 }
 
+/** Top-level fields of a line the envelope scan could not finish; non-scalar values carry no value. */
+function wholeLineFields(line: string): LeadingProperty[] {
+  const message = parseObject(line)
+  return Object.entries(message ?? {}).map(([key, value]) =>
+    typeof value === 'object' && value !== null ? { key } : { key, value }
+  )
+}
+
 function rpcId(value: unknown): string | null {
   return typeof value === 'number' || typeof value === 'string'
     ? `j:${JSON.stringify(value)}`
@@ -33,7 +41,8 @@ const RESOLVED_METHOD = 'serverRequest/resolved'
 /**
  * Agent lines are classified from their leading envelope fields only (`id`, `method`, `type`,
  * `request_id`), which every supported agent writes before its payload. The scan stops at the first
- * object value and never reads past this many chars, so a notification is never parsed whole.
+ * object value and never reads past this many chars, so a notification is never parsed whole; a line
+ * whose envelope the scan can't finish (cut by this limit, or unusual) is parsed whole instead.
  */
 const ENVELOPE_SCAN_CHARS = 4096
 
@@ -103,7 +112,8 @@ export class ProviderRelayPendingRequests {
   observeAgentLine(record: ProviderRelayRecord): void {
     const { line } = record
     const head = line.length > ENVELOPE_SCAN_CHARS ? line.slice(0, ENVELOPE_SCAN_CHARS) : line
-    const fields = leadingJsonProperties(head, { stopAtContainer: true })
+    const envelope = leadingJsonEnvelope(head, { stopAtContainer: true })
+    const fields = envelope.complete ? envelope.properties : wholeLineFields(line)
     const field = (key: string): LeadingProperty | undefined =>
       fields.find((property) => property.key === key)
     const method = field('method')?.value
@@ -145,7 +155,8 @@ export class ProviderRelayPendingRequests {
         : field('result') || field('error')
           ? rpcId(answerId)
           : null
-    if (answerKey === this.initializeKey) {
+    // A malformed line can't stand in for the answer a reattaching client is handed.
+    if (answerKey === this.initializeKey && (type === 'control_response' || parseObject(line))) {
       this.initializeResult = line
     }
   }

@@ -5,7 +5,7 @@ import {
   encodeBinaryRelayLineFrame,
   type DaemonStreamFraming
 } from '../transport/framing/daemon-stream-binary-framing'
-import { isHighSurrogate } from './provider-relay-surrogate-tail'
+import { isHighSurrogate } from './provider-relay-input'
 
 /** Keeps each event frame well under the stream's line cap even after JSON escaping. */
 const EVENT_PIECE_CHARS = 1024 * 1024

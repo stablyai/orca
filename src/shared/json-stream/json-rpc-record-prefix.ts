@@ -82,16 +82,35 @@ export function leadingJsonProperties(
   prefix: string,
   options: { stopAtContainer?: boolean } = {}
 ): LeadingProperty[] {
+  return leadingJsonEnvelope(prefix, options).properties
+}
+
+/**
+ * As `leadingJsonProperties`; `complete` is true only when the scan reached a container value or the
+ * closing brace, so no field was cut off by the prefix's end or skipped past the field limit.
+ */
+export function leadingJsonEnvelope(
+  prefix: string,
+  options: { stopAtContainer?: boolean } = {}
+): { properties: LeadingProperty[]; complete: boolean } {
   const properties: LeadingProperty[] = []
+  let complete = false
   let cursor = 0
   const skipWhitespace = (): void => {
     while (/\s/.test(prefix[cursor] ?? '')) {
       cursor += 1
     }
   }
+  /** Steps past the separator after a value; true when another field follows. */
+  const next = (): boolean => {
+    skipWhitespace()
+    complete = prefix[cursor] === '}'
+    cursor += 1
+    return prefix[cursor - 1] === ','
+  }
   skipWhitespace()
   if (prefix[cursor] !== '{') {
-    return properties
+    return { properties, complete }
   }
   cursor += 1
   while (properties.length < 8) {
@@ -116,6 +135,7 @@ export function leadingJsonProperties(
     if (prefix[cursor] === '{' || prefix[cursor] === '[') {
       properties.push({ key: String(key) })
       if (options.stopAtContainer) {
+        complete = true
         break
       }
       const valueEnd = skipJsonContainer(prefix, cursor)
@@ -123,22 +143,18 @@ export function leadingJsonProperties(
         break
       }
       cursor = valueEnd
-      skipWhitespace()
-      if (prefix[cursor] !== ',') {
+      if (!next()) {
         break
       }
-      cursor += 1
       continue
     }
     const literalEnd = skipJsonLiteral(prefix, cursor)
     if (literalEnd !== null) {
       properties.push({ key: String(key) })
       cursor = literalEnd
-      skipWhitespace()
-      if (prefix[cursor] !== ',') {
+      if (!next()) {
         break
       }
-      cursor += 1
       continue
     }
     const stringEnd = readJsonStringEnd(prefix, cursor)
@@ -149,28 +165,23 @@ export function leadingJsonProperties(
         break
       }
       cursor = stringEnd
-      skipWhitespace()
-      if (prefix[cursor] !== ',') {
+      if (!next()) {
         break
       }
-      cursor += 1
       continue
     }
     // The whole JSON number, so `1e3` or `1.5` is never read as a different id than it is.
     const match = /^-?(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d+)?/.exec(prefix.slice(cursor))
-    // A number running to the end of the prefix may be cut short, so it is not read.
-    if (!match || cursor + match[0].length >= prefix.length) {
+    if (!match) {
       break
     }
     properties.push({ key: String(key), value: Number(match[0]) })
     cursor += match[0].length
-    skipWhitespace()
-    if (prefix[cursor] !== ',') {
+    if (!next()) {
       break
     }
-    cursor += 1
   }
-  return properties
+  return { properties, complete }
 }
 
 export function classifyJsonRpcPrefix(prefix: string): JsonRpcPrefix {

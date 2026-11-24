@@ -10,9 +10,8 @@ import { ProviderRelayPendingRequests } from './provider-relay-pending-requests'
 import { ProviderRelaySpool } from './provider-relay-spool'
 import { ProviderRelayLineReader } from './provider-relay-line-reader'
 import { ProviderRelayAttachment, type ProviderRelayStream } from './provider-relay-attachment'
-import { splitSurrogateTail } from './provider-relay-surrogate-tail'
+import { ProviderRelayInput } from './provider-relay-input'
 
-const MAX_QUEUED_INPUT_BYTES = 16 * 1024 * 1024
 const RELAY_TAKEN_OVER = 'Relay attach superseded by a detach or another attach'
 
 type RelayOptions = {
@@ -45,7 +44,7 @@ export class ProviderRelay {
   private spoolPaused = false
   private readingPaused = false
   private failure: ProviderRelayFailure | null = null
-  private inputCarry = ''
+  private readonly input: ProviderRelayInput
   /** The relay is kept until a client was actually sent its exit, so no outcome goes unseen. */
   private exitDelivered = false
   /** The attachment the exit last went to, so one client never gets it twice. */
@@ -55,6 +54,7 @@ export class ProviderRelay {
     this.relayId = options.relayId
     this.chatKey = options.chatKey
     const stdout = options.managed.child.stdout
+    this.input = new ProviderRelayInput(options.managed.child.stdin)
     this.spool = new ProviderRelaySpool({
       path: options.spoolPath,
       deliver: (record) => this.deliver(record),
@@ -217,18 +217,10 @@ export class ProviderRelay {
   }
 
   write(chunk: string): void {
-    const { stdin } = this.options.managed.child
-    // A write may end inside a surrogate pair; its first half waits for the next write so the pair encodes whole.
-    const [data, carry] = splitSurrogateTail(this.inputCarry + chunk)
-    // An agent that stops reading must not grow the daemon's buffer without bound; the client retries.
-    const bytes = Buffer.byteLength(data)
-    if (stdin.writableLength + bytes > MAX_QUEUED_INPUT_BYTES) {
-      throw new Error('Relay input is full')
-    }
-    this.inputCarry = carry
+    const data = this.input.take(chunk)
     const answered = this.pending.observeClientData(data)
     // A request stays owed until its answer has reached the agent; a failed write keeps it.
-    stdin.write(data, (error) => {
+    this.input.write(data, (error) => {
       if (!error && answered.length > 0) {
         this.pending.releaseAnswered(answered)
         this.updateReading()
@@ -241,6 +233,7 @@ export class ProviderRelay {
   }
 
   close(grace?: 'brief'): Promise<unknown> {
+    this.input.flush()
     return this.options.managed.close(undefined, grace === 'brief' ? { grace } : undefined)
   }
 
