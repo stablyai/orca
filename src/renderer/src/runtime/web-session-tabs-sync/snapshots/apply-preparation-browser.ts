@@ -30,6 +30,7 @@ import { executionHostIdForSessionTabsOwner } from '../../native-chat/local-sess
 import { isAgentSessionTabOfAnotherHost } from '../identity/mirror-row-ownership'
 import { isUnlistedCreatedChat } from '@/lib/agent-session/launch/pane/structured-agent-session-unlisted-created-chats'
 import {
+  canAdoptInitialHostGroups,
   directlyOpenedChatPublications,
   retainDirectlyOpenedChats
 } from '../tracking/directly-opened-chat-tabs'
@@ -55,25 +56,9 @@ export function prepareWebSessionTabsSnapshotBrowser(
   const currentUnifiedTabs = state.unifiedTabsByWorktree[worktreeId] ?? []
   const snapshotExecutionHostId = executionHostIdForSessionTabsOwner(environmentId)
   const receivedChats = directlyOpenedChatPublications(environmentId, worktreeId)
-  const currentGroups = state.groupsByWorktree[worktreeId]
-  const currentLayout = state.layoutByWorktree[worktreeId]
-  const initialGroup =
-    currentGroups?.length === 1 &&
-    currentLayout?.type === 'leaf' &&
-    currentLayout.groupId === currentGroups[0].id
-      ? currentGroups[0]
-      : undefined
   const adoptsInitialHostGroups = Boolean(
-    initialGroup &&
-    receivedChats &&
     snapshot.tabGroups?.length &&
-    initialGroup.tabOrder.length === receivedChats.size &&
-    [...receivedChats.values()].some((chat) => chat.initialGroupId === initialGroup.id) &&
-    currentUnifiedTabs.every(
-      (tab) =>
-        tab.executionHostId === snapshotExecutionHostId &&
-        receivedChats.get(tab.entityId)?.tabId === tab.id
-    )
+    canAdoptInitialHostGroups(state, worktreeId, snapshotExecutionHostId, receivedChats)
   )
   const directlyOpened = retainDirectlyOpenedChats(
     environmentId,

@@ -1,9 +1,12 @@
 import type { RuntimeMobileSessionTabsResult } from '../../../../../shared/remote-runtime/session-graph/runtime-session-contracts'
 import type { Tab } from '../../../../../shared/workspace-layout/tab-groups/tab-types'
-import { toRuntimeExecutionHostId } from '../../../../../shared/execution-host/execution-host'
+import {
+  toRuntimeExecutionHostId,
+  type ExecutionHostId
+} from '../../../../../shared/execution-host/execution-host'
 import { getRuntimeEnvironmentConnectionGeneration } from '@/store/slices/runtime-status/runtime-status-connection-generation'
 import { getRuntimeEnvironmentRegistration } from '../../rpc/environment-revisions/runtime-environment-revision'
-import { sessionTabsFreshnessKey, type MirroredAgentTab } from '../state'
+import { sessionTabsFreshnessKey, type MirroredAgentTab, type WebSessionTabsSyncState } from '../state'
 import { isWebSessionTabsWorktreeRemovalFrame } from './session-tabs-inventory-absence'
 import {
   isCurrentSessionTabsRuntimeFrame,
@@ -31,6 +34,30 @@ export function directlyOpenedChatPublications(
   worktreeId: string
 ): ReadonlyMap<string, ChatPublication> | undefined {
   return directlyOpenedChats.get(sessionTabsFreshnessKey(environmentId, worktreeId))
+}
+
+export function canAdoptInitialHostGroups(
+  state: WebSessionTabsSyncState,
+  worktreeId: string,
+  executionHostId: ExecutionHostId,
+  receivedChats: ReadonlyMap<string, ChatPublication> | undefined
+): boolean {
+  const groups = state.groupsByWorktree[worktreeId]
+  const layout = state.layoutByWorktree[worktreeId]
+  const group = groups?.[0]
+  return Boolean(
+    receivedChats &&
+    groups?.length === 1 &&
+    group &&
+    layout?.type === 'leaf' &&
+    layout.groupId === group.id &&
+    group.tabOrder.length === receivedChats.size &&
+    [...receivedChats.values()].some((chat) => chat.initialGroupId === group.id) &&
+    (state.unifiedTabsByWorktree[worktreeId] ?? []).every(
+      (tab) =>
+        tab.executionHostId === executionHostId && receivedChats.get(tab.entityId)?.tabId === tab.id
+    )
+  )
 }
 
 export function forgetDirectlyOpenedChat(
