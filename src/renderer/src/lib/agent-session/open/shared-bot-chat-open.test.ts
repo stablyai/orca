@@ -11,7 +11,8 @@ import { folderWorkspaceKey } from '../../../../../shared/workspace/identity/wor
 import { installSharedBotHostCatalog } from '@/runtime/hosts/shared-bot-hosts/shared-bot-host-catalog'
 import { structuredAgentSessionTargetForTab } from '@/runtime/native-chat/session-ownership/structured-agent-session-owner'
 import { publishBots, readHostBots, setBotHostListing } from '../../bot-catalog-snapshot'
-import { openBotHome, openBotHomeTab } from '../../bot-catalog'
+import { openBotHome, openBotHomeTab, startBotSession } from '../../bot-catalog'
+import { installSharedBotNewChatSwap } from '@/runtime/hosts/shared-bot-hosts/shared-bot-new-chat-swap'
 import { buildWorkspaceSessionPayload } from '../../workspace/persistence/workspace-session'
 import { activateAiVaultStructuredSession } from './activate-ai-vault-structured-session'
 
@@ -22,7 +23,9 @@ const SHARED: SharedBotHostView = {
   botName: 'Ivy',
   ownerName: 'Jinwoo Hong',
   homeWorkspaceId: 'home-1',
-  link: 'live'
+  link: 'live',
+  holds: true,
+  held: []
 }
 const HOST = toRuntimeExecutionHostId(SHARED.environmentId)
 const HOME_KEY = folderWorkspaceKey('home-1')
@@ -76,24 +79,33 @@ function resetStore(): void {
 }
 
 let stopCatalog: () => void = () => {}
-// Main's answers over the share link, as the owner's host would give them.
-// The owner's host answers its listing; anything else this test meets is refused, as the share
-// refuses `bots.chat.open` and `folderWorkspaces.list`.
-const call = vi.fn(async ({ method }: { method: string }) =>
-  method === 'bots.list'
-    ? {
-        id: method,
-        ok: true,
-        result: { bots: [ivy], threadReplies: false },
-        _meta: { runtimeId: SHARED.environmentId }
-      }
-    : { id: method, ok: false, error: { code: 'forbidden', message: method } }
+let changed: (views: SharedBotHostView[]) => void = () => {}
+// The owner's host as the share reaches it: the window's own share gate refuses what isn't allowed
+// before it is sent; a new chat started while the host is away is a placeholder there.
+const call = vi.fn(
+  async ({ method, params }: { method: string; params: { newChatId?: string } }) => ({
+    id: method,
+    ok: true,
+    result:
+      method === 'bots.list'
+        ? { bots: [ivy], threadReplies: false }
+        : { sessionId: params.newChatId ? 'chat-real' : 'shared-new-1' },
+    _meta: { runtimeId: SHARED.environmentId }
+  })
 )
 
 beforeEach(async () => {
+  call.mockClear()
   vi.stubGlobal('api', {
     ...window.api,
-    sharedBotHosts: { list: async () => [SHARED], onChanged: () => () => {}, call }
+    sharedBotHosts: {
+      list: async () => [SHARED],
+      onChanged: (listener: (views: SharedBotHostView[]) => void) => {
+        changed = listener
+        return () => {}
+      },
+      call
+    }
   })
   stopCatalog = installSharedBotHostCatalog()
   await Promise.resolve()
@@ -145,10 +157,33 @@ describe('a shared agent’s chats on this computer', () => {
     expect(await openBotHomeTab(bot)).toBe(true)
     expect(useAppStore.getState().activeWorktreeId).toBe(HOME_KEY)
     expect(fetchFolderWorkspaces).toHaveBeenCalledWith({ runtimeEnvironmentId: null })
-    // The owner's Home Chat is theirs: nothing of it is asked for, and no tab of it opens.
+    // The owner's Home Chat is theirs: the share refuses it here, and no tab of it opens.
     const asked = call.mock.calls.map(([request]) => request.method)
     expect(asked).not.toContain('folderWorkspaces.list')
     expect(asked).not.toContain('bots.chat.open')
     expect(tabs()).toEqual([])
+  })
+
+  it('opens a new chat started while the owner’s computer is away, and moves it to the chat the host starts once back', async () => {
+    const [bot] = readHostBots(HOST)
+    changed([{ ...SHARED, link: 'offline' }])
+    const placeholder = await startBotSession(bot, { agent: bot.agent })
+    await activateAiVaultStructuredSession({
+      structuredSession: { workspaceId: HOME_KEY, sessionId: placeholder }
+    })
+    expect(tabs().map((tab) => tab.entityId)).toEqual(['shared-new-1'])
+    const stopSwap = installSharedBotNewChatSwap()
+    changed([SHARED])
+    await vi.waitFor(() =>
+      expect(tabs()).toEqual([
+        expect.objectContaining({ entityId: 'chat-real', executionHostId: HOST })
+      ])
+    )
+    stopSwap()
+    expect(call).toHaveBeenCalledWith({
+      environmentId: SHARED.environmentId,
+      method: 'bots.session.start',
+      params: { botId: 'bot-1', newChatId: 'shared-new-1' }
+    })
   })
 })

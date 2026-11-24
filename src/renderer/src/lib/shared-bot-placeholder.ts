@@ -4,14 +4,15 @@ import { LOCAL_EXECUTION_HOST_ID } from '../../../shared/execution-host/executio
 import type { Bot } from '../../../shared/bot-types'
 import type { SharedBotHostView } from '../../../shared/bots/shared-bot-hosts'
 
-export function sharedBotPlaceholder(view: SharedBotHostView): Bot {
+/** Its home is the one main made here for the share. */
+export function sharedBotPlaceholder(view: SharedBotHostView & { homeWorkspaceId: string }): Bot {
   return {
     id: view.botId,
     name: view.botName,
     // Stamped with the shared host's id when listed, like any host's own bots.
     hostId: LOCAL_EXECUTION_HOST_ID,
     folder: 'shared',
-    folderWorkspaceId: `shared-${view.shareId}`,
+    folderWorkspaceId: view.homeWorkspaceId,
     // The cloud doesn't say which agent it runs; nothing about the row depends on it until the host answers.
     agent: 'claude',
     avatar: null,

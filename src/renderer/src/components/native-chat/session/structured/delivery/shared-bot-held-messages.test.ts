@@ -24,6 +24,7 @@ const host = (messages: SharedBotHeldView[]): SharedBotHostView => ({
   botId: 'bot-1',
   botName: 'Ivy',
   ownerName: 'Jinwoo Hong',
+  homeWorkspaceId: null,
   link: 'offline',
   holds: true,
   held: messages

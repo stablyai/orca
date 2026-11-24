@@ -12,31 +12,25 @@ import { toRuntimeExecutionHostId } from '../../../../../shared/execution-host/e
 import type { Tab } from '../../../../../shared/workspace-layout/tab-groups/tab-types'
 import { readSharedBotHosts, subscribeSharedBotHosts } from './shared-bot-host-catalog'
 
-type SwapDeps = {
-  open: (workspaceId: string, sessionId: string) => void
-  close: (tabId: string) => void
-}
-
-const APP_SWAP: SwapDeps = {
-  open: (workspaceId, sessionId) =>
-    void activateAiVaultStructuredSession({ structuredSession: { workspaceId, sessionId } }),
-  close: (tabId) => void useAppStore.getState().closeUnifiedTab(tabId)
-}
-
-/** Moves one placeholder tab to the chat its host started for it. */
+/** Moves one placeholder tab to the chat its host started for it: the chat opens through the same
+ *  path as any of the agent's chats, and the placeholder closes only once it has. */
 export async function swapSharedBotNewChat(
   host: Pick<SharedBotHostView, 'environmentId' | 'botId'>,
   workspaceId: string,
-  tab: Pick<Tab, 'id' | 'entityId'>,
-  deps: SwapDeps = APP_SWAP
-): Promise<void> {
+  tab: Pick<Tab, 'id' | 'entityId'>
+): Promise<boolean> {
   const { sessionId } = await callRuntimeRpc<{ sessionId: string }>(
     { kind: 'environment', environmentId: host.environmentId },
     'bots.session.start',
     { botId: host.botId, newChatId: tab.entityId }
   )
-  deps.open(workspaceId, sessionId)
-  deps.close(tab.id)
+  const opened = await activateAiVaultStructuredSession({
+    structuredSession: { workspaceId, sessionId }
+  })
+  if (opened) {
+    useAppStore.getState().closeUnifiedTab(tab.id)
+  }
+  return opened
 }
 
 /** Follows the shared hosts; each placeholder tab on one that is live moves once. */

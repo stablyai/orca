@@ -124,11 +124,12 @@ export function syncBotHostListing(input: BotHostListingInput, webClient: boolea
       ])
     )
   }
-  // A shared agent is listed as soon as it is found, before its host has answered a read.
+  // A shared agent is listed as soon as it is found and has its home, before its host has answered a read.
   for (const shared of input.sharedBotHosts) {
     const hostId = toRuntimeExecutionHostId(shared.environmentId)
-    if (!readKeptBotHostList(hostId)) {
-      keepBotHostList(hostId, { bots: [sharedBotPlaceholder(shared)] })
+    const { homeWorkspaceId } = shared
+    if (homeWorkspaceId !== null && !readKeptBotHostList(hostId)) {
+      keepBotHostList(hostId, { bots: [sharedBotPlaceholder({ ...shared, homeWorkspaceId })] })
     }
   }
   const listing = computeBotHostListing(

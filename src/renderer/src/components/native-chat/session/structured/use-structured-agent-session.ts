@@ -57,6 +57,7 @@ export function useStructuredAgentSession(args: StructuredAgentSessionViewArgs) 
     target,
     transportEnabled = true
   } = args
+  const held = useSharedBotHeldMessages(target, sessionId)
   const {
     state,
     stateRef,
@@ -71,19 +72,17 @@ export function useStructuredAgentSession(args: StructuredAgentSessionViewArgs) 
     write,
     admit,
     capturePresentation,
-    providerVisible
+    providerVisible,
+    readVisible
   } = useStructuredAgentSessionTransport({
     sessionId,
     target,
     isVisible: args.isVisible,
     enabled: transportEnabled,
+    readable: held.readable,
     agentName: structuredAgentLabel(agent)
   })
-  const commandMenu = useStructuredAgentSessionCommandMenu(
-    target,
-    sessionId,
-    transportEnabled && args.isVisible !== false
-  )
+  const commandMenu = useStructuredAgentSessionCommandMenu(target, sessionId, readVisible)
   const commandPending = useRef(false)
   const legacyLaunchStop = useStructuredLegacyLaunchStop(sessionId)
   const transportState = useStructuredAgentSessionTransportState(state, transportEnabled)
@@ -206,7 +205,6 @@ export function useStructuredAgentSession(args: StructuredAgentSessionViewArgs) 
     () => withNativeChatCutTurnNotices(contextClear.rows, { agentName }),
     [agentName, contextClear.rows]
   )
-  const held = useSharedBotHeldMessages(target, sessionId)
   const messages = useStructuredAgentSessionMessages(
     transcriptItems,
     useStructuredAgentSessionTranscriptPending(transportState, pending, isWorking, held.messages),

@@ -11,6 +11,7 @@ const SHARED: SharedBotHostView = {
   botId: 'bot-1',
   botName: 'Ivy',
   ownerName: 'Jinwoo Hong',
+  homeWorkspaceId: 'home-1',
   link: 'offline',
   holds: true,
   held: []

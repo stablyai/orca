@@ -3,7 +3,10 @@
 import { useMemo } from 'react'
 import { toast } from 'sonner'
 import { agentJournalSubmissionKey } from '../../../../../../../shared/agent-session/journal/agent-session-journal-item-key'
-import type { SharedBotHostView } from '../../../../../../../shared/bots/shared-bot-hosts'
+import {
+  isSharedBotNewChatId,
+  type SharedBotHostView
+} from '../../../../../../../shared/bots/shared-bot-hosts'
 import type { StructuredAgentSessionOptimisticMessage } from '../../../../../../../shared/agent-session/view/structured-agent-session-message-projection'
 import type { RuntimeClientTarget } from '../../../../../../../shared/remote-runtime/host-catalog/runtime-client-target'
 import { useTranslate } from '@/i18n/use-translate'
@@ -17,9 +20,11 @@ export type SharedBotHeldMessages = {
   /** Drawn after the chat's rows; the host's own row replaces each once it records it. */
   messages: readonly StructuredAgentSessionOptimisticMessage[]
   notices: ReadonlyMap<string, NativeChatDeliveryNotice>
+  /** False for a new chat its away host hasn't started: nothing of it is there to read until it holds a message. */
+  readable: boolean
 }
 
-const NONE: SharedBotHeldMessages = { messages: [], notices: new Map() }
+const NONE: SharedBotHeldMessages = { messages: [], notices: new Map(), readable: true }
 
 export type SharedBotHeldWords = {
   waiting: (owner: string) => string
@@ -35,7 +40,7 @@ export function sharedBotHeldMessages(
 ): SharedBotHeldMessages {
   const held = host?.held.filter((message) => message.sessionId === sessionId) ?? []
   if (!host || held.length === 0) {
-    return NONE
+    return isSharedBotNewChatId(sessionId) ? { ...NONE, readable: false } : NONE
   }
   const notices = new Map<string, NativeChatDeliveryNotice>()
   for (const message of held) {
@@ -65,7 +70,8 @@ export function sharedBotHeldMessages(
       },
       queuedAt: message.sentAt
     })),
-    notices
+    notices,
+    readable: true
   }
 }
 
