@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto'
 import { lstat, mkdir, readdir, unlink } from 'node:fs/promises'
-import { basename, isAbsolute, join } from 'node:path'
+import { join } from 'node:path'
 import type { spawnManagedProviderProcess } from '../../provider-process/managed-provider-process'
 import type {
   ProviderRelayAttachResult,
@@ -12,16 +12,16 @@ import { ProviderRelay } from './provider-relay'
 import type { ProviderRelayStream } from './provider-relay-attachment'
 import { waitAtMost } from './provider-relay-bounded-wait'
 import { readProviderRelayDetachPolicy } from './provider-relay-idle-stop'
+import { validProviderRelaySpawnSpec } from './provider-relay-spawn-spec'
 
 type SpawnManaged = typeof spawnManagedProviderProcess
 
-const PROVIDER_OWNER_EXECUTABLE = 'orca-provider-exec'
 const MAX_CHAT_KEY_CHARS = 1024
 /** An ended relay nobody collects is dropped after this, so it never holds the daemon or its spool forever. */
 const ENDED_RELAY_RETENTION_MS = 24 * 60 * 60 * 1000
 /** Relay cleanup is disk work; shutdown waits for it only this long. */
 const DISPOSE_WAIT_MS = 3000
-const RELAY_SPOOL_NAME = /^r-(\d+)-[0-9a-f-]{36}\.ndjson(?:\.line)?$/
+const RELAY_SPOOL_NAME = /^r-(\d+)-[0-9a-f-]{36}\.ndjson(?:\.line|\.compact)?$/
 
 type RelayHostOptions = {
   /** `<daemon runtime dir>`; spools and the ownership journal live under its `chat-relay/`. */
@@ -32,29 +32,6 @@ type RelayHostOptions = {
   acceptsWork: () => boolean
   onLiveCountChanged: () => void
   log: (event: string, details?: Record<string, unknown>) => void
-}
-
-const launchString = (value: unknown): value is string =>
-  typeof value === 'string' && !value.includes('\0')
-
-function validSpec(spec: ProviderRelaySpawnSpec | undefined): spec is ProviderRelaySpawnSpec {
-  return (
-    !!spec &&
-    launchString(spec.command) &&
-    spec.command.length > 0 &&
-    Array.isArray(spec.args) &&
-    spec.args.every(launchString) &&
-    launchString(spec.cwd) &&
-    isAbsolute(spec.cwd) &&
-    launchString(spec.ownerExecutable) &&
-    isAbsolute(spec.ownerExecutable) &&
-    basename(spec.ownerExecutable) === PROVIDER_OWNER_EXECUTABLE &&
-    !!spec.env &&
-    typeof spec.env === 'object' &&
-    Object.entries(spec.env).every(([key, value]) => launchString(key) && launchString(value)) &&
-    (spec.appVersion === undefined || typeof spec.appVersion === 'string') &&
-    (spec.entryPath === undefined || typeof spec.entryPath === 'string')
-  )
 }
 
 /** Only a proven-absent pid (ESRCH) frees a spool; "can't tell" keeps it. */
@@ -107,7 +84,11 @@ export class ProviderRelayHost {
     if (!this.supported || this.disposed || !this.options.acceptsWork()) {
       return { refused: 'unavailable' }
     }
-    if (!validSpec(spec) || typeof chatKey !== 'string' || chatKey.length > MAX_CHAT_KEY_CHARS) {
+    if (
+      !validProviderRelaySpawnSpec(spec) ||
+      typeof chatKey !== 'string' ||
+      chatKey.length > MAX_CHAT_KEY_CHARS
+    ) {
       throw new Error('Invalid relay launch')
     }
     if (this.staleFor(spec)) {
@@ -180,10 +161,12 @@ export class ProviderRelayHost {
     // An ended relay's expiry keeps running through attaches: it lives at most a day after it ends.
     const relay = this.requireRelay(relayId)
     relay.idleStopPolicy.configure(readProviderRelayDetachPolicy(policy))
-    const result = await relay.attach(clientId, stream, typeof fromSeq === 'number' ? fromSeq : 0)
-    // An ended relay with nothing left to ack is done once a client has seen its outcome.
-    this.removeIfFinished(relay)
-    return result
+    try {
+      return await relay.attach(clientId, stream, typeof fromSeq === 'number' ? fromSeq : 0)
+    } finally {
+      // An ended relay with nothing left to ack is done once a client has seen its outcome.
+      this.removeIfFinished(relay)
+    }
   }
 
   write(clientId: string, relayId: unknown, data: unknown): void {
@@ -193,9 +176,12 @@ export class ProviderRelayHost {
     this.requireAttached(clientId, relayId).write(data)
   }
 
-  ack(clientId: string, relayId: unknown, seq: unknown): void {
+  ack(clientId: string, relayId: unknown, seq: unknown, keepFrom?: unknown): void {
     const relay = this.requireAttached(clientId, relayId)
-    relay.ack(typeof seq === 'number' ? seq : 0)
+    relay.ack(
+      typeof seq === 'number' ? seq : 0,
+      typeof keepFrom === 'number' ? keepFrom : undefined
+    )
     this.removeIfFinished(relay)
   }
 

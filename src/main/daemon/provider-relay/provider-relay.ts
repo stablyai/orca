@@ -1,4 +1,4 @@
-import type { ManagedProviderProcess } from '../../provider-process/managed-provider-process'
+import type { ProviderRelayOptions as RelayOptions } from './provider-relay-options'
 import type {
   ProviderRelayAttachResult,
   ProviderRelayDetachPolicy,
@@ -15,21 +15,6 @@ import { ProviderRelayInput } from './provider-relay-input'
 import { ProviderRelayIdleStop } from './provider-relay-idle-stop'
 
 const RELAY_TAKEN_OVER = 'Relay attach superseded by a detach or another attach'
-
-type RelayOptions = {
-  relayId: string
-  chatKey: string
-  agent?: string | null
-  managed: ManagedProviderProcess
-  spoolPath: string
-  /** Test seam; defaults to the reader's own spill size. */
-  lineSpillBytes?: number
-  log?: (event: string, details?: Record<string, unknown>) => void
-  /** The agent exited or its stdout ended: the record may now be finished or expire. */
-  onSettled: () => void
-  /** No client is attached anymore; an ended relay may now expire. */
-  onDetached: () => void
-}
 
 /** One daemon-owned agent: its stdout spool, unanswered requests, and the one client attached. */
 export class ProviderRelay {
@@ -69,7 +54,9 @@ export class ProviderRelay {
       },
       drained: () => this.attachment?.drained() ?? Promise.resolve(),
       onFileLost: () => this.fail('spool-unreadable'),
-      onAckWanted: (seq) => this.attachment?.askForAck(seq)
+      onAckWanted: (seq) => this.attachment?.askForAck(seq),
+      // Deferred, so the host's cleanup never runs inside a spool method.
+      onDrained: () => queueMicrotask(() => options.onSettled())
     })
     this.lines = new ProviderRelayLineReader({
       spillPath: `${options.spoolPath}.line`,
@@ -130,9 +117,17 @@ export class ProviderRelay {
     return this.attachment?.clientId ?? null
   }
 
-  /** Ended, its exit sent to a client and fully acked: nothing left that a client could still need. */
+  /**
+   * Ended, its exit sent to a client and fully acked: nothing left that a client could still need.
+   * A client mid-attach hasn't had the exit yet, so a release during its replay can't remove it.
+   */
   get finished(): boolean {
-    return this.exitDelivered && this.stdoutEnded && this.spool.drained
+    return (
+      this.exitDelivered &&
+      this.stdoutEnded &&
+      this.spool.drained &&
+      (this.attachment === null || this.exitSentTo === this.attachment)
+    )
   }
 
   get idleStopPolicy(): Pick<ProviderRelayIdleStop, 'configure'> {
@@ -232,8 +227,8 @@ export class ProviderRelay {
     })
   }
 
-  ack(seq: number): void {
-    this.spool.ack(seq)
+  ack(seq: number, keepFrom?: number): void {
+    this.spool.ack(seq, keepFrom)
   }
 
   close(grace?: 'brief'): Promise<unknown> {
