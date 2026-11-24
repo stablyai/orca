@@ -10,6 +10,9 @@ import {
 } from '../mobile-relay-credential-contract'
 import type { RelayRpcClient } from './relay-rpc-client'
 
+// Any client that can send a host request: the phone's RpcClient or a relay RPC client.
+type RelayRequestPort = Pick<RelayRpcClient, 'sendRequest'>
+
 /** A minted resume credential the caller may persist before installing, so a lost reply retries the same reqId. */
 export type PendingRelayResumeCredential = { token: string; hash: string; reqId: string }
 
@@ -18,7 +21,7 @@ export type PendingRelayResumeCredential = { token: string; hash: string; reqId:
  * host's committed install status promotes it; provision's own reply never does.
  */
 export async function installRelayResumeCredential(
-  client: RelayRpcClient,
+  client: RelayRequestPort,
   pending: PendingRelayResumeCredential,
   expectedCurrentHash?: string
 ): Promise<{ installed: DeviceCredentialInstalled; relay: MobileRelayEndpoint }> {
@@ -49,7 +52,7 @@ export async function installRelayResumeCredential(
 
 /** Confirms a resumed connection with the host, which renews the credential's expiry. */
 export async function confirmRelayResume(
-  client: RelayRpcClient,
+  client: RelayRequestPort,
   resumeConfirmReqId: string,
   relayHostId: string
 ): Promise<DeviceResumeConfirmed> {
@@ -61,7 +64,7 @@ export async function confirmRelayResume(
 }
 
 async function readEndpoints(
-  client: RelayRpcClient,
+  client: RelayRequestPort,
   params: PairingGetEndpointsParams
 ): Promise<PairingGetEndpointsResult> {
   return PairingGetEndpointsResultSchema.parse(
