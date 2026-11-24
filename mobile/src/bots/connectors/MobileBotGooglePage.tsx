@@ -93,6 +93,7 @@ export function MobileBotGooglePage(props: {
         google={google}
         {...disconnecting}
         onClose={() => setDisconnecting(null)}
+        onConfirmed={() => setOpenAccount(null)}
         failed={failed}
       />
     )
@@ -128,7 +129,10 @@ export function MobileBotGooglePage(props: {
 
   const several = accounts.length > 1
   // The account the bot uses: the host's default, or the only one; its readiness is the page's.
-  const shown = accounts.find((account) => account.email === defaultAccount) ?? accounts[0]
+  // With several, a host whose saved default it can't read says null: the person picks one first.
+  const shown =
+    accounts.find((account) => account.email === defaultAccount) ??
+    (several && defaultAccount === null ? undefined : accounts[0])
   const problemCount = (account: GoogleAccount) => googleProblemCount(account, t)
   const servicesGroup = (account: GoogleAccount, first: boolean) =>
     account.status === 'reconnect' ? null : (
@@ -142,6 +146,11 @@ export function MobileBotGooglePage(props: {
         showToast={props.showToast}
       />
     )
+  const ended = t(
+    'bots.google.headline.endedOnHost',
+    'Google access ended. Sign in again on {{host}}.',
+    { host: hostName }
+  )
   if (opened) {
     const canSetDefault = several && defaultAccount !== undefined && opened.email !== defaultAccount
     return (
@@ -155,6 +164,7 @@ export function MobileBotGooglePage(props: {
           }}
         />
         {props.banner}
+        {opened.status === 'reconnect' ? <SettingsNote>{ended}</SettingsNote> : null}
         {opened === shown ? null : servicesGroup(opened, true)}
         {canSetDefault ? (
           <SettingsSection first={opened === shown}>
@@ -193,11 +203,11 @@ export function MobileBotGooglePage(props: {
 
   const shownProblems = shown ? problemCount(shown) : 0
   const status = !shown
-    ? null
+    ? several
+      ? t('bots.google.headline.noDefault', 'Choose a default account')
+      : null
     : shown.status === 'reconnect'
-      ? t('bots.google.headline.endedOnHost', 'Google access ended. Sign in again on {{host}}.', {
-          host: hostName
-        })
+      ? ended
       : shownProblems === 0
         ? t('bots.google.headline.connected', 'Google is connected')
         : shownProblems === 1
@@ -225,6 +235,7 @@ export function MobileBotGooglePage(props: {
           label: t('bots.google.shareButton', 'Share setup'),
           icon: Share,
           disabled: !props.online,
+          closeBeforePress: true,
           onPress: shareSetup
         }
       ]

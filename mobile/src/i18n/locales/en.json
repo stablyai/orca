@@ -7810,7 +7810,8 @@
         "connected": "Google is connected",
         "toFixOne": "Almost there: 1 thing to fix",
         "toFix": "Almost there: {{count}} things to fix",
-        "endedOnHost": "Google access ended. Sign in again on {{host}}."
+        "endedOnHost": "Google access ended. Sign in again on {{host}}.",
+        "noDefault": "Choose a default account"
       },
       "defaultBadge": "Default",
       "setDefault": "Set as default",
