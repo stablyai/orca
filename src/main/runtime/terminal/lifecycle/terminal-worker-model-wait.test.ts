@@ -6,6 +6,7 @@ import '../../orchestration/db/dispatch-row-writer'
 import '../../orchestration/db/attempt-outcome-projection'
 import { createRootDispatch } from '../../orchestration/db/root-dispatch-test-fixture'
 import { stopReportId } from '../../orchestration/workers/turn-stops/worker-turn-stop-report'
+import { parseRelayedMessage } from '../../orchestration/legacy-remote-home/federation-sync-message'
 import type { TerminalModelWait } from '../../../agent-hooks/server/server-model-wait'
 import { RuntimeTerminalWorkerModelWait } from './terminal-worker-model-wait'
 
@@ -112,6 +113,12 @@ function expectNoScreenText(text: string, sentinel: string): void {
   expect(text).not.toContain('lastSeen')
 }
 
+/** Every message this machine holds, under any id or mailbox. */
+function localMailCount(store: OrchestrationDb): number {
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: COUNT(*) always returns one row with n.
+  return (store.db.prepare('SELECT COUNT(*) AS n FROM messages').get() as { n: number }).n
+}
+
 function localRoute(store: OrchestrationDb): { runId: string; taskId: string; dispatchId: string } {
   const run = store.createRun({
     objective: 'ship',
@@ -168,11 +175,15 @@ describe('a terminal Claude worker waiting on its model', () => {
       const mail = db.getUnreadRunMailbox(runId, 100, ['escalation'])
       expect(mail).toHaveLength(1)
       const [message] = mail
-      expect(message.id).toBe(id)
-      expect(message.subject).toBe('Worker has made no progress')
-      expect(message.body).toContain(`Worker ${HANDLE} has made no progress on task`)
+      expect(message).toMatchObject({
+        id,
+        from_handle: HANDLE,
+        type: 'escalation',
+        priority: 'high'
+      })
+      expect(message.body).toContain(HANDLE)
       expect(message.body).toContain(taskId)
-      expect(message.body).toContain('for 12 min')
+      expect(message.body).toContain('12 min')
       expectNoScreenText(message.body, frame.sentinel)
       const payload = JSON.parse(message.payload ?? '{}')
       expect(payload).toEqual({ taskId, dispatchId, handle: HANDLE, modelWait: 'waiting' })
@@ -191,6 +202,7 @@ describe('a terminal Claude worker waiting on its model', () => {
       db = new OrchestrationDb(':memory:')
       const { dispatchId, taskId } = pairedRoute(db)
       expect(db.listPendingFederationRelay(dispatchId, 'to_home')).toHaveLength(0)
+      expect(localMailCount(db)).toBe(0)
       const watcher = observer(db, frame.screen)
       const wait = stalledStretch()
       const id = stopReportId(dispatchId, `model-waiting:${wait.turnKey}:${wait.since}`)
@@ -200,18 +212,24 @@ describe('a terminal Claude worker waiting on its model', () => {
       const relayed = db.listPendingFederationRelay(dispatchId, 'to_home')
       expect(relayed).toHaveLength(1)
       expect(relayed[0].message_id).toBe(id)
+      // The Run home's own parser accepts it as a high-priority escalation from the worker.
+      const outer = parseRelayedMessage(relayed[0].payload)
+      expect(outer).toMatchObject({
+        from: HANDLE,
+        type: 'escalation',
+        priority: 'high',
+        threadId: null
+      })
+      expect(outer.body).toContain(HANDLE)
+      expect(outer.body).toContain(taskId)
+      expect(outer.body).toContain('12 min')
       expectNoScreenText(relayed[0].payload, frame.sentinel)
-      const outer = JSON.parse(relayed[0].payload)
-      expect(outer.from).toBe(HANDLE)
-      expect(outer.subject).toBe('Worker has made no progress')
-      expect(outer.body).toContain(`Worker ${HANDLE} has made no progress on task ${taskId}`)
-      expect(outer.body).toContain('for 12 min')
       expectNoScreenText(outer.body, frame.sentinel)
-      const inner = JSON.parse(outer.payload)
+      const inner = JSON.parse(outer.payload ?? '{}')
       expect(inner).toEqual({ taskId, dispatchId, handle: HANDLE, modelWait: 'waiting' })
-      expectNoScreenText(outer.payload, frame.sentinel)
+      expectNoScreenText(outer.payload ?? '', frame.sentinel)
       // A paired worker's notice goes home, not into this machine's mail.
-      expect(db.getMessageById(id)).toBeUndefined()
+      expect(localMailCount(db)).toBe(0)
 
       // The same stretch again reaches the relay queue under the same id, and changes nothing.
       const enqueue = vi.spyOn(db, 'enqueueFederationRelay')
@@ -220,6 +238,7 @@ describe('a terminal Claude worker waiting on its model', () => {
       const again = db.listPendingFederationRelay(dispatchId, 'to_home')
       expect(again).toHaveLength(1)
       expect(again[0]).toEqual(relayed[0])
+      expect(localMailCount(db)).toBe(0)
     })
   }
 })

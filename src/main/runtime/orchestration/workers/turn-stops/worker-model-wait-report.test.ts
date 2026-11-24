@@ -19,6 +19,21 @@ const KEY = `sk-ant-api03-${'x9Y8'.repeat(16)}`
 // The notice's line limit, written out so the test does not borrow the code under test.
 const LAST_SEEN_MAX_CHARS = 300
 
+/** Both redaction markers and the kept sentinel; no raw credential, nothing past the cap. */
+function expectOnlySanitized(texts: readonly string[], inside: string, past: string): void {
+  for (const text of texts) {
+    expect(text).toContain('[redacted:anthropic-key]')
+    expect(text).toContain('[dispatch capability redacted]')
+    expect(text).toContain(inside)
+    expect(text).not.toContain(KEY)
+    expect(text).not.toContain(CAPABILITY)
+    expect(text).not.toContain(past)
+    expect(text).not.toContain('overflow')
+    expect(text).not.toContain('\\n')
+    expect(text).not.toContain('\\t')
+  }
+}
+
 beforeEach(() => {
   vi.useFakeTimers({ toFake: ['Date', 'setTimeout', 'clearTimeout'] })
 })
@@ -41,11 +56,9 @@ describe('the model-wait notice', () => {
       coordinatorHandle: 'term_coordinator',
       coordinatorPaneKey: 'tab_coordinator:11111111-1111-4111-8111-111111111111'
     })
-    createRootDispatch(
-      db,
-      db.createTask({ spec: 'work', runId: run.id }).id,
-      formatOrcaSessionAddress(SESSION)
-    )
+    const handle = formatOrcaSessionAddress(SESSION)
+    const taskId = db.createTask({ spec: 'work', runId: run.id }).id
+    const dispatchId = createRootDispatch(db, taskId, handle).id
     // Credentials and repeated whitespace early; one sentinel just inside the 300-character line
     // the notice keeps, one just past it, and a long tail after that.
     const head = 'Claude is retrying: overloaded'
@@ -87,28 +100,43 @@ describe('the model-wait notice', () => {
     watch.observe(SESSION, 'working')
     feed.onItems?.(['retry-1'])
     await vi.advanceTimersByTimeAsync(0)
-    await vi.advanceTimersByTimeAsync(10 * MINUTE)
 
-    const mail = db.getUnreadRunMailbox(run.id, 100, ['escalation', 'status'])
-    expect(mail.map((message) => message.subject).sort()).toEqual([
-      'Worker has made no progress',
-      'Worker is retrying the model API'
-    ])
-    for (const message of mail) {
-      expect(message.body).toContain(`Last seen: ${expected} `)
-      expect(JSON.parse(message.payload ?? '{}').lastSeen).toBe(expected)
-      for (const text of [message.body, message.payload ?? '']) {
-        expect(text).toContain('[redacted:anthropic-key]')
-        expect(text).toContain('[dispatch capability redacted]')
-        expect(text).toContain(inside)
-        expect(text).not.toContain(KEY)
-        expect(text).not.toContain(CAPABILITY)
-        expect(text).not.toContain(past)
-        expect(text).not.toContain('overflow')
-        expect(text).not.toContain('\\n')
-        expect(text).not.toContain('\\t')
-      }
+    const mail = () => db.getUnreadRunMailbox(run.id, 100, ['escalation', 'status'])
+    // The retry is told at once, as a notice.
+    const [retrying] = mail()
+    expect(mail()).toHaveLength(1)
+    expect(retrying).toMatchObject({ from_handle: handle, type: 'status', priority: 'normal' })
+    expect(JSON.parse(retrying.payload ?? '{}')).toEqual({
+      taskId,
+      dispatchId,
+      handle,
+      modelWait: 'retrying',
+      lastSeen: expected
+    })
+    // Bounded on both sides: the whole capped line, nothing cut or added.
+    expect(retrying.body).toContain(` ${expected} `)
+    expectOnlySanitized([retrying.body, retrying.payload ?? ''], inside, past)
+
+    // Ten quiet minutes later the wait itself goes up as an escalation, with the same retry line.
+    await vi.advanceTimersByTimeAsync(10 * MINUTE)
+    const later = mail()
+    expect(later).toHaveLength(2)
+    const waiting = later.find((message) => message.id !== retrying.id)
+    if (!waiting) {
+      throw new Error('no waiting notice')
     }
+    expect(waiting).toMatchObject({ from_handle: handle, type: 'escalation', priority: 'high' })
+    expect(JSON.parse(waiting.payload ?? '{}')).toEqual({
+      taskId,
+      dispatchId,
+      handle,
+      modelWait: 'waiting',
+      lastSeen: expected
+    })
+    expect(waiting.body).toContain(` ${expected} `)
+    expect(waiting.body).toContain('10 min')
+    expectOnlySanitized([waiting.body, waiting.payload ?? ''], inside, past)
+
     watch.dispose()
     db.close()
   })
