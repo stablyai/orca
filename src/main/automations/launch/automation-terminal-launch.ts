@@ -10,6 +10,7 @@ import { automationRunFailure } from '../../../shared/automations/history/automa
 import type { AgentLaunchSurfaceExecution } from '../../agent-launch/agent-launch-execution'
 import { openAgentLaunch } from '../../agent-launch/agent-launch-executor'
 import { tuiAgentDisplayName } from '../../../shared/agent-launch/catalog/tui-agent-display-names'
+import { isTuiAgent } from '../../../shared/agent-launch/catalog/tui-agent-config'
 import type { RuntimeTerminalCreate } from '../../../shared/terminal/runtime/runtime-terminal-create-contract'
 import type { Automation } from '../../../shared/automations/automation-definition'
 import type { AutomationRun } from '../../../shared/automations/history/automation-run'
@@ -22,6 +23,8 @@ import { buildAutomationWorktreeCreateArgs } from './automation-workspace-create
 import type { AutomationRepoRunTarget } from '../ownership/run-target-resolution'
 
 const TERMINAL_ONLY_MESSAGE = 'An automation starts a terminal agent only.'
+const UNSUPPORTED_AGENT_MESSAGE =
+  "This automation's agent is no longer supported. Edit the automation to pick another agent."
 
 type LaunchedTerminal = {
   handle: string
@@ -45,6 +48,10 @@ export async function launchAutomationTerminalAgent(
 ): Promise<AutomationTerminalAgentLaunch> {
   const { automation, run, target } = request
   const agent = automation.agentId
+  // Saved automations can name a removed agent (Gemini CLI); refuse before its config lookup throws.
+  if (!isTuiAgent(agent)) {
+    throw new Error(UNSUPPORTED_AGENT_MESSAGE)
+  }
   const selectedTarget =
     automation.workspaceMode === 'existing'
       ? await resolveLocalExistingWorkspace(runtime, automation, target)

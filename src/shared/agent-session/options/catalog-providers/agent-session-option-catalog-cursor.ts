@@ -6,29 +6,6 @@ import type {
 import { agentChoiceCliApply } from '../../../agent-launch/choices/agent-choice-cli-apply'
 import { parseCursorModels } from '../../../source-control/ai/generation/commit-message-model-parsers'
 
-export const GEMINI_SESSION_OPTION_CATALOG: AgentSessionOptionCatalog = {
-  models: [
-    { id: 'gemini-3-pro-preview', label: 'Gemini 3 Pro Preview', options: [] },
-    { id: 'gemini-3-flash-preview', label: 'Gemini 3 Flash Preview', options: [] },
-    { id: 'gemini-2.5-pro', label: 'Gemini 2.5 Pro', options: [] },
-    { id: 'gemini-2.5-flash', label: 'Gemini 2.5 Flash', options: [] }
-  ],
-  modelApply: {
-    ...agentChoiceCliApply(
-      'gemini',
-      [
-        {
-          kind: 'value',
-          names: ['-m', '--model'],
-          lift: 'separate-and-long-equals'
-        }
-      ],
-      '-m'
-    ),
-    midSession: { kind: 'agent-picker', command: '/model' }
-  }
-}
-
 // The levels `cursor-agent models` ids can name; a listed model offers its own subset.
 const CURSOR_CLI_EFFORTS = [
   { value: 'none', label: 'None' },

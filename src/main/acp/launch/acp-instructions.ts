@@ -153,13 +153,6 @@ export const deliverGooseInstructions: AcpInstructionsDelivery = async ({ text, 
   return {}
 }
 
-// Gemini ignores `_meta` and builds its context from the folder's GEMINI.md at every start, a
-// reopen and each compression included, but reads it only in a trusted folder, so the launch trusts it.
-export const deliverGeminiInstructions: AcpInstructionsDelivery = async ({ text, cwd }) => {
-  await writeFolderContextFile(cwd, 'GEMINI.md', 'Gemini', text)
-  return { env: { GEMINI_CLI_TRUST_WORKSPACE: 'true' } }
-}
-
 // Qwen rebuilds its system prompt from the folder's QWEN.md at every start, reopens included
 // (checked live on 0.28.0), so every launch rewrites it with the current text.
 export const deliverQwenCodeInstructions: AcpInstructionsDelivery = async ({ text, cwd }) => {
