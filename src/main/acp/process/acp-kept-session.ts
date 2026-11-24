@@ -121,9 +121,11 @@ export class AcpKeptSession {
     )
   }
 
-  /** Background work the daemon still counted open at this attach, by its first key part. */
-  openWork(group: string): string[] {
-    return (this.child.attachResult?.openWork?.[group] ?? []).flatMap((key) => key[0] ?? [])
+  /** Background work the daemon still counted open at this attach, or saw end while no app was
+   *  attached (`ended`), by its first key part. */
+  openWork(group: string, ended = false): string[] {
+    const work = ended ? this.child.attachResult?.endedWork : this.child.attachResult?.openWork
+    return (work?.[group] ?? []).flatMap((key) => key[0] ?? [])
   }
 
   /** Lets the held output through once the chat can route it. */

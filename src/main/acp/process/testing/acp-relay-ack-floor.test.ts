@@ -94,12 +94,13 @@ describe('ACP relay ack floor', () => {
     parsed(failed)
     // Without ids its messages are numbered from the turn's start, so nothing in the turn is acked.
     expect(await send(chunk('a'), chunk('b'))).toEqual([1])
-    // The daemon's ask passes the floor; the turn still holds what follows.
+    // The daemon's ask (its file cap) passes the floor; what it released is never kept again, so
+    // a later restart replays only the rest, renumbered, and duplicates nothing.
     await output.settle(true)
     expect(acks).toEqual([1, 5])
-    expect(await send(chunk('c'))).toEqual([1, 5])
+    expect(await send(chunk('c'))).toEqual([1, 5, 6])
     answer.reject(new Error('rate limited'))
-    await vi.waitFor(async () => expect(await send(chunk('later'))).toEqual([1, 5, 7]))
+    await vi.waitFor(async () => expect(await send(chunk('later'))).toEqual([1, 5, 6, 7]))
   })
 
   it('reads a long update from its ends without parsing its payload', async () => {
