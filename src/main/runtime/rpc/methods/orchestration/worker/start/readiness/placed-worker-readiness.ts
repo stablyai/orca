@@ -13,8 +13,9 @@ import {
   type WorkerReadinessWaitArgs
 } from './worker-start-background-readiness'
 import {
-  awaitStructuredWorkerSetupGate,
-  type StructuredWorkerSetupGate
+  watchStructuredWorkerSetup,
+  type StructuredWorkerSetupGate,
+  type StructuredWorkerSetupWatch
 } from './worker-start-structured-setup-gate'
 
 type PlacedWorkerReadiness = {
@@ -45,15 +46,25 @@ export async function handOverWhenReady(
 ): Promise<unknown> {
   const { setupStage } = args
   const setupEnd = watchLaunchSetupEnd(args)
+  // A structured worker's one Setup wait: the background wait takes it over if the budget ends first.
+  const setupWatch = args.structuredSession
+    ? watchStructuredWorkerSetup({
+        runtime: args.runtime,
+        setup: setupStage.setup,
+        effects: setupStage.effects
+      })
+    : null
   let pending: Awaited<ReturnType<typeof awaitPlacedWorkerReadiness>>
   try {
-    pending = await awaitPlacedWorkerReadiness(args)
+    pending = await awaitPlacedWorkerReadiness(args, setupWatch)
   } catch (error) {
     setupEnd?.dispose()
+    setupWatch?.dispose()
     throw error
   }
   if (!pending) {
     setupEnd?.dispose()
+    setupWatch?.dispose()
     return args.handOver()
   }
   return continueWorkerStartInBackground({
@@ -69,14 +80,13 @@ export async function handOverWhenReady(
     launchedAt: args.launchedAt,
     setupEnd,
     blockedReason: pending.blockedReason,
-    ...(args.structuredSession
-      ? { waitForStructuredSetup: waitForStructuredSetupInBackground(args) }
-      : {}),
+    ...(setupWatch ? { waitForStructuredSetup: waitInBackground(args, setupWatch) } : {}),
     handOver: async (ready) => {
       const handedOver = (async () => {
         if (ready) {
           await settleReadinessWait(args, ready)
         }
+        // A fresh budget; a structured agent only starts now, under its host's own startup ceiling.
         return args.handOver(Date.now() + args.timeoutMs)
       })()
       args.onHandedOver(await handedOver.catch((error: unknown) => args.fail(error)))
@@ -107,19 +117,17 @@ function watchLaunchSetupEnd(args: PlacedWorkerReadiness): SetupEndWatch | null 
 /** Waits, within the caller's budget, for the placed worker to take its brief. Null: it can now. Else
  *  its agent is not ready in a way waiting on can fix; a real failure throws. */
 async function awaitPlacedWorkerReadiness(
-  args: PlacedWorkerReadiness
+  args: PlacedWorkerReadiness,
+  setupWatch: StructuredWorkerSetupWatch | null
 ): Promise<ReturnType<typeof readinessStillPending>> {
   const { runtime, structuredSession, setupStage } = args
   const terminalHandle = setupStage.terminalHandle
   let wait: StructuredWorkerSetupGate | RuntimeTerminalWait | null = null
   // Structured readiness comes from preamble delivery, not TUI idle; only repo wait-for-setup policy gates here.
   if (structuredSession) {
-    wait = await awaitStructuredWorkerSetupGate({
-      runtime,
-      setup: setupStage.setup,
-      effects: setupStage.effects,
-      timeoutMs: Math.max(0, args.readinessDeadline - Date.now())
-    })
+    wait = setupWatch
+      ? await setupWatch.within(Math.max(0, args.readinessDeadline - Date.now()))
+      : null
     // Setup still running at the budget: wait on in the background, as an agent not yet ready does.
     if (wait && !wait.satisfied && wait.status === 'timeout') {
       return {}
@@ -160,30 +168,27 @@ async function settleReadinessWait(
   if (wait.satisfied) {
     return
   }
-  if (setupStage.setup.state === 'failed') {
+  const unobserved = 'reason' in wait && wait.status === 'unobserved'
+  if (setupStage.setup.state === 'failed' || unobserved) {
     args.onSetupFailed()
   }
   throw new Error(
     wait.blockedReason
       ? await agentStartupBlockedMessage(runtime, setupStage.terminalHandle, wait.blockedReason)
-      : structuredSession
-        ? `Setup did not finish before the structured worker started (${wait.status}).`
-        : `Agent did not become ready (${wait.status}).`
+      : unobserved
+        ? `Orca lost sight of Setup (${wait.reason}), so it never sent the brief; Setup may still be running.`
+        : structuredSession
+          ? `Setup did not finish before the structured worker started (${wait.status}).`
+          : `Agent did not become ready (${wait.status}).`
   )
 }
 
 /** The background wait on a structured worker's Setup; a stop during it releases the session. */
-function waitForStructuredSetupInBackground(args: PlacedWorkerReadiness) {
+function waitInBackground(args: PlacedWorkerReadiness, setupWatch: StructuredWorkerSetupWatch) {
   const { runtime, structuredSession, setupStage } = args
   return async (signal: AbortSignal, timeoutMs: number) => {
     try {
-      return await awaitStructuredWorkerSetupGate({
-        runtime,
-        setup: setupStage.setup,
-        effects: setupStage.effects,
-        timeoutMs,
-        signal
-      })
+      return await setupWatch.within(timeoutMs, signal)
     } catch (error) {
       if (signal.aborted) {
         await tearDownFailedWorkerStart({
@@ -194,6 +199,8 @@ function waitForStructuredSetupInBackground(args: PlacedWorkerReadiness) {
         })
       }
       throw error
+    } finally {
+      setupWatch.dispose()
     }
   }
 }

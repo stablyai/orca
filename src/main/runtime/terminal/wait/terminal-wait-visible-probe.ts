@@ -163,9 +163,11 @@ export abstract class OrcaRuntimeWithStartTuiIdleVisibleReadProbe extends OrcaRu
         scanner.scan(replay)
       }
       if (!settled) {
+        // Why outlivesRenderer: a window closing or reloading (an app quit) must not read as Setup ending.
         void this.waitForTerminal(handle, {
           condition: 'exit',
-          signal: exitAbort.signal
+          signal: exitAbort.signal,
+          outlivesRenderer: true
         })
           .then((wait) => {
             if (wait.satisfied && wait.condition === 'exit' && wait.status === 'exited') {

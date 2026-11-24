@@ -9,15 +9,19 @@ afterEach(() => {
 })
 
 const BUDGET_MS = 60_000
-const READY_DEADLINE_MS = 10 * 60_000
+const SETUP_LIMIT_MS = 2 * 60 * 60_000
 
 /** A structured worker start behind a running wait-for-setup Setup whose exit the test decides. */
 function structuredStart() {
   let exitSetup: (exitCode: number) => void = () => {}
+  let loseSetup: (error: Error) => void = () => {}
+  let setupWaits = 0
   const runtime = {
     waitForSetupTerminalCompletion: (_handle: string, signal?: AbortSignal) =>
       new Promise<{ exitCode: number | null }>((resolve, reject) => {
+        setupWaits += 1
         exitSetup = (exitCode) => resolve({ exitCode })
+        loseSetup = reject
         signal?.addEventListener('abort', () => reject(signal.reason), { once: true })
       }),
     readTerminal: () => Promise.reject(new Error('no screen'))
@@ -40,7 +44,7 @@ function structuredStart() {
   const effects: WorkerEffect[] = [
     { kind: 'setup', action: 'run', state: 'running', terminalId: 'term_setup' }
   ]
-  const handOver = vi.fn(async () => 'brief delivered')
+  const handOver = vi.fn(async (_deliveryDeadline?: number) => 'brief delivered')
   const fail = vi.fn(async (error: unknown) => ({
     failed: error instanceof Error ? error.message : String(error)
   }))
@@ -82,6 +86,8 @@ function structuredStart() {
   return {
     start,
     exitSetup: (code: number) => exitSetup(code),
+    loseSetup: (error: Error) => loseSetup(error),
+    setupWaits: () => setupWaits,
     setup,
     handOver,
     fail,
@@ -120,13 +126,22 @@ describe('a structured worker start behind wait-for-setup', () => {
       stage: 'awaiting_agent',
       nextCommands: expect.arrayContaining(['orca terminal read --terminal term_setup --screen'])
     })
+    expect(await worker.start).not.toHaveProperty('readyBy')
     expect(worker.handOver).not.toHaveBeenCalled()
 
-    await vi.advanceTimersByTimeAsync(2 * BUDGET_MS)
+    // Past the old 10 min limit counted from launch: Setup now gets 2 h.
+    await vi.advanceTimersByTimeAsync(30 * 60_000)
     worker.exitSetup(0)
+    const setupEndedAt = Date.now()
     await vi.waitFor(() => expect(worker.onHandedOver).toHaveBeenCalledWith('brief delivered'))
+    // A fresh delivery budget from Setup's end (waitFor's own polling moves the fake clock a little).
+    const deliveryDeadline = worker.handOver.mock.calls[0]?.[0] ?? 0
+    expect(deliveryDeadline - setupEndedAt).toBeGreaterThanOrEqual(BUDGET_MS)
+    expect(deliveryDeadline - setupEndedAt).toBeLessThan(BUDGET_MS + 1_000)
     expect(worker.setup.state).toBe('succeeded')
     expect(worker.fail).not.toHaveBeenCalled()
+    // One Setup wait spans the budget and the background: the setup terminal is never looked up again.
+    expect(worker.setupWaits()).toBe(1)
   })
 
   it('fails the start when Setup fails after the budget', async () => {
@@ -146,19 +161,47 @@ describe('a structured worker start behind wait-for-setup', () => {
     expect(worker.handOver).not.toHaveBeenCalled()
   })
 
-  it('fails the start when Setup is still running at the ready deadline', async () => {
+  it('fails the start when Setup is still running 2 h after launch', async () => {
     vi.useFakeTimers()
     const worker = structuredStart()
     await vi.advanceTimersByTimeAsync(BUDGET_MS)
     expect(await worker.start).toMatchObject({ state: 'starting' })
 
-    await vi.advanceTimersByTimeAsync(READY_DEADLINE_MS)
+    await vi.advanceTimersByTimeAsync(SETUP_LIMIT_MS - BUDGET_MS - 1)
+    expect(worker.onHandedOver).not.toHaveBeenCalled()
+    await vi.advanceTimersByTimeAsync(1)
     await vi.waitFor(() =>
       expect(worker.onHandedOver).toHaveBeenCalledWith({
         failed: 'Setup did not finish before the structured worker started (timeout).'
       })
     )
     expect(worker.setup.state).toBe('running')
+    expect(worker.handOver).not.toHaveBeenCalled()
+  })
+
+  it('fails the start, sending nothing, when Orca loses sight of Setup within the budget', async () => {
+    vi.useFakeTimers()
+    const worker = structuredStart()
+    worker.loseSetup(new Error('terminal_handle_stale'))
+    await expect(worker.start).rejects.toThrow(
+      'Orca lost sight of Setup (terminal_handle_stale), so it never sent the brief; Setup may still be running.'
+    )
+    expect(worker.handOver).not.toHaveBeenCalled()
+  })
+
+  it('fails the start, sending nothing, when Orca loses sight of Setup after the budget', async () => {
+    vi.useFakeTimers()
+    const worker = structuredStart()
+    await vi.advanceTimersByTimeAsync(BUDGET_MS)
+    expect(await worker.start).toMatchObject({ state: 'starting' })
+
+    worker.loseSetup(new Error('terminal_handle_stale'))
+    await vi.waitFor(() =>
+      expect(worker.onHandedOver).toHaveBeenCalledWith({
+        failed:
+          'Orca lost sight of Setup (terminal_handle_stale), so it never sent the brief; Setup may still be running.'
+      })
+    )
     expect(worker.handOver).not.toHaveBeenCalled()
   })
 })

@@ -1,22 +1,25 @@
+import { SETUP_WAIT_GATE_MAX_MS } from '../../../../../../../../shared/agent-launch/startup/setup-wait-output-gate'
 import type { AwaitingWorkerStart } from './worker-start-background-readiness'
 import type { StructuredWorkerSetupGate } from './worker-start-structured-setup-gate'
 
-/** Waits on a structured worker's Setup for up to `timeoutMs`; null when Setup could not be observed. */
+/** Waits on a structured worker's Setup for up to `timeoutMs`. */
 export type StructuredSetupWait = (
   signal: AbortSignal,
   timeoutMs: number
-) => Promise<StructuredWorkerSetupGate | null>
+) => Promise<StructuredWorkerSetupGate>
 
-/** Waits out Setup until the start's deadline, then settles the start from its verdict. */
+/** Waits on Setup for as long as a terminal worker's wrapper does (from launch), then settles the
+ *  start from its verdict. */
 export async function watchStructuredSetup(
   start: AwaitingWorkerStart,
   waitForSetup: StructuredSetupWait,
   signal: AbortSignal,
-  clock: { readyBy: () => number; dispose: () => void },
+  clock: { dispose: () => void },
   awaiting: () => boolean
 ): Promise<void> {
   try {
-    const verdict = await waitForSetup(signal, Math.max(0, clock.readyBy() - Date.now()))
+    const setupDeadline = start.launchedAt + SETUP_WAIT_GATE_MAX_MS
+    const verdict = await waitForSetup(signal, Math.max(0, setupDeadline - Date.now()))
     if (!awaiting()) {
       return
     }

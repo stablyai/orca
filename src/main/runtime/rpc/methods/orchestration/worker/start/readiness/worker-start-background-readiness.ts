@@ -88,7 +88,7 @@ export type AwaitingWorkerStart = {
   /** A structured worker has no agent screen to wait on: only its wait-for-setup Setup holds the brief. */
   waitForStructuredSetup?: StructuredSetupWait
   /** Settles the start from the wait's verdict as a start ready in time does: types the brief, or
-   *  fails on a Setup that did not succeed. Null: Setup could not be observed. */
+   *  fails on a Setup that did not succeed or could not be watched. */
   handOver: (ready: RuntimeTerminalWait | Awaited<ReturnType<StructuredSetupWait>>) => Promise<void>
   /** Records the terminal as this worker's own, as a hand-over does first. */
   bindTerminal: () => void

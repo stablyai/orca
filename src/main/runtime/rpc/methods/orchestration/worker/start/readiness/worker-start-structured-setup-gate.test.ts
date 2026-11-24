@@ -5,7 +5,7 @@ import {
   WORKTREE_ID
 } from '../../../../../../terminal/layout/orca-runtime-layout-owner-start-fixture'
 import type { WorkerEffect, WorkerSetupReceipt } from '../placement/worker-placement-topology'
-import { awaitStructuredWorkerSetupGate } from './worker-start-structured-setup-gate'
+import { watchStructuredWorkerSetup } from './worker-start-structured-setup-gate'
 
 it('waits for setup on a terminal the window adopted before the wait began', async () => {
   const { runtime } = setupLayoutOwnerRuntime()
@@ -42,14 +42,16 @@ it('waits for setup on a terminal the window adopted before the wait began', asy
     // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the gate reads only policy and state.
     const setup = { startupPolicy: 'wait-for-setup', state: 'running' } as WorkerSetupReceipt
     let settled = false
-    const gate = awaitStructuredWorkerSetupGate({ runtime, setup, effects, timeoutMs: 5_000 }).then(
-      (result) => {
-        settled = true
-        return result
-      }
-    )
+    const watch = watchStructuredWorkerSetup({ runtime, setup, effects })
+    const gate = (watch?.within(5_000) ?? Promise.resolve(null)).then((result) => {
+      settled = true
+      return result
+    })
     // Unfixed, the gate settles at once with no verdict; fixed, it waits out the budget's last tick.
-    await vi.advanceTimersByTimeAsync(4_999)
+    await vi.advanceTimersByTimeAsync(2_000)
+    // A window closing (as on app quit) retires renderer-bound waits; the Setup wait must outlive it.
+    internals.terminalWaiters.rejectRendererBound('terminal_handle_stale')
+    await vi.advanceTimersByTimeAsync(2_999)
     expect(settled).toBe(false)
 
     runtime.onPtyData(ptyId, '\n__ORCA_SETUP_COMPLETE__:token-1:0\n', 1)
