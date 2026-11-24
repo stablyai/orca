@@ -8,6 +8,7 @@ import {
 } from './messages/disclosure/native-chat-disclosure-store'
 import type { ReaderGesture } from './viewport/scroll/native-chat-autoscroll'
 import { NativeChatForwardedGestureContext } from './viewport/scroll/native-chat-reader-scroll-input'
+import { NativeChatTranscriptScrollContext } from './viewport/scroll/native-chat-transcript-scroll-context'
 
 /** Every transcript's scroller: disclosures, forwarded visual gestures, math copy, and Jump to latest. */
 export function NativeChatTranscriptViewport({
@@ -48,7 +49,9 @@ export function NativeChatTranscriptViewport({
             // Browser anchoring would add unattributed movement beside the follow policy's anchor.
             className="scrollbar-sleek relative h-full overflow-y-auto [overflow-anchor:none] [scrollbar-gutter:stable_both-edges] focus-visible:outline-none"
           >
-            {children}
+            <NativeChatTranscriptScrollContext.Provider value>
+              {children}
+            </NativeChatTranscriptScrollContext.Provider>
           </div>
           {overlays}
           <NativeChatJumpToLatest visible={showJump} onJump={onJump} />

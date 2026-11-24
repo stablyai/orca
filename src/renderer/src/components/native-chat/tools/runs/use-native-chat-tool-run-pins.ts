@@ -1,5 +1,4 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
-import { VIRTUALIZED_LIST_MIN_ROWS } from '@/components/ui/virtualized-list'
 import { nativeChatTranscriptRange } from '../../viewport/virtualization/native-chat-pinned-rows'
 import type { NativeChatToolRunRow } from './native-chat-tool-run-rows'
 
@@ -20,19 +19,16 @@ export function useNativeChatToolRunPins({
   rows,
   rowIndexByKey,
   revealRowKey,
-  heldRowKey,
   drawsEveryRow,
-  isVisible,
-  scrollerRef
+  tracksSelection,
+  membersRef
 }: {
   rows: readonly NativeChatToolRunRow[]
   rowIndexByKey: ReadonlyMap<string, number>
   revealRowKey: string | undefined
-  /** The row a returning reader is being restored to; drawn until they move. */
-  heldRowKey: string | undefined
   drawsEveryRow: boolean
-  isVisible: boolean
-  scrollerRef: React.RefObject<HTMLDivElement | null>
+  tracksSelection: boolean
+  membersRef: React.RefObject<HTMLDivElement | null>
 }) {
   const [interactionKeys, setInteractionKeys] = useState<readonly string[]>([])
   const [focusedKey, setFocusedKey] = useState<string | null>(null)
@@ -75,7 +71,7 @@ export function useNativeChatToolRunPins({
     add(rows.length - 1)
     add(focusNeighbors.first)
     add(focusNeighbors.final)
-    for (const key of [revealRowKey, heldRowKey, ...interactionKeys]) {
+    for (const key of [revealRowKey, ...interactionKeys]) {
       add(key === undefined ? undefined : rowIndexByKey.get(key))
     }
     const focused = focusedKey === null ? undefined : rowIndexByKey.get(focusedKey)
@@ -84,19 +80,8 @@ export function useNativeChatToolRunPins({
       add(focusNeighbors.next[focused])
     }
     return indexes
-  }, [
-    focusNeighbors,
-    focusedKey,
-    heldRowKey,
-    interactionKeys,
-    revealRowKey,
-    rowIndexByKey,
-    rows.length
-  ])
+  }, [focusNeighbors, focusedKey, interactionKeys, revealRowKey, rowIndexByKey, rows.length])
 
-  // A hidden run cannot be copied from; a visible one tracks selection even while drawing every row,
-  // so the span is already known when it goes back to its window.
-  const tracksSelection = isVisible
   // One array per row count: the virtualizer keeps its items while the same array comes back, so
   // scrolling a run that draws every row rebuilds nothing.
   const everyIndex = useMemo(
@@ -140,15 +125,15 @@ export function useNativeChatToolRunPins({
       return
     }
     const onSelectionChange = (): void => {
-      const scroller = scrollerRef.current
+      const members = membersRef.current
       const selection = document.getSelection()
       const range = selection && selection.rangeCount > 0 ? selection.getRangeAt(0) : null
-      if (!scroller || !range || !range.intersectsNode(scroller)) {
+      if (!members || !range || !range.intersectsNode(members)) {
         setSelectionSpan((current) => (current === null ? current : null))
         return
       }
       const indexAt = (node: Node, fallback: number): number => {
-        if (!scroller.contains(node)) {
+        if (!members.contains(node)) {
           return fallback
         }
         const key = rowKeyOf(node instanceof Element ? node : node.parentElement)
@@ -164,7 +149,7 @@ export function useNativeChatToolRunPins({
     onSelectionChange()
     document.addEventListener('selectionchange', onSelectionChange)
     return () => document.removeEventListener('selectionchange', onSelectionChange)
-  }, [scrollerRef, tracksSelection])
+  }, [membersRef, tracksSelection])
 
   const retainInteractedRow = useCallback((event: React.SyntheticEvent) => {
     const key = rowKeyOf(event.target)
@@ -187,14 +172,12 @@ export function useNativeChatToolRunPins({
   const onBlurCapture = useCallback(
     (event: React.FocusEvent) => {
       const next = event.relatedTarget
-      if (!(next instanceof Node) || !scrollerRef.current?.contains(next)) {
+      if (!(next instanceof Node) || !membersRef.current?.contains(next)) {
         setFocusedKey(null)
       }
     },
-    [scrollerRef]
+    [membersRef]
   )
 
-  // A selection wider than a window keeps that many rows drawn while the reader scrolls.
-  const spansSelection = span !== null && span[1] - span[0] >= VIRTUALIZED_LIST_MIN_ROWS
-  return { rangeExtractor, spansSelection, retainInteractedRow, onFocusCapture, onBlurCapture }
+  return { rangeExtractor, retainInteractedRow, onFocusCapture, onBlurCapture }
 }

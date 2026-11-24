@@ -20,10 +20,7 @@ export function NativeChatToolRunMemberList({
   revealedDiff,
   onRevealDiff,
   disclosureId,
-  asides,
-  followKey,
-  startsAtEnd,
-  memoryKey
+  asides
 }: {
   /** Every tool block of the run; `headerBlocks` is those minus its asks. */
   blocks: NativeChatBlock[]
@@ -35,9 +32,6 @@ export function NativeChatToolRunMemberList({
   revealedDiff?: NativeChatDiffReveal
   onRevealDiff?: (element: HTMLElement) => void
   disclosureId?: string
-  followKey: number
-  startsAtEnd: boolean
-  memoryKey?: string
 }): React.JSX.Element {
   // One flat keyed row list with or without asides, so a row gaining its first never remounts a line.
   const rows = useMemo(
@@ -103,9 +97,6 @@ export function NativeChatToolRunMemberList({
     <NativeChatToolRunMembers
       rows={rows}
       renderRow={renderRow}
-      followKey={followKey}
-      startsAtEnd={startsAtEnd}
-      memoryKey={memoryKey}
       revealRowKey={revealedDiff ? `edit:${revealedDiff.editKey}` : undefined}
     />
   )

@@ -24,7 +24,6 @@ import { NativeChatBackgroundTaskRun } from '../tasks/NativeChatBackgroundTaskRu
 import { NativeChatSubagentRun } from '../../subagents/NativeChatSubagentRun'
 import { NativeChatToolRunIcon } from '../lines/NativeChatToolIcon'
 import { NativeChatToolRunCallCounts } from './NativeChatToolRunCallCounts'
-import { revealNativeChatToolRunMember } from './NativeChatToolRunMembers'
 import { NativeChatToolRunMemberList } from './NativeChatToolRunMemberList'
 import { NativeChatBrowserRunPageButton } from './NativeChatBrowserPageButton'
 import { NativeChatImageAttachments } from '../../media/images/NativeChatImageAttachments'
@@ -86,15 +85,6 @@ export function NativeChatToolRun({
   // This row owns the language subscription for its tool, diff, and task labels.
   useTranslation()
   const spacing = followsProse ? 'mt-2' : undefined
-  // Rows drawn among the calls count as work too: a reader at the end follows them arriving.
-  const asideCount = useMemo(
-    () =>
-      asides
-        ? asides.after.length +
-          Array.from(asides.before.values()).reduce((count, rows) => count + rows.length, 0)
-        : 0,
-    [asides]
-  )
   // Key reader overrides by controlling disclosure state so returning restores them without mid-render store writes.
   const runKey =
     disclosureId === undefined
@@ -140,14 +130,6 @@ export function NativeChatToolRun({
   const showsHeader = !hasAskCall || callCount > 0
   // A single command is more recognizable than its category summary. Its words read translate(), so key it on `t`.
   const runSentence = recomputeOn([t], () => nativeChatToolRunSentence(headerBlocks, { live }))
-  // The card sits inside the run's own scroll box, so that box has to move too.
-  const revealDiff = useMemo(
-    () =>
-      onRevealDiff
-        ? (card: HTMLElement) => onRevealDiff(revealNativeChatToolRunMember(card))
-        : undefined,
-    [onRevealDiff]
-  )
   const fallbackLabel =
     fallbackKey === 'result'
       ? t('components.native-chat.tool.result', NATIVE_CHAT_TOOL_ACTIVITY_COPY.result)
@@ -238,11 +220,8 @@ export function NativeChatToolRun({
           previousTodoWrite={previousTodoWrite}
           previousUpdatePlan={previousUpdatePlan}
           revealedDiff={revealedDiff}
-          onRevealDiff={revealDiff}
+          onRevealDiff={onRevealDiff}
           disclosureId={disclosureId}
-          followKey={blocks.length + asideCount}
-          startsAtEnd={live && !revealedDiff}
-          memoryKey={runKey}
         />
       </NativeChatExpandable>
     </div>

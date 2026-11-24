@@ -57,7 +57,7 @@ function SlackMessage({ asker = ASKER }: { asker?: ConnectorAsker }): React.JSX.
 
 export const slackMarkup = defineFixture({ width: 640, render: () => <SlackMessage /> })
 // Every fold open, so the earlier messages show.
-const OPEN = { read: () => true, write: () => {}, runScroll: new Map() }
+const OPEN = { read: () => true, write: () => {} }
 export const slackEarlierMessages = defineFixture({
   width: 640,
   render: () => (

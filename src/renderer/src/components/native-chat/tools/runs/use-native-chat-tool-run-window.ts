@@ -1,39 +1,32 @@
 import { useCallback, useLayoutEffect, useMemo, useRef } from 'react'
-import {
-  elementScroll,
-  measureElement,
-  useVirtualizer,
-  type Virtualizer
-} from '@tanstack/react-virtual'
+import { elementScroll, useVirtualizer, type VirtualizerOptions } from '@tanstack/react-virtual'
 import { VIRTUALIZED_LIST_OVERSCAN } from '@/components/ui/virtualized-list'
-import type { ProgrammaticScrollMarks } from '@/lib/list-interaction/virtualized-scrolling/programmatic-scroll-marks'
-import { useLatestHandler } from '@/lib/use-latest-handler'
 import type { NativeChatToolRunRow } from './native-chat-tool-run-rows'
 
 /** A tool line's `min-h-6.5`; measured rows replace it. */
 const ROW_ESTIMATE_PX = 26
 const estimateRowSize = (): number => ROW_ESTIMATE_PX
-const ignoreMeasurement = (): void => {}
+const ignoreScroll = (): void => {}
+const neverAdjustScroll = (): boolean => false
 
-export type NativeChatToolRunVirtualizer = Virtualizer<HTMLDivElement, HTMLDivElement>
 export type NativeChatToolRunDrawnRow = { index: number; start: number; end: number }
 
 /** The run's virtualizer, kept in its own hook: it reads a mutable library instance every render,
  *  so every live read (window, sizes, positions) happens here and leaves as plain values. */
 export function useNativeChatToolRunWindow({
   rows,
-  scrollerRef,
+  getScrollElement,
+  observeOffset,
   isVisible,
   drawsEveryRow,
   rangeExtractor,
-  marks,
-  onMeasure = ignoreMeasurement,
   estimateSize = estimateRowSize,
-  scrollMargin = 0,
   enabled = true
 }: {
   rows: readonly Pick<NativeChatToolRunRow, 'key'>[]
-  scrollerRef: React.RefObject<HTMLDivElement | null>
+  getScrollElement: () => HTMLDivElement | null
+  /** For windows that read member-relative offsets from the transcript, which owns scroll writes. */
+  observeOffset?: VirtualizerOptions<HTMLDivElement, HTMLDivElement>['observeElementOffset']
   isVisible: boolean
   drawsEveryRow: boolean
   rangeExtractor: (range: {
@@ -42,42 +35,28 @@ export function useNativeChatToolRunWindow({
     overscan: number
     count: number
   }) => number[]
-  marks?: ProgrammaticScrollMarks
-  /** Every real measurement, attach and resize alike, so the cap and follow see them all. */
-  onMeasure?: (element: HTMLDivElement) => void
   estimateSize?: (index: number) => number
-  scrollMargin?: number
   enabled?: boolean
 }) {
-  const onMeasured = useLatestHandler(onMeasure)
   // Stable per row list: a new key function makes the virtualizer rebuild every row's measurement.
   const getItemKey = useCallback((index: number) => rows[index]?.key ?? index, [rows])
   const virtualizer = useVirtualizer<HTMLDivElement, HTMLDivElement>({
     count: rows.length,
-    getScrollElement: () => scrollerRef.current,
+    getScrollElement,
+    ...(observeOffset
+      ? { observeElementOffset: observeOffset, scrollToFn: ignoreScroll }
+      : { scrollToFn: elementScroll }),
     estimateSize,
-    scrollMargin,
     enabled,
     getItemKey,
     overscan: VIRTUALIZED_LIST_OVERSCAN,
     rangeExtractor,
     // A hidden pane has no boxes to measure; keep the last visible sizes.
-    useCachedMeasurements: !isVisible,
-    measureElement: (element, entry, instance) => {
-      const size = measureElement(element, entry, instance)
-      onMeasured(element)
-      return size
-    },
-    // Mark every write the virtualizer makes so the reader's own scrolling stays distinguishable.
-    scrollToFn: (offset, options, instance) => {
-      const element = instance.scrollElement
-      const previous = element?.scrollTop
-      elementScroll(offset, options, instance)
-      if (element && element.scrollTop !== previous) {
-        marks?.mark(element.scrollTop)
-      }
-    }
+    useCachedMeasurements: !isVisible
   })
+  virtualizer.shouldAdjustScrollPositionOnItemSizeChange = observeOffset
+    ? neverAdjustScroll
+    : undefined
   const totalSize = virtualizer.getTotalSize()
   const virtualItems = virtualizer.getVirtualItems()
   const measurements = virtualizer.measurementsCache

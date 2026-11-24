@@ -127,7 +127,7 @@ export function WorkerDockRoster(props: {
   )
   const rowWindow = useNativeChatToolRunWindow({
     rows: rowKeys,
-    scrollerRef: viewport,
+    getScrollElement: () => viewport.current,
     isVisible: props.visible,
     drawsEveryRow: small,
     estimateSize,
