@@ -76,19 +76,19 @@ async function serverSupports(
   return decision.supported
 }
 
-/** The lineage a start carries to the server: only when its caller is in one and the server takes it.
- *  An older server would ignore it and keep its own settings, as before. */
+/** Older servers omit the wire lineage option. This Run's home still admits every bot start. */
 export async function forwardedChatLineage(
   runtime: OrcaRuntimeService,
   db: ReturnType<OrcaRuntimeService['getOrchestrationDb']>,
   params: StartParams,
   caller: StartContext['orchestrationCaller'],
   server: OrchestrationWorkerServer
-): Promise<{ chatLineage?: true }> {
-  return startsInChatLineage(runtime, db, params, caller) &&
+): Promise<{ chatLineage?: true; enforceBotRunCapacity: boolean }> {
+  const enforceBotRunCapacity = startsInChatLineage(runtime, db, params, caller)
+  const forwards =
+    enforceBotRunCapacity &&
     (await serverSupports(runtime, server, ORCHESTRATION_CHAT_LINEAGE_RUNTIME_CAPABILITY))
-    ? { chatLineage: true }
-    : {}
+  return { enforceBotRunCapacity, ...(forwards ? { chatLineage: true } : {}) }
 }
 
 /** The caller's options a server's start takes; this Orca's own fields, and a lineage claim the
@@ -147,7 +147,13 @@ export async function startRemoteOwnedWorker(
     params.worktree === 'new-child'
       ? await resolveCrossMachineChildParent(runtime, params.from, ctx.orchestrationCaller)
       : undefined
-  const lineage = await forwardedChatLineage(runtime, db, params, ctx.orchestrationCaller, server)
+  const { enforceBotRunCapacity, ...lineage } = await forwardedChatLineage(
+    runtime,
+    db,
+    params,
+    ctx.orchestrationCaller,
+    server
+  )
   const { run } = bindRun()
   // An older CLI sends no request ID; the start still runs, but a retry cannot find it.
   const forward = remoteForwardKey(runtime, ctx, params.from, callerRequestId ?? randomUUID())!
@@ -163,6 +169,7 @@ export async function startRemoteOwnedWorker(
     taskId,
     requestKey: forward.key,
     retryOf: params.retryOf,
+    enforceBotRunCapacity,
     create: existingTask
       ? undefined
       : {

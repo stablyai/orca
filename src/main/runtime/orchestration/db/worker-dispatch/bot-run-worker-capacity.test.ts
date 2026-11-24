@@ -1,5 +1,11 @@
 import { afterEach, beforeEach, expect, it } from 'vitest'
 import { OrchestrationDb } from '../orchestration-db'
+import {
+  recordRemoteStart,
+  releaseRemotePlacement,
+  reserveRemotePlacement
+} from '../remote-owned/remote-placements'
+import { openRemoteRunLink } from '../remote-owned/remote-run-links'
 
 let db: OrchestrationDb
 
@@ -42,4 +48,53 @@ it('holds a slot for uncertain starts and rolls back a refused dispatch until a 
 
   db.failWorkerStart(first.dispatch.id, 'terminal_create', 'Launch refused')
   expect(start('Overflow').worker.state).toBe('starting')
+})
+
+it('shares the Run budget with paired starts before and after their server confirms placement', () => {
+  const { id: runId } = db.createRun({
+    objective: 'Work on both hosts',
+    coordinatorHandle: null,
+    coordinatorPaneKey: null
+  })
+  const link = openRemoteRunLink(db, runId, {
+    environmentId: 'env_server',
+    name: 'Server',
+    peerFingerprint: 'fp_server'
+  })
+  const startLocal = () =>
+    db.createStartingWorkerDispatch({
+      taskRunId: runId,
+      taskSpec: 'Local work',
+      creator: { kind: 'system' },
+      maxDepth: 4,
+      startOptions: {},
+      chatLineage: true
+    })
+  const place = (taskId: string) =>
+    reserveRemotePlacement(db, {
+      link,
+      taskId,
+      requestKey: taskId,
+      create: { spec: 'Paired work' },
+      enforceBotRunCapacity: true
+    })
+  for (let index = 0; index < 6; index++) {
+    startLocal()
+  }
+  place('task_000000000001')
+  place('task_000000000002')
+  expect(() => startLocal()).toThrow('This Run already has 8 active workers.')
+  expect(() => place('task_000000000003')).toThrow('This Run already has 8 active workers.')
+  expect(db.getTask('task_000000000003')).toBeUndefined()
+  expect(place('task_000000000001').placement.state).toBe('reserved')
+
+  recordRemoteStart(db, {
+    conversationId: link.conversation_id,
+    taskId: 'task_000000000001',
+    requestKey: 'task_000000000001',
+    dispatchId: 'ctx_000000000001'
+  })
+  expect(() => startLocal()).toThrow('This Run already has 8 active workers.')
+  releaseRemotePlacement(db, 'task_000000000002', 'task_000000000002')
+  expect(place('task_000000000003').placement.state).toBe('reserved')
 })

@@ -34,6 +34,15 @@ export type WorkerEffect = {
   warning?: string
 }
 
+export function existingWorkerPlacementEffects(worktreeId: string | undefined): WorkerEffect[] {
+  return worktreeId
+    ? [
+        { kind: 'worktree', action: 'reused', id: worktreeId },
+        { kind: 'setup', action: 'not_applicable', state: 'not_applicable' }
+      ]
+    : []
+}
+
 export type WorkerSetupReceipt = {
   requested: 'run' | 'skip' | 'inherit' | 'not_applicable'
   effective: 'run' | 'skip' | 'inherit' | 'not_applicable'
@@ -106,19 +115,17 @@ export async function createStructuredWorkerSessionForWorktree(args: {
   launchPreferences?: AgentLaunchPreferences
   effects: WorkerEffect[]
 }): Promise<Awaited<ReturnType<typeof createStructuredWorkerSession>>> {
-  const caller =
-    args.caller?.workspaceId === args.worktreeId
-      ? readAgentSessionRecordStore()?.getRecord(args.caller.sessionId)
+  const bot = botOfHome(args.runtime.bots, { workspaceId: args.worktreeId })
+  const homeCaller = args.caller?.workspaceId === args.worktreeId ? args.caller : undefined
+  const caller = homeCaller && readAgentSessionRecordStore()?.getRecord(homeCaller.sessionId)
+  const ownChoice =
+    caller && caller.location.workspaceId === args.worktreeId && caller.provider === args.agent
+      ? caller.permissionMode
       : undefined
-  const bot =
-    caller?.location.workspaceId === args.worktreeId
-      ? botOfHome(args.runtime.bots, caller.location)
-      : undefined
-  const savedMode = caller?.permissionMode ?? bot?.permissionMode
+  // A different workspace may use the destination bot home without borrowing its approval grants.
+  const savedMode = homeCaller ? (ownChoice ?? bot?.permissionMode) : bot?.permissionMode && 'ask'
   const permissionMode =
-    savedMode && caller?.provider === args.agent && bot?.agent === args.agent
-      ? newChatPermissionMode(args.agent, savedMode)
-      : null
+    savedMode && bot?.agent === args.agent ? newChatPermissionMode(args.agent, savedMode) : null
   const launchOptions = narrowStructuredLaunchSeedOptions(args.launchPreferences)
   const options = permissionMode
     ? { ...launchOptions, [AGENT_CHAT_PERMISSION_MODE_OPTION_ID]: permissionMode }

@@ -24,6 +24,7 @@ import {
 } from './remote-dispatch-records'
 import { getOpenRemoteRunLink, type RemoteRunLinkRow } from './remote-run-links'
 import { getLiveRemotePlacement, type RemotePlacementRow } from './remote-placement-hold'
+import { assertBotRunWorkerCapacity } from '../bot-run-worker-capacity'
 import { writtenRow } from './written-row'
 
 export function getRemotePlacement(
@@ -53,6 +54,7 @@ export function reserveRemotePlacement(
     requestKey: string
     create?: TaskCreation
     retryOf?: string
+    enforceBotRunCapacity?: boolean
   }
 ): { placement: RemotePlacementRow; task: TaskRow; nothingSent: boolean } {
   const transaction = beginLifecycleWriteTransaction(db.db, 'reserve_remote_placement')
@@ -80,6 +82,9 @@ export function reserveRemotePlacement(
         task: writtenRow(db.getTask(params.taskId), `Task ${params.taskId}`),
         nothingSent: existing.never_sent_at !== null
       }
+    }
+    if (params.enforceBotRunCapacity) {
+      assertBotRunWorkerCapacity(db, link.run_id)
     }
     const task =
       db.getTask(params.taskId) ??
@@ -277,13 +282,11 @@ export function currentRemoteAttempt(
   taskId: string
 ): RemoteDispatchRow | undefined {
   const placement = getLiveRemotePlacement(db, taskId)
-  if (placement?.state !== 'accepted' || !placement.dispatch_id) {
-    return undefined
-  }
-  if (getActiveDispatchForTask(db, taskId)) {
-    return undefined
-  }
-  return getRemoteDispatch(db, placement.dispatch_id)
+  return placement?.state === 'accepted' &&
+    placement.dispatch_id &&
+    !getActiveDispatchForTask(db, taskId)
+    ? getRemoteDispatch(db, placement.dispatch_id)
+    : undefined
 }
 
 /**

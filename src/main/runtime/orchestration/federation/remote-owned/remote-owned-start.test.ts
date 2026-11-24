@@ -41,12 +41,17 @@ describe('a chat-lineage start on a paired server', () => {
     const home = session('folder:home-1')
     const takes = runtimeWith([ORCHESTRATION_CHAT_LINEAGE_RUNTIME_CAPABILITY])
     expect(await forwardedChatLineage(takes, db, params, home, server)).toEqual({
-      chatLineage: true
+      chatLineage: true,
+      enforceBotRunCapacity: true
     })
-    expect(await forwardedChatLineage(runtimeWith([]), db, params, home, server)).toEqual({})
+    expect(await forwardedChatLineage(runtimeWith([]), db, params, home, server)).toEqual({
+      enforceBotRunCapacity: true
+    })
     // A caller outside any lineage cannot claim one by sending the flag itself.
     const elsewhere = session('folder:elsewhere')
-    expect(await forwardedChatLineage(takes, db, params, elsewhere, server)).toEqual({})
+    expect(await forwardedChatLineage(takes, db, params, elsewhere, server)).toEqual({
+      enforceBotRunCapacity: false
+    })
     expect(serverStartOptions(params)).not.toHaveProperty('chatLineage')
     expect(serverStartOptions(params)).toMatchObject({ spec: 'work' })
   })

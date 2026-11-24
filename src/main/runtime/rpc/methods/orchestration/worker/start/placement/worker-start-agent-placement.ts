@@ -16,7 +16,7 @@ import type { OrchestrationDb } from '../../../../../../orchestration/db/orchest
 import { WORKER_START_VOCABULARY } from '../../../structured-workers/orchestration-worker-start-mode'
 import type { AgentLaunchModeReceipt as WorkerStartModeReceipt } from '../../../../../../../../shared/agent-launch/contracts/agent-launch-intent'
 import { tearDownFailedWorkerStart } from '../readiness/failed-worker-start-teardown'
-import { readWorkerHandoffBrief } from '../worker-handoff-brief'
+import { readWorkerHandoffBrief, type WorkerHandoffTurn } from '../worker-handoff-brief'
 import type { WorkerStartInput } from '../worker-start-input'
 import {
   createExistingWorktreeWorkerTerminal,
@@ -69,6 +69,7 @@ type WorkerAgentPlacementArgs = {
   /** Decided before the dispatch record; for an existing worktree, already settled on its host. */
   mode: WorkerStartModeReceipt
   callerSession?: OrchestrationEntryCaller
+  handoffTurn?: WorkerHandoffTurn
   agent: TuiAgent | undefined
   launch: {
     preferences: AgentLaunchPreferences | undefined
@@ -135,11 +136,12 @@ export async function placeWorkerAgent(
   if (reopened === null && args.followUp?.earlierWork) {
     return { ...launched, extraSpec: args.followUp.earlierWork }
   }
-  if (launched.structuredSession && !args.followUp && args.agent) {
+  if (launched.structuredSession && !args.followUp && args.agent && args.handoffTurn) {
     const extraSpec = await readWorkerHandoffBrief({
       runtime: args.runtime,
       db: args.db,
       callerSession: args.callerSession,
+      turn: args.handoffTurn,
       workerAgent: args.agent,
       taskSpec: args.taskSpec
     })

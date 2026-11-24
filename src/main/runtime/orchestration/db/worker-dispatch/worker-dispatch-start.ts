@@ -11,7 +11,7 @@ import { taskNotFoundError } from '../../coordinator/dispatch/task-dispatch-refu
 import { claimTaskForStart } from '../tasks/task-start-claim'
 import { getFollowUpDispatch, takeFollowUpMail } from '../dispatch-context/worker-follow-up-lineage'
 
-const BOT_RUN_ACTIVE_WORKER_LIMIT = 8
+import { assertBotRunWorkerCapacity } from '../bot-run-worker-capacity'
 
 export function createStartingWorkerDispatch(
   this: OrchestrationDb,
@@ -246,26 +246,6 @@ export function createStartingWorkerDispatch(
   } catch (error) {
     this.db.exec('ROLLBACK')
     throw error
-  }
-}
-
-// The write lock covers both the capacity check and the new starting row.
-function assertBotRunWorkerCapacity(db: OrchestrationDb, runId: string): void {
-  const full = db.db
-    .prepare(
-      `SELECT 1 FROM dispatch_contexts dc
-       JOIN worker_dispatches wd ON wd.dispatch_id = dc.id
-       WHERE dc.run_id = ?
-         AND wd.state IN ('starting', 'ready', 'start_unknown', 'stopping', 'stop_unknown')
-       LIMIT 1 OFFSET ?`
-    )
-    .get(runId, BOT_RUN_ACTIVE_WORKER_LIMIT - 1)
-  if (full) {
-    throw new OrchestrationError(
-      'bot_run_worker_limit',
-      `This Run already has ${BOT_RUN_ACTIVE_WORKER_LIMIT} active workers. Continue with an existing worker or wait for one to settle before starting another.`,
-      { effectsApplied: false }
-    )
   }
 }
 

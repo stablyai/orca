@@ -17,10 +17,22 @@ import type { OrcaRuntimeService } from '../../../../../orca-runtime'
 
 const HANDOFF_BRIEF_MAX_CODE_UNITS = 2048
 
+export type WorkerHandoffTurn = { turnId: string; itemId: string }
+
+export function captureWorkerHandoffTurn(
+  caller: OrchestrationEntryCaller | undefined
+): WorkerHandoffTurn | undefined {
+  const session = sessionCallerOf(caller)
+  const active =
+    session && getStructuredAgentSessionHost()?.publishedWork?.(session.sessionId)?.activeTurn
+  return active ? { turnId: active.turnId, itemId: active.item.itemId } : undefined
+}
+
 export async function readWorkerHandoffBrief(args: {
   runtime: Pick<OrcaRuntimeService, 'bots'>
   db: OrchestrationDb
   callerSession: OrchestrationEntryCaller | undefined
+  turn: WorkerHandoffTurn
   workerAgent: string
   taskSpec: string
 }): Promise<string | undefined> {
@@ -30,25 +42,29 @@ export async function readWorkerHandoffBrief(args: {
   if (!caller || !bot || !host) {
     return undefined
   }
+  const { turnId, itemId } = args.turn
+  const sameActiveTurn = () => {
+    const active = host.publishedWork(caller.sessionId)?.activeTurn
+    return active?.turnId === turnId && active.item.itemId === itemId
+  }
   try {
     const source = host.deps.store.getConversation(caller.sessionId)
-    const active = host.publishedWork(caller.sessionId)?.activeTurn
     if (
       source?.provider !== args.workerAgent ||
       source.location.workspaceId !== caller.workspaceId ||
-      !active
+      !sameActiveTurn()
     ) {
       return undefined
     }
     const reads = await host.journalReads(caller.sessionId)
     const [{ turnItemId, opener }, turnRow] = await Promise.all([
-      reads.turnAttribution(active.turnId, Number.MAX_SAFE_INTEGER),
-      reads.itemDetail(active.item.itemId)
+      reads.turnAttribution(turnId, Number.MAX_SAFE_INTEGER),
+      reads.itemDetail(itemId)
     ])
     if (
-      turnItemId !== active.item.itemId ||
+      turnItemId !== itemId ||
       readAgentJournalTurn(turnRow?.body)?.state !== 'running' ||
-      host.publishedWork(caller.sessionId)?.activeTurn?.turnId !== active.turnId
+      !sameActiveTurn()
     ) {
       return undefined
     }

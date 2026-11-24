@@ -1,3 +1,4 @@
+import type { WorkerHandoffTurn } from './worker-handoff-brief'
 import { createLocalWorkerStartDispatch } from './local-worker-start-dispatch'
 import { refuseClaimedWorkerTerminal } from '../../../../../orchestration/db/worker-dispatch/worker-terminal-claim'
 import { probeWorkerOpenCodeModelLaunchSupport } from './launch/worker-opencode-model-preflight'
@@ -39,7 +40,10 @@ import {
   closeFailedSetupOnceRetryReady,
   releaseRetriedWorkerTerminal
 } from '../release/retried-worker-terminal-release'
-import { requireWorkerAuthority, type WorkerEffect } from './placement/worker-placement-topology'
+import {
+  existingWorkerPlacementEffects,
+  requireWorkerAuthority
+} from './placement/worker-placement-topology'
 import { prepareLocalWorkerStart } from './launch/worker-start-validation'
 import { deliverAndSettleWorkerStartReadiness } from './readiness/worker-start-readiness-settlement'
 import { handOverWhenReady } from './readiness/placed-worker-readiness'
@@ -66,6 +70,7 @@ export async function startLocalWorker(args: {
   mode: WorkerStartModeReceipt
   /** Stamped on the Dispatch so the workers this one starts start as chats too. */
   chatLineage?: boolean
+  handoffTurn?: WorkerHandoffTurn
   /** Set when a worker starts its own helper; the helper reports to this Dispatch. */
   helperCreator?: DispatchContextRow
   followUp?: WorkerFollowUp
@@ -151,14 +156,8 @@ export async function startLocalWorker(args: {
     launchReceipt: launch.receipt
   })
   releaseRetriedWorkerTerminal(runtime, db, params)
-  const effects: WorkerEffect[] = []
+  const effects = existingWorkerPlacementEffects(resolvedWorktree?.id)
   const task = started.task
-  if (resolvedWorktree) {
-    effects.push(
-      { kind: 'worktree', action: 'reused', id: resolvedWorktree.id },
-      { kind: 'setup', action: 'not_applicable', state: 'not_applicable' }
-    )
-  }
   let terminalHandle = params.terminal
   let placed: Awaited<ReturnType<typeof placeWorkerAgent>> | undefined
   let failedStage = 'terminal_create'
@@ -206,6 +205,7 @@ export async function startLocalWorker(args: {
       resolvedWorktree,
       mode,
       callerSession,
+      handoffTurn: args.handoffTurn,
       agent,
       launch,
       effects,

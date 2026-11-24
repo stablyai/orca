@@ -1,3 +1,4 @@
+import { captureWorkerHandoffTurn } from './start/worker-handoff-brief'
 import { stopHelperAfterStart } from './worker-stop'
 import { OrchestrationError } from '../../../../orchestration/orchestration-error'
 import type { z } from 'zod'
@@ -71,6 +72,7 @@ export async function startWorker(
   startFollowUp?: WorkerFollowUp
 ): Promise<unknown> {
   const { runtime, orchestrationMutation, orchestrationCaller } = ctx
+  const handoffTurn = captureWorkerHandoffTurn(orchestrationCaller)
   if (startParams.origin !== undefined && startParams.on) {
     throw new OrchestrationError(
       'invalid_argument',
@@ -133,6 +135,7 @@ export async function startWorker(
     orchestrationMutation,
     mode,
     chatLineage,
+    handoffTurn,
     helperCreator,
     followUp
   })
