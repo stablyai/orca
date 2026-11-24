@@ -30,4 +30,12 @@ describe('Claude relay acks through the SDK', () => {
     taking.handled({ type: 'result', uuid: 'u3' })
     expect(consumption.upTo(4)).toBe(4)
   })
+
+  it('never throws on a nested id it cannot read', () => {
+    const consumption = new RelayedProviderConsumption(() => {})
+    const taking = claudeRelaySdkRecordTaking(consumption.taking)
+    consumption.pushed(true, 1)
+    const nested = '{"type":"control_request","request":{"input":{"uuid":"a\\"b"}}}'
+    expect(() => taking.observe(`${nested}\n`)).not.toThrow()
+  })
 })

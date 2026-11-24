@@ -1,96 +1,86 @@
-import { Readable } from 'node:stream'
 import { describe, expect, it } from 'vitest'
-import { RelayedProviderOutput } from '../../provider-relay/relayed-provider-output'
 import { claudeRelayAckFloor } from './claude-relay-ack-floor'
 
 const frame = (value: unknown) => JSON.stringify(value)
-const stream = (type: string) =>
-  frame({ type: 'stream_event', session_id: 's', parent_tool_use_id: null, event: { type } })
+const stream = (type: string, parent: string | null = null) =>
+  frame({ type: 'stream_event', event: { type }, session_id: 's', parent_tool_use_id: parent })
+const toolUse = (id: string, parent: string | null = null) =>
+  frame({
+    type: 'assistant',
+    message: { content: [{ type: 'tool_use', id, name: 'Bash' }] },
+    session_id: 's',
+    parent_tool_use_id: parent
+  })
+const toolResult = (id: string) =>
+  frame({
+    type: 'user',
+    message: { content: [{ type: 'tool_result', tool_use_id: id }] },
+    session_id: 's'
+  })
 
+// A reattach replays from the floor, so the new app rebuilds each open item on its own row.
 describe('Claude relay ack floor', () => {
-  it('never acks into a streamed message whose final frame has not landed', async () => {
-    const acks: number[] = []
-    const output = new RelayedProviderOutput({
-      stdout: new Readable({ read() {} }),
-      ack: async (seq) => {
-        acks.push(seq)
-      },
-      ackFloor: claudeRelayAckFloor()
-    })
-    output.line('relayData', 1, frame({ type: 'system', subtype: 'init', session_id: 's' }))
-    output.line('relayData', 2, stream('message_start'))
-    output.line('relayData', 3, stream('content_block_delta'))
+  it('holds a streamed message until its stop, though each block ends before it', () => {
+    const floor = claudeRelayAckFloor()
+    floor.observe(1, frame({ type: 'system', subtype: 'init', session_id: 's' }))
+    expect(floor.floor()).toBe(null)
+    floor.observe(2, stream('message_start'))
+    floor.observe(3, stream('content_block_delta'))
     // The CLI sends each block's final frame before the message ends (thinking, then text).
-    output.line(
-      'relayData',
-      4,
-      frame({ type: 'assistant', session_id: 's', parent_tool_use_id: null })
+    floor.observe(4, frame({ type: 'assistant', session_id: 's', parent_tool_use_id: null }))
+    floor.observe(5, stream('content_block_delta'))
+    expect(floor.floor()).toBe(2)
+    floor.observe(6, stream('message_stop'))
+    expect(floor.floor()).toBe(null)
+  })
+
+  it('holds a tool call from its message start until its result', () => {
+    const floor = claudeRelayAckFloor()
+    floor.observe(1, stream('message_start'))
+    floor.observe(2, toolUse('t1'))
+    floor.observe(3, stream('message_stop'))
+    expect(floor.floor()).toBe(1)
+    floor.observe(4, toolResult('t1'))
+    expect(floor.floor()).toBe(null)
+  })
+
+  it("keeps a background subagent's open call past the turn's end, until the subagent ends", () => {
+    const floor = claudeRelayAckFloor()
+    floor.observe(
+      1,
+      frame({ type: 'system', subtype: 'task_started', task_id: 'k', tool_use_id: 'agent-1' })
     )
-    output.line('relayData', 5, stream('content_block_delta'))
-    await output.settle()
-    // A later attach replays from the message's start, so the new app rebuilds the same row.
-    expect(acks).toEqual([1])
-    output.line('relayData', 6, stream('message_stop'))
-    await output.settle()
-    expect(acks).toEqual([1, 6])
-    // The daemon asking for an ack (its spool is full) lets go of the floor.
-    output.line('relayData', 7, stream('message_start'))
-    output.line('relayData', 8, stream('content_block_delta'))
-    await output.settle()
-    expect(acks).toEqual([1, 6])
-    await output.settle(true)
-    expect(acks).toEqual([1, 6, 8])
-    // A tool call holds its message until the tool's result lands, so its row keeps its name.
-    output.line('relayData', 9, stream('message_start'))
-    output.line(
-      'relayData',
-      10,
+    floor.observe(
+      2,
       frame({
-        type: 'assistant',
-        session_id: 's',
-        parent_tool_use_id: null,
-        message: { content: [{ type: 'tool_use', id: 't1', name: 'Bash' }] }
+        type: 'system',
+        subtype: 'task_updated',
+        task_id: 'k',
+        patch: { is_backgrounded: true }
       })
     )
-    output.line('relayData', 11, stream('message_stop'))
-    await output.settle()
-    expect(acks).toEqual([1, 6, 8])
-    output.line(
-      'relayData',
-      12,
-      frame({
-        type: 'user',
-        session_id: 's',
-        message: { content: [{ type: 'tool_result', tool_use_id: 't1' }] }
-      })
-    )
-    await output.settle()
-    expect(acks).toEqual([1, 6, 8, 12])
-    // A background subagent's tool call outlives the turn that launched it, until its end.
-    output.line(
-      'relayData',
-      13,
-      frame({
-        type: 'assistant',
-        session_id: 's',
-        parent_tool_use_id: 'agent-1',
-        message: { content: [{ type: 'tool_use', id: 't2', name: 'Bash' }] }
-      })
-    )
-    output.line('relayData', 14, frame({ type: 'result', session_id: 's' }))
-    await output.settle()
-    expect(acks).toEqual([1, 6, 8, 12])
-    output.line(
-      'relayData',
-      15,
+    floor.observe(3, toolUse('t2', 'agent-1'))
+    floor.observe(4, toolResult('agent-1'))
+    floor.observe(5, frame({ type: 'result', session_id: 's' }))
+    expect(floor.floor()).toBe(3)
+    floor.observe(
+      6,
       frame({
         type: 'system',
         subtype: 'task_notification',
-        session_id: 's',
-        tool_use_id: 'agent-1'
+        task_id: 'k',
+        tool_use_id: 'agent-1',
+        session_id: 's'
       })
     )
-    await output.settle()
-    expect(acks).toEqual([1, 6, 8, 12, 15])
+    expect(floor.floor()).toBe(null)
+  })
+
+  it("ends a foreground subagent's open calls with its launching call's result", () => {
+    const floor = claudeRelayAckFloor()
+    floor.observe(1, toolUse('t3', 'agent-2'))
+    expect(floor.floor()).toBe(1)
+    floor.observe(2, toolResult('agent-2'))
+    expect(floor.floor()).toBe(null)
   })
 })

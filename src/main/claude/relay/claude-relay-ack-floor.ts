@@ -42,6 +42,8 @@ export function claudeRelayAckFloor(): ProviderRelayAckFloor {
   const tools = new Map<string, { seq: number; scope: string }>()
   /** Tool calls that launched a background task; their subagent outlives the call's result. */
   const backgroundLaunches = new Set<string>()
+  /** Each running task's launching call, for one moved to the background after it started. */
+  const launchOf = new Map<string, string>()
   const closeScope = (scope: string): void => {
     open.delete(scope)
     starts.delete(scope)
@@ -81,10 +83,19 @@ export function claudeRelayAckFloor(): ProviderRelayAckFloor {
       } else if (frame.type === 'system' && frame.subtype === 'task_notification') {
         // A subagent's end closes what it left open under its launching tool call.
         backgroundLaunches.delete(String(frame.tool_use_id ?? ''))
+        launchOf.delete(String(frame.task_id ?? ''))
         closeScope(`${String(frame.session_id ?? '')}/${String(frame.tool_use_id ?? '')}`)
       } else if (frame.type === 'system' && frame.subtype === 'task_started') {
+        if (typeof frame.task_id === 'string' && typeof frame.tool_use_id === 'string') {
+          launchOf.set(frame.task_id, frame.tool_use_id)
+        }
         if (frame.is_backgrounded === true && typeof frame.tool_use_id === 'string') {
           backgroundLaunches.add(frame.tool_use_id)
+        }
+      } else if (frame.type === 'system' && frame.subtype === 'task_updated') {
+        const launch = typeof frame.task_id === 'string' ? launchOf.get(frame.task_id) : undefined
+        if (launch && isRecord(frame.patch) && frame.patch.is_backgrounded === true) {
+          backgroundLaunches.add(launch)
         }
       } else if (frame.type === 'assistant') {
         const scope = scopeOf(frame)

@@ -12,8 +12,16 @@ function lineUuid(line: string): string | null {
   const start = at + UUID_KEY.length
   const end = line.indexOf('"', start)
   // Parsed, not sliced: a slice would keep the whole line alive for as long as its id is held.
-  const id: unknown = end === -1 ? null : JSON.parse(line.slice(at + UUID_KEY.length - 1, end + 1))
-  return typeof id === 'string' ? id : null
+  if (end === -1) {
+    return null
+  }
+  // A nested key can carry an escaped quote; an unreadable id only holds acks back.
+  try {
+    const id: unknown = JSON.parse(line.slice(at + UUID_KEY.length - 1, end + 1))
+    return typeof id === 'string' ? id : null
+  } catch {
+    return null
+  }
 }
 
 /**

@@ -7,15 +7,17 @@ import type { ClaudeSession } from '../structured/claude-structured-session-stat
 export function restateKeptClaudeBackgroundTasks(
   session: Pick<ClaudeSession, 'childWork' | 'backgroundTasks'> &
     Partial<Pick<ClaudeSession, 'translator'>>,
-  taskIds: readonly string[]
+  taskIds: readonly string[],
+  /** The last app left a turn running; with none, every open task is background work. */
+  turnRunning: boolean
 ): void {
   for (const task_id of taskIds) {
     const frame = {
       type: 'system',
       subtype: 'task_started',
       task_id,
-      // Foreground commands are open work too; only the journal knows which ran in the background.
-      is_backgrounded: session.childWork.taskInvocations.savedAsBackground(task_id),
+      // Foreground work ends with its turn; mid-turn, only the journal knows which ran in the background.
+      is_backgrounded: !turnRunning || session.childWork.taskInvocations.savedAsBackground(task_id),
       status: 'running'
     }
     session.childWork.observe(frame, session.translator?.childToolOwner)

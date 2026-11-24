@@ -24,7 +24,7 @@ describe('a kept Claude agent across a reattach', () => {
       childWork: new ClaudeChildWorkDecoder(saved),
       backgroundTasks: new ClaudeBackgroundTaskTracker()
     }
-    restateKeptClaudeBackgroundTasks(session, ['b1', 'f1', 'a1'])
+    restateKeptClaudeBackgroundTasks(session, ['b1', 'f1', 'a1'], true)
     expect([...session.childWork.live.keys()]).toEqual(['b1', 'f1', 'a1'])
     expect(session.childWork.live.get('f1')?.backgrounded).toBe(false)
     // A subagent the journal knows, still running after its turn, is a background one.
@@ -44,6 +44,17 @@ describe('a kept Claude agent across a reattach', () => {
     session.childWork.observe(ended)
     session.backgroundTasks.observe(ended)
     expect([...session.childWork.live.keys()]).toEqual(['f1', 'a1'])
+    expect(session.backgroundTasks.goalBackgroundWork).toBe('live')
+  })
+
+  it('restates every open task as background when no turn was running', () => {
+    const session = {
+      childWork: new ClaudeChildWorkDecoder(),
+      backgroundTasks: new ClaudeBackgroundTaskTracker()
+    }
+    // A monitor has no journal row of its own, but outliving its turn makes it background work.
+    restateKeptClaudeBackgroundTasks(session, ['m1'], false)
+    expect(session.childWork.live.get('m1')?.backgrounded).toBe(true)
     expect(session.backgroundTasks.goalBackgroundWork).toBe('live')
   })
 })
