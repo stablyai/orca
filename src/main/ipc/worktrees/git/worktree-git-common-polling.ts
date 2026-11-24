@@ -2,6 +2,7 @@ import { readdir } from 'node:fs/promises'
 import { join } from 'node:path'
 import { forEachWithConcurrency } from '../../../../shared/concurrency/map-with-concurrency'
 import { PRIMARY_CHECKOUT_METADATA_FILES } from './worktree-git-common-metadata-files'
+import { createOnDemandScanGate } from './worktree-git-common-on-demand-scan-gate'
 import {
   diffGitCommon,
   gitCommonDirectoryIdentity,
@@ -146,29 +147,7 @@ export async function startGitCommonPolling(
   // Filesystems can ignore child renames in directory metadata; detected misses force ungated sweeps.
   let entryDirGateTrusted = true
   let dirGateMissTicks = 0
-  const minOnDemandScanIntervalMs = options.minOnDemandScanIntervalMs
-  let lastScanStartedAt = performance.now()
-  const scannedRecently = (): boolean =>
-    minOnDemandScanIntervalMs !== undefined &&
-    performance.now() - lastScanStartedAt < minOnDemandScanIntervalMs
-  let hiddenAt: number | null = null
-  // Where the old 30 s tick would fall: start-to-start from the last timed or forced scan (pokes never moved it).
-  let oldCadenceAnchor = lastScanStartedAt
-  // The old tick parked when it landed inside a hide and forced a sweep on reveal; mirror exactly that.
-  const hideSpannedOldTick = (): boolean => {
-    if (minOnDemandScanIntervalMs === undefined || hiddenAt === null) {
-      return false
-    }
-    const oldTickIndex = (time: number): number =>
-      Math.floor((time - oldCadenceAnchor) / minOnDemandScanIntervalMs)
-    return oldTickIndex(performance.now()) > oldTickIndex(hiddenAt)
-  }
-  const unsubscribeHidden =
-    minOnDemandScanIntervalMs === undefined
-      ? undefined
-      : visibility.onWindowHidden?.(() => {
-          hiddenAt ??= performance.now()
-        })
+  const onDemand = createOnDemandScanGate(options.minOnDemandScanIntervalMs, visibility)
   let snapshot = await snapshotGitCommon(
     commonDirPath,
     undefined,
@@ -207,13 +186,11 @@ export async function startGitCommonPolling(
       return
     }
     ticking = true
-    hiddenAt = null
+    onDemand.scanStarted(!poked)
     // Measure start-to-start cadence so scan duration does not add a full interval of lag.
     const startedAt = Date.now()
-    lastScanStartedAt = performance.now()
     if (!poked) {
       tickCount++
-      oldCadenceAnchor = lastScanStartedAt
     }
     const shouldForceFullScan =
       (isReconciliation && !entryDirGateTrusted) ||
@@ -284,8 +261,8 @@ export async function startGitCommonPolling(
   }
 
   const unsubscribeVisibility = visibility.onWindowBecameVisible(() => {
-    const spannedOldTick = hideSpannedOldTick()
-    hiddenAt = null
+    const spannedOldTick = onDemand.hideSpannedOldTick()
+    onDemand.clearHide()
     if (disposed || (!parkedWhileHidden && !spannedOldTick)) {
       return
     }
@@ -297,29 +274,29 @@ export async function startGitCommonPolling(
   timer = setTimeout(() => void tick(), pollIntervalMs)
   timer.unref?.()
 
+  const poke = (): boolean => {
+    // A pending reveal sweep supersedes the gated check (focus can arrive before show/restore).
+    const revealPending = parkedWhileHidden || onDemand.hideSpannedOldTick()
+    if (disposed || revealPending || !visibility.isWindowVisible()) {
+      return false
+    }
+    if (ticking || onDemand.scannedRecently()) {
+      onDemand.retryWhenOpen(poke)
+      return false
+    }
+    void tick(false, true)
+    return true
+  }
+
   return {
-    poke: () => {
-      // A pending reveal sweep supersedes the gated check (focus can arrive before show/restore).
-      const revealPending = parkedWhileHidden || hideSpannedOldTick()
-      if (
-        disposed ||
-        ticking ||
-        revealPending ||
-        !visibility.isWindowVisible() ||
-        scannedRecently()
-      ) {
-        return false
-      }
-      void tick(false, true)
-      return true
-    },
+    poke,
     unsubscribe: async () => {
       disposed = true
       if (timer) {
         clearTimeout(timer)
       }
       unsubscribeVisibility()
-      unsubscribeHidden?.()
+      onDemand.dispose()
     }
   }
 }

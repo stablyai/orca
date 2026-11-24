@@ -1,5 +1,4 @@
 import { stat, statfs } from 'node:fs/promises'
-import { homedir } from 'node:os'
 
 // Linux statfs f_type magics for network/FUSE filesystems, where inotify misses changes made by other hosts.
 const LINUX_NETWORK_FS_TYPES = new Set([
@@ -10,23 +9,28 @@ const LINUX_NETWORK_FS_TYPES = new Set([
   0x65735546, // FUSE (sshfs, rclone, ...)
   0x01021997, // 9P
   0x5346414f, // AFS
-  0x6b414653 // kAFS
+  0x6b414653, // kAFS
+  0x00c36400, // CephFS
+  0x0bd00bd0, // Lustre
+  0x47504653, // GPFS
+  0x73757245, // Coda
+  0x564c // NCP
 ])
 
 /** True when native watching cannot be trusted to see every change (network shares, FUSE mounts). */
 export async function isOnNetworkVolume(
   path: string,
   platform: NodeJS.Platform = process.platform,
-  homeDir: string = homedir()
+  bootVolumePath = '/'
 ): Promise<boolean> {
   if (platform === 'win32') {
     return /^[\\/]{2}/.test(path)
   }
   if (platform === 'darwin') {
-    // darwin statfs types are per-boot indexes; any volume other than the home volume (shares, external disks) keeps the old cadence.
+    // darwin statfs types are per-boot indexes; any volume but the boot one (shares, network homes, external disks) keeps the old cadence.
     try {
-      const [target, home] = await Promise.all([stat(path), stat(homeDir)])
-      return target.dev !== home.dev
+      const [target, boot] = await Promise.all([stat(path), stat(bootVolumePath)])
+      return target.dev !== boot.dev
     } catch {
       return false
     }

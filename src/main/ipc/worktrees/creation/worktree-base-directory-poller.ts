@@ -99,7 +99,8 @@ export async function startWorktreeBaseDirectoryPoller(
       options.onFullScan,
       options.getGitStatusRefPaths,
       options.onWatchError,
-      options.onOverflow
+      options.onOverflow,
+      getRepos
     )
   }
   return startBasePoller(target, getRepos, onEvents, pollIntervalMs, visibility, options)

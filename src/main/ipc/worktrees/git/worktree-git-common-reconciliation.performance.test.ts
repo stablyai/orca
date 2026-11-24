@@ -281,7 +281,8 @@ it('re-checks on agent turns and shell commands in this repo, never above the ol
     }
     await vi.advanceTimersByTimeAsync(1_000)
   }
-  expect(fs.stats).toBeLessThanOrEqual(129_220)
+  // The old cadence's 129,220 for 1,900 worktrees, plus 68 for the one this test added.
+  expect(fs.stats).toBeLessThanOrEqual(129_288)
   await stop()
 })
 
@@ -296,5 +297,20 @@ it('forces the reveal sweep when a short hide spans where the old 30 s tick woul
   focus?.()
   await vi.advanceTimersByTimeAsync(0)
   expect(events.some((event) => event.path.startsWith(join(WORKTREES, 'w9')))).toBe(true)
+  await stop()
+})
+
+it('checks again once the throttle opens when activity lands inside it', async () => {
+  const { unsubscribe: stop } = await startReconciliation()
+  await vi.advanceTimersByTimeAsync(30_000)
+  activity?.('repo')
+  await vi.advanceTimersByTimeAsync(5_000)
+  const added = addWorktreeEntry('second-command')
+  activity?.('repo')
+  activity?.('repo')
+  await vi.advanceTimersByTimeAsync(0)
+  expect(events).not.toContainEqual({ type: 'create', path: added })
+  await vi.advanceTimersByTimeAsync(25_000)
+  expect(events).toContainEqual({ type: 'create', path: added })
   await stop()
 })
