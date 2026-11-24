@@ -61,6 +61,9 @@ export const ORCHESTRATION_REMOTE_OWNED_WORKERS_RUNTIME_CAPABILITY =
 /** A paired Orca's chat-lineage start (`chatLineage`) starts here as a chat, and so do the workers it starts. */
 export const ORCHESTRATION_CHAT_LINEAGE_RUNTIME_CAPABILITY =
   'orchestration.chat-lineage.v1' as const
+/** A legacy federation attachment accepts a trusted bot-worker lineage stamp from its Run home. */
+export const ORCHESTRATION_FEDERATION_CHAT_LINEAGE_RUNTIME_CAPABILITY =
+  'orchestration.federation-chat-lineage.v1' as const
 /** Its agents can message agents on a paired computer that pulls with `clientAsks`
  *  (`send --on-client`); replies come back by `peerMailReturn`. */
 export const ORCHESTRATION_CLIENT_AGENT_ASKS_RUNTIME_CAPABILITY =
@@ -90,5 +93,6 @@ export const ORCHESTRATION_RUNTIME_CAPABILITIES = [
   ORCHESTRATION_PEER_BOT_MAIL_RUNTIME_CAPABILITY,
   ORCHESTRATION_PEER_MAIL_FILES_RUNTIME_CAPABILITY,
   ORCHESTRATION_REMOTE_OWNED_WORKERS_RUNTIME_CAPABILITY,
-  ORCHESTRATION_CHAT_LINEAGE_RUNTIME_CAPABILITY
+  ORCHESTRATION_CHAT_LINEAGE_RUNTIME_CAPABILITY,
+  ORCHESTRATION_FEDERATION_CHAT_LINEAGE_RUNTIME_CAPABILITY
 ] as const

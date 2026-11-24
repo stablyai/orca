@@ -41,7 +41,10 @@ import {
   recordWorkerLaunchObservation,
   workerLaunchAgent
 } from '../workers/launch/worker-launch-observation'
-import { forwardedFederatedChatLineage } from './federated-worker-chat-lineage'
+import {
+  federatedWorkerChatLineage,
+  forwardedFederatedChatLineage
+} from './federated-worker-chat-lineage'
 export async function startFederatedWorker(args: FederatedWorkerStartRequest): Promise<unknown> {
   const { params, runtime, db, task, orchestrationMutation } = args
   const recordStart = prepareWorkerStartCard(runtime, args.callerSession)
@@ -124,9 +127,7 @@ export async function startFederatedWorker(args: FederatedWorkerStartRequest): P
         ? ORCHESTRATION_FEDERATION_CONTROL_MAIL_PROTOCOL_VERSION
         : 1
   const setupDecision = createsWorktree ? (params.setup ?? 'inherit') : 'not_applicable'
-  const chatLineage = db.creatorStartsChatWorkers(
-    resolveDispatchCreator(runtime, params.from, args.callerSession)
-  )
+  const chatLineage = federatedWorkerChatLineage(runtime, db, params, args.callerSession)
   const runId = args.bindRunId()
   const started = db.createStartingWorkerDispatch({
     creator: resolveDispatchCreator(runtime, params.from, args.callerSession),
