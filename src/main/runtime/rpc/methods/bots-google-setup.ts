@@ -36,6 +36,10 @@ import { googleSetupKeyRefusedLine } from '../../../google/google-setup-key-down
 import { noWindowAnswersGoogleCards } from '../../../google/google-card-reach'
 import { defineMethod, InvalidArgumentError, type RpcContext } from '../core'
 import { requireSetupPageInAgentWorkspace } from '../../../google/google-setup-page-binding'
+import {
+  markGoogleSetupFinishedOutside,
+  reconcileGoogleSetupFinishedOutside
+} from '../../../google/google-setup-finished-outside'
 import { postConnectorOffer } from './bots-connector-offer'
 import { isAgentRpcCaller } from '../callers/rpc-caller-identity'
 
@@ -147,9 +151,10 @@ function keyMissing(run: GoogleSetupRun, google: Awaited<ReturnType<typeof hostG
 }
 
 /** The run with where it's stuck and the owner's buttons, from this host's Google and the bot's turn. */
-export async function withBlocker(context: RpcContext, botId: string, run: GoogleSetupRun | null) {
+export async function withBlocker(context: RpcContext, botId: string, read: GoogleSetupRun | null) {
   const google = await hostGoogle()
   const chat = chatOf(context.runtime, botId)
+  const run = reconcileGoogleSetupFinishedOutside(read, google, chat)
   const blocker = googleSetupBlocker({
     run,
     google,
@@ -208,11 +213,8 @@ async function refuseUnfinishedDone(run: GoogleSetupRun | null): Promise<void> {
     connect.checkAccounts().catch(() => connect.accounts()),
     connect.checkClient()
   ])
-  const refusal = googleSetupDoneRefusal(run, {
-    client: await connect.client(),
-    accounts,
-    ...(clientKey ? { clientKey } : {})
-  })
+  const google = { client: await connect.client(), accounts, ...(clientKey ? { clientKey } : {}) }
+  const refusal = googleSetupDoneRefusal(markGoogleSetupFinishedOutside(run, google), google)
   if (refusal) {
     throw new InvalidArgumentError(`${refusal} Run done again once it's sorted.`)
   }

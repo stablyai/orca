@@ -19,8 +19,10 @@ import { writeFileAtomically } from '../filesystem/atomic-file-publication'
 import { getDataFile } from '../persistence/loading-store/user-data-path'
 import {
   botClicks,
+  GOOGLE_SETUP_FINISHED_OUTSIDE_NOTE,
   GoogleSetupError,
   isPersonOwnedStep,
+  lateDone,
   PERSON_FINISHES,
   recordAnswer,
   startMode,
@@ -53,6 +55,8 @@ export type GoogleSetupChange =
   | { action: 'done' }
   /** Orca's own reading that the key didn't arrive; never sent by a bot. */
   | { action: 'key-missed'; reason?: string }
+  /** Orca's own reading that a working sign-in shows these steps finished; never sent by a bot. */
+  | { action: 'finished-outside'; steps: GoogleSetupStep[] }
   | { action: 'fail'; error: string }
   | { action: 'cancel' }
 
@@ -147,6 +151,9 @@ export class GoogleSetupRuns {
     const revived = current ? this.revive(current, actor, change, now) : null
     if (revived) {
       return this.save(revived)
+    }
+    if (current?.state === 'done' && lateDone(change)) {
+      return current
     }
     if (current?.state !== 'running') {
       throw new GoogleSetupError(
@@ -288,6 +295,20 @@ function applyChange(
       return
     case 'key-missed':
       run.keyMissed = { at: now, ...(change.reason ? { reason: change.reason } : {}) }
+      return
+    case 'finished-outside':
+      if (actor === 'bot') {
+        throw new GoogleSetupError(PERSON_FINISHES)
+      }
+      for (const step of change.steps) {
+        const status = run.steps[step]?.status
+        if (status !== 'done' && status !== 'skipped') {
+          run.steps[step] = { status: 'done', at: now, note: GOOGLE_SETUP_FINISHED_OUTSIDE_NOTE }
+          if (run.personStep === step) {
+            delete run.personStep
+          }
+        }
+      }
       return
     case 'done':
       run.state = 'done'
