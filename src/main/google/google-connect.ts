@@ -5,6 +5,7 @@ import { googleClientFile, parseGoogleClientFile } from './google-client-file'
 import {
   GOOGLE_CONNECT_RUNTIME_CAPABILITY,
   GOOGLE_TRIGGERS_RUNTIME_CAPABILITY,
+  GOOGLE_SETUP_NEW_APP_RUNTIME_CAPABILITY,
   GOOGLE_CONNECTED_ANSWER_RUNTIME_CAPABILITY,
   type GoogleAccountView,
   type GoogleClientKeyState,
@@ -318,7 +319,8 @@ export function googleRuntimeCapabilities(): string[] {
     ? [
         GOOGLE_CONNECT_RUNTIME_CAPABILITY,
         GOOGLE_TRIGGERS_RUNTIME_CAPABILITY,
-        GOOGLE_CONNECTED_ANSWER_RUNTIME_CAPABILITY
+        GOOGLE_CONNECTED_ANSWER_RUNTIME_CAPABILITY,
+        GOOGLE_SETUP_NEW_APP_RUNTIME_CAPABILITY
       ]
     : []
 }

@@ -1,5 +1,5 @@
 // The Google Connect card: with an account already on the bot's host, use it (the host's default) or
-// sign in to another through Google's account chooser; once on, add another account.
+// use another account, through Google's account chooser or a new Google app set up in this chat.
 import { useContext } from 'react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
@@ -14,6 +14,10 @@ import { refreshGoogle, useGoogleHost } from '../bots/google/google-connect-clie
 import { tellGoogleConnected } from '../bots/google/google-connected-answer'
 import { googleSignInChoices } from '../bots/google/google-account-readiness'
 import { GoogleSignInWaiting } from '../bots/google/GoogleSignInWaiting'
+import { GoogleSignInFailed } from '../bots/google/GoogleSignInTrouble'
+import { GoogleUseAnotherAccountMenu } from '../bots/google/GoogleUseAnotherAccountMenu'
+import { startGoogleSetupInChat } from '../bots/google/setup-cards/google-setup-run-store'
+import { useGoogleNewApp } from '../bots/google/use-google-new-app'
 import { useGoogleSignIn } from '../bots/google/use-google-sign-in'
 import { useTurnOnBotGoogle } from '../bots/google/use-turn-on-bot-google'
 import type { Bot } from '../../../../shared/bot-types'
@@ -99,22 +103,28 @@ export function NativeChatGoogleOfferCard({
     })
   }
 
+  const { newApp, updateNotice } = useGoogleNewApp(botTarget(bot), signIn, () => {
+    void startGoogleSetupInChat(bot, 'chat', { newApp: true }).catch((error: unknown) =>
+      toast.error(error instanceof Error ? error.message : String(error))
+    )
+  })
+
   const waiting = signIn.state.kind === 'waiting'
   const footer = waiting ? undefined : face.kind === 'connected' ? (
     face.canAdd ? (
       <NativeChatCardActions>
-        <Button type="button" variant="outline" size="sm" onClick={() => void signInThenTurnOn()}>
-          {t('bots.google.addAccount', 'Add another Google account')}
-        </Button>
+        <GoogleUseAnotherAccountMenu onSignIn={() => void signInThenTurnOn()} onNewApp={newApp} />
       </NativeChatCardActions>
     ) : undefined
   ) : face.kind === 'choose' ? (
     <NativeChatOfferActions
       offer={answering}
       start={
-        <Button type="button" variant="ghost" size="sm" onClick={() => void signInThenTurnOn()}>
-          {t('components.native-chat.googleOffer.useAnother', 'Use another account')}
-        </Button>
+        <GoogleUseAnotherAccountMenu
+          variant="ghost"
+          onSignIn={() => void signInThenTurnOn()}
+          onNewApp={newApp}
+        />
       }
     >
       {face.reconnect ? (
@@ -177,13 +187,12 @@ export function NativeChatGoogleOfferCard({
       )}
       {signIn.state.kind === 'waiting' ? (
         <div className="mt-2">
-          <GoogleSignInWaiting state={signIn.state} onCancel={signIn.cancel} />
+          <GoogleSignInWaiting state={signIn.state} onCancel={signIn.cancel} onNewApp={newApp} />
         </div>
       ) : signIn.state.kind === 'failed' ? (
-        <p role="alert" className="mt-0.5 text-sm text-destructive">
-          {signIn.state.error}
-        </p>
+        <GoogleSignInFailed className="mt-0.5" error={signIn.state.error} onNewApp={newApp} />
       ) : null}
+      {updateNotice ? <div className="mt-1">{updateNotice}</div> : null}
       {setup.dialogs}
     </NativeChatCardFrame>
   )

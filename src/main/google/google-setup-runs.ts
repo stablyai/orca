@@ -118,8 +118,14 @@ export class GoogleSetupRuns {
     const current = this.get(botId)
     if (change.action === 'start') {
       // A bot resumes a running setup rather than restarting it, which could lift Guide me here.
-      // --new-app only marks it: a running setup already makes its own app, and a key saved during it counts.
-      if (current?.state === 'running' && actor === 'bot') {
+      // A new-app start only marks it: a running setup already makes its own app, and a key saved during it counts.
+      // One that imported the team's file makes none, so a new app starts over.
+      const imported = current?.answers.path?.values[0] === 'import'
+      if (
+        current?.state === 'running' &&
+        (actor === 'bot' || change.newApp) &&
+        !(change.newApp && imported)
+      ) {
         return change.newApp && !current.newApp
           ? this.save({ ...current, newApp: true, updatedAt: now, revision: current.revision + 1 })
           : current

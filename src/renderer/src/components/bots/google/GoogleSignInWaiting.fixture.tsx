@@ -15,3 +15,15 @@ export const webPaste = defineFixture({
     <GoogleSignInWaiting state={{ kind: 'waiting', prompt, way: 'paste' }} onCancel={() => {}} />
   )
 })
+
+/** Desktop: Google's page is open in the browser; Access blocked offers a new app from the start. */
+export const accessBlocked = defineFixture({
+  width: 520,
+  render: () => (
+    <GoogleSignInWaiting
+      state={{ kind: 'waiting', prompt: { ...prompt, browserOpened: true }, way: 'browser' }}
+      onCancel={() => {}}
+      onNewApp={() => {}}
+    />
+  )
+})

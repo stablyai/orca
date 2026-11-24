@@ -57,12 +57,14 @@ export const GoogleSetupWrite = z.object({
 })
 
 /** Where the owner started a setup from, for the bot's first line. */
-export const GOOGLE_SETUP_STARTED_FROM = ['add-connector', 'settings'] as const
+export const GOOGLE_SETUP_STARTED_FROM = ['add-connector', 'settings', 'chat'] as const
 
 /** The owner starts (or returns to) a bot's Google setup; the bot hears it without a chat bubble. */
 export const GoogleSetupStart = z.object({
   botId: Text(200),
-  from: z.enum(GOOGLE_SETUP_STARTED_FROM)
+  from: z.enum(GOOGLE_SETUP_STARTED_FROM),
+  /** Set up a new Google app even though this computer already has one. */
+  newApp: z.literal(true).optional()
 })
 
 /** An owner's click on a setup card: recorded, and told to the bot without a chat bubble. */

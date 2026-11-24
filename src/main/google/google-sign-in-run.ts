@@ -1,7 +1,10 @@
 // One Google sign-in, run on the host that will keep the grant: PKCE S256 and `state` are made and
 // checked here, and the code is exchanged here. The browser comes back to a loopback port on this
 // host, to one the calling client owns (a paired desktop), or as an address pasted back.
-import type { GoogleSignInPrompt } from '../../shared/google/google-connect-types'
+import {
+  GOOGLE_SIGN_IN_EXPIRED,
+  type GoogleSignInPrompt
+} from '../../shared/google/google-connect-types'
 import {
   googleChoices,
   googleSignInScopes,
@@ -169,10 +172,7 @@ export async function runGoogleSignIn(
   try {
     const pasted = channel.nextCode()
     const expired = new Promise<never>((_, reject) => {
-      timer = setTimeout(
-        () => reject(new Error('The Google sign-in expired. Start again in Orca.')),
-        GOOGLE_SIGN_IN_TTL_MS
-      )
+      timer = setTimeout(() => reject(new Error(GOOGLE_SIGN_IN_EXPIRED)), GOOGLE_SIGN_IN_TTL_MS)
     })
     expired.catch(() => {})
     if (options.callerLoopbackPort !== undefined) {
@@ -185,7 +185,7 @@ export async function runGoogleSignIn(
         signal: listener.signal,
         hold: GOOGLE_RETURN_HOLD,
         errors: {
-          timeout: 'The Google sign-in expired. Start again in Orca.',
+          timeout: GOOGLE_SIGN_IN_EXPIRED,
           cancelled: 'The Google sign-in was cancelled.',
           unavailable: "Orca couldn't open a local port for Google to return to.",
           failed: 'The Google sign-in failed. Start again in Orca.'

@@ -7,9 +7,10 @@ import { googleSetupKeyBlocker } from '../../../../shared/google/google-setup-bl
 import type { GoogleClientView } from '../../../../shared/google/google-client-config'
 import type { RpcContext } from '../core'
 
-const state = vi.hoisted((): { runs: GoogleSetupRuns | null; offers: number } => ({
+const state = vi.hoisted((): { runs: GoogleSetupRuns | null; offers: number; lines: string[] } => ({
   runs: null,
-  offers: 0
+  offers: 0,
+  lines: []
 }))
 const BOT = { id: 'bot-1', name: 'Ada', google: true, chatSessionId: 'chat-1' }
 const OLD_CLIENT: GoogleClientView = {
@@ -32,12 +33,21 @@ vi.mock('../../../google/google-connect', () => ({
 }))
 vi.mock('../../../bots/bot-of-caller', () => ({
   BOT_TOKEN_ENDED: 'ended',
-  botOfToken: () => ({ kind: 'bot', bot: BOT })
+  botOfToken: (_runtime: unknown, token?: string) =>
+    token ? { kind: 'bot', bot: BOT } : { kind: 'owner' }
 }))
 vi.mock('../../../google/google-card-reach', () => ({ noWindowAnswersGoogleCards: () => false }))
 vi.mock('../../../google/google-setup-chat-cards', () => ({
   writeGoogleSetupCards: () => [],
   rewriteGoogleSetupWaitingCard: () => {}
+}))
+vi.mock('../../../bots/bot-chat-session', () => ({
+  runtimeBotChats: () => ({
+    sendToChat: async (_botId: string, line: string) => {
+      state.lines.push(line)
+      return { sessionId: BOT.chatSessionId }
+    }
+  })
 }))
 vi.mock('./bots-connector-offer', () => ({
   postConnectorOffer: async () => {
@@ -46,9 +56,9 @@ vi.mock('./bots-connector-offer', () => ({
 }))
 
 const { GOOGLE_SETUP_METHODS } = await import('./bots-google-setup')
-const [, write] = GOOGLE_SETUP_METHODS
-if (write.name !== 'bots.googleSetup.write') {
-  throw new Error('bots.googleSetup.write moved')
+const [, write, , start] = GOOGLE_SETUP_METHODS
+if (write.name !== 'bots.googleSetup.write' || start.name !== 'bots.googleSetup.start') {
+  throw new Error('bots.googleSetup.write or start moved')
 }
 
 // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the write handler reads only bots and lookAround here.
@@ -66,6 +76,7 @@ beforeEach(() => {
   runs = new GoogleSetupRuns(() => join(dir, 'runs.json'))
   state.runs = runs
   state.offers = 0
+  state.lines = []
 })
 afterEach(() => rmSync(dir, { recursive: true, force: true }))
 
@@ -108,5 +119,54 @@ describe('bots.googleSetup.write start with an app already here', () => {
       startedAt: answered.startedAt,
       newApp: true
     })
+  })
+})
+
+describe('bots.googleSetup.start from Orca with newApp', () => {
+  it('starts a new-app run in the bot chat, and the old key is not its key', async () => {
+    const { run } = await start.handler({ botId: BOT.id, from: 'settings', newApp: true }, context)
+    expect(run).toMatchObject({ state: 'running', mode: 'unchosen', newApp: true })
+    expect(googleSetupKeyBlocker(run, { client: OLD_CLIENT, accounts: [] })).toMatchObject({
+      kind: 'no-key'
+    })
+    expect(state.lines).toEqual([
+      'Setup of a new Google app started by your owner (from settings). Run `orca bot google-setup show` and carry on from there.'
+    ])
+  })
+
+  it('marks a running setup rather than restarting it', async () => {
+    runs.apply(BOT.id, 'owner', { action: 'start' })
+    const answered = runs.apply(BOT.id, 'owner', {
+      action: 'answer',
+      card: 'path',
+      values: ['do-it-for-me']
+    })
+    const { run } = await start.handler({ botId: BOT.id, from: 'chat', newApp: true }, context)
+    expect(run).toMatchObject({
+      id: answered.id,
+      mode: answered.mode,
+      answers: answered.answers,
+      newApp: true
+    })
+    expect(state.lines).toHaveLength(1)
+  })
+
+  it('starts over a running setup that imported the team file', async () => {
+    runs.apply(BOT.id, 'owner', { action: 'start' })
+    const imported = runs.apply(BOT.id, 'owner', {
+      action: 'answer',
+      card: 'path',
+      values: ['import']
+    })
+    const { run } = await start.handler({ botId: BOT.id, from: 'settings', newApp: true }, context)
+    expect(run.id).not.toBe(imported.id)
+    expect(run).toMatchObject({ state: 'running', newApp: true, steps: {}, answers: {} })
+  })
+
+  it('returns to a running new-app setup without telling the bot again', async () => {
+    const first = await start.handler({ botId: BOT.id, from: 'settings', newApp: true }, context)
+    const again = await start.handler({ botId: BOT.id, from: 'settings', newApp: true }, context)
+    expect(again.run).toEqual(first.run)
+    expect(state.lines).toHaveLength(1)
   })
 })
