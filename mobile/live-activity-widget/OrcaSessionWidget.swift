@@ -11,8 +11,8 @@ struct OrcaSessionWidget: Widget {
         HStack {
           Text("Orca").font(.headline)
           Spacer()
-          overviewCounter(context, attention: false)
-          overviewCounter(context, attention: true)
+          OverviewCounter(context: context, attention: false)
+          OverviewCounter(context: context, attention: true)
         }
         OverviewSessions(context: context, detailed: true)
       }
@@ -22,10 +22,12 @@ struct OrcaSessionWidget: Widget {
     } dynamicIsland: { context in
       DynamicIsland {
         DynamicIslandExpandedRegion(.leading) {
-          overviewCounter(context, attention: false, expanded: true)
+          OverviewCounter(context: context, attention: false, expanded: true)
+            .padding(.top, 4).padding(.leading, 4)
         }
         DynamicIslandExpandedRegion(.trailing) {
-          overviewCounter(context, attention: true, expanded: true)
+          OverviewCounter(context: context, attention: true, expanded: true)
+            .padding(.top, 4).padding(.trailing, 4)
         }
         DynamicIslandExpandedRegion(.bottom) {
           OverviewSessions(context: context, maximumRows: 2)
@@ -34,9 +36,9 @@ struct OrcaSessionWidget: Widget {
             .padding(.bottom, 8)
         }
       } compactLeading: {
-        overviewCounter(context, attention: false)
+        OverviewCounter(context: context, attention: false)
       } compactTrailing: {
-        overviewCounter(context, attention: true)
+        OverviewCounter(context: context, attention: true)
       } minimal: {
         HStack(spacing: 2) {
           Image(systemName: overviewSymbol(context.isStale ? "unavailable" : context.state.state))
@@ -79,17 +81,26 @@ private func overviewNumber(_ count: Int) -> String {
   count >= 1000 ? count.formatted(.number.notation(.compactName)) : String(count)
 }
 
-private func overviewCounter(_ context: ActivityViewContext<OrcaAgentOverviewAttributes>, attention: Bool, expanded: Bool = false) -> some View {
-  let count = attention ? context.state.counts.attention + context.state.counts.failed : context.state.counts.working
-  return HStack(spacing: 4) {
-    Image(systemName: attention ? "hand.raised" : "gearshape")
-      .imageScale(.small).fixedSize().accessibilityHidden(true)
-    Text(context.isStale ? "?" : "\(context.state.complete ? "" : "≥")\(overviewNumber(count))")
-      .monospacedDigit().lineLimit(1).minimumScaleFactor(0.8)
+private struct OverviewCounter: View {
+  let context: ActivityViewContext<OrcaAgentOverviewAttributes>
+  var attention: Bool
+  var expanded = false
+  @ScaledMetric(relativeTo: .headline) private var symbolSize = 16
+
+  var body: some View {
+    let count = attention ? context.state.counts.attention + context.state.counts.failed : context.state.counts.working
+    return HStack(spacing: 4) {
+      Image(systemName: attention ? "hand.raised" : "gearshape")
+        .resizable().scaledToFit()
+        .frame(width: symbolSize, height: symbolSize)
+        .padding(2).accessibilityHidden(true)
+      Text(context.isStale ? "?" : "\(context.state.complete ? "" : "≥")\(overviewNumber(count))")
+        .monospacedDigit().lineLimit(1).minimumScaleFactor(0.8)
+    }
+    .font(expanded ? .headline : .subheadline)
+    .accessibilityElement(children: .ignore)
+    .accessibilityLabel(context.isStale ? overviewLabel(context, "unavailable") : "\(count) \(overviewLabel(context, attention ? "attention" : "working"))" + (context.state.complete ? "" : ", " + overviewLabel(context, "partial")))
   }
-  .font(expanded ? .headline : .subheadline)
-  .accessibilityElement(children: .ignore)
-  .accessibilityLabel(context.isStale ? overviewLabel(context, "unavailable") : "\(count) \(overviewLabel(context, attention ? "attention" : "working"))" + (context.state.complete ? "" : ", " + overviewLabel(context, "partial")))
 }
 
 private struct OverviewSessions: View {
