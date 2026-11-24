@@ -2,6 +2,7 @@ import type { PortForwardEntry } from '../../../shared/remote-runtime/ssh/ssh-ty
 import { assertPortNotShadowingListener } from '../../runtime/rpc/transports/websocket/shadowed-port-probe'
 import { assertIpv6LoopbackPortFree } from './local-forward-ipv6-loopback-probe'
 import { serializePortForwardChange } from '../../ipc/ssh/ssh-managed-port-forward-restore'
+import { portForwardManager as sshPortForwardManager } from '../../ipc/ssh/ssh-ipc-context'
 
 // Loopback answers at once on POSIX; Windows retries a refused SYN for seconds, which also means nothing listens.
 const LOOPBACK_PROBE_TIMEOUT_MS = 150
@@ -59,6 +60,8 @@ async function waitForLoopbackListener(
 
 type FreeLocalPortForward = {
   remotePort: number
+  /** The local port to try first; the remote port number when absent. */
+  preferredLocalPort?: number
   add: (localPort: number) => Promise<PortForwardEntry>
   remove: (id: string) => Promise<unknown>
   /** Whether the forward listens on [::1] too; when it doesn't, an OS-picked port is checked there,
@@ -66,6 +69,9 @@ type FreeLocalPortForward = {
   holdsIpv6Loopback: boolean
   /** Local ports saved for other forwards that aren't listening now; taking one would replace them. */
   reservedLocalPorts?: ReadonlySet<number>
+  /** Ports other forwards of this desktop listen on or are binding, beside SSH forwards' (always
+   *  skipped); a probe there would open their remote stream. */
+  heldLocalPorts?: () => readonly number[]
   /** For a forward whose start can return before it listens: wait this long for 127.0.0.1 to answer,
    *  while `isOpen` says the forward is still up. */
   listening?: { timeoutMs: number; isOpen: (entry: PortForwardEntry) => boolean }
@@ -96,10 +102,16 @@ export function addForwardOnFreeLocalPort(
 }
 
 async function startOnFreeLocalPort(forward: FreeLocalPortForward): Promise<PortForwardEntry> {
-  const { remotePort, add, reservedLocalPorts } = forward
-  const lastCandidate = Math.min(remotePort + NEXT_PORT_ATTEMPTS - 1, 65_535)
-  for (let candidate = remotePort; candidate <= lastCandidate; candidate++) {
-    if (reservedLocalPorts?.has(candidate) || (await loopbackPortAnswers(candidate))) {
+  const { add, reservedLocalPorts, heldLocalPorts } = forward
+  const firstCandidate = forward.preferredLocalPort ?? forward.remotePort
+  const lastCandidate = Math.min(firstCandidate + NEXT_PORT_ATTEMPTS - 1, 65_535)
+  for (let candidate = firstCandidate; candidate <= lastCandidate; candidate++) {
+    if (
+      reservedLocalPorts?.has(candidate) ||
+      heldLocalPorts?.().includes(candidate) ||
+      sshPortForwardManager?.heldLocalPorts().includes(candidate) ||
+      (await loopbackPortAnswers(candidate))
+    ) {
       continue
     }
     try {
