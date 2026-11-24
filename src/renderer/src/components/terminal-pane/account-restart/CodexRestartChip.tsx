@@ -145,21 +145,18 @@ function LoudRestartOverlay({
           </div>
         </div>
         <div id={bodyId} className="text-sm leading-relaxed text-muted-foreground">
-          {t(
-            'auto.components.CodexRestartChip.9375620cc3',
-            'Restart this session to use {{value0}}. It stays on the previous account until you do.',
-            { value0: restartNotice.nextAccountLabel }
-          )}
+          {restartNotice.restartBlockedBy === 'service-outdated'
+            ? // Retry fails the same way until Orca restarts its terminal service, so say how out.
+              t(
+                'auto.components.CodexRestartChip.b6f0d2a913',
+                "Orca's terminal service is out of date. Restart Orca, then retry."
+              )
+            : t(
+                'auto.components.CodexRestartChip.9375620cc3',
+                'Restart this session to use {{value0}}. It stays on the previous account until you do.',
+                { value0: restartNotice.nextAccountLabel }
+              )}
         </div>
-        {restartNotice.restartBlockedBy === 'service-outdated' ? (
-          // Retry fails the same way until Orca restarts its terminal service, so say how out.
-          <div className="text-sm leading-relaxed text-muted-foreground">
-            {t(
-              'auto.components.CodexRestartChip.b6f0d2a913',
-              "Orca's terminal service is out of date. Restart Orca, then retry."
-            )}
-          </div>
-        ) : null}
         <div className="mt-1 flex flex-wrap justify-end gap-2">
           <Button type="button" variant="outline" size="sm" onClick={onDismiss}>
             {t('auto.components.CodexRestartChip.6133594b12', 'Keep old account')}
