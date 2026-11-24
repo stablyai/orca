@@ -1,6 +1,11 @@
 import { Readable } from 'node:stream'
 import { describe, expect, it } from 'vitest'
 import { RelayedProviderOutput } from '../../provider-relay/relayed-provider-output'
+import { RelayedProviderChild } from '../../provider-relay/relayed-provider-child'
+import type {
+  ProviderRelayChannel,
+  ProviderRelaySink
+} from '../../provider-relay/provider-relay-channel'
 import { createCodexRelayAckFloor } from './codex-relay-ack-floor'
 import { CODEX_RELAY_ITEM_CONTINUATION } from './codex-relay-item-continuation'
 import { agentJournalItemKey } from '../../../shared/agent-session/journal/agent-session-journal-item-key'
@@ -93,7 +98,7 @@ describe('codex rows across a reattach', () => {
       output.line('relayData', 11, delta('a'))
       output.line('relayData', 12, item('item/started', 'b'))
       output.line('relayData', 13, delta('b'))
-      output.continueAfterTruncation(CODEX_RELAY_ITEM_CONTINUATION, 'r1', 10)
+      output.continueAfterCut(CODEX_RELAY_ITEM_CONTINUATION, 'r1', 10, null)
       await output.release()
       await settle()
       await output.settle()
@@ -112,6 +117,66 @@ describe('codex rows across a reattach', () => {
     expect(first.acks).toEqual(['13 keep 11'])
     const second = await attach()
     expect(second.ids).toEqual(first.ids)
+  })
+
+  it('a reattach whose cursor a cap release moved past an open start still moves the item, until its turn ends', async () => {
+    const delta = (id: string) =>
+      JSON.stringify({ method: 'item/agentMessage/delta', params: { threadId: 't', itemId: id } })
+    const turnDone = JSON.stringify({ method: 'turn/completed', params: { threadId: 't' } })
+    const attach = async (openTurns: string[][]) => {
+      let sink = null as ProviderRelaySink | null
+      const channel = {
+        bind: (_relayId: string, bound: ProviderRelaySink) => {
+          sink = bound
+          return () => {}
+        },
+        // The release left the daemon's cursor at 10, so it reports no truncation.
+        attach: async () => {
+          sink?.line('relayData', 11, delta('a'))
+          return {
+            replayThroughSeq: 11,
+            pending: [],
+            maxClientRequestId: null,
+            initializeResultSent: false,
+            stderrTail: '',
+            exit: null,
+            openWork: { turn: openTurns }
+          }
+        },
+        ack: async () => ({}),
+        close: async () => ({})
+      } as unknown as ProviderRelayChannel
+      const child = new RelayedProviderChild({
+        channel,
+        relayId: 'r1',
+        pid: 42,
+        policy: () => ({ idleStopMs: null, markers: [] }),
+        passWhileHeld: () => false,
+        continuation: CODEX_RELAY_ITEM_CONTINUATION
+      })
+      const ids: unknown[] = []
+      child.stdout.on('data', (chunk: Buffer) =>
+        chunk
+          .toString()
+          .trim()
+          .split('\n')
+          .forEach((line) => {
+            const { params } = JSON.parse(line) as { params: { itemId?: string } }
+            ids.push(params.itemId ?? null)
+          })
+      )
+      await child.start(10)
+      sink?.line('relayData', 12, turnDone)
+      // Never sent by Codex after its turn; here it shows the continuation no longer reads lines.
+      sink?.line('relayData', 13, delta('z'))
+      child.releaseOutput()
+      await settle()
+      await settle()
+      return ids
+    }
+    expect(await attach([['t']])).toEqual(['relay:r1:11:a', null, 'z'])
+    // Nothing was running at the quit, so no item can be cut: lines pass as they are.
+    expect(await attach([])).toEqual(['a', null, 'z'])
   })
 
   it('a cap-cut replay never overwrites the saved row, and the item ends whole on it', async () => {
@@ -177,7 +242,7 @@ describe('codex rows across a reattach', () => {
       })
       output.restartAt(10)
       lines.forEach((line, i) => output.line('relayData', 11 + i, line))
-      output.continueAfterTruncation(CODEX_RELAY_ITEM_CONTINUATION, 'r1', 10)
+      output.continueAfterCut(CODEX_RELAY_ITEM_CONTINUATION, 'r1', 10, null)
       await output.release()
       await settle()
       translator.flush()

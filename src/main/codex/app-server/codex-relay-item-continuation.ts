@@ -84,6 +84,22 @@ export const CODEX_RELAY_ITEM_CONTINUATION: ProviderRelayItemContinuation = {
     }
     return [CODEX_RELAY_ITEM_CONTINUATION.rekey(line, tag), JSON.stringify(retired), line]
   },
+  openGroup: 'turn',
+  // Keys as CODEX_RELAY_WORK_MARKERS' `turn` group: [threadId].
+  settles: (line) => {
+    if (!line.includes('"turn/completed"') && !line.includes('"thread/closed"')) {
+      return null
+    }
+    try {
+      const { method, params } = JSON.parse(line) as Message
+      return (method === 'turn/completed' || method === 'thread/closed') &&
+        typeof params?.threadId === 'string'
+        ? JSON.stringify([params.threadId])
+        : null
+    } catch {
+      return null
+    }
+  },
   start: (line, tag) => {
     const message = textItemLine(line)
     const threadId = message?.params.threadId

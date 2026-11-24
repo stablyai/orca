@@ -62,7 +62,7 @@ export class RelayedProviderOutput {
   /** How far a held replay has been handed on; it stays held until the slices reach the end. */
   private releasedTo = 0
   private releasing: Promise<void> | null = null
-  /** Set when the daemon dropped kept lines: items cut by that move to continuation rows. */
+  /** Set when a replay may start inside an open item: items cut by that move to continuation rows. */
   private continuation: RelayedProviderContinuation | null = null
   private readonly consumption = new RelayedProviderConsumption(() => {
     if (this.consumption.upTo(this.pushedSeq) > this.ackedSeq) {
@@ -143,13 +143,14 @@ export class RelayedProviderOutput {
     })
   }
 
-  /** The daemon dropped kept lines through `truncatedThrough` (its file cap); set before release. */
-  continueAfterTruncation(
+  /** The replay starts after `cutThrough`, maybe inside an open item; set before release. */
+  continueAfterCut(
     hook: ProviderRelayItemContinuation,
     relayId: string,
-    truncatedThrough: number
+    cutThrough: number,
+    open: Set<string> | null
   ): void {
-    this.continuation = new RelayedProviderContinuation(hook, relayId, truncatedThrough)
+    this.continuation = new RelayedProviderContinuation(hook, relayId, cutThrough, open)
   }
 
   /** Output waits for the chat to be ready (`release()`). */
@@ -225,6 +226,9 @@ export class RelayedProviderOutput {
     // The floor reads each line as it is handed on: acks only ever cover what was.
     if (line && seq !== null) {
       const lines = this.continuation?.lines(seq, line, this.options.ackFloor) ?? [line]
+      if (this.continuation?.done) {
+        this.continuation = null
+      }
       line = lines.pop() ?? line
       // Lines a continuation adds before this one go out ahead of it, under its seq.
       for (const added of lines) {

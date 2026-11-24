@@ -142,13 +142,7 @@ export class RelayedProviderChild extends EventEmitter implements ProviderChild 
       const result = await this.options.channel.attach(this.relayId, fromSeq, this.options.policy())
       await this.output.awaitPreamble(result.initializeResultSent, result.pending, PREAMBLE_WAIT_MS)
       this.attachResult = result
-      if (result.truncatedThrough !== undefined && this.options.continuation) {
-        this.output.continueAfterTruncation(
-          this.options.continuation,
-          this.relayId,
-          result.truncatedThrough
-        )
-      }
+      this.continueCutItems(fromSeq, result)
       if (this.state === 'attaching') {
         this.state = 'attached'
       }
@@ -258,6 +252,21 @@ export class RelayedProviderChild extends EventEmitter implements ProviderChild 
         await new Promise((resolve) => setTimeout(resolve, INPUT_FULL_RETRY_MS))
       }
     }
+  }
+
+  // A forced release (the file cap) can leave an open item's kept start behind the cursor.
+  private continueCutItems(fromSeq: number, result: ProviderRelayAttachResult): void {
+    const hook = this.options.continuation
+    if (!hook || fromSeq <= 0) {
+      return
+    }
+    const carried =
+      hook.openGroup && result.openWork ? (result.openWork[hook.openGroup] ?? []) : null
+    if (carried ? carried.length === 0 : result.truncatedThrough === undefined) {
+      return
+    }
+    const open = carried ? new Set(carried.map((key) => JSON.stringify(key))) : null
+    this.output.continueAfterCut(hook, this.relayId, result.truncatedThrough ?? fromSeq, open)
   }
 
   /** The daemon detached us when the stream dropped; the same daemon resumes from our cursor. */
