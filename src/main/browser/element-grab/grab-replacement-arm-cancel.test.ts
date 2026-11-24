@@ -1,11 +1,12 @@
 // @vitest-environment happy-dom
 import { EventEmitter } from 'node:events'
-import { afterEach, expect, it } from 'vitest'
+import { afterEach, expect, it, vi } from 'vitest'
 import { createBrowserGuestPickerAuthority } from '../../../preload/browser/element-grab/browser-guest-picker-authority'
 import { attachGrabExecutionTransport } from './testing/grab-execution-transport-fixture'
 import { executeGrabScript, grabDocumentScope, retireGrabOverlay } from './grab-guest-execution'
 
 afterEach(() => {
+  vi.useRealTimers()
   document.body.replaceChildren()
   for (const host of document.querySelectorAll('#__orca-grab-host')) {
     host.remove()
@@ -102,19 +103,25 @@ it('cancel while a replacement arm is still running retires both pickers', async
 })
 
 it('an arm that outlasts its timeout never goes live after its caller saw it fail', async () => {
+  // Only timers: the transport delivers messages as microtasks, which stay real.
+  vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] })
   const { guest, hosts, finishHeldArm } = pickerPage()
-  await expect(executeGrabScript(guest, 'first', { overlayControl: true })).resolves.toBe(true)
+  const first = executeGrabScript(guest, 'first', { overlayControl: true })
+  await vi.advanceTimersByTimeAsync(0)
+  await expect(first).resolves.toBe(true)
   const replacement = executeGrabScript(guest, 'held-replacement', { overlayControl: true })
+  // The arm's 2 s execution timeout passes before the page reports.
+  await vi.advanceTimersByTimeAsync(2_000)
   await expect(replacement).resolves.toBeNull()
   const scope = grabDocumentScope(guest)
   expect(scope.pendingOverlayId).toBeNull()
 
   // The page finishes the arm late: it must fail there, leaving the first picker live and named.
   finishHeldArm()
-  await new Promise((resolve) => setTimeout(resolve, 50))
+  await vi.advanceTimersByTimeAsync(0)
   expect(hosts.get('held-replacement')?.isConnected).toBe(false)
   expect(hosts.get('first')?.isConnected).toBe(true)
   retireGrabOverlay(scope)
-  await delivered()
+  await vi.advanceTimersByTimeAsync(0)
   expect(hosts.get('first')?.isConnected).toBe(false)
-}, 10_000)
+})
