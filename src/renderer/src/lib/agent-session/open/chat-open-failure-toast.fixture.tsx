@@ -17,7 +17,9 @@ function ToastStage({ starting }: { starting: boolean }): React.JSX.Element {
       starting ? { starting: true } : { detail: DETAIL, retry: () => undefined },
       AGENT
     )
-    return () => toast.dismiss()
+    return () => {
+      toast.dismiss()
+    }
   }, [starting])
   // A transform makes this frame the toaster's fixed-position containing block, like a 600px window.
   return (

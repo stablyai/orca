@@ -13,6 +13,7 @@ export type ChatOpenUnavailable = {
 }
 
 const CHAT_OPEN_TOAST_ID = 'chat-open-unavailable'
+let chatOpenFailureCount = 0
 
 export const chatOpenUnavailableText = {
   stillStarting: () =>
@@ -42,7 +43,9 @@ export function showChatOpenUnavailable(context: ChatOpenUnavailable = {}, agent
   const detail = [agent, context.detail].filter(Boolean).join('\n')
   toast.error(chatOpenUnavailableText.openFailed(), {
     id: CHAT_OPEN_TOAST_ID,
-    description: detail ? <ChatOpenFailureDetails detail={detail} /> : undefined,
+    description: detail ? (
+      <ChatOpenFailureDetails key={++chatOpenFailureCount} detail={detail} />
+    ) : undefined,
     action: retry
       ? {
           label: translate('auto.lib.activateAiVaultStructuredSession.chatOpenRetry', 'Retry'),
@@ -57,12 +60,12 @@ export function ChatOpenFailureDetails({ detail }: { detail: string }): React.JS
   const [open, setOpen] = useState(false)
   const detailId = useId()
   return (
-    <div className="flex flex-col gap-1.5">
+    <div className="flex flex-col gap-1.5 text-muted-foreground">
       <Button
         type="button"
-        variant="ghost"
+        variant="disclosure"
         size="xs"
-        className="-ml-2 self-start text-muted-foreground hover:text-foreground"
+        className="-ml-2 self-start"
         onClick={() => setOpen((prev) => !prev)}
         aria-expanded={open}
         aria-controls={detailId}
@@ -77,7 +80,7 @@ export function ChatOpenFailureDetails({ detail }: { detail: string }): React.JS
       {open ? (
         <p
           id={detailId}
-          className="scrollbar-sleek max-h-20 select-text overflow-auto whitespace-pre-wrap break-words rounded-md bg-muted/40 px-2 py-1.5 font-mono text-xs leading-relaxed text-muted-foreground"
+          className="scrollbar-sleek max-h-20 select-text overflow-auto whitespace-pre-wrap break-words rounded-md bg-muted/40 px-2 py-1.5 font-mono text-xs leading-relaxed"
         >
           {detail}
         </p>

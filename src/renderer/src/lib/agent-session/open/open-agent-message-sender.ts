@@ -33,6 +33,7 @@ import {
 import type { OrchestrationCrewRow } from '../../../../../shared/orchestration/orchestration-crew'
 import type { AgentMessageSource } from '../../../../../shared/agent-session/journal/agent-session-message-source'
 import type { RuntimeClientTarget } from '../../../../../shared/remote-runtime/host-catalog/runtime-client-target'
+import { unreachableOpenFailure } from '../../../../../shared/agent-session/view/structured-session-open-failure-detail'
 
 type Sender = AgentMessageSource['senders'][number]
 const opensInFlight = new Map<string, Promise<void>>()
@@ -281,10 +282,15 @@ export async function openOrchestrationCrewAgent(
       await focusTerminal(result.handle, terminalEnvironmentId(host, result), terminalFeedback)
     }
   } catch (error) {
-    showLookupFailure(
-      isRuntimeCompatBlockError(error) ? 'update' : 'unreachable',
-      row.label,
-      feedback
-    )
+    if (isRuntimeCompatBlockError(error)) {
+      feedback.hostCannotOpen(row.label)
+    } else if (target?.kind === 'chat') {
+      feedback.unavailable(row.label, {
+        detail: unreachableOpenFailure(error).detail,
+        retry: () => void openOrchestrationCrewAgent(row, host)
+      })
+    } else {
+      feedback.unavailable(row.label)
+    }
   }
 }
