@@ -138,7 +138,8 @@ export class LinkedWorkerStates {
     // A write while the read awaited may have changed a kept worker. If it did, the whole batch is read
     // again, so links sharing a lineage never disagree within one read.
     let used = hits
-    if (this.changedSince(db, stamp, hits)) {
+    const [changed, checked] = this.changedSince(db, stamp, hits)
+    if (changed) {
       used = []
       workers.clear()
       for (const [ref, worker] of await readWorkers(this.workRuntime, unique, lineageOf)) {
@@ -185,21 +186,21 @@ export class LinkedWorkerStates {
         }
       },
       // A kept worker this read used changed before its caller replied: read it again.
-      stale: () => this.changedSince(db, readAt, used)
+      stale: () => this.changedSince(db, checked, used)[0]
     }
   }
 
-  /** Whether a write since `stamp` changed any of these kept workers; those that changed are dropped,
-   *  the rest are checked as of now. */
+  /** Whether a write since `stamp` changed any of these kept workers, and the stamp they were checked
+   *  at; those that changed are dropped, the rest are checked as of now. */
   private changedSince(
     db: OrchestrationDb,
     stamp: string | null,
     hits: readonly (readonly [string, Kept])[]
-  ): boolean {
+  ): [boolean, string | null] {
     const now = this.syncStamp(db)
     // Unmoved, nothing invalidated them (one version read; an eviction loses no freshness).
     if (now === stamp || hits.length === 0) {
-      return false
+      return [false, now]
     }
     const prints = readPrints(
       db,
@@ -215,7 +216,7 @@ export class LinkedWorkerStates {
       kept.checkedAt = now
       return false
     })
-    return changed.length > 0
+    return [changed.length > 0, now]
   }
 
   private queue(db: OrchestrationDb, stamp: string, finished: readonly Finished[]): void {
