@@ -130,8 +130,10 @@ it('opens from a pointer press with focus on the card itself, so no button shows
   document.body.append(opener)
   opener.focus()
   // A pointer press leaves its target without a keyboard focus ring.
-  opener.matches = (selector: string) =>
-    selector !== ':focus-visible' && Element.prototype.matches.call(opener, selector)
+  Object.defineProperty(opener, 'matches', {
+    value: (selector: string) =>
+      selector !== ':focus-visible' && Element.prototype.matches.call(opener, selector)
+  })
   card(result)
   expect(document.activeElement).toBe(document.querySelector('[data-worker-dock-card]'))
   opener.remove()
@@ -142,8 +144,10 @@ it('opens from the keyboard with focus on Open worker, where its ring shows', ()
   document.body.append(opener)
   opener.focus()
   // Enter or Space on a row leaves it holding a keyboard focus ring.
-  opener.matches = (selector: string) =>
-    selector === ':focus-visible' || Element.prototype.matches.call(opener, selector)
+  Object.defineProperty(opener, 'matches', {
+    value: (selector: string) =>
+      selector === ':focus-visible' || Element.prototype.matches.call(opener, selector)
+  })
   card(result)
   expect(document.activeElement).toBe(screen.getByRole('button', { name: 'Open worker' }))
   opener.remove()

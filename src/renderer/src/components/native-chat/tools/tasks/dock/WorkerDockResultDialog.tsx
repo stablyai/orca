@@ -18,7 +18,7 @@ import { workerDockGlyph, type WorkerDockGlyph as Glyph } from './worker-dock-ca
 import { WorkerDockGlyph } from './WorkerDockGlyph'
 import type { WorkerDockRowView } from './WorkerDockRow'
 
-// The dock rows' keyboard ring, so focus reads the same in the card as in the list it opened from.
+// The dock rows' keyboard ring for the card's one plain button; its Buttons draw their own ring.
 const RING = 'focus-visible:ring-2 focus-visible:ring-ring'
 
 /** The first sentence of an error, as plain text, for the card's one reason line. */
@@ -194,7 +194,7 @@ export function WorkerDockResultDialog({
                 type="button"
                 variant="ghost"
                 size="icon-xs"
-                className={cn('-mr-1 shrink-0', RING)}
+                className="-mr-1 shrink-0"
                 aria-label={t('components.native-chat.workerDock.close', 'Close')}
               >
                 <X className="size-4" />
@@ -246,7 +246,6 @@ export function WorkerDockResultDialog({
             <Button
               variant="ghost"
               size="sm"
-              className={RING}
               disabled={!ownerActionsAvailable}
               title={
                 ownerActionsAvailable
@@ -261,7 +260,7 @@ export function WorkerDockResultDialog({
               {t('components.native-chat.workerDock.restore', 'Show in dock again')}
             </Button>
           ) : null}
-          <Button ref={openButton} variant="outline" size="sm" className={RING} onClick={onOpen}>
+          <Button ref={openButton} variant="outline" size="sm" onClick={onOpen}>
             {t('components.native-chat.workerDock.openWorker', 'Open worker')}
           </Button>
         </div>
