@@ -21645,18 +21645,18 @@
         "confirmSignIn": "Google로 로그인할까요?"
       },
       "pairedServerAsk": {
-        "always": "{{server}} 항상 허용",
+        "always": "{{server}}에서 오는 메시지 항상 허용",
         "deny": "거부",
         "once": "한 번 허용",
         "thisServer": "이 서버",
-        "title": "이 컴퓨터에서 메시지 전송 요청: {{from}} → {{to}}",
-        "titlePills": "이 컴퓨터에서 메시지 전송 요청: <from>{{from}}</from> → <to>{{to}}</to>"
+        "title": "{{from}}이(가) 이 컴퓨터의 {{to}}에게 메시지를 보내려고 합니다",
+        "titlePills": "메시지 요청: <from>{{from}}</from> → 이 컴퓨터의 <to>{{to}}</to>"
       },
       "clientAsk": {
         "declined": "거절됨",
         "notConnected": "연결되지 않았음",
         "pairedComputer": "페어링된 컴퓨터",
-        "waitingForYou": "사용자 대기 중",
+        "waitingForYou": "내 승인 대기 중",
         "waitingOn": "{{computer}}에서 승인 대기 중"
       },
       "dock": {
@@ -27904,7 +27904,12 @@
         "noAccount": "Google에 로그인했지만 호스트가 계정을 보내지 않았습니다.",
         "alreadyRunning": "Google 로그인이 이미 진행 중입니다. 먼저 완료하거나 취소하세요.",
         "notWaiting": "대기 중인 Google 로그인이 없습니다. 다시 시작하세요."
-      }
+      },
+      "useAnother": "다른 계정 사용",
+      "useAnotherSignIn": "Google로 로그인",
+      "useAnotherSignInDetail": "현재 Google 앱 사용",
+      "setUpNewApp": "새 Google 앱 설정",
+      "setUpNewAppDetail": "현재 앱이 이 계정이나 조직에서 작동하지 않는 경우"
     },
     "notices": {
       "couldNotFinish": "{{bot}}이(가) 끝내지 못했습니다",
