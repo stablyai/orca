@@ -76,7 +76,7 @@ export class BotRunChatCloser {
   wake(sessionIds: readonly string[]): void {
     void this.serial(async () => {
       const byChat = await this.list.load()
-      await this.unpark(sessionIds.flatMap((id) => byChat.get(id) ?? []))
+      await this.unpark([...new Set(sessionIds)].flatMap((id) => byChat.get(id) ?? []))
     })
   }
 
