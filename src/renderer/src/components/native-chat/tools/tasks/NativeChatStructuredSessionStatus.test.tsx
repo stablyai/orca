@@ -1,6 +1,6 @@
 // @vitest-environment happy-dom
 import '@testing-library/jest-dom/vitest'
-import { cleanup, fireEvent, render, screen } from '@testing-library/react'
+import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { TooltipProvider } from '@/components/ui/tooltip'
 import type { RuntimeClientTarget } from '../../../../../../shared/remote-runtime/host-catalog/runtime-client-target'
@@ -12,10 +12,15 @@ const hoisted = vi.hoisted(() => {
   const workers: WorkerDockRowView[] = []
   return {
     rpc: vi.fn<(target: unknown, method: string, params: unknown) => Promise<unknown>>(),
-    workers
+    workers,
+    pairedDockOwner: false
   }
 })
 vi.mock('@/runtime/rpc/calls/runtime-rpc-call', () => ({ callRuntimeRpc: hoisted.rpc }))
+vi.mock('@/runtime/rpc/compatibility/runtime-capability-proof', () => ({
+  runtimeEnvironmentSupportsCapability: async (_environmentId: string, capability: string) =>
+    capability === 'orchestration.paired-worker-dock-owner.v1' && hoisted.pairedDockOwner
+}))
 vi.mock('../../worker-approvals/native-chat-worker-approval-feed', () => ({
   useNativeChatPinnedWorkerApprovals: () => []
 }))
@@ -85,6 +90,7 @@ beforeEach(() => {
   hoisted.rpc.mockReset()
   hoisted.rpc.mockResolvedValue({})
   hoisted.workers = []
+  hoisted.pairedDockOwner = false
 })
 afterEach(cleanup)
 
@@ -99,10 +105,23 @@ it.each([
   expect(onStop).toHaveBeenCalledWith('shell-7')
 })
 
-it("keeps a remote chat's orchestration worker Open-only: no Stop that would do nothing", () => {
-  hoisted.workers = [worker]
+const failed: WorkerDockRowView = {
+  ...worker,
+  id: 'home/source/worker/attempt-2',
+  dispatchId: 'attempt-2',
+  name: 'Cleaner',
+  title: 'Clean up journal',
+  state: 'failed',
+  reason: 'Cleanup failed',
+  settlement: 'settlement-2',
+  stoppable: false
+}
+
+it("keeps a remote chat's orchestration worker Open-only on a host that refuses this window's Clear and Stop", () => {
+  hoisted.workers = [worker, failed]
   const onStop = renderStrip(REMOTE)
   expect(screen.queryByRole('button', { name: /^Stop Verifier/ })).toBeNull()
+  expect(screen.queryByRole('button', { name: /^Clear Cleaner/ })).toBeNull()
   const open = screen.getByRole('button', { name: /^Worker · Review journal/ })
   expect(open).toHaveAccessibleName(/from the computer it runs on/)
   expect(onStop).not.toHaveBeenCalled()
@@ -110,5 +129,22 @@ it("keeps a remote chat's orchestration worker Open-only: no Stop that would do 
     expect.anything(),
     'orchestration.workerDockStop',
     expect.anything()
+  )
+})
+
+it("clears a paired host's settled failure from this window once the host takes it", async () => {
+  hoisted.pairedDockOwner = true
+  hoisted.workers = [worker, failed]
+  renderStrip(REMOTE)
+  const clear = await screen.findByRole('button', { name: 'Clear Cleaner' })
+  expect(screen.getByRole('button', { name: /^Stop Verifier · Review journal$/ })).toBeVisible()
+  expect(screen.queryByText(/from the computer it runs on/)).toBeNull()
+  fireEvent.click(clear)
+  await waitFor(() =>
+    expect(hoisted.rpc).toHaveBeenCalledWith(REMOTE, 'orchestration.workerDockAcknowledge', {
+      party: 'party-synthetic',
+      settlements: [{ dispatchId: 'attempt-2', settlement: 'settlement-2' }],
+      acknowledged: true
+    })
   )
 })

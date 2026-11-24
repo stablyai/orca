@@ -3,6 +3,7 @@ import { OrchestrationDb } from '../../../orchestration/db/orchestration-db'
 import type { RpcContext } from '../../core'
 import type { RpcCallerIdentity } from '../../callers/rpc-caller-identity'
 import { ORCHESTRATION_WORKER_DOCK_METHODS } from './worker-dock-methods'
+import { ORCHESTRATION_PERSON_APPROVALS_CLIENT_CAPABILITY } from '../../../../../shared/orchestration/orchestration-runtime-capabilities'
 
 const databases: OrchestrationDb[] = []
 afterEach(() => {
@@ -39,6 +40,88 @@ it('refuses CLI and paired-device stop or acknowledgment as desktop owner intent
           code: 'owner_required'
         })
       }
+    }
+  }
+})
+
+const params = {
+  party: 'orca_session_id:11111111-1111-4111-8111-111111111111',
+  dispatch: 'ctx_unknown',
+  requestId: 'stop-request',
+  settlements: [],
+  acknowledged: true
+}
+
+/** Runs a dock owner action as the given caller. */
+async function ownerAction(
+  name: 'orchestration.workerDockAcknowledge' | 'orchestration.workerDockStop',
+  ctx: RpcContext
+): Promise<unknown> {
+  for (const method of ORCHESTRATION_WORKER_DOCK_METHODS) {
+    if (method.name === 'orchestration.workerDockAcknowledge' && method.name === name) {
+      return method.handler(params, ctx)
+    }
+    if (method.name === 'orchestration.workerDockStop' && method.name === name) {
+      return method.handler(params, ctx)
+    }
+  }
+  throw new Error(name)
+}
+
+function ownerContext(db: OrchestrationDb, ctx: Partial<RpcContext>): RpcContext {
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: these handlers only need the DB after the caller guard.
+  return { runtime: { getOrchestrationDb: () => db }, ...ctx } as RpcContext
+}
+
+it('lets a person on a paired window or phone Clear and Stop from the dock', async () => {
+  const db = new OrchestrationDb(':memory:')
+  databases.push(db)
+  const people: Partial<RpcContext>[] = [
+    {
+      caller: { kind: 'paired-device', deviceId: 'paired-desktop' },
+      clientCapabilities: [ORCHESTRATION_PERSON_APPROVALS_CLIENT_CAPABILITY]
+    },
+    {
+      caller: { kind: 'paired-device', deviceId: 'paired-phone' },
+      clientKind: 'mobile'
+    }
+  ]
+  for (const person of people) {
+    const ctx = ownerContext(db, person)
+    await expect(ownerAction('orchestration.workerDockAcknowledge', ctx)).resolves.toEqual({
+      acknowledged: true
+    })
+    // Past the owner check: the unknown worker is what refuses it.
+    await expect(ownerAction('orchestration.workerDockStop', ctx)).rejects.toMatchObject({
+      code: 'dispatch_not_found'
+    })
+  }
+})
+
+it("refuses an agent's or a paired Orca's call even when it says it is a person's window", async () => {
+  const db = new OrchestrationDb(':memory:')
+  databases.push(db)
+  const agents: Partial<RpcContext>[] = [
+    {
+      caller: { kind: 'paired-device', deviceId: 'paired-agent', agent: true },
+      clientCapabilities: [ORCHESTRATION_PERSON_APPROVALS_CLIENT_CAPABILITY]
+    },
+    {
+      caller: { kind: 'paired-device', deviceId: 'paired-orca' },
+      clientCapabilities: [ORCHESTRATION_PERSON_APPROVALS_CLIENT_CAPABILITY],
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: only its presence is read.
+      orchestrationCaller: {} as RpcContext['orchestrationCaller']
+    }
+  ]
+  for (const agent of agents) {
+    const ctx = ownerContext(db, agent)
+    for (const name of [
+      'orchestration.workerDockAcknowledge',
+      'orchestration.workerDockStop'
+    ] as const) {
+      await expect(ownerAction(name, ctx)).rejects.toMatchObject({
+        code: 'owner_required'
+      })
     }
   }
 })
