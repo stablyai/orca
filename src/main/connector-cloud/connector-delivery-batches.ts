@@ -8,6 +8,7 @@ import type { ExternalConversationHost } from '../external-conversations/externa
 import type { ExternalConversationSeam } from '../external-conversations/external-conversation-seam'
 import {
   dispatchDelivery,
+  isThreadDelivery,
   refuse,
   type DispatchedDelivery,
   type DispatchMachine,
@@ -38,12 +39,7 @@ export function connectorDeliveryUnits(
   for (const raw of raws) {
     const parsed = ConnectorDelivery.safeParse(raw)
     const delivery = parsed.success ? parsed.data : null
-    if (
-      !delivery ||
-      delivery.kind === 'trigger' ||
-      delivery.kind === 'webhook_notice' ||
-      delivery.kind === 'pr_event'
-    ) {
+    if (!delivery || !isThreadDelivery(delivery)) {
       units.push({ raw })
       continue
     }

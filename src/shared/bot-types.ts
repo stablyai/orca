@@ -12,6 +12,7 @@ import { BotOfferAnswerSchema } from './bots/bot-offer-answers'
 import { BotCancelledWaitSchema } from './bots/bot-cancelled-waits'
 import { BotAvatarColorSchema } from './bots/bot-avatar-color'
 import { BotStoredOutfitSchema } from './bots/bot-avatar-outfit'
+import { BotSharesSchema } from './bots/bot-team-shares'
 
 /** Native-chat agents a bot cannot run on yet; each waits on a live check of its preamble delivery. */
 export const BOT_HELD_BACK_AGENTS = [] as const
@@ -192,6 +193,7 @@ export const BotSchema = z.object({
   launch: BotLaunchSchema.optional().catch(undefined),
   notifications: BotNotificationsSchema,
   members: z.array(BotMemberSchema).max(BOT_MAX_MEMBERS),
+  shares: BotSharesSchema.optional(), // Orca accounts and invites; members: Slack/GitHub/Linear-only
   /** The first of slackApps, kept for readers that know one workspace (older Orcas, the phone). */
   slack: BotSlackLinkSchema.nullable(),
   /** Every Slack workspace the bot is in, first one first; absent on bots saved before several. */
@@ -394,22 +396,4 @@ export function normalizePersistedBots(value: unknown): Bot[] {
     }
   }
   return bots
-}
-
-const WINDOWS_RESERVED_NAME = /^(con|prn|aux|nul|com\d|lpt\d)$/
-
-/** A folder name every supported filesystem accepts. */
-export function botFolderName(botName: string): string {
-  const slug = botName
-    .normalize('NFKD')
-    .toLowerCase()
-    // Why: NFKD leaves an accent as a combining mark; drop it so it doesn't split the word.
-    .replace(/(\p{M}+)|[^a-z0-9]+/gu, (_run, marks) => (marks ? '' : '-'))
-    .replace(/^-+|-+$/g, '')
-    .slice(0, 40)
-    .replace(/-+$/, '')
-  if (!slug) {
-    return 'bot'
-  }
-  return WINDOWS_RESERVED_NAME.test(slug) ? `${slug}-bot` : slug
 }

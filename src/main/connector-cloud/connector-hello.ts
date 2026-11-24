@@ -122,6 +122,12 @@ export async function sayConnectorHello(
   return answer.ok ? { ok: true, value: { answer: answer.value, trimmed } } : answer
 }
 
+// The signed-in account's name, which teammates see the bots it shares by; an older cloud drops it.
+function ownerName(machine: ConnectorMachine): { ownerName?: string } {
+  const name = machine.ownerName?.()
+  return name ? { ownerName: name } : {}
+}
+
 /**
  * The hello body. Inline bots always fit: each is cut to its share of the request cap
  * (connector-places.ts), which leaves room for triggers up to their cap.
@@ -139,6 +145,7 @@ export function connectorHello(
     platform: process.platform,
     runtime: machine.runtime,
     hostName: machine.hostName(),
+    ...ownerName(machine),
     // Older clouds require both lists; they stay empty now that only bots start conversations.
     // TODO: drop both once every connector cloud ships the contract without them.
     agents: [],

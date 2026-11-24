@@ -13,6 +13,7 @@ import {
 import type { ExternalConversationHost } from '../external-conversations/external-conversation-host'
 import type { ExternalConversationSeam } from '../external-conversations/external-conversation-seam'
 import { placeLaunchTarget } from './connector-places'
+import { UNKNOWN_SHARE_REFUSAL } from '../../shared/connector-share-contract'
 import type { ConnectorMachine } from './connector-machine'
 import type { TurnAutomations } from './connector-turn-automations'
 
@@ -89,14 +90,24 @@ export async function recordedDeliveryResult(
 
 export type DispatchMachine = Pick<
   ConnectorMachine,
-  'runTrigger' | 'webhookNotice' | 'turnAutomations' | 'prEvent'
+  'runTrigger' | 'webhookNotice' | 'turnAutomations' | 'prEvent' | 'shareResolved' | 'shareAccept'
 >
 export type RequestDelivery = Extract<ConnectorDelivery, { kind: 'start' | 'send' }>
 export type SendDelivery = Extract<ConnectorDelivery, { kind: 'send' }>
-export type ThreadDelivery = Exclude<
-  ConnectorDelivery,
-  { kind: 'trigger' | 'webhook_notice' | 'pr_event' }
->
+const THREADLESS_KINDS = [
+  'trigger',
+  'webhook_notice',
+  'pr_event',
+  'share_resolved',
+  'share_accept'
+] as const
+const THREADLESS: ReadonlySet<string> = new Set(THREADLESS_KINDS)
+export type ThreadDelivery = Exclude<ConnectorDelivery, { kind: (typeof THREADLESS_KINDS)[number] }>
+
+/** A delivery of a thread's conversation, which a thread's later sends may join. */
+export function isThreadDelivery(delivery: ConnectorDelivery): delivery is ThreadDelivery {
+  return !THREADLESS.has(delivery.kind)
+}
 
 /** When the cloud took the message and how long it waited, both on the cloud's clock. */
 function sentTiming(
@@ -163,16 +174,15 @@ export function dispatchDelivery(
     return { deliveryId, received: false, done }
   }
   if (delivery.kind === 'webhook_notice') {
-    const notice = machine.webhookNotice
-    if (!notice) {
-      return refuse(deliveryId, { outcome: 'unsupported' })
-    }
-    const done = settle(async () =>
-      (await notice(delivery))
-        ? { outcome: 'accepted' }
-        : { outcome: 'refused', reason: 'webhook_not_found' }
-    )
-    return { deliveryId, received: false, done }
+    return doneOnly(deliveryId, machine.webhookNotice, delivery, 'webhook_not_found')
+  }
+  // Done once the bot's share list or the teammate's offer is written, so the share's next
+  // delivery (an accept after its resolve) never runs before it.
+  if (delivery.kind === 'share_resolved') {
+    return doneOnly(deliveryId, machine.shareResolved, delivery, UNKNOWN_SHARE_REFUSAL)
+  }
+  if (delivery.kind === 'share_accept') {
+    return doneOnly(deliveryId, machine.shareAccept, delivery, UNKNOWN_SHARE_REFUSAL)
   }
   if (delivery.kind === 'pr_event') {
     const hold = machine.prEvent
@@ -285,6 +295,22 @@ async function recordedInTurn(
     return result
   }
   return { ...result, inTurn: true }
+}
+
+/** A delivery the machine handles as a whole, confirmed only by its done; false is `refusal`. */
+function doneOnly<T>(
+  deliveryId: string,
+  handle: ((delivery: T) => Promise<boolean>) | undefined,
+  delivery: T,
+  refusal: string
+): DispatchedDelivery {
+  if (!handle) {
+    return refuse(deliveryId, { outcome: 'unsupported' })
+  }
+  const done = settle(async () =>
+    (await handle(delivery)) ? { outcome: 'accepted' } : { outcome: 'refused', reason: refusal }
+  )
+  return { deliveryId, received: false, done }
 }
 
 export function refuse(deliveryId: string, result: ConnectorDeliveryResult): DispatchedDelivery {

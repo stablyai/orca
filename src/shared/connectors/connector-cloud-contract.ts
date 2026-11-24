@@ -18,6 +18,11 @@ import { ConnectorAsker } from '../connector-asker-contract'
 import type { ConnectorWorkLink } from '../connector-work-link-contract'
 import type { AutomationConnectorEventTrigger } from '../automation-event-triggers'
 import type { JournalConnectorReplyOutcome } from '../agent-session/journal/journal-connector-reply'
+import {
+  ShareAcceptDelivery,
+  ShareResolvedDelivery,
+  type ConnectorBotShare
+} from '../connector-share-contract'
 
 export const CONNECTOR_CONTRACT_VERSION = 1
 
@@ -223,7 +228,10 @@ export const ConnectorDelivery = z.discriminatedUnion('kind', [
     ...DeliveryBase,
     kind: z.literal('pr_event'),
     event: PrEvent
-  })
+  }),
+  // A shared bot's people (connector-share-contract.ts), on the share's own conversation.
+  ShareResolvedDelivery,
+  ShareAcceptDelivery
 ])
 export type ConnectorDelivery = z.infer<typeof ConnectorDelivery>
 
@@ -285,6 +293,8 @@ export type ConnectorBot = {
   handle?: string
   /** Workspaces of a shared-app source (Linear, GitHub installations) it answers in, with who may ask there. */
   sharedAppWorkspaces?: ConnectorBotWorkspace[]
+  /** The Orca accounts and invited emails it is shared with; absent, it isn't shared. */
+  sharedWith?: ConnectorBotShare[]
 }
 
 /** One event rule of a bot automation here; the cloud sends a match to this machine alone. */
