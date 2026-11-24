@@ -149,6 +149,20 @@ export function botItemQuickReplyText(
     : reply.label
 }
 
+// Each ask's heads, worked out once: matching runs per line, per option, per question.
+const headsByAsk = new WeakMap<readonly BotItemDecision[], readonly (readonly string[])[]>()
+
+function askHeads(decisions: readonly BotItemDecision[]): readonly (readonly string[])[] {
+  let heads = headsByAsk.get(decisions)
+  if (!heads) {
+    heads = decisions.map((decision) =>
+      botItemQuestionLeads(decision.question).map((lead) => `${lead} →`)
+    )
+    headsByAsk.set(decisions, heads)
+  }
+  return heads
+}
+
 /** Per question of the ask, the "Question →" head `line` starts with, else undefined. An older build's
  *  head counts only when longer than every current head that matches, so one question's old head never
  *  takes a line another's current head names. */
@@ -156,9 +170,7 @@ export function botItemLineHeads(
   shape: BotItemQuestionShape,
   line: string
 ): (string | undefined)[] {
-  const heads = shape.decisions.map((decision) =>
-    botItemQuestionLeads(decision.question).map((lead) => `${lead} →`)
-  )
+  const heads = askHeads(shape.decisions)
   const current = heads.map(([head]) => (line.startsWith(head) ? head : undefined))
   const longest = Math.max(0, ...current.map((head) => head?.length ?? 0))
   return heads.map(
@@ -177,6 +189,9 @@ export function botItemIsQuickReplyText(
 ): boolean {
   if (shape.decisions.length <= 1) {
     return text === reply.label
+  }
+  if (!text.endsWith(` ${reply.label}`)) {
+    return false
   }
   const head = botItemLineHeads(shape, text)[index]
   return head !== undefined && text === `${head} ${reply.label}`
