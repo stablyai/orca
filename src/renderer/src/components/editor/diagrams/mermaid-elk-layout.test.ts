@@ -24,7 +24,8 @@ flowchart TD
     ).toBe(true)
     expect(
       sourceUsesElkLayout(`---
-layout: elk # use the layered engine
+config:
+  layout: elk # use the layered engine
 ---
 flowchart TD
   A --> B`)
@@ -38,13 +39,31 @@ flowchart TD
     ).toBe(true)
   })
 
-  it('detects the init directive and flowchart-elk syntax', () => {
+  it('detects the init directive and flowchart-elk syntax in the diagram body', () => {
     expect(sourceUsesElkLayout('%%{init: {"layout": "elk"}}%%\nflowchart TD\n A --> B')).toBe(true)
     expect(sourceUsesElkLayout('flowchart-elk TD\n  A --> B')).toBe(true)
   })
 
-  it('ignores labels and non-elk layouts', () => {
+  it('ignores top-level layout, non-elk values and frontmatter text', () => {
     expect(sourceUsesElkLayout('flowchart TD\n  A[layout: elk] --> B')).toBe(false)
+    expect(
+      sourceUsesElkLayout(`---
+layout: elk # Mermaid ignores top-level layout
+---
+flowchart TD
+  A --> B`)
+    ).toBe(false)
+    expect(sourceUsesElkLayout('%%{init: {"layout": "elkjs"}}%%\nflowchart TD\n A --> B')).toBe(
+      false
+    )
+    expect(
+      sourceUsesElkLayout(`---
+title: |
+  flowchart-elk TD
+---
+flowchart TD
+  A --> B`)
+    ).toBe(false)
     expect(
       sourceUsesElkLayout(`---
 config:
@@ -53,8 +72,5 @@ config:
 flowchart TD
   A --> B`)
     ).toBe(false)
-    expect(sourceUsesElkLayout('---\nconfig: {layout: dagre}\n---\nflowchart TD\n  A --> B')).toBe(
-      false
-    )
   })
 })
