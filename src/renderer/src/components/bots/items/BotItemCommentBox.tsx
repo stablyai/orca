@@ -393,11 +393,8 @@ function BotItemCommentField({
           </div>
         ) : null}
         <div className={cn('flex flex-wrap items-end gap-0.5', nav && BOT_ITEM_TOOL_ROW_TOUCH_FIT)}>
-          {session && !compact ? (
-            <NativeChatAttachButton onAttach={fileDrops.pickAttachments} />
-          ) : null}
           {/* Open, the text has its own row whatever its length, so the tools never shift it. */}
-          <div className={cn('min-w-0 flex-1', !compact && 'order-first basis-full')}>
+          <div className={cn('min-w-0 flex-1', !compact && 'basis-full')}>
             <NativeChatPromptEditor
               key={scopeKey}
               scopeKey={scopeKey}
@@ -423,6 +420,9 @@ function BotItemCommentField({
           </div>
           {compact ? null : (
             <>
+              {session ? (
+                <NativeChatAttachButton onAttach={fileDrops.pickAttachments} />
+              ) : null}
               {nav}
               <BotItemCommentMic dictation={dictation} />
             </>
