@@ -715,17 +715,15 @@ static int tree_root(struct watcher *w, const struct tree_scan *scan, const stru
     if (scan->leader_alive && row->ppid == w->group) {
         return TREE_ANCESTRY;
     }
-    // A member an earlier sweep proved vouches for its later children, though not for its session.
-    if (!row->zombie && identity_find(&w->known, row->pid, row->start) != NULL) {
-        return TREE_TAGGED;
-    }
     if (row->ppid != 1 || row->uid != geteuid() || row->start < w->leader_start || row->zombie) {
         return TREE_UNKNOWN;
     }
     pid_t sid = getsid(row->pid);
-    int kind = sid > 0 && member_session(scan, sid) ? TREE_ANCESTRY
-               : tagged_once(w, row)                 ? TREE_TAGGED
-                                                     : TREE_UNKNOWN;
+    // A member an earlier sweep proved vouches for its later children, though not for its session.
+    int kind = sid > 0 && member_session(scan, sid)                   ? TREE_ANCESTRY
+               : identity_find(&w->known, row->pid, row->start) != NULL ? TREE_TAGGED
+               : tagged_once(w, row)                                   ? TREE_TAGGED
+                                                                       : TREE_UNKNOWN;
     return kind != TREE_UNKNOWN && same_identity(row) ? kind : TREE_UNKNOWN;
 #endif
 }
@@ -1138,29 +1136,33 @@ static int tree_proven_empty(const struct watcher *w) {
 
 // /proc is read one row at a time, so on Linux two empty scans in a row, and the subreaper having
 // no child but this watcher, prove the tree gone.
-static int sweep_tree(struct watcher *w, int signal_number) {
+// group_gone is the caller's one reading, so a PID reused as a group mid-sweep can't change the proof.
+static int sweep_tree(struct watcher *w, int signal_number, int group_gone) {
 #if defined(__linux__)
-    if (group_absent(w) && tree_proven_empty(w)) {
+    if (group_gone && tree_proven_empty(w)) {
         return 0;
     }
+#else
+    (void)group_gone;
 #endif
     int live = sweep_once(w, signal_number);
 #if defined(__linux__)
     // The second read only serves an absence proof, which needs the CLI group gone.
-    if (live == 0 && group_absent(w)) {
+    if (live == 0 && group_gone) {
         live = sweep_once(w, signal_number);
     }
     // While the CLI group lives its leader is the subreaper's child too; absence isn't claimed then.
-    if (live == 0 && group_absent(w) && reaper_has_only_watcher(w) == 0) {
+    if (live == 0 && group_gone && reaper_has_only_watcher(w) == 0) {
         live = -1;
     }
 #endif
     return live;
 }
 #else
-static int sweep_tree(struct watcher *w, int signal_number) {
+static int sweep_tree(struct watcher *w, int signal_number, int group_gone) {
     (void)w;
     (void)signal_number;
+    (void)group_gone;
     return 0;
 }
 #endif
@@ -1229,7 +1231,7 @@ static int tree_absent(struct watcher *w, int signal_number) {
     int full = unproven || (probed && live == 0) || first_gone || now_ns >= w->next_full_ns ||
                now_ns >= last_chance;
     if (full) {
-        live = sweep_tree(w, signal_number);
+        live = sweep_tree(w, signal_number, group_gone);
         schedule_after_full_sweep(w, live);
     } else {
         schedule_next_check(w, now_ns, live);
@@ -1257,7 +1259,7 @@ static void complete_if_tree_gone(struct watcher *w, int group_gone, int members
     if (!group_gone || (members != 0 && members != TREE_UNPROVABLE)) {
         return;
     }
-    int again = members == 0 ? sweep_tree(w, signal_number) : TREE_UNPROVABLE;
+    int again = members == 0 ? sweep_tree(w, signal_number, 1) : TREE_UNPROVABLE;
     if (again == 0 || again == TREE_UNPROVABLE) {
         watcher_complete(again == 0);
     }
@@ -1267,7 +1269,7 @@ static void kill_group(struct watcher *w) {
     if (w->phase == WATCH_REAP) {
         return;
     }
-    int members = sweep_tree(w, SIGKILL);
+    int members = sweep_tree(w, SIGKILL, group_absent(w));
     schedule_after_full_sweep(w, members);
     int group_gone = kill(-w->group, SIGKILL) < 0 && errno == ESRCH;
     complete_if_tree_gone(w, group_gone, members, SIGKILL);
@@ -1279,7 +1281,7 @@ static void kill_group(struct watcher *w) {
 static void watcher_term(struct watcher *w) {
     // Group members seen by this sweep get the group TERM right after it.
     w->group_term_pending = 1;
-    int members = sweep_tree(w, SIGTERM);
+    int members = sweep_tree(w, SIGTERM, group_absent(w));
     w->group_term_pending = 0;
     schedule_after_full_sweep(w, members);
     int group_gone = kill(-w->group, SIGTERM) < 0 && errno == ESRCH;
