@@ -26,6 +26,8 @@ export type EndedTurnReplies = {
   openerItemId?: string
   outcome: AgentJournalTurnOutcome
   prose: string
+  /** The prose as the fill writes it, read at that moment (a leave's line, only while still owed). */
+  proseNow?: () => string
   bot: boolean
   failure?: ConnectorFailure
   links: ConnectorWorkLink[]
@@ -149,12 +151,13 @@ export function conversationReplyFill(
       }
     }
     const fills: JournalConnectorReplyFill[] = []
+    const writing = turn.proseNow?.() ?? turn.prose
     for (const row of own) {
       // Decided per request: the marker can't silence an answer to its owner's own DM (recovery
       // fills here too); a member's DM, or a thread, keeps today's silence.
       const { outcome, prose } = connectorReplyTurnOutcome({
         outcome: turn.outcome,
-        prose: turn.prose,
+        prose: writing,
         bot: turn.bot,
         addressed:
           isSlackDirectMessage(row.conversation) &&

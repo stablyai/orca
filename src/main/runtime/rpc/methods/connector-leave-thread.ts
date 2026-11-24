@@ -5,6 +5,8 @@
 import type { ConnectorConversation } from '../../../../shared/connectors/connector-cloud-contract'
 import { ConnectorLeaveThread } from '../../../../shared/rpc-contract/connectors/connector-params'
 import { botOfSession } from '../../../bots/bot-session-tabs'
+import { sameSession } from '../../../bots/bot-turn-for'
+import { sessionCallerOf } from '../../orchestration/addressing/orchestration-caller-identity'
 import { requireStructuredHost } from '../../../bots/bot-chat-session'
 import { leaveThreadRefusal } from '../../../bots/bot-leave-thread-authority'
 import { REPLY_ONLY_REFUSAL, LOOK_AROUND_REFUSAL } from '../../../bots/bot-look-around-policy'
@@ -34,7 +36,9 @@ export const CONNECTOR_LEAVE_THREAD_METHOD = defineMethod({
   handler: async ({ sessionId }, context) => {
     const { runtime } = context
     const bot = runtime.bots.enabled() ? botOfSession(runtime.bots, sessionId) : null
-    if (!bot) {
+    // Only the chat itself, as Orca verified the caller: never one chat leaving for another.
+    const caller = sessionCallerOf(context.orchestrationCaller)?.sessionId
+    if (!bot || caller === undefined || !sameSession(caller, sessionId)) {
       throw new ConnectorActError(
         'not_a_bot_session',
         "This isn't a bot's chat: only a bot can leave a Slack thread it follows."
@@ -87,7 +91,12 @@ function leaveFrom(
   sessionId: string,
   key: ConnectorConversation,
   turnId: number,
-  seam: { queued: (key: ConnectorConversation, work: () => Promise<unknown>) => Promise<unknown> },
+  seam: {
+    queued: (
+      key: ConnectorConversation,
+      work: () => Promise<unknown>
+    ) => Promise<{ outcome: string } | undefined>
+  },
   store: Parameters<typeof threadMuteSaves>[0]
 ): Promise<void> {
   // Only the turn running now: a report that woke it never borrows the request before it.
@@ -98,17 +107,27 @@ function leaveFrom(
     ).operationWindow({ latestTurns: 2, turnShape: true })
     return leaveThreadRefusal(snapshot.items, snapshot.submissions, key)
   })()
+  // Read below once its place comes; a read that fails first is never an unhandled rejection.
+  checking.catch(() => undefined)
   // Its place in the thread's queue is taken now, before the read, so a reply that waits on this
   // leave is always behind it and never holds it up. The save is on disk before this answers.
-  const save: { saving?: Promise<void> } = {}
-  const queued = seam.queued(key, async () => {
-    if ((await checking.catch(() => 'unread')) === null) {
-      save.saving = threadMuteSaves(store)(key, true, turnId)
-      await save.saving.catch(() => undefined)
-    }
+  const save: { saving?: Promise<void>; ran?: Promise<void>; stopped?: true } = {}
+  const queued = seam.queued(key, () => {
+    save.ran = (async () => {
+      // A Stop since its place came: it never saves after the thread was stopped.
+      if ((await checking.catch(() => 'unread')) === null && !save.stopped) {
+        save.saving = threadMuteSaves(store)(key, true, turnId)
+        await save.saving.catch(() => undefined)
+      }
+    })()
+    return save.ran
   })
   return (async () => {
-    await queued
+    if ((await queued)?.outcome === 'refused') {
+      save.stopped = true
+    }
+    // A Stop answers the queue at once while its work may still run: what it did is the answer.
+    await save.ran
     const refusal = await checking
     if (refusal) {
       throw new ConnectorActError(refusal, refusal === 'leave_refused_mixed' ? MIXED : STALE)

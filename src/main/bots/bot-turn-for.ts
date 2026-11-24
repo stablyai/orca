@@ -8,7 +8,8 @@ import { canonicalOrcaSessionId } from '../runtime/orchestration/addressing/sess
 import type { OrcaRuntimeService } from '../runtime/orca-runtime'
 import { readBotTurn } from '../runtime/rpc/methods/orchestration/messaging/bot-recipient'
 
-const sameSession = (a: string, b: string): boolean =>
+/** Whether two ids name one agent session, however each is spelled. */
+export const sameSession = (a: string, b: string): boolean =>
   (isOrcaSessionId(a) ? canonicalOrcaSessionId(a) : a) ===
   (isOrcaSessionId(b) ? canonicalOrcaSessionId(b) : b)
 

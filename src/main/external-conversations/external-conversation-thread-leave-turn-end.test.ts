@@ -56,7 +56,7 @@ async function endLeftTurn(
   const events: ConversationEvent[] = []
   const prose: string[] = []
   const fill = async (replies: EndedTurnReplies) => {
-    prose.push(replies.prose)
+    prose.push(replies.proseNow?.() ?? replies.prose)
     return { covered: new Set([thread.externalId]), paused: false, answered: true as const }
   }
   const chats = new ChatTurns({

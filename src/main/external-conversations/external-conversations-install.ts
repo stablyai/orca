@@ -65,6 +65,7 @@ export function installExternalConversations(
     onWorktreeLifecycle: (listener: (event: RuntimeWorktreeLifecycleEvent) => void) => () => void
     agentTransitions: Pick<AgentTransitionDetector, 'latestRow' | 'subscribe'>
     onConversationLinked?: () => void
+    ensureStructuredAgentSessionHost?: () => Promise<unknown>
     /** Settles once this start continued what the last run cut, naming what it did not. */
     structuredAgentSessionLaunchContinuation?: {
       continued: Promise<{ cutByLastRun: ReadonlySet<string> }>
@@ -118,6 +119,8 @@ export function installExternalConversations(
         ? { flush: () => store.flushPendingOrThrowAsync!({ drainToStableGeneration: false }) }
         : {}),
       carriedIn: async (link, turnId) => {
+        // At startup the chat host may not be in yet: read the outbox only once it is.
+        await runtime.ensureStructuredAgentSessionHost?.()
         const rows =
           (await getStructuredAgentSessionHost()
             ?.deps.store.connectorReplies()

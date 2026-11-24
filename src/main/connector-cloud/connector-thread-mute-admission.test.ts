@@ -13,7 +13,6 @@ vi.mock('../bots/bot-session-tabs', () => ({
   botOfSession: (_bots: unknown, sessionId: string) =>
     sessionId === 'session-bot1' ? { id: 'bot1', name: 'Reviewer' } : null
 }))
-vi.mock('../bots/bot-turn-for', () => ({ botTurnFor: async () => 'someone_else' }))
 vi.mock('../bots/bot-chat-session', () => ({
   requireStructuredHost: async () => ({
     journalReads: async () => ({
@@ -236,7 +235,13 @@ function leaver(
       })
     }
   } as unknown as Parameters<typeof CONNECTOR_LEAVE_THREAD_METHOD.handler>[1]
-  const leave = () => CONNECTOR_LEAVE_THREAD_METHOD.handler({ sessionId: 'session-bot1' }, context)
+  // As Orca verified the caller: the bot's own chat, unless a test names another.
+  const leave = (caller = 'session-bot1') =>
+    CONNECTOR_LEAVE_THREAD_METHOD.handler(
+      { sessionId: 'session-bot1' },
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the caller identity this method reads.
+      { ...context, orchestrationCaller: { sessionId: caller } } as typeof context
+    )
   // What the turn's end, or a restart, posts with.
   const timers: (() => void)[] = []
   const lines = (on = store) =>
@@ -452,6 +457,13 @@ describe('a bot that leaves its thread', () => {
     expect(await replied).toEqual({ outcome: 'accepted' })
     expect(turns).toEqual([])
     journal.reading.held = Promise.resolve()
+  })
+
+  it('never leaves for a chat other than the one asking', async () => {
+    const store = await botHome({})
+    const { leave } = leaver(store)
+    await expect(leave('session-bot2')).rejects.toMatchObject({ code: 'not_a_bot_session' })
+    expect(readThreadMute(store, FIRST)).toEqual({ botId: 'bot1', muted: false })
   })
 
   it('never leaves on a cloud that can\u2019t say a reply @mentioned it', async () => {
