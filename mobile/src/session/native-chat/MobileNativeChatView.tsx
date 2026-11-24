@@ -21,6 +21,7 @@ import { useMobileTranslation } from '../../i18n/use-mobile-translation'
 import { MobileNativeChatInputLockStatus } from './composer/field/MobileNativeChatInputLockStatus'
 import { useMobileColorScheme } from '../../theme/use-mobile-color-scheme'
 import { styles } from './mobile-native-chat-view-styles'
+import { MobileNativeChatComposerMenuHost } from './composer/menus/MobileNativeChatComposerMenuHost'
 import { MobileNativeChatEmptyStateView } from './transcript/viewport/MobileNativeChatEmptyStateView'
 import { mobileNativeChatListFooter } from './transcript/viewport/mobile-native-chat-list-footer'
 import { mobileNativeChatListHeader } from './transcript/viewport/mobile-native-chat-list-header'
@@ -150,6 +151,7 @@ export function MobileNativeChatView({
   const t = useMobileTranslation()
   const insets = useSafeAreaInsets()
   const bottomPad = keyboardInset > 0 ? keyboardInset + insets.bottom : insets.bottom
+  const rootStyle = [styles.root, { paddingBottom: bottomPad }]
   const { fontScale, pinchGesture } = useMobileNativeChatPinchGesture()
   const { font, lineSpacing } = useNativeChatTextSettings()
 
@@ -359,12 +361,12 @@ export function MobileNativeChatView({
   )
 
   if (readFailedFinally && emptyStateView) {
-    return <View style={[styles.root, { paddingBottom: bottomPad }]}>{emptyStateView}</View>
+    return <View style={rootStyle}>{emptyStateView}</View>
   }
 
   return (
     <MobileNativeChatOpenFileContext value={onOpenFile}>
-      <View testID="native-chat-view" style={[styles.root, { paddingBottom: bottomPad }]}>
+      <MobileNativeChatComposerMenuHost testID="native-chat-view" style={rootStyle}>
         {status === 'loading' && messages.length === 0 ? (
           <MobileStateView
             loading
@@ -415,7 +417,7 @@ export function MobileNativeChatView({
         <MobileNativeChatLowerRegion scopeKey={sendSurfaceId} composerPresent={!promptOwnsInput}>
           {lowerContent}
         </MobileNativeChatLowerRegion>
-      </View>
+      </MobileNativeChatComposerMenuHost>
     </MobileNativeChatOpenFileContext>
   )
 }
