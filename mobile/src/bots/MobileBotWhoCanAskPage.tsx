@@ -16,7 +16,7 @@ import { useMobileTranslation } from '../i18n/use-mobile-translation'
 import { useBackClaim } from '../navigation/use-back-claim'
 import { SettingsNote, SettingsSection } from '../settings/settings-screen-frame'
 import type { RpcClient } from '../transport/rpc/rpc-client-contract'
-import { accessRequestGrant, type PhoneAccessBot } from './bot-access-request-copy'
+import type { PhoneAccessBot } from './bot-access-request-copy'
 import { MobileBotAccessDecisionContent } from './MobileBotAccessDecision'
 import {
   botUpdate,
@@ -35,6 +35,7 @@ import {
   MobileWhoCanAskAddRow,
   MobileWhoCanAskPersonRow,
   MobileWhoCanAskRequestRow,
+  MobileWhoCanAskReview,
   WHO_FACE_INSET,
   whoCanAskName
 } from './MobileWhoCanAskRows'
@@ -250,10 +251,11 @@ export function MobileBotWhoCanAskPage(props: {
   // Any paired phone may grant (D3), so it always asks first, as the desktop does.
   if (granting && access) {
     return (
-      <MobileBotAccessDecisionContent
-        grant={accessRequestGrant(granting)}
+      <MobileWhoCanAskReview
+        request={granting}
         bot={bot}
-        onGrant={() => void access.decide(granting, 'granted')}
+        busy={access.deciding || !props.online}
+        onDecide={(decision) => void access.decide(granting, decision)}
         onClose={() => setGranting(null)}
       />
     )

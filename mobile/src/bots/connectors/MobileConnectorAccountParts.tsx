@@ -15,7 +15,6 @@ import { useBackClaim } from '../../navigation/use-back-claim'
 import { SettingsNote, SettingsSection } from '../../settings/settings-screen-frame'
 import { colors, spacing } from '../../theme/mobile-theme'
 import { themedStyleSheet } from '../../theme/themed-styles'
-import { accessRequestGrant } from '../bot-access-request-copy'
 import { mobileBotAccessCopy } from '../mobile-bot-access-copy'
 import type { PhoneBot } from '../host-bots-operations'
 import { MobileBotAccessDecisionContent } from '../MobileBotAccessDecision'
@@ -23,6 +22,7 @@ import {
   MobileWhoCanAskOwnerFace,
   MobileWhoCanAskPersonRow,
   MobileWhoCanAskRequestRow,
+  MobileWhoCanAskReview,
   WHO_FACE_INSET,
   whoCanAskName
 } from '../MobileWhoCanAskRows'
@@ -53,10 +53,11 @@ export function useConnectorPeople(props: {
   }
   const overlay =
     granting && access ? (
-      <MobileBotAccessDecisionContent
-        grant={accessRequestGrant(granting)}
+      <MobileWhoCanAskReview
+        request={granting}
         bot={props.accessBot}
-        onGrant={() => void access.decide(granting, 'granted')}
+        busy={access.deciding || !props.online}
+        onDecide={(decision) => void access.decide(granting, decision)}
         onClose={() => setGranting(null)}
       />
     ) : removing ? (

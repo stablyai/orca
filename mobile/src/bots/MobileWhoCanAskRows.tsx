@@ -27,7 +27,9 @@ import { PrCommentAvatar } from '../source-control/review/pull-request/comments/
 import { colors, radii, spacing } from '../theme/mobile-theme'
 import { themedStyleSheet } from '../theme/themed-styles'
 import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
-import { accessRequestLine } from './bot-access-request-copy'
+import { accessRequestGrant, accessRequestLine } from './bot-access-request-copy'
+import { MobileBotAccessDecisionContent } from './MobileBotAccessDecision'
+import { SettingsSection } from '../settings/settings-screen-frame'
 import { mobileBotAccessCopy } from './mobile-bot-access-copy'
 
 // The phone's person face, as pull request threads and group members draw it.
@@ -278,6 +280,39 @@ export function MobileWhoCanAskRequestRow(props: {
         />
       )}
     </RowWithActions>
+  )
+}
+
+/** Review a request: the Give access confirm, with Cancel to back out, then Decline as the page's one
+ *  red row, so declining needs no swipe or long press. */
+export function MobileWhoCanAskReview(props: {
+  request: ConnectorAccessRequest
+  bot: Parameters<typeof MobileBotAccessDecisionContent>[0]['bot']
+  busy: boolean
+  onDecide: (decision: 'granted' | 'declined') => void
+  onClose: () => void
+}) {
+  const t = useMobileTranslation()
+  return (
+    <>
+      <MobileBotAccessDecisionContent
+        grant={accessRequestGrant(props.request)}
+        bot={props.bot}
+        onGrant={() => props.onDecide('granted')}
+        onClose={props.onClose}
+      />
+      <SettingsSection>
+        <ListRow
+          title={mobileBotAccessCopy(t, 'decline')}
+          destructive
+          disabled={props.busy}
+          onPress={() => {
+            props.onDecide('declined')
+            props.onClose()
+          }}
+        />
+      </SettingsSection>
+    </>
   )
 }
 
