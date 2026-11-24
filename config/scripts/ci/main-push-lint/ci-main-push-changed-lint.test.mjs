@@ -80,6 +80,18 @@ describe('main-push changed-file lint', () => {
     ])
   })
 
+  it('keeps an error two batches both report once', () => {
+    // A Git-ignored touched file named in a later batch than the walk of its directory can repeat an error.
+    const lintExit = { failed: true, exitCode: 1, reason: 'exit code 1' }
+    const output = `${maxLines(PANE)}\n${FINISHED}`
+    const result = collectBatchResults([
+      { files: ['.'], ...lintExit, output },
+      { files: [PANE], ...lintExit, output }
+    ])
+    expect(result.diagnostics.map((diagnostic) => diagnostic.file)).toEqual([PANE])
+    expect(result.errorCount).toBe(1)
+  })
+
   it('keeps a diagnostic whose path holds a Unicode line separator', () => {
     const odd = 'a b.ts'
     const output = `${maxLines(odd)}\n${maxLines(PANE)}\n${FINISHED}`
