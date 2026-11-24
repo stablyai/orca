@@ -64,17 +64,20 @@ export function MobileStateView({
   )
 }
 
-/** The one action a centred state offers, such as Retry. */
+/** The one action a centred state offers, such as Retry; `inRow`, a row's small line button (a wait's Cancel). */
 export function MobileStateButton({
   label,
   onPress,
-  disabled
-}: MobileStateAction & { disabled?: boolean }) {
+  disabled,
+  inRow = false,
+  accessibilityLabel
+}: MobileStateAction & { disabled?: boolean; inRow?: boolean; accessibilityLabel?: string }) {
   useMobileColorScheme()
   return (
     <Pressable
       style={({ pressed }) => [
         styles.action,
+        inRow && styles.actionInRow,
         pressed && styles.actionPressed,
         disabled && styles.actionDisabled
       ]}
@@ -82,6 +85,7 @@ export function MobileStateButton({
       disabled={disabled}
       hitSlop={8}
       accessibilityRole="button"
+      accessibilityLabel={accessibilityLabel}
       accessibilityState={{ disabled }}
     >
       <Text style={styles.actionText}>{label}</Text>
@@ -256,6 +260,8 @@ const styles = themedStyleSheet(() => ({
     borderColor: colors.borderSubtle,
     backgroundColor: colors.bgRaised
   },
+  // bgRaised is a dark group's own fill, so the edge alone draws it there, as a line button.
+  actionInRow: { marginTop: 0, borderColor: colors.floatingCardBorder },
   actionPressed: { opacity: feedback.pressedOpacity },
   actionDisabled: { opacity: 0.5 },
   actionText: {

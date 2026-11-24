@@ -8,9 +8,11 @@ import {
 } from '../requests/acp-form-elicitation'
 import { acpPermissionPresentation } from '../requests/acp-timeline-requests'
 import type { ToolCallUpdate } from '../generated/acp-protocol.generated'
+import type { StructuredAgentListedSelection } from '../../native-chat/agent-session-wire/providers/structured-agent-definition'
 import { pendingAcpResolution, type AcpDialect, type AcpRequestPresentation } from './acp-dialect'
 import { acpReplyNoticeFailure } from './acp-reply-notice-failure'
 import { antigravityExecutorErrorWords } from './antigravity-executor-error'
+import { ANTIGRAVITY_LEVEL_SUFFIX } from '../../../shared/agent-session/options/catalog-providers/agent-session-option-catalog-antigravity'
 import {
   antigravityFamilyEfforts,
   antigravityModelChoices
@@ -162,6 +164,23 @@ const TURN_FAILURE_NOTICE =
   /^\s*(?:\u26a0 (?:UNAUTHENTICATED \(code 401\)|agent executor error): [^\n]*|API key not valid\. Please pass a valid API key\.|Agent execution error: failed to create Gemini client: [^\n]*|Agent connection was lost and could not be re-established: Failed to rebuild agent: [\s\S]*)\s*$/
 // agy drops a session whose agent it cannot rebuild; later prompts find no session.
 const REBUILD_FAILED = 'Failed to rebuild agent: '
+
+/** A level id as the family row and level a chat lists in its place; null when the listing names
+ *  the id itself or the family does not offer that level and the requested effort. */
+export const antigravityListedFamilySelection: StructuredAgentListedSelection = (
+  options,
+  listed
+) => {
+  const [, family, level] = ANTIGRAVITY_LEVEL_SUFFIX.exec(options.model ?? '') ?? []
+  const offered = listed.find((model) => model.id === family)?.efforts.map(({ value }) => value)
+  const effort = options.effort ?? level
+  return offered?.includes(level) &&
+    offered.includes(effort) &&
+    !listed.some((model) => model.id === options.model)
+    ? { ...options, model: family, effort }
+    : null
+}
+
 export const ANTIGRAVITY_ACP_DIALECT: AcpDialect = {
   // With forms, ask_question carries a write-in field per question; permissions cannot carry text.
   clientCapabilities: { elicitation: { form: {} } },
@@ -196,7 +215,8 @@ export const ANTIGRAVITY_ACP_DIALECT: AcpDialect = {
   toolName: (update) => (update.kind === 'execute' ? 'execute' : undefined),
   // Logout would clear the account shared by every Antigravity chat on this host.
   withheldCommands: ['logout'],
-  familyEfforts: antigravityFamilyEfforts
+  familyEfforts: antigravityFamilyEfforts,
+  listedSelection: antigravityListedFamilySelection
 }
 
 // agy answers "Authentication required" alone; on Orca's home that is a key it rejects, so the

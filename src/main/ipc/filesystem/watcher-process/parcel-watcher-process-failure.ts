@@ -31,3 +31,11 @@ export function watcherHostFailure(
 export function isWatcherProcessFailure(error: unknown): error is WatcherProcessFailure {
   return error instanceof WatcherProcessFailure
 }
+
+/** The child is paused by its crash fuse; a later subscribe can succeed once the cooldown ends. */
+export function isWatcherCrashFuseFailure(error: unknown): boolean {
+  return (
+    isWatcherProcessFailure(error) &&
+    (error.code === 'supervisor_crash_fuse' || error.code === 'process_unavailable')
+  )
+}

@@ -20,7 +20,6 @@ import { useMobileColorScheme } from '../../theme/use-mobile-color-scheme'
 import type { RpcClient } from '../../transport/rpc/rpc-client-contract'
 import { useHostBotsEntry } from '../host-bot-store'
 import { memberRemoval } from '../bot-sheet-operations'
-import { mobileBotAvatarSource } from '../host-bot-row-facts'
 import type { PhoneBot } from '../host-bots-operations'
 import type { BotAccessRequests } from '../use-bot-access-requests'
 import { useMobileBotWebhookSettings } from '../webhooks/MobileBotWebhooks'
@@ -28,7 +27,7 @@ import { MobileBotConnectorsAddPage } from './MobileBotConnectorsAddPage'
 import type { ConnectorPage } from './connector-pages'
 import type { SettingsFeature } from '../MobileBotSettingsRoot'
 import { MobileBotConnectorAccountPage } from './MobileBotConnectorAccountPages'
-import { usePhoneGoogleStatus } from './MobileBotGooglePage'
+import { usePhoneGoogleStatus } from './phone-google-accounts'
 import { usePhoneGitHubAccount, usePhoneLinearAccount } from './use-phone-connector-account'
 import { connectorNames, connectorRows } from './connector-entry-rows'
 import { MobileBotSlackPage } from './MobileBotSlackPage'
@@ -160,7 +159,6 @@ function ConnectorsPage(
         client={props.client}
         botId={bot.id}
         botName={bot.name}
-        avatar={mobileBotAvatarSource(bot)}
         teamId={page.teamId}
         inSlack={slackApps.length > 0}
         // The workspaces a later bot reuses: those other bots on this host are in.

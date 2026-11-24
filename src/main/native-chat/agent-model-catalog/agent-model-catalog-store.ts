@@ -135,20 +135,14 @@ export class AgentModelCatalogStore {
 
   /** Live saves must not delay account-level discovery. */
   isStale(entry: AgentModelCatalogEntry): boolean {
-    return agentModelCatalogEntryIsStale(entry, this.dueEntries.has(entry.fingerprint))
+    return agentModelCatalogEntryIsStale(entry, this.dueEntries.has(entry.fingerprint), this.now())
   }
 
-  failureDetail(fingerprint: string): string | null {
-    return this.failures.detail(fingerprint)
-  }
+  failureDetail = (fingerprint: string): string | null => this.failures.detail(fingerprint)
 
-  hasActiveFailure(fingerprint: string): boolean {
-    return this.failures.isActive(fingerprint)
-  }
+  hasActiveFailure = (fingerprint: string): boolean => this.failures.isActive(fingerprint)
 
-  failure(fingerprint: string): AgentModelCatalogFailure | null {
-    return this.failures.get(fingerprint)
-  }
+  failure = (fingerprint: string): AgentModelCatalogFailure | null => this.failures.get(fingerprint)
 
   retirementRevision(agent: string): number {
     const revision = this.retirementRevisions.get(agent) ?? 0
@@ -190,6 +184,17 @@ export class AgentModelCatalogStore {
   expireScopes(agent?: string): void {
     this.inputs.expireScopes(agent)
   }
+
+  /** A user's Refresh of one catalog: a listing already running for it stands, else its next read
+   *  lists again past any failure hold. Its agent's other catalogs and chats are untouched. */
+  relistScope = (fingerprint: string): void => this.inputs.relistScope(fingerprint)
+
+  /** These catalogs' login now holds another account: the rows seen under it go, they list again. */
+  forgetSeenRows = (...forget: Parameters<AgentModelCatalogInputs['forgetSeenRows']>): void =>
+    this.inputs.forgetSeenRows(...forget)
+
+  /** The listings running now, for a later forgetSeenRows to tell from newer ones. */
+  runningListings = (): ReadonlySet<InFlightListing> => new Set(this.refreshes.values())
 
   expireFailure(fingerprint: string): void {
     this.failures.expire(fingerprint)

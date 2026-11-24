@@ -62,11 +62,8 @@ export function splitBotsByOlderBuildSupport(bots: readonly Bot[]): {
   const readable: Bot[] = []
   const newer: Bot[] = []
   for (const bot of bots) {
-    if (BOT_AGENTS_OLDER_BUILDS_READ.has(bot.agent)) {
-      readable.push(bot)
-    } else {
-      newer.push(bot)
-    }
+    const side = BOT_AGENTS_OLDER_BUILDS_READ.has(bot.agent) ? readable : newer
+    side.push(bot)
   }
   return { readable, newer }
 }
@@ -180,6 +177,13 @@ export const BotSchema = z.object({
   /** What the mascot wears; absent or null, nothing. Kept as stored: one this version doesn't know draws
    *  as none (wornBotOutfit) but survives a save, for the version that added it. */
   avatarOutfit: BotStoredOutfitSchema.nullable().optional().catch(undefined),
+  /** Mascot replaced by an automatic upload at the current revision. */
+  generatedOverMascot: z.string().optional().catch(undefined),
+  /** Bumped by every picture, color or outfit write, so a write can require that none landed since it was
+   *  asked for (bots.avatar.upload `expectedAvatarRevision`). Absent is 0; older hosts drop it. */
+  avatarRevision: z.number().int().nonnegative().optional().catch(undefined),
+  /** Rotated when an explicit picture choice repairs a lost revision history. */
+  avatarRevisionEpoch: z.uuid().optional().catch(undefined),
   paused: z.boolean(),
   /** An owner's override; absent, the bot's chats start like any native chat. */
   permissionMode: z.enum(AGENT_CHAT_PERMISSION_MODES).optional(),
@@ -399,7 +403,8 @@ export function botFolderName(botName: string): string {
   const slug = botName
     .normalize('NFKD')
     .toLowerCase()
-    .replace(/[^a-z0-9]+/g, '-')
+    // Why: NFKD leaves an accent as a combining mark; drop it so it doesn't split the word.
+    .replace(/(\p{M}+)|[^a-z0-9]+/gu, (_run, marks) => (marks ? '' : '-'))
     .replace(/^-+|-+$/g, '')
     .slice(0, 40)
     .replace(/-+$/, '')

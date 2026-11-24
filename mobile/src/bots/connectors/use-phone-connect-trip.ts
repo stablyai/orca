@@ -55,6 +55,8 @@ type PhoneConnectTrips = {
   shown: RefObject<{ source: ConnectSource; refresh: () => Promise<unknown> } | null>
   /** Shows the trip's page on this phone, then reopens `back` when the trip ends; null where it can't. */
   showSignIn: ((back: ConnectorPage) => void) | null
+  /** Cancels the sign-in shown here and reopens its setup. */
+  cancelSignIn: () => void
 }
 
 export const PhoneConnectTripContext = createContext<PhoneConnectTrips | null>(null)
@@ -207,6 +209,23 @@ export function usePhoneConnectTrips(
     )
   }, [])
 
+  const cancelSignIn = useCallback(() => {
+    const back = away.current
+    // A trip that ended while the sheet closed already reopened its setup.
+    if (!back) {
+      return
+    }
+    if (current) {
+      cancel(current.source)
+    }
+    // A page that opened on the sign-in would start it again, so Cancel returns where it came from.
+    callbacks.current.reopen(
+      (back.kind === 'linear-setup' || back.kind === 'github-setup') && back.signIn
+        ? back.from
+        : back
+    )
+  }, [cancel, current])
+
   const page = current?.trip.status === 'waiting' ? current.trip.page : null
   const { show } = signIn
   const showSignIn =
@@ -217,7 +236,7 @@ export function usePhoneConnectTrips(
         }
       : null
 
-  return { current, start, cancel, release, shown, showSignIn }
+  return { current, start, cancel, release, shown, showSignIn, cancelSignIn }
 }
 
 /** One setup page's view of the screen's trip: idle while another source's runs. */
@@ -251,4 +270,23 @@ export function usePhoneConnectTrip(
     cancel: () => trips?.cancel(source),
     showSignIn: mine.status === 'waiting' ? (trips?.showSignIn ?? null) : null
   }
+}
+
+/** Starts the sign-in with the account picker once, as the page opens for one; a page reopened after
+ *  showing the sign-in here finds its trip running or ended, and leaves it be. */
+export function useSignInOnOpen(
+  signIn: boolean,
+  trip: PhoneConnectTrip,
+  start: (switchAccount: boolean) => void
+): void {
+  const started = useRef(false)
+  const idle = trip.status === 'idle'
+  useEffect(() => {
+    if (signIn && !started.current) {
+      started.current = true
+      if (idle) {
+        start(true)
+      }
+    }
+  }, [signIn, idle, start])
 }

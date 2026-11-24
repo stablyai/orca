@@ -107,7 +107,18 @@ export function createBrowserProfileListActions(
         return
       }
       try {
-        const profiles = (await window.api.browser.sessionListProfiles()) as BrowserSessionProfile[]
+        const localProfiles =
+          (await window.api.browser.sessionListProfiles()) as BrowserSessionProfile[]
+        // An SSH host's pages use this computer's profiles in their own jars; badges describe those jars.
+        const sshSources =
+          parsedHostId?.kind === 'ssh'
+            ? await window.api.browser
+                .sessionClientRouteImportSources({ sshTargetId: parsedHostId.targetId })
+                .catch(() => ({}))
+            : null
+        const profiles = sshSources
+          ? localProfiles.map((profile) => ({ ...profile, source: sshSources[profile.id] ?? null }))
+          : localProfiles
         if (isLatest()) {
           await landListing(hostId, profiles)
         }
