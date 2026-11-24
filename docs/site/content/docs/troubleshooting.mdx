@@ -56,7 +56,9 @@ No tab is open in the current worktree. Open one with `orca tab create --url ...
 
 If a script recently lowered process priorities to reduce CPU load, check whether it also selected the agent running your chat. Under contention, a backgrounded agent can take minutes to acknowledge a message that Orca has already handed over.
 
-On the Mac running the agent, inspect its PID with `ps -ww -p PID -o pid,ppid,lstart,pri,time,command`. Match the session identifier in the command to the chat, or use the PID and start time from a record that identifies that session. A low priority alone cannot tell you who set it. If you confirm that a script applied background scheduling to that running PID by mistake, `taskpolicy -B -p PID` clears the external background flag. Check whether the original message is acknowledged before resending it.
+1. In the affected chat’s context menu, choose **Copy Session ID**. On the Mac running the agent, run `pgrep -fl 'SESSION_ID'` with the copied ID in place of `SESSION_ID`. This lists processes whose arguments contain the provider’s session ID, including launchers.
+2. Find the PID whose executable is the agent CLI (for example, `claude`). Verify its start time and command with `ps -ww -p PID -o pid,ppid,lstart,pri,time,command`. If the provider omits the ID from its arguments, use a launch record that identifies the session, PID, and start time. Proceed only with a confirmed match.
+3. If the earlier script applied background scheduling to that running PID by mistake, `taskpolicy -B -p PID` clears the external background flag. A low priority alone cannot tell you who set it. Check whether the original message is acknowledged before resending it.
 
 ## Windows: RAM disappears but no app is using it
 
