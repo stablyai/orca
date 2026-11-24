@@ -43,7 +43,8 @@ export type AgentSessionDeltaCoalescer = {
   snapshot: (key: string) => AgentSessionDeltaSnapshot | null
   /** The retained text, or undefined past `maxLength`; a longer text is never joined. */
   textWithin: (key: string, maxLength: number) => string | undefined
-  /** The key's current stream, new each time one starts: within one, the text only grows. */
+  /** The key's current stream, new each time one starts: until it is truncated, its text only
+   *  grows. Undefined once truncated. */
   streamOf: (key: string) => object | undefined
   dirty: () => { key: string; snapshot: AgentSessionDeltaSnapshot }[]
   /** External writes satisfy the current snapshot until more text arrives. */
@@ -215,7 +216,11 @@ export function createAgentSessionDeltaCoalescer(
       evictable.clear()
       totalRetainedBytes = 0
     },
-    streamOf: (key) => streams.get(key),
+    // Truncation rewrites the tail with a marker, so a truncated stream promises no growth.
+    streamOf: (key) => {
+      const stream = streams.get(key)
+      return stream?.truncated ? undefined : stream
+    },
     textWithin: (key, maxLength) => {
       const stream = streams.get(key)
       return stream && stream.textLength <= maxLength ? joined(stream) : undefined
