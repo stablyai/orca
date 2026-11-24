@@ -3,6 +3,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { describe, expect, it, vi } from 'vitest'
 import type { BotShare } from '../../shared/bots/bot-team-shares'
+import { ShareResolvedDelivery } from '../../shared/connector-share-contract'
 import {
   openBotTeamShareOffer,
   type BotTeamShareOffer
@@ -193,6 +194,19 @@ describe('invite resolved on the host', () => {
         }
       ]
     ])
+  })
+
+  it('stores the services the account linked, read from the delivery as the cloud sends it', async () => {
+    const { bots, writes } = hostWith([invite], [invite])
+    const delivery = ShareResolvedDelivery.parse({
+      ...resolved,
+      linkedSources: ['github', 'slack', 'jira']
+    })
+    await expect(resolveBotShareInvite(bots, delivery)).resolves.toBe(true)
+    expect(writes[0]?.[0]).toMatchObject({
+      accountId: 'acct-carol',
+      linkedSources: ['github', 'slack']
+    })
   })
 
   it('is refused, writing nothing, when the invite was removed before or during the write', async () => {

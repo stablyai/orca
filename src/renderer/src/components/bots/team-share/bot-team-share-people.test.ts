@@ -27,6 +27,15 @@ describe('share dialog rows', () => {
     ])
   })
 
+  it("marks an account's row with only the services it linked", () => {
+    const linked: BotShare = { ...hasAccess, linkedSources: ['github', 'slack'] }
+    expect(
+      teamSharePeople([linked, hasAccess]).map(
+        (person) => person.kind === 'account' && person.links
+      )
+    ).toEqual([['github', 'slack'], []])
+  })
+
   it('a removed invite or account leaves both lists', () => {
     const after = [invited, waiting, hasAccess].filter(
       (share) => share.shareId !== 'b' && share.shareId !== 'c'

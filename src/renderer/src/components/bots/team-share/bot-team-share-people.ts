@@ -5,8 +5,9 @@ import {
   normalizeShareEmail,
   type BotShare
 } from '../../../../../shared/bots/bot-team-shares'
+import type { ConnectorConnectSource } from '../../../../../shared/connectors/connector-cloud-contract'
 
-export type TeamShareLinkSource = 'slack' | 'github' | 'linear'
+export type TeamShareLinkSource = ConnectorConnectSource
 
 export type TeamSharePerson =
   | {
@@ -80,7 +81,7 @@ export function teamSharePeople(shares: readonly BotShare[] | undefined): TeamSh
           key: share.shareId,
           name: share.name ?? share.email,
           email: share.email,
-          links: []
+          links: share.linkedSources ?? []
         }
       : {
           kind: 'invite',

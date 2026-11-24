@@ -86,6 +86,10 @@ describe('bot shares contract', () => {
     const resolved = { ...base, kind: 'share_resolved', email: 'alice@stably.ai', accountId: 'acct-1' }
     const onShare = { source: 'orca', externalId: 's1' }
     expect(ConnectorDeliverySchema.safeParse({ ...resolved, conversation: onShare }).success).toBe(true)
+    const linked = { ...resolved, conversation: onShare, linkedSources: ['slack', 'github'] }
+    expect(ConnectorDeliverySchema.parse(linked)).toMatchObject({ linkedSources: ['slack', 'github'] })
+    // Source names only.
+    expect(ConnectorDeliverySchema.safeParse({ ...linked, linkedSources: ['U123'] }).success).toBe(false)
     // Another share's queue would let it pass that share's accept.
     expect(
       ConnectorDeliverySchema.safeParse({ ...resolved, conversation: { ...onShare, externalId: 's2' } })

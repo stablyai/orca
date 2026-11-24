@@ -57,6 +57,7 @@
     "../cloud/packages/connector-contract/src/connect-messages.ts",
     "../cloud/packages/connector-contract/src/connector-limits.ts",
     "../cloud/packages/connector-contract/src/linear-issue-names.ts",
+    "../cloud/packages/connector-contract/src/share-messages.ts",
     "../cloud/packages/connector-contract/src/webhook-matcher.ts",
     "../cloud/packages/connector-contract/src/webhook-names.ts",
     "../cloud/packages/connector-contract/src/webhook-routes.ts",

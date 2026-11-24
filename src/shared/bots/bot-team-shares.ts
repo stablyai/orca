@@ -1,6 +1,10 @@
 // The Orca accounts and invited emails a bot is shared with (Bot.shares). The host owns the list and
 // publishes it in its hello; Orca Cloud mirrors it, resolves invites and relays teammates' accepts.
 import * as z from 'zod'
+import {
+  CONNECTOR_CONNECT_SOURCES,
+  type ConnectorConnectSource
+} from '../connectors/connector-cloud-paths'
 
 /** One bot's hello lists at most this many, as the connector contract's maxBotShares caps them. */
 export const BOT_MAX_SHARES = 50
@@ -18,6 +22,13 @@ export const BotShareEmailSchema = z
   .max(MAX_SHARE_EMAIL_LENGTH)
   .refine((email) => email === normalizeShareEmail(email))
 
+/** The services a teammate linked to their own Orca account, by name only. A source this Orca doesn't
+ *  know (a newer cloud's) is dropped, never the share; the list comes back in one order, once each. */
+export const BotShareLinkedSourcesSchema = z
+  .array(z.unknown())
+  .max(16)
+  .transform((sources) => CONNECTOR_CONNECT_SOURCES.filter((source) => sources.includes(source)))
+
 // shareId is minted on Add and kept when the invite resolves, so the cloud's row and a teammate's
 // accept name the same share throughout.
 export const BotShareSchema = z.discriminatedUnion('kind', [
@@ -27,7 +38,9 @@ export const BotShareSchema = z.discriminatedUnion('kind', [
     accountId: z.string().min(1).max(128),
     name: z.string().min(1).optional(),
     email: BotShareEmailSchema,
-    addedAt: z.number()
+    addedAt: z.number(),
+    /** Absent from an older cloud's resolve: none shown. */
+    linkedSources: BotShareLinkedSourcesSchema.optional()
   }),
   z.object({
     kind: z.literal('invite'),
@@ -87,7 +100,13 @@ export function withBotSharesEmailed(
  */
 export function withBotShareResolved(
   shares: readonly BotShare[],
-  resolved: { shareId: string; email: string; accountId: string; name?: string }
+  resolved: {
+    shareId: string
+    email: string
+    accountId: string
+    name?: string
+    linkedSources?: readonly ConnectorConnectSource[]
+  }
 ): readonly BotShare[] | null {
   const share = shares.find((entry) => entry.shareId === resolved.shareId)
   if (!share || share.email !== normalizeShareEmail(resolved.email)) {
@@ -105,7 +124,8 @@ export function withBotShareResolved(
     accountId: resolved.accountId,
     ...(resolved.name ? { name: resolved.name } : {}),
     email: share.email,
-    addedAt: share.addedAt
+    addedAt: share.addedAt,
+    ...(resolved.linkedSources?.length ? { linkedSources: [...resolved.linkedSources] } : {})
   }
   return shares.map((entry) => (entry === share ? account : entry))
 }

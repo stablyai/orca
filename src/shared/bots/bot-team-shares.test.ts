@@ -59,6 +59,20 @@ describe('bot share list', () => {
     ])
   })
 
+  it('keeps the services a resolve names; an old entry reads none, an unknown one drops, not the share', () => {
+    const linked = withBotShareResolved([invite], {
+      ...resolved,
+      linkedSources: ['slack', 'linear']
+    })!
+    expect(linked[0]).toMatchObject({ kind: 'account', linkedSources: ['slack', 'linear'] })
+    const [account] = withBotShareResolved([invite], resolved)!
+    expect(BotSharesSchema.parse([account])[0]).not.toHaveProperty('linkedSources')
+    const fromNewer = { ...account, linkedSources: ['discord', 'slack', 'github', 'slack'] }
+    expect(BotSharesSchema.parse([fromNewer])).toEqual([
+      { ...account, linkedSources: ['github', 'slack'] }
+    ])
+  })
+
   it('reads a saved list entry by entry, and a list that is not one as unset, never losing the bot', () => {
     expect(BotSharesSchema.parse([invite, { kind: 'team', shareId: 'c' }])).toEqual([invite])
     expect(BotSchema.shape.shares.parse(null)).toBeUndefined()

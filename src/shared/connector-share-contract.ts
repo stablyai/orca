@@ -1,7 +1,11 @@
 // Mirror of cloud/packages/connector-contract/src/share-messages.ts for the host of a shared bot.
 // Copies, not imports: the CLI compiles src/shared with rootDir src, so it can't reach cloud files.
 import * as z from 'zod'
-import { BotShareEmailSchema, BotShareIdSchema } from './bots/bot-team-shares'
+import {
+  BotShareEmailSchema,
+  BotShareIdSchema,
+  BotShareLinkedSourcesSchema
+} from './bots/bot-team-shares'
 import { CONNECTOR_PATHS } from './connectors/connector-cloud-paths'
 
 const Id = z.string().min(1).max(128)
@@ -29,14 +33,16 @@ const ShareDeliveryFields = {
 const isOnItsShare = (delivery: { shareId: string; conversation: { externalId: string } }) =>
   delivery.conversation.externalId === delivery.shareId
 
-// An invited email signed in to Orca: the host rewrites that invite as this account.
+// An invited email signed in to Orca: the host rewrites that invite as this account, with the
+// services that account linked (Share dialog marks).
 export const ShareResolvedDelivery = z
   .object({
     ...ShareDeliveryFields,
     kind: z.literal('share_resolved'),
     email: BotShareEmailSchema,
     accountId: Id,
-    name: Name.optional()
+    name: Name.optional(),
+    linkedSources: BotShareLinkedSourcesSchema.optional()
   })
   .refine(isOnItsShare)
 

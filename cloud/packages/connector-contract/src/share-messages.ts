@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import { CONNECTOR_CONNECT_SOURCES } from './connect-messages.js'
 import { CONNECTOR_LIMITS } from './connector-limits.js'
 
 // A bot shared with Orca accounts: its host lists the people in its hello (sharedWith), and a
@@ -55,12 +56,15 @@ export const ShareDeliveryFields = {
   botId: OpaqueIdSchema
 }
 
-// An invited email signed in to Orca: the host rewrites that invite as this account.
+// An invited email signed in to Orca: the host rewrites that invite as this account. linkedSources:
+// the services that account linked (connector_identities), by name only, never who it is there; the
+// host shows them on the person's row. Absent from an older cloud; an older host ignores it.
 export const ShareResolvedFields = {
   ...ShareDeliveryFields,
   email: ShareEmailSchema,
   accountId: OpaqueIdSchema,
-  name: Name.optional()
+  name: Name.optional(),
+  linkedSources: z.array(z.enum(CONNECTOR_CONNECT_SOURCES)).max(16).optional()
 }
 
 // A teammate's device asked to reach the bot: the host binds its Ed25519 key to the share, mints
