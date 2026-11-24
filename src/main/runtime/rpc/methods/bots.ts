@@ -27,6 +27,7 @@ import { ownerOnly } from './bots-caller-gates'
 import { BOT_CREATE_METHOD } from './bots-create'
 import { BOT_AGENT_CHOICES_METHOD } from './bots-agent-choices'
 import { BOT_CHATS_METHODS, botChatsSummary, readBotChats } from './bots-chats'
+import { BOT_RUN_CHATS_METHOD } from './bots-run-chats'
 import { BOT_CHAT_TREE_METHODS } from './bots-chat-tree'
 import { BOT_MEMORY_METHODS } from './bots-memory'
 import { BOT_KICKOFF_METHODS } from './bots-kickoff'
@@ -178,6 +179,7 @@ export const BOT_METHODS = [
   BOT_CREATE_METHOD,
   BOT_AGENT_CHOICES_METHOD,
   ...BOT_CHATS_METHODS,
+  BOT_RUN_CHATS_METHOD,
   ...BOT_CHAT_TREE_METHODS,
   ...BOT_MEMORY_METHODS,
   defineMethod({

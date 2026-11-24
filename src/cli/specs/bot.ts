@@ -59,6 +59,28 @@ export const BOT_COMMAND_SPECS: CommandSpec[] = [
     ]
   },
   {
+    path: ['bot', 'run-chats'],
+    hidden: true,
+    summary:
+      "Count a bot's automation-run chats a check would close now, and what keeps the rest open",
+    usage: 'orca bot run-chats [--bot <name>] [--json]',
+    allowedFlags: [...GLOBAL_FLAGS, 'bot'],
+    notes: [
+      'Reads only. A run chat is one an automation run opened as a new conversation; it closes once its run ended and nothing waits there (a turn, unread mail, an open item, an automation aimed at it, a thread, a live Run, an open tab, a person who wrote after the run, or a turn in the last 10 minutes).',
+      'Closed chats keep their history and show under `orca bot chats --all`. --json lists each chat with its title and items.'
+    ]
+  },
+  {
+    path: ['bot', 'run-chats', 'set'],
+    hidden: true,
+    summary: "Turn closing a bot's ended automation-run chats on or off",
+    usage: 'orca bot run-chats set --bot <name> --on|--off [--json]',
+    allowedFlags: [...GLOBAL_FLAGS, 'bot', 'on', 'off'],
+    notes: [
+      'On, the bot checks at once, 10 minutes after each run, and once 10 minutes after Orca starts. Off is the default; turning it off closes nothing more.'
+    ]
+  },
+  {
     path: ['bot', 'new-chat'],
     hidden: true,
     summary:
