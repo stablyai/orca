@@ -21,6 +21,7 @@ import {
   mountedHistoryConsumers,
   nextGitHistoryRequestId,
   publishGitHistory,
+  retireGitHistorySlot,
   subscribeGitHistory,
   presentGitHistoryEntry,
   pageKeyFor,
@@ -96,7 +97,11 @@ export function useSourceControlGitHistory({
     compareBaseRef,
     compareBaseOid
   ])
-  const entry = useSyncExternalStore(subscribeGitHistory, () =>
+  const subscribeSlot = useCallback(
+    (listener: () => void) => subscribeGitHistory(slotKey, listener),
+    [slotKey]
+  )
+  const entry = useSyncExternalStore(subscribeSlot, () =>
     activeWorktreeId ? gitHistorySlots.get(slotKey) : undefined
   )
   const gitHistoryState = activeWorktreeId
@@ -124,8 +129,7 @@ export function useSourceControlGitHistory({
   useEffect(() => {
     for (const [key, request] of latestGitHistoryRequest) {
       if (!worktreeMap.has(request.worktreeId) && !mountedHistoryConsumers.has(key)) {
-        gitHistorySlots.delete(key)
-        latestGitHistoryRequest.delete(key)
+        retireGitHistorySlot(key)
       }
     }
   }, [worktreeMap])
