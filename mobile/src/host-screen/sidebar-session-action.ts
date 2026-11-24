@@ -1,5 +1,5 @@
-import { agentDisplayLabel } from '../worktree/agent-row-display'
-import type { Worktree } from '../worktree/workspace-list-types'
+import { agentDisplayLabel } from '../worktree/agent-lineage/agent-row-display'
+import type { Worktree } from '../worktree/workspace-list/workspace-list-types'
 import { getSelectedSidebarSession, setSelectedSidebarSession } from './selected-sidebar-session'
 
 export type SidebarSessionAction = {

@@ -1,5 +1,5 @@
 import type { SnapshotEntry } from './snapshot-ax-tree-walk'
-import type { CdpCommandSender } from './snapshot-engine'
+import type { CdpCommandSender } from '../debugger/cdp-command-sender'
 
 // Find controls omitted from the accessibility tree, such as styled div buttons.
 export async function findCursorInteractiveElements(

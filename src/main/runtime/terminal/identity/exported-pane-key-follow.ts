@@ -1,4 +1,4 @@
-import { agentHookServer } from '../../../agent-hooks/server'
+import { agentHookServer } from '../../../agent-hooks/server/agent-hook-server'
 import type { RuntimePtyWorktreeRecord } from '../records/runtime-terminal-state-records'
 
 type ExportedPaneKeyPty = Pick<RuntimePtyWorktreeRecord, 'ptyId' | 'connected' | 'spawnPaneKey'>

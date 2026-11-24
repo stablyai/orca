@@ -1,15 +1,26 @@
 import { createElement } from 'react'
-import { act, create, type ReactTestRenderer } from 'react-test-renderer'
+import { act, create, type ReactTestInstance, type ReactTestRenderer } from 'react-test-renderer'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { clearDisclosuresForTests } from '../worktree/agent-child-disclosure'
-import type { RuntimeWorktreeAgentRow } from '../../../src/shared/runtime-types'
+import { clearDisclosuresForTests } from '../worktree/agent-lineage/agent-child-disclosure'
+import type { RuntimeWorktreeAgentRow } from '../../../src/shared/worktree/catalog/runtime-worktree-contracts'
 import { colors } from '../theme/mobile-theme'
-import { WorktreeAgentList } from './WorktreeAgentList'
-import { findAllByHostType, findByHostType } from '../test-support/react-test-renderer-host-nodes'
+import { WorktreeAgentList } from '../worktree/agent-lineage/presentation/WorktreeAgentList'
+
+function findAllByHostType(root: ReactTestInstance, hostType: string): ReactTestInstance[] {
+  return root.findAll((node) => node.type === hostType)
+}
+
+function findByHostType(root: ReactTestInstance, hostType: string): ReactTestInstance {
+  return root.find((node) => node.type === hostType)
+}
 
 beforeEach(clearDisclosuresForTests)
 
 vi.mock('react-native', () => ({
+  AppState: {
+    currentState: 'active',
+    addEventListener: () => ({ remove: () => {} })
+  },
   Pressable: 'Pressable',
   StyleSheet: { create: <T,>(styles: T) => styles },
   Text: 'Text',
@@ -19,8 +30,8 @@ vi.mock('lucide-react-native', () => ({
   ChevronDown: 'ChevronDown',
   ChevronRight: 'ChevronRight'
 }))
-vi.mock('./AgentStateDot', () => ({ AgentStateDot: () => null }))
-vi.mock('./MobileAgentIcon', () => ({ MobileAgentIcon: () => null }))
+vi.mock('../agents/presentation/AgentStateDot', () => ({ AgentStateDot: () => null }))
+vi.mock('../components/icons/MobileAgentIcon', () => ({ MobileAgentIcon: () => null }))
 
 async function pressByLabel(renderer: ReactTestRenderer, label: string) {
   const toggle = findAllByHostType(renderer.root, 'Pressable').find(
@@ -63,7 +74,6 @@ describe('selectable sidebar sessions in the agent list', () => {
       renderer = create(
         createElement(WorktreeAgentList, {
           agents: [agent('agent-1'), agent('agent-2')],
-          now: 2_000,
           unvisited: false,
           fullList: true,
           selectable: true,
@@ -101,7 +111,6 @@ describe('selectable sidebar sessions in the agent list', () => {
               subagents: [{ id: 'child', state: 'working', startedAt: 1_000 }]
             }
           ],
-          now: 2_000,
           unvisited: false,
           fullList: true,
           statusLive: true,
@@ -141,7 +150,6 @@ describe('selectable sidebar sessions in the agent list', () => {
             },
             agent('agent-2')
           ],
-          now: 2_000,
           unvisited: false,
           fullList: true,
           selectable: true,

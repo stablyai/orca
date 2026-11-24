@@ -35,7 +35,7 @@
 
 - `panels` (PanelContribution[], since 1.4.160): Sidebar panels. At most 64.
 - `commands` (CommandContribution[], since 1.4.160): Command palette entries. At most 256.
-- `events` (EventContribution[], since 1.4.160): Events delivered to the plugin worker. At most 4.
+- `events` (EventContribution[], since 1.4.160): Events delivered to the plugin worker. At most 5.
 - `hooks` (HookContribution[], since 1.4.248): Hooks the worker runs before or after Orca acts; Orca waits only on plugins that list one. At most 8.
 - `languagePacks` (LanguagePackContribution[], since 1.4.160): Interface translations. At most 16.
 - `keybindings` (KeybindingContribution[], since 1.4.160): Keyboard shortcuts for contributed commands. At most 256.
@@ -43,6 +43,7 @@
 - `themes` (ThemeContribution[], since 1.4.245): App color themes. At most 64.
 - `terminalThemes` (ThemeContribution[], since 1.4.245): Terminal ANSI palettes. At most 64.
 - `iconThemes` (ThemeContribution[], since 1.4.245): File icon themes. At most 32.
+- `fonts` (FontContribution[], since 1.4.253): Font families for the terminal, editor and interface font pickers. At most 8.
 - `syntaxes` (SyntaxContribution[], since 1.4.245): Syntax highlighting for editor languages. At most 16.
 - `customEditors` (CustomEditorContribution[], since 1.4.245): Editors that open files of given types in the editor tab. At most 16.
 - `newFiles` (NewFileContribution[], since 1.4.245): Untitled files the user can create from the + menu and the command palette. At most 16.
@@ -57,7 +58,7 @@ A sidebar panel. Requires the `sandboxed-ui` execution profile or higher.
 
 - `id` (string, required, since 1.4.160): Panel id, unique among this plugin's panels. The reserved names `constructor` and `prototype` are refused.
 - `title` (string, required, since 1.4.160): Title shown on the panel tab and its tooltip.
-- `icon` (one of activity, bar-chart-3, bell, blocks, book, bot, bug, calendar, cloud, code, database, file-text, flag, folder, gauge, globe, hammer, layers, lightbulb, package, plug, puzzle, rocket, star, terminal, wrench, zap, add, remove, delete, edit, refresh, search, settings, check, close, info, warning, error, open-external, copy, download, upload, play, pause, stop, more, expand, collapse, next, filter, branch, file, agent, link, since 1.4.160): Icon shown in the right-sidebar activity bar. Defaults to `plug`.
+- `icon` (one of activity, bar-chart-3, bell, blocks, book, bot, bug, calendar, cloud, code, database, file-text, flag, folder, gauge, globe, hammer, layers, lightbulb, package, plug, puzzle, rocket, star, terminal, wrench, zap, add, remove, delete, edit, refresh, search, settings, check, close, info, warning, error, open-external, copy, download, upload, play, pause, stop, more, expand, collapse, next, filter, branch, file, agent, link | object, since 1.4.160): Icon shown in the right-sidebar activity bar. Defaults to `puzzle`. Either a built-in name, or (manifest format 2, needs `engines.orca` `>=1.4.274`) an object with inline SVG path data that Orca draws in the theme color: `path` (required; up to 4096 characters of SVG path data starting with `M`, separated only by spaces, tabs, line breaks and commas), `viewBox` (`"0 0 W H"`, W and H from 1 to 1024; default `"0 0 24 24"`) and `mode` (`stroke`, the default, draws a 2-unit outline with round caps and joins like Lucide, which assumes a viewBox of about 24, so validation warns when W or H is above 48; `fill` fills the shape). Unknown keys are refused. SVG files are not supported. In format 2, an object icon that isn't a valid path icon, or a string ending in `.svg`, shows `puzzle` with a warning; any other value (a misspelled name, `null`, an array, a number or a boolean) is a manifest error. Format 1 shows `puzzle` with a warning for any icon that isn't a built-in name. Orca draws a single `<path>`: for an icon made of several `<path>` elements or other shapes (`<circle>`, `<rect>`, `<line>`), convert each shape to path commands and join every `d` into one `path`. Example: `{ "path": "M4 4h16v16H4z", "mode": "stroke" }`.
 - `entry` (string, required, since 1.4.160): What the panel runs: an HTML page for `ui: "html"`, a `.js`/`.mjs` module for `ui: "components"`. Either may instead be a `.ts`/`.tsx`/`.mts`/`.jsx` file, which Orca transpiles when it loads (needs `engines.orca` `>=1.4.246`; an `html` panel then gets a generated page around it). It is trusted code: install panels you trust.
 - `ui` ("html" | "components", since 1.4.246): How the panel draws its UI. `html` (default) shows `entry` as a web page in an isolated frame; `components` runs `entry` as a hidden module and Orca draws the component tree it returns with its own controls.
 
@@ -73,9 +74,9 @@ A command palette entry. Requires the `declarative` execution profile or higher.
 
 ## EventContribution
 
-An event subscription. Requires `main`, the `trusted-worker` execution profile and the capability of the event's domain: `workspace:read` for workspace events, `agent:read` for agent events.
+An event subscription. Requires `main`, the `trusted-worker` execution profile and the capability of the event's domain: `workspace:read` for workspace events, `agent:read` for agent events. Editor events need no capability.
 
-- `on` ("workspace.created" | "workspace.removed" | "agent.status.changed" | "workspace.changed", required, since 1.4.160): Event delivered to the plugin worker.
+- `on` ("workspace.created" | "workspace.removed" | "agent.status.changed" | "workspace.changed" | "editor.typography.changed", required, since 1.4.160): Event delivered to the plugin worker.
 
 ## HookContribution
 
@@ -113,6 +114,21 @@ A titled theme file.
 - `id` (string, required, since 1.4.245): Theme id, unique within its family in this plugin. The reserved names `constructor` and `prototype` are refused.
 - `title` (string, required, since 1.4.245): Name shown in the theme picker.
 - `path` (string, required, since 1.4.245): JSON theme file, at most 16 KiB.
+
+## FontContribution
+
+A font family the user can pick for the terminal, editor or interface. It applies only once picked.
+
+- `family` (string, required, since 1.4.253): Family name shown in the font pickers. Orca adds the plugin id, so a plugin font never replaces an installed or built-in font of the same name.
+- `faces` (FontFaceContribution[], required, since 1.4.253): The family's files, at most 8. All of a plugin's font files together may be at most 8 MB.
+
+## FontFaceContribution
+
+One file of a font family.
+
+- `path` (string, required, since 1.4.253): WOFF or WOFF2 file, at most 2 MB; its first bytes must match its extension. TTF, OTF and font collections are refused.
+- `weight` (string, since 1.4.253): CSS weight this file draws, or a range for a variable font. Defaults to `400`.
+- `style` ("normal" | "italic", since 1.4.253): Whether this file is the italic face. Defaults to `normal`.
 
 ## SyntaxContribution
 
@@ -182,7 +198,7 @@ An item in the status bar. Requires the `declarative` profile; a `trusted-worker
 
 A host API the plugin may call once the user consents.
 
-- `kind` (one of workspace:read, workspace:write, agent:read, agent:launch, terminal:send, terminal:read, notifications:show, storage:own, secrets:own, settings:own, appearance:write, required, since 1.4.160): Capability granted on user consent.
+- `kind` (one of workspace:read, workspace:write, agent:read, agent:launch, terminal:send, terminal:read, notifications:show, storage:own, secrets:own, settings:own, appearance:write, workspace:create, automation:read, automation:write, history:read, required, since 1.4.160): Capability granted on user consent.
 
 ## Screenshot
 

@@ -1,6 +1,6 @@
 import type React from 'react'
 import type { AiVaultSearchHit } from '../../../../../../shared/ai-vault/search/ai-vault-search-types'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import { conversationRoleLabel } from '../session-list/ai-vault-session-row-display'
 
 const LEADING_CONTEXT_CHARS = 12
@@ -47,15 +47,16 @@ export function highlightedSearchSnippet(snippet: string): React.ReactNode[] {
 }
 
 export function AiVaultSearchEvidence({ hit }: { hit: AiVaultSearchHit }): React.JSX.Element {
+  const t = useTranslate()
   const evidence = hit.evidence
   let availability: string | null = null
   if (hit.source.presence === 'unverifiable') {
-    availability = translate(
+    availability = t(
       'auto.components.right.sidebar.AiVaultSearchEvidence.sourceUnverifiable',
       'Transcript availability could not be verified'
     )
   } else if (hit.source.presence === 'missing') {
-    availability = translate(
+    availability = t(
       'auto.components.right.sidebar.AiVaultSearchEvidence.sourceMissing',
       'Transcript is no longer available'
     )
@@ -66,13 +67,13 @@ export function AiVaultSearchEvidence({ hit }: { hit: AiVaultSearchHit }): React
       {evidence ? (
         <div className="line-clamp-2 [overflow-wrap:anywhere]">
           <span className="font-medium text-foreground/80">
-            {conversationRoleLabel(evidence.role)}
+            {conversationRoleLabel(evidence.role, t)}
           </span>
           <span>: {highlightedSearchSnippet(evidence.snippet)}</span>
         </div>
       ) : (
         <div className="line-clamp-1">
-          {translate(
+          {t(
             'auto.components.right.sidebar.AiVaultSearchEvidence.metadataMatch',
             'Match in session metadata'
           )}

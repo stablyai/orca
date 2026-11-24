@@ -1,8 +1,12 @@
-// Why: the count is a row count, not a total — Linear's issues() connection has no totalCount.
+// Why: only Linear's search payloads carry totalCount; list connections report rows shown.
 export function appendLinearListTruncation(
   body: string,
   shown: number,
-  truncated: boolean
+  truncated: boolean,
+  total?: number
 ): string {
-  return truncated ? `${body}\ntruncated: showing ${shown}` : body
+  if (!truncated) {
+    return body
+  }
+  return `${body}\ntruncated: showing ${shown}${total === undefined ? '' : ` of ${total}`}`
 }

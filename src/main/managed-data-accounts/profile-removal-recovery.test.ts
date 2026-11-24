@@ -12,8 +12,8 @@ import {
 } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import type { ManagedDataAccountProvider } from '../../shared/managed-account-types'
-import { writeSecureFile } from '../../shared/secure-file'
+import type { ManagedDataAccountProvider } from '../../shared/agent-accounts/managed-account-types'
+import { writeSecureFile } from '../../shared/secure-storage/secure-file'
 import { ManagedDataAccountService } from './service'
 
 vi.mock('node:fs', async (importOriginal) => ({

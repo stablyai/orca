@@ -1,6 +1,10 @@
-import type { RuntimeWorktreeAgentRow } from '../../../src/shared/runtime-types'
-import { agentDisplayLabel, agentDotState, type AgentDotState } from '../worktree/agent-row-display'
-import { flattenAgentRowLineage } from '../worktree/agent-row-lineage'
+import type { RuntimeWorktreeAgentRow } from '../../../src/shared/worktree/catalog/runtime-worktree-contracts'
+import {
+  agentDisplayLabel,
+  agentDotState,
+  type AgentDotState
+} from '../worktree/agent-lineage/agent-row-display'
+import { flattenAgentRowLineage } from '../worktree/agent-lineage/agent-row-lineage'
 
 export type SidebarSessionJump = {
   paneKey: string

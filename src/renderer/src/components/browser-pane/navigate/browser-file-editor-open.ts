@@ -1,9 +1,9 @@
-import { getConnectionIdFromState } from '@/lib/connection-owner-resolution'
-import { getRuntimeTargetForWorktreeOwner } from '@/lib/file-owner-runtime-target'
+import { getConnectionIdFromState } from '@/lib/workspace/ownership/connection-owner-resolution'
+import { getRuntimeTargetForWorktreeOwner } from '@/lib/files/access/file-owner-runtime-target'
 import { getRelativePathInsideRoot } from '@/lib/path'
-import { statUserOpenedPath } from '@/lib/user-opened-local-path'
+import { statUserOpenedPath } from '@/lib/files/access/user-opened-local-path'
 import { toast } from 'sonner'
-import type { AppState } from '@/store'
+import type { AppState } from '@/store/types'
 import { useAppStore } from '@/store'
 import { openDocPreviewSource } from '../workspace-doc/doc-preview-document-actions'
 

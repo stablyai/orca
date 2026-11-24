@@ -1,13 +1,13 @@
-import type { ExecutionHostId } from '../../../../../shared/execution-host'
+import type { ExecutionHostId } from '../../../../../shared/execution-host/execution-host'
 import { useAppStore } from '@/store/index'
 import { confirmStructuredLaunchFirstMessagePublication } from './structured-agent-session-launch-publication-confirmation'
 import { retryStructuredAgentSessionLaunch } from './structured-agent-session-launch'
 import {
   getStructuredAgentSessionLaunchLifecycle,
-  getStructuredAgentSessionLaunchOwner,
-  structuredLaunchStates,
-  structuredAgentSessionLaunchHasRetainedInput
+  getStructuredAgentSessionLaunchOwner
 } from './structured-agent-session-launch-registry'
+import { structuredLaunchStates } from './structured-agent-session-launch-state-store'
+import { structuredAgentSessionLaunchHasRetainedInput } from './structured-agent-session-launch-input'
 
 /** On host inventory reconnect, recheck its unconfirmed launches as Retry does. Settle published/failed; still-unknown waits for the next return, and cancellation skips. */
 export function recheckUnconfirmedStructuredAgentLaunches(executionHostId: ExecutionHostId): void {

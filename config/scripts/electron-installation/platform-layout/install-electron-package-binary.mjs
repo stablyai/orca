@@ -16,7 +16,7 @@ import { createRequire } from 'node:module'
 import { platform as osPlatform, tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { getElectronPlatformPath } from './electron-platform-path.mjs'
-import { getZipExtractorCommand } from '../../../../src/shared/zip-extractor-command.ts'
+import { getZipExtractorCommand } from '../../../../src/shared/archives/zip-extractor-command.ts'
 import { isSharedPackageDir } from '../../native-build/node-addons/native-build-entry.cjs'
 import {
   shareElectronDistFromCache,

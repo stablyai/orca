@@ -3,7 +3,7 @@ import { Pressable, Text } from 'react-native'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
 import { colors, feedback, radii, spacing } from '../theme/mobile-theme'
 import { themedStyleSheet } from '../theme/themed-styles'
-import type { WorkspaceListItem } from '../worktree/workspace-list-types'
+import type { WorkspaceListItem } from '../worktree/workspace-list/workspace-list-types'
 
 // Grows the 20 pt pill to a 44 pt target without pushing the row apart.
 const LINEAGE_TOGGLE_HIT_SLOP = { top: 12, bottom: 12, left: 8, right: 8 } as const

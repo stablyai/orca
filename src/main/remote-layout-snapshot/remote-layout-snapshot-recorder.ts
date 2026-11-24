@@ -3,12 +3,21 @@
 import type {
   RemoteLayoutSnapshot,
   RemoteLayoutSnapshotWorkspace
-} from '../../shared/remote-layout-snapshot'
-import type { RuntimeRpcResponse } from '../../shared/runtime-rpc-envelope'
-import type { RuntimeMobileSessionTabsResult } from '../../shared/runtime-session-contracts'
+} from '../../shared/remote-runtime/session-graph/remote-layout-snapshot'
+import type { RuntimeRpcResponse } from '../../shared/remote-runtime/rpc/runtime-rpc-envelope'
+import type { RuntimeMobileSessionTabsResult } from '../../shared/remote-runtime/session-graph/runtime-session-contracts'
 
 export type RemoteLayoutSnapshotStore = {
-  getRemoteLayoutSnapshot(environmentId: string): RemoteLayoutSnapshot | undefined
+  getRemoteLayoutSnapshotWorkspace(
+    environmentId: string,
+    worktreeId: string
+  ): RemoteLayoutSnapshotWorkspace | undefined
+  setRemoteLayoutSnapshotWorkspace(
+    environmentId: string,
+    worktreeId: string,
+    workspace: RemoteLayoutSnapshotWorkspace | null,
+    save: 'now' | 'later'
+  ): void
   setRemoteLayoutSnapshot(
     environmentId: string,
     snapshot: RemoteLayoutSnapshot | null,
@@ -77,16 +86,16 @@ export function recordRemoteLayoutFrame(
     return
   }
   const { type: _type, removed, ...result } = frame
-  const { [frame.worktree]: previous, ...others } =
-    store.getRemoteLayoutSnapshot(environmentId)?.workspaces ?? {}
+  const previous = store.getRemoteLayoutSnapshotWorkspace(environmentId, frame.worktree)
   if (removed) {
-    store.setRemoteLayoutSnapshot(environmentId, { workspaces: others }, 'now')
+    store.setRemoteLayoutSnapshotWorkspace(environmentId, frame.worktree, null, 'now')
     return
   }
   const workspace = displayed(result)
-  store.setRemoteLayoutSnapshot(
+  store.setRemoteLayoutSnapshotWorkspace(
     environmentId,
-    { workspaces: { ...others, [frame.worktree]: workspace } },
+    frame.worktree,
+    workspace,
     structure(previous) === structure(workspace) ? 'later' : 'now'
   )
 }

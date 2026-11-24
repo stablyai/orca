@@ -1,9 +1,11 @@
 import { execFile, type ChildProcess } from 'node:child_process'
 import { closeSync } from 'node:fs'
 import { spawnProcess } from '@orca/process-host'
-import { LSOF_NONBLOCKING_ARGS } from '../../shared/lsof-nonblocking-args'
+import { LSOF_NONBLOCKING_ARGS } from '../../shared/process-observation/lsof-nonblocking-args'
+import { psLocaleEnvironment } from '../../shared/process-observation/tables/ps-locale-environment'
 import { DarwinNetstatListeners } from './darwin-netstat-listeners'
 import { openDarwinPortScanLock } from './darwin-port-scan-lock'
+import { runLinuxSocketHolderListing } from './linux-socket-holder-listing'
 import {
   PORT_SCAN_COMMAND_TIMEOUT_MS,
   PortScanCommandTimeoutError,
@@ -23,10 +25,17 @@ let stopping = false
 export async function runPortScanCommandInProcess(
   command: string,
   args: string[],
-  darwinOperation?: DarwinPortScanOperation
+  darwinOperation?: DarwinPortScanOperation,
+  linuxSocketInodes?: number[]
 ): Promise<{ stdout: string; spawnMs: number }> {
   if (stopping) {
     throw new Error('Port scanning is shutting down.')
+  }
+  if (linuxSocketInodes) {
+    return runLinuxSocketHolderListing(linuxSocketInodes, (child) => {
+      activeChildren.add(child)
+      return () => activeChildren.delete(child)
+    })
   }
   if (process.platform === 'darwin' && darwinOperation) {
     const fd = openDarwinPortScanLock(darwinOperation)
@@ -62,7 +71,8 @@ export async function runPortScanCommandInProcess(
         {
           timeout: PORT_SCAN_COMMAND_TIMEOUT_MS,
           maxBuffer: 2 * 1024 * 1024,
-          windowsHide: true
+          windowsHide: true,
+          env: psLocaleEnvironment()
         },
         (error, stdout, stderr) => {
           if (error) {
@@ -141,7 +151,12 @@ async function runDarwinPortScanCommand(
   let child: ChildProcess
   const startedAt = Date.now()
   try {
-    child = spawnProcess({ program: command, args, stdio: [fd, 'pipe', 'pipe'] })
+    child = spawnProcess({
+      program: command,
+      args,
+      env: psLocaleEnvironment(),
+      stdio: [fd, 'pipe', 'pipe']
+    })
   } finally {
     closeSync(fd)
   }

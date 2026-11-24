@@ -1,7 +1,7 @@
 import { defaultFilter } from 'cmdk'
 import '../../workspace-card/activity/worktree-card-empty-inputs'
 import { branchDisplayName } from '../../workspace-card/identity/worktree-branch-display'
-import type { Repo } from '../../../../../../shared/repo-types'
+import type { Repo } from '../../../../../../shared/repository/repo-types'
 import type { Worktree } from '../../../../../../shared/worktree/types'
 
 export function getWorktreeParentPickerItemValue(candidate: Worktree, repoName = ''): string {

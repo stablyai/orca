@@ -1,11 +1,11 @@
 import { createElement } from 'react'
 import { act, create, type ReactTestRenderer } from 'react-test-renderer'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import type { RuntimeWorktreeAgentRow } from '../../../src/shared/runtime-types'
+import type { RuntimeWorktreeAgentRow } from '../../../src/shared/worktree/catalog/runtime-worktree-contracts'
 import { WorkspaceSessionJumpList } from './WorkspaceSessionJumpList'
 
-vi.mock('../components/AgentStateDot', () => ({ AgentStateDot: 'AgentStateDot' }))
-vi.mock('../components/MobileAgentIcon', () => ({ MobileAgentIcon: 'MobileAgentIcon' }))
+vi.mock('../agents/presentation/AgentStateDot', () => ({ AgentStateDot: 'AgentStateDot' }))
+vi.mock('../components/icons/MobileAgentIcon', () => ({ MobileAgentIcon: 'MobileAgentIcon' }))
 vi.mock('react-native', () => ({
   Pressable: 'Pressable',
   ScrollView: 'ScrollView',

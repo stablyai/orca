@@ -2,10 +2,8 @@ import type { BrowserClientAutomationMethod } from '../../../../shared/browser/c
 import type { BrowserClientFileChannelTransport } from '../../client-hosts/file-transfers/browser-client-file-channel-transport'
 import type { BrowserClientPageGuestBinding } from '../lifecycle/browser-client-page-guest-binding'
 import type { BrowserClientUploadStaging } from '../../client-hosts/file-transfers/browser-client-upload-staging'
-import type {
-  BrowserClientPageNetworkRoute,
-  BrowserClientPageRenderer
-} from '../lifecycle/browser-client-page-cleanup'
+import type { BrowserClientPageNetworkRoute } from '../../network/client-routes/browser-client-page-network-route'
+import type { BrowserClientPageRenderer } from '../renderer/browser-client-page-renderer-contract'
 import type { BrowserRouteSessionRegistry } from '../../routing/sessions/browser-route-session-registry'
 import type {
   BrowserClientPageLifecycleRegistry,
@@ -65,5 +63,7 @@ export type BrowserClientPageCommandExecutorDependencies = BrowserClientPageAuth
   // Remote uploads require both a negotiated file channel and upload staging.
   fileChannel?: BrowserClientFileChannelTransport
   uploadStaging?: BrowserClientUploadStaging
+  /** Marks the page's next download as the agent's, for its host to save; see `claimNextDownload`. */
+  claimRelayedDownload?(guestWebContentsId: number): { started: Promise<boolean>; release(): void }
   maxPages?: number
 }

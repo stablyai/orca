@@ -4,8 +4,11 @@ import { isWorkspaceBoardKeepOpenTarget } from './use-workspace-kanban-outside-d
 import {
   STATUS_BAR_RESERVE_HEIGHT,
   WORKSPACE_TOP_CHROME_HEIGHT
-} from '../../workspace-chrome-metrics'
-import { trackSidebarLiveWidth } from '../../sidebar-live-width'
+} from '../../../../app-shell/chrome/workspace-chrome-metrics'
+import { trackSidebarLiveWidth } from '../../chrome/sidebar-live-width'
+import { resolveSidebarDrawerLeftEdge } from '../../chrome/sidebar-drawer-left-edge'
+import { useAppStore } from '@/store/index'
+import { selectAppRailWidth } from '@/components/app-rail/app-rail-layout'
 
 type WorkspaceKanbanSheetProps = {
   boardRef: React.RefObject<HTMLDivElement | null>
@@ -32,10 +35,12 @@ export default function WorkspaceKanbanSheet({
   sidebarWidth,
   statusBarVisible
 }: WorkspaceKanbanSheetProps): React.JSX.Element {
-  const drawerLeft = sidebarOpen ? sidebarWidth : 0
-  const drawerLeftCss = sidebarOpen
-    ? `var(--workspace-sidebar-live-width, ${sidebarWidth}px)`
-    : '0px'
+  const railWidth = useAppStore(selectAppRailWidth)
+  const { left: drawerLeft, leftCss: drawerLeftCss } = resolveSidebarDrawerLeftEdge({
+    sidebarOpen,
+    sidebarWidth,
+    railWidth
+  })
   const drawerBottom = `${statusBarVisible ? STATUS_BAR_RESERVE_HEIGHT : 0}px`
   const keepOpenForOutsideEvent = (event: {
     preventDefault: () => void

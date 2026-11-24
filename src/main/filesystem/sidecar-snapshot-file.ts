@@ -54,7 +54,3 @@ export async function writeSidecarSnapshot(file: string, payload: unknown): Prom
   await cleanup
   await writeFileDurable(durableWriteTempPath(file), file, JSON.stringify(payload))
 }
-
-export function _getSidecarSnapshotPendingFileCountForTests(): number {
-  return queues.size + staleTempCleanups.size
-}

@@ -1,4 +1,4 @@
-import type * as PageStorage from '../mobile-web-shell/bridge/page-async-storage'
+import type * as PageStorage from '../mobile-web-shell/bridge/page-storage/page-async-storage'
 import type * as Preference from './selectable-sidebar-sessions'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
@@ -46,9 +46,10 @@ async function mount(pref: PreferenceModule): Promise<{
 async function loadPage(): Promise<PreferenceModule> {
   vi.resetModules()
   vi.doMock('@react-native-async-storage/async-storage', async () => ({
-    default: (await import('../mobile-web-shell/bridge/page-async-storage')).default
+    default: (await import('../mobile-web-shell/bridge/page-storage/page-async-storage')).default
   }))
-  const storage: typeof PageStorage = await import('../mobile-web-shell/bridge/page-async-storage')
+  const storage: typeof PageStorage =
+    await import('../mobile-web-shell/bridge/page-storage/page-async-storage')
   const pref = await import('./selectable-sidebar-sessions')
   storage.publishPageStorage(
     Object.fromEntries(appStore),

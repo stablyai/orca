@@ -1,18 +1,18 @@
 import { webContents } from 'electron'
+import { browserExtensionSourceProfileId } from '../profile-sessions/browser-extension-route-profiles'
 import type { InstalledBrowserExtension } from '../../../../shared/browser/extensions/browser-extension-types'
 import {
   parseChromeWebStoreExtensionInput,
   type BrowserExtensionWebStoreInstallResult
 } from '../../../../shared/browser/extensions/browser-extension-webstore'
-import { browserManager } from '../../browser-manager'
-import { browserSessionRegistry } from '../../sessions/browser-session-registry'
+import { browserManager } from '../../guest-lifecycle/manager/browser-manager'
+import { browserSessionRegistry } from '../../sessions/profiles/browser-session-registry'
 import { getBrowserExtensionInstallStore } from '../installation/browser-extension-install-store'
 import { requestBrowserExtensionInstallPrompt } from '../permissions/browser-extension-install-prompt'
 import { removeBrowserExtension } from '../browser-extension-management'
 import { readBrowserExtensionIconDataUrl } from '../installation/browser-extension-manifest'
 import { samePermissionSummary } from '../permissions/browser-extension-permission-summary'
 import type { BrowserExtensionAccessLists as BrowserExtensionPermissionSummary } from '../../../../shared/browser/extensions/browser-extension-permission-warnings'
-import { getBrowserExtensionSessionForProfile } from '../profile-sessions/browser-extension-session-loader'
 import { isBrowserExtensionSupportEnabled } from '../browser-extension-support'
 import {
   downloadWebStoreCrx,
@@ -26,10 +26,12 @@ import {
 import {
   commitStagedWebStoreExtension,
   discardStagedWebStoreExtension,
-  isBrowserExtensionBusy,
-  stageWebStoreExtension,
-  withBrowserExtensionLock
+  stageWebStoreExtension
 } from '../installation/browser-extension-webstore-install'
+import {
+  isBrowserExtensionBusy,
+  withBrowserExtensionLock
+} from '../installation/browser-extension-mutation-lock'
 import {
   ChromeWebStoreInstallFlow,
   InvalidIconUrlError,
@@ -49,7 +51,9 @@ export function isBrowserExtensionEnabledInProfile(
 }
 
 function profileLabel(profileId: string): string | null {
-  return browserSessionRegistry.getProfile(profileId)?.label ?? null
+  return (
+    browserSessionRegistry.getProfile(browserExtensionSourceProfileId(profileId))?.label ?? null
+  )
 }
 
 function liveGuest(frame: ChromeWebStoreFrame): Electron.WebContents | null {
@@ -129,7 +133,10 @@ export async function installBrowserExtensionFromWebStore(
   renderer: Electron.WebContents
 ): Promise<BrowserExtensionWebStoreInstallResult> {
   if (!isBrowserExtensionSupportEnabled()) {
-    return { status: 'failed', error: 'Turn on browser extensions in Settings › Experimental' }
+    return {
+      status: 'failed',
+      error: 'Turn on browser extensions in Settings › Browser › Extensions'
+    }
   }
   const extensionId = parseChromeWebStoreExtensionInput(input)
   if (!extensionId) {
@@ -138,7 +145,7 @@ export async function installBrowserExtensionFromWebStore(
       error: 'Paste a Chrome Web Store link or a 32-letter extension ID'
     }
   }
-  if (!getBrowserExtensionSessionForProfile(profileId)) {
+  if (!browserSessionRegistry.getProfile(profileId)) {
     return { status: 'failed', error: 'Browser profile is not available for extensions' }
   }
   const existing = getBrowserExtensionInstallStore().get(extensionId)

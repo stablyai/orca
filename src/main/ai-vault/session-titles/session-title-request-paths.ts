@@ -1,6 +1,6 @@
 import type { AiVaultSessionTitleRequest } from '../../../shared/ai-vault/contracts/ai-vault-session-title'
-import { toHostReadableTranscriptPath } from '../../native-chat/host-readable-transcript-path'
-import { wslTranscriptFsRefusal } from '../../native-chat/wsl-transcript-fs-error'
+import { toHostReadableTranscriptPath } from '../../native-chat/transcript-discovery/host-readable-transcript-path'
+import { wslTranscriptFsRefusal } from '../../native-chat/transcript-filesystem/wsl-transcript-fs-error'
 
 export function resolveHostReadableAiVaultTitleRequests(
   requests: AiVaultSessionTitleRequest[],

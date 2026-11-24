@@ -1,28 +1,26 @@
+import { copyCodexConversation } from '../../codex-conversation-copy'
 import { readCodexSessionAccountUsage } from './codex-session-account-usage'
+import { manageCodexSessionMcp } from './codex-session-mcp'
 import * as permission from '../turns/codex-structured-turn-permission'
 import { projectCodexSessionOptions } from '../catalog/codex-structured-service-tier'
-import type { AgentSessionBackgroundTaskState } from '../../../../shared/agent-session/agent-session-background-task-wire'
+import type { AgentSessionBackgroundTaskState } from '../../../../shared/agent-session/background-tasks/agent-session-background-task-wire'
 import type {
   AgentSessionAcquisition,
   AgentSessionDispatchOutcome,
   StructuredAgentSessionAcquireInput,
-  StructuredAgentSessionAdapter,
+  StructuredAgentSessionAdapter as SessionAdapter,
   StructuredAgentSessionSetOptionInput
-} from '../../../native-chat/agent-session-wire/structured-agent-session-adapter'
-import type { StructuredAgentSessionProviderOpenInput } from '../../../native-chat/agent-session-wire/structured-agent-session-provider-open-contract'
+} from '../../../native-chat/agent-session-wire/providers/structured-agent-session-adapter'
 import type { CodexJournalTranslationAdmission } from '../journal/codex-structured-journal-contracts'
 import { dispatchCodexTurn } from '../turns/codex-structured-turn-start'
 import { isCodexTurnOptionKey } from '../turns/codex-turn-option-keys'
-import { isNativeLocalLocation as supportsCodexStructuredLocation } from '../../../../shared/execution-host'
+import { isNativeLocalLocation as supportsCodexStructuredLocation } from '../../../../shared/execution-host/execution-host'
 import { CodexStructuredSessionTeardown } from './codex-structured-session-teardown'
 import {
   applyCodexStructuredSessionOption,
   readLiveCodexSessionOptions
 } from '../catalog/codex-structured-session-options'
-import {
-  prepareCodexMessageDispatch,
-  readCodexAppliedInputOptions
-} from '../turns/codex-structured-message-options'
+import * as messageOptions from '../turns/codex-structured-message-options'
 import {
   CodexAcquisitionRegistry,
   requireLiveCodexSession,
@@ -48,12 +46,13 @@ import {
   cancelCodexStructuredTurn
 } from '../prompts/codex-structured-prompt-ownership'
 import { renameCodexProviderSession } from './codex-provider-session-rename'
+import { approveCodexAutoReviewDenial } from './codex-auto-review-approval'
 import * as codexRewind from '../threads/codex-structured-rewind'
 import * as turnEnd from '../turns/codex-structured-turn-end-settlement'
 import { codexAcquireFailure } from '../../app-server/codex-startup-outcome'
 import { openCodexStart, recoverCodexRewindAtStart } from './codex-structured-start-verdict'
 
-export class CodexStructuredSessionAdapter implements StructuredAgentSessionAdapter {
+export class CodexStructuredSessionAdapter implements SessionAdapter {
   private readonly sessions = new Map<string, CodexSession>()
   private readonly acquisitions = new CodexAcquisitionRegistry()
   private readonly notificationRetries: ReturnType<typeof createCodexStructuredNotificationRetry>
@@ -83,18 +82,20 @@ export class CodexStructuredSessionAdapter implements StructuredAgentSessionAdap
     })
   }
 
+  copyConversation: NonNullable<SessionAdapter['copyConversation']> = (input) =>
+    copyCodexConversation(input, this.deps.providerInvocation)
   readAccountUsage = readCodexSessionAccountUsage(this.sessions, () => this.deps.providerInvocation)
+  manageMcp = manageCodexSessionMcp(this.sessions, () => this.deps.providerInvocation)
+  approveAutoReviewDenial = approveCodexAutoReviewDenial(this.sessions)
 
   supportsLocation = supportsCodexStructuredLocation
 
-  readCommands: NonNullable<StructuredAgentSessionAdapter['readCommands']> = (sessionId) =>
+  readCommands: NonNullable<SessionAdapter['readCommands']> = (sessionId) =>
     this.sessions.get(sessionId)?.skillReport?.read()
 
   readonly atRestCommands: CodexStructuredSessionAdapterDeps['atRestCommands']
 
-  renameProviderSession: NonNullable<StructuredAgentSessionAdapter['renameProviderSession']> = (
-    input
-  ) =>
+  renameProviderSession: NonNullable<SessionAdapter['renameProviderSession']> = (input) =>
     renameCodexProviderSession({
       ...input,
       session: this.sessions.get(input.record.sessionId),
@@ -102,6 +103,7 @@ export class CodexStructuredSessionAdapter implements StructuredAgentSessionAdap
     })
 
   permissionModeRequiresAcquisition = permission.codexNativeResumeRequirement(this.sessions)
+  runningPermissionMode = permission.codexRunningPermissionMode(this.sessions)
 
   settlePermissionTransition = permission.createCodexPermissionTransition(this.sessions, this)
 
@@ -123,8 +125,7 @@ export class CodexStructuredSessionAdapter implements StructuredAgentSessionAdap
       throw codexAcquireFailure(error)
     })
 
-  open = (input: StructuredAgentSessionProviderOpenInput) =>
-    openCodexStart(this.acquisitions, input)
+  open: SessionAdapter['open'] = (input) => openCodexStart(this.acquisitions, input)
 
   /** Buffers pre-publication events and drops events from superseded children. */
   private deliver(
@@ -160,6 +161,7 @@ export class CodexStructuredSessionAdapter implements StructuredAgentSessionAdap
       return admission
     }
     if (event.type === 'notification') {
+      turnEnd.publishCodexTurnOpened(session, event, this.sessions)
       // Only an admitted turn end settles; a refused one settles on the retry that lands.
       turnEnd.settleCodexSendsInEndedTurn(session, event)
       // Child records observe refused frames only after a retry reaches the journal.
@@ -213,13 +215,11 @@ export class CodexStructuredSessionAdapter implements StructuredAgentSessionAdap
     )
   }
 
-  backgroundTaskStops: NonNullable<StructuredAgentSessionAdapter['backgroundTaskStops']> = (
-    sessionId
-  ) => backgroundStops.codexBackgroundTaskStops(this.sessions.get(sessionId))
+  backgroundTaskStops: NonNullable<SessionAdapter['backgroundTaskStops']> = (sessionId) =>
+    backgroundStops.codexBackgroundTaskStops(this.sessions.get(sessionId))
 
-  stopBackgroundTasks: NonNullable<StructuredAgentSessionAdapter['stopBackgroundTasks']> = (
-    input
-  ) => backgroundStops.stopCodexBackgroundTasks(this.sessions, input, this.deps.requestTimeoutMs)
+  stopBackgroundTasks: NonNullable<SessionAdapter['stopBackgroundTasks']> = (input) =>
+    backgroundStops.stopCodexBackgroundTasks(this.sessions, input, this.deps.requestTimeoutMs)
 
   bindPromptItemId = (
     sessionId: string,
@@ -238,14 +238,14 @@ export class CodexStructuredSessionAdapter implements StructuredAgentSessionAdap
       )
 
   async dispatch(
-    input: Parameters<StructuredAgentSessionAdapter['dispatch']>[0]
+    input: Parameters<SessionAdapter['dispatch']>[0]
   ): Promise<AgentSessionDispatchOutcome> {
     const session = this.session(input.sessionId)
     session.dispatchPending = true
     try {
       const outcome = await dispatchCodexTurn(
         session,
-        await prepareCodexMessageDispatch(
+        await messageOptions.prepareCodexMessageDispatch(
           session,
           input,
           () => this.sessions.get(input.sessionId) === session
@@ -269,7 +269,7 @@ export class CodexStructuredSessionAdapter implements StructuredAgentSessionAdap
     }
   }
 
-  cancelTurn: StructuredAgentSessionAdapter['cancelTurn'] = (request) =>
+  cancelTurn: SessionAdapter['cancelTurn'] = (request) =>
     cancelCodexStructuredTurn({
       request,
       sessions: this.sessions,
@@ -278,25 +278,28 @@ export class CodexStructuredSessionAdapter implements StructuredAgentSessionAdap
 
   awaitStoppedRequestEnd = requestEndWait.codexStoppedRequestEndWait(this.sessions)
 
-  rewindSupport: NonNullable<StructuredAgentSessionAdapter['rewindSupport']> = (sessionId) =>
+  rewindSupport: NonNullable<SessionAdapter['rewindSupport']> = (sessionId) =>
     this.sessions.get(sessionId)?.historyMode === 'legacy'
       ? { supported: false, reason: 'history-not-paginated' }
       : { supported: true }
 
-  rewind: NonNullable<StructuredAgentSessionAdapter['rewind']> = (input) =>
+  prepareRewind: NonNullable<SessionAdapter['prepareRewind']> = (input) =>
+    codexRewind.prepareCodexRewind(this.session(input.sessionId), input, this.deps.requestTimeoutMs)
+
+  rewind: NonNullable<SessionAdapter['rewind']> = (input) =>
     codexRewind.rewindCodexSession(this.session(input.sessionId), input, this.deps.requestTimeoutMs)
 
-  recoverRewind: NonNullable<StructuredAgentSessionAdapter['recoverRewind']> = (input) =>
+  recoverRewind: NonNullable<SessionAdapter['recoverRewind']> = (input) =>
     recoverCodexRewindAtStart(this.sessions, input, this.deps.requestTimeoutMs)
 
   startupEnding = (id: string, generation: string) => this.acquisitions.endings.get(id, generation)
   retireStartup = (sessionId: string, generation: string) =>
     this.acquisitions.endings.retire(sessionId, generation)
 
-  compact: NonNullable<StructuredAgentSessionAdapter['compact']> = (input) =>
+  compact: NonNullable<SessionAdapter['compact']> = (input) =>
     compactCodexStructuredSession(this.session(input.sessionId), input, this.deps.requestTimeoutMs)
 
-  changeThreadGoal: NonNullable<StructuredAgentSessionAdapter['changeThreadGoal']> = (input) => {
+  changeThreadGoal: NonNullable<SessionAdapter['changeThreadGoal']> = (input) => {
     const session = this.session(input.sessionId)
     return changeCodexThreadGoalWithSettings(
       session,
@@ -306,7 +309,7 @@ export class CodexStructuredSessionAdapter implements StructuredAgentSessionAdap
     )
   }
 
-  answerPrompt: StructuredAgentSessionAdapter['answerPrompt'] = (request) =>
+  answerPrompt: SessionAdapter['answerPrompt'] = (request) =>
     answerCodexStructuredPrompt({ request, sessions: this.sessions })
 
   async setOption(
@@ -322,24 +325,22 @@ export class CodexStructuredSessionAdapter implements StructuredAgentSessionAdap
   readOptions = (input: { sessionId: string; fence: number }) =>
     readLiveCodexSessionOptions(this.session(input.sessionId), this.deps.requestTimeoutMs)
 
-  readAppliedInputOptions: NonNullable<StructuredAgentSessionAdapter['readAppliedInputOptions']> = (
+  captureMessageSteeringInputs: NonNullable<SessionAdapter['captureMessageSteeringInputs']> = (
     input
-  ) => readCodexAppliedInputOptions(this.sessions.get(input.sessionId), input)
+  ) => messageOptions.readCodexMessageSteeringInputs(this.sessions.get(input.sessionId), input)
 
   projectOptions = (sessionId: string, options: Readonly<Record<string, string>>) =>
     projectCodexSessionOptions(this.sessions.get(sessionId), options)
 
-  closeSession: NonNullable<StructuredAgentSessionAdapter['closeSession']> = (...args) =>
-    this.teardown.close(...args)
+  closeSession: NonNullable<SessionAdapter['closeSession']> = (sessionId, observeClose) =>
+    this.teardown.close(sessionId, observeClose)
   forceCloseSession = (sessionId: string): Promise<boolean> => this.teardown.forceClose(sessionId)
-  disposeSession: NonNullable<StructuredAgentSessionAdapter['disposeSession']> = this.closeSession
+  disposeSession: NonNullable<SessionAdapter['disposeSession']> = this.closeSession
   closeAll = (): Promise<void> => this.teardown.closeAll()
   releaseAcquisition = (input: { sessionId: string }): Promise<boolean> =>
     this.teardown.close(input.sessionId)
   hasOwnedAcquisition = (sessionId: string): boolean =>
     this.acquisitions.get(sessionId) !== undefined || this.sessions.has(sessionId)
 
-  private session(sessionId: string): CodexSession {
-    return requireLiveCodexSession(this.sessions, sessionId)
-  }
+  private session = (id: string): CodexSession => requireLiveCodexSession(this.sessions, id)
 }

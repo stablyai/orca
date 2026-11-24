@@ -1,7 +1,7 @@
 import { createElement, type ReactNode } from 'react'
 import { act, create, type ReactTestRenderer } from 'react-test-renderer'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import type { Worktree } from '../worktree/workspace-list-types'
+import type { Worktree } from '../worktree/workspace-list/workspace-list-types'
 import { SidebarSessionActionSheet } from './SidebarSessionActionSheet'
 import { clearClosedSidebarSession, sidebarSessionAction } from './sidebar-session-action'
 import { getSelectedSidebarSession, setSelectedSidebarSession } from './selected-sidebar-session'
@@ -12,7 +12,9 @@ vi.mock('react-native', () => ({
   Text: 'Text',
   View: 'View'
 }))
-vi.mock('../components/ActionSheetModal', () => ({ ActionSheetContent: 'ActionSheetContent' }))
+vi.mock('../components/sheets/ActionSheetModal', () => ({
+  ActionSheetContent: 'ActionSheetContent'
+}))
 vi.mock('../components/bottom-drawer/BottomDrawer', () => ({
   BottomDrawer: ({ visible, children }: { visible: boolean; children: ReactNode }) =>
     visible ? children : null

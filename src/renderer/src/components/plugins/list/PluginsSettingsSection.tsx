@@ -1,19 +1,20 @@
 import { isPluginAutoUpdateOn } from '../../../../../shared/plugins/catalog/plugin-update-policy'
 import { useEffect, useEffectEvent, useRef, useState } from 'react'
 import { toast } from 'sonner'
-import type { PluginHostInstallSource } from '../../../../../preload/api/plugin-host-api'
+import type { PluginHostInstallSource } from '../../../../../preload/api/plugins/plugin-host-api'
 import type { PluginHostListEntry } from '../../../../../shared/plugins/plugin-list-entry'
-import type { GlobalSettings } from '../../../../../shared/global-settings-types'
-import { translate } from '@/i18n/i18n'
+import type { GlobalSettings } from '../../../../../shared/settings/global-settings-types'
+import { useTranslate } from '@/i18n/use-translate'
 import { useAppStore } from '@/store/index'
 import { PluginDevelopmentDialog } from '../dialogs/PluginDevelopmentDialog'
 import { PluginInstallDialog } from '../dialogs/PluginInstallDialog'
 import { sourceInstallTrustPrompt } from '../presentation/plugin-install-trust'
-import { confirmPluginInstallTrust } from '@/store/plugin-install-trust-request'
+import { usePluginInstallTrust } from '../state/use-plugin-install-trust'
 import { PluginRemoveDialog } from '../dialogs/PluginRemoveDialog'
 import { PluginRollbackDialog } from '../dialogs/PluginRollbackDialog'
 import { PluginsHeaderActions } from './PluginSettingsMenu'
 import { PluginSettingsOverview } from './PluginSettingsOverview'
+import { RequiredPluginWarnings } from './RequiredPluginWarnings'
 import { PluginsAlphaNotice } from './PluginsAlphaNotice'
 import { PluginsSectionDescription } from './PluginsSectionDescription'
 import { getPluginsSectionPresentation } from '../../settings/plugins/plugins-search'
@@ -42,6 +43,8 @@ export function PluginsSettingsSection({
   settings,
   updateSettings
 }: PluginsSettingsSectionProps): React.JSX.Element {
+  const t = useTranslate()
+  const confirmTrust = usePluginInstallTrust(mounted)
   const [plugins, setPlugins] = useState<PluginHostListEntry[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -54,16 +57,16 @@ export function PluginsSettingsSection({
   const mountedRef = useRef(false)
   const listRequestRef = useRef(0)
   const review = usePluginReviewQueue()
-  const page = usePluginPageNavigation(review.pause)
+  const page = usePluginPageNavigation(review.navigate)
   const clearReviews = review.clear
   const installedKeysRef = useRef<ReadonlySet<string>>(new Set())
   const openPage = page.open
   // Why: review happens on the plugin's own page, where the consent sits above its one button.
   useEffect(() => {
     if (review.reviewKey) {
-      openPage(review.reviewKey)
+      openPage(review.reviewKey, { replace: review.replacePage })
     }
-  }, [review.reviewKey, openPage])
+  }, [review.reviewKey, review.replacePage, openPage])
 
   const applyPluginList = (nextPlugins: PluginHostListEntry[]): void => {
     const installedPluginKeys = new Set(nextPlugins.map((plugin) => plugin.pluginKey))
@@ -88,10 +91,7 @@ export function PluginsSettingsSection({
     setError(
       errorMessage(
         cause,
-        translate(
-          'auto.components.settings.PluginsSettingsSection.loadFailed',
-          'Could not load plugins.'
-        )
+        t('auto.components.settings.PluginsSettingsSection.loadFailed', 'Could not load plugins.')
       )
     )
   }
@@ -196,7 +196,7 @@ export function PluginsSettingsSection({
   })
   const pluginLogs = usePluginLogs(mounted, mountedRef, plugins)
 
-  const sectionPresentation = getPluginsSectionPresentation()
+  const sectionPresentation = getPluginsSectionPresentation(t)
 
   if (!mounted) {
     return <SettingsSection id="plugins" {...sectionPresentation} />
@@ -205,7 +205,7 @@ export function PluginsSettingsSection({
   const removePlugin = plugins.find((plugin) => plugin.pluginKey === removePluginId) ?? null
 
   const install = async (source: PluginHostInstallSource): Promise<void> => {
-    if (!(await confirmPluginInstallTrust(sourceInstallTrustPrompt(source)))) {
+    if (!(await confirmTrust(sourceInstallTrustPrompt(source)))) {
       return
     }
     const result = await window.api.plugins.install(source)
@@ -237,7 +237,7 @@ export function PluginsSettingsSection({
         void applyPluginThemesNow(pluginKey).catch(() => false)
       }
       if (mountedRef.current) {
-        review.advance(nextPlugins)
+        review.advance(pluginKey, nextPlugins)
       }
     } finally {
       clearBusy(pluginKey)
@@ -271,18 +271,20 @@ export function PluginsSettingsSection({
     }
   }
 
-  // Why: re-enabling resets the supervisor's restart budget, which is what "Restart" means here.
+  // Required plugins reset the supervisor without writing a disabled preference.
   const restart = async (pluginKey: string): Promise<void> => {
     setBusyPluginKeys((current) => new Set(current).add(pluginKey))
     try {
-      applyCompletedMutation(await window.api.plugins.setEnabled({ pluginKey, enabled: false }))
+      if (!plugins.some((plugin) => plugin.pluginKey === pluginKey && plugin.requiredByTeam)) {
+        applyCompletedMutation(await window.api.plugins.setEnabled({ pluginKey, enabled: false }))
+      }
       applyCompletedMutation(await window.api.plugins.setEnabled({ pluginKey, enabled: true }))
     } catch (cause) {
       if (mountedRef.current) {
         // Why: the stop may have landed before the start failed; show what is true now.
         void loadPluginList(window.api.plugins.list())
         toast.error(
-          translate(
+          t(
             'auto.components.settings.PluginsSettingsSection.restartFailed',
             "Couldn't restart {{value0}}.",
             {
@@ -336,7 +338,7 @@ export function PluginsSettingsSection({
       {...sectionPresentation}
       description={<PluginsSectionDescription text={sectionPresentation.description} />}
       hideHeader={featureEnabled && page.openKey !== null}
-      bodyClassName="space-y-6 rounded-none border-0 bg-transparent p-0 shadow-none"
+      bodyClassName="gap-6"
       headerAction={
         <PluginsHeaderActions
           featureEnabled={featureEnabled}
@@ -352,7 +354,12 @@ export function PluginsSettingsSection({
         />
       }
     >
-      {featureEnabled && page.openKey !== null ? null : <PluginsAlphaNotice />}
+      {featureEnabled && page.openKey !== null ? null : (
+        <>
+          <PluginsAlphaNotice />
+          <RequiredPluginWarnings />
+        </>
+      )}
       <PluginSettingsOverview
         featureEnabled={featureEnabled}
         settingsError={settingsError}

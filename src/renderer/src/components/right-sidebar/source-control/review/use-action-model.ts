@@ -1,9 +1,10 @@
 import { useMemo } from 'react'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import { useUiLanguageRevision } from '@/i18n/use-ui-language-revision'
 import type { GitBranchCompareSummary } from '../../../../../../shared/git/diff/git-diff-compare-types'
 import { isStageableStatusEntry } from '../../../../../../shared/source-control/listing/source-control-discard-all-sequence'
 import { resolveDropdownItems } from '../panel/source-control-dropdown-items'
+import type { SourceControlRebaseModel } from '../panel/base-rebase-state'
 import { resolveCommitAreaPrimaryAction } from './source-control-primary-action'
 import { resolveCreatePrHeaderAction } from './primary-create-pr-intent-action'
 import { resolveVisibleCreatePrHeaderAction } from './create-pr-intent-state'
@@ -39,7 +40,9 @@ export function useSourceControlActionModel({
   hostedReviewReviewLabel,
   hasSuppressedGitHubPRState,
   conflictOperation,
-  effectiveBaseRef
+  effectiveBaseRef,
+  rebaseMenu,
+  suppressPullAfterRebase
 }: {
   grouped: SourceControlEntryGroups
   commitMessage: string
@@ -67,7 +70,13 @@ export function useSourceControlActionModel({
   hasSuppressedGitHubPRState: boolean
   conflictOperation: DropdownInput['conflictOperation']
   effectiveBaseRef: string | null
+  rebaseMenu: Pick<
+    SourceControlRebaseModel,
+    'rebaseBehindCount' | 'rebaseBlockedByDirtyTree' | 'rebaseContinueState'
+  >
+  suppressPullAfterRebase: boolean
 }) {
+  const t = useTranslate()
   const languageRevision = useUiLanguageRevision()
   const createReviewEligibility = hasSuppressedGitHubPRState ? null : hostedReviewCreation
   const createReviewHeaderEligibility = hasSuppressedGitHubPRState
@@ -109,9 +118,11 @@ export function useSourceControlActionModel({
           branchSummary?.status === 'ready' ? (branchSummary.commitsAhead ?? 0) : undefined,
         hasCurrentBranch: Boolean(branchName),
         canPushLinkedReviewWithoutUpstream: canUseHostedReviewPushTarget,
-        isPrIntentInFlight: isCreatePrIntentInFlight
+        isPrIntentInFlight: isCreatePrIntentInFlight,
+        suppressPullAfterRebase
       }),
     [
+      suppressPullAfterRebase,
       commitMessage,
       grouped.staged.length,
       hasStageableChanges,
@@ -139,40 +150,41 @@ export function useSourceControlActionModel({
     if (hasSuppressedGitHubPRState) {
       return null
     }
-    const action = resolveCreatePrHeaderAction({
-      stagedCount: grouped.staged.length,
-      hasUnstagedChanges,
-      hasStageableChanges,
-      hasPartiallyStagedChanges,
-      hasMessage: commitMessage.trim().length > 0,
-      hasUnresolvedConflicts: unresolvedConflictCount > 0,
-      isCommitting,
-      isRemoteOperationActive: isRemoteOperationActive || isAbortingOperation,
-      upstreamStatus: remoteStatus,
-      prState: hostedReviewState,
-      isPRStateLoading: isHostedReviewStateLoading,
-      inFlightRemoteOpKind,
-      hostedReviewCreation: createReviewHeaderEligibility,
-      isHostedReviewCreationLoading:
-        isHostedReviewCreationLoading && createReviewHeaderEligibility !== null,
-      branchCommitsAhead:
-        branchSummary?.status === 'ready' ? (branchSummary.commitsAhead ?? 0) : undefined,
-      hasCurrentBranch: Boolean(branchName),
-      isPrIntentInFlight: isCreatePrIntentInFlight
-    })
+    const action = resolveCreatePrHeaderAction(
+      {
+        stagedCount: grouped.staged.length,
+        hasUnstagedChanges,
+        hasStageableChanges,
+        hasPartiallyStagedChanges,
+        hasMessage: commitMessage.trim().length > 0,
+        hasUnresolvedConflicts: unresolvedConflictCount > 0,
+        isCommitting,
+        isRemoteOperationActive: isRemoteOperationActive || isAbortingOperation,
+        upstreamStatus: remoteStatus,
+        prState: hostedReviewState,
+        isPRStateLoading: isHostedReviewStateLoading,
+        inFlightRemoteOpKind,
+        hostedReviewCreation: createReviewHeaderEligibility,
+        isHostedReviewCreationLoading:
+          isHostedReviewCreationLoading && createReviewHeaderEligibility !== null,
+        branchCommitsAhead:
+          branchSummary?.status === 'ready' ? (branchSummary.commitsAhead ?? 0) : undefined,
+        hasCurrentBranch: Boolean(branchName),
+        isPrIntentInFlight: isCreatePrIntentInFlight
+      },
+      t
+    )
     if ((prGenerating || isCreatingPr) && action?.kind === 'create_pr') {
       return {
         ...action,
         title: prGenerating
-          ? translate(
+          ? t(
               'auto.components.right.sidebar.SourceControl.createPrIntentGeneratingDetails',
               'Generating review details…'
             )
-          : translate(
-              'auto.components.right.sidebar.SourceControl.fe5bd1a610',
-              'Creating {{value0}}...',
-              { value0: hostedReviewReviewLabel }
-            ),
+          : t('auto.components.right.sidebar.SourceControl.fe5bd1a610', 'Creating {{value0}}...', {
+              value0: hostedReviewReviewLabel
+            }),
         disabled: true
       }
     }
@@ -202,7 +214,8 @@ export function useSourceControlActionModel({
     prGenerating,
     remoteStatus,
     unresolvedConflictCount,
-    languageRevision
+    languageRevision,
+    t
   ])
   const directCreatePrAction =
     createPrHeaderAction?.kind === 'create_pr' &&
@@ -211,6 +224,7 @@ export function useSourceControlActionModel({
       ? createPrHeaderAction
       : null
   const visibleCreatePrHeaderAction = resolveVisibleCreatePrHeaderAction({ createPrHeaderAction })
+  const { rebaseBehindCount, rebaseBlockedByDirtyTree, rebaseContinueState } = rebaseMenu
   const dropdownItems = useMemo(
     () =>
       resolveDropdownItems({
@@ -233,9 +247,20 @@ export function useSourceControlActionModel({
           branchSummary?.status === 'ready' ? (branchSummary.commitsAhead ?? 0) : undefined,
         hasCurrentBranch: Boolean(branchName),
         canPushLinkedReviewWithoutUpstream: canUseHostedReviewPushTarget,
-        rebaseBaseRef: effectiveBaseRef
+        rebaseBaseRef: effectiveBaseRef,
+        rebaseBehindCount,
+        rebaseBlockedByDirtyTree,
+        rebaseContinueReady: rebaseContinueState === 'ready',
+        suppressPullAfterRebase,
+        primaryActionKind: primaryAction.disabled ? undefined : primaryAction.kind
       }),
     [
+      rebaseBehindCount,
+      rebaseContinueState,
+      rebaseBlockedByDirtyTree,
+      suppressPullAfterRebase,
+      primaryAction.disabled,
+      primaryAction.kind,
       commitMessage,
       grouped.staged.length,
       hasStageableChanges,

@@ -1,20 +1,26 @@
 import { RateLimitServiceResultPolicy } from './service-result-policy'
-import { fetchCodexRateLimits } from '../codex-fetcher'
-import { fetchKimiRateLimits } from '../kimi-fetcher'
+import { fetchCodexRateLimits } from '../providers/codex/codex-fetcher'
+import { withCodexReadingAccount } from '../providers/codex/codex-reading-account'
+import { fetchKimiRateLimits } from '../providers/kimi/kimi-fetcher'
 import {
   isSystemDefaultClaudeAuth,
-  type ClaudeRuntimeAuthPreparation,
-  type CodexAccountSelectionTarget,
   type MiniMaxResolvedConfig,
   type ZcodePlanResolvedConfig,
   type OpenCodeGoResolvedConfig,
-  type NormalizedCodexAccountSelectionTarget,
-  type NormalizedClaudeAccountSelectionTarget,
-  type ProviderRateLimits,
-  type RateLimitState,
   toErrorMessage
 } from './service-types'
-import type { CodexRateLimitResetOutcome } from '../../../shared/rate-limit-types'
+import type { ClaudeRuntimeAuthPreparation } from '../../claude-accounts/runtime-auth/runtime-auth-types'
+import type {
+  CodexAccountSelectionTarget,
+  NormalizedCodexAccountSelectionTarget
+} from '../../../shared/agent-accounts/codex/codex-selection-lane'
+import type { NormalizedClaudeAccountSelectionTarget } from '../../claude-accounts/selection/runtime-selection'
+import type {
+  ProviderRateLimits,
+  RateLimitState,
+  CodexRateLimitResetOutcome,
+  UsageReadingAccount
+} from '../../../shared/agent-usage/rate-limits/rate-limit-types'
 import { ApiKeyFileUnreadableError } from '../../credentials/api-key-file-unreadable-error'
 
 const CODEX_RESET_REFRESH_RETRIES = 3
@@ -47,6 +53,7 @@ export abstract class RateLimitServiceFetchTargets extends RateLimitServiceResul
   protected async resolveCodexHome(target?: CodexAccountSelectionTarget): Promise<{
     skip: boolean
     homePath: string | null
+    readingAccount?: UsageReadingAccount
   }> {
     const resolution = await this.codexHomePathResolver?.(target)
     if (!resolution) {
@@ -54,7 +61,11 @@ export abstract class RateLimitServiceFetchTargets extends RateLimitServiceResul
     }
     return resolution.kind === 'skip'
       ? { skip: true, homePath: null }
-      : { skip: false, homePath: resolution.codexHomePath }
+      : {
+          skip: false,
+          homePath: resolution.codexHomePath,
+          readingAccount: resolution.readingAccount
+        }
   }
 
   // WSL home resolution probes wsl.exe; chain it so other providers start immediately.
@@ -149,7 +160,6 @@ export abstract class RateLimitServiceFetchTargets extends RateLimitServiceResul
       }
     }
 
-    const scopedCodex = this.applyStalePolicy(fresh, stateBeforeReset.codex)
     const currentCodexHome = await this.resolveCodexHome(target)
     // Skips carry no provenance; never publish them as System Default usage.
     const stillActive =
@@ -157,13 +167,18 @@ export abstract class RateLimitServiceFetchTargets extends RateLimitServiceResul
       this.isSameCodexTarget(this.codexFetchTarget, target) &&
       this.getCodexProvenance(target, currentCodexHome.homePath) ===
         this.getCodexProvenance(target, codexHomePath)
+    // Still the redeemed home, so its account (if it is that account's own home) took this reading.
+    const attributed = stillActive
+      ? withCodexReadingAccount(fresh, currentCodexHome.readingAccount)
+      : fresh
+    const scopedCodex = this.applyStalePolicy(attributed, stateBeforeReset.codex)
     if (stillActive) {
       // Redemption is newer than prior reads; invalidate their generations before publishing.
       this.codexFetchGeneration += 1
       this.trackActiveFailureStreak('codex', fresh)
       this.updateState({
         ...this.state,
-        codex: this.applyStalePolicy(fresh, this.state.codex)
+        codex: this.applyStalePolicy(attributed, this.state.codex)
       })
     }
 
@@ -186,7 +201,7 @@ export abstract class RateLimitServiceFetchTargets extends RateLimitServiceResul
     return process.platform !== 'win32'
   }
 
-  protected resolveOpenCodeGoConfig(): OpenCodeGoResolvedConfig {
+  protected async resolveOpenCodeGoConfig(): Promise<OpenCodeGoResolvedConfig> {
     const config = this.openCodeGoConfigResolver?.() ?? {
       sessionCookie: '',
       workspaceIdOverride: ''
@@ -194,7 +209,7 @@ export abstract class RateLimitServiceFetchTargets extends RateLimitServiceResul
     try {
       return {
         ...config,
-        apiKey: this.openCodeGoApiKeyResolver?.() ?? '',
+        apiKey: (await this.openCodeGoApiKeyResolver?.()) ?? '',
         apiKeyError: null,
         apiKeyReadSkipped: false
       }
@@ -214,10 +229,10 @@ export abstract class RateLimitServiceFetchTargets extends RateLimitServiceResul
     }
   }
 
-  protected resolveMiniMaxConfig(): MiniMaxResolvedConfig {
+  protected async resolveMiniMaxConfig(): Promise<MiniMaxResolvedConfig> {
     try {
       return {
-        config: this.miniMaxConfigResolver?.() ?? {
+        config: (await this.miniMaxConfigResolver?.()) ?? {
           sessionCookie: '',
           groupId: '',
           models: 'general',
@@ -241,10 +256,10 @@ export abstract class RateLimitServiceFetchTargets extends RateLimitServiceResul
     }
   }
 
-  protected resolveZcodePlanConfig(): ZcodePlanResolvedConfig {
+  protected async resolveZcodePlanConfig(): Promise<ZcodePlanResolvedConfig> {
     try {
       return {
-        config: this.zcodePlanConfigResolver?.() ?? { site: 'zai', apiKey: '' },
+        config: (await this.zcodePlanConfigResolver?.()) ?? { site: 'zai', apiKey: '' },
         error: null
       }
     } catch (error) {

@@ -1,10 +1,8 @@
-import {
-  wrapPosixHookCommand,
-  wrapWindowsHookCommand,
-  type HookDefinition
-} from '../agent-hooks/installer-utils'
-import { wrapWindowsDirectCmdHookCommand } from '../agent-hooks/windows-direct-cmd-hook-command'
-import { getWindowsSystem32Path } from '../agent-hooks/windows-powershell-hook-launcher'
+import { wrapPosixHookCommand } from '../agent-hooks/installation/commands/posix-hook-command'
+import { wrapWindowsHookCommand } from '../agent-hooks/installation/commands/windows-hook-command'
+import type { HookDefinition } from '../agent-hooks/installation/configuration/hook-config-schema'
+import { wrapWindowsDirectCmdHookCommand } from '../agent-hooks/installation/commands/windows-direct-cmd-hook-command'
+import { getWindowsSystem32Path } from '../agent-hooks/installation/commands/windows-powershell-hook-launcher'
 
 // VS Code-compatible PascalCase names reuse the hook server's event normalization.
 export const COPILOT_EVENTS = [
@@ -24,9 +22,18 @@ export const COPILOT_EVENTS = [
   'Notification'
 ] as const
 
+// The script answers {} before any guard, so the skipped-script path answers the same.
+export function getPosixManagedCommand(scriptPath: string, eventName: string): string {
+  return wrapPosixHookCommand(
+    scriptPath,
+    { ORCA_COPILOT_HOOK_EVENT: eventName },
+    { fallbackStdout: '{}' }
+  )
+}
+
 export function getManagedCommand(scriptPath: string, eventName: string): string {
   if (process.platform !== 'win32') {
-    return wrapPosixHookCommand(scriptPath, { ORCA_COPILOT_HOOK_EVENT: eventName })
+    return getPosixManagedCommand(scriptPath, eventName)
   }
   // Arguments survive runners that ignore hook env maps and keep managed commands distinct per event.
   const direct = wrapWindowsDirectCmdHookCommand(scriptPath)

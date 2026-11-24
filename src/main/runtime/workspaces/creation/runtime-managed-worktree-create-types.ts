@@ -1,6 +1,6 @@
 import type { SessionOptionValue } from '../../../../shared/native-chat/input/native-chat-session-options'
-import type { RuntimeTerminalCreate } from '../../../../shared/runtime-terminal-create-contract'
-import type { AgentLaunchPreferences } from '../../../../shared/agent-session/agent-session-host-authority'
+import type { RuntimeTerminalCreate } from '../../../../shared/terminal/runtime/runtime-terminal-create-contract'
+import type { AgentLaunchPreferences } from '../../../../shared/agent-session/lifecycle/operations/agent-session-host-authority'
 import type { CreateWorktreeArgs } from '../../../../shared/worktree/create-types'
 import type {
   AutomationWorkspaceProvenance,
@@ -11,15 +11,15 @@ import type {
   Worktree
 } from '../../../../shared/worktree/types'
 import type { TuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent'
-import type { WorkspaceSource as WorkspaceCreateTelemetrySource } from '../../../../shared/workspace-source'
-import type { WorktreeStartupLaunch } from '../../../../shared/worktree/launch-types'
+import type { WorkspaceSource as WorkspaceCreateTelemetrySource } from '../../../../shared/workspace/creation/workspace-source'
+import type { WorktreeStartupLaunch } from '../../../../shared/worktree/creation/launch-types'
 import type {
   CrossStoreInferredSource,
   CrossStoreParentRef
 } from '../../../../shared/worktree/lineage-types'
-import type { TaskSourceContext } from '../../../../shared/task-source-context'
+import type { TaskSourceContext } from '../../../../shared/work-items/task-source-context'
 import type { WorktreeStartupDraftPaste } from '../startup/runtime-worktree-agent-startup'
-import type { RuntimeNavigationTarget } from '../../../../shared/runtime-navigation'
+import type { RuntimeNavigationTarget } from '../../../../shared/remote-runtime/session-graph/runtime-navigation'
 import type { RuntimeRepoSelector } from '../catalog/runtime-repo-selector'
 
 export type RuntimeManagedWorktreeCreateArgs = {
@@ -60,6 +60,9 @@ export type RuntimeManagedWorktreeCreateArgs = {
   runHooks?: boolean
   activate?: boolean
   setupDecision?: 'run' | 'skip' | 'inherit'
+  /** SHA-256 of the setup content the client approved; see CreateWorktreeArgs. */
+  approvedSetupHash?: string
+  approvedSetupHashes?: string[]
   setupOnly?: boolean
   awaitTerminalProvisioning?: boolean
   observeSetupCompletion?: boolean
@@ -85,6 +88,8 @@ export type RuntimeManagedWorktreeCreateArgs = {
   startupExtraAgentArgs?: string
   /** Main-internal: Orca, not a user, types into the startup agent once it starts. */
   startupSuppressUpdatePrompt?: boolean
+  /** Main-internal: the startup terminal's tab title, such as an automation run's. */
+  startupTitle?: string
   startupCwd?: string
   /** The surface behind a host-built startup agent (`startupAgent` or `startupDraft`). */
   startupLaunchSource?: string
@@ -108,12 +113,16 @@ export type RuntimeManagedWorktreeCreateArgs = {
     parentWorkspaceOrigin?: 'manual'
     envParentWorkspace?: string
     parentWorktree?: string
+    /** path: and name: in parentWorktree may name a folder workspace. */
+    matchFolderWorkspaces?: true
     crossStoreParent?: CrossStoreParentRef
     crossStoreParentInferredFrom?: CrossStoreInferredSource
     cwdParentWorktree?: string
     cwdParentAmbiguous?: true
     noParent?: boolean
     callerTerminalHandle?: string
+    /** The creating agent session's Orca id; only the host that runs it can resolve it. */
+    callerAgentSessionId?: string
     comment?: string
     orchestrationContext?: {
       parentWorktreeId?: string
@@ -122,4 +131,14 @@ export type RuntimeManagedWorktreeCreateArgs = {
       coordinatorHandle?: string
     }
   }
+}
+
+export type RuntimeLocalWorktreeCreateCandidate = {
+  effectiveRequestedName: string
+  requestedDisplayName?: string
+  displayNameKind: CreateWorktreeArgs['displayNameKind']
+  effectiveSanitizedName: string
+  branchName: string
+  checkoutExistingBranch: boolean
+  worktreePath: string
 }

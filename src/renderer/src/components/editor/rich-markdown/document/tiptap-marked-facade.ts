@@ -18,7 +18,7 @@ import {
   marked
 } from 'marked'
 import { ORDERED_LIST_MARKER_PATTERN } from '@tiptap/extension-list'
-import { findProseUrlEnd } from '../../../../../../shared/prose-url-boundary'
+import { findProseUrlEnd } from '../../../../../../shared/text/prose-url-boundary'
 
 // Same item start Tiptap's ordered list accepts, so every list it built can be re-read here.
 const TIPTAP_LIST_ITEM = new RegExp(`^(\\s*(?:${ORDERED_LIST_MARKER_PATTERN})[.)])(\\s+)`)

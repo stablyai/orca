@@ -1,20 +1,25 @@
 import { setTimeout as delay } from 'node:timers/promises'
 import { OrcaRuntimeWithRecordAgentPromptLifecycleState } from '../output/terminal-output-generation'
 import type { TerminalOscLinkRange } from '../../../../shared/terminal/links/terminal-osc-link-ranges'
-import type { PtyProviderBufferSnapshot } from '../../../providers/pty-provider-contract'
+import type { PtyProviderBufferSnapshot } from '../../../providers/pty/provider-contract'
 import type { RuntimeTerminalWriteOptions } from '../input/runtime-terminal-writer'
 import type { WriteSettlement } from '../../../../shared/terminal/pty/lifecycle/pty-write-settlement'
 
-import type { RuntimeTerminalDriverState as DriverState } from '../../../../shared/runtime-session-contracts'
+import type { RuntimeTerminalDriverState } from '../../../../shared/remote-runtime/session-graph/runtime-session-contracts'
 import { addListenerToMap } from './terminal-listener-map'
 import { notifyRuntimeListeners } from '../../events/runtime-listener-delivery'
-import type { RuntimeTerminalAttention } from '../../../../shared/runtime-terminal-contracts'
+import type { RuntimeTerminalAttention } from '../../../../shared/terminal/runtime/runtime-terminal-contracts'
 import type { RuntimeTerminalBufferSnapshot } from '../records/runtime-terminal-state-records'
 import { AUTHORITATIVE_TERMINAL_SNAPSHOT_TIMEOUT_MS } from '../output/provider-snapshot-budget'
-import { assertTerminalInputWithinLimitWithYield } from '../../terminal-send-payload'
+import { assertTerminalInputWithinLimitWithYield } from '../input/terminal-send-payload'
+import { TerminalViewerDevices } from './terminal-viewer-devices'
 
 // Covers a daemon reconnect plus the attach; past it the write proceeds and is refused as before.
 const ENDPOINT_REATTACH_INPUT_WAIT_MS = 10_000
+
+/** The client viewing a terminal: its device, and whether it rebinds when the host replaces the
+ *  pane's terminal. */
+export type RemoteTerminalViewer = { deviceId: string | undefined; followsHostRespawn: boolean }
 
 export abstract class OrcaRuntimeWithNotifyRemoteTerminalViewPresenceChanged extends OrcaRuntimeWithRecordAgentPromptLifecycleState {
   protected abstract serializeTerminalBufferFromAvailableState(
@@ -46,6 +51,23 @@ export abstract class OrcaRuntimeWithNotifyRemoteTerminalViewPresenceChanged ext
     options: RuntimeTerminalWriteOptions
   ): Promise<WriteSettlement | undefined>
 
+  private readonly terminalViewerDevices = new TerminalViewerDevices()
+
+  /**
+   * A departed device's xterm never blurred; tell PTYs that no remote viewer or local pane still
+   * shows. A remaining view whose pane is hidden already blurred, so it does not hold focus.
+   */
+  protected reportFocusLostForDepartedDevice(deviceClientId: string): void {
+    for (const ptyId of this.terminalViewerDevices.takeDeparted(deviceClientId)) {
+      if (
+        !this.terminalViewSubscribers.mayBeShownRemotely(ptyId) &&
+        this.ptyController?.hasRendererSerializer?.(ptyId) !== true
+      ) {
+        void this.ptyController?.reportFocusLost?.(ptyId)
+      }
+    }
+  }
+
   protected notifyRemoteTerminalViewPresenceChanged(ptyId: string): void {
     try {
       this.onRemoteTerminalViewPresenceChanged?.(ptyId)
@@ -60,8 +82,12 @@ export abstract class OrcaRuntimeWithNotifyRemoteTerminalViewPresenceChanged ext
     isOutputPaused?: () => boolean,
     mobileClientId?: string,
     /** Only for views that pause output while their pane is hidden, so "unpaused" means on screen. */
-    reportsHiddenPane = false
+    reportsHiddenPane = false,
+    viewer?: RemoteTerminalViewer
   ): () => void {
+    if (viewer?.deviceId) {
+      this.terminalViewerDevices.record(viewer.deviceId, ptyId)
+    }
     const isSilent =
       mobileClientId === undefined
         ? isOutputPaused
@@ -71,7 +97,8 @@ export abstract class OrcaRuntimeWithNotifyRemoteTerminalViewPresenceChanged ext
     return this.terminalViewSubscribers.registerRemote(
       ptyId,
       isSilent,
-      reportsHiddenPane ? isOutputPaused : undefined
+      reportsHiddenPane ? isOutputPaused : undefined,
+      viewer?.followsHostRespawn === true
     )
   }
 
@@ -200,7 +227,10 @@ export abstract class OrcaRuntimeWithNotifyRemoteTerminalViewPresenceChanged ext
     return addListenerToMap(this.fitOverrideListeners, ptyId, listener)
   }
 
-  subscribeToDriverChanges(ptyId: string, listener: (driver: DriverState) => void): () => void {
+  subscribeToDriverChanges(
+    ptyId: string,
+    listener: (driver: RuntimeTerminalDriverState) => void
+  ): () => void {
     return this.terminalDrivers.subscribe(ptyId, listener)
   }
 

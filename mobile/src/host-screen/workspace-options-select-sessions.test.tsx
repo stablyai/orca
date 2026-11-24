@@ -2,8 +2,8 @@ import { createElement } from 'react'
 import { act, create, type ReactTestRenderer } from 'react-test-renderer'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { NO_WORKSPACE_ROW_FILTERS } from '../../../src/shared/workspace-view/workspace-row-filters'
-import { INITIAL_MOBILE_VIEW } from '../worktree/workspace-view-settings'
-import { WorkspaceOptionsSheet } from './workspace-options-sheet'
+import { INITIAL_MOBILE_VIEW } from '../worktree/workspace-list/workspace-view-settings'
+import { WorkspaceOptionsSheet } from './workspace-options/workspace-options-sheet'
 
 vi.mock('react-native', () => ({
   ActivityIndicator: 'ActivityIndicator',
@@ -22,15 +22,32 @@ vi.mock('lucide-react-native', () => ({
   X: 'X'
 }))
 vi.mock('../navigation/use-back-claim', () => ({ useBackClaim: () => {} }))
-vi.mock('../platform/use-reduced-motion', () => ({ useReducedMotionEnabled: () => false }))
-vi.mock('react-native-reanimated', async () =>
-  (await import('../test-support/reanimated-pager-stub')).reanimatedPagerStub()
-)
+vi.mock('../platform/accessibility/use-reduced-motion', () => ({
+  useReducedMotionEnabled: () => false
+}))
+vi.mock('react-native-reanimated', () => ({
+  default: { View: 'AnimatedView' },
+  Easing: { bezier: () => (t: number) => t },
+  ReduceMotion: { Never: 'never' },
+  useReducedMotion: () => false,
+  runOnJS:
+    <Args extends unknown[]>(fn: (...args: Args) => void) =>
+    (...args: Args) =>
+      fn(...args),
+  useAnimatedStyle: () => ({}),
+  useSharedValue: (value: number) => ({ value }),
+  withTiming: (to: number, _config: unknown, done?: (finished: boolean) => void) => {
+    done?.(true)
+    return to
+  }
+}))
 vi.mock('../components/bottom-drawer/keyed-bottom-drawer', () => ({
   KeyedBottomDrawer: ({ children }: { children: () => unknown }) => children()
 }))
-vi.mock('../components/MobileSearchField', () => ({ MobileSearchField: 'MobileSearchField' }))
-vi.mock('../components/MobileSwitch', () => ({ MobileSwitch: 'Switch' }))
+vi.mock('../components/controls/MobileSearchField', () => ({
+  MobileSearchField: 'MobileSearchField'
+}))
+vi.mock('../components/controls/MobileSwitch', () => ({ MobileSwitch: 'Switch' }))
 vi.mock('./selectable-sidebar-sessions', () => ({
   useSelectableSidebarSessions: () => false,
   setSelectableSidebarSessions: vi.fn()
@@ -92,7 +109,10 @@ describe('selectable sessions on the workspace options sheet', () => {
     })
     const shown = renderer!.root
       .findAll((node) => String(node.type) === 'Text')
-      .map((node) => node.props.children)
+      .flatMap((node) => {
+        const children = node.props.children
+        return Array.isArray(children) ? children : [children]
+      })
       .filter((child): child is string => typeof child === 'string')
     expect(shown).toContain('Select sessions')
     expect(shown).toContain('Taller rows you can tap to open that session.')

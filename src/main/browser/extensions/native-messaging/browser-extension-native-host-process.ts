@@ -1,6 +1,7 @@
 import { dirname } from 'node:path'
 import { spawnProcess } from '@orca/process-host'
-import type { PipedChildProcess, PipedProcessSpec } from '@orca/process-host/process-spec'
+import type { ChildProcessWithoutNullStreams } from 'node:child_process'
+import type { PipedProcessSpec } from '@orca/process-host/process-spec'
 import {
   childProcessHasExited,
   forceTerminateProcessTree,
@@ -38,9 +39,9 @@ export type NativeHostConnection = {
   close: () => void
 }
 
-export type NativeHostSpawner = (spec: PipedProcessSpec) => PipedChildProcess
+export type NativeHostSpawner = (spec: PipedProcessSpec) => ChildProcessWithoutNullStreams
 
-const liveHosts = new Map<PipedChildProcess, () => void>()
+const liveHosts = new Map<ChildProcessWithoutNullStreams, () => void>()
 
 /** Quit: kill every host now; a pending grace timer would never fire. */
 export function killAllNativeHosts(): void {
@@ -55,7 +56,7 @@ export function killAllNativeHosts(): void {
   liveHosts.clear()
 }
 
-function forwardStderr(name: string, child: PipedChildProcess): void {
+function forwardStderr(name: string, child: ChildProcessWithoutNullStreams): void {
   let budget = STDERR_LOG_BUDGET_BYTES
   child.stderr.on('data', (chunk: Buffer) => {
     if (budget <= 0) {
@@ -77,7 +78,7 @@ export function startNativeHost(
   spawn: NativeHostSpawner = spawnProcess
 ): Promise<NativeHostConnection> {
   return new Promise((resolve, reject) => {
-    let child: PipedChildProcess
+    let child: ChildProcessWithoutNullStreams
     const supervised = process.platform === 'win32'
     try {
       child = spawn(

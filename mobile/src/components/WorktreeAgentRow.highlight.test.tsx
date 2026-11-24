@@ -1,11 +1,14 @@
 import { createElement } from 'react'
 import { View } from 'react-native'
-import { act, create, type ReactTestRenderer } from 'react-test-renderer'
+import { act, create, type ReactTestInstance, type ReactTestRenderer } from 'react-test-renderer'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import type { RuntimeWorktreeAgentRow } from '../../../src/shared/runtime-types'
+import type { RuntimeWorktreeAgentRow } from '../../../src/shared/worktree/catalog/runtime-worktree-contracts'
 import { colors, spacing } from '../theme/mobile-theme'
-import { findByHostType } from '../test-support/react-test-renderer-host-nodes'
-import { WorktreeAgentRow } from './WorktreeAgentRow'
+import { WorktreeAgentRow } from '../worktree/agent-lineage/presentation/WorktreeAgentRow'
+
+function findByHostType(root: ReactTestInstance, hostType: string): ReactTestInstance {
+  return root.find((node) => node.type === hostType)
+}
 
 vi.mock('react-native', () => ({
   Pressable: 'Pressable',
@@ -13,8 +16,8 @@ vi.mock('react-native', () => ({
   Text: 'Text',
   View: 'View'
 }))
-vi.mock('./AgentStateDot', () => ({ AgentStateDot: () => null }))
-vi.mock('./MobileAgentIcon', () => ({ MobileAgentIcon: () => null }))
+vi.mock('../agents/presentation/AgentStateDot', () => ({ AgentStateDot: () => null }))
+vi.mock('../components/icons/MobileAgentIcon', () => ({ MobileAgentIcon: () => null }))
 
 function agent(): RuntimeWorktreeAgentRow {
   return {

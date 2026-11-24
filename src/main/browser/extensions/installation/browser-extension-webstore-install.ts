@@ -1,16 +1,21 @@
+import { recordBrowserExtensionInstalled } from '../../../telemetry/browser-extensions-banner'
+import { startBrowserExtensionsForSettings } from '../profile-sessions/browser-extension-idle-profiles'
 import { randomUUID } from 'node:crypto'
 import { rename, rm, writeFile } from 'node:fs/promises'
 import { isAbsolute, join, relative, resolve } from 'node:path'
 import type { InstalledBrowserExtension } from '../../../../shared/browser/extensions/browser-extension-types'
 import { BROWSER_EXTENSION_ORIGINAL_MANIFEST_FILE } from '../../../../shared/browser/extensions/browser-extension-worker-api'
-import { browserSessionRegistry } from '../../sessions/browser-session-registry'
+import { browserSessionRegistry } from '../../sessions/profiles/browser-session-registry'
 import {
   readBrowserExtensionArchive,
   writeBrowserExtensionArchive
 } from './browser-extension-archive'
 import type { VerifiedCrx } from './browser-extension-crx'
 import { getBrowserExtensionInstallStore } from './browser-extension-install-store'
-import { refuseOrcaFileCollisions } from './browser-extension-load-directory'
+import {
+  forgetPreparedBrowserExtensionDirectory,
+  refuseOrcaFileCollisions
+} from './browser-extension-load-directory'
 import {
   readBrowserExtensionManifest,
   type BrowserExtensionManifestSummary
@@ -23,6 +28,10 @@ import {
 } from '../web-store/browser-extension-held-updates'
 import { notifyBrowserExtensionListChanged } from './browser-extension-list-changes'
 import { withExtensionEnabled } from '../profile-sessions/browser-extension-profile-enablement'
+import {
+  browserExtensionSourceProfileId,
+  loadBrowserExtensionWhereProfileRuns
+} from '../profile-sessions/browser-extension-route-profiles'
 import { reloadBrowserExtensionWhereEnabled } from '../profile-sessions/browser-extension-profile-reload'
 import {
   loadBrowserExtensionIntoProfile,
@@ -36,33 +45,6 @@ import {
 
 const VERSION_PATTERN = /^\d+(\.\d+){0,3}$/
 const STAGING_PREFIX = '.staging-'
-const busyExtensionIds = new Set<string>()
-
-export class BrowserExtensionBusyError extends Error {
-  constructor() {
-    super('This extension is already being installed or removed')
-  }
-}
-
-/** Serializes install, update and uninstall of one extension id. */
-export async function withBrowserExtensionLock<T>(
-  extensionId: string,
-  action: () => Promise<T>
-): Promise<T> {
-  if (busyExtensionIds.has(extensionId)) {
-    throw new BrowserExtensionBusyError()
-  }
-  busyExtensionIds.add(extensionId)
-  try {
-    return await action()
-  } finally {
-    busyExtensionIds.delete(extensionId)
-  }
-}
-
-export function isBrowserExtensionBusy(extensionId: string): boolean {
-  return busyExtensionIds.has(extensionId)
-}
 
 export type StagedWebStoreExtension = {
   extensionId: string
@@ -163,6 +145,7 @@ export async function commitStagedWebStoreExtension(
     // Same version already in use: keep the loaded folder untouched.
     await discardStagedWebStoreExtension(staged)
   } else {
+    forgetPreparedBrowserExtensionDirectory(target)
     await rm(target, { recursive: true, force: true })
     await rename(staged.directory, target)
   }
@@ -184,15 +167,27 @@ export async function commitStagedWebStoreExtension(
       await reloadBrowserExtensionWhereEnabled(record)
     }
     if (enableInProfileId) {
+      // An install from an SSH or This-device page turns it on in that page's local profile.
+      const sourceProfileId = browserExtensionSourceProfileId(enableInProfileId)
+      await startBrowserExtensionsForSettings(enableInProfileId)
       await loadBrowserExtensionIntoProfile(enableInProfileId, record)
+      if (sourceProfileId !== enableInProfileId) {
+        // Why start it: its attach settles an earlier removal, which would otherwise undo this enable.
+        await startBrowserExtensionsForSettings(sourceProfileId)
+        await loadBrowserExtensionIntoProfile(sourceProfileId, record)
+      }
       browserSessionRegistry.updateEnabledExtensionIds((byProfile) =>
-        withExtensionEnabled(byProfile, enableInProfileId, extensionId, true)
+        withExtensionEnabled(byProfile, sourceProfileId, extensionId, true)
       )
+      await loadBrowserExtensionWhereProfileRuns(sourceProfileId, record)
     }
   } catch (error) {
     if (replaced) {
+      // Why everywhere: a page that loaded the new copy before the failure may not have it on.
+      await unloadBrowserExtensionEverywhere(extensionId)
       store.save(replaced)
       await reloadBrowserExtensionWhereEnabled(replaced).catch(() => {})
+      forgetPreparedBrowserExtensionDirectory(target)
       await rm(target, { recursive: true, force: true })
     } else if (!previous) {
       await unloadBrowserExtensionEverywhere(extensionId)
@@ -201,10 +196,14 @@ export async function commitStagedWebStoreExtension(
     throw error
   }
   if (replaced && isOwnedVersionFolder(extensionId, replaced.path)) {
+    forgetPreparedBrowserExtensionDirectory(replaced.path)
     await rm(replaced.path, { recursive: true, force: true, maxRetries: 3 })
   }
   if (getHeldBrowserExtensionUpdate(extensionId)?.version === record.version) {
     forgetHeldBrowserExtensionUpdate(extensionId)
+  }
+  if (!previous) {
+    recordBrowserExtensionInstalled('web_store')
   }
   notifyBrowserExtensionListChanged()
   return record

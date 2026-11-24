@@ -1,5 +1,9 @@
-import type { PersistedState } from '../../../shared/persisted-state-types'
-import type { RemovedSshTargetTombstone, SshTarget } from '../../../shared/ssh-types'
+import type { ProfileSaveDomains } from '../profile-save-domains'
+import type { PersistedState } from '../../../shared/orca-profiles/persisted-state-types'
+import type {
+  RemovedSshTargetTombstone,
+  SshTarget
+} from '../../../shared/remote-runtime/ssh/ssh-types'
 import type { ProtectedSecretPersistence } from '../../credentials/protected-secret-persistence'
 import { sshPtyOwnerLeaseSecretSlot } from '../../credentials/protected-secret-persistence'
 import {
@@ -8,7 +12,7 @@ import {
   collectSshTargetRemovalEvidenceDependencies
 } from '../../ssh/targets/removed-ssh-target-tombstone-retention'
 import { normalizeSshTarget } from './ssh-normalization'
-import { isRuntimeOwnedSshTargetId } from '../../../shared/execution-host'
+import { isRuntimeOwnedSshTargetId } from '../../../shared/execution-host/execution-host'
 import {
   migrateRetirementNamespaceHostIdentity,
   sshHostIdentity
@@ -17,7 +21,7 @@ import {
 export type SshTargetStateOperations = {
   state: PersistedState
   protectedSecrets: Pick<ProtectedSecretPersistence, 'removeRetainedBlob'>
-  scheduleSave: () => void
+  scheduleSave: (domains: ProfileSaveDomains) => void
 }
 
 export function getSshTargets(state: PersistedState): SshTarget[] {
@@ -32,7 +36,7 @@ export function getSshTarget(state: PersistedState, id: string): SshTarget | und
 export function addSshTarget(operations: SshTargetStateOperations, target: SshTarget): void {
   // Replace the array to invalidate identity-cached automation projections.
   operations.state.sshTargets = [...(operations.state.sshTargets ?? []), normalizeSshTarget(target)]
-  operations.scheduleSave()
+  operations.scheduleSave(['sshTargets'])
 }
 
 export function updateSshTarget(
@@ -64,7 +68,7 @@ export function updateSshTarget(
   }
   // Invalidate identity-cached lists after mutating the shared row.
   operations.state.sshTargets = [...(operations.state.sshTargets ?? [])]
-  operations.scheduleSave()
+  operations.scheduleSave(['sshTargets', 'retiredWorktreeNamesByNamespace'])
   return { ...target }
 }
 
@@ -79,7 +83,7 @@ export function removeSshTarget(operations: SshTargetStateOperations, id: string
   operations.state.sshTargets = nextTargets
   operations.state.sshPtyConsumerRecoveries = nextRecoveries
   operations.protectedSecrets.removeRetainedBlob(sshPtyOwnerLeaseSecretSlot(id))
-  operations.scheduleSave()
+  operations.scheduleSave(['sshTargets', 'sshPtyConsumerRecoveries'])
 }
 
 export function getDeletedSshConfigAliases(state: PersistedState): string[] {
@@ -93,7 +97,7 @@ export function addDeletedSshConfigAlias(
   operations.state.deletedSshConfigAliases ??= []
   if (!operations.state.deletedSshConfigAliases.includes(alias)) {
     operations.state.deletedSshConfigAliases.push(alias)
-    operations.scheduleSave()
+    operations.scheduleSave(['deletedSshConfigAliases'])
   }
 }
 
@@ -106,7 +110,7 @@ export function removeDeletedSshConfigAlias(
     return
   }
   operations.state.deletedSshConfigAliases = current.filter((entry) => entry !== alias)
-  operations.scheduleSave()
+  operations.scheduleSave(['deletedSshConfigAliases'])
 }
 
 export function clearDeletedSshConfigAliases(operations: SshTargetStateOperations): void {
@@ -115,7 +119,7 @@ export function clearDeletedSshConfigAliases(operations: SshTargetStateOperation
     operations.state.deletedSshConfigAliases.length > 0
   ) {
     operations.state.deletedSshConfigAliases = []
-    operations.scheduleSave()
+    operations.scheduleSave(['deletedSshConfigAliases'])
   }
 }
 
@@ -134,7 +138,7 @@ export function addRemovedSshTargetTombstone(
     sshTargetRemovalEvidenceDependencies(operations.state),
     MAX_REMOVED_SSH_TARGET_TOMBSTONES
   )
-  operations.scheduleSave()
+  operations.scheduleSave(['removedSshTargetTombstones'])
 }
 
 function sshTargetRemovalEvidenceDependencies(state: PersistedState): Set<string> {
@@ -169,5 +173,5 @@ export function removeRemovedSshTargetTombstone(
   operations.state.removedSshTargetTombstones = existing.filter(
     (entry) => entry.oldTargetId !== oldTargetId
   )
-  operations.scheduleSave()
+  operations.scheduleSave(['removedSshTargetTombstones'])
 }

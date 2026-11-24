@@ -1,20 +1,30 @@
 import { createElement } from 'react'
-import { act, create, type ReactTestRenderer } from 'react-test-renderer'
+import { act, create, type ReactTestInstance, type ReactTestRenderer } from 'react-test-renderer'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type { RuntimeWorktreeAgentRow } from '../../../src/shared/runtime-types'
+import type { RuntimeWorktreeAgentRow } from '../../../src/shared/worktree/catalog/runtime-worktree-contracts'
 import {
   DEFAULT_WORKTREE_CARD_PROPERTIES,
   getWorktreeCardDetails
-} from '../../../src/shared/worktree/card-properties'
+} from '../../../src/shared/worktree/row-display/card-properties'
 import { setSelectedSidebarSession } from '../host-screen/selected-sidebar-session'
 import { colors } from '../theme/mobile-theme'
-import type { Worktree, WorktreeRowView } from '../worktree/workspace-list-types'
-import { findAllByHostType } from '../test-support/react-test-renderer-host-nodes'
-import { WorktreeListRow } from './WorktreeListRow'
+import type { Worktree, WorktreeRowView } from '../worktree/workspace-list/workspace-list-types'
+import { WorktreeListRow } from '../worktree/row-presentation/WorktreeListRow'
 
-const { agentListRender } = vi.hoisted(() => ({ agentListRender: vi.fn() }))
+function findAllByHostType(root: ReactTestInstance, hostType: string): ReactTestInstance[] {
+  return root.findAll((node) => node.type === hostType)
+}
+
+const { agentListRender } = vi.hoisted(() => {
+  Object.assign(globalThis, { __DEV__: false })
+  return { agentListRender: vi.fn() }
+})
 
 vi.mock('react-native', () => ({
+  AppState: {
+    currentState: 'active',
+    addEventListener: () => ({ remove: () => {} })
+  },
   Pressable: 'Pressable',
   StyleSheet: { create: <T>(styles: T) => styles },
   Text: 'Text',
@@ -27,18 +37,26 @@ vi.mock('lucide-react-native', () => ({
   GitBranch: 'GitBranch',
   GitPullRequest: 'GitPullRequest'
 }))
-vi.mock('../platform/haptics', () => ({ triggerMediumImpact: vi.fn() }))
-vi.mock('./AgentSpinner', () => ({ AgentSpinner: () => null }))
-vi.mock('./AgentStateDot', () => ({ AgentStateDot: () => null }))
-vi.mock('./MobileAgentIcon', () => ({ MobileAgentIcon: () => null }))
-vi.mock('./MobileRepoIcon', () => ({ MobileRepoIcon: () => null }))
-vi.mock('./WorktreeAgentList', () => ({
+vi.mock('expo', () => ({}))
+vi.mock('expo-router', () => ({
+  useFocusEffect: () => {},
+  useRouter: () => ({ push: () => {} }),
+  useLocalSearchParams: () => ({})
+}))
+vi.mock('../platform/haptics/haptics', () => ({ triggerMediumImpact: vi.fn() }))
+vi.mock('../bots/MobileBotHomeRow', () => ({ MobileBotHomeRow: () => null }))
+vi.mock('../bots/MobileBotChatRows', () => ({ MobileBotWorkerLine: () => null }))
+vi.mock('../agents/presentation/AgentSpinner', () => ({ AgentSpinner: () => null }))
+vi.mock('../agents/presentation/AgentStateDot', () => ({ AgentStateDot: () => null }))
+vi.mock('../components/icons/MobileAgentIcon', () => ({ MobileAgentIcon: () => null }))
+vi.mock('../components/icons/MobileRepoIcon', () => ({ MobileRepoIcon: () => null }))
+vi.mock('../worktree/agent-lineage/presentation/WorktreeAgentList', () => ({
   WorktreeAgentList: (props: unknown) => {
     agentListRender(props)
     return null
   }
 }))
-vi.mock('./WorktreeMetaGlyphs', () => ({
+vi.mock('../worktree/row-presentation/WorktreeMetaGlyphs', () => ({
   prStateColor: () => '#000000',
   WorktreeMetaGlyphs: () => null
 }))
@@ -104,7 +122,6 @@ describe('selectable sidebar session rows', () => {
         item,
         view: item,
         isReadOnly: false,
-        now: 2_000,
         repoColor: '#000000',
         cardDetails: ALL_DETAILS,
         agentActivityDisplayMode: 'full',
@@ -145,7 +162,6 @@ describe('selectable sidebar session rows', () => {
           item: baseItem,
           view: {},
           isReadOnly: false,
-          now: 2_000,
           repoColor: '#000000',
           cardDetails: ALL_DETAILS,
           agentActivityDisplayMode: 'compact',
@@ -170,7 +186,6 @@ describe('selectable sidebar session rows', () => {
         item: baseItem,
         view: { lineageChildCount: 2, lineageCollapsed },
         isReadOnly: false,
-        now: 2_000,
         repoColor: '#000000',
         cardDetails: ALL_DETAILS,
         agentActivityDisplayMode: 'compact',

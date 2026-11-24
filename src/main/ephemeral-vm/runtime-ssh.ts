@@ -4,14 +4,27 @@ import {
   disconnectRegisteredSshTarget,
   removeRegisteredSshTarget
 } from '../ipc/ssh/ssh-session-teardown'
-import type { EphemeralVmRecipeConnection } from '../../shared/ephemeral-vm-recipes'
-import type { SshTarget } from '../../shared/ssh-types'
+import type { EphemeralVmRecipeConnection } from '../../shared/remote-runtime/ephemeral-vm-recipes/ephemeral-vm-recipes'
+import type { SshTarget } from '../../shared/remote-runtime/ssh/ssh-types'
 import { SshHostNotServedError } from '../providers/ssh-host-not-served-error'
 
 export type RuntimeOwnedSshConnectionResult = {
   targetId: string
   target: SshTarget
   environmentId: string
+}
+
+/** Saves the recipe's current SSH address for its VM without dialing it, so a later explicit
+ *  Connect reaches the VM where it now is. */
+export function refreshRuntimeOwnedSshTarget(args: {
+  runtimeId: string
+  connection: Extract<EphemeralVmRecipeConnection, { type: 'ssh' }>
+}): SshTarget {
+  const store = getSshConnectionStore()
+  if (!store) {
+    throw new Error('SSH handlers are not registered.')
+  }
+  return store.upsertRuntimeOwnedTarget(args.runtimeId, args.connection.target)
 }
 
 export async function connectRuntimeOwnedSshTarget(args: {
