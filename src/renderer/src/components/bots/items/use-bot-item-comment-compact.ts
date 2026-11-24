@@ -1,4 +1,4 @@
-import { useEffect, useLayoutEffect, useRef, useState, type RefObject } from 'react'
+import { useCallback, useEffect, useLayoutEffect, useRef, useState, type RefObject } from 'react'
 
 const RESIZE_MS = 140
 
@@ -26,9 +26,8 @@ export function useBotItemCommentCompact(
   const press = useRef<{ release: () => void } | null>(null)
   const settle = useRef<ReturnType<typeof setTimeout> | null>(null)
   const stepRef = useRef(stepping)
-  stepRef.current = stepping
   // After the event that moved focus has run its course (a click's own refocus included).
-  const recheck = (): void => {
+  const recheck = useCallback((): void => {
     if (settle.current) {
       clearTimeout(settle.current)
     }
@@ -40,15 +39,14 @@ export function useBotItemCommentCompact(
       const node = box.current
       setFocused(Boolean(node && node.contains(document.activeElement)))
     }, 0)
-  }
-  // Mounted open, and once a step's read ends: settle on where focus is now.
-  useEffect(() => {
-    if (!stepping && focused) {
+  }, [box])
+  useLayoutEffect(() => {
+    stepRef.current = stepping
+    // After mounting or a step's read, settle on where focus is now.
+    if (!stepping) {
       recheck()
     }
-    // Only as the box mounts and as `stepping` ends; `focused` changes settle themselves.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [stepping])
+  }, [recheck, stepping])
   useEffect(
     () => () => {
       if (settle.current) {
