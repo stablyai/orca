@@ -1,3 +1,4 @@
+import { freshGrabDocumentScope, settleGrabOverlayArm } from './grab-document-scope'
 import { sendPrivate, retireGrabOverlay, type GrabDocumentScope } from './grab-document-scope'
 export { retireGrabOverlay, restoreGrabCapture } from './grab-document-scope'
 export type { GrabDocumentScope } from './grab-document-scope'
@@ -17,7 +18,7 @@ const sessions = new WeakMap<WebContents, GrabGuestExecution>()
 
 /** At most one active and one waiting request per lane; background checks never queue. */
 class GrabGuestExecution {
-  scope: GrabDocumentScope = { current: true, frame: null, documentId: null, overlayId: null }
+  scope: GrabDocumentScope = freshGrabDocumentScope()
   private script: Task | null = null
   private selection: Task | null = null
   private waiting: Task | null = null
@@ -208,7 +209,8 @@ class GrabGuestExecution {
       this.scope.documentId = payload.documentId
       this.scope.frame = task.frame
       if (task.options.overlayControl) {
-        this.scope.overlayId = task.id
+        // The page keeps its current picker until this arm succeeds; cancel retires both meanwhile.
+        this.scope.pendingOverlayId = task.id
       }
       task.started = true
       clearTimeout(task.timer)
@@ -236,10 +238,12 @@ class GrabGuestExecution {
           overlayAction: task.options.overlayAction
         })
       } catch {
+        settleGrabOverlayArm(this.scope, task.id, null)
         this.finish(task, { ok: false }, true)
       }
       task.code = ''
     } else if (payload.documentId === task.documentId && payload.result) {
+      settleGrabOverlayArm(this.scope, task.id, payload.result)
       this.finish(task, payload.result, true)
     }
   }
@@ -258,7 +262,7 @@ class GrabGuestExecution {
   private readonly retire = (): void => {
     retireGrabOverlay(this.scope)
     this.scope.current = false
-    this.scope = { current: true, frame: null, documentId: null, overlayId: null }
+    this.scope = freshGrabDocumentScope()
     const tasks = [this.script, this.selection, this.waiting, this.waitingSelection]
     this.script = this.selection = this.waiting = this.waitingSelection = null
     for (const task of tasks) {
