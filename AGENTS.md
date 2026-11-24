@@ -45,7 +45,11 @@ All UI work — layout, color, typography, spacing, component selection, UX beha
    ```
 3. `publish.mjs` 會：暫存 clone `Orca_zh-Hant`（`main`）→ 建立/重設 `i18n/zh-hant-coverage` → 只複製桌面、行動、插件 `zh-Hant.json`（`config.publish` 定義）→ commit → push。若遠端同名分支有舊歷史，腳本會以 `--force-with-lease` 更新發佈分支（發佈內容以 zh-maintenance 產出為準）。
 4. 推送後到 GitHub 開 PR：`i18n/zh-hant-coverage -> main`，確認後合併。可用 `gh pr create` / `gh pr merge`。
-5. **禁止推送官方 `stablyai/orca`（origin）**；`origin` 僅用於 fetch 上游。外部推送（GitHub push/merge）前需確認。
+5. **社群市場發版（僅在要讓 Orca 市場/`orca plugin update` 偵測新版本時）**：僅合併 `main` **不會**更新社群目錄。需另外在 `Orca_zh-Hant`：
+   - 更新 `orca-plugin.json` 的 `version`（`X.Y.Z` 三段版；同一官方版內修補遞增第三段）。
+   - commit 後建立 `vX.Y.Z` tag，push `main` + tag。
+   - 版本/tag/檢查清單以 [Orca_zh-Hant AGENTS.md](https://github.com/ainlee/Orca_zh-Hant/blob/main/AGENTS.md) 為準；執行前確認。
+6. **禁止推送官方 `stablyai/orca`（origin）**；`origin` 僅用於 fetch 上游。外部推送（GitHub push/merge）前需確認。
 
 **不要做：**
 
