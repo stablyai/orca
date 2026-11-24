@@ -927,7 +927,10 @@
           "custom": "自定义",
           "indentation": "缩进",
           "long_lines": "长行",
-          "about": "关于"
+          "about": "关于",
+          "syncFile": "同步",
+          "portable": "可移植",
+          "config": "配置"
         }
       },
       "cli": {
@@ -14083,6 +14086,19 @@
           "cancel": "取消",
           "confirm": "移除",
           "unknownHost": "未知主机"
+        },
+        "SettingsFileSetting": {
+          "ff84319f89": "创建设置文件",
+          "fd6ead6c3a": "打开文件",
+          "26ce59dab3_other": "正在使用此文件 · {{count}} 项设置",
+          "e19be5ebf6": "无法读取该文件：{{message}}。修复后将恢复同步。",
+          "0301bcadce": "无法读取该文件。修复后将恢复同步。",
+          "1d03236030": "该文件为只读。在此处所做的更改仅保留在此设备上，直到文件发生变化或 Orca 重启。",
+          "c0ce8dadaf_other": "已忽略 {{count}} 个条目",
+          "d57ac76822": "另有 {{moreCount}} 项",
+          "a0928296e1": "无法创建设置文件。",
+          "ac98fdd2bf": "设置文件",
+          "561cc00662": "将可移植的设置保存在文件中，可用 dotfiles 工具或同步文件夹管理。特定于设备的设置和私密设置仅保留在此设备上。"
         }
       },
       "right": {

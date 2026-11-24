@@ -4,6 +4,7 @@ import type { Store } from '../persistence/loading-store/store'
 import type { NativeSettingsProjection } from '../core-desktop/native-settings-projection'
 import type { AgentAwakeService } from '../power/agent-awake-service'
 import type { CrashReportStore } from '../crash-reporting/reports/crash-report-store'
+import type { SettingsFileSync } from '../settings-file/settings-file-sync-types'
 import type { AgentBrowserBridge } from '../browser/agent-browser/agent-browser-bridge'
 import type { GpuFallbackMarker, GpuFallbackEnvironment } from './gpu-recovery/gpu-fallback-marker'
 import type { getDevInstanceIdentity } from './profile-startup/dev-instance-identity'
@@ -69,6 +70,8 @@ export const mainProcessState = {
   unsubscribeWakeSignalClock: null as (() => void) | null,
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: widens the null slot to the stop function assigned by main-process-observers.
   stopDesktopPresenceReporter: null as (() => void) | null,
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: widens the null initial value; assigned once the store loads.
+  settingsFile: null as SettingsFileSync | null,
   // Timed reload flags cannot leak to later loads; recovery did-finish-load must preserve live PTYs (#5787).
   expectedRendererReload: createWebContentsTimedFlag(),
   recoveryReloadInFlight: createWebContentsTimedFlag(),

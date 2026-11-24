@@ -879,6 +879,13 @@
       "about": {
         "title": "À propos",
         "version": "Orca {{version}}"
+      },
+      "search": {
+        "keywords": {
+          "syncFile": "synchronisation",
+          "portable": "portable",
+          "config": "configuration"
+        }
       }
     },
     "updateDelay": {
@@ -13466,6 +13473,23 @@
           "shownPluginCount_other": "{{count}} plugins correspondants affichés, dont celui-ci",
           "samePublisher": "Autres éléments répertoriés sous {{value0}}",
           "shownPluginCount_many": "{{count}} plugins correspondants affichés, dont celui-ci"
+        },
+        "SettingsFileSetting": {
+          "ff84319f89": "Créer le fichier de paramètres",
+          "fd6ead6c3a": "Ouvrir le fichier",
+          "26ce59dab3_one": "Fichier utilisé · {{count}} paramètre",
+          "26ce59dab3_many": "Fichier utilisé · {{count}} paramètres",
+          "26ce59dab3_other": "Fichier utilisé · {{count}} paramètres",
+          "e19be5ebf6": "Le fichier n’a pas pu être lu : {{message}}. Corrigez-le pour reprendre la synchronisation.",
+          "0301bcadce": "Le fichier n’a pas pu être lu. Corrigez-le pour reprendre la synchronisation.",
+          "1d03236030": "Le fichier est en lecture seule. Les modifications faites ici restent sur cet appareil jusqu’à ce que le fichier change ou qu’Orca redémarre.",
+          "c0ce8dadaf_one": "{{count}} entrée ignorée",
+          "c0ce8dadaf_many": "{{count}} entrées ignorées",
+          "c0ce8dadaf_other": "{{count}} entrées ignorées",
+          "d57ac76822": "et {{moreCount}} de plus",
+          "a0928296e1": "Impossible de créer le fichier de paramètres.",
+          "ac98fdd2bf": "Fichier de paramètres",
+          "561cc00662": "Conservez les paramètres portables dans un fichier que vous pouvez gérer avec des outils de dotfiles ou un dossier synchronisé. Les paramètres propres à la machine et les paramètres privés restent sur cet appareil."
         }
       },
       "right": {

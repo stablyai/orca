@@ -97,6 +97,7 @@ async function installMainWindowCoreServices(
     {
       deferHostInitialization: true,
       hostInitialization: deps.hostInitialization,
+      settingsFile: state.settingsFile,
       getAdditionalAiVaultCodexHomePaths: () =>
         codexRuntimeHome.getHostCodexHomePathsForSessionDiscovery(),
       prepareAiVaultSessionResume: (args) =>

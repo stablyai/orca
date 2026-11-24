@@ -1,15 +1,13 @@
 import { sanitizeRendererSettingsUpdate } from './renderer-settings-update'
 import { confirmBrowserPasswordOwner } from '../../browser-passwords/browser-password-reauth'
 import { getClaudeAgentViewService } from '../../claude/agent-view/agent-view-service'
-import { app, BrowserWindow, ipcMain, nativeTheme } from 'electron'
+import { app, BrowserWindow, ipcMain } from 'electron'
 import type { Store } from '../../persistence/loading-store/store'
 import type { GlobalSettings } from '../../../shared/settings/global-settings-types'
 import type { PersistedState } from '../../../shared/orca-profiles/persisted-state-types'
 import { listSystemFontFamilies } from '../../window/desktop-integration/system-fonts'
 import { registerSettingsImportHandlers } from './settings-import-handlers'
-import { setMainUiLanguage } from '../../i18n/main-i18n'
-import { rebuildAppMenu } from '../../menu/register-app-menu'
-import { rebuildSystemTrayMenu } from '../../tray/system-tray'
+import { applyMainProcessSettingsEffects } from './main-process-settings-effects'
 import { track } from '../../telemetry/client'
 import {
   SETTINGS_CHANGED_WHITELIST,
@@ -54,14 +52,6 @@ import { getRuntimeEnvironmentRegistryRoot } from '../runtime-environments/catal
 const SETTINGS_CHANGED_WHITELIST_SET = new Set<string>(SETTINGS_CHANGED_WHITELIST)
 const registryRoot = getRuntimeEnvironmentRegistryRoot
 
-// Electron menus do not react to settings; rebuild appearance checkboxes after writes.
-const APPEARANCE_MENU_KEYS: readonly (keyof GlobalSettings)[] = [
-  'showTasksButton',
-  'showAutomationsButton',
-  'showMobileButton',
-  'showTitlebarAppName'
-]
-
 export function registerSettingsHandlers(
   store: Store,
   agentAwakeService?: AgentAwakeService
@@ -76,6 +66,14 @@ export function registerSettingsHandlers(
       if (!window.isDestroyed()) {
         window.webContents.send('agentAwake:changed', status)
       }
+    }
+  })
+
+  store.onSettingsPersisted((changed, origin) => {
+    if (origin === 'settings-file') {
+      applyMainProcessSettingsEffects(changed, store.getSettings()).catch((error) => {
+        console.warn('[settings] failed to apply settings file changes to the main process:', error)
+      })
     }
   })
 
@@ -115,10 +113,6 @@ export function registerSettingsHandlers(
 
   ipcMain.handle('settings:set', async (event, args: Partial<GlobalSettings>) => {
     const sanitizedArgs = sanitizeRendererSettingsUpdate(args)
-    // Generic settings writers cannot change the server preference owned by Advanced controls.
-    delete sanitizedArgs.activeRuntimeEnvironmentId
-    // Only the main-process directory picker may grant trusted floating-workspace paths.
-    delete sanitizedArgs.floatingTerminalTrustedCwds
     if ('computerAwakeMode' in sanitizedArgs) {
       Object.assign(
         sanitizedArgs,
@@ -172,9 +166,6 @@ export function registerSettingsHandlers(
         args.mobilePairingCustomAddresses
       )
     }
-    if (args.theme) {
-      nativeTheme.themeSource = args.theme
-    }
     if (
       sanitizedArgs.browserPasswordsFillRequiresReauth === false &&
       (store.getSettings().browserPasswordsFillRequiresReauth !== true ||
@@ -203,6 +194,11 @@ export function registerSettingsHandlers(
         enabled: result.experimentalAgentDashboardPopout === true
       })
     }
+    const effectChanges = { ...sanitizedArgs }
+    if (before.uiLanguage === result.uiLanguage) {
+      delete effectChanges.uiLanguage
+    }
+    await applyMainProcessSettingsEffects(effectChanges, result)
     const proxySettingsChanged =
       ('httpProxyUrl' in sanitizedArgs && before.httpProxyUrl !== result.httpProxyUrl) ||
       ('httpProxyBypassRules' in sanitizedArgs &&
@@ -247,20 +243,12 @@ export function registerSettingsHandlers(
         console.warn('[settings] failed to reconcile managed agent hooks:', error)
       }
     }
-    if ('uiLanguage' in sanitizedArgs && before.uiLanguage !== result.uiLanguage) {
-      await setMainUiLanguage(result.uiLanguage)
-      rebuildAppMenu()
-      rebuildSystemTrayMenu()
-    }
     if (
       ('workspaceDir' in sanitizedArgs && before.workspaceDir !== result.workspaceDir) ||
       ('nestWorkspaces' in sanitizedArgs && before.nestWorkspaces !== result.nestWorkspaces)
     ) {
       void prepareLocalWorktreeRootsForRepos(store)
       scheduleCurrentWorktreeBaseDirectoryWatcherSync()
-    }
-    if (APPEARANCE_MENU_KEYS.some((key) => key in sanitizedArgs)) {
-      rebuildAppMenu()
     }
     if ('appIcon' in sanitizedArgs && before.appIcon !== result.appIcon) {
       applyAppIcon(result.appIcon)

@@ -101,6 +101,9 @@ function installWillQuitHandler(): void {
     if (!quitTeardownStartGate.tryStart(event)) {
       return
     }
+    // A UI change still inside its debounce must reach the file before exit.
+    const settingsFileShutdown = state.settingsFile?.dispose() ?? Promise.resolve()
+    state.settingsFile = null
     // Not awaited: signals catalog git to stop without delaying quit; the startup sweep catches leftovers.
     abortPluginGitForShutdown()
     const updateQuitInProgress = isQuittingForUpdate()
@@ -132,6 +135,7 @@ function installWillQuitHandler(): void {
     // Extension storage's final save runs after this, unbounded, as its old synchronous will-quit save was.
     const teardowns = [
       ...coreTeardowns,
+      { name: 'settings-file', promise: settingsFileShutdown },
       { name: 'install-park', promise: pendingServeSupervisorQuitCommit() }
     ]
     const teardownSettlement = Promise.allSettled(teardowns.map((item) => item.promise))

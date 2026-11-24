@@ -2133,6 +2133,13 @@
       "about": {
         "title": "Sobre",
         "version": "Orca {{version}}"
+      },
+      "search": {
+        "keywords": {
+          "syncFile": "sincronizar",
+          "portable": "portátil",
+          "config": "configuração"
+        }
       }
     },
     "openInApp": {
@@ -10299,6 +10306,23 @@
           "cancel": "Cancelar",
           "confirm": "Remover",
           "unknownHost": "Host desconhecido"
+        },
+        "SettingsFileSetting": {
+          "ff84319f89": "Criar arquivo de configurações",
+          "fd6ead6c3a": "Abrir arquivo",
+          "26ce59dab3_one": "Usando este arquivo · {{count}} configuração",
+          "26ce59dab3_many": "Usando este arquivo · {{count}} configurações",
+          "26ce59dab3_other": "Usando este arquivo · {{count}} configurações",
+          "e19be5ebf6": "Não foi possível ler o arquivo: {{message}}. Corrija-o para retomar a sincronização.",
+          "0301bcadce": "Não foi possível ler o arquivo. Corrija-o para retomar a sincronização.",
+          "1d03236030": "O arquivo é somente leitura. As alterações feitas aqui ficam neste dispositivo até que o arquivo mude ou o Orca seja reiniciado.",
+          "c0ce8dadaf_one": "{{count}} entrada ignorada",
+          "c0ce8dadaf_many": "{{count}} entradas ignoradas",
+          "c0ce8dadaf_other": "{{count}} entradas ignoradas",
+          "d57ac76822": "e mais {{moreCount}}",
+          "a0928296e1": "Não foi possível criar o arquivo de configurações.",
+          "ac98fdd2bf": "Arquivo de configurações",
+          "561cc00662": "Mantenha configurações portáteis em um arquivo que você pode gerenciar com ferramentas de dotfiles ou uma pasta sincronizada. As configurações específicas da máquina e as privadas ficam neste dispositivo."
         }
       },
       "right": {

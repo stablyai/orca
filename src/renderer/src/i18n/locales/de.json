@@ -1027,6 +1027,13 @@
       "about": {
         "title": "Info",
         "version": "Orca {{version}}"
+      },
+      "search": {
+        "keywords": {
+          "syncFile": "synchronisieren",
+          "portable": "portabel",
+          "config": "Konfiguration"
+        }
       }
     },
     "openInApp": {
@@ -13581,6 +13588,21 @@
           "shownPluginCount_one": "{{count}} passendes Plugin angezeigt, einschließlich dieses Plugins",
           "shownPluginCount_other": "{{count}} passende Plugins angezeigt, einschließlich dieses Plugins",
           "samePublisher": "Weitere unter {{value0}} aufgeführte Plugins"
+        },
+        "SettingsFileSetting": {
+          "ff84319f89": "Einstellungsdatei erstellen",
+          "fd6ead6c3a": "Datei öffnen",
+          "26ce59dab3_one": "Diese Datei wird verwendet · {{count}} Einstellung",
+          "26ce59dab3_other": "Diese Datei wird verwendet · {{count}} Einstellungen",
+          "e19be5ebf6": "Die Datei konnte nicht gelesen werden: {{message}}. Behebe das Problem, um die Synchronisierung fortzusetzen.",
+          "0301bcadce": "Die Datei konnte nicht gelesen werden. Behebe das Problem, um die Synchronisierung fortzusetzen.",
+          "1d03236030": "Die Datei ist schreibgeschützt. Hier vorgenommene Änderungen bleiben auf diesem Gerät, bis sich die Datei ändert oder Orca neu startet.",
+          "c0ce8dadaf_one": "{{count}} Eintrag wurde ignoriert",
+          "c0ce8dadaf_other": "{{count}} Einträge wurden ignoriert",
+          "d57ac76822": "und {{moreCount}} weitere",
+          "a0928296e1": "Die Einstellungsdatei konnte nicht erstellt werden.",
+          "ac98fdd2bf": "Einstellungsdatei",
+          "561cc00662": "Speichere portable Einstellungen in einer Datei, die du mit Dotfiles-Tools oder einem synchronisierten Ordner verwalten kannst. Gerätespezifische und private Einstellungen bleiben auf diesem Gerät."
         }
       },
       "right": {

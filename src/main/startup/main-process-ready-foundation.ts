@@ -62,6 +62,7 @@ import { agentHookServer } from '../agent-hooks/server/agent-hook-server'
 import { isAgentStatusHooksEnabled } from '../../shared/agent-hook-listener/configuration/agent-status-hooks-setting'
 import { reportProfileStateWriteFailure } from './profile-startup/profile-state-write-failure'
 import { reportProfileStateSaveDelay } from './profile-startup/profile-state-save-delay'
+import { startUserSettingsFileSync } from '../settings-file/settings-file-startup'
 import { preloadSsh2 } from '../ssh/authentication/ssh2-module-load'
 
 export async function initializeReadyFoundation(): Promise<void> {
@@ -179,6 +180,9 @@ export async function initializeReadyFoundation(): Promise<void> {
   }
   const store = profileState.store
   state.store = store
+  // Before any consumer or window reads settings, so the first render already has the file's values.
+  state.settingsFile = await startUserSettingsFileSync(store, app.getPath('home'))
+  app.on('browser-window-focus', () => void state.settingsFile?.refresh())
   const nativeSettings = createStoreNativeSettingsProjection(store)
   state.nativeSettings = nativeSettings
   hangWatchdog?.setMenuBarIconSetting(nativeSettings.getSettings().showMenuBarIcon !== false)

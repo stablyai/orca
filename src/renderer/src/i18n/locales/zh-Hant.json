@@ -1119,6 +1119,13 @@
       "about": {
         "title": "關於",
         "version": "Orca {{version}}"
+      },
+      "search": {
+        "keywords": {
+          "syncFile": "同步",
+          "portable": "可攜式",
+          "config": "設定"
+        }
       }
     },
     "updateDelay": {
@@ -13412,6 +13419,19 @@
           "shownPluginCount_one": "顯示 {{count}} 個符合的外掛，包括此外掛",
           "shownPluginCount_other": "顯示 {{count}} 個符合的外掛，包括此外掛",
           "samePublisher": "更多列為 {{value0}} 的外掛"
+        },
+        "SettingsFileSetting": {
+          "ff84319f89": "建立設定檔",
+          "fd6ead6c3a": "開啟檔案",
+          "26ce59dab3_other": "正在使用此檔案 · {{count}} 項設定",
+          "e19be5ebf6": "無法讀取該檔案：{{message}}。修正後將恢復同步。",
+          "0301bcadce": "無法讀取該檔案。修正後將恢復同步。",
+          "1d03236030": "該檔案為唯讀。在此處所做的變更只會保留在此裝置上，直到檔案變更或 Orca 重新啟動。",
+          "c0ce8dadaf_other": "已忽略 {{count}} 個項目",
+          "d57ac76822": "另有 {{moreCount}} 項",
+          "a0928296e1": "無法建立設定檔。",
+          "ac98fdd2bf": "設定檔",
+          "561cc00662": "將可攜式設定存放在檔案中，可用 dotfiles 工具或同步資料夾管理。裝置專屬設定與私人設定只會保留在此裝置上。"
         }
       },
       "right": {

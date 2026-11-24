@@ -16,6 +16,7 @@ import { LOCAL_SETTINGS_HOST_SCOPE } from '../host-scope/settings-host-scope'
 import {
   getGeneralCliSearchEntries,
   getGeneralNavigationSearchEntries,
+  getGeneralSettingsFileSearchEntry,
   getGeneralUpdateSearchEntries
 } from './general-search'
 import { getGeneralEditorSearchDescriptors } from '../editor/general-editor-search'
@@ -31,6 +32,7 @@ import { DefaultWindowsProjectRuntimeSetting } from './project-runtime/DefaultWi
 import { defaultScopeHost } from '@/runtime/hosts/selection/default-creation-host'
 import { SettingsGroup } from '../section-layout/SettingsGroup'
 import { GeneralConfirmationsSection } from './GeneralConfirmationsSection'
+import { SettingsFileSetting } from './SettingsFileSetting'
 import { GeneralSearchResults } from './GeneralSearchResults'
 import { getGeneralSubPageTitle, type GeneralSubPage } from './general-sub-pages'
 import { useOpenInMenuDraft } from './OpenInMenuSetting'
@@ -291,6 +293,11 @@ function GeneralRootSettings({
               onClick={() => onSelectSubPage('editor')}
             />
           ) : null}
+        </SettingsGroup>
+      ) : null}
+      {matchesSettingsSearch(query, [getGeneralSettingsFileSearchEntry()]) ? (
+        <SettingsGroup>
+          <SettingsFileSetting />
         </SettingsGroup>
       ) : null}
       {matchesSettingsSearch(query, getGeneralCliSearchEntries()) ? (

@@ -4,6 +4,7 @@ import type {
   AiVaultPrepareSessionResumeResult
 } from '../../../shared/ai-vault/resume/ai-vault-resume-preparation'
 import type { OrcaRuntimeService } from '../../runtime/orca-runtime'
+import type { SettingsFileSync } from '../../settings-file/settings-file-sync-types'
 import type { RendererShutdownCheckpointService } from '../../core-desktop/renderer-shutdown-checkpoint-service'
 import { settleWithinMs } from '../../startup/quit/quit-teardown-deadline'
 
@@ -24,6 +25,7 @@ export async function closeNotificationDismissalsBeforeRelaunch(
 export type CoreHandlerLifecycleOptions = {
   deferHostInitialization?: boolean
   hostInitialization?: Promise<void>
+  settingsFile?: SettingsFileSync | null
   onBeforeRelaunch?: () => void | Promise<void>
   onQuit?: () => void
   orcaAccount?: OrcaAccountService

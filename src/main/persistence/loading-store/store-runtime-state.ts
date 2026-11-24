@@ -2,6 +2,7 @@ import { randomUUID } from 'node:crypto'
 import { removeStaleDurableWriteTempFiles } from '../../filesystem/durable-file-write'
 import type { GlobalSettings } from '../../../shared/settings/global-settings-types'
 import type { PersistedState } from '../../../shared/orca-profiles/persisted-state-types'
+import type { SettingsUpdateOrigin } from '../applying-settings/settings-update'
 import type {
   WorkspaceSessionOperationListener,
   WorkspaceSessionWriteListener
@@ -114,6 +115,9 @@ export class StoreRuntimeState {
       settings: GlobalSettings,
       originWebContentsId?: number
     ) => void
+  >()
+  settingsPersistedListeners = new Set<
+    (changed: Partial<GlobalSettings>, origin: SettingsUpdateOrigin | undefined) => void
   >()
   uiChangeListeners = new Set<(ui: PersistedState['ui']) => void>()
   readonly workspaceSessionWriteListeners = new Set<WorkspaceSessionWriteListener>()

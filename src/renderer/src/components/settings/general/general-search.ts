@@ -183,6 +183,26 @@ export const getGeneralCliSearchEntries = createLocalizedCatalog(() => [
   }
 ])
 
+export const getGeneralSettingsFileSearchEntry = createLocalizedCatalog(() => ({
+  targetSectionId: GENERAL_SETTING_ANCHORS.settingsFile,
+  title: translate('auto.components.settings.SettingsFileSetting.ac98fdd2bf', 'Settings file'),
+  description: translate(
+    'auto.components.settings.SettingsFileSetting.561cc00662',
+    'Keep portable settings in a file you can manage with dotfiles tools or a synced folder. Machine-specific and private settings stay on this device.'
+  ),
+  keywords: [
+    ...translateSearchKeyword('settings.general.search.keywords.syncFile', 'sync'),
+    ...translateSearchKeyword('settings.general.search.keywords.portable', 'portable'),
+    ...translateSearchKeyword('settings.general.search.keywords.dotfiles', 'dotfiles', {
+      englishOnly: true
+    }),
+    ...translateSearchKeyword('settings.general.search.keywords.json', 'json', {
+      englishOnly: true
+    }),
+    ...translateSearchKeyword('settings.general.search.keywords.config', 'config')
+  ]
+}))
+
 export const getGeneralUpdateSearchEntries = createLocalizedCatalog(() => [
   ...(isWebClientLocation() ? [] : [getAutomaticUpdatesSettingCopy()]),
   {
@@ -215,6 +235,7 @@ export const getGeneralUpdateSearchEntries = createLocalizedCatalog(() => [
 
 type GeneralPaneSearchOptions = {
   includeProjectRuntime?: boolean
+  includeSettingsFile?: boolean
 }
 
 export function getGeneralPaneSearchEntries(
@@ -227,6 +248,7 @@ export function getGeneralPaneSearchEntries(
     ...getGeneralDestinationSearchEntries(),
     ...(options.includeProjectRuntime === false ? [] : getGeneralProjectRuntimeSearchEntries()),
     ...getGeneralEditorSearchEntries(),
+    ...(options.includeSettingsFile === false ? [] : [getGeneralSettingsFileSearchEntry()]),
     ...getGeneralCliSearchEntries(),
     ...getGeneralUpdateSearchEntries(),
     ...getGeneralSupportSearchEntries()

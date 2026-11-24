@@ -36,6 +36,7 @@ import { jiraApi } from './api/work-items/jira-bridge'
 import { starNagApi } from './api/onboarding/star-nag-bridge'
 import { diagnosticsApi } from './api/diagnostics/diagnostics-bridge'
 import { settingsApi } from './api/preferences/settings-bridge'
+import { settingsFileApi } from './api/preferences/settings-file-bridge'
 import { agentAwakeApi } from './api/agent-status/agent-awake-bridge'
 import { localhostWorktreeLabelsApi } from './api/workspaces/localhost-worktree-labels-bridge'
 import { keybindingsApi } from './api/preferences/keybindings-bridge'
@@ -151,6 +152,7 @@ const api = {
   telemetryAssignBrowserExtensionsBanner: telemetryAssignBrowserExtensionsBannerApi,
   diagnostics: diagnosticsApi,
   settings: settingsApi,
+  settingsFile: settingsFileApi,
   agentAwake: agentAwakeApi,
   localhostWorktreeLabels: localhostWorktreeLabelsApi,
   keybindings: keybindingsApi,

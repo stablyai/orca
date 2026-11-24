@@ -1436,7 +1436,12 @@
           "custom": "custom",
           "indentation": "indentation",
           "long_lines": "long lines",
-          "about": "about"
+          "about": "about",
+          "syncFile": "sync",
+          "portable": "portable",
+          "dotfiles": "dotfiles",
+          "json": "json",
+          "config": "config"
         }
       },
       "cli": {
@@ -14997,6 +15002,21 @@
           "cancel": "Cancel",
           "confirm": "Remove",
           "unknownHost": "Unknown host"
+        },
+        "SettingsFileSetting": {
+          "ff84319f89": "Create settings file",
+          "fd6ead6c3a": "Open file",
+          "26ce59dab3_one": "Using this file · {{count}} setting",
+          "26ce59dab3_other": "Using this file · {{count}} settings",
+          "e19be5ebf6": "The file could not be read: {{message}}. Fix it to resume syncing.",
+          "0301bcadce": "The file could not be read. Fix it to resume syncing.",
+          "1d03236030": "The file is read-only. Changes made here stay on this device until the file changes or Orca restarts.",
+          "c0ce8dadaf_one": "{{count}} entry was ignored",
+          "c0ce8dadaf_other": "{{count}} entries were ignored",
+          "d57ac76822": "and {{moreCount}} more",
+          "a0928296e1": "Could not create the settings file.",
+          "ac98fdd2bf": "Settings file",
+          "561cc00662": "Keep portable settings in a file you can manage with dotfiles tools or a synced folder. Machine-specific and private settings stay on this device."
         }
       },
       "right": {

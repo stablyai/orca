@@ -1152,7 +1152,10 @@
           "wrap": "kaydırma",
           "markdown": "Markdown",
           "long_lines": "uzun satırlar",
-          "auto_save": "otomatik kaydetme"
+          "auto_save": "otomatik kaydetme",
+          "syncFile": "senkronizasyon",
+          "portable": "taşınabilir",
+          "config": "yapılandırma"
         }
       },
       "folder": {
@@ -13707,6 +13710,21 @@
           "ligaturesOn": "Açık",
           "fontSmoothingGrayscale": "Gri tonlama",
           "fontSmoothingNative": "Yerel"
+        },
+        "SettingsFileSetting": {
+          "ff84319f89": "Ayar dosyası oluştur",
+          "fd6ead6c3a": "Dosyayı aç",
+          "26ce59dab3_one": "Bu dosya kullanılıyor · {{count}} ayar",
+          "26ce59dab3_other": "Bu dosya kullanılıyor · {{count}} ayar",
+          "e19be5ebf6": "Dosya okunamadı: {{message}}. Senkronizasyonu sürdürmek için düzeltin.",
+          "0301bcadce": "Dosya okunamadı. Senkronizasyonu sürdürmek için düzeltin.",
+          "1d03236030": "Dosya salt okunur. Burada yapılan değişiklikler, dosya değişene veya Orca yeniden başlayana kadar yalnızca bu cihazda kalır.",
+          "c0ce8dadaf_one": "{{count}} girdi yok sayıldı",
+          "c0ce8dadaf_other": "{{count}} girdi yok sayıldı",
+          "d57ac76822": "ve {{moreCount}} tane daha",
+          "a0928296e1": "Ayar dosyası oluşturulamadı.",
+          "ac98fdd2bf": "Ayar dosyası",
+          "561cc00662": "Taşınabilir ayarları, dotfiles araçlarıyla veya eşitlenen bir klasörle yönetebileceğiniz bir dosyada tutun. Makineye özgü ve özel ayarlar bu cihazda kalır."
         }
       },
       "right": {

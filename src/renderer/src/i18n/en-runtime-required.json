@@ -748,6 +748,12 @@
           "9abb9be3bc": "Set Up",
           "e1578cd4bc": "Workflows"
         },
+        "SettingsFileSetting": {
+          "26ce59dab3_one": "Using this file · {{count}} setting",
+          "26ce59dab3_other": "Using this file · {{count}} settings",
+          "c0ce8dadaf_one": "{{count}} entry was ignored",
+          "c0ce8dadaf_other": "{{count}} entries were ignored"
+        },
         "SshPane": {
           "syncedServerPlural": "Synced {{count}} servers",
           "syncedServerSingular": "Synced {{count}} server"

@@ -1,3 +1,4 @@
+import { homedir } from 'node:os'
 import type { BackendCoreHost } from './core-runtime'
 import type { OrcadHandle } from '../orcad/serve-startup/orcad-start-contract'
 import type { BackendCoreProfileShutdown } from './core-profile-shutdown'
@@ -105,6 +106,12 @@ export async function activateBackendRuntime(
     createOrcadProfileStateStartup(runtimeUserDataPath)
   )
   profileShutdown.store = profileStore
+  // Apply ~/.orca/settings.json before anything reads settings; cleanups run in reverse, so this flushes before the final profile flush.
+  const { startUserSettingsFileSync } = await import('../settings-file/settings-file-startup')
+  const settingsFile = await timed('settings-file', () =>
+    startUserSettingsFileSync(profileStore, homedir())
+  )
+  registerCleanup(() => settingsFile?.dispose())
   const { installOrcadUsageService } = await import('../orcad/host-runtime/orcad-usage-service')
   const usageClients = installOrcadUsageService(profileStore, runtimeUserDataPath, registerCleanup)
   registerCleanup(() => worktreeRemovalLifetime.close())

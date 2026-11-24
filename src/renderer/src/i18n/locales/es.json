@@ -601,6 +601,13 @@
       "about": {
         "title": "Acerca de",
         "version": "Orca {{version}}"
+      },
+      "search": {
+        "keywords": {
+          "syncFile": "sincronizar",
+          "portable": "portátil",
+          "config": "configuración"
+        }
       }
     },
     "updateDelay": {
@@ -13173,6 +13180,23 @@
           "shownPluginCount_other": "{{count}} complementos coincidentes mostrados, incluido este",
           "samePublisher": "Más elementos incluidos como {{value0}}",
           "shownPluginCount_many": "{{count}} complementos coincidentes mostrados, incluido este"
+        },
+        "SettingsFileSetting": {
+          "ff84319f89": "Crear archivo de ajustes",
+          "fd6ead6c3a": "Abrir archivo",
+          "26ce59dab3_one": "Usando este archivo · {{count}} ajuste",
+          "26ce59dab3_many": "Usando este archivo · {{count}} ajustes",
+          "26ce59dab3_other": "Usando este archivo · {{count}} ajustes",
+          "e19be5ebf6": "No se pudo leer el archivo: {{message}}. Corrígelo para reanudar la sincronización.",
+          "0301bcadce": "No se pudo leer el archivo. Corrígelo para reanudar la sincronización.",
+          "1d03236030": "El archivo es de solo lectura. Los cambios hechos aquí se quedan en este dispositivo hasta que el archivo cambie o Orca se reinicie.",
+          "c0ce8dadaf_one": "{{count}} entrada ignorada",
+          "c0ce8dadaf_many": "{{count}} entradas ignoradas",
+          "c0ce8dadaf_other": "{{count}} entradas ignoradas",
+          "d57ac76822": "y {{moreCount}} más",
+          "a0928296e1": "No se pudo crear el archivo de ajustes.",
+          "ac98fdd2bf": "Archivo de ajustes",
+          "561cc00662": "Guarda los ajustes portátiles en un archivo que puedes gestionar con herramientas de dotfiles o una carpeta sincronizada. Los ajustes específicos del equipo y los privados se quedan en este dispositivo."
         }
       },
       "right": {

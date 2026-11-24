@@ -7,6 +7,7 @@ export const GENERAL_SETTING_ANCHORS = {
   worktrees: 'general-global-worktree-visibility',
   openIn: 'general-open-in-apps',
   cliSkill: 'general-cli-skill',
+  settingsFile: 'general-settings-file',
   autoSave: 'general-auto-save',
   autoSaveDelay: 'general-editor-auto-save-delay',
   formatOnSave: 'general-editor-format-on-save',

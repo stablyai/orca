@@ -47,18 +47,30 @@ import {
   stripRetiredGlobalSettings
 } from './terminal-settings-migrations'
 
+export type SettingsUpdateOrigin = 'settings-file'
+
+export type SettingsUpdateOptions = {
+  notifyListeners?: boolean
+  originWebContentsId?: number
+  origin?: SettingsUpdateOrigin
+}
+
 export type SettingsMutationOperations = {
   state: PersistedState
   bumpLocalWorktreeScanGeneration: (repoId: string) => void
   removeRetainedBlob: ProtectedSecretPersistence['removeRetainedBlob']
   scheduleSave: () => void
   notifySettingsChanged: (updates: Partial<GlobalSettings>, originWebContentsId?: number) => void
+  notifySettingsPersisted: (
+    changed: Partial<GlobalSettings>,
+    origin: SettingsUpdateOrigin | undefined
+  ) => void
 }
 
 export function updateSettings(
   operations: SettingsMutationOperations,
   updates: Partial<GlobalSettings>,
-  options: { notifyListeners?: boolean; originWebContentsId?: number } = {}
+  options: SettingsUpdateOptions = {}
 ): GlobalSettings {
   const sanitizedUpdates = normalizeWorkspaceDirSetting(stripRetiredGlobalSettings(updates))
   const linkBehavior = updates.terminalLinkClickBehavior

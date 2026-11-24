@@ -3,14 +3,14 @@ import { PROTECTED_SECRET_SLOT } from '../../credentials/protected-secret-persis
 import { retireAtRestCommandSettings } from '../../native-chat/agent-session-wire/options/at-rest-command-context'
 import { createAgentModelCatalogSettingsExpiry } from '../../native-chat/agent-model-catalog/agent-model-catalog-account-expiry'
 import { agentModelCatalogStore } from '../../native-chat/agent-model-catalog/agent-model-catalog-store'
-import type { SettingsMutationOperations } from './settings-update'
+import type { SettingsMutationOperations, SettingsUpdateOptions } from './settings-update'
 
 export function publishSettingsUpdate(
   operations: SettingsMutationOperations,
   updates: Partial<GlobalSettings>,
   sanitizedUpdates: Partial<GlobalSettings>,
   previousSettings: GlobalSettings,
-  options: { notifyListeners?: boolean; originWebContentsId?: number }
+  options: SettingsUpdateOptions
 ): void {
   if ('opencodeSessionCookie' in updates && !updates.opencodeSessionCookie) {
     operations.removeRetainedBlob(PROTECTED_SECRET_SLOT.opencodeSessionCookie)
@@ -41,7 +41,12 @@ export function publishSettingsUpdate(
     operations.state.settings
   )
   retireAtRestCommandSettings(Object.keys(changedUpdates))
-  if (options.notifyListeners === true && Object.keys(changedUpdates).length > 0) {
+  if (Object.keys(changedUpdates).length === 0) {
+    return
+  }
+  // Persisted listeners are isolated from each other, so they run before ones that may throw.
+  operations.notifySettingsPersisted(changedUpdates, options.origin)
+  if (options.notifyListeners === true) {
     operations.notifySettingsChanged(changedUpdates, options.originWebContentsId)
   }
 }

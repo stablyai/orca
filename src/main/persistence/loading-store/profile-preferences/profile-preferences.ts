@@ -14,9 +14,15 @@ import {
 } from '../../../../shared/feature-education/chat-ui-launch-tip-audience'
 import {
   updateSettings as updateSettingsOperation,
-  type SettingsMutationOperations
+  type SettingsMutationOperations,
+  type SettingsUpdateOptions
 } from '../../applying-settings/settings-update'
 import { getPersistedUI } from '../../applying-settings/ui-state-read'
+import {
+  notifySettingsPersistedListeners,
+  notifyStillCurrentSettings,
+  type SettingsPersistedListener
+} from './settings-persisted-listeners'
 import { updatePersistedUI, type UIUpdateOperations } from '../../applying-settings/ui-state-update'
 import {
   recordFeatureInteraction as recordFeatureInteractionOperation,
@@ -47,6 +53,7 @@ type ProfilePreferencesRuntime = Pick<
   | 'protectedSecrets'
   | 'runDurableMutation'
   | 'settingsChangeListeners'
+  | 'settingsPersistedListeners'
   | 'state'
   | 'uiChangeListeners'
 >
@@ -81,6 +88,14 @@ export class ProfilePreferences {
     }
   }
 
+  // Fires for every applied settings change, including writes made with notifyListeners off.
+  onSettingsPersisted(listener: SettingsPersistedListener): () => void {
+    this[profilePreferencesContext].runtime.settingsPersistedListeners.add(listener)
+    return () => {
+      this[profilePreferencesContext].runtime.settingsPersistedListeners.delete(listener)
+    }
+  }
+
   onUIChanged(listener: (ui: PersistedState['ui']) => void): () => void {
     this[profilePreferencesContext].runtime.uiChangeListeners.add(listener)
     return () => {
@@ -90,20 +105,31 @@ export class ProfilePreferences {
 
   updateSettings(
     updates: Partial<GlobalSettings>,
-    options: { notifyListeners?: boolean; originWebContentsId?: number } = {}
+    options: SettingsUpdateOptions = {}
   ): GlobalSettings {
     return updateSettingsOperation(getSettingsMutationOperations(this), updates, options)
   }
 
   async updateSettingsAndFlush(
     updates: Partial<GlobalSettings>,
-    options: { notifyListeners?: boolean; originWebContentsId?: number } = {}
+    options: SettingsUpdateOptions = {}
   ): Promise<GlobalSettings> {
     const { runtime } = this[profilePreferencesContext]
     let changedUpdates: Partial<GlobalSettings> = {}
+    // Includes siblings the sanitizer derived (e.g. terminalLinkActionPopoverEnabled).
+    let committedChanges: Partial<GlobalSettings> = {}
     await runtime.runDurableMutation(() => {
       const previous = runtime.state.settings
-      const next = this.updateSettings(updates)
+      // The persisted hook fires below, only once the durable write has committed.
+      const next = updateSettingsOperation(
+        {
+          ...getSettingsMutationOperations(this),
+          notifySettingsPersisted: (changed) => {
+            committedChanges = changed
+          }
+        },
+        updates
+      )
       const previousEntries = new Map(Object.entries(previous))
       const updateKeys = new Set(Object.keys(updates))
       changedUpdates = Object.fromEntries(
@@ -141,6 +167,12 @@ export class ProfilePreferences {
         }
       }
     })
+    notifyStillCurrentSettings(
+      runtime.settingsPersistedListeners,
+      committedChanges,
+      runtime.state.settings,
+      options.origin
+    )
     if (options.notifyListeners && Object.keys(changedUpdates).length > 0) {
       notifySettingsChanged(this, changedUpdates, options.originWebContentsId)
     }
@@ -263,7 +295,13 @@ export function getSettingsMutationOperations(
       owner[profilePreferencesContext].runtime.protectedSecrets.removeRetainedBlob(slot),
     scheduleSave: () => scheduleSave(owner[profilePreferencesContext].scheduling, ['settings']),
     notifySettingsChanged: (updates, originWebContentsId) =>
-      notifySettingsChanged(owner, updates, originWebContentsId)
+      notifySettingsChanged(owner, updates, originWebContentsId),
+    notifySettingsPersisted: (changed, origin) =>
+      notifySettingsPersistedListeners(
+        owner[profilePreferencesContext].runtime.settingsPersistedListeners,
+        changed,
+        origin
+      )
   }
 }
 

@@ -4,6 +4,7 @@ import type {
   WarpThemeImportSource
 } from '../../../shared/terminal-themes/terminal-custom-themes'
 import type { GlobalSettings } from '../../../shared/settings/global-settings-types'
+import type { SettingsFileStatus } from '../../../shared/settings/settings-file/settings-file-status-types'
 import type {
   TerminalConfigImportPreview,
   TerminalConfigImportSource
@@ -38,4 +39,12 @@ export type KeybindingsApi = {
   openFile: () => Promise<KeybindingFileSnapshot>
   revealFile: () => Promise<KeybindingFileSnapshot>
   onChanged: (callback: (snapshot: KeybindingFileSnapshot) => void) => () => void
+}
+
+export type SettingsFileApi = {
+  getStatus: () => Promise<SettingsFileStatus>
+  create: () => Promise<SettingsFileStatus>
+  /** Resolves to an error message, or '' when the file opened or does not exist. */
+  open: () => Promise<string>
+  onStatusChanged: (callback: (status: SettingsFileStatus) => void) => () => void
 }
