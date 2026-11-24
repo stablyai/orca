@@ -4551,7 +4551,6 @@
     "groups": {
       "group": "群組",
       "peerTold": "{{from}} 告知了 {{to}}",
-      "startAConversationWithThisGroupMentionBots": "與此群組開始對話。用 @名稱 或 @everyone 提及機器人。",
       "items": {
         "emptyTitle": "此群組還沒有事項",
         "needsYouCount_one": "{{count}} 個需要您處理",

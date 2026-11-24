@@ -4638,7 +4638,6 @@
     "groups": {
       "group": "グループ",
       "peerTold": "{{from}} が {{to}} に伝えました",
-      "startAConversationWithThisGroupMentionBots": "このグループで会話を始めましょう。@名前 または @everyone でボットをメンションできます。",
       "items": {
         "emptyTitle": "このグループの項目はまだありません",
         "needsYouCount_one": "{{count}} 件が対応待ち",

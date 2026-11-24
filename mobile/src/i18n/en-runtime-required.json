@@ -400,7 +400,13 @@
         "workingCount_other": "{{count}} working"
       },
       "memberCount_one": "{{count}} bot",
-      "memberCount_other": "{{count}} bots"
+      "memberCount_other": "{{count}} bots",
+      "membersHere_one": "{{names}} is here.",
+      "membersHere_other": "{{names}} are here.",
+      "moreCount_one": "{{count}} more",
+      "moreCount_other": "{{count}} more",
+      "workingCount_one": "{{count}} working",
+      "workingCount_other": "{{count}} working"
     },
     "import": {
       "folderItems_one": "{{count}} item",

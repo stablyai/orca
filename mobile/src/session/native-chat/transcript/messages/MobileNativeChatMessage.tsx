@@ -79,7 +79,8 @@ function MobileNativeChatMessageImpl({
   receipt,
   awaiting,
   userMessageOpen,
-  onToggleUserMessage
+  onToggleUserMessage,
+  withoutMeta
 }: {
   message: Chat.NativeChatMessage
   // Stable placement key survives older messages joining a folded row.
@@ -115,6 +116,8 @@ function MobileNativeChatMessageImpl({
   awaiting?: boolean
   userMessageOpen?: boolean
   onToggleUserMessage?: (messageId: string) => void
+  /** A group room draws one time line per turn; otherwise the time line always shows, so the row never shifts when copy appears. */
+  withoutMeta?: true
 }): React.JSX.Element {
   useMobileColorScheme()
   const t = useMobileTranslation()
@@ -396,8 +399,7 @@ function MobileNativeChatMessageImpl({
         </Content>
         {isUser ? <Marks.MobileNativeChatUserMessageNotes message={message} /> : null}
         {unsentNotice ? <Text style={styles.unsentNotice}>{unsentNotice}</Text> : null}
-        {/* Always shown, so the row never shifts when copy appears. */}
-        {isChatTurn && !agentFrom ? (
+        {isChatTurn && !agentFrom && !withoutMeta ? (
           <MobileNativeChatMessageMeta
             message={message}
             rowKey={rowKey ?? message.id}

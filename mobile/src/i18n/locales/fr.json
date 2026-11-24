@@ -4664,7 +4664,6 @@
     "groups": {
       "group": "Groupe",
       "peerTold": "{{from}} a informé {{to}}",
-      "startAConversationWithThisGroupMentionBots": "Lancez une conversation avec ce groupe. Mentionnez des bots avec @Nom ou @everyone.",
       "items": {
         "emptyTitle": "Aucun élément de ce groupe pour l’instant",
         "needsYouCount_one": "{{count}} a besoin de vous",
