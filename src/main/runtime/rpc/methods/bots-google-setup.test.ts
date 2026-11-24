@@ -238,6 +238,21 @@ describe('Stop setup', () => {
         context
       )
     ).rejects.toThrow('Your owner stopped this Google setup.')
+    await expect(
+      write.handler(
+        { botToken: 't', change: { action: 'step', step: 'client', status: 'done' } },
+        context
+      )
+    ).rejects.toThrow('Your owner stopped this Google setup.')
+  })
+
+  it('leaves a newer run alone when a late Stop names the one it replaced', async () => {
+    waitingOnPublish()
+    const shown = runs.get(BOT.id)?.id
+    await write.handler({ botId: BOT.id, change: { action: 'cancel', runId: shown } }, context)
+    const fresh = runs.apply(BOT.id, 'owner', { action: 'start' })
+    await write.handler({ botId: BOT.id, change: { action: 'cancel', runId: shown } }, context)
+    expect(runs.get(BOT.id)).toEqual(fresh)
   })
 
   it("refuses a bot's stop", async () => {

@@ -52,7 +52,8 @@ export function BotGoogleCard({
   const confirm = useConfirmationDialog()
   const host = useBotHostLabel(bot.hostId)
   const signIn = useGoogleSignIn(botTarget(bot), bot)
-  const settingUp = googleSetupRunActive(useGoogleSetupRun(bot))
+  const setupRun = useGoogleSetupRun(bot)
+  const settingUp = googleSetupRunActive(setupRun)
   if (view.status !== 'ready' || bot.google !== true) {
     return null
   }
@@ -78,7 +79,12 @@ export function BotGoogleCard({
     )
   }
   const stop = (): void => {
-    void stopGoogleSetup(bot).catch((error: unknown) => toast.error(botErrorMessage(error)))
+    if (!setupRun) {
+      return
+    }
+    void stopGoogleSetup(bot, setupRun.id).catch((error: unknown) =>
+      toast.error(botErrorMessage(error))
+    )
   }
   const remove = async (): Promise<void> => {
     const confirmed = await confirm({

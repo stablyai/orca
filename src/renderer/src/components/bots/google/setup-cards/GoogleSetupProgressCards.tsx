@@ -129,7 +129,7 @@ export function GoogleSetupProgressCard({
   const [stopping, setStopping] = useState(false)
   const stop = (): void => {
     setStopping(true)
-    void stopGoogleSetup(bot)
+    void stopGoogleSetup(bot, run.id)
       .catch((error: unknown) =>
         toast.error(error instanceof Error ? error.message : String(error))
       )

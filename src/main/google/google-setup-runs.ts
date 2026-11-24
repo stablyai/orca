@@ -59,7 +59,7 @@ export type GoogleSetupChange =
   /** Orca's own reading that a working sign-in shows these steps finished; never sent by a bot. */
   | { action: 'finished-outside'; steps: GoogleSetupStep[] }
   | { action: 'fail'; error: string }
-  | { action: 'cancel' }
+  | { action: 'cancel'; runId?: string }
 
 export class GoogleSetupRuns {
   private runs: Record<string, GoogleSetupRun> | null = null
@@ -153,8 +153,14 @@ export class GoogleSetupRuns {
     if (revived) {
       return this.save(revived)
     }
-    // A second Stop (a double click, another device) is already done.
-    if (change.action === 'cancel' && actor === 'owner' && current?.state === 'cancelled') {
+    // A second Stop (a double click, another device) is already done; a late one for an older run
+    // leaves the current one alone.
+    if (
+      change.action === 'cancel' &&
+      actor === 'owner' &&
+      current &&
+      (current.state === 'cancelled' || (change.runId !== undefined && change.runId !== current.id))
+    ) {
       return current
     }
     if (current?.state === 'cancelled') {

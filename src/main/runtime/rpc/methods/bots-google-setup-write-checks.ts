@@ -70,6 +70,10 @@ export async function refuseClientDoneWithoutKey(
   if (change.action !== 'step' || change.step !== 'client' || change.status !== 'done' || !run) {
     return
   }
+  // A stopped or finished run takes no step; the write's own apply says why.
+  if (!googleSetupRunActive(run)) {
+    return
+  }
   if (keyMissing(run, await hostGoogle())) {
     // The bot is past Download JSON: the key went missing, so the owner's card offers the recovery.
     // Once: a bot asking again must not make a new change (and a new card) each time. Only on the

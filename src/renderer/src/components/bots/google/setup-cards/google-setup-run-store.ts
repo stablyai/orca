@@ -78,7 +78,10 @@ type SetupCall =
       method: 'bots.googleSetup.answer'
       params: { botId: string; card: GoogleSetupCard; values: string[] }
     }
-  | { method: 'bots.googleSetup.write'; params: { botId: string; change: { action: 'cancel' } } }
+  | {
+      method: 'bots.googleSetup.write'
+      params: { botId: string; change: { action: 'cancel'; runId: string } }
+    }
   | {
       method: 'bots.googleSetup.importHostKey'
       params: { botId: string; file?: { name: string; id: string } }
@@ -187,10 +190,10 @@ export async function answerGoogleSetup(
 }
 
 /** The owner's Stop setup: the run ends; what's done in Google Cloud and any account signed in stay. */
-export async function stopGoogleSetup(bot: BotRef): Promise<void> {
+export async function stopGoogleSetup(bot: BotRef, runId: string): Promise<void> {
   await call(bot, {
     method: 'bots.googleSetup.write',
-    params: { botId: bot.id, change: { action: 'cancel' } }
+    params: { botId: bot.id, change: { action: 'cancel', runId } }
   })
 }
 
