@@ -108,8 +108,14 @@ const HOST_LOCAL_PROJECT_ID_PREFIX = 'repo:'
 export const GIT_REMOTE_PROJECT_ID_PREFIX = 'git:'
 
 export function getProjectIdentityKey(
-  repo: Pick<Repo, 'id' | 'upstream' | 'repoIcon' | 'gitRemoteIdentity'>
+  repo: Pick<
+    Repo,
+    'id' | 'upstream' | 'repoIcon' | 'gitRemoteIdentity' | 'kind' | 'folderProjectSourceId'
+  >
 ): string {
+  if (repo.kind === 'folder' && repo.folderProjectSourceId) {
+    return `${HOST_LOCAL_PROJECT_ID_PREFIX}${repo.folderProjectSourceId}`
+  }
   const identity = getProjectProviderIdentity(repo)
   if (identity) {
     return getProjectIdForProviderIdentity(identity)
@@ -131,7 +137,10 @@ export function getProjectIdForProviderIdentity(identity: ProjectProviderIdentit
 }
 
 function getProjectId(
-  repo: Pick<Repo, 'id' | 'upstream' | 'repoIcon' | 'gitRemoteIdentity'>
+  repo: Pick<
+    Repo,
+    'id' | 'upstream' | 'repoIcon' | 'gitRemoteIdentity' | 'kind' | 'folderProjectSourceId'
+  >
 ): string {
   return getProjectIdentityKey(repo)
 }

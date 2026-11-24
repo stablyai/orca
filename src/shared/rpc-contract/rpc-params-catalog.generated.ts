@@ -62,6 +62,11 @@ import {
 } from '../orchestration/orchestration-crew'
 import { PeerRunCancelParams } from '../orchestration/remote-owned-wire'
 import {
+  CreateFolderReplica,
+  FolderReplica,
+  PublishFolderSyncChange
+} from '../project/folder-project-sync'
+import {
   OrcadDeclareClientParamsSchema,
   OrcadPeerDesktopsParamsSchema
 } from '../remote-runtime/orcad-lifecycle/orcad-peer-desktops-contract'
@@ -2035,8 +2040,11 @@ export const RPC_PARAMS_BY_METHOD = {
   'projectGroup.updateMany': ProjectGroupUpdateMany,
   'projectHostSetup.clone': ProjectHostSetupClone,
   'projectHostSetup.create': ProjectHostSetupCreate,
+  'projectHostSetup.createFolderReplica': CreateFolderReplica,
   'projectHostSetup.delete': ProjectHostSetupDelete,
+  'projectHostSetup.folderReplicaManifest': FolderReplica,
   'projectHostSetup.list': null,
+  'projectHostSetup.publishFolderSyncChange': PublishFolderSyncChange,
   'projectHostSetup.setupExistingFolder': ProjectHostSetupExistingFolder,
   'projectHostSetup.update': ProjectHostSetupUpdate,
   'reference.find': ReferenceFind,

@@ -3046,6 +3046,7 @@
         "noSavedConversation": "This chat has no saved conversation to copy."
       },
       "projectHostSetupOptions": {
+        "folderSyncUpdateRequired": "Update Orca on this server to sync folders",
         "locationNotSet": "Project location not set",
         "hostLocalGitProject": "No matched Git remote for this project",
         "hostLocalFolderProject": "Folder projects can't link to other hosts",
@@ -16805,6 +16806,21 @@
       },
       "new": {
         "workspace": {
+          "FolderProjectSync": {
+            "autoSync": "Automatically sync with the local folder",
+            "autoSyncHelp": "While Orca is open, changes made after setup sync in both directions.",
+            "conflicts": "Sync needs attention for {{paths}}. Both versions were kept.",
+            "continue": "Continue without copying",
+            "copy": "Copy files",
+            "description": "Orca will create a folder for {{project}} on {{host}}. You can copy your local files or start with an empty folder.",
+            "preferenceFailed": "Could not change folder sync",
+            "preparing": "Preparing the folder on the server…",
+            "refreshFailed": "Could not load the new folder from the server. Try again.",
+            "retry": "Finish folder setup",
+            "retryDescription": "Retry copying files for {{project}} on {{host}}, or continue with the files already there.",
+            "title": "Copy this folder to the server?",
+            "withoutCopy": "Create empty folder"
+          },
           "SetProjectLocationDialog": {
             "title": "Set project location",
             "description": "Choose where {{project}} lives on {{host}}.",

@@ -9,7 +9,10 @@ import {
   ProjectUpdate
 } from '../../../../../shared/rpc-contract/projects/project-runtime-params'
 
+import { FOLDER_PROJECT_SYNC_METHODS } from './folder-project-sync-methods'
+
 export const PROJECT_RUNTIME_METHODS = [
+  ...FOLDER_PROJECT_SYNC_METHODS,
   defineMethod({
     name: 'project.list',
     permission: 'workspace',

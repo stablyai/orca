@@ -1,4 +1,5 @@
 import type { BrowserWindow } from 'electron'
+import { registerFolderProjectSyncHandlers } from './repos/folder-project-sync-handlers'
 import { ipcMain } from 'electron'
 import type { Store } from '../persistence/loading-store/store'
 import { registerRepoCatalogHandlers } from './repos/repo-catalog-handlers'
@@ -76,6 +77,7 @@ export function registerRepoHandlers(
     ) => runtime.repositoryForkBackfill.resolve(repo)
   }
   registerProjectHostSetupHandlers(mainWindow, store, metadata)
+  registerFolderProjectSyncHandlers(mainWindow, store)
   registerRepoCreationHandlers(mainWindow, store, metadata.enqueueRepositoryMetadata)
   registerProjectGroupHandlers(mainWindow, store, runtime)
   registerFolderWorkspaceHandlers(mainWindow, store, runtime)

@@ -1,3 +1,4 @@
+import { FOLDER_PROJECT_SYNC_CAPABILITY } from '../../project/folder-project-sync'
 import { WORKSPACE_ATTACHMENT_RUNTIME_CAPABILITIES } from '../../workspace-attachments/workspace-attachment-capabilities'
 import { ORCA_SIDEBAR_INPUTS_IS_MAIN } from '../../sidebar-list/feed/sidebar-inputs-switch'
 
@@ -126,6 +127,7 @@ export const WORKTREE_ROWS_CHANGED_EVENT_RUNTIME_CAPABILITY =
   'worktree.rows-changed-event.v1' as const
 
 export const WORKTREE_RUNTIME_CAPABILITIES = [
+  FOLDER_PROJECT_SYNC_CAPABILITY,
   WORKTREE_CREATE_AGENT_OPTIONS_RUNTIME_CAPABILITY,
   WORKTREE_RENAME_ERROR_DISMISS_RUNTIME_CAPABILITY,
   WORKTREE_OPEN_EXISTING_BRANCH_RUNTIME_CAPABILITY,
