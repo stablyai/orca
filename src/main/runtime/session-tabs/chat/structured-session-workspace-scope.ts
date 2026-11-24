@@ -32,6 +32,10 @@ export abstract class StructuredSessionWorkspaceScope extends OrcaRuntimeWithStr
     OrcaRuntimeWithTransitionGraphReloadToTerminalState['resolveFolderWorkspaceSelector']
   >
 
+  protected abstract resolveGitWorktreeSelector(
+    ...args: Parameters<RuntimeWorkspaceSelectors['resolveGitWorktreeSelector']>
+  ): ReturnType<RuntimeWorkspaceSelectors['resolveGitWorktreeSelector']>
+
   protected abstract buildResolvedWorktreeFromId(
     ...args: Parameters<RuntimeWorkspaceSelectors['buildResolvedWorktreeFromId']>
   ): ReturnType<RuntimeWorkspaceSelectors['buildResolvedWorktreeFromId']>
@@ -143,6 +147,23 @@ export abstract class StructuredSessionWorkspaceScope extends OrcaRuntimeWithStr
         ? await this.resolveRuntimeFileTarget(selector)
         : this.structuredAgentCatalogTarget(selector)
       return target && isNativeLocalLocation(this.structuredAgentSessionLocationForTarget(target))
+        ? target.worktree.path
+        : null
+    } catch {
+      return null
+    }
+  }
+
+  /** Resolve the local History owner even when a remote workspace has the same ID. */
+  async resolveStructuredHistoryLocalWorkspacePath(workspaceId: string): Promise<string | null> {
+    const selector = `id:${workspaceId}`
+    try {
+      const target = isFloatingWorkspaceId(workspaceId)
+        ? await this.resolveRuntimeFileTarget(selector)
+        : this.runtimeFileTargetForWorktree(
+            await this.resolveGitWorktreeSelector(selector, LOCAL_EXECUTION_HOST_ID)
+          )
+      return isNativeLocalLocation(this.structuredAgentSessionLocationForTarget(target))
         ? target.worktree.path
         : null
     } catch {

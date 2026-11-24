@@ -189,6 +189,8 @@ function buildAgentResumeInvocation(
   sessionArg: string
 ): string {
   switch (agent) {
+    case 'mimo-code':
+      return ''
     case 'codex':
       return `${baseCommand} resume ${sessionArg}`
     case 'rovo':

@@ -1,3 +1,4 @@
+import { includeLocalMimoHistory } from '../../ai-vault/structured-sessions/mimo-chat-history'
 import { scanLocalAiVaultSessionsAsIssue } from './ai-vault-local-scan'
 import {
   captureRuntimeAiVaultProjectionDependency,
@@ -67,6 +68,7 @@ import { registerAiVaultScanProgressBroadcast } from './ai-vault-scan-progress-b
 type AiVaultHandlerOptions = AiVaultSessionSources &
   AiVaultResumeHandlerOptions & {
     getUserDataPath?: () => string
+    resolveLocalWorkspacePath?: (workspaceId: string, selected: boolean) => Promise<string | null>
     getActiveRuntimeAiVaultHostInfos?: () =>
       | readonly RuntimeAiVaultHostInfo[]
       | Promise<readonly RuntimeAiVaultHostInfo[]>
@@ -241,7 +243,13 @@ export function registerAiVaultHandlers(options: AiVaultHandlerOptions = {}): vo
     try {
       await handlerOptions.ensureStructuredSessionOwnership?.()
       const result = await listAiVaultSessions(args, { signal: controller?.signal })
-      return projectStructuredAiVaultSessions(result, OPENS_EVERY_STRUCTURED_CHAT)
+      const projected = await includeLocalMimoHistory(
+        projectStructuredAiVaultSessions(result, OPENS_EVERY_STRUCTURED_CHAT),
+        args,
+        handlerOptions.resolveLocalWorkspacePath,
+        controller?.signal
+      )
+      return controller?.signal.aborted ? cancelledAiVaultListResult() : projected
     } catch (error) {
       // Expected cancellation is a result so Electron does not log rejected IPC as an error.
       if (!isAiVaultScanCancelledError(error)) {

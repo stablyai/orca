@@ -188,6 +188,7 @@ export const AiVaultVirtualRow = memo(function AiVaultVirtualRow({
   const canOpenLogInOrca = row.type === 'session' && canOpenAiVaultSessionLogInOrca(row.session)
   const searchResumeAllowed = searchHit ? canResumeAiVaultSearchHit(searchHit) : true
   const searchPathAllowed = searchHit ? hasAiVaultSearchHitPath(searchHit) : true
+  const hasSourcePath = row.type === 'session' && Boolean(row.session.filePath)
   const usesLegacyResumeCommand = row.type === 'session' && !row.session.structuredSession
   const canBuildResumeStartup =
     row.type === 'session' &&
@@ -297,12 +298,14 @@ export const AiVaultVirtualRow = memo(function AiVaultVirtualRow({
               : undefined
           }
           onCopyId={() => onCopyId(row.session)}
-          onCopyPath={searchPathAllowed ? () => onCopyPath(row.session) : undefined}
+          onCopyPath={
+            searchPathAllowed && hasSourcePath ? () => onCopyPath(row.session) : undefined
+          }
           onOpenLog={
             searchPathAllowed && canOpenLogInOrca ? () => onOpenLog(row.session) : undefined
           }
           onRevealLog={
-            searchPathAllowed && canOpenLocalSessionPaths
+            searchPathAllowed && hasSourcePath && canOpenLocalSessionPaths
               ? () => onRevealLog(row.session)
               : undefined
           }
@@ -316,7 +319,7 @@ export const AiVaultVirtualRow = memo(function AiVaultVirtualRow({
               ? () => onRevealArtifacts(row.session)
               : undefined
           }
-          onRequestDelete={searchPathAllowed ? onRequestDelete : undefined}
+          onRequestDelete={searchPathAllowed && hasSourcePath ? onRequestDelete : undefined}
         />
       )}
     </div>

@@ -26,6 +26,7 @@ export const SELF_CONTAINED_TRANSCRIPT_AGENTS = {
   codex: false, // session_index.jsonl can override titles.
   gemini: true,
   copilot: true,
+  'mimo-code': false,
   cursor: false, // Sibling chat metadata enriches the transcript.
   antigravity: false, // Workspace history enriches the transcript separately.
   opencode: false, // SQLite or a separate message directory.

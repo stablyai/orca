@@ -1,7 +1,7 @@
 import type { AgentSessionContinuationRequest } from '../../agent-session/conversation-context/agent-session-continuation'
 import type { AiVaultSession, AiVaultSessionPreviewMessage } from '../contracts/ai-vault-types'
 import { isAiVaultDatabaseAgent } from '../contracts/ai-vault-session-handoff'
-import { isCursorAcpSessionRow } from '../session-display/cursor-acp-session-path'
+import { isAiVaultJournalOnlySession } from '../session-display/cursor-acp-session-path'
 
 export function canContinueAiVaultSessionInNewSession(
   session: AiVaultSession,
@@ -10,7 +10,7 @@ export function canContinueAiVaultSessionInNewSession(
   return Boolean(
     targetWorktreeId &&
     // Only its chat holds the conversation, so the hand-off starts from that chat instead.
-    !isCursorAcpSessionRow(session) &&
+    !isAiVaultJournalOnlySession(session) &&
     // A database row's host saves its conversation when Hand Off opens, even with no preview text.
     (isAiVaultDatabaseAgent(session.agent) ||
       vaultTranscriptPath(session) ||
@@ -69,7 +69,7 @@ function previewTranscript(session: AiVaultContinuationSession): string {
 
 function vaultTranscriptPath(session: Pick<AiVaultSession, 'agent' | 'filePath'>): string | null {
   // These rows name an account-wide database; handing that path over would expose every conversation in it.
-  if (isAiVaultDatabaseAgent(session.agent) || isCursorAcpSessionRow(session)) {
+  if (isAiVaultDatabaseAgent(session.agent) || isAiVaultJournalOnlySession(session)) {
     return null
   }
   return session.filePath.trim() || null

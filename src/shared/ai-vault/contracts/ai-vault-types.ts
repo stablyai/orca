@@ -13,6 +13,7 @@ export const AI_VAULT_AGENTS = [
   'omp',
   'prime-agent',
   'cursor',
+  'mimo-code',
   'gemini',
   'antigravity',
   'rovo',
@@ -76,6 +77,7 @@ export const AI_VAULT_AGENT_LABELS = {
   omp: 'OMP',
   'prime-agent': 'Prime Agent',
   cursor: 'Cursor',
+  'mimo-code': 'MiMo Code',
   gemini: 'Gemini',
   antigravity: 'Antigravity',
   rovo: 'Rovo Dev',
@@ -230,6 +232,8 @@ export type AiVaultScanIssue = {
   message: string
 } & Omit<AiVaultScanIssueText, 'message'>
 
+export type AiVaultWorkspaceOwner = { workspaceId: string; executionHostId: ExecutionHostId }
+
 export type AiVaultListArgs = {
   /** Opts a selected runtime-host refresh into content-conditional replies. */
   afterFingerprint?: string | null
@@ -242,6 +246,8 @@ export type AiVaultListArgs = {
   scopePaths?: readonly string[]
   /** Return only scopePaths sessions, without the global recency pass. Older hosts ignore it; clients still filter. */
   scopeOnly?: boolean
+  /** Workspace view identity for Orca-owned chats; null means no live selection. */
+  workspaceOwner?: AiVaultWorkspaceOwner | null
   executionHostScope?: ExecutionHostScope
   requestToken?: string
 }

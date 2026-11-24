@@ -1,6 +1,7 @@
 import type {
   AiVaultListArgs,
-  AiVaultListResult
+  AiVaultListResult,
+  AiVaultWorkspaceOwner
 } from '../../../../../../shared/ai-vault/contracts/ai-vault-types'
 import {
   parseRoutableExecutionHostId,
@@ -20,6 +21,7 @@ export type AiVaultSessionListRequest = {
   scopePaths: readonly string[]
   /** Workspace and Project list only their own sessions; All and the tab move lookup leave it off. */
   scopeOnly?: boolean
+  workspaceOwner?: AiVaultWorkspaceOwner | null
   executionHostScope: ExecutionHostScope
   sessionLimit: AiVaultSessionLimit
 }
@@ -34,6 +36,7 @@ export function aiVaultSessionListArgs(
     unlimited: request.sessionLimit === 'unlimited',
     scopePaths: request.scopePaths,
     ...(request.scopeOnly === true ? { scopeOnly: true } : {}),
+    ...(request.workspaceOwner !== undefined ? { workspaceOwner: request.workspaceOwner } : {}),
     executionHostScope: request.executionHostScope,
     force: options.force,
     requestToken: options.requestToken
@@ -47,7 +50,8 @@ export function readCachedAiVaultSessionList(
     key: aiVaultSessionResultCacheKey(
       request.executionHostScope,
       request.scopePaths,
-      request.scopeOnly
+      request.scopeOnly,
+      request.workspaceOwner
     ),
     limit: request.sessionLimit,
     scopePaths: request.scopePaths
@@ -61,7 +65,8 @@ export function readLastAiVaultSessionList(
     key: aiVaultSessionResultCacheKey(
       request.executionHostScope,
       request.scopePaths,
-      request.scopeOnly
+      request.scopeOnly,
+      request.workspaceOwner
     ),
     limit: request.sessionLimit,
     scopePaths: request.scopePaths
@@ -77,7 +82,8 @@ export function cacheAiVaultSessionList(
     key: aiVaultSessionResultCacheKey(
       request.executionHostScope,
       request.scopePaths,
-      request.scopeOnly
+      request.scopeOnly,
+      request.workspaceOwner
     ),
     executionHostScope: request.executionHostScope,
     limit: request.sessionLimit,

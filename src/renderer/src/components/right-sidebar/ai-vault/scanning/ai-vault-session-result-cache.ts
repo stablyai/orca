@@ -1,4 +1,7 @@
-import type { AiVaultListResult } from '../../../../../../shared/ai-vault/contracts/ai-vault-types'
+import type {
+  AiVaultListResult,
+  AiVaultWorkspaceOwner
+} from '../../../../../../shared/ai-vault/contracts/ai-vault-types'
 import type { ExecutionHostScope } from '../../../../../../shared/execution-host/execution-host'
 import {
   aiVaultCachedDepthServes,
@@ -27,12 +30,14 @@ const cachedSessionResults = new Map<string, CachedSessionResult>()
 export function aiVaultSessionResultCacheKey(
   executionHostScope: ExecutionHostScope,
   scopePaths: readonly string[],
-  scopeOnly = false
+  scopeOnly = false,
+  workspaceOwner?: AiVaultWorkspaceOwner | null
 ): string {
   // JSON keeps the parts unambiguous: a path may legally contain any separator.
   return JSON.stringify([
     executionHostScope,
     ...(scopeOnly ? [{ scopeOnly }] : []),
+    ...(workspaceOwner !== undefined ? [{ workspaceOwner }] : []),
     ...[...new Set(scopePaths)].sort()
   ])
 }

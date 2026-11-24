@@ -1,4 +1,5 @@
 import { app } from 'electron'
+import { createMimoHistoryWorkspacePathResolver } from '../../ai-vault/structured-sessions/mimo-history-workspace-path'
 import { registerAppHandlers } from '../app'
 import { registerWslMoveWiring } from '../wsl/wsl-move-driver-wiring'
 import { registerWslDriveProjectHandlers } from '../wsl/wsl-drive-project-handlers'
@@ -247,6 +248,7 @@ export async function registerCoreHandlers(
     })
     registerAiVaultHandlers({
       getUserDataPath: () => app.getPath('userData'),
+      resolveLocalWorkspacePath: createMimoHistoryWorkspacePathResolver(store, runtime),
       ensureStructuredSessionOwnership,
       getAdditionalCodexHomePaths: lifecycleOptions.getAdditionalAiVaultCodexHomePaths,
       prepareSessionResume: lifecycleOptions.prepareAiVaultSessionResume,
