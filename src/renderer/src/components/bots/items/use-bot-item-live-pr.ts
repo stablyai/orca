@@ -10,11 +10,33 @@ import type {
   BotItemLinkRow
 } from '../../../../../shared/bots/bot-item-link-rows'
 
-type PrRead = { state: NonNullable<BotItemGitHubRow['state']>; checks: string | null; at: number }
+type PrRead = {
+  title: string | null
+  state: NonNullable<BotItemGitHubRow['state']>
+  checks: string | null
+  at: number
+}
+type PrCacheEntry = NonNullable<AppState['prCache'][string]>
 
 // Each cache the store holds, its newest read per lower-cased PR URL: built once per cache, shared
 // by every PR row, so a store write elsewhere costs a row one lookup, not a scan of the cache.
 const readsByCache = new WeakMap<AppState['prCache'], ReadonlyMap<string, PrRead>>()
+// One read per cache entry, so a write to another PR hands a row the same object and skips its render.
+const readsByEntry = new WeakMap<PrCacheEntry, PrRead>()
+
+function entryRead(entry: PrCacheEntry, data: NonNullable<PrCacheEntry['data']>): PrRead {
+  let read = readsByEntry.get(entry)
+  if (!read) {
+    read = {
+      title: data.title || null,
+      state: data.state,
+      checks: data.checksStatus ?? null,
+      at: entry.fetchedAt
+    }
+    readsByEntry.set(entry, read)
+  }
+  return read
+}
 
 function prReads(cache: AppState['prCache']): ReadonlyMap<string, PrRead> {
   let reads = readsByCache.get(cache)
@@ -28,11 +50,7 @@ function prReads(cache: AppState['prCache']): ReadonlyMap<string, PrRead> {
       const url = data.url.toLowerCase()
       const known = byUrl.get(url)
       if (!known || entry.fetchedAt > known.at) {
-        byUrl.set(url, {
-          state: data.state,
-          checks: data.checksStatus ?? null,
-          at: entry.fetchedAt
-        })
+        byUrl.set(url, entryRead(entry, data))
       }
     }
     reads = byUrl
@@ -46,7 +64,15 @@ export function useBotItemLivePr(row: BotItemGitHubRow): BotItemGitHubRow {
     row.type === 'pr' ? (prReads(state.prCache).get(row.url.toLowerCase()) ?? null) : null
   )
   const newer = read !== null && (row.checkedAt === null || read.at > row.checkedAt)
-  return newer ? { ...row, state: read.state, checks: read.checks, checkedAt: read.at } : row
+  return newer
+    ? {
+        ...row,
+        title: read.title ?? row.title,
+        state: read.state,
+        checks: read.checks,
+        checkedAt: read.at
+      }
+    : row
 }
 
 /** Reports the workspaces behind the page's PR rows as visible while it is mounted. */
