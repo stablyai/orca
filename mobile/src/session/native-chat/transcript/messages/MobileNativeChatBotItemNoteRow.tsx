@@ -2,7 +2,7 @@
 // phone's wrap: several items list one chip per line, a long lead on its own line above them. Chips open
 // the item where the screen can open one; the owner's comment is their own message under the item's chip.
 import { useContext, useState } from 'react'
-import { Pressable, Text, View } from 'react-native'
+import { Pressable, StyleSheet, Text, View } from 'react-native'
 import { ListTodo, MessageSquare } from 'lucide-react-native'
 import type { NativeChatMessage } from '../../../../../../src/shared/native-chat/native-chat-types'
 import { isNativeChatOrcaCard } from '../../../../../../src/shared/native-chat/native-chat-orca-card'
@@ -222,6 +222,11 @@ function QuietLine({
   )
 }
 
+/** A comment bubble's floor, so a short comment leaves its item's title room; never past its cap. */
+const COMMENT_MIN_WIDTH = 200
+/** A comment chip's title characters that must fit beside its label, or the chip takes its own line. */
+const COMMENT_TITLE_LEAST = 4
+
 function CommentLine({
   line,
   fontScale,
@@ -239,12 +244,40 @@ function CommentLine({
   return (
     // A message, so a row gap below what the note drew above it, not the lines' 3 pt.
     <View style={[messageStyles.userBubble, styles.comment, belowAnother && styles.belowAnother]}>
-      <View style={styles.commentOn}>
-        <ListTodo size={12 * fontScale} strokeWidth={2} color={colors.textMuted} />
-        <Text style={[styles.text, scaledType(typography.metaSize, fontScale)]}>
-          {t('bots.items.chat.commentOn', 'On')}
-        </Text>
-        <ItemChip item={line.item} fontScale={fontScale} open={open} />
+      {/* The chip's line, in flow so its height is right in the first layout pass. Only a floor of
+          200 pt (never past the bubble's cap) and the least the chip needs add width: the words size
+          the bubble, and a long title cuts short to them instead of stretching it. */}
+      <View>
+        <View style={styles.commentFloor} />
+        <View style={[styles.commentHead, { minHeight: CHIP_HEIGHT * fontScale }]}>
+          <View style={styles.commentLead}>
+            <ListTodo size={12 * fontScale} strokeWidth={2} color={colors.textMuted} />
+            <Text style={[styles.text, scaledType(typography.metaSize, fontScale)]}>
+              {t('bots.items.chat.commentOn', 'On')}
+            </Text>
+          </View>
+          {/* The chip's slot fills the rest of the line, or wraps under the label when not even its
+              least (the chip with its title's first characters) fits beside it. */}
+          <View style={styles.commentSlot}>
+            <View
+              style={[styles.chip, styles.commentProbe, { minHeight: CHIP_HEIGHT * fontScale }]}
+              accessibilityElementsHidden
+              importantForAccessibility="no-hide-descendants"
+            >
+              {/* The status icon's default size. */}
+              <View style={{ width: 10, height: 10 }} />
+              <Text
+                numberOfLines={1}
+                style={[styles.chipText, scaledType(CHIP_SIZE, fontScale, 4)]}
+              >
+                {Array.from(line.item.title).slice(0, COMMENT_TITLE_LEAST).join('')}
+              </Text>
+            </View>
+            <View style={styles.commentChip} pointerEvents="box-none">
+              <ItemChip item={line.item} fontScale={fontScale} open={open} />
+            </View>
+          </View>
+        </View>
       </View>
       <Prose block={{ type: 'text', text }} text={text} userMessage fontScale={fontScale} />
     </View>
@@ -377,13 +410,22 @@ const styles = themedStyleSheet(() => ({
   },
   comment: {
     alignSelf: 'flex-end',
-    gap: spacing.xs
+    gap: 6
   },
   // With the lines' gap, the 12 pt a note row (4) and a message row (8) leave between them.
   belowAnother: { marginTop: spacing.md - MOBILE_NATIVE_CHAT_ACTIVITY_ROW_GAP },
-  commentOn: {
+  // The bubble's padding and border come off the floor; the percentage is of the bubble's room.
+  commentFloor: { width: COMMENT_MIN_WIDTH - 2 * spacing.md - 2, maxWidth: '100%' },
+  commentHead: {
     flexDirection: 'row',
+    flexWrap: 'wrap',
     alignItems: 'center',
-    gap: 6
-  }
+    columnGap: 6,
+    rowGap: 3
+  },
+  commentLead: { flexDirection: 'row', alignItems: 'center', gap: 6, flexShrink: 1 },
+  commentSlot: { flexGrow: 1, flexShrink: 1 },
+  // Only measured: its width is the slot's least, its height the chip's.
+  commentProbe: { alignSelf: 'flex-start', opacity: 0 },
+  commentChip: { ...StyleSheet.absoluteFill, alignItems: 'flex-start', justifyContent: 'center' }
 }))

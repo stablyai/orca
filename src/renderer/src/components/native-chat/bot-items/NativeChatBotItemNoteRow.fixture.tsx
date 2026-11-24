@@ -306,27 +306,63 @@ const context: NativeChatTranscriptRowContext = {
   onRevealDiff: () => {}
 }
 
-/** A bot chat's turns as the transcript draws them: folded, clustered, a row gap between slots. */
+/** Turns as the transcript draws them: folded, clustered, a row gap between slots. */
+function Transcript({ rows }: { rows: [NativeChatMessage, string][] }): React.JSX.Element {
+  const slots = buildNativeChatTranscriptSlots({
+    messages: rows.map(([message]) => message),
+    turnKeys: rows.map(([, turn]) => turn),
+    liveTurnKey: undefined,
+    receipts: new Map(),
+    turnStatuses: { active: null, completedByTurn: {} },
+    turnDiffs: new Map(),
+    expandedTurnKeys: new Set(),
+    isWorking: false,
+    lifecycleWorking: false
+  })
+  return (
+    <div className="flex flex-col bg-chat-pane p-4" style={{ gap: NATIVE_CHAT_ROW_GAP_PX }}>
+      {slots.map((slot) => (
+        <NativeChatTranscriptRow key={nativeChatSlotKey(slot)} slot={slot} context={context} />
+      ))}
+    </div>
+  )
+}
+
+/** A bot chat's turns. */
 export const turnLines = defineFixture({
   width: 680,
-  render: () => {
-    const slots = buildNativeChatTranscriptSlots({
-      messages: transcript.map(([message]) => message),
-      turnKeys: transcript.map(([, turn]) => turn),
-      liveTurnKey: undefined,
-      receipts: new Map(),
-      turnStatuses: { active: null, completedByTurn: {} },
-      turnDiffs: new Map(),
-      expandedTurnKeys: new Set(),
-      isWorking: false,
-      lifecycleWorking: false
-    })
-    return (
-      <div className="flex flex-col bg-chat-pane p-4" style={{ gap: NATIVE_CHAT_ROW_GAP_PX }}>
-        {slots.map((slot) => (
-          <NativeChatTranscriptRow key={nativeChatSlotKey(slot)} slot={slot} context={context} />
-        ))}
-      </div>
+  render: () => <Transcript rows={transcript} />
+})
+
+const longTitle = item(
+  12,
+  'Bug: bot runs fail when the agent CLI is missing from PATH on first launch',
+  'planned'
+)
+const comment = (entry: ReturnType<typeof item>, text: string): BotItemNoteEntry => ({
+  ...entry,
+  event: 'commented',
+  text
+})
+const comments = [
+  words('c1', 'user', 'Did the fix we merged regress anything?'),
+  notes('c1', 'owner', [comment(longTitle, 'so the pr we merged has a regression?')]),
+  notes('c1', 'owner', [
+    comment(
+      sd,
+      'The dialog should open on the link tab when the item already has a link, and the copy button needs a confirmation so people know it worked.'
     )
-  }
+  ]),
+  notes('c1', 'owner', [comment(rn, 'Add the CSV fix.'), comment(longTitle, 'Same root cause?')])
+]
+
+/** The owner's comments, each headed by its item's chip, beside a plain message. */
+export const ownerComments = defineFixture({
+  width: 680,
+  render: () => <Transcript rows={comments} />
+})
+
+export const ownerCommentsNarrow = defineFixture({
+  width: 340,
+  render: () => <Transcript rows={comments} />
 })

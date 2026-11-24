@@ -286,10 +286,13 @@ function CommentRow({
     // A message, so a full row gap (gap-5) below what the note drew above it, not the lines' gap-1.5.
     <div className={cn('flex flex-col items-end gap-1', belowAnother && 'mt-3.5')}>
       {line.images ? <BotItemCommentImages images={line.images} inChat /> : null}
-      {/* The item heads the bubble, as on the phone. */}
-      <NativeChatUserBubble className="flex flex-col items-start gap-1.5">
-        {/* A bubble's head, not a row's share: it fits the bubble instead. */}
-        <ItemChip item={line.item} className="max-w-full flex-none" />
+      {/* The item heads the bubble, as on the phone; the words alone size the bubble. */}
+      <NativeChatUserBubble className="flex min-w-[min(200px,80%)] flex-col items-start gap-1.5">
+        {/* Adds no width of its own (w-0) yet fills the bubble (min-w-full): a long title cuts short
+            to the words' width instead of stretching the bubble, a short one keeps its own width. */}
+        <div className="w-0 min-w-full">
+          <ItemChip item={line.item} className="max-w-full" />
+        </div>
         {text.trim() ? <div className="whitespace-pre-wrap">{text}</div> : null}
       </NativeChatUserBubble>
     </div>
