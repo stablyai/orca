@@ -23,6 +23,7 @@ import {
   GenerateFaceThumb,
   GenerateFaceTile,
   useGenerateFace,
+  type GenerateFace,
   type GenerateFaceDraft
 } from './AvatarGenerateFace'
 import { BotPictureRowFold } from './BotPictureRowFold'
@@ -95,7 +96,9 @@ export function BotPicturePicker({
   onOutfitChange,
   descriptionDraft,
   intake: sharedIntake,
-  footer
+  footer,
+  generate: sharedFace,
+  onIntakeStart
 }: {
   value: BotPictureValue
   custom: BotPictureCustom | null
@@ -119,6 +122,11 @@ export function BotPicturePicker({
   intake?: BotAvatarIntake
   /** Drawn under the picker, told whether Generate is the current face. */
   footer?: (generating: boolean) => React.ReactNode
+  /** A Generate face that outlives this picker, so a run goes on with the popover closed; its owner
+   *  places the picture made. */
+  generate?: GenerateFace
+  /** A picture starts being taken in by this picker's own intake; see useBotAvatarIntakeState's onTake. */
+  onIntakeStart?: () => () => void
 }): React.JSX.Element {
   const t = useTranslate()
   const rootRef = useRef<HTMLDivElement>(null)
@@ -133,15 +141,19 @@ export function BotPicturePicker({
       ? { before: 'custom', after: custom.after }
       : { before: 'mascot', index: mascotIndex }
   )
-  // Generate is current while chosen, even before it holds a picture; selected is applied.
-  const [onGenerate, setOnGenerate] = useState(false)
+  // Generate is current while chosen, even before it holds a picture; selected is applied. Reopened
+  // while a run goes on, or after it failed, the picker opens on it.
+  const [onGenerate, setOnGenerate] = useState(
+    () => sharedFace?.run.kind === 'running' || sharedFace?.run.kind === 'error'
+  )
   const ownIntake = useBotAvatarIntakeState({
     // A new picture replaces the custom one in place, or lands beside the mascot shown.
     onPicture: (png) => {
       setOnGenerate(false)
       onUpload(png, showingCustom ? custom.after : mascotIndex)
     },
-    undoable: onUndo !== undefined
+    undoable: onUndo !== undefined,
+    onTake: onIntakeStart
   })
   const intake = sharedIntake ?? ownIntake
   const outlinePicker = useBotAvatarIntakeHost(rootRef, intake)
@@ -172,7 +184,7 @@ export function BotPicturePicker({
   // The intake turn a generated picture holds: one taken after it was asked for wins, in any order and
   // even within one render, since the turn is checked when the picture arrives, not from React state.
   const generateTurn = useRef<(() => boolean) | null>(null)
-  const face = useGenerateFace(
+  const ownFace = useGenerateFace(
     (made) => {
       const ownTurn = generateTurn.current?.() ?? true
       // Applied only while Generate is the current face and no picture was taken since it was asked for.
@@ -186,8 +198,9 @@ export function BotPicturePicker({
     () => {
       generateTurn.current = intake.claim()
     },
-    descriptionDraft
+    { draft: descriptionDraft }
   )
+  const face = sharedFace ?? ownFace
   const faces: BotPictureFace[] = order.map((key) =>
     key === GENERATE_FACE
       ? {

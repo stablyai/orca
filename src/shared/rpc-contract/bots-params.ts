@@ -22,7 +22,7 @@ import {
   type Bot,
   type BotMember
 } from '../bot-types'
-import { isSettableBotAvatar, MAX_BOT_AVATAR_BYTES } from '../bot-avatar'
+import { isSettableBotAvatar } from '../bot-avatar'
 import { BotAvatarColorSchema } from '../bots/bot-avatar-color'
 import { BotStoredOutfitSchema } from '../bots/bot-avatar-outfit'
 import { botMembersFullError, planBotMemberAdds } from '../bots/bot-member-capacity'
@@ -46,6 +46,8 @@ export const BOT_ERROR_CODES = [
   'bot_not_found',
   'bot_folder_not_owned',
   'bot_avatar_invalid',
+  'bot_avatar_changed',
+  'bot_avatar_home_unreadable',
   BOT_OFFER_ALREADY_ANSWERED
 ] as const
 
@@ -135,6 +137,8 @@ export const BotUpdate = z.object({
       name: BotNameSchema.optional(),
       agent: z.enum(BOT_AGENTS).optional(),
       avatar: SettableBotAvatar.optional(),
+      /** The mascot revision visible when its color or outfit was picked. */
+      lookAtRevision: z.number().int().nonnegative().optional(),
       /** null puts back the mascot's own sky blue. */
       avatarColor: BotAvatarColorSchema.nullable().optional(),
       /** null takes the outfit off; any well-formed id is kept, as on create. */
@@ -202,17 +206,6 @@ export const BotDelete = z.object({
   /** The home folder, soul and memory included, is kept unless this is set. */
   deleteFolder: OptionalBoolean
 })
-
-/** A square PNG, base64, that becomes the bot's picture. */
-export const BotAvatarUpload = z.object({
-  botId: requiredString('Missing bot id'),
-  png: z
-    .string()
-    .min(1)
-    .max(Math.ceil(MAX_BOT_AVATAR_BYTES / 3) * 4)
-})
-
-export const BotAvatarRead = z.object({ botId: requiredString('Missing bot id') })
 
 /** The bot's Activity rows, as its host builds them. */
 export const BotActivityRead = z.object({ botId: requiredString('Missing bot id') })
@@ -304,7 +297,7 @@ export type BotHostUpdates = BotUpdateParams['updates'] &
     cancelledWait?: BotCancelledWait
   }
 export type BotDeleteParams = z.infer<typeof BotDelete>
-export type BotAvatarUploadParams = z.infer<typeof BotAvatarUpload>
+export { BotAvatarRead, BotAvatarUpload, type BotAvatarUploadParams } from './bot-avatar-params'
 export type BotSessionStartParams = z.infer<typeof BotSessionStart>
 /** A run that couldn't start, sent again from its card in that chat. */
 export const BotRunSendAgainParams = BotChat.extend({
@@ -345,9 +338,19 @@ export function applyBotUpdates(bot: Bot, updates: BotHostUpdates): Bot {
     tidyUp,
     offerAnswer,
     cancelledWait,
+    lookAtRevision,
     ...rest
   } = updates
   const next: Bot = { ...bot, ...rest }
+  if (
+    bot.generatedOverMascot &&
+    lookAtRevision !== undefined &&
+    lookAtRevision === (bot.avatarRevision ?? 0) - 1 &&
+    updates.avatar === undefined &&
+    (updates.avatarColor !== undefined || updates.avatarOutfit !== undefined)
+  ) {
+    next.avatar = bot.generatedOverMascot
+  }
   if (offerAnswer) {
     next.offerAnswers = withBotOfferAnswer(bot.offerAnswers, offerAnswer)
   }

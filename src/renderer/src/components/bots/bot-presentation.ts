@@ -59,6 +59,12 @@ export function botErrorMessage(error: unknown): string {
   if (error instanceof Error && error.message === 'bot_name_taken') {
     return translate('bots.errors.nameTaken', 'Another bot already has that name.')
   }
+  if (error instanceof Error && error.message === 'bot_avatar_home_unreadable') {
+    return translate(
+      'bots.errors.avatarHomeUnreadable',
+      'Check that bot.json in the bot folder is readable and valid, then try again.'
+    )
+  }
   if (error instanceof Error && error.message === 'bot_avatar_invalid') {
     return translate(
       'bots.errors.avatarInvalid',
