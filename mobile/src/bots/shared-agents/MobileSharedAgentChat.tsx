@@ -154,6 +154,7 @@ export function MobileSharedAgentChat() {
                 page.live
                   ? null
                   : {
+                      holdsSends: true,
                       text: t(
                         'bots.shared.offline',
                         '{{owner}}’s computer is offline. Messages wait and send when it’s back.',

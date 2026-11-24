@@ -9,7 +9,12 @@ import { formatOfflineAsOfTime } from '../../../components/host-connection/offli
 import type { MobileSessionController } from '../../use-mobile-session-controller'
 
 /** The composer's status line while the chat's host is out, with Reconnect only when redialing can help. */
-export type MobileNativeChatHostOutage = { text: string; onReconnect?: () => void }
+export type MobileNativeChatHostOutage = {
+  text: string
+  onReconnect?: () => void
+  /** Sends still go (held for the host), so the line shows over an open composer too. */
+  holdsSends?: true
+}
 
 /** Name the link that is down: the paired desktop, or the server behind it that the phone cannot start or redial. */
 export function mobileNativeChatHostOutage(

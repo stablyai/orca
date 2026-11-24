@@ -15,7 +15,7 @@ export function MobileNativeChatInputLockStatus({
   hostOutage: MobileNativeChatHostOutage | null
 }): React.JSX.Element {
   const t = useMobileTranslation()
-  const outage = lockReason === 'disconnected' ? hostOutage : null
+  const outage = lockReason === 'disconnected' || hostOutage?.holdsSends ? hostOutage : null
   const text = lockReason === 'waiting' ? waitingText : (outage?.text ?? null)
   // Why always mounted: the polite live region must exist before its text changes.
   return (

@@ -50,6 +50,8 @@ describe('a shared agent’s held messages on the phone', () => {
     expect(sharedAgentChats(chats, [held('m1', NEW_CHAT, 'delivered', 20)])).toEqual(chats)
     // A held message in a chat the host lists adds no row of its own.
     expect(sharedAgentChats(chats, [held('m1', 'chat-1', 'waiting', 20)])).toEqual(chats)
+    // Nor does one in a chat the host hasn't listed yet (an offline page's first read).
+    expect(sharedAgentChats(chats, [held('m1', 'chat-2', 'waiting', 20)])).toEqual(chats)
   })
 
   it('marks a chat by its latest held message that has not landed', () => {

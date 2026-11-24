@@ -280,7 +280,8 @@ export function MobileBotRowView({
   disabled = false,
   onPress,
   onLongPress,
-  titleTrailing = null
+  titleTrailing = null,
+  titleMark = null
 }: {
   avatar: React.ReactNode
   title: string
@@ -300,6 +301,8 @@ export function MobileBotRowView({
   onPress: () => void
   onLongPress?: () => void
   titleTrailing?: React.ReactNode
+  /** Right after the title, e.g. a shared agent's people mark. */
+  titleMark?: React.ReactNode
 }) {
   const t = useMobileTranslation()
   return (
@@ -323,9 +326,18 @@ export function MobileBotRowView({
       <View style={styles.avatar}>{avatar}</View>
       <View style={styles.main}>
         <View style={styles.titleRow}>
-          <Text numberOfLines={1} style={[styles.title, unread && styles.unread]}>
+          <Text
+            numberOfLines={1}
+            style={[styles.title, titleMark ? styles.titleMarked : null, unread && styles.unread]}
+          >
             {title}
           </Text>
+          {titleMark ? (
+            <>
+              {titleMark}
+              <View style={styles.fill} />
+            </>
+          ) : null}
           {titleTrailing}
         </View>
         <View style={styles.activity}>
@@ -373,6 +385,8 @@ const styles = themedStyleSheet(() => ({
   main: { flex: 1, minWidth: 0 },
   titleRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.xs },
   title: { flex: 1, fontSize: 15, color: colors.textSecondary, fontWeight: '500' },
+  titleMarked: { flex: 0, flexShrink: 1 },
+  fill: { flex: 1 },
   unread: { color: colors.textPrimary, fontWeight: '700' },
   fold: {
     minWidth: 44,

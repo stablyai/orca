@@ -83,13 +83,12 @@ export const MobileHomeBotRow = memo(function MobileHomeBotRow(props: {
       dimmed={row.offline === true || (row.kind === 'bot' && row.bot.paused)}
       divider={props.divider}
       onPress={() => props.onOpen(row)}
-      titleTrailing={
+      titleMark={
         row.kind === 'shared' ? (
           <Users size={14} color={colors.textSecondary} accessibilityLabel={row.preview} />
-        ) : row.needsYou > 0 ? (
-          <MobileBotNeedsYouCount count={row.needsYou} />
         ) : null
       }
+      titleTrailing={row.needsYou > 0 ? <MobileBotNeedsYouCount count={row.needsYou} /> : null}
     />
   )
 })

@@ -20,7 +20,11 @@ export function sharedAgentChats(
   const listed = new Set(chats.map((chat) => chat.chatId))
   const started = new Map<string, BotChatTreeChat>()
   for (const message of held) {
-    if (listed.has(message.sessionId) || message.state === 'delivered') {
+    if (
+      listed.has(message.sessionId) ||
+      !isSharedBotNewChatId(message.sessionId) ||
+      message.state === 'delivered'
+    ) {
       continue
     }
     const shown = started.get(message.sessionId)

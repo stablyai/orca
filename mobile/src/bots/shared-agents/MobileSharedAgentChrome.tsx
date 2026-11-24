@@ -90,7 +90,11 @@ export function MobileSharedAgentUnavailable({
       {last ? (
         <MobileSharedAgentNavBar
           name={last.botName}
-          avatar={mobileBotAvatarSource({ id: last.botId, name: last.botName, avatar: null })}
+          avatar={mobileBotAvatarSource(
+            page.kind === 'removed' && page.bot
+              ? page.bot
+              : { id: last.botId, name: last.botName, avatar: null }
+          )}
           onBack={onBack}
         />
       ) : null}

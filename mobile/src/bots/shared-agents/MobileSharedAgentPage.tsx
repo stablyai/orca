@@ -46,7 +46,8 @@ export function MobileSharedAgentPage() {
   const tree = usePhoneBotChatTree({
     client: agent?.client ?? null,
     botId: agent?.view.botId ?? '',
-    showing: agent?.live === true,
+    // Read while away too: the phone answers with the host's last list.
+    showing: agent !== null,
     reads: agent?.reads ?? 0
   })
   const held = agent?.view.held
@@ -110,16 +111,18 @@ export function MobileSharedAgentPage() {
           <Text style={styles.newChatText}>{t('bots.shared.newChat', 'New chat')}</Text>
         </Pressable>
         {chats.length > 0 ? (
-          <MobileBotChatTree
-            bot={{ id: view.botId, name }}
-            hostKey={hostBotsKey(params.hostId, `runtime:${view.environmentId}`)}
-            chats={chats}
-            loadMore={tree.kind === 'tree' ? tree.loadMore : () => {}}
-            search={tree.kind === 'tree' ? tree.search : NO_SEARCH}
-            actions={{ openChat: (chat) => open(chat.chatId, chat.title), openWorker: () => {} }}
-            heading={t('bots.shared.yourChats', 'Your chats')}
-            note={note}
-          />
+          <View style={styles.chats}>
+            <MobileBotChatTree
+              bot={{ id: view.botId, name }}
+              hostKey={hostBotsKey(params.hostId, `runtime:${view.environmentId}`)}
+              chats={chats}
+              loadMore={tree.kind === 'tree' ? tree.loadMore : () => {}}
+              search={tree.kind === 'tree' ? tree.search : NO_SEARCH}
+              actions={{ openChat: (chat) => open(chat.chatId, chat.title), openWorker: () => {} }}
+              heading={t('bots.shared.yourChats', 'Your chats')}
+              note={note}
+            />
+          </View>
         ) : null}
       </ScrollView>
     </View>
@@ -142,5 +145,6 @@ const styles = themedStyleSheet(() => ({
     borderRadius: 12,
     backgroundColor: colors.bgPanel
   },
-  newChatText: { fontSize: 16, color: colors.accentBlue }
+  newChatText: { fontSize: 16, color: colors.accentBlue },
+  chats: { marginHorizontal: spacing.lg }
 }))

@@ -13,7 +13,7 @@ import { readProbedHostCapabilities } from '../../transport/connection/host-stat
 export type SharedAgentPage =
   | { kind: 'loading' }
   /** No longer shared with this account: the last view of it, if the page had one. */
-  | { kind: 'removed'; last: SharedBotHostView | null }
+  | { kind: 'removed'; last: SharedBotHostView | null; bot: PhoneBot | undefined }
   | {
       kind: 'agent'
       view: SharedBotHostView
@@ -63,7 +63,7 @@ export function useSharedAgentPage(hostId: string, environmentId: string): Share
   }
   // Gone from the computer's shares: its owner stopped sharing it (or this account left).
   if (!view) {
-    return { kind: 'removed', last: last.current }
+    return { kind: 'removed', last: last.current, bot }
   }
   return { kind: 'agent', view, client, bot, capabilities, live, reads }
 }
