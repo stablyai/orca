@@ -215,8 +215,7 @@
       "next": "Далее",
       "other": "Другое…",
       "skip": "Пропустить",
-      "step": "Шаг {{step}}",
-      "submit": "Ответить"
+      "step": "Шаг {{step}}"
     },
     "askRow": {
       "asked": "Вопрос:",
@@ -388,14 +387,6 @@
     },
     "promptStrip": {
       "expand": "Развернуть"
-    },
-    "question": {
-      "otherReplyPlaceholder": "Или введите ответ…",
-      "replyPlaceholder": "Введите ответ…",
-      "sendReply": "Отправить ответ",
-      "submit": "Ответить",
-      "submitCount": "Ответить ({{count}})",
-      "submitSelectedOptions": "Отправить выбранные варианты"
     },
     "queuedMessages": {
       "deleteAll": "Удалить все",

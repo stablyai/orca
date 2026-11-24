@@ -211,8 +211,7 @@
       "next": "Suivant",
       "other": "Autre…",
       "skip": "Ignorer",
-      "step": "Étape {{step}}",
-      "submit": "Valider"
+      "step": "Étape {{step}}"
     },
     "askRow": {
       "asked": "Questions posées :",
@@ -384,14 +383,6 @@
     },
     "promptStrip": {
       "expand": "Développer"
-    },
-    "question": {
-      "otherReplyPlaceholder": "Ou saisissez une réponse…",
-      "replyPlaceholder": "Saisissez votre réponse…",
-      "sendReply": "Envoyer la réponse",
-      "submit": "Valider",
-      "submitCount": "Valider ({{count}})",
-      "submitSelectedOptions": "Valider les options sélectionnées"
     },
     "queuedMessages": {
       "deleteAll": "Tout supprimer",

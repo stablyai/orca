@@ -207,8 +207,7 @@
       "next": "İleri",
       "other": "Diğer…",
       "skip": "Atla",
-      "step": "Adım {{step}}",
-      "submit": "Gönder"
+      "step": "Adım {{step}}"
     },
     "askRow": {
       "asked": "Soruldu:",
@@ -380,14 +379,6 @@
     },
     "promptStrip": {
       "expand": "Genişlet"
-    },
-    "question": {
-      "otherReplyPlaceholder": "Ya da bir yanıt yazın…",
-      "replyPlaceholder": "Yanıtınızı yazın…",
-      "sendReply": "Yanıt gönder",
-      "submit": "Gönder",
-      "submitCount": "Gönder ({{count}})",
-      "submitSelectedOptions": "Seçilen seçenekleri gönder"
     },
     "queuedMessages": {
       "deleteAll": "Tümünü sil",

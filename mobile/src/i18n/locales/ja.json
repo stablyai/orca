@@ -207,8 +207,7 @@
       "next": "次へ",
       "other": "その他…",
       "skip": "スキップ",
-      "step": "ステップ {{step}}",
-      "submit": "送信"
+      "step": "ステップ {{step}}"
     },
     "askRow": {
       "asked": "質問:",
@@ -380,14 +379,6 @@
     },
     "promptStrip": {
       "expand": "展開"
-    },
-    "question": {
-      "otherReplyPlaceholder": "または返信を入力…",
-      "replyPlaceholder": "返信を入力…",
-      "sendReply": "返信を送信",
-      "submit": "送信",
-      "submitCount": "送信（{{count}}）",
-      "submitSelectedOptions": "選択した項目を送信"
     },
     "queuedMessages": {
       "deleteAll": "すべて削除",

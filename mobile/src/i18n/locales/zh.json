@@ -284,6 +284,8 @@
   },
   "chat": {
     "ask": {
+      "send": "发送",
+      "notNow": "暂不",
       "answerPlaceholder": "输入您的回答",
       "optionPreview": "{{option}} 预览",
       "previewPosition": "{{current}}/{{total}}",
@@ -294,8 +296,7 @@
       "other": "其他…",
       "recommended": "推荐",
       "skip": "跳过",
-      "step": "第 {{step}} 步",
-      "submit": "提交"
+      "step": "第 {{step}} 步"
     },
     "askRow": {
       "asked": "问：",
@@ -478,14 +479,6 @@
     },
     "promptStrip": {
       "expand": "展开"
-    },
-    "question": {
-      "otherReplyPlaceholder": "或输入回复…",
-      "replyPlaceholder": "输入回复…",
-      "sendReply": "发送回复",
-      "submit": "提交",
-      "submitCount": "提交（{{count}}）",
-      "submitSelectedOptions": "提交所选选项"
     },
     "queuedMessages": {
       "deleteAll": "全部删除",
@@ -1171,6 +1164,7 @@
       "failed": "失败"
     },
     "workerApproval": {
+      "allowFor": "允许 {{worker}} 使用 {{tool}}？",
       "title": "{{worker}} · {{title}}",
       "allow": "允许",
       "deny": "拒绝",
