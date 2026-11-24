@@ -6,6 +6,7 @@
 import { Check, LoaderCircle, Pencil } from 'lucide-react'
 import { useLayoutEffect, useRef, useState } from 'react'
 import { Button } from '@/components/ui/button'
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { useTranslate } from '@/i18n/use-translate'
 import { cn } from '@/lib/class-names'
 import {
@@ -185,6 +186,7 @@ export function BotItemQuestionStep({
 }): React.JSX.Element {
   const t = useTranslate()
   const recommended = t('bots.items.ask.recommended', 'Recommended')
+  const typeAnswer = t('bots.items.ask.typeAnswer', 'Type your answer')
   // A picked line reopened to change its pick; a new pick folds it again.
   const [reopened, setReopened] = useState<number | null>(null)
   const targets = useRef(new Map<string, HTMLButtonElement>())
@@ -302,6 +304,25 @@ export function BotItemQuestionStep({
             </div>
           )
         }
+        const iconOnly = decision.replies.length > 0
+        const typeControl =
+          pick === null || !typed(index) ? (
+            <button
+              ref={target(`${index}:type`)}
+              type="button"
+              aria-label={iconOnly ? typeAnswer : undefined}
+              className={cn(
+                BOT_ITEM_CHIP,
+                CHIP_ACTION,
+                CHIP_OWN_WORDS,
+                iconOnly && 'size-8 shrink-0 justify-center self-start rounded-md p-0'
+              )}
+              onClick={() => ownWords(index, null)}
+            >
+              <Pencil aria-hidden className="size-3 shrink-0" />
+              {iconOnly ? null : typeAnswer}
+            </button>
+          ) : null
         return (
           <div key={decision.question} className={divider}>
             <div className={cn('min-w-0', BOT_ITEM_OPEN_QUESTION)}>
@@ -357,18 +378,16 @@ export function BotItemQuestionStep({
                   <span className="min-w-0 [overflow-wrap:anywhere]">{pick}</span>
                 </button>
               ) : null}
-              {/* Your own words, the other way to answer: the box names this line. */}
-              {pick === null || !typed(index) ? (
-                <button
-                  ref={target(`${index}:type`)}
-                  type="button"
-                  className={cn(BOT_ITEM_CHIP, CHIP_ACTION, CHIP_OWN_WORDS)}
-                  onClick={() => ownWords(index, null)}
-                >
-                  <Pencil className="size-3 shrink-0" />
-                  {t('bots.items.ask.typeAnswer', 'Type your answer')}
-                </button>
-              ) : null}
+              {typeControl && iconOnly ? (
+                <Tooltip>
+                  <TooltipTrigger asChild>{typeControl}</TooltipTrigger>
+                  <TooltipContent side="top" sideOffset={4}>
+                    {typeAnswer}
+                  </TooltipContent>
+                </Tooltip>
+              ) : (
+                typeControl
+              )}
             </div>
           </div>
         )
