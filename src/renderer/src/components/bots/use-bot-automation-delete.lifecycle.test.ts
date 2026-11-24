@@ -2,8 +2,35 @@
 import { act, renderHook } from '@testing-library/react'
 import { afterEach, expect, it, vi } from 'vitest'
 import type { BotRef } from '@/lib/bot-hosts'
-import type { BotAutomationDeleteIntent } from './use-bot-automation-delete'
+import type {
+  BotAutomationDeleteAdmission,
+  BotAutomationDeleteIntent
+} from './use-bot-automation-delete'
 import { useBotAutomationDelete } from './use-bot-automation-delete'
+import { NO_ACTIVITY, type BotActivityWithAuthority } from './use-bot-activity'
+
+const localRead: BotActivityWithAuthority = {
+  authority: { kind: 'local' },
+  activity: {
+    ...NO_ACTIVITY,
+    automations: [
+      {
+        key: 'digest',
+        failing: false,
+        automation: {
+          id: 'digest',
+          name: 'Digest',
+          enabled: true,
+          nextRunAt: 100,
+          updatedAt: 1,
+          dtstart: 0,
+          rrule: 'FREQ=DAILY',
+          workspaceId: null
+        }
+      }
+    ]
+  }
+}
 
 afterEach(() => {
   vi.unstubAllGlobals()
@@ -19,7 +46,8 @@ it('keeps a delete intent and its completion within the bot visit that created i
     }
   })
   const activity = {
-    read: null,
+    read: localRead,
+    currentRead: () => localRead,
     refresh: () => {},
     refreshSettled: async () => ({ ok: false as const })
   }
@@ -43,12 +71,64 @@ it('keeps a delete intent and its completion within the bot visit that created i
   act(() => {
     expect(result.current.admit(old)).toBeNull()
   })
-  let current: number | null = null
+  const admissions: BotAutomationDeleteAdmission[] = []
   act(() => {
-    current = result.current.admit(intent())
+    const current = result.current.admit(intent())
+    if (current) {
+      admissions.push(current)
+    }
   })
-  expect(current).not.toBeNull()
+  expect(admissions).toHaveLength(1)
   expect(replies).toHaveLength(2)
   await act(async () => replies[0]())
-  expect([...result.current.pendingOpIds]).toEqual([current])
+  expect(result.current.pending.get('digest')?.opId).toBe(admissions[0].opId)
+})
+
+it('declines a stale intent when the newest raw read classifies the same id as a wait', async () => {
+  const bot: BotRef = { hostId: 'local', id: 'b1' }
+  let deletes = 0
+  let currentRead = localRead
+  vi.stubGlobal('api', {
+    runtime: {
+      call: async () => {
+        deletes += 1
+        return { ok: true, result: {} }
+      }
+    }
+  })
+  const { result } = renderHook(() =>
+    useBotAutomationDelete(
+      bot,
+      {
+        read: localRead,
+        currentRead: () => currentRead,
+        refresh: () => {},
+        refreshSettled: async () => ({ ok: false })
+      },
+      false
+    )
+  )
+  const intent: BotAutomationDeleteIntent = {
+    id: 'digest',
+    name: 'Digest',
+    authority: localRead.authority,
+    botKey: result.current.botKey,
+    generation: result.current.generation,
+    admittedAsTrouble: false
+  }
+  currentRead = {
+    ...localRead,
+    activity: { ...NO_ACTIVITY, waits: localRead.activity.automations }
+  }
+  act(() => {
+    expect(result.current.admit(intent)).toBeNull()
+  })
+  expect(deletes).toBe(0)
+  currentRead = localRead
+  await act(async () => {
+    const accepted = result.current.admit(intent)
+    expect(accepted).not.toBeNull()
+    await expect(accepted?.settled).resolves.toBe('hidden')
+  })
+  expect(deletes).toBe(1)
 })

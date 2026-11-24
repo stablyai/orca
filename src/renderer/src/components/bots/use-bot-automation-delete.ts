@@ -5,7 +5,9 @@ import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { toast } from 'sonner'
 import { useTranslate } from '@/i18n/use-translate'
 import { botRefKey, type BotRef } from '@/lib/bot-hosts'
+import { getRuntimeEnvironmentRevision } from '@/runtime/rpc/environment-revisions/runtime-environment-revision'
 import { deleteBotAutomation } from '../automations/hosts/automation-host-client'
+import { reconcileBotAutomationDelete } from './bot-automation-delete-reconciliation'
 import {
   AUTOMATION_HIDE_TTL_MS,
   hiddenAutomationIds,
@@ -35,6 +37,13 @@ export type BotAutomationDeleteIntent = {
 type DeleteOp = BotAutomationDeleteIntent & { opId: number; opKey: string }
 
 export type BotAutomationPending = { opId: number; admittedAsTrouble: boolean }
+export type BotAutomationDeleteOutcome = 'hidden' | 'omitted' | 'still-listed' | 'uncertain'
+export type BotAutomationDeleteAdmission = {
+  opId: number
+  settled: Promise<BotAutomationDeleteOutcome>
+}
+
+type DeleteMembership = 'listed' | 'absent' | 'stale'
 
 export type BotAutomationDeletion = {
   /** The current read's incarnation, null until a read lands. */
@@ -45,11 +54,11 @@ export type BotAutomationDeletion = {
   hidden: ReadonlySet<string>
   /** Ids being deleted under the current incarnation. */
   pending: ReadonlyMap<string, BotAutomationPending>
-  /** Every operation not yet ended, whatever its incarnation. */
-  pendingOpIds: ReadonlySet<number>
   offline: boolean
-  /** Starts the delete; its operation id, or null when it can't start (offline, already deleting, stale). */
-  admit: (intent: BotAutomationDeleteIntent) => number | null
+  membership: (intent: BotAutomationDeleteIntent) => DeleteMembership
+  ownsFocus: (intent: BotAutomationDeleteIntent) => boolean
+  canAdmit: (intent: BotAutomationDeleteIntent) => boolean
+  admit: (intent: BotAutomationDeleteIntent) => BotAutomationDeleteAdmission | null
 }
 
 type DeleteState = {
@@ -73,7 +82,7 @@ export function useBotAutomationDelete(
 ): BotAutomationDeletion {
   const t = useTranslate()
   const key = botRefKey(bot)
-  const { read, refresh, refreshSettled } = activity
+  const { read, currentRead, refresh, refreshSettled } = activity
   const [stored, setState] = useState(() => emptyDeleteState(key))
   const state = stored.key === key ? stored : emptyDeleteState(key)
   if (state !== stored) {
@@ -106,74 +115,91 @@ export function useBotAutomationDelete(
     update(expected, (previous) => ({ ...previous, ops: snapshot }))
   }
 
-  const run = async (op: DeleteOp): Promise<void> => {
+  const run = async (op: DeleteOp): Promise<BotAutomationDeleteOutcome> => {
     const alive = (): boolean =>
       liveGeneration.current === op.generation && ops.current.get(op.opKey)?.opId === op.opId
-    // Only this operation's own admission; a newer one for the same row stays.
-    const release = (): void => {
+    try {
+      await deleteBotAutomation(bot, op.id, op.authority)
+    } catch (error) {
+      console.error('Failed to delete the automation:', error)
+      if (!alive()) {
+        return 'uncertain'
+      }
+      const settled = await reconcileBotAutomationDelete(error, op.authority, refreshSettled, alive)
+      if (!alive()) {
+        return 'uncertain'
+      }
+      const sameRead = settled.ok && sameBotReadAuthority(settled.value.authority, op.authority)
+      if (
+        sameRead &&
+        !settled.value.activity.automations.some((row) => row.automation.id === op.id)
+      ) {
+        return 'omitted'
+      }
+      toast.error(t('bots.automations.deleteFailed', 'Couldn’t delete {{name}}', { name: op.name }))
+      return sameRead ? 'still-listed' : 'uncertain'
+    }
+    if (!alive()) {
+      return 'uncertain'
+    }
+    const authority = botReadAuthorityKey(op.authority)
+    const hide: BotAutomationHide = {
+      authority,
+      id: op.id,
+      name: op.name,
+      expiresAt: Date.now() + AUTOMATION_HIDE_TTL_MS
+    }
+    update(op.generation, (previous) => ({
+      ...previous,
+      hides: [...previous.hides.filter((h) => h.authority !== authority || h.id !== op.id), hide]
+    }))
+    refresh()
+    return 'hidden'
+  }
+
+  const listed = useMemo(
+    () => new Set(read?.activity.automations.map((row) => row.automation.id)),
+    [read]
+  )
+  const membership = (intent: BotAutomationDeleteIntent): DeleteMembership => {
+    const latest = currentRead()
+    if (
+      intent.generation !== liveGeneration.current ||
+      intent.botKey !== key ||
+      !latest ||
+      botReadAuthorityKey(latest.authority) !== botReadAuthorityKey(intent.authority)
+    ) {
+      return 'stale'
+    }
+    const present =
+      latest === read
+        ? listed.has(intent.id)
+        : latest.activity.automations.some((row) => row.automation.id === intent.id)
+    return present ? 'listed' : 'absent'
+  }
+  const ownsFocus = (intent: BotAutomationDeleteIntent): boolean =>
+    membership(intent) !== 'stale' &&
+    (intent.authority.kind !== 'environment' ||
+      getRuntimeEnvironmentRevision(intent.authority.environmentId) ===
+        intent.authority.pairingRevision)
+  const canAdmit = (intent: BotAutomationDeleteIntent): boolean =>
+    !offlineNow.current && membership(intent) === 'listed' && !ops.current.has(deleteOpKey(intent))
+
+  const admit = (intent: BotAutomationDeleteIntent): BotAutomationDeleteAdmission | null => {
+    if (!canAdmit(intent)) {
+      return null
+    }
+    const opKey = deleteOpKey(intent)
+    const op: DeleteOp = { ...intent, opId: ++nextOpId.current, opKey }
+    ops.current.set(opKey, op)
+    mirrorOps(op.generation)
+    const settled = run(op).finally(() => {
       if (ops.current.get(op.opKey)?.opId === op.opId) {
         ops.current.delete(op.opKey)
         mirrorOps(op.generation)
       }
-    }
-    try {
-      await deleteBotAutomation(bot, op.id, op.authority)
-      if (!alive()) {
-        return
-      }
-      const authority = botReadAuthorityKey(op.authority)
-      const hide: BotAutomationHide = {
-        authority,
-        id: op.id,
-        name: op.name,
-        expiresAt: Date.now() + AUTOMATION_HIDE_TTL_MS
-      }
-      update(op.generation, (previous) => ({
-        ...previous,
-        hides: [...previous.hides.filter((h) => h.authority !== authority || h.id !== op.id), hide]
-      }))
-      refresh()
-      release()
-    } catch (error) {
-      console.error('Failed to delete the automation:', error)
-      if (!alive()) {
-        return
-      }
-      // The host may have deleted it anyway: one read started after the failure decides.
-      const settled = await refreshSettled()
-      if (!alive()) {
-        return
-      }
-      const gone =
-        settled.ok &&
-        sameBotReadAuthority(settled.value.authority, op.authority) &&
-        !settled.value.activity.automations.some((row) => row.automation.id === op.id)
-      if (!gone) {
-        toast.error(
-          t('bots.automations.deleteFailed', 'Couldn’t delete {{name}}', { name: op.name })
-        )
-      }
-      release()
-    }
-  }
-
-  const admit = (intent: BotAutomationDeleteIntent): number | null => {
-    if (
-      offlineNow.current ||
-      intent.generation !== liveGeneration.current ||
-      intent.botKey !== key
-    ) {
-      return null
-    }
-    const opKey = `${botReadAuthorityKey(intent.authority)}\u0000${intent.id}`
-    if (ops.current.has(opKey)) {
-      return null
-    }
-    const op: DeleteOp = { ...intent, opId: ++nextOpId.current, opKey }
-    ops.current.set(opKey, op)
-    mirrorOps(op.generation)
-    void run(op)
-    return op.opId
+    })
+    return { opId: op.opId, settled }
   }
 
   // Each read prunes the hides it settles; one timer re-checks the soonest still listed.
@@ -182,7 +208,6 @@ export function useBotAutomationDelete(
     if (!read || hides.length === 0) {
       return
     }
-    const listed = new Set(read.activity.automations.map((row) => row.automation.id))
     const { kept, expired } = pruneAutomationHides(hides, read.authority, listed, Date.now())
     for (const hide of expired) {
       if (!toldExpired.current.has(hide)) {
@@ -204,22 +229,35 @@ export function useBotAutomationDelete(
     }
     const timer = setTimeout(() => setTick((n) => n + 1), Math.max(0, soonest - Date.now()))
     return () => clearTimeout(timer)
-  }, [read, hides, generation, tick, t])
+  }, [read, hides, listed, generation, tick, t])
 
   const authority = read?.authority ?? null
   const hidden = useMemo(() => hiddenAutomationIds(hides, authority), [hides, authority])
   const authorityKey = authority ? botReadAuthorityKey(authority) : null
-  const { pending, pendingOpIds } = useMemo(() => {
+  const pending = useMemo(() => {
     const byId = new Map<string, BotAutomationPending>()
-    const ids = new Set<number>()
     for (const op of state.ops.values()) {
-      ids.add(op.opId)
       if (botReadAuthorityKey(op.authority) === authorityKey) {
         byId.set(op.id, { opId: op.opId, admittedAsTrouble: op.admittedAsTrouble })
       }
     }
-    return { pending: byId, pendingOpIds: ids }
+    return byId
   }, [state.ops, authorityKey])
 
-  return { authority, botKey: key, generation, hidden, pending, pendingOpIds, offline, admit }
+  return {
+    authority,
+    botKey: key,
+    generation,
+    hidden,
+    pending,
+    offline,
+    membership,
+    ownsFocus,
+    canAdmit,
+    admit
+  }
+}
+
+function deleteOpKey(intent: BotAutomationDeleteIntent): string {
+  return `${botReadAuthorityKey(intent.authority)}\u0000${intent.id}`
 }

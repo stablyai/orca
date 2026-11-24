@@ -58,6 +58,37 @@ const advance = (ms: number): void => {
 }
 
 describe('requestSettled', () => {
+  it('publishes false as a settled success and keeps a real failure uncertain', async () => {
+    const read = createBotHostRead<boolean>(
+      'test.read',
+      (result: boolean) => result,
+      'read failed',
+      ['automations']
+    )
+    read.subscribe(bot, () => {})
+    const success = read.requestSettled(bot)
+    await flush()
+    calls[0].resolve(false)
+    await expect(success).resolves.toEqual({ ok: true, value: false })
+    expect(read.snapshot(KEY)).toBe(false)
+
+    const failure = read.requestSettled(bot)
+    await flush()
+    calls[1].reject(new Error('down'))
+    await expect(failure).resolves.toEqual({ ok: false })
+  })
+
+  it('uses only the remaining part of an existing deadline', async () => {
+    const read = makeRead()
+    read.subscribe(bot, () => {})
+    advance(14_000)
+    const settled = read.requestSettled(bot, 15_000)
+    await flush()
+    expect(calls).toHaveLength(1)
+    advance(1_000)
+    await expect(settled).resolves.toEqual({ ok: false })
+  })
+
   it('is not decided by a read already running, only by the one after it', async () => {
     const read = makeRead()
     read.subscribe(bot, () => {})

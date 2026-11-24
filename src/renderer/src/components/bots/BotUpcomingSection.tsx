@@ -1,7 +1,7 @@
 // Automations in a bot's Activity panel: Tidy memory, Look around, automations and waits, failed first,
 // then running, then soonest; paused ones last. Five show, then "All N automations". Folded, the rows
 // in trouble stay listed under the header. An automation's Delete confirms here and keeps focus near it.
-import { useLayoutEffect, useRef, useState } from 'react'
+import { useRef, useState, type RefObject } from 'react'
 import { ChevronRight, Plus } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
@@ -21,44 +21,18 @@ import {
   type BotAutomationCardRow
 } from './bot-automation-card'
 import { UpcomingItem, type BotAutomationRowDeletion } from './BotUpcomingRows'
-import type { BotAutomationDeleteIntent, BotAutomationDeletion } from './use-bot-automation-delete'
-
-/** A delete this section started, followed until its row is gone so focus can move off it. */
-type FollowedDelete = {
-  id: string
-  rowKey: string
-  /** Its own confirmation is still closing: that close places focus first. */
-  awaitingClose: boolean
-  /** The openable rows, in order, the last time its row rendered. */
-  order: string[]
-  /** It left for a reason other than this delete (folded, an item opened): focus stays put. */
-  leftOtherwise: boolean
-}
-
-const ROW_OPEN = '[data-bot-row-open]'
-
-/** The rendered rows whose button opens something, in order. */
-function openableRowKeys(section: HTMLElement | null): string[] {
-  if (!section) {
-    return []
-  }
-  return [...section.querySelectorAll<HTMLElement>(ROW_OPEN)].flatMap((button) => {
-    const key = button.closest<HTMLElement>('[data-bot-panel-row]')?.dataset.botPanelRow
-    return key ? [key] : []
-  })
-}
-
-function rowOpenButton(section: HTMLElement | null, rowKey: string): HTMLElement | null {
-  return (
-    section?.querySelector<HTMLElement>(
-      `[data-bot-panel-row="${CSS.escape(rowKey)}"] ${ROW_OPEN}`
-    ) ?? null
-  )
-}
-
-/** Focus was left nowhere (on the page body), as when the focused row unmounts. */
-const focusIsLost = (): boolean =>
-  !document.activeElement || document.activeElement === document.body
+import { isBotRowTrouble } from './BotPanelRow'
+import {
+  botAutomationMembershipState,
+  useBotAutomationMembership,
+  type AutomationEnabledOverride
+} from './bot-automation-row-membership'
+import { botReadAuthorityKey } from './bot-read-authority'
+import type { BotAutomationDeletion } from './use-bot-automation-delete'
+import {
+  useBotAutomationDeleteFocus,
+  type BotAutomationFocusIntent
+} from './use-bot-automation-delete-focus'
 
 export function BotUpcomingSection({
   bot,
@@ -68,7 +42,8 @@ export function BotUpcomingSection({
   hasAutomations,
   signInStops,
   now,
-  deletion
+  deletion,
+  panelFallback
 }: {
   bot: Bot
   /** In the fixed order `botAutomationCardRows` gives, without hidden ones; the card ranks them. */
@@ -82,6 +57,7 @@ export function BotUpcomingSection({
   signInStops: ReadonlySet<string>
   now: number
   deletion: BotAutomationDeletion
+  panelFallback: RefObject<HTMLDivElement | null>
 }): React.JSX.Element {
   const t = useTranslate()
   const ordered = useAutomationCardOrder(rows, hiddenKeys)
@@ -94,144 +70,68 @@ export function BotUpcomingSection({
   )
   const newLabel = t('bots.automations.new', 'New automation')
   const fold = useBotPanelFold(bot.id, 'automations')
-  const section = useRef<HTMLElement | null>(null)
-  const newButton = useRef<HTMLButtonElement | null>(null)
   const confirmButton = useRef<HTMLButtonElement | null>(null)
-  const [target, setTarget] = useState<(BotAutomationDeleteIntent & { rowKey: string }) | null>(
-    null
-  )
+  const [dialogId, setDialogId] = useState(0)
+  const [target, setTarget] = useState<BotAutomationFocusIntent | null>(null)
   const [dontAskAgain, setDontAskAgain] = useState(false)
-  // Shows the header's idle actions so New automation can take focus after the last row leaves.
-  const [newShown, setNewShown] = useState(false)
-  const focusNew = useRef(false)
-  // Per mount: a section opened again (after an item) never replays an older delete's focus.
-  const followed = useRef(new Map<number, FollowedDelete>())
-  const closing = useRef<number | null>(null)
-
-  const follow = (
-    opId: number,
-    intent: { id: string; rowKey: string },
-    viaDialog: boolean
-  ): void => {
-    followed.current.set(opId, {
-      id: intent.id,
-      rowKey: intent.rowKey,
-      awaitingClose: viaDialog,
-      order: openableRowKeys(section.current),
-      leftOtherwise: false
+  const membership = useBotAutomationMembership(bot, signInStops)
+  const { section, newButton, newShown, setNewShown, follow, onCloseAutoFocus } =
+    useBotAutomationDeleteFocus({
+      deletion,
+      open: fold.open,
+      panelFallback,
+      troubleCleared: (intent) => {
+        const card = rows.find((row) => row.key === intent.rowKey)
+        if (card?.kind !== 'automation') {
+          return false
+        }
+        const { automation } = card.row
+        const enabled =
+          intent.saved?.from === automation.updatedAt ? intent.saved.enabled : automation.enabled
+        return !isBotRowTrouble(botAutomationMembershipState(card, membership, t, enabled))
+      }
     })
-  }
 
-  // The next openable row where it was (a row promoted into its place counts), else the one before,
-  // else New automation (expanded) or the fold toggle (folded).
-  const moveFocusFrom = (entry: FollowedDelete): void => {
-    const order = openableRowKeys(section.current)
-    const at = entry.order.indexOf(entry.rowKey)
-    const before =
-      at === -1 ? 0 : entry.order.slice(0, at).filter((key) => order.includes(key)).length
-    const next = order[before] ?? order[before - 1]
-    const button = next ? rowOpenButton(section.current, next) : null
-    if (button) {
-      button.focus()
-      return
-    }
-    if (fold.open) {
-      focusNew.current = true
-      setNewShown(true)
-      return
-    }
-    section.current?.querySelector<HTMLElement>('button[aria-expanded]')?.focus()
-  }
-
-  const listedIds = new Set(
-    rows.flatMap((row) => (row.kind === 'automation' ? [row.row.automation.id] : []))
-  )
-  useLayoutEffect(() => {
-    const order = openableRowKeys(section.current)
-    for (const [opId, entry] of followed.current) {
-      const present = order.includes(entry.rowKey)
-      const ended = !deletion.pendingOpIds.has(opId)
-      if (present) {
-        entry.order = order
-      } else if (!ended && listedIds.has(entry.id)) {
-        // Still listed while its delete runs: it left with a fold, cap or reorder, not the delete.
-        entry.leftOtherwise = true
-      }
-      if (!ended || entry.awaitingClose) {
-        continue
-      }
-      followed.current.delete(opId)
-      if (!present && !entry.leftOtherwise && focusIsLost()) {
-        moveFocusFrom(entry)
-      }
-    }
-    if (focusNew.current && newShown) {
-      focusNew.current = false
-      newButton.current?.focus()
-      // Never left on the page body: the fold toggle stands in when New automation can't take it.
-      if (document.activeElement !== newButton.current) {
-        section.current?.querySelector<HTMLElement>('button[aria-expanded]')?.focus()
-      }
-    }
-  })
-
-  const confirmCloseFocus = (event: Event): void => {
-    const opId = closing.current
-    closing.current = null
-    const entry = opId === null ? undefined : followed.current.get(opId)
-    if (opId === null || !entry) {
-      return
-    }
-    // The confirmation hands focus to the row it deleted, not back to the menu that opened it.
-    event.preventDefault()
-    entry.awaitingClose = false
-    const button = rowOpenButton(section.current, entry.rowKey)
-    if (document.activeElement !== button && !focusIsLost()) {
-      return
-    }
-    if (button) {
-      button.focus()
-      return
-    }
-    if (!deletion.pendingOpIds.has(opId)) {
-      followed.current.delete(opId)
-      if (!entry.leftOtherwise) {
-        moveFocusFrom(entry)
-      }
-    }
-  }
-
-  const request = (row: BotAutomationCardRow, asTrouble: boolean): void => {
+  const request = (
+    row: BotAutomationCardRow,
+    asTrouble: boolean,
+    saved: AutomationEnabledOverride | null
+  ): void => {
     if (row.kind !== 'automation' || !deletion.authority) {
       return
     }
-    const intent = {
+    const intent: BotAutomationFocusIntent = {
       botKey: deletion.botKey,
       generation: deletion.generation,
       id: row.row.automation.id,
       name: row.row.automation.name,
       authority: deletion.authority,
       admittedAsTrouble: asTrouble,
-      rowKey: row.key
+      rowKey: row.key,
+      folded: !fold.open,
+      saved
     }
     if (useAppStore.getState().settings?.skipDeleteAutomationConfirm) {
-      const opId = deletion.admit(intent)
-      if (opId !== null) {
-        follow(opId, intent, false)
+      const admission = deletion.admit(intent)
+      if (admission) {
+        follow(intent, admission)
       }
-      return
+    } else if (deletion.canAdmit(intent)) {
+      setDialogId((id) => id + 1)
+      setDontAskAgain(false)
+      setTarget(intent)
     }
-    setDontAskAgain(false)
-    setTarget(intent)
   }
 
   const confirm = (): void => {
     if (!target) {
       return
     }
-    // Admission first: an offline host or a delete already running starts nothing, preference included.
-    const opId = deletion.admit(target)
-    if (opId === null) {
+    const admission = deletion.admit(target)
+    if (!admission) {
+      if (deletion.membership(target) !== 'listed') {
+        setTarget(null)
+      }
       return
     }
     if (dontAskAgain) {
@@ -242,8 +142,7 @@ export function BotUpcomingSection({
         openSettingsTarget: store.openSettingsTarget
       })
     }
-    follow(opId, target, true)
-    closing.current = opId
+    follow(target, admission, dialogId)
     setTarget(null)
     setDontAskAgain(false)
   }
@@ -257,17 +156,16 @@ export function BotUpcomingSection({
       pending: Boolean(pending),
       admittedAsTrouble: pending?.admittedAsTrouble ?? false,
       disabled: Boolean(pending) || deletion.offline || !deletion.authority,
-      request: (asTrouble) => request(row, asTrouble)
+      request: (asTrouble, saved) => request(row, asTrouble, saved)
     }
   }
 
   const item = (row: BotAutomationCardRow, folded: boolean): React.JSX.Element => (
     <UpcomingItem
       key={row.key}
-      bot={bot}
+      membership={membership}
       row={row}
       upNext={upNext}
-      signInStops={signInStops}
       now={now}
       folded={folded}
       deletion={rowDeletion(row)}
@@ -333,7 +231,14 @@ export function BotUpcomingSection({
         )}
       </BotPanelSection>
       <AutomationDeleteDialog
-        deleteTarget={target?.generation === deletion.generation ? target : null}
+        key={dialogId}
+        deleteTarget={
+          target?.generation === deletion.generation &&
+          deletion.authority &&
+          botReadAuthorityKey(target.authority) === botReadAuthorityKey(deletion.authority)
+            ? target
+            : null
+        }
         dontAskDeleteAgain={dontAskAgain}
         confirmButtonRef={confirmButton}
         onOpenChange={(open) => {
@@ -344,7 +249,7 @@ export function BotUpcomingSection({
         onDontAskAgainToggle={() => setDontAskAgain((value) => !value)}
         onCancel={() => setTarget(null)}
         onConfirm={confirm}
-        onCloseAutoFocus={confirmCloseFocus}
+        onCloseAutoFocus={(event) => onCloseAutoFocus(dialogId, event)}
         confirmDisabledReason={
           deletion.offline
             ? t('bots.upNext.hostOffline', '{{bot}}’s computer is offline', { bot: bot.name })

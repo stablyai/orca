@@ -56,7 +56,7 @@ export type BotHostRead<T> = {
   requestMore: (bot: BotRef) => Promise<T | null>
   /** A whole read that starts after this ask and finishes within `BOT_READ_SETTLE_MS` of it; uncertain
    *  when that read fails, the time runs out, or the last surface closes. Needs an open surface. */
-  requestSettled: (bot: BotRef) => Promise<BotReadSettled<T>>
+  requestSettled: (bot: BotRef, deadline?: number) => Promise<BotReadSettled<T>>
   /** The parts a notice can have changed in the bot's value; null: read whole. */
   partsOf: (scope: BotChangeScope | undefined, bot: BotRef) => readonly string[] | null
   subscribe: (bot: BotRef, listener: () => void) => () => void
@@ -190,7 +190,7 @@ export function createBotHostRead<T>(
       if (live()) {
         const changed = land(value)
         landed = value
-        settle(entry.value ? { ok: true, value: entry.value } : { ok: false })
+        settle(value !== null ? { ok: true, value } : { ok: false })
         if (changed) {
           notify()
         }
@@ -234,21 +234,25 @@ export function createBotHostRead<T>(
     }
   }
 
-  const requestSettled = (bot: BotRef): Promise<BotReadSettled<T>> => {
+  const requestSettled = (
+    bot: BotRef,
+    deadline = performance.now() + BOT_READ_SETTLE_MS
+  ): Promise<BotReadSettled<T>> => {
     const entry = entries.get(botRefKey(bot))
+    const remaining = deadline - performance.now()
     // Only an entry a surface holds is ever disposed, so no ask may create or keep one by itself.
-    if (!entry || entry.listeners.size === 0) {
+    if (!entry || entry.listeners.size === 0 || remaining <= 0) {
       return Promise.resolve({ ok: false })
     }
     return new Promise((resolve) => {
       const waiter: BotSettledWaiter<T> = {
         minSequence: entry.latest + 1,
-        deadline: performance.now() + BOT_READ_SETTLE_MS,
+        deadline,
         timer: null,
         resolve
       }
       // Armed at the ask: it covers a read still running, the minimum gap and the read itself.
-      waiter.timer = setTimeout(() => finish(entry, waiter, { ok: false }), BOT_READ_SETTLE_MS)
+      waiter.timer = setTimeout(() => finish(entry, waiter, { ok: false }), remaining)
       entry.settled.add(waiter)
       request(bot)
     })

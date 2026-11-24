@@ -237,6 +237,7 @@ function BotActivityTab({ bot }: { bot: Bot }): React.JSX.Element {
           rows={automationRows}
           hiddenKeys={hiddenCardKeys}
           deletion={deletion}
+          panelFallback={scroll}
           upNext={activity.upNext?.state}
           hasAutomations={activity.automations.length + activity.waits.length > 0}
           signInStops={signInStops}

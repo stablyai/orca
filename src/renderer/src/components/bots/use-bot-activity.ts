@@ -1,4 +1,5 @@
 import { useCallback } from 'react'
+import { botRefKey } from '@/lib/bot-hosts'
 import type { Bot } from '../../../../shared/bot-types'
 import { BOT_WORK_KINDS } from '../../../../shared/bots/bot-change-scope'
 import type { BotActivity } from '../../../../shared/bots/bot-activity-model'
@@ -41,25 +42,29 @@ export function useBotActivityRead(bot: Bot | null): BotActivityRead | null {
 /** The read with its authority, for a surface that acts on what it shows (Delete). */
 export function useBotActivityAuthorityRead(bot: Bot | null): {
   read: BotActivityWithAuthority | null
+  /** Latest raw publication, including reads that React has yet to commit. */
+  currentRead: () => BotActivityWithAuthority | null
   /** Ask the shared read again. */
   refresh: () => void
   /** A read started after this ask, or uncertain (`BotHostRead.requestSettled`). */
-  refreshSettled: () => Promise<BotReadSettled<BotActivityWithAuthority>>
+  refreshSettled: (deadline: number) => Promise<BotReadSettled<BotActivityWithAuthority>>
 } {
   const read = useBotHostRead(activityRead, bot)
   const botId = bot?.id ?? null
   const hostId = bot?.hostId ?? null
+  const key = bot ? botRefKey(bot) : null
+  const currentRead = useCallback(() => (key === null ? null : activityRead.snapshot(key)), [key])
   const refresh = useCallback(() => {
     if (botId && hostId) {
       activityRead.request({ hostId, id: botId })
     }
   }, [botId, hostId])
   const refreshSettled = useCallback(
-    (): Promise<BotReadSettled<BotActivityWithAuthority>> =>
+    (deadline: number): Promise<BotReadSettled<BotActivityWithAuthority>> =>
       botId && hostId
-        ? activityRead.requestSettled({ hostId, id: botId })
+        ? activityRead.requestSettled({ hostId, id: botId }, deadline)
         : Promise.resolve({ ok: false }),
     [botId, hostId]
   )
-  return { read, refresh, refreshSettled }
+  return { read, currentRead, refresh, refreshSettled }
 }
