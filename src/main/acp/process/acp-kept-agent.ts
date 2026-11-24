@@ -4,6 +4,7 @@ import {
   type ProviderRelayLaunch,
   type RelayedProviderProcess
 } from '../../provider-relay/app-provider-relays'
+import { readProcessStartTimeMs } from '../../runtime/agent-session/ownership/agent-session-process-identity-probe'
 import { AcpRelayItemContinuation } from './acp-relay-item-continuation'
 import { acpRelayWorkMarkers, acpSpecRelays } from './acp-relay-work-markers'
 import { AcpRelayTurns } from './acp-relay-ack-floor'
@@ -40,6 +41,14 @@ const ACP_RELAY_KEEP: ProviderRelayKeepSpec = {
   // Its answer is empty, so the model the user picked is read from the request.
   requests: [SET_MODEL]
 }
+
+/** A pid's start time; a kept agent that ended while Orca was closed still hands on its output,
+ *  under a start time no live process has, so recovery never mistakes another one for it. */
+export const keptAcpStartTime =
+  (relayed: AcpRelayedProcess | null, read = readProcessStartTimeMs) =>
+  async (pid: number): Promise<number | null> =>
+    (await read(pid)) ??
+    (relayed && (relayed.child.exited ?? relayed.child.attachResult?.exit) ? 0 : null)
 
 /** A kept state change, replayed as the `session/update` the agent sent or implied. */
 export type AcpKeptUpdate = { sessionId: string | undefined; update: Record<string, unknown> }
