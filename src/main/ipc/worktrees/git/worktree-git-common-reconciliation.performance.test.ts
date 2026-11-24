@@ -8,12 +8,19 @@ import { createGitCommonWatchReconciliation } from './worktree-git-common-watch-
 // visible (~200 stats/s at 1,900 worktrees) even though the native watcher already reports changes.
 
 type Node = { dir: boolean; mtimeMs: number; ino: number }
-const fs = vi.hoisted(() => ({
-  nodes: new Map<string, Node>(),
+type FsState = {
+  nodes: Map<string, Node>
+  stats: number
+  clock: number
+  ino: number
+  stall: Promise<void> | null
+}
+const fs = vi.hoisted((): FsState => ({
+  nodes: new Map(),
   stats: 0,
   clock: 1,
   ino: 1,
-  stall: null as Promise<void> | null
+  stall: null
 }))
 
 vi.mock('node:fs/promises', async (importOriginal) => {
