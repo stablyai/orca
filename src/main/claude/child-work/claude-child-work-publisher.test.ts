@@ -15,6 +15,7 @@ function sessionWithChild(toolUseId = 'toolu_a1'): ClaudeSession {
     task_type: 'local_agent',
     description: 'Read files'
   })
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the publisher only reads childWork, events and the session identity the reader receives.
   return {
     childWork,
     translator: undefined,

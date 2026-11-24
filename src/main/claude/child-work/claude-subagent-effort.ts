@@ -2,6 +2,7 @@ import { join } from 'node:path'
 
 import { readAgentEffortLevel } from '../../../shared/agent-launch/choices/agent-effort-level'
 import { claudeSubagentTranscriptPath } from '../../../shared/agent-hook-listener/providers/claude/transcripts/claude-subagent-transcript-path'
+import { isRecord } from '../../../shared/agent-status/child-work/agent-status-child-work-value-guards'
 import {
   openTranscriptReadStream,
   wslGatedStat
@@ -21,11 +22,8 @@ export function claudeTranscriptEffort(text: string): string | undefined {
     }
     let row: Record<string, unknown> | null = null
     try {
-      const value = JSON.parse(line) as unknown
-      row =
-        typeof value === 'object' && value !== null && !Array.isArray(value)
-          ? (value as Record<string, unknown>)
-          : null
+      const value: unknown = JSON.parse(line)
+      row = isRecord(value) ? value : null
     } catch {
       // A tail read can start or end mid-row.
       continue
