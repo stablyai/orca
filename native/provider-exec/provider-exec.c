@@ -246,7 +246,7 @@ static _Noreturn void fail(int code) {
 // deadline own the stop, so owner EOF resumes it and a repeated term never restarts or shortens it.
 enum watcher_phase { WATCH_IDLE, WATCH_STDIN_GRACE, WATCH_TERM_GRACE, WATCH_REAP };
 enum { WATCH_LINE_MAX = 32, WATCH_READ_MAX = 256, WATCH_POLL_MS = 25, WATCH_REAP_MS = 1500 };
-enum { TREE_SWEEP_INTERVAL_MS = 100 };
+enum { TREE_SWEEP_INTERVAL_MS = 100, TREE_SWEEP_MAX_INTERVAL_MS = 1000 };
 // A sweep result: the tree can't be proven empty on this host at all (no pidfd or audit-token
 // signal, a gone or replaced subreaper, a foreign /proc), so once the CLI group is gone the stop
 // ends unverified at once rather than waiting out its deadlines.
@@ -255,6 +255,19 @@ enum { TREE_UNPROVABLE = -2 };
 enum { REAPER_UNPROVEN = -1, REAPER_START_UNREAD = -2 };
 // Inherited by every tool the CLI starts, so one reparented to launchd is still found on macOS.
 #define TREE_TAG_NAME "ORCA_PROVIDER_TREE"
+
+// Exact process identities kept sorted, so each lookup is a binary search.
+struct identity {
+    pid_t pid;
+    long long start;
+    int value;
+};
+
+struct identity_set {
+    struct identity *items;
+    size_t count;
+    size_t capacity;
+};
 
 struct watcher {
     pid_t group;
@@ -266,12 +279,10 @@ struct watcher {
     long long next_sweep_ns;
     int swept_group_gone;
     // Exact identities already sent TERM, so each gets it once and none is skipped.
-    struct termed {
-        pid_t pid;
-        long long start;
-    } *termed;
-    size_t termed_count;
-    size_t termed_capacity;
+    struct identity_set termed;
+    // Tag verdicts per identity, so a stop reads each process's environment at most once.
+    struct identity_set tagged;
+    long long sweep_interval_ms;
     int group_term_pending;
     unsigned stdin_end_grace_ms;
     unsigned sigterm_grace_ms;
@@ -292,6 +303,58 @@ static _Noreturn void watcher_complete(int absent) {
 
 static int group_absent(struct watcher *w) {
     return kill(-w->group, 0) < 0 && errno == ESRCH;
+}
+
+static int compare_identity(pid_t pid, long long start, const struct identity *item) {
+    if (pid != item->pid) {
+        return pid < item->pid ? -1 : 1;
+    }
+    return (start > item->start) - (start < item->start);
+}
+
+// Index of the first item not below (pid, start).
+static size_t identity_position(const struct identity_set *set, pid_t pid, long long start) {
+    size_t low = 0;
+    size_t high = set->count;
+    while (low < high) {
+        size_t middle = low + (high - low) / 2;
+        if (compare_identity(pid, start, &set->items[middle]) > 0) {
+            low = middle + 1;
+        } else {
+            high = middle;
+        }
+    }
+    return low;
+}
+
+static struct identity *identity_find(const struct identity_set *set, pid_t pid, long long start) {
+    size_t at = identity_position(set, pid, start);
+    return at < set->count && compare_identity(pid, start, &set->items[at]) == 0 ? &set->items[at]
+                                                                                    : NULL;
+}
+
+static int identity_reserve(struct identity_set *set) {
+    if (set->count == set->capacity) {
+        size_t capacity = set->capacity > 0 ? set->capacity * 2 : 16;
+        void *grown = realloc(set->items, capacity * sizeof *set->items);
+        if (grown == NULL) {
+            return 0;
+        }
+        set->items = grown;
+        set->capacity = capacity;
+    }
+    return 1;
+}
+
+// Callers reserve first; an identity already present is left as it is.
+static void identity_insert(struct identity_set *set, pid_t pid, long long start, int value) {
+    size_t at = identity_position(set, pid, start);
+    if (at < set->count && compare_identity(pid, start, &set->items[at]) == 0) {
+        return;
+    }
+    memmove(&set->items[at + 1], &set->items[at], (set->count - at) * sizeof *set->items);
+    set->items[at] = (struct identity){.pid = pid, .start = start, .value = value};
+    set->count++;
 }
 
 struct proc_row {
@@ -585,17 +648,45 @@ struct tree_scan {
     size_t *chain;
     pid_t *sids;
     size_t sid_count;
+    size_t sid_sorted;
     int leader_alive;
 };
 
 #if defined(__APPLE__)
+// The verdict is cached per exact identity; the identity check after it covers PID reuse.
+static int tagged_once(struct watcher *w, const struct proc_row *row) {
+    const struct identity *known = identity_find(&w->tagged, row->pid, row->start);
+    if (known != NULL) {
+        return known->value;
+    }
+    int tagged = carries_tree_tag(row->pid, w->tree_tag);
+    if (identity_reserve(&w->tagged)) {
+        identity_insert(&w->tagged, row->pid, row->start, tagged);
+    }
+    return tagged;
+}
+
+static int compare_sid(const void *a, const void *b) {
+    pid_t left = *(const pid_t *)a;
+    pid_t right = *(const pid_t *)b;
+    return (left > right) - (left < right);
+}
+
 static int member_session(const struct tree_scan *scan, pid_t sid) {
+    return bsearch(&sid, scan->sids, scan->sid_sorted, sizeof *scan->sids, compare_sid) != NULL;
+}
+
+// Sorts and dedupes the sessions after a round's appends, keeping member_session a binary search.
+static void settle_member_sessions(struct tree_scan *scan) {
+    qsort(scan->sids, scan->sid_count, sizeof *scan->sids, compare_sid);
+    size_t kept = 0;
     for (size_t i = 0; i < scan->sid_count; i++) {
-        if (scan->sids[i] == sid) {
-            return 1;
+        if (kept == 0 || scan->sids[kept - 1] != scan->sids[i]) {
+            scan->sids[kept++] = scan->sids[i];
         }
     }
-    return 0;
+    scan->sid_count = kept;
+    scan->sid_sorted = kept;
 }
 #endif
 
@@ -622,9 +713,9 @@ static int tree_root(struct watcher *w, const struct tree_scan *scan, const stru
         return TREE_UNKNOWN;
     }
     pid_t sid = getsid(row->pid);
-    int kind = sid > 0 && member_session(scan, sid)       ? TREE_ANCESTRY
-               : carries_tree_tag(row->pid, w->tree_tag) ? TREE_TAGGED
-                                                         : TREE_UNKNOWN;
+    int kind = sid > 0 && member_session(scan, sid) ? TREE_ANCESTRY
+               : tagged_once(w, row)                 ? TREE_TAGGED
+                                                     : TREE_UNKNOWN;
     return kind != TREE_UNKNOWN && same_identity(row) ? kind : TREE_UNKNOWN;
 #endif
 }
@@ -673,6 +764,7 @@ static void resolve_members(struct watcher *w, struct tree_scan *scan) {
 static void collect_member_sessions(struct watcher *w, struct tree_scan *scan) {
     scan->sid_count = 0;
     scan->sids[scan->sid_count++] = w->group;
+    scan->sid_sorted = 1;
     for (;;) {
         resolve_members(w, scan);
         size_t before = scan->sid_count;
@@ -687,6 +779,8 @@ static void collect_member_sessions(struct watcher *w, struct tree_scan *scan) {
                 scan->sids[scan->sid_count++] = sid;
             }
         }
+        // member_session sees only the sorted prefix, so a duplicate appended here is removed now.
+        settle_member_sessions(scan);
         if (scan->sid_count == before) {
             return;
         }
@@ -770,33 +864,17 @@ static int signal_member(struct proc_row *row, int signal_number, int *sent) {
 }
 
 static int already_termed(const struct watcher *w, const struct proc_row *row) {
-    for (size_t i = 0; i < w->termed_count; i++) {
-        if (w->termed[i].pid == row->pid && w->termed[i].start == row->start) {
-            return 1;
-        }
-    }
-    return 0;
+    return identity_find(&w->termed, row->pid, row->start) != NULL;
 }
 
 // Room is reserved before a TERM is sent, so a delivered TERM is always recorded.
 static int reserve_termed(struct watcher *w) {
-    if (w->termed_count == w->termed_capacity) {
-        size_t capacity = w->termed_capacity > 0 ? w->termed_capacity * 2 : 16;
-        void *grown = realloc(w->termed, capacity * sizeof *w->termed);
-        if (grown == NULL) {
-            return 0;
-        }
-        w->termed = grown;
-        w->termed_capacity = capacity;
-    }
-    return 1;
+    return identity_reserve(&w->termed);
 }
 
 static void record_termed(struct watcher *w, const struct proc_row *row) {
-    if (!already_termed(w, row) && reserve_termed(w)) {
-        w->termed[w->termed_count].pid = row->pid;
-        w->termed[w->termed_count].start = row->start;
-        w->termed_count++;
+    if (!already_termed(w, row) && identity_reserve(&w->termed)) {
+        identity_insert(&w->termed, row->pid, row->start, 1);
     }
 }
 
@@ -964,7 +1042,7 @@ static int sweep_tree(struct watcher *w, int signal_number) {
 }
 #endif
 
-// Rate-limited to one table read per sweep interval.
+// Rate-limited to one table read per sweep interval, backing off to 1 s while nothing is found.
 // During TERM grace and reap it also sweeps while the CLI group lives, so a tool that was deferred
 // or born late still gets its signal. Absence needs the group gone before the sweep began.
 static int tree_absent(struct watcher *w, int signal_number) {
@@ -982,8 +1060,14 @@ static int tree_absent(struct watcher *w, int signal_number) {
         return 0;
     }
     w->swept_group_gone = group_gone;
-    w->next_sweep_ns = now_ns + (long long)TREE_SWEEP_INTERVAL_MS * 1000000LL;
     int live = sweep_tree(w, signal_number);
+    // Back off while sweeps find nothing to act on; any member or uncertainty resets the pace.
+    long long interval = w->sweep_interval_ms > 0 ? w->sweep_interval_ms : TREE_SWEEP_INTERVAL_MS;
+    interval = live != 0 ? TREE_SWEEP_INTERVAL_MS
+                         : (interval * 2 > TREE_SWEEP_MAX_INTERVAL_MS ? TREE_SWEEP_MAX_INTERVAL_MS
+                                                                      : interval * 2);
+    w->sweep_interval_ms = interval;
+    w->next_sweep_ns = now_ns + interval * 1000000LL;
     if (!group_gone) {
         return 0;
     }
