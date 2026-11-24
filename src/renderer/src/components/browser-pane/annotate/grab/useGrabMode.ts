@@ -145,13 +145,17 @@ export function useGrabMode(
 
     if (result.kind === 'selected' || result.kind === 'context-selected') {
       let screenshot: BrowserGrabScreenshot | null = null
+      // The screenshot crops the picked element by its private pick ID; without one there is nothing to crop.
+      const selectionId = result.payload.page.selectionId
       try {
-        const ssResult = await transport.captureSelectionScreenshot({
-          browserPageId: tabId,
-          rect: result.payload.target.rectViewport,
-          selectionId: result.payload.page.selectionId
-        })
-        if (ssResult.ok) {
+        const ssResult = selectionId
+          ? await transport.captureSelectionScreenshot({
+              browserPageId: tabId,
+              rect: result.payload.target.rectViewport,
+              selectionId
+            })
+          : null
+        if (ssResult?.ok) {
           screenshot = ssResult.screenshot as BrowserGrabScreenshot
         }
       } catch {

@@ -130,12 +130,14 @@ export function runBrowserGrabActionShortcut({
       }
       const payload = result.payload as BrowserGrabPayload
 
-      if (key === 's') {
+      // The screenshot crops the picked element by its private pick ID; without one there is nothing to crop.
+      const selectionId = payload.page.selectionId
+      if (key === 's' && selectionId) {
         try {
           const ssResult = await grab.transport.captureSelectionScreenshot({
             browserPageId: toolTargetId,
             rect: payload.target.rectViewport,
-            selectionId: payload.page.selectionId
+            selectionId
           })
           if (ssResult.ok) {
             payload.screenshot = ssResult.screenshot as BrowserGrabScreenshot

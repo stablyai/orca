@@ -20,7 +20,8 @@ export const GrabAwait = BrowserTarget.extend({
 
 export const GrabCaptureSelection = BrowserTarget.extend({
   rect: z.object({ x: finite, y: finite, width: finite, height: finite }),
-  selectionId: z.string().min(1).max(200).optional()
+  // The pick to crop; a rectangle alone could name any region of the page.
+  selectionId: z.string().min(1).max(200)
 })
 
 export const GrabViewportBridge = BrowserTarget.extend({

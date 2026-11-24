@@ -248,7 +248,8 @@ export type BrowserCancelGrabArgs = {
 
 export type BrowserCaptureSelectionScreenshotArgs = {
   browserPageId: string
-  selectionId?: string
+  /** The pick to crop; a rectangle alone could name any region of the page, so it is required. */
+  selectionId: string
   rect: BrowserGrabRect
 }
 

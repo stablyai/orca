@@ -242,3 +242,12 @@ it('hands Draw the capture of the document its own request cleaned', async () =>
     )
   ).resolves.toEqual({ dataUrl: 'data:image/png;base64,AA', width: 8, height: 8 })
 })
+
+it('refuses a selection screenshot named only by a rectangle, without a pick', async () => {
+  await expect(
+    mocks.handlers.get('browser:captureSelectionScreenshot')?.(
+      { sender: { id: 17 } },
+      { browserPageId: 'page', rect: { x: 0, y: 0, width: 10, height: 10 } }
+    )
+  ).resolves.toEqual({ ok: false, reason: 'No picked element' })
+})

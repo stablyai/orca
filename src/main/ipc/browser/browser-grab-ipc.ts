@@ -205,6 +205,10 @@ export function registerBrowserGrabHandlers(): void {
       if (!isTrustedBrowserRenderer(event.sender)) {
         return { ok: false, reason: 'Not authorized' }
       }
+      // Only the picked element is captured; a rectangle alone could name any region of the page.
+      if (typeof args.selectionId !== 'string' || args.selectionId.length === 0) {
+        return { ok: false, reason: 'No picked element' }
+      }
       const guest = browserManager.getAuthorizedGuest(args.browserPageId, event.sender.id)
       if (!guest) {
         return { ok: false, reason: 'Guest not ready' }
