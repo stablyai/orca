@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import { clientIpFromForwardedFor, clientIpPolicy } from './client-ip-rate-limit.js'
 import { resolvePublicUrlProxyAddresses } from './public-url-proxy-addresses.js'
 
@@ -29,18 +29,52 @@ describe('clientIpFromForwardedFor', () => {
     const policy = clientIpPolicy({ trustedProxyHops: 0, trustedProxyAddresses: ['2001:DB8::A'] })
     expect(clientIpFromForwardedFor('2001:db8::1, 2001:db8::a', policy)).toBe('2001:db8::1')
   })
+
+  it('matches proxy addresses written in another form', () => {
+    const policy = clientIpPolicy({
+      trustedProxyHops: 0,
+      trustedProxyAddresses: ['2001:0db8:0:0:0:0:0:000a', `::ffff:${LB}`]
+    })
+    expect(clientIpFromForwardedFor('2001:db8::1, 2001:db8::a', policy)).toBe('2001:db8::1')
+    expect(clientIpFromForwardedFor(`198.51.100.1, ${LB}`, policy)).toBe('198.51.100.1')
+  })
 })
 
 describe('resolvePublicUrlProxyAddresses', () => {
+  const fail = async (): Promise<string[]> => {
+    throw new Error('ETIMEOUT')
+  }
+
   it('returns both address families and survives one failing', async () => {
-    const resolver = {
-      resolve4: async () => [LB],
-      resolve6: async () => {
-        throw new Error('ENODATA')
-      }
+    const resolver = { resolve4: async () => [LB], resolve6: fail }
+    await expect(
+      resolvePublicUrlProxyAddresses('https://push.example', { resolver, required: true })
+    ).resolves.toEqual([LB])
+  })
+
+  it('retries when both families fail, then fails startup instead of trusting nothing', async () => {
+    let calls = 0
+    const flaky = {
+      resolve4: async () => (++calls < 2 ? fail() : [LB]),
+      resolve6: fail
     }
-    await expect(resolvePublicUrlProxyAddresses('https://push.example', resolver)).resolves.toEqual(
-      [LB]
-    )
+    await expect(
+      resolvePublicUrlProxyAddresses('https://push.example', {
+        resolver: flaky,
+        required: true,
+        retryDelayMs: 0
+      })
+    ).resolves.toEqual([LB])
+
+    const down = { resolve4: vi.fn(fail), resolve6: fail }
+    await expect(
+      resolvePublicUrlProxyAddresses('https://push.example', {
+        resolver: down,
+        required: true,
+        attempts: 3,
+        retryDelayMs: 0
+      })
+    ).rejects.toThrow(/ORCA_PUSH_TRUSTED_PROXY_ADDRESSES/)
+    expect(down.resolve4).toHaveBeenCalledTimes(3)
   })
 })

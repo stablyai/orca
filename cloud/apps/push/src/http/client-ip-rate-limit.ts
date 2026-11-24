@@ -1,5 +1,6 @@
 import { PUSH_LIMITS } from '@orca-cloud/push-contract/push-limits'
 import type { Context, MiddlewareHandler } from 'hono'
+import { isIP } from 'node:net'
 
 const REFILL_WINDOW_MS = 60_000
 const MAX_TRACKED_IPS = 10_000
@@ -16,7 +17,7 @@ type Bucket = { tokens: number; updatedAt: number }
 
 export type ClientIpPolicy = {
   trustedProxyHops: number
-  /** Lowercase addresses only a proxy in front of this service appends, such as the load balancer's own address. */
+  /** Canonical addresses only a proxy in front of this service appends, such as the load balancer's own address. */
   trustedProxyAddresses: ReadonlySet<string>
 }
 
@@ -26,10 +27,28 @@ export function clientIpPolicy(config: {
 }): ClientIpPolicy {
   return {
     trustedProxyHops: config.trustedProxyHops,
-    trustedProxyAddresses: new Set(
-      config.trustedProxyAddresses.map((address) => address.toLowerCase())
-    )
+    trustedProxyAddresses: new Set(config.trustedProxyAddresses.map(canonicalIp))
   }
+}
+
+const IPV4_MAPPED = /^::ffff:([0-9a-f]{1,4}):([0-9a-f]{1,4})$/
+
+// One spelling per address, so 2001:0DB8::000A in config matches 2001:db8::a in a header and
+// ::ffff:203.0.113.10 matches 203.0.113.10.
+export function canonicalIp(address: string): string {
+  if (isIP(address) !== 6) return address.toLowerCase()
+  let compressed: string
+  try {
+    compressed = new URL(`http://[${address}]`).hostname.slice(1, -1)
+  } catch {
+    // Zone-scoped addresses (fe80::1%eth0) are not valid URL hosts.
+    return address.toLowerCase()
+  }
+  const mapped = IPV4_MAPPED.exec(compressed)
+  if (!mapped) return compressed
+  const high = Number.parseInt(mapped[1]!, 16)
+  const low = Number.parseInt(mapped[2]!, 16)
+  return [high >> 8, high & 0xff, low >> 8, low & 0xff].join('.')
 }
 
 // Read from the right: Google's front end appends the peer, while callers can forge earlier entries. Skip the trusted hop count and any trailing hop that is a trusted proxy's own address, so a load balancer's address never becomes everyone's shared bucket; short chains share the throttled fallback bucket.
@@ -46,7 +65,7 @@ export function clientIpFromForwardedFor(
   for (let skipped = 0; index >= 0; index--, skipped++) {
     const trusted =
       skipped < policy.trustedProxyHops ||
-      policy.trustedProxyAddresses.has(hops[index]!.toLowerCase())
+      policy.trustedProxyAddresses.has(canonicalIp(hops[index]!))
     if (!trusted) break
   }
   return hops[index] ?? UNKNOWN_CLIENT_IP

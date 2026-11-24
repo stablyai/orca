@@ -13,7 +13,10 @@ const [database, publicUrlProxyAddresses] = await Promise.all([
     applicationName: 'orca-push',
     readOnly: loadedConfig.mode === 'validation'
   }),
-  resolvePublicUrlProxyAddresses(loadedConfig.publicUrl)
+  resolvePublicUrlProxyAddresses(loadedConfig.publicUrl, {
+    // Configured hops or addresses already find the client without discovery.
+    required: loadedConfig.trustedProxyHops === 0 && loadedConfig.trustedProxyAddresses.length === 0
+  })
 ])
 const config = {
   ...loadedConfig,

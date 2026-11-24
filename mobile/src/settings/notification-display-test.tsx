@@ -205,8 +205,8 @@ export function NotificationDisplayTest({ onTroubleshoot }: { onTroubleshoot: ()
             )
           continue
         }
-        if (result?.pushServiceProblem === 'rate_limited') {
-          throw new Error(pushServiceProblemCopy('rate_limited', t))
+        if (result?.pushServiceProblem) {
+          throw new Error(pushServiceProblemCopy(result.pushServiceProblem, t))
         }
         throw new Error(
           result?.reason === 'rate_limited'
