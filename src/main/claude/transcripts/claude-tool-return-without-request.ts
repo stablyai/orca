@@ -34,6 +34,7 @@ export function claudeToolReturnWithoutRequest(transcript: string): number | nul
       if (index > 0 && line.trim() !== '') {
         lastResultAt = null
         batch = null
+        requestRecorded = false
       }
       continue
     }
