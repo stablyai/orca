@@ -30,7 +30,7 @@ export type DocumentCodeBlockRenderer = (props: {
   sourceLine?: number
 }) => React.JSX.Element
 
-function handleMarkdownAnchorClick(
+export function handleMarkdownAnchorClick(
   event: React.MouseEvent<HTMLAnchorElement>,
   href: string | undefined,
   onLinkClick: CommentMarkdownLinkClickHandler | undefined
@@ -47,7 +47,7 @@ function handleMarkdownAnchorClick(
   onLinkClick?.(event, href)
 }
 
-function handleMarkdownAnchorAuxClick(
+export function handleMarkdownAnchorAuxClick(
   event: React.MouseEvent<HTMLAnchorElement>,
   href: string | undefined,
   onLinkClick: CommentMarkdownLinkClickHandler | undefined
