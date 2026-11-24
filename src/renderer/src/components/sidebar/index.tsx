@@ -48,6 +48,7 @@ import {
 import { useRailPageListFocusRelease } from '@/components/app-rail/rail-page-list-focus-loss'
 import { setWorkspaceListRegionPresent } from '@/components/app-rail/workspace-list-region-presence'
 import { WorktreeCardsUpdateNotice } from './workspace-card/template/WorktreeCardsUpdateNotice'
+import { ChatWorkspaceSection } from './chat-workspaces/ChatWorkspaceSection'
 
 // Load the shared Activity badge/list pipeline after the sidebar shell.
 const SidebarAgentsList = lazyWithRetry(() => import('../activity/sidebar/SidebarAgentsList'))
@@ -327,6 +328,7 @@ function Sidebar({
               >
                 <SidebarContentViewport>
                   <SidebarNav />
+                  {sidebarBody !== 'agents' ? <ChatWorkspaceSection /> : null}
                   {projectsFirst ? [projectsSection, botsSection] : [botsSection, projectsSection]}
                 </SidebarContentViewport>
                 <SidebarSectionDragOverlay sidebarStyle={leftSidebarStyle} />

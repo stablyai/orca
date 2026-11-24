@@ -20,6 +20,8 @@ import type { useSidebarHostVisibleScope } from './use-host-visible-scope'
 import type { useSidebarSectionRows } from './use-section-rows'
 
 export type SidebarListModelArgs = {
+  workspaceSection?: 'projects' | 'chats'
+  ownsWorktree?: (worktree: Worktree) => boolean
   filterState: SidebarWorktreeFilters['filterState']
   sortBy: SortBy
   groupBy: WorktreeGroupBy

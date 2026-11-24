@@ -128,7 +128,12 @@ export function WorktreeCardsIntroPanel({
         return
       }
       // Why check each try: a disabled or hidden opener can refuse focus; then the list still gets it.
-      for (const candidate of [opener, document.querySelector('[data-worktree-sidebar]')]) {
+      for (const candidate of [
+        opener,
+        document.querySelector(
+          '[data-sidebar-workspace-section="projects"] [data-worktree-sidebar]'
+        )
+      ]) {
         if (canTakeFocus(candidate)) {
           candidate.focus({ preventScroll: true })
           if (document.activeElement === candidate) {

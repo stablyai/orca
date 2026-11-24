@@ -234,7 +234,7 @@ export function preserveDeleteSiblingPosition(scope: HTMLElement | null): () => 
     let attempts = 0
     let stableFrames = 0
     const restore = (): void => {
-      const currentSidebar = document.querySelector('[data-worktree-sidebar]')
+      const currentSidebar = sidebar.isConnected ? sidebar : null
       if (!(currentSidebar instanceof HTMLElement)) {
         return
       }

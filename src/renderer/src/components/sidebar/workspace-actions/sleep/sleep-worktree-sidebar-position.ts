@@ -39,7 +39,8 @@ export function preserveSidebarWorktreePosition(worktreeId: string): () => void 
     return () => {}
   }
   const getScroller = (): HTMLElement | null =>
-    document.querySelector<HTMLElement>('[data-worktree-sidebar]')
+    findPrimarySidebarWorktreeOption(worktreeId)?.closest<HTMLElement>('[data-worktree-sidebar]') ??
+    null
   const scroller = getScroller()
   const activeOption = findPrimarySidebarWorktreeOption(worktreeId)
   const activeRowKey = activeOption?.dataset.worktreeRowKey

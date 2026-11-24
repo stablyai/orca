@@ -23,6 +23,7 @@ import {
 import {
   RepoClone,
   RepoCreate,
+  ChatWorkspaceCreate,
   RepoHooksCheck,
   RepoHooksRead,
   RepoIssueCommandWrite,
@@ -114,6 +115,16 @@ export const REPO_METHODS = [
     handler: async (params, context) =>
       projectRepoResultVisibilityForClient(
         await context.runtime.createRepo(params.parentPath, params.name, params.kind),
+        context
+      )
+  }),
+  defineMethod({
+    name: 'repo.createChatWorkspace',
+    permission: 'workspace',
+    params: ChatWorkspaceCreate,
+    handler: async (params, context) =>
+      projectRepoResultVisibilityForClient(
+        await context.runtime.createChatWorkspace(params.name, params.displayName),
         context
       )
   }),

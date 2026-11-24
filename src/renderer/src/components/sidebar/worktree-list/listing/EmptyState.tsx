@@ -6,9 +6,11 @@ import { useAppStore } from '@/store'
 import { isRepoHidden } from '../../../../../../shared/project/catalog/hidden-projects'
 
 export function SidebarWorktreeListEmptyState({
+  workspaceSection = 'projects',
   hasFilters,
   onClearFilters
 }: {
+  workspaceSection?: 'projects' | 'chats'
   hasFilters: boolean
   onClearFilters: () => void
 }): React.JSX.Element {
@@ -19,7 +21,8 @@ export function SidebarWorktreeListEmptyState({
   return (
     <div
       data-worktree-sidebar-container
-      data-contextual-tour-target="workspace-list"
+      data-sidebar-workspace-section={workspaceSection}
+      data-contextual-tour-target={workspaceSection === 'chats' ? undefined : 'workspace-list'}
       className="relative min-h-0 flex-1"
     >
       <div className="worktree-sidebar-scrollbar flex h-full flex-col overflow-y-auto overflow-x-hidden pl-1 scrollbar-sleek pt-px">

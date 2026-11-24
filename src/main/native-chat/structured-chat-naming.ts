@@ -174,6 +174,7 @@ export function createStructuredChatNamingHandler(deps: StructuredChatNamingDeps
     if (named) {
       forget(record.sessionId)
       refresh(named.location.workspaceId, named.sessionId)
+      await deps.onGenerated?.(named)
     }
   }
 

@@ -22164,6 +22164,14 @@
     "cardSlot": {
       "needYouCount": "{{count}} à traiter",
       "needsYou": "À traiter"
+    },
+    "chats": {
+      "title": "Discussions",
+      "create": "Nouvel espace de discussion",
+      "expand": "Développer les discussions",
+      "collapse": "Réduire les discussions",
+      "newProjectDate": "Nouveau projet-{{date}}",
+      "updateHost": "Mettez à jour Orca sur l’hôte sélectionné pour créer un espace de discussion."
     }
   },
   "editor": {

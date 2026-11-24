@@ -24028,6 +24028,14 @@
       "detailsRow": "상세 정보 줄",
       "workspaceUnread": "이 워크스페이스의 읽지 않은 항목",
       "unreadTab": "읽지 않은 탭"
+    },
+    "chats": {
+      "title": "채팅",
+      "create": "새 채팅 작업 공간",
+      "expand": "채팅 펼치기",
+      "collapse": "채팅 접기",
+      "newProjectDate": "새 프로젝트-{{date}}",
+      "updateHost": "채팅 작업 공간을 만들려면 선택한 호스트의 Orca를 업데이트하세요."
     }
   },
   "editor": {

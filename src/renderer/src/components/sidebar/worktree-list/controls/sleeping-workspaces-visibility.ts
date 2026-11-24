@@ -25,15 +25,16 @@ function isInOuterSidebarViewport(scroller: HTMLElement, option: HTMLElement): b
 }
 
 function findVisibleActiveRowKey(activeId: string): string | undefined {
-  const scroller = document.querySelector<HTMLElement>('[data-worktree-sidebar]')
-  // Why: a hidden list has no viewport, and revealing there would unfold the Projects section.
-  if (!scroller || scroller.clientHeight === 0) {
-    return undefined
+  for (const scroller of document.querySelectorAll<HTMLElement>('[data-worktree-sidebar]')) {
+    if (scroller.clientHeight === 0) {
+      continue
+    }
+    const option = findOnScreenActiveWorktreeOption(scroller, activeId)
+    if (option && isInOuterSidebarViewport(scroller, option)) {
+      return option.dataset.worktreeRowKey
+    }
   }
-  const option = findOnScreenActiveWorktreeOption(scroller, activeId)
-  return option && isInOuterSidebarViewport(scroller, option)
-    ? option.dataset.worktreeRowKey
-    : undefined
+  return undefined
 }
 
 // Why: newly shown sleeping rows above an on-screen active row push it out of view (#47643).

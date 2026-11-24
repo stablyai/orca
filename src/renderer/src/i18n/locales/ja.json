@@ -22561,6 +22561,14 @@
     "cardSlot": {
       "needYouCount": "要対応 {{count}} 件",
       "needsYou": "要対応"
+    },
+    "chats": {
+      "title": "チャット",
+      "create": "新しいチャットワークスペース",
+      "expand": "チャットを展開",
+      "collapse": "チャットを折りたたむ",
+      "newProjectDate": "新規プロジェクト-{{date}}",
+      "updateHost": "チャットワークスペースを作成するには、選択したホストの Orca を更新してください。"
     }
   },
   "editor": {

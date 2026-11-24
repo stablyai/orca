@@ -38,6 +38,7 @@ import {
   type RepoCreateFailure
 } from '../../../shared/repository/creation/repo-create-failure-copy'
 import { getDefaultCreateProjectParent } from './default-create-project-parent'
+import { createChatWorkspace } from './chat-workspace-create'
 
 type RuntimeRepositoryRegistrationDependencies = {
   getStore: () => RuntimeStore | null
@@ -156,7 +157,8 @@ export class RuntimeRepositoryRegistrationController {
   async create(
     parentPath: string,
     name: string,
-    kind: 'git' | 'folder' = 'git'
+    kind: 'git' | 'folder' = 'git',
+    chatWorkspace?: Repo['chatWorkspace']
   ): Promise<
     { repo: Repo } | (RepoCreateFailure & { windowsDriveRefusal?: WslHostWindowsDriveRefusal })
   > {
@@ -249,7 +251,8 @@ export class RuntimeRepositoryRegistrationController {
     const repo: Repo = {
       id: randomUUID(),
       path: repoPath,
-      displayName: trimmedName,
+      displayName: chatWorkspace?.initialName ?? trimmedName,
+      ...(chatWorkspace ? { chatWorkspace } : {}),
       badgeColor: DEFAULT_REPO_BADGE_COLOR,
       ...detected,
       addedAt: Date.now(),
@@ -262,6 +265,9 @@ export class RuntimeRepositoryRegistrationController {
     this.invalidate(repo.id)
     return { repo: store.getRepo(repo.id) ?? repo }
   }
+
+  createChatWorkspace = async (name: string, displayName: string) =>
+    createChatWorkspace(this, this.requireStore(), name, displayName)
 
   private async initializeGitRepo(
     targetPath: string,
@@ -297,10 +303,8 @@ export class RuntimeRepositoryRegistrationController {
     }
   }
 
-  /** Read on this host so a paired client suggests this host's Workspace Directory, not its own. */
-  defaultCreateParent(): string {
-    return getDefaultCreateProjectParent(this.requireStore().getSettings())
-  }
+  defaultCreateParent = (): string =>
+    getDefaultCreateProjectParent(this.requireStore().getSettings())
 
   private requireStore(): RuntimeStore {
     const store = this.deps.getStore()

@@ -23728,6 +23728,14 @@
       "detailsRow": "详情行",
       "workspaceUnread": "此工作区中有未读内容",
       "unreadTab": "未读标签页"
+    },
+    "chats": {
+      "title": "对话",
+      "create": "新建对话工作区",
+      "expand": "展开对话",
+      "collapse": "折叠对话",
+      "newProjectDate": "新项目-{{date}}",
+      "updateHost": "请更新所选主机上的 Orca，再创建对话工作区。"
     }
   },
   "editor": {

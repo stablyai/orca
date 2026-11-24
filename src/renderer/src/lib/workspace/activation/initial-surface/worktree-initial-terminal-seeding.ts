@@ -2,7 +2,11 @@ import type {
   WorktreeDefaultTabsLaunch,
   WorktreeSetupLaunch
 } from '../../../../../../shared/worktree/creation/launch-types'
-import type { ExecutionHostId } from '../../../../../../shared/execution-host/execution-host'
+import {
+  getRepoExecutionHostId,
+  type ExecutionHostId
+} from '../../../../../../shared/execution-host/execution-host'
+import { getRepoIdFromWorktreeId } from '../../../../../../shared/worktree/id'
 import { shouldAutoCreateInitialTerminal } from '@/lib/workspace/activation/initial-surface/initial-terminal'
 import { hasSplitLandingGroup } from '@/store/slices/tabs/split-landing-groups'
 import { isTerminalWorkspaceEmptiedOnPurpose } from '../../../../../../shared/workspace-layout/terminal-surfaces/closed-terminal-tab-tombstones'
@@ -88,6 +92,22 @@ export function ensureWorktreeHasInitialTerminal(
       ? store
       : useAppStore.getState()
   let sequencedStartup = startup
+  if (
+    renderableTabCount === 0 &&
+    !startup &&
+    !setup &&
+    !issueCommand &&
+    !defaultTabs?.tabs.length &&
+    ownerState.repos?.some(
+      (repo) =>
+        repo.id === getRepoIdFromWorktreeId(worktreeId) &&
+        repo.chatWorkspace &&
+        getRepoExecutionHostId(repo) ===
+          (opts?.executionHostId ?? ownerState.activeWorkspaceExecutionHostId ?? 'local')
+    )
+  ) {
+    return null
+  }
   let wrappedSetupCommandStr: string | undefined
 
   if (startup && setup?.waitForAgentStartup === true) {

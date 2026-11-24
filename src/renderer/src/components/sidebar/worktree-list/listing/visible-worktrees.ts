@@ -33,14 +33,27 @@ export type VisibleWorktreeShortcutTarget = {
 }
 let _publishedVisibleShortcutTargets: VisibleWorktreeShortcutTarget[] | null = null
 
-export function setVisibleWorktreeIds(ids: string[] | null): void {
-  _publishedVisibleIds = ids
-}
+const renderedSections = new Map<
+  'chats' | 'projects',
+  { ids: string[]; targets: VisibleWorktreeShortcutTarget[] }
+>()
 
-export function setVisibleWorktreeShortcutTargets(
-  targets: VisibleWorktreeShortcutTarget[] | null
+export function setVisibleWorktreeSection(
+  section: 'chats' | 'projects',
+  rows: { ids: string[]; targets: VisibleWorktreeShortcutTarget[] } | null
 ): void {
-  _publishedVisibleShortcutTargets = targets
+  if (rows) {
+    renderedSections.set(section, rows)
+  } else {
+    renderedSections.delete(section)
+  }
+  const sections = ['chats', 'projects'] as const
+  _publishedVisibleIds = renderedSections.size
+    ? sections.flatMap((key) => renderedSections.get(key)?.ids ?? [])
+    : null
+  _publishedVisibleShortcutTargets = renderedSections.size
+    ? sections.flatMap((key) => renderedSections.get(key)?.targets ?? [])
+    : null
 }
 
 export function getPublishedVisibleWorktreeShortcutTargets():

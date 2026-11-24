@@ -45,6 +45,10 @@ export type Repo = {
   id: string
   path: string
   displayName: string
+  chatWorkspace?: {
+    initialName: string
+    autoName: boolean
+  }
   badgeColor: string
   repoIcon?: RepoIcon | null
   /** Fork parent; same-name forks use its avatar, renamed forks keep their own. Absent means non-fork or unresolved. */

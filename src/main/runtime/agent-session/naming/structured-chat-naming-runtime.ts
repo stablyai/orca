@@ -1,3 +1,4 @@
+import { createStructuredChatNamingHandler } from '../../../native-chat/structured-chat-naming'
 import { normalizeSourceControlAiSettings } from '../../../../shared/source-control/ai/settings/source-control-ai-settings'
 import { resolveSourceControlActionRecipe } from '../../../../shared/source-control/ai/source-control-ai-operation-policy'
 import { normalizeSourceControlActionRecipe } from '../../../../shared/source-control/ai/recipes/source-control-ai-actions'
@@ -22,6 +23,8 @@ import {
   resolveCommitMessageSettings as resolveTextGenerationParams
 } from '../../../text-generation/commit-message-text-generation'
 import { resolveGenerationTarget } from '../../../agent-hooks/first-work/first-work-generation-target'
+import type { RuntimeStore } from '../../construction/runtime-store-contract'
+import { nameChatWorkspaceFromSession } from '../../repositories/chat-workspace-name-runtime'
 
 type StructuredChatNamingRuntime = {
   resolveWorkspace: (
@@ -31,18 +34,19 @@ type StructuredChatNamingRuntime = {
   getAgentEnvResolvers: () => CommitMessageAgentEnvironmentResolvers | undefined
   workerTaskTitle: StructuredChatNamingDeps['workerTaskTitle']
   retitleOpenTab: StructuredChatNamingDeps['onNamed']
+  refreshProjectCatalog: (repoId: string) => void
 }
 
-export function structuredChatNamingDeps(
+export function createRuntimeStructuredChatNamingHandler(
   getStore: () => {
     getSettings: () => Parameters<typeof resolveTextGenerationParams>[0] &
       AgentLaunchProfileSettings &
       ReturnType<StructuredChatNamingDeps['getSettings']>
-  },
+  } & Pick<RuntimeStore, 'getRepos' | 'updateRepo'>,
   runtime: StructuredChatNamingRuntime,
   logger: StructuredAgentSessionLogger
-): StructuredChatNamingDeps {
-  return {
+): ReturnType<typeof createStructuredChatNamingHandler> {
+  return createStructuredChatNamingHandler({
     getStore: () => getStructuredAgentSessionHost()?.deps.store ?? null,
     getSettings: () => getStore().getSettings(),
     readFirstPrompt: async (sessionId, hostStartedAt) => {
@@ -174,6 +178,20 @@ export function structuredChatNamingDeps(
       logger.warn(result.error, log)
       return result.canceled ? null : { error: result.error, failureOutput: result.failureOutput }
     },
+    onGenerated: (record) =>
+      nameChatWorkspaceFromSession(getStore(), runtime.resolveWorkspace, record)
+        .then((named) => {
+          if (named) {
+            runtime.refreshProjectCatalog(named)
+          }
+        })
+        .catch((error: unknown) =>
+          logger.warn('Chat workspace naming failed', {
+            scope: 'chat-workspace',
+            sessionId: record.sessionId,
+            error
+          })
+        ),
     onNamed: (workspaceId, sessionId) => {
       try {
         // Lists that show the chat without its tab, a closed one too, learn the name from the feed.
@@ -188,5 +206,5 @@ export function structuredChatNamingDeps(
       runtime.retitleOpenTab(workspaceId, sessionId)
     },
     logger
-  }
+  })
 }

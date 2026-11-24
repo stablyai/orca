@@ -27,6 +27,7 @@ export type StructuredChatNamingDeps = {
     shouldExecute?: () => boolean
   ) => Promise<StructuredChatNameGeneration>
   onNamed: (workspaceId: string, sessionId: string) => void
+  onGenerated?: (record: AgentSessionRecord) => Promise<void>
   logger: StructuredAgentSessionLogger
   wait?: (ms: number) => Promise<void>
 }

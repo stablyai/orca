@@ -369,7 +369,10 @@ export const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktr
   return (
     <div
       data-worktree-sidebar-container
-      data-contextual-tour-target="workspace-list"
+      data-sidebar-workspace-section={props.workspaceSection ?? 'projects'}
+      data-contextual-tour-target={
+        props.workspaceSection === 'chats' ? undefined : 'workspace-list'
+      }
       className="relative min-h-0 flex-1"
     >
       <div

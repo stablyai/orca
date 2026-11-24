@@ -319,6 +319,14 @@
       "detailsRow": "Details row",
       "workspaceUnread": "Unread in this workspace",
       "unreadTab": "Unread tab"
+    },
+    "chats": {
+      "title": "Chats",
+      "create": "New chat workspace",
+      "expand": "Expand Chats",
+      "collapse": "Collapse Chats",
+      "newProjectDate": "New project-{{date}}",
+      "updateHost": "Update Orca on the selected host to create a chat workspace."
     }
   },
   "app": {
