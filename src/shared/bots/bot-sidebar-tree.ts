@@ -18,6 +18,7 @@ import {
   rankBotWorkspacesByLive,
   type BotSidebarLineNote
 } from './bot-sidebar-chat-groups'
+import type { HostScopedWorktreeKey } from '../worktree/host-qualified-identity'
 
 /** What a chat row's right edge says: a folded chat's live counts, else its time; nothing while it replies. */
 export type BotSidebarChatTrailing =
@@ -59,8 +60,8 @@ export type BotSidebarTree<T> = {
   stray: T[]
   /** Each workspace's note: handed over, or from a closed chat. */
   notes: ReadonlyMap<string, BotSidebarLineNote>
-  /** Each workspace's newest loaded worker, which its line shows and opens. */
-  workers: ReadonlyMap<string, BotChatTreeWorker>
+  /** Each workspace's newest loaded worker by `botLineWorkspaceKey`, which its line shows and opens. */
+  workers: ReadonlyMap<HostScopedWorktreeKey, BotChatTreeWorker>
 }
 
 /** Whether a bot's chats and workspaces list under its row. Nothing does while its host is down: no

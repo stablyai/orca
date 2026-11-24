@@ -6,7 +6,7 @@ import { useAppStore } from '@/store'
 import { findWorktreeById } from '@/store/github/refresh/worktree-refresh'
 import { useNow } from '@/lib/window-activity/use-now'
 import { useTranslate, type Translate } from '@/i18n/use-translate'
-import { botTarget } from '@/lib/bot-hosts'
+import { botTarget, type BotOnHost } from '@/lib/bot-hosts'
 import { openOrchestrationWorker, revealWorkerPane } from '@/lib/open-orchestration-worker'
 import type { Bot } from '../../../../shared/bot-types'
 import type { BotChatTreeWorker } from '../../../../shared/bots/bot-chat-tree'
@@ -120,7 +120,7 @@ export function botChatTreeWorkerRunning(worker: BotChatTreeWorker): boolean {
  *  when it has none of them. A start that failed before its agent ran has no session, so only a
  *  workspace it left behind opens. */
 export function botChatTreeWorkerOpen(
-  bot: Bot,
+  bot: BotOnHost,
   worker: BotChatTreeWorker
 ): (() => void) | undefined {
   const { run, dispatchId, worktreeId } = worker

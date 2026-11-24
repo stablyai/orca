@@ -1,4 +1,9 @@
 import { CHAT_TREE_CAPS, type BotChatTreeChat, type BotChatTreeWorker } from './bot-chat-tree'
+import { parseExecutionHostId, type ExecutionHostId } from '../execution-host/execution-host'
+import {
+  composeWorktreeHostIdentity,
+  type HostScopedWorktreeKey
+} from '../worktree/host-qualified-identity'
 
 export type BotSidebarChatGroup<T> = { chat: BotChatTreeChat; workspaces: T[] }
 
@@ -72,16 +77,31 @@ export function pageChatLines(
 
 export type BotSidebarLineNote = 'handed-over' | 'from-closed-chat'
 
-/** Each workspace's newest loaded worker; a workspace none of the loaded workers has is absent. */
+/** A workspace's key relative to the host that answered: a paired computer's id is kept, the
+ *  answering host's own (or an unstated one) is left out, so the same id on two hosts stays two. */
+export function botLineWorkspaceKey(
+  hostId: string | undefined,
+  worktreeId: string
+): HostScopedWorktreeKey {
+  const parsed = parseExecutionHostId(hostId)
+  const host: ExecutionHostId | undefined = parsed?.kind === 'runtime' ? parsed.id : undefined
+  return composeWorktreeHostIdentity(host, worktreeId)
+}
+
+/** Each workspace's newest loaded worker, by host and worktree id; one none of them has is absent. */
 export function botSidebarLineWorkers(
   chats: readonly BotChatTreeChat[]
-): Map<string, BotChatTreeWorker> {
-  const newest = new Map<string, BotChatTreeWorker>()
+): Map<HostScopedWorktreeKey, BotChatTreeWorker> {
+  const newest = new Map<HostScopedWorktreeKey, BotChatTreeWorker>()
   for (const chat of chats) {
     for (const worker of [...chat.running, ...chat.finished]) {
-      const seen = worker.worktreeId ? newest.get(worker.worktreeId) : undefined
-      if (worker.worktreeId && (!seen || worker.startedAt > seen.startedAt)) {
-        newest.set(worker.worktreeId, worker)
+      if (!worker.worktreeId) {
+        continue
+      }
+      const key = botLineWorkspaceKey(worker.hostId, worker.worktreeId)
+      const seen = newest.get(key)
+      if (!seen || worker.startedAt > seen.startedAt) {
+        newest.set(key, worker)
       }
     }
   }
@@ -90,12 +110,15 @@ export function botSidebarLineWorkers(
 
 /** Each workspace's note from its newest loaded worker: a hand-over or a closed chat's still-running worker. */
 export function botSidebarLineNotes(
-  workers: ReadonlyMap<string, BotChatTreeWorker>
+  workers: ReadonlyMap<HostScopedWorktreeKey, BotChatTreeWorker>
 ): Map<string, BotSidebarLineNote> {
   const notes = new Map<string, BotSidebarLineNote>()
-  for (const [worktreeId, worker] of workers) {
-    if (worker.note === 'handed-over' || worker.note === 'from-closed-chat') {
-      notes.set(worktreeId, worker.note)
+  for (const worker of workers.values()) {
+    if (
+      worker.worktreeId &&
+      (worker.note === 'handed-over' || worker.note === 'from-closed-chat')
+    ) {
+      notes.set(worker.worktreeId, worker.note)
     }
   }
   return notes

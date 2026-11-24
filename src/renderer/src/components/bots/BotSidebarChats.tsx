@@ -103,7 +103,7 @@ export function BotSidebarChats({
     }
     return labels
   }, [view.notes, t])
-  const lineWorkers = useMemo(() => botSidebarWorkerLines(bot, view.workers), [bot, view.workers])
+  const lineWorkerOf = useMemo(() => botSidebarWorkerLines(bot, view.workers), [bot, view.workers])
 
   return (
     <>
@@ -113,7 +113,7 @@ export function BotSidebarChats({
           bot={bot}
           view={chatView}
           notes={notes}
-          lineWorkers={lineWorkers}
+          lineWorkerOf={lineWorkerOf}
           lineageChildrenByParentIdentity={lineageChildrenByParentIdentity}
           onStep={(next) => onStep(chatView.chat.chatId, next)}
           onOpen={onOpen}
@@ -126,7 +126,7 @@ export function BotSidebarChats({
           compactLine
           lineOwnerHostId={bot.hostId}
           lineNotes={notes}
-          lineWorkers={lineWorkers}
+          lineWorkerOf={lineWorkerOf}
           onOpen={onOpen}
         />
       ) : null}
@@ -151,7 +151,7 @@ function BotSidebarChat({
   bot,
   view,
   notes,
-  lineWorkers,
+  lineWorkerOf,
   lineageChildrenByParentIdentity,
   onStep,
   onOpen
@@ -159,7 +159,7 @@ function BotSidebarChat({
   bot: Bot
   view: BotSidebarChatView<Worktree>
   notes: ReadonlyMap<string, string>
-  lineWorkers: ReadonlyMap<string, WorktreeCardLineWorker>
+  lineWorkerOf: (worktree: Worktree) => WorktreeCardLineWorker | undefined
   lineageChildrenByParentIdentity: ReadonlyMap<string, Worktree[]>
   onStep: (steps: number) => void
   onOpen: () => void
@@ -239,7 +239,7 @@ function BotSidebarChat({
             compactLine
             lineOwnerHostId={bot.hostId}
             lineNotes={notes}
-            lineWorkers={lineWorkers}
+            lineWorkerOf={lineWorkerOf}
             onOpen={onOpen}
           />
           <BotChatPaging

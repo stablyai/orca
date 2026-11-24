@@ -27,7 +27,7 @@ export function AttachedWorktreeCards({
   lineOwnerHostId,
   affiliateListMode = false,
   lineNotes,
-  lineWorkers,
+  lineWorkerOf,
   onOpen
 }: {
   roots: readonly Worktree[]
@@ -42,8 +42,8 @@ export function AttachedWorktreeCards({
   affiliateListMode?: boolean
   /** A muted note after a line's name, by worktree id, as under a bot's chat. */
   lineNotes?: ReadonlyMap<string, string>
-  /** The worker a line stands for, by worktree id: its dot and what a press opens. */
-  lineWorkers?: ReadonlyMap<string, WorktreeCardLineWorker>
+  /** The worker a line stands for, by its host and id: its dot and what a press opens. */
+  lineWorkerOf?: (worktree: Worktree) => WorktreeCardLineWorker | undefined
   /** Runs when a card is opened, as a sidebar card closes the workspace board. */
   onOpen?: () => void
 }): React.JSX.Element {
@@ -116,7 +116,7 @@ export function AttachedWorktreeCards({
         renameRowKey={compactLine ? botWorkerLineRowKey(identity) : undefined}
         lineOwnerHostId={lineOwnerHostId}
         lineNote={lineNotes?.get(worktree.id)}
-        lineWorker={lineWorkers?.get(worktree.id)}
+        lineWorker={lineWorkerOf?.(worktree)}
         nativeDragEnabled={false}
         // A regular nested child row's geometry, so a selected row's glyph clears its border.
         flushSurface
