@@ -1,6 +1,7 @@
 import React from 'react'
 import { GitFork, Github, Gitlab, Globe } from 'lucide-react'
 import { useAppStore } from '@/store'
+import { openAppHttpLink } from '@/lib/browser/navigation/app-http-link-open'
 import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { useTranslate } from '@/i18n/use-translate'
@@ -48,7 +49,7 @@ function ExternalLinkLine({
           href={url}
           onClick={(event) => {
             event.preventDefault()
-            void window.api.shell.openUrl(url)
+            openAppHttpLink(url, { event, destination: 'system' })
           }}
           aria-label={label}
           className="flex w-fit max-w-full min-w-0 items-center gap-1 rounded-sm text-muted-foreground underline-offset-2 outline-none hover:text-foreground hover:underline focus-visible:ring-2 focus-visible:ring-ring"

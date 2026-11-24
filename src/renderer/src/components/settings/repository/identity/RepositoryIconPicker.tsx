@@ -89,8 +89,7 @@ export function RepositoryIconPicker({
           variant="outline"
           size="sm"
           className="gap-2"
-          disabled={actions.resetting}
-          onClick={() => void actions.resetToDefault()}
+          onClick={actions.resetToDefault}
         >
           <RotateCcw className="size-3.5" />
           {t('auto.components.settings.RepositoryIconPicker.549d126081', 'Reset')}

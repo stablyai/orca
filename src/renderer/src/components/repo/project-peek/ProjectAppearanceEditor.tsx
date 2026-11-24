@@ -95,12 +95,12 @@ export function ProjectAppearanceEditor({
   }
 
   const isDefault = repo.badgeColor === DEFAULT_REPO_BADGE_COLOR && repo.repoIcon == null
-  const reset = async (): Promise<void> => {
+  const reset = (): void => {
     const previous = {
       repoIcon: repo.repoIcon ?? null,
       badgeColor: repo.badgeColor
     }
-    await actions.resetToDefault()
+    actions.resetToDefault()
     updateRepo(repo.id, { badgeColor: DEFAULT_REPO_BADGE_COLOR })
     toast(t('auto.components.repo.ProjectPeek.resetDone', 'Icon and color reset'), {
       action: {
@@ -164,13 +164,7 @@ export function ProjectAppearanceEditor({
         </Tabs>
       </div>
       <div className="flex items-center px-1.5 pb-2">
-        <Button
-          type="button"
-          variant="ghost"
-          size="xs"
-          disabled={actions.resetting || isDefault}
-          onClick={() => void reset()}
-        >
+        <Button type="button" variant="ghost" size="xs" disabled={isDefault} onClick={reset}>
           <RotateCcw />
           {t('auto.components.repo.ProjectPeek.resetAppearance', 'Reset icon & color')}
         </Button>

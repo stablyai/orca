@@ -17,9 +17,8 @@ export type RepoAppearanceUpdate = Partial<Pick<Repo, 'repoIcon' | 'badgeColor' 
 
 export type RepositoryIconActions = {
   loadingGitHub: boolean
-  resetting: boolean
   applyGitHubAvatar: () => Promise<void>
-  resetToDefault: () => Promise<void>
+  resetToDefault: () => void
 }
 
 export function useRepositoryIconActions(
@@ -28,7 +27,6 @@ export function useRepositoryIconActions(
 ): RepositoryIconActions {
   const t = useTranslate()
   const [loadingGitHub, setLoadingGitHub] = useState(false)
-  const [resetting, setResetting] = useState(false)
   const mountedRef = useMountedRef()
   // Resolve avatars/upstream on the selected repo owner, independent of focused host.
   const selectedHost = parseExecutionHostId(getRepoExecutionHostId(repo))
@@ -46,49 +44,40 @@ export function useRepositoryIconActions(
 
   const applyGitHubAvatar = async (): Promise<void> => {
     setLoadingGitHub(true)
-    try {
-      const resolution = await resolveGitHubAvatar({ forceLive: true })
-      if (!mountedRef.current) {
-        return
-      }
-      if (!resolution.repoIcon) {
-        toast.error(
-          t(
-            'auto.components.settings.RepositoryIconPicker.f79972271a',
-            'No GitHub remote found for this repo.'
-          )
+    // Why: settle into a value instead of try/finally, which the React Compiler can't lower.
+    const resolution = await resolveGitHubAvatar({ forceLive: true }).catch(() => null)
+    if (!mountedRef.current) {
+      return
+    }
+    setLoadingGitHub(false)
+    if (!resolution) {
+      toast.error(
+        t(
+          'auto.components.settings.RepositoryIconPicker.d71df44587',
+          'Failed to resolve the GitHub repo.'
         )
-        return
-      }
-      const updates = buildRepositoryGitHubAvatarUpdate(repo, resolution)
-      if (updates) {
-        updateRepo(repo.id, updates)
-      }
-    } catch {
-      if (mountedRef.current) {
-        toast.error(
-          t(
-            'auto.components.settings.RepositoryIconPicker.d71df44587',
-            'Failed to resolve the GitHub repo.'
-          )
+      )
+      return
+    }
+    if (!resolution.repoIcon) {
+      toast.error(
+        t(
+          'auto.components.settings.RepositoryIconPicker.f79972271a',
+          'No GitHub remote found for this repo.'
         )
-      }
-    } finally {
-      if (mountedRef.current) {
-        setLoadingGitHub(false)
-      }
+      )
+      return
+    }
+    const updates = buildRepositoryGitHubAvatarUpdate(repo, resolution)
+    if (updates) {
+      updateRepo(repo.id, updates)
     }
   }
 
   // The default mark is the project's letters, so resetting just clears the chosen icon.
-  const resetToDefault = async (): Promise<void> => {
-    setResetting(true)
-    try {
-      updateRepo(repo.id, { repoIcon: null })
-    } finally {
-      setResetting(false)
-    }
+  const resetToDefault = (): void => {
+    updateRepo(repo.id, { repoIcon: null })
   }
 
-  return { loadingGitHub, resetting, applyGitHubAvatar, resetToDefault }
+  return { loadingGitHub, applyGitHubAvatar, resetToDefault }
 }

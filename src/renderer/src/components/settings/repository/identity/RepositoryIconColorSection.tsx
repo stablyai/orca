@@ -31,9 +31,13 @@ export function RepositoryIconColorSection({
   const isPresetBadgeColor = REPO_COLORS.some((color) => color === selectedBadgeColor)
   const customLabel = isPresetBadgeColor
     ? t('auto.components.settings.RepositoryIconPicker.0e5f0693c1', 'Choose custom repo color')
-    : t('auto.components.settings.RepositoryIconPicker.913c55833d', 'Custom repo color {{value0}}', {
-        value0: selectedBadgeColor
-      })
+    : t(
+        'auto.components.settings.RepositoryIconPicker.913c55833d',
+        'Custom repo color {{value0}}',
+        {
+          value0: selectedBadgeColor
+        }
+      )
   const autoLabel = t(
     'auto.components.settings.RepositoryIconPicker.autoColor',
     'Automatic color (kept distinct from other projects)'
