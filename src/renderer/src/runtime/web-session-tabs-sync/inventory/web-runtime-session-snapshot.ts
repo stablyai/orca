@@ -123,6 +123,7 @@ async function reconcileWebRuntimeSessionTabs(
       (await listSessionTabs({
         environmentId,
         worktreeId,
+        listTimeoutMs: options.listTimeoutMs,
         load: async () => {
           const response = await callEnvironment({
             method: 'session.tabs.list',
