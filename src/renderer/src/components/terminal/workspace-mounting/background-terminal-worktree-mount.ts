@@ -116,7 +116,12 @@ export function applyBackgroundMountTabRestriction(
   if (existing && tabIds.every((tabId) => existing.has(tabId))) {
     return
   }
-  restrictions.set(worktreeId, new Set([...(existing ?? []), ...tabIds]))
+  const next = new Set([...(existing ?? []), ...tabIds])
+  restrictions.set(worktreeId, next)
+  // Allowing more tabs adds nothing to warm, so a drained admission stays drained.
+  if (existing) {
+    carryActivationAdmissionDrained(existing, next)
+  }
 }
 
 export function shouldMountBackgroundWorktreeTab(
