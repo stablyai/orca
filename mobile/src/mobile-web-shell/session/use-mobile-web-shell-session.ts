@@ -67,6 +67,7 @@ export type MobileWebShellSessionView = {
   readonly pageFrame: ShellPageFrame
   // Project Back claims so claim-only events still rerender.
   readonly backClaimed: boolean
+  readonly store: GenerationStore
 }
 
 // Run reducer effects behind an epoch fence so unmount/host change/retry cannot apply abandoned results to the replacement session.
@@ -86,7 +87,7 @@ export function useMobileWebShellSession(args: {
   runtimeRef.current ??= args.runtime ?? createMobileWebShellRuntime()
   const runtime = runtimeRef.current
   const storeRef = useRef<GenerationStore | null>(null)
-  storeRef.current ??= runtime.createStore()
+  const store = (storeRef.current ??= runtime.createStore())
 
   const sessionRef = useRef(createMobileWebShellSession(routePathname, wide, appNamesRoute))
   const [state, setState] = useState(sessionRef.current.state)
@@ -335,6 +336,7 @@ export function useMobileWebShellSession(args: {
     reportPagePainted,
     reportPageBackClaim,
     reportSwapSafe,
-    backClaimed
+    backClaimed,
+    store
   }
 }
