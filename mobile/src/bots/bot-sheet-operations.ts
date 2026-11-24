@@ -138,7 +138,7 @@ export const botBackupSwitch = bindDeferredRpcOperation(
       'bot-backup-switched',
       z.looseObject({
         switched: z.boolean(),
-        sessionId: z.string().min(1).optional()
+        newSessionId: z.string().min(1).optional()
       })
     )
   })

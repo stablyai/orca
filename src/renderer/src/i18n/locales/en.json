@@ -1831,6 +1831,8 @@
         "backToModels": "Back to models",
         "reasoningEffort": "Reasoning effort",
         "defaultEffort": "Default",
+        "loadFailed": "Couldn't load available models.",
+        "retry": "Retry",
         "title": "Backup models"
       }
     },
@@ -22898,6 +22900,7 @@
         "returnedLead": "Returned to",
         "switchedLead": "Switched to backup",
         "returnedDetail": "after usage limit reset",
+        "returnedManualDetail": "returned manually",
         "switchedDetailReset": "while {{from}} is at limit · resets {{time}}",
         "switchedDetail": "while {{from}} is at its usage limit"
       }

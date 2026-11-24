@@ -52,7 +52,8 @@ function carriedOptions(
 export async function carryQueuedMessages(
   host: QueuedCarryHost,
   from: string | null,
-  to: string
+  to: string,
+  options?: { rethrow?: boolean }
 ): Promise<void> {
   if (!from || !host.deps.store.getConversation(from)) {
     return
@@ -87,5 +88,8 @@ export async function carryQueuedMessages(
     }
   } catch (error) {
     console.warn('[bots] could not move queued messages to the new Chat', error)
+    if (options?.rethrow) {
+      throw error
+    }
   }
 }

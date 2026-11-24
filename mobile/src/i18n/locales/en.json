@@ -3687,6 +3687,7 @@
       "statusContinuesThen": "Orca continues then",
       "statusWontContinue": "Orca won't continue automatically",
       "backupSwitching": "Switching to backup model…",
+      "backupSwitchFailed": "Couldn't switch to backup model. Try again.",
       "backupsExhaustedReset": "Primary and backup models hit their usage limits · next reset at {{time}}.",
       "backupsExhausted": "Primary and backup models hit their usage limits.",
       "switchToBackup": "Switch to {{target}}",
@@ -7990,6 +7991,7 @@
       "returnedLead": "Returned to",
       "switchedLead": "Switched to backup",
       "returnedDetail": "after usage limit reset",
+      "returnedManualDetail": "returned manually",
       "switchedDetailReset": "while {{from}} is at limit · resets {{time}}",
       "switchedDetail": "while {{from}} is at its usage limit"
     }

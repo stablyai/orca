@@ -54,12 +54,20 @@ type BotTurnHost = Pick<
 /** Streaming changes the journal many times a second; the run re-reads it once it settles. */
 const JOURNAL_WAKE = { flushMs: 300, maxWaitMs: 2_000 }
 
-type SessionRebindListener = (fromSessionId: string, toSessionId: string) => void
+type SessionRebindListener = (
+  fromSessionId: string,
+  toSessionId: string,
+  handoffSend?: BotRunSend
+) => void
 const rebindListeners = new Set<SessionRebindListener>()
 
 /** Notifies active bot run watches that `fromSessionId` handed off cross-agent to `toSessionId`. */
-export function notifyBotTurnWatchRebind(fromSessionId: string, toSessionId: string): void {
-  rebindListeners.forEach((listener) => listener(fromSessionId, toSessionId))
+export function notifyBotTurnWatchRebind(
+  fromSessionId: string,
+  toSessionId: string,
+  handoffSend?: BotRunSend
+): void {
+  rebindListeners.forEach((listener) => listener(fromSessionId, toSessionId, handoffSend))
 }
 
 const unavailable = (reason: BotRunUnavailable): BotTurnEnd => ({ unavailable: reason })
@@ -161,6 +169,10 @@ export function watchBotTurnEnds(host: BotTurnHost): BotTurnWatch {
     dispose,
     next: async (initialSend) => {
       let current = initialSend
+      let handoffOpener: BotRunSend | null = null
+      let active = true
+      let subscribeSeq = 0
+      let unsubscribe = (): void => {}
       let changes = 0
       const journalChanged = createKeyedTrailingEdgeCoalescer(() => {
         changes += 1
@@ -178,32 +190,50 @@ export function watchBotTurnEnds(host: BotTurnHost): BotTurnWatch {
             }
           })
           .catch(() => () => {})
-      // Without it the run still wakes at turn ends.
-      let unsubscribe = await subscribeSession(current.sessionId)
-      const onRebind: SessionRebindListener = (fromSessionId, toSessionId) => {
+      const attachSubscription = (sessionId: string): Promise<void> => {
+        const seq = ++subscribeSeq
+        unsubscribe()
+        unsubscribe = () => {}
+        return subscribeSession(sessionId).then((nextUnsub) => {
+          if (!active || seq !== subscribeSeq || current.sessionId !== sessionId) {
+            nextUnsub()
+            return
+          }
+          unsubscribe = nextUnsub
+        })
+      }
+      const onRebind: SessionRebindListener = (fromSessionId, toSessionId, replacementOpener) => {
         if (current.sessionId !== fromSessionId) {
           return
         }
         current = { ...current, sessionId: toSessionId }
+        handoffOpener = replacementOpener ?? null
         changes += 1
-        unsubscribe()
-        void subscribeSession(toSessionId).then((nextUnsub) => {
-          if (current.sessionId === toSessionId) {
-            unsubscribe = nextUnsub
-          } else {
-            nextUnsub()
-          }
-        })
+        void attachSubscription(toSessionId)
         wake()
       }
+      // Register before awaiting initial subscription so an intervening handoff is never missed.
       rebindListeners.add(onRebind)
       const seen = () => (turnEnds.get(current.sessionId) ?? 0) + changes
       try {
+        await attachSubscription(current.sessionId)
         for (;;) {
           const before = seen()
+          const readSend = current
           // A journal that can't be read can't tell which turn was the run's.
-          const end = await readRunTurn(host, current).catch(() => unavailable('unread'))
+          const end = await readRunTurn(host, readSend).catch(() => unavailable('unread'))
+          // Discard any read that completed after a cross-agent handoff replaced the watched send.
+          if (current !== readSend) {
+            continue
+          }
           if (end) {
+            // An already-delivered turn has no copy of its original message id in the replacement session;
+            // switch to the handoff opener turn while keeping transferred queued messages on their own id.
+            if ('unavailable' in end && end.unavailable === 'removed' && handoffOpener) {
+              current = handoffOpener
+              handoffOpener = null
+              continue
+            }
             return end
           }
           while (seen() === before) {
@@ -214,6 +244,7 @@ export function watchBotTurnEnds(host: BotTurnHost): BotTurnWatch {
           }
         }
       } finally {
+        active = false
         rebindListeners.delete(onRebind)
         journalChanged.dispose()
         unsubscribe()

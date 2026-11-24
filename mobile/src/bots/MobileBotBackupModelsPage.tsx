@@ -1,7 +1,7 @@
 // Bot backup models settings page on mobile: active failover banner, order, mode, and add picker.
-import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react'
-import { Pressable, Text, View } from 'react-native'
-import { ArrowDown, ArrowUp, Plus, RotateCcw, Trash2 } from 'lucide-react-native'
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
+import { Pressable, View } from 'react-native'
+import { ArrowDown, ArrowUp, Plus, Trash2 } from 'lucide-react-native'
 import { isBotAgent } from '../../../src/shared/bot-types'
 import {
   BOT_BACKUP_MODEL_LIMIT,
@@ -20,17 +20,54 @@ import { SwitchRow } from '../host-screen/workspace-options/workspace-option-row
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
 import { useBackClaim } from '../navigation/use-back-claim'
 import { SettingsNote, SettingsSection } from '../settings/settings-screen-frame'
-import { colors, feedback, radius, spacing, typography } from '../theme/mobile-theme'
+import { colors, feedback, spacing } from '../theme/mobile-theme'
 import { themedStyleSheet } from '../theme/themed-styles'
 import type { RpcClient } from '../transport/rpc/rpc-client-contract'
 import { botBackupReturn, botBackupStatusRead, type SheetBot } from './bot-sheet-operations'
 import { botAgentLabel, botSaveErrorMessage } from './mobile-bot-sheet-copy'
+import { MobileBotActiveBackupBanner } from './MobileBotActiveBackupBanner'
 import { MobileBotBackupModelPicker } from './MobileBotBackupModelPicker'
 
 function formatTarget(agent: string, model?: string, effort?: string): string {
   const name = botAgentLabel(agent)
   const base = model ? `${name} · ${model}` : name
   return effort ? `${base} (${effort})` : base
+}
+
+function formatAvailabilityLine(
+  t: ReturnType<typeof useMobileTranslation>,
+  state: string | undefined,
+  resetsAt?: number
+): string {
+  if (state === 'at-limit') {
+    return resetsAt !== undefined
+      ? t('bots.settings.backupModelsAtLimitReset', 'At limit · resets {{time}}', {
+          time: formatUsageLimitResetClock(resetsAt)
+        })
+      : t('bots.settings.backupModelsAtLimit', 'At usage limit')
+  }
+  return state === 'unavailable'
+    ? t('bots.settings.backupModelsUnavailable', 'Unavailable')
+    : t('bots.settings.backupModelsReady', 'Ready')
+}
+
+function RowActionButton(props: {
+  label: string
+  disabled: boolean
+  onPress: () => void
+  icon: ReactNode
+}) {
+  return (
+    <Pressable
+      accessibilityRole="button"
+      accessibilityLabel={props.label}
+      disabled={props.disabled}
+      onPress={props.onPress}
+      style={[styles.iconBtn, props.disabled && styles.disabled]}
+    >
+      {props.icon}
+    </Pressable>
+  )
 }
 
 export function MobileBotBackupModelsPage(props: {
@@ -46,9 +83,19 @@ export function MobileBotBackupModelsPage(props: {
 }) {
   const t = useMobileTranslation()
   const { bot, client, online } = props
-  const [status, setStatus] = useState<BotBackupStatusResult | null>(null)
+  const [statusState, setStatusState] = useState<{
+    botId: string
+    client: RpcClient
+    data: BotBackupStatusResult
+  } | null>(null)
   const [picking, setPicking] = useState(false)
   const [returning, setReturning] = useState(false)
+  const refreshGenRef = useRef(0)
+
+  const status =
+    statusState && statusState.botId === bot.id && statusState.client === client
+      ? statusState.data
+      : null
 
   useBackClaim(
     picking
@@ -63,11 +110,14 @@ export function MobileBotBackupModelsPage(props: {
     if (!client || !online) {
       return
     }
+    const gen = ++refreshGenRef.current
     try {
       const next = botBackupStatusRead.interpret(
         await botBackupStatusRead.request(client, { botId: bot.id }, { failWhenDisconnected: true })
       )
-      setStatus(next)
+      if (gen === refreshGenRef.current) {
+        setStatusState({ botId: bot.id, client, data: next })
+      }
     } catch {
       // Keep the bot snapshot's backup list visible when status read fails.
     }
@@ -75,6 +125,9 @@ export function MobileBotBackupModelsPage(props: {
 
   useEffect(() => {
     void refreshStatus()
+    return () => {
+      refreshGenRef.current += 1
+    }
   }, [refreshStatus, bot.backupModels, bot.activeBackup])
 
   const primary = useMemo<BotBackupModelEntry | null>(() => {
@@ -163,76 +216,24 @@ export function MobileBotBackupModelsPage(props: {
       </SettingsNote>
 
       {activeBackup ? (
-        <SettingsSection>
-          <View style={styles.activeBanner}>
-            <View style={styles.activeText}>
-              <Text style={styles.activeTitle}>
-                {t('bots.settings.backupModelsActiveBanner', 'Running on backup · {{target}}', {
-                  target: formatTarget(
-                    activeBackup.target.agent,
-                    activeBackup.target.model,
-                    activeBackup.target.options?.effort
-                  )
-                })}
-              </Text>
-              <Text style={styles.activeSub}>
-                {activeBackup.primaryResetsAt !== undefined
-                  ? t(
-                      'bots.settings.backupModelsActiveReset',
-                      'Returns to {{primary}} after {{time}}.',
-                      {
-                        primary: formatTarget(
-                          bot.agent,
-                          bot.launch?.model ?? activeBackup.primaryModel
-                        ),
-                        time: formatUsageLimitResetClock(activeBackup.primaryResetsAt)
-                      }
-                    )
-                  : t(
-                      'bots.settings.backupModelsActiveReturn',
-                      'Returns to {{primary}} when ready.',
-                      {
-                        primary: formatTarget(
-                          bot.agent,
-                          bot.launch?.model ?? activeBackup.primaryModel
-                        )
-                      }
-                    )}
-              </Text>
-            </View>
-            <Pressable
-              accessibilityRole="button"
-              disabled={props.disabled || returning}
-              onPress={() => void handleReturnNow()}
-              style={({ pressed }) => [
-                styles.returnBtn,
-                (props.disabled || returning) && styles.disabled,
-                pressed && styles.pressed
-              ]}
-            >
-              <RotateCcw size={14} color={colors.textPrimary} />
-              <Text style={styles.returnLabel}>
-                {t('bots.settings.backupModelsReturnNow', 'Return now')}
-              </Text>
-            </Pressable>
-          </View>
-        </SettingsSection>
+        <MobileBotActiveBackupBanner
+          activeBackup={activeBackup}
+          targetLabel={formatTarget(
+            activeBackup.target.agent,
+            activeBackup.target.model,
+            activeBackup.target.options?.effort
+          )}
+          primaryLabel={formatTarget(bot.agent, bot.launch?.model ?? activeBackup.primaryModel)}
+          disabled={props.disabled}
+          returning={returning}
+          onReturnNow={() => void handleReturnNow()}
+        />
       ) : null}
 
       <SettingsSection title={t('bots.settings.backupModelsPrimary', 'Primary')}>
         <ListRow
           title={formatTarget(bot.agent, bot.launch?.model)}
-          subtitle={
-            status?.primary.state === 'at-limit'
-              ? status.primary.resetsAt !== undefined
-                ? t('bots.settings.backupModelsAtLimitReset', 'At limit · resets {{time}}', {
-                    time: formatUsageLimitResetClock(status.primary.resetsAt)
-                  })
-                : t('bots.settings.backupModelsAtLimit', 'At usage limit')
-              : status?.primary.state === 'unavailable'
-                ? t('bots.settings.backupModelsUnavailable', 'Unavailable')
-                : t('bots.settings.backupModelsReady', 'Ready')
-          }
+          subtitle={formatAvailabilityLine(t, status?.primary.state, status?.primary.resetsAt)}
         />
       </SettingsSection>
 
@@ -263,25 +264,16 @@ export function MobileBotBackupModelsPage(props: {
             const isActive = activeBackup !== null && botModelTargetKey(activeBackup.target) === key
             const statusLine = isActive
               ? t('bots.settings.backupModelsActiveTag', 'Active now')
-              : entryStatus?.state === 'at-limit'
-                ? entryStatus.resetsAt !== undefined
-                  ? t('bots.settings.backupModelsAtLimitReset', 'At limit · resets {{time}}', {
-                      time: formatUsageLimitResetClock(entryStatus.resetsAt)
-                    })
-                  : t('bots.settings.backupModelsAtLimit', 'At usage limit')
-                : entryStatus?.state === 'unavailable'
-                  ? t('bots.settings.backupModelsUnavailable', 'Unavailable')
-                  : t('bots.settings.backupModelsReady', 'Ready')
+              : formatAvailabilityLine(t, entryStatus?.state, entryStatus?.resetsAt)
             return (
               <ListRow
                 key={key}
                 title={`${index + 1}. ${formatTarget(entry.agent, entry.model, entry.options?.effort)}`}
                 subtitle={statusLine}
-                trailing={
+                accessory={
                   <View style={styles.rowActions}>
-                    <Pressable
-                      accessibilityRole="button"
-                      accessibilityLabel={t('bots.settings.backupModelsMoveUp', 'Move up')}
+                    <RowActionButton
+                      label={t('bots.settings.backupModelsMoveUp', 'Move up')}
                       disabled={props.disabled || index === 0}
                       onPress={() => {
                         const next = reorderBotBackupModels(bot.backupModels, index, index - 1)
@@ -289,13 +281,10 @@ export function MobileBotBackupModelsPage(props: {
                           void props.onSave(next)
                         }
                       }}
-                      style={[styles.iconBtn, (props.disabled || index === 0) && styles.disabled]}
-                    >
-                      <ArrowUp size={15} color={colors.textSecondary} />
-                    </Pressable>
-                    <Pressable
-                      accessibilityRole="button"
-                      accessibilityLabel={t('bots.settings.backupModelsMoveDown', 'Move down')}
+                      icon={<ArrowUp size={15} color={colors.textSecondary} />}
+                    />
+                    <RowActionButton
+                      label={t('bots.settings.backupModelsMoveDown', 'Move down')}
                       disabled={props.disabled || index === order.length - 1}
                       onPress={() => {
                         const next = reorderBotBackupModels(bot.backupModels, index, index + 1)
@@ -303,25 +292,16 @@ export function MobileBotBackupModelsPage(props: {
                           void props.onSave(next)
                         }
                       }}
-                      style={[
-                        styles.iconBtn,
-                        (props.disabled || index === order.length - 1) && styles.disabled
-                      ]}
-                    >
-                      <ArrowDown size={15} color={colors.textSecondary} />
-                    </Pressable>
-                    <Pressable
-                      accessibilityRole="button"
-                      accessibilityLabel={t('bots.settings.backupModelsRemove', 'Remove')}
+                      icon={<ArrowDown size={15} color={colors.textSecondary} />}
+                    />
+                    <RowActionButton
+                      label={t('bots.settings.backupModelsRemove', 'Remove')}
                       disabled={props.disabled}
-                      onPress={() => {
-                        const next = removeBotBackupModel(bot.backupModels, index)
-                        void props.onSave(next ?? null)
-                      }}
-                      style={[styles.iconBtn, props.disabled && styles.disabled]}
-                    >
-                      <Trash2 size={15} color={colors.textSecondary} />
-                    </Pressable>
+                      onPress={() =>
+                        void props.onSave(removeBotBackupModel(bot.backupModels, index) ?? null)
+                      }
+                      icon={<Trash2 size={15} color={colors.textSecondary} />}
+                    />
                   </View>
                 }
               />
@@ -363,42 +343,6 @@ export function MobileBotBackupModelsPage(props: {
 }
 
 const styles = themedStyleSheet(() => ({
-  activeBanner: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    gap: spacing.sm,
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm
-  },
-  activeText: {
-    flex: 1,
-    gap: 2
-  },
-  activeTitle: {
-    color: colors.textPrimary,
-    fontSize: typography.bodySize,
-    fontWeight: '600'
-  },
-  activeSub: {
-    color: colors.textMuted,
-    fontSize: typography.metaSize
-  },
-  returnBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    borderWidth: 1,
-    borderColor: colors.border,
-    borderRadius: radius.sm,
-    paddingHorizontal: spacing.sm,
-    paddingVertical: 6
-  },
-  returnLabel: {
-    color: colors.textPrimary,
-    fontSize: typography.metaSize,
-    fontWeight: '500'
-  },
   rowActions: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -409,8 +353,5 @@ const styles = themedStyleSheet(() => ({
   },
   disabled: {
     opacity: feedback.disabledOpacity
-  },
-  pressed: {
-    opacity: 0.7
   }
 }))

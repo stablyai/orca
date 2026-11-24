@@ -24,8 +24,14 @@ function requireBotFlag(flags: Map<string, string | boolean>): string {
 }
 
 function parsePositiveIndex(value: string | undefined, flagName: string): number {
-  const parsed = value ? Number.parseInt(value, 10) : Number.NaN
-  if (!Number.isInteger(parsed) || parsed < 1) {
+  if (!value || !/^[1-9]\d*$/.test(value)) {
+    throw new RuntimeClientError(
+      'invalid_argument',
+      `Invalid ${flagName}: expected a 1-based integer.`
+    )
+  }
+  const parsed = Number(value)
+  if (!Number.isSafeInteger(parsed) || parsed < 1) {
     throw new RuntimeClientError(
       'invalid_argument',
       `Invalid ${flagName}: expected a 1-based integer.`

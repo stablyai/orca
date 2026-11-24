@@ -35,7 +35,9 @@ export function MobileBotBackupSwitchCard({
     ? t('bots.backupSwitch.returnedLead', 'Returned to')
     : t('bots.backupSwitch.switchedLead', 'Switched to backup')
   const detail = toPrimary
-    ? t('bots.backupSwitch.returnedDetail', 'after usage limit reset')
+    ? switched.returnReason === 'manual'
+      ? t('bots.backupSwitch.returnedManualDetail', 'returned manually')
+      : t('bots.backupSwitch.returnedDetail', 'after usage limit reset')
     : reset
       ? t('bots.backupSwitch.switchedDetailReset', 'while {{from}} is at limit · resets {{time}}', {
           from: fromLabel,

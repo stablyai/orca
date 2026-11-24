@@ -150,7 +150,16 @@ export class BotUsageLimitGate {
     }
     try {
       const spentUntil = await this.deps.readSpentUntil(key)
+      if (this.disposed || this.isLimited(key)) {
+        return false
+      }
       if (spentUntil === undefined) {
+        return true
+      }
+      if (
+        typeof spentUntil === 'number' &&
+        spentUntil + BOT_USAGE_LIMIT_RESET_GRACE_MS <= this.now()
+      ) {
         return true
       }
       this.recordLimit({
@@ -159,7 +168,7 @@ export class BotUsageLimitGate {
       })
       return false
     } catch {
-      return true
+      return !this.disposed && !this.isLimited(key)
     }
   }
 
@@ -205,14 +214,20 @@ export class BotUsageLimitGate {
           return
         }
         if (spentUntil !== undefined) {
-          held.resetsAt = typeof spentUntil === 'number' ? spentUntil : null
-          this.arm(id, held)
-          this.deps.onLimitChanged?.()
-          return
+          // Only re-arm when the reported window is still active; an already-expired reset falls through to release.
+          if (spentUntil === null || spentUntil + BOT_USAGE_LIMIT_RESET_GRACE_MS > this.now()) {
+            held.resetsAt = typeof spentUntil === 'number' ? spentUntil : null
+            this.arm(id, held)
+            this.deps.onLimitChanged?.()
+            return
+          }
         }
       } catch {
         // Unreadable usage falls through to release once the known reset window has elapsed.
       }
+    }
+    if (this.disposed || this.holds.get(id) !== held) {
+      return
     }
     this.holds.delete(id)
     this.deps.onLimitChanged?.()

@@ -36,7 +36,9 @@ export function NativeChatBotBackupSwitchCard({
     ? t('components.native-chat.botBackupSwitch.returnedLead', 'Returned to')
     : t('components.native-chat.botBackupSwitch.switchedLead', 'Switched to backup')
   const detail = toPrimary
-    ? t('components.native-chat.botBackupSwitch.returnedDetail', 'after usage limit reset')
+    ? switched.returnReason === 'manual'
+      ? t('components.native-chat.botBackupSwitch.returnedManualDetail', 'returned manually')
+      : t('components.native-chat.botBackupSwitch.returnedDetail', 'after usage limit reset')
     : reset
       ? t(
           'components.native-chat.botBackupSwitch.switchedDetailReset',

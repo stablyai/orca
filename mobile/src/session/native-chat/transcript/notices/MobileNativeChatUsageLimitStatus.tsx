@@ -126,6 +126,11 @@ export function MobileNativeChatUsageLimitStatus({
           )}
         </Text>
       ) : null}
+      {actions?.backupSwitchFailed ? (
+        <Text style={meta}>
+          {t('chat.usageLimit.backupSwitchFailed', "Couldn't switch to backup model. Try again.")}
+        </Text>
+      ) : null}
       {continueNow || switchAccount || backupSwitch ? (
         <View style={styles.pills}>
           {backupSwitch ? (

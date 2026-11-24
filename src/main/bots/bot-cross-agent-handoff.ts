@@ -4,6 +4,7 @@ import type { Bot, BotAgent } from '../../shared/bot-types'
 import { backupEntryToLaunch, type BotBackupModelEntry } from '../../shared/bots/bot-backup-models'
 import { botOnSetup } from '../../shared/bots/bot-agent-setup'
 import { buildAgentSessionContinuationPrompt } from '../../shared/agent-session/conversation-context/agent-session-continuation'
+import { agentSessionSendBodyFingerprint } from '../../shared/agent-session/requests/structured-agent-session-send-mutation'
 import { isTuiAgent } from '../../shared/agent-launch/catalog/tui-agent-config'
 import { redactSecretLike } from '../../shared/crash-reporting/crash-report-redaction'
 import type { AgentJournalBotBackupModelSwitchItem } from '../../shared/agent-journal-orca-card-items'
@@ -25,8 +26,15 @@ export type BotCrossAgentHandoffInput = {
   sourceModel?: string
   target: BotBackupModelEntry
   direction: 'to-backup' | 'to-primary'
+  returnReason?: 'limit-reset' | 'manual'
   resetsAt?: number
   now: number
+}
+
+export type BotCrossAgentHandoffSend = {
+  sessionId: string
+  clientMessageId: string
+  fingerprint: string
 }
 
 export type BotCrossAgentHandoffResult = {
@@ -64,7 +72,11 @@ export type BotCrossAgentHandoffDeps = {
     at: number
   ) => Promise<void>
   linkStore: () => ExternalConversationLinkStore | null
-  onSessionHandedOff?: (fromSessionId: string, toSessionId: string) => void
+  onSessionHandedOff?: (
+    fromSessionId: string,
+    toSessionId: string,
+    handoffSend?: BotCrossAgentHandoffSend
+  ) => void
 }
 
 /** Builds a bounded, secret-redacted continuation prompt for cross-agent backup failover. */
@@ -98,7 +110,17 @@ export async function executeCrossAgentBotHandoff(
   deps: BotCrossAgentHandoffDeps,
   input: BotCrossAgentHandoffInput
 ): Promise<BotCrossAgentHandoffResult> {
-  const { bot, sourceSessionId, sourceAgent, sourceModel, target, direction, resetsAt, now } = input
+  const {
+    bot,
+    sourceSessionId,
+    sourceAgent,
+    sourceModel,
+    target,
+    direction,
+    returnReason,
+    resetsAt,
+    now
+  } = input
   const workspaceId = folderWorkspaceKey(bot.folderWorkspaceId)
   const isHomeChat = bot.chatSessionId === sourceSessionId
   const wasVisible = deps.isTabVisible(sourceSessionId)
@@ -115,45 +137,31 @@ export async function executeCrossAgentBotHandoff(
 
   const newSessionId = randomUUID()
   const switchId = randomUUID()
+  const clientMessageId = `backup-handoff:${switchId}`
+  const handoffSend: BotCrossAgentHandoffSend = {
+    sessionId: newSessionId,
+    clientMessageId,
+    fingerprint: agentSessionSendBodyFingerprint(newSessionId, {
+      kind: 'message',
+      role: 'user',
+      blocks: [{ type: 'text', text: prompt }]
+    })
+  }
   const targetLaunch = backupEntryToLaunch(target)
   const botOnTarget = botOnSetup(bot, {
     agent: target.agent,
     ...(targetLaunch ? { launch: targetLaunch } : {})
   })
 
-  await deps.startSession(botOnTarget, {
-    sessionId: newSessionId,
-    ...(background ? { background: true as const } : {}),
-    ...(actsFor ? { actsFor } : {}),
-    text: prompt,
-    clientMessageId: `backup-handoff:${switchId}`
-  })
-
-  if (conversationName) {
-    await deps.nameSession(newSessionId, conversationName).catch(() => {})
-  }
-
-  if (isHomeChat) {
-    await deps.setHomeChatSession(bot.id, newSessionId)
-    await deps.carryQueuedMessages(sourceSessionId, newSessionId).catch(() => {})
-    if (wasVisible) {
-      await deps.showTab(botOnTarget, newSessionId).catch(() => {})
-    }
-    await deps.closeOldHomeChat(sourceSessionId).catch(() => {})
-  } else {
-    await deps.carryQueuedMessages(sourceSessionId, newSessionId).catch(() => {})
-    if (wasVisible) {
-      await deps.showTab(botOnTarget, newSessionId).catch(() => {})
-    }
-  }
-
-  // Rebind Slack/Linear/GitHub conversation links so replies continue posting in the same thread.
+  // Rebind connector links before startSession so early mirrored events on newSessionId find their link.
   const store = deps.linkStore()
+  const reboundLinks = store
+    ? findLinksForSession(store, sourceSessionId).filter(
+        (linked) => linked.link.bot?.kind !== 'bot-chat'
+      )
+    : []
   if (store) {
-    for (const linked of findLinksForSession(store, sourceSessionId)) {
-      if (linked.link.bot?.kind === 'bot-chat') {
-        continue
-      }
+    for (const linked of reboundLinks) {
       writeLink(store, linked.workspace, {
         ...linked.link,
         sessionId: newSessionId,
@@ -163,11 +171,46 @@ export async function executeCrossAgentBotHandoff(
     }
   }
 
+  try {
+    await deps.startSession(botOnTarget, {
+      sessionId: newSessionId,
+      ...(background ? { background: true as const } : {}),
+      ...(actsFor ? { actsFor } : {}),
+      text: prompt,
+      clientMessageId
+    })
+  } catch (error) {
+    if (store) {
+      for (const linked of reboundLinks) {
+        writeLink(store, linked.workspace, linked.link)
+      }
+    }
+    throw error
+  }
+
+  if (conversationName) {
+    await deps.nameSession(newSessionId, conversationName).catch(() => {})
+  }
+
+  // Migrate queued messages before switching or closing the source so failed migration stays recoverable.
+  await deps.carryQueuedMessages(sourceSessionId, newSessionId)
+
+  if (isHomeChat) {
+    await deps.setHomeChatSession(bot.id, newSessionId)
+    if (wasVisible) {
+      await deps.showTab(botOnTarget, newSessionId).catch(() => {})
+    }
+    await deps.closeOldHomeChat(sourceSessionId).catch(() => {})
+  } else if (wasVisible) {
+    await deps.showTab(botOnTarget, newSessionId).catch(() => {})
+  }
+
   const baseCard: Omit<AgentJournalBotBackupModelSwitchItem, 'linkedSessionId'> = {
     kind: 'bot-backup-model-switch',
     switchId,
     botId: bot.id,
     direction,
+    ...(returnReason ? { returnReason } : {}),
     fromAgent: sourceAgent,
     ...(sourceModel ? { fromModel: sourceModel } : {}),
     toAgent: target.agent,
@@ -180,6 +223,6 @@ export async function executeCrossAgentBotHandoff(
     deps.appendSwitchCard(newSessionId, { ...baseCard, linkedSessionId: sourceSessionId }, now)
   ])
 
-  deps.onSessionHandedOff?.(sourceSessionId, newSessionId)
+  deps.onSessionHandedOff?.(sourceSessionId, newSessionId, handoffSend)
   return { newSessionId, switchId }
 }

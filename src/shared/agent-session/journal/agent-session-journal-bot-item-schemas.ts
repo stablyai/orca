@@ -62,6 +62,7 @@ export const BOT_JOURNAL_ITEM_BODIES = [
     switchId: z.string().min(1),
     botId: z.string().min(1),
     direction: z.enum(['to-backup', 'to-primary']),
+    returnReason: z.enum(['limit-reset', 'manual']).optional(),
     fromAgent: z.string().min(1),
     fromModel: z.string().min(1).optional(),
     toAgent: z.string().min(1),

@@ -432,4 +432,65 @@ describe('BotUsageLimitFailover invariants and security boundaries', () => {
       BOT_BACKUP_RETURN_METHOD.handler({ botId: 'bot-1' }, agentContext)
     ).rejects.toThrow('Only the owner')
   })
+
+  it('rejects session/bot mismatches, recovers failed switches, defers forced return while busy, and restores unset launch.model', async () => {
+    const h = createHarness(
+      createBot({
+        launch: undefined,
+        backupModels: {
+          automatic: true,
+          order: [
+            { agent: 'claude' },
+            { agent: 'claude', model: 'claude-haiku-4-5' },
+            { agent: 'codex', model: 'gpt-5-codex' }
+          ]
+        }
+      })
+    )
+    h.sessions.set('session-home', {
+      sessionId: 'session-home',
+      provider: 'claude',
+      model: 'claude-sonnet-4-5',
+      isIdle: true,
+      runtimeFence: 1
+    })
+
+    // Rejects switching a session that does not belong to the requested bot.
+    await expect(
+      h.failover.switchSessionManually({
+        botId: 'bot-1',
+        sessionId: 'unknown-session',
+        turnItemId: 'turn-1',
+        target: { agent: 'codex', model: 'gpt-5-codex' }
+      })
+    ).rejects.toThrow('session_not_found')
+
+    // Automatic cut skips model-less same-agent entry and switches to claude-haiku-4-5.
+    await h.failover.onUsageLimitCut('session-home', {
+      turnItemId: 'turn-1',
+      resetsAt: NOW + 600_000,
+      chain: 1
+    })
+    expect(h.getBot().activeBackup?.target).toEqual({ agent: 'claude', model: 'claude-haiku-4-5' })
+    expect(h.getBot().activeBackup?.primaryModel).toBe('claude-sonnet-4-5')
+
+    // Forced return while busy keeps activeBackup and defers until onTurnSucceeded.
+    h.sessions.set('session-home', { ...h.sessions.get('session-home')!, isIdle: false })
+    expect(await h.failover.returnToPrimary('bot-1', { force: true })).toBe(false)
+    expect(h.getBot().activeBackup).toBeDefined()
+
+    h.sessions.set('session-home', { ...h.sessions.get('session-home')!, isIdle: true })
+    await h.failover.onTurnSucceeded('session-home')
+    expect(h.getBot().activeBackup).toBeUndefined()
+    expect(h.sameAgentApplies.at(-1)).toEqual({
+      sessionId: 'session-home',
+      model: 'claude-sonnet-4-5'
+    })
+    expect(h.switchCards.at(-1)?.item).toMatchObject({
+      direction: 'to-primary',
+      returnReason: 'manual',
+      toModel: 'claude-sonnet-4-5'
+    })
+    h.gate.dispose()
+  })
 })

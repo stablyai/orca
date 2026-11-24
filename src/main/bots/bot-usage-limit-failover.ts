@@ -1,10 +1,8 @@
 // Coordinates bot usage-limit failover (same-agent in-place & cross-agent handoff) and return to primary.
 import type { Bot, BotAgent } from '../../shared/bot-types'
 import {
-  backupEntryToLaunch,
   botModelTargetKey,
   botPrimaryTarget,
-  effectiveBotSetup,
   rememberedBotBackupModels,
   type BotBackupSwitchParams
 } from '../../shared/bots/bot-backup-models'
@@ -14,6 +12,7 @@ import type { BotUsageLimitKey } from './bot-usage-limit-gate'
 import {
   executeBotBackupSwitch,
   pickReadyBotBackup,
+  resolveBotLaunchSetup,
   returnHomeChatToPrimary,
   type BotCutBackupState,
   type BotFailoverSessionInfo,
@@ -27,6 +26,7 @@ export class BotUsageLimitFailover {
   private readonly cutStates = new Map<string, BotCutBackupState>()
   private readonly attemptedByCut = new Map<string, Set<string>>()
   private readonly inFlightCuts = new Set<string>()
+  private readonly pendingForcedReturns = new Set<string>()
   private readonly programmaticOptionSessions = new Set<string>()
   private readonly now: () => number
 
@@ -50,33 +50,7 @@ export class BotUsageLimitFailover {
 
   /** Resolves the setup a new bot session or automation run should launch with. */
   async resolveLaunchSetup(bot: Bot): Promise<{ agent: BotAgent; launch?: Bot['launch'] }> {
-    const effective = effectiveBotSetup(bot)
-    const primaryKey = await this.limitKeyFor(bot.agent, bot.launch?.model)
-    if (
-      !effective.onBackup &&
-      this.deps.gate.isLimited(primaryKey) &&
-      bot.backupModels?.automatic
-    ) {
-      const available = await this.deps.availableAgents()
-      const ready = await pickReadyBotBackup(this.deps, bot, botPrimaryTarget(bot), available)
-      if (ready) {
-        const launch = backupEntryToLaunch(ready)
-        await this.deps
-          .updateBot(bot.id, () => ({
-            activeBackup: {
-              target: ready,
-              switchedAt: this.now(),
-              ...(bot.launch?.model ? { primaryModel: bot.launch.model } : {}),
-              ...(this.deps.gate.limitResetAt(primaryKey) !== undefined
-                ? { primaryResetsAt: this.deps.gate.limitResetAt(primaryKey) }
-                : {})
-            }
-          }))
-          .catch(() => {})
-        return { agent: ready.agent, ...(launch ? { launch } : {}) }
-      }
-    }
-    return { agent: effective.agent, ...(effective.launch ? { launch: effective.launch } : {}) }
+    return resolveBotLaunchSetup(this.deps, bot, this.now())
   }
 
   /** Called when a structured session observes a usage-limit cut. */
@@ -111,6 +85,9 @@ export class BotUsageLimitFailover {
       const session = await this.deps.getSessionInfo(params.sessionId)
       if (!session) {
         throw new Error('session_not_found')
+      }
+      if (this.deps.botOfSession(params.sessionId)?.id !== bot.id) {
+        throw new Error('session_bot_mismatch')
       }
       if (params.remember) {
         await this.deps.updateBot(bot.id, (latest) => ({
@@ -151,20 +128,26 @@ export class BotUsageLimitFailover {
         return false
       }
       const home = bot.chatSessionId ? await this.deps.getSessionInfo(bot.chatSessionId) : null
-      // Never interrupt an active Home Chat turn; onTurnSucceeded retries once idle.
-      if (!options.force && home && !home.isIdle) {
+      // Never interrupt an active Home Chat turn; remember forced requests so onTurnSucceeded completes them.
+      if (home && !home.isIdle) {
+        if (options.force) {
+          this.pendingForcedReturns.add(bot.id)
+        }
         return false
       }
       const fromTarget = bot.activeBackup.target
-      await this.deps.updateBot(bot.id, () => ({ activeBackup: null }))
-
-      if (home && home.isIdle) {
-        await returnHomeChatToPrimary(
+      if (home) {
+        const returned = await returnHomeChatToPrimary(
           this.deps,
           (sid, run) => this.withProgrammaticOptions(sid, run),
-          { bot, home, fromTarget, primaryModel, now: this.now() }
+          { bot, home, fromTarget, primaryModel, manual: options.force === true, now: this.now() }
         )
+        if (!returned) {
+          return false
+        }
       }
+      this.pendingForcedReturns.delete(bot.id)
+      await this.deps.updateBot(bot.id, () => ({ activeBackup: null }))
       return true
     })
   }
@@ -213,10 +196,14 @@ export class BotUsageLimitFailover {
     }
     const bot = this.deps.botOfSession(sessionId)
     if (bot?.activeBackup && bot.chatSessionId === sessionId) {
-      const primaryModel = bot.launch?.model ?? bot.activeBackup.primaryModel
-      const primaryKey = await this.limitKeyFor(bot.agent, primaryModel)
-      if (!this.deps.gate.isLimited(primaryKey)) {
-        await this.returnToPrimary(bot.id).catch(() => {})
+      if (this.pendingForcedReturns.has(bot.id)) {
+        await this.returnToPrimary(bot.id, { force: true }).catch(() => {})
+      } else {
+        const primaryModel = bot.launch?.model ?? bot.activeBackup.primaryModel
+        const primaryKey = await this.limitKeyFor(bot.agent, primaryModel)
+        if (!this.deps.gate.isLimited(primaryKey)) {
+          await this.returnToPrimary(bot.id).catch(() => {})
+        }
       }
     }
   }
@@ -271,15 +258,27 @@ export class BotUsageLimitFailover {
     }
 
     this.setCutState(sessionId, { turnItemId: cut.turnItemId, backupState: 'switching' })
-    attempted.add(botModelTargetKey(ready))
-    await executeBotBackupSwitch(this.deps, (sid, run) => this.withProgrammaticOptions(sid, run), {
-      bot,
-      session,
-      cut,
-      target: ready,
-      now: this.now()
-    })
-    this.clearCutState(sessionId)
+    let candidate: typeof ready | undefined = ready
+    while (candidate) {
+      attempted.add(botModelTargetKey(candidate))
+      let switched = false
+      try {
+        const result = await executeBotBackupSwitch(
+          this.deps,
+          (sid, run) => this.withProgrammaticOptions(sid, run),
+          { bot, session, cut, target: candidate, now: this.now() }
+        )
+        switched = result.switched
+      } catch {
+        switched = false
+      }
+      if (switched) {
+        this.clearCutState(sessionId)
+        return
+      }
+      candidate = await pickReadyBotBackup(this.deps, bot, currentChoice, available, attempted)
+    }
+    await this.markBackupsExhausted(bot, sessionId, cut)
   }
 
   private async markBackupsExhausted(

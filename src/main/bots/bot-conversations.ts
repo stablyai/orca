@@ -34,10 +34,11 @@ export function botConversations(deps: {
       }
       const sessionId =
         kind === 'bot-chat' ? await deps.ensureChat(botId) : await deps.startSession(bot)
+      const latest = find(botId) ?? bot
       return {
-        worktreeId: folderWorkspaceKey(bot.folderWorkspaceId),
+        worktreeId: folderWorkspaceKey(latest.folderWorkspaceId),
         sessionId,
-        agent: effectiveBotSetup(bot).agent
+        agent: effectiveBotSetup(latest).agent
       }
     },
     workLinks: async ({ bot, source, externalId }) =>

@@ -74,6 +74,7 @@ export type AgentJournalBotBackupModelSwitchItem = {
   switchId: string
   botId: string
   direction: 'to-backup' | 'to-primary'
+  returnReason?: 'limit-reset' | 'manual'
   fromAgent: string
   fromModel?: string
   toAgent: string

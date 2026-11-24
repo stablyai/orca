@@ -2,8 +2,10 @@
 import { randomUUID } from 'node:crypto'
 import type { Bot, BotAgent } from '../../shared/bot-types'
 import {
+  backupEntryToLaunch,
   botModelTargetKey,
   botPrimaryTarget,
+  effectiveBotSetup,
   sameBotModelTarget,
   type BotActiveBackup,
   type BotBackupModelEntry
@@ -78,7 +80,12 @@ export async function pickReadyBotBackup(
 ): Promise<BotBackupModelEntry | undefined> {
   const order = bot.backupModels?.order ?? []
   for (const candidate of order) {
-    if (sameBotModelTarget(candidate, current) || !available.has(candidate.agent)) {
+    if (
+      sameBotModelTarget(candidate, current) ||
+      !available.has(candidate.agent) ||
+      // A same-agent backup without a concrete model cannot move the session off the limited model.
+      (candidate.agent === current.agent && !candidate.model)
+    ) {
       continue
     }
     if (attempted?.has(botModelTargetKey(candidate))) {
@@ -110,26 +117,32 @@ export async function executeBotBackupSwitch(
   const { bot, session, cut, target, now } = input
   const primaryModel = bot.activeBackup?.primaryModel ?? bot.launch?.model ?? session.model
   const primaryResetsAt = bot.activeBackup?.primaryResetsAt ?? cut.resetsAt
-  await deps.updateBot(bot.id, (latest) => ({
-    activeBackup: {
-      target,
-      switchedAt: now,
-      ...((latest.activeBackup?.primaryModel ?? primaryModel)
-        ? { primaryModel: latest.activeBackup?.primaryModel ?? primaryModel }
-        : {}),
-      ...((latest.activeBackup?.primaryResetsAt ?? primaryResetsAt)
-        ? { primaryResetsAt: latest.activeBackup?.primaryResetsAt ?? primaryResetsAt }
-        : {})
-    }
-  }))
+  const commitActiveBackup = async (): Promise<void> => {
+    await deps.updateBot(bot.id, (latest) => ({
+      activeBackup: {
+        target,
+        switchedAt: now,
+        ...((latest.activeBackup?.primaryModel ?? primaryModel)
+          ? { primaryModel: latest.activeBackup?.primaryModel ?? primaryModel }
+          : {}),
+        ...((latest.activeBackup?.primaryResetsAt ?? primaryResetsAt)
+          ? { primaryResetsAt: latest.activeBackup?.primaryResetsAt ?? primaryResetsAt }
+          : {})
+      }
+    }))
+  }
 
   if (target.agent === session.provider) {
+    if (!target.model) {
+      return { switched: false }
+    }
     const applied = await withProgrammaticOptions(session.sessionId, () =>
       deps.applySameAgentOptions(session.sessionId, target)
     )
     if (!applied) {
       return { switched: false }
     }
+    await commitActiveBackup()
     await deps
       .appendSwitchCard(
         session.sessionId,
@@ -141,7 +154,7 @@ export async function executeBotBackupSwitch(
           fromAgent: session.provider,
           ...(session.model ? { fromModel: session.model } : {}),
           toAgent: target.agent,
-          ...(target.model ? { toModel: target.model } : {}),
+          toModel: target.model,
           ...(cut.resetsAt !== undefined ? { resetsAt: cut.resetsAt } : {}),
           at: now
         },
@@ -167,6 +180,7 @@ export async function executeBotBackupSwitch(
     resetsAt: cut.resetsAt,
     now
   })
+  await commitActiveBackup()
   return { switched: true, newSessionId: handedOff.newSessionId }
 }
 
@@ -178,15 +192,21 @@ export async function returnHomeChatToPrimary(
     home: BotFailoverSessionInfo
     fromTarget: BotBackupModelEntry
     primaryModel: string | undefined
+    manual?: boolean
     now: number
   }
-): Promise<void> {
-  const { bot, home, fromTarget, primaryModel, now } = input
+): Promise<boolean> {
+  const { bot, home, fromTarget, primaryModel, manual, now } = input
+  const returnReason = manual ? ('manual' as const) : ('limit-reset' as const)
   const primaryTarget = botPrimaryTarget(bot)
   if (home.provider === bot.agent) {
-    await withProgrammaticOptions(home.sessionId, () =>
-      deps.applySameAgentOptions(home.sessionId, primaryTarget)
-    )
+    const restoreTarget = primaryModel ? { ...primaryTarget, model: primaryModel } : primaryTarget
+    const applied = await withProgrammaticOptions(home.sessionId, () =>
+      deps.applySameAgentOptions(home.sessionId, restoreTarget)
+    ).catch(() => false)
+    if (!applied) {
+      return false
+    }
     await deps
       .appendSwitchCard(
         home.sessionId,
@@ -195,6 +215,7 @@ export async function returnHomeChatToPrimary(
           switchId: randomUUID(),
           botId: bot.id,
           direction: 'to-primary',
+          returnReason,
           fromAgent: fromTarget.agent,
           ...(fromTarget.model ? { fromModel: fromTarget.model } : {}),
           toAgent: bot.agent,
@@ -204,16 +225,57 @@ export async function returnHomeChatToPrimary(
         now
       )
       .catch(() => {})
-    return
+    return true
   }
   const refreshed = deps.listBots().find((entry) => entry.id === bot.id) ?? bot
-  await executeCrossAgentBotHandoff(deps.crossAgentHandoff, {
-    bot: refreshed,
-    sourceSessionId: home.sessionId,
-    sourceAgent: home.provider,
-    sourceModel: home.model ?? fromTarget.model,
-    target: primaryTarget,
-    direction: 'to-primary',
-    now
-  }).catch(() => {})
+  try {
+    await executeCrossAgentBotHandoff(deps.crossAgentHandoff, {
+      bot: refreshed,
+      sourceSessionId: home.sessionId,
+      sourceAgent: home.provider,
+      sourceModel: home.model ?? fromTarget.model,
+      target: primaryTarget,
+      direction: 'to-primary',
+      returnReason,
+      now
+    })
+    return true
+  } catch {
+    return false
+  }
+}
+
+/** Resolves the setup a new bot session or automation run should launch with. */
+export async function resolveBotLaunchSetup(
+  deps: BotUsageLimitFailoverDeps,
+  bot: Bot,
+  now: number
+): Promise<{ agent: BotAgent; launch?: Bot['launch'] }> {
+  const effective = effectiveBotSetup(bot)
+  const accountHomeKey = await deps.resolveAccountHomeKey(bot.agent)
+  const primaryKey: BotUsageLimitKey = {
+    agent: bot.agent,
+    accountHomeKey,
+    model: bot.launch?.model ?? ''
+  }
+  if (!effective.onBackup && deps.gate.isLimited(primaryKey) && bot.backupModels?.automatic) {
+    const available = await deps.availableAgents()
+    const ready = await pickReadyBotBackup(deps, bot, botPrimaryTarget(bot), available)
+    if (ready) {
+      const launch = backupEntryToLaunch(ready)
+      const resetsAt = deps.gate.limitResetAt(primaryKey)
+      await deps
+        .updateBot(bot.id, () => ({
+          activeBackup: {
+            target: ready,
+            switchedAt: now,
+            ...(bot.launch?.model ? { primaryModel: bot.launch.model } : {}),
+            ...(resetsAt !== undefined ? { primaryResetsAt: resetsAt } : {})
+          }
+        }))
+        .catch(() => {})
+      return { agent: ready.agent, ...(launch ? { launch } : {}) }
+    }
+  }
+  return { agent: effective.agent, ...(effective.launch ? { launch: effective.launch } : {}) }
 }

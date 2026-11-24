@@ -56,6 +56,7 @@ export type BotBackupModelsContentProps = {
   bot: Pick<Bot, 'id' | 'name' | 'agent' | 'launch' | 'backupModels' | 'activeBackup'>
   status: BotBackupStatusResult | null
   loading: boolean
+  loadError?: boolean
   returning: boolean
   disabled?: boolean
   onRefresh?: () => void
@@ -68,6 +69,7 @@ export function BotBackupModelsContent({
   bot,
   status,
   loading,
+  loadError = false,
   returning,
   disabled = false,
   onRefresh,
@@ -84,7 +86,7 @@ export function BotBackupModelsContent({
     () =>
       order.map((entry) => {
         const matched = status?.entries.find((item) => sameBotModelTarget(item.entry, entry))
-        return matched ?? { entry, state: 'ready' }
+        return matched ? { ...matched, entry } : { entry, state: 'ready' }
       }),
     [order, status]
   )
@@ -246,13 +248,30 @@ export function BotBackupModelsContent({
         )}
 
         {order.length < BOT_BACKUP_MODEL_LIMIT ? (
-          <BotBackupModelPickerPopover
-            addableByAgent={addableByAgent}
-            canAdd={canAdd}
-            loading={loading}
-            onOpen={onRefresh}
-            onSelect={handleAdd}
-          />
+          loadError && status === null && !loading && onRefresh ? (
+            <div className="flex min-h-10 items-center justify-between gap-2 px-3 py-2 text-xs text-muted-foreground">
+              <span>
+                {t('settings.bots.backupModels.loadFailed', "Couldn't load available models.")}
+              </span>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                disabled={disabled}
+                onClick={onRefresh}
+              >
+                {t('settings.bots.backupModels.retry', 'Retry')}
+              </Button>
+            </div>
+          ) : (
+            <BotBackupModelPickerPopover
+              addableByAgent={addableByAgent}
+              canAdd={canAdd}
+              loading={loading}
+              onOpen={onRefresh}
+              onSelect={handleAdd}
+            />
+          )
         ) : null}
       </SettingsInsetGroup>
     </div>
@@ -269,17 +288,19 @@ export function BotBackupModelsPage({
   const controlsOff = useContext(SettingsControlsOffContext)
   const [status, setStatus] = useState<BotBackupStatusResult | null>(null)
   const [loading, setLoading] = useState(true)
+  const [loadError, setLoadError] = useState(false)
   const [returning, setReturning] = useState(false)
 
   const readStatus = useCallback(async () => {
     setLoading(true)
+    setLoadError(false)
     try {
       const next = await callBotRpc<BotBackupStatusResult>(bot, 'bots.backup.status', {
         botId: bot.id
       })
       setStatus(next)
     } catch {
-      // Keep last known status when offline or unavailable.
+      setLoadError(true)
     }
     setLoading(false)
   }, [bot])
@@ -318,6 +339,7 @@ export function BotBackupModelsPage({
       bot={bot}
       status={status}
       loading={loading}
+      loadError={loadError}
       returning={returning}
       disabled={controlsOff}
       onRefresh={() => void readStatus()}

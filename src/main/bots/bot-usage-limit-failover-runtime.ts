@@ -60,7 +60,8 @@ async function applySameAgentOptionsOnHost(
     })
     return res.ok
   }
-  if (target.model && !(await writeOption('model', target.model))) {
+  // A same-agent switch without an explicit model would leave the exhausted model in place.
+  if (!target.model || !(await writeOption('model', target.model))) {
     return false
   }
   if (target.options) {
@@ -237,7 +238,7 @@ export function createRuntimeBotUsageLimitFailover(
       carryQueuedMessages: async (fromSessionId, toSessionId) => {
         const host = getStructuredAgentSessionHost()
         if (host) {
-          await carryQueuedMessages(host, fromSessionId, toSessionId)
+          await carryQueuedMessages(host, fromSessionId, toSessionId, { rethrow: true })
         }
       },
       closeOldHomeChat: async (sessionId) => {
@@ -255,9 +256,9 @@ export function createRuntimeBotUsageLimitFailover(
           return null
         }
       },
-      onSessionHandedOff: (fromSessionId, toSessionId) => {
+      onSessionHandedOff: (fromSessionId, toSessionId, handoffSend) => {
         runtime.lookAround.rebindSession(fromSessionId, toSessionId)
-        notifyBotTurnWatchRebind(fromSessionId, toSessionId)
+        notifyBotTurnWatchRebind(fromSessionId, toSessionId, handoffSend)
         runtime.notifyBotsChanged({ kinds: ['chats', 'bot'] })
       }
     }

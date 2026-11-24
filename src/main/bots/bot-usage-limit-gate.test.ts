@@ -97,4 +97,59 @@ describe('BotUsageLimitGate', () => {
     // Disposed gate must not emit further release callbacks.
     expect(released).toEqual([CLAUDE_SONNET])
   })
+
+  it('does not spin on expired readSpentUntil and preserves replacement holds across async races', async () => {
+    const released: BotUsageLimitKey[] = []
+    let limitChanges = 0
+    const pastSpentUntil = Date.now() - 10_000
+    const gate = new BotUsageLimitGate({
+      readSpentUntil: async () => pastSpentUntil,
+      onLimitReleased: (key) => released.push(key),
+      onLimitChanged: () => {
+        limitChanges += 1
+      }
+    })
+    gate.recordLimit({ ...CLAUDE_SONNET, resetsAt: Date.now() + 30_000 })
+    await vi.advanceTimersByTimeAsync(45_000)
+    expect(gate.isLimited(CLAUDE_SONNET)).toBe(false)
+    expect(released).toEqual([CLAUDE_SONNET])
+    // Only record + release notifications, never a 0ms re-arm storm.
+    expect(limitChanges).toBe(2)
+    gate.dispose()
+
+    // Concurrent recordLimit during verifyReturnReady and rejecting onTimer must never be clobbered.
+    const pending: {
+      resolve?: (value: number | null | undefined) => void
+      reject?: (err: Error) => void
+    } = {}
+    let mode: 'resolve' | 'reject' = 'resolve'
+    const raceReleased: BotUsageLimitKey[] = []
+    const raceGate = new BotUsageLimitGate({
+      readSpentUntil: () =>
+        new Promise((resolve, reject) => {
+          if (mode === 'resolve') {
+            pending.resolve = resolve
+          } else {
+            pending.reject = reject
+          }
+        }),
+      onLimitReleased: (key) => raceReleased.push(key)
+    })
+
+    const verifyPromise = raceGate.verifyReturnReady(CLAUDE_SONNET)
+    raceGate.recordLimit({ ...CLAUDE_SONNET, resetsAt: Date.now() + 120_000 })
+    pending.resolve?.(undefined)
+    expect(await verifyPromise).toBe(false)
+
+    mode = 'reject'
+    await vi.advanceTimersByTimeAsync(135_000)
+    // Replace the hold while the old timer's readSpentUntil is in flight, then reject the old read.
+    raceGate.recordLimit({ ...CLAUDE_SONNET, resetsAt: Date.now() + 300_000 })
+    pending.reject?.(new Error('network_error'))
+    await Promise.resolve()
+    await Promise.resolve()
+    expect(raceGate.isLimited(CLAUDE_SONNET)).toBe(true)
+    expect(raceReleased).toEqual([])
+    raceGate.dispose()
+  })
 })
