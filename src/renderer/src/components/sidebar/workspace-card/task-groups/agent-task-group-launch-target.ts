@@ -2,6 +2,7 @@ import type { AppState } from '@/store/types'
 import { findFirstIndexedWorktree } from '@/lib/workspace/ownership/worktree-runtime-owner-index'
 import { selectWorktreesByRepo } from '@/store/workspaces/catalog/workspace-record-fields'
 import { selectActiveTabForWorktree } from '@/store/slices/tabs/active-tab-selection'
+import { selectWorkspaceAgentTaskGroups } from '@/store/slices/ui/agent-task-group-source'
 import { structuredAgentSessionTabId } from '../../../../../../shared/agent-session/view/structured-agent-session-projection'
 import type { AgentTaskGroup } from '../../../../../../shared/agent-task-groups/agent-task-groups'
 import type { ExecutionHostId } from '../../../../../../shared/execution-host/execution-host'
@@ -31,7 +32,7 @@ export function resolveTaskGroupLaunchTarget(
     worktreeId
   )?.hostId
   const workspaceKey = agentTaskGroupWorkspaceKey(worktreeId, executionHostId)
-  const record = state.agentTaskGroupsByWorkspace[workspaceKey]
+  const record = selectWorkspaceAgentTaskGroups(state, worktreeId, executionHostId)
   const active = selectActiveTabForWorktree(state, worktreeId)
   const activeTabId = active?.id ?? null
   const groups = record?.groups ?? NO_GROUPS

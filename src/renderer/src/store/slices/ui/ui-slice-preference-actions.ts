@@ -184,7 +184,7 @@ export function createUiPreferenceActions(set: UISliceSet, get: UISliceGet): Par
     setFilterRepoIds: (ids) => set({ filterRepoIds: ids }),
 
     ...createAgentsViewPreferenceActions(set),
-    ...createAgentTaskGroupActions(set),
+    ...createAgentTaskGroupActions(set, get),
 
     collapsedGroups: new Set<string>(),
     toggleCollapsedGroup: (key) =>

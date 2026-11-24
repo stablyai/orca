@@ -8,6 +8,7 @@ import {
   DropdownMenuSubTrigger
 } from '@/components/ui/dropdown-menu'
 import { useAppStore } from '@/store/index'
+import { selectWorkspaceAgentTaskGroups } from '@/store/slices/ui/agent-task-group-source'
 import { useTranslate } from '@/i18n/use-translate'
 import type { ExecutionHostId } from '../../../../../../shared/execution-host/execution-host'
 import {
@@ -30,7 +31,9 @@ export function AgentTaskGroupMenuItems({
 }): React.JSX.Element {
   const t = useTranslate()
   const workspaceKey = agentTaskGroupWorkspaceKey(worktreeId, executionHostId)
-  const taskGroups = useAppStore((s) => s.agentTaskGroupsByWorkspace[workspaceKey])
+  const taskGroups = useAppStore((s) =>
+    selectWorkspaceAgentTaskGroups(s, worktreeId, executionHostId)
+  )
   const openModal = useAppStore((s) => s.openModal)
   const assign = useAppStore((s) => s.assignTabToAgentTaskGroup)
   const dialogData = {

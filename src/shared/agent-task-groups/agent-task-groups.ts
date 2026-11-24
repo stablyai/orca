@@ -54,7 +54,8 @@ export function normalizeAgentTaskGroupName(value: unknown): string | null {
   return name.length > 0 ? name : null
 }
 
-function normalizeWorkspaceGroups(value: unknown): WorkspaceAgentTaskGroups | null {
+/** One workspace's groups as stored with the workspace on its host; null when none survive. */
+export function normalizeWorkspaceAgentTaskGroups(value: unknown): WorkspaceAgentTaskGroups | null {
   if (!isRecord(value) || !Array.isArray(value.groups)) {
     return null
   }
@@ -117,7 +118,7 @@ export function normalizeAgentTaskGroupsByWorkspace(value: unknown): AgentTaskGr
     if (workspaces >= MAX_AGENT_TASK_GROUP_WORKSPACES) {
       break
     }
-    const normalized = isId(workspaceKey) ? normalizeWorkspaceGroups(raw) : null
+    const normalized = isId(workspaceKey) ? normalizeWorkspaceAgentTaskGroups(raw) : null
     if (normalized) {
       result[workspaceKey] = normalized
       workspaces++

@@ -2298,7 +2298,8 @@
                     "pr": {
                       "suppression": "Update the remote runtime to unlink GitHub pull requests"
                     }
-                  }
+                  },
+                  "agentTaskGroups": "Update Orca on the host to share task groups with this device"
                 }
               }
             }

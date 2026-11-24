@@ -1,5 +1,7 @@
-import React, { useCallback, useMemo } from 'react'
+import React, { useCallback, useEffect, useMemo } from 'react'
 import { useAppStore } from '@/store/index'
+import { selectWorkspaceAgentTaskGroups } from '@/store/slices/ui/agent-task-group-source'
+import { moveDeviceAgentTaskGroupsToHosts } from '@/store/slices/ui/agent-task-group-host-move'
 import { useAgentPresentation } from '../activity/useWorktreeAgentRows'
 import type { WorkspaceAgentTaskGroups } from '../../../../../../shared/agent-task-groups/agent-task-groups'
 import type { ExecutionHostId } from '../../../../../../shared/execution-host/execution-host'
@@ -23,9 +25,10 @@ export function useAgentTaskGroupsList(
   worktreeId: string,
   executionHostId: ExecutionHostId | undefined
 ): 'none' | 'open' | 'folded' {
+  // Cards mount once workspaces are listed: the first moment this device's older groups can move.
+  useEffect(() => moveDeviceAgentTaskGroupsToHosts(useAppStore), [])
   return useAppStore((s) => {
-    const record =
-      s.agentTaskGroupsByWorkspace[agentTaskGroupWorkspaceKey(worktreeId, executionHostId)]
+    const record = selectWorkspaceAgentTaskGroups(s, worktreeId, executionHostId)
     if (!record || record.groups.length === 0) {
       return 'none'
     }
@@ -49,8 +52,8 @@ export function useTaskGroupedRoots(
   executionHostId: ExecutionHostId | undefined,
   roots: readonly string[]
 ): { groups: WorkspaceAgentTaskGroups; grouped: GroupedRoots } | null {
-  const taskGroups = useAppStore(
-    (s) => s.agentTaskGroupsByWorkspace[agentTaskGroupWorkspaceKey(worktreeId, executionHostId)]
+  const taskGroups = useAppStore((s) =>
+    selectWorkspaceAgentTaskGroups(s, worktreeId, executionHostId)
   )
   // A pane's tab never changes, so the roots channel covers it; the joined string keeps snapshots stable.
   const rootTabIds = useAgentPresentation(

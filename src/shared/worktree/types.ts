@@ -9,6 +9,7 @@ import type { BuiltInWorktreeVisibilitySourceId } from '../repository/repo-types
 import type { WorktreeIdentity } from './identity'
 import type { WorktreeScanFailureKind } from './catalog/worktree-scan-failure'
 import type { SmartTier } from '../sidebar-list/sorting/sort-stamps'
+import type { WorkspaceAgentTaskGroups } from '../agent-task-groups/agent-task-groups'
 
 export type WorkspaceAttachmentOrigin = {
   kind: 'observed'
@@ -167,6 +168,8 @@ export type Worktree = {
   mobileDiffReview?: MobileDiffReviewState
   automationProvenance?: AutomationWorkspaceProvenance
   cliProvenance?: CliWorkspaceProvenance
+  /** The host's task groups for this workspace; null right after an edit cleared them. */
+  agentTaskGroups?: WorkspaceAgentTaskGroups | null
 } & GitWorktreeInfo
 
 /** Only CLI-created workspaces carry this; missing means not CLI-created, including older rows. */
