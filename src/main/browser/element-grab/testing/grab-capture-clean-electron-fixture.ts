@@ -4,6 +4,7 @@ import { join } from 'node:path'
 import { app, BrowserWindow, webContents, nativeImage } from 'electron'
 import { applyBackgroundActivationPolicy } from '../../../window/activation/foreground-activation-policy'
 import { writeElectronFixtureResult } from '../../electron-fixtures/electron-fixture-result'
+import { letFixtureWindowPaint } from '../../electron-fixtures/electron-fixture-window'
 import { verifyGrabPickLifetime } from './grab-pick-lifetime-electron-fixture'
 import { verifyGrabExecutionRecovery } from './grab-execution-recovery-electron-fixture'
 
@@ -41,6 +42,7 @@ async function run(): Promise<void> {
       backgroundThrottling: false
     }
   })
+  letFixtureWindowPaint(window)
   window.webContents.on('will-attach-webview', (_event, preferences) => {
     preferences.preload = process.env.ORCA_BROWSER_GUEST_PRELOAD
     preferences.sandbox = true
@@ -159,7 +161,7 @@ async function run(): Promise<void> {
     }
   }
 
-  writeElectronFixtureResult({ pickedKinds, recovery, pickLifetime, ...results })
+  await writeElectronFixtureResult({ pickedKinds, recovery, pickLifetime, ...results })
   process.stderr.write(
     `[palette-proof] ${JSON.stringify({
       pid: process.pid,

@@ -9,6 +9,7 @@ import { join } from 'node:path'
 import { app, BrowserWindow, webContents } from 'electron'
 import { applyBackgroundActivationPolicy } from '../../../window/activation/foreground-activation-policy'
 import { writeElectronFixtureResult } from '../../electron-fixtures/electron-fixture-result'
+import { letFixtureWindowPaint } from '../../electron-fixtures/electron-fixture-window'
 import {
   setupGrabShortcutForwarding,
   refreshGrabShortcutPolicies
@@ -52,6 +53,7 @@ async function run(): Promise<void> {
       backgroundThrottling: false
     }
   })
+  letFixtureWindowPaint(window)
   window.webContents.on('will-attach-webview', (_event, preferences) => {
     preferences.preload = process.env.ORCA_BROWSER_GUEST_PRELOAD
     preferences.sandbox = true
@@ -272,7 +274,7 @@ async function run(): Promise<void> {
 
   const nonCommit = await verifyGrabChordNonCommit(page, chordPages, chord)
 
-  writeElectronFixtureResult({
+  await writeElectronFixtureResult({
     focusAfterArm,
     searchValue,
     forwardedWhileInField,
