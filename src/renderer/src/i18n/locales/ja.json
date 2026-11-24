@@ -19978,7 +19978,6 @@
         "terminalRequired": "ターミナルでこの OMP の質問に答えてください。",
         "openTerminal": "ターミナルで回答する",
         "recommended": "おすすめ",
-        "stepAnswered": "{{value0}}、回答済み",
         "stepOf": "{{value0}} / {{value1}}",
         "answered": "回答済み",
         "title": "質問",

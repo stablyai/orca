@@ -19916,7 +19916,6 @@
         "terminalRequired": "Diese OMP-Frage im Terminal beantworten.",
         "openTerminal": "Im Terminal antworten",
         "recommended": "Empfohlen",
-        "stepAnswered": "{{value0}}, beantwortet",
         "stepOf": "{{value0}} von {{value1}}",
         "answered": "Beantwortet",
         "title": "Frage",

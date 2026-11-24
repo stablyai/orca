@@ -19777,7 +19777,6 @@
         "terminalRequired": "Répondez à cette question OMP dans le terminal.",
         "openTerminal": "Répondre dans le terminal",
         "recommended": "Recommandé",
-        "stepAnswered": "{{value0}}, répondue",
         "stepOf": "{{value0}} sur {{value1}}",
         "answered": "Répondue",
         "title": "Question",

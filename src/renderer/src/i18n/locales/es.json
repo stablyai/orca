@@ -19495,7 +19495,6 @@
         "terminalRequired": "Responda esta pregunta OMP en la terminal.",
         "openTerminal": "Responder en la terminal",
         "recommended": "Recomendado",
-        "stepAnswered": "{{value0}}, respondida",
         "stepOf": "{{value0}} de {{value1}}",
         "answered": "Respondida",
         "title": "Pregunta",
