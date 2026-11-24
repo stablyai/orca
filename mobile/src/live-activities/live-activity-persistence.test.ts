@@ -1,68 +1,7 @@
+import { backend, client } from './live-activity-persistence.test-fixture'
 import { registerLiveActivityOverview } from './live-activity-overview-registration'
-import { beforeEach, expect, it, vi } from 'vitest'
+import { expect, it } from 'vitest'
 import * as z from 'zod'
-import type { RpcClient } from '../transport/rpc/rpc-client-contract'
-
-const backend = vi.hoisted(() => ({
-  storage: new Map<string, string>(),
-  secrets: new Map<string, string>(),
-  writes: 0,
-  failWrite: 0,
-  failDelete: false,
-  catalog: [{ id: 'host-a' }],
-  nativeActive: new Set<string>(),
-  failNativeEnd: false
-}))
-vi.mock('@react-native-async-storage/async-storage', () => ({
-  default: {
-    getItem: async (key: string) => backend.storage.get(key) ?? null,
-    setItem: async (key: string, value: string) => {
-      backend.storage.set(key, value)
-    },
-    removeItem: async (key: string) => {
-      backend.storage.delete(key)
-    }
-  }
-}))
-vi.mock('expo-secure-store', () => ({
-  getItemAsync: async (key: string) => backend.secrets.get(key) ?? null,
-  setItemAsync: async (key: string, value: string) => {
-    backend.writes++
-    if (backend.writes === backend.failWrite) {
-      throw new Error('Keychain unavailable')
-    }
-    backend.secrets.set(key, value)
-  },
-  deleteItemAsync: async (key: string) => {
-    if (backend.failDelete) {
-      throw new Error('Keychain unavailable')
-    }
-    backend.secrets.delete(key)
-  }
-}))
-vi.mock('expo-crypto', async () => {
-  const { createHash, randomUUID } = await import('node:crypto')
-  return {
-    randomUUID,
-    CryptoDigestAlgorithm: { SHA256: 'sha256' },
-    digestStringAsync: async (algorithm: string, input: string) =>
-      createHash(algorithm).update(input).digest('hex')
-  }
-})
-vi.mock('./native-live-activities', () => ({
-  nativeLiveActivities: {
-    environment: async () => 'sandbox',
-    storeRoute: async () => {},
-    end: async (id: string) => {
-      if (backend.failNativeEnd) {
-        throw new Error('ActivityKit unavailable')
-      }
-      backend.nativeActive.delete(id)
-    },
-    forgetRoute: async () => {}
-  }
-}))
-vi.mock('../host-catalog/host-store', () => ({ loadHostCatalog: async () => backend.catalog }))
 
 import {
   cleanupLiveActivitySecrets,
@@ -78,31 +17,6 @@ import {
   retryLiveActivityRetirements,
   unregisterLiveActivityOverview
 } from './live-activity-retirement'
-
-function client(sendRequest: RpcClient['sendRequest']): RpcClient {
-  return {
-    sendRequest,
-    getState: () => 'connected',
-    getReconnectAttempt: () => 0,
-    getLastConnectedAt: () => 1,
-    subscribe: () => () => {},
-    onStateChange: () => () => {},
-    updateTerminalSubscriptionViewport: () => {},
-    notifyForeground: () => {},
-    close: () => {}
-  }
-}
-
-beforeEach(() => {
-  backend.storage.clear()
-  backend.secrets.clear()
-  backend.writes = 0
-  backend.failWrite = 0
-  backend.failDelete = false
-  backend.catalog = [{ id: 'host-a' }]
-  backend.nativeActive.clear()
-  backend.failNativeEnd = false
-})
 
 it('keeps durable deletion intent across failed allocation and retirement of Keychain secrets', async () => {
   backend.failWrite = 2
@@ -256,4 +170,17 @@ it('retains a failed native end after remote acknowledgement and retries it with
   expect(await retryLiveActivityRetirements(new Map())).toBe(true)
   expect(await isLiveActivityRetiring(activity.activityId)).toBe(false)
   expect(backend.nativeActive.size).toBe(0)
+})
+
+it('recovers active Keychain credentials when the cohort metadata becomes malformed', async () => {
+  await createLiveActivityCohort(
+    { sources: [{ hostId: 'host-a' }], complete: true },
+    'host-a',
+    () => true
+  )
+  expect(backend.secrets.size).toBe(2)
+  backend.storage.set('orca:liveActivityOverview:v2', '{invalid')
+  await cleanupLiveActivitySecrets()
+  expect(backend.secrets.size).toBe(0)
+  expect(backend.storage.has('orca:liveActivitySecretCleanup:v2')).toBe(false)
 })

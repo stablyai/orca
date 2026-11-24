@@ -65,7 +65,7 @@ export async function deliverHostLiveActivity(
   )
   entry.authoritative = entry.censusAuthoritative && projected.every((result) => result.complete)
   const content = agentOverviewContent(
-    entry.censusAuthoritative ? projected.map((result) => result.frame) : [],
+    projected.map((result) => result.frame),
     entry.input.activityId,
     entry.input.showNames,
     now

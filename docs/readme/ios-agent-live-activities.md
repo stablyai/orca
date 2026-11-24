@@ -133,13 +133,22 @@ reconnection. Failed enrollment of any source remains a delivery failure and
 retries while the phone is foregrounded; this does not assume background JavaScript
 execution. New source enrollment also requires the foreground phone.
 
+Partial executor inventories retain the known locally projected sessions as lower
+bounds. A failed inventory drops older frames and retains only publications
+received during that attempt; those contributions remain incomplete.
+
 ## Qualification
 
 Local checks cover real device-registry persistence/revocation, overlapping host
 updates, authenticated gateway merging, alias deduplication, hidden-name
 serialization, replay rejection, freshness expiry, cohort ownership and
 old-token in-flight fencing. Native iOS builds and simulator screenshots are
-separate from physical-device APNs qualification.
+separate from physical-device APNs qualification. Apple also supports real
+ActivityKit APNs testing in Simulator on Apple silicon or T2 Macs with macOS 13
+or later. This still requires the Push Notifications capability, an ActivityKit
+push token and APNs authentication for the app topic. `simctl push` only supports
+application remote notifications and does not replace ActivityKit APNs delivery.
+A fixture with `pushType: nil` qualifies presentation, not suspended delivery.
 
 Use an explicit model, OS, build, APNs environment and viewport. Keep screenshots
 outside Git. The temporary simulator fixture uses the shipping widget with

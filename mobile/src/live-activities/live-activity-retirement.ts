@@ -44,16 +44,13 @@ async function flushRetirements(
   records: Retirement[],
   clients: ReadonlyMap<string, RpcClient>
 ): Promise<boolean> {
-  const ready = records
-    .filter(
-      (record) =>
-        record.nativePending ||
-        record.scopes.some((scope) => clients.get(scope.hostId)?.getState() === 'connected')
-    )
-    .slice(0, 4)
   await Promise.all(
-    ready.map(async (record) => {
-      if (record.nativePending && nativeLiveActivities) {
+    records
+      .filter((record) => record.nativePending)
+      .map(async (record) => {
+        if (!nativeLiveActivities) {
+          return
+        }
         try {
           await nativeLiveActivities.end(record.activityId)
           await nativeLiveActivities.forgetRoute(record.overviewId)
@@ -61,7 +58,15 @@ async function flushRetirements(
         } catch {
           /* Retain the native retirement for foreground retry. */
         }
-      }
+      })
+  )
+  const ready = records
+    .filter((record) =>
+      record.scopes.some((scope) => clients.get(scope.hostId)?.getState() === 'connected')
+    )
+    .slice(0, 4)
+  await Promise.all(
+    ready.map(async (record) => {
       const pending = await Promise.all(
         record.scopes.map(async (scope) => {
           const client = clients.get(scope.hostId)
@@ -86,7 +91,10 @@ async function flushRetirements(
       record.scopes = pending.filter((scope) => scope !== null)
     })
   )
-  const remaining = records.filter((record) => record.nativePending || record.scopes.length > 0)
+  const attempted = new Set(ready)
+  const remaining = [...records.filter((record) => !attempted.has(record)), ...ready].filter(
+    (record) => record.nativePending || record.scopes.length > 0
+  )
   await saveRetirements(remaining)
   return remaining.length === 0
 }
@@ -119,14 +127,24 @@ function enqueueRetirement(
     const existing = records.find(
       (record) => record.activityId === activityId && record.overviewId === overviewId
     )
+    const merged = new Map(
+      [...(existing?.scopes ?? []), ...scopes].map((scope) => [
+        JSON.stringify([scope.hostId, scope.executionHost ?? null]),
+        scope
+      ])
+    )
+    if (merged.size > 32) {
+      throw new Error('Too many Live Activity retirement scopes')
+    }
     if (existing) {
       existing.nativePending ||= nativePending
+      existing.scopes = [...merged.values()]
     } else {
       records.push({
         activityId,
         overviewId,
         expiresAt: Date.now() + 8 * 60 * 60_000,
-        scopes,
+        scopes: [...merged.values()],
         nativePending
       })
     }

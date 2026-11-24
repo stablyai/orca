@@ -35,6 +35,7 @@ export async function refreshHostLiveActivityCensus(
     entry.censusAuthoritative = inventory.authoritative === true
     entry.authoritative = entry.censusAuthoritative
   } catch {
+    entry.frames = updates
     entry.authoritative = false
     entry.censusAuthoritative = false
   } finally {

@@ -29,14 +29,19 @@ export async function rememberLiveActivitySecrets(
 
 export async function cleanLiveActivitySecrets(activeOverviewId?: string): Promise<void> {
   const keys = await readKeys()
-  const pending = keys.filter(
-    (key) => !activeOverviewId || !key.startsWith(`orca.activity.${activeOverviewId}.`)
+  const protectedKeys = keys.filter(
+    (key) => activeOverviewId && key.startsWith(`orca.activity.${activeOverviewId}.`)
   )
+  const pending = keys.filter((key) => !protectedKeys.includes(key))
   const results = await Promise.allSettled(pending.map((key) => SecureStore.deleteItemAsync(key)))
   const failed = pending.filter((_, index) => results[index].status === 'rejected')
+  const retained = [...protectedKeys, ...failed]
+  if (retained.length) {
+    await AsyncStorage.setItem(KEY, JSON.stringify(retained))
+  } else {
+    await AsyncStorage.removeItem(KEY)
+  }
   if (failed.length) {
-    await AsyncStorage.setItem(KEY, JSON.stringify(failed))
     throw new Error('Live Activity secret cleanup pending')
   }
-  await AsyncStorage.removeItem(KEY)
 }
