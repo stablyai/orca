@@ -149,7 +149,7 @@ export async function readBotSlackIconShown(
       return { account: shown.account, mascot: shown.mascot }
     }
   } catch {
-    // Cut short by a crash: read as none, so the mascot id goes as before.
+    // Written whole or not at all; anything else unreadable reads as none, so the mascot id goes as before.
   }
   return null
 }
@@ -166,7 +166,7 @@ export async function writeBotSlackIconShown(
     return
   }
   await filesystem.makeDirectory(folder)
-  await filesystem.writeBytes(join(folder, SHOWN_FILE), Buffer.from(JSON.stringify(shown)))
+  await filesystem.replaceBytes(join(folder, SHOWN_FILE), Buffer.from(JSON.stringify(shown)))
 }
 
 /** A bot's drawn icon by id: whether one is wanted, kept, and read back for the cloud. */
