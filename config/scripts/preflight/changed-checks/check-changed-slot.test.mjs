@@ -1,10 +1,13 @@
 import { readFile } from 'node:fs/promises'
 import { join } from 'node:path'
+import { DatabaseSync } from 'node:sqlite'
 import { setTimeout as delay } from 'node:timers/promises'
 import { describe, expect, it } from 'vitest'
+import { queueFileFor } from './check-changed-slot.mjs'
 import {
   createQueue,
   exitedPid,
+  file,
   insertTicket,
   observe,
   openQueue,
@@ -225,6 +228,35 @@ await next()`)
       expect(waiter.error).toBeUndefined()
     }, 60_000)
   }
+
+  it('lets no check-in commit between reading the queue and claiming the slot', async () => {
+    await createQueue()
+    const peer = insertTicket({ pid: process.pid, started: ownStart(), seenAt: 1 })
+    const attempts = []
+    const release = await within(
+      run({
+        // Inside the decision: the peer's ticket was just read as silent. A check-in for it now
+        // must not commit, or the claim would rest on a state that no longer holds.
+        beforeClaim: () => {
+          const other = new DatabaseSync(queueFileFor(file), { timeout: 0 })
+          try {
+            other
+              .prepare('UPDATE tickets_v2 SET seen_at = ?, lane = 0 WHERE id = ?')
+              .run(Date.now(), peer)
+            attempts.push('committed')
+          } catch (error) {
+            attempts.push(error.errcode & 0xff)
+          } finally {
+            other.close()
+          }
+        }
+      }),
+      'waiter'
+    )
+    // SQLITE_BUSY: the decision holds the queue's write lock until the claim commits.
+    expect(attempts).toEqual([5])
+    await release()
+  }, 30_000)
 
   it('moves a waiter behind the line when its launcher has exited', async () => {
     const holder = await run()

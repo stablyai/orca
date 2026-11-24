@@ -61,6 +61,8 @@ export async function acquireChangedCheckSlot(file = slotFile, options = {}) {
     lock = new DatabaseSync(file)
     queue = new Queue(queueFileFor(file))
     waiter = new Waiter(queue, describeSelf(options.ancestors), timing, log)
+    // Test-only: runs inside the decision transaction, after the queue is read and before the claim.
+    waiter.beforeClaim = options.beforeClaim
     for (;;) {
       signal?.throwIfAborted()
       // Polls before the first await, so an uncontended call joins the queue in call order.
@@ -198,6 +200,9 @@ class Waiter {
       }
     }
     this.first = blocker === undefined
+    if (this.first) {
+      this.beforeClaim?.()
+    }
 
     if (this.first && tryLock(lock)) {
       s.hold.run(now, now, this.id)
