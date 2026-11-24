@@ -4,14 +4,20 @@ import process from 'node:process'
 import { afterAll, describe, expect, it, vi } from 'vitest'
 import { resolveOxlintInvocation } from '../../tool-invocation/oxlint-cli-invocation.mjs'
 import { main } from './ci-main-push-changed-lint.mjs'
-import { CONFIG, createGitFixture, DEBUGGER, REPO_ROOT } from './main-push-git-test-fixture.mjs'
+import {
+  CONFIG,
+  createGitFixture,
+  DEBUGGER,
+  GIT_TEST_TIMEOUT_MS,
+  REPO_ROOT
+} from './main-push-git-test-fixture.mjs'
 import { changedLintableFiles, EMPTY_TREE_SHA, resolveRange } from './main-push-range.mjs'
 import { collectBatchResults, runOxlint } from './oxlint-batches.mjs'
 
 const { git, commit, makeOrigin, shallowCheckout, scratchFile, cleanup } = createGitFixture()
-afterAll(cleanup)
+afterAll(cleanup, GIT_TEST_TIMEOUT_MS)
 
-describe('main-push lint range', () => {
+describe('main-push lint range', { timeout: GIT_TEST_TIMEOUT_MS }, () => {
   const origin = makeOrigin()
   const root = commit(origin, { '.oxlintrc.json': CONFIG, 'root.ts': 'export {}\n' }, 'root')
   git(origin, 'branch', 'rewritten')
@@ -139,7 +145,7 @@ describe('main-push lint range', () => {
         invocation: resolveOxlintInvocation(REPO_ROOT)
       })
     )
-    expect(results).toEqual({ diagnostics: [], incomplete: [], linted: 2 })
+    expect(results).toEqual({ diagnostics: [], errorCount: 0, incomplete: [], linted: 2 })
   })
 
   it('publishes the failure before any PR lookup, and exits 1', async () => {

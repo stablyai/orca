@@ -7,6 +7,8 @@ import { dirname, join, resolve } from 'node:path'
 export const REPO_ROOT = resolve(import.meta.dirname, '../../../..')
 export const DEBUGGER = 'debugger\n'
 export const CONFIG = JSON.stringify({ rules: { 'no-debugger': 'error' } })
+// Each test runs dozens of short Git and oxlint processes; on a loaded runner that outlasts the default timeout.
+export const GIT_TEST_TIMEOUT_MS = 120_000
 export const LENIENT = JSON.stringify({ rules: { 'no-debugger': 'off' } })
 
 export function createGitFixture() {
@@ -39,7 +41,8 @@ export function createGitFixture() {
         writeFileSync(join(cwd, file), content)
       }
     }
-    git(cwd, 'add', '-A')
+    // --force: a test may track a file its own .gitignore matches, as Orca does.
+    git(cwd, 'add', '-A', '--force')
     git(cwd, 'commit', '-q', '--allow-empty', '-m', message)
     return git(cwd, 'rev-parse', 'HEAD')
   }

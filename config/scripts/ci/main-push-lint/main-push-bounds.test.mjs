@@ -5,9 +5,13 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import process from 'node:process'
 import { afterAll, describe, expect, it, vi } from 'vitest'
-import { createReporter } from './ci-main-push-changed-lint.mjs'
+import {
+  createReporter,
+  reportDiagnostics,
+  reportIncomplete
+} from './ci-main-push-changed-lint.mjs'
 import { renderAttributionSummary, renderLintSummary } from './main-push-report.mjs'
-import { collectBatchResults, runOxlint } from './oxlint-batches.mjs'
+import { collectBatchResults, createBatchCollector, runOxlint } from './oxlint-batches.mjs'
 import { attributeFiles, describeAttribution } from './push-attribution.mjs'
 
 const scratch = mkdtempSync(join(tmpdir(), 'orca-main-push-bounds-'))
@@ -62,6 +66,93 @@ if (paths.includes('slow.ts')) { setTimeout(() => {}, 60_000) } else {
       [['slow.ts'], 'stopped when the lint time budget ran out'],
       [['late.ts'], 'not run: the lint time budget ran out']
     ])
+  })
+
+  it('keeps only bounded output across several children, digesting each as it ends', async () => {
+    // A stand-in oxlint: floods its output on big.ts, otherwise reports one long multibyte error per path.
+    const fake = join(scratch, 'fake-flood.mjs')
+    writeFileSync(
+      fake,
+      `const paths = process.argv.slice(process.argv.indexOf('--') + 1)
+if (paths.includes('big.ts')) { process.stdout.write('x'.repeat(100_000)) } else {
+  for (const p of paths) console.log(\`::error file=\${p},line=1,col=1,title=r::\${p}:1:1: \${'é%25'.repeat(200)}\`)
+  console.log(\`Finished in 1ms on \${paths.length} files using 1 threads.\`)
+  process.exitCode = 1
+}
+`
+    )
+    const collector = createBatchCollector({
+      maxDiagnostics: 1,
+      maxMessageChars: 50,
+      maxExcerptChars: 100
+    })
+    const kept = await runOxlint(['a.ts', 'big.ts', 'c.ts'], {
+      cwd: scratch,
+      invocation: { command: process.execPath, prefixArgs: [fake] },
+      maxChars: 7,
+      maxBuffer: 4_096,
+      onResult: collector.add
+    })
+    expect(kept).toEqual([])
+    const result = collector.result()
+    expect(result.errorCount).toBe(2)
+    expect(result.diagnostics).toHaveLength(1)
+    expect(result.diagnostics[0].message).toMatch(/^(é%){25}… \(350 more characters\)$/)
+    expect(result.linted).toBe(2)
+    expect(result.incomplete).toHaveLength(1)
+    expect(result.incomplete[0]).toMatchObject({
+      files: ['big.ts'],
+      reason: 'its output exceeded 4096 bytes'
+    })
+    expect(result.incomplete[0].output.length).toBeLessThan(150)
+  })
+
+  it('bounds each annotation after escaping and leaves an unboundable path out of its location', () => {
+    const out = captureStdout(() => {
+      const reporter = createReporter({})
+      reporter.error('t'.repeat(1_000), 'é%\n'.repeat(50_000))
+      reportDiagnostics(
+        [{ file: 'p'.repeat(600), line: 1, col: 1, rule: 'r', message: 'm' }],
+        1,
+        reporter
+      )
+    })
+    const [long, , pathless] = out.split('\n')
+    expect(Buffer.byteLength(long)).toBeLessThan(10 * 1024)
+    expect(long).toContain('more characters')
+    expect(pathless).toBe('::error title=r::m')
+  })
+
+  it('cites only the unfinished-run details the log really holds', () => {
+    const incomplete = Array.from({ length: 11 }, (_, index) => ({
+      files: [`f${index}.ts`],
+      reason: 'exit code 2',
+      output: 'boom'
+    }))
+    let logged
+    const out = captureStdout(() => {
+      const reporter = createReporter({})
+      // Spend the shared log budget first, as a long run would.
+      for (let index = 0; index < 300; index += 1) {
+        reporter.log('x'.repeat(1_000))
+      }
+      logged = reportIncomplete(incomplete, reporter)
+    })
+    expect(logged).toBe(0)
+    expect(out).not.toContain('Not linted:')
+    expect(out.match(/^::error title=Main-push lint::/gm)).toHaveLength(10)
+    const summary = renderLintSummary({
+      range: 'a..b',
+      scope: 's',
+      candidates: 11,
+      linted: 0,
+      diagnostics: [],
+      incomplete,
+      loggedIncomplete: logged
+    })
+    expect(summary).toContain(
+      '6 more unfinished oxlint run(s) are not shown here; the step log lists none of the 11.'
+    )
   })
 
   it('keeps the log within its budget and says how much it left out', () => {

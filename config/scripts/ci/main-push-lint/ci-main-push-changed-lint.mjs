@@ -11,11 +11,12 @@ import {
   escapeAnnotationProperty,
   logLine,
   logText,
+  truncate,
   MAX_LOG_LINE_CHARS,
   renderAttributionSummary,
   renderLintSummary
 } from './main-push-report.mjs'
-import { collectBatchResults, runOxlint } from './oxlint-batches.mjs'
+import { createBatchCollector, runOxlint } from './oxlint-batches.mjs'
 import { computePlan, rangeText, reportPlanFailure } from './plan-main-push-lint.mjs'
 import { attributeFiles, createGithubApi, describeAttribution } from './push-attribution.mjs'
 
@@ -26,6 +27,10 @@ const MAX_LOG_DIAGNOSTICS = 1_000
 const LOG_BUDGET_BYTES = 256 * 1024
 const MAX_INCOMPLETE_LOGGED = 10
 const MAX_LOGGED_PATHS = 50
+// Each annotation's text is cut before escaping, so every annotation, and so all of them, have a byte bound.
+const MAX_ANNOTATION_CHARS = 2_000
+const MAX_ANNOTATION_PATH_CHARS = 500
+const MAX_POLICIES_NAMED = 5
 
 export function createReporter(env) {
   let logBytes = 0
@@ -53,8 +58,9 @@ export function createReporter(env) {
         omittedAnnotations += 1
         return
       }
+      const text = truncate(String(message), MAX_ANNOTATION_CHARS)
       write(
-        `::error ${location}title=${escapeAnnotationProperty(title)}::${escapeAnnotationData(message)}`
+        `::error ${location}title=${escapeAnnotationProperty(truncate(title, 200))}::${escapeAnnotationData(text)}`
       )
     },
     summary(markdown) {
@@ -75,25 +81,29 @@ export function createReporter(env) {
   }
 }
 
-function reportDiagnostics(diagnostics, reporter) {
+export function reportDiagnostics(diagnostics, errorCount, reporter) {
   for (const diagnostic of diagnostics.slice(0, MAX_LOG_DIAGNOSTICS)) {
     reporter.writeEscaped(logLine(diagnostic))
   }
-  if (diagnostics.length > MAX_LOG_DIAGNOSTICS) {
+  if (errorCount > MAX_LOG_DIAGNOSTICS) {
     reporter.writeEscaped(
-      `${diagnostics.length - MAX_LOG_DIAGNOSTICS} more oxlint error(s) are not listed.`
+      `${errorCount - MAX_LOG_DIAGNOSTICS} more oxlint error(s) are not listed.`
     )
   }
   for (const diagnostic of diagnostics.slice(0, MAX_ANNOTATIONS)) {
-    const location = diagnostic.file
-      ? `file=${escapeAnnotationProperty(diagnostic.file)},line=${diagnostic.line},col=${diagnostic.col},`
-      : ''
+    // A path too long to bound is left out of the location; the log line still names it.
+    const location =
+      diagnostic.file && diagnostic.file.length <= MAX_ANNOTATION_PATH_CHARS
+        ? `file=${escapeAnnotationProperty(diagnostic.file)},line=${diagnostic.line},col=${diagnostic.col},`
+        : ''
     reporter.error(diagnostic.rule, diagnostic.message, location)
   }
   return Math.min(diagnostics.length, MAX_LOG_DIAGNOSTICS)
 }
 
-function reportIncomplete(incomplete, reporter) {
+// Returns how many unfinished runs have their paths in the log, which the summary then cites.
+export function reportIncomplete(incomplete, reporter) {
+  let logged = 0
   for (const batch of incomplete.slice(0, MAX_INCOMPLETE_LOGGED)) {
     const output = batch.output.trim().slice(0, 4_000)
     reporter.error(
@@ -104,14 +114,16 @@ function reportIncomplete(incomplete, reporter) {
       batch.files.length > MAX_LOGGED_PATHS
         ? ` and ${batch.files.length - MAX_LOGGED_PATHS} more`
         : ''
-    reporter.log(`Not linted: ${batch.files.slice(0, MAX_LOGGED_PATHS).join(' ')}${more}`)
+    if (reporter.log(`Not linted: ${batch.files.slice(0, MAX_LOGGED_PATHS).join(' ')}${more}`)) {
+      logged += 1
+    }
   }
   if (incomplete.length > MAX_INCOMPLETE_LOGGED) {
     reporter.log(
       `${incomplete.length - MAX_INCOMPLETE_LOGGED} more unfinished oxlint run(s) are not listed.`
     )
   }
-  return Math.min(incomplete.length, MAX_INCOMPLETE_LOGGED)
+  return logged
 }
 
 // A failing file the push touched is attributed to the commits that changed it. One it did not touch was
@@ -132,7 +144,7 @@ async function reportAttribution({ diagnostics, plan, env, reporter, api }) {
   const lookups = [
     ...new Set([
       ...failing.filter((file) => touched.has(file)),
-      ...[...policiesFor.values()].flat().map((policy) => policy.path)
+      ...[...policiesFor.values()].flat().flatMap((policy) => policy.paths)
     ])
   ]
   const attributions = env.GITHUB_REPOSITORY
@@ -145,16 +157,23 @@ async function reportAttribution({ diagnostics, plan, env, reporter, api }) {
       })
     : new Map()
   const describe = (file) => describeAttribution(attributions.get(file), ref)
+  // Every policy change whose scope holds the file, up to a few, each with the commits behind its inputs.
+  const becauseOf = (policies) => {
+    const named = policies
+      .slice(0, MAX_POLICIES_NAMED)
+      .map((policy) =>
+        policy.paths.length > 0
+          ? `${policy.why} (${policy.paths.map((input) => `${input} changed by ${describe(input)}`).join('; ')})`
+          : `${policy.why} (no input changed in ${noun})`
+      )
+    const more = policies.length - named.length
+    return `${named.join('; ')}${more > 0 ? `; and ${more} more policy change(s)` : ''}`
+  }
   const rows = failing.map((file) => ({
     file,
     description: touched.has(file)
       ? describe(file)
-      : `not changed in ${noun}; linted because ${policiesFor
-          .get(file)
-          .map(
-            (policy) => `${policy.why}, and ${policy.path} was changed by ${describe(policy.path)}`
-          )
-          .join('; ')}`
+      : `not changed in ${noun}; linted because ${becauseOf(policiesFor.get(file))}`
   }))
   let logged = 0
   for (const { file, description } of rows) {
@@ -191,18 +210,23 @@ export async function main({
   }
   const range = rangeText(plan)
   const targets = [...plan.dirs, ...plan.files]
+  const walked = plan.dirs.length > 0 ? `, every file under ${plan.dirs.join(', ')}` : ''
   reporter.log(
-    `Linting ${plan.touched.length} changed candidate file(s)${plan.dirs.length > 0 ? ` and every file under ${plan.dirs.join(', ')}` : ''} in ${range}: ${plan.scope}.`
+    `Linting ${plan.touched.length} changed candidate file(s) (${plan.files.length} named explicitly)${walked} in ${range}: ${plan.scope}.`
   )
   for (const policy of plan.policies) {
     reporter.log(`Lint policy changed: ${policy.why}; linting everything under ${policy.dir}.`)
   }
-  let results = { diagnostics: [], incomplete: [], linted: 0 }
+  const collector = createBatchCollector()
+  let results = collector.result()
   if (targets.length > 0) {
     try {
       const invocation = resolveOxlintInvocation(invocationRoot)
-      results = collectBatchResults(await runOxlint(targets, { cwd: root, invocation }))
+      // Each child's output is digested as it ends, so earlier results survive a later stall.
+      await runOxlint(targets, { cwd: root, invocation, onResult: collector.add })
+      results = collector.result()
     } catch (error) {
+      results = collector.result()
       results.incomplete.push({
         files: targets,
         reason: 'could not run oxlint',
@@ -217,9 +241,9 @@ export async function main({
       output: ''
     })
   }
-  const { diagnostics, incomplete, linted } = results
+  const { diagnostics, errorCount, incomplete, linted } = results
   // The verdict, locations and summary are published before any optional PR lookup.
-  const loggedDiagnostics = reportDiagnostics(diagnostics, reporter)
+  const loggedDiagnostics = reportDiagnostics(diagnostics, errorCount, reporter)
   const loggedIncomplete = reportIncomplete(incomplete, reporter)
   reporter.summary(
     renderLintSummary({
@@ -230,6 +254,7 @@ export async function main({
       policies: plan.policies,
       linted,
       diagnostics,
+      errorCount,
       incomplete,
       loggedDiagnostics,
       loggedIncomplete
@@ -240,7 +265,7 @@ export async function main({
   )
   await reportAttribution({ diagnostics, plan, env, reporter, api })
   reporter.finish()
-  return diagnostics.length > 0 || incomplete.length > 0 ? 1 : 0
+  return errorCount > 0 || incomplete.length > 0 ? 1 : 0
 }
 
 if (isDirectInvocation(import.meta.url, process.argv[1])) {

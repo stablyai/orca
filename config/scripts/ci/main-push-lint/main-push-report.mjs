@@ -86,6 +86,9 @@ function boundedRows(items, renderRow, maxBytes) {
 
 // Where the log stops, so an omission note never points at rows the log also left out.
 function logNote(total, logged, noun) {
+  if (logged === 0) {
+    return `the step log lists none of the ${total}`
+  }
   return logged >= total
     ? `the step log lists every ${noun}`
     : `the step log lists the first ${logged} of ${total}`
@@ -128,6 +131,8 @@ export function renderLintSummary({
   linted,
   diagnostics,
   incomplete,
+  // All errors oxlint reported; `diagnostics` holds the ones kept, which can be fewer.
+  errorCount = diagnostics.length,
   loggedDiagnostics = diagnostics.length,
   loggedIncomplete = incomplete.length
 }) {
@@ -137,11 +142,11 @@ export function renderLintSummary({
   ]
     .filter(Boolean)
     .join('\n\n')
-  if (diagnostics.length === 0 && incomplete.length === 0) {
+  if (errorCount === 0 && incomplete.length === 0) {
     return `### Main-push lint passed\n\n${header}\n`
   }
   const lines = ['### Main-push lint failed', '', header, '']
-  if (diagnostics.length > 0) {
+  if (errorCount > 0) {
     const { shown, omitted } = boundedRows(
       diagnostics,
       (diagnostic) =>
@@ -149,16 +154,17 @@ export function renderLintSummary({
       FAILURE_TABLE_BYTES
     )
     lines.push(
-      `${diagnostics.length} oxlint error(s). PR checks lint against an older main, so a merge can cross a limit there; fix it on main.`,
+      `${errorCount} oxlint error(s). PR checks lint against an older main, so a merge can cross a limit there; fix it on main.`,
       '',
       '| Location | Rule | Message |',
       '| --- | --- | --- |',
       ...shown,
       ''
     )
-    if (omitted > 0) {
+    const unshown = omitted + errorCount - diagnostics.length
+    if (unshown > 0) {
       lines.push(
-        `${omitted} more error(s) are not shown here; ${logNote(diagnostics.length, loggedDiagnostics, 'error')}.`,
+        `${unshown} more error(s) are not shown here; ${logNote(errorCount, loggedDiagnostics, 'error')}.`,
         ''
       )
     }

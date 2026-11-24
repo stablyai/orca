@@ -47,7 +47,7 @@ export async function main({ env = process.env, root = process.cwd() } = {}) {
   }
   process.stdout.write(
     `${logText(
-      `Plan for ${rangeText(plan)} (${plan.scope}): ${plan.files.length} changed lintable file(s), ` +
+      `Plan for ${rangeText(plan)} (${plan.scope}): ${plan.touched.length} changed lintable file(s), ${plan.files.length} of them named explicitly, ` +
         `${plan.dirs.length} director(ies) to walk for a lint policy change, ${plan.unrepresentable.length} non-UTF-8 path(s).`
     )}\n`
   )

@@ -1,6 +1,7 @@
 // Pin what a main push lints when it changes lint policy, and that the plan step gates dependency setup.
 import { execFileSync } from 'node:child_process'
-import { existsSync, readFileSync } from 'node:fs'
+import { existsSync, readFileSync, symlinkSync } from 'node:fs'
+import { join } from 'node:path'
 import process from 'node:process'
 import { afterAll, describe, expect, it, vi } from 'vitest'
 import { main as lint } from './ci-main-push-changed-lint.mjs'
@@ -8,6 +9,7 @@ import {
   CONFIG,
   createGitFixture,
   DEBUGGER,
+  GIT_TEST_TIMEOUT_MS,
   LENIENT,
   REPO_ROOT
 } from './main-push-git-test-fixture.mjs'
@@ -15,7 +17,7 @@ import { isEmptyPlan, oxlintVersionFromLockfile, planLint } from './main-push-pl
 import { main as plan } from './plan-main-push-lint.mjs'
 
 const { git, commit, makeOrigin, shallowCheckout, scratchFile, cleanup } = createGitFixture()
-afterAll(cleanup)
+afterAll(cleanup, GIT_TEST_TIMEOUT_MS)
 
 const CLEAN = 'export {}\n'
 const lock = (version) =>
@@ -72,7 +74,7 @@ async function runWorkflow({ origin, before, after }, api = async () => []) {
   }
 }
 
-describe('main-push lint plan', () => {
+describe('main-push lint plan', { timeout: GIT_TEST_TIMEOUT_MS }, () => {
   it('lints only touched source on an ordinary push, leaving older files alone', async () => {
     const pushed = push(
       { '.oxlintrc.json': LENIENT, 'old.ts': DEBUGGER, 'a.ts': CLEAN },
@@ -100,7 +102,7 @@ describe('main-push lint plan', () => {
     expect([run.planExit, run.lintExit]).toEqual([0, 1])
     expect(run.log).toContain('::error file=newer.ts,line=1,col=1,title=eslint(no-debugger)::')
     expect(run.log).toContain(
-      `newer.ts: not changed in this push; linted because .oxlintrc.json changed, and .oxlintrc.json was changed by commit ${pushed.after.slice(0, 10)} by @cfg (no merged PR into main)`
+      `newer.ts: not changed in this push; linted because .oxlintrc.json changed (.oxlintrc.json changed by commit ${pushed.after.slice(0, 10)} by @cfg (no merged PR into main))`
     )
     expect(run.summary).toContain('Lint policy changed, so the whole scope it governs is linted')
   })
@@ -157,7 +159,7 @@ describe('main-push lint plan', () => {
     expect(await planFor(pushed)).toMatchObject({
       dirs: ['m'],
       policies: [
-        { dir: 'm', path: 'base.json', why: 'm/.oxlintrc.json extends base.json, which changed' }
+        { dir: 'm', paths: ['base.json'], why: 'm/.oxlintrc.json extends base.json, which changed' }
       ]
     })
     expect((await runWorkflow(pushed)).lintExit).toBe(1)
@@ -183,8 +185,8 @@ describe('main-push lint plan', () => {
       policies: [
         {
           dir: 'm',
-          path: 'rules.json',
-          why: 'm/.oxlintrc.json extends base.json, which depends on rules.json, which changed'
+          paths: ['rules.json'],
+          why: 'm/.oxlintrc.json depends on rules.json, which changed'
         }
       ]
     })
@@ -213,7 +215,7 @@ describe('main-push lint plan', () => {
     expect(await planFor(bumped)).toMatchObject({
       dirs: ['.'],
       policies: [
-        { path: 'pnpm-lock.yaml', why: 'the locked oxlint version changed (1.94.0 to 1.95.0)' }
+        { paths: ['pnpm-lock.yaml'], why: 'the locked oxlint version changed (1.94.0 to 1.95.0)' }
       ]
     })
     const other = push(
@@ -337,5 +339,230 @@ describe('main-push lint plan', () => {
     const deletion = await planLint({ base: after, head: removed, cwd })
     expect(deletion).toMatchObject({ files: [], dirs: [], unrepresentable: [] })
     expect(isEmptyPlan(deletion)).toBe(true)
+  })
+
+  describe('matches the pinned oxlint discovery', () => {
+    it('lints a subtree when a commented .oxlintrc.jsonc tightens it', async () => {
+      const jsonc = '// stricter here\n{\n  /* inline */ "rules": { "no-debugger": "error" },\n}\n'
+      const pushed = push(
+        { '.oxlintrc.json': LENIENT, 'sub/x.ts': DEBUGGER, 'top.ts': DEBUGGER },
+        { 'sub/.oxlintrc.jsonc': jsonc }
+      )
+      expect(await planFor(pushed)).toMatchObject({ files: [], dirs: ['sub'] })
+      const run = await runWorkflow(pushed)
+      expect(run.lintExit).toBe(1)
+      expect(run.log).toContain('::error file=sub/x.ts,')
+      expect(run.log).not.toContain('file=top.ts')
+    })
+
+    it('follows a commented extends chain to a changed leaf', async () => {
+      const pushed = push(
+        {
+          '.oxlintrc.json': LENIENT,
+          'm/.oxlintrc.json': '{ // inherits\n "extends": ["../base.jsonc"] }\n',
+          'base.jsonc': '/* shared */ { "extends": ["./rules.json"], }\n',
+          'rules.json': LENIENT,
+          'm/x.ts': DEBUGGER
+        },
+        { 'rules.json': CONFIG }
+      )
+      expect(await planFor(pushed)).toMatchObject({
+        dirs: ['m'],
+        policies: [
+          {
+            dir: 'm',
+            paths: ['rules.json'],
+            why: 'm/.oxlintrc.json depends on rules.json, which changed'
+          }
+        ]
+      })
+      expect((await runWorkflow(pushed)).lintExit).toBe(1)
+    })
+
+    it('treats a script config as changed on every push, and oxlint runs it', async () => {
+      const script = 'export default { rules: { "no-debugger": "error" } }\n'
+      const added = push(
+        { '.oxlintrc.json': LENIENT, 't/x.ts': DEBUGGER },
+        { 't/oxlint.config.ts': script }
+      )
+      expect(await planFor(added)).toMatchObject({
+        dirs: ['t'],
+        policies: [{ why: 't/oxlint.config.ts was added' }]
+      })
+      const addedRun = await runWorkflow(added)
+      expect(addedRun.lintExit).toBe(1)
+      expect(addedRun.log).toContain('::error file=t/x.ts,')
+      // Its imports cannot be read, so even a docs-only push walks its scope.
+      const docs = push(
+        { '.oxlintrc.json': LENIENT, 't/oxlint.config.mts': script, 't/x.ts': CLEAN },
+        { 'README.md': '#\n' }
+      )
+      expect(await planFor(docs)).toMatchObject({
+        dirs: ['t'],
+        policies: [
+          {
+            paths: [],
+            why: 't/oxlint.config.mts is a script config whose inputs cannot be read, so its scope is linted on every push'
+          }
+        ]
+      })
+    })
+
+    it('follows a symlinked config to its changed target', async () => {
+      const origin = makeOrigin()
+      const before = commit(
+        origin,
+        { '.oxlintrc.json': LENIENT, 'shared.json': LENIENT, 'd/x.ts': DEBUGGER },
+        'setup'
+      )
+      symlinkSync('../shared.json', join(origin, 'd/.oxlintrc.json'))
+      const linked = commit(origin, {}, 'link')
+      const after = commit(origin, { 'shared.json': CONFIG }, 'tighten shared')
+      expect(await planFor({ origin, before: linked, after })).toMatchObject({
+        dirs: ['d'],
+        policies: [
+          { paths: ['shared.json'], why: 'd/.oxlintrc.json extends shared.json, which changed' }
+        ]
+      })
+      expect((await runWorkflow({ origin, before: linked, after })).lintExit).toBe(1)
+      expect(before).not.toBe(linked)
+    })
+
+    it('lints both scopes when a nested override moves', async () => {
+      const pushed = push(
+        {
+          '.oxlintrc.json': CONFIG,
+          'sub/.oxlintrc.json': LENIENT,
+          'sub/x.ts': DEBUGGER,
+          'sub/inner/y.ts': CLEAN
+        },
+        { 'sub/.oxlintrc.json': null, 'sub/inner/.oxlintrc.json': LENIENT }
+      )
+      expect(await planFor(pushed)).toMatchObject({ dirs: ['sub'] })
+      const run = await runWorkflow(pushed)
+      expect(run.lintExit).toBe(1)
+      expect(run.log).toContain('::error file=sub/x.ts,')
+    })
+
+    it('lints the scope of a config it cannot read, and keeps unrelated JSON edits out of scope', async () => {
+      const unreadable = push(
+        {
+          '.oxlintrc.json': CONFIG,
+          'u/.oxlintrc.json': '{ "rules": ',
+          'u/x.ts': CLEAN,
+          'data.json': '{}'
+        },
+        { 'data.json': '{"a":1}' }
+      )
+      expect(await planFor(unreadable)).toMatchObject({
+        dirs: ['u'],
+        policies: [
+          {
+            why: 'u/.oxlintrc.json does not parse as JSON with comments, so its scope is linted on every push'
+          }
+        ]
+      })
+      const outside = push(
+        {
+          '.oxlintrc.json': CONFIG,
+          'o/.oxlintrc.json': '{ "extends": ["../../elsewhere.json"] }',
+          'data.json': '{}'
+        },
+        { 'data.json': '{"a":1}' }
+      )
+      expect(await planFor(outside)).toMatchObject({ dirs: ['o'] })
+      const control = push(
+        { '.oxlintrc.json': CONFIG, 'data.json': '{}', 'a.ts': CLEAN },
+        { 'data.json': '{"a":1}' }
+      )
+      expect(await planFor(control)).toMatchObject({ files: [], dirs: [], policies: [] })
+    })
+  })
+
+  describe('keeps touched files the policy walk would skip', () => {
+    // As in Orca, where release/ is Git-ignored but files under worker/release/ are tracked.
+    const setup = (config) => ({
+      '.gitignore': 'release/\n',
+      '.oxlintrc.json': config,
+      'w/release/kept.ts': CLEAN,
+      'w/release/untouched.ts': DEBUGGER,
+      'old.ts': DEBUGGER,
+      'w.ts': CLEAN
+    })
+    const errorsFor = (log, file) =>
+      log.split('\n').filter((line) => line.startsWith(`::error file=${file},`))
+
+    it('lints a touched Git-ignored file on a source-only push', async () => {
+      const pushed = push(setup(CONFIG), { 'w/release/kept.ts': DEBUGGER })
+      expect(await planFor(pushed)).toMatchObject({ files: ['w/release/kept.ts'], dirs: [] })
+      const run = await runWorkflow(pushed)
+      expect(run.lintExit).toBe(1)
+      expect(errorsFor(run.log, 'w/release/kept.ts')).toHaveLength(1)
+    })
+
+    it('names it next to the root walk on a mixed push, without duplicates or a walk of the ignored directory', async () => {
+      const pushed = push(setup(LENIENT), {
+        '.oxlintrc.json': CONFIG,
+        'w/release/kept.ts': DEBUGGER,
+        'w.ts': DEBUGGER
+      })
+      expect(await planFor(pushed)).toMatchObject({
+        touched: ['.oxlintrc.json', 'w.ts', 'w/release/kept.ts'].filter((file) =>
+          file.endsWith('.ts')
+        ),
+        files: ['w/release/kept.ts'],
+        dirs: ['.']
+      })
+      const run = await runWorkflow(pushed)
+      expect(run.lintExit).toBe(1)
+      expect(errorsFor(run.log, 'w/release/kept.ts')).toHaveLength(1)
+      expect(errorsFor(run.log, 'w.ts')).toHaveLength(1)
+      expect(errorsFor(run.log, 'old.ts')).toHaveLength(1)
+      // The untouched ignored file stays out, as in the PR Lint step's own walk.
+      expect(errorsFor(run.log, 'w/release/untouched.ts')).toHaveLength(0)
+      // old.ts and w.ts walked, kept.ts named: three files, none counted twice.
+      expect(run.log).toContain('oxlint reported linting 3 file(s)')
+    })
+  })
+
+  it('names every governing policy change for an untouched failure, and each changed input of one config', async () => {
+    const pushed = push(
+      {
+        '.oxlintrc.json': LENIENT,
+        'mobile/.oxlintrc.json': JSON.stringify({
+          extends: ['../.oxlintrc.json', '../extra.json']
+        }),
+        'extra.json': '{}',
+        'mobile/x.ts': DEBUGGER
+      },
+      {
+        '.oxlintrc.json': CONFIG,
+        'extra.json': JSON.stringify({ rules: {} }),
+        'mobile/.oxlintrc.json': JSON.stringify({
+          extends: ['../.oxlintrc.json', '../extra.json'],
+          ignorePatterns: []
+        })
+      }
+    )
+    const plan = await planFor(pushed)
+    expect(plan.policies).toEqual([
+      { dir: '.', paths: ['.oxlintrc.json'], why: '.oxlintrc.json changed' },
+      { dir: 'mobile', paths: ['mobile/.oxlintrc.json'], why: 'mobile/.oxlintrc.json changed' },
+      {
+        dir: 'mobile',
+        paths: ['.oxlintrc.json', 'extra.json'],
+        why: 'mobile/.oxlintrc.json extends .oxlintrc.json, extra.json, which changed'
+      }
+    ])
+    const run = await runWorkflow(pushed)
+    const line = run.log
+      .split('\n')
+      .find((text) => text.startsWith('mobile/x.ts: not changed in this push'))
+    expect(line).toContain('mobile/.oxlintrc.json changed (mobile/.oxlintrc.json changed by')
+    expect(line).toContain(
+      'mobile/.oxlintrc.json extends .oxlintrc.json, extra.json, which changed (.oxlintrc.json changed by'
+    )
+    expect(line).toContain('; extra.json changed by')
+    expect(line).toContain('; .oxlintrc.json changed (.oxlintrc.json changed by')
   })
 })

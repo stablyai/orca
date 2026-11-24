@@ -40,7 +40,7 @@ function runOnce(command, args, options) {
 }
 
 // What stopped a child, if anything other than a clean exit: exit code, signal, timeout or spawn error.
-function describeFailure(error, timedOut) {
+function describeFailure(error, timedOut, maxBuffer) {
   if (!error) {
     return { failed: false }
   }
@@ -48,7 +48,7 @@ function describeFailure(error, timedOut) {
     return { failed: true, reason: 'stopped when the lint time budget ran out' }
   }
   if (error.code === 'ERR_CHILD_PROCESS_STDIO_MAXBUFFER') {
-    return { failed: true, reason: 'its output exceeded 64 MiB' }
+    return { failed: true, reason: `its output exceeded ${maxBuffer} bytes` }
   }
   if (error.signal) {
     return { failed: true, reason: `killed by ${error.signal}` }
@@ -61,16 +61,26 @@ function describeFailure(error, timedOut) {
 
 // Each batch keeps its own output and outcome, so one batch's lint errors never hide another batch's failure.
 // One deadline covers every batch: a stalled run is stopped, and later batches are reported as not run.
+// With `onResult`, each result is handed over as its child ends and nothing is kept here, so one child's output
+// is the most held at once.
 export async function runOxlint(
   paths,
-  { cwd, invocation, budgetMs = LINT_BUDGET_MS, maxChars = MAX_PATH_CHARS_PER_RUN }
+  {
+    cwd,
+    invocation,
+    budgetMs = LINT_BUDGET_MS,
+    maxChars = MAX_PATH_CHARS_PER_RUN,
+    maxBuffer = MAX_BUFFER_BYTES,
+    onResult
+  }
 ) {
   const deadline = Date.now() + budgetMs
   const results = []
+  const report = onResult ?? ((result) => results.push(result))
   for (const batch of batchPaths(paths, maxChars)) {
     const remaining = deadline - Date.now()
     if (remaining <= 0) {
-      results.push({
+      report({
         files: batch,
         failed: true,
         reason: 'not run: the lint time budget ran out',
@@ -90,12 +100,12 @@ export async function runOxlint(
     ]
     const { error, output } = await runOnce(invocation.command, args, {
       cwd,
-      maxBuffer: MAX_BUFFER_BYTES,
+      maxBuffer,
       timeout: remaining,
       killSignal: 'SIGKILL'
     })
     // Only the timeout kills a child here.
-    results.push({ files: batch, output, ...describeFailure(error, Boolean(error?.killed)) })
+    report({ files: batch, output, ...describeFailure(error, Boolean(error?.killed), maxBuffer) })
   }
   return results
 }
@@ -136,24 +146,51 @@ export function parseGithubDiagnostics(output) {
   return diagnostics
 }
 
+// What the run keeps: each child's raw output is digested as it ends, then only an excerpt of an unfinished run,
+// and at most `maxDiagnostics` errors (counting the rest), each message cut to `maxMessageChars`.
+export const RETAIN_LIMITS = {
+  maxDiagnostics: 5_000,
+  maxMessageChars: 2_000,
+  maxExcerptChars: 4_000
+}
+
+function cut(text, maxChars) {
+  return text.length > maxChars
+    ? `${text.slice(0, maxChars)}… (${text.length - maxChars} more characters)`
+    : text
+}
+
 // A batch counts only if oxlint finished it and exited cleanly, or exited 1 with a parsed lint error.
-// Errors parsed from an unfinished batch are still reported, next to why it did not finish.
-export function collectBatchResults(batches) {
+// Errors parsed from an unfinished batch are still reported, next to why it did not finish. An error reported
+// twice (a Git-ignored file named next to the directory that holds it) is kept once.
+export function createBatchCollector(limits = RETAIN_LIMITS) {
   const diagnostics = []
+  const seen = new Set()
   const incomplete = []
+  let errorCount = 0
   let linted = 0
-  for (const batch of batches) {
-    const errors = parseGithubDiagnostics(batch.output).filter(
-      (diagnostic) => diagnostic.severity === 'error'
-    )
-    for (const error of errors) {
-      diagnostics.push(error)
-    }
-    const finished = FINISHED_LINE.exec(batch.output)
-    const explained = !batch.failed || (batch.exitCode === LINT_ERROR_EXIT && errors.length > 0)
-    if (finished && explained) {
-      linted += Number(finished[1])
-    } else {
+  return {
+    add(batch) {
+      const errors = parseGithubDiagnostics(batch.output).filter(
+        (diagnostic) => diagnostic.severity === 'error'
+      )
+      for (const error of errors) {
+        const key = JSON.stringify([error.file, error.line, error.col, error.rule, error.message])
+        if (seen.has(key)) {
+          continue
+        }
+        errorCount += 1
+        if (diagnostics.length < limits.maxDiagnostics) {
+          seen.add(key)
+          diagnostics.push({ ...error, message: cut(error.message, limits.maxMessageChars) })
+        }
+      }
+      const finished = FINISHED_LINE.exec(batch.output)
+      const explained = !batch.failed || (batch.exitCode === LINT_ERROR_EXIT && errors.length > 0)
+      if (finished && explained) {
+        linted += Number(finished[1])
+        return
+      }
       const reasons = []
       if (batch.failed) {
         reasons.push(
@@ -165,8 +202,22 @@ export function collectBatchResults(batches) {
       if (!finished && !batch.failed) {
         reasons.push('no Finished line')
       }
-      incomplete.push({ files: batch.files, reason: reasons.join('; '), output: batch.output })
+      incomplete.push({
+        files: batch.files,
+        reason: reasons.join('; '),
+        output: cut(batch.output, limits.maxExcerptChars)
+      })
+    },
+    result() {
+      return { diagnostics, errorCount, incomplete, linted }
     }
   }
-  return { diagnostics, incomplete, linted }
+}
+
+export function collectBatchResults(batches, limits) {
+  const collector = createBatchCollector(limits)
+  for (const batch of batches) {
+    collector.add(batch)
+  }
+  return collector.result()
 }
