@@ -133,6 +133,13 @@ function getBaselineFields(root: CodexRegistrationRoot): readonly string[] {
   return root === 'plugins' ? PLUGIN_BASELINE_FIELDS : []
 }
 
+/** The fields that name what a registration points at; a change makes it a different registration. */
+export function readCodexRegistrationIdentity(entry: CodexRegistrationEntry): string {
+  const identityFields =
+    entry.root === 'marketplaces' ? MARKETPLACE_IDENTITY_FIELDS : PLUGIN_IDENTITY_FIELDS
+  return JSON.stringify(identityFields.map((field) => readNormalizedField(entry, field)))
+}
+
 function hasMatchingRegistrationIdentity(
   runtimeEntry: CodexRegistrationEntry,
   systemEntry: CodexRegistrationEntry

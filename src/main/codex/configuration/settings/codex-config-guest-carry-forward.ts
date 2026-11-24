@@ -5,6 +5,7 @@ import { upsertPromotedSettingsInContent } from './codex-config-settings-upsert'
 import {
   applyCodexRegistrationPromotions,
   planCodexRegistrationPromotion,
+  readCodexRegistrationIdentity,
   type CodexRegistrationPromotion
 } from './config-plugin-registration-promotion'
 import {
@@ -22,8 +23,14 @@ export const CODEX_GUEST_CARRY_FORWARD_MARKER = '# orca: tab edit kept from befo
 export type CodexGuestCarryForward = {
   /** Structured key -> runtime raw, plus the distro raw it overrides. */
   settings: ReadonlyMap<string, { raw: string; system: string | null }>
-  /** `system` is the distro's normalized field value; null for appends or an absent field. */
-  registrations: readonly { promotion: CodexRegistrationPromotion; system: string | null }[]
+  /** `system` is the distro's normalized field value (null for appends or an absent field) and `identity` its source. */
+  registrations: readonly CodexGuestCarriedRegistration[]
+}
+
+export type CodexGuestCarriedRegistration = {
+  promotion: CodexRegistrationPromotion
+  system: string | null
+  identity: string | null
 }
 
 export const EMPTY_GUEST_CARRY_FORWARD: CodexGuestCarryForward = {
@@ -46,13 +53,17 @@ function planGuestCarryForward(
     settings: new Map(
       [...updates].map(([key, raw]) => [key, { raw, system: systemValues.get(key)?.raw ?? null }])
     ),
-    registrations: registrations.map((promotion) => ({
-      promotion,
-      system:
-        promotion.kind === 'field'
-          ? readNormalizedField(systemEntries, promotion.key, promotion.field)
-          : null
-    }))
+    registrations: registrations.map((promotion) => {
+      const entry = promotion.kind === 'field' ? systemEntries.get(promotion.key) : undefined
+      return {
+        promotion,
+        system:
+          promotion.kind === 'field'
+            ? readNormalizedField(systemEntries, promotion.key, promotion.field)
+            : null,
+        identity: entry ? readCodexRegistrationIdentity(entry) : null
+      }
+    })
   }
 }
 
@@ -65,7 +76,6 @@ export function retainGuestCarryForward(
     return carry
   }
   const systemValues = readPromotedSettingValuesFromContent(systemConfig)
-  const systemEntries = readCodexRegistrationEntries(systemConfig)
   return {
     settings: new Map(
       [...carry.settings].filter(([key, kept]) => {
@@ -74,15 +84,37 @@ export function retainGuestCarryForward(
         return !current?.multiline && currentRaw === kept.system && currentRaw !== kept.raw
       })
     ),
-    registrations: carry.registrations.filter(({ promotion, system }) => {
-      if (promotion.kind === 'append') {
-        return !systemEntries.has(promotion.key)
-      }
-      const current = readNormalizedField(systemEntries, promotion.key, promotion.field)
-      const kept = promotion.raw === null ? null : normalizeCodexRegistrationValue(promotion.raw)
-      return systemEntries.has(promotion.key) && current === system && current !== kept
-    })
+    registrations: retainCarriedRegistrations(carry.registrations, systemConfig)
   }
+}
+
+// A marketplace's refresh time and revision are kept or dropped together.
+function retainCarriedRegistrations(
+  carried: readonly CodexGuestCarriedRegistration[],
+  systemConfig: string
+): CodexGuestCarriedRegistration[] {
+  const systemEntries = readCodexRegistrationEntries(systemConfig)
+  const droppedKeys = new Set<string>()
+  for (const { promotion, system, identity } of carried) {
+    const entry = systemEntries.get(promotion.key)
+    if (promotion.kind === 'append') {
+      if (entry) {
+        droppedKeys.add(promotion.key)
+      }
+      continue
+    }
+    const current = readNormalizedField(systemEntries, promotion.key, promotion.field)
+    const kept = promotion.raw === null ? null : normalizeCodexRegistrationValue(promotion.raw)
+    if (
+      !entry ||
+      readCodexRegistrationIdentity(entry) !== identity ||
+      current !== system ||
+      current === kept
+    ) {
+      droppedKeys.add(promotion.key)
+    }
+  }
+  return carried.filter(({ promotion }) => !droppedKeys.has(promotion.key))
 }
 
 /** Apply kept values to the distro config in memory, before it is merged into the managed copy. */

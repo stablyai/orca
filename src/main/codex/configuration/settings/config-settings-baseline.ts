@@ -8,6 +8,7 @@ import { observeFilePublication } from '../../../filesystem/file-content-observa
 import { assertGuardedFileCurrent } from '../../../filesystem/concurrent-file-edit-guard'
 import {
   EMPTY_GUEST_CARRY_FORWARD,
+  type CodexGuestCarriedRegistration,
   type CodexGuestCarryForward
 } from './codex-config-guest-carry-forward'
 import type { CodexRegistrationPromotion } from './config-plugin-registration-promotion'
@@ -33,7 +34,7 @@ export type CodexSettingsBaseline = {
 
 type StoredGuestCarryForward = {
   settings?: Record<string, { raw: string; system: string | null }>
-  registrations?: { promotion: CodexRegistrationPromotion; system: string | null }[]
+  registrations?: CodexGuestCarriedRegistration[]
 }
 
 type StoredSettingsBaseline = {
@@ -124,9 +125,10 @@ function readStoredGuestCarryForward(stored: unknown): CodexGuestCarryForward {
       )
     ),
     registrations: (Array.isArray(registrations) ? registrations : []).filter(
-      (entry) =>
+      (entry: unknown): entry is CodexGuestCarriedRegistration =>
         isRecord(entry) &&
         (typeof entry.system === 'string' || entry.system === null) &&
+        (typeof entry.identity === 'string' || entry.identity === null) &&
         isStoredRegistrationPromotion(entry.promotion)
     )
   }

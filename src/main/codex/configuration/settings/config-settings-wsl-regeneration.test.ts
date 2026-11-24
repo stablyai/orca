@@ -190,6 +190,25 @@ describe('managed Codex config for a WSL distro config', () => {
     expect(readRuntimeConfig()).toMatch(/^enabled = false # orca: /m)
   })
 
+  it.skipIf(process.platform === 'win32')(
+    'keeps a pending edit for a ~/.codex linked into a distro across later passes',
+    () => {
+      const guestCodexDir = join(tmpHome, 'guest-codex')
+      mkdirSync(guestCodexDir, { recursive: true })
+      writeFileSync(join(guestCodexDir, 'config.toml'), 'model = "gpt-5"\n', 'utf-8')
+      symlinkSync(guestCodexDir, join(tmpHome, '.codex'))
+      syncSystemConfigIntoManagedCodexHome()
+      simulateCodexSettingWrite('model', '"o4"')
+      wslTestState.wslPath = join(realpathSync(guestCodexDir), 'config.toml')
+
+      syncSystemConfigIntoManagedCodexHome()
+      syncSystemConfigIntoManagedCodexHome()
+
+      expect(readFileSync(systemConfigPath(), 'utf-8')).toBe('model = "gpt-5"\n')
+      expect(readRuntimeConfig()).toMatch(/^model = "o4" # orca: /m)
+    }
+  )
+
   it('leaves an unchanged managed copy untouched on regeneration', () => {
     writeSystemConfig(
       'model = "gpt-5"\n\n[hooks.state."/home/u/.codex/hooks.json:stop:0:0"]\ntrusted_hash = "sha256:abc"\n\n[projects."/home/u/repo"]\ntrust_level = "trusted"\n'

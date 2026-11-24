@@ -141,7 +141,17 @@ function promoteCodexRuntimeSettingsToSystemUnsafe(
     return emptyPromotionPlan()
   }
   // A drvfs source (a distro home under /mnt/c) is the distro's own config too.
-  const guestSource = homes.systemConfigDir !== undefined || isWslSharePath(systemTomlPath)
+  const sourceInGuest = homes.systemConfigDir !== undefined || isWslSharePath(systemTomlPath)
+  // So is a host ~/.codex linked into a distro; resolve it before any pass can skip ahead.
+  let writeTarget: { path: string } | { error: unknown } | null = null
+  try {
+    writeTarget = sourceInGuest ? null : resolvePromotionWriteTarget(systemTomlPath)
+  } catch (error) {
+    writeTarget = { error }
+  }
+  const guestSource =
+    sourceInGuest ||
+    (writeTarget !== null && 'path' in writeTarget && resolvesIntoWslShare(writeTarget.path))
   const runtimeTomlObservation = observeAgentStateFile(runtimeTomlPath)
   if (runtimeTomlObservation.kind === 'absent') {
     // A fresh guest copy has no tab edits to carry, now or on later passes.
@@ -188,14 +198,9 @@ function promoteCodexRuntimeSettingsToSystemUnsafe(
   if (nothingToWrite && conflicts.size === 0 && runtimeValuesToPreserve.size === 0) {
     return { conflicts, runtimeValuesToPreserve, mirroredMcpServers, mirroredMcpServerRoot }
   }
-  const writeTarget = resolvePromotionWriteTarget(systemTomlPath)
-  // A host ~/.codex can link into a distro; its config is never written and nothing is kept back.
-  if (resolvesIntoWslShare(writeTarget.path)) {
-    return regenerateFromGuestPlan(
-      baselineObservation,
-      runtimeTomlObservation.value,
-      systemTomlPath
-    )
+  // An unresolvable ~/.codex link could lead into a distro; stall rather than write through it.
+  if (!writeTarget || !('path' in writeTarget)) {
+    throw writeTarget?.error ?? new Error('Codex config write target was not resolved')
   }
   if (nothingToWrite) {
     return { conflicts, runtimeValuesToPreserve, mirroredMcpServers, mirroredMcpServerRoot }
