@@ -260,5 +260,9 @@ export class RuntimeBrowserCommands {
     this.browserGrabViewportBridge = grab.browserGrabViewportBridge.bind(grab)
     this.browserGrabWatch = grab.browserGrabWatch.bind(grab)
     admitBrowserPageCommands(this, { host, targets, queries })
+    // Outside page admission, so a cancel sent while the enable waits for its page still lands.
+    const admittedGrabSetMode = this.browserGrabSetMode
+    this.browserGrabSetMode = (params) =>
+      grab.admitGrabSetMode(params, () => admittedGrabSetMode(params))
   }
 }
