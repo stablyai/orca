@@ -31,19 +31,29 @@ export type RebaseAutoStashSetting = boolean | 'unsupported' | null
 /**
  * Orca's own rebase of this branch integrated this upstream tip, so the remote only holds old
  * copies. done: just finished; active: a diverged reading has matched it. Mismatches retire it.
+ * behind is pinned at the first match: the old copies never change count at the same upstream tip,
+ * so a different count means the local history was reset or rewritten outside Orca.
  */
 export type OrcaRebaseMarker = {
   branch: string
   upstreamOid: string
   state: 'done' | 'active'
+  behind?: number
 }
 
 /** The stop the panel last read; Continue sends it back so Git only continues what was shown. */
 export type RebaseStopReading = {
   token: RebaseStopToken
   branch: string | null
-  // Git found nothing to commit here, or paused for its own reason: Abort only.
-  continueBlocked: boolean
+  // Git cannot continue this stop. empty: nothing to commit, so Skip or Abort; stopped: Git paused
+  // for its own reason (edit, break, exec), so Abort or finish in a terminal.
+  blocked: 'empty' | 'stopped' | null
+}
+
+/** The automatic stop read failed for this HEAD; the strip says so and offers a retry. */
+export type RebaseStopInspectFailure = {
+  head: string | null
+  message: string | null
 }
 
 /** Everything Source Control tracks for one worktree copy; lives past panel/section unmounts. */
@@ -58,6 +68,7 @@ export type WorktreeOperationRecord = {
   // null until probed; Git refuses a rebase over tracked changes unless this is on.
   rebaseAutoStash: RebaseAutoStashSetting
   rebaseStop: RebaseStopReading | null
+  rebaseStopInspectFailure: RebaseStopInspectFailure | null
   // Orca started this rebase; once done it hides Pull/Sync/Fast-forward, never enables a force path.
   orcaRebase: OrcaRebaseMarker | null
   remoteActionError: SourceControlActionError | null
@@ -104,6 +115,7 @@ function createRecord(draftKey: string): WorktreeOperationRecord {
     isContinuingRebase: false,
     rebaseAutoStash: null,
     rebaseStop: null,
+    rebaseStopInspectFailure: null,
     orcaRebase: null,
     remoteActionError: null,
     remoteActionSequence: 0,

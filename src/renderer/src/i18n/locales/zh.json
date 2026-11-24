@@ -14584,7 +14584,19 @@
             "continueRebaseUnconfirmed": "无法确认结果。源代码管理已刷新以显示当前状态。",
             "noRebaseInProgress": "没有正在进行的变基",
             "rebaseStopMovedOn": "变基已经继续进行。请查看面板后重试。",
-            "rebaseEmptyStep": "此步骤没有可提交的内容。请中止变基，或在终端中完成它。"
+            "rebaseEmptyStep": "此步骤没有可提交的内容。请跳过此步骤或中止变基。",
+            "skipRebaseStepFailed": "无法跳过此变基步骤",
+            "rebaseStepUnreadable": "无法检查此变基步骤",
+            "rebaseStepUnreadableShort": "无法检查步骤",
+            "rebaseRetryInspect": "重试",
+            "rebaseRetryInspectLabel": "重新检查变基步骤",
+            "rebaseSkipStep": "跳过",
+            "rebaseSkipStepLabel": "跳过此变基步骤",
+            "rebaseSkipStepReason": "此步骤没有可提交的内容。跳过会丢弃此步骤并继续。",
+            "rebaseStoppedFinishInTerminal": "Git 已在此步骤暂停。请在终端中完成或中止。",
+            "rebaseCheckingStep": "正在检查变基步骤",
+            "rebaseEmptyStepShort": "空步骤",
+            "rebaseAbortLabel": "中止变基"
           },
           "SourceControlAgentActionDialog": {
             "8e856842d1": "无法启动选定的代理",

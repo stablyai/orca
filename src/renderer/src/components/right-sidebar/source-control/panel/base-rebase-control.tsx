@@ -13,39 +13,63 @@ export type BaseRebaseActions = {
   onRebase: () => void
   onAbortRebase: () => void
   onContinueRebase: () => void
+  onSkipRebaseStep: () => void
+  onRetryRebaseInspect: () => void
 }
 
-/** Disabled buttons drop pointer and focus events, so the reason sits on a focusable wrapper. */
-function ButtonWithReason({
-  reason,
-  children
-}: {
+type ReasonButtonProps = Omit<React.ComponentProps<typeof Button>, 'disabled' | 'onClick'> & {
+  unavailable: boolean
   reason: string | null
-  children: (describedBy: string | undefined) => React.ReactElement
-}): React.JSX.Element {
+  onPress: () => void
+}
+
+/**
+ * aria-disabled, not disabled: an unavailable button keeps focus and hover, so its tooltip can say
+ * why, and a button that turns busy or available while focused keeps focus. Every state renders the
+ * same node, so React never remounts it under the keyboard.
+ */
+function ReasonButton({
+  unavailable,
+  reason,
+  onPress,
+  children,
+  ...buttonProps
+}: ReasonButtonProps): React.JSX.Element {
   const reasonId = useId()
-  if (!reason) {
-    return children(undefined)
-  }
   return (
-    <Tooltip>
-      <TooltipTrigger asChild>
-        <span
-          className="inline-flex shrink-0 rounded-md outline-none focus-visible:ring-1 focus-visible:ring-ring"
-          tabIndex={0}
-          aria-describedby={reasonId}
-        >
-          {children(reasonId)}
-          {/* Always in the DOM: the tooltip body only exists while it is open. */}
-          <span id={reasonId} className="sr-only">
+    <>
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <Button
+            {...buttonProps}
+            type="button"
+            aria-disabled={unavailable || undefined}
+            aria-describedby={reason ? reasonId : undefined}
+            style={unavailable ? { cursor: 'default' } : undefined}
+            onClick={(event) => {
+              if (unavailable) {
+                event.preventDefault()
+                return
+              }
+              onPress()
+            }}
+          >
+            {children}
+          </Button>
+        </TooltipTrigger>
+        {reason ? (
+          <TooltipContent side="bottom" sideOffset={6}>
             {reason}
-          </span>
+          </TooltipContent>
+        ) : null}
+      </Tooltip>
+      {/* Always in the DOM while there is a reason: the tooltip body only exists while it is open. */}
+      {reason ? (
+        <span id={reasonId} className="sr-only">
+          {reason}
         </span>
-      </TooltipTrigger>
-      <TooltipContent side="bottom" sideOffset={6}>
-        {reason}
-      </TooltipContent>
-    </Tooltip>
+      ) : null}
+    </>
   )
 }
 
@@ -86,18 +110,17 @@ export function BaseRebaseTrailing({
             'Wait for the current Git operation to finish'
           )
         : null
-  const disabled = actions.isRebasing || state.blockedBy !== null
-  const button = (describedBy: string | undefined) => (
-    <Button
-      type="button"
+  const unavailable = actions.isRebasing || state.blockedBy !== null
+  return (
+    <ReasonButton
       variant="outline"
       size="xs"
-      disabled={disabled}
+      unavailable={unavailable}
+      reason={reason}
       aria-label={label}
-      aria-describedby={describedBy}
       aria-busy={actions.isRebasing || undefined}
-      title={disabled ? undefined : label}
-      onClick={actions.onRebase}
+      title={unavailable ? undefined : label}
+      onPress={actions.onRebase}
     >
       {actions.isRebasing ? (
         <Loader2 className="size-3 animate-spin" aria-hidden="true" />
@@ -106,19 +129,99 @@ export function BaseRebaseTrailing({
         <GitPullRequestArrow className="size-3 @max-[16rem]:hidden" aria-hidden="true" />
       )}
       {t('auto.components.right.sidebar.SourceControl.rebaseButton', 'Rebase')}
-    </Button>
+    </ReasonButton>
   )
-  return <ButtonWithReason reason={reason}>{button}</ButtonWithReason>
+}
+
+type StepButton = {
+  label: string
+  ariaLabel?: string
+  reason: string | null
+  unavailable: boolean
+  primary: boolean
+  onPress: () => void
+}
+
+/** The one step the paused rebase offers next; a single slot so focus survives state changes. */
+function useRebaseStepButton(
+  actions: BaseRebaseActions,
+  unresolvedCount: number,
+  continueState: RebaseContinueState,
+  inspectFailureMessage: string | null
+): StepButton {
+  const t = useTranslate()
+  const busy = actions.isAbortingRebase || actions.isContinuingRebase
+  const continueLabel = t('auto.components.right.sidebar.SourceControl.rebaseContinue', 'Continue')
+  if (continueState === 'unreadable') {
+    const failed = t(
+      'auto.components.right.sidebar.SourceControl.rebaseStepUnreadable',
+      "Couldn't check this rebase step"
+    )
+    return {
+      label: t('auto.components.right.sidebar.SourceControl.rebaseRetryInspect', 'Retry'),
+      ariaLabel: t(
+        'auto.components.right.sidebar.SourceControl.rebaseRetryInspectLabel',
+        'Retry checking the rebase step'
+      ),
+      reason: inspectFailureMessage ? `${failed}: ${inspectFailureMessage}` : failed,
+      unavailable: busy,
+      primary: false,
+      onPress: actions.onRetryRebaseInspect
+    }
+  }
+  if (continueState === 'empty') {
+    return {
+      label: t('auto.components.right.sidebar.SourceControl.rebaseSkipStep', 'Skip'),
+      ariaLabel: t(
+        'auto.components.right.sidebar.SourceControl.rebaseSkipStepLabel',
+        'Skip this rebase step'
+      ),
+      reason: t(
+        'auto.components.right.sidebar.SourceControl.rebaseSkipStepReason',
+        'Nothing to commit in this step. Skip drops it and moves on.'
+      ),
+      unavailable: busy,
+      primary: true,
+      onPress: actions.onSkipRebaseStep
+    }
+  }
+  const reason =
+    unresolvedCount > 0
+      ? t(
+          'auto.components.right.sidebar.SourceControl.rebaseResolveConflictsFirst',
+          'Resolve conflicts first'
+        )
+      : continueState === 'blocked'
+        ? t(
+            'auto.components.right.sidebar.SourceControl.rebaseStoppedFinishInTerminal',
+            'Git paused this step. Finish it in a terminal or abort.'
+          )
+        : continueState === 'unknown'
+          ? t(
+              'auto.components.right.sidebar.SourceControl.rebaseCheckingStep',
+              'Checking the rebase step'
+            )
+          : null
+  return {
+    label: continueLabel,
+    reason: busy ? null : reason,
+    unavailable: busy || reason !== null,
+    // Once nothing is left to resolve, Continue is the step to take.
+    primary: reason === null,
+    onPress: actions.onContinueRebase
+  }
 }
 
 export function RebasePausedStrip({
   actions,
   unresolvedCount,
-  continueState
+  continueState,
+  inspectFailureMessage = null
 }: {
   actions: BaseRebaseActions
   unresolvedCount: number
   continueState: RebaseContinueState
+  inspectFailureMessage?: string | null
 }): React.JSX.Element {
   const t = useTranslate()
   const pausedLabel = t('auto.components.right.sidebar.SourceControl.rebasePaused', 'Rebase paused')
@@ -132,18 +235,16 @@ export function RebasePausedStrip({
             defaultValue_one: '{{count}} conflict'
           }
         )
-      : null
+      : continueState === 'unreadable'
+        ? t(
+            'auto.components.right.sidebar.SourceControl.rebaseStepUnreadableShort',
+            "Couldn't check step"
+          )
+        : continueState === 'empty'
+          ? t('auto.components.right.sidebar.SourceControl.rebaseEmptyStepShort', 'Empty step')
+          : null
   const busy = actions.isAbortingRebase || actions.isContinuingRebase
-  const continueReason =
-    unresolvedCount > 0
-      ? t(
-          'auto.components.right.sidebar.SourceControl.rebaseResolveConflictsFirst',
-          'Resolve conflicts first'
-        )
-      : null
-  const stepSpinner = actions.isContinuingRebase ? (
-    <Loader2 className="size-3 animate-spin" aria-hidden="true" />
-  ) : null
+  const step = useRebaseStepButton(actions, unresolvedCount, continueState, inspectFailureMessage)
   return (
     <div className="@container -mx-1 flex min-h-7 min-w-0 items-center gap-1.5 rounded-md bg-destructive/10 px-1 py-0.5">
       <TriangleAlert className="size-3.5 shrink-0 text-destructive" aria-hidden="true" />
@@ -158,37 +259,38 @@ export function RebasePausedStrip({
           pausedLabel
         )}
       </span>
-      <Button
-        type="button"
+      <ReasonButton
         variant="destructive-chip"
         size="xs"
-        disabled={busy}
-        onClick={actions.onAbortRebase}
+        unavailable={busy}
+        reason={null}
+        // The visible word alone is ambiguous to a screen reader landing on it from elsewhere.
+        aria-label={t(
+          'auto.components.right.sidebar.SourceControl.rebaseAbortLabel',
+          'Abort rebase'
+        )}
+        aria-busy={(actions.isAbortingRebase && !actions.isContinuingRebase) || undefined}
+        onPress={actions.onAbortRebase}
       >
         {actions.isAbortingRebase && !actions.isContinuingRebase ? (
           <Loader2 className="size-3 animate-spin" aria-hidden="true" />
         ) : null}
         {t('auto.components.right.sidebar.SourceControl.rebaseAbort', 'Abort')}
-      </Button>
-      {/* Git cannot continue this stop (nothing to commit, or its own pause): Abort only. */}
-      {continueState === 'blocked' ? null : (
-        <ButtonWithReason reason={continueReason}>
-          {(describedBy) => (
-            <Button
-              type="button"
-              // Once nothing is left to resolve, Continue is the step to take.
-              variant={unresolvedCount === 0 && continueState === 'ready' ? 'default' : 'outline'}
-              size="xs"
-              disabled={busy || unresolvedCount > 0 || continueState !== 'ready'}
-              aria-describedby={describedBy}
-              onClick={actions.onContinueRebase}
-            >
-              {stepSpinner}
-              {t('auto.components.right.sidebar.SourceControl.rebaseContinue', 'Continue')}
-            </Button>
-          )}
-        </ButtonWithReason>
-      )}
+      </ReasonButton>
+      <ReasonButton
+        variant={step.primary ? 'default' : 'outline'}
+        size="xs"
+        unavailable={step.unavailable}
+        reason={step.reason}
+        aria-label={step.ariaLabel}
+        aria-busy={actions.isContinuingRebase || undefined}
+        onPress={step.onPress}
+      >
+        {actions.isContinuingRebase ? (
+          <Loader2 className="size-3 animate-spin" aria-hidden="true" />
+        ) : null}
+        {step.label}
+      </ReasonButton>
     </div>
   )
 }

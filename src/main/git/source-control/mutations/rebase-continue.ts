@@ -23,9 +23,9 @@ import { joinGitOutput, readGitErrorOutput } from './git-command-output'
 const EMPTY_PICK_OUTPUT = /No changes - did you forget to use 'git add'|nothing to commit/i
 
 /**
- * `inspect` reads the current stop without changing anything. `continue` runs only when the
- * rebase is still at the stop the caller was shown, so a retry after an unknown settlement
- * cannot advance a later stop the user never saw.
+ * `inspect` reads the current stop without changing anything. `continue` and `skip` run only when
+ * the rebase is still at the stop the caller was shown, so a retry after an unknown settlement
+ * cannot advance (or drop) a later stop the user never saw.
  */
 export async function continueRebase(
   worktreePath: string,
@@ -37,7 +37,7 @@ export async function continueRebase(
     runWithGitReadCacheInvalidation(() =>
       action === 'inspect'
         ? inspectRebaseStop(worktreePath, gitOptions)
-        : continueRebaseUnlocked(worktreePath, expected, gitOptions)
+        : continueRebaseUnlocked(worktreePath, action, expected, gitOptions)
     )
   )
 }
@@ -58,6 +58,7 @@ async function inspectRebaseStop(
 
 async function continueRebaseUnlocked(
   worktreePath: string,
+  action: 'continue' | 'skip',
   expected: RebaseStopToken | undefined,
   options: GitRuntimeOptions
 ): Promise<ContinueRebaseResult> {
@@ -80,7 +81,7 @@ async function continueRebaseUnlocked(
   let output: string
   let exitedCleanly: boolean
   try {
-    const { stdout, stderr } = await gitExecFileAsync(['rebase', '--continue'], {
+    const { stdout, stderr } = await gitExecFileAsync(['rebase', `--${action}`], {
       ...gitOptionsForWorktree(worktreePath, options),
       // A cancelled Continue must not release the worktree lock while Git still writes rebase state.
       terminationBarrier: true,

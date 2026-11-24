@@ -14008,7 +14008,19 @@
             "continueRebaseUnconfirmed": "Impossible de confirmer le résultat. Le contrôle de source a été actualisé pour afficher l’état actuel.",
             "noRebaseInProgress": "Aucun rebase en cours",
             "rebaseStopMovedOn": "Le rebase a déjà avancé. Vérifiez le panneau et réessayez.",
-            "rebaseEmptyStep": "Rien à commiter à cette étape. Annulez le rebase ou terminez-le dans un terminal."
+            "rebaseEmptyStep": "Rien à valider à cette étape. Ignorez-la ou annulez le rebase.",
+            "skipRebaseStepFailed": "Impossible d’ignorer cette étape du rebase",
+            "rebaseStepUnreadable": "Impossible de vérifier cette étape du rebase",
+            "rebaseStepUnreadableShort": "Étape non vérifiée",
+            "rebaseRetryInspect": "Réessayer",
+            "rebaseRetryInspectLabel": "Revérifier l’étape du rebase",
+            "rebaseSkipStep": "Ignorer",
+            "rebaseSkipStepLabel": "Ignorer cette étape du rebase",
+            "rebaseSkipStepReason": "Rien à valider à cette étape. Ignorer la supprime et passe à la suite.",
+            "rebaseStoppedFinishInTerminal": "Git a mis cette étape en pause. Terminez-la dans un terminal ou annulez.",
+            "rebaseCheckingStep": "Vérification de l’étape du rebase",
+            "rebaseEmptyStepShort": "Étape vide",
+            "rebaseAbortLabel": "Annuler le rebase"
           },
           "SourceControlAgentActionDialog": {
             "8e856842d1": "Impossible de démarrer l'agent sélectionné.",

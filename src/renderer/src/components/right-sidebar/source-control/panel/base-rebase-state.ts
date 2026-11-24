@@ -1,6 +1,10 @@
 import type { GitBranchCompareSummary } from '../../../../../../shared/git/diff/git-diff-compare-types'
 import type { GitConflictOperation } from '../../../../../../shared/git/status/git-status-types'
-import type { RebaseAutoStashSetting, RebaseStopReading } from './worktree-operation-store'
+import type {
+  RebaseAutoStashSetting,
+  RebaseStopInspectFailure,
+  RebaseStopReading
+} from './worktree-operation-store'
 import {
   formatSourceControlRefLabel,
   resolveSourceControlDisplayedBaseRef
@@ -10,14 +14,17 @@ export type BaseRebaseState =
   | { kind: 'none' }
   | { kind: 'up_to_date' }
   | { kind: 'behind'; behind: number; baseLabel: string; blockedBy: 'dirty' | 'busy' | null }
-  // continueState: unknown until the stop is read for this HEAD; blocked when Git cannot continue it.
+  // continueState: unknown until the stop is read for this HEAD; blocked when Git cannot continue it;
+  // unreadable when the read failed, so the strip can say why and retry.
   | {
       kind: 'rebase_paused'
       unresolvedCount: number
       continueState: RebaseContinueState
+      inspectFailureMessage: string | null
     }
 
-export type RebaseContinueState = 'ready' | 'blocked' | 'unknown'
+// empty: Git found nothing to commit at this step, which can be skipped instead of continued.
+export type RebaseContinueState = 'ready' | 'empty' | 'blocked' | 'unknown' | 'unreadable'
 
 export type BaseRebaseInputs = {
   summary: GitBranchCompareSummary | null
@@ -28,6 +35,7 @@ export type BaseRebaseInputs = {
   hasTrackedChanges: boolean
   rebaseAutoStash: RebaseAutoStashSetting
   rebaseStop: RebaseStopReading | null
+  rebaseStopInspectFailure: RebaseStopInspectFailure | null
   statusHead: string | null
   isBusy: boolean
 }
@@ -85,22 +93,31 @@ export function resolveSourceControlRebaseModel(inputs: BaseRebaseInputs) {
 }
 
 // A reading for another HEAD is stale until re-read, so Continue waits rather than guessing.
+// A failed read only counts for the HEAD it was taken at; a HEAD move reads again on its own.
 export function resolveRebaseContinueState(
   rebaseStop: RebaseStopReading | null,
-  statusHead: string | null
+  statusHead: string | null,
+  inspectFailure: RebaseStopInspectFailure | null = null
 ): RebaseContinueState {
   if (!rebaseStop || (statusHead !== null && rebaseStop.token.head !== statusHead)) {
-    return 'unknown'
+    return inspectFailure && inspectFailure.head === statusHead ? 'unreadable' : 'unknown'
   }
-  return rebaseStop.continueBlocked ? 'blocked' : 'ready'
+  return rebaseStop.blocked === 'empty' ? 'empty' : rebaseStop.blocked ? 'blocked' : 'ready'
 }
 
 export function resolveBaseRebaseState(inputs: BaseRebaseInputs): BaseRebaseState {
   if (inputs.conflictOperation === 'rebase') {
+    const continueState = resolveRebaseContinueState(
+      inputs.rebaseStop,
+      inputs.statusHead,
+      inputs.rebaseStopInspectFailure
+    )
     return {
       kind: 'rebase_paused',
       unresolvedCount: inputs.unresolvedConflictCount,
-      continueState: resolveRebaseContinueState(inputs.rebaseStop, inputs.statusHead)
+      continueState,
+      inspectFailureMessage:
+        continueState === 'unreadable' ? (inputs.rebaseStopInspectFailure?.message ?? null) : null
     }
   }
   const behind = resolveRebaseBehindCount(

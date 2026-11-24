@@ -14473,7 +14473,19 @@
             "continueRebaseUnconfirmed": "Не удалось подтвердить результат. Система контроля версий обновлена и показывает текущее состояние.",
             "noRebaseInProgress": "Rebase не выполняется",
             "rebaseStopMovedOn": "Rebase уже продвинулся дальше. Проверьте панель и повторите попытку.",
-            "rebaseEmptyStep": "На этом шаге нечего коммитить. Прервите rebase или завершите его в терминале."
+            "rebaseEmptyStep": "На этом шаге нечего коммитить. Пропустите его или прервите rebase.",
+            "skipRebaseStepFailed": "Не удалось пропустить этот шаг rebase",
+            "rebaseStepUnreadable": "Не удалось проверить этот шаг rebase",
+            "rebaseStepUnreadableShort": "Шаг не проверен",
+            "rebaseRetryInspect": "Повторить",
+            "rebaseRetryInspectLabel": "Повторно проверить шаг rebase",
+            "rebaseSkipStep": "Пропустить",
+            "rebaseSkipStepLabel": "Пропустить этот шаг rebase",
+            "rebaseSkipStepReason": "На этом шаге нечего коммитить. Пропуск отбросит его и продолжит.",
+            "rebaseStoppedFinishInTerminal": "Git приостановил этот шаг. Завершите его в терминале или прервите.",
+            "rebaseCheckingStep": "Проверка шага rebase",
+            "rebaseEmptyStepShort": "Пустой шаг",
+            "rebaseAbortLabel": "Прервать rebase"
           },
           "SourceControlAgentActionDialog": {
             "8e856842d1": "Не удалось запустить выбранного агента.",

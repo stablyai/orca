@@ -22,13 +22,16 @@ export function useOrcaRebaseMarker({
     orcaRebase !== null && orcaRebaseMarkerIsRetired(orcaRebase, branchName, remoteStatus)
   // Readings right after the rebase are still pre-rebase ones; only a seen match arms mismatch retirement.
   const promote = applies && orcaRebase?.state === 'done'
+  const matchedBehind = remoteStatus?.behind
   useEffect(() => {
     const current = operationStore.getState().orcaRebase
     if (retired) {
       operationStore.setState({ orcaRebase: null })
     } else if (promote && current) {
-      operationStore.setState({ orcaRebase: { ...current, state: 'active' } })
+      operationStore.setState({
+        orcaRebase: { ...current, state: 'active', behind: matchedBehind }
+      })
     }
-  }, [operationStore, promote, retired])
+  }, [matchedBehind, operationStore, promote, retired])
   return applies && !retired
 }

@@ -228,7 +228,8 @@ export function SourceControlHeaderToolbar({
   const showBranchContext = shouldShowSourceControlBranchContextChrome(
     branchSummary,
     compareBaseRef,
-    headDisplay
+    headDisplay,
+    rebase?.state.kind === 'rebase_paused'
   )
   const branchContextRow = (reviewTrailing?: React.ReactNode) => (
     <SourceControlBranchContextRow
