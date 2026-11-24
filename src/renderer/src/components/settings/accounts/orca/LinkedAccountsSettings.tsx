@@ -8,6 +8,7 @@ import { isPairedWebClientWindow } from '@/app-shell/chrome/desktop-window-chrom
 import { BOT_CONNECTORS } from '@/components/bots/bot-connectors'
 import { botGitHubErrorMessage } from '@/components/bots/github/bot-github-copy'
 import { botLinearErrorMessage } from '@/components/bots/linear/bot-linear-copy'
+import { botSlackErrorMessage } from '@/components/bots/slack/bot-slack-copy'
 import { connectorLinksCalls } from '@/lib/bot-connector-host-calls'
 import { refreshBotGitHub } from '@/lib/bot-github-state'
 import { refreshBotLinear } from '@/lib/bot-linear-state'
@@ -17,11 +18,9 @@ import {
   useConnectorConnect
 } from '@/lib/connector-connect-state'
 import { refreshConnectorLinks, useConnectorLinks } from '@/lib/connector-links-state'
+import { BOT_SLACK_SIGN_IN_OFF } from '../../../../../../shared/connector-bot-slack-contract'
 import type { ExecutionHostId } from '../../../../../../shared/execution-host/execution-host'
-import {
-  CONNECTOR_CONNECT_SOURCES,
-  type ConnectorConnectSource
-} from '../../../../../../shared/connectors/connector-cloud-contract'
+import type { ConnectorConnectSource } from '../../../../../../shared/connectors/connector-cloud-contract'
 import type {
   ConnectorLink,
   ConnectorLinkSource
@@ -46,9 +45,6 @@ function linksErrorMessage(code: string, hostName: string | null): string {
   }
 }
 
-const isConnectSource = (source: ConnectorLinkSource): source is ConnectorConnectSource =>
-  CONNECTOR_CONNECT_SOURCES.some((connectSource) => connectSource === source)
-
 /** A link or unlink changes what the source's own settings show too. */
 function refreshSource(hostId: ExecutionHostId, source: ConnectorLinkSource): Promise<unknown> {
   return source === 'linear'
@@ -56,6 +52,24 @@ function refreshSource(hostId: ExecutionHostId, source: ConnectorLinkSource): Pr
     : source === 'github'
       ? refreshBotGitHub(hostId)
       : Promise.resolve()
+}
+
+/** What a failed trip says here, in the source's own words. */
+function tripErrorMessage(
+  source: ConnectorConnectSource,
+  code: string,
+  hostName: string | null
+): string {
+  switch (source) {
+    case 'github':
+      return botGitHubErrorMessage(code, hostName)
+    case 'linear':
+      return botLinearErrorMessage(code, hostName)
+    case 'slack':
+      return code === BOT_SLACK_SIGN_IN_OFF
+        ? translate('settings.linkedAccounts.slackOff', 'Linking Slack isn’t available yet.')
+        : botSlackErrorMessage(code, hostName)
+  }
 }
 
 function useTrip(
@@ -68,13 +82,15 @@ function useTrip(
   if (isPairedWebClientWindow()) {
     return null
   }
-  const error =
-    view.status !== 'failed'
-      ? null
-      : source === 'github'
-        ? botGitHubErrorMessage(view.error, hostName)
-        : botLinearErrorMessage(view.error, hostName)
-  return { waiting: view.status === 'waiting', error }
+  if (view.status !== 'failed') {
+    return { waiting: view.status === 'waiting', error: null, canLink: true }
+  }
+  return {
+    waiting: false,
+    error: tripErrorMessage(source, view.error, hostName),
+    // A cloud from before Sign in with Slack: no Link to offer until it has one.
+    canLink: view.error !== BOT_SLACK_SIGN_IN_OFF
+  }
 }
 
 export function LinkedAccountsSettings({
@@ -88,7 +104,7 @@ export function LinkedAccountsSettings({
   const confirm = useConfirmationDialog()
   const view = useConnectorLinks(hostId)
   const trips = {
-    slack: null,
+    slack: useTrip(hostId, 'slack', hostName),
     github: useTrip(hostId, 'github', hostName),
     linear: useTrip(hostId, 'linear', hostName)
   } satisfies Record<ConnectorLinkSource, LinkedAccountsTrip>
@@ -109,17 +125,12 @@ export function LinkedAccountsSettings({
     )
   }
 
+  // A second account of a service lets the person pick another one there.
   const link = (source: ConnectorLinkSource): void => {
-    if (isConnectSource(source)) {
-      const another = view.links.some((entry) => entry.source === source)
-      void startConnectorConnect(hostId, source, { switchAccount: another })
-    }
+    const another = view.links.some((entry) => entry.source === source)
+    void startConnectorConnect(hostId, source, { switchAccount: another })
   }
-  const cancel = (source: ConnectorLinkSource): void => {
-    if (isConnectSource(source)) {
-      cancelConnectorConnect(hostId, source)
-    }
-  }
+  const cancel = (source: ConnectorLinkSource): void => cancelConnectorConnect(hostId, source)
   const unlink = async (entry: ConnectorLink): Promise<void> => {
     const service =
       BOT_CONNECTORS.find((connector) => connector.id === entry.source)?.label ?? entry.source

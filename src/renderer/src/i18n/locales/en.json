@@ -2047,7 +2047,8 @@
       "retry": "Try again",
       "unlinkTitle": "Unlink {{name}} on {{service}}?",
       "unlinkNoteWorkspace": "Bots shared with you won’t know it’s you in that workspace.",
-      "unlinkNote": "Bots shared with you won’t know it’s you on {{service}}."
+      "unlinkNote": "Bots shared with you won’t know it’s you on {{service}}.",
+      "slackOff": "Linking Slack isn’t available yet."
     }
   },
   "menu": {

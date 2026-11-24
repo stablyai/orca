@@ -48,6 +48,9 @@ function serve(): { method: string; params: unknown }[] {
   mocks.call.mockImplementation(async (target: unknown, method: string, params: unknown) => {
     expect(target).toEqual({ kind: 'environment', environmentId: 'env_lab' })
     asked.push({ method, params })
+    if (method === 'bots.connect.start') {
+      return { ok: false, error: 'slack_sign_in_off' }
+    }
     if (method === 'bots.links.list') {
       return { ok: true, value: { links: LINKS } }
     }
@@ -89,5 +92,16 @@ describe('Linked accounts', () => {
         params: { source: 'slack', workspaceId: 'T2', userId: 'U2' }
       })
     )
+  })
+
+  it('offers Slack Link until a cloud without Sign in with Slack answers', async () => {
+    serve()
+    show()
+    await screen.findByText('Northwind')
+    expect(screen.getAllByRole('button', { name: /Link another/ })).toHaveLength(2)
+    fireEvent.click(screen.getAllByRole('button', { name: /Link another/ })[0]!)
+    expect(await screen.findByText('Linking Slack isn’t available yet.')).toBeTruthy()
+    // GitHub still offers its Link; Slack no longer does.
+    expect(screen.getAllByRole('button', { name: /Link another/ })).toHaveLength(1)
   })
 })

@@ -45,7 +45,7 @@ const LINKS: ConnectorLink[] = [
   }
 ]
 
-const IDLE: LinkedAccountsTrip = { waiting: false, error: null }
+const IDLE: LinkedAccountsTrip = { waiting: false, error: null, canLink: true }
 const noop = (): void => {}
 
 export const linked = defineFixture({
@@ -53,7 +53,7 @@ export const linked = defineFixture({
   render: () => (
     <LinkedAccountsList
       links={LINKS}
-      trips={{ slack: null, github: IDLE, linear: IDLE }}
+      trips={{ slack: IDLE, github: IDLE, linear: IDLE }}
       onLink={noop}
       onCancel={noop}
       onUnlink={noop}
@@ -66,7 +66,7 @@ export const linking = defineFixture({
   render: () => (
     <LinkedAccountsList
       links={LINKS.filter((link) => link.source !== 'linear')}
-      trips={{ slack: null, github: { waiting: true, error: null }, linear: IDLE }}
+      trips={{ slack: IDLE, github: { waiting: true, error: null, canLink: true }, linear: IDLE }}
       onLink={noop}
       onCancel={noop}
       onUnlink={noop}
@@ -79,7 +79,7 @@ export const nothingLinked = defineFixture({
   render: () => (
     <LinkedAccountsList
       links={[]}
-      trips={{ slack: null, github: IDLE, linear: IDLE }}
+      trips={{ slack: IDLE, github: IDLE, linear: IDLE }}
       onLink={noop}
       onCancel={noop}
       onUnlink={noop}

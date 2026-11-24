@@ -1,4 +1,4 @@
-// One "Connect Linear" / "Connect GitHub" trip per host and source, as every setup surface sees it.
+// One "Connect Linear" / "Connect GitHub" / Sign in with Slack trip per host and source, as every setup surface sees it.
 // The host runs the trip as its own Orca account; this window opens its page where the host's
 // return reaches (a server's own page in Orca's browser) and waits on the host for its end.
 import { useEffect, useSyncExternalStore } from 'react'

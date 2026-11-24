@@ -11,8 +11,9 @@ import {
   type ConnectorLinkSource
 } from '../../../../../../shared/connectors/connector-links-contract'
 
-/** One service's sign-in trip: `null` where this window can't start one (e.g. Slack until it can). */
-export type LinkedAccountsTrip = { waiting: boolean; error: string | null } | null
+/** One service's sign-in trip: `null` where this window can't start one; `canLink` false where the
+ *  host's cloud has no sign-in for the service. */
+export type LinkedAccountsTrip = { waiting: boolean; error: string | null; canLink: boolean } | null
 
 function LinkedAccountRow({
   link,
@@ -66,7 +67,7 @@ function LinkedAccountsGroup({
           {Icon ? <Icon className="size-3.5" /> : null}
         </div>
         <p className="min-w-0 flex-1 truncate text-sm font-medium">{label}</p>
-        {trip && !trip.waiting ? (
+        {trip?.canLink && !trip.waiting ? (
           <Button size="sm" variant="outline" onClick={() => onLink(source)}>
             <Plus />
             {links.length > 0
