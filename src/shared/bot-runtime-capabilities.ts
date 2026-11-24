@@ -82,6 +82,10 @@ export const BOTS_ITEM_CANCEL_NO_REASON_CAPABILITY = 'bots.item-cancel-no-reason
 // on its own (one generated while the picker was closed) only where this is advertised.
 export const BOTS_AVATAR_REVISION_RUNTIME_CAPABILITY = 'bots.avatar-revision.v3' as const
 
+// Host lets a phone change who Slack replies post as (bots.slack.setPostAs); an older host refuses it, so the
+// phone keeps the read-only row.
+export const BOTS_SLACK_POST_AS_RUNTIME_CAPABILITY = 'bots.slack-post-as.v1' as const
+
 export const BOT_RUNTIME_CAPABILITIES = [
   BOTS_GROUPS_RUNTIME_CAPABILITY,
   BOTS_GROUP_ATTACHMENTS_RUNTIME_CAPABILITY,
@@ -101,6 +105,7 @@ export const BOT_RUNTIME_CAPABILITIES = [
   BOTS_SESSION_LINKS_RUNTIME_CAPABILITY,
   BOTS_AVATAR_COLOR_RUNTIME_CAPABILITY,
   BOTS_AVATAR_OUTFIT_RUNTIME_CAPABILITY,
+  BOTS_SLACK_POST_AS_RUNTIME_CAPABILITY,
   BOTS_HOME_PIN_RUNTIME_CAPABILITY,
   BOTS_ITEM_WAITING_CAPABILITY,
   BOTS_ITEM_CANCEL_NO_REASON_CAPABILITY,

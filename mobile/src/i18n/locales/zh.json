@@ -7421,7 +7421,14 @@
       "replies": "回复",
       "postAs": {
         "title": "发布身份",
-        "changeOn": "在 {{host}} 上更改"
+        "changeOn": "在 {{host}} 上更改",
+        "orcaUser": "Orca 用户",
+        "viaOrca": "{{name}}（通过 Orca）",
+        "sample": "那之后就发布吧",
+        "linePlain": "你从 Orca 回复 Slack 话题时，会以 {{name}} 的身份发布。",
+        "approve": "在 Slack 中批准",
+        "waitingOn": "切换为 {{name}} 需要 {{installer}} 在 Slack 中批准",
+        "waiting": "切换为 {{name}} 需要在 Slack 中获得批准"
       },
       "token": {
         "open": "获取配置令牌",

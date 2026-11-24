@@ -7226,7 +7226,14 @@
       "replies": "Replies",
       "postAs": {
         "title": "Post as",
-        "changeOn": "Change it on {{host}}"
+        "changeOn": "Change it on {{host}}",
+        "orcaUser": "Orca user",
+        "viaOrca": "{{name}} (via Orca)",
+        "sample": "Ship it after that",
+        "linePlain": "When you reply to a Slack thread from Orca, it posts as {{name}}.",
+        "approve": "Approve in Slack",
+        "waitingOn": "Switching to {{name}} needs {{installer}} to approve in Slack.",
+        "waiting": "Switching to {{name}} needs approval in Slack."
       },
       "token": {
         "open": "Get config token",
