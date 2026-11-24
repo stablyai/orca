@@ -104,6 +104,7 @@ export function NewBotPictureButton({
               onColorChange={picture.onColorChange}
               outfit={picture.outfit}
               onOutfitChange={picture.onOutfitChange}
+              descriptionDraft={picture.descriptionDraft}
               uploadLink
               intake={intake}
             />
