@@ -1,5 +1,6 @@
 import { lstatSync, readlinkSync, realpathSync } from 'node:fs'
 import { basename, dirname, join, resolve } from 'node:path'
+import { isDefinitiveAbsence } from '../../../../shared/errors/definitive-filesystem-absence'
 import {
   observeResolvedFilePath,
   observeResolvedFilePathError
@@ -39,8 +40,12 @@ function resolveThroughLinkedAncestor(path: string): string {
     try {
       return join(realpathSync(dir), ...missing)
     } catch (error) {
+      observeResolvedFilePathError('promotion-write', path, error)
+      // An unresolvable folder could still link into a distro; stall rather than write through it.
+      if (!isDefinitiveAbsence(error)) {
+        throw error
+      }
       if (dirname(dir) === dir) {
-        observeResolvedFilePathError('promotion-write', path, error)
         return path
       }
       missing.unshift(basename(dir))

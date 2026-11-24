@@ -18,10 +18,16 @@ import { join } from 'node:path'
 import type * as WslPaths from '../../../../shared/file-access/wsl-paths'
 
 const { homedirMock, wslTestState } = vi.hoisted(() => {
-  const state: { wslPath: string | null; daemonGuard: boolean; failTempWrite: boolean } = {
+  const state: {
+    wslPath: string | null
+    daemonGuard: boolean
+    failTempWrite: boolean
+    unresolvablePath: string | null
+  } = {
     wslPath: null,
     daemonGuard: false,
-    failTempWrite: false
+    failTempWrite: false,
+    unresolvablePath: null
   }
   return { homedirMock: vi.fn<() => string>(), wslTestState: state }
 })
@@ -44,8 +50,19 @@ vi.mock('../../../../shared/file-access/wsl-paths', async (importOriginal) => {
 
 vi.mock('node:fs', async (importOriginal) => {
   const actual = await importOriginal<typeof NodeFs>()
+  const realpathSync = Object.assign(
+    (...args: Parameters<typeof actual.realpathSync>) => {
+      if (String(args[0]) === wslTestState.unresolvablePath) {
+        // Windows can refuse to resolve a folder link into a distro.
+        throw Object.assign(new Error('EACCES: permission denied'), { code: 'EACCES' })
+      }
+      return actual.realpathSync(...args)
+    },
+    { native: actual.realpathSync.native }
+  )
   return {
     ...actual,
+    realpathSync,
     writeFileSync: (...args: Parameters<typeof actual.writeFileSync>) => {
       if (wslTestState.failTempWrite && String(args[0]).endsWith('.tmp')) {
         // A disk that fills partway through the temp file.
@@ -77,6 +94,7 @@ beforeEach(() => {
   wslTestState.wslPath = null
   wslTestState.daemonGuard = false
   wslTestState.failTempWrite = false
+  wslTestState.unresolvablePath = null
   if (homedir() !== tmpHome) {
     throw new Error('node:os homedir mock is not active; refusing to touch the real ~/.codex')
   }
@@ -185,6 +203,23 @@ describe('managed Codex config for a WSL distro config', () => {
       mkdirSync(guestCodexDir, { recursive: true })
       symlinkSync(guestCodexDir, join(tmpHome, '.codex'))
       wslTestState.wslPath = join(realpathSync(guestCodexDir), 'config.toml')
+      simulateCodexSettingWrite('approval_policy', '"never"')
+      syncSystemConfigIntoManagedCodexHome()
+
+      simulateCodexSettingWrite('model', '"o4"')
+      syncSystemConfigIntoManagedCodexHome()
+
+      expect(existsSync(join(guestCodexDir, 'config.toml'))).toBe(false)
+    }
+  )
+
+  it.skipIf(process.platform === 'win32')(
+    'never writes through a linked ~/.codex folder that cannot be resolved',
+    () => {
+      const guestCodexDir = join(tmpHome, 'guest-codex')
+      mkdirSync(guestCodexDir, { recursive: true })
+      symlinkSync(guestCodexDir, join(tmpHome, '.codex'))
+      wslTestState.unresolvablePath = join(tmpHome, '.codex')
       simulateCodexSettingWrite('approval_policy', '"never"')
       syncSystemConfigIntoManagedCodexHome()
 
