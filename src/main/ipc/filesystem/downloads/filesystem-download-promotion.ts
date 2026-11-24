@@ -1,7 +1,6 @@
 import { randomUUID } from 'node:crypto'
-import { createReadStream, type Stats } from 'node:fs'
-import { link, lstat, open, rename, rm, stat } from 'node:fs/promises'
-import { pipeline } from 'node:stream/promises'
+import type { Stats } from 'node:fs'
+import { link, lstat, open, rename, rm, stat, type FileHandle } from 'node:fs/promises'
 import { dirname, join } from 'node:path'
 import { errnoCodeOrUnknown } from '../../../../shared/errors/errno-code'
 import { isENOENT } from '../../../filesystem/local-file-io/filesystem-path-containment'
@@ -77,6 +76,7 @@ export async function promoteDownloadedFile(
   }
 }
 
+const COPY_FALLBACK_CHUNK_BYTES = 1024 * 1024
 // Volumes without hard links (FAT, exFAT, some network shares).
 const NO_HARD_LINK_CODES = new Set(['EPERM', 'ENOTSUP', 'EOPNOTSUPP', 'ENOSYS', 'EXDEV', 'EMLINK'])
 
@@ -121,18 +121,29 @@ async function copyIntoNewFile(
 ): Promise<void> {
   const target = await open(targetPath, 'wx')
   let copied = false
+  let ours: Stats | null = null
+  let source: FileHandle | null = null
   try {
-    await pipeline(
-      createReadStream(sourcePath),
-      target.createWriteStream({ autoClose: false }),
-      signal ? { signal } : {}
-    )
+    ours = await target.stat()
+    source = await open(sourcePath, 'r')
+    const buffer = Buffer.alloc(COPY_FALLBACK_CHUNK_BYTES)
+    for (;;) {
+      signal?.throwIfAborted()
+      const { bytesRead } = await source.read(buffer, 0, buffer.length, null)
+      if (bytesRead === 0) {
+        break
+      }
+      for (let written = 0; written < bytesRead;) {
+        written += (await target.write(buffer, written, bytesRead - written)).bytesWritten
+      }
+    }
     copied = true
   } finally {
-    if (!copied) {
-      await removeIfStillOurs(targetPath, await target.stat())
+    await source?.close().catch(() => {})
+    await target.close().catch(() => {})
+    if (!copied && ours) {
+      await removeIfStillOurs(targetPath, ours)
     }
-    await target.close()
   }
 }
 
