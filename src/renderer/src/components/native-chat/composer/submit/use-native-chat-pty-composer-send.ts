@@ -1,3 +1,4 @@
+import { keepWorkerSurfaceOnUserSend } from '@/components/tab-bar/worker-tab-keep-on-input'
 import { readNativeChatComposerDraft } from '../../drafts/native-chat-composer-draft-store'
 import { serializeNativeChatAgentReferences } from '../pickers/native-chat-agent-reference-send'
 import {
@@ -165,6 +166,7 @@ export function useNativeChatPtyComposerSend(args: {
         agent: args.agent,
         runtime: nativeChatComposerTargetIsRemote(target.ptyId) ? 'remote' : 'local'
       })
+      keepWorkerSurfaceOnUserSend(args.terminalTabId)
       args.onSubmitted?.()
       if (!retry) {
         args.setDraft('')

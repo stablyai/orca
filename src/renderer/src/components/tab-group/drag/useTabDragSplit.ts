@@ -1,3 +1,4 @@
+import { keepPlacedWorkerTab } from '../../tab-bar/worker-tab-keep-on-input'
 import { useCallback, useMemo, useRef, useState, type RefObject } from 'react'
 import {
   type CollisionDetection,
@@ -175,6 +176,7 @@ export function useTabDragSplit({
         return
       }
 
+      keepPlacedWorkerTab(worktreeId, dragData.unifiedTabId)
       setActiveDrag(dragData)
       tabDragActiveRef.current = true
       installMissedEndFallback()

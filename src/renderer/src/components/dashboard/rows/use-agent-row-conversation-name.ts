@@ -3,6 +3,8 @@ import { getAgentRowConversationName } from '../../../../../shared/agent-status/
 import { parsePaneKey } from '../../../../../shared/workspace-layout/stable-pane-id'
 import { structuredChatDisplayName } from '../../../../../shared/agent-session/view/structured-chat-row-name'
 import { resolveAgentRowPaneLiveTitle } from './agent-row-pane-live-title'
+import { stampedTaskTitle } from '../../../../../shared/orchestration/workers/worker-tab-stamp'
+import { resolveUnifiedTabLabel } from '../../../../../shared/workspace-layout/tab-groups/tab-title-resolution'
 import { structuredChatTabById } from '@/lib/agent-session/tab-identity/structured-chat-tab-index'
 import { useStructuredChatTabNaming } from '@/runtime/native-chat/naming/structured-conversation-name'
 import type { AppState } from '@/store/types'
@@ -75,7 +77,9 @@ export function useAgentRowConversationNaming(agent: DashboardAgentRow): {
   }
   const structuredName =
     structuredTab &&
-    structuredChatDisplayName(structuredTab.customLabel, conversationName, structuredTab.label)
+    (stampedTaskTitle(structuredTab)?.trim()
+      ? resolveUnifiedTabLabel(structuredTab, generatedTitlesEnabled)
+      : structuredChatDisplayName(structuredTab.customLabel, conversationName, structuredTab.label))
   if (structuredName) {
     return { name: structuredName, forked: chatNaming.forkSourceId !== null }
   }

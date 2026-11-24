@@ -154,7 +154,10 @@ export function buildMirroredAgentTabs(
         createdAt: existing?.createdAt ?? now + sortOffset + index,
         // Focus visits are client-owned; host snapshots carry none, so rebuilding must not drop them.
         ...(existing?.lastFocusedAt !== undefined ? { lastFocusedAt: existing.lastFocusedAt } : {}),
-        isPinned: tab.isPinned !== undefined ? tab.isPinned : existing?.isPinned === true
+        isPinned: tab.isPinned !== undefined ? tab.isPinned : existing?.isPinned === true,
+        // Host-owned, one way: an old host omits both, so the chat stays an ordinary visible tab.
+        ...(tab.workerTab ? { workerTab: tab.workerTab } : {}),
+        ...(tab.lineageRootSessionId ? { agentSessionLineageRootId: tab.lineageRootSessionId } : {})
       }
     }
   })

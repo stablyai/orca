@@ -1,3 +1,9 @@
+import { patchTab } from '@/store/slices/tabs/tab-group-state'
+import type { AppState } from '@/store/types'
+import {
+  isWorkerLeaf,
+  transferWorkerStamp
+} from '../../../../../shared/orchestration/workers/worker-tab-stamp'
 import { replaceRecordEntries } from '@/store/record-transitions/keyed-record-transitions'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../../shared/workspace-layout/layout-owner-switch'
 import { makePaneKey } from '../../../../../shared/workspace-layout/stable-pane-id'
@@ -155,11 +161,46 @@ export function createTerminalLayoutActions(
           relayReplacements.push([targetTabId, detachedPtyId])
         }
         // Why: pane-to-tab detach moves a live PTY without spawning or exiting, so transfer identity without activity bumps.
-        const nextTabsByWorktree = withTerminalTabPtyIds(s.tabsByWorktree, [
+        let nextTabsByWorktree = withTerminalTabPtyIds(s.tabsByWorktree, [
           { tabId: sourceTabId, ptyId: sourcePrimaryPtyId },
           ...(detachedPtyId ? [{ tabId: targetTabId, ptyId: detachedPtyId }] : [])
         ])
+        let workerStampPatch: Partial<Pick<AppState, 'unifiedTabsByWorktree'>> = {}
+        for (const [workspaceId, tabs] of Object.entries(s.unifiedTabsByWorktree)) {
+          const source = tabs.find(
+            (tab) => tab.contentType === 'terminal' && tab.entityId === sourceTabId
+          )
+          const target = tabs.find(
+            (tab) => tab.contentType === 'terminal' && tab.entityId === targetTabId
+          )
+          if (!source || !target) {
+            continue
+          }
+          if (isWorkerLeaf(source.workerTab, detachedLeafId)) {
+            const sourcePatch = patchTab(s.unifiedTabsByWorktree, source.id, {
+              workerTab: undefined
+            })
+            workerStampPatch =
+              patchTab(sourcePatch?.unifiedTabsByWorktree ?? s.unifiedTabsByWorktree, target.id, {
+                workerTab: source.workerTab
+              }) ??
+              sourcePatch ??
+              {}
+            nextTabsByWorktree = {
+              ...nextTabsByWorktree,
+              [workspaceId]: [
+                ...transferWorkerStamp(
+                  nextTabsByWorktree[workspaceId] ?? [],
+                  sourceTabId,
+                  targetTabId,
+                  detachedLeafId
+                )
+              ]
+            }
+          }
+        }
         return {
+          ...workerStampPatch,
           ptyIdsByTabId: replaceRecordEntries(s.ptyIdsByTabId, ptyReplacements),
           lastKnownRelayPtyIdByTabId: replaceRecordEntries(
             s.lastKnownRelayPtyIdByTabId,

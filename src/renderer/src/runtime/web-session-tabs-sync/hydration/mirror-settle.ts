@@ -1,3 +1,5 @@
+import { recordWorkerTabFeed } from '@/components/tab-bar/worker-tab-feed-grace'
+import { toRuntimeExecutionHostId } from '../../../../../shared/execution-host/execution-host'
 import type { RuntimeMobileSessionTabsResult } from '../../../../../shared/remote-runtime/session-graph/runtime-session-contracts'
 import { getRuntimeEnvironmentConnectionGeneration } from '@/store/slices/runtime-status/runtime-status-connection-generation'
 import { probeHostLiveTerminals } from '../../hosted-terminals/inventory/host-live-terminal-probe'
@@ -115,6 +117,7 @@ export function createHostSessionMirrorSettle(
       if (!fence || !hostSessionMirrorSettleFenceIsCurrent(fence)) {
         return
       }
+      recordWorkerTabFeed(toRuntimeExecutionHostId(fullInventory.environmentId), 'snapshot')
       if (fullInventory.publishedSnapshotCount === 0) {
         if (fullInventory.authoritative) {
           markHostSessionMirrorHydrated(fullInventory.environmentId)
@@ -129,6 +132,7 @@ export function createHostSessionMirrorSettle(
     for (const { environmentId, worktreeId } of settles) {
       const fence = fenceByEnvironment.get(environmentId)
       if (fence && hostSessionMirrorSettleFenceIsCurrent(fence)) {
+        recordWorkerTabFeed(toRuntimeExecutionHostId(environmentId), 'snapshot')
         markHostSessionMirrorWorktreeHydrated(environmentId, worktreeId)
       }
     }
@@ -151,6 +155,7 @@ export function hostSessionMirrorSettleForPatchlessFrame(
   const fence = captureHostSessionMirrorSettleFence(environmentId, expected)
   return () => {
     if (hostSessionMirrorSettleFenceIsCurrent(fence)) {
+      recordWorkerTabFeed(toRuntimeExecutionHostId(environmentId), 'snapshot')
       markHostSessionMirrorWorktreeHydrated(environmentId, worktreeId)
     }
   }

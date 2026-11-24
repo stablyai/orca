@@ -1,3 +1,4 @@
+import type { TerminalTab } from '../../../../../shared/workspace-layout/terminal-tab-types'
 import type { TabBarItem } from './tab-bar-item-model'
 import { resolveTerminalTabTitle } from '../../../../../shared/workspace-layout/tab-groups/tab-title-resolution'
 import { getEditorDisplayLabel } from '@/components/editor/panel/header/editor-labels'
@@ -27,4 +28,11 @@ export function tabItemLabel(
     return formatSimulatorTabLabel(item.data.label, t)
   }
   return getEditorDisplayLabel(item.data, undefined, t)
+}
+
+export function resolveTerminalItemTab(
+  tab: TerminalTab & { unifiedTabId?: string },
+  generatedTitlesEnabled: boolean
+): TerminalTab & { unifiedTabId?: string } {
+  return { ...tab, title: resolveTerminalTabTitle(tab, generatedTitlesEnabled, tab.title) }
 }

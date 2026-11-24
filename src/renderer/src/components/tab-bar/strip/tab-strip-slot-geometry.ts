@@ -110,3 +110,17 @@ export function revealTabStripSlot(strip: HTMLElement, slot: HTMLElement): void 
     strip.scrollLeft += Math.min(left - viewLeft, right - viewLeft - strip.clientWidth)
   }
 }
+
+export function isTabStripScrolledToEnd(el: HTMLElement): boolean {
+  const max = Math.max(0, el.scrollWidth - el.clientWidth)
+  return el.scrollLeft >= max - 2
+}
+
+export function revealPeekTabStripSlot(strip: HTMLElement, id: string): boolean {
+  const active = findTabStripSlot(strip, id)
+  if (!active?.hasAttribute('data-worker-tab-peek')) {
+    return false
+  }
+  revealTabStripSlot(strip, active)
+  return true
+}

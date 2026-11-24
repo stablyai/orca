@@ -1,3 +1,8 @@
+import { selectFoldedWorkerTabIds } from '@/components/tab-bar/worker-tab-folding'
+import {
+  handleWorkerTabUserClose,
+  keepWorkerPaneOnClose
+} from '@/components/tab-bar/worker-tab-user-close'
 import type { KeybindingContext } from '../../../../../shared/keybindings/types'
 import {
   toVisibleTabType,
@@ -125,7 +130,21 @@ function resolveCloseTarget(
 function closeFocusedSplitLanding(state: TabState): boolean {
   const group = findFocusedSplitLandingGroup(state, state.activeWorktreeId)
   if (group === null) {
-    return false
+    // A pane whose tabs are all folded workers lands with nothing selected; Close keeps it and says why.
+    const worktreeId = state.activeWorktreeId
+    const groupId = worktreeId && state.activeGroupIdByWorktree[worktreeId]
+    const focused =
+      worktreeId &&
+      state.groupsByWorktree[worktreeId]?.find((candidate) => candidate.id === groupId)
+    return Boolean(
+      worktreeId &&
+      focused &&
+      focused.activeTabId === null &&
+      keepWorkerPaneOnClose(worktreeId, focused.id)
+    )
+  }
+  if (keepWorkerPaneOnClose(group.worktreeId, group.id)) {
+    return true
   }
   // Closing a sole chooser empties the workspace, which then lands like a last-tab close.
   const whenEmptied = captureWorkspaceEmptiedReaction(group.worktreeId)
@@ -151,7 +170,9 @@ export function moveActiveTab(worktreeId: string | null, direction: -1 | 1): boo
     return false
   }
   // Step past visible neighbors only, so a stale order entry never swallows the move.
-  const visibleTabIds = getActiveTabNavOrder(state, worktreeId).map((ref) => ref.tabId)
+  const visibleTabIds = getActiveTabNavOrder(state, worktreeId, {}, (id) =>
+    selectFoldedWorkerTabIds(state, worktreeId, id)
+  ).map((ref) => ref.tabId)
   const index = visibleTabIds.indexOf(tabId)
   const neighborId = index === -1 ? undefined : visibleTabIds[index + direction]
   if (!neighborId || !group.tabOrder.includes(neighborId)) {
@@ -203,7 +224,7 @@ export function dispatchWorkspaceTabCommand(command: WorkspaceTabCommand): boole
     if (command.context === 'terminal' && tab.contentType === 'terminal') {
       return false
     }
-    if (isBotChatTab(tab)) {
+    if (isBotChatTab(tab) || handleWorkerTabUserClose(tab.id, command.bulk)) {
       return true
     }
     const commands = createWorkspaceTabCloseCommands({

@@ -73,6 +73,22 @@ export function tabActivationPatch(
   }
 }
 
+/** Opening a worker tab that isn't kept makes it its pane's one peek, re-folding the previous peek. */
+function workerTabPeekPatch(
+  state: Pick<AppState, 'workerTabPeekByGroupId' | 'workerTabStripChoiceByWorktree'>,
+  tab: Tab,
+  worktreeId: string
+): Partial<Pick<AppState, 'workerTabPeekByGroupId'>> {
+  if (
+    !tab.workerTab ||
+    state.workerTabStripChoiceByWorktree?.[worktreeId]?.[tab.id] === 'kept' ||
+    state.workerTabPeekByGroupId?.[tab.groupId] === tab.id
+  ) {
+    return {}
+  }
+  return { workerTabPeekByGroupId: { ...state.workerTabPeekByGroupId, [tab.groupId]: tab.id } }
+}
+
 export function createTabsFocusActions(
   _set: TabsSliceSet,
   get: TabsSliceGet
@@ -113,7 +129,10 @@ export function createTabsFocusActions(
         if (ORCA_LAYOUT_OWNER_IS_MAIN && tab.isPreview && !opts?.preservePreview) {
           promoted.push(tab)
         }
-        return tabActivationPatch(state, tab, worktreeId, opts, endsPreviewHere(state, worktreeId))
+        return {
+          ...tabActivationPatch(state, tab, worktreeId, opts, endsPreviewHere(state, worktreeId)),
+          ...workerTabPeekPatch(state, tab, worktreeId)
+        }
       })
       // Switch point: main makes the activated preview permanent; its frame clears the flag.
       if (ORCA_LAYOUT_OWNER_IS_MAIN && promoted.length > 0) {

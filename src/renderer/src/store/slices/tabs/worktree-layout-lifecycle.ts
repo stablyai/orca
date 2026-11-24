@@ -1,3 +1,4 @@
+import { withoutFoldedWorkerTabs } from '@/components/tab-bar/worker-tab-folding'
 import {
   retirePendingWorkspaceTabs,
   hasPendingEntityTab
@@ -162,7 +163,7 @@ export function removeWorktreeLayout(
               activeTabId:
                 group.activeTabId && !removedPlacementIds.has(group.activeTabId)
                   ? group.activeTabId
-                  : (tabOrder[0] ?? null)
+                  : (withoutFoldedWorkerTabs(s, id, group.id, tabOrder)[0] ?? null)
             }
           })
         : groups

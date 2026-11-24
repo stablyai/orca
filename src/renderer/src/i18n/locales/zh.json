@@ -30176,5 +30176,79 @@
       "workerOwed": "仍有编排在等待此聊天",
       "home": "托管智能体的主聊天无法删除"
     }
+  },
+  "workerTabs": {
+    "keep": "保留标签页",
+    "preview": "预览",
+    "hide": "隐藏标签页",
+    "hideRunning": "隐藏标签页 · 继续运行",
+    "hideToast": {
+      "show": "显示",
+      "running": "仍在运行 · 可从侧边栏打开",
+      "unreachable": "已隐藏 · 可在标签页搜索中找到"
+    },
+    "stop": {
+      "refused": "无法停止此工作代理",
+      "notConfirmed": "无法确认工作代理已停止",
+      "helpers": "部分辅助代理未停止"
+    },
+    "confirm": {
+      "stopTitle": "停止此工作代理？其任务将结束。",
+      "stop": "停止",
+      "closeRunningTitle": "停止此工作代理并关闭其标签页？",
+      "stopAndClose": "停止并关闭",
+      "closeFinishedTitle": "关闭此工作代理的标签页？其中仍在运行的内容都将停止。",
+      "close": "关闭",
+      "cancel": "取消"
+    },
+    "menu": {
+      "keep": "保留标签页",
+      "hide": "隐藏标签页",
+      "stop": "停止工作代理",
+      "closeTab": "关闭标签页",
+      "workers": "工作代理…"
+    },
+    "state": {
+      "needsYou": "需要你处理",
+      "failed": "失败",
+      "running": "运行中",
+      "done": "已完成",
+      "stopped": "已停止"
+    },
+    "list": {
+      "title": "工作代理",
+      "via": "通过 {{title}}",
+      "viaClosed": "通过已关闭的工作代理",
+      "close": "关闭 {{title}}",
+      "stop": "停止 {{title}}"
+    },
+    "badge": {
+      "label_one": "{{count}} 个工作代理需要你处理",
+      "label_other": "{{count}} 个工作代理需要你处理"
+    },
+    "setting": {
+      "title": "工作代理标签页",
+      "description": "仅在打开工作代理时显示标签页，或始终显示。",
+      "openWhenClicked": "点击时打开",
+      "alwaysOpen": "始终打开",
+      "keywordWorker": "工作代理",
+      "keywordOrchestration": "编排",
+      "keywordCoordinator": "协调代理",
+      "keywordHideTabs": "隐藏标签页"
+    },
+    "move": {
+      "refused": "无法移动此窗格 · 该标签页属于另一工作代理"
+    },
+    "remote": {
+      "stopReason": "请在启动它的电脑上停止",
+      "stopFromHome": "无法在此处停止此工作代理 · 请在启动它的电脑上停止"
+    },
+    "closeKept": {
+      "tab": "此标签页有工作代理 · 请先关闭你自己的终端窗格",
+      "pane_one": "此窗格有工作代理 · 请先停止或关闭它",
+      "pane_other": "此窗格有 {{count}} 个工作代理 · 请先停止或关闭它们",
+      "bulk_one": "已保留 {{count}} 个含工作代理的标签页",
+      "bulk_other": "已保留 {{count}} 个含工作代理的标签页"
+    }
   }
 }

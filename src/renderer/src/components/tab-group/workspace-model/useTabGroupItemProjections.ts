@@ -1,3 +1,4 @@
+import { workerTabStripOrder } from '../../../../../shared/workspace-layout/tab-groups/worker-tab-strip-order'
 import { useMemo } from 'react'
 import type { OpenFile } from '@/store/slices/editor/types/open-file'
 import type { BrowserWorkspace } from '../../../../../shared/browser/workspaces/browser-workspace-types'
@@ -31,11 +32,16 @@ type TerminalTabItem = TerminalTab & { unifiedTabId: string }
 export function useTabGroupItemProjections({
   groupId,
   worktreeId,
-  worktreeState
+  worktreeState,
+  foldedTabIds,
+  peekTabId
 }: {
   groupId: string
   worktreeId: string
   worktreeState: TabGroupWorktreeSnapshot
+  /** Worker tabs folded out of this pane's strip; they stay in `groupTabs` for close and activation. */
+  foldedTabIds?: ReadonlySet<string>
+  peekTabId?: string
 }) {
   const group = useMemo(
     () => worktreeState.groups.find((item) => item.id === groupId) ?? null,
@@ -44,6 +50,13 @@ export function useTabGroupItemProjections({
   const groupTabs = useMemo(
     () => worktreeState.unifiedTabs.filter((item) => item.groupId === groupId),
     [groupId, worktreeState.unifiedTabs]
+  )
+  const stripTabs = useMemo(
+    () =>
+      foldedTabIds && foldedTabIds.size > 0
+        ? groupTabs.filter((item) => !foldedTabIds.has(item.id))
+        : groupTabs,
+    [foldedTabIds, groupTabs]
   )
   const activeItemId = group?.activeTabId ?? null
   const activeTab = groupTabs.find((item) => item.id === activeItemId) ?? null
@@ -60,13 +73,14 @@ export function useTabGroupItemProjections({
 
   const terminalTabs = useMemo<TerminalTabItem[]>(
     () =>
-      groupTabs
+      stripTabs
         .filter((item) => item.contentType === 'terminal')
         .map((item) => {
           const terminalTab = terminalTabById.get(item.entityId)
           return {
             id: item.entityId,
             unifiedTabId: item.id,
+            ...(item.workerTab ? { workerTab: item.workerTab } : {}),
             ptyId: terminalTab?.ptyId ?? null,
             worktreeId,
             title: resolveUnifiedTabLabel(
@@ -95,7 +109,7 @@ export function useTabGroupItemProjections({
             pendingActivationSpawn: terminalTab?.pendingActivationSpawn
           }
         }),
-    [groupTabs, terminalTabById, worktreeId, worktreeState.generatedTabTitlesEnabled]
+    [stripTabs, terminalTabById, worktreeId, worktreeState.generatedTabTitlesEnabled]
   )
 
   const editorItems = useMemo<GroupEditorItem[]>(
@@ -124,25 +138,25 @@ export function useTabGroupItemProjections({
 
   const agentSessionItems = useMemo<GroupAgentSessionItem[]>(
     () =>
-      groupTabs.filter(
+      stripTabs.filter(
         (item): item is GroupAgentSessionItem => item.contentType === 'agent-session'
       ),
-    [groupTabs]
+    [stripTabs]
   )
 
-  const tabBarOrder = useMemo(
-    () =>
-      (group?.tabOrder ?? []).map((itemId) => {
-        const item = groupTabById.get(itemId)
-        if (!item) {
-          return itemId
-        }
-        return item.contentType === 'terminal' || item.contentType === 'browser'
-          ? item.entityId
-          : item.id
-      }),
-    [group, groupTabById]
-  )
+  const tabBarOrder = useMemo(() => {
+    const order = workerTabStripOrder(
+      (group?.tabOrder ?? []).filter((id) => !foldedTabIds?.has(id)),
+      groupTabs,
+      peekTabId
+    )
+    return order.map((id) => {
+      const item = groupTabById.get(id)
+      return item?.contentType === 'terminal' || item?.contentType === 'browser'
+        ? item.entityId
+        : id
+    })
+  }, [foldedTabIds, group, groupTabById, groupTabs, peekTabId])
 
   return {
     group,

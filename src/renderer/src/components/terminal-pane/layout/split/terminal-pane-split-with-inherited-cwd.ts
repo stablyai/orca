@@ -1,3 +1,4 @@
+import { keepPlacedWorkerTab } from '@/components/tab-bar/worker-tab-keep-on-input'
 import type { TerminalPaneSplitSource } from '../../../../../../shared/feature-education/feature-education-telemetry'
 import type { ManagedPane } from '@/lib/pane-manager/pane-manager-types'
 import type { PaneManager } from '@/lib/pane-manager/pane-manager'
@@ -32,6 +33,7 @@ type SplitArgs = {
 }
 
 export function splitTerminalPaneWithInheritedCwd(args: SplitArgs): void {
+  keepPlacedWorkerTab(args.worktreeId, args.tabId)
   const sourcePane = { worktreeId: args.worktreeId, tabId: args.tabId, leafId: args.pane.leafId }
   // Why the host's binding: a pane whose attach is still in flight has no transport id yet.
   const ptyId =

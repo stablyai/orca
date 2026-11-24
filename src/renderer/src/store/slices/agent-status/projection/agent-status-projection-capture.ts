@@ -4,6 +4,7 @@ export function captureProjectionState(
   data: AgentStatusProjectionState
 ): AgentStatusProjectionState {
   const captured = new AgentStatusProjectionState()
+  captured.membershipVersion = data.membershipVersion
   Object.assign(captured.tabTypes, data.tabTypes)
   Object.assign(captured.unsafeTabs, data.unsafeTabs)
   captured.tabProjection = {

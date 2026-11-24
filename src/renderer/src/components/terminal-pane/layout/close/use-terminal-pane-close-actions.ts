@@ -1,3 +1,4 @@
+import { handleWorkerTabUserClose } from '@/components/tab-bar/worker-tab-user-close'
 import { captureTerminalPaneNoticeRetirement } from '../../mounting/terminal-pane-notice-retirement'
 import { useTerminalSelectionSearch } from '../../search/use-terminal-selection-search'
 import { useCallback, useEffect, useRef } from 'react'
@@ -20,6 +21,10 @@ import { sendUserPaneCloseToLayoutOwner } from './layout-owner-pane-close-comman
 import type { TerminalTabCloseIntent } from '../../../terminal/tab-lifecycle/terminal-tab-close-intent'
 import type { useTerminalPaneTabDetachActions } from '../detach/use-terminal-pane-tab-detach-actions'
 
+/** A pane's own header/menu close is explicit, so its last pane closes a worker's tab as main does; Cmd/Ctrl+W is not. */
+type PaneCloseOrigin = 'explicit' | 'keyboard'
+const EXPLICIT_TAB_CLOSE = { endsWorker: true } as const
+
 export function useTerminalPaneCloseActions(controller: TerminalPaneBindingController) {
   const confirmedCloseRef = useRef<(() => void) | null>(null)
   const {
@@ -38,7 +43,12 @@ export function useTerminalPaneCloseActions(controller: TerminalPaneBindingContr
   } = controller
   // The window's half of a split pane's close: its transport, status and pane go.
   const closePaneLocally = useCallback(
-    (paneId: number, committedLeafId: string | undefined, reason: TerminalTabCloseIntent) => {
+    (
+      paneId: number,
+      committedLeafId: string | undefined,
+      reason: TerminalTabCloseIntent,
+      origin?: PaneCloseOrigin
+    ) => {
       const manager = managerRef.current
       // Why the pane check: main's answer can land after the pane already went.
       if (!manager || (committedLeafId && manager.getLeafId(paneId) !== committedLeafId)) {
@@ -46,7 +56,7 @@ export function useTerminalPaneCloseActions(controller: TerminalPaneBindingContr
       }
       // A sibling went while main answered: this pane is now the tab's last, so its close closes the tab.
       if (committedLeafId && manager.getPanes().length <= 1) {
-        onCloseTab(reason)
+        onCloseTab(reason, origin === 'explicit' ? EXPLICIT_TAB_CLOSE : undefined)
         return
       }
       const ptyId = paneTransportsRef.current.get(paneId)?.getPtyId() ?? null
@@ -102,13 +112,14 @@ export function useTerminalPaneCloseActions(controller: TerminalPaneBindingContr
     ]
   )
   const executeClosePane = useCallback(
-    (paneId: number, reason: TerminalTabCloseIntent) => {
+    (paneId: number, reason: TerminalTabCloseIntent, origin?: PaneCloseOrigin) => {
       const manager = managerRef.current
       if (!manager) {
         return
       }
+      const tabCloseOptions = origin === 'explicit' ? EXPLICIT_TAB_CLOSE : undefined
       if (manager.getPanes().length <= 1) {
-        onCloseTab(reason)
+        onCloseTab(reason, tabCloseOptions)
         return
       }
       const leafId = manager.getLeafId(paneId)
@@ -134,14 +145,15 @@ export function useTerminalPaneCloseActions(controller: TerminalPaneBindingContr
           {
             onAcceptedClose: retireNotice,
             getManager: () => managerRef.current,
-            closeTab: () => onCloseTab(reason),
-            closePaneLocally: (id, committedLeafId) => closePaneLocally(id, committedLeafId, reason)
+            closeTab: () => onCloseTab(reason, tabCloseOptions),
+            closePaneLocally: (id, committedLeafId) =>
+              closePaneLocally(id, committedLeafId, reason, origin)
           }
         )
       ) {
         return
       }
-      closePaneLocally(paneId, undefined, reason)
+      closePaneLocally(paneId, undefined, reason, origin)
     },
     [closePaneLocally, onCloseTab, tabId, worktreeId, managerRef, paneTransportsRef]
   )
@@ -150,22 +162,22 @@ export function useTerminalPaneCloseActions(controller: TerminalPaneBindingContr
     [tabId, managerRef]
   )
   const handleRequestClosePane = useCallback(
-    (paneId: number) => {
+    (paneId: number, origin: PaneCloseOrigin = 'explicit') => {
       if ((managerRef.current?.getPanes().length ?? 0) <= 1) {
-        executeClosePane(paneId, 'user')
+        executeClosePane(paneId, 'user', origin)
         return
       }
       const transport = paneTransportsRef.current.get(paneId)
       const pending = capturePendingTerminalPaneClose(controller, paneId, useAppStore.getState)
       const ptyId = transport?.getPtyId() ?? pending?.ptyId
       if (!ptyId) {
-        executeClosePane(paneId, 'user')
+        executeClosePane(paneId, 'user', origin)
         return
       }
       const settings = useAppStore.getState().settings
       const close = (): void => {
         if (!pending || pending.isCurrent()) {
-          executeClosePane(paneId, 'user')
+          executeClosePane(paneId, 'user', origin)
         }
       }
       let decided = false
@@ -218,14 +230,24 @@ export function useTerminalPaneCloseActions(controller: TerminalPaneBindingContr
     // oxlint-disable-next-line react-hooks/exhaustive-deps -- Preserve the pre-split dependency contract.
     [executeClosePane, getCloseDialogCopyKind]
   )
+  // Cmd/Ctrl+W closes the focused pane, except in a worker's tab: a pure worker hides, a mixed tab stays open.
+  const handleKeyboardRequestClosePane = useCallback(
+    (paneId: number) => {
+      if (handleWorkerTabUserClose(tabId)) {
+        return
+      }
+      handleRequestClosePane(paneId, 'keyboard')
+    },
+    [handleRequestClosePane, tabId]
+  )
 
   const closeActivePane = useCallback((): void => {
     const manager = managerRef.current
     const pane = manager?.getActivePane() ?? manager?.getPanes()[0]
     if (pane) {
-      handleRequestClosePane(pane.id)
+      handleKeyboardRequestClosePane(pane.id)
     }
-  }, [handleRequestClosePane, managerRef])
+  }, [handleKeyboardRequestClosePane, managerRef])
   useEffect(
     () => onActiveTerminalPaneCloseRequest(tabId, closeActivePane),
     [closeActivePane, tabId]
@@ -258,6 +280,7 @@ export function useTerminalPaneCloseActions(controller: TerminalPaneBindingContr
     executeClosePane,
     getCloseDialogCopyKind,
     handleRequestClosePane,
+    handleKeyboardRequestClosePane,
     handleSearchSelectedText,
     handleConfirmClose,
     handleCancelClose

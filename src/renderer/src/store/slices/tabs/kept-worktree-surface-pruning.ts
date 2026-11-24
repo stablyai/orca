@@ -1,3 +1,5 @@
+import { selectFoldedWorkerTabIds } from '@/components/tab-bar/worker-tab-folding'
+import { pickVisibleLandingTabId } from '../../../../../shared/workspace-layout/tab-groups/worker-tab-visibility'
 import type { AppState } from '../../types'
 import {
   toVisibleTabType,
@@ -30,7 +32,7 @@ function isRemovedUnifiedTab(tab: Tab, removed: KeptWorktreeSurfaceRemoval): boo
   return toVisibleTabType(tab.contentType) === 'editor' && removed.fileIds.has(tab.entityId)
 }
 
-function pruneGroup(group: TabGroup, removedIds: ReadonlySet<string>): TabGroup {
+function pruneGroup(group: TabGroup, removedIds: ReadonlySet<string>, state: AppState): TabGroup {
   if (!group.tabOrder.some((id) => removedIds.has(id))) {
     return group
   }
@@ -39,7 +41,11 @@ function pruneGroup(group: TabGroup, removedIds: ReadonlySet<string>): TabGroup 
   // Why MRU first: closing the active tab lands on the previously active one, as closeUnifiedTab does.
   const activeTabId =
     group.activeTabId && removedIds.has(group.activeTabId)
-      ? (recentTabIds.at(-1) ?? tabOrder[0] ?? null)
+      ? pickVisibleLandingTabId(
+          tabOrder,
+          recentTabIds,
+          selectFoldedWorkerTabIds(state, group.worktreeId, group.id)
+        )
       : group.activeTabId
   return {
     ...group,
@@ -93,10 +99,7 @@ function withoutIds<T extends { id: string }>(items: T[], ids: ReadonlySet<strin
 }
 
 /** Per-field pruners for workspaces that stay while some of their surfaces leave. */
-export function createKeptWorktreeSurfacePruners(
-  s: Pick<AppState, 'unifiedTabsByWorktree'>,
-  removed: KeptWorktreeSurfaceRemoval
-) {
+export function createKeptWorktreeSurfacePruners(s: AppState, removed: KeptWorktreeSurfaceRemoval) {
   const { worktreeIds } = removed
   const removedUnifiedIds = new Set(
     [...worktreeIds].flatMap((worktreeId) =>
@@ -119,7 +122,7 @@ export function createKeptWorktreeSurfacePruners(
         typeof value === 'string' && ids.has(value) ? undefined : value
       )
   const pruneGroups = (groups: TabGroup[]): TabGroup[] => {
-    const next = groups.map((group) => pruneGroup(group, removedIds))
+    const next = groups.map((group) => pruneGroup(group, removedIds, s))
     return next.every((group, index) => group === groups[index]) ? groups : next
   }
   return {

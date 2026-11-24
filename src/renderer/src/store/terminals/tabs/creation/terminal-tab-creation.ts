@@ -128,6 +128,7 @@ export function createTerminalTabCreationActions(
           ...(startupCwd && startupCwd.length > 0 ? { startupCwd } : {}),
           ...(options?.forceHostRuntime ? { forceHostRuntime: true } : {}),
           ...(options?.launchAgent ? { launchAgent: options.launchAgent } : {}),
+          ...(options?.workerTab ? { workerTab: options.workerTab } : {}),
           ...(options?.agentLaunchPane ? { agentLaunchPane: options.agentLaunchPane } : {}),
           // Tag click-driven spawn so bind cannot reorder Recent/Smart via activity/sortEpoch.
           ...(options?.pendingActivationSpawn ? { pendingActivationSpawn: true } : {})
@@ -210,7 +211,8 @@ export function createTerminalTabCreationActions(
           sortOrder: cleanedGroupOrder.length,
           createdAt: tab.createdAt,
           // Why: omit for non-agent tabs so they keep the implicit 'terminal' view mode.
-          ...(options?.viewMode ? { viewMode: options.viewMode } : {})
+          ...(options?.viewMode ? { viewMode: options.viewMode } : {}),
+          ...(options?.workerTab ? { workerTab: options.workerTab } : {})
         }
         const nextGroupOrder = dedupeTabOrder([...cleanedGroupOrder, unifiedTab.id])
         const nextRecent = shouldActivate
@@ -245,7 +247,8 @@ export function createTerminalTabCreationActions(
                 ...cleanedTargetGroup,
                 activeTabId: shouldActivate
                   ? unifiedTab.id
-                  : (cleanedGroupActiveTabId ?? unifiedTab.id),
+                  : // A background worker never takes an empty pane's focus; the pane keeps its landing.
+                    (cleanedGroupActiveTabId ?? (options?.workerTab ? null : unifiedTab.id)),
                 tabOrder: nextGroupOrder,
                 recentTabIds: nextRecent
               })

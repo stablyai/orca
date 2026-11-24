@@ -1,3 +1,4 @@
+import { recordWorkerTabFeed } from '@/components/tab-bar/worker-tab-feed-grace'
 import type { AgentStatusIpcPayload } from '../../../../../shared/agent-status/contracts/agent-status-ipc-payload'
 import { syncAgentHookCompletionNotificationsForStoreUpdate } from '../../../components/terminal-pane/agent-completion/hook-lane/agent-hook-completion-notifications'
 import { registerAgentStatusListeners } from './agent-status-listeners'
@@ -138,6 +139,7 @@ export function registerAgentStatusIpcBridge(unsubs: (() => void)[]): AgentStatu
         }
         applyAgentStatusBatch(entries.map((data) => ({ data, replay: true })))
         startupSnapshot.settle()
+        recordWorkerTabFeed('local', 'status')
         const getMigrationUnsupportedSnapshot =
           window.api.agentStatus.getMigrationUnsupportedSnapshot
         if (typeof getMigrationUnsupportedSnapshot !== 'function') {
@@ -166,6 +168,7 @@ export function registerAgentStatusIpcBridge(unsubs: (() => void)[]): AgentStatu
         // Latch failure until readiness changes; retrying on every store update would storm a persistently failing IPC.
         if (!disposed && requestId === snapshotRequestId) {
           startupSnapshot.settle()
+          recordWorkerTabFeed('local', 'failed')
         }
         console.warn('[agent-status] failed to load startup snapshot:', err)
       })

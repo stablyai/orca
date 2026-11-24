@@ -1,3 +1,4 @@
+import { showWorkerTabMoveRefusal } from '@/components/tab-bar/worker-tab-move-refusal'
 // Store-free so store slices can send; `layout-owner-command` reads the store for other callers.
 import {
   runtimeEnvironmentIdForWorkspaceOwner,
@@ -5,10 +6,8 @@ import {
 } from '@/lib/workspace/ownership/resolve-owner'
 import { callLayoutApply } from '@/runtime/workspace-layout/commands/layout-apply-call'
 import { holdTabPaneTree } from '@/runtime/workspace-layout/intents/layout-owner-pane-tree-holds'
-import {
-  holdDrawnTabs,
-  type DrawnTabHold
-} from '@/runtime/workspace-layout/intents/layout-owner-drawn-tab-holds'
+import { holdDrawnTabs } from '@/runtime/workspace-layout/intents/layout-owner-drawn-tab-holds'
+import { drawnTabHolds } from './layout-command-drawn-tabs'
 import {
   holdsPaneTree,
   releaseLayoutApplyHolds
@@ -190,49 +189,6 @@ export type LayoutApplyHandlers = {
   drawn?: true
 }
 
-/** The tabs, by workspace, that a command the window already drew changes. */
-function drawnTabHolds(worktreeId: string, command: WindowLayoutCommand): DrawnTabHold[] {
-  switch (command.type) {
-    case 'closeTabs':
-      return [{ workspace: worktreeId, ids: command.tabIds }]
-    case 'splitGroup':
-      return [{ workspace: worktreeId, ids: [command.tabId], groupLayout: true }]
-    case 'moveTab':
-    case 'renameTab':
-    case 'setTabProps':
-    case 'createTerminalTab':
-      return [{ workspace: worktreeId, ids: [command.tabId] }]
-    case 'setGroupRatios':
-      return [{ workspace: worktreeId, ids: [], groupLayout: true }]
-    // Pane commands hold their drawn tree; records are not frame-drawn. Editor/browser/chat/simulator opens and page changes send before drawing.
-    case 'openBrowserTab':
-    case 'openBrowserPage':
-    case 'closeBrowserPage':
-    case 'replaceTabContent':
-    case 'setBrowserTabProfile':
-    case 'openAgentSessionTab':
-    case 'openSimulatorTab':
-    case 'openRoomTab':
-    case 'openEditorTab':
-    case 'promotePreviewTab':
-    case 'moveTabToWorkspace':
-    case 'renameEditorFiles':
-    case 'splitPane':
-    case 'closePane':
-    case 'renamePane':
-    case 'equalizePanes':
-    case 'movePane':
-    case 'setPaneRatios':
-    case 'setChatPane':
-    case 'movePaneToNewTab':
-    case 'sleep':
-    case 'wake':
-    case 'startPane':
-    case 'setDefaultTabsApplied':
-      return []
-  }
-}
-
 /** Main applies first; apply shows its result after the matching frame. Only possible paired-server ownership permits asToday (#18202); other refusals/thrown calls log and retain main’s drawing because window saves no longer persist changes. Frame-drawn paired workspaces route SERVER_ROUTED_LAYOUT_COMMANDS to their own main; other cases return false for existing caller behavior. */
 export function sendLayoutApply(
   state: Parameters<typeof runtimeEnvironmentIdUnlessTwin>[0] & ServerMoveDrawnTabs,
@@ -298,6 +254,7 @@ function handleReply(
   } else if (refusalActsAsToday(state, worktreeId, reply.code)) {
     handlers.asToday()
   } else {
+    showWorkerTabMoveRefusal(reply.code)
     console.warn(`[layout-owner] ${command.type} refused:`, reply.code)
     handlers.refused?.(reply.code)
   }

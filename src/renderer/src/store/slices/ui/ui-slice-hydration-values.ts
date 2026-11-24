@@ -1,3 +1,6 @@
+import { readWorkerTabWindowChoices } from '@/components/tab-bar/worker-tab-window-choices'
+import { normalizeWorkerTabsUiPreferences } from '../../../../../shared/orchestration/workers/worker-tabs-ui-preferences'
+import type { WorkerTabViewSlice } from '../tabs/worker-tab-view-slice'
 import type { PersistedUIState } from '../../../../../shared/orca-profiles/persisted-ui-state-types'
 import type {
   TaskResumeState,
@@ -168,9 +171,20 @@ export function hydrateAgentReadState(
   ui: PersistedUIState
 ): Pick<
   UISlice,
-  'acknowledgedAgentsByPaneKey' | 'activityClearedAtByPaneKey' | 'manuallyUnreadTurnsByPaneKey'
-> {
+  | 'acknowledgedAgentsByPaneKey'
+  | 'activityClearedAtByPaneKey'
+  | 'manuallyUnreadTurnsByPaneKey'
+  | 'showAgentModels'
+  | 'workerTabsMode'
+  | 'workerTabHideHintShown'
+> &
+  Pick<WorkerTabViewSlice, 'workerTabStripChoiceByWorktree'> {
+  const workerTabs = normalizeWorkerTabsUiPreferences(ui)
   return {
+    showAgentModels: ui.showAgentModels !== false,
+    workerTabsMode: workerTabs.workerTabsMode,
+    workerTabHideHintShown: workerTabs.workerTabHideHintShown,
+    workerTabStripChoiceByWorktree: readWorkerTabWindowChoices(),
     acknowledgedAgentsByPaneKey: sanitizePaneKeyTimestampRecord(ui.acknowledgedAgentsByPaneKey),
     activityClearedAtByPaneKey: sanitizePaneKeyTimestampRecord(ui.activityClearedAtByPaneKey),
     manuallyUnreadTurnsByPaneKey: sanitizePaneKeyTimestampRecord(ui.manuallyUnreadTurnsByPaneKey)

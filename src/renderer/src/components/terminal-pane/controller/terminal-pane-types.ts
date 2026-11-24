@@ -20,5 +20,6 @@ export type TerminalPaneProps = {
   showSplitButton?: boolean
   onPtyExit: (ptyId: string, exitCode?: number) => void
   /** Closing the tab's last pane closes the tab; the caller names who asked. */
-  onCloseTab: (reason: TerminalTabCloseIntent) => void
+  /** `endsWorker`: a pane's own explicit close, so a worker's last pane closes its tab as main does. */
+  onCloseTab: (reason: TerminalTabCloseIntent, options?: { endsWorker?: true }) => void
 }

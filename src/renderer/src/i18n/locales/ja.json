@@ -25955,5 +25955,79 @@
   },
   "agentCliUpdate": {
     "thisComputer": "このコンピューター"
+  },
+  "workerTabs": {
+    "keep": "タブを保持",
+    "preview": "プレビュー",
+    "hide": "タブを隠す",
+    "hideRunning": "タブを隠す · 実行は継続",
+    "hideToast": {
+      "show": "表示",
+      "running": "実行中 · サイドバーから開けます",
+      "unreachable": "非表示 · タブ検索から探せます"
+    },
+    "stop": {
+      "refused": "このワーカーを停止できませんでした",
+      "notConfirmed": "ワーカーの停止を確認できませんでした",
+      "helpers": "一部のヘルパーが停止しませんでした"
+    },
+    "confirm": {
+      "stopTitle": "このワーカーを停止しますか？タスクが終了します。",
+      "stop": "停止",
+      "closeRunningTitle": "このワーカーを停止してタブを閉じますか？",
+      "stopAndClose": "停止して閉じる",
+      "closeFinishedTitle": "このワーカーのタブを閉じますか？タブ内で実行中のものはすべて停止します。",
+      "close": "閉じる",
+      "cancel": "キャンセル"
+    },
+    "menu": {
+      "keep": "タブを保持",
+      "hide": "タブを隠す",
+      "stop": "ワーカーを停止",
+      "closeTab": "タブを閉じる",
+      "workers": "ワーカー…"
+    },
+    "state": {
+      "needsYou": "対応が必要",
+      "failed": "失敗",
+      "running": "実行中",
+      "done": "完了",
+      "stopped": "停止済み"
+    },
+    "list": {
+      "title": "ワーカー",
+      "via": "{{title}} 経由",
+      "viaClosed": "閉じたワーカー経由",
+      "close": "{{title}} を閉じる",
+      "stop": "{{title}} を停止"
+    },
+    "badge": {
+      "label_one": "{{count}} 件のワーカーに対応が必要",
+      "label_other": "{{count}} 件のワーカーに対応が必要"
+    },
+    "setting": {
+      "title": "ワーカーのタブ",
+      "description": "ワーカーを開いたときだけ、または常にタブを表示します。",
+      "openWhenClicked": "クリック時に開く",
+      "alwaysOpen": "常に開く",
+      "keywordWorker": "ワーカー",
+      "keywordOrchestration": "オーケストレーション",
+      "keywordCoordinator": "コーディネーター",
+      "keywordHideTabs": "タブを隠す"
+    },
+    "move": {
+      "refused": "このペインは移動できません · 移動先のタブは別のワーカーに属しています"
+    },
+    "remote": {
+      "stopReason": "開始したコンピューターで停止してください",
+      "stopFromHome": "ここではこのワーカーを停止できません · 開始したコンピューターで停止してください"
+    },
+    "closeKept": {
+      "tab": "このタブにはワーカーがあります · 先にご自身のターミナルペインを閉じてください",
+      "pane_one": "このペインにはワーカーがあります · 先に停止するか閉じてください",
+      "pane_other": "このペインには {{count}} 件のワーカーがあります · 先に停止するか閉じてください",
+      "bulk_one": "ワーカーのあるタブ {{count}} 件を残しました",
+      "bulk_other": "ワーカーのあるタブ {{count}} 件を残しました"
+    }
   }
 }

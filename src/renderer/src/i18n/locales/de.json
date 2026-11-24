@@ -24586,5 +24586,79 @@
   },
   "agentCliUpdate": {
     "thisComputer": "Dieser Computer"
+  },
+  "workerTabs": {
+    "keep": "Tab behalten",
+    "preview": "Vorschau",
+    "hide": "Tab ausblenden",
+    "hideRunning": "Tab ausblenden · läuft weiter",
+    "hideToast": {
+      "show": "Anzeigen",
+      "running": "Läuft weiter · über die Seitenleiste öffnen",
+      "unreachable": "Ausgeblendet · in der Tab-Suche finden"
+    },
+    "stop": {
+      "refused": "Dieser Worker konnte nicht gestoppt werden",
+      "notConfirmed": "Der Stopp des Workers konnte nicht bestätigt werden",
+      "helpers": "Einige Helfer wurden nicht gestoppt"
+    },
+    "confirm": {
+      "stopTitle": "Diesen Worker stoppen? Seine Aufgabe endet.",
+      "stop": "Stoppen",
+      "closeRunningTitle": "Diesen Worker stoppen und seinen Tab schließen?",
+      "stopAndClose": "Stoppen und schließen",
+      "closeFinishedTitle": "Tab dieses Workers schließen? Alles, was darin noch läuft, wird gestoppt.",
+      "close": "Schließen",
+      "cancel": "Abbrechen"
+    },
+    "menu": {
+      "keep": "Tab behalten",
+      "hide": "Tab ausblenden",
+      "stop": "Worker stoppen",
+      "closeTab": "Tab schließen",
+      "workers": "Worker…"
+    },
+    "state": {
+      "needsYou": "Benötigt dich",
+      "failed": "Fehlgeschlagen",
+      "running": "Läuft",
+      "done": "Fertig",
+      "stopped": "Gestoppt"
+    },
+    "list": {
+      "title": "Worker",
+      "via": "über {{title}}",
+      "viaClosed": "über einen geschlossenen Worker",
+      "close": "{{title}} schließen",
+      "stop": "{{title}} stoppen"
+    },
+    "badge": {
+      "label_one": "{{count}} Worker benötigt dich",
+      "label_other": "{{count}} Worker benötigen dich"
+    },
+    "setting": {
+      "title": "Worker-Tabs",
+      "description": "Worker erhalten einen Tab beim Öffnen oder immer.",
+      "openWhenClicked": "Beim Anklicken öffnen",
+      "alwaysOpen": "Immer öffnen",
+      "keywordWorker": "Worker",
+      "keywordOrchestration": "Orchestrierung",
+      "keywordCoordinator": "Koordinator",
+      "keywordHideTabs": "Tabs ausblenden"
+    },
+    "move": {
+      "refused": "Dieser Bereich kann nicht verschoben werden · der Tab gehört zu einem anderen Worker"
+    },
+    "remote": {
+      "stopReason": "Stoppe ihn auf dem Computer, auf dem er gestartet wurde",
+      "stopFromHome": "Dieser Worker kann hier nicht gestoppt werden · stoppe ihn auf dem Computer, auf dem er gestartet wurde"
+    },
+    "closeKept": {
+      "tab": "Dieser Tab enthält einen Worker · schließe zuerst deinen Terminalbereich",
+      "pane_one": "Dieser Bereich enthält einen Worker · stoppe oder schließe ihn zuerst",
+      "pane_other": "Dieser Bereich enthält {{count}} Worker · stoppe oder schließe sie zuerst",
+      "bulk_one": "{{count}} Tab mit Worker behalten",
+      "bulk_other": "{{count}} Tabs mit Workern behalten"
+    }
   }
 }

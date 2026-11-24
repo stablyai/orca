@@ -1,3 +1,4 @@
+import { stampedTaskTitle } from '../../../../../shared/orchestration/workers/worker-tab-stamp'
 import {
   projectedStructuredChatTabSavedName,
   type StructuredChatTabNames
@@ -9,7 +10,6 @@ import type {
   WorkspaceVisibleTabType
 } from '../../../../../shared/workspace-layout/tab-groups/tab-types'
 import type { TerminalTab } from '../../../../../shared/workspace-layout/terminal-tab-types'
-import { resolveTerminalTabTitle } from '../../../../../shared/workspace-layout/tab-groups/tab-title-resolution'
 import type { OpenFile } from '../../../store/slices/editor/types/open-file'
 import { normalizeRelativePath } from '../../../../../shared/file-access/cross-platform-path'
 import { isVirtualEditorFile } from '@/store/slices/editor/tabs/editor-tab-content-type'
@@ -54,18 +54,12 @@ export type TabBarItem =
     }
 
 /** The terminal tab as the strip shows it: its title resolved against the generated-titles setting. */
-export function resolveTerminalItemTab(
-  tab: TerminalTab & { unifiedTabId?: string },
-  generatedTitlesEnabled: boolean
-): TerminalTab & { unifiedTabId?: string } {
-  return { ...tab, title: resolveTerminalTabTitle(tab, generatedTitlesEnabled, tab.title) }
-}
+export { resolveTerminalItemTab } from './tab-bar-item-label'
 
 export function resolveEditorTabGitStatus(
   file: Pick<OpenFile, 'mode' | 'relativePath'>,
   statusByRelativePath: Map<string, GitFileStatus>
 ): GitFileStatus | null {
-  // Why: a virtual tab's relativePath is its title, which can collide with a real file's path.
   if (file.relativePath === 'All Changes' || isVirtualEditorFile(file)) {
     return null
   }
@@ -82,7 +76,12 @@ export function getTabDragLabel(
   return tabItemLabel(
     item,
     generatedTitlesEnabled,
-    item.type === 'agent-session' ? item.data.customLabel?.trim() || conversationName : null,
+    item.type === 'agent-session'
+      ? item.data.customLabel?.trim() ||
+          item.data.quickCommandLabel?.trim() ||
+          stampedTaskTitle(item.data) ||
+          conversationName
+      : null,
     t
   )
 }

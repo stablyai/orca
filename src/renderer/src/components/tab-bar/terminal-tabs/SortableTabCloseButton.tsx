@@ -5,9 +5,13 @@ import { cn } from '@/lib/class-names'
 export function SortableTabCloseButton({
   tabTitle,
   isActive,
-  onClose
+  onClose,
+  label,
+  title
 }: {
   tabTitle: string
+  label?: string
+  title?: string
   isActive: boolean
   onClose: () => void
 }): React.JSX.Element {
@@ -21,9 +25,13 @@ export function SortableTabCloseButton({
           : 'text-transparent group-hover:text-muted-foreground hover:!text-foreground hover:!bg-muted focus-visible:!text-foreground focus-visible:!bg-muted'
       )}
       // Why: stable accessible name lets E2E drive the real close path instead of calling the store.
-      aria-label={t('auto.components.tab.bar.SortableTab.6df69d9388', 'Close tab {{value0}}', {
-        value0: tabTitle
-      })}
+      aria-label={
+        label ??
+        t('auto.components.tab.bar.SortableTab.6df69d9388', 'Close tab {{value0}}', {
+          value0: tabTitle
+        })
+      }
+      title={title}
       type="button"
       data-tab-close-button="true"
       onPointerDown={(e) => {

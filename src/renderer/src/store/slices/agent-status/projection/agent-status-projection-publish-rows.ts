@@ -10,6 +10,7 @@ import type { AgentStatusProjectionState } from './agent-status-projection-state
 import type { ProjectionTopology } from './agent-status-projection-topology'
 import type { ProjectionRows } from './agent-status-projection-rows'
 import { agentRowEntriesEqual } from '@/components/sidebar/workspace-card/activity/worktree-agent-live-index-patch'
+import { observeWorkerTabAgentIdentity } from '../../../../../../shared/orchestration/workers/worker-tab-agent-identity'
 
 export function publishProjectionRows(
   data: AgentStatusProjectionState,
@@ -52,6 +53,9 @@ export function publishProjectionRows(
       }
     }
     for (const row of next.rows) {
+      if (row.tab.workerTab) {
+        observeWorkerTabAgentIdentity(row.tab.workerTab, row.entry)
+      }
       if (!next.worktreeId) {
         continue
       }

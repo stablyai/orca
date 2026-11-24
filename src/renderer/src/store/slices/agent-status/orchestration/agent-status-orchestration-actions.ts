@@ -1,9 +1,14 @@
+import { recordWorkerTabFeed } from '@/components/tab-bar/worker-tab-feed-grace'
+import { linkRecordWrite } from '@/store/record-transitions/keyed-record-transitions'
 import {
   canonicalOrchestrationForRow,
   recordOrchestrationProducer,
   orchestrationProducer
 } from '@/runtime/agent-orchestration/visible-agent-orchestration'
-import { LOCAL_EXECUTION_HOST_ID } from '../../../../../../shared/execution-host/execution-host'
+import {
+  LOCAL_EXECUTION_HOST_ID,
+  toSshExecutionHostId
+} from '../../../../../../shared/execution-host/execution-host'
 import type {
   AgentStatusEntry,
   AgentStatusOrchestrationContext
@@ -32,8 +37,13 @@ export function createAgentStatusOrchestrationActions(
       set((s, changedPaneKeys) => {
         const previous = s.runtimeAgentOrchestrationByPaneKey
         const reconciled: Record<string, AgentStatusOrchestrationContext> = Object.fromEntries([])
-        let runtimeMapChanged = Object.keys(previous).length !== Object.keys(entries).length
+        const previousKeys = Object.keys(previous)
+        let runtimeMapChanged = previousKeys.length !== Object.keys(entries).length
+        let sameOrder = !runtimeMapChanged
+        let position = 0
+        let replacedRuntimeKeys: string[] | undefined
         for (const [key, context] of Object.entries(entries)) {
+          sameOrder &&= previousKeys[position++] === key
           const old = previous[key]
           const value =
             old &&
@@ -45,7 +55,11 @@ export function createAgentStatusOrchestrationActions(
           recordOrchestrationProducer(value, producerHost)
           if (value !== old) {
             runtimeMapChanged = true
+            ;(replacedRuntimeKeys ??= []).push(key)
           }
+        }
+        if (runtimeMapChanged && sameOrder && replacedRuntimeKeys) {
+          linkRecordWrite(reconciled, previous, replacedRuntimeKeys)
         }
         const canonicalState = {
           ...s,
@@ -94,6 +108,15 @@ export function createAgentStatusOrchestrationActions(
           ...(liveChanged ? { agentStatusEpoch: s.agentStatusEpoch + 1 } : {})
         }
       })
+      // The first projection, empty included, ends the restored-worker fold grace.
+      recordWorkerTabFeed(producerHost, 'orchestration')
+      if (producerHost === LOCAL_EXECUTION_HOST_ID) {
+        for (const [targetId, connection] of get().sshConnectionStates ?? []) {
+          if (connection.status === 'connected') {
+            recordWorkerTabFeed(toSshExecutionHostId(targetId), 'orchestration')
+          }
+        }
+      }
       for (const entry of generatedTitleUpdates) {
         get().setGeneratedTabTitleFromAgentPrompt(
           entry.paneKey,

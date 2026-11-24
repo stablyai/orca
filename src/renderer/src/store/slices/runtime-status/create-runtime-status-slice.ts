@@ -1,3 +1,5 @@
+import { recordWorkerTabFeed } from '@/components/tab-bar/worker-tab-feed-grace'
+import { toRuntimeExecutionHostId } from '../../../../../shared/execution-host/execution-host'
 import { createRuntimeEnvironmentStatusRetention } from './runtime-environment-status-retention'
 import type {
   RuntimeStatusSlice,
@@ -187,6 +189,12 @@ export const createRuntimeStatusSlice: (
     // An outage past the browser-host lease grace drops this desktop's hosting, so regained contact
     // must re-claim it just like a restart does.
     const contactRegained = previous?.status === null && status.status !== null
+    if (contactRegained || runtimeRestarted) {
+      recordWorkerTabFeed(toRuntimeExecutionHostId(environmentId), 'reconnect')
+    }
+    if (status.status === null) {
+      recordWorkerTabFeed(toRuntimeExecutionHostId(environmentId), 'failed')
+    }
     // Reachable status clears offline compatibility failures before reuse-flagged refetches can pin them.
     if (status.status !== null) {
       clearRecentRuntimeCompatibilityFailure(environmentId, status.status)

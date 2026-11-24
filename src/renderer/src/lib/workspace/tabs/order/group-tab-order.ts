@@ -3,9 +3,13 @@ import {
   type Tab,
   type TabGroup
 } from '../../../../../../shared/workspace-layout/tab-groups/tab-types'
+import { workerTabStripOrder } from '../../../../../../shared/workspace-layout/tab-groups/worker-tab-strip-order'
+import { selectWorkerTabPeekId } from '@/components/tab-bar/worker-tab-presentation'
 import { workspaceEditorFiles } from '@/store/slices/editor/tabs/workspace-editor-files'
 import type { AppState } from '../../../../store/types'
 import { reconcileTabOrder } from './reconcile-tab-order'
+
+const EMPTY_FOLDED: ReadonlySet<string> = new Set()
 
 export type VisibleTabRef = {
   type: 'terminal' | 'editor' | 'agent-session' | 'browser' | 'simulator'
@@ -155,9 +159,14 @@ export function getActiveTabNavOrder(
     | 'tabsByWorktree'
     | 'openFiles'
     | 'browserTabsByWorktree'
-  >,
+  > &
+    Partial<
+      Pick<AppState, 'workerTabStripChoiceByWorktree' | 'workerTabPeekByGroupId' | 'workerTabsMode'>
+    >,
   worktreeId: string,
-  ids: ActiveTabNavOrderIds = {}
+  ids: ActiveTabNavOrderIds = {},
+  /** Desktop strips skip folded worker tabs; mobile passes none and lists every tab. */
+  folded: (groupId: string) => ReadonlySet<string> = () => EMPTY_FOLDED
 ): VisibleTabRef[] {
   const terminalIds = ids.terminalIds ?? (state.tabsByWorktree[worktreeId] ?? []).map((t) => t.id)
   const editorIds =
@@ -182,8 +191,9 @@ export function getActiveTabNavOrder(
     : undefined
 
   if (group) {
+    const foldedIds = folded(group.id)
     const groupTabs = (state.unifiedTabsByWorktree[worktreeId] ?? []).filter(
-      (tab) => tab.groupId === group.id
+      (tab) => tab.groupId === group.id && !foldedIds.has(tab.id)
     )
     // Unified terminal tabs render before legacy runtime hydration; keep them cyclable so activation can restore the runtime.
     const groupTerminalIds = new Set([
@@ -191,7 +201,14 @@ export function getActiveTabNavOrder(
       ...groupTabs.filter((tab) => tab.contentType === 'terminal').map((tab) => tab.entityId)
     ])
     return getGroupVisibleTabOrder(
-      group,
+      {
+        ...group,
+        tabOrder: workerTabStripOrder(
+          group.tabOrder,
+          groupTabs,
+          selectWorkerTabPeekId(state, worktreeId, group.id)
+        )
+      },
       groupTabs,
       groupTerminalIds,
       new Set(editorIds),

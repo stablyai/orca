@@ -4009,6 +4009,18 @@
       "updateServerUnreachable": "Couldn't reach the update server. Try again in a few minutes."
     }
   },
+  "workerTabs": {
+    "badge": {
+      "label_one": "{{count}} worker needs you",
+      "label_other": "{{count}} workers need you"
+    },
+    "closeKept": {
+      "bulk_one": "Kept {{count}} tab with a worker",
+      "bulk_other": "Kept {{count}} tabs with workers",
+      "pane_one": "This pane has a worker · stop or close it first",
+      "pane_other": "This pane has {{count}} workers · stop or close them first"
+    }
+  },
   "workspace": {
     "links": {
       "linkedCount_one": "{{count}} linked",

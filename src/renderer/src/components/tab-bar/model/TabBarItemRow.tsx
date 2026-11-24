@@ -37,6 +37,7 @@ import { formatSimulatorTabLabel } from '@/lib/simulator/tabs/simulator-tab-labe
 import { botGroupRoomSessions } from '@/lib/bot-group-room-sessions'
 import { terminalTabHasUnreadActivity } from '../terminal-tabs/terminal-tab-activity-status'
 import { useTranslate } from '@/i18n/use-translate'
+import { stampedTaskTitle } from '../../../../../shared/orchestration/workers/worker-tab-stamp'
 
 // Why only values and `actions`: anything a tab draws must be a compared prop, or a skipped render shows it stale.
 type TabBarItemRowProps = {
@@ -179,7 +180,9 @@ function TabBarItemRow({
           markedTitle: forkMarkedNameText(
             t,
             chatTab.customLabel ??
-              stripLeadingAgentTitleDecoration(conversationName ?? chatTab.label)
+              stripLeadingAgentTitleDecoration(
+                stampedTaskTitle(chatTab) ?? conversationName ?? chatTab.label
+              )
           ),
           describeSource: () =>
             forkSourceTooltipText(
@@ -199,7 +202,7 @@ function TabBarItemRow({
         tab={{
           id: item.id,
           worktreeId,
-          title: conversationName ?? item.data.label,
+          title: stampedTaskTitle(chatTab) ?? conversationName ?? chatTab.label,
           customTitle: item.data.customLabel,
           color: item.data.color
         }}

@@ -25649,5 +25649,82 @@
   },
   "agentCliUpdate": {
     "thisComputer": "Este computador"
+  },
+  "workerTabs": {
+    "keep": "Manter aba",
+    "preview": "Prévia",
+    "hide": "Ocultar aba",
+    "hideRunning": "Ocultar aba · continua em execução",
+    "hideToast": {
+      "show": "Mostrar",
+      "running": "Ainda em execução · abra pela barra lateral",
+      "unreachable": "Oculta · encontre na busca de abas"
+    },
+    "stop": {
+      "refused": "Não foi possível parar este trabalhador",
+      "notConfirmed": "Não foi possível confirmar que o trabalhador parou",
+      "helpers": "Alguns auxiliares não pararam"
+    },
+    "confirm": {
+      "stopTitle": "Parar este trabalhador? Sua tarefa será encerrada.",
+      "stop": "Parar",
+      "closeRunningTitle": "Parar este trabalhador e fechar sua aba?",
+      "stopAndClose": "Parar e fechar",
+      "closeFinishedTitle": "Fechar a aba deste trabalhador? Tudo que ainda estiver em execução nela será interrompido.",
+      "close": "Fechar",
+      "cancel": "Cancelar"
+    },
+    "menu": {
+      "keep": "Manter aba",
+      "hide": "Ocultar aba",
+      "stop": "Parar trabalhador",
+      "closeTab": "Fechar aba",
+      "workers": "Trabalhadores…"
+    },
+    "state": {
+      "needsYou": "Precisa de você",
+      "failed": "Falhou",
+      "running": "Em execução",
+      "done": "Concluído",
+      "stopped": "Parado"
+    },
+    "list": {
+      "title": "Trabalhadores",
+      "via": "via {{title}}",
+      "viaClosed": "via um trabalhador fechado",
+      "close": "Fechar {{title}}",
+      "stop": "Parar {{title}}"
+    },
+    "badge": {
+      "label_one": "{{count}} trabalhador precisa de você",
+      "label_other": "{{count}} trabalhadores precisam de você",
+      "label_many": "{{count}} trabalhadores precisam de você"
+    },
+    "setting": {
+      "title": "Abas dos trabalhadores",
+      "description": "Dê uma aba aos trabalhadores ao abri-los, ou sempre.",
+      "openWhenClicked": "Abrir ao clicar",
+      "alwaysOpen": "Sempre abrir",
+      "keywordWorker": "trabalhador",
+      "keywordOrchestration": "orquestração",
+      "keywordCoordinator": "coordenador",
+      "keywordHideTabs": "ocultar abas"
+    },
+    "move": {
+      "refused": "Não é possível mover este painel · essa aba pertence a outro trabalhador"
+    },
+    "remote": {
+      "stopReason": "Pare-o no computador que o iniciou",
+      "stopFromHome": "Não é possível parar este worker aqui · pare-o no computador que o iniciou"
+    },
+    "closeKept": {
+      "tab": "Esta aba tem um trabalhador · feche primeiro seu painel de terminal",
+      "pane_one": "Este painel tem um trabalhador · pare ou feche-o primeiro",
+      "pane_other": "Este painel tem {{count}} trabalhadores · pare ou feche-os primeiro",
+      "pane_many": "Este painel tem {{count}} trabalhadores · pare ou feche-os primeiro",
+      "bulk_one": "{{count}} aba com trabalhador mantida",
+      "bulk_other": "{{count}} abas com trabalhadores mantidas",
+      "bulk_many": "{{count}} abas com trabalhadores mantidas"
+    }
   }
 }

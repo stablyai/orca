@@ -1,3 +1,8 @@
+import {
+  getWorkerTabsSettingDescription,
+  getWorkerTabsSettingKeywords,
+  getWorkerTabsSettingTitle
+} from './behavior/worker-tabs-setting-copy'
 import { getAgentSettingsRowId } from './agent-settings-navigation'
 import {
   getClaudeSubagentNavigationTitle,
@@ -217,6 +222,11 @@ const getAllAgentsPaneSearchEntries = createLocalizedCatalog(() => [
     title: getAgentGeneratedTabTitlesTitle(),
     description: getAgentGeneratedTabTitlesDescription(),
     keywords: getAgentGeneratedTabTitlesSearchKeywords()
+  },
+  {
+    title: getWorkerTabsSettingTitle(),
+    description: getWorkerTabsSettingDescription(),
+    keywords: getWorkerTabsSettingKeywords()
   },
   {
     title: getAgentAwakeTitle(),

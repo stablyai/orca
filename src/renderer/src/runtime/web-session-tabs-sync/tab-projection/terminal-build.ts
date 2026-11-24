@@ -185,6 +185,8 @@ export function buildMirroredTerminalTabs(
     // Why: viewMode echoes back through host snapshots, so prefer the client's record during the echo window and adopt the host value only without a prior tab.
     const hostViewModeSurface = surfaces.find((surface) => surface.viewMode)
     const viewMode = existing ? existing.viewMode : hostViewModeSurface?.viewMode
+    // Host-owned worker stamp, one way; an old host omits it and the worker stays visible.
+    const workerTab = surfaces.find((surface) => surface.workerTab)?.workerTab
     return {
       tab: {
         id: localTabId,
@@ -211,7 +213,8 @@ export function buildMirroredTerminalTabs(
         sortOrder: sortOffset + index,
         createdAt: existing?.createdAt ?? now + index,
         // Why: launchAgent is host-owned lifecycle metadata; once the host omits it, don't resurrect stale startup intent.
-        ...(launchAgent ? { launchAgent } : {})
+        ...(launchAgent ? { launchAgent } : {}),
+        ...(workerTab ? { workerTab } : {})
       },
       hostTabId: parentTabId,
       ptyIds,

@@ -1,3 +1,4 @@
+import { workerTabStampsEqual } from '../../../../../shared/orchestration/workers/worker-tab-stamp'
 import type {
   BrowserCertificateFailure,
   BrowserPage,
@@ -31,6 +32,7 @@ export function terminalTabEqual(a: TerminalTab, b: TerminalTab): boolean {
     a.generation === b.generation &&
     a.shellOverride === b.shellOverride &&
     a.launchAgent === b.launchAgent &&
+    workerTabStampsEqual(a.workerTab, b.workerTab) &&
     a.pendingActivationSpawn === b.pendingActivationSpawn
   )
 }

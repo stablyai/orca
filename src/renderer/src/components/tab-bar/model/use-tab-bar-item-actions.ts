@@ -1,3 +1,4 @@
+import { keepPlacedWorkerTab } from '../worker-tab-keep-on-input'
 import { useLayoutEffect, useMemo, useRef } from 'react'
 import { clearClientHostedBrowserRowSelection } from '@/runtime/browser/client-hosting/client-hosted-browser-row-state'
 import { noteUserWorkspaceSwitch } from '@/lib/workspace/activation/workspace-switch-user-act'
@@ -96,8 +97,17 @@ export function useTabBarItemActions(source: TabBarItemActionSource): TabBarItem
       togglePinned: (item) => latest.current.togglePinned(item),
       toggleViewMode: (tabId) => latest.current.toggleTabViewMode(tabId)
     }
-    return ORCA_LAYOUT_OWNER_IS_MAIN
+    const routed = ORCA_LAYOUT_OWNER_IS_MAIN
       ? { ...actions, ...withLayoutOwnerTabProps(actions, () => latest.current.props.worktreeId) }
       : actions
+    return {
+      ...routed,
+      togglePinned: (item: TabBarItem) => {
+        if (!item.isPinned) {
+          keepPlacedWorkerTab(latest.current.props.worktreeId, item.unifiedTabId)
+        }
+        routed.togglePinned(item)
+      }
+    }
   }, [])
 }

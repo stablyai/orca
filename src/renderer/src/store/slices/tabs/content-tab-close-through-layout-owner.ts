@@ -11,6 +11,7 @@ import {
 import type { AppState } from '../../types'
 import { pickNextActiveTab } from './tab-selection-history'
 import { isEditorTabContentType } from '../editor/tabs/editor-tab-content-type'
+import { withoutFoldedWorkerTabs } from '@/components/tab-bar/worker-tab-folding'
 
 /** Tab kinds whose close main decides; a terminal's goes through its own close. */
 export function closesThroughLayoutOwner(contentType: Tab['contentType']): boolean {
@@ -35,11 +36,12 @@ function selectAfterClose(
   }
   const activeGroupId = state.activeGroupIdByWorktree[worktreeId]
   const group = state.groupsByWorktree[worktreeId]?.find((entry) => entry.id === tab.groupId)
+  const visible = group ? withoutFoldedWorkerTabs(state, worktreeId, group.id, group.tabOrder) : []
   const next =
-    group && nextActiveTabId && group.tabOrder.includes(nextActiveTabId)
+    group && nextActiveTabId && visible.includes(nextActiveTabId)
       ? nextActiveTabId
       : group
-        ? pickNextActiveTab(group.tabOrder, group.recentTabIds, tab.id)
+        ? pickNextActiveTab(visible, group.recentTabIds, tab.id)
         : null
   if (next && group?.activeTabId !== next) {
     state.activateTab(next, { worktreeId, preservePreview: true, recordFocus: false })

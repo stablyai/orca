@@ -95,7 +95,7 @@ export function TerminalLegacyTerminalPanes({
                     isWorktreeActive={isVisible || isActivityPortalTab}
                     isolatedPaneKey={activityTerminalPortal?.paneKey ?? null}
                     onPtyExit={(ptyId, exitCode) => handlePtyExit(tab.id, ptyId, exitCode)}
-                    onCloseTab={(reason) => handleCloseTab(tab.id, reason)}
+                    onCloseTab={(reason, options) => handleCloseTab(tab.id, reason, options)}
                   />
                 )
                 if (activityTerminalPortal) {

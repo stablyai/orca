@@ -1,3 +1,4 @@
+import { withoutFoldedWorkerTabs } from '@/components/tab-bar/worker-tab-folding'
 import type { TabsSlice, TabsSliceGet, TabsSliceSet } from './tabs-slice-contract'
 import { collapseWorktreeGroupLayout } from '../../../../../shared/workspace-layout/tab-groups/tab-group-layout-tree'
 import { buildActiveSurfacePatch } from './tabs-surface'
@@ -57,7 +58,12 @@ export function createTabsMoveActions(
                 group.activeTabId === tabId
                   ? // Why: keep MRU-aware selection so the user lands on their previously-focused tab, not a visual neighbor.
                     pickNextActiveTab(
-                      dedupedSourceGroupOrder,
+                      withoutFoldedWorkerTabs(
+                        state,
+                        worktreeId,
+                        sourceGroup.id,
+                        dedupedSourceGroupOrder
+                      ),
                       sourceGroup.recentTabIds,
                       tabId,
                       state.unifiedTabsByWorktree[worktreeId]

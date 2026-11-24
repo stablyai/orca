@@ -9,7 +9,7 @@ import { replaceTabBuckets } from '../../record-transitions/keyed-record-transit
 export function patchTerminalTabRow(
   tabsByWorktree: Record<string, TerminalTab[]>,
   tabId: string,
-  patch: Partial<Pick<TerminalTab, 'isPinned' | 'viewMode'>>
+  patch: Partial<Pick<TerminalTab, 'isPinned' | 'viewMode' | 'workerTab'>>
 ): Partial<Pick<AppState, 'tabsByWorktree'>> {
   const location = locateTerminalTab(tabsByWorktree, tabId)
   if (!location) {

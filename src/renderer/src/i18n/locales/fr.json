@@ -25068,5 +25068,82 @@
   },
   "agentCliUpdate": {
     "thisComputer": "Cet ordinateur"
+  },
+  "workerTabs": {
+    "keep": "Garder l’onglet",
+    "preview": "Aperçu",
+    "hide": "Masquer l’onglet",
+    "hideRunning": "Masquer l’onglet · continue de fonctionner",
+    "hideToast": {
+      "show": "Afficher",
+      "running": "Toujours en cours · ouvrir depuis la barre latérale",
+      "unreachable": "Masqué · retrouvez-le dans la recherche d’onglets"
+    },
+    "stop": {
+      "refused": "Impossible d’arrêter ce worker",
+      "notConfirmed": "Impossible de confirmer l’arrêt du worker",
+      "helpers": "Certains assistants ne se sont pas arrêtés"
+    },
+    "confirm": {
+      "stopTitle": "Arrêter ce worker ? Sa tâche prendra fin.",
+      "stop": "Arrêter",
+      "closeRunningTitle": "Arrêter ce worker et fermer son onglet ?",
+      "stopAndClose": "Arrêter et fermer",
+      "closeFinishedTitle": "Fermer l’onglet de ce worker ? Tout ce qui y fonctionne encore sera arrêté.",
+      "close": "Fermer",
+      "cancel": "Annuler"
+    },
+    "menu": {
+      "keep": "Garder l’onglet",
+      "hide": "Masquer l’onglet",
+      "stop": "Arrêter le worker",
+      "closeTab": "Fermer l’onglet",
+      "workers": "Workers…"
+    },
+    "state": {
+      "needsYou": "A besoin de vous",
+      "failed": "Échec",
+      "running": "En cours",
+      "done": "Terminé",
+      "stopped": "Arrêté"
+    },
+    "list": {
+      "title": "Workers",
+      "via": "via {{title}}",
+      "viaClosed": "via un worker fermé",
+      "close": "Fermer {{title}}",
+      "stop": "Arrêter {{title}}"
+    },
+    "badge": {
+      "label_one": "{{count}} worker a besoin de vous",
+      "label_other": "{{count}} workers ont besoin de vous",
+      "label_many": "{{count}} workers ont besoin de vous"
+    },
+    "setting": {
+      "title": "Onglets des workers",
+      "description": "Donnez un onglet aux workers à leur ouverture, ou toujours.",
+      "openWhenClicked": "Ouvrir au clic",
+      "alwaysOpen": "Toujours ouvrir",
+      "keywordWorker": "worker",
+      "keywordOrchestration": "orchestration",
+      "keywordCoordinator": "coordinateur",
+      "keywordHideTabs": "masquer les onglets"
+    },
+    "move": {
+      "refused": "Impossible de déplacer ce volet · cet onglet appartient à un autre worker"
+    },
+    "remote": {
+      "stopReason": "Arrêtez-le sur l’ordinateur qui l’a démarré",
+      "stopFromHome": "Impossible d’arrêter ce worker ici · arrêtez-le sur l’ordinateur qui l’a démarré"
+    },
+    "closeKept": {
+      "tab": "Cet onglet contient un worker · fermez d’abord votre volet de terminal",
+      "pane_one": "Ce volet contient un worker · arrêtez-le ou fermez-le d’abord",
+      "pane_other": "Ce volet contient {{count}} workers · arrêtez-les ou fermez-les d’abord",
+      "pane_many": "Ce volet contient {{count}} workers · arrêtez-les ou fermez-les d’abord",
+      "bulk_one": "{{count}} onglet avec un worker conservé",
+      "bulk_other": "{{count}} onglets avec des workers conservés",
+      "bulk_many": "{{count}} onglets avec des workers conservés"
+    }
   }
 }

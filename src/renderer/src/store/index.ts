@@ -1,6 +1,7 @@
 import { logActiveWorkspaceChanges } from './active-workspace-change-log'
 import { bindAppRuntimeStatusStore } from './slices/runtime-status/views/app-runtime-status-binding'
 import { withStatusTransaction } from './status-transaction/status-transaction-boundary'
+import { registerWorkerTabFeedChangeHandler } from '@/components/tab-bar/worker-tab-feed-grace'
 import { withBrowserInitializationPresentations } from './slices/browser/hosts/browser-initialization-presentation-store'
 import { registerTerminalNoticeShutdownReader } from '@/components/terminal-pane/pty-transport/delivery/pty-notice-exit'
 import { registerStructuredSelectionCatalogStore } from '@/lib/agent-session/options/structured-agent-session-selection-controller'
@@ -48,6 +49,7 @@ import { createRuntimeStatusSlice } from './slices/runtime-status/create-runtime
 import { createPullRequestGenerationSlice } from './slices/hosted-review/generation/pull-request-generation'
 import { createCommitMessageGenerationSlice } from './slices/hosted-review/generation/commit-message-generation'
 import { createPinnedTabCloseConfirmSlice } from './slices/tabs/pinned-tab-close-confirm'
+import { createWorkerTabViewSlice } from './slices/tabs/worker-tab-view-slice'
 import { createRecentlyClosedTerminalTabsSlice } from './terminals/tabs/recently-closed-terminal-tabs'
 import { createRecentlyClosedTabsSlice } from './slices/tabs/recently-closed-tabs'
 import { createOrcaProfilesSlice } from './slices/orca-profiles/create-orca-profiles-slice'
@@ -150,6 +152,7 @@ export const useAppStore = create<AppState>()(
               ...createPullRequestGenerationSlice(...a),
               ...createCommitMessageGenerationSlice(...a),
               ...createPinnedTabCloseConfirmSlice(...a),
+              ...createWorkerTabViewSlice(...a),
               ...createRecentlyClosedTerminalTabsSlice(...a),
               ...createRecentlyClosedTabsSlice(...a),
               ...createOrcaProfilesSlice(...a),
@@ -189,6 +192,7 @@ registerStructuredSelectionCatalogStore({
   subscribe: useAppStore.subscribe
 })
 registerHttpLinkStoreAccessor(() => useAppStore.getState(), useAppStore.subscribe)
+registerWorkerTabFeedChangeHandler(() => useAppStore.getState().bumpWorkerTabGraceEpoch())
 registerHttpLinkGroupActionAvailability((request) =>
   canOfferHttpLinkGroupAction(useAppStore.getState(), request)
 )

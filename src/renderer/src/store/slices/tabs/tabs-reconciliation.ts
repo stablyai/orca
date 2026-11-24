@@ -1,3 +1,4 @@
+import { withoutFoldedWorkerTabs } from '@/components/tab-bar/worker-tab-folding'
 import { structuredLaunchSlotIds } from '@/lib/agent-session/launch/structured-agent-session-launch-persistence'
 import type { AppState } from '../../types'
 import {
@@ -99,7 +100,8 @@ export function projectWorktreeTabModelReconciliation(
             customLabel: tab.customTitle,
             color: tab.color,
             sortOrder: tab.sortOrder,
-            createdAt: tab.createdAt
+            createdAt: tab.createdAt,
+            ...(tab.workerTab ? { workerTab: tab.workerTab } : {})
           }))
   const reconciledUnifiedTabs =
     restoredLegacyTabs.length > 0 ? [...unifiedTabs, ...restoredLegacyTabs] : unifiedTabs
@@ -158,7 +160,7 @@ export function projectWorktreeTabModelReconciliation(
     const activeTabId =
       group.activeTabId && validTabIds.has(group.activeTabId)
         ? group.activeTabId
-        : (realOrder[0] ?? null)
+        : (withoutFoldedWorkerTabs(state, worktreeId, group.id, realOrder)[0] ?? null)
     const tabOrderUnchanged =
       tabOrder.length === group.tabOrder.length &&
       tabOrder.every((tabId, index) => tabId === group.tabOrder[index])

@@ -1,3 +1,4 @@
+import { keepWorkerSurfaceOnUserSend } from '@/components/tab-bar/worker-tab-keep-on-input'
 import { serializeNativeChatAgentReferences } from '../pickers/native-chat-agent-reference-send'
 import {
   hasNativeChatStagedFiles,
@@ -222,6 +223,9 @@ export function useNativeChatStructuredComposerSend({
           if (!accepted) {
             finishNativeChatComposerSubmission(draftScopeKey, submission, recoversDraft())
             return false
+          }
+          if (!hostCommand) {
+            keepWorkerSurfaceOnUserSend(structuredTransport.sessionId)
           }
           transferred = true
           completeNativeChatStructuredUserAction(

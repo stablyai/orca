@@ -18,6 +18,8 @@ import {
   type TypeCyclableTab
 } from '../../../lib/workspace/tabs/tab-type-cycle'
 
+import { selectFoldedWorkerTabIds } from '../worker-tab-folding'
+
 export type RecentTabSwitcherItem = TypeCyclableTab & {
   key: string
   label: string
@@ -156,7 +158,9 @@ export function buildRecentTabSwitcherModel(
   worktreeId: string,
   mode: CtrlTabOrderMode
 ): RecentTabSwitcherModel | null {
-  const visibleEntries = getActiveTabNavOrder(state, worktreeId)
+  const visibleEntries = getActiveTabNavOrder(state, worktreeId, {}, (groupId) =>
+    selectFoldedWorkerTabIds(state, worktreeId, groupId)
+  )
   if (visibleEntries.length <= 1) {
     return null
   }

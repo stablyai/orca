@@ -25053,5 +25053,82 @@
   },
   "agentCliUpdate": {
     "thisComputer": "Este equipo"
+  },
+  "workerTabs": {
+    "keep": "Mantener pestaña",
+    "preview": "Vista previa",
+    "hide": "Ocultar pestaña",
+    "hideRunning": "Ocultar pestaña · sigue ejecutándose",
+    "hideToast": {
+      "show": "Mostrar",
+      "running": "Sigue ejecutándose · ábrelo desde la barra lateral",
+      "unreachable": "Oculta · encuéntrala en la búsqueda de pestañas"
+    },
+    "stop": {
+      "refused": "No se pudo detener este trabajador",
+      "notConfirmed": "No se pudo confirmar que el trabajador se detuvo",
+      "helpers": "Algunos ayudantes no se detuvieron"
+    },
+    "confirm": {
+      "stopTitle": "¿Detener este trabajador? Su tarea terminará.",
+      "stop": "Detener",
+      "closeRunningTitle": "¿Detener este trabajador y cerrar su pestaña?",
+      "stopAndClose": "Detener y cerrar",
+      "closeFinishedTitle": "¿Cerrar la pestaña de este trabajador? Se detendrá todo lo que siga ejecutándose en ella.",
+      "close": "Cerrar",
+      "cancel": "Cancelar"
+    },
+    "menu": {
+      "keep": "Mantener pestaña",
+      "hide": "Ocultar pestaña",
+      "stop": "Detener trabajador",
+      "closeTab": "Cerrar pestaña",
+      "workers": "Trabajadores…"
+    },
+    "state": {
+      "needsYou": "Te necesita",
+      "failed": "Falló",
+      "running": "En ejecución",
+      "done": "Finalizado",
+      "stopped": "Detenido"
+    },
+    "list": {
+      "title": "Trabajadores",
+      "via": "a través de {{title}}",
+      "viaClosed": "a través de un trabajador cerrado",
+      "close": "Cerrar {{title}}",
+      "stop": "Detener {{title}}"
+    },
+    "badge": {
+      "label_one": "{{count}} trabajador te necesita",
+      "label_other": "{{count}} trabajadores te necesitan",
+      "label_many": "{{count}} trabajadores te necesitan"
+    },
+    "setting": {
+      "title": "Pestañas de trabajadores",
+      "description": "Dale una pestaña a cada trabajador al abrirlo, o siempre.",
+      "openWhenClicked": "Abrir al hacer clic",
+      "alwaysOpen": "Abrir siempre",
+      "keywordWorker": "trabajador",
+      "keywordOrchestration": "orquestación",
+      "keywordCoordinator": "coordinador",
+      "keywordHideTabs": "ocultar pestañas"
+    },
+    "move": {
+      "refused": "No se puede mover este panel · esa pestaña pertenece a otro trabajador"
+    },
+    "remote": {
+      "stopReason": "Detenlo en el ordenador que lo inició",
+      "stopFromHome": "No se puede detener este worker aquí · detenlo en el ordenador que lo inició"
+    },
+    "closeKept": {
+      "tab": "Esta pestaña tiene un trabajador · cierra primero tu panel de terminal",
+      "pane_one": "Este panel tiene un trabajador · detenlo o ciérralo primero",
+      "pane_other": "Este panel tiene {{count}} trabajadores · detenlos o ciérralos primero",
+      "pane_many": "Este panel tiene {{count}} trabajadores · detenlos o ciérralos primero",
+      "bulk_one": "Se mantuvo {{count}} pestaña con un trabajador",
+      "bulk_other": "Se mantuvieron {{count}} pestañas con trabajadores",
+      "bulk_many": "Se mantuvieron {{count}} pestañas con trabajadores"
+    }
   }
 }

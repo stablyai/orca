@@ -1,3 +1,5 @@
+import { withoutFoldedWorkerTabs } from '@/components/tab-bar/worker-tab-folding'
+import { keepPlacedWorkerTabInState } from '@/components/tab-bar/worker-tab-view-actions'
 import { createNonSecureContextUuid as createBrowserUuid } from '../../../../../shared/identifiers/non-secure-context-uuid'
 import type {
   TabGroup,
@@ -25,6 +27,10 @@ export function createTabsDropActions(
 ): Pick<TabsSlice, 'dropUnifiedTab'> {
   return {
     dropUnifiedTab: (tabId, target) => {
+      const found = findTabAndWorktree(get().unifiedTabsByWorktree, tabId)
+      if (found && target.splitDirection) {
+        keepPlacedWorkerTabInState(get(), found.worktreeId, tabId)
+      }
       let moved = false
       set((state) => {
         const foundTab = findTabAndWorktree(state.unifiedTabsByWorktree, tabId)
@@ -117,7 +123,12 @@ export function createTabsDropActions(
                 group.activeTabId === tabId
                   ? // Why: same MRU-aware fallback as moveUnifiedTabToGroup — the drag keeps the user on their previously-active tab.
                     pickNextActiveTab(
-                      dedupedSourceGroupOrder,
+                      withoutFoldedWorkerTabs(
+                        state,
+                        worktreeId,
+                        sourceGroup.id,
+                        dedupedSourceGroupOrder
+                      ),
                       sourceGroup.recentTabIds,
                       tabId,
                       state.unifiedTabsByWorktree[worktreeId]

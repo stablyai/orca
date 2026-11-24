@@ -43,6 +43,7 @@ import { createRuntimeStatusSlice } from '../slices/runtime-status/create-runtim
 import { createPullRequestGenerationSlice } from '../slices/hosted-review/generation/pull-request-generation'
 import { createCommitMessageGenerationSlice } from '../slices/hosted-review/generation/commit-message-generation'
 import { createPinnedTabCloseConfirmSlice } from '../slices/tabs/pinned-tab-close-confirm'
+import { createWorkerTabViewSlice } from '../slices/tabs/worker-tab-view-slice'
 import { createRecentlyClosedTerminalTabsSlice } from '../terminals/tabs/recently-closed-terminal-tabs'
 import { createRecentlyClosedTabsSlice } from '../slices/tabs/recently-closed-tabs'
 import { createOrcaProfilesSlice } from '../slices/orca-profiles/create-orca-profiles-slice'
@@ -115,6 +116,7 @@ export function createTestStore(
         ...createPullRequestGenerationSlice(...a),
         ...createCommitMessageGenerationSlice(...a),
         ...createPinnedTabCloseConfirmSlice(...a),
+        ...createWorkerTabViewSlice(...a),
         ...createRecentlyClosedTerminalTabsSlice(...a),
         ...createRecentlyClosedTabsSlice(...a),
         ...createOrcaProfilesSlice(...a),

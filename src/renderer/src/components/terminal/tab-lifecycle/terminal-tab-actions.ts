@@ -1,3 +1,4 @@
+import { handleWorkerTabUserClose } from '../../tab-bar/worker-tab-user-close'
 import {
   getTerminalNoticeLifetime,
   retireTerminalNoticeLifetime
@@ -41,6 +42,8 @@ import {
 
 type CloseTerminalTabOptions = {
   force?: boolean
+  /** An explicit Close tab / Stop: a worker's tab really closes instead of folding. */
+  endsWorker?: true
   rejectPinned?: boolean
   /** PTY whose lifecycle event initiated the host close. */
   lifecyclePtyId?: string
@@ -65,6 +68,10 @@ type CloseTerminalTabOptions = {
 
 /** Every caller declares its intent: an undeclared close must never reach a host as the user's (#37245). */
 export function closeTerminalTab(tabId: string, options: CloseTerminalTabOptions): void {
+  // A user close of a worker's tab folds it; Close tab passes `endsWorker` to really close.
+  if (options.reason === 'user' && !options.endsWorker && handleWorkerTabUserClose(tabId)) {
+    return
+  }
   const intent = options.reason ?? options.hostCloseReason
   const storeReason = terminalTabCloseStoreReason(intent)
   const state = useAppStore.getState()

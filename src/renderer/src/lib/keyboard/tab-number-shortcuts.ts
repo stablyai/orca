@@ -1,6 +1,9 @@
+import { workerTabStripOrder } from '../../../../shared/workspace-layout/tab-groups/worker-tab-strip-order'
+import { selectWorkerTabPeekId } from '@/components/tab-bar/worker-tab-presentation'
 import { focusTerminalTabSurface } from '@/components/terminal-pane/input/focus/focus-terminal-tab-surface'
 import { useAppStore } from '@/store/index'
 import type { AppState } from '@/store/types'
+import { selectFoldedWorkerTabIds } from '@/components/tab-bar/worker-tab-folding'
 import { runtimeEnvironmentIdOrLocalUnlessTwin } from '@/lib/workspace/ownership/worktree-runtime-owner'
 import { dedupeTabOrder } from '../../../../shared/workspace-layout/tab-groups/tab-order'
 import type { Tab } from '../../../../shared/workspace-layout/tab-groups/tab-types'
@@ -17,11 +20,16 @@ type TabNumberShortcutState = Pick<
   | 'settings'
   | 'unifiedTabsByWorktree'
   | 'worktreesByRepo'
->
+> &
+  Partial<
+    Pick<AppState, 'workerTabStripChoiceByWorktree' | 'workerTabPeekByGroupId' | 'workerTabsMode'>
+  >
 
 export function resolveTabNumberShortcutTarget(
   state: TabNumberShortcutState,
-  index: number
+  index: number,
+  /** Cmd+1–9 counts only the tabs the strip shows. */
+  foldedTabIds?: (worktreeId: string, groupId: string) => ReadonlySet<string>
 ): Tab | null {
   if (state.activeView !== 'terminal' || state.activeWorktreeId === null || index < 0) {
     return null
@@ -37,22 +45,29 @@ export function resolveTabNumberShortcutTarget(
     return null
   }
 
+  const folded = foldedTabIds?.(worktreeId, group.id)
   const groupTabs = (state.unifiedTabsByWorktree[worktreeId] ?? []).filter(
-    (tab) => tab.groupId === group.id
+    (tab) => tab.groupId === group.id && !folded?.has(tab.id)
   )
   const tabById = new Map(groupTabs.map((tab) => [tab.id, tab]))
   // Match TabBar reconciliation: stored order is authoritative, but append mounted tabs missing during hydration/drag races.
-  const orderedIds = dedupeTabOrder([
-    ...group.tabOrder.filter((tabId) => tabById.has(tabId)),
-    ...groupTabs.map((tab) => tab.id)
-  ])
+  const orderedIds = workerTabStripOrder(
+    dedupeTabOrder([
+      ...group.tabOrder.filter((tabId) => tabById.has(tabId)),
+      ...groupTabs.map((tab) => tab.id)
+    ]),
+    groupTabs,
+    foldedTabIds ? selectWorkerTabPeekId(state, worktreeId, group.id) : undefined
+  )
 
   return tabById.get(orderedIds[index] ?? '') ?? null
 }
 
 export function activateTabNumberShortcut(index: number): boolean {
   const store = useAppStore.getState()
-  const target = resolveTabNumberShortcutTarget(store, index)
+  const target = resolveTabNumberShortcutTarget(store, index, (worktreeId, groupId) =>
+    selectFoldedWorkerTabIds(store, worktreeId, groupId)
+  )
   if (!target) {
     return false
   }
@@ -61,6 +76,11 @@ export function activateTabNumberShortcut(index: number): boolean {
   const runtimeEnvironmentId = runtimeEnvironmentIdOrLocalUnlessTwin(store, worktreeId)
   store.focusGroup(worktreeId, target.groupId)
   store.activateTab(target.id)
+
+  if (target.contentType === 'agent-session') {
+    store.setActiveTabType('agent-session', worktreeId)
+    return true
+  }
 
   if (target.contentType === 'terminal') {
     if (isWebRuntimeSessionActive(runtimeEnvironmentId)) {

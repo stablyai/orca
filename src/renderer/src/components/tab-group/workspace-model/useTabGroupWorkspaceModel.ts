@@ -1,3 +1,4 @@
+import { selectWorkerTabPeekId } from '../../tab-bar/worker-tab-presentation'
 import { useShallow } from 'zustand/react/shallow'
 import type { BrowserWorkspace } from '../../../../../shared/browser/workspaces/browser-workspace-types'
 import type { Tab, TabGroup } from '../../../../../shared/workspace-layout/tab-groups/tab-types'
@@ -8,6 +9,8 @@ import { useTabGroupTabCloseCommands } from './useTabGroupTabCloseCommands'
 import { useTabGroupCloseScopeCommands } from './useTabGroupCloseScopeCommands'
 import { useTabGroupActivationCommands } from './useTabGroupActivationCommands'
 import { useTabGroupCreationCommands } from './useTabGroupCreationCommands'
+import { selectFoldedWorkerTabIds } from '../../tab-bar/worker-tab-folding'
+import { useWorkerTabFoldMaintenance } from '../../tab-bar/use-worker-tab-fold-maintenance'
 
 const EMPTY_GROUPS: readonly TabGroup[] = []
 const EMPTY_UNIFIED_TABS: readonly Tab[] = []
@@ -39,6 +42,9 @@ export function useTabGroupWorkspaceModel({
     }))
   )
 
+  const peekTabId = useAppStore((state) => selectWorkerTabPeekId(state, worktreeId, groupId))
+  const foldedTabIds = useAppStore((state) => selectFoldedWorkerTabIds(state, worktreeId, groupId))
+  useWorkerTabFoldMaintenance(worktreeId, groupId)
   const focusGroup = useAppStore((state) => state.focusGroup)
   const makePreviewFilePermanent = useAppStore((state) => state.makePreviewFilePermanent)
   const pinFile = useAppStore((state) => state.pinFile)
@@ -54,7 +60,7 @@ export function useTabGroupWorkspaceModel({
     browserItems,
     agentSessionItems,
     tabBarOrder
-  } = useTabGroupItemProjections({ groupId, worktreeId, worktreeState })
+  } = useTabGroupItemProjections({ groupId, worktreeId, worktreeState, foldedTabIds, peekTabId })
 
   const { closeItem, closeMany } = useTabGroupTabCloseCommands({ worktreeId })
 
@@ -85,6 +91,7 @@ export function useTabGroupWorkspaceModel({
     terminalTabs,
     tabBarOrder,
     groupTabs,
+    foldedTabIds,
     expandedPaneByTabId: worktreeState.expandedPaneByTabId,
     commands: {
       focusGroup: () => {

@@ -1,3 +1,4 @@
+import { WorkerAgentRowMenu } from '@/components/tab-bar/WorkerAgentRowMenu'
 import React, { useCallback, useEffect, useRef } from 'react'
 import { DashboardAgentChildDisclosure } from '@/components/dashboard/rows/DashboardAgentChildDisclosure'
 import {
@@ -14,7 +15,8 @@ import { viewClaudeAgentFromRow } from '@/lib/agent-session/navigation/claude-ag
 import { useClaudeAgentRowView } from '@/components/dashboard/rows/use-claude-agent-row-view'
 import './worktree-card-agent-summary'
 import { agentRowDisplayDotState as getAgentDotState } from '../../../../../../shared/agent-row-dot-state'
-import { getAgentRowPrimaryText } from '../../../../../../shared/agent-status/presentation/agent-row-primary-text'
+import { getWorkerAgentRowPrimaryText } from '../../../../../../shared/agent-status/presentation/agent-row-primary-text'
+import { stampedTaskTitle } from '../../../../../../shared/orchestration/workers/worker-tab-stamp'
 import { useAgentRowConversationNaming } from '@/components/dashboard/rows/use-agent-row-conversation-name'
 import { ForkMarkedName } from '@/components/native-chat/fork/ForkMarkedName'
 import { forkMarkedNameText } from '@/components/native-chat/fork/fork-marked-name-text'
@@ -32,7 +34,8 @@ function getCompactAgentPrimary(
   agent: DashboardAgentRowData,
   conversationName: string | null
 ): string {
-  const prompt = conversationName ?? getAgentRowPrimaryText(agent.entry)
+  const prompt =
+    conversationName ?? getWorkerAgentRowPrimaryText(agent.entry, stampedTaskTitle(agent.tab))
   return prompt || agentStateLabel(getAgentDotState(agent))
 }
 
@@ -302,35 +305,40 @@ export const CompactAgentRow = React.memo(function CompactAgentRow({
   )
 
   return (
-    <div
-      draggable={false}
-      className={cn(
-        'compact-agent-row agent-disclosure-row group/compact-agent-row min-w-0 cursor-pointer rounded-sm px-1 text-[11px] leading-none',
-        'text-muted-foreground worktree-agent-row-hover',
-        hasChildDisclosure && 'worktree-agent-lineage-parent-row',
-        isLineageChild && 'worktree-agent-lineage-child-row',
-        'flex h-6 items-center gap-1',
-        highlighted && 'bg-worktree-sidebar-accent',
-        sendTargetStatus === 'sending' && 'cursor-progress opacity-75',
-        sendTargetStatus === 'disabled' && 'cursor-default opacity-60'
-      )}
-      onClickCapture={handleSendTargetClickCapture}
-      onClick={handleActivate}
-      onMouseDown={(e) => e.stopPropagation()}
-      onPointerDown={(e) => e.stopPropagation()}
-      onDragStart={(e) => e.stopPropagation()}
-      data-workspace-agent-row=""
-      data-focused-agent-pane={highlighted ? 'true' : undefined}
-      data-current={view?.current ? 'true' : undefined}
-      aria-current={view?.current ? 'true' : undefined}
-      aria-description={parentConversationDescription}
-      data-agent-send-target={sendTargetStatus}
-      role={agent.lineage ? 'treeitem' : undefined}
-      aria-level={agent.lineage ? agent.lineage.depth + 1 : undefined}
-      aria-expanded={hasChildDisclosure ? childAgentsExpanded : undefined}
-      title={sendTargetDisabledReason}
+    <WorkerAgentRowMenu
+      worktreeId={agent.tab.worktreeId}
+      tabId={agent.rowSource === 'subagent' ? '' : agent.tab.id}
     >
-      {rowBody}
-    </div>
+      <div
+        draggable={false}
+        className={cn(
+          'compact-agent-row agent-disclosure-row group/compact-agent-row min-w-0 cursor-pointer rounded-sm px-1 text-[11px] leading-none',
+          'text-muted-foreground worktree-agent-row-hover',
+          hasChildDisclosure && 'worktree-agent-lineage-parent-row',
+          isLineageChild && 'worktree-agent-lineage-child-row',
+          'flex h-6 items-center gap-1',
+          highlighted && 'bg-worktree-sidebar-accent',
+          sendTargetStatus === 'sending' && 'cursor-progress opacity-75',
+          sendTargetStatus === 'disabled' && 'cursor-default opacity-60'
+        )}
+        onClickCapture={handleSendTargetClickCapture}
+        onClick={handleActivate}
+        onMouseDown={(e) => e.stopPropagation()}
+        onPointerDown={(e) => e.stopPropagation()}
+        onDragStart={(e) => e.stopPropagation()}
+        data-workspace-agent-row=""
+        data-focused-agent-pane={highlighted ? 'true' : undefined}
+        data-current={view?.current ? 'true' : undefined}
+        aria-current={view?.current ? 'true' : undefined}
+        aria-description={parentConversationDescription}
+        data-agent-send-target={sendTargetStatus}
+        role={agent.lineage ? 'treeitem' : undefined}
+        aria-level={agent.lineage ? agent.lineage.depth + 1 : undefined}
+        aria-expanded={hasChildDisclosure ? childAgentsExpanded : undefined}
+        title={sendTargetDisabledReason}
+      >
+        {rowBody}
+      </div>
+    </WorkerAgentRowMenu>
   )
 })

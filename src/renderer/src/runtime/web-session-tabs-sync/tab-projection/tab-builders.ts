@@ -35,7 +35,8 @@ export function buildTerminalUnifiedTab(
     createdAt: tab.createdAt,
     isPreview: false,
     isPinned: tab.isPinned === true,
-    ...(viewMode ? { viewMode } : {})
+    ...(viewMode ? { viewMode } : {}),
+    ...(tab.workerTab ? { workerTab: tab.workerTab } : {})
   }
 }
 

@@ -1,3 +1,4 @@
+import { WorkerTabsSetting } from './behavior/WorkerTabsSetting'
 import { useAppStore } from '@/store/index'
 import {
   getClaudeSubagentNavigationTitle,
@@ -112,6 +113,7 @@ export function AgentsPane({
           </>
         ) : null}
         <AgentGeneratedTabTitlesSetting settings={settings} updateSettings={updateSettings} />
+        <WorkerTabsSetting />
         {!isPairedWebClientWindow() ? (
           <AgentAwakeSetting settings={settings} updateSettings={updateSettings} />
         ) : null}

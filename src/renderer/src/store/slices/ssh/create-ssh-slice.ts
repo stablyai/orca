@@ -1,3 +1,5 @@
+import { recordWorkerTabFeed } from '@/components/tab-bar/worker-tab-feed-grace'
+import { toSshExecutionHostId } from '../../../../../shared/execution-host/execution-host'
 import type { StateCreator } from 'zustand'
 import type { AppState } from '../../types'
 import type {
@@ -64,7 +66,7 @@ export function getLocalSshTargetConnectionGeneration(targetId: string): number 
   return localTargetConnectionGenerations.get(targetId)
 }
 
-export const createSshSlice: StateCreator<AppState, [], [], SshSlice> = (set) => ({
+export const createSshSlice: StateCreator<AppState, [], [], SshSlice> = (set, get) => ({
   sshConnectionStates: new Map(),
   sshTargetLabels: new Map(),
   sshTargetGenerations: new Map(),
@@ -76,7 +78,8 @@ export const createSshSlice: StateCreator<AppState, [], [], SshSlice> = (set) =>
   unrestoredPortForwardsByConnection: {},
   detectedPortsByConnection: {},
 
-  setSshConnectionState: (targetId, state) =>
+  setSshConnectionState: (targetId, state) => {
+    const was = get().sshConnectionStates.get(targetId)?.status
     set((s) => {
       const next = new Map(s.sshConnectionStates)
       const previous = next.get(targetId)
@@ -98,7 +101,20 @@ export const createSshSlice: StateCreator<AppState, [], [], SshSlice> = (set) =>
           : s.sshConnectedGeneration,
         transientClearedAgentStatusConnectionIds: blockedConnections
       }
-    }),
+    })
+    if (was !== state.status) {
+      if (state.status === 'connected') {
+        recordWorkerTabFeed(toSshExecutionHostId(targetId), 'reconnect')
+      } else if (
+        state.status === 'disconnected' ||
+        state.status === 'error' ||
+        state.status === 'auth-failed' ||
+        state.status === 'reconnection-failed'
+      ) {
+        recordWorkerTabFeed(toSshExecutionHostId(targetId), 'failed')
+      }
+    }
+  },
 
   setSshTargetLabels: (labels) => set({ sshTargetLabels: labels }),
   setRemovedSshTargetLabels: (labels) =>

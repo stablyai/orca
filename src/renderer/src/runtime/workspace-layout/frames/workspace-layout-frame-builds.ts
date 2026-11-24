@@ -1,3 +1,4 @@
+import { preserveWorkerTabFrameSelections } from '@/components/tab-bar/worker-tab-frame-selection'
 // Full builds read window view/facts through save/Loader; workspace builds use store records. Both run restore builders only for named workspaces, merging records via workspace-layout-frame-store-patch.
 
 import type { AppState } from '@/store/types'
@@ -53,7 +54,7 @@ function patchFromSlices(
   })
   return buildLayoutFrameStorePatch(
     state,
-    built,
+    preserveWorkerTabFrameSelections(state, built),
     keys,
     holds.keepsTerminalLayout,
     holds.newRowFields,

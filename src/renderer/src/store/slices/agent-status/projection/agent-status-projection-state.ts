@@ -27,6 +27,7 @@ import {
 } from './agent-status-projection-types'
 
 export class AgentStatusProjectionState {
+  membershipVersion = 0
   display = new AgentRowDisplayIndex()
   readonly terminalTypes = new Map<string, TerminalTypeBucket>()
   activeAgentCount = 0

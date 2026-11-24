@@ -30903,5 +30903,81 @@
     "moveLeft": "Move left",
     "moveRight": "Move right",
     "reset": "Reset tab order"
+  },
+  "workerTabs": {
+    "keep": "Keep tab",
+    "preview": "Preview",
+    "hide": "Hide tab",
+    "hideRunning": "Hide tab · keeps running",
+    "hideToast": {
+      "show": "Show",
+      "running": "Still running · open it from the sidebar",
+      "unreachable": "Hidden · find it in tab search"
+    },
+    "stop": {
+      "refused": "Couldn't stop this worker",
+      "notConfirmed": "Couldn't confirm the worker stopped",
+      "helpers": "Some helpers didn't stop"
+    },
+    "confirm": {
+      "stopTitle": "Stop this worker? Its task ends.",
+      "stop": "Stop",
+      "closeRunningTitle": "Stop this worker and close its tab?",
+      "stopAndClose": "Stop and close",
+      "closeFinishedTitle": "Close this worker's tab? Anything still running in it stops.",
+      "close": "Close",
+      "cancel": "Cancel"
+    },
+    "menu": {
+      "keep": "Keep tab",
+      "hide": "Hide tab",
+      "stop": "Stop worker",
+      "closeTab": "Close tab",
+      "workers": "Workers…"
+    },
+    "state": {
+      "needsYou": "Needs you",
+      "failed": "Failed",
+      "running": "Running",
+      "done": "Done",
+      "stopped": "Stopped"
+    },
+    "list": {
+      "title": "Workers",
+      "via": "via {{title}}",
+      "viaClosed": "via a closed worker",
+      "close": "Close {{title}}",
+      "stop": "Stop {{title}}"
+    },
+    "badge": {
+      "label_one": "{{count}} worker needs you",
+      "label_other": "{{count}} workers need you"
+    },
+    "setting": {
+      "title": "Worker tabs",
+      "description": "Give workers a tab only when you open them, or always.",
+      "openWhenClicked": "Open when clicked",
+      "alwaysOpen": "Always open",
+      "keywordWorker": "worker",
+      "keywordOrchestration": "orchestration",
+      "keywordCoordinator": "coordinator",
+      "keywordHideTabs": "hide tabs"
+    },
+    "move": {
+      "refused": "Can't move this pane · that tab belongs to another worker"
+    },
+    "remote": {
+      "stopReason": "Stop it on the computer that started it",
+      "stopFromHome": "Can't stop this worker here · stop it on the computer that started it"
+    },
+    "closeKept": {
+      "tab": "This tab has a worker · close your terminal pane first",
+      "pane_one": "This pane has a worker · stop or close it first",
+      "pane_other": "This pane has {{count}} workers · stop or close them first",
+      "bulk_one": "Kept {{count}} tab with a worker",
+      "bulk_other": "Kept {{count}} tabs with workers",
+      "bulk": "Kept {{count}} tabs with workers",
+      "pane": "This pane has {{count}} workers · stop or close them first"
+    }
   }
 }

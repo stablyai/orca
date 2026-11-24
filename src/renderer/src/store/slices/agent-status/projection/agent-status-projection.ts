@@ -39,11 +39,15 @@ import { publishProjectionRows } from './agent-status-projection-publish-rows'
 import { publishProjectionArrangement } from './agent-status-projection-publish-arrangement'
 
 import { KeyedChangeJournal } from '../../../../../../shared/collections/keyed-change-journal'
+import { agentRowMembershipChanged } from '../../../../../../shared/agent-status/presentation/agent-row-membership-fields'
 
 /** Live keyed derivatives; historical views capture explicitly. */
 export class AgentStatusProjection {
   private data = new AgentStatusProjectionState()
   private changes = new KeyedChangeJournal()
+  membershipRevision(): number {
+    return this.data.membershipVersion
+  }
   changeCursor(): number {
     return this.changes.cursor()
   }
@@ -259,6 +263,9 @@ export class AgentStatusProjection {
         : []
     const publishCounts = stageProjectionCounts(data, state, rows.prepared)
     return () => {
+      if (fullResync || topology.moved.size > 0 || agentRowMembershipChanged(changes)) {
+        data.membershipVersion++
+      }
       const changed = new Set(topology.changedKeys)
       for (const [key, next] of rows.prepared) {
         changed.add(key)

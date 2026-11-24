@@ -18,6 +18,8 @@ import {
   findOffscreenOpenedTabStripSlot,
   findTabStripSlot,
   getActiveTabDockSide,
+  isTabStripScrolledToEnd,
+  revealPeekTabStripSlot,
   readTabStripSlotIds,
   revealTabStripSlot,
   updateTabStripDockAvailability,
@@ -49,11 +51,6 @@ export function scrollTabStripByStep(
     left: direction === 'start' ? -scrollStep : scrollStep,
     behavior: motionSafeScrollBehavior(behavior)
   })
-}
-
-function isTabStripScrolledToEnd(el: HTMLElement): boolean {
-  const max = Math.max(0, el.scrollWidth - el.clientWidth)
-  return el.scrollLeft >= max - 2
 }
 
 export function useTabStripOverflowNavigation({
@@ -160,8 +157,12 @@ export function useTabStripOverflowNavigation({
     const handleStripResize = (): void => {
       updateTabStripOverflowState()
       // Keep end-pinned strips at the right edge as live labels change scrollWidth.
-      if (stickToEndRef.current && !isTabStripPointerGestureActive()) {
-        el.scrollLeft = Math.max(0, el.scrollWidth - el.clientWidth)
+      if (!isTabStripPointerGestureActive()) {
+        if (stickToEndRef.current) {
+          el.scrollLeft = Math.max(0, el.scrollWidth - el.clientWidth)
+        } else if (revealPeekTabStripSlot(el, activeTabIdRef.current ?? '')) {
+          stickToEndRef.current = isTabStripScrolledToEnd(el)
+        }
       }
       recordScrollAnchor()
       notifyTabStripListeners(stripResizeListenersRef)

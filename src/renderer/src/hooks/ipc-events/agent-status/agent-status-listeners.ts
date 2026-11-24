@@ -1,3 +1,5 @@
+import { recordWorkerTabFeed } from '@/components/tab-bar/worker-tab-feed-grace'
+import { toSshExecutionHostId } from '../../../../../shared/execution-host/execution-host'
 import { CLOSE_TERMINAL_PANE_EVENT } from '@/constants/terminal'
 import {
   resolveLegacyWorkerTerminalRecoveryAction,
@@ -65,6 +67,10 @@ export function registerAgentStatusListeners(args: {
   } = args
   unsubs.push(
     window.api.agentStatus.onSet((data) => {
+      recordWorkerTabFeed(
+        data.connectionId ? toSshExecutionHostId(data.connectionId) : 'local',
+        'status'
+      )
       enqueueLiveAgentStatus(data)
       // A successful stop can resolve before the ordinary burst timer; publish its handoff first.
       if (data.paneSleep) {

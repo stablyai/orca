@@ -226,6 +226,16 @@ export function createUiPreferenceActions(set: UISliceSet, get: UISliceGet): Par
       set({ showAgentModels: show })
       window.api.ui.set({ showAgentModels: show }).catch(console.error)
     },
+    workerTabsMode: 'open-when-clicked',
+    setWorkerTabsMode: (mode) => {
+      set({ workerTabsMode: mode })
+      window.api.ui.set({ workerTabsMode: mode }).catch(console.error)
+    },
+    workerTabHideHintShown: false,
+    markWorkerTabHideHintShown: () => {
+      set({ workerTabHideHintShown: true })
+      window.api.ui.set({ workerTabHideHintShown: true }).catch(console.error)
+    },
     agentActivityDisplayMode: DEFAULT_AGENT_ACTIVITY_DISPLAY_MODE,
     setAgentActivityDisplayMode: (mode) => {
       const normalized = normalizeAgentActivityDisplayMode(mode)

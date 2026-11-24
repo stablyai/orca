@@ -1,3 +1,4 @@
+import type { WorkerTabStamp } from '../../../../shared/orchestration/workers/worker-tab-stamp'
 import type { FreshWorkspaceAgentLaunch } from '@/lib/workspace/creation/worktree-startup-payload'
 import type { TerminalState } from './terminal-state'
 import type { Tab } from '../../../../shared/workspace-layout/tab-groups/tab-types'
@@ -98,6 +99,8 @@ export type TerminalActions = {
       viewMode?: Tab['viewMode']
       startupCwd?: string
       forceHostRuntime?: boolean
+      /** Host-owned stamp for a surface Orca created for an orchestration worker. */
+      workerTab?: WorkerTabStamp
     }
   ) => TerminalTab
   openNewTerminalTabInActiveWorkspace: (groupId: string) => Promise<void>

@@ -1,3 +1,6 @@
+import { patchTab } from '@/store/slices/tabs/tab-group-state'
+import { patchTerminalTabRow } from '@/store/slices/tabs/tabs-host-mirroring'
+import { withWorkerLeaf } from '../../../../../shared/orchestration/workers/worker-tab-stamp'
 import { presentAgentLaunchTab } from '@/lib/agent-session/launch/pane/agent-launch-tab-presentation'
 import { requestBackgroundTerminalWorktreeMount } from '@/components/terminal/workspace-mounting/background-terminal-worktree-mount'
 import { hasRegisteredRuntimeTerminalTab } from '@/runtime/hosted-terminals/mounted-surfaces/mounted-terminal-tab-registry'
@@ -37,6 +40,7 @@ export function registerTerminalPresentationIpcBridge(unsubs: (() => void)[]): v
         resumeProviderSession,
         launchToken,
         launchAgent,
+        workerTab,
         viewMode,
         targetGroupId,
         afterTabId,
@@ -126,6 +130,7 @@ export function registerTerminalPresentationIpcBridge(unsubs: (() => void)[]): v
                       }
                     : {}),
                   ...(cwd ? { startupCwd: cwd } : {}),
+                  ...(workerTab && leafId ? { workerTab: withWorkerLeaf(workerTab, leafId) } : {}),
                   // Why: CLI-spawned PTYs bake the pane key into env; adopt the same tab id so hook-event attribution keeps working.
                   ...(tabId !== undefined ? { id: tabId } : {}),
                   ...(ORCA_LAYOUT_OWNER_IS_MAIN && leafId ? { initialLeafId: leafId } : {})
@@ -172,8 +177,23 @@ export function registerTerminalPresentationIpcBridge(unsubs: (() => void)[]): v
           if (agentLaunchViewer) {
             presentAgentLaunchTab(agentLaunchViewer, worktreeId, tab.id, leafId)
           }
+          if (reusedTab?.workerTab && workerTab && leafId) {
+            const stamped = withWorkerLeaf(workerTab, leafId)
+            useAppStore.setState((state) => {
+              const unified = state.unifiedTabsByWorktree[worktreeId]?.find(
+                (row) => row.contentType === 'terminal' && row.entityId === tab.id && row.workerTab
+              )
+              return {
+                ...patchTerminalTabRow(state.tabsByWorktree, tab.id, { workerTab: stamped }),
+                ...(unified
+                  ? patchTab(state.unifiedTabsByWorktree, unified.id, { workerTab: stamped })
+                  : {})
+              }
+            })
+          }
           // Apply runtime titles only to fresh tabs or focus would overwrite reused tabs’ custom titles.
-          if (title && !reusedTab) {
+          // A worker's management title is a placeholder; its Task title labels the tab (#21917).
+          if (title && !reusedTab && !workerTab) {
             store.setTabCustomTitle(tab.id, title, { recordInteraction: false })
           }
           if (leafId && ptyId) {

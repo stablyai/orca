@@ -24702,5 +24702,79 @@
   },
   "agentCliUpdate": {
     "thisComputer": "Bu bilgisayar"
+  },
+  "workerTabs": {
+    "keep": "Sekmeyi tut",
+    "preview": "Önizleme",
+    "hide": "Sekmeyi gizle",
+    "hideRunning": "Sekmeyi gizle · çalışmaya devam eder",
+    "hideToast": {
+      "show": "Göster",
+      "running": "Hâlâ çalışıyor · kenar çubuğundan açın",
+      "unreachable": "Gizlendi · sekme aramasında bulun"
+    },
+    "stop": {
+      "refused": "Bu çalışan durdurulamadı",
+      "notConfirmed": "Çalışanın durduğu doğrulanamadı",
+      "helpers": "Bazı yardımcılar durmadı"
+    },
+    "confirm": {
+      "stopTitle": "Bu çalışan durdurulsun mu? Görevi sona erer.",
+      "stop": "Durdur",
+      "closeRunningTitle": "Bu çalışan durdurulup sekmesi kapatılsın mı?",
+      "stopAndClose": "Durdur ve kapat",
+      "closeFinishedTitle": "Bu çalışanın sekmesi kapatılsın mı? İçinde hâlâ çalışan her şey durdurulur.",
+      "close": "Kapat",
+      "cancel": "İptal"
+    },
+    "menu": {
+      "keep": "Sekmeyi tut",
+      "hide": "Sekmeyi gizle",
+      "stop": "Çalışanı durdur",
+      "closeTab": "Sekmeyi kapat",
+      "workers": "Çalışanlar…"
+    },
+    "state": {
+      "needsYou": "Size ihtiyacı var",
+      "failed": "Başarısız",
+      "running": "Çalışıyor",
+      "done": "Tamamlandı",
+      "stopped": "Durduruldu"
+    },
+    "list": {
+      "title": "Çalışanlar",
+      "via": "{{title}} aracılığıyla",
+      "viaClosed": "kapatılmış bir çalışan aracılığıyla",
+      "close": "{{title}} kapat",
+      "stop": "{{title}} durdur"
+    },
+    "badge": {
+      "label_one": "{{count}} çalışanın size ihtiyacı var",
+      "label_other": "{{count}} çalışanın size ihtiyacı var"
+    },
+    "setting": {
+      "title": "Çalışan sekmeleri",
+      "description": "Çalışanlara yalnızca açıldıklarında veya her zaman sekme verin.",
+      "openWhenClicked": "Tıklandığında aç",
+      "alwaysOpen": "Her zaman aç",
+      "keywordWorker": "çalışan",
+      "keywordOrchestration": "orkestrasyon",
+      "keywordCoordinator": "koordinatör",
+      "keywordHideTabs": "sekmeleri gizle"
+    },
+    "move": {
+      "refused": "Bu bölme taşınamıyor · bu sekme başka bir çalışana ait"
+    },
+    "remote": {
+      "stopReason": "Başlatıldığı bilgisayardan durdurun",
+      "stopFromHome": "Bu worker burada durdurulamıyor · başlatıldığı bilgisayardan durdurun"
+    },
+    "closeKept": {
+      "tab": "Bu sekmede bir çalışan var · önce kendi terminal bölmenizi kapatın",
+      "pane_one": "Bu bölmede bir çalışan var · önce durdurun veya kapatın",
+      "pane_other": "Bu bölmede {{count}} çalışan var · önce durdurun veya kapatın",
+      "bulk_one": "Çalışan içeren {{count}} sekme tutuldu",
+      "bulk_other": "Çalışan içeren {{count}} sekme tutuldu"
+    }
   }
 }

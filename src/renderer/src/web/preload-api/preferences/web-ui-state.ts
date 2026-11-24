@@ -1,4 +1,5 @@
 import { normalizeAgentActivityDisplayMode } from '../../../../../shared/agent-status/presentation/agent-activity-display-mode'
+import { normalizeWorkerTabsUiPreferences } from '../../../../../shared/orchestration/workers/worker-tabs-ui-preferences'
 import {
   normalizeWorktreeCardProperties,
   getWorktreeCardModeProperties
@@ -79,6 +80,7 @@ export function mergeHostWebUIState(
     activityBarBotOrder: local.activityBarBotOrder,
     activityBarHidden: local.activityBarHidden,
     showAgentModels: local.showAgentModels !== false,
+    ...normalizeWorkerTabsUiPreferences(local),
     agentsVisibleHostIds: local.agentsVisibleHostIds,
     agentsFilterRepoIds: local.agentsFilterRepoIds,
     agentsHideWorkspacesFromOtherDevices: local.agentsHideWorkspacesFromOtherDevices === true,

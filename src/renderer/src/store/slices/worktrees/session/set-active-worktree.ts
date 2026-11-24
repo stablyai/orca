@@ -1,3 +1,4 @@
+import { workerWorkspacePeekPatch } from '@/components/tab-bar/worker-tab-workspace-open'
 import { cancelActiveWorktreeRemoval } from '@/store/workspaces/selection/active-worktree-deselection-intent'
 import { projectWorktreeTabModelReconciliation } from '../../tabs/tabs-reconciliation'
 import { moveFocusToRendererBeforeFocusedWebviewHidden } from '../../../../components/browser-pane/host-guest/webview-registry'
@@ -63,10 +64,14 @@ export function createSetActiveWorktree(
       const reconciliationChanged = Boolean(
         reconciliation && Object.keys(reconciliation.patch).length > 0
       )
-      const s =
+      let s =
         reconciliation && reconciliationChanged
           ? { ...transitioned, ...reconciliation.patch }
           : transitioned
+      const workerPeekPatch = worktreeId ? workerWorkspacePeekPatch(s, worktreeId) : {}
+      if (workerPeekPatch.groupsByWorktree) {
+        s = { ...s, ...workerPeekPatch }
+      }
       const reconciledActiveTabId = reconciliation?.activeRenderableTabId ?? null
       if (!worktreeId) {
         return {
@@ -144,7 +149,8 @@ export function createSetActiveWorktree(
         nextActiveRepoId !== s.activeRepoId ||
         allDead ||
         reconciliationChanged ||
-        stateTransition !== undefined
+        stateTransition !== undefined ||
+        workerPeekPatch.groupsByWorktree !== undefined
       if (!hasStateChange) {
         // Why: preserve the root Zustand reference on a no-op re-activation so session persistence/runtime sync don't fan out.
         return s
@@ -153,6 +159,7 @@ export function createSetActiveWorktree(
       return {
         ...stateTransition?.patch,
         ...reconciliation?.patch,
+        ...workerPeekPatch,
         activeRepoId: nextActiveRepoId,
         activeWorktreeId: worktreeId,
         activeWorkspaceKey: nextActiveWorkspaceKey,

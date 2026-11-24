@@ -19,6 +19,7 @@ import { installTerminalSelectionFitGuard } from '../../viewport/terminal-select
 import type { ConnectPanePtySession } from '../connect-pane-pty-session'
 import { recordAdmittedTerminalUserInput } from '@/diagnostics/telemetry/telemetry'
 import { noteTerminalWebglAtlasTyping } from '@/lib/pane-manager/terminal-rendering/terminal-webgl-atlas-rebuild-interaction'
+import { keepWorkerTabOnUserInput } from '@/components/tab-bar/worker-tab-keep-on-input'
 
 export function installPtyInputForward(session: ConnectPanePtySession): void {
   session.forwardPtyInput = (data: string, wasUserInput = false): void => {
@@ -157,7 +158,10 @@ export function installPtyInputForward(session: ConnectPanePtySession): void {
     }
   }
   // Bind once so provenance survives deferred input without allocating per-keystroke closures.
-  const forwardUserInput = (data: string): void => session.forwardPtyInput(data, true)
+  const forwardUserInput = (data: string): void => {
+    keepWorkerTabOnUserInput(session.deps.worktreeId, session.deps.tabId, data)
+    session.forwardPtyInput(data, true)
+  }
   const forwardUnclassifiedInput = (data: string): void => session.forwardPtyInput(data, false)
   session.onDataDisposable = subscribeToTerminalInputData(
     session.pane.terminal,

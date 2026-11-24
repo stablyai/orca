@@ -24245,5 +24245,79 @@
   },
   "agentCliUpdate": {
     "thisComputer": "這台電腦"
+  },
+  "workerTabs": {
+    "keep": "保留分頁",
+    "preview": "預覽",
+    "hide": "隱藏分頁",
+    "hideRunning": "隱藏分頁 · 繼續執行",
+    "hideToast": {
+      "show": "顯示",
+      "running": "仍在執行 · 可從側邊欄開啟",
+      "unreachable": "已隱藏 · 可在分頁搜尋中找到"
+    },
+    "stop": {
+      "refused": "無法停止此工作代理",
+      "notConfirmed": "無法確認工作代理已停止",
+      "helpers": "部分輔助代理未停止"
+    },
+    "confirm": {
+      "stopTitle": "停止此工作代理？其任務將結束。",
+      "stop": "停止",
+      "closeRunningTitle": "停止此工作代理並關閉其分頁？",
+      "stopAndClose": "停止並關閉",
+      "closeFinishedTitle": "關閉此工作代理的分頁？其中仍在執行的內容都將停止。",
+      "close": "關閉",
+      "cancel": "取消"
+    },
+    "menu": {
+      "keep": "保留分頁",
+      "hide": "隱藏分頁",
+      "stop": "停止工作代理",
+      "closeTab": "關閉分頁",
+      "workers": "工作代理…"
+    },
+    "state": {
+      "needsYou": "需要你處理",
+      "failed": "失敗",
+      "running": "執行中",
+      "done": "已完成",
+      "stopped": "已停止"
+    },
+    "list": {
+      "title": "工作代理",
+      "via": "透過 {{title}}",
+      "viaClosed": "透過已關閉的工作代理",
+      "close": "關閉 {{title}}",
+      "stop": "停止 {{title}}"
+    },
+    "badge": {
+      "label_one": "{{count}} 個工作代理需要你處理",
+      "label_other": "{{count}} 個工作代理需要你處理"
+    },
+    "setting": {
+      "title": "工作代理分頁",
+      "description": "僅在開啟工作代理時顯示分頁，或始終顯示。",
+      "openWhenClicked": "點擊時開啟",
+      "alwaysOpen": "始終開啟",
+      "keywordWorker": "工作代理",
+      "keywordOrchestration": "編排",
+      "keywordCoordinator": "協調代理",
+      "keywordHideTabs": "隱藏分頁"
+    },
+    "move": {
+      "refused": "無法移動此窗格 · 該分頁屬於另一工作代理"
+    },
+    "remote": {
+      "stopReason": "請在啟動它的電腦上停止",
+      "stopFromHome": "無法在此處停止此工作代理 · 請在啟動它的電腦上停止"
+    },
+    "closeKept": {
+      "tab": "此分頁有工作代理 · 請先關閉你自己的終端機窗格",
+      "pane_one": "此窗格有工作代理 · 請先停止或關閉它",
+      "pane_other": "此窗格有 {{count}} 個工作代理 · 請先停止或關閉它們",
+      "bulk_one": "已保留 {{count}} 個含工作代理的分頁",
+      "bulk_other": "已保留 {{count}} 個含工作代理的分頁"
+    }
   }
 }

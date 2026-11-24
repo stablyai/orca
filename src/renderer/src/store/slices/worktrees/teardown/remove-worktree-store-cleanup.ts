@@ -1,3 +1,4 @@
+import { forgetWorkerTabFolding } from '@/components/tab-bar/worker-tab-folding'
 import { worktreeWorkspaceKey } from '../../../../../../shared/workspace/identity/workspace-scope'
 import { forgetCombinedDiffViewsForWorktrees } from '@/components/editor/combined-diff/remember-view/combined-diff-view-cache'
 import { forgetDisplayedPanesForWorktrees } from '@/components/sidebar/workspace-card/slots/worktree-card-slot-pane-index'
@@ -23,6 +24,7 @@ export function applyRemoveWorktreeSuccessState(
   executionHostId?: ExecutionHostId,
   confirmedDiscards?: ConfirmedUnsavedDiscards
 ): void {
+  forgetWorkerTabFolding(worktreeId)
   // Clear module caches outside store state; reused IDs must re-arm ambiguity warnings.
   forgetAmbiguousOwnerWarnings([worktreeId])
   forgetCombinedDiffViewsForWorktrees([worktreeId])

@@ -9,6 +9,10 @@ import {
   runAfterEditorFramesFlush
 } from '../../editor/save/flush/editor-pending-flush'
 import { closeTerminalTab } from './terminal-tab-actions'
+import {
+  announceKeptMixedWorkerTabs,
+  handleWorkerTabUserClose
+} from '../../tab-bar/worker-tab-user-close'
 import { isWebRuntimeSessionActive } from '@/runtime/web-session-tabs-sync/identity/web-runtime-session-environment'
 import { closeBrowserWorkspaceTabOnHosts } from '@/runtime/browser/closing/browser-workspace-tab-close'
 import { destroyWorkspaceWebviews } from '../../../store/slices/browser/cleanup/browser-webview-cleanup'
@@ -47,6 +51,10 @@ export function useTerminalBulkCloseActions(
         .map((tab) => tab.id)
       for (const id of tabIds) {
         const unifiedTab = byId.get(id) ?? byEntity.get(id)
+        // Re-read per tab: a worker tab hides, and one that now mixes in the user's pane stays open.
+        if (unifiedTab?.workerTab && handleWorkerTabUserClose(unifiedTab.id, true)) {
+          continue
+        }
         // Bulk closes keep pinned tabs and tabs holding unsent browser notes open.
         if (
           unifiedTab?.isPinned ||
@@ -110,6 +118,7 @@ export function useTerminalBulkCloseActions(
   const closeTabBarTabs = useCallback(
     (tabIds: string[]) => {
       const state = useAppStore.getState()
+      announceKeptMixedWorkerTabs(state, tabIds)
       const tabs = activeWorktreeId ? (state.unifiedTabsByWorktree[activeWorktreeId] ?? []) : []
       const entityByTab = new Map(tabs.map((tab) => [tab.id, tab.entityId]))
       const fileIdOf = (id: string): string => entityByTab.get(id) ?? id

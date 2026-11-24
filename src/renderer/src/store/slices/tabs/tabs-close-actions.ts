@@ -1,3 +1,4 @@
+import { withoutFoldedWorkerTabs } from '@/components/tab-bar/worker-tab-folding'
 import { editorTabRetirement } from '../editor/tabs/editor-tab-retirement'
 import { structuredAgentSessionAddressTabId } from '../../../../../shared/agent-session/view/structured-agent-session-projection'
 import {
@@ -123,7 +124,8 @@ export function createTabsCloseActions(
           ? wasLastTab
             ? null
             : pickNextActiveTab(
-                dedupedGroupOrder,
+                // Never land on a folded worker; a pane of only folded workers keeps its landing.
+                withoutFoldedWorkerTabs(state, worktreeId, group.id, dedupedGroupOrder),
                 group.recentTabIds,
                 tabId,
                 state.unifiedTabsByWorktree[worktreeId]

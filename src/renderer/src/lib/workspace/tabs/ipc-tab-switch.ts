@@ -1,5 +1,6 @@
 import { useAppStore } from '../../../store/index'
 import { getActiveTabNavOrder } from '@/lib/workspace/tabs/order/group-tab-order'
+import { selectFoldedWorkerTabIds } from '@/components/tab-bar/worker-tab-folding'
 import {
   getActiveEntityIdForTabType,
   getNextTerminalCycleTab,
@@ -28,7 +29,9 @@ function resolveCycleContext(): CycleContext | null {
     return null
   }
   // Cycle the visible group’s order so keyboard navigation follows dragged tabs.
-  const allTabIds = getActiveTabNavOrder(store, worktreeId)
+  const allTabIds = getActiveTabNavOrder(store, worktreeId, {}, (groupId) =>
+    selectFoldedWorkerTabIds(store, worktreeId, groupId)
+  )
   if (allTabIds.length <= 1) {
     return null
   }
@@ -275,7 +278,9 @@ export function handleSwitchTerminalTab(direction: number): boolean {
     return false
   }
   // Keep terminal hydration detection separate: native chats are self-backed.
-  const activeGroupNavTabs = getActiveTabNavOrder(store, worktreeId)
+  const activeGroupNavTabs = getActiveTabNavOrder(store, worktreeId, {}, (groupId) =>
+    selectFoldedWorkerTabIds(store, worktreeId, groupId)
+  )
   const activeGroupTerminalTabs = activeGroupNavTabs.filter((entry) => entry.type === 'terminal')
   const worktreeTerminalTabs = getWorktreeTerminalTabOrder(store, worktreeId)
   const useFallback = shouldUseWorktreeTerminalFallback(

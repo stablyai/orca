@@ -10,6 +10,7 @@ import { BrowserPagePrompts } from './components/browser-pane/page-prompts/brows
 import { LinkRoutingPreferenceDialogProvider } from './components/link-actions/link-routing-preference-dialog'
 import { SkillFreshnessNudge } from './components/skills/freshness/SkillFreshnessNudge'
 import PinnedTabCloseDialog from './components/terminal-pane/layout/close/PinnedTabCloseDialog'
+import WorkerTabConfirmDialog from './components/tab-bar/WorkerTabConfirmDialog'
 import RunningTerminalCloseDialog from './components/terminal-pane/layout/close/RunningTerminalCloseDialog'
 import WorktreeBaseFallbackDialog from './components/sidebar/workspace-creation/base-ref-update/WorktreeBaseFallbackDialog'
 import ClaudeAccountSwitchDialog from './components/provider-accounts/claude/ClaudeAccountSwitchDialog'
@@ -134,6 +135,7 @@ function App(): React.JSX.Element {
       <WorktreeBaseFallbackDialog />
       <ClaudeAccountSwitchDialog />
       <PinnedTabCloseDialog />
+      <WorkerTabConfirmDialog />
       <RunningTerminalCloseDialog />
       {/* Electron drag hit-testing follows DOM order, ignoring z-index; render controls last to keep them clickable. */}
       {hasCustomTitleBar && <WindowControls closeOnly={tilingWindowMode} />}

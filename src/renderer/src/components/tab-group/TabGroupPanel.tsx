@@ -95,9 +95,11 @@ export default function TabGroupPanel({
     tabBarOrder,
     terminalTabs
   } = model
-  const showsSplitLanding = useAppStore((state) =>
+  const isEmptySplit = useAppStore((state) =>
     isSplitLandingGroup(state, worktreeId, model.group ?? undefined)
   )
+  const showsSplitLanding =
+    isEmptySplit || (!activeTab && tabBarOrder.length === 0 && model.foldedTabIds.size > 0)
   // Why: one strip owns the worktree's client-hosted rows, or every split repeats them.
   const ownsClientHostedRows = useAppStore(
     (state) =>

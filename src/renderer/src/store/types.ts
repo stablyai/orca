@@ -39,6 +39,7 @@ import type { RuntimeStatusSlice } from './slices/runtime-status/runtime-status-
 import type { PullRequestGenerationSlice } from './slices/hosted-review/generation/pull-request-generation-state'
 import type { CommitMessageGenerationSlice } from './slices/hosted-review/generation/commit-message-generation'
 import type { PinnedTabCloseConfirmSlice } from './slices/tabs/pinned-tab-close-confirm'
+import type { WorkerTabViewSlice } from './slices/tabs/worker-tab-view-slice'
 import type { RecentlyClosedTerminalTabsSlice } from './terminals/tabs/recently-closed-terminal-tabs'
 import type { RecentlyClosedTabsSlice } from './slices/tabs/recently-closed-tabs'
 import type { OrcaProfilesSlice } from './slices/orca-profiles/create-orca-profiles-slice'
@@ -93,6 +94,7 @@ export type AppState = RepoSlice &
   PullRequestGenerationSlice &
   CommitMessageGenerationSlice &
   PinnedTabCloseConfirmSlice &
+  WorkerTabViewSlice &
   RecentlyClosedTerminalTabsSlice &
   RecentlyClosedTabsSlice &
   OrcaProfilesSlice &

@@ -1,3 +1,4 @@
+import { agentPublicIdentitiesEqual } from '../../../../../../shared/orchestration/workers/worker-tab-stamp'
 import type { AgentStatusOrchestrationContext } from '../../../../../../shared/agent-status/contracts/agent-status-types'
 import { orchestrationFleetAttentionEqual } from '../../../../../../shared/orchestration/fleet/orchestration-fleet-attention'
 
@@ -14,7 +15,10 @@ export function orchestrationContextsEqual(
     a.parentTerminalHandle === b.parentTerminalHandle &&
     a.parentPaneKey === b.parentPaneKey &&
     a.coordinatorHandle === b.coordinatorHandle &&
+    agentPublicIdentitiesEqual(a.coordinatorIdentity, b.coordinatorIdentity) &&
+    agentPublicIdentitiesEqual(a.parentIdentity, b.parentIdentity) &&
     a.orchestrationRunId === b.orchestrationRunId &&
+    a.stopped === b.stopped &&
     orchestrationFleetAttentionEqual(a.attention, b.attention)
   )
 }

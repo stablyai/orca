@@ -1,4 +1,5 @@
 import type { RetainedUpdateTarget } from './retained-update-target'
+import type { WorkerTabsMode } from '../../../../../shared/workspace-layout/tab-groups/worker-tab-visibility'
 import type { StatusBarUsageFormat } from '../../../../../shared/status-bar/status-bar-usage-format'
 import type { PersistedUIState } from '../../../../../shared/orca-profiles/persisted-ui-state-types'
 import type { BrowserDevToolsDockLayout } from '../../../../../shared/browser/devtools/browser-devtools-dock'
@@ -116,6 +117,10 @@ export type UISlicePreferences = {
   setWorktreeCardProperties: (properties: readonly WorktreeCardProperty[]) => void
   showAgentModels: boolean
   setShowAgentModels: (show: boolean) => void
+  workerTabsMode: WorkerTabsMode
+  setWorkerTabsMode: (mode: WorkerTabsMode) => void
+  workerTabHideHintShown: boolean
+  markWorkerTabHideHintShown: () => void
   agentActivityDisplayMode: AgentActivityDisplayMode
   setAgentActivityDisplayMode: (mode: AgentActivityDisplayMode) => void
   workspaceStatuses: WorkspaceStatusDefinition[]

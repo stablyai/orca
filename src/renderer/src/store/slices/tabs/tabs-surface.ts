@@ -118,11 +118,13 @@ export function deriveActiveSurfaceForWorktree(
     activeBrowserTabId,
     activeFileId,
     activeTabId:
-      activeUnifiedTab?.contentType === 'terminal'
-        ? activeUnifiedTab.entityId
-        : terminalTabStillExists
-          ? restoredTerminalTabId
-          : (terminalTabs[0]?.id ?? null),
+      activeGroup && activeGroup.activeTabId === null && !activeUnifiedTab
+        ? null
+        : activeUnifiedTab?.contentType === 'terminal'
+          ? activeUnifiedTab.entityId
+          : terminalTabStillExists
+            ? restoredTerminalTabId
+            : (terminalTabs[0]?.id ?? null),
     activeTabType
   }
 }

@@ -1,3 +1,7 @@
+import { WorkerTabMenuItems } from '../WorkerTabMenuItems'
+import { indexedWorkerTab } from '../worker-tab-index'
+import { workerTabCloseKind } from '../worker-tab-view-actions'
+import { CoordinatorWorkersMenuItem } from '../CoordinatorWorkersMenuItem'
 import { CopyX, Pencil, Pin, PinOff, SquareTerminal, Timer, X } from 'lucide-react'
 import {
   ContextMenuItem,
@@ -149,6 +153,11 @@ export function SortableTabContextMenu({
   const splitDownShortcut = formatShortcutLabel('terminal.splitDown', keybindings)
 
   const closeShortcut = useOptionalShortcutLabel('tab.close')
+  // A stamp whose worker pane is gone leaves an ordinary tab with the ordinary Close.
+  const stamped = useAppStore((state) => {
+    const worker = indexedWorkerTab(state.unifiedTabsByWorktree[tab.worktreeId], unifiedTabId)
+    return worker ? workerTabCloseKind(state, worker) !== 'none' : false
+  })
   const renameShortcut = useOptionalShortcutLabel('tab.rename')
   // Keep the route back from chat even while switching terminals into chat is disabled.
   const showTerminalViewSwitch = canToggleViewMode && isChatView && onToggleViewMode !== undefined
@@ -218,12 +227,21 @@ export function SortableTabContextMenu({
         </ContextMenuItem>
       ) : null}
       <CopyTabIdMenuItem menuKind="context" unifiedTabId={unifiedTabId} />
+      <CoordinatorWorkersMenuItem coordinatorTabId={unifiedTabId} />
+      <WorkerTabMenuItems
+        worktreeId={tab.worktreeId}
+        groupId={groupId}
+        unifiedTabId={unifiedTabId}
+        closeShortcut={closeShortcut}
+      />
       <ContextMenuSeparator />
-      <ContextMenuItem onSelect={() => canClose && onClose(tab.id)} disabled={!canClose}>
-        <X className="size-3.5" />
-        {t('auto.components.tab.bar.SortableTabContextMenu.89359a36f7', 'Close')}
-        {closeShortcut ? <ContextMenuShortcut>{closeShortcut}</ContextMenuShortcut> : null}
-      </ContextMenuItem>
+      {!stamped ? (
+        <ContextMenuItem onSelect={() => canClose && onClose(tab.id)} disabled={!canClose}>
+          <X className="size-3.5" />
+          {t('auto.components.tab.bar.SortableTabContextMenu.89359a36f7', 'Close')}
+          {closeShortcut ? <ContextMenuShortcut>{closeShortcut}</ContextMenuShortcut> : null}
+        </ContextMenuItem>
+      ) : null}
       <ContextMenuItem onSelect={() => onCloseOthers(tab.id)} disabled={tabCount <= 1}>
         <CopyX className="size-3.5" />
         {t('auto.components.tab.bar.SortableTabContextMenu.8d16f9cd30', 'Close Others')}
