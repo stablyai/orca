@@ -427,15 +427,17 @@ describe('a bot that leaves its thread', () => {
     cloudState.endPending = true
     own.afterTurnEnd(link(), TURN_ID, true)
     timers.shift()!()
-    own.post(link(), TURN_ID)
+    // It waits and looks again later.
+    await expect.poll(() => timers.length).toBe(1)
+    timers.shift()!()
+    await expect.poll(() => timers.length).toBe(1)
     // A hello not answered yet: whether mentions are marked is unknown, so it waits and tries again.
     cloudState.endPending = false
     cloudState.answered = false
-    own.post(link(), TURN_ID)
+    timers.shift()!()
     await expect.poll(() => timers.length).toBe(1)
     expect(posted).toEqual([])
     cloudState.answered = true
-    timers.length = 0
     // A cloud that stopped marking mentions: saying so would be false, so it waits, still owed.
     features.length = 0
     own.turnEndsTaken([{ kind: 'turn-ended', conversation: FIRST, turnId: TURN_ID }])
@@ -590,6 +592,37 @@ describe('a bot that leaves its thread', () => {
     restarted.resume(() => null)
     await Promise.resolve()
     expect(posted).toHaveLength(1)
+  })
+
+  it('posts no line when an @mention brought it back while it looked for the answer', async () => {
+    const store = await botHome({})
+    const { leave, posted, link, timers } = leaver(store)
+    await leave()
+    const lines = leaveLines({
+      store,
+      cloud: () => ({
+        cloudFeatures: () => new Set(['sends.mentioned']),
+        reply: async (reply: unknown) => {
+          posted.push(reply)
+          return { ok: true as const }
+        }
+      }),
+      setTimer: (run) => timers.push(run),
+      answerPending: async () => {
+        await threadMuteSaves(store)(FIRST, false)
+        checked.done = true
+        return false
+      }
+    })
+    const checked = { done: false }
+    lines.post(link(), TURN_ID)
+    await expect.poll(() => checked.done).toBe(true)
+    // The attempt goes on in the same few ticks; it would have posted by now.
+    for (let tick = 0; tick < 5; tick++) {
+      await Promise.resolve()
+    }
+    expect(readThreadMute(store, FIRST)).toMatchObject({ muted: false })
+    expect(posted).toEqual([])
   })
 
   it('changes nothing when no request of the thread is running', async () => {

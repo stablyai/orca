@@ -141,7 +141,6 @@ export async function endRepliedTurn(
   }
   const failure = turnFailure(end, turn)
   let threw = false
-  const workLinks = link.bot ? await links() : []
   const { covered, resumesAt } = await fill({
     sessionId: end.news.sessionId,
     turnItemId: turn.turnItemId,
@@ -150,7 +149,7 @@ export async function endRepliedTurn(
     outcome: end.news.outcome,
     prose: turn.turnProse ?? '',
     bot: Boolean(link.bot),
-    links: workLinks,
+    links: link.bot ? await links() : [],
     ...turnTimesOf(end.ended),
     ...failure
   }).catch((error: unknown): FilledTurn => {

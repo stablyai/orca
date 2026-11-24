@@ -145,19 +145,42 @@ export function leaveLines(deps: LeaveLinesDeps): LeaveLines {
     let tries = 0
     posting.set(id, () => {})
     const attempt = async (retry: number): Promise<void> => {
+      // Tried again after the next wait, or by the next watch once the waits run out.
+      const later = () => {
+        const wait = RETRY_MS[retry]
+        if (wait === undefined) {
+          console.warn(
+            '[connectors] could not post that a bot left its thread; it posts on reconnect'
+          )
+          posting.delete(id)
+          return
+        }
+        const mine = ++tries
+        const next = () => {
+          // A wake and its timer both fire: only the first tries.
+          if (mine === tries) {
+            tries += 1
+            void attempt(retry + 1)
+          }
+        }
+        posting.set(id, next)
+        timer(next, wait)
+      }
+      const cloud = deps.cloud()
+      // Its answer goes first: the end or reply that carries it (or the end an owner's failed post
+      // holds). Its acceptance wakes this; the waits cover a route that doesn't (Orca's /replies).
+      const pending =
+        owed(link, turnId) &&
+        (cloud?.turnEndPending?.(link, turnId) ||
+          heldByMirror(deps.store, link, turnId) ||
+          (await Promise.resolve(deps.answerPending?.(link, turnId)).catch(() => false)) === true)
+      // Read after any wait: an @mention meanwhile means it is no longer left.
       if (!owed(link, turnId)) {
         posting.delete(id)
         return
       }
-      const cloud = deps.cloud()
-      // Its answer goes first: the end or reply that carries it (or the end an owner's failed post
-      // holds) posts the line once the cloud took it.
-      const pending =
-        cloud?.turnEndPending?.(link, turnId) ||
-        heldByMirror(deps.store, link, turnId) ||
-        (await (deps.answerPending?.(link, turnId) ?? false))
       if (pending) {
-        posting.delete(id)
+        later()
         return
       }
       // No client runs (signed out, quitting): the next watch starts the line again.
@@ -172,16 +195,18 @@ export function leaveLines(deps: LeaveLinesDeps): LeaveLines {
         posting.delete(id)
         return
       }
-      const replying = features
-        ? cloud.reply({
-            replyId: leaveLineReplyId(link, turnId),
-            conversation,
-            turnId,
-            text: THREAD_LEFT_LINE,
-            // Orca's own line, on no one's behalf: no bot hears it as a person's request.
-            turnFor: 'none'
-          })
-        : Promise.resolve({ ok: false as const, status: null, error: null })
+      if (!features) {
+        later()
+        return
+      }
+      const replying = cloud.reply({
+        replyId: leaveLineReplyId(link, turnId),
+        conversation,
+        turnId,
+        text: THREAD_LEFT_LINE,
+        // Orca's own line, on no one's behalf: no bot hears it as a person's request.
+        turnFor: 'none'
+      })
       if (!replying) {
         posting.delete(id)
         return
@@ -201,24 +226,7 @@ export function leaveLines(deps: LeaveLinesDeps): LeaveLines {
         settle(link, turnId)
         return
       }
-      const wait = RETRY_MS[retry]
-      if (wait === undefined) {
-        console.warn(
-          '[connectors] could not post that a bot left its thread; it posts on reconnect'
-        )
-        posting.delete(id)
-        return
-      }
-      const mine = ++tries
-      const next = () => {
-        // A wake and its timer both fire: only the first tries.
-        if (mine === tries) {
-          tries += 1
-          void attempt(retry + 1)
-        }
-      }
-      posting.set(id, next)
-      timer(next, wait)
+      later()
     }
     void attempt(0)
   }

@@ -118,12 +118,12 @@ export function installExternalConversations(
         ? { flush: () => store.flushPendingOrThrowAsync!({ drainToStableGeneration: false }) }
         : {}),
       answerPending: async (link, turnId) => {
-        // At startup the chat host may not be in yet: read the outbox only once it is.
-        await runtime.ensureStructuredAgentSessionHost?.()
-        const rows = await getStructuredAgentSessionHost()
-          ?.deps.store.connectorReplies()
-          ?.read(link.sessionId)
-          // An unreadable outbox never holds the line back for good.
+        // At startup the chat host may not be in yet: read the outbox only once it is. One that
+        // can't be read never holds the line back for good.
+        const rows = await Promise.resolve(runtime.ensureStructuredAgentSessionHost?.())
+          .then(() =>
+            getStructuredAgentSessionHost()?.deps.store.connectorReplies()?.read(link.sessionId)
+          )
           .catch(() => [])
         return (rows ?? []).some(
           (row) =>
