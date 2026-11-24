@@ -49,7 +49,13 @@ export function applyKeptClaudeLaunchMode(
   timeoutMs: number | undefined
 ): Promise<void> {
   const wanted = session.launchIntent?.permissionMode
-  return wanted ? applyBuildMode(session, wanted as PermissionMode, timeoutMs) : Promise.resolve()
+  if (wanted && session.savedPlan === true) {
+    // Saved in Plan, so the agent may still be in it: leaving Plan writes this mode.
+    session.appliedInputOptions.set('buildPermissionMode', wanted)
+  }
+  return wanted && session.savedPlan !== true
+    ? applyBuildMode(session, wanted as PermissionMode, timeoutMs)
+    : Promise.resolve()
 }
 
 export function requiresAcquisition(

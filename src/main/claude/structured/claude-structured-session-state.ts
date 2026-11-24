@@ -162,6 +162,8 @@ export type ClaudeSession = {
   appliedInputOptions: Map<string, string>
   /** What Orca put on this process's command line, and the mode it opened in; this process only. */
   launchIntent?: { permissionMode?: string; model?: string }
+  /** The chat was saved in Plan when this process was acquired. */
+  savedPlan?: boolean
   firstRootInit?: { permissionMode: string | null }
   /** Claude's own effective settings turn bypass off for this process (startup `get_settings`). */
   bypassDisabled?: boolean
