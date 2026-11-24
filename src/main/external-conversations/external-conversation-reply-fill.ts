@@ -132,13 +132,15 @@ export function conversationReplyFill(
     if (paused) {
       return { covered, paused: true, ...paused }
     }
-    // One answer per conversation, under the rule its turn began with: its earliest row's. A row an
-    // older build admitted silences the whole reply, except to its owner in their own DM.
+    // One answer per conversation, under the rule its turn began with: its head's (its earliest row
+    // still kept, filled or not). A row an older build admitted silences the whole reply, except to
+    // its owner in their own DM.
     const markerMayQuiet = turn.bot && turn.outcome === 'success' && isQuietBotResult(turn.prose)
+    const filling = new Set(own.map((row) => JSON.stringify([row.account, row.conversation])))
     const silencedWhole = new Map<string, boolean>()
-    for (const row of markerMayQuiet ? own : []) {
+    for (const row of markerMayQuiet ? rows : []) {
       const conversation = JSON.stringify([row.account, row.conversation])
-      if (silencedWhole.has(conversation)) {
+      if (!filling.has(conversation) || silencedWhole.has(conversation)) {
         continue
       }
       const ownerDm =
