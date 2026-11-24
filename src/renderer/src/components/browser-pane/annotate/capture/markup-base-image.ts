@@ -22,20 +22,43 @@ export async function captureMarkupBaseImage(
   return captureFromImage(source.element)
 }
 
+export const WEBVIEW_CAPTURE_DEADLINE_MS = 10_000
+
+// The webview's readback until it settles, even after the Draw that started it gave up on it.
 const pendingWebviewCaptures = new WeakMap<Electron.WebviewTag, Promise<MarkupBaseImage>>()
 
+/**
+ * A Draw that finds an earlier readback still running (one a timed-out Draw abandoned) waits for it
+ * and then captures afresh, so a stall fails only the Draws that outlast it and never overlaps two
+ * native readbacks. The deadline covers that wait and this readback.
+ */
 async function captureFromWebview(webview: Electron.WebviewTag): Promise<MarkupBaseImage> {
-  if (pendingWebviewCaptures.has(webview)) {
-    throw new Error('markup: capture already pending')
+  let abandoned = false
+  const noop = (): void => {}
+  // Checking for a readback and submitting one happen in one synchronous step, so two Draws woken
+  // together cannot both submit; the one that finds the next readback running waits again.
+  const submitWhenFree = (): Promise<MarkupBaseImage> => {
+    if (abandoned) {
+      return Promise.reject(new Error('markup: capture stalled'))
+    }
+    const running = pendingWebviewCaptures.get(webview)
+    if (running) {
+      return running.then(noop, noop).then(submitWhenFree)
+    }
+    const pending = captureWebviewImage(webview)
+    pendingWebviewCaptures.set(webview, pending)
+    const release = (): void => {
+      if (pendingWebviewCaptures.get(webview) === pending) {
+        pendingWebviewCaptures.delete(webview)
+      }
+    }
+    void pending.then(release, release)
+    return pending
   }
-  const pending = captureWebviewImage(webview)
-  pendingWebviewCaptures.set(webview, pending)
-  const release = (): void => {
-    pendingWebviewCaptures.delete(webview)
-  }
-  void pending.then(release, release)
-  const result = await withTimeoutResult(pending, 10_000)
+  const result = await withTimeoutResult(submitWhenFree(), WEBVIEW_CAPTURE_DEADLINE_MS)
   if (!result.ok) {
+    // A Draw still waiting for the lane must not submit after its caller saw it fail.
+    abandoned = true
     throw new Error('markup: capture failed or stalled')
   }
   return result.value
