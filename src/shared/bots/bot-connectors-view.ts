@@ -8,7 +8,8 @@ import { googleBotConnectState, type GoogleHostConnect } from '../google/google-
 import {
   botDefaultGoogleAccount,
   botGoogleAccess,
-  botMayUseGoogleAccount
+  botMayUseGoogleAccount,
+  googleEmailKey
 } from '../google/google-bot-accounts'
 
 export type BotConnectorService = {
@@ -80,7 +81,9 @@ function googleService(
   // Only the accounts the bot may use, and the default its calls without --account go to.
   const access = botGoogleAccess(bot)
   const accounts = hostAccounts.filter((account) => botMayUseGoogleAccount(access, account.email))
-  const defaultAccount = botDefaultGoogleAccount(access, computerDefault) ?? computerDefault
+  const defaultAccount = botDefaultGoogleAccount(access, computerDefault)
+  const isDefault = (account: GoogleAccountView): boolean =>
+    defaultAccount !== null && googleEmailKey(account.email) === defaultAccount
   const connected = accounts.filter((account) => account.status === 'connected')
   const { allowed, host } = googleBotConnectState({
     allowed: bot.google === true,
@@ -91,10 +94,12 @@ function googleService(
     ? `Run ${OFFER_GOOGLE} to ask your owner.`
     : host === 'connected'
       ? undefined
-      : GOOGLE_HOST_GAPS[host]
+      : accounts.length === 0 && hostAccounts.length > 0
+        ? `None of the Google accounts on this computer is chosen for you; ${OFFER_GOOGLE} asks your owner.`
+        : GOOGLE_HOST_GAPS[host]
   // A signed-out default stays listed: calls without --account still go to it, and fail.
   const signedOutDefault = accounts.find(
-    (account) => account.email === defaultAccount && account.status !== 'connected'
+    (account) => isDefault(account) && account.status !== 'connected'
   )
   const detail = [
     ...(signedOutDefault
@@ -102,7 +107,7 @@ function googleService(
       : []),
     ...connected.map(
       (account) =>
-        `${account.email}${account.email === defaultAccount ? ' (default)' : ''}: ${account.services
+        `${account.email}${isDefault(account) ? ' (default)' : ''}: ${account.services
           .map(
             (service) =>
               `${GOOGLE_SERVICE_INFO[service.service].label} ${GOOGLE_STATES[service.state]}`

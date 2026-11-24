@@ -9,9 +9,11 @@ import type { Automation } from '../../shared/automations/automation-definition'
 import type { Bot } from '../../shared/bot-types'
 import { mailboxAddresses } from '../../shared/google/email-address-list'
 import {
-  botDefaultGoogleAccount,
   botGoogleAccess,
-  botMayUseGoogleAccount
+  botGoogleDefault,
+  botMayUseGoogleAccount,
+  googleEmailKey,
+  type GoogleDefaultRead
 } from '../../shared/google/google-bot-accounts'
 import type { UpcomingEvent } from './google-calendar-changes'
 import type { GoogleDefaultAccount } from './google-credential-store'
@@ -37,9 +39,9 @@ export function googleRuleTargets(
   automations: readonly Pick<Automation, 'id' | 'enabled' | 'bot' | 'on'>[],
   bots: readonly Pick<Bot, 'id' | 'google' | 'googleAccounts'>[],
   accounts: readonly string[],
-  defaultAccount: string | null
+  defaultAccount: GoogleDefaultRead
 ): GoogleRuleTarget[] {
-  const connected = new Set(accounts.map((email) => email.toLowerCase()))
+  const connected = new Set(accounts.map(googleEmailKey))
   return automations.flatMap((automation) => {
     const botId = automation.bot?.botId
     const bot = bots.find((entry) => entry.id === botId)
@@ -47,12 +49,13 @@ export function googleRuleTargets(
       return []
     }
     const access = botGoogleAccess(bot)
-    const fallback = botDefaultGoogleAccount(access, defaultAccount)
+    const read = botGoogleDefault(access, defaultAccount)
+    const fallback = 'email' in read ? read.email : null
     return (automation.on ?? []).flatMap((rule) => {
       if (!isGoogleTrigger(rule)) {
         return []
       }
-      const account = rule.account?.toLowerCase() ?? fallback
+      const account = rule.account ? googleEmailKey(rule.account) : fallback
       return account && connected.has(account) && botMayUseGoogleAccount(access, account)
         ? [{ automationId: automation.id, botId, account, rule }]
         : []
@@ -64,15 +67,24 @@ export function googleRuleTargets(
 export function accountlessRulesPausedBy(
   fallback: GoogleDefaultAccount,
   automations: readonly Pick<Automation, 'enabled' | 'bot' | 'on'>[],
-  bots: readonly Pick<Bot, 'id' | 'google'>[]
+  bots: readonly Pick<Bot, 'id' | 'google' | 'googleAccounts'>[]
 ): string | null {
-  const waiting = automations.some(
-    (automation) =>
-      automation.enabled &&
-      bots.some((bot) => bot.id === automation.bot?.botId && bot.google === true) &&
-      (automation.on ?? []).some((rule) => isGoogleTrigger(rule) && !rule.account)
-  )
-  return waiting && 'unreadable' in fallback ? fallback.unreadable : null
+  // The same rule googleRuleTargets follows: paused only where the bot's own default is unreadable.
+  for (const automation of automations) {
+    const bot = bots.find((entry) => entry.id === automation.bot?.botId)
+    if (
+      !automation.enabled ||
+      !bot ||
+      !(automation.on ?? []).some((rule) => isGoogleTrigger(rule) && !rule.account)
+    ) {
+      continue
+    }
+    const read = botGoogleDefault(botGoogleAccess(bot), fallback)
+    if ('unreadable' in read) {
+      return read.unreadable
+    }
+  }
+  return null
 }
 
 export function isGmailTarget(target: GoogleRuleTarget): target is GoogleRuleTarget<GmailRule> {

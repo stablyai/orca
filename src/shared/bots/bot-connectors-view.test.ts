@@ -9,23 +9,31 @@ const account = (email: string): GoogleAccountView => ({
   connectedAt: 0
 })
 
-function googleDetail(googleAccounts?: string[]): string | undefined {
+function googleRow(googleAccounts?: string[], hostEmails = ['Me@Work.com', 'me@gmail.com']) {
   const services = botConnectorServices(
     { slack: null, linear: null, github: null, google: true, googleAccounts },
     {
       gh: 'signed-in',
       linear: false,
-      google: [account('me@work.com'), account('me@gmail.com')],
+      google: hostEmails.map(account),
       googleApp: true,
       googleDefault: 'me@work.com'
     }
   )
-  return services.find((service) => service.source === 'google')?.detail
+  return services.find((service) => service.source === 'google')
 }
+const googleDetail = (googleAccounts?: string[]) => googleRow(googleAccounts)?.detail
 
 describe('orca bot connectors, Google', () => {
   it('lists only the accounts the bot may use, with its own default', () => {
     expect(googleDetail(['me@gmail.com'])).toBe('me@gmail.com (default): Gmail ready')
-    expect(googleDetail()).toBe('me@work.com (default): Gmail ready; me@gmail.com: Gmail ready')
+    // The host's email case doesn't hide which is the default.
+    expect(googleDetail()).toBe('Me@Work.com (default): Gmail ready; me@gmail.com: Gmail ready')
+  })
+
+  it('says none of its accounts is here, not that nobody is signed in', () => {
+    expect(googleRow(['gone@x.com'])?.gap).toContain(
+      'None of the Google accounts on this computer is chosen for you'
+    )
   })
 })

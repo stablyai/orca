@@ -2,7 +2,9 @@ import { describe, expect, it } from 'vitest'
 import {
   botDefaultGoogleAccount,
   botGoogleAccess,
-  botMayUseGoogleAccount
+  botGoogleDefault,
+  botMayUseGoogleAccount,
+  googleAccountNotAllowed
 } from './google-bot-accounts'
 
 describe('a bot’s Google accounts', () => {
@@ -27,5 +29,24 @@ describe('a bot’s Google accounts', () => {
     expect(botDefaultGoogleAccount(access, 'a@x.com')).toBe('a@x.com')
     expect(botDefaultGoogleAccount(access, 'other@x.com')).toBe('b@x.com')
     expect(botDefaultGoogleAccount(access, null)).toBe('b@x.com')
+  })
+
+  it('keeps an unreadable default unreadable unless the bot has a single account', () => {
+    const unreadable = { unreadable: 'Keychain denied.' }
+    expect(botGoogleDefault(botGoogleAccess({ google: true }), unreadable)).toEqual(unreadable)
+    const two = botGoogleAccess({ google: true, googleAccounts: ['a@x.com', 'b@x.com'] })
+    expect(botGoogleDefault(two, unreadable)).toEqual(unreadable)
+    const one = botGoogleAccess({ google: true, googleAccounts: ['A@x.com'] })
+    expect(botGoogleDefault(one, unreadable)).toEqual({ email: 'a@x.com' })
+  })
+
+  it('says plainly when no account is chosen', () => {
+    const none = botGoogleAccess({ google: true, googleAccounts: [] })
+    if (none.kind !== 'some') {
+      throw new Error('expected a list')
+    }
+    expect(googleAccountNotAllowed('Scout', 'me@work.com', none)).toBe(
+      "Scout can't use me@work.com: no Google account is chosen for it. Ask your owner to choose one in Orca."
+    )
   })
 })

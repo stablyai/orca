@@ -9,6 +9,7 @@ const Caller = { botToken: OptionalString, callerSessionId: OptionalString }
 const Email = z.string().trim().toLowerCase().email().max(320)
 
 export const GoogleStatusParams = z.object({
+  ...Caller,
   /** Re-read every account's services now instead of showing the last check. */
   check: z.boolean().optional()
 })

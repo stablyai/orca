@@ -41,5 +41,10 @@ describe('orca google bot', () => {
     )
     await expect(run({}).done).rejects.toThrow('Pass one of --on, --off or --accounts.')
     await expect(run({ accounts: 'me@work.com,scout' }).done).rejects.toThrow('not scout')
+    // An empty list is refused, never read as absent: --on would then mean every account.
+    await expect(run({ accounts: '' }).done).rejects.toThrow('not an empty one')
+    const widened = run({ on: true, accounts: '' })
+    await expect(widened.done).rejects.toThrow('not an empty one')
+    expect(widened.call).not.toHaveBeenCalled()
   })
 })

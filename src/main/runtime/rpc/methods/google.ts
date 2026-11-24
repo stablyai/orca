@@ -26,6 +26,12 @@ import type { OrcaRuntimeService } from '../../orca-runtime'
 import { defineMethod, InvalidArgumentError, type RpcContext } from '../core'
 import { isAgentRpcCaller, rpcCallerOperationKey } from '../callers/rpc-caller-identity'
 import { googleCallerAccount } from '../google-caller-api'
+import { readGoogleDefaultAccount } from '../../../google/google-credential-store'
+import {
+  botGoogleAccess,
+  botGoogleDefault,
+  botMayUseGoogleAccount
+} from '../../../../shared/google/google-bot-accounts'
 import { runtimeBotChats } from '../../../bots/bot-chat-session'
 import { botOfSession } from '../../../bots/bot-session-tabs'
 
@@ -113,16 +119,31 @@ export const GOOGLE_METHODS = [
     name: 'google.status',
     permission: 'workspace',
     params: GoogleStatusParams,
-    handler: async ({ check }, { runtime }): Promise<GoogleStatusView> => {
+    handler: async (
+      { check, botToken },
+      { runtime, pairedDeviceId }
+    ): Promise<GoogleStatusView> => {
       const connect = google()
       const [accounts, clientKey] = check
         ? await Promise.all([connect.checkAccounts(), connect.checkClient()])
         : [await connect.accounts(), await connect.clientCheck()]
-      return {
+      const view = {
         ...(await statusView(runtime, connect)),
         accounts,
         defaultAccount: await connect.defaultAccount(),
         ...(clientKey ? { clientKey } : {})
+      }
+      // A bot limited to some accounts sees only those, and the default its own calls use.
+      const caller = botOfToken(runtime, botToken, pairedDeviceId)
+      const access = caller.kind === 'bot' ? botGoogleAccess(caller.bot) : null
+      if (access?.kind !== 'some') {
+        return view
+      }
+      const fallback = botGoogleDefault(access, await readGoogleDefaultAccount())
+      return {
+        ...view,
+        accounts: accounts.filter((account) => botMayUseGoogleAccount(access, account.email)),
+        defaultAccount: 'email' in fallback ? fallback.email : null
       }
     }
   }),

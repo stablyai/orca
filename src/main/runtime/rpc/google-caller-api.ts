@@ -7,8 +7,8 @@ import { botOfSession } from '../../bots/bot-session-tabs'
 import { googleApi, type GoogleApi } from '../../google/google-api-client'
 import { readGoogleDefaultAccount } from '../../google/google-credential-store'
 import {
-  botDefaultGoogleAccount,
   botGoogleAccess,
+  botGoogleDefault,
   botMayUseGoogleAccount,
   googleAccountNotAllowed
 } from '../../../shared/google/google-bot-accounts'
@@ -49,8 +49,13 @@ export async function googleCallerAccount(
     }
     return params.account
   }
-  const fallback = await readGoogleDefaultAccount()
-  const account = botDefaultGoogleAccount(access, 'email' in fallback ? fallback.email : null)
+  const fallback = botGoogleDefault(access, await readGoogleDefaultAccount())
+  if ('unreadable' in fallback) {
+    throw new InvalidArgumentError(
+      `Couldn't read this computer's default Google account. ${fallback.unreadable} Name one with --account: ${access.accounts.join(', ')}.`
+    )
+  }
+  const account = fallback.email
   if (!account) {
     throw new InvalidArgumentError(
       `No Google account is chosen for ${caller.bot.name}. Ask your owner to choose one in Orca.`

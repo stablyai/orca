@@ -1,18 +1,28 @@
 import { describe, expect, it, vi } from 'vitest'
-import { GOOGLE_OWNER_ONLY } from '../../../bots/bot-google-access'
+import { GOOGLE_OWNER_ONLY, hostGoogleBotState } from '../../../bots/bot-google-access'
 import { googleCallerAccount } from '../google-caller-api'
 import { GOOGLE_METHODS } from './google'
 
 const BOT_TOKEN = 'scout-token'
 const setDefaultAccount = vi.fn(async (email: string) => email)
 const disconnect = vi.fn()
+type DefaultRead = { email: string } | { unreadable: string; accounts: string[] }
+const computerDefault: { read: DefaultRead } = vi.hoisted(() => ({
+  read: { email: 'me@work.com' }
+}))
+const hostAccount = (email: string) => ({
+  email,
+  status: 'connected',
+  services: [],
+  connectedAt: 0
+})
 
 vi.mock('../../../bots/tool-relay/bot-tool-relay', () => ({
   botToolRelay: { botOf: (token: string) => (token === BOT_TOKEN ? 'scout' : null) }
 }))
 vi.mock('../../../google/google-credential-store', async (importOriginal) => ({
   ...(await importOriginal<Record<string, unknown>>()),
-  readGoogleDefaultAccount: async () => ({ email: 'me@work.com' })
+  readGoogleDefaultAccount: async () => computerDefault.read
 }))
 vi.mock('../../../google/google-connect', () => ({
   getGoogleConnect: () => ({
@@ -20,7 +30,10 @@ vi.mock('../../../google/google-connect', () => ({
     disconnect,
     importClient: vi.fn(),
     exportClient: vi.fn(),
-    accounts: async () => [{ email: 'me@example.com' }]
+    accounts: async () => [hostAccount('me@work.com'), hostAccount('Me@Gmail.com')],
+    client: async () => ({ clientId: 'client' }),
+    clientCheck: async () => null,
+    defaultAccount: async () => 'me@work.com'
   })
 }))
 
@@ -121,5 +134,51 @@ describe('google.bot.set from the owner', () => {
     await set({ on: true, accounts: ['me@gmail.com'] })
     expect((await set({ on: false })).bot).toEqual({ id: 'scout', name: 'Scout', google: false })
     expect(ctx.runtime.bots.list()[0]?.googleAccounts).toBeUndefined()
+  })
+})
+
+describe('Google as a bot limited to some accounts sees it', () => {
+  it('shows only its accounts and the default its own calls use', async () => {
+    await expect(
+      call(
+        'google.status',
+        { botToken: BOT_TOKEN },
+        { google: true, googleAccounts: ['me@gmail.com'] }
+      )
+    ).resolves.toMatchObject({
+      accounts: [{ email: 'Me@Gmail.com' }],
+      defaultAccount: 'me@gmail.com'
+    })
+    await expect(call('google.status', {}, { google: true })).resolves.toMatchObject({
+      accounts: [{ email: 'me@work.com' }, { email: 'Me@Gmail.com' }],
+      defaultAccount: 'me@work.com'
+    })
+  })
+
+  it('reads the host as connected only through its own accounts', async () => {
+    await expect(
+      hostGoogleBotState({ google: true, googleAccounts: ['gone@x.com'] })
+    ).resolves.toEqual({ allowed: true, host: 'signed-out' })
+    await expect(
+      hostGoogleBotState({ google: true, googleAccounts: ['me@gmail.com'] })
+    ).resolves.toEqual({ allowed: true, host: 'connected' })
+  })
+
+  it('refuses to guess among several accounts when the default is unreadable', async () => {
+    computerDefault.read = { unreadable: 'Keychain denied.', accounts: ['me@work.com'] }
+    try {
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: googleCallerAccount reads only these runtime fields.
+      const several = {
+        runtime: runtime({ google: true, googleAccounts: ['a@x.com', 'b@x.com'] })
+      } as never
+      await expect(googleCallerAccount({ botToken: BOT_TOKEN }, several)).rejects.toThrow(
+        "Couldn't read this computer's default Google account. Keychain denied. Name one with --account: a@x.com, b@x.com."
+      )
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: as above.
+      const one = { runtime: runtime({ google: true, googleAccounts: ['a@x.com'] }) } as never
+      await expect(googleCallerAccount({ botToken: BOT_TOKEN }, one)).resolves.toBe('a@x.com')
+    } finally {
+      computerDefault.read = { email: 'me@work.com' }
+    }
   })
 })

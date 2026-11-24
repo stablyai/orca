@@ -20,7 +20,11 @@ import {
   readInjectedBotToken
 } from '../../shared/agent-session/lifecycle/launch/agent-session-caller-env'
 import type { CommandHandler, HandlerContext } from '../dispatch/dispatch'
-import { getOptionalStringFlag, getRequiredStringFlag } from '../arguments/flags'
+import {
+  getOptionalStringFlag,
+  getOptionalStringFlagAllowingEmpty,
+  getRequiredStringFlag
+} from '../arguments/flags'
 import { printResult } from '../output/command-result-output'
 import { rejectRemoteSelectionFlags } from '../dispatch/remote-selection-flag-rejection'
 import { RuntimeClientError } from '../runtime/connection/types'
@@ -78,7 +82,8 @@ function clientLine(client: GoogleClientView | null): string {
 
 export function formatGoogleStatus(view: GoogleStatusView): string {
   const bots = view.bots.map(
-    (bot) => `${bot.name} (${bot.accounts ? bot.accounts.join(', ') : 'every account'})`
+    (bot) =>
+      `${bot.name} (${!bot.accounts ? 'every account' : bot.accounts.length > 0 ? bot.accounts.join(', ') : 'no account chosen'})`
   )
   return [
     clientLine(view.client),
@@ -223,10 +228,10 @@ export async function runGoogleConnect(
 export const GOOGLE_HANDLERS: Record<string, CommandHandler> = {
   'google status': async (ctx) => {
     prepare(ctx, 'orca google status')
-    const status = await ctx.client.call<GoogleStatusView>(
-      'google.status',
-      ctx.flags.get('check') === true ? { check: true } : {}
-    )
+    const status = await ctx.client.call<GoogleStatusView>('google.status', {
+      ...caller(),
+      ...(ctx.flags.get('check') === true ? { check: true } : {})
+    })
     printResult(status, ctx.json, formatGoogleStatus)
   },
   'google client import': async (ctx) => {
@@ -285,7 +290,8 @@ export const GOOGLE_HANDLERS: Record<string, CommandHandler> = {
   },
   'google bot': async (ctx) => {
     prepare(ctx, 'orca google bot')
-    const accounts = readAccounts(getOptionalStringFlag(ctx.flags, 'accounts'))
+    // An empty --accounts is refused, never read as absent (which --on would make every account).
+    const accounts = readAccounts(getOptionalStringFlagAllowingEmpty(ctx.flags, 'accounts'))
     const picked = [
       ctx.flags.get('on') === true,
       ctx.flags.get('off') === true,
