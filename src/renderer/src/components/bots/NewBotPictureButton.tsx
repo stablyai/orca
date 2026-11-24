@@ -121,7 +121,7 @@ export function NewBotPictureButton({
           <div
             className={cn(
               BOT_PICTURE_DROP_OUTLINE,
-              'scrollbar-sleek min-h-0 overflow-x-hidden overflow-y-auto overscroll-contain pt-3'
+              'scrollbar-sleek min-h-0 overflow-x-hidden overflow-y-auto overscroll-contain p-3'
             )}
           >
             <BotPicturePicker
