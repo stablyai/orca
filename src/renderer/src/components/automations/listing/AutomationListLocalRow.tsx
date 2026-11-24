@@ -42,7 +42,7 @@ import {
   getLocalAutomationLastRunSnapshot
 } from './automation-list-last-run'
 import { AutomationListLastRunCell } from './AutomationListLastRunCell'
-import { formatAutomationRelativeTime, formatAutomationDateTime } from '../automation-page-parts'
+import { formatAutomationDateTime, formatAutomationNextRun } from '../automation-page-parts'
 import { getAutomationTargetAvailability } from '../hosts/automation-target-availability'
 import { getAgentLabel } from '../authoring/automation-draft-model'
 import { automationProjectName, type AutomationListRow } from './automation-list-row-identity'
@@ -159,8 +159,7 @@ export function AutomationListLocalRow({
   const nextRunLabel = automation.enabled
     ? automation.bot
       ? automationNextRunLabel(automation, relativeNow)
-      : (formatAutomationRelativeTime(automation.nextRunAt, relativeNow, t, intlLocale) ??
-        formatAutomationDateTime(automation.nextRunAt, t, intlLocale))
+      : formatAutomationNextRun(automation.nextRunAt, relativeNow, t, intlLocale)
     : t('auto.components.automations.enablement.paused', 'Paused')
   const nextRunTitle = formatAutomationDateTime(automation.nextRunAt, t, intlLocale)
   const isSelected = isSelectedLocal && selectedRowKey === row.key
@@ -314,15 +313,14 @@ export function AutomationListLocalRow({
               {hostLabel}
             </span>
           ) : null}
-          <span className="min-w-0" title={automation.enabled ? nextRunTitle : undefined}>
-            <AutomationListNextRunCell
-              enabled={automation.enabled}
-              nextRunLabel={nextRunLabel}
-              movedToDistro={movedToDistro}
-              needsMigration={needsMigration?.(row)}
-              setupSkipped={Boolean(setupReview)}
-            />
-          </span>
+          <AutomationListNextRunCell
+            enabled={automation.enabled}
+            nextRunLabel={nextRunLabel}
+            nextRunTitle={nextRunTitle}
+            movedToDistro={movedToDistro}
+            needsMigration={needsMigration?.(row)}
+            setupSkipped={Boolean(setupReview)}
+          />
           <AutomationListLastRunCell snapshot={lastRunSnapshot} now={relativeNow} />
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
