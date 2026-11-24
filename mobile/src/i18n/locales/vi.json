@@ -426,7 +426,7 @@
     },
     "claude": {
       "usageSignInLabel": "Đăng nhập lại",
-      "usageSignInMessage": "Tài khoản Claude đã chọn cần đăng nhập lại. Mở Cài đặt > Tài khoản nhà cung cấp AI, hoặc chọn Mặc định hệ thống."
+      "usageSignInMessage": "Tài khoản này cần bạn đăng nhập lại."
     },
     "codex": {
       "usageSignInLabel": "Đã đăng xuất"
@@ -2129,6 +2129,12 @@
     }
   },
   "browser": {
+    "clientHost": {
+      "openOnNamed": "Mở trên {{device}}",
+      "openOn": "Mở trên máy khác",
+      "offlineNamed": "{{device}} đang ngoại tuyến",
+      "offline": "Máy đang hiển thị trang này đang ngoại tuyến"
+    },
     "addressField": {
       "urlPlaceholder": "URL"
     },
@@ -2180,6 +2186,41 @@
       "certificateProceedFailed": "Orca không phê duyệt được yêu cầu chứng chỉ này. Tải lại trang rồi thử lại.",
       "certificateChallengeUnavailable": "Yêu cầu chứng chỉ này không còn khả dụng. Thử lại trang để yêu cầu cái mới.",
       "certificateProceedNeedsHostUpdate": "Cập nhật Orca trên host này để chấp nhận cảnh báo chứng chỉ từ điện thoại."
+    },
+    "pagePrompt": {
+      "downloadStarted": "Đang tải xuống {{path}} trên host",
+      "downloadSaved": "Đã lưu vào {{path}} trên host",
+      "downloadCanceled": "Đã hủy tải xuống.",
+      "downloadFailed": "Không thể hoàn tất tải xuống.",
+      "answerFailed": "Câu trả lời đó không tới được trang.",
+      "openFailed": "Không mở được ứng dụng cho liên kết {{scheme}} này.",
+      "localFiles": "File cục bộ",
+      "ask": {
+        "camera": "Dùng camera của bạn",
+        "microphone": "Dùng micrô của bạn",
+        "location": "Biết vị trí của bạn",
+        "notifications": "Hiện thông báo",
+        "clipboard": "Xem văn bản và hình ảnh đã sao chép vào clipboard",
+        "midi": "Dùng thiết bị MIDI của bạn",
+        "windowManagement": "Quản lý cửa sổ trên mọi màn hình của bạn",
+        "idleDetection": "Biết khi bạn đang chủ động dùng thiết bị này",
+        "localNetwork": "Truy cập ứng dụng trên thiết bị này và các thiết bị trong mạng cục bộ của bạn"
+      },
+      "fileTitle": "File này muốn",
+      "permissionTitle": "{{site}} muốn",
+      "block": "Khối",
+      "allow": "Cho phép",
+      "signInTitle": "Đăng nhập",
+      "signInDescription": "{{origin}} đang yêu cầu tên người dùng và mật khẩu.",
+      "signInInsecure": "Kết nối tới trang này không riêng tư.",
+      "signInRetry": "Tên người dùng hoặc mật khẩu không đúng.",
+      "signIn": "Đăng nhập",
+      "openLinkTitle": "Mở liên kết {{scheme}} này?",
+      "openLinkDescription": "{{origin}} muốn mở ứng dụng khác.",
+      "openLinkAnonymous": "Một trang trong trình duyệt muốn mở một ứng dụng khác.",
+      "openLink": "Mở liên kết",
+      "username": "Tên người dùng",
+      "password": "Mật khẩu"
     }
   },
   "files": {
@@ -3060,6 +3101,8 @@
       "historyUnreadable": "Orca không đọc được lịch sử đã lưu của chat này.",
       "historyUnusable": "Không thể tải cuộc trò chuyện này.",
       "historyUnavailable": "Orca không mở được lịch sử của chat này lúc này.",
+      "diskFull": "Đĩa trên máy đang chạy cuộc trò chuyện này đã đầy.",
+      "freeDiskSpace": "Giải phóng dung lượng trên đĩa đó rồi thử lại.",
       "savedInOtherFolder": "Cuộc hội thoại này được lưu trong thư mục khác.",
       "savedByNewerOrca": "Các cuộc trò chuyện đã được lưu bởi một Orca mới hơn.",
       "updateOrcaToKeepUsing": "Cập nhật Orca để tiếp tục dùng chúng.",
@@ -5671,6 +5714,8 @@
       "hide": "Ẩn không gian làm việc của {{name}}"
     },
     "section": {
+      "scrollLeft": "Cuộn trái · {{amount}} bị ẩn",
+      "scrollRight": "Cuộn phải · {{amount}} bị ẩn",
       "title": "Bots",
       "summary": "{{title}}, {{total}} bot, {{attention}} cần bạn, {{unread}} chưa đọc, {{working}} đang làm",
       "newBot": "Bot mới",
@@ -6477,13 +6522,7 @@
       },
       "cancel": {
         "keep": "Giữ",
-        "confirmMany": "Hủy {{count}}",
-        "titleMany": "Hủy {{count}} mục?",
-        "titleOne": "Hủy {{title}}?",
-        "why": "Bot thấy lý do. Không có gì bị xóa.",
-        "placeholder": "Lý do",
-        "confirmOne": "Hủy mục",
-        "offline": "{{host}} đang ngoại tuyến. Lý do vẫn được giữ; {{action}} hoạt động lại khi host trở lại."
+        "confirmMany": "Hủy {{count}}"
       },
       "wait": {
         "titleOne": "{{title}} đang chờ gì?",
@@ -6551,7 +6590,9 @@
         "next": "Câu hỏi tiếp theo",
         "heldCount_one": "{{count}} câu trả lời chưa gửi, <send>vẫn gửi</send>",
         "heldCount_other": "{{count}} câu trả lời chưa gửi, <send>vẫn gửi</send>",
-        "replaced": "Agent đã hỏi một câu mới. Đọc rồi trả lời."
+        "replaced": "Agent đã hỏi một câu mới. Đọc rồi trả lời.",
+        "replacedByNewer": "Đã thay bằng câu hỏi mới hơn",
+        "skipped": "Đã bỏ qua"
       },
       "readFailedClosedPage": "Không thể đọc thêm các mục đã đóng.",
       "skillLimit": "Chưa gửi tin nhắn. Giữ tối đa {{limit}} file skill đã chọn rồi thử lại."
@@ -7619,7 +7660,7 @@
         "off": "Linear sắp ra mắt.",
         "replaced": "Linear chưa hoàn tất. Kết nối Linear hoặc GitHub mới hơn có thể đã thay thế nó. Bắt đầu lại.",
         "wrongAccount": "Lần đăng nhập này được bắt đầu từ một tài khoản Orca khác. Kết nối lại Linear từ tài khoản này.",
-        "alreadyLinked": "Tài khoản Orca này liên kết với người dùng Linear khác trong không gian làm việc đó. Huỷ liên kết trong Cài đặt › Bots › Linear trước.",
+        "alreadyLinked": "Tài khoản Orca này đã liên kết với người dùng Linear khác trong không gian làm việc đó. Hãy huỷ liên kết từ ⋯ trên trang Linear trước.",
         "notAMember": "Chỉ thành viên chính thức của không gian làm việc Linear mới chọn được người từ đó.",
         "rateLimited": "Thử quá nhiều lần. Đợi một phút rồi thử lại.",
         "unavailable": "Linear không phản hồi. Thử lại."
@@ -7657,7 +7698,8 @@
       },
       "address": "linear.app/{{urlKey}}",
       "account": {
-        "unlink": "Hủy liên kết tài khoản Linear"
+        "unlink": "Hủy liên kết tài khoản Linear",
+        "reconnect": "Kết nối lại"
       }
     },
     "github": {
@@ -7673,7 +7715,7 @@
         "off": "GitHub sắp ra mắt.",
         "replaced": "GitHub chưa hoàn tất. Một kết nối Linear hoặc GitHub mới hơn có thể đã thay thế nó. Bắt đầu lại.",
         "wrongAccount": "Lần đăng nhập này được bắt đầu từ một tài khoản Orca khác. Đăng nhập lại bằng GitHub từ tài khoản này.",
-        "alreadyLinked": "Tài khoản Orca này liên kết với người dùng GitHub khác. Huỷ liên kết trong Cài đặt › Bots › GitHub trước.",
+        "alreadyLinked": "Tài khoản Orca này đã liên kết với người dùng GitHub khác. Hãy huỷ liên kết từ ⋯ trên trang GitHub trước.",
         "unavailable": "GitHub không phản hồi. Thử lại."
       },
       "setup": {
@@ -7696,11 +7738,14 @@
       "connection": {
         "removeNote": "Mọi người không còn hỏi nó trên GitHub được nữa, và người dùng GitHub của nó đã bị xóa. Ứng dụng Orca vẫn được cài.",
         "removeConfirm": "Xóa",
-        "finishSetup": "Hoàn tất thiết lập"
+        "finishSetup": "Hoàn tất thiết lập",
+        "addAccount": "Thêm một tài khoản GitHub khác",
+        "refresh": "Làm mới"
       },
       "allRepositories": "Tất cả kho lưu trữ của {{account}}",
       "account": {
-        "unlink": "Hủy liên kết tài khoản GitHub"
+        "unlink": "Hủy liên kết tài khoản GitHub",
+        "reconnect": "Kết nối lại"
       },
       "howToAskPlain": "Đề cập {{mention}} {{handle}} … trên issue hoặc pull request.",
       "addMore": "Thêm các kho lưu trữ hoặc một tổ chức",
@@ -7748,14 +7793,10 @@
         "continue": "Tiếp tục",
         "description": "Chọn cách {{bot}} đăng nhập vào Gmail, Calendar và Drive của bạn.",
         "self": "Tự host",
-        "selfNote": "Bạn tự tạo app Google Cloud, nên thông tin đăng nhập ở trên máy của bạn. Khoảng 10 phút.",
+        "selfNote": "Ứng dụng Google của riêng bạn.",
         "orca": "Do Orca lưu trữ",
-        "orcaNote": "Đăng nhập bằng Google. Không cần cài đặt gì.",
-        "comingSoon": "Sắp ra mắt",
-        "steps": "Các bước",
-        "stepApp": "{{bot}} mở Google Cloud và thiết lập ứng dụng",
-        "stepSignIn": "Bạn đánh dấu ô điều khoản của Google và đăng nhập",
-        "stepCheck": "{{bot}} kiểm tra Gmail, Calendar và Drive có hoạt động không"
+        "orcaNote": "Đăng nhập bằng Google.",
+        "soon": "Sắp"
       },
       "importFromTeam": "Nhập file thiết lập từ nhóm của bạn",
       "service": {
@@ -7792,7 +7833,23 @@
         "toFix": "Sắp xong: còn {{count}} mục cần sửa"
       },
       "signInOnHost": "Đăng nhập lại Google trên {{host}}",
-      "moreOnHost": "Thêm một dịch vụ hoặc chia sẻ thiết lập trong Orca trên {{host}}."
+      "addOnHost": "Thêm dịch vụ hoặc tài khoản khác trong Orca trên {{host}}.",
+      "defaultBadge": "Mặc định",
+      "setDefault": "Đặt làm mặc định",
+      "shareButton": "Chia sẻ thiết lập",
+      "share": {
+        "copied": "Đã sao chép. Gửi cho đồng đội của bạn."
+      },
+      "disconnect": {
+        "title": "Ngắt {{email}}?",
+        "revokeNote": "Bots ngừng dùng tài khoản này tại đây, và Google hủy quyền truy cập của Orca ở mọi nơi nó được cho phép.",
+        "removeOneNote": "Bots ngừng dùng tài khoản này tại đây.",
+        "removeNote": "Bots ngừng dùng tài khoản này tại đây. Cài đặt bot vẫn còn, nên Connect Google sẽ bật lại nó.",
+        "promotes": "{{email}} trở thành mặc định.",
+        "confirm": "Ngắt kết nối",
+        "removeFromHost": "Xoá khỏi {{host}}",
+        "revoke": "Xóa và thu hồi tại Google"
+      }
     },
     "failures": {
       "lookUnfinished": "Lần xem gần nhất chưa hoàn tất.",
@@ -7891,6 +7948,10 @@
       "removeServer": "Xóa {{server}}",
       "tooltip": "Bots và agent trên các server này có thể hỏi {{name}} mà không cần hỏi bạn mỗi lần.",
       "unnamed": "Server đã ghép nối"
+    },
+    "usageLimit": {
+      "continuesAt": "Tiếp tục lúc {{time}}",
+      "hitLimit": "Đạt giới hạn · đặt lại {{time}}"
     }
   },
   "mobileWebShell": {

@@ -393,6 +393,9 @@
     "serverPage": {
       "download": {
         "started": "Đang tải vào {{path}} trên {{host}}"
+      },
+      "print": {
+        "failed": "Không lưu được trang thành PDF"
       }
     },
     "clientHosted": {
@@ -572,12 +575,21 @@
         "imported_other": "Đã nhập {{count}} cookie cho {{domains}}. Tải lại trang để dùng.",
         "failed": "Nhập cookie thất bại: {{reason}}"
       },
-      "sshPage": {
+      "routedPage": {
         "label": "Các trình duyệt trên thiết bị này",
         "destination": "Nhập vào trình duyệt cho {{host}}.",
-        "hostAgents": "Agent trên {{host}} có thể dùng các lần đăng nhập này nhưng không thể đọc cookie.",
+        "hostAgents": "Agent trên {{host}} có thể dùng các lần đăng nhập này nhưng không thể đọc cookie."
+      },
+      "sshPage": {
         "stored": "Lưu trong trình duyệt cho {{host}}.",
         "googleCookiesSkipped": "Cookie Google chưa được nhập. Mở một trang duyệt qua {{host}}, rồi đăng nhập Google."
+      },
+      "picker": {
+        "menuItem": "Nhập cookie…",
+        "search": "Tìm hồ sơ",
+        "lastUsed": "Dùng lần cuối",
+        "noMatches": "Không có kết quả khớp",
+        "googleNote": "Thông tin đăng nhập Google không được nhập"
       }
     },
     "passwords": {
@@ -613,6 +625,25 @@
     },
     "loadStall": {
       "waitingForHost": "Đang chờ {{host}}…"
+    },
+    "profileCookieClear": {
+      "label": "Cookie",
+      "action": "Xoá cookie…",
+      "rowLocal": "Đăng xuất khỏi mọi trang trong {{profile}} trên máy này.",
+      "rowServer": "Đăng xuất khỏi mọi trang trong {{profile}} trên {{host}}, cả trang trên máy này lẫn trang được stream.",
+      "rowSsh": "Đăng xuất khỏi mọi trang trong {{profile}} cho {{host}}.",
+      "unavailable": "Không khả dụng cho hồ sơ này trên host đã chọn.",
+      "confirmTitle": "Xoá cookie trong {{profile}} trên {{host}}?",
+      "confirmTitleLocal": "Xoá cookie trong {{profile}} trên máy này?",
+      "confirmDescriptionServer": "Thao tác này đăng xuất khỏi mọi trang trong hồ sơ này, cả trang trên máy này lẫn trang được stream. Các hồ sơ và host khác vẫn giữ cookie.",
+      "confirmDescription": "Thao tác này đăng xuất khỏi mọi trang trong hồ sơ này. Các hồ sơ và host khác vẫn giữ cookie.",
+      "clear": "Xóa",
+      "cancel": "Hủy",
+      "cleared": "Đã xoá cookie trong {{profile}} trên {{host}}.",
+      "clearedLocal": "Đã xoá cookie trong {{profile}} trên máy này.",
+      "failed": "Không xoá được cookie trong {{profile}} trên {{host}}. Thử lại.",
+      "failedLocal": "Không xoá được cookie trong {{profile}} trên máy này. Thử lại.",
+      "sshHostOption": "{{host}} (SSH)"
     }
   },
   "editor": {
@@ -1102,6 +1133,9 @@
           "sleep": "ngủ",
           "performance": "hiệu năng"
         }
+      },
+      "sessionHost": {
+        "sshDetail": "Trang của SSH host này mở trên máy này."
       }
     },
     "agents": {
@@ -1218,7 +1252,7 @@
     "followSymlinkedDirectories": "Đi theo thư mục symlink",
     "followSymlinkedDirectoriesDescription": "Tìm thư mục liên kết trong Quick Open và mở rộng thư mục liên kết local trong File Explorer.",
     "accounts": {
-      "codexRemoveHome": "Orca xóa thư mục Codex của tài khoản này trên {{host}}, gồm đăng nhập, đăng nhập MCP và mọi lịch sử Codex chỉ lưu trong thư mục đó. Không thể hoàn tác. Nếu nó đang được chọn, Codex tiếp theo bạn khởi động sẽ dùng System default.",
+      "codexRemoveHome": "Orca sẽ xoá thư mục Codex của tài khoản này trên {{host}}, gồm cả thông tin đăng nhập và đăng nhập MCP. Không thể hoàn tác. Nếu đang chọn thư mục này, Codex khởi động lần tới sẽ dùng System default.",
       "claudeRemoveProfile": "Orca xóa thư mục Claude riêng của tài khoản này và đăng nhập đã lưu trong đó trên {{host}}. Đăng nhập System default và lịch sử chat chung với nó vẫn còn. Nếu nó đang được chọn, Claude tiếp theo bạn khởi động sẽ dùng System default."
     },
     "sourceControl": {
@@ -9011,18 +9045,14 @@
         },
         "BrowserProfileRow": {
           "8e636cae25": "Đã xóa profile \"{{value0}}\".",
-          "2d4bea7f35": "Đã xóa cookie mặc định.",
           "796d846483": "Chưa nhập cookie",
           "c29648fe5b": "Đang hoạt động",
           "b4c167764d": "Đã nhập {{value0}} cookie từ file vào {{value1}}.",
           "a3f8c2d1e0b4": "Đã nhập {{value0}} cookie từ {{value1}} ({{value2}}) vào {{value3}}.",
           "b4e9d3f2a1c5": "Đã nhập {{value0}} cookie từ {{value1}} vào {{value2}}.",
           "c5a273a809": "Từ {{value0}}",
-          "4054c458e1": "Xóa cookie mặc định",
           "80bffd32bf": "Nhập cookie",
-          "bd7d68f138": "Từ file…",
-          "3b662becd5": "Xóa cookie trong hồ sơ Default?",
-          "f159cf5a3e": "Thao tác này có thể đăng xuất bạn khỏi các trang trong hồ sơ này."
+          "bd7d68f138": "Từ file…"
         },
         "BrowserUseComputerUseNotice": {
           "79209b37b9": "Nếu nhập cookie không phù hợp, Computer Use có thể điều khiển ứng dụng cục bộ và có thể dùng phiên trình duyệt đã đăng nhập hiện có nếu áp dụng. Cài skill Orca Computer Use; macOS cũng cần quyền riêng tư.",
@@ -18979,8 +19009,6 @@
             "ed8f54509d": "Mặc định",
             "e5d31de1a9": "Kích thước khung nhìn",
             "56f94f4ffa": "Từ File…",
-            "eb280bfb11": "Từ {{value0}}",
-            "2293adf620": "Nhập Cookies",
             "cf7cdc67ef": "Hồ sơ mới…",
             "7b838540c7": "Menu trình duyệt",
             "a7a86702b3": "Đã tạo và chuyển sang hồ sơ {{value0}}",
@@ -20315,9 +20343,7 @@
         "typeHtml": "HTML"
       },
       "BrowserCookieImportMachineNotice": {
-        "clientLabel": "Các trình duyệt trên thiết bị này",
         "remoteLabel": "Các trình duyệt trên {{value0}}",
-        "clientNoteLocalStorage": "Thao tác nhập đọc trình duyệt của thiết bị này. Cookie lưu cục bộ.",
         "remoteNoteRemoteStorage": "Thao tác nhập đọc trình duyệt trên {{value0}}. Cookie lưu trên máy đó, và lời nhắc cấp quyền có thể xuất hiện trên màn hình của nó."
       },
       "native": {
@@ -21110,6 +21136,8 @@
         "historyUnreadable": "Orca không đọc được lịch sử đã lưu của chat này.",
         "historyUnusable": "Không thể tải cuộc trò chuyện này.",
         "historyUnavailable": "Orca không mở được lịch sử của chat này lúc này.",
+        "diskFull": "Đĩa trên máy đang chạy cuộc trò chuyện này đã đầy.",
+        "freeDiskSpace": "Giải phóng dung lượng trên đĩa đó rồi thử lại.",
         "savedInOtherFolder": "Cuộc hội thoại này được lưu trong thư mục khác.",
         "savedByNewerOrca": "Các cuộc trò chuyện đã được lưu bởi một Orca mới hơn.",
         "updateOrcaToKeepUsing": "Cập nhật Orca để tiếp tục dùng chúng.",
@@ -21650,7 +21678,6 @@
         "terminalRequired": "Trả lời câu hỏi OMP này trong Terminal.",
         "openTerminal": "Trả lời trong Terminal",
         "recommended": "Khuyên dùng",
-        "stepAnswered": "{{value0}}, đã trả lời",
         "stepOf": "{{value0}} trong số {{value1}}",
         "answered": "Đã trả lời",
         "title": "Câu hỏi",
@@ -21981,6 +22008,17 @@
       "imagePreview": {
         "fileActions": "Thao tác file",
         "linkActions": "Hành động liên kết"
+      },
+      "imageGallery": {
+        "scopeHelp": "Các ảnh gần phần chat này khi bạn mở bản xem trước. Ảnh ở xa phía trên hoặc dưới không được tính. Đóng và mở lại để cập nhật.",
+        "description": "Ảnh trong khung xem này: {{position}}/{{count}}. {{help}}",
+        "stepAnnouncement": "Ảnh {{position}}/{{count}} trong khung xem này: {{title}}.",
+        "firstImage": "Ảnh đầu tiên.",
+        "lastImage": "Ảnh cuối cùng.",
+        "loading": "Đang tải ảnh…",
+        "loadFailed": "Không tải được {{name}}",
+        "closedImageChanged": "Bản xem trước đã đóng vì một ảnh đã thay đổi. Mở ảnh thu nhỏ để chụp bộ ảnh hiện tại.",
+        "closedChatChanged": "Bản xem trước đã đóng vì cuộc trò chuyện đã thay đổi. Mở ảnh thu nhỏ để chụp bộ ảnh hiện tại."
       },
       "goalControl": {
         "settingsRejected": "Codex không thể áp dụng model và mức nỗ lực đã chọn. Thay đổi mục tiêu này chưa được gửi. Kiểm tra lựa chọn và thử lại.",
@@ -22727,7 +22765,6 @@
       },
       "googleOffer": {
         "useAccount": "Dùng {{email}} cho Google.",
-        "useAnother": "Dùng tài khoản khác",
         "reconnect": "Kết nối lại {{email}}",
         "use": "Dùng {{email}}",
         "staysDefault": "{{email}} vẫn là mặc định"
@@ -23986,11 +24023,10 @@
     },
     "orchestration": {
       "workerAutoClose": {
-        "running": "Worker orchestration tạm thời · Đóng 2 phút sau khi xong",
-        "finished": "Worker orchestration tạm thời đã xong · Đóng sau {{countdown}}",
         "keepOpen": "Giữ mở",
         "bannerRunning": "Worker orchestration · Đóng 2 phút sau khi xong",
         "bannerFinished": "Worker orchestration đã xong · Đóng sau {{countdown}}",
+        "bannerFinishedStatus": "Worker điều phối đã xong · Sắp đóng",
         "boundRunning": "Đóng cùng {{worker}}",
         "boundFinished": "{{worker}} đã xong · Đóng sau {{countdown}}",
         "boundFallbackName": "worker của nó"
@@ -25282,7 +25318,7 @@
       "signInRequired": "Đăng nhập lại để dùng tài khoản này",
       "signInAgain": "Đăng nhập lại",
       "usageSignInLabel": "Đăng nhập lại",
-      "usageSignInMessage": "Tài khoản Claude đã chọn cần đăng nhập lại. Mở Cài đặt > Tài khoản nhà cung cấp AI, hoặc chọn Mặc định hệ thống.",
+      "usageSignInMessage": "Tài khoản này cần bạn đăng nhập lại.",
       "signIn": "Đăng nhập",
       "moreSignInOptions": "Thêm tùy chọn đăng nhập",
       "copySignInLink": "Sao chép liên kết đăng nhập thay thế",
@@ -25728,9 +25764,10 @@
   },
   "updates": {
     "installOnQuit": {
-      "title": "Khởi động lại Orca thủ công",
-      "summary": "Orca không tự khởi động lại được. Thoát Orca và để bản cập nhật cài đặt trước khi mở lại.",
-      "keepWorking": "Giữ đang làm việc"
+      "title": "Bản cập nhật sẵn sàng cài đặt",
+      "summary": "Thoát Orca. Mở lại sau khi cài đặt xong.",
+      "quit": "Thoát Orca",
+      "later": "Để sau"
     },
     "installBlock": {
       "instancesLabel": "Các phiên bản đang dùng Orca",
@@ -27349,7 +27386,6 @@
       "waitingForUntil": "Đang chờ {{label}} · đến {{time}}",
       "waitingCount": "Đang chờ {{count}} sự kiện",
       "settings": "Cài đặt bot…",
-      "hostDisconnected": "{{host}} đã ngắt kết nối",
       "disconnected": "Đã ngắt kết nối",
       "runsOn": "Chạy trên {{host}}"
     },
@@ -28633,13 +28669,10 @@
       "hostChoice": {
         "description": "Chọn cách {{bot}} đăng nhập vào Gmail, Calendar và Drive của bạn.",
         "orca": "Do Orca lưu trữ",
-        "comingSoon": "Sắp ra mắt",
-        "orcaNote": "Đăng nhập bằng Google. Không cần cài đặt gì.",
+        "soon": "Sắp",
+        "orcaNote": "Đăng nhập bằng Google.",
         "self": "Tự host",
-        "selfNote": "Bạn tự tạo app Google Cloud, nên thông tin đăng nhập ở trên máy của bạn. Không có gì đi qua server của Orca.",
-        "stepApp": "{{bot}} mở Google Cloud và thiết lập ứng dụng",
-        "stepSignIn": "Bạn đánh dấu ô điều khoản của Google và đăng nhập",
-        "stepCheck": "{{bot}} kiểm tra Gmail, Calendar và Drive có hoạt động không",
+        "selfNote": "Ứng dụng Google của riêng bạn.",
         "continue": "Tiếp tục"
       },
       "connectDescription": "Cho bot của bạn truy cập Gmail, Calendar và Drive. Thông tin đăng nhập của bạn ở lại trên {{host}}.",
@@ -28707,7 +28740,14 @@
         "noAccount": "Google đã đăng nhập, nhưng host không gửi tài khoản nào.",
         "alreadyRunning": "Một phiên đăng nhập Google đang chạy. Hãy hoàn thành hoặc hủy nó trước.",
         "notWaiting": "Không có lần đăng nhập Google nào đang chờ. Bắt đầu lại."
-      }
+      },
+      "accessBlocked": "Thấy 'Access blocked'?",
+      "setUpNewApp": "Thiết lập ứng dụng Google mới",
+      "useAnother": "Dùng tài khoản khác",
+      "useAnotherSignIn": "Đăng nhập bằng Google",
+      "useAnotherSignInDetail": "Dùng ứng dụng Google hiện tại của bạn",
+      "setUpNewAppDetail": "Nếu ứng dụng hiện tại không dùng được cho tài khoản hoặc tổ chức này",
+      "updateToSetUpNewApp": "Cập nhật Orca trên {{host}} để thiết lập ứng dụng Google mới."
     },
     "googleSetup": {
       "receipt": {
@@ -30075,12 +30115,7 @@
       },
       "cancel": {
         "confirmMany": "Hủy {{count}}",
-        "confirmOne": "Hủy mục",
-        "keep": "Giữ",
-        "placeholder": "Lý do",
-        "titleMany": "Hủy {{count}} mục?",
-        "titleOne": "Hủy {{title}}?",
-        "why": "Bot thấy lý do. Không có gì bị xóa."
+        "keep": "Giữ"
       },
       "chat": {
         "added": "Đã thêm {{items}}",
@@ -30180,8 +30215,7 @@
         "automationEnded": "Đã kết thúc"
       },
       "menu": {
-        "cancel": "Hủy…",
-        "canceled": "Đã hủy…",
+        "cancel": "Hủy",
         "done": "Xong",
         "waiting": "Đang chờ…"
       },
@@ -30266,7 +30300,9 @@
         "recommended": "Khuyên dùng",
         "step": "{{n}} / {{total}}",
         "typeAnswer": "Nhập câu trả lời",
-        "replaced": "Agent đã hỏi một câu mới. Đọc rồi trả lời."
+        "replaced": "Agent đã hỏi một câu mới. Đọc rồi trả lời.",
+        "replacedByNewer": "Đã thay bằng câu hỏi mới hơn",
+        "skipped": "Đã bỏ qua"
       },
       "readMoreClosedFailed": "Đọc thêm mục đã đóng thất bại",
       "wait": {
