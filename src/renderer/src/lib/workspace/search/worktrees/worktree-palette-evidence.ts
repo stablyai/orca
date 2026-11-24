@@ -117,7 +117,7 @@ export function buildWorktreeAutomationEvidence(
   })
 }
 
-function resolveLinkedTaskIdentifier(worktree: Worktree): string {
+export function resolveLinkedTaskIdentifier(worktree: Worktree): string {
   const item = worktree.linkedWorkItem
   if (item?.linearIdentifier) {
     return item.linearIdentifier
