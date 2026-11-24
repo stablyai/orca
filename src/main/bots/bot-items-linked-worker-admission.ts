@@ -67,7 +67,13 @@ export function finishedOf(
 export function plainChain(db: OrchestrationDb, finished: Finished): string[] | null {
   const chain = [finished.latestId]
   for (let id = finished.latestId; id !== finished.ref;) {
-    const parent = db.getDispatchContextById(id)?.follow_up_of_dispatch_id
+    let parent: string | null | undefined
+    try {
+      parent = db.getDispatchContextById(id)?.follow_up_of_dispatch_id
+    } catch {
+      // Unreadable: it reads live, and keeping goes on for the rest.
+      return null
+    }
     if (!parent || chain.length >= CHAIN_MAX) {
       return null
     }

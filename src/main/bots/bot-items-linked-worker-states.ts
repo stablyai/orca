@@ -138,29 +138,11 @@ export class LinkedWorkerStates {
     // A write while the read awaited may have changed a kept worker. If it did, the whole batch is read
     // again, so links sharing a lineage never disagree within one read.
     let used = hits
-    const now = this.stampOf(db)
-    this.syncVersion(db)
-    if (now !== stamp && hits.length > 0) {
-      const nowPrints = readPrints(
-        db,
-        hits.map(([, kept]) => kept)
-      )
-      const changed = hits.filter(([ref, kept]) => {
-        const print = nowPrints.get(printKey(kept))
-        if (this.kept.get(ref) !== kept || now === null || print?.print !== kept.print) {
-          this.forget(ref)
-          return true
-        }
-        kept.reason = print.reason
-        kept.checkedAt = now
-        return false
-      })
-      if (changed.length > 0) {
-        used = []
-        workers.clear()
-        for (const [ref, worker] of await readWorkers(this.workRuntime, unique, lineageOf)) {
-          workers.set(ref, worker)
-        }
+    if (this.changedSince(db, stamp, hits)) {
+      used = []
+      workers.clear()
+      for (const [ref, worker] of await readWorkers(this.workRuntime, unique, lineageOf)) {
+        workers.set(ref, worker)
       }
     }
     for (const [ref, kept] of used) {
@@ -202,10 +184,38 @@ export class LinkedWorkerStates {
           this.queue(db, stamp, finished)
         }
       },
-      // A kept worker this read used was dropped before its caller replied: read it again.
-      stale: () =>
-        this.stampOf(db) !== readAt && used.some(([ref, kept]) => this.kept.get(ref) !== kept)
+      // A kept worker this read used changed before its caller replied: read it again.
+      stale: () => this.changedSince(db, readAt, used)
     }
+  }
+
+  /** Whether a write since `stamp` changed any of these kept workers; those that changed are dropped,
+   *  the rest are checked as of now. */
+  private changedSince(
+    db: OrchestrationDb,
+    stamp: string | null,
+    hits: readonly (readonly [string, Kept])[]
+  ): boolean {
+    const now = this.stampOf(db)
+    this.syncVersion(db)
+    if (now === stamp || hits.length === 0) {
+      return false
+    }
+    const prints = readPrints(
+      db,
+      hits.map(([, kept]) => kept)
+    )
+    const changed = hits.filter(([ref, kept]) => {
+      const print = prints.get(printKey(kept))
+      if (this.kept.get(ref) !== kept || now === null || print?.print !== kept.print) {
+        this.forget(ref)
+        return true
+      }
+      kept.reason = print.reason
+      kept.checkedAt = now
+      return false
+    })
+    return changed.length > 0
   }
 
   private queue(db: OrchestrationDb, stamp: string, finished: readonly Finished[]): void {
