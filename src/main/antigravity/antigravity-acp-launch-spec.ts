@@ -3,6 +3,7 @@
 import { join } from 'node:path'
 import { homedir } from 'node:os'
 import type { AcpHostBackendInput, AcpLaunchSpec } from '../acp/launch/acp-launch-contract'
+import type { AcpSessionModelDiscovery } from '../acp/discovery/acp-model-discovery-policy'
 import {
   antigravityAgyOrcaHomeRevision,
   antigravityChatRoute,
@@ -21,7 +22,6 @@ import {
   agyOrcaHomeArgs,
   antigravityAgyOrcaAccount,
   antigravityAgyOrcaAccountHome,
-  discardAgyOrcaListingSession,
   isAntigravityAgyOrcaAccountHome
 } from './antigravity-agy-orca-home'
 import {
@@ -47,7 +47,7 @@ import {
 import { readAntigravitySignInLine } from './antigravity-sign-in-url'
 import { antigravityChatRulesMeta } from './antigravity-chat-rules'
 import { discardAntigravityListingSession } from './antigravity-listing-session'
-import { parseAgyModelListing } from './antigravity-model-listing'
+import { discardAgyListingSession } from './agy-listing-session-discard'
 import { managedRuntimeReleasesRevision } from '../node-runtime/managed-runtime-installation'
 import {
   AGY_SKIP_PERMISSIONS_FLAG,
@@ -153,6 +153,14 @@ function scrubAgyHostApiKeys(env: Record<string, string>, inherited: NodeJS.Proc
   return removed
 }
 
+const AGY_SESSION_MODEL_DISCOVERY: AcpSessionModelDiscovery = {
+  kind: 'session',
+  listingNamesConfiguredModel: false,
+  inPrivateFolder: true,
+  listsOnDemand: true,
+  discardSession: discardAgyListingSession
+}
+
 // The host's `agy acp` uses agy's own sign-in and history; Orca neither signs it in nor out.
 const ANTIGRAVITY_HOST_LAUNCH_SPEC: AcpLaunchSpec = {
   ...ANTIGRAVITY_MANAGED_LAUNCH_SPEC,
@@ -170,13 +178,8 @@ const ANTIGRAVITY_HOST_LAUNCH_SPEC: AcpLaunchSpec = {
   authMethodUnavailableMessage: undefined,
   signIn: undefined,
   dialect: { ...ANTIGRAVITY_ACP_DIALECT, signInAccount: 'system' },
-  // `agy models` lists without opening a session.
-  modelDiscovery: {
-    kind: 'command',
-    args: ['models'],
-    parse: parseAgyModelListing,
-    listingNamesConfiguredModel: false
-  },
+  // A session lists what a chat is offered; `agy models` can return a shorter fallback list.
+  modelDiscovery: AGY_SESSION_MODEL_DISCOVERY,
   account: {
     pin: antigravityChatAccount.pin,
     resolve: async ({ launchEnv }) =>
@@ -215,14 +218,6 @@ const ANTIGRAVITY_AGY_ORCA_HOME_LAUNCH_SPEC: AcpLaunchSpec = {
   scrubEnvironment: scrubAgyOrcaHomeEnvironment,
   dialect: ANTIGRAVITY_AGY_ORCA_HOME_DIALECT,
   account: antigravityAgyOrcaAccount,
-  // `agy models` can't be pointed at this home, so a session lists them, and is then removed.
-  modelDiscovery: {
-    kind: 'session',
-    listingNamesConfiguredModel: false,
-    inPrivateFolder: true,
-    listsOnDemand: true,
-    discardSession: discardAgyOrcaListingSession
-  },
   minimumVersions: [AGY_ORCA_HOME_MINIMUM_VERSION]
 }
 
