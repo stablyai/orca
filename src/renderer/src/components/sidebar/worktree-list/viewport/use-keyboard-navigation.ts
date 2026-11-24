@@ -1,6 +1,9 @@
 import type React from 'react'
 import { useWorktreeListKeyboardNavigation } from '../navigation/use-keyboard'
-import { resolveSidebarWorkspaceDeleteIntent } from '../navigation/sidebar-workspace-delete'
+import {
+  getSidebarWorkspaceDeleteTargets,
+  resolveSidebarWorkspaceDeleteIntent
+} from '../navigation/sidebar-workspace-delete'
 import type { VirtualizedWorktreeViewportProps } from './viewport-props'
 
 export function useWorktreeViewportKeyboardNavigation(args: {
@@ -22,7 +25,7 @@ export function useWorktreeViewportKeyboardNavigation(args: {
     focusedWorkspaceExecutionHostId: props.focusedWorkspaceExecutionHostId,
     resolveDeleteIntent: () =>
       resolveSidebarWorkspaceDeleteIntent({
-        selectedWorktrees: props.selectedWorktrees,
+        selectedWorktrees: getSidebarWorkspaceDeleteTargets(props),
         focusedWorktree: props.focusedWorktree ?? null,
         repoMap: props.repoMap
       })

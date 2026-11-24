@@ -1,7 +1,14 @@
 import { useAppStore } from '@/store'
 import { isPairedWebClientWindow } from '@/app-shell/chrome/desktop-window-chrome'
 import { resolveWorktreeOperationRouteForHost } from '@/lib/workspace/ownership/worktree-operation-route'
-import { getWorktreeExecutionHostId } from '../../../../../../shared/execution-host/execution-host'
+import {
+  getWorktreeExecutionHostId,
+  type ExecutionHostId
+} from '../../../../../../shared/execution-host/execution-host'
+import type { HostSectionRow } from '../../../../../../shared/sidebar-list/hosts/host-section-rows'
+import type { PinnedWorktreeDisplayPolicy } from '../../../../../../shared/sidebar-list/row-types'
+import { getRenderedWorkspaceRowsInSidebarOrder } from './worktree-sidebar-row-preference'
+import { getCyclableRowIdentity, resolveActiveCycleIdentity } from './worktree-keyboard-cycle'
 import { getWorktreeHostIdentity } from '../../../../../../shared/worktree/host-qualified-identity'
 import { parseWorkspaceKey } from '../../../../../../shared/workspace/identity/workspace-scope'
 import type { Worktree } from '../../../../../../shared/worktree/types'
@@ -15,6 +22,23 @@ import { resolveSshWorkspaceForget } from '../../workspace-actions/deletion/ssh-
 import { getDeleteStateForWorktreeHost } from '../../workspace-actions/deletion/worktree-delete-state-host-match'
 import { getIndexedReposById } from '@/store/repos/repository-catalog-index'
 import { repoMatchesHostIdentity } from '@/store/repos/repo-host-identity'
+
+// Why: with nothing selected the focused list treats the open workspace's row as current (arrows, aria-activedescendant).
+export function getSidebarWorkspaceDeleteTargets(args: {
+  selectedWorktrees: readonly Worktree[]
+  rows: readonly HostSectionRow[]
+  pinnedDisplayPolicy: PinnedWorktreeDisplayPolicy
+  activeWorktreeId: string | null
+  activeWorkspaceExecutionHostId: ExecutionHostId | null
+}): readonly Worktree[] {
+  if (args.selectedWorktrees.length > 0 || args.activeWorktreeId === null) {
+    return args.selectedWorktrees
+  }
+  const rows = getRenderedWorkspaceRowsInSidebarOrder(args.rows, args.pinnedDisplayPolicy)
+  const activeIdentity = resolveActiveCycleIdentity({ ...args, rows })
+  const activeRow = rows.find((row) => getCyclableRowIdentity(row) === activeIdentity)
+  return activeRow ? [activeRow.worktree] : []
+}
 
 export function resolveSidebarWorkspaceDeleteIntent(args: {
   selectedWorktrees: readonly Worktree[]
