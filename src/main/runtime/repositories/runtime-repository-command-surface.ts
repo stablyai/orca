@@ -58,6 +58,7 @@ export type RuntimeRepositoryCommandSurface = {
   createFolderWorkspace: RuntimeProjectGroupController['createFolderWorkspace']
   getFolderWorkspacePathStatus: RuntimeProjectGroupController['getFolderPathStatus']
   updateFolderWorkspace: RuntimeProjectGroupController['updateFolderWorkspace']
+  mergeFolderDiffComments: RuntimeProjectGroupController['mergeFolderDiffComments']
   deleteFolderWorkspace: RuntimeProjectGroupController['deleteFolderWorkspace']
   scanNestedRepos: RuntimeNestedRepoImport['scan']
   importNestedRepos: RuntimeNestedRepoImport['import']
@@ -144,6 +145,7 @@ export function installRuntimeRepositoryCommandSurface(
     createFolderWorkspace: groups.createFolderWorkspace.bind(groups),
     getFolderWorkspacePathStatus: groups.getFolderPathStatus.bind(groups),
     updateFolderWorkspace: groups.updateFolderWorkspace.bind(groups),
+    mergeFolderDiffComments: groups.mergeFolderDiffComments.bind(groups),
     deleteFolderWorkspace: groups.deleteFolderWorkspace.bind(groups),
     scanNestedRepos: nested.scan.bind(nested),
     importNestedRepos: nested.import.bind(nested),

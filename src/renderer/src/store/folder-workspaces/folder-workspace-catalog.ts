@@ -68,7 +68,7 @@ function getFolderWorkspaceHostIdFromIndex(
   return hostByGroupId.get(workspace.projectGroupId) ?? LOCAL_EXECUTION_HOST_ID
 }
 
-function createFolderWorkspaceHostResolver(
+export function createFolderWorkspaceHostResolver(
   projectGroups: readonly ProjectGroup[]
 ): (workspace: FolderWorkspace) => ExecutionHostId {
   let hostByGroupId: FolderWorkspaceHostIndex | undefined

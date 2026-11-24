@@ -41,6 +41,12 @@ import {
   type FolderWorkspaceDeleteOptions
 } from './folder-workspace-deletion'
 import { createFolderWorkspaceWithPluginHooks } from '../../plugins/hooks/workspace-create-plugin-hook'
+import type {
+  FolderDiffCommentMergeRequest,
+  FolderDiffCommentReceipt
+} from '../../../shared/file-review/folder-diff-comment-merge'
+import { mergeFolderDiffCommentsOnHost } from '../../../shared/file-review/folder-diff-comment-merge-operation'
+import { runtimeFolderDiffCommentMergeHost } from './runtime-folder-diff-comment-merge'
 import {
   assertWslMoveRepoWritable,
   isLocalWslMoveRow,
@@ -275,6 +281,18 @@ export class RuntimeProjectGroupController {
       this.deps.notifyReposChanged()
     }
     return updated
+  }
+
+  /** Merge-only note change (or read) for one folder row; never replaces its list. */
+  mergeFolderDiffComments(request: FolderDiffCommentMergeRequest): FolderDiffCommentReceipt {
+    const store = this.deps.getStore()
+    if (!store?.updateFolderWorkspace) {
+      throw new Error('runtime_unavailable')
+    }
+    return mergeFolderDiffCommentsOnHost(
+      runtimeFolderDiffCommentMergeHost(store, () => this.deps.notifyReposChanged()),
+      request
+    )
   }
 
   async deleteFolderWorkspace(

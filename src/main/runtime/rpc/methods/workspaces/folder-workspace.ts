@@ -7,6 +7,7 @@ import {
   FolderWorkspacePathStatus,
   FolderWorkspaceUpdate
 } from '../../../../../shared/rpc-contract/workspaces/folder-workspace-params'
+import { FolderDiffCommentMergeRequestSchema } from '../../../../../shared/file-review/folder-diff-comment-merge'
 
 export const FOLDER_WORKSPACE_METHODS = [
   defineMethod({
@@ -42,6 +43,13 @@ export const FOLDER_WORKSPACE_METHODS = [
         { requireUniqueId: params.requireUniqueId }
       )
     })
+  }),
+  // Why a separate method: an older host answers method_not_found instead of replacing the notes.
+  defineMethod({
+    name: 'folderWorkspace.mergeDiffComments',
+    permission: 'workspace',
+    params: FolderDiffCommentMergeRequestSchema,
+    handler: (params, { runtime }) => runtime.mergeFolderDiffComments(params)
   }),
   defineMethod({
     name: 'folderWorkspace.delete',

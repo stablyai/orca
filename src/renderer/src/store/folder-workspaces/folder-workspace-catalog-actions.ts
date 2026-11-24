@@ -18,12 +18,14 @@ import {
 import {
   type FetchedFolderWorkspaceCatalog,
   clearRestoredFolderWorkspaceSessionOwners,
+  createFolderWorkspaceHostResolver,
   fetchFolderWorkspaceCatalogForTarget,
   getFolderWorkspaceCatalogReplacementIdentities,
   mergeFetchedFolderWorkspaceCatalog
 } from './folder-workspace-catalog'
 import { reuseEqualRecordMap } from '../../lib/catalog-reconciliation/catalog-record-reconciliation'
 import { getFolderWorkspaceUpdateCoordinator } from './folder-workspace-mutations'
+import { keepFencedFolderNotes } from '../slices/diff-comments/folder-note-fence'
 import { structuralValuesEqualIgnoringUndefined } from '../../../../shared/collections/structural-value-equality'
 
 export function createFolderWorkspaceCatalogActions(
@@ -57,6 +59,14 @@ export function createFolderWorkspaceCatalogActions(
         current.folderWorkspaces,
         current.projectGroups
       )
+      // Why: a fetch sampled before a protected note commit must not roll those notes back.
+      const fencedFolderWorkspaces = keepFencedFolderNotes({
+        catalogHostId: catalog.hostId,
+        fetchGeneration: fence.generation,
+        merged: folderWorkspaces,
+        current: current.folderWorkspaces,
+        rowHostId: createFolderWorkspaceHostResolver(current.projectGroups)
+      })
       const { target, identity, sshStateGeneration } = fence
       const catalogIdentity = { target, identity, sshStateGeneration }
       const catalogPatch = structuralValuesEqualIgnoringUndefined(
@@ -70,9 +80,12 @@ export function createFolderWorkspaceCatalogActions(
               [catalog.hostId]: catalogIdentity
             }
           }
-      const workspacePatch = arrayElementsUnchanged(folderWorkspaces, current.folderWorkspaces)
+      const workspacePatch = arrayElementsUnchanged(
+        fencedFolderWorkspaces,
+        current.folderWorkspaces
+      )
         ? null
-        : { folderWorkspaces, folderWorkspacePathStatuses: {} }
+        : { folderWorkspaces: fencedFolderWorkspaces, folderWorkspacePathStatuses: {} }
       return catalogPatch || workspacePatch ? { ...catalogPatch, ...workspacePatch } : current
     })
     return applied

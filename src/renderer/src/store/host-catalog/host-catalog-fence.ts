@@ -47,6 +47,18 @@ export function claimHostCatalogFence(
   }
 }
 
+/** The newest generation claimed for a catalog, without claiming one; 0 when none started yet. */
+export function peekHostCatalogGeneration(
+  get: CatalogFenceStore,
+  kind: HostCatalogKind,
+  target: RuntimeClientTarget
+): number {
+  return (
+    latestHostCatalogGenerationByStore.get(get)?.get(`${kind}:${getRuntimeTargetHostId(target)}`) ??
+    0
+  )
+}
+
 export function isHostCatalogFenceCurrent(
   get: CatalogFenceStore,
   fence: HostCatalogFence

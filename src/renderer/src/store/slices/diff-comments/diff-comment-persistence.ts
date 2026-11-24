@@ -8,6 +8,14 @@ import { diffCommentOwnerKey, findOwnedFolder, type DiffCommentOwner } from './d
 import type { getExecutionHostIdForFolderWorkspace } from '@/lib/workspace/ownership/folder-workspace-runtime-owner'
 import { readDiffCommentsFromHost, writeDiffCommentsToHost } from './diff-comment-host-write'
 import { parseWorkspaceKey } from '../../../../../shared/workspace/identity/workspace-scope'
+import {
+  enterFolderNoteProtection,
+  isFolderNoteProtectionActive,
+  refreshProtectedFolderDisplay,
+  runProtectedFolderNoteAction,
+  settleOrdinaryFolderNoteAction,
+  trackFolderNoteAction
+} from './folder-note-protection'
 
 export function normalizeDiffComment(comment: DiffComment): DiffComment {
   const rawSource = (comment as { source?: unknown }).source
@@ -111,7 +119,36 @@ export function enqueueDiffCommentPersist(
     floorSeedEpochByQueue.set(floorKey, (floorSeedEpochByQueue.get(floorKey) ?? 0) + 1)
   }
   lastMutationNextByQueue.set(floorKey, mutation.next)
+  const folderOwner = mutation.owner.kind === 'folder' ? mutation.owner : null
+  const folderAction = folderOwner
+    ? trackFolderNoteAction(floorKey, folderOwner, get, mutation.previous, mutation.next)
+    : null
+  if (folderOwner) {
+    refreshProtectedFolderDisplay(floorKey, get, set)
+  }
+  // Runs behind every queued write of this copy, ahead of any enqueued later.
+  const enqueueRead = (task: () => Promise<void>): void => {
+    const tail = persistQueueByWorktree.get(queueKey) ?? Promise.resolve()
+    const read = tail.then(task, task)
+    persistQueueByWorktree.set(queueKey, read)
+    const release = (): void => {
+      if (persistQueueByWorktree.get(queueKey) === read) {
+        persistQueueByWorktree.delete(queueKey)
+      }
+    }
+    read.then(release, release)
+  }
   const run = async (): Promise<void> => {
+    // Why: after a failed folder save, every queued write is one merge-only action (see folder-note-protection).
+    if (folderAction && isFolderNoteProtectionActive(floorKey)) {
+      return runProtectedFolderNoteAction({
+        copyKey: floorKey,
+        action: folderAction,
+        get,
+        set,
+        enqueueRead
+      })
+    }
     // Capture epoch at dequeue with coalesced stateList; enqueue-time epochs would reject floors spanning chain breaks.
     const seedEpoch = floorSeedEpochByQueue.get(floorKey)
     // Retain state-side array rather than disk-normalized clone so rollback preserves getDiffComments identity.
@@ -124,18 +161,16 @@ export function enqueueDiffCommentPersist(
     let sent: DiffComment[] = []
     // What this copy last saw on disk; the host merges only the edits since then.
     // Why not always a promise: a write with nothing to re-read leaves in the turn it was dequeued in.
-    const baseFor = (
-      requested: DiffComment[]
-    ): DiffComment[] | undefined | Promise<DiffComment[]> => {
+    const baseFor = (requested: DiffComment[]): DiffComment[] | Promise<DiffComment[]> => {
       sent = requested
       const own = ownNoteIdsAfterFailure.get(floorKey)
       const owner = mutation.owner
       if (!own) {
         return floor
       }
-      // Why no base: there is no folder re-read helper, and a failed write may still have landed,
-      // so the floor may not be what the host holds; the host replaces the list instead.
-      return owner.kind === 'worktree' ? rereadBase(owner, own, requested) : undefined
+      // Folders never get here: after a failure their writes go through folder-note-protection,
+      // and a base-less write would let the host replace the list.
+      return owner.kind === 'worktree' ? rereadBase(owner, own, requested) : floor
     }
     const rereadBase = async (
       owner: Extract<DiffCommentOwner, { kind: 'worktree' }>,
@@ -185,6 +220,18 @@ export function enqueueDiffCommentPersist(
         ? lastPersistedByQueue.get(floorKey)
         : mutation.previous
       rollback(set, worktreeId, rollbackFloor, mutation)
+      if (folderOwner && folderAction) {
+        // The failed write may have landed: later writes of this copy stay merge-only until one is acknowledged.
+        enterFolderNoteProtection(
+          floorKey,
+          folderOwner,
+          folderAction,
+          (rollbackFloor ?? []).map(normalizeDiffComment),
+          get,
+          set
+        )
+        throw err
+      }
       const own = ownNoteIdsAfterFailure.get(floorKey) ?? new Set<string>()
       for (const note of [...floor, ...sent]) {
         own.add(note.id)
@@ -193,6 +240,9 @@ export function enqueueDiffCommentPersist(
       throw err
     }
     ownNoteIdsAfterFailure.delete(floorKey)
+    if (folderAction) {
+      settleOrdinaryFolderNoteAction(floorKey, folderAction)
+    }
     // Out-of-band replacement during await reseeded floor; never restore the older captured list as floor.
     if (floorSeedEpochByQueue.get(floorKey) === seedEpoch) {
       lastPersistedByQueue.set(floorKey, stateList)

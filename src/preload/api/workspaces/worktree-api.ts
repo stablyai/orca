@@ -1,5 +1,9 @@
 import type { DiffCommentBaseMutation } from '../../../shared/file-review/diff-comment-mutation'
 import type {
+  FolderDiffCommentMergeRequest,
+  FolderDiffCommentReceipt
+} from '../../../shared/file-review/folder-diff-comment-merge'
+import type {
   FolderWorkspaceCreateInput,
   FolderWorkspaceCreateResult
 } from '../../../shared/folder-workspaces/folder-workspace-create'
@@ -192,6 +196,8 @@ export type WorktreeApi = {
 
 export type FolderWorkspacesApi = {
   list: () => Promise<FolderWorkspace[]>
+  /** Merge-only note change (or read) for one row, answered with a receipt of that exact commit. */
+  mergeDiffComments: (args: FolderDiffCommentMergeRequest) => Promise<FolderDiffCommentReceipt>
   getPathStatus: (args: FolderWorkspacePathStatusRequest) => Promise<FolderWorkspacePathStatus>
   create: (args: FolderWorkspaceCreateInput) => Promise<FolderWorkspaceCreateResult>
   update: (args: {

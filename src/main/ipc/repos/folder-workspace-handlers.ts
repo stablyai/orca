@@ -21,6 +21,12 @@ import {
   isLocalWslMoveRow,
   shouldDropWslMoveProjectUpdate
 } from '../../persistence/moving-wsl-projects/quiescence/wsl-move-scope-guard'
+import {
+  FolderDiffCommentMergeRequestSchema,
+  type FolderDiffCommentReceipt
+} from '../../../shared/file-review/folder-diff-comment-merge'
+import { mergeFolderDiffCommentsOnHost } from '../../../shared/file-review/folder-diff-comment-merge-operation'
+import { assertWslMoveNoteWriteAllowed } from '../../persistence/restoring-sessions/folder-diff-comment-merge-guards'
 
 export function registerFolderWorkspaceHandlers(
   mainWindow: BrowserWindow,
@@ -94,6 +100,37 @@ export function registerFolderWorkspaceHandlers(
         notifyReposChanged(mainWindow)
       }
       return updated
+    }
+  )
+
+  ipcMain.handle(
+    'folderWorkspaces:mergeDiffComments',
+    (_event, rawArgs: unknown): FolderDiffCommentReceipt => {
+      const request = parseProjectGroupIpcArgs(
+        FolderDiffCommentMergeRequestSchema,
+        rawArgs,
+        'invalid_folder_workspace_merge_diff_comments_args'
+      )
+      return mergeFolderDiffCommentsOnHost(
+        {
+          rows: () => store.getFolderWorkspaces(),
+          visibleRows: () => visibleFolderWorkspaces(store),
+          assertWritable: (row) =>
+            assertWslMoveNoteWriteAllowed(row, (target) =>
+              isLocalWslMoveRow(target)
+                ? shouldDropWslMoveProjectUpdate(
+                    store,
+                    { folderWorkspaceId: target.id },
+                    { diffComments: [] }
+                  )
+                : false
+            ),
+          update: (folderWorkspaceId, updates) =>
+            store.updateFolderWorkspace(folderWorkspaceId, updates),
+          notify: () => notifyReposChanged(mainWindow)
+        },
+        request
+      )
     }
   )
 
