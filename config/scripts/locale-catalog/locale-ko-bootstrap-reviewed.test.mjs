@@ -10,7 +10,6 @@ import {
 } from 'node:fs'
 import { tmpdir } from 'node:os'
 import path from 'node:path'
-import { fileURLToPath } from 'node:url'
 import { expect, test } from 'vitest'
 
 const scripts = import.meta.dirname
@@ -33,10 +32,10 @@ test('Korean bootstrap guards reviewed keys without contaminating the English ca
       preload,
       "globalThis.fetch = async (url) => { const u = new URL(url); if (u.searchParams.get('q') !== 'n/a') throw Error('unexpected fetch'); return { ok: true, json: async () => [[['ordinary provider']]] } }\n"
     )
-    const run = () =>
+    const run = (locale = 'ko') =>
       spawnSync(
         process.execPath,
-        ['--import', preload, path.join(dir, 'bootstrap-locale-catalog.mjs'), '--locale', 'ko'],
+        ['--import', preload, path.join(dir, 'bootstrap-locale-catalog.mjs'), '--locale', locale],
         { cwd: root, encoding: 'utf8' }
       )
     const fixtureRows = [
@@ -59,16 +58,29 @@ test('Korean bootstrap guards reviewed keys without contaminating the English ca
       ordinary: 'ordinary provider'
     })
     expect(JSON.parse(readFileSync(cache))).toEqual({ 'n/a': 'ordinary provider' })
+    const firstCache = readFileSync(cache, 'utf8')
     const first = readFileSync(output, 'utf8')
     result = run()
     expect(result.status, result.stderr).toBe(0)
     expect(readFileSync(output, 'utf8')).toBe(first)
+    expect(readFileSync(cache, 'utf8')).toBe(firstCache)
+    writeFileSync(cache, JSON.stringify({ 'workflow #': '캐시 값', 'n/a': '일반 캐시' }))
+    result = run()
+    expect(result.status, result.stderr).toBe(0)
+    expect(JSON.parse(readFileSync(output))).toEqual({
+      one: '첫째',
+      two: '둘째',
+      guarded: '해당 없음',
+      ordinary: '일반 캐시'
+    })
+    expect(JSON.parse(readFileSync(cache))['workflow #']).toBe('캐시 값')
     writeFileSync(source, JSON.stringify({ one: 'changed', renamed: 'workflow #' }))
     writeFileSync(cache, JSON.stringify({ changed: '새 번역', 'workflow #': '일반 번역' }))
     result = run()
     expect(result.status, result.stderr).toBe(0)
     expect(JSON.parse(readFileSync(output))).toEqual({ one: '새 번역', renamed: '일반 번역' })
     const before = readFileSync(cache, 'utf8')
+    const beforeOutput = readFileSync(output, 'utf8')
     writeFileSync(table, JSON.stringify([fixtureRows[0], fixtureRows[0]]))
     result = run()
     expect(result.status).not.toBe(0)
@@ -76,6 +88,7 @@ test('Korean bootstrap guards reviewed keys without contaminating the English ca
     expect(readFileSync(cache, 'utf8')).toBe(before)
     for (const row of [
       { key: 'one', en: 'Hello {{name}}', ko: '안녕' },
+      { key: 'one', en: 'Hello {{name}}', ko: '안녕 {{name}} {{name}}' },
       { key: 'one', en: 'Hello <term>world</term>', ko: '안녕 <term>세계' },
       { key: 'one', en: 'Hello', ko: '안녕 <extra>세계</extra>' },
       { key: 'one', en: 'Hello', ko: '' }
@@ -84,6 +97,7 @@ test('Korean bootstrap guards reviewed keys without contaminating the English ca
       result = run()
       expect(result.status).not.toBe(0)
       expect(readFileSync(cache, 'utf8')).toBe(before)
+      expect(readFileSync(output, 'utf8')).toBe(beforeOutput)
     }
     writeFileSync(table, JSON.stringify([{ key: 'one', en: 'Refresh', ko: '다른 번역' }]))
     writeFileSync(source, JSON.stringify({ one: 'Refresh' }))
@@ -93,26 +107,41 @@ test('Korean bootstrap guards reviewed keys without contaminating the English ca
     writeFileSync(
       table,
       JSON.stringify([
-        { key: 'one', en: '<term>{{x}} {{x}}</term>', ko: '<term>{{x}} {{x}}</term>' },
+        { key: 'one', en: '<term>{{x}} {{y}} {{x}}</term>', ko: '<term>{{y}} {{x}} {{x}}</term>' },
         { key: 'two', en: 'Orca', ko: '가짜' },
+        { key: 'auto.lib.agent.catalog.example', en: 'Example agent', ko: '가짜' },
         { key: 'auto.components.status.bar.StatusBar.6d1042aa6f', en: 'test pin', ko: '가짜' }
       ])
     )
     writeFileSync(
       source,
       JSON.stringify({
-        one: '<term>{{x}} {{x}}</term>',
+        one: '<term>{{x}} {{y}} {{x}}</term>',
         two: 'Orca',
-        auto: { components: { status: { bar: { StatusBar: { '6d1042aa6f': 'test pin' } } } } }
+        auto: {
+          lib: { agent: { catalog: { example: 'Example agent' } } },
+          components: { status: { bar: { StatusBar: { '6d1042aa6f': 'test pin' } } } }
+        }
       })
     )
-    writeFileSync(cache, JSON.stringify({ 'test pin': 'cached' }))
+    writeFileSync(cache, JSON.stringify({ 'test pin': 'cached', 'Example agent': '가짜' }))
     result = run()
     expect(result.status, result.stderr).toBe(0)
     const pinned = JSON.parse(readFileSync(output))
-    expect(pinned.one).toBe('<term>{{x}} {{x}}</term>')
+    expect(pinned.one).toBe('<term>{{y}} {{x}} {{x}}</term>')
     expect(pinned.two).toBe('Orca')
+    expect(pinned.auto.lib.agent.catalog.example).toBe('Example agent')
     expect(pinned.auto.components.status.bar.StatusBar['6d1042aa6f']).toContain('사용량 구간')
+    writeFileSync(table, 'invalid JSON')
+    writeFileSync(source, JSON.stringify({ ordinary: 'plain source' }))
+    writeFileSync(
+      path.join(locales, '.ja-catalog-cache.json'),
+      JSON.stringify({ 'plain source': '普通の翻訳' })
+    )
+    result = run('ja')
+    expect(result.status, result.stderr).toBe(0)
+    expect(JSON.parse(readFileSync(path.join(locales, 'ja.json'))).ordinary).toBe('普通の翻訳')
+    expect(readFileSync(table, 'utf8')).toBe('invalid JSON')
     expect(rows).toHaveLength(27)
   } finally {
     rmSync(root, { recursive: true, force: true })
