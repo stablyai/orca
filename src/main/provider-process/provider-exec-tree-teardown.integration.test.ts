@@ -106,6 +106,8 @@ describe.skipIf(process.platform !== 'darwin' && process.platform !== 'linux')(
       expect(await completion).toBe('group-absent')
       // A killed orphan stays a zombie until init reaps it.
       await expect.poll(() => tools.some(alive), { timeout: 2000 }).toBe(false)
+      // Confirmed gone, so their PIDs may be reused and must not be signalled in cleanup.
+      started.splice(0, started.length, outsider.pid!)
       expect(alive(outsider.pid!)).toBe(true)
     })
   }

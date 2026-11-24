@@ -373,8 +373,9 @@ static int carries_tree_tag(pid_t pid, const char *tag) {
     }
     for (p = z; p < end && *p == '\0'; p++) {
     }
+    // Arguments may be empty; the environment ends at the first empty string after them.
     size_t tag_length = strlen(tag);
-    for (int i = 0; p < end && *p != '\0'; i++) {
+    for (int i = 0; p < end && (i < argc || *p != '\0'); i++) {
         z = memchr(p, '\0', (size_t)(end - p));
         if (z == NULL) {
             return 0;
@@ -590,8 +591,16 @@ static void collect_member_sessions(struct watcher *w, struct tree_scan *scan) {
 }
 #endif
 
-// Rows are read one by one, so a parent link holds only if that parent was still the same process
-// after every row was read; a member whose identity changed is dropped and the tree re-resolved.
+// Rows are read one by one, so a parent link holds only if both ends are unchanged after every row
+// was read; a member whose identity or parent changed is dropped and the tree re-resolved.
+static int same_parent_link(const struct proc_row *row) {
+    struct proc_row now;
+    return read_row(row->pid, &now) == 1 && now.start == row->start && !now.zombie &&
+           now.ppid == row->ppid;
+}
+
+// A member whose parent changed since its row was read may have been linked through a PID that
+// now names another process, so it is dropped until a later sweep reads it afresh.
 static int drop_stale_members(struct tree_scan *scan, const struct proc_row *leader) {
     int dropped = 0;
     if (scan->leader_alive && !same_identity(leader)) {
@@ -599,7 +608,7 @@ static int drop_stale_members(struct tree_scan *scan, const struct proc_row *lea
         dropped = 1;
     }
     for (size_t i = 0; i < scan->n; i++) {
-        if (scan->state[i] == 1 && !scan->rows[i].stale && !same_identity(&scan->rows[i])) {
+        if (scan->state[i] == 1 && !scan->rows[i].stale && !same_parent_link(&scan->rows[i])) {
             scan->rows[i].stale = 1;
             dropped = 1;
         }
@@ -620,8 +629,9 @@ static int drop_stale_members(struct tree_scan *scan, const struct proc_row *lea
 // pins the signal to that process; elsewhere the check immediately precedes the kill.
 static int signal_member(const struct proc_row *row, int signal_number) {
 #if defined(__linux__) && defined(SYS_pidfd_open) && defined(SYS_pidfd_send_signal)
+    // Only ESRCH proves absence; any other refusal falls back to the checked kill.
     int fd = (int)syscall(SYS_pidfd_open, row->pid, 0);
-    if (fd < 0 && errno != ENOSYS) {
+    if (fd < 0 && errno == ESRCH) {
         return 0;
     }
     int alive = same_identity(row);
