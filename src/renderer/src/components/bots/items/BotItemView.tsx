@@ -47,6 +47,7 @@ import { BotItemCloseNote, BotItemDoneWhen } from './BotItemCloseNote'
 import { BotItemLinksBlock } from './BotItemLinks'
 import { BotItemMarkdown } from './BotItemMarkdown'
 import { BotItemFrom } from './BotItemFrom'
+import { BotItemDetailsScroller, useBotItemActivityTopFade } from './bot-item-details-scroll'
 
 const NO_FOLDERS: never[] = []
 
@@ -298,6 +299,10 @@ export function BotItemBody({
     sessionId: null,
     isVisible: true
   })
+  const activityFade = useBotItemActivityTopFade(
+    scrollerProps.onScroll,
+    'scrollbar-sleek min-h-0 flex-1 overflow-y-auto [overflow-anchor:none]'
+  )
   return (
     <div
       ref={pane}
@@ -316,9 +321,9 @@ export function BotItemBody({
             <NativeChatFileLinkExistenceContext value={fileContext?.existence ?? null}>
               <NativeChatLinkClickContext value={links.onLinkClick}>
                 <div className="relative flex min-h-0 flex-1 flex-col">
-                  {/* The pinned title and the details share one cap, so Activity keeps the space it
-                      had when the title scrolled with the details. */}
-                  <div className="flex max-h-[max(50%,calc(100%_-_140px))] min-h-0 shrink-0 flex-col">
+                  {/* The pinned title and the details share one cap (BotItemDetailsScroller), so
+                      Activity keeps the space it had when the title scrolled with the details. */}
+                  <div className="flex min-h-0 shrink-0 flex-col">
                     <BotItemHeader
                       bot={bot}
                       item={item}
@@ -328,12 +333,12 @@ export function BotItemBody({
                       reply={needsYou.reply}
                       statusSlot={statusSlot}
                     />
-                    <div className="scrollbar-sleek flex min-h-0 flex-col overflow-y-auto">
+                    <BotItemDetailsScroller>
                       <div className="flex flex-col gap-4 px-3.5 pt-3.5">
                         {item.description ? (
                           <BotItemClampedText
                             text={item.description}
-                            clampClassName="max-h-[57px]"
+                            clampClassName="line-clamp-3"
                             render={renderDescription}
                           />
                         ) : null}
@@ -348,7 +353,7 @@ export function BotItemBody({
                           onOpen={() => openBotSession(bot, item.chat.id)}
                         />
                       </div>
-                    </div>
+                    </BotItemDetailsScroller>
                   </div>
                   <section className="mt-4 flex min-h-0 flex-1 flex-col">
                     <h3 className="mb-1.5 shrink-0 px-3.5 text-xs text-muted-foreground">
@@ -357,7 +362,8 @@ export function BotItemBody({
                     <div
                       ref={scrollRef}
                       {...scrollerProps}
-                      className="scrollbar-sleek min-h-0 flex-1 overflow-y-auto [overflow-anchor:none]"
+                      onScroll={activityFade.onScroll}
+                      className={activityFade.className}
                     >
                       <div ref={contentRef} className="px-3.5 pb-2">
                         {view.hasEarlier ? (

@@ -30293,7 +30293,11 @@
         "running": "Running",
         "done": "Done",
         "failed": "Failed",
-        "stopped": "Stopped"
+        "stopped": "Stopped",
+        "checksPassing": "Passing",
+        "checksFailing": "Failing",
+        "file": "File",
+        "linear": "Linear"
       },
       "menu": {
         "cancel": "Cancel",

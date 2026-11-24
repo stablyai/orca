@@ -28,7 +28,12 @@ export function BotItemDoneWhen({ item }: { item: BotItem }): React.JSX.Element 
       <h3 className="mb-1 text-xs text-muted-foreground">
         {t('bots.items.field.doneMeans', 'Done when')}
       </h3>
-      <p className="text-[13px] leading-[19px] break-words text-foreground">{item.doneMeans}</p>
+      <p
+        data-bot-item-cut="lines"
+        className="text-[13px] leading-[19px] break-words text-foreground"
+      >
+        {item.doneMeans}
+      </p>
     </section>
   )
 }

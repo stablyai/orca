@@ -24,10 +24,13 @@ export function useNativeChatMessageTimeLabel(timestamp: number | null | undefin
 export function NativeChatMessageTimestamp({
   timestamp,
   focusable = false,
+  compact = false,
   className
 }: {
   timestamp: number | null
   focusable?: boolean
+  /** Today's time, else only the day; the full time stays in the tooltip and label. */
+  compact?: boolean
   className?: string
 }): React.JSX.Element | null {
   const intlLocale = useIntlLocale()
@@ -56,9 +59,11 @@ export function NativeChatMessageTimestamp({
             className
           )}
         >
-          {formatter.format(date, today.date, (time) =>
-            t('nativeChat.messageTime.yesterday', 'Yesterday {{time}}', { time })
-          )}
+          {compact
+            ? formatter.formatCompact(date, today.date)
+            : formatter.format(date, today.date, (time) =>
+                t('nativeChat.messageTime.yesterday', 'Yesterday {{time}}', { time })
+              )}
         </time>
       </TooltipTrigger>
       <TooltipContent side="top" sideOffset={4}>

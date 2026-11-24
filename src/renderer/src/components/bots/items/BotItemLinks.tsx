@@ -15,10 +15,8 @@ import {
   NativeChatLinkPeekContext,
   NativeChatLinkPeekProvider
 } from '@/components/native-chat/links/previews/native-chat-link-peek-context'
-import { Button } from '@/components/ui/button'
 import { HoverCard, HoverCardContent, HoverCardTrigger } from '@/components/ui/hover-card'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
-import { useAppStore } from '@/store'
 import { getTaskPageGitHubWorkItemStateLabel } from '@/components/task-page/github/listing/task-page-github-work-item-status'
 import type { Bot } from '../../../../../shared/bot-types'
 import type { BotItemLinkView, BotItemWorkerState } from '../../../../../shared/bots/bot-items'
@@ -50,7 +48,8 @@ import {
 } from './bot-item-github-peek-content'
 import { useBotItemLivePr, useBotItemPrWorkspacesVisible } from './use-bot-item-live-pr'
 import { botItemLinksOrder } from './bot-item-links-order'
-import { selectBotItemLinearRead, type BotItemLinearRead } from './bot-item-linear-read'
+import { BOT_ITEM_PANE_CARD_MARGIN, botItemPaneBounds } from './bot-item-pane-bounds'
+import type { PeekBounds } from '@/components/native-chat/links/previews/link-peek-side'
 
 /** Rows shown before "N more". */
 export const BOT_ITEM_LINKS_SHOWN = 5
@@ -69,19 +68,6 @@ function MiddleTruncated({ text }: { text: string }): React.JSX.Element {
       <span className="min-w-0 truncate">{text.slice(0, cut)}</span>
       <span className="max-w-[60%] shrink-0 truncate">{text.slice(cut)}</span>
     </span>
-  )
-}
-
-/** The cached read proven to be this link's issue, from a Linear source the bot's host owns. */
-function useLinearRead(
-  identifier: string | null,
-  url: string,
-  hostId: string
-): BotItemLinearRead | null {
-  const cache = useAppStore((state) => (identifier ? state.linearIssueCache : null))
-  return useMemo(
-    () => (cache ? selectBotItemLinearRead(cache, identifier, url, hostId) : null),
-    [cache, identifier, url, hostId]
   )
 }
 
@@ -109,7 +95,12 @@ function gitHubStatus(t: Translate, row: BotItemGitHubRow): ReactNode {
     return (
       <>
         <Dot className={row.checks === 'success' ? 'bg-status-success' : 'bg-destructive'} />
-        <BotItemLinkRowStatusText>{checksLabel(t, row.checks)}</BotItemLinkRowStatusText>
+        {/* Short, so a row's state never truncates; the tip and card say "Checks …" in full. */}
+        <BotItemLinkRowStatusText>
+          {row.checks === 'success'
+            ? t('bots.items.link.checksPassing', 'Passing')
+            : t('bots.items.link.checksFailing', 'Failing')}
+        </BotItemLinkRowStatusText>
       </>
     )
   }
@@ -154,6 +145,7 @@ function GitHubRow({ row: hostRow }: { row: BotItemGitHubRow }): React.JSX.Eleme
       githubFallback={fallback.pending}
       githubFailedFallback={fallback.failed}
       retryKey={GITHUB_RETRY_KEY}
+      boundTo={botItemPaneBounds}
     >
       {button}
     </NativeChatLinkPeek>
@@ -162,29 +154,22 @@ function GitHubRow({ row: hostRow }: { row: BotItemGitHubRow }): React.JSX.Eleme
   )
 }
 
-function WebRow({
-  row,
-  hostId
-}: {
-  row: Extract<BotItemLinkRow, { kind: 'web' }>
-  hostId: string
-}): React.JSX.Element {
-  const linear = useLinearRead(row.linear, row.url, hostId)
+/** A web link. A Linear issue reads as its key, with "Linear" for its state: Orca's Linear cache can't
+ *  yet prove which host and sign-in read an issue, so no title or state is borrowed from it. */
+function WebRow({ row }: { row: Extract<BotItemLinkRow, { kind: 'web' }> }): React.JSX.Element {
+  const t = useTranslate()
   const openWeb = useOpenWeb()
-  const name = linear ? `${row.title} ${linear.title}` : row.title
   return (
     <BotItemLinkRowButton
       name={
         row.linear ? (
-          <span className="min-w-0 truncate">{name}</span>
+          <span className="min-w-0 truncate">{row.title}</span>
         ) : (
           <MiddleTruncated text={row.title} />
         )
       }
-      status={linear?.state}
-      tip={
-        row.linear ? `${name}${linear?.state ? ` · ${linear.state}` : ''} · ${row.tip}` : row.url
-      }
+      status={row.linear ? t('bots.items.link.linear', 'Linear') : null}
+      tip={row.linear ? `${row.title} · ${row.tip}` : row.url}
       onClick={(event) => openWeb(row.url, event)}
     />
   )
@@ -229,9 +214,19 @@ function WorkerRow({
   const open = botChatTreeWorkerOpen(bot, worker)
   const canStop = botChatTreeWorkerRunning(worker) && Boolean(worker.dispatchId)
   const { stopping, stop } = useWorkerStop(worker.dispatchId ?? '')
+  const rowRef = useRef<HTMLDivElement | null>(null)
+  const [bounds, setBounds] = useState<PeekBounds | null>(null)
   return (
-    <HoverCard openDelay={400} closeDelay={100}>
-      <div className="group/worker flex min-w-0 items-center">
+    <HoverCard
+      openDelay={400}
+      closeDelay={100}
+      onOpenChange={(next) => {
+        if (next && rowRef.current) {
+          setBounds(botItemPaneBounds(rowRef.current))
+        }
+      }}
+    >
+      <div ref={rowRef} className="group/worker flex min-w-0 items-center">
         <HoverCardTrigger asChild>
           <button type="button" disabled={!open} onClick={open} className={botItemLinkRowClassName}>
             <BotItemLinkRowName>
@@ -250,16 +245,25 @@ function WorkerRow({
                 })}
                 disabled={stopping}
                 onClick={stop}
-                className="ml-0.5 hidden size-5 shrink-0 items-center justify-center rounded-sm text-muted-foreground outline-none group-focus-within/worker:flex group-hover/worker:flex hover:bg-accent hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring/50 disabled:opacity-50"
+                // Its slot is kept while hidden, so the state beside it never moves on hover.
+                className="invisible ml-0.5 flex size-5 shrink-0 items-center justify-center rounded-sm text-muted-foreground outline-none group-focus-within/worker:visible group-hover/worker:visible hover:bg-accent hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring/50 disabled:opacity-50"
               >
                 <Square className="size-2.5 fill-current" />
               </button>
             </TooltipTrigger>
-            <TooltipContent side="bottom">{t('bots.activity.stop', 'Stop')}</TooltipContent>
+            {/* Beside its own row, never over the next row's state. */}
+            <TooltipContent side="left">{t('bots.activity.stop', 'Stop')}</TooltipContent>
           </Tooltip>
         ) : null}
       </div>
-      <HoverCardContent side="bottom" align="start" variant="workspace-details">
+      <HoverCardContent
+        side="bottom"
+        align="start"
+        variant="workspace-details"
+        collisionPadding={BOT_ITEM_PANE_CARD_MARGIN}
+        collisionBoundary={bounds?.boundary}
+        style={bounds ? { maxWidth: bounds.maxWidth } : undefined}
+      >
         <WorkerActivityDetails
           title={worker.title}
           agent={worker.agent}
@@ -296,11 +300,12 @@ function Row({
       )
     }
     case 'web':
-      return <WebRow row={row} hostId={bot.hostId} />
+      return <WebRow row={row} />
     case 'file':
       return (
         <BotItemLinkRowButton
           name={<span className="min-w-0 truncate">{row.name}</span>}
+          status={t('bots.items.link.file', 'File')}
           tip={row.path}
           disabled={!fileContext}
           onClick={() => {
@@ -373,19 +378,21 @@ function LinksBlock({
       >
         <ul ref={list} tabIndex={-1} aria-label={label} className="-mx-1.5 flex flex-col">
           {shown.map((row) => (
-            <li key={row.key} className="min-w-0">
+            <li key={row.key} className="min-w-0" data-bot-item-cut="row">
               <Row bot={bot} chat={chat} row={row} fileContext={fileContext} />
             </li>
           ))}
         </ul>
       </NativeChatLinkPeekProvider>
       {more > 0 ? (
-        <Button
-          variant="disclosure"
-          size="xs"
+        <button
+          type="button"
           aria-expanded={false}
-          aria-label={t('bots.items.view.moreLinks', '{{count}} more links', { count: more })}
-          className="-ml-2"
+          aria-label={t('bots.items.view.moreLinks', '{{count}} more links', {
+            count: more
+          })}
+          // Quieter than the rows it stands for.
+          className="mt-0.5 rounded-sm text-xs text-muted-foreground outline-none hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring/50"
           onClick={() => {
             // The button goes once the rest show: focus moves to the first of them that opens, not to the page.
             flushSync(() => setExpanded(true))
@@ -401,7 +408,7 @@ function LinksBlock({
           }}
         >
           {t('bots.items.view.moreCount', '{{count}} more', { count: more })}
-        </Button>
+        </button>
       ) : null}
     </section>
   )

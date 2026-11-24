@@ -160,7 +160,9 @@ export function BotItemPaneFrame({
   useEffect(() => {
     const pane = root.current
     return pane
-      ? registerDictationInputOwner(pane, { focusInput: () => comment.current?.focus() })
+      ? registerDictationInputOwner(pane, {
+          focusInput: () => comment.current?.focus()
+        })
       : undefined
   }, [])
   const nav = walk.place ? (
@@ -202,9 +204,13 @@ export function BotItemPaneFrame({
           {t('bots.items.tab', 'Home')}
         </Button>
         {owner ? (
-          <span className="flex min-w-0 items-center gap-1.5 px-1 text-foreground">
+          <span
+            title={owner.name}
+            className="flex min-w-0 items-center gap-1.5 px-1 text-foreground"
+          >
             <BotAvatar bot={owner} className="size-4 shrink-0 rounded-full text-[9px]" />
-            <span className="min-w-0 truncate">{owner.name}</span>
+            {/* Below a 300px pane the avatar alone: a name cut to a letter only crowds the row. */}
+            <span className="min-w-0 truncate @max-[300px]/item-pane:sr-only">{owner.name}</span>
           </span>
         ) : null}
         {/* Outside the item's fieldset, so offline is set here too. */}
@@ -270,7 +276,10 @@ function useSlowPending(pending: boolean): boolean {
   return pending && slow
 }
 
-type BotItemAnnouncerHandle = { say: (text: string) => void; loading: () => () => void }
+type BotItemAnnouncerHandle = {
+  say: (text: string) => void
+  loading: () => () => void
+}
 
 /** The pane's screen-reader line. A leaf, so speaking re-renders only it. */
 function BotItemAnnouncer({ ref }: { ref: React.Ref<BotItemAnnouncerHandle> }): React.JSX.Element {

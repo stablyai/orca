@@ -65,43 +65,23 @@ const calmPr = (
     checkedAt: CALM_AT
   }
 })
-const LINEAR_ISSUE = (identifier: string, title: string, state: string) => ({
-  data: {
-    id: identifier,
-    identifier,
-    title,
-    url: `https://linear.app/acme/issue/${identifier.toLowerCase()}`,
-    state: { name: state, type: 'started', color: '#999999' },
-    team: { id: 't1', name: 'Ops', key: 'OPS' },
-    labels: [],
-    labelIds: [],
-    priority: 0,
-    updatedAt: '2026-11-17T00:00:00Z'
-  },
-  fetchedAt: CALM_AT
-})
-const calmStore = {
-  linearIssueCache: {
-    'selected::OPS-1650': LINEAR_ISSUE('OPS-1650', 'Cloud read-only access', 'In Progress'),
-    'selected::OPS-1702': LINEAR_ISSUE('OPS-1702', 'Launch checklist', 'Todo'),
-    'selected::OPS-1777': LINEAR_ISSUE(
-      'OPS-1777',
-      'Security sign-off for the stop switch',
-      'Waiting on security review'
-    )
-  }
-}
 const calmThree: BotItemLinkView[] = [
   calmPr(46172, 'Global stop switch', 'success'),
   workerLink('ctx_stop', 'Stop runbook review', true),
-  { kind: 'url', ref: 'https://linear.app/acme/issue/OPS-1650/cloud-read-only-access' }
+  {
+    kind: 'url',
+    ref: 'https://linear.app/acme/issue/OPS-1650/cloud-read-only-access'
+  }
 ]
 const calmSeven: BotItemLinkView[] = [
   ...calmThree,
   calmPr(46210, 'Undo card copy', 'failure'),
   workerLink('ctx_drain', 'Relay drain check', false),
   { kind: 'file', ref: '/projects/launch/notes/backup-operator-rota.md' },
-  { kind: 'url', ref: 'https://linear.app/acme/issue/OPS-1702/launch-checklist' }
+  {
+    kind: 'url',
+    ref: 'https://linear.app/acme/issue/OPS-1702/launch-checklist'
+  }
 ]
 
 const NO_EVENTS: BotItemEvent[] = []
@@ -148,7 +128,6 @@ function Calm({
 function calmAt(width: number, shown: BotItem, named = false) {
   return defineFixture({
     width,
-    store: calmStore,
     render: () => <Calm shown={shown} named={named} />
   })
 }
@@ -156,7 +135,11 @@ const SHORT_TITLE = { title: 'Global stop' }
 export const calmThreeLinks = calmAt(340, { ...calmItem, links: calmThree })
 export const calmSevenLinks = calmAt(340, { ...calmItem, links: calmSeven })
 export const calmNoLinks = calmAt(340, { ...calmItem, ...SHORT_TITLE })
-export const calmNoDoneWhen = calmAt(340, { ...calmItem, doneMeans: null, links: calmThree })
+export const calmNoDoneWhen = calmAt(340, {
+  ...calmItem,
+  doneMeans: null,
+  links: calmThree
+})
 export const calmNarrowSeven = calmAt(260, { ...calmItem, links: calmSeven })
 export const calmNarrowNamed = calmAt(260, { ...calmItem, links: calmThree }, true)
 export const calmNarrowNoLinks = calmAt(260, { ...calmItem, doneMeans: null })
@@ -202,15 +185,6 @@ export const calmStatusMenu = defineFixture({
   }
 })
 
-/** A Linear state too long for a 260px row: it truncates, the name keeps its room. */
-export const calmNarrowLongState = calmAt(260, {
-  ...calmItem,
-  links: [
-    ...calmThree,
-    { kind: 'url', ref: 'https://linear.app/acme/issue/OPS-1777/security-sign-off' }
-  ]
-})
-
 const comment = (id: string, text: string, minutes: number): BotItemEvent => ({
   id,
   kind: 'commented',
@@ -226,7 +200,6 @@ const CALM_EVENTS = Array.from({ length: 8 }, (_, index) =>
  *  keeps the rest. */
 export const calmConstrained = defineFixture({
   width: 340,
-  store: calmStore,
   render: () => (
     <Calm
       shown={{

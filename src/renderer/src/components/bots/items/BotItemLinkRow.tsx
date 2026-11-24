@@ -39,13 +39,14 @@ export function BotItemLinkRowName({ children }: { children: ReactNode }): React
   return <span className="flex min-w-0 flex-1 truncate">{children}</span>
 }
 
+/** A row's state, right: the app's own short words, which never shrink, so only the name truncates. */
 export function BotItemLinkRowStatus({
   children
 }: {
   children: ReactNode
 }): React.JSX.Element | null {
   return children ? (
-    <span className="flex max-w-[45%] min-w-0 shrink items-center gap-1.5 truncate text-xs text-muted-foreground">
+    <span className="flex shrink-0 items-center gap-1.5 text-xs text-muted-foreground">
       {typeof children === 'string' ? (
         <BotItemLinkRowStatusText>{children}</BotItemLinkRowStatusText>
       ) : (
