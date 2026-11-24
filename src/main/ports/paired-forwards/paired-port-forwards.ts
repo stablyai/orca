@@ -7,7 +7,8 @@ import {
 } from '../../ssh/port-forwarding/ssh-port-forward'
 import {
   addForwardOnFreeLocalPort,
-  assertLoopbackPortFree
+  assertLoopbackPortFree,
+  registerForwardPortHolder
 } from '../../ssh/port-forwarding/forward-local-port-choice'
 import { forwardKey, type ForwardMapping } from '../../ssh/port-forwarding/saved-port-forward-list'
 import {
@@ -46,6 +47,7 @@ const manager = new SshPortForwardManager<PairedPortForwardTunnel>(
   { onForwardClosed: (entry) => deps?.onChanged(entry.connectionId) },
   [new PairedPortForwardProvider()]
 )
+registerForwardPortHolder(() => manager.heldLocalPorts())
 
 export function configurePairedPortForwards(next: PairedPortForwardsDeps): void {
   deps = next
@@ -244,8 +246,7 @@ function addOnFirstFreePort(
       ),
     remove: (id) => manager.removeForwardAndWait(id),
     holdsIpv6Loopback: holdsIpv6Loopback(process.platform),
-    reservedLocalPorts: reserved,
-    heldLocalPorts: () => manager.heldLocalPorts()
+    reservedLocalPorts: reserved
   })
 }
 

@@ -58,6 +58,21 @@ async function waitForLoopbackListener(
   }
 }
 
+const portHolders = new Set<() => readonly number[]>()
+
+/** A forward manager besides SSH's names the local ports its forwards hold or are binding. */
+export function registerForwardPortHolder(holder: () => readonly number[]): void {
+  portHolders.add(holder)
+}
+
+/** Taken without probing: connecting to a forward's own listener would open its remote stream. */
+function heldByForwardHere(port: number): boolean {
+  return (
+    (sshPortForwardManager?.heldLocalPorts().includes(port) ?? false) ||
+    [...portHolders].some((holder) => holder().includes(port))
+  )
+}
+
 type FreeLocalPortForward = {
   remotePort: number
   /** The local port to try first; the remote port number when absent. */
@@ -69,9 +84,6 @@ type FreeLocalPortForward = {
   holdsIpv6Loopback: boolean
   /** Local ports saved for other forwards that aren't listening now; taking one would replace them. */
   reservedLocalPorts?: ReadonlySet<number>
-  /** Ports other forwards of this desktop listen on or are binding, beside SSH forwards' (always
-   *  skipped); a probe there would open their remote stream. */
-  heldLocalPorts?: () => readonly number[]
   /** For a forward whose start can return before it listens: wait this long for 127.0.0.1 to answer,
    *  while `isOpen` says the forward is still up. */
   listening?: { timeoutMs: number; isOpen: (entry: PortForwardEntry) => boolean }
@@ -102,14 +114,13 @@ export function addForwardOnFreeLocalPort(
 }
 
 async function startOnFreeLocalPort(forward: FreeLocalPortForward): Promise<PortForwardEntry> {
-  const { add, reservedLocalPorts, heldLocalPorts } = forward
+  const { add, reservedLocalPorts } = forward
   const firstCandidate = forward.preferredLocalPort ?? forward.remotePort
   const lastCandidate = Math.min(firstCandidate + NEXT_PORT_ATTEMPTS - 1, 65_535)
   for (let candidate = firstCandidate; candidate <= lastCandidate; candidate++) {
     if (
       reservedLocalPorts?.has(candidate) ||
-      heldLocalPorts?.().includes(candidate) ||
-      sshPortForwardManager?.heldLocalPorts().includes(candidate) ||
+      heldByForwardHere(candidate) ||
       (await loopbackPortAnswers(candidate))
     ) {
       continue
