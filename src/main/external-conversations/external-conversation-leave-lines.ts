@@ -35,8 +35,10 @@ export type LeaveLinesCloud = {
   /** Whether `turnId`'s end in the thread still waits for the cloud to take it. */
   turnEndPending?: (conversation: Thread, turnId: number) => boolean
   /** Null while no client runs. */
+  /** `proceed`: asked before each of the client's own retries. */
   reply: (
-    body: ConnectorReplyBody
+    body: ConnectorReplyBody,
+    proceed?: () => boolean
   ) => Promise<{ ok: true } | { ok: false; status: number | null; error: string | null }> | null
 }
 
@@ -199,14 +201,18 @@ export function leaveLines(deps: LeaveLinesDeps): LeaveLines {
         later()
         return
       }
-      const replying = cloud.reply({
-        replyId: leaveLineReplyId(link, turnId),
-        conversation,
-        turnId,
-        text: THREAD_LEFT_LINE,
-        // Orca's own line, on no one's behalf: no bot hears it as a person's request.
-        turnFor: 'none'
-      })
+      const replying = cloud.reply(
+        {
+          replyId: leaveLineReplyId(link, turnId),
+          conversation,
+          turnId,
+          text: THREAD_LEFT_LINE,
+          // Orca's own line, on no one's behalf: no bot hears it as a person's request.
+          turnFor: 'none'
+        },
+        // An @mention during a retry's wait means it is no longer left.
+        () => owed(link, turnId)
+      )
       if (!replying) {
         posting.delete(id)
         return

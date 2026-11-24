@@ -356,9 +356,9 @@ export class ConnectorCloud {
 
   /** Null while no client runs: signed out, no bot the cloud can reach, or Orca quitting. */
   reply(
-    body: Parameters<ConnectorPollClient['reply']>[0]
+    ...args: Parameters<ConnectorPollClient['reply']>
   ): ReturnType<ConnectorPollClient['reply']> | null {
-    return this.client?.reply(body) ?? null
+    return this.client?.reply(...args) ?? null
   }
 
   /** Null while no client runs: signed out, no bot the cloud can reach, or Orca quitting. */

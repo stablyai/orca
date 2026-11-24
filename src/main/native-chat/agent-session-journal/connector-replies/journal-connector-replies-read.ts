@@ -21,7 +21,8 @@ export function readJournalConnectorReplies(
   return rows.map(replyRowOf)
 }
 
-/** Whether a turn's answer to one conversation is still unsent: one indexed probe, no prose read. */
+/** Whether a turn's answer to one conversation may still be unsent: one indexed probe. A row with
+ *  no turn yet (not filled, or filled by recovery, which can't name it) may be that answer. */
 export function hasUnsentJournalConnectorReply(
   db: Database.Database,
   sessionId: string,
@@ -32,7 +33,7 @@ export function hasUnsentJournalConnectorReply(
     db
       .prepare(
         `SELECT 1 FROM journal_connector_replies WHERE session_id=? AND sent_at IS NULL
-          AND source=? AND external_id=? AND turn_started_at=? LIMIT 1`
+          AND source=? AND external_id=? AND (turn_started_at=? OR turn_started_at IS NULL) LIMIT 1`
       )
       .get(sessionId, conversation.source, conversation.externalId, turnStartedAt) !== undefined
   )
