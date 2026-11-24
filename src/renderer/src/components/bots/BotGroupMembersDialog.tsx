@@ -90,13 +90,16 @@ export function BotGroupMembersDialog({
     canMix && hostedHere && order.length > 0 && !pickHosts.has(LOCAL_EXECUTION_HOST_ID)
   const suggestion = name ? null : suggestGroupName(picked.map((bot) => bot.name))
   const missing = needsLocal
-    ? t('bots.groups.needsLocalBot', 'This group needs at least one bot on this computer.')
+    ? group
+      ? t('bots.groups.needsLocalBot', 'This group needs at least one bot on this computer.')
+      : t('bots.groups.pickLocalBot', 'Pick a bot on this computer')
     : missingText(botGroupMissing(order.length, name, group !== undefined))
   // Editing saves only a real change: a new name, or other members or order.
   const unchanged =
     group !== undefined && botGroupUnchanged({ name: group.name, botIds: savedKeys }, name, order)
   const shownBots = filterByName(allBots, query, (bot) => bot.name)
-  const shownByHost = !group && manyHosts ? Map.groupBy(shownBots, (bot) => bot.hostId) : null
+  // Keep each row under the same parent when a computer appears or goes offline.
+  const shownByHost = group ? null : Map.groupBy(shownBots, (bot) => bot.hostId)
   // The host a pick is held to: anywhere a mixed room can reach, else the first pick's computer.
   const pickHost = group?.hostId ?? picked[0]?.hostId ?? null
   const elsewhere = (bot: Bot) =>
@@ -108,7 +111,7 @@ export function BotGroupMembersDialog({
     setSelected(on ? selected.filter((x) => x !== key) : [...selected, key])
     setPopped(on ? null : key)
   }
-  const renderMember = (bot: Bot) => {
+  const renderMember = (bot: Bot, hostLabel?: string) => {
     const key = botRefKey(bot)
     const unavailable = elsewhere(bot)
     return (
@@ -121,6 +124,7 @@ export function BotGroupMembersDialog({
         disabled={saving || unavailable}
         describedBy={unavailable ? 'bot-group-same-computer' : undefined}
         showHost={group !== undefined && manyHosts}
+        hostLabel={hostLabel}
         compact={!group}
         onToggle={() => toggle(bot)}
       />
@@ -161,6 +165,24 @@ export function BotGroupMembersDialog({
       setSaving(false)
     }
   }
+  const actions = (
+    <>
+      <Button variant="ghost" size="sm" onClick={onClose} disabled={saving}>
+        {t('bots.groups.cancel', 'Cancel')}
+      </Button>
+      <Button
+        size="sm"
+        onClick={() => void save()}
+        disabled={saving || missing !== null || unchanged}
+      >
+        {saving
+          ? t('bots.groups.saving', 'Saving…')
+          : group
+            ? t('bots.groups.save', 'Save')
+            : t('bots.groups.create', 'Create')}
+      </Button>
+    </>
+  )
   return (
     <Dialog
       open
@@ -226,32 +248,43 @@ export function BotGroupMembersDialog({
           </div>
           <BotNameSuggestion suggestion={suggestion} onTake={setName} compact={!group} />
         </div>
-        <div className={group ? undefined : 'flex min-h-0 flex-col gap-1.5'}>
-          <div
-            className={
-              group
-                ? 'mb-2 flex items-center justify-between'
-                : 'flex shrink-0 items-center justify-between gap-2'
-            }
-          >
-            <Label id="bot-group-members">{t('bots.groups.members', 'Members')}</Label>
-            <span className="text-xs text-muted-foreground tabular-nums">
-              {selected.length > 0
-                ? t('bots.groups.picked', '{{count}} picked', { count: selected.length })
-                : null}
-            </span>
+        {/* Retain room to scroll the picker when a save error makes the dialog taller. */}
+        <div className={group ? undefined : 'grid grid-rows-[auto_minmax(3.5rem,1fr)] gap-1.5'}>
+          <div className={group ? undefined : 'grid gap-1.5'}>
+            <div
+              className={
+                group
+                  ? 'mb-2 flex items-center justify-between'
+                  : 'flex items-center justify-between gap-2'
+              }
+            >
+              <Label id="bot-group-members">{t('bots.groups.members', 'Members')}</Label>
+              <span className="text-xs text-muted-foreground tabular-nums">
+                {selected.length > 0
+                  ? t('bots.groups.picked', '{{count}} picked', { count: selected.length })
+                  : null}
+              </span>
+            </div>
+            {allBots.length > FILTER_FROM ? (
+              <BotPickFilter value={query} onChange={setQuery} compact={!group} />
+            ) : null}
           </div>
-          {allBots.length > FILTER_FROM ? (
-            <BotPickFilter value={query} onChange={setQuery} compact={!group} />
-          ) : null}
           <BotPickRows role="group" labelledBy="bot-group-members" compact={!group}>
+            {!group && query.trim() && shownBots.length === 0 ? (
+              <p role="status" className="px-2 py-1.5 text-xs text-muted-foreground">
+                {t('bots.search.noMatches', 'No matches')}
+              </p>
+            ) : null}
             {shownByHost
               ? [...shownByHost].map(([hostId, bots]) => (
-                  <BotGroupMemberHostGroup key={hostId} hostId={hostId}>
-                    {bots.map(renderMember)}
-                  </BotGroupMemberHostGroup>
+                  <BotGroupMemberHostGroup
+                    key={hostId}
+                    hostId={hostId}
+                    showLabel={manyHosts}
+                    renderMembers={(hostLabel) => bots.map((bot) => renderMember(bot, hostLabel))}
+                  />
                 ))
-              : shownBots.map(renderMember)}
+              : shownBots.map((bot) => renderMember(bot))}
           </BotPickRows>
           {someElsewhere ? (
             <p id="bot-group-same-computer" className="mt-2 text-xs text-muted-foreground">
@@ -279,7 +312,9 @@ export function BotGroupMembersDialog({
           </p>
         ) : null}
         <DialogFooter
-          className={group ? 'items-center' : 'shrink-0 flex-row items-center justify-end'}
+          className={
+            group ? 'items-center' : 'shrink-0 flex-row flex-wrap items-center justify-end'
+          }
         >
           {group ? (
             <Button
@@ -299,22 +334,13 @@ export function BotGroupMembersDialog({
             </Button>
           ) : null}
           {missing ? (
-            <span className="mr-auto min-w-0 text-xs text-muted-foreground">{missing}</span>
+            <span className="mr-auto text-xs text-muted-foreground">{missing}</span>
           ) : null}
-          <Button variant="ghost" size="sm" onClick={onClose} disabled={saving}>
-            {t('bots.groups.cancel', 'Cancel')}
-          </Button>
-          <Button
-            size="sm"
-            onClick={() => void save()}
-            disabled={saving || missing !== null || unchanged}
-          >
-            {saving
-              ? t('bots.groups.saving', 'Saving…')
-              : group
-                ? t('bots.groups.save', 'Save')
-                : t('bots.groups.create', 'Create')}
-          </Button>
+          {group ? (
+            actions
+          ) : (
+            <div className="ml-auto flex max-w-full items-center gap-2">{actions}</div>
+          )}
         </DialogFooter>
       </DialogContent>
     </Dialog>

@@ -159,7 +159,7 @@ export function BotPickRow({
           aria-hidden
           className={cn(
             'flex size-4 shrink-0 items-center justify-center rounded-sm border',
-            on ? 'border-primary bg-primary text-primary-foreground' : 'border-muted-foreground/60'
+            on ? 'border-primary bg-primary text-primary-foreground' : 'border-muted-foreground'
           )}
         >
           {on ? (

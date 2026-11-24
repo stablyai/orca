@@ -32,7 +32,7 @@ export function BotNameSuggestion({
 }): React.JSX.Element {
   const t = useTranslate()
   return (
-    <div className={compact ? 'flex h-4' : 'mt-1.5 flex h-4 justify-center'}>
+    <div className={compact ? 'mt-1.5 flex h-4' : 'mt-1.5 flex h-4 justify-center'}>
       {suggestion ? (
         <button
           type="button"

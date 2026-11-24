@@ -17,6 +17,7 @@ export function BotGroupMemberRow({
   pop,
   disabled,
   showHost,
+  hostLabel,
   compact,
   describedBy,
   onToggle
@@ -28,6 +29,7 @@ export function BotGroupMemberRow({
   disabled: boolean
   /** Bots span more than one computer: say which one this is. */
   showHost: boolean
+  hostLabel?: string
   compact: boolean
   /** Why it can't be picked. */
   describedBy?: string
@@ -37,6 +39,7 @@ export function BotGroupMemberRow({
     <BotPickRow
       role="checkbox"
       aria-checked={on}
+      aria-label={hostLabel ? [bot.name, purpose, hostLabel].filter(Boolean).join(' ') : undefined}
       disabled={disabled}
       aria-describedby={describedBy}
       // A pointer pick leaves focus in the name field, so its Tab suggestion still works.
@@ -74,22 +77,30 @@ function MemberHost({ hostId }: { hostId: ExecutionHostId }): React.JSX.Element 
 
 export function BotGroupMemberHostGroup({
   hostId,
-  children
+  showLabel,
+  renderMembers
 }: {
   hostId: ExecutionHostId
-  children: React.ReactNode
+  showLabel: boolean
+  renderMembers: (hostLabel?: string) => React.ReactNode
 }): React.JSX.Element {
   const host = useMemberHost(hostId)
   const labelId = useId()
   return (
-    <div role="group" aria-labelledby={labelId} className="shrink-0">
-      <div
-        id={labelId}
-        className="truncate px-2 pt-1 pb-0.5 text-2xs font-medium text-muted-foreground"
-      >
-        {host}
-      </div>
-      {children}
+    <div
+      role={showLabel ? 'group' : undefined}
+      aria-labelledby={showLabel ? labelId : undefined}
+      className="shrink-0"
+    >
+      {showLabel ? (
+        <div
+          id={labelId}
+          className="truncate px-2 pt-1 pb-0.5 text-2xs font-medium text-muted-foreground"
+        >
+          {host}
+        </div>
+      ) : null}
+      {renderMembers(showLabel ? host : undefined)}
     </div>
   )
 }

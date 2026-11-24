@@ -7,6 +7,7 @@ import {
 import type { Bot } from '../../../../shared/bot-types'
 import { botGroupFaces, type BotGroupFace } from '../../../../shared/bots/bot-group-face-layout'
 import { BotAvatar, BotAvatarTile } from './BotAvatar'
+import { botRefKey } from '@/lib/bot-hosts'
 
 const POP = 'cubic-bezier(0.34, 1.56, 0.64, 1)'
 const SETTLE_MS = 420
@@ -24,7 +25,7 @@ export function BotGroupFaceCluster({
   const reduced = usePrefersReducedMotion()
   const faces: Face[] =
     members.length > 0
-      ? botGroupFaces(members, (bot) => bot.id)
+      ? botGroupFaces(members, botRefKey)
       : [{ key: 'empty', face: null, x: 4, y: 4, size: 20 }]
   const signature = faces.map((face) => face.key).join(' ')
   // Faces just dropped stay until they have shrunk away.
