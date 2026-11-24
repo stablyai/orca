@@ -32,13 +32,10 @@ import {
 } from '../../../../shared/bots/bot-create-offer-view'
 import { botTemplateText } from '../../../../shared/bots/bot-template-text'
 import type { BotCardCopyValues } from '../../../../shared/native-chat/bot-cards/bot-card-copy'
-import {
-  NativeChatCardActions,
-  NativeChatCardFrame,
-  NativeChatCardStatus
-} from './NativeChatCardFrame'
+import { NativeChatCardFrame, NativeChatCardStatus } from './NativeChatCardFrame'
 import { NativeChatCardFact } from './NativeChatAutomationCardDetails'
 import { NativeChatExpandable } from './messages/disclosure/NativeChatExpandable'
+import { NativeChatEventOpenButton } from './messages/events/NativeChatEventOpenButton'
 import { NativeChatOfferActions, useNativeChatOffer } from './NativeChatOfferActions'
 import { useNativeChatDisclosure } from './messages/disclosure/native-chat-disclosure-store'
 
@@ -84,6 +81,7 @@ const PIECES: Record<keyof typeof COPY, (t: Translate, values?: BotCardCopyValue
   edit: (t) => t('components.native-chat.botCreateOffer.edit', COPY.edit),
   create: (t) => t('components.native-chat.botCreateOffer.create', COPY.create),
   open: (t) => t('components.native-chat.botCreateOffer.open', COPY.open),
+  openBot: (t, values) => t('components.native-chat.botCreateOffer.openBot', COPY.openBot, values),
   origin: (t, values) => t('components.native-chat.botCreateOffer.origin', COPY.origin, values),
   originTemplate: (t, values) =>
     t('components.native-chat.botCreateOffer.originTemplate', COPY.originTemplate, values),
@@ -175,6 +173,11 @@ function OfferCard({
     botTemplateText(text, t)
   )
   const Chevron = open ? ChevronUp : ChevronDown
+  const openCreatedBot = (): void => {
+    if (created) {
+      void openBotHomeTabById(created)
+    }
+  }
 
   const create = (): void => {
     setCreating(true)
@@ -217,20 +220,28 @@ function OfferCard({
             </NativeChatCardStatus>
           )
         }
-        title={view.title}
-        footer={
+        label={view.title}
+        title={
           created ? (
-            <NativeChatCardActions>
-              <Button
+            <span className="inline-flex min-w-0 items-baseline gap-1">
+              <button
                 type="button"
-                variant="outline"
-                size="sm"
-                onClick={() => void openBotHomeTabById(created)}
+                className="min-w-0 text-left [overflow-wrap:anywhere] hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                onClick={openCreatedBot}
               >
-                {say('open')}
-              </Button>
-            </NativeChatCardActions>
-          ) : view.open === null ? undefined : (
+                {view.title}
+              </button>
+              <NativeChatEventOpenButton
+                name={say('openBot', { name: view.title })}
+                onOpen={openCreatedBot}
+              />
+            </span>
+          ) : (
+            view.title
+          )
+        }
+        footer={
+          view.open === null ? undefined : (
             <NativeChatOfferActions
               offer={answering}
               start={
@@ -266,10 +277,9 @@ function OfferCard({
           className="-mx-1 flex w-[calc(100%+0.5rem)] min-w-0 items-start justify-between gap-2 rounded-md px-1 text-left text-xs text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
         >
           <span className="min-w-0">
-            {view.line.kind === 'purpose' ? (
-              <span className="block">{view.line.text}</span>
-            ) : view.takeover ? (
-              <span className="block">{view.takeover}</span>
+            <span className="block">{view.purpose}</span>
+            {view.takeover ? (
+              <span className="block text-chat-foreground-faint">{view.takeover}</span>
             ) : null}
             {view.open?.note ? <span className="block">{view.open.note}</span> : null}
           </span>

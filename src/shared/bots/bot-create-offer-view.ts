@@ -29,6 +29,7 @@ export const BOT_CREATE_OFFER_COPY = {
   edit: 'Edit',
   create: 'Create bot',
   open: 'Open',
+  openBot: 'Open {{name}}',
   origin: 'Proposed by {{bot}}',
   originTemplate: 'From {{template}}, proposed by {{bot}}',
   watches: 'Watches',
@@ -49,6 +50,8 @@ export type BotCreateOfferView = {
   /** The bot made from the offer, while it's there. */
   createdBotId: string | null
   title: string
+  /** The bot's purpose, which stays visible beneath its title in every state. */
+  purpose: string
   line: { kind: 'created' | 'deleted' | 'purpose'; text: string }
   /** Once created with workspaces to take over: how that went, for a card whose state already says Created. */
   takeover: string | null
@@ -113,6 +116,7 @@ export function botCreateOfferView(
     return {
       createdBotId: state.botId,
       title: created?.name ?? proposal.name,
+      purpose: shown(proposal.purpose),
       line: { kind: 'created', text: createdLine(taken, count, say) },
       takeover: takeoverLine(taken, count, say),
       open: null
@@ -122,6 +126,7 @@ export function botCreateOfferView(
     return {
       createdBotId: null,
       title: proposal.name,
+      purpose: shown(proposal.purpose),
       line: { kind: 'deleted', text: say('deleted') },
       takeover: null,
       open: null
@@ -138,6 +143,7 @@ export function botCreateOfferView(
   return {
     createdBotId: null,
     title: proposal.name,
+    purpose: shown(proposal.purpose),
     line: { kind: 'purpose', text: shown(proposal.purpose) },
     takeover: null,
     open: { note, actions: nameTaken ? 'rename' : 'editAndCreate' }
