@@ -77,12 +77,18 @@ export async function openSystemHttpLinkResolved(url: string): Promise<void> {
 export function openOwnedSystemHttpLinkAdmitted(
   url: string,
   owner: HttpLinkSourceOwner | undefined,
-  worktreeId: string | null | undefined,
+  opts: Pick<OpenHttpLinkOptions, 'worktreeId' | 'linkContext'>,
   settle: (outcome: HttpLinkAdmission) => void
 ): void {
-  void openOwnedSystemHttpLink(url, owner, worktreeId, (resolved) =>
-    openSystemHttpLink(resolved).then(settle)
-  ).then((reached) => {
+  const isCurrentRequest = opts.linkContext?.isCurrentRequest
+  // A forward can take a while; a newer link open started meanwhile supersedes this one.
+  void openOwnedSystemHttpLink(url, owner, opts.worktreeId, (resolved) => {
+    if (isCurrentRequest?.() === false) {
+      settle('superseded')
+      return Promise.resolve()
+    }
+    return openSystemHttpLink(resolved).then(settle)
+  }).then((reached) => {
     if (!reached) {
       settle('refused')
     }

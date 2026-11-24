@@ -290,7 +290,7 @@ function executeHttpLink(
 
   const localhostRoute = state ? localhostLabelRouteForHttpLink(url, state, sourceOwner) : null
   if (!localhostRoute) {
-    openOwnedSystemHttpLinkAdmitted(url, effectiveSourceOwner, worktreeId, settle)
+    openOwnedSystemHttpLinkAdmitted(url, effectiveSourceOwner, opts, settle)
     return 'system-browser'
   }
   void openLabeledLocalhostLink(url, localhostRoute, (labeledUrl) => {

@@ -23,13 +23,15 @@ function forwardPort(remotePort: number, localPort: number): void {
 // The chooser's System Browser row, as a Remember would consume its admission.
 async function openInSystemBrowser(
   url: string,
-  sourceOwner: Parameters<typeof openOwnedHttpLink>[1]['sourceOwner']
+  sourceOwner: Parameters<typeof openOwnedHttpLink>[1]['sourceOwner'],
+  isCurrentRequest?: () => boolean
 ): Promise<HttpLinkAdmission[]> {
   const outcomes: HttpLinkAdmission[] = []
   openOwnedHttpLink(url, {
     sourceOwner,
     worktreeId: null,
     forceSystemBrowser: true,
+    ...(isCurrentRequest ? { linkContext: { linkIntent: null, isCurrentRequest } } : {}),
     onAdmission: (outcome) => {
       outcomes.push(outcome)
     }
@@ -71,6 +73,17 @@ describe('a System Browser open of a paired server localhost link', () => {
     forwardPort(3000, 41000)
     openUrl.mockRejectedValue(new Error('no handler'))
     expect(await openInSystemBrowser('http://localhost:3000/app', SERVER)).toEqual(['failed'])
+  })
+
+  it('opens nothing when a newer link open supersedes it while the forward is prepared', async () => {
+    forwardPort(3000, 41000)
+    let checks = 0
+    // Current at the click, stale by the time the forwarded address is ready.
+    const isCurrentRequest = (): boolean => (checks += 1) === 1
+    expect(
+      await openInSystemBrowser('http://localhost:3000/app', SERVER, isCurrentRequest)
+    ).toEqual(['superseded'])
+    expect(openUrl).not.toHaveBeenCalled()
   })
 
   it('admits a link from this computer straight from the shell (control)', async () => {
