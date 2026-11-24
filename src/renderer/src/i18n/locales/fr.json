@@ -19578,7 +19578,6 @@
         "moreControls": "Plus de commandes de conversation",
         "exitPlanMode": "Quitter le mode plan",
         "permissionAppliesNextMessage": "{{saved}} s’applique à votre prochain message ; réglage utilisé actuellement : {{active}}",
-        "botFor": "Pour : {{detail}}",
         "bots": "Bots"
       },
       "tool": {
