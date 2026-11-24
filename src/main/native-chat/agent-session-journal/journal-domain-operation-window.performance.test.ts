@@ -12,7 +12,7 @@ import { readJournalDomainOperationWindow } from './journal-domain-operation-win
 import { JournalWindowNotIndexed } from './journal-operation-window-sends'
 import { JournalSqlScope } from './journal-sql-scope'
 import { keptSends } from './journal-operation-window-held-sends'
-import { marginBefore } from './journal-operation-window-turn-ahead'
+import { marginBefore, newestBefore } from './journal-operation-window-turn-ahead'
 import type { Send } from './journal-operation-window-sends'
 import { codexTurnLifecycleIdentity } from '../../codex/structured/journal/codex-structured-journal-translation-turns'
 import { codexProviderHandle } from '../../../shared/agent-session/lifecycle/provider-handles/agent-session-provider-handle-encoding'
@@ -519,4 +519,36 @@ it('looks back for the turn ahead of an indexed-only window no further than the 
     near.close()
     far.close()
   }
+})
+
+it('stops its look back for the turn ahead at the nearest match, however long the chat ran', () => {
+  // Counts each candidate SQLite tests: the nearest prompt is two rows back at 100 and 1,000 turns.
+  const look = (turns: number) => {
+    const db = chat(turns)
+    let tested = 0
+    let probes = 0
+    db.function('tested', (hit) => {
+      tested += 1
+      return hit
+    })
+    const prepare = db.prepare.bind(db)
+    db.prepare = (sql: string) => {
+      probes += sql.includes('OFFSET') ? 1 : 0
+      return prepare(sql)
+    }
+    const found = newestBefore(
+      new JournalSqlScope(db, 'chat', 'epoch'),
+      'journal_items_root_position',
+      'root=1',
+      "tested(kind='message' AND message_role='user')",
+      Number.MAX_SAFE_INTEGER,
+      true
+    )
+    db.close()
+    return { found: found !== null, tested, probes }
+  }
+  expect([look(100), look(1000)]).toEqual([
+    { found: true, tested: 2, probes: 0 },
+    { found: true, tested: 2, probes: 0 }
+  ])
 })

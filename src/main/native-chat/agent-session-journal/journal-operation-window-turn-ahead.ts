@@ -33,7 +33,7 @@ export function marginBefore(
 
 /** The newest row before `sequence` the index's own filter and `test` both hold for. `test` is no
  *  index column, so an indexed-only read looks back only as far as an admitted window could reach. */
-function newestBefore(
+export function newestBefore(
   scope: JournalSqlScope,
   index: string,
   indexed: string,
