@@ -6,14 +6,9 @@ import {
   over,
   type Rgba
 } from '../../../../shared/color/rgba-contrast'
-import { applyPluginAppTheme } from './document-theme'
 import { safePluginThemeTokens, type ColorProbe } from './plugin-theme-tokens'
 import { UNFOCUSED_SPLIT_GROUP_OPACITY } from '../../components/tab-group/panel/split-group-dim'
-import {
-  TAB_CONTRAST_MIX_TOKEN,
-  UNFOCUSED_TAB_LABEL_DARKEN,
-  tabContrastMix
-} from './tab-contrast-mix'
+import { tabContrastTokens } from './tab-contrast-mix'
 
 const probe: ColorProbe = (value) => (/^#[0-9a-f]{3,6}$/i.test(value) ? hexToRgb(value) : null)
 
@@ -58,7 +53,8 @@ const unfocusedRatio = (fill: Rgba, label: Rgba, page: string) => {
 /** Safe tokens and the mix painted for them, as applyPluginAppTheme computes both. */
 function paint(tokens: Record<string, string>, base: 'light' | 'dark') {
   const safe = safePluginThemeTokens(tokens, base, BUILT_INS[base], probe)
-  return { safe, mix: tabContrastMix(safe, base, BUILT_INS[base], probe) }
+  const styles = tabContrastTokens(safe, base, BUILT_INS[base], probe)
+  return { safe, styles, mix: Number.parseInt(styles['--tab-contrast-mix'], 10) }
 }
 
 describe('tabContrastMix', () => {
@@ -68,12 +64,32 @@ describe('tabContrastMix', () => {
   })
 
   it('keeps the built-in light inactive label at 4.5:1 in an unfocused split group', () => {
-    const fill = recess('#0a0a0a', '#ffffff', paint({}, 'light').mix)
+    const { mix: percent, styles } = paint({}, 'light')
+    const fill = recess('#0a0a0a', '#ffffff', percent)
     const muted = hexToRgb('#696969')
     // As is, the dimmed group takes the label under 4.5:1 at the full depth.
     expect(unfocusedRatio(fill, muted, '#ffffff')).toBeLessThan(4.5)
-    const darkened = paintedRgb(mix(hexToRgb('#000000'), muted, UNFOCUSED_TAB_LABEL_DARKEN))
+    expect(styles['--tab-unfocused-inactive-label']).toBe(
+      'color-mix(in srgb, black 10%, var(--muted-foreground))'
+    )
+    const darkened = paintedRgb(mix(hexToRgb('#000000'), muted, 10))
     expect(unfocusedRatio(fill, darkened, '#ffffff')).toBeGreaterThanOrEqual(4.5)
+  })
+
+  it('preserves a readable fallback label on an explicit dark inactive fill in light mode', () => {
+    const tokens = {
+      '--background': '#000000',
+      '--card': '#141414',
+      '--foreground': '#fefefe',
+      '--muted': '#000000',
+      '--muted-foreground': '#757575',
+      '--tab-inactive': '#000000'
+    }
+    const { safe, styles } = paint(tokens, 'light')
+    expect(safe['--tab-inactive']).toBe('#000000')
+    expect(safe['--muted-foreground']).toBe('#757575')
+    expect(styles['--tab-unfocused-inactive-label']).toBe('var(--muted-foreground)')
+    expect(contrastRatio(hexToRgb('#000000'), hexToRgb('#757575'))).toBeGreaterThanOrEqual(4.5)
   })
 
   it("stops short where a theme's own inactive label would drop under 4.5:1 in an unfocused split", () => {
@@ -110,6 +126,20 @@ describe('tabContrastMix', () => {
     expect(recess('#0a0a0a', '#ffffff', 8)).toEqual(hexToRgb('#ebebeb'))
     const separation = (at: number) =>
       contrastRatio(recess('#0a0a0a', '#ffffff', at), hexToRgb('#ebebeb'))
+    expect(separation(percent)).toBeGreaterThanOrEqual(separation(4))
+  })
+
+  it('keeps a one-sided theme fill separated even after split compositing', () => {
+    const tokens = {
+      '--background': '#cdcdcd',
+      '--card': '#fefefe',
+      '--tab-active': '#efefef',
+      '--muted-foreground': '#575757'
+    }
+    const { safe, mix: percent } = paint(tokens, 'light')
+    expect(safe['--tab-active']).toBe('#efefef')
+    const separation = (at: number) =>
+      unfocusedRatio(recess('#0a0a0a', '#fefefe', at), hexToRgb('#efefef'), '#cdcdcd')
     expect(separation(percent)).toBeGreaterThanOrEqual(separation(4))
   })
 
@@ -203,24 +233,5 @@ describe('tabContrastMix', () => {
     }
     expect(paint(light, 'light').safe).toEqual(light)
     expect(paint(dark, 'dark').safe).toEqual(dark)
-  })
-
-  it('paints the mix with the theme', () => {
-    const painted = new Map<string, string>()
-    const root = {
-      style: {
-        setProperty: (token: string, value: string) => void painted.set(token, value),
-        removeProperty: (token: string) => (painted.delete(token), '')
-      }
-    }
-    applyPluginAppTheme(
-      { id: 'test', revision: '1', base: 'dark', tokens: { '--tab-active-indicator': '#595959' } },
-      { root, probe, builtIns: () => BUILT_INS.dark, storage: null }
-    )
-    const percent = Number.parseInt(painted.get(TAB_CONTRAST_MIX_TOKEN) ?? '', 10)
-    expect(percent).toBeGreaterThanOrEqual(6)
-    expect(percent).toBeLessThan(11)
-    applyPluginAppTheme(null, { root, storage: null })
-    expect(painted.has(TAB_CONTRAST_MIX_TOKEN)).toBe(false)
   })
 })

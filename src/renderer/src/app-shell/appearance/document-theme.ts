@@ -12,7 +12,7 @@ import {
 } from './plugin-theme-tokens'
 import { CHAT_SELECTION_MIX_TOKEN, chatSelectionMix } from './chat-selection-mix'
 import { noticeSurfaceTokens } from './notice-surface-tokens'
-import { TAB_CONTRAST_MIX_TOKEN, tabContrastMix } from './tab-contrast-mix'
+import { tabContrastTokens } from './tab-contrast-mix'
 import { themeAccentButtonTokens } from './theme-accent-button-tokens'
 
 export type DocumentThemePreference = GlobalSettings['theme']
@@ -189,7 +189,7 @@ function paintPluginTokens(
     ...withFloatingSurfaces(safe),
     [HOST_PILL_OUTLINE_MIX_TOKEN]: `${hostPillOutlineMix(safe, base, builtIns, probe)}%`,
     [CHAT_SELECTION_MIX_TOKEN]: `${chatSelectionMix(safe, base, builtIns, probe)}%`,
-    [TAB_CONTRAST_MIX_TOKEN]: `${tabContrastMix(safe, base, builtIns, probe)}%`,
+    ...tabContrastTokens(safe, base, builtIns, probe),
     ...noticeSurfaceTokens(safe, base, builtIns, probe),
     ...themeAccentButtonTokens(safe, builtIns, probe)
   })

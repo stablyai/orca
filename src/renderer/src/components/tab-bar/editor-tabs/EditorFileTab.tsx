@@ -186,6 +186,9 @@ export default function EditorFileTab({
   )
 
   const tabStatusColor = tabStatus ? STATUS_COLORS[tabStatus] : undefined
+  const tabStatusStyle = tabStatusColor
+    ? { color: `var(--tab-status-ink, ${tabStatusColor})` }
+    : undefined
 
   useEffect(() => {
     const closeMenu = (): void => setMenuOpen(false)
@@ -220,6 +223,13 @@ export default function EditorFileTab({
       {...attributes}
       {...dragListeners}
       className={`w-full group relative flex items-center h-full px-1.5 text-xs cursor-pointer select-none outline-none focus:outline-none focus-visible:outline-none ${getTabStripBorderClasses(hasTabsToRight, { includeTopBorder: includeTopTabBorder })} ${getDropIndicatorClasses(dropIndicator ?? null)} ${getTabRootStateClasses(isActive)}`}
+      style={
+        tabStatus
+          ? ({
+              '--tab-status-mixed-ink': `var(--tab-decoration-${tabStatus}, ${tabStatusColor})`
+            } as React.CSSProperties)
+          : undefined
+      }
       onPointerDown={(e) => {
         onPointerDown(
           e,
@@ -300,7 +310,7 @@ export default function EditorFileTab({
         ) : (
           <span
             className={`${TAB_LABEL_WIDTH_CLASSES}${isPreviewTab ? ' italic' : ''}${isMissingFileMutation ? ' line-through' : ''}`}
-            style={tabStatusColor ? { color: tabStatusColor } : undefined}
+            style={tabStatusStyle}
             onDoubleClick={(e) => {
               if (isPreviewTab && onMakePermanent) {
                 e.stopPropagation()
@@ -327,7 +337,7 @@ export default function EditorFileTab({
         {tabStatus && !isRenaming && !isMissingFileMutation && (
           <span
             className="shrink-0 text-[10px] leading-none font-semibold tracking-wide"
-            style={{ color: tabStatusColor }}
+            style={tabStatusStyle}
           >
             {STATUS_LABELS[tabStatus]}
           </span>
