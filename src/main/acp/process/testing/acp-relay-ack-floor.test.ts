@@ -22,8 +22,13 @@ function rig() {
     stdout: new Readable({ read() {} }),
     ackFloor: turns.ackFloor(),
     durable: async () => true,
-    ack: async (seq) => {
-      acks.push(seq)
+    // Where a reattach would replay from, less one: the daemon keeps lines from `keepFrom` on, and
+    // never gets back lines it already dropped.
+    ack: async (seq, keepFrom) => {
+      const replayedFrom = (keepFrom ?? seq + 1) - 1
+      if (replayedFrom > (acks.at(-1) ?? 0)) {
+        acks.push(replayedFrom)
+      }
     }
   })
   output.restartAt(0)
