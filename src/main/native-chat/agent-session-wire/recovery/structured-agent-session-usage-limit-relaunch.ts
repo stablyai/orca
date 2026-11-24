@@ -1,7 +1,4 @@
-import {
-  rateLimitShowsRoom,
-  rateLimitSpentUntil
-} from '../../../../shared/agent-usage/rate-limits/rate-limit-spent-windows'
+import { rateLimitShowsRoom } from '../../../../shared/agent-usage/rate-limits/rate-limit-spent-windows'
 import type { ProviderRateLimits } from '../../../../shared/agent-usage/rate-limits/rate-limit-types'
 import { NATIVE_CHAT_USAGE_LIMIT_MAX_OVERDUE_MS } from '../../../../shared/native-chat/transcript/continuation/native-chat-usage-limit-cut'
 import {
@@ -87,7 +84,15 @@ type Relaunch = {
  *  the cut before its own reset. Derived each pass from readings; nothing is saved. */
 export class UsageLimitRelaunchedCuts {
   private readonly relaunches = new Map<string, Relaunch>()
-  private readonly switchReads = new Set<string>()
+  private readonly switchReads = new Map<string, number>()
+
+  beginPass(now: number): void {
+    for (const [key, askedAt] of this.switchReads) {
+      if (askedAt + 10 * 60_000 <= now) {
+        this.switchReads.delete(key)
+      }
+    }
+  }
 
   /** `to` is where the chat would start now, after the launch at `fence`; null when the cut's launch
    *  still names its account. */
@@ -125,13 +130,15 @@ export class UsageLimitRelaunchedCuts {
     cut,
     provider,
     witness,
-    scope
+    scope,
+    now
   }: {
     id: string
     cut: NativeChatUsageLimitCut & SwitchReset
     provider: string | undefined
     witness: string | undefined
     scope: UsageLimitAccountScope | undefined
+    now: number
   }): void {
     if (
       cut.resetFromSwitch !== true ||
@@ -142,18 +149,17 @@ export class UsageLimitRelaunchedCuts {
       return
     }
     const key = JSON.stringify([provider, witness, scope.scope])
-    if (this.switchReads.has(key)) {
+    if ((this.switchReads.get(key) ?? Number.NEGATIVE_INFINITY) + 10 * 60_000 > now) {
       return
     }
     const reading = scope.account?.read()
     const usable =
       reading?.status === 'ok' &&
-      (rateLimitSpentUntil(reading) !== undefined ||
-        (rateLimitShowsRoom(reading) &&
-          reading.updatedAt >= (cut.turnEndedAt ?? Number.NEGATIVE_INFINITY)))
+      rateLimitShowsRoom(reading) &&
+      reading.updatedAt >= (cut.turnEndedAt ?? Number.NEGATIVE_INFINITY)
     const ask = usable ? undefined : (scope.account?.refresh ?? scope.bootstrap)
     if (ask?.()) {
-      this.switchReads.add(key)
+      this.switchReads.set(key, now)
     }
   }
 

@@ -28,13 +28,15 @@ export function accountSwitchRoom(
   providers: ReadonlyMap<string, string>,
   bindings: ReadonlyMap<string, UsageLimitAttributionBinding>,
   scopes: ReadonlyMap<string, UsageLimitAccountScope | undefined>,
-  relaunched: UsageLimitRelaunchedCuts
+  relaunched: UsageLimitRelaunchedCuts,
+  now: number
 ): void {
   relaunched.askForRoom({
     id,
     cut,
     provider: providers.get(id),
     witness: bindings.get(id)?.witness,
-    scope: scopes.get(id)
+    scope: scopes.get(id),
+    now
   })
 }

@@ -205,7 +205,7 @@ export class StructuredAgentSessionUsageLimitContinue {
       // Visibility and workspace sleep can change without a journal or settings commit.
       await this.publishScheduled()
       await this.cold.readUnread(visible)
-      this.holds.beginPass()
+      this.holds.beginPass(this.deps.now())
       const due: { id: string; cut: Cut; at: number }[] = []
       for (const id of visible) {
         if (!this.deps.sessions.has(id) && !this.cold.has(id)) {
@@ -238,7 +238,7 @@ export class StructuredAgentSessionUsageLimitContinue {
         if (!this.eligible(id, cut)) {
           continue
         }
-        this.holds.askForRelaunchRoom(id, cut)
+        this.holds.askForRelaunchRoom(id, cut, this.deps.now())
         const retryAt = attempt ? attempt.at + 60_000 * 2 ** Math.max(0, attempt.count - 1) : 0
         if (this.holds.ready(id, cut, this.deps.now(), retryAt)) {
           due.push({ id, cut, at: attempt?.at ?? 0 })

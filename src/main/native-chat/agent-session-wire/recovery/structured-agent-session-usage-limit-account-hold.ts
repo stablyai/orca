@@ -57,9 +57,10 @@ export class UsageLimitAccountHolds {
   private launchHomes = new Map<string, Promise<AgentSessionAccountHome | null>>()
   private readings = new Map<string, Promise<UsageLimitAccountScope | undefined>>()
 
-  beginPass(): void {
+  beginPass(now = Date.now()): void {
     this.launchHomes = new Map()
     this.readings = new Map()
+    this.relaunched.beginPass(now)
   }
 
   /** Re-attributed each pass: the account a chat continues on follows the host's selection. The
@@ -180,8 +181,12 @@ export class UsageLimitAccountHolds {
     return accountSwitchReset(id, cut, this.movedSince, this.relaunched)
   }
 
-  askForRelaunchRoom = (id: string, cut: NativeChatUsageLimitCut & SwitchReset): void =>
-    accountSwitchRoom(id, cut, this.providers, this.bindings, this.scopes, this.relaunched)
+  askForRelaunchRoom = (
+    id: string,
+    cut: NativeChatUsageLimitCut & SwitchReset,
+    now = Date.now()
+  ): void =>
+    accountSwitchRoom(id, cut, this.providers, this.bindings, this.scopes, this.relaunched, now)
   verdict(
     id: string,
     limited: { turnItemId: string; resetsAt: number; turnEndedAt?: number } & SwitchReset,
