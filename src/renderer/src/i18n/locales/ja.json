@@ -22059,7 +22059,7 @@
         "search": "プロファイルを検索",
         "lastUsed": "前回使用",
         "noMatches": "一致する項目がありません",
-        "googleNote": "Google ログインはインポートされません"
+        "googleNote": "Google ログインは対象外です"
       }
     },
     "passwords": {

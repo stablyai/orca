@@ -1,4 +1,4 @@
-import { useLayoutEffect, useMemo, useRef, useState } from 'react'
+import { useLayoutEffect, useMemo, useReducer, useRef, useState } from 'react'
 import { Info } from 'lucide-react'
 import {
   Command,
@@ -24,8 +24,13 @@ import {
   readBrowserCookieImportLastUsed,
   rememberBrowserCookieImportLastUsed
 } from './browser-cookie-import-last-used'
+import {
+  FROM_FILE_VALUE,
+  getPickerSelection,
+  INITIAL_PICKER_SEARCH,
+  reducePickerSearch
+} from './browser-cookie-import-picker-selection'
 
-const FROM_FILE_VALUE = 'from-file'
 // A cmdk value no row has, so nothing is highlighted.
 const NO_HIGHLIGHT = '\u001fnone\u001f'
 
@@ -64,7 +69,12 @@ function scrollRowIntoView(list: HTMLElement | null, value: string): void {
 
 type BrowserCookieImportPickerProps = Pick<
   BrowserToolbarImportCookiesProps,
-  'browserPageId' | 'detectedBrowsers' | 'pageRoute' | 'onImportFromBrowser' | 'onImportFromFile'
+  | 'browserPageId'
+  | 'detectedBrowsers'
+  | 'detectedBrowsersLoaded'
+  | 'pageRoute'
+  | 'onImportFromBrowser'
+  | 'onImportFromFile'
 > & {
   open: boolean
   onOpenChange: (open: boolean) => void
@@ -114,6 +124,7 @@ export function BrowserCookieImportPicker({
 
 function BrowserCookieImportPickerBody({
   detectedBrowsers,
+  detectedBrowsersLoaded,
   pageRoute,
   onImportFromBrowser,
   onImportFromFile,
@@ -122,7 +133,8 @@ function BrowserCookieImportPickerBody({
   onClose: () => void
 }): React.JSX.Element {
   const t = useTranslate()
-  const [query, setQuery] = useState('')
+  const [search, updateSearch] = useReducer(reducePickerSearch, INITIAL_PICKER_SEARCH)
+  const { query } = search
   // Mounted per open, so a source picked in another pane shows here next time.
   const [lastUsed] = useState(readBrowserCookieImportLastUsed)
   const sections = useMemo(
@@ -131,16 +143,12 @@ function BrowserCookieImportPickerBody({
   )
   const rowValues = [...sections.flatMap((s) => s.rows.map((r) => r.value)), FROM_FILE_VALUE]
   const hasSearch = query.trim() !== ''
-  const noMatches = sections.length === 0 && hasSearch
-  // No profile rows (still probing, none found, or no matches): From File… is all that's left, and
-  // Enter alone must not open a file dialog.
   const onlyFromFile = sections.length === 0
-  // Typing or browsers arriving from the lazy probe puts the highlight back on the first row.
-  const rowsKey = JSON.stringify([query, ...rowValues])
-  const [highlight, setHighlight] = useState<{ rowsKey: string; value: string } | null>(null)
+  const noMatches = onlyFromFile && hasSearch && detectedBrowsersLoaded
+  const rowsKey = JSON.stringify(rowValues)
   const [selectionReset, setSelectionReset] = useState(0)
   const explicitSelection = useRef(false)
-  const selected = highlight?.rowsKey === rowsKey ? highlight.value : null
+  const selected = getPickerSelection(search, rowsKey)
   const highlighted = onlyFromFile
     ? (selected ?? `${NO_HIGHLIGHT}${selectionReset}`)
     : (selected ?? rowValues[0])
@@ -167,7 +175,10 @@ function BrowserCookieImportPickerBody({
         const byUser = explicitSelection.current
         explicitSelection.current = false
         if (!onlyFromFile || byUser) {
-          setHighlight({ rowsKey, value: rowValues.includes(value) ? value : rowValues[0] })
+          updateSearch({
+            type: 'select',
+            selection: { rowsKey, value: rowValues.includes(value) ? value : rowValues[0] }
+          })
         } else if (!selected) {
           // cmdk selects its first row on search changes. A new value clears that selection.
           setSelectionReset((count) => count + 1)
@@ -191,7 +202,7 @@ function BrowserCookieImportPickerBody({
         value={query}
         onValueChange={(value) => {
           explicitSelection.current = false
-          setQuery(value)
+          updateSearch({ type: 'edit-query', query: value })
         }}
         placeholder={searchLabel}
         aria-label={searchLabel}
@@ -202,7 +213,7 @@ function BrowserCookieImportPickerBody({
       />
       <CommandList ref={listRef} className="max-h-none overflow-visible">
         <BrowserCookieImportMachineNotice pageRoute={pageRoute} />
-        <div className={LIST_SCROLL_CLASS}>
+        <div className={LIST_SCROLL_CLASS} aria-busy={!detectedBrowsersLoaded}>
           {sections.map((section, index) => (
             <CommandGroup
               key={section.key}
@@ -236,7 +247,7 @@ function BrowserCookieImportPickerBody({
             </div>
           ) : null}
         </div>
-        {sections.length > 0 || hasSearch ? (
+        {!onlyFromFile || noMatches ? (
           <CommandSeparator alwaysRender className={menuSeparatorVariants()} />
         ) : null}
         <CommandItem
@@ -253,7 +264,7 @@ function BrowserCookieImportPickerBody({
         <div role="separator" className={menuSeparatorVariants()} />
         <p className="flex items-center gap-2 px-2.5 py-[5px] text-[12px] leading-4 text-muted-foreground">
           <Info aria-hidden className="size-3.5 shrink-0" />
-          <span className="min-w-0 truncate">
+          <span className="min-w-0">
             {t('browser.cookieImport.picker.googleNote', 'Google logins aren’t imported')}
           </span>
         </p>

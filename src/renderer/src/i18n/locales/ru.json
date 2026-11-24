@@ -607,7 +607,7 @@
         "search": "Поиск профилей",
         "lastUsed": "Недавно использованные",
         "noMatches": "Нет совпадений",
-        "googleNote": "Учётные записи Google не импортируются"
+        "googleNote": "Сеансы Google не переносятся"
       }
     },
     "passwords": {

@@ -549,7 +549,7 @@
         "search": "Profile suchen",
         "lastUsed": "Zuletzt verwendet",
         "noMatches": "Keine Treffer",
-        "googleNote": "Google-Anmeldungen werden nicht importiert"
+        "googleNote": "Kein Import von Google-Logins"
       }
     },
     "passwords": {

@@ -15,6 +15,7 @@ export type BrowserToolbarImportCookiesProps = {
   /** Cookies always land in the page's current profile. */
   effectiveProfileId: string
   detectedBrowsers: DetectedBrowserEntry[]
+  detectedBrowsersLoaded: boolean
   onFetchDetectedBrowsers: () => void
   browserSessionImportState: { profileId: string; status: string } | null | undefined
   /** The page's own jar, which the import fills. */

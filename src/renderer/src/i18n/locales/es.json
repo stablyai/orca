@@ -21415,7 +21415,7 @@
         "search": "Buscar perfiles",
         "lastUsed": "Usado por última vez",
         "noMatches": "Sin coincidencias",
-        "googleNote": "Los inicios de sesión de Google no se importan"
+        "googleNote": "No se importan sesiones de Google"
       }
     },
     "passwords": {

@@ -109,10 +109,12 @@ function FixtureImportLog({ entries }: { entries: string[] }): React.JSX.Element
 
 function Toolbar({
   detectedBrowsers = MANY_BROWSERS,
+  detectedBrowsersLoaded = true,
   onFetchDetectedBrowsers = noop,
   pageRoute = LOCAL_PAGE_ROUTE
 }: {
   detectedBrowsers?: DetectedBrowserEntry[]
+  detectedBrowsersLoaded?: boolean
   onFetchDetectedBrowsers?: () => void
   pageRoute?: BrowserPageCookieImportRoute
 }): React.JSX.Element {
@@ -170,6 +172,7 @@ function Toolbar({
               browserPageId: 'fixture-page',
               effectiveProfileId: 'default',
               detectedBrowsers,
+              detectedBrowsersLoaded,
               onFetchDetectedBrowsers,
               browserSessionImportState: null,
               pageRoute,
@@ -216,6 +219,7 @@ function RemoteToolbarWithDelayedProbe(): React.JSX.Element {
   return (
     <Toolbar
       detectedBrowsers={loaded ? MANY_BROWSERS : []}
+      detectedBrowsersLoaded={loaded}
       onFetchDetectedBrowsers={() => setRequested(true)}
       pageRoute={{
         kind: 'client-host',

@@ -252,6 +252,7 @@ export function BrowserToolbarMenuDropdown({
           anchorRef={overflow.triggerRef}
           browserPageId={cookieImport.browserPageId}
           detectedBrowsers={cookieImport.detectedBrowsers}
+          detectedBrowsersLoaded={cookieImport.detectedBrowsersLoaded}
           pageRoute={cookieImport.pageRoute}
           onImportFromBrowser={cookieImport.onImportFromBrowser}
           onImportFromFile={cookieImport.onImportFromFile}
