@@ -24,7 +24,7 @@ import type {
 import { validatePluginInstallTree } from '../artifacts/plugin-artifact-validation'
 import { renamePluginFileWithWindowsRetry } from './plugin-atomic-file-write'
 import { hashPluginTree } from '../artifacts/plugin-content-hash'
-import { publishPluginInstall } from './plugin-install-publication'
+import { discardUnpublishedPluginVersion, publishPluginInstall } from './plugin-install-publication'
 import { readPluginManifestText } from '../artifacts/plugin-manifest-file'
 import { pluginInstallTrustError } from './plugin-install-trust'
 import { pluginCatalogTakeoverError } from './plugin-catalog-install-guard'
@@ -199,6 +199,7 @@ export async function installStagedPluginTree(input: {
       await rm(versionDir, { recursive: true, force: true })
     }
   }
+  let createdVersion = false
   if (!existsSync(versionDir)) {
     const stagedVersionDir = `${versionDir}.staging`
     try {
@@ -238,6 +239,7 @@ export async function installStagedPluginTree(input: {
         return { ok: false, error: `copied artifact validation failed: ${copiedArtifacts.error}` }
       }
       await renamePluginFileWithWindowsRetry(stagedVersionDir, versionDir)
+      createdVersion = true
     } catch (error) {
       return { ok: false, error: error instanceof Error ? error.message : String(error) }
     } finally {
@@ -271,27 +273,32 @@ export async function installStagedPluginTree(input: {
     }
   }
   const consentFingerprint = fingerprintPluginConsent(manifest, sourceInspection.contentHash)
-  const entry: PluginLockEntry = {
-    pluginKey,
-    version: manifest.version,
-    source: input.source,
-    ...(input.source.kind === 'marketplace' &&
-    !input.release?.sourceUnavailable &&
-    input.release?.repository
-      ? { authorRepository: input.release.repository }
-      : {}),
-    resolvedCommit: input.resolvedCommit,
-    contentHash: sourceInspection.contentHash,
-    consentFingerprint,
-    // Why kept on update: install order decides which plugin replaces a built-in action.
-    installedAt:
-      (await readPluginLockfile(input.pluginsDir).catch(() => null))?.plugins[pluginKey]
-        ?.installedAt ?? Date.now()
-  }
   try {
-    const publish = () => publishPluginInstall({ pluginsDir: input.pluginsDir, pluginDir, entry })
-    await (input.withPublication ? input.withPublication(publish) : publish())
+    const entry: PluginLockEntry = {
+      pluginKey,
+      version: manifest.version,
+      source: input.source,
+      ...(input.source.kind === 'marketplace' &&
+      !input.release?.sourceUnavailable &&
+      input.release?.repository
+        ? { authorRepository: input.release.repository }
+        : {}),
+      resolvedCommit: input.resolvedCommit,
+      contentHash: sourceInspection.contentHash,
+      consentFingerprint,
+      // Why kept on update: install order decides which plugin replaces a built-in action.
+      installedAt:
+        (await readPluginLockfile(input.pluginsDir).catch(() => null))?.plugins[pluginKey]
+          ?.installedAt ?? Date.now()
+    }
+    await publishPluginInstall({
+      pluginsDir: input.pluginsDir,
+      pluginDir,
+      entry,
+      withPublication: input.withPublication
+    })
   } catch (error) {
+    await discardUnpublishedPluginVersion(pluginDir, sourceInspection.contentHash, createdVersion)
     return { ok: false, error: error instanceof Error ? error.message : String(error) }
   }
   return {

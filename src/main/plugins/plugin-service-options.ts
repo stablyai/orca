@@ -1,3 +1,4 @@
+import type { PluginLockEntry } from '../../shared/plugins/installation/plugin-install-lockfile'
 import type { PluginWorkerFactory } from './workers/worker-supervision/plugin-worker-startup'
 import type { KeybindingOverrides } from '../../shared/keybindings/types'
 import type {
@@ -17,7 +18,10 @@ export type PluginServiceOptions = {
   getRequiredPlugins?: () => readonly string[] | undefined
   getCatalogManagingTeams?: (source: { url: string; ref: string }) => string[] | undefined
   getPluginConsents: () => Record<string, string>
-  withMarketplaceApproval?: (pluginKey: string, write: () => void) => Promise<void>
+  withMarketplaceApproval?: (
+    pluginKey: string,
+    write: (installed: PluginLockEntry) => void
+  ) => Promise<void>
   getDevPluginPaths: () => string[]
   getKeybindings?: () => KeybindingOverrides
   getPluginKillListEntry?: (pluginKey: string) => (PluginKillListEntry & PluginBlockNotice) | null

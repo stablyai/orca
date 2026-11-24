@@ -1,3 +1,4 @@
+import type { PluginLockEntry } from '../../../shared/plugins/installation/plugin-install-lockfile'
 import {
   normalizePluginConsents,
   normalizePluginIdList
@@ -33,9 +34,17 @@ export async function applyPluginConsent(input: {
     // prove every declarative byte is still reviewable before enabling it.
     await verifyDeclarativePluginContent(plugin)
   }
-  const write = (): void => {
+  const write = (installed?: PluginLockEntry): void => {
     if (input.teamRequirementStillApplies?.() === false) {
       return
+    }
+    if (
+      input.decision === 'approve' &&
+      installed &&
+      (installed.contentHash !== plugin.contentHash ||
+        installed.version !== plugin.manifest.version)
+    ) {
+      throw new Error(`plugin ${pluginKey} changed since its permissions were reviewed`)
     }
     if (
       input.decision === 'approve' &&
@@ -69,12 +78,12 @@ export async function applyPluginConsent(input: {
   await pluginService.reconcileActivationState()
 }
 
-/** Drops a plugin's recorded approval without disabling it, so it waits for review. */
-export async function revokePluginConsent(input: {
+/** Synchronous revocation; reconcile activation only after releasing mutation locks. */
+export function revokePluginConsent(input: {
   store: Store
   pluginService: PluginService | null
   pluginKey: string
-}): Promise<void> {
+}): void {
   const { store, pluginService, pluginKey } = input
   // Why throw: an install that cannot drop the old approval must not publish.
   if (!pluginService) {
@@ -86,7 +95,6 @@ export async function revokePluginConsent(input: {
   }
   delete consents[pluginKey]
   store.updateSettings({ pluginConsents: consents }, { notifyListeners: true })
-  await pluginService.reconcileActivationState()
 }
 
 /** Enabling cannot bypass missing/stale consent. */

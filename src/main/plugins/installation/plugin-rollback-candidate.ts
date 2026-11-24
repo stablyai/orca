@@ -1,5 +1,6 @@
 import { readdir } from 'node:fs/promises'
-import { join } from 'node:path'
+import { basename, join } from 'node:path'
+import { readPluginInstallProvenance } from './plugin-install-provenance'
 import { parseHostPluginManifest } from '../../../shared/plugins/manifest/plugin-manifest'
 import { readPluginCurrentPointer } from './plugin-current-pointer'
 import { readPluginManifestText } from '../artifacts/plugin-manifest-file'
@@ -17,7 +18,7 @@ export async function findPluginRollbackCandidate(
   if (!currentContentHash) {
     return { ok: false, error: 'installed plugin has no current version' }
   }
-  const candidates = (await readdir(pluginDir, { withFileTypes: true }).catch(() => []))
+  const directories = (await readdir(pluginDir, { withFileTypes: true }).catch(() => []))
     .filter(
       (entry) =>
         entry.isDirectory() &&
@@ -25,6 +26,16 @@ export async function findPluginRollbackCandidate(
         entry.name !== currentContentHash
     )
     .map((entry) => entry.name)
+  const candidates: string[] = []
+  for (const hash of directories) {
+    const provenance = await readPluginInstallProvenance(pluginDir, hash)
+    if (provenance?.pluginKey === basename(pluginDir) && provenance.contentHash === hash) {
+      candidates.push(hash)
+      if (candidates.length > 1) {
+        break
+      }
+    }
+  }
   const [contentHash] = candidates
   if (candidates.length !== 1 || !contentHash) {
     return {

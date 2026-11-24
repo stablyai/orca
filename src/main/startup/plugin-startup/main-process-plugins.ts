@@ -111,7 +111,8 @@ export async function initializeMainProcessPlugins(core: DesktopCore, store: Sto
     blockedPluginReason: (pluginKey) => core.pluginKillListService?.reason(pluginKey) ?? null,
     imageCache: pluginImageCache,
     revokeConsent: (pluginKey) =>
-      revokePluginConsent({ store, pluginService: core.pluginService, pluginKey })
+      revokePluginConsent({ store, pluginService: core.pluginService, pluginKey }),
+    reconcileConsent: () => core.pluginService?.reconcileActivationState() ?? Promise.resolve()
   })
   const bundledPluginRoot = bundledPluginRootForApp(app)
   core.pluginService = new PluginService({

@@ -46,7 +46,9 @@ const manifest = pluginManifestSchema.parse({
 const preview = (pluginKey: string): PluginMarketplaceHostInstallPreview =>
   previewFor(pluginKey, manifest, true)
 
-function stubApi(installed: Record<string, { ok: boolean; consentFingerprint?: string }>) {
+function stubApi(
+  installed: Record<string, { ok: boolean; consentFingerprint?: string; error?: string }>
+) {
   const consent = vi.fn(async () => [])
   vi.stubGlobal('window', {
     api: {
@@ -67,6 +69,29 @@ afterEach(() => {
 })
 
 describe('installUpdates', () => {
+  it('preserves landed updates and separates unattempted rows after a catalog timeout', async () => {
+    stubApi({
+      'acme.done': { ok: true, consentFingerprint: 'reviewed-acme.done' },
+      'acme.waiting': {
+        ok: false,
+        error: 'The plugin catalog is still updating. Try again in a moment.'
+      }
+    })
+    const result = await installUpdates(
+      ['acme.done', 'acme.waiting', 'acme.later'].map((key) => ({
+        preview: preview(key),
+        name: key,
+        reviewed: true
+      }))
+    )
+    expect(result.approved.map((item) => item.name)).toEqual(['acme.done'])
+    expect(result.failed.map((item) => item.name)).toEqual(['acme.waiting'])
+    expect(result).toMatchObject({
+      error: 'The plugin catalog is still updating. Try again in a moment.',
+      unattempted: [{ name: 'acme.later' }]
+    })
+    expect(window.api.plugins.installMarketplacePlugin).toHaveBeenCalledTimes(2)
+  })
   it('approves exactly the reviewed fingerprint and holds bytes that changed after review', async () => {
     const consent = stubApi({
       'acme.same': { ok: true, consentFingerprint: 'reviewed-acme.same' },

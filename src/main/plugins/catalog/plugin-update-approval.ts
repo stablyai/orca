@@ -15,7 +15,6 @@ import type {
 } from './plugin-marketplace-installer'
 import type { ValidDiscoveredPlugin } from '../discovery/plugin-discovery'
 import { enableIfDataPlugin } from './plugin-one-click-enable'
-import { MarketplaceReviewRequiredError } from './plugin-marketplace-install-eligibility'
 
 /** The installed plugin an update would replace, when it is running under a user approval. */
 export function readApprovedPredecessor(
@@ -81,9 +80,6 @@ async function carryPluginApprovalAcrossUpdate(input: {
     await input.approve(next.pluginKey, next.consentFingerprint)
     return true
   } catch (error) {
-    if (error instanceof MarketplaceReviewRequiredError) {
-      throw error
-    }
     // Why not thrown: the update installed; it simply waits for review like a first install.
     console.warn(`[plugins] kept ${next.pluginKey} for review after update:`, error)
     return false
@@ -121,35 +117,40 @@ export async function installCatalogReleaseWithApproval(input: {
   if (!result.ok) {
     return result
   }
-  await pluginService.refresh()
-  // Why main decides: a repository move must reach review even if the renderer skipped its flag.
-  if (result.repositoryMoved) {
-    return { ...result, needsReview: true }
-  }
-  const findValidPlugin = (key: string): ValidDiscoveredPlugin | null =>
-    pluginService.findValidPlugin(key)
-  if (
-    await carryPluginApprovalAcrossUpdate({
-      previous: predecessor,
-      previousVmRecipes,
+  try {
+    await pluginService.refresh()
+    // Why main decides: a repository move must reach review even if the renderer skipped its flag.
+    if (result.repositoryMoved) {
+      return { ...result, needsReview: true }
+    }
+    const findValidPlugin = (key: string): ValidDiscoveredPlugin | null =>
+      pluginService.findValidPlugin(key)
+    if (
+      await carryPluginApprovalAcrossUpdate({
+        previous: predecessor,
+        previousVmRecipes,
+        installedFingerprint: result.consentFingerprint,
+        findValidPlugin,
+        isDisabled: (key) => pluginService.options.getDisabledPlugins().includes(key),
+        approve: input.approve
+      })
+    ) {
+      return { ...result, needsReview: false }
+    }
+    if (!input.enableIfData) {
+      return predecessor ? { ...result, needsReview: true } : result
+    }
+    const { expectedFingerprint } = input.enableIfData
+    const { needsReview } = await enableIfDataPlugin({
+      pluginKey: result.pluginKey,
       installedFingerprint: result.consentFingerprint,
+      ...(expectedFingerprint ? { expectedFingerprint } : {}),
       findValidPlugin,
-      isDisabled: (key) => pluginService.options.getDisabledPlugins().includes(key),
       approve: input.approve
     })
-  ) {
-    return { ...result, needsReview: false }
+    return { ...result, needsReview }
+  } catch (error) {
+    console.warn(`[plugins] ${input.pluginKey} installed but approval is pending:`, error)
+    return { ...result, needsReview: true }
   }
-  if (!input.enableIfData) {
-    return predecessor ? { ...result, needsReview: true } : result
-  }
-  const { expectedFingerprint } = input.enableIfData
-  const { needsReview } = await enableIfDataPlugin({
-    pluginKey: result.pluginKey,
-    installedFingerprint: result.consentFingerprint,
-    ...(expectedFingerprint ? { expectedFingerprint } : {}),
-    findValidPlugin,
-    approve: input.approve
-  })
-  return { ...result, needsReview }
 }

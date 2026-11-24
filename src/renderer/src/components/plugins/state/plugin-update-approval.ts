@@ -52,14 +52,16 @@ export type UpdateToInstall = {
 
 /**
  * `approved`: landed, and a reviewed one is approved. `held`: landed, but its bytes differ from the
- * reviewed ones, so it waits for review on the plugin's page. `failed`: install or approval failed.
+ * reviewed ones or its approval was refused, so it waits for review. `failed`: install failed.
  */
 export type UpdateResult = 'approved' | 'held' | 'failed'
 
 async function installOne({
   preview,
+  name,
   reviewed
 }: UpdateToInstall): Promise<{ result: UpdateResult; error?: string; retryLater?: boolean }> {
+  let installed = false
   try {
     const result = await window.api.plugins.installMarketplacePlugin({
       marketplaceSourceId: preview.marketplaceSourceId,
@@ -74,8 +76,18 @@ async function installOne({
         retryLater: isPluginCatalogUpdating(result.error)
       }
     }
+    installed = true
     if (!reviewed) {
-      return { result: 'approved' }
+      return result.needsReview
+        ? {
+            result: 'held',
+            error: translate(
+              'auto.components.settings.PluginUpdateReviewToast.needsReview',
+              '{{value0}} installed and needs your review in Settings → Plugins.',
+              { value0: name }
+            )
+          }
+        : { result: 'approved' }
     }
     // Why only on a match: other bytes than the reviewed ones must be reviewed again.
     if (result.consentFingerprint !== preview.consentFingerprint) {
@@ -90,9 +102,9 @@ async function installOne({
   } catch (cause) {
     console.warn('[plugins] update failed:', cause)
     return {
-      result: 'failed',
+      result: installed ? 'held' : 'failed',
       error: catalogInstallErrorMessage(cause),
-      retryLater: isPluginCatalogUpdating(cause)
+      retryLater: !installed && isPluginCatalogUpdating(cause)
     }
   }
 }
@@ -103,26 +115,36 @@ async function installOne({
  */
 export async function installUpdates(
   updates: readonly UpdateToInstall[]
-): Promise<Record<UpdateResult, UpdateToInstall[]> & { error?: string }> {
+): Promise<
+  Record<UpdateResult, UpdateToInstall[]> & { unattempted: UpdateToInstall[]; error?: string }
+> {
   const results: Record<UpdateResult, UpdateToInstall[]> = { approved: [], held: [], failed: [] }
+  const unattempted: UpdateToInstall[] = []
+  const heldMessages = new Map<UpdateToInstall, string>()
   let error: string | undefined
   for (const [index, update] of updates.entries()) {
     const attempt = await installOne(update)
     results[attempt.result].push(update)
-    error ??= attempt.error
+    if (attempt.result === 'failed') {
+      error ??= attempt.error
+    }
+    if (attempt.result === 'held' && attempt.error) {
+      heldMessages.set(update, attempt.error)
+    }
     if (attempt.retryLater) {
       error = attempt.error
-      results.failed.push(...updates.slice(index + 1))
+      unattempted.push(...updates.slice(index + 1))
       break
     }
   }
-  announceInstalled(results.approved, results.held)
-  return { ...results, error }
+  announceInstalled(results.approved, results.held, heldMessages)
+  return { ...results, unattempted, error }
 }
 
 function announceInstalled(
   approved: readonly UpdateToInstall[],
-  held: readonly UpdateToInstall[]
+  held: readonly UpdateToInstall[],
+  heldMessages: ReadonlyMap<UpdateToInstall, string>
 ): void {
   const [one] = approved
   if (one) {
@@ -137,14 +159,16 @@ function announceInstalled(
           })
     )
   }
-  for (const { name } of held) {
+  for (const update of held) {
+    const { name } = update
     // Why say so: the bytes changed after the review, so its approval doesn't apply.
     toast.warning(
-      translate(
-        'auto.components.settings.PluginUpdateReviewToast.held',
-        '{{value0}} changed after you reviewed it, so it waits for your review in Settings → Plugins.',
-        { value0: name }
-      )
+      heldMessages.get(update) ??
+        translate(
+          'auto.components.settings.PluginUpdateReviewToast.held',
+          '{{value0}} changed after you reviewed it, so it waits for your review in Settings → Plugins.',
+          { value0: name }
+        )
     )
   }
 }

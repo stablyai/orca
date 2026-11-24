@@ -162,23 +162,19 @@ it('keeps a catalog generation fixed until its guarded write finishes', async ()
   const entered = Promise.withResolvers<void>()
   const release = Promise.withResolvers<void>()
   const order: string[] = []
-  const publishing = withMarketplaceInstallEligibility(
-    marketplace,
-    {
-      marketplaceSourceId: source.id,
-      marketplaceCommit: 'c'.repeat(40),
-      pluginKey: 'samples.demo'
-    },
-    async () => {
-      order.push('write started')
-      entered.resolve()
-      await release.promise
-      expect((await marketplace.findPlugin(source.id, 'samples.demo'))?.marketplaceCommit).toBe(
-        'c'.repeat(40)
-      )
-      order.push('write finished')
-    }
-  )
+  const admitted = await marketplace.findPlugin(source.id, 'samples.demo')
+  if (!admitted) {
+    throw new Error('fixture offer missing')
+  }
+  const publishing = withMarketplaceInstallEligibility(marketplace, admitted, async () => {
+    order.push('write started')
+    entered.resolve()
+    await release.promise
+    expect((await marketplace.findPlugin(source.id, 'samples.demo'))?.marketplaceCommit).toBe(
+      'c'.repeat(40)
+    )
+    order.push('write finished')
+  })
   await entered.promise
   const changed = store
     .writeSnapshot({

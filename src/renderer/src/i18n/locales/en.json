@@ -14874,7 +14874,9 @@
           "failed": "Couldn’t update {{value0}}",
           "morePlugins": "and {{value0}} more plugins",
           "uncompared": "Orca couldn’t compare it with the version you approved.",
-          "held": "{{value0}} changed after you reviewed it, so it waits for your review in Settings → Plugins."
+          "held": "{{value0}} changed after you reviewed it, so it waits for your review in Settings → Plugins.",
+          "notAttempted": "Not attempted",
+          "needsReview": "{{value0}} installed and needs your review in Settings → Plugins."
         },
         "PluginInstallTrustDialog": {
           "titleFolder": "Make sure you trust this folder",

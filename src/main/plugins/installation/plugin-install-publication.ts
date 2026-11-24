@@ -1,4 +1,4 @@
-import { readdir, rm } from 'node:fs/promises'
+import { readdir, rm, rmdir } from 'node:fs/promises'
 import { join } from 'node:path'
 import { findTeamPluginBlock, teamAllowsPluginInstallSource } from './plugin-team-install-policy'
 import { requiredPluginInstallError } from './required-plugin-release-policy'
@@ -24,6 +24,7 @@ export async function publishPluginInstall(input: {
   pluginsDir: string
   pluginDir: string
   entry: PluginLockEntry
+  withPublication?: (publish: () => Promise<void>) => Promise<void>
 }): Promise<void> {
   const previousContentHash = await readPluginCurrentPointer(input.pluginDir)
   const currentLock = await readPluginLockfile(input.pluginsDir)
@@ -43,33 +44,36 @@ export async function publishPluginInstall(input: {
       : null
   // Same-byte reinstalls preserve immutable provenance; interrupted source changes must not appear published.
   const publishedEntry = existingProvenance ?? legacyCurrentEntry ?? input.entry
-  const policyError = pluginInstallPolicyError(publishedEntry)
-  if (policyError) {
-    throw new Error(policyError)
-  }
-  const nextLock = upsertPluginLock(currentLock, publishedEntry)
-  // Provenance repairs crashes between pointer and global-index publication.
-  if (!existingProvenance) {
-    await writePluginInstallProvenance(input.pluginDir, publishedEntry)
-  }
-  const currentPolicyError = pluginInstallPolicyError(publishedEntry)
-  if (currentPolicyError) {
-    throw new Error(currentPolicyError)
-  }
-  await writePluginCurrentPointer(input.pluginDir, input.entry.contentHash)
-  try {
-    await writePluginLockfile(input.pluginsDir, nextLock)
-  } catch (publicationError) {
-    try {
-      await restorePluginCurrentPointer(input.pluginDir, previousContentHash)
-    } catch (rollbackError) {
-      throw new AggregateError(
-        [publicationError, rollbackError],
-        'plugin install publication and pointer rollback both failed'
-      )
+  const write = async (): Promise<void> => {
+    const policyError = pluginInstallPolicyError(publishedEntry)
+    if (policyError) {
+      throw new Error(policyError)
     }
-    throw publicationError
+    const nextLock = upsertPluginLock(currentLock, publishedEntry)
+    // Provenance repairs crashes between pointer and global-index publication.
+    if (!existingProvenance) {
+      await writePluginInstallProvenance(input.pluginDir, publishedEntry)
+    }
+    const currentPolicyError = pluginInstallPolicyError(publishedEntry)
+    if (currentPolicyError) {
+      throw new Error(currentPolicyError)
+    }
+    await writePluginCurrentPointer(input.pluginDir, input.entry.contentHash)
+    try {
+      await writePluginLockfile(input.pluginsDir, nextLock)
+    } catch (publicationError) {
+      try {
+        await restorePluginCurrentPointer(input.pluginDir, previousContentHash)
+      } catch (rollbackError) {
+        throw new AggregateError(
+          [publicationError, rollbackError],
+          'plugin install publication and pointer rollback both failed'
+        )
+      }
+      throw publicationError
+    }
   }
+  await (input.withPublication ? input.withPublication(write) : write())
   // Reinstalling B must not collapse an existing A rollback into {B}.
   if (previousContentHash !== input.entry.contentHash) {
     await pruneHistoricalVersions(
@@ -109,4 +113,16 @@ async function pruneHistoricalVersions(pluginDir: string, retained: ReadonlySet<
       .map((entry) => rm(join(pluginDir, entry.name), { recursive: true, force: true }))
   )
   await prunePluginInstallProvenance(pluginDir, retained)
+}
+
+/** Keep existing versions intact; discard an unpublished attempt and its empty container. */
+export async function discardUnpublishedPluginVersion(
+  pluginDir: string,
+  contentHash: string,
+  created: boolean
+): Promise<void> {
+  if (created && (await readPluginCurrentPointer(pluginDir)) !== contentHash) {
+    await rm(join(pluginDir, contentHash), { recursive: true, force: true })
+    await rmdir(pluginDir).catch(() => undefined)
+  }
 }

@@ -1,4 +1,5 @@
 // @protected-copy
+import { PluginUpdateReviewToastRow } from './PluginUpdateReviewToastRow'
 import { useEffect, useRef, useState } from 'react'
 import { Loader2, X } from 'lucide-react'
 import type { PluginUpdateReviewNotice } from '../../../../../shared/plugins/catalog/plugin-update-policy'
@@ -7,8 +8,6 @@ import { useTranslate } from '@/i18n/use-translate'
 import { openPluginUpdateReviewDialog } from '@/store/plugins/updates/plugin-update-review-dialog'
 import { Button } from '../../ui/button'
 import { SecuritySurface } from '../../ui/security-surface'
-import { pluginListEntryFromInstalled } from '../list/plugin-list-entries'
-import { PluginRowArt } from '../list/PluginRowArt'
 import {
   installUpdates,
   loadUpdate,
@@ -16,9 +15,6 @@ import {
   type LoadedUpdate
 } from '../state/plugin-update-approval'
 import { useOrcaVersion } from '../state/use-plugin-page-navigation'
-import { PluginUpdatePublisher, PluginUpdateVersions } from './PluginUpdateIdentity'
-import { PluginUpdateAdditionList } from './PluginUpdateReview'
-import { pluginUpdateAdditions } from './plugin-update-additions'
 
 /** Plugins the toast shows; more than this goes to the dialog, with no approval in the toast. */
 const SHOWN_PLUGINS = 3
@@ -57,53 +53,6 @@ function useLoadedNotices(notices: readonly PluginUpdateReviewNotice[]): Loaded 
   return loaded
 }
 
-function ToastPlugin({
-  notice,
-  update,
-  installed
-}: {
-  notice: PluginUpdateReviewNotice
-  update: LoadedUpdate | undefined
-  installed: PluginHostListEntry | undefined
-}): React.JSX.Element {
-  const t = useTranslate()
-  const { lines, compared } = update
-    ? pluginUpdateAdditions(update.preview, update.installedManifest, t)
-    : { lines: [], compared: true }
-  return (
-    <div data-plugin-update-toast={notice.pluginKey} className="space-y-1.5">
-      <div className="flex items-center gap-2">
-        {installed ? <PluginRowArt entry={pluginListEntryFromInstalled(installed)} /> : null}
-        <div className="min-w-0 flex-1 space-y-0.5">
-          <p className="truncate text-sm font-medium">
-            {notice.name}
-            {update ? (
-              <PluginUpdateVersions from={installed?.version} preview={update.preview} />
-            ) : (
-              <span className="ml-1.5 text-xs font-normal text-muted-foreground">
-                {notice.version}
-              </span>
-            )}
-          </p>
-          {update ? (
-            <PluginUpdatePublisher pluginKey={notice.pluginKey} preview={update.preview} />
-          ) : null}
-        </div>
-      </div>
-      {compared ? null : (
-        <p className="text-xs text-muted-foreground">
-          {t(
-            'auto.components.settings.PluginUpdateReviewToast.uncompared',
-            'Orca couldn’t compare it with the version you approved.'
-          )}
-        </p>
-      )}
-      {/* Why every line: "Approve & update" here approves all of it. */}
-      {lines.length > 0 ? <PluginUpdateAdditionList lines={lines} className="text-xs" /> : null}
-    </div>
-  )
-}
-
 /**
  * Held updates, approvable in place: each plugin with its publisher and what it adds, "Approve &
  * update" to approve exactly that, or "Details" for the full review. Why the quick path only when
@@ -125,6 +74,7 @@ export function PluginUpdateReviewToast({
   const loaded = useLoadedNotices(notices)
   const [busy, setBusy] = useState(false)
   const [failure, setFailure] = useState<string | null>(null)
+  const [unattemptedKeys, setUnattemptedKeys] = useState<ReadonlySet<string>>(() => new Set())
   // Why kept: a retry after a partial failure must not reinstall the ones that landed.
   const [landed, setLanded] = useState<ReadonlySet<string>>(() => new Set())
   const cardRef = useRef<HTMLDivElement>(null)
@@ -168,7 +118,8 @@ export function PluginUpdateReviewToast({
     }
     setBusy(true)
     setFailure(null)
-    const { approved, held, failed } = await installUpdates(
+    setUnattemptedKeys(new Set())
+    const { approved, held, failed, unattempted, error } = await installUpdates(
       notices.flatMap((notice) => {
         const preview = loaded.updates.get(notice.pluginKey)?.preview
         return preview && !landed.has(notice.pluginKey)
@@ -179,15 +130,17 @@ export function PluginUpdateReviewToast({
     setLanded(
       new Set([...landed, ...[...approved, ...held].map(({ preview }) => preview.pluginKey)])
     )
+    setUnattemptedKeys(new Set(unattempted.map(({ preview }) => preview.pluginKey)))
     setBusy(false)
-    if (failed.length === 0) {
+    if (failed.length === 0 && unattempted.length === 0) {
       onResolved(notices)
       return
     }
     setFailure(
-      t('auto.components.settings.PluginUpdateReviewToast.failed', 'Couldn’t update {{value0}}', {
-        value0: failed.map(({ name }) => name).join(', ')
-      })
+      error ??
+        t('auto.components.settings.PluginUpdateReviewToast.failed', 'Couldn’t update {{value0}}', {
+          value0: failed.map(({ name }) => name).join(', ')
+        })
     )
   }
   const [only] = notices
@@ -235,11 +188,21 @@ export function PluginUpdateReviewToast({
         ) : (
           <div className="space-y-3">
             {notices.slice(0, SHOWN_PLUGINS).map((notice) => (
-              <ToastPlugin
+              <PluginUpdateReviewToastRow
                 key={notice.pluginKey}
                 notice={notice}
                 update={loaded.updates.get(notice.pluginKey)}
                 installed={loaded.installed.get(notice.pluginKey)}
+                status={
+                  landed.has(notice.pluginKey)
+                    ? t('auto.components.settings.PluginCardAction.installed', 'Installed')
+                    : unattemptedKeys.has(notice.pluginKey)
+                      ? t(
+                          'auto.components.settings.PluginUpdateReviewToast.notAttempted',
+                          'Not attempted'
+                        )
+                      : undefined
+                }
               />
             ))}
             {notices.length > SHOWN_PLUGINS ? (

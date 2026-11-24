@@ -1,13 +1,14 @@
-import type { PluginBlockNotice } from '../../../shared/plugins/catalog/plugin-kill-list'
+import type {
+  PluginMarketplaceInstallPreview,
+  PluginMarketplaceInstallResult,
+  PluginMarketplacePreviewIdentity
+} from './plugin-marketplace-install-types'
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import type { PluginManifest } from '../../../shared/plugins/manifest/plugin-manifest'
-import type { PluginHostImages } from '../../../shared/plugins/images/plugin-image-url'
 import type { PluginImageCache } from '../media/plugin-image-cache'
 import { cachePluginPreviewImages } from './plugin-marketplace-preview-images'
 import { readPluginVmRecipeIdentities } from '../contributions/plugin-vm-recipe-identities'
-import type { PluginVmRecipeIdentities } from '../../../shared/plugins/approval/plugin-update-access-growth'
 import { pluginCatalogReleaseCompatibilityError } from '../../../shared/plugins/manifest/plugin-manifest-compatibility'
 import { isQualifiedPluginKey } from '../../../shared/plugins/manifest/plugin-manifest'
 import { getUserPluginsDir } from '../discovery/plugin-discovery'
@@ -39,36 +40,11 @@ import {
   type PluginInstallTrigger
 } from '../../telemetry/plugin-install-telemetry'
 
-export type PluginMarketplaceInstallPreview = {
-  marketplaceSourceId: string
-  marketplaceName: string
-  marketplaceOwner: string
-  marketplaceCommit: string
-  pluginKey: string
-  source: PluginMarketplaceListing['source']
-  resolvedCommit: string
-  contentHash: string
-  consentFingerprint: string
-  manifest: PluginManifest
-  official: boolean
-  managedByTeams?: string[]
-  bundled: boolean
-  blockedByKillList?: PluginBlockNotice
-  /** The manifest's images, verified at preview and cached by hash. */
-  images?: PluginHostImages
-  /** What each recipe file can run, read before the staging tree is deleted; null if unreadable. */
-  vmRecipeIdentities?: PluginVmRecipeIdentities
-  /** The catalog now points at a different repository than the installed copy came from. */
-  repositoryMoved?: true
-}
-
-/** `repositoryMoved`: this replaced an install that came from a different repository. */
-export type PluginMarketplaceInstallResult = PluginInstallResult & { repositoryMoved?: true }
-
-export type PluginMarketplacePreviewIdentity = Pick<
+export type {
   PluginMarketplaceInstallPreview,
-  'marketplaceSourceId' | 'marketplaceCommit' | 'pluginKey' | 'resolvedCommit'
->
+  PluginMarketplaceInstallResult,
+  PluginMarketplacePreviewIdentity
+} from './plugin-marketplace-install-types'
 
 export class PluginMarketplaceInstaller {
   private readonly marketplace: PluginMarketplaceService
@@ -76,7 +52,8 @@ export class PluginMarketplaceInstaller {
   private readonly hostVersion: string
   private readonly blockedPluginReason: (pluginKey: string) => string | null
   private readonly imageCache: PluginImageCache | null
-  private readonly revokeConsent: (pluginKey: string) => Promise<void>
+  private readonly revokeConsent: (pluginKey: string) => void
+  private readonly reconcileConsent: () => Promise<void>
 
   constructor(options: {
     marketplace: PluginMarketplaceService
@@ -84,10 +61,12 @@ export class PluginMarketplaceInstaller {
     hostVersion: string
     blockedPluginReason?: (pluginKey: string) => string | null
     imageCache?: PluginImageCache
-    revokeConsent: (pluginKey: string) => Promise<void>
+    revokeConsent: (pluginKey: string) => void
+    reconcileConsent?: () => Promise<void>
   }) {
     this.imageCache = options.imageCache ?? null
     this.revokeConsent = options.revokeConsent
+    this.reconcileConsent = options.reconcileConsent ?? (() => Promise.resolve())
     this.marketplace = options.marketplace
     this.userDataPath = options.userDataPath
     this.hostVersion = options.hostVersion
@@ -197,9 +176,9 @@ export class PluginMarketplaceInstaller {
     if (!sourceState) {
       return { ok: false, error: 'marketplace source is no longer configured' }
     }
-    // Why read first: the install rewrites the lock entry this comparison needs.
-    const priorEntry = await this.readLockEntry(preview.pluginKey)
-    const repositoryMoved = marketplaceInstallMoved(priorEntry, listing.source)
+    let previousVersion: string | null = null
+    let repositoryMoved = false
+    let consentRevoked = false
     const result = await installPluginFromMarketplace({
       pluginsDir: getUserPluginsDir(this.userDataPath),
       hostVersion: this.hostVersion,
@@ -216,11 +195,18 @@ export class PluginMarketplaceInstaller {
         ...(listing.source.path ? { path: listing.source.path } : {})
       },
       ...(listing.release ? { release: listing.release } : {}),
-      withPublication: (publish) =>
-        withMarketplaceInstallEligibility(this.marketplace, preview, async () => {
-          await (repositoryMoved ? this.revokeConsent(preview.pluginKey) : undefined)
-          await publish()
-        }),
+      withPublication: (publish, previous) => {
+        const priorEntry = previous ?? null
+        previousVersion = priorEntry?.version ?? null
+        repositoryMoved = marketplaceInstallMoved(priorEntry, listing.source)
+        return withMarketplaceInstallEligibility(this.marketplace, listing, () => {
+          if (repositoryMoved) {
+            consentRevoked = true
+            this.revokeConsent(preview.pluginKey)
+          }
+          return publish()
+        })
+      },
       blockedPluginReason: (key) => {
         if (
           options.stillAllowed?.() === false ||
@@ -236,12 +222,17 @@ export class PluginMarketplaceInstaller {
         ? { expectedInstalledContentHash: options.expectedInstalledContentHash }
         : {})
     })
+    if (consentRevoked) {
+      await this.reconcileConsent().catch((error) =>
+        console.warn('[plugins] consent reconciliation failed:', error)
+      )
+    }
     if (result.ok) {
       trackPluginInstalled({
         marketplaceUrl: sourceState.source.url,
         plugin_key: result.pluginKey,
         version: result.version,
-        kind: pluginInstallKind(priorEntry?.version ?? null, result.version),
+        kind: pluginInstallKind(previousVersion, result.version),
         trigger: options.trigger ?? 'catalog'
       })
     }
