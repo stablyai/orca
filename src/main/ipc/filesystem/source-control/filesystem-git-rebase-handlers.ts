@@ -37,7 +37,7 @@ export function registerFilesystemGitRebaseHandlers({ store }: FilesystemHandler
         args.worktreePath,
         worktreePath
       )
-      return continueRebase(worktreePath, args.action === 'skip' ? 'skip' : 'continue', {
+      return continueRebase(worktreePath, 'continue', {
         ...gitOptions,
         admissionTier: 'interactive',
         expected: args.expected
