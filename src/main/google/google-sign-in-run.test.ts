@@ -156,3 +156,102 @@ describe('the Google app a sign-in goes through', () => {
     expect((await readGoogleAccount('me@gmail.com'))?.client).toEqual(OWN)
   })
 })
+
+/** Signs in through the loopback return, with Google's token endpoint answering `token`. */
+async function failedSignIn(token: () => Promise<Response>) {
+  const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+  const http: typeof fetch = async (input) =>
+    String(input).startsWith('https://oauth2.googleapis.com/token') ? token() : Response.json({})
+  let page: Promise<string> = Promise.resolve('')
+  const error = await runGoogleSignIn(
+    { http, now: () => 1_000, client: () => CURRENT },
+    { choices: [], openBrowser: false },
+    {
+      signal: new AbortController().signal,
+      onPrompt: (prompt) => {
+        const state = new URL(prompt.authorizeUrl).searchParams.get('state')
+        page = fetch(`${prompt.redirectUri}?state=${state}&code=the-code`).then((r) => r.text())
+      },
+      nextCode: () => new Promise(() => {})
+    }
+  ).then(
+    () => null,
+    (failure: unknown) => (failure instanceof Error ? failure.message : String(failure))
+  )
+  const logged = warn.mock.calls.map((call) => String(call[0]))
+  warn.mockRestore()
+  return { error, page: await page, logged }
+}
+
+const tokens = (overrides: Record<string, unknown> = {}) =>
+  Promise.resolve(
+    Response.json({
+      access_token: 'access',
+      expires_in: 3600,
+      refresh_token: 'refresh',
+      scope: 'openid email',
+      id_token: idToken('me@gmail.com'),
+      ...overrides
+    })
+  )
+
+describe('a Google sign-in that fails after Google returned', () => {
+  it('says Orca couldn’t reach Google, in the tab too, when the exchange can’t connect', async () => {
+    const { error, page, logged } = await failedSignIn(() =>
+      Promise.reject(new TypeError('fetch failed'))
+    )
+    expect(error).toBe(
+      'Orca couldn’t reach Google from this computer. Check your VPN, proxy or HTTPS inspection, then try again.'
+    )
+    expect(page).toContain('Orca couldn’t reach Google from this computer.')
+    expect(logged).toEqual(['[google] sign-in failed at token exchange: network'])
+  })
+
+  it('names the client secret when Google rejects the app', async () => {
+    const { error, logged } = await failedSignIn(() =>
+      Promise.resolve(Response.json({ error: 'invalid_client' }, { status: 401 }))
+    )
+    expect(error).toBe(
+      'Google rejected this app’s client secret. Download the client file again and import it in Orca.'
+    )
+    expect(logged).toEqual(['[google] sign-in failed at token exchange: invalid_client'])
+  })
+
+  it('asks to start again when Google already spent the sign-in', async () => {
+    const { error, logged } = await failedSignIn(() =>
+      Promise.resolve(Response.json({ error: 'invalid_grant' }, { status: 400 }))
+    )
+    expect(error).toBe(
+      'Google says this sign-in was already used or has expired. Start again in Orca.'
+    )
+    expect(logged).toEqual(['[google] sign-in failed at token exchange: invalid_grant'])
+  })
+
+  it('says Google didn’t name the account when there is no id token', async () => {
+    const { error, logged } = await failedSignIn(() => tokens({ id_token: undefined }))
+    expect(error).toBe('Google didn’t say which account signed in. Try again.')
+    expect(logged).toEqual(['[google] sign-in failed at account: no_account'])
+  })
+
+  it('says the sign-in won’t last when there is no refresh token', async () => {
+    const { error, logged } = await failedSignIn(() => tokens({ refresh_token: undefined }))
+    expect(error).toBe('Google didn’t return a lasting sign-in. Try again.')
+    expect(logged).toEqual(['[google] sign-in failed at account: no_refresh_token'])
+  })
+
+  it('says the account couldn’t be saved when writing it fails', async () => {
+    // A folder where the account's file goes: reading it finds nothing, writing it fails.
+    const file = join(
+      home.dir,
+      '.orca',
+      'google',
+      'accounts',
+      `${Buffer.from('me@gmail.com').toString('base64url')}.enc`
+    )
+    mkdirSync(file, { recursive: true })
+    writeFileSync(join(file, 'keep'), 'x')
+    const { error, logged } = await failedSignIn(() => tokens())
+    expect(error).toBe('Orca couldn’t save the Google account on this computer. Try again.')
+    expect(logged).toEqual(['[google] sign-in failed at save: save_failed'])
+  })
+})
