@@ -69,14 +69,19 @@ export function activateTerminalTabOnOwner(
   if (!environmentId || !isWebRuntimeSessionActive(environmentId)) {
     return
   }
+  // Bind to the pairing at the gesture: activation awaits a lazy import before its RPC, and must
+  // never pick up a pairing made meanwhile. A caller naming the owner needs a known pairing.
+  const pairingRevision =
+    expectedPairingRevision ?? captureWebSessionIntentOwner(environmentId).pairingRevision
+  if (pairingRevision === undefined && ownerEnvironmentId !== undefined) {
+    return
+  }
   void activateWebRuntimeSessionTab({
     worktreeId,
     tabId,
     environmentId,
     leafId,
-    // Bind to the pairing at the gesture: activation awaits a lazy import before its RPC.
-    expectedPairingRevision:
-      expectedPairingRevision ?? captureWebSessionIntentOwner(environmentId).pairingRevision,
+    expectedPairingRevision: pairingRevision,
     expectedCurrentLocalTabId: resolveWebSessionVisibleTabId(state, worktreeId)
   })
 }

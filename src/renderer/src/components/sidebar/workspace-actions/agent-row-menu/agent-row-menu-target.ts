@@ -19,7 +19,7 @@ import { hasTerminalTabRenameListener } from '@/components/tab-bar/terminal-tabs
 import { resolveUnmirroredAgentTerminalOwner } from '@/lib/workspace/tabs/terminal-tab-owner-activation'
 import { selectKnownWorktreeById } from '@/store/workspaces/selection/known-worktree-selection'
 import { isWorktreeRetiredByRemoval } from '../../../../../../shared/worktree/removal/removal-visibility'
-import { runtimeEnvironmentIdOrLocalUnlessTwin } from '@/lib/workspace/ownership/worktree-runtime-owner'
+import { runtimeEnvironmentIdForWorkspaceOwner } from '@/lib/workspace/ownership/resolve-owner'
 
 export type AgentRowMenuRowRef = {
   worktreeId: string
@@ -190,15 +190,19 @@ export function getAgentRowRenameListenerId(target: AgentRowMenuTarget): string 
       : null
 }
 
-/** Fork prepares and launches by workspace ID, so the row offers it only when both ends are this computer. */
+/** Fork prepares, launches and reveals by workspace ID, so the row offers it only for a local
+ *  chat whose workspace this computer alone owns; a same-ID copy on another host hides it. */
 function canForkOnThisComputer(state: AppState, target: AgentRowMenuTarget): boolean {
-  return (
-    target.kind === 'chat' &&
-    target.chatAgent !== null &&
-    target.executionHostId === LOCAL_EXECUTION_HOST_ID &&
-    (!target.cardHostId || target.cardHostId === LOCAL_EXECUTION_HOST_ID) &&
-    runtimeEnvironmentIdOrLocalUnlessTwin(state, target.worktreeId) === null
-  )
+  if (
+    target.kind !== 'chat' ||
+    target.chatAgent === null ||
+    target.executionHostId !== LOCAL_EXECUTION_HOST_ID ||
+    (target.cardHostId && target.cardHostId !== LOCAL_EXECUTION_HOST_ID)
+  ) {
+    return false
+  }
+  const owner = runtimeEnvironmentIdForWorkspaceOwner(state, { workspaceId: target.worktreeId })
+  return owner.kind === 'resolved' && owner.environmentId === null
 }
 
 export function getAgentRowMenuActions(
