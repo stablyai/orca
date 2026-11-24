@@ -4,7 +4,7 @@ import {
   readPairedServerSavedPortForwards,
   type PairedServerSavedPortForwards
 } from '../../../shared/remote-runtime/host-catalog/paired-server-saved-port-forwards'
-import { getSshTargetRegistryStore } from '../../ssh/targets/ssh-target-registry'
+import { persistedStore } from '../../ipc/ssh/ssh-ipc-context'
 import {
   nextSavedPortForwards,
   type ForwardMapping
@@ -43,7 +43,8 @@ export function savedForwardLocalPorts(): Set<number> {
     ...savedPairedPortForwardEnvironmentIds().flatMap(
       (id) => savedPairedPortForwards(id)?.forwards.map((forward) => forward.localPort) ?? []
     ),
-    ...(getSshTargetRegistryStore()?.listTargets() ?? []).flatMap((target) =>
+    // Every persisted target, including a suspended recipe VM's the SSH list leaves out.
+    ...(persistedStore?.getSshTargets() ?? []).flatMap((target) =>
       (target.portForwards ?? []).map((forward) => forward.localPort)
     )
   ])
