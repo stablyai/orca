@@ -691,6 +691,7 @@
     "bots.access.titleMany",
     "bots.access.titleOne",
     "bots.apps.add",
+    "bots.apps.addAppsTitle",
     "bots.apps.line.google",
     "bots.automations.deleteDescription",
     "bots.connect.notYou",

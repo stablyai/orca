@@ -155,7 +155,7 @@ export function GoogleAccountsDialog({
         className="flex max-h-[calc(100vh-4rem)] flex-col overflow-hidden sm:max-w-115"
       >
         <DialogTitle className="sr-only">
-          {t('bots.apps.title', 'Add to {{bot}}', { bot: bot.name })}
+          {t('bots.apps.addAppsTitle', 'Add apps to {{bot}}', { bot: bot.name })}
         </DialogTitle>
         {open ? <GoogleAccountsStep bot={bot} onClose={() => onOpenChange(false)} /> : null}
       </DialogContent>
