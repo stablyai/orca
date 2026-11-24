@@ -14,7 +14,7 @@ import {
 } from '../../../bots/bot-items-input'
 import { sessionCallerOf } from '../../orchestration/addressing/orchestration-caller-identity'
 import type { RpcContext } from '../core'
-import { readBotTurn } from './orchestration/messaging/bot-recipient'
+import { readBotTurnOrigin } from './orchestration/messaging/bot-turn-origin'
 import { botChatAddress } from './orchestration/messaging/bot-chat-address'
 import { sendToBot } from './orchestration/messaging/bot-request-send'
 import {
@@ -92,15 +92,12 @@ export async function addItem(
  *  there; none when the turn can't be read, which never stops the add. */
 async function originUrl(context: RpcContext, sessionId: string): Promise<string | null> {
   try {
-    // Only the running turn's own window can name a place, so the read never widens past it.
-    const { turn } = await readBotTurn(
+    const origin = await readBotTurnOrigin(
       context.runtime,
       context.runtime.getOrchestrationDb(),
-      sessionId,
-      undefined,
-      true
+      sessionId
     )
-    return turn.originPlace?.url ?? null
+    return origin?.url ?? null
   } catch (error) {
     // A newest turn only the whole conversation's sends could place: no origin, as designed.
     if (!(error instanceof Error && error.name === 'JournalWindowNotIndexed')) {

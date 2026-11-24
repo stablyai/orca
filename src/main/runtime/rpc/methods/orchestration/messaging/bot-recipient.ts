@@ -181,7 +181,7 @@ export function creatorSession(
 }
 
 // Every source's conversation id starts with its workspace (the cloud's botConversationId).
-function workspaceOf(externalId: string): string | null {
+export function workspaceOf(externalId: string): string | null {
   return externalId.split(':')[0] || null
 }
 
@@ -258,9 +258,7 @@ export async function readBotTurn(
   runtime: OrcaRuntimeService,
   db: OrchestrationDb,
   sessionId: string,
-  opening?: AgentJournalMessageItem,
-  /** Only the newest turns, never widened: for what the running turn alone can say. */
-  newestOnly = false
+  opening?: AgentJournalMessageItem
 ): Promise<{
   turn: BotActingTurn
   conversation: BotRequestConversation | null
@@ -289,21 +287,12 @@ export async function readBotTurn(
     botRequestActsFor: (messageId: string) => botRequestActsFor(db, messageId),
     conversationActsFor: actsFor,
     automationPlace: (run?: AutomationRunMessage) =>
-      automationPlace(
-        runtime,
-        sessionId,
-        run && { automationId: run.automation.id, runId: run.runId, trigger: run.trigger }
-      ),
+      automationPlace(runtime, sessionId, run, conversation !== null),
     conversationWorkspaceId: workspaceId
   }
   const turn = opening
     ? readBotActingTurn([openingItem(opening)], lookups, [])
-    : await readNewestBotActingTurn(
-        await host.journalReads(sessionId),
-        lookups,
-        undefined,
-        !newestOnly
-      )
+    : await readNewestBotActingTurn(await host.journalReads(sessionId), lookups)
   // The prompt that opened the turn names its event; a conversation an automation or request started keeps it.
   const triggeredBy = turn.triggeredBy ?? recorded?.triggeredBy ?? null
   return { turn, conversation, actsFor, triggeredBy }

@@ -4,6 +4,7 @@ import { isFinalAutomationRunStatus } from '../../../../../../shared/automations
 import { isConnectorSource } from '../../../../../../shared/automation-event-triggers'
 import type { BotWakingPlace } from '../../../../../bots/bot-request-asker'
 import type { OrcaRuntimeService } from '../../../../orca-runtime'
+import type { AutomationRunMessage } from '../../../../../../shared/automations/automation-run-message'
 
 /** The automation run in progress in this chat: the one its prompt records, read among that
  *  automation's runs alone; else (an older prompt) the only one in progress. Where its event happened,
@@ -11,7 +12,7 @@ import type { OrcaRuntimeService } from '../../../../orca-runtime'
 function runningAutomationRun(
   runtime: OrcaRuntimeService,
   sessionId: string,
-  recorded?: { automationId: string; runId: string; trigger: string }
+  recorded?: { automationId: string; runId: string }
 ) {
   const running = (
     recorded
@@ -25,30 +26,46 @@ function runningAutomationRun(
 export function automationPlace(
   runtime: OrcaRuntimeService,
   sessionId: string,
-  recorded?: { automationId: string; runId: string; trigger: string }
+  recorded: AutomationRunMessage | undefined,
+  /** The chat answers its event's thread, which a run whose results go there runs in. */
+  answersThread: boolean
 ): BotWakingPlace | null {
-  // A scheduled, manual or wait run's prompt names no event, so no run need be read.
+  // A scheduled or manual run's prompt names no event, so no run need be read.
   if (recorded && recorded.trigger !== 'event') {
     return null
   }
-  const run = runningAutomationRun(runtime, sessionId, recorded)
+  const run = runningAutomationRun(
+    runtime,
+    sessionId,
+    recorded && { automationId: recorded.automation.id, runId: recorded.runId }
+  )
   const event = run?.trigger === 'event' ? run.event : undefined
-  if (!run || !event?.subject || !isConnectorSource(event.source)) {
+  if (!event?.subject || !isConnectorSource(event.source)) {
     return null
   }
   return {
     source: event.source,
     placeId: event.subject,
     ...(event.url ? { url: event.url } : {}),
-    ...(resultsToThread(runtime, run.automationId) ? {} : { resultsElsewhere: true as const })
+    // Results set to none, the bot's Chat or another channel run outside the thread's chat.
+    ...(answersThread ? {} : { resultsElsewhere: true as const })
   }
 }
 
-/** Whether an automation posts its runs' results back to their event's thread. */
-function resultsToThread(runtime: OrcaRuntimeService, automationId: string): boolean {
-  try {
-    return runtime.showAutomation(automationId).bot?.resultsTo === 'thread'
-  } catch {
-    return false
+/** Where the running turn's own prompt says its event happened, from its record alone (no run is
+ *  read); none for a prompt from a host that recorded no event link. */
+export function recordedAutomationPlace(
+  recorded: AutomationRunMessage | undefined,
+  answersThread: boolean
+): BotWakingPlace | null {
+  const event = recorded?.trigger === 'event' ? recorded.event : undefined
+  if (!event?.url || !isConnectorSource(event.source)) {
+    return null
+  }
+  return {
+    source: event.source,
+    placeId: event.place ?? event.url,
+    url: event.url,
+    ...(answersThread ? {} : { resultsElsewhere: true as const })
   }
 }
