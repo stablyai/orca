@@ -572,7 +572,7 @@ it('saves a record whose save failed when a new drawing is stored, even if its u
   await vi.waitFor(() => expect(onDisk.get('bot-1')).toEqual(drawing))
 })
 
-it('sends again to an account that signed in while an upload was out, and keeps no record for it', async () => {
+it('sends again to an account that signed in while an upload was out', async () => {
   const bot = {
     id: 'bot-1',
     folderWorkspaceId: 'home-1',

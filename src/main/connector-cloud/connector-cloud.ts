@@ -75,8 +75,8 @@ export class ConnectorCloud {
     return this.activeAccount()
   }
 
-  // The same account as the last sign-in hook saw it (null once signing out), from memory: no profile read.
-  readonly knownAccount = (): string | null => this.lastAccount
+  // The account the last sign-in hook saw (null signing out or fenced for quit), from memory: no profile read.
+  readonly knownAccount = (): string | null => (this.options.isFenced() ? null : this.lastAccount)
 
   private noteAccount(): void {
     const account = this.signingOut ? null : this.options.account()

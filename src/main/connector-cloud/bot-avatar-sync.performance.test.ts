@@ -74,3 +74,75 @@ it('reads no profile for the account however many bots are sent', async () => {
   expect(await accountReadsForSends(10)).toBe(0)
   expect(await accountReadsForSends(100)).toBe(0)
 })
+
+// Icon reads queued bots start once quit fences the connector, after the four sends out answer.
+async function iconReadsAfterFence(bots: number): Promise<number> {
+  let fenced = false
+  const connector = new ConnectorCloud({
+    userDataPath: '/nonexistent',
+    origin: 'https://cloud.invalid',
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: knownAccount() never touches the machine.
+    machine: {} as ConnectorMachine,
+    account: () => 'acct-1',
+    isFenced: () => fenced,
+    mintFor: () => {
+      throw new Error('not minted here')
+    }
+  })
+  const roster = Array.from({ length: bots }, (_, index) => ({
+    id: `bot-${index}`,
+    folderWorkspaceId: `home-${index}`,
+    avatar: 'mascot:A1',
+    avatarColor: '#1f2126',
+    avatarOutfit: null,
+    slack: { appId: `A${index}`, teamId: 'T1' },
+    github: null
+  }))
+  let reads = 0
+  let sends = 0
+  let release = (): void => {}
+  const held = new Promise<void>((resolve) => (release = resolve))
+  const sync = new BotAvatarSync({
+    bots: {
+      enabled: () => true,
+      list: () => roster,
+      readAvatarImage: async () => null,
+      slackIcons: {
+        shownRecords: new BotSlackIconShownRecords({
+          read: async () => null,
+          write: async () => {},
+          exists: () => true
+        }),
+        read: async () => {
+          reads += 1
+          return null
+        }
+      }
+    },
+    cloud: () => ({
+      knownAccount: () => connector.knownAccount(),
+      call: async <T extends z.ZodType>(
+        _path: string,
+        _body: unknown,
+        schema: T
+      ): Promise<ConnectorResult<z.infer<T>>> => {
+        sends += 1
+        await held
+        return { ok: true, value: schema.parse(undefined) }
+      }
+    })
+  })
+  sync.changed()
+  await vi.waitFor(() => expect(sends).toBe(4))
+  fenced = true
+  const before = reads
+  release()
+  await new Promise((resolve) => setImmediate(resolve))
+  await new Promise((resolve) => setImmediate(resolve))
+  return reads - before
+}
+
+it('starts no queued icon read once quit fences the connector', async () => {
+  expect(await iconReadsAfterFence(100)).toBe(0)
+  expect(await iconReadsAfterFence(1000)).toBe(0)
+})
