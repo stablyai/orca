@@ -192,16 +192,36 @@ export function createClaudeStreamedTextCheckpoints(
   }
 }
 
-/** A relay ack's save, and the daemon's forced one, must cover text the checkpoints still hold. */
+/**
+ * A relay ack's save must cover text the checkpoints still hold. The daemon's forced ack asks
+ * `has`, then flushes in the same task; every other barrier (a subagent row, a prompt) flushes too,
+ * but rewriting a block's whole text there would multiply writes as it grows, so only a flush that
+ * follows a `has` that found unsaved text in the same task saves it.
+ */
 export function bindClaudeUnsavedText(
   sink: Pick<StructuredAgentSessionEventSink, 'bindLiveText'>,
   streams: readonly Pick<ClaudeStreamedTextCheckpoints, 'unsaved' | 'flush'>[]
 ): () => void {
+  let asked = false
   return (
     sink.bindLiveText?.({
       read: () => [],
-      has: () => streams.some((stream) => stream.unsaved),
-      flush: () => streams.forEach((stream) => stream.flush())
+      has: () => {
+        const unsaved = streams.some((stream) => stream.unsaved)
+        if (unsaved && !asked) {
+          asked = true
+          setImmediate(() => {
+            asked = false
+          })
+        }
+        return unsaved
+      },
+      flush: () => {
+        if (asked) {
+          asked = false
+          streams.forEach((stream) => stream.flush())
+        }
+      }
     }) ?? (() => {})
   )
 }

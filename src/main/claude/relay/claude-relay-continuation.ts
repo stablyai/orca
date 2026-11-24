@@ -3,6 +3,23 @@ import { CLAUDE_RELAY_CONTINUATION_KEY } from '../structured/journal/claude-stre
 
 type StreamLine = Record<string, unknown>
 
+const STREAM_EVENT = '{"type":"stream_event","event":{"type":"'
+const ASSISTANT = '{"type":"assistant"'
+
+/** The scope a line belongs to, from its trailing keys: the session and the launching call. */
+function scopeKey(line: string): string {
+  const read = (key: string): string => {
+    const at = line.lastIndexOf(key)
+    if (at === -1) {
+      return ''
+    }
+    const from = at + key.length
+    const end = line.indexOf(line[from] === '"' ? '"' : ',', from + 1)
+    return line.slice(from, end === -1 ? undefined : end)
+  }
+  return `${read('"session_id":')}|${read('"parent_tool_use_id":')}`
+}
+
 function isRecord(value: unknown): value is StreamLine {
   return typeof value === 'object' && value !== null && !Array.isArray(value)
 }
@@ -26,14 +43,19 @@ function streamLine(line: string): StreamLine | null {
  * its final frames carry the real message id and go on the row saved before the cut, retiring it.
  */
 export const CLAUDE_RELAY_ITEM_CONTINUATION: ProviderRelayItemContinuation = {
+  // Read on every line while a cut replay is in play, so no parse: the CLI writes `type` first
+  // and the scope keys last (a key inside the payload is an escaped string, never these bytes).
   item: (line) => {
-    const frame = streamLine(line)
-    if (!frame) {
+    const event = line.startsWith(STREAM_EVENT)
+      ? line.slice(STREAM_EVENT.length, line.indexOf('"', STREAM_EVENT.length))
+      : line.startsWith(ASSISTANT)
+        ? ''
+        : null
+    if (event === null) {
       return null
     }
-    const event = frame.type === 'stream_event' && isRecord(frame.event) ? frame.event.type : null
     return {
-      key: JSON.stringify([frame.session_id ?? null, frame.parent_tool_use_id ?? null]),
+      key: scopeKey(line),
       start: event === 'message_start',
       end: event === 'message_stop'
     }
