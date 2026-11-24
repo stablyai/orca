@@ -207,8 +207,12 @@ export function useBotAutomationDelete(
     (intent.authority.kind !== 'environment' ||
       getRuntimeEnvironmentRevision(intent.authority.environmentId) ===
         intent.authority.pairingRevision)
+  // A read whose pairing was unknown when sent is shown, but authorizes no delete.
   const canAdmit = (intent: BotAutomationDeleteRoute): boolean =>
-    !offlineNow.current && membership(intent) === 'listed' && !ops.current.has(deleteOpKey(intent))
+    !offlineNow.current &&
+    intent.authority.kind !== 'environment-unavailable' &&
+    membership(intent) === 'listed' &&
+    !ops.current.has(deleteOpKey(intent))
 
   const admit = (
     intent: BotAutomationDeleteIntent,

@@ -132,3 +132,58 @@ it('declines a stale intent when the newest raw read classifies the same id as a
   })
   expect(deletes).toBe(1)
 })
+
+it('refuses a row read while its pairing was unknown: no admission, delete or recovery read', () => {
+  const bot: BotRef = { hostId: 'runtime:paired', id: 'b1' }
+  const unavailable: BotActivityWithAuthority = {
+    ...localRead,
+    authority: { kind: 'environment-unavailable', environmentId: 'paired' }
+  }
+  let rpcs = 0
+  let recoveries = 0
+  vi.stubGlobal('api', {
+    runtime: {
+      call: async () => {
+        rpcs += 1
+        return { ok: true, result: {} }
+      }
+    },
+    runtimeEnvironments: {
+      call: async () => {
+        rpcs += 1
+        return { ok: true, result: {} }
+      }
+    }
+  })
+  const { result } = renderHook(() =>
+    useBotAutomationDelete(
+      bot,
+      {
+        read: unavailable,
+        currentRead: () => unavailable,
+        refresh: () => {},
+        refreshSettled: async () => {
+          recoveries += 1
+          return { ok: false }
+        }
+      },
+      false
+    )
+  )
+  const intent: BotAutomationDeleteIntent = {
+    id: 'digest',
+    name: 'Digest',
+    authority: unavailable.authority,
+    botKey: result.current.botKey,
+    generation: result.current.generation,
+    admittedAsTrouble: false
+  }
+  expect(result.current.membership(intent)).toBe('listed')
+  expect(result.current.canAdmit(intent)).toBe(false)
+  act(() => {
+    expect(result.current.admit(intent)).toBeNull()
+  })
+  expect(result.current.pending.size).toBe(0)
+  expect(rpcs).toBe(0)
+  expect(recoveries).toBe(0)
+})

@@ -212,7 +212,11 @@ export function BotUpcomingSection({
     return {
       pending: Boolean(pending),
       admittedAsTrouble: pending?.admittedAsTrouble ?? false,
-      disabled: Boolean(pending) || deletion.offline || !deletion.authority,
+      disabled:
+        Boolean(pending) ||
+        deletion.offline ||
+        !deletion.authority ||
+        deletion.authority.kind === 'environment-unavailable',
       request: () => request(row),
       owner: deletion.authority
         ? overrideOwner({

@@ -19,7 +19,6 @@ import {
   snapshotRuntimeEnvironmentRegistrations
 } from '@/runtime/rpc/environment-revisions/runtime-environment-revision'
 import * as registry from '@/runtime/rpc/environment-revisions/runtime-environment-revision'
-import { runtimeEnvironmentChangedFailure } from '../../../../main/ipc/runtime-environments/requests/runtime-environment-revision-guard'
 import { RUNTIME_PROTOCOL_VERSION } from '../../../../shared/remote-runtime/protocol/protocol-version'
 import type { PublicKnownRuntimeEnvironment } from '../../../../shared/remote-runtime/host-catalog/runtime-environments'
 import { createBotHostRead } from './bot-host-read-store'
@@ -72,6 +71,21 @@ const revision = (pairingRevision: number) => {
   return snapshotRuntimeEnvironmentRegistrations(['paired'])
 }
 let clock = 0
+
+/** The host's refusal of a request sent under a superseded pairing (main's revision guard). */
+const runtimeEnvironmentChangedFailure = (
+  { runtimeId }: { runtimeId: string },
+  method: string,
+  pairingChanged = false
+) => ({
+  id: method,
+  ok: false,
+  error: {
+    code: 'runtime_environment_changed',
+    message: `Runtime environment ${pairingChanged ? 'pairing' : 'identity'} changed; refresh and try again`
+  },
+  _meta: { runtimeId }
+})
 
 beforeEach(() => {
   clock = 0
