@@ -255,7 +255,6 @@ struct watcher {
     pid_t reaper;
     long long reaper_start;
     int reaper_fd;
-    int procfs_hidden;
     long long leader_start;
     char tree_tag[64];
     long long next_sweep_ns;
@@ -837,7 +836,8 @@ static int sweep_once(struct watcher *w, int signal_number) {
     scan.leader_alive = leader != NULL && !leader->zombie && leader->start == w->leader_start;
 #if defined(__linux__)
     // A hidden row this watcher can signal might be a member, so the scan can't prove absence.
-    int dropped = table_has_hidden_row || w->procfs_hidden;
+    // Read each sweep: the mount's options can change while the chat runs.
+    int dropped = table_has_hidden_row || procfs_hides_processes();
 #else
     int dropped = 0;
 #endif
@@ -1500,7 +1500,6 @@ int main(int argc, char *argv[]) {
             procfs_in_own_namespace() && read_row(getpid(), &reaper_row) == 1) {
         watcher.reaper = reaper_row.pid;
         watcher.reaper_start = reaper_row.start;
-        watcher.procfs_hidden = procfs_hides_processes();
     } else {
         watcher.reaper = getpid();
         watcher.reaper_start = -1;
