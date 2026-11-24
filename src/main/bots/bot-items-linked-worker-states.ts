@@ -5,6 +5,7 @@ import type { WorkerLineage } from '../runtime/orchestration/db/dispatch-context
 import { readWorkerDockReasons } from '../runtime/orchestration/dock/worker-dock-read'
 import type { BotWorkRuntime } from './bot-work-runtime'
 import type { BotWorkWorker } from './bot-work-types'
+import type { OrchestrationDb } from '../runtime/orchestration/db/orchestration-db'
 import { readWorkers } from './bot-work-workers-read'
 import { dataVersion, dockRevision, printKey, readPrints } from './bot-items-linked-worker-prints'
 
@@ -18,8 +19,10 @@ export type LinkedWorkerState = {
 /** A big profile's linked Dispatches (thousands) stay kept, within a few MB in all: a worker whose own
  *  read is longer isn't kept, and reports past their budget are read from the Task on use. */
 const KEPT_MAX = 8_192
-const KEPT_WORKER_MAX_CHARS = 512
+const KEPT_WORKER_MAX_CHARS = 2_048
 const KEPT_REPORT_MAX_CHARS = 1_000_000
+/** Workers kept per turn after a read, so keeping a cold profile's thousands never stalls a frame. */
+const KEEP_SLICE = 256
 const FINISHED_STATES = new Set<BotWorkWorker['state']>(['completed', 'failed', 'stopped'])
 
 type Kept = {
@@ -37,6 +40,14 @@ type Kept = {
   checkedAt: string
   /** The kept report's length, counted against its budget. */
   chars: number
+}
+
+type Finished = {
+  ref: string
+  worker: BotWorkWorker
+  report: LinkedWorkerState['report']
+  reason: string | null
+  lineage: WorkerLineage
 }
 
 export class LinkedWorkerStates {
@@ -76,8 +87,7 @@ export class LinkedWorkerStates {
     const writes = this.writes
     // Row notices, other connections' commits (which fire none here) and the dock's own revision: with
     // none since a kept worker was last checked, its rows are unchanged and no fingerprint is read.
-    const version = dataVersion(db)
-    const stamp = version === null ? null : `${writes}:${version}:${dockRevision(db)}`
+    const stamp = this.stampOf(db)
     const states = new Map<string, LinkedWorkerState | null>()
     const candidates = unique.flatMap((ref) => {
       const kept = this.kept.get(ref)
@@ -117,6 +127,18 @@ export class LinkedWorkerStates {
     const lineageOf = new Map<string, WorkerLineage>()
     const workers =
       missing.length > 0 ? await readWorkers(this.workRuntime, missing, lineageOf) : new Map()
+    // A kept worker dropped while the walk ran (its rows written or deleted) is read again, not shown stale.
+    const dropped = hits.flatMap(([ref, kept]) => (this.kept.get(ref) === kept ? [] : [ref]))
+    if (dropped.length > 0) {
+      for (const [ref, worker] of await readWorkers(this.workRuntime, dropped, lineageOf)) {
+        workers.set(ref, worker)
+      }
+      for (const ref of dropped) {
+        if (!workers.has(ref)) {
+          states.delete(ref)
+        }
+      }
+    }
     const reasons = readWorkerDockReasons(
       db,
       [...workers.values()].flatMap((worker) => worker?.dispatchId ?? [])
@@ -125,6 +147,9 @@ export class LinkedWorkerStates {
       // A Task written while the walk ran: kept workers show its report as of now.
       reports.clear()
       for (const [ref, kept] of hits) {
+        if (workers.has(ref)) {
+          continue
+        }
         states.set(ref, {
           worker: kept.worker,
           report: readReport(kept.worker.taskId) ?? null,
@@ -132,8 +157,7 @@ export class LinkedWorkerStates {
         })
       }
     }
-    const finished: [string, Kept][] = []
-    let finishedChars = 0
+    const finished: Finished[] = []
     for (const [ref, worker] of workers) {
       if (!worker) {
         states.set(ref, null)
@@ -141,15 +165,10 @@ export class LinkedWorkerStates {
       }
       // A server worker shows no report, even when a local retry of its Task has one.
       const read = worker.host === 'local' ? readReport(worker.taskId) : null
-      states.set(ref, {
-        worker,
-        report: read ?? null,
-        reason: reasons.get(worker.dispatchId) ?? null
-      })
+      const reason = reasons.get(worker.dispatchId) ?? null
+      states.set(ref, { worker, report: read ?? null, reason })
       const lineage = lineageOf.get(ref)
-      const resource = lineage?.resource
       if (
-        stamp !== null &&
         read !== undefined &&
         lineage &&
         worker.host === 'local' &&
@@ -157,44 +176,71 @@ export class LinkedWorkerStates {
         lineage.latest.status !== 'dispatched' &&
         FINISHED_STATES.has(worker.state) &&
         // A worker still on a pane reads as the fleet sees every Dispatch on it, so it stays live.
-        (!resource || resource.ownership_state === 'released')
+        (!lineage.resource || lineage.resource.ownership_state === 'released')
       ) {
-        if (JSON.stringify(worker).length <= KEPT_WORKER_MAX_CHARS) {
-          // Over the budget, the report is read from its Task on use, so it is never copied.
-          const fits = this.keptChars + finishedChars + reportLength(read) <= KEPT_REPORT_MAX_CHARS
-          const chars = fits ? reportLength(read) : 0
-          finishedChars += chars
-          // A copy: a kept substring would otherwise pin the whole Task spec or result it was cut from.
-          finished.push([
-            ref,
-            {
-              ...structuredClone({ worker, report: fits ? read : undefined }),
-              dispatchId: lineage.latest.id,
-              resourceId: resource?.id ?? null,
-              notedBy: [...new Set([ref, lineage.latest.id, worker.dispatchId])],
-              print: 0,
-              reason: reasons.get(worker.dispatchId) ?? null,
-              checkedAt: stamp ?? '',
-              chars
-            }
-          ])
-        }
+        finished.push({ ref, worker, report: read, reason, lineage })
       }
     }
-    const finishedPrints = readPrints(
-      db,
-      finished.map(([, kept]) => kept)
-    )
-    // Rows written since the read began, its fingerprints included, may be newer than what it saw.
-    if (`${this.writes}:${dataVersion(db)}:${dockRevision(db)}` === stamp) {
-      for (const [ref, kept] of finished) {
-        const print = finishedPrints.get(printKey(kept))?.print
-        if (print !== undefined) {
-          this.keep(ref, { ...kept, print })
-        }
-      }
+    if (stamp !== null && finished.length > 0) {
+      // After the reply, in slices: keeping costs a cold read nothing over reading.
+      setImmediate(() => this.keepLater(db, stamp, finished))
     }
     return states
+  }
+
+  /** Keeps what a read found finished, a slice per turn, while no write has landed since that read began;
+   *  each slice re-checks after its fingerprints are read. */
+  private keepLater(db: OrchestrationDb, stamp: string, finished: readonly Finished[]): void {
+    const orchestration = this.workRuntime.getOrchestrationDb()
+    if (orchestration !== db || this.stampOf(orchestration) !== stamp) {
+      return
+    }
+    const slice: [string, Kept][] = []
+    let sliceChars = 0
+    for (const { ref, worker, report, reason, lineage } of finished.slice(0, KEEP_SLICE)) {
+      if (JSON.stringify(worker).length > KEPT_WORKER_MAX_CHARS) {
+        continue
+      }
+      // Over the budget, the report is read from its Task on use, so it is never copied.
+      const fits = this.keptChars + sliceChars + reportLength(report) <= KEPT_REPORT_MAX_CHARS
+      const chars = fits ? reportLength(report) : 0
+      sliceChars += chars
+      // A copy: a kept substring would otherwise pin the whole Task spec or result it was cut from.
+      slice.push([
+        ref,
+        {
+          ...structuredClone({ worker, report: fits ? report : undefined }),
+          dispatchId: lineage.latest.id,
+          resourceId: lineage.resource?.id ?? null,
+          notedBy: [...new Set([ref, lineage.latest.id, worker.dispatchId])],
+          print: 0,
+          reason,
+          checkedAt: stamp,
+          chars
+        }
+      ])
+    }
+    const prints = readPrints(
+      orchestration,
+      slice.map(([, kept]) => kept)
+    )
+    if (this.stampOf(orchestration) !== stamp) {
+      return
+    }
+    for (const [ref, kept] of slice) {
+      const print = prints.get(printKey(kept))?.print
+      if (print !== undefined) {
+        this.keep(ref, { ...kept, print })
+      }
+    }
+    if (finished.length > KEEP_SLICE) {
+      setImmediate(() => this.keepLater(db, stamp, finished.slice(KEEP_SLICE)))
+    }
+  }
+
+  private stampOf(db: OrchestrationDb): string | null {
+    const version = dataVersion(db)
+    return version === null ? null : `${this.writes}:${version}:${dockRevision(db)}`
   }
 
   private keep(ref: string, kept: Kept): void {

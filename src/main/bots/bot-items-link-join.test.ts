@@ -35,6 +35,13 @@ function newJoin(): BotItemLinkJoin {
   return join
 }
 
+/** A read keeps what it found finished on the turns after it replies. */
+async function itemLinkKept(dispatchId: string, join: BotItemLinkJoin) {
+  const link = await itemLink(dispatchId, join)
+  await new Promise((resolve) => setImmediate(resolve))
+  return link
+}
+
 async function itemLink(
   dispatchId: string,
   join = newJoin()
@@ -60,7 +67,7 @@ describe('item worker links', () => {
   it('keep a settled worker until its lineage is written, then follow its new follow-up', async () => {
     const first = failedWorker('Agent process exited with code 1')
     const join = newJoin()
-    expect((await itemLink(first, join)).state).toBe('failed')
+    expect((await itemLinkKept(first, join)).state).toBe('failed')
     const walks = vi.spyOn(db, 'getDispatchContextById')
     expect((await itemLink(first, join)).state).toBe('failed')
     expect(walks).not.toHaveBeenCalled()
@@ -84,7 +91,7 @@ describe('item worker links', () => {
       JSON.stringify({ subject: 'Done', body })
     )
     const join = newJoin()
-    await itemLink(id, join)
+    await itemLinkKept(id, join)
     const walks = vi.spyOn(db, 'getDispatchContextById')
     expect((await itemLink(id, join)).report).toEqual({ subject: 'Done', body })
     expect(walks).not.toHaveBeenCalled()
@@ -93,7 +100,7 @@ describe('item worker links', () => {
   it('show a kept worker’s new report once its Task changes', async () => {
     const id = failedWorker('Agent process exited with code 1')
     const join = newJoin()
-    expect((await itemLink(id, join)).report).toBeNull()
+    expect((await itemLinkKept(id, join)).report).toBeNull()
     db.updateTaskStatus(
       db.getDispatchContextById(id)!.task_id,
       'failed',
@@ -108,7 +115,7 @@ describe('item worker links', () => {
     const report = (body: string) => JSON.stringify({ subject: 'Done', body })
     db.updateTaskStatus(taskId, 'failed', report(`a${'x'.repeat(100)}a`))
     const join = newJoin()
-    await itemLink(id, join)
+    await itemLinkKept(id, join)
     db.updateTaskStatus(taskId, 'failed', report(`a${'y'.repeat(100)}a`))
     expect((await itemLink(id, join)).report?.body).toBe(`a${'y'.repeat(100)}a`)
   })
