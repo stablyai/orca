@@ -37,7 +37,7 @@ function ownedKey(key: string, hostId: string): { workspace: string | null; id: 
   if (key.startsWith('linear:')) {
     // A project source's scope holds empty parts (`::`) of its own: find where the whole scope ends.
     let cut = key.indexOf('::')
-    let host = null
+    let host: string | null = null
     while (cut !== -1 && !host) {
       host = taskSourceCacheScopeHostId(key.slice(0, cut))
       local = key.slice(cut + 2)
