@@ -1664,6 +1664,7 @@
       "commentImageNotStored": "Only pasted or attached images can go on a comment.",
       "commentImagesTooLarge": "These images add up to {{totalMb}} MB. A comment takes up to {{maxMb}} MB.",
       "commentImagesTooMany": "Comments take up to {{max}} images.",
+      "googleAccountsChanged": "Its Google accounts changed since you opened them. Check them and save again.",
       "groupAttachFailed": "Couldn't attach the files. Try sending again in a moment.",
       "groupAttachmentsUnavailable": "This computer can't take attachments right now. Try sending again in a moment.",
       "groupBotGone": "A selected bot is no longer available.",
