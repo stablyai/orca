@@ -15,7 +15,6 @@ import {
   root,
   run,
   spawnOwned,
-  queueWriter,
   until,
   registerSlotHarness,
   WAITING,
@@ -223,12 +222,13 @@ process.exit(0)`)
 
   for (const lane of [0, 2]) {
     for (const { side, age, first } of [
-      { side: 'inside', age: 8000, first: 'returned' },
-      { side: 'outside', age: 12_000, first: 'later' }
+      { side: 'inside', age: 25_000, first: 'returned' },
+      { side: 'outside', age: 35_000, first: 'later' }
     ]) {
       it(`keeps or gives up its place on return from ${side} the expiry horizon (lane ${lane})`, async () => {
-        // expireMs = 10 * staleMs = 10 s.
-        const staleMs = 1000
+        // expireMs = 10 * staleMs = 30 s. The later waiter's 500 ms polls stay well inside the 3 s
+        // stale window even on a loaded host, so it is never set aside.
+        const staleMs = 3000
         const holder = await run({ staleMs })
         const order = []
         // The returning waiter polls far more often than the later one, so it finds its own row
@@ -266,35 +266,33 @@ process.exit(0)`)
   }
 
   it('recounts its place as soon as it starts yielding, with the same run ahead and holder', async () => {
-    // Timed recounts and launcher probes both run every staleMs / 3 = 20 s.
+    // Timed recounts run every staleMs / 3 = 20 s; launchers are probed every 500 ms, so a quick
+    // recount after the launcher exits can only come from the lane change.
     const staleMs = 60_000
     const holder = await run({ staleMs })
     run({ staleMs })
     run({ staleMs, ancestors: [await exitedPid()] })
     const launcher = spawnOwned('await next()')
     await launcher.waitFor('')
-    // The waiter probes its launcher on its first poll but cannot join until the writer leaves,
-    // so its first count, and so its timed recounts, run 10 s behind its launcher probes.
-    const writer = await queueWriter()
     const messages = []
     const waiter = observe(
       run({
         staleMs,
+        launcherCheckMs: 500,
         ancestors: [launcher.pid],
         log: (message) => messages.push({ message, at: Date.now() })
       })
     )
-    await delay(10_000)
-    await writer.kill()
     await until(() => messages.length > 0, 'first message')
     expect(messages[0].message).toContain('Position 2 of 3.')
     await launcher.kill()
     await until(
       () => messages.some(({ message }) => message.includes('has exited')),
-      'launcher exit noticed',
-      40_000
+      'launcher exit noticed'
     )
     const exited = messages.find(({ message }) => message.includes('has exited'))
+    // No timed recount can be due yet.
+    expect(exited.at - messages[0].at).toBeLessThan(15_000)
     await until(
       () =>
         messages.some(({ message, at }) => at >= exited.at && message.includes('Position 3 of 3.')),
@@ -304,8 +302,7 @@ process.exit(0)`)
     const recount = messages.find(
       ({ message, at }) => at >= exited.at && message.includes('Position 3 of 3.')
     )
-    // A timed recount would come about 10 s later; only the lane change explains this one.
-    expect(recount.at - exited.at).toBeLessThan(2000)
+    expect(recount.at - messages[0].at).toBeLessThan(15_000)
     await holder()
     expect(waiter.settled).toBe(false)
   }, 240_000)

@@ -64,7 +64,7 @@ export function queueFileFor(file) {
  * holds the lock now.
  */
 export async function acquireChangedCheckSlot(file = slotFile, options = {}) {
-  const timing = timingFor(options.staleMs ?? 30_000)
+  const timing = timingFor(options.staleMs ?? 30_000, options.launcherCheckMs)
   const pollMs = options.pollMs ?? 1000
   const log = options.log ?? console.log
   const signal = options.signal
@@ -96,9 +96,11 @@ export async function acquireChangedCheckSlot(file = slotFile, options = {}) {
   }
 }
 
-function timingFor(staleMs) {
+function timingFor(staleMs, launcherCheckMs = staleMs / 3) {
   return {
     staleMs,
+    // How often a normal-lane waiter probes its launchers (tests shorten it).
+    launcherCheckMs,
     // Waiters check in, recount and probe launchers at this cadence while they can poll.
     beatMs: staleMs / 3,
     // A holder is named only while its last heartbeat, read when the line is printed, is this recent.
@@ -130,7 +132,7 @@ class Waiter {
   /** One coherent decision under the queue's write lock; true once the slot is held. */
   poll(lock) {
     const now = Date.now()
-    if (this.lane === NORMAL && now - this.lastAncestorCheck >= this.timing.beatMs) {
+    if (this.lane === NORMAL && now - this.lastAncestorCheck >= this.timing.launcherCheckMs) {
       this.lastAncestorCheck = now
       if (this.self.ancestors.some((pid) => processGone(pid))) {
         this.lane = YIELDING

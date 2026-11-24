@@ -225,7 +225,9 @@ ${body}`
       throw new CustodyKept(`child ${child.pid} did not close`)
     }
     // A pipe broken by our own kill is expected; anything else the child's pipes reported is not.
-    const unexpected = errors.filter((error) => !(killedHere && error.code === 'EPIPE'))
+    const unexpected = errors.filter(
+      (error) => !(killedHere && ['EPIPE', 'ERR_STREAM_DESTROYED'].includes(error.code))
+    )
     if (unexpected.length > 0) {
       throw new AggregateError(unexpected, `child ${child.pid} reported errors`)
     }
@@ -241,7 +243,12 @@ ${body}`
     errors,
     output: () => output,
     send(command) {
-      child.stdin.write(`${command}\n`)
+      // A write the pipe refuses is reported through its callback, not always as an 'error' event.
+      child.stdin.write(`${command}\n`, (error) => {
+        if (error && !errors.includes(error)) {
+          errors.push(error)
+        }
+      })
     },
     async waitFor(text) {
       if (!(await started)) {
