@@ -2030,11 +2030,9 @@
       "addCustomShortcut": "新增自訂快速鍵"
     },
     "activeContent": {
-      "createTab": "建立分頁",
       "creatingTab": "建立中…",
       "fileTitle": "檔案",
       "loadingTerminal": "正在載入終端機",
-      "noTabs": "此工作階段中沒有分頁",
       "retryLoadingTerminal": "重試載入終端機",
       "terminalTakingLonger": "終端機載入時間超出預期"
     },
@@ -2120,20 +2118,10 @@
       "workflow": "背景工作流程"
     },
     "browserTabActionSheet": {
-      "forward": "前進",
-      "reload": "重新載入",
       "title": "瀏覽器"
     },
     "bulkCloseSheetActions": {
       "closeOtherTabs": "關閉其他分頁"
-    },
-    "bulkTabClose": {
-      "confirm": "關閉分頁",
-      "description": "所選分頁將會關閉。已釘選的分頁會保持開啟。",
-      "titleEditors": "要關閉所有編輯器分頁嗎？",
-      "titleLeft": "要關閉左側的分頁嗎？",
-      "titleOthers": "要關閉其他分頁嗎？",
-      "titleRight": "要關閉右側的分頁嗎？"
     },
     "commandDock": {
       "liveInputHint": "輸入的文字會直接傳送至目前使用中的終端機",
@@ -2513,7 +2501,6 @@
       "file": "檔案",
       "markdown": "Markdown",
       "markdownNote": "Markdown 筆記",
-      "newBrowser": "新瀏覽器",
       "newTab": "新分頁",
       "notesCopied": "已複製備註",
       "notesHint": "選擇要接收目前備註的代理程式工作階段。",
@@ -2529,7 +2516,6 @@
       "shellWsl": "WSL",
       "terminalName": "終端機名稱",
       "unsavedMarkdown": "尚未儲存的 Markdown 變更",
-      "urlPrompt": "請輸入網址，或留空以開啟新分頁。",
       "allowAutoClose": "允許自動關閉",
       "agents": "代理程式",
       "renameTerminalFailed": "無法重新命名終端機。{{reason}}"
@@ -2803,8 +2789,6 @@
       "waitMoment": "請稍候。"
     },
     "workerAutoClose": {
-      "running": "暫時的協作工作者 · 完成 2 分鐘後關閉",
-      "finished": "暫時的協作工作者已完成 · 將在 {{countdown}} 後關閉",
       "keepOpen": "保持開啟"
     },
     "terminalLayoutSheet": {
@@ -2871,7 +2855,6 @@
     "tabBar": {
       "oneTab": "1 個分頁",
       "tabCount": "{{count}} 個分頁",
-      "anotherNeedsYou": "另一個分頁需要你處理",
       "actionsHint": "顯示此分頁的操作",
       "next": "下一個分頁",
       "previous": "上一個分頁",

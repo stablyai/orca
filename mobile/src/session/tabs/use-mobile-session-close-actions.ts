@@ -40,6 +40,20 @@ const terminalRename = defineHostMutation({
   confirm: sendTerminalRename
 })
 
+/** The tab to open when `closing` goes: the first one to its right outside `closingTogether`, else to its left. */
+export function mobileSessionCloseLanding(
+  tabs: readonly MobileSessionTab[],
+  closing: string,
+  closingTogether: readonly string[]
+): MobileSessionTab | undefined {
+  const index = tabs.findIndex((candidate) => candidate.id === closing)
+  if (index === -1) {
+    return undefined
+  }
+  const staying = (candidate: MobileSessionTab) => !closingTogether.includes(candidate.id)
+  return tabs.slice(index + 1).find(staying) ?? tabs.slice(0, index).toReversed().find(staying)
+}
+
 export function useMobileSessionCloseActions(scope: MobileSessionContentCreateActionsModel) {
   const {
     hostId,
@@ -69,7 +83,9 @@ export function useMobileSessionCloseActions(scope: MobileSessionContentCreateAc
     unsubscribeTerminal,
     subscribeToTerminal,
     fetchTerminals,
-    showToast
+    showToast,
+    switchSessionTab,
+    switchSessionTabRef
   } = scope
   const terminalRenameWrite = useHostMutation(terminalRename, { hostId, client })
   // A refused or lost close keeps the tab, so say so rather than leave the tap unanswered.
@@ -144,7 +160,11 @@ export function useMobileSessionCloseActions(scope: MobileSessionContentCreateAc
     }
   }
 
-  async function handleCloseSessionTab(tab: MobileSessionTab) {
+  /** `closingTogether` names every tab going with this one (a split's panes), so the landing is outside them. */
+  async function handleCloseSessionTab(
+    tab: MobileSessionTab,
+    closingTogether: readonly string[] = [tab.id]
+  ) {
     if (!client) {
       return
     }
@@ -152,6 +172,22 @@ export function useMobileSessionCloseActions(scope: MobileSessionContentCreateAc
       tab.type === 'terminal' ? createClosingTerminalTab(tab, sessionTabsRef.current) : null
     if (closingTerminal) {
       closingTerminalTabsRef.current.add(closingTerminal)
+    }
+    // Why: closing the open tab lands on its neighbour before the round trip, never on an empty pane.
+    const landing =
+      activeSessionTabIdRef.current === tab.id
+        ? mobileSessionCloseLanding(sessionTabsRef.current, tab.id, closingTogether)
+        : undefined
+    if (landing) {
+      switchSessionTab(landing)
+    }
+    // A tab that stays open takes you back to it, unless you've moved on since.
+    const keepTab = (code?: string) => {
+      showCloseFailed(code)
+      // The latest switch: the one this close captured still thinks the closed tab is open.
+      if (landing && activeSessionTabIdRef.current === landing.id) {
+        switchSessionTabRef.current?.(tab)
+      }
     }
     try {
       const reply = await sessionTabClose.request(client, {
@@ -163,7 +199,7 @@ export function useMobileSessionCloseActions(scope: MobileSessionContentCreateAc
       })
       const response = sessionTabClose.interpret(reply)
       if (!response.accepted || response.value.refused) {
-        showCloseFailed(reply.ok ? undefined : reply.error.code)
+        keepTab(reply.ok ? undefined : reply.error.code)
       } else {
         const chatScope = mobileNativeChatScopeKey(hostId, worktreeId, tab.id)
         if (chatScope && response.value.retirementConfirmed) {
@@ -232,7 +268,7 @@ export function useMobileSessionCloseActions(scope: MobileSessionContentCreateAc
         }
       }
     } catch {
-      showCloseFailed()
+      keepTab()
     } finally {
       if (closingTerminal) {
         closingTerminalTabsRef.current.delete(closingTerminal)

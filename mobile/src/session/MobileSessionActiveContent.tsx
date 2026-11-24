@@ -63,8 +63,6 @@ export function MobileSessionActiveContent({
     diffComments,
     diffCommentBusy,
     createError,
-    setCreateError,
-    setShowCreateTabDrawer,
     dictationMode,
     dictationEnabled,
     toastMessage,
@@ -162,10 +160,6 @@ export function MobileSessionActiveContent({
         createError={createError}
         onReconnect={forceReconnectHost ? () => void forceReconnectHost(hostId) : null}
         onRetryTabs={() => void retryPendingTerminalRecovery()}
-        onCreateTab={() => {
-          setCreateError('')
-          setShowCreateTabDrawer(true)
-        }}
       />
     ) : activeMarkdownTab ? (
       <View style={styles.markdownFrame}>

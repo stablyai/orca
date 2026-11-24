@@ -2032,11 +2032,9 @@
       "addCustomShortcut": "カスタムショートカットを追加"
     },
     "activeContent": {
-      "createTab": "タブを作成",
       "creatingTab": "作成中…",
       "fileTitle": "ファイル",
       "loadingTerminal": "ターミナルを読み込み中…",
-      "noTabs": "このセッションにはタブがありません。",
       "retryLoadingTerminal": "ターミナルの読み込みを再試行",
       "terminalTakingLonger": "ターミナルの読み込みに予想以上の時間がかかっています。"
     },
@@ -2122,20 +2120,10 @@
       "workflow": "バックグラウンドワークフロー"
     },
     "browserTabActionSheet": {
-      "forward": "進む",
-      "reload": "リロード",
       "title": "ブラウザ"
     },
     "bulkCloseSheetActions": {
       "closeOtherTabs": "他のタブを閉じる"
-    },
-    "bulkTabClose": {
-      "confirm": "タブを閉じる",
-      "description": "選択したタブを閉じます。ピン留めしたタブは開いたままになります。",
-      "titleEditors": "すべてのエディタータブを閉じますか？",
-      "titleLeft": "左側のタブを閉じますか？",
-      "titleOthers": "他のタブを閉じますか？",
-      "titleRight": "右側のタブを閉じますか？"
     },
     "commandDock": {
       "liveInputHint": "入力したテキストは、選択中のターミナルに直接送信されます。",
@@ -2515,7 +2503,6 @@
       "file": "ファイル",
       "markdown": "Markdown",
       "markdownNote": "Markdown ノート",
-      "newBrowser": "新規ブラウザ",
       "newTab": "新規タブ",
       "notesCopied": "メモをコピーしました。",
       "notesHint": "現在のメモの送信先となる Agent セッションを選択してください。",
@@ -2531,7 +2518,6 @@
       "shellWsl": "WSL",
       "terminalName": "ターミナル名",
       "unsavedMarkdown": "Markdown の未保存の変更",
-      "urlPrompt": "URL を入力してください。空欄のままにすると新規タブが開きます。",
       "allowAutoClose": "自動終了を許可",
       "agents": "Agent",
       "renameTerminalFailed": "ターミナルの名前を変更できませんでした。{{reason}}"
@@ -2805,8 +2791,6 @@
       "waitMoment": "しばらくお待ちください。"
     },
     "workerAutoClose": {
-      "running": "一時的なオーケストレーションワーカー · 完了の2分後に閉じます",
-      "finished": "一時的なオーケストレーションワーカーが完了しました · {{countdown}}後に閉じます",
       "keepOpen": "開いたままにする"
     },
     "terminalLayoutSheet": {
@@ -2874,7 +2858,6 @@
     "tabBar": {
       "oneTab": "1 個のタブ",
       "tabCount": "{{count}} 個のタブ",
-      "anotherNeedsYou": "別のタブで確認が必要です",
       "actionsHint": "このタブの操作を表示します",
       "next": "次のタブ",
       "previous": "前のタブ",

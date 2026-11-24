@@ -33,7 +33,7 @@ export function MobileTerminalRenameModal({
   return (
     <BottomDrawer visible={renameTarget != null} onClose={() => setRenameTarget(null)}>
       <TextInputSheetContent
-        title={t('session.sheets.renameTerminal', 'Rename Terminal')}
+        title={t('session.sheets.renameTerminal', 'Rename terminal')}
         placeholder={t('session.sheets.terminalName', 'Terminal name')}
         {...sheet.sheetProps}
         onSubmit={(title) => void sheet.submit(title)}

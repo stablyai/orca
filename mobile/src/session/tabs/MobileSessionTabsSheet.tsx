@@ -1,20 +1,18 @@
-import { Fragment, useMemo, useRef, useState, type ReactNode } from 'react'
+import { Fragment, useMemo, useRef, useState } from 'react'
 import { MobileForkMarkedName } from '../fork/MobileForkMarkedName'
 import { mobileForkAccessibleName } from '../fork/mobile-fork-marked-name'
-import { Pressable, Text, View } from 'react-native'
-import { Bell, Check, Columns2, CornerDownRight, Plus, X } from 'lucide-react-native'
+import { Text, View } from 'react-native'
+import { Columns2, CornerDownRight, Plus } from 'lucide-react-native'
 import { BottomDrawer } from '../../components/bottom-drawer/BottomDrawer'
 import { ListGroup, SectionHeader } from '../../components/list/ListGroup'
-import { TailClippedText } from '../../components/list/TailClippedText'
 import { NavBarButton } from '../../components/nav-bar/NavBarButton'
 import { SheetHeader } from '../../components/nav-bar/SheetHeader'
-import { SwipeRowActions } from '../../components/list/SwipeRowActions'
-import { AgentStateDot } from '../../agents/presentation/AgentStateDot'
+import { Presence } from '../../components/motion/AutoHeight'
+import { SHEET_HEIGHT_DURATION_MS } from '../../components/motion/sheet-motion-values'
 import { useMobileTranslation } from '../../i18n/use-mobile-translation'
 import { useNow } from '../../hooks/use-now'
 import { agentStateLabel, formatTimeAgo } from '../../worktree/agent-lineage/agent-row-display'
-import { colors, radii, spacing } from '../../theme/mobile-theme'
-import { themedStyleSheet } from '../../theme/themed-styles'
+import { colors, spacing } from '../../theme/mobile-theme'
 import { useMobileColorScheme } from '../../theme/use-mobile-color-scheme'
 import {
   buildMobileSessionTabRow,
@@ -26,10 +24,16 @@ import {
   type MobileSessionTabSummary
 } from './mobile-session-tab-rows'
 import { MobileSessionTabMark } from './MobileSessionTabMark'
+import { mobileSessionTabStopKind, type MobileSessionTabStop } from './MobileSessionTabStopConfirm'
+import {
+  TABS_SHEET_TILE_SIZE,
+  TabsSheetRow,
+  TabsSheetRowDetail,
+  TabsSheetTile,
+  tabsSheetRowStyles
+} from './MobileSessionTabsSheetRow'
 import type { MobileSessionController } from '../use-mobile-session-controller'
 
-const TILE_SIZE = 34
-const TILE_DOT_RING = 2
 const GROUP_ORDER: readonly MobileSessionTabGroup[] = ['needs-you', 'working', 'other']
 
 type Entry = MobileSessionTabEntry<MobileSessionTabRow>
@@ -37,19 +41,26 @@ type Entry = MobileSessionTabEntry<MobileSessionTabRow>
 const entryGroup = (entry: Entry): MobileSessionTabGroup =>
   entry.kind === 'tab' ? entry.tab.group : entry.group
 
-/** Every tab in the workspace, what needs you first; tap one to go there, swipe one to close it. */
+/** Every tab in the workspace, what needs you first; tap one to go there, × to close it. */
 export function MobileSessionTabsSheet({
   controller,
   tabs,
   visible,
-  onClose
+  onClose,
+  onStopTabs
 }: {
   controller: MobileSessionController
   tabs: readonly MobileSessionTabSummary[]
   visible: boolean
   onClose: () => void
+  /** Asks before closing a running agent; called once this sheet has gone (nested modals, #10331). */
+  onStopTabs: (stop: MobileSessionTabStop) => void
 }) {
   const afterCloseRef = useRef<(() => void) | null>(null)
+  const closeThen = (afterClose: () => void) => {
+    afterCloseRef.current = afterClose
+    onClose()
+  }
   // Why: the drawer draws its content only while shown, so a closed sheet runs no clock and builds no rows (STA-15103).
   return (
     <BottomDrawer
@@ -65,11 +76,9 @@ export function MobileSessionTabsSheet({
         controller={controller}
         tabs={tabs}
         onClose={onClose}
-        onOpenNewTab={() => {
-          // The new-tab sheet is its own drawer; open it once this one is gone.
-          afterCloseRef.current = controller.handleOpenNewTab
-          onClose()
-        }}
+        // The new-tab sheet is its own drawer; open it once this one is gone.
+        onOpenNewTab={() => closeThen(controller.handleOpenNewTab)}
+        onStopTabs={(stop) => closeThen(() => onStopTabs(stop))}
       />
     </BottomDrawer>
   )
@@ -79,12 +88,14 @@ function MobileSessionTabsSheetContent({
   controller,
   tabs,
   onClose,
-  onOpenNewTab
+  onOpenNewTab,
+  onStopTabs
 }: {
   controller: MobileSessionController
   tabs: readonly MobileSessionTabSummary[]
   onClose: () => void
   onOpenNewTab: () => void
+  onStopTabs: (stop: MobileSessionTabStop) => void
 }) {
   useMobileColorScheme()
   const t = useMobileTranslation()
@@ -103,6 +114,9 @@ function MobileSessionTabsSheetContent({
   const [frozenGroups] = useState<ReadonlyMap<string, MobileSessionTabGroup>>(
     () => new Map(entries.map((entry) => [entry.key, entryGroup(entry)]))
   )
+  // Rows on their way out: folding shut, then gone while the computer answers; a refusal brings them back.
+  const [leaving, setLeaving] = useState<ReadonlyMap<string, 'folding' | 'gone'>>(new Map())
+  const closingKeysRef = useRef(new Set<string>())
   const sections = GROUP_ORDER.map((group) => ({
     group,
     entries: entries.filter((entry) => (frozenGroups.get(entry.key) ?? entryGroup(entry)) === group)
@@ -123,19 +137,65 @@ function MobileSessionTabsSheetContent({
     onClose()
   }
 
+  // Keyed by entry and by every pane, so a split that drops to one pane mid-close stays hidden.
+  const setLeavingState = (keys: readonly string[], state: 'folding' | 'gone' | null) =>
+    setLeaving((previous) => {
+      const next = new Map(previous)
+      for (const key of keys) {
+        if (state === null) {
+          next.delete(key)
+        } else {
+          next.set(key, state)
+        }
+      }
+      return next
+    })
+  // The row folds shut first, so the reply removes a row that is already out of sight instead of jumping the list.
   // Closing every pane closes the desktop tab, on hosts old and new.
-  const closePanes = async (panes: readonly MobileSessionTabRow[]) => {
-    for (const pane of panes) {
-      await handleCloseSessionTab(pane.tab)
+  const closeRows = (key: string, closing: readonly MobileSessionTabRow[]) => {
+    // A second tap while the row folds would close it twice and report a failure.
+    if (closingKeysRef.current.has(key)) {
+      return
     }
+    // Any pane still running asks first, whatever the split's most urgent state says.
+    const running = closing.find((row) => mobileSessionTabStopKind(row.dotState) !== null)
+    const stop = running ? mobileSessionTabStopKind(running.dotState) : null
+    if (running && stop) {
+      onStopTabs({ tabs: closing.map((row) => row.tab), title: running.title, kind: stop })
+      return
+    }
+    closingKeysRef.current.add(key)
+    const ids = closing.map((row) => row.tab.id)
+    const keys = [key, ...ids]
+    setLeavingState(keys, 'folding')
+    setTimeout(() => {
+      setLeavingState(keys, 'gone')
+      void (async () => {
+        for (const row of closing) {
+          await handleCloseSessionTab(row.tab, ids)
+        }
+        setLeavingState(keys, null)
+        closingKeysRef.current.delete(key)
+      })()
+    }, SHEET_HEIGHT_DURATION_MS)
+  }
+
+  // Each row folds on its own, keyed apart from its entry so a split's panes fold with their tab.
+  const present = (key: string, entryKey: string, row: React.JSX.Element) => {
+    const state = leaving.get(entryKey) ?? leaving.get(key)
+    if (state === 'gone') {
+      return []
+    }
+    return [<Presence key={key}>{state === 'folding' ? null : row}</Presence>]
   }
 
   const renderTab = (row: MobileSessionTabRow) => {
     const current = row.tab.id === activeSessionTabId
     const time = row.timeAt !== null ? formatTimeAgo(row.timeAt, now) : ''
-    return (
-      <SheetRow
-        key={row.tab.id}
+    return present(
+      row.tab.id,
+      row.tab.id,
+      <TabsSheetRow
         title={row.title}
         accessibilityLabel={[
           isForkedChatTab(row.tab) ? mobileForkAccessibleName(row.title) : row.title,
@@ -148,22 +208,21 @@ function MobileSessionTabsSheetContent({
           .join(', ')}
         current={current}
         onPress={() => open(row.tab)}
-        onSwipeClose={() => void handleCloseSessionTab(row.tab)}
+        onClose={() => closeRows(row.tab.id, [row])}
       >
-        <Tile
+        <TabsSheetTile
           badge={row.dotState}
           unreadBell={row.unread && row.group === 'other'}
           mark={<MobileSessionTabMark row={row} size={17} />}
         />
-        <View style={styles.text}>
-          <Text style={styles.title} numberOfLines={1}>
+        <View style={tabsSheetRowStyles.text}>
+          <Text style={tabsSheetRowStyles.title} numberOfLines={1}>
             {isForkedChatTab(row.tab) ? <MobileForkMarkedName name={row.title} /> : row.title}
           </Text>
-          <RowDetail row={row} />
+          <TabsSheetRowDetail row={row} />
         </View>
-        {time ? <Text style={styles.time}>{time}</Text> : null}
-        {current ? <CurrentCheck /> : null}
-      </SheetRow>
+        {time ? <Text style={tabsSheetRowStyles.time}>{time}</Text> : null}
+      </TabsSheetRow>
     )
   }
 
@@ -180,61 +239,64 @@ function MobileSessionTabsSheetContent({
       panes.find((pane) => pane.tab.id === activeSessionTabId) ??
       panes.find((pane) => pane.tab.isActive) ??
       panes[0]
+    const splitKey = `split:${entry.key}`
     return [
-      <SheetRow
-        key={`split:${entry.key}`}
-        title={splitTitle}
-        accessibilityLabel={[
-          splitTitle,
-          paneCount,
-          badgeState ? agentStateLabel(badgeState) : null,
-          entry.unread ? t('agents.list.unread', 'Unread') : null
-        ]
-          .filter(Boolean)
-          .join(', ')}
-        current={false}
-        onPress={() => open(target.tab)}
-        onSwipeClose={() => void closePanes(panes)}
-      >
-        <Tile
-          badge={badgeState}
-          unreadBell={unreadBell}
-          mark={<Columns2 size={17} color={colors.textSecondary} strokeWidth={2.1} />}
-        />
-        <View style={styles.text}>
-          <Text style={styles.title} numberOfLines={1}>
-            {splitTitle}
-          </Text>
-          <Text style={styles.detail} numberOfLines={1}>
-            {paneCount}
-          </Text>
-        </View>
-      </SheetRow>,
-      ...panes.map((row) => {
-        const current = row.tab.id === activeSessionTabId
-        return (
-          <SheetRow
-            key={row.tab.id}
+      ...present(
+        splitKey,
+        splitKey,
+        <TabsSheetRow
+          title={splitTitle}
+          accessibilityLabel={[
+            splitTitle,
+            paneCount,
+            badgeState ? agentStateLabel(badgeState) : null,
+            entry.unread ? t('agents.list.unread', 'Unread') : null
+          ]
+            .filter(Boolean)
+            .join(', ')}
+          current={false}
+          onPress={() => open(target.tab)}
+          onClose={() => closeRows(splitKey, panes)}
+        >
+          <TabsSheetTile
+            badge={badgeState}
+            unreadBell={unreadBell}
+            mark={<Columns2 size={17} color={colors.textSecondary} strokeWidth={2.1} />}
+          />
+          <View style={tabsSheetRowStyles.text}>
+            <Text style={tabsSheetRowStyles.title} numberOfLines={1}>
+              {splitTitle}
+            </Text>
+            <Text style={tabsSheetRowStyles.detail} numberOfLines={1}>
+              {paneCount}
+            </Text>
+          </View>
+        </TabsSheetRow>
+      ),
+      ...panes.flatMap((row) =>
+        present(
+          row.tab.id,
+          splitKey,
+          <TabsSheetRow
             title={row.title}
             accessibilityLabel={[row.title, row.stateWord, row.content].filter(Boolean).join(', ')}
-            current={current}
+            current={row.tab.id === activeSessionTabId}
             pane
             onPress={() => open(row.tab)}
-            onSwipeClose={() => void handleCloseSessionTab(row.tab)}
+            onClose={() => closeRows(row.tab.id, [row])}
           >
-            <View style={styles.paneMark}>
+            <View style={tabsSheetRowStyles.paneMark}>
               <CornerDownRight size={14} color={colors.textMuted} strokeWidth={2} />
             </View>
-            <View style={styles.text}>
-              <Text style={styles.paneTitle} numberOfLines={1}>
+            <View style={tabsSheetRowStyles.text}>
+              <Text style={tabsSheetRowStyles.paneTitle} numberOfLines={1}>
                 {row.title}
               </Text>
-              <RowDetail row={row} />
+              <TabsSheetRowDetail row={row} />
             </View>
-            {current ? <CurrentCheck /> : null}
-          </SheetRow>
+          </TabsSheetRow>
         )
-      })
+      )
     ]
   }
 
@@ -252,15 +314,15 @@ function MobileSessionTabsSheetContent({
           />
         }
       />
-      <View style={styles.body}>
+      <View style={tabsSheetRowStyles.body}>
         {sections.map((section, index) => (
           <Fragment key={section.group}>
             {sections.length > 1 ? (
               <SectionHeader title={sectionTitles[section.group]} first={index === 0} />
             ) : null}
-            <ListGroup separatorInset={spacing.lg + TILE_SIZE + spacing.md}>
+            <ListGroup separatorInset={spacing.lg + TABS_SHEET_TILE_SIZE + spacing.md}>
               {section.entries.flatMap((entry) =>
-                entry.kind === 'tab' ? [renderTab(entry.tab)] : renderSplit(entry)
+                entry.kind === 'tab' ? renderTab(entry.tab) : renderSplit(entry)
               )}
             </ListGroup>
           </Fragment>
@@ -269,157 +331,3 @@ function MobileSessionTabsSheetContent({
     </>
   )
 }
-
-function SheetRow({
-  title,
-  accessibilityLabel,
-  current,
-  pane = false,
-  onPress,
-  onSwipeClose,
-  children
-}: {
-  title: string
-  accessibilityLabel: string
-  current: boolean
-  /** A split's pane, indented under its tab. */
-  pane?: boolean
-  onPress: () => void
-  onSwipeClose: () => void
-  children: ReactNode
-}) {
-  const t = useMobileTranslation()
-  useMobileColorScheme()
-  return (
-    <SwipeRowActions
-      trailing={{
-        label: t('common.close', 'Close'),
-        accessibilityLabel: t('session.tabsSheet.closeTab', 'Close {{title}}', { title }),
-        icon: X,
-        background: colors.statusRed,
-        foreground: colors.onStatusRed,
-        onPress: onSwipeClose
-      }}
-    >
-      {(guardPress) => (
-        <Pressable
-          accessibilityRole="button"
-          accessibilityLabel={accessibilityLabel}
-          accessibilityState={{ selected: current }}
-          style={[styles.row, pane && styles.paneRow]}
-          onPress={guardPress(onPress)}
-        >
-          {({ pressed }) => (
-            <>
-              {pressed ? <View pointerEvents="none" style={styles.wash} /> : null}
-              {children}
-            </>
-          )}
-        </Pressable>
-      )}
-    </SwipeRowActions>
-  )
-}
-
-function Tile({
-  mark,
-  badge,
-  unreadBell
-}: {
-  mark: ReactNode
-  badge: MobileSessionTabSummary['dotState']
-  unreadBell: boolean
-}) {
-  const dot = badge && badge !== 'idle' ? badge : undefined
-  return (
-    <View style={styles.tile}>
-      {mark}
-      {unreadBell || dot ? (
-        <View style={styles.tileBadge}>
-          {unreadBell ? (
-            <Bell size={10} color={colors.statusAmber} fill={colors.statusAmber} />
-          ) : dot ? (
-            <AgentStateDot state={dot} decorative />
-          ) : null}
-        </View>
-      ) : null}
-    </View>
-  )
-}
-
-// The second line only when it adds to the title; paths and URLs keep their end in view.
-function RowDetail({ row }: { row: MobileSessionTabRow }) {
-  if (!row.stateWord && !row.content) {
-    return null
-  }
-  if (!row.stateWord && row.tab.type !== 'terminal' && row.tab.type !== 'agent-session') {
-    return <TailClippedText style={styles.detail}>{row.content}</TailClippedText>
-  }
-  const stateStyle =
-    row.dotState === 'failed'
-      ? styles.stateFailed
-      : row.group === 'needs-you'
-        ? styles.stateNeedsYou
-        : undefined
-  return (
-    <Text style={styles.detail} numberOfLines={1}>
-      {row.stateWord ? <Text style={stateStyle}>{row.stateWord}</Text> : null}
-      {row.stateWord && row.content ? ' · ' : ''}
-      {row.content}
-    </Text>
-  )
-}
-
-function CurrentCheck() {
-  return <Check size={18} color={colors.accentBlue} strokeWidth={2.6} />
-}
-
-const styles = themedStyleSheet(() => ({
-  body: { paddingBottom: spacing.lg },
-  // Opaque so a swipe's action stays hidden until the row slides off it.
-  row: {
-    minHeight: 52,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.md,
-    paddingHorizontal: spacing.lg,
-    paddingVertical: spacing.sm,
-    backgroundColor: colors.sheetGroup
-  },
-  // Indented under its tab's tile, so the corner arrow points into the split.
-  paneRow: { minHeight: 44, paddingLeft: 34, gap: 10, paddingVertical: 6 },
-  // A pressed row, washed like a picked segment on a sheet group.
-  wash: {
-    position: 'absolute',
-    top: 0,
-    right: 0,
-    bottom: 0,
-    left: 0,
-    backgroundColor: colors.translucentFill
-  },
-  tile: {
-    width: TILE_SIZE,
-    height: TILE_SIZE,
-    borderRadius: radii.tile,
-    backgroundColor: colors.translucentFill,
-    alignItems: 'center',
-    justifyContent: 'center'
-  },
-  // The state dot on the tile's corner, ringed in the group's colour.
-  tileBadge: {
-    position: 'absolute',
-    top: -4,
-    right: -4,
-    padding: TILE_DOT_RING,
-    borderRadius: radii.pill,
-    backgroundColor: colors.sheetGroup
-  },
-  paneMark: { width: 24, alignItems: 'center' },
-  text: { flex: 1, minWidth: 0, gap: 1 },
-  title: { fontSize: 15, fontWeight: '500', color: colors.textPrimary },
-  paneTitle: { fontSize: 14, color: colors.textPrimary },
-  detail: { fontSize: 13, color: colors.textSecondary },
-  stateNeedsYou: { color: colors.agentQuestionText },
-  stateFailed: { color: colors.statusRed },
-  time: { fontSize: 12, color: colors.textMuted, fontVariant: ['tabular-nums'] }
-}))

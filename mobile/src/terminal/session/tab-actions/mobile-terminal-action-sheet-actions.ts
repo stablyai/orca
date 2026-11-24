@@ -46,8 +46,8 @@ export function getMobileTerminalActionSheetActions<
     {
       id: 'toggleDisplayMode',
       label: phoneMode
-        ? translate('session.terminalActionSheetActions.switchToDesktop', 'Switch to Desktop')
-        : translate('session.terminalActionSheetActions.switchToPhone', 'Switch to Phone'),
+        ? translate('session.terminalActionSheetActions.switchToDesktop', 'Switch to desktop')
+        : translate('session.terminalActionSheetActions.switchToPhone', 'Switch to phone'),
       icon: phoneMode ? Monitor : Smartphone,
       onPress: () => {
         args.onDismiss()
@@ -65,7 +65,7 @@ export function getMobileTerminalActionSheetActions<
     },
     {
       id: 'clearTerminal',
-      label: translate('session.terminalActionSheetActions.clearTerminal', 'Clear Terminal'),
+      label: translate('session.terminalActionSheetActions.clearTerminal', 'Clear terminal'),
       icon: Eraser,
       onPress: () => {
         args.onDismiss()
@@ -75,7 +75,7 @@ export function getMobileTerminalActionSheetActions<
     ...(args.workerActions ?? []),
     {
       id: 'close',
-      label: translate('session.tabMenu.closeTab', 'Close Tab'),
+      label: translate('session.tabMenu.closeTab', 'Close tab'),
       icon: X,
       destructive: true,
       onPress: () => {

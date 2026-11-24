@@ -1,4 +1,5 @@
-import { Platform, StyleSheet, Text, View } from 'react-native'
+import { useEffect, useRef } from 'react'
+import { Platform, StyleSheet, Text, View, type TextInputInstance } from 'react-native'
 import { useMobileTranslation } from '../../i18n/use-mobile-translation'
 import { colors } from '../../theme/mobile-theme'
 import { themedStyleSheet } from '../../theme/themed-styles'
@@ -24,6 +25,8 @@ type Props = {
   onFocus: () => void
   onSubmit: () => void
   value: string
+  /** A blank tab has nothing to show yet, so the field takes focus once it can be typed in. */
+  focusWhenReady: boolean
 }
 
 export function MobileBrowserAddressField({
@@ -35,16 +38,26 @@ export function MobileBrowserAddressField({
   onChangeText,
   onFocus,
   onSubmit,
-  value
+  value,
+  focusWhenReady
 }: Props): React.JSX.Element {
   const t = useMobileTranslation()
   useMobileColorScheme()
+  const inputRef = useRef<TextInputInstance>(null)
+  const focusedOnceRef = useRef(false)
+  useEffect(() => {
+    if (focusWhenReady && !disabled && !focusedOnceRef.current) {
+      focusedOnceRef.current = true
+      inputRef.current?.focus()
+    }
+  }, [focusWhenReady, disabled])
   const fileLabel = focused ? null : compactMobileBrowserFileAddress(value)
   const selection = focused ? undefined : { start: 0, end: 0 }
 
   return (
     <View style={styles.host}>
       <TextField
+        inputRef={inputRef}
         style={styles.compact}
         value={value}
         onChangeText={onChangeText}

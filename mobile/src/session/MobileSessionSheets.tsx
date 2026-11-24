@@ -1,4 +1,3 @@
-import { Platform } from 'react-native'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
 import { getRepoIdFromWorktreeId } from '../../../src/shared/worktree/id'
 import { useClipboardWriter } from '../platform/clipboard/clipboard'
@@ -7,7 +6,6 @@ import { MobileSessionTerminalLayoutSheet } from '../terminal/session/pane-layou
 import { QuickCommandsSheet } from '../terminal/quick-commands/QuickCommandsSheet'
 import { triggerSuccess, triggerError } from '../platform/haptics/haptics'
 import { ActionSheetModal } from '../components/sheets/ActionSheetModal'
-import { TextInputModal } from '../components/sheets/TextInputModal'
 import { MobileTerminalRenameModal } from '../terminal/session/tab-actions/MobileTerminalRenameModal'
 import { ConfirmModal } from '../components/sheets/ConfirmModal'
 import { CustomKeyModal } from '../terminal/shortcuts/settings/CustomKeyModal'
@@ -42,8 +40,6 @@ export function MobileSessionSheets({ controller }: { controller: MobileSessionC
     setShowCreateTabDrawer,
     showQuickCommands,
     setShowQuickCommands,
-    setShowCreateBrowserModal,
-    showCreateBrowserModal,
     showTerminalLayout,
     setShowTerminalLayout,
     markdownActionTarget,
@@ -143,19 +139,10 @@ export function MobileSessionSheets({ controller }: { controller: MobileSessionC
         onCreateTerminal={(shell) =>
           void handleCreateTerminal(undefined, shell ? { shell } : undefined)
         }
-        onCreateBrowser={() => {
-          if (browserScreencastSupported !== true) {
-            showToast(
-              t(
-                'session.sheets.browserStreamingUnavailable',
-                "This host can't stream browser tabs"
-              ),
-              1600
-            )
-            return
-          }
-          setShowCreateBrowserModal(true)
-        }}
+        // A blank tab opens with its address field focused, so there's no URL to ask for first.
+        onCreateBrowser={() =>
+          void handleCreateBrowser(undefined, browserProfile.profileId ?? undefined)
+        }
         onCreateMarkdownNote={() => void handleCreateMarkdownNote()}
       />
       <ActionSheetModal
@@ -212,7 +199,7 @@ export function MobileSessionSheets({ controller }: { controller: MobileSessionC
           },
           {
             id: 'copyPath',
-            label: t('session.sheets.copyPath', 'Copy Path'),
+            label: t('session.sheets.copyPath', 'Copy path'),
             icon: FileText,
             onPress: () => {
               const target = markdownActionTarget
@@ -313,26 +300,6 @@ export function MobileSessionSheets({ controller }: { controller: MobileSessionC
       />
       <ConfirmModal {...bulkCloseConfirm} />
       <MobileTerminalRenameModal controller={controller} />
-      <TextInputModal
-        visible={showCreateBrowserModal}
-        title={t('session.sheets.newBrowser', 'New Browser')}
-        message={t('session.sheets.urlPrompt', 'Enter a URL, or leave blank for a new tab.')}
-        defaultValue=""
-        placeholder="https://example.com"
-        submitLabel={t('common.open', 'Open')}
-        allowEmpty
-        selectTextOnFocus
-        // The session page reports 'web', where RN Web maps 'url' to the URL keyboard.
-        keyboardType={Platform.OS === 'android' ? 'default' : 'url'}
-        onSubmit={(value) => {
-          void handleCreateBrowser(value, browserProfile.profileId ?? undefined).then((created) => {
-            if (created) {
-              setShowCreateBrowserModal(false)
-            }
-          })
-        }}
-        onCancel={() => setShowCreateBrowserModal(false)}
-      />
       <CustomKeyModal
         visible={showCustomKeyModal}
         onClose={() => setShowCustomKeyModal(false)}

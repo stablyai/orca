@@ -2932,11 +2932,9 @@
       "addCustomShortcut": "添加自定义快捷键"
     },
     "activeContent": {
-      "createTab": "创建标签页",
       "creatingTab": "创建中…",
       "fileTitle": "文件",
       "loadingTerminal": "正在加载终端",
-      "noTabs": "此会话中没有标签页",
       "retryLoadingTerminal": "重试加载终端",
       "terminalTakingLonger": "终端加载时间超出预期"
     },
@@ -3022,20 +3020,10 @@
       "workflow": "后台工作流程"
     },
     "browserTabActionSheet": {
-      "forward": "前进",
-      "reload": "重新加载",
       "title": "浏览器"
     },
     "bulkCloseSheetActions": {
       "closeOtherTabs": "关闭其他标签页"
-    },
-    "bulkTabClose": {
-      "confirm": "关闭标签页",
-      "description": "选中的标签页将关闭。固定的标签页将保持打开",
-      "titleEditors": "关闭所有编辑器标签页？",
-      "titleLeft": "关闭左侧标签页？",
-      "titleOthers": "关闭其他标签页？",
-      "titleRight": "关闭右侧标签页？"
     },
     "commandDock": {
       "liveInputHint": "输入的文本会直接发送到当前终端",
@@ -3426,7 +3414,6 @@
     },
     "sheets": {
       "browser": "浏览器",
-      "browserStreamingUnavailable": "此主机无法串流浏览器标签页",
       "chat": "聊天",
       "cli": "CLI",
       "cliOnly": "仅限 CLI",
@@ -3443,7 +3430,6 @@
       "file": "文件",
       "markdown": "Markdown",
       "markdownNote": "Markdown 笔记",
-      "newBrowser": "新浏览器",
       "newTab": "新标签页",
       "notesCopied": "注释已复制",
       "notesHint": "选择接收当前注释的智能体会话",
@@ -3460,7 +3446,6 @@
       "shellWsl": "WSL",
       "terminalName": "终端名称",
       "unsavedMarkdown": "未保存的 Markdown 更改",
-      "urlPrompt": "输入 URL，或留空以新建标签页",
       "allowAutoClose": "允许自动关闭",
       "agents": "智能体",
       "renameTerminalFailed": "无法重命名终端。{{reason}}"
@@ -3737,8 +3722,6 @@
       "waitMoment": "请稍候"
     },
     "workerAutoClose": {
-      "running": "临时协作工作者 · 完成 2 分钟后关闭",
-      "finished": "临时协作工作者已完成 · 将在 {{countdown}} 后关闭",
       "keepOpen": "保持打开"
     },
     "terminalLayoutSheet": {
@@ -3855,7 +3838,6 @@
     "tabBar": {
       "oneTab": "1 个标签页",
       "tabCount": "{{count}} 个标签页",
-      "anotherNeedsYou": "另一个标签页需要你处理",
       "actionsHint": "显示此标签页的操作",
       "next": "下一个标签页",
       "previous": "上一个标签页",

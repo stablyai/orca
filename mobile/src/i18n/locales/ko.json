@@ -2211,11 +2211,9 @@
       "addCustomShortcut": "사용자 지정 단축키 추가"
     },
     "activeContent": {
-      "createTab": "탭 만들기",
       "creatingTab": "만드는 중…",
       "fileTitle": "파일",
       "loadingTerminal": "터미널 로드 중",
-      "noTabs": "이 세션에는 탭이 없습니다.",
       "retryLoadingTerminal": "터미널 로드 재시도",
       "terminalTakingLonger": "터미널 준비가 예상보다 오래 걸리고 있습니다."
     },
@@ -2301,20 +2299,10 @@
       "workflow": "백그라운드 워크플로"
     },
     "browserTabActionSheet": {
-      "forward": "앞으로",
-      "reload": "새로고침",
       "title": "브라우저"
     },
     "bulkCloseSheetActions": {
       "closeOtherTabs": "다른 탭 닫기"
-    },
-    "bulkTabClose": {
-      "confirm": "탭 닫기",
-      "description": "선택한 탭을 닫습니다. 고정된 탭은 열린 상태로 유지됩니다.",
-      "titleEditors": "모든 편집기 탭을 닫을까요?",
-      "titleLeft": "왼쪽 탭을 닫을까요?",
-      "titleOthers": "다른 탭을 닫을까요?",
-      "titleRight": "오른쪽 탭을 닫을까요?"
     },
     "commandDock": {
       "liveInputHint": "입력한 텍스트가 활성 터미널로 바로 전송됩니다.",
@@ -2694,7 +2682,6 @@
       "file": "파일",
       "markdown": "Markdown",
       "markdownNote": "Markdown 노트",
-      "newBrowser": "새 브라우저",
       "newTab": "새 탭",
       "notesCopied": "메모를 복사했습니다.",
       "notesHint": "현재 메모를 보낼 에이전트 세션을 선택하세요.",
@@ -2710,7 +2697,6 @@
       "shellWsl": "WSL",
       "terminalName": "터미널 이름",
       "unsavedMarkdown": "저장되지 않은 Markdown 변경 사항",
-      "urlPrompt": "URL을 입력하세요. 비워 두면 새 탭이 열립니다.",
       "allowAutoClose": "자동 닫기 허용",
       "agents": "에이전트",
       "renameTerminalFailed": "터미널 이름을 변경하지 못했습니다. {{reason}}"
@@ -2984,8 +2970,6 @@
       "waitMoment": "잠시 기다리세요."
     },
     "workerAutoClose": {
-      "running": "임시 오케스트레이션 워커 · 완료 2분 후 닫힙니다",
-      "finished": "임시 오케스트레이션 워커 완료 · {{countdown}} 후 닫힙니다",
       "keepOpen": "열어 두기"
     },
     "terminalLayoutSheet": {
@@ -3052,7 +3036,6 @@
     "tabBar": {
       "oneTab": "탭 1개",
       "tabCount": "탭 {{count}}개",
-      "anotherNeedsYou": "다른 탭에서 확인이 필요합니다",
       "actionsHint": "이 탭의 작업을 표시합니다",
       "next": "다음 탭",
       "previous": "이전 탭",

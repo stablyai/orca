@@ -4,7 +4,6 @@ import {
   createCloseWithBulkActions
 } from './mobile-bulk-close-sheet-actions'
 import type { RpcSuccess } from '../../transport/rpc/rpc-wire-types'
-import { mobileBulkTabCloseCopy } from './mobile-bulk-tab-close-copy'
 import { useMobileTranslation } from '../../i18n/use-mobile-translation'
 import { activateMobileSessionTab } from './mobile-session-tab-activation'
 import type { MobileSessionTab, SessionTabsResult } from './mobile-session-tabs'
@@ -12,7 +11,6 @@ import type { MobileSessionCloseActionsModel } from './use-mobile-session-close-
 
 export function useMobileSessionBulkClose(scope: MobileSessionCloseActionsModel) {
   const t = useMobileTranslation()
-  const copy = mobileBulkTabCloseCopy(t)
   const {
     worktreeId,
     client,
@@ -35,15 +33,28 @@ export function useMobileSessionBulkClose(scope: MobileSessionCloseActionsModel)
   const [answerBulkClose, setAnswerBulkClose] = useState<((confirmed: boolean) => void) | null>(
     null
   )
+  // Kept once answered, so the confirm's words hold still while it slides away.
+  const [bulkCloseCount, setBulkCloseCount] = useState(0)
   const resolveBulkCloseConfirm = (confirmed: boolean) => {
     answerBulkClose?.(confirmed)
     setAnswerBulkClose(null)
   }
   const bulkCloseConfirm = {
     visible: answerBulkClose !== null,
-    title: copy.title.others,
-    message: copy.description,
-    confirmLabel: copy.confirm,
+    title:
+      bulkCloseCount === 1
+        ? t('session.bulkTabClose.titleOthers_one', 'Close {{count}} other tab?', {
+            count: bulkCloseCount
+          })
+        : t('session.bulkTabClose.titleOthers_other', 'Close {{count}} other tabs?', {
+            count: bulkCloseCount
+          }),
+    confirmLabel:
+      bulkCloseCount === 1
+        ? t('session.bulkTabClose.confirm_one', 'Close {{count}} tab', { count: bulkCloseCount })
+        : t('session.bulkTabClose.confirm_other', 'Close {{count}} tabs', {
+            count: bulkCloseCount
+          }),
     destructive: true,
     onConfirm: () => resolveBulkCloseConfirm(true),
     onCancel: () => resolveBulkCloseConfirm(false)
@@ -54,7 +65,11 @@ export function useMobileSessionBulkClose(scope: MobileSessionCloseActionsModel)
     activeSessionTabIdRef,
     switchSessionTab,
     closeSessionTab: handleCloseSessionTab,
-    confirmBulkClose: () => new Promise<boolean>((resolve) => setAnswerBulkClose(() => resolve))
+    confirmBulkClose: (count) =>
+      new Promise<boolean>((resolve) => {
+        setBulkCloseCount(count)
+        setAnswerBulkClose(() => resolve)
+      })
   })
   const closeWithBulkActions = createCloseWithBulkActions(handleCloseSessionTab, bulkCloseActions)
 

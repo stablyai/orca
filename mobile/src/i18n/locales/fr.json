@@ -2094,11 +2094,9 @@
       "addCustomShortcut": "Ajouter un raccourci personnalisé"
     },
     "activeContent": {
-      "createTab": "Créer un onglet",
       "creatingTab": "Création…",
       "fileTitle": "Fichier",
       "loadingTerminal": "Chargement du terminal",
-      "noTabs": "Aucun onglet dans cette session",
       "retryLoadingTerminal": "Réessayer de charger le terminal",
       "terminalTakingLonger": "Le chargement du terminal prend plus de temps que prévu"
     },
@@ -2200,20 +2198,10 @@
       "workflow": "Flux de travail en arrière-plan"
     },
     "browserTabActionSheet": {
-      "forward": "Suivant",
-      "reload": "Recharger",
       "title": "Navigateur"
     },
     "bulkCloseSheetActions": {
       "closeOtherTabs": "Fermer les autres onglets"
-    },
-    "bulkTabClose": {
-      "confirm": "Fermer les onglets",
-      "description": "Les onglets sélectionnés seront fermés. Les onglets épinglés resteront ouverts.",
-      "titleEditors": "Fermer tous les onglets de l’éditeur ?",
-      "titleLeft": "Fermer les onglets à gauche ?",
-      "titleOthers": "Fermer les autres onglets ?",
-      "titleRight": "Fermer les onglets à droite ?"
     },
     "commandDock": {
       "liveInputHint": "Le texte saisi est envoyé directement au terminal actif.",
@@ -2595,7 +2583,6 @@
       "file": "Fichier",
       "markdown": "Markdown",
       "markdownNote": "Note Markdown",
-      "newBrowser": "Nouveau navigateur",
       "newTab": "Nouvel onglet",
       "notesCopied": "Notes copiées",
       "notesHint": "Choisissez une session d'agent pour les notes actuelles.",
@@ -2611,7 +2598,6 @@
       "shellWsl": "WSL",
       "terminalName": "Nom du terminal",
       "unsavedMarkdown": "Modifications Markdown non enregistrées",
-      "urlPrompt": "Saisissez une URL ou laissez le champ vide pour un nouvel onglet.",
       "allowAutoClose": "Autoriser la fermeture automatique",
       "agents": "Agents",
       "renameTerminalFailed": "Impossible de renommer le terminal. {{reason}}"
@@ -2885,8 +2871,6 @@
       "waitMoment": "Patientez un instant."
     },
     "workerAutoClose": {
-      "running": "Agent d’orchestration temporaire · Se ferme 2 minutes après la fin",
-      "finished": "Agent d’orchestration temporaire terminé · Se ferme dans {{countdown}}",
       "keepOpen": "Garder ouvert"
     },
     "terminalLayoutSheet": {
@@ -2953,7 +2937,6 @@
     "tabBar": {
       "oneTab": "1 onglet",
       "tabCount": "Onglets : {{count}}",
-      "anotherNeedsYou": "un autre onglet nécessite votre attention",
       "actionsHint": "Affiche les actions de cet onglet",
       "next": "Onglet suivant",
       "previous": "Onglet précédent",

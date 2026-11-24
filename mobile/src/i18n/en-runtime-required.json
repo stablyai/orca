@@ -1224,6 +1224,12 @@
       "stateWorkingCount_one": "{{value0}} working",
       "stateWorkingCount_other": "{{value0}} working"
     },
+    "bulkTabClose": {
+      "confirm_one": "Close {{count}} tab",
+      "confirm_other": "Close {{count}} tabs",
+      "titleOthers_one": "Close {{count}} other tab?",
+      "titleOthers_other": "Close {{count}} other tabs?"
+    },
     "diffReviewScreenModel": {
       "commitFiles_one": "{{count}} file",
       "commitFiles_other": "{{count}} files",
@@ -1253,6 +1259,10 @@
     "queuedMessageCardRow": {
       "images_one": "{{count}} image",
       "images_other": "{{count}} images"
+    },
+    "tabBar": {
+      "needYou_one": "{{count}} needs you",
+      "needYou_other": "{{count}} need you"
     },
     "tabsSheet": {
       "panes_one": "{{count}} pane",

@@ -19,15 +19,10 @@ export function MobileWorkerAutoCloseStrip({
     !state || state.kept
       ? null
       : state.closesAt === null
-        ? t(
-            'session.workerAutoClose.running',
-            'Temporary orchestration worker · Closes 2 minutes after it finishes'
-          )
-        : t(
-            'session.workerAutoClose.finished',
-            'Temporary orchestration worker finished · Closes in {{countdown}}',
-            { countdown: formatWorkerAutoCloseCountdown(state.closesAt, nowMs) }
-          )
+        ? t('session.workerAutoClose.running', 'Closes 2 min after it finishes')
+        : t('session.workerAutoClose.finished', 'Closes in {{countdown}}', {
+            countdown: formatWorkerAutoCloseCountdown(state.closesAt, nowMs)
+          })
   // Fades without easing its height: the terminal under it refits on every resize.
   return (
     <Presence animateHeight={false}>
