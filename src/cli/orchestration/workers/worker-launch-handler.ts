@@ -7,6 +7,10 @@ import {
   getRepeatedStringFlag
 } from '../../arguments/flags'
 import { RuntimeClientError } from '../../runtime/connection/types'
+import {
+  isAbsoluteDirectoryPath,
+  resolveAdditionalDirectoriesFromLaunch
+} from '../../../shared/agent-session/lifecycle/records/agent-session-additional-directories'
 import type { RuntimeClient } from '../../runtime/client'
 import type { RuntimeStatus } from '../../../shared/remote-runtime/session-graph/runtime-session-contracts'
 import {
@@ -41,7 +45,30 @@ export const ORCHESTRATION_WORKER_LAUNCH_HANDLER: Record<string, CommandHandler>
     const terminal = getPresentStringFlag(flags, 'terminal')
     const model = getOptionalStringFlag(flags, 'model')
     const effort = getOptionalStringFlag(flags, 'effort')
-    const additionalDirectories = getRepeatedStringFlag(flags, 'add-dir')
+    const on = getOptionalStringFlag(flags, 'on')
+    const rawAdditionalDirectories = getRepeatedStringFlag(flags, 'add-dir')
+    let additionalDirectories: string[] = []
+    if (rawAdditionalDirectories.length > 0) {
+      if (on && rawAdditionalDirectories.some((dir) => !isAbsoluteDirectoryPath(dir.trim()))) {
+        throw new RuntimeClientError(
+          'invalid_argument',
+          '--add-dir requires absolute directory paths when targeting --on <server>.'
+        )
+      }
+      try {
+        additionalDirectories =
+          resolveAdditionalDirectoriesFromLaunch(
+            rawAdditionalDirectories,
+            undefined,
+            on ? undefined : cwd
+          ) ?? []
+      } catch (error) {
+        throw new RuntimeClientError(
+          'invalid_argument',
+          error instanceof Error ? error.message : String(error)
+        )
+      }
+    }
     if (model || effort || additionalDirectories.length > 0) {
       const status = await client.call<RuntimeStatus>('status.get')
       const capabilities = status.result.capabilities
@@ -80,7 +107,7 @@ export const ORCHESTRATION_WORKER_LAUNCH_HANDLER: Record<string, CommandHandler>
       // The host checks the caller is a bot's own chat and the item is open, then records it.
       ...(item ? { origin: `bot-item:${item}` } : {}),
       ...(forQuestion ? { forQuestion } : {}),
-      on: getOptionalStringFlag(flags, 'on'),
+      on,
       worktree: getOptionalStringFlag(flags, 'worktree'),
       name: getOptionalStringFlag(flags, 'name'),
       repo: getOptionalStringFlag(flags, 'repo'),

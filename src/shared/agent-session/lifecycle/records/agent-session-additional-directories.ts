@@ -64,7 +64,7 @@ export function extractAdditionalDirectoriesFromArgs(
   return normalizeAdditionalDirectories(directories) ?? []
 }
 
-function isAbsoluteDirectoryPath(directory: string): boolean {
+export function isAbsoluteDirectoryPath(directory: string): boolean {
   return (
     directory.startsWith('/') || /^[A-Za-z]:[/\\]/.test(directory) || directory.startsWith('\\\\')
   )
@@ -88,20 +88,50 @@ function normalizePosixSegments(raw: string): string {
 }
 
 function resolveDirectoryAgainstCwd(directory: string, cwd: string): string {
-  if (isAbsoluteDirectoryPath(directory)) {
+  const driveMatch = /^([A-Za-z]:)([/\\].*)$/.exec(cwd)
+  const uncMatch = /^(?:\\\\|\/\/)([^\\/]+)[\\/]([^\\/]+)(.*)$/.exec(cwd)
+  const dirDriveRelative = /^([A-Za-z]:)([^/\\].*)$/.exec(directory)
+
+  if (
+    /^[A-Za-z]:[/\\]/.test(directory) ||
+    directory.startsWith('\\\\') ||
+    directory.startsWith('//')
+  ) {
     return directory
   }
-  const driveMatch = /^([A-Za-z]:)([/\\].*)$/.exec(cwd)
   if (driveMatch) {
-    const joined = `${driveMatch[2].replaceAll('\\', '/')}/${directory.replaceAll('\\', '/')}`
-    return `${driveMatch[1]}${normalizePosixSegments(joined).replaceAll('/', '\\')}`
+    const [, cwdDrive, cwdRest] = driveMatch
+    if (directory.startsWith('\\') || directory.startsWith('/')) {
+      return `${cwdDrive}${normalizePosixSegments(directory.replaceAll('\\', '/')).replaceAll('/', '\\')}`
+    }
+    if (dirDriveRelative) {
+      if (dirDriveRelative[1].toLowerCase() !== cwdDrive.toLowerCase()) {
+        throw new Error(
+          `Cannot resolve drive-relative directory "${directory}" against "${cwd}". Use an absolute path.`
+        )
+      }
+      const joined = `${cwdRest.replaceAll('\\', '/')}/${dirDriveRelative[2].replaceAll('\\', '/')}`
+      return `${cwdDrive}${normalizePosixSegments(joined).replaceAll('/', '\\')}`
+    }
+    const joined = `${cwdRest.replaceAll('\\', '/')}/${directory.replaceAll('\\', '/')}`
+    return `${cwdDrive}${normalizePosixSegments(joined).replaceAll('/', '\\')}`
   }
-  if (cwd.startsWith('\\\\')) {
-    const parts = cwd.slice(2).split('\\').filter(Boolean)
-    const root = parts.length >= 2 ? `\\\\${parts[0]}\\${parts[1]}` : '\\\\'
-    const tail = `/${parts.slice(2).join('/')}/${directory.replaceAll('\\', '/')}`
-    const normalizedTail = normalizePosixSegments(tail).slice(1).replaceAll('/', '\\')
-    return normalizedTail ? `${root}\\${normalizedTail}` : root
+  if (uncMatch) {
+    const shareRoot = `\\\\${uncMatch[1]}\\${uncMatch[2]}`
+    const base =
+      directory.startsWith('\\') || directory.startsWith('/')
+        ? directory
+        : `${uncMatch[3]}/${directory}`
+    const tail = normalizePosixSegments(base.replaceAll('\\', '/')).slice(1).replaceAll('/', '\\')
+    return tail ? `${shareRoot}\\${tail}` : shareRoot
+  }
+  if (directory.startsWith('/')) {
+    return directory
+  }
+  if (dirDriveRelative) {
+    throw new Error(
+      `Cannot resolve drive-relative directory "${directory}" against "${cwd}". Use an absolute path.`
+    )
   }
   return normalizePosixSegments(`${cwd}/${directory}`)
 }

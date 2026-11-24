@@ -101,9 +101,7 @@ export async function resolveLocalWorkerStartMode(start: {
     start.agent
   )
   const mode = chatWorkerMode(hostMode, start.chat)
-  if (!start.createsWorktree) {
-    assertWorkerAdditionalDirectoriesMode(start.params.additionalDirectories, mode.mode)
-  }
+  assertWorkerAdditionalDirectoriesMode(start.params.additionalDirectories, mode.mode)
   return mode
 }
 

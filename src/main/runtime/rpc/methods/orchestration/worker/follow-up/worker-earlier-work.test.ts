@@ -6,6 +6,7 @@ import {
   assertWorkerAdditionalDirectoriesMode,
   assertWorkerLaunchPreferencesCreateTerminal
 } from '../start/launch/worker-launch-preferences'
+import { resolveLocalWorkerStartMode } from '../start/worker-chat-lineage'
 import { parseStartOptions } from './worker-earlier-work'
 
 describe('worker start_options additionalDirectories round-trip', () => {
@@ -82,7 +83,8 @@ describe('worker start_options additionalDirectories round-trip', () => {
     ).toBe(false)
   })
 
-  it('refuses --add-dir when launching or reusing a terminal worker', () => {
+  it('allows --add-dir in structured mode and refuses terminal mode or --terminal reuse', async () => {
+    expect(() => assertWorkerAdditionalDirectoriesMode(['/materials'], 'structured')).not.toThrow()
     expect(() => assertWorkerAdditionalDirectoriesMode(['/materials'], 'terminal')).toThrowError(
       /terminal/
     )
@@ -92,5 +94,42 @@ describe('worker start_options additionalDirectories round-trip', () => {
         additionalDirectories: ['/materials']
       })
     ).toThrowError(/--add-dir/)
+
+    const fakeRuntime = {
+      bots: { list: () => [] },
+      getStructuredAgentSessionCreateSupport: () => ({ supported: true })
+    } as unknown as Parameters<typeof resolveLocalWorkerStartMode>[0]['runtime']
+    await expect(
+      resolveLocalWorkerStartMode({
+        runtime: fakeRuntime,
+        mode: {
+          mode: 'structured',
+          preferred: 'structured',
+          reason: 'user_default',
+          detail: 'structured'
+        },
+        params: { additionalDirectories: ['/materials'] },
+        agent: 'antigravity',
+        worktreeId: undefined,
+        chat: null,
+        createsWorktree: true
+      })
+    ).resolves.toMatchObject({ mode: 'structured' })
+    await expect(
+      resolveLocalWorkerStartMode({
+        runtime: fakeRuntime,
+        mode: {
+          mode: 'terminal',
+          preferred: 'terminal',
+          reason: 'user_default',
+          detail: 'terminal'
+        },
+        params: { additionalDirectories: ['/materials'] },
+        agent: 'antigravity',
+        worktreeId: undefined,
+        chat: null,
+        createsWorktree: true
+      })
+    ).rejects.toThrow(/terminal/)
   })
 })
