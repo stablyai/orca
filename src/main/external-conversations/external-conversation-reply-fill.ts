@@ -132,26 +132,29 @@ export function conversationReplyFill(
     if (paused) {
       return { covered, paused: true, ...paused }
     }
-    // A row an older build admitted keeps the rule its turn began under: the marker silences the
-    // whole reply, except to its owner in their own DM.
+    // One answer per conversation, under the rule its turn began with: its earliest row's. A row an
+    // older build admitted silences the whole reply, except to its owner in their own DM.
     const markerMayQuiet = turn.bot && turn.outcome === 'success' && isQuietBotResult(turn.prose)
-    const silencedWhole = new Set<JournalConnectorReplyRow>()
-    for (const row of markerMayQuiet ? own.filter((row) => row.quietRule === undefined) : []) {
+    const silencedWhole = new Map<string, boolean>()
+    for (const row of markerMayQuiet ? own : []) {
+      const conversation = JSON.stringify([row.account, row.conversation])
+      if (silencedWhole.has(conversation)) {
+        continue
+      }
       const ownerDm =
+        row.quietRule === undefined &&
         isSlackDirectMessage(row.conversation) &&
         (ownerAsked.has(keyOf(row.account, row.deliveryId)) ||
           (await askedByOwner?.(turn.sessionId, row.messageId).catch(() => false)) === true)
-      if (!ownerDm) {
-        silencedWhole.add(row)
-      }
+      silencedWhole.set(conversation, row.quietRule === undefined && !ownerDm)
     }
     const fills: JournalConnectorReplyFill[] = []
     for (const row of own) {
+      const conversation = JSON.stringify([row.account, row.conversation])
       const { outcome, prose } = connectorReplyTurnOutcome({
         ...turn,
-        silencedWhole: silencedWhole.has(row)
+        silencedWhole: silencedWhole.get(conversation) === true
       })
-      const conversation = JSON.stringify([row.account, row.conversation])
       const answerDeliveryId = answers.get(conversation) ?? row.deliveryId
       fills.push({
         account: row.account,
