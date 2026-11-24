@@ -2,6 +2,7 @@ import { z } from 'zod'
 import type { Translate } from '@/i18n/use-translate'
 import { normalizeToolInput } from '../../../../../shared/native-chat/tools/native-chat-tool-summary'
 import { approvalRecordTool } from '../../../../../shared/agent-session/requests/prompts/agent-session-approval-tool'
+import { AGENT_PERMISSION_FLOW_RESOLVER } from '../../../../../shared/agent-session/requests/prompts/agent-session-approval-resolver'
 import type { AgentJournalApprovalItem } from '../../../../../shared/agent-session/journal/agent-session-journal-types'
 import {
   ORCHESTRATION_APPROVAL_CALLER_PREFIX,
@@ -76,10 +77,12 @@ export function ownApprovalRecordLine(
         values: { tool }
       }
     }
-    // Older builds named no one: the coordinator or a person in its chat.
+    // Older builds named no one: the coordinator or a person in its chat. Nor does the agent's own
+    // permission flow, such as a hook that allowed the call while the card was open.
     if (
-      resolvedBy.startsWith(ORCHESTRATION_APPROVAL_CALLER_PREFIX) &&
-      !resolvedBy.startsWith(ORCHESTRATION_PERSON_APPROVAL_CALLER_PREFIX)
+      resolvedBy === AGENT_PERMISSION_FLOW_RESOLVER ||
+      (resolvedBy.startsWith(ORCHESTRATION_APPROVAL_CALLER_PREFIX) &&
+        !resolvedBy.startsWith(ORCHESTRATION_PERSON_APPROVAL_CALLER_PREFIX))
     ) {
       return {
         ...base,

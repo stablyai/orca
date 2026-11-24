@@ -4,6 +4,7 @@ import { getStructuredAgentSessionHost } from '../../../../native-chat/agent-ses
 import { structuredAgentSessionPayloadFingerprint } from '../../../../../shared/agent-session/lifecycle/operations/structured-agent-session-mutation'
 import type { AgentJournalApprovalItem } from '../../../../../shared/agent-session/journal/agent-session-journal-types'
 import { mintAgentSessionOperationId } from '../../mailbox/structured-pointer/structured-pointer-operation-id'
+import { AGENT_PERMISSION_FLOW_RESOLVER } from '../../../../../shared/agent-session/requests/prompts/agent-session-approval-resolver'
 import { workerApprovalDecisionOf, workerApprovalOption } from './worker-approval'
 import {
   ORCHESTRATION_APPROVAL_CALLER_PREFIX,
@@ -50,6 +51,12 @@ export function chatApprovalCloseOutcome(
     reason: null,
     reasonDelivered: false
   }
+}
+
+/** Withdrawn by the worker's agent, then allowed by its own permission flow once the call ran. */
+export function allowedByAgentPermissionFlow(prompt: ChatWorkerPrompt): boolean {
+  const { resolution } = prompt.body
+  return resolution.state === 'resolved' && resolution.resolvedBy === AGENT_PERMISSION_FLOW_RESOLVER
 }
 
 export type ChatWorkerApprovalAnswer =

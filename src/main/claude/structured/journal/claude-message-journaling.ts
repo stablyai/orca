@@ -40,6 +40,7 @@ import type { ClaudeOpenTurn } from '../turns/claude-open-turn'
 import type { ClaudeAssistantFailures } from './claude-assistant-failures'
 import type { ClaudeUsageLimits } from './claude-usage-limits'
 import type { ClaudeThreadGoal } from './claude-thread-goal'
+import type { ClaudeJournalPrompts } from './claude-structured-journal-prompts'
 
 export type ClaudeMessageJournalContext = {
   sink: StructuredAgentSessionEventSink
@@ -57,6 +58,7 @@ export type ClaudeMessageJournalContext = {
   assistantFailures: ClaudeAssistantFailures
   usageLimits: ClaudeUsageLimits
   threadGoal: ClaudeThreadGoal
+  prompts: ClaudeJournalPrompts
 }
 
 export function journalClaudeStream(
@@ -196,6 +198,7 @@ export function journalClaudeMessage(
       ...stamp(resultIdentity, resultBody),
       lifecycle: true
     })
+    ctx.prompts.observeToolResult(result.toolUseId, result.failed, observedAt)
     if (
       results.length === 1 &&
       envelope.parentToolUseId === null &&

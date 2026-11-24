@@ -137,12 +137,12 @@ export function createClaudeJournalTranslator(
     turn,
     assistantFailures: new ClaudeAssistantFailures(deps.account, deps.model),
     usageLimits: new ClaudeUsageLimits(),
-    threadGoal: new ClaudeThreadGoal(() => deps.sink.journalSnapshot?.()?.threadGoal)
+    threadGoal: new ClaudeThreadGoal(() => deps.sink.journalSnapshot?.()?.threadGoal),
+    prompts
   }
 
   const resultContext: ClaudeResultJournalContext = {
     ...messageContext,
-    prompts,
     context,
     goalBackgroundWork: deps.goalBackgroundWork ?? (() => 'unverifiable'),
     acceptStartupFailure: deps.acceptStartupFailure,
