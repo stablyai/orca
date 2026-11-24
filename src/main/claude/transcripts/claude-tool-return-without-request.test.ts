@@ -107,6 +107,11 @@ describe('claudeToolReturnWithoutRequest', () => {
     ).toBeNull()
   })
 
+  it('stops at the first unreadable row rather than parsing on', () => {
+    const malformed = '{\n'.repeat(1000)
+    expect(claudeToolReturnWithoutRequest(`${malformed}${transcript(...STALLED)}`)).toBeNull()
+  })
+
   it('proves nothing when only an earlier turn had its request recorded (recorder off since)', () => {
     const prompt = { type: 'user', isSidechain: false, message: { role: 'user', content: 'next' } }
     expect(

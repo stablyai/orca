@@ -30,11 +30,10 @@ export function claudeToolReturnWithoutRequest(transcript: string): number | nul
     const row = parseRow(line)
     if (!row) {
       // Only the tail's first line may be cut by the read; any other unreadable row (a sibling
-      // call's, say) leaves the batch unknown.
+      // call's, say) leaves the batch unknown. Stopping there also bounds the work: each failed
+      // parse throws, and a tail of them held main for 700 ms.
       if (index > 0 && line.trim() !== '') {
-        lastResultAt = null
-        batch = null
-        requestRecorded = false
+        return null
       }
       continue
     }
@@ -110,9 +109,20 @@ export function readClaudeToolReturnWithoutRequest(
   input: ClaudeToolReturnCheck
 ): Promise<number | null> {
   const now = input.now ?? Date.now()
-  const check = checks.then(() => checkToolReturn(input, now))
+  const check = checks.then(() => withDeadline(checkToolReturn(input, now)))
   checks = check.catch(() => {})
   return check
+}
+
+// A read that never returns (a stale network mount) must not hold every later worker's notice.
+const CHECK_DEADLINE_MS = 5_000
+
+function withDeadline(check: Promise<number | null>): Promise<number | null> {
+  let timer: ReturnType<typeof setTimeout> | undefined
+  const deadline = new Promise<null>((resolve) => {
+    timer = setTimeout(() => resolve(null), CHECK_DEADLINE_MS)
+  })
+  return Promise.race([check, deadline]).finally(() => clearTimeout(timer))
 }
 
 // One check at a time, each parse after a turn of the event loop: a burst of quiet workers costs
