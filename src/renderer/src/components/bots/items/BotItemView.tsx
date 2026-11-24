@@ -204,11 +204,12 @@ export function BotItemBody({
   // The header and comment box paint first; the Activity, the costly part, renders right after.
   const activityMounted = useDeferredValue(true, false)
   const activityShown = view.eventsRead && activityMounted
-  const { scrollRef, contentRef, scrollerProps, showJump, jumpToLatest } = useBotTranscriptFollow({
-    itemCount: view.events.length + pending.shown.length,
-    isWorking: false,
-    isVisible: true
-  })
+  const { scrollRef, contentRef, scrollerProps, showJump, jumpToLatest, revealRow } =
+    useBotTranscriptFollow({
+      itemCount: view.events.length + pending.shown.length,
+      isWorking: false,
+      isVisible: true
+    })
   // From the comment box or a quick reply: shown at once, then sent to the host.
   const sendComment: Parameters<typeof useBotItemQuestionSteps>[3] = (
     text,
@@ -275,6 +276,7 @@ export function BotItemBody({
     activityShown,
     loadingTarget,
     scrollRef,
+    revealRow,
     comment
   })
   const links = useNativeChatLinkActions(fileContext?.fileLinkContext ?? null, pane, {

@@ -31,6 +31,7 @@ export function useBotItemNeedsYouJump({
   activityShown,
   loadingTarget,
   scrollRef,
+  revealRow,
   comment
 }: {
   /** Needs you and no answer is on its way. */
@@ -39,6 +40,7 @@ export function useBotItemNeedsYouJump({
   /** The item view is already reading earlier pages to find the question. */
   loadingTarget: boolean
   scrollRef: React.RefObject<HTMLDivElement | null>
+  revealRow: (row: HTMLElement, behavior: ScrollBehavior) => void
   comment: React.RefObject<BotItemCommentBoxHandle | null>
 }): BotItemNeedsYouJump {
   const [watch] = useState(createBotItemNeedsYouWatch)
@@ -49,7 +51,7 @@ export function useBotItemNeedsYouJump({
     watch.revealed()
     const still = window.matchMedia('(prefers-reduced-motion: reduce)').matches
     // The scroller's scroll padding is the header's height, so it lands just under the header.
-    node.scrollIntoView({ block: 'start', behavior: still ? 'auto' : 'smooth' })
+    revealRow(node, still ? 'auto' : 'smooth')
     // Keyframes take a color, not a variable: the theme's amber, read on the click.
     const amber = getComputedStyle(node).getPropertyValue('--agent-question').trim()
     const ring = `0 0 0 2px ${amber || 'currentColor'}`

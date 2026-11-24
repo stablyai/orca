@@ -126,7 +126,7 @@ function LinksMenu({
         <div
           ref={list}
           tabIndex={-1}
-          className="scrollbar-sleek max-h-60 overflow-y-auto p-1 outline-none"
+          className="scrollbar-sleek max-h-[min(15rem,var(--radix-popover-content-available-height,15rem))] overflow-y-auto p-1 outline-none"
         >
           <BotItemLinkRowList bot={bot} rows={rows} chat={chat} />
         </div>

@@ -20,6 +20,7 @@ export type BotItemNeedsYouWatch = ReturnType<typeof createBotItemNeedsYouWatch>
 
 // The soft edge over the comment box hides the scroller's last pixels.
 const BOTTOM_EDGE = 16
+const VISIBLE_RATIO = 0.99
 // Far enough above the view to hold any page of Activity.
 const FAR = 1_000_000
 
@@ -70,16 +71,16 @@ export function createBotItemNeedsYouWatch() {
             settle()
           }
         },
-        { root, rootMargin: margin, threshold: [0, 1] }
+        { root, rootMargin: margin, threshold: VISIBLE_RATIO }
       )
       observer.observe(edge)
       observers.push(observer)
     }
     watchEdge(`-${top}px 0px -${BOTTOM_EDGE}px 0px`, (entry) => {
-      shows = entry.intersectionRatio >= 0.99
+      shows = entry.intersectionRatio >= VISIBLE_RATIO
     })
     watchEdge(`${FAR}px 0px -${BOTTOM_EDGE}px 0px`, (entry) => {
-      notBelow = entry.intersectionRatio >= 0.99
+      notBelow = entry.intersectionRatio >= VISIBLE_RATIO
     })
   }
   return {
