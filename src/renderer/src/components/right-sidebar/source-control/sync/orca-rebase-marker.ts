@@ -32,6 +32,7 @@ export function recordRebaseStopReading(
     rebaseStop: result.stop
       ? {
           token: result.stop,
+          ...(result.indexObservation ? { indexObservation: result.indexObservation } : {}),
           branch: result.branch ?? null,
           blocked:
             result.outcome === 'empty' || result.outcome === 'stopped' ? result.outcome : null

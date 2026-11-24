@@ -14092,7 +14092,7 @@
             "noRebaseInProgress": "進行中のリベースはありません",
             "rebaseStopMovedOn": "リベースはすでに先へ進んでいます。パネルを確認してもう一度お試しください。",
             "rebaseEmptyStep": "このステップにはコミットする内容がありません。リベースを中止するか、ターミナルで完了してください。",
-            "rebaseStepUnreadableShort": "ステップを確認できません",
+            "rebaseStepUnreadableShort": "確認失敗",
             "rebaseCheckAgain": "再確認",
             "rebaseRetryInspect": "再試行",
             "rebaseRetryInspectLabel": "リベースステップを再確認",

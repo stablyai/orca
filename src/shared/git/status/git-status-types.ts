@@ -51,6 +51,8 @@ export type ContinueRebaseResult = {
   message?: string
   // The stop the rebase is at after this call, when it is still paused.
   stop?: RebaseStopToken
+  indexObservation?: string
+  hasStagedChanges?: boolean
   // Branch the rebase updates (head-name); null when detached.
   branch?: string | null
   // Set when this Continue finished a rebase Orca started over an integrated upstream tip.
@@ -100,6 +102,7 @@ export type GitBranchLineTotal = {
 export type GitStatusResult = {
   entries: GitStatusEntry[]
   conflictOperation: GitConflictOperation
+  rebaseIndexObservation?: string
   head?: string
   branch?: string
   // Reuse porcelain v2 upstream/ahead/behind metadata to avoid two extra refresh subprocesses.

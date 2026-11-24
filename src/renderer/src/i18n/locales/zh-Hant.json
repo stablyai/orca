@@ -13913,7 +13913,7 @@
             "noRebaseInProgress": "沒有進行中的重定基底",
             "rebaseStopMovedOn": "重定基底已經繼續進行。請查看面板後再試一次。",
             "rebaseEmptyStep": "此步驟沒有可提交的內容。請中止重定基底，或在終端機中完成它。",
-            "rebaseStepUnreadableShort": "無法檢查步驟",
+            "rebaseStepUnreadableShort": "檢查失敗",
             "rebaseCheckAgain": "再次檢查",
             "rebaseRetryInspect": "重試",
             "rebaseRetryInspectLabel": "重新檢查重定基底步驟",

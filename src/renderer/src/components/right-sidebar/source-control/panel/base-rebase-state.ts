@@ -99,11 +99,17 @@ export function resolveRebaseContinueState(
   statusHead: string | null,
   inspectFailure: RebaseStopInspectFailure | null = null
 ): RebaseContinueState {
-  if (!rebaseStop || (statusHead !== null && rebaseStop.token.head !== statusHead)) {
-    return inspectFailure && inspectFailure.head === statusHead ? 'unreadable' : 'unknown'
+  if (inspectFailure && inspectFailure.head === statusHead) {
+    return 'unreadable'
+  }
+  if (!rebaseStop) {
+    return 'unknown'
   }
   if (!rebaseStop.token.head || !rebaseStop.token.step || !rebaseStop.token.incarnation) {
     return 'unreadable'
+  }
+  if (statusHead !== null && rebaseStop.token.head !== statusHead) {
+    return 'unknown'
   }
   return rebaseStop.blocked === 'empty' ? 'empty' : rebaseStop.blocked ? 'blocked' : 'ready'
 }

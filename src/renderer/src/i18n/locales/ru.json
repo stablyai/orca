@@ -14474,7 +14474,7 @@
             "noRebaseInProgress": "Rebase не выполняется",
             "rebaseStopMovedOn": "Rebase уже продвинулся дальше. Проверьте панель и повторите попытку.",
             "rebaseEmptyStep": "На этом шаге нечего коммитить. Прервите rebase или завершите его в терминале.",
-            "rebaseStepUnreadableShort": "Шаг не проверен",
+            "rebaseStepUnreadableShort": "Проверка не удалась",
             "rebaseCheckAgain": "Проверить снова",
             "rebaseRetryInspect": "Повторить",
             "rebaseRetryInspectLabel": "Повторно проверить шаг rebase",

@@ -14219,7 +14219,7 @@
             "noRebaseInProgress": "Devam eden rebase yok",
             "rebaseStopMovedOn": "Rebase zaten ilerledi. Paneli kontrol edip yeniden deneyin.",
             "rebaseEmptyStep": "Bu adımda commit edilecek bir şey yok. Rebase’i iptal edin veya bir terminalde tamamlayın.",
-            "rebaseStepUnreadableShort": "Adım denetlenemedi",
+            "rebaseStepUnreadableShort": "Kontrol başarısız",
             "rebaseCheckAgain": "Tekrar kontrol et",
             "rebaseRetryInspect": "Yeniden dene",
             "rebaseRetryInspectLabel": "Rebase adımını yeniden denetle",

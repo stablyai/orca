@@ -7,6 +7,7 @@ import {
   gitOptionsForWorktree
 } from '../../command-runner/git-runtime-options'
 import { gitExecFileAsync } from '../../command-runner/git-exec-file'
+import { trackGitOperationWriters } from '../../command-runner/git-writer-lifetime'
 import { runWithGitReadCacheInvalidation } from '../git-read-cache-invalidation'
 import { runWithGitWorktreeOperationLock } from '../../../../shared/git/worktrees/git-worktree-operation-lock'
 import { resolveGitDir } from '../resolve-git-dir'
@@ -68,14 +69,19 @@ export async function abortRebase(
   worktreePath: string,
   options: GitRuntimeOptions = {}
 ): Promise<void> {
+  const lifetime = trackGitOperationWriters(options, true)
   // Queued Abort runs once in this worktree after any Orca operation already holding the lane.
-  await runWithGitWorktreeOperationLock(worktreePath, options.signal, () =>
-    runWithGitReadCacheInvalidation(() =>
-      gitExecFileAsync(['rebase', '--abort'], {
-        ...gitOptionsForWorktree(worktreePath, options),
-        terminationBarrier: true
-      })
-    )
+  await runWithGitWorktreeOperationLock(
+    worktreePath,
+    options.signal,
+    () =>
+      runWithGitReadCacheInvalidation(() =>
+        gitExecFileAsync(['rebase', '--abort'], {
+          ...gitOptionsForWorktree(worktreePath, lifetime.options),
+          terminationBarrier: 'wait-for-posix-group'
+        })
+      ),
+    lifetime.waitForWriters
   )
 }
 

@@ -2,6 +2,7 @@ import { rmSync } from 'node:fs'
 import { afterEach, describe, expect, it } from 'vitest'
 import { detectConflictOperation } from './git-conflict-operation'
 import { continueRebase } from './rebase-continue'
+import { getStatus } from '../status/status-read'
 import { createConflictingRebaseRepo } from './rebase-real-git.test-fixture'
 describe('continueRebase against real git', () => {
   const tempPaths: string[] = []
@@ -120,6 +121,33 @@ describe('continueRebase against real git', () => {
       continueRebase(repoPath, 'continue', { expected: await stopToken(repoPath) })
     ).resolves.toMatchObject({ outcome: 'empty' })
     await expect(detectConflictOperation(repoPath)).resolves.toBe('rebase')
+  })
+
+  it('observes staged content changes at the same rebase stop', async () => {
+    const { repoPath, git, write } = createFeatureBehindConflictingMain()
+    expect(() => git('rebase', '--apply', 'main')).toThrow()
+    git('checkout', '--ours', 'a.txt')
+    git('add', 'a.txt')
+    const empty = await continueRebase(repoPath, 'continue', {
+      expected: await stopToken(repoPath)
+    })
+    expect(empty.outcome).toBe('empty')
+    const unchanged = await continueRebase(repoPath, 'inspect')
+    expect(unchanged.indexObservation).toBe(empty.indexObservation)
+    expect(unchanged.hasStagedChanges).toBe(false)
+    write('a.txt', 'first resolution\n')
+    git('add', 'a.txt')
+    const first = await continueRebase(repoPath, 'inspect')
+    expect(first.hasStagedChanges).toBe(true)
+    expect(first.indexObservation).not.toBe(empty.indexObservation)
+    write('a.txt', 'second resolution\n')
+    git('add', 'a.txt')
+    const second = await continueRebase(repoPath, 'inspect')
+    expect(second.hasStagedChanges).toBe(true)
+    expect(second.indexObservation).not.toBe(first.indexObservation)
+    expect(second.stop).toEqual(first.stop)
+    const status = await getStatus(repoPath, { includeLineStats: false })
+    expect(status.rebaseIndexObservation).toBe(second.indexObservation)
   })
 
   it('treats the merge backend dropping an empty pick before the next conflict as conflicted', async () => {

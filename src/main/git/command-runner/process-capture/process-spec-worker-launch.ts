@@ -85,7 +85,15 @@ export function launchProcessSpecOnWindowsWorker(
       onTerminated()
       return
     }
-    reportWhenAbandonedRootEnds(child.pid, proven, onTerminated)
+    if (typeof barrier === 'object') {
+      void proven.then((guestEnded) => {
+        if (guestEnded) {
+          onTerminated()
+        }
+      })
+    } else {
+      reportWhenAbandonedRootEnds(child.pid, proven, onTerminated)
+    }
   })
   return { child: launched, withdrawPendingLaunch: () => child.cancelPendingSpawn() }
 }
