@@ -89,7 +89,13 @@ const FOUND: Record<string, readonly TeamShareSuggestion[]> = {
     { kind: 'invite', key: 'invite', email: 'alex@stably.ai' }
   ],
   'dana@acme.co': [{ kind: 'invite', key: 'invite', email: 'dana@acme.co' }],
-  '@alcie': []
+  '@alcie': [],
+  sam: Array.from({ length: 14 }, (_, index) => ({
+    kind: 'slack' as const,
+    key: `sam-${index}`,
+    name: `Sam ${String.fromCharCode(65 + index)}.`,
+    detail: `@sam${index + 1}`
+  }))
 }
 
 function Scene({
@@ -167,3 +173,13 @@ export const onlyYou = scene([])
 
 /** A long list scrolls; the Add field and the footer stay put. */
 export const many = scene(['alice', 'bo', 'sam', 'octo', 'mei', 'raj', 'lena', 'tom', 'ana'])
+
+/** Many matches scroll; Up wraps to the last one and the list follows it, focus kept in the field. */
+export const manySuggestions = scene(['alice', 'bo'], {
+  query: 'sam',
+  interact: () => {
+    document
+      .querySelector<HTMLInputElement>('input[role="combobox"]')
+      ?.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowUp', bubbles: true }))
+  }
+})

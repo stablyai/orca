@@ -65,7 +65,10 @@ export function BotTeamShareDialog({
     if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
       event.preventDefault()
       const step = event.key === 'ArrowDown' ? 1 : -1
-      setActiveIndex((active + step + shown.length) % shown.length)
+      const next = (active + step + shown.length) % shown.length
+      setActiveIndex(next)
+      // Focus stays in the field, so the list follows the keyboard pick itself.
+      document.getElementById(optionId(next))?.scrollIntoView({ block: 'nearest' })
     } else if (event.key === 'Enter') {
       event.preventDefault()
       pick(shown[active])
@@ -75,7 +78,7 @@ export function BotTeamShareDialog({
     <Dialog open onOpenChange={(next) => !next && onClose()}>
       <DialogContent
         size="flush"
-        className="sm:max-w-[520px]"
+        className="max-h-[calc(100dvh-2rem)] grid-rows-[auto_auto_minmax(0,1fr)_auto] sm:max-w-[520px]"
         aria-describedby={undefined}
         onEscapeKeyDown={(event) => {
           // Esc clears a search before it closes the dialog.
@@ -120,7 +123,10 @@ export function BotTeamShareDialog({
             <div
               id={listId}
               role="listbox"
-              className={cn(MENU_SURFACE_CLASS, 'absolute top-full right-[100px] left-6 z-10 mt-1')}
+              className={cn(
+                MENU_SURFACE_CLASS,
+                'absolute top-full right-[100px] left-6 z-10 mt-1 max-h-[min(20rem,calc(100dvh-14rem))] overflow-y-auto scrollbar-sleek'
+              )}
             >
               {shown.length === 0 ? (
                 <TeamShareNoMatch query={query.trim()} />
@@ -139,7 +145,7 @@ export function BotTeamShareDialog({
             </div>
           ) : null}
         </div>
-        <div className="scrollbar-sleek max-h-[340px] overflow-y-auto pt-1 pb-2">
+        <div className="scrollbar-sleek min-h-0 max-h-[340px] overflow-y-auto pt-1 pb-2">
           <h3 className="px-6 pt-4 pb-1 text-xs font-medium text-muted-foreground">
             {t('bots.teamShare.peopleWithAccess', 'People with access')}
           </h3>
