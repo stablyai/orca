@@ -79,6 +79,20 @@ describe('buildWindowsHostInteractiveLoginSpawn', () => {
     expect(existsSync(pidFilePath)).toBe(false)
   })
 
+  it('builds an absolute relay PowerShell path when SystemRoot is blank', async () => {
+    vi.stubEnv('SystemRoot', '')
+    vi.stubEnv('windir', '')
+    const spawn = withWindows(() =>
+      buildWindowsHostInteractiveLoginSpawn('C:\\Tools\\claude.exe', ['auth', 'login'])
+    )
+    try {
+      expect(spawn.args[5]).toBe('C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe')
+    } finally {
+      vi.unstubAllEnvs()
+      await spawn.cleanup()
+    }
+  })
+
   it('waits for the relay PID when cancellation races console startup', async () => {
     vi.useFakeTimers()
     const spawn = withWindows(() =>
