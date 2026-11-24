@@ -136,8 +136,10 @@ type ListRowProps = {
   subtitleMono?: boolean
   /** A subtitle that is a status to act on, e.g. "Needs sign-in", in its tone's colour. */
   subtitleColor?: string
-  /** A muted mark in a fixed-width column before the title, e.g. an item's `#35`. */
+  /** A muted mark in a fixed-width column before the title, e.g. a step's number. */
   marker?: string
+  /** A muted mark inline before the title, e.g. an item's `#35`, so titles keep one start. */
+  titlePrefix?: string
   /** Lines the subtitle may take before it cuts; two by default. */
   subtitleLines?: number
   /** A small mark before the subtitle, e.g. the agent a row runs. */
@@ -177,6 +179,7 @@ export function ListRow({
   subtitleMono = false,
   subtitleColor,
   marker,
+  titlePrefix,
   subtitleLines = 2,
   subtitleIcon,
   detail,
@@ -214,6 +217,9 @@ export function ListRow({
         ]}
         numberOfLines={wrapTitle ? undefined : 1}
       >
+        {titlePrefix !== undefined ? (
+          <Text style={listRowStyles.titlePrefix}>{`${titlePrefix} `}</Text>
+        ) : null}
         {title}
       </Text>
       {subtitle !== undefined ? (
@@ -335,6 +341,7 @@ const listRowStyles = themedStyleSheet(() => ({
   },
   title: { fontSize: 15, color: colors.textPrimary },
   titleEmphasis: { fontWeight: '500' },
+  titlePrefix: { color: colors.textMuted, fontVariant: ['tabular-nums'] },
   titleStrong: { fontWeight: '700' },
   titleDestructive: { color: colors.statusRed },
   subtitle: { fontSize: 13, color: colors.textSecondary, flexShrink: 1 },

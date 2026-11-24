@@ -247,6 +247,7 @@ export function MobileBotGroupItems({
                 return bot ? { name: bot.name, avatar: mobileBotAvatarSource(bot) } : undefined
               }}
               items={groups.needs_you}
+              now={now}
               disabled={failed}
               renderItem={(item) => row(item, id)}
               onOpenAsk={(ask) => {

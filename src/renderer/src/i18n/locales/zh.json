@@ -29166,7 +29166,7 @@
       "codexNoSandbox": "不使用 Codex 沙盒",
       "whoeverAskedApproves": "如果它请求批准，提问的人可以批准",
       "reachLinear": "以你的身份评论、更新和创建 Linear 议题",
-      "reachSlack": "以 @{{name}} 的身份在 Slack 中发消息",
+      "reachSlack": "以 {{name}} 的身份在 Slack 中发消息",
       "reachGitHub": "以你的身份在 GitHub 上评论、评审和推送",
       "trust": "只添加你放心把键盘交给对方的人",
       "adviceHeading": "分享之前",

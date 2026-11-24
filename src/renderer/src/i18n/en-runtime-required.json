@@ -1567,7 +1567,7 @@
       "reachLinear": "Comment on, update and create Linear issues as you",
       "reachPermission": "New conversations start in {{mode}}",
       "reachPermissionUnknown": "New conversations start from your chat permission setting",
-      "reachSlack": "Post in Slack as @{{name}}",
+      "reachSlack": "Post in Slack as {{name}}",
       "reject": "Reject",
       "separateBot": "A separate bot for the team gets its own permission, Google switch and tools. It still runs on {{computer}} as you.",
       "summaryMany": "You and {{count}} other people can ask {{name}}.",

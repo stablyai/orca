@@ -25449,7 +25449,7 @@
       "controlOne": "{{person}} pode usar {{name}} para trabalhar em {{computer}} como você: executar comandos, abrir e alterar arquivos e usar suas contas conectadas.",
       "executionComputer": "o computador em que este agente é executado",
       "here": "aqui",
-      "reachSlack": "Postar no Slack como @{{name}}",
+      "reachSlack": "Postar no Slack como {{name}}",
       "reject": "Rejeitar",
       "there": "lá",
       "thisComputer": "este computador",
