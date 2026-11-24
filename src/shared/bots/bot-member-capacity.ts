@@ -7,7 +7,9 @@ import {
   botMemberSource,
   gitHubMembersOf,
   linearMembersOf,
-  type BotMember
+  withoutBotMember,
+  type BotMember,
+  type BotMemberKey
 } from '../bot-types'
 import { CONNECTOR_CLIENT_LIMITS } from '../connectors/connector-cloud-contract'
 
@@ -90,4 +92,26 @@ export function readBotMembersFull(error: unknown): BotMembersFull | null {
   } catch {
     return null
   }
+}
+
+/** Who can ask after the people an update takes off and adds, applied to the list the host has now.
+ *  Throws botMembersFullError, saving nothing, when an add would pass a limit. */
+export function applyBotMemberUpdates(
+  members: readonly BotMember[],
+  updates: {
+    removeMember?: BotMemberKey
+    removeMembers?: readonly BotMemberKey[]
+    addMembers?: readonly BotMember[]
+  }
+): BotMember[] {
+  const { removeMember, removeMembers = [], addMembers = [] } = updates
+  let next = [...members]
+  for (const key of [...(removeMember ? [removeMember] : []), ...removeMembers]) {
+    next = withoutBotMember(next, key)
+  }
+  const plan = planBotMemberAdds(next, addMembers)
+  if (!plan.ok) {
+    throw botMembersFullError(plan.full)
+  }
+  return plan.members
 }
