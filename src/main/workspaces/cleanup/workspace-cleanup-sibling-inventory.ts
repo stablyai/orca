@@ -1,5 +1,9 @@
 import { getRepoIdFromWorktreeId } from '../../../shared/worktree/id'
-import { getWorktreeIdFromHostIdentity } from '../../../shared/worktree/host-qualified-identity'
+import {
+  getExecutionHostIdFromWorktreeHostIdentity,
+  getWorktreeIdFromHostIdentity
+} from '../../../shared/worktree/host-qualified-identity'
+import { LOCAL_EXECUTION_HOST_ID } from '../../../shared/execution-host/execution-host'
 import type { Repo } from '../../../shared/repository/repo-types'
 import type { RuntimeWorktreePsSummary } from '../../../shared/worktree/catalog/runtime-worktree-contracts'
 import type { OrcaRuntimeService } from '../../runtime/orca-runtime'
@@ -15,7 +19,7 @@ export const WORKTREE_PS_LIMIT = 100_000
  * re-reads only those projects strictly, so a failure refuses the comparison instead of dropping the
  * member, while an unrelated broken project can't block a healthy group.
  */
-async function listMissingSiblingProjectsStrictly(
+export async function listMissingSiblingProjectsStrictly(
   runtime: OrcaRuntimeService,
   listed: RuntimeWorktreePsSummary[],
   projectId: string,
@@ -28,20 +32,27 @@ async function listMissingSiblingProjectsStrictly(
       .filter((summary) => summary.repoId === projectId)
       .flatMap(folderSiblingsOf)
       .filter((identity) => !identities.has(identity))
+      // A paired server's member is that server's to list; a same-id local project proves nothing about it.
+      .filter((identity) => {
+        const hostId = getExecutionHostIdFromWorktreeHostIdentity(identity)
+        return hostId === undefined || hostId === LOCAL_EXECUTION_HOST_ID
+      })
       .map((identity) => getRepoIdFromWorktreeId(getWorktreeIdFromHostIdentity(identity)))
       .filter((repoId) => repoId !== projectId && repos.has(repoId))
   )
-  const reads = await Promise.all(
-    [...missing].map((repoId) =>
-      runtime.getWorktreePs(WORKTREE_PS_LIMIT, true, false, undefined, repoId, true)
-    )
-  )
-  if (reads.some((read) => read.truncated)) {
+  if (!missing.size) {
+    return listed
+  }
+  // One inventory, complete for exactly these projects.
+  const read = await runtime.getWorktreePs(WORKTREE_PS_LIMIT, true, false, undefined, undefined, [
+    ...missing
+  ])
+  if (read.truncated) {
     throw new Error('Could not list every workspace on this host.')
   }
-  const found = reads
-    .flatMap((read) => read.worktrees)
-    .filter((summary) => missing.has(summary.repoId) && !identities.has(summaryIdentity(summary)))
+  const found = read.worktrees.filter(
+    (summary) => missing.has(summary.repoId) && !identities.has(summaryIdentity(summary))
+  )
   return found.length ? [...listed, ...found] : listed
 }
 

@@ -119,7 +119,8 @@ export abstract class RuntimeWorkspaceCatalog extends OrcaRuntimeWithReadKittyFi
   }
 
   protected async listResolvedWorktreeSnapshot(
-    freshScope?: string | null
+    /** A repo id, null for every local repo, or exactly these repos; any of them must list completely. */
+    freshScope?: string | null | ReadonlySet<string>
   ): Promise<ResolvedWorktreeSnapshot> {
     if (!this.store) {
       return { worktrees: [], platformByRepoId: new Map() }
@@ -128,7 +129,10 @@ export abstract class RuntimeWorkspaceCatalog extends OrcaRuntimeWithReadKittyFi
       freshScope === undefined
         ? undefined
         : (repo: Repo) =>
-            (!freshScope || repo.id === freshScope) &&
+            (!freshScope ||
+              (typeof freshScope === 'string'
+                ? repo.id === freshScope
+                : freshScope.has(repo.id))) &&
             getRepoExecutionHostId(repo) === LOCAL_EXECUTION_HOST_ID &&
             !isFolderRepo(repo)
     if (requireComplete) {

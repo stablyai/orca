@@ -1,4 +1,4 @@
-import { expect, it, vi } from 'vitest'
+import { beforeEach, expect, it, vi } from 'vitest'
 import type { OrcaRuntimeService } from '../../runtime/orca-runtime'
 import type { RuntimeStore } from '../../runtime/construction/runtime-store-contract'
 import type { RuntimeWorktreePsSummary } from '../../../shared/worktree/catalog/runtime-worktree-contracts'
@@ -36,6 +36,8 @@ vi.mock('../../persistence/loading-store/user-data-path', () => ({
 }))
 
 import { WorkspaceCleanupRunner } from './workspace-cleanup-runner'
+import { listMissingSiblingProjectsStrictly } from './workspace-cleanup-sibling-inventory'
+import type { Repo } from '../../../shared/repository/repo-types'
 
 const RULES: WorkspaceCleanupRules = {
   merged: { enabled: true },
@@ -66,10 +68,15 @@ function row(worktreeId: string, folder = true): RuntimeWorktreePsSummary {
   } as unknown as RuntimeWorktreePsSummary
 }
 
+const calls: { repoId?: string; fresh?: boolean | readonly string[] }[] = []
+beforeEach(() => {
+  calls.length = 0
+})
+
 /** A runner over these listed rows; `listing` answers getWorktreePs as the real catalog would. */
 function makeRunner(
   rows: RuntimeWorktreePsSummary[],
-  listing: (repoId?: string, fresh?: boolean) => RuntimeWorktreePsSummary[],
+  listing: (repoId?: string, fresh?: boolean | readonly string[]) => RuntimeWorktreePsSummary[],
   repoPaths: Record<string, string> = {}
 ): WorkspaceCleanupRunner {
   const repos = [...new Set(rows.map((summary) => summary.repoId))].map((id) => ({
@@ -106,8 +113,11 @@ function makeRunner(
       _b: boolean,
       _worktreeId?: string,
       repoId?: string,
-      fresh?: boolean
-    ) => ({ worktrees: listing(repoId, fresh), truncated: false }),
+      fresh?: boolean | readonly string[]
+    ) => {
+      calls.push({ repoId, fresh })
+      return { worktrees: listing(repoId, fresh), truncated: false }
+    },
     getExistingOrchestrationDb: () => null,
     listTerminals: async () => ({ terminals: [], totalCount: 0, truncated: false }),
     getLocalProvider: () => ({ listProcesses: async () => [] }),
@@ -127,7 +137,7 @@ it("fails a project's preview when its folder sibling's project could not be lis
   const rows = [row('repo-a::/a1'), row('repo-b::/b1')]
   // repo-b's listing fails: an ordinary listing omits its rows, a strict one refuses.
   const runner = makeRunner(rows, (repoId, fresh) => {
-    if (repoId === 'repo-b' && fresh) {
+    if (Array.isArray(fresh) && fresh.includes('repo-b')) {
       throw new Error('Could not list every workspace on this host.')
     }
     return rows.filter((summary) =>
@@ -136,13 +146,28 @@ it("fails a project's preview when its folder sibling's project could not be lis
   })
   // Turning repo-a back on would free the folder group, repo-b's worktree included: consent must see it.
   await expect(turnOn(runner)).rejects.toThrow('Could not list every workspace on this host.')
+  // One inventory, complete for exactly the missing member's project.
+  expect(calls.filter((call) => Array.isArray(call.fresh))).toEqual([{ fresh: ['repo-b'] }])
+})
+
+it("leaves a paired server's member to that server, even beside a same-id local project", async () => {
+  const getWorktreePs = vi.fn()
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: only the listing call is under test.
+  const runtime = { getWorktreePs } as unknown as OrcaRuntimeService
+  const listed = [row('repo-a::/a1')]
+  const repos = new Map([['repo-b', { id: 'repo-b' } as Repo]])
+  const result = await listMissingSiblingProjectsStrictly(runtime, listed, 'repo-a', repos, () => [
+    'runtime:env-1|repo-b::/b1'
+  ])
+  expect(result).toBe(listed)
+  expect(getWorktreePs).not.toHaveBeenCalled()
 })
 
 it("reviews a healthy folder group while an unrelated project's listing fails", async () => {
   const rows = [row('repo-a::/a1'), row('repo-b::/b1'), row('repo-c::/c1', false)]
   // repo-c's folder is missing: its listing fails strictly and drops out of an ordinary listing.
   const runner = makeRunner(rows, (repoId, fresh) => {
-    if (fresh && (!repoId || repoId === 'repo-c')) {
+    if (fresh === true ? !repoId : Array.isArray(fresh) && fresh.includes('repo-c')) {
       throw new Error('Could not list every workspace on this host.')
     }
     return rows.filter(

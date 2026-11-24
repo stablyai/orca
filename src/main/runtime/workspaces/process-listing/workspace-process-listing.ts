@@ -1,3 +1,4 @@
+import { freshInventoryScope } from '../catalog/fresh-inventory-scope'
 import { crewChatStatusChange } from '../../orchestration/crew/crew-changes'
 import { getRepoHostIdentityForParts } from '../../../../shared/repository/repo-host-identity'
 import { createRepoRowExecutionHostLookup } from '../../../../shared/execution-host/worktree-execution-host-resolution'
@@ -75,13 +76,14 @@ export abstract class OrcaRuntimeWithGetWorktreePs extends RuntimeChatWorkerEven
     includeAgentWait = false,
     worktreeId?: string,
     repoId?: string,
-    freshInventory = false
+    /** True for a complete read of `repoId` (or every local repo); a list makes exactly those complete. */
+    freshInventory: boolean | readonly string[] = false
   ): Promise<RuntimeWorktreePsResult> {
     if (!Number.isInteger(limit) || limit <= 0) {
       throw new Error('invalid_limit')
     }
     const { worktrees: resolvedWorktrees, platformByRepoId } = this.visibleResolvedWorktreeSnapshot(
-      await this.listResolvedWorktreeSnapshot(freshInventory ? (repoId ?? null) : undefined),
+      await this.listResolvedWorktreeSnapshot(freshInventoryScope(freshInventory, repoId)),
       sourceDefaultsSupported
     )
     const freshPtyLiveness = await this.refreshPtyWorktreeRecordsFromController(resolvedWorktrees)
