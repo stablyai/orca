@@ -7,7 +7,10 @@ import { useAppStore } from '@/store'
 import { makePaneKey } from '../../../../../shared/workspace-layout/stable-pane-id'
 import { getWorkspaceCleanupGroup } from '../../../../../shared/workspace-cleanup/workspace-cleanup-groups'
 import { getWorkspaceCleanupCandidateIdentity } from '../../../../../shared/workspace-cleanup/workspace-cleanup-host-identity'
-import { makeFacetCandidate as makeCandidate } from '../query/workspace-cleanup-facet.test.fixture'
+import {
+  FACET_NOW,
+  makeFacetCandidate as makeCandidate
+} from '../query/workspace-cleanup-facet.test.fixture'
 import { CandidateRow } from '../candidate-list/workspace-cleanup-candidate-row'
 import WorkspaceCleanupDialog from '../WorkspaceCleanupDialog'
 import { focusWorkspaceCleanupConfirmOpener } from '../dialog/workspace-cleanup-confirm-opener-focus'
@@ -73,7 +76,7 @@ function renderRun(onDeleteAnyway: (row: typeof candidate) => void) {
 
 function renderCleanupDialog() {
   const row = { ...candidate, executionHostId: 'local' as const }
-  const scan = { candidates: [row], scannedAt: Date.now(), errors: [] }
+  const scan = { candidates: [row], scannedAt: FACET_NOW, errors: [] }
   const removeWorkspaceCleanupCandidates = vi.fn(async () => ({
     removedIds: [],
     removedIdentities: [],
@@ -242,7 +245,7 @@ describe('Back from confirmation', () => {
         customTitle: null,
         color: null,
         sortOrder: 0,
-        createdAt: Date.now()
+        createdAt: FACET_NOW
       }
       useAppStore.setState({ tabsByWorktree: { [row.worktreeId]: [tab] } })
       useAppStore
