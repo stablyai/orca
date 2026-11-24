@@ -27,7 +27,7 @@ it('translates a missing method on the local-target path', async () => {
       }
     }
   })
-  const context = { target: { kind: 'local' as const }, worktreePath: '/repo' }
+  const context = { target: { kind: 'local' as const }, worktreeId: null, worktreePath: '/repo' }
   await expect(continueRuntimeGitRebase(context, 'inspect')).resolves.toMatchObject({
     outcome: 'failed',
     message: expect.stringContaining('newer Orca')
