@@ -279,7 +279,6 @@
 1 src/main/codex/app-server/codex-app-server-connection.ts
 2 src/main/codex/app-server/codex-app-server-session.ts
 1 src/main/codex/app-server/shared-servers/codex-shared-server-windows-job.ts # the windows-process-tree loader: one cached readFileSync per process (relay addon check)
-1 src/main/codex/codex-conversation-copy.ts
 2 src/main/codex/configuration/agent-state-file-reader.ts
 1 src/main/codex/configuration/codex-path-observation.ts
 22 src/main/codex/configuration/homes/codex-home-paths.ts
@@ -346,10 +345,6 @@
 1 src/main/codex/structured/catalog/codex-model-catalog-probe.ts
 1 src/main/codex/structured/launch/codex-structured-launch-resolution.ts
 1 src/main/codex/structured/launch/codex-structured-orca-hooks-off.ts
-3 src/main/codex/structured/session-lifecycle/codex-provider-session-rename.ts
-1 src/main/codex/structured/session-lifecycle/codex-session-account-usage.ts
-1 src/main/codex/structured/session-lifecycle/codex-session-mcp.ts
-1 src/main/codex/structured/session-lifecycle/codex-structured-session-adapter.ts
 5 src/main/codex/trust/grants/codex-hook-trust-grant.ts
 4 src/main/codex/trust/grants/codex-managed-trust-grant-plan.ts
 11 src/main/codex/trust/grants/codex-managed-trust-reconciliation.ts

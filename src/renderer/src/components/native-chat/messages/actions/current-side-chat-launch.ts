@@ -1,5 +1,5 @@
 import { isTuiAgent } from '../../../../../../shared/agent-launch/catalog/tui-agent-config'
-import { afterPendingTab } from '@/runtime/workspace-layout/intents/layout-owner-pending-tabs'
+import { afterPendingEntityTabs } from '@/runtime/workspace-layout/intents/layout-owner-pending-tabs'
 import { useAppStore } from '@/store'
 import { launchNativeChatFork, nativeChatForkSurfaceAddress } from './native-chat-fork-launch'
 import {
@@ -41,7 +41,7 @@ function findSideChatGroup(worktreeId: string) {
       record.forkFrom?.current &&
       record.surfaceAddress?.worktreeId === worktreeId
     ) {
-      sideIds.add(structuredAgentSessionTabId(record.sessionId))
+      sideIds.add(record.tabId ?? structuredAgentSessionTabId(record.sessionId))
       if (record.surfaceAddress.targetGroupId) {
         pendingGroups.add(record.surfaceAddress.targetGroupId)
       }
@@ -193,10 +193,13 @@ async function open(worktreeId: string, tabId: string): Promise<void> {
         : nativeChatForkSurfaceAddress(worktreeId, tabId)
     })
     if (outcome.chat && destination) {
-      afterPendingTab(structuredAgentSessionTabId(outcome.chat.sessionId), (id) => {
+      const childSessionId = outcome.chat.sessionId
+      afterPendingEntityTabs(worktreeId, childSessionId, () => {
         const child = useAppStore
           .getState()
-          .unifiedTabsByWorktree[worktreeId]?.find((tab) => tab.id === id)
+          .unifiedTabsByWorktree[worktreeId]?.find(
+            (tab) => tab.contentType === 'agent-session' && tab.entityId === childSessionId
+          )
         if (child?.groupId === destination.groupId) {
           moveSideChatsInto(worktreeId, destination.groupId)
         }
