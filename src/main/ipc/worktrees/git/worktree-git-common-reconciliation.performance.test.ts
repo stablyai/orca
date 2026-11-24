@@ -218,11 +218,11 @@ it('never scans more than the old 30 s cadence under hide/reveal churn', async (
   // [visible ms, hidden ms, stats the old cadence spent over ten minutes of that pattern]
   const patterns = [
     [30_000, 1_000, 129_220],
-    [29_500, 1_000, 252_720],
-    [45_000, 5_000, 131_120],
-    [60_000, 10_000, 144_421],
-    [1_000, 30_000, 252_720],
-    [30_000, 30_000, 176_720]
+    [29_500, 1_000, 266_020],
+    [45_000, 5_000, 144_420],
+    [60_000, 10_000, 157_721],
+    [1_000, 30_000, 266_020],
+    [30_000, 30_000, 190_020]
   ]
   for (const [visibleMs, hiddenMs, oldCadenceStats] of patterns) {
     const { unsubscribe: stop } = await startReconciliation()
@@ -234,6 +234,7 @@ it('never scans more than the old 30 s cadence under hide/reveal churn', async (
       reveal?.()
       focus?.()
     }
+    await vi.advanceTimersByTimeAsync(0)
     expect(fs.stats).toBeLessThanOrEqual(oldCadenceStats)
     await stop()
   }

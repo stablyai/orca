@@ -261,7 +261,12 @@ export async function startGitCommonPolling(
       }
       return
     }
+    const deferred = deferredTimedTick
     deferredTimedTick = null
+    if (deferred?.forceFullScan) {
+      void tick(true)
+      return
+    }
     // Clamp wall-clock jumps so NTP cannot postpone refreshes beyond one interval.
     const nextDelay = Math.max(
       0,
