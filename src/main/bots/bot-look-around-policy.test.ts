@@ -7,6 +7,7 @@ describe('lookAroundToolDecision', () => {
   it.each([
     'gh pr view 12 --repo o/r',
     'orca bot list',
+    'orca bot item show 3',
     'git log -3',
     "gh pr list --search 'is:open draft'"
   ])('allows %s', (command) => {
