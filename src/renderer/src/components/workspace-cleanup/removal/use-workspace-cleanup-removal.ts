@@ -16,6 +16,7 @@ import { filterWorkspaceCleanupRemovalCandidates } from './workspace-cleanup-rem
 import { createWorkspaceCleanupSnapshotPruneBatch } from './workspace-cleanup-snapshot-prune-batch'
 import { useWorkspaceCleanupUnverifiedRemoval } from './use-workspace-cleanup-unverified-removal'
 import { useWorkspaceCleanupRunStore } from './run/workspace-cleanup-run-store'
+import { mergeWorkspaceCleanupRowFailures } from './workspace-cleanup-row-failures'
 import {
   createWorkspaceCleanupRunReporter,
   getWorkspaceCleanupFailureIdentity
@@ -240,14 +241,12 @@ export function useWorkspaceCleanupRemoval({
         },
         onResult: (result) => {
           runReporter.onResult(result)
-          const nextFailures: Record<string, WorkspaceCleanupFailure> = {}
           for (const failure of result.failures) {
-            nextFailures[getWorkspaceCleanupFailureIdentity(failure)] = failure
             // Why: defensively covers failures that never reached onRowFailed.
             clearQueuedDeleteState(failure.worktreeId, failure.executionHostId)
           }
           if (mountedRef.current) {
-            setRowFailures(nextFailures)
+            setRowFailures((current) => mergeWorkspaceCleanupRowFailures(current, result))
             onDeselect(result.removedIdentities)
             settle()
           }
@@ -262,16 +261,7 @@ export function useWorkspaceCleanupRemoval({
           if (!mountedRef.current || removalBatchIdRef.current !== removalBatchId) {
             return
           }
-          setRowFailures((current) => {
-            const next = { ...current }
-            for (const identity of result.removedIdentities) {
-              delete next[identity]
-            }
-            for (const failure of result.failures) {
-              next[getWorkspaceCleanupFailureIdentity(failure)] = failure
-            }
-            return next
-          })
+          setRowFailures((current) => mergeWorkspaceCleanupRowFailures(current, result))
           onDeselect(result.removedIdentities)
         },
         onError: handleRemovalError

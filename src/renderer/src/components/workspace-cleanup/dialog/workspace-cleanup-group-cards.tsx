@@ -12,13 +12,6 @@ export function getWorkspaceCleanupGroupTabId(group: WorkspaceCleanupGroup): str
   return `workspace-cleanup-group-tab-${group}`
 }
 
-/** Returns focus to a group tab after the step that replaced the browse view unmounts. */
-export function focusWorkspaceCleanupGroupTab(group: WorkspaceCleanupGroup): void {
-  requestAnimationFrame(() =>
-    document.getElementById(getWorkspaceCleanupGroupTabId(group))?.focus()
-  )
-}
-
 export type WorkspaceCleanupGroupSummary = {
   count: number
   /** Rows the user ticked in this group; shown only when above zero. */

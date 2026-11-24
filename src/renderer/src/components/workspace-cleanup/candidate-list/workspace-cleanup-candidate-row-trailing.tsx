@@ -95,6 +95,7 @@ export function CandidateRowTrailing({
               { value0: accessibleName }
             )}
             className="text-destructive hover:text-destructive"
+            removeTarget={identity}
             onClick={() => onRemove(candidate)}
           />
         ) : (
@@ -148,6 +149,7 @@ function RowIconAction({
   ariaLabel,
   ariaExpanded,
   className,
+  removeTarget,
   onClick
 }: {
   icon?: LucideIcon
@@ -156,6 +158,8 @@ function RowIconAction({
   ariaLabel: string
   ariaExpanded?: boolean
   className?: string
+  /** Marks a row's Remove so Back from confirmation can return focus to it. */
+  removeTarget?: string
   onClick: () => void
 }): React.JSX.Element {
   return (
@@ -167,6 +171,7 @@ function RowIconAction({
           aria-label={ariaLabel}
           aria-expanded={ariaExpanded}
           className={className}
+          data-workspace-cleanup-remove={removeTarget}
           onClick={onClick}
         >
           {Icon ? <Icon className="size-3.5" /> : children}

@@ -4,7 +4,6 @@ import { useAppStore } from '@/store'
 import type { WorkspaceCleanupCandidate } from '../../../../../shared/workspace-cleanup/workspace-cleanup'
 import {
   getWorkspaceCleanupCandidateIdentity,
-  getWorkspaceCleanupHostIdentity,
   resolveWorkspaceCleanupRemovalHostId
 } from '../../../../../shared/workspace-cleanup/workspace-cleanup-host-identity'
 import type {
@@ -16,6 +15,7 @@ import type { WorkspaceCleanupDeletionPhase } from '../candidate-list/workspace-
 import { useWorkspaceCleanupRunStore } from './run/workspace-cleanup-run-store'
 import { createWorkspaceCleanupRunReporter } from './run/workspace-cleanup-run-reporter'
 import { createWorkspaceCleanupSnapshotPruneBatch } from './workspace-cleanup-snapshot-prune-batch'
+import { mergeWorkspaceCleanupRowFailures } from './workspace-cleanup-row-failures'
 
 type UnverifiedRemovalArgs = {
   setRowFailures: Dispatch<SetStateAction<Record<string, WorkspaceCleanupFailure>>>
@@ -121,7 +121,10 @@ function applyResult(
   onDeselect: UnverifiedRemovalArgs['onDeselect']
 ): void {
   setPhases((current) => withoutIdentity(current, identity))
-  setFailures((current) => addFailures(withoutIdentity(current, identity), result.failures))
+  // This attempt's own result replaces the row's earlier failure.
+  setFailures((current) =>
+    mergeWorkspaceCleanupRowFailures(withoutIdentity(current, identity), result)
+  )
   onDeselect(result.removedIdentities)
 }
 
@@ -130,35 +133,12 @@ function applyLateResult(
   setFailures: UnverifiedRemovalArgs['setRowFailures'],
   onDeselect: UnverifiedRemovalArgs['onDeselect']
 ): void {
-  setFailures((current) => {
-    let next = current
-    for (const identity of result.removedIdentities) {
-      next = withoutIdentity(next, identity)
-    }
-    return addFailures(next, result.failures)
-  })
+  setFailures((current) => mergeWorkspaceCleanupRowFailures(current, result))
   onDeselect(result.removedIdentities)
-}
-
-function addFailures(
-  current: Record<string, WorkspaceCleanupFailure>,
-  failures: readonly WorkspaceCleanupFailure[]
-): Record<string, WorkspaceCleanupFailure> {
-  const next = { ...current }
-  for (const failure of failures) {
-    next[getWorkspaceCleanupFailureIdentity(failure)] = failure
-  }
-  return next
 }
 
 function withoutIdentity<T>(current: Record<string, T>, identity: string): Record<string, T> {
   const next = { ...current }
   delete next[identity]
   return next
-}
-
-function getWorkspaceCleanupFailureIdentity(failure: WorkspaceCleanupFailure): string {
-  return failure.executionHostId
-    ? getWorkspaceCleanupHostIdentity(failure.executionHostId, failure.worktreeId)
-    : getWorkspaceCleanupCandidateIdentity({ worktreeId: failure.worktreeId })
 }

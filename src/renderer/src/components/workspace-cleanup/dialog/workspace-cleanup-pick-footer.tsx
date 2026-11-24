@@ -19,6 +19,7 @@ export function WorkspaceCleanupPickFooter({
     <Button
       variant="destructive"
       disabled={selectedCount === 0 || deleteBlocked}
+      data-workspace-cleanup-bulk-delete
       onClick={onDelete}
     >
       {t('components.workspace.cleanup.footer.delete', 'Delete {{count}} workspaces', {
