@@ -1,6 +1,7 @@
 import {
   buildPluginApprovalRequest,
   pluginNeedsCliApproval,
+  PLUGIN_INSTALL_FAILED_CODE,
   PluginApprovalRequiredError,
   PluginCliError,
   type PluginApprovalUpdateInfo
@@ -160,6 +161,41 @@ export function pluginInstallMove(
 }
 
 /**
+ * A failure after the candidate's bytes landed still says so: the error names the installed version
+ * instead of reading as "nothing was installed". Read from the lockfile, not from the thrown error.
+ */
+async function afterInstallFailure(
+  deps: PluginCliInstallDeps,
+  candidate: PluginCliInstallCandidate,
+  error: unknown
+): Promise<unknown> {
+  if (error instanceof PluginApprovalRequiredError) {
+    return error
+  }
+  const entry = (await deps.catalogs.installer.readInstallLockfile().catch(() => null))?.plugins[
+    candidate.pluginKey
+  ]
+  if (
+    !entry ||
+    entry.version !== candidate.manifest.version ||
+    entry.contentHash !== candidate.contentHash
+  ) {
+    return error
+  }
+  const reason = error instanceof Error ? error.message : String(error)
+  return new PluginCliError(
+    PLUGIN_INSTALL_FAILED_CODE,
+    `${candidate.pluginKey} ${entry.version} is installed, but finishing the install failed: ${reason}`,
+    {
+      pluginKey: candidate.pluginKey,
+      version: entry.version,
+      installed: true,
+      nextSteps: ['Run `orca plugin list` to see what is installed and enabled now.']
+    }
+  )
+}
+
+/**
  * Decides approval before anything is written, then installs. Code needs `--approve` bound to
  * these bytes; an update keeps its approval only from the same place with no new access.
  */
@@ -207,12 +243,15 @@ export async function settlePluginCliCandidate(
       throw new PluginApprovalRequiredError(request, approvalFingerprint !== undefined)
     }
   }
+  // Why: the bytes may land before a later step fails; the error must then say they are installed.
   const outcome = await installCatalogReleaseWithApproval({
     pluginKey,
     pluginService: service,
     install: candidate.install,
     approve: (key, reviewedFingerprint) =>
       applyConsent({ pluginKey: key, reviewedFingerprint, decision: 'approve' })
+  }).catch(async (error: unknown) => {
+    throw await afterInstallFailure(deps, candidate, error)
   })
   if (!outcome.ok) {
     throw installFailed(`Could not install ${pluginKey}: ${outcome.error}`, { pluginKey })
@@ -229,6 +268,8 @@ export async function settlePluginCliCandidate(
             approvalFingerprint: needsFlag ? approvalFingerprint : undefined,
             action,
             caller: deps.caller
+          }).catch(async (error: unknown) => {
+            throw await afterInstallFailure(deps, candidate, error)
           })
   return {
     pluginKey,

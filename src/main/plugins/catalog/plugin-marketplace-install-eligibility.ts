@@ -1,4 +1,5 @@
 import { isSamePluginSource } from '../../../shared/plugins/catalog/plugin-marketplace'
+import { pluginCatalogReleaseCompatibilityError } from '../../../shared/plugins/manifest/plugin-manifest-compatibility'
 import type { PluginLockEntry } from '../../../shared/plugins/installation/plugin-install-lockfile'
 import { getUserPluginsDir } from '../discovery/plugin-discovery'
 import { pluginTreeHashMatches } from '../artifacts/plugin-content-integrity'
@@ -49,10 +50,12 @@ type CatalogOffer = Pick<
   'marketplaceSourceId' | 'pluginKey' | 'source' | 'release'
 >
 
-/** Only the admitted offer must stay fixed; another plugin's catalog edit is unrelated. */
+/** Only the admitted offer must stay fixed; another plugin's catalog edit is unrelated. A refresh
+ *  may still raise the release's minimum Orca, so that is checked here too, at the write. */
 export function withMarketplaceInstallEligibility<T>(
   marketplace: PluginMarketplaceService,
   expected: CatalogOffer,
+  hostVersion: string,
   write: () => T | Promise<T>
 ): Promise<T> {
   return marketplace.withSourceSnapshot(expected.marketplaceSourceId, async () => {
@@ -67,6 +70,12 @@ export function withMarketplaceInstallEligibility<T>(
       listing.release?.contentHash !== expected.release?.contentHash
     ) {
       throw new MarketplaceReviewRequiredError()
+    }
+    const incompatible = listing.release
+      ? pluginCatalogReleaseCompatibilityError(listing.release, hostVersion)
+      : null
+    if (incompatible) {
+      throw new Error(incompatible)
     }
     return write()
   })

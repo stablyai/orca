@@ -196,16 +196,20 @@ export class PluginMarketplaceInstaller {
       },
       ...(listing.release ? { release: listing.release } : {}),
       withPublication: (publish, previous) => {
-        const priorEntry = previous ?? null
-        previousVersion = priorEntry?.version ?? null
-        repositoryMoved = marketplaceInstallMoved(priorEntry, listing.source)
-        return withMarketplaceInstallEligibility(this.marketplace, listing, () => {
-          if (repositoryMoved) {
-            consentRevoked = true
-            this.revokeConsent(preview.pluginKey)
+        previousVersion = previous?.version ?? null
+        repositoryMoved = marketplaceInstallMoved(previous ?? null, listing.source)
+        return withMarketplaceInstallEligibility(
+          this.marketplace,
+          listing,
+          this.hostVersion,
+          () => {
+            if (repositoryMoved) {
+              consentRevoked = true
+              this.revokeConsent(preview.pluginKey)
+            }
+            return publish()
           }
-          return publish()
-        })
+        )
       },
       blockedPluginReason: (key) => {
         if (

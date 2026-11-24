@@ -135,6 +135,8 @@ export function usePluginInstallAction({
         }
         // Why recipes wait: their command lines are read from the installed files, so they are
         // reviewed on the page after install rather than approved unseen.
+        // Why tracked: a refused approval leaves the plugin off, so nothing it adds is there to try.
+        let approvalApplied = false
         if (
           approve &&
           !moved &&
@@ -146,6 +148,9 @@ export function usePluginInstallAction({
               pluginKey,
               reviewedFingerprint: approve.preview.consentFingerprint,
               decision: 'approve'
+            })
+            .then(() => {
+              approvalApplied = true
             })
             .catch((cause: unknown) => {
               // Why: a mismatch leaves it pending, and the page then shows what it now asks for.
@@ -181,8 +186,7 @@ export function usePluginInstallAction({
           return
         }
         // Why: only a plugin that is on by now has anything to try; recipes still wait for review.
-        const on =
-          execution === 'data' || (approve && preview.manifest.contributes.vmRecipes.length === 0)
+        const on = execution === 'data' || approvalApplied
         const tryIt = on ? pluginTryAction(pluginKey, preview.manifest) : null
         toast.success(
           translate(

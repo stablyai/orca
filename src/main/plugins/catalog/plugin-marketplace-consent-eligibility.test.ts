@@ -166,7 +166,7 @@ it('keeps a catalog generation fixed until its guarded write finishes', async ()
   if (!admitted) {
     throw new Error('fixture offer missing')
   }
-  const publishing = withMarketplaceInstallEligibility(marketplace, admitted, async () => {
+  const publishing = withMarketplaceInstallEligibility(marketplace, admitted, '1.4.0', async () => {
     order.push('write started')
     entered.resolve()
     await release.promise
