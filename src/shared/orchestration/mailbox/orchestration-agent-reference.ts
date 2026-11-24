@@ -6,6 +6,8 @@ export type OrchestrationAgentReference = {
   hostKey: string
   /** A chat or terminal picked under `@`; absent for a crew agent, which gets mail. */
   kind?: AgentReferenceKind
+  /** A terminal agent's `orca_session_id:` address, so the note can page its transcript. */
+  session?: string
   /** The agent's logo on its composer pill; never part of the sent text. */
   agentType?: string
 }
@@ -47,14 +49,15 @@ export function agentReferenceToken(reference: OrchestrationAgentReference): str
 export function agentReferenceNote(
   label: string,
   address: string,
-  kind?: AgentReferenceKind
+  kind?: AgentReferenceKind,
+  session?: string
 ): string {
   const send = `orca orchestration send --to ${address} --subject "<topic>" --body "<message>"`
   if (kind === 'chat') {
     return `[Orca chat "${label}": ${address} — read it with orca agent read ${address}, and message it with ${send}]`
   }
   if (kind === 'terminal') {
-    return `[Orca terminal "${label}": ${address} — read it with orca terminal read --terminal ${address}, and type into it with orca terminal send --terminal ${address} --text "<text>" --enter]`
+    return `[Orca terminal "${label}": ${address} — read it with orca terminal read --terminal ${address}, ${session ? `page its agent's transcript with orca agent read ${session}, ` : ''}and type into it with orca terminal send --terminal ${address} --text "<text>" --enter]`
   }
   return `[Orca agent "${label}": ${address} — message it with ${send}]`
 }

@@ -95,6 +95,12 @@ export function hostSessionMentions(
   })
   // A remote pane's PTY id wraps the host's terminal handle.
   const ownPty = self.ptyId && (parseRemoteRuntimePtyId(self.ptyId)?.handle ?? self.ptyId)
+  // A terminal agent's pane key is its terminal's tab and leaf.
+  const terminalAgents = new Map(
+    agents.flatMap((row) =>
+      row.kind === 'terminal' && row.orcaSessionId ? [[row.paneKey, row.orcaSessionId]] : []
+    )
+  )
   const shells = terminals.flatMap((terminal): NativeChatRoomMention[] => {
     if (
       terminal.orphaned ||
@@ -105,7 +111,14 @@ export function hostSessionMentions(
     }
     const key = `host-terminal:${terminal.handle}`
     const label = terminal.paneTitle || terminal.title || terminal.handle
-    references.set(key, { label, address: terminal.handle, hostKey, kind: 'terminal' })
+    const session = terminalAgents.get(`${terminal.tabId}:${terminal.leafId}`)
+    references.set(key, {
+      label,
+      address: terminal.handle,
+      hostKey,
+      kind: 'terminal',
+      ...(session ? { session: `${ORCA_SESSION_ADDRESS_PREFIX}${session}` } : {})
+    })
     return [
       {
         key,

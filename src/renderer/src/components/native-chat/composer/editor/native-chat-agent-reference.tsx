@@ -62,6 +62,7 @@ export const NativeChatAgentReference = Node.create({
     address: { default: '' },
     hostKey: { default: '' },
     kind: { default: '' },
+    session: { default: '' },
     agentType: { default: '' }
   }),
   addNodeView: () => ReactNodeViewRenderer(AgentReferencePill),
@@ -109,7 +110,7 @@ export function insertAgentReferences(
     references.flatMap((attrs, index) => [
       {
         type: NativeChatAgentReference.name,
-        attrs: { ...attrs, agentType: attrs.agentType ?? '' }
+        attrs: { ...attrs, session: attrs.session ?? '', agentType: attrs.agentType ?? '' }
       },
       ...(index < references.length - 1 || !hasRightSeparator ? [{ type: 'text', text: ' ' }] : [])
     ])

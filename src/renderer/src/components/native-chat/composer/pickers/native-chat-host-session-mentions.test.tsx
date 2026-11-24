@@ -159,4 +159,31 @@ describe('hostSessionMentions', () => {
       'host-terminal:term_dev'
     ])
   })
+
+  it("gives a terminal chip its agent's Orca session ID when the terminal runs a named agent", () => {
+    const mentions = hostSessionMentions(
+      lists(
+        [
+          // A terminal agent's pane key is its terminal's tab and leaf.
+          { ...chat('codex-session', 'tab-term_codex:leaf'), kind: 'terminal' },
+          { ...chat('', 'tab-term_unnamed:leaf'), orcaSessionId: null, kind: 'terminal' }
+        ],
+        [
+          terminal('term_codex', 'pty-codex'),
+          terminal('term_unnamed', 'pty-unnamed'),
+          terminal('term_dev', 'pty-dev')
+        ]
+      ),
+      { paneKey: 'pane-own', ptyId: null },
+      new Set()
+    )
+
+    expect(
+      [...mentions.references.values()].map(({ address, session }) => [address, session])
+    ).toEqual([
+      ['term_codex', 'orca_session_id:codex-session'],
+      ['term_unnamed', undefined],
+      ['term_dev', undefined]
+    ])
+  })
 })

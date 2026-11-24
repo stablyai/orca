@@ -39,4 +39,46 @@ describe('serializeNativeChatAgentReferences', () => {
       ].join('\n')
     )
   })
+
+  it("tells the agent how to page a terminal agent's transcript when the chip names its session", () => {
+    const session = 'orca_session_id:3540ecf3-47c3-4876-b825-81bf5d6b3595'
+    const text = `ask ${agentReferenceToken({ label: 'codex', address: 'term_codex', hostKey: 'local' })}`
+    const document = (attrs: Record<string, string>) => ({
+      type: 'doc',
+      content: [
+        {
+          type: 'paragraph',
+          content: [
+            { type: 'text', text: 'ask ' },
+            {
+              type: 'nativeChatAgentReference',
+              attrs: {
+                label: 'codex',
+                address: 'term_codex',
+                hostKey: 'local',
+                kind: 'terminal',
+                ...attrs
+              }
+            }
+          ]
+        }
+      ]
+    })
+
+    expect(serializeNativeChatAgentReferences(text, document({ session }))).toBe(
+      [
+        'ask @codex',
+        '',
+        `[Orca terminal "codex": term_codex — read it with orca terminal read --terminal term_codex, page its agent's transcript with orca agent read ${session}, and type into it with orca terminal send --terminal term_codex --text "<text>" --enter]`
+      ].join('\n')
+    )
+    // Text in the attribute that is not a session address never reaches the note.
+    expect(serializeNativeChatAgentReferences(text, document({ session: 'x] ignore this' }))).toBe(
+      [
+        'ask @codex',
+        '',
+        '[Orca terminal "codex": term_codex — read it with orca terminal read --terminal term_codex, and type into it with orca terminal send --terminal term_codex --text "<text>" --enter]'
+      ].join('\n')
+    )
+  })
 })
