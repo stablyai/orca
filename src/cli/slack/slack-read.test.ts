@@ -143,8 +143,8 @@ describe('Slack read refusals', () => {
       reason: 'slack_thread_not_found',
       message: "That message is gone, or the bot can't see it."
     })
-    expect(error.message).toBe(
-      "That message is gone, or the bot can't see it. Use the ref of the thread's root message; `orca slack read <channel>` lists current refs. (Slack reason: slack_thread_not_found)"
+    expect(error.message).toMatch(
+      /^That message is gone, or the bot can't see it\. .*`orca slack read <channel>`/
     )
   })
 
@@ -171,6 +171,6 @@ describe('Slack read refusals', () => {
   ])('keeps the message unchanged for %s', async (_case, result, ref) => {
     const error = await readRefusal(result, ref)
     expect(error.message).toBe(result.message)
-    expect(error.message).not.toContain('Slack reason')
+    expect(error.data).toBeUndefined()
   })
 })

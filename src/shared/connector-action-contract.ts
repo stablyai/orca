@@ -134,8 +134,8 @@ export const ConnectorActionResponse = z.discriminatedUnion('ok', [
     ok: z.literal(false),
     refusal: z.string().min(1),
     message: z.string(),
-    reason: z.string().min(1).optional(),
-    scope: z.string().min(1).optional()
+    reason: z.string().optional(),
+    scope: z.string().optional()
   })
 ])
 export type ConnectorActionResponse = z.infer<typeof ConnectorActionResponse>
