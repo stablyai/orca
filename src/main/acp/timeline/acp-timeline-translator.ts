@@ -31,6 +31,9 @@ export type AcpTimelineTranslatorOptions = {
   dialect?: AcpDialect
   agentName?: string
   onTextDropped?: (drop: AcpTextDrop) => void
+  /** Number every turn's messages: a relayed agent's rows outlive the acquisition, and its
+   *  replay rewrites the rows it saved. */
+  numbersMessages?: boolean
 }
 
 /** Consume frames once; callers retry returned events. State lasts only for this provider child. */
@@ -252,7 +255,7 @@ export class AcpTimelineTranslator {
     }
     if (standard) {
       const messageKey =
-        turn && this.dialect.injectedPromptIdentity
+        turn && (this.dialect.injectedPromptIdentity || this.options.numbersMessages)
           ? this.ownership.messages.key(turn, standard.update)
           : undefined
       return [

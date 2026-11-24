@@ -7,8 +7,8 @@ import { backgroundTaskBlocks } from '../../../../shared/native-chat/input/task-
 import type { AgentType } from '../../../../shared/agent-status/contracts/agent-status-types'
 import type { AcpStructuredChild } from '../children/acp-structured-child'
 
-/** More background tasks than this outlasting their turns can't be real; the rest start anew. */
-const MAX_CARRIED_TASKS = 32
+/** Saved rows read at once; every carried task is read, in batches of this many. */
+const READ_BATCH = 16
 
 /**
  * Background tasks still running when the earlier app quit: their turns ended, so their starts
@@ -20,7 +20,7 @@ export async function carryKeptAcpBackgroundWork(
   child: AcpStructuredChild,
   agent: AgentType
 ): Promise<void> {
-  const taskIds = child.connection.kept?.openWork('task').slice(0, MAX_CARRIED_TASKS) ?? []
+  const taskIds = child.connection.kept?.openWork('task') ?? []
   const translator = child.lane?.translator
   const history = child.events?.journalHistory?.()
   if (taskIds.length === 0 || !translator || !history) {
@@ -36,9 +36,14 @@ export async function carryKeptAcpBackgroundWork(
     const { itemId } = rows.item('item', providerKey(key), namespace)
     return history.readInOrder((reads) => reads.itemDetail(itemId)).catch(() => null)
   }
-  for (const row of await Promise.all(taskIds.map((id) => read(`background-task:${id}`)))) {
-    for (const block of row?.body.kind === 'message' ? backgroundTaskBlocks(row.body.blocks) : []) {
-      translator.backgroundTasks.restate(block)
+  for (let at = 0; at < taskIds.length; at += READ_BATCH) {
+    const batch = taskIds.slice(at, at + READ_BATCH)
+    for (const row of await Promise.all(batch.map((id) => read(`background-task:${id}`)))) {
+      for (const block of row?.body.kind === 'message'
+        ? backgroundTaskBlocks(row.body.blocks)
+        : []) {
+        translator.backgroundTasks.restate(block)
+      }
     }
   }
 }
