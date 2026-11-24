@@ -19,6 +19,7 @@ import {
 import { acpPromptRejection } from './acp-prompt-failure'
 import type { ContentBlock, PromptResponse } from '../generated/acp-protocol.generated'
 import { AcpTurnIdleWaiters } from './acp-turn-idle-waiters'
+import type { AcpPromptOpening } from '../timeline/acp-prompt-turns'
 
 type Send = { clientMessageId: string; prompt: ContentBlock[]; requestedAt: number }
 
@@ -206,18 +207,16 @@ export class AcpStructuredTurns {
   }
 
   /** The prompt an earlier app sent a kept agent: its answer ends the chat's open turn as usual.
-   *  `compactionTurn`: the prompt was the host's `/compact`, whose begun command turn it settles.
-   *  Not `journaled`: no turn was saved yet, so it opens as usual and its send is settled here. */
+   *  Not `adopted` (no turn saved yet), it opens as usual and its send is settled here. */
   adoptEarlier(
     clientMessageId: string,
     answered: () => Promise<PromptResponse>,
-    compactionTurn?: string,
-    journaled = true
+    ...opening: AcpPromptOpening
   ): void {
     if (!this.active && !this.ended) {
       const at = this.deps.now()
       const { lane } = this.deps
-      const opened = lane.translator.openPrompt(clientMessageId, at, compactionTurn, journaled)
+      const opened = lane.translator.openPrompt(clientMessageId, at, ...opening)
       lane.apply(opened.events)
       this.unsettled.add(clientMessageId)
       this.active = { clientMessageId, prompt: [], requestedAt: at }
@@ -243,10 +242,6 @@ export class AcpStructuredTurns {
       ? { promptId, requestId: promptId }
       : undefined
     const answered = earlier ?? this.deps.connection.prompt(send.prompt, meta)
-    // A compaction's reply stays in the relay until it ends, so after a restart it is judged whole.
-    const release = promptId.startsWith('compact:') ? this.deps.connection.holdAcks?.() : null
-    // Always handled here: the prompt's own failure is handled below.
-    void answered.then(release, () => release?.())
     if (this.steers.length > 0 || this.preparingSteers > 0) {
       this.cancelForSteer()
     }

@@ -2,9 +2,9 @@ import { providerTimelineTurnKeyPart } from '../../../native-chat/agent-session-
 import { ACP_PROMPT_TURN_PREFIX, acpTurnEndEvents } from '../../timeline/acp-prompt-turns'
 import { structuredAgentSessionCommandTurn } from '../../../../shared/agent-session/view/structured-agent-session-command-turn-identity'
 import { isStructuredAgentSessionCommandTurnId } from '../../../native-chat/agent-session-wire/operations/structured-agent-session-command-turn'
-import type { AcpKeptRows } from './acp-kept-rows'
 import type { StructuredAgentSessionCommandRun } from '../../../native-chat/agent-session-wire/providers/structured-agent-session-adapter'
 import type { AcpStructuredSessionAdapterDeps } from '../acp-structured-session-adapter-deps'
+import { carryKeptAcpCalls } from './acp-kept-calls'
 import { assertAcpStartingSession, type AcpStructuredChild } from '../children/acp-structured-child'
 
 /** The translator's turn from the journal's spelling of its id; null for host turns and for ids
@@ -56,9 +56,8 @@ async function savedCommandRun(
 export async function carryOnKeptAcpAgent<Opened>(
   opened: Opened,
   child: AcpStructuredChild,
-  deps: Pick<AcpStructuredSessionAdapterDeps, 'keptWork'>,
-  signal: AbortSignal,
-  rows: AcpKeptRows | null = null
+  deps: Pick<AcpStructuredSessionAdapterDeps, 'keptWork' | 'spec'>,
+  signal: AbortSignal
 ): Promise<Opened> {
   const { kept } = child.connection
   if (!kept) {
@@ -68,6 +67,8 @@ export async function carryOnKeptAcpAgent<Opened>(
   const turnId = work?.turnId ?? null
   const turn = turnId === null ? null : providerTurn(turnId)
   assertAcpStartingSession(child, () => signal.aborted)
+  // Before any turn opens here: these calls belong to turns that already ended.
+  await carryKeptAcpCalls(child, deps.spec.agent)
   const command =
     turnId !== null && isStructuredAgentSessionCommandTurnId(turnId)
       ? await savedCommandRun(child, turnId)
@@ -81,23 +82,13 @@ export async function carryOnKeptAcpAgent<Opened>(
     if (command) {
       child.lane?.beginCommand(command)
     }
-    // The answer ends the turn only after the updates the agent sent before it are delivered.
-    const delivered = async (): Promise<void> => await rows?.drained()
-    const answered = kept.earlierPrompt().then(
-      async (response) => (await delivered(), response),
-      async (error: unknown) => {
-        await delivered()
-        throw error
-      }
-    )
-    // Saved rows are continued only within the carried turn.
-    void answered.then(
-      () => rows?.end(),
-      () => rows?.end()
-    )
-    child.turns.adoptEarlier(clientMessageId, () => answered, command?.turnId, unopened === null)
+    const journaled = unopened === null
+    // Output is acked only past an open message's or call's start, so the replay rewrites each row
+    // whole; a turn whose first lines were acked anyway (the daemon's cap) numbers rows anew.
+    const renumber = journaled && !kept.promptReplayedWhole
+    const answered = () => kept.earlierPrompt()
+    child.turns.adoptEarlier(clientMessageId, answered, command?.turnId, journaled, renumber)
   } else {
-    rows?.end()
     // A turn the agent began itself, which this run's translator doesn't know: it ends as the open
     // app ends one when the agent goes quiet, and the agent's further work opens a turn of its own.
     const { lane } = child

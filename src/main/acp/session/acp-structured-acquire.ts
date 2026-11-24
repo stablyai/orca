@@ -15,7 +15,6 @@ import type { AcpSessionEvent } from '../protocol/acp-session-events'
 import type { AcpStructuredConnection } from '../process/acp-structured-connection'
 import { launchRelayedAcpAgent } from '../process/acp-kept-agent'
 import { carryOnKeptAcpAgent } from './start/acp-kept-turn'
-import { keptAcpRows } from './start/acp-kept-rows'
 import { acpAgentName } from './acp-structured-agent-definitions'
 import { AcpStructuredLane } from '../journal/acp-structured-lane'
 import { acpLaneChildWorkDelivery } from '../journal/acp-lane-child-work-delivery'
@@ -153,8 +152,7 @@ export async function acquireAcpStructuredSession(input: {
   }
   // From here, cancellation closes this connection even before exit is proven.
   input.track(connection)
-  const keptRows = keptAcpRows(connection.kept, events, input, () => slot.lane?.translator)
-  const route = (event: AcpSessionEvent): void =>
+  connection.subscribe((event: AcpSessionEvent) =>
     whenLane(() => {
       if (slot.lane) {
         if (slot.reattaching) {
@@ -187,7 +185,7 @@ export async function acquireAcpStructuredSession(input: {
         })
       }
     })
-  connection.subscribe(keptRows?.route(route) ?? route)
+  )
   const identity = providerSpawnedProcessIdentity(
     acquire,
     `${spec.agent} ACP agent`,
@@ -300,7 +298,7 @@ export async function acquireAcpStructuredSession(input: {
       })
         // Before the first turn, so no tool of this session runs without its identity.
         .then((opened) => sharedTools?.publishFor(opened) ?? opened)
-        .then((opened) => carryOnKeptAcpAgent(opened, child, deps, signal, keptRows)),
+        .then((opened) => carryOnKeptAcpAgent(opened, child, deps, signal)),
     dispose: () => {
       child.historyCatchUp?.abort()
       slot.lane?.dispose()

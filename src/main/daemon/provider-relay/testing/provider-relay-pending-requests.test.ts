@@ -304,8 +304,10 @@ describe('provider relay kept lines', () => {
         { seq: 1, name: 'a:session/new' },
         { seq: 3, name: 'l:"config_option_update"' }
       ],
-      outstanding: [{ id: 3, method: 'session/prompt' }]
+      // Every line since the prompt is in a replay after seq 4; once one is acked, not.
+      outstanding: [{ id: 3, method: 'session/prompt', replayedWhole: true }]
     })
+    expect(pending.kept.attachDetails(5).outstanding).toEqual([{ id: 3, method: 'session/prompt' }])
     expect(pending.working.size).toBe(1)
     // Kept lines are never held requests, so spool acks and answers can't release them.
     expect(pending.size).toBe(0)
@@ -314,7 +316,7 @@ describe('provider relay kept lines', () => {
     expect(pending.working.size).toBe(0)
     // Answered within the replay after seq 4, so the next app can wait on it by id.
     expect(pending.kept.attachDetails(4).outstanding).toEqual([
-      { id: 3, method: 'session/prompt', answered: true }
+      { id: 3, method: 'session/prompt', answered: true, replayedWhole: true }
     ])
     expect(pending.kept.attachDetails(5).outstanding).toBeUndefined()
     expect(pending.kept.records().map((record) => record.seq)).toEqual([1, 3])

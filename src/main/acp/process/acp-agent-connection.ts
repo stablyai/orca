@@ -27,7 +27,7 @@ import { AcpSessionRuntime } from '../protocol/acp-session-runtime'
 import { redactString, redactTextTail } from '../../../shared/observability/redactor'
 import type { AcpSessionRuntimeOptions } from '../protocol/acp-session-runtime-options'
 import type { RelayedProviderProcess } from '../../provider-relay/app-provider-relays'
-import { holdRelayAcks, keptAcpSession, type AcpKeptSession } from './acp-kept-session'
+import { keptAcpSession, type AcpKeptSession } from './acp-kept-session'
 import type { InitializeResponse } from '../generated/acp-protocol.generated'
 
 export type AcpSignInWatch = {
@@ -79,8 +79,6 @@ export class AcpAgentConnection extends AcpSessionRuntime {
   private readonly lifecycle: AcpConnectionLifecycle
   private readonly diagnoseLifecycle: (message: string) => void
   readonly spawned: Promise<void>
-  /** A relayed agent's output stays unacked until the release, so the next app replays it. */
-  holdAcks = (): (() => void) | undefined => holdRelayAcks(this.managed.child)
 
   /** Any session the agent reports on this connection, including a subagent's child session. */
   closeSession = (sessionId: string, timeoutMs = 10_000): Promise<unknown> =>

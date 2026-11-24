@@ -12,7 +12,7 @@ import { AcpAgentTurns } from './acp-agent-turns'
 import { GENERIC_ACP_DIALECT } from '../acp-dialects/acp-dialect'
 import type { AcpDialect, AcpTurnEnding } from '../acp-dialects/acp-dialect'
 import type { AcpAgentError } from '../transport/acp-errors'
-import { acpTurnEndEvents, AcpPromptTurns } from './acp-prompt-turns'
+import { acpTurnEndEvents, AcpPromptTurns, type AcpPromptOpening } from './acp-prompt-turns'
 
 import { translateAcpRequest } from '../requests/acp-timeline-requests'
 import { AcpUrlElicitations } from '../requests/acp-url-elicitation'
@@ -80,13 +80,13 @@ export class AcpTimelineTranslator {
   openPrompt(
     clientMessageId: string,
     at: number,
-    ...open: [compactionTurn?: string, adopted?: boolean]
+    ...open: AcpPromptOpening
   ): { promptId: string; events: ProviderTimelineEvent[] } {
     if (this.loading) {
       throw new Error('ACP prompt overlaps a prompt or load')
     }
-    const prompt = this.prompts.open(clientMessageId, at, ...open)
-    if (open[1]) {
+    const prompt = this.prompts.open(clientMessageId, at, open[0], open[1])
+    if (open[2]) {
       this.ownership.messages.carry(prompt.promptId)
     }
     this.agentTurns.resume()
