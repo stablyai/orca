@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { RelayOuterError } from '../encryption/mobile-relay-e2ee-link'
+import { RelayOuterError } from '../../../../src/shared/remote-runtime/relay/client/relay-e2ee-link'
 import { MobileEndpointSupervisor } from './mobile-endpoint-supervisor'
 import {
   FakeLogicalClient,

@@ -39,6 +39,9 @@ import { normalizeBotSidebarView } from '../../../../shared/bots/bot-sidebar-vie
 import { OWNER_ACTS_FOR } from '../../../../shared/bots/bot-acts-for'
 import { orcaSignInServer } from '../../../bots/orca-sign-in-server'
 import { refuseUnsavedFolderDrafts } from '../../repositories/folder-workspace-deletion'
+import { botShareScopeOf, emptyChatReusableBy } from '../../../bots/team-share/bot-share-chats'
+import { startBotShareSession } from '../../../bots/team-share/bot-share-session-start'
+import { botShareListedBots } from '../../../bots/team-share/bot-share-access'
 
 async function updateBot(params: BotUpdateParams, context: RpcContext) {
   if (params.updates.slackMirror !== undefined) {
@@ -112,9 +115,18 @@ export const BOT_METHODS = [
     // can't reach Orca Cloud, refused (connectorMessage says why), or ok; absent without Orca Cloud.
     // signInServer: this host's name when it is a headless server, whose signed-out copy names it;
     // null with a window (an older host omits it, so the CLI can't tell which).
-    handler: async (_params, { runtime }) => {
-      const webhooks = runtime.getWebhooks()
+    handler: async (_params, context) => {
+      const { runtime } = context
       const listing = runtime.bots.listing()
+      const share = botShareScopeOf(context)
+      if (share) {
+        // A teammate sees the shared bot alone, and none of this host's own state.
+        return {
+          bots: botShareListedBots(listing.bots, share),
+          botsEnabled: listing.botsEnabled
+        }
+      }
+      const webhooks = runtime.getWebhooks()
       const signInServer = orcaSignInServer(runtime)
       return {
         ...listing,
@@ -138,6 +150,11 @@ export const BOT_METHODS = [
     params: BotRoster,
     handler: async (params, context) => {
       const { runtime } = context
+      const share = botShareScopeOf(context)
+      if (share) {
+        // The shared bot alone, without its chats count (which counts everyone's) or other computers.
+        return { bots: (await runtime.bots.roster()).filter((entry) => entry.id === share.botId) }
+      }
       // A session id names a chat only on its own host, so a paired client's claim names none.
       const caller =
         context.pairedDeviceId === undefined && params.callerSessionId
@@ -262,20 +279,27 @@ export const BOT_METHODS = [
     name: 'bots.session.start',
     permission: 'workspace',
     params: BotSessionStart,
-    handler: async (params, { runtime }) => {
+    handler: async (params, context) => {
+      const { runtime } = context
       runtime.bots.assertEnabled()
       const bot = runtime.bots.list().find((entry) => entry.id === params.botId)
       if (!bot) {
         throw new Error('bot_not_found')
       }
+      const share = botShareScopeOf(context)
+      if (share) {
+        return { sessionId: await startBotShareSession(runtime, bot, share, params.newChatId) }
+      }
       const onAgent = botOnAgent(bot, params.agent)
       // Like a blank page: an empty chat already open is the new chat, not one more.
-      const empty = await openEmptyBotChat(runtimeBotChatTreeHost(runtime), onAgent).catch(
-        (error: unknown) => {
-          console.error('[bots] failed to look for an empty chat to reuse:', error)
-          return null
-        }
-      )
+      const empty = await openEmptyBotChat(
+        runtimeBotChatTreeHost(runtime),
+        onAgent,
+        emptyChatReusableBy(runtime, null)
+      ).catch((error: unknown) => {
+        console.error('[bots] failed to look for an empty chat to reuse:', error)
+        return null
+      })
       // The owner's own chat, as Home Chat is: recorded so a /clear never leaves it unattributed.
       const actsFor = { actsFor: [...OWNER_ACTS_FOR] }
       return { sessionId: empty ?? (await startBotSession(runtime, onAgent, { actsFor })) }

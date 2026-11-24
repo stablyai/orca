@@ -4,7 +4,8 @@ import type { OrcaCloudAuthConfig } from '../orca-profiles/cloud-auth/profile-cl
 import type { OrcaCloudSession } from '../orca-profiles/cloud-session/profile-cloud-session-store'
 import {
   readFreshOrcaCloudSession,
-  refreshAfterRejectedAccessToken
+  refreshAfterRejectedAccessToken,
+  runWithFreshOrcaCloudSession
 } from '../orca-profiles/cloud-session/profile-cloud-session-refresh'
 import { ensureActiveOrcaProfile } from '../orca-profiles/profile-index-store'
 import { loadOrCreateHostInstallationId } from '../runtime/hosts/platform-probe/host-descriptor'
@@ -100,6 +101,25 @@ function withServerTime(fetchImpl: typeof globalThis.fetch): {
   }
 }
 
+/**
+ * Runs `operation` with this account's Orca Cloud access token and the sign-in service's address,
+ * refreshing once on a 401, as the connector's own token mint does; for calls beyond the connector's.
+ */
+export function connectorAccountCloudCall(
+  authConfig: OrcaCloudAuthConfig,
+  userDataPath: string
+): <T>(
+  operation: (accessToken: string, apiBaseUrl: string) => Promise<T>
+) => Promise<{ status: 'ok'; value: T } | { status: 'reconnect-required' }> {
+  return (operation) =>
+    runWithFreshOrcaCloudSession(
+      authConfig,
+      ensureActiveOrcaProfile(userDataPath),
+      userDataPath,
+      (session) => operation(session.accessToken, authConfig.apiBaseUrl)
+    )
+}
+
 /** The account the connector serves, read like the relay's: the active profile's cloud user. */
 export function connectorAccount(userDataPath: string): string | null {
   return ensureActiveOrcaProfile(userDataPath).profile.cloud?.userId ?? null
@@ -122,10 +142,10 @@ export function desktopConnectorTokenMint(
   fetchImpl: typeof globalThis.fetch = globalThis.fetch
 ): ConnectorTokenMint {
   return async () => {
-    if (connectorAccount(userDataPath) !== account) {
+    const active = ensureActiveOrcaProfile(userDataPath)
+    if (active.profile.cloud?.userId !== account) {
       return SIGNED_OUT
     }
-    const active = ensureActiveOrcaProfile(userDataPath)
     try {
       // Only a refresh the auth service itself refuses can sign out here, as for any Orca Cloud call.
       const fresh = await readFreshOrcaCloudSession(authConfig, active, userDataPath)

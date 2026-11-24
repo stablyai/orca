@@ -1,5 +1,3 @@
-import './mobile-relay-e2ee-link'
-import './mobile-e2ee-v2-physical-channel'
 import '../relay/replacement-session-authentication'
 
 export function encodeBase64Url(value: Uint8Array): string {

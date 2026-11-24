@@ -7,11 +7,11 @@ import {
   MobileRelayCredentialBundleSchema,
   type MobileRelayCredentialBundle
 } from '../../host-credentials/mobile-relay-credential-bundle'
-import { hashMobileRelayCredential } from './mobile-relay-credential-hash'
 import {
-  relayCredentialProvision,
-  relayPairingEndpointsRead
-} from '../../pairing/mobile-relay-pairing-operations'
+  hashRelayCredential,
+  mintRelayCredential
+} from '../../../../src/shared/remote-runtime/relay/relay-credential-hash'
+import { installRelayResumeCredential } from '../../../../src/shared/remote-runtime/relay/client/relay-resume-credential'
 import type { RpcClient } from '../rpc/rpc-client-contract'
 
 const CREDENTIAL_ROTATION_WINDOW_MS = 7 * 24 * 60 * 60 * 1000
@@ -30,12 +30,10 @@ export async function rotateMobileRelayCredential(args: {
   let bundle = args.bundle
   if (!bundle.pending) {
     const randomBytes = args.randomBytes ?? ExpoCrypto.getRandomBytes
-    const token = encodeBase64Url(randomBytes(32))
     bundle = MobileRelayCredentialBundleSchema.parse({
       ...bundle,
       pending: {
-        token,
-        hash: hashMobileRelayCredential(token),
+        ...mintRelayCredential(randomBytes),
         reqId: `rotate-${encodeBase64Url(randomBytes(16))}`
       }
     })
@@ -47,26 +45,11 @@ export async function rotateMobileRelayCredential(args: {
   if (!pending) {
     throw new Error('relay credential rotation pending state missing')
   }
-  let endpoints = await getEndpoints(args.client, pending.reqId)
-  if (endpoints.installStatus?.state !== 'committed') {
-    const installReply = await relayCredentialProvision.request(args.client, {
-      reqId: pending.reqId,
-      newResumeTokenHash: pending.hash,
-      expectedCurrentHash: bundle.current.hash
-    })
-    const installed = relayCredentialProvision.interpret(installReply)
-    endpoints = await getEndpoints(args.client, pending.reqId)
-    if (
-      endpoints.installStatus?.state !== 'committed' ||
-      JSON.stringify(endpoints.installStatus.result) !== JSON.stringify(installed)
-    ) {
-      throw new Error('relay credential rotation was not authoritatively committed')
-    }
-  }
-  if (!endpoints.relay || endpoints.installStatus?.state !== 'committed') {
-    throw new Error('relay credential rotation endpoint state missing')
-  }
-  const installed = endpoints.installStatus.result
+  const { installed, relay } = await installRelayResumeCredential(
+    args.client,
+    pending,
+    bundle.current.hash
+  )
   const next = MobileRelayCredentialBundleSchema.parse({
     ...bundle,
     current: {
@@ -81,7 +64,7 @@ export async function rotateMobileRelayCredential(args: {
     pending: undefined
   })
   await args.writeBundle(next)
-  return { bundle: next, relay: endpoints.relay }
+  return { bundle: next, relay }
 }
 
 export function mobileRelayCredentialNeedsRotation(
@@ -89,8 +72,7 @@ export function mobileRelayCredentialNeedsRotation(
   now: number
 ): boolean {
   // Repair pre-release decoded-byte hashes over authenticated direct connectivity using the stored hash.
-  const malformedCurrentHash =
-    bundle.current.hash !== hashMobileRelayCredential(bundle.current.token)
+  const malformedCurrentHash = bundle.current.hash !== hashRelayCredential(bundle.current.token)
   return (
     Boolean(bundle.pending) ||
     malformedCurrentHash ||
@@ -150,11 +132,6 @@ export async function persistResumeConfirmation(args: {
       ? null
       : (confirmation?.resumeExpiresAt ?? args.session.getResumeExpiresAt())
   return { bundle, leaseExpiry }
-}
-
-async function getEndpoints(client: RpcClient, installReqId: string) {
-  const reply = await relayPairingEndpointsRead.request(client, { installReqId })
-  return relayPairingEndpointsRead.interpret(reply)
 }
 
 function encodeBase64Url(value: Uint8Array): string {

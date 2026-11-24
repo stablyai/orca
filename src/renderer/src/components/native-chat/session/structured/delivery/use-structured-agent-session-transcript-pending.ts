@@ -8,7 +8,8 @@ import {
 } from '../../../queue/structured-agent-session-sending-queued-cards'
 import type { StructuredAgentSessionPendingSend } from './structured-agent-session-pending-sends'
 
-/** The sends the transcript draws before the host records them: queued ones stay in their cards. */
+/** The sends the transcript draws before the host records them: queued ones stay in their cards, and
+ *  a shared agent's held messages follow. */
 export function useStructuredAgentSessionTranscriptPending(
   chat: {
     queuedMessages: readonly AgentSessionQueuedMessage[] | null
@@ -16,7 +17,8 @@ export function useStructuredAgentSessionTranscriptPending(
     submissions: readonly AgentJournalSubmission[]
   },
   pending: readonly StructuredAgentSessionPendingSend[],
-  isWorking: boolean
+  isWorking: boolean,
+  held: readonly StructuredAgentSessionOptimisticMessage[]
 ): readonly StructuredAgentSessionOptimisticMessage[] {
   const { queuedMessages, submissions } = chat
   const queuePaused = chat.queuePause !== null
@@ -27,6 +29,6 @@ export function useStructuredAgentSessionTranscriptPending(
       agentWorking: isWorking,
       queuePaused
     })
-    return steering.length > 0 ? [...outside, ...steering] : outside
-  }, [isWorking, pending, queuePaused, queuedMessages, submissions])
+    return steering.length > 0 || held.length > 0 ? [...outside, ...steering, ...held] : outside
+  }, [held, isWorking, pending, queuePaused, queuedMessages, submissions])
 }

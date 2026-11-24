@@ -14,6 +14,7 @@ import type { ExternalConversationLink } from '../../../../../shared/connectors/
 import type { SlackMirrorStatus } from '../../../../../shared/connectors/connector-slack-mirror-contract'
 import { slackMirrorAvailable } from '../../../../../shared/connectors/slack-mirror-state'
 import { selectFolderWorkspaceOnHost } from '../../../store/folder-workspaces/folder-workspace-record-index'
+import { botHomeHostId } from '../../../../../shared/bots/bot-home-host'
 
 export type NativeChatSlackMirror = {
   /** The bot as the catalog has it now; null once it is gone. */
@@ -43,7 +44,7 @@ export function useNativeChatSlackMirror(
     if (!bot) {
       return null
     }
-    const workspace = selectFolderWorkspaceOnHost(state, bot.folderWorkspaceId, bot.hostId)
+    const workspace = selectFolderWorkspaceOnHost(state, bot.folderWorkspaceId, botHomeHostId(bot))
     return (
       workspace?.externalConversations?.find(
         (entry) => entry.sessionId === sessionId && slackMirrorAvailable(entry)

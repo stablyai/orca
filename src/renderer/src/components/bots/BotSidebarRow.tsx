@@ -28,6 +28,8 @@ export type BotSidebarRowProps = {
   /** The row's picture: a bot's avatar, or a group's member faces. */
   avatar: React.ReactNode
   name: string
+  /** A mark right after the name, such as a shared agent's people icon. */
+  nameMark?: React.ReactNode
   /** Its home's key: the status and unread mark are the home's. */
   workspaceId: string
   hostId: ExecutionHostId
@@ -63,6 +65,7 @@ export type BotSidebarRowProps = {
 export function BotSidebarRow({
   avatar,
   name,
+  nameMark = null,
   workspaceId,
   hostId,
   status,
@@ -141,7 +144,13 @@ export function BotSidebarRow({
             closeDelay={120}
             trigger={
               <div
-                className="flex min-w-0 flex-1 gap-1 self-stretch"
+                className={cn(
+                  'flex min-w-0 flex-1 gap-1 self-stretch',
+                  actionsDisabled &&
+                    'focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-worktree-sidebar-ring'
+                )}
+                // The name takes focus only while it can be renamed; otherwise the row still can.
+                tabIndex={actionsDisabled ? 0 : undefined}
                 onFocus={(event) => setKeyboardFocus(event.target.matches(':focus-visible'))}
                 onBlur={() => setKeyboardFocus(false)}
               >
@@ -154,11 +163,13 @@ export function BotSidebarRow({
                       className="text-[13px] leading-5"
                       editingClassName="flex-1"
                       onRename={onRename}
+                      disabled={actionsDisabled}
                       // The hover card already shows the full name.
                       titleWrapper={(title) => title}
                       beginEditing={renameRequested}
                       onBeginEditingConsumed={() => setRenameRequested(false)}
                     />
+                    {nameMark}
                     {age ? (
                       <span className="ml-auto shrink-0 text-3xs leading-none text-muted-foreground tabular-nums">
                         {age}

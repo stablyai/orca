@@ -26,6 +26,7 @@ import { botQuietLine } from './BotPanelHeader'
 import { BotPanelHostLine } from './BotPanelHostLine'
 import { BotRowLineText, useBotRowLine } from './BotRowActivityLine'
 import { useBotGroupDelete } from './use-bot-group-delete'
+import { botHomeHostId } from '../../../../shared/bots/bot-home-host'
 
 /** The header's picture slot, a bot header's `size-9`. */
 const PICTURE = 36
@@ -36,7 +37,7 @@ const NAMED = 3
 
 function MemberRow({ bot }: { bot: Bot }): React.JSX.Element {
   const home = useAppStore((state) =>
-    selectFolderWorkspaceOnHost(state, bot.folderWorkspaceId, bot.hostId)
+    selectFolderWorkspaceOnHost(state, bot.folderWorkspaceId, botHomeHostId(bot))
   )
   return (
     <DropdownMenuItem onSelect={() => void openBotHomeTab(bot)}>

@@ -18,6 +18,11 @@ import {
 } from '../../shared/bot-types'
 import { GITHUB_ID_PATTERN } from '../../shared/connector-bot-github-contract'
 import type { ExternalConversationBot } from '../../shared/connectors/external-conversation-link'
+import { BOT_MAX_SHARES, type BotShare } from '../../shared/bots/bot-team-shares'
+import {
+  ConnectorBotShareSchema,
+  type ConnectorBotShare
+} from '../../shared/connector-share-contract'
 import type { RuntimeStore } from '../runtime/construction/runtime-store-contract'
 
 const Place = z.tuple([z.enum(['bot', 'bot-chat']), z.string().min(1)])
@@ -54,6 +59,20 @@ export const BOT_HELLO_BUDGET_BYTES = Math.floor(
     HELLO_TRIGGERS_RESERVE_BYTES) /
     CONNECTOR_CLIENT_LIMITS.maxHelloBots
 )
+
+// Each as the contract reads it, at most its maxBotShares, so one bad record never voids the hello.
+// Absent when there are none, which the cloud reads as not shared.
+function sharedWith(shares: readonly BotShare[] | undefined): { sharedWith?: ConnectorBotShare[] } {
+  const people = (shares ?? [])
+    .map((share) =>
+      share.kind === 'account'
+        ? { shareId: share.shareId, accountId: share.accountId }
+        : { shareId: share.shareId, email: share.email }
+    )
+    .filter((share) => ConnectorBotShareSchema.safeParse(share).success)
+    .slice(0, BOT_MAX_SHARES)
+  return people.length > 0 ? { sharedWith: people } : {}
+}
 
 /** A bot's GitHub people go on each installation, so a bot over its share drops installations from the end. */
 function withinBotBudget(bot: ConnectorBot): ConnectorBot {
@@ -185,13 +204,14 @@ export function connectorBots(
               )
             )
           : [])
-      ])
+      ]),
+      ...sharedWith(bot.shares)
     }))
     .map(withinBotBudget)
 }
 
 /** At most the contract's display length, never splitting a surrogate pair. */
-function displayText(text: string): string {
+export function displayText(text: string): string {
   const max = CONNECTOR_CLIENT_LIMITS.maxDisplayTextLength
   if (text.length <= max) {
     return text

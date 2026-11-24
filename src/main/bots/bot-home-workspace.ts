@@ -3,7 +3,7 @@ import type { RuntimeStore } from '../runtime/construction/runtime-store-contrac
 import type { BotControllerDependencies } from './bot-controller'
 import { botHomeFolder, isBotsProjectGroup } from './bot-home'
 
-type HomeStore = Required<Pick<RuntimeStore, 'getProjectGroups' | 'createProjectGroup'>>
+export type HomeStore = Required<Pick<RuntimeStore, 'getProjectGroups' | 'createProjectGroup'>>
 type HomeRecord = { folder: string; folderWorkspaceId: string }
 
 /** Reserves `<bots root>/<slug>` (else `<slug>-2`...) and makes its folder workspace in the
@@ -23,7 +23,7 @@ export async function makeBotsHome(
   try {
     await fill(path, folder)
     const workspace = await deps.createFolderWorkspace({
-      projectGroupId: botsGroupId(store, botsRoot),
+      projectGroupId: botsProjectGroupId(store, botsRoot),
       name,
       folderPath: path,
       createdWithAgent: agent
@@ -35,7 +35,8 @@ export async function makeBotsHome(
   }
 }
 
-function botsGroupId(store: HomeStore, botsRoot: string): string {
+/** The hidden Bots group every bot home lives in, made the first time one is. */
+export function botsProjectGroupId(store: HomeStore, botsRoot: string): string {
   const existing = store.getProjectGroups().find((group) => isBotsProjectGroup(group, botsRoot))
   return (
     existing ??

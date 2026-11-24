@@ -8,8 +8,13 @@ import { ConnectorCloud } from './connector-cloud'
 import { resolveConnectorOrigin } from './connector-origin'
 import type { ConnectorGitHubInstallations } from './connector-github-installations'
 import type { ConnectorRuntimeKind } from './connector-machine'
-import { connectorBots, type ConnectorPlacesStore } from './connector-places'
+import { connectorBots, displayText, type ConnectorPlacesStore } from './connector-places'
 import { connectorAccount, desktopConnectorTokenMint } from './connector-token-mint'
+import {
+  acceptBotShare,
+  putBotShareOffer,
+  resolveBotShareInvite
+} from '../bots/bot-team-share-deliveries'
 import { connectorTriggers, runTriggerDelivery } from './connector-triggers'
 import { hostNeedsConnector } from './connector-connection-need'
 import type { WebhookHostService } from '../webhooks/webhook-host-service'
@@ -117,6 +122,7 @@ export function createConnectorCloud({
       runtime: kind,
       orcaVersion: environment.getVersion(),
       hostName: () => runtime.readMachineName(),
+      ownerName: () => displayText(runtime.getConnectorCloud()?.orcaAccountName() ?? ''),
       seam: () => runtime.getExternalConversationSeam(),
       resetConversations: () => runtime.getExternalConversationSeam()?.resetAccount(),
       conversationHost: () => runtimeConversationHost(runtime),
@@ -161,6 +167,30 @@ export function createConnectorCloud({
           : null,
       webhookNotice: async (delivery) => webhooks.notice(delivery),
       prEvent: (delivery) => prWaker.handle(delivery.deliveryId, delivery.event),
+      shareResolved: (delivery) => resolveBotShareInvite(runtime.bots, delivery),
+      shareAccept: (delivery) =>
+        acceptBotShare(
+          {
+            bots: runtime.bots,
+            mintOffer: async (ask) => {
+              if (!runtime.botShareDevices) {
+                throw new Error('share_offer_unavailable')
+              }
+              return await runtime.botShareDevices.mintBotShareOffer(ask)
+            },
+            revokeDevices: async (botId, accountId) =>
+              (await runtime.botShareDevices?.revokeBotShareDevices(botId, accountId)) ?? false,
+            putOffer: (...offer) => putBotShareOffer(runtime.getConnectorCloud(), ...offer)
+          },
+          delivery
+        ),
+      shareSend: {
+        hostKey: () => runtime.botShareDevices?.getE2EEPublicKey() ?? null,
+        deliver: async (delivery) =>
+          runtime.botShareDevices
+            ? await runtime.botShareDevices.deliverBotShareHeldMessage(delivery)
+            : { outcome: 'refused', reason: 'unknown_device' }
+      },
       helloAnswered: (answer) => {
         webhooks.helloAnswered(answer)
         migratePlaces()
@@ -172,6 +202,7 @@ export function createConnectorCloud({
         ),
       onHelloInputsChanged: (listener) => {
         runtime.onBotsWritten(listener)
+        runtime.onBotShareHostKeyReady(listener)
         runtime.onClientEvent(
           (event) => {
             if (event.type === 'reposChanged' || event.type === 'automationsChanged') {

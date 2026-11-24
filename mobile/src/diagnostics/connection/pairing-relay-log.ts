@@ -1,4 +1,4 @@
-import { RelayOuterError } from '../../transport/encryption/mobile-relay-e2ee-link'
+import { RelayOuterError } from '../../../../src/shared/remote-runtime/relay/client/relay-e2ee-link'
 import type { ConnectionLogLevel, ConnectionLogSink } from './connection-log-types'
 
 export type PairingRelayLogger = (

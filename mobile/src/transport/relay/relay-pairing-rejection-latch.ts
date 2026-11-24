@@ -1,4 +1,4 @@
-import { MobileE2EEAuthenticationError } from '../encryption/mobile-e2ee-v2-physical-channel'
+import { PairedE2EEAuthenticationError } from '../../../../src/shared/remote-runtime/relay/client/paired-e2ee-v2-physical-channel'
 
 // Allow transient post-pairing E2EE refusals; match direct AUTH_RETRY_BUDGET before suggesting re-pair.
 const RELAY_PAIRING_REJECTION_BUDGET = 3
@@ -20,7 +20,7 @@ export class RelayPairingRejectionLatch {
   // Only an E2EE rejection is evidence; every other relay failure leaves the streak
   // untouched so a flaky network cannot masquerade as a revoked pairing.
   record(error: Error | null): void {
-    if (error instanceof MobileE2EEAuthenticationError) {
+    if (error instanceof PairedE2EEAuthenticationError) {
       this.update(Math.min(this.count + 1, RELAY_PAIRING_REJECTION_BUDGET))
     }
   }

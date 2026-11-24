@@ -1,3 +1,4 @@
+/* eslint-disable max-lines -- preview branch combines two size-neutral changes */
 import { botTidyUp, patchTidyUp, TIDY_UP_EVERY_CHOICES } from '../bots/bot-tidy-up'
 import * as z from 'zod'
 import { BOT_IMPORT_REPLY_MAX, BotImportFromSchema } from '../bots/bot-import'
@@ -52,10 +53,11 @@ export const BOT_ERROR_CODES = [
 ] as const
 
 const HandedWorkspaces = z.array(HandedWorkspaceSchema).min(1).max(HANDED_WORKSPACES_MAX)
+const BotAgent = z.enum(BOT_AGENTS).optional()
 
 export const BotCreate = z.object({
   name: NewBotNameSchema,
-  agent: z.enum(BOT_AGENTS).optional(),
+  agent: BotAgent,
   /** The model and options picked for `agent`; absent, its chats start on the native chat defaults. */
   launch: BotLaunchSchema.optional(),
   /** Absent, its chats follow the native chat permission default. */
@@ -129,7 +131,7 @@ export const BotUpdate = z.object({
   updates: z
     .object({
       name: BotNameSchema.optional(),
-      agent: z.enum(BOT_AGENTS).optional(),
+      agent: BotAgent,
       avatar: SettableBotAvatar.optional(),
       /** The mascot revision visible when its color or outfit was picked. */
       lookAtEpoch: z.uuid().optional(),
@@ -273,8 +275,11 @@ export const BotRoster = z.object({
   withoutChats: z.boolean().optional()
 })
 
-/** A new conversation with the bot; `agent` runs it on another of the agents a bot can be. */
-export const BotSessionStart = BotChat.extend({ agent: z.enum(BOT_AGENTS).optional() })
+/** A new conversation with the bot; `agent` runs it on another of the agents a bot can be.
+ *  `newChatId`: a shared teammate's id for this new chat, so their start and their message held while
+ *  the host was away open the same one; the owner's starts ignore it. */
+const NewChatId = z.string().min(1).max(128).optional()
+export const BotSessionStart = BotChat.extend({ agent: BotAgent, newChatId: NewChatId })
 
 /** The owner handed the bot a workspace, already moved under its home: Orca tells the bot in its Home
  *  (a bot just made for it) or in a new chat. */
@@ -288,7 +293,7 @@ export type BotUpdateParams = z.infer<typeof BotUpdate>
 /** What the host itself may change: an update, or the Google toggle, which only google.bot.set sets. */
 export type BotHostUpdates = BotUpdateParams['updates'] &
   Pick<Bot, 'google' | 'googleAccounts'> &
-  Pick<Bot, 'acceptedOffers' | 'handedPairedWorkspaces' | 'itemsSeen'> & {
+  Pick<Bot, 'acceptedOffers' | 'handedPairedWorkspaces' | 'itemsSeen' | 'shares'> & {
     /** Host-only: a wait of this bot's was cancelled. */
     cancelledWait?: BotCancelledWait
   }

@@ -1,5 +1,5 @@
-import { RelayOuterError } from '../encryption/mobile-relay-e2ee-link'
-import { MobileE2EEAuthenticationError } from '../encryption/mobile-e2ee-v2-physical-channel'
+import { RelayOuterError } from '../../../../src/shared/remote-runtime/relay/client/relay-e2ee-link'
+import { PairedE2EEAuthenticationError } from '../../../../src/shared/remote-runtime/relay/client/paired-e2ee-v2-physical-channel'
 import { ReplacementAuthenticationTimeoutError } from './replacement-session-authentication'
 import type { RelayHostOfflineStreak } from './relay-host-offline-streak'
 import type { MobileRelayEndpoint } from '../../../../src/shared/remote-runtime/relay/mobile-relay-credential-contract'
@@ -58,7 +58,7 @@ export function isDirectorResolutionFailure(error: Error): boolean {
     return error.stage === null || error.stage === 'opening'
   }
   return (
-    !(error instanceof MobileE2EEAuthenticationError) &&
+    !(error instanceof PairedE2EEAuthenticationError) &&
     (!(error instanceof RelayOuterError) || [4409, 4503, 1006].includes(error.code))
   )
 }

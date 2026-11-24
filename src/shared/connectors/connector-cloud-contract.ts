@@ -18,13 +18,20 @@ import { ConnectorAsker } from '../connector-asker-contract'
 import type { ConnectorWorkLink } from '../connector-work-link-contract'
 import type { AutomationConnectorEventTrigger } from '../automation-event-triggers'
 import type { JournalConnectorReplyOutcome } from '../agent-session/journal/journal-connector-reply'
+import {
+  ShareAcceptDelivery,
+  ShareResolvedDelivery,
+  ShareSendDelivery,
+  type ConnectorBotShare
+} from '../connector-share-contract'
 
 export const CONNECTOR_CONTRACT_VERSION = 1
 
 export { CONNECTOR_PATHS } from './connector-cloud-paths'
 
-/** The shared-app services an owner connects in one browser trip. */
-export const CONNECTOR_CONNECT_SOURCES = ['linear', 'github'] as const
+/** The services a person connects in one browser trip (connect-messages.ts in the cloud contract;
+ *  connector-mirrored-constants.test.ts keeps them equal). */
+export const CONNECTOR_CONNECT_SOURCES = ['linear', 'github', 'slack'] as const
 export type ConnectorConnectSource = (typeof CONNECTOR_CONNECT_SOURCES)[number]
 
 export const CONNECTOR_FEATURES = [
@@ -224,7 +231,11 @@ export const ConnectorDelivery = z.discriminatedUnion('kind', [
     ...DeliveryBase,
     kind: z.literal('pr_event'),
     event: PrEvent
-  })
+  }),
+  // A shared bot's people (connector-share-contract.ts), on the share's own conversation.
+  ShareResolvedDelivery,
+  ShareAcceptDelivery,
+  ShareSendDelivery
 ])
 export type ConnectorDelivery = z.infer<typeof ConnectorDelivery>
 
@@ -286,6 +297,8 @@ export type ConnectorBot = {
   handle?: string
   /** Workspaces of a shared-app source (Linear, GitHub installations) it answers in, with who may ask there. */
   sharedAppWorkspaces?: ConnectorBotWorkspace[]
+  /** The Orca accounts and invited emails it is shared with; absent, it isn't shared. */
+  sharedWith?: ConnectorBotShare[]
 }
 
 /** One event rule of a bot automation here; the cloud sends a match to this machine alone. */

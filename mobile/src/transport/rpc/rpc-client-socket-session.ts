@@ -2,7 +2,7 @@ import type { PairedE2EEFraming } from '../../../../src/shared/remote-runtime/e2
 import { PAIRED_E2EE_HANDSHAKE_DEADLINE_MS } from '../../../../src/shared/remote-runtime/e2ee/paired-e2ee-handshake-deadline'
 import type { PairedE2EEFramingPolicy } from '../../../../src/shared/remote-runtime/e2ee/paired-e2ee-framing-policy'
 import { createDirectSocketFraming, type DirectSocketFraming } from './direct-socket-framing'
-import { isRpcResponse } from './rpc-response-shape'
+import { isRpcResponse } from '../../../../src/shared/remote-runtime/rpc/rpc-response-shape'
 import { AUTH_REJECTED } from './rpc-client-authentication-retry'
 import { isStaleRpcSocketEvent, logRpcSocketClose } from './rpc-socket-close-evidence'
 import {

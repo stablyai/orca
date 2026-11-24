@@ -2032,6 +2032,24 @@
     },
     "artifacts": {
       "teamDisabled": "Artifact sharing is turned off by your team."
+    },
+    "linkedAccounts": {
+      "unlink": "Unlink",
+      "linkAnother": "Link another",
+      "link": "Link",
+      "waiting": "Waiting for {{service}}…",
+      "cancel": "Cancel",
+      "none": "Not linked",
+      "title": "Linked accounts",
+      "signedOutOnHost": "Sign {{host}} in to Orca again.",
+      "signedOut": "Sign in to Orca again.",
+      "unreachable": "Orca Cloud could not be reached. Check your connection and try again.",
+      "retry": "Try again",
+      "unlinkTitle": "Unlink {{name}} on {{service}}?",
+      "unlinkNoteWorkspace": "Bots shared with you won’t know it’s you in that workspace.",
+      "unlinkNote": "Bots shared with you won’t know it’s you on {{service}}.",
+      "slackOff": "Linking Slack isn’t available yet.",
+      "unlinkTitleIn": "Unlink {{name}} in {{workspace}}?"
     }
   },
   "menu": {
@@ -22949,6 +22967,12 @@
         "sampleCall": "Sample call",
         "sampleNote": "Starts a real run",
         "send": "Send"
+      },
+      "sharedHeld": {
+        "waiting": "Waiting for {{owner}}’s computer",
+        "notSent": "Not sent",
+        "sendAgain": "Send again",
+        "notHeld": "Couldn’t send it again"
       }
     },
     "tab": {
@@ -27769,7 +27793,9 @@
         "notInstalled": "Add this bot to Slack first.",
         "signedOut": "Sign in to Orca Cloud to connect Slack.",
         "unreachable": "Orca Cloud could not be reached. Check your connection and try again.",
-        "handOffExpired": "That hand-off expired or was already used. Try again."
+        "handOffExpired": "That hand-off expired or was already used. Try again.",
+        "tripExpired": "Slack didn’t finish. A newer sign-in may have replaced it. Start again.",
+        "wrongAccount": "This sign-in was started from another Orca account. Sign in with Slack again from this one."
       },
       "howToAsk": "Mention <code>@{{name}}</code> in a channel, or send it a direct message.",
       "handOff": {
@@ -27843,6 +27869,9 @@
         "otherDevice": "Approve on another device",
         "linkLabel": "Slack approval link",
         "copied": "Copied"
+      },
+      "connect": {
+        "linked": "Slack linked."
       }
     },
     "whoCanAsk": {
@@ -29657,7 +29686,7 @@
       "allHidden": "All bots are paused and hidden."
     },
     "share": {
-      "shareBot": "Share bot…",
+      "shareCopy": "Share a copy…",
       "none": "None",
       "noPurpose": "No purpose yet",
       "updatedAt": "Updated {{date}}",
@@ -29799,7 +29828,10 @@
         "avatarRefused": "Orca Cloud refused the bot's picture. Pick another picture, then try again.",
         "tooLarge": "This bot is too large to share. Leave out some memory or skills, then try again."
       },
-      "duplicateSkill": "Same name, in {{folder}} · not shared"
+      "duplicateSkill": "Same name, in {{folder}} · not shared",
+      "sharedBy": "Shared by {{name}}",
+      "sharedWith": "Shared with {{names}}",
+      "ownersComputer": "{{name}}’s computer"
     },
     "apps": {
       "close": "Close",
@@ -30718,6 +30750,35 @@
         "expired": "The sign-in expired. Try again.",
         "couldNotSignIn": "Couldn’t sign in. Try again."
       }
+    },
+    "teamShare": {
+      "add": "Add",
+      "addLabel": "Add people",
+      "addPlaceholder": "Email, Slack @name or GitHub login",
+      "done": "Done",
+      "emailNotSent": "Email not sent yet",
+      "githubLine": "GitHub · {{place}}",
+      "githubLinkedLine": "GitHub · linked to {{count}} Orca accounts",
+      "githubOnly": "GitHub only",
+      "invite": "Invite {{email}}",
+      "inviteActions": "Invite actions for {{name}}",
+      "invited": "Invited",
+      "noMatch": "No match for {{query}}",
+      "orcaAccount": "Orca account",
+      "owner": "Owner",
+      "peopleWithAccess": "People with access",
+      "remove": "Remove",
+      "removePerson": "Remove {{name}}",
+      "resendInvite": "Resend invite",
+      "share": "Share…",
+      "slackLine": "{{handle}} on Slack · {{workspace}}",
+      "slackOnly": "Slack only",
+      "slackPlace": "Slack · {{workspace}}",
+      "suggestions": "Suggestions",
+      "thisComputer": "this computer",
+      "title": "Share {{name}}",
+      "warning": "Anyone you share with can do anything {{name}} can on {{host}}, including using your accounts, files and chats.",
+      "you": "{{name}} (you)"
     }
   },
   "plugins": {

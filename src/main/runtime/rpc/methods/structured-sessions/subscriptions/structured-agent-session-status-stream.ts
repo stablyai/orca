@@ -8,6 +8,10 @@ import { defineStreamingMethod, type RpcContext } from '../../../core'
 import { requireStructuredHost as requireHost } from '../creation/structured-agent-session-gate'
 import { structuredAgentSessionStatusSubscriptionId } from './structured-agent-session-subscription-id'
 import { clientReadsStructuredSessionAgent } from '../structured-agent-session-policy'
+import {
+  botShareScopeOf,
+  botShareSessionFilter
+} from '../../../../../bots/team-share/bot-share-chats'
 
 /** Ties a stream to both ends that can close it — the runtime's subscription registry and the
  *  transport abort — so either one runs `onClose` exactly once. */
@@ -60,6 +64,9 @@ export const STRUCTURED_AGENT_SESSION_STATUS_METHODS = [
       if (stream.isClosed()) {
         return
       }
+      // A teammate's stream carries only their own chats on the shared bot.
+      const share = botShareScopeOf(ctx)
+      const listed = share ? botShareSessionFilter(ctx.runtime, share) : () => true
       dispose = host.subscribeStatus({
         id: subscriptionId,
         emit: (event) => {
@@ -70,7 +77,11 @@ export const STRUCTURED_AGENT_SESSION_STATUS_METHODS = [
                 ? {
                     conversationNames: event.conversationNames.filter((note) => {
                       const record = host.deps.store.getConversation(note.sessionId)
-                      return record && clientReadsStructuredSessionAgent(ctx, record.provider)
+                      return (
+                        record &&
+                        clientReadsStructuredSessionAgent(ctx, record.provider) &&
+                        listed(note.sessionId)
+                      )
                     })
                   }
                 : {}),
@@ -78,17 +89,23 @@ export const STRUCTURED_AGENT_SESSION_STATUS_METHODS = [
                 ? {
                     namingActiveSessionIds: event.namingActiveSessionIds.filter((sessionId) => {
                       const record = host.deps.store.getConversation(sessionId)
-                      return record && clientReadsStructuredSessionAgent(ctx, record.provider)
+                      return (
+                        record &&
+                        clientReadsStructuredSessionAgent(ctx, record.provider) &&
+                        listed(sessionId)
+                      )
                     })
                   }
                 : {}),
-              sessions: event.sessions.filter((session) =>
-                clientReadsStructuredSessionAgent(ctx, session.agent)
+              sessions: event.sessions.filter(
+                (session) =>
+                  clientReadsStructuredSessionAgent(ctx, session.agent) && listed(session.sessionId)
               )
             })
           } else if (
             event.type !== 'status' ||
-            clientReadsStructuredSessionAgent(ctx, event.session.agent)
+            (clientReadsStructuredSessionAgent(ctx, event.session.agent) &&
+              listed(event.session.sessionId))
           ) {
             emit(event)
           }

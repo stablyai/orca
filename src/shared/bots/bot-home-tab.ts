@@ -3,6 +3,7 @@ import type { Bot } from '../bot-types'
 import type { Tab } from '../workspace-layout/tab-groups/tab-types'
 import { LOCAL_EXECUTION_HOST_ID, type ExecutionHostId } from '../execution-host/execution-host'
 import { folderWorkspaceKey } from '../workspace/identity/workspace-scope'
+import { botHomeHostId } from './bot-home-host'
 
 type ChatTab = Pick<Tab, 'contentType' | 'entityId'>
 
@@ -30,7 +31,9 @@ export function isHostedBotChatTab(tab: HostedChatTab, bot: HostedBotHome | null
 }
 
 export function isLocalBotChatTab(tab: HostedChatTab, bot: HostedBotHome | null): boolean {
-  return bot?.hostId === LOCAL_EXECUTION_HOST_ID && isHostedBotChatTab(tab, bot)
+  return (
+    bot !== null && botHomeHostId(bot) === LOCAL_EXECUTION_HOST_ID && isHostedBotChatTab(tab, bot)
+  )
 }
 
 export function isBotSideChatTab(tab: HostedChatTab, bot: HostedBotHome | null): boolean {

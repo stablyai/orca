@@ -18,6 +18,8 @@ export function useStructuredAgentSessionDeliveryNotices(args: {
   journalItems: readonly AgentJournalRenderItem[]
   agentName: string
   startFailures?: readonly AgentSessionFailureFact[]
+  /** A shared agent's held messages' own lines, by the same row ids. */
+  heldNotices?: ReadonlyMap<string, NativeChatDeliveryNotice>
 }): ReadonlyMap<string, NativeChatDeliveryNotice> {
   const { agentName, pending, submissions } = args
   // Only rejection wording needs journal items; pending delivery comes from submissions alone.
@@ -30,17 +32,17 @@ export function useStructuredAgentSessionDeliveryNotices(args: {
   )
   const startFailures = args.startFailures ?? loadedFailures
   const commandItemIds = useCommandItemIds(args.journalItems, hasRejected)
-  const notices = useMemo(
-    () =>
-      structuredAgentSessionDeliveryNotices({
-        pending,
-        submissions,
-        agentName,
-        startFailures,
-        commandItemIds
-      }),
-    [pending, submissions, agentName, startFailures, commandItemIds]
-  )
+  const held = args.heldNotices
+  const notices = useMemo(() => {
+    const own = structuredAgentSessionDeliveryNotices({
+      pending,
+      submissions,
+      agentName,
+      startFailures,
+      commandItemIds
+    })
+    return held?.size ? new Map([...held, ...own]) : own
+  }, [pending, submissions, agentName, startFailures, commandItemIds, held])
   // Reuse unchanged notices/maps across submission batches to avoid rerendering rows.
   const previousRef = useRef(notices)
   const stable = sameNoticesKept(previousRef.current, notices)
@@ -89,6 +91,8 @@ function sameNoticesKept(
       before.failureKind === notice.failureKind &&
       before.signIn?.agentName === notice.signIn?.agentName &&
       before.signIn?.account === notice.signIn?.account &&
+      before.waiting === notice.waiting &&
+      (before.onSendAgain === undefined) === (notice.onSendAgain === undefined) &&
       (before.onDismiss === undefined) === (notice.onDismiss === undefined)
     allKept &&= same
     kept.set(id, same ? before : notice)

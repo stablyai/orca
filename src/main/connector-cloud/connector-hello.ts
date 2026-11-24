@@ -17,6 +17,7 @@ import {
   CONNECTOR_WAKE_FEATURE,
   ConnectorHelloWakeOfferSchema
 } from '../../../cloud/packages/connector-contract/src/wake-messages'
+import { CONNECTOR_CLOUD_BOT_SHARES_FEATURE } from '../../shared/connector-cloud-features'
 import type { ConnectorResult } from './connector-cloud-request'
 import type { ConnectorMachine, ConnectorTransport } from './connector-machine'
 import { jsonBytes } from './connector-snapshot'
@@ -28,7 +29,8 @@ import { jsonBytes } from './connector-snapshot'
 // ownDmChats: a bot start for a DM that ran in the bot's Chat opens the DM a chat of its own.
 // askerNote: Orca's lines on where a bot was asked come apart from the asker's words.
 // connector-wake-v1: takes a wake offer (connector-wake-channel.ts). resume: a send's `resume`
-// continues a chat whose newest turn failed (external-conversation-resume.ts).
+// continues a chat whose newest turn failed (external-conversation-resume.ts). bots.shares: it
+// handles every share delivery (share_resolved, share_accept, share_send).
 const FEATURES = [
   'answer',
   CONNECTOR_ANSWER_TEXT_FEATURE,
@@ -44,7 +46,8 @@ const FEATURES = [
   'askerNote',
   CONNECTOR_REPLIES_OUTBOX_FEATURE,
   CONNECTOR_WAKE_FEATURE,
-  CONNECTOR_RESUME_FEATURE
+  CONNECTOR_RESUME_FEATURE,
+  CONNECTOR_CLOUD_BOT_SHARES_FEATURE
 ]
 const PROMPT_KINDS = ['approval', 'question']
 // Listed by hand: a source joins only once this build's seam handles its conversations.
@@ -63,6 +66,8 @@ export type ConnectorHelloSaid = {
   /** Only the first bots, to an older cloud that takes no pages. */
   cut: boolean
   triggers: ConnectorTrigger[]
+  /** The key teammates seal held messages to; null from a machine without one (it holds nothing). */
+  hostKey: string | null
 }
 
 /**
@@ -77,16 +82,18 @@ export function connectorHelloSaid(
 ): ConnectorHelloSaid {
   const bots = machine.bots()
   const triggers = machine.triggers()
+  // Only from a machine that takes share_send: without it, the cloud holds nothing for this machine.
+  const hostKey = machine.shareSend?.hostKey() ?? null
   const { maxHelloBots } = CONNECTOR_CLIENT_LIMITS
   if (bots.length <= maxHelloBots) {
-    return { bots, paged: false, cut: false, triggers }
+    return { bots, paged: false, cut: false, triggers, hostKey }
   }
   if (cloudFeatures === null) {
-    return { bots: null, paged: false, cut: false, triggers }
+    return { bots: null, paged: false, cut: false, triggers, hostKey }
   }
   return cloudFeatures.has('bots.pages' satisfies ConnectorCloudFeature)
-    ? { bots, paged: true, cut: false, triggers }
-    : { bots: bots.slice(0, maxHelloBots), paged: false, cut: true, triggers }
+    ? { bots, paged: true, cut: false, triggers, hostKey }
+    : { bots: bots.slice(0, maxHelloBots), paged: false, cut: true, triggers, hostKey }
 }
 
 /** Says `said`, after staging a paged hello's bots: the cloud's answer, and whether it left any out. */
@@ -122,6 +129,12 @@ export async function sayConnectorHello(
   return answer.ok ? { ok: true, value: { answer: answer.value, trimmed } } : answer
 }
 
+// The signed-in account's name, which teammates see the bots it shares by; an older cloud drops it.
+function ownerName(machine: ConnectorMachine): { ownerName?: string } {
+  const name = machine.ownerName?.()
+  return name ? { ownerName: name } : {}
+}
+
 /**
  * The hello body. Inline bots always fit: each is cut to its share of the request cap
  * (connector-places.ts), which leaves room for triggers up to their cap.
@@ -139,6 +152,8 @@ export function connectorHello(
     platform: process.platform,
     runtime: machine.runtime,
     hostName: machine.hostName(),
+    ...ownerName(machine),
+    ...(said.hostKey ? { hostKey: said.hostKey } : {}),
     // Older clouds require both lists; they stay empty now that only bots start conversations.
     // TODO: drop both once every connector cloud ships the contract without them.
     agents: [],

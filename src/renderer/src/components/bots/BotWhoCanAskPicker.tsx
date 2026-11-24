@@ -23,7 +23,13 @@ type Search =
 
 type Found = BotWhoCanAskFound['members'][number]
 
-function useMemberSearch(
+/** What a search looks for: the text without a leading @, as people type a Slack @name or GitHub login. */
+export function memberSearchText(query: string): string {
+  return query.trim().replace(/^@/, '')
+}
+
+/** One connector's people for `query`, debounced; the Share dialog's Add field searches with it too. */
+export function useMemberSearch(
   service: BotWhoCanAskService,
   query: string
 ): { search: Search; retry: () => void } {
@@ -34,7 +40,7 @@ function useMemberSearch(
     let current = true
     setSearch({ status: 'loading' })
     const timer = setTimeout(() => {
-      void find(query.trim()).then((result) => {
+      void find(memberSearchText(query)).then((result) => {
         if (current) {
           setSearch(
             result.ok
@@ -57,7 +63,7 @@ const matches = (name: string, needle: string): boolean =>
 
 // Saved as the chips draw it: a found person's picture is kept, their handle isn't; an app is
 // marked so, so it draws as one.
-const asMember = (found: Found, service: BotWhoCanAskService): BotMember => ({
+export const asMember = (found: Found, service: BotWhoCanAskService): BotMember => ({
   id: found.id,
   name: found.name,
   ...(found.avatarUrl ? { avatarUrl: found.avatarUrl } : {}),
@@ -103,7 +109,7 @@ export function BotWhoCanAskPicker({
   const [query, setQuery] = useState('')
   const [picked, setPicked] = useState<BotMember[]>([])
   const { search, retry } = useMemberSearch(service, query)
-  const needle = query.trim().toLowerCase()
+  const needle = memberSearchText(query).toLowerCase()
   const listed = service.listed(bot.members)
   const added = new Set(listed.map((member) => member.id))
   const full =

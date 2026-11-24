@@ -104,7 +104,7 @@ function BotShareLinkView({
             detail={t('bots.share.description', 'Anyone with the link can make a copy.')}
             wrapDetail
             wrapEnd
-            end={shareButton(t('bots.share.shareBot', 'Share bot…'))}
+            end={shareButton(t('bots.share.shareCopy', 'Share a copy…'))}
           />
         </SettingsInsetGroup>
         {read.kind === 'offline' ? (

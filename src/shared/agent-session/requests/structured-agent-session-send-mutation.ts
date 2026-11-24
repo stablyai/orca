@@ -79,7 +79,8 @@ export function structuredAgentSessionMessageSendMutation(
   message: {
     sessionId: string
     clientOperationId: string
-    expectedRuntimeFence: number
+    /** Null where the host takes no fence: a shared agent's host, which may be away. */
+    expectedRuntimeFence: number | null
     body: AgentJournalMessageItem
   } & StructuredAgentSessionSendControl
 ): StructuredAgentSessionSendMutation {

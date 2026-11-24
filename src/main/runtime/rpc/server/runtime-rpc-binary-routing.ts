@@ -1,6 +1,8 @@
 import type { WebSocket } from 'ws'
 import type { TerminalStreamFrame } from '../../../../shared/terminal/stream/terminal-stream-protocol'
 import { DeviceRegistry } from './pairing/device-registry'
+import { BotShareDeviceStore } from './pairing/bot-share-device-store'
+import { botSharedWithAccount } from '../../../bots/team-share/bot-share-access'
 import { loadOrCreateE2EEKeypair, type E2EEKeypair } from './pairing/e2ee-keypair'
 import { ensureHostInstanceIdentity, type HostIdentityOutcome } from '../../host-instance-identity'
 import { RuntimeRpcState } from './runtime-rpc-state'
@@ -91,6 +93,17 @@ export class RuntimeRpcBinaryRouting extends RuntimeRpcState {
     state.controllers.clear()
   }
 
+  /** Reads the pairing identity and serves it (or its failure) from here on. */
+  protected loadPairingIdentity(): PairingIdentityInitialization {
+    const identity = this.initializePairingIdentity()
+    this.deviceRegistry = identity.ok ? identity.deviceRegistry : null
+    this.botShareDevices = identity.ok ? identity.botShareDevices : null
+    this.e2eeKeypair = identity.ok ? identity.e2eeKeypair : null
+    this.pairingInitializationFailure = identity.ok ? null : identity.failure
+    this.deviceRegistry?.setOnPairedDevicesChanged(() => this.onPairedDevicesChanged?.())
+    return identity
+  }
+
   protected initializePairingIdentity(): PairingIdentityInitialization {
     try {
       logHostIdentityOutcome(ensureHostInstanceIdentity(this.userDataPath))
@@ -125,7 +138,15 @@ export class RuntimeRpcBinaryRouting extends RuntimeRpcState {
         failure: pairingUnavailable('e2ee_key_unavailable', E2EE_KEY_UNAVAILABLE_GUIDANCE)
       }
     }
-    return { ok: true, deviceRegistry, e2eeKeypair }
+    // Read beside the registry, so an identity reset that wipes one wipes both.
+    return {
+      ok: true,
+      deviceRegistry,
+      botShareDevices: new BotShareDeviceStore(this.userDataPath, (grant) =>
+        botSharedWithAccount(this.runtime.bots.list(), grant)
+      ),
+      e2eeKeypair
+    }
   }
 }
 

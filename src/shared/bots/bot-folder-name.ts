@@ -1,3 +1,4 @@
+// A bot home's folder name, from its display name.
 const WINDOWS_RESERVED_NAME = /^(con|prn|aux|nul|com\d|lpt\d)$/
 
 /** A folder name every supported filesystem accepts. */

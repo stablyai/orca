@@ -1,12 +1,22 @@
 /** Transport stamps proven scope; unstamped calls are local desktop/owner CLI. Non-owner methods require an explicitly granted permission. */
 import { MOBILE_RPC_METHOD_ALLOWLIST } from '../server/runtime-rpc-mobile-method-allowlist'
 import type { RpcMethodPermission, RuntimeDeviceGrant } from './rpc-method-permission'
+import { BOT_SHARE_RPC_METHODS } from '../../../../shared/bots/bot-share-rpc-methods'
 
 export type RpcCallerScope =
   | { kind: 'owner' }
   /** Delegated phones inherit at most their paired desktop's scope, which never includes pairing-admin. */
   | { kind: 'mobile'; delegated?: boolean }
   | { kind: 'runtime-paired'; grants: readonly RuntimeDeviceGrant[] }
+  /** A teammate the owner shared one bot with, by the share row their device key signed in as. */
+  | BotShareCallerScope
+
+export type BotShareCallerScope = {
+  kind: 'bot-share'
+  botId: string
+  accountId: string
+  name: string
+}
 
 export const OWNER_RPC_CALLER_SCOPE: RpcCallerScope = { kind: 'owner' }
 
@@ -34,6 +44,11 @@ export function denyRpcMethodForCaller(
     return scope.delegated && permission === 'pairing-admin'
       ? `Method '${methodName}' is not available to a phone connected through a paired desktop`
       : null
+  }
+  if (scope.kind === 'bot-share') {
+    return BOT_SHARE_RPC_METHODS.has(methodName)
+      ? null
+      : `Method '${methodName}' is not available to a shared agent's teammates`
   }
   if (scope.kind === 'owner' || permission === undefined) {
     return null

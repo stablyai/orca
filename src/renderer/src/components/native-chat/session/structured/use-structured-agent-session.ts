@@ -40,6 +40,7 @@ import { useStructuredAgentSessionRailOutline } from '../../viewport/rail/use-st
 import { useStructuredAgentSessionQueuedMessages } from '../../queue/use-structured-agent-session-queued-messages'
 import { structuredConversationCommandRunner } from './writes/structured-conversation-command-send'
 import { useStructuredAgentSessionTranscriptPending } from './delivery/use-structured-agent-session-transcript-pending'
+import { useSharedBotHeldMessages } from './delivery/shared-bot-held-messages'
 import { hostStatesTurnScopes } from '../../../../../../shared/native-chat/transcript/turns/native-chat-turn-membership'
 import { withNativeChatCutTurnNotices } from '../../../../../../shared/native-chat/transcript/turns/native-chat-cut-turn-notice'
 import { useNativeChatContextClearFloor } from '../../conversation/projection/use-native-chat-context-clear-floor'
@@ -56,6 +57,7 @@ export function useStructuredAgentSession(args: StructuredAgentSessionViewArgs) 
     target,
     transportEnabled = true
   } = args
+  const held = useSharedBotHeldMessages(target, sessionId)
   const {
     state,
     stateRef,
@@ -70,19 +72,17 @@ export function useStructuredAgentSession(args: StructuredAgentSessionViewArgs) 
     write,
     admit,
     capturePresentation,
-    providerVisible
+    providerVisible,
+    readVisible
   } = useStructuredAgentSessionTransport({
     sessionId,
     target,
     isVisible: args.isVisible,
     enabled: transportEnabled,
+    readable: held.readable,
     agentName: structuredAgentLabel(agent)
   })
-  const commandMenu = useStructuredAgentSessionCommandMenu(
-    target,
-    sessionId,
-    transportEnabled && args.isVisible !== false
-  )
+  const commandMenu = useStructuredAgentSessionCommandMenu(target, sessionId, readVisible)
   const commandPending = useRef(false)
   const legacyLaunchStop = useStructuredLegacyLaunchStop(sessionId)
   const transportState = useStructuredAgentSessionTransportState(state, transportEnabled)
@@ -207,7 +207,7 @@ export function useStructuredAgentSession(args: StructuredAgentSessionViewArgs) 
   )
   const messages = useStructuredAgentSessionMessages(
     transcriptItems,
-    useStructuredAgentSessionTranscriptPending(transportState, pending, isWorking),
+    useStructuredAgentSessionTranscriptPending(transportState, pending, isWorking, held.messages),
     transportState.submissions
   )
   const editTransport = useQueuedMessageEditTransport(target, sessionId, write)
@@ -276,6 +276,10 @@ export function useStructuredAgentSession(args: StructuredAgentSessionViewArgs) 
     trimHistory,
     prompts,
     pending,
+    /** A shared agent's held messages' lines, under the rows `messages` draws for them. */
+    heldNotices: held.notices,
+    /** False for a new chat's placeholder: nothing of it is read from its host. */
+    readable: held.readable,
     /** A send is out, or a /clear holds sends; the chat takes none until it settles. */
     sendOut: sending || sends.held,
     /** The journal's rows for sent messages, which carry a rejected message's whole fact. */

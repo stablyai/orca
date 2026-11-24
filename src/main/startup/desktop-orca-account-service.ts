@@ -1,6 +1,9 @@
 import { OrcaAccountService } from '../orca-profiles/orca-account-service'
 import { botAccountSwitchBlocker } from '../bots/bot-account-switch-blocker'
-import { mainProcessConnectorCloud } from './cloud-startup/main-process-connector-startup'
+import {
+  mainProcessConnectorCloud,
+  refreshSharedBotHosts
+} from './cloud-startup/main-process-connector-startup'
 import { mainProcessState as state } from './main-process-state'
 import { redeclarePairedDesktopAccounts } from '../ipc/runtime-environments/connections/runtime-environment-request-connections'
 import { scheduleTeamPolicyRefresh } from '../orca-profiles/cloud-auth/team-policy-refresh'
@@ -19,15 +22,19 @@ export function createDesktopOrcaAccountService(
         // An auth change retries relay installation after launch-time failure.
         state.core.relayHost?.accountChanged()
         mainProcessConnectorCloud()?.accountChanged()
+        refreshSharedBotHosts()
         redeclarePairedDesktopAccounts()
       },
       // Only sign-out fences paired phones; reasonless quit/relaunch must not look like logout.
       onBeforeSignOut: () => {
         state.core.relayHost?.signOutStarted()
         mainProcessConnectorCloud()?.signOutStarted()
+        // Sharing hides now, not once the logout request returns.
+        refreshSharedBotHosts()
       },
       onAfterSignOut: () => {
         mainProcessConnectorCloud()?.signOutFinished()
+        refreshSharedBotHosts()
         redeclarePairedDesktopAccounts()
       }
     }

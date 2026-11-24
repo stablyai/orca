@@ -4,11 +4,16 @@ import type { ConnectorCloud } from '../../connector-cloud/connector-cloud'
 import { installConnectorHost } from '../../connector-cloud/connector-host-install'
 import { registerGoogleSetupHandlers } from '../../ipc/google-setup'
 import { registerSlackHandOffHandlers } from '../../ipc/slack-hand-off'
+import { registerSharedBotHostsHandlers } from '../../ipc/shared-bot-hosts'
 import { registerAvatarGenerationHandlers } from '../../avatar-generation/avatar-generation-ipc'
 import { browserManager } from '../../browser/guest-lifecycle/manager/browser-manager'
 import { installGoogleSetupHostWatch } from '../../google/google-setup-host-watch'
 import { getProfileUserDataPath } from '../../orca-profiles/profile-storage-paths'
 import { mainProcessState as state } from '../main-process-state'
+import { botsRootFolder } from '../../bots/bot-home'
+import type { SharedBotHosts } from '../../bots/shared-with-me/shared-bot-hosts'
+
+let sharedBotHosts: SharedBotHosts | null = null
 
 /**
  * The desktop's or Electron `orca serve`'s connector, as this process's own Orca account.
@@ -39,7 +44,27 @@ export function installMainProcessConnectorCloud(serve: boolean): void {
   powerMonitor.on('resume', host.refreshLinearLogins)
   registerGoogleSetupHandlers()
   registerSlackHandOffHandlers(() => runtime.getConnectorCloud())
+  const store = state.store
+  sharedBotHosts = registerSharedBotHostsHandlers({
+    userDataPath,
+    cloud: () => runtime.getConnectorCloud(),
+    // Through the runtime's own create and delete, as a bot home is.
+    homes: {
+      botsRoot: () => botsRootFolder(),
+      store,
+      createFolderWorkspace: async (input) =>
+        (await runtime.createFolderWorkspace(input)).folderWorkspace,
+      deleteFolderWorkspace: (id) =>
+        runtime.deleteFolderWorkspace(id, { discardUnsavedDrafts: true })
+    }
+  })
+  powerMonitor.on('resume', refreshSharedBotHosts)
   registerAvatarGenerationHandlers(() => runtime.getCommitMessageAgentEnvironmentResolvers())
+}
+
+/** Re-reads the agents shared with this account, as after a sign-in or a wake. */
+export function refreshSharedBotHosts(): void {
+  void sharedBotHosts?.refresh()
 }
 
 /** This process's connector, for the startup, auth and quit hooks. */
@@ -51,6 +76,7 @@ export function mainProcessConnectorCloud(): ConnectorCloud | null {
 export function fenceMainProcessCloudOnQuit(): void {
   state.core.relayHost?.fence()
   mainProcessConnectorCloud()?.fence()
+  sharedBotHosts?.stop()
 }
 
 // Registered with the relay; like it, the first request waits for the persisted proxy.

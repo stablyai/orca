@@ -457,6 +457,7 @@
 1 src/main/runtime/rpc/methods/bots-tools.ts
 1 src/main/runtime/rpc/methods/mobile-delivery/bundled-mobile-web-bundle.ts
 1 src/main/runtime/rpc/server/network-source-policy-store.ts
+1 src/main/runtime/rpc/server/pairing/bot-share-device-store.ts # one read at pairing-identity load (startup), beside the device registry; writes are async
 2 src/main/runtime/rpc/server/pairing/device-registry-corruption.ts
 2 src/main/runtime/rpc/server/pairing/device-registry-disk-merge.ts
 1 src/main/runtime/rpc/server/pairing/device-registry-file-read.ts

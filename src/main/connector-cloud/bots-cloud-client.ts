@@ -9,6 +9,7 @@ import {
   ConnectorBotSlackPostAsResponse,
   ConnectorBotSlackStateResponse,
   ConnectorSlackGrantResponse,
+  BOT_SLACK_SIGN_IN_OFF,
   type BotSlackResult,
   type ConnectorBotAvatarRequest,
   type ConnectorBotSlackPostAsRequest
@@ -38,6 +39,8 @@ import {
   ConnectorConnectStartRequestSchema,
   ConnectorConnectStartSchema
 } from '../../../cloud/packages/connector-contract/src/connect-messages'
+import { botsCloudAnswer as answer, offAnswer } from './bots-cloud-answer'
+import { connectorLinksClient } from './connector-links-cloud-client'
 import type { ConnectorCloud } from './connector-cloud'
 import type { ConnectorResult } from './connector-cloud-request'
 
@@ -51,36 +54,18 @@ const SLACK_HAND_OFF_REDEEM = '/v1/connector/slack/handoffs/redeem'
 const teamQuery = (teamId: string | undefined, separator: '?' | '&'): string =>
   teamId === undefined ? '' : `${separator}team=${encodeURIComponent(teamId)}`
 
-function answer<T>(result: ConnectorResult<T>): BotSlackResult<T> {
-  if (result.ok) {
-    return result
-  }
-  const error =
-    result.error ??
-    (result.status === null
-      ? BOT_SLACK_DESKTOP_ERRORS.unreachable
-      : BOT_SLACK_DESKTOP_ERRORS.failed)
-  return { ok: false, error }
-}
-
-/** A cloud with Linear off has no Linear routes, so a bare 404 reads as "Coming soon"; a 404 with a code (not_linked, unknown_issue…) is that code. */
-function linearAnswer<T>(result: ConnectorResult<T>): BotSlackResult<T> {
-  return !result.ok && result.status === 404 && result.error === null
-    ? { ok: false, error: BOT_LINEAR_OFF }
-    : answer(result)
-}
-
-/** As for Linear: a bare 404 is a cloud with GitHub off. */
-function gitHubAnswer<T>(result: ConnectorResult<T>): BotSlackResult<T> {
-  return !result.ok && result.status === 404 && result.error === null
-    ? { ok: false, error: BOT_GITHUB_OFF }
-    : answer(result)
-}
+// A cloud with Linear or GitHub off ("Coming soon"), or from before Sign in with Slack.
+const linearAnswer = offAnswer(BOT_LINEAR_OFF)
+const gitHubAnswer = offAnswer(BOT_GITHUB_OFF)
+const SOURCE_ANSWERS: Record<
+  ConnectorConnectSource,
+  <T>(result: ConnectorResult<T>) => BotSlackResult<T>
+> = { linear: linearAnswer, github: gitHubAnswer, slack: offAnswer(BOT_SLACK_SIGN_IN_OFF) }
 
 function sourceAnswer(
   source: ConnectorConnectSource
 ): <T>(result: ConnectorResult<T>) => BotSlackResult<T> {
-  return source === 'linear' ? linearAnswer : gitHubAnswer
+  return SOURCE_ANSWERS[source]
 }
 
 /** A cloud with bots off, or from before access requests, has none to list. */
@@ -282,6 +267,8 @@ export function botsCloudClient(cloud: Pick<ConnectorCloud, 'call'>) {
           z.undefined()
         )
       ),
+    /** The account's linked Slack, GitHub and Linear people. */
+    links: connectorLinksClient(cloud),
     githubState: async () =>
       gitHubAnswer(
         await cloud.call(`${CONNECTOR_PATHS.github}/state`, undefined, ConnectorGitHubState, {

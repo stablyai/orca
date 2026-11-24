@@ -7,6 +7,10 @@ import type { AgentStatusOrchestrationContext } from '../../shared/agent-status/
 import type { BotAccessRequestWatch } from '../bots/bot-access-request-watch'
 import type { ConnectorGitHubInstallations } from '../connector-cloud/connector-github-installations'
 import { BotChangeNotices } from '../bots/bot-change-notices'
+import {
+  revokeDeletedBotShareDevices,
+  type BotShareDevices
+} from '../bots/team-share/bot-share-access'
 import { deleteAutomationsOfBot } from '../bots/bot-automations-removal'
 import { syncBotAutomationAgents } from '../bots/bot-automation-agent-sync'
 import { BotController } from '../bots/bot-controller'
@@ -20,6 +24,7 @@ import { journaledItemsNotice } from '../bots/bot-memory-journal-runtime'
 import { BotSharePicksStore } from '../bots/sharing/bot-share-picks-store'
 import { BotShareCandidates } from '../bots/sharing/bot-package-export'
 import type { BotShareClient } from '../bots/sharing/bot-share-client'
+import type { BotInviteCloudCall } from '../bots/team-share/bot-invite-email'
 import type { BotShareDownloadPolicy } from '../bots/sharing/bot-share-receive'
 import { BotShareService } from '../bots/sharing/bot-share-service'
 import { readBotShareable } from '../bots/sharing/bot-share-sources'
@@ -60,7 +65,24 @@ export abstract class OrcaRuntimeWithBots extends OrcaRuntimeWithLinearCommands 
   /** The host's GitHub orgs as its connector says them; null on a host without a connector. */
   connectorGitHubInstallations: Pick<ConnectorGitHubInstallations, 'track'> | null = null
 
+  /** The RPC server's teammate devices of shared bots, set as it is made; null without one. */
+  botShareDevices: BotShareDevices | null = null
+
   private readonly botWriteListeners = new Set<() => void>()
+  private readonly shareHostKeyListeners = new Set<() => void>()
+
+  /** The RPC server loaded its pairing identity: held messages now have a key to be sealed to, which
+   *  the connector's hello publishes (hostKey). */
+  onBotShareHostKeyReady(listener: () => void): () => void {
+    this.shareHostKeyListeners.add(listener)
+    return () => this.shareHostKeyListeners.delete(listener)
+  }
+
+  notifyBotShareHostKeyReady(): void {
+    for (const listener of this.shareHostKeyListeners) {
+      listener()
+    }
+  }
 
   /** Every bot record save or removal on this host, for its own readers (webhooks, avatars, the
    *  connector's hello); clients hear `botsChanged`. */
@@ -99,13 +121,14 @@ export abstract class OrcaRuntimeWithBots extends OrcaRuntimeWithLinearCommands 
       this.servedOrcaProfileId
         ? profileAccountUserId(this.servedOrcaProfileId, getProfileUserDataPath())
         : null,
-    forgetBot: (botId) => {
+    forgetBot: async (botId) => {
       void this.botSharePicks()
         .forget(botId)
         .catch(() => undefined)
       this.lookAround.forget(botId)
       void this.botWork.forgetBot(botId)
       this.bots.memory.removed(botId)
+      await revokeDeletedBotShareDevices(this.botShareDevices, botId)
     }
   })
 
@@ -129,6 +152,9 @@ export abstract class OrcaRuntimeWithBots extends OrcaRuntimeWithLinearCommands 
     this.botShareClient = { client, download }
     this.botShareService = null
   }
+
+  /** This host's signed-in Orca Cloud calls, set where its connector installs (desktop, serve, orcad). */
+  botCloudAuth: BotInviteCloudCall | null = null
 
   /** Sharing bots by link, made on first use (it needs the app's data folder). */
   botShares(): BotShareService {

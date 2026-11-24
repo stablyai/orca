@@ -1,4 +1,4 @@
-// One "Connect Linear" / "Connect GitHub" trip per host and source, as every setup surface sees it.
+// One "Connect Linear" / "Connect GitHub" / Sign in with Slack trip per host and source, as every setup surface sees it.
 // The host runs the trip as its own Orca account; this window opens its page where the host's
 // return reaches (a server's own page in Orca's browser) and waits on the host for its end.
 import { useEffect, useSyncExternalStore } from 'react'
@@ -6,6 +6,7 @@ import { useAppStore } from '@/store'
 import { signedInOrcaAccount } from './signed-in-orca-account'
 import { refreshBotGitHub } from './bot-github-state'
 import { refreshBotLinear } from './bot-linear-state'
+import { refreshConnectorLinks } from './connector-links-state'
 import { connectorTripCalls } from './bot-connector-host-calls'
 import { openBotHostPage } from './bot-host-page'
 import { CONNECT_NOT_ROUTED } from '@/components/bots/bot-host-copy'
@@ -15,7 +16,10 @@ import {
   BOT_SLACK_DESKTOP_ERRORS,
   type BotSlackResult
 } from '../../../shared/connector-bot-slack-contract'
-import type { ConnectorConnectSource } from '../../../shared/connectors/connector-cloud-contract'
+import {
+  CONNECTOR_CONNECT_SOURCES,
+  type ConnectorConnectSource
+} from '../../../shared/connectors/connector-cloud-contract'
 import {
   LOCAL_EXECUTION_HOST_ID,
   type ExecutionHostId
@@ -75,8 +79,11 @@ function set(trip: Trip, next: ConnectorConnectView): void {
   listeners.forEach((listener) => listener())
 }
 
-function refresh(hostId: ExecutionHostId, source: ConnectorConnectSource): Promise<unknown> {
-  return source === 'linear' ? refreshBotLinear(hostId) : refreshBotGitHub(hostId)
+// What a trip's link changes on the host: its linked accounts, and Linear's or GitHub's own state.
+const REFRESH: Record<ConnectorConnectSource, (hostId: ExecutionHostId) => Promise<unknown>> = {
+  linear: (hostId) => Promise.all([refreshBotLinear(hostId), refreshConnectorLinks(hostId)]),
+  github: (hostId) => Promise.all([refreshBotGitHub(hostId), refreshConnectorLinks(hostId)]),
+  slack: refreshConnectorLinks
 }
 
 async function settle(
@@ -92,7 +99,7 @@ async function settle(
     }
     return
   }
-  await refresh(hostId, source)
+  await REFRESH[source](hostId)
   if (request === trip.latest) {
     set(trip, { status: 'linked', link: result.value })
   }
@@ -204,7 +211,7 @@ export async function connectAnotherAccount(
   trip.owner = options.owner ?? null
   set(trip, { status: 'waiting' })
   const unlinked = await unlink().catch(() => FAILED)
-  await refresh(hostId, source)
+  await REFRESH[source](hostId)
   if (request !== trip.latest) {
     return
   }
@@ -338,7 +345,7 @@ function watchSignedInAccount(): void {
       return
     }
     shownAccount = account
-    for (const source of ['linear', 'github'] as const) {
+    for (const source of CONNECTOR_CONNECT_SOURCES) {
       const trip = trips.get(tripKey(LOCAL_EXECUTION_HOST_ID, source))
       if (trip) {
         trip.latest++

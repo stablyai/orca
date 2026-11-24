@@ -2,6 +2,7 @@ import type { ConnectorTurnEvents } from './connector-turn-events'
 import type {
   ConnectorBot,
   ConnectorDelivery,
+  ConnectorDeliveryResult,
   ConnectorTrigger
 } from '../../shared/connectors/connector-cloud-contract'
 import type { ConnectorTurnAutomation } from '../../shared/connector-trigger-event-contract'
@@ -21,6 +22,8 @@ export type ConnectorMachine = {
   orcaVersion: string
   /** Read per hello: the computer's display name (Settings, else macOS ComputerName), never the raw hostname. */
   hostName: () => string
+  /** Read per hello: the signed-in Orca account's display name, cut to the contract's length. */
+  ownerName?: () => string
   seam: () => ExternalConversationSeam | null
   conversationHost: () => ExternalConversationHost
   bots: () => ConnectorBot[]
@@ -44,6 +47,20 @@ export type ConnectorMachine = {
   ) => Promise<boolean>
   /** Holds the event for the wake of the bot whose worker owns the pull request, if one here does. */
   prEvent?: (delivery: Extract<ConnectorDelivery, { kind: 'pr_event' }>) => Promise<void>
+  /** An invite on a bot's share list signed in as an Orca account; false once the share isn't that email's. */
+  shareResolved?: (
+    delivery: Extract<ConnectorDelivery, { kind: 'share_resolved' }>
+  ) => Promise<boolean>
+  /** A teammate's device asked to reach a bot shared with them; false once the share isn't theirs. */
+  shareAccept?: (delivery: Extract<ConnectorDelivery, { kind: 'share_accept' }>) => Promise<boolean>
+  /** Teammates' messages held while this machine was away. `hostKey`, read per hello, is the key they
+   *  are sealed to; null (no pairing identity) holds nothing. `deliver` settles once it is written. */
+  shareSend?: {
+    hostKey: () => string | null
+    deliver: (
+      delivery: Extract<ConnectorDelivery, { kind: 'share_send' }>
+    ) => Promise<ConnectorDeliveryResult>
+  }
   /** The cloud took a hello: what it takes now, and the hooks deleted while this machine was away. */
   helloAnswered?: (answer: { webhookTombstones?: string[] }) => void
   /** Signed out or switched account: drop what the linked conversations' cloud was last shown. */

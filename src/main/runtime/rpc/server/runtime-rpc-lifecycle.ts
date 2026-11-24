@@ -112,16 +112,10 @@ export class RuntimeRpcLifecycle extends RuntimeRpcWebSocketDispatch {
     if (this.enableWebSocket) {
       // Flush deferred lastSeen before replacement registry reads disk.
       this.deviceRegistry?.flushPendingLastSeen()
-      const pairingIdentity = this.initializePairingIdentity()
-      if (!pairingIdentity.ok) {
-        this.deviceRegistry = null
-        this.e2eeKeypair = null
-        this.pairingInitializationFailure = pairingIdentity.failure
-      } else {
-        this.deviceRegistry = pairingIdentity.deviceRegistry
-        this.deviceRegistry.setOnPairedDevicesChanged(() => this.onPairedDevicesChanged?.())
-        this.e2eeKeypair = pairingIdentity.e2eeKeypair
-        this.pairingInitializationFailure = null
+      const pairingIdentity = this.loadPairingIdentity()
+      if (pairingIdentity.ok) {
+        // A connector that said hello before this (orca serve) says it again, now with hostKey.
+        this.runtime.notifyBotShareHostKeyReady()
         this.hostDescriptor = await loadHostDescriptor(this.userDataPath)
         publishHostDescriptor(this.runtime.getRuntimeId(), this.hostDescriptor)
         try {
@@ -268,6 +262,7 @@ export class RuntimeRpcLifecycle extends RuntimeRpcWebSocketDispatch {
     const connectionLog = this.startClientConnectionLog()
     const mobileSocketWiring = new MobileSocketWiring({
       deviceRegistry,
+      ...(this.botShareDevices ? { botShareDevices: this.botShareDevices } : {}),
       e2eeKeypair,
       onText: (socket, plaintext, reply, sendBinary) => {
         void this.trackSocketRequest(socket, plaintext, reply, () =>
@@ -298,8 +293,9 @@ export class RuntimeRpcLifecycle extends RuntimeRpcWebSocketDispatch {
         if (ORCA_LAYOUT_OWNER_IS_MAIN) {
           void placeUnshownLiveTerminalsBestEffort(this.runtime)
         }
-        // Update capabilities once per socket; only phones send their own later update.
-        if (socket.device.scope === 'runtime') {
+        // Update capabilities once per socket; only phones send their own later update. A
+        // teammate's window never changes how this host raises its own unread flags.
+        if (socket.device.scope === 'runtime' && !socket.device.botShare) {
           this.runtime.sidebarFacts?.noteRuntimeClient(
             socket.connectionId,
             socket.clientCapabilities

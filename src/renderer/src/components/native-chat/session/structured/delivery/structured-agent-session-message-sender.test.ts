@@ -35,6 +35,8 @@ import { noteStructuredAgentSessionFence } from '@/components/native-chat/sessio
 import { getStructuredAgentSessionReadOwner } from '@/components/native-chat/session/structured/read/structured-agent-session-read-owner'
 import { structuredAgentSessionDeliveryNotices } from '@/components/native-chat/session/structured/delivery/structured-agent-session-delivery-notices'
 import { RuntimeRpcCallError } from '@/runtime/rpc/calls/runtime-rpc-result'
+import { installSharedBotHostCatalog } from '@/runtime/hosts/shared-bot-hosts/shared-bot-host-catalog'
+import { SHARED_BOT_HOST_ERRORS } from '../../../../../../../shared/bots/shared-bot-hosts'
 
 describe('structured agent session message sender', () => {
   beforeEach(() => {
@@ -48,6 +50,43 @@ describe('structured agent session message sender', () => {
   afterEach(() => {
     resetStructuredAgentSessionSendsForTests()
     vi.useRealTimers()
+  })
+
+  it('holds a message for a shared agent’s away host with no status probe or fence read first', async () => {
+    vi.stubGlobal('window', {
+      api: {
+        sharedBotHosts: {
+          list: async () => ({ hosts: [{ environmentId: 'shared-env' }], sharing: true }),
+          onChanged: () => () => {}
+        }
+      }
+    })
+    const uninstall = installSharedBotHostCatalog()
+    await flush()
+    const shared = { kind: 'environment', environmentId: 'shared-env' } as const
+    mocks.call.mockRejectedValue(
+      new RuntimeRpcCallError({
+        id: 'agentSession.send',
+        ok: false,
+        error: { code: SHARED_BOT_HOST_ERRORS.held, message: 'Waiting for Jinwoo Hong’s computer' }
+      })
+    )
+    const sent = sendStructuredAgentSessionMessage({
+      sessionId: 'shared-chat-1',
+      target: shared,
+      text: 'while away'
+    })
+    await vi.runAllTimersAsync()
+    expect(await sent?.outcome).toBe('recorded')
+    expect(mocks.call.mock.calls.map((call) => call[1])).toEqual(['agentSession.send'])
+    expect(mocks.call.mock.calls[0]?.[2]).toMatchObject({
+      envelope: { expectedRuntimeFence: null }
+    })
+    expect(mocks.handBack).not.toHaveBeenCalled()
+    // The shared host's held list draws it from here on, not this send.
+    expect(getStructuredAgentSessionPendingSends('shared-chat-1')).toEqual([])
+    uninstall()
+    vi.unstubAllGlobals()
   })
 
   it('refuses a second send while one is out, and takes the next once it settles', async () => {

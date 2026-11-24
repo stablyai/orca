@@ -52,7 +52,7 @@ import {
   refreshBotHost,
   refreshBots
 } from './bot-host-refresh'
-import { botHostTarget, botTarget, callBotRpc, ownBotHost, type BotRef } from './bot-hosts'
+import { botHostTarget, callBotRpc, ownBotHost, type BotRef } from './bot-hosts'
 import type { ExecutionHostId } from '../../../shared/execution-host/execution-host'
 import {
   getRuntimeTargetHostId,
@@ -62,6 +62,8 @@ import { NativeChatVisualOwnerContext } from '@/components/native-chat/media/vis
 import { isHome, type BotHomeOwner } from '../../../shared/bots/bot-homes'
 import { requestNativeChatComposerFocus } from '../components/native-chat/composer/focus/native-chat-composer-focus-intent'
 import { structuredAgentSessionDraftScopeKey } from '../components/native-chat/drafts/native-chat-draft-scope'
+import { botHomeHostId } from '../../../shared/bots/bot-home-host'
+import { sharedBotHostOf } from '@/runtime/hosts/shared-bot-hosts/shared-bot-host-catalog'
 
 export { isHome, readBots, readHostBots, refreshBotHost, refreshBots, subscribeToBotChanges }
 
@@ -315,7 +317,7 @@ export async function deleteBot(
 /** False when the home is not in the catalog (or not reachable) yet. */
 export function openBotHome(bot: Bot): boolean {
   const opened = activateAndRevealFolderWorkspace(bot.folderWorkspaceId, {
-    executionHostId: bot.hostId,
+    executionHostId: botHomeHostId(bot),
     // Bots are not rows of the workspace list, so there is nothing there to reveal.
     revealInSidebar: false
   })
@@ -327,15 +329,18 @@ export function openBotHome(bot: Bot): boolean {
  * `draft` is added to Home's unsent message, never sent, and its composer takes focus.
  */
 export async function openBotHomeTab(bot: Bot, options?: { draft?: string }): Promise<boolean> {
-  // Home exists before the page opens, so the page lands on it rather than on a new terminal.
-  const chatSessionId = await openBotChat(bot).catch((error: unknown) => {
-    console.error('Failed to open the bot chat:', error)
-    return null
-  })
+  // Home exists before the page opens, so the page lands on it rather than on a new terminal. A
+  // shared agent's Home Chat is its owner's: the share opens only its home here.
+  const chatSessionId = sharedBotHostOf(bot.hostId)
+    ? null
+    : await openBotChat(bot).catch((error: unknown) => {
+        console.error('Failed to open the bot chat:', error)
+        return null
+      })
   // The home must be in the catalog before it can open.
-  await useAppStore
-    .getState()
-    .fetchFolderWorkspaces({ runtimeEnvironmentId: runtimeTargetEnvironmentId(botTarget(bot)) })
+  await useAppStore.getState().fetchFolderWorkspaces({
+    runtimeEnvironmentId: runtimeTargetEnvironmentId(botHostTarget(botHomeHostId(bot)))
+  })
   if (!openBotHome(bot)) {
     return false
   }

@@ -7,6 +7,7 @@ import {
 } from './structured-agent-session-pending-sends'
 import {
   beginSend,
+  finish,
   handBack,
   handBackRefused,
   retainUnconfirmed,
@@ -38,6 +39,9 @@ async function attempt(entry: StructuredAgentSessionPendingSend): Promise<void> 
   }
   if (outcome.kind === 'not-sent') {
     handBack(current, outcome.parts)
+  } else if (outcome.kind === 'held') {
+    // Its chat draws it from the shared host's held messages until the host records it.
+    finish(current, 'recorded')
   } else if (outcome.evidence.kind === 'recorded') {
     settleRecorded(current, outcome.submission, 'reply', outcome.cursor)
   } else if (outcome.evidence.kind === 'not-recorded') {

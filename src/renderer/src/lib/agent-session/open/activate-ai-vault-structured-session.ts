@@ -16,6 +16,7 @@ import {
 import { readBotGroups } from '../../bot-group-catalog-snapshot'
 import { openBotGroupRoom } from '../../bot-group-catalog'
 import { botGroupRoomOfRow } from '../../bot-group-room-history'
+import { openSharedBotChat } from './shared-bot-chat-open'
 import type { AiVaultSession } from '../../../../../shared/ai-vault/contracts/ai-vault-types'
 import type {
   StructuredSessionOpenSource,
@@ -85,6 +86,11 @@ export async function activateAiVaultStructuredSession(
   if (room) {
     await openBotGroupRoom(room.group, room.roomId, room.label)
     return true
+  }
+  // A shared agent's host keeps no tabs for this account: its chat opens in a tab kept here.
+  const shared = openSharedBotChat(session.structuredSession)
+  if (shared !== null) {
+    return shared
   }
   await openDesktopStructuredSession(
     { kind: 'history', structuredSession: session.structuredSession, agent: session.agent },

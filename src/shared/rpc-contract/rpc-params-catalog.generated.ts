@@ -162,6 +162,7 @@ import {
   BotLinearDefaultBot,
   BotLinearMembers,
   BotLinearWorkspace,
+  BotLinkedAccount,
   BotSlackBot,
   BotSlackGrant,
   BotSlackMembers,
@@ -235,6 +236,7 @@ import {
   BotShareStatusParams,
   BotShareStop
 } from './bots-share-params'
+import { BotTeamSharesAdd, BotTeamSharesRemove } from './bots-team-shares-params'
 import {
   BotToolAdd,
   BotToolFinishSignIn,
@@ -1321,6 +1323,8 @@ export const RPC_PARAMS_BY_METHOD = {
   'bots.linear.setDefaultBot': BotLinearDefaultBot,
   'bots.linear.state': null,
   'bots.linear.unlink': BotLinearWorkspace,
+  'bots.links.list': null,
+  'bots.links.unlink': BotLinkedAccount,
   'bots.list': null,
   'bots.lookAround.lookNow': BotLookNow,
   'bots.lookAround.set': BotLookAroundSet,
@@ -1352,6 +1356,9 @@ export const RPC_PARAMS_BY_METHOD = {
   'bots.suggestions.dismiss': BotSuggestionAct,
   'bots.suggestions.start': BotSuggestionAct,
   'bots.takeOver': BotTakeOverParams,
+  'bots.teamShares.add': BotTeamSharesAdd,
+  'bots.teamShares.remove': BotTeamSharesRemove,
+  'bots.teamShares.resend': BotTeamSharesRemove,
   'bots.templates.suggest': null,
   'bots.tidyUp.get': BotTidyUpAct,
   'bots.tidyUp.now': BotTidyUpAct,
