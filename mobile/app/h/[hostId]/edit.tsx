@@ -13,9 +13,8 @@ import {
 } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { useLocalSearchParams, useRouter } from 'expo-router'
-import { Check, ChevronLeft } from 'lucide-react-native'
+import { Check } from 'lucide-react-native'
 import { colors, radii, spacing, typography, pressedStyle } from '../../../src/theme/mobile-theme'
-import { NavBar } from '../../../src/components/nav-bar/NavBar'
 import { NavBarButton } from '../../../src/components/nav-bar/NavBarButton'
 import { themedStyleSheet } from '../../../src/theme/themed-styles'
 import { useMobileColorScheme } from '../../../src/theme/use-mobile-color-scheme'
@@ -37,6 +36,7 @@ import { hostOs } from '../../../src/platform/host-os'
 import { translate } from '../../../src/i18n/mobile-i18n'
 import { useMobileTranslation } from '../../../src/i18n/use-mobile-translation'
 import {
+  SettingsNavBar,
   SettingsNote,
   SettingsSection,
   settingsScreenStyles
@@ -225,15 +225,9 @@ export default function EditHostScreen() {
   }
 
   return (
-    <View style={[styles.container, { paddingTop: insets.top }]}>
-      <NavBar
-        leading={
-          <NavBarButton
-            icon={ChevronLeft}
-            onPress={leave}
-            accessibilityLabel={t('common.back', 'Back')}
-          />
-        }
+    <View style={[settingsScreenStyles.container, { paddingTop: insets.top }]}>
+      <SettingsNavBar
+        onBack={leave}
         title={t('host.edit.title', 'Edit host')}
         trailing={
           <NavBarButton
@@ -364,10 +358,6 @@ function HostFieldRow({ label, ...inputProps }: HostFieldRowProps) {
 }
 
 const styles = themedStyleSheet(() => ({
-  container: {
-    flex: 1,
-    backgroundColor: colors.bgBase
-  },
   flex: {
     flex: 1
   },
@@ -412,7 +402,7 @@ const styles = themedStyleSheet(() => ({
     paddingHorizontal: spacing.md,
     paddingVertical: spacing.sm,
     borderRadius: radii.control,
-    backgroundColor: colors.bgRaised
+    backgroundColor: colors.sheetGroup
   },
   secondaryButtonText: {
     color: colors.textPrimary,

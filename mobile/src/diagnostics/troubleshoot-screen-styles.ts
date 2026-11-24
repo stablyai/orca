@@ -11,7 +11,7 @@ export const troubleshootScreenStyles = themedStyleSheet(() => ({
     alignItems: 'center',
     justifyContent: 'center',
     gap: spacing.sm,
-    backgroundColor: colors.bgRaised,
+    backgroundColor: colors.sheetGroup,
     borderRadius: radii.control,
     paddingVertical: spacing.md,
     paddingHorizontal: spacing.lg,
@@ -35,9 +35,7 @@ export const troubleshootScreenStyles = themedStyleSheet(() => ({
   checkDetailFail: {
     color: colors.statusRed
   },
-  // On a screen, not a sheet: one step above the page, as the other screen groups are.
   group: {
-    backgroundColor: colors.bgPanel,
     marginBottom: spacing.lg
   },
   // Steps start under the issue title, past its icon.
