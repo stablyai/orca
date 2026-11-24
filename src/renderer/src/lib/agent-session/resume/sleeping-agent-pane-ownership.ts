@@ -20,6 +20,7 @@ import {
   isPaneResumingInPlace,
   isPaneSpawnDeferred
 } from '../../../components/terminal-pane/session-restore/spawn-deferral/pane-spawn-deferral-registry'
+import { hasSleepingAgentWakeRequest } from './sleeping-agent-wake-request-registry'
 
 type AppStoreState = ReturnType<typeof useAppStore.getState>
 
@@ -205,6 +206,14 @@ export function recordPaneIsOwnedByPreservedPane(
     }
     // In-place restart clears bindings with either layout owner; its active start still owns the session.
     if (isPaneResumingInPlace(record.paneKey)) {
+      return true
+    }
+    // A dispatcher wake-on-mount promise is the same ownership proof one step earlier: the pane
+    // will mount and cold-restore this record, so the sweep must not fork a duplicate resume tab.
+    // Unlike the in-place hold above, the wake mark's producer and consumer are build-independent,
+    // and it lapses with the record or when the pane consumes it, so a never-mounting pane cannot
+    // strand the resume forever.
+    if (hasSleepingAgentWakeRequest(record)) {
       return true
     }
     // Scrollback-only leaves without PTY/session IDs can repaint but cannot cold-resume active sessions.
