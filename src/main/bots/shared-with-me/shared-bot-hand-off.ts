@@ -19,10 +19,11 @@ type TextBlock = { type: 'text'; text: string }
 
 const isTextBlock = (block: { type: string }): block is TextBlock => block.type === 'text'
 
-/** Holds one message for `entry`'s host; the caller has checked it has the host's key. */
+/** Holds one message for `entry`'s host, sealed to `hostKey` (see `sharedBotHostKey`). */
 export async function handOffSharedBotMessage(
   cloud: SharedBotsCloud,
-  entry: SharedBotHostEntry & { hostKey: string },
+  entry: SharedBotHostEntry,
+  hostKey: string,
   message: {
     chat: SharedBotHeldMessage['chat']
     clientMessageId: string
@@ -35,7 +36,7 @@ export async function handOffSharedBotMessage(
   }
   const secretKey = Buffer.from(entry.deviceKey.secretKeyB64, 'base64')
   const sealed = await sealBotTeamShareHeldMessage(NODE_PAIRED_E2EE_PRIMITIVES, {
-    hostKey: entry.hostKey,
+    hostKey,
     message: {
       v: 1,
       shareId: entry.shareId,

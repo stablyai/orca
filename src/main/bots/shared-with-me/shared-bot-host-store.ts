@@ -80,6 +80,14 @@ export function newSharedBotHostEntry(share: {
   }
 }
 
+/** The key held messages are sealed to: the host's own, from its offer, once paired; before that,
+ *  only the cloud's word for it. */
+export function sharedBotHostKey(
+  entry: Pick<SharedBotHostEntry, 'offer' | 'hostKey'>
+): string | undefined {
+  return entry.offer?.hostPublicKeyB64 ?? entry.hostKey
+}
+
 const SharedBotHostsFile = z.object({ v: z.literal(1), shares: z.array(z.unknown()) })
 
 /** Entry by entry, so one this build can't read is dropped, never the whole file. */

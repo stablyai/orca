@@ -1,11 +1,9 @@
 // The agents shared with this Orca account: found on Orca Cloud, paired over Orca Relay, and reached by
 // the window as hosts of their own. A message to a host that is away is held in Orca Cloud.
-import { openBotTeamShareOffer } from '../../../shared/bots/bot-team-share-seal'
 import {
   SHARED_BOT_HOST_ERRORS,
   type SharedBotHostView
 } from '../../../shared/bots/shared-bot-hosts'
-import { NODE_PAIRED_E2EE_PRIMITIVES } from '../../../shared/remote-runtime/e2ee/node/paired-e2ee-node-primitives'
 import type { RelayClientPlatform } from '../../../shared/remote-runtime/relay/client/relay-client-platform'
 import type { RuntimeRpcResponse } from '../../../shared/remote-runtime/rpc/runtime-rpc-envelope'
 import type { RpcResponse } from '../../../shared/remote-runtime/rpc/rpc-response-shape'
@@ -13,6 +11,7 @@ import { relayStreamError } from '../../../shared/remote-runtime/relay/client/re
 import { SharedBotHostLink } from './shared-bot-host-link'
 import {
   newSharedBotHostEntry,
+  sharedBotHostKey,
   SharedBotHostStore,
   type SharedBotHostEntry
 } from './shared-bot-host-store'
@@ -21,7 +20,7 @@ import {
   sharedBotFailure as failure,
   sharedBotOffline
 } from './shared-bot-held-sends'
-import { nextPairingStep, type MineShare } from './shared-bot-pairing'
+import { nextPairingStep, pinnedSharedBotOffer, type MineShare } from './shared-bot-pairing'
 import type { SharedBotsCloud } from './shared-bots-cloud'
 import type { SharedBotHomes } from './shared-bot-home'
 
@@ -222,23 +221,14 @@ export class SharedBotHosts {
     for (const share of shares) {
       const entry = this.store.get(share.shareId) ?? newSharedBotHostEntry(share)
       const { hostKey: _hostKey, avatarUrl: _avatar, ...rest } = entry
-      const offer =
-        share.offers
-          ?.filter((candidate) => candidate.devicePublicKey === entry.deviceKey.publicKeyB64)
-          .map((candidate) =>
-            openBotTeamShareOffer(NODE_PAIRED_E2EE_PRIMITIVES, {
-              sealSecretKey: Buffer.from(entry.sealKey.secretKeyB64, 'base64'),
-              sealed: candidate.sealedOffer,
-              expect: { botId: share.botId }
-            })
-          )
-          .find((opened) => opened !== null) ?? entry.offer
+      const offer = pinnedSharedBotOffer(entry, share)
+      const hostKey = sharedBotHostKey({ offer, hostKey: share.hostKey })
       this.store.put({
         ...rest,
         botName: share.botName,
         ownerName: share.ownerName,
         ...(share.avatarUrl ? { avatarUrl: share.avatarUrl } : {}),
-        ...(share.hostKey ? { hostKey: share.hostKey } : {}),
+        ...(hostKey ? { hostKey } : {}),
         ...(offer ? { offer } : {}),
         held: this.held.settle(entry.held, read)
       })

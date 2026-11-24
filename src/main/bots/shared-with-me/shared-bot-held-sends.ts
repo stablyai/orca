@@ -7,10 +7,11 @@ import {
 import type { RuntimeRpcResponse } from '../../../shared/remote-runtime/rpc/runtime-rpc-envelope'
 import { SendParams } from '../../../shared/rpc-contract/structured-agent-session/structured-agent-session-params'
 import { handOffSharedBotMessage, type HandOffResult } from './shared-bot-hand-off'
-import type {
-  SharedBotHeldMessage,
-  SharedBotHostEntry,
-  SharedBotHostStore
+import {
+  sharedBotHostKey,
+  type SharedBotHeldMessage,
+  type SharedBotHostEntry,
+  type SharedBotHostStore
 } from './shared-bot-host-store'
 import { sendsHeld, type MineShare, type SharedBotLink } from './shared-bot-pairing'
 import type { SharedBotsCloud } from './shared-bots-cloud'
@@ -113,16 +114,15 @@ export class SharedBotHeldSends {
       blocks: readonly { type: string }[]
     }
   ): Promise<HandOffResult | null> {
-    const { hostKey } = entry
+    const hostKey = sharedBotHostKey(entry)
     const cloud = this.deps.cloud()
     if (!hostKey || !cloud) {
       return null
     }
-    const result = await handOffSharedBotMessage(
-      cloud,
-      { ...entry, hostKey },
-      { ...message, sentAt: this.deps.now() }
-    )
+    const result = await handOffSharedBotMessage(cloud, entry, hostKey, {
+      ...message,
+      sentAt: this.deps.now()
+    })
     if (result.kind === 'held') {
       const current = this.deps.store.get(entry.shareId) ?? entry
       this.deps.store.put({ ...current, held: [...current.held, result.held] })

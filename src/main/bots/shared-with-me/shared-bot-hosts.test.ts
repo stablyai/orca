@@ -24,6 +24,11 @@ import {
 import type { SharedBotsCloud } from './shared-bots-cloud'
 import { memorySharedBotHomes } from './shared-bot-home.test-fixture'
 import type { ConnectorShareAcceptRequest } from '../../../shared/connector-share-contract'
+import { NODE_PAIRED_E2EE_PRIMITIVES } from '../../../shared/remote-runtime/e2ee/node/paired-e2ee-node-primitives'
+import {
+  openBotTeamShareHeldMessage,
+  sealBotTeamShareOffer
+} from '../../../shared/bots/bot-team-share-seal'
 
 const HOST_KEY = Buffer.from(nacl.box.keyPair().publicKey).toString('base64')
 const dirs: string[] = []
@@ -191,6 +196,61 @@ const sendParams = (sessionId: string, clientOperationId: string) =>
     expectedRuntimeFence: null,
     body: { kind: 'message', role: 'user', blocks: [{ type: 'text', text: 'hi' }] }
   })
+
+describe('the key a held message is sealed to', () => {
+  it('stays the paired host’s own when the cloud later names or offers another', async () => {
+    const primitives = NODE_PAIRED_E2EE_PRIMITIVES
+    const host = primitives.generateKeyPair()
+    const cloudKeys = primitives.generateKeyPair()
+    const hostKey = primitives.publicKeyToBase64(host.publicKey)
+    const cloudKey = primitives.publicKeyToBase64(cloudKeys.publicKey)
+    const sealed: string[] = []
+    let current = share({ state: 'ready', hostKey })
+    const { service } = hosts(
+      () => [current],
+      () => 1_000,
+      async (_shareId, request) => {
+        sealed.push(request.sealed)
+        return { ok: true, value: { status: 'held' } }
+      }
+    )
+    await service.refresh()
+    const { deviceKey, sealKey } = service['store'].get('share-1')!
+    // Expired invites, so nothing dials the relay.
+    const offered = (key: string) => [
+      {
+        devicePublicKey: deviceKey.publicKeyB64,
+        sealedOffer: sealBotTeamShareOffer(primitives, {
+          sealKey: sealKey.publicKeyB64,
+          offer: { ...offer(0), hostPublicKeyB64: key }
+        })
+      }
+    ]
+    current = { ...current, offers: offered(hostKey) }
+    await service.refresh()
+    expect(service['store'].get('share-1')?.offer?.hostPublicKeyB64).toBe(hostKey)
+
+    // The cloud knows the seal key, so it can name its own key and seal an offer under it too.
+    current = { ...current, hostOnline: false, hostKey: cloudKey, offers: offered(cloudKey) }
+    await service.refresh()
+    const sent = await service.call(
+      service.views()[0]!.environmentId,
+      'agentSession.send',
+      sendParams('chat-0001', 'm1')
+    )
+    service.stop()
+    expect(sent.ok ? null : sent.error.code).toBe(SHARED_BOT_HOST_ERRORS.held)
+    const open = (secretKey: Uint8Array, key: string) =>
+      openBotTeamShareHeldMessage(primitives, {
+        hostSecretKey: secretKey,
+        hostKey: key,
+        sealed: sealed[0]!,
+        expect: { shareId: 'share-1', botId: 'bot-1', clientMessageId: 'm1' }
+      })
+    expect(open(cloudKeys.secretKey, cloudKey)).toBeNull()
+    expect(open(host.secretKey, hostKey)?.text).toBe('hi')
+  })
+})
 
 describe('the held queue’s order', () => {
   it('keeps a message held while an older read of the cloud was out, and reads once more after it', async () => {

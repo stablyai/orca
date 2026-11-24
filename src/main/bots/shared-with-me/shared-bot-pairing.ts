@@ -1,10 +1,39 @@
 // What this device does next for one shared agent, from its entry and the cloud's latest word on the
 // share, and where a message to it goes. Pure, so the order of pairing and hand-off can be tested.
 import type { ConnectorSharesMine } from '../../../shared/connector-share-contract'
+import { openBotTeamShareOffer } from '../../../shared/bots/bot-team-share-seal'
+import { NODE_PAIRED_E2EE_PRIMITIVES } from '../../../shared/remote-runtime/e2ee/node/paired-e2ee-node-primitives'
 import type { SharedHostRelayCredential } from '../../../shared/remote-runtime/relay/client/shared-host-relay-connection'
-import type { SharedBotHeldMessage, SharedBotHostEntry } from './shared-bot-host-store'
+import {
+  sharedBotHostKey,
+  type SharedBotHeldMessage,
+  type SharedBotHostEntry
+} from './shared-bot-host-store'
 
 export type MineShare = ConnectorSharesMine['shares'][number]
+
+/** The host's offer to this device: one newly opened, else the one held. Once paired the host's key
+ *  is pinned: the cloud knows the seal key, so an offer under another key may be its own. */
+export function pinnedSharedBotOffer(
+  entry: Pick<SharedBotHostEntry, 'deviceKey' | 'sealKey' | 'offer'>,
+  share: Pick<MineShare, 'botId' | 'offers'>
+): SharedBotHostEntry['offer'] {
+  const pinned = entry.offer?.hostPublicKeyB64
+  return (
+    share.offers
+      ?.filter((candidate) => candidate.devicePublicKey === entry.deviceKey.publicKeyB64)
+      .map((candidate) =>
+        openBotTeamShareOffer(NODE_PAIRED_E2EE_PRIMITIVES, {
+          sealSecretKey: Buffer.from(entry.sealKey.secretKeyB64, 'base64'),
+          sealed: candidate.sealedOffer,
+          expect: { botId: share.botId }
+        })
+      )
+      .find(
+        (opened) => opened !== null && (pinned === undefined || opened.hostPublicKeyB64 === pinned)
+      ) ?? entry.offer
+  )
+}
 
 /** How this device reaches the host now. `unpaired`: no usable offer or resume credential yet. */
 export type SharedBotLink = 'live' | 'connecting' | 'offline' | 'unpaired'
@@ -80,12 +109,12 @@ const sameChat = (a: HeldChat, b: HeldChat): boolean =>
  * an earlier held message in the same chat hasn't landed, so a later one never overtakes it.
  */
 export function sendsHeld(
-  entry: Pick<SharedBotHostEntry, 'hostKey' | 'held'>,
+  entry: Pick<SharedBotHostEntry, 'offer' | 'hostKey' | 'held'>,
   link: SharedBotLink,
   chat: HeldChat,
   heldStates: ReadonlyMap<string, MineShare['held'][number]['state']>
 ): boolean {
-  if (!entry.hostKey) {
+  if (!sharedBotHostKey(entry)) {
     return false
   }
   if (link !== 'live') {
