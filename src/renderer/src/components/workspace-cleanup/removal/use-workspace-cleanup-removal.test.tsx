@@ -30,7 +30,11 @@ afterEach(() => {
 
 describe('useWorkspaceCleanupRemoval Browse failures', () => {
   it('guards a permanent retry against the busy marker for its own host', () => {
-    const local = makeCandidate({ executionHostId: 'local' })
+    const local = makeCandidate({
+      executionHostId: 'local',
+      worktreeId: 'repo-1::/repo/busy-twin',
+      path: '/repo/busy-twin'
+    })
     const remote = { ...local, executionHostId: 'ssh:workbench' } as const
     useAppStore
       .getState()
@@ -57,7 +61,8 @@ describe('useWorkspaceCleanupRemoval Browse failures', () => {
   ] as const)(
     'keeps the newer $newer error when the earlier $older removal fails late',
     async ({ older, newer }) => {
-      const row = makeCandidate({ executionHostId: 'local' })
+      const path = `/repo/${older}-first`
+      const row = makeCandidate({ executionHostId: 'local', worktreeId: `repo-1::${path}`, path })
       const identity = getWorkspaceCleanupCandidateIdentity(row)
       const pending = Promise.withResolvers<WorkspaceCleanupRemoveResult>()
       const newerFailure = {
