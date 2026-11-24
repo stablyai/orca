@@ -23997,11 +23997,10 @@
     },
     "orchestration": {
       "workerAutoClose": {
-        "running": "Temporary orchestration worker · Closes 2 minutes after it finishes",
-        "finished": "Temporary orchestration worker finished · Closes in {{countdown}}",
         "keepOpen": "Keep open",
         "bannerRunning": "Orchestration worker · Closes 2 minutes after it finishes",
         "bannerFinished": "Orchestration worker finished · Closes in {{countdown}}",
+        "bannerFinishedStatus": "Orchestration worker finished · Closes soon",
         "boundRunning": "Closes with {{worker}}",
         "boundFinished": "{{worker}} finished · Closes in {{countdown}}",
         "boundFallbackName": "its worker"
@@ -25293,7 +25292,7 @@
       "signInRequired": "Sign in again to use this account",
       "signInAgain": "Sign in again",
       "usageSignInLabel": "Sign in again",
-      "usageSignInMessage": "The selected Claude account needs you to sign in again. Open Settings > AI Provider Accounts, or choose System default.",
+      "usageSignInMessage": "This account needs you to sign in again.",
       "signIn": "Sign in",
       "moreSignInOptions": "More sign-in options",
       "copySignInLink": "Copy sign-in link instead",
@@ -30285,7 +30284,8 @@
         "recommended": "Recommended",
         "step": "{{n}} of {{total}}",
         "typeAnswer": "Type your answer",
-        "replaced": "The agent asked a new question. Read it, then reply."
+        "replaced": "The agent asked a new question. Read it, then reply.",
+        "replacedByNewer": "Replaced by a newer question"
       },
       "readMoreClosedFailed": "Reading more Closed items failed",
       "wait": {

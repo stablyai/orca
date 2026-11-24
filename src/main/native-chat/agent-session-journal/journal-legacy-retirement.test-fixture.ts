@@ -254,7 +254,7 @@ export async function profile(
   const errors: unknown[] = []
   /** A launch of the Orca at `version`, owning the profile unless told otherwise. */
   const launch = (
-    version = '1.0.1',
+    version: string | null = '1.0.1',
     owns = true,
     lock = native ? acquireJournalLegacyFileLock : fakeLease,
     eligibility?: ConstructorParameters<typeof JournalLegacyRetirement>[9],

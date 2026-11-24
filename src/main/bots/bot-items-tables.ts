@@ -126,8 +126,9 @@ export class BotItemsTables {
     return id
   }
 
-  /** The item's ask waiting on the owner, which a later question can leave open: the kept one while the
-   *  events since it can't have changed it, else worked out from all its events. */
+  /** The item's ask waiting on the owner, which can differ from its question (a later Needs you comment
+   *  that asks nothing, or a move an answer made): the kept one while the events since it can't have
+   *  changed it, else worked out from all its events. */
   protected waitingAsk(item: Pick<BotItemRecord, 'uid'>): number | null {
     return waitingAskOf(this.db, item.uid, this.keepsWaitingAsks(), !this.writing)
   }

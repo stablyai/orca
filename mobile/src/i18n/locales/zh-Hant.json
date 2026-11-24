@@ -21,7 +21,7 @@
     },
     "claude": {
       "usageSignInLabel": "重新登入",
-      "usageSignInMessage": "所選 Claude 帳戶需要您重新登入。請開啟設定 > AI 供應商帳戶，或選擇系統預設。"
+      "usageSignInMessage": "此帳戶需要您重新登入。"
     }
   },
   "agentHistory": {
@@ -392,6 +392,13 @@
     "queuedMessages": {
       "deleteAll": "全部刪除",
       "editMessage": "編輯訊息",
+      "showLess": "收合",
+      "moreCount_one": "還有 {{count}} 則",
+      "moreCount_other": "還有 {{count}} 則",
+      "deleteMessage": "刪除訊息",
+      "queuedCount_one": "{{count}} 則排隊中的訊息",
+      "queuedCount_other": "{{count}} 則排隊中的訊息",
+      "foldNeedsAttention": "{{more}}，有訊息需要處理",
       "pausedState": "已暫停",
       "queuedState": "已排隊",
       "resume": "繼續",
@@ -2423,6 +2430,7 @@
       "images_one": "{{count}} 張圖片",
       "images_other": "{{count}} 張圖片",
       "moreActions": "更多操作",
+      "you": "你",
       "send": "傳送",
       "sendAgainHint": "再次傳送此訊息",
       "sendHint": "傳送此訊息",
@@ -2532,6 +2540,7 @@
       "unsavedMarkdown": "尚未儲存的 Markdown 變更",
       "urlPrompt": "請輸入網址，或留空以開啟新分頁。",
       "allowAutoClose": "允許自動關閉",
+      "agents": "代理程式",
       "renameTerminalFailed": "無法重新命名終端機。{{reason}}"
     },
     "sourceControlLaunchAgent": {
@@ -2852,11 +2861,29 @@
     "nativeChatView": {
       "linkedMessageMissing": "找不到該訊息。"
     },
+    "tabsSheet": {
+      "needsYou": "需要你處理",
+      "working": "工作中",
+      "everythingElse": "其他",
+      "closeTab": "關閉 {{title}}"
+    },
+    "tabRows": {
+      "browser": "瀏覽器",
+      "markdown": "Markdown 筆記",
+      "file": "檔案",
+      "chat": "聊天",
+      "terminal": "終端機"
+    },
     "browserProfile": {
       "default": "預設"
     },
     "tabBar": {
+      "oneTab": "1 個分頁",
       "tabCount": "{{count}} 個分頁",
+      "anotherNeedsYou": "另一個分頁需要你處理",
+      "actionsHint": "顯示此分頁的操作",
+      "next": "下一個分頁",
+      "previous": "上一個分頁",
       "hint": "顯示所有分頁"
     }
   },
@@ -3436,6 +3463,9 @@
       "planModelUnavailable": "模型「{{model}}」無法用於 {{label}}。",
       "planModelWithoutThinking": "模型「{{model}}」不支援設定思考強度。",
       "planThinkingLevelInvalid": "思考強度「{{level}}」不適用於 {{model}}。",
+      "commandTemplateEmptyDictationCleanup": "聽寫整理的命令範本為空。",
+      "dictationCleanupAgentUnsupported": "請在「設定 -> 語音 -> 整理」中為 AI 整理選擇支援的代理程式。支援的代理程式：{{agents}}，也可選擇「自訂命令」。",
+      "agentCannotGenerateDictationCleanup": "代理程式「{{agent}}」不支援聽寫整理。支援的代理程式：{{agents}}，也可選擇「自訂命令」。",
       "promptTooLargeForArgument": "{{label}} 的提示詞過大，無法作為單一命令列引數傳遞。請減少暫存的變更後再試一次。",
       "promptTooLargeForWindows": "{{label}} 的提示詞過大，無法用於 Windows 命令列。請減少暫存的變更後再試一次。",
       "pullRequestDetailsUnparseable": "無法解析產生的 PR 詳細資料。",
@@ -4434,6 +4464,10 @@
     }
   },
   "bots": {
+    "section": {
+      "scrollLeft": "向左捲動 · 隱藏 {{amount}} 個",
+      "scrollRight": "向右捲動 · 隱藏 {{amount}} 個"
+    },
     "link": {
       "pairTitle": "配對電腦",
       "pairRequired": "若要開啟此連結，請將這部手機與電腦配對，然後重新開啟該連結。",
@@ -4615,7 +4649,8 @@
       "skillLimit": "訊息未傳送。請最多選擇 {{limit}} 個技能檔案後再試一次。",
       "ask": {
         "notSentYet": "尚未傳送",
-        "replaced": "代理程式提出了新問題。請先閱讀，再回覆。"
+        "replaced": "代理程式提出了新問題。請先閱讀，再回覆。",
+        "replacedByNewer": "已由較新的問題取代"
       }
     },
     "needs": {

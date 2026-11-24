@@ -18,6 +18,7 @@ import {
   type HeldLoopbackReturn
 } from '../orca-profiles/cloud-auth/loopback-callback'
 import { createOrcaCloudPkceSecrets } from '../orca-profiles/cloud-auth/profile-cloud-pkce'
+import { checkGoogleClientKey } from './google-client-check'
 import { checkGoogleServices } from './google-readiness'
 import {
   readGoogleAccount,
@@ -57,16 +58,43 @@ export type GoogleSignInDeps = {
 export type GoogleSignInOptions = {
   /** A loopback port on the calling client; its browser returns there and the client relays the address. */
   callerLoopbackPort?: number
-  /** Pre-selects the account, e.g. for Reconnect. */
+  /** Pre-selects the account, e.g. for Reconnect; a saved one signs in through its own app. */
   loginHint?: string
   /** The services asked for; the base set (who signed in, name lookup) always comes too. */
   choices: readonly GoogleServiceChoice[]
   /** The person is at this host, so its browser opens. */
   openBrowser: boolean
+  /** Signs a saved account in through this computer's app too, as a setup that just made it does. */
+  currentApp?: boolean
+}
+
+/** The app a sign-in goes through: its id and secret, and the Cloud project its APIs are checked in. */
+type GoogleSignInClient = Pick<GoogleClientConfig, 'clientId' | 'clientSecret' | 'projectId'>
+
+/**
+ * A saved account signs in again through the app it signed in with, which may not be this
+ * computer's app now (Google can refuse the account there); a new account uses this computer's.
+ */
+async function signInClient(
+  deps: GoogleSignInDeps,
+  options: GoogleSignInOptions,
+  signal: AbortSignal
+): Promise<GoogleSignInClient | null> {
+  const saved =
+    options.loginHint && !options.currentApp ? await readGoogleAccount(options.loginHint) : null
+  const current = await deps.client()
+  if (!saved || saved.client.clientId === current?.clientId) {
+    return current
+  }
+  // An app Google no longer knows can't sign the account in again.
+  if (current && (await checkGoogleClientKey(deps.http, saved.client, signal)) === 'gone') {
+    return current
+  }
+  return { ...saved.client, ...(saved.projectId ? { projectId: saved.projectId } : {}) }
 }
 
 function authorizeUrl(
-  client: GoogleClientConfig,
+  client: GoogleSignInClient,
   args: {
     redirectUri: string
     state: string
@@ -103,15 +131,20 @@ export async function runGoogleSignIn(
   options: GoogleSignInOptions,
   channel: CallerOwnedSignInChannel<GoogleSignInPrompt, string>
 ): Promise<GoogleAccountRecord> {
-  const client = await deps.client()
+  const client = await signInClient(deps, options, channel.signal)
   if (!client) {
     throw new Error(NO_GOOGLE_CLIENT)
   }
+  channel.signal.throwIfAborted()
   const { codeVerifier, codeChallenge, state } = createOrcaCloudPkceSecrets()
   const expiresAt = deps.now() + GOOGLE_SIGN_IN_TTL_MS
   const expected: { current: GoogleSignInExpectation | null } = { current: null }
 
   const prompt = async (redirectUri: string): Promise<void> => {
+    // A sign-in cancelled while its app was being chosen opens nothing.
+    if (channel.signal.aborted) {
+      return
+    }
     expected.current = { state, redirectUri, expiresAt }
     const url = authorizeUrl(client, {
       redirectUri,
@@ -211,7 +244,7 @@ export async function runGoogleSignIn(
 
 async function finishGoogleSignIn(
   deps: GoogleSignInDeps,
-  client: GoogleClientConfig,
+  client: GoogleSignInClient,
   asked: readonly GoogleServiceChoice[],
   args: { code: string; codeVerifier: string; redirectUri: string; signal: AbortSignal }
 ): Promise<GoogleAccountRecord> {

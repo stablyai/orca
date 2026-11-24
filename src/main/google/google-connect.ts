@@ -6,6 +6,7 @@ import {
   GOOGLE_CONNECT_RUNTIME_CAPABILITY,
   GOOGLE_TRIGGERS_RUNTIME_CAPABILITY,
   GOOGLE_SETUP_NEW_APP_RUNTIME_CAPABILITY,
+  GOOGLE_CONNECTED_ANSWER_RUNTIME_CAPABILITY,
   type GoogleAccountView,
   type GoogleClientKeyState,
   type GoogleSignInPrompt,
@@ -53,7 +54,11 @@ export function googleAccountView(record: GoogleAccountRecord): GoogleAccountVie
     ...(record.reason ? { reason: record.reason } : {}),
     services: record.services,
     ...(record.checkedAt ? { checkedAt: record.checkedAt } : {}),
-    connectedAt: record.connectedAt
+    connectedAt: record.connectedAt,
+    app: {
+      clientId: record.client.clientId,
+      ...(record.projectId ? { projectId: record.projectId } : {})
+    }
   }
 }
 
@@ -224,7 +229,9 @@ export class GoogleConnect {
     const options: GoogleSignInOptions = { ...rest, choices }
     const back =
       options.callerLoopbackPort === undefined ? 'host' : `caller-${options.callerLoopbackPort}`
-    const route: Route = `${back}:${choices.join(',')}`
+    // The account and app pick the client, so a start for another one isn't this flow.
+    const account = options.loginHint?.toLowerCase() ?? 'new'
+    const route: Route = `${back}:${account}:${options.currentApp ? 'current' : 'own'}:${choices.join(',')}`
     return toWire(this.flows.start(owner, route, options))
   }
 
@@ -312,6 +319,7 @@ export function googleRuntimeCapabilities(): string[] {
     ? [
         GOOGLE_CONNECT_RUNTIME_CAPABILITY,
         GOOGLE_TRIGGERS_RUNTIME_CAPABILITY,
+        GOOGLE_CONNECTED_ANSWER_RUNTIME_CAPABILITY,
         GOOGLE_SETUP_NEW_APP_RUNTIME_CAPABILITY
       ]
     : []

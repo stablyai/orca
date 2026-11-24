@@ -5,11 +5,25 @@ const FACE_SIZE = 20
 const FACE_GAP = 4
 const FACE_STEP = FACE_SIZE + FACE_GAP
 const TRACK_INSET = 4
-const EDGE_WIDTH = FACE_SIZE + 6
+const EDGE_WIDTH = 12
 export const PREVIEW_TRACK_HEIGHT = FACE_SIZE + TRACK_INSET * 2
 
 export function botPreviewFaceStart(index: number): number {
   return TRACK_INSET + index * FACE_STEP
+}
+
+function readTrackBounds(track: HTMLElement) {
+  const width = track.clientWidth
+  const max = Math.max(0, track.scrollWidth - width)
+  const left = Math.max(0, Math.min(max, track.scrollLeft))
+  const right = left + width
+  return {
+    left,
+    right,
+    max,
+    clearLeft: left + (left > 0 ? EDGE_WIDTH : TRACK_INSET),
+    clearRight: right - (left < max ? EDGE_WIDTH : 0)
+  }
 }
 
 export function useBotPreviewScroll(
@@ -19,38 +33,35 @@ export function useBotPreviewScroll(
   const previewRef = useRef<HTMLSpanElement>(null)
   const trackRef = useRef<HTMLSpanElement>(null)
   const [width, setWidth] = useState(0)
-  const [range, setRange] = useState({ first: 0, end: 0, anchor: 0, firstFull: 0, endFull: 0 })
+  const [range, setRange] = useState({ first: 0, end: 0, firstFull: 0, endFull: 0 })
   const totalWidth = count > 0 ? count * FACE_STEP + TRACK_INSET : 0
   const overflow = width > 0 && totalWidth > width
   const trackWidth = overflow
-    ? Math.max(0, Math.floor((width - 2 * (EDGE_WIDTH + FACE_GAP) - TRACK_INSET) / FACE_STEP)) *
-        FACE_STEP +
-      TRACK_INSET
+    ? Math.min(
+        width,
+        Math.max(0, Math.floor((width - TRACK_INSET - EDGE_WIDTH) / FACE_STEP)) * FACE_STEP +
+          TRACK_INSET +
+          EDGE_WIDTH
+      )
     : Math.min(width, totalWidth)
-  const visibleCount = trackWidth === 0 ? 0 : Math.floor((trackWidth - TRACK_INSET) / FACE_STEP)
-  const anchor = overflow ? Math.min(count - visibleCount, range.anchor) : 0
 
   const syncWindow = useCallback((): void => {
     const track = trackRef.current
     if (!track) {
       return
     }
-    const left = Math.max(0, track.scrollLeft)
-    const right = left + track.clientWidth
+    const { left, right, clearLeft, clearRight } = readTrackBounds(track)
     const first = Math.floor(left / FACE_STEP)
     const end = Math.ceil((right - TRACK_INSET) / FACE_STEP)
-    const anchor = Math.round(left / FACE_STEP)
-    const firstFull = Math.ceil(left / FACE_STEP)
-    const endFull = Math.floor((right - TRACK_INSET) / FACE_STEP)
-    // React only needs to render when a face or an edge count changes.
+    const firstFull = Math.ceil((clearLeft - TRACK_INSET) / FACE_STEP)
+    const endFull = Math.max(0, Math.floor((clearRight - TRACK_INSET) / FACE_STEP))
     setRange((previous) =>
       previous.first === first &&
       previous.end === end &&
-      previous.anchor === anchor &&
       previous.firstFull === firstFull &&
       previous.endFull === endFull
         ? previous
-        : { first, end, anchor, firstFull, endFull }
+        : { first, end, firstFull, endFull }
     )
   }, [])
 
@@ -70,12 +81,13 @@ export function useBotPreviewScroll(
       if (!track) {
         return
       }
-      const start = index * FACE_STEP
-      const end = botPreviewFaceStart(index) + FACE_SIZE + TRACK_INSET
-      if (start < track.scrollLeft) {
-        track.scrollLeft = start
-      } else if (end > track.scrollLeft + track.clientWidth) {
-        track.scrollLeft = end - track.clientWidth
+      const { clearLeft, clearRight } = readTrackBounds(track)
+      const start = botPreviewFaceStart(index)
+      const end = start + FACE_SIZE + TRACK_INSET
+      if (start < clearLeft) {
+        track.scrollLeft = start - EDGE_WIDTH
+      } else if (end > clearRight) {
+        track.scrollLeft = end + EDGE_WIDTH - track.clientWidth
       }
       syncWindow()
     },
@@ -147,16 +159,17 @@ export function useBotPreviewScroll(
     if (!track) {
       return false
     }
-    const step = Math.max(1, visibleCount - 1)
-    const index = Math.max(0, Math.min(count - visibleCount, anchor + step * direction))
+    const { left, max } = readTrackBounds(track)
+    const step = Math.max(1, Math.floor(track.clientWidth / FACE_STEP) - 1) * FACE_STEP
+    const target = Math.max(0, Math.min(max, left + step * direction))
     track.scrollTo({
-      left: index * FACE_STEP,
+      left: target,
       behavior: keyboard ? 'instant' : motionSafeScrollBehavior()
     })
     if (keyboard) {
       syncWindow()
     }
-    return direction === -1 ? index === 0 : index === count - visibleCount
+    return direction === -1 ? target === 0 : target === max
   }
 
   return {
@@ -164,14 +177,13 @@ export function useBotPreviewScroll(
     trackRef,
     trackWidth,
     totalWidth,
-    badgeWidth: EDGE_WIDTH,
     overflow,
-    before: anchor,
-    after: width > 0 ? Math.max(0, count - visibleCount - anchor) : 0,
+    before: overflow ? Math.min(count, range.firstFull) : 0,
+    after: overflow ? Math.max(0, count - range.endFull) : 0,
     firstVisible: overflow ? Math.min(count, range.first) : 0,
-    endVisible: overflow ? Math.min(count, range.end) : visibleCount,
+    endVisible: overflow ? Math.min(count, range.end) : width > 0 ? count : 0,
     firstFull: overflow ? range.firstFull : 0,
-    endFull: overflow ? range.endFull : visibleCount,
+    endFull: overflow ? range.endFull : count,
     syncWindow,
     revealAvatar,
     pageBots
