@@ -16,7 +16,6 @@ vi.mock('@/i18n/i18n', () => ({
     return template.replace(/\{\{(\w+)\}\}/g, (_m, name: string) => String(values?.[name] ?? ''))
   }
 }))
-vi.mock('../sync/git-graph-open-button', () => ({ useGitGraphSupport: () => true }))
 vi.mock('@/lib/source-control/graph/git-graph-tab', () => ({ openGitGraph: vi.fn() }))
 
 import { SourceControlChangeScopeBar } from './change-scope-bar'
@@ -109,7 +108,7 @@ function renderBar({
       worktreePath: '/repo',
       model
     } as unknown as SourceControlPanelReadyProps
-    return <SourceControlChangeScopeBar {...props} />
+    return <SourceControlChangeScopeBar {...props} graphSupported />
   }
   render(
     <TooltipProvider>

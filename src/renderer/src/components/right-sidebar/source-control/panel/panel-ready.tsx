@@ -5,7 +5,7 @@ import { SourceControlNotesShelf } from '../notes/notes-shelf'
 import { SourceControlPanelContent } from './panel-content'
 import { SourceControlPanelDialogs } from './panel-dialogs'
 import { SourceControlChangeScopeBar } from './change-scope-bar'
-import { GitGraphOpenButton } from '../sync/git-graph-open-button'
+import { GitGraphOpenButton, useGitGraphSupport } from '../sync/git-graph-open-button'
 import { openGitGraph } from '@/lib/source-control/graph/git-graph-tab'
 import type { SourceControlPanelReadyProps } from './panel-props'
 
@@ -59,6 +59,8 @@ export function SourceControlPanelReady(props: SourceControlPanelReadyProps) {
     suppressedGitHubPRState,
     visibleCreatePrHeaderAction
   } = model
+  // One probe per panel: the header Graph button and the scope menu's Graph item share it.
+  const graphSupport = useGitGraphSupport(currentWorktreeId, isGitHistoryVisible)
 
   return (
     <>
@@ -125,6 +127,7 @@ export function SourceControlPanelReady(props: SourceControlPanelReadyProps) {
             isGitHistoryVisible ? (
               <GitGraphOpenButton
                 worktreeId={currentWorktreeId}
+                support={graphSupport}
                 onOpen={(event) => {
                   void openGitGraph(currentWorktreeId, () => resolveSplitTargetGroupId(event))
                 }}
@@ -133,7 +136,9 @@ export function SourceControlPanelReady(props: SourceControlPanelReadyProps) {
           }
         />
 
-        {isGitHistoryVisible ? <SourceControlChangeScopeBar {...props} /> : null}
+        {isGitHistoryVisible ? (
+          <SourceControlChangeScopeBar {...props} graphSupported={graphSupport === true} />
+        ) : null}
 
         {activeWorktreeId && worktreePath && diffCommentCount > 0 && (
           <SourceControlNotesShelf

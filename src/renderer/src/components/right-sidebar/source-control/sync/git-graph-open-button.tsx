@@ -14,8 +14,8 @@ import {
 import { toSourceControlRowOpenEvent, type SourceControlRowOpenEvent } from '../listing/split-open'
 import { useTranslate } from '@/i18n/use-translate'
 
-/** Whether this worktree's host can open Git Graph: null while the first probe runs. */
-export function useGitGraphSupport(worktreeId: string): boolean | null {
+/** Whether this worktree's host can open Git Graph: null while the first probe runs or when disabled. */
+export function useGitGraphSupport(worktreeId: string, enabled = true): boolean | null {
   // Hidden section bodies stop these subscriptions; a primitive key keeps unrelated writes from rendering.
   const owner = useSourceControlState((state) =>
     JSON.stringify([worktreeId, gitGraphScope(worktreeId, state)?.route])
@@ -26,6 +26,9 @@ export function useGitGraphSupport(worktreeId: string): boolean | null {
   })
   const [probe, setProbe] = useState<{ owner: string; support: boolean | null }>()
   useEffect(() => {
+    if (!enabled) {
+      return
+    }
     let current = true
     setProbe({ owner, support: gitGraphSupport(worktreeId) })
     void probeGitGraphSupport(worktreeId)
@@ -38,19 +41,21 @@ export function useGitGraphSupport(worktreeId: string): boolean | null {
     return () => {
       current = false
     }
-  }, [worktreeId, owner, status])
-  return probe?.owner === owner ? probe.support : null
+  }, [enabled, worktreeId, owner, status])
+  return enabled && probe?.owner === owner ? probe.support : null
 }
 
 export function GitGraphOpenButton({
   worktreeId,
+  support,
   onOpen
 }: {
   worktreeId: string
+  /** From `useGitGraphSupport`, owned by the panel so the scope menu shares one probe. */
+  support: boolean | null
   onOpen?: (event: SourceControlRowOpenEvent) => void
 }) {
   const t = useTranslate()
-  const support = useGitGraphSupport(worktreeId)
   const button = (
     <Button
       type="button"

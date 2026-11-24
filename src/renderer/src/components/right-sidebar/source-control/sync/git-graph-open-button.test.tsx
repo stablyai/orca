@@ -23,7 +23,12 @@ vi.mock('@/lib/source-control/graph/git-graph-tab', () => ({
   openGitGraph: mocks.openGitGraph
 }))
 
-import { GitGraphOpenButton } from './git-graph-open-button'
+import { GitGraphOpenButton, useGitGraphSupport } from './git-graph-open-button'
+
+function PanelGraphButton() {
+  const support = useGitGraphSupport('wt-1')
+  return <GitGraphOpenButton worktreeId="wt-1" support={support} />
+}
 
 afterEach(() => {
   cleanup()
@@ -33,7 +38,7 @@ afterEach(() => {
 function renderButton(): HTMLButtonElement {
   render(
     <TooltipProvider>
-      <GitGraphOpenButton worktreeId="wt-1" />
+      <PanelGraphButton />
     </TooltipProvider>
   )
   return screen.getByRole<HTMLButtonElement>('button', { name: 'Graph' })

@@ -5,7 +5,6 @@ import { DropdownMenu, DropdownMenuTrigger } from '@/components/ui/dropdown-menu
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { useIntlLocale, useTranslate, type Translate } from '@/i18n/use-translate'
 import { openGitGraph } from '@/lib/source-control/graph/git-graph-tab'
-import { useGitGraphSupport } from '../sync/git-graph-open-button'
 import { formatSourceControlRefLabel } from './branch-context-stats'
 import { SourceControlChangeScopeMenuContent, commitMetaLine } from './change-scope-menu'
 import {
@@ -56,8 +55,9 @@ function scopeTriggerLabel(t: Translate, scope: SourceControlChangeScope): strin
 export function SourceControlChangeScopeBar({
   currentWorktreeId,
   worktreePath,
-  model
-}: SourceControlPanelReadyProps): React.JSX.Element {
+  model,
+  graphSupported
+}: SourceControlPanelReadyProps & { graphSupported: boolean }): React.JSX.Element {
   const t = useTranslate()
   const intlLocale = useIntlLocale()
   const scopeTriggerRef = useRef<HTMLButtonElement>(null)
@@ -80,7 +80,6 @@ export function SourceControlChangeScopeBar({
     setChangeScope,
     setChangeScopeMenuOpen
   } = model
-  const graphSupported = useGitGraphSupport(currentWorktreeId) === true
 
   const uncommitted = summarizeChangeScopeEntries(entries)
   const branchReady = branchSummary?.status === 'ready'
