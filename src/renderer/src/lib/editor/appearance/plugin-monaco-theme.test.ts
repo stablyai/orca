@@ -54,12 +54,17 @@ describe('derivePluginMonacoTheme selection colors', () => {
     expect(selection[0]).toBeGreaterThan(selection[1])
     expect(selection[1]).toBe(selection[2])
 
-    const active = rgba(colors['editor.findMatchBackground']!)
-    const inactive = rgba(colors['editor.findMatchHighlightBackground']!)
-    expect(active[3]).toBeGreaterThan(inactive[3])
-    expect(contrastRatio(over(active, WHITE), WHITE)).toBeGreaterThan(
-      contrastRatio(over(inactive, WHITE), WHITE)
-    )
+    const activeHex = colors['editor.findMatchBackground']
+    const inactiveHex = colors['editor.findMatchHighlightBackground']
+    expect(Boolean(activeHex)).toBe(Boolean(inactiveHex))
+    if (activeHex && inactiveHex) {
+      const active = rgba(activeHex)
+      const inactive = rgba(inactiveHex)
+      expect(active[3]).toBeGreaterThan(inactive[3])
+      expect(contrastRatio(over(active, WHITE), WHITE)).toBeGreaterThan(
+        contrastRatio(over(inactive, WHITE), WHITE)
+      )
+    }
   })
 
   it('keeps built-in syntax text readable on an opaque selection surface', () => {

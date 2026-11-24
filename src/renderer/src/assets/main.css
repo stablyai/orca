@@ -206,7 +206,11 @@
   --color-git-graph-lane-4: var(--git-graph-lane-4);
   --color-git-graph-lane-5: var(--git-graph-lane-5);
   --color-annotation-highlight: var(--annotation-highlight);
-  --color-search-match: var(--markdown-search-match);
+  --color-search-match: color-mix(
+    in srgb,
+    var(--text-link, var(--callout-note)) var(--search-match-mix),
+    transparent
+  );
   --shadow-floating: 0 10px 24px rgb(0 0 0 / 0.18);
   --shadow-notice: var(--notice-shadow);
   --radius-sm: calc(var(--radius) * 0.6);
@@ -547,6 +551,7 @@
   --callout-important: #8250df;
   /* Mix depths for the theme accent; each use site resolves the current --text-link. */
   --text-selection-mix: 28%;
+  --selection-foreground: #111111;
   --search-match-mix: 22%;
   --search-match-active-mix: 45%;
   --git-decoration-added: #587c0c;
@@ -589,6 +594,7 @@
   --theme-accent-foreground: #171717;
   --callout-important: #ab7df8;
   --text-selection-mix: 34%;
+  --selection-foreground: #ffffff;
   --search-match-mix: 26%;
   --search-match-active-mix: 50%;
   --git-decoration-added: #81b88b;
@@ -967,6 +973,7 @@ body[data-modal-overlay-open]
       var(--text-link, var(--callout-note)) var(--text-selection-mix),
       transparent
     );
+    color: var(--selection-foreground);
   }
 
   body {

@@ -67,10 +67,19 @@ function accentOverlay(hue: Rgba, percent: number): Rgba {
 }
 
 /** A find match also sits over the selection when Find navigates to it. */
-function readableFindOverlay(overlay: Rgba, surfaces: readonly Rgba[], foreground: Rgba): boolean {
-  return surfaces.every(
-    (surface) => contrastRatio(foreground, over(overlay, surface)) >= MIN_TEXT_CONTRAST
-  )
+function readableFindOverlay(
+  overlay: Rgba,
+  surfaces: readonly Rgba[],
+  foreground: Rgba,
+  syntaxColors: readonly Rgba[]
+): boolean {
+  return surfaces.every((surface) => {
+    const composed = over(overlay, surface)
+    return (
+      contrastRatio(foreground, composed) >= MIN_TEXT_CONTRAST &&
+      syntaxColors.every((color) => contrastRatio(color, composed) >= MIN_SYNTAX_CONTRAST)
+    )
+  })
 }
 
 function hex([r, g, b, a]: Rgba): string {
@@ -191,7 +200,12 @@ export function derivePluginMonacoTheme(input: {
   const searchActive =
     link &&
     activeSurface &&
-    readableFindOverlay(accentOverlay(link, activeSurface.percent), findSurfaces, foreground)
+    readableFindOverlay(
+      accentOverlay(link, activeSurface.percent),
+      findSurfaces,
+      foreground,
+      syntaxColors
+    )
       ? activeSurface
       : null
   const searchInactive =
@@ -200,7 +214,8 @@ export function derivePluginMonacoTheme(input: {
     readableFindOverlay(
       accentOverlay(link, inactiveSurfaceCandidate.percent),
       findSurfaces,
-      foreground
+      foreground,
+      syntaxColors
     )
       ? inactiveSurfaceCandidate
       : null
