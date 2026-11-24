@@ -129,9 +129,10 @@ function originLine(record: BotRequestRecord): Record<string, string> {
       : {}),
     ...(place
       ? {
+          // Item add links only a place with a link, so only that one is promised.
           startedIn:
-            record.purpose === 'handoff'
-              ? `${place.url ?? place.placeId}. An item you add for it links this, and its worker's report names it, so what the job finds later goes back there.`
+            record.purpose === 'handoff' && place.url
+              ? `${place.url}. An item you add for it links this, and its worker's report names it, so what the job finds later goes back there.`
               : (place.url ?? place.placeId)
         }
       : {})
