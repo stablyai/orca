@@ -125,11 +125,58 @@ export async function writeBotSlackIcon(
   }
 }
 
+// Which drawing the cloud last took for the bot (the account's hash and the mascot), so a restart before a
+// new look is drawn keeps it rather than sending the mascot id's older art.
+const SHOWN_FILE = 'shown.json'
+
+export type BotSlackIconShown = { account: string | null; mascot: string }
+
+export async function readBotSlackIconShown(
+  filesystem: BotHomeFilesystem,
+  root: string,
+  botId: string
+): Promise<BotSlackIconShown | null> {
+  const bytes = await filesystem.readBytes(join(botFolder(root, botId), SHOWN_FILE))
+  try {
+    const shown: unknown = bytes && JSON.parse(bytes.toString('utf8'))
+    if (
+      shown &&
+      typeof shown === 'object' &&
+      'account' in shown &&
+      'mascot' in shown &&
+      (shown.account === null || typeof shown.account === 'string') &&
+      typeof shown.mascot === 'string'
+    ) {
+      return { account: shown.account, mascot: shown.mascot }
+    }
+  } catch {
+    // Cut short by a crash: read as none, so the mascot id goes as before.
+  }
+  return null
+}
+
+export async function writeBotSlackIconShown(
+  filesystem: BotHomeFilesystem,
+  root: string,
+  botId: string,
+  shown: BotSlackIconShown | null
+): Promise<void> {
+  const folder = botFolder(root, botId)
+  if (!shown) {
+    await filesystem.removeTree(join(folder, SHOWN_FILE))
+    return
+  }
+  await filesystem.makeDirectory(folder)
+  await filesystem.writeBytes(join(folder, SHOWN_FILE), Buffer.from(JSON.stringify(shown)))
+}
+
 /** A bot's drawn icon by id: whether one is wanted, kept, and read back for the cloud. */
 export class BotSlackIcons {
   private readonly listeners = new Set<(botId: string) => void>()
   // Per bot, the icon file last found whole, by its size and change time.
   private readonly whole = new Map<string, { path: string; size: number; mtimeMs: number }>()
+  // Per bot, what `shown` read or `markShown` wrote, so each send reads no file.
+  private readonly shownByBot = new Map<string, BotSlackIconShown | null>()
 
   constructor(
     private readonly deps: {
@@ -211,9 +258,33 @@ export class BotSlackIcons {
     return readBotSlackIcon(this.deps.filesystem, this.deps.root(), this.deps.bot(botId))
   }
 
+  /** The drawing the cloud last took for the bot (its account's hash and mascot), or null: read once. */
+  async shown(botId: string): Promise<BotSlackIconShown | null> {
+    let shown = this.shownByBot.get(botId)
+    if (shown === undefined) {
+      shown = await readBotSlackIconShown(this.deps.filesystem, this.deps.root(), botId)
+      this.shownByBot.set(botId, shown)
+    }
+    return shown
+  }
+
+  /** What the cloud took for the bot now, written only when it changes; a deleted bot keeps nothing. */
+  async markShown(botId: string, shown: BotSlackIconShown | null): Promise<void> {
+    const before = await this.shown(botId)
+    if (
+      !this.has(botId) ||
+      (before?.account === shown?.account && before?.mascot === shown?.mascot)
+    ) {
+      return
+    }
+    this.shownByBot.set(botId, shown)
+    await writeBotSlackIconShown(this.deps.filesystem, this.deps.root(), botId, shown)
+  }
+
   /** A deleted bot's icons go with it. */
   forget(botId: string): Promise<void> {
     this.whole.delete(botId)
+    this.shownByBot.delete(botId)
     return this.deps.filesystem.removeTree(botFolder(this.deps.root(), botId))
   }
 

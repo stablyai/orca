@@ -62,9 +62,6 @@ export class BotAvatarSync {
   private readonly icons = new Map<string, number>()
   // Bots whose drawn icon the cloud failed to take: sent again on a real step, never by the retry timer.
   private readonly owed = new Set<string>()
-  // Per bot whose picture the cloud last took is a drawing, the account it went to and its mascot: for that
-  // account, a look of the same mascot not drawn yet leaves it rather than the id.
-  private readonly showsDrawing = new Map<string, { account: string | null; mascot: string }>()
   // Per bot, its drawn icon while a send of it is out (or none, until one is kept), by look and icon count.
   private readonly prepared = new Map<
     string,
@@ -77,7 +74,7 @@ export class BotAvatarSync {
     private readonly deps: {
       bots: Pick<BotController, 'enabled' | 'readAvatarImage'> & {
         list: () => SyncedBot[]
-        slackIcons: Pick<BotSlackIcons, 'read'>
+        slackIcons: Pick<BotSlackIcons, 'read' | 'shown' | 'markShown'>
       }
       cloud: () =>
         | (Pick<ConnectorCloud, 'call'> & Partial<Pick<ConnectorCloud, 'signedInAccount'>>)
@@ -182,14 +179,7 @@ export class BotAvatarSync {
     }
     // A deleted bot keeps nothing here. Only a bot write deletes one, so the retry timer's passes skip this.
     if (!fromTimer) {
-      for (const kept of [
-        this.owed,
-        this.showsDrawing,
-        this.icons,
-        this.prepared,
-        this.sent,
-        this.refused
-      ]) {
+      for (const kept of [this.owed, this.icons, this.prepared, this.sent, this.refused]) {
         for (const id of kept.keys()) {
           if (!present.has(id)) {
             kept.delete(id)
@@ -254,8 +244,12 @@ export class BotAvatarSync {
           ? { v: 1, kind: 'mascot', id: parsed.id }
           : png && { v: 1, kind: 'upload', version: parsed.version, png: png.toString('base64') }
       carried = icon !== null
-      const account = cloud.signedInAccount?.() ?? null
-      const shown = this.showsDrawing.get(bot.id)
+      const signedIn = cloud.signedInAccount?.()
+      const account = signedIn
+        ? createHash('sha256').update(signedIn).digest('hex').slice(0, 16)
+        : null
+      // The drawing the cloud last took for this bot, kept across restarts by the icon store.
+      const shown = await this.deps.bots.slackIcons.shown(bot.id)
       // The window draws a new look right after the write: until it does, Slack keeps the last drawing.
       left =
         parsed.kind === 'mascot' &&
@@ -267,11 +261,10 @@ export class BotAvatarSync {
         : body && (await botsCloudClient(cloud).setAvatar(bot.id, body))
       sent = result?.ok === true
       if (sent && !left) {
-        if (carried && parsed.kind === 'mascot') {
-          this.showsDrawing.set(bot.id, { account, mascot: parsed.id })
-        } else {
-          this.showsDrawing.delete(bot.id)
-        }
+        await this.deps.bots.slackIcons.markShown(
+          bot.id,
+          carried && parsed.kind === 'mascot' ? { account, mascot: parsed.id } : null
+        )
       }
       refused = result?.ok === false && result.error === 'unknown_bot'
     } catch (error) {

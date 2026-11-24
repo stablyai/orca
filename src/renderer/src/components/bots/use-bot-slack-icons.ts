@@ -190,7 +190,9 @@ export function withSlackIconPublish<T>(
 ): (updates: T) => Promise<Bot | null> {
   return async (updates) => {
     const saved = await save(updates)
-    if (saved) {
+    // A newer save from elsewhere listed first: its own notice already asked for that look.
+    const listed = saved && readHostBots(hostId).find((bot) => bot.id === saved.id)
+    if (saved && !(listed && listed.updatedAt > saved.updatedAt)) {
       const bot = { ...saved, hostId }
       // Its list notice for this same save then asks nothing more.
       seen.set(botRefKey(bot), recordSeen(bot))

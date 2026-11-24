@@ -86,7 +86,7 @@ export class ConnectorCloud {
     }
   }
 
-  /** Orca Cloud answers again after it didn't, or an account signed in: a send that failed may go now. */
+  /** Orca Cloud answers again after it (or a call outside the poll) didn't, or a sign-in: a send may go. */
   onBack(listener: () => void): () => void {
     return this.reach.onBack(listener)
   }
@@ -231,7 +231,8 @@ export class ConnectorCloud {
     options?: ConnectorCallOptions
   ): Promise<ConnectorResult<z.infer<TSchema>>> {
     const account = this.activeAccount()
-    return account ? await this.transportFor(account).call(path, body, schema, options) : SIGNED_OUT
+    const transport = account && this.reach.outsidePoll(this.transportFor(account))
+    return transport ? await transport.call(path, body, schema, options) : SIGNED_OUT
   }
 
   private activeAccount(): string | null {

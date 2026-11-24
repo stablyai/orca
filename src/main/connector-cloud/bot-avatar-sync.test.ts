@@ -8,7 +8,13 @@ import type { Bot } from '../../shared/bot-types'
 import type { ConnectorResult } from './connector-cloud-request'
 import { botSlackIconLook } from '../../shared/bots/bot-slack-icon'
 import { localBotHomeFilesystem } from '../bots/bot-home'
-import { readBotSlackIcon, writeBotSlackIcon } from '../bots/bot-slack-icon-store'
+import {
+  readBotSlackIcon,
+  readBotSlackIconShown,
+  writeBotSlackIcon,
+  writeBotSlackIconShown,
+  type BotSlackIconShown
+} from '../bots/bot-slack-icon-store'
 import { BotAvatarSync } from './bot-avatar-sync'
 
 let home: string | null = null
@@ -42,6 +48,18 @@ afterEach(async () => {
   }
 })
 
+// The real record of what the cloud last took, kept beside the drawings, so a new sync reads it as a restart does.
+function shownIn(folder: string): {
+  shown: (botId: string) => Promise<BotSlackIconShown | null>
+  markShown: (botId: string, shown: BotSlackIconShown | null) => Promise<void>
+} {
+  return {
+    shown: (botId) => readBotSlackIconShown(localBotHomeFilesystem, folder, botId),
+    markShown: (botId, shown) =>
+      writeBotSlackIconShown(localBotHomeFilesystem, folder, botId, shown)
+  }
+}
+
 it('sends a drawn icon only for the look the bot has now, and the mascot id only before any drawing', async () => {
   home = await mkdtemp(join(tmpdir(), 'bot-slack-icon-'))
   const folder = home
@@ -60,31 +78,34 @@ it('sends a drawn icon only for the look the bot has now, and the mascot id only
   const sent: unknown[] = []
   let reads = 0
   let account = 'acct-1'
-  const sync = new BotAvatarSync({
-    bots: {
-      enabled: () => true,
-      list: () => [bot],
-      readAvatarImage: async () => null,
-      slackIcons: {
-        read: async () => {
-          const icon = await readBotSlackIcon(localBotHomeFilesystem, folder, bot)
-          reads += 1
-          return icon
+  const start = (): BotAvatarSync =>
+    new BotAvatarSync({
+      bots: {
+        enabled: () => true,
+        list: () => [bot],
+        readAvatarImage: async () => null,
+        slackIcons: {
+          ...shownIn(folder),
+          read: async () => {
+            const icon = await readBotSlackIcon(localBotHomeFilesystem, folder, bot)
+            reads += 1
+            return icon
+          }
         }
-      }
-    },
-    cloud: () => ({
-      signedInAccount: () => account,
-      call: async <T extends z.ZodType>(
-        _path: string,
-        body: unknown,
-        schema: T
-      ): Promise<ConnectorResult<z.infer<T>>> => {
-        sent.push(body)
-        return { ok: true, value: schema.parse(undefined) }
-      }
+      },
+      cloud: () => ({
+        signedInAccount: () => account,
+        call: async <T extends z.ZodType>(
+          _path: string,
+          body: unknown,
+          schema: T
+        ): Promise<ConnectorResult<z.infer<T>>> => {
+          sent.push(body)
+          return { ok: true, value: schema.parse(undefined) }
+        }
+      })
     })
-  })
+  let sync = start()
 
   sync.changed()
   await vi.waitFor(() => expect(sent).toHaveLength(1))
@@ -109,21 +130,33 @@ it('sends a drawn icon only for the look the bot has now, and the mascot id only
   await vi.waitFor(() => expect(sent).toHaveLength(3))
   expect(sent[2]).toMatchObject({ v: 1, kind: 'upload', png: party.toString('base64') })
 
+  // Quit after a look's save, before its drawing: the restarted host still leaves the last drawing.
+  sync = start()
+  const restarted = reads
+  bot = { ...bot, avatarOutfit: 'reviewer' }
+  sync.changed()
+  await vi.waitFor(() => expect(reads).toBeGreaterThan(restarted))
+  await new Promise((resolve) => setTimeout(resolve, 0))
+  expect(sent).toHaveLength(3)
+  await writeBotSlackIcon(localBotHomeFilesystem, folder, bot.id, botSlackIconLook(bot)!, party)
+  sync.iconStored(bot.id)
+  await vi.waitFor(() => expect(sent).toHaveLength(4))
+
   // Another mascot not drawn yet: Slack gets that mascot, not the old one's drawing.
   bot = { ...bot, avatar: 'mascot:G1' }
   sync.changed()
-  await vi.waitFor(() => expect(sent).toHaveLength(4))
-  expect(sent[3]).toEqual({ v: 1, kind: 'mascot', id: 'G1' })
+  await vi.waitFor(() => expect(sent).toHaveLength(5))
+  expect(sent[4]).toEqual({ v: 1, kind: 'mascot', id: 'G1' })
   await writeBotSlackIcon(localBotHomeFilesystem, folder, bot.id, botSlackIconLook(bot)!, drawn)
   sync.iconStored(bot.id)
-  await vi.waitFor(() => expect(sent).toHaveLength(5))
+  await vi.waitFor(() => expect(sent).toHaveLength(6))
 
   // A drawing another account's cloud took never holds this one's picture back.
   account = 'acct-2'
   bot = { ...bot, avatarOutfit: null }
   sync.changed()
-  await vi.waitFor(() => expect(sent).toHaveLength(6))
-  expect(sent[5]).toEqual({ v: 1, kind: 'mascot', id: 'G1' })
+  await vi.waitFor(() => expect(sent).toHaveLength(7))
+  expect(sent[6]).toEqual({ v: 1, kind: 'mascot', id: 'G1' })
 })
 
 it('reads an icon cut short by a crash as none, so it is drawn again', async () => {
@@ -185,7 +218,10 @@ it('leaves a drawn icon the cloud failed to take for the next real step, not the
       enabled: () => true,
       list: () => [bot],
       readAvatarImage: async () => null,
-      slackIcons: { read: () => readBotSlackIcon(localBotHomeFilesystem, folder, bot) }
+      slackIcons: {
+        ...shownIn(folder),
+        read: () => readBotSlackIcon(localBotHomeFilesystem, folder, bot)
+      }
     },
     cloud: () => ({
       call: async <T extends z.ZodType>(
@@ -266,6 +302,7 @@ it('sends only drawings of the latest look through every edit, a plain look incl
       list: () => [bot],
       readAvatarImage: async () => null,
       slackIcons: {
+        ...shownIn(folder),
         read: async () => {
           const icon = await readBotSlackIcon(localBotHomeFilesystem, folder, bot)
           reads += 1
