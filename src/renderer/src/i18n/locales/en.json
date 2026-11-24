@@ -30645,6 +30645,31 @@
         "expired": "The sign-in expired. Try again.",
         "couldNotSignIn": "Couldn’t sign in. Try again."
       }
+    },
+    "teamShare": {
+      "add": "Add",
+      "addLabel": "Add people",
+      "addPlaceholder": "Email, Slack @name or GitHub login",
+      "done": "Done",
+      "emailNotSent": "Email not sent yet",
+      "githubLine": "GitHub · {{place}}",
+      "githubLinkedLine": "GitHub · linked to {{count}} Orca accounts",
+      "githubOnly": "GitHub only",
+      "invite": "Invite {{email}}",
+      "inviteActions": "Invite actions for {{name}}",
+      "invited": "Invited",
+      "noMatch": "No match for {{query}}",
+      "orcaAccount": "Orca account",
+      "owner": "Owner",
+      "peopleWithAccess": "People with access",
+      "remove": "Remove",
+      "removePerson": "Remove {{name}}",
+      "resendInvite": "Resend invite",
+      "slackLine": "{{handle}} on Slack · {{workspace}}",
+      "slackOnly": "Slack only",
+      "title": "Share {{name}}",
+      "warning": "Anyone you share with can do anything {{name}} can on {{host}}, including using your accounts, files and chats.",
+      "you": "{{name}} (you)"
     }
   },
   "plugins": {
