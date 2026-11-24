@@ -1,5 +1,5 @@
 // The top of a shared agent's page and the line it shows while its owner's computer is away.
-import { Text, View } from 'react-native'
+import { Pressable, Text, View } from 'react-native'
 import { ChevronLeft, CloudOff, Lock } from 'lucide-react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { MobileStateView } from '../../components/feedback/MobileStateView'
@@ -18,24 +18,43 @@ export function MobileSharedAgentNavBar({
   name,
   avatar,
   subtitle,
-  onBack
+  onBack,
+  labeledBack = false,
+  trailing
 }: {
   name: string
   avatar: MobileBotAvatarSource
   subtitle?: string
   onBack: () => void
+  /** "‹ Bots", where Back returns to the list; a chat's Back is the bare chevron. */
+  labeledBack?: boolean
+  trailing?: React.ReactNode
 }) {
   const t = useMobileTranslation()
   useMobileColorScheme()
   return (
     <NavBar
       leading={
-        <NavBarButton
-          icon={ChevronLeft}
-          accessibilityLabel={t('bots.shared.back', 'Back to bots')}
-          onPress={onBack}
-        />
+        labeledBack ? (
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel={t('bots.shared.back', 'Back to bots')}
+            hitSlop={8}
+            onPress={onBack}
+            style={styles.back}
+          >
+            <ChevronLeft size={24} color={colors.accentBlue} />
+            <Text style={styles.backText}>{t('bots.shared.backLabel', 'Bots')}</Text>
+          </Pressable>
+        ) : (
+          <NavBarButton
+            icon={ChevronLeft}
+            accessibilityLabel={t('bots.shared.back', 'Back to bots')}
+            onPress={onBack}
+          />
+        )
       }
+      trailing={trailing}
       center={
         <View style={styles.center}>
           <View style={styles.titleRow}>
@@ -90,6 +109,7 @@ export function MobileSharedAgentUnavailable({
       {last ? (
         <MobileSharedAgentNavBar
           name={last.botName}
+          labeledBack
           avatar={mobileBotAvatarSource(
             page.kind === 'removed' && page.bot
               ? page.bot
@@ -127,6 +147,8 @@ export function MobileSharedAgentUnavailable({
 const styles = themedStyleSheet(() => ({
   screen: { flex: 1, backgroundColor: colors.bgBase },
   center: { alignItems: 'center' },
+  back: { flexDirection: 'row', alignItems: 'center', marginLeft: -spacing.xs },
+  backText: { fontSize: 17, color: colors.accentBlue },
   titleRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.xs },
   title: { fontSize: 16, fontWeight: '600', color: colors.textPrimary },
   subtitle: { fontSize: typography.metaSize, color: colors.textSecondary },

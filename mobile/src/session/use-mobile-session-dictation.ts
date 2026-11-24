@@ -30,12 +30,12 @@ import {
   workspaceRouteHref
 } from '../navigation/workspace-execution-host'
 import { sessionTabPaneKey } from '../../../src/shared/remote-runtime/session-graph/session-tab-pane-key'
-import type { MobileSessionFeedbackCapabilitiesModel } from './use-mobile-session-feedback-capabilities'
+import type { MobileSessionDictationScope } from './mobile-session-dictation-scope'
 import type { useMobileNativeChatController } from './native-chat/use-mobile-native-chat-controller'
 
 // The session screen's side of the page's one dictation: start it here, show it in place while this screen is in front, and insert where it started.
 export function useMobileSessionDictation(
-  scope: MobileSessionFeedbackCapabilitiesModel,
+  scope: MobileSessionDictationScope,
   nativeChatController: ReturnType<typeof useMobileNativeChatController>,
   sendLiveTerminalInput: (handle: string, bytes: string) => Promise<boolean>
 ) {
@@ -241,10 +241,12 @@ export function useMobileSessionDictation(
           : target,
       title: activeSessionTab?.title ?? '',
       paneKey,
-      href: workspaceRouteHref(
-        `/h/${encodeURIComponent(hostId)}/session/${encodeURIComponent(worktreeId)}${paneKey ? `?paneKey=${encodeURIComponent(paneKey)}` : ''}`,
-        executionHost
-      ),
+      href:
+        scope.dictationHref ??
+        workspaceRouteHref(
+          `/h/${encodeURIComponent(hostId)}/session/${encodeURIComponent(worktreeId)}${paneKey ? `?paneKey=${encodeURIComponent(paneKey)}` : ''}`,
+          executionHost
+        ),
       dictationMode: scope.dictationMode,
       silenceSeconds,
       removeFillerWords,
@@ -270,6 +272,7 @@ export function useMobileSessionDictation(
     dictationTerms,
     silenceSeconds,
     scope.dictationMode,
+    scope.dictationHref,
     sessionKey,
     setShowDictationSetup,
     showNativeChat,

@@ -25,6 +25,9 @@ import { MobileSharedAgentNavBar, MobileSharedAgentUnavailable } from './MobileS
 import { sharedAgentChatHref } from './MobileSharedAgentPage'
 import { sharedAgentChatTranscriptHeld } from './shared-agent-chat-held'
 import { useSharedAgentChat } from './use-shared-agent-chat'
+import { useSharedAgentDictation } from './use-shared-agent-dictation'
+import { MobileSharedAgentChatMenu } from './MobileSharedAgentChatMenu'
+import { MobileDictationSetupSheet } from '../../dictation/setup/MobileDictationSetupSheet'
 import { useSharedAgentPage } from './use-shared-agent-page'
 import { useSharedAgentSendAgain } from './use-shared-agent-views'
 
@@ -54,11 +57,22 @@ export function MobileSharedAgentChat() {
     sessionId,
     // Until the host lists it, as the desktop's placeholder does.
     agent: agent?.bot?.agent ?? 'claude',
+    title: params.title ?? '',
     capabilities: agent?.capabilities ?? null,
     connState: state,
     showToast
   })
   const keyboardLift = useMobileSessionKeyboardLift(insets.bottom)
+  const dictation = useSharedAgentDictation({
+    pairedClient: paired,
+    hostId,
+    worktreeId: chat.worktreeId,
+    tab: chat.tab,
+    connState: state,
+    controller: chat.controller,
+    showToast,
+    href: sharedAgentChatHref(hostId, environmentId, sessionId, params.title)
+  })
   const sendAgain = useSharedAgentSendAgain(hostId)
   const held = agent?.view.held
   const ownerName = agent?.view.ownerName ?? ''
@@ -121,6 +135,7 @@ export function MobileSharedAgentChat() {
           owner: view.ownerName
         })}
         onBack={back}
+        trailing={<MobileSharedAgentChatMenu />}
       />
       <View style={styles.chat}>
         {page.client ? (
@@ -133,13 +148,7 @@ export function MobileSharedAgentChat() {
               onOpenFile={noop}
               images={chat.images}
               structuredComposer={chat.structuredComposer}
-              onMicPress={undefined}
-              micActive={false}
-              micStarting={false}
-              micProcessing={false}
-              dictationMode={undefined}
-              onMicPressIn={noop}
-              onMicPressOut={noop}
+              {...dictation.mic}
               inputLockReason={state === 'connected' ? null : 'disconnected'}
               sendErrorMessage={chat.sendError.message}
               onClearSendError={chat.sendError.clear}
@@ -166,6 +175,12 @@ export function MobileSharedAgentChat() {
           </MobileNativeChatDeliveryContext.Provider>
         ) : null}
       </View>
+      <MobileDictationSetupSheet
+        visible={dictation.setup.visible}
+        client={paired}
+        onClose={dictation.setup.close}
+        onReady={dictation.setup.close}
+      />
       <TransientToast message={toast} bottomInset={insets.bottom} />
     </View>
   )

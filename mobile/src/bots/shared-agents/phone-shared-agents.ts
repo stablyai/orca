@@ -23,6 +23,7 @@ import type { UnvalidatedRpcRequestPort } from '../../transport/rpc/unvalidated-
 import { randomV4Uuid } from '../../platform/random-v4-uuid'
 import { PhoneSharedAgentHeld } from './phone-shared-agent-held'
 import { sharedBotHeldRefusal } from '../../../../src/shared/bots/shared-bot-held-routing'
+import { PhoneSharedAgentKeptReads } from './phone-shared-agent-kept-reads'
 import {
   awaitingKeyView,
   readComputerShares,
@@ -37,8 +38,6 @@ type Link = SharedHostRelayLink<PhoneSharedAgent>
 // backing off to at most HELD_POLL_MAX_MS while it doesn't answer.
 const HELD_POLL_MS = 30_000
 const HELD_POLL_MAX_MS = 5 * 60_000
-// Reads the phone answers from the host's last answer while it is away, as Home keeps a computer's list.
-const KEPT_READS: ReadonlySet<string> = new Set(['status.get', 'bots.list', 'bots.chatTree'])
 
 const failure = (method: string, code: string, message: string): RpcFailure => ({
   id: method,
@@ -70,8 +69,7 @@ export class PhoneSharedAgents {
   private heldReadFailures = 0
   // Listed by a computer but with no key here yet (its host wasn't reached): shown, not callable.
   private readonly awaitingKey = new Map<string, readonly SharedBotPhoneShare[]>()
-  // This launch's last answer to each kept read, by share, method and params.
-  private readonly kept = new Map<string, RpcResponse>()
+  private readonly kept = new PhoneSharedAgentKeptReads()
 
   constructor(private readonly now: () => number = Date.now) {
     this.held = new PhoneSharedAgentHeld({
@@ -204,21 +202,18 @@ export class PhoneSharedAgents {
         return held
       }
     }
-    const keptKey = KEPT_READS.has(method)
-      ? `${entry.shareId}\0${method}\0${JSON.stringify(params ?? null)}`
-      : null
+    const away = () =>
+      this.kept.answer(entry.shareId, method, params) ?? this.offline(entry, method)
     if (link !== 'live') {
-      return (keptKey && this.kept.get(keptKey)) || this.offline(entry, method)
+      return away()
     }
     try {
       const response = await this.linkFor(entry).request(method, params)
       this.held.noteAnswer(entry, method, params, response)
-      if (keptKey && response.ok) {
-        this.kept.set(keptKey, response)
-      }
+      this.kept.noteAnswer(entry.shareId, method, params, response)
       return response
     } catch {
-      return (keptKey && this.kept.get(keptKey)) || this.offline(entry, method)
+      return away()
     }
   }
 
@@ -235,10 +230,14 @@ export class PhoneSharedAgents {
         return
       }
       if (link !== 'live') {
-        onData({ type: 'error', message: this.offline(entry, method).error.message })
+        // While away, a chat shows what its host last streamed of it, if this launch saw it.
+        if (!this.kept.replay(entry.shareId, method, params, onData)) {
+          onData({ type: 'error', message: this.offline(entry, method).error.message })
+        }
         return
       }
-      stop = this.linkFor(entry).subscribe(method, params, onData)
+      const kept = this.kept.recording(entry.shareId, method, params, onData)
+      stop = this.linkFor(entry).subscribe(method, params, kept)
     })
     return () => {
       released = true

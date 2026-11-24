@@ -1,6 +1,7 @@
 // The phone's chat for one of a teammate's chats with a shared agent: the regular native chat
 // controller and composer, on the client to the agent's host. There is no workspace, terminal or tab
 // around it; the chat is the page.
+import { isStructuredAgentId } from '../../../../src/shared/agent-session/lifecycle/provider-handles/agent-session-provider-handle-encoding'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { DEFAULT_LINK_OPEN_MODE, loadLinkOpenMode } from '../../storage/preferences'
 import { useMobileSessionImageAttachments } from '../../files/attachments/use-mobile-session-image-attachments'
@@ -24,6 +25,7 @@ export function useSharedAgentChat(args: {
   environmentId: string
   sessionId: string
   agent: string
+  title: string
   capabilities: readonly string[] | null
   connState: ConnectionState
   showToast: (message: string) => void
@@ -32,7 +34,18 @@ export function useSharedAgentChat(args: {
   // Its drafts and view are kept under the agent's host, as a workspace's are under its own.
   const worktreeId = `shared:${args.environmentId}`
   const tabId = `agent-session:${sessionId}`
-  const tab = useMemo(() => ({ type: 'agent-session', sessionId, agent }), [sessionId, agent])
+  // The chat as the session screen's agent tab would name it.
+  const tab = useMemo(
+    () => ({
+      type: 'agent-session' as const,
+      id: tabId,
+      title: args.title,
+      sessionId,
+      agent: isStructuredAgentId(agent) ? agent : 'claude',
+      isActive: true
+    }),
+    [tabId, args.title, sessionId, agent]
+  )
   const scopeKey = mobileNativeChatScopeKey(hostId, worktreeId, tabId)
   const sendError = useMobileNativeChatSendError({ scopeKey, showToast })
   const terminalRef = useRef<string | null>(null)
@@ -107,6 +120,7 @@ export function useSharedAgentChat(args: {
     void loadLinkOpenMode().then(setLinkOpenMode)
   }, [])
   return {
+    tab,
     controller,
     linkOpenMode,
     images,

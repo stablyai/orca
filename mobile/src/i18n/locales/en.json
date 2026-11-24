@@ -7958,7 +7958,8 @@
       "removedBody": "{{owner}} stopped sharing it with you.",
       "backToBots": "Back to bots",
       "newChat": "New chat",
-      "yourChats": "Your chats"
+      "yourChats": "Your chats",
+      "backLabel": "Bots"
     }
   },
   "mobileWebShell": {

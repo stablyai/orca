@@ -99,6 +99,7 @@ export function MobileSharedAgentPage() {
         avatar={mobileBotAvatarSource(bot ?? { id: view.botId, name, avatar: null })}
         subtitle={t('bots.share.sharedBy', 'Shared by {{name}}', { name: view.ownerName })}
         onBack={back}
+        labeledBack
       />
       <ScrollView contentContainerStyle={{ paddingBottom: insets.bottom + spacing.xl }}>
         {page.live ? null : <MobileSharedAgentOfflineLine ownerName={view.ownerName} />}
