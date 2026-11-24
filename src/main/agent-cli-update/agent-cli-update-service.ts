@@ -23,11 +23,14 @@ import { latestAgentCliRelease } from './agent-cli-latest-release'
 import { readModelsNeedingCliUpdate } from './agent-cli-model-requirements'
 import { agentCliUpdateDefinition, type AgentCliUpdatePlan } from './agent-cli-update-agents'
 import { checkThroughGate, updateThroughGate } from './agent-cli-update-gate'
+import { PrioritySemaphore } from '../../shared/concurrency/priority-semaphore'
 
 const UPDATE_TIMEOUT_MS = 10 * 60_000
 const UPDATE_OUTPUT_BYTES = 64 * 1024
 // An unread version (e.g. a slow first start) is asked again after this, not on every check.
 const UNREAD_RETRY_MS = 10 * 60_000
+// Each --version starts a full CLI runtime (often Node); a dozen at once spikes memory and CPU.
+const versionReads = new PrioritySemaphore(3)
 
 const versions = new Map<string, { stamp: string; version: string | null; at: number }>()
 const checks = new Map<AgentCliUpdateAgent, Promise<AgentCliUpdate | null>>()
@@ -65,9 +68,15 @@ async function installedVersion(
   if (unchanged && ((known.version && !recheck) || Date.now() - known.at < UNREAD_RETRY_MS)) {
     return known.version
   }
-  const read = parseVersion
-    ? await readAgentCliVersion(input, parseVersion)
-    : await readAgentCliVersion(input)
+  const release = await versionReads.acquire(0)
+  let read: Awaited<ReturnType<typeof readAgentCliVersion>>
+  try {
+    read = parseVersion
+      ? await readAgentCliVersion(input, parseVersion)
+      : await readAgentCliVersion(input)
+  } finally {
+    release()
+  }
   // Hermes' --version can outlast the probe while it checks for updates itself.
   const version = read.version ?? (unchanged ? known.version : null)
   versions.set(cli.program, { stamp, version, at: Date.now() })
@@ -237,15 +246,12 @@ async function updateAgentCli(
     .map((text) => text.trim())
     .filter(Boolean)
     .join('\n')
-  if (result.code !== 0 || result.timedOut) {
-    return { ok: false, output, command }
-  }
   const latest = after ? await latestRelease(agent, after, updated) : null
-  // A package manager behind the release (e.g. Homebrew) exits cleanly on the old version.
-  if (after && latest && compareAppVersions(after, latest) < 0) {
-    return { ok: false, output, command }
-  }
-  return { ok: true }
+  // The version decides when readable: a failed run that leaves the CLI at the latest release is done
+  // (e.g. a wrapper around a desktop app's CLI), and a clean exit still behind it (e.g. Homebrew) is not.
+  const current =
+    after && latest ? compareAppVersions(after, latest) >= 0 : result.code === 0 && !result.timedOut
+  return current ? { ok: true } : { ok: false, output, command }
 }
 
 /** Joins an update of `agent` already running on this host. */

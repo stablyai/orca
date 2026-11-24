@@ -5,7 +5,7 @@ import { DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/co
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { cn } from '@/lib/class-names'
 import { useTranslate } from '@/i18n/use-translate'
-import type { WorkspaceCleanupCandidate } from '../../../../../../shared/workspace-cleanup/workspace-cleanup'
+import type { WorkspaceCleanupGroup } from '../../../../../../shared/workspace-cleanup/workspace-cleanup-groups'
 import '../../candidate-evidence/workspace-cleanup-host-indexes'
 import { getWorkspaceCleanupCandidateIdentity } from '../../../../../../shared/workspace-cleanup/workspace-cleanup-host-identity'
 import {
@@ -13,13 +13,17 @@ import {
   getWorkspaceCleanupCandidateHostLabel
 } from '../../candidate-list/workspace-cleanup-host-label'
 import { WorkspaceCleanupMetadataChip } from '../../candidate-list/workspace-cleanup-metadata-chip'
+import { focusWorkspaceCleanupConfirmOpener } from '../../dialog/workspace-cleanup-confirm-opener-focus'
+import type { WorkspaceCleanupAgentStopRequest } from './use-workspace-cleanup-agent-stop-gate'
 
 export function WorkspaceCleanupConfirmStopAgents({
-  candidates,
+  request: { candidates, unverifiedCandidate },
+  activeGroup,
   onBack,
   onConfirm
 }: {
-  candidates: readonly WorkspaceCleanupCandidate[]
+  request: WorkspaceCleanupAgentStopRequest
+  activeGroup: WorkspaceCleanupGroup
   onBack: () => void
   onConfirm: () => void
 }): React.JSX.Element {
@@ -91,7 +95,21 @@ export function WorkspaceCleanupConfirmStopAgents({
       </ScrollArea>
       <div className="border-t border-border px-5 py-3">
         <DialogFooter>
-          <Button variant="outline" onClick={onBack}>
+          <Button
+            variant="outline"
+            onClick={() => {
+              onBack()
+              if (unverifiedCandidate) {
+                focusWorkspaceCleanupConfirmOpener(
+                  {
+                    kind: 'retry',
+                    identity: getWorkspaceCleanupCandidateIdentity(unverifiedCandidate)
+                  },
+                  activeGroup
+                )
+              }
+            }}
+          >
             {t('auto.components.workspace.cleanup.WorkspaceCleanupDialog.74f6c16279', 'Back')}
           </Button>
           <Button variant="destructive" onClick={onConfirm}>

@@ -79,6 +79,8 @@ export function LookAroundRow({
   }
   const every = everyText(setting)
   const dueNow = setting.on && !looking && state?.dueNow === true
+  // Due or looking, its next is the panel's clock standing in until the host says: no time to say.
+  const nextAt = setting.on && !looking && state?.dueNow !== true ? row.nextAt : null
   const name = t('settings.bots.lookAround.title', 'Look around')
   const setOn = (on: boolean): void => updateBotReporting(bot, { lookAround: { on } })
   const toggle = pauseResume(t, setting.on, setOn)
@@ -99,13 +101,14 @@ export function LookAroundRow({
       title={name}
       state={rowState?.label}
       dimmed={!setting.on}
+      next={nextAt === null ? null : { at: nextAt, now }}
       card={{
         state: dueNow ? { kind: 'note', label: t('bots.upcoming.dueNow', 'Due now') } : rowState,
         facts: [
-          setting.on && !dueNow && row.nextAt !== null
+          nextAt !== null
             ? {
                 label: t('bots.automations.next', 'Next'),
-                text: `${upcomingAt(row.nextAt, now)} · ${every}`
+                text: `${upcomingAt(nextAt, now)} · ${every}`
               }
             : {
                 text:

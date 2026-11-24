@@ -135,6 +135,6 @@ export function parseCronField(args: {
 }
 
 // Follow vixie/robfig star restriction, including */2, over ambiguous crontab prose; treating it as restricted flips AND to OR and fires ~8x more.
-export function isCronDayFieldRestricted(field: string): boolean {
+export function isCronFieldRestricted(field: string): boolean {
   return !field.split(',').some((term) => term.split('/')[0].trim() === '*')
 }

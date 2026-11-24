@@ -22,8 +22,10 @@ import {
   type AntigravityChatRoute
 } from '../../../../antigravity/antigravity-chat-route'
 import { withTimeout } from '../../../../../shared/concurrency/promise-timeout-fallback'
+import { antigravityUsesFileStoreAsync } from '../../../../antigravity/native-file-credentials'
 
 const CHAT_BACKEND_WAIT_MS = 1_500
+const LAUNCH_HOME_WAIT_MS = 1_000
 
 /** Where new chats on this host run; an unreadable answer reads as Orca's server. */
 async function hostChatRoute(runtime: OrcaRuntimeService) {
@@ -38,6 +40,27 @@ async function hostChatRoute(runtime: OrcaRuntimeService) {
   // The settings the route answered for go with its answer, so the two never mix snapshots.
   const route = input ? await antigravityHostChatRoute(input) : null
   return { agy: route?.agy ?? false, orcaHome: route?.orcaHome === true, settings }
+}
+
+/** The HOME new host agy chats launch with, when it shares the login an account switch changes;
+ *  a login shell or the agent's settings can set one other than Orca's own. Unknown after
+ *  LAUNCH_HOME_WAIT_MS, or when unreadable. */
+export function sharedAgyLaunchHome(runtime: OrcaRuntimeService): Promise<string | undefined> {
+  const read = async (): Promise<string | undefined> => {
+    // agy's login is in the system keyring, which every HOME shares, unless it keeps a file per HOME.
+    if (process.platform === 'win32' || (await antigravityUsesFileStoreAsync(process.env))) {
+      return undefined
+    }
+    const settings = runtime.requireStore().getSettings()
+    const env = await resolveHostStructuredAgentLaunchEnvironment('antigravity', settings)
+    // The launch environment can keep a file per HOME even where Orca's own uses the keyring.
+    return (await antigravityUsesFileStoreAsync(env)) ? undefined : (env.HOME ?? env.USERPROFILE)
+  }
+  return withTimeout(
+    read().catch(() => undefined),
+    LAUNCH_HOME_WAIT_MS,
+    undefined
+  )
 }
 
 /** Which sign-in new Google-account chats use: agy whenever the route sends them there, signed in

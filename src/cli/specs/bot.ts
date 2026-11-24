@@ -202,7 +202,7 @@ export const BOT_COMMAND_SPECS: CommandSpec[] = [
   {
     path: ['bot', 'work', 'list'],
     hidden: true,
-    summary: 'List the work a bot started: each worker, its state, PR and CI, age and source',
+    summary: 'List the work a bot started: each worker, its state, PR link, age and source',
     usage: 'orca bot work list [--bot <name>] [--json]',
     allowedFlags: [...GLOBAL_FLAGS, 'bot'],
     notes: ['Run from a bot’s chat it lists that bot’s work.']

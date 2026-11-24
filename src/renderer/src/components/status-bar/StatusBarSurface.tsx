@@ -79,8 +79,7 @@ export function StatusBarSurface({
     showGitBlame,
     showPorts,
     showResourceUsage,
-    showSsh,
-    usageHidden
+    showSsh
   } = controller
   return (
     <div
@@ -99,11 +98,7 @@ export function StatusBarSurface({
         setMenuOpen(true)
       }}
     >
-      {usageHidden ? (
-        <div aria-hidden className="flex-1" />
-      ) : (
-        <StatusBarUsageArea controller={controller} />
-      )}
+      <StatusBarUsageArea controller={controller} />
 
       {/* Why: attention segments shrink only after usage reaches its minimum, then scroll instead of
           compressing; the row's padding keeps edge badges and focus rings inside the scroll box. */}

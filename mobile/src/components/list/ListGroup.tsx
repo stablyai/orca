@@ -136,8 +136,12 @@ type ListRowProps = {
   subtitleMono?: boolean
   /** A subtitle that is a status to act on, e.g. "Needs sign-in", in its tone's colour. */
   subtitleColor?: string
-  /** A muted mark in a fixed-width column before the title, e.g. an item's `#35`. */
+  /** A status after the subtitle on its line, in its tone's colour: "Daily at 9 AM · Needs sign-in". */
+  subtitleNote?: { text: string; color: string }
+  /** A muted mark in a fixed-width column before the title, e.g. a step's number. */
   marker?: string
+  /** A muted mark inline before the title, e.g. an item's `#35`, so titles keep one start. */
+  titlePrefix?: string
   /** Lines the subtitle may take before it cuts; two by default. */
   subtitleLines?: number
   /** A small mark before the subtitle, e.g. the agent a row runs. */
@@ -157,6 +161,8 @@ type ListRowProps = {
   /** Draws a check: the row is the picked option. */
   selected?: boolean
   destructive?: boolean
+  /** An action, not a setting (e.g. "Open sign-in page"): the title in the accent, like Home's "Pair a desktop". */
+  accent?: boolean
   /** Something new to read: the title bolder. */
   strong?: boolean
   onPress?: () => void
@@ -176,7 +182,9 @@ export function ListRow({
   subtitle,
   subtitleMono = false,
   subtitleColor,
+  subtitleNote,
   marker,
+  titlePrefix,
   subtitleLines = 2,
   subtitleIcon,
   detail,
@@ -187,6 +195,7 @@ export function ListRow({
   navigates = false,
   selected,
   destructive = false,
+  accent = false,
   strong = false,
   onPress,
   onLongPress,
@@ -210,10 +219,14 @@ export function ListRow({
           listRowStyles.title,
           subtitle !== undefined && listRowStyles.titleEmphasis,
           strong && listRowStyles.titleStrong,
-          destructive && listRowStyles.titleDestructive
+          destructive && listRowStyles.titleDestructive,
+          accent && listRowStyles.titleAccent
         ]}
         numberOfLines={wrapTitle ? undefined : 1}
       >
+        {titlePrefix !== undefined ? (
+          <Text style={listRowStyles.titlePrefix}>{`${titlePrefix} `}</Text>
+        ) : null}
         {title}
       </Text>
       {subtitle !== undefined ? (
@@ -227,6 +240,9 @@ export function ListRow({
             numberOfLines={subtitleLines}
           >
             {subtitle}
+            {subtitleNote ? (
+              <Text style={{ color: subtitleNote.color }}>{` · ${subtitleNote.text}`}</Text>
+            ) : null}
           </Text>
         </WithIcon>
       ) : null}
@@ -335,8 +351,10 @@ const listRowStyles = themedStyleSheet(() => ({
   },
   title: { fontSize: 15, color: colors.textPrimary },
   titleEmphasis: { fontWeight: '500' },
+  titlePrefix: { color: colors.textMuted, fontVariant: ['tabular-nums'] },
   titleStrong: { fontWeight: '700' },
   titleDestructive: { color: colors.statusRed },
+  titleAccent: { color: colors.accentBlue },
   subtitle: { fontSize: 13, color: colors.textSecondary, flexShrink: 1 },
   subtitleMono: { fontFamily: typography.monoFamily },
   value: { fontSize: 15, color: colors.textSecondary, flexShrink: 1, maxWidth: 180 },

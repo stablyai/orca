@@ -5,17 +5,24 @@ import type {
 } from '@/store/slices/workspace-cleanup/workspace-cleanup-removal'
 import { translate } from '@/i18n/i18n'
 import { showPreservedBranchBatchToast } from '../../../sidebar/workspace-actions/deletion/preserved-branch-batch-toast'
+import { getWorkspaceCleanupFailureIdentity } from '../run/workspace-cleanup-run-reporter'
 
 export function showWorkspaceCleanupRemovalResultToasts(
   result: WorkspaceCleanupRemoveResult,
-  pendingSettlementFailures?: ReadonlySet<WorkspaceCleanupFailure>
+  pendingSettlementFailures?: ReadonlySet<WorkspaceCleanupFailure>,
+  canReportFailure?: (identity: string) => boolean
 ): void {
   if (result.preservedBranches && result.preservedBranches.length > 0) {
     showPreservedBranchBatchToast(result.removedIds.length, result.preservedBranches)
   }
-  const definitiveFailures = pendingSettlementFailures
-    ? result.failures.filter((failure) => !pendingSettlementFailures.has(failure))
+  const failures = canReportFailure
+    ? result.failures.filter((failure) =>
+        canReportFailure(getWorkspaceCleanupFailureIdentity(failure))
+      )
     : result.failures
+  const definitiveFailures = pendingSettlementFailures
+    ? failures.filter((failure) => !pendingSettlementFailures.has(failure))
+    : failures
   if (definitiveFailures.length > 0) {
     toast.error(
       translate(
@@ -26,7 +33,7 @@ export function showWorkspaceCleanupRemovalResultToasts(
       { description: definitiveFailures.map((failure) => failure.message).join('; ') }
     )
   }
-  const stillRemovingCount = result.failures.length - definitiveFailures.length
+  const stillRemovingCount = failures.length - definitiveFailures.length
   if (stillRemovingCount > 0) {
     // Timed-out rows still remove; definitive error toasts would contradict later authoritative outcomes.
     toast.info(

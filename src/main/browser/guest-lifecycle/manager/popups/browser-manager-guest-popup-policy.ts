@@ -239,8 +239,7 @@ export abstract class BrowserManagerGuestPopupPolicy extends BrowserManagerNavig
     )
   }
 
-  /** An offscreen page, or a popup one opened: viewers list both as server tabs. */
-  protected isListedAsServerPage(guestWebContentsId: number): boolean {
+  isListedAsServerPage(guestWebContentsId: number): boolean {
     const rootGuestId =
       this.popupOwnerContextByGuestId.get(guestWebContentsId)?.rootGuestWebContentsId ??
       guestWebContentsId

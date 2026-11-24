@@ -108,7 +108,10 @@ export function MobileBotHomeRow({
       onLongPress={onLongPress}
       titleTrailing={
         <>
-          {needsYou > 0 ? <MobileBotNeedsYouCount count={needsYou} /> : null}
+          {/* The line already says "N need you": the count once. */}
+          {needsYou > 0 && !(asking && limitText === null) ? (
+            <MobileBotNeedsYouCount count={needsYou} />
+          ) : null}
           {bot.upNext ? <MobileBotUpNextCount count={bot.upNext} /> : null}
           {/* A folded bot always keeps its chevron, so it can unfold before its chats are read; a
               down host's bot is its row alone. */}
@@ -372,8 +375,8 @@ const styles = themedStyleSheet(() => ({
   },
   main: { flex: 1, minWidth: 0 },
   titleRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.xs },
-  title: { flex: 1, fontSize: 15, color: colors.textSecondary, fontWeight: '500' },
-  unread: { color: colors.textPrimary, fontWeight: '700' },
+  title: { flex: 1, fontSize: 15, color: colors.textPrimary, fontWeight: '500' },
+  unread: { fontWeight: '700' },
   fold: {
     minWidth: 44,
     minHeight: 44,
