@@ -46,10 +46,9 @@ function pr(state: PRInfo['state']): PRInfo {
 
 /** A main-process store with no window: only this module writes its cache. */
 function storeWith(data: PRInfo | null, ageMs: number, repos: Repo[] = [repo]) {
-  let cache: PersistedState['githubCache'] = {
-    pr: { [cacheKey]: { data, fetchedAt: NOW - ageMs, fetchedHeadOid: 'abc123' } as never },
-    issue: {}
-  }
+  // The window's entries carry the head they were read at, beyond the persisted type.
+  const entry = { data, fetchedAt: NOW - ageMs, fetchedHeadOid: 'abc123' }
+  let cache: PersistedState['githubCache'] = { pr: { [cacheKey]: entry }, issue: {} }
   return {
     getRepos: () => repos,
     getGitHubCache: () => cache,
