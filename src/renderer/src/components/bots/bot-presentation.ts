@@ -62,7 +62,13 @@ export function botErrorMessage(error: unknown): string {
   if (error instanceof Error && error.message === 'bot_avatar_home_unreadable') {
     return translate(
       'bots.errors.avatarHomeUnreadable',
-      'Check that bot.json in the bot folder is readable and valid, then try again.'
+      'Orca could not verify the saved picture. Check that bot.json is readable, or choose the picture again.'
+    )
+  }
+  if (error instanceof Error && error.message === 'bot_folder_not_owned') {
+    return translate(
+      'bots.errors.folderNotOwned',
+      'Orca could not verify that this folder belongs to this bot. Check the bot’s home folder and try again.'
     )
   }
   if (error instanceof Error && error.message === 'bot_avatar_invalid') {

@@ -32,7 +32,7 @@ export function useBotPictureLook(
       update({
         ...updates,
         ...(botHostHas(bot.hostId, BOTS_AVATAR_REVISION_RUNTIME_CAPABILITY)
-          ? { lookAtRevision: bot.avatarRevision ?? 0 }
+          ? { lookAtRevision: bot.avatarRevision ?? 0, lookAtEpoch: bot.avatarRevisionEpoch }
           : {})
       }).then((saved) => {
         noteBotPictureSaved(key, saved)

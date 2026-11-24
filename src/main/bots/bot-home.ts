@@ -172,6 +172,7 @@ export function generatedBotHomeFiles(bot: Bot): BotHomeFile[] {
           avatarColor: bot.avatarColor ?? null,
           avatarOutfit: bot.avatarOutfit ?? null,
           generatedOverMascot: bot.generatedOverMascot,
+          avatarRevisionEpoch: bot.avatarRevisionEpoch,
           // Kept here as well as in the record, which saves on a debounce: after a crash the higher of
           // the two is still at least every revision a write acknowledged.
           ...(bot.avatarRevision ? { avatarRevision: bot.avatarRevision } : {}),

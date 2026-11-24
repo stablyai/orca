@@ -27540,6 +27540,8 @@
     "errors": {
       "nameTaken": "Another bot already has that name.",
       "generic": "Something went wrong. Try again.",
+      "avatarHomeUnreadable": "Orca could not verify the saved picture. Check that bot.json is readable, or choose the picture again.",
+      "folderNotOwned": "Orca could not verify that this folder belongs to this bot. Check the bot’s home folder and try again.",
       "avatarInvalid": "That picture could not be used. Pick a PNG or JPG image.",
       "unsavedDrafts": "Its folder has unsaved editor changes. Save or close them, then delete again."
     },

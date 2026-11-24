@@ -205,7 +205,8 @@ export const BOT_METHODS = [
       bot: await runtime.bots.setAvatarImage(
         params.botId,
         Buffer.from(params.png, 'base64'),
-        params.expectedAvatarRevision
+        params.expectedAvatarRevision,
+        params.expectedAvatarEpoch
       )
     })
   }),
@@ -216,7 +217,7 @@ export const BOT_METHODS = [
     handler: async (params, { runtime }) =>
       params.catalogRevision === undefined
         ? { png: (await runtime.bots.readAvatarImage(params.botId))?.toString('base64') ?? null }
-        : { revision: await runtime.bots.generationRevision(params.botId, params.catalogRevision) }
+        : runtime.bots.generationRevision(params.botId, params.catalogRevision, params.catalogEpoch)
   }),
   defineMethod({
     name: 'bots.activity',

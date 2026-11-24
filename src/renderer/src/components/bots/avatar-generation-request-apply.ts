@@ -5,6 +5,7 @@ import { translate } from '@/i18n/i18n'
 import { botRefKey, type BotRef } from '@/lib/bot-hosts'
 import { botHostHas } from '@/lib/bot-host-status'
 import { readBotGenerationRevision, uploadBotAvatar } from '@/lib/bot-catalog'
+import type { BotPictureRevision } from '../../../../shared/bot-avatar'
 import type { Bot } from '../../../../shared/bot-types'
 import { BOTS_AVATAR_REVISION_RUNTIME_CAPABILITY } from '../../../../shared/bot-runtime-capabilities'
 import type {
@@ -40,7 +41,7 @@ export type Owner =
 /** The bot revision an upload requires: the one at Generate, or, while picture saves begun earlier are
  *  still in flight, the one they are acknowledged at. */
 export type Anchor = {
-  revision: number | Promise<number | null>
+  revision: BotPictureRevision | Promise<BotPictureRevision | null>
   waiting: boolean
   acked: Set<number>
 }
@@ -75,8 +76,10 @@ export function anchorAt(bot: Bot): Anchor {
   // A legacy bot has no revision yet: 0, sent explicitly, so its first automatic upload is still checked.
   return {
     revision: canCheckRevision(bot)
-      ? readBotGenerationRevision(bot, bot.avatarRevision ?? 0).catch(() => null)
-      : (bot.avatarRevision ?? 0),
+      ? readBotGenerationRevision(bot, bot.avatarRevision ?? 0, bot.avatarRevisionEpoch).catch(
+          () => null
+        )
+      : { revision: bot.avatarRevision ?? 0, epoch: bot.avatarRevisionEpoch },
     waiting: botPictureOpsOpen(botRefKey(bot)),
     acked: new Set<number>()
   }
@@ -111,17 +114,18 @@ export function tryApply(request: Request, finish: (request: Request, saved?: Bo
   const { png, description } = request.made
   const automatic = beginAutomaticBotPictureUpload(botRefKey(ref))
   const upload = async (): Promise<Bot> => {
-    let revision = await anchor.revision
-    if (revision === null) {
+    const token = await anchor.revision
+    if (token === null) {
       throw new Error('bot_avatar_home_unreadable')
     }
+    let revision = token.revision
     while (anchor.acked.delete(revision + 1)) {
       revision += 1
     }
     if (!request.eligible) {
       throw new Error('bot_avatar_changed')
     }
-    return uploadBotAvatar(ref, png, revision)
+    return uploadBotAvatar(ref, png, { ...token, revision })
   }
   let acknowledged: Bot | undefined
   void upload()

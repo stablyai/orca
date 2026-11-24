@@ -22,7 +22,7 @@ import {
   type Bot,
   type BotMember
 } from '../bot-types'
-import { isSettableBotAvatar } from '../bot-avatar'
+import { SettableBotAvatar } from './bot-avatar-params'
 import { BotAvatarColorSchema } from '../bots/bot-avatar-color'
 import { BotStoredOutfitSchema } from '../bots/bot-avatar-outfit'
 import { botMembersFullError, planBotMemberAdds } from '../bots/bot-member-capacity'
@@ -50,12 +50,6 @@ export const BOT_ERROR_CODES = [
   'bot_avatar_home_unreadable',
   BOT_OFFER_ALREADY_ANSWERED
 ] as const
-
-/** A mascot, an emoji or null; an upload is set with bots.avatar.upload. */
-const SettableBotAvatar = z
-  .string()
-  .nullable()
-  .refine(isSettableBotAvatar, 'Set an uploaded picture with bots.avatar.upload')
 
 const HandedWorkspaces = z.array(HandedWorkspaceSchema).min(1).max(HANDED_WORKSPACES_MAX)
 
@@ -138,6 +132,7 @@ export const BotUpdate = z.object({
       agent: z.enum(BOT_AGENTS).optional(),
       avatar: SettableBotAvatar.optional(),
       /** The mascot revision visible when its color or outfit was picked. */
+      lookAtEpoch: z.uuid().optional(),
       lookAtRevision: z.number().int().nonnegative().optional(),
       /** null puts back the mascot's own sky blue. */
       avatarColor: BotAvatarColorSchema.nullable().optional(),
@@ -339,12 +334,14 @@ export function applyBotUpdates(bot: Bot, updates: BotHostUpdates): Bot {
     offerAnswer,
     cancelledWait,
     lookAtRevision,
+    lookAtEpoch,
     ...rest
   } = updates
   const next: Bot = { ...bot, ...rest }
   if (
     bot.generatedOverMascot &&
     lookAtRevision !== undefined &&
+    lookAtEpoch === bot.avatarRevisionEpoch &&
     lookAtRevision === (bot.avatarRevision ?? 0) - 1 &&
     updates.avatar === undefined &&
     (updates.avatarColor !== undefined || updates.avatarOutfit !== undefined)

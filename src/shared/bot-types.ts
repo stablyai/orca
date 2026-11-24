@@ -182,6 +182,8 @@ export const BotSchema = z.object({
   /** Bumped by every picture, color or outfit write, so a write can require that none landed since it was
    *  asked for (bots.avatar.upload `expectedAvatarRevision`). Absent is 0; older hosts drop it. */
   avatarRevision: z.number().int().nonnegative().optional().catch(undefined),
+  /** Rotated when an explicit picture choice repairs a lost revision history. */
+  avatarRevisionEpoch: z.uuid().optional().catch(undefined),
   paused: z.boolean(),
   /** An owner's override; absent, the bot's chats start like any native chat. */
   permissionMode: z.enum(AGENT_CHAT_PERMISSION_MODES).optional(),

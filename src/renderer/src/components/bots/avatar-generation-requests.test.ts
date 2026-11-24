@@ -15,7 +15,10 @@ const mocks = vi.hoisted(() => ({
 }))
 
 vi.mock('@/lib/bot-catalog', () => ({
-  readBotGenerationRevision: async (_ref: unknown, revision: number) => revision,
+  readBotGenerationRevision: async (_ref: unknown, revision: number, epoch?: string) => ({
+    revision,
+    epoch
+  }),
   uploadBotAvatar: mocks.uploadBotAvatar,
   readHostBots: mocks.readHostBots
 }))
@@ -117,7 +120,10 @@ describe('avatar generation requests', () => {
 
     expect(at.landed).toHaveBeenCalledWith({ png: 'CROPPED', description: 'a fox' }, false)
     expect(mocks.uploadBotAvatar).toHaveBeenCalledTimes(1)
-    expect(mocks.uploadBotAvatar).toHaveBeenCalledWith({ hostId: 'local', id: 'b1' }, 'CROPPED', 0)
+    expect(mocks.uploadBotAvatar).toHaveBeenCalledWith({ hostId: 'local', id: 'b1' }, 'CROPPED', {
+      revision: 0,
+      epoch: undefined
+    })
     expect(mocks.keepSavedPictureDescription).toHaveBeenCalledWith(
       expect.objectContaining({ avatar: 'upload:abc' }),
       'CROPPED',
@@ -167,7 +173,10 @@ describe('avatar generation requests', () => {
     noteBotPictureAck(BOT_KEY, 3)
     op.end()
     await flush()
-    expect(mocks.uploadBotAvatar).toHaveBeenCalledWith(expect.anything(), 'CROPPED', 3)
+    expect(mocks.uploadBotAvatar).toHaveBeenCalledWith(expect.anything(), 'CROPPED', {
+      revision: 3,
+      epoch: undefined
+    })
   })
 
   it('keeps the revision at Generate when a save begun before it failed, past a newer write elsewhere', async () => {
@@ -182,7 +191,10 @@ describe('avatar generation requests', () => {
     await land(made)
     await flush()
 
-    expect(mocks.uploadBotAvatar).toHaveBeenCalledWith(expect.anything(), 'CROPPED', 2)
+    expect(mocks.uploadBotAvatar).toHaveBeenCalledWith(expect.anything(), 'CROPPED', {
+      revision: 2,
+      epoch: undefined
+    })
   })
 
   it('stays silent when a newer write landed first, and saves no caption', async () => {
@@ -255,7 +267,10 @@ describe('avatar generation requests', () => {
     releaseAvatarRequest(id)
     await flush()
     expect(mocks.uploadBotAvatar).toHaveBeenCalledTimes(1)
-    expect(mocks.uploadBotAvatar).toHaveBeenCalledWith({ hostId: 'local', id: 'b2' }, 'CROPPED', 1)
+    expect(mocks.uploadBotAvatar).toHaveBeenCalledWith({ hostId: 'local', id: 'b2' }, 'CROPPED', {
+      revision: 1,
+      epoch: undefined
+    })
   })
 
   it('uploads once to a bot made before its picture lands', async () => {
@@ -268,7 +283,10 @@ describe('avatar generation requests', () => {
     await flush()
 
     expect(mocks.uploadBotAvatar).toHaveBeenCalledTimes(1)
-    expect(mocks.uploadBotAvatar).toHaveBeenCalledWith({ hostId: 'local', id: 'b2' }, 'CROPPED', 0)
+    expect(mocks.uploadBotAvatar).toHaveBeenCalledWith({ hostId: 'local', id: 'b2' }, 'CROPPED', {
+      revision: 0,
+      epoch: undefined
+    })
   })
 
   it('gives the picture back to the dialog when Create fails', async () => {

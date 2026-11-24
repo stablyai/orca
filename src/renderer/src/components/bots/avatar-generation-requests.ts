@@ -263,7 +263,7 @@ export function handOffAvatarRequest(
       request.owner = { kind: 'bot', ref: { hostId: bot.hostId, id: bot.id }, name: bot.name }
       // The bot as Create (and its first picture's upload) acknowledged it.
       request.anchor = {
-        revision: bot.avatarRevision ?? 0,
+        revision: { revision: bot.avatarRevision ?? 0, epoch: bot.avatarRevisionEpoch },
         waiting: false,
         acked: new Set()
       }

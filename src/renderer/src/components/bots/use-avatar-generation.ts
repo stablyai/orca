@@ -148,7 +148,9 @@ export function useAvatarGeneration(
       },
       ended: (saved) => {
         if (ours()) {
-          lastSaved.current = saved
+          if (saved) {
+            lastSaved.current = saved
+          }
           current.current = null
           setRun({ kind: 'idle' })
         }
@@ -160,6 +162,8 @@ export function useAvatarGeneration(
       target.kind === 'bot' &&
       saved?.id === target.bot.id &&
       saved.hostId === target.bot.hostId &&
+      (!target.bot.avatarRevisionEpoch ||
+        saved.avatarRevisionEpoch === target.bot.avatarRevisionEpoch) &&
       (saved.avatarRevision ?? 0) > (target.bot.avatarRevision ?? 0)
         ? { ...target, bot: saved }
         : target

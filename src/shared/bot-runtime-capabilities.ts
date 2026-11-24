@@ -80,7 +80,7 @@ export const BOTS_ITEM_CANCEL_NO_REASON_CAPABILITY = 'bots.item-cancel-no-reason
 // Host bumps a bot's `avatarRevision` on every picture, color or outfit write and refuses a bots.avatar.upload whose
 // `expectedAvatarRevision` no longer matches; an older host drops the field, so a client uploads a picture
 // on its own (one generated while the picker was closed) only where this is advertised.
-export const BOTS_AVATAR_REVISION_RUNTIME_CAPABILITY = 'bots.avatar-revision.v2' as const
+export const BOTS_AVATAR_REVISION_RUNTIME_CAPABILITY = 'bots.avatar-revision.v3' as const
 
 export const BOT_RUNTIME_CAPABILITIES = [
   BOTS_GROUPS_RUNTIME_CAPABILITY,

@@ -160,13 +160,45 @@ describe('BotController', () => {
         'bot_avatar_changed'
       )
       expect(readFileSync(join(folder, BOT_AVATAR_FILE))).toEqual(Buffer.from(squarePng(512)))
-      expect(await bots.generationRevision(older.id, 0)).toBe(2)
+      expect(await bots.generationRevision(older.id, 0)).toMatchObject({ revision: 2 })
       expect(bots.list().find((entry) => entry.id === older.id)).toMatchObject({
         avatar: saved.avatar,
         avatarOutfit: 'tie',
         avatarRevision: 2
       })
       expect((await bots.setAvatarImage(older.id, squarePng(512, 2), 2)).avatarRevision).toBe(3)
+    })
+
+    it('leaves a conflicting revisionless home untouched and invalidates old tokens when its owner repairs it', async () => {
+      const original = await bots.create({ name: 'Reviewer', avatar: mascotAvatar('A1') })
+      const manual = squarePng(512, 1)
+      const different = squarePng(512, 2)
+      const before = await bots.setAvatarImage(original.id, manual)
+      const folder = join(botsRoot(), 'reviewer')
+      const path = join(folder, 'bot.json')
+      const manifest = JSON.parse(readFileSync(path, 'utf8'))
+      delete manifest.avatarRevision
+      const conflict = JSON.stringify(manifest)
+      writeFileSync(path, conflict)
+      store.saveBot(original)
+      await expect(bots.setAvatarImage(original.id, different, 0)).rejects.toThrow(
+        'bot_avatar_home_unreadable'
+      )
+      expect(readFileSync(path, 'utf8')).toBe(conflict)
+      expect(readFileSync(join(folder, BOT_AVATAR_FILE))).toEqual(Buffer.from(manual))
+      rmSync(path)
+      expect((await bots.update(original.id, { paused: true })).paused).toBe(true)
+      expect(existsSync(path)).toBe(false)
+      const repaired = await bots.setAvatarImage(original.id, manual)
+      expect(repaired.avatarRevision).toBe(before.avatarRevision)
+      await expect(
+        bots.setAvatarImage(original.id, different, before.avatarRevision)
+      ).rejects.toThrow('bot_avatar_changed')
+      const fresh = await bots.generationRevision(original.id, 1, repaired.avatarRevisionEpoch)
+      expect(
+        (await bots.setAvatarImage(original.id, different, fresh.revision, fresh.epoch))
+          .avatarRevision
+      ).toBe(2)
     })
 
     it('restores a mascot under a look picked at its revision only while the automatic replacement is current', async () => {
