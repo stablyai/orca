@@ -1,4 +1,5 @@
 // A conversation's native chat (structured session): its deliveries, prompts, turns and Stop.
+import type { BotShare } from '../../shared/bots/bot-team-shares'
 import { randomUUID } from 'node:crypto'
 import { isConversationReport } from './external-conversation-turn-opener'
 import {
@@ -215,6 +216,7 @@ export async function deliverToChat(
     admitted?: () => void
     deliveryId?: string
     images?: readonly string[]
+    shares?: readonly BotShare[]
   }
 ): Promise<Delivery> {
   const { asker } = delivery
@@ -223,7 +225,7 @@ export async function deliverToChat(
     ? connectorAskerPrompt(link.source, asker, note, delivery)
     : connectorPlainMessages([delivery, ...(delivery.later ?? [])], note)
   // Kept beside the message for the chat's tag, with only the links a tag may open or fetch.
-  const stored = asker ? storedConnectorAsker(link.source, asker) : undefined
+  const stored = asker ? storedConnectorAsker(link.source, asker, delivery.shares) : undefined
   const { signal } = delivery
   if (!chat) {
     return refused('agent_not_reachable')

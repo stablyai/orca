@@ -1,10 +1,7 @@
 // What a bot's agent reads of a message a shared teammate typed in Orca.
 import type { AgentJournalMessageItem } from '../agent-session/journal/agent-session-journal-types'
 import { shareTypistOf } from '../agent-session/journal/agent-journal-typed-by'
-import {
-  isPromptCommand,
-  messageWords
-} from '../agent-session/lifecycle/stopping/agent-session-stopped-history'
+import { isPromptCommand, messageWords } from '../agent-session/journal/agent-journal-message-words'
 import { MESSAGE_LABEL, NOTE, shownName } from '../connector-asker-prompt'
 import { fenceQuotedText } from '../quoted-text-fence'
 

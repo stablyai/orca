@@ -42,7 +42,7 @@ function SlackMessage({ asker = ASKER }: { asker?: ConnectorAsker }): React.JSX.
       kind: 'message',
       role: 'user',
       origin: 'connector',
-      asker: storedConnectorAsker('slack', asker),
+      asker: storedConnectorAsker('slack', asker, undefined),
       blocks: [{ type: 'text', text: connectorAskerPrompt('slack', asker) }]
     }
   })

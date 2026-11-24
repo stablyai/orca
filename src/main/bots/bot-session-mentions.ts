@@ -12,7 +12,7 @@ import {
 } from '../../shared/bots/bot-mention-context'
 import { soulSpecialty } from '../../shared/bot-roster'
 import { botHomeFolder, localBotHomeFilesystem } from './bot-home'
-import { messageWords } from '../../shared/agent-session/lifecycle/stopping/agent-session-stopped-history'
+import { messageWords } from '../../shared/agent-session/journal/agent-journal-message-words'
 import type { KnownPairedBotRoster } from './paired-bot-rosters'
 
 /** A picked chat as the host's own list has it: `--chat` only for one of the bot's chats that takes

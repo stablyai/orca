@@ -1,7 +1,9 @@
 import * as z from 'zod'
+import type { BotShare } from './bots/bot-team-shares'
 import {
   CONNECTOR_ASKER_PLACE_KINDS,
   ConnectorAskerVia,
+  ConnectorAskerViaAccount,
   type ConnectorAsker
 } from './connectors/connector-cloud-contract'
 import { CONNECTOR_SOURCES, type ConnectorSource } from './connectors/external-conversation-link'
@@ -26,7 +28,8 @@ export type ConnectorMessageAsker = Pick<
   | 'app'
 > & { source: ConnectorSource; noAccess?: ConnectorNoAccessLine[] }
 
-/** The part of a delivered asker the journal keeps, with only links a tag may open or fetch. */
+/** The part of a delivered asker the journal keeps, with only links a tag may open or fetch. Its
+ *  linked Orca account is kept only while the bot is still shared with that account. */
 export function storedConnectorAsker(
   source: ConnectorSource,
   {
@@ -41,8 +44,10 @@ export function storedConnectorAsker(
     via,
     viaAccount,
     app
-  }: ConnectorAsker
+  }: ConnectorAsker,
+  shares: readonly BotShare[] | undefined
 ): ConnectorMessageAsker | undefined {
+  const shared = shares?.some((share) => share.kind === 'account' && share.accountId === viaAccount)
   const noAccess = context.flatMap((item) =>
     item.kind === 'no_access' ? [{ name: item.name, text: item.text }] : []
   )
@@ -57,7 +62,7 @@ export function storedConnectorAsker(
     messageRef,
     ...(noAccess.length > 0 ? { noAccess } : {}),
     via,
-    ...(viaAccount ? { viaAccount } : {}),
+    ...(viaAccount && shared ? { viaAccount } : {}),
     ...(app ? { app } : {})
   })
 }
@@ -133,7 +138,7 @@ const askerSchema = z
     avatarUrl: optionalUrl,
     messageRef: z.string().min(1).max(2048).optional().catch(undefined),
     via: ConnectorAskerVia,
-    viaAccount: z.string().min(1).max(128).optional().catch(undefined),
+    viaAccount: ConnectorAskerViaAccount,
     app: z.literal(true).optional().catch(undefined),
     // Unreadable lines are left out one by one; the tag never depends on them.
     noAccess: z
