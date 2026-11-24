@@ -1,5 +1,5 @@
 import { expect, it } from 'vitest'
-import { claudeTurnDoneOnScreen } from './claude-model-wait-screen'
+import { claudeCompactingOnScreen, claudeTurnDoneOnScreen } from './claude-model-wait-screen'
 
 const FOOTER = '  ⏵⏵ bypass permissions on (shift+tab to cycle) · esc to interrupt'
 
@@ -25,4 +25,10 @@ it('reads a stalled request, and a reply that says done, as still waiting', () =
     ])
   ).toBe(false)
   expect(claudeTurnDoneOnScreen(['· Whirlpooling… (11m 27s)', '❯', FOOTER])).toBe(false)
+})
+
+// A compaction's request writes no api-request row, so only its spinner says one is out.
+it('reads a compaction in progress from its spinner', () => {
+  expect(claudeCompactingOnScreen(['✻ Compacting conversation… (1m 34s)', '❯', FOOTER])).toBe(true)
+  expect(claudeCompactingOnScreen(['· Whirlpooling… (11m 27s)', '❯', FOOTER])).toBe(false)
 })
