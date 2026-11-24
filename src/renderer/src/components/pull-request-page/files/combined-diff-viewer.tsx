@@ -311,18 +311,29 @@ export function PRFilesCombinedDiffViewer({
           filePath={file.path}
           onToggle={() => {
             if (!pending) {
-              void onViewedChange(file.path, !viewed).then(() => {
-                const index = sections.findIndex((s) => s.path === file.path)
-                if (index !== -1) {
-                  toggleSection(index)
+              // Capture generation to ignore completions from a previous diff.
+              const generation = generationRef.current
+              void onViewedChange(file.path, !viewed).then((ok) => {
+                // Skip if the request failed or the diff changed while pending.
+                if (!ok || generationRef.current !== generation) {
+                  return
                 }
+                // Set collapsed to match the requested Viewed state instead of
+                // toggling, so manual expand/collapse is preserved.
+                setSections((prev) =>
+                  prev.map((s) =>
+                    s.path === file.path
+                      ? { ...s, collapsed: !viewed, loading: viewed ? true : s.loading }
+                      : s
+                  )
+                )
               })
             }
           }}
         />
       )
     },
-    [fileByPath, onViewedChange, pendingViewedPaths, sections, toggleSection]
+    [fileByPath, onViewedChange, pendingViewedPaths, generationRef, setSections]
   )
 
   return (

@@ -135,11 +135,13 @@ function PRFilesCombinedDiffSections({
   const loadedIndicesRef = useRef<Set<number>>(new Set())
   const loadingIndicesRef = useRef<Set<number>>(new Set())
   const sectionsRef = useRef<DiffSection[]>(sections)
+  const generationRef = useRef(0)
   const modifiedEditorsRef = useRef<Map<number, monacoEditor.IStandaloneCodeEditor>>(new Map())
   const handleSectionSaveRef = useRef<(index: number) => Promise<void>>(async () => {})
 
   // Sync after commit but before passive effects: collapsed sections remount and read this ref during their passive load.
   useLayoutEffect(() => {
+    generationRef.current += 1
     sectionsRef.current = sections
   }, [sections])
 
@@ -295,18 +297,29 @@ function PRFilesCombinedDiffSections({
           filePath={file.path}
           onToggle={() => {
             if (!pending) {
-              void onViewedChange(file.path, !viewed).then(() => {
-                const index = sections.findIndex((s) => s.path === file.path)
-                if (index !== -1) {
-                  toggleSection(index)
+              // Capture generation to ignore completions from a previous diff.
+              const generation = generationRef.current
+              void onViewedChange(file.path, !viewed).then((ok) => {
+                // Skip if the request failed or the diff changed while pending.
+                if (!ok || generationRef.current !== generation) {
+                  return
                 }
+                // Set collapsed to match the requested Viewed state instead of
+                // toggling, so manual expand/collapse is preserved.
+                setSections((prev) =>
+                  prev.map((s) =>
+                    s.path === file.path
+                      ? { ...s, collapsed: !viewed, loading: viewed ? true : s.loading }
+                      : s
+                  )
+                )
               })
             }
           }}
         />
       )
     },
-    [fileByPath, onViewedChange, pendingViewedPaths, sections, toggleSection]
+    [fileByPath, onViewedChange, pendingViewedPaths, generationRef, setSections]
   )
 
   return (
