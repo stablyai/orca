@@ -40,6 +40,15 @@ export function claudeRelayAckFloor(): ProviderRelayAckFloor {
   const starts = new Map<string, number>()
   /** Unreturned tool calls, by the seq of their message's `message_start`, and their scope. */
   const tools = new Map<string, { seq: number; scope: string }>()
+  /** The same calls by scope, so ending a scope visits only its own. */
+  const toolsByScope = new Map<string, Set<string>>()
+  const dropTool = (id: string): void => {
+    const tool = tools.get(id)
+    if (tool) {
+      tools.delete(id)
+      toolsByScope.get(tool.scope)?.delete(id)
+    }
+  }
   /** Tool calls that launched a background task; their subagent outlives the call's result. */
   const backgroundLaunches = new Set<string>()
   /** Each running task's launching call, for one moved to the background after it started. */
@@ -47,10 +56,22 @@ export function claudeRelayAckFloor(): ProviderRelayAckFloor {
   const closeScope = (scope: string): void => {
     open.delete(scope)
     starts.delete(scope)
-    for (const [id, tool] of tools) {
-      if (tool.scope === scope) {
-        tools.delete(id)
+    for (const id of toolsByScope.get(scope) ?? []) {
+      tools.delete(id)
+    }
+    toolsByScope.delete(scope)
+  }
+  /** A root result ends its turn, which the chat has saved: a replay never starts before it, so
+   *  work still open past it (a background subagent's) is kept from the line after; a reattach
+   *  restores such a running tool call from its saved row. */
+  const keepAfter = (seq: number): void => {
+    for (const map of [open, starts]) {
+      for (const [scope, from] of map) {
+        map.set(scope, Math.max(from, seq + 1))
       }
+    }
+    for (const tool of tools.values()) {
+      tool.seq = Math.max(tool.seq, seq + 1)
     }
   }
   return {
@@ -80,6 +101,9 @@ export function claudeRelayAckFloor(): ProviderRelayAckFloor {
         // A turn's end closes its own streams, even one the CLI never finished; a background
         // subagent's work goes on past it.
         closeScope(scopeOf(frame))
+        if (frame.parent_tool_use_id == null) {
+          keepAfter(seq)
+        }
       } else if (frame.type === 'system' && frame.subtype === 'task_notification') {
         // A subagent's end closes what it left open under its launching tool call.
         backgroundLaunches.delete(String(frame.tool_use_id ?? ''))
@@ -101,10 +125,13 @@ export function claudeRelayAckFloor(): ProviderRelayAckFloor {
         const scope = scopeOf(frame)
         const start = starts.get(scope) ?? seq
         // The CLI sends one final frame per block, before the message's stop.
-        contentIds(frame, 'tool_use', 'id').forEach((id) => tools.set(id, { seq: start, scope }))
+        for (const id of contentIds(frame, 'tool_use', 'id')) {
+          tools.set(id, { seq: start, scope })
+          toolsByScope.set(scope, (toolsByScope.get(scope) ?? new Set()).add(id))
+        }
       } else if (frame.type === 'user') {
         for (const id of contentIds(frame, 'tool_result', 'tool_use_id')) {
-          tools.delete(id)
+          dropTool(id)
           // A foreground subagent ends with its launching call's result.
           if (!backgroundLaunches.has(id)) {
             closeScope(`${String(frame.session_id ?? '')}/${id}`)

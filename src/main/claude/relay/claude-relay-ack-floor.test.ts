@@ -44,7 +44,7 @@ describe('Claude relay ack floor', () => {
     expect(floor.floor()).toBe(null)
   })
 
-  it("keeps a background subagent's open call past the turn's end, until the subagent ends", () => {
+  it("keeps a background subagent's open call past the turn's end, never replaying that end", () => {
     const floor = claudeRelayAckFloor()
     floor.observe(
       1,
@@ -61,8 +61,10 @@ describe('Claude relay ack floor', () => {
     )
     floor.observe(3, toolUse('t2', 'agent-1'))
     floor.observe(4, toolResult('agent-1'))
-    floor.observe(5, frame({ type: 'result', session_id: 's' }))
     expect(floor.floor()).toBe(3)
+    // The turn's end is saved: a replay starting before it would settle the next turn with it.
+    floor.observe(5, frame({ type: 'result', session_id: 's' }))
+    expect(floor.floor()).toBe(6)
     floor.observe(
       6,
       frame({
