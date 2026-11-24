@@ -715,6 +715,10 @@ static int tree_root(struct watcher *w, const struct tree_scan *scan, const stru
     if (scan->leader_alive && row->ppid == w->group) {
         return TREE_ANCESTRY;
     }
+    // A member an earlier sweep proved vouches for its later children, though not for its session.
+    if (!row->zombie && identity_find(&w->known, row->pid, row->start) != NULL) {
+        return TREE_TAGGED;
+    }
     if (row->ppid != 1 || row->uid != geteuid() || row->start < w->leader_start || row->zombie) {
         return TREE_UNKNOWN;
     }
@@ -913,17 +917,24 @@ static void seen_member(struct watcher *w, const struct proc_row *row) {
 
 // Earlier-proven members this sweep didn't reach: still signalled through their own handle, and
 // dropped from the record once gone.
-static int signal_unseen_known(struct watcher *w, int signal_number) {
+static int signal_unseen_known(struct watcher *w, int signal_number, int *doubt) {
     int live = 0;
     size_t kept = 0;
     for (size_t i = 0; i < w->known.count; i++) {
         struct identity item = w->known.items[i];
         if (item.value != w->sweep_generation) {
             struct proc_row row = {.pid = item.pid, .start = item.start};
-            if (!deliver_to_member(w, &row, signal_number)) {
-                continue;
+            if (deliver_to_member(w, &row, signal_number)) {
+                live++;
+            } else {
+                // Only a read that shows the PID gone or reused retires it; a failed read is doubt.
+                struct proc_row now;
+                int read = read_row(item.pid, &now);
+                if (read == 0 || (read == 1 && (now.start != item.start || now.zombie))) {
+                    continue;
+                }
+                *doubt = 1;
             }
-            live++;
         }
         w->known.items[kept++] = item;
     }
@@ -1065,7 +1076,7 @@ static int sweep_once(struct watcher *w, int signal_number) {
         }
     }
     // A member proven by an earlier sweep stays one after its ancestry is gone; its handle decides.
-    live += signal_unseen_known(w, signal_number);
+    live += signal_unseen_known(w, signal_number, &dropped);
     // A dropped member may live on under a new parent, or in a child born after the table was read,
     // so this sweep cannot prove the tree empty.
     if (dropped && live == 0) {
