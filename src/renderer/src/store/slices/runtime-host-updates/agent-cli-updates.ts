@@ -11,11 +11,17 @@ import {
 import type { RuntimeClientTarget } from '../../../../../shared/remote-runtime/host-catalog/runtime-client-target'
 import { lastVerifiedRuntimeStatus } from '../../../../../shared/remote-runtime/host-status/runtime-host-status'
 import { callRuntimeRpc } from '@/runtime/rpc/calls/runtime-rpc-call'
+import { subscribeRuntimeRpc } from '@/runtime/rpc/subscriptions/runtime-rpc-subscribe'
 
-// Above the host's own ten-minute limit, so its answer always arrives.
-const RUN_TIMEOUT_MS = 11 * 60_000
+// Above the host's ten-minute updater limit plus its waits before and after, so its answer always arrives.
+const RUN_TIMEOUT_MS = 12 * 60_000
 // Chat starts come in bursts; one ask per host in this window is enough.
 const CHECK_INTERVAL_MS = 10 * 60_000
+// Opening the update list checks sooner; a CLI updated in a terminal sends no finish event.
+const OPEN_CHECK_INTERVAL_MS = 10_000
+// The host runs three --version probes (5s cap each, some read twice) at a time; 17 agents plus
+// release lookups can approach a minute.
+const CHECK_TIMEOUT_MS = 2 * 60_000
 
 export type AgentCliUpdateRun =
   | { phase: 'running' }
@@ -44,8 +50,13 @@ export function agentCliUpdateHostTarget(key: string): RuntimeClientTarget {
 }
 
 const EMPTY_HOST: AgentCliUpdateHost = { updates: [], runs: {} }
+const LOCAL_TARGET = { kind: 'local' } as const
 const checks = new Map<string, Promise<void>>()
 const checkedAt = new Map<string, number>()
+// Whether this window follows this computer's finished updates; paired hosts announce them as client events.
+let followsLocal = false
+// Hosts with a re-check already waiting on an answer in flight; more finished updates join it.
+const rechecking = new Set<string>()
 
 function sameUpdates(a: readonly AgentCliUpdate[], b: readonly AgentCliUpdate[]): boolean {
   return (
@@ -68,6 +79,10 @@ export type AgentCliUpdatesSlice = {
   agentCliUpdates: ReadonlyMap<string, AgentCliUpdateHost>
   /** Asks the host which of the user's own CLIs are behind; the host caches its answer. */
   checkAgentCliUpdates: (target: RuntimeClientTarget) => Promise<void>
+  /** Checks again now, after any answer already on its way, e.g. once an update finished on the host. */
+  recheckAgentCliUpdates: (target: RuntimeClientTarget) => void
+  /** Checks as `checkAgentCliUpdates` does, but past a much shorter interval, when the user opens the list. */
+  checkAgentCliUpdatesOnOpen: (target: RuntimeClientTarget) => Promise<void>
   /** Resolves true once the host reports the CLI current. */
   runAgentCliUpdate: (target: RuntimeClientTarget, agent: AgentCliUpdateAgent) => Promise<boolean>
 }
@@ -90,35 +105,83 @@ export const createAgentCliUpdatesSlice: StateCreator<AppState, [], [], AgentCli
     lastVerifiedRuntimeStatus(
       runtimeStatusSubscriptionsFor(store).readStatuses().get(target.environmentId)
     )?.capabilities?.includes(AGENT_CLI_UPDATE_RUNTIME_CAPABILITY) === true
+  // An update run from any window re-checks here at once, so this window drops its older answer.
+  const followLocal = (): void => {
+    if (followsLocal) {
+      return
+    }
+    followsLocal = true
+    const lose = (): void => {
+      followsLocal = false
+    }
+    subscribeRuntimeRpc(LOCAL_TARGET, 'agentCliUpdate.subscribe', null, {
+      onEvent: (result) => {
+        if (typeof result === 'object' && result !== null && 'agent' in result && result.agent) {
+          get().recheckAgentCliUpdates(LOCAL_TARGET)
+        }
+      },
+      onError: lose,
+      onClose: lose
+    }).catch(lose)
+  }
+  const checkPastInterval = (target: RuntimeClientTarget, interval: number): Promise<void> => {
+    const key = agentCliUpdateHostKey(target)
+    const last = checkedAt.get(key)
+    if (!hostAnswers(target)) {
+      return checks.get(key) ?? Promise.resolve()
+    }
+    if (target.kind === 'local') {
+      followLocal()
+    }
+    if (last !== undefined && Date.now() - last < interval) {
+      return checks.get(key) ?? Promise.resolve()
+    }
+    let check = checks.get(key)
+    if (!check) {
+      checkedAt.set(key, Date.now())
+      check = callRuntimeRpc<{ updates: AgentCliUpdate[] }>(
+        target,
+        'agentCliUpdate.check',
+        { agents: AGENT_CLI_UPDATE_AGENTS },
+        { timeoutMs: CHECK_TIMEOUT_MS }
+      )
+        .then(({ updates }) => {
+          // An unchanged answer leaves the store alone, so the status bar doesn't re-render.
+          if (!sameUpdates(get().agentCliUpdates.get(key)?.updates ?? [], updates)) {
+            writeHost(key, (host) => ({ ...host, updates }))
+          }
+        })
+        .catch((error: unknown) => {
+          // Still asked (so rechecks apply), but a failure must not hold off the next ask for the interval.
+          checkedAt.set(key, 0)
+          console.warn('[agent-cli-update] check failed:', error)
+        })
+        .finally(() => checks.delete(key))
+      checks.set(key, check)
+    }
+    return check
+  }
 
   return {
     agentCliUpdates: new Map(),
 
-    checkAgentCliUpdates: (target) => {
+    checkAgentCliUpdates: (target) => checkPastInterval(target, CHECK_INTERVAL_MS),
+
+    checkAgentCliUpdatesOnOpen: (target) => checkPastInterval(target, OPEN_CHECK_INTERVAL_MS),
+
+    recheckAgentCliUpdates: (target) => {
       const key = agentCliUpdateHostKey(target)
-      const last = checkedAt.get(key)
-      if (!hostAnswers(target) || (last !== undefined && Date.now() - last < CHECK_INTERVAL_MS)) {
-        return checks.get(key) ?? Promise.resolve()
+      // Only a host this window has asked before; an answer still on its way may predate the update.
+      if (!checkedAt.has(key) || rechecking.has(key)) {
+        return
       }
-      let check = checks.get(key)
-      if (!check) {
-        checkedAt.set(key, Date.now())
-        check = callRuntimeRpc<{ updates: AgentCliUpdate[] }>(target, 'agentCliUpdate.check', {
-          agents: AGENT_CLI_UPDATE_AGENTS
-        })
-          .then(({ updates }) => {
-            // An unchanged answer leaves the store alone, so the status bar doesn't re-render.
-            if (!sameUpdates(get().agentCliUpdates.get(key)?.updates ?? [], updates)) {
-              writeHost(key, (host) => ({ ...host, updates }))
-            }
-          })
-          .catch((error: unknown) => {
-            console.warn('[agent-cli-update] check failed:', error)
-          })
-          .finally(() => checks.delete(key))
-        checks.set(key, check)
-      }
-      return check
+      rechecking.add(key)
+      void (checks.get(key) ?? Promise.resolve()).then(() => {
+        rechecking.delete(key)
+        // Past the interval, so this checks now, while the host stays one this window asked.
+        checkedAt.set(key, 0)
+        return get().checkAgentCliUpdates(target)
+      })
     },
 
     runAgentCliUpdate: async (target, agent) => {

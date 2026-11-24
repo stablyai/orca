@@ -36,12 +36,16 @@ export type BrowserGuestDiscardApi = {
     browserPageId: string
     partition: string
     url: string
+    /** Its wait for the profile's extensions already ended; another would outlast its deadline. */
+    waited?: boolean
   }) => Promise<string>
   reserveGuestDiscard: (args: {
     browserPageId: string
     webContentsId: number
     policyToken?: BrowserGuestIdleDiscardToken
   }) => boolean
+  /** Remakes a This-device page Memory Saver freed; false when it was not freed. */
+  wakeClientPage: (args: { browserPageId: string }) => Promise<boolean>
   acknowledgeGuestRemoval: (args: {
     browserPageId: string
     webContentsId: number

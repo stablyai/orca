@@ -9,6 +9,7 @@ import { pendingCreationOpensNativeChat } from '@/lib/workspace/creation/pending
 import { showsFloatingRightSidebarToggle } from '@/components/right-sidebar/visibility/right-sidebar-visibility'
 import Sidebar from '../components/sidebar/index'
 import { AppRail } from '../components/app-rail/AppRail'
+import { APP_RAIL_WIDTH } from '../components/app-rail/app-rail-layout'
 import RightSidebar from '../components/right-sidebar/RightSidebar'
 import { RecoverableRenderErrorBoundary } from '../components/error-boundaries/RecoverableRenderErrorBoundary'
 import { FloatingTerminalToggleButton } from '../components/floating-terminal/trigger/FloatingTerminalToggleButton'
@@ -16,6 +17,7 @@ import { TerminalWorkbenchContainer } from '../components/terminal/workbench/Ter
 import type { VirtualizedScrollAnchor } from '../lib/list-interaction/virtualized-scrolling/useVirtualizedScrollAnchor'
 import { TitlebarLeftControls } from './chrome/TitlebarLeftControls'
 import { AppShellLeftColumn } from './chrome/AppShellLeftColumn'
+import { useRailPageFocusRecovery } from './chrome/use-rail-page-focus-recovery'
 import { RightSidebarToggle } from './chrome/RightSidebarToggle'
 import { TitlebarMainStrip } from './chrome/TitlebarMainStrip'
 import type { AppChromeLayout } from './chrome/use-app-chrome-layout'
@@ -173,6 +175,8 @@ export function AppWorkspaceShell(props: {
   const t = useTranslate()
   const { layout, floatingWorkspace } = props
   const titlebarLeftControls = <TitlebarLeftControls layout={layout} />
+  const pageColumnRef = useRef<HTMLDivElement | null>(null)
+  useRailPageFocusRecovery(pageColumnRef)
   const titlebarMainStrip = <TitlebarMainStrip layout={layout} />
   // Keep scroll memory above sidebar view remounts to preserve list position.
   const scrollOffsetRef = useRef(0)
@@ -204,7 +208,22 @@ export function AppWorkspaceShell(props: {
           {/* Workspace tab groups reach the top; other pages retain the titlebar. */}
           {!layout.leftTitlebarChromeLayout.shouldMount ? (
             <div className="titlebar">
-              <div className="flex items-center shrink-0 mr-2">{titlebarLeftControls}</div>
+              <div
+                className="flex items-center shrink-0 mr-2"
+                // Why: a rail page lays the left segment out as Workspaces does for the saved state, so Back/Forward
+                // keep their x across the switch; untinted, because the list itself is not on screen.
+                style={
+                  layout.listHiddenByRailPage && layout.savedSidebarOpen
+                    ? {
+                        width: APP_RAIL_WIDTH + layout.sidebarWidth,
+                        alignSelf: 'stretch',
+                        marginRight: 0
+                      }
+                    : undefined
+                }
+              >
+                {titlebarLeftControls}
+              </div>
               {titlebarMainStrip}
             </div>
           ) : null}
@@ -221,10 +240,8 @@ export function AppWorkspaceShell(props: {
               list={<WorktreeSidebar layout={layout} scrollRefs={sidebarScrollRefs} />}
             />
             <div className="flex flex-col flex-1 min-w-0 min-h-0 overflow-hidden">
-              {/* Automations/artifacts own their headers; another titlebar would leave an empty stripe. */}
-              {layout.stackedSidebarOpen &&
-              layout.activeView !== 'automations' &&
-              layout.activeView !== 'artifacts' ? (
+              {/* Every page sits under the top bar; window controls and board sheets rely on it. */}
+              {layout.stackedSidebarOpen ? (
                 <div className="titlebar">{titlebarMainStrip}</div>
               ) : null}
               <div className="relative flex flex-1 min-w-0 min-h-0 overflow-hidden">
@@ -243,7 +260,7 @@ export function AppWorkspaceShell(props: {
                     <RightSidebarToggle />
                   </div>
                 )}
-                <div className="flex flex-1 min-w-0 min-h-0 flex-col">
+                <div ref={pageColumnRef} className="flex flex-1 min-w-0 min-h-0 flex-col">
                   {layout.shouldMountTerminalWorkbench ? (
                     <TerminalWorkbenchContainer isVisible={layout.terminalWorkbenchVisible}>
                       <Suspense fallback={null}>

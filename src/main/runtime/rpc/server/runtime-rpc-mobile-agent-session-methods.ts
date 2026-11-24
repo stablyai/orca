@@ -17,6 +17,8 @@ export const MOBILE_AGENT_SESSION_RPC_METHODS = [
   'agentSession.queuedMessageEditHold',
   'agentSession.queuedMessagesResume',
   'agentSession.close',
+  // Delete chat in an agent's Chats; phones gate on agent-session.delete.phone.v1.
+  'agentSession.delete',
   'agentSession.respondToApproval',
   'agentSession.respondToQuestion',
   'agentSession.setOption',

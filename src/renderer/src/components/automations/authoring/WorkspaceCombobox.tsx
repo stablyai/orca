@@ -62,7 +62,7 @@ function WorkspaceComboboxList({
     highlightedId !== null && indexById.has(highlightedId) ? highlightedId : (itemIds[0] ?? null)
   const activeIndex = activeId === null ? -1 : (indexById.get(activeId) ?? -1)
 
-  const virtualizer = useWindowedCommandVirtualizer({
+  const { virtualItems, totalSize, scrollToIndex, scrollToOffset } = useWindowedCommandVirtualizer({
     itemKeys: itemIds,
     scrollElement: () => listRef.current,
     estimateSize: estimateWorkspaceOptionSize,
@@ -86,7 +86,7 @@ function WorkspaceComboboxList({
   const handleQueryChange = (nextQuery: string): void => {
     setQuery(nextQuery)
     setHighlightedId(null)
-    virtualizer.scrollToOffset(0)
+    scrollToOffset(0)
   }
 
   const handleKeyDown = (event: React.KeyboardEvent<HTMLInputElement>): void => {
@@ -95,7 +95,7 @@ function WorkspaceComboboxList({
       event.preventDefault()
       if (navigation.targetId !== null) {
         setHighlightedId(navigation.targetId)
-        virtualizer.scrollToIndex(indexById.get(navigation.targetId) ?? 0, { align: 'auto' })
+        scrollToIndex(indexById.get(navigation.targetId) ?? 0, { align: 'auto' })
       }
       return
     }
@@ -123,8 +123,8 @@ function WorkspaceComboboxList({
             {t('auto.components.automations.WorkspaceCombobox.ee5b280eba', 'No workspaces found.')}
           </div>
         ) : (
-          <div className="relative w-full" style={{ height: virtualizer.getTotalSize() }}>
-            {virtualizer.getVirtualItems().map((virtualRow) => {
+          <div className="relative w-full" style={{ height: totalSize }}>
+            {virtualItems.map((virtualRow) => {
               const worktree = filtered[virtualRow.index]
               if (!worktree) {
                 return null

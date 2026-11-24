@@ -14,6 +14,7 @@ import type {
 } from '../../../shared/native-chat/native-chat-types'
 import type { ProviderTimelineRequestBody } from '../../native-chat/agent-session-timeline/provider-timeline-event'
 import type { AcpAgentError } from '../transport/acp-errors'
+import type { StructuredAgentListedSelection } from '../../native-chat/agent-session-wire/providers/structured-agent-definition'
 import type { AgentSessionOptionChoice } from '../../../shared/agent-session/agent-session-wire'
 import type {
   AvailableCommand,
@@ -111,7 +112,10 @@ export type AcpDialectNotification =
       end?: Omit<AcpTurnEnding, 'at' | 'notSignedIn'>
       failureDetail?: string
       /** Replaces the update that reported it. */
-      failure?: Pick<AcpTurnEnding, 'stopReason' | 'failureDetail' | 'usageLimit' | 'notSignedIn'>
+      failure?: Pick<
+        AcpTurnEnding,
+        'stopReason' | 'failureDetail' | 'failureFrame' | 'usageLimit' | 'notSignedIn'
+      >
       usage?: AgentSessionContextUsage
       backgroundTasks?: AcpBackgroundTaskUpdate[]
       subagents?: AcpSubagentUpdate[]
@@ -127,6 +131,9 @@ export type AcpTurnEnding = {
   at: number
   durationMs?: number
   failureDetail?: string
+  /** The agent's own failure line, verbatim, kept under Details when `failureDetail` is a shorter
+   *  sentence drawn from it. */
+  failureFrame?: string
   notSignedIn?: boolean
   /** The agent had no model for the prompt; why (selection or sign-in) is unknown. */
   modelNotSelected?: boolean
@@ -200,6 +207,8 @@ export type AcpDialect = {
   modelEfforts?(model: ModelInfo): AcpAdvertisedEfforts
   /** Efforts of a listed model family that `models` advertises only as per-effort variants. */
   familyEfforts?(family: string, models: readonly ModelInfo[]): AcpAdvertisedEfforts | undefined
+  /** A saved model id the chat lists as another row and effort, e.g. a family's level id. */
+  listedSelection?: StructuredAgentListedSelection
   /** Native thinking choices remain valid across models; the agent clamps unsupported levels. */
   clampsUnlistedEffort?: true
   /** Opt-in because advertising forms changes agent behaviour; requests use the generic handlers. */
@@ -254,6 +263,8 @@ export type AcpDialect = {
   }
   /** The agent reads a mentioned file only from a resource link, not from `@path` text. */
   linksFileMentions?: true
+  /** The agent advertises image prompts but drops image blocks, so images go as file references. */
+  dropsPromptImages?: true
   /** Hide these commands and reject command-only prompts before dispatch. */
   withheldCommands?: readonly string[]
   /** Which sign-in a not-signed-in chat needs; absent is the agent's usual one. */

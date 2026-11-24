@@ -2,6 +2,7 @@
 import {
   sessionWorkerAgentState,
   sessionWorkerIsRunning,
+  sessionWorkerNeverStarted,
   sessionWorkerRestsOnAsk,
   type OrchestrationSessionWorker
 } from '../orchestration-session-workers'
@@ -231,10 +232,12 @@ export function botChatTreeDispatchWorker(
       dispatchId: dispatch.id
     }
   }
+  const state = workerState(worker)
   return {
     key,
     title: clipActivityTitle(worker.title),
-    state: workerState(worker),
+    state,
+    ...(state === 'running' && worker.backgroundWait ? { waitsOnBackground: true as const } : {}),
     startedAt: worker.startedAt,
     // The list's own order and cursor read this time.
     ...(dispatch.settled ? { settledAt: dispatch.at } : {}),
@@ -247,6 +250,7 @@ export function botChatTreeDispatchWorker(
       : {}),
     ...(worker.agent ? { agent: worker.agent } : {}),
     ...(worker.summary ? { summary: worker.summary } : {}),
+    ...(sessionWorkerNeverStarted(worker) ? { neverStarted: true as const } : {}),
     host: worker.host
   }
 }

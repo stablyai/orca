@@ -261,6 +261,30 @@
       "existingWhy": "{{distro}} zaten ana makine olarak çalışıyor; Git, dosyalar ve terminaller Windows dosya paylaşımı yerine doğrudan Linux'ta çalışır.",
       "existingAccept": "Ana makineye ekle"
     },
+    "hiddenProjects": {
+      "hidden": "{{name}} gizlendi",
+      "hiddenDescription": "Terminalleri ve ajanları çalışmaya devam eder. Listenin altındaki Gizli projeler bölümünden projeyi yeniden gösterebilirsiniz.",
+      "undo": "Geri al",
+      "hideFailed": "{{name}} gizlenemedi. Sunucusunda Orca'nın güncellenmesi gerekebilir.",
+      "showFailed": "{{name}} yeniden gösterilemedi.",
+      "listLabel": "Gizli projeler",
+      "show": "Göster",
+      "showAriaLabel": "{{name}} projesini kenar çubuğunda göster",
+      "settingsTitle": "Kenar çubuğunda gizle",
+      "settingsDescription": "Projenin bu sunucudaki kopyasını kenar çubuğunda, proje seçicilerinde ve çalışma alanı değiştiricisinde gizler. Terminalleri, ajanları ve otomasyonları çalışmaya devam eder. Eşleştirilmiş bir Orca sunucusunda bu işlem, projeyi o sunucuya bağlı herkes için gizler.",
+      "settingsToggleLabel": "{{name}} projesini kenar çubuğunda gizle",
+      "keywordHide": "gizle",
+      "keywordHidden": "gizli",
+      "keywordSidebar": "kenar çubuğu",
+      "hideFromSidebar": "Kenar Çubuğunda Gizle",
+      "sectionTitle": "Gizli projeler ({{count}})",
+      "allHidden": "Tüm projeler gizli. Aşağıdaki Gizli projeler bölümünden birini gösterin.",
+      "undoGone": "{{name}} Orca'dan kaldırıldı.",
+      "settingsGroup": "Kenar Çubuğu",
+      "showOnHostAriaLabel": "{{host}} sunucusundaki {{name}} projesini kenar çubuğunda göster",
+      "keywordShow": "göster",
+      "keywordUnhide": "gizlemeyi kaldır"
+    },
     "cardSlot": {
       "needYouCount": "{{count}} sizi bekliyor",
       "needsYou": "Sizi bekliyor"
@@ -368,6 +392,12 @@
       "pending": "Yeniden açılıyor…",
       "caveat": "Bu işlem, uzak sunucuda bu sayfanın son adresinde yeni bir sayfa açar. Oturum açma durumu ve diğer geçici sayfa verileri farklı olabilir, form gönderiminden gelen bir sayfa boş açılır.",
       "failed": "Bu sayfa uzak sunucuda açılamadı. Bağlantıyı kontrol edip tekrar deneyin."
+    },
+    "deviceMove": {
+      "toThisComputer": "Bu bilgisayarda aç",
+      "toHost": "{{host}} üzerinde aç",
+      "tooltip": "Bu adresi diğer tarafta yeni bir sekmede açar ve bunu kapatır. Yeniden oturum açmanız gerekebilir.",
+      "failedToThisComputer": "Bu sayfa bu bilgisayarda açılamadı."
     },
     "sshRoute": {
       "preparingTitle": "SSH sunucusu üzerinden bağlanılıyor",
@@ -501,7 +531,8 @@
         "connectionEnded": "İçe aktarma sırasında bu sunucuyla bağlantı kesildi. Yeniden bağlanıp tekrar deneyin.",
         "serverRepaired": "Bu sunucu içe aktarma sırasında yeniden eşleştirildi. Tekrar deneyin.",
         "macFullDiskAccess": "macOS, {{browser}} çerezlerine erişimi reddetti. Sistem Ayarları → Gizlilik ve Güvenlik → Tam Disk Erişimi bölümünden Orca’ya Tam Disk Erişimi verin, ardından Orca’yı yeniden başlatın.",
-        "sshHostDisconnected": "Bu sayfa artık SSH ana bilgisayarı üzerinden bağlı değil. Yeniden bağlanıp tekrar deneyin."
+        "sshHostDisconnected": "Bu sayfa artık SSH ana bilgisayarı üzerinden bağlı değil. Yeniden bağlanıp tekrar deneyin.",
+        "pageChanged": "Bu sayfa içe aktarma sırasında kapandı veya profil değiştirdi. Tekrar deneyin."
       },
       "notice": {
         "importedMore_one": "{{domains}} ve diğer {{more}} alan adı için {{count}} çerez içe aktarıldı. Kullanmak için sayfayı yeniden yükleyin.",
@@ -510,12 +541,21 @@
         "imported_other": "{{domains}} için {{count}} çerez içe aktarıldı. Kullanmak için sayfayı yeniden yükleyin.",
         "failed": "Çerezler içe aktarılamadı: {{reason}}"
       },
-      "sshPage": {
+      "routedPage": {
         "label": "Bu cihazdaki tarayıcılar",
         "destination": "{{host}} tarayıcısına içe aktarır.",
-        "hostAgents": "{{host}} üzerindeki ajanlar bu oturumları kullanabilir ancak çerezleri okuyamaz.",
+        "hostAgents": "{{host}} üzerindeki ajanlar bu oturumları kullanabilir ancak çerezleri okuyamaz."
+      },
+      "sshPage": {
         "stored": "{{host}} tarayıcısında saklandı.",
         "googleCookiesSkipped": "Google çerezleri içe aktarılmadı. {{host}} üzerinden gezinen bir sayfa açın, ardından Google'da oturum açın."
+      },
+      "picker": {
+        "menuItem": "Çerezleri İçe Aktar…",
+        "search": "Profillerde ara",
+        "lastUsed": "Son kullanılan",
+        "noMatches": "Eşleşme yok",
+        "googleNote": "Google oturumları içe aktarılmaz"
       }
     },
     "passwords": {
@@ -764,7 +804,8 @@
       },
       "userAgent": {
         "title": "Tarayıcı kimliği",
-        "description": "Her tarayıcı profili ve sayfası için user-agent seçin. Değişiklikler yeniden başlatmadan sonra etkin olur.",
+        "descriptionPageKinds": "Bu bilgisayarın gösterdiği her sayfa için user-agent seçin; SSH sayfaları ve Bu cihaz olarak ayarlanmış uzak sayfalar da dahil. Değişiklikler yeniden başlatmadan sonra etkin olur.",
+        "serverPagesNote": "Sunucu (akış) sayfaları o sunucunun kimliğini kullanır; orada orca browser identity set ile değiştirin.",
         "remoteUnsupported": "Uzak sunucudaki tarayıcı kimliğini Orca CLI ile yönetin.",
         "loading": "Yükleniyor…",
         "resetRequired": "Değiştirilmeden önce kimlik verileri açıkça sıfırlanmalıdır.",
@@ -843,8 +884,6 @@
       }
     },
     "agents": {
-      "installedRegion": "Yüklü ajanlar",
-      "availableRegion": "Yüklenebilecek ajanlar",
       "permissionsTitle": "İzinler",
       "permissionsChoiceExplanation": "Her ajanın izin istemeden yapabilecekleri. Aşağıda bir ajan için farklı bir ayar seçebilirsiniz.",
       "permissionEachOwn": "Her ajanın kendi ayarları",
@@ -938,7 +977,10 @@
       "defaultSurfaceSetAllTerminal": "Tümünü Terminal yap",
       "modelListFallback": "Yerleşik liste. Orca bu ana makineden model listesi alamadı.",
       "chatUnavailableOnWindows": "{{value0}} Chat henüz Windows'ta kullanılamıyor, bu nedenle {{value0}} bu ana makinede bir terminalde açılır. macOS veya Linux ana makinesindeki sohbetler çalışmaya devam eder.",
-      "undetectedCommandHint": "{{agent}} CLI, PATH dışında kuruluysa bu ana makinedeki yürütülebilir dosyanın tam yolunu girin."
+      "undetectedCommandHint": "{{agent}} CLI, PATH dışında kuruluysa bu ana makinedeki yürütülebilir dosyanın tam yolunu girin.",
+      "agentActions": "{{agent}} işlemleri",
+      "defaultAutoBadge": "Varsayılan · Otomatik",
+      "newAgentsTitle": "Yeni ajanlar"
     },
     "followSymlinkedDirectoriesKeywords": {
       "symlink": "sembolik bağlantı",
@@ -1067,6 +1109,11 @@
       "include": "Dahil edilecek glob'lar (her satıra bir tane)",
       "includeHelp": "Çalışma alanı köküne göre göreli yollarla eşleşir. Eşleşen glob yoksa biçimlendirme yapılmaz. * ve ** noktayla başlayan adları atlar; bunları açıkça belirtin, ör. .github/**/*.yml. Bu komutu kullanmak için Genel > Düzenleyici bölümünde Kaydederken biçimlendir seçeneğini etkinleştirin.",
       "710343e374": "Biçimlendirici komutu"
+    },
+    "voice": {
+      "cleanup": {
+        "recipeDescription": "Dikte edilen metni eklenmeden önce düzeltir."
+      }
     },
     "general": {
       "openInMenu": {
@@ -2011,11 +2058,16 @@
         }
       },
       "activateAiVaultStructuredSession": {
-        "unavailable": "Yapılandırılmış ajan oturumu henüz kullanılamıyor. Bir süre sonra tekrar deneyin.",
         "gone": "Bu sohbet artık bu sunucuda değil, bu yüzden burada yeniden açılamıyor.",
         "hostCannotOpen": "Orca güncellenene kadar bu sohbet yeniden açılamaz.",
         "worktreeDeleted": "Çalışma ağacı silindi.",
-        "folderWorkspaceRemoved": "Klasör çalışma alanı kaldırıldı."
+        "projectRemoved": "Proje Orca'dan kaldırıldı.",
+        "folderWorkspaceRemoved": "Klasör çalışma alanı kaldırıldı.",
+        "chatStillStarting": "Sohbet hâlâ başlatılıyor. Birazdan tekrar deneyin.",
+        "chatOpenFailed": "Bu sohbet açılamadı.",
+        "chatOpenRetry": "Tekrar dene",
+        "chatOpenShowDetails": "Ayrıntıları göster",
+        "chatOpenHideDetails": "Ayrıntıları gizle"
       },
       "ephemeralVmWorktreeCreation": {
         "sparseCheckoutUnsupported": "Sağlanmış kök tarifleri sparse checkout'u desteklemez."
@@ -2157,7 +2209,11 @@
       },
       "projectHostSetupOptions": {
         "hostLocalGitProject": "Bu projenin eşleşen bir Git uzak deposu yok",
-        "hostLocalFolderProject": "Klasör projeleri diğer sunuculara bağlanamaz"
+        "hostLocalFolderProject": "Klasör projeleri diğer sunuculara bağlanamaz",
+        "pendingNotSetUp": "Proje bu sunucuda izleniyor ancak kurulmadı",
+        "pendingSettingUp": "Proje kurulumu sürüyor",
+        "pendingError": "Proje kurulumu dikkat gerektiriyor",
+        "pendingUnsupported": "Proje bu sunucuda desteklenmiyor"
       },
       "updateCheckClickOptions": {
         "releaseHint": "{{rcKey}}+tıklama en son sürüm adayını (RC), {{perfKey}}+tıklama ise en son performans testi derlemesini denetler.",
@@ -2778,8 +2834,8 @@
         "969a8bff66": "Proje",
         "23bb365554": "orca.yaml",
         "a239038146": "SSH bağlantı hatası",
-        "9a70e4859e": "Bu çalışma alanını oluşturmadan önce setup çalıştırılıp çalıştırılmayacağını seçin.",
-        "803b7fe72f": "Setup yapılandırması kontrol ediliyor...",
+        "9a70e4859e": "Bu çalışma alanını oluşturmadan önce kurulum çalıştırılıp çalıştırılmayacağını seçin.",
+        "803b7fe72f": "Kurulum yapılandırması kontrol ediliyor...",
         "92e34f0311": "yerel ayarlar",
         "326a578923": "orca.yaml + yerel",
         "ac3748dcda": "Şuradan Oluştur",
@@ -2797,7 +2853,7 @@
         "sshReconnectionFailed": "SSH yeniden bağlantısı başarısız oldu",
         "notConnected": "Bağlı değil",
         "notePasteTooLarge": "Yapıştırılan içerik not alanı için çok büyük.",
-        "waitForSetupBeforeAgent": "Ajanı başlatmadan önce setup'ın tamamlanmasını bekle",
+        "waitForSetupBeforeAgent": "Ajanı başlatmadan önce kurulumun tamamlanmasını bekle",
         "destroyDisabled": "yok etme devre dışı",
         "destroyConfigured": "yok etme yapılandırıldı",
         "noDestroyConfigured": "yok etme yok",
@@ -3951,28 +4007,23 @@
         "cleanup": {
           "WorkspaceCleanupDialog": {
             "3828408538": "{{value0}} öğesini kaldır",
-            "b6bae1eed1": "İptal",
-            "38ca0b1400": "Bu, yerel dosyalarını kalıcı olarak siler. Bu işlem geri alınamaz.",
             "e97e4580c7": "Kirli",
             "9623a5107d": "Push edilmemiş commit'ler",
             "e8b3741ff7": "Yok sayıldı",
             "a9957007eb": "{{value0}} öğesini yok say",
             "bef0adef9b": "Branch",
             "bbb1ab6a6f": "{{value0}} seç",
-            "b771c92598": "Seçilenleri sil",
             "7eee951968": "Çalışma alanları taranıyor",
             "191f0bc98e": "Kapat",
-            "7ae2ad30f4": "Yenile",
             "7f451a3e2c": "Temizlik önerisi yok sayılamadı",
             "662b8ec3f8": "Çalışma alanı temizlik taraması başarısız oldu",
             "9cc26c019d": "Kaldır",
             "0e2d235c63": "Çalışma alanı taraması hazır",
             "4a35c08764": "İncele",
             "47123d0108": "Çalışma alanı bilgileri toplanıyor. Bunu kapatıp daha sonra geri dönebilirsiniz.",
-            "1d3503357d": "Silme işlemi devam ederken bunu kapatıp geri dönebilirsiniz.",
-            "4c2990886e": "{{value0}}/{{value1}} silindi",
-            "86ba852118": "{{value0}}, {{value1}} başarısız oldu",
             "archivedStatus": "Arşivlendi",
+            "mergedStatus": "Merge edildi",
+            "unchangedStatus": "Yeni commit yok",
             "74f6c16279": "Geri"
           },
           "backgroundRemoval": {
@@ -5142,29 +5193,29 @@
             "server_replaced_explanation": "Orca ana makineye farklı bir SSH kullanıcısı olarak bağlanıyor veya sunucu yeniden yüklendi. Ayarlar › Uzak Orca Sunucuları bölümünde bu sunucunun ⋯ menüsünü açıp Unut… seçeneğini seçin, ardından mevcut sunucuyla eşleştirmek için SSH ana makinesine bağlanın."
           },
           "NativeChatResumeStatusSegment": {
-            "tooltip": "Devam edilebilecek yarım kalmış sohbetleri aç",
-            "failedTooltip": "Orca'nın yeniden başlatma sonrasında devam edemediği sohbetler. Ayrıntılar için tıklayın.",
-            "checkTooltip": "Orca'nın yeniden başlatma sonrasında devam edemediği veya devam edildiğini doğrulayamadığı sohbetler. Ayrıntılar için tıklayın.",
-            "resumingTooltip": "Yarım kalan sohbetler geri yükleniyor ve devam etmeleri isteniyor…",
-            "resumingProgressLabel": "Sohbetlere devam ediliyor {{value0}}/{{value1}}",
-            "resumingProgressAria": "Sohbetlere devam ediliyor, {{value1}} sohbetten {{value0}} tanesi tamamlandı. Ayrıntıları açmak için tıklayın.",
-            "resumedTooltip": "Orca'nın yeniden başlatıldıktan sonra devam ettirdiği sohbetler. Görmek için tıklayın.",
-            "chatsFailedLabel_other": "{{count}} sohbet devam ettirilemedi",
-            "chatsFailedLabel_one": "{{count}} sohbet devam ettirilemedi",
-            "chatsFailedAria_other": "{{count}} sohbet devam ettirilemedi. Ayrıntılar için tıklayın.",
-            "chatsFailedAria_one": "{{count}} sohbet devam ettirilemedi. Ayrıntılar için tıklayın.",
-            "resumedLabelCount_other": "{{count}} sohbet devam ettirildi",
-            "resumedLabelCount_one": "{{count}} sohbet devam ettirildi",
-            "resumedAriaCount_other": "{{count}} sohbet devam ettirildi. Görmek için tıklayın.",
-            "resumedAriaCount_one": "{{count}} sohbet devam ettirildi. Görmek için tıklayın.",
-            "checkLabelCount_other": "Kontrol edilecek {{count}} sohbet",
-            "checkLabelCount_one": "Kontrol edilecek {{count}} sohbet",
-            "checkAriaCount_other": "Devam ettirdikten sonra kontrol edilecek {{count}} sohbet var. Ayrıntılar için tıklayın.",
-            "checkAriaCount_one": "Devam ettirdikten sonra kontrol edilecek {{count}} sohbet var. Ayrıntılar için tıklayın.",
-            "labelCount_other": "Devam ettirilecek {{count}} sohbet",
-            "labelCount_one": "Devam ettirilecek {{count}} sohbet",
-            "ariaLabelCount_other": "Devam ettirilebilecek {{count}} sohbet",
-            "ariaLabelCount_one": "Devam ettirilebilecek {{count}} sohbet"
+            "tooltip": "Devam edilebilecek yarım kalmış ajanları aç",
+            "failedTooltip": "Orca'nın yeniden başlatma sonrasında devam edemediği ajanlar. Ayrıntılar için tıklayın.",
+            "checkTooltip": "Orca'nın yeniden başlatma sonrasında devam edemediği veya devam edildiğini doğrulayamadığı ajanlar. Ayrıntılar için tıklayın.",
+            "resumingTooltip": "Yarım kalan ajanlar geri yükleniyor ve devam etmeleri isteniyor…",
+            "resumingProgressLabel": "Ajanlara devam ediliyor {{value0}}/{{value1}}",
+            "resumingProgressAria": "Ajanlara devam ediliyor, {{value1}} ajandan {{value0}} tanesi tamamlandı. Ayrıntıları açmak için tıklayın.",
+            "resumedTooltip": "Orca'nın yeniden başlatıldıktan sonra devam ettirdiği ajanlar. Görmek için tıklayın.",
+            "chatsFailedLabel_other": "{{count}} ajan devam ettirilemedi",
+            "chatsFailedLabel_one": "{{count}} ajan devam ettirilemedi",
+            "chatsFailedAria_other": "{{count}} ajan devam ettirilemedi. Ayrıntılar için tıklayın.",
+            "chatsFailedAria_one": "{{count}} ajan devam ettirilemedi. Ayrıntılar için tıklayın.",
+            "resumedLabelCount_other": "{{count}} ajan devam ettirildi",
+            "resumedLabelCount_one": "{{count}} ajan devam ettirildi",
+            "resumedAriaCount_other": "{{count}} ajan devam ettirildi. Görmek için tıklayın.",
+            "resumedAriaCount_one": "{{count}} ajan devam ettirildi. Görmek için tıklayın.",
+            "checkLabelCount_other": "Kontrol edilecek {{count}} ajan",
+            "checkLabelCount_one": "Kontrol edilecek {{count}} ajan",
+            "checkAriaCount_other": "Devam ettirdikten sonra kontrol edilecek {{count}} ajan var. Ayrıntılar için tıklayın.",
+            "checkAriaCount_one": "Devam ettirdikten sonra kontrol edilecek {{count}} ajan var. Ayrıntılar için tıklayın.",
+            "labelCount_other": "Devam ettirilecek {{count}} ajan",
+            "labelCount_one": "Devam ettirilecek {{count}} ajan",
+            "ariaLabelCount_other": "Devam ettirilebilecek {{count}} ajan",
+            "ariaLabelCount_one": "Devam ettirilebilecek {{count}} ajan"
           },
           "StatusBarUsageChangeNotices": {
             "compactTitle": "Kullanım görünümü artık kompakt",
@@ -6013,7 +6064,6 @@
         },
         "skillPlanOpCopy": {
           "busy": "Başka bir yükleme hâlâ sürüyor",
-          "edited": "Beceri Orca dışında düzenlendi",
           "install": "Yükle",
           "installFor": "{{value0}} için yükle",
           "installed": "Yüklü",
@@ -6037,7 +6087,9 @@
           "updateSkipped": "Güncelleme atlandı: {{value0}}",
           "updateAvailable": "Güncelleme mevcut",
           "repairAvailable": "Onarılabilir",
-          "installAvailable": "Yüklenebilir"
+          "installAvailable": "Yüklenebilir",
+          "otherBuild": "Orca'nın başka bir sürümü tarafından yüklendi",
+          "otherBuildKept": "Korundu: Orca'nın başka bir sürümü tarafından yazıldı"
         },
         "installResult": {
           "installed": "Yüklendi ve doğrulandı.",
@@ -6241,13 +6293,6 @@
           "changesLost_one": "{{count}} commit'lenmemiş değişiklik kaybolacak",
           "changesLost_other": "{{count}} commit'lenmemiş değişiklik kaybolacak",
           "uncountedChangesLost": "Commit'lenmemiş değişiklikler kaybolacak"
-        },
-        "DeleteWorktreeLineageNotice": {
-          "a940f3c96e": "Alt çalışma alanları silinecek",
-          "alsoDeletesChildren_other": "Bu çalışma alanı silindiğinde {{count}} alt çalışma alanı da silinir.",
-          "alsoDeletesChildren_one": "Bu çalışma alanı silindiğinde {{count}} alt çalışma alanı da silinir.",
-          "moreChildren_other": "+{{count}} tane daha",
-          "moreChildren_one": "+{{count}} tane daha"
         },
         "ImportedWorktreesVisibilityLine": {
           "b7a87dc32f": "Çalışma ağacını göster",
@@ -7504,6 +7549,14 @@
           "inProgress": "Devam ediyor",
           "inReview": "İncelemede",
           "done": "Tamamlandı"
+        },
+        "AddProjectMenu": {
+          "changeProjectHost": "Proje sunucusu: {{host}}",
+          "projectHost": "Proje sunucusu",
+          "addRemoteHost": "Uzak sunucu ekle…",
+          "browseFolder": "Klasör seç…",
+          "cloneFromUrl": "URL'den klonla…",
+          "createNewProject": "Yeni proje oluştur…"
         }
       },
       "shared": {
@@ -7914,7 +7967,6 @@
         },
         "BrowserProfileRow": {
           "8e636cae25": "\"{{value0}}\" profili kaldırıldı.",
-          "2d4bea7f35": "Varsayılan çerezler temizlendi.",
           "796d846483": "Çerez içe aktarılmadı",
           "c29648fe5b": "Etkin",
           "b4c167764d": "Dosyadan {{value0}} çerez, {{value1}} içine aktarıldı.",
@@ -7922,10 +7974,7 @@
           "b4e9d3f2a1c5": "{{value1}} kaynağından {{value0}} çerez, {{value2}} içine aktarıldı.",
           "c5a273a809": "{{value0}} kaynağından",
           "80bffd32bf": "Çerezleri İçe Aktar",
-          "bd7d68f138": "Dosyadan…",
-          "4054c458e1": "Varsayılan çerezleri temizle",
-          "3b662becd5": "Varsayılan profildeki çerezler temizlensin mi?",
-          "f159cf5a3e": "Bu profildeki sitelerden çıkış yapmanıza neden olabilir."
+          "bd7d68f138": "Dosyadan…"
         },
         "BrowserUseComputerUseNotice": {
           "79209b37b9": "Çerez içe aktarma uygun değilse Computer Use, yerel uygulamaları kontrol edebilir ve uygun olduğunda mevcut oturum açılmış tarayıcı oturumlarını kullanabilir. Orca Computer Use becerisini yükleyin; macOS ayrıca gizlilik izinleri gerektirir.",
@@ -8629,6 +8678,10 @@
           "workerAutoReleaseDescription": "Açık tut seçilmediği sürece çalışanın terminalini veya sohbetini tamamlandıktan 2 dakika sonra kapatır. Yeniden çalışmaya başlarsa tamamladığında 2 dakika yeniden başlar.",
           "workerAutoReleaseKeywordClose": "kapat",
           "workerAutoReleaseKeywordRelease": "serbest bırak",
+          "coordinatorApprovalsTitle": "Koordinatörlerin çalışanların izin istemlerini onaylamasına izin ver",
+          "coordinatorApprovalsDescription": "Bir koordinatör ajan, gerekçe belirterek bir çalışanın izin istemini onaylayabilir. İzin ver ve Reddet seçeneklerini görmeye devam edersiniz; ilk yanıt geçerli olur. Bu bilgisayarda çalıştırılan çalışanlar için geçerlidir.",
+          "coordinatorApprovalsKeywordApprove": "onayla",
+          "coordinatorApprovalsKeywordPermission": "izin",
           "8a94078d05": "Ajan Orkestrasyonu"
         },
         "OrchestrationSetupCard": {
@@ -10375,7 +10428,7 @@
             "0efc9d96ad": "prompt",
             "939b80f5fd": "zamanlayıcı",
             "b2601a778c": "önbellek",
-            "40c9585e43": "Prompt önbelleğinin ne zaman süresinin dolacağını gösteren geri sayım zamanlayıcısı (Claude ajanları).",
+            "40c9585e43": "İstem önbelleğinin süresinin ne zaman dolacağını gösteren geri sayım zamanlayıcısı (Claude ajanları).",
             "e49e739a59": "indir",
             "c9d8c1ce66": "sürüm notları",
             "9e86ccd05c": "sürüm",
@@ -10501,7 +10554,7 @@
             "close": "kapat",
             "omp": "OMP",
             "d9168badd2": "Otomatik Kaydetme Gecikmesi",
-            "34cda90656": "Prompt Önbelleği Zamanlayıcısı",
+            "34cda90656": "İstem Önbelleği Zamanlayıcısı",
             "b8e1e1ac68": "Varsayılan Diff Dosya Ağacı",
             "0e030ce4e3": "Çalışma Alanı Dizini",
             "11003cbcbd": "Çalışma Alanlarını İç İçe Yerleştir",
@@ -11452,7 +11505,10 @@
               "shortcutDescription": "Dikteyi başlatan tuş.",
               "shortcutKeyword": "klavye",
               "keepLoadedTitle": "Modeli yüklü tut",
-              "gpuKeyword": "ekran kartı"
+              "gpuKeyword": "ekran kartı",
+              "cleanupDescription": "Metin eklenmeden önce ajanınızla noktalama işaretlerini, sayıları ve sözlü düzeltmeleri düzenleyin.",
+              "cleanupKeyword": "düzeltme sözcüğü",
+              "cleanupScratchKeyword": "son söyleneni geri al"
             }
           }
         },
@@ -11518,7 +11574,7 @@
                   "4be0616873": "GitLab CLI yüklü ancak kimliği doğrulanmamış. Bir terminalde bu komutu çalıştırın:",
                   "54a640af7a": "GitLab CLI'yi Yükle",
                   "b56fd5676a": "Merge request'leri, sorunları ve pipeline'ları etkinleştirmek için GitLab CLI'yi yükleyin.",
-                  "faddeb763d": "GitLab CLI durumu bu runtime'da henüz kullanılamıyor.",
+                  "faddeb763d": "GitLab CLI durumu bu çalışma zamanında henüz kullanılamıyor.",
                   "a47f71e357": "CLI.",
                   "2a6b359e75": "glab",
                   "1f2b347bd3": "Merge request'ler, sorunlar, yapılacaklar ve pipeline'lar",
@@ -11526,7 +11582,7 @@
                   "2e44dda68a": "GitHub CLI yüklü ancak kimliği doğrulanmamış. Bir terminalde bu komutu çalıştırın:",
                   "7755c28af5": "GitHub CLI'yi Yükle",
                   "23cb5a0dee": "Pull request'leri, sorunları ve kontrolleri etkinleştirmek için GitHub CLI'yi yükleyin.",
-                  "6f30fc4216": "GitHub CLI durumu bu runtime'da henüz kullanılamıyor.",
+                  "6f30fc4216": "GitHub CLI durumu bu çalışma zamanında henüz kullanılamıyor.",
                   "6b2cfb52b4": "gh",
                   "b4d900e7f1": "Pull request'ler, sorunlar ve kontroller",
                   "account_scope_prefix": "Hesap kapsamı",
@@ -11545,8 +11601,8 @@
               "cards": {
                 "c90f2ef419": "Yeniden kontrol et",
                 "dd3529015d": "{{value0}} bağlantısını kes",
-                "8b2408a8e5": "Jira bu runtime için bağlı. Bağlı site listesi eski görünüyorsa yeniden kontrol edin.",
-                "8c20e76308": "Bağlı her Jira sitesinin, etkin runtime tarafından saklanan bir belirteci vardır.",
+                "8b2408a8e5": "Jira bu çalışma zamanı için bağlı. Bağlı site listesi eski görünüyorsa yeniden kontrol edin.",
+                "8c20e76308": "Bağlı her Jira sitesinin, etkin çalışma zamanı tarafından saklanan bir belirteci vardır.",
                 "c24e56c532": "Test et",
                 "3e7c10d286": "Test ediliyor...",
                 "a2c0015fb8": "Doğrulandı",
@@ -11555,15 +11611,15 @@
                 "7ca5ffffdb": "Jira Cloud sorunlarını görüntüleyin, oluşturun ve üzerlerinde çalışmaya başlayın.",
                 "a1093a06c7": "Kurulum eylemlerini göstermeden önce Jira erişimi kontrol ediliyor.",
                 "cef18762a2": "Linear ayarlarınızdan bir Kişisel API anahtarı ile erişim ekleyin. Tam erişimli anahtarlar, anahtar sahibinin erişebildiği her takımı görebilir.",
-                "6224fe9d34": "Bağlı her Linear çalışma alanının, etkin runtime tarafından saklanan bir anahtarı vardır. Tam erişimli anahtarlar, anahtar sahibinin erişebildiği tüm takımları kapsayabilir; kısıtlı anahtarlar istenildiğinde değiştirilebilir.",
+                "6224fe9d34": "Bağlı her Linear çalışma alanının, etkin çalışma zamanı tarafından saklanan bir anahtarı vardır. Tam erişimli anahtarlar, anahtar sahibinin erişebildiği tüm takımları kapsayabilir; kısıtlı anahtarlar istenildiğinde değiştirilebilir.",
                 "1a12e33fe5": "Linear Erişimi Ekle",
                 "622c224082": "Çalışma alanı erişimi ekle",
                 "eae4a9f16b": "Sorunları görüntülemek ve bağlamak için Linear erişimi ekleyin.",
                 "fe9231215b": "Kurulum eylemlerini göstermeden önce Linear erişimi kontrol ediliyor.",
                 "disconnect_all": "Bağlantıyı kes",
                 "account_scope_prefix": "Hesap kapsamı",
-                "2d60ec7921": "Bir API belirteci ile Jira Cloud sitesi veya kişisel erişim belirteci ya da kullanıcı adı ve parola ile self-hosted Jira bağlayın. Kimlik bilgileri seçilen uzak runtime'a gönderilir ve orada runtime'ın desteklediği şifrelemeyle saklanır.",
-                "977e360b71": "Bir API belirteci ile Jira Cloud sitesi veya kişisel erişim belirteci ya da kullanıcı adı ve parola ile self-hosted Jira bağlayın. Kimlik bilgileri yerel olarak saklanır ve yerel runtime depolaması destekliyorsa şifrelenir.",
+                "2d60ec7921": "Bir API belirteci ile Jira Cloud sitesi veya kişisel erişim belirteci ya da kullanıcı adı ve parola ile self-hosted Jira bağlayın. Kimlik bilgileri seçilen uzak çalışma zamanına gönderilir ve orada çalışma zamanının desteklediği şifrelemeyle saklanır.",
+                "977e360b71": "Bir API belirteci ile Jira Cloud sitesi veya kişisel erişim belirteci ya da kullanıcı adı ve parola ile self-hosted Jira bağlayın. Kimlik bilgileri yerel olarak saklanır ve yerel çalışma zamanı depolaması destekliyorsa şifrelenir.",
                 "statusConnected": "Bağlı",
                 "statusNotConnected": "Bağlı değil",
                 "linearTokenName": "Linear API belirteciniz",
@@ -11588,7 +11644,7 @@
                   "6da9dfa5de": "özel repository'ler için ve şunu ayarlayın",
                   "6d5c2a3005": "ORCA_GITEA_TOKEN",
                   "fcbe0469fd": "Genel repository'ler git remote'larından tespit edilir. Şunu ayarlayın",
-                  "0613928cb3": "Gitea durumu bu runtime'da henüz kullanılamıyor.",
+                  "0613928cb3": "Gitea durumu bu çalışma zamanında henüz kullanılamıyor.",
                   "05863d2599": "Gitea REST API üzerinden pull request'ler ve commit durumları.",
                   "52f75876be": "Tespit edilen repository'ler için pull request'ler ve commit durumları",
                   "0b5242f8a2": "{{value0}} · Pull request'ler ve commit durumları",
@@ -11600,12 +11656,12 @@
                   "087feb92f1": ", ya da şunu ayarlayın",
                   "48842720d2": "ORCA_AZURE_DEVOPS_TOKEN",
                   "7bbc9c64f0": "Şunu ayarlayın",
-                  "f3f47dc7de": "Azure DevOps durumu bu runtime'da henüz kullanılamıyor.",
+                  "f3f47dc7de": "Azure DevOps durumu bu çalışma zamanında henüz kullanılamıyor.",
                   "0eb50d5593": "Azure DevOps REST API belirteçleri üzerinden pull request'ler ve build durumları.",
                   "54636c65d4": "Tespit edilen Azure Repos için pull request'ler ve build durumları",
                   "ea204f5e03": "{{value0}} · Pull request'ler ve build durumları",
                   "6154b02093": "Bitbucket kimlik bilgileri yapılandırılmış ancak kimlik doğrulanamadı. Belirteci ve repository izinlerini kontrol edin, ardından ortam değişkenleri değiştiyse Orca'yı yeniden başlatın.",
-                  "24ac1c69dc": "Bitbucket durumu bu runtime'da henüz kullanılamıyor.",
+                  "24ac1c69dc": "Bitbucket durumu bu çalışma zamanında henüz kullanılamıyor.",
                   "0fa5629dad": "Pull request'ler ve build durumları",
                   "statusConnected": "Bağlı",
                   "statusUnavailable": "Kullanılamıyor",
@@ -11681,7 +11737,7 @@
           "1b00dcc746": "Fork'u Güncel Tut"
         },
         "DefaultWindowsProjectRuntimeSetting": {
-          "defaultRuntime": "Varsayılan proje runtime'ı",
+          "defaultRuntime": "Varsayılan proje çalışma zamanı",
           "windows": "Windows",
           "wsl": "WSL",
           "selectDistro": "Dağıtım seç",
@@ -11691,12 +11747,12 @@
           "wslDescription": "Bir proje geçersiz kılmadığı sürece projeler WSL üzerinden {{value0}} dağıtımını devralır."
         },
         "ProjectWindowsRuntimeSetting": {
-          "projectRuntime": "Proje runtime'ı",
+          "projectRuntime": "Proje çalışma zamanı",
           "defaultRuntime": "Varsayılan ({{value0}})",
           "windows": "Windows",
           "wsl": "WSL",
           "selectDistro": "Dağıtım seç",
-          "runtimeChangeHelp": "Runtime değişiklikleri bu proje için yeni terminallere, ajan kontrollerine ve beceri keşfine uygulanır. Mevcut terminaller kendi runtime'larını korur.",
+          "runtimeChangeHelp": "Çalışma zamanı değişiklikleri bu proje için yeni terminallere, ajan kontrollerine ve beceri keşfine uygulanır. Mevcut terminaller kendi çalışma zamanlarını korur.",
           "wslUnavailable": "WSL kullanılamıyor. Bu projeyi Windows'a geçirin veya WSL'i onarın.",
           "distroMissing": "{{value0}} WSL'de yüklü değil. Yüklü bir dağıtım seçin veya bu projeyi Windows'a geçirin.",
           "distroRequired": "Bir WSL dağıtımı seçin veya bu projeyi Windows'a geçirin.",
@@ -11709,10 +11765,10 @@
           "activeTaskSingular": "{{count}} etkin görev",
           "activeTaskPlural": "{{count}} etkin görev",
           "runtimeSessionJoin": "{{value0}} ve {{value1}}",
-          "runtimeSessionWarning": "{{value0}} mevcut runtime'da çalışmaya devam edecek. Devam etmeden önce görevlerin bitmesini bekleyin veya terminalleri yeniden başlatın.",
-          "pendingRuntimeChange": "Runtime değişikliği bekliyor. Uygula demenizin ardından yeni proje çalışmaları seçilen runtime'ı kullanacak.",
+          "runtimeSessionWarning": "{{value0}} mevcut çalışma zamanında çalışmaya devam edecek. Devam etmeden önce görevlerin bitmesini bekleyin veya terminalleri yeniden başlatın.",
+          "pendingRuntimeChange": "Çalışma zamanı değişikliği bekliyor. Uygula demenizin ardından yeni proje çalışmaları seçilen çalışma zamanını kullanacak.",
           "cancel": "İptal",
-          "applyRuntimeChange": "Runtime değişikliğini uygula"
+          "applyRuntimeChange": "Çalışma zamanı değişikliğini uygula"
         },
         "PrivacyDiagnosticsRows": {
           "5a7cbe069a": "DO_NOT_TRACK=1 ayarlı; tanılama dosyaları oluşturma ve gönderme devre dışı.",
@@ -11757,14 +11813,14 @@
           "1af20fbf51": "Localhost Worktree Etiketleri"
         },
         "AgentRuntimeSetting": {
-          "label": "Ajan runtime'ı",
+          "label": "Ajan çalışma zamanı",
           "wsl": "WSL",
           "loadingWsl": "WSL Yükleniyor",
           "selectDistro": "Dağıtım seç",
-          "windowsDescription": "Runtime'larını geçersiz kılmayan projeler için Windows'ta ajanları tespit edin ve başlatın.",
+          "windowsDescription": "Çalışma zamanlarını geçersiz kılmayan projeler için Windows'ta ajanları tespit edin ve başlatın.",
           "wslUnavailable": "Bu makinede WSL kullanılamıyor.",
           "distroRequired": "Projeler WSL'i devralabilmeden önce bir WSL dağıtımı seçin.",
-          "wslDescription": "Runtime'larını geçersiz kılmayan projeler için WSL üzerinden {{value0}} içinde ajanları tespit edin ve başlatın."
+          "wslDescription": "Çalışma zamanlarını geçersiz kılmayan projeler için WSL üzerinden {{value0}} içinde ajanları tespit edin ve başlatın."
         },
         "MobileEmulatorSdkStatus": {
           "027cbf668a": "Android SDK",
@@ -11835,11 +11891,11 @@
           "copyCleanup": "Komutu kopyala",
           "retry": "Temizlemeyi yeniden dene",
           "cleanup": "Temizle",
-          "cloudVmLoadFailed": "Cloud VM runtime'ları yüklenemedi.",
-          "cloudVmCleanupFailedToast": "Cloud VM runtime'ı temizlenemedi.",
-          "cloudVmMarkedCleaned": "Cloud VM runtime'ı temizlendi olarak işaretlendi.",
-          "cloudVmCleaned": "Cloud VM runtime'ı temizlendi.",
-          "cloudVmRefresh": "Cloud VM runtime'larını yenile",
+          "cloudVmLoadFailed": "Cloud VM çalışma zamanları yüklenemedi.",
+          "cloudVmCleanupFailedToast": "Cloud VM çalışma zamanı temizlenemedi.",
+          "cloudVmMarkedCleaned": "Cloud VM çalışma zamanı temizlendi olarak işaretlendi.",
+          "cloudVmCleaned": "Cloud VM çalışma zamanı temizlendi.",
+          "cloudVmRefresh": "Cloud VM çalışma zamanlarını yenile",
           "stoppingCleanup": "Durduruluyor…",
           "stopCleanup": "Temizlemeyi durdur",
           "cleanupStopped": "Temizleme durduruldu",
@@ -12205,6 +12261,7 @@
         "PluginRemoveDialog": {
           "cancel": "İptal",
           "remove": "Eklentiyi kaldır",
+          "pausesAutomations": "Oluşturduğu otomasyonlar duraklatılır ve eklenti yeniden yüklense de duraklatılmış olarak kalır.",
           "title": "{{value0}} kaldırılsın mı?",
           "description": "Verileri de kaldırılır."
         },
@@ -13089,12 +13146,13 @@
           "thisComputer": "Bu bilgisayar",
           "defaultHostHelp": "Mevcut projeler bulundukları yerde kalır.",
           "defaultHostWebHelp": "Bu tarayıcı yeni projeleri seçilen sunucuda açar.",
-          "updateAll": "Tümünü güncelle ({{count}})",
+          "updateAll": "Tümünü güncelle",
+          "updatesCount_other": "{{count}} güncelleme mevcut",
+          "updatesCount_one": "{{count}} güncelleme mevcut",
           "addServer": "Sunucu ekle",
           "moreWaysToAdd": "Sunucu eklemenin diğer yolları",
           "pasteAccessLink": "Erişim bağlantısını yapıştır",
           "checkForUpdates": "Güncellemeleri denetle",
-          "emptyDescription": "Bir geliştirme makinesini, bulut makinesini veya evdeki masaüstü bilgisayarı eşleştirin. Bu bilgisayar uykuya geçtiğinde oturumlarınız orada çalışmaya devam eder.",
           "movePaused": "Taşıma duraklatıldı",
           "shareTitle": "Bu bilgisayarı paylaş",
           "done": "Bitti",
@@ -13170,7 +13228,6 @@
           "attentionUnwritable": "Dikkat gerekiyor · Orca tarafından {{folder}} konumuna yazılamıyor",
           "attentionBusy": "Dikkat gerekiyor · Burada başka bir becerinin yüklenmesi hâlâ sürüyor",
           "attentionUnreadable": "Dikkat gerekiyor · Bu kopyadaki bazı dosyalar Orca tarafından okunamıyor",
-          "attentionEdited": "Dikkat gerekiyor · Bu kopyayı düzenlediniz",
           "attentionOther": "Dikkat gerekiyor · Bu adı zaten başka bir beceri kullanıyor",
           "attentionSharedNotCurrent": "Dikkat gerekiyor · Bu klasörün kullandığı paylaşılan kopya Orca'ya ait değil",
           "resultUpdateSkippedPlaces": "{{result}} · {{places}} konumda güncelleme atlandı: {{reason}}",
@@ -13514,7 +13571,8 @@
           "sources": "Katalog kaynakları…"
         },
         "PluginSettingsOverview": {
-          "offTitle": "Eklentiler kapalı"
+          "offTitle": "Eklentiler kapalı",
+          "offAutomations": "Eklentilerin oluşturduğu otomasyonlar duraklatılır ve eklentiler yeniden açıldığında duraklatılmış olarak kalır."
         },
         "pluginContributions": {
           "dark": "Koyu",
@@ -13587,6 +13645,21 @@
         },
         "SettingsSearchableSelect": {
           "noMatches": "Eşleşme yok."
+        },
+        "RepositoryRemoveProjectSection": {
+          "filesNoteVmRecipe": "VM tarifleri, ortamlarının ve dosyalarının silinip silinmeyeceğini belirler.",
+          "filesNote": "Dosyalar diskte kalır; projeyi daha sonra yeniden ekleyebilirsiniz.",
+          "hostCount_one": "{{count}} sunucu",
+          "hostCount_other": "{{count}} sunucu",
+          "checkoutCount_one": "{{count}} checkout",
+          "checkoutCount_other": "{{count}} checkout",
+          "removeButton": "Kaldır…",
+          "dialogTitle": "{{name}} kaldırılsın mı?",
+          "terminalWarning_one": "Bu projedeki {{count}} açık terminal kapatılacak.",
+          "terminalWarning_other": "Bu projedeki {{count}} açık terminal kapatılacak.",
+          "cancel": "İptal",
+          "confirm": "Kaldır",
+          "unknownHost": "Bilinmeyen sunucu"
         },
         "PluginAuthor": {
           "catalogClaim": "Yayımcı {{catalog}} tarafından listeleniyor. Yazarlık doğrulanmadı.",
@@ -13966,7 +14039,7 @@
             "2fe2a67580": "Diğer not işlemleri",
             "eae2d051af": "Tüm notları kopyala",
             "cc474e0b8c": "Notlar",
-            "e131cd7128": "Source Control yalnızca Git repository'leri için kullanılabilir",
+            "e131cd7128": "Kaynak Kontrolü yalnızca Git repository'leri için kullanılabilir",
             "c07b236287": "Değişiklikleri görüntülemek için bir çalışma alanı seçin",
             "a5e5a11090": "Tüm değişiklikler geri alınamadı — geri alma işleminden önce dosyalar stage'den çıkarılamadı",
             "8a5ba6a988": "Commit diff'i yüklenemedi",
@@ -14040,7 +14113,7 @@
             "fda060d6ce": "Commit mesajını gözden geçirin, ardından PR Oluştur'u tekrar deneyin.",
             "b75cb1fd0c": "Değişiklikler commit ediliyor…",
             "995c5e67ec": "İnceleme kurulumu dikkat gerektiriyor.",
-            "d7492cafce": "Source Control yenilenemedi. PR Oluştur'u tekrar deneyin.",
+            "d7492cafce": "Kaynak Kontrolü yenilenemedi. PR Oluştur'u tekrar deneyin.",
             "473f18758e": "Kaynak Kontrolü AI ayarları",
             "createPrIntentConfigureAi": "Bir commit mesajı ekleyin veya Kaynak Kontrolü AI ayarlarını yapılandırın.",
             "createPrIntentGenerateFailed": "Commit mesajı oluşturulamadı. Bir tane ekleyip tekrar deneyin.",
@@ -14057,7 +14130,7 @@
             "createPrIntentCreatingReview": "İnceleme oluşturuluyor…",
             "a91f8e2b01": "Liste olarak görüntüle",
             "b82e9f3c12": "Ağaç olarak görüntüle",
-            "f71c4a8d90": "Diğer source control işlemleri",
+            "f71c4a8d90": "Diğer Kaynak Kontrolü işlemleri",
             "c8e4a1f902": "Filtre: {{value0}}",
             "b3c8f1a902": "Dosyaları ada göre filtrele",
             "d4f8c2a901": "Filtreyi temizle ve kapat",
@@ -14079,7 +14152,7 @@
               "834cb3f23d": "AI ile düzelt",
               "783a808870": "Kapat"
             },
-            "97e7124eac": "Source Control yenilenemedi. Tekrar deneyin.",
+            "97e7124eac": "Kaynak Kontrolü yenilenemedi. Tekrar deneyin.",
             "b8c2e1a904": "{{value0}} → {{value1}}",
             "a4e93c21d7": "Geçerli branch: {{value0}}",
             "c7d4e2f801": "Base ref'i değiştir: {{value0}}",
@@ -14487,7 +14560,7 @@
             "e8e2e4ce74": "Sağ kenar çubuğunu aç/kapat",
             "441733b630": "Portlar",
             "83a10e3c44": "Kontroller",
-            "0314901467": "Source Control",
+            "0314901467": "Kaynak Kontrolü",
             "8bc2bbc3a0": "Gezgin",
             "9fffaf17c1": "Sağ kenar çubuğunu aç/kapat ({{value0}})",
             "aiVaultSessionHistory": "Ajanlar",
@@ -17575,8 +17648,6 @@
             "ed8f54509d": "Varsayılan",
             "e5d31de1a9": "Görüntü Alanı Boyutu",
             "56f94f4ffa": "Dosyadan…",
-            "eb280bfb11": "{{value0}}'den",
-            "2293adf620": "Çerezleri İçe Aktar",
             "cf7cdc67ef": "Yeni Profil…",
             "7b838540c7": "Tarayıcı menüsü",
             "a7a86702b3": "{{value0}} profili oluşturuldu ve bu profile geçildi",
@@ -17743,7 +17814,10 @@
           "execution": "Çalıştırma",
           "notRunYet": "Henüz çalıştırılmadı",
           "usageDetail_one": "{{tokens}} token · {{known}}/{{count}} çalıştırma raporlandı",
-          "usageDetail_other": "{{tokens}} token · {{known}}/{{count}} çalıştırma raporlandı"
+          "usageDetail_other": "{{tokens}} token · {{known}}/{{count}} çalıştırma raporlandı",
+          "createdBy": "Oluşturan",
+          "createdByPluginTitle": "Eklenti {{plugin}}",
+          "createdByEnded": "Eklenti kaldırıldı veya devre dışı bırakıldı; bu otomasyonu değiştirmeden önce izin istemelidir"
         },
         "AutomationEditorDialog": {
           "fb1896a5e7": "İptal",
@@ -18837,9 +18911,7 @@
         "typeHtml": "HTML"
       },
       "BrowserCookieImportMachineNotice": {
-        "clientLabel": "Bu cihazdaki tarayıcılar",
         "remoteLabel": "{{value0}} üzerindeki tarayıcılar",
-        "clientNoteLocalStorage": "İçe aktarmalar bu cihazın tarayıcılarını okur. Çerezler yerel olarak depolanır.",
         "remoteNoteRemoteStorage": "İçe aktarmalar {{value0}} üzerindeki tarayıcıları okur. Çerezler o makinede depolanır ve ekranında bir izin istemi görünebilir."
       },
       "native": {
@@ -19096,30 +19168,30 @@
         "keyword-hooks": "kancalar"
       },
       "NativeChatResumeToast": {
-        "resumingOn_one": "{{machine}} üzerinde {{count}} sohbet devam ettiriliyor…",
-        "resumingOn_other": "{{machine}} üzerinde {{count}} sohbet devam ettiriliyor…",
-        "resuming_one": "{{count}} sohbet devam ettiriliyor…",
-        "resuming_other": "{{count}} sohbet devam ettiriliyor…",
-        "resumedOn_one": "{{machine}} üzerinde {{count}} sohbet devam ettirildi.",
-        "resumedOn_other": "{{machine}} üzerinde {{count}} sohbet devam ettirildi.",
-        "resumedUpdate_one": "Güncellemeden sonra {{count}} sohbet devam ettirildi.",
-        "resumedUpdate_other": "Güncellemeden sonra {{count}} sohbet devam ettirildi.",
-        "resumedRestart_one": "Yeniden başlatmadan sonra {{count}} sohbet devam ettirildi.",
-        "resumedRestart_other": "Yeniden başlatmadan sonra {{count}} sohbet devam ettirildi.",
-        "partial_one": "{{resumed}}/{{total}} sohbet devam ettirildi. {{count}} tanesi sizi bekliyor.",
-        "partial_other": "{{resumed}}/{{total}} sohbet devam ettirildi. {{count}} tanesi sizi bekliyor.",
-        "stoppedOn_one": "{{machine}} üzerinde {{count}} sohbet durdu.",
-        "stoppedOn_other": "{{machine}} üzerinde {{count}} sohbet durdu.",
-        "stoppedUpdate_one": "Orca güncellenirken {{count}} sohbet durdu.",
-        "stoppedUpdate_other": "Orca güncellenirken {{count}} sohbet durdu.",
-        "stoppedRestart_one": "Orca kapanırken {{count}} sohbet durdu.",
-        "stoppedRestart_other": "Orca kapanırken {{count}} sohbet durdu.",
+        "resumingOn_one": "{{machine}} üzerinde {{count}} ajan devam ettiriliyor…",
+        "resumingOn_other": "{{machine}} üzerinde {{count}} ajan devam ettiriliyor…",
+        "resuming_one": "{{count}} ajan devam ettiriliyor…",
+        "resuming_other": "{{count}} ajan devam ettiriliyor…",
+        "resumedOn_one": "{{machine}} üzerinde {{count}} ajan devam ettirildi.",
+        "resumedOn_other": "{{machine}} üzerinde {{count}} ajan devam ettirildi.",
+        "resumedUpdate_one": "Güncellemeden sonra {{count}} ajan devam ettirildi.",
+        "resumedUpdate_other": "Güncellemeden sonra {{count}} ajan devam ettirildi.",
+        "resumedRestart_one": "Yeniden başlatmadan sonra {{count}} ajan devam ettirildi.",
+        "resumedRestart_other": "Yeniden başlatmadan sonra {{count}} ajan devam ettirildi.",
+        "partial_one": "{{resumed}}/{{total}} ajan devam ettirildi. {{count}} tanesi sizi bekliyor.",
+        "partial_other": "{{resumed}}/{{total}} ajan devam ettirildi. {{count}} tanesi sizi bekliyor.",
+        "stoppedOn_one": "{{machine}} üzerinde {{count}} ajan durdu.",
+        "stoppedOn_other": "{{machine}} üzerinde {{count}} ajan durdu.",
+        "stoppedUpdate_one": "Orca güncellenirken {{count}} ajan durdu.",
+        "stoppedUpdate_other": "Orca güncellenirken {{count}} ajan durdu.",
+        "stoppedRestart_one": "Orca kapanırken {{count}} ajan durdu.",
+        "stoppedRestart_other": "Orca kapanırken {{count}} ajan durdu.",
         "promptsNotResent": "Devam ettirmek istemlerinizi yeniden göndermez.",
         "resume": "Devam ettir",
         "details": "Ayrıntılar",
         "close": "Kapat",
-        "listLabel": "Sohbetler",
-        "untitled": "Başlıksız sohbet",
+        "listLabel": "Ajanlar",
+        "untitled": "Başlıksız ajan",
         "willAsk": "Orca devam etmelerini isteyecek. Sıradaki mesajlar gönderilebilir.",
         "asked": "Orca devam etmelerini istedi. Sıradaki mesajlar gönderilebilir.",
         "resumedAutomatically": "Otomatik olarak devam ettirildi.",
@@ -19141,7 +19213,7 @@
         "ownershipUnknownShort": "Henüz devam ettirmeye hazır değil.",
         "notAttachedShort": "Yeniden bağlanmadı.",
         "dispatchRejectedShort": "Ajan devam etmeyi reddetti.",
-        "unsupportedShort": "Orca bu sohbeti devam ettiremiyor."
+        "unsupportedShort": "Orca bu ajanı devam ettiremiyor."
       }
     },
     "i18n": {
@@ -19378,6 +19450,8 @@
         "agentCommandFailed": "Ayarlar → Ajanlar bölümündeki {{agent}} Komut ayarı {{agent}} uygulamasını başlatmadı: {{detail}}. Değiştirin veya sıfırlayın.",
         "runtimeNotInstalled": "Bu sohbetin çalıştığı bilgisayarda {{agent}} yüklü değil. Orca'nın güncel bir sürümünde sohbet içinden yükleyin.",
         "fullAccessAsRoot": "{{agent}}, root olarak çalışırken Tam erişim iznini kullanmaz. Bu sohbeti çalıştıran bilgisayarda Ayarlar → Ajanlar bölümünden {{agent}} için başka bir izin seçin, ardından yeni bir sohbet başlatın.",
+        "botToolsNeedStatusHooks": "{{agent}} botları ajan durumu hook'larına ihtiyaç duyar: bir botun araçları bunlar sayesinde bot olarak çalışır. Ayarlar → Ajanlar bölümünden {{agent}} için açın, ardından yeni bir sohbet başlatın.",
+        "botToolsGatewayOutdated": "{{agent}} ağ geçidi hâlâ Orca eklentisinin eski bir sürümüyle çalışıyor, bu yüzden bu botun araçları bot olarak çalışamıyor. `hermes gateway stop` komutunu çalıştırın, ardından yeni bir sohbet başlatın.",
         "launchPreparationFailed": "Orca, bu sohbeti çalıştıran bilgisayarda {{agent}} başlatmayı hazırlayamadı.",
         "conversationOpenElsewhere": "Codex bu sohbeti hâlâ açık tutuyor. Biraz sonra yeniden deneyin veya diğer Codex terminallerini kapatın.",
         "conversationOpenInTerminal": "{{agent}} bu sohbeti zaten başka bir terminalde yürütüyor. Burada devam etmek için o terminalde {{agent}} uygulamasından çıkın veya terminali kapatın.",
@@ -19488,6 +19562,8 @@
         "historyUnreadable": "Orca bu sohbetin kayıtlı geçmişini okuyamadı.",
         "historyUnusable": "Bu sohbet yüklenemiyor.",
         "historyUnavailable": "Orca şu anda bu sohbetin geçmişini açamadı.",
+        "diskFull": "Bu sohbeti çalıştıran bilgisayarın diski dolu.",
+        "freeDiskSpace": "Bu diskte yer açın, ardından tekrar deneyin.",
         "savedInOtherFolder": "Bu konuşma başka bir klasöre kaydedildi.",
         "savedByNewerOrca": "Sohbetler daha yeni bir Orca sürümüyle kaydedildi.",
         "updateOrcaToKeepUsing": "Kullanmaya devam etmek için Orca'yı güncelleyin.",
@@ -19953,6 +20029,10 @@
       "railLabel": "Mesajlarınız",
       "railImageMessage": "Görsel eki",
       "railEmptyMessage": "Mesaj",
+      "railFilterPlaceholder": "Mesajlarınızı filtreleyin",
+      "railNoMatches": "Eşleşen mesaj yok",
+      "railTickLabel": "Mesaj {{index}} / {{count}}: {{text}}",
+      "railMatchCount": "{{count}} / {{total}}",
       "prompt": {
         "collapse": "Daralt",
         "expand": "Genişlet"
@@ -19968,7 +20048,6 @@
         "terminalRequired": "Bu OMP sorusunu terminalde yanıtlayın.",
         "openTerminal": "Terminalde yanıtla",
         "recommended": "Önerilen",
-        "stepAnswered": "{{value0}}, yanıtlandı",
         "stepOf": "{{value0}} / {{value1}}",
         "answered": "Yanıtlandı",
         "title": "Soru",
@@ -19997,7 +20076,9 @@
           "file": "Plan dosyası",
           "reviewTitle": "Önerilen planı incele",
           "refineHint": "Planı iyileştir seçeneği, değişiklik isteklerinizi gönderebilmeniz için incelemeyi kapatır."
-        }
+        },
+        "answerNotApplied": "{{name}}: yanıt bu isteme ulaşmadı",
+        "answerWorkerEnded": "{{name}} sonlandığı için bu istem kapatıldı"
       },
       "launchPromptNotDelivered": "İletilmedi, terminali kontrol edin",
       "subagents": {
@@ -20083,7 +20164,10 @@
         "paused": "Hedef duraklatıldı",
         "blocked": "Hedef engellendi",
         "limited": "Hedef sınırına ulaşıldı",
-        "attachmentsUnsupported": "Hedef belirlemeden önce ekleri kaldırın."
+        "attachmentsUnsupported": "Hedef belirlemeden önce ekleri kaldırın.",
+        "checks_one": "{{count}} kontrol",
+        "checks_other": "{{count}} kontrol",
+        "last-check": "Son hedef kontrolü"
       },
       "fileLinks": {
         "notFound": "Dosya bulunamadı: {{value0}}",
@@ -20165,6 +20249,7 @@
         "reconnect": "Yeniden bağlan",
         "stopped": "{{distro}} durduruldu",
         "start": "Başlat",
+        "connecting": "{{distro}} bağlantısı kuruluyor…",
         "unverifiable": "Orca, {{distro}} öğesinin çalışıp çalışmadığını denetleyemedi",
         "startToSend": "Göndermek için {{distro}} dağıtımını başlatın.",
         "startDistro": "{{distro}} dağıtımını başlat"
@@ -20196,11 +20281,23 @@
         "fileActions": "Dosya işlemleri",
         "linkActions": "Bağlantı işlemleri"
       },
+      "imageGallery": {
+        "loadFailed": "{{name}} yüklenemedi"
+      },
       "goalControl": {
         "settingsRejected": "Seçilen model ve akıl yürütme düzeyi Codex tarafından uygulanamadı. Bu hedef değişikliği gönderilmedi. Seçimi kontrol edin ve yeniden deneyin.",
         "settingsUnconfirmed": "Seçilen model ve akıl yürütme düzeyi Codex tarafından doğrulanmadı. Bu hedef değişikliği gönderilmedi. Sohbeti kontrol edin ve yeniden deneyin.",
         "pauseUnconfirmed": "Codex durdu, ancak hedefinin duraklatıldığı doğrulanmadı. Devam etmeden önce hedefi kontrol edin.",
-        "stopUnconfirmed": "Durdur işlemi Codex tarafından doğrulanamadı. Devam etmeden önce sohbeti kontrol edin."
+        "stopUnconfirmed": "Durdur işlemi Codex tarafından doğrulanamadı. Devam etmeden önce sohbeti kontrol edin.",
+        "noGoal": "Bu sohbette Codex'in değiştirilecek bir hedefi yok. /goal ve ardından hedefi yazarak bir hedef belirleyin."
+      },
+      "automationResult": {
+        "openRun": "Çalıştırmayı aç",
+        "notRead": "{{name}} bunu henüz okumadı. Sonraki mesajınızla birlikte gönderilecek.",
+        "read": "{{name}} bunu sonraki mesajınızla birlikte okudu.",
+        "sentWithOne": "1 otomasyon sonucuyla birlikte gönderildi",
+        "sentWithMany": "{{count}} otomasyon sonucuyla birlikte gönderildi",
+        "cleared": "Sohbet temizlenmeden önce ulaştı. {{name}} bunu görmeyecek."
       },
       "slashCommandDescriptions": {
         "clearConversation": "Sohbeti temizle",
@@ -20368,6 +20465,27 @@
         "sourceTooltip": "{{name}} sohbetinin çatalı",
         "unknownSourceTooltip": "Başka bir sohbetin çatalı"
       },
+      "importPlan": {
+        "comes": "İçe aktarılacak",
+        "changed": "Değişikliklerle içe aktarılacak",
+        "already": "Zaten burada",
+        "stays": "{{app}} içinde kalacak",
+        "fromAgain": "{{app}} kaynağından, yeniden",
+        "from": "{{app}} kaynağından",
+        "selected": "{{total}} öğeden {{chosen}} tanesi seçili · anahtarlar ve oturum bilgileri asla kopyalanmaz",
+        "importOne": "1 öğeyi içe aktar",
+        "importMany": "{{count}} öğeyi içe aktar",
+        "askedOne": "1 öğenin içe aktarılması istendi",
+        "askedMany": "{{count}} öğenin içe aktarılması istendi"
+      },
+      "importDone": {
+        "heading": "İçe aktarma tamamlandı",
+        "title": "{{name}}, {{app}} kaynağından aktarıldı",
+        "open": "Aç",
+        "stayed": "{{app}} içinde kalanlar: {{things}}. {{app}} içinde hiçbir şey değiştirilmedi.",
+        "unchanged": "{{app}} içinde hiçbir şey değiştirilmedi.",
+        "paused": "Hiçbir şey iki kez çalışmasın diye otomasyonlar duraklatıldı. Eski bot {{app}} içinde kapatıldıktan sonra otomasyonları açın."
+      },
       "cardKindHidden": {
         "description": "Bunu istediğiniz zaman şuradan değiştirebilirsiniz:",
         "settingsLink": "Ayarlar > Chat UI > Tur etkinliği",
@@ -20382,11 +20500,149 @@
       },
       "splitRight": "Sağa Böl",
       "splitDown": "Aşağı Böl",
+      "automationRun": {
+        "waitOver": "Bekleme sona erdi",
+        "scheduled": "Zamanlanmış",
+        "runNow": "Şimdi çalıştır",
+        "github": "GitHub",
+        "slack": "Slack",
+        "linear": "Linear",
+        "webhook": "Webhook",
+        "gmail": "Gmail",
+        "calendar": "Takvim",
+        "instructions": "Talimatlar",
+        "event": "Olay",
+        "startError": "Hata",
+        "couldNotStart": "Başlatılamadı",
+        "queued": "Sırada",
+        "deadlineReached": "Son tarihe ulaşıldı",
+        "due": "Planlanan: {{time}}",
+        "dueRan": "planlanan: {{due}}, çalıştı: {{ran}}",
+        "reused": "Yeniden kullanıldı: {{what}}",
+        "reusedFrom": "Yeniden kullanılan olay: {{what}} · {{time}}",
+        "whatOn": "{{where}} üzerinde: {{what}}",
+        "whatIn": "{{where}} içinde: {{what}}",
+        "whatAt": "{{what}} · {{where}}",
+        "factsAt": "{{facts}} · {{time}}",
+        "someoneWrote": "Biri şunu yazdı",
+        "personWrote": "{{name}} şunu yazdı",
+        "callerSent": "Çağıran şunu gönderdi",
+        "external": "Harici içerik · bota bilgi olarak gönderildi, talimat olarak değil",
+        "shortened": "Bota gönderildiği şekliyle 4.096 karaktere kısaltıldı.",
+        "memberAccess": "Bu çalıştırıldığında {{name}}, Kimler sorabilir listesindeydi.",
+        "someMemberAccess": "Bu çalıştırıldığında Kimler sorabilir listesindeki biri gönderdi.",
+        "otherAccess": "Kimler sorabilir listesinde değil veya erişim bilinmiyor.",
+        "ownerAccess": "Botun sahibinden.",
+        "sampleCall": "Örnek çağrı",
+        "firstCall": "İlk çağrı",
+        "webhookCall": "Webhook çağrısı",
+        "openOnGitHub": "GitHub'da aç",
+        "openInSlack": "Slack'te aç",
+        "openInLinear": "Linear'da aç",
+        "openLink": "Bağlantıyı aç",
+        "accessibleName": "Otomasyon çalıştırması. {{label}}: {{name}}. {{reason}}.",
+        "accessibleNameAt": "Otomasyon çalıştırması. {{label}}: {{name}}. {{reason}}. {{time}}.",
+        "accessibleNameNoReason": "Otomasyon çalıştırması. {{label}}: {{name}}.",
+        "accessibleNameNoReasonAt": "Otomasyon çalıştırması. {{label}}: {{name}}. {{time}}.",
+        "copyInstructions": "Talimatları kopyala",
+        "copyEvent": "Olayı kopyala",
+        "openAutomation": "Otomasyonu aç",
+        "sendAgain": "Yeniden gönder",
+        "sentAgain": "Yeniden gönderildi",
+        "showAll": "Tümünü göster",
+        "showLess": "Daha az göster",
+        "what": {
+          "github": {
+            "issue_opened": "Sorun açıldı",
+            "pr_opened": "Pull request açıldı",
+            "pr_pushed": "Push",
+            "pr_merged": "Merge edildi",
+            "comment": "Yorum",
+            "review_comment": "İnceleme yorumu",
+            "review": "İnceleme",
+            "mentioned": "Bahsetme",
+            "review_requested": "İnceleme istendi",
+            "assigned": "Atandı",
+            "ci_failed": "CI başarısız oldu",
+            "ci_finished": "CI tamamlandı",
+            "ci_passed": "CI başarılı oldu",
+            "pr_conflicted": "Conflict'ler",
+            "pr_closed": "Kapatıldı",
+            "pr_ready": "İncelemeye hazır",
+            "labeled": "Etiketlendi",
+            "issue_closed": "Sorun kapatıldı",
+            "deploy_finished": "Dağıtım tamamlandı",
+            "security_alert": "Güvenlik uyarısı",
+            "workflow_finished": "Workflow çalıştırması tamamlandı"
+          },
+          "slack": {
+            "mentioned": "Bahsetme",
+            "message": "Mesaj",
+            "reaction": "Tepki"
+          },
+          "linear": {
+            "assigned": "Atandı",
+            "mentioned": "Bahsetme",
+            "issue_created": "Sorun oluşturuldu",
+            "issue_moved": "Sorun taşındı"
+          },
+          "gmail": {
+            "new_email": "Yeni e-posta"
+          },
+          "calendar": {
+            "starting_soon": "Toplantı yakında başlıyor"
+          },
+          "other": "Olay"
+        },
+        "afterThirtyDays": "30 gün sonra",
+        "cancel": "İptal",
+        "cancelled": "İptal edildi",
+        "couldNotFinish": "Tamamlanamadı",
+        "createdAutomation": "Otomasyon oluşturuldu",
+        "finished": "Tamamlandı",
+        "happened": "Gerçekleşti",
+        "noDeadline": "Son tarih yok",
+        "noReplyBy": "{{time}} zamanına kadar yanıt yok",
+        "nothingBy": "{{time}} zamanına kadar bir şey olmadı",
+        "paused": "Duraklatıldı",
+        "replied": "{{actor}} yanıtladı",
+        "rowAccessibleName": "{{label}}: {{name}}. {{details}}",
+        "thenLine": "Ardından",
+        "thenOnce": "Gerçekleştiğinde bir kez çalışır",
+        "thenOnceBy": "Bir kez çalışır; hiçbir şey gelmezse {{time}} zamanında",
+        "until": "{{time}} zamanına kadar",
+        "updatedAutomation": "Otomasyon güncellendi",
+        "waiting": "Bekliyor",
+        "waitsFor": "Şunu bekler"
+      },
+      "eventRow": {
+        "showLess": "Daha az göster",
+        "showMore": "Daha fazla göster",
+        "running": "Çalışıyor",
+        "failed": "Başarısız"
+      },
       "dock": {
         "label": "Mesaj kutusu ve istemler"
       },
       "automationSaved": {
-        "openFullPage": "Sayfayı aç"
+        "resultsInRuns": "her çalıştırmada sonuçlar",
+        "paused": "duraklatıldı",
+        "webhookHint": "Hizmetinizi bu URL'ye yönlendirin",
+        "gettingUrl": "URL alınıyor…",
+        "editDraft": "“{{name}}” otomasyonunu şu şekilde değiştir: ",
+        "resultsInEachRun": "Her çalıştırmada",
+        "resultsChat": "Sohbet",
+        "noRuns": "Henüz çalıştırma yok",
+        "recentRuns": "Son çalıştırmalar",
+        "when": "Ne zaman",
+        "results": "Sonuçlar",
+        "agent": "Ajan",
+        "runNow": "Şimdi çalıştır",
+        "loading": "Yükleniyor",
+        "deleted": "Bu otomasyon silindi",
+        "loadFailed": "Bu otomasyon okunamadı",
+        "openFullPage": "Sayfayı aç",
+        "onAgent": "{{name}} üzerinde"
       },
       "usageLimitActions": {
         "handOff": "Ajana devret"
@@ -20488,8 +20744,6 @@
           "noSizes": "Henüz hiçbir çalışma alanı boyutu ölçülmedi.",
           "noSizesDescription": "Boyutlar, disk kullanımı ölçüldükten sonra görünür.",
           "measureSizesTitle": "Çalışma alanı boyutlarını tara",
-          "sizeOnDisk": "Disk üzerindeki boyut: {{value0}}",
-          "checkingGitRow": "Git durumu kontrol ediliyor",
           "searchPlaceholder": "İsim, repo, branch, yol, ana makine ara",
           "searchLabel": "Çalışma alanlarını ara",
           "filters": "Filtreler",
@@ -20547,7 +20801,6 @@
           "noMatches": "Bu filtrelerle eşleşen çalışma alanı yok.",
           "noMatchesDescription": "Tüm çalışma alanları tek bir listede, bir filtreyi genişletin veya filtreleri temizleyin.",
           "sortBy": "Sıralama ölçütü",
-          "sortByField": "{{value0}} ile sırala",
           "sort": {
             "lastActivity": "Son etkinlik",
             "lastVisited": "Son açılma",
@@ -20603,17 +20856,11 @@
             "none": "Hiçbiri yok"
           },
           "idleSignalField": "Boşta kalma sinyali",
-          "updatedAgo": "{{value0}} güncellendi",
-          "refreshing": "Yenileniyor…",
-          "refreshingProgress": "Yenileniyor {{value0}}/{{value1}}",
-          "notMeasured": "Ölçülmedi",
           "openWorkspaceNamed": "{{value0}} aç",
           "openWorkspace": "Çalışma alanını aç",
-          "workspaceStatus": "Çalışma alanı durumu: {{value0}}",
           "measuringSizesProgress": "Taranıyor {{value0}}/{{value1}}",
           "measuringSizes": "Boyutlar taranıyor",
           "measureSizesFailed": "Çalışma alanı boyutları taranamadı",
-          "selectedCount": "{{value0}} seçildi",
           "gitStatusCheckFailed": "Git durumu kontrolü başarısız oldu",
           "gitStatusUnverified": "Git durumu doğrulanamadı",
           "deleteAnyway": "Yine de sil",
@@ -20661,15 +20908,13 @@
               "finishedAgents": "Tamamlanmış ajanlar"
             }
           },
-          "forceDeleteRisk_other": "Şu anda {{count}} çalışma alanında risk var ve bunların zorla silinmesi gerekebilir",
-          "forceDeleteRisk_one": "Şu anda {{count}} çalışma alanında risk var ve bunların zorla silinmesi gerekebilir",
           "selectionVanishedCount_other": "Seçili {{count}} çalışma alanı artık mevcut değil.",
           "selectionVanishedCount_one": "Seçili {{count}} çalışma alanı artık mevcut değil.",
           "selectionWithheldCount_other": "Seçili {{count}} çalışma alanı geçerli filtreler tarafından gizlendiği için seçimden çıkarıldı.",
           "selectionWithheldCount_one": "Seçili {{count}} çalışma alanı geçerli filtreler tarafından gizlendiği için seçimden çıkarıldı.",
-          "selectAllSafetyChecked_other": "Güvenlik kontrolünden geçen {{count}} çalışma alanının tümünü seç",
-          "selectAllSafetyChecked_one": "Güvenlik kontrolünden geçen {{count}} çalışma alanının tümünü seç",
-          "lastActive": "Son etkinlik: {{value0}}"
+          "lastActive": "Son etkinlik: {{value0}}",
+          "sortAscending": "artan",
+          "sortDescending": "azalan"
         },
         "scan": {
           "progress": "Çalışma alanları taranıyor ({{value0}}/{{value1}})",
@@ -20706,7 +20951,80 @@
             "dirty": "Değişiklik var",
             "unpushed": "Push edilmemiş",
             "unknown": "Bilinmiyor"
-          }
+          },
+          "ignoredFilesBlocker": "Yok sayılan yerel dosyalar",
+          "ignoredFilesNamed": "Yok sayılan dosyalar: {{value0}}",
+          "ignoredFilesUnchecked": "Yok sayılan dosyalar tam olarak kontrol edilmedi"
+        },
+        "confirm": {
+          "title_one": "{{count}} çalışma alanı silinsin mi?",
+          "title_other": "{{count}} çalışma alanı silinsin mi?",
+          "localFilesSection": "Yerel dosyalar kaybolacak",
+          "back": "Geri",
+          "deletePermanently": "Kalıcı olarak sil",
+          "retryDescription": "Bu işlem {{name}} çalışma alanını ve yerel dosyalarını kalıcı olarak siler.",
+          "showMore": "{{count}} tane daha göster"
+        },
+        "review": {
+          "title": "Çalışma alanlarını gözden geçir",
+          "refresh": "Yenile",
+          "checking": "Değişiklikler kontrol ediliyor",
+          "updatesAvailable": "Güncellemeler var. Yenile"
+        },
+        "row": {
+          "sizeLabel": "Boyut",
+          "reviewLabel": "İnceleme",
+          "statusLabel": "Durum",
+          "signalsLabel": "Sinyaller",
+          "projectOnHost": "{{project}} · {{host}}",
+          "notGit": "Git çalışma alanı değil. Bunun yerine projeyi Orca’dan kaldırın.",
+          "unreachable": "{{host}} ile bağlantı kurulamıyor. Silmek için yeniden bağlanın veya Orca’dan kaldırın.",
+          "mainCheckout": "Projenin ana checkout’u silinemez.",
+          "uncommittedFiles_one": "{{count}} commit edilmemiş dosya",
+          "uncommittedFiles_other": "{{count}} commit edilmemiş dosya",
+          "couldntCheck": "Değişiklikler kontrol edilemedi"
+        },
+        "group": {
+          "empty": "Burada çalışma alanı yok.",
+          "nothingLocal": "Yerel bir şey yok",
+          "localFiles": "Yerel dosyalar var",
+          "cannotDelete": "Silinemez",
+          "label": "Çalışma alanı grupları",
+          "selected": "{{count}} seçili"
+        },
+        "footer": {
+          "delete_one": "{{count}} çalışma alanını sil",
+          "delete_other": "{{count}} çalışma alanını sil",
+          "selected": "{{count}} seçili",
+          "waitForDelete": "Geçerli silme işleminin bitmesini bekleyin."
+        },
+        "selectAll": {
+          "partial": "{{total}} içinden {{selected}} seçili",
+          "all": "{{count}} öğenin tümünü seç"
+        },
+        "runCard": {
+          "title": "Çalışma alanları siliniyor",
+          "progress": "{{done}}/{{total}}",
+          "dismiss": "Kapat",
+          "show": "Göster"
+        },
+        "done": {
+          "failedLine_one": "{{count}} tanesi silinemedi.",
+          "failedLine_other": "{{count}} tanesi silinemedi.",
+          "title": "{{total}} çalışma alanından {{deleted}} tanesi silindi",
+          "singleTitle": "{{total}} çalışma alanından {{deleted}} tanesi silindi",
+          "button": "Bitti"
+        },
+        "deleting": {
+          "title_one": "{{count}} çalışma alanı siliniyor",
+          "title_other": "{{count}} çalışma alanı siliniyor",
+          "runInBackground": "Arka planda çalıştır",
+          "progress": "{{total}} içinden {{done}} silindi",
+          "statusDeleted": "Silindi",
+          "statusDeleting": "Siliniyor…",
+          "statusFailed": "Silinemedi",
+          "statusWaiting": "Bekliyor",
+          "unconfirmed": "Silindiği doğrulanamadı. Kontrol etmek için yenileyin."
         }
       },
       "creation": {
@@ -20737,6 +21055,9 @@
           "line_other": "{{count}} dosyadaki kaydedilmemiş düzenlemeler silinecek: {{files}}"
         },
         "ignoredFilesUnchecked": "Yok sayılan dosyalar tam olarak kontrol edilemedi"
+      },
+      "atRiskLocalFiles": {
+        "namesAndMore": "{{names}} ve daha fazlası"
       }
     },
     "agentSessionContinuation": {
@@ -20964,7 +21285,13 @@
           "listening": "{{model}} da dinliyor…",
           "heardLabel": "{{model}} şunu duydu",
           "heardNothing": "Hiç kelime yok. Daha yüksek sesle konuşmayı deneyin.",
-          "heardFailed": "{{model}} kaydı yazıya dökemedi."
+          "heardFailed": "{{model}} kaydı yazıya dökemedi.",
+          "cleaningUp": "Düzeltiliyor…",
+          "tryCleanup": "Düzeltmeyi dene",
+          "cleanupFailed": "Metin düzeltilemedi: {{reason}}",
+          "cleanupTimedOut": "Düzeltme çok uzun sürdü.",
+          "cleanupOff": "Yapay zekâ ile düzeltme kapalı.",
+          "afterCleanup": "Düzeltme sonrası · {{agent}}, {{model}} · {{seconds}} sn"
         },
         "silenceStop": {
           "off": "Kapalı",
@@ -20991,6 +21318,44 @@
         },
         "gpu": {
           "description": "Dikte bilgisayarınızı donduruyorsa kapatın."
+        },
+        "cleanup": {
+          "consent": {
+            "goesToKnown": "Bu bilgisayardaki {{agent}} aracılığıyla {{company}}. {{plan}} planınızın kullanımına dâhil edilir.",
+            "goesToAgent": "Bu bilgisayardaki {{agent}} ajanının istem göndermek üzere yapılandırıldığı yere.",
+            "sentLabel": "Gönderilen",
+            "sent": "Dikte edilen metin, sözlüğünüz ve talimatlarınız.",
+            "notSentLabel": "Gönderilmeyen",
+            "notSent": "Ses kaydı, dosyalar veya ekran içeriği.",
+            "goesToLabel": "Gönderildiği yer",
+            "waitLabel": "Bekleme",
+            "wait": "Metin birkaç saniye sonra eklenir.",
+            "title": "Yapay zekâ ile düzeltme açılsın mı?",
+            "description": "Her diktenin ardından Orca, metni eklemeden önce düzeltmesi için {{agent}} ajanına gönderir.",
+            "cancel": "İptal",
+            "confirm": "Aç"
+          },
+          "instructions": {
+            "label": "Talimatlar",
+            "custom": "Kendi talimatlarınız.",
+            "builtIn": "Yerleşik: noktalama işaretlerini, sayıları ve düzeltmeleri düzenle. İfadelerimi koru.",
+            "edit": "Düzenle",
+            "emptyHint": "Yerleşik talimatları kullanmak için boş bırakın.",
+            "reset": "Sıfırla",
+            "cancel": "İptal",
+            "save": "Kaydet"
+          },
+          "saveFailed": "Yapay zekâ ile düzeltme kaydedilemedi.",
+          "noAgent": "Yapay zekâ ile düzeltme yapabilecek bir ajan yok. Aşağıdan birini seçin.",
+          "title": "Düzeltme",
+          "label": "Yapay zekâ ile düzeltme",
+          "description": "Metin eklenmeden önce noktalama işaretlerini, sayıları ve sözlü düzeltmeleri düzenler. Metnin gönderildiği alıcı: {{agent}}. Ses asla gönderilmez.",
+          "anAgent": "bir yapay zekâ ajanı",
+          "agent": "Ajan ve model",
+          "agentDescription": "Bu bilgisayarda çalışır. Küçük ve hızlı bir model beklemeyi kısaltır.",
+          "correctionWord": "Düzeltme sözcüğü",
+          "correctionWordDescription": "Az önce söylediğinizi geri almak için bu sözcüğü söyleyin: “saat dörtte, {{word}}, saat beşte”.",
+          "correctionWordOff": "Yok"
         },
         "keepLoaded": {
           "label": "Modeli yüklü tut",
@@ -21062,7 +21427,7 @@
       "directSetup": {
         "run": "Run setup",
         "skip": "Skip setup",
-        "description": "Bu çalışma alanını oluşturmadan önce setup çalıştırılıp çalıştırılmayacağını seçin.",
+        "description": "Bu çalışma alanını oluşturmadan önce kurulum çalıştırılıp çalıştırılmayacağını seçin.",
         "cancel": "İptal",
         "retry": "Yeniden dene",
         "setupScript": "Kurulum betiği",
@@ -21103,12 +21468,13 @@
       "downloadSize": "{{size}} MB indirme.",
       "downloading": "{{done}} MB indiriliyor.",
       "downloadingOf": "{{total}} MB verinin {{done}} MB kadarı indiriliyor.",
-      "external": "Bu ana makinede bulunan {{agent}} kopyasını kullanır.",
-      "extracting": "{{agent}} arşivden çıkarılıyor.",
+      "external": "Kendi {{agent}} kopyanızı kullanır",
+      "externalShort": "Kendi kopyanızı kullanır",
+      "extracting": "{{agent}} arşivden çıkarılıyor…",
+      "extractingShort": "Arşivden çıkarılıyor…",
       "failed": "Kurulum başarısız oldu. Yeniden deneyin.",
       "cancelFailed": "Kurulum iptal edilemedi. Yeniden deneyin.",
       "install": "{{agent}} yükle",
-      "installManaged": "Orca'nın kopyasını yükle",
       "notInstalled": "Yüklü değil.",
       "progress": "{{agent}} indirmesi",
       "readFailed": "Bu ana makinede {{agent}} kontrol edilemedi. Yeniden deneniyor.",
@@ -21125,7 +21491,8 @@
       "thisComputer": "bu bilgisayar",
       "unavailable": "{{agent}} bu ana makinede kullanılamıyor.",
       "update": "Güncelle",
-      "verifying": "İndirilen çalışma zamanı kontrol ediliyor.",
+      "verifying": "Doğrulanıyor…",
+      "verifyingAgent": "{{agent}} doğrulanıyor…",
       "installTitle": "Sohbete başlamak için {{agent}} yükleyin",
       "continueTitle": "Devam etmek için {{agent}} yükleyin",
       "heroBody": "Bir defaya mahsus {{size}} MB indirilir. Bu sohbeti çalıştıran bilgisayardaki {{agent}} sohbetleri tarafından ortak kullanılır.",
@@ -21143,7 +21510,7 @@
       "checkingTitle": "İndirme kontrol ediliyor",
       "progressOf": "{{done}} / {{total}} MB",
       "unpackingDetail": "Çalışma zamanı arşivden çıkarılıyor",
-      "checkingDetail": "İndirilen çalışma zamanı kontrol ediliyor",
+      "checkingDetail": "{{agent}} doğrulanıyor…",
       "stepDownload": "İndir",
       "stepUnpack": "Arşivden çıkar",
       "stepCheck": "Kontrol et"
@@ -21157,12 +21524,10 @@
     },
     "orchestration": {
       "workerAutoClose": {
-        "running": "Geçici orkestrasyon çalışanı · Tamamlandıktan 2 dakika sonra kapanır",
-        "finished": "Geçici orkestrasyon çalışanı tamamlandı · {{countdown}} içinde kapanır",
         "keepOpen": "Açık tut",
         "bannerRunning": "Orkestrasyon çalışanı · Tamamlandıktan 2 dakika sonra kapanır",
         "bannerFinished": "Orkestrasyon çalışanı tamamlandı · {{countdown}} içinde kapanır",
-        "temporaryBadge": "Geçici"
+        "bannerFinishedStatus": "Orkestrasyon çalışanı tamamlandı · Yakında kapanır"
       }
     },
     "wslHostMark": {
@@ -21175,7 +21540,9 @@
     },
     "tabGroup": {
       "splitPaneLanding": {
-        "newAgent": "Yeni Ajan"
+        "newAgent": "Yeni Ajan",
+        "searchAgentsAndFiles": "Ajan ve dosya ara",
+        "searchShort": "Ara"
       }
     },
     "contextualTours": {
@@ -21187,7 +21554,16 @@
       }
     },
     "dictation": {
-      "stoppedAfterSilenceSeconds": "{{seconds}} saniyelik sessizlikten sonra durduruldu"
+      "stoppedAfterSilenceSeconds": "{{seconds}} saniyelik sessizlikten sonra durduruldu",
+      "cleanupNotice": {
+        "timedOut": "Düzeltme çok uzun sürdü. Metin duyulduğu gibi eklendi.",
+        "failed": "Metin düzeltilemedi. Duyulduğu gibi eklendi.",
+        "dismiss": "Kapat"
+      },
+      "DictationIndicator": {
+        "cleaningUp": "Düzeltiliyor…",
+        "skipCleanup": "Düzeltmeyi atla"
+      }
     },
     "crash": {
       "report": {
@@ -21713,7 +22089,10 @@
         "kimiProviderLimited": "Kimi sağlayıcı sınırına ulaştı veya sağlayıcı meşgul. Yeniden denemeden önce bekleyin veya istek sıklığını azaltın.",
         "kimiContextOverflow": "Kimi'nin bağlamı tükendi. İstemi kısaltın veya yeni bir oturum başlatın, ardından yeniden deneyin.",
         "kimiConfigInvalid": "Kimi'nin yapılandırması geçersiz. Yeniden denemeden önce çalıştırma sunucusundaki model ve sağlayıcı yapılandırmasını kontrol edin.",
-        "kimiContinueSessionConflict": "Kimi çakışan seçenekler aldı: --continue, --session. Yeniden denemeden önce metin oluşturma tarifini veya CLI argümanlarını düzeltin."
+        "kimiContinueSessionConflict": "Kimi çakışan seçenekler aldı: --continue, --session. Yeniden denemeden önce metin oluşturma tarifini veya CLI argümanlarını düzeltin.",
+        "commandTemplateEmptyDictationCleanup": "Dikte düzeltmesi için komut şablonu boş.",
+        "dictationCleanupAgentUnsupported": "Yapay zekâ ile düzeltme için Ayarlar -> Ses -> Düzeltme bölümünde desteklenen bir ajan seçin. Desteklenen ajanlar: {{agents}} veya Özel komut.",
+        "agentCannotGenerateDictationCleanup": "“{{agent}}” ajanı dikte düzeltmesini desteklemiyor. Desteklenen ajanlar: {{agents}} veya Özel komut."
       },
       "enableSourceControlAi": "Ayarlar -> Git bölümünde Kaynak Kontrolü AI özelliğini etkinleştirin.",
       "chooseBaseBranch": "Oluşturmadan önce bir temel branch seçin.",
@@ -21929,7 +22308,8 @@
         "agentNotSupported": "ajan desteklenmiyor"
       },
       "consentTranscriptIndex": "Arama, oturum ayrıntılarında ve mesaj önizlemelerinde eşleşme arar. Konuşmaların tamamında aramak için tam metin aramasını açın (yerel dökümleri sansürlemeden dizinler). Eşleştirilmiş cihazlar da bunlarda arama yapabilir.",
-      "noMatchesToShow": "Gösterilecek eşleşen oturum yok."
+      "noMatchesToShow": "Gösterilecek eşleşen oturum yok.",
+      "titleMatchesOnly": "Tam metin eşleşmesi yok. Başlığı veya ayrıntıları eşleşen oturumlar gösteriliyor."
     }
   },
   "sessionHistory": {
@@ -22089,6 +22469,11 @@
       "dontShowAgain": "Bir daha gösterme",
       "dismiss": "Kapat"
     },
+    "fileDrop": {
+      "copyUploadedPaths": "Yolları kopyala",
+      "copyUploadedPathsFailed": "Yüklenen dosyaların yolları kopyalanamadı.",
+      "uploadedWithoutPaste": "Yükleme tamamlandı, ancak yollar terminale yapıştırılamadı."
+    },
     "newerDaemonBanner": {
       "failedTitle": "Bu terminal yeniden açılamadı",
       "title": "Bu terminal Orca'nın daha yeni bir sürümünde açıldı",
@@ -22210,6 +22595,7 @@
       "changed": "agy'nin kendi hesabı değişti. agy'yi başlatmadan önce kayıtlı bir hesabı yeniden seçin.",
       "refresh": "Hesapları yenile",
       "usage": "Kullanımı yenile",
+      "usageWithReading": "Kullanımı yenile ({{reading}})",
       "usageReading": "Oturum: {{session}} · Haftalık: {{weekly}}",
       "saved": "Kaydedilmiş Google hesabı",
       "remove": "Kaldır",
@@ -22230,7 +22616,23 @@
       "lastReading": "{{reading}} · Okunma zamanı: {{time}}",
       "noReading": "Kullanım bilinmiyor: henüz okunmadı",
       "fd47b5a5dd": "Antigravity Hesapları",
-      "apiKeyGet": "API anahtarı al"
+      "personalOption": "Kişisel Google AI planınız",
+      "enterpriseOption": "Kuruluşunuzun lisansı",
+      "apiKeyGet": "API anahtarı al",
+      "location": "Konum",
+      "enterpriseFieldsShort": "Bir proje ve konum girin.",
+      "chatUseMethod": "{{method}} kullanmak için yeniden oturum açın",
+      "loadFailed": "agy hesapları yüklenemedi",
+      "loading": "Hesaplar yükleniyor…",
+      "notSignedIn": "Oturum açılmadı",
+      "runAgy": "Oturum açmak için bu sunucuda agy'yi çalıştırın",
+      "signInHelp": "Oturum açma yardımı",
+      "currentLogin": "Geçerli agy oturumu",
+      "currentNotSaved": "Geçerli agy oturumu · kaydedilmedi",
+      "noEmailNotSaved": "agy e-posta adresi bildirmedi · kaydedilmedi",
+      "saveShort": "Kaydet",
+      "readAt": "Okunma zamanı: {{time}}",
+      "active": "Etkin"
     },
     "claude": {
       "added": "Hesap eklendi. Başlatacağınız bir sonraki Claude'da kullanmak için bu hesabı seçin.",
@@ -22244,7 +22646,7 @@
       "signInRequired": "Bu hesabı kullanmak için yeniden oturum açın",
       "signInAgain": "Yeniden oturum aç",
       "usageSignInLabel": "Yeniden oturum aç",
-      "usageSignInMessage": "Seçili Claude hesabında yeniden oturum açmanız gerekiyor. Ayarlar > Yapay Zeka Sağlayıcı Hesapları bölümünü açın veya Sistem varsayılanı seçeneğini seçin.",
+      "usageSignInMessage": "Bu hesapta yeniden oturum açmanız gerekiyor.",
       "signIn": "Oturum aç",
       "moreSignInOptions": "Diğer oturum açma seçenekleri",
       "copySignInLink": "Bunun yerine oturum açma bağlantısını kopyala",
@@ -23612,7 +24014,11 @@
         "error": "Proje seçili otomasyon sunucusunda kurulamadı.",
         "unsupported": "Seçili otomasyon sunucusu bu projeyi desteklemiyor."
       },
-      "botProviderErrorNotSaved": "Botun turu başarısız oldu ancak bu çalıştırmada sağlayıcının hatası kaydedilmedi. Asıl sohbette daha fazla ayrıntı olabilir."
+      "botProviderErrorNotSaved": "Botun turu başarısız oldu ancak bu çalıştırmada sağlayıcının hatası kaydedilmedi. Asıl sohbette daha fazla ayrıntı olabilir.",
+      "botsOff": "Botlar Ayarlar’da kapalı olduğu için Orca bu çalıştırmayı atladı.",
+      "botMissing": "Bu otomasyonun adına çalıştığı bot artık yok.",
+      "botFolderMissing": "Botun klasörü artık kullanılamıyor.",
+      "botPaused": "{{bot}} duraklatıldığı için Orca bu çalıştırmayı atladı."
     },
     "extraAgentArgs": {
       "errors": {
@@ -23988,18 +24394,19 @@
       "tidyNightAfter": "Her gece {{from}} sonrasında veya bu bilgisayar uyandığında",
       "tidyWeekAfter": "Haftada bir, {{from}} sonrasında veya bu bilgisayar uyandığında",
       "dueNow": "Zamanı geldi",
-      "every2h": "2 saatte bir",
-      "every4h": "4 saatte bir",
       "lastNeededSignIn": "Son çalıştırması oturum açılması gerektiği için durdu",
       "lookAroundSettings": "Göz atma ayarları",
       "lookFirst": "İlk sohbetinizden sonra · ardından {{every}}",
-      "mornings": "her sabah",
       "needsSignIn": "Giriş gerekli",
       "runsEvery": "{{every}} çalışır",
       "stopped": "Durduruldu",
       "tidySettings": "Bellek toparlama ayarları",
       "tidyUp": "Belleği toparla",
-      "twiceDaily": "günde iki kez"
+      "every4hWindow": "{{from}} - {{to}}, 4 saatte bir",
+      "every2hWindow": "{{from}} - {{to}}, 2 saatte bir",
+      "twiceDailyAt": "günde iki kez, {{first}} ve {{second}}",
+      "morningsAt": "her sabah {{time}}",
+      "weekdays": "hafta içi, {{schedule}}"
     },
     "palette": {
       "placeholder": "Bots’ta, sohbetlerde, terminallerde, çalışma alanlarında, görevlerde, ayarlarda ve işlemlerde ara...",
@@ -24054,13 +24461,24 @@
       "noChatAgents": "Bu bilgisayarda kullanılabilir sohbet ajanı yok.",
       "pictureColor": "Arka plan rengi",
       "pictureColorCustom": "Özel renk",
-      "useChatDefaults": "Sohbet varsayılanlarını kullan"
+      "useChatDefaults": "Sohbet varsayılanlarını kullan",
+      "name": "Ad",
+      "validation": {
+        "addName": "Bir ad ekleyin",
+        "botsUnavailable": "Botlar kullanılamıyor",
+        "computerOffline": "Çevrimdışı",
+        "findingAgents": "Ajanlar aranıyor…",
+        "identityTooLong": "Çok uzun",
+        "noAgents": "Ajan yok",
+        "noAgentsAvailable": "Kullanılabilir ajan yok",
+        "pictureLoading": "Görsel yükleniyor…",
+        "updateOrca": "Orca’yı güncelleyin"
+      }
     },
     "apps": {
       "paste": {
         "remoteSignIn": "Uzaktan oturum açma"
       },
-      "allApps": "Tüm uygulamalar",
       "composio": {
         "withComposio": "Composio ile"
       },
@@ -24088,12 +24506,58 @@
           "usWest": "Batı ABD"
         }
       },
-      "onBot": "{{bot}} üzerinde"
+      "line": {
+        "vercel": "Dağıtımları kontrol edin ve günlüklerini okuyun",
+        "sentry": "Hataları ve arkalarındaki olayları inceleyin",
+        "datadog": "Günlükleri, metrikleri ve monitörleri arayın",
+        "posthog": "Ürün analizlerini ve özellik bayraklarını sorgulayın",
+        "cloudflare": "Workers, DNS ve hesabın geri kalanını yönetin",
+        "supabase": "Veritabanlarını sorgulayın ve projeleri yönetin",
+        "neon": "SQL çalıştırın ve Postgres dallarını yönetin",
+        "netlify": "Siteleri dağıtın ve derlemelerini kontrol edin",
+        "gitlab": "Sorunları ve birleştirme isteklerini okuyun ve güncelleyin",
+        "context7": "Kod kitaplıkları için güncel belgeler ve örnekler",
+        "atlassian": "Jira sorunları ve Confluence sayfaları",
+        "notion": "Sayfaları arayın, okuyun ve düzenleyin",
+        "stripe": "Ödemelere, müşterilere ve aboneliklere bakın",
+        "github": "Sorunlar ve PR’lardaki bahsetmeler ve olaylar",
+        "slack": "Mesajlar ve bahsetmeler",
+        "linear": "Atanan sorunlar ve bahsetmeler",
+        "google": "Sizin adınıza Gmail, Takvim ve Drive"
+      },
+      "composioLine": {
+        "outlook": "Posta, takvim ve kişiler",
+        "microsoft_teams": "Sohbetler, kanallar ve toplantılar",
+        "notion": "Sayfalar, veritabanları ve yorumlar",
+        "jira": "Sorunlar, projeler ve sprint’ler",
+        "hubspot": "Kişiler, şirketler, anlaşmalar ve destek talepleri",
+        "salesforce": "Hesaplar, potansiyel müşteriler ve fırsatlar",
+        "asana": "Görevler, projeler ve yorumlar",
+        "airtable": "Tabanlar, tablolar ve kayıtlar",
+        "zendesk": "Destek talepleri, kullanıcılar ve yardım merkezi makaleleri",
+        "figma": "Dosyalar, yorumlar ve bileşenler",
+        "stripe": "Ödemeler, müşteriler ve faturalar",
+        "dropbox": "Dosyalar ve klasörler",
+        "one_drive": "Dosyalar ve klasörler",
+        "confluence": "Sayfalar, alanlar ve yorumlar",
+        "clickup": "Görevler, listeler ve belgeler",
+        "monday": "Panolar, öğeler ve güncellemeler",
+        "intercom": "Konuşmalar, kişiler ve makaleler",
+        "zoom": "Toplantılar, kayıtlar ve dökümler",
+        "calendly": "Etkinlikler, davetliler ve rezervasyon bağlantıları",
+        "trello": "Panolar, listeler ve kartlar",
+        "sentry": "Sorunlar, olaylar ve sürümler",
+        "box": "Dosyalar ve klasörler",
+        "miro": "Panolar, yapışkan notlar ve çerçeveler",
+        "reddit": "Gönderiler, yorumlar ve subreddit’ler"
+      },
+      "webhooks": {
+        "line": "Herhangi bir araç veya betikten gelen olaylar"
+      }
     },
     "row": {
       "runsOn": "{{host}} üzerinde çalışıyor",
       "disconnected": "Bağlantı kesildi",
-      "hostDisconnected": "{{host}} bağlantısı kesildi",
       "idle": "Boşta",
       "paused": "Duraklatıldı",
       "reading": "Mesajınızı okuyor",
@@ -24114,7 +24578,10 @@
         "lastItem": "Son öğe",
         "previous": "Önceki öğe",
         "next": "Sonraki öğe",
-        "subWhere": "Öğe {{number}} · {{chat}}"
+        "linkCount": "{{count}} bağlantı",
+        "reply": "Yanıtla",
+        "replyAbove": "Yukarıdaki soruyu yanıtla",
+        "replyBelow": "Aşağıdaki soruyu yanıtla"
       },
       "activity": {
         "linked": "{{links}} bağlantılarını bağladı",
@@ -24122,7 +24589,9 @@
       },
       "ask": {
         "notSentYet": "henüz gönderilmedi",
-        "replaced": "Ajan yeni bir soru sordu. Okuyup yanıtlayın."
+        "replaced": "Ajan yeni bir soru sordu. Okuyup yanıtlayın.",
+        "replacedByNewer": "Daha yeni bir soruyla değiştirildi",
+        "skipped": "Atlandı"
       },
       "chat": {
         "moreItems": "+{{count}} tane daha"
@@ -24151,7 +24620,8 @@
       "stale": {
         "cancelAll": "Tümünü iptal et"
       },
-      "tab": "Ana sayfa"
+      "tab": "Ana sayfa",
+      "readMoreClosedFailed": "Daha fazla kapalı öğe okunamadı"
     },
     "hover": {
       "asksQuestion": "Yanıtınızı bekliyor",
@@ -24214,7 +24684,7 @@
       "controlOne": "{{person}}, {{name}} botunu kullanarak {{computer}} üzerinde sizin adınıza çalışabilir: komut çalıştırabilir, dosyaları açıp değiştirebilir ve bağlı hesaplarınızı kullanabilir.",
       "executionComputer": "bu ajanın çalıştığı bilgisayar",
       "here": "burada",
-      "reachSlack": "Slack'te @{{name}} olarak mesaj gönderme",
+      "reachSlack": "Slack'te {{name}} olarak mesaj gönderme",
       "reject": "Reddet",
       "there": "orada",
       "thisComputer": "bu bilgisayar",
@@ -24229,7 +24699,10 @@
       "paused": "Duraklatıldı",
       "resumeShort": "Devam ettir",
       "runNow": "Şimdi çalıştır",
-      "running": "Çalışıyor"
+      "running": "Çalışıyor",
+      "deleting": "Siliniyor…",
+      "deleteFailed": "{{name}} silinemedi",
+      "deleteDescription": "<name/> ve çalıştırma geçmişini sil."
     },
     "cloudSignIn": {
       "eventsHostChat": "{{source}} olayları için {{host}} üzerinde Orca Cloud oturumu açılması gerekiyor. Oturum açıldığında bu kuralı kaydedeceğim.",
@@ -24259,7 +24732,10 @@
       "remoteShortened": "Kısaltıldı. Yanıtın tamamı {{computer}} üzerinde.",
       "remoteStopped": "Burada durduruldu",
       "remoteUnknown": "İletim durumu bilinmiyor",
-      "thisComputer": "Bu bilgisayar"
+      "thisComputer": "Bu bilgisayar",
+      "deliveryUnconfirmed": "Teslim onaylanmadı",
+      "starting": "Başlatılıyor…",
+      "notStarted": "Başlatılmadı"
     },
     "host": {
       "botWorkspaceUnavailable": "Bu ajanın çalışma alanı şu anda burada kullanılamıyor, bu yüzden sayfa orada açılamıyor.",
@@ -24277,8 +24753,10 @@
       "nudgeOne": "{{app}} içinde bir bot bulduk."
     },
     "section": {
+      "scrollLeft": "Sola kaydır · {{amount}} gizli",
+      "scrollRight": "Sağa kaydır · {{amount}} gizli",
       "startFromScratch": "Sıfırdan başla",
-      "title": "Botlar"
+      "title": "Bots"
     },
     "settingsView": {
       "backToItems": "Ana sayfaya dön",
@@ -24330,9 +24808,163 @@
           "title": "“{{automation}}” ve webhook'u silinsin mi?"
         }
       }
+    },
+    "failures": {
+      "lookUnfinished": "Son göz atma tamamlanmadı.",
+      "lookTimedOut": "Son göz atma {{minutes}} dk sonra durduruldu.",
+      "lookInterrupted": "Son göz atma sırasında Orca durdu.",
+      "lookCouldNotStart": "Son göz atma başlatılamadı.",
+      "lookAsleep": "Bu bilgisayar uykudayken son göz atma kaçırıldı.",
+      "tidyUpUnfinished": "Son toparlama tamamlanmadı.",
+      "tidyUpTimedOut": "Son toparlama {{minutes}} dk sonra durduruldu.",
+      "tidyUpCouldNotStart": "Son toparlama başlatılamadı.",
+      "tidyUpAsleep": "Bu bilgisayar uykudayken son toparlama kaçırıldı.",
+      "tidyUpUnreadChats": "Son toparlama sohbetlerini okuyamadığı için çalışmadı.",
+      "tidyUpNoDraft": "Son toparlama yeni bir MEMORY.md ile yanıt vermedi.",
+      "tidyUpNoOps": "Son toparlamanın yanıtı, Orca'nın okuyabileceği bir değişiklik listesi değildi.",
+      "tidyUpAllSkipped": "Orca son toparlamanın istediği her değişikliği atladı, bu yüzden hiçbir şey değişmedi. ({{detail}})",
+      "tidyUpNotListLines": "Son toparlama çalışmadı: MEMORY.md'de liste satırı olmayan birkaç satırdan fazlası var ve toparlama yalnızca liste satırlarını okur.",
+      "tidyUpMovedOnly": "Son toparlama durum satırlarını memory/journal/ klasörüne taşıdı, ancak Orca yanıtın geri kalanını kullanamadı. ({{detail}})",
+      "tidyUpBadTopic": "Son toparlama, Orca'nın yazamadığı bir konu dosyası belirtti, bu yüzden hiçbir şey değişmedi.",
+      "tidyUpTooLong": "Son toparlamanın MEMORY.md dosyası {{max}} satırı aştı ve kısalmadı, bu yüzden hiçbir şey değişmedi.",
+      "tidyUpTooManyRemoved": "Son toparlama aynı anda çok fazla satır çıkardı, bu yüzden hiçbir şey değişmedi.",
+      "tidyUpTooManyAdded": "Son toparlama aynı anda çok fazla yeni satır ekledi, bu yüzden hiçbir şey değişmedi.",
+      "tidyUpNotCopied": "Son toparlama MEMORY.md'de olmayan bir satırı dosyaladı; yeni bilgiler MEMORY.md'ye girer, bu yüzden hiçbir şey değişmedi.",
+      "tidyUpTooManyFiled": "Son toparlama aynı anda {{max}} satırdan fazlasını dosyaladı, bu yüzden hiçbir şey değişmedi.",
+      "tidyUpChanged": "Son toparlama sırasında MEMORY.md değişti, bu yüzden hiçbir şey değişmedi.",
+      "tidyUpNotApplied": "Son toparlamanın değişiklikleri kaydedilemedi, bu yüzden hiçbir şey değişmedi.",
+      "toolGone": "Bu botta artık o araç yok.",
+      "toolDetailsInvalid": "Araç bilgileri geçersiz. Adı, URL'yi veya çalıştırılabilir dosyayı ve değerleri kontrol edin.",
+      "toolDestinationChanged": "Kimlik bilgilerinin hedefi değişti. Kayıtlı değerleri yeniden girin veya satırlarını kaldırın.",
+      "toolSavedValueGone": "Bu kayıtlı değer artık kullanılamıyor. Yeniden girin veya satırını kaldırın.",
+      "toolValueMissing": "Her satıra bir değer girin veya satırı kaldırın.",
+      "toolCredentialsUnreadable": "Botun kayıtlı araç kimlik bilgileri okunamıyor. Aracın değerlerini yeniden girin.",
+      "toolSignInManaged": "Bu araçta oturumu Orca açar. Bunun yerine oturumunu açın veya kapatın.",
+      "toolCredentialsRaced": "Botun araç kimlik bilgileri başka bir Orca'da değişti. Tekrar deneyin.",
+      "toolSourceManaged": "Bu aracı Orca yönetiyor. Kurduğunuz yerden değiştirin.",
+      "toolValuesUnmoved": "Bir araç hâlâ kayıtlı değerlerini tutuyor. Taşımak için botun araçlarını yeniden açın.",
+      "toolCodexCheckFailed": "Codex araçları denetleyemedi veya bağlayamadı. Kurulumunu kontrol edip tekrar deneyin.",
+      "toolCodexNoThread": "Codex araçları denetlemek için bir iş parçacığı başlatmadı.",
+      "toolSignInFolderFailed": "Oturum açma klasörü hazırlanamadı: {{detail}}",
+      "toolClaudePrepareFailed": "{{name}}, Claude Code'da hazırlanamadı. Araç yapılandırmasını kontrol edin.",
+      "toolNameTaken": "Bu botta zaten {{name}} adlı bir araç var.",
+      "toolNameTakenByAgent": "{{agent}} uygulamanızda zaten {{name}} adlı bir araç var ve bu bot da onu alıyor. --name ile başka bir ad seçin.",
+      "toolNameTakenByCodexStdio": "Codex uygulamanızda zaten {{name}} adlı yerel bir araç var, bu yüzden bu botun {{name}} aracı çalışamıyor. Bu botun aracını yeniden adlandırın.",
+      "toolNotUpdated": "Araç güncellenmedi.",
+      "toolSignInAddressIncomplete": "Oturum açma sayfasının sonlandığı adresin tamamını yapıştırın.",
+      "toolSignInAddressWrong": "Bu oturum açmanın sona erdiği adres bu değil. Bağlan ile yeniden başlatın, oturum açın ve tarayıcınızın gösterdiği adresi yapıştırın.",
+      "toolSignInEnded": "Oturum açma zaten sona ermiş veya zaman aşımına uğramıştı. Bağlan ile yeniden başlatın.",
+      "toolNotFound": "Bu botta {{name}} adlı bir araç yok.",
+      "toolNeedsNoSignIn": "{{name}} kayıtlı değerlerini kullanır ve oturum açması gerekmez.",
+      "toolSignInAgentUnsupported": "Orca, {{name}} için yalnızca Claude Code ve Codex'te oturum açar. Bunun yerine oturum açma değerleriyle ekleyin.",
+      "toolCodexNoSignInPage": "Codex, {{name}} için bir oturum açma sayfası vermedi.",
+      "toolClaudeSignInFailed": "Claude, {{name}} için oturum açmayı başlatamadı.",
+      "toolClaudeNoSignInPage": "Claude, {{name}} için bir oturum açma sayfası açmadı.",
+      "groupMessageIdReused": "Mesaj kimliği zaten kullanıldı.",
+      "groupChangedBeforeSend": "Grup değişti. Göndermeden önce mevcut üyeleri gözden geçirin.",
+      "groupEmptyBeforeSend": "Tüm botlar bu gruptan ayrıldı. Göndermeden önce bir bot ekleyin.",
+      "groupRequestUnverifiable": "Kuyruktaki asıl grup isteği doğrulanamıyor.",
+      "groupTurnInactive": "Bu grup isteği veya üye artık etkin değil.",
+      "groupBotUnavailable": "Bu bot duraklatılmış veya kullanılamıyor. Yerine başka bir bot konmadı.",
+      "groupBotTwice": "Her botu yalnızca bir kez seçin.",
+      "groupBotGone": "Seçilen bir bot artık kullanılamıyor.",
+      "groupLocalOnly": "Gruplar şu an yalnızca bu yerel ana bilgisayardaki botları destekliyor.",
+      "groupChanged": "Grup değişti. Bu iletişim kutusunu yeniden açıp tekrar deneyin.",
+      "groupReplierGone": "Oda yanıtları bölümünde mevcut bir üye seçin.",
+      "groupEmptyBeforeThread": "Tüm botlar bu gruptan ayrıldı. Bir iş parçacığı başlatmadan önce bir bot ekleyin.",
+      "groupNeedsLocalBot": "Bu grubun bu bilgisayarda en az bir bota ihtiyacı var.",
+      "groupNameTaken": "{{name}} zaten bu grupta. Bahsetmelerin karışmaması için üyelerin farklı adları olmalı.",
+      "groupPostFromHost": "Başka bilgisayarlarda botları olan bir gruba göndermek için {{host}} kullanın.",
+      "groupPeerTooOld": "Botlarını bir gruba eklemek için {{host}} üzerindeki Orca'yı güncelleyin.",
+      "attachmentUnreadable": "{{name}} okunamıyor.",
+      "attachmentTooLarge": "{{name}}, {{maxMb}} MB'tan büyük.",
+      "attachmentUploading": "{{name}} hâlâ yükleniyor.",
+      "attachmentExpired": "{{names}}: bu ekin süresi doldu. Yeniden ekleyin.",
+      "commentImagesTooMany": "Yorumlar en fazla {{max}} görsel alır.",
+      "commentImagesTooLarge": "Bu görseller toplam {{totalMb}} MB. Bir yorum en fazla {{maxMb}} MB alır.",
+      "commentImageNotStored": "Yoruma yalnızca yapıştırılan veya eklenen görseller konabilir.",
+      "commentAttachmentsUnavailable": "Bu bilgisayar şu an ek alamıyor. Biraz sonra yeniden yorum yapın.",
+      "commentFileNotAbsolute": "{{path}}: dosyayı tam yoluyla belirtin.",
+      "commentFilesTooMany": "Yorumlar görsellerin yanında en fazla {{max}} dosya alır.",
+      "commentChatDeleted": "Bu öğenin sohbeti silindi, bu yüzden buraya dosya eklenemez.",
+      "commentAttachFailed": "Dosyalar eklenemedi. Biraz sonra yeniden yorum yapın.",
+      "groupImagesTooMany": "Grup mesajları en fazla {{max}} görsel alır.",
+      "groupImagesTooLarge": "Bu görseller toplam {{totalMb}} MB. Bir grup mesajı en fazla {{maxMb}} MB alır.",
+      "groupImageNotStored": "Grup mesajına yalnızca yapıştırılan veya eklenen görseller konabilir.",
+      "groupAttachmentsUnavailable": "Bu bilgisayar şu an ek alamıyor. Biraz sonra yeniden göndermeyi deneyin.",
+      "groupAttachFailed": "Dosyalar eklenemedi. Biraz sonra yeniden göndermeyi deneyin.",
+      "groupMentionAmbiguous": "Göndermeden önce belirsiz bot bahsetmesini düzeltin.",
+      "groupMentionUnavailable": "Göndermeden önce kullanılamayan veya belirsiz bot bahsetmesini düzeltin.",
+      "groupReplierNotMember": "Oda yanıtları bölümünde mevcut bir oda üyesi seçin.",
+      "groupMailNeverStarted": "Bu posta hiçbir tur başlatmadı.",
+      "groupRemoteUnreachable": "{{host}} cihazına ulaşılamadı. {{detail}}",
+      "groupRemoteUnreachableRetry": "{{host}} cihazına ulaşılamadı. {{detail}} Yeniden denemek için tekrar gönderin."
+    },
+    "google": {
+      "signInRun": {
+        "cancelled": "Google oturum açma işlemi iptal edildi.",
+        "failed": "Google oturum açma başarısız oldu. Yeniden deneyin.",
+        "noAccount": "Google oturumu açıldı ancak ana bilgisayar hesap göndermedi.",
+        "alreadyRunning": "Bir Google oturum açma işlemi zaten sürüyor. Önce bitirin veya iptal edin.",
+        "notWaiting": "Bekleyen bir Google oturum açma işlemi yok. Yeniden başlayın."
+      }
+    },
+    "notices": {
+      "couldNotFinish": "{{bot}} işi bitiremedi",
+      "turnEnded": "\"{{automation}}\" bitmeden sona erdi.",
+      "folderMissing": "Botun klasörü bulunmadığı için \"{{automation}}\" başlatılamadı.",
+      "sessionRefused": "\"{{automation}}\" başlatılamadı.",
+      "askedYou": "{{bot}} size bir soru sordu",
+      "accessAsked": "{{person}}, {{bot}} kullanmak istedi",
+      "webhookNeedsLook": "{{bot}} webhook’unun kontrol edilmesi gerekiyor",
+      "webhookRefusals": "\"{{automation}}\" son 10 dakikada {{refused}} çağrıyı reddetti. Beklemiyorsanız duraklatın.",
+      "webhookHourlyCap": "\"{{automation}}\" saatte {{limit}} çalıştırma sınırına ulaştı; diğer çağrılar bekliyor. Durdurmak için duraklatın."
+    },
+    "tools": {
+      "pasteInvalid": "Yapıştırılan içerik geçersiz.",
+      "checkUnfinished": "Yerel denetim tamamlanmadı. Yeniden denemek için tekrar denetleyin.",
+      "signIn": {
+        "notThisSignIn": "Bu adres bu oturum açma işlemine ait değil. Yönlendirildiğiniz sayfanın adresini yapıştırın."
+      },
+      "input": {
+        "invalid": "Geçerli bir sunucu adı ve URL ya da çalıştırılabilir dosya girin.",
+        "namesRepeat": "Her başlık veya ortam değişkeni adı benzersiz olmalı.",
+        "rowInvalid": "Her satır için geçerli bir ad ve değer girin ya da satırı kaldırın."
+      },
+      "paste": {
+        "notConfig": "Bir sunucu URL’si veya başlatma komutu yapıştırın ya da yapılandırmayı Ayrıntıları düzenle bölümüne girin.",
+        "badUrl": "Gömülü kimlik bilgisi içermeyen bir HTTP veya HTTPS URL’si kullanın.",
+        "badCommand": "Tırnakları dengeli tek bir başlatma komutu kullanın ya da ayrıntıları elle girin. Kabuk ifadeleri desteklenmez."
+      },
+      "signInFailure": {
+        "unsupported": "Bu uygulama henüz desteklenmiyor.",
+        "unavailable": "Bu uygulamaya ulaşılamıyor. Adresi kontrol edip yeniden deneyin.",
+        "noTool": "Bu botta artık o araç yok.",
+        "desktopOnly": "{{host}} üzerindeki Orca’dan oturum açın.",
+        "denied": "Erişime izin verilmedi.",
+        "expired": "Oturum açmanın süresi doldu. Yeniden deneyin.",
+        "couldNotSignIn": "Oturum açılamadı. Yeniden deneyin."
+      }
+    }
+  },
+  "plugins": {
+    "actionConfirmation": {
+      "cancel": "İptal",
+      "deleteAutomation": "{{plugin}}, “{{automation}}” otomasyonunu silmek istiyor",
+      "deleteAutomationDetail": "Bu otomasyonu eklenti oluşturmadı. Zamanlanmış çalıştırmaları durur ve Otomasyonlar bölümünden kaldırılır.",
+      "delete": "Sil",
+      "changeAutomation": "{{plugin}}, “{{automation}}” otomasyonunu değiştirmek istiyor",
+      "changeAutomationDetail": "Bu otomasyonu eklenti oluşturmadı. Onaylarsanız eklenti şunları değiştirir: {{fields}}.",
+      "change": "Değiştir",
+      "changeElevatedAutomationDetail": "Bu otomasyon, ajanını seçtiğiniz ek ayarlarla (argümanlar, izin modu veya ön kontrol komutu) çalıştırır. Onaylarsanız eklenti şunları değiştirir: {{fields}}.",
+      "newPrompt": "Yeni istem: “{{prompt}}”",
+      "unknownProject": "bilinmeyen bir proje",
+      "automationNewWorkspaces": "Otomasyon {{id}}: {{schedule}} zamanlamasıyla her çalıştırmada {{project}} için yeni bir çalışma alanı.",
+      "automationInWorkspace": "Otomasyon {{id}}: {{schedule}} zamanlamasıyla {{project}} / {{workspace}} içinde."
     }
   },
   "agentPicker": {
+    "refreshModels": "Modelleri yenile",
     "catalogUnsupportedLaunch": "{{agent}} modelleri bu sunucuda kullanılamıyor. Geçerli seçimleriniz uygulanmaya devam eder.",
     "catalogEmpty": "{{agent}} için kullanılabilir model yok.",
     "setByArguments": "Argümanlarınızla ayarlandı",
@@ -24465,6 +25097,15 @@
       "deleteFailed": "{{model}} silinemedi.",
       "dismiss": "Kapat",
       "cancelDownload": "İndirmeyi iptal et"
+    }
+  },
+  "usage": {
+    "failure": {
+      "unavailable": "Kullanım bilgileri kullanılamıyor. Yeniden bağlanmak için Yenile'yi deneyin.",
+      "setting": "Takip değişikliği doğrulanamadı. Ayarı değiştirmeyi yeniden deneyin.",
+      "refresh": "Önceki yenileme tamamlanamadı. Yenile'yi yeniden deneyin.",
+      "read": "Kullanım bilgileri yüklenemedi. Yenile'yi yeniden deneyin.",
+      "retry": "Yenile"
     }
   },
   "crashReport": {

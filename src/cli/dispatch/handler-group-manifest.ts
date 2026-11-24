@@ -63,6 +63,7 @@ export const HANDLER_GROUPS: readonly HandlerGroup[] = [
       'automations list',
       'automations show',
       'automations create',
+      'automations watch-pr',
       'automations edit',
       'automations remove',
       'automations run',

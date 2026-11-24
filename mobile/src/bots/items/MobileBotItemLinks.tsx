@@ -11,6 +11,7 @@ import {
   GitPullRequest,
   GitPullRequestClosed,
   GitPullRequestDraft,
+  Hourglass,
   Link2,
   X
 } from 'lucide-react-native'
@@ -33,8 +34,8 @@ import { colors, spacing, typography } from '../../theme/mobile-theme'
 import { themedStyleSheet } from '../../theme/themed-styles'
 import { useMobileColorScheme } from '../../theme/use-mobile-color-scheme'
 import { prStateColor } from '../../worktree/row-presentation/WorktreeMetaGlyphs'
-import { MobileConnectorSourceIcon } from '../MobileConnectorSourceIcon'
-import { MobileBotWorkerRow } from '../MobileBotChatTree'
+import { MobileConnectorLogo } from '../MobileConnectorSourceIcon'
+import { MobileBotWorkerRow } from '../MobileBotWorkerRow'
 
 const ICON = 15
 
@@ -143,7 +144,7 @@ export function MobileBotItemLinks({
   const clipboard = useClipboardWriter()
   const [pressed, setPressed] = useState<LongPress | null>(null)
   const rows = botItemLinkRows(links)
-  const row = (entry: BotItemLinkRow) => {
+  const row = (entry: BotItemLinkRow): React.JSX.Element => {
     switch (entry.kind) {
       case 'worker': {
         const worker = botItemWorkerRow(entry.link)
@@ -153,7 +154,7 @@ export function MobileBotItemLinks({
             bot={bot}
             worker={worker}
             nested={false}
-            onOpen={() => onOpenWorker(worker)}
+            onOpen={worker.neverStarted ? undefined : () => onOpenWorker(worker)}
           />
         )
       }
@@ -196,7 +197,7 @@ export function MobileBotItemLinks({
             title={entry.title}
             leading={
               entry.brand ? (
-                <MobileConnectorSourceIcon source={entry.brand} />
+                <MobileConnectorLogo source={entry.brand} />
               ) : (
                 <Link2 size={ICON} color={colors.textMuted} />
               )
@@ -226,6 +227,21 @@ export function MobileBotItemLinks({
             }
           />
         )
+      case 'automation': {
+        const title = entry.name ?? t('bots.items.link.automation', 'Automation')
+        const line = entry.active
+          ? t('bots.items.link.automationOn', 'Will wake the agent for this item')
+          : t('bots.items.link.automationEnded', 'Ended')
+        return (
+          <ListRow
+            key={entry.key}
+            title={title}
+            subtitle={line}
+            leading={<Hourglass size={ICON} color={colors.textMuted} />}
+            disabled={!entry.active}
+          />
+        )
+      }
     }
   }
   const actions: ActionSheetAction[] = pressed

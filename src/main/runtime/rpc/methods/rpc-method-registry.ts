@@ -26,6 +26,7 @@ import { BROWSER_CLIENT_FILE_CHANNEL_METHODS } from './browser/browser-client-fi
 import { BROWSER_NETWORK_TUNNEL_METHODS } from './browser/browser-network-tunnel'
 import { ORCHESTRATION_METHODS } from './orchestration/orchestration'
 import { NOTIFICATION_METHODS } from './notifications/notifications'
+import { PAIRED_SERVER_ASKS_METHODS } from './paired-server-asks/paired-server-asks-methods'
 import { STATS_METHODS } from './host-management/stats'
 import { USAGE_ANALYTICS_METHODS } from './host-management/usage-analytics'
 import { DIAGNOSTICS_METHODS } from './host-management/diagnostics'
@@ -59,6 +60,7 @@ import { SPEECH_METHODS } from './speech/speech'
 import { CLIENT_UI_METHODS } from './client-state/client-ui'
 import { CLIENT_EVENT_METHODS } from './client-events/client-events'
 import { WORKSPACE_PORT_METHODS } from './workspace-ports/workspace-ports'
+import { NETWORK_PORT_FORWARD_METHODS } from './workspace-ports/network-port-forward'
 import { LINK_PREVIEW_METHODS } from './link-preview/link-preview'
 import { PLUGIN_METHODS } from './plugins/plugins'
 import { PLUGIN_VIEW_METHODS } from './plugins/plugin-view'
@@ -129,6 +131,7 @@ import { ORCA_SIDEBAR_INPUTS_IS_MAIN } from '../../../../shared/sidebar-list/fee
 // Keep registration order and the full RPC/security surface visible in one manifest.
 const CORE_RPC_METHODS = [
   ...STATUS_METHODS,
+  ...PAIRED_SERVER_ASKS_METHODS,
   ...DESKTOP_WINDOW_METHODS,
   ...ORCAD_TERMINAL_CENSUS_METHODS,
   ...ORCAD_MIGRATION_METHODS,
@@ -200,6 +203,7 @@ const SERVICE_RPC_METHODS = [
   ...DESKTOP_BROWSER_BRIDGE_RPC_METHODS,
   ...BROWSER_CLIENT_FILE_CHANNEL_METHODS,
   ...BROWSER_NETWORK_TUNNEL_METHODS,
+  ...NETWORK_PORT_FORWARD_METHODS,
   ...ORCHESTRATION_METHODS,
   ...NOTIFICATION_METHODS,
   ...STATS_METHODS,

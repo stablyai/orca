@@ -45,25 +45,6 @@ export const Scroll = ExpectUrlBrowserTarget.extend({
     .optional()
 })
 
-export const Screencast = BrowserTarget.extend({
-  format: z
-    .unknown()
-    .optional()
-    .transform((v) => (v === 'png' ? 'png' : 'jpeg'))
-    .pipe(z.enum(['png', 'jpeg'])),
-  quality: OptionalFiniteNumber,
-  maxWidth: OptionalFiniteNumber,
-  maxHeight: OptionalFiniteNumber,
-  viewportWidth: OptionalFiniteNumber,
-  viewportHeight: OptionalFiniteNumber,
-  deviceScaleFactor: OptionalFiniteNumber,
-  mobile: OptionalBoolean,
-  everyNthFrame: OptionalFiniteNumber,
-  minFrameIntervalMs: OptionalFiniteNumber,
-  // Ask for frame credit; the host echoes `frameAck: true` in `ready`. Old hosts strip it.
-  frameAck: z.literal(1).optional()
-})
-
 export const FullScreenshot = BrowserTarget.extend({
   format: z
     .unknown()
@@ -128,6 +109,8 @@ export const ProfileClearGoogleCookies = ProfileDelete.extend({
   executorRuntimeId: z.string().min(1)
 })
 
+export const ProfileClearCookies = ProfileClearGoogleCookies
+
 export const ProfileImportFromBrowser = z.object({
   profileId: requiredString('Missing required --profile'),
   browserFamily: requiredString('Missing required --browser-family'),
@@ -185,7 +168,10 @@ export const Highlight = BrowserTarget.extend({
 })
 
 export const Exec = BrowserTarget.extend({
-  command: requiredString('Missing required --command')
+  command: requiredString('Missing required --command'),
+  // A local caller's directory (and legacy WSL distro), so file operands resolve as it typed them.
+  cwd: OptionalString,
+  wslDistro: OptionalString
 })
 
 export const Get = BrowserTarget.extend({
@@ -280,8 +266,19 @@ export const MouseXY = ExpectUrlBrowserTarget.extend({
   })
 })
 
+const BROWSER_MOUSE_MODIFIERS = ['cmd', 'ctrl', 'alt', 'shift'] as const
+export type BrowserMouseModifier = (typeof BROWSER_MOUSE_MODIFIERS)[number]
+
+export const MouseModifiers = z
+  .unknown()
+  .transform((v) => (Array.isArray(v) ? v : undefined))
+  .pipe(z.union([z.array(z.enum(BROWSER_MOUSE_MODIFIERS)), z.undefined()]))
+  .optional()
+
+// Older hosts strip `modifiers` from mouseDown/mouseUp, so a modified press arrives plain.
 export const MouseButton = ExpectUrlBrowserTarget.extend({
-  button: OptionalPlainString
+  button: OptionalPlainString,
+  modifiers: MouseModifiers
 })
 
 export const MouseWheel = ExpectUrlBrowserTarget.extend({

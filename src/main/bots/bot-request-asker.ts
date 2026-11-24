@@ -109,18 +109,23 @@ type ItemReading =
   | { kind: 'request'; messageIds: string[] }
   | { kind: 'agent' }
 
+/** The bot requests a message delivered, by their mail ids; none for any other message. */
+export function botRequestIdsOf(
+  body: AgentJournalItemBody,
+  isBotRequest: (messageId: string) => boolean
+): string[] {
+  const mail = body.kind === 'message' ? body.from?.orchestration : undefined
+  return mail?.message === 'mail-notice'
+    ? mail.messages.map((message) => message.messageId).filter(isBotRequest)
+    : []
+}
+
 function readItem(body: AgentJournalItemBody, lookups: BotActingTurnLookups): ItemReading {
   if (body.kind !== 'message') {
     return { kind: 'agent' }
   }
   if (body.from) {
-    const mail = body.from.orchestration
-    const messageIds =
-      mail?.message === 'mail-notice'
-        ? mail.messages
-            .map((message) => message.messageId)
-            .filter((messageId) => lookups.isBotRequest(messageId))
-        : []
+    const messageIds = botRequestIdsOf(body, lookups.isBotRequest)
     return messageIds.length > 0 ? { kind: 'request', messageIds } : { kind: 'agent' }
   }
   if (body.asker) {
