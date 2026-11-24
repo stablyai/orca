@@ -47,3 +47,19 @@ export async function removeBotShare(
   }
   return bot
 }
+
+/** A deleted bot's teammates lose every device on it; a failure is logged, never thrown at the delete. */
+export async function revokeDeletedBotShareDevices(
+  devices: BotShareDevices | null,
+  botId: string
+): Promise<void> {
+  try {
+    if (devices && !(await devices.revokeBotShareDevices(botId))) {
+      console.warn('[bots] a deleted bot’s teammate devices are not all disconnected yet', {
+        botId
+      })
+    }
+  } catch (error) {
+    console.warn('[bots] could not disconnect a deleted bot’s teammate devices', { botId, error })
+  }
+}

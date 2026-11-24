@@ -7,7 +7,10 @@ import type { AgentStatusOrchestrationContext } from '../../shared/agent-status/
 import type { BotAccessRequestWatch } from '../bots/bot-access-request-watch'
 import type { ConnectorGitHubInstallations } from '../connector-cloud/connector-github-installations'
 import { BotChangeNotices } from '../bots/bot-change-notices'
-import type { BotShareDevices } from '../bots/team-share/bot-share-access'
+import {
+  revokeDeletedBotShareDevices,
+  type BotShareDevices
+} from '../bots/team-share/bot-share-access'
 import { deleteAutomationsOfBot } from '../bots/bot-automations-removal'
 import { syncBotAutomationAgents } from '../bots/bot-automation-agent-sync'
 import { BotController } from '../bots/bot-controller'
@@ -110,11 +113,7 @@ export abstract class OrcaRuntimeWithBots extends OrcaRuntimeWithLinearCommands 
       this.lookAround.forget(botId)
       void this.botWork.forgetBot(botId)
       this.bots.memory.removed(botId)
-      void this.botShareDevices?.revokeBotShareDevices(botId).then((ended) => {
-        if (!ended) {
-          console.warn('[bots] a deleted bot’s teammate devices are not all disconnected yet')
-        }
-      })
+      void revokeDeletedBotShareDevices(this.botShareDevices, botId)
     }
   })
 
