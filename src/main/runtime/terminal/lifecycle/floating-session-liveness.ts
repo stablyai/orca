@@ -9,6 +9,7 @@ import type {
 
 import { botGroupOfRoomMailAddress } from '../../../../shared/bots/bot-group-room-mail'
 import { questionAnswerWaitPrefix } from '../../orchestration/mailbox/questions/question-answer-delivery'
+import { parsePaneKey } from '../../../../shared/workspace-layout/stable-pane-id'
 const DISCONNECTED_PTY_RECORD_MAX = 128
 
 export abstract class OrcaRuntimeWithRefreshFloatingWorkspacePtyLiveness extends OrcaRuntimeWithRefreshPtyWorktreeRecordsWithControllerInventory {
@@ -100,7 +101,7 @@ export abstract class OrcaRuntimeWithRefreshFloatingWorkspacePtyLiveness extends
     )
     if (retained.length > DISCONNECTED_PTY_RECORD_MAX) {
       // An open slept pane's handle still names its stopped process; that archive goes with the pane.
-      retained = retained.filter((pty) => !this.isSleptPanePty(pty.ptyId))
+      retained = retained.filter((pty) => !this.isSleptPanePty(pty))
     }
     retained.sort((a, b) => (a.disconnectedAt ?? 0) - (b.disconnectedAt ?? 0))
     const staleCount = Math.max(0, retained.length - DISCONNECTED_PTY_RECORD_MAX)
@@ -110,15 +111,34 @@ export abstract class OrcaRuntimeWithRefreshFloatingWorkspacePtyLiveness extends
     }
   }
 
-  /** A stopped process whose handle a processless pane still holds: only a sleep keeps it so. */
-  private isSleptPanePty(ptyId: string): boolean {
-    const handle = this.handleByPtyId.get(ptyId)
-    const record = handle ? this.handles.get(handle) : undefined
-    if (!handle || record?.ptyId !== ptyId) {
-      return false
+  /** A stopped process whose handle a processless pane still holds: only a sleep keeps it so. The
+   *  panes it can name (its own pane by leaf id, its handle's, its incarnation's) are checked by
+   *  key; a pane counts when it shows no process and its bound handle still names this one. */
+  private isSleptPanePty(pty: RuntimePtyWorktreeRecord): boolean {
+    const keys = new Set<string>()
+    const pane = pty.paneKey ? parsePaneKey(pty.paneKey) : null
+    if (pane) {
+      keys.add(this.getLeafKey(pane.tabId, pane.leafId))
+      for (const key of this.terminalIdentity.paneCandidates.leavesForId(pane.leafId)) {
+        keys.add(key)
+      }
     }
-    const leafKey = this.getLeafKey(record.tabId, record.leafId)
-    return this.leaves.get(leafKey)?.ptyId === null && this.handleByLeafKey.get(leafKey) === handle
+    const handle = this.handleByPtyId.get(pty.ptyId)
+    const record = handle ? this.handles.get(handle) : undefined
+    if (record) {
+      keys.add(this.getLeafKey(record.tabId, record.leafId))
+    }
+    const incarnation = this.handleByPtyIncarnation.get(pty.ptyId)
+    if (incarnation?.leafKey) {
+      keys.add(incarnation.leafKey)
+    }
+    for (const key of keys) {
+      const bound = this.leaves.get(key)?.ptyId === null ? this.handleByLeafKey.get(key) : undefined
+      if (bound && this.handles.get(bound)?.ptyId === pty.ptyId) {
+        return true
+      }
+    }
+    return false
   }
 
   protected dropDisconnectedPtyRecord(ptyId: string): void {

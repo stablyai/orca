@@ -18,7 +18,8 @@ it.each([100, 1_000])('retains no input of %i hosts added then removed', (count)
   }
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the per-host input cache is the retention under test.
   const cached = (index as unknown as { inputs: ReadonlyMap<string, unknown> }).inputs
-  expect([...cached.keys()]).toEqual(['local'])
+  // Hosts with no sleep records keep no cached input at all.
+  expect([...cached.keys()]).toEqual([])
 })
 
 it.each([100, 1_000])(
@@ -76,5 +77,39 @@ it.each([100, 1_000])(
       )
     }
     expect(listed).toBe(0)
+  }
+)
+
+it.each([100, 1_000])(
+  'session writes for %i hosts added then removed with no sleepers retain no input',
+  (count) => {
+    const index = new SleepingMailRecordIndex()
+    const live = ['local']
+    index.sessionWritten(
+      'local',
+      () => live,
+      () => NONE,
+      () => {}
+    )
+    for (let host = 0; host < count; host++) {
+      const id = `ssh:target-${host}`
+      // The host's partition is published empty, then removed: both read as no records.
+      const empty: Readonly<Record<string, SleepingAgentSessionRecord>> = {}
+      index.sessionWritten(
+        id,
+        () => [...live, id],
+        () => empty,
+        () => {}
+      )
+      index.sessionWritten(
+        id,
+        () => live,
+        () => NONE,
+        () => {}
+      )
+    }
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the per-host input cache is the retention under test.
+    const cached = (index as unknown as { inputs: ReadonlyMap<string, unknown> }).inputs
+    expect(cached.size).toBe(0)
   }
 )

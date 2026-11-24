@@ -150,7 +150,13 @@ export class SleepingMailRecordIndex {
     changed: (pane: string) => void
   ): Set<string>[] {
     const written: Set<string>[] = []
-    if (hostId !== null && this.inputs.get(hostId) === recordsOf(hostId)) {
+    const named = hostId === null ? null : recordsOf(hostId)
+    // Unchanged records, or a host with none and nothing indexed (one with no sleepers, or removed).
+    if (
+      hostId !== null &&
+      (this.inputs.get(hostId) === named ||
+        (isEmptyRecords(named) && !this.inputs.has(hostId) && !this.hosts.has(hostId)))
+    ) {
       return written
     }
     const current = live()
@@ -173,7 +179,12 @@ export class SleepingMailRecordIndex {
       return new Set()
     }
     const seenHost = this.initialReadDone || this.inputs.has(host)
-    this.inputs.set(host, records)
+    // A host with no records keeps no cached input, so removing it leaves nothing behind.
+    if (isEmptyRecords(records)) {
+      this.inputs.delete(host)
+    } else {
+      this.inputs.set(host, records)
+    }
     const previous = this.hosts.get(host) ?? new Map<string, SleepingAgentSessionRecord>()
     const next = new Map<string, SleepingAgentSessionRecord>()
     const maintained = new Set<string>()
@@ -224,4 +235,13 @@ export class SleepingMailRecordIndex {
     }
     return maintained
   }
+}
+
+function isEmptyRecords(
+  records: Readonly<Record<string, SleepingAgentSessionRecord>> | null
+): boolean {
+  for (const _key in records) {
+    return false
+  }
+  return true
 }
