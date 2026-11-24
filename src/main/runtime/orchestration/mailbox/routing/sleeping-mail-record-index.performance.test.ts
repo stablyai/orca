@@ -54,7 +54,7 @@ it.each([100, 1_000])(
   'session writes that leave a host’s sleep records unchanged list none of %i saved hosts',
   (hosts) => {
     const index = new SleepingMailRecordIndex()
-    const saved = Array.from({ length: hosts }, (_, host) => `ssh:target-${host}`)
+    const saved = ['local', ...Array.from({ length: hosts }, (_, host) => `ssh:target-${host}`)]
     let listed = 0
     const live = () => {
       listed += saved.length
