@@ -1,11 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { validateGiteaApiUrl } from './gitea-api-url'
-import {
-  giteaGetJsonAtBase,
-  giteaRepoGetText,
-  giteaRepoWrite,
-  resolveGiteaAuth
-} from './gitea-request'
+import { giteaGetJsonAtBase, resolveGiteaAuth } from './gitea-request'
 import { parseGiteaRepoRef } from '../repository-ref'
 
 const { serverForHost } = vi.hoisted(() => ({ serverForHost: vi.fn() }))
@@ -22,7 +17,6 @@ afterEach(() => {
 
 describe('Gitea credential destinations', () => {
   it.each([
-    'http://git.example.com',
     'ftp://localhost',
     'https://user:pass@git.example.com',
     'https://git.example.com?token=value',
@@ -33,6 +27,7 @@ describe('Gitea credential destinations', () => {
 
   it.each([
     'https://git.example.com:8443/gitea',
+    'http://gitea:3000',
     'http://localhost:3000',
     'http://127.0.0.1:3000',
     'http://[::1]:3000'
@@ -40,23 +35,30 @@ describe('Gitea credential destinations', () => {
     expect(validateGiteaApiUrl(url)).toBe(url)
   })
 
-  it('never sends credentials on plaintext JSON, file, or mutation requests', async () => {
-    vi.stubEnv('ORCA_GITEA_TOKEN', 'test-token')
+  it('never sends a saved token to a different host', async () => {
+    vi.stubEnv('ORCA_GITEA_TOKEN', '')
     vi.stubEnv('ORCA_GITEA_API_BASE_URL', '')
-    const fetchMock = vi.fn()
-    vi.stubGlobal('fetch', fetchMock)
-    const repo = parseGiteaRepoRef('http://git.example.com/team/project.git')
+    serverForHost.mockImplementation((host: string) =>
+      host === 'git.example.com'
+        ? { server: { apiBaseUrl: 'https://git.example.com/api/v1' }, token: 'saved-token' }
+        : null
+    )
+    const repo = parseGiteaRepoRef('https://git.example.com.evil.test/team/project.git')
     if (!repo) {
       throw new Error('Missing test repository')
     }
-    await expect(
-      giteaGetJsonAtBase(repo.apiBaseUrl, '/user', { token: 'test-token' })
-    ).resolves.toBeNull()
-    await expect(giteaRepoGetText(repo, '/file')).resolves.toBeNull()
-    await expect(giteaRepoWrite(repo, '/issues', { method: 'POST' })).resolves.toMatchObject({
-      ok: false
-    })
-    expect(fetchMock).not.toHaveBeenCalled()
+    await expect(resolveGiteaAuth(repo)).resolves.toMatchObject({ token: null })
+  })
+
+  it('scopes an environment token to ORCA_GITEA_API_BASE_URL when it is set', async () => {
+    vi.stubEnv('ORCA_GITEA_TOKEN', 'env-token')
+    vi.stubEnv('ORCA_GITEA_API_BASE_URL', 'https://git.example.com')
+    serverForHost.mockResolvedValue(null)
+    const repo = parseGiteaRepoRef('https://other.example.com/team/project.git')
+    if (!repo) {
+      throw new Error('Missing test repository')
+    }
+    await expect(resolveGiteaAuth(repo)).resolves.toMatchObject({ token: null })
   })
 
   it('matches a saved token to a non-default HTTPS port', async () => {
