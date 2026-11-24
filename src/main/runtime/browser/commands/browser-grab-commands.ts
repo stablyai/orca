@@ -21,7 +21,8 @@ import type { RuntimeBrowserCommandTargets } from './browser-command-targets'
 import type { RuntimeBrowserTabCatalog } from '../tabs/browser-tab-catalog'
 
 type ResolvedGrabGuest = { browserPageId: string; resolveGuest: () => Electron.WebContents | null }
-type PendingGrabEnable = { cancelled: boolean }
+/** The page an enable addressed: a cancel for the same request ID on another page is not its cancel. */
+type PendingGrabEnable = { cancelled: boolean; page?: string; worktree?: string }
 // Viewers hold at most a few enables each; the cap only bounds a misbehaving client.
 const MAX_PENDING_GRAB_ENABLES = 64
 
@@ -89,7 +90,11 @@ export class RuntimeBrowserGrab {
     if (this.pendingEnables.size >= MAX_PENDING_GRAB_ENABLES) {
       return supersededGrabMode()
     }
-    const pending: PendingGrabEnable = { cancelled: false }
+    const pending: PendingGrabEnable = {
+      cancelled: false,
+      page: params.page,
+      worktree: params.worktree
+    }
     this.pendingEnables.set(requestId, pending)
     try {
       return await run()
@@ -151,7 +156,7 @@ export class RuntimeBrowserGrab {
     // An enable still waiting for its page has no sequencer owner yet; it must not arm after this.
     const pending =
       params.requestId === undefined ? undefined : this.pendingEnables.get(params.requestId)
-    if (pending) {
+    if (pending && pending.page === params.page && pending.worktree === params.worktree) {
       pending.cancelled = true
       return { cancelled: true }
     }
@@ -182,7 +187,7 @@ export class RuntimeBrowserGrab {
   }
 
   async browserGrabCaptureSelection(
-    params: BrowserCommandTargetParams & { rect: BrowserGrabRect; selectionId?: string }
+    params: BrowserCommandTargetParams & { rect: BrowserGrabRect; selectionId: string }
   ): Promise<BrowserCaptureSelectionScreenshotResult> {
     const { browserPageId, resolveGuest } = await this.resolveGrabGuest(params)
     const guest = resolveGuest()

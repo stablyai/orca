@@ -93,3 +93,15 @@ it('a cancel for another request leaves the waiting enable to arm', async () => 
   page.admit()
   await expect(enable).resolves.toEqual({ ok: true, clean: false })
 })
+
+it('a cancel for the same request ID on another page leaves the waiting enable to arm', async () => {
+  const page = holdPageAdmission()
+  const commands = new RuntimeBrowserCommands(host)
+  const enable = commands.browserGrabSetMode({ page: 'page', enabled: true, requestId: 'request' })
+  await expect(
+    commands.browserGrabCancel({ page: 'other-page', requestId: 'request' })
+  ).resolves.toEqual({ cancelled: false })
+  page.admit()
+  await expect(enable).resolves.toEqual({ ok: true, clean: false })
+  expect(sequencer.setBrowserGrabMode).toHaveBeenCalledTimes(1)
+})
