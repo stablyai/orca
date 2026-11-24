@@ -103,9 +103,10 @@ describe.skipIf(process.platform !== 'darwin' && process.platform !== 'linux')(
       owner.write('term\n')
       expect(await completion).toBe('group-absent')
       // A killed orphan stays a zombie until init reaps it.
-      await expect.poll(() => alive(tools[0]), { timeout: 2000 }).toBe(false)
       // Linux's subreaper proves the untagged orphan is the chat's. On macOS only the tag would,
       // and a tag never vouches for the rest of its session.
+      const stopped = process.platform === 'darwin' ? [tools[0]] : tools
+      await expect.poll(() => stopped.some(alive), { timeout: 2000 }).toBe(false)
       expect(alive(tools[1])).toBe(process.platform === 'darwin')
       expect(outsider.exitCode).toBeNull()
       expect(alive(outsider.pid!)).toBe(true)

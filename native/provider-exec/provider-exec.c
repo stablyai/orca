@@ -678,7 +678,8 @@ static int drop_stale_members(struct tree_scan *scan, const struct proc_row *lea
 // check, so the signal reaches that process or none: a pidfd on Linux, an audit token (which
 // carries the PID version) on macOS. A member whose handle is refused is never signalled, and
 // counts as alive unless it is gone.
-static int signal_member(struct proc_row *row, int signal_number) {
+static int signal_member(struct proc_row *row, int signal_number, int *sent) {
+    *sent = 0;
 #if defined(__linux__)
     int fd = (int)syscall(SYS_pidfd_open, row->pid, 0);
     if (fd < 0) {
@@ -686,7 +687,7 @@ static int signal_member(struct proc_row *row, int signal_number) {
     }
     int alive = same_identity(row);
     if (alive && signal_number != 0) {
-        syscall(SYS_pidfd_send_signal, fd, signal_number, NULL, 0);
+        *sent = syscall(SYS_pidfd_send_signal, fd, signal_number, NULL, 0) == 0;
     }
     close(fd);
     return alive;
@@ -703,7 +704,7 @@ static int signal_member(struct proc_row *row, int signal_number) {
     }
     int alive = same_identity(row);
     if (alive && held && signal_number != 0 && proc_signal_with_audittoken != NULL) {
-        proc_signal_with_audittoken(&token, signal_number);
+        *sent = proc_signal_with_audittoken(&token, signal_number) == 0;
     }
     return alive;
 #endif
@@ -718,7 +719,8 @@ static int already_termed(const struct watcher *w, const struct proc_row *row) {
     return 0;
 }
 
-static int record_termed(struct watcher *w, const struct proc_row *row) {
+// Room is reserved before a TERM is sent, so a delivered TERM is always recorded.
+static int reserve_termed(struct watcher *w) {
     if (w->termed_count == w->termed_capacity) {
         size_t capacity = w->termed_capacity > 0 ? w->termed_capacity * 2 : 16;
         void *grown = realloc(w->termed, capacity * sizeof *w->termed);
@@ -728,10 +730,15 @@ static int record_termed(struct watcher *w, const struct proc_row *row) {
         w->termed = grown;
         w->termed_capacity = capacity;
     }
-    w->termed[w->termed_count].pid = row->pid;
-    w->termed[w->termed_count].start = row->start;
-    w->termed_count++;
     return 1;
+}
+
+static void record_termed(struct watcher *w, const struct proc_row *row) {
+    if (!already_termed(w, row) && reserve_termed(w)) {
+        w->termed[w->termed_count].pid = row->pid;
+        w->termed[w->termed_count].start = row->start;
+        w->termed_count++;
+    }
 }
 
 // Signals each live descendant once through its kernel handle. Returns how many were alive, or -1
@@ -791,8 +798,14 @@ static int sweep_once(struct watcher *w, int signal_number) {
     live = 0;
     for (size_t i = 0; i < scan.n; i++) {
         struct proc_row *row = &scan.rows[i];
-        // The CLI group gets its own signal, so its members are never signalled twice.
-        if (!tree_member(scan.state[i]) || row->zombie || row->pgid == w->group) {
+        if (!tree_member(scan.state[i]) || row->zombie) {
+            continue;
+        }
+        // The CLI group gets its own signal; its TERM counts if a member later leaves the group.
+        if (row->pgid == w->group) {
+            if (signal_number == SIGTERM) {
+                record_termed(w, row);
+            }
             continue;
         }
 #if defined(__linux__)
@@ -801,12 +814,17 @@ static int sweep_once(struct watcher *w, int signal_number) {
             continue;
         }
 #endif
-        // A member already sent TERM is only probed; one that can't be recorded is not sent it.
+        // A member already sent TERM is only probed; one with no room to record it is not sent it,
+        // and a TERM that wasn't delivered stays due for the next sweep.
         int send = signal_number;
-        if (signal_number == SIGTERM && (already_termed(w, row) || !record_termed(w, row))) {
+        if (signal_number == SIGTERM && (already_termed(w, row) || !reserve_termed(w))) {
             send = 0;
         }
-        if (signal_member(row, send)) {
+        int sent;
+        if (signal_member(row, send, &sent)) {
+            if (sent && send == SIGTERM) {
+                record_termed(w, row);
+            }
             live++;
         } else {
             // It may have forked after the table was read and exited since.
