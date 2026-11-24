@@ -1,13 +1,11 @@
 import type { ProviderRelayRecord } from '../protocol/daemon-provider-relay-protocol'
 import { SpoolFile } from './provider-relay-spool-file'
-import { SpoolMemory, type HeldRecord } from './provider-relay-spool-memory'
+import { RECORD_OVERHEAD_BYTES, SpoolMemory, type HeldRecord } from './provider-relay-spool-memory'
 import { SpoolReaderSlot } from './provider-relay-spool-reader-slot'
 import { replayMemoryTail, replaySpoolFileRecords } from './provider-relay-spool-replay'
 
 export const RELAY_SPOOL_MEMORY_CAP_BYTES = 1024 * 1024
 export const RELAY_SPOOL_FILE_CAP_BYTES = 16 * 1024 * 1024
-/** Each record costs at least this much, so a flood of blank lines still reaches the cap. */
-const RECORD_OVERHEAD_BYTES = 64
 
 type SpoolOptions = {
   path: string

@@ -1,6 +1,6 @@
 import { open, unlink, type FileHandle } from 'node:fs/promises'
 import { SpoolFileIndex } from './provider-relay-spool-file-index'
-import type { HeldRecord } from './provider-relay-spool-memory'
+import { RECORD_OVERHEAD_BYTES, type HeldRecord } from './provider-relay-spool-memory'
 import { compactSpoolFile } from './provider-relay-spool-compaction'
 import { encodeSpoolRow } from './provider-relay-spool-row'
 
@@ -35,7 +35,7 @@ export class SpoolFile {
   private readonly waiting = new Set<SpoolWrite>()
   /** Bumped when the file is removed, so batches queued before that never write into a new one. */
   private epoch = 0
-  /** Bytes written to this file, acked rows included, so a file kept across acks can be compacted. */
+  /** What rows written to this file are charged, acked ones included, so a kept file can be compacted. */
   private writtenBytes = 0
   private compacting = false
   /** A removal not yet run; later ones join it, since every write between them checks the epoch. */
@@ -66,8 +66,9 @@ export class SpoolFile {
       this.failed = true
       return false
     }
-    // Measured as written: a line decoded from invalid UTF-8 is larger than the bytes it was read as.
-    const bytes = Buffer.byteLength(encoded)
+    // Measured as written (a line decoded from invalid UTF-8 grows), plus what the record costs in
+    // the queue and the index, so short rows can't pile up under the cap.
+    const bytes = Buffer.byteLength(encoded) + RECORD_OVERHEAD_BYTES
     this.index.add(record.seq, bytes)
     this.pendingBytes += bytes
     this.writtenBytes += bytes
@@ -148,10 +149,10 @@ export class SpoolFile {
         }
         await this.closeOpenHandle()
         try {
-          const { before, after } = await compactSpoolFile(this.path, this.hooks.acked())
+          const { before, after, dropped } = await compactSpoolFile(this.path, this.hooks.acked())
           // A removal while this ran started a new file; the savings were in the old one.
           if (epoch === this.epoch) {
-            this.writtenBytes -= before - after
+            this.writtenBytes -= before - after + dropped * RECORD_OVERHEAD_BYTES
           }
         } catch {
           // The file is still whole, only larger; later lines stay in memory so it stops growing. A
