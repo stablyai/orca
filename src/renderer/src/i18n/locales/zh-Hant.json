@@ -1098,7 +1098,8 @@
         "ownShort": "自有技能",
         "showMore": "顯示另外 {{count}} 個",
         "notLoaded": "沒有代理程式載入此技能"
-      }
+      },
+      "whoCanAsk": "誰可以向 {{bot}} 提問"
     },
     "sharedLinks": {
       "keywordBots": "機器人"
@@ -19733,7 +19734,9 @@
         "paused": "目標已暫停",
         "blocked": "目標受阻",
         "limited": "目標受限",
-        "attachmentsUnsupported": "在設定目標之前刪除附件。"
+        "attachmentsUnsupported": "在設定目標之前刪除附件。",
+        "checks_other": "{{count}} 次檢查",
+        "last-check": "最近一次目標檢查"
       },
       "fileLinks": {
         "notFound": "未找到檔案：{{value0}}",
@@ -19854,7 +19857,16 @@
         "settingsRejected": "Codex 無法套用所選的模型與推理強度。此次目標變更未送出。請檢查選項後再試一次。",
         "settingsUnconfirmed": "Codex 未確認所選的模型與推理強度。此次目標變更未送出。請查看聊天後再試一次。",
         "pauseUnconfirmed": "Codex 已停止執行，但尚未確認目標已暫停。請先確認目標狀態再繼續。",
-        "stopUnconfirmed": "Codex 無法確認「停止」操作。請先查看聊天再繼續。"
+        "stopUnconfirmed": "Codex 無法確認「停止」操作。請先查看聊天再繼續。",
+        "noGoal": "此聊天中 Codex 沒有可變更的目標。請輸入 /goal 並接上目標內容來設定。"
+      },
+      "automationResult": {
+        "openRun": "開啟執行紀錄",
+        "notRead": "{{name}} 尚未讀取此內容，將隨你的下一則訊息一併送出。",
+        "read": "{{name}} 已隨你的下一則訊息讀取此內容。",
+        "sentWithOne": "已隨附 1 個自動化結果傳送",
+        "sentWithMany": "已隨附 {{count}} 個自動化結果傳送",
+        "cleared": "在聊天清除前已送達，不會傳給 {{name}}。"
       },
       "slashCommandDescriptions": {
         "clearConversation": "清除對話",
@@ -20022,6 +20034,27 @@
         "sourceTooltip": "{{name}} 的分支",
         "unknownSourceTooltip": "另一個聊天的分支"
       },
+      "importPlan": {
+        "comes": "將匯入",
+        "changed": "將匯入並調整",
+        "already": "已存在",
+        "stays": "保留在 {{app}}",
+        "fromAgain": "來自 {{app}}（再次匯入）",
+        "from": "來自 {{app}}",
+        "selected": "已選取 {{chosen}} / {{total}} 項 · 金鑰與登入資訊絕不會被複製",
+        "importOne": "匯入 1 個項目",
+        "importMany": "匯入 {{count}} 個項目",
+        "askedOne": "已要求匯入 1 個項目",
+        "askedMany": "已要求匯入 {{count}} 個項目"
+      },
+      "importDone": {
+        "heading": "匯入完成",
+        "title": "已從 {{app}} 匯入 {{name}}",
+        "open": "開啟",
+        "stayed": "保留在 {{app}}：{{things}}。{{app}} 中的內容皆未變更。",
+        "unchanged": "{{app}} 中的內容皆未變更。",
+        "paused": "自動化已暫停，以免重複執行。請先在 {{app}} 關閉舊 bot，再開啟這些自動化。"
+      },
       "cardKindHidden": {
         "description": "你可以隨時在此處變更",
         "settingsLink": "設定 > 聊天介面 > 回合活動",
@@ -20036,11 +20069,149 @@
       },
       "splitRight": "向右分割",
       "splitDown": "向下分割",
+      "automationRun": {
+        "waitOver": "等待結束",
+        "scheduled": "已排程",
+        "runNow": "立即執行",
+        "github": "GitHub",
+        "slack": "Slack",
+        "linear": "Linear",
+        "webhook": "Webhook",
+        "gmail": "Gmail",
+        "calendar": "日曆",
+        "instructions": "指示",
+        "event": "事件",
+        "startError": "錯誤",
+        "couldNotStart": "無法啟動",
+        "queued": "已排隊",
+        "deadlineReached": "已到期限",
+        "due": "預定 {{time}}",
+        "dueRan": "預定 {{due}}，執行於 {{ran}}",
+        "reused": "重複使用：{{what}}",
+        "reusedFrom": "重複使用的事件：{{what}} · 發生於 {{time}}",
+        "whatOn": "{{what}}（{{where}}）",
+        "whatIn": "{{what}}（{{where}}）",
+        "whatAt": "{{what}} · {{where}}",
+        "factsAt": "{{facts}} · {{time}}",
+        "someoneWrote": "有人寫道",
+        "personWrote": "{{name}} 寫道",
+        "callerSent": "呼叫端傳送的內容",
+        "external": "外部內容 · 作為資訊而非指示傳送給 bot",
+        "shortened": "已縮短為 4,096 個字元，與傳送給 bot 的內容相同。",
+        "memberAccess": "執行時，{{name}} 在「誰可以提問」名單中。",
+        "someMemberAccess": "執行時，此內容由「誰可以提問」名單中的人傳送。",
+        "otherAccess": "不在「誰可以提問」名單中，或存取權未知。",
+        "ownerAccess": "來自 bot 的擁有者。",
+        "sampleCall": "範例呼叫",
+        "firstCall": "首次呼叫",
+        "webhookCall": "Webhook 呼叫",
+        "openOnGitHub": "在 GitHub 開啟",
+        "openInSlack": "在 Slack 開啟",
+        "openInLinear": "在 Linear 開啟",
+        "openLink": "開啟連結",
+        "accessibleName": "自動化執行。{{label}}：{{name}}。{{reason}}。",
+        "accessibleNameAt": "自動化執行。{{label}}：{{name}}。{{reason}}。{{time}}。",
+        "accessibleNameNoReason": "自動化執行。{{label}}：{{name}}。",
+        "accessibleNameNoReasonAt": "自動化執行。{{label}}：{{name}}。{{time}}。",
+        "copyInstructions": "複製指示",
+        "copyEvent": "複製事件",
+        "openAutomation": "開啟自動化",
+        "sendAgain": "再次傳送",
+        "sentAgain": "已再次傳送",
+        "showAll": "顯示全部",
+        "showLess": "收合",
+        "what": {
+          "github": {
+            "issue_opened": "議題已建立",
+            "pr_opened": "PR 已建立",
+            "pr_pushed": "推送",
+            "pr_merged": "已合併",
+            "comment": "留言",
+            "review_comment": "審查留言",
+            "review": "審查",
+            "mentioned": "提及",
+            "review_requested": "已請求審查",
+            "assigned": "已指派",
+            "ci_failed": "CI 失敗",
+            "ci_finished": "CI 完成",
+            "ci_passed": "CI 通過",
+            "pr_conflicted": "衝突",
+            "pr_closed": "已關閉",
+            "pr_ready": "可供審查",
+            "labeled": "已加標籤",
+            "issue_closed": "議題已關閉",
+            "deploy_finished": "部署完成",
+            "security_alert": "安全性警示",
+            "workflow_finished": "工作流程執行完成"
+          },
+          "slack": {
+            "mentioned": "提及",
+            "message": "訊息",
+            "reaction": "表情回應"
+          },
+          "linear": {
+            "assigned": "已指派",
+            "mentioned": "提及",
+            "issue_created": "議題已建立",
+            "issue_moved": "議題已移動"
+          },
+          "gmail": {
+            "new_email": "新電子郵件"
+          },
+          "calendar": {
+            "starting_soon": "會議即將開始"
+          },
+          "other": "事件"
+        },
+        "afterThirtyDays": "30 天後",
+        "cancel": "取消",
+        "cancelled": "已取消",
+        "couldNotFinish": "無法完成",
+        "createdAutomation": "已建立自動化",
+        "finished": "已完成",
+        "happened": "已發生",
+        "noDeadline": "無期限",
+        "noReplyBy": "{{time}} 前無回覆",
+        "nothingBy": "{{time}} 前無任何事件",
+        "paused": "已暫停",
+        "replied": "{{actor}} 已回覆",
+        "rowAccessibleName": "{{label}}：{{name}}。{{details}}",
+        "thenLine": "接著",
+        "thenOnce": "事件發生時執行一次",
+        "thenOnceBy": "執行一次；若無事件，則於 {{time}} 執行",
+        "until": "至 {{time}}",
+        "updatedAutomation": "已更新自動化",
+        "waiting": "等待中",
+        "waitsFor": "等待"
+      },
+      "eventRow": {
+        "showLess": "收合",
+        "showMore": "展開",
+        "running": "正在執行",
+        "failed": "失敗"
+      },
       "dock": {
         "label": "訊息框和提示"
       },
       "automationSaved": {
-        "openFullPage": "開啟頁面"
+        "resultsInRuns": "結果顯示於每次執行中",
+        "paused": "已暫停",
+        "webhookHint": "請將你的服務指向此 URL",
+        "gettingUrl": "正在取得 URL…",
+        "editDraft": "請修改「{{name}}」，讓它",
+        "resultsInEachRun": "每次執行中",
+        "resultsChat": "聊天",
+        "noRuns": "尚無執行記錄",
+        "recentRuns": "最近的執行",
+        "when": "時機",
+        "results": "結果",
+        "agent": "代理程式",
+        "runNow": "立即執行",
+        "loading": "載入中",
+        "deleted": "此自動化已刪除",
+        "loadFailed": "無法讀取此自動化",
+        "openFullPage": "開啟頁面",
+        "onAgent": "由 {{name}} 執行"
       },
       "usageLimitActions": {
         "handOff": "交接給代理程式"
@@ -23752,6 +23923,9 @@
     "terminalUnverifiable": "Orca 無法確認 WSL 發行版 {{distro}} 是否正在執行，因此沒有啟動此終端機。請啟動該發行版後重試。"
   },
   "bots": {
+    "whoCanAsk": {
+      "caption": "誰可以提問"
+    },
     "activity": {
       "title": "活動"
     },
@@ -24081,7 +24255,8 @@
       "here": "這裡",
       "thisServer": "此伺服器",
       "there": "那裡",
-      "executionComputer": "此代理程式執行所在的電腦"
+      "executionComputer": "此代理程式執行所在的電腦",
+      "whoCanAsk": "誰可以向 {{name}} 提問"
     },
     "webhooks": {
       "delete": {
@@ -24177,7 +24352,8 @@
       "youAndOthers_one": "你和另外 {{count}} 人",
       "youAndOthers_other": "你和另外 {{count}} 人",
       "shareAction": "分享",
-      "sharingOn": "開啟"
+      "sharingOn": "開啟",
+      "whoCanAsk": "誰可以提問"
     },
     "failures": {
       "lookUnfinished": "上次四處檢視沒有完成。",
