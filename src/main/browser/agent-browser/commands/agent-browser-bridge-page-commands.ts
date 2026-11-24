@@ -3,12 +3,17 @@ import path from 'node:path'
 import { BrowserError } from '../../browser-error'
 import { assertClipboardTextWriteWithinLimitWithYield } from '../../../../shared/clipboard/clipboard-text'
 import { withTimeout } from '../../../../shared/concurrency/promise-timeout-fallback'
+import {
+  AGENT_DOWNLOAD_REPLY_DEADLINE_MS,
+  AGENT_DOWNLOAD_START_TIMEOUT_MS
+} from '../../../../shared/browser/downloads/agent-download-timing'
 import { AGENT_BROWSER_CLIPBOARD_WRITE_MAX_BYTES } from '../protocol/agent-browser-text-argument-budget'
 import type {
   BrowserBackResult,
-  BrowserReloadResult
+  BrowserReloadResult,
+  BrowserStopResult
 } from '../../../../shared/browser/runtime/runtime-browser-contracts'
-import { AgentBrowserBridgeMouseCommands } from './agent-browser-bridge-mouse-commands'
+import { AgentBrowserBridgeSiteDisplayCommands } from './agent-browser-bridge-site-display-commands'
 import {
   answerBrowserJavaScriptDialog,
   getBrowserJavaScriptDialog
@@ -29,7 +34,7 @@ import {
 /** Keep JSON results stable across CLI payload versions. */
 export type BrowserDialogAnswer = { accepted: boolean; browserPageId?: string; checkedUrl?: string }
 
-export abstract class AgentBrowserBridgeUtilityCommands extends AgentBrowserBridgeMouseCommands {
+export abstract class AgentBrowserBridgeUtilityCommands extends AgentBrowserBridgeSiteDisplayCommands {
   async clipboardRead(worktreeId?: string, browserPageId?: string): Promise<unknown> {
     return this.enqueueTargetedCommand(worktreeId, browserPageId, async (sessionName) => {
       return await this.execAgentBrowser(sessionName, ['clipboard', 'read'])
@@ -226,7 +231,25 @@ export abstract class AgentBrowserBridgeUtilityCommands extends AgentBrowserBrid
     })
   }
 
-  async reload(worktreeId?: string, browserPageId?: string): Promise<BrowserReloadResult> {
+  // Not queued: the load it stops may be the queued command ahead of it, such as a reload.
+  stop(worktreeId?: string, browserPageId?: string): BrowserStopResult {
+    this.assertCommandAdmission()
+    const assertNotRevoked = captureRemoteCliBrowserRevocation()
+    const { webContentsId } = this.resolveCommandTarget(worktreeId, browserPageId)
+    assertNotRevoked(webContentsId)
+    const wc = this.getWebContents(webContentsId)
+    if (!wc) {
+      throw new BrowserError('browser_no_tab', 'Tab is no longer available')
+    }
+    wc.stop()
+    return { url: wc.getURL(), title: wc.getTitle() }
+  }
+
+  async reload(
+    worktreeId?: string,
+    browserPageId?: string,
+    { ignoreCache = false }: { ignoreCache?: boolean } = {}
+  ): Promise<BrowserReloadResult> {
     // Reload directly because a process swap can destroy the helper session mid-command.
     return this.enqueueInertAction(worktreeId, browserPageId, async (_sessionName, target) => {
       const wc = this.getWebContents(target.webContentsId)
@@ -239,7 +262,11 @@ export abstract class AgentBrowserBridgeUtilityCommands extends AgentBrowserBrid
           'Nothing to reload: this page never finished loading. Navigate to its URL instead.'
         )
       }
-      wc.reload()
+      if (ignoreCache) {
+        wc.reloadIgnoringCache()
+      } else {
+        wc.reload()
+      }
       await new Promise<void>((resolve) => {
         let settled = false
         let fallbackTimer: ReturnType<typeof setTimeout> | null = null
@@ -280,8 +307,3 @@ export abstract class AgentBrowserBridgeUtilityCommands extends AgentBrowserBrid
     })
   }
 }
-
-export const AGENT_DOWNLOAD_START_TIMEOUT_MS = 10_000
-
-// Counted from the request, so the reply beats the CLI's 60s timeout; the download keeps going after.
-export const AGENT_DOWNLOAD_REPLY_DEADLINE_MS = 50_000

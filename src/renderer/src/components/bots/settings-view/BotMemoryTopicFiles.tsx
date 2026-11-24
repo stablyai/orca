@@ -5,7 +5,8 @@ import { useTranslate } from '@/i18n/use-translate'
 import type { Bot } from '../../../../../shared/bot-types'
 import { type BotHome, readBotHomeFile } from '../../settings/bots/bot-home-files'
 import { openBotHomeFileTab } from '../../settings/bots/bot-home-file-open'
-import { BOT_MEMORY_ARCHIVE, useBotMemoryTopics } from '../../settings/bots/use-bot-memory-topics'
+import { BOT_MEMORY_ARCHIVE } from '../../../../../shared/bots/bot-memory-archive'
+import { useBotMemoryTopics } from '../../settings/bots/use-bot-memory-topics'
 import { SettingsInsetGroup, SettingsInsetRow } from './BotSettingsRows'
 
 const memoryPath = (name: string): string => `memory/${name}`
@@ -59,7 +60,7 @@ export function BotMemoryTopicFiles({
   }
   const openIcon = <ExternalLink className="size-3.5 text-muted-foreground" />
   return (
-    <div className="mt-4 flex flex-col gap-4">
+    <div className="flex flex-col gap-3.5">
       {listing.topics.length > 0 ? (
         <SettingsInsetGroup title={t('bots.settingsView.topicFiles', 'Topic files')}>
           {listing.topics.map((name) => (

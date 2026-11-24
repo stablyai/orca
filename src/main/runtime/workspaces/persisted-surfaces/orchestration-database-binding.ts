@@ -12,6 +12,12 @@ export abstract class OrcaRuntimeWithOrchestrationDatabaseBinding extends OrcaRu
     return orchestrationDbFile(getAppEnvironment().getPath('userData'))
   }
 
+  /** A paired computer handed back replies to asks: the asking chats' cards read them again. */
+  notifyPeerMailReturned(): void {
+    this.notifier?.peerMailReturned?.()
+    this.emitClientEvent({ type: 'peerMailReturned' })
+  }
+
   protected bindWorkerTerminalAutoRelease(db: OrchestrationDb): void {
     // A worker can settle with no agent phase change (a failed start, a release); bots re-read.
     db.workerStatusListener = (dispatchId, change) => this.botDispatchChanged(dispatchId, change)

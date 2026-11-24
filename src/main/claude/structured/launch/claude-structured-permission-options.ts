@@ -1,10 +1,13 @@
-import type { Options, PermissionMode } from '@anthropic-ai/claude-agent-sdk'
+import type {
+  Options as ClaudeAgentSdkOptions,
+  PermissionMode
+} from '@anthropic-ai/claude-agent-sdk'
 import type {
   AgentChatPermissionChoice,
   AgentChatPermissionMode
 } from '../../../../shared/agent-launch/permissions/agent-chat-permission-mode'
 
-export type ClaudePermissionOptions = Pick<Options, 'permissionMode' | 'extraArgs'>
+export type ClaudePermissionOptions = Pick<ClaudeAgentSdkOptions, 'permissionMode' | 'extraArgs'>
 
 const CLAUDE_PERMISSION_MODES = {
   // Override settings defaultMode so the chat runs with its selected permission mode.

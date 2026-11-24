@@ -25,6 +25,12 @@ const nativeCopyOrigin = z.object({
 const origin = z.discriminatedUnion('kind', [legacyOrigin, nativeCopyOrigin])
 export type NativeCopyCoverage = Pick<z.infer<typeof nativeCopyOrigin>, 'unit' | 'ids'>
 export type NativeCopyOrigin = z.infer<typeof nativeCopyOrigin>
+const copyCoverage = nativeCopyOrigin.pick({ unit: true, ids: true })
+
+export function readNativeCopyCoverage(value: unknown): NativeCopyCoverage | null {
+  const result = copyCoverage.safeParse(value)
+  return result.success ? result.data : null
+}
 const parsedOrigins = new WeakMap<JournalHistoryOrigin, ReturnType<typeof origin.safeParse>>()
 
 /** Preserve raw annotations even when this build cannot interpret them. */

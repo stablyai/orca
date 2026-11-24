@@ -8,6 +8,8 @@ import { persistConfirmationSkipPreference } from '@/components/dismiss/confirma
 import { callRuntimeRpc } from '@/runtime/rpc/calls/runtime-rpc-call'
 import { useAppStore } from '@/store'
 import { useTranslate } from '@/i18n/use-translate'
+import { useOrcaTeamFeatureBlocked } from '@/lib/orca-team-policy'
+import { ORCA_CLOUD_TEAM_POLICY_FLAGS } from '../../../../shared/orca-profiles/orca-cloud-team-policy'
 import { ArtifactCollection } from './ArtifactCollection'
 import { ArtifactDetailDrawer } from './ArtifactDetailDrawer'
 import { ArtifactsPageSkeleton } from './ArtifactsPageSkeleton'
@@ -31,6 +33,9 @@ export default function ArtifactsPage(): React.JSX.Element {
   const updateSettings = useAppStore((state) => state.updateSettings)
   const confirm = useConfirmationDialog()
   // Claim publishing is blocked only after settings load; sharing requires explicit capability opt-in.
+  const publishingBlockedByTeam = useOrcaTeamFeatureBlocked(
+    ORCA_CLOUD_TEAM_POLICY_FLAGS.artifactSharing
+  )
   const publishingBlocked = settings ? settings.artifactSharingEnabled !== true : false
   const [deleting, setDeleting] = useState<{ identity: string; slug: string } | null>(null)
   const [selectedSlug, setSelectedSlug] = useState<string | null>(null)
@@ -168,16 +173,8 @@ export default function ArtifactsPage(): React.JSX.Element {
   }
 
   return (
-    <main className="relative flex h-full min-h-0 flex-1 flex-col bg-background pt-5 text-foreground md:pt-6">
-      <header
-        className="flex shrink-0 items-center px-3 pb-3 md:px-5"
-        // Why: no stacked center titlebar on this page; keep the title clear of Windows/Linux window controls.
-        style={
-          {
-            paddingRight: 'max(0.75rem, var(--window-controls-width, 0px))'
-          } as React.CSSProperties
-        }
-      >
+    <main className="relative flex h-full min-h-0 flex-1 flex-col bg-background pt-4 text-foreground">
+      <header className="flex shrink-0 items-center px-3 pb-3 md:px-5">
         <h1 className="truncate text-base font-semibold leading-8">
           {t('auto.components.artifacts.ArtifactsPage.title', 'Artifacts')}
         </h1>
@@ -203,6 +200,7 @@ export default function ArtifactsPage(): React.JSX.Element {
           hasMore={Boolean(nextCursor)}
           loadingMore={loadingMore}
           publishingBlocked={publishingBlocked}
+          publishingBlockedByTeam={publishingBlockedByTeam}
           onLoadMore={() => void loadMoreArtifacts()}
           onOpenArtifactsSettings={() => {
             openSettingsTarget({ pane: 'artifacts', repoId: null })

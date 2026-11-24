@@ -78,9 +78,12 @@ function prepareSideChatPane(worktreeId: string, sourceTabId: string) {
 }
 
 function moveSideChatsInto(worktreeId: string, groupId: string): void {
+  const state = useAppStore.getState()
+  let index =
+    state.groupsByWorktree[worktreeId]?.find((group) => group.id === groupId)?.tabOrder.length ?? 0
   for (const tab of useAppStore.getState().unifiedTabsByWorktree[worktreeId] ?? []) {
     if (isCurrentSideChat(tab) && tab.groupId !== groupId) {
-      moveTabToGroup({ worktreeId, unifiedTabId: tab.id, groupId, index: 0 })
+      moveTabToGroup({ worktreeId, unifiedTabId: tab.id, groupId, index: index++ })
     }
   }
 }

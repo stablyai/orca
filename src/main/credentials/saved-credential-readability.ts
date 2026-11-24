@@ -1,4 +1,4 @@
-import { existsSync, readFileSync } from 'node:fs'
+import { readFile } from 'node:fs/promises'
 import { getSecretStore } from '../../shared/secure-storage/secret-store'
 
 export type SavedCredentialUnreadable =
@@ -26,16 +26,16 @@ function secretStoreWorks(): boolean {
 }
 
 /** Read disk to see other-app rewrites; stay silent because Settings polls this. */
-export function savedCredentialUnreadable(
+export async function savedCredentialUnreadable(
   file: SavedCredentialFile
-): SavedCredentialUnreadable | undefined {
-  if (!existsSync(file.path)) {
-    return undefined
-  }
+): Promise<SavedCredentialUnreadable | undefined> {
   let text: string
   try {
-    text = readFileSync(file.path, 'utf8')
-  } catch {
+    text = await readFile(file.path, 'utf8')
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === 'ENOENT') {
+      return undefined
+    }
     return 'unreadable'
   }
   if (!text.startsWith(file.envelopePrefix)) {

@@ -1,3 +1,5 @@
+import { legacyProofReply } from './journal-legacy-proof-reply'
+import { measureJournalConversionStorage } from './journal-conversion-storage'
 import { JournalForkPreparation } from './journal-fork-preparation'
 import { parentPort, workerData } from 'node:worker_threads'
 import { existsSync } from 'node:fs'
@@ -44,6 +46,7 @@ let original: Database.Database | undefined
 let fork: { id: number; preparation: JournalForkPreparation } | undefined
 const conversions = new Map<number, JournalDomainImport['pages']>()
 const replyCredit = creditGrant(workerData.replyCredit)
+let requests = Promise.resolve()
 function reply(message: JournalSqlReaderReply): void {
   // An oversized reply fails its request instead of the receiving thread running out of memory.
   const { reply: limited, bytes } = measureJournalReaderReply(message)
@@ -121,6 +124,10 @@ try {
   port.close()
 }
 port.on('message', ({ id, operation }: JournalSqlReaderRequest) => {
+  requests = requests.then(() => handle(id, operation)).catch(() => {})
+})
+
+async function handle(id: number, operation: JournalSqlReaderRequest['operation']): Promise<void> {
   try {
     if (!db) {
       throw new Error('journal SQL reader is unavailable')
@@ -170,6 +177,9 @@ port.on('message', ({ id, operation }: JournalSqlReaderRequest) => {
       case 'database':
         reply({ type: 'database', id, result: readJournalSqlDatabase(db, operation.operation) })
         break
+      case 'legacy-proof':
+        reply(legacyProofReply(openOriginal, db, id, operation.cursor))
+        break
       case 'conversion-prepare': {
         // Each frozen-source read is its own short statement; no snapshot spans the restore.
         const source = openOriginal()
@@ -194,6 +204,17 @@ port.on('message', ({ id, operation }: JournalSqlReaderRequest) => {
       case 'legacy-compare': {
         const result = compareJournalLegacyChat(openOriginal, db, operation.sessionId)
         reply({ type: 'legacy-compare', id, result })
+        break
+      }
+      case 'conversion-storage': {
+        const storage = await measureJournalConversionStorage(
+          workerData.originalFilename,
+          openOriginal(),
+          db,
+          operation.sessionId,
+          operation.sizedAt
+        )
+        reply({ type: 'conversion-storage', id, storage })
         break
       }
       case 'conversion-page': {
@@ -235,12 +256,12 @@ port.on('message', ({ id, operation }: JournalSqlReaderRequest) => {
       type: 'failed',
       id,
       error:
-        operation.kind === 'conversion-prepare'
+        operation.kind === 'conversion-prepare' || operation.kind === 'conversion-storage'
           ? journalSqlSourceFailure(error)
           : journalSqlFailure(error)
     })
   }
-})
+}
 
 function openOriginal(): Database.Database | undefined {
   if (!original && existsSync(workerData.originalFilename)) {

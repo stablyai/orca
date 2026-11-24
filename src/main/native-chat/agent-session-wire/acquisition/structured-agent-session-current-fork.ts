@@ -1,4 +1,5 @@
 import { copyStructuredAgentSessionCurrentContext } from './structured-agent-session-current-copy'
+import { agentSessionJournalProviderHandle } from '../../../../shared/agent-session/lifecycle/provider-handles/agent-session-provider-handle-encoding'
 import { activeProviderContext } from '../../../../shared/agent-session/conversation-context/agent-session-provider-context'
 import { agentSessionExecutionLocationsEqual } from '../../../../shared/agent-session/lifecycle/agent-session-record'
 import { AGENT_CHAT_PERMISSION_MODE_OPTION_ID } from '../../../../shared/agent-launch/permissions/agent-chat-permission-mode-option-id'
@@ -68,6 +69,23 @@ export async function prepareStructuredAgentSessionCurrentFork(input: {
     return next.head!
   }
   const handle = current().handle
+  const codexSource =
+    input.agent === 'codex'
+      ? {
+          workspaceCwd:
+            agentSessionPinnedLaunchDirectory(source) ??
+            (await host.deps.resolveWorkspacePath?.(source.location.workspaceId)) ??
+            fail(),
+          conversationStore:
+            metadata.transcriptImport.conversationStore({
+              accountHome: source.accountHome,
+              launchEnv: {
+                ...process.env,
+                ...(await host.deps.resolveLaunchEnv?.(input.agent))
+              }
+            }) ?? fail()
+        }
+      : null
   const copy = await copyStructuredAgentSessionCurrentContext({
     store: host.deps.store,
     callerKey: input.callerKey,
@@ -89,7 +107,12 @@ export async function prepareStructuredAgentSessionCurrentFork(input: {
     }
   })
   current()
-  if (!copy.filePath || !copy.sessionId.trim() || copy.sessionId === handle.nativeId) {
+  if (
+    !copy.filePath ||
+    !copy.coverage ||
+    !copy.sessionId.trim() ||
+    copy.sessionId === handle.nativeId
+  ) {
     return fail()
   }
   requireUnownedStructuredAgentSessionAdoption({
@@ -98,6 +121,12 @@ export async function prepareStructuredAgentSessionCurrentFork(input: {
     providerSessionId: copy.sessionId,
     selfSessionId: input.envelope.sessionId
   })
+  const providerHandle = {
+    transport: metadata.definition.handleTransport,
+    agent: input.agent,
+    nativeId: metadata.transcriptImport.handleNamesTranscript ? copy.filePath : copy.sessionId,
+    ...(copy.resumeCursor ? { resumeCursor: copy.resumeCursor } : {})
+  }
   return {
     envelope: { ...input.envelope, expectedRuntimeFence: null, payloadFingerprint: '' },
     location: input.location,
@@ -115,13 +144,16 @@ export async function prepareStructuredAgentSessionCurrentFork(input: {
     },
     ...(source.launchArgs ? { launchArgs: source.launchArgs } : {}),
     adopt: {
-      providerHandle: {
-        transport: metadata.definition.handleTransport,
+      providerHandle,
+      transcriptPath: copy.filePath,
+      historyOrigin: {
+        version: 1,
+        kind: 'native_copy',
+        providerHandle: agentSessionJournalProviderHandle({ agent: input.agent, providerHandle }),
         agent: input.agent,
-        nativeId: metadata.transcriptImport.handleNamesTranscript ? copy.filePath : copy.sessionId,
-        ...(copy.resumeCursor ? { resumeCursor: copy.resumeCursor } : {})
+        ...copy.coverage
       },
-      transcriptPath: copy.filePath
+      ...(codexSource ? { source: { ...codexSource, providerSessionId: copy.sessionId } } : {})
     }
   }
 }

@@ -6,6 +6,8 @@ import { requireLegacyAgentSessionAccountHome } from '../../shared/agent-session
 import { resolveSessionFilePath } from '../native-chat/session-file-resolver'
 import { asRecord } from '../ai-vault/parsing/session-record-fields'
 import { codexForkModelOverrides } from './codex-fork-model-overrides'
+import { readCodexForkTurns } from './codex-fork-turns'
+import { codexHistorySources } from '../native-chat/transcript-history/codex/codex-rollout-history-source'
 import {
   AgentConversationCopyError,
   AgentConversationCopyStartError,
@@ -81,7 +83,9 @@ export async function copyCurrentCodexConversation(
           await input.onCopyConfirmed?.(fork.id)
           remembered = Boolean(input.onCopyConfirmed)
           try {
-            await rpc.request('thread/goal/clear', { threadId: fork.id, origin: 'user' })
+            if (!input.copiedCoverage) {
+              await rpc.request('thread/goal/clear', { threadId: fork.id, origin: 'user' })
+            }
           } catch (error) {
             if (
               !codexMethodUnavailable(error, 'thread/goal/clear') &&
@@ -106,7 +110,15 @@ export async function copyCurrentCodexConversation(
           if (!filePath) {
             throw new Error('Codex could not find the copied conversation.')
           }
-          return { sessionId: fork.id, filePath }
+          const admitted = await codexHistorySources(filePath, [
+            join(home, 'sessions'),
+            join(home, 'archived_sessions')
+          ])
+          const coverage = input.copiedCoverage ?? {
+            unit: 'codex-turn' as const,
+            ids: (await readCodexForkTurns(rpc, fork.id, Infinity)).map((turn) => turn.id)
+          }
+          return { sessionId: fork.id, filePath: admitted.path, coverage }
         } catch (error) {
           let archived = false
           try {

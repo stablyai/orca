@@ -135,6 +135,7 @@ export function ChatBehaviorSetting({
         <NativeChatIdleStopSetting
           settings={settings}
           updateSettings={updateSettings}
+          hostScope={hostScope}
           title={entries.idleStop.title}
           description={entries.idleStop.description}
         />
@@ -251,7 +252,11 @@ export function ChatBehaviorSetting({
         forceVisible={forceVisible}
         className="max-w-none"
       >
-        <NativeChatShellEnvironmentSetting settings={settings} updateSettings={updateSettings} />
+        <NativeChatShellEnvironmentSetting
+          settings={settings}
+          updateSettings={updateSettings}
+          hostScope={hostScope}
+        />
       </SearchableSetting>
     </SettingsGroup>
   )

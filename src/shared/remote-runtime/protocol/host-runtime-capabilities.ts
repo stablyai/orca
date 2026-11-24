@@ -20,6 +20,10 @@ export const SETTINGS_CHANGED_EVENT_RUNTIME_CAPABILITY =
   'runtime.settings-changed-event.v1' as const
 // Why: hosts without it never computed their own usage; clients say to update instead of showing zeros.
 export const USAGE_ANALYTICS_RUNTIME_CAPABILITY = 'usage.analytics.v1' as const
+// settings.get/update carry hostNotifications and accept nativeChatQueueFollowUps/nativeChatCiResultLines; older hosts refuse them (strict).
+// A Mac answers settings for the phones it relays, so read this from the host that answers the write.
+export const HOST_NOTIFICATION_SETTINGS_RUNTIME_CAPABILITY =
+  'settings.host-notification-settings.v1' as const
 
 // The paired host itself: status, environments, control, updates and the servers it manages.
 export const HOST_RUNTIME_CAPABILITIES = [
@@ -35,5 +39,6 @@ export const HOST_RUNTIME_CAPABILITIES = [
   SETTINGS_CHANGED_EVENT_RUNTIME_CAPABILITY,
   SSH_TARGET_MANAGEMENT_RUNTIME_CAPABILITY,
   ENVIRONMENT_DOCTOR_RUNTIME_CAPABILITY,
-  USAGE_ANALYTICS_RUNTIME_CAPABILITY
+  USAGE_ANALYTICS_RUNTIME_CAPABILITY,
+  HOST_NOTIFICATION_SETTINGS_RUNTIME_CAPABILITY
 ] as const

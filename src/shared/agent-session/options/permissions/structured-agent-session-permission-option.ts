@@ -1,9 +1,8 @@
 // Saved choices describe requested policy; runtime observations never replace that intent.
-
-// Saved choices describe requested policy; runtime observations never replace that intent.
 import type { AgentChatPermissionMode } from '../../../agent-launch/permissions/agent-chat-permission-mode'
 import { AGENT_CHAT_PERMISSION_MODE_OPTION_ID } from '../../../agent-launch/permissions/agent-chat-permission-mode-option-id'
 import { agentChatPermissionModes } from '../../../agent-launch/permissions/agent-chat-permission-support'
+import { agentPermissionSettingsSourceName } from '../../../agent-launch/permissions/agent-permission-settings-source'
 import type { StructuredAgentSessionOptionRecord } from '../reconciliation/structured-agent-session-option-state'
 import type { SessionOptionDescriptor } from '../../../native-chat/input/native-chat-session-options'
 
@@ -79,16 +78,21 @@ export function structuredAgentSessionPermissionDescriptor(state: {
     return null
   }
   const current = state.permissionMode ?? undefined
-  const reported = support.modes.find((mode) => mode === current)
-  const label = own
-    ? "Agent's own settings"
-    : reported
-      ? MODE_COPY[reported].label
-      : current === 'plan'
-        ? 'Plan mode'
-        : current === 'read-only'
-          ? 'Read only'
-          : (current ?? 'Permissions')
+  // Own delegates to the agent, so show the mode it reports running in; the saved choice stays Own.
+  // null reads as no report: it can't tell a policy Orca has no name for from no mode at all.
+  const reportedValue = own ? (state.reportedPermissionMode ?? undefined) : undefined
+  const shown = reportedValue ?? current
+  const known = support.modes.find((mode) => mode === shown)
+  const label =
+    own && reportedValue === undefined
+      ? `${agentPermissionSettingsSourceName(state.record.agent)} settings`
+      : known
+        ? MODE_COPY[known].label
+        : shown === 'plan'
+          ? 'Plan mode'
+          : shown === 'read-only'
+            ? 'Read only'
+            : (shown ?? 'Permissions')
   // A pick the running child has not applied yet takes effect with the next message. Hosts
   // without a running report only prove Claude's, which applies a pick by restarting.
   const running =
@@ -103,6 +107,8 @@ export function structuredAgentSessionPermissionDescriptor(state: {
     kind: {
       type: 'select',
       currentValue: current,
+      ...(reportedValue !== undefined ? { reportedValue } : {}),
+      settingsAgent: state.record.agent,
       choices: support.modes.map((value) => ({
         value,
         ...agentChatPermissionModeCopy(state.record.agent, value)
@@ -145,7 +151,9 @@ export function legacyHostPermissionDescriptor(): SessionOptionDescriptor {
 /** No runtime permission evidence: the options fallback stands. */
 export const NO_RUNTIME_PERMISSION_REPORT = false
 
-/** A primitive per answer, so subscribers re-render only when it changes: no evidence, cleared or stale (undefined), or the reported mode. */
+/** A primitive per answer, so subscribers re-render only when it changes: no evidence, cleared (undefined), or the reported mode.
+ *  A newer fence's report is current: the first child starts above the fence the chat attached at. An older fence's report
+ *  says nothing about this attachment, so the options fallback stands. */
 export function runtimePermissionReport(
   summary: unknown,
   fence: number | null
@@ -161,10 +169,13 @@ export function runtimePermissionReport(
     !Number.isSafeInteger(report.fence) ||
     typeof report.fence !== 'number' ||
     report.fence < 0 ||
-    report.fence !== fence ||
+    fence === null ||
     !('mode' in report)
   ) {
     return undefined
+  }
+  if (report.fence < fence) {
+    return NO_RUNTIME_PERMISSION_REPORT
   }
   const mode = report.mode
   return mode === null || typeof mode === 'string' ? mode : undefined

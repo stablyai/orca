@@ -1,32 +1,16 @@
-import type { ChildProcess, ChildProcessWithoutNullStreams } from 'node:child_process'
-import { resolveSpawn } from './spawn-resolution'
+import type { ChildProcess } from 'node:child_process'
+import { spawnProcess } from './spawn-process'
 import { createPosixGroupTermination, PROCESS_EXIT_GRACE_MS } from './posix-group-termination'
 import { forceTerminateProcessTree, signalProcessTree } from './process-tree-termination'
 import { inFlightWindowsTreeKill } from './windows-tree-kill'
 
-import { hasSpawnObserver, notifySpawnObserver } from './spawn-observer'
 import { createOutputSink } from './bounded-output-sink'
 import { createChildTerminationReporter } from './child-termination-reporter'
-import { spawnNativeProcess } from './native-process-spawn'
 
-import type { PipedProcessSpec, ProcessSpec, ProcessResult } from './process-spec'
+import type { LaunchedProcess, ProcessSpec, ProcessResult } from './process-spec'
 import { DEFAULT_PROCESS_TIMEOUT_MS, DEFAULT_MAX_OUTPUT_BYTES } from './process-spec'
 // An unverifiable, silent tree must not leave barrier callers pending forever.
 const BARRIER_UNVERIFIED_EXIT_GRACE_MS = 10_000
-
-/** Callers own stream error handling; unhandled stream errors can crash the host process. */
-export function spawnProcess(spec: PipedProcessSpec): ChildProcessWithoutNullStreams
-export function spawnProcess(spec: ProcessSpec): ChildProcess
-export function spawnProcess(spec: ProcessSpec): ChildProcess {
-  const resolved = resolveSpawn(spec, process.platform)
-  return spawnNativeProcess(
-    resolved.file,
-    resolved.args,
-    resolved.options,
-    undefined,
-    hasSpawnObserver() ? notifySpawnObserver : undefined
-  )
-}
 
 /** Nonzero exits resolve; spawn errors reject. Tail capture preserves final diagnostics. */
 export function runProcess(
@@ -37,13 +21,16 @@ export function runProcess(
     spec.onChildTerminated?.()
     return Promise.resolve({ code: null, signal: null, stdout: '', stderr: '', timedOut: false })
   }
+  const waitForPosixGroup = spec.terminationBarrier === 'wait-for-posix-group'
   const maxOutputBytes = spec.maxOutputBytes ?? DEFAULT_MAX_OUTPUT_BYTES
 
   return new Promise<ProcessResult>((resolve, reject) => {
     const terminationReporter = createChildTerminationReporter(spec.onChildTerminated)
     let child: ChildProcess
+    let launched: LaunchedProcess | null = null
     try {
-      child = spawnProcess(spec)
+      launched = spec.launch?.(spec) ?? null
+      child = launched?.child ?? spawnProcess(spec)
     } catch (error) {
       terminationReporter.report()
       reject(error)
@@ -62,14 +49,15 @@ export function runProcess(
     let deferredClose: { code: number | null; signal: NodeJS.Signals | null } | null = null
     let deferredError: Error | null = null
     let rootExitedBeforeBarrier = false
+    const onGroupTerminated = (): void => {
+      terminationReporter.report()
+      if (barrierStopping) {
+        markBarrierTerminationVerified()
+      }
+    }
     const nativeGroupTermination =
-      spec.terminationBarrier === true && process.platform !== 'win32'
-        ? createPosixGroupTermination(child, () => {
-            terminationReporter.report()
-            if (barrierStopping) {
-              markBarrierTerminationVerified()
-            }
-          })
+      (spec.terminationBarrier === true || waitForPosixGroup) && process.platform !== 'win32'
+        ? createPosixGroupTermination(child, onGroupTerminated, waitForPosixGroup)
         : undefined
 
     const settle = (act: () => void): void => {
@@ -249,16 +237,44 @@ export function runProcess(
       graceTimer.unref?.()
     }
 
+    // A launched child's pid arrives later; stopping before it would kill only a root, or nothing, and claim the tree ended.
+    let awaitingPid = launched !== null && child.pid === undefined
+    let stopDeferred = false
+    const requestStop = (): void => {
+      if (!awaitingPid) {
+        stopAndSettle()
+        return
+      }
+      if (stopDeferred) {
+        return
+      }
+      stopDeferred = true
+      launched?.withdrawPendingLaunch()
+      // A stalled launcher must not hold the caller; termination is still reported only by the child.
+      graceTimer ??= setTimeout(() => resolveFromClose(null, null), PROCESS_EXIT_GRACE_MS)
+      graceTimer.unref?.()
+    }
+    if (awaitingPid) {
+      child.once('spawn', () => {
+        awaitingPid = false
+        if (stopDeferred) {
+          clearTimeout(graceTimer)
+          graceTimer = undefined
+          stopAndSettle()
+        }
+      })
+    }
+
     const timer =
       spec.timeoutMs === null
         ? undefined
         : setTimeout(() => {
             timedOut = true
-            stopAndSettle()
+            requestStop()
           }, spec.timeoutMs ?? DEFAULT_PROCESS_TIMEOUT_MS)
     timer?.unref?.()
 
-    const onAbort = (): void => stopAndSettle()
+    const onAbort = (): void => requestStop()
     spec.signal?.addEventListener('abort', onAbort, { once: true })
     // Already-aborted signals emit no event; recheck after subscribing to close the race.
     if (spec.signal?.aborted) {
@@ -294,7 +310,6 @@ export function runProcess(
         rootExitedBeforeBarrier = true
       }
       if (barrierStopping) {
-        deferredClose = { code, signal }
         resolveBarrierIfSafe()
         return
       }
@@ -316,3 +331,4 @@ function terminate(child: ChildProcess, signal?: NodeJS.Signals): void {
 }
 
 export { runProcessSync } from './run-process-sync'
+export { spawnProcess } from './spawn-process'

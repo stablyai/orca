@@ -48,9 +48,11 @@ pnpm build
 
 For faster repeat typechecks use `pnpm tc` (or `pnpm tc:node`, `pnpm tc:web`, `pnpm tc:cli`); run `pnpm tc:node` after editing shared tests.
 
-Add a test when it would catch a regression of your behavior change or bug fix, not for shallow coverage; see [test anti-patterns](../docs/agents-md-refs/test-antipatterns.md). If your change affects UI or interaction behavior, verify it on the platforms it could impact.
+Tests are the exception: add one only for logic where a silent regression is costly (parsers, security boundaries, data integrity, concurrency invariants), never for UI behavior or wiring; see [test anti-patterns](../docs/agents-md-refs/test-antipatterns.md). If your change affects UI or interaction behavior, verify it on the platforms it could impact.
 
 ### Targeting Local Tests
+
+On macOS and Linux, set `git config --local orca.serializeChangedChecks true` to queue full `pnpm check:changed` runs across worktrees. On Ctrl+C, SIGTERM, or terminal hangup, the runner waits for its active check process groups to stop before admitting another run. Processes that detach from those groups, or survive a force-kill of the runner, can continue independently. Windows uses the standard concurrent runner.
 
 Use `pnpm test`, not raw `vitest`: only it keeps the transform cache that makes repeat runs fast.
 
@@ -64,7 +66,7 @@ Affected tests follow Vitest's static import graph, so run suites explicitly for
 
 ## Pull Requests
 
-Fill in every section of [`.github/pull_request_template.md`](./pull_request_template.md): an ELI5, what changed and why, a linked issue (required for outside contributors), a before and after (screenshots or videos) for any UI or behavior change (only if there is truly no visual or interaction change, write exactly `N/A` and briefly say why), how you tested it, the risk, and under Review a short summary from your AI coding agent covering cross-platform, SSH/remote, agent and integration compatibility, performance, UI quality, and security. Keep each PR small and focused on one topic.
+Fill in every section of [`.github/pull_request_template.md`](./pull_request_template.md): an ELI5, what changed and why, a linked issue (required for outside contributors), a before and after (screenshots or videos) for any UI or behavior change (only if there is truly no visual or interaction change, write exactly `N/A` and briefly say why), how you tested it, the risk, its performance impact (one line such as `None, because …` is fine when nothing gets slower or heavier), and under Review a short summary from your AI coding agent covering cross-platform, SSH/remote, agent and integration compatibility, performance, UI quality, and security. Keep each PR small and focused on one topic.
 
 Version bumps, tags, and releases are maintainer-managed. Do not include release version changes unless a maintainer asks. Maintainers cut releases with the [Cut Release](https://github.com/stablyai/orca/actions/workflows/release-cut.yml) workflow.
 

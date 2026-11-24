@@ -3,18 +3,22 @@ import { ChevronDown, X } from 'lucide-react-native'
 import { colors, pressedStyle } from '../../../../theme/mobile-theme'
 import { useMobileColorScheme } from '../../../../theme/use-mobile-color-scheme'
 import { useMobileTranslation } from '../../../../i18n/use-mobile-translation'
+import { MobilePendingButton } from '../../../../components/controls/MobilePendingButton'
 
 /** Collapse and Cancel; a structured question offers both, so neither hides the other. */
 export function MobileNativeChatCardHeaderAction<Prompt>({
   prompt,
   onCancel,
   onCollapse,
-  disabled
+  disabled,
+  cancelPending = false
 }: {
   prompt?: Prompt
   onCancel?: (prompt?: Prompt) => Promise<boolean>
   onCollapse?: () => void
   disabled?: boolean
+  /** This card's cancel is on its way. */
+  cancelPending?: boolean
 }): React.JSX.Element | null {
   useMobileColorScheme()
   const t = useMobileTranslation()
@@ -40,21 +44,24 @@ export function MobileNativeChatCardHeaderAction<Prompt>({
         </Pressable>
       ) : null}
       {onCancel ? (
-        <Pressable
-          accessibilityLabel={t('common.cancel', 'Cancel')}
-          hitSlop={8}
-          style={({ pressed }) => [styles.action, pressed && pressedStyle]}
-          onPress={() => void onCancel(prompt)}
+        <MobilePendingButton
+          label={t('common.cancel', 'Cancel')}
+          iconOnly
+          icon={<X size={16} color={colors.textMuted} />}
+          pending={cancelPending}
           disabled={disabled}
-        >
-          <X size={16} color={colors.textMuted} />
-        </Pressable>
+          onPress={() => void onCancel(prompt)}
+          hitSlop={8}
+          style={styles.action}
+          spinnerColor={colors.textMuted}
+        />
       ) : null}
     </View>
   )
 }
 
 const styles = StyleSheet.create({
-  row: { flexDirection: 'row', alignItems: 'center' },
+  // Centred on the card title's first line.
+  row: { flexDirection: 'row', alignItems: 'center', marginTop: 7 },
   action: { width: 28, height: 28, alignItems: 'center', justifyContent: 'center' }
 })

@@ -1,5 +1,5 @@
 import { defineFixture } from '../../component-fixtures/component-fixture'
-import type { AgentSessionContinuationRequest } from '@/lib/agent-session/context/agent-session-continuation'
+import type { AgentSessionContinuationRequest } from '../../../../shared/agent-session/conversation-context/agent-session-continuation'
 import type { Repo } from '../../../../shared/repository/repo-types'
 import type { Worktree } from '../../../../shared/worktree/types'
 import { AgentSessionContinuationDialog } from './AgentSessionContinuationDialog'

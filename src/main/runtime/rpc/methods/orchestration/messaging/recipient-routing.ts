@@ -211,6 +211,7 @@ export type SendRecipientWarning = {
     | 'recipient_delivery_held'
     | 'recipient_delivery_unknown'
     | 'stale_task_id'
+    | 'files_not_sent'
   recipient: string
   message: string
 }

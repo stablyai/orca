@@ -16,6 +16,10 @@ import {
 import type { AgentSessionRecordStore } from '../../../runtime/agent-session/records/agent-session-record-store'
 import type { StructuredAgentSessionConversationCopyInput } from '../providers/structured-agent-session-conversation-copy-input'
 import type { StructuredAgentSessionAdapter } from '../providers/structured-agent-session-adapter'
+import {
+  readNativeCopyCoverage,
+  type NativeCopyCoverage
+} from '../../agent-session-journal/context-epochs/journal-history-origin'
 
 /** The native copy has its own receipt because it happens before the destination chat exists. */
 export async function copyStructuredAgentSessionCurrentContext(input: {
@@ -48,9 +52,6 @@ export async function copyStructuredAgentSessionCurrentContext(input: {
       identity: input.source.identity,
       providerSessionId: input.source.providerSessionId,
       accountHome: input.source.accountHome,
-      options: record?.options,
-      permissionMode: record?.permissionMode,
-      launchArgs: record?.launchArgs,
       contextBoundary: record?.providerContextBoundary
     }),
     now: Date.now()
@@ -76,6 +77,17 @@ export async function copyStructuredAgentSessionCurrentContext(input: {
     }
   }
   const copiedSessionId = outcome.status === 'succeeded' ? outcome.sessionId : undefined
+  const savedCoverage =
+    outcome.status === 'succeeded' && outcome.conversationCopyCoverage !== undefined
+      ? readNativeCopyCoverage(outcome.conversationCopyCoverage)
+      : undefined
+  if (savedCoverage === null) {
+    throw agentConversationCopyRefusal(
+      'agent_session_operation_unknown',
+      { reason: 'outcomeUnknown' },
+      'The saved side-chat context could not be confirmed. Check its history before continuing.'
+    )
+  }
   const claim = copiedSessionId
     ? null
     : await input.store.claimOperation({
@@ -89,23 +101,31 @@ export async function copyStructuredAgentSessionCurrentContext(input: {
       'The agent could not confirm the original copy. Check its history before opening another side chat.'
     )
   }
-  const rememberCopy = async (sessionId: string) => {
+  const rememberCopy = async (
+    sessionId: string,
+    coverage: NativeCopyCoverage | undefined = savedCoverage
+  ) => {
     if (!sessionId.trim() || sessionId === input.source.providerSessionId) {
       throw new Error('The provider did not confirm an independent copy.')
     }
     await input.store.recordOperationOutcome({
       callerKey: decision.row.callerKey,
       operationId,
-      outcome: { status: 'succeeded', sessionId }
+      outcome: {
+        status: 'succeeded',
+        sessionId,
+        ...(coverage ? { conversationCopyCoverage: coverage } : {})
+      }
     })
   }
   try {
     const copy = await input.copy({
       ...input.source,
       copiedSessionId,
+      ...(savedCoverage ? { copiedCoverage: savedCoverage } : {}),
       onCopyConfirmed: rememberCopy
     })
-    await rememberCopy(copy.sessionId)
+    await rememberCopy(copy.sessionId, copy.coverage)
     return copy
   } catch (error) {
     if (isAgentSessionRefusalError(error) && error.refusal.createAttemptRefusedBeforeCommit) {

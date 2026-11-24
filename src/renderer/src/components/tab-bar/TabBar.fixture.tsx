@@ -1,4 +1,3 @@
-import type { Tab } from '../../../../shared/workspace-layout/tab-groups/tab-types'
 import { useState } from 'react'
 import { DndContext } from '@dnd-kit/core'
 import { defineFixture } from '../../component-fixtures/component-fixture'
@@ -25,16 +24,20 @@ function TabWidthFixture({
   browserTabs,
   clientHostedBrowserRows,
   editorFiles,
-  tabBarOrder
+  tabBarOrder,
+  initialActiveIndex = 0,
+  isGroupFocused
 }: {
   count: number
   titles?: string[]
   agentTabs?: boolean
+  initialActiveIndex?: number
+  isGroupFocused?: boolean
 } & Pick<
   TabBarProps,
   'browserTabs' | 'clientHostedBrowserRows' | 'editorFiles' | 'tabBarOrder'
 >): React.JSX.Element {
-  const [activeTabId, setActiveTabId] = useState('tab-0')
+  const [activeTabId, setActiveTabId] = useState(`tab-${initialActiveIndex}`)
   const tabs: TerminalTab[] = Array.from({ length: count }, (_, index) => ({
     id: `tab-${index}`,
     worktreeId: WORKSPACE_ID,
@@ -56,6 +59,7 @@ function TabWidthFixture({
           activeTabType="terminal"
           worktreeId={WORKSPACE_ID}
           groupId="tab-width-group"
+          isGroupFocused={isGroupFocused}
           browserTabs={browserTabs}
           clientHostedBrowserRows={clientHostedBrowserRows}
           editorFiles={editorFiles}
@@ -333,90 +337,69 @@ export const agentIdentityChanges = defineFixture({
   render: () => <AgentIdentityFixture />
 })
 
-const sidePaneTabs: (Tab & { contentType: 'agent-session' })[] = TITLES.map((label, index) => ({
-  id: `side-${index}`,
-  entityId: `side-session-${index}`,
-  worktreeId: WORKSPACE_ID,
-  groupId: 'tab-width-group',
-  contentType: 'agent-session',
-  agentSessionAgent: 'codex',
-  executionHostId: 'local',
-  label,
-  customLabel: null,
-  color: null,
-  sortOrder: index,
-  createdAt: index
-}))
+// Narrow-pane condensing: 6 tabs, the 4th active, at the widths the option-D design walks through.
+const NARROW_TITLES = [
+  'Build server',
+  'Release notes draft',
+  'Test runner',
+  'API docs review',
+  'Migration plan',
+  'Shell'
+]
 
-export const sideChatPane = defineFixture({
-  width: 480,
-  store: { unifiedTabsByWorktree: { [WORKSPACE_ID]: sidePaneTabs } },
-  setup: () => {
-    const subscribe = window.api.runtime.subscribe
-    window.api.runtime.subscribe = async (request, onResponse) => {
-      if (request.method !== 'agentSession.subscribeStatus') {
-        return subscribe.call(window.api.runtime, request, onResponse)
-      }
-      const delivery = setTimeout(() => {
-        onResponse({
-          id: 'side-pane-fixture',
-          ok: true,
-          _meta: { runtimeId: 'fixture' },
-          result: {
-            type: 'snapshot',
-            sessions: [],
-            namingActiveSessionIds: [],
-            conversationNames: sidePaneTabs.map((tab) => ({
-              sessionId: tab.entityId,
-              conversationName: tab.label,
-              sideChat: {
-                sourceSessionId: 'source-session',
-                sourceProviderSessionId: 'source-provider'
-              }
-            }))
-          }
-        })
-      })
-      return { unsubscribe: () => clearTimeout(delivery), sendBinary: noop }
-    }
-    return () => {
-      window.api.runtime.subscribe = subscribe
-    }
-  },
-  render: () => (
-    <DndContext>
-      <div className="@container/tab-strip h-8 bg-card">
-        <TabBar
-          tabs={[]}
-          agentSessionTabs={sidePaneTabs}
-          tabBarOrder={sidePaneTabs.map((tab) => tab.id)}
-          activeTabId="side-0"
-          activeTabType="agent-session"
-          worktreeId={WORKSPACE_ID}
-          groupId="tab-width-group"
-          expandedPaneByTabId={{}}
-          showAgentLaunchItems={false}
-          onActivate={noop}
-          onClose={noop}
-          onCloseOthers={noop}
-          onCloseToRight={noop}
-          onCloseToLeft={noop}
-          onNewTerminalTab={noop}
-          onNewBrowserTab={noop}
-          onSetCustomTitle={noop}
-          onSetTabColor={noop}
-          onTogglePaneExpand={noop}
-        />
-      </div>
-    </DndContext>
-  ),
-  interact: async (frame) => {
-    for (let attempt = 0; attempt < 60; attempt += 1) {
-      if (frame.querySelector('[data-side-chat-only="true"]')) {
-        return
-      }
-      await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()))
-    }
-    throw new Error('Side-chat pane naming did not arrive')
+// Ownership is read from the store when a +N pick restores focus.
+const NARROW_STRIP_STORE = {
+  activeWorktreeId: WORKSPACE_ID,
+  activeGroupIdByWorktree: { [WORKSPACE_ID]: 'tab-width-group' }
+}
+
+function NarrowStripFixture(): React.JSX.Element {
+  return <TabWidthFixture count={6} titles={NARROW_TITLES} initialActiveIndex={3} isGroupFocused />
+}
+
+function narrowStrip(width: number): ReturnType<typeof defineFixture> {
+  return defineFixture({ width, store: NARROW_STRIP_STORE, render: () => <NarrowStripFixture /> })
+}
+
+export const narrow640 = narrowStrip(640)
+export const narrow440 = narrowStrip(440)
+export const narrow330 = narrowStrip(330)
+export const narrow280 = narrowStrip(280)
+export const narrow230 = narrowStrip(230)
+export const narrow205 = narrowStrip(205)
+export const narrowChipOnly = narrowStrip(120)
+
+async function nextFrames(count: number): Promise<void> {
+  for (let index = 0; index < count; index++) {
+    await new Promise((resolve) => requestAnimationFrame(resolve))
   }
+}
+
+/** Opens the "+N" list and moves keyboard focus one row, so the current row and the focused row differ. */
+async function openOverflowList(frame: HTMLElement): Promise<void> {
+  await nextFrames(4)
+  const chip = frame.querySelector('[data-tab-strip-overflow-chip]')
+  if (!chip) {
+    throw new Error('Missing tab overflow chip')
+  }
+  chip.dispatchEvent(
+    new PointerEvent('pointerdown', { bubbles: true, button: 0, pointerType: 'mouse' })
+  )
+  await nextFrames(4)
+  const focused = document.activeElement
+  if (!focused?.closest('[role="menu"][data-state="open"]')) {
+    throw new Error('Tab overflow menu did not open and receive focus')
+  }
+  focused.dispatchEvent(new KeyboardEvent('keydown', { bubbles: true, key: 'ArrowDown' }))
+  await nextFrames(2)
+  if (!document.activeElement?.matches('[data-tab-strip-list-entry]:not([aria-current="true"])')) {
+    throw new Error('Keyboard focus did not move to a different tab')
+  }
+}
+
+export const narrowOverflowListOpen = defineFixture({
+  width: 280,
+  store: NARROW_STRIP_STORE,
+  render: () => <NarrowStripFixture />,
+  interact: openOverflowList
 })

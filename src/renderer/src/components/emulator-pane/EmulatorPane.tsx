@@ -98,6 +98,7 @@ export default function EmulatorPane({ tab, worktreeId, isActive = true }: Emula
             </p>
           ) : null}
           <EmulatorDeviceFrame
+            worktreeId={worktreeId}
             deviceId={deviceId}
             previewUrl={previewUrl}
             wsUrl={wsUrl}

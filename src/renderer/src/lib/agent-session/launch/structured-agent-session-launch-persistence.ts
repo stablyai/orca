@@ -165,7 +165,7 @@ export function structuredLaunchSlotSignatures(): Map<string, string> {
     }
     const slots = slotsByWorktree.get(worktreeId) ?? []
     slots.push(
-      `${record.surfaceAddress?.targetGroupId ?? ''}\u0000${structuredAgentSessionTabId(record.sessionId)}`
+      `${record.surfaceAddress?.targetGroupId ?? ''}\u0000${record.tabId ?? structuredAgentSessionTabId(record.sessionId)}`
     )
     slotsByWorktree.set(worktreeId, slots)
   }
@@ -181,7 +181,7 @@ export function structuredLaunchSlotIds(worktreeId: string, groupId?: string): S
       record.lifecycle !== 'failed' &&
       record.surfaceAddress?.worktreeId === worktreeId &&
       (!groupId || record.surfaceAddress.targetGroupId === groupId)
-        ? [structuredAgentSessionTabId(record.sessionId)]
+        ? [record.tabId ?? structuredAgentSessionTabId(record.sessionId)]
         : []
     )
   )

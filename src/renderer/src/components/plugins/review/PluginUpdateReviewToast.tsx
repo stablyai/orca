@@ -1,5 +1,5 @@
 // @protected-copy
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { Loader2, X } from 'lucide-react'
 import type { PluginUpdateReviewNotice } from '../../../../../shared/plugins/catalog/plugin-update-policy'
 import type { PluginHostListEntry } from '../../../../../shared/plugins/plugin-list-entry'
@@ -111,11 +111,14 @@ function ToastPlugin({
  */
 export function PluginUpdateReviewToast({
   notices,
-  onResolved
+  onResolved,
+  onResize
 }: {
   notices: readonly PluginUpdateReviewNotice[]
   /** These notices are handled: installed, dismissed, or handed to the dialog. */
   onResolved: (notices: readonly PluginUpdateReviewNotice[]) => void
+  /** The card's height changed: content loaded, a failure line, a rewrap or a locale switch. */
+  onResize: () => void
 }): React.JSX.Element {
   const t = useTranslate()
   const orcaVersion = useOrcaVersion()
@@ -124,6 +127,22 @@ export function PluginUpdateReviewToast({
   const [failure, setFailure] = useState<string | null>(null)
   // Why kept: a retry after a partial failure must not reinstall the ones that landed.
   const [landed, setLanded] = useState<ReadonlySet<string>>(() => new Set())
+  const cardRef = useRef<HTMLDivElement>(null)
+  useEffect(() => {
+    const card = cardRef.current
+    if (!card) {
+      return
+    }
+    let height = card.offsetHeight
+    const observer = new ResizeObserver(() => {
+      if (card.offsetHeight !== height) {
+        height = card.offsetHeight
+        onResize()
+      }
+    })
+    observer.observe(card)
+    return () => observer.disconnect()
+  }, [onResize])
 
   const details = (): void => {
     onResolved(notices)
@@ -194,7 +213,10 @@ export function PluginUpdateReviewToast({
 
   return (
     <SecuritySurface>
-      <div className="relative w-[360px] max-w-[calc(100vw-32px)] space-y-3 rounded-lg border border-(--notice-border) bg-popover p-3.5 text-popover-foreground shadow-notice">
+      <div
+        ref={cardRef}
+        className="relative w-[360px] max-w-[calc(100vw-32px)] space-y-3 rounded-lg border border-(--notice-border) bg-popover p-3.5 text-popover-foreground shadow-notice"
+      >
         <div className="flex items-start justify-between gap-3">
           <p className="pt-1 text-sm font-semibold">{title}</p>
           <Button

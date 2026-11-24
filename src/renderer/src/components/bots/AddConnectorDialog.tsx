@@ -1,14 +1,12 @@
-// Add to <bot>: every app the bot can be given, in one wide dialog with a category rail. Each app is
+// Add apps to <bot>: every app the bot can be given, in one wide dialog filtered by chips. Each app is
 // listed once under its direct route; Composio's apps have a section of their own. Add opens the app's
 // setup: Orca's own connector dialogs, the Composio account and sign-in, Webhooks, or an app by URL.
 import React, { useState } from 'react'
-import { X } from 'lucide-react'
-import { Button } from '@/components/ui/button'
 import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog'
 import { translate } from '@/i18n/i18n'
 import { useTranslate } from '@/i18n/use-translate'
 import { useAppStore } from '@/store'
-import { openBotHome } from '@/lib/bot-catalog'
+import { openBotConnectorsTab } from './bot-settings-open'
 import type { BotConnector } from './bot-connectors'
 import { BotAppsCatalog, type BotAppsStep } from './apps/BotAppsCatalog'
 import type { Bot } from '../../../../shared/bot-types'
@@ -52,13 +50,10 @@ export function connectorDescription(id: BotConnectorId): string {
 }
 
 /** The bot page's Connectors tab; from inside Settings, which lists them too, the dialog only closes. */
-export function manageConnectors(bot: Bot): void {
-  const { activeView, setRightSidebarTab, setRightSidebarOpen } = useAppStore.getState()
-  if (activeView === 'settings' || !openBotHome(bot)) {
-    return
+export function manageConnectors(bot: Bot, entryKey?: string): void {
+  if (useAppStore.getState().activeView !== 'settings') {
+    openBotConnectorsTab(bot, entryKey)
   }
-  setRightSidebarTab('bot-connectors')
-  setRightSidebarOpen(true)
 }
 
 export function AddConnectorDialog({
@@ -74,7 +69,7 @@ export function AddConnectorDialog({
 }): React.JSX.Element {
   const t = useTranslate()
   const [step, setStep] = useState<BotAppsStep | null>(null)
-  const title = t('bots.apps.title', 'Add to {{bot}}', { bot: bot.name })
+  const title = t('bots.apps.addAppsTitle', 'Add apps to {{bot}}', { bot: bot.name })
   return (
     <Dialog
       open={open}
@@ -90,30 +85,13 @@ export function AddConnectorDialog({
         showCloseButton={false}
         aria-describedby={undefined}
         data-step={step !== null}
-        className="flex h-150 max-h-[calc(100vh-4rem)] flex-col overflow-hidden sm:max-w-190 data-[step=true]:h-auto data-[step=true]:sm:max-w-115"
+        className="flex h-175 max-h-[calc(100vh-4rem)] flex-col overflow-hidden sm:max-w-[min(57.5rem,calc(100vw-4rem))] data-[step=true]:h-auto data-[step=true]:sm:max-w-115"
       >
-        {step === null ? (
-          <div className="flex items-center gap-2 border-b border-border py-3.5 pr-3.5 pl-5">
-            <DialogTitle className="min-w-0 flex-1">
-              <span className="block truncate" title={title}>
-                {title}
-              </span>
-            </DialogTitle>
-            <Button
-              variant="ghost"
-              size="icon-xs"
-              aria-label={t('bots.apps.close', 'Close')}
-              onClick={() => onOpenChange(false)}
-            >
-              <X className="size-3.5" />
-            </Button>
-          </div>
-        ) : (
-          <DialogTitle className="sr-only">{title}</DialogTitle>
-        )}
+        {step !== null ? <DialogTitle className="sr-only">{title}</DialogTitle> : null}
         {open ? (
           <BotAppsCatalog
             bot={bot}
+            title={title}
             onOpenChange={(next) => {
               onOpenChange(next)
               if (!next) {

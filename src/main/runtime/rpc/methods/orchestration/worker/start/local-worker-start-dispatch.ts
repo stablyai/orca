@@ -20,7 +20,8 @@ export function createLocalWorkerStartDispatch(
     existingTask,
     orchestrationMutation,
     helperCreator,
-    followUp
+    followUp,
+    chatLineage
   }: Parameters<typeof startLocalWorker>[0],
   {
     params,
@@ -95,6 +96,8 @@ export function createLocalWorkerStartDispatch(
     followUpOf: followUp?.of,
     acceptedBy: followUp?.acceptedBy,
     takesMailOf: followUp?.takesMailOf,
-    ...(params.origin ? { originRef: params.origin } : {})
+    ...(params.origin ? { originRef: params.origin } : {}),
+    ...(params.forQuestion ? { forMessageId: params.forQuestion } : {}),
+    ...(chatLineage ? { chatLineage } : {})
   })
 }

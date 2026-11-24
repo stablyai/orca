@@ -16,9 +16,7 @@ import { createWatchdogHangCapture } from './watchdog-hang-capture'
 import { recentWorkerSends } from './hang-recent-worker-sends'
 import { sleepAssociation, type SleepPeriod } from './hang-sleep-association'
 import {
-  escalationCaptureParts,
   escalationFields,
-  JS_ONLY,
   recoveredTier,
   stallRecoveredMessage,
   suspendedSince,
@@ -51,7 +49,6 @@ export function runWatchdog(
   let activeStallId: string | null = null
   let stopped = false
   let showMenuBarIcon: boolean | null = null
-  let drain: { token: string; acknowledge: () => void } | null = null
   let collector: AbortController | null = null
   let recentPower: HangPowerReceipt[] = []
   let sleepPeriod: SleepPeriod | null = null
@@ -93,11 +90,6 @@ export function runWatchdog(
     artifactDirectory: config.artifactDirectory,
     processMetadata: config.processMetadata,
     publish: update,
-    drain: (token) =>
-      new Promise<void>((resolve) => {
-        drain = { token, acknowledge: resolve }
-        port.postMessage?.({ type: 'capture-drain', token })
-      }),
     onIdle: () => port.close()
   })
   const openReceiptWindow = (id: string): void => {
@@ -141,7 +133,6 @@ export function runWatchdog(
     startedAt: number,
     options: ObserveOptions = {}
   ): string => {
-    const detectedAt = performance.now()
     const snapshot = captureHangSnapshot()
     const now = snapshot.wallMs ?? Date.now()
     const { initialSleepAssociated, powerEvents } = sleepAssociation({
@@ -176,8 +167,8 @@ export function runWatchdog(
     }
     openReceiptWindow(record.id)
     save()
-    if (!isMainThread && !options.recovered && find(record.id)) {
-      captures.capture(record, detectedAt, showMenuBarIcon, options.capture)
+    if (!isMainThread && live && record.tier === 'hang' && find(record.id)) {
+      captures.capture(record, showMenuBarIcon)
     }
     enrich(record)
     return record.id
@@ -195,7 +186,7 @@ export function runWatchdog(
       if (suspendedSince(recentPower, startedAt)) {
         return false
       }
-      observe('heartbeat-stall', durationMs, startedAt, { tier: 'stall', capture: JS_ONLY })
+      observe('heartbeat-stall', durationMs, startedAt, { tier: 'stall' })
       return true
     },
     onHangDetected: (durationMs) => {
@@ -207,7 +198,7 @@ export function runWatchdog(
       // Same record (and detectedAt) so the native artifact still pairs with it at next launch.
       update(stall.id, escalationFields(stall, durationMs))
       if (!isMainThread) {
-        captures.capture(stall, performance.now(), showMenuBarIcon, escalationCaptureParts(stall))
+        captures.capture(stall, showMenuBarIcon)
       }
     },
     onHangResolved: (unresponsiveMs) => {
@@ -217,7 +208,6 @@ export function runWatchdog(
       }
       const id = activeStallId
       activeStallId = null
-      captures.recover(id)
       const resolution = captureHangSnapshot()
       const tier = recoveredTier(find(id), resolution, unresponsiveMs, config.timeoutMs)
       update(id, { selfRecovered: true, resolution, tier })
@@ -225,10 +215,7 @@ export function runWatchdog(
       reportRecovered(id, unresponsiveMs, endedAt)
     },
     onStallEndedBySleep: () => {
-      if (activeStallId) {
-        captures.recover(activeStallId)
-        activeStallId = null
-      }
+      activeStallId = null
     },
     onStallMissed: (durationMs, startedAt) => {
       const endedAt = Date.now()
@@ -256,12 +243,6 @@ export function runWatchdog(
   })
   const checkTimer = setInterval(() => loop.tick(), config.checkIntervalMs)
   port.on('message', (message) => {
-    if (message.type === 'capture-drain-ack' && drain && drain.token === message.token) {
-      const pending = drain
-      drain = null
-      pending.acknowledge()
-      return
-    }
     if (stopped) {
       return
     }

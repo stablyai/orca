@@ -167,6 +167,8 @@ export async function copyCodexConversation(
             ...(lastTurnId ? { lastTurnId } : beforeTurnId ? { beforeTurnId } : {}),
             excludeTurns: true,
             cwd,
+            // A copy is a user thread too, so its Full Access turns show a server's form.
+            threadSource: 'user',
             ...codexForkModelOverrides(record.options?.model, metadata)
           })
         )

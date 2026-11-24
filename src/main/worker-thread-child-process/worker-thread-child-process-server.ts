@@ -1,4 +1,8 @@
 import type { ChildProcessWithoutNullStreams } from 'node:child_process'
+import {
+  nativeExecutableResolver,
+  type NativeExecutableSelection
+} from '@orca/process-host/native-executable-resolution'
 import { createPosixGroupTermination } from '@orca/process-host/posix-group-termination'
 import { spawnProcess } from '@orca/process-host'
 import type {
@@ -39,17 +43,24 @@ export function serveWorkerThreadChildProcesses(port: WorkerThreadChildPort): vo
       stopping: boolean
       closed: boolean
       groupTerminated: boolean
-      discardingOutput?: boolean
+      discarding?: { stdout?: boolean; stderr?: boolean }
     }
   >()
 
-  const spawnChild = ({ id, spec }: Extract<WorkerThreadChildRequest, { type: 'spawn' }>): void => {
+  const spawnChild = (
+    { id, spec }: Extract<WorkerThreadChildRequest, { type: 'spawn' }>,
+    selection: NativeExecutableSelection | undefined
+  ): void => {
     let child: ChildProcessWithoutNullStreams
     try {
-      child = spawnProcess({ ...spec, stdio: ['pipe', 'pipe', 'pipe'] })
+      child = spawnProcess({ ...spec, stdio: ['pipe', 'pipe', 'pipe'] }, selection)
     } catch (error) {
       port.postMessage({ type: 'spawn-error', id, error: toErrorPayload(error) })
       return
+    }
+    // A failed creation has no pid and reports through 'error'; Node's own 'spawn' event would come a turn later.
+    if (child.pid !== undefined) {
+      port.postMessage({ type: 'spawn', id, pid: child.pid })
     }
     const state: NonNullable<ReturnType<typeof children.get>> = {
       child,
@@ -69,13 +80,18 @@ export function serveWorkerThreadChildProcesses(port: WorkerThreadChildPort): vo
     }
     children.set(id, state)
     const postOutput = (type: 'stdout' | 'stderr', chunk: Buffer): void => {
-      if (state.discardingOutput) {
+      if (state.discarding?.[type]) {
         return
       }
       state.pendingOutputBytes += chunk.byteLength
       if (state.pendingOutputBytes >= OUTPUT_HIGH_WATER_BYTES) {
-        child.stdout?.pause()
-        child.stderr?.pause()
+        // A discarded stream keeps draining here; pausing it could fill the pipe and stall the child.
+        if (!state.discarding?.stdout) {
+          child.stdout?.pause()
+        }
+        if (!state.discarding?.stderr) {
+          child.stderr?.pause()
+        }
       }
       // Own the pipe chunk before transfer; a pooled Buffer may share its backing allocation.
       const bytes = new Uint8Array(chunk)
@@ -83,7 +99,6 @@ export function serveWorkerThreadChildProcesses(port: WorkerThreadChildPort): vo
     }
     const postError = (error: Error): void =>
       port.postMessage({ type: 'error', id, error: toErrorPayload(error) })
-    child.on('spawn', () => port.postMessage({ type: 'spawn', id, pid: child.pid }))
     child.stdout?.on('data', (chunk: Buffer) => postOutput('stdout', chunk))
     child.stderr?.on('data', (chunk: Buffer) => postOutput('stderr', chunk))
     // An unhandled stream error would take the whole worker, and every other child, down.
@@ -95,10 +110,11 @@ export function serveWorkerThreadChildProcesses(port: WorkerThreadChildPort): vo
     child.on('exit', (code, signal) => port.postMessage({ type: 'exit', id, code, signal }))
     child.on('close', (code, signal) => {
       state.closed = true
-      if (!state.group || state.groupTerminated) {
+      const retained = Boolean(state.group) && !state.groupTerminated
+      if (!retained) {
         children.delete(id)
       }
-      port.postMessage({ type: 'close', id, code, signal })
+      port.postMessage({ type: 'close', id, code, signal, ...(retained ? { retained: true } : {}) })
       if (state.stopping) {
         state.group?.close()
       }
@@ -106,42 +122,77 @@ export function serveWorkerThreadChildProcesses(port: WorkerThreadChildPort): vo
   }
 
   // Each launch waits a turn so cancels queued behind a slow CreateProcess can withdraw it first.
-  const queued = new Map<
-    number,
-    {
-      request: Extract<WorkerThreadChildRequest, { type: 'spawn' }>
-      early: WorkerThreadChildRequest[]
-    }
-  >()
+  type QueuedLaunch = {
+    request: Extract<WorkerThreadChildRequest, { type: 'spawn' }>
+    early: WorkerThreadChildRequest[]
+    selection?: NativeExecutableSelection
+  }
+  const queued = new Map<number, QueuedLaunch>()
+  // Launches whose PATH lookup settled, in that order; a withdrawn one is skipped when reached.
+  const startable: QueuedLaunch[] = []
   let launching = false
   const launchNext = (): void => {
-    const next = queued.values().next()
-    if (next.done) {
+    let entry = startable.shift()
+    while (entry && queued.get(entry.request.id) !== entry) {
+      entry = startable.shift()
+    }
+    if (!entry) {
       launching = false
       return
     }
-    queued.delete(next.value.request.id)
-    spawnChild(next.value.request)
-    for (const request of next.value.early) {
+    queued.delete(entry.request.id)
+    spawnChild(entry.request, entry.selection)
+    for (const request of entry.early) {
       handle(request)
     }
     setImmediate(launchNext)
   }
+  const makeStartable = (entry: QueuedLaunch): void => {
+    startable.push(entry)
+    if (!launching) {
+      launching = true
+      setImmediate(launchNext)
+    }
+  }
 
   const handle = (request: WorkerThreadChildRequest): void => {
     if (request.type === 'spawn') {
-      queued.set(request.id, { request, early: [] })
-      if (!launching) {
-        launching = true
-        setImmediate(launchNext)
+      const entry: QueuedLaunch = { request, early: [] }
+      queued.set(request.id, entry)
+      if (process.platform !== 'darwin') {
+        makeStartable(entry)
+        return
       }
+      // macOS resolves PATH itself; each launch looks up async so a slow PATH directory blocks no other child.
+      void nativeExecutableResolver
+        .resolveAsync(request.spec.program, request.spec.env)
+        .then(
+          (selection) => {
+            entry.selection = selection
+          },
+          () => {}
+        )
+        .then(() => {
+          if (queued.get(request.id) === entry) {
+            makeStartable(entry)
+          }
+        })
       return
     }
     const waiting = queued.get(request.id)
     // Any stop of a launch that has not started withdraws it; nothing is created only to be killed.
-    if (waiting && (request.type === 'cancel-spawn' || request.type === 'kill')) {
+    if (
+      waiting &&
+      (request.type === 'cancel-spawn' ||
+        request.type === 'kill' ||
+        request.type === 'stop-owned-group')
+    ) {
       queued.delete(request.id)
       const signal = (request.type === 'kill' && request.signal) || 'SIGTERM'
+      // A group that was never created has ended, which an owned-group stop waits to hear.
+      if (waiting.request.spec.terminationBarrier) {
+        port.postMessage({ type: 'group-terminated', id: request.id })
+      }
       port.postMessage({ type: 'exit', id: request.id, code: null, signal })
       port.postMessage({ type: 'close', id: request.id, code: null, signal })
       return
@@ -175,10 +226,15 @@ export function serveWorkerThreadChildProcesses(port: WorkerThreadChildPort): vo
           child.stderr?.resume()
         }
       } else if (request.type === 'discard-output') {
-        state.discardingOutput = true
-        state.pendingOutputBytes = 0
-        child.stdout?.resume()
-        child.stderr?.resume()
+        if (request.stream) {
+          state.discarding = { ...state.discarding, [request.stream]: true }
+          child[request.stream]?.resume()
+        } else {
+          state.discarding = { stdout: true, stderr: true }
+          state.pendingOutputBytes = 0
+          child.stdout?.resume()
+          child.stderr?.resume()
+        }
       } else if (request.type === 'stdin-write') {
         child.stdin?.write(request.data)
       } else if (request.type === 'stdin-end') {

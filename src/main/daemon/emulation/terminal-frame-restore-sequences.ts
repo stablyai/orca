@@ -3,6 +3,7 @@ import type { SerializeAddon } from '@xterm/addon-serialize'
 import {
   buildAbsoluteCursorRestoreSequence,
   readSavedCursorRegister,
+  serializeCurrentPenState,
   type SavedCursorRegister
 } from '../../../shared/terminal/replay/terminal-serialize-absolute-cursor'
 
@@ -32,7 +33,7 @@ function buildTerminalFrameRestoreSequences(
   savedCursor: SavedCursorRegister | null
 ): string {
   const terminalModes = terminal.modes
-  const seqs: string[] = ['\x1b[0m\x1b[?1049h', serializeCurrentSgrState(serializer, terminal)]
+  const seqs: string[] = ['\x1b[0m\x1b[?1049h', serializeCurrentPenState(serializer, terminal)]
   if (terminalModes.applicationCursorKeysMode) {
     seqs.push('\x1b[?1h')
   }
@@ -84,14 +85,4 @@ function buildTerminalFrameRestoreSequences(
     })
   )
   return seqs.join('')
-}
-
-function serializeCurrentSgrState(serializer: SerializeAddon, terminal: Terminal): string {
-  // Our vendored addon’s undocumented out-of-range row behavior emits only the live pen state.
-  const emptyRow = terminal.buffer.normal.length
-  return serializer.serialize({
-    range: { start: emptyRow, end: emptyRow },
-    excludeAltBuffer: true,
-    excludeModes: true
-  })
 }

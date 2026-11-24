@@ -3,6 +3,7 @@ import { mkdir, readdir, readFile, rm, stat, writeFile } from 'node:fs/promises'
 import { homedir } from 'node:os'
 import { basename, dirname, join } from 'node:path'
 import { getAppEnvironment } from '../../shared/app-lifecycle/app-environment'
+import { BOT_MEMORY_SEED_INTRO } from '../../shared/bot-memory-lines'
 import type { Bot } from '../../shared/bot-types'
 import { starterSoul } from '../../shared/bot-soul'
 import { normalizeRuntimePathForComparison } from '../../shared/file-access/cross-platform-path'
@@ -143,6 +144,7 @@ type BotHomeFile = { path: string; text: string }
 
 /** Orca owns these and rewrites them whenever they differ. */
 export function generatedBotHomeFiles(bot: Bot): BotHomeFile[] {
+  const clearedLook = bot.avatarRevision ? null : undefined
   return [
     {
       path: 'AGENTS.md',
@@ -168,6 +170,13 @@ export function generatedBotHomeFiles(bot: Bot): BotHomeFile[] {
           name: bot.name,
           agent: bot.agent,
           avatar: bot.avatar,
+          avatarColor: bot.avatarColor ?? clearedLook,
+          avatarOutfit: bot.avatarOutfit ?? clearedLook,
+          generatedOverMascot: bot.generatedOverMascot,
+          avatarRevisionEpoch: bot.avatarRevisionEpoch,
+          // Kept here as well as in the record, which saves on a debounce: after a crash the higher of
+          // the two is still at least every revision a write acknowledged.
+          ...(bot.avatarRevision ? { avatarRevision: bot.avatarRevision } : {}),
           members: bot.members,
           ...(bot.skillProjects?.length ? { skillProjects: bot.skillProjects } : {})
         },
@@ -190,8 +199,7 @@ export function seededBotHomeFiles(bot: Bot, soul?: string): BotHomeFile[] {
   ]
 }
 
-export const BOT_MEMORY_SEED =
-  '# Memory\n\nOne line per fact, newest first. Longer notes go in memory/<topic>.md.\n'
+export const BOT_MEMORY_SEED = `# Memory\n\n${BOT_MEMORY_SEED_INTRO}\n`
 
 /** Safe to repeat: seeded files are never overwritten and generated ones are written only on change. */
 export async function writeBotHome(

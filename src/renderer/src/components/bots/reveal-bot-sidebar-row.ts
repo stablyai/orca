@@ -1,6 +1,9 @@
 import { useAppStore } from '@/store'
 import { BOTS_GROUP_KEY } from '../../../../shared/sidebar-list/sections/group-keys'
 import { readBotsEnabled } from '@/lib/bot-catalog'
+import { botSidebarVirtualScrollers } from './bot-sidebar-virtual-scroll'
+
+const READY_DEADLINE_MS = 500
 
 // One owner for "show a Bots row": the sidebar search (focuses the row's name) and Cmd+K (never moves focus).
 
@@ -62,8 +65,8 @@ export function revealBotSidebarRow({
   if (store.collapsedGroups.has(BOTS_GROUP_KEY)) {
     store.toggleCollapsedGroup(BOTS_GROUP_KEY)
   }
-  // One extra frame covers a list that mounts a commit after the unfold.
   let retries = defer ? 1 : 0
+  let seekDeadline: number | null = null
   const step = (): void => {
     frame = null
     if (cancelled || !isCurrent()) {
@@ -71,12 +74,17 @@ export function revealBotSidebarRow({
     }
     const found = findListedRow(sidebarKey, getList)
     if (!found) {
-      if (retries-- > 0) {
+      const list = getList()
+      if (seekDeadline === null && list && botSidebarVirtualScrollers.get(list)?.(sidebarKey)) {
+        seekDeadline = performance.now() + READY_DEADLINE_MS
+      }
+      if (seekDeadline === null ? retries-- > 0 : performance.now() < seekDeadline) {
         frame = requestAnimationFrame(step)
       }
       return
     }
-    scrollListToRow(found.list, found.row)
+    const card = found.row.querySelector<HTMLElement>('[data-worktree-card-surface]')
+    scrollListToRow(found.list, card ?? found.row)
     if (focusName) {
       found.row
         .querySelector<HTMLElement>('[data-worktree-title-inline-rename]')
@@ -128,9 +136,6 @@ export function advanceBotPaletteGeneration(): number {
 export function currentBotPaletteGeneration(): number {
   return paletteSelectionGeneration
 }
-
-// Past this the open is treated as settled elsewhere and the reveal is dropped, leaving the sidebar as it is.
-const READY_DEADLINE_MS = 500
 
 /** Focus sits inside the opened tab's own pane (its chat, room or terminal), not just its workspace. */
 function destinationTabHasFocus(tabId: string): boolean {

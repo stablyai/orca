@@ -17,7 +17,6 @@ export function CurrentSideChatMenu({ worktreeId, tabId }: { worktreeId: string;
   const tab = useAppStore((state) =>
     state.unifiedTabsByWorktree[worktreeId]?.find((entry) => entry.id === tabId)
   )
-  const statuses = useAppStore((state) => state.runtimeStatusByEnvironmentId)
   useHostStructuredAgentsVersion()
   const host = useAppStore((state) => (tab ? structuredAgentSessionOwnerForTab(state, tab) : null))
   const target = structuredAgentSessionTargetForHost(host)
@@ -26,9 +25,13 @@ export function CurrentSideChatMenu({ worktreeId, tabId }: { worktreeId: string;
     AGENT_SESSION_CREATE_CURRENT_FORK_RUNTIME_CAPABILITY
   )
   const agent = tab?.agentSessionAgent
-  const registered = host
-    ? readHostStructuredAgents(host, statuses)?.find((row) => row.agent === agent)
-    : undefined
+  const registered = useAppStore((state) =>
+    host
+      ? readHostStructuredAgents(host, state.runtimeStatusByEnvironmentId)?.find(
+          (row) => row.agent === agent
+        )
+      : undefined
+  )
   if (support !== 'supported' || !registered?.capabilities.currentFork) {
     return null
   }

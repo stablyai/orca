@@ -16,7 +16,7 @@ import type { PaneSide } from './terminal-topology/terminal-pane-tree'
 import type { SplitRatioIntent } from './tab-groups/split-ratio-intents'
 import type { PaneOutcomeChanges } from './commands/workspace-layout-pane-outcomes'
 import type { LayoutEditorView } from './editor-tabs/layout-editor-view'
-import type { LayoutEditorFile, LayoutTerminalCreation } from './workspace-layout-model'
+import type * as LayoutModel from './workspace-layout-model'
 
 type On = { workspace: string }
 
@@ -45,7 +45,7 @@ export type LayoutCommand =
       createdAt?: number
       /** A quick command tab's label, so a later save of it matches main's copy. */
       quickCommandLabel?: string
-      creation?: Partial<LayoutTerminalCreation>
+      creation?: Partial<LayoutModel.LayoutTerminalCreation>
       initial?: InitialSurfaceReason
       /** A live terminal no pane shows: its pane when main holds one, else this tab, bound to it. */
       adopt?: LiveTerminalAdoption
@@ -140,7 +140,7 @@ export type LayoutCommand =
         'terminal' | 'browser' | 'agent-session' | 'simulator' | 'room'
       >
       /** Present for edit-mode files, which are restored after restart. */
-      file?: LayoutEditorFile
+      file?: LayoutModel.LayoutEditorFile
       /** What the tab shows beyond its file; not saved. */
       view?: LayoutEditorView
       groupId?: string
@@ -174,7 +174,7 @@ export type LayoutCommand =
       tabs: { tabId: string; newTabId: string; newEntityId: string; view?: LayoutEditorView }[]
       groupId: string
       /** The moved edit-mode file's record in its new workspace. */
-      file?: LayoutEditorFile
+      file?: LayoutModel.LayoutEditorFile
     })
   | (On & {
       type: 'renameEditorFiles'
@@ -203,8 +203,8 @@ export type LayoutCommand =
     })
   | (On & { type: 'openBrowserPage'; browserTabId: string; pageId: string })
   | (On & { type: 'closeBrowserPage'; browserTabId: string; pageId: string })
-  /** A page the address bar converted: the new page takes the old one's place. */
-  | (On & { type: 'replaceBrowserPage'; browserTabId: string; pageId: string; newPageId: string })
+  /** Swaps what a tab shows; its id, group, order, pin and presentation stay. */
+  | (On & { type: 'replaceTabContent'; replacement: LayoutModel.TabContentReplacement })
   | (On & {
       type: 'setBrowserTabProfile'
       browserTabId: string
@@ -253,7 +253,7 @@ export type DefaultTerminalTab = {
   leafId: string
   title?: string
   color?: string
-  creation?: Partial<LayoutTerminalCreation>
+  creation?: Partial<LayoutModel.LayoutTerminalCreation>
 }
 
 export type CommandOf<T extends LayoutCommand['type']> = Extract<LayoutCommand, { type: T }>
@@ -262,7 +262,7 @@ export type CommandOf<T extends LayoutCommand['type']> = Extract<LayoutCommand, 
 export type EditorFileRename = {
   fileId: string
   newFileId: string
-  record?: { fromFilePath: string; file: LayoutEditorFile }
+  record?: { fromFilePath: string; file: LayoutModel.LayoutEditorFile }
   /** A non-plain tab's view under the file's new path. */
   view?: LayoutEditorView
 }

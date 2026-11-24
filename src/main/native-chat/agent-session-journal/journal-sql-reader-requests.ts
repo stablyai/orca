@@ -111,6 +111,8 @@ export function describeJournalReaderOperation(
     case 'import-state':
     case 'legacy-compare':
       return { operation: operation.kind, chat: chatHash(operation.sessionId) }
+    case 'legacy-proof':
+    case 'conversion-storage':
     case 'fork-next':
     case 'fork-release':
     case 'conversion-page':

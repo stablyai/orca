@@ -7,6 +7,7 @@ import { ActionSheetModal } from '../../components/sheets/ActionSheetModal'
 import { MobileForkMarkedName } from '../fork/MobileForkMarkedName'
 import { mobileForkAccessibleName } from '../fork/mobile-fork-marked-name'
 import { useMobileTranslation } from '../../i18n/use-mobile-translation'
+import { mobileSessionTabMenuHeader } from './MobileSessionTabMark'
 import { getMobileNativeChatCliForkActions } from '../native-chat/history/mobile-native-chat-cli-fork'
 import { useMobileAllowAutoCloseActions, workerSubjectOf } from './mobile-worker-auto-close'
 import type { MobileSessionController } from '../use-mobile-session-controller'
@@ -45,6 +46,8 @@ export function MobileAgentSessionTabActionSheet({
   return (
     <ActionSheetModal
       visible={tab != null}
+      {...mobileSessionTabMenuHeader(tab, controller.terminals)}
+      groupDestructive
       title={forked ? <MobileForkMarkedName name={title} sideChat={tab?.sideChat} /> : title}
       titleAccessibilityLabel={forked ? mobileForkAccessibleName(title) : undefined}
       actions={[

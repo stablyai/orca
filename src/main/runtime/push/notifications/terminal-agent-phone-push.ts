@@ -32,6 +32,12 @@ type PaneNews = {
   event: MobileNotificationDispatchEvent
 }
 
+type TurnNews = PaneNews & {
+  paneKey: string
+  row: AgentStatusIpcPayload
+  labels: TerminalAgentWorkspaceLabels
+}
+
 export type TerminalAgentPhonePushDeps = {
   /** A desktop window owns this host and pushes its phones itself. */
   hasWindow: () => boolean
@@ -53,21 +59,35 @@ export type TerminalAgentPhonePushDeps = {
 export class TerminalAgentPhonePush {
   // The burst gate the window's fan-out applies, per workspace.
   private readonly recentDispatches = new Map<string, number>()
-  private readonly turnNews: TerminalAgentTurnNews<PaneNews>
+  private readonly turnNews: TerminalAgentTurnNews<TurnNews>
   private readonly hooklessNews: TerminalHooklessNews
 
   constructor(private readonly deps: TerminalAgentPhonePushDeps) {
     this.turnNews = new TerminalAgentTurnNews({
       readHookRow: (paneKey) => deps.readHookRow(paneKey),
-      prepare: ({ paneKey, worktreeId, row }) => ({
-        worktreeId,
-        event: this.buildEvent(worktreeId, paneKey, row)
-      }),
-      deliver: (news) => {
+      prepare: ({ paneKey, worktreeId, row }) => {
+        const labels = this.readLabels(worktreeId, paneKey)
+        return {
+          worktreeId,
+          paneKey,
+          row,
+          labels,
+          event: this.buildEvent(worktreeId, paneKey, row, labels)
+        }
+      },
+      deliver: (news, row) => {
         if (news.event.paneKey) {
           this.hooklessNews.noteFinish(news.event.paneKey)
         }
-        this.send(news)
+        // The turn's reply can arrive after the finish was decided; rebuilt only for a phone that gets it.
+        // A row without one (a /clear's new session) keeps the reply already captured.
+        const replied =
+          !!row.lastAssistantMessage && row.lastAssistantMessage !== news.row.lastAssistantMessage
+        this.send(news, () =>
+          replied
+            ? { ...news, event: this.buildEvent(news.worktreeId, news.paneKey, row, news.labels) }
+            : news
+        )
       },
       setTimer: (run, delayMs) => deps.setTimer(run, delayMs)
     })
@@ -144,14 +164,15 @@ export class TerminalAgentPhonePush {
   private buildEvent(
     worktreeId: string,
     paneKey: string,
-    row: AgentStatusIpcPayload
+    row: AgentStatusIpcPayload,
+    labels: TerminalAgentWorkspaceLabels
   ): MobileNotificationDispatchEvent {
     const outcome = agentMainAgentVerdict(row)
     const request: NotificationDispatchRequest = {
       source: 'agent-task-complete',
       worktreeId,
       paneKey,
-      ...this.readLabels(worktreeId, paneKey),
+      ...labels,
       agentState: row.state,
       ...(row.agentType ? { agentType: row.agentType } : {}),
       ...(row.prompt ? { agentPrompt: row.prompt } : {}),
@@ -181,12 +202,12 @@ export class TerminalAgentPhonePush {
     }
   }
 
-  private send(news: PaneNews): void {
+  private send(decided: PaneNews, current: () => PaneNews = () => decided): void {
     // Recheck window ownership at delivery to avoid duplicating a newly opened window's push.
-    const { agentState, paneKey } = news.event
+    const { agentState, paneKey } = decided.event
     if (
       this.deps.hasWindow() ||
-      this.deps.isWorkspaceMuted(news.worktreeId) ||
+      this.deps.isWorkspaceMuted(decided.worktreeId) ||
       (paneKey &&
         isCoordinatorOnlyNews(
           withApprovalTitle(agentState, this.deps.readTerminalTitle(paneKey)),
@@ -196,19 +217,16 @@ export class TerminalAgentPhonePush {
       return
     }
     const settings = this.deps.readNotificationSettings()
+    const { source } = decided.event
     // The window's own fan-out gates the phone on these same preferences.
-    const desktopAllowed =
-      !settings || isNotificationSourceEnabled(settings, news.event.source, news.event.agentState)
+    const desktopAllowed = !settings || isNotificationSourceEnabled(settings, source, agentState)
     const now = this.deps.now()
-    const burstKey = JSON.stringify([
-      desktopAllowed,
-      news.event.source,
-      news.event.agentState,
-      news.worktreeId
-    ])
+    const burstKey = JSON.stringify([desktopAllowed, source, agentState, decided.worktreeId])
     if (!reserveNotificationCooldown(this.recentDispatches, burstKey, now)) {
       return
     }
+    // Only the alert that goes out is rebuilt; a refresh keeps its source, state and workspace.
+    const news = current()
     // No attention key: later cooldowns then key on the workspace, as the window's request does.
     this.deps.dispatch({
       ...news.event,

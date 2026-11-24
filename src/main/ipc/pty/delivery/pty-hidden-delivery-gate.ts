@@ -1,5 +1,6 @@
 /** Drop hidden renderer delivery after model ingestion; reveal restores a snapshot, while sidecar interest keeps raw bytes flowing. */
 import type { GlobalSettings } from '../../../../shared/settings/global-settings-types'
+import { HIDDEN_OUTPUT_ACTIVITY_NOTICE_INTERVAL_MS } from '../../../../shared/terminal/replay/pty-model-restore-marker'
 import { _resetPtyEscapeBoundaryForTest, clearPtyEscapeBoundary } from './pty-escape-boundary'
 
 export type HiddenPtyDeliveryGateSettings = Pick<
@@ -21,11 +22,11 @@ let nextHiddenDropEpisode = 1
 const runtimeOwnedHiddenRendererPtys = new Set<string>()
 // A pane's own hidden claim outranks its visible report; only its release may reveal the PTY.
 const rendererClaimedHiddenPtys = new Set<string>()
+const rendererRetainingGraphicsPtys = new Set<string>()
 // A visible report already sent this episode's 'unhide'; the pane's follow-up release must not resend it mid-restore.
 const visibleReportUnhideEpisodes = new Map<string, number>()
 
 // Hidden bytes never reach the renderer, so its agent-exit watch learns about output only from this throttled notice.
-const HIDDEN_OUTPUT_ACTIVITY_NOTICE_INTERVAL_MS = 5_000
 const lastHiddenOutputActivityNoticeAt = new Map<string, number>()
 
 let droppedHiddenDeliveryChars = 0
@@ -82,12 +83,21 @@ export function isRuntimeOwnedHiddenRendererPty(id: string): boolean {
   return runtimeOwnedHiddenRendererPtys.has(id)
 }
 
-export function setRendererHiddenClaim(id: string, hidden: boolean): void {
+export function setRendererHiddenClaim(id: string, hidden: boolean, retainGraphics = false): void {
+  if (hidden && retainGraphics) {
+    rendererRetainingGraphicsPtys.add(id)
+  } else {
+    rendererRetainingGraphicsPtys.delete(id)
+  }
   if (hidden) {
     rendererClaimedHiddenPtys.add(id)
   } else {
     rendererClaimedHiddenPtys.delete(id)
   }
+}
+
+export function isRendererRetainingGraphics(id: string): boolean {
+  return rendererRetainingGraphicsPtys.has(id)
 }
 
 /** A visible view reveals a runtime mark unless its renderer still claims the PTY hidden. */
@@ -126,6 +136,7 @@ export function shouldDropHiddenRendererPtyData(
   return (
     isHiddenPtyDeliveryGateEnabled(settings) &&
     hiddenRendererPtys.has(id) &&
+    !rendererRetainingGraphicsPtys.has(id) &&
     !deliveryInterestRendererPtys.has(id)
   )
 }
@@ -183,6 +194,7 @@ export function resetRendererScopedHiddenPtyDeliveryState(): void {
   lastHiddenOutputActivityNoticeAt.clear()
   deliveryInterestRendererPtys.clear()
   rendererClaimedHiddenPtys.clear()
+  rendererRetainingGraphicsPtys.clear()
   visibleReportUnhideEpisodes.clear()
   for (const id of runtimeOwnedHiddenRendererPtys) {
     hiddenRendererPtys.add(id)
@@ -194,6 +206,7 @@ export function clearHiddenRendererPtyDeliveryState(id: string): void {
   lastHiddenOutputActivityNoticeAt.delete(id)
   runtimeOwnedHiddenRendererPtys.delete(id)
   rendererClaimedHiddenPtys.delete(id)
+  rendererRetainingGraphicsPtys.delete(id)
   visibleReportUnhideEpisodes.delete(id)
   deliveryInterestRendererPtys.delete(id)
   droppedSinceHiddenPtys.delete(id)
@@ -225,6 +238,7 @@ export function _resetHiddenRendererPtyDeliveryGateForTest(): void {
   hiddenRendererPtys.clear()
   runtimeOwnedHiddenRendererPtys.clear()
   rendererClaimedHiddenPtys.clear()
+  rendererRetainingGraphicsPtys.clear()
   visibleReportUnhideEpisodes.clear()
   deliveryInterestRendererPtys.clear()
   droppedSinceHiddenPtys.clear()

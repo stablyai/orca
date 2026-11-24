@@ -11,12 +11,14 @@ import {
   type TabBarItem
 } from './tab-bar-item-model'
 import type { DropIndicator } from '../strip/drop-indicator'
+import type { HoveredTabInsertion } from '../../tab-group/drag/tab-insertion'
 import { sameStringArray } from '@/runtime/web-session-tabs-sync/snapshots/state-equality-core'
 
 export type TabBarItemProjection = {
   orderedItems: TabBarItem[]
   sortableIds: string[]
   dropIndicatorByVisibleId: Map<string, DropIndicator>
+  hoveredInsertion: HoveredTabInsertion | null
   activeVisibleTabId: string | null
   /** The active item's unified tab id; resolved here so strip re-renders don't search every tab. */
   activeUnifiedTabId: string | null
@@ -177,6 +179,7 @@ export function useTabBarItemProjection({
     orderedItems,
     sortableIds,
     dropIndicatorByVisibleId,
+    hoveredInsertion: activeIndicator,
     activeVisibleTabId,
     activeUnifiedTabId,
     tabStripLayoutKey,

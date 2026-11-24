@@ -1,7 +1,6 @@
 // @vitest-environment happy-dom
 import { beforeEach, expect, it, vi } from 'vitest'
 import { createTestStore } from '@/store/testing/app-store-test-fixture'
-import { createTabsSliceMockApi } from '@/store/slices/tabs/tabs-slice-test-harness'
 import { withHeldTabsAsDrawn } from '@/store/workspace-layout/frames/workspace-layout-frame-held-tabs'
 import {
   isDrawnTabHeld,
@@ -46,12 +45,8 @@ vi.mock(
 vi.mock('../../../tab-group/drag/tab-group-panel-split-target', () => ({
   getTabGroupPanelRect: () => ({ width: 1200, height: 800 })
 }))
-vi.mock('@/lib/agent-session/launch/structured-agent-session-launch-persistence', () => ({
-  readStructuredAgentLaunchRecords: () => []
-}))
 
 const { openCurrentSideChat } = await import('./current-side-chat-launch')
-createTabsSliceMockApi()
 const WORKSPACE = 'repo1::/tmp/side-chat'
 
 beforeEach(() => {

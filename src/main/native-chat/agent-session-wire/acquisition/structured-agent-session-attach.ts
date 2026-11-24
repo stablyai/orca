@@ -72,6 +72,7 @@ export type AgentSessionAttachParams = {
     /** Omit only for exact replay of an already-imported journal. */
     transcriptPath?: string
     source?: AdoptedTranscriptSource
+    historyOrigin?: NativeCopyOrigin
     /** The source conversation's title; derived, so not part of the attach fingerprint. */
     conversationName?: string
   }

@@ -24,7 +24,10 @@ export default function TabGroupSplitLayout({
           ref={setDragRootNode}
           className="workspace-sidebar-seam flex flex-col flex-1 min-w-0 min-h-0 overflow-hidden border-l border-border"
         >
-          <div className="h-[4px] shrink-0 bg-tab-bar" data-terminal-focus-release-surface="true" />
+          <div
+            className="workspace-tab-drag-strip h-[4px] shrink-0 bg-tab-bar"
+            data-terminal-focus-release-surface="true"
+          />
           <div className="flex flex-1 min-w-0 min-h-0 overflow-hidden">
             <TabGroupSplitNodeTree
               layout={layout}

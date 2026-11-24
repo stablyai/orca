@@ -34,12 +34,18 @@ export type AcpSessionModelDiscovery = {
   inPrivateFolder?: true
   /** Starting the agent is heavy, so it lists only when a picker asks, never in warm-up. */
   listsOnDemand?: true
-  /** Removes a listing session's files, after its process exits, from an agent that can't delete
-   *  sessions; `cwd` is the private folder it ran in, so only that session matches. */
+  /** Removes a listing session, after its process exits, from an agent that can't delete sessions
+   *  over ACP; `cwd` is the private folder it ran in, so only that session matches. */
   discardSession?(session: AcpListingSession): Promise<void>
 }
 
-export type AcpListingSession = { sessionId: string; cwd: string; accountHomePath: string }
+export type AcpListingSession = {
+  sessionId: string
+  cwd: string
+  accountHomePath: string
+  /** Runs the agent's own CLI with the listing's binary, account and environment. */
+  runAgent(args: readonly string[]): Promise<string>
+}
 
 export function acpListingNeedsChatFolder(discovery: AcpModelDiscovery): boolean {
   return (

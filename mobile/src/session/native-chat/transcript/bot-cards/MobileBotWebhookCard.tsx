@@ -25,7 +25,8 @@ import { MobileNativeChatNoticePill } from '../notices/MobileNativeChatNoticePil
 import { toolStyles } from '../tool-results/mobile-native-chat-tool-styles'
 import { mobileWebhookCardSay } from './mobile-bot-card-copy'
 import { useMobileBotCardHost } from './mobile-bot-card-host'
-import { webhookCardRead, webhookKeyReveal } from './mobile-bot-card-operations'
+import { webhookCardRead } from './mobile-bot-card-operations'
+import { copyPhoneWebhookUrl } from '../../../../bots/webhooks/mobile-webhook-url-copy'
 import { MobileBotCardActions, MobileBotCardFrame, MobileBotCardMeta } from './MobileBotCardFrame'
 
 const URL_KEY_MASK = '••••••••'
@@ -133,13 +134,10 @@ export function MobileBotWebhookCard({
       return
     }
     setCopy('busy')
-    void webhookKeyReveal
-      .request(client, { hookId: directive.hookId })
-      .then((response) => clipboard.writeText(webhookKeyReveal.interpret(response).url))
-      .then(
-        () => setCopy('copied'),
-        () => setCopy('failed')
-      )
+    void copyPhoneWebhookUrl(client, directive.hookId, clipboard).then(
+      (copied) => setCopy(copied.kind === 'copied' ? 'copied' : 'failed'),
+      () => setCopy('failed')
+    )
   }
   return (
     <MobileBotCardFrame
@@ -165,7 +163,7 @@ export function MobileBotWebhookCard({
             copy === 'copied'
               ? t('chat.botCards.webhook.copied', 'Copied')
               : copy === 'failed'
-                ? t('chat.botCards.webhook.copyFailed', 'Couldn’t copy. Try again')
+                ? t('chat.botCards.webhook.copyFailed', 'Retry copy')
                 : t('chat.botCards.webhook.copyUrl', 'Copy URL')
           }
           Icon={Copy}

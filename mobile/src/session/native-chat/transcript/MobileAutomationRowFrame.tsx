@@ -1,82 +1,78 @@
 import type { ReactNode } from 'react'
-import { Pressable, Text, View } from 'react-native'
-import { ChevronDown, ChevronUp } from 'lucide-react-native'
 import type { AutomationRowMark } from '../../../../../src/shared/automations/automation-chat-row'
-import { colors, typography } from '../../../theme/mobile-theme'
-import { useMobileColorScheme } from '../../../theme/use-mobile-color-scheme'
-import { scaledType } from './messages/mobile-native-chat-message-styles'
-import { styles as card } from './agent-messages/mobile-agent-message-card-styles'
-import { styles } from './mobile-automation-run-row-styles'
+import {
+  MobileNativeChatEventName,
+  MobileNativeChatEventRow
+} from './messages/MobileNativeChatEventRow'
 import { MobileAutomationMark } from './MobileAutomationMark'
 
-/** "2:10 PM", as every automation row's time reads on the phone. */
+/** "2:10 PM", as automation wording reads a time on the phone. */
 export function mobileAutomationRowTime(at: number): string {
   return new Date(at).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })
 }
 
-/** Every automation row in a phone chat: mark, name, then label · status on a second line (320 pt
- *  can't fit all on one); opens in place. */
+/** Every automation row in a phone chat, as a status row: its trigger's mark, "<lead> · <name> · <status>"
+ *  (or "<lead> <name>" for a verb such as Couldn't start), then its details when opened. With a
+ *  subtitle the words are the name alone, the subtitle says what happened. */
 export function MobileAutomationRowFrame({
   mark,
+  lead,
   name,
-  meta,
+  status,
+  leadIsVerb = false,
   failed = false,
-  accessibilityLabel,
-  open,
-  onToggle,
+  timestamp,
+  disclosureKey,
   action,
+  subtitle,
   fontScale,
   testID,
   children
 }: {
   mark: AutomationRowMark
+  lead: string
   name: string
-  meta: string
+  status?: string | null
+  leadIsVerb?: boolean
+  /** A red ✕ on the mark: it couldn't start or finish. */
   failed?: boolean
-  accessibilityLabel: string
-  open: boolean
-  onToggle: () => void
+  timestamp: number | null
+  disclosureKey: string
   action?: ReactNode
+  /** The line under the name, such as "Couldn't start · 2:14 AM"; the row then shows no time. */
+  subtitle?: { node: ReactNode; label: string }
   fontScale: number
   testID?: string
   children?: ReactNode
 }): React.JSX.Element {
-  useMobileColorScheme()
-  const Chevron = open ? ChevronUp : ChevronDown
+  const after = status ? [status] : []
+  const label = subtitle
+    ? `${name}, ${subtitle.label}`
+    : leadIsVerb
+      ? [`${lead} ${name}`, ...after].join(' · ')
+      : [lead, name, ...after].join(' · ')
   return (
-    <View style={card.compactCard} testID={testID}>
-      <View style={card.compactHeader}>
-        <Pressable
-          style={card.headerToggle}
-          accessibilityRole="button"
-          accessibilityLabel={accessibilityLabel}
-          accessibilityState={{ expanded: open }}
-          onPress={onToggle}
-        />
-        <MobileAutomationMark mark={mark} />
-        <View pointerEvents="none" style={styles.text}>
-          <Text
-            numberOfLines={1}
-            style={[styles.name, scaledType(typography.bodySize, fontScale, 4)]}
-          >
-            {name}
-          </Text>
-          <View style={styles.metaLine}>
-            {failed ? <View style={styles.dot} /> : null}
-            <Text
-              numberOfLines={1}
-              style={[styles.meta, scaledType(typography.metaSize, fontScale, 4)]}
-            >
-              {meta}
-            </Text>
-          </View>
-        </View>
-        {action}
-        <View pointerEvents="none">
-          <Chevron size={14} color={colors.textMuted} />
-        </View>
-      </View>
-      {open && children ? <View style={card.compactBody}>{children}</View> : null}
-    </View>
+    <MobileNativeChatEventRow
+      testID={testID}
+      icon={<MobileAutomationMark mark={mark} />}
+      badge={failed ? 'failed' : null}
+      label={label}
+      action={action}
+      timestamp={subtitle ? null : timestamp}
+      disclosureKey={disclosureKey}
+      fontScale={fontScale}
+      details={children}
+      subtitle={subtitle?.node}
+      wordsLines={subtitle ? 2 : 1}
+    >
+      {subtitle ? null : (
+        <>
+          {lead}
+          {leadIsVerb ? ' ' : ' · '}
+        </>
+      )}
+      <MobileNativeChatEventName>{name}</MobileNativeChatEventName>
+      {status ? ` · ${status}` : null}
+    </MobileNativeChatEventRow>
   )
 }

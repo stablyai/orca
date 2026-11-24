@@ -105,7 +105,7 @@ export function admitPane(
               )
             )
         ) {
-          return { value: 'tab_closed', persist: false }
+          return { value: 'tab_closed', persist: false, writtenHostIds: [] }
         }
         return commitPaneChange(
           hostId,
@@ -255,7 +255,7 @@ function commitLeafMove(
     request
   )
   if (planned.sessions.length === 0) {
-    return { value: planned.result, persist: false }
+    return { value: planned.result, persist: false, writtenHostIds: [] }
   }
   const restores = planned.sessions.map(({ hostId, session }) =>
     writeRestorable(
@@ -277,12 +277,17 @@ function commitPaneChange<T>(
   context: TerminalTopologyCommitContext
 ): DurableProfileStateMutation<T> {
   if (!change.session) {
-    return { value: change.value, persist: false }
+    return { value: change.value, persist: false, writtenHostIds: [] }
   }
   const restore = writeRestorable(
     () => context.getSession(hostId),
     (value) => context.markDirty(assignWorkspaceSessionPartition(context.state, hostId, value)),
     keepFrozen(hostId, change.session, context)
   )
-  return { value: change.value, rollback: restore }
+  return {
+    value: change.value,
+    rollback: restore,
+    writtenHostIds: [hostId],
+    ...(change.workspaces ? { writtenWorkspaces: new Map([[hostId, change.workspaces]]) } : {})
+  }
 }

@@ -65,10 +65,12 @@ export const MOBILE_RUNTIME_CLIENT_CAPABILITIES = remoteRuntimeClientCapabilitie
 export const MOBILE_RUNTIME_CLIENT_CAPABILITY_UPDATE_METHOD =
   'runtime.clientCapabilities.update' as const
 
-export function mobileRuntimeClientCapabilityUpdateParams(): {
+export function mobileRuntimeClientCapabilityUpdateParams(
+  pageCapabilities: readonly string[] = []
+): {
   clientCapabilities: string[]
 } {
-  return { clientCapabilities: [...MOBILE_RUNTIME_CLIENT_CAPABILITIES] }
+  return { clientCapabilities: [...MOBILE_RUNTIME_CLIENT_CAPABILITIES, ...pageCapabilities] }
 }
 
 export function mobileRuntimeClientCapabilityUpdateRequest(args: {

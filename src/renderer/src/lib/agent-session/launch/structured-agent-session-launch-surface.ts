@@ -13,6 +13,8 @@ import {
 import type { TuiAgent } from '../../../../../shared/agent-launch/catalog/tui-agent'
 import { defaultAgentChatLabel } from '../../../../../shared/agent-session/conversation-naming/agent-session-chat-label'
 import { structuredAgentSessionTabId } from '../../../../../shared/agent-session/view/structured-agent-session-projection'
+import { findTabByIdOrChatAlias } from '../../../../../shared/agent-session/view/structured-agent-session-tab'
+import { structuredLaunchSlotTabId } from './structured-agent-session-launch-slot'
 import { useAppStore } from '@/store/index'
 import { resolveUnifiedTabCreatePlacement } from '@/store/slices/tabs/tabs-create-placement'
 import type { StructuredLaunchSurfaceAddress } from './structured-agent-session-launch-record'
@@ -86,6 +88,10 @@ export function captureStructuredLaunchSurfaceAddress(
   }
 }
 
+function hasChatTab(tabs: readonly Tab[] | undefined, sessionId: string): boolean {
+  return findTabByIdOrChatAlias(tabs, structuredAgentSessionTabId(sessionId)) !== undefined
+}
+
 let stopTrackingSlots: (() => void) | undefined
 
 export function stopStructuredLaunchSlotTracking(): void {
@@ -104,8 +110,8 @@ function trackSlotAddresses(): void {
       if (!address || (record.executionHostId !== 'local' && !record.forkFrom?.current)) {
         continue
       }
-      const tabId = structuredAgentSessionTabId(record.sessionId)
-      if (state.unifiedTabsByWorktree[address.worktreeId]?.some((tab) => tab.id === tabId)) {
+      const tabId = record.tabId ?? structuredAgentSessionTabId(record.sessionId)
+      if (hasChatTab(state.unifiedTabsByWorktree[address.worktreeId], record.sessionId)) {
         continue
       }
       hasHiddenSlot = true
@@ -139,9 +145,13 @@ export function reserveStructuredLaunchSlot(launch: LaunchSurface): void {
   if (!address || (launch.executionHostId !== 'local' && !launch.params?.forkFrom?.current)) {
     return
   }
+  const state = useAppStore.getState()
+  if (hasChatTab(state.unifiedTabsByWorktree[address.worktreeId], launch.sessionId)) {
+    return
+  }
   trackSlotAddresses()
-  useAppStore.getState().ensureWorktreeRootGroup(address.worktreeId, {
-    tabId: structuredAgentSessionTabId(launch.sessionId),
+  state.ensureWorktreeRootGroup(address.worktreeId, {
+    tabId: structuredLaunchSlotTabId(launch.sessionId),
     targetGroupId: address.targetGroupId,
     precedingTabIds: address.precedingTabIds
   })
@@ -167,7 +177,8 @@ export function openStructuredAgentSessionProvisionalTab(args: {
     }
     return existing
   }
-  const tabId = structuredAgentSessionTabId(args.sessionId)
+  // The id the launch's create carries, so this window and the host save the tab alike.
+  const tabId = structuredLaunchSlotTabId(args.sessionId)
   const record = readStructuredAgentLaunchRecord(args.sessionId)
   const address =
     record?.executionHostId === args.executionHostId ? record.surfaceAddress : undefined
@@ -201,6 +212,7 @@ export function openStructuredAgentSessionProvisionalTab(args: {
         worktreeId: args.worktreeId,
         executionHostId: args.executionHostId,
         sessionId: args.sessionId,
+        tabId,
         agent: args.agent,
         ...(targetGroupId ? { targetGroupId } : {}),
         // A reserved slot names where the chat goes: after the tab before it.

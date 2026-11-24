@@ -47,8 +47,11 @@ describe('migrateWorktreeIdentity worktree-reference coverage', () => {
       ...getDefaultWorkspaceSession(),
       ...REFERENCE_FIXTURES.clientHostedBrowserPagesByWorktree
     }
-    migrateWorktreeIdentity(persistedState(session), OLD, NEW)
-    expect(session.clientHostedBrowserPagesByWorktree?.[NEW]?.[0]?.workspaceId).toBe(NEW)
+    const state = persistedState(session)
+    migrateWorktreeIdentity(state, OLD, NEW)
+    expect(state.workspaceSession.clientHostedBrowserPagesByWorktree?.[NEW]?.[0]?.workspaceId).toBe(
+      NEW
+    )
   })
 
   it('migrates host partitions, not just the local blob', () => {
@@ -59,7 +62,10 @@ describe('migrateWorktreeIdentity worktree-reference coverage', () => {
     const state = persistedState(getDefaultWorkspaceSession())
     state.workspaceSessionsByHostId = { 'ssh:target': hostSession }
     expect(migrateWorktreeIdentity(state, OLD, NEW)).toBe(true)
-    expect(hostSession.closedTerminalTabTombstonesByTabId?.['tab-1']?.worktreeId).toBe(NEW)
+    expect(
+      state.workspaceSessionsByHostId?.['ssh:target']?.closedTerminalTabTombstonesByTabId?.['tab-1']
+        ?.worktreeId
+    ).toBe(NEW)
   })
 
   it('re-keys a cross-store link by its child and never touches a parent in another store', () => {

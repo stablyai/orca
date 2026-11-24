@@ -30,6 +30,8 @@ export const ORCAD_CHILD_ENTRY_POINTS = {
   journalSqlReader: 'src/main/native-chat/agent-session-journal/journal-sql-reader-entry.ts',
   agentIdentityWorker: 'src/main/agent-hooks/identity/agent-identity-worker-entry.ts',
   botsDbWorker: 'src/main/bots/db-worker/bots-db-worker-entry.ts',
+  orchestrationReader:
+    'src/main/runtime/orchestration/db/reader-worker/orchestration-reader-entry.ts',
   portScanCommandWorker: 'src/main/ports/port-scan-command-worker-entry.ts',
   commandPathDirectoryWorker: 'src/main/ipc/command-path/command-path-directory-worker-entry.ts',
   sessionScanner: 'src/main/ai-vault/scan-service/session-scanner-service-entry.ts',
@@ -39,6 +41,9 @@ export const ORCAD_CHILD_ENTRY_POINTS = {
     'src/main/claude-accounts/profiles/setup/claude-profile-setup-worker-entry.ts',
   codexHistoryDiskUsage:
     'src/main/codex/history/disk-usage/codex-history-disk-usage-worker-entry.ts',
+  codexRolloutHistoryReferences:
+    'src/main/codex/history/cleanup/codex-rollout-history-references-worker-entry.ts',
+  codexProjectTrust: 'src/main/codex/trust/project-trust/codex-project-trust-worker-entry.ts',
   claudeConversationFork: 'src/main/claude/transcripts/claude-conversation-fork-worker-entry.ts',
   usageScanWorker: 'src/main/usage/scan-worker/usage-scan-worker-entry.ts',
   sttWorker: 'src/main/speech/stt-worker.ts',

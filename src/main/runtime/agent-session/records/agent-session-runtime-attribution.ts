@@ -16,10 +16,6 @@ export function agentSessionRuntimeIncarnation(): string {
   return incarnation
 }
 
-export function beginAgentSessionRuntimeIncarnationForTest(): void {
-  incarnation = randomUUID()
-}
-
 export function attributeAgentSessionRuntimeRecord(
   before: AgentSessionRecord | undefined,
   after: AgentSessionRecord,
