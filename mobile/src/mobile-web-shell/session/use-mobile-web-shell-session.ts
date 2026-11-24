@@ -86,8 +86,7 @@ export function useMobileWebShellSession(args: {
   const runtimeRef = useRef<MobileWebShellRuntime | null>(null)
   runtimeRef.current ??= args.runtime ?? createMobileWebShellRuntime()
   const runtime = runtimeRef.current
-  const storeRef = useRef<GenerationStore | null>(null)
-  const store = (storeRef.current ??= runtime.createStore())
+  const [store] = useState(() => runtime.createStore())
 
   const sessionRef = useRef(createMobileWebShellSession(routePathname, wide, appNamesRoute))
   const [state, setState] = useState(sessionRef.current.state)
@@ -141,12 +140,11 @@ export function useMobileWebShellSession(args: {
       const next = stepped.session.state
       // Take the hold before any effect runs, so another shell's open-cache cannot commit under this one.
       if (next.kind === 'ready' || next.kind === 'activating') {
-        holdRef.current ??=
-          storeRef.current?.holdGeneration(deriveHostCacheKey(hostIdRef.current), {
-            swap: () => dispatch(epoch, { type: 'update-swap' }),
-            askAgain: () => askPagesAgain(hostIdRef.current),
-            latestRound: latestAppResumeRound
-          }) ?? null
+        holdRef.current ??= store.holdGeneration(deriveHostCacheKey(hostIdRef.current), {
+          swap: () => dispatch(epoch, { type: 'update-swap' }),
+          askAgain: () => askPagesAgain(hostIdRef.current),
+          latestRound: latestAppResumeRound
+        })
       } else {
         releaseHold()
       }
@@ -166,7 +164,7 @@ export function useMobileWebShellSession(args: {
         runEffectRef.current?.(epoch, stepped.session.flow, effect)
       }
     },
-    [cancelPending, downloadProgress, releaseHold]
+    [cancelPending, downloadProgress, releaseHold, store]
   )
 
   const invalidate = useCallback((): void => {
@@ -179,24 +177,21 @@ export function useMobileWebShellSession(args: {
 
   const runEffect = useCallback(
     async (epoch: number, flow: number, effect: MobileWebShellSessionEffect): Promise<void> => {
-      const store = storeRef.current
-      if (store !== null) {
-        await runShellEffect(effect, {
-          store,
-          client,
-          hostId,
-          hostKey,
-          runtime,
-          flow,
-          startedAt: startedAtRef.current,
-          downloads: downloadsRef.current,
-          deadline,
-          manifest: manifestRef,
-          send: (event) => dispatch(epoch, event)
-        })
-      }
+      await runShellEffect(effect, {
+        store,
+        client,
+        hostId,
+        hostKey,
+        runtime,
+        flow,
+        startedAt: startedAtRef.current,
+        downloads: downloadsRef.current,
+        deadline,
+        manifest: manifestRef,
+        send: (event) => dispatch(epoch, event)
+      })
     },
-    [client, deadline, dispatch, hostId, hostKey, runtime]
+    [client, deadline, dispatch, hostId, hostKey, runtime, store]
   )
   // Install the runner after commit, before dispatching effects, so discarded renders cannot execute work.
   useEffect(() => {
