@@ -9,7 +9,11 @@ export type ProviderRelaySpawnSpec = {
   env: Record<string, string>
   /** The app's native provider owner; the daemon cannot resolve app resources itself. */
   ownerExecutable: string
-  /** The launching app's bundle; a daemon from another bundle refuses so stale code never starts chats. */
+  /**
+   * The launching app's bundle. A daemon kept from an older bundle for its live sessions starts
+   * relays for a newer app too, as it does terminals (the relay protocol matched at hello); the
+   * agent runs through the app's own `ownerExecutable`. Older daemons refuse another bundle.
+   */
   appVersion?: string
   entryPath?: string
 }

@@ -129,7 +129,8 @@ function spawnSpec(
   client: DaemonClient
 ): ProviderRelaySpawnSpec | null {
   const identity = client.getDaemonIdentity()
-  if (!route || !identity?.providerRelay || identity.appVersion !== route.appVersion) {
+  // A daemon kept from another bundle relays too, when it speaks the relay protocol.
+  if (!route || !identity?.providerRelay) {
     return null
   }
   if (!launch.cwd) {
