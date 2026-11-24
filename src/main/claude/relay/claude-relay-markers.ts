@@ -1,4 +1,11 @@
-import type { ProviderRelayWorkMarkers } from '../../provider-relay/app-provider-relays'
+import {
+  registerReattachableProviderRelayAgent,
+  type ProviderRelayWorkMarkers
+} from '../../provider-relay/app-provider-relays'
+
+/** Recorded with each Claude relay; this build reattaches it. */
+export const CLAUDE_RELAY_AGENT = 'claude-code'
+registerReattachableProviderRelayAgent(CLAUDE_RELAY_AGENT)
 
 const SESSION = [['session_id']]
 const TASK = [['task_id']]
@@ -13,6 +20,7 @@ const TERMINAL_STATUSES = ['completed', 'failed', 'killed', 'stopped']
  * until its end, also after the turn. Keys: `turn` [session_id], `task` [task_id].
  */
 export const CLAUDE_RELAY_WORK_MARKERS: ProviderRelayWorkMarkers = {
+  agent: CLAUDE_RELAY_AGENT,
   markers: [
     {
       group: 'turn',
