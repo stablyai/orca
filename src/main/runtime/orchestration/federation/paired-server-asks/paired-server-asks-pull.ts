@@ -10,6 +10,7 @@ import { ORCHESTRATION_CLIENT_AGENT_ASKS_RUNTIME_CAPABILITY } from '../../../../
 import type { PeerMailClientAsksPull } from '../../../../../shared/rpc-contract/orchestration/orchestration-peer-mail-params'
 import { getPublishedHostDescriptor } from '../../../hosts/platform-probe/host-descriptor'
 import { peerMailPairing } from '../peer-mail/peer-mail-delivery'
+import { tellUnansweredAskers } from './paired-server-unanswered-asks'
 import type { OrchestrationWorkerServer } from '../environment-transport'
 import {
   getAnnouncedPairing,
@@ -166,9 +167,11 @@ export function owesAnnouncement(db: OrchestrationDb, asks: PairedServerAsks): b
 /** The server answered under this pairing: it is announced, and when it replaced an earlier one,
  *  what any other pairing of this server left here ends in the same write: its owed replies are retired (the server told their
  *  askers when it ended that pairing) and its held asks go unanswered, since no answer could go
- *  back. A failed write leaves the announcement owed, so the next answered pull settles them.
+ *  back, and asks admitted under it end as unpaired. A failed write leaves the announcement owed,
+ *  so the next answered pull settles them.
  *  Returns whether it replaced an earlier one, and the agents whose waiting cards went. */
 export function noteAnnounced(
+  runtime: OrcaRuntimeService,
   db: OrchestrationDb,
   asks: PairedServerAsks,
   seenAs: string
@@ -205,6 +208,9 @@ export function noteAnnounced(
       .all(asks.environmentId, asks.pairing)
       .map((row) => String(row.bot_id))
     db.db.prepare(`DELETE ${stale}`).run(asks.environmentId, asks.pairing)
+    // Admitted under an older pairing before this (its catalog changed while it was admitted):
+    // its answer could never go back, so it ends as unpaired in this same write, or not at all.
+    tellUnansweredAskers(runtime, asks.environmentId, asks.pairing)
     return cards
   })
   delete asks.wire.previousPairing

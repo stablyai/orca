@@ -297,7 +297,7 @@ describe('what this computer hands back to a paired server', () => {
     queue(replaced, 'msg_replaced')
     const announced = { ...SERVER, wire: { ...SERVER.wire } }
 
-    noteAnnounced(db, { ...announced, pairing: 'fingerprint_replaced' }, 'seen_as_a')
+    noteAnnounced(runtime, db, { ...announced, pairing: 'fingerprint_replaced' }, 'seen_as_a')
     expect(db.listPendingFederationRelay(replaced, 'to_home')).toHaveLength(1)
 
     db.db.exec(`
@@ -305,11 +305,13 @@ describe('what this computer hands back to a paired server', () => {
       WHEN OLD.message_id = 'msg_replaced'
       BEGIN SELECT RAISE(ABORT, 'reply settlement failed'); END;
     `)
-    expect(() => noteAnnounced(db, announced, 'seen_as_a2')).toThrow('reply settlement failed')
+    expect(() => noteAnnounced(runtime, db, announced, 'seen_as_a2')).toThrow(
+      'reply settlement failed'
+    )
     expect(owesAnnouncement(db, announced)).toBe(true)
 
     db.db.exec('DROP TRIGGER fail_reply_settlement')
-    noteAnnounced(db, announced, 'seen_as_a2')
+    noteAnnounced(runtime, db, announced, 'seen_as_a2')
 
     expect(db.listPendingFederationRelay(replaced, 'to_home')).toEqual([])
     expect(db.listPendingFederationRelay(current, 'to_home')).toHaveLength(1)
@@ -471,7 +473,10 @@ describe('what this computer hands back to a paired server', () => {
     })
     const repaired = { ...SERVER, pairing: 'fingerprint_b', wire: { ...SERVER.wire } }
 
-    expect(noteAnnounced(db, repaired, 'seen_b')).toEqual({ replaced: true, cards: ['docs'] })
+    expect(noteAnnounced(runtime, db, repaired, 'seen_b')).toEqual({
+      replaced: true,
+      cards: ['docs']
+    })
 
     expect(getPairedServerAsk(db, 'm_old_card')).toBeUndefined()
     expect(getPairedServerAsk(db, 'm_old_admit')).toBeUndefined()

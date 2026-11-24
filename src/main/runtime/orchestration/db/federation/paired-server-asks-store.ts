@@ -51,6 +51,12 @@ CREATE TABLE IF NOT EXISTS paired_server_announced (
   pairing_fingerprint     TEXT NOT NULL,
   server_seen_fingerprint TEXT NOT NULL
 );
+-- A server's reverse conversations by pairing, and the mail filed under each: what ending a pairing
+-- of one server reads, never all paired mail.
+CREATE INDEX IF NOT EXISTS idx_peer_mail_conversations_reversed
+  ON peer_mail_conversations(environment_id, peer_fingerprint, conversation_id) WHERE role = 'peer';
+CREATE INDEX IF NOT EXISTS idx_peer_mail_messages_conversation
+  ON peer_mail_messages(conversation_id);
 `
 
 export type PairedServerAskRow = {

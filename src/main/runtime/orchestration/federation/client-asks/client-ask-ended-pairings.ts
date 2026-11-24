@@ -6,6 +6,7 @@
 // pairing removed before the record existed.
 import type { OrchestrationDb } from '../../db/orchestration-db'
 import type { ClientAskListenerOwner } from './client-ask-listeners'
+import { runLifecycleWriteTransaction } from '../../db/lifecycle-write-transaction-runner'
 
 export const CLIENT_ASKS_SCHEMA_SQL = `
 CREATE TABLE IF NOT EXISTS ended_client_pairings (
@@ -26,21 +27,50 @@ CREATE INDEX IF NOT EXISTS idx_federation_relay_client_ask_threads
   ON federation_relay_items(dispatch_id, json_extract(payload, '$.threadId'))
   WHERE kind = 'client_ask';`
 
-/** After `CLIENT_ASKS_SCHEMA_SQL`: an earlier build of this table kept only the pairing and when it
- *  ended, and settled each end in the write that recorded it, so its rows gain the columns as
- *  settled (nothing for a restart to replay). Then the unsettled-end index, which names them. */
+// Who an ended pairing's askers hear from, and why, when an earlier build kept neither.
+const UNNAMED_END = { serverName: 'A paired computer', reason: 'Its pairing with this Orca ended.' }
+
+// What an end still owes: a question there still awaits an answer, or mail queued there was never
+// taken. For `ended_client_pairings` aliased `e`.
+const OWES_SQL = `(EXISTS (SELECT 1 FROM peer_questions_out q
+    WHERE q.awaiting = 1 AND q.peer_fingerprint = e.peer_fingerprint
+      AND q.environment_id = e.environment_id)
+  OR EXISTS (SELECT 1 FROM peer_mail_conversations c
+    JOIN federation_relay_items i ON i.dispatch_id = c.conversation_id
+    WHERE c.role = 'home' AND c.environment_id = e.environment_id
+      AND c.peer_fingerprint = e.peer_fingerprint
+      AND i.direction = 'to_worker' AND i.acked_at IS NULL))`
+
+/** After `CLIENT_ASKS_SCHEMA_SQL`, once, at database open: an earlier build of this table kept only
+ *  the pairing and when it ended, and could stop between recording an end and settling it. Its rows
+ *  gain the columns in one write, so an interrupted upgrade starts over: one that still owes a
+ *  notice or a drop stays unsettled for a restart to finish, under a plain sender and reason; the
+ *  rest are settled. Then the unsettled-end index, which names the column. */
 export function migrateEndedClientPairings(
   db: OrchestrationDb['db'],
   hasColumn: (table: string, column: string) => boolean
 ): void {
-  for (const column of ['server_name', 'reason']) {
-    if (!hasColumn('ended_client_pairings', column)) {
-      db.exec(`ALTER TABLE ended_client_pairings ADD COLUMN ${column} TEXT NOT NULL DEFAULT ''`)
-    }
-  }
-  if (!hasColumn('ended_client_pairings', 'settled_at')) {
-    db.exec('ALTER TABLE ended_client_pairings ADD COLUMN settled_at TEXT')
-    db.exec('UPDATE ended_client_pairings SET settled_at = ended_at')
+  const missing = ['server_name', 'reason', 'settled_at'].filter(
+    (column) => !hasColumn('ended_client_pairings', column)
+  )
+  if (missing.length > 0) {
+    runLifecycleWriteTransaction(db, 'ended_client_pairings_upgrade', () => {
+      for (const column of missing) {
+        db.exec(
+          column === 'settled_at'
+            ? 'ALTER TABLE ended_client_pairings ADD COLUMN settled_at TEXT'
+            : `ALTER TABLE ended_client_pairings ADD COLUMN ${column} TEXT NOT NULL DEFAULT ''`
+        )
+      }
+      db.prepare(
+        `UPDATE ended_client_pairings
+         SET server_name = CASE server_name WHEN '' THEN ?1 ELSE server_name END,
+             reason = CASE reason WHEN '' THEN ?2 ELSE reason END`
+      ).run(UNNAMED_END.serverName, UNNAMED_END.reason)
+      if (missing.includes('settled_at')) {
+        db.exec(`UPDATE ended_client_pairings AS e SET settled_at = ended_at WHERE NOT ${OWES_SQL}`)
+      }
+    })
   }
   db.exec(`CREATE INDEX IF NOT EXISTS idx_ended_client_pairings_unsettled
     ON ended_client_pairings(environment_id) WHERE settled_at IS NULL`)

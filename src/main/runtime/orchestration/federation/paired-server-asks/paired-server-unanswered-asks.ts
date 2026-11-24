@@ -14,11 +14,13 @@ export function tellUnansweredAskers(
   replacedBy?: string
 ): void {
   const db = runtime.getOrchestrationDb()
+  // From this server's reverse conversations (of the replaced pairings only, when re-paired) to
+  // their mail and its requests: the work follows that route's mail, never all paired mail.
   const unanswered = db.db
     .prepare(
-      `SELECT r.message_id FROM bot_requests r
-       JOIN peer_mail_messages p ON p.message_id = r.message_id
-       JOIN peer_mail_conversations c ON c.conversation_id = p.conversation_id
+      `SELECT r.message_id FROM peer_mail_conversations c
+       JOIN peer_mail_messages p ON p.conversation_id = c.conversation_id
+       JOIN bot_requests r ON r.message_id = p.message_id
        LEFT JOIN bot_request_outcomes o ON o.message_id = r.message_id
        WHERE c.role = 'peer' AND c.environment_id = ?1 AND ${REVERSED_CONVERSATION_SQL}
          AND (?2 IS NULL OR c.peer_fingerprint <> ?2) AND o.message_id IS NULL`

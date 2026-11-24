@@ -24,7 +24,6 @@ import {
 import { admitPairedServerAsks } from './paired-server-ask-admission'
 import { flushPairedServerReturns } from './paired-server-ask-returns'
 import { notifyPairedServerCardsChanged } from './paired-server-card-notices'
-import { tellUnansweredAskers } from './paired-server-unanswered-asks'
 import {
   importPairedServerItem,
   PAIRED_SERVER_ITEM_KINDS,
@@ -174,14 +173,9 @@ export function notePairedServerAnswer(
 ): void {
   const seenAs = Answered.safeParse(response).data?.clientAsks?.seenAs
   if (asks && seenAs && (owesAnnouncement(db, asks) || asks.wire.previousPairing)) {
-    const { replaced, cards } = noteAnnounced(db, asks, seenAs)
+    const { cards } = noteAnnounced(runtime, db, asks, seenAs)
     if (cards.length > 0) {
       notifyPairedServerCardsChanged(runtime, cards)
-    }
-    if (replaced) {
-      // Admitted under the old pairing before this announcement (its catalog changed mid-way):
-      // its answer could never go back, so it ends here as unpaired.
-      tellUnansweredAskers(runtime, asks.environmentId, asks.pairing)
     }
   }
 }

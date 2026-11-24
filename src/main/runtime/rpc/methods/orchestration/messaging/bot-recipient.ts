@@ -21,7 +21,7 @@ import type {
   BotRequestAsker
 } from '../../../../../../shared/bots/bot-acts-for'
 import { botRequestActsFor } from './bot-request-record'
-import { isPulledRequestChat, readFirstMessageActsFor } from './bot-first-message-acts-for'
+import { isPulledRequestChatOnce, readFirstMessageActsFor } from './bot-first-message-acts-for'
 import type {
   AgentJournalMessageItem,
   AgentJournalRenderItem
@@ -304,7 +304,7 @@ export async function readBotTurn(
     recorded &&
     isOrcaSessionId(root) &&
     recorded.actsFor.some((asker) => asker.kind !== 'unknown') &&
-    (await isPulledRequestChat(db, () => host.journalReads(root), root))
+    (await isPulledRequestChatOnce(db, () => host.journalReads(root), root))
   ) {
     // Started for a request pulled from a paired server, and kept as the owner's by an earlier
     // version: it acts for no one, as such a chat is recorded now.
