@@ -12,6 +12,7 @@ import {
 } from '../../../shared/browser/element-grab/browser-grab-native-keys'
 
 type Message = { token: string; revision: number }
+type PageReport = Message & Record<string, unknown>
 
 it('forwards a tool letter the page reports right after agent input, while the resume is still in flight', async () => {
   const guards: (Message & { suspended: boolean })[] = []
@@ -39,7 +40,7 @@ it('forwards a tool letter the page reports right after agent input, while the r
     isDestroyed: () => false,
     send: (_channel: string, payload: { key: string }) => forwarded.push(payload.key)
   })
-  const fromPage = (channel: string, payload: object): void => {
+  const fromPage = (channel: string, payload: PageReport): void => {
     guest.emit('ipc-message', { senderFrame: frame }, channel, payload)
   }
   const ackGuard = (): void => {

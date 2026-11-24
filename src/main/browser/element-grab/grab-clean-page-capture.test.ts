@@ -11,6 +11,12 @@ const image = {
   getSize: () => ({ width: 8, height: 8 })
 }
 const captured = { dataUrl: 'data:image/png;base64,AA', width: 8, height: 8 }
+const flushMicrotasks = async (turns: number): Promise<void> => {
+  if (turns > 0) {
+    await Promise.resolve()
+    await flushMicrotasks(turns - 1)
+  }
+}
 
 it('abandons a stalled readback at its deadline, and starts no second readback until it settles', async () => {
   vi.useFakeTimers()
@@ -94,11 +100,14 @@ it('never overlaps Draw readbacks with the paint lease restore capture, in eithe
   expect(calls).toEqual(['readback'])
 
   // Draws that time out behind the stalled readback submit nothing of their own.
-  for (let i = 0; i < 3; i++) {
+  const timeOutDraw = async (): Promise<void> => {
     const waiting = draw()
     await vi.advanceTimersByTimeAsync(1_000)
     await expect(waiting).resolves.toBeNull()
   }
+  await timeOutDraw()
+  await timeOutDraw()
+  await timeOutDraw()
   await vi.advanceTimersByTimeAsync(100)
   expect(calls).toEqual(['readback'])
   expect(throttling.at(-1)).toBe(true)
@@ -152,9 +161,7 @@ it('owes one rehide per final release, and a lease held when the readback settle
   throttle.acquire(guest)()
   readbacks[0]()
   // Let the settlement run to completion before that timer fires.
-  for (let i = 0; i < 30; i++) {
-    await Promise.resolve()
-  }
+  await flushMicrotasks(30)
   await vi.advanceTimersByTimeAsync(0)
   await vi.advanceTimersByTimeAsync(0)
   expect(calls).toEqual(['readback', 'restore'])

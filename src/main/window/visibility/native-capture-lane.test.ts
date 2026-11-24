@@ -6,7 +6,7 @@ import {
 } from './native-capture-lane'
 
 it('wakes only the waits still registered when the capture settles', async () => {
-  const target = {}
+  const target = { capturePage: () => Promise.resolve() }
   let settle: (() => void) | undefined
   occupyNativeCaptureLane(
     target,

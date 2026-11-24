@@ -60,19 +60,25 @@ export async function captureCleanGuestPage(
       resolve(null)
     }, deadlineMs)
   })
-  while (isNativeCaptureBusy(guest)) {
-    const free = await new Promise<boolean>((resolve) => {
-      const cancel = whenNativeCaptureLaneFree(guest, () => resolve(true))
+  // Re-registers until the lane is free: another capture may take it between wake-up and retry.
+  const free = await new Promise<boolean>((resolve) => {
+    const attempt = (): void => {
+      if (!isNativeCaptureBusy(guest)) {
+        stopWaiting = () => {}
+        resolve(true)
+        return
+      }
+      const cancel = whenNativeCaptureLaneFree(guest, attempt)
       stopWaiting = () => {
         cancel()
         resolve(false)
       }
-    })
-    stopWaiting = () => {}
-    if (!free) {
-      releasePaint()
-      return null
     }
+    attempt()
+  })
+  if (!free) {
+    releasePaint()
+    return null
   }
   if (signal.aborted || guest.isDestroyed()) {
     clearTimeout(deadlineTimer)

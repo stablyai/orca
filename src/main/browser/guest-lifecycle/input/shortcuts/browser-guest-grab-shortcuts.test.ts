@@ -12,6 +12,7 @@ import {
 } from '../../../../../shared/browser/element-grab/browser-grab-native-keys'
 
 type Message = { token: string; revision: number }
+type PageReport = Message & Record<string, unknown>
 
 const settle = (): Promise<void> => new Promise((resolve) => setTimeout(resolve, 0))
 
@@ -42,7 +43,7 @@ it('delivers a grab chord the page reports right after agent input, while the re
     isDestroyed: () => false,
     send: (channel: string, _page: string, kind: string) => toggles.push(`${channel}:${kind}`)
   }
-  const fromPage = (channel: string, payload: object): void => {
+  const fromPage = (channel: string, payload: PageReport): void => {
     guest.emit('ipc-message', { senderFrame: frame }, channel, payload)
   }
   const ackGuard = (): void => {
