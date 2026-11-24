@@ -1,5 +1,5 @@
 import { spawn } from 'node:child_process'
-import { once } from 'node:events'
+import { randomUUID } from 'node:crypto'
 import { mkdtemp, realpath, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -10,7 +10,6 @@ import { afterEach, beforeEach } from 'vitest'
 import {
   acquireChangedCheckSlot,
   queueFileFor,
-  readStartTimes,
   settleChangedCheckSlotCleanup
 } from './check-changed-slot.mjs'
 
@@ -19,49 +18,78 @@ export const WAITING = 'Waiting for another local check:changed run to finish…
 export const UNNAMED =
   'Running now: a run the queue cannot name, such as one from an older checkout.'
 const moduleUrl = pathToFileURL(join(import.meta.dirname, 'check-changed-slot.mjs')).href
+// Longest teardown waits for admitted work or background cleanup before keeping custody.
+const DRAIN_MS = 30_000
 
 export let root
 export let file
-// Every acquisition, continuation, connection and child is registered when it is created. Teardown
-// runs all of them even if one throws, settles background cleanup, then removes the files.
+let rawRoot
+// Every acquisition, continuation, connection and child is registered when it is created.
 const owned = []
 
 function own(cleanup) {
   owned.push(cleanup)
 }
 
-/** Registers the per-test temp directory and the teardown that drains everything `own` recorded. */
+/** Teardown could not confirm something stopped; the slot and temp root are kept, not torn down. */
+class CustodyKept extends Error {}
+
+/**
+ * Registers the per-test temp root and the teardown. Teardown runs every owned cleanup, newest
+ * first, including ones registered while it runs and despite earlier failures; then settles
+ * background slot cleanup; then removes the root only if nothing was left in custody.
+ */
 export function registerSlotHarness() {
   beforeEach(async () => {
-    root = await realpath(await mkdtemp(join(tmpdir(), 'orca-changed-slot-')))
+    rawRoot = await mkdtemp(join(tmpdir(), 'orca-changed-slot-'))
+    root = await realpath(rawRoot)
     file = join(root, 'host.sqlite')
   })
 
   afterEach(async () => {
     const errors = []
-    for (const cleanup of owned.splice(0).toReversed()) {
+    while (owned.length > 0) {
+      const cleanup = owned.pop()
       try {
         await cleanup()
       } catch (error) {
         errors.push(error)
       }
     }
-    await settleChangedCheckSlotCleanup()
-    await rm(root, { recursive: true, force: true })
+    if (!(await settles(settleChangedCheckSlotCleanup(), DRAIN_MS))) {
+      errors.push(new CustodyKept('background slot cleanup still running'))
+    }
+    if (errors.some((error) => error instanceof CustodyKept)) {
+      errors.push(new CustodyKept(`kept ${rawRoot} because something may still be using it`))
+    } else {
+      await rm(rawRoot, { recursive: true, force: true })
+    }
     if (errors.length > 0) {
       throw new AggregateError(errors, 'teardown failed')
     }
   })
 }
 
+async function settles(promise, timeoutMs) {
+  const controller = new AbortController()
+  const settled = await Promise.race([
+    Promise.resolve(promise).then(
+      () => true,
+      () => true
+    ),
+    delay(timeoutMs, false, { signal: controller.signal }).catch(() => false)
+  ])
+  controller.abort()
+  return settled
+}
+
 /**
- * Starts an acquisition and runs `onAcquired(release)` once it holds the slot. The returned promise
- * is owned: teardown aborts a pending acquisition, releases a held slot, and awaits both.
+ * Starts an acquisition and runs `onAcquired(release)` once it holds the slot. Teardown aborts a
+ * pending acquisition; admitted work keeps the slot until it settles, and only then is the slot
+ * released. If admitted work does not settle, the slot stays held and the root is kept.
  */
 export function run(options = {}, onAcquired = (release) => release) {
   const controller = new AbortController()
-  let continuation
-  own(() => continuation?.catch(() => {}))
   const acquisition = acquireChangedCheckSlot(file, {
     pollMs: 5,
     log: () => {},
@@ -69,13 +97,16 @@ export function run(options = {}, onAcquired = (release) => release) {
     signal: controller.signal,
     ...options
   })
+  const continuation = acquisition.then(onAcquired)
+  continuation.catch(() => {})
   own(async () => {
     controller.abort()
     const release = await acquisition.catch(() => undefined)
+    if (!(await settles(continuation, DRAIN_MS))) {
+      throw new CustodyKept('admitted work did not finish; its slot was kept')
+    }
     await release?.()
   })
-  continuation = acquisition.then(onAcquired)
-  continuation.catch(() => {})
   continuation.abort = () => controller.abort()
   return continuation
 }
@@ -94,7 +125,8 @@ export function observe(promise) {
   return state
 }
 
-export async function until(condition, label, timeoutMs = 30_000) {
+/** Helper deadline: its message names the condition, unlike the runner's test timeout. */
+export async function until(condition, label, timeoutMs = 60_000) {
   const deadline = Date.now() + timeoutMs
   while (!(await condition())) {
     if (Date.now() > deadline) {
@@ -104,7 +136,8 @@ export async function until(condition, label, timeoutMs = 30_000) {
   }
 }
 
-export function within(promise, label, timeoutMs = 30_000) {
+/** Helper deadline on a promise; the underlying work stays owned by whoever created it. */
+export function within(promise, label, timeoutMs = 60_000) {
   let timer
   return Promise.race([
     promise,
@@ -132,16 +165,31 @@ ${body}`
     ],
     { cwd: root, stdio: ['pipe', 'pipe', 'inherit'] }
   )
-  // 'close' follows exit once stdout has drained; a failed spawn settles it through 'error'.
+  const errors = []
+  // A spawn failure arrives as 'error' before any 'spawn'; later errors are recorded separately.
+  const started = new Promise((resolve) => {
+    child.once('spawn', () => resolve(true))
+    child.once('error', (error) => {
+      errors.push(error)
+      resolve(false)
+    })
+  })
+  child.on('error', (error) => errors.includes(error) || errors.push(error))
+  child.stdin.on('error', (error) => errors.push(error))
+  // 'close' comes after exit once stdout and stderr have closed.
   const closed = new Promise((resolve) => {
     child.once('close', (code, signal) => resolve({ code, signal }))
-    child.once('error', (error) => resolve({ code: null, signal: null, error }))
   })
   own(async () => {
+    if (!(await started)) {
+      return
+    }
     if (child.exitCode === null && child.signalCode === null) {
       child.kill('SIGKILL')
     }
-    await closed
+    if (!(await settles(closed, DRAIN_MS))) {
+      throw new CustodyKept(`child ${child.pid} did not close`)
+    }
   })
   let output = ''
   child.stdout.setEncoding('utf8')
@@ -151,11 +199,15 @@ ${body}`
   return {
     pid: child.pid,
     closed,
+    errors,
     output: () => output,
     send(command) {
       child.stdin.write(`${command}\n`)
     },
-    waitFor(text) {
+    async waitFor(text) {
+      if (!(await started)) {
+        throw new Error(`child failed to start: ${errors[0]?.message}`)
+      }
       return until(() => {
         if (child.exitCode !== null || child.signalCode !== null) {
           throw new Error(`child exited before printing ${text}: ${output}`)
@@ -179,7 +231,7 @@ export function openQueue() {
 export function queueRows() {
   const db = new DatabaseSync(queueFileFor(file))
   try {
-    return db.prepare('SELECT * FROM tickets_v2 ORDER BY id').all()
+    return db.prepare('SELECT * FROM tickets_v3 ORDER BY id').all()
   } finally {
     db.close()
   }
@@ -188,7 +240,6 @@ export function queueRows() {
 export function insertTicket({
   id = null,
   pid,
-  started = null,
   seenAt = Date.now(),
   heldAt = null,
   lane = 0,
@@ -199,13 +250,29 @@ export function insertTicket({
     return Number(
       db
         .prepare(
-          'INSERT INTO tickets_v2 (id, pid, started, cwd, enqueued_at, seen_at, lane, held_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)'
+          'INSERT INTO tickets_v3 (id, token, pid, cwd, enqueued_at, seen_at, lane, held_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)'
         )
-        .run(id, pid, started, cwd, seenAt, seenAt, lane, heldAt).lastInsertRowid
+        .run(id, randomUUID(), pid, cwd, seenAt, seenAt, lane, heldAt).lastInsertRowid
     )
   } finally {
     db.close()
   }
+}
+
+/** Keeps a ticket checking in, like a live waiter that never reaches the front, until teardown. */
+export function keepCheckingIn(id) {
+  const db = new DatabaseSync(queueFileFor(file), { timeout: 100 })
+  const timer = setInterval(() => {
+    try {
+      db.prepare('UPDATE tickets_v3 SET seen_at = ? WHERE id = ?').run(Date.now(), id)
+    } catch {
+      // Busy: the next beat retries.
+    }
+  }, 100)
+  own(() => {
+    clearInterval(timer)
+    db.close()
+  })
 }
 
 /** A raw connection on the slot file, like a run from a checkout without the queue. */
@@ -230,7 +297,7 @@ export function outsider() {
 
 /** A child process that holds the queue database's write lock until it is killed. */
 export async function queueWriter() {
-  const writer = spawnOwned(`const db = new DatabaseSync(queueFile)
+  const writer = spawnOwned(`const db = new DatabaseSync(queueFile, { timeout: 10_000 })
 db.exec('BEGIN IMMEDIATE')
 process.stdout.write('locked\\n')
 await next()`)
@@ -238,9 +305,10 @@ await next()`)
   return writer
 }
 
+/** The pid of a process that has already exited. */
 export async function exitedPid() {
-  const child = spawn(process.execPath, ['-e', ''], { stdio: 'ignore' })
-  await once(child, 'close')
+  const child = spawnOwned('process.exit(0)')
+  await child.closed
   return child.pid
 }
 
@@ -249,5 +317,3 @@ export async function createQueue() {
     await run()
   )()
 }
-
-export const ownStart = () => readStartTimes([process.pid]).get(process.pid)

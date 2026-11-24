@@ -37,6 +37,7 @@ const NODE_RUNTIME_INCLUDE = [
   // The check:changed slot queue is node:sqlite, which Bun does not provide.
   'config/scripts/preflight/changed-checks/check-changed-slot.test.mjs',
   'config/scripts/preflight/changed-checks/check-changed-slot-recovery.test.mjs',
+  'config/scripts/preflight/changed-checks/check-changed-slot-faults.test.mjs',
   // Bun on macOS fails its read-only directory case with ENOTEMPTY; Node passes it.
   ...(process.platform === 'darwin'
     ? ['config/scripts/worktree-storage/reclaim-worktree-generated-files.test.mjs']

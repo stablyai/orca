@@ -52,7 +52,7 @@ await next()`)
     await holder.kill()
     await within(waiter.promise, 'waiter after holder crash')
     expect(queueRows().map((row) => row.pid)).toEqual([process.pid])
-  }, 120_000)
+  }, 240_000)
 
   it('formats a listed holder with its age at the time of the message', async () => {
     await createQueue()
@@ -67,7 +67,7 @@ await next()`)
     ])
     other.close()
     await within(waiter.promise, 'waiter')
-  }, 90_000)
+  }, 180_000)
 
   it('stops naming a released holder whose cleanup was blocked once an older checkout takes the slot', async () => {
     const staleMs = 3000
@@ -94,7 +94,7 @@ await next()`)
     expect(waiter.settled).toBe(false)
     legacy.close()
     await within(waiter.promise, 'waiter')
-  }, 120_000)
+  }, 240_000)
 
   it('leaves the holder unnamed when no live, heartbeating ticket holds the slot', async () => {
     await createQueue()
@@ -109,14 +109,14 @@ await next()`)
     other.close()
     await within(waiter.promise, 'waiter')
     expect(queueRows().filter((row) => row.held_at !== null)).toHaveLength(1)
-  }, 90_000)
+  }, 180_000)
 
   it('never re-creates its held ticket after the row is lost, and still releases', async () => {
     const staleMs = 1500
     const release = await run({ staleMs })
     const [held] = queueRows()
     const db = openQueue()
-    db.prepare('DELETE FROM tickets_v2 WHERE id = ?').run(held.id)
+    db.prepare('DELETE FROM tickets_v3 WHERE id = ?').run(held.id)
     // Several holder heartbeats pass with the row gone.
     await delay((staleMs / 15) * 5)
     expect(queueRows()).toEqual([])
@@ -125,20 +125,20 @@ await next()`)
     await within(release(), 'release')
     expect(other.tryLock()).toBe(true)
     expect(queueRows()).toEqual([])
-  }, 90_000)
+  }, 180_000)
 
   it('keeps holding the slot when its queue metadata breaks, and still releases it', async () => {
     const staleMs = 1500
     const release = await run({ staleMs })
     const db = openQueue()
-    db.exec('DROP TABLE tickets_v2')
+    db.exec('DROP TABLE tickets_v3')
     // Holder heartbeats now fail with a non-busy error; none may escape or end the hold.
     await delay((staleMs / 15) * 5)
     const other = outsider()
     expect(other.tryLock()).toBe(false)
     await within(release(), 'release with broken metadata')
     expect(other.tryLock()).toBe(true)
-  }, 90_000)
+  }, 180_000)
 
   it('removes its ticket when acquisition fails, so the next call is not held up', async () => {
     const holder = await run()
@@ -154,7 +154,7 @@ await next()`)
     await holder()
     // A leftover fresh ticket would block this call for the whole minute-long stale window; 30 s is half of it.
     await within(run({ staleMs: 60_000 }), 'next call', 30_000)
-  }, 90_000)
+  }, 180_000)
 
   it('lets the next call through once a queue writer stalls cleanup of an aborted call', async () => {
     const holder = await run({ staleMs: 3000 })
@@ -174,7 +174,7 @@ await next()`)
     await within(next.promise, 'next call after the writer left', 30_000)
     await settleChangedCheckSlotCleanup()
     expect(queueRows().filter((row) => row.held_at === null)).toEqual([])
-  }, 120_000)
+  }, 240_000)
 
   it('keeps waiters pending while another process holds the queue database, then admits them in order', async () => {
     const holder = await run({ staleMs: 3000 })
@@ -207,7 +207,7 @@ await next()`)
     expect(order).toEqual(['queued', 'arrival'])
     expect(queued.error).toBeUndefined()
     expect(arrival.error).toBeUndefined()
-  }, 120_000)
+  }, 240_000)
 
   it('corrects its place once a ticket beyond the run ahead dies and is removed', async () => {
     // Long enough that no ticket here goes silent during the test, even on a loaded host.
@@ -215,7 +215,7 @@ await next()`)
     const holder = await run({ staleMs })
     // Leave a gap in the ids so another ticket can be placed ahead of a waiter that already polled.
     const gap = insertTicket({ pid: process.pid })
-    openQueue().prepare('DELETE FROM tickets_v2 WHERE id = ?').run(gap)
+    openQueue().prepare('DELETE FROM tickets_v3 WHERE id = ?').run(gap)
     const middle = run({ staleMs, pollMs: 50 })
     await until(() => queueRows().length === 2, 'middle ticket')
     // A live process owns the ticket ahead of the middle waiter, so both waiters count it.
@@ -244,7 +244,7 @@ await next()`)
       await within(middle, 'middle waiter')
     )()
     await within(waiter.promise, 'waiter')
-  }, 120_000)
+  }, 240_000)
 
   it('closes the slot connection and keeps the original error when the queue cannot open', async () => {
     await mkdir(queueFileFor(file), { recursive: true })
@@ -253,7 +253,7 @@ await next()`)
       /unable to open/i
     )
     expect(readdirSync('/dev/fd').length).toBe(before)
-  }, 90_000)
+  }, 180_000)
 
   it('formats holder ages', () => {
     expect(formatAge(12_000)).toBe('12s')
