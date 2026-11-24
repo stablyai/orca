@@ -162,10 +162,7 @@
 1 src/main/browser/guest-lifecycle/prompts/browser-system-dialogs.ts
 7 src/main/browser/identity/mode/browser-identity-mode-store.ts
 1 src/main/browser/network/egress/browser-route-egress-electron-launch.ts
-1 src/main/browser/network/execution-routes/browser-network-execution-route-dispatch.ts
 1 src/main/browser/network/execution-routes/ssh-browser-network-execution-route.ts
-2 src/main/browser/network/execution-routes/wsl-browser-network-execution-route.ts
-2 src/main/browser/network/execution-routes/wsl-browser-network-relay-launch.ts
 1 src/main/browser/routing/local-host-partitions/local-ssh-browser-partition-bindings.ts # moved with the jar binding code from local-ssh-browser-partitions.ts
 1 src/main/browser/routing/local-host-partitions/local-ssh-browser-partitions.ts
 1 src/main/browser/routing/local-host-partitions/wsl-host-browser-route-partition.ts
