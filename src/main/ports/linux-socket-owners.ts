@@ -58,18 +58,22 @@ export function parseSocketHolderListing(
   return seen === null ? null : { holders, seen }
 }
 
-/** Keep, per inode, the holder a walk in `pidOrder` would visit last; pids that appeared after the listing go last. */
+/** Keep, per inode, the holder a walk in `pidOrder` would visit last; pids missing from it are ones the walk never sees. */
 export function pickLastHolders(
   holders: readonly { pid: number; inode: number }[],
   pidOrder: readonly string[],
   inodes: Set<number>
 ): Map<number, number> {
   const rank = new Map(pidOrder.map((pid, index) => [Number(pid), index]))
-  const rankOf = (pid: number): number => rank.get(pid) ?? pidOrder.length + pid
   const result = new Map<number, number>()
   for (const { pid, inode } of holders) {
+    const index = rank.get(pid)
     const current = result.get(inode)
-    if (inodes.has(inode) && (current === undefined || rankOf(pid) > rankOf(current))) {
+    if (
+      index !== undefined &&
+      inodes.has(inode) &&
+      (current === undefined || index > (rank.get(current) ?? -1))
+    ) {
       result.set(inode, pid)
     }
   }

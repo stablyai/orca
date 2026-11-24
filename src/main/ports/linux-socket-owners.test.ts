@@ -46,6 +46,8 @@ describe('Linux socket holder listing', () => {
       ])
     )
     expect(pickLastHolders(parsed!.holders, ['1000', '900'], inodes).get(4242)).toBe(900)
+    // A process forked after /proc was listed is invisible to the walk, so it can't take the socket.
+    expect(pickLastHolders(parsed!.holders, ['900'], inodes).get(4242)).toBe(900)
   })
 
   it('drops only an over-long line, whatever the chunk boundaries', () => {
