@@ -65,3 +65,15 @@ export async function assemblePtyIpcSpawnCodexEnv(ctx: PtyIpcSpawnState): Promis
   ctx.stripInheritedOrcaCodexHome = hostEnv.stripInheritedOrcaCodexHome
   ctx.spawnTiming.mark('host_env')
 }
+
+/** Once the provider spawn is dispatched the child may run, so the intent is never restored. */
+export function noteCodexAccountRestartLaunchDispatched(ctx: PtyIpcSpawnState): void {
+  ctx.unspendCodexAccountRestart = null
+}
+
+/** A spawn that failed or retired before dispatch launched nothing; its intent returns for the next resume. */
+export function restoreUnstartedCodexAccountRestart(ctx: PtyIpcSpawnState): void {
+  const unspend = ctx.unspendCodexAccountRestart
+  ctx.unspendCodexAccountRestart = null
+  unspend?.()
+}

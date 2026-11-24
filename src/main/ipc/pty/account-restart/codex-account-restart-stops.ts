@@ -119,6 +119,8 @@ export class CodexAccountRestartStops {
   private readonly inFlightByPane = new Map<string, InFlightStop>()
   private readonly markByIncarnation = new Map<string, RestartMark>()
   private readonly markByPane = new Map<string, RestartMark>()
+  // A granted intent stays reachable until its launch starts, so Dismiss still applies to it.
+  private readonly spentMarkByPane = new Map<string, RestartMark>()
   private readonly retiredIncarnations = new Set<string>()
 
   /** Admits one stop per pane; a second request for the same pane joins the stop in flight. */
@@ -178,7 +180,8 @@ export class CodexAccountRestartStops {
     if (typeof request?.opId !== 'string') {
       return false
     }
-    const mark = this.markByPane.get(codexAccountRestartPaneKey(request))
+    const paneKey = codexAccountRestartPaneKey(request)
+    const mark = this.markByPane.get(paneKey) ?? this.spentMarkByPane.get(paneKey)
     if (!mark || !mark.opIds.has(request.opId)) {
       return false
     }
@@ -229,6 +232,7 @@ export class CodexAccountRestartStops {
 
   /** Close or rebind of the pane: its intent no longer applies. */
   forgetPane(paneKey: string): void {
+    this.spentMarkByPane.delete(paneKey)
     const mark = this.markByPane.get(paneKey)
     if (mark) {
       this.retireMark(mark)
@@ -241,6 +245,7 @@ export class CodexAccountRestartStops {
   ): CodexRestartResumeDecision {
     // Spend the intent now so a concurrent mount cannot launch the same conversation twice.
     this.retireMark(mark)
+    this.spentMarkByPane.set(mark.paneKey, mark)
     return {
       kind: 'selected',
       providerSession: {
@@ -248,10 +253,13 @@ export class CodexAccountRestartStops {
         transcriptPath: mark.provenance.transcriptPath
       },
       unspend: () => {
-        if (!this.markByPane.has(mark.paneKey)) {
-          this.retiredIncarnations.delete(mark.incarnationId)
-          this.installMark(mark)
+        // Only the pane's latest intent comes back, and a Dismiss while it was spent still holds.
+        if (this.spentMarkByPane.get(mark.paneKey) !== mark || this.markByPane.has(mark.paneKey)) {
+          return
         }
+        this.spentMarkByPane.delete(mark.paneKey)
+        this.retiredIncarnations.delete(mark.incarnationId)
+        this.installMark(mark)
       }
     }
   }
@@ -295,6 +303,9 @@ export class CodexAccountRestartStops {
   }
 
   private installMark(mark: RestartMark): void {
+    if (this.spentMarkByPane.get(mark.paneKey) !== mark) {
+      this.spentMarkByPane.delete(mark.paneKey)
+    }
     const previous = this.markByPane.get(mark.paneKey)
     if (previous && previous !== mark) {
       this.retireMark(previous)

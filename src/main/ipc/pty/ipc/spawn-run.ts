@@ -1,3 +1,7 @@
+import {
+  noteCodexAccountRestartLaunchDispatched,
+  restoreUnstartedCodexAccountRestart
+} from './spawn-env-codex'
 import { AGENT_LAUNCH_PANE_REFUSED_CODE } from '../../../../shared/agent-launch/contracts/agent-launch-pane-verdict'
 import { requireAcceptedSpawn } from '../spawn/spawn-outcome'
 import { runPtySpawn, normalizePtySpawnSessionId } from '../spawn/spawn-operation'
@@ -75,6 +79,7 @@ export async function runPtyIpcSpawn(deps: PtySpawnIpcDeps, request: PtySpawnIpc
       replacedPaneOwner: ctx.replacedPaneOwner,
       attachOnlyView: attachOnlyViewOf(ctx.args),
       beforeProviderSpawn: () => {
+        noteCodexAccountRestartLaunchDispatched(ctx)
         if (ctx.paneAgentLaunch) {
           ctx.paneAgentLaunch.dispatched = true
         }
@@ -91,9 +96,7 @@ export async function runPtyIpcSpawn(deps: PtySpawnIpcDeps, request: PtySpawnIpc
       ),
     onError: (error) => endPaneAgentLaunch(ctx, { error }),
     releasePreparation: () => {
-      // Any failure or retirement before the process starts keeps the selected-account resume for next time.
-      ctx.unspendCodexAccountRestart?.()
-      ctx.unspendCodexAccountRestart = null
+      restoreUnstartedCodexAccountRestart(ctx)
       if (ctx.agentTeamsLeaderHandle) {
         deps.runtime?.releaseClaudeAgentTeamsLeaderForHandle?.(ctx.agentTeamsLeaderHandle)
         ctx.agentTeamsLeaderHandle = null

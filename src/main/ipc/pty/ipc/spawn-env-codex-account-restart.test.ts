@@ -19,14 +19,20 @@ vi.mock('../../../runtime/terminal/output/terminal-model-query-authority', () =>
   isNativeWindowsLocalPtySpawn: () => false
 }))
 
-import { assemblePtyIpcSpawnCodexEnv } from './spawn-env-codex'
+import {
+  assemblePtyIpcSpawnCodexEnv,
+  noteCodexAccountRestartLaunchDispatched,
+  restoreUnstartedCodexAccountRestart
+} from './spawn-env-codex'
 import {
   codexAccountRestartPaneKey,
   codexAccountRestartStops
 } from '../account-restart/codex-account-restart-stops'
 import type { PtyIpcSpawnState } from './spawn-state'
 
-const pane = { worktreeId: 'wt', tabId: 'tab', leafId: 'leaf-unspend' }
+let paneCounter = 0
+const nextPane = () => ({ worktreeId: 'wt', tabId: 'tab', leafId: `leaf-${++paneCounter}` })
+let pane = nextPane()
 const session = { key: 'session_id' as const, id: 'thread-1' }
 
 async function admitProvenStop(): Promise<void> {
@@ -35,7 +41,7 @@ async function admitProvenStop(): Promise<void> {
     {
       resolveOccupant: () => ({
         ptyId: 'pty-a',
-        incarnationId: 'inc-unspend',
+        incarnationId: `inc-${pane.leafId}`,
         provenance: { threadId: 'thread-1', transcriptPath: '/old/rollout-thread-1.jsonl' }
       }),
       stop: async () => 'ended'
@@ -60,6 +66,7 @@ function spawnState(): PtyIpcSpawnState {
 
 describe('Codex env assembly for an account restart resume', () => {
   it('keeps a restore for a spawn that fails or retires after its env was assembled', async () => {
+    pane = nextPane()
     await admitProvenStop()
     const ctx = spawnState()
     await assemblePtyIpcSpawnCodexEnv(ctx)
@@ -75,9 +82,40 @@ describe('Codex env assembly for an account restart resume', () => {
       codexAccountRestartStops.resolveResume({ paneKey, providerSession: session })
     ).resolves.toEqual({ kind: 'none' })
     // The process never started, so the spawn's preparation release restores it.
-    ctx.unspendCodexAccountRestart?.()
+    restoreUnstartedCodexAccountRestart(ctx)
     await expect(
       codexAccountRestartStops.resolveResume({ paneKey, providerSession: session })
     ).resolves.toMatchObject({ kind: 'selected' })
+  })
+
+  it('never restores the intent once the provider spawn was dispatched', async () => {
+    pane = nextPane()
+    await admitProvenStop()
+    const ctx = spawnState()
+    await assemblePtyIpcSpawnCodexEnv(ctx)
+    noteCodexAccountRestartLaunchDispatched(ctx)
+    // A later failure (binding save, registration) may follow a started child.
+    restoreUnstartedCodexAccountRestart(ctx)
+    await expect(
+      codexAccountRestartStops.resolveResume({
+        paneKey: codexAccountRestartPaneKey(pane),
+        providerSession: session
+      })
+    ).resolves.toEqual({ kind: 'none' })
+  })
+
+  it('a Dismiss while the intent is spent still holds after an unstarted spawn restores it', async () => {
+    pane = nextPane()
+    await admitProvenStop()
+    const ctx = spawnState()
+    await assemblePtyIpcSpawnCodexEnv(ctx)
+    expect(codexAccountRestartStops.withdraw({ ...pane, opId: 'op-1' })).toBe(true)
+    restoreUnstartedCodexAccountRestart(ctx)
+    await expect(
+      codexAccountRestartStops.resolveResume({
+        paneKey: codexAccountRestartPaneKey(pane),
+        providerSession: session
+      })
+    ).resolves.toEqual({ kind: 'pinned' })
   })
 })
