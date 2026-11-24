@@ -12,6 +12,8 @@ const ACK_DELAY_MS = 1_000
 export type ProviderRelayAckFloor = {
   observe: (seq: number, line: string) => void
   floor: () => number | null
+  /** A line that needs no ack of its own (a keep-alive); the next real line's ack covers it. */
+  quiet?: (line: string) => boolean
 }
 
 type OutputOptions = {
@@ -134,7 +136,9 @@ export class RelayedProviderOutput {
     }
     if (seq !== null && seq > this.pushedSeq) {
       this.pushedSeq = seq
-      this.scheduleAck()
+      if (!line || !this.options.ackFloor?.quiet?.(line)) {
+        this.scheduleAck()
+      }
     }
   }
 
