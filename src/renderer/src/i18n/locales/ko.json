@@ -872,11 +872,13 @@
       }
     },
     "bots": {
+      "avatarSlackNoteColor": "Slack에는 사진만 적용되고 색상은 적용되지 않습니다.",
       "tidyUp": {
         "everyNightLine": "매일 밤 오전 3시 이후, 또는 이 컴퓨터가 깨어난 후",
         "everyWeekLine": "일주일에 한 번 오전 3시 이후, 또는 이 컴퓨터가 깨어난 후",
         "everyDescriptionAwake": "그 시간에 이 컴퓨터가 잠자기 상태이면 깨어난 후 실행됩니다. 새 채팅이 있었던 밤 이후에만 실행됩니다. 정리할 때마다 짧은 채팅처럼 {{agent}} 요금제를 사용합니다."
       },
+      "teamDisabled": "팀에서 봇을 꺼 두었습니다.",
       "lookAround": {
         "title": "둘러보기"
       },
@@ -8998,7 +9000,9 @@
           "lucideDescription": "저장소 색상의 {{label}} 아이콘",
           "defaultIcon": "기본값",
           "cc76342291": "GitHub 아바타 사용",
-          "43bf3709dd": "저장소 아이콘"
+          "43bf3709dd": "저장소 아이콘",
+          "autoColor": "자동 색상(다른 프로젝트와 구분되게 유지)",
+          "lettersDescription": "글자 “{{text}}”"
         },
         "RepositoryPane": {
           "15a99d9b9f": "상대 경로는 이 프로젝트 루트에서 확인됩니다.",
@@ -15661,6 +15665,25 @@
         },
         "forkIndicator": {
           "forkOf": "{{repo}}의 포크"
+        },
+        "ProjectPeek": {
+          "openRemote": "브라우저에서 {{value0}} 열기",
+          "folderProject": "폴더 · git 저장소 아님",
+          "noRemote": "로컬 git 저장소 · 원격 없음",
+          "openUpstream": "브라우저에서 {{value0}} 열기",
+          "forkOf": "{{value0}}의 포크",
+          "openSettingsPage": "설정 페이지 열기",
+          "done": "완료",
+          "resetDone": "아이콘과 색상이 재설정됨",
+          "undo": "실행 취소",
+          "styleLetters": "글자",
+          "stylePicture": "사진",
+          "resetAppearance": "아이콘 및 색상 재설정",
+          "faviconPlaceholder": "파비콘을 가져올 웹사이트",
+          "lettersInput": "최대 2글자",
+          "lettersPlaceholder": "1–2글자",
+          "useLetters": "“{{value0}}” 사용",
+          "usingGitHubAvatar": "GitHub 아바타 사용 중"
         }
       },
       "pet": {
@@ -21765,6 +21788,9 @@
         "clearAllLabel_other": "실패한 워커 {{count}}개 모두 지우기",
         "loadingWorker": "워커 로드 중…",
         "resultUnavailable": "워커 결과를 확인할 수 없음",
+        "showDetails": "세부 정보 표시",
+        "hideDetails": "세부 정보 숨기기",
+        "close": "닫기",
         "workersRegion": "워커",
         "doneResult": "완료 · 결과 열기",
         "clearName": "{{name}} 지우기",
@@ -22200,6 +22226,7 @@
           "ignoredFilesUnchecked": "무시된 파일을 완전히 확인하지 못함"
         },
         "confirm": {
+          "title_one": "워크스페이스 {{count}}개를 삭제할까요?",
           "title_other": "워크스페이스 {{count}}개를 삭제할까요?",
           "localFilesSection": "로컬 파일이 사라집니다",
           "back": "뒤로",
@@ -22222,6 +22249,7 @@
           "notGit": "Git 워크스페이스가 아닙니다. 대신 Orca에서 프로젝트를 제거하세요.",
           "unreachable": "{{host}}에 연결할 수 없습니다. 다시 연결해 삭제하거나 Orca에서 제거하세요.",
           "mainCheckout": "프로젝트의 기본 체크아웃은 삭제할 수 없습니다.",
+          "uncommittedFiles_one": "커밋되지 않은 파일 {{count}}개",
           "uncommittedFiles_other": "커밋되지 않은 파일 {{count}}개",
           "couldntCheck": "변경 사항을 확인하지 못했습니다"
         },
@@ -22234,6 +22262,7 @@
           "selected": "{{count}}개 선택됨"
         },
         "footer": {
+          "delete_one": "워크스페이스 {{count}}개 삭제",
           "delete_other": "워크스페이스 {{count}}개 삭제",
           "selected": "{{count}}개 선택됨",
           "waitForDelete": "현재 삭제가 끝날 때까지 기다리세요."
@@ -22249,12 +22278,14 @@
           "show": "보기"
         },
         "done": {
+          "failedLine_one": "{{count}}개를 삭제하지 못했습니다.",
           "failedLine_other": "{{count}}개를 삭제하지 못했습니다.",
           "title": "워크스페이스 {{total}}개 중 {{deleted}}개 삭제됨",
           "singleTitle": "워크스페이스 {{total}}개 중 {{deleted}}개 삭제됨",
           "button": "완료"
         },
         "deleting": {
+          "title_one": "워크스페이스 {{count}}개 삭제 중",
           "title_other": "워크스페이스 {{count}}개 삭제 중",
           "runInBackground": "백그라운드에서 실행",
           "progress": "{{total}}개 중 {{done}}개 삭제됨",
@@ -24263,6 +24294,9 @@
     "scanTooLarge": "Quick Open 스캔 범위가 너무 큽니다({{reason}})."
   },
   "checksPanel": {
+    "commentsUnavailable": "댓글을 불러오지 못했습니다.",
+    "linkedReviewUnavailable": "연결된 PR을 불러오지 못했습니다.",
+    "loadingReviewDetails": "리뷰 세부 정보 로드 중…",
     "unlinked": {
       "title": "PR 연결 해제됨",
       "description": "이 워크스페이스에서는 PR #{{number}}이(가) 숨겨져 있습니다. 검사와 리뷰 세부정보를 복원하려면 다시 연결하세요.",
@@ -25289,7 +25323,11 @@
       "singleTitle": "{{name}}을(를) 삭제할까요?",
       "forceExplanation": "변경 사항이 있어 Git이 삭제하지 못했습니다. 강제로 삭제하면 변경 사항도 삭제됩니다.",
       "errorDetails": "세부 정보",
-      "changesIncomplete": "일부 변경 사항을 완전히 확인하지 못했습니다."
+      "changesIncomplete": "일부 변경 사항을 완전히 확인하지 못했습니다.",
+      "parentWorkspace": "상위 워크스페이스",
+      "workspacesToReview": "검토할 워크스페이스",
+      "workspaceDetails": "선택한 워크스페이스 세부 정보",
+      "workspaceKept": "유지됨"
     }
   },
   "mediaPreview": {
@@ -27174,7 +27212,8 @@
       "missing": "이 대화는 이 컴퓨터에서 열려 있지 않습니다."
     },
     "activity": {
-      "title": "활동"
+      "title": "활동",
+      "waitsOnBackground": "백그라운드 작업을 기다리는 중"
     },
     "connectors": {
       "tab": "커넥터",
@@ -27182,6 +27221,31 @@
     },
     "files": {
       "tab": "파일"
+    },
+    "avatar": {
+      "generate": {
+        "closeAnytime": "언제든 닫아도 됩니다",
+        "failedFor": "{{name}}의 이미지를 생성하지 못했습니다."
+      }
+    },
+    "github": {
+      "connection": {
+        "addAccount": "다른 GitHub 계정 추가",
+        "refresh": "새로고침"
+      },
+      "setup": {
+        "preview": {
+          "label": "이슈나 PR에서 {{command}}을(를) 멘션해 {{name}}에게 요청하세요. 예를 들어 “{{command}} {{ask}}”라고 쓰면 {{name}}이(가) “{{reply}}”라고 답합니다.",
+          "commented": "방금 댓글 작성",
+          "ask": "이 PR 리뷰해 줘",
+          "bot": "봇",
+          "reply": "바로 시작하겠습니다."
+        }
+      },
+      "account": {
+        "descriptionPlural": "내 GitHub 계정들입니다. 봇이 어떤 댓글이 내 것인지 아는 데 사용됩니다.",
+        "descriptionOnHostPlural": "{{host}}의 봇이 대신 작업하고 봇을 소유하는 GitHub 사용자들입니다."
+      }
     },
     "upcoming": {
       "tidyNightAfter": "매일 밤 {{from}} 이후, 또는 이 컴퓨터가 깨어난 후",
@@ -27626,6 +27690,17 @@
       "hostNeedsServerHint": "봇을 실행하려면 설정 → 원격 Orca 서버에서 {{host}}에 Orca 서버를 설정하세요.",
       "pictureColor": "배경색",
       "pictureColorCustom": "사용자 지정 색상",
+      "pictureOutfit": "의상",
+      "outfitNone": "의상 없음",
+      "outfitTie": "넥타이",
+      "outfitDetective": "탐정",
+      "outfitHardHat": "안전모",
+      "outfitReviewer": "리뷰어",
+      "outfitNightShift": "야간 근무",
+      "outfitArtist": "아티스트",
+      "outfitScientist": "과학자",
+      "outfitParty": "파티",
+      "outfitSecurity": "보안 요원",
       "colorSky": "하늘색",
       "colorWhite": "흰색",
       "colorLavender": "라벤더색",
@@ -27656,12 +27731,21 @@
         "noAgentsAvailable": "쓸 수 있는 에이전트 없음",
         "pictureLoading": "이미지를 불러오는 중…",
         "updateOrca": "Orca 업데이트"
-      }
+      },
+      "identityWatches": "감시: {{what}}",
+      "identityReports": "보고: {{what}}"
     },
     "googleSetup": {
+      "receipt": {
+        "stopped": "설정 중지됨"
+      },
+      "progress": {
+        "stopped": "중지됨"
+      },
       "otherAccount": "계정 전환",
       "pickHostKey": "가져올 키 파일을 선택하세요:",
-      "pickKeyHere": "이 컴퓨터에서 파일 선택"
+      "pickKeyHere": "이 컴퓨터에서 파일 선택",
+      "stop": "설정 중지"
     },
     "apps": {
       "paste": {
@@ -27769,28 +27853,45 @@
         "linkCount": "링크 {{count}}개",
         "reply": "답변",
         "replyAbove": "위 질문에 답변",
-        "replyBelow": "아래 질문에 답변"
+        "replyBelow": "아래 질문에 답변",
+        "loading": "항목 로드 중…"
       },
       "activity": {
         "linked": "이(가) {{links}}을(를) 연결함",
-        "you": "나"
+        "anotherAgent": "다른 에이전트",
+        "you": "나",
+        "waitingOn": "기다리는 대상"
       },
       "chat": {
-        "moreItems": "+{{count}}개 더"
+        "moreItems": "+{{count}}개 더",
+        "anotherAgent": "다른 에이전트"
       },
       "comment": {
         "add": "댓글 추가…",
         "label": "댓글",
-        "submit": "댓글"
+        "submit": "댓글",
+        "replyingToShow": "답변 대상: {{question}}. 질문 보기",
+        "showQuestion": "질문 보기"
       },
       "group": {
         "new": "새 항목 {{count}}개"
+      },
+      "link": {
+        "automation": "자동화",
+        "automationOn": "이 항목을 위해 에이전트를 깨웁니다",
+        "automationEnded": "종료됨"
+      },
+      "menu": {
+        "waiting": "대기 중…"
       },
       "row": {
         "more": "더 보기"
       },
       "stale": {
         "cancelAll": "모두 취소"
+      },
+      "status": {
+        "waiting": "대기 중"
       },
       "tab": "홈",
       "loading": "항목 로드 중…",
@@ -27807,9 +27908,21 @@
         "notSentYet": "아직 보내지 않음",
         "replaced": "에이전트가 새 질문을 했습니다. 읽은 다음 답장하세요.",
         "replacedByNewer": "새 질문으로 대체됨",
-        "skipped": "건너뜀"
+        "skipped": "건너뜀",
+        "send": "보내기",
+        "sending": "보내는 중…",
+        "sendSome": "{{count}}/{{total}} 보내기",
+        "sendSomeLabel": "답변 {{total}}개 중 {{count}}개 보내기",
+        "changeAnswer": "{{question}}: {{answer}}. 답변 변경"
       },
-      "readMoreClosedFailed": "닫힌 항목을 더 읽지 못했습니다"
+      "readMoreClosedFailed": "닫힌 항목을 더 읽지 못했습니다",
+      "wait": {
+        "titleOne": "{{title}}은(는) 무엇을 기다리고 있나요?",
+        "titleMany": "항목 {{count}}개는 무엇을 기다리고 있나요?",
+        "placeholder": "기다리는 대상",
+        "keep": "취소",
+        "confirm": "대기 중으로 설정"
+      }
     },
     "hover": {
       "asksQuestion": "답변을 기다리는 중",
@@ -27825,16 +27938,33 @@
       "moreAsks_one": "+{{count}}건의 추가 요청",
       "itemsNeedYou_one": "사용자님을 위해 표시한 항목 {{count}}개"
     },
+    "pairedServers": {
+      "add": "페어링된 서버 추가",
+      "allAdded": "페어링된 서버가 모두 추가되었습니다",
+      "heading": "페어링된 서버",
+      "info": "페어링된 서버 정보",
+      "none": "페어링된 서버 없음",
+      "remove": "제거",
+      "search": "페어링된 서버 검색",
+      "tooltip": "이 서버의 봇과 에이전트는 매번 나에게 묻지 않고 {{name}}에게 요청할 수 있습니다.",
+      "removeServer": "{{server}} 제거"
+    },
     "chats": {
       "home": "Home Chat",
       "untitled": "새 채팅",
       "searchRetry": "다시 시도하세요",
       "loading": "채팅 로드 중…",
-      "readFailed": "이 봇의 채팅을 읽지 못했습니다."
+      "readFailed": "이 봇의 채팅을 읽지 못했습니다.",
+      "delete": "채팅 삭제",
+      "open": "열기",
+      "actions": "채팅 작업",
+      "needsYouCount": "확인 필요 {{count}}개"
     },
     "needs": {
       "chat": "{{name}} 채팅",
-      "worker": "워커: {{name}}"
+      "worker": "워커: {{name}}",
+      "pairedAsk": "{{from}}이(가) {{name}}에게 메시지를 보내려고 합니다",
+      "pairedAskDetail": "권한 · {{name}}에게 메시지 보내기"
     },
     "panel": {
       "needYou_other": "확인 필요 {{count}}개",
@@ -27860,11 +27990,86 @@
       "startFromScratch": "처음부터 시작"
     },
     "errors": {
+      "avatarHomeUnreadable": "저장된 사진을 읽지 못했습니다. 다시 선택하세요.",
+      "folderNotOwned": "이 봇의 폴더를 확인하지 못했습니다.",
       "unsavedDrafts": "봇 폴더에 저장하지 않은 편집 내용이 있습니다. 파일을 저장하거나 닫은 다음 다시 삭제하세요."
+    },
+    "slack": {
+      "setup": {
+        "preview": {
+          "label": "Slack에서 @{{name}}을(를) 멘션해 요청하세요.",
+          "now": "방금",
+          "you": "나",
+          "ask": "<mention/> 이 스레드 요약해 줘",
+          "reply": "바로 할게요."
+        },
+        "cancel": "취소"
+      },
+      "token": {
+        "openSettings": "Slack 앱 설정 열기",
+        "generate": "이 워크스페이스용 토큰 생성",
+        "copyRefresh": "Refresh Token 복사"
+      },
+      "handOff": {
+        "question": "대신 {{device}}의 Slack 로그인을 사용할까요?",
+        "firstQuestion": "{{device}}이(가) 이미 Slack에 로그인되어 있습니다. 그 로그인을 사용할까요?",
+        "useDevice": "{{device}}의 로그인 사용",
+        "questionHere": "대신 이 컴퓨터의 Slack 로그인을 사용할까요?",
+        "firstQuestionHere": "이 컴퓨터가 이미 Slack에 로그인되어 있습니다. 그 로그인을 사용할까요?",
+        "useHere": "이 컴퓨터의 로그인 사용",
+        "anotherWay": "다른 방법으로 설정"
+      },
+      "reconnect": {
+        "expiredTitle": "Slack 토큰 만료됨",
+        "whyMine": "컴퓨터마다 자체 Slack 토큰을 보관합니다. Slack이 {{email}}의 토큰을 더 이상 받지 않습니다.",
+        "whyHost": "컴퓨터마다 자체 Slack 토큰을 보관합니다. Slack이 {{host}}의 토큰을 더 이상 받지 않습니다.",
+        "why": "Slack이 이 워크스페이스의 저장된 토큰을 더 이상 받지 않습니다.",
+        "submit": "다시 연결",
+        "about": "Slack 토큰 정보",
+        "kept": "Orca Cloud가 새 토큰을 암호화해 보관하므로, 여기에 추가하는 다음 봇부터는 클릭 한 번이면 됩니다.",
+        "mineMac": "이 Mac의 토큰이 만료되었습니다. 새 토큰을 붙여넣으세요.",
+        "mine": "이 컴퓨터의 토큰이 만료되었습니다. 새 토큰을 붙여넣으세요.",
+        "paste": "다시 연결하려면 새 토큰을 붙여넣으세요.",
+        "expiredOnTitle": "{{host}}에서 Slack 로그인이 만료됨",
+        "signInAgain": "다시 로그인",
+        "neededTitle": "이 워크스페이스에 Slack 토큰이 필요합니다",
+        "whyNeeded": "Orca에 이 워크스페이스에서 사용할 수 있는 Slack 토큰이 없습니다.",
+        "pasteNeeded": "계속하려면 토큰을 붙여넣으세요.",
+        "continue": "계속"
+      },
+      "problem": {
+        "reconnecting": "{{host}}이(가) 다시 연결되기를 기다리는 중…",
+        "reconnectingNext": "{{host}}이(가) 돌아오면 Slack 설정이 자동으로 다시 시작됩니다. 처음부터 다시 하거나 토큰을 붙여넣을 필요가 없습니다.",
+        "offline": "Orca가 {{host}}에 연결할 수 없습니다.",
+        "offlineNext": "{{host}}에서 Orca가 실행 중인지 확인한 다음 다시 연결하세요. {{host}}이(가) 돌아오면 Slack 설정이 다시 시작됩니다.",
+        "otherUser": "다른 Slack 계정이 연결을 승인했습니다.",
+        "otherUserNext": "다른 Slack 계정으로 로그인한 사람이 Slack 링크를 승인해서 {{bot}}이(가) 나를 대신해 작업할 수 없습니다. 새 링크를 받아 내 Slack 계정으로 로그인한 상태에서 승인하세요.",
+        "expired": "Slack 로그인이 완료되지 않았습니다.",
+        "expiredNext": "아무도 연결을 승인하기 전에 Slack 링크가 만료되었습니다.",
+        "tokenRejected": "Slack이 이 워크스페이스의 토큰을 거부했습니다.",
+        "tokenRejectedNext": "Slack 앱이 제거되었거나 토큰이 해제되면 이렇게 됩니다. 토큰을 교체해 {{bot}}을(를) 다시 설정하세요.",
+        "reconnect": "다시 연결",
+        "replaceToken": "토큰 교체",
+        "details": "세부 정보",
+        "reconnectFailed": "Orca가 여전히 {{host}}에 연결할 수 없습니다."
+      },
+      "approve": {
+        "noteUntil": "{{time}}까지 한 번만 사용할 수 있습니다. 그곳에서 내 계정으로 Slack에 로그인하세요. Orca Cloud가 승인을 {{host}}에 전달합니다.",
+        "note": "한 번만 사용할 수 있습니다. 그곳에서 내 계정으로 Slack에 로그인하세요. Orca Cloud가 승인을 {{host}}에 전달합니다.",
+        "noteUntilHere": "{{time}}까지 한 번만 사용할 수 있습니다. 그곳에서 내 계정으로 Slack에 로그인하세요.",
+        "noteHere": "한 번만 사용할 수 있습니다. 그곳에서 내 계정으로 Slack에 로그인하세요.",
+        "openOn": "{{host}}에서 Slack 열기",
+        "otherDevice": "다른 기기에서 승인",
+        "linkLabel": "Slack 승인 링크",
+        "copied": "복사됨"
+      }
     },
     "automations": {
       "paused": "일시중지됨",
       "newDraft": "다음과 같은 자동화를 설정해 주세요: ",
+      "on": {
+        "githubCiFinished": "CI가 끝날 때"
+      },
       "failed": "실패",
       "running": "실행 중",
       "next": "다음 실행",
@@ -27872,6 +28077,7 @@
       "openOnPage": "자동화 페이지에서 열기",
       "pauseShort": "일시 중지",
       "resumeShort": "재개",
+      "nextAt": "다음 실행 {{time}}",
       "deleting": "삭제 중…",
       "deleteFailed": "{{name}}을(를) 삭제하지 못했습니다",
       "deleteDescription": "<name/> 및 실행 기록을 삭제합니다."
@@ -27899,7 +28105,8 @@
       "here": "여기",
       "thisServer": "이 서버",
       "there": "그곳",
-      "executionComputer": "이 에이전트가 실행되는 컴퓨터"
+      "executionComputer": "이 에이전트가 실행되는 컴퓨터",
+      "yourComputer": "내 컴퓨터"
     },
     "webhooks": {
       "delete": {
@@ -27908,7 +28115,8 @@
           "note": "이 자동화를 시작하는 다른 항목이 없으므로 실행 기록과 함께 삭제됩니다. 웹훅의 URL이 더 이상 작동하지 않으며, 대기 중인 호출은 취소됩니다.",
           "confirm": "둘 다 삭제"
         }
-      }
+      },
+      "copied": "복사됨"
     },
     "upNext": {
       "lookNow": "지금 둘러보기",
@@ -27917,9 +28125,11 @@
     },
     "groups": {
       "newGroup": "새 그룹",
+      "peerReadItems": "{{bot}}이(가) 자기 항목의 업데이트를 읽음",
       "handoffsPaused": "인계 {{count}}회 후 일시 중지되었습니다. 계속하려면 답장하세요.",
       "pairedComputersOnly": "그룹에는 페어링된 컴퓨터의 봇만 추가할 수 있습니다.",
       "needsLocalBot": "이 그룹에는 이 컴퓨터의 봇이 하나 이상 필요합니다.",
+      "pickLocalBot": "이 컴퓨터의 봇을 선택하세요",
       "thisComputer": "이 컴퓨터",
       "remoteNeedsChat": "{{name}}의 채팅을 한 번 연 다음 그룹에 추가하세요.",
       "remoteReplied": "{{computer}}에서 답변함",
@@ -27947,6 +28157,12 @@
       "previewChanged": "미리 보기가 변경되었습니다. 게시하기 전에 검토하세요.",
       "signInToPublish": "게시하려면 로그인",
       "cancelSignIn": "로그인 취소",
+      "fileLinkNotShared": "심볼릭 링크 또는 하드 링크 포함 · 공유되지 않음",
+      "outsideSkill": "{{project}} 외부에서 가져옴",
+      "outsideSkillWith": "{{project}} 외부에서 가져옴 · {{description}}",
+      "tooLargeNotShared": "너무 큼 · 공유되지 않음",
+      "unreadableNotShared": "읽을 수 없음 · 공유되지 않음",
+      "overLimitNotShared": "스킬 한도 초과 · 공유되지 않음",
       "notShared": "공유되지 않음",
       "stopSharing": "공유 중지",
       "loadingLinks": "공유 링크 로드 중…",
@@ -27969,6 +28185,9 @@
       "webhooksHostChat": "웹훅을 사용하려면 {{host}}이(가) Orca Cloud에 로그인되어 있어야 합니다. 로그인되면 만들겠습니다.",
       "eventsHostChat": "{{source}} 이벤트를 사용하려면 {{host}}이(가) Orca Cloud에 로그인되어 있어야 합니다. 로그인되면 이 규칙을 저장하겠습니다.",
       "webhooksNotReaching": "Orca Cloud가 {{name}}에 연결되지 않아 아직 웹훅을 만들 수 없습니다."
+    },
+    "tabs": {
+      "homeTitle": "홈"
     },
     "settingsView": {
       "backToItems": "홈으로 돌아가기",
@@ -28084,6 +28303,12 @@
       "groupRemoteUnreachable": "{{host}}에 연결할 수 없었습니다. {{detail}}",
       "groupRemoteUnreachableRetry": "{{host}}에 연결할 수 없었습니다. {{detail}} 다시 시도하려면 다시 게시하세요."
     },
+    "lookAroundEvery": {
+      "every4h": "오전 8시~오후 8시, 4시간마다",
+      "every2h": "오전 8시~오후 8시, 2시간마다",
+      "twiceDaily": "하루 두 번, 오전 8시와 오후 1시",
+      "mornings": "매일 아침 오전 8시"
+    },
     "templateSkills": {
       "nameWithFolder": "{{name}} ({{folder}})",
       "prReviewChecklist": "PR 리뷰 체크리스트",
@@ -28116,6 +28341,34 @@
       }
     },
     "google": {
+      "bot": {
+        "account": "계정",
+        "hostDefault": "{{host}}의 기본값",
+        "computerDefault": "이 컴퓨터의 기본값",
+        "changeInSettings": "설정에서 변경",
+        "alsoConnected": "함께 연결됨",
+        "settingUp": "설정 중"
+      },
+      "disconnect": {
+        "promotes": "{{email}}이(가) 기본값이 됩니다.",
+        "removeOneNote": "여기에서 봇이 이 계정을 더 이상 사용하지 않습니다."
+      },
+      "hostChoice": {
+        "soon": "출시 예정"
+      },
+      "addAccount": "다른 Google 계정 추가",
+      "defaultBadge": "기본값",
+      "row": {
+        "signedOut": "Google에서 로그아웃됨",
+        "notAllowed": "{{service}} 허용되지 않음",
+        "apiOff": "{{service}}이(가) Google Cloud에서 꺼짐",
+        "adminBlocked": "관리자가 {{service}}을(를) 차단함",
+        "error": "{{service}}을(를) 확인하지 못함"
+      },
+      "setDefault": "기본값으로 설정",
+      "accountActions": "{{email}} 작업",
+      "addServiceMenu": "서비스 추가…",
+      "updateToAdd": "다른 Google 계정을 추가하려면 {{host}}의 Orca를 업데이트하세요.",
       "signInRun": {
         "cancelled": "Google 로그인이 취소되었습니다.",
         "failed": "Google 로그인에 실패했습니다. 다시 시도하세요.",
@@ -28123,11 +28376,13 @@
         "alreadyRunning": "Google 로그인이 이미 진행 중입니다. 먼저 완료하거나 취소하세요.",
         "notWaiting": "대기 중인 Google 로그인이 없습니다. 다시 시작하세요."
       },
+      "accessBlocked": "‘액세스 차단됨’이 표시되나요?",
       "useAnother": "다른 계정 사용",
       "useAnotherSignIn": "Google로 로그인",
       "useAnotherSignInDetail": "현재 Google 앱 사용",
       "setUpNewApp": "새 Google 앱 설정",
-      "setUpNewAppDetail": "현재 앱이 이 계정이나 조직에서 작동하지 않는 경우"
+      "setUpNewAppDetail": "현재 앱이 이 계정이나 조직에서 작동하지 않는 경우",
+      "updateToSetUpNewApp": "새 Google 앱을 설정하려면 {{host}}의 Orca를 업데이트하세요."
     },
     "notices": {
       "couldNotFinish": "{{bot}}이(가) 끝내지 못했습니다",
@@ -28445,7 +28700,8 @@
     "navigationLabel": "앱 탐색",
     "toolsLabel": "앱 도구",
     "workspaces": "워크스페이스",
-    "more": "더 보기"
+    "more": "더 보기",
+    "pageRegion": "페이지"
   },
   "chats": {
     "delete": {
