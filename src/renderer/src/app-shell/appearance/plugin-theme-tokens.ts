@@ -7,16 +7,11 @@ import {
   CONTRAST_RULES,
   MIN_BORDER_ALPHA,
   MIN_RING_CONTRAST,
-  MIN_TEXT_CONTRAST,
   RINGS,
   type ContrastRule
 } from './plugin-theme-contrast-rules'
 
 import { contrastRatio, mix, over, type Rgba } from '../../../../shared/color/rgba-contrast'
-import { accentInkContrast, accentInkHex } from '../../../../shared/color/accent-ink'
-
-const THEME_ACCENT = '--text-link'
-const THEME_ACCENT_FOREGROUND = '--theme-accent-foreground'
 
 /** sRGB channels 0-255 and alpha 0-1, or null when the value is not a CSS color. */
 export type ColorProbe = (value: string) => Rgba | null
@@ -142,29 +137,7 @@ export function safePluginThemeTokens(
       }
     }
   }
-  // Why: an accent that neither near-black nor white reads on can't carry a label at 4.5:1, so it is
-  // dropped like any other failing color and the built-in accent stands.
-  const ownAccent = accepted.get(THEME_ACCENT)
-  if (ownAccent?.[3] === 1 && accentInkContrast(ownAccent) < MIN_TEXT_CONTRAST) {
-    accepted.delete(THEME_ACCENT)
-  }
-  // Why: the label follows the accent it sits on. Once the rules settle, a theme that sets an accent
-  // (or a label) gets the ink that reads on that accent; an explicit label that doesn't is replaced.
-  const accent =
-    accepted.get(THEME_ACCENT) ?? (builtIns[THEME_ACCENT] ? probe(builtIns[THEME_ACCENT]) : null)
-  const ownLabel = accepted.get(THEME_ACCENT_FOREGROUND)
-  const labelReads =
-    ownLabel?.[3] === 1 && accent !== null && contrastRatio(accent, ownLabel) >= MIN_TEXT_CONTRAST
-  const derivedLabel =
-    accent?.[3] === 1 &&
-    (accepted.has(THEME_ACCENT) || accepted.has(THEME_ACCENT_FOREGROUND)) &&
-    !labelReads
-      ? accentInkHex(accent)
-      : undefined
-  return {
-    ...Object.fromEntries(Object.entries(tokens).filter(([token]) => accepted.has(token))),
-    ...(derivedLabel ? { [THEME_ACCENT_FOREGROUND]: derivedLabel } : {})
-  }
+  return Object.fromEntries(Object.entries(tokens).filter(([token]) => accepted.has(token)))
 }
 
 export const HOST_PILL_OUTLINE_MIX_TOKEN = '--worktree-host-pill-outline-mix'

@@ -5,6 +5,7 @@ import { describe, expect, it } from 'vitest'
 import { accentInkHex, accentInkContrast } from '../../../../shared/color/accent-ink'
 import { contrastRatio, hexToRgb } from '../../../../shared/color/rgba-contrast'
 import { safePluginThemeTokens, type ColorProbe } from './plugin-theme-tokens'
+import { themeAccentButtonTokens } from './theme-accent-button-tokens'
 
 const MIN = 4.5
 const AMBER = '#b45309'
@@ -47,49 +48,96 @@ describe('theme accent label', () => {
   })
 })
 
-describe('safePluginThemeTokens: the accent label', () => {
+// What the theme-accent button paints for a theme: its fill and label after the validator and
+// themeAccentButtonTokens, falling back to main.css's built-ins, as document-theme applies them.
+function paintButton(
+  tokens: Record<string, string>,
+  themeBase: 'light' | 'dark',
+  builtIns: Record<string, string>
+): { safe: Record<string, string>; fill: string; label: string } {
+  const safe = safePluginThemeTokens(tokens, themeBase, builtIns, hexProbe)
+  const button = themeAccentButtonTokens(safe, builtIns, hexProbe)
+  return {
+    safe,
+    fill: button['--theme-accent-fill'] ?? safe['--text-link'] ?? builtIns['--text-link'],
+    label:
+      button['--theme-accent-foreground'] ??
+      safe['--theme-accent-foreground'] ??
+      builtIns['--theme-accent-foreground']
+  }
+}
+
+describe('themeAccentButtonTokens: the accent button', () => {
   const base = { '--background': '#ffffff', '--foreground': '#0a0a0a' }
   const builtIns = { '--text-link': lightAccent, '--theme-accent-foreground': lightLabel }
   const run = (tokens: Record<string, string>, themeBase: 'light' | 'dark' = 'dark') =>
-    safePluginThemeTokens({ ...base, ...tokens }, themeBase, builtIns, hexProbe)
+    paintButton({ ...base, ...tokens }, themeBase, builtIns)
 
-  it('derives the label from an accent the theme sets, on either base', () => {
+  it('fills with the theme accent and white ink for amber #b45309, on either base', () => {
     for (const themeBase of ['light', 'dark'] as const) {
-      const out = run({ '--text-link': AMBER }, themeBase)
-      expect(out['--theme-accent-foreground']).toBe('#fafafa')
-      expect(ratio(AMBER, out['--theme-accent-foreground'])).toBeGreaterThanOrEqual(MIN)
+      const { fill, label } = run({ '--text-link': AMBER }, themeBase)
+      expect(fill).toBe(AMBER)
+      expect(label).toBe('#fafafa')
+      expect(ratio(fill, label)).toBeGreaterThanOrEqual(MIN)
     }
   })
 
   it('keeps the built-in look for a default-blue theme accent', () => {
-    expect(run({ '--text-link': darkAccent }, 'dark')['--theme-accent-foreground']).toBe(darkLabel)
+    expect(run({ '--text-link': darkAccent }, 'dark').label).toBe(darkLabel)
   })
 
   it('keeps an explicit label that reads on the accent', () => {
-    const out = run({ '--text-link': AMBER, '--theme-accent-foreground': '#ffffff' })
-    expect(out['--theme-accent-foreground']).toBe('#ffffff')
+    const { fill, label } = run({ '--text-link': AMBER, '--theme-accent-foreground': '#ffffff' })
+    expect([fill, label]).toEqual([AMBER, '#ffffff'])
   })
 
-  it('replaces an explicit label that does not read on the accent', () => {
-    const out = run({ '--text-link': AMBER, '--theme-accent-foreground': '#171717' })
-    expect(out['--theme-accent-foreground']).toBe('#fafafa')
+  it('rejects an explicit label that does not read on the accent', () => {
+    const { safe, label } = run({ '--text-link': AMBER, '--theme-accent-foreground': '#171717' })
+    expect(safe).not.toHaveProperty('--theme-accent-foreground')
+    expect(label).toBe('#fafafa')
   })
 
-  it('drops an accent that neither near-black nor white reads on, keeping the built-in accent', () => {
-    const grey = '#767676'
-    expect(accentInkContrast(hexToRgb(grey))).toBeLessThan(MIN)
-    const out = run({ '--text-link': grey })
-    expect(out).not.toHaveProperty('--text-link')
-    expect(out).not.toHaveProperty('--theme-accent-foreground')
+  it.each(['#d73a49', '#cb4b16', '#dc322f'])(
+    'keeps mid-tone %s as the link color; only the button falls back to the built-in accent',
+    (midTone) => {
+      expect(accentInkContrast(hexToRgb(midTone))).toBeLessThan(MIN)
+      const { safe, fill, label } = run({ '--text-link': midTone })
+      expect(safe['--text-link']).toBe(midTone)
+      expect([fill, label]).toEqual([lightAccent, lightLabel])
+      expect(ratio(fill, label)).toBeGreaterThanOrEqual(MIN)
+    }
+  )
+
+  it('falls back on a mid-tone accent when the explicit label does not read on it', () => {
+    const { safe, fill, label } = run({
+      '--text-link': '#d73a49',
+      '--theme-accent-foreground': '#fafafa'
+    })
+    expect(safe['--text-link']).toBe('#d73a49')
+    expect([fill, label]).toEqual([lightAccent, lightLabel])
   })
 
-  it('adds no label when the theme sets no accent or label', () => {
-    expect(run({})).not.toHaveProperty('--theme-accent-foreground')
+  it('keeps a mid-tone accent when the theme sets a label that reads on it', () => {
+    const { fill, label } = run({
+      '--text-link': '#d73a49',
+      '--theme-accent-foreground': '#000000'
+    })
+    expect([fill, label]).toEqual(['#d73a49', '#000000'])
+    expect(ratio(fill, label)).toBeGreaterThanOrEqual(MIN)
+  })
+
+  it('paints nothing over the built-ins when the theme sets no accent', () => {
+    expect(
+      themeAccentButtonTokens(
+        safePluginThemeTokens(base, 'dark', builtIns, hexProbe),
+        builtIns,
+        hexProbe
+      )
+    ).toEqual({})
   })
 })
 
-// Every theme Orca ships, run through the validator: its accent and label (its own or the built-in
-// ones for its base) must read at 4.5:1.
+// Every theme Orca ships: the accent button's fill and label must read at 4.5:1.
 const launchDir = fileURLToPath(
   new URL('../../../../../resources/plugins/launch/', import.meta.url)
 )
@@ -110,13 +158,10 @@ describe('bundled themes: accent label contrast', () => {
     const theme: { base: 'light' | 'dark'; tokens: Record<string, string> } = JSON.parse(
       readFileSync(path, 'utf8')
     )
-    const builtIns = {
+    const { fill, label } = paintButton(theme.tokens, theme.base, {
       '--text-link': theme.base === 'light' ? lightAccent : darkAccent,
       '--theme-accent-foreground': theme.base === 'light' ? lightLabel : darkLabel
-    }
-    const out = safePluginThemeTokens(theme.tokens, theme.base, builtIns, hexProbe)
-    const accent = out['--text-link'] ?? builtIns['--text-link']
-    const label = out['--theme-accent-foreground'] ?? builtIns['--theme-accent-foreground']
-    expect(ratio(accent, label)).toBeGreaterThanOrEqual(MIN)
+    })
+    expect(ratio(fill, label)).toBeGreaterThanOrEqual(MIN)
   })
 })
