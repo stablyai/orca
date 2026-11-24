@@ -3,27 +3,25 @@
 // phone waits; GitHub's install page works in any browser, so it opens in the phone's, and the host
 // notices the install.
 import { useEffect, useRef, useState, type ReactNode } from 'react'
-import { View } from 'react-native'
-import { ArrowUpRight, ExternalLink } from 'lucide-react-native'
+import { ActivityIndicator } from 'react-native'
+import { ArrowUpRight } from 'lucide-react-native'
 import {
   BOT_GITHUB_OFF,
   GITHUB_BOT_MENTION,
   type ConnectorGitHubInstallation
 } from '../../../../src/shared/connector-bot-github-contract'
+import { BOT_CONNECTOR_NAMES } from '../../../../src/shared/bots/bot-templates'
 import { MobileStateView } from '../../components/feedback/MobileStateView'
 import { ListRow } from '../../components/list/ListGroup'
 import { SheetHeader } from '../../components/nav-bar/SheetHeader'
-import { SheetPrimaryButton } from '../../components/sheets/SheetPrimaryButton'
 import { useMobileTranslation } from '../../i18n/use-mobile-translation'
 import { useBackClaim } from '../../navigation/use-back-claim'
 import { openConnectorLink, GITHUB_LINK_HOSTS } from './connector-link'
 import { SettingsNote, SettingsSection } from '../../settings/settings-screen-frame'
-import { spacing } from '../../theme/mobile-theme'
-import { themedStyleSheet } from '../../theme/themed-styles'
+import { colors } from '../../theme/mobile-theme'
 import type { RpcClient } from '../../transport/rpc/rpc-client-contract'
-import { mobileBotAvatarSource } from '../host-bot-row-facts'
 import type { PhoneBot } from '../host-bots-operations'
-import { MobileConnectorSourceIcon } from '../MobileConnectorSourceIcon'
+import { MobileConnectorLogo } from '../MobileConnectorSourceIcon'
 import { ConnectorHandoff, useFollowHost } from './MobileConnectorAccountParts'
 import { connectorAccountErrorMessage } from './mobile-connector-account-copy'
 import { MobileConnectorTryIt } from './MobileConnectorTryIt'
@@ -118,34 +116,22 @@ export function MobileBotGitHubSetup(props: {
         connector="github"
         subtitle={t('bots.github.setup.isOn', '{{name}} is on GitHub', { name: bot.name })}
         heading={t('bots.github.setup.tryIt', 'Try it on any issue or PR')}
-        ways={[
-          {
-            key: 'ask',
-            from: 'person',
-            title: state?.account?.login ?? '',
-            subtitle: `${command} ${t('bots.github.setup.preview.ask', 'review this PR')}`,
-            copy: command
-          },
-          {
-            key: 'reply',
-            from: 'bot',
-            title: bot.name,
-            subtitle: t('bots.github.setup.preview.reply', 'On it.')
-          }
-        ]}
-        note={t(
+        prompt={{
+          text: `${command} ${t('bots.github.setup.preview.ask', 'review this PR')}`,
+          copy: command
+        }}
+        footer={t(
           'bots.github.setup.pushesOnHost',
           '{{name}} pushes code from {{host}} with its git login.',
           { name: bot.name, host: hostName }
         )}
-        avatar={mobileBotAvatarSource(bot)}
         banner={props.banner}
         showToast={props.showToast}
         onDone={props.onDone}
       />
     )
   }
-  const mark = <MobileConnectorSourceIcon source="github" size={28} />
+  const mark = <MobileConnectorLogo source="github" size={28} />
   const error = (code: string) => connectorAccountErrorMessage('github', code, hostName, t)
   const openInstall = () => {
     if (state) {
@@ -176,69 +162,58 @@ export function MobileBotGitHubSetup(props: {
           />
         )
       }
-      case 'connect':
+      case 'connect': {
+        const failed = trip.status === 'failed' ? trip.error : null
         return (
-          <MobileStateView
-            iconElement={mark}
-            title={t(
-              'bots.github.connect.pickRepositories',
-              'Sign in and choose which repositories {{name}} can work in.',
-              { name: bot.name }
-            )}
-            message={
-              trip.status === 'failed'
-                ? error(trip.error)
-                : t('bots.github.connect.readsOnly', 'Orca only reads your GitHub username and id.')
-            }
-          >
-            <SheetPrimaryButton
-              label={t('bots.github.connect.button', 'Connect GitHub')}
-              icon={ArrowUpRight}
-              disabled={!props.online}
-              onPress={() => start(props.signIn)}
-            />
-            <SettingsNote>
-              {t('bots.connect.opensOnHost', 'Opens in Orca’s browser on {{host}}.', {
-                host: hostName
-              })}
-            </SettingsNote>
-          </MobileStateView>
+          <>
+            <SettingsSection
+              first
+              footer={
+                failed
+                  ? undefined
+                  : `${t('bots.connect.opensOnHost', 'Opens in Orca’s browser on {{host}}.', {
+                      host: hostName
+                    })} ${t('bots.github.connect.readsOnly', 'Orca only reads your GitHub username and id.')}`
+              }
+            >
+              <ListRow
+                leading={<MobileConnectorLogo source="github" size={20} />}
+                title={BOT_CONNECTOR_NAMES.github}
+                subtitle={t(
+                  'bots.github.connect.pickSubtitle',
+                  'Choose the repositories it can work in'
+                )}
+              />
+              <ListRow
+                leading={<ArrowUpRight size={18} color={colors.accentBlue} />}
+                accent
+                title={
+                  failed
+                    ? t('bots.github.setup.retry', 'Try again')
+                    : t('bots.github.connect.signIn', 'Sign in to GitHub')
+                }
+                accessibilityRole="link"
+                disabled={!props.online}
+                onPress={() => start(props.signIn)}
+              />
+            </SettingsSection>
+            {failed ? <SettingsNote error>{error(failed)}</SettingsNote> : null}
+          </>
         )
+      }
       case 'waiting':
         return (
           <ConnectorHandoff
             hostName={hostName}
-            message={t(
-              'bots.github.connect.handoff',
-              'GitHub’s sign-in is open in Orca’s browser there. Sign in and choose the repositories; this updates when you finish.'
-            )}
-            waiting={t(
-              'bots.github.connect.waitingOn',
-              'Finish signing in to GitHub on {{host}}…',
-              {
-                host: hostName
-              }
-            )}
+            message={t('bots.github.connect.handoffPick', 'Sign in and choose the repositories.')}
             onOpenPage={showSignIn ? () => showSignIn(props.page) : null}
-            onCancel={cancel}
           />
         )
       case 'install':
         return (
-          <MobileStateView
-            iconElement={mark}
-            title={
-              trip.status === 'linked' && trip.link?.install === 'requested'
-                ? t(
-                    'bots.github.connect.requested',
-                    'An owner of the organization has been asked to approve the Orca app.'
-                  )
-                : t(
-                    'bots.github.connect.notInstalled',
-                    'The Orca app is not on any of your repositories yet.'
-                  )
-            }
-            message={
+          <SettingsSection
+            first
+            footer={
               opened
                 ? t(
                     'bots.github.setup.installing',
@@ -247,48 +222,52 @@ export function MobileBotGitHubSetup(props: {
                 : undefined
             }
           >
-            <SheetPrimaryButton
-              label={t('bots.github.setup.install', 'Install the Orca app')}
-              icon={ExternalLink}
+            <ListRow
+              leading={<ArrowUpRight size={18} color={colors.accentBlue} />}
+              accent
+              title={t('bots.github.setup.install', 'Install the Orca app')}
+              subtitle={
+                trip.status === 'linked' && trip.link?.install === 'requested'
+                  ? t(
+                      'bots.github.connect.requested',
+                      'An owner of the organization has been asked to approve the Orca app.'
+                    )
+                  : t(
+                      'bots.github.connect.notInstalled',
+                      'The Orca app is not on any of your repositories yet.'
+                    )
+              }
+              accessory={
+                opened ? <ActivityIndicator size="small" color={colors.textSecondary} /> : undefined
+              }
+              accessibilityRole="link"
               disabled={!props.online}
               onPress={openInstall}
             />
-          </MobileStateView>
+          </SettingsSection>
         )
       case 'turn-on':
         return (
-          <>
-            <SettingsNote>
-              {t('bots.connect.signedInAs', 'Signed in as {{who}}', {
-                who: `@${state?.account?.login ?? ''}`
-              })}
-            </SettingsNote>
-            <SettingsSection title={t('bots.github.setup.repositories', 'Repositories')}>
-              {(state?.installations ?? []).map((installation) => (
-                <ListRow
-                  key={installation.installationId}
-                  title={installation.accountLogin}
-                  subtitle={gitHubRepositoriesLine(installation, (account) =>
-                    t('bots.github.allRepositories', 'All repositories of {{account}}', {
-                      account
-                    })
-                  )}
-                />
-              ))}
-            </SettingsSection>
-            <View style={styles.action}>
-              <SheetPrimaryButton
-                label={
-                  bot.github
-                    ? t('bots.github.setup.finish', 'Done')
-                    : t('bots.github.connect.turnOn', 'Turn on {{name}}', { name: bot.name })
-                }
-                busy={saving}
-                disabled={!props.online}
-                onPress={() => void turnOn()}
+          <SettingsSection
+            first
+            title={t('bots.github.setup.repositories', 'Repositories')}
+            footer={t('bots.connect.signedInAs', 'Signed in as {{who}}', {
+              who: `@${state?.account?.login ?? ''}`
+            })}
+          >
+            {(state?.installations ?? []).map((installation) => (
+              <ListRow
+                key={installation.installationId}
+                leading={<MobileConnectorLogo source="github" size={20} />}
+                title={installation.accountLogin}
+                subtitle={gitHubRepositoriesLine(installation, (account) =>
+                  t('bots.github.allRepositories', 'All repositories of {{account}}', {
+                    account
+                  })
+                )}
               />
-            </View>
-          </>
+            ))}
+          </SettingsSection>
         )
     }
   })()
@@ -297,14 +276,26 @@ export function MobileBotGitHubSetup(props: {
       <SheetHeader
         title={t('bots.github.setup.connectTitle', 'Connect GitHub')}
         subtitle={t('bots.setup.for', 'for {{name}}', { name: bot.name })}
-        leading={{ label: t('bots.github.setup.close', 'Close'), onPress: props.onClose }}
+        leading={
+          step === 'waiting'
+            ? { label: t('bots.connect.cancel', 'Cancel'), onPress: cancel }
+            : { label: t('bots.github.setup.close', 'Close'), onPress: props.onClose }
+        }
+        trailing={
+          step === 'turn-on'
+            ? {
+                label: bot.github
+                  ? t('bots.github.setup.finish', 'Done')
+                  : t('bots.connect.turnOnShort', 'Turn on'),
+                busy: saving,
+                disabled: !props.online,
+                onPress: () => void turnOn()
+              }
+            : undefined
+        }
       />
       {props.banner}
       {body}
     </>
   )
 }
-
-const styles = themedStyleSheet(() => ({
-  action: { marginTop: spacing.lg }
-}))

@@ -13,6 +13,9 @@ export type StructuredAgentSessionCloseOutcome = {
   stopped: boolean
   closeAttempted: boolean
   reason?: string
+  /** The close cut a start whose acquire had not returned: true once that start has ended and its
+   *  exit is proven, false when it ended without that proof. */
+  whenStartEnds?: Promise<boolean>
 }
 
 export type StructuredSessionSurfaceRuntime = Pick<
@@ -55,6 +58,9 @@ export async function closeStructuredAgentSessionChild(
       ? captureStructuredSessionSurface(host, sessionId, options.runtime)
       : options.surface
   const admitClose = options.admitClose
+  const startingOrWindingDown = () =>
+    host.reads.agentStarting(sessionId) || host.reads.startWindingDown(sessionId)
+  const wasStarting = startingOrWindingDown()
   let admitted = admitClose === undefined
   let closeFailure: string | undefined
   try {
@@ -76,6 +82,21 @@ export async function closeStructuredAgentSessionChild(
       options.afterClose?.()
     }
   }
+  if (
+    admitted &&
+    // A start may also have registered after that read, before this close's lane cut it.
+    (wasStarting || startingOrWindingDown()) &&
+    closeFailure === undefined &&
+    !structuredSessionCloseSettled(sessionId)
+  ) {
+    // The aborted start refuses its late child, but an acquire may return long after: never wait on it.
+    return {
+      stopped: false,
+      closeAttempted: true,
+      reason: STARTING_AGENT_STOPPING_REASON,
+      whenStartEnds: settleCancelledStart(host, sessionId, surface, options.runtime)
+    }
+  }
   if (!admitted || !structuredSessionCloseSettled(sessionId)) {
     return {
       stopped: false,
@@ -87,7 +108,40 @@ export async function closeStructuredAgentSessionChild(
     }
   }
   await retireCapturedStructuredSessionSurface(host, sessionId, surface, options.runtime)
-  return { stopped: true, closeAttempted: true }
+  return {
+    stopped: true,
+    closeAttempted: true,
+    ...(wasStarting ? { reason: STARTING_AGENT_STOPPED_REASON } : {})
+  }
+}
+
+export const STARTING_AGENT_STOPPED_REASON =
+  'Its agent was still starting; Orca cancelled the start.'
+
+export const STARTING_AGENT_STOPPING_REASON =
+  'Its agent was still starting; Orca will close it as soon as it comes up.'
+
+async function settleCancelledStart(
+  host: StructuredAgentSessionHost,
+  sessionId: string,
+  surface: StructuredSessionSurface | null,
+  runtime: StructuredSessionSurfaceRuntime | undefined
+): Promise<boolean> {
+  try {
+    await host.reads.startAttemptsEnded(sessionId)
+    if (!structuredSessionCloseSettled(sessionId)) {
+      return false
+    }
+    await retireCapturedStructuredSessionSurface(host, sessionId, surface, runtime)
+    return true
+  } catch (error) {
+    host.deps.logger.warn('settling a cancelled start failed', {
+      scope: 'cancelled-start-close',
+      sessionId,
+      error
+    })
+    return false
+  }
 }
 
 /** Capture actual presentation independently: a failed SHOW can leave Retry with no table row. */

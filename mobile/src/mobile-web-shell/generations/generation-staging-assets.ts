@@ -1,11 +1,18 @@
 import type { MobileWebBundleFetchResult } from '../../transport/web-bundle/mobile-web-bundle-fetch'
-import { shellDownloadedAssets } from '../../transport/web-bundle/mobile-web-bundle-reply-schemas'
+import {
+  isDeferredAsset,
+  shellDownloadedAssets
+} from '../../transport/web-bundle/mobile-web-bundle-reply-schemas'
 import { requireStorablePath } from './generation-asset-path'
 import { joinUri } from './generation-cache-uri'
 
 export function stagingAssetsOf(directory: string, result: MobileWebBundleFetchResult) {
   const reused = new Set(result.reused)
-  return shellDownloadedAssets(result.manifest).map((asset) => ({
+  // Deferred code the fetch found in a cached build is reused too.
+  const deferred = result.manifest.assets.filter(
+    (asset) => isDeferredAsset(asset) && reused.has(asset.path)
+  )
+  return [...shellDownloadedAssets(result.manifest), ...deferred].map((asset) => ({
     asset,
     uri: joinUri(directory, requireStorablePath(asset.path)),
     bytes: reused.has(asset.path) ? null : requireExactBytes(result.assets.get(asset.path), asset)

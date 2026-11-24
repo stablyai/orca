@@ -31,8 +31,8 @@ export function recordJournalConnectorReplies(
     return
   }
   const insert = db.prepare(`INSERT INTO journal_connector_replies
-    (account,delivery_id,source,external_id,session_id,epoch,message_id,queued)
-    VALUES(?,?,?,?,?,?,?,?) ON CONFLICT(account,delivery_id) DO NOTHING`)
+    (account,delivery_id,source,external_id,session_id,epoch,message_id,queued,quiet_rule)
+    VALUES(?,?,?,?,?,?,?,?,'trailing') ON CONFLICT(account,delivery_id) DO NOTHING`)
   for (const deliveryId of [stamp.deliveryId, ...(stamp.carried ?? [])]) {
     insert.run(
       stamp.account,

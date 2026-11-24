@@ -4,6 +4,7 @@ import { makeTestBotItem } from '../../../../../shared/bots/bot-item.test-fixtur
 import type { BotItem, BotItemEvent, BotItemLinkView } from '../../../../../shared/bots/bot-items'
 import { BotItemPaneFrame } from './BotItemPane'
 import { BotItemBody, BotItemDeletedNotice } from './BotItemView'
+import { BotItemLoading } from './BotItemLoading'
 import type { BotItemWalkState } from './use-bot-item-walk'
 import { botRefKey } from '@/lib/bot-hosts'
 import { updateNativeChatComposerDraft } from '../../native-chat/drafts/native-chat-composer-draft-store'
@@ -42,7 +43,8 @@ function Pane({
   deleted = false,
   activity = events,
   hasEarlier = false,
-  tall = false
+  tall = false,
+  height
 }: {
   state: BotItemWalkState
   shown?: BotItem
@@ -51,9 +53,13 @@ function Pane({
   activity?: BotItemEvent[]
   hasEarlier?: boolean
   tall?: boolean
+  height?: number
 }): React.JSX.Element {
   return (
-    <div className={tall ? 'flex h-[860px] flex-col' : 'flex h-[420px] flex-col'}>
+    <div
+      className={tall ? 'flex h-[860px] flex-col' : 'flex h-[420px] flex-col'}
+      style={height ? { height } : undefined}
+    >
       <BotItemPaneFrame walk={state} offline={offline} onBack={() => {}}>
         {({ comment, nav }) => (
           <BotItemBody
@@ -191,6 +197,49 @@ export const manyLinksTop = defineFixture({
 export const noLinksScrolled = defineFixture({
   ...frozenScrolled,
   render: () => <Pane state={walk(3, 14)} activity={longActivity} />
+})
+// A long title, many links and a long Done means in a short pane: the top caps and the Activity keeps room.
+export const crowdedTopShort = defineFixture({
+  ...frozenScrolled,
+  render: () => (
+    <Pane
+      state={walk(3, 14)}
+      height={360}
+      shown={{
+        ...item,
+        title: longTitle,
+        links: manyLinks,
+        doneMeans: Array.from({ length: 6 }, () => item.doneMeans).join('; ')
+      }}
+      activity={longActivity}
+    />
+  )
+})
+export const crowdedTopTall = defineFixture({
+  ...crowdedTopShort,
+  render: () => (
+    <Pane
+      state={walk(3, 14)}
+      tall
+      shown={{
+        ...item,
+        title: longTitle,
+        links: manyLinks,
+        doneMeans: Array.from({ length: 6 }, () => item.doneMeans).join('; ')
+      }}
+      activity={longActivity}
+    />
+  )
+})
+export const loading = defineFixture({
+  width: 340,
+  render: () => (
+    <div className="flex h-[420px] flex-col">
+      <BotItemPaneFrame walk={walk(3, 14, { pending: true })} offline={false} onBack={() => {}}>
+        {() => <BotItemLoading />}
+      </BotItemPaneFrame>
+    </div>
+  )
 })
 export const keyboard = defineFixture({
   ...longTitleScrolled,

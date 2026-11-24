@@ -10,6 +10,7 @@ import {
 import { callRuntimeRpc } from '@/runtime/rpc/calls/runtime-rpc-call'
 import { createNonSecureContextUuid } from '../../../../../../../shared/identifiers/non-secure-context-uuid'
 import type { WorkerDockRowView } from './WorkerDockRow'
+import type { WorkerDockStopBlock } from './worker-dock-stop-check'
 
 /** A strip failure and the retry of the request that failed; no retry when none applies. */
 export type WorkerDockFailure = { message: string; retry?: () => void }
@@ -22,12 +23,17 @@ export type WorkerDockResultDialogState = {
 }
 
 const message = (value: unknown) => (value instanceof Error ? value.message : String(value))
+/** A failure no Retry can change, such as a Stop for a worker that has already settled. */
+class FinalWorkerDockError extends Error {}
 
 export function useWorkerDockOwnerActions(
   target: RuntimeClientTarget,
   party: string | null | undefined,
   identities: WorkerDockSnapshot['identities'] | undefined,
-  workerOpen: (row: WorkerDockRowView) => void
+  workerOpen: (row: WorkerDockRowView) => void,
+  /** Read just before each Stop request and each Retry of it, so neither is sent once the
+   *  pressed row can't stop. */
+  stopBlock?: (row: WorkerDockRowView, party: string) => WorkerDockStopBlock
 ) {
   const t = useTranslate()
   const [pending, setPending] = useState<ReadonlySet<string>>(new Set())
@@ -93,7 +99,13 @@ export function useWorkerDockOwnerActions(
       setFailure(null)
       setPending((current) => new Set([...current, ...ids]))
       void request()
-        .catch((value) => setFailure({ message: message(value), retry: attempt }))
+        .catch((value) =>
+          setFailure(
+            value instanceof FinalWorkerDockError
+              ? { message: message(value) }
+              : { message: message(value), retry: attempt }
+          )
+        )
         .finally(() => setPending((current) => new Set([...current].filter((id) => !ids.has(id)))))
     }
     attempt()
@@ -125,17 +137,27 @@ export function useWorkerDockOwnerActions(
       }
       const requestId = createNonSecureContextUuid()
       const settlement = kind === 'clear' ? row.settlement : null
-      track(new Set([row.id]), () =>
-        settlement
-          ? clear([{ dispatchId: row.dispatchId, settlement }])
+      track(new Set([row.id]), () => {
+        if (settlement) {
+          return clear([{ dispatchId: row.dispatchId, settlement }])
+        }
+        const block = stopBlock?.(row, party)
+        return block
+          ? Promise.reject(
+              block === 'settled'
+                ? new FinalWorkerDockError(
+                    t('components.native-chat.workerDock.alreadyStopped', 'Already stopped')
+                  )
+                : new Error(t('components.native-chat.workerDock.cantStop', "Can't stop now"))
+            )
           : callRuntimeRpc(target, 'orchestration.workerDockStop', {
               party,
               dispatch: row.dispatchId,
               requestId
             })
-      )
+      })
     },
-    [clear, party, target, track]
+    [clear, party, stopBlock, t, target, track]
   )
   const clearAll = useCallback(() => {
     const captured = (identities ?? []).flatMap((row) =>

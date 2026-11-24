@@ -46,8 +46,25 @@ type PendingRetirementReport = {
 }
 
 export function legacyJournalRetirementEvent(
-  outcome: LegacyJournalRetirementOutcome
+  input: Partial<LegacyJournalRetirementOutcome> & Pick<LegacyJournalRetirementOutcome, 'deletes'>
 ): LegacyJournalRetirementEvent {
+  const outcome: LegacyJournalRetirementOutcome = {
+    outcome: 'deferred',
+    reason: 'none',
+    defer: 'none',
+    artifact: 'unknown',
+    completeness: 'unknown',
+    resumed: false,
+    counts: null,
+    cumulative: false,
+    sourceBytes: null,
+    activeMs: null,
+    elapsedMs: null,
+    error: 'none',
+    deletes: input.deletes,
+    // Undefined optional fields keep their defaults so the event stays valid.
+    ...Object.fromEntries(Object.entries(input).filter(([, value]) => value !== undefined))
+  }
   const { counts, cumulative: _cumulative, sourceBytes, activeMs, elapsedMs, ...fields } = outcome
   return {
     ...fields,
@@ -62,6 +79,21 @@ export function legacyJournalRetirementEvent(
     source_bytes_bucket: bytesBucket(sourceBytes),
     active_ms_bucket: durationBucket(activeMs),
     elapsed_ms_bucket: durationBucket(elapsedMs)
+  }
+}
+
+export class LegacyJournalRetirementLaunchReport {
+  reported = false
+
+  async defer(defer: 'not_owner' | 'no_version', deletes: boolean): Promise<void> {
+    if (this.reported) {
+      return
+    }
+    // No cross-launch deduplication or retries can write to a profile we cannot use.
+    this.reported = true
+    const event = legacyJournalRetirementEvent({ defer, deletes })
+    logLegacyJournalRetirement(event)
+    await sendLegacyJournalRetirement(event)
   }
 }
 
@@ -166,20 +198,7 @@ export class LegacyJournalRetirementReporter {
 
   async report(fields: Partial<LegacyJournalRetirementOutcome>): Promise<void> {
     const event = legacyJournalRetirementEvent({
-      outcome: 'deferred',
-      reason: 'none',
-      defer: 'none',
-      artifact: 'unknown',
-      completeness: 'unknown',
-      resumed: false,
-      counts: null,
-      cumulative: false,
-      sourceBytes: null,
-      activeMs: null,
-      elapsedMs: null,
-      error: 'none',
-      // A field passed as undefined keeps its default rather than leaving the event invalid.
-      ...Object.fromEntries(Object.entries(fields).filter(([, value]) => value !== undefined)),
+      ...fields,
       deletes: this.deletes
     })
     const outcome = JSON.stringify([

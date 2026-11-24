@@ -40,6 +40,10 @@ export type AgentJournalBotMessageFields = {
    *  a turn it opens stays that conversation's though the chat is later linked elsewhere.
    *  Host-written, never sent to the agent. */
   connectorConversation?: { source: string; externalId: string }
+  /** Every message this one delivered (it and the later ones of its batch) came from a person who
+   *  can ask the bot in its Slack thread: only then may its turn leave the thread. Host-written,
+   *  never sent to the agent. */
+  leaveEligible?: true
   /** The connector delivery this message admits, and the later ones it carries: each gets its
    *  answer or a truthful outcome through the reply outbox. Kept across a queued edit. Host-written,
    *  never sent to the agent. */

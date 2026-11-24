@@ -243,7 +243,7 @@
 2 src/renderer/src/components/native-chat/queue/NativeChatQueuedMessageRows.tsx
 5 src/renderer/src/components/native-chat/queue/editing/use-structured-agent-session-queued-edit.ts
 1 src/renderer/src/components/native-chat/queue/use-structured-agent-session-queued-messages.ts
-2 src/renderer/src/components/native-chat/queue/use-structured-agent-session-queued-reorder.ts
+1 src/renderer/src/components/native-chat/queue/use-structured-agent-session-queued-reorder.ts
 1 src/renderer/src/components/native-chat/selection-quotes/AddToChatMenu.tsx
 1 src/renderer/src/components/native-chat/session/goals/use-structured-agent-session-thread-goal.ts
 1 src/renderer/src/components/native-chat/session/options/controls/NativeChatSessionOptionPickers.tsx
@@ -386,7 +386,6 @@
 1 src/renderer/src/components/right-sidebar/source-control/review/use-create-pr-intent-run.ts
 1 src/renderer/src/components/right-sidebar/source-control/review/use-hosted-review-creation.ts
 1 src/renderer/src/components/right-sidebar/source-control/review/use-hosted-review-provider-hint.ts
-1 src/renderer/src/components/right-sidebar/source-control/sync/git-history-panel.tsx
 1 src/renderer/src/components/right-sidebar/source-control/sync/git-status-file-watch-refresh.ts
 1 src/renderer/src/components/right-sidebar/source-control/sync/use-branch-compare.ts
 1 src/renderer/src/components/right-sidebar/source-control/sync/use-conflict-abort.ts

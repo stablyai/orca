@@ -1,6 +1,7 @@
 import { textFieldClaimsActionKey } from '@/lib/keyboard/text-field-shortcut-policy'
 import React, { useCallback, useEffect, useRef, useState } from 'react'
 import { useAppStore } from '@/store'
+import { listHiddenByRailPage } from '@/components/app-rail/app-rail-navigation'
 import { activateWorktreeFromSidebar } from '@/lib/workspace/activation/sidebar-worktree-activation'
 import { hasVisibleOverlay } from '@/lib/overlay-interaction/visible-overlay'
 import { getWorktreeExecutionHostId } from '../../../../../../shared/execution-host/execution-host'
@@ -191,7 +192,8 @@ export function useWorktreeListKeyboardNavigation(args: {
       scrollRef.current?.removeAttribute('data-keyboard-navigation')
     }
     const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.defaultPrevented || e.isComposing || activeModal !== 'none') {
+      // Why the rail check: a rail page hides the list (still mounted); its shortcuts must not act on hidden rows.
+      if (e.defaultPrevented || e.isComposing || activeModal !== 'none' || listHiddenByRailPage()) {
         return
       }
 
