@@ -3,7 +3,9 @@ import { AlertCircle, CheckCircle2, Loader2, RotateCcw, X } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { useTranslate, type Translate } from '@/i18n/use-translate'
 import { formatShortTimeAgo } from '@/lib/time-format/short-time-ago'
+import type { Bot } from '../../../../../shared/bot-types'
 import type { ResumeFailureAction } from '../failures/native-chat-resume-failure-guidance'
+import type { ResumeCandidate } from '../tree/native-chat-resume-on-restart-grouping'
 import type { ResumeToastView } from './native-chat-resume-toast-view'
 import { NativeChatResumeToastRow } from './NativeChatResumeToastRow'
 
@@ -13,6 +15,8 @@ export type NativeChatResumeToastProps = {
   machineName?: string
   listedAt: number
   nameFor: (sessionId: string, fallback: string) => string
+  /** The bot whose chat this is, named under the chat's title. */
+  botFor?: (candidate: ResumeCandidate) => Bot | null
   defaultExpanded?: boolean
   onResume: (sessionIds: readonly string[]) => void
   onRowAction: (action: ResumeFailureAction, sessionId: string) => void
@@ -136,6 +140,7 @@ export function NativeChatResumeToast({
   machineName,
   listedAt,
   nameFor,
+  botFor,
   defaultExpanded = false,
   onResume,
   onRowAction,
@@ -238,6 +243,7 @@ export function NativeChatResumeToast({
                   firstLine(row.candidate.latestPrompt) ||
                     t('auto.components.NativeChatResumeToast.untitled', 'Untitled agent')
                 )}
+                bot={botFor?.(row.candidate)}
                 age={formatShortTimeAgo(row.candidate.recordedAt, listedAt)}
                 busy={busy}
                 remote={machineName !== undefined}

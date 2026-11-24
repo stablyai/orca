@@ -1,6 +1,9 @@
 import { AlertCircle, CheckCircle2, Loader2 } from 'lucide-react'
+import { BotAvatar } from '@/components/bots/BotAvatar'
 import { Button } from '@/components/ui/button'
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { useTranslate, type Translate } from '@/i18n/use-translate'
+import type { Bot } from '../../../../../shared/bot-types'
 import {
   resumeFailureGuidance,
   type ResumeFailureAction
@@ -85,7 +88,8 @@ function StateMark({ row }: { row: ResumeToastRow }): React.JSX.Element {
 
 export function NativeChatResumeToastRow({
   row,
-  name,
+  name: chatName,
+  bot,
   age,
   busy,
   remote,
@@ -93,6 +97,8 @@ export function NativeChatResumeToastRow({
 }: {
   row: ResumeToastRow
   name: string
+  /** Shown under the chat's title, for a bot's chat. */
+  bot?: Bot | null
   age: string
   busy: boolean
   remote: boolean
@@ -100,6 +106,12 @@ export function NativeChatResumeToastRow({
 }): React.JSX.Element {
   const t = useTranslate()
   const actions = rowActions(row, remote, t)
+  const name = bot
+    ? t('auto.components.NativeChatResumeToast.botChat', '{{bot}} · {{chat}}', {
+        bot: bot.name,
+        chat: chatName
+      })
+    : chatName
   const reason = row.openOnly
     ? t('auto.components.NativeChatResumeFailureGuidance.fallbackShort', 'Couldn’t resume.')
     : row.failure
@@ -112,9 +124,26 @@ export function NativeChatResumeToastRow({
       <StateMark row={row} />
       <div className="min-w-0 flex-1">
         <div className="flex min-w-0 items-baseline gap-2">
-          <span className="min-w-0 flex-1 truncate text-xs text-foreground/90" title={name}>
-            {name}
-          </span>
+          {/* Truncated names can look alike; focus or hover shows the whole one, a stop per row. */}
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <div
+                tabIndex={0}
+                className="-mx-1 -my-0.5 min-w-0 flex-1 rounded-sm px-1 py-0.5 outline-none focus-visible:ring-2 focus-visible:ring-ring/50"
+              >
+                <p className="truncate text-xs text-foreground/90">{chatName}</p>
+                {bot && (
+                  <p className="mt-0.5 flex min-w-0 items-center gap-1 text-[11px] leading-snug text-muted-foreground">
+                    <BotAvatar bot={bot} className="size-3.5 rounded-sm border-0 text-[9px]" />
+                    <span className="min-w-0 truncate">{bot.name}</span>
+                  </p>
+                )}
+              </div>
+            </TooltipTrigger>
+            <TooltipContent side="top" className="max-w-80 wrap-anywhere">
+              {name}
+            </TooltipContent>
+          </Tooltip>
           <span className="shrink-0 text-[11px] tabular-nums text-muted-foreground">{age}</span>
         </div>
         {reason && (
