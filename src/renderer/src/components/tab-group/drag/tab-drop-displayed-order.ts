@@ -1,6 +1,9 @@
 // Drops are drawn against the order the tab bar shows (a bot's pinned Home first), so they commit against it too.
 
-/** The group's next order after moving `activeId` beside `overId` within it; null when nothing moves. */
+/**
+ * The group's next order after moving `activeId` beside `overId` within it; null when nothing moves, including a drop
+ * on a tab drawn but missing from the stored order (the old index math moved the tab to a guessed slot there).
+ */
 export function reorderWithinDisplayedOrder(
   displayedOrder: readonly string[],
   activeId: string,

@@ -11,11 +11,7 @@ import { renderTabBarSurface } from './strip/tab-bar-surface'
 import { useTabBarItemActions } from './model/use-tab-bar-item-actions'
 import { useActiveClientHostedBrowserRowId } from '@/runtime/browser/client-hosting/client-hosted-browser-row-state'
 import { useEditorGroupFileDropOwner } from '../editor/file-drop/use-editor-group-file-drop-owner'
-import {
-  findBotByWorkspace,
-  useBotForWorkspace,
-  useBotGroupForWorkspace
-} from '../bots/bot-workspace'
+import { findBotByWorkspace, useBotGroupForWorkspace } from '../bots/bot-workspace'
 import { useBots, useBotsEnabled } from '@/lib/bot-catalog'
 import { parseWorkspaceKey } from '../../../../shared/workspace/identity/workspace-scope'
 import { useTranslate } from '@/i18n/use-translate'
@@ -55,7 +51,6 @@ function TabBarInner(props: TabBarProps): React.JSX.Element {
     onPinFile
   } = props
   const runtime = useTabBarRuntimeModel({ worktreeId, groupId })
-  const bot = useBotForWorkspace(worktreeId)
   const botGroup = useBotGroupForWorkspace(worktreeId)
   const baseCreateMenu = useTabBarCreateMenuController({
     worktreeId,
@@ -99,6 +94,8 @@ function TabBarInner(props: TabBarProps): React.JSX.Element {
   })
   const botsEnabled = useBotsEnabled()
   const bots = useBots(botsEnabled && parseWorkspaceKey(worktreeId)?.type === 'folder')
+  // One catalog subscription: the page's bot (as useBotForWorkspace finds it) and each chat's Home lookup.
+  const bot = findBotByWorkspace(bots, worktreeId)
   // Each chat asks for the bot on its own host, as its row does, so a mixed-host group never borrows another's Home.
   const pinnedHomeId = useMemo(
     () =>

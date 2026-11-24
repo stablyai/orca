@@ -8,7 +8,7 @@ type HomeCandidate = Pick<Tab, 'id' | 'contentType' | 'entityId' | 'executionHos
 /** The bot whose page holds a tab on `hostId`; each tab is asked for its own host, so mixed hosts never cross. */
 export type HomeBotLookup = (hostId: Tab['executionHostId']) => Pick<Bot, 'chatSessionId'> | null
 
-/** The bot's Home among `tabs` wherever it sits; a published tab outranks a preview, as Home placement prefers. */
+/** The bot's Home among `tabs` (in drawn order) wherever it sits: a published tab outranks a preview, then the first drawn. */
 export function findBotHomeTab<T extends HomeCandidate>(
   tabs: readonly T[],
   homeBotFor: HomeBotLookup
@@ -64,9 +64,12 @@ export function withBotHomeFirstTabIds(
   groupTabs: readonly HomeCandidate[],
   homeBotFor: HomeBotLookup
 ): string[] {
+  // Search in drawn order, as the tab bar does, so twin Homes resolve to the same tab on every path.
+  const byId = new Map(groupTabs.map((tab) => [tab.id, tab]))
+  const drawnTabs = orderedIds.flatMap((id) => byId.get(id) ?? [])
   return withPinnedHomeFirst(
     orderedIds,
-    findBotHomeTab(groupTabs, homeBotFor)?.id ?? null,
+    findBotHomeTab(drawnTabs, homeBotFor)?.id ?? null,
     (id) => id
   )
 }

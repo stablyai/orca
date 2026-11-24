@@ -18,6 +18,13 @@ describe('reorderWithinDisplayedOrder', () => {
     ])
   })
 
+  it('keeps every stored id, ones without a tab included, when it moves one', () => {
+    const withGhost = ['home', 'a', 'ghost', 'b']
+    const next = reorderWithinDisplayedOrder(withGhost, 'b', 'home', 'right')
+    expect(next).toEqual(['home', 'b', 'a', 'ghost'])
+    expect([...(next ?? [])].sort()).toEqual([...withGhost].sort())
+  })
+
   it('moves forward past the tab it was dropped on', () => {
     expect(reorderWithinDisplayedOrder(displayed, 'a', 'b', 'right')).toEqual([
       'home',

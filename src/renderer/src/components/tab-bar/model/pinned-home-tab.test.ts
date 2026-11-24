@@ -104,6 +104,15 @@ describe('withPinnedHomeFirst', () => {
 })
 
 describe('withBotHomeFirstTabIds', () => {
+  it('picks the first drawn of twin Homes, as the tab bar does, whatever order the tabs are listed in', () => {
+    const groupTabs = [chatTab('home-2', 'home-chat'), chatTab('home-1', 'home-chat')]
+    expect(withBotHomeFirstTabIds(['a', 'home-1', 'home-2'], groupTabs, onBotPage)).toEqual([
+      'home-1',
+      'a',
+      'home-2'
+    ])
+  })
+
   it("counts the bot's Home first, as the tab bar shows it", () => {
     const groupTabs = [chatTab('side-a', 'side-a-chat'), chatTab('home', 'home-chat')]
     expect(withBotHomeFirstTabIds(['side-a', 'home'], groupTabs, onBotPage)).toEqual([
