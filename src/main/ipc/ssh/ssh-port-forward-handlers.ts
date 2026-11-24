@@ -71,7 +71,12 @@ export function registerSshPortForwardHandlers(handle: RegisterSshRequest): void
       if (!conn) {
         throw new Error(`SSH connection "${targetId}" not found`)
       }
-      const saved = getSshTargetRegistryStore()?.getTarget(targetId)?.portForwards ?? []
+      // Saved forwards of every host keep their ports: one restoring as this starts would answer its probe.
+      const savedLocalPorts = new Set(
+        (getSshTargetRegistryStore()?.listTargets() ?? []).flatMap((target) =>
+          (target.portForwards ?? []).map((forward) => forward.localPort)
+        )
+      )
       const entry = await addForwardOnFreeLocalPort({
         remotePort,
         add: (localPort) =>
@@ -79,8 +84,8 @@ export function registerSshPortForwardHandlers(handle: RegisterSshRequest): void
         remove: (id) => portForwardManager!.removeForwardAndWait(id),
         // SSH forwards listen on 127.0.0.1 only.
         holdsIpv6Loopback: false,
-        // A saved forward that couldn't restore keeps its port; persisting a new one there would drop it.
-        reservedLocalPorts: new Set(saved.map((forward) => forward.localPort)),
+        // Persisting a new forward on a saved one's port would also drop that saved mapping.
+        reservedLocalPorts: savedLocalPorts,
         // The caller opens the address next; a slow SSH login must not hand it a port nothing answers yet.
         listening: {
           timeoutMs: FORWARD_LISTENER_TIMEOUT_MS,
