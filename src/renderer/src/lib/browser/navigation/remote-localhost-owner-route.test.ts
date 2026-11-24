@@ -7,11 +7,25 @@ import { isExpectedSshBrowserRoute } from '../workspace/workspace-browser-route-
 import { seedBrowserLinkTestStore, WORKSPACE } from './browser-link-open.test-fixture'
 import { openRoutedHttpLink, type WorkspaceHttpLinkBrowserOpener } from './http-link-destinations'
 import { registerWorkspaceHttpLinkBrowserOpener } from './http-link-routing'
+import { markHydratedBrowserPageHandles } from '@/store/slices/browser/hosts/browser-initialization-presentation-ownership'
 
 const TARGET = 'c1'
 const LOCALHOST = 'http://localhost:3000/'
 const ssh = { kind: 'ssh', connectionId: TARGET } as const
 const initialState = useAppStore.getInitialState()
+
+// The page-handle ownership check needs a whole-store reset to carry hydrated handles.
+function resetStore(): void {
+  useAppStore.setState(
+    {
+      ...initialState,
+      remoteBrowserPageHandlesByPageId: markHydratedBrowserPageHandles({
+        ...initialState.remoteBrowserPageHandlesByPageId
+      })
+    },
+    true
+  )
+}
 
 type OpenerRequest = Parameters<WorkspaceHttpLinkBrowserOpener>[0]
 let held: OpenerRequest[] = []
@@ -40,7 +54,7 @@ function admits(request: OpenerRequest): boolean {
 }
 
 beforeEach(() => {
-  useAppStore.setState(initialState, true)
+  resetStore()
   seedBrowserLinkTestStore(useAppStore)
   useAppStore.setState({
     activeWorkspaceExecutionHostId: toSshExecutionHostId(TARGET),
@@ -65,7 +79,7 @@ beforeEach(() => {
 })
 afterEach(() => {
   registerWorkspaceHttpLinkBrowserOpener(null)
-  useAppStore.setState(initialState, true)
+  resetStore()
 })
 
 describe('a routed SSH localhost link that skipped the chooser', () => {
