@@ -19,7 +19,9 @@ function alreadyExists(error: unknown): boolean {
 }
 
 /** One level of the cache path, created as this user's alone. A link, or a directory another user
- *  owns or can write, would let that user choose where the cache writes, so it is refused instead. */
+ *  owns or can write, would let that user choose where the cache writes, so it is refused instead.
+ *  Windows has no POSIX permission bits: a writable directory reads as 0o666, so they are checked
+ *  on POSIX only. */
 async function claimCacheDirectory(path: string): Promise<void> {
   try {
     await mkdir(path, { mode: 0o700 })
@@ -30,12 +32,9 @@ async function claimCacheDirectory(path: string): Promise<void> {
     }
   }
   const stats = await lstat(path)
-  const uid = process.platform === 'win32' ? undefined : process.getuid?.()
-  if (
-    !stats.isDirectory() ||
-    (uid !== undefined && stats.uid !== uid) ||
-    (stats.mode & 0o022) !== 0
-  ) {
+  const uid = process.getuid?.()
+  const writableByOthers = process.platform !== 'win32' && (stats.mode & 0o022) !== 0
+  if (!stats.isDirectory() || (uid !== undefined && stats.uid !== uid) || writableByOthers) {
     throw new Error(
       `Cross-version fixture cache refused ${path}: it is a link, another user's directory, or writable by others`
     )

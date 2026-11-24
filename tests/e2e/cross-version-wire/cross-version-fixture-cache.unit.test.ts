@@ -54,6 +54,19 @@ it('keeps the cache in a directory only its own user can write', async () => {
   })
 })
 
+// A later run finds the namespace already there and must accept what the earlier one claimed.
+it('reuses the cache an earlier run prepared', async () => {
+  const { repoRoot, temporaryRoot } = await checkoutBesideSharedTemp()
+  const first = await prepareCrossVersionFixtureCache(repoRoot, temporaryRoot)
+
+  const second = await prepareCrossVersionFixtureCache(repoRoot, temporaryRoot)
+
+  expect(second).toBe(first)
+  expect(await realpath(join(second, 'node_modules'))).toBe(
+    await realpath(join(repoRoot, 'node_modules'))
+  )
+})
+
 // The checkout's own node_modules satisfies the identity check, so following the link would replace its tsconfig.
 it.each(['namespace', 'cache root'])('refuses a %s that links to the checkout', async (level) => {
   const { repoRoot, temporaryRoot } = await checkoutBesideSharedTemp()
