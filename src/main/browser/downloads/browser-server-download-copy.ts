@@ -10,6 +10,7 @@ import {
 } from '../../ipc/filesystem/downloads/filesystem-download-promotion'
 import { BROWSER_DOWNLOAD_COPY_MAX_BYTES } from '../guest-lifecycle/manager/downloads/browser-download-copy-offers'
 import { browserDownloadDestinationReservations } from './browser-download-destination'
+import { withBrowserPaneUiRuntimeRpcSource } from '../../../shared/remote-runtime/rpc/runtime-rpc-feature-interaction-source'
 
 const COPY_READ_TIMEOUT_MS = 60_000
 const COPY_RELEASE_TIMEOUT_MS = 10_000
@@ -50,7 +51,8 @@ export async function copyBrowserServerDownloadHere(
       getRuntimeEnvironmentRegistryRoot(),
       environmentId,
       method,
-      params,
+      // Orca's own window asked, not an agent: no browser-use interaction to record per slice.
+      withBrowserPaneUiRuntimeRpcSource(params),
       timeoutMs,
       expectedEnvironmentPairingRevision,
       undefined,
@@ -70,6 +72,7 @@ export async function copyBrowserServerDownloadHere(
   }
 
   let reservationKey: string | null = null
+  const retryReservationKeys: string[] = []
   let tempPath: string | null = null
   let handle: Awaited<ReturnType<typeof open>> | null = null
   let saved = false
@@ -105,9 +108,9 @@ export async function copyBrowserServerDownloadHere(
       tempPath,
       reserved.savePath,
       async () => {
+        // Held until the move, so a browser download can't be handed the same name meanwhile.
         const free = await browserDownloadDestinationReservations.reserveIncoming(args.filename)
-        // The link that follows claims it.
-        browserDownloadDestinationReservations.release(free.reservationKey)
+        retryReservationKeys.push(free.reservationKey)
         return free.savePath
       },
       signal
@@ -116,7 +119,9 @@ export async function copyBrowserServerDownloadHere(
     return { destinationPath }
   } finally {
     runningCopies.delete(copyId)
-    browserDownloadDestinationReservations.release(reservationKey)
+    for (const key of [reservationKey, ...retryReservationKeys]) {
+      browserDownloadDestinationReservations.release(key)
+    }
     await handle?.close().catch(() => {})
     if (!saved) {
       await cleanupLocalTransferPath(tempPath)
@@ -125,7 +130,7 @@ export async function copyBrowserServerDownloadHere(
         getRuntimeEnvironmentRegistryRoot(),
         environmentId,
         'browser.releaseDownloadCopy',
-        { copyId },
+        withBrowserPaneUiRuntimeRpcSource({ copyId }),
         COPY_RELEASE_TIMEOUT_MS,
         expectedEnvironmentPairingRevision,
         undefined,
