@@ -123,9 +123,12 @@ export function MobileBotImportSheet(props: {
         ? pick.bot.name.slice(0, BOT_NAME_MAX_LENGTH)
         : '')
   const trimmed = name.trim()
-  const again = pick?.bot.importedAs && !copying ? pick.bot.importedAs : null
-  // The bot an earlier import made gets the new things, instead of a second bot.
-  const existing = again ? (props.bots.find((bot) => bot.id === again.botId) ?? null) : null
+  const imported = pick?.bot.importedAs ?? null
+  const madeBefore = imported ? (props.bots.find((bot) => bot.id === imported.botId) ?? null) : null
+  // The bot an earlier import made gets the new things, instead of a second bot; one this sheet
+  // can't open is imported again under a new name.
+  const again = imported && madeBefore && props.onUpdate && !copying ? imported : null
+  const existing = again ? madeBefore : null
   const update =
     existing && pick && props.onUpdate
       ? () =>
@@ -168,6 +171,7 @@ export function MobileBotImportSheet(props: {
     if (view === 'export' && picks.length > 0) {
       setTypedName(null)
       setView('pick')
+      setCopying(false)
     } else {
       props.onBack()
     }
@@ -361,6 +365,7 @@ export function MobileBotImportSheet(props: {
             {
               label: t('bots.import.makeNew', 'Make a new bot instead'),
               icon: Plus,
+              closeBeforePress: true,
               onPress: () => {
                 setTypedName(null)
                 setCopying(true)
