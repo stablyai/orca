@@ -258,7 +258,11 @@ function RebaseStatusLabel({
         >
           {detailLabel}
         </span>
-        {visible === 'full' ? fullLabel : visible === 'detail' ? detailLabel : null}
+        {/* Why: a narrow strip may show only part of the label or none; the live region still announces all of it. */}
+        <span className="sr-only">{fullLabel}</span>
+        <span aria-hidden="true">
+          {visible === 'full' ? fullLabel : visible === 'detail' ? detailLabel : null}
+        </span>
       </span>
     </>
   )

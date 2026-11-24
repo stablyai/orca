@@ -31,6 +31,7 @@ it('forgets an earlier rebase.autoStash answer when a later probe fails', async 
   )
 
   await flush()
+  expect(probe.read).toHaveBeenCalledTimes(1)
   // A failed re-read must not leave the old `true` enabling Rebase over a dirty tree.
   expect(operationStore.getState().rebaseAutoStash).toBeNull()
 })

@@ -5,7 +5,8 @@ import { forceTerminateProcessTree, signalProcessTree } from './process-tree-ter
 import { inFlightWindowsTreeKill } from './windows-tree-kill'
 
 import { createOutputSink } from './bounded-output-sink'
-import * as childTermination from './child-termination-reporter'
+import { createChildTerminationReporter } from './child-termination-reporter'
+
 import type { LaunchedProcess, ProcessSpec, ProcessResult } from './process-spec'
 import { DEFAULT_PROCESS_TIMEOUT_MS, DEFAULT_MAX_OUTPUT_BYTES } from './process-spec'
 // An unverifiable, silent tree must not leave barrier callers pending forever.
@@ -24,9 +25,7 @@ export function runProcess(
   const maxOutputBytes = spec.maxOutputBytes ?? DEFAULT_MAX_OUTPUT_BYTES
 
   return new Promise<ProcessResult>((resolve, reject) => {
-    const terminationReporter = childTermination.createChildTerminationReporter(
-      spec.onChildTerminated
-    )
+    const terminationReporter = createChildTerminationReporter(spec.onChildTerminated)
     let child: ChildProcess
     let launched: LaunchedProcess | null = null
     try {
@@ -139,7 +138,7 @@ export function runProcess(
     // Let taskkill finish reading the tree before killing the root, or descendants may be orphaned.
     const killRootUnlessTreeKillInFlight = (): void => {
       if (!inFlightWindowsTreeKill(child)) {
-        childTermination.terminateChild(child, 'SIGKILL')
+        terminate(child, 'SIGKILL')
       }
     }
 
@@ -187,7 +186,7 @@ export function runProcess(
           )
         }
       } else {
-        childTermination.terminateChild(child)
+        terminate(child)
       }
       graceTimer ??= setTimeout(() => {
         if (spec.terminationBarrier) {
@@ -225,14 +224,14 @@ export function runProcess(
               barrierTerminationVerified = forceTerminated
               terminationReporter.reportIf(barrierTerminationVerified)
               if (!barrierTerminationVerified) {
-                childTermination.terminateChild(child, 'SIGKILL')
+                terminate(child, 'SIGKILL')
               }
               resolveBarrierIfSafe()
             }
           )
           return
         }
-        childTermination.terminateChild(child, 'SIGKILL')
+        terminate(child, 'SIGKILL')
         resolveFromClose(null, null)
       }, PROCESS_EXIT_GRACE_MS)
       graceTimer.unref?.()
@@ -292,7 +291,9 @@ export function runProcess(
       settle(() => reject(error))
     })
     child.once('exit', (code, signal) => {
-      rootExitedBeforeBarrier ||= !barrierStopping
+      if (!barrierStopping) {
+        rootExitedBeforeBarrier = true
+      }
       deferredExit = { code, signal }
       if (barrierStopping) {
         resolveBarrierIfSafe()
@@ -301,16 +302,13 @@ export function runProcess(
     child.once('close', (code, signal) => {
       deferredClose = { code, signal }
       if (nativeGroupTermination) {
-        if (!barrierStopping && (code === null || signal !== null)) {
-          stopAndSettle()
-        }
         nativeGroupTermination.close()
-      } else if (
-        childTermination.canReportChildClose(spec.terminationBarrier, barrierStopping, code, signal)
-      ) {
+      } else {
         terminationReporter.report()
       }
-      rootExitedBeforeBarrier ||= !barrierStopping
+      if (!barrierStopping) {
+        rootExitedBeforeBarrier = true
+      }
       if (barrierStopping) {
         resolveBarrierIfSafe()
         return
@@ -321,6 +319,15 @@ export function runProcess(
     // Send EOF so stdin readers do not wait until timeout.
     child.stdin?.end(spec.input)
   })
+}
+
+// Best-effort root termination; tree termination is handled separately.
+function terminate(child: ChildProcess, signal?: NodeJS.Signals): void {
+  try {
+    child.kill(signal)
+  } catch {
+    /* already gone */
+  }
 }
 
 export { runProcessSync } from './run-process-sync'

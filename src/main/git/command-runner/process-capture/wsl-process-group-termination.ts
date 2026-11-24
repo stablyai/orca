@@ -21,8 +21,6 @@ export type WslProcessGroupTermination = ProcessTerminationBarrier & {
 
 export function createWslProcessGroupTermination(distro: string): WslProcessGroupTermination {
   const marker = `__ORCA_WSL_PROCESS_GROUP_${randomUUID()}__=`
-  const completionMarker = `__ORCA_WSL_PROCESS_DONE_${randomUUID()}__`
-  let completed = false
   let processGroupId: number | null = null
   // When the guest proved it ran; a 'stopped' read probed before then cannot prove the group ended.
   let groupObservedAt = -Infinity
@@ -32,9 +30,6 @@ export function createWslProcessGroupTermination(distro: string): WslProcessGrou
     const combined = `${stderrTail}${chunk.toString()}`
     const match = combined.match(new RegExp(`${marker}(\\d+)\\r?\\n`))
     stderrTail = combined.slice(-512)
-    if (combined.includes(completionMarker)) {
-      completed = true
-    }
     const parsed = match ? Number(match[1]) : 0
     if (Number.isSafeInteger(parsed) && parsed > 1) {
       processGroupId = parsed
@@ -81,7 +76,6 @@ export function createWslProcessGroupTermination(distro: string): WslProcessGrou
 
   return {
     observeStderr,
-    isExitVerified: () => completed,
     signal: () => terminate('TERM'),
     force: () => terminate('KILL'),
     wrapGuestArgs: (args) => {
@@ -92,19 +86,12 @@ export function createWslProcessGroupTermination(distro: string): WslProcessGrou
       // BusyBox setsid lacks --wait; without a new session, report no group to avoid killing another owner.
       const script = [
         'if setsid --wait true 2>/dev/null; then',
-        `  setsid --wait sh -c ${quotePosixShell(reportGroup)} orca-wsl-process-group "$@"`,
-        'else',
-        '  "$@"',
+        `  exec setsid --wait sh -c ${quotePosixShell(reportGroup)} orca-wsl-process-group "$@"`,
         'fi',
-        '_orca_exit=$?',
-        `printf '%s\\n' ${quotePosixShell(completionMarker)} >&2`,
-        'exit "$_orca_exit"'
+        'exec "$@"'
       ].join('\n')
       return ['sh', '-c', script, 'orca-wsl-process-group', ...args]
     },
-    stripControlOutput: (stderr) =>
-      stderr
-        .replace(new RegExp(`${marker}\\d+\\r?\\n?`, 'g'), '')
-        .replace(new RegExp(`${completionMarker}\\r?\\n?`, 'g'), '')
+    stripControlOutput: (stderr) => stderr.replace(new RegExp(`${marker}\\d+\\r?\\n?`, 'g'), '')
   }
 }

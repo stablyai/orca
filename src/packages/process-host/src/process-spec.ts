@@ -54,7 +54,6 @@ export type PipedProcessSpawner = (spec: PipedProcessSpec) => ChildProcessWithou
 
 export type ProcessTerminationBarrier = {
   observeStderr?: (chunk: Buffer | string) => void
-  isExitVerified?: () => boolean
   signal: (child: ChildProcess, signal?: NodeJS.Signals) => Promise<boolean>
   force: (child: ChildProcess) => Promise<boolean>
 }
