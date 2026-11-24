@@ -1,10 +1,13 @@
 import { expect, it } from 'vitest'
 import type { ProviderRateLimits } from '../../../../shared/agent-usage/rate-limits/rate-limit-types'
 import type { LegacyAgentSessionAccountHome } from '../../../../shared/agent-session/lifecycle/accounts/agent-session-account-home'
-import type { NativeChatUsageLimitCut } from '../../../../shared/native-chat/transcript/continuation/native-chat-usage-limit-cut'
+import {
+  NATIVE_CHAT_USAGE_LIMIT_MAX_OVERDUE_MS,
+  usageLimitStopWithdrawal,
+  type NativeChatUsageLimitCut
+} from '../../../../shared/native-chat/transcript/continuation/native-chat-usage-limit-cut'
 import { UsageLimitAccountHolds } from './structured-agent-session-usage-limit-account-hold'
 import { cancelsCut } from './structured-agent-session-usage-limit-disposition'
-import { usageLimitStopWithdrawal } from '../../../../shared/native-chat/transcript/continuation/native-chat-usage-limit-cut'
 import { isOptionalUsageLimitContinueCancel } from '../../../../shared/agent-session/lifecycle/stopping/agent-session-usage-limit-continue'
 
 const HIT: LegacyAgentSessionAccountHome = { variable: 'CODEX_HOME', path: '/homes/spent' }
@@ -124,6 +127,16 @@ it('keeps stale known spending on a moved account past the reading wait', async 
   await holds.attribute('chat', host, CUT, SWITCHED)
   const cut = { ...holds.withSwitchReset('chat', CUT), resetsAt: SWITCHED }
   expect(holds.ready('chat', cut, SWITCHED + 135_000)).toBe(false)
+})
+
+it('does not let later spending revive an expired moved cut', async () => {
+  const overdue = SWITCHED + NATIVE_CHAT_USAGE_LIMIT_MAX_OVERDUE_MS + 5_000
+  const holds = await attributed(NEXT, {
+    ...reading({ usedPercent: 100, resetsAt: overdue + 3_600_000 }),
+    updatedAt: overdue
+  })
+  const cut = holds.withSwitchReset('chat', CUT)
+  expect(holds.schedulable('chat', cut, overdue)).toBe(false)
 })
 
 it('releases a moved chat from picker room that arrived after its turn before the sweep', async () => {
@@ -247,6 +260,6 @@ it('uses an existing account selection reading without starting another read', a
     }
   } as unknown as Parameters<UsageLimitAccountHolds['attribute']>[1]
   await holds.attribute('chat', host, CUT, SWITCHED)
-  holds.askForRelaunchRoom('chat', holds.withSwitchReset('chat', CUT))
+  holds.askForRelaunchRoom('chat', holds.withSwitchReset('chat', CUT), SWITCHED + 5_000)
   expect(asked).toBe(0)
 })

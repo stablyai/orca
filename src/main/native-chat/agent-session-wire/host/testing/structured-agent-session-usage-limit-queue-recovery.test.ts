@@ -297,14 +297,14 @@ it('continues a known-reset relaunched cut after its normal reading wait', async
 it('reads the switched account once and requires fresh room before a resetless relaunched cut continues', async () => {
   const { current, host, pass, requested } = await relaunchedChat(null)
   expect(await pass(5_000, null)).toEqual([])
-  expect(requested).toEqual([{}])
+  expect(requested).toEqual([{ notWithinMs: 600_000 }])
   expect(await host.readUsageLimitContinue(SESSION)).toBeUndefined()
   expect(
     await pass(20_000, { ...reading(0, NOW + 20_000), status: 'error', error: 'offline' })
   ).toEqual([])
   expect(await pass(35_000, reading(0, NOW - 1))).toEqual([])
   expect(await pass(50_000, { ...reading(0, NOW + 50_000), weekly: null })).toEqual([])
-  expect(requested).toEqual([{}, {}])
+  expect(requested).toEqual([{ notWithinMs: 600_000 }])
   const sent = await pass(65_000, reading(0, NOW + 65_000))
   expect(sent).toHaveLength(1)
   await eventually(async () =>
@@ -320,6 +320,12 @@ it('continues a resetless relaunched cut when fresh room arrives after a day hel
   await eventually(async () =>
     expect((await current.submission(sent[0]!.clientMessageId))?.handedOverAt).toBeDefined()
   )
+})
+
+it('requests room for a resetless relaunch after its synthetic reset is overdue', async () => {
+  const { pass, requested } = await relaunchedChat(null)
+  await pass(NATIVE_CHAT_USAGE_LIMIT_MAX_OVERDUE_MS + 5_000, null)
+  expect(requested).toEqual([{ notWithinMs: 600_000 }])
 })
 
 it('continues a resetless relaunched cut when room follows a day-old unknown spent window', async () => {

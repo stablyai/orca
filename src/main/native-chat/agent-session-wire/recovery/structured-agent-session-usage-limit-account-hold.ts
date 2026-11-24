@@ -185,8 +185,7 @@ export class UsageLimitAccountHolds {
     id: string,
     cut: NativeChatUsageLimitCut & SwitchReset,
     now = Date.now()
-  ): void =>
-    accountSwitchRoom(id, cut, this.providers, this.bindings, this.scopes, this.relaunched, now)
+  ): void => accountSwitchRoom(id, cut, this.providers, this.scopes, this.relaunched, now)
   verdict(
     id: string,
     limited: { turnItemId: string; resetsAt: number; turnEndedAt?: number } & SwitchReset,

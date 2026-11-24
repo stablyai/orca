@@ -79,6 +79,8 @@ type Relaunch = {
   room?: { at: number; account: string }
 }
 
+const SWITCH_READ_INTERVAL_MS = 10 * 60_000
+
 /** Cuts whose account is unknown after a relaunch. The account the chat starts on now may not be the
  *  one the cut hit, so room in its live reading, taken since this launch was first seen, releases
  *  the cut before its own reset. Derived each pass from readings; nothing is saved. */
@@ -88,7 +90,7 @@ export class UsageLimitRelaunchedCuts {
 
   beginPass(now: number): void {
     for (const [key, askedAt] of this.switchReads) {
-      if (askedAt + 10 * 60_000 <= now) {
+      if (askedAt + SWITCH_READ_INTERVAL_MS <= now) {
         this.switchReads.delete(key)
       }
     }
@@ -129,14 +131,12 @@ export class UsageLimitRelaunchedCuts {
     id,
     cut,
     provider,
-    witness,
     scope,
     now
   }: {
     id: string
     cut: NativeChatUsageLimitCut & SwitchReset
     provider: string | undefined
-    witness: string | undefined
     scope: UsageLimitAccountScope | undefined
     now: number
   }): void {
@@ -148,17 +148,19 @@ export class UsageLimitRelaunchedCuts {
     ) {
       return
     }
-    const key = JSON.stringify([provider, witness, scope.scope])
-    if ((this.switchReads.get(key) ?? Number.NEGATIVE_INFINITY) + 10 * 60_000 > now) {
+    const key = JSON.stringify([provider, scope.scope])
+    if ((this.switchReads.get(key) ?? Number.NEGATIVE_INFINITY) + SWITCH_READ_INTERVAL_MS > now) {
       return
     }
     const reading = scope.account?.read()
+    // Suppress a refresh only when this exact reading releases the relaunched cut. In particular,
+    // live-session and overdue readings that merely look like room must not strand recovery.
     const usable =
-      reading?.status === 'ok' &&
-      rateLimitShowsRoom(reading) &&
-      reading.updatedAt >= (cut.turnEndedAt ?? Number.NEGATIVE_INFINITY)
+      reading !== null &&
+      reading !== undefined &&
+      this.roomAt(id, switchFreeIdentity(cut), scope.account?.key, reading, now) !== undefined
     const ask = usable ? undefined : (scope.account?.refresh ?? scope.bootstrap)
-    if (ask?.()) {
+    if (ask?.(SWITCH_READ_INTERVAL_MS)) {
       this.switchReads.set(key, now)
     }
   }

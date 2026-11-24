@@ -4,10 +4,7 @@ import { switchFreeIdentity } from './structured-agent-session-usage-limit-chain
 import type { SwitchReset } from './structured-agent-session-usage-limit-chain'
 import { withMovedCutReset } from './structured-agent-session-usage-limit-account-schedule'
 import type { UsageLimitAccountScope } from './structured-agent-session-usage-limit-account-types'
-import type {
-  UsageLimitAttributionBinding,
-  UsageLimitRelaunchedCuts
-} from './structured-agent-session-usage-limit-relaunch'
+import type { UsageLimitRelaunchedCuts } from './structured-agent-session-usage-limit-relaunch'
 
 export function accountSwitchReset<T extends NativeChatUsageLimitCut>(
   id: string,
@@ -26,7 +23,6 @@ export function accountSwitchRoom(
   id: string,
   cut: NativeChatUsageLimitCut & SwitchReset,
   providers: ReadonlyMap<string, string>,
-  bindings: ReadonlyMap<string, UsageLimitAttributionBinding>,
   scopes: ReadonlyMap<string, UsageLimitAccountScope | undefined>,
   relaunched: UsageLimitRelaunchedCuts,
   now: number
@@ -35,7 +31,6 @@ export function accountSwitchRoom(
     id,
     cut,
     provider: providers.get(id),
-    witness: bindings.get(id)?.witness,
     scope: scopes.get(id),
     now
   })
