@@ -47,7 +47,11 @@ describe('toolCallHasSideEffects', () => {
       ['Bash', { command: "find . -de''lete" }],
       ['Bash', { command: 'find . -dele\\te' }],
       ['Bash', { command: "find . -name '*.log' -{delete,print}" }],
-      ['Bash', { command: 'git log ${X:---output=/tmp/x}' }]
+      ['Bash', { command: 'git log ${X:---output=/tmp/x}' }],
+      ['Bash', { command: 'gh myext list' }],
+      ['Bash', { command: 'gh pr view -w 12' }],
+      ['Bash', { command: 'tree -H . -L 1 -R' }],
+      ['Bash', { command: 'date 010100002027' }]
     ]
     expect(reads.filter(([name, input]) => toolCallHasSideEffects(name, input))).toEqual([])
     expect(acts.filter(([name, input]) => !toolCallHasSideEffects(name, input))).toEqual([])

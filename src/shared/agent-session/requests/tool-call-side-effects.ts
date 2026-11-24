@@ -47,13 +47,14 @@ const READ_PROGRAMS: Record<string, (args: readonly string[]) => boolean> = {
   egrep: () => true,
   rg: (args) => !args.some((word) => /^--(pre|hostname-bin)/.test(word)),
   find: (args) => !args.some((word) => /^-(exec|execdir|ok|okdir|delete|fprint|fls)/.test(word)),
-  tree: (args) => !args.some((word) => /^-[^-]*o/.test(word)),
+  tree: (args) => !args.some((word) => /^-[^-]*[oR]/.test(word)),
   file: (args) => !args.some((word) => /^-[^-]*C/.test(word) || namesOption(word, ['--compile'])),
   stat: () => true,
   du: () => true,
   df: () => true,
   which: () => true,
-  date: (args) => !args.some((word) => /^-[^-]*s/.test(word) || namesOption(word, ['--set'])),
+  // Only formats and plain flags: `-s`, `--set` or a bare time sets the clock.
+  date: (args) => args.every((word) => word.startsWith('+') || /^-[uR]$/.test(word)),
   whoami: () => true,
   sort: (args) =>
     !args.some(
@@ -130,9 +131,30 @@ function gitReads(given: readonly string[]): boolean {
 
 const GH_READS: ReadonlySet<string> = new Set(['view', 'list', 'checks', 'diff', 'status'])
 
+/** gh's own command groups: any other first word runs an extension or an alias, which may be anything. */
+const GH_GROUPS: ReadonlySet<string> = new Set([
+  'pr',
+  'issue',
+  'run',
+  'repo',
+  'release',
+  'workflow',
+  'label',
+  'cache',
+  'gist',
+  'project',
+  'ruleset',
+  'search',
+  'api'
+])
+
 function ghReads(args: readonly string[]): boolean {
   const [group, sub] = args
-  if (args.some((word) => word === '--web' || word.startsWith('--web='))) {
+  if (
+    group === undefined ||
+    !GH_GROUPS.has(group) ||
+    args.some((word) => /^-[^-]*w/.test(word) || namesOption(word, ['--web']))
+  ) {
     return false
   }
   if (group === 'api') {
