@@ -151,6 +151,9 @@ export class StructuredAgentSessionAdapterRouter implements Adapter {
 
   confirmIdle = (id: string) => this.liveOwnerOrNull(id)?.confirmIdle?.(id)
 
+  relayOpenWork = (id: string, rootTurnRunning: boolean) =>
+    this.liveOwnerOrNull(id)?.relayOpenWork?.(id, rootTurnRunning) ?? null
+
   liveTurnId = (sessionId: string): string | null | undefined =>
     this.liveOwnerOrNull(sessionId)?.liveTurnId?.(sessionId)
 

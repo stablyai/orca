@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import type { ProviderRelayChannel, ProviderRelaySink } from './provider-relay-channel'
 import { RelayedProviderChild } from './relayed-provider-child'
 
-const policy = () => ({ idleStopMs: null, working: false, workStarts: [], workEnds: [] })
+const policy = () => ({ idleStopMs: null, markers: [] })
 
 describe('relayed provider child', () => {
   it('an agent that exits during the attach still hands on its last output before its exit', async () => {

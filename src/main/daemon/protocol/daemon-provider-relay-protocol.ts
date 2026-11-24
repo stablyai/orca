@@ -57,11 +57,30 @@ export type ProviderRelaySpawnResult =
 export type ProviderRelayDetachPolicy = {
   /** Quiet time before the agent is stopped; null never stops it. */
   idleStopMs: number | null
-  /** The chat was mid-turn at detach; it stays working until a `workEnds` line arrives. */
-  working: boolean
-  /** JSON-RPC `method`s or message `type`s that start and end the agent's work. */
-  workStarts: string[]
-  workEnds: string[]
+  /** Agent lines that open, close or restate the work the open app's idle stop counts. */
+  markers: ProviderRelayWorkMarker[]
+  /** Client request methods that are work until the agent answers them (an ACP `session/prompt`). */
+  workRequests?: string[]
+  /**
+   * Work open when a detach was sent, as task keys per marker group. Only a detach carries it, and
+   * only a detach that carries it can idle-stop: a stream that just dropped keeps the agent running.
+   */
+  open?: Record<string, string[][]>
+}
+
+/**
+ * One kind of agent line. It applies when its `name` is the line's top-level `method` (else `type`)
+ * and every `when` holds. `start` and `end` key one task by the values at `key` (each part takes the
+ * first of its paths that holds a string); an `end` with fewer parts ends every task under it. A
+ * `roster` replaces its group with the tasks in the array at `list`, each keyed by `key` inside it.
+ */
+export type ProviderRelayWorkMarker = {
+  group: string
+  name: string
+  effect: 'start' | 'end' | 'roster'
+  when?: { path: string[]; is: string; not?: true }[]
+  key: string[][][]
+  list?: string[]
 }
 
 /** Why the daemon ended an agent itself; output stopped, so the chat says so instead of hanging. */

@@ -1,9 +1,52 @@
 import type { ProviderRelayWorkMarkers } from '../../provider-relay/app-provider-relays'
 
-/** A turn is work from its start notification to its completion; the daemon never idle-stops it. */
+const THREAD = [
+  ['params', 'threadId'],
+  ['params', 'thread', 'id']
+]
+const COMMAND = { path: ['params', 'item', 'type'], is: 'commandExecution' }
+/** A stdin write to a running command is not a process of its own (as the background tracker reads it). */
+const NOT_INTERACTION = {
+  path: ['params', 'item', 'source'],
+  is: 'unifiedExecInteraction',
+  not: true as const
+}
+const RUNNING = { path: ['params', 'item', 'status'], is: 'inProgress' }
+
+/**
+ * What the open app's idle stop counts for Codex: any thread's running turn (the chat's own and its
+ * subagents') and every command process from its start until it completes, also after its turn ends.
+ * Keys: `turn` [threadId], `command` [threadId, itemId].
+ */
 export const CODEX_RELAY_WORK_MARKERS: ProviderRelayWorkMarkers = {
-  workStarts: ['turn/started'],
-  workEnds: ['turn/completed']
+  markers: [
+    { group: 'turn', name: 'turn/started', effect: 'start', key: [THREAD] },
+    { group: 'turn', name: 'turn/completed', effect: 'end', key: [THREAD] },
+    { group: 'turn', name: 'thread/closed', effect: 'end', key: [THREAD] },
+    {
+      group: 'command',
+      name: 'item/started',
+      effect: 'start',
+      when: [COMMAND, NOT_INTERACTION, RUNNING],
+      key: [THREAD, [['params', 'item', 'id']]]
+    },
+    {
+      group: 'command',
+      name: 'item/started',
+      effect: 'end',
+      when: [COMMAND, { ...RUNNING, not: true }],
+      key: [THREAD, [['params', 'item', 'id']]]
+    },
+    {
+      group: 'command',
+      name: 'item/completed',
+      effect: 'end',
+      when: [COMMAND],
+      key: [THREAD, [['params', 'item', 'id']]]
+    },
+    // Codex stops a closed thread's processes first, so none of them reports its own end.
+    { group: 'command', name: 'thread/closed', effect: 'end', key: [THREAD] }
+  ]
 }
 
 /** True for an answer to a request this app sent (ids above the last app's), cheaply tested first. */

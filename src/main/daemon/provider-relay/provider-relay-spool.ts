@@ -138,6 +138,12 @@ export class ProviderRelaySpool {
     this.updatePressure()
   }
 
+  /** Unacked records, oldest first; null when some of them are only in the file. */
+  unackedInMemory(): readonly ProviderRelayRecord[] | null {
+    const inFile = this.fileIndex.lastSeq > this.acked || this.lostThrough > this.acked
+    return inFile ? null : this.memory.slice(this.memoryHead)
+  }
+
   /** Replays records after `fromSeq` through `deliver`, then streams live; returns the last replayed seq. */
   async attach(fromSeq: number): Promise<number> {
     const generation = ++this.attachGeneration

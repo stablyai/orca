@@ -282,7 +282,8 @@ async function detachKeptAgentUnderSerialize(
     return false
   }
   const working = (await runningRootTurnItemId(session.journal)) !== null
-  return detachProviderRelayForQuit(sessionId, working)
+  const open = context.deps.adapter.relayOpenWork?.(sessionId, working) ?? null
+  return detachProviderRelayForQuit(sessionId, open)
 }
 
 async function awaitsReopen(journal: SqlAgentSessionJournal): Promise<boolean> {

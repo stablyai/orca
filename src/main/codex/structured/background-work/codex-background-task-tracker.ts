@@ -87,6 +87,15 @@ export class CodexBackgroundTaskTracker {
     }
   }
 
+  /** The work the open app's idle stop counts, keyed as `CODEX_RELAY_WORK_MARKERS` key it. */
+  relayOpenWork(rootTurnRunning: boolean): Record<string, string[][]> {
+    const turns = this.executions.workingChildren().map((child) => [child.agentThreadId])
+    return {
+      turn: rootTurnRunning ? [[this.primaryThreadId], ...turns] : turns,
+      command: this.commands.openKeys()
+    }
+  }
+
   backgroundProcesses(taskIds: readonly string[]): { threadId: string; processId: string }[] {
     return this.stopsTerminals ? this.commands.backgroundProcesses(taskIds) : []
   }

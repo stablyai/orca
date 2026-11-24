@@ -1,6 +1,7 @@
 import type { DaemonClient } from '../daemon/transport/client/daemon-client'
 import type {
   ProviderRelayDetachPolicy,
+  ProviderRelayWorkMarker,
   ProviderRelaySpawnSpec
 } from '../daemon/protocol/daemon-provider-relay-protocol'
 export { keptProviderRelaySpawnToken } from './provider-relay-launch-inventory'
@@ -34,8 +35,17 @@ export type ProviderRelayRoute = {
   idleStopMs: () => number | null
 }
 
-/** What starts and ends a provider's work, so the daemon never idle-stops a running turn. */
-export type ProviderRelayWorkMarkers = { workStarts: string[]; workEnds: string[] }
+/**
+ * What the open app's idle stop counts, as the daemon can see it: agent lines that open and close
+ * turns and background tasks, and the app's own requests that are work until answered.
+ */
+export type ProviderRelayWorkMarkers = {
+  markers: readonly ProviderRelayWorkMarker[]
+  requests?: readonly string[]
+}
+
+/** The provider's open work at detach, keyed as its markers key it. */
+export type ProviderRelayOpenWork = Record<string, string[][]>
 
 export type ProviderRelayLaunch = {
   chatKey: string
@@ -75,8 +85,15 @@ export function installProviderRelayDurability(
   durableFor = barrier
 }
 
-function policyFor(markers: ProviderRelayWorkMarkers, working = false): ProviderRelayDetachPolicy {
-  return { idleStopMs: route?.idleStopMs() ?? null, working, ...markers }
+function policyFor(
+  markers: ProviderRelayWorkMarkers,
+  open?: ProviderRelayOpenWork | null
+): ProviderRelayDetachPolicy {
+  return {
+    idleStopMs: route?.idleStopMs() ?? null,
+    markers: [...markers],
+    ...(open ? { open } : {})
+  }
 }
 
 /** Lists the daemons' kept relays once per launch (again after a daemon that didn't answer). */
@@ -336,10 +353,13 @@ export function hasAttachedProviderRelay(chatKey: string): boolean {
   return child !== undefined && child.exited === null && !child.handedOff
 }
 
-/** Hands the chat's agent to the daemon; it keeps working and the next launch reattaches it. */
+/**
+ * Hands the chat's agent to the daemon; it keeps working and the next launch reattaches it. Without
+ * `open` (a provider that can't say what work is open) the daemon never idle-stops it.
+ */
 export async function detachProviderRelayForQuit(
   chatKey: string,
-  working: boolean
+  open: ProviderRelayOpenWork | null
 ): Promise<boolean> {
   const child = attached.get(chatKey)
   const markers = child ? markersFor.get(child) : undefined
@@ -348,6 +368,6 @@ export async function detachProviderRelayForQuit(
   }
   attached.delete(chatKey)
   // A failed detach request still hands the agent off: the closing stream detaches it daemon-side.
-  await child.detach(policyFor(markers, working)).catch(() => {})
+  await child.detach(policyFor(markers, open)).catch(() => {})
   return true
 }

@@ -125,6 +125,10 @@ export class ProviderRelay {
     return this.exitStatus === null
   }
 
+  unackedRecords(): readonly ProviderRelayRecord[] | null {
+    return this.spool.unackedInMemory()
+  }
+
   get attachedClientId(): string | null {
     return this.attachment?.clientId ?? null
   }

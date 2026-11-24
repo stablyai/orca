@@ -198,8 +198,8 @@ export class CodexStructuredSessionAdapter implements SessionAdapter {
   backgroundTaskState = (sessionId: string): AgentSessionBackgroundTaskState | null | undefined =>
     this.sessions.get(sessionId)?.backgroundTasks.state
 
-  heldSends = (sessionId: string): ReadonlySet<string> | undefined =>
-    this.sessions.get(sessionId)?.dispatchEchoes.heldSends()
+  relayOpenWork = backgroundStops.codexRelayOpenWork(this.sessions)
+  heldSends = (id: string) => this.sessions.get(id)?.dispatchEchoes.heldSends()
 
   holdsLiveProviderProcess = (sessionId: string, acquisitionGeneration: string): boolean => {
     const session = this.sessions.get(sessionId)

@@ -11,6 +11,12 @@ import {
 import { interruptCodexSubagents } from './codex-subagent-interrupts'
 import type { AgentSessionBackgroundTaskStops } from '../../../../shared/agent-status/child-work/agent-child-work-stop-targets'
 
+/** The adapter's `relayOpenWork`: a chat's open work for the daemon's detached idle stop. */
+export function codexRelayOpenWork(sessions: ReadonlyMap<string, CodexSession>) {
+  return (sessionId: string, rootTurnRunning: boolean): Record<string, string[][]> | null =>
+    sessions.get(sessionId)?.backgroundTasks.relayOpenWork(rootTurnRunning) ?? null
+}
+
 type StopTally = { stopped: number; survived: boolean }
 
 /** Subagent interrupts are always available; command stops require background-terminal support. */
