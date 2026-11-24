@@ -24,7 +24,8 @@ function rows(count: number): WorkspaceCleanupPreviewRow[] {
         ? 'Preserve authentication sessions while reconnecting the development environment'
         : `Workspace ${index + 1}`,
     branch: `feature-${index + 1}`,
-    path: `/synthetic/workspace-${index}`,
+    // Long enough to truncate at 600 px; checkouts differ at the end of the path.
+    path: `/home/dev/projects/example/worktrees/workspace-${index}`,
     executionHostId: 'local',
     sizeBytes: 1048576,
     evaluation: { action: 'delete', reason: index % 2 ? 'inactive' : 'merged' }
