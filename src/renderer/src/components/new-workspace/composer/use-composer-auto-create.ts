@@ -13,7 +13,10 @@ export function useComposerAutoCreate(
   const startedRef = useRef(false)
   const mountedRef = useRef(true)
   const onBlockedRef = useRef(onBlocked)
-  onBlockedRef.current = onBlocked
+
+  useEffect(() => {
+    onBlockedRef.current = onBlocked
+  }, [onBlocked])
 
   useEffect(() => {
     mountedRef.current = true

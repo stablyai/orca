@@ -255,6 +255,8 @@ function QuickTabBody({
         }
         const snapshot = {
           ...modalData,
+          // Reopen is for fixing the failed create, so show the dialog instead of auto-submitting.
+          autoCreate: false,
           prefilledName: cardProps.name,
           initialRepoId: cardProps.repoId,
           initialBaseBranch: cardProps.baseBranch,
