@@ -24,6 +24,8 @@ export type CodexAccountRestartNotStartedReason =
   | 'resume-unavailable'
   | 'withdrawn'
   | 'refused'
+  /** A local terminal service without fenced stops: manual until Orca restarts it. */
+  | 'service-outdated'
 
 /** Every joined click's opId is listed, so one stop settles every current notice. */
 export type CodexAccountRestartStopResult =

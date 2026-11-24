@@ -30,16 +30,16 @@ export async function stopCodexPaneForAccountRestart(
     return 'handled'
   }
   currentOperationByPtyId.delete(pane.ptyId)
-  if (
-    result.outcome === 'not-started' &&
-    (result.reason === 'unsupported' || result.reason === 'invalid')
-  ) {
+  // Only lanes main does not stop locally (SSH, paired runtime) keep the replacement restart.
+  if (result.outcome === 'not-started' && result.reason === 'unsupported') {
     return 'fallback'
   }
   const store = useAppStore.getState()
   if (result.outcome === 'stopped') {
     // The exit arrives as a restart exit; the pane's normal resume picks up the selected account.
     store.clearCodexRestartNotice(pane.ptyId)
+  } else if (result.outcome === 'not-started' && result.reason === 'service-outdated') {
+    store.reopenCodexRestartPrompt(pane.ptyId, 'service-outdated')
   } else {
     store.reopenCodexRestartPrompt(pane.ptyId)
   }

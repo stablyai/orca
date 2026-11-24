@@ -100,6 +100,22 @@ describe('renderer account restart stop', () => {
     expect(store.reopenCodexRestartPrompt).not.toHaveBeenCalled()
   })
 
+  it('keeps an outdated local terminal service manual and says how to recover', async () => {
+    const { replies } = heldReplies()
+    const pending = stopCodexPaneForAccountRestart(pane)
+    replies[0]({ outcome: 'not-started', reason: 'service-outdated', opIds: ['op-1'] })
+    await expect(pending).resolves.toBe('handled')
+    expect(store.reopenCodexRestartPrompt).toHaveBeenCalledWith('pty-a', 'service-outdated')
+  })
+
+  it('never falls back to an unfenced replacement for a legacy pane id', async () => {
+    const { replies } = heldReplies()
+    const pending = stopCodexPaneForAccountRestart(pane)
+    replies[0]({ outcome: 'not-started', reason: 'invalid', opIds: ['op-1'] })
+    await expect(pending).resolves.toBe('handled')
+    expect(store.reopenCodexRestartPrompt).toHaveBeenCalledWith('pty-a')
+  })
+
   it('a Dismiss with no operation in flight sends nothing', () => {
     const { withdraw } = heldReplies()
     withdrawCodexPaneAccountRestart('pty-a')

@@ -61,9 +61,9 @@ export function resolveCodexRestartOccupant(
     return 'unsupported'
   }
   const provider = tryGetProviderForPty(ptyId)
-  // Older daemons and in-process routes cannot fence a stop; they keep the replacement restart.
+  // A local route that cannot fence a stop never falls back to an unfenced kill: it stays manual.
   if (!provider?.killFenced || provider.supportsFencedTermination?.(ptyId) !== true) {
-    return 'unsupported'
+    return 'service-outdated'
   }
   const incarnationId = ptyIncarnationById.get(ptyId)
   if (!incarnationId || (owner.incarnationId && owner.incarnationId !== incarnationId)) {
@@ -107,7 +107,7 @@ async function stopCodexRestartOccupant(
   await deps.getLocalPtyProviderStartupPromise(LOCAL_EXECUTION_HOST_ID)
   const provider = tryGetProviderForPty(occupant.ptyId)
   if (!provider?.killFenced) {
-    return 'unsupported'
+    return 'service-outdated'
   }
   let outcome: Awaited<ReturnType<NonNullable<typeof provider.killFenced>>>
   try {
@@ -125,7 +125,7 @@ async function stopCodexRestartOccupant(
     return 'ended'
   }
   if (outcome.outcome === 'refused' && outcome.reason === 'unsupported') {
-    return 'unsupported'
+    return 'service-outdated'
   }
   if (outcome.outcome === 'refused' && outcome.reason !== 'unverifiable') {
     return 'refused'

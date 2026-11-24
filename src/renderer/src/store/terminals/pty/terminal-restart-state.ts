@@ -178,13 +178,19 @@ export function createTerminalRestartActions(
         }
       })
     },
-    reopenCodexRestartPrompt: (ptyId) => {
+    reopenCodexRestartPrompt: (ptyId, blockedBy) => {
       set((s) => {
         const notice = s.codexRestartNoticeByPtyId[ptyId]
         if (!notice?.restartRequested) {
           return s
         }
-        const { restartRequested: _restartRequested, ...kept } = notice
+        const {
+          restartRequested: _restartRequested,
+          restartBlockedBy: _restartBlockedBy,
+          ...rest
+        } = notice
+        // A repeated failure replaces the reason in place; it never stacks.
+        const kept = blockedBy ? { ...rest, restartBlockedBy: blockedBy } : rest
         const nextPendingPaneAccountRestarts = { ...s.pendingPaneAccountRestarts }
         dropQueuedCodexRestart(nextPendingPaneAccountRestarts, ptyId)
         return {

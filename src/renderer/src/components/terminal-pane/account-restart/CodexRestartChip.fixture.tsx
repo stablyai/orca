@@ -2,10 +2,18 @@ import { defineFixture } from '../../../component-fixtures/component-fixture'
 import CodexRestartChip from './CodexRestartChip'
 
 // Invented accounts; the overlay sits over a pane-sized box as it does over a live terminal.
-function notice(previousAccountLabel: string, nextAccountLabel: string) {
+function notice(
+  previousAccountLabel: string,
+  nextAccountLabel: string,
+  restartBlockedBy?: 'service-outdated'
+) {
   return {
     codexRestartNoticeByPtyId: {
-      'fixture-pty': { previousAccountLabel, nextAccountLabel }
+      'fixture-pty': {
+        previousAccountLabel,
+        nextAccountLabel,
+        ...(restartBlockedBy ? { restartBlockedBy } : {})
+      }
     }
   }
 }
@@ -36,5 +44,17 @@ export const accountSwitchedLongLabels = defineFixture({
     'a.very.long.workspace.account.name@research-team.example.com',
     'another.long.account.label.for.billing@operations.example.org'
   ),
+  render: () => <Pane />
+})
+
+export const restartBlockedByOutdatedService = defineFixture({
+  width: 960,
+  store: notice('dana@example.com', 'robin@example.org', 'service-outdated'),
+  render: () => <Pane />
+})
+
+export const restartBlockedByOutdatedServiceNarrow = defineFixture({
+  width: 360,
+  store: notice('dana@example.com', 'robin@example.org', 'service-outdated'),
   render: () => <Pane />
 })

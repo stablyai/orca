@@ -34,6 +34,8 @@ export type CodexRestartNotice = {
   restartRequested?: true
   /** Dismissal outlives the prompt while explicitly preventing that notice from blocking pane input. */
   dismissed?: true
+  /** Why the last restart did not run, when the user must act before Retry can work. */
+  restartBlockedBy?: 'service-outdated'
 }
 
 export type HydrateWorkspaceSessionOptions = {

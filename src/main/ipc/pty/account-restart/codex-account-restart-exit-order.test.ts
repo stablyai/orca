@@ -263,22 +263,25 @@ describe('account restart exits arriving out of order', () => {
     expect(t.runtime.onPtyExit.mock.calls[1][3]).not.toHaveProperty('paneRespawning')
   })
 
-  it('hands a daemon without fenced termination back to the replacement restart before any stop', async () => {
+  it('refuses an older terminal service without stopping anything, never falling back', async () => {
     const t = setup()
     h.fencedTerminationSupported = false
     await expect(t.request()).resolves.toMatchObject({
       outcome: 'not-started',
-      reason: 'unsupported'
+      reason: 'service-outdated'
     })
     expect(h.killFenced).not.toHaveBeenCalled()
   })
 
-  it('maps an unsupported fenced refusal to the replacement fallback and classifies no exit', async () => {
+  it('maps an unsupported fenced refusal to the same manual refusal and classifies no exit', async () => {
     const t = setup()
     const result = t.request()
     await t.stopDispatched()
     t.release({ outcome: 'refused', reason: 'unsupported' })
-    await expect(result).resolves.toMatchObject({ outcome: 'not-started', reason: 'unsupported' })
+    await expect(result).resolves.toMatchObject({
+      outcome: 'not-started',
+      reason: 'service-outdated'
+    })
     t.emitExit()
     expect(t.runtime.onPtyExit.mock.calls[0][3]).not.toHaveProperty('paneRespawning')
   })
