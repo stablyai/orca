@@ -176,3 +176,18 @@ export function dropListedProviderRelay(chatKey: string): void {
     void relay.channel.close(relay.info.relayId).catch(() => {})
   }
 }
+
+/** Chats whose agent this app reattached from the last run; it stays true after that agent ends. */
+const reattachedFromLastRun = new Set<string>()
+
+export function noteProviderRelayReattachedFromLastRun(chatKey: string): void {
+  reattachedFromLastRun.add(chatKey)
+}
+
+/**
+ * The last run's writer for this chat was kept, not stopped by its quit: still held by the daemon,
+ * or reattached by this app (even if a Stop has ended it since). Its turns ended here, never by quit.
+ */
+export function providerRelayKeptFromLastRun(chatKey: string): boolean {
+  return reattachedFromLastRun.has(chatKey) || keptRunningProviderRelayPid(chatKey) !== null
+}

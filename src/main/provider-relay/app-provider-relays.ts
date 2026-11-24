@@ -8,12 +8,14 @@ export {
   dropListedProviderRelay,
   keptProviderRelaySpawnToken,
   keptRunningProviderRelayPid,
+  providerRelayKeptFromLastRun,
   liveKeptProviderRelayChats as liveProviderRelayChats,
   registerReattachableProviderRelayAgent
 } from './provider-relay-launch-inventory'
 import {
   forgetKeptProviderRelay,
   keptProviderRelayOutstanding,
+  noteProviderRelayReattachedFromLastRun,
   keptProviderRelay,
   listKeptProviderRelays,
   recheckKeptProviderRelay
@@ -236,6 +238,7 @@ async function reattachListed(launch: ProviderRelayLaunch): Promise<RelayedProvi
     if (started) {
       forgetKeptProviderRelay(launch.chatKey, relay)
       reattachedChildren.add(child)
+      noteProviderRelayReattachedFromLastRun(launch.chatKey)
       carriedFor.get(child)?.take(child.attachResult?.openWork)
       track(launch.chatKey, child, launch.markers)
       return { managed: relayedManagedProcess(child), child, reattached: true }

@@ -1,10 +1,7 @@
 // The profile lock proves replaced host runtimes lost their pipes, not that provider processes died.
 // Attribute only runtimes this host replaced; terminal claims and unknown owners provide no such evidence.
 
-import {
-  keptRunningProviderRelayPid,
-  providerRelayReattached
-} from '../../../provider-relay/app-provider-relays'
+import { providerRelayKeptFromLastRun } from '../../../provider-relay/app-provider-relays'
 import type { AgentSessionOrcaStopCause } from '../../../../shared/agent-session/lifecycle/stopping/agent-session-orca-stop'
 import {
   listAgentSessionConversations,
@@ -28,8 +25,7 @@ export type AgentSessionReplacedRuntime = {
 class KeptWriterAwareReplacedRuntimes extends Map<string, AgentSessionReplacedRuntime> {
   override get(sessionId: string): AgentSessionReplacedRuntime | undefined {
     const replaced = super.get(sessionId)
-    return replaced &&
-      (providerRelayReattached(sessionId) || keptRunningProviderRelayPid(sessionId) !== null)
+    return replaced && providerRelayKeptFromLastRun(sessionId)
       ? { ...replaced, kept: true }
       : replaced
   }

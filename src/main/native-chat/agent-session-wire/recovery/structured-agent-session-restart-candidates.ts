@@ -10,7 +10,7 @@ import type { StructuredAgentRegistry } from '../providers/structured-agent-regi
 import {
   listProviderRelaysAtLaunch,
   liveProviderRelayChats,
-  providerRelayReattached
+  providerRelayKeptFromLastRun
 } from '../../../provider-relay/app-provider-relays'
 import {
   structuredAgentSessionResumableSet,
@@ -61,7 +61,7 @@ async function withoutKeptRunningChats(
   const kept = liveProviderRelayChats()
   // Still held by the daemon, or already reattached: either way its agent never stopped.
   return markers.filter(
-    (marker) => !kept.has(marker.sessionId) && !providerRelayReattached(marker.sessionId)
+    (marker) => !kept.has(marker.sessionId) && !providerRelayKeptFromLastRun(marker.sessionId)
   )
 }
 
