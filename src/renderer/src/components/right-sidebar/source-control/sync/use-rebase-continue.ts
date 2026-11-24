@@ -2,7 +2,11 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import type { GitConflictOperation } from '../../../../../../shared/git/status/git-status-types'
 import type { SourceControlWorktreeContext } from '../listing/use-worktree-context'
 import { sourceControlConnectionId, useSourceControlScope } from '../panel/worktree-scope'
-import type { RebaseStopInspectFailure, RebaseStopReading } from '../panel/worktree-operation-store'
+import type {
+  RebaseStopInspectFailure,
+  RebaseStopReading,
+  WorktreeOperationStore
+} from '../panel/worktree-operation-store'
 import { refreshSourceControlAfterRemoteAction } from './remote-refresh'
 import type { SourceControlStatusRefresh } from './use-status-refresh'
 import { requireGitOwnerTarget } from './worktree-git-owner-target'
@@ -26,7 +30,7 @@ export function useSourceControlRebaseContinue({
   activeRepoTarget: SourceControlWorktreeContext['activeRepoTarget']
   activeWorktreeId: string | null
   conflictOperation: GitConflictOperation
-  operationStore: OperationStore
+  operationStore: WorktreeOperationStore
   // The paused rebase has no reading for the current HEAD yet.
   rebaseStopUnread: boolean
   refreshActiveGitStatusAfterMutation: SourceControlStatusRefresh['refreshActiveGitStatusAfterMutation']
