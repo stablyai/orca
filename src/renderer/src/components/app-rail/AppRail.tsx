@@ -257,7 +257,7 @@ export function AppRail({
         onKeyDownCapture={handleKeyDown}
         onFocus={handleFocus}
       >
-        <div className="flex flex-col items-center gap-1">
+        <div className="flex flex-col items-center gap-3">
           <RailItem tooltip={workspacesLabel}>
             <AppRailButton
               itemId="workspaces"
@@ -309,7 +309,7 @@ export function AppRail({
             />
           ) : null}
         </div>
-        <div className="flex flex-col items-center gap-1">
+        <div className="flex flex-col items-center gap-3">
           {partition.helpInMore ? null : (
             <HelpMenuView
               controller={help}
