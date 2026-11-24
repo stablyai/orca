@@ -13,7 +13,11 @@ and attention counts. Failures contribute to the attention count. Expanded and
 Lock Screen presentations show prioritized sessions, their state and elapsed
 state time, with a remainder count for sessions that do not fit. The expanded
 Island shows up to two rows; the Lock Screen shows up to three.
-Large text reduces the visible rows while preserving totals.
+The Lock Screen uses the available height for each session's title and an explicit
+state label. Large text reduces the visible rows while preserving totals.
+Session rows show their agent's existing bundled icon (Claude, Codex and the other
+supported agents), independently of the status indicator. Unknown agents use a
+terminal symbol. Aggregate working/attention counters retain neutral state icons.
 
 The source set includes the saved phone host catalog and servers discovered through
 each connected desktop's existing relay catalog. It is bounded to 32 source grants,
@@ -38,7 +42,7 @@ push-to-start is not implemented. iOS limits an activity to eight hours. After
 expiry or user dismissal, a later working turn opened in the app can create a
 new overview. No foreground JavaScript socket is assumed to run while suspended.
 
-Names are hidden by default. **Show session names** separately consents to sending
+Names are hidden by default; the agent type/icon and state remain visible. **Show session names** separately consents to sending
 bounded session titles through Orca's push service and APNs. The gateway masks
 titles unless the overview's control registration allows them. Native titles are
 also marked privacy-sensitive. Prompts, commands, terminal output, provider error

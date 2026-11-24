@@ -26,6 +26,7 @@ struct OrcaAgentOverviewAttributes: ActivityAttributes {
     var scopeId: String
     var renderId: String { scopeId + "." + id }
     var title: String
+    var agent: String? = nil
     var state: String
     var stateStartedAt: Double
   }

@@ -1,21 +1,23 @@
 import ActivityKit
 import SwiftUI
 import WidgetKit
+import UIKit
 
 @main
 struct OrcaSessionWidget: Widget {
   var body: some WidgetConfiguration {
     ActivityConfiguration(for: OrcaAgentOverviewAttributes.self) { context in
-      VStack(alignment: .leading, spacing: 8) {
+      VStack(alignment: .leading, spacing: 4) {
         HStack {
           Text("Orca").font(.headline)
           Spacer()
           overviewCounter(context, attention: false)
           overviewCounter(context, attention: true)
         }
-        OverviewSessions(context: context)
+        OverviewSessions(context: context, detailed: true)
       }
-      .padding(12)
+      .padding(.horizontal, 12)
+      .padding(.vertical, 8)
       .widgetURL(overviewLink(context))
     } dynamicIsland: { context in
       DynamicIsland {
@@ -92,6 +94,7 @@ private func overviewCounter(_ context: ActivityViewContext<OrcaAgentOverviewAtt
 private struct OverviewSessions: View {
   let context: ActivityViewContext<OrcaAgentOverviewAttributes>
   var maximumRows = 3
+  var detailed = false
   @Environment(\.dynamicTypeSize) private var typeSize
 
   private var limit: Int { min(maximumRows, typeSize.isAccessibilitySize ? 1 : typeSize > .large ? 2 : 3) }
@@ -101,7 +104,7 @@ private struct OverviewSessions: View {
   }
 
   var body: some View {
-    VStack(alignment: .leading, spacing: 4) {
+    VStack(alignment: .leading, spacing: detailed ? 2 : 4) {
       if context.isStale {
         Text(overviewLabel(context, "unavailable")).font(.subheadline)
       } else {
@@ -109,11 +112,23 @@ private struct OverviewSessions: View {
           if let url = URL(string: "orca://live-activity?id=\(context.attributes.linkId)&scope=\(session.scopeId)&session=\(session.id)") {
             Link(destination: url) {
               HStack(spacing: 8) {
-                Image(systemName: overviewSymbol(session.state))
-                  .accessibilityLabel(overviewLabel(context, session.state))
-                Text(session.title.isEmpty ? "\(overviewLabel(context, "session")) \(index + 1)" : session.title)
-                  .lineLimit(1).privacySensitive()
+                OverviewAgentIcon(agent: session.agent)
+                  .frame(width: 20, height: 20)
+                  .accessibilityLabel(session.agent ?? "")
+                  .accessibilityHidden(session.agent == nil)
+                VStack(alignment: .leading, spacing: 0) {
+                  Text(session.title.isEmpty ? "\(overviewLabel(context, "session")) \(index + 1)" : session.title)
+                    .lineLimit(1).privacySensitive()
+                  if detailed {
+                    Text(overviewLabel(context, session.state))
+                      .font(.caption2).foregroundStyle(.secondary).lineLimit(1)
+                  }
+                }
                 Spacer(minLength: 4)
+                if !detailed {
+                  Image(systemName: overviewSymbol(session.state))
+                    .font(.caption2).accessibilityLabel(overviewLabel(context, session.state))
+                }
                 if session.state == "working" || session.state == "attention" {
                   Text(Date(timeIntervalSince1970: session.stateStartedAt), style: .timer)
                     .font(.subheadline).monospacedDigit()
@@ -149,6 +164,29 @@ private struct OverviewSessions: View {
       }
       .font(.caption2).foregroundStyle(.secondary).lineLimit(1)
       .fixedSize(horizontal: false, vertical: true)
+    }
+  }
+}
+
+private struct OverviewAgentIcon: View {
+  var agent: String?
+
+  private var asset: String? {
+    switch agent {
+    case "claude-agent-teams": return "claude"
+    case "opencode2": return "opencode"
+    case "dsb": return "dsh"
+    default: return agent
+    }
+  }
+
+  var body: some View {
+    if let asset, let image = UIImage(named: "live-agent-" + asset) {
+      Image(uiImage: image)
+        .renderingMode(["codex", "pi", "aider"].contains(asset) ? .template : .original)
+        .resizable().scaledToFit()
+    } else {
+      Image(systemName: "terminal").resizable().scaledToFit()
     }
   }
 }

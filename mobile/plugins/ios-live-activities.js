@@ -2,6 +2,8 @@ const fs = require('node:fs')
 const path = require('node:path')
 const { withInfoPlist, withXcodeProject } = require('expo/config-plugins')
 
+const writeLiveActivityAgentIcons = require('./live-activity-agent-icons')
+
 const TARGET = 'OrcaSessionActivity'
 
 module.exports = function withIosLiveActivities(config) {
@@ -56,6 +58,12 @@ module.exports = function withIosLiveActivities(config) {
         project.addSourceFile(name, { target: target.uuid }, group.uuid)
       }
     }
+    writeLiveActivityAgentIcons(root, output)
+    project.addResourceFile(
+      'AgentIcons.xcassets',
+      { target: target.uuid },
+      project.findPBXGroupKey({ name: TARGET })
+    )
     const list = project.pbxXCConfigurationList()[target.pbxNativeTarget.buildConfigurationList]
     for (const item of list.buildConfigurations) {
       Object.assign(project.pbxXCBuildConfigurationSection()[item.value].buildSettings, {

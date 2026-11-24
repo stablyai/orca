@@ -45,5 +45,5 @@ export function liveActivityOverviewContent(scopes: string[], rows: SqlRow[], cr
 }
 
 export function liveActivityOverviewIdentity(content: LiveActivityContent): string {
-  return JSON.stringify([content.state, content.counts, content.knownSources, content.totalSources, content.complete, content.sessions.map(({ id, scopeId, title, state, segment }) => [id, scopeId, title, state, segment])])
+  return JSON.stringify([content.state, content.counts, content.knownSources, content.totalSources, content.complete, content.sessions.map(({ id, scopeId, title, state, segment, agent }) => [id, scopeId, title, state, segment, agent])])
 }

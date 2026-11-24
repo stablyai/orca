@@ -16,12 +16,12 @@ const bootstrap = {
 const first = {
   schemaVersion: 2, overviewId, scopeKey: firstKey, sequence: 1, event: 'update',
   content: { counts: { working: 2, attention: 0, done: 0, failed: 0, unavailable: 0 },
-    sessions: [{ id: '1'.repeat(32), segment: '1'.repeat(32), title: 'private project', state: 'working', elapsedSeconds: 90 }], complete: true }
+    sessions: [{ id: '1'.repeat(32), segment: '1'.repeat(32), title: 'private project', agent: 'codex', state: 'working', elapsedSeconds: 90 }], complete: true }
 }
 const second = {
   ...first, scopeKey: secondKey,
   content: { counts: { working: 1, attention: 1, done: 0, failed: 0, unavailable: 0 },
-    sessions: [{ id: '2'.repeat(32), segment: '2'.repeat(32), title: 'private provider', state: 'attention', elapsedSeconds: 20 }], complete: true }
+    sessions: [{ id: '2'.repeat(32), segment: '2'.repeat(32), title: 'private provider', agent: 'claude', state: 'attention', elapsedSeconds: 20 }], complete: true }
 }
 
 it('aggregates durable owner snapshots once, masks names, and expires missing hosts without a new request', async () => {
@@ -44,6 +44,7 @@ it('aggregates durable owner snapshots once, masks names, and expires missing ho
     expect(content.counts).toEqual({ working: 3, attention: 1, done: 0, failed: 0, unavailable: 0 })
     expect([content.knownSources, content.totalSources, content.complete, content.state]).toEqual([2, 2, true, 'attention'])
     expect(content.sessions.map((row: { title: string; state: string }) => [row.title, row.state])).toEqual([['', 'attention'], ['', 'working']])
+    expect(content.sessions.map((row: { agent?: string }) => row.agent)).toEqual(['claude', 'codex'])
     expect(wire.body).not.toContain('private')
     expect(wire.body).not.toContain(firstKey)
     expect(Buffer.byteLength(wire.body)).toBeLessThan(2800)

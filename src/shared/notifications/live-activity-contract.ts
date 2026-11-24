@@ -69,6 +69,7 @@ export type LiveActivitySessionContent = {
 
 export type LiveActivityCounts = Record<LiveActivityState, number>
 export type LiveActivitySession = {
+  agent?: string
   id: string
   segment: string
   title: string

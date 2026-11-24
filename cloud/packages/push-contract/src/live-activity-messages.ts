@@ -10,6 +10,7 @@ export const LiveActivityCountsSchema = z.object({
   unavailable: z.number().int().min(0).max(320000)
 }).strict()
 const session = z.object({
+  agent: z.string().max(32).regex(/^[a-z0-9-]+$/).optional(),
   segment: z.string().regex(/^[a-f0-9]{32}$/),
   id: z.string().regex(/^[a-f0-9]{32}$/), title: z.string().max(40), state,
   elapsedSeconds: z.number().min(0).max(604800)

@@ -70,7 +70,13 @@ export async function deliverHostLiveActivity(
   const identity = JSON.stringify([
     content.counts,
     content.complete,
-    content.sessions.map(({ id, title, state, segment }) => [id, title, state, segment])
+    content.sessions.map(({ id, title, state, segment, agent }) => [
+      id,
+      title,
+      state,
+      segment,
+      agent
+    ])
   ])
   if (entry.sent === identity && now - entry.sentAt < HEARTBEAT_MS) {
     entry.nextAt = Math.min(

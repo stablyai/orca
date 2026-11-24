@@ -106,7 +106,9 @@ export function agentOverviewContent(
       .digest('hex')
       .slice(0, 32)
     content.counts[session.state] = Math.min(9999, content.counts[session.state] + 1)
+    const agent = tab.type === 'agent-session' ? tab.agent : tab.agentStatus?.agentType
     content.sessions.push({
+      ...(agent && /^[a-z0-9-]{1,32}$/.test(agent) ? { agent } : {}),
       id,
       segment,
       state: session.state,
