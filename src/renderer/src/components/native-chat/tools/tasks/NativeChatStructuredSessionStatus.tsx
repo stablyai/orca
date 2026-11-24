@@ -1,21 +1,11 @@
-import {
-  lazy,
-  Suspense,
-  useCallback,
-  useContext,
-  useLayoutEffect,
-  useMemo,
-  useRef,
-  useState
-} from 'react'
+import { lazy, Suspense, useCallback, useContext, useMemo, useRef, useState } from 'react'
 import type { RuntimeClientTarget } from '../../../../../../shared/remote-runtime/host-catalog/runtime-client-target'
 import { useNativeChatPinnedWorkerApprovals } from '../../worker-approvals/native-chat-worker-approval-feed'
 import { useWorkerDockFeed } from './dock/worker-dock-feed'
 import type { WorkerDockRowView } from './dock/WorkerDockRow'
 import { openOrchestrationCrewAgent } from '@/lib/agent-session/open/open-agent-message-sender'
 import { useWorkerDockOwnerActions } from './dock/use-worker-dock-owner-actions'
-import { workerDockStopBlock } from './dock/worker-dock-stop-check'
-import { useWorkerDockGestureHeld } from './dock/NativeChatWorkerDockFrame'
+import { WorkerDockFeedLossesContext, workerDockStopBlock } from './dock/worker-dock-stop-check'
 import { WorkerDockFailureStrip } from './dock/WorkerDockFailureStrip'
 import { useLatestHandler } from '@/lib/use-latest-handler'
 import { NativeChatBackgroundTasksStatus } from './NativeChatBackgroundTasksStatus'
@@ -167,37 +157,18 @@ export function NativeChatStructuredSessionStatus(props: {
       ),
     [target]
   )
-  const dockNow = useMemo(
-    () => ({
+  // Read live when a Stop or its Retry is sent, never from rows a held press kept on screen.
+  const stopBlock = useLatestHandler((row: WorkerDockRowView, party: string) =>
+    workerDockStopBlock(row, party, {
       party: feed.party,
+      available: feed.available,
       rows: controlledWorkerRows,
       identities: controlledWorkerIdentities
-    }),
-    [feed.party, controlledWorkerRows, controlledWorkerIdentities]
+    })
   )
-  // A held press (mouse or Space) shows the rows frozen at press time, so its release would read
-  // them as still stoppable after an outage that recovered mid-press. Each held dispatch must stay
-  // stoppable in every live update until release; one lapse cancels that press.
-  const gestureHeld = useWorkerDockGestureHeld()
-  const heldStoppable = useRef<ReadonlySet<string> | null>(null)
-  useLayoutEffect(() => {
-    if (!gestureHeld) {
-      heldStoppable.current = null
-      return
-    }
-    const now = new Set(
-      (dockNow.identities ?? [])
-        .filter((row) => dockNow.party && !workerDockStopBlock(row, dockNow.party, dockNow))
-        .map((row) => row.id)
-    )
-    const previous = heldStoppable.current
-    heldStoppable.current = previous ? new Set([...previous].filter((id) => now.has(id))) : now
-  }, [gestureHeld, dockNow])
-  // Read live when a Stop or its Retry is sent, never from the rows a held press froze.
-  const stopBlock = useLatestHandler((row: WorkerDockRowView, party: string) => {
-    const block = workerDockStopBlock(row, party, dockNow)
-    return block ?? (heldStoppable.current?.has(row.id) === false ? 'blocked' : null)
-  })
+  // A focused Retry or Dismiss leaves with the failure line; focus then moves to the next line or
+  // the dock's toggle instead of the page.
+  const failureFocus = useRef(false)
   const owner = useWorkerDockOwnerActions(
     target,
     feed.party,
@@ -232,7 +203,7 @@ export function NativeChatStructuredSessionStatus(props: {
     )
   }
   return (
-    <>
+    <WorkerDockFeedLossesContext.Provider value={feed.readLosses}>
       <NativeChatBackgroundTasksStatus
         isVisible={props.isVisible}
         sessionId={props.sessionId}
@@ -274,7 +245,12 @@ export function NativeChatStructuredSessionStatus(props: {
         </Suspense>
       ) : null}
       {failure && !dialog ? (
-        <WorkerDockFailureStrip failure={failure} onDismiss={owner.dismissFailure} />
+        <WorkerDockFailureStrip
+          key={`${failure.message}\0${failure.retry ? 'retry' : 'final'}`}
+          failure={failure}
+          onDismiss={owner.dismissFailure}
+          focusHandoff={failureFocus}
+        />
       ) : null}
       {dialog ? (
         <Suspense fallback={null}>
@@ -302,7 +278,7 @@ export function NativeChatStructuredSessionStatus(props: {
           />
         </Suspense>
       ) : null}
-    </>
+    </WorkerDockFeedLossesContext.Provider>
   )
 }
 

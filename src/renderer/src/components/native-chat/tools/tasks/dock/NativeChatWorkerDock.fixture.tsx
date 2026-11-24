@@ -4,6 +4,8 @@ import { NativeChatBackgroundTasksStatus } from '../NativeChatBackgroundTasksSta
 import { NativeChatWorkerDockFrame } from './NativeChatWorkerDockFrame'
 import type { WorkerDockRowView } from './WorkerDockRow'
 import { WorkerDockFailureStrip } from './WorkerDockFailureStrip'
+import type { WorkerDockFailure } from './use-worker-dock-owner-actions'
+import { useRef, useState, type ReactNode } from 'react'
 import { NativeChatComposerField } from '../../../composer/editor/NativeChatComposerField'
 import { FloatingTerminalToggleButton } from '../../../../floating-terminal/trigger/FloatingTerminalToggleButton'
 import { FLOATING_TERMINAL_TRIGGER_POSITION_STORAGE_KEY } from '../../../../floating-terminal/trigger/floating-terminal-trigger-position'
@@ -118,7 +120,7 @@ function botChat(
   expanded: boolean,
   list: readonly WorkerDockRowView[] = rows,
   note = 'Both fix workers are running in parallel; ORCA-20 needs your approval.',
-  failureMessage?: string
+  footer?: ReactNode
 ) {
   return (
     <div
@@ -129,9 +131,7 @@ function botChat(
       <p className="text-sm text-chat-foreground">{note}</p>
       <div className="rounded-xl border border-chat-composer-border bg-chat-composer-surface p-1.5 shadow-xs">
         {dock(expanded, list)}
-        {failureMessage ? (
-          <WorkerDockFailureStrip failure={{ message: failureMessage }} onDismiss={noop} />
-        ) : null}
+        {footer}
         <p className="px-2 py-2 text-sm text-muted-foreground">
           Ask anything, / for commands, @ for context
         </p>
@@ -309,6 +309,50 @@ export const retryAfterSettle360 = defineFixture({
       true,
       rows,
       'Both fix workers are running in parallel; ORCA-20 needs your approval.',
-      'Already stopped'
+      <WorkerDockFailureStrip failure={{ message: 'Already stopped' }} onDismiss={noop} />
     )
+})
+
+// The real hand-off: Retry is focused and pressed, the line clears, then returns as final.
+function RetryThenSettled() {
+  const handoff = useRef(false)
+  const [failure, setFailure] = useState<WorkerDockFailure | null>(() => ({
+    message: 'Connection dropped',
+    retry: () => {
+      setFailure(null)
+      queueMicrotask(() => setFailure({ message: 'Already stopped' }))
+    }
+  }))
+  return failure ? (
+    <WorkerDockFailureStrip
+      key={`${failure.message}\0${failure.retry ? 'retry' : 'final'}`}
+      failure={failure}
+      onDismiss={() => setFailure(null)}
+      focusHandoff={handoff}
+    />
+  ) : null
+}
+
+async function pressFocusedRetry(frame: HTMLElement) {
+  const retry = [...frame.querySelectorAll<HTMLElement>('[role="alert"] button')].find(
+    (button) => button.textContent === 'Retry'
+  )
+  if (!retry) {
+    throw new Error('Retry button not found')
+  }
+  retry.focus({ focusVisible: true })
+  retry.click()
+  await new Promise((resolve) => setTimeout(resolve, 100))
+}
+
+export const retryFocusAfterSettle360 = defineFixture({
+  width: 360,
+  render: () =>
+    botChat(
+      true,
+      rows,
+      'Both fix workers are running in parallel; ORCA-20 needs your approval.',
+      <RetryThenSettled />
+    ),
+  interact: pressFocusedRetry
 })

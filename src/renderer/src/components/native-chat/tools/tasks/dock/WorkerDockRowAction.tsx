@@ -1,11 +1,12 @@
 import { useTranslate } from '@/i18n/use-translate'
 import { workerDockStateLabel } from './worker-dock-labels'
-import { useRef, useState } from 'react'
+import { useContext, useRef, useState } from 'react'
 import { Square, X } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip'
 import { cn } from '@/lib/class-names'
 import type { WorkerDockRowView } from './WorkerDockRow'
+import { WorkerDockFeedLossesContext, workerDockCanStop } from './worker-dock-stop-check'
 
 /** A dock row's Stop or Clear, which keeps the pressed intent through a structural update. */
 export function WorkerDockRowAction({
@@ -26,16 +27,18 @@ export function WorkerDockRowAction({
     rect: DOMRect | null
     cancelled: boolean
     activated: boolean
+    /** The feed's loss count when this press started; a loss before activation cancels it. */
+    losses: number
   } | null>(null)
+  const readLosses = useContext(WorkerDockFeedLossesContext)
   const [focusedAction, setFocusedAction] = useState<'stop' | 'clear' | null>(null)
   const failed = row.state === 'failed' || row.state === 'unexpected'
   const owner = row.ownerActionsAvailable !== false && !row.retired
   // Only an action that can run gets a button: a remote worker, a cleared row or a failure with
   // nothing to acknowledge shows none rather than a live-looking control that does nothing.
   const canClear = owner && failed && Boolean(row.settlement)
-  // An exited worker with an open dispatch has nothing to clear; Stop settles it.
-  const exitedOpen = row.state === 'unexpected' && !row.settlement
-  const canStop = owner && (!failed || exitedOpen) && row.stoppable && row.state !== 'saving'
+  // The same rule a Stop is checked against when it is sent.
+  const canStop = workerDockCanStop(row)
   const action = focusedAction ?? (canClear ? 'clear' : 'stop')
   const unavailable = !canStop || pending
   return (
@@ -94,7 +97,8 @@ export function WorkerDockRowAction({
                     action,
                     rect: event.currentTarget.getBoundingClientRect(),
                     cancelled: false,
-                    activated: false
+                    activated: false,
+                    losses: readLosses()
                   }
                 }
               }}
@@ -130,7 +134,8 @@ export function WorkerDockRowAction({
                     action,
                     rect: null,
                     cancelled: false,
-                    activated: false
+                    activated: false,
+                    losses: readLosses()
                   }
                 }
               }}
@@ -148,7 +153,13 @@ export function WorkerDockRowAction({
               onFocus={() => setFocusedAction(action)}
               onClick={() => {
                 const captured = gesture.current
-                if (captured?.cancelled || captured?.activated) {
+                // A press the feed dropped during is cancelled even if it has since recovered:
+                // the row it was aimed at may not be the worker it is now.
+                if (
+                  captured?.cancelled ||
+                  captured?.activated ||
+                  (captured && captured.losses !== readLosses())
+                ) {
                   return
                 }
                 const intendedRow = captured?.row ?? row
