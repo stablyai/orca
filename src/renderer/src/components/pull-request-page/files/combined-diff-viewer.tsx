@@ -119,17 +119,25 @@ export function PRFilesCombinedDiffViewer({
   const loadingIndicesRef = useRef<Set<number>>(new Set())
   const sectionsRef = useRef<DiffSection[]>([])
   const generationRef = useRef(0)
+  const lastInitSignatureRef = useRef<string | null>(null)
   const modifiedEditorsRef = useRef<Map<number, monacoEditor.IStandaloneCodeEditor>>(new Map())
   const handleSectionSaveRef = useRef<(index: number) => Promise<void>>(async () => {})
   useLayoutEffect(() => {
-    // Why: keep the loader/navigation callbacks reading the latest sections without a render-phase ref write.
     sectionsRef.current = sections
   })
 
   useEffect(() => {
-    // Why: bump generation so stale async diff loads from the previous view can't patch the restored sections.
     generationRef.current += 1
+  }, [entrySignature])
+
+  useEffect(() => {
     setEntryRevision((revision) => revision + 1)
+    // Skip cache restore when only fileByPath changed (optimistic Viewed update).
+    // The Viewed handler already updated sections; restoring would revert collapse state.
+    if (lastInitSignatureRef.current === entrySignature) {
+      return
+    }
+    lastInitSignatureRef.current = entrySignature
     const cached = prFilesDiffViewStateCache.get(viewStateKey)
     if (cached && cached.entrySignature === entrySignature) {
       const restoredSections = cached.sections
@@ -270,15 +278,7 @@ export function PRFilesCombinedDiffViewer({
   const handleAddLineComment = useCallback(
     async (
       section: DiffSection,
-      {
-        lineNumber,
-        startLine,
-        body
-      }: {
-        lineNumber: number
-        startLine?: number
-        body: string
-      }
+      { lineNumber, startLine, body }: { lineNumber: number; startLine?: number; body: string }
     ) =>
       addPullRequestLineComment({
         headSha,
@@ -311,21 +311,22 @@ export function PRFilesCombinedDiffViewer({
           filePath={file.path}
           onToggle={() => {
             if (!pending) {
-              // Capture generation to ignore completions from a previous diff.
               const generation = generationRef.current
               void onViewedChange(file.path, !viewed).then((ok) => {
-                // Skip if the request failed or the diff changed while pending.
                 if (!ok || generationRef.current !== generation) {
                   return
                 }
-                // Set collapsed to match the requested Viewed state instead of
-                // toggling, so manual expand/collapse is preserved.
-                setSections((prev) =>
-                  prev.map((s) =>
-                    s.path === file.path
-                      ? { ...s, collapsed: !viewed, loading: viewed ? true : s.loading }
-                      : s
-                  )
+                const sectionIndex = prev.findIndex((s) => s.path === file.path)
+                const alreadyLoaded =
+                  sectionIndex !== -1 && loadedIndicesRef.current.has(sectionIndex)
+                return prev.map((s) =>
+                  s.path === file.path
+                    ? {
+                        ...s,
+                        collapsed: !viewed,
+                        loading: viewed && !alreadyLoaded ? true : s.loading
+                      }
+                    : s
                 )
               })
             }
@@ -333,7 +334,7 @@ export function PRFilesCombinedDiffViewer({
         />
       )
     },
-    [fileByPath, onViewedChange, pendingViewedPaths, generationRef, setSections]
+    [fileByPath, onViewedChange, pendingViewedPaths, generationRef, loadedIndicesRef]
   )
 
   return (

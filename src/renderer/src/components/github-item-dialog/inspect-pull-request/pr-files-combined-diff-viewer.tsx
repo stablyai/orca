@@ -139,9 +139,12 @@ function PRFilesCombinedDiffSections({
   const modifiedEditorsRef = useRef<Map<number, monacoEditor.IStandaloneCodeEditor>>(new Map())
   const handleSectionSaveRef = useRef<(index: number) => Promise<void>>(async () => {})
 
+  useEffect(() => {
+    generationRef.current += 1
+  }, [signature])
+
   // Sync after commit but before passive effects: collapsed sections remount and read this ref during their passive load.
   useLayoutEffect(() => {
-    generationRef.current += 1
     sectionsRef.current = sections
   }, [sections])
 
@@ -297,21 +300,22 @@ function PRFilesCombinedDiffSections({
           filePath={file.path}
           onToggle={() => {
             if (!pending) {
-              // Capture generation to ignore completions from a previous diff.
               const generation = generationRef.current
               void onViewedChange(file.path, !viewed).then((ok) => {
-                // Skip if the request failed or the diff changed while pending.
                 if (!ok || generationRef.current !== generation) {
                   return
                 }
-                // Set collapsed to match the requested Viewed state instead of
-                // toggling, so manual expand/collapse is preserved.
-                setSections((prev) =>
-                  prev.map((s) =>
-                    s.path === file.path
-                      ? { ...s, collapsed: !viewed, loading: viewed ? true : s.loading }
-                      : s
-                  )
+                const sectionIndex = prev.findIndex((s) => s.path === file.path)
+                const alreadyLoaded =
+                  sectionIndex !== -1 && loadedIndicesRef.current.has(sectionIndex)
+                return prev.map((s) =>
+                  s.path === file.path
+                    ? {
+                        ...s,
+                        collapsed: !viewed,
+                        loading: viewed && !alreadyLoaded ? true : s.loading
+                      }
+                    : s
                 )
               })
             }
@@ -319,7 +323,7 @@ function PRFilesCombinedDiffSections({
         />
       )
     },
-    [fileByPath, onViewedChange, pendingViewedPaths, generationRef, setSections]
+    [fileByPath, onViewedChange, pendingViewedPaths, generationRef, loadedIndicesRef]
   )
 
   return (
