@@ -27425,7 +27425,6 @@
     "row": {
       "runsOn": "{{host}}에서 실행 중",
       "disconnected": "연결 끊김",
-      "hostDisconnected": "{{host}} 연결 끊김",
       "idle": "유휴 상태",
       "paused": "일시 중지됨",
       "reading": "메시지를 읽는 중",
@@ -27483,7 +27482,8 @@
       "ask": {
         "notSentYet": "아직 보내지 않음",
         "replaced": "에이전트가 새 질문을 했습니다. 읽은 다음 답장하세요.",
-        "replacedByNewer": "새 질문으로 대체됨"
+        "replacedByNewer": "새 질문으로 대체됨",
+        "skipped": "건너뜀"
       },
       "readMoreClosedFailed": "닫힌 항목을 더 읽지 못했습니다"
     },

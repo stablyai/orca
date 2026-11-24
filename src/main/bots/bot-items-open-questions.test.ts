@@ -14,6 +14,7 @@ import {
   botItemWaitingLine
 } from '../../shared/bots/bot-item-question-answers'
 import { waitingAskChange } from './bot-item-waiting-ask-keep'
+import { botItemChangeMail } from './bot-items-mail-text'
 import type { BotItemBotActor, BotItemOwnerActor } from './bot-items-input'
 import { BotItemsStore } from './bot-items-store'
 
@@ -50,8 +51,8 @@ function item(path = ':memory:') {
     store.set(uid, { status: 'needs_you', ask: asked }, AGENT, NOW)
     return store.get(uid)!.questionEvent!
   }
-  const comment = (text: string, questionEventId?: number) =>
-    store.ownerComment(uid, text, OWNER, [], NOW, undefined, questionEventId)
+  const comment = (text: string, questionEventId?: number, skipped?: number[]) =>
+    store.ownerComment(uid, text, OWNER, [], NOW, undefined, questionEventId, false, [], skipped)
   // What the item's view reads, from the host's item and the events loaded after `after`: the line
   // its comment box replies to, each ask's answers, which ask each reply quotes, and the comments
   // shown waiting.
@@ -113,9 +114,9 @@ it('replaces an earlier set of questions when a later set is asked', () => {
   comment(`${HOSTS} → Yes`, first)
   const second = ask([MERGE])
   const { asks, replyingTo, waitingComments } = view()
-  expect(asks.get(botItemEventId(first))).toMatchObject({ waiting: false, replaced: true })
+  expect(asks.get(botItemEventId(first))).toMatchObject({ waiting: false, ended: 'replaced' })
   expect(asks.get(botItemEventId(first))?.answers.map(Boolean)).toEqual([true, false])
-  expect(asks.get(botItemEventId(second))).toMatchObject({ waiting: true, replaced: false })
+  expect(asks.get(botItemEventId(second))).toMatchObject({ waiting: true, ended: null })
   expect(replyingTo).toMatchObject({ eventId: botItemEventId(second), line: MERGE })
   expect(waitingComments).toEqual([botItemEventId(second)])
   expect(store.viewRows([uid], true).waitingAsks[uid]).toBe(botItemEventId(second))
@@ -153,6 +154,47 @@ it('keeps a reply naming a replaced set off the later set, even with that set on
   )
   expect(entry).toMatchObject({ waiting: true })
   expect(entry?.answers.map(Boolean)).toEqual([false])
+})
+
+it('closes the questions an answer skips, so the set is finished and its mail names them', () => {
+  const { store, uid, ask, comment, view, lastComment } = item()
+  const asked = ask([HOSTS, GO, MERGE])
+  // "send anyway" with only the first answered.
+  // A line the answer names is never recorded as skipped.
+  comment(`${HOSTS} → Yes`, asked, [0, 1, 2])
+  expect(lastComment().data.skipped).toEqual([GO, MERGE])
+  expect(store.get(uid)?.status).toBe('working')
+  expect(store.viewRows([uid], true).waitingAsks[uid]).toBeUndefined()
+  const entry = view().asks.get(botItemEventId(asked))
+  expect(entry).toMatchObject({ waiting: false, ended: 'skipped' })
+  expect(entry?.answers.map(Boolean)).toEqual([true, false, false])
+  expect(view().replyingTo).toBeNull()
+  const mail = botItemChangeMail([{ event: lastComment(), item: store.get(uid)! }])
+  expect(mail?.body).toContain(
+    `[Orca: they skipped the rest of that set, so these questions are closed unanswered: "${GO}", "${MERGE}". If one still matters, ask it again in a new set.]`
+  )
+  // A later comment answers none of them.
+  comment('Yes')
+  expect(view().asks.get(botItemEventId(asked))?.answers.map(Boolean)).toEqual([true, false, false])
+})
+
+it('never skips a line an earlier comment or the answer itself answered', () => {
+  const { ask, comment, lastComment, store, uid } = item()
+  const asked = ask([HOSTS, GO, MERGE])
+  // Another device answered the second line first; this one's "send anyway" still lists it.
+  comment(`${GO} → No`, asked)
+  // Words that name no line answer the first open one by order.
+  comment('Yes', asked, [0, 1, 2])
+  expect(lastComment().data.skipped).toEqual([MERGE])
+  const mail = botItemChangeMail([{ event: lastComment(), item: store.get(uid)! }])
+  expect(mail?.body).toContain(
+    `so this question is closed unanswered: "${MERGE}". If it still matters, ask it again in a new set.]`
+  )
+  // Every line answered: nothing is skipped.
+  const second = ask([HOSTS, GO])
+  comment(`${HOSTS} → Yes`, second)
+  comment(`${GO} → No`, second, [0, 1])
+  expect(lastComment().data.skipped).toBeUndefined()
 })
 
 it('holds the latest set until every question in it is answered', () => {

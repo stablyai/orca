@@ -180,7 +180,7 @@ export class ExternalConversationSeam {
     })
     this.chatDeliveries.stopFollowing()
     const release = this.events.watch(listener)
-    this.deps.slackMirror?.()?.flushHeld()
+    this.deps.watched?.()
     return release
   }
 
@@ -344,7 +344,7 @@ export class ExternalConversationSeam {
       : linkedChat(workspace.worktreeId, link)
     return 'outcome' in chat
       ? chat
-      : ((await resumeRefusal(message, host.chat, chat.sessionId)) ??
+      : ((await resumeRefusal(message, host.chat, chat.sessionId, { workspace, link })) ??
           this.deliverToChat(host, key, chat, message, signal))
   }
 }

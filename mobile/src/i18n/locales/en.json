@@ -6521,13 +6521,7 @@
       },
       "cancel": {
         "keep": "Keep",
-        "confirmMany": "Cancel {{count}}",
-        "titleMany": "Cancel {{count}} items?",
-        "titleOne": "Cancel {{title}}?",
-        "why": "The bot sees the reason. Nothing is deleted.",
-        "placeholder": "Reason",
-        "confirmOne": "Cancel item",
-        "offline": "{{host}} is offline. Your reason is kept; {{action}} works again when it’s back."
+        "confirmMany": "Cancel {{count}}"
       },
       "wait": {
         "titleOne": "What is {{title}} waiting on?",
@@ -6596,7 +6590,8 @@
         "heldCount_one": "{{count}} answer not sent yet, <send>send anyway</send>",
         "heldCount_other": "{{count}} answers not sent yet, <send>send anyway</send>",
         "replaced": "The agent asked a new question. Read it, then reply.",
-        "replacedByNewer": "Replaced by a newer question"
+        "replacedByNewer": "Replaced by a newer question",
+        "skipped": "Skipped"
       },
       "readFailedClosedPage": "Couldn’t read more closed items.",
       "skillLimit": "Message not sent. Keep at most {{limit}} selected skill files and try again."

@@ -189,7 +189,7 @@ export function NativeChatResumeToast({
           </div>
           <div className="mt-2 flex flex-wrap items-center gap-1.5">
             {showResume && (
-              <Button size="xs" onClick={() => onResume(view.resumable)}>
+              <Button variant="theme-accent" size="xs" onClick={() => onResume(view.resumable)}>
                 {t('auto.components.NativeChatResumeToast.resume', 'Resume')}
               </Button>
             )}

@@ -14,6 +14,7 @@ import {
   botItemAnswerWords,
   botItemUnsentAnswers
 } from '../../../../src/shared/bots/bot-item-answer-lines'
+import type { BotItemAskEnd } from '../../../../src/shared/bots/bot-item-question-answers'
 import type { BotItemEvent } from '../../../../src/shared/bots/bot-items'
 import type { BotItemQuickReplyActions } from '../../../../src/shared/bots/use-bot-item-question-steps'
 import { MobileMarkdown } from '../../components/markdown/MobileMarkdown'
@@ -38,7 +39,7 @@ export function MobileBotItemQuestionLines({
   waiting,
   answers = NO_ANSWERS,
   byOrder,
-  replaced = false,
+  ended = null,
   actions,
   disabled = false,
   style
@@ -54,8 +55,8 @@ export function MobileBotItemQuestionLines({
   answers?: readonly (BotItemEvent | null)[]
   /** Per line, answered only by a comment naming no line: that comment shows as itself. */
   byOrder?: readonly boolean[]
-  /** A later ask replaced its open lines. */
-  replaced?: boolean
+  /** Why its open lines take no answer: a later ask replaced them, or the owner skipped them. */
+  ended?: BotItemAskEnd | null
   /** While it waits, what its quick replies do; absent where the item takes no comment. */
   actions?: BotItemQuickReplyActions
   /** The host can't take a comment now (offline). */
@@ -144,9 +145,11 @@ export function MobileBotItemQuestionLines({
           </View>
         )
       })}
-      {replaced && answered.some((words, index) => !words && !unsent?.[index]) ? (
-        <Text style={styles.replaced}>
-          {t('bots.items.ask.replacedByNewer', 'Replaced by a newer question')}
+      {ended && answered.some((words, index) => !words && !unsent?.[index]) ? (
+        <Text style={styles.ended}>
+          {ended === 'skipped'
+            ? t('bots.items.ask.skipped', 'Skipped')
+            : t('bots.items.ask.replacedByNewer', 'Replaced by a newer question')}
         </Text>
       ) : null}
     </View>
@@ -157,6 +160,6 @@ const styles = themedStyleSheet(() => ({
   spaced: { marginTop: spacing.lg },
   one: { gap: spacing.md },
   several: { gap: 6 },
-  replaced: { fontSize: 12, lineHeight: 16, color: colors.textMuted },
+  ended: { fontSize: 12, lineHeight: 16, color: colors.textMuted },
   chips: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm, marginTop: 10 }
 }))
