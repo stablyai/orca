@@ -48,8 +48,11 @@ export function BotTeamShareDialog({
   const t = useTranslate()
   const listId = useId()
   const [activeIndex, setActiveIndex] = useState(0)
-  const open = query.trim() !== '' && suggestions !== null
+  // Radix focuses the field on open; leaving the Add row hides the suggestions until it is back.
+  const [addRowFocused, setAddRowFocused] = useState(true)
+  const open = addRowFocused && query.trim() !== '' && suggestions !== null
   const shown = open ? suggestions : []
+  const listed = shown.length > 0
   const active = shown.length > 0 ? Math.min(activeIndex, shown.length - 1) : -1
   const optionId = (index: number) => `${listId}-${index}`
   const pick = (suggestion: TeamShareSuggestion | undefined) => {
@@ -96,12 +99,20 @@ export function BotTeamShareDialog({
             </span>
           </DialogTitle>
         </div>
-        <div className="relative px-6 pt-4">
-          <div className="flex items-center gap-2">
+        <div
+          className="flex items-center gap-2 px-6 pt-4"
+          onFocus={() => setAddRowFocused(true)}
+          onBlur={(event) => {
+            if (!event.currentTarget.contains(event.relatedTarget)) {
+              setAddRowFocused(false)
+            }
+          }}
+        >
+          <div className="relative min-w-0 flex-1">
             <Input
               role="combobox"
-              aria-expanded={open}
-              aria-controls={open ? listId : undefined}
+              aria-expanded={listed}
+              aria-controls={listed ? listId : undefined}
               aria-autocomplete="list"
               aria-activedescendant={active >= 0 ? optionId(active) : undefined}
               aria-label={t('bots.teamShare.addLabel', 'Add people')}
@@ -115,35 +126,38 @@ export function BotTeamShareDialog({
               }}
               onKeyDown={onKeyDown}
             />
-            <Button variant="outline" disabled={active < 0} onClick={() => pick(shown[active])}>
-              {t('bots.teamShare.add', 'Add')}
-            </Button>
+            {open ? (
+              <div
+                id={listed ? listId : undefined}
+                role={listed ? 'listbox' : undefined}
+                aria-label={listed ? t('bots.teamShare.suggestions', 'Suggestions') : undefined}
+                // Keep focus in the field, so a press on the list or its scrollbar doesn't close it.
+                onMouseDown={(event) => event.preventDefault()}
+                className={cn(
+                  MENU_SURFACE_CLASS,
+                  'absolute inset-x-0 top-full z-10 mt-1 max-h-[min(20rem,50dvh)] overflow-y-auto scrollbar-sleek'
+                )}
+              >
+                {listed ? (
+                  shown.map((suggestion, index) => (
+                    <TeamShareSuggestionOption
+                      key={suggestion.key}
+                      id={optionId(index)}
+                      suggestion={suggestion}
+                      active={index === active}
+                      onPick={() => pick(suggestion)}
+                      onHover={() => setActiveIndex(index)}
+                    />
+                  ))
+                ) : (
+                  <TeamShareNoMatch query={query.trim()} />
+                )}
+              </div>
+            ) : null}
           </div>
-          {open ? (
-            <div
-              id={listId}
-              role="listbox"
-              className={cn(
-                MENU_SURFACE_CLASS,
-                'absolute top-full right-[100px] left-6 z-10 mt-1 max-h-[min(20rem,calc(100dvh-14rem))] overflow-y-auto scrollbar-sleek'
-              )}
-            >
-              {shown.length === 0 ? (
-                <TeamShareNoMatch query={query.trim()} />
-              ) : (
-                shown.map((suggestion, index) => (
-                  <TeamShareSuggestionOption
-                    key={suggestion.key}
-                    id={optionId(index)}
-                    suggestion={suggestion}
-                    active={index === active}
-                    onPick={() => pick(suggestion)}
-                    onHover={() => setActiveIndex(index)}
-                  />
-                ))
-              )}
-            </div>
-          ) : null}
+          <Button variant="outline" disabled={active < 0} onClick={() => pick(shown[active])}>
+            {t('bots.teamShare.add', 'Add')}
+          </Button>
         </div>
         <div className="scrollbar-sleek min-h-0 max-h-[340px] overflow-y-auto pt-1 pb-2">
           <h3 className="px-6 pt-4 pb-1 text-xs font-medium text-muted-foreground">

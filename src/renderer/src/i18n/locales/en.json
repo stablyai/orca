@@ -30667,6 +30667,7 @@
       "resendInvite": "Resend invite",
       "slackLine": "{{handle}} on Slack · {{workspace}}",
       "slackOnly": "Slack only",
+      "suggestions": "Suggestions",
       "title": "Share {{name}}",
       "warning": "Anyone you share with can do anything {{name}} can on {{host}}, including using your accounts, files and chats.",
       "you": "{{name}} (you)"

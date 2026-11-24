@@ -59,7 +59,13 @@ function PersonAvatar({
     <span className={cn('relative shrink-0', small ? 'size-7' : 'size-8')}>
       <BotOwnerAvatar iconClassName={small ? 'size-3.5' : 'size-4'} />
       {BadgeIcon ? (
-        <span className="absolute -right-0.5 -bottom-0.5 flex size-4 items-center justify-center rounded-full bg-dialog-surface p-[3px]">
+        <span
+          className={cn(
+            'absolute -right-0.5 -bottom-0.5 flex size-4 items-center justify-center rounded-full p-[3px]',
+            // Cut out of the surface it sits on: suggestions are on the popover, rows on the dialog.
+            small ? 'bg-popover' : 'bg-dialog-surface'
+          )}
+        >
           <BadgeIcon className="size-full text-muted-foreground" />
         </span>
       ) : null}
@@ -82,7 +88,7 @@ function useSubline(person: TeamSharePerson): string {
         workspace: person.workspace
       })
     case 'github':
-      return person.linkedAccounts
+      return (person.linkedAccounts ?? 0) > 1
         ? t('bots.teamShare.githubLinkedLine', 'GitHub · linked to {{count}} Orca accounts', {
             count: person.linkedAccounts
           })
