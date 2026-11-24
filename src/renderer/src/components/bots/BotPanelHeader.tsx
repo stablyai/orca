@@ -292,7 +292,7 @@ export function BotPanelHeader({
           </DropdownMenuContent>
         </DropdownMenu>
       </fieldset>
-      {sharing === 'people' ? (
+      {sharingOffered && sharing === 'people' ? (
         <BotTeamShareDialogHost bot={bot} onClose={() => setSharing(null)} />
       ) : null}
       {sharing === 'copy' ? <BotShareFlow bot={bot} onClose={() => setSharing(null)} /> : null}
