@@ -1,5 +1,7 @@
+import { CODEX_ACCOUNT_RESTART_RESUME_ERROR } from '../../../../shared/agent-accounts/codex/codex-account-restart-stop'
 import type { AgentProviderSessionMetadata } from '../../../../shared/agent-session/lifecycle/agent-session-resume'
 import type { CodexAccountSelectionTarget } from '../../../../shared/agent-accounts/codex/codex-selection-lane'
+import { isAmbiguousIdOnlyAccountResume } from './codex-session-resume-ambiguous-id'
 import {
   trustedCodexResumeHomes,
   type CodexSessionResumePreparation
@@ -74,6 +76,19 @@ export function createCodexSessionResumeLaunchPreparation(deps: {
       args.providerSession.transcriptPath,
       resolveOrcaManagedCodexHomePath()
     )
+    if (
+      await isAmbiguousIdOnlyAccountResume({
+        sessionId: args.providerSession.id,
+        transcriptPath: args.providerSession.transcriptPath,
+        trustedCodexHomes: trustedHomes,
+        getSelectedAccountCodexHome: () => selectedAccountCodexHome,
+        systemCodexHomePath: systemHomePath,
+        sharedRuntimeCodexHomePath: getOrcaManagedCodexHomePath()
+      })
+    ) {
+      // Without its transcript path the thread's account is ambiguous; never guess the credentials.
+      throw new Error(CODEX_ACCOUNT_RESTART_RESUME_ERROR)
+    }
     const preparation = await prepareCodexSessionResume({
       sessionId: args.providerSession.id,
       transcriptPath: args.providerSession.transcriptPath,
