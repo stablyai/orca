@@ -27,14 +27,16 @@ import { extractOrdinaryCodexSettings } from '../toml/config-toml-runtime-owned-
 import {
   applyCodexRegistrationPromotions,
   planCodexRegistrationPromotion,
-  readCodexRegistrationBaseline
+  readCodexRegistrationBaseline,
+  type CodexRegistrationBaseline
 } from './config-plugin-registration-promotion'
 import { hasCodexRegistrationEntries } from '../toml/config-toml-plugin-registration-tables'
 
 export type CodexSettingsBaselineSnapshotOptions = {
   conflicts?: ReadonlyMap<string, CodexSettingsConflict>
   /** False for bootstrap baselines, which cannot establish canonical registration ownership. */
-  mirroredRegistrations?: boolean
+  /** A string is the source config those registrations came from, when the managed copy differs. */
+  mirroredRegistrations?: boolean | string
   /** Names copied from the canonical source in this mirror pass. */
   mirroredMcpServers?: ReadonlySet<string>
   mirroredMcpServerRoot?: boolean
@@ -67,7 +69,11 @@ export function snapshotCodexRuntimeSettingsBaseline(
       settings,
       conflicts,
       registrations: options.mirroredRegistrations
-        ? readCodexRegistrationBaseline(runtimeConfig)
+        ? readCodexRegistrationBaseline(
+            typeof options.mirroredRegistrations === 'string'
+              ? options.mirroredRegistrations
+              : runtimeConfig
+          )
         : new Map(),
       mcpServers: options.mirroredMcpServers ?? new Set(),
       mcpServerRoot: options.mirroredMcpServerRoot ?? false
@@ -92,6 +98,8 @@ export type CodexSettingsPromotionPlan = {
   /** MCP names the previous mirror copied from the canonical source. */
   mirroredMcpServers: ReadonlySet<string>
   mirroredMcpServerRoot: boolean
+  /** Set when the source is a WSL distro's config: runtime plugin edits stay in the managed copy. */
+  heldRegistrationBaseline?: CodexRegistrationBaseline
 }
 
 function getHostPromotionHomes(): CodexSettingsPromotionHomes {
@@ -141,10 +149,6 @@ function promoteCodexRuntimeSettingsToSystemUnsafe(
     // Throw to stall the mirror rather than overwrite unreadable runtime changes.
     throw runtimeTomlObservation.error
   }
-  // A drvfs source (a distro home under /mnt/c) is the distro's own config too.
-  if (homes.systemConfigDir !== undefined || isWslSharePath(systemTomlPath)) {
-    return regenerateFromGuestPlan(observeCodexSettingsBaseline(runtimeHomePath))
-  }
   // Scalars need a baseline to distinguish stale copies from new Codex edits.
   const baselineObservation = observeCodexSettingsBaseline(runtimeHomePath)
   if (baselineObservation.kind === 'indeterminate') {
@@ -157,15 +161,34 @@ function promoteCodexRuntimeSettingsToSystemUnsafe(
   const updates = new Map<string, string>()
   const conflicts = new Map<string, CodexSettingsConflict>()
   const runtimeValuesToPreserve = new Map<string, string | null>()
+  const systemValues = baseline ? readPromotedSettingValues(systemTomlPath) : new Map()
   if (baseline) {
     collectPromotionChanges({
       baseline,
       runtimeValues: readPromotedSettingValues(runtimeTomlPath),
-      systemValues: readPromotedSettingValues(systemTomlPath),
+      systemValues,
       updates,
       conflicts,
       runtimeValuesToPreserve
     })
+  }
+  const holdInManagedCopy = (): CodexSettingsPromotionPlan => {
+    // Orca never writes a distro's config, so pending edits stay in the managed copy until the distro changes that key.
+    for (const [key, raw] of updates) {
+      conflicts.set(key, { runtime: raw, system: getComparableRaw(systemValues.get(key)) ?? null })
+      runtimeValuesToPreserve.set(key, raw)
+    }
+    return {
+      conflicts,
+      runtimeValuesToPreserve,
+      mirroredMcpServers,
+      mirroredMcpServerRoot,
+      heldRegistrationBaseline: baseline?.registrations ?? new Map()
+    }
+  }
+  // A drvfs source (a distro home under /mnt/c) is the distro's own config too.
+  if (homes.systemConfigDir !== undefined || isWslSharePath(systemTomlPath)) {
+    return holdInManagedCopy()
   }
   // Registrations can promote before the first mirror because untracked tables are additions.
   const nothingToWrite =
@@ -174,9 +197,9 @@ function promoteCodexRuntimeSettingsToSystemUnsafe(
     return { conflicts, runtimeValuesToPreserve, mirroredMcpServers, mirroredMcpServerRoot }
   }
   const writeTarget = resolvePromotionWriteTarget(systemTomlPath)
-  // A host ~/.codex can link into a distro; its config is never written and nothing is kept back.
+  // A host ~/.codex can link into a distro, whose config is never written.
   if (resolvesIntoWslShare(writeTarget.path)) {
-    return regenerateFromGuestPlan(baselineObservation)
+    return holdInManagedCopy()
   }
   if (nothingToWrite) {
     return { conflicts, runtimeValuesToPreserve, mirroredMcpServers, mirroredMcpServerRoot }
@@ -268,24 +291,6 @@ function getComparableRaw(value: TopLevelSettingValue | undefined): string | nul
     return null
   }
   return value.multiline ? undefined : value.raw
-}
-
-/**
- * Orca never writes a WSL distro's own config, so nothing in the managed copy is kept back:
- * the mirror regenerates it from the distro file plus the lines the managed home owns.
- */
-function regenerateFromGuestPlan(
-  baselineObservation: ReturnType<typeof observeCodexSettingsBaseline>
-): CodexSettingsPromotionPlan {
-  if (baselineObservation.kind === 'indeterminate') {
-    throw new Error('Codex settings baseline could not be read')
-  }
-  const baseline = baselineObservation.kind === 'present' ? baselineObservation.baseline : null
-  return {
-    ...emptyPromotionPlan(),
-    mirroredMcpServers: baseline?.mcpServers ?? new Set(),
-    mirroredMcpServerRoot: baseline?.mcpServerRoot ?? false
-  }
 }
 
 function emptyPromotionPlan(): CodexSettingsPromotionPlan {

@@ -134,8 +134,9 @@ function simulateCodexSettingWrite(key: string, rawValue: string): void {
 }
 
 describe('managed Codex config for a WSL distro config', () => {
-  it('replaces a tab change at the next regeneration and never writes the distro config', () => {
-    const original = 'model = "gpt-5"\n\n[mcp_servers.docs]\nurl = "https://docs.example"\n'
+  it('keeps pending model and plugin edits across rebuilds and never writes the distro config', () => {
+    const original =
+      'model = "gpt-5"\n\n[plugins."docs@market"]\nenabled = true\n\n[mcp_servers.docs]\nurl = "https://docs.example"\n'
     writeSystemConfig(original)
     wslTestState.wslPath = systemConfigPath()
     syncSystemConfigIntoManagedCodexHome()
@@ -143,18 +144,27 @@ describe('managed Codex config for a WSL distro config', () => {
     simulateCodexSettingWrite('model', '"o4"')
     writeFileSync(
       runtimeConfigPath(),
-      `${readRuntimeConfig()}\n[plugins."ponytail@ponytail"]\nenabled = true\n`,
+      `${readRuntimeConfig().replace('enabled = true', 'enabled = false')}\n[plugins."ponytail@ponytail"]\nenabled = true\n`,
       'utf-8'
     )
     wslTestState.daemonGuard = true
 
+    // An upgrade rebuild, then a restart.
+    syncSystemConfigIntoManagedCodexHome()
     syncSystemConfigIntoManagedCodexHome()
 
     expect(readFileSync(systemConfigPath(), 'utf-8')).toBe(original)
-    expect(readRuntimeConfig()).toContain('model = "gpt-5"')
+    expect(readRuntimeConfig()).toContain('model = "o4"')
+    expect(readRuntimeConfig()).toMatch(/\[plugins\."docs@market"\]\nenabled = false/)
+    expect(readRuntimeConfig()).toContain('[plugins."ponytail@ponytail"]\nenabled = true')
     expect(readRuntimeConfig()).toContain('[mcp_servers.docs]')
-    expect(readRuntimeConfig()).not.toContain('ponytail')
     expect(readRuntimeConfig()).toMatch(/^daemon_auto_start = false # orca:/m)
+
+    // A later edit in the distro's own config wins for that key.
+    writeSystemConfig(original.replace('"gpt-5"', '"o5"'))
+    syncSystemConfigIntoManagedCodexHome()
+    expect(readRuntimeConfig()).toContain('model = "o5"')
+    expect(readRuntimeConfig()).toContain('ponytail@ponytail')
   })
 
   it('leaves an unchanged managed copy untouched on regeneration', () => {
@@ -231,7 +241,7 @@ describe('managed Codex config for a WSL distro config', () => {
   )
 
   it.skipIf(process.platform === 'win32')(
-    'drops a held-back conflict for a ~/.codex linked into a distro',
+    'keeps a held-back conflict for a ~/.codex linked into a distro',
     () => {
       const guestCodexDir = join(tmpHome, 'guest-codex')
       mkdirSync(guestCodexDir, { recursive: true })
@@ -254,7 +264,7 @@ describe('managed Codex config for a WSL distro config', () => {
       expect(readFileSync(systemConfigPath(), 'utf-8')).toBe(
         'model = "o5"\napproval_policy = "never"\n'
       )
-      expect(readRuntimeConfig()).toContain('model = "o5"')
+      expect(readRuntimeConfig()).toContain('model = "o4"')
     }
   )
 })
