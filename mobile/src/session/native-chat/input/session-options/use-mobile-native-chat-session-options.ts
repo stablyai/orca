@@ -36,7 +36,10 @@ import {
 import { setBoundedScopeCacheEntry } from '../../../../../../src/shared/native-chat/input/composer/native-chat-scope-cache'
 import { nativeChatCommandOpensTerminal } from '../../../../../../src/shared/native-chat/input/commands/native-chat-agent-profiles'
 import { sayMobileNativeChatSessionOption } from './native-chat-session-option-copy'
-import { useMobileNativeChatAppliedSessionOptionSeed } from './use-mobile-native-chat-applied-session-option-seed'
+import {
+  forgetMobileNativeChatAppliedSessionOptionFill,
+  useMobileNativeChatAppliedSessionOptionSeed
+} from './use-mobile-native-chat-applied-session-option-seed'
 
 export type MobileNativeChatSessionOptionsController = {
   optionSurface?: SessionOptionsSurface
@@ -95,6 +98,7 @@ function startScopeOverForAgent(scopeKey: string, agent: string): void {
   if (cachedAgent !== undefined && cachedAgent !== agent) {
     writeNativeChatSessionOptionCache(scopeKey, createNativeChatSessionOptionRecord(agent))
     appliedReportByScope.delete(scopeKey)
+    forgetMobileNativeChatAppliedSessionOptionFill(`${scopeKey}\0${agent}`)
   }
 }
 

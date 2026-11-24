@@ -6,6 +6,11 @@ import { setBoundedScopeCacheEntry } from '../../../../../../src/shared/native-c
 // Kept across remounts: refilling the same launch values would bring back a value the chat cleared on purpose.
 const filledByChat = new Map<string, string>()
 
+/** A chat whose option record starts over takes its launch values again. */
+export function forgetMobileNativeChatAppliedSessionOptionFill(chatIdentity: string): void {
+  filledByChat.delete(chatIdentity)
+}
+
 export function useMobileNativeChatAppliedSessionOptionSeed(
   surface: NativeChatPtySessionOptionsSurface | null,
   chatIdentity: string | null,
