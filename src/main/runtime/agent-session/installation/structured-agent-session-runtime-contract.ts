@@ -1,3 +1,4 @@
+import type { ResolvedLaunchAccount } from '../../../../shared/agent-accounts/launch-account-ref'
 import type { ReadOnlySessionMode } from '../../../bots/bot-look-around-policy'
 import type { BotLaunchTools } from '../../../bots/bot-launch-tools'
 import type { StructuredAgentSessionHostDeps } from '../../../native-chat/agent-session-wire/host/structured-agent-session-host-types'
@@ -75,6 +76,11 @@ export type StructuredAgentSessionRuntimeDeps = StructuredAgentSessionTransportO
   readOnlySession?: (sessionId: string) => ReadOnlySessionMode | null
   /** See `StructuredAgentLaunchSources.prepareLaunch`. */
   prepareSessionLaunch?: (record: AgentSessionRecord, launchDirectory: string) => Promise<void>
+  /** The saved account a Claude chat launches under instead of the host's selection (a bot's own,
+   *  or a plugin's pick); null follows the selection. */
+  resolveClaudeRequestedAccount?: (
+    record: AgentSessionRecord
+  ) => Promise<ResolvedLaunchAccount | null>
   /** See `StructuredAgentLaunchSources.resolveToolServers`. */
   resolveSessionToolServers?: (
     record: AgentSessionRecord,

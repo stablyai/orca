@@ -1,9 +1,13 @@
 import * as z from 'zod'
+import { AgentAccountRefSchema } from '../agent-accounts/launch-account-ref'
 import { readAgentSessionExecutionOptions } from '../agent-session/options/protocol/agent-session-execution-options'
 import { OptionKey } from '../rpc-contract/agent-launch/agent-launch-settings-params'
 import { parseStructuredLaunchSeedOptions } from '../native-chat/input/session-options/native-chat-session-option-defaults'
 import { AGENT_CHAT_PERMISSION_MODE_OPTION_ID } from '../agent-launch/permissions/agent-chat-permission-mode'
 import { encodeStructuredAgentSessionOptionValue } from '../agent-session/options/selection/structured-agent-session-option-codec'
+
+/** `bots.update` account: an empty string clears it, so the bot's chats follow the host selection again. */
+export const BotAccountPatchSchema = AgentAccountRefSchema.or(z.literal(''))
 
 const ChoiceValue = z
   .string()
