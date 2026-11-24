@@ -66,7 +66,7 @@ describe('main-push lint plan', { timeout: GIT_TEST_TIMEOUT_MS }, () => {
     expect([run.planExit, run.lintExit]).toEqual([0, 1])
     expect(run.log).toContain('::error file=newer.ts,line=1,col=1,title=eslint(no-debugger)::')
     expect(run.log).toContain(
-      `newer.ts: not changed in this push; linted because 1 lint policy change(s) cover it; 1 shown: .oxlintrc.json changed [1 changed input(s)] (.oxlintrc.json changed by commit ${pushed.after.slice(0, 10)} by @cfg (no merged PR into main))`
+      `newer.ts: not changed in this push; linted because 1 lint policy change(s) cover it; 1 shown: .oxlintrc.json changed [1 changed input(s)] (.oxlintrc.json: ${pushed.after.slice(0, 10)} (no merged PR))`
     )
     expect(run.summary).toContain('Lint policy changed, so the whole scope it governs is linted')
   })

@@ -263,14 +263,12 @@ describe('main-push lint policy', { timeout: GIT_TEST_TIMEOUT_MS }, () => {
       .find((text) => text.startsWith('mobile/x.ts: not changed in this push'))
     expect(line).toContain('linted because 3 lint policy change(s) cover it; 3 shown: ')
     expect(line).toContain(
-      'mobile/.oxlintrc.json changed [1 changed input(s)] (mobile/.oxlintrc.json changed by'
+      'mobile/.oxlintrc.json changed [1 changed input(s)] (mobile/.oxlintrc.json: '
     )
     expect(line).toContain(
-      'mobile/.oxlintrc.json extends .oxlintrc.json, extra.json, which changed [2 changed input(s)] (.oxlintrc.json changed by'
+      'mobile/.oxlintrc.json extends .oxlintrc.json, extra.json, which changed [2 changed input(s)] (.oxlintrc.json: '
     )
-    expect(line).toContain(
-      '; .oxlintrc.json changed [1 changed input(s)] (.oxlintrc.json changed by'
-    )
+    expect(line).toContain('; .oxlintrc.json changed [1 changed input(s)] (.oxlintrc.json: ')
   })
 
   // POSIX allows a backslash in a name; oxlint 1.94 reports it as a slash.
@@ -290,7 +288,7 @@ describe('main-push lint policy', { timeout: GIT_TEST_TIMEOUT_MS }, () => {
         )
         expect(run.lintExit).toBe(1)
         expect(run.log).toContain(
-          '::error title=eslint(no-debugger)::`debugger` statement is not allowed (oxlint reported a/b.ts, which could be any of: a/b.ts, a\\b.ts)'
+          '::error title=eslint(no-debugger)::[path uncertain: a/b.ts or a\\b.ts] oxlint reported a/b.ts: `debugger` statement is not allowed'
         )
         expect(run.log).not.toContain('::error file=')
         expect(run.log).toMatch(
@@ -555,7 +553,7 @@ describe('main-push lint policy', { timeout: GIT_TEST_TIMEOUT_MS }, () => {
       expect(run.lintExit).toBe(1)
       const lines = run.log
         .split('\n')
-        .filter((line) => line.startsWith('a/b.ts:1:1 (path uncertain: a/b.ts or a\\\\b.ts)'))
+        .filter((line) => line.startsWith('[path uncertain: a/b.ts or a\\\\b.ts] a/b.ts:1:1'))
       expect(lines).toHaveLength(2)
     }
   )

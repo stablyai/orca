@@ -46,14 +46,19 @@ export function describeLocation(diagnostic) {
     return '(no file)'
   }
   const where = `${diagnostic.file}:${diagnostic.line}:${diagnostic.col}`
-  // oxlint printed a name that more than one tracked file could have produced.
+  // The notice comes first, so a long path or message cut later never takes it with it.
+  const notice = pathNotice(diagnostic)
+  return notice ? `${notice} ${where}` : where
+}
+
+// Why a printed path may not name the tracked file: oxlint printed a name that more than one tracked file could
+// have produced, or the tracked files could not be read to check it.
+export function pathNotice(diagnostic) {
   if (diagnostic.ambiguous) {
-    return `${where} (path uncertain: ${diagnostic.ambiguous.join(' or ')})`
+    const candidates = diagnostic.ambiguous.join(' or ')
+    return `[path uncertain: ${candidates.length > 300 ? `${candidates.slice(0, 299)}…` : candidates}]`
   }
-  // Without the tracked-path index, the printed path is not checked against tracked files.
-  return diagnostic.unverified
-    ? `${where} (path unverified: tracked files could not be read)`
-    : where
+  return diagnostic.unverified ? '[path unverified: tracked files could not be read]' : ''
 }
 
 // The runner reads a line that starts with `::` or contains `##[` as a workflow command, so a path

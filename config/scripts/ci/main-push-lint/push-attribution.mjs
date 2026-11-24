@@ -176,6 +176,38 @@ function describeCommit({ sha, author, pull }, ref) {
   }
 }
 
+// At most this many characters, commit first, for a policy input in a tight explanation.
+export const MAX_COMPACT_CHARS = 70
+const PR_NOTE = {
+  ambiguous: ' (several PRs)',
+  none: ' (no merged PR)',
+  partial: ' (PR lookup incomplete)'
+}
+
+// A short form for a policy input that never loses its first commit's SHA: "c60247760f #7", "+2 more commit(s)",
+// or why the lookup failed.
+export function compactAttribution(entry) {
+  if (!entry || entry.status === 'unavailable') {
+    const reason = entry?.reason ?? 'not looked up'
+    return `lookup unavailable: ${reason.length > 50 ? `${reason.slice(0, 49)}…` : reason}`
+  }
+  if (entry.commits.length === 0) {
+    return 'no commit in this push changed it'
+  }
+  const [{ sha, pull }] = entry.commits
+  const pr =
+    pull.status === 'merged'
+      ? ` #${pull.number}`
+      : (PR_NOTE[pull.status] ?? ' (PR lookup unavailable)')
+  const more =
+    entry.commits.length > 1
+      ? `, +${entry.commits.length - 1}${entry.partial ? ' or more' : ''} more commit(s)`
+      : entry.partial
+        ? ', possibly more commits'
+        : ''
+  return `${sha.slice(0, 10)}${pr}${more}`.slice(0, MAX_COMPACT_CHARS)
+}
+
 // Plain text; callers escape it for Markdown or the log.
 export function describeAttribution(entry, ref) {
   if (!entry || entry.status === 'unavailable') {

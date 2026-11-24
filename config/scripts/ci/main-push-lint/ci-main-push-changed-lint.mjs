@@ -13,6 +13,7 @@ import {
   logLine,
   countCaveat,
   incompleteHeading,
+  pathNotice,
   logText,
   truncate,
   MAX_LOG_LINE_CHARS,
@@ -21,7 +22,13 @@ import {
 } from './main-push-report.mjs'
 import { createBatchCollector, runOxlint } from './oxlint-batches.mjs'
 import { computePlan, rangeText, reportPlanFailure } from './plan-main-push-lint.mjs'
-import { attributeFiles, createGithubApi, describeAttribution } from './push-attribution.mjs'
+import {
+  attributeFiles,
+  compactAttribution,
+  createGithubApi,
+  describeAttribution,
+  MAX_COMPACT_CHARS
+} from './push-attribution.mjs'
 
 // GitHub shows at most 10 error annotations per step; the log carries the rest.
 const MAX_ANNOTATIONS = 20
@@ -35,10 +42,10 @@ const MAX_ANNOTATION_CHARS = 2_000
 const MAX_ANNOTATION_PATH_CHARS = 500
 // A summary cell keeps 500 characters and a log line 1,000; explanations stay under both.
 const SUMMARY_CAUSE_BUDGET = 440
-const LOG_CAUSE_BUDGET = 800
-const MAX_WHY_CHARS = 120
-const MAX_COMMIT_CHARS = 150
-const MAX_PATH_CHARS = 100
+const MAX_WHY_CHARS = 90
+const MAX_PATH_CHARS = 70
+// A failing file's name is clipped on its policy line, so the counts after it always reach the log.
+const MAX_LOG_FILE_CHARS = 200
 
 export function createReporter(env) {
   let logBytes = 0
@@ -107,12 +114,11 @@ export function reportDiagnostics(diagnostics, errorCount, reporter) {
       diagnostic.file.length <= MAX_ANNOTATION_PATH_CHARS
         ? `file=${escapeAnnotationProperty(diagnostic.file)},line=${diagnostic.line},col=${diagnostic.col},`
         : ''
-    const which = diagnostic.ambiguous
-      ? ` (oxlint reported ${diagnostic.file}, which could be any of: ${diagnostic.ambiguous.join(', ')})`
-      : diagnostic.unverified
-        ? ` (oxlint reported ${diagnostic.file}; tracked files could not be read to verify it)`
-        : ''
-    reporter.error(diagnostic.rule, `${diagnostic.message}${which}`, location)
+    // An annotation without a location names the printed path after its notice, before the message, so cutting
+    // a long message keeps both.
+    const notice = pathNotice(diagnostic)
+    const printed = notice ? `${notice} oxlint reported ${clip(diagnostic.file, 300)}: ` : ''
+    reporter.error(diagnostic.rule, `${printed}${diagnostic.message}`, location)
   }
   return Math.min(diagnostics.length, MAX_LOG_DIAGNOSTICS)
 }
@@ -178,33 +184,46 @@ export function resolveReportedPaths(diagnostics, index) {
   }
 }
 
-// Why an untouched file was linted, within `budget` characters. Every count comes first (policy changes, how
-// many have unreadable inputs, how many are shown), so a later cut can only drop detail. Each shown change gives
-// its cut cause, how many changed inputs it has, and the commits behind the first; the first change always fits.
-export function explainPolicies(policies, describe, noun, budget = SUMMARY_CAUSE_BUDGET) {
+// At most `max` characters, exactly, with a mark where it was cut.
+function clip(text, max) {
+  return text.length > max ? `${text.slice(0, max - 1)}…` : text
+}
+
+// Why an untouched file was linted, within `budget` characters, and which policy changes that text shows. Every
+// count comes first (policy changes, how many have unreadable inputs, how many are shown). Each shown change gives
+// its clipped cause, its input count, and its first input with a compact, commit-first attribution. The clips are
+// exact, so the first change, its SHA included, always fits whole.
+export function planExplanation(policies, compact, noun, budget = SUMMARY_CAUSE_BUDGET) {
   const unreadable = policies.filter((policy) => policy.unreadable?.length > 0).length
   const entry = (policy) => {
     const [first] = policy.paths
     const inputs = `${policy.paths.length} changed input(s)${policy.unreadable?.length > 0 ? ', some unreadable' : ''}`
     const source = first
-      ? `${truncate(first, MAX_PATH_CHARS)} changed by ${truncate(describe(first), MAX_COMMIT_CHARS)}`
+      ? `${clip(first, MAX_PATH_CHARS)}: ${compact(first)}`
       : `no changed input in ${noun} can be named: its inputs cannot be read`
-    return `${truncate(policy.why, MAX_WHY_CHARS)} [${inputs}] (${source})`
+    return `${clip(policy.why, MAX_WHY_CHARS)} [${inputs}] (${source})`
   }
   const counts = (shown) =>
     `${policies.length} lint policy change(s) cover it` +
     `${unreadable > 0 ? `, ${unreadable} with unreadable inputs` : ''}; ${shown} shown: `
-  const entries = []
+  const shown = []
+  let used = counts(policies.length).length
   for (const policy of policies) {
-    const used =
-      counts(policies.length).length + entries.reduce((total, text) => total + text.length + 2, 0)
     const text = entry(policy)
-    if (entries.length > 0 && used + text.length > budget) {
+    if (shown.length > 0 && used + text.length + 2 > budget) {
       break
     }
-    entries.push(entries.length === 0 ? truncate(text, Math.max(budget - used, 80)) : text)
+    shown.push({ policy, text })
+    used += text.length + 2
   }
-  return `${counts(entries.length)}${entries.join('; ')}`
+  return {
+    text: `${counts(shown.length)}${shown.map((item) => item.text).join('; ')}`,
+    shown: shown.map((item) => item.policy)
+  }
+}
+
+export function explainPolicies(policies, compact, noun, budget = SUMMARY_CAUSE_BUDGET) {
+  return planExplanation(policies, compact, noun, budget).text
 }
 
 async function reportAttribution({ diagnostics, plan, env, reporter, api }) {
@@ -238,12 +257,18 @@ async function reportAttribution({ diagnostics, plan, env, reporter, api }) {
       .filter((file) => !touched.has(file))
       .map((file) => [file, governingPolicies(file, plan.policies)])
   )
-  const lookups = [
-    ...new Set([
-      ...failing.filter((file) => touched.has(file)),
-      ...[...policiesFor.values()].flat().flatMap((policy) => policy.paths)
-    ])
-  ]
+  const prefix = (file) =>
+    `${clip(file, MAX_LOG_FILE_CHARS)}: not changed in ${noun}; linted because `
+  const logBudget = (file) => MAX_LOG_LINE_CHARS - prefix(file).length
+  // Only inputs the report can show are looked up: each explanation is planned first with the longest compact
+  // attribution, so the real one shows at least those changes, and only their first inputs.
+  const longest = () => 'x'.repeat(MAX_COMPACT_CHARS)
+  const displayable = [...policiesFor].flatMap(([file, policies]) =>
+    planExplanation(policies, longest, noun, logBudget(file))
+      .shown.map((policy) => policy.paths[0])
+      .filter(Boolean)
+  )
+  const lookups = [...new Set([...failing.filter((file) => touched.has(file)), ...displayable])]
   const attributions = env.GITHUB_REPOSITORY
     ? await attributeFiles(lookups, {
         base: plan.base,
@@ -254,9 +279,10 @@ async function reportAttribution({ diagnostics, plan, env, reporter, api }) {
       })
     : new Map()
   const describe = (file) => describeAttribution(attributions.get(file), ref)
+  const compact = (file) => compactAttribution(attributions.get(file))
   // The summary cell and the log line each get an explanation sized for them.
   const becauseOf = (file, budget) =>
-    `not changed in ${noun}; linted because ${explainPolicies(policiesFor.get(file), describe, noun, budget)}`
+    `not changed in ${noun}; linted because ${explainPolicies(policiesFor.get(file), compact, noun, budget)}`
   const unattributed = (description) => ({
     description,
     logDescription: description,
@@ -269,7 +295,7 @@ async function reportAttribution({ diagnostics, plan, env, reporter, api }) {
         : {
             file,
             description: becauseOf(file, SUMMARY_CAUSE_BUDGET),
-            logDescription: becauseOf(file, LOG_CAUSE_BUDGET),
+            logDescription: becauseOf(file, logBudget(file)),
             policyRow: true
           }
     ),
@@ -291,7 +317,7 @@ async function reportAttribution({ diagnostics, plan, env, reporter, api }) {
     const line =
       touched.has(file) && !unclear && !policyRow
         ? `${file}: changed in ${noun} by ${logDescription}`
-        : `${file}: ${logDescription}`
+        : `${policyRow ? clip(file, MAX_LOG_FILE_CHARS) : file}: ${logDescription}`
     if (reporter.log(line)) {
       logged += 1
     }
