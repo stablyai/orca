@@ -5,7 +5,7 @@ import { translate } from '@/i18n/i18n'
 import type { Repo } from '../../../../../../shared/repository/repo-types'
 import { getRepoExecutionHostId } from '../../../../../../shared/execution-host/execution-host'
 
-export type ProjectRenameDialogState = { repo: Repo }
+export type ProjectRenameDialogState = { repos: readonly Repo[] }
 
 export function useProjectRenameDialog() {
   const updateRepo = useAppStore((s) => s.updateRepo)
@@ -13,8 +13,8 @@ export function useProjectRenameDialog() {
     null
   )
 
-  const handleRenameProject = useCallback((repo: Repo) => {
-    setProjectRenameDialog({ repo })
+  const handleRenameProject = useCallback((repo: Repo, hostRepos?: ReadonlyMap<string, Repo>) => {
+    setProjectRenameDialog({ repos: hostRepos?.size ? [...hostRepos.values()] : [repo] })
   }, [])
 
   const handleSubmitProjectRename = useCallback(
@@ -22,13 +22,12 @@ export function useProjectRenameDialog() {
       if (!projectRenameDialog) {
         return
       }
-      const { repo } = projectRenameDialog
-      const renamed = await updateRepo(
-        repo.id,
-        { displayName: name },
-        { hostId: getRepoExecutionHostId(repo) }
+      const renamed = await Promise.all(
+        projectRenameDialog.repos.map((repo) =>
+          updateRepo(repo.id, { displayName: name }, { hostId: getRepoExecutionHostId(repo) })
+        )
       )
-      if (!renamed) {
+      if (renamed.some((success) => !success)) {
         toast.error(
           translate(
             'auto.components.sidebar.WorktreeList.projectRenameFailed',
@@ -42,6 +41,7 @@ export function useProjectRenameDialog() {
             )
           }
         )
+        throw new Error('Failed to rename project')
       }
     },
     [projectRenameDialog, updateRepo]

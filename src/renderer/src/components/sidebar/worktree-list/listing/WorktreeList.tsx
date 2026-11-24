@@ -33,7 +33,6 @@ import { EMPTY_PROJECT_GROUPS } from '../viewport/viewport-props'
 import { NOOP_WORKSPACE_BOARD_DRAG_PREVIEW_CALLBACK } from '../drag/drop-commit-context'
 import { useAgentSendTargetWorktreeId } from './use-agent-send-target'
 import { useProjectGroupDialogs } from '../rows/use-project-group-dialogs'
-import { useProjectRenameDialog } from '../rows/use-project-rename-dialog'
 import { useSidebarRevealRequests } from '../navigation/use-reveal-requests'
 import { useSidebarWorktreeFilters } from './use-filters'
 import { useSidebarWorktreeSelection } from '../navigation/use-selection'
@@ -206,7 +205,6 @@ const WorktreeList = React.memo(function WorktreeList({
     sortBy
   })
   const projectGroupDialogs = useProjectGroupDialogs({ repos, repoMap, projectGroups })
-  const projectRenameDialog = useProjectRenameDialog()
 
   const handleImmediateWorktreeActivate = useCallback((worktreeId: string, rowKey?: string) => {
     // Update the active row directly on pointer input to avoid virtualized rerender latency; store state reconciles afterward.
@@ -305,7 +303,6 @@ const WorktreeList = React.memo(function WorktreeList({
         : null}
       <SidebarWorktreeListDialogs
         dialogs={projectGroupDialogs}
-        projectRenameDialog={projectRenameDialog}
         repos={repos}
         settings={settings}
         suppressExternalWorktreeInboxRepoId={
@@ -343,7 +340,7 @@ const WorktreeList = React.memo(function WorktreeList({
         collapsedGroups={effectiveCollapsedGroups}
         handleCreateForRepo={openHeaderCreateComposer}
         handleOpenRepoSettings={handleOpenRepoSettings}
-        handleRenameProject={projectRenameDialog.handleRenameProject}
+        handleRenameProject={projectGroupDialogs.projectRenameDialog.handleRenameProject}
         handleOpenWorktreeVisibility={handleOpenWorktreeVisibility}
         handleShowImportedWorktrees={externalWorktreeCards.handleShowImportedWorktrees}
         handleKeepImportedWorktreesHidden={externalWorktreeCards.handleKeepImportedWorktreesHidden}

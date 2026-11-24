@@ -76,7 +76,7 @@ function getWorktreeVisibilityMenuLabel(
 export type RepoHeaderProjectActions = {
   getWorktreeVisibilityDefaults: (repo: Repo) => WorktreeVisibilityDefaults | undefined
   onOpenRepoSettings: (projectId: string, sectionId?: string) => void
-  onRenameProject: (repo: Repo) => void
+  onRenameProject: (repo: Repo, hostRepos?: ReadonlyMap<string, Repo>) => void
   onOpenWorktreeVisibility: (repo: Repo) => void
   onCreateGroupFromRepo: (repo: Repo) => void
   onMoveProjectToGroup: (repo: Repo, groupId: string) => void
@@ -148,7 +148,7 @@ export const RepoHeaderProjectActionsMenu = React.memo(function RepoHeaderProjec
           <SlidersHorizontal className="size-3.5" />
           {t('auto.components.sidebar.WorktreeList.2cdffbc728', 'Project Settings')}
         </DropdownMenuItem>
-        <DropdownMenuItem onSelect={() => actions.onRenameProject(repo)}>
+        <DropdownMenuItem onSelect={() => actions.onRenameProject(repo, hostRepos)}>
           <Pencil className="size-3.5" />
           {t('auto.components.sidebar.WorktreeList.projectRenameAction', 'Rename Project')}
         </DropdownMenuItem>

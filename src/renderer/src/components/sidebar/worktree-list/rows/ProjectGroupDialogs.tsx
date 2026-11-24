@@ -8,11 +8,9 @@ import { ProjectGroupDeleteDialog } from './ProjectGroupDeleteDialog'
 import SuppressExternalWorktreeInboxDialog from '../listing/SuppressExternalWorktreeInboxDialog'
 import type { NewExternalWorktreesInboxActionState } from '../listing/new-external-worktrees-inbox-actions'
 import type { ProjectGroupDialogs } from './use-project-group-dialogs'
-import type { useProjectRenameDialog } from './use-project-rename-dialog'
 
 export function SidebarWorktreeListDialogs({
   dialogs,
-  projectRenameDialog,
   repos,
   settings,
   suppressExternalWorktreeInboxRepoId,
@@ -22,7 +20,6 @@ export function SidebarWorktreeListDialogs({
   onOpenWorktreeVisibility
 }: {
   dialogs: ProjectGroupDialogs
-  projectRenameDialog: ReturnType<typeof useProjectRenameDialog>
   repos: readonly Repo[]
   settings: AppState['settings']
   suppressExternalWorktreeInboxRepoId: string | null
@@ -32,7 +29,7 @@ export function SidebarWorktreeListDialogs({
   onOpenWorktreeVisibility: (repo: Repo) => void
 }): React.JSX.Element {
   const t = useTranslate()
-  const { nameDialog, setNameDialog, deleteDialog, setDeleteDialog } = dialogs
+  const { projectRenameDialog, nameDialog, setNameDialog, deleteDialog, setDeleteDialog } = dialogs
   return (
     <>
       <SidebarNameDialog
@@ -84,7 +81,7 @@ export function SidebarWorktreeListDialogs({
           'Update the project name shown in the sidebar.'
         )}
         label={t('auto.components.sidebar.ProjectRenameDialog.label', 'Project name')}
-        initialName={projectRenameDialog.projectRenameDialog?.repo.displayName ?? ''}
+        initialName={projectRenameDialog.projectRenameDialog?.repos[0]?.displayName ?? ''}
         confirmLabel={t('auto.components.sidebar.ProjectGroupNameDialog.rename', 'Rename')}
         onOpenChange={(open) => {
           if (!open) {

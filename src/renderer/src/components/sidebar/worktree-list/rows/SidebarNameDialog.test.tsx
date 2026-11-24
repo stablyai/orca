@@ -1,5 +1,5 @@
 // @vitest-environment happy-dom
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { SidebarNameDialog } from './SidebarNameDialog'
 
@@ -32,8 +32,10 @@ describe('SidebarNameDialog', () => {
 
     rerender(<SidebarNameDialog {...props} open={false} />)
     rerender(<SidebarNameDialog {...props} open initialName="Third" />)
-    resolveSave()
+    await act(async () => {
+      resolveSave()
+    })
 
-    await waitFor(() => expect(onOpenChange).not.toHaveBeenCalledWith(false))
+    expect(onOpenChange).not.toHaveBeenCalledWith(false)
   })
 })

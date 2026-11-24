@@ -12,6 +12,7 @@ import {
   type ExecutionHostId
 } from '../../../../../../shared/execution-host/execution-host'
 import { refreshFolderProjectGroup } from './project-group-folder-refresh'
+import { useProjectRenameDialog } from './use-project-rename-dialog'
 import {
   selectDetectedWorktreesByRepo,
   selectWorktreesByRepo
@@ -90,6 +91,7 @@ export function useProjectGroupDialogs(args: {
     (s) => s.deleteProjectGroupWithContainedProjects
   )
   const refreshingGroupIds = useRef(new Set<string>())
+  const projectRenameDialog = useProjectRenameDialog()
   const [nameDialog, setNameDialog] = useState<ProjectGroupNameDialogState | null>(null)
   const [deleteDialog, setDeleteDialog] = useState<ProjectGroupDeleteDialogState | null>(null)
 
@@ -265,6 +267,7 @@ export function useProjectGroupDialogs(args: {
   ])
 
   return {
+    projectRenameDialog,
     nameDialog,
     setNameDialog,
     deleteDialog,

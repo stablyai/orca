@@ -81,7 +81,7 @@ export function SidebarNameDialog({
   const handleSubmit = useCallback(
     async (event?: React.FormEvent<HTMLFormElement>) => {
       event?.preventDefault()
-      if (!trimmedName || submitting) {
+      if (!open || !trimmedName || submitting) {
         return
       }
       const session = sessionRef.current
@@ -98,7 +98,7 @@ export function SidebarNameDialog({
         }
       }
     },
-    [handleOpenChange, onSubmit, submitting, trimmedName]
+    [handleOpenChange, onSubmit, open, submitting, trimmedName]
   )
 
   return (
