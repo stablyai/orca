@@ -10,10 +10,7 @@ import type {
 } from '../../native-chat/agent-session-wire/providers/structured-agent-session-adapter'
 import * as controlActions from './turns/claude-structured-control-actions'
 import { claudeHeldSends, claudeHoldsDispatch } from './turns/claude-command-lifecycle'
-import {
-  releaseClaudeAcquisition,
-  type ClaudeReleaseRequest
-} from './lifecycle/claude-structured-acquisition-release'
+import * as acquisitionRelease from './lifecycle/claude-structured-acquisition-release'
 import { acquireClaudeSession } from './lifecycle/claude-structured-session-acquisition'
 import { supportsClaudeStructuredLocation } from './launch/claude-structured-location-support'
 import * as claudeOptions from './launch/claude-structured-options'
@@ -49,6 +46,7 @@ import { claudeForkForRewind } from '../transcripts/claude-rewind-fork'
 import { copyClaudeConversation } from '../transcripts/claude-conversation-copy'
 import { ClaudeConversationNaming } from '../conversation-naming/claude-conversation-naming'
 import { syncClaudePromptSuggestionPause } from './claude-prompt-suggestion-pause'
+import * as keptPermission from '../relay/claude-kept-permission'
 
 export class ClaudeStructuredSessionAdapter implements StructuredAgentSessionAdapter {
   private readonly sessions = new Map<string, ClaudeSession>()
@@ -212,6 +210,8 @@ export class ClaudeStructuredSessionAdapter implements StructuredAgentSessionAda
   readonly atRestCommands: ClaudeStructuredSessionAdapterDeps['atRestCommands']
   holdsDispatch = (sessionId: string): boolean => claudeHoldsDispatch(this.sessions.get(sessionId))
   requiresModelTransitionRestart = claudeOptions.claudeModelTransitionRestart(this.sessions)
+  permissionModeRequiresAcquisition = keptPermission.requiresAcquisition(this.sessions)
+  applyPermissionMode = keptPermission.applyLive(this.sessions, () => this.deps.requestTimeoutMs)
   liveTurnId = (sessionId: string): string | null | undefined =>
     this.sessions.get(sessionId)?.translator?.currentTurnId
   heldSends = (sessionId: string): ReadonlySet<string> | undefined => {
@@ -250,7 +250,7 @@ export class ClaudeStructuredSessionAdapter implements StructuredAgentSessionAda
     claudeOptions.noteClaudeModelPick(this.sessions, input, this.emit.bind(this))
   readOptions = (input: { sessionId: string; fence: number }) =>
     readClaudeStructuredSessionOptions(this.session(input.sessionId))
-  releaseAcquisition = (input: ClaudeReleaseRequest): Promise<boolean> => {
+  releaseAcquisition = (input: acquisitionRelease.ClaudeReleaseRequest): Promise<boolean> => {
     this.endings.retire(input.sessionId)
     return this.afterClose(input.sessionId, () => this.releaseProviderSession(input))
   }
@@ -279,8 +279,10 @@ export class ClaudeStructuredSessionAdapter implements StructuredAgentSessionAda
     }
   }
 
-  private releaseProviderSession = (request: ClaudeReleaseRequest): Promise<boolean> =>
-    releaseClaudeAcquisition({
+  private releaseProviderSession = (
+    request: acquisitionRelease.ClaudeReleaseRequest
+  ): Promise<boolean> =>
+    acquisitionRelease.releaseClaudeAcquisition({
       ...request,
       sessions: this.sessions,
       acquisitions: this.acquisitions,

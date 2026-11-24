@@ -60,6 +60,14 @@ export function noteKeptClaudeAgentReplaced(session: {
   session.events?.publish()
 }
 
+/** Chats whose kept agent this app read to its end, so the journal already holds its transcript. */
+const readToEnd = new Set<string>()
+
+/** True once after a chat's kept agent ended here: the next start has nothing to catch up on. */
+export function takeKeptClaudeAgentReadToEnd(chatKey: string): boolean {
+  return readToEnd.delete(chatKey)
+}
+
 function isKeptConnection(
   connection: ClaudeStreamJsonConnection
 ): connection is ClaudeKeptAgentConnection {
@@ -229,6 +237,7 @@ export async function openKeptClaudeAgentConnection(
     readingBarrier?.resolve()
     readingBarrier = null
     responder.dispose()
+    readToEnd.add(chatKey)
     terminalError = withLostProviderOutcome(
       claudeStreamJsonExitError(managed.stderrTail(), managed.exitStatus),
       child

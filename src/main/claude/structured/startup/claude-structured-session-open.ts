@@ -9,7 +9,10 @@ import { readClaudeStructuredSessionSettings } from '../launch/claude-structured
 import { openClaudeSession, readClaudeStartupFacts } from './claude-structured-session-startup'
 import { catchUpClaudeTranscript } from '../../transcripts/claude-transcript-catch-up'
 import { readyClaudePromptSuggestionPause } from '../claude-prompt-suggestion-pause'
-import { keptClaudeAgentRelay } from '../../relay/claude-kept-agent-connection'
+import {
+  keptClaudeAgentRelay,
+  takeKeptClaudeAgentReadToEnd
+} from '../../relay/claude-kept-agent-connection'
 import { restateKeptClaudeBackgroundTasks } from '../../relay/claude-kept-background-tasks'
 import { keptClaudeToolCalls, keptClaudeTurn } from '../../relay/claude-kept-turn'
 import type {
@@ -121,7 +124,17 @@ async function openStartingClaudeSession(
     restateKeptClaudeBackgroundTasks(session, kept.taskIds, keptTurn !== null)
     input.publishChildWork?.(request.sessionId, session)
   }
-  if (!kept && resumesTranscript && (leafUuid || origin?.kind === 'native_copy') && events) {
+  // After a kept agent ended here its whole output is already saved; catching up would race the
+  // new agent's first report (a task the old one left) and skip the import.
+  const readToEnd = !kept && takeKeptClaudeAgentReadToEnd(request.sessionId)
+  history.covered ||= readToEnd
+  if (
+    !kept &&
+    !readToEnd &&
+    resumesTranscript &&
+    (leafUuid || origin?.kind === 'native_copy') &&
+    events
+  ) {
     const catchUp = withStructuredHistoryInvocation(
       session,
       request.signal,

@@ -16,6 +16,11 @@ const CLAUDE_PERMISSION_MODES = {
   auto: 'auto'
 } as const satisfies Record<Exclude<AgentChatPermissionMode, 'full-access'>, PermissionMode>
 
+/** Claude's own mode for a chat's pick; Full access is bypass, which only a flagged launch allows. */
+export function claudePermissionModeFor(mode: AgentChatPermissionMode): PermissionMode {
+  return mode === 'full-access' ? 'bypassPermissions' : CLAUDE_PERMISSION_MODES[mode]
+}
+
 /** Full access is the owned CLI flag: the SDK's typed bypass emits a flag older binaries reject. */
 export function claudeStructuredPermissionOptions(
   mode: AgentChatPermissionChoice
