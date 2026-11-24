@@ -4,7 +4,7 @@ import {
   type ProviderRelayLaunch,
   type RelayedProviderProcess
 } from '../../provider-relay/app-provider-relays'
-import { acpRelayWorkMarkers } from './acp-relay-work-markers'
+import { acpRelayWorkMarkers, acpSpecRelays } from './acp-relay-work-markers'
 import type { RelayedProviderChild } from '../../provider-relay/relayed-provider-child'
 import { isJsonRpcAnswerAbove, jsonRpcResultOf } from '../../provider-relay/relayed-json-rpc-lines'
 import type { ProviderProcessLaunch } from '../../provider-process/provider-process-launch'
@@ -151,10 +151,8 @@ export async function launchRelayedAcpAgent(
   processLaunch: ProviderProcessLaunch
 ): Promise<RelayedProviderProcess | null> {
   const { spec } = input.deps
-  // These launch as today: a private temp folder is the launch's own and goes at its exit;
-  // Gemini's sign-in link is read from stderr as it arrives, which a relay only sends at exit;
-  // a bot's tool grants live only in this app, so a kept bot would lose its tools.
-  if (spec.privateTempDirectory || spec.signIn || launch.appBoundGrants) {
+  // A bot's tool grants live only in this app, so a kept bot would lose its tools.
+  if (!acpSpecRelays(spec) || launch.appBoundGrants) {
     return null
   }
   const refuse = async (refused: unknown): Promise<never> => {

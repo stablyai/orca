@@ -1,12 +1,29 @@
 import type { ProviderRelayWorkMarker } from '../../daemon/protocol/daemon-provider-relay-protocol'
+import type { AcpLaunchSpec } from '../launch/acp-launch-contract'
 import {
   registerReattachableProviderRelayAgent,
   type ProviderRelayWorkMarkers
 } from '../../provider-relay/app-provider-relays'
 
-/** Recorded with each ACP relay; this build reattaches it. */
-const ACP_RELAY_AGENT = 'acp-agent'
-registerReattachableProviderRelayAgent(ACP_RELAY_AGENT)
+/**
+ * These launch as today: a private temp folder is the launch's own and goes at its exit; a sign-in
+ * link (Gemini's) is read from stderr as it arrives, which a relay only sends at exit.
+ */
+export function acpSpecRelays(
+  spec: Pick<AcpLaunchSpec, 'privateTempDirectory' | 'signIn'>
+): boolean {
+  return !spec.privateTempDirectory && !spec.signIn
+}
+
+/** Recorded with each ACP relay, per agent, so a build can stop relaying one and still end its relay. */
+const acpRelayAgent = (agent: string): string => `acp:${agent}`
+
+/** Each ACP agent this build relays reattaches; called as its adapter is registered. */
+export function registerAcpRelayAgent(spec: AcpLaunchSpec): void {
+  if (acpSpecRelays(spec)) {
+    registerReattachableProviderRelayAgent(acpRelayAgent(spec.agent))
+  }
+}
 
 /** An ACP turn is the app's own `session/prompt` request; no agent line opens it. */
 const PROMPT_REQUESTS = ['session/prompt']
@@ -96,7 +113,7 @@ const CALL_END_MARKERS: ProviderRelayWorkMarker[] = ['task', 'subagent'].flatMap
  */
 export function acpRelayWorkMarkers(agent: string): ProviderRelayWorkMarkers {
   return {
-    agent: ACP_RELAY_AGENT,
+    agent: acpRelayAgent(agent),
     markers: [...CALL_END_MARKERS, ...(agent === 'grok' ? GROK_MARKERS : [])],
     requests: PROMPT_REQUESTS
   }

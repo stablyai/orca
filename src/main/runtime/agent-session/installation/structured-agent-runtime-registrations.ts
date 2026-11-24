@@ -1,3 +1,4 @@
+import { registerAcpRelayAgent } from '../../../acp/process/acp-relay-work-markers'
 import { AcpAtRestCommandCatalog } from '../../../acp/discovery/acp-at-rest-commands'
 import { resolveNativeChatVisualsSkillLocation } from '../../../native-chat/conversation-files/native-chat-visuals-skill-location'
 import { withSupportedCodexCli } from '../../../codex/structured/launch/codex-cli-installation-error'
@@ -165,6 +166,7 @@ function createClaudeAdapter(
 function createAcpAdapter(
   spec: AcpLaunchSpec
 ): StructuredAgentRuntimeRegistration['createAdapter'] {
+  registerAcpRelayAgent(spec)
   return (context) => {
     const { deps, followUps } = context
     const savedSession = savedProviderTurns(context)
