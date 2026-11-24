@@ -87,7 +87,7 @@ export async function callAct(
     })
   if (!answer.result.ok) {
     const slackMessage =
-      params.verb === 'read'
+      params.verb === 'read' && params.ref !== undefined && !OTHER_SOURCE.test(params.ref.trim())
         ? slackReadRefusalMessage(answer.result.reason, answer.result.scope)
         : null
     throw new RuntimeClientError(answer.result.refusal, slackMessage ?? answer.result.message)

@@ -29,4 +29,14 @@ describe('connector action read failures', () => {
       message: 'Orca Cloud refused it (forbidden).'
     })
   })
+
+  it.each(['slack_thread_not_found', 'slack_history_scope_missing'])(
+    'keeps the original %s message for a non-Slack read',
+    (error) => {
+      expect(actFailure('read', 'linear:org:issue', { status: 403, error }, host)).toMatchObject({
+        code: 'connector_refused',
+        message: `Orca Cloud refused it (${error}).`
+      })
+    }
+  )
 })

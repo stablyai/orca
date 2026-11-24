@@ -101,7 +101,9 @@ export function actFailure(
       "This bot isn't on Orca Cloud from this machine yet: connect it to Slack, Linear or GitHub, or wait a moment after connecting it."
     )
   }
-  const slackMessage = verb === 'read' ? slackReadRefusalMessage(failure.error) : null
+  const slackRead =
+    verb === 'read' && actionGoesToSlack({ verb, ref, title: undefined, conversation: null })
+  const slackMessage = slackRead ? slackReadRefusalMessage(failure.error) : null
   if (slackMessage) {
     return new ConnectorActError('connector_refused', slackMessage)
   }
