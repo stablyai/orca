@@ -407,8 +407,12 @@ static int read_row(pid_t pid, struct proc_row *row) {
     snprintf(path, sizeof path, "/proc/%ld/stat", (long)pid);
     int fd = open(path, O_RDONLY | O_CLOEXEC);
     if (fd < 0) {
-        // hidepid hides other users' rows; the watcher could never signal those anyway.
-        return errno == ENOENT || errno == ESRCH || errno == EACCES || errno == EPERM ? 0 : -1;
+        if (errno == EACCES || errno == EPERM) {
+            // hidepid hides other users' rows, which the watcher can't signal; a hidden row it can
+            // signal (a same-user tool that is not dumpable) could be a member, so it is reported.
+            return kill(pid, 0) == 0 ? 2 : 0;
+        }
+        return errno == ENOENT || errno == ESRCH ? 0 : -1;
     }
     char buf[1024];
     ssize_t got;
@@ -468,7 +472,11 @@ static int procfs_in_own_namespace(void) {
     return own;
 }
 
+// Set by the last table read when it held a row this watcher could signal but not read.
+static int table_has_hidden_row;
+
 static struct proc_row *read_table(size_t *count) {
+    table_has_hidden_row = 0;
     DIR *dir = opendir("/proc");
     if (dir == NULL) {
         return NULL;
@@ -495,6 +503,8 @@ static struct proc_row *read_table(size_t *count) {
         int found = read_row((pid_t)pid, &rows[n]);
         if (found < 0) {
             failed = 1;
+        } else if (found == 2) {
+            table_has_hidden_row = 1;
         } else if (found > 0) {
             n++;
         }
@@ -792,7 +802,12 @@ static int sweep_once(struct watcher *w, int signal_number) {
 #endif
     const struct proc_row *leader = find_row(scan.rows, scan.n, w->group);
     scan.leader_alive = leader != NULL && !leader->zombie && leader->start == w->leader_start;
+#if defined(__linux__)
+    // A hidden row this watcher can signal might be a member, so the scan can't prove absence.
+    int dropped = table_has_hidden_row;
+#else
     int dropped = 0;
+#endif
     for (;;) {
 #if defined(__APPLE__)
         collect_member_sessions(w, &scan);
