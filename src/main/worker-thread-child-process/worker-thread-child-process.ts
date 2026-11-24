@@ -120,9 +120,12 @@ export class WorkerThreadChildProcess extends EventEmitter {
 
   receive(event: Exclude<WorkerThreadChildEvent, { type: 'ready' }>): void {
     switch (event.type) {
+      case 'spawn-withdrawn':
       case 'group-terminated':
-        this.ownedGroupTerminated = true
-        this.emit('group-terminated')
+        if (event.type === 'group-terminated') {
+          this.ownedGroupTerminated = true
+        }
+        this.emit(event.type)
         return
       case 'spawn':
         this.pid = event.pid

@@ -52,7 +52,7 @@ export function launchProcessSpecOnWindowsWorker(
     let received = 0
     const onData = (chunk: Buffer): void => {
       received += chunk.byteLength
-      if (received > cap) {
+      if (received > cap && !(stream === 'stderr' && typeof spec.terminationBarrier === 'object')) {
         child[stream].off('data', onData)
         child.discardOutput(stream)
       }
@@ -61,6 +61,7 @@ export function launchProcessSpecOnWindowsWorker(
   }
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the stand-in carries the piped surface runProcess and its tree kill read: pid, exitCode, signalCode, kill, stdio streams, and spawn/error/exit/close events.
   const launched = child as unknown as ChildProcess
+  child.on('spawn-withdrawn', onTerminated)
   child.on('error', (error) => {
     if (child.pid === undefined || !isAbandonedWorkerChildError(error)) {
       return
@@ -85,7 +86,15 @@ export function launchProcessSpecOnWindowsWorker(
       onTerminated()
       return
     }
-    reportWhenAbandonedRootEnds(child.pid, proven, onTerminated)
+    if (barrier) {
+      void proven.then((ended) => {
+        if (ended) {
+          onTerminated()
+        }
+      })
+    } else {
+      reportWhenAbandonedRootEnds(child.pid, proven, onTerminated)
+    }
   })
   return { child: launched, withdrawPendingLaunch: () => child.cancelPendingSpawn() }
 }
