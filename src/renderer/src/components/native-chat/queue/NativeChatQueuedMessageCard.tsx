@@ -88,7 +88,7 @@ export function queuedMessageCardCaption(
 
 /** Steer's or Send's label and tooltip: Steer only into a turn that is running (`queuedMessageCardSteers`). */
 export function queuedMessageCardSendNow(
-  card: QueuedMessageCard,
+  card: Pick<QueuedMessageCard, 'hold' | 'command'>,
   agentWorking: boolean,
   t: Translate = translate
 ): {

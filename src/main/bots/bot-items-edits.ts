@@ -149,7 +149,12 @@ export class BotItemsEdits extends BotItemsReads {
         return this.moveToWait(item, waitNote, actor, mail, now)
       }
       this.writeStatus(uid, status!, question, actor, now, closing ? closeNote : null)
-      const data = { from: item.status, to: status, ...(moveNote ? { note: moveNote } : {}) }
+      const data = {
+        from: item.status,
+        to: status,
+        ...(moveNote ? { note: moveNote } : {}),
+        ...(closing && changes.closedFor ? { actsFor: changes.closedFor } : {})
+      }
       return this.appendEvent(uid, 'status', actor, data, mail, now)
     }
     // A reopen comes first, so the edits it allows read after it.

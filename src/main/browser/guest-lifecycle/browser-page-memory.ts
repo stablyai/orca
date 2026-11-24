@@ -20,7 +20,8 @@ export {
   isBrowserPageAttachMarker,
   associateBrowserPageAttach,
   startBrowserPageAttach,
-  hasPendingBrowserPageAttach
+  hasPendingBrowserPageAttach,
+  claimBrowserPageFirstLoad
 } from './browser-page-attach'
 import { noteBrowserPageClosed } from './browser-page-partition-presence'
 

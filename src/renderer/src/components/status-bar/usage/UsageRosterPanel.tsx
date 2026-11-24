@@ -176,7 +176,7 @@ export function UsageRow({
   const sections = usedSections(p, t)
   const hasUsage = sections.length > 0
   const name = getProviderDisplayName(p.provider)
-  const plan = formatPlanLabel(p.planType)
+  const plan = formatPlanLabel(p.planType, p.provider)
   // Why: Detailed lists every window below, so a top-right summary would repeat one of them.
   const showDetails = hasUsage && mode === 'verbose'
   const soonestReset = showDetails ? soonestResetLabel(sections, now, intlLocale, t) : null

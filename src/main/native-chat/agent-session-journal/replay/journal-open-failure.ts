@@ -7,6 +7,7 @@ import {
   type AgentSessionWireRefusal
 } from '../../../../shared/agent-session/failures/agent-session-wire-refusals'
 import { isSqliteCorruption } from '../../../sqlite/sqlite-read-failure'
+import { storageCapacityErrorCode } from '../../../../shared/errors/storage-capacity-error'
 import type { JournalLoad } from './journal-open'
 import { AgentSessionJournalError, assertJournalWritable } from '../writing/journal-write-guards'
 import type { StructuredAgentSessionLogger } from '../../agent-session-wire/host/structured-agent-session-logger'
@@ -58,13 +59,15 @@ export function classifyJournalOpenFailure(error: unknown): JournalOpenFailure {
     }
     current = current instanceof Error ? current.cause : undefined
   }
-  return 'journalUnavailable'
+  // A full disk clears once space is freed, so the person is told to free it.
+  return storageCapacityErrorCode(error) ? 'journalStorageFull' : 'journalUnavailable'
 }
 
 // Released clients print these messages for sends and Stops.
 const JOURNAL_OPEN_MESSAGE: Record<JournalRefusalReason, string> = {
   journalCorrupt: agentSessionWriteNoticeEnglish(['historyUnusable']),
   journalUnavailable: agentSessionWriteNoticeEnglish(['historyUnavailable', 'tryAgain']),
+  journalStorageFull: agentSessionWriteNoticeEnglish(['diskFull', 'freeDiskSpace']),
   journalWrittenByNewerOrca: agentSessionWriteNoticeEnglish([
     'savedByNewerOrca',
     'updateOrcaToKeepUsing'

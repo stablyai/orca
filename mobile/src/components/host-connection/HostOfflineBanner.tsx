@@ -1,8 +1,10 @@
 import { useEffect, useState } from 'react'
-import { ActivityIndicator, Pressable, Text, View } from 'react-native'
+import { Pressable, Text, View } from 'react-native'
 import { CloudOff } from 'lucide-react-native'
 import { useMobileTranslation } from '../../i18n/use-mobile-translation'
-import { colors, pressedStyle, radii, spacing, typography } from '../../theme/mobile-theme'
+import { LoadingSpinner } from '../feedback/LoadingSpinner'
+import { LIST_ROW_PADDING } from '../list/ListGroup'
+import { colors, pressedStyle, spacing, typography } from '../../theme/mobile-theme'
 import { themedStyleSheet } from '../../theme/themed-styles'
 import { useMobileColorScheme } from '../../theme/use-mobile-color-scheme'
 import { useCalmConnectionState } from '../../transport/connection/calm-connection-state'
@@ -67,7 +69,7 @@ export function useHostOfflineBanner({
 }
 
 /**
- * Inset at the top of a screen that still shows data while its desktop is unreachable.
+ * A quiet line at the top of a screen that still shows data while its desktop is unreachable, as on the desktop.
  * Offline offers Retry; otherwise it is still redialing. An empty screen says it in its body instead.
  */
 export function HostOfflineBanner({
@@ -85,23 +87,23 @@ export function HostOfflineBanner({
   useMobileColorScheme()
   const t = useMobileTranslation()
   return (
-    <View style={styles.banner} accessibilityLiveRegion="polite">
+    <View style={styles.line} accessibilityLiveRegion="polite">
       {offline ? (
-        <CloudOff size={18} color={colors.statusAmber} />
+        <CloudOff size={14} color={colors.textMuted} />
       ) : (
-        <ActivityIndicator size="small" color={colors.textSecondary} style={styles.spinner} />
+        <LoadingSpinner size={14} color={colors.textMuted} />
       )}
       <View style={styles.text}>
         <Text style={styles.title} numberOfLines={1}>
           {offline
-            ? t('components.hostOfflineBanner.offline', '{{host}} is offline', { host: hostName })
+            ? t('components.hostOfflineBanner.offline', 'Can’t reach {{host}}', { host: hostName })
             : t('components.hostOfflineBanner.reconnecting', 'Reconnecting to {{host}}…', {
                 host: hostName
               })}
         </Text>
         {asOf !== null ? (
           <Text style={styles.detail} numberOfLines={1}>
-            {t('components.hostOfflineBanner.asOf', 'Showing what was here as of {{time}}', {
+            {t('components.hostOfflineBanner.asOf', 'As of {{time}}', {
               time: formatOfflineAsOfTime(asOf)
             })}
           </Text>
@@ -111,6 +113,7 @@ export function HostOfflineBanner({
         <Pressable
           style={({ pressed }) => [styles.retry, pressed && pressedStyle]}
           onPress={onRetry}
+          hitSlop={RETRY_HIT_SLOP}
           accessibilityRole="button"
         >
           <Text style={styles.retryText}>{t('common.retry', 'Retry')}</Text>
@@ -120,45 +123,42 @@ export function HostOfflineBanner({
   )
 }
 
+const RETRY_HIT_SLOP = { top: 8, bottom: 8 }
+// The text keeps Retry's height so the line doesn't jump when Retry comes and goes.
+const LINE_CONTENT_HEIGHT = 32
+
 const styles = themedStyleSheet(() => ({
-  banner: {
+  line: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 10,
-    paddingVertical: 10,
-    paddingHorizontal: spacing.md,
-    borderRadius: radii.surface,
-    backgroundColor: colors.bgRaised,
-    borderWidth: 0.5,
-    borderColor: colors.statusAmber
-  },
-  spinner: {
-    width: 18,
-    height: 18
+    gap: spacing.sm,
+    paddingLeft: LIST_ROW_PADDING,
+    // Retry's own inset brings its label to the rows' trailing edge.
+    paddingRight: LIST_ROW_PADDING - spacing.xs,
+    paddingVertical: spacing.sm
   },
   text: {
     flex: 1,
-    minWidth: 0
+    minWidth: 0,
+    minHeight: LINE_CONTENT_HEIGHT,
+    justifyContent: 'center'
   },
   title: {
     fontSize: 13,
-    fontWeight: '600',
-    color: colors.textPrimary
+    color: colors.textSecondary
   },
   detail: {
     fontSize: typography.metaSize,
-    color: colors.textSecondary
+    color: colors.textMuted
   },
   retry: {
-    height: 32,
-    paddingHorizontal: 11,
-    borderRadius: radii.control,
-    backgroundColor: colors.translucentFill,
-    justifyContent: 'center'
+    minHeight: LINE_CONTENT_HEIGHT,
+    justifyContent: 'center',
+    paddingHorizontal: spacing.xs
   },
   retryText: {
     fontSize: 13,
-    fontWeight: '600',
-    color: colors.textPrimary
+    fontWeight: '500',
+    color: colors.accentBlue
   }
 }))

@@ -83,7 +83,7 @@ export const GOOGLE_COMMAND_SPECS: CommandSpec[] = [
     notes: [
       'Without --account, Google commands and automation rules use this account. The first account connected here is the default until you pick another; removing it makes the oldest one left the default.',
       'With no email, prints the default.',
-      OWNER_ONLY
+      "From a bot's chat, works once Google is on for that bot."
     ],
     examples: ['orca google default', 'orca google default me@example.com']
   },

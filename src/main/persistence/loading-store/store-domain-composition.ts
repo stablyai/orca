@@ -23,6 +23,7 @@ import { MobileTabSelectionPersistence } from './profile-preferences/mobile-tab-
 import { BotPersistence } from './bot-state/bot-persistence'
 import { RemoteLayoutSnapshotPersistence } from '../../remote-layout-snapshot/remote-layout-snapshot-persistence'
 import { HostRepoCatalogSnapshotPersistence } from '../../host-repo-catalog-snapshot/host-repo-catalog-snapshot-persistence'
+import { PairedPortForwardPersistence } from '../../ports/paired-forwards/paired-port-forward-persistence'
 import { SparsePresetPersistence } from './project-catalog/sparse-preset-persistence'
 import { PtyBindingPersistenceOperations } from './terminal-bindings/pty-binding-persistence'
 import { LayoutCommandPersistence } from '../terminal-topology/layout-command-persistence'
@@ -41,6 +42,7 @@ export type StoreDomainOperations = WriteSchedulingOperations &
   BotPersistence &
   RemoteLayoutSnapshotPersistence &
   HostRepoCatalogSnapshotPersistence &
+  PairedPortForwardPersistence &
   SparsePresetPersistence &
   AutomationPersistence &
   MetadataLineageOperations &
@@ -81,6 +83,7 @@ export type StoreDomains = {
   bots: BotPersistence
   remoteLayoutSnapshots: RemoteLayoutSnapshotPersistence
   hostRepoCatalogSnapshots: HostRepoCatalogSnapshotPersistence
+  pairedPortForwards: PairedPortForwardPersistence
   sparsePresets: SparsePresetPersistence
   ptyBindings: PtyBindingPersistenceOperations
   layoutCommands: LayoutCommandPersistence
@@ -101,6 +104,7 @@ export const STORE_DOMAIN_OPERATION_CLASSES = [
   BotPersistence,
   RemoteLayoutSnapshotPersistence,
   HostRepoCatalogSnapshotPersistence,
+  PairedPortForwardPersistence,
   SparsePresetPersistence,
   AutomationPersistence,
   MetadataLineageOperations,
@@ -188,6 +192,7 @@ export function createStoreDomains(runtime: StoreRuntimeState): StoreDomains {
     bots: new BotPersistence(runtime, scheduling),
     remoteLayoutSnapshots,
     hostRepoCatalogSnapshots: new HostRepoCatalogSnapshotPersistence(runtime, scheduling),
+    pairedPortForwards: new PairedPortForwardPersistence(runtime, scheduling),
     sparsePresets,
     ptyBindings,
     layoutCommands: new LayoutCommandPersistence(

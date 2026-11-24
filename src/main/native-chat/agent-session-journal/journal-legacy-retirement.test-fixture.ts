@@ -12,7 +12,7 @@ import { journalDatabasePath } from './database/journal-host-database'
 import { JournalSqlBatch } from './journal-sql-batch'
 import { applyJournalSqlMaintenance, type JournalSqlMaintenance } from './journal-sql-maintenance'
 import { readJournalLegacyProofPage } from './journal-legacy-source-proof'
-import type { JournalSqlReaderPool } from './journal-sql-reader-pool'
+import type { JournalSqlConversionReader, JournalSqlReaderPool } from './journal-sql-reader-pool'
 import { journalDomainImportState } from './journal-domain-import-rows'
 import { prepareJournalDomainImport } from './journal-domain-import'
 import {
@@ -24,6 +24,9 @@ import { insertJournalRow, publishJournalSessionEpoch } from './durable-rows/jou
 import { acquireJournalLegacyFileLock } from './journal-legacy-file-lock'
 import { JournalLegacyRetirement } from './journal-legacy-retirement'
 import { JournalLegacyRetentionError } from './journal-legacy-retention-error'
+import { JournalSqlConversions } from './journal-sql-conversions'
+import { readJournalSqlDatabase } from './journal-sql-database-read'
+import type { JournalConversionStorage } from './journal-conversion-storage'
 
 export const cleanup: (() => void)[] = []
 
@@ -116,6 +119,8 @@ export async function profile(
     seed?: (db: Database.Database) => void
     /** Converting this chat fails with this error, as a reader would. */
     failConversion?: { sessionId: string; error: Error }
+    /** Converts through the real conversion lock, measuring the disk with this. */
+    storage?: () => Promise<JournalConversionStorage>
   } = {}
 ) {
   const root = mkdtempSync(join(tmpdir(), 'orca-legacy-retirement-'))
@@ -186,8 +191,40 @@ export async function profile(
   const ensured: string[] = []
   /** Converting a chat named here fails once with its error, as a lost reader would. */
   const failOnce = new Map<string, Error>()
+  const guarded =
+    options.storage &&
+    new JournalSqlConversions(
+      writer,
+      {
+        importState: readers.importState,
+        conversionStorage: options.storage,
+        database: async (read) => readJournalSqlDatabase(db, read),
+        compareLegacyChat: async () => null,
+        // As the reader does: a copy takes its original chat's history under its own id.
+        prepareConversion: async (id: string) => {
+          const from = journalLegacyConversionSource(db, id)
+          const prepared = prepareJournalDomainImport(source(), from)
+          if (!prepared) {
+            return null
+          }
+          const { pages, ...header } = prepared
+          const reader = {
+            header: from === id ? header : { ...header, sessionId: id, sourceRevision: null },
+            next: async () => pages.next().value ?? null,
+            close: async () => {}
+          }
+          // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: conversions use only header, next and close.
+          return reader as unknown as JournalSqlConversionReader
+        }
+      },
+      async () => {}
+    )
   const conversions = {
-    ensure: async (id: string) => {
+    ensure: async (id: string, foreground = true) => {
+      if (guarded) {
+        ensured.push(id)
+        return guarded.ensure(id, foreground)
+      }
       ensured.push(id)
       if (options.failConversion?.sessionId === id) {
         throw options.failConversion.error
@@ -217,7 +254,7 @@ export async function profile(
   const errors: unknown[] = []
   /** A launch of the Orca at `version`, owning the profile unless told otherwise. */
   const launch = (
-    version = '1.0.1',
+    version: string | null = '1.0.1',
     owns = true,
     lock = native ? acquireJournalLegacyFileLock : fakeLease,
     eligibility?: ConstructorParameters<typeof JournalLegacyRetirement>[9],
