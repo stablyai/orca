@@ -59,19 +59,22 @@ function FloatingChatButton({
 export function MobileNativeChatFloatingControls({
   showJumpToTail,
   onJumpToTail,
-  previousPrompt
+  showPreviousPrompt,
+  onPreviousPrompt
 }: {
   showJumpToTail: boolean
   onJumpToTail: () => void
-  previousPrompt?: { visible: boolean; onPress: () => void }
+  showPreviousPrompt?: boolean
+  onPreviousPrompt?: () => void
 }): React.JSX.Element {
   useMobileColorScheme()
   const t = useMobileTranslation()
   return (
     <View pointerEvents="box-none" style={styles.floatingControls}>
-      {previousPrompt && (
+      {onPreviousPrompt && (
         <FloatingChatButton
-          {...previousPrompt}
+          visible={showPreviousPrompt === true}
+          onPress={onPreviousPrompt}
           label={t(
             'session.nativeChatFloatingControls.scrollToPreviousPrompt',
             'Scroll to previous prompt'

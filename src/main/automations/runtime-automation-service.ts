@@ -39,6 +39,7 @@ export function createRuntimeAutomationService(input: {
   codexUsage?: AutomationUsageClient
   /** Only server processes execute remote_host_service schedules. */
   allowRemoteHostScheduling: boolean
+  isHostQuitting?: () => boolean
 }): AutomationService {
   const { store, runtime, claudeUsage, codexUsage } = input
   // Launch handles remain usable before pane-key lookup resolves.
@@ -159,6 +160,7 @@ export function createRuntimeAutomationService(input: {
         return observation
       }
     },
+    isHostQuitting: input.isHostQuitting,
     onAutomationsChanged: (payload) => runtime.notifyAutomationsChanged(payload),
     allowRemoteHostScheduling: input.allowRemoteHostScheduling,
     ...botAutomationServiceOptions(runtime),

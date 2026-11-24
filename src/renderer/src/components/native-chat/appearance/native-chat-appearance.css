@@ -35,13 +35,6 @@
   font-family: var(--chat-code-font-family, var(--font-mono));
 }
 
-/* Not inherited: the run box alone reads it, and an inherited one would restyle every member. */
-@property --native-chat-opened-detail {
-  syntax: '<length>';
-  inherits: false;
-  initial-value: 0px;
-}
-
 /* Chat keeps a readable canvas over either backdrop. Mixed splits retain their shared terminal
    paint beneath it so neighboring terminals keep their background. */
 :root:is([data-theme-background], [data-window-material])

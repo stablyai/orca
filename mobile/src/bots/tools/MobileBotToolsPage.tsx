@@ -23,7 +23,6 @@ import { useMobileColorScheme } from '../../theme/use-mobile-color-scheme'
 import type { RpcClient } from '../../transport/rpc/rpc-client-contract'
 import { botAgentLabel } from '../mobile-bot-sheet-copy'
 import { MobileBotSettingsOffline } from '../MobileBotSettingsOffline'
-import { MobileBotTextButton } from '../MobileBotTextButton'
 import { botToolsListRead, type PhoneOwnTool } from './bot-tool-operations'
 import {
   botToolAppName,
@@ -192,29 +191,35 @@ export function MobileBotToolsPage(props: {
         onBack={{ label: t('bots.lookAround.back', 'Back to Settings'), onPress: props.onBack }}
       />
       {banner}
-      <SettingsSection
-        first
-        separatorInset={LIST_LEADING_INSET}
-        footer={page.error ? <SettingsNote error>{page.error}</SettingsNote> : undefined}
-      >
-        {own.map((entry) => (
-          <ToolRow
-            key={entry.name}
-            tool={entry}
-            problem={page.problems?.[entry.name]}
-            hostName={props.hostName}
-            disabled={!props.online}
-            onOpen={(signIn) => setOpened({ name: entry.name, signIn })}
-          />
-        ))}
-        <ListRow
-          key="add"
-          title={t('bots.tools.add', 'Add a tool')}
-          leading={<Plus size={18} color={colors.textMuted} />}
-          disabled={!props.online}
-          onPress={() => setAdding(true)}
-        />
-      </SettingsSection>
+      {/* Offline, Add and the failed read only repeat what the banner says. */}
+      {own.length > 0 || props.online ? (
+        <SettingsSection
+          first
+          separatorInset={LIST_LEADING_INSET}
+          footer={
+            page.error && props.online ? <SettingsNote error>{page.error}</SettingsNote> : undefined
+          }
+        >
+          {own.map((entry) => (
+            <ToolRow
+              key={entry.name}
+              tool={entry}
+              problem={page.problems?.[entry.name]}
+              hostName={props.hostName}
+              disabled={!props.online}
+              onOpen={(signIn) => setOpened({ name: entry.name, signIn })}
+            />
+          ))}
+          {props.online ? (
+            <ListRow
+              key="add"
+              title={t('bots.tools.add', 'Add a tool')}
+              leading={<Plus size={18} color={colors.textMuted} />}
+              onPress={() => setAdding(true)}
+            />
+          ) : null}
+        </SettingsSection>
+      ) : null}
       {inherited.length > 0 ? (
         <SettingsSection
           footer={t('bots.tools.readOnly', 'Read-only here. Change them in {{agent}}.', { agent })}
@@ -248,7 +253,7 @@ export function ToolRow(props: {
   const { tool, problem } = props
   const face = botToolSignInFace(tool, problem, false, undefined)
   const signInLine = face === 'signed-in' ? null : botToolSignInLine(face, t, props.hostName)
-  const action = botToolSignInActionLabel(face, t)
+  const signIn = botToolSignInActionLabel(face, t) !== null
   const trouble =
     problem?.kind === 'failed'
       ? t('bots.tools.wontStart', 'Won’t start')
@@ -260,21 +265,18 @@ export function ToolRow(props: {
     <ListRow
       title={name}
       subtitle={signInLine ?? trouble ?? props.line ?? botToolSubtitle(tool)}
-      subtitleColor={signInLine ? colors.agentQuestion : trouble ? colors.statusAmber : undefined}
+      subtitleColor={
+        signInLine
+          ? colors.agentQuestion
+          : problem?.kind === 'failed'
+            ? colors.statusRed
+            : undefined
+      }
       subtitleLines={1}
       leading={<Wrench size={17} color={colors.textMuted} />}
-      accessory={
-        action ? (
-          <MobileBotTextButton
-            label={action}
-            accessibilityLabel={`${action}, ${name}`}
-            disabled={props.disabled}
-            onPress={() => props.onOpen(true)}
-          />
-        ) : undefined
-      }
-      navigates={!action}
-      onPress={() => props.onOpen(false)}
+      navigates
+      // A tool that needs a sign-in opens on it; Back from there is the tool's page.
+      onPress={() => props.onOpen(signIn && !props.disabled)}
     />
   )
 }

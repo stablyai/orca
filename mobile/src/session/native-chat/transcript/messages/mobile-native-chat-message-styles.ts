@@ -1,6 +1,7 @@
 import { StyleSheet } from 'react-native'
 import { colors, radii, spacing, typography } from '../../../../theme/mobile-theme'
 import { themedStyleSheet } from '../../../../theme/themed-styles'
+import { useMobileNativeChatLandedPrompt } from '../viewport/mobile-native-chat-landed-prompt'
 
 export const TEXT_SIZE = 17
 export const CHAT_PROSE_SCALE = 1.25
@@ -119,3 +120,10 @@ export const styles = themedStyleSheet(() => ({
     borderColor: colors.borderSubtle
   }
 }))
+
+/** The person's bubble, outlined for a moment after "Scroll to previous prompt" lands on it. */
+export function useMobileNativeChatUserBubbleStyle(rowKey: string | undefined) {
+  return useMobileNativeChatLandedPrompt(rowKey)
+    ? [styles.userBubble, styles.landedPrompt]
+    : styles.userBubble
+}

@@ -3,6 +3,7 @@ import { defineFixture } from '../../../component-fixtures/component-fixture'
 import { fixtureCos } from '../../../component-fixtures/fixture-bot-panel'
 import { makeTestBotItem } from '../../../../../shared/bots/bot-item.test-fixture'
 import type { BotItemAsk } from '../../../../../shared/bots/bot-item-ask'
+import type { BotItemAskEnd } from '../../../../../shared/bots/bot-item-question-answers'
 import type { BotItemEvent } from '../../../../../shared/bots/bot-items'
 import { BotItemCommentCard } from './BotItemCommentCard'
 import type { BotItemQuickReplyActions } from './use-bot-item-question-steps'
@@ -80,17 +81,19 @@ function Feed({ children }: { children: React.ReactNode }): React.JSX.Element {
 function Card({
   event,
   waiting,
-  answers
+  answers,
+  ended
 }: {
   event: BotItemEvent
   waiting: boolean
   answers?: (BotItemEvent | null)[]
+  ended?: BotItemAskEnd
 }): React.JSX.Element {
   return (
     <BotItemCommentCard
       bot={bot}
       item={item}
-      entry={{ event, waiting, answers }}
+      entry={{ event, waiting, answers, ended }}
       quickReplies={waiting ? actions : undefined}
     />
   )
@@ -212,19 +215,53 @@ function AnsweredWhileOpen(): React.JSX.Element {
 export const answeredWhileOpen = defineFixture({ width: 340, render: () => <AnsweredWhileOpen /> })
 export const answeredWide = defineFixture({ width: 560, render: () => <Answered /> })
 
-// Two asking messages in one feed: each carries its own tag.
-function TwoPending(): React.JSX.Element {
+// A later ask replaced an earlier one: only the later one waits; the earlier reads muted, marked replaced.
+function Replaced(): React.JSX.Element {
   return (
     <Feed>
-      <Card event={ask('q2', LONG, 9)} waiting />
+      <Card event={ask('q2', LONG, 9)} waiting={false} ended="replaced" />
       <Card event={plain} waiting={false} />
       <Card event={ask('q1', MERGE)} waiting />
     </Feed>
   )
 }
 
-export const twoPending = defineFixture({ width: 560, render: () => <TwoPending /> })
-export const twoPendingNarrow = defineFixture({ width: 340, render: () => <TwoPending /> })
+export const replaced = defineFixture({ width: 560, render: () => <Replaced /> })
+export const replacedNarrow = defineFixture({ width: 340, render: () => <Replaced /> })
+
+const SET: BotItemAsk = {
+  questions: [
+    { prompt: 'Merge it now?', options: [{ label: 'Merge it' }, { label: 'Wait' }] },
+    { prompt: 'Post the release note today?', options: [{ label: 'Yes' }, { label: 'Tomorrow' }] },
+    { prompt: 'Keep the old guide linked?', options: [{ label: 'Keep it' }, { label: 'Drop it' }] }
+  ]
+}
+const sentAnyway: BotItemEvent = {
+  id: 'a2',
+  kind: 'commented',
+  actor: { kind: 'owner' },
+  data: {
+    text: 'Merge it now? → Merge it',
+    answers: 'q3',
+    skipped: ['Post the release note today?', 'Keep the old guide linked?']
+  },
+  at: AT + 60_000
+}
+
+// "send anyway" with one of three answered: the rest read muted, marked skipped.
+export const skipped = defineFixture({
+  width: 560,
+  render: () => (
+    <Feed>
+      <Card
+        event={ask('q3', SET)}
+        waiting={false}
+        answers={[sentAnyway, null, null]}
+        ended="skipped"
+      />
+    </Feed>
+  )
+})
 
 // The recommended reply among its siblings: the same pill, filled, a star before the label.
 const ROTATED: BotItemAsk = {

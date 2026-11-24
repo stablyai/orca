@@ -1,10 +1,16 @@
 import type React from 'react'
 import { Pressable, StyleSheet, Text, View } from 'react-native'
-import { ChevronDown, ChevronRight, Lightbulb } from 'lucide-react-native'
+import { ChevronDown, ChevronRight, Gauge, Lightbulb } from 'lucide-react-native'
 import { botGroupRowLine } from '../../../src/shared/bots/bot-sidebar-entries'
 import type { Worktree, WorktreeRowView } from '../worktree/workspace-list/workspace-list-types'
 import { formatTimeAgo } from '../worktree/agent-lineage/agent-row-display'
-import { mobileBotRowLine, mobileBotRowLineText, mobileBotRowNeedsYou } from './mobile-bot-row-line'
+import {
+  mobileBotRowLimitText,
+  mobileBotRowLine,
+  mobileBotRowLineText,
+  mobileBotRowNeedsYou
+} from './mobile-bot-row-line'
+import { useMobileBotUsageLimitStop } from './use-mobile-bot-usage-limit-stop'
 import { colors, feedback, spacing } from '../theme/mobile-theme'
 import { themedStyleSheet } from '../theme/themed-styles'
 import { AgentSpinner } from '../agents/presentation/AgentSpinner'
@@ -24,6 +30,7 @@ export function MobileBotHomeRow({
   item,
   view,
   isReadOnly,
+  pairedHostId,
   onPress,
   onLongPress,
   onToggle
@@ -31,6 +38,8 @@ export function MobileBotHomeRow({
   item: Worktree
   view: WorktreeRowView
   isReadOnly: boolean
+  /** The paired computer, whose status feed says which of its sessions stopped on a usage limit. */
+  pairedHostId: string | null
   onPress: () => void
   onLongPress?: () => void
   onToggle?: () => void
@@ -38,14 +47,20 @@ export function MobileBotHomeRow({
   const t = useMobileTranslation()
   const now = useSharedNow(30_000)
   const bot = view.botFacts!
-  // The desktop row's line, from its Chat's and threads' agent rows; waits while nothing works.
-  const line = mobileBotRowLine(bot, item.agents ?? [], now)
+  // The desktop row's line, from its Chat's and threads' agent rows; waits while nothing works. A
+  // search that found the bot by what it's for shows that in its place.
+  const line = bot.searchPurpose ? null : mobileBotRowLine(bot, item.agents ?? [], now)
   // The line's count, so the badge never disagrees with it; a down host's row keeps its last, greyed.
   const needsYou = mobileBotRowNeedsYou(bot.line, item.agents ?? [], now)
   // A down server's bot shows only where it runs and that computer's word: its last activity isn't live.
   const down = bot.host?.word !== undefined
   const asking = !down && line?.kind === 'needYouElsewhere'
-  const lineText = line ? mobileBotRowLineText(line, now) : bot.statusLine
+  // A server's sessions aren't on its paired computer's feed; a search's purpose line keeps its place.
+  const feedHost = down || bot.host || bot.searchPurpose ? null : pairedHostId
+  const stop = useMobileBotUsageLimitStop(feedHost, bot.workspaceIds, now)
+  const limitText = mobileBotRowLimitText(stop, line, { ...bot.line, dot: bot.dot })
+  const lineText =
+    limitText ?? (line ? mobileBotRowLineText(line, now) : (bot.searchPurpose ?? bot.statusLine))
   // The line names who waits on an access answer, since nothing else on the row says it.
   const preview = down
     ? ''
@@ -55,12 +70,19 @@ export function MobileBotHomeRow({
   const age =
     !down && line?.kind === 'activity' && line.at !== null ? formatTimeAgo(line.at, now) : null
   // The desktop's mark before a thread's label, which leads an activity line.
-  const placeSource = !down && line?.kind === 'activity' ? (line.place?.source ?? null) : null
+  const placeSource =
+    !down && !limitText && line?.kind === 'activity' ? (line.place?.source ?? null) : null
   const count = view.lineageChildCount ?? 0
   const Chevron = view.lineageCollapsed ? ChevronRight : ChevronDown
   return (
     <MobileBotRowView
-      avatar={<MobileBotRowAvatar avatar={bot.avatar} dot={down ? null : bot.dot} />}
+      avatar={
+        <MobileBotRowAvatar
+          avatar={bot.avatar}
+          dot={down ? null : bot.dot}
+          stopped={!down && limitText !== null}
+        />
+      }
       title={item.displayName}
       unread={item.unread}
       preview={preview}
@@ -86,7 +108,10 @@ export function MobileBotHomeRow({
       onLongPress={onLongPress}
       titleTrailing={
         <>
-          {needsYou > 0 ? <MobileBotNeedsYouCount count={needsYou} /> : null}
+          {/* The line already says "N need you": the count once. */}
+          {needsYou > 0 && !(asking && limitText === null) ? (
+            <MobileBotNeedsYouCount count={needsYou} />
+          ) : null}
           {bot.upNext ? <MobileBotUpNextCount count={bot.upNext} /> : null}
           {/* A folded bot always keeps its chevron, so it can unfold before its chats are read; a
               down host's bot is its row alone. */}
@@ -166,20 +191,28 @@ export function MobileBotGroupRow({
   )
 }
 
-/** A bot's 32 pt picture with its own turn's status at the corner; a down host's bot has none. */
+/** A bot's 32 pt picture with its status at the corner, or the amber gauge on a usage limit. */
 export function MobileBotRowAvatar({
   avatar,
   dot,
+  stopped = false,
   surface
 }: {
   avatar: MobileBotAvatarSource
   dot: BotRowStatus | null
+  stopped?: boolean
   surface?: string
 }) {
   return (
     <>
       <MobileBotAvatar avatar={avatar} size={32} />
-      <MobileBotRowStatus dot={dot} surface={surface} />
+      {stopped ? (
+        <View style={[styles.status, surface ? { backgroundColor: surface } : null]}>
+          <Gauge size={12} color={colors.statusAmber} />
+        </View>
+      ) : (
+        <MobileBotRowStatus dot={dot} surface={surface} />
+      )}
     </>
   )
 }
@@ -342,8 +375,8 @@ const styles = themedStyleSheet(() => ({
   },
   main: { flex: 1, minWidth: 0 },
   titleRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.xs },
-  title: { flex: 1, fontSize: 15, color: colors.textSecondary, fontWeight: '500' },
-  unread: { color: colors.textPrimary, fontWeight: '700' },
+  title: { flex: 1, fontSize: 15, color: colors.textPrimary, fontWeight: '500' },
+  unread: { fontWeight: '700' },
   fold: {
     minWidth: 44,
     minHeight: 44,

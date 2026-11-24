@@ -25,10 +25,12 @@ import { themedStyleSheet } from '../../theme/themed-styles'
 import { useMobileColorScheme } from '../../theme/use-mobile-color-scheme'
 import type { RpcClient } from '../../transport/rpc/rpc-client-contract'
 import type { MobileBotAvatarSource } from '../host-bot-row-facts'
+import type { PhoneBot } from '../host-bots-operations'
 import { MobileBotTextButton } from '../MobileBotTextButton'
 import { MobileConnectorSourceIcon } from '../MobileConnectorSourceIcon'
 import { slackErrorMessage } from './mobile-slack-copy'
 import { MobileConnectorTryIt } from './MobileConnectorTryIt'
+import { SlackPickStep, SlackProblemStep } from './MobileSlackSetupSteps'
 import type { PhoneSlackView } from './use-phone-bot-slack'
 import { usePhoneSlackSetup } from './use-phone-slack-setup'
 
@@ -43,7 +45,9 @@ export function MobileBotSlackSetup(props: {
   avatar: MobileBotAvatarSource
   teamId: string | undefined
   inSlack: boolean
-  knownTeam: string | null
+  knownTeams: readonly string[]
+  /** The host's bots, whose Slack reads name the workspaces to pick from. */
+  hostBots: readonly PhoneBot[]
   slack: { view: PhoneSlackView; refresh: () => Promise<PhoneSlackView> }
   hostName: string
   online: boolean
@@ -159,9 +163,11 @@ export function MobileBotSlackSetup(props: {
       trailing={
         tokenStep
           ? {
-              label: tokenStep.reconnect
-                ? t('bots.slack.setup.reconnectShort', 'Reconnect')
-                : t('bots.slack.setup.createShort', 'Create'),
+              label: tokenStep.unsure
+                ? t('bots.slack.reconnect.continue', 'Continue')
+                : tokenStep.reconnect
+                  ? t('bots.slack.setup.reconnectShort', 'Reconnect')
+                  : t('bots.slack.setup.createShort', 'Create'),
               disabled: !canCreate,
               onPress: () => send(trimmed)
             }
@@ -186,10 +192,13 @@ export function MobileBotSlackSetup(props: {
           <>
             {step.reconnect ? (
               <SettingsNote>
-                {t(
-                  'bots.slack.setup.reconnect',
-                  'Slack no longer accepts this workspace’s token. Paste a new one to reconnect.'
-                )}
+                {step.unsure
+                  ? `${t('bots.slack.reconnect.whyNeeded', 'Orca has no working Slack token for this workspace.')} ${t('bots.slack.reconnect.pasteNeeded', 'Paste a token to continue.')}`
+                  : `${t(
+                      'bots.slack.reconnect.whyHost',
+                      'Each computer keeps its own Slack token. Slack stopped accepting the one {{host}} uses.',
+                      { host: props.hostName }
+                    )} ${t('bots.slack.reconnect.paste', 'Paste a new token to reconnect.')}`}
               </SettingsNote>
             ) : null}
             <SettingsSection first>
@@ -282,27 +291,27 @@ export function MobileBotSlackSetup(props: {
             ) : null}
           </MobileStateView>
         )
+      case 'pick':
+        return (
+          <SlackPickStep
+            client={props.client}
+            hostBots={props.hostBots}
+            teamIds={step.teamIds}
+            online={props.online}
+            onPick={setup.setUp}
+            onAnother={setup.pasteToken}
+          />
+        )
       case 'expired':
       case 'other-user':
         return (
-          <MobileStateView
-            iconElement={mark}
-            title={
-              step.kind === 'expired'
-                ? t('bots.slack.setup.expired', 'The install link expired.')
-                : t(
-                    'bots.slack.setup.otherUser',
-                    'Another Slack account approved it. Get a new link and approve as yourself.'
-                  )
-            }
-            action={
-              props.online
-                ? {
-                    label: t('bots.slack.setup.newLink', 'Get a new link'),
-                    onPress: () => setup.setUp(step.teamId)
-                  }
-                : null
-            }
+          <SlackProblemStep
+            kind={step.kind}
+            teamId={step.teamId}
+            botName={props.botName}
+            hostName={props.hostName}
+            online={props.online}
+            onNewLink={() => setup.setUp(step.teamId)}
           />
         )
       case 'uncertain':

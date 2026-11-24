@@ -185,7 +185,9 @@ export function UpdateCard(): React.JSX.Element | null {
       onEnableHttp1Compatibility: handleEnableHttp1Compatibility,
       onRetryDownload: handleUpdate,
       onRecheck: () => void window.api.updater.check({ includePrerelease: false }),
-      onInstallRetry: handleInstallRetry
+      onInstallRetry: handleInstallRetry,
+      // Resolves once quit is requested; a cancelled quit leaves this recovery in place.
+      onQuitToInstall: () => void window.api.app.quit().catch(console.error)
     },
     t
   )

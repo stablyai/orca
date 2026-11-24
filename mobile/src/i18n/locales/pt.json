@@ -22,7 +22,7 @@
     },
     "claude": {
       "usageSignInLabel": "Entrar novamente",
-      "usageSignInMessage": "A conta do Claude selecionada precisa de um novo login. Abra Configurações > Contas de provedores de IA ou escolha Padrão do sistema."
+      "usageSignInMessage": "Esta conta precisa de um novo login."
     }
   },
   "agentHistory": {
@@ -227,8 +227,7 @@
       "next": "Próximo",
       "other": "Outro…",
       "skip": "Pular",
-      "step": "Etapa {{step}}",
-      "submit": "Enviar"
+      "step": "Etapa {{step}}"
     },
     "askRow": {
       "asked": "Perguntado:",
@@ -401,17 +400,18 @@
     "promptStrip": {
       "expand": "Expandir"
     },
-    "question": {
-      "otherReplyPlaceholder": "Ou digite uma resposta…",
-      "replyPlaceholder": "Digite sua resposta…",
-      "sendReply": "Enviar resposta",
-      "submit": "Enviar",
-      "submitCount": "Enviar ({{count}})",
-      "submitSelectedOptions": "Enviar opções selecionadas"
-    },
     "queuedMessages": {
       "deleteAll": "Excluir tudo",
       "editMessage": "Editar mensagem",
+      "showLess": "Mostrar menos",
+      "moreCount_one": "Mais {{count}}",
+      "moreCount_other": "Mais {{count}}",
+      "moreCount_many": "Mais {{count}}",
+      "deleteMessage": "Excluir mensagem",
+      "queuedCount_one": "{{count}} mensagem na fila",
+      "queuedCount_other": "{{count}} mensagens na fila",
+      "queuedCount_many": "{{count}} mensagens na fila",
+      "foldNeedsAttention": "{{more}}, uma mensagem precisa de atenção",
       "pausedState": "Pausado",
       "queuedState": "Na fila",
       "resume": "Retomar",
@@ -1971,7 +1971,7 @@
       "workspaceOptions": "Opções do espaço de trabalho",
       "activeFilters_one": "Opções do espaço de trabalho ({{count}} filtro ativo)",
       "activeFilters_other": "Opções do espaço de trabalho ({{count}} filtros ativos)",
-      "searchWorkspaces": "Buscar espaços de trabalho",
+      "search": "Buscar",
       "newWorkspace": "Novo espaço de trabalho",
       "activeFilters_many": "Opções do espaço de trabalho ({{count}} filtros ativos)"
     },
@@ -2866,6 +2866,7 @@
       "images_one": "{{count}} imagem",
       "images_other": "{{count}} imagens",
       "moreActions": "Mais ações",
+      "you": "Você",
       "send": "Enviar",
       "sendAgainHint": "Enviar esta mensagem novamente",
       "sendHint": "Enviar esta mensagem",
@@ -2975,6 +2976,7 @@
       "unsavedMarkdown": "Alterações em Markdown não salvas",
       "urlPrompt": "Digite uma URL ou deixe em branco para abrir uma nova aba.",
       "allowAutoClose": "Permitir fechamento automático",
+      "agents": "Agentes",
       "renameTerminalFailed": "Não foi possível renomear o terminal. {{reason}}"
     },
     "sourceControlLaunchAgent": {
@@ -3189,6 +3191,8 @@
       "conversationCleared": "Esta conversa foi limpa.",
       "goalsUnsupported": "Este agente não aceita objetivos.",
       "historyUnavailable": "O Orca não conseguiu abrir o histórico deste chat agora.",
+      "diskFull": "O disco do computador que executa este chat está cheio.",
+      "freeDiskSpace": "Libere espaço nesse disco e tente novamente.",
       "savedInOtherFolder": "Esta conversa foi salva em outra pasta.",
       "historyUnreadable": "O Orca não conseguiu ler o histórico salvo deste chat.",
       "historyUnusable": "Não foi possível carregar este chat.",
@@ -3289,6 +3293,7 @@
     },
     "structuredOpen": {
       "worktreeDeleted": "A worktree foi excluída.",
+      "projectRemoved": "O projeto foi removido do Orca.",
       "folderWorkspaceRemoved": "O espaço de trabalho de pasta foi removido.",
       "goneGeneric": "O chat do agente não está mais neste host, portanto não pode ser reaberto aqui.",
       "unknownGeneric": "Não foi possível encontrar o bate-papo do agente neste host. Reconecte-se ao computador e tente novamente.",
@@ -3327,11 +3332,29 @@
     "usePrTextAction": {
       "updateFailed": "Falha ao atualizar o pull request."
     },
+    "tabsSheet": {
+      "needsYou": "Precisa de você",
+      "working": "Trabalhando",
+      "everythingElse": "Todo o resto",
+      "closeTab": "Fechar {{title}}"
+    },
+    "tabRows": {
+      "browser": "Navegador",
+      "markdown": "Nota Markdown",
+      "file": "Arquivo",
+      "chat": "Chat",
+      "terminal": "Terminal"
+    },
     "browserProfile": {
       "default": "Padrão"
     },
     "tabBar": {
+      "oneTab": "1 aba",
       "tabCount": "Abas: {{count}}",
+      "anotherNeedsYou": "outra aba precisa de você",
+      "actionsHint": "Mostra ações para esta aba",
+      "next": "Próxima aba",
+      "previous": "Aba anterior",
       "hint": "Mostra todas as abas"
     }
   },
@@ -3948,6 +3971,9 @@
       "planModelUnavailable": "O modelo \"{{model}}\" não está disponível para {{label}}.",
       "planModelWithoutThinking": "O modelo \"{{model}}\" não suporta um nível de esforço de raciocínio.",
       "planThinkingLevelInvalid": "O nível de raciocínio \"{{level}}\" não é válido para {{model}}.",
+      "commandTemplateEmptyDictationCleanup": "O modelo de comando para a revisão do ditado está vazio.",
+      "dictationCleanupAgentUnsupported": "Escolha um agente compatível com a revisão por IA em Configurações -> Voz -> Revisão. Agentes compatíveis: {{agents}}, ou Comando personalizado.",
+      "agentCannotGenerateDictationCleanup": "O agente \"{{agent}}\" não é compatível com a revisão do ditado. Agentes compatíveis: {{agents}}, ou Comando personalizado.",
       "promptTooLargeForArgument": "O prompt de {{label}} é grande demais para ser passado como um único argumento de linha de comando. Adicione menos alterações ao stage e tente novamente.",
       "promptTooLargeForWindows": "O prompt de {{label}} é grande demais para a linha de comando do Windows. Adicione menos alterações ao stage e tente novamente.",
       "pullRequestDetailsUnparseable": "Não foi possível interpretar os detalhes gerados do pull request.",
@@ -5004,7 +5030,7 @@
         }
       },
       "TaskPage": {
-        "99c2755218": "JQL do Jira, ex.: project = ABC AND statusCategory != Done",
+        "99c2755218": "Buscar issues ou inserir JQL, ex.: project = ABC",
         "jiraTextMatchesNotice": "Mostrando correspondências de texto. O Jira não conseguiu executar esta busca como JQL."
       },
       "editor": {
@@ -5116,6 +5142,10 @@
     }
   },
   "bots": {
+    "section": {
+      "scrollLeft": "Rolar para a esquerda · {{amount}} ocultos",
+      "scrollRight": "Rolar para a direita · {{amount}} ocultos"
+    },
     "link": {
       "pairTitle": "Emparelhar um computador",
       "pairRequired": "Para abrir este link, emparelhe este telefone com um computador e abra o link novamente.",
@@ -5154,7 +5184,6 @@
       "access": "Acesso",
       "whoCanAsk": "Quem pode pedir",
       "deleteBot": "Excluir bot…",
-      "agentDetail": "Usado em conversas e automações de bots. Um novo modelo vale para novas conversas; o chat principal mantém o atual.",
       "accountChecking": "Verificando…",
       "signedOut": "Sessão do Orca encerrada",
       "orcaAccount": "Conta do Orca",
@@ -5169,7 +5198,6 @@
       "onlyYou": "Só você",
       "model": "Modelo",
       "effort": "Esforço",
-      "chatDefaultNote": "Usa o padrão do seu chat. Execuções em segundo plano usam sua configuração de Agentes.",
       "modelDefault": "Padrão",
       "signInChanged": "O login do Orca mudou",
       "sameAsChatsDetail": "Usa a configuração de permissão dos seus chats.",
@@ -5213,31 +5241,14 @@
       "peerTold": "{{from}} avisou {{to}}",
       "startAConversationWithThisGroupMentionBots": "Comece uma conversa com este grupo. Mencione bots com @Nome ou @everyone.",
       "items": {
-        "thisGroup": "Este grupo",
-        "thread": "Thread",
-        "all": "Todo o trabalho deles",
-        "orNames": "{{names}} ou {{last}}",
-        "outsideRoom_one": "Mais {{count}} fora desta sala",
-        "outsideRoom_other": "Mais {{count}} fora desta sala",
-        "outsideThread_one": "Mais {{count}} fora desta thread",
-        "outsideThread_other": "Mais {{count}} fora desta thread",
-        "outside_one": "Mais {{count}} fora deste grupo",
-        "outside_other": "Mais {{count}} fora deste grupo",
         "emptyTitle": "Ainda não há itens deste grupo",
-        "emptyBody": "Quando {{names}} assumirem algo neste grupo, aparecerá aqui.",
         "needsYouCount_one": "{{count}} precisa de você",
         "needsYouCount_other": "{{count}} precisam de você",
         "workingCount_one": "{{count}} trabalhando",
         "workingCount_other": "{{count}} trabalhando",
         "filterBot": "Bot",
-        "outsideRoom": "Mais {{count}} fora desta sala",
-        "outsideThread": "Mais {{count}} fora desta thread",
-        "outside": "Mais {{count}} fora deste grupo",
         "needsYouCount": "{{count}} precisa de você",
         "workingCount": "{{count}} trabalhando",
-        "outsideRoom_many": "Mais {{count}} fora desta sala",
-        "outsideThread_many": "Mais {{count}} fora desta thread",
-        "outside_many": "Mais {{count}} fora deste grupo",
         "needsYouCount_many": "{{count}} precisam de você",
         "workingCount_many": "{{count}} trabalhando"
       },
@@ -5275,8 +5286,7 @@
     },
     "items": {
       "filter": {
-        "clearAll": "Limpar filtros",
-        "chat": "Chat"
+        "clearAll": "Limpar filtros"
       },
       "tab": "Itens",
       "activity": {
@@ -5303,7 +5313,9 @@
       "skillLimit": "Mensagem não enviada. Selecione no máximo {{limit}} arquivos de habilidade e tente novamente.",
       "ask": {
         "notSentYet": "ainda não enviado",
-        "replaced": "O agente fez uma nova pergunta. Leia e responda."
+        "replaced": "O agente fez uma nova pergunta. Leia e responda.",
+        "replacedByNewer": "Substituída por uma pergunta mais recente",
+        "skipped": "Ignoradas"
       }
     },
     "needs": {
@@ -5535,7 +5547,6 @@
       "colorInk": "Tinta",
       "title": "Nome e imagem",
       "mascot": "Mascote",
-      "background": "Cor de fundo",
       "choosePhoto": "Escolher em Fotos",
       "slackToo": "Também altera a imagem do seu bot no Slack."
     },
@@ -5552,9 +5563,7 @@
       "addButton": "Adicionar",
       "sourceLabel": "URL do servidor ou comando de início",
       "sourcePlaceholder": "https://… or npx …",
-      "scope": "Só {{name}} a recebe, além das suas próprias ferramentas.",
       "details": "Detalhes",
-      "commandWarning": "O comando é executado na pasta inicial deste bot em {{host}}. Adicionar ou salvar pode iniciá-lo durante a verificação nativa. Adicione só softwares confiáveis.",
       "serverType": "Tipo de servidor",
       "urlMode": "Conectar a uma URL",
       "commandMode": "Executar um comando",
@@ -5562,7 +5571,6 @@
       "removeTitle": "Remover {{app}}?",
       "removeNote": "{{bot}} não pode mais usar {{app}}. Você pode adicioná-lo de novo quando quiser.",
       "remove": "Remover",
-      "signInOrca": "Funciona com Claude e Codex",
       "signInMissing": "{{agent}} não está conectado",
       "signInHeld": "Gerenciado por {{agent}}",
       "wontStart": "Não inicia",
@@ -5624,7 +5632,17 @@
         "denied": "O acesso não foi permitido.",
         "expired": "O login expirou. Tente novamente.",
         "couldNotSignIn": "Não foi possível fazer login. Tente novamente."
-      }
+      },
+      "trust": "Adicione apenas software em que você confia.",
+      "argument": "Argumento",
+      "removeArgument": "Remover argumento",
+      "header": "Cabeçalho",
+      "variable": "Variável",
+      "removeHeaderRow": "Remover cabeçalho",
+      "removeVariableRow": "Remover variável",
+      "emptyArgument": "Vazio",
+      "valueNew": "Novo valor",
+      "valueSaved": "Salvo"
     },
     "handToBot": {
       "menu": "Repassar a um bot…",
@@ -5657,7 +5675,6 @@
       "rowDetail": "{{app}} {{kind}}",
       "bringOver": "Trazer",
       "otherApp": "Outro app…",
-      "otherAppNote": "Seu bot antigo copia os arquivos dele para você",
       "noneFoundNote": "Nenhum bot encontrado no OpenClaw (~/.openclaw), no Hermes (~/.hermes) ou no OpenBot.",
       "sendStep": "Envie esta mensagem ao seu bot antigo",
       "copyMessage": "Copiar mensagem",
@@ -5670,18 +5687,13 @@
       "replyLabel": "A resposta dele",
       "title": "Importar de outro app",
       "newBot": "Novo bot",
-      "exportDescription": "Peça ao seu bot antigo uma cópia de si mesmo e depois entregue a cópia ao seu novo bot.",
-      "description": "Seu novo bot lê o antigo e se configura sozinho.",
       "nameAnother": "Dê um nome ao novo bot",
-      "importedBefore": "{{bot}} veio deste bot",
       "keysStay": "Chaves e logins ficam para trás",
       "chooseFolderTitle": "Escolher uma pasta",
       "loadingFolders": "Carregando pastas…",
       "lookingOn": "Procurando em {{host}}…",
       "foundOn": "Encontramos {{count}} em {{host}}",
-      "copiedNote": "Copiado. Cole onde você conversa com seu bot antigo.",
       "copyAgain": "Copiar novamente",
-      "addStepNote": "Ele salva uma pasta com nome terminado em -export em Downloads, em {{host}}.",
       "chooseAnother": "Escolher outra pasta…",
       "chooseFolderRow": "Escolher uma pasta…",
       "nudgeOne": "Encontramos um bot no {{app}}.",
@@ -5842,6 +5854,9 @@
       },
       "webhooks": {
         "line": "Eventos de qualquer ferramenta ou script"
+      },
+      "composio": {
+        "keyOnHost": "Fica em {{host}}; os bots nunca a veem."
       }
     },
     "share": {
@@ -5853,6 +5868,10 @@
       "today": "hoje",
       "yesterday": "ontem",
       "lastTidied": "última arrumação {{when}}"
+    },
+    "usageLimit": {
+      "continuesAt": "Continua às {{time}}",
+      "hitLimit": "Limite atingido · reinicia às {{time}}"
     }
   },
   "sidebar": {

@@ -1,7 +1,11 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react'
-import { Platform } from 'react-native'
+import { Platform, type LayoutChangeEvent } from 'react-native'
 import { triggerSelection } from '../../../../platform/haptics/haptics'
 import { forgetMobileNativeChatPlace } from './use-mobile-native-chat-place-keeper'
+import {
+  createMobileNativeChatTailViewport,
+  type MobileNativeChatTailViewport
+} from './mobile-native-chat-tail-viewport'
 
 const AT_TAIL_SLOP = 80
 
@@ -56,7 +60,7 @@ export type MobileNativeChatTailFollow = {
   }
   showJumpToTail: boolean
   showPreviousPrompt: boolean
-  pinToTail: () => void
+  pinToTail: (event?: LayoutChangeEvent) => void
   pinToTailAfterContentResize: (_width: number, height: number) => void
   jumpToTail: () => void
   jumpToPreviousPrompt: () => void
@@ -68,6 +72,8 @@ export type MobileNativeChatTailFollow = {
   endMomentum: (event: MobileScrollTailEvent) => void
   scrollMayLoadEarlier: () => boolean
   recordScrollMetrics: (event: MobileScrollTailMetrics) => void
+  /** The on-screen part of the list's end, for footer rows that pause work while scrolled away. */
+  viewport: MobileNativeChatTailViewport
 }
 
 // Use one non-animated follower: competing animated endpoints drift backward during streaming.
@@ -119,19 +125,27 @@ export function useMobileNativeChatTailFollow(args: {
     listRef.current = list
   }, [])
 
-  const pinToTail = useCallback(() => {
-    if (followingRef.current && hasItems) {
-      listRef.current?.scrollToEnd({ animated: false })
-    }
-  }, [hasItems])
+  const [viewport] = useState(createMobileNativeChatTailViewport)
+  const pinToTail = useCallback(
+    (event?: LayoutChangeEvent) => {
+      if (event) {
+        viewport.laidOut(event.nativeEvent.layout.height)
+      }
+      if (followingRef.current && hasItems) {
+        listRef.current?.scrollToEnd({ animated: false })
+      }
+    },
+    [hasItems, viewport]
+  )
 
   const pinToTailAfterContentResize = useCallback(
     (_width: number, height: number) => {
+      viewport.contentResized(height)
       if (followingRef.current && hasItems) {
         listRef.current?.scrollToOffset({ animated: false, offset: height })
       }
     },
-    [hasItems]
+    [hasItems, viewport]
   )
 
   const clearUserScrollSettle = useCallback(() => {
@@ -143,11 +157,12 @@ export function useMobileNativeChatTailFollow(args: {
 
   const recordScrollMetrics = useCallback(
     (event: MobileScrollTailMetrics) => {
+      viewport.record(event)
       if (listReportsGestures()) {
         setAtTail(isAtTail(event))
       }
     },
-    [setAtTail]
+    [setAtTail, viewport]
   )
 
   // Detach even on one-point reader moves; programmatic corrections must not alter intent.
@@ -270,13 +285,14 @@ export function useMobileNativeChatTailFollow(args: {
       return
     }
     scopeKeyRef.current = scopeKey
+    viewport.reset()
     const restored = restoredScopeRef.current === scopeKey
     restoredScopeRef.current = null
     // Rows still loading keep the chat's saved place, for the list to put back once they draw.
     if (!restored) {
       followTail()
     }
-  }, [scopeKey, followTail])
+  }, [scopeKey, followTail, viewport])
 
   useEffect(() => clearUserScrollSettle, [clearUserScrollSettle])
 
@@ -302,6 +318,7 @@ export function useMobileNativeChatTailFollow(args: {
     beginMomentum,
     endMomentum,
     scrollMayLoadEarlier,
-    recordScrollMetrics
+    recordScrollMetrics,
+    viewport
   }
 }

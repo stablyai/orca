@@ -22,14 +22,27 @@ const LONG_ANSWER = [
   'If a reader asks for the older numbers, send them the archive link.'
 ].join('\n\n')
 
-const asker = { kind: 'bot' as const, botId: fixtureCos.id, chatId: 'chat-home' }
+const sampleBot = {
+  ...fixtureCos,
+  id: 'fixture-report-bot',
+  name: 'Sample Bot',
+  folder: 'sample-bot',
+  folderWorkspaceId: 'fixture-report-workspace',
+  avatar: null
+}
+const asker = {
+  kind: 'bot' as const,
+  botId: sampleBot.id,
+  chatId: 'chat-home'
+}
 
 const EARLIER = [
   'Starting on the sample report outline now.',
   'The example data has two quarters, and the template only fits one per page.',
   'Splitting the summary table needs a second page in the template.',
   'Template updated; both quarters now fit on two pages.',
-  'Before going further, one choice about the scope of the report.'
+  'Before going further, one choice about the scope of the report.',
+  'The sample report is ready for a final pass.'
 ]
 
 function asking(
@@ -39,15 +52,26 @@ function asking(
 ): { item: BotItem; events: BotItemEvent[] } {
   const item = makeTestBotItem(uid, {
     title: 'Draft the sample report',
-    owner: { botId: fixtureCos.id, name: 'Sample Bot' },
+    owner: { botId: sampleBot.id, name: sampleBot.name },
     status: 'needs_you',
     question: { eventId: `q${uid}`, text: question },
     createdAt: Date.now() - 3 * 3_600_000,
     updatedAt: Date.now() - 20 * 60_000,
     lastActivityAt: Date.now() - 20 * 60_000
   })
+  const options = (
+    question === SHORT_QUESTION
+      ? ['Expire after 7 days', 'Keep the link open']
+      : ['Both quarters', 'Latest quarter only']
+  ).map((label) => ({ label }))
   const events: BotItemEvent[] = [
-    { id: `m${uid}`, kind: 'made', actor: asker, data: {}, at: Date.now() - 3 * 3_600_000 },
+    {
+      id: `m${uid}`,
+      kind: 'made',
+      actor: asker,
+      data: {},
+      at: Date.now() - 3 * 3_600_000
+    },
     ...earlier.map((text, index): BotItemEvent => ({
       id: `c${uid}-${index}`,
       kind: 'commented',
@@ -59,7 +83,7 @@ function asking(
       id: `q${uid}`,
       kind: 'commented',
       actor: asker,
-      data: { text: question },
+      data: { text: question, ask: { questions: [{ prompt: question, options }] } },
       at: Date.now() - 20 * 60_000
     },
     {
@@ -101,16 +125,14 @@ function Pane({
   width: number
   height: number
 }): React.JSX.Element {
-  // Invented name and a letter avatar: evidence never shows a real bot.
-  const bot = { ...fixtureCos, name: 'Sample Bot', avatar: null }
   return (
     <div className="flex flex-col bg-sidebar" style={{ width, height }}>
-      <BotItemPaneFrame walk={walk()} offline={false} onBack={() => {}} owner={bot}>
+      <BotItemPaneFrame walk={walk()} offline={false} onBack={() => {}} owner={sampleBot}>
         {({ comment, nav }) => (
           <BotItemBody
             commentRef={comment}
             nav={nav}
-            bot={bot}
+            bot={sampleBot}
             item={item}
             view={{
               item,
@@ -145,7 +167,7 @@ function replying(
     store: {
       folderWorkspaces: [
         makeFolderWorkspace({
-          id: fixtureCos.folderWorkspaceId,
+          id: sampleBot.folderWorkspaceId,
           folderPath: '/home/me/.orca/bots/sample-bot'
         })
       ]
@@ -153,7 +175,7 @@ function replying(
     // Each theme's shot starts from the same draft.
     setup: () =>
       updateNativeChatComposerDraft(
-        `bot-item-comment:${botRefKey(fixtureCos)}:${item.uid}`,
+        `bot-item-comment:${botRefKey(sampleBot)}:${item.uid}`,
         { text: draft, images: [] },
         'immediate'
       ),
@@ -161,7 +183,7 @@ function replying(
   })
 }
 
-/** Nothing typed yet: about four lines of room, the tools on their own row below. */
+/** An idle reply with only the question chip, textbox and send control. */
 export const empty360 = replying(401, SHORT_QUESTION, '', 360, 640)
 export const empty700 = replying(402, SHORT_QUESTION, '', 700, 640)
 /** A long answer: the box grows to its cap, then scrolls. */
@@ -209,7 +231,10 @@ export const shownQuestion360 = {
     await pause(300)
   }
 }
-export const shownQuestion700 = { ...longActivity(414, 700), interact: shownQuestion360.interact }
+export const shownQuestion700 = {
+  ...longActivity(414, 700),
+  interact: shownQuestion360.interact
+}
 /** Hovering "Replying to": its tooltip. */
 export const chipTooltip360 = {
   ...longActivity(415, 360),
@@ -221,7 +246,10 @@ export const chipTooltip360 = {
     await pause(900)
   }
 }
-export const chipTooltip700 = { ...longActivity(416, 700), interact: chipTooltip360.interact }
+export const chipTooltip700 = {
+  ...longActivity(416, 700),
+  interact: chipTooltip360.interact
+}
 /** Its × hides the mark, with no scroll: the Activity stays where it was read. */
 export const hidden360 = {
   ...longActivity(417, 360),
@@ -231,4 +259,103 @@ export const hidden360 = {
     await pause(400)
   }
 }
-export const hidden700 = { ...longActivity(418, 700), interact: hidden360.interact }
+export const hidden700 = {
+  ...longActivity(418, 700),
+  interact: hidden360.interact
+}
+
+// Idle and empty, the box is one compact row; focus opens it, and it folds back only when focus leaves it empty.
+
+function plain(uid: number, draft: string, width: number): ComponentFixture {
+  const { item, events } = asking(uid, SHORT_QUESTION, EARLIER)
+  const quiet = { ...item, status: 'working' as const, question: null }
+  const quietEvents = events.filter(
+    (event) => event.kind !== 'status' && event.id !== item.question?.eventId
+  )
+  return {
+    ...replying(uid, SHORT_QUESTION, draft, width, 520, EARLIER),
+    render: () => <Pane item={quiet} events={quietEvents} width={width} height={520} />
+  }
+}
+
+function editor(frame: HTMLElement): HTMLElement | null {
+  return frame.querySelector<HTMLElement>('[contenteditable]')
+}
+
+const focusBox = async (frame: HTMLElement): Promise<void> => {
+  await pause(200)
+  editor(frame)?.focus()
+  await pause(300)
+}
+/** Focus in, then out to the Back row. */
+const focusThenLeave = async (frame: HTMLElement): Promise<void> => {
+  await focusBox(frame)
+  frame.querySelector<HTMLElement>('button')?.focus()
+  await pause(400)
+}
+
+export const compactIdle360 = plain(421, '', 360)
+export const compactIdle700 = plain(422, '', 700)
+export const compactFocused360 = { ...plain(423, '', 360), interact: focusBox }
+export const compactFocused700 = { ...plain(424, '', 700), interact: focusBox }
+export const compactTyping360 = {
+  ...plain(425, 'Only the latest quarter', 360),
+  interact: focusBox
+}
+export const compactTyping700 = {
+  ...plain(426, 'Only the latest quarter', 700),
+  interact: focusBox
+}
+/** A draft keeps it open after focus leaves. */
+export const compactDraftBlurred360 = {
+  ...plain(427, 'Only the latest quarter', 360),
+  interact: focusThenLeave
+}
+export const compactDraftBlurred700 = {
+  ...plain(428, 'Only the latest quarter', 700),
+  interact: focusThenLeave
+}
+/** Empty when focus leaves: it folds back. */
+export const compactEmptyBlurred360 = {
+  ...plain(429, '', 360),
+  interact: focusThenLeave
+}
+export const compactEmptyBlurred700 = {
+  ...plain(430, '', 700),
+  interact: focusThenLeave
+}
+/** "Replying to" stays above the compact row. */
+export const compactReplying360 = longActivityEmpty(431, 360)
+export const compactReplying700 = longActivityEmpty(432, 700)
+export const compactReplyingFocused360 = {
+  ...longActivityEmpty(433, 360),
+  interact: focusBox
+}
+export const compactReplyingFocused700 = {
+  ...longActivityEmpty(434, 700),
+  interact: focusBox
+}
+
+function longActivityEmpty(uid: number, width: number): ComponentFixture {
+  return replying(uid, LONG_QUESTION, '', width, 520, EARLIER)
+}
+
+/** Read partway up Activity, then the box opens: the messages in view stay where they were. */
+async function readPartway(frame: HTMLElement): Promise<void> {
+  await pause(300)
+  const scroller = frame.querySelector<HTMLElement>('.overflow-y-auto')
+  scroller?.dispatchEvent(new WheelEvent('wheel', { deltaY: -120, bubbles: true }))
+  if (scroller) {
+    scroller.scrollTop = 120
+  }
+  await pause(300)
+}
+export const scrolledIdle360 = { ...plain(435, '', 360), interact: readPartway }
+export const scrolledFocused360 = {
+  ...plain(436, '', 360),
+  interact: async (frame: HTMLElement) => {
+    await readPartway(frame)
+    editor(frame)?.focus()
+    await pause(400)
+  }
+}

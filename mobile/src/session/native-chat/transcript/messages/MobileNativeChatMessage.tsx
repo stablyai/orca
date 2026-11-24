@@ -15,7 +15,6 @@ import { isNativeChatProviderTurnStart } from '../../../../../../src/shared/nati
 import { MobileNativeChatReasoningRow } from '../message-content/MobileNativeChatReasoningRow'
 import { useMobileNativeChatRunAsides } from '../use-mobile-native-chat-run-asides'
 import { mobileNativeChatRowId } from '../viewport/mobile-native-chat-reading-place'
-import { useMobileNativeChatLandedPrompt } from '../viewport/mobile-native-chat-landed-prompt'
 import { nativeChatWorkRunEntries } from '../../../../../../src/shared/native-chat/transcript/folding/native-chat-work-run'
 import { MobileNativeChatTurnStatus } from './MobileNativeChatTurnStatus'
 import { MobileNativeChatNoticeRow } from '../notices/MobileNativeChatNoticeRow'
@@ -41,7 +40,7 @@ import { MobileNativeChatBackgroundTaskRun } from './MobileNativeChatBackgroundT
 import { withoutBackgroundTaskRows } from '../../../../../../src/shared/native-chat/input/task-lists/native-chat-background-task-row'
 import { ToolRun } from '../tool-results/MobileNativeChatToolRun'
 import type { NativeChatTurnStatus } from '../../../../../../src/shared/native-chat/transcript/turns/native-chat-turn-status'
-import { styles } from './mobile-native-chat-message-styles'
+import { styles, useMobileNativeChatUserBubbleStyle } from './mobile-native-chat-message-styles'
 import { MobileNativeChatAgentMessageCard } from '../agent-messages/MobileNativeChatAgentMessageCard'
 import { mobileAutomationRow } from '../MobileAutomationSavedRow'
 import { MobileNativeChatVisualContext } from '../../visual/mobile-native-chat-visual-context'
@@ -166,6 +165,7 @@ function MobileNativeChatMessageImpl({
         pending={askPending}
         fontScale={fontScale}
         listsQuestions={false}
+        disclosureKey={`ask:${rowKey ?? message.id}`}
       />
     ) : null
   // A ref keeps the memoized Markdown context stable as the message streams.
@@ -191,7 +191,7 @@ function MobileNativeChatMessageImpl({
     />
   ) : null
   const rowId = rowKey ?? message.id
-  const landed = useMobileNativeChatLandedPrompt(isUser ? rowId : undefined)
+  const userBubble = useMobileNativeChatUserBubbleStyle(isUser ? rowId : undefined)
   const withStatus = (row: React.ReactNode) => (
     <>
       {turnStatusAbove ? statusRow : null}
@@ -228,6 +228,7 @@ function MobileNativeChatMessageImpl({
         <MobileNativeChatResolutionReceipt
           body={receipt}
           awaiting={awaiting}
+          disclosureKey={`receipt:${rowId}`}
           fontScale={fontScale}
         />
       </View>
@@ -294,7 +295,6 @@ function MobileNativeChatMessageImpl({
   }
   const proseRows = (blocks: Chat.NativeChatBlock[]) =>
     blocks.map((block, index) => proseRow(block, index, Chat.isTextBlock(block) ? block.text : ''))
-  const userBubble = landed ? [styles.userBubble, styles.landedPrompt] : styles.userBubble
   return (
     <>
       {tookOver ? <MobileNativeChatTookOverRow workspace={tookOver.workspace} /> : null}

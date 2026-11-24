@@ -112,8 +112,11 @@ export function readWorkerDock(
         const ready = row.lifecycleState === 'ready'
         const live = ready ? activity?.get(identity.dispatchId) : undefined
         if (current) {
+          // An exited worker's dispatch is still open, so it ages out like an unverifiable one.
           const unverified =
-            ready && activity !== undefined && (!live || live.state === 'unavailable')
+            ready &&
+            activity !== undefined &&
+            (!live || live.state === 'unavailable' || live.state === 'unexpected')
           const window = unverified
             ? WORKER_DOCK_UNVERIFIED_READY_MS
             : row.lifecycleState === 'start_unknown' || row.lifecycleState === 'stop_unknown'
@@ -273,6 +276,7 @@ export function readWorkerDockResult(
     title: row.title,
     outcome,
     body: row.body ?? (row.receipt ? 'Stopped by you.' : failureReason),
+    report: typeof row.body === 'string',
     at: epoch(row.changed_at),
     settlement: row.settlement ?? `worker_report:${String(row.report_id)}`,
     acknowledged: row.acknowledged === 1,

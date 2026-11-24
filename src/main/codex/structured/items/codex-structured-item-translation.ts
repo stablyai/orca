@@ -20,6 +20,7 @@ import {
   type CodexHelperName
 } from './codex-collab-agent-item-translation'
 import { codexItemRunState } from './codex-item-run-state'
+import { codexFileChangePatch } from './codex-file-change-patch'
 import { readRecord, readString, readTextContent } from '../../app-server/codex-item-field-readers'
 import type { CodexThreadItem } from './codex-thread-item-identity'
 import { journalReasoningBody } from '../../../native-chat/agent-session-journal/item-lifecycle/journal-reasoning-row'
@@ -112,13 +113,13 @@ function fileChangeItem(item: CodexThreadItem): CodexJournalItem {
         const record = typeof change === 'object' && change !== null ? readRecord(change) : {}
         const path = readString(record, 'path')
         const diff = readString(record, 'diff')
-        return path && diff ? [{ path, diff }] : []
+        return path && diff ? [{ path, diff, kind: record.kind }] : []
       })
     : []
   if (changes.length === 0 || codexItemRunState(item) !== 'completed') {
     return fileChangeToolCall(item)
   }
-  const patch = changes.map((change) => change.diff).join('\n')
+  const patch = codexFileChangePatch(changes)
   return {
     body: {
       kind: 'diff',

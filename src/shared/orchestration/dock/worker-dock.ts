@@ -84,6 +84,9 @@ export const WorkerDockResult = z.object({
   title: z.string(),
   outcome: z.enum(['succeeded', 'failed', 'stopped', 'unexpected']),
   body: z.string(),
+  /** True when the body is the worker's own report (Markdown); false for a raw error or a stop
+   *  note. Optional: older hosts omit it, and their bodies keep rendering as Markdown. */
+  report: z.boolean().optional(),
   at: z.number().nullable(),
   settlement: z.string(),
   acknowledged: z.boolean(),
