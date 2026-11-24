@@ -1040,7 +1040,9 @@
           "done": "已完成",
           "waiting": "等待你处理",
           "working": "工作中",
-          "stopped": "已停止"
+          "stopped": "已停止",
+          "doneCount": "已完成 {{count}} 步",
+          "more": "+ 还有 {{count}} 步"
         },
         "account": {
           "title": "我应该使用哪个 Google 账户？",
@@ -1056,7 +1058,8 @@
         "connect": {
           "titleAccount": "登录以连接 {{email}}",
           "title": "登录以连接",
-          "onComputer": "请在电脑上的 Orca 中登录 Google"
+          "onComputer": "请在电脑上的 Orca 中登录 Google",
+          "signIn": "登录 Google"
         },
         "movedDown": "已在下方继续",
         "connected": {
@@ -1905,6 +1908,24 @@
         "loading": "正在加载 Codex 用量…",
         "account": "此聊天使用的账户",
         "retry": "重试"
+      },
+      "workerDock": {
+        "coordinator": "正在等待协调者",
+        "starting": "正在启动",
+        "idle": "空闲",
+        "saving": "正在保存结果…",
+        "failed": "失败",
+        "unexpected": "意外停止",
+        "stopping": "正在停止…",
+        "workerCount_one": "{{count}} 个工作者",
+        "workerCount_other": "{{count}} 个工作者",
+        "taskCount_one": "{{count}} 个任务",
+        "taskCount_other": "{{count}} 个任务",
+        "failedCount": "{{count}} 个失败",
+        "needsYouCount": "{{count}} 个需要你",
+        "runningCount": "{{count}} 个运行中",
+        "workersRegion": "工作者",
+        "stopOnComputer": "请在工作者运行的电脑上停止或清除它们"
       }
     },
     "hostOfflineBanner": {
@@ -5430,6 +5451,13 @@
       "renderProcessGone": "工作区已停止响应",
       "statusUnreadable": "无法读取此主机的状态。请返回后重新打开",
       "tryAgain": "重试"
+    },
+    "pageRouteUnavailable": {
+      "updateTitle": "更新 Orca",
+      "updateMessage": "此页面需要手机或 {{host}} 上更新版本的 Orca",
+      "updateMessageNoHost": "此页面需要更新版本的 Orca",
+      "serverTitle": "无法连接此服务器",
+      "serverMessage": "你的手机无法通过 {{host}} 连接到此工作区的服务器"
     }
   },
   "workspace": {
@@ -5734,7 +5762,7 @@
       "letBotReactHelp": "每个结果都会开启一个新回合，让 {{name}} 据此采取行动",
       "time": "时间",
       "minute": "分钟",
-      "runs": "运行"
+      "runs": "运行设置"
     },
     "botEvents": {
       "label": "事件",
@@ -6239,9 +6267,21 @@
       "needsTwoBots": "需要 {{host}} 上有 2 个 bot",
       "stopCouldNotBeConfirmed": "无法确认是否已停止",
       "notStarted": "尚未启动",
+      "workingCount_one": "{{count}} 个工作中",
+      "workingCount_other": "{{count}} 个工作中",
+      "workingCount": "{{count}} 个工作中",
       "memberCount_one": "{{count}} 个 bot",
       "memberCount_other": "{{count}} 个 bot",
-      "memberCount": "{{count}} 个 bot"
+      "memberCount": "{{count}} 个 bot",
+      "moreCount_one": "还有 {{count}} 个",
+      "moreCount_other": "还有 {{count}} 个",
+      "moreCount": "还有 {{count}} 个",
+      "andNames": "{{names}}和{{last}}",
+      "membersHere_one": "{{names}} 在这里",
+      "membersHere_other": "{{names}} 都在这里",
+      "membersHere": "{{names}} 都在这里",
+      "starting": "正在启动…",
+      "peerReadReplyFrom": "{{reader}} 已读取 {{peer}} 的回复"
     },
     "templates": {
       "title": "Bot 模板",
@@ -6695,7 +6735,8 @@
     },
     "search": {
       "pausedMatches_one": "{{count}} 个已暂停的匹配项",
-      "pausedMatches_other": "{{count}} 个已暂停的匹配项"
+      "pausedMatches_other": "{{count}} 个已暂停的匹配项",
+      "showPausedAction": "显示已暂停的"
     },
     "list": {
       "updateOrcaOn": "更新 {{host}} 上的 Orca",
@@ -6703,7 +6744,8 @@
       "noBotsYet": "还没有 bots",
       "offline": "离线",
       "updateToSee": "更新 {{host}} 上的 Orca 以查看它的 bots",
-      "offEnd": "{{host}} 上的 Bots 已关闭"
+      "offEnd": "{{host}} 上的 Bots 已关闭",
+      "readFailed": "无法加载 {{host}} 上的 bots"
     },
     "items": {
       "chat": {
@@ -7602,7 +7644,7 @@
         "otherUserNext": "登录了另一个 Slack 账号的人批准了 Slack 链接，因此 {{bot}} 无法以你的身份操作。请获取新链接，并在登录你自己的 Slack 账号后批准",
         "expired": "Slack 登录未完成",
         "expiredNext": "Slack 链接在有人批准连接前已过期",
-        "code": "代码",
+        "code": "错误代码",
         "computer": "电脑",
         "workspace": "工作区"
       }
@@ -8247,13 +8289,16 @@
         "apiOff": "已在 Google Cloud 中停用",
         "adminBlocked": "已被你公司的 Google 管理员阻止",
         "error": "无法检查",
-        "notAllowed": "你没有允许"
+        "notAllowed": "你未授权",
+        "allowOnHost": "在 {{host}} 上再次允许"
       },
       "headline": {
         "connected": "Google 已连接",
         "toFixOne": "快完成了：还有 1 个问题需要解决",
         "toFix": "快完成了：还有 {{count}} 个问题需要处理",
-        "ended": "Google 访问已结束。"
+        "noDefault": "选择默认账户",
+        "ended": "Google 访问已结束",
+        "endedOnHost": "Google 访问已结束。请在 {{host}} 上重新登录"
       },
       "defaultBadge": "默认",
       "setDefault": "设为默认",
@@ -8271,10 +8316,18 @@
         "removeFromHost": "从 {{host}} 移除",
         "revoke": "移除并在 Google 撤销授权"
       },
+      "accounts": "账户",
+      "row": {
+        "signedOut": "已被 Google 退出登录"
+      },
       "reconnect": "重新连接",
-      "addAccount": "添加另一个账号",
+      "addAccount": "添加另一个账户",
       "signIn": "登录 Google",
-      "handoff": "选择你的账号，然后选择\"允许\""
+      "handoff": "选择你的账户，然后点击\"允许\"",
+      "signInWarning": "由于这是你刚创建的自有应用，Google 会显示一条警告。请选择\"高级\"，然后选择\"转至 Orca\"，并在下一个页面勾选所有复选框",
+      "signInRun": {
+        "failed": "Google 登录失败。请重试"
+      }
     },
     "saveFailed": "无法保存",
     "sheet": {
