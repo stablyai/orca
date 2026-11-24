@@ -4,7 +4,6 @@ import { useAppStore } from '@/store'
 import type { WorkspaceCleanupCandidate } from '../../../../../shared/workspace-cleanup/workspace-cleanup'
 import {
   getWorkspaceCleanupCandidateIdentity,
-  getWorkspaceCleanupHostIdentity,
   resolveWorkspaceCleanupRemovalHostId
 } from '../../../../../shared/workspace-cleanup/workspace-cleanup-host-identity'
 import type {
@@ -13,9 +12,16 @@ import type {
 } from '@/store/slices/workspace-cleanup/workspace-cleanup-removal'
 import { startWorkspaceCleanupBackgroundRemoval } from './settlement/workspace-cleanup-background-removal'
 import type { WorkspaceCleanupDeletionPhase } from '../candidate-list/workspace-cleanup-candidate-row'
+import { useWorkspaceCleanupRunStore } from './run/workspace-cleanup-run-store'
+import { createWorkspaceCleanupRunReporter } from './run/workspace-cleanup-run-reporter'
 import { createWorkspaceCleanupSnapshotPruneBatch } from './workspace-cleanup-snapshot-prune-batch'
+import {
+  mergeWorkspaceCleanupRowFailures,
+  startWorkspaceCleanupRowAttempt
+} from './workspace-cleanup-row-failures'
 
 type UnverifiedRemovalArgs = {
+  browseAttempts: { current: Map<string, symbol> }
   setRowFailures: Dispatch<SetStateAction<Record<string, WorkspaceCleanupFailure>>>
   setDeletionPhaseByIdentity: Dispatch<
     SetStateAction<Record<string, WorkspaceCleanupDeletionPhase>>
@@ -28,6 +34,7 @@ type UnverifiedRemovalArgs = {
 }
 
 export function useWorkspaceCleanupUnverifiedRemoval({
+  browseAttempts,
   setRowFailures,
   setDeletionPhaseByIdentity,
   clearQueuedDeleteState,
@@ -45,10 +52,32 @@ export function useWorkspaceCleanupUnverifiedRemoval({
       if (!attemptId) {
         return
       }
+      const browseAttempt = startWorkspaceCleanupRowAttempt(browseAttempts.current, [identity])
       const hostId = resolveWorkspaceCleanupRemovalHostId(candidate)
       setRowFailures((current) => withoutIdentity(current, identity))
       setDeletionPhaseByIdentity((current) => ({ ...current, [identity]: 'queued' }))
       markQueued([hostId ? { id: candidate.worktreeId, hostId } : candidate.worktreeId])
+      // A retry joins the run that failed (or starts a one-row run when none is left).
+      const runReporter = createWorkspaceCleanupRunReporter(
+        useWorkspaceCleanupRunStore.getState().beginRowRetry(candidate)
+      )
+      const clearOwnedDeletionState = (): void => {
+        if (!browseAttempt.owns(identity)) {
+          return
+        }
+        clearQueuedDeleteState(candidate.worktreeId, hostId ?? undefined)
+        if (mountedRef.current) {
+          setDeletionPhaseByIdentity((current) => withoutIdentity(current, identity))
+        }
+      }
+      const reportBrowseResult = (result: WorkspaceCleanupRemoveResult): void => {
+        clearOwnedDeletionState()
+        const settlement = browseAttempt.settle(result)
+        if (mountedRef.current) {
+          setRowFailures((current) => mergeWorkspaceCleanupRowFailures(current, settlement))
+          onDeselect(settlement.removedIdentities)
+        }
+      }
       startWorkspaceCleanupBackgroundRemoval({
         candidates: [candidate],
         removeCandidates,
@@ -56,40 +85,34 @@ export function useWorkspaceCleanupUnverifiedRemoval({
         getRemoveOptions: () => ({
           unverifiedRemovalConsent: { identity, attemptId }
         }),
+        onRowStarted: runReporter.onRowStarted,
+        onRowRemoved: runReporter.onRowRemoved,
         onProgress: () => {
-          if (mountedRef.current) {
+          if (mountedRef.current && browseAttempt.owns(identity)) {
             setDeletionPhaseByIdentity((current) => ({ ...current, [identity]: 'deleting' }))
           }
         },
         onRowFailed: (failure) => {
-          clearQueuedDeleteState(failure.worktreeId, failure.executionHostId)
-          // Clear optimistic deleting immediately on preflight/timeout failure, before batch settlement.
-          if (mountedRef.current) {
-            setDeletionPhaseByIdentity((current) => withoutIdentity(current, identity))
-          }
+          runReporter.onRowFailed(failure)
+          clearOwnedDeletionState()
         },
         onResult: (result) => {
-          clearQueuedDeleteState(candidate.worktreeId, hostId ?? undefined)
-          if (mountedRef.current) {
-            applyResult(result, identity, setRowFailures, setDeletionPhaseByIdentity, onDeselect)
-          }
+          runReporter.onResult(result)
+          reportBrowseResult(result)
         },
         onLateResult: (result) => {
-          if (mountedRef.current) {
-            setDeletionPhaseByIdentity((current) => withoutIdentity(current, identity))
-            applyLateResult(result, setRowFailures, onDeselect)
-          }
+          runReporter.onLateResult(result)
+          reportBrowseResult(result)
         },
-        onError: () => {
-          clearQueuedDeleteState(candidate.worktreeId, hostId ?? undefined)
-          if (mountedRef.current) {
-            setDeletionPhaseByIdentity((current) => withoutIdentity(current, identity))
-          }
+        onError: (error) => {
+          runReporter.onError(error)
+          clearOwnedDeletionState()
         }
       })
     },
     [
       beginConsent,
+      browseAttempts,
       clearQueuedDeleteState,
       markQueued,
       mountedRef,
@@ -101,52 +124,8 @@ export function useWorkspaceCleanupUnverifiedRemoval({
   )
 }
 
-function applyResult(
-  result: WorkspaceCleanupRemoveResult,
-  identity: string,
-  setFailures: UnverifiedRemovalArgs['setRowFailures'],
-  setPhases: UnverifiedRemovalArgs['setDeletionPhaseByIdentity'],
-  onDeselect: UnverifiedRemovalArgs['onDeselect']
-): void {
-  setPhases((current) => withoutIdentity(current, identity))
-  setFailures((current) => addFailures(withoutIdentity(current, identity), result.failures))
-  onDeselect(result.removedIdentities)
-}
-
-function applyLateResult(
-  result: WorkspaceCleanupRemoveResult,
-  setFailures: UnverifiedRemovalArgs['setRowFailures'],
-  onDeselect: UnverifiedRemovalArgs['onDeselect']
-): void {
-  setFailures((current) => {
-    let next = current
-    for (const identity of result.removedIdentities) {
-      next = withoutIdentity(next, identity)
-    }
-    return addFailures(next, result.failures)
-  })
-  onDeselect(result.removedIdentities)
-}
-
-function addFailures(
-  current: Record<string, WorkspaceCleanupFailure>,
-  failures: readonly WorkspaceCleanupFailure[]
-): Record<string, WorkspaceCleanupFailure> {
-  const next = { ...current }
-  for (const failure of failures) {
-    next[getWorkspaceCleanupFailureIdentity(failure)] = failure
-  }
-  return next
-}
-
 function withoutIdentity<T>(current: Record<string, T>, identity: string): Record<string, T> {
   const next = { ...current }
   delete next[identity]
   return next
-}
-
-function getWorkspaceCleanupFailureIdentity(failure: WorkspaceCleanupFailure): string {
-  return failure.executionHostId
-    ? getWorkspaceCleanupHostIdentity(failure.executionHostId, failure.worktreeId)
-    : getWorkspaceCleanupCandidateIdentity({ worktreeId: failure.worktreeId })
 }

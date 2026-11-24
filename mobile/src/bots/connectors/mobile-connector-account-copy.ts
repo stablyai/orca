@@ -64,11 +64,11 @@ export function connectorAccountErrorMessage(
       return source === 'linear'
         ? t(
             'bots.linear.errors.alreadyLinked',
-            'This Orca account is linked to another Linear user in that workspace. Unlink it in Settings › Bots › Linear first.'
+            'This Orca account is linked to another Linear user in that workspace. Unlink it from ⋯ on the Linear page first.'
           )
         : t(
             'bots.github.errors.alreadyLinked',
-            'This Orca account is linked to another GitHub user. Unlink it in Settings › Bots › GitHub first.'
+            'This Orca account is linked to another GitHub user. Unlink it from ⋯ on the GitHub page first.'
           )
     case 'not_a_member':
       return t(

@@ -24,11 +24,11 @@ import { markThreadSeen } from './external-conversation-link-writes'
 import { ExternalConversationSeam } from './external-conversation-seam'
 import {
   conversationReplyFill,
-  journalAskedByOwner,
   type ConversationReplyFill
 } from './external-conversation-reply-fill'
 import { usageLimitReplyPause } from './external-conversation-reply-pause'
 import { ConnectorReplyRecovery } from './external-conversation-reply-recovery'
+import { endRestartCutTurns, heldTurnEnds } from './external-conversation-restart-cuts'
 import type { OrchestrationDb } from '../runtime/orchestration/db/orchestration-db'
 import { canonicalOrcaSessionId } from '../runtime/orchestration/addressing/session-lineage/canonical-orca-session-id'
 import { threadActsFor } from '../../shared/bots/bot-acts-for'
@@ -52,6 +52,10 @@ export function installExternalConversations(
     onWorktreeLifecycle: (listener: (event: RuntimeWorktreeLifecycleEvent) => void) => () => void
     agentTransitions: Pick<AgentTransitionDetector, 'latestRow' | 'subscribe'>
     onConversationLinked?: () => void
+    /** Settles once this start continued what the last run cut, naming what it did not. */
+    structuredAgentSessionLaunchContinuation?: {
+      continued: Promise<{ cutByLastRun: ReadonlySet<string> }>
+    }
     getConnectorCloud?: () =>
       | (SlackMirrorCloud & {
           refResolver(): ConnectorRefResolver | null
@@ -93,8 +97,13 @@ export function installExternalConversations(
         signal
       })
     let replyOutbox: ReturnType<typeof connectorReplyOutbox> | null = null
+    const restartCuts = heldTurnEnds(() => seam)
     seam = new ExternalConversationSeam({
       slackMirror: () => mirror,
+      watched: () => {
+        mirror?.flushHeld()
+        restartCuts.flush()
+      },
       replyFill: () => replyOutbox?.fill ?? null,
       replyAdmitted: (sessionId) => replyOutbox?.admitted(sessionId),
       store,
@@ -164,6 +173,12 @@ export function installExternalConversations(
     })
     mirror = made(seam.signal)
     replyOutbox = connectorReplyOutbox(store, runtime, seam.signal)
+    endRestartCutTurns(
+      store,
+      runtime.structuredAgentSessionLaunchContinuation,
+      seam.signal,
+      restartCuts.tell
+    )
     return seam
   }
   return {
@@ -196,10 +211,7 @@ function connectorReplyOutbox(
     usageLimitReplyPause(journal, usageLimitDisposition, async (sessionId) => {
       const shown = await getStructuredAgentSessionHost()?.readUsageLimitContinue(sessionId)
       return shown?.state === 'scheduled' ? (shown.continueAt ?? shown.resetsAt) : undefined
-    }),
-    journalAskedByOwner(async (sessionId) =>
-      getStructuredAgentSessionHost()?.journalReads(sessionId)
-    )
+    })
   )
   const recovery = new ConnectorReplyRecovery({
     journal,

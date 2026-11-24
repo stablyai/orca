@@ -190,7 +190,7 @@ export function useNativeChatTranscriptScroll({
         return
       }
       const geometry = geometryOf(element)
-      const programmatic = consumeProgrammaticScroll(event.nativeEvent)
+      const programmatic = consumeProgrammaticScroll(event.nativeEvent, previousGeometryRef.current)
       observeForwardedMovement(geometry, programmatic)
       followingRef.current = nextFollowingEnd({
         following: followingRef.current,

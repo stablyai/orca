@@ -1,4 +1,5 @@
-// Reuse the sidebar’s lead/child fold for teardown so restart offers match visible work.
+// Teardown reuses the sidebar's lead/child fold but keeps open questions 'blocked', so
+// restartActivityWaitsOnPerson skips auto-resume.
 
 import type {
   AgentJournalRenderItem,

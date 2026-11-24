@@ -396,12 +396,6 @@
       "items": {
         "needsYouCount_one": "{{count}} needs you",
         "needsYouCount_other": "{{count}} needs you",
-        "outsideRoom_one": "{{count}} more outside this room",
-        "outsideRoom_other": "{{count}} more outside this room",
-        "outsideThread_one": "{{count}} more outside this thread",
-        "outsideThread_other": "{{count}} more outside this thread",
-        "outside_one": "{{count}} more outside this group",
-        "outside_other": "{{count}} more outside this group",
         "workingCount_one": "{{count}} working",
         "workingCount_other": "{{count}} working"
       }
@@ -437,6 +431,10 @@
     "panel": {
       "needYou_one": "{{count}} needs you",
       "needYou_other": "{{count}} need you"
+    },
+    "search": {
+      "pausedMatches_one": "{{count}} paused match",
+      "pausedMatches_other": "{{count}} paused matches"
     },
     "settings": {
       "memoryFiles_one": "{{count}} file",
@@ -1226,6 +1224,10 @@
     "queuedMessageCardRow": {
       "images_one": "{{count}} image",
       "images_other": "{{count}} images"
+    },
+    "tabsSheet": {
+      "panes_one": "{{count}} pane",
+      "panes_other": "{{count}} panes"
     }
   },
   "settings": {

@@ -50,6 +50,10 @@ export const BOTS_ITEM_COMMENT_PLAIN_RUNTIME_CAPABILITY = 'bots.item-comment-pla
 // file in the comment's mail. An older host refuses the field.
 export const BOTS_ITEM_COMMENT_SKILLS_RUNTIME_CAPABILITY = 'bots.item-comment-skills.v1' as const
 
+// Host takes `skipped` on the owner's item comments (bots.items.owner.comment): an answer sent with the
+// ask's other questions skipped, which closes them and names them in the mail. An older host refuses the field.
+export const BOTS_ITEM_COMMENT_SKIPPED_RUNTIME_CAPABILITY = 'bots.item-comment-skipped.v1' as const
+
 // Host stores a picture's background color (bots.update and bots.create `avatarColor`); an older host's strict
 // update refuses the field, so clients offer the colors only where this is advertised.
 export const BOTS_AVATAR_COLOR_RUNTIME_CAPABILITY = 'bots.avatar-color.v1' as const
@@ -73,6 +77,15 @@ export const BOTS_HOME_PIN_RUNTIME_CAPABILITY = 'bots.home-pin.v1' as const
 // too: a host shows Waiting only to a client that reads it, and as In progress to one that doesn't.
 export const BOTS_ITEM_WAITING_CAPABILITY = 'bots.item-waiting.v1' as const
 
+// Host cancels an item for the owner with no reason (bots.items.owner.status `canceled`); an older host
+// refuses one, so a client sends it a plain reason (botItemStatusFields).
+export const BOTS_ITEM_CANCEL_NO_REASON_CAPABILITY = 'bots.item-cancel-no-reason.v1' as const
+
+// Host bumps a bot's `avatarRevision` on every picture, color or outfit write and refuses a bots.avatar.upload whose
+// `expectedAvatarRevision` no longer matches; an older host drops the field, so a client uploads a picture
+// on its own (one generated while the picker was closed) only where this is advertised.
+export const BOTS_AVATAR_REVISION_RUNTIME_CAPABILITY = 'bots.avatar-revision.v3' as const
+
 export const BOT_RUNTIME_CAPABILITIES = [
   BOTS_GROUPS_RUNTIME_CAPABILITY,
   BOTS_GROUP_ATTACHMENTS_RUNTIME_CAPABILITY,
@@ -89,9 +102,12 @@ export const BOT_RUNTIME_CAPABILITIES = [
   BOTS_ITEM_COMMENT_QUESTION_ID_RUNTIME_CAPABILITY,
   BOTS_ITEM_COMMENT_PLAIN_RUNTIME_CAPABILITY,
   BOTS_ITEM_COMMENT_SKILLS_RUNTIME_CAPABILITY,
+  BOTS_ITEM_COMMENT_SKIPPED_RUNTIME_CAPABILITY,
   BOTS_SESSION_LINKS_RUNTIME_CAPABILITY,
   BOTS_AVATAR_COLOR_RUNTIME_CAPABILITY,
   BOTS_AVATAR_OUTFIT_RUNTIME_CAPABILITY,
   BOTS_HOME_PIN_RUNTIME_CAPABILITY,
-  BOTS_ITEM_WAITING_CAPABILITY
+  BOTS_ITEM_WAITING_CAPABILITY,
+  BOTS_ITEM_CANCEL_NO_REASON_CAPABILITY,
+  BOTS_AVATAR_REVISION_RUNTIME_CAPABILITY
 ] as const

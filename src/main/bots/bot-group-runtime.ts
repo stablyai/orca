@@ -155,8 +155,9 @@ export class BotGroupRuntime {
     this.store = new BotGroupStore(runtime.getOrchestrationDb().db)
   }
 
-  changed(): void {
-    this.runtime.notifyBotGroupsChanged()
+  /** Readers re-read; open rooms of `groupId` only, when it is given (a change inside one room). */
+  changed(groupId?: string): void {
+    this.runtime.notifyBotGroupsChanged(groupId === undefined ? undefined : [groupId])
   }
 
   /** Names the members' chats after their rooms, once `group` is saved with new members or names. */

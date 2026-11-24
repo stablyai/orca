@@ -12,6 +12,7 @@ import {
   isBotSlackIconFile
 } from '../../shared/bots/bot-slack-icon'
 import type { BotHomeFilesystem } from './bot-home'
+import { createBotLookupIndex } from '../../shared/bots/bot-lookup-index'
 import { type BotSlackIconShown, BotSlackIconShownRecords } from './bot-slack-icon-shown'
 
 type LookedBot = Pick<Bot, 'id' | 'avatar' | 'avatarColor' | 'avatarOutfit'>
@@ -289,4 +290,26 @@ export class BotSlackIcons {
     this.listeners.add(listener)
     return () => this.listeners.delete(listener)
   }
+}
+
+/** A bot controller's icon store: its bots by id, its on switch and its write queue. */
+export function botSlackIconsOf(
+  bots: { list: () => readonly Bot[]; enabled: () => boolean },
+  deps: { filesystem: BotHomeFilesystem; slackIconsRoot: () => string },
+  serialize: <T>(work: () => Promise<T>) => Promise<T>
+): BotSlackIcons {
+  const lookup = createBotLookupIndex(() => bots.list())
+  return new BotSlackIcons({
+    filesystem: deps.filesystem,
+    root: deps.slackIconsRoot,
+    bot: (botId) => {
+      const bot = lookup.byId(botId)
+      if (!bot) {
+        throw new Error('bot_not_found')
+      }
+      return bot
+    },
+    enabled: () => bots.enabled(),
+    serialize
+  })
 }

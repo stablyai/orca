@@ -58,4 +58,9 @@ export function ensureJournalConnectorRepliesSchema(db: {
       db.exec(`ALTER TABLE journal_connector_replies ADD COLUMN ${name} ${type}`)
     }
   }
+  // A Stop finds the rows of the messages it took back; an older build ignores these indexes.
+  db.exec(`CREATE INDEX IF NOT EXISTS journal_connector_replies_message
+    ON journal_connector_replies(session_id, epoch, message_id) WHERE outcome IS NULL;
+  CREATE INDEX IF NOT EXISTS journal_connector_replies_claim
+    ON journal_connector_replies(claim_message_id) WHERE claim_message_id IS NOT NULL`)
 }

@@ -8,6 +8,10 @@ export type WakeAlertsEnv = AlertsEnv & {
   // no-socket-share fires above NO_SOCKET_PCT (5) percent of wakes, at >= NO_SOCKET_MIN (50) wakes.
   NO_SOCKET_PCT?: string
   NO_SOCKET_MIN?: string
+  // Comma-separated rule ids this deployment never evaluates (e.g. 'silent' where no clients run).
+  ALERTS_OFF?: string
+  // Which rules are firing and when each was last posted (alerts.ts). Unbound: every breaching run posts.
+  ALERT_STATE?: KVNamespace
 }
 
 export type WakeThresholds = Thresholds & { noSocketPct: number; noSocketMin: number; probesPerWindow: number }
@@ -34,24 +38,39 @@ export function thresholds(env: WakeAlertsEnv): WakeThresholds {
   }
 }
 
-// Counts per window, weighted by Analytics Engine sampling. blobs: [event, label, version, reason,
-// place]; double1 is the event's value (a wake event's value is its host count).
-export const SQL = (dataset: string, fromMin: number, toMin: number) => `
+// Each column the SQL sums per minute, weighted by Analytics Engine sampling. blobs: [event, label,
+// version, reason, place]; double1 is the event's value (a wake event's value is its host count).
+export const COLUMNS = {
+  socket_open: "sumIf(_sample_interval, blob1 = 'socket_open')",
+  refuse_401: "sumIf(_sample_interval, blob1 = 'refuse' AND blob4 = 'token')",
+  refuse_country: "sumIf(_sample_interval, blob1 = 'refuse' AND blob4 = 'country')",
+  keys_unavailable: "sumIf(_sample_interval, blob1 = 'upgrade' AND blob2 = 'keys_unavailable')",
+  admin_failures: "sumIf(_sample_interval, blob1 = 'admin' AND blob2 != '200')",
+  wakes: "sumIf(_sample_interval * double1, blob1 = 'wake')",
+  wake_no_socket: "sumIf(_sample_interval * double1, blob1 = 'wake' AND blob2 = 'no_socket')",
+  wake_error: "sumIf(_sample_interval * double1, blob1 = 'wake' AND blob2 = 'error')",
+  events: "sumIf(_sample_interval, blob1 != 'refuse')"
+} as const
+
+// Counts per whole minute before atSec (0 = the last minute), so one query gives both windows.
+// atSec is the run's scheduled time, never the query's NOW().
+export const SQL = (dataset: string, fromMin: number, atSec: number) => `
 SELECT
-  sumIf(_sample_interval, blob1 = 'socket_open') AS socket_open,
-  sumIf(_sample_interval, blob1 = 'refuse' AND blob4 = 'token') AS refuse_401,
-  sumIf(_sample_interval, blob1 = 'refuse' AND blob4 = 'country') AS refuse_country,
-  sumIf(_sample_interval, blob1 = 'upgrade' AND blob2 = 'keys_unavailable') AS keys_unavailable,
-  sumIf(_sample_interval, blob1 = 'admin' AND blob2 != '200') AS admin_failures,
-  sumIf(_sample_interval * double1, blob1 = 'wake') AS wakes,
-  sumIf(_sample_interval * double1, blob1 = 'wake' AND blob2 = 'no_socket') AS wake_no_socket,
-  sumIf(_sample_interval * double1, blob1 = 'wake' AND blob2 = 'error') AS wake_error,
-  sumIf(_sample_interval, blob1 != 'refuse') AS events
+  intDiv(${atSec} - toUInt32(timestamp), 60) AS ago,
+${Object.entries(COLUMNS).map(([name, sum]) => `  ${sum} AS ${name}`).join(',\n')}
 FROM ${dataset}
-WHERE timestamp > NOW() - INTERVAL '${fromMin}' MINUTE AND timestamp <= NOW() - INTERVAL '${toMin}' MINUTE
+WHERE timestamp > toDateTime(${atSec - fromMin * 60}) AND timestamp <= toDateTime(${atSec})
+GROUP BY ago
 FORMAT JSON`
 
-export type Rule = { id: string; describe: (now: Counts, t: WakeThresholds) => string; breach: (c: Counts, t: WakeThresholds, prior?: Counts) => boolean }
+// holds: once firing, whether it still is. Default: breach again. A rule that starts on a change
+// (silent: traffic stopping) needs it, or it would resolve as soon as the change is old news.
+export type Rule = {
+  id: string
+  describe: (now: Counts, t: WakeThresholds) => string
+  breach: (c: Counts, t: WakeThresholds, prior?: Counts) => boolean
+  holds?: (c: Counts, t: WakeThresholds) => boolean
+}
 
 const pct = (a: number, b: number) => (b > 0 ? (100 * a) / b : 0)
 // Every upgrade that reached the token check or the country check.
@@ -104,6 +123,8 @@ export const RULES: Rule[] = [
     // left out, so the alerts' own probes never keep it quiet.
     id: 'silent',
     breach: (c, t, prior) => prior !== undefined && prior.events >= t.minVolume && c.events === 0,
+    // Still silent until events come back, however long ago traffic stopped.
+    holds: (c) => c.events === 0,
     describe: () => `no wake events in ${WINDOW_MIN} min`
   },
   {

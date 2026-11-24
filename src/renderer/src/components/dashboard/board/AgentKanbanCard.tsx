@@ -72,7 +72,8 @@ function sameSubagents(a: DashboardCard['subagents'], b: DashboardCard['subagent
     if (
       subagent.id !== other.id ||
       subagent.name !== other.name ||
-      subagent.dotState !== other.dotState
+      subagent.dotState !== other.dotState ||
+      subagent.failed !== other.failed
     ) {
       return false
     }
@@ -285,7 +286,7 @@ export const AgentKanbanCard = memo(
                     key={subagent.id}
                     className="flex items-center gap-1.5 py-0.5 text-[11px] text-muted-foreground"
                   >
-                    <AgentStateDot state={subagent.dotState} />
+                    <AgentStateDot state={subagent.failed ? 'failed' : subagent.dotState} />
                     <span className="truncate">{subagent.name}</span>
                   </div>
                 ))}
