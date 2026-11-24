@@ -148,6 +148,10 @@ export class GoogleSetupRuns {
     if (revived) {
       return this.save(revived)
     }
+    // A second Stop (a double click, another device) is already done.
+    if (change.action === 'cancel' && actor === 'owner' && current?.state === 'cancelled') {
+      return current
+    }
     if (current?.state === 'cancelled') {
       throw new GoogleSetupError(
         'Your owner stopped this Google setup. Start it again only if they ask.'

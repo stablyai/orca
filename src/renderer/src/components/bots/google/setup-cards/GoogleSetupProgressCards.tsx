@@ -101,12 +101,6 @@ function answerStep(bot: BotRef, values: string[]): void {
   )
 }
 
-function stop(bot: BotRef): void {
-  void stopGoogleSetup(bot).catch((error: unknown) =>
-    toast.error(error instanceof Error ? error.message : String(error))
-  )
-}
-
 function StepMark({ index, status }: { index: number; status: string }): React.JSX.Element {
   return (
     <span
@@ -132,6 +126,15 @@ export function GoogleSetupProgressCard({
 }): React.JSX.Element {
   const t = useTranslate()
   const capture = useSetupKeyCapture(bot, run, newest)
+  const [stopping, setStopping] = useState(false)
+  const stop = (): void => {
+    setStopping(true)
+    void stopGoogleSetup(bot)
+      .catch((error: unknown) =>
+        toast.error(error instanceof Error ? error.message : String(error))
+      )
+      .finally(() => setStopping(false))
+  }
   const blocker = useGoogleSetupBlocker(bot)
   const view = googleSetupProgressView(run, blocker, capture.owns)
   const { panel, letMe } = view
@@ -225,7 +228,7 @@ export function GoogleSetupProgressCard({
         ) : null}
         {view.stop ? (
           <div className="mt-2.5">
-            <Button variant="link-muted" size="inlineText" onClick={() => stop(bot)}>
+            <Button variant="link-muted" size="inlineText" disabled={stopping} onClick={stop}>
               {t('bots.googleSetup.stop', 'Stop setup')}
             </Button>
           </div>

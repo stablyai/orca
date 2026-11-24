@@ -5,17 +5,22 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { GoogleSetupRuns } from '../../../google/google-setup-runs'
 import { googleSetupKeyBlocker } from '../../../../shared/google/google-setup-blocker'
 import {
+  googleSetupChoiceLocked,
+  googleSetupConnectOpen,
   googleSetupShownStepStatus,
   googleSetupStepCardView
 } from '../../../../shared/google/google-setup-card-view'
 import type { GoogleClientView } from '../../../../shared/google/google-client-config'
 import type { RpcContext } from '../core'
 
-const state = vi.hoisted((): { runs: GoogleSetupRuns | null; offers: number; lines: string[] } => ({
-  runs: null,
-  offers: 0,
-  lines: []
-}))
+const state = vi.hoisted(
+  (): {
+    runs: GoogleSetupRuns | null
+    offers: number
+    lines: string[]
+    duringCheck: (() => void) | null
+  } => ({ runs: null, offers: 0, lines: [], duringCheck: null })
+)
 const BOT = { id: 'bot-1', name: 'Ada', google: true, chatSessionId: 'chat-1' }
 const OLD_CLIENT: GoogleClientView = {
   clientId: 'old',
@@ -32,7 +37,10 @@ vi.mock('../../../google/google-connect', () => ({
   getGoogleConnect: () => ({
     client: async () => OLD_CLIENT,
     accounts: async () => [],
-    clientCheck: async () => null
+    clientCheck: async () => {
+      state.duringCheck?.()
+      return null
+    }
   })
 }))
 vi.mock('../../../bots/bot-of-caller', () => ({
@@ -81,6 +89,7 @@ beforeEach(() => {
   state.runs = runs
   state.offers = 0
   state.lines = []
+  state.duringCheck = null
 })
 afterEach(() => rmSync(dir, { recursive: true, force: true }))
 
@@ -195,6 +204,12 @@ describe('Stop setup', () => {
       ended: true
     })
     expect(googleSetupShownStepStatus(run, 'publish')).toBe('pending')
+    // Unanswered choice cards and the sign-in card take no clicks either.
+    expect(googleSetupChoiceLocked(run, false, false)).toBe(true)
+    expect(googleSetupConnectOpen(run)).toBe(false)
+    // A second Stop (a double click) is a no-op, not an error.
+    await write.handler({ botId: BOT.id, change: { action: 'cancel' } }, context)
+    expect(runs.get(BOT.id)).toEqual(run)
     await expect(
       write.handler(
         { botToken: 't', change: { action: 'step', step: 'client', status: 'active' } },
@@ -209,5 +224,26 @@ describe('Stop setup', () => {
       write.handler({ botToken: 't', change: { action: 'cancel' } }, context)
     ).rejects.toThrow('Only your owner can stop the setup.')
     expect(runs.get(BOT.id)?.state).toBe('running')
+  })
+
+  it('drops an agent write when the owner stops and restarts the run during its checks', async () => {
+    waitingOnPublish()
+    runs.apply(BOT.id, 'bot', { action: 'step', step: 'client', status: 'active' })
+    state.duringCheck = () => {
+      state.duringCheck = null
+      runs.apply(BOT.id, 'owner', { action: 'cancel' })
+      runs.apply(BOT.id, 'owner', { action: 'start' })
+    }
+    const stopped = runs.get(BOT.id)?.id
+    await expect(
+      write.handler(
+        { botToken: 't', change: { action: 'step', step: 'client', status: 'done' } },
+        context
+      )
+    ).rejects.toThrow()
+    const fresh = runs.get(BOT.id)
+    expect(fresh?.id).not.toBe(stopped)
+    expect(fresh).toMatchObject({ state: 'running', steps: {} })
+    expect(fresh?.keyMissed).toBeUndefined()
   })
 })

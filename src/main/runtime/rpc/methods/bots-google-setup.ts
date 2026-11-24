@@ -7,16 +7,10 @@ import {
   GoogleSetupWrite
 } from '../../../../shared/rpc-contract/google-setup-params'
 import type { GoogleSetupCard, GoogleSetupRun } from '../../../../shared/google/google-setup-run'
-import type { GoogleStatusView } from '../../../../shared/google/google-connect-types'
-import {
-  googleSetupBlocker,
-  googleSetupDoneRefusal,
-  googleSetupKeyBlocker
-} from '../../../../shared/google/google-setup-blocker'
+import { googleSetupBlocker } from '../../../../shared/google/google-setup-blocker'
 import { googleBotAsk } from '../../../../shared/google/google-bot-connect-state'
 import { botTurns } from '../../../bots/bot-automation-sessions'
 import { hostGoogleBotState } from '../../../bots/bot-google-access'
-import { getGoogleConnect } from '../../../google/google-connect'
 import { BOT_TOKEN_ENDED, botOfToken } from '../../../bots/bot-of-caller'
 import { botOfSession } from '../../../bots/bot-session-tabs'
 import { runtimeBotChats } from '../../../bots/bot-chat-session'
@@ -25,12 +19,7 @@ import {
   rewriteGoogleSetupWaitingCard,
   writeGoogleSetupCards
 } from '../../../google/google-setup-chat-cards'
-import {
-  GoogleSetupError,
-  googleSetupRuns,
-  type GoogleSetupActor,
-  type GoogleSetupChange
-} from '../../../google/google-setup-runs'
+import { googleSetupRuns, type GoogleSetupActor } from '../../../google/google-setup-runs'
 import type { OrcaRuntimeService } from '../../orca-runtime'
 import { googleSetupKeyRefusedLine } from '../../../google/google-setup-key-download'
 import { noWindowAnswersGoogleCards } from '../../../google/google-card-reach'
@@ -38,6 +27,14 @@ import { defineMethod, InvalidArgumentError, type RpcContext } from '../core'
 import { requireSetupPageInAgentWorkspace } from '../../../google/google-setup-page-binding'
 import { postConnectorOffer } from './bots-connector-offer'
 import { isAgentRpcCaller } from '../callers/rpc-caller-identity'
+import {
+  applied,
+  hostGoogle,
+  keyMissing,
+  refuseClientDoneWithoutKey,
+  refuseUnfinishedDone,
+  requireUnchangedRun
+} from './bots-google-setup-write-checks'
 
 /** The line the bot reads for an owner's card answer. */
 export function googleSetupAnswerLine(card: GoogleSetupCard, values: readonly string[]): string {
@@ -81,23 +78,6 @@ export function whose(
   return { botId: params.botId, actor: isAgentRpcCaller(context.caller) ? 'bot' : 'owner' }
 }
 
-/** Applies a change and returns the run before and after it, for the cards it calls for. */
-function applied(
-  botId: string,
-  actor: GoogleSetupActor,
-  change: GoogleSetupChange
-): { prev: GoogleSetupRun | null; run: GoogleSetupRun } {
-  const prev = googleSetupRuns().get(botId)
-  try {
-    return { prev, run: googleSetupRuns().apply(botId, actor, change) }
-  } catch (error) {
-    if (error instanceof GoogleSetupError) {
-      throw new InvalidArgumentError(error.message)
-    }
-    throw error
-  }
-}
-
 function chatOf(runtime: OrcaRuntimeService, botId: string): string | undefined {
   return runtime.bots.list().find((entry) => entry.id === botId)?.chatSessionId ?? undefined
 }
@@ -124,28 +104,6 @@ export async function answerGoogleSetupCard(
   return run
 }
 
-/** This host's saved key and accounts, or null when Google isn't available here. */
-async function hostGoogle(): Promise<Pick<
-  GoogleStatusView,
-  'client' | 'accounts' | 'clientKey'
-> | null> {
-  const connect = getGoogleConnect()
-  if (!connect) {
-    return null
-  }
-  const clientKey = await connect.clientCheck()
-  return {
-    client: await connect.client(),
-    accounts: await connect.accounts(),
-    ...(clientKey ? { clientKey } : {})
-  }
-}
-
-/** Whether the setup's key isn't in Orca; no Google here means no key. */
-function keyMissing(run: GoogleSetupRun, google: Awaited<ReturnType<typeof hostGoogle>>): boolean {
-  return !google || googleSetupKeyBlocker(run, google) !== null
-}
-
 /** The run with where it's stuck and the owner's buttons, from this host's Google and the bot's turn. */
 export async function withBlocker(context: RpcContext, botId: string, run: GoogleSetupRun | null) {
   const google = await hostGoogle()
@@ -162,27 +120,6 @@ export async function withBlocker(context: RpcContext, botId: string, run: Googl
   return { run, blocker, keyMissing: open && keyMissing(run, google) }
 }
 
-/** The bot marks client done only once the key reached Orca, so a missed download shows at once. */
-async function refuseClientDoneWithoutKey(
-  botId: string,
-  run: GoogleSetupRun | null,
-  change: GoogleSetupChange
-): Promise<void> {
-  if (change.action !== 'step' || change.step !== 'client' || change.status !== 'done' || !run) {
-    return
-  }
-  if (keyMissing(run, await hostGoogle())) {
-    // The bot is past Download JSON: the key went missing, so the owner's card offers the recovery.
-    // Once: a bot asking again must not make a new change (and a new card) each time.
-    if (!run.keyMissed) {
-      googleSetupRuns().apply(botId, 'owner', { action: 'key-missed' })
-    }
-    throw new InvalidArgumentError(
-      "Orca doesn't have this setup's key, so client isn't done. Your owner's card shows: Make a new key · Import a key file."
-    )
-  }
-}
-
 /** Orca's reading that the key didn't arrive: the owner's card offers recovery, and the bot hears why. */
 export async function recordGoogleSetupKeyMissed(
   runtime: OrcaRuntimeService,
@@ -192,30 +129,6 @@ export async function recordGoogleSetupKeyMissed(
   const { prev, run } = applied(botId, 'owner', { action: 'key-missed', reason })
   writeGoogleSetupCards(chatOf(runtime, botId), prev, run)
   await runtimeBotChats(runtime).sendToChat(botId, googleSetupKeyRefusedLine(reason), 'card-answer')
-}
-
-/** A bot's `done` stands only once Google answers for every chosen service. */
-async function refuseUnfinishedDone(run: GoogleSetupRun | null): Promise<void> {
-  if (run?.state !== 'running') {
-    return
-  }
-  const connect = getGoogleConnect()
-  if (!connect) {
-    throw new InvalidArgumentError("Google isn't available on this computer.")
-  }
-  // A fresh read, so a box ticked on a second sign-in counts; the saved one when Google can't be reached.
-  const [accounts, clientKey] = await Promise.all([
-    connect.checkAccounts().catch(() => connect.accounts()),
-    connect.checkClient()
-  ])
-  const refusal = googleSetupDoneRefusal(run, {
-    client: await connect.client(),
-    accounts,
-    ...(clientKey ? { clientKey } : {})
-  })
-  if (refusal) {
-    throw new InvalidArgumentError(`${refusal} Run done again once it's sorted.`)
-  }
 }
 
 /** A bot's start when Google's app is already on this host: its Connect card, or a line, instead of a
@@ -277,11 +190,12 @@ export const GOOGLE_SETUP_METHODS = [
         }
       }
       if (actor === 'bot') {
+        const checked = googleSetupRuns().get(botId)
         try {
           if (params.change.action === 'done') {
-            await refuseUnfinishedDone(googleSetupRuns().get(botId))
+            await refuseUnfinishedDone(checked)
           }
-          await refuseClientDoneWithoutKey(botId, googleSetupRuns().get(botId), params.change)
+          await refuseClientDoneWithoutKey(botId, checked, params.change)
         } catch (error) {
           // Refused for want of the owner: their card goes back to the bottom of the chat.
           const run = googleSetupRuns().get(botId)
@@ -290,6 +204,7 @@ export const GOOGLE_SETUP_METHODS = [
           }
           throw error
         }
+        requireUnchangedRun(botId, checked)
       }
       requireSetupPageInAgentWorkspace(context.runtime, botId, params.change)
       const { prev, run } = applied(botId, actor, params.change)

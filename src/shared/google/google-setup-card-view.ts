@@ -24,6 +24,20 @@ export function googleSetupChoiceChangeable(run: GoogleSetupRun): boolean {
   return googleSetupRunActive(run) && (run.steps.project?.status ?? 'pending') === 'pending'
 }
 
+/** A choice card takes no clicks once answered (until reopened with Change) or once the run ended. */
+export function googleSetupChoiceLocked(
+  run: GoogleSetupRun,
+  answered: boolean,
+  reopened: boolean
+): boolean {
+  return !googleSetupRunActive(run) || (answered && !reopened)
+}
+
+/** The sign-in card still waits on the owner: not signed in, and the run under way. */
+export function googleSetupConnectOpen(run: GoogleSetupRun): boolean {
+  return run.steps.connect?.status !== 'done' && googleSetupRunActive(run)
+}
+
 /** The services the owner picked on the services card, or null before they answered. */
 export function googleSetupAnsweredServices(run: GoogleSetupRun): GoogleServiceChoice[] | null {
   const values = run.answers.services?.values
