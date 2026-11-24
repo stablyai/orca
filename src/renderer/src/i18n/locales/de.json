@@ -21278,7 +21278,11 @@
           "openDirectlyIn": "Direkt öffnen in",
           "openDirectlyInDescription": "{{modifier}}-Klick und die erste Auswahl, wenn Orca fragt.",
           "title": "Links öffnen",
-          "description": "Links in Chat, Terminals und Schaltflächen. Localhost-Links auf diesem Computer öffnen sich im Orca-Browser."
+          "description": "Links in Chat, Terminals und Schaltflächen. Localhost-Links auf diesem Computer öffnen sich im Orca-Browser.",
+          "search": {
+            "ask": "fragen",
+            "system": "systembrowser"
+          }
         },
         "terminalLinkClicks": {
           "plainClickDescription": "Für Dateipfade im Terminal. Weblinks folgen „Links öffnen“, sofern Klicks nicht der Terminal-App überlassen werden."

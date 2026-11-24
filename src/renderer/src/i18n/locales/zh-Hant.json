@@ -20959,7 +20959,11 @@
           "openDirectlyIn": "直接開啟方式",
           "openDirectlyInDescription": "{{modifier}}-點按以及 Orca 詢問時的第一個選項。",
           "title": "開啟連結",
-          "description": "聊天、終端機和按鈕中的連結。這部電腦上的 localhost 連結會在 Orca 瀏覽器中開啟。"
+          "description": "聊天、終端機和按鈕中的連結。這部電腦上的 localhost 連結會在 Orca 瀏覽器中開啟。",
+          "search": {
+            "ask": "詢問",
+            "system": "系統瀏覽器"
+          }
         },
         "terminalLinkClicks": {
           "plainClickDescription": "用於終端機中的檔案路徑。除非點按交給終端機 App，網頁連結會遵循「開啟連結」。"

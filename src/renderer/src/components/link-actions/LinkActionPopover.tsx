@@ -25,10 +25,13 @@ type LinkActionPopoverProps<TRequest extends LinkActionRequest> = {
 function ActionRow({
   action,
   shortcut,
+  inMenu,
   onRun
 }: {
   action: LinkAction
   shortcut: 'primary' | 'alternate' | null
+  /** Only a keyboard-hosted chooser is a menu; other choosers keep plain button semantics. */
+  inMenu: boolean
   onRun: () => void
 }): React.JSX.Element {
   const isMac = navigator.userAgent.includes('Mac')
@@ -41,7 +44,7 @@ function ActionRow({
 
   return (
     <Button
-      role="menuitem"
+      {...(inMenu ? { role: 'menuitem' } : {})}
       data-link-popover-item
       className="h-8 w-full justify-start gap-1.5 px-1.5 text-[13px] font-normal has-[>svg]:px-1.5"
       variant="ghost"
@@ -292,12 +295,14 @@ export function LinkActionPopover<TRequest extends LinkActionRequest>({
           <ActionRow
             action={request.primary}
             shortcut="primary"
+            inMenu={keyboardHost}
             onRun={() => runAction(request.primary)}
           />
           {request.alternate ? (
             <ActionRow
               action={request.alternate}
               shortcut="alternate"
+              inMenu={keyboardHost}
               onRun={() => runAction(request.alternate!)}
             />
           ) : null}
@@ -306,6 +311,7 @@ export function LinkActionPopover<TRequest extends LinkActionRequest>({
               key={action.label}
               action={action}
               shortcut={null}
+              inMenu={keyboardHost}
               onRun={() => runAction(action)}
             />
           ))}

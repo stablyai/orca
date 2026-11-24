@@ -21402,7 +21402,11 @@
           "openDirectlyIn": "Doğrudan şurada aç",
           "openDirectlyInDescription": "{{modifier}}-tıklama ve Orca sorduğunda ilk seçenek.",
           "title": "Bağlantıları aç",
-          "description": "Sohbet, terminal ve düğmelerdeki bağlantılar. Bu bilgisayardaki localhost bağlantıları Orca tarayıcısında açılır."
+          "description": "Sohbet, terminal ve düğmelerdeki bağlantılar. Bu bilgisayardaki localhost bağlantıları Orca tarayıcısında açılır.",
+          "search": {
+            "ask": "sor",
+            "system": "sistem tarayıcısı"
+          }
         },
         "terminalLinkClicks": {
           "plainClickDescription": "Terminaldeki dosya yolları için. Tıklamalar terminal uygulamasına bırakılmadıkça web bağlantıları “Bağlantıları aç” ayarını izler."

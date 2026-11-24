@@ -21007,7 +21007,11 @@
           "openDirectlyIn": "Abrir directamente en",
           "openDirectlyInDescription": "{{modifier}}+clic y la primera opción cuando Orca pregunta.",
           "title": "Abrir enlaces",
-          "description": "Enlaces en el chat, las terminales y los botones. Los enlaces de localhost de este equipo se abren en el navegador de Orca."
+          "description": "Enlaces en el chat, las terminales y los botones. Los enlaces de localhost de este equipo se abren en el navegador de Orca.",
+          "search": {
+            "ask": "preguntar",
+            "system": "navegador del sistema"
+          }
         },
         "terminalLinkClicks": {
           "plainClickDescription": "Para rutas de archivo en la terminal. Los enlaces web siguen «Abrir enlaces» salvo que los clics se dejen a la aplicación de terminal."

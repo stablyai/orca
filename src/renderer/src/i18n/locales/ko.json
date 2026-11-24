@@ -22936,7 +22936,11 @@
           "openDirectlyIn": "바로 열 위치",
           "openDirectlyInDescription": "{{modifier}}-클릭 및 Orca가 물을 때 첫 번째 선택.",
           "title": "링크 열기",
-          "description": "채팅, 터미널, 버튼의 링크. 이 컴퓨터의 localhost 링크는 Orca 브라우저에서 열립니다."
+          "description": "채팅, 터미널, 버튼의 링크. 이 컴퓨터의 localhost 링크는 Orca 브라우저에서 열립니다.",
+          "search": {
+            "ask": "묻기",
+            "system": "시스템 브라우저"
+          }
         },
         "terminalLinkClicks": {
           "plainClickDescription": "터미널의 파일 경로용입니다. 웹 링크는 클릭을 터미널 앱에 맡기지 않는 한 '링크 열기'를 따릅니다."

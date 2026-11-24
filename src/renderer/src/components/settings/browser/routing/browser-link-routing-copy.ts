@@ -68,6 +68,13 @@ export function getBrowserOpenLinksCopy(
         undefined,
         t
       ),
+      // The nested "Open directly in" row renders inside this entry's search gate.
+      ...translateSearchKeyword(
+        'components.settings.browser.openLinks.openDirectlyIn',
+        'Open directly in',
+        undefined,
+        t
+      ),
       ...translateSearchKeyword(
         'auto.components.settings.browser.search.90425d313c',
         'shift',
