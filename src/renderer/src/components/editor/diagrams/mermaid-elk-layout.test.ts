@@ -39,9 +39,31 @@ flowchart TD
     ).toBe(true)
   })
 
-  it('detects the init directive and flowchart-elk syntax in the diagram body', () => {
+  it('detects init/initialize directives and flowchart-elk syntax in the diagram body', () => {
     expect(sourceUsesElkLayout('%%{init: {"layout": "elk"}}%%\nflowchart TD\n A --> B')).toBe(true)
+    expect(sourceUsesElkLayout('%%{initialize: {"layout": "elk"}}%%\nflowchart TD\n A --> B')).toBe(
+      true
+    )
     expect(sourceUsesElkLayout('flowchart-elk TD\n  A --> B')).toBe(true)
+  })
+
+  it('uses the last initialization directive in source order', () => {
+    expect(
+      sourceUsesElkLayout(
+        '%%{init: {"layout": "dagre"}}%%\n%%{init: {"layout": "elk"}}%%\nflowchart TD\n A --> B'
+      )
+    ).toBe(true)
+    expect(
+      sourceUsesElkLayout(
+        '%%{init: {"layout": "elk"}}%%\n%%{init: {"layout": "dagre"}}%%\nflowchart TD\n A --> B'
+      )
+    ).toBe(false)
+  })
+
+  it('accepts whitespace after frontmatter delimiters', () => {
+    expect(sourceUsesElkLayout('--- \nconfig: {layout: elk}\n--- \nflowchart TD\n A --> B')).toBe(
+      true
+    )
   })
 
   it('ignores top-level layout, non-elk values and frontmatter text', () => {

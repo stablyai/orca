@@ -1,9 +1,9 @@
 import { parse as parseYaml } from 'yaml'
 
-const FRONTMATTER = /^---\r?\n([\s\S]*?)\r?\n---(?:\r?\n|$)/
+const FRONTMATTER = /^---[ \t]*\r?\n([\s\S]*?)\r?\n---[ \t]*(?:\r?\n|$)/
 const FRONTMATTER_ELK = /^\s*layout\s*:\s*['"]?elk(?:\.[a-z]+)?['"]?\s*$/im
-const INIT_ELK =
-  /%%\{\s*init\s*:\s*\{[\s\S]*?["']?layout["']?\s*:\s*["']?([a-z]+(?:\.[a-z]+)?)["']?[\s\S]*?\}\s*\}%%/i
+const INIT_LAYOUT =
+  /%%\{\s*(?:init|initialize)\s*:\s*\{[\s\S]*?["']?layout["']?\s*:\s*["']?([a-z]+(?:\.[a-z]+)?)["']?[\s\S]*?\}\s*\}%%/gi
 const FLOWCHART_ELK = /^\s*flowchart-elk\b/im
 const ELK_LAYOUT = /^elk(?:\.[a-z]+)?$/i
 
@@ -31,6 +31,10 @@ export function sourceUsesElkLayout(content: string): boolean {
     return true
   }
   const body = frontmatter ? trimmed.slice(frontmatter[0].length) : trimmed
-  const init = INIT_ELK.exec(body)
-  return (init !== null && ELK_LAYOUT.test(init[1])) || FLOWCHART_ELK.test(body)
+  // Mermaid merges init directives in source order, so the last layout wins.
+  let layout: string | null = null
+  for (const directive of body.matchAll(INIT_LAYOUT)) {
+    layout = directive[1]
+  }
+  return (layout !== null && ELK_LAYOUT.test(layout)) || FLOWCHART_ELK.test(body)
 }
