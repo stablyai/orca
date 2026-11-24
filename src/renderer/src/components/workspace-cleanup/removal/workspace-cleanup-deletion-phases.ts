@@ -2,7 +2,6 @@ import type { WorkspaceCleanupCandidate } from '../../../../../shared/workspace-
 import type { WorktreeDeleteState } from '@/store/slices/worktrees/teardown/worktree-delete-state-types'
 import {
   getWorkspaceCleanupCandidateIdentity,
-  getWorkspaceCleanupIdentityWorktreeId,
   resolveWorkspaceCleanupRemovalHostId
 } from '../../../../../shared/workspace-cleanup/workspace-cleanup-host-identity'
 import { composeWorktreeHostIdentity } from '../../../../../shared/worktree/host-qualified-identity'
@@ -13,12 +12,10 @@ export function getWorkspaceCleanupDeletionPhaseByIdentity(
   cleanupPhases: Readonly<Record<string, WorkspaceCleanupDeletionPhase>>,
   genericPhasesByDeleteStateKey: Readonly<Record<string, WorkspaceCleanupDeletionPhase>>
 ): Record<string, WorkspaceCleanupDeletionPhase> {
-  const cleanupWorktreeIds = new Set(
-    Object.keys(cleanupPhases).map(getWorkspaceCleanupIdentityWorktreeId)
-  )
   const phases = { ...cleanupPhases }
   for (const candidate of candidates) {
-    if (cleanupWorktreeIds.has(candidate.worktreeId)) {
+    const identity = getWorkspaceCleanupCandidateIdentity(candidate)
+    if (cleanupPhases[identity]) {
       continue
     }
     const hostId = resolveWorkspaceCleanupRemovalHostId(candidate)
@@ -27,7 +24,7 @@ export function getWorkspaceCleanupDeletionPhaseByIdentity(
         ? genericPhasesByDeleteStateKey[composeWorktreeHostIdentity(hostId, candidate.worktreeId)]
         : undefined) ?? genericPhasesByDeleteStateKey[candidate.worktreeId]
     if (phase) {
-      phases[getWorkspaceCleanupCandidateIdentity(candidate)] = phase
+      phases[identity] = phase
     }
   }
   return phases

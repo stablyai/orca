@@ -15,6 +15,7 @@ import {
 } from '../../../../src/shared/bots/use-bot-item-question-steps'
 import { MobileMarkdown } from '../../components/markdown/MobileMarkdown'
 import { useMobileTranslation } from '../../i18n/use-mobile-translation'
+import { INLINE_TEXT_SELECTION } from '../../platform/text-selection/inline-text-selection'
 import { colors, radii, spacing, typography } from '../../theme/mobile-theme'
 import { themedStyleSheet } from '../../theme/themed-styles'
 import {
@@ -35,6 +36,7 @@ export function MobileBotItemCommentCard({
   failed,
   ref,
   onShowQuestion,
+  onShowLive,
   flash,
   itemScope,
   quickReplies,
@@ -42,13 +44,17 @@ export function MobileBotItemCommentCard({
 }: {
   item: BotItem
   entry: Pick<Extract<BotItemActivityEntry, { kind: 'comment' }>, 'event' | 'replyTo' | 'waiting'> &
-    Partial<Pick<Extract<BotItemActivityEntry, { kind: 'comment' }>, 'answers' | 'byOrder'>>
+    Partial<
+      Pick<Extract<BotItemActivityEntry, { kind: 'comment' }>, 'answers' | 'byOrder' | 'ended'>
+    >
   attachments: MobileBotItemAttachmentSource
   /** A comment sent from the box that didn't reach the host; no Retry when it may have. */
   failed?: { retry: (() => void) | null; discard: () => void }
   ref?: Ref<HostInstance>
   /** Its quote's tap; null while the question isn't in the Activity read so far. */
   onShowQuestion?: (() => void) | null
+  /** Replaced: shows the ask that waits now; null when none waits. */
+  onShowLive?: (() => void) | null
   /** Shown from a reply's quote: a brief highlight, again for each new `at`; `end` stays the same. */
   flash?: { at: number; still: boolean; end: () => void }
   /** The item on its host, which an ask's held answers are kept under. */
@@ -90,7 +96,9 @@ export function MobileBotItemCommentCard({
         <MobileBotItemReplyQuote text={replyTo.text} onShowQuestion={onShowQuestion ?? null} />
       ) : null}
       <MobileBotItemCommentAttachments data={event.data} {...attachments}>
-        {text.trim() ? <MobileMarkdown content={text} /> : null}
+        {text.trim() ? (
+          <MobileMarkdown content={text} rangeSelectable={INLINE_TEXT_SELECTION} />
+        ) : null}
       </MobileBotItemCommentAttachments>
       {asks ? (
         <MobileBotItemQuestionLines
@@ -104,6 +112,8 @@ export function MobileBotItemCommentCard({
           waiting={waiting}
           answers={entry.answers}
           byOrder={entry.byOrder}
+          ended={entry.ended}
+          onShowLive={onShowLive ?? undefined}
           actions={quickReplies}
           disabled={repliesDisabled}
           // Ruled off only below something: a question with no body stays under the name.

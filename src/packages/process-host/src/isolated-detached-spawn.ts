@@ -4,6 +4,7 @@ import type { ProcessSpec } from './process-spec'
 import { spawnProcess } from './run-process'
 import { resolveSpawn } from './spawn-resolution'
 import { hasSpawnObserver, notifySpawnObserver } from './spawn-observer'
+import { quoteWindowsArgumentLikeLibuv } from './windows-command-line'
 
 /** Main installs the native spawner; daemon, relay, and CLI fall back to libuv. Empty cwd: ours. */
 export type IsolatedSpawner = (
@@ -26,31 +27,6 @@ let isolatedSpawner: IsolatedSpawner | null = null
 
 export function setIsolatedSpawner(next: IsolatedSpawner | null): void {
   isolatedSpawner = next
-}
-
-// libuv's quote_cmd_arg, so a holder's command line matches what uv_spawn produced before.
-export function quoteWindowsArgumentLikeLibuv(value: string): string {
-  if (value === '') {
-    return '""'
-  }
-  if (!/[ \t"]/.test(value)) {
-    return value
-  }
-  if (!/["\\]/.test(value)) {
-    return `"${value}"`
-  }
-  let quoted = '"'
-  let backslashes = 0
-  for (const char of value) {
-    if (char === '\\') {
-      backslashes += 1
-      continue
-    }
-    quoted +=
-      char === '"' ? `${'\\'.repeat(backslashes * 2 + 1)}"` : `${'\\'.repeat(backslashes)}${char}`
-    backslashes = 0
-  }
-  return `${quoted}${'\\'.repeat(backslashes * 2)}"`
 }
 
 // Variables libuv copies from the parent when the given env lacks them; Windows breaks without some.

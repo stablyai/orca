@@ -21,7 +21,7 @@
     },
     "claude": {
       "usageSignInLabel": "Iniciar sesión de nuevo",
-      "usageSignInMessage": "La cuenta de Claude seleccionada necesita que inicies sesión de nuevo. Abre Ajustes > Cuentas de proveedores de IA, o elige Predeterminado del sistema."
+      "usageSignInMessage": "Esta cuenta necesita que inicies sesión de nuevo."
     }
   },
   "agentHistory": {
@@ -396,6 +396,15 @@
     "queuedMessages": {
       "deleteAll": "Eliminar todo",
       "editMessage": "Editar mensaje",
+      "showLess": "Mostrar menos",
+      "moreCount_one": "{{count}} más",
+      "moreCount_other": "{{count}} más",
+      "moreCount_many": "{{count}} más",
+      "deleteMessage": "Eliminar mensaje",
+      "queuedCount_one": "{{count}} mensaje en cola",
+      "queuedCount_other": "{{count}} mensajes en cola",
+      "queuedCount_many": "{{count}} mensajes en cola",
+      "foldNeedsAttention": "{{more}}, un mensaje requiere atención",
       "pausedState": "En pausa",
       "queuedState": "En cola",
       "resume": "Reanudar",
@@ -2503,6 +2512,7 @@
       "images_one": "{{count}} imagen",
       "images_other": "{{count}} imágenes",
       "moreActions": "Más acciones",
+      "you": "Tú",
       "send": "Enviar",
       "sendAgainHint": "Volver a enviar este mensaje",
       "sendHint": "Enviar este mensaje",
@@ -2612,6 +2622,7 @@
       "unsavedMarkdown": "Cambios en Markdown sin guardar",
       "urlPrompt": "Introduce una URL o deja el campo en blanco para abrir una pestaña nueva.",
       "allowAutoClose": "Permitir cierre automático",
+      "agents": "Agentes",
       "renameTerminalFailed": "No se pudo cambiar el nombre del terminal. {{reason}}"
     },
     "sourceControlLaunchAgent": {
@@ -2825,6 +2836,8 @@
       "conversationCleared": "Esta conversación se borró.",
       "goalsUnsupported": "Este agente no admite objetivos.",
       "historyUnavailable": "Orca no pudo abrir el historial de este chat en este momento.",
+      "diskFull": "El disco del equipo que ejecuta este chat está lleno.",
+      "freeDiskSpace": "Libere espacio en ese disco y vuelva a intentarlo.",
       "savedInOtherFolder": "Esta conversación se guardó en otra carpeta.",
       "historyUnreadable": "Orca no pudo leer el historial guardado de este chat.",
       "historyUnusable": "No se puede cargar este chat.",
@@ -2930,11 +2943,29 @@
     "nativeChatView": {
       "linkedMessageMissing": "No se pudo encontrar ese mensaje."
     },
+    "tabsSheet": {
+      "needsYou": "Requieren tu atención",
+      "working": "En curso",
+      "everythingElse": "Todo lo demás",
+      "closeTab": "Cerrar {{title}}"
+    },
+    "tabRows": {
+      "browser": "Navegador",
+      "markdown": "Nota en Markdown",
+      "file": "Archivo",
+      "chat": "Chat",
+      "terminal": "Terminal"
+    },
     "browserProfile": {
       "default": "Predeterminado"
     },
     "tabBar": {
+      "oneTab": "1 pestaña",
       "tabCount": "Pestañas: {{count}}",
+      "anotherNeedsYou": "otra pestaña requiere tu atención",
+      "actionsHint": "Muestra las acciones de esta pestaña",
+      "next": "Pestaña siguiente",
+      "previous": "Pestaña anterior",
       "hint": "Muestra todas las pestañas"
     }
   },
@@ -3532,6 +3563,9 @@
       "planModelUnavailable": "El modelo «{{model}}» no está disponible para {{label}}.",
       "planModelWithoutThinking": "El modelo «{{model}}» no admite un nivel de esfuerzo de razonamiento.",
       "planThinkingLevelInvalid": "El nivel de razonamiento «{{level}}» no es válido para {{model}}.",
+      "commandTemplateEmptyDictationCleanup": "La plantilla de comando para la corrección del dictado está vacía.",
+      "dictationCleanupAgentUnsupported": "Elige un agente compatible para la corrección con IA en Ajustes -> Voz -> Corrección. Agentes compatibles: {{agents}}, o Comando personalizado.",
+      "agentCannotGenerateDictationCleanup": "El agente «{{agent}}» no admite la corrección del dictado. Agentes compatibles: {{agents}}, o Comando personalizado.",
       "promptTooLargeForArgument": "El prompt de {{label}} es demasiado grande para pasarlo como un único argumento de línea de comandos. Prepara menos cambios y vuelve a intentarlo.",
       "promptTooLargeForWindows": "El prompt de {{label}} es demasiado grande para la línea de comandos de Windows. Prepara menos cambios y vuelve a intentarlo.",
       "pullRequestDetailsUnparseable": "No se pudieron analizar los detalles generados de la pull request.",
@@ -4542,6 +4576,10 @@
     }
   },
   "bots": {
+    "section": {
+      "scrollLeft": "Desplazar a la izquierda · {{amount}} ocultos",
+      "scrollRight": "Desplazar a la derecha · {{amount}} ocultos"
+    },
     "link": {
       "pairTitle": "Vincular un ordenador",
       "pairRequired": "Para abrir este enlace, vincula este teléfono con un ordenador y vuelve a abrir el enlace.",
@@ -4639,31 +4677,14 @@
       "peerTold": "{{from}} avisó a {{to}}",
       "startAConversationWithThisGroupMentionBots": "Empieza una conversación con este grupo. Menciona bots con @Nombre o @everyone.",
       "items": {
-        "thisGroup": "Este grupo",
-        "thread": "Hilo",
-        "all": "Todo su trabajo",
-        "orNames": "{{names}} o {{last}}",
-        "outsideRoom_one": "{{count}} más fuera de esta sala",
-        "outsideRoom_other": "{{count}} más fuera de esta sala",
-        "outsideThread_one": "{{count}} más fuera de este hilo",
-        "outsideThread_other": "{{count}} más fuera de este hilo",
-        "outside_one": "{{count}} más fuera de este grupo",
-        "outside_other": "{{count}} más fuera de este grupo",
         "emptyTitle": "Aún no hay elementos de este grupo",
-        "emptyBody": "Cuando {{names}} asuman algo en este grupo, aparecerá aquí.",
         "needsYouCount_one": "{{count}} te necesita",
         "needsYouCount_other": "{{count}} te necesitan",
         "workingCount_one": "{{count}} trabajando",
         "workingCount_other": "{{count}} trabajando",
         "filterBot": "Bot",
-        "outsideRoom": "{{count}} más fuera de esta sala",
-        "outsideThread": "{{count}} más fuera de este hilo",
-        "outside": "{{count}} más fuera de este grupo",
         "needsYouCount": "{{count}} te necesita",
         "workingCount": "{{count}} trabajando",
-        "outsideRoom_many": "{{count}} más fuera de esta sala",
-        "outsideThread_many": "{{count}} más fuera de este hilo",
-        "outside_many": "{{count}} más fuera de este grupo",
         "needsYouCount_many": "{{count}} te necesitan",
         "workingCount_many": "{{count}} trabajando"
       },
@@ -4701,8 +4722,7 @@
     },
     "items": {
       "filter": {
-        "clearAll": "Borrar filtros",
-        "chat": "Chat"
+        "clearAll": "Borrar filtros"
       },
       "tab": "Elementos",
       "activity": {
@@ -4729,7 +4749,9 @@
       "skillLimit": "Mensaje no enviado. Selecciona como máximo {{limit}} archivos de habilidades e inténtalo de nuevo.",
       "ask": {
         "notSentYet": "aún no enviado",
-        "replaced": "El agente ha hecho una nueva pregunta. Léela y luego responde."
+        "replaced": "El agente ha hecho una nueva pregunta. Léela y luego responde.",
+        "replacedByNewer": "Sustituida por una pregunta más reciente",
+        "skipped": "Omitidas"
       }
     },
     "needs": {

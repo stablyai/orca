@@ -2,7 +2,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Pressable, Text, View } from 'react-native'
 import { ChevronDown, CircleX } from '../components/icons/app-icons'
-import { AGENT_ATTENTION_COLOR, AgentStateDot } from '../agents/presentation/AgentStateDot'
+import { AGENT_FAILURE_COLOR, AgentStateDot } from '../agents/presentation/AgentStateDot'
 import { DisclosureChevron } from '../components/list/DisclosureChevron'
 import { MobileSearchField } from '../components/controls/MobileSearchField'
 import { ListGroup, ListRow, SectionHeader } from '../components/list/ListGroup'
@@ -85,12 +85,11 @@ function WorkerIcon({ state }: { state: BotChatTreeWorker['state'] }) {
     case 'unreachable':
       return <AgentStateDot state="unverifiable" />
     case 'needs-you':
-      return <AgentStateDot state="permission" />
+      return <AgentStateDot state="permission" decorative />
     case 'done':
       return <AgentStateDot state="done" />
     case 'failed':
-      // Unlike a worker waiting on the owner, which shares the red dot.
-      return <CircleX size={13} color={AGENT_ATTENTION_COLOR} />
+      return <CircleX size={13} color={AGENT_FAILURE_COLOR} />
   }
 }
 

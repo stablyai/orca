@@ -22,7 +22,7 @@
     },
     "claude": {
       "usageSignInLabel": "重新登录",
-      "usageSignInMessage": "所选 Claude 账户需要您重新登录，请打开设置 > AI 提供商账户，或选择系统默认"
+      "usageSignInMessage": "此账户需要您重新登录。"
     },
     "usage": {
       "percentLeft": "剩余 {{value}}%"
@@ -3686,6 +3686,8 @@
       "conversationCleared": "此对话已被清除",
       "goalsUnsupported": "此智能体不支持目标",
       "historyUnavailable": "Orca 目前无法打开此聊天的历史记录",
+      "diskFull": "运行此聊天的电脑磁盘已满。",
+      "freeDiskSpace": "请释放该磁盘空间后重试。",
       "savedInOtherFolder": "此对话保存在另一个文件夹中",
       "historyUnreadable": "Orca 无法读取此聊天的已保存历史记录",
       "historyUnusable": "无法加载此聊天",
@@ -5670,7 +5672,7 @@
               "7e8bbe3cd7": "冲突",
               "b169f943e1": "准备好后合并",
               "autoMergeOn": "自动合并已开启",
-              "039c072f94": "在后面",
+              "039c072f94": "落后",
               "bf5e4c6c92": "已阻塞",
               "87fa36ac83": "检查失败",
               "4e2507176b": "检查待处理",
@@ -6057,6 +6059,8 @@
       "hide": "隐藏 {{name}} 的工作区"
     },
     "section": {
+      "scrollLeft": "向左滚动 · 隐藏 {{amount}} 个",
+      "scrollRight": "向右滚动 · 隐藏 {{amount}} 个",
       "title": "Bots",
       "summary": "{{title}}，{{total}} 个 bot，{{attention}} 个需要你处理，{{unread}} 个未读，{{working}} 个工作中",
       "newBot": "新建 bot",
@@ -6090,26 +6094,12 @@
       "peerFollowedUp": "{{bot}} 跟进了",
       "startAConversationWithThisGroupMentionBots": "开始与此群组对话。使用 @名称 或 @everyone 提及 bots",
       "items": {
-        "thisGroup": "此群组",
-        "thread": "话题",
-        "all": "成员的全部工作",
-        "orNames": "{{names}} 或 {{last}}",
-        "outsideRoom_one": "此聊天室外还有 {{count}} 项",
-        "outsideRoom_other": "此聊天室外还有 {{count}} 项",
-        "outsideThread_one": "此话题外还有 {{count}} 项",
-        "outsideThread_other": "此话题外还有 {{count}} 项",
-        "outside_one": "此群组外还有 {{count}} 项",
-        "outside_other": "此群组外还有 {{count}} 项",
         "emptyTitle": "此群组还没有事项",
-        "emptyBody": "当 {{names}} 在此群组中接手任务时，会显示在这里",
         "needsYouCount_one": "{{count}} 项需要你处理",
         "needsYouCount_other": "{{count}} 项需要你处理",
         "workingCount_one": "{{count}} 个进行中",
         "workingCount_other": "{{count}} 个进行中",
         "filterBot": "Bot",
-        "outsideRoom": "此聊天室外还有 {{count}} 项",
-        "outsideThread": "此话题外还有 {{count}} 项",
-        "outside": "此群组外还有 {{count}} 项",
         "needsYouCount": "{{count}} 项需要你处理",
         "workingCount": "{{count}} 个进行中"
       },
@@ -6667,8 +6657,7 @@
         "label": "筛选事项",
         "remove": "移除筛选条件 {{name}}",
         "clear": "清除筛选",
-        "clearAll": "清除筛选",
-        "chat": "聊天"
+        "clearAll": "清除筛选"
       },
       "tab": "事项",
       "field": {
@@ -6781,13 +6770,7 @@
       },
       "cancel": {
         "keep": "保留",
-        "confirmMany": "取消 {{count}} 项",
-        "titleMany": "要取消 {{count}} 个事项吗？",
-        "titleOne": "要取消“{{title}}”吗？",
-        "why": "bot 会看到原因。不会删除任何内容",
-        "placeholder": "原因",
-        "confirmOne": "取消事项",
-        "offline": "{{host}} 已离线。你填写的原因已保留，{{action}} 会在它恢复连接后重新可用"
+        "confirmMany": "取消 {{count}} 项"
       },
       "strip": {
         "view": "查看"
@@ -6828,7 +6811,9 @@
         "previous": "上一个问题",
         "step": "第 {{n}} 个，共 {{total}} 个",
         "next": "下一个问题",
-        "replaced": "智能体提出了新问题。请先阅读，再回复"
+        "replaced": "智能体提出了新问题。请先阅读，再回复",
+        "replacedByNewer": "已由较新的问题取代",
+        "skipped": "已跳过"
       },
       "write": {
         "unknown": "发送时连接中断，内容可能已经送达。重新连接后请先查看“活动”，再决定是否重新发送",
@@ -8119,14 +8104,10 @@
         "continue": "继续",
         "description": "选择 {{bot}} 登录你的 Gmail、日历和云端硬盘的方式",
         "self": "自行托管",
-        "selfNote": "你将自行创建 Google Cloud 应用，因此你的登录信息会保留在你的电脑上。大约需要 10 分钟",
+        "selfNote": "使用你自己的 Google 应用",
         "orca": "Orca 托管",
-        "orcaNote": "使用 Google 登录。无需任何设置",
-        "comingSoon": "即将推出",
-        "steps": "步骤",
-        "stepApp": "{{bot}} 打开 Google Cloud 并设置应用",
-        "stepSignIn": "你勾选 Google 的条款复选框，然后登录",
-        "stepCheck": "{{bot}} 检查 Gmail、日历和云端硬盘能否正常使用"
+        "orcaNote": "使用 Google 登录",
+        "soon": "即将推出"
       },
       "importFromTeam": "导入团队提供的配置文件",
       "service": {

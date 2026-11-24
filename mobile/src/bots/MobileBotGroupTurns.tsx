@@ -127,7 +127,7 @@ export function MobileBotGroupTurn({
   )
   const lifecycle = items.find((item) => item.body.kind === 'turn')?.body
   const clock = lifecycle?.kind === 'turn' ? lifecycle : null
-  const queued = session?.queued.cards.some((card) => card.messageId === turn.operationId)
+  const queued = session?.queued.holds(turn.operationId)
   const working = clock?.state === 'running' && !turn.revoked
   const source = useMemo(() => ({ client, sessionId: turn.sessionId }), [client, turn.sessionId])
   const rawMessages = useMemo(

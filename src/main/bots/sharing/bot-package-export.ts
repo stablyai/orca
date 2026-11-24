@@ -32,6 +32,7 @@ import {
 } from './bot-package-content-files'
 import { BOT_DISPLAY_NAME_MAX, isLandingText, landingLine } from './bot-package-transport'
 import { availableParts, picked, sharedAutomationIds } from './bot-share-available'
+import { claimNewest } from './bot-share-skill-reads'
 import { deriveConnectors, type BotShareable } from './bot-share-sources'
 
 /** The owner's picks: absent lists share everything but memory, which is off unless named. */
@@ -111,6 +112,8 @@ export class BotShareCandidates {
   private readonly candidates = new Map<string, Candidate>()
   /** Every change runs here in turn, so none releases a candidate another is still writing. */
   private changes: Promise<unknown> = Promise.resolve()
+  /** Each bot's newest candidate's place, kept whatever happens to that candidate since. */
+  private readonly newest = new Map<string, number>()
 
   constructor(
     private readonly root: string,
@@ -124,11 +127,15 @@ export class BotShareCandidates {
     packageId: string
     /** Built in, so a candidate opened with the last published note digests as that version did. */
     setupNote?: string
+    /** When it was asked for: one asked for before the bot's newest candidate never replaces it. */
+    place?: number
   }): Promise<BotShareCandidateSummary> {
     return this.change(() => this.build(input))
   }
 
   private async build(input: Parameters<BotShareCandidates['prepare']>[0]) {
+    // Checked here, where replacing runs in turn: an older build that finished late fails instead.
+    claimNewest(this.newest, input.bot.id, input.place)
     await this.prune()
     // One candidate per bot: a rebuild (a changed tick, a reopened dialog) replaces the last one.
     const previous = [...this.candidates.entries()].filter(
