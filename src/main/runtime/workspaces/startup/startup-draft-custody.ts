@@ -57,7 +57,8 @@ export function pasteStartupDraftInCustody(
       if (host.isStopRequested(target.ptyId)) {
         throw new Error('terminal_not_writable')
       }
-      // The agent took time to be ready; its caller is approved again right before the paste.
+      // The agent took time to be ready: the request must still be live and its caller approving.
+      guard.signal?.throwIfAborted()
       guard.beforeWrite?.()
       host.readiness.write(target.ptyId, `\x1b[200~${draft.content}\x1b[201~`, 'launch')
     }
