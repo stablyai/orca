@@ -10,8 +10,6 @@ import { BrowserError } from '../../browser-error'
 const PRINT_READ_CHUNK_BYTES = 2 * 1024 * 1024
 // Covers a person choosing where to save; each read restarts it.
 const PRINT_HOLD_MS = 5 * 60_000
-// Covers the device moving to a just-opened popup's stream, which starts after the opener's ends.
-const PRINT_HANDOFF_MS = 30_000
 // A PDF past this is not held for a viewer: memory, and minutes over a slow link.
 const PRINT_MAX_BYTES = 256 * 1024 * 1024
 
@@ -22,8 +20,8 @@ export type BrowserPrintViewer = {
 }
 
 /**
- * One print per device and page, from rendering until it is read, released or expires. A print
- * delivered to the device outlives its stream: the save dialog may be open across a reconnect.
+ * One print per device and page, from rendering until it is read to the end, released or expires.
+ * It outlives the stream it was sent on: the save dialog may stay open across a reconnect.
  */
 type PrintSlot = {
   pairedDeviceId: string
@@ -33,7 +31,9 @@ type PrintSlot = {
   title: string
   // Null while the PDF renders.
   bytes: Buffer | null
-  delivered: boolean
+  // The device has read from it. Until then each new stream of a receiver page is told again,
+  // as the stream that was told may have been closing (the device moving to a just-opened popup).
+  read: boolean
   expiry: NodeJS.Timeout
 }
 
@@ -63,10 +63,9 @@ export function addBrowserPrintViewer(
     viewersByGuestId.set(guestWebContentsId, viewers)
   }
   viewers.add(viewer)
-  // A print that rendered while the device was between streams of its tab goes to the new one.
   for (const [printId, slot] of slots) {
     if (
-      !slot.delivered &&
+      !slot.read &&
       slot.bytes &&
       slot.pairedDeviceId === viewer.pairedDeviceId &&
       slot.receivers.includes(guestWebContentsId)
@@ -115,8 +114,8 @@ export function printForBrowserViewer(
     receivers,
     title,
     bytes: null,
-    delivered: false,
-    expiry: expirePrint(printId, PRINT_HOLD_MS)
+    read: false,
+    expiry: expirePrint(printId)
   }
   slots.set(printId, slot)
   void frame
@@ -133,9 +132,6 @@ export function printForBrowserViewer(
       const viewer = receiver()
       if (viewer) {
         deliverPrint(printId, slot, viewer)
-      } else {
-        clearTimeout(slot.expiry)
-        slot.expiry = expirePrint(printId, PRINT_HANDOFF_MS)
       }
     })
     .catch((error: unknown) => {
@@ -155,6 +151,7 @@ export function readBrowserPrintPdf(
   if (!slot || !bytes) {
     throw new BrowserError('browser_error', 'This print is no longer available. Print again.')
   }
+  slot.read = true
   const start = Math.min(Math.max(0, Math.floor(params.offset ?? 0)), bytes.length)
   const chunk = bytes.subarray(start, start + PRINT_READ_CHUNK_BYTES)
   const eof = start + chunk.length >= bytes.length
@@ -162,7 +159,7 @@ export function readBrowserPrintPdf(
     forgetPrint(params.printId)
   } else {
     clearTimeout(slot.expiry)
-    slot.expiry = expirePrint(params.printId, PRINT_HOLD_MS)
+    slot.expiry = expirePrint(params.printId)
   }
   return { contentBase64: chunk.toString('base64'), bytesRead: chunk.length, eof }
 }
@@ -180,14 +177,11 @@ export function releaseBrowserPrintPdf(
 }
 
 function deliverPrint(printId: string, slot: PrintSlot, viewer: BrowserPrintViewer): void {
-  slot.delivered = true
-  clearTimeout(slot.expiry)
-  slot.expiry = expirePrint(printId, PRINT_HOLD_MS)
   viewer.print({ type: 'print', printId, title: slot.title })
 }
 
-function expirePrint(printId: string, ms: number): NodeJS.Timeout {
-  return setTimeout(() => slots.delete(printId), ms).unref()
+function expirePrint(printId: string): NodeJS.Timeout {
+  return setTimeout(() => slots.delete(printId), PRINT_HOLD_MS).unref()
 }
 
 function forgetPrint(printId: string): void {

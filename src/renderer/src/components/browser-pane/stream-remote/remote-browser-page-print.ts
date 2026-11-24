@@ -8,8 +8,8 @@ import { callRuntimeRpc } from '@/runtime/rpc/calls/runtime-rpc-call'
 import { streamDownloadedFile } from '@/runtime/files/reads/runtime-remote-file-download'
 import type { RemoteBrowserDialogPage } from './remote-browser-javascript-dialog'
 
-// One save per page at a time; the host also holds one print per page until it is read or released.
-const printingPages = new Set<string>()
+// The host holds one print per page until it is read to the end or released.
+const savingPrintIds = new Set<string>()
 
 /** A streamed page called print(): save it here as a PDF, then open that in this computer's viewer, where it prints. */
 export async function saveRemoteBrowserPagePrint(
@@ -30,12 +30,11 @@ export async function saveRemoteBrowserPagePrint(
       { suppressFeatureInteraction: true, background: true, expectedEnvironmentPairingRevision }
     ).catch(() => {})
   }
-  const key = `${JSON.stringify(page.target)}\n${page.pageId}`
-  if (printingPages.has(key)) {
-    release()
+  // The host tells each new stream of the page again until a read starts; one save per print.
+  if (savingPrintIds.has(printId)) {
     return
   }
-  printingPages.add(key)
+  savingPrintIds.add(printId)
   try {
     const name = `${title.trim().slice(0, 120) || 'page'}.pdf`
     const saved = await streamDownloadedFile(name, (offset) =>
@@ -57,6 +56,6 @@ export async function saveRemoteBrowserPagePrint(
       description: readIpcErrorMessage(error) ?? String(error)
     })
   } finally {
-    printingPages.delete(key)
+    savingPrintIds.delete(printId)
   }
 }
