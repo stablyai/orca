@@ -100,7 +100,7 @@ function installWillQuitHandler(): void {
     if (!quitTeardownStartGate.tryStart(event)) {
       return
     }
-    // Not awaited: kills catalog clones so git cannot outlive Orca; the startup sweep catches leftovers.
+    // Not awaited: signals catalog git to stop without delaying quit; the startup sweep catches leftovers.
     abortPluginGitForShutdown()
     const updateQuitInProgress = isQuittingForUpdate()
     const coreTeardowns = beginDesktopCoreShutdown(
