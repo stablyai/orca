@@ -1896,6 +1896,10 @@
       "downloadProgress": "Скачивание… {{progress}}",
       "downloading": "Скачивание",
       "loading": "Загрузка"
+    },
+    "kind": {
+      "worktree": "Worktree",
+      "chat": "Чат"
     }
   },
   "notifications": {
@@ -5395,5 +5399,14 @@
     "cardSlot": {
       "working": "В работе"
     }
+  },
+  "chats": {
+    "newProjectDate": "Новый проект-{{date}}",
+    "createdNotOpened": "Чат создан. Откройте его в разделе «Чаты».",
+    "createFailed": "Не удалось создать чат",
+    "create": "Создать чат",
+    "title": "Чаты",
+    "noteFailed": "Не удалось сохранить заметку",
+    "agentFailed": "Не удалось запустить агента. Проверьте чат перед новым запуском."
   }
 }

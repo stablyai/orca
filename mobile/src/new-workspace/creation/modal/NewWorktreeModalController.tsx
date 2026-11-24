@@ -1,8 +1,9 @@
-import { useMemo } from 'react'
+import { useMemo, useState } from 'react'
 
 import type { ExecutionHostId } from '../../../../../src/shared/execution-host/execution-host'
 import { useReachableServerClients } from '../../../worktree/execution-hosts/use-reachable-server-clients'
 import { withServerHosts } from '../../../worktree/execution-hosts/server-workspaces'
+import { NewChatWorkspaceModal } from '../../NewChatWorkspaceModal'
 import { NewWorktreeModal } from './NewWorktreeModal'
 import type { NewWorktreeModalProps } from '../forms/new-worktree-modal-types'
 
@@ -20,6 +21,11 @@ export function NewWorktreeModalController({
   hostLabelById,
   ...modalProps
 }: Props) {
+  const [kind, setKind] = useState(modalProps.creationKind ?? 'worktree')
+  const [opening, setOpening] = useState({ visible, epoch: 0 })
+  if (opening.visible !== visible) {
+    setOpening({ visible, epoch: visible ? opening.epoch + 1 : opening.epoch })
+  }
   // Why the feed, not the list's server rows: the list stops refreshing behind the sheet.
   const { servers, serverClients } = useReachableServerClients(client, hostCapabilities, visible)
   const serverLabelById = useMemo(
@@ -27,9 +33,14 @@ export function NewWorktreeModalController({
     [hostLabelById, servers]
   )
 
+  const Form =
+    kind === 'chat' && !modalProps.folderLaunch ? NewChatWorkspaceModal : NewWorktreeModal
   return (
-    <NewWorktreeModal
+    <Form
+      key={`${modalProps.hostId ?? ''}:${opening.epoch}:${kind}`}
       {...modalProps}
+      creationKind={kind}
+      onCreationKindChange={modalProps.folderLaunch ? undefined : setKind}
       visible={visible}
       client={client}
       serverClients={serverClients}

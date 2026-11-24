@@ -17,17 +17,20 @@ import {
 import { SheetHeader } from '../../../components/nav-bar/SheetHeader'
 import type { NewWorktreeAgentOption } from '../runtime/new-worktree-agent-selection'
 import { newWorktreeFormStyles as styles } from './new-worktree-form-styles'
-import type { SetupRunPolicy } from './new-worktree-modal-types'
+import type { WorkspaceCreationKind, SetupRunPolicy } from './new-worktree-modal-types'
 import { NewWorktreeFormOptions } from './NewWorktreeFormOptions'
 import { NewWorktreeProjectTargetFields } from './NewWorktreeProjectTargetFields'
 import { NewWorkspaceSshConnectionField } from './NewWorkspaceSshConnectionField'
 import { SheetPrimaryButton } from '../../../components/sheets/SheetPrimaryButton'
+import { WorkspaceCreationTabs } from '../../WorkspaceCreationTabs'
 import { SmartWorkspaceSourceField } from '../../source-selection/presentation/SmartWorkspaceSourceField'
 
 type Composer = ReturnType<typeof useMobileComposerSource>
 type Selection = { label: string; detail?: string }
 
 export function NewWorktreeFormSheet(props: {
+  creationKind?: WorkspaceCreationKind
+  onCreationKindChange?: (kind: WorkspaceCreationKind) => void
   visible: boolean
   interactive: boolean
   loading: boolean
@@ -84,6 +87,15 @@ export function NewWorktreeFormSheet(props: {
       <View style={styles.header}>
         <SheetHeader
           title={title}
+          titleControl={
+            props.onCreationKindChange ? (
+              <WorkspaceCreationTabs
+                selected={props.creationKind ?? 'worktree'}
+                disabled={props.creating}
+                onSelect={props.onCreationKindChange}
+              />
+            ) : undefined
+          }
           leading={{
             label: t('common.cancel', 'Cancel'),
             onPress: props.onClose,

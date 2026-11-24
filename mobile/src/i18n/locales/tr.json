@@ -1806,6 +1806,10 @@
       "downloadProgress": "İndiriliyor… {{progress}}",
       "downloading": "İndiriliyor",
       "loading": "Yükleniyor"
+    },
+    "kind": {
+      "worktree": "Worktree",
+      "chat": "Sohbet"
     }
   },
   "notifications": {
@@ -5175,5 +5179,14 @@
     "cardSlot": {
       "working": "Çalışıyor"
     }
+  },
+  "chats": {
+    "newProjectDate": "Yeni proje-{{date}}",
+    "createdNotOpened": "Sohbet oluşturuldu. Sohbetler bölümünden açın.",
+    "createFailed": "Sohbet oluşturulamadı",
+    "create": "Sohbet oluştur",
+    "title": "Sohbetler",
+    "noteFailed": "Not kaydedilemedi",
+    "agentFailed": "Aracı başlatılamadı. Yeniden başlatmadan önce sohbeti kontrol edin."
   }
 }

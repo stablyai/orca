@@ -285,6 +285,8 @@ function NewWorktreeModalContent(props: NewWorktreeModalProps) {
   return (
     <BottomDrawerModalHost visible={visible} onRequestClose={requestClose}>
       <NewWorktreeFormSheet
+        creationKind={props.creationKind}
+        onCreationKindChange={props.onCreationKindChange}
         visible={navigation.formSheetVisible}
         interactive={navigation.formSheetInteractive}
         loading={loading}

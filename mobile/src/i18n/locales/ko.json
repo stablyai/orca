@@ -1802,6 +1802,10 @@
       "downloadProgress": "다운로드 중… {{progress}}",
       "downloading": "다운로드 중",
       "loading": "로드 중"
+    },
+    "kind": {
+      "worktree": "워크트리",
+      "chat": "채팅"
     }
   },
   "notifications": {
@@ -5699,5 +5703,14 @@
     "cardSlot": {
       "working": "작업 중"
     }
+  },
+  "chats": {
+    "newProjectDate": "새 프로젝트-{{date}}",
+    "createdNotOpened": "채팅이 생성되었습니다. 채팅에서 여세요.",
+    "createFailed": "채팅을 생성할 수 없습니다",
+    "create": "채팅 생성",
+    "title": "채팅",
+    "noteFailed": "메모를 저장할 수 없습니다",
+    "agentFailed": "에이전트를 시작할 수 없습니다. 다시 시작하기 전에 채팅을 확인하세요."
   }
 }

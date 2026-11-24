@@ -15,6 +15,7 @@ function catalogRepo(repo: SidebarCatalogRepo): Repo {
     displayName: repo.displayName,
     badgeColor: repo.badgeColor ?? '',
     addedAt: repo.addedAt ?? 0,
+    ...(repo.chatWorkspace ? { chatWorkspace: repo.chatWorkspace } : {}),
     ...(repo.connectionId !== undefined ? { connectionId: repo.connectionId } : {}),
     ...(repo.executionHostId ? { executionHostId: repo.executionHostId } : {}),
     ...(repo.projectGroupId ? { projectGroupId: repo.projectGroupId } : {}),

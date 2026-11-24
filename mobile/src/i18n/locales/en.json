@@ -4882,6 +4882,10 @@
       "hostUnsupported": "Approved. Update Orca on the workspace host to run setup for an existing workspace.",
       "changedAgain": "Setup didn't run: this workspace's orca.yaml changed again since you reviewed it.",
       "runFailed": "Could not start setup."
+    },
+    "kind": {
+      "worktree": "Worktree",
+      "chat": "Chat"
     }
   },
   "tasks": {
@@ -8556,6 +8560,13 @@
       "groupRoom": "A group room's chat can't be deleted",
       "home": "A managed agent's Home Chat can't be deleted",
       "workerOwed": "An orchestration still waits on this chat"
-    }
+    },
+    "newProjectDate": "New project-{{date}}",
+    "createdNotOpened": "Chat was created. Open it from Chats.",
+    "createFailed": "Could not create chat",
+    "create": "Create chat",
+    "title": "Chats",
+    "noteFailed": "Could not save the note",
+    "agentFailed": "Could not start the agent. Check the chat before starting another."
   }
 }

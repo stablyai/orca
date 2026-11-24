@@ -7,7 +7,10 @@ import { readOfferedHostIds } from '../src/new-workspace/new-workspace-overlay-r
 
 /** Home's New Workspace, over Home: which desktop, then that desktop's Create Workspace drawer. */
 export default function NewWorkspaceOverlayRoute() {
-  const params = useLocalSearchParams<{ hostIds?: string | string[] }>()
+  const params = useLocalSearchParams<{
+    hostIds?: string | string[]
+    creationKind?: string | string[]
+  }>()
   const [offered] = useState(() => readOfferedHostIds(firstParam(params.hostIds)))
   const [hostId, setHostId] = useState(offered.length === 1 ? offered[0] : null)
   return (
@@ -15,7 +18,12 @@ export default function NewWorkspaceOverlayRoute() {
       {offered.length === 1 ? null : (
         <NewWorkspaceHostPicker hostIds={offered} onPick={setHostId} />
       )}
-      {hostId === null ? null : <NewWorkspaceOverlay hostId={hostId} />}
+      {hostId === null ? null : (
+        <NewWorkspaceOverlay
+          hostId={hostId}
+          creationKind={firstParam(params.creationKind) === 'chat' ? 'chat' : 'worktree'}
+        />
+      )}
     </>
   )
 }

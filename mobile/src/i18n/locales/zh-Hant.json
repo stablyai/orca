@@ -1800,6 +1800,10 @@
       "downloadProgress": "正在下載… {{progress}}",
       "downloading": "正在下載",
       "loading": "載入中"
+    },
+    "kind": {
+      "worktree": "工作區",
+      "chat": "對話"
     }
   },
   "notifications": {
@@ -5169,5 +5173,14 @@
     "cardSlot": {
       "working": "執行中"
     }
+  },
+  "chats": {
+    "newProjectDate": "新專案-{{date}}",
+    "createdNotOpened": "對話已建立，請從「對話」中開啟。",
+    "createFailed": "無法建立對話",
+    "create": "建立對話",
+    "title": "對話",
+    "noteFailed": "無法儲存備註",
+    "agentFailed": "無法確認代理是否啟動，請先檢查對話。"
   }
 }

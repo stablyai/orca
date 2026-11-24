@@ -12,6 +12,7 @@ type SheetTextAction = { label: string; onPress: () => void; disabled?: boolean;
 
 type SheetHeaderProps = {
   title: string
+  titleControl?: ReactNode
   titleAboveActions?: boolean
   subtitle?: string
   /** "Cancel" or "Reset"; omit for a plain list sheet. */
@@ -36,6 +37,7 @@ function oneButton(node: ReactNode): boolean {
 // The one sheet header: a centred title, with a text action or a round button on either side.
 export function SheetHeader({
   title,
+  titleControl,
   subtitle,
   leading,
   onBack,
@@ -86,11 +88,12 @@ export function SheetHeader({
           </View>
           {!titleAboveActions ? (
             <View style={styles.center}>
-              {title ? (
-                <Text style={styles.title} numberOfLines={1} accessibilityRole="header">
-                  {title}
-                </Text>
-              ) : null}
+              {titleControl ??
+                (title ? (
+                  <Text style={styles.title} numberOfLines={1} accessibilityRole="header">
+                    {title}
+                  </Text>
+                ) : null)}
               {subtitle !== undefined ? (
                 <Text style={styles.subtitle} numberOfLines={1}>
                   {subtitle}
@@ -100,16 +103,18 @@ export function SheetHeader({
           ) : (
             <View style={styles.center} />
           )}
-          <View style={[...side, styles.trailing]}>
-            {trailing ? <TextAction action={trailing} emphasis /> : (trailingButtons ?? null)}
-            {onClose && !trailing && !trailingButtons ? (
-              <NavBarButton
-                icon={X}
-                accessibilityLabel={t('components.sheetHeader.close', 'Close')}
-                onPress={onClose}
-              />
-            ) : null}
-          </View>
+          {!titleControl || trailing || trailingButtons || onClose ? (
+            <View style={[...side, styles.trailing]}>
+              {trailing ? <TextAction action={trailing} emphasis /> : (trailingButtons ?? null)}
+              {onClose && !trailing && !trailingButtons ? (
+                <NavBarButton
+                  icon={X}
+                  accessibilityLabel={t('components.sheetHeader.close', 'Close')}
+                  onPress={onClose}
+                />
+              ) : null}
+            </View>
+          ) : null}
         </View>
       </View>
     </NavBarButtonOnSheetContext>

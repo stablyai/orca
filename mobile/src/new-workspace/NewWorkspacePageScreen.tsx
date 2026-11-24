@@ -13,7 +13,10 @@ import { useHostProtocolGates } from '../components/host-connection/host-protoco
 
 // Use a transparent drawer page; close returns to its opener and creation replaces it with the new workspace session.
 export function NewWorkspacePageScreen() {
-  const params = useLocalSearchParams<{ hostId?: string | string[] }>()
+  const params = useLocalSearchParams<{
+    hostId?: string | string[]
+    creationKind?: string | string[]
+  }>()
   const hostId = firstParam(params.hostId)
   const router = useRouteHandoff()
   const { client, state: connState } = useHostClient(hostId)
@@ -26,6 +29,7 @@ export function NewWorkspacePageScreen() {
   return (
     <NewWorktreeModalController
       visible
+      creationKind={firstParam(params.creationKind) === 'chat' ? 'chat' : 'worktree'}
       client={client}
       hostCapabilities={hostCapabilities}
       hostId={hostId}

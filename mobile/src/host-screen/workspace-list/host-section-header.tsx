@@ -1,6 +1,6 @@
 import { memo } from 'react'
 import { ActivityIndicator, Pressable, Text, View } from 'react-native'
-import { ChevronRight, FolderTree, Pin } from 'lucide-react-native'
+import { ChevronRight, FolderTree, Pin, MessagesSquare } from 'lucide-react-native'
 import { DisclosureChevron } from '../../components/list/DisclosureChevron'
 import { MobileRepoIcon } from '../../components/icons/MobileRepoIcon'
 import { WORKTREE_ROW_LAYOUT } from '../../worktree/row-presentation/worktree-list-row-layout'
@@ -58,9 +58,12 @@ export const HostSectionHeader = memo(function HostSectionHeader(props: {
         {props.icon === 'pin' && (
           <Pin size={12} color={colors.textMuted} style={styles.sectionIcon} />
         )}
-        {props.groupByRepo && props.isProjectGroup ? (
+        {props.icon === 'chat' ? (
+          <MessagesSquare size={14} color={colors.textPrimary} style={styles.sectionIcon} />
+        ) : null}
+        {props.groupByRepo && props.icon !== 'chat' && props.isProjectGroup ? (
           <FolderTree size={12} color={colors.textPrimary} style={styles.sectionIcon} />
-        ) : props.groupByRepo ? (
+        ) : props.groupByRepo && props.icon !== 'chat' ? (
           <View style={styles.sectionRepoIcon}>
             <MobileRepoIcon
               repoIcon={props.repoLook?.icon ?? null}

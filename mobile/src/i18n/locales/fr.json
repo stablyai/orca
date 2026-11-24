@@ -1853,6 +1853,10 @@
       "downloadProgress": "Téléchargement… {{progress}}",
       "downloading": "Téléchargement",
       "loading": "Chargement"
+    },
+    "kind": {
+      "worktree": "Worktree",
+      "chat": "Chat"
     }
   },
   "notifications": {
@@ -5287,5 +5291,14 @@
     "cardSlot": {
       "working": "En activité"
     }
+  },
+  "chats": {
+    "newProjectDate": "Nouveau projet-{{date}}",
+    "createdNotOpened": "Chat créé. Ouvrez-le depuis Chats.",
+    "createFailed": "Impossible de créer le chat",
+    "create": "Créer un chat",
+    "title": "Chats",
+    "noteFailed": "Impossible d’enregistrer la note",
+    "agentFailed": "Impossible de démarrer l’agent. Vérifiez le chat avant de réessayer."
   }
 }

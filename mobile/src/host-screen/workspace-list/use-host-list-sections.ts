@@ -1,3 +1,5 @@
+import { useHostChatSections } from './use-host-chat-sections'
+import { useProjectWorkspaceScope } from './use-project-workspace-scope'
 import { useCallback, useMemo, useState } from 'react'
 import { ORCA_SIDEBAR_INPUTS_IS_MAIN } from '../../../../src/shared/sidebar-list/feed/sidebar-inputs-switch'
 import { buildSidebarFeedRows } from '../../../../src/shared/sidebar-list/feed/sidebar-feed-rows'
@@ -255,11 +257,14 @@ const useBaseHostListSections = ORCA_SIDEBAR_INPUTS_IS_MAIN
   ? useFeedHostListSections
   : useLegacyHostListSections
 
-export function useHostListSections(inputs: HostListSectionsInputs): HostListSections {
+export function useHostListSections(unscoped: HostListSectionsInputs): HostListSections {
+  const scoped = useProjectWorkspaceScope(unscoped)
+  const inputs = scoped.projects
   const { bots, displayWorktrees, state } = inputs
   const collapsedGroups = useCollapsedGroups(state)
   const lastVisited = useLastVisitedWorktreeOnHost(inputs.hostId)
   const lineageStores = useLineageStores(inputs)
+  const chats = useHostChatSections(unscoped, scoped.chatRows, scoped.chatRepos, lastVisited)
   // Show paused holds for the search it was asked in.
   const [showPausedFor, setShowPausedFor] = useState<string | null>(null)
   const botSections = useHostBotSections({
@@ -299,14 +304,12 @@ export function useHostListSections(inputs: HostListSectionsInputs): HostListSec
     const paused = botSections.pausedMatches
       ? { pausedBotMatches: botSections.pausedMatches, showPausedBots }
       : {}
-    if (botSections.sections.length === 0) {
-      return { ...base, ...paused }
-    }
     return {
       ...base,
       ...paused,
-      sections: [...botSections.sections, ...base.sections],
-      rawSections: [...botSections.sections, ...base.rawSections]
+      sections: [...botSections.sections, ...chats.sections, ...base.sections],
+      rawSections: [...botSections.sections, ...chats.rawSections, ...base.rawSections],
+      repoById: new Map([...base.repoById, ...chats.repoById])
     }
-  }, [base, botSections, showPausedBots])
+  }, [base, botSections, chats, showPausedBots])
 }

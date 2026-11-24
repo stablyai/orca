@@ -59,6 +59,10 @@ export const hostRepoCatalogRepos = salvagingArray(
   z.looseObject({
     id: z.string(),
     displayName: z.string(),
+    chatWorkspace: salvagedOptional(
+      'chatWorkspace',
+      z.object({ initialName: z.string(), autoName: z.boolean() })
+    ),
     path: salvagedOptional('path', z.string()),
     badgeColor: salvagedOptional('badgeColor', z.string()),
     repoIcon: salvagedOptional('repoIcon', mobileRepoIconSchema),

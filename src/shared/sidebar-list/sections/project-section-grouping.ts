@@ -40,6 +40,7 @@ export type ProjectGroupingIndex = {
 
 /** The repo fields section grouping, labelling and ordering read. */
 export type ProjectSectionRepo = {
+  chatWorkspace?: Repo['chatWorkspace']
   id: string
   displayName: string
   path: string

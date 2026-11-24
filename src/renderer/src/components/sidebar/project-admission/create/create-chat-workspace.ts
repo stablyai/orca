@@ -4,7 +4,7 @@ import { RuntimeRpcCallError } from '@/runtime/rpc/calls/runtime-rpc-result'
 import { repoCreateErrorText } from './repo-create-error-copy'
 import { activateAndRevealWorktree } from '@/lib/workspace/activation/worktree-activation'
 import { selectWorktreesByRepo } from '@/store/workspaces/catalog/workspace-record-fields'
-import { createNonSecureContextUuid } from '../../../../../../shared/identifiers/non-secure-context-uuid'
+import { createChatWorkspaceDraft } from '../../../../../../shared/repository/chat-workspace-draft'
 import { translate } from '@/i18n/i18n'
 import {
   parseExecutionHostId,
@@ -26,9 +26,7 @@ export async function createChatWorkspace(hostId: ExecutionHostId): Promise<void
     )
   }
   const owner = host.kind === 'runtime' ? host.environmentId : null
-  const now = new Date()
-  const date = `${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, '0')}${String(now.getDate()).padStart(2, '0')}`
-  const name = `${now.toISOString().slice(0, 10)}-${createNonSecureContextUuid()}`
+  const { name, date } = createChatWorkspaceDraft()
   const result = await callRuntimeRpc<{ repo: Repo } | RepoCreateFailure>(
     resolveAddRepoRuntimeTarget(owner),
     'repo.createChatWorkspace',
