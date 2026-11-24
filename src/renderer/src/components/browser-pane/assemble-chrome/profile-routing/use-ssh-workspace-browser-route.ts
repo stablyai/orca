@@ -1,7 +1,5 @@
 import { useEffect, useState } from 'react'
 import { useAppStore } from '@/store'
-import type { AppState } from '@/store/types'
-import type { PortForwardEntry } from '../../../../../../shared/remote-runtime/ssh/ssh-types'
 import { getExecutionHostIdForWorktree } from '@/lib/workspace/ownership/worktree-runtime-owner'
 import { useWorktreeHostConnection } from '@/lib/workspace/ownership/worktree-host-connection-phase'
 import { resolveSshWorkspaceBrowserRouteEligibility } from '@/lib/browser/workspace/ssh-workspace-browser-route-eligibility'
@@ -220,43 +218,17 @@ export function useSshWorkspaceBrowserRoute(
   }
 }
 
-function selectSshWorkspaceRouteTargetId(state: AppState, worktreeId: string): string | null {
+function useSshWorkspaceRouteTargetId(worktreeId: string): string | null {
+  const executionHostId = useAppStore((s) => getExecutionHostIdForWorktree(s, worktreeId))
+  const browserRoutingSettings = useAppStore((s) => s.settings)
+  const environments = useAppStore((s) => s.runtimeEnvironments)
   return (
     resolveSshWorkspaceBrowserRouteEligibility(
-      getExecutionHostIdForWorktree(state, worktreeId),
-      state.settings,
-      state.runtimeEnvironments
+      executionHostId,
+      browserRoutingSettings,
+      environments
     )?.targetId ?? null
   )
-}
-
-function useSshWorkspaceRouteTargetId(worktreeId: string): string | null {
-  return useAppStore((s) => selectSshWorkspaceRouteTargetId(s, worktreeId))
-}
-
-/** Whether this worktree's desktop-hosted pages browse through its SSH host. */
-export function useSshWorkspaceBrowsesThroughHost(worktreeId: string): boolean {
-  return useAppStore(
-    (s) =>
-      resolveSshWorkspaceBrowserRouteEligibility(
-        getExecutionHostIdForWorktree(s, worktreeId),
-        s.settings,
-        s.runtimeEnvironments
-      )?.eligible === true
-  )
-}
-
-const NO_PORT_FORWARDS: readonly PortForwardEntry[] = []
-
-/** The port forwards of the SSH host an SSH-routed page browses through; none for a page on this desktop's network. */
-export function useSshRoutedPagePortForwards(
-  worktreeId: string,
-  sshRouted: boolean
-): readonly PortForwardEntry[] {
-  return useAppStore((s) => {
-    const targetId = sshRouted ? selectSshWorkspaceRouteTargetId(s, worktreeId) : null
-    return (targetId && s.portForwardsByConnection[targetId]) || NO_PORT_FORWARDS
-  })
 }
 
 /** Revoke persisted “Try anyway” on load failure so route hooks probe again and can explain blocked forwarding. */

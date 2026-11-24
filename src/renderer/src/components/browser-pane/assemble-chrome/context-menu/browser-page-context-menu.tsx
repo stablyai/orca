@@ -26,8 +26,7 @@ export function BrowserPageContextMenu({
   canGoForward,
   webviewRef,
   onReload,
-  remoteRoutedNetwork = false,
-  externalUrl
+  remoteRoutedNetwork = false
 }: {
   browserPageId: string
   worktreeId: string
@@ -37,8 +36,6 @@ export function BrowserPageContextMenu({
   onReload: () => void
   /** The page browses through a remote host, whose loopback this desktop's browser cannot reach. */
   remoteRoutedNetwork?: boolean
-  /** Overrides what the system browser opens, e.g. an SSH host's localhost through its port forward. */
-  externalUrl?: (url: string) => string | null
 }): React.JSX.Element | null {
   const [contextMenu, setContextMenu] = useState<BrowserPageContextMenuState | null>(null)
   const contextMenuRef = useRef<HTMLDivElement>(null)
@@ -191,9 +188,9 @@ export function BrowserPageContextMenu({
       void window.api.browser.addWordToDictionary({ browserPageId, word }),
     openInNewTab: (url, activate) =>
       openLinkInNewBrowserTab({ sourcePageId: browserPageId, worktreeId, url, activate }),
-    externalUrl:
-      externalUrl ??
-      (remoteRoutedNetwork ? getRemoteRoutedOpenableExternalUrl : normalizeExternalBrowserUrl),
+    externalUrl: remoteRoutedNetwork
+      ? getRemoteRoutedOpenableExternalUrl
+      : normalizeExternalBrowserUrl,
     // Use guest download rules for local Downloads or the client-hosted remote workspace.
     saveImage: (url) => webviewRef.current?.downloadURL(url),
     copyImage: () => void window.api.browser.copyImageAt({ browserPageId, point: pagePoint }),

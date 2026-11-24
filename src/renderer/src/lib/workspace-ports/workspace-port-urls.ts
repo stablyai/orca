@@ -3,7 +3,6 @@ import type {
   EnrichedDetectedPort
 } from '../../../../shared/remote-runtime/ssh/ssh-types'
 import type { WorkspacePort } from '../../../../shared/workspace/ports/workspace-ports'
-import { portForwardKey } from '@/components/right-sidebar/ports/port-forward-remote-host'
 
 const HTTPS_PORTS = new Set([443, 8443])
 const LOOPBACK_HOSTS = new Set(['localhost', '127.0.0.1', '::1', '0.0.0.0', '::'])
@@ -86,43 +85,6 @@ export function browserUrlForPortForwardEntry(entry: PortForwardEntry): string {
   const protocol = advertisedProtocolForPort(entry)
   const host = customHostFromAdvertised(entry.advertisedUrl) ?? '127.0.0.1'
   return `${protocol}://${host}:${entry.localPort}`
-}
-
-// Browsers resolve *.localhost to loopback themselves; hosts are matched case-insensitively.
-function forwardMatchKey(host: string, port: number): string {
-  const hostname = host.toLowerCase().replace(/^\[|\]$/g, '')
-  return portForwardKey(hostname.endsWith('.localhost') ? 'localhost' : hostname, port)
-}
-
-/** The address of an SSH host's loopback URL through the forward of its port; null when that port is not forwarded. */
-export function forwardedUrlForRemoteUrl(
-  rawUrl: string,
-  forwards: readonly PortForwardEntry[]
-): string | null {
-  let url: URL
-  try {
-    url = new URL(rawUrl)
-  } catch {
-    return null
-  }
-  if (url.protocol !== 'http:' && url.protocol !== 'https:') {
-    return null
-  }
-  const port = Number(url.port) || (url.protocol === 'https:' ? 443 : 80)
-  const key = forwardMatchKey(url.hostname, port)
-  const forward = forwards.find(
-    (entry) => forwardMatchKey(entry.remoteHost, entry.remotePort) === key
-  )
-  if (!forward) {
-    return null
-  }
-  const hostname = url.hostname.toLowerCase()
-  // Keep the page's own localhost name for its Host header, cookies and redirect URIs; the listener is IPv4 only.
-  if (hostname !== 'localhost' && !hostname.endsWith('.localhost') && hostname !== '127.0.0.1') {
-    url.hostname = '127.0.0.1'
-  }
-  url.port = String(forward.localPort)
-  return url.toString()
 }
 
 export function addressForPortForwardEntry(entry: PortForwardEntry): string {

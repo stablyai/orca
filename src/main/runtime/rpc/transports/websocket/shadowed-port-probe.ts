@@ -5,11 +5,7 @@ const PROBE_TIMEOUT_MS = 1_000
 
 /** Windows/macOS permit loopback binds over existing wildcard listeners, redirecting paired clients; report EADDRINUSE so the port ladder moves on.
  * Probe by loopback connect: trial wildcard listening raises Windows Firewall prompts. Linux already refuses overlapping binds. */
-export async function assertPortNotShadowingListener(
-  host: string,
-  port: number,
-  timeoutMs = PROBE_TIMEOUT_MS
-): Promise<void> {
+export async function assertPortNotShadowingListener(host: string, port: number): Promise<void> {
   if (port === 0 || WILDCARD_HOSTS.has(host)) {
     return
   }
@@ -19,7 +15,7 @@ export async function assertPortNotShadowingListener(
       socket.destroy()
       resolve(value)
     }
-    socket.setTimeout(timeoutMs, () => settle(false))
+    socket.setTimeout(PROBE_TIMEOUT_MS, () => settle(false))
     socket.once('connect', () => settle(true))
     socket.once('error', () => settle(false))
   })
