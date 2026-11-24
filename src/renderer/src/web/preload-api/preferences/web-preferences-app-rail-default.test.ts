@@ -1,11 +1,12 @@
 // @vitest-environment happy-dom
 
-import { afterEach, describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import { SETTINGS_STORAGE_KEY } from '../web-storage'
 import { getStoredSettings, writeStoredSettings } from './web-preferences-store'
 
 describe('web app rail default cohort', () => {
   afterEach(() => {
+    vi.restoreAllMocks()
     window.localStorage.clear()
   })
 
@@ -29,5 +30,20 @@ describe('web app rail default cohort', () => {
       JSON.stringify({ theme: 'dark', experimentalAppRail: true })
     )
     expect(getStoredSettings().experimentalAppRail).toBe(true)
+  })
+
+  it('returns readable existing settings when the migration write is denied', () => {
+    window.localStorage.setItem(SETTINGS_STORAGE_KEY, JSON.stringify({ theme: 'dark' }))
+    vi.spyOn(window.localStorage, 'setItem').mockImplementation(() => {
+      throw new DOMException('Storage is full', 'QuotaExceededError')
+    })
+
+    const settings = getStoredSettings()
+
+    expect(settings.theme).toBe('dark')
+    expect(settings.experimentalAppRail).toBe(false)
+    expect(JSON.parse(window.localStorage.getItem(SETTINGS_STORAGE_KEY) ?? '{}')).toEqual({
+      theme: 'dark'
+    })
   })
 })

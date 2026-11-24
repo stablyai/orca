@@ -76,13 +76,18 @@ export function getStoredSettings(): GlobalSettings {
       needsChatUiChoiceCarry(stored) ||
       stored.uiLanguagePortugueseMigrationApplied !== true)
   ) {
-    writeJson(SETTINGS_STORAGE_KEY, retainOriginalWebChatSetting(migratedStored, stored))
-    if (osc52ClipboardDefaultOnOverridesPersistedOff(stored)) {
-      // readLocalWebUIState calls getStoredSettings; raw merge avoids recursive migration writes.
-      writeJson(UI_STORAGE_KEY, {
-        ...readJson<Partial<PersistedUIState>>(UI_STORAGE_KEY, {}),
-        osc52ClipboardDefaultOnNoticePending: true
-      })
+    try {
+      writeJson(SETTINGS_STORAGE_KEY, retainOriginalWebChatSetting(migratedStored, stored))
+      if (osc52ClipboardDefaultOnOverridesPersistedOff(stored)) {
+        // readLocalWebUIState calls getStoredSettings; raw merge avoids recursive migration writes.
+        writeJson(UI_STORAGE_KEY, {
+          ...readJson<Partial<PersistedUIState>>(UI_STORAGE_KEY, {}),
+          osc52ClipboardDefaultOnNoticePending: true
+        })
+      }
+    } catch {
+      // Why: startup reads settings while building window.api, so a full or denied
+      // localStorage must not stop the web client. The migration reruns next load.
     }
   }
   const settings = mergeSettings(
