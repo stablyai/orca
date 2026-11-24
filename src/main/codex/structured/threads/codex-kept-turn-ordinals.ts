@@ -46,8 +46,11 @@ export async function seedKeptCodexTurnOrdinals(input: {
   const queue = [input.threadId]
   const seen = new Set<string>()
   const fetched: KeptCodexTurn[] = []
-  while (queue.length > 0 && seen.size < MAX_SEEDED_THREADS) {
-    const threadId = queue.shift() as string
+  for (
+    let threadId = queue.shift();
+    threadId !== undefined && seen.size < MAX_SEEDED_THREADS;
+    threadId = queue.shift()
+  ) {
     if (seen.has(threadId)) {
       continue
     }

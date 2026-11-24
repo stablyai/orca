@@ -119,7 +119,7 @@ export class CodexBackgroundCommandTracker {
 
   /** [threadId, itemId] of every live command, as the relay's work markers key them. */
   openKeys(): string[][] {
-    return [...this.commands.keys()].map((key) => JSON.parse(key) as string[])
+    return [...this.commands.keys()].map((key): string[] => JSON.parse(key))
   }
 
   get holdsProcess(): boolean {

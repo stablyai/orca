@@ -1,4 +1,5 @@
 import { leadingJsonEnvelope } from '../../../shared/json-stream/json-rpc-record-prefix'
+import { jsonProperty } from '../../../shared/json-stream/json-value-property'
 import type { ProviderRelayAckFloor } from '../../provider-relay/relayed-provider-output'
 
 const ENVELOPE_SCAN_CHARS = 4096
@@ -12,14 +13,17 @@ function itemKey(line: string): { key: string; running: boolean } | null {
   } catch {
     return null
   }
-  const params = (message as { params?: { threadId?: unknown; item?: unknown } } | null)?.params
-  const item = params?.item as { id?: unknown; status?: unknown } | undefined
-  if (typeof params?.threadId !== 'string' || typeof item?.id !== 'string') {
+  const params = jsonProperty(message, 'params')
+  const item = jsonProperty(params, 'item')
+  const threadId = jsonProperty(params, 'threadId')
+  const id = jsonProperty(item, 'id')
+  const status = jsonProperty(item, 'status')
+  if (typeof threadId !== 'string' || typeof id !== 'string') {
     return null
   }
   return {
-    key: JSON.stringify([params.threadId, item.id]),
-    running: item.status === undefined || item.status === 'inProgress'
+    key: JSON.stringify([threadId, id]),
+    running: status === undefined || status === 'inProgress'
   }
 }
 

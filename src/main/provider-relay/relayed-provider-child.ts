@@ -1,7 +1,7 @@
 import { EventEmitter } from 'node:events'
 import { Readable, Writable } from 'node:stream'
 import type { ProviderChild } from '../provider-process/provider-child'
-import { notifyProviderChild } from '../provider-process/provider-child'
+import { isProviderExitSignal, notifyProviderChild } from '../provider-process/provider-child'
 import type {
   ProviderRelayAttachResult,
   ProviderRelayDetachPolicy,
@@ -11,7 +11,10 @@ import { RELAY_WRITE_CHUNK_CHARS } from '../daemon/protocol/daemon-provider-rela
 import type { ProviderRelayChannel } from './provider-relay-channel'
 import { RelayedProviderOutput, type ProviderRelayAckFloor } from './relayed-provider-output'
 import type { ProviderRelayRecordTaking } from './relayed-provider-consumption'
-import type { ProviderRelayItemContinuation } from './relayed-provider-continuation'
+import {
+  attachContinuation,
+  type ProviderRelayItemContinuation
+} from './relayed-provider-continuation'
 
 /** The daemon refuses input past its queue cap; the write is offered again after this. */
 const INPUT_FULL_RETRY_MS = 50
@@ -142,7 +145,10 @@ export class RelayedProviderChild extends EventEmitter implements ProviderChild 
       const result = await this.options.channel.attach(this.relayId, fromSeq, this.options.policy())
       await this.output.awaitPreamble(result.initializeResultSent, result.pending, PREAMBLE_WAIT_MS)
       this.attachResult = result
-      this.continueCutItems(fromSeq, result)
+      const { continuation } = this.options
+      if (continuation) {
+        this.output.continueWith(attachContinuation(continuation, this.relayId, fromSeq, result))
+      }
       if (this.state === 'attaching') {
         this.state = 'attached'
       }
@@ -212,7 +218,7 @@ export class RelayedProviderChild extends EventEmitter implements ProviderChild 
 
   private input(chunks: unknown[], callback: (error?: Error | null) => void): void {
     const data = chunks
-      .map((chunk) => (typeof chunk === 'string' ? chunk : Buffer.from(chunk as Buffer).toString()))
+      .map((chunk) => (Buffer.isBuffer(chunk) ? chunk.toString() : String(chunk)))
       .join('')
     // The daemon joins a surrogate pair split between writes, so a plain slice is safe.
     const sent = this.writing.then(async () => {
@@ -252,21 +258,6 @@ export class RelayedProviderChild extends EventEmitter implements ProviderChild 
         await new Promise((resolve) => setTimeout(resolve, INPUT_FULL_RETRY_MS))
       }
     }
-  }
-
-  // A forced release (the file cap) can leave an open item's kept start behind the cursor.
-  private continueCutItems(fromSeq: number, result: ProviderRelayAttachResult): void {
-    const hook = this.options.continuation
-    if (!hook || fromSeq <= 0) {
-      return
-    }
-    const carried =
-      hook.openGroup && result.openWork ? (result.openWork[hook.openGroup] ?? []) : null
-    if (carried ? carried.length === 0 : result.truncatedThrough === undefined) {
-      return
-    }
-    const open = carried ? new Set(carried.map((key) => JSON.stringify(key))) : null
-    this.output.continueAfterCut(hook, this.relayId, result.truncatedThrough ?? fromSeq, open)
   }
 
   /** The daemon detached us when the stream dropped; the same daemon resumes from our cursor. */
@@ -322,7 +313,7 @@ export class RelayedProviderChild extends EventEmitter implements ProviderChild 
     this.state = 'exited'
     this.exitStatus = exit
     this.exitCode = exit.code
-    this.signalCode = (exit.signal as NodeJS.Signals | null) ?? null
+    this.signalCode = isProviderExitSignal(exit.signal) ? exit.signal : null
     if (lost) {
       this.outcomeLost = true
     }

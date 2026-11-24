@@ -76,7 +76,7 @@ export class RelayedProviderConsumption {
     },
     taken: () => {
       if (this.head < this.after.length) {
-        this.consumed = Math.max(this.consumed, this.after[this.head++] as number)
+        this.consumed = Math.max(this.consumed, this.after[this.head++]!)
         if (this.head > 1_024 && this.head * 2 > this.after.length) {
           this.after.splice(0, this.head)
           this.head = 0

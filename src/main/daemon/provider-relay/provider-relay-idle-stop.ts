@@ -8,7 +8,7 @@ import {
   ProviderRelayWorkReader
 } from './provider-relay-work-markers'
 
-export { readProviderRelayDetachPolicy } from './provider-relay-work-markers'
+export { readProviderRelayDetachPolicy } from './provider-relay-detach-policy'
 
 type IdleStopHost = {
   attached: () => boolean

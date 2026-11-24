@@ -2,10 +2,11 @@ import { Readable } from 'node:stream'
 import { describe, expect, it } from 'vitest'
 import { RelayedProviderOutput } from '../../provider-relay/relayed-provider-output'
 import { RelayedProviderChild } from '../../provider-relay/relayed-provider-child'
-import type {
-  ProviderRelayChannel,
-  ProviderRelaySink
-} from '../../provider-relay/provider-relay-channel'
+import { RelayedProviderContinuation } from '../../provider-relay/relayed-provider-continuation'
+import {
+  EMPTY_RELAY_ATTACH,
+  fakeProviderRelayChannel
+} from '../../provider-relay/fake-provider-relay-channel.test-fixture'
 import { createCodexRelayAckFloor } from './codex-relay-ack-floor'
 import { CODEX_RELAY_ITEM_CONTINUATION } from './codex-relay-item-continuation'
 import { agentJournalItemKey } from '../../../shared/agent-session/journal/agent-session-journal-item-key'
@@ -98,14 +99,14 @@ describe('codex rows across a reattach', () => {
       output.line('relayData', 11, delta('a'))
       output.line('relayData', 12, item('item/started', 'b'))
       output.line('relayData', 13, delta('b'))
-      output.continueAfterCut(CODEX_RELAY_ITEM_CONTINUATION, 'r1', 10, null)
+      output.continueWith(
+        new RelayedProviderContinuation(CODEX_RELAY_ITEM_CONTINUATION, 'r1', 10, 13)
+      )
       await output.release()
       await settle()
       await output.settle()
       const ids = seen.map((line) => {
-        const { params } = JSON.parse(line) as {
-          params: { itemId?: string; item?: { id: string } }
-        }
+        const { params }: { params: { itemId?: string; item?: { id: string } } } = JSON.parse(line)
         return params.itemId ?? params.item?.id
       })
       return { ids, acks }
@@ -124,30 +125,15 @@ describe('codex rows across a reattach', () => {
       JSON.stringify({ method: 'item/agentMessage/delta', params: { threadId: 't', itemId: id } })
     const turnDone = JSON.stringify({ method: 'turn/completed', params: { threadId: 't' } })
     const attach = async (openTurns: string[][]) => {
-      let sink = null as ProviderRelaySink | null
-      const channel = {
-        bind: (_relayId: string, bound: ProviderRelaySink) => {
-          sink = bound
-          return () => {}
-        },
+      const relay = fakeProviderRelayChannel({
         // The release left the daemon's cursor at 10, so it reports no truncation.
         attach: async () => {
-          sink?.line('relayData', 11, delta('a'))
-          return {
-            replayThroughSeq: 11,
-            pending: [],
-            maxClientRequestId: null,
-            initializeResultSent: false,
-            stderrTail: '',
-            exit: null,
-            openWork: { turn: openTurns }
-          }
-        },
-        ack: async () => ({}),
-        close: async () => ({})
-      } as unknown as ProviderRelayChannel
+          relay.sink().line('relayData', 11, delta('a'))
+          return { ...EMPTY_RELAY_ATTACH, replayThroughSeq: 11, openWork: { turn: openTurns } }
+        }
+      })
       const child = new RelayedProviderChild({
-        channel,
+        channel: relay.channel,
         relayId: 'r1',
         pid: 42,
         policy: () => ({ idleStopMs: null, markers: [] }),
@@ -161,14 +147,14 @@ describe('codex rows across a reattach', () => {
           .trim()
           .split('\n')
           .forEach((line) => {
-            const { params } = JSON.parse(line) as { params: { itemId?: string } }
+            const { params }: { params: { itemId?: string } } = JSON.parse(line)
             ids.push(params.itemId ?? null)
           })
       )
       await child.start(10)
-      sink?.line('relayData', 12, turnDone)
+      relay.sink().line('relayData', 12, turnDone)
       // Never sent by Codex after its turn; here it shows the continuation no longer reads lines.
-      sink?.line('relayData', 13, delta('z'))
+      relay.sink().line('relayData', 13, delta('z'))
       child.releaseOutput()
       await settle()
       await settle()
@@ -200,10 +186,8 @@ describe('codex rows across a reattach', () => {
     // The last run saved "Hello " before Orca quit.
     const first = translatorFor()
     const send = (translator: typeof first, line: string) => {
-      const { method, params } = JSON.parse(line) as {
-        method: string
-        params: Record<string, unknown>
-      }
+      const { method, params }: { method: string; params: Record<string, unknown> } =
+        JSON.parse(line)
       translator.handle({ type: 'notification', sessionId: 's', threadId: 't', method, params })
     }
     send(
@@ -242,7 +226,9 @@ describe('codex rows across a reattach', () => {
       })
       output.restartAt(10)
       lines.forEach((line, i) => output.line('relayData', 11 + i, line))
-      output.continueAfterCut(CODEX_RELAY_ITEM_CONTINUATION, 'r1', 10, null)
+      output.continueWith(
+        new RelayedProviderContinuation(CODEX_RELAY_ITEM_CONTINUATION, 'r1', 10, 10 + lines.length)
+      )
       await output.release()
       await settle()
       translator.flush()
@@ -280,10 +266,8 @@ describe('codex rows across a reattach', () => {
     const ordinals = new CodexTurnOrdinals()
     await seedKeptCodexTurnOrdinals({
       connection: {
-        request: async (_method: string, params: unknown) => ({
-          data: [turns[(params as { threadId: string }).threadId]]
-        })
-      } as never,
+        request: async (_method, params) => ({ data: [turns[String(params?.threadId)]] })
+      },
       translator: {
         seedTurnOrdinals: (threadId, turnId, ids) =>
           ids.forEach((id) => ordinals.ordinalFor(threadId, turnId, id))

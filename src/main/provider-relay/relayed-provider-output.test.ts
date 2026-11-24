@@ -1,6 +1,7 @@
 import { Readable } from 'node:stream'
 import { describe, expect, it, vi } from 'vitest'
 import { RelayedProviderOutput } from './relayed-provider-output'
+import { jsonProperty } from '../../shared/json-stream/json-value-property'
 import { createProviderRecordReader } from '../provider-process/provider-record-reader'
 
 function rig(passWhileHeld?: (line: string) => boolean) {
@@ -117,7 +118,7 @@ describe('relayed provider output', () => {
     const reader = createProviderRecordReader({
       stdout: Object.assign(stdout, { relayRecords: output.recordTaking }),
       onRecord: (record) => {
-        taken.push((record as { n: number }).n)
+        taken.push(Number(jsonProperty(record, 'n')))
         if (taken.length === 1) {
           reader.pause()
         }

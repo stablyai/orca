@@ -1,10 +1,7 @@
 import type { Readable } from 'node:stream'
 import type { ProviderRelayDataEvent } from '../daemon/protocol/daemon-provider-relay-protocol'
 import { RelayedProviderConsumption } from './relayed-provider-consumption'
-import {
-  RelayedProviderContinuation,
-  type ProviderRelayItemContinuation
-} from './relayed-provider-continuation'
+import type { RelayedProviderContinuation } from './relayed-provider-continuation'
 import { withTimeout } from '../../shared/concurrency/promise-timeout-fallback'
 
 /** Acks batch this long after output; the daemon asks sooner (relayAckWanted) when it holds a lot. */
@@ -143,14 +140,9 @@ export class RelayedProviderOutput {
     })
   }
 
-  /** The replay starts after `cutThrough`, maybe inside an open item; set before release. */
-  continueAfterCut(
-    hook: ProviderRelayItemContinuation,
-    relayId: string,
-    cutThrough: number,
-    open: Set<string> | null
-  ): void {
-    this.continuation = new RelayedProviderContinuation(hook, relayId, cutThrough, open)
+  /** The replay may start inside an open item; set before release. */
+  continueWith(continuation: RelayedProviderContinuation | null): void {
+    this.continuation = continuation
   }
 
   /** Output waits for the chat to be ready (`release()`). */
@@ -168,7 +160,7 @@ export class RelayedProviderOutput {
         const held = this.held ?? []
         let chars = 0
         while (this.releasedTo < held.length) {
-          const entry = held[this.releasedTo++] as { seq: number | null; line: string }
+          const entry = held[this.releasedTo++]!
           this.push(entry.seq, entry.line)
           chars += entry.line.length + 1
           if (chars >= RELEASE_SLICE_CHARS && this.releasedTo < held.length) {

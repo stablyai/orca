@@ -6,7 +6,13 @@ import {
 } from '../../../provider-relay/provider-relay-launch-inventory'
 import { staleStopRow } from './structured-agent-session-stale-stop-row'
 
-const turn = { itemId: 'turn-1' } as AgentJournalRenderItem
+const turn: AgentJournalRenderItem = {
+  itemId: 'turn-1',
+  revision: 1,
+  body: { kind: 'turn', turnId: 't1', state: 'running' },
+  sequence: 1,
+  observedAt: 0
+}
 
 describe('stale stop row for a chat whose agent was kept', () => {
   it('a Stop after a mid-turn reattach is never worded as closed by quit', () => {

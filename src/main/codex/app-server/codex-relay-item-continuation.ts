@@ -28,7 +28,7 @@ function textItemLine(line: string): Message | null {
     return null
   }
   try {
-    const message = JSON.parse(line) as Message
+    const message: Message = JSON.parse(line)
     const { params } = message
     if (typeof params?.threadId !== 'string') {
       return null
@@ -91,7 +91,7 @@ export const CODEX_RELAY_ITEM_CONTINUATION: ProviderRelayItemContinuation = {
       return null
     }
     try {
-      const { method, params } = JSON.parse(line) as Message
+      const { method, params }: Message = JSON.parse(line)
       return (method === 'turn/completed' || method === 'thread/closed') &&
         typeof params?.threadId === 'string'
         ? JSON.stringify([params.threadId])

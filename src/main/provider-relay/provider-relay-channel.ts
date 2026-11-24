@@ -1,4 +1,5 @@
 import type { DaemonClient } from '../daemon/transport/client/daemon-client'
+import { jsonProperty } from '../../shared/json-stream/json-value-property'
 import type {
   ProviderRelayAckWantedEvent,
   ProviderRelayAttachResult,
@@ -27,18 +28,15 @@ export type ProviderRelaySink = {
 type ChannelEvent = ProviderRelayDataEvent | ProviderRelayAckWantedEvent | ProviderRelayExitEvent
 
 function isRelayEvent(raw: unknown): raw is ChannelEvent {
-  if (typeof raw !== 'object' || raw === null) {
-    return false
-  }
-  const event = raw as { type?: unknown; event?: unknown; sessionId?: unknown }
+  const name = jsonProperty(raw, 'event')
   return (
-    event.type === 'event' &&
-    typeof event.sessionId === 'string' &&
-    (event.event === 'relayData' ||
-      event.event === 'relayPending' ||
-      event.event === 'relayInitialize' ||
-      event.event === 'relayAckWanted' ||
-      event.event === 'relayExit')
+    jsonProperty(raw, 'type') === 'event' &&
+    typeof jsonProperty(raw, 'sessionId') === 'string' &&
+    (name === 'relayData' ||
+      name === 'relayPending' ||
+      name === 'relayInitialize' ||
+      name === 'relayAckWanted' ||
+      name === 'relayExit')
   )
 }
 
