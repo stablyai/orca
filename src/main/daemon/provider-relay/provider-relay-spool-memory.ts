@@ -1,5 +1,8 @@
 import type { ProviderRelayRecord } from '../protocol/daemon-provider-relay-protocol'
 
+/** Each record costs at least this much, so a flood of blank lines still reaches the cap. */
+export const RECORD_OVERHEAD_BYTES = 64
+
 /** `bytes` is what the record is charged in memory: its UTF-8 size plus a fixed overhead. */
 export type HeldRecord = ProviderRelayRecord & { bytes: number }
 

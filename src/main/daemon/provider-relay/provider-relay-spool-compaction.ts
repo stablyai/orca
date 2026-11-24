@@ -1,10 +1,7 @@
 import { createReadStream } from 'node:fs'
 import { open, rename, unlink, type FileHandle } from 'node:fs/promises'
+import { SPOOL_ROW_PREFIX_CHARS, SPOOL_ROW_SEQ } from './provider-relay-spool-row'
 
-/** Each row starts with the seq the spool wrote, so it is read without parsing the line. */
-const ROW_SEQ = /^\{"seq":(\d+),/
-/** Longer than any row's `{"seq":<n>,` prefix, so a row is decided once this much of it is read. */
-const ROW_PREFIX_CHARS = 32
 const READ_CHUNK_BYTES = 64 * 1024
 
 /** Streams rows through, keeping those after `acked`; a row is never joined, however long. */
@@ -27,12 +24,12 @@ class RowFilter {
     let text = piece
     if (this.keep === null) {
       text = this.undecided + piece
-      if (text.length < ROW_PREFIX_CHARS && !endsRow) {
+      if (text.length < SPOOL_ROW_PREFIX_CHARS && !endsRow) {
         this.undecided = text
         return
       }
       this.undecided = ''
-      const seq = ROW_SEQ.exec(text.slice(0, ROW_PREFIX_CHARS))
+      const seq = SPOOL_ROW_SEQ.exec(text.slice(0, SPOOL_ROW_PREFIX_CHARS))
       this.keep = seq !== null && Number(seq[1]) > this.acked
     }
     if (this.keep && text.length > 0) {

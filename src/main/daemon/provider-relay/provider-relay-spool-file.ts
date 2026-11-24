@@ -1,7 +1,8 @@
 import { open, unlink, type FileHandle } from 'node:fs/promises'
 import { SpoolFileIndex } from './provider-relay-spool-file-index'
-import type { HeldRecord } from './provider-relay-spool-memory'
+import { RECORD_OVERHEAD_BYTES, type HeldRecord } from './provider-relay-spool-memory'
 import { compactSpoolFile } from './provider-relay-spool-compaction'
+import { encodeSpoolRow } from './provider-relay-spool-row'
 
 /** Coalesced appends stop growing here, so joining records can never pass the engine's string limit. */
 const MAX_COALESCED_WRITE_CHARS = 8 * 1024 * 1024
@@ -53,19 +54,20 @@ export class SpoolFile {
     private readonly hooks: SpoolFileHooks
   ) {}
 
-  /** False when the record can't be encoded (too large to escape); it and later ones stay in memory. */
+  /** False when the record can't be encoded (past the engine's string limit); it and later ones stay in memory. */
   write(record: HeldRecord): boolean {
     if (this.disposed) {
       return true
     }
     let encoded: string
     try {
-      encoded = `${JSON.stringify({ seq: record.seq, line: record.line })}\n`
+      encoded = encodeSpoolRow(record.seq, record.line)
     } catch {
       this.failed = true
       return false
     }
-    const bytes = Buffer.byteLength(encoded)
+    // The row's prefix is ASCII and the line's UTF-8 size is known, so a huge line isn't rescanned.
+    const bytes = encoded.length - record.line.length + record.bytes - RECORD_OVERHEAD_BYTES
     this.index.add(record.seq, bytes)
     this.pendingBytes += bytes
     this.writtenBytes += bytes
