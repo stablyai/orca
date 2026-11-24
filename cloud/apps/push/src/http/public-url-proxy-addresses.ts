@@ -22,7 +22,8 @@ export type PublicUrlProxyAddressOptions = {
 // Behind Google's load balancer the last x-forwarded-for hop is the balancer's own
 // address, which is what the public host name resolves to; no client sends from it.
 // Only these exact addresses are trusted: an IPv6 frontend can append any address in its
-// forwarding rule's /64, so list that range in ORCA_PUSH_TRUSTED_PROXY_ADDRESSES.
+// forwarding rule's allocated IPv6 range (/64 for a global external Application Load Balancer,
+// /96 for a regional one), so list that range in ORCA_PUSH_TRUSTED_PROXY_ADDRESSES.
 export async function resolvePublicUrlProxyAddresses(
   publicUrl: string,
   options: PublicUrlProxyAddressOptions

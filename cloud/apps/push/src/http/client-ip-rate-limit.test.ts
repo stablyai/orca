@@ -64,7 +64,7 @@ describe('trusted proxy ranges', () => {
     )
   })
 
-  it("skips any address in an IPv6 forwarding rule's /64 and nothing outside it", () => {
+  it("skips any address in a global load balancer's allocated IPv6 /64 and nothing outside it", () => {
     const policy = clientIpPolicy({
       trustedProxyHops: 0,
       trustedProxyAddresses: ['2600:1901:0:1234::/64', LB]

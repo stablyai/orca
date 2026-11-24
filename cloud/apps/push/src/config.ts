@@ -38,8 +38,9 @@ const EnvSchema = z.object({
   ORCA_PUSH_TRUSTED_PROXY_HOPS: z.coerce.number().int().nonnegative().max(8).default(0),
   // Comma-separated proxy addresses or CIDR ranges skipped at the end of x-forwarded-for, on top
   // of the exact addresses ORCA_PUSH_PUBLIC_URL resolves to at startup. Behind an IPv6 load
-  // balancer, list the forwarding rule's /64 (for example 2600:1901:0:1234::/64): Google can
-  // append any address in it, not only the one DNS returns.
+  // balancer, list the forwarding rule's allocated IPv6 range (/64 for a global external
+  // Application Load Balancer, /96 for a regional one), for example 2600:1901:0:1234::/64:
+  // Google can append any address in it, not only the one DNS returns.
   ORCA_PUSH_TRUSTED_PROXY_ADDRESSES: z
     .string()
     .optional()

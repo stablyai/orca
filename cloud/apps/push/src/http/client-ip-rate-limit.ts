@@ -24,7 +24,7 @@ export type ClientIpPolicy = {
   trustedProxyHops: number
   /** Canonical addresses only a proxy in front of this service appends, such as the load balancer's own address. */
   trustedProxyAddresses: ReadonlySet<string>
-  /** Configured networks a proxy appends from, such as an IPv6 forwarding rule's /64. */
+  /** Configured networks a proxy appends from, such as an IPv6 forwarding rule's allocated range (/64 global, /96 regional). */
   trustedProxyRanges: readonly TrustedProxyRange[]
 }
 
