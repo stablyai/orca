@@ -58,4 +58,29 @@ describe('browser print viewers', () => {
     expect(releaseBrowserPrintPdf('desk-a', { printId: received[1]!.printId }).released).toBe(true)
     stop()
   })
+
+  it('keeps a print that rendered between streams for the next stream of its tab', async () => {
+    const received: BrowserScreencastPrintResult[] = []
+    const stopOpener = addBrowserPrintViewer(20, { pairedDeviceId: 'desk-a', print: () => {} })
+    let finishRender: (bytes: Buffer) => void = () => {}
+    const frame = {
+      printToPDF: () =>
+        new Promise<Buffer>((resolve) => {
+          finishRender = resolve
+        })
+    }
+    // A popup (21) prints from the opener's click; the device streams only the opener (20).
+    expect(printForBrowserViewer(21, frame, 'desk-a', 'Receipt', [20])).toBe(true)
+    stopOpener()
+    finishRender(Buffer.from('%PDF-receipt'))
+    await Promise.resolve()
+    const stopPopup = addBrowserPrintViewer(21, {
+      pairedDeviceId: 'desk-a',
+      print: (event) => received.push(event)
+    })
+    await expect.poll(() => received.length).toBe(1)
+    const read = readBrowserPrintPdf('desk-a', { printId: received[0]!.printId })
+    expect(Buffer.from(read.contentBase64, 'base64').toString()).toBe('%PDF-receipt')
+    stopPopup()
+  })
 })

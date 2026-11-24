@@ -10,6 +10,8 @@ import { BrowserError } from '../../browser-error'
 const PRINT_READ_CHUNK_BYTES = 2 * 1024 * 1024
 // Covers a person choosing where to save; each read restarts it.
 const PRINT_HOLD_MS = 5 * 60_000
+// Covers the device moving to a just-opened popup's stream, which starts after the opener's ends.
+const PRINT_HANDOFF_MS = 30_000
 // A PDF past this is not held for a viewer: memory, and minutes over a slow link.
 const PRINT_MAX_BYTES = 256 * 1024 * 1024
 
@@ -26,8 +28,12 @@ export type BrowserPrintViewer = {
 type PrintSlot = {
   pairedDeviceId: string
   guestWebContentsId: number
+  // The pages whose streams may take it: the printing page first, then the rest of its tab.
+  receivers: readonly number[]
+  title: string
   // Null while the PDF renders.
   bytes: Buffer | null
+  delivered: boolean
   expiry: NodeJS.Timeout
 }
 
@@ -57,6 +63,17 @@ export function addBrowserPrintViewer(
     viewersByGuestId.set(guestWebContentsId, viewers)
   }
   viewers.add(viewer)
+  // A print that rendered while the device was between streams of its tab goes to the new one.
+  for (const [printId, slot] of slots) {
+    if (
+      !slot.delivered &&
+      slot.bytes &&
+      slot.pairedDeviceId === viewer.pairedDeviceId &&
+      slot.receivers.includes(guestWebContentsId)
+    ) {
+      deliverPrint(printId, slot, viewer)
+    }
+  }
   return () => {
     viewers.delete(viewer)
     if (viewers.size === 0 && viewersByGuestId.get(guestWebContentsId) === viewers) {
@@ -79,9 +96,10 @@ export function printForBrowserViewer(
   title: string,
   tabGuestWebContentsIds: readonly number[] = []
 ): boolean {
+  const receivers = [guestWebContentsId, ...tabGuestWebContentsIds]
   // One stream reads it, as its last slice releases it; the printing page's own stream first.
   const receiver = (): BrowserPrintViewer | undefined =>
-    [guestWebContentsId, ...tabGuestWebContentsIds]
+    receivers
       .map((guestId) => deviceViewers(guestId, pairedDeviceId).at(-1))
       .find((viewer) => viewer !== undefined)
   if (!receiver()) {
@@ -94,8 +112,11 @@ export function printForBrowserViewer(
   const slot: PrintSlot = {
     pairedDeviceId,
     guestWebContentsId,
+    receivers,
+    title,
     bytes: null,
-    expiry: expirePrint(printId)
+    delivered: false,
+    expiry: expirePrint(printId, PRINT_HOLD_MS)
   }
   slots.set(printId, slot)
   void frame
@@ -104,13 +125,18 @@ export function printForBrowserViewer(
       if (slots.get(printId) !== slot) {
         return
       }
-      const viewer = receiver()
-      if (!viewer || bytes.length > PRINT_MAX_BYTES) {
+      if (bytes.length > PRINT_MAX_BYTES) {
         forgetPrint(printId)
         return
       }
       slot.bytes = bytes
-      viewer.print({ type: 'print', printId, title })
+      const viewer = receiver()
+      if (viewer) {
+        deliverPrint(printId, slot, viewer)
+      } else {
+        clearTimeout(slot.expiry)
+        slot.expiry = expirePrint(printId, PRINT_HANDOFF_MS)
+      }
     })
     .catch((error: unknown) => {
       forgetPrint(printId)
@@ -136,7 +162,7 @@ export function readBrowserPrintPdf(
     forgetPrint(params.printId)
   } else {
     clearTimeout(slot.expiry)
-    slot.expiry = expirePrint(params.printId)
+    slot.expiry = expirePrint(params.printId, PRINT_HOLD_MS)
   }
   return { contentBase64: chunk.toString('base64'), bytesRead: chunk.length, eof }
 }
@@ -153,8 +179,15 @@ export function releaseBrowserPrintPdf(
   return { released: true }
 }
 
-function expirePrint(printId: string): NodeJS.Timeout {
-  return setTimeout(() => slots.delete(printId), PRINT_HOLD_MS).unref()
+function deliverPrint(printId: string, slot: PrintSlot, viewer: BrowserPrintViewer): void {
+  slot.delivered = true
+  clearTimeout(slot.expiry)
+  slot.expiry = expirePrint(printId, PRINT_HOLD_MS)
+  viewer.print({ type: 'print', printId, title: slot.title })
+}
+
+function expirePrint(printId: string, ms: number): NodeJS.Timeout {
+  return setTimeout(() => slots.delete(printId), ms).unref()
 }
 
 function forgetPrint(printId: string): void {
