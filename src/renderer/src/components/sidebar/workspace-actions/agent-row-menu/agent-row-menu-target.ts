@@ -201,7 +201,11 @@ function canForkOnThisComputer(state: AppState, target: AgentRowMenuTarget): boo
   ) {
     return false
   }
-  const owner = runtimeEnvironmentIdForWorkspaceOwner(state, { workspaceId: target.worktreeId })
+  // Ask without the active selection: the active card's host would otherwise settle a twin as local.
+  const owner = runtimeEnvironmentIdForWorkspaceOwner(
+    { ...state, activeWorktreeId: null },
+    { workspaceId: target.worktreeId }
+  )
   return owner.kind === 'resolved' && owner.environmentId === null
 }
 
