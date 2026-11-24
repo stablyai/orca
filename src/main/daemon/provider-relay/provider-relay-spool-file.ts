@@ -35,6 +35,8 @@ export class SpoolFile {
   /** Bytes written to this file, acked rows included, so a file kept across acks can be compacted. */
   private writtenBytes = 0
   private compacting = false
+  /** A removal not yet run; later ones join it, since every write between them checks the epoch. */
+  private removalQueued = false
   private disposed = false
 
   constructor(
@@ -90,9 +92,10 @@ export class SpoolFile {
           // appendFile keeps writing until every byte lands; a bare write may stop short.
           await this.handle.appendFile(write.chunk)
         } catch {
-          this.failed = true
-          // An ack may have retired the whole file while this write was in flight.
+          // An ack may have retired the whole file while this write was in flight; its replacement
+          // is a new file, and this failure says nothing about it.
           if (epoch === this.epoch) {
+            this.failed = true
             this.restore(write)
           }
         }
@@ -161,8 +164,13 @@ export class SpoolFile {
     this.epoch++
     this.index.clear()
     this.writtenBytes = 0
+    if (this.removalQueued) {
+      return
+    }
+    this.removalQueued = true
     this.io = this.io
       .then(async () => {
+        this.removalQueued = false
         await this.closeOpenHandle()
         await unlink(this.path).catch(() => {})
       })

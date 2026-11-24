@@ -253,12 +253,14 @@ export class ProviderRelaySpool {
   /** Pause at the cap, resume below half of it, so acks near the cap don't flap the agent's stdout. */
   private updatePressure(): void {
     const [kept, keptCap] = this.pressure(false)
-    // While paused, kept lines that alone keep it from resuming count as reaching the cap.
+    // While paused, kept lines that alone keep it from resuming count as reaching the cap. Only when
+    // they, not queued writes, hold it: a queue drains by itself and rechecks as it does.
     const keptLimit = this.paused ? keptCap / 2 : keptCap
     if (
       this.keeping &&
       this.mode === 'attached' &&
       kept >= keptLimit &&
+      this.file.pendingBytes <= this.file.index.unackedBytes &&
       this.clientAcked > this.acked
     ) {
       // A kept span reaching the cap can't be kept whole; holding it would stall the agent. Only the
@@ -286,14 +288,14 @@ export class ProviderRelaySpool {
     }
   }
 
-  /** `withQueued` adds writes not yet started: they hold memory an ack can't free. */
+  /** `withQueued` adds writes not yet started: they hold memory an ack can't free, in any mode. */
   private pressure(withQueued: boolean): [held: number, cap: number] {
+    const queued = withQueued ? this.file.pendingBytes : 0
     if (this.mode !== 'detached' && !this.keepingLive) {
-      return [this.memory.bytes, this.memoryCap]
+      // Live, a queue here is left from keeping; a replay flushes the detached queue before it starts.
+      return [this.memory.bytes + (this.mode === 'attached' ? queued : 0), this.memoryCap]
     }
-    const unacked = this.file.index.unackedBytes
-    const onDisk = withQueued ? Math.max(unacked, this.file.pendingBytes) : unacked
-    return [onDisk + this.memory.bytes, this.fileCap]
+    return [Math.max(this.file.index.unackedBytes, queued) + this.memory.bytes, this.fileCap]
   }
 
   private writeToFile(record: HeldRecord): void {
