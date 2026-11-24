@@ -1,6 +1,6 @@
 // Pin which files a main push lints, against real shallow clones and the real oxlint.
 import { execFileSync } from 'node:child_process'
-import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import process from 'node:process'
@@ -158,9 +158,13 @@ describe('main-push lint range', () => {
     const write = vi
       .spyOn(process.stdout, 'write')
       .mockImplementation((chunk) => out.push(String(chunk)))
-    let seenAtLookup
+    // Record every lookup: the first must already see the published verdict.
+    const lookups = []
     const api = async () => {
-      seenAtLookup = { summary: readFileSync(summaryPath, 'utf8'), log: out.join('') }
+      lookups.push({
+        summary: existsSync(summaryPath) ? readFileSync(summaryPath, 'utf8') : '',
+        log: out.join('')
+      })
       throw new Error('GitHub API request failed (HTTP 503)')
     }
     const env = {
@@ -175,6 +179,8 @@ describe('main-push lint range', () => {
     } finally {
       write.mockRestore()
     }
+    expect(lookups).toHaveLength(1)
+    const [seenAtLookup] = lookups
     expect(seenAtLookup.summary).toContain('### Main-push lint failed')
     expect(seenAtLookup.summary).toContain('<code>early.ts')
     expect(seenAtLookup.log).toContain(

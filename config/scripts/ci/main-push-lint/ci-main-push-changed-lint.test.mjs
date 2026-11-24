@@ -4,6 +4,7 @@ import { describe, expect, it } from 'vitest'
 import { logLine, markdownText, renderLintSummary } from './main-push-report.mjs'
 import { collectBatchResults, parseGithubDiagnostics } from './oxlint-batches.mjs'
 import {
+  ATTRIBUTION_LIMITS,
   attributeFiles,
   choosePull,
   createGithubApi,
@@ -198,27 +199,48 @@ describe('main-push changed-file lint', () => {
   })
 
   it('stops attribution at the first API failure and within its time budget', async () => {
-    let fetches = 0
-    const hang = (_url, { signal }) => {
-      fetches += 1
+    const files = Array.from({ length: 30 }, (_, index) => `f${index}.ts`)
+    const scope = { base: 'b', head: 'h', repo: 'o/r', ref: 'main' }
+    const compare = { total_commits: 1, commits: [{ sha: 'a'.repeat(40) }] }
+    const reply = (body, status = 200) => Promise.resolve(Response.json(body, { status }))
+    const attribute = (limits, fetchImpl) =>
+      attributeFiles(files, {
+        ...scope,
+        api: createGithubApi({ GITHUB_REPOSITORY: 'o/r' }, limits, fetchImpl)
+      })
+
+    // An outage after the compare: the first failed history lookup ends every later one.
+    const outageUrls = []
+    const outage = await attribute(ATTRIBUTION_LIMITS, (url) => {
+      outageUrls.push(url)
+      return url.includes('/compare/') ? reply(compare) : reply({}, 503)
+    })
+    expect(outageUrls).toHaveLength(2)
+    for (const file of ['f0.ts', 'f19.ts']) {
+      expect(describeAttribution(outage.get(file), 'main')).toBe(
+        'unknown (GitHub API request failed (HTTP 503))'
+      )
+    }
+    expect(describeAttribution(outage.get('f20.ts'), 'main')).toBe(
+      'unknown (only the first 20 failing files are attributed)'
+    )
+
+    // A hang: one global budget, not a timeout per request, bounds the whole pass.
+    let hung = 0
+    const limits = { ...ATTRIBUTION_LIMITS, budgetMs: 200, requestTimeoutMs: 5_000 }
+    const started = Date.now()
+    const stalled = await attribute(limits, (url, { signal }) => {
+      if (url.includes('/compare/')) {
+        return reply(compare)
+      }
+      hung += 1
       return new Promise((_, reject) =>
         signal.addEventListener('abort', () => reject(signal.reason))
       )
-    }
-    const limits = { budgetMs: 200, requestTimeoutMs: 5_000, maxRequests: 40, maxFiles: 20 }
-    const api = createGithubApi({ GITHUB_REPOSITORY: 'o/r' }, limits, hang)
-    const files = Array.from({ length: 30 }, (_, index) => `f${index}.ts`)
-    const started = Date.now()
-    const result = await attributeFiles(files, {
-      base: 'b',
-      head: 'h',
-      repo: 'o/r',
-      ref: 'main',
-      api
     })
     expect(Date.now() - started).toBeLessThan(2_000)
-    expect(fetches).toBe(1)
-    expect([...result.values()].every((entry) => entry.status === 'unavailable')).toBe(true)
+    expect(hung).toBe(1)
+    expect([...stalled.values()].every((entry) => entry.status === 'unavailable')).toBe(true)
   })
 
   it('gives every push its own run, so no push range is dropped', () => {
