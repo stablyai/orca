@@ -52,7 +52,7 @@ export class AgentModelCatalogInternPool {
     id: number
     value: AgentSessionOptionChoice
   } {
-    const key = `${choice.value}\u0000${choice.label}\u0000${choice.description ?? ''}`
+    const key = JSON.stringify([choice.value, choice.label, choice.description ?? null])
     const existing = this.choices.get(key)
     if (existing) {
       return existing
