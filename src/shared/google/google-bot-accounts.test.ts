@@ -46,7 +46,7 @@ describe('a bot’s Google accounts', () => {
       throw new Error('expected a list')
     }
     expect(googleAccountNotAllowed('Scout', 'me@work.com', none)).toBe(
-      "Scout can't use me@work.com: no Google account is chosen for it. Ask your owner to choose one in Orca."
+      "Scout can't use me@work.com: no Google accounts are chosen for Scout. Ask your owner to choose one in Orca."
     )
   })
 })

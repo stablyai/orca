@@ -76,5 +76,5 @@ export function googleAccountNotAllowed(
 ): string {
   return access.accounts.length > 0
     ? `${botName} can't use ${email}. Its Google accounts: ${access.accounts.join(', ')}. Ask your owner to add it in Orca.`
-    : `${botName} can't use ${email}: no Google account is chosen for it. Ask your owner to choose one in Orca.`
+    : `${botName} can't use ${email}: no Google accounts are chosen for ${botName}. Ask your owner to choose one in Orca.`
 }

@@ -83,7 +83,7 @@ function clientLine(client: GoogleClientView | null): string {
 export function formatGoogleStatus(view: GoogleStatusView): string {
   const bots = view.bots.map(
     (bot) =>
-      `${bot.name} (${!bot.accounts ? 'every account' : bot.accounts.length > 0 ? bot.accounts.join(', ') : 'no account chosen'})`
+      `${bot.name} (${!bot.accounts ? 'every account' : bot.accounts.length > 0 ? bot.accounts.join(', ') : 'no Google accounts chosen'})`
   )
   return [
     clientLine(view.client),

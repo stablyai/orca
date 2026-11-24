@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
 import type { HandlerContext } from '../dispatch/dispatch'
-import { GOOGLE_HANDLERS } from './google'
+import { formatGoogleStatus, GOOGLE_HANDLERS } from './google'
 
 function run(flags: Record<string, string | boolean>) {
   const call = vi.fn(async (method: string, params?: Record<string, unknown>) =>
@@ -46,5 +46,17 @@ describe('orca google bot', () => {
     const widened = run({ on: true, accounts: '' })
     await expect(widened.done).rejects.toThrow('not an empty one')
     expect(widened.call).not.toHaveBeenCalled()
+  })
+
+  it('names an agent with no chosen accounts plainly in orca google status', () => {
+    const status = formatGoogleStatus({
+      client: null,
+      accounts: [],
+      bots: [
+        { id: 'scout', name: 'Scout', accounts: [] },
+        { id: 'cos', name: 'CoS' }
+      ]
+    })
+    expect(status).toContain('Scout (no Google accounts chosen), CoS (every account)')
   })
 })
