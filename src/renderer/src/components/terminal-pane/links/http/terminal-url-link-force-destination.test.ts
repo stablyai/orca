@@ -3,6 +3,7 @@ import '@/store/testing/app-store-test-fixture'
 import type { LinkActionRequest } from '@/components/link-actions/link-action-request'
 import type { TerminalLinkActionContext } from '../terminal-link-action-request'
 import type * as HttpLinkDestinations from '@/lib/browser/navigation/http-link-destinations'
+import { httpLinkActionDestinationsFor } from '@/lib/browser/navigation/http-link-destinations'
 import { handleTerminalHttpLink } from './terminal-url-link-hit-testing'
 
 const { openRoutedHttpLink } = vi.hoisted(() => ({ openRoutedHttpLink: vi.fn() }))
@@ -108,4 +109,56 @@ describe('terminal URL opens never reach the legacy browser dialog', () => {
     expect(request!.rememberEligible).toBe(false)
     expect(openRoutedHttpLink.mock.calls[0]![1].onAdmission).toBeUndefined()
   })
+})
+
+// Printed URLs and OSC 8 links both route through handleTerminalHttpLink.
+describe('a localhost link from this machine', () => {
+  const LOCALHOST = 'http://localhost:5173/'
+  const forced = (): unknown[] =>
+    openRoutedHttpLink.mock.calls.map(([, deps]) => deps.forceDestination)
+
+  function openLocalhost(
+    event: MouseEvent,
+    savedOrca: boolean,
+    middleClickBehavior: 'actions' | 'open'
+  ): LinkActionRequest[] {
+    const requests: LinkActionRequest[] = []
+    handleTerminalHttpLink(LOCALHOST, event, {
+      worktreeId: 'w',
+      sourceTabId: 'tab',
+      sourceOwner: { kind: 'local' },
+      linkActionContext: { ...linkContext('actions', requests), middleClickBehavior },
+      actionDestinations: httpLinkActionDestinationsFor(
+        { openLinksInApp: savedOrca },
+        { kind: 'local' },
+        false,
+        LOCALHOST
+      )
+    })
+    return requests
+  }
+
+  for (const savedOrca of [false, true]) {
+    const saved = savedOrca ? 'orca' : 'system'
+
+    it(`opens in Orca on a plain or Cmd click and in the system browser on Shift+Cmd (saved ${saved})`, () => {
+      expect(openLocalhost(click(), savedOrca, 'actions')).toEqual([])
+      openLocalhost(click({ metaKey: true, ctrlKey: true }), savedOrca, 'actions')
+      openLocalhost(click({ metaKey: true, ctrlKey: true, shiftKey: true }), savedOrca, 'actions')
+      expect(forced()).toEqual(['orca', 'orca', 'system'])
+    })
+
+    it(`keeps a direct middle-click on the saved browser (saved ${saved})`, () => {
+      openLocalhost(click({ button: 1 }), savedOrca, 'open')
+      expect(forced()).toEqual([saved])
+    })
+
+    it(`badges each middle-click chooser row with the gesture that opens it (saved ${saved})`, async () => {
+      const [request] = openLocalhost(click({ button: 1 }), savedOrca, 'actions')
+      // The primary row carries the Cmd badge and the alternate the Shift+Cmd badge.
+      await request!.primary.run()
+      await request!.alternate!.run()
+      expect(forced()).toEqual(['orca', 'system'])
+    })
+  }
 })

@@ -32,9 +32,7 @@ import {
 /** Desktop URLs follow the link mode unless plain clicks are left to the terminal app. */
 function dashboardHttpClickBehavior(
   settings: GlobalSettings | null,
-  url: string,
-  destinations: { primary: 'orca' | 'system'; alternate?: 'orca' | 'system' },
-  sourceOwner: { kind: string }
+  destinations: Parameters<typeof httpLinkModeForLink>[1]
 ): {
   httpPlainClickBehavior?: TerminalLinkClickBehavior
   rememberMode?: HttpLinkMode
@@ -42,7 +40,7 @@ function dashboardHttpClickBehavior(
   if (!usesHttpLinkMode() || terminalLinkClickBehaviorFor(settings) === 'none') {
     return {}
   }
-  const mode = httpLinkModeForLink(settings, url, destinations, sourceOwner)
+  const mode = httpLinkModeForLink(settings, destinations)
   return { httpPlainClickBehavior: mode === 'ask' ? 'actions' : 'open', rememberMode: mode }
 }
 
@@ -147,12 +145,7 @@ export function installDashboardPreviewLinkInteraction(
           request: deps.request,
           focusTerminal: () => terminal.focus(),
           plainClickBehavior: terminalLinkClickBehaviorFor(deps.getSettings()),
-          ...dashboardHttpClickBehavior(
-            deps.getSettings(),
-            uri,
-            actions.destinations,
-            actions.owner
-          ),
+          ...dashboardHttpClickBehavior(deps.getSettings(), actions.destinations),
           middleClickBehavior: 'none',
           sourceOwner: actions.owner
         },

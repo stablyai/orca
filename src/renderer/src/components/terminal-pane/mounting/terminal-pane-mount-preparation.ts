@@ -6,7 +6,10 @@ import { useAppStore } from '@/store/index'
 import { getConnectionId } from '@/lib/workspace/ownership/connection-context'
 import { httpLinkActionDestinationsFor } from '@/lib/browser/navigation/http-link-destinations'
 import '@/lib/browser/workspace/workspace-browser-tab-open'
-import { canOpenRemoteLinkInWorkspaceBrowser } from '@/lib/browser/workspace/workspace-browser-route-eligibility'
+import {
+  canOpenRemoteLinkInWorkspaceBrowser,
+  sshLinkRoutesThroughOwnerHost
+} from '@/lib/browser/workspace/workspace-browser-route-eligibility'
 import { resolvePaneWslDistro } from '../host-state/terminal-pane-wsl-distro'
 import {
   resolveTerminalHttpLinkSourceOwner,
@@ -119,16 +122,19 @@ export function prepareTerminalPaneMount(
       deps.worktreeId,
       getHttpLinkSourceOwnerForPane(paneId)
     )
-  const getHttpLinkActionDestinations = (
-    paneId: number,
-    url?: string
-  ): TerminalHttpLinkActionDestinations =>
-    httpLinkActionDestinationsFor(
-      deps.settingsRef.current,
-      getHttpLinkSourceOwnerForPane(paneId),
+  const getHttpLinkActionDestinations = (paneId: number, url?: string) => {
+    const owner = getHttpLinkSourceOwnerForPane(paneId)
+    const state = useAppStore.getState()
+    const reach = sshLinkRoutesThroughOwnerHost(state, deps.worktreeId, owner)
+    const settings = deps.settingsRef.current
+    return httpLinkActionDestinationsFor(
+      settings,
+      owner,
       canOpenOwnedBrowserForPane(paneId),
-      url
+      url,
+      reach
     )
+  }
   const getLinkActionContext = (paneId: number): TerminalLinkActionContext | null => {
     const plainClickBehavior = terminalLinkClickBehaviorFor(deps.settingsRef.current)
     const middleClickBehavior = deps.settingsRef.current?.terminalUrlMiddleClickBehavior ?? 'open'
@@ -249,13 +255,7 @@ export function prepareTerminalPaneMount(
         getHttpLinkSourceOwnerForPane(paneId),
         canOpenOwnedBrowserForPane(paneId)
       ),
-      url !== undefined
-        ? {
-            url,
-            destinations: getHttpLinkActionDestinations(paneId, url),
-            sourceOwner: getHttpLinkSourceOwnerForPane(paneId)
-          }
-        : {}
+      url !== undefined ? getHttpLinkActionDestinations(paneId, url) : undefined
     )
   return {
     container,

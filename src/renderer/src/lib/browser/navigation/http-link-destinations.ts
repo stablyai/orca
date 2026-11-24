@@ -74,6 +74,8 @@ export type HttpLinkDestination = 'orca' | 'system'
 export type HttpLinkActionDestinations = {
   primary: HttpLinkDestination
   alternate?: HttpLinkDestination
+  /** Plain and Cmd/Ctrl-click order when it differs from the setting's (a localhost link Orca can reach). */
+  plainClick?: { primary: 'orca'; alternate: 'system' }
 }
 
 export type HttpLinkActionChoice = { remember: boolean }
@@ -102,14 +104,20 @@ export function httpLinkActionDestinationsFor(
   settings: { openLinksInApp?: boolean } | null | undefined,
   sourceOwner: HttpLinkSourceOwner,
   canOpenOwnedBrowser: boolean,
-  url?: string
+  url?: string,
+  /** A remote owner's own host serves the tab (not a "This device" desktop fallback). */
+  reachesOwnerHost = false
 ): HttpLinkActionDestinations {
   if (!canSourceOwnerOpenInOrca(sourceOwner, canOpenOwnedBrowser)) {
     return { primary: 'system' }
   }
-  return settings?.openLinksInApp === true || isRemoteLoopbackHttpLink(url, sourceOwner)
-    ? { primary: 'orca', alternate: 'system' }
-    : { primary: 'system', alternate: 'orca' }
+  const destinations: HttpLinkActionDestinations =
+    settings?.openLinksInApp === true || isRemoteLoopbackHttpLink(url, sourceOwner)
+      ? { primary: 'orca', alternate: 'system' }
+      : { primary: 'system', alternate: 'orca' }
+  return isDesktopLocalhostLink(url, sourceOwner, reachesOwnerHost)
+    ? { ...destinations, plainClick: { primary: 'orca', alternate: 'system' } }
+    : destinations
 }
 
 export function httpLinkDirectClickDestination(

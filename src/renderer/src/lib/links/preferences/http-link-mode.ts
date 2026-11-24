@@ -26,52 +26,40 @@ export function usesHttpLinkMode(): boolean {
   return !isWebClientLocation()
 }
 
-type LinkDestinations = { primary: 'orca' | 'system'; alternate?: 'orca' | 'system' }
+type LinkDestinations = {
+  primary: 'orca' | 'system'
+  alternate?: 'orca' | 'system'
+  plainClick?: { primary: 'orca'; alternate: 'system' }
+}
 
-/** A localhost link from this machine's own process; remote loopback keeps its host's route rules. */
+/** A localhost link whose own host's Orca browser can open it: this machine's, or an SSH host whose
+ *  tab is routed through it. A "This device" fallback browses from here, so it is excluded; runtime
+ *  owners keep their existing route rules. */
 export function isDesktopLocalhostLink(
   url: string | undefined,
-  sourceOwner: { kind: string } | undefined
+  sourceOwner: { kind: string } | undefined,
+  reachesOwnerHost = false
 ): boolean {
   return (
     url !== undefined &&
-    sourceOwner?.kind === 'local' &&
+    (sourceOwner?.kind === 'local' || (sourceOwner?.kind === 'ssh' && reachesOwnerHost)) &&
     usesHttpLinkMode() &&
     isLoopbackHttpUrl(url)
   )
 }
 
-/** A plain click on this link opens the Orca browser whatever the setting says. */
-export function opensLocalhostInOrca(
-  destinations: LinkDestinations,
-  url: string,
-  sourceOwner: { kind: string } | undefined
-): boolean {
-  return (
-    (destinations.primary === 'orca' || destinations.alternate === 'orca') &&
-    isDesktopLocalhostLink(url, sourceOwner)
-  )
+/** Plain and Cmd/Ctrl-click order; middle-click and its chooser badges follow it only when they show it. */
+export function plainClickDestinationsFor<D extends LinkDestinations>(destinations: D): D {
+  // Keeps the marker, so the reordered value still reads as a localhost link that opens directly.
+  return destinations.plainClick ? { ...destinations, ...destinations.plainClick } : destinations
 }
 
-/** Plain and Cmd/Ctrl-click order: a local dev server opens in the Orca browser, Shift sends it out. */
-export function plainClickDestinationsFor<D extends LinkDestinations>(
-  destinations: D,
-  url: string,
-  sourceOwner: { kind: string } | undefined
-): D | { primary: 'orca'; alternate: 'system' } {
-  return opensLocalhostInOrca(destinations, url, sourceOwner)
-    ? { primary: 'orca', alternate: 'system' }
-    : destinations
-}
-
-/** One link's plain-click mode: a local localhost link that can open in Orca skips the chooser. */
+/** One link's plain-click mode: a localhost link Orca can open skips the chooser. */
 export function httpLinkModeForLink(
   settings: Partial<HttpLinkModeSettings> | null | undefined,
-  url: string,
-  destinations: LinkDestinations,
-  sourceOwner: { kind: string } | undefined
+  destinations: LinkDestinations
 ): HttpLinkMode {
-  return opensLocalhostInOrca(destinations, url, sourceOwner) ? 'open' : httpLinkModeFor(settings)
+  return destinations.plainClick ? 'open' : httpLinkModeFor(settings)
 }
 
 /** Settings a Remember choice writes: the browser, the open mode, and no legacy first-use prompt. */

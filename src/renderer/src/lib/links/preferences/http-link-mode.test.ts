@@ -24,28 +24,32 @@ describe('desktop link-open mode', () => {
     expect(httpLinkModeFor({ terminalLinkClickBehavior: 'none' })).toBe('open')
   })
 
-  it('opens a local localhost link in Orca without asking; remote and other links keep the setting', () => {
+  it('opens a reachable localhost link in Orca without asking; other links keep the setting', () => {
     const settings = { httpLinkClickBehavior: 'ask', openLinksInApp: false } as const
     const local = { kind: 'local' } as const
     const localhost = 'http://localhost:5173/app'
     const destinations = httpLinkActionDestinationsFor(settings, local, false, localhost)
-    // The setting's order is untouched (middle-click and choosers use it); plain clicks reorder.
-    expect(destinations).toEqual({ primary: 'system', alternate: 'orca' })
-    expect(plainClickDestinationsFor(destinations, localhost, local)).toEqual({
+    // The setting's order stays for middle-click "open"; plain and Cmd/Ctrl-click put Orca first.
+    expect(destinations.primary).toBe('system')
+    expect(plainClickDestinationsFor(destinations)).toMatchObject({
       primary: 'orca',
       alternate: 'system'
     })
-    expect(httpLinkModeForLink(settings, localhost, destinations, local)).toBe('open')
+    expect(httpLinkModeForLink(settings, destinations)).toBe('open')
+    expect(httpLinkModeForLink(settings, plainClickDestinationsFor(destinations))).toBe('open')
 
     const web = 'https://example.com/'
     const webDestinations = httpLinkActionDestinationsFor(settings, local, false, web)
-    expect(plainClickDestinationsFor(webDestinations, web, local)).toBe(webDestinations)
-    expect(httpLinkModeForLink(settings, web, webDestinations, local)).toBe('ask')
+    expect(plainClickDestinationsFor(webDestinations)).toBe(webDestinations)
+    expect(httpLinkModeForLink(settings, webDestinations)).toBe('ask')
 
-    // A remote host's loopback names that host; it keeps asking, even when its browser route is open.
+    // An SSH host's loopback opens directly only when its tab is routed through that host.
     const ssh = { kind: 'ssh', connectionId: 'c1' } as const
-    const sshDestinations = httpLinkActionDestinationsFor(settings, ssh, true, localhost)
-    expect(httpLinkModeForLink(settings, localhost, sshDestinations, ssh)).toBe('ask')
-    expect(plainClickDestinationsFor(sshDestinations, localhost, ssh)).toBe(sshDestinations)
+    const routed = httpLinkActionDestinationsFor(settings, ssh, true, localhost, true)
+    expect(httpLinkModeForLink(settings, routed)).toBe('open')
+    // "This device" browses from here, where the host's localhost is not reachable: keep asking.
+    const thisDevice = httpLinkActionDestinationsFor(settings, ssh, true, localhost, false)
+    expect(httpLinkModeForLink(settings, thisDevice)).toBe('ask')
+    expect(plainClickDestinationsFor(thisDevice)).toBe(thisDevice)
   })
 })

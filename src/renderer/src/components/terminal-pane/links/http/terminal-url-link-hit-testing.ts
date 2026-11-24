@@ -25,10 +25,7 @@ import {
   type TerminalLinkActionContext
 } from '../terminal-link-action-request'
 import { captureLinkActionContext } from '@/lib/links/preferences/link-action-context'
-import {
-  isDesktopLocalhostLink,
-  plainClickDestinationsFor
-} from '@/lib/links/preferences/http-link-mode'
+import { plainClickDestinationsFor } from '@/lib/links/preferences/http-link-mode'
 import {
   canRememberLinkChoice,
   rememberOnAdmission
@@ -70,14 +67,12 @@ function isDesktopHttpLinkFallbackActivation(event: MouseEvent): boolean {
 
 // Under Ask, a localhost link that can open in Orca opens there on a plain click instead of asking.
 function localhostLinkActionContext(
-  url: string,
   deps: UrlLinkHitTestDeps
 ): TerminalLinkActionContext | null | undefined {
   const context = deps.linkActionContext
   return context?.rememberMode === 'ask' &&
     context.httpPlainClickBehavior === 'actions' &&
-    deps.actionDestinations?.primary === 'orca' &&
-    isDesktopLocalhostLink(url, deps.sourceOwner)
+    deps.actionDestinations?.plainClick
     ? { ...context, httpPlainClickBehavior: 'open', rememberMode: 'open' }
     : context
 }
@@ -87,17 +82,14 @@ export function handleTerminalHttpLink(
   event: MouseEvent | undefined,
   input: UrlLinkHitTestDeps
 ): boolean {
-  // Middle-click keeps the setting's order; plain and Cmd/Ctrl-click put a local dev server in Orca.
+  // Only a middle-click set to open directly keeps the saved browser; every other route (and every
+  // chooser's Cmd and Shift+Cmd badges) uses the plain-click order, so badges name what the gesture opens.
+  const middleOpensDirectly =
+    isTerminalMiddleClickActivation(event) &&
+    input.linkActionContext?.middleClickBehavior === 'open'
   const deps =
-    input.actionDestinations && !isTerminalMiddleClickActivation(event)
-      ? {
-          ...input,
-          actionDestinations: plainClickDestinationsFor(
-            input.actionDestinations,
-            url,
-            input.sourceOwner
-          )
-        }
+    input.actionDestinations?.plainClick && !middleOpensDirectly
+      ? { ...input, actionDestinations: plainClickDestinationsFor(input.actionDestinations) }
       : input
   if (isTerminalHttpLinkActivation(event)) {
     const forceDestination =
@@ -111,7 +103,7 @@ export function handleTerminalHttpLink(
     return true
   }
 
-  const linkActionContext = localhostLinkActionContext(url, deps)
+  const linkActionContext = localhostLinkActionContext(input)
   const rememberMode = linkActionContext?.rememberMode
   // Captured at click: the chooser's actions must not follow later focus or host changes.
   const actionContext = rememberMode

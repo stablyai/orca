@@ -93,16 +93,12 @@ export function useNativeChatLinkClick(
       const routed = resolveNativeChatHttpLinkRouting(state, context.worktreeId, route.url)
       const desktopMode =
         followsLinkMode && usesHttpLinkMode()
-          ? httpLinkModeForLink(state.settings, route.url, routed.destinations, routed.sourceOwner)
+          ? httpLinkModeForLink(state.settings, routed.destinations)
           : null
       const routing = desktopMode
         ? {
             ...routed,
-            destinations: plainClickDestinationsFor(
-              routed.destinations,
-              route.url,
-              routed.sourceOwner
-            )
+            destinations: plainClickDestinationsFor(routed.destinations)
           }
         : routed
       // Desktop chat follows the link mode, so effective "leave to terminal" no longer blocks it.

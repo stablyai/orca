@@ -45,12 +45,12 @@ export function useWorkspaceReferenceLinkActions(
     // Desktop follows the link mode (no Remember row here); the web keeps its own resolver.
     const routed = resolveNativeChatHttpLinkRouting(state, workspaceId, url)
     const desktopMode = usesHttpLinkMode()
-      ? httpLinkModeForLink(state.settings, url, routed.destinations, routed.sourceOwner)
+      ? httpLinkModeForLink(state.settings, routed.destinations)
       : null
     const routing = desktopMode
       ? {
           ...routed,
-          destinations: plainClickDestinationsFor(routed.destinations, url, routed.sourceOwner)
+          destinations: plainClickDestinationsFor(routed.destinations)
         }
       : routed
     const plainClickBehavior = desktopMode
