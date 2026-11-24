@@ -121,6 +121,13 @@ describe('claudeToolReturnWithoutRequest', () => {
       claudeToolReturnWithoutRequest(`${transcript(...STALLED)}{"type":"api-request",`)
     ).toBeNull()
     expect(claudeToolReturnWithoutRequest(`${transcript(...STALLED)}{"type":"api-req\n`)).toBeNull()
+    // The unreadable row may have held a sibling call that is still running.
+    const [requestRow, toolA, resultA] = STALLED
+    expect(
+      claudeToolReturnWithoutRequest(
+        `${transcript(requestRow, toolA)}{"type":"assistant",\n${transcript(resultA)}`
+      )
+    ).toBeNull()
   })
 })
 

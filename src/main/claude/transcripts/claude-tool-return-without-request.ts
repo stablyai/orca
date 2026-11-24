@@ -29,9 +29,11 @@ export function claudeToolReturnWithoutRequest(transcript: string): number | nul
   for (const [index, line] of lines.entries()) {
     const row = parseRow(line)
     if (!row) {
-      // Only the tail's first line may be cut by the read; any other unreadable row is doubt.
+      // Only the tail's first line may be cut by the read; any other unreadable row (a sibling
+      // call's, say) leaves the batch unknown.
       if (index > 0 && line.trim() !== '') {
         lastResultAt = null
+        batch = null
       }
       continue
     }

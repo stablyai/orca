@@ -49,6 +49,10 @@ export abstract class RuntimeTerminalWorkerModelWait extends RuntimePtyExitWorke
       return true
     }
     const toolReturnedAt = await toolReturnWithoutRequest(wait, after)
+    // A hook during the read restarted the stopwatch: this stretch is over.
+    if (!wait.stillWaiting()) {
+      return true
+    }
     // Re-read: the Dispatch may have settled while the screen and transcript were read.
     const db = this._orchestrationDb
     const target = this.modelWaitTarget(handle, paneKey)
@@ -63,8 +67,7 @@ export abstract class RuntimeTerminalWorkerModelWait extends RuntimePtyExitWorke
           stretchKey: `${wait.turnKey}:${wait.since}`,
           waitedMs: Date.now() - wait.since,
           ...(lastSeen ? { lastSeen } : {}),
-          // A hook during the read means the turn moved on: the transcript may be stale.
-          ...(toolReturnedAt !== null && wait.stillWaiting() ? { toolReturnedAt } : {})
+          ...(toolReturnedAt !== null ? { toolReturnedAt } : {})
         },
         this.workerTurnStopReportDeps
       )
