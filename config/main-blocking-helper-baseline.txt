@@ -431,6 +431,7 @@
 3 src/main/daemon/launch/daemon-launch-paths.ts
 1 src/main/daemon/launch/daemon-launched-child-spawn.ts
 8 src/main/daemon/launch/daemon-launched-child.ts
+1 src/main/daemon/launch/daemon-legacy-process-liveness.ts # legacyDaemonProcessMayBeAlive reads one pid record per old protocol on lost-tab close; same read it made inline before
 20 src/main/daemon/launch/daemon-out-of-process-launcher.ts
 5 src/main/daemon/launch/daemon-protocol-cleanup.ts
 13 src/main/daemon/launch/daemon-replacement-preflight.ts
@@ -452,7 +453,7 @@
 5 src/main/daemon/providers/lifecycle/daemon-provider-state.ts
 4 src/main/daemon/providers/lifecycle/daemon-severed-restart.ts
 1 src/main/daemon/providers/lifecycle/daemon-uninstall-shutdown.ts
-3 src/main/daemon/providers/routing/daemon-legacy-adapters.ts
+9 src/main/daemon/providers/routing/daemon-legacy-adapters.ts # one-shot startup reclaim of exited legacy daemon files; fewer sync calls per version than the unfenced unlinks it replaced
 8 src/main/daemon/providers/routing/daemon-newer-protocol-hold.ts
 2 src/main/daemon/providers/routing/daemon-unlisted-session.ts
 1 src/main/daemon/providers/wsl/daemon-wsl-bridge-boot-identity.ts
