@@ -122,6 +122,10 @@ function failedStart(
   at = NOW
 ): void {
   admit(id, body, at)
+  refuseStart(id, kind, at)
+}
+
+function refuseStart(id: string, kind: AgentSessionFailureKind = 'notSignedIn', at = NOW): void {
   inWriter(() =>
     applyJournalDomainGenerationSettlement(
       db,
@@ -279,7 +283,7 @@ it('refuses the admission when a carried card changed since it was read', () => 
   expect(again.admit()).toBe(true)
 })
 
-it('reads a returned card an earlier Orca saved', () => {
+function insertOldCard(): void {
   // As builds before this change stored it: no queue time, no unattended mark, no sent time.
   db.prepare(
     `INSERT INTO journal_queue_cards(session_id,epoch,message_id,revision,state,position,command_turn_item_id,payload_json)
@@ -304,6 +308,10 @@ it('reads a returned card an earlier Orca saved', () => {
       queuedAt: null
     })
   )
+}
+
+it('reads a returned card an earlier Orca saved', () => {
+  insertOldCard()
   const next = sendNext('next', 'ping')
   expect(next.body.blocks).toEqual([
     { type: 'text', text: 'see attached' },
@@ -311,5 +319,40 @@ it('reads a returned card an earlier Orca saved', () => {
     { type: 'text', text: 'ping' }
   ])
   expect(next.admit()).toBe(true)
+  expect(returnedIds()).toEqual([])
+})
+
+it('carries an earlier Orca’s card ahead of a newer one', () => {
+  insertOldCard()
+  failedStart('new', asked('d-new', 'newer'), 'notSignedIn', NOW + 60_000)
+  // The newer failure sits ahead of it in the queue.
+  expect(returnedIds()).toEqual(['new', 'old'])
+  expect(sendNext('next', 'ping').carried.cards.map((card) => card.messageId)).toEqual([
+    'old',
+    'new'
+  ])
+})
+
+it('a message that carried others and failed again keeps each sent line on its own words', () => {
+  failedStart('first', asked('d1', 'one'), 'notSignedIn', NOW)
+  const second = sendNext('second', 'two', NOW + 60_000)
+  expect(second.admit()).toBe(true)
+  refuseStart('second', 'notSignedIn', NOW + 60_000)
+
+  const third = sendNext('third', 'three', NOW + 180_000)
+  expect(third.carried.cards.map((card) => card.messageId)).toEqual(['second'])
+  expect(third.carried.deliveryIds).toEqual(['second', 'd1'])
+  expect(third.body.blocks).toEqual([
+    {
+      type: 'text',
+      text: '[Orca: sent 2027-01-15T08:00:00.000Z, 1 minute before it reached you]\none'
+    },
+    {
+      type: 'text',
+      text: '[Orca: sent 2027-01-15T08:01:00.000Z, 2 minutes before it reached you]\ntwo'
+    },
+    { type: 'text', text: 'three' }
+  ])
+  expect(third.admit()).toBe(true)
   expect(returnedIds()).toEqual([])
 })

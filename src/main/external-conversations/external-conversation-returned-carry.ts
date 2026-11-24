@@ -1,5 +1,5 @@
 // A connector message sent into a chat first takes its conversation's messages that failed to start
-// for the agent's availability (signed out, a usage limit, not set up, an exit while starting). Their
+// for the agent's availability (signed out, not set up, an exit while starting). Their
 // asker can't see the chat's Retry, so the next message of the conversation carries them into its
 // turn, oldest first, each with its own images. The admission settles them (journal-domain-carried-cards).
 import type { ExternalConversationLink } from '../../shared/connectors/external-conversation-link'
@@ -71,12 +71,13 @@ export function carriedMessages(
   account: string | undefined,
   now: number
 ): CarriedMessages {
-  // Oldest first: a failed start's card goes ahead of the queue, so queue order is newest first.
+  // Oldest first: a failed start's card goes ahead of the queue, so queue order is newest first. A
+  // card whose send time is gone came from an earlier Orca, so it is the older.
+  const sentAt = (each: JournalReturnedCard) => each.submittedAt ?? Number.NEGATIVE_INFINITY
   const carried = returned
     .filter((each) => carriesReturnedCard(link, each))
-    .sort((a, b) =>
-      a.submittedAt !== undefined && b.submittedAt !== undefined ? a.submittedAt - b.submittedAt : 0
-    )
+    .toReversed()
+    .sort((a, b) => (sentAt(a) === sentAt(b) ? 0 : sentAt(a) < sentAt(b) ? -1 : 1))
   if (carried.length === 0) {
     return NOTHING_CARRIED
   }
@@ -86,13 +87,18 @@ export function carriedMessages(
         submittedAt === undefined
           ? null
           : connectorSentLine({ askedAt: submittedAt, waitedMs: now - submittedAt }, true)
-      const [first, ...rest] = card.body.blocks
+      // On its own words: a card that carried earlier ones holds their lines before its last text.
+      const own = card.body.blocks.findLastIndex((block) => block.type === 'text')
       if (!sent) {
         return card.body.blocks
       }
-      return first?.type === 'text'
-        ? [{ ...first, text: `${sent}\n${first.text}` }, ...rest]
-        : [{ type: 'text' as const, text: sent }, ...card.body.blocks]
+      return own === -1
+        ? [{ type: 'text' as const, text: sent }, ...card.body.blocks]
+        : card.body.blocks.map((block, index) =>
+            index === own && block.type === 'text'
+              ? { ...block, text: `${sent}\n${block.text}` }
+              : block
+          )
     }),
     cards: carried.map(({ card }) => ({
       messageId: card.messageId,

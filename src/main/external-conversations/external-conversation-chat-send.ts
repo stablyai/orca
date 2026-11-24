@@ -25,10 +25,11 @@ import { refused, type ConnectorMessage, type Delivery } from './external-conver
 export async function deliverToChat(
   chat: ConversationChat | null,
   link: ExternalConversationLink,
-  // admitted: told the moment the chat takes the message, before its turn can begin.
+  // admitted: told the moment the chat takes the message, before its turn can begin; what it
+  // returns takes that back when the writer then refused the attempt.
   delivery: ConnectorMessage & {
     signal: AbortSignal
-    admitted?: () => void
+    admitted?: () => (() => void) | void
     deliveryId?: string
     images?: readonly string[]
   }
@@ -41,10 +42,12 @@ export async function deliverToChat(
     return refused(CHAT_GONE_REFUSAL)
   }
   let admitted = false
+  // What takes back an admission the writer then refused.
+  const taken: { back?: (() => void) | void } = {}
   const admit = () => {
     if (!admitted) {
       admitted = true
-      delivery.admitted?.()
+      taken.back = delivery.admitted?.()
     }
   }
   try {
@@ -60,6 +63,10 @@ export async function deliverToChat(
         carried.cards.length > 0 &&
         outcome.refusal.details?.reason === 'continuationSuperseded'
       ) {
+        // Nothing was admitted: a turn the racing Retry starts isn't this delivery's.
+        taken.back?.()
+        taken.back = undefined
+        admitted = false
         continue
       }
       if (outcome.kind === 'refused') {
