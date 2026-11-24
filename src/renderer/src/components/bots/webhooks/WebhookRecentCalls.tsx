@@ -62,8 +62,9 @@ export function WebhookRecentCalls({
           {t('bots.webhooks.noCalls', 'No calls yet.')}
         </p>
       ) : (
-        // One shared time column, as wide as the longest time ("Yesterday 2:56 PM").
-        <ul className="grid grid-cols-[max-content_6rem_minmax(0,1fr)] gap-x-3">
+        // One shared time column, as wide as the longest time ("Yesterday 2:56 PM"); in a narrow
+        // pane the time column gives way and wraps, so labels keep whole words.
+        <ul className="grid grid-cols-[auto_minmax(min-content,6rem)_minmax(0,1fr)] gap-x-3">
           {shown.map((row) => {
             const line = webhookCallLine(row, botName, resultsTo)
             return (
@@ -73,7 +74,7 @@ export function WebhookRecentCalls({
               >
                 <NativeChatMessageTimestamp
                   timestamp={callTime(row)}
-                  className="text-muted-foreground"
+                  className="whitespace-normal text-muted-foreground"
                 />
                 <span className="text-foreground">{line.label}</span>
                 <span className="min-w-0 truncate text-muted-foreground">{line.detail}</span>

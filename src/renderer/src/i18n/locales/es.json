@@ -20064,21 +20064,21 @@
         "unknownSourceTooltip": "Rama de otro chat"
       },
       "importPlan": {
-        "comes": "Se importa",
-        "changed": "Se importa con cambios",
+        "comes": "Se importará",
+        "changed": "Se importará con cambios",
         "already": "Ya está aquí",
-        "stays": "Se queda en {{app}}",
+        "stays": "Se quedará en {{app}}",
         "fromAgain": "De {{app}}, otra vez",
         "from": "De {{app}}",
         "selected": "{{chosen}} de {{total}} seleccionados · las claves y los inicios de sesión nunca se copian",
-        "importOne": "Importar 1 elemento",
-        "importMany": "Importar {{count}} elementos",
+        "importOne": "Importar (1)",
+        "importMany": "Importar ({{count}})",
         "askedOne": "Se pidió importar 1 elemento",
         "askedMany": "Se pidió importar {{count}} elementos"
       },
       "importDone": {
         "heading": "Importación completada",
-        "title": "{{name}} se trasladó desde {{app}}",
+        "title": "{{name}} se importó desde {{app}}",
         "open": "Abrir",
         "stayed": "Se quedan en {{app}}: {{things}}. No se cambió nada en {{app}}.",
         "unchanged": "No se cambió nada en {{app}}.",
@@ -20153,7 +20153,7 @@
         "what": {
           "github": {
             "issue_opened": "Issue abierto",
-            "pr_opened": "Solicitud de extracción abierta",
+            "pr_opened": "Pull request abierta",
             "pr_pushed": "Push",
             "pr_merged": "Fusionada",
             "comment": "Comentario",
@@ -20227,6 +20227,7 @@
         "resultsInRuns": "resultados en cada ejecución",
         "paused": "en pausa",
         "webhookHint": "Dirige tu servicio a esta URL",
+        "gettingUrl": "Obteniendo la URL…",
         "editDraft": "Cambia «{{name}}» para que ",
         "resultsInEachRun": "En cada ejecución",
         "resultsChat": "Chat",
@@ -24941,8 +24942,6 @@
       "composio": {
         "withComposio": "Con Composio"
       },
-      "allApps": "Todas las apps",
-      "onBot": "En {{bot}}",
       "mcp": {
         "addTitle": "Añadir {{app}}",
         "advanced": "Avanzado",
@@ -25149,7 +25148,10 @@
       "runNow": "Ejecutar ahora",
       "openOnPage": "Abrir en la página de Automatizaciones",
       "pauseShort": "Pausa",
-      "resumeShort": "Reanudar"
+      "resumeShort": "Reanudar",
+      "deleting": "Eliminando…",
+      "deleteFailed": "No se pudo eliminar {{name}}",
+      "deleteDescription": "Eliminar <name/> y su historial de ejecuciones."
     },
     "access": {
       "thisComputer": "este equipo",
@@ -25170,7 +25172,7 @@
       "controlBriefIfAdded": "Cualquier persona que añadas puede actuar como tú aquí.",
       "controlBriefOnHost": "Pueden actuar como tú en {{computer}}.",
       "controlBriefIfAddedOnHost": "Cualquier persona que añadas puede actuar como tú en {{computer}}.",
-      "reachSlack": "Publicar en Slack como @{{name}}",
+      "reachSlack": "Publicar en Slack como {{name}}",
       "here": "aquí",
       "thisServer": "este servidor",
       "there": "allí",

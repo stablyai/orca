@@ -143,7 +143,11 @@ export const ORCHESTRATION_WORKER_DOCK_METHODS = [
     permission: 'workspace',
     access: { kind: 'localOnly', targets: { party: 'party' } },
     params: WorkerDockSubscribe,
-    handler: ({ party, includeRows, currentOnly }, { runtime, signal, connectionId }, emit) =>
+    handler: (
+      { party, includeRows, currentOnly },
+      { runtime, signal, connectionId, requestId },
+      emit
+    ) =>
       new Promise<void>((resolve) => {
         if (signal?.aborted) {
           resolve()
@@ -165,9 +169,13 @@ export const ORCHESTRATION_WORKER_DOCK_METHODS = [
           () => {
             stop()
             signal?.removeEventListener('abort', close)
+            // A relay holds a stream's id until its end frame, as crew streams send.
+            emit({ type: 'end' })
             resolve()
           },
-          connectionId
+          connectionId,
+          // A phone ends this one stream by its request id (`orchestration.workerApprovalsUnsubscribe`).
+          requestId
         )
         signal?.addEventListener('abort', close, { once: true })
         if (signal?.aborted) {

@@ -20366,8 +20366,8 @@
         "fromAgain": "Depuis {{app}}, à nouveau",
         "from": "Depuis {{app}}",
         "selected": "{{chosen}} sur {{total}} sélectionnés · les clés et identifiants de connexion ne sont jamais copiés",
-        "importOne": "Importer 1 élément",
-        "importMany": "Importer {{count}} éléments",
+        "importOne": "Importer (1)",
+        "importMany": "Importer ({{count}})",
         "askedOne": "Import de 1 élément demandé",
         "askedMany": "Import de {{count}} éléments demandé"
       },
@@ -24963,8 +24963,6 @@
       "composio": {
         "withComposio": "Avec Composio"
       },
-      "allApps": "Toutes les apps",
-      "onBot": "Sur {{bot}}",
       "mcp": {
         "addTitle": "Ajouter {{app}}",
         "advanced": "Avancé",
@@ -25171,7 +25169,10 @@
       "runNow": "Exécuter maintenant",
       "openOnPage": "Ouvrir sur la page Automatisations",
       "pauseShort": "Pause",
-      "resumeShort": "Reprendre"
+      "resumeShort": "Reprendre",
+      "deleting": "Suppression…",
+      "deleteFailed": "Impossible de supprimer {{name}}",
+      "deleteDescription": "Supprimer <name/> et son historique d’exécution."
     },
     "access": {
       "thisComputer": "cet ordinateur",
@@ -25192,7 +25193,7 @@
       "controlBriefIfAdded": "Toute personne que vous ajoutez peut agir en votre nom ici.",
       "controlBriefOnHost": "Ces personnes peuvent agir en votre nom sur {{computer}}.",
       "controlBriefIfAddedOnHost": "Toute personne que vous ajoutez peut agir en votre nom sur {{computer}}.",
-      "reachSlack": "Publier dans Slack en tant que @{{name}}",
+      "reachSlack": "Publier dans Slack en tant que {{name}}",
       "here": "ici",
       "thisServer": "ce serveur",
       "there": "là-bas",

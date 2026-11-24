@@ -133,6 +133,8 @@ export const MobileNativeChatAgentMessageCard = memo(function MobileNativeChatAg
   const row = (
     <MobileNativeChatEventRow
       testID={waiting ? 'agent-message-card-waiting' : 'agent-message-card'}
+      // The first line wraps once beside the open button, chevron and time.
+      wordsLines={2}
       icon={<SenderMark agentType={view.agentType} />}
       // The live state never marks a row failed: a restarted worker would un-fail it. Waiting mail shows no status.
       badge={!waiting && view.dot === 'working' ? 'running' : null}

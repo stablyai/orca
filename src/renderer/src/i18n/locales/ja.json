@@ -20591,7 +20591,7 @@
         "open": "開く",
         "stayed": "{{app}} に残したもの: {{things}}。{{app}} では何も変更されていません。",
         "unchanged": "{{app}} では何も変更されていません。",
-        "paused": "二重に実行されないよう、オートメーションは一時停止しています。{{app}} で古いボットをオフにしてから、オートメーションをオンにしてください。"
+        "paused": "二重に実行されないよう、オートメーションは一時停止しています。{{app}} で古いbotをオフにしてから、オートメーションをオンにしてください。"
       },
       "usage": {
         "description": "このチャットの Codex アカウントの使用量を表示",
@@ -20675,12 +20675,12 @@
         "someoneWrote": "誰かの投稿",
         "personWrote": "{{name}} の投稿",
         "callerSent": "呼び出し元が送信した内容",
-        "external": "外部コンテンツ · 指示ではなく情報としてボットに送信されました",
-        "shortened": "ボットに送信されたときと同じく、4,096 文字に短縮されています。",
+        "external": "外部コンテンツ · 指示ではなく情報としてbotに送信されました",
+        "shortened": "botに送信されたときと同じく、4,096 文字に短縮されています。",
         "memberAccess": "この実行時、{{name}} は「質問できる人」に含まれていました。",
         "someMemberAccess": "実行時に「質問できる人」に含まれていた人が送信しました。",
         "otherAccess": "「質問できる人」に含まれていないか、アクセス権が不明です。",
-        "ownerAccess": "ボットの所有者からの送信です。",
+        "ownerAccess": "botの所有者からの送信です。",
         "sampleCall": "サンプル呼び出し",
         "firstCall": "最初の呼び出し",
         "webhookCall": "Webhook 呼び出し",
@@ -25666,8 +25666,6 @@
       "composio": {
         "withComposio": "Composio 経由"
       },
-      "allApps": "すべてのアプリ",
-      "onBot": "{{bot}} 上",
       "mcp": {
         "addTitle": "{{app}} を追加",
         "advanced": "詳細設定",
@@ -25869,7 +25867,10 @@
       "runNow": "今すぐ実行",
       "openOnPage": "オートメーションページで開く",
       "pauseShort": "一時停止",
-      "resumeShort": "再開"
+      "resumeShort": "再開",
+      "deleting": "削除中…",
+      "deleteFailed": "{{name}} を削除できませんでした",
+      "deleteDescription": "<name/> とその実行履歴を削除します。"
     },
     "access": {
       "thisComputer": "このコンピュータ",
@@ -25890,7 +25891,7 @@
       "controlBriefIfAdded": "追加した人は誰でもここであなたとして操作できます。",
       "controlBriefOnHost": "アクセスを許可した人は {{computer}} 上であなたとして操作できます。",
       "controlBriefIfAddedOnHost": "追加した人は誰でも {{computer}} 上であなたとして操作できます。",
-      "reachSlack": "Slack で @{{name}} として投稿する",
+      "reachSlack": "Slack で {{name}} として投稿する",
       "here": "ここ",
       "thisServer": "このサーバー",
       "there": "そこ",

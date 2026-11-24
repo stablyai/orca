@@ -20349,8 +20349,8 @@
         "fromAgain": "Erneut aus {{app}}",
         "from": "Aus {{app}}",
         "selected": "{{chosen}} von {{total}} ausgewählt · Schlüssel und Anmeldedaten werden nie kopiert",
-        "importOne": "1 Element importieren",
-        "importMany": "{{count}} Elemente importieren",
+        "importOne": "Importieren (1)",
+        "importMany": "Importieren ({{count}})",
         "askedOne": "Import von 1 Element angefordert",
         "askedMany": "Import von {{count}} Elementen angefordert"
       },
@@ -20504,6 +20504,7 @@
         "resultsInRuns": "Ergebnisse in jeder Ausführung",
         "paused": "pausiert",
         "webhookHint": "Diese URL in deinem Dienst als Ziel eintragen",
+        "gettingUrl": "URL wird abgerufen…",
         "editDraft": "Ändere „{{name}}“ so, dass ",
         "resultsInEachRun": "In jeder Ausführung",
         "resultsChat": "Chat",
@@ -24362,8 +24363,6 @@
       "composio": {
         "withComposio": "Mit Composio"
       },
-      "allApps": "Alle Apps",
-      "onBot": "Bei {{bot}}",
       "mcp": {
         "addTitle": "{{app}} hinzufügen",
         "advanced": "Erweitert",
@@ -24565,7 +24564,10 @@
       "runNow": "Jetzt ausführen",
       "openOnPage": "Auf der Seite Automatisierungen öffnen",
       "pauseShort": "Pausieren",
-      "resumeShort": "Fortsetzen"
+      "resumeShort": "Fortsetzen",
+      "deleting": "Wird gelöscht…",
+      "deleteFailed": "{{name}} konnte nicht gelöscht werden",
+      "deleteDescription": "<name/> und den Ausführungsverlauf löschen."
     },
     "access": {
       "thisComputer": "diesem Computer",
@@ -24586,7 +24588,7 @@
       "controlBriefIfAdded": "Alle, die du hinzufügst, können hier in deinem Namen handeln.",
       "controlBriefOnHost": "Sie können auf {{computer}} in deinem Namen handeln.",
       "controlBriefIfAddedOnHost": "Alle, die du hinzufügst, können auf {{computer}} in deinem Namen handeln.",
-      "reachSlack": "Als @{{name}} in Slack posten",
+      "reachSlack": "Als {{name}} in Slack posten",
       "here": "hier",
       "thisServer": "diesem Server",
       "there": "dort",

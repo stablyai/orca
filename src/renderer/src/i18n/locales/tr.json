@@ -20164,7 +20164,10 @@
         "paused": "Hedef duraklatıldı",
         "blocked": "Hedef engellendi",
         "limited": "Hedef sınırına ulaşıldı",
-        "attachmentsUnsupported": "Hedef belirlemeden önce ekleri kaldırın."
+        "attachmentsUnsupported": "Hedef belirlemeden önce ekleri kaldırın.",
+        "checks_one": "{{count}} kontrol",
+        "checks_other": "{{count}} kontrol",
+        "last-check": "Son hedef kontrolü"
       },
       "fileLinks": {
         "notFound": "Dosya bulunamadı: {{value0}}",
@@ -20285,7 +20288,16 @@
         "settingsRejected": "Seçilen model ve akıl yürütme düzeyi Codex tarafından uygulanamadı. Bu hedef değişikliği gönderilmedi. Seçimi kontrol edin ve yeniden deneyin.",
         "settingsUnconfirmed": "Seçilen model ve akıl yürütme düzeyi Codex tarafından doğrulanmadı. Bu hedef değişikliği gönderilmedi. Sohbeti kontrol edin ve yeniden deneyin.",
         "pauseUnconfirmed": "Codex durdu, ancak hedefinin duraklatıldığı doğrulanmadı. Devam etmeden önce hedefi kontrol edin.",
-        "stopUnconfirmed": "Durdur işlemi Codex tarafından doğrulanamadı. Devam etmeden önce sohbeti kontrol edin."
+        "stopUnconfirmed": "Durdur işlemi Codex tarafından doğrulanamadı. Devam etmeden önce sohbeti kontrol edin.",
+        "noGoal": "Bu sohbette Codex'in değiştirilecek bir hedefi yok. /goal ve ardından hedefi yazarak bir hedef belirleyin."
+      },
+      "automationResult": {
+        "openRun": "Çalıştırmayı aç",
+        "notRead": "{{name}} bunu henüz okumadı. Sonraki mesajınızla birlikte gönderilecek.",
+        "read": "{{name}} bunu sonraki mesajınızla birlikte okudu.",
+        "sentWithOne": "1 otomasyon sonucuyla birlikte gönderildi",
+        "sentWithMany": "{{count}} otomasyon sonucuyla birlikte gönderildi",
+        "cleared": "Sohbet temizlenmeden önce ulaştı. {{name}} bunu görmeyecek."
       },
       "slashCommandDescriptions": {
         "clearConversation": "Sohbeti temizle",
@@ -20453,6 +20465,27 @@
         "sourceTooltip": "{{name}} sohbetinin çatalı",
         "unknownSourceTooltip": "Başka bir sohbetin çatalı"
       },
+      "importPlan": {
+        "comes": "İçe aktarılacak",
+        "changed": "Değişikliklerle içe aktarılacak",
+        "already": "Zaten burada",
+        "stays": "{{app}} içinde kalacak",
+        "fromAgain": "{{app}} kaynağından, yeniden",
+        "from": "{{app}} kaynağından",
+        "selected": "{{total}} öğeden {{chosen}} tanesi seçili · anahtarlar ve oturum bilgileri asla kopyalanmaz",
+        "importOne": "1 öğeyi içe aktar",
+        "importMany": "{{count}} öğeyi içe aktar",
+        "askedOne": "1 öğenin içe aktarılması istendi",
+        "askedMany": "{{count}} öğenin içe aktarılması istendi"
+      },
+      "importDone": {
+        "heading": "İçe aktarma tamamlandı",
+        "title": "{{name}}, {{app}} kaynağından aktarıldı",
+        "open": "Aç",
+        "stayed": "{{app}} içinde kalanlar: {{things}}. {{app}} içinde hiçbir şey değiştirilmedi.",
+        "unchanged": "{{app}} içinde hiçbir şey değiştirilmedi.",
+        "paused": "Hiçbir şey iki kez çalışmasın diye otomasyonlar duraklatıldı. Eski bot {{app}} içinde kapatıldıktan sonra otomasyonları açın."
+      },
       "cardKindHidden": {
         "description": "Bunu istediğiniz zaman şuradan değiştirebilirsiniz:",
         "settingsLink": "Ayarlar > Chat UI > Tur etkinliği",
@@ -20467,11 +20500,149 @@
       },
       "splitRight": "Sağa Böl",
       "splitDown": "Aşağı Böl",
+      "automationRun": {
+        "waitOver": "Bekleme sona erdi",
+        "scheduled": "Zamanlanmış",
+        "runNow": "Şimdi çalıştır",
+        "github": "GitHub",
+        "slack": "Slack",
+        "linear": "Linear",
+        "webhook": "Webhook",
+        "gmail": "Gmail",
+        "calendar": "Takvim",
+        "instructions": "Talimatlar",
+        "event": "Olay",
+        "startError": "Hata",
+        "couldNotStart": "Başlatılamadı",
+        "queued": "Sırada",
+        "deadlineReached": "Son tarihe ulaşıldı",
+        "due": "Planlanan: {{time}}",
+        "dueRan": "planlanan: {{due}}, çalıştı: {{ran}}",
+        "reused": "Yeniden kullanıldı: {{what}}",
+        "reusedFrom": "Yeniden kullanılan olay: {{what}} · {{time}}",
+        "whatOn": "{{where}} üzerinde: {{what}}",
+        "whatIn": "{{where}} içinde: {{what}}",
+        "whatAt": "{{what}} · {{where}}",
+        "factsAt": "{{facts}} · {{time}}",
+        "someoneWrote": "Biri şunu yazdı",
+        "personWrote": "{{name}} şunu yazdı",
+        "callerSent": "Çağıran şunu gönderdi",
+        "external": "Harici içerik · bota bilgi olarak gönderildi, talimat olarak değil",
+        "shortened": "Bota gönderildiği şekliyle 4.096 karaktere kısaltıldı.",
+        "memberAccess": "Bu çalıştırıldığında {{name}}, Kimler sorabilir listesindeydi.",
+        "someMemberAccess": "Bu çalıştırıldığında Kimler sorabilir listesindeki biri gönderdi.",
+        "otherAccess": "Kimler sorabilir listesinde değil veya erişim bilinmiyor.",
+        "ownerAccess": "Botun sahibinden.",
+        "sampleCall": "Örnek çağrı",
+        "firstCall": "İlk çağrı",
+        "webhookCall": "Webhook çağrısı",
+        "openOnGitHub": "GitHub'da aç",
+        "openInSlack": "Slack'te aç",
+        "openInLinear": "Linear'da aç",
+        "openLink": "Bağlantıyı aç",
+        "accessibleName": "Otomasyon çalıştırması. {{label}}: {{name}}. {{reason}}.",
+        "accessibleNameAt": "Otomasyon çalıştırması. {{label}}: {{name}}. {{reason}}. {{time}}.",
+        "accessibleNameNoReason": "Otomasyon çalıştırması. {{label}}: {{name}}.",
+        "accessibleNameNoReasonAt": "Otomasyon çalıştırması. {{label}}: {{name}}. {{time}}.",
+        "copyInstructions": "Talimatları kopyala",
+        "copyEvent": "Olayı kopyala",
+        "openAutomation": "Otomasyonu aç",
+        "sendAgain": "Yeniden gönder",
+        "sentAgain": "Yeniden gönderildi",
+        "showAll": "Tümünü göster",
+        "showLess": "Daha az göster",
+        "what": {
+          "github": {
+            "issue_opened": "Sorun açıldı",
+            "pr_opened": "Pull request açıldı",
+            "pr_pushed": "Push",
+            "pr_merged": "Merge edildi",
+            "comment": "Yorum",
+            "review_comment": "İnceleme yorumu",
+            "review": "İnceleme",
+            "mentioned": "Bahsetme",
+            "review_requested": "İnceleme istendi",
+            "assigned": "Atandı",
+            "ci_failed": "CI başarısız oldu",
+            "ci_finished": "CI tamamlandı",
+            "ci_passed": "CI başarılı oldu",
+            "pr_conflicted": "Conflict'ler",
+            "pr_closed": "Kapatıldı",
+            "pr_ready": "İncelemeye hazır",
+            "labeled": "Etiketlendi",
+            "issue_closed": "Sorun kapatıldı",
+            "deploy_finished": "Dağıtım tamamlandı",
+            "security_alert": "Güvenlik uyarısı",
+            "workflow_finished": "Workflow çalıştırması tamamlandı"
+          },
+          "slack": {
+            "mentioned": "Bahsetme",
+            "message": "Mesaj",
+            "reaction": "Tepki"
+          },
+          "linear": {
+            "assigned": "Atandı",
+            "mentioned": "Bahsetme",
+            "issue_created": "Sorun oluşturuldu",
+            "issue_moved": "Sorun taşındı"
+          },
+          "gmail": {
+            "new_email": "Yeni e-posta"
+          },
+          "calendar": {
+            "starting_soon": "Toplantı yakında başlıyor"
+          },
+          "other": "Olay"
+        },
+        "afterThirtyDays": "30 gün sonra",
+        "cancel": "İptal",
+        "cancelled": "İptal edildi",
+        "couldNotFinish": "Tamamlanamadı",
+        "createdAutomation": "Otomasyon oluşturuldu",
+        "finished": "Tamamlandı",
+        "happened": "Gerçekleşti",
+        "noDeadline": "Son tarih yok",
+        "noReplyBy": "{{time}} zamanına kadar yanıt yok",
+        "nothingBy": "{{time}} zamanına kadar bir şey olmadı",
+        "paused": "Duraklatıldı",
+        "replied": "{{actor}} yanıtladı",
+        "rowAccessibleName": "{{label}}: {{name}}. {{details}}",
+        "thenLine": "Ardından",
+        "thenOnce": "Gerçekleştiğinde bir kez çalışır",
+        "thenOnceBy": "Bir kez çalışır; hiçbir şey gelmezse {{time}} zamanında",
+        "until": "{{time}} zamanına kadar",
+        "updatedAutomation": "Otomasyon güncellendi",
+        "waiting": "Bekliyor",
+        "waitsFor": "Şunu bekler"
+      },
+      "eventRow": {
+        "showLess": "Daha az göster",
+        "showMore": "Daha fazla göster",
+        "running": "Çalışıyor",
+        "failed": "Başarısız"
+      },
       "dock": {
         "label": "Mesaj kutusu ve istemler"
       },
       "automationSaved": {
-        "openFullPage": "Sayfayı aç"
+        "resultsInRuns": "her çalıştırmada sonuçlar",
+        "paused": "duraklatıldı",
+        "webhookHint": "Hizmetinizi bu URL'ye yönlendirin",
+        "gettingUrl": "URL alınıyor…",
+        "editDraft": "“{{name}}” otomasyonunu şu şekilde değiştir: ",
+        "resultsInEachRun": "Her çalıştırmada",
+        "resultsChat": "Sohbet",
+        "noRuns": "Henüz çalıştırma yok",
+        "recentRuns": "Son çalıştırmalar",
+        "when": "Ne zaman",
+        "results": "Sonuçlar",
+        "agent": "Ajan",
+        "runNow": "Şimdi çalıştır",
+        "loading": "Yükleniyor",
+        "deleted": "Bu otomasyon silindi",
+        "loadFailed": "Bu otomasyon okunamadı",
+        "openFullPage": "Sayfayı aç",
+        "onAgent": "{{name}} üzerinde"
       },
       "usageLimitActions": {
         "handOff": "Ajana devret"
@@ -24308,7 +24479,6 @@
       "paste": {
         "remoteSignIn": "Uzaktan oturum açma"
       },
-      "allApps": "Tüm uygulamalar",
       "composio": {
         "withComposio": "Composio ile"
       },
@@ -24336,7 +24506,6 @@
           "usWest": "Batı ABD"
         }
       },
-      "onBot": "{{bot}} üzerinde",
       "line": {
         "vercel": "Dağıtımları kontrol edin ve günlüklerini okuyun",
         "sentry": "Hataları ve arkalarındaki olayları inceleyin",
@@ -24515,7 +24684,7 @@
       "controlOne": "{{person}}, {{name}} botunu kullanarak {{computer}} üzerinde sizin adınıza çalışabilir: komut çalıştırabilir, dosyaları açıp değiştirebilir ve bağlı hesaplarınızı kullanabilir.",
       "executionComputer": "bu ajanın çalıştığı bilgisayar",
       "here": "burada",
-      "reachSlack": "Slack'te @{{name}} olarak mesaj gönderme",
+      "reachSlack": "Slack'te {{name}} olarak mesaj gönderme",
       "reject": "Reddet",
       "there": "orada",
       "thisComputer": "bu bilgisayar",
@@ -24530,7 +24699,10 @@
       "paused": "Duraklatıldı",
       "resumeShort": "Devam ettir",
       "runNow": "Şimdi çalıştır",
-      "running": "Çalışıyor"
+      "running": "Çalışıyor",
+      "deleting": "Siliniyor…",
+      "deleteFailed": "{{name}} silinemedi",
+      "deleteDescription": "<name/> ve çalıştırma geçmişini sil."
     },
     "cloudSignIn": {
       "eventsHostChat": "{{source}} olayları için {{host}} üzerinde Orca Cloud oturumu açılması gerekiyor. Oturum açıldığında bu kuralı kaydedeceğim.",

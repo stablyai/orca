@@ -1554,7 +1554,7 @@
         "addedMany": "Added {{count}} lines",
         "forgotMany": "Forgot {{count}} lines",
         "changedMany": "Changed {{count}} lines",
-        "chat": "Chat \"{{title}}\"",
+        "chat": "Chat “{{title}}”",
         "aChat": "A chat",
         "chatFrom": "{{chat}} · from {{source}}",
         "kept": "Orca · {{chat}} wrote over it",
@@ -2729,7 +2729,9 @@
             "forwarded": "Forwarded port {{port}} from {{host}}",
             "opened": "Opened {{address}} in your default browser.",
             "otherMachine": "Couldn't forward port {{port}}: this workspace doesn't run on {{host}} itself.",
-            "useSshPorts": "Couldn't forward port {{port}} from {{host}}. Forward it in Ports, then try again."
+            "useSshPorts": "Couldn't forward port {{port}} from {{host}}. Forward it in Ports, then try again.",
+            "restoredMoved": "Forwarded port {{port}} from {{host}} to localhost:{{localPort}}",
+            "restoredMovedReason": "localhost:{{previousPort}} is in use on this computer."
           }
         }
       },
@@ -10014,7 +10016,9 @@
           "lucideDescription": "{{label}} icon with repo color",
           "defaultIcon": "Default",
           "cc76342291": "Use GitHub avatar",
-          "43bf3709dd": "Repo icon"
+          "43bf3709dd": "Repo icon",
+          "autoColor": "Automatic color (kept distinct from other projects)",
+          "lettersDescription": "Letters “{{text}}”"
         },
         "RepositoryPane": {
           "15a99d9b9f": "Relative paths resolve from this project root.",
@@ -16617,6 +16621,25 @@
         },
         "forkIndicator": {
           "forkOf": "Fork of {{repo}}"
+        },
+        "ProjectPeek": {
+          "openRemote": "Open {{value0}} in browser",
+          "folderProject": "Folder · not a git repo",
+          "noRemote": "Local git repo · no remote",
+          "openUpstream": "Open {{value0}} in browser",
+          "forkOf": "Fork of {{value0}}",
+          "openSettingsPage": "Open settings page",
+          "done": "Done",
+          "resetDone": "Icon and color reset",
+          "undo": "Undo",
+          "styleLetters": "Letters",
+          "stylePicture": "Picture",
+          "resetAppearance": "Reset icon & color",
+          "faviconPlaceholder": "Website for favicon",
+          "lettersInput": "Up to 2 letters",
+          "lettersPlaceholder": "1–2 letters",
+          "useLetters": "Use “{{value0}}”",
+          "usingGitHubAvatar": "Using the GitHub avatar"
         }
       },
       "pet": {
@@ -22810,6 +22833,9 @@
         "clearAllLabel_other": "Clear all {{count}} failed workers",
         "loadingWorker": "Loading worker…",
         "resultUnavailable": "Worker result unavailable",
+        "showDetails": "Show details",
+        "hideDetails": "Hide details",
+        "close": "Close",
         "workersRegion": "Workers",
         "doneResult": "Done · open result",
         "clearName": "Clear {{name}}",
@@ -25846,6 +25872,19 @@
       }
     }
   },
+  "tabStrip": {
+    "overflow": {
+      "chipOnlyName_one": "{{title}}, {{count}} tab",
+      "chipOnlyName_other": "{{title}}, {{count}} tabs",
+      "entryNeedsAttention": "{{title}}, needs attention",
+      "moreTabs_one": "{{count}} more tab",
+      "moreTabs_other": "{{count}} more tabs",
+      "needAttention_one": ", {{count}} needs attention",
+      "needAttention_other": ", {{count}} need attention",
+      "openTabs_one": "{{count}} open tab",
+      "openTabs_other": "{{count}} open tabs"
+    }
+  },
   "updates": {
     "installOnQuit": {
       "title": "Update ready to install",
@@ -28043,13 +28082,11 @@
         "refresh": "Refresh"
       },
       "setup": {
-        "install": "Install the Orca app",
         "close": "Close",
         "checking": "Checking GitHub…",
         "retry": "Try again",
         "installing": "Waiting for the install, or for an owner of the organization to approve…",
         "finish": "Done",
-        "title": "Add {{name}} to GitHub",
         "pushesAsYou": "{{name}} pushes code from this computer with your own git login.",
         "addMore": "Add repositories or an organization",
         "checkingInstalls": "Checking GitHub for changes…",
@@ -28058,7 +28095,6 @@
         "repositories": "Repositories",
         "isOn": "{{name}} is on GitHub",
         "new": "New",
-        "finishInBrowser": "Finish on GitHub in your browser…",
         "openAgain": "Open again",
         "added": "Added from GitHub: {{names}}.",
         "pushesOnHost": "{{name}} pushes code from {{host}} with its git login.",
@@ -28071,7 +28107,17 @@
           "reply": "On it."
         },
         "connectTitle": "Connect GitHub",
-        "manage": "Manage"
+        "manage": "Manage",
+        "cancel": "Cancel",
+        "installApp": "Install app",
+        "add": "Add",
+        "addTitle": "Add {{name}}",
+        "addShort": "Add",
+        "allRepos": "All repos",
+        "repoCount_one": "{{count}} repo",
+        "repoCount_other": "{{count}} repos",
+        "finishInYourBrowser": "Finish in your browser…",
+        "whoCanAsk": "Who can ask"
       },
       "account": {
         "defaultBot": "Default bot for my requests",
@@ -28107,7 +28153,6 @@
         "waiting": "Finish signing in to GitHub in your browser…",
         "requested": "An owner of the organization has been asked to approve the Orca app.",
         "notInstalled": "The Orca app is not on any of your repositories yet.",
-        "turnOn": "Turn on {{name}}",
         "connected": "GitHub connected.",
         "pickRepositories": "Sign in and choose which repositories {{name}} can work in.",
         "readsOnly": "Orca only reads your GitHub username and id."
@@ -28193,7 +28238,10 @@
       "openOnPage": "Open on Automations page",
       "pauseShort": "Pause",
       "resumeShort": "Resume",
-      "nextAt": "next {{time}}"
+      "nextAt": "next {{time}}",
+      "deleting": "Deleting…",
+      "deleteFailed": "Couldn’t delete {{name}}",
+      "deleteDescription": "Delete <name/> and its run history."
     },
     "access": {
       "thisComputer": "this computer",
@@ -28223,6 +28271,7 @@
       "controlBriefIfAdded": "Anyone you add can act as you here.",
       "controlBriefOnHost": "They can act as you on {{computer}}.",
       "controlBriefIfAddedOnHost": "Anyone you add can act as you on {{computer}}.",
+      "actsAsYou": "They act as you on {{computer}}.",
       "reachHeading": "What {{name}} can reach",
       "reachComputer": "Your files, commands and accounts on {{computer}}",
       "reachComputerDetail": "As you, as far as the permission below allows.",
@@ -28234,7 +28283,7 @@
       "codexNoSandbox": "No Codex sandbox.",
       "whoeverAskedApproves": "If it asks, whoever asked can approve.",
       "reachLinear": "Comment on, update and create Linear issues as you",
-      "reachSlack": "Post in Slack as @{{name}}",
+      "reachSlack": "Post in Slack as {{name}}",
       "reachGitHub": "Comment, review and push on GitHub as you",
       "trust": "Add only people you’d trust at your keyboard.",
       "adviceHeading": "Before you share",
@@ -28598,6 +28647,7 @@
       "sameComputer": "Bots in a group must be on the same computer.",
       "pairedComputersOnly": "Groups can add bots only from paired computers.",
       "needsLocalBot": "This group needs at least one bot on this computer.",
+      "pickLocalBot": "Pick a bot on this computer",
       "thisComputer": "This computer",
       "remoteNeedsChat": "Open a chat with {{name}} once, then add it to the group.",
       "remoteReplied": "Replied on {{computer}}",
@@ -28663,7 +28713,8 @@
         "hostDefault": "{{host}}’s default",
         "computerDefault": "This computer’s default",
         "changeInSettings": "Change in Settings",
-        "alsoConnected": "Also connected"
+        "alsoConnected": "Also connected",
+        "settingUp": "Setting up"
       },
       "copied": "Copied. Send it to your Google admin.",
       "share": {
@@ -28837,7 +28888,8 @@
         "signedIn": "✓ Signed in",
         "done": "✓ Done",
         "takeOver": "✓ {{bot}} takes over from here",
-        "chose": "✓ You chose {{what}}"
+        "chose": "✓ You chose {{what}}",
+        "stopped": "Setup stopped"
       },
       "ended": "This Google setup ended.",
       "heading": "Connect Google",
@@ -28881,7 +28933,8 @@
         "waiting": "Waiting for you",
         "working": "Working",
         "heading": "Setting up Google",
-        "you": "You"
+        "you": "You",
+        "stopped": "Stopped"
       },
       "letMe": "Let me do this one",
       "step": {
@@ -28928,7 +28981,8 @@
         "checkFailed": "Orca couldn’t check {{services}}."
       },
       "notNow": "Not now",
-      "importSetupFile": "Import setup file"
+      "importSetupFile": "Import setup file",
+      "stop": "Stop setup"
     },
     "import": {
       "nudgeOne": "We found a bot in {{app}}.",
@@ -28979,7 +29033,6 @@
     "composio": {
       "connectedAs": "Connected as {{label}}",
       "connected": "Connected",
-      "group": "More apps with Composio",
       "key": {
         "label": "Composio API key",
         "placeholder": "Paste your key",
@@ -29701,12 +29754,10 @@
       "duplicateSkill": "Same name, in {{folder}} · not shared"
     },
     "apps": {
-      "title": "Add to {{bot}}",
       "close": "Close",
       "signingIn": "Signing in",
       "add": "Add",
       "composio": {
-        "note": "These connect through your Composio account.",
         "browseAll": "Browse Composio apps",
         "searchCaption": "Composio apps",
         "allCaption": "All Composio apps",
@@ -29716,9 +29767,9 @@
         "accountThenCatalog": "Once, for all your bots. Then pick from all of Composio’s apps.",
         "keyStored": "Stored on this computer; bots never see it. Composio holds your app sign-ins.",
         "addKey": "Add key and continue",
-        "keyStoredOnHost": "Stored on {{host}}; bots never see it. Composio holds your app sign-ins."
+        "keyStoredOnHost": "Stored on {{host}}; bots never see it. Composio holds your app sign-ins.",
+        "signsIn": "Signs in through your Composio account."
       },
-      "allApps": "All apps",
       "closeKeepsSigningIn": "Sign-in continues in your browser",
       "openPageAgain": "Open page again",
       "webhooks": {
@@ -29731,7 +29782,9 @@
         "line": "Any MCP server {{bot}} should use",
         "failedLine": "{{app}} is on {{bot}} but not signed in. Try again, or remove it in Settings › Tools.",
         "done": "{{app}} is on {{bot}}",
-        "doneLine": "{{bot}} can use its tools from its next turn."
+        "doneLine": "{{bot}} can use its tools from its next turn.",
+        "name": "Custom",
+        "rowLine": "Any MCP server"
       },
       "couldNotSignIn": "Couldn’t sign in to {{app}}",
       "done": "Done",
@@ -29743,11 +29796,11 @@
       },
       "signInAllow": "Sign in to {{app}} and allow access.",
       "viaComposio": "via Composio",
-      "onBot": "On {{bot}}",
       "appsCaption": "Apps",
       "searchComposio": "Search Composio apps",
-      "searchMine": "Search On {{bot}}",
+      "searchAdded": "Search added apps",
       "search": "Search apps",
+      "filters": "App filters",
       "categories": "Categories",
       "addByUrl": "Add by URL",
       "noMatch": "No app matches “{{query}}”.",
@@ -29836,7 +29889,17 @@
         "box": "Files and folders",
         "miro": "Boards, sticky notes and frames",
         "reddit": "Posts, comments and subreddits"
-      }
+      },
+      "addAppsTitle": "Add apps to {{bot}}",
+      "addedCount": "{{count}} added",
+      "addedCaption": "Added",
+      "chip": {
+        "all": "All",
+        "composio": "Composio",
+        "more": "More"
+      },
+      "setUpNamed": "Set up {{name}}",
+      "setUp": "Set up"
     },
     "panel": {
       "idle": "Idle",

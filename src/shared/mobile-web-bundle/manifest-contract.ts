@@ -77,7 +77,11 @@ export const MobileWebBundleAssetSchema = z
       .max(MOBILE_WEB_BUNDLE_MAX_ASSET_BYTES)
       .optional(),
     /** A language-catalog chunk: shells that read catalogs from the host skip it; outside buildId. */
-    kind: z.literal('catalog').optional()
+    kind: z.literal('catalog').optional(),
+    /** Code (the diagram engine) that shells serving it on request fetch only when the page first asks;
+     *  outside buildId. A field of its own: a running older desktop drops it, where a new kind value would
+     *  refuse the whole manifest an in-place update wrote. */
+    deferred: z.literal(true).optional()
   })
   .strict()
 
