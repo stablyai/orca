@@ -61,6 +61,18 @@ export function installBrowserGuestExecution(
     }
     return owned.control('teardown') === true
   }
+  // Hosts stay watched and are removed through this world, even when the page-side teardown throws.
+  const retireHosts = (owned: Overlay | null, hosts: readonly Element[]): void => {
+    for (const host of hosts) {
+      retiredHosts.add(host)
+    }
+    try {
+      if (owned) {
+        tearDown(owned)
+      }
+    } catch {}
+    authority?.discard(hosts)
+  }
   const ownedHostsRemoved = (): boolean => {
     if (!authority) {
       return true
@@ -101,8 +113,9 @@ export function installBrowserGuestExecution(
         retiredOverlay = request.overlayId
       }
       if (overlay?.id === request.overlayId) {
-        tearDown(overlay)
+        const retired = overlay
         overlay = null
+        retireHosts(retired, retired.host ? [retired.host] : [])
       }
       return
     }
@@ -158,13 +171,7 @@ export function installBrowserGuestExecution(
           if (!control || retiredOverlay === request.id || (authority && !host)) {
             // A failed arm keeps every host it added under this preload's watch, so a later clean
             // stays negative until each one is verifiably detached, whatever its teardown claims.
-            for (const added of armed.added) {
-              retiredHosts.add(added)
-            }
-            if (control) {
-              tearDown({ id: request.id, control, host })
-            }
-            authority?.discard(armed.added)
+            retireHosts(control ? { id: request.id, control, host } : null, armed.added)
             if (!control) {
               throw new Error('Missing overlay control')
             }

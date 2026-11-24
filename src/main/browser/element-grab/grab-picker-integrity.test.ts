@@ -47,6 +47,28 @@ it('reports a clean page only when the overlay host it armed is really gone, wha
   await expect(executeGrabScript(guest, '', { clean: true })).resolves.toBe(true)
 })
 
+it('still removes a failed arm’s hosts when its page-side teardown throws, so the next clean succeeds', async () => {
+  const hosts: HTMLElement[] = []
+  const guest = guestWith(async (code) => {
+    if (code === 'ambiguous') {
+      for (let i = 0; i < 2; i++) {
+        const host = document.createElement('div')
+        host.id = '__orca-grab-host'
+        document.documentElement.appendChild(host)
+        hosts.push(host)
+      }
+      return () => {
+        throw new Error('page teardown failed')
+      }
+    }
+    return true
+  })
+
+  await expect(executeGrabScript(guest, 'ambiguous', { overlayControl: true })).resolves.toBe(false)
+  expect(hosts.map((host) => host.isConnected)).toEqual([false, false])
+  await expect(executeGrabScript(guest, '', { clean: true })).resolves.toBe(true)
+})
+
 it('keeps a clean negative after a failed arm until every overlay host it left is really gone', async () => {
   const hosts: HTMLElement[] = []
   const addHost = (parent: Element): HTMLElement => {
