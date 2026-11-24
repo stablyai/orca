@@ -5,7 +5,7 @@ import type {
 import { leadingJsonEnvelope } from '../../../shared/json-stream/json-rpc-record-prefix'
 import { mayHideKey } from './provider-relay-pending-requests'
 
-const MAX_MARKERS = 16
+const MAX_MARKERS = 32
 const MAX_NAME_CHARS = 128
 const MAX_PATH_DEPTH = 8
 const MAX_KEY_PARTS = 4
@@ -216,11 +216,12 @@ export class ProviderRelayWorkReader {
     if (scanned === null) {
       return false
     }
-    const escaped = mayEscapeValue(line)
+    // Only a line its name can match is searched for values or escapes; others cost one scan.
+    let escaped: boolean | undefined
     return this.needles.some(
       (marker) =>
         (scanned === undefined ? line.includes(marker.quoted) : marker.name === scanned) &&
-        (escaped || marker.values.every((value) => line.includes(value)))
+        ((escaped ??= mayEscapeValue(line)) || marker.values.every((value) => line.includes(value)))
     )
   }
 

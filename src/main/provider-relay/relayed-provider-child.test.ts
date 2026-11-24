@@ -40,4 +40,54 @@ describe('relayed provider child', () => {
     expect(order).toEqual(['ask', 'two', 'exit:0'])
     expect(child.exited).toEqual({ code: 0, signal: null })
   })
+
+  it('an agent that exits while its output is held for a reattach waits for the chat, then ends', async () => {
+    let sink: ProviderRelaySink | null = null
+    const acks: number[] = []
+    const channel = {
+      bind: (_relayId: string, bound: ProviderRelaySink) => {
+        sink = bound
+        return () => {}
+      },
+      attach: async () => {
+        sink?.line('relayData', 5, 'five')
+        return {
+          replayThroughSeq: 5,
+          pending: [],
+          maxClientRequestId: null,
+          initializeResultSent: false,
+          stderrTail: '',
+          exit: null
+        }
+      },
+      ack: async (_relayId: string, seq: number) => {
+        acks.push(seq)
+        return {}
+      },
+      close: async () => ({})
+    } as unknown as ProviderRelayChannel
+    const child = new RelayedProviderChild({
+      channel,
+      relayId: 'r',
+      pid: 42,
+      policy,
+      passWhileHeld: () => false
+    })
+    const order: string[] = []
+    child.stdout.on('data', (chunk: Buffer) => order.push(...chunk.toString().trim().split('\n')))
+    child.on('exit', (code) => order.push(`exit:${code}`))
+    await child.start(4)
+    sink?.line('relayData', 6, 'six')
+    sink?.exit({ code: 0, signal: null })
+    await new Promise((resolve) => setTimeout(resolve, 20))
+    // The chat isn't ready yet: nothing reaches it, nothing is acked, and it hasn't ended.
+    expect(order).toEqual([])
+    expect(acks).toEqual([])
+    expect(child.exited).toBeNull()
+
+    child.releaseOutput()
+    await new Promise((resolve) => child.once('close', resolve))
+    expect(order).toEqual(['five', 'six', 'exit:0'])
+    expect(acks).toEqual([6])
+  })
 })

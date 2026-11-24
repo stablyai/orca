@@ -50,6 +50,8 @@ export class RelayedProviderChild extends EventEmitter implements ProviderChild 
   /** What the first attach reported: request id floor, cached initialize answer, stderr, exit. */
   attachResult: ProviderRelayAttachResult | null = null
   private state: RelayState = 'attaching'
+  /** An end that came while output was held; it runs once the output is released. */
+  private parkedEnd: { exit: ProviderRelayExit; lost: boolean } | null = null
   private exitStatus: ProviderRelayExit | null = null
   private unbind: (() => void) | null = null
   private readonly output: RelayedProviderOutput
@@ -137,9 +139,16 @@ export class RelayedProviderChild extends EventEmitter implements ProviderChild 
   /** Lets held output through, in order, once the consumer can route it. */
   releaseOutput(): void {
     this.output.release()
+    const parked = this.parkedEnd
+    this.parkedEnd = null
+    if (parked) {
+      this.end(parked.exit, parked.lost)
+    }
   }
 
   kill(signal?: NodeJS.Signals | number): boolean {
+    // A chat that gives up before it was ready still hears the agent's end, after its output.
+    this.releaseOutput()
     if (this.state === 'exited' || this.state === 'detached') {
       return false
     }
@@ -151,6 +160,7 @@ export class RelayedProviderChild extends EventEmitter implements ProviderChild 
   }
 
   close(grace?: 'brief'): Promise<void> {
+    this.releaseOutput()
     if (this.state === 'exited' || this.state === 'detached') {
       return Promise.resolve()
     }
@@ -268,8 +278,11 @@ export class RelayedProviderChild extends EventEmitter implements ProviderChild 
     if (this.state === 'exited' || this.state === 'detached') {
       return
     }
-    // Held output still goes out first: the consumer must see what the agent said before it ended.
-    this.releaseOutput()
+    // Output held for a reattach waits for its chat: the end comes after it, never before the chat exists.
+    if (this.output.holding) {
+      this.parkedEnd ??= { exit, lost }
+      return
+    }
     this.state = 'exited'
     this.exitStatus = exit
     this.exitCode = exit.code

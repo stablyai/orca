@@ -85,6 +85,11 @@ export class RelayedProviderOutput {
     this.deliver(seq, this.deliveredPending.has(seq) ? null : line)
   }
 
+  /** Output waits for the chat to be ready (`release()`). */
+  get holding(): boolean {
+    return this.held !== null
+  }
+
   release(): void {
     const held = this.held
     this.held = null
