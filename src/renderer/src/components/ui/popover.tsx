@@ -222,7 +222,9 @@ function PopoverArrow({
     <PopoverPrimitive.Arrow
       data-slot="popover-arrow"
       className={cn(
-        tone === 'pointer' ? 'fill-floating-surface' : 'fill-popover',
+        tone === 'pointer'
+          ? 'fill-floating-surface border border-black/14 dark:border-white/14'
+          : 'fill-popover',
         '!visible block overflow-visible',
         className
       )}
