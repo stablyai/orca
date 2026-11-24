@@ -20,7 +20,17 @@ const READ_TOOLS: ReadonlySet<string> = new Set([
   'notebookread',
   'bashoutput',
   'listmcpresourcestool',
-  'readmcpresourcetool'
+  'readmcpresourcetool',
+  'todoread',
+  'read_file',
+  'read_many_files',
+  'list_directory',
+  'search_file_content',
+  'google_web_search',
+  'view_image',
+  'taskoutput',
+  'exitplanmode',
+  'askuserquestion'
 ])
 
 /** Programs that only read, each with the arguments that would make it write or run something. */
@@ -35,9 +45,9 @@ const READ_PROGRAMS: Record<string, (args: readonly string[]) => boolean> = {
   wc: () => true,
   grep: () => true,
   egrep: () => true,
-  rg: (args) => !args.some((word) => word.startsWith('--pre')),
+  rg: (args) => !args.some((word) => /^--(pre|hostname-bin)/.test(word)),
   find: (args) => !args.some((word) => /^-(exec|execdir|ok|okdir|delete|fprint|fls)/.test(word)),
-  tree: () => true,
+  tree: (args) => !args.some((word) => /^-[^-]*o/.test(word)),
   file: () => true,
   stat: () => true,
   du: () => true,
@@ -45,12 +55,13 @@ const READ_PROGRAMS: Record<string, (args: readonly string[]) => boolean> = {
   which: () => true,
   date: () => true,
   whoami: () => true,
-  sort: (args) => !args.some((word) => /^(-o|--output)/.test(word)),
+  sort: (args) => !args.some((word) => /^(-[^-]*o|--output|--compress-program)/.test(word)),
   uniq: (args) => args.length <= 1,
   cut: () => true,
   tr: () => true,
   jq: () => true,
-  sed: (args) => !args.some((word) => /^(-i|--in-place|-[^-]*i)/.test(word)),
+  // Only `sed -n '<lines>p'`: a sed script can write files (w) or run commands (e).
+  sed: ([flag, script]) => flag === '-n' && /^\$?\d*(,\$?\d*)?p$/.test(script ?? ''),
   diff: () => true,
   cmp: () => true,
   basename: () => true,
@@ -83,7 +94,12 @@ const GIT_READS = new Set([
 
 function gitReads(args: readonly string[]): boolean {
   const [sub, ...rest] = args
-  if (args.some((word) => word.startsWith('-c') || /^(--output|--exec|--ext-diff)/.test(word))) {
+  if (
+    args.some(
+      (word) =>
+        word.startsWith('-c') || /^(-O|--output|--exec|--ext-diff|--open-files-in-pager)/.test(word)
+    )
+  ) {
     return false
   }
   if (sub === 'branch' || sub === 'remote') {
@@ -124,7 +140,6 @@ const ORCA_READS: readonly (readonly string[])[] = [
   ['repo', 'list'],
   ['worktree', 'ps'],
   ['worktree', 'list'],
-  ['orchestration', 'check'],
   ['orchestration', 'inbox'],
   ['orchestration', 'task-list'],
   ['orchestration', 'worker-list'],
@@ -136,7 +151,7 @@ const ORCA_READS: readonly (readonly string[])[] = [
 
 function orcaReads(args: readonly string[]): boolean {
   return (
-    !args.some((word) => /^--(join|download|out)/.test(word)) &&
+    !args.some((word) => /^--(join|download|out|offer)/.test(word)) &&
     ORCA_READS.some((path) => path.every((word, index) => args[index] === word))
   )
 }
@@ -152,9 +167,9 @@ export function shellCommandOnlyReads(command: string): boolean {
   const line = unwrapShell(command)
     .replaceAll('"${ORCA_CLI_COMMAND:-orca}"', 'orca')
     .replace(/\s2>&1/g, ' ')
-    .replace(/\s2?>\s*\/dev\/null/g, ' ')
+    .replace(/\s2?>\s*\/dev\/null(?=\s|$)/g, ' ')
   // Redirection, substitution, background jobs and here-docs can write or run anything.
-  if (/[>`]|\$\(|<<|(?<!&)&(?!&)/.test(line)) {
+  if (/[>`]|\$\(|<<|<\(|(?<!&)&(?!&)/.test(line)) {
     return false
   }
   const commands = line.split(/&&|\|\||[;|\n]/)
@@ -167,6 +182,19 @@ export function shellCommandOnlyReads(command: string): boolean {
     const reads = program !== undefined && Object.hasOwn(READ_PROGRAMS, program)
     return reads && READ_PROGRAMS[program!]!(args)
   })
+}
+
+/** Whether a journal item is work that may have changed something: an edit recorded as a diff
+ *  (Codex and Pi file changes), or a tool call not known to only read. */
+export function journalItemHasSideEffects(body: {
+  kind: string
+  name?: string
+  input?: unknown
+}): boolean {
+  return (
+    body.kind === 'diff' ||
+    (body.kind === 'tool-call' && toolCallHasSideEffects(body.name ?? '', body.input))
+  )
 }
 
 /** Whether a tool call may have changed something: false only for a call known to only read. */

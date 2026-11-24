@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { toolCallHasSideEffects } from './tool-call-side-effects'
+import { journalItemHasSideEffects, toolCallHasSideEffects } from './tool-call-side-effects'
 
 // The thread's "check before asking again" note and the hidden retry both hang on this: a call that
 // may have acted must never pass as a read.
@@ -13,7 +13,8 @@ describe('toolCallHasSideEffects', () => {
       ['Bash', { command: 'gh pr view 12 --json state 2>&1' }],
       ['Bash', { command: '"${ORCA_CLI_COMMAND:-orca}" bot item show 4' }],
       ['shell', { command: "/bin/zsh -lc 'cat a.txt'" }],
-      ['read', { command: "bash -lc 'sed -n 1,20p a.ts'" }]
+      ['read', { command: "bash -lc 'sed -n 1,20p a.ts'" }],
+      ['read_file', { path: 'a.ts' }]
     ]
     const acts: [string, unknown][] = [
       ['Edit', { file_path: 'a.ts' }],
@@ -30,9 +31,15 @@ describe('toolCallHasSideEffects', () => {
       ['Bash', { command: '"${ORCA_CLI_COMMAND:-orca}" bot reply --text hi' }],
       ['read', { command: "bash -lc 'cat a; npm install'" }],
       ['Bash', { command: 'cat $(make)' }],
-      ['Bash', {}]
+      ['Bash', {}],
+      ['Bash', { command: 'diff <(rm -rf x) a' }],
+      ['Bash', { command: "sed -n '1w /tmp/x' a" }],
+      ['Bash', { command: 'sort -uo out in' }],
+      ['Bash', { command: 'orca orchestration check' }],
+      ['Bash', { command: 'cat a > /dev/nullx' }]
     ]
     expect(reads.filter(([name, input]) => toolCallHasSideEffects(name, input))).toEqual([])
     expect(acts.filter(([name, input]) => !toolCallHasSideEffects(name, input))).toEqual([])
+    expect(journalItemHasSideEffects({ kind: 'diff' })).toBe(true)
   })
 })

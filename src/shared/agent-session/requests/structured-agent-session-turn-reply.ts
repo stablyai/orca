@@ -1,10 +1,10 @@
 import type { AgentJournalRenderItem } from '../journal/agent-session-journal-types'
 import { structuredAgentSessionTurnAssistantMessage } from './structured-agent-session-latest-request'
-import { toolCallHasSideEffects } from './tool-call-side-effects'
+import { journalItemHasSideEffects } from './tool-call-side-effects'
 
 /** What a turn's end tells the request it answered: its newest root prose
  *  (structuredAgentSessionTurnAssistantMessage), and whether a tool call inside it, a sub-agent's
- *  included, may have changed something (toolCallHasSideEffects); reads alone don't count. */
+ *  included, may have changed something (journalItemHasSideEffects); reads alone don't count. */
 export function structuredAgentSessionTurnReply(
   items: readonly AgentJournalRenderItem[],
   turnItemId: string
@@ -13,10 +13,9 @@ export function structuredAgentSessionTurnReply(
     prose: structuredAgentSessionTurnAssistantMessage(items, turnItemId),
     toolsRan: items.some(
       (item) =>
-        item.body.kind === 'tool-call' &&
         item.turnScope?.kind === 'turn' &&
         item.turnScope.turnItemId === turnItemId &&
-        toolCallHasSideEffects(item.body.name, item.body.input)
+        journalItemHasSideEffects(item.body)
     )
   }
 }
