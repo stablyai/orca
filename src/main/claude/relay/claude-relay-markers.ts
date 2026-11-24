@@ -3,6 +3,7 @@ import {
   type ProviderRelayWorkMarkers
 } from '../../provider-relay/app-provider-relays'
 import { claudeRelayAckFloor } from './claude-relay-ack-floor'
+import { CLAUDE_RELAY_ITEM_CONTINUATION } from './claude-relay-continuation'
 
 /** Recorded with each Claude relay; this build reattaches it. */
 export const CLAUDE_RELAY_AGENT = 'claude-code'
@@ -23,6 +24,7 @@ const TERMINAL_STATUSES = ['completed', 'failed', 'killed', 'stopped']
 export const CLAUDE_RELAY_WORK_MARKERS: ProviderRelayWorkMarkers = {
   agent: CLAUDE_RELAY_AGENT,
   ackFloor: claudeRelayAckFloor,
+  continuation: CLAUDE_RELAY_ITEM_CONTINUATION,
   // The CLI's keep-alive while a request is open, every 30 s; the SDK only reads a startup mark off it.
   quiet: ['keep_alive'],
   markers: [

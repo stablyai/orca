@@ -137,11 +137,14 @@ export function journalClaudeMessage(
     messageBody ??
     ordinaryFailure
   const terminalIdentity = terminal && ctx.turn.identity && usageLimit ? ctx.turn.identity : null
-  const identity =
-    (body && envelope.role === 'assistant'
-      ? ctx.streamedBlocks.reconcile(envelope)?.identity
-      : null) ?? claudeMessageIdentity(envelope)
+  const streamed =
+    body && envelope.role === 'assistant' ? ctx.streamedBlocks.reconcile(envelope) : null
+  const identity = streamed?.identity ?? claudeMessageIdentity(envelope)
   ctx.streamedText.forget(agentJournalItemKey(identity))
+  if (streamed?.retired) {
+    ctx.streamedText.forget(agentJournalItemKey(streamed.retired))
+    ctx.sink.appendTombstone(streamed.retired, { lifecycle: true })
+  }
   const thinking = ctx.streamedThinking.finalize(outputEnvelope, observedAt)
   if (body) {
     // Open before appending so backward scans include the turn's first output.

@@ -12,10 +12,21 @@ export type ClaudeStreamedTextDelta = {
   startedAt: number
 }
 
-export type StreamedBlock = { identity: AgentJournalItemIdentity; startedAt: number }
+export type StreamedBlock = {
+  identity: AgentJournalItemIdentity
+  startedAt: number
+  index: number
+  /** A relay continuation's own row, which its final frame retires (see `reconcile`). */
+  retired?: AgentJournalItemIdentity
+}
+
+/** On a stream line, the relay continuation a cut replay moved its message to. */
+export const CLAUDE_RELAY_CONTINUATION_KEY = 'orca_relay_continuation'
 
 type StreamedMessage = {
   messageId: string | null
+  /** The message's start was cut from a replay: it streams under a continuation id. */
+  continuation: boolean
   stopped: boolean
   blocks: Map<number, StreamedBlock>
   /** Await final frames in block order for both text and thinking. */
@@ -48,10 +59,17 @@ export function createClaudeStreamedBlockRegistry(
 ): ClaudeStreamedBlockRegistry {
   const messages = new Map<string, StreamedMessage>()
 
-  const messageFor = (scope: string): StreamedMessage => {
+  const messageFor = (scope: string, frame: Record<string, unknown>): StreamedMessage => {
     let streamed = messages.get(scope)
     if (!streamed) {
-      streamed = { messageId: null, stopped: false, blocks: new Map(), awaitingFinal: [] }
+      const continuation = claudeText(frame[CLAUDE_RELAY_CONTINUATION_KEY])
+      streamed = {
+        messageId: continuation,
+        continuation: continuation !== null,
+        stopped: false,
+        blocks: new Map(),
+        awaitingFinal: []
+      }
       messages.set(scope, streamed)
     }
     return streamed
@@ -69,7 +87,7 @@ export function createClaudeStreamedBlockRegistry(
       sessionId,
       uuid: streamed.messageId ? claudeSourceBlockId(streamed.messageId, index) : uuid
     }
-    const block = { identity, startedAt }
+    const block = { identity, startedAt, index }
     streamed.blocks.set(index, block)
     streamed.awaitingFinal.push(block)
     return block
@@ -88,6 +106,7 @@ export function createClaudeStreamedBlockRegistry(
       if (event.type === 'message_start') {
         messages.set(scope, {
           messageId: claudeText(claudeRecord(event.message)?.id),
+          continuation: false,
           stopped: false,
           blocks: new Map(),
           awaitingFinal: []
@@ -110,7 +129,7 @@ export function createClaudeStreamedBlockRegistry(
         if (block?.type !== blockType) {
           return null
         }
-        const started = mint(messageFor(scope), sessionId, index, uuid, observedAt)
+        const started = mint(messageFor(scope, frame), sessionId, index, uuid, observedAt)
         const text = claudeText(block[blockType])
         return text ? { ...started, text, parentToolUseId } : null
       }
@@ -122,7 +141,7 @@ export function createClaudeStreamedBlockRegistry(
       if (!text) {
         return null
       }
-      const streamed = messageFor(scope)
+      const streamed = messageFor(scope, frame)
       const started =
         streamed.blocks.get(index) ?? mint(streamed, sessionId, index, uuid, observedAt)
       return { ...started, text, parentToolUseId }
@@ -130,13 +149,27 @@ export function createClaudeStreamedBlockRegistry(
     reconcile: (frame) => {
       const scope = scopeKey(frame.sessionId, frame.parentToolUseId)
       const streamed = messages.get(scope)
+      // A continuation's final names the real message: it goes on the row saved before the cut.
+      const moved = streamed?.continuation === true && frame.messageId !== null
       if (
         !streamed ||
-        (frame.messageId && streamed.messageId && frame.messageId !== streamed.messageId)
+        (!moved && frame.messageId && streamed.messageId && frame.messageId !== streamed.messageId)
       ) {
         return null
       }
-      const block = streamed.awaitingFinal.shift() ?? null
+      const shifted = streamed.awaitingFinal.shift() ?? null
+      const block =
+        moved && shifted && frame.messageId
+          ? {
+              ...shifted,
+              identity: {
+                provider: 'claude' as const,
+                sessionId: frame.sessionId,
+                uuid: claudeSourceBlockId(frame.messageId, shifted.index)
+              },
+              retired: shifted.identity
+            }
+          : shifted
       if (
         streamed.awaitingFinal.length === 0 &&
         (streamed.messageId === null || streamed.stopped)

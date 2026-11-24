@@ -19,6 +19,16 @@ function keptSession(sessions: Sessions, sessionId: string): ClaudeSession | nul
 // for one. Two picks it can't take still start a fresh agent: "your Claude settings" (no mode to
 // send), and Full access once Claude refused bypass (only a flagged launch allows it).
 
+const BUILD_MODES: ReadonlySet<string> = new Set<PermissionMode>([
+  'default',
+  'acceptEdits',
+  'bypassPermissions',
+  'dontAsk',
+  'auto'
+])
+const isBuildMode = (mode: string | undefined): mode is PermissionMode =>
+  mode !== undefined && BUILD_MODES.has(mode)
+
 const bypassRefused = (session: ClaudeSession, mode: AgentChatPermissionChoice): boolean =>
   mode === 'full-access' && session.bypassDisabled === true
 
@@ -48,13 +58,14 @@ export function applyKeptClaudeLaunchMode(
   session: ClaudeSession,
   timeoutMs: number | undefined
 ): Promise<void> {
-  const wanted = session.launchIntent?.permissionMode
+  const launched = session.launchIntent?.permissionMode
+  const wanted = isBuildMode(launched) ? launched : undefined
   if (wanted && session.savedPlan === true) {
     // Saved in Plan, so the agent may still be in it: leaving Plan writes this mode.
     session.appliedInputOptions.set('buildPermissionMode', wanted)
   }
   return wanted && session.savedPlan !== true
-    ? applyBuildMode(session, wanted as PermissionMode, timeoutMs)
+    ? applyBuildMode(session, wanted, timeoutMs)
     : Promise.resolve()
 }
 

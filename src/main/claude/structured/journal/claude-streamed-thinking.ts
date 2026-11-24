@@ -117,10 +117,16 @@ export function createClaudeStreamedThinking(deps: {
       const identity =
         streamed?.identity ?? claudeThinkingIdentity(envelope.sessionId, envelope.uuid)
       const key = agentJournalItemKey(identity)
+      const retired = streamed?.retired ? agentJournalItemKey(streamed.retired) : key
       // A textless final frame still closes its streamed row.
-      const text = claudeThinkingText(envelope) ?? checkpoints.latest(key) ?? ''
-      checkpoints.forget(key)
-      open.delete(key)
+      const text = claudeThinkingText(envelope) ?? checkpoints.latest(retired) ?? ''
+      for (const each of new Set([key, retired])) {
+        checkpoints.forget(each)
+        open.delete(each)
+      }
+      if (streamed?.retired) {
+        deps.sink.appendTombstone(streamed.retired, { lifecycle: true })
+      }
       const body = journalReasoningBody(
         text,
         endedJournalReasoning(streamed ? observedAt : undefined)
