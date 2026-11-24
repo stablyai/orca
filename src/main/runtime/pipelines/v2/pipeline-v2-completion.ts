@@ -3,7 +3,7 @@ import type {
   PipelineV2Run
 } from '../../../../shared/pipelines/v2/pipeline-v2-run-contracts'
 import { pipelineV2ReviewRequirements } from '../../../../shared/pipelines/v2/pipeline-v2-review-policy'
-import { pipelineV2FindingLedger } from './pipeline-v2-finding-ledger'
+import { pipelineV2FindingLedger, acceptedPipelineV2Disputes } from './pipeline-v2-finding-ledger'
 import { pipelineV2FindingId } from '../../../../shared/pipelines/v2/pipeline-v2-findings'
 
 export type PipelineV2CompletionResult = {
@@ -78,6 +78,7 @@ export function evaluatePipelineV2SourceEvidence(
       return failed()
     }
   }
+  const acceptedDisputes = acceptedPipelineV2Disputes(run, currentSource)
   for (const requirement of policy.reviewRequirements) {
     const required = pipelineV2ReviewRequirements(requirement)
     const accepted = latestAccepted(run, requirement.stageId, currentSource)
@@ -92,7 +93,9 @@ export function evaluatePipelineV2SourceEvidence(
       accepted.invocation.session?.kind === 'checks' ||
       !requirement.acceptedOutcomeIds.includes(accepted.result.outcomeId) ||
       accepted.result.evidence.stage !== 'review' ||
-      accepted.result.evidence.findings.some((value) => value.severity !== 'minor') ||
+      accepted.result.evidence.findings.some(
+        (value) => value.severity !== 'minor' && !acceptedDisputes.has(pipelineV2FindingId(value))
+      ) ||
       run.invocations.some(
         (value) =>
           (required.freshSession

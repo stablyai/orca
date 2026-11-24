@@ -1,4 +1,4 @@
-import { z } from 'zod'
+import * as z from 'zod'
 import { pipelineV2Digest, pipelineV2Id, pipelineV2Text } from './pipeline-v2-values'
 
 export const PipelineV2Target = z.discriminatedUnion('kind', [
@@ -70,6 +70,7 @@ export const PipelineV2CompletionPolicy = z.discriminatedUnion('kind', [
   z.strictObject({
     kind: z.literal('reviewed_source'),
     findingPolicy: z.enum(['latest_review', 'tracked']).optional(),
+    findingDisputes: z.enum(['owner_acknowledgment', 'stage_rationale']).optional(),
     checkRequirements: z
       .array(
         z.strictObject({ stageId: pipelineV2Id, checkIds: z.array(pipelineV2Id).min(1).max(16) })

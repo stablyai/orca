@@ -14,7 +14,7 @@ async function recover(
 ) {
   const run = await scopedPipelineV2(ctx, input)
   const service = ctx.runtime.pipelineRuntime
-  const previous = service.store.receiptV2(input.id, input.requestId)
+  const previous = await service.store.receiptV2(input.id, input.requestId)
   if (previous) {
     if (
       previous.kind !== kind ||
@@ -49,14 +49,14 @@ async function recover(
       !invocation.session ||
       (!response &&
         !(invocation.session.kind === 'checks'
-          ? service.store.completedCheckEffect(`pipeline-v2:${invocation.id}`)
+          ? await service.store.completedCheckEffect(`pipeline-v2:${invocation.id}`)
           : await service.v2Ports.settled(invocation.dispatchId)))
     ) {
       throw new Error('pipeline_reconciliation_required')
     }
     command = { kind, invocationId: invocation.id, ...(response ? { response } : {}) }
   } else {
-    service.store.templatesV2.resolve({
+    await service.store.templatesV2.resolve({
       engineVersion: 2,
       projectId: run.workspace.projectId,
       id: run.definition.id,
@@ -67,7 +67,7 @@ async function recover(
   }
   await service.assertWorkspace(run.workspace)
   assertPipelineV2Runtime(ctx, input.expectedRuntimeId)
-  let next = service.store.commandV2(input.id, {
+  let next = await service.store.commandV2(input.id, {
     requestId: input.requestId,
     expectedRevision: input.expectedRevision,
     expectedInstanceId: input.expectedInstanceId,
@@ -79,7 +79,7 @@ async function recover(
   service.wake()
   return {
     contractVersion: 2 as const,
-    receipt: service.store.receiptV2(input.id, input.requestId),
+    receipt: await service.store.receiptV2(input.id, input.requestId),
     run: pipelineV2Summary(next)
   }
 }

@@ -1,5 +1,5 @@
-import { z } from 'zod'
-import type { PipelineStore } from '../pipeline-store'
+import * as z from 'zod'
+import type { PipelineStorePort } from '../pipeline-store-port'
 import type { PipelineV2Run } from '../../../../shared/pipelines/v2/pipeline-v2-run-contracts'
 import type { RuntimeClientEvent } from '../../../../shared/remote-runtime/session-graph/runtime-client-events'
 import {
@@ -15,9 +15,9 @@ const query = z.strictObject({
   cursor: pipelineV2Revision.default(0),
   limit: z.number().int().min(1).max(50).default(50)
 })
-export function pipelineV2Events(store: PipelineStore, raw: unknown) {
+export async function pipelineV2Events(store: PipelineStorePort, raw: unknown) {
   const input = query.parse(raw)
-  const run = store.getV2(input.id)
+  const run = await store.getV2(input.id)
   if (
     input.projectId !== run.workspace.projectId ||
     input.workspaceId !== run.workspace.id ||
@@ -28,7 +28,7 @@ export function pipelineV2Events(store: PipelineStore, raw: unknown) {
   if (input.cursor > run.eventSequence) {
     throw new Error('pipeline_cursor_invalid')
   }
-  return store.eventsV2(input.id, input.cursor, input.limit)
+  return await store.eventsV2(input.id, input.cursor, input.limit)
 }
 export function publishPipelineV2Change(
   publish: ((event: RuntimeClientEvent) => void) | undefined,

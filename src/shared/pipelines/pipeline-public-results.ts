@@ -1,4 +1,4 @@
-import { z } from 'zod'
+import * as z from 'zod'
 import { PipelineStage, PipelineWorkspace, PipelineSelection } from './pipeline-contracts'
 import { PipelineStageEvidence } from './pipeline-stage-evidence'
 

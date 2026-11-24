@@ -1,4 +1,4 @@
-import type { PipelineStore } from '../pipeline-store'
+import type { PipelineStorePort } from '../pipeline-store-port'
 import type { Worktree } from '../../../../shared/worktree/types'
 import { PipelineV2CreationSnapshot } from '../../../../shared/pipelines/v2/pipeline-v2-admission-contracts'
 import { PipelineV2TemplateSelection } from '../../../../shared/pipelines/v2/pipeline-v2-template-contracts'
@@ -7,7 +7,7 @@ import { pipelineV2Fingerprint } from '../../../../shared/pipelines/v2/pipeline-
 import { pipelineCommit, pipelineSourceRevision } from '../pipeline-evidence'
 
 export async function bindAdmittedPipelineV2(
-  store: PipelineStore,
+  store: PipelineStorePort,
   worktree: Pick<Worktree, 'id' | 'instanceId' | 'repoId' | 'path'>,
   rawSelection: unknown,
   rawTask: unknown,
@@ -16,7 +16,7 @@ export async function bindAdmittedPipelineV2(
 ) {
   const selection = PipelineV2TemplateSelection.parse(rawSelection)
   const task = PipelineV2Task.parse(rawTask)
-  const snapshot = PipelineV2CreationSnapshot.parse(store.creationSnapshotV2(creationId))
+  const snapshot = PipelineV2CreationSnapshot.parse(await store.creationSnapshotV2(creationId))
   if (
     pipelineV2Fingerprint(selection) !== pipelineV2Fingerprint(snapshot.selection) ||
     task !== snapshot.task ||
@@ -35,7 +35,7 @@ export async function bindAdmittedPipelineV2(
     hostId: 'local' as const
   }
   const key = pipelineV2Fingerprint({ creationId })
-  return store.createV2({
+  return await store.createV2({
     id: `v2:${key.slice(0, 48)}`,
     requestId: `create:${key}`,
     workspace,

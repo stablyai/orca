@@ -14,7 +14,7 @@ export async function preparePipelineV2Creation(
   payload: unknown
 ) {
   const service = runtime.pipelineRuntime
-  const previous = service.store.creationV2(creationId, payload)
+  const previous = await service.store.creationV2(creationId, payload)
   if (previous) {
     if (!previous.run) {
       throw new Error('pipeline_create_reconciliation_required')

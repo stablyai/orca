@@ -67,6 +67,7 @@ export function lightPipelineV2Preset(
         ? {
             kind: 'reviewed_source',
             findingPolicy: 'tracked',
+            findingDisputes: 'stage_rationale',
             checkRequirements: [{ stageId: 'checks', checkIds: checks.executor.checkIds }],
             reviewRequirements: [
               {

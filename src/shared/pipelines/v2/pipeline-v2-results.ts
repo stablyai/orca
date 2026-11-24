@@ -1,4 +1,4 @@
-import { z } from 'zod'
+import * as z from 'zod'
 import { PipelineCheckResult } from '../pipeline-stage-evidence'
 import { PipelineSessionBinding } from './pipeline-v2-run-contracts'
 import {

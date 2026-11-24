@@ -79,18 +79,22 @@ it('treats incomplete checks as unknown, preserves the fix budget and reconciles
 })
 
 it('reconciles post-check source edits only after the running check transport settles', async () => {
+  let signalStarted!: () => void
+  const started = new Promise<void>((resolve) => {
+    signalStarted = resolve
+  })
   let finish!: () => void
   const gate = new Promise<void>((resolve) => {
     finish = resolve
   })
   const current = fixture(async () => {
+    signalStarted()
     await gate
     current.ports.sourceRevision = async () => 'b'.repeat(40)
     return { passed: true, body: 'unit: exit 0' }
   })
   const running = current.controller.advance(current.run.id)
-  await Promise.resolve()
-  await Promise.resolve()
+  await started
   expect((await current.controller.reconcile(current.run.id)).active?.sessionId).toBe(
     'runtime-checks'
   )

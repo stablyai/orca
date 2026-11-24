@@ -218,7 +218,7 @@ class OrcaRuntimeService extends OrcaRuntimeWithPipelines {
     this.botChatTreeIndex = runtimeBotChatTreeIndex(this)
     this.automation.botChat = botGroups.withGroupRoomChats(this, this.automation.botChat)
     syncPRAutoRefreshCadence(this.store)
-    restorePipelineRuntime(this)
+    void restorePipelineRuntime(this)
   }
 
   /** What mobileRelay.hosts.list answers changed. */

@@ -1,4 +1,4 @@
-import { z } from 'zod'
+import * as z from 'zod'
 import { PipelineCheck, PipelineMutation, PipelineStage } from '../pipelines/pipeline-contracts'
 
 const id = z.string().min(1).max(256)

@@ -1,4 +1,4 @@
-import { z } from 'zod'
+import * as z from 'zod'
 import { pipelineV2Digest, pipelineV2Id } from './v2/pipeline-v2-values'
 
 const legacy = z.strictObject({

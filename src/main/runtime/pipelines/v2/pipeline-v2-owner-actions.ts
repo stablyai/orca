@@ -1,4 +1,4 @@
-import type { PipelineStore } from '../pipeline-store'
+import type { PipelineStorePort } from '../pipeline-store-port'
 import type { PipelineV2Run } from '../../../../shared/pipelines/v2/pipeline-v2-run-contracts'
 import type { PipelineV2Receipt } from '../../../../shared/pipelines/v2/pipeline-v2-results'
 import { pipelineV2Fingerprint } from '../../../../shared/pipelines/v2/pipeline-v2-fingerprint'
@@ -13,7 +13,7 @@ export type PipelineOwnerActions = {
   resolveBudget: (input: PipelineV2BudgetInput) => Promise<PipelineV2Receipt>
 }
 export type PipelineV2OwnerDependencies = {
-  store: PipelineStore
+  store: PipelineStorePort
   assertWorkspace: (workspace: PipelineV2Run['workspace']) => Promise<void>
   sourceRevision: (workspace: PipelineV2Run['workspace']) => Promise<string>
   reviewCommit?: (workspace: PipelineV2Run['workspace']) => Promise<string>
@@ -34,8 +34,11 @@ export function createPipelineOwnerActions(
     if (input.mutation.command.kind !== kind) {
       throw new Error('pipeline_owner_command_invalid')
     }
-    const run = runtime.store.getV2(input.id)
-    const proposal = runtime.store.ownerRequestsV2.get(input.projectId, input.mutation.requestId)
+    const run = await runtime.store.getV2(input.id)
+    const proposal = await runtime.store.ownerRequestsV2.get(
+      input.projectId,
+      input.mutation.requestId
+    )
     if (proposal) {
       if (
         (proposal.kind !== 'decision' && proposal.kind !== 'budget') ||
@@ -68,16 +71,16 @@ export function createPipelineOwnerActions(
     }
     await runtime.assertWorkspace(run.workspace)
     if (
-      !runtime.store.receiptV2(input.id, input.mutation.requestId) &&
+      !(await runtime.store.receiptV2(input.id, input.mutation.requestId)) &&
       kind === 'decide' &&
       (await runtime.sourceRevision(run.workspace)) !== run.sourceRevision
     ) {
       throw new Error('pipeline_source_changed')
     }
     assertRuntime()
-    runtime.store.commandV2(input.id, input.mutation)
+    await runtime.store.commandV2(input.id, input.mutation)
     runtime.wake()
-    return runtime.store.receiptV2(input.id, input.mutation.requestId)!
+    return (await runtime.store.receiptV2(input.id, input.mutation.requestId))!
   }
   return {
     resolveDecision: (input) => resolve(input, 'decide'),

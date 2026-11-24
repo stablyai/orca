@@ -1,4 +1,4 @@
-import type { PipelineStore } from '../pipeline-store'
+import type { PipelineStorePort } from '../pipeline-store-port'
 import type {
   PipelineV2Run,
   PipelineV2Invocation
@@ -20,12 +20,12 @@ type Recovery =
   | undefined
 
 export async function readPipelineV2ResponseRecovery(
-  store: PipelineStore,
+  store: PipelineStorePort,
   ports: PipelineV2Ports,
   run: PipelineV2Run,
   invocation: PipelineV2Invocation
 ): Promise<Recovery> {
-  const messageId = store.launchReceiptV2(invocation.id)?.responseMessageId
+  const messageId = (await store.launchReceiptV2(invocation.id))?.responseMessageId
   if (!messageId) {
     return undefined
   }
@@ -70,12 +70,15 @@ export async function readPipelineV2ResponseRecovery(
 }
 
 export async function finishPipelineV2ResponseRecovery(
-  store: PipelineStore,
+  store: PipelineStorePort,
   ports: PipelineV2Ports,
   run: PipelineV2Run
 ): Promise<PipelineV2Run> {
   const invocation = run.invocations.find((value) => value.id === run.activeInvocationId)
-  if (!invocation?.candidateId || !store.launchReceiptV2(invocation.id)?.responseMessageId) {
+  if (
+    !invocation?.candidateId ||
+    !(await store.launchReceiptV2(invocation.id))?.responseMessageId
+  ) {
     return run
   }
   try {
@@ -91,9 +94,9 @@ export async function finishPipelineV2ResponseRecovery(
       throw new Error('pipeline_response_candidate_changed')
     }
     await ports.completeResponse!(invocation, candidate.result)
-    return commandPipelineV2(store, run.id, { kind: 'settle', invocationId: invocation.id })
+    return await commandPipelineV2(store, run.id, { kind: 'settle', invocationId: invocation.id })
   } catch (error) {
-    commandPipelineV2(store, run.id, {
+    await commandPipelineV2(store, run.id, {
       kind: 'uncertain',
       reason: 'pipeline_response_settlement_unconfirmed'
     })

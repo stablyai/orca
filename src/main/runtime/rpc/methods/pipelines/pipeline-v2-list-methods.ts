@@ -8,9 +8,9 @@ export const PIPELINE_V2_LIST_METHODS = [
     name: 'pipeline.v2.profiles',
     permission: 'workspace',
     params: PipelineV2ListParams,
-    handler: (input, ctx) => {
+    handler: async (input, ctx) => {
       assertPipelineV2Project(ctx, input.projectId, input.expectedRuntimeId)
-      const page = ctx.runtime.pipelineRuntime.store.templatesV2.list(
+      const page = await ctx.runtime.pipelineRuntime.store.templatesV2.list(
         { ...input, kind: 'versions', enabledOnly: true },
         true
       )
@@ -31,9 +31,9 @@ export const PIPELINE_V2_LIST_METHODS = [
     name: 'pipeline.v2.list',
     permission: 'workspace',
     params: PipelineV2ListParams,
-    handler: (input, ctx) => {
+    handler: async (input, ctx) => {
       assertPipelineV2Project(ctx, input.projectId, input.expectedRuntimeId)
-      const all = ctx.runtime.pipelineRuntime.store.pageV2(
+      const all = await ctx.runtime.pipelineRuntime.store.pageV2(
         input.projectId,
         input.cursor,
         input.limit

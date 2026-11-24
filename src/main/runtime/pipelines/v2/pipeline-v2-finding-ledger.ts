@@ -7,11 +7,7 @@ import {
 
 type Finding = z.infer<typeof PipelineV2FindingLedger>['findings'][number]
 
-export function pipelineV2FindingLedger(
-  run: PipelineV2Run,
-  source: string,
-  sourceVerified: boolean
-): z.infer<typeof PipelineV2FindingLedger> {
+function retainedPipelineV2Findings(run: PipelineV2Run, source: string, sourceVerified: boolean) {
   const findings = new Map<string, Finding & { updatedAt: number }>()
   const accepted = new Set(
     run.visits.flatMap((visit) => (visit.acceptedCandidateId ? [visit.acceptedCandidateId] : []))
@@ -84,7 +80,38 @@ export function pipelineV2FindingLedger(
       })
     }
   }
-  const values = [...findings.values()].sort(
+  return findings
+}
+
+function acceptsDispute(run: PipelineV2Run, finding: Finding): boolean {
+  const policy = run.definition.completionPolicy
+  return (
+    finding.disposition === 'disputed' &&
+    (finding.ownerAcknowledged ||
+      (policy.kind === 'reviewed_source' &&
+        policy.findingPolicy === 'tracked' &&
+        policy.findingDisputes === 'stage_rationale'))
+  )
+}
+
+export function acceptedPipelineV2Disputes(run: PipelineV2Run, source: string): Set<string> {
+  const policy = run.definition.completionPolicy
+  if (policy.kind !== 'reviewed_source' || policy.findingPolicy !== 'tracked') {
+    return new Set()
+  }
+  return new Set(
+    [...retainedPipelineV2Findings(run, source, false).values()]
+      .filter((finding) => acceptsDispute(run, finding))
+      .map((finding) => finding.id)
+  )
+}
+
+export function pipelineV2FindingLedger(
+  run: PipelineV2Run,
+  source: string,
+  sourceVerified: boolean
+): z.infer<typeof PipelineV2FindingLedger> {
+  const values = [...retainedPipelineV2Findings(run, source, sourceVerified).values()].sort(
     (a, b) =>
       Number(a.disposition === 'fixed_verified') - Number(b.disposition === 'fixed_verified') ||
       a.updatedAt - b.updatedAt
@@ -96,7 +123,7 @@ export function pipelineV2FindingLedger(
       (finding) =>
         finding.severity !== 'minor' &&
         finding.disposition !== 'fixed_verified' &&
-        !(finding.disposition === 'disputed' && finding.ownerAcknowledged)
+        !acceptsDispute(run, finding)
     ).length,
     findings: values.slice(0, 24).map(({ updatedAt: _index, ...finding }) => finding)
   }

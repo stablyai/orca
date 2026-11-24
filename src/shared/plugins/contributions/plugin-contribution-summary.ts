@@ -1,4 +1,4 @@
-import { z } from 'zod'
+import * as z from 'zod'
 import { safePluginDisplayText } from '../manifest/plugin-display-text'
 import {
   PLUGIN_CONTRIBUTION_POINTS,

@@ -34,16 +34,16 @@ function fixture() {
   })
   return store
 }
-it('restart_with_unknown_check_process_never_reruns_it_or_waits_for_a_nonexistent_dispatch', () => {
+it('restart_with_unknown_check_process_never_reruns_it_or_waits_for_a_nonexistent_dispatch', async () => {
   const store = fixture()
-  restorePipelineV2(store)
+  await restorePipelineV2(store)
   expect(store.getV2('run-1')).toMatchObject({
     state: 'reconciliation_required',
     stageId: 'checks',
     usedInvocations: 1
   })
 })
-it('restart_settles_checks_only_with_durable_process_receipt_and_submitted_evidence', () => {
+it('restart_settles_checks_only_with_durable_process_receipt_and_submitted_evidence', async () => {
   const store = fixture()
   store.settleEffect('pipeline-v2:checks-invocation', { processComplete: true, category: 'passed' })
   v2Mutation(store, {
@@ -62,7 +62,7 @@ it('restart_settles_checks_only_with_durable_process_receipt_and_submitted_evide
       }
     }
   })
-  restorePipelineV2(store)
+  await restorePipelineV2(store)
   expect(store.getV2('run-1')).toMatchObject({
     state: 'running',
     stageId: 'review',

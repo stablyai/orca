@@ -7,7 +7,7 @@ import {
   v2Mutation
 } from './pipeline-v2.test-fixture'
 import { observePipelineV2RuntimeInput } from './pipeline-v2-runtime'
-import { emitPipelineV2AcceptedInput } from './pipeline-v2-input-events'
+import { preparePipelineV2Input } from './pipeline-v2-input-events'
 
 let store: PipelineStore
 let release: () => void
@@ -65,9 +65,9 @@ afterEach(() => {
   store.close()
 })
 const input = (data: string) =>
-  emitPipelineV2AcceptedInput(runtime, { handle: session.terminalHandle }, 'driving', true, data)
-function synchronize() {
-  input('Discuss rollback\r')
+  preparePipelineV2Input(runtime, { handle: session.terminalHandle }, 'driving', data)
+async function synchronize() {
+  await input('Discuss rollback\r')
   const run = store.getV2('run-1')
   v2Mutation(store, {
     kind: 'reserve',
@@ -79,11 +79,11 @@ function synchronize() {
   })
   v2Mutation(store, { kind: 'bind', invocationId: 'sync', dispatchId: 'sync', session })
 }
-it('finishes an attested synchronization despite bare Enter confirmations within its owned turn', () => {
-  synchronize()
-  input('\r')
+it('finishes an attested synchronization despite bare Enter confirmations within its owned turn', async () => {
+  await synchronize()
+  await input('\r')
   submit('sync', 'Updated plan includes rollback')
-  input('\r')
+  await input('\r')
   v2Mutation(store, { kind: 'settle', invocationId: 'sync' })
   const waiting = store.getV2('run-1')
   expect(waiting.unverifiedSessionInput).toBeUndefined()
@@ -91,11 +91,11 @@ it('finishes an attested synchronization despite bare Enter confirmations within
   v2Mutation(store, { kind: 'decide', ...waiting.pendingDecision!, action: 'accept' })
   expect(store.getV2('run-1').stageId).toBe('implement')
 })
-it('keeps raw text typed during an owned turn unverified after its candidate settles', () => {
-  synchronize()
-  input('Add a different requirement\r')
+it('keeps raw text typed during an owned turn unverified after its candidate settles', async () => {
+  await synchronize()
+  await input('Add a different requirement\r')
   submit('sync', 'Updated plan')
-  input('\r')
+  await input('\r')
   v2Mutation(store, { kind: 'settle', invocationId: 'sync' })
   const waiting = store.getV2('run-1')
   expect(waiting.unverifiedSessionInput?.sessionId).toBe('terminal-input-session')
@@ -104,8 +104,8 @@ it('keeps raw text typed during an owned turn unverified after its candidate set
     v2Mutation(store, { kind: 'decide', ...waiting.pendingDecision!, action: 'accept' })
   ).toThrow('pipeline_owner_decision_required')
 })
-it('does not treat bare Enter outside an owned turn as owner acceptance or synchronized input', () => {
-  input('\r')
+it('does not treat bare Enter outside an owned turn as owner acceptance or synchronized input', async () => {
+  await input('\r')
   const waiting = store.getV2('run-1')
   expect(waiting.waitReason).toBe('session_sync')
   expect(() =>

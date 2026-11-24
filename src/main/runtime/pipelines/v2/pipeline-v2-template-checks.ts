@@ -1,5 +1,5 @@
 import type Database from '../../../sqlite/sync-database'
-import { z } from 'zod'
+import * as z from 'zod'
 import { PipelineCheck } from '../../../../shared/pipelines/pipeline-contracts'
 import type { PipelineV2Definition } from '../../../../shared/pipelines/v2/pipeline-v2-contracts'
 

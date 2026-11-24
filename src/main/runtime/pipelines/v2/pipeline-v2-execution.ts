@@ -1,3 +1,4 @@
+import type { PipelineStorePort } from '../pipeline-store-port'
 import type { PipelineStore } from '../pipeline-store'
 import type { PipelineV2Command } from '../../../../shared/pipelines/v2/pipeline-v2-mutations'
 import type { PipelineV2CompiledStage } from '../../../../shared/pipelines/v2/pipeline-v2-contracts'
@@ -33,7 +34,7 @@ export type PipelineV2Ports = {
     invocation: PipelineV2Invocation,
     result?: PipelineV2Submission
   ) => Promise<void>
-  definitionEnabled?: (run: PipelineV2Run) => boolean
+  definitionEnabled?: (run: PipelineV2Run) => boolean | Promise<boolean>
   sourceRevision: (workspace: PipelineV2Run['workspace']) => Promise<string>
   reviewCommit: (workspace: PipelineV2Run['workspace']) => Promise<string>
   settled: (dispatchId: string) => Promise<boolean>
@@ -41,7 +42,10 @@ export type PipelineV2Ports = {
   startInvocation: (
     request: PipelineV2LaunchRequest,
     spec: string,
-    prepared: (binding: { dispatchId: string; session: PipelineSessionBinding }) => void
+    prepared: (binding: {
+      dispatchId: string
+      session: PipelineSessionBinding
+    }) => void | Promise<void>
   ) => Promise<PipelineV2InvocationReceipt>
 }
 
@@ -50,14 +54,20 @@ export function commandPipelineV2(
   id: string,
   command: PipelineV2Command,
   requestId?: string
-): PipelineV2Run {
-  const run = store.getV2(id)
-  return store.commandV2(id, {
-    requestId: requestId ?? `v2:${id}:${run.revision}:${command.kind}`,
-    expectedRevision: run.revision,
-    expectedInstanceId: run.workspace.instanceId,
-    command
-  })
+): PipelineV2Run
+export function commandPipelineV2(
+  store: PipelineStorePort,
+  id: string,
+  command: PipelineV2Command,
+  requestId?: string
+): PipelineV2Run | Promise<PipelineV2Run>
+export function commandPipelineV2(
+  store: PipelineStorePort,
+  id: string,
+  command: PipelineV2Command,
+  requestId?: string
+): PipelineV2Run | Promise<PipelineV2Run> {
+  return store.internalV2(id, command, requestId)
 }
 
 function checkCategory(
@@ -81,29 +91,29 @@ function checkCategory(
 }
 
 async function executeChecks(
-  store: PipelineStore,
+  store: PipelineStorePort,
   ports: PipelineV2Ports,
   run: PipelineV2Run,
   invocation: PipelineV2Invocation,
   stage: Extract<PipelineV2CompiledStage, { kind: 'checks' }>,
   effect: string
 ): Promise<void> {
-  commandPipelineV2(store, run.id, {
+  await commandPipelineV2(store, run.id, {
     kind: 'bind',
     invocationId: invocation.id,
     dispatchId: invocation.id,
     session: { kind: 'checks', sessionId: 'runtime-checks', compatibilityKey: run.definitionDigest }
   })
-  const result = await ports.checks(store.getV2(run.id), stage.executor.checkIds)
+  const result = await ports.checks(await store.getV2(run.id), stage.executor.checkIds)
   const category = checkCategory(stage.executor.checkIds, result)
-  store.settleEffect(effect, { processComplete: true, category })
+  await store.settleEffect(effect, { processComplete: true, category })
   if (category === 'unknown') {
     throw new Error('pipeline_checks_incomplete')
   }
   if ((await ports.sourceRevision(run.workspace)) !== invocation.sourceRevision) {
     throw new Error('pipeline_source_changed')
   }
-  commandPipelineV2(store, run.id, {
+  await commandPipelineV2(store, run.id, {
     kind: 'submit',
     invocationId: invocation.id,
     dispatchId: invocation.id,
@@ -116,18 +126,18 @@ async function executeChecks(
       evidence: { stage: 'checks', results: result.results }
     }
   })
-  commandPipelineV2(store, run.id, { kind: 'settle', invocationId: invocation.id })
+  await commandPipelineV2(store, run.id, { kind: 'settle', invocationId: invocation.id })
 }
 
 export async function advancePipelineV2(
-  store: PipelineStore,
+  store: PipelineStorePort,
   ports: PipelineV2Ports,
   id: string
 ): Promise<void> {
-  let run = store.getV2(id)
+  let run = await store.getV2(id)
   if (run.waitReason === 'completion' && !run.activeInvocationId && run.state === 'running') {
     const sourceRevision = await ports.sourceRevision(run.workspace)
-    commandPipelineV2(store, id, { kind: 'revalidate', sourceRevision })
+    await commandPipelineV2(store, id, { kind: 'revalidate', sourceRevision })
     return
   }
   if (run.state === 'reconciliation_required') {
@@ -135,13 +145,13 @@ export async function advancePipelineV2(
   }
   let invocation = run.invocations.find((value) => value.id === run.activeInvocationId)
   if (invocation && invocation.state !== 'reserved') {
-    const messageId = store.launchReceiptV2(invocation.id)?.responseMessageId
+    const messageId = (await store.launchReceiptV2(invocation.id))?.responseMessageId
     if (messageId) {
       await completePipelineV2Response(store, ports, run, invocation, messageId)
       return
     }
     if (invocation.dispatchId && (await ports.settled(invocation.dispatchId))) {
-      commandPipelineV2(store, id, {
+      await commandPipelineV2(store, id, {
         kind: invocation.state === 'submitted' ? 'settle' : 'interrupted',
         invocationId: invocation.id
       })
@@ -156,14 +166,14 @@ export async function advancePipelineV2(
     return
   }
   try {
-    if (ports.definitionEnabled && !ports.definitionEnabled(run)) {
-      commandPipelineV2(store, id, { kind: 'definition_disabled' })
+    if (ports.definitionEnabled && !(await ports.definitionEnabled(run))) {
+      await commandPipelineV2(store, id, { kind: 'definition_disabled' })
       return
     }
     const stage = run.definition.stages.find((value) => value.id === run.stageId)!
     if (!invocation) {
       const sourceRevision = await ports.sourceRevision(run.workspace)
-      run = commandPipelineV2(store, id, {
+      run = await commandPipelineV2(store, id, {
         kind: 'reserve',
         invocationId: `${id}:invocation:${run.usedInvocations + 1}`,
         purpose: 'stage',
@@ -177,8 +187,8 @@ export async function advancePipelineV2(
         return
       }
     }
-    if (ports.definitionEnabled && !ports.definitionEnabled(run)) {
-      commandPipelineV2(store, id, { kind: 'definition_disabled' })
+    if (ports.definitionEnabled && !(await ports.definitionEnabled(run))) {
+      await commandPipelineV2(store, id, { kind: 'definition_disabled' })
       return
     }
     const context =
@@ -186,7 +196,7 @@ export async function advancePipelineV2(
         ? assemblePipelineV2Context(run)
         : undefined
     const effect = `pipeline-v2:${invocation.id}`
-    if (!store.claimEffect(effect)) {
+    if (!(await store.claimEffect(effect))) {
       throw new Error('pipeline_invocation_effect_unknown')
     }
     if (stage.kind === 'checks') {
@@ -218,12 +228,16 @@ export async function advancePipelineV2(
     const receipt = await ports.startInvocation(
       { runId: id, workspace: run.workspace, invocation, executor, stage, previousSession },
       prompt,
-      (binding) => {
-        commandPipelineV2(store, id, { kind: 'bind', invocationId: invocation!.id, ...binding })
+      async (binding) => {
+        await commandPipelineV2(store, id, {
+          kind: 'bind',
+          invocationId: invocation!.id,
+          ...binding
+        })
       }
     )
-    store.settleEffect(effect, receipt)
-    const current = store.getV2(id).invocations.find((value) => value.id === invocation!.id)
+    await store.settleEffect(effect, receipt)
+    const current = (await store.getV2(id)).invocations.find((value) => value.id === invocation!.id)
     if (receipt.state !== 'ready' || !current?.dispatchId || !current.session) {
       throw new Error('pipeline_launch_unconfirmed')
     }
@@ -232,7 +246,7 @@ export async function advancePipelineV2(
       error instanceof Error && /^[a-z][a-z0-9_]{1,120}$/.test(error.message)
         ? error.message
         : 'pipeline_invocation_outcome_unknown'
-    const current = store.getV2(id)
+    const current = await store.getV2(id)
     const refused = current.invocations.find((value) => value.id === invocation?.id)
     if (
       error instanceof PipelineV2LaunchRefusedError &&
@@ -241,17 +255,21 @@ export async function advancePipelineV2(
       !refused.session &&
       current.activeInvocationId === refused.id
     ) {
-      store.settleEffect(`pipeline-v2:${refused.id}`, { state: 'not_started', reason })
-      commandPipelineV2(store, id, { kind: 'launch_refused', invocationId: refused.id, reason })
+      await store.settleEffect(`pipeline-v2:${refused.id}`, { state: 'not_started', reason })
+      await commandPipelineV2(store, id, {
+        kind: 'launch_refused',
+        invocationId: refused.id,
+        reason
+      })
       return
     }
     if (!invocation && !current.activeInvocationId && current.state === 'running') {
-      commandPipelineV2(store, id, { kind: 'pause', reason })
+      await commandPipelineV2(store, id, { kind: 'pause', reason })
       return
     }
     if (!invocation && !current.activeInvocationId && current.state === 'paused') {
       return
     }
-    commandPipelineV2(store, id, { kind: 'uncertain', reason })
+    await commandPipelineV2(store, id, { kind: 'uncertain', reason })
   }
 }

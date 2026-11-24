@@ -52,13 +52,13 @@ export async function preparePipelineCreation(
       payload
     )
   }
-  let admission: { fresh: boolean; run?: PipelineRun } | undefined = service.store.creation(
+  let admission: { fresh: boolean; run?: PipelineRun } | undefined = await service.store.creation(
     creationId,
     payload
   )
   if (!admission) {
     const { definition, checks } = await service.validateSelection(pipeline.profile, repo.id)
-    admission = service.store.reserveCreation(creationId, payload, {
+    admission = await service.store.reserveCreation(creationId, payload, {
       profile: definition.profile,
       provider: definition.provider,
       checkSnapshot: checks
@@ -110,7 +110,7 @@ export async function bindCreatedPipeline(
       digest: profile.digest
     }
     save(worktree.pipeline)
-    service.store.completeCreationV2(args.creationId, run.id)
+    await service.store.completeCreationV2(args.creationId, run.id)
     return run
   }
   const run = await service.bind(
@@ -126,45 +126,45 @@ export async function bindCreatedPipeline(
     digest: args.pipeline.profile.digest
   }
   save(worktree.pipeline)
-  service.store.completeCreation(args.creationId!, run.id)
+  await service.store.completeCreation(args.creationId!, run.id)
   return run
 }
 
-export function settlePipelineCreationSetup(
+export async function settlePipelineCreationSetup(
   service: PipelineRuntime,
   id: string,
   setup: { setupTrustMismatch?: unknown; shouldRunSetup: boolean },
   terminal: string | null
-): void {
-  if (service.store.hasV2(id)) {
+): Promise<void> {
+  if (await service.store.hasV2(id)) {
     if (setup.setupTrustMismatch || (setup.shouldRunSetup && !terminal)) {
-      commandPipelineV2(service.store, id, {
+      await commandPipelineV2(service.store, id, {
         kind: 'uncertain',
         reason: 'Setup approval or startup needs owner reconciliation'
       })
     } else if (terminal) {
-      commandPipelineV2(service.store, id, { kind: 'setup_wait', terminalHandle: terminal })
+      await commandPipelineV2(service.store, id, { kind: 'setup_wait', terminalHandle: terminal })
       service.observeSetup(id, terminal)
     } else {
-      service.releaseSetup(id)
+      await service.releaseSetup(id)
     }
     return
   }
-  const run = service.store.get(id)
+  const run = await service.store.get(id)
   if (setup.setupTrustMismatch || (setup.shouldRunSetup && !terminal)) {
-    service.store.command(id, {
+    await service.store.command(id, {
       requestId: `setup-unknown:${id}`,
       expectedRevision: run.revision,
       command: { kind: 'uncertain', reason: 'Setup approval or startup needs owner reconciliation' }
     })
   } else if (terminal) {
-    service.store.command(id, {
+    await service.store.command(id, {
       requestId: `setup-observer:${id}`,
       expectedRevision: run.revision,
       command: { kind: 'setup_wait', terminalHandle: terminal }
     })
     service.observeSetup(id, terminal)
   } else {
-    service.releaseSetup(id)
+    await service.releaseSetup(id)
   }
 }

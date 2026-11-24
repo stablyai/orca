@@ -86,9 +86,47 @@ export function PipelineCompletionEditor({
           >
             {t(
               'pipelines.trackFindingReadiness',
-              'Require important retained findings to be verified fixed or disputed with owner acknowledgment'
+              'Require important retained findings to be verified fixed or resolved under the selected dispute policy'
             )}
           </PipelineToggle>
+          {policy.findingPolicy === 'tracked' && (
+            <PipelineSelectField
+              label={t('pipelines.findingDisputes', 'Accept requirement disputes through')}
+              value={policy.findingDisputes ?? 'owner_acknowledgment'}
+              options={[
+                {
+                  value: 'owner_acknowledgment',
+                  label: t(
+                    'pipelines.disputeOwnerPolicy',
+                    'Owner acknowledgment of an accepted candidate'
+                  )
+                },
+                {
+                  value: 'stage_rationale',
+                  label: t(
+                    'pipelines.disputeStagePolicy',
+                    'Requirement-citing rationale from an accepted stage'
+                  )
+                }
+              ]}
+              onChange={(findingDisputes) => {
+                if (
+                  findingDisputes === 'owner_acknowledgment' ||
+                  findingDisputes === 'stage_rationale'
+                ) {
+                  onChange({ completionPolicy: { ...policy, findingDisputes } })
+                }
+              }}
+            />
+          )}
+          {policy.findingPolicy === 'tracked' && (
+            <p className="text-xs text-muted-foreground">
+              {t(
+                'pipelines.disputePolicyMeaning',
+                'Owner acknowledgment requires accepting a candidate through an owner gate. Stage rationale can be used without owner gates.'
+              )}
+            </p>
+          )}
           {template.stages
             .filter((stage) => stage.kind === 'checks')
             .map((stage) => (

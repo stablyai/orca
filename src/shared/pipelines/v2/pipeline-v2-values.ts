@@ -1,4 +1,4 @@
-import { z } from 'zod'
+import * as z from 'zod'
 
 export const pipelineV2Id = z.string().min(1).max(256)
 export const pipelineV2Revision = z.number().int().min(0)

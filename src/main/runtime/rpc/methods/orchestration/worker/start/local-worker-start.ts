@@ -229,7 +229,7 @@ export async function startLocalWorker(args: LocalWorkerStartArgs): Promise<unkn
     const handle = terminalHandle
     const worktreeId = resolvedWorktree.id
     // A hand-over from the background wait gets a fresh delivery budget; one in time keeps the shared one.
-    const bindTerminal = (): void => {
+    const bindTerminal = async (): Promise<void> => {
       const terminalAuthority = authority ?? requireWorkerAuthority(runtime, handle)
       db.prepareStartingWorkerAuthority({
         dispatchId: started.dispatch.id,
@@ -240,7 +240,7 @@ export async function startLocalWorker(args: LocalWorkerStartArgs): Promise<unkn
         setupState: setupReceipt.state,
         terminalOwnership: external ? 'external' : 'created'
       })
-      system.bindSystemWorkerCoordinator(
+      await system.bindSystemWorkerCoordinator(
         args.systemCoordinator,
         db,
         terminalAuthority.paneKey,
@@ -249,7 +249,7 @@ export async function startLocalWorker(args: LocalWorkerStartArgs): Promise<unkn
       )
     }
     const handOver = async (deliveryDeadline = readinessDeadline): Promise<unknown> => {
-      bindTerminal()
+      await bindTerminal()
       if (workerChat) {
         rebindReusedStructuredWorker(handle, db)
       }

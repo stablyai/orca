@@ -1,5 +1,5 @@
 import { subscribeRuntimeRpc } from '@/runtime/rpc/subscriptions/runtime-rpc-subscribe'
-import { z } from 'zod'
+import * as z from 'zod'
 
 const PipelineChange = z.discriminatedUnion('type', [
   z.object({

@@ -1,4 +1,4 @@
-import { z } from 'zod'
+import * as z from 'zod'
 import { pipelineV2Fingerprint } from './pipeline-v2-fingerprint'
 
 export const PipelineV2FindingId = z.string().regex(/^finding:[a-f0-9]{64}$/)

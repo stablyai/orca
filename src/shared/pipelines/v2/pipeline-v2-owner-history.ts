@@ -1,4 +1,4 @@
-import { z } from 'zod'
+import * as z from 'zod'
 import { PipelineV2CompiledTarget } from './pipeline-v2-contracts'
 import { PipelineV2EffectiveExecutor } from './pipeline-v2-run-contracts'
 import {

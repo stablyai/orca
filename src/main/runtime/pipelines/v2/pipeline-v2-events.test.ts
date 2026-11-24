@@ -44,7 +44,7 @@ it('bounded_context_names_omitted_artifacts_and_fetches_one_by_exact_id', () => 
     'pipeline_artifact_not_found'
   )
 })
-it('event_cursor_reconnect_is_scoped_to_instance_and_notifies_after_commit', () => {
+it('event_cursor_reconnect_is_scoped_to_instance_and_notifies_after_commit', async () => {
   const bus = new RuntimeClientEventBus({
     makeTitleGateKey: (_raw, normalized) => normalized,
     onConsumerAvailabilityChanged: () => {}
@@ -66,18 +66,22 @@ it('event_cursor_reconnect_is_scoped_to_instance_and_notifies_after_commit', () 
     projectId: 'project-1',
     instanceId: 'instance-1'
   }
-  const first = pipelineV2Events(store, { ...scope, cursor: 0, limit: 1 })
-  const second = pipelineV2Events(store, { ...scope, cursor: first.cursor, limit: 1 })
+  const first = await pipelineV2Events(store, { ...scope, cursor: 0, limit: 1 })
+  const second = await pipelineV2Events(store, { ...scope, cursor: first.cursor, limit: 1 })
   expect(first.events.map((event) => event.kind)).toEqual(['create'])
   expect(second.events.map((event) => event.kind)).toEqual(['pause'])
-  expect(pipelineV2Events(store, { ...scope, cursor: second.cursor, limit: 1 }).events).toEqual([])
-  expect(() => pipelineV2Events(store, { ...scope, instanceId: 'replacement', cursor: 0 })).toThrow(
-    'pipeline_workspace_instance_changed'
+  expect(
+    (await pipelineV2Events(store, { ...scope, cursor: second.cursor, limit: 1 })).events
+  ).toEqual([])
+  await expect(
+    pipelineV2Events(store, { ...scope, instanceId: 'replacement', cursor: 0 })
+  ).rejects.toThrow('pipeline_workspace_instance_changed')
+  await expect(
+    pipelineV2Events(store, { ...scope, projectId: 'foreign', cursor: 0 })
+  ).rejects.toThrow('pipeline_workspace_instance_changed')
+  await expect(pipelineV2Events(store, { ...scope, cursor: 99 })).rejects.toThrow(
+    'pipeline_cursor_invalid'
   )
-  expect(() => pipelineV2Events(store, { ...scope, projectId: 'foreign', cursor: 0 })).toThrow(
-    'pipeline_workspace_instance_changed'
-  )
-  expect(() => pipelineV2Events(store, { ...scope, cursor: 99 })).toThrow('pipeline_cursor_invalid')
   expect(seen).toMatchObject([
     { type: 'pipelinesChanged', instanceId: 'instance-1', sequence: 1 },
     { type: 'pipelinesChanged', revision: 1, sequence: 2 }

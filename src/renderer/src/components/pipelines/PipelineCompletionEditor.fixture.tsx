@@ -20,6 +20,7 @@ function View() {
         freshSession: false
       }
       value.completionPolicy.findingPolicy = 'tracked'
+      value.completionPolicy.findingDisputes = 'stage_rationale'
     }
     return value
   })

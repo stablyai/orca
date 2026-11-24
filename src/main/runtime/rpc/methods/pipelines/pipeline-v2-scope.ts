@@ -16,7 +16,7 @@ export function assertPipelineV2Runtime(ctx: RpcContext, expected?: string): voi
 export async function scopedPipelineV2(ctx: RpcContext, input: PipelineV2RunParams) {
   assertPipelineV2Runtime(ctx, input.expectedRuntimeId)
   const service = ctx.runtime.pipelineRuntime
-  const run = service.store.getV2(input.id)
+  const run = await service.store.getV2(input.id)
   if (
     (input.projectId && input.projectId !== run.workspace.projectId) ||
     (input.expectedInstanceId && input.expectedInstanceId !== run.workspace.instanceId)

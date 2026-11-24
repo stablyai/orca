@@ -333,7 +333,7 @@
     "checksFailed": "When checks fail",
     "checkedReviewedSource": "Source checked and reviewed",
     "configurableReviewRequirements": "Choose checks, accepted review outcomes, and whether each review must be independent or fresh. All required evidence must match the current clean source.",
-    "trackFindingReadiness": "Require important retained findings to be verified fixed or disputed with owner acknowledgment",
+    "trackFindingReadiness": "Require important retained findings to be verified fixed or resolved under the selected dispute policy",
     "requireIndependent": "Require independent review",
     "requireFreshReview": "Require a fresh review session",
     "independentSession": "Require a session separate from implementation context",
@@ -362,7 +362,12 @@
     "stopSourceChanged": "The source no longer matches the pinned evidence. Readiness is not confirmed.",
     "stopSourceUnavailable": "The current source could not be verified. Reconcile the existing response after source access is restored.",
     "stopSourceFlags": "Git index flags hide source changes. A clean review commit cannot be verified; Orca has not changed those flags.",
-    "stopFindings": "Important retained findings remain unresolved under the selected completion policy."
+    "stopFindings": "Important retained findings remain unresolved under the selected completion policy.",
+    "findingDisputes": "Accept requirement disputes through",
+    "disputeOwnerPolicy": "Owner acknowledgment of an accepted candidate",
+    "disputeStagePolicy": "Requirement-citing rationale from an accepted stage",
+    "disputePolicyMeaning": "Owner acknowledgment requires accepting a candidate through an owner gate. Stage rationale can be used without owner gates.",
+    "stageDisputeMeaning": "The selected policy accepts requirement-citing disputes from accepted stages; owner acknowledgment is shown separately."
   },
   "taskPipelines": {
     "label": "Task pipeline",

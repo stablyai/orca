@@ -139,7 +139,7 @@ it('lost_create_reply_returns_the_original_instance_and_keeps_startup_suppressed
     task,
     workspace: { instanceId: 'instance-1' }
   })
-  releasePipelineSetup(store, run.id)
+  await releasePipelineSetup(store, run.id)
   expect(store.getV2(run.id)).toMatchObject({
     state: 'running',
     stageId: 'plan',

@@ -18,9 +18,9 @@ async function send(
 ): Promise<PipelineV2InvocationReceipt> {
   const input = PipelineV2DiscussionInput.parse(raw)
   runtime.assertRuntime?.()
-  const run = runtime.store.getV2(input.id)
+  const run = await runtime.store.getV2(input.id)
   await runtime.assertWorkspace(run.workspace)
-  const receipt = runtime.store.receiptV2(input.id, input.requestId)
+  const receipt = await runtime.store.receiptV2(input.id, input.requestId)
   const source = receipt?.sourceRevision ?? (await runtime.sourceRevision(run.workspace))
   if (!receipt && purpose !== 'synchronize' && source !== input.pin.sourceRevision) {
     throw new Error('pipeline_source_changed')
@@ -59,7 +59,7 @@ async function send(
     })
   }
   runtime.assertRuntime?.()
-  const reserved = runtime.store.commandV2(input.id, {
+  const reserved = await runtime.store.commandV2(input.id, {
     requestId: input.requestId,
     expectedRevision: input.expectedRevision,
     expectedInstanceId: input.expectedInstanceId,
@@ -78,17 +78,17 @@ async function send(
     throw new Error('pipeline_budget_exhausted')
   }
   await runtime.controller.advance(input.id)
-  const current = runtime.store.getV2(input.id)
+  const current = await runtime.store.getV2(input.id)
   const invocation = current.invocations.find((value) => value.id === invocationId)!
   runtime.wake()
-  const refusal = pipelineV2RefusalReceipt(runtime.store, invocation)
+  const refusal = await pipelineV2RefusalReceipt(runtime.store, invocation)
   if (refusal) {
     return { state: refusal.state, reason: refusal.reason }
   }
   return {
     state:
       current.state === 'reconciliation_required' ||
-      !pipelineV2DeliveryReceipt(runtime.store, invocation)
+      !(await pipelineV2DeliveryReceipt(runtime.store, invocation))
         ? 'outcome_unknown'
         : 'ready',
     ...(invocation.dispatchId ? { dispatchId: invocation.dispatchId } : {}),

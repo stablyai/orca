@@ -137,7 +137,7 @@ export const diagnostics = defineFixture({
   width: 1000,
   setup: () => setup(true),
   render: () => (
-    <div className="bg-background text-foreground">
+    <div className="bg-background text-foreground" style={{ height: 2400 }}>
       <PipelineRunView workspace={workspace} />
     </div>
   )

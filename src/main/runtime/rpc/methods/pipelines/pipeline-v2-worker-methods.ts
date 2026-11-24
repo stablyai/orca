@@ -7,7 +7,6 @@ import { callerDispatch } from './pipeline-caller-dispatch'
 import { assemblePipelineV2Context } from '../../../pipelines/v2/pipeline-v2-context'
 import { validatePipelineFileEvidence } from '../../../pipelines/pipeline-evidence'
 import { scopedPipelineV2 } from './pipeline-v2-scope'
-import { readPipelineV2HistoryContext } from '../../../pipelines/v2/pipeline-v2-history-context'
 import { pipelineV2RequiresReviewCommit } from '../../../../../shared/pipelines/v2/pipeline-v2-review-policy'
 
 export const PIPELINE_V2_WORKER_METHODS = [
@@ -32,7 +31,7 @@ export const PIPELINE_V2_WORKER_METHODS = [
             activeInvocationId: visit.id === run.currentVisitId ? run.activeInvocationId : undefined
           }
         : run
-      const history = readPipelineV2HistoryContext(service.store, run, input)
+      const history = await service.store.historyContext(run.id, input)
       if (
         input.artifactId &&
         visit &&
@@ -74,7 +73,7 @@ export const PIPELINE_V2_WORKER_METHODS = [
     params: PipelineV2WorkerSubmitParams,
     handler: async ({ id, mutation }, ctx) => {
       const service = ctx.runtime.pipelineRuntime
-      const run = service.store.getV2(id)
+      const run = await service.store.getV2(id)
       await service.assertWorkspace(run.workspace)
       const command = mutation.command
       if (
@@ -87,7 +86,7 @@ export const PIPELINE_V2_WORKER_METHODS = [
       if (stage.kind !== 'agent') {
         throw new Error('pipeline_submission_denied')
       }
-      if (!service.store.receiptV2(id, mutation.requestId)) {
+      if (!(await service.store.receiptV2(id, mutation.requestId))) {
         const invocation = run.invocations.find((value) => value.id === run.activeInvocationId)
         if (
           pipelineV2RequiresReviewCommit(run.definition, stage) &&
@@ -101,16 +100,16 @@ export const PIPELINE_V2_WORKER_METHODS = [
         }
       }
       if (
-        !service.store.receiptV2(id, mutation.requestId) &&
+        !(await service.store.receiptV2(id, mutation.requestId)) &&
         (await service.v2Ports.sourceRevision(run.workspace)) !== command.sourceRevision
       ) {
         throw new Error('pipeline_source_changed')
       }
-      service.store.commandV2(id, mutation)
+      await service.store.commandV2(id, mutation)
       service.wake()
       return {
         contractVersion: 2 as const,
-        receipt: service.store.receiptV2(id, mutation.requestId)
+        receipt: await service.store.receiptV2(id, mutation.requestId)
       }
     }
   })

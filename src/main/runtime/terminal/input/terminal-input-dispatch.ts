@@ -1,6 +1,6 @@
 import { OrcaRuntimeWithPtyLiveness } from './terminal-pty-liveness'
 import { agentPromptObservationSignal } from './agent-prompt-signals'
-import { emitPipelineV2AcceptedInput } from '../../pipelines/v2/pipeline-v2-input-events'
+import { preparePipelineV2Input } from '../../pipelines/v2/pipeline-v2-input-events'
 import type { RuntimeTerminalWriteOptions } from './runtime-terminal-writer'
 import type { WriteSettlement } from '../../../../shared/terminal/pty/lifecycle/pty-write-settlement'
 import type { RuntimeLeafRecord } from '../records/runtime-terminal-state-records'
@@ -90,18 +90,12 @@ export abstract class OrcaRuntimeWithControllerKnowsPtyIsLive extends OrcaRuntim
       if (!(await this.launchComposerAdmitsSubmit(pty.pty.ptyId, action, options))) {
         return { handle, accepted: false, bytesWritten: 0 }
       }
+      await preparePipelineV2Input(this, { handle }, options.inputKind, payload)
       const writeSettlement = await this.writeTerminalAction(
         pty.pty.ptyId,
         action,
         payload,
         options
-      )
-      emitPipelineV2AcceptedInput(
-        this,
-        { handle },
-        options.inputKind,
-        !writeSettlement || writeSettlement.outcome === 'accepted',
-        payload
       )
       return {
         handle,
@@ -131,14 +125,8 @@ export abstract class OrcaRuntimeWithControllerKnowsPtyIsLive extends OrcaRuntim
       return { handle, accepted: false, bytesWritten: 0 }
     }
 
+    await preparePipelineV2Input(this, { handle }, options.inputKind, payload)
     const writeSettlement = await this.writeTerminalAction(leaf.ptyId, action, payload, options)
-    emitPipelineV2AcceptedInput(
-      this,
-      { handle },
-      options.inputKind,
-      !writeSettlement || writeSettlement.outcome === 'accepted',
-      payload
-    )
 
     return {
       handle,
@@ -208,6 +196,7 @@ export abstract class OrcaRuntimeWithControllerKnowsPtyIsLive extends OrcaRuntim
       const payload = payloadFor(pty.pty.ptyId)
       await assertTerminalInputWithinLimitWithYield(payload)
       // Only opted-in calls take the extra layer, so every default caller's timing is untouched.
+      await preparePipelineV2Input(this, { handle }, options.inputKind, prompt)
       if (agentPromptWriteOptsIn(options)) {
         const result = await this.submitTerminalAgentPrompt(
           handle,
@@ -216,7 +205,6 @@ export abstract class OrcaRuntimeWithControllerKnowsPtyIsLive extends OrcaRuntim
           payload,
           options
         )
-        emitPipelineV2AcceptedInput(this, { handle }, options.inputKind, result.accepted, prompt)
         return result
       }
       const generation = this.getPtyLifecycleGeneration(pty.pty.ptyId)
@@ -233,7 +221,6 @@ export abstract class OrcaRuntimeWithControllerKnowsPtyIsLive extends OrcaRuntim
         }
       )
       const bytesWritten = Buffer.byteLength(payload, 'utf8') + delivery.submits
-      emitPipelineV2AcceptedInput(this, { handle }, options.inputKind, true, prompt)
       return {
         handle,
         accepted: true,
@@ -252,6 +239,7 @@ export abstract class OrcaRuntimeWithControllerKnowsPtyIsLive extends OrcaRuntim
     if (await this.isLeafPtyProvenAbsent(leaf.ptyId)) {
       throw new Error('terminal_not_writable')
     }
+    await preparePipelineV2Input(this, { handle }, options.inputKind, prompt)
     if (agentPromptWriteOptsIn(options)) {
       const result = await this.submitTerminalAgentPrompt(
         handle,
@@ -260,7 +248,6 @@ export abstract class OrcaRuntimeWithControllerKnowsPtyIsLive extends OrcaRuntim
         payload,
         options
       )
-      emitPipelineV2AcceptedInput(this, { handle }, options.inputKind, result.accepted, prompt)
       return result
     }
     const generation = this.getPtyLifecycleGeneration(leaf.ptyId)
@@ -273,7 +260,6 @@ export abstract class OrcaRuntimeWithControllerKnowsPtyIsLive extends OrcaRuntim
       })
     })
     const bytesWritten = Buffer.byteLength(payload, 'utf8') + delivery.submits
-    emitPipelineV2AcceptedInput(this, { handle }, options.inputKind, true, prompt)
     return {
       handle,
       accepted: true,

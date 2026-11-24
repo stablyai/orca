@@ -19,6 +19,15 @@ export function PipelineFindings({ model }: { model: ReturnType<typeof usePipeli
           'Findings are review evidence. A dispute must cite the task requirement; it becomes acknowledged only through an explicit owner decision.'
         )}
       </p>
+      {model.read?.definition.completionPolicy.kind === 'reviewed_source' &&
+        model.read.definition.completionPolicy.findingDisputes === 'stage_rationale' && (
+          <p className="text-xs text-muted-foreground">
+            {t(
+              'pipelines.stageDisputeMeaning',
+              'The selected policy accepts requirement-citing disputes from accepted stages; owner acknowledgment is shown separately.'
+            )}
+          </p>
+        )}
       <ol className="space-y-3">
         {ledger.findings.map((finding) => (
           <li key={finding.id} className="space-y-1 border-t pt-3">

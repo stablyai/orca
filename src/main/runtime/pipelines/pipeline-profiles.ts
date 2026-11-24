@@ -1,5 +1,5 @@
 import { requirePluginService } from '../rpc/methods/plugins/plugins'
-import { pipelineDigest } from './pipeline-store'
+import { pipelineDigest } from './pipeline-digest'
 import type {
   PipelineProfile,
   PipelineSelection

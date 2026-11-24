@@ -12,7 +12,7 @@ import { transitionPipelineV2 } from '../../../pipelines/v2/pipeline-v2-state'
 async function receipt(input: z.infer<typeof PipelineV2RequestReceiptParams>, ctx: RpcContext) {
   assertPipelineV2Runtime(ctx, input.expectedRuntimeId)
   const store = ctx.runtime.pipelineRuntime.store
-  const request = store.ownerRequestsV2.get(input.projectId, input.requestId)
+  const request = await store.ownerRequestsV2.get(input.projectId, input.requestId)
   if (request && (request.kind === 'decision' || request.kind === 'budget')) {
     await scopedPipelineV2(ctx, {
       id: request.input.id,
@@ -22,7 +22,7 @@ async function receipt(input: z.infer<typeof PipelineV2RequestReceiptParams>, ct
     return {
       contractVersion: 2 as const,
       request,
-      receipt: store.receiptV2(request.input.id, input.requestId)
+      receipt: await store.receiptV2(request.input.id, input.requestId)
     }
   }
   return { contractVersion: 2 as const, request, receipt: null }
@@ -36,7 +36,7 @@ async function propose(
 ) {
   const run = await scopedPipelineV2(ctx, input)
   const store = ctx.runtime.pipelineRuntime.store
-  if (!store.ownerRequestsV2.get(input.projectId, input.requestId)) {
+  if (!(await store.ownerRequestsV2.get(input.projectId, input.requestId))) {
     if (run.revision !== input.expectedRevision) {
       throw new Error('pipeline_revision_conflict')
     }
@@ -56,7 +56,7 @@ async function propose(
       command
     })
   }
-  const request = store.ownerRequestsV2.request(kind, input)
+  const request = await store.ownerRequestsV2.request(kind, input)
   return { contractVersion: 2 as const, request, run: pipelineV2Summary(run) }
 }
 export const PIPELINE_V2_REQUEST_METHODS = [
@@ -88,16 +88,16 @@ export const PIPELINE_V2_REQUEST_METHODS = [
     name: 'pipeline.v2.requests',
     permission: 'workspace',
     params: PipelineV2ListParams,
-    handler: (input, ctx) => {
+    handler: async (input, ctx) => {
       assertPipelineV2Runtime(ctx, input.expectedRuntimeId)
       return {
         contractVersion: 2 as const,
         projectId: input.projectId,
-        ...ctx.runtime.pipelineRuntime.store.ownerRequestsV2.list(
+        ...(await ctx.runtime.pipelineRuntime.store.ownerRequestsV2.list(
           input.projectId,
           input.cursor,
           input.limit
-        )
+        ))
       }
     }
   })

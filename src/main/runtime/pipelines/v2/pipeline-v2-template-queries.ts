@@ -11,7 +11,7 @@ import {
   PipelineV2Version
 } from '../../../../shared/pipelines/v2/pipeline-v2-template-contracts'
 import { pipelineV2Fingerprint } from '../../../../shared/pipelines/v2/pipeline-v2-fingerprint'
-import { z } from 'zod'
+import * as z from 'zod'
 import {
   PipelineV2TemplateListItem,
   PipelineV2TemplatePage

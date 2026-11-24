@@ -1,4 +1,4 @@
-import { z } from 'zod'
+import * as z from 'zod'
 import { PipelineV2FindingId } from './v2/pipeline-v2-findings'
 
 const text = z.string().min(1).max(500)

@@ -23,11 +23,11 @@ export const PIPELINE_V2_TEMPLATE_METHODS = [
     name: 'pipeline.v2.template.delete',
     permission: 'workspace',
     params: PipelineV2TemplateDeleteParams,
-    handler: (input, ctx) => {
+    handler: async (input, ctx) => {
       assertPipelineV2Project(ctx, input.projectId, input.expectedRuntimeId)
       return PipelineV2TemplateDeleteResult.parse({
         contractVersion: 2 as const,
-        receipt: ctx.runtime.pipelineRuntime.store.templatesV2.deleteDraft(input)
+        receipt: await ctx.runtime.pipelineRuntime.store.templatesV2.deleteDraft(input)
       })
     }
   }),
@@ -35,11 +35,11 @@ export const PIPELINE_V2_TEMPLATE_METHODS = [
     name: 'pipeline.v2.template.list',
     permission: 'workspace',
     params: PipelineV2TemplateListParams,
-    handler: (input, ctx) => {
+    handler: async (input, ctx) => {
       assertPipelineV2Project(ctx, input.projectId, input.expectedRuntimeId)
       return {
         contractVersion: 2 as const,
-        ...ctx.runtime.pipelineRuntime.store.templatesV2.list(input)
+        ...(await ctx.runtime.pipelineRuntime.store.templatesV2.list(input))
       }
     }
   }),
@@ -54,8 +54,8 @@ export const PIPELINE_V2_TEMPLATE_METHODS = [
       }
       const library = ctx.runtime.pipelineRuntime.store.templatesV2
       const record = input.draftId
-        ? library.getDraft(input.projectId, input.draftId)
-        : library.getVersion(input.selection!)
+        ? await library.getDraft(input.projectId, input.draftId)
+        : await library.getVersion(input.selection!)
       const template = 'draft' in record ? record.draft : record.definition
       if (input.cursor > template.stages.length) {
         throw new Error('pipeline_cursor_invalid')
@@ -103,14 +103,14 @@ export const PIPELINE_V2_TEMPLATE_METHODS = [
     handler: async (input, ctx) => {
       assertPipelineV2Project(ctx, input.projectId, input.expectedRuntimeId)
       const library = ctx.runtime.pipelineRuntime.store.templatesV2
-      const replay = library.replaySave(input)
+      const replay = await library.replaySave(input)
       if (replay) {
         return PipelineV2TemplateSaveResult.parse({ contractVersion: 2 as const, receipt: replay })
       }
       const prepared = 'source' in input ? await pipelineV2DraftSource(ctx, input) : undefined
       return PipelineV2TemplateSaveResult.parse({
         contractVersion: 2 as const,
-        receipt: library.saveEdited(input, prepared)
+        receipt: await library.saveEdited(input, prepared)
       })
     }
   }),
@@ -118,9 +118,9 @@ export const PIPELINE_V2_TEMPLATE_METHODS = [
     name: 'pipeline.v2.template.validate',
     permission: 'workspace',
     params: PipelineV2TemplateValidateParams,
-    handler: (input, ctx) => {
+    handler: async (input, ctx) => {
       assertPipelineV2Project(ctx, input.projectId, input.expectedRuntimeId)
-      const definition = ctx.runtime.pipelineRuntime.store.templatesV2.validate(
+      const definition = await ctx.runtime.pipelineRuntime.store.templatesV2.validate(
         input.projectId,
         input.draftId,
         input.expectedRevision
@@ -139,15 +139,15 @@ export const PIPELINE_V2_TEMPLATE_METHODS = [
     name: 'pipeline.v2.template.publishRequest',
     permission: 'workspace',
     params: PipelineV2TemplatePublishRequestParams,
-    handler: (input, ctx) => {
+    handler: async (input, ctx) => {
       assertPipelineV2Project(ctx, input.projectId, input.expectedRuntimeId)
       const store = ctx.runtime.pipelineRuntime.store
-      if (!store.ownerRequestsV2.get(input.projectId, input.requestId)) {
-        store.templatesV2.validate(input.projectId, input.draftId, input.expectedRevision)
+      if (!(await store.ownerRequestsV2.get(input.projectId, input.requestId))) {
+        await store.templatesV2.validate(input.projectId, input.draftId, input.expectedRevision)
       }
       return {
         contractVersion: 2 as const,
-        request: store.ownerRequestsV2.request('publish', input)
+        request: await store.ownerRequestsV2.request('publish', input)
       }
     }
   }),
@@ -155,10 +155,10 @@ export const PIPELINE_V2_TEMPLATE_METHODS = [
     name: 'pipeline.v2.template.disableRequest',
     permission: 'workspace',
     params: PipelineV2TemplateDisableRequestParams,
-    handler: (input, ctx) => {
+    handler: async (input, ctx) => {
       assertPipelineV2Project(ctx, input.projectId, input.expectedRuntimeId)
       const store = ctx.runtime.pipelineRuntime.store
-      store.templatesV2.getVersion({
+      await store.templatesV2.getVersion({
         engineVersion: 2,
         projectId: input.projectId,
         id: input.id,
@@ -167,7 +167,7 @@ export const PIPELINE_V2_TEMPLATE_METHODS = [
       })
       return {
         contractVersion: 2 as const,
-        request: store.ownerRequestsV2.request('disable', input)
+        request: await store.ownerRequestsV2.request('disable', input)
       }
     }
   }),
@@ -175,14 +175,14 @@ export const PIPELINE_V2_TEMPLATE_METHODS = [
     name: 'pipeline.v2.template.receipt',
     permission: 'workspace',
     params: PipelineV2RequestReceiptParams,
-    handler: (input, ctx) => {
+    handler: async (input, ctx) => {
       assertPipelineV2Project(ctx, input.projectId, input.expectedRuntimeId)
       const store = ctx.runtime.pipelineRuntime.store
       return PipelineV2TemplateReceiptResult.parse({
         contractVersion: 2 as const,
         projectId: input.projectId,
-        request: store.ownerRequestsV2.get(input.projectId, input.requestId),
-        receipt: store.templatesV2.receipt(input.projectId, input.requestId)
+        request: await store.ownerRequestsV2.get(input.projectId, input.requestId),
+        receipt: await store.templatesV2.receipt(input.projectId, input.requestId)
       })
     }
   })

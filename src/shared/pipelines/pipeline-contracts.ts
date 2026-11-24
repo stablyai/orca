@@ -1,4 +1,4 @@
-import { z } from 'zod'
+import * as z from 'zod'
 import { PipelineStageEvidence } from './pipeline-stage-evidence'
 import type { PipelineV2Run } from './v2/pipeline-v2-run-contracts'
 import { PipelineV2TemplateSelection } from './v2/pipeline-v2-template-contracts'

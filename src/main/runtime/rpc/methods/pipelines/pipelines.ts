@@ -1,4 +1,4 @@
-import { z } from 'zod'
+import * as z from 'zod'
 import { defineMethod, type RpcContext } from '../../core'
 import {
   PipelineRunParams as runParams,
@@ -48,8 +48,8 @@ export const PIPELINE_METHODS = [
     handler: async ({ id, expectedRuntimeId, ...mutation }, ctx) => {
       assertRuntime(ctx, expectedRuntimeId)
       const service = ctx.runtime.pipelineRuntime
-      await service.assertWorkspace(service.store.get(id).workspace)
-      const run = service.store.command(id, { ...mutation, command: { kind: 'revalidate' } })
+      await service.assertWorkspace((await service.store.get(id)).workspace)
+      const run = await service.store.command(id, { ...mutation, command: { kind: 'revalidate' } })
       service.wake()
       return { run: summary(run) }
     }
@@ -58,9 +58,12 @@ export const PIPELINE_METHODS = [
     name: 'pipeline.receipt',
     permission: 'workspace',
     params: PipelineReceiptParams,
-    handler: ({ id, kind, expectedRuntimeId, ...mutation }, ctx) => {
+    handler: async ({ id, kind, expectedRuntimeId, ...mutation }, ctx) => {
       assertRuntime(ctx, expectedRuntimeId)
-      const run = ctx.runtime.pipelineRuntime.store.replay(id, { ...mutation, command: { kind } })
+      const run = await ctx.runtime.pipelineRuntime.store.replay(id, {
+        ...mutation,
+        command: { kind }
+      })
       return { run: run ? summary(run) : null }
     }
   }),
@@ -68,8 +71,8 @@ export const PIPELINE_METHODS = [
     name: 'pipeline.list',
     permission: 'workspace',
     params: null,
-    handler: (_params, { runtime }) => ({
-      runs: runtime.pipelineRuntime.store.list().map(summary)
+    handler: async (_params, { runtime }) => ({
+      runs: (await runtime.pipelineRuntime.store.list()).map(summary)
     })
   }),
   defineMethod({
@@ -107,7 +110,7 @@ export const PIPELINE_METHODS = [
     permission: 'workspace',
     params: runParams,
     handler: async ({ id }, { runtime }) => {
-      const run = runtime.pipelineRuntime.store.get(id)
+      const run = await runtime.pipelineRuntime.store.get(id)
       await runtime.pipelineRuntime.assertWorkspace(run.workspace)
       const sourceRevision = await pipelineSourceRevision(run.workspace).catch(() => null)
       return {
@@ -128,10 +131,10 @@ export const PIPELINE_METHODS = [
     params: PipelineContextParams,
     handler: async ({ id, artifactStage, artifactIndex }, { runtime }) => {
       const service = runtime.pipelineRuntime
-      const run = service.store.get(id)
+      const run = await service.store.get(id)
       await service.assertWorkspace(run.workspace)
       return PipelineContextResponse.parse({
-        ...service.store.context(id, run.stage, artifactStage, artifactIndex),
+        ...(await service.store.context(id, run.stage, artifactStage, artifactIndex)),
         active: run.active,
         sourceRevision: await pipelineSourceRevision(run.workspace)
       })
@@ -143,11 +146,11 @@ export const PIPELINE_METHODS = [
     params: submitParams,
     handler: async ({ id, mutation }, ctx) => {
       const service = ctx.runtime.pipelineRuntime
-      await service.assertWorkspace(service.store.get(id).workspace)
+      await service.assertWorkspace((await service.store.get(id)).workspace)
       const run = await service.controller.submit(
         id,
         mutation,
-        await callerDispatch(ctx, service.store.get(id).workspace.id)
+        await callerDispatch(ctx, (await service.store.get(id)).workspace.id)
       )
       service.wake()
       return { run: summary(run) }
@@ -157,11 +160,14 @@ export const PIPELINE_METHODS = [
     name: 'pipeline.pause',
     permission: 'workspace',
     params: controlParams,
-    handler: ({ id, expectedRuntimeId, ...mutation }, ctx) => {
+    handler: async ({ id, expectedRuntimeId, ...mutation }, ctx) => {
       assertRuntime(ctx, expectedRuntimeId)
       return {
         run: summary(
-          ctx.runtime.pipelineRuntime.store.command(id, { ...mutation, command: { kind: 'pause' } })
+          await ctx.runtime.pipelineRuntime.store.command(id, {
+            ...mutation,
+            command: { kind: 'pause' }
+          })
         )
       }
     }
@@ -174,7 +180,7 @@ export const PIPELINE_METHODS = [
       assertRuntime(ctx, expectedRuntimeId)
       const { runtime } = ctx
       const service = runtime.pipelineRuntime
-      const current = service.store.get(id)
+      const current = await service.store.get(id)
       await service.assertWorkspace(current.workspace)
       if (
         !(await availablePipelines()).some(
@@ -186,7 +192,7 @@ export const PIPELINE_METHODS = [
       ) {
         throw new Error('pipeline_profile_unavailable_or_changed')
       }
-      const run = service.store.command(id, { ...mutation, command: { kind: 'resume' } })
+      const run = await service.store.command(id, { ...mutation, command: { kind: 'resume' } })
       service.wake()
       return { run: summary(run) }
     }
@@ -197,13 +203,13 @@ export const PIPELINE_METHODS = [
     params: PipelineReconcileParams,
     handler: async ({ id, setupTerminal }, { runtime }) => {
       if (setupTerminal) {
-        const run = runtime.pipelineRuntime.store.get(id)
+        const run = await runtime.pipelineRuntime.store.get(id)
         await runtime.pipelineRuntime.assertWorkspace(run.workspace)
         const terminal = await runtime.showTerminal(setupTerminal)
         if (terminal.worktreeId !== run.workspace.id) {
           throw new Error('pipeline_setup_workspace_mismatch')
         }
-        runtime.pipelineRuntime.store.command(id, {
+        await runtime.pipelineRuntime.store.command(id, {
           requestId: `reconcile-setup:${id}:${run.revision}`,
           expectedRevision: run.revision,
           command: { kind: 'setup_wait', terminalHandle: setupTerminal }
@@ -211,15 +217,15 @@ export const PIPELINE_METHODS = [
         runtime.pipelineRuntime.observeSetup(id, setupTerminal)
       }
       await runtime.pipelineRuntime.controller.reconcile(id)
-      return { run: summary(runtime.pipelineRuntime.store.get(id)) }
+      return { run: summary(await runtime.pipelineRuntime.store.get(id)) }
     }
   }),
   defineMethod({
     name: 'pipeline.configure',
     permission: 'host-admin',
     params: PipelineConfigureParams,
-    handler: ({ projectId, checks }, { runtime }) => {
-      runtime.pipelineRuntime.store.configureChecks(projectId, checks)
+    handler: async ({ projectId, checks }, { runtime }) => {
+      await runtime.pipelineRuntime.store.configureChecks(projectId, checks)
       return { projectId, checks }
     }
   })

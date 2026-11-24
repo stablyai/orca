@@ -41,9 +41,9 @@ export function pipelineWorkerPorts(
         mode: decideWorkerStartMode({ params, settings: readWorkerStartModeSettings(runtime) }),
         systemCoordinator: {
           workspaceId: run.workspace.id,
-          prepared: (value) => {
+          prepared: async (value) => {
             worker = value
-            prepared(value)
+            await prepared(value)
           }
         }
       })

@@ -1,4 +1,4 @@
-import { z } from 'zod'
+import * as z from 'zod'
 import { PipelineV2Mutation } from './pipeline-v2-mutations'
 import { pipelineV2Id } from './pipeline-v2-values'
 import { PipelineV2DiscussionInput } from './pipeline-v2-discussion-contracts'

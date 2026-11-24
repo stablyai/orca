@@ -57,7 +57,9 @@ export async function pipelineV2DraftSource(
       }
     }
   }
-  const { definition } = ctx.runtime.pipelineRuntime.store.templatesV2.getVersion(source.selection)
+  const { definition } = await ctx.runtime.pipelineRuntime.store.templatesV2.getVersion(
+    source.selection
+  )
   const { digest: _digest, engineVersion: _engine, ...template } = definition
   return {
     draft: PipelineV2Template.parse({

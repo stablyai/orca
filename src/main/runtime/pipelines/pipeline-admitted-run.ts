@@ -3,19 +3,19 @@ import {
   type PipelineSelection
 } from '../../../shared/pipelines/pipeline-contracts'
 import type { Worktree } from '../../../shared/worktree/types'
-import type { PipelineStore } from './pipeline-store'
-import { pipelineDigest } from './pipeline-store'
+import type { PipelineStorePort } from './pipeline-store-port'
+import { pipelineDigest } from './pipeline-digest'
 import { pipelineCommit } from './pipeline-evidence'
 
 export async function bindAdmittedPipeline(
-  store: PipelineStore,
+  store: PipelineStorePort,
   worktree: Pick<Worktree, 'id' | 'instanceId' | 'repoId' | 'path'>,
   selection: PipelineSelection,
   task: string,
   requestId: string
 ) {
   const snapshot = PipelineDefinitionSnapshot.parse(
-    store.creationSnapshot(requestId.replace(/^create:/, ''))
+    await store.creationSnapshot(requestId.replace(/^create:/, ''))
   )
   if (
     selection.digest !== pipelineDigest(snapshot.profile) ||
@@ -27,7 +27,7 @@ export async function bindAdmittedPipeline(
   if (!worktree.instanceId) {
     throw new Error('pipeline_workspace_instance_missing')
   }
-  return store.create({
+  return await store.create({
     requestId,
     waitForSetup: true,
     profile: snapshot.profile,

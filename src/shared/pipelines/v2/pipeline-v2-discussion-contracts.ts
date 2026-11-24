@@ -1,4 +1,4 @@
-import { z } from 'zod'
+import * as z from 'zod'
 import { PipelineV2DecisionPin } from './pipeline-v2-run-contracts'
 import {
   pipelineV2Digest,

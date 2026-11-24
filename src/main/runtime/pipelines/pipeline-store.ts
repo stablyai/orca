@@ -2,9 +2,12 @@ import { randomUUID } from 'node:crypto'
 import { PipelineCreationJournal } from './pipeline-creation-journal'
 import { assertPipelineCreationCapacity } from './pipeline-creation-capacity'
 import type { PipelineV2Run } from '../../../shared/pipelines/v2/pipeline-v2-run-contracts'
+import type { PipelineV2Command } from '../../../shared/pipelines/v2/pipeline-v2-mutations'
+import { readPipelineV2HistoryContext } from './v2/pipeline-v2-history-context'
+import { invalidatePipelineV2RawInput } from './v2/pipeline-v2-session-input-effect'
 import { pipelineV2Fingerprint } from '../../../shared/pipelines/v2/pipeline-v2-fingerprint'
-import { chmodSync, existsSync } from 'node:fs'
-import { preparePipelineStoreFile } from './pipeline-store-file'
+import { preparePipelineStoreFile, restrictPipelineStoreSidecars } from './pipeline-store-file'
+import { applyInternalPipelineV2 } from './pipeline-store-v2-command'
 import Database from '../../sqlite/sync-database'
 import {
   PipelineCreate,
@@ -77,13 +80,7 @@ export class PipelineStore {
       this.db.close()
       throw error
     }
-    if (file !== ':memory:') {
-      for (const suffix of ['-wal', '-shm']) {
-        if (existsSync(file + suffix)) {
-          chmodSync(file + suffix, 0o600)
-        }
-      }
-    }
+    restrictPipelineStoreSidecars(file)
   }
 
   create(input: unknown): PipelineRun {
@@ -146,6 +143,17 @@ export class PipelineStore {
     return this.v2.get(id)
   }
 
+  historyContext(id: string, selector: Parameters<typeof readPipelineV2HistoryContext>[2]) {
+    return readPipelineV2HistoryContext(this, this.getV2(id), selector)
+  }
+
+  observeRawInput(
+    binding: Parameters<typeof invalidatePipelineV2RawInput>[1],
+    input: Parameters<typeof invalidatePipelineV2RawInput>[2]
+  ): void {
+    invalidatePipelineV2RawInput(this, binding, input)
+  }
+
   hasV2(id: string): boolean {
     return this.v2.has(id)
   }
@@ -165,6 +173,10 @@ export class PipelineStore {
     const run = this.v2.command(id, input)
     publishPipelineV2Change(this.publish, run)
     return run
+  }
+
+  internalV2(id: string, command: PipelineV2Command, requestId?: string): PipelineV2Run {
+    return applyInternalPipelineV2(this, id, command, requestId)
   }
 
   receiptV2(id: string, requestId: string) {

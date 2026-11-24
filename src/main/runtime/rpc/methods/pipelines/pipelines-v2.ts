@@ -1,5 +1,5 @@
 import { defineMethod } from '../../core'
-import { z } from 'zod'
+import * as z from 'zod'
 import {
   PipelineV2RunParams,
   PipelineV2DescribeParams,
@@ -54,7 +54,7 @@ export const PIPELINE_V2_METHODS = [
       return {
         contractVersion: 2 as const,
         receipt,
-        run: pipelineV2Summary(service.store.getV2(input.id))
+        run: pipelineV2Summary(await service.store.getV2(input.id))
       }
     }
   }),
@@ -85,7 +85,7 @@ export const PIPELINE_V2_METHODS = [
                 configuredChecks: z
                   .array(PipelineCheck)
                   .max(16)
-                  .parse(ctx.runtime.pipelineRuntime.store.configuredChecks(input.projectId))
+                  .parse(await ctx.runtime.pipelineRuntime.store.configuredChecks(input.projectId))
                   .map((check) => ({ id: check.id }))
               }
             : {}),
@@ -179,14 +179,14 @@ export const PIPELINE_V2_METHODS = [
       const run = await scopedPipelineV2(ctx, input)
       return {
         contractVersion: 2 as const,
-        ...pipelineV2Events(ctx.runtime.pipelineRuntime.store, {
+        ...(await pipelineV2Events(ctx.runtime.pipelineRuntime.store, {
           id: run.id,
           projectId: run.workspace.projectId,
           workspaceId: run.workspace.id,
           instanceId: run.workspace.instanceId,
           cursor: input.cursor,
           limit: input.limit
-        })
+        }))
       }
     }
   })

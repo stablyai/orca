@@ -1,4 +1,4 @@
-import { z } from 'zod'
+import * as z from 'zod'
 import { PipelineV2ResponseObservation } from './pipeline-v2-response-observation'
 import {
   PipelineSessionBinding,

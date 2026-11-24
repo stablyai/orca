@@ -1,4 +1,4 @@
-import { z } from 'zod'
+import * as z from 'zod'
 
 export const AgentSessionTurnTokenCountsSchema = z.strictObject({
   uncachedInput: z.number().int().nonnegative(),

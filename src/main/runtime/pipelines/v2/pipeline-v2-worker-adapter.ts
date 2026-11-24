@@ -20,7 +20,7 @@ export function pipelineV2WorkerPorts(
   observeSession: (request: PipelineV2LaunchRequest) => Promise<PipelineV2SessionObservation> = (
     request
   ) => readPipelineV2SessionExecutor(runtime, request),
-  assertLaunch: (request: PipelineV2LaunchRequest) => void = () => {}
+  assertLaunch: (request: PipelineV2LaunchRequest) => void | Promise<void> = () => {}
 ): Pick<PipelineV2Ports, 'startInvocation' | 'settled'> {
   const db = runtime.getOrchestrationDb()
   return {
@@ -30,14 +30,14 @@ export function pipelineV2WorkerPorts(
       const permissionMode = executor.permissionMode === 'default' ? 'own' : executor.permissionMode
       const previous = request.previousSession
       try {
-        assertLaunch(request)
+        await assertLaunch(request)
         if (!isTuiAgent(executor.agent) || !isAgentPermissionChoice(permissionMode)) {
           throw new Error('pipeline_permission_mode_unsupported')
         }
         if (previous) {
           assertPipelineV2SessionCompatible(executor, await observeSession(request))
         }
-        assertLaunch(request)
+        await assertLaunch(request)
       } catch (error) {
         throw new PipelineV2LaunchRefusedError(error)
       }
@@ -104,8 +104,8 @@ export function pipelineV2WorkerPorts(
                   { model: executor.model, effort: executor.effort, permissionMode },
                   executor.agent
                 ),
-          prepared: (value, authority) => {
-            assertLaunch(request)
+          prepared: async (value, authority) => {
+            await assertLaunch(request)
             const party = resolveDispatchAssigneeParty(value.sessionId, db)
             const session: PipelineSessionBinding = {
               kind: party.orcaSessionId ? 'structured' : 'terminal',
@@ -118,7 +118,7 @@ export function pipelineV2WorkerPorts(
               throw new Error('pipeline_surface_changed')
             }
             worker = { dispatchId: value.dispatchId, session }
-            prepared(worker)
+            await prepared(worker)
           }
         }
       })

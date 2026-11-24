@@ -23,8 +23,15 @@ beforeEach(() => {
   store = new PipelineStore(':memory:')
 })
 afterEach(() => store.close())
-function createReviewed(gatedReview = false) {
+function createReviewed(
+  gatedReview = false,
+  findingDisputes?: 'owner_acknowledgment' | 'stage_rationale'
+) {
   const template = pipelineV2ReviewedFixture()
+  if (findingDisputes && template.completionPolicy.kind === 'reviewed_source') {
+    template.completionPolicy.findingPolicy = 'tracked'
+    template.completionPolicy.findingDisputes = findingDisputes
+  }
   template.stages[3].ownerGate.enabled = gatedReview
   template.stages[3].outcomes[0].target = { kind: 'next' }
   const docs = pipelineV2AgentStage('docs')
@@ -210,6 +217,61 @@ it('generic_evidence_is_not_independent_review', () => {
   ).toThrow('pipeline_stage_evidence_mismatch')
   expect(evaluatePipelineV2Completion(store.getV2('run-1'), fixtureSource).ready).toBe(false)
 })
+
+it.each([
+  ['owner_acknowledgment', false, false],
+  ['owner_acknowledgment', true, true],
+  ['stage_rationale', false, true]
+] as const)(
+  'resolves requirement disputes under %s with owner gate %s according to the selected policy',
+  (policy, gated, ready) => {
+    createReviewed(gated, policy)
+    checks()
+    const finding = {
+      severity: 'important' as const,
+      detail: 'Rename public API',
+      conditionToFix: 'Replace the existing API'
+    }
+    stage('changes', { stage: 'review', findings: [finding] })
+    const accept = () => {
+      const pending = store.getV2('run-1').pendingDecision
+      if (pending) {
+        v2Mutation(store, { kind: 'decide', ...pending, action: 'accept' })
+      }
+    }
+    accept()
+    const id = pipelineV2FindingLedger(store.getV2('run-1'), fixtureSource, false).findings[0].id
+    settleV2Stage(store)
+    settleV2Stage(store)
+    checks()
+    stage(
+      'approved',
+      { stage: 'review', findings: [{ ...finding, id }] },
+      fixtureSource,
+      false,
+      undefined,
+      [
+        {
+          id,
+          disposition: 'disputed',
+          rationale: 'Renaming is outside the agreed scope',
+          requirement: 'Keep the existing public API compatible'
+        }
+      ]
+    )
+    if (gated) {
+      expect(evaluatePipelineV2Completion(store.getV2('run-1'), fixtureSource).ready).toBe(false)
+    }
+    accept()
+    const run = store.getV2('run-1')
+    expect(pipelineV2FindingLedger(run, fixtureSource, true)).toMatchObject({
+      unresolvedImportant: ready ? 0 : 1,
+      findings: [{ id, disposition: 'disputed', ownerAcknowledged: gated }]
+    })
+    expect(evaluatePipelineV2Completion(run, fixtureSource).ready).toBe(ready)
+    expect(evaluatePipelineV2Completion(run, 'e'.repeat(64)).ready).toBe(false)
+  }
+)
 it('docs_change_enters_visible_repair_route_and_no_update_rationale_allows_finish', async () => {
   createReviewed()
   checks()

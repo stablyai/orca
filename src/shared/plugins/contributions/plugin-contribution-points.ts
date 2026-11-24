@@ -1,4 +1,4 @@
-import { z } from 'zod'
+import * as z from 'zod'
 import { PipelineProfile } from '../../pipelines/pipeline-contracts'
 import type { PluginCatalogType } from '../catalog/plugin-catalog-types'
 import {

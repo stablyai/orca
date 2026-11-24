@@ -1,4 +1,4 @@
-import { z } from 'zod'
+import * as z from 'zod'
 import { PipelineCheck } from '../pipeline-contracts'
 import { PipelineV2Definition, PipelineV2Task } from './pipeline-v2-contracts'
 import { PipelineV2EffectiveExecutor } from './pipeline-v2-run-contracts'

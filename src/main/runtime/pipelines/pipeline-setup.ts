@@ -1,27 +1,31 @@
-import type { PipelineStore } from './pipeline-store'
+import type { PipelineStorePort } from './pipeline-store-port'
 import { commandPipelineV2 } from './v2/pipeline-v2-execution'
 
-export function releasePipelineSetup(store: PipelineStore, id: string): void {
-  if (store.hasV2(id)) {
-    if (store.getV2(id).setupHold) {
-      commandPipelineV2(store, id, { kind: 'setup_ready' })
+export async function releasePipelineSetup(store: PipelineStorePort, id: string): Promise<void> {
+  if (await store.hasV2(id)) {
+    if ((await store.getV2(id)).setupHold) {
+      await commandPipelineV2(store, id, { kind: 'setup_ready' })
     }
     return
   }
-  const run = store.get(id)
-  store.command(id, {
+  const run = await store.get(id)
+  await store.command(id, {
     requestId: `setup-ready:${id}:${run.revision}`,
     expectedRevision: run.revision,
     command: { kind: 'setup_ready' }
   })
 }
-export function failPipelineSetup(store: PipelineStore, id: string, reason: string): void {
-  if (store.hasV2(id)) {
-    commandPipelineV2(store, id, { kind: 'uncertain', reason })
+export async function failPipelineSetup(
+  store: PipelineStorePort,
+  id: string,
+  reason: string
+): Promise<void> {
+  if (await store.hasV2(id)) {
+    await commandPipelineV2(store, id, { kind: 'uncertain', reason })
     return
   }
-  const run = store.get(id)
-  store.command(id, {
+  const run = await store.get(id)
+  await store.command(id, {
     requestId: `setup-failed:${id}:${run.revision}`,
     expectedRevision: run.revision,
     command: { kind: 'uncertain', reason }

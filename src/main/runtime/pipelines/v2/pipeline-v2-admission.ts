@@ -1,5 +1,5 @@
-import { z } from 'zod'
-import type { PipelineStore } from '../pipeline-store'
+import * as z from 'zod'
+import type { PipelineStorePort } from '../pipeline-store-port'
 import { PipelineCheck } from '../../../../shared/pipelines/pipeline-contracts'
 import {
   PipelineV2Task,
@@ -13,7 +13,7 @@ import { resolvePipelineV2Launch, type PipelineV2LaunchEnvironment } from './pip
 import { pipelineV2MandatoryContext } from './pipeline-v2-context'
 
 export type PipelineV2AdmissionEnvironment = {
-  store: PipelineStore
+  store: PipelineStorePort
   launch: PipelineV2LaunchEnvironment
   project: { id: string; path: string; kind: string; hostId: string }
 }
@@ -67,18 +67,18 @@ export async function admitPipelineV2(
     throw new Error('pipeline_local_git_only')
   }
   const payload = creationPayload ?? { projectId: host.project.id, selection, task }
-  if (host.store.creationV2(creationId, payload)) {
+  if (await host.store.creationV2(creationId, payload)) {
     return {
-      ...PipelineV2CreationSnapshot.parse(host.store.creationSnapshotV2(creationId)),
+      ...PipelineV2CreationSnapshot.parse(await host.store.creationSnapshotV2(creationId)),
       fresh: false
     }
   }
-  const { definition } = host.store.templatesV2.resolve(selection)
+  const { definition } = await host.store.templatesV2.resolve(selection)
   assertPipelineV2AdmissionContext(definition, task)
   const configured = z
     .array(PipelineCheck)
     .max(16)
-    .parse(host.store.configuredChecks(host.project.id))
+    .parse(await host.store.configuredChecks(host.project.id))
   const required = new Set(
     definition.stages.flatMap((stage) => (stage.kind === 'checks' ? stage.executor.checkIds : []))
   )
@@ -114,12 +114,12 @@ export async function admitPipelineV2(
     effectiveExecutors,
     checkSnapshot: configured.filter((check) => required.has(check.id))
   })
-  host.store.templatesV2.resolve(selection)
-  const reserved = host.store.reserveCreationV2(creationId, payload, snapshot)
+  await host.store.templatesV2.resolve(selection)
+  const reserved = await host.store.reserveCreationV2(creationId, payload, snapshot)
   return {
     ...(reserved.fresh
       ? snapshot
-      : PipelineV2CreationSnapshot.parse(host.store.creationSnapshotV2(creationId))),
+      : PipelineV2CreationSnapshot.parse(await host.store.creationSnapshotV2(creationId))),
     fresh: reserved.fresh
   }
 }

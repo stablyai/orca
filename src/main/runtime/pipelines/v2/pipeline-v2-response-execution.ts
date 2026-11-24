@@ -1,4 +1,4 @@
-import type { PipelineStore } from '../pipeline-store'
+import type { PipelineStorePort } from '../pipeline-store-port'
 import type {
   PipelineV2Invocation,
   PipelineV2Run
@@ -9,7 +9,7 @@ import { pipelineV2Fingerprint } from '../../../../shared/pipelines/v2/pipeline-
 import { pipelineV2RequiresReviewCommit } from '../../../../shared/pipelines/v2/pipeline-v2-review-policy'
 
 export async function completePipelineV2Response(
-  store: PipelineStore,
+  store: PipelineStorePort,
   ports: PipelineV2Ports,
   run: PipelineV2Run,
   invocation: PipelineV2Invocation,
@@ -80,7 +80,7 @@ export async function completePipelineV2Response(
       }
     }
     if (observation) {
-      run = commandPipelineV2(
+      run = await commandPipelineV2(
         store,
         run.id,
         { kind: 'observe_response', invocationId: invocation.id, observation },
@@ -97,7 +97,7 @@ export async function completePipelineV2Response(
       )
     }
     if (valid && response.state === 'completed' && invocation.state === 'running') {
-      run = commandPipelineV2(
+      run = await commandPipelineV2(
         store,
         run.id,
         {
@@ -123,7 +123,7 @@ export async function completePipelineV2Response(
       throw new Error('pipeline_response_candidate_changed')
     }
     await ports.completeResponse(invocation, candidate?.result)
-    commandPipelineV2(
+    await commandPipelineV2(
       store,
       run.id,
       candidate
@@ -137,7 +137,7 @@ export async function completePipelineV2Response(
           }
     )
   } catch (error) {
-    commandPipelineV2(store, run.id, {
+    await commandPipelineV2(store, run.id, {
       kind: 'uncertain',
       reason:
         error instanceof Error && /^pipeline_[a-z_]+$/.test(error.message)

@@ -1,4 +1,4 @@
-import { z } from 'zod'
+import * as z from 'zod'
 import { PLUGIN_HOST_API } from '../../../shared/plugins/workers/plugin-host-api'
 import { bind, type PluginHostMethodContext } from './host-api/plugin-host-method-bind'
 import { PluginHostCallError } from './host-api/plugin-host-call-scope'

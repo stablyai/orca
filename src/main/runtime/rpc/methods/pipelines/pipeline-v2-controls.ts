@@ -18,9 +18,9 @@ async function control(
 ) {
   const run = await scopedPipelineV2(ctx, input)
   const service = ctx.runtime.pipelineRuntime
-  const previous = service.store.receiptV2(input.id, input.requestId)
+  const previous = await service.store.receiptV2(input.id, input.requestId)
   if (!previous && kind === 'resume') {
-    service.store.templatesV2.resolve({
+    await service.store.templatesV2.resolve({
       engineVersion: 2,
       projectId: run.workspace.projectId,
       id: run.definition.id,
@@ -36,7 +36,7 @@ async function control(
             previous?.sourceRevision ?? (await service.v2Ports.sourceRevision(run.workspace))
         }
       : { kind }
-  const next = service.store.commandV2(input.id, {
+  const next = await service.store.commandV2(input.id, {
     requestId: input.requestId,
     expectedRevision: input.expectedRevision,
     expectedInstanceId: input.expectedInstanceId,
@@ -46,7 +46,7 @@ async function control(
   return {
     contractVersion: 2 as const,
     run: pipelineV2Summary(next),
-    receipt: service.store.receiptV2(input.id, input.requestId)
+    receipt: await service.store.receiptV2(input.id, input.requestId)
   }
 }
 export const PIPELINE_V2_CONTROL_METHODS = [
@@ -74,7 +74,7 @@ export const PIPELINE_V2_CONTROL_METHODS = [
     params: PipelineV2ReceiptParams,
     handler: async (input, ctx) => {
       const run = await scopedPipelineV2(ctx, input)
-      const receipt = ctx.runtime.pipelineRuntime.store.receiptV2(input.id, input.requestId)
+      const receipt = await ctx.runtime.pipelineRuntime.store.receiptV2(input.id, input.requestId)
       if (
         receipt &&
         (receipt.kind !== input.kind ||
@@ -97,10 +97,16 @@ export const PIPELINE_V2_CONTROL_METHODS = [
         ...(input.kind === 'reserve'
           ? {
               delivery: invocation
-                ? (pipelineV2DeliveryReceipt(ctx.runtime.pipelineRuntime.store, invocation) ?? null)
+                ? ((await pipelineV2DeliveryReceipt(
+                    ctx.runtime.pipelineRuntime.store,
+                    invocation
+                  )) ?? null)
                 : null,
               refusal: invocation
-                ? (pipelineV2RefusalReceipt(ctx.runtime.pipelineRuntime.store, invocation) ?? null)
+                ? ((await pipelineV2RefusalReceipt(
+                    ctx.runtime.pipelineRuntime.store,
+                    invocation
+                  )) ?? null)
                 : null
             }
           : {})

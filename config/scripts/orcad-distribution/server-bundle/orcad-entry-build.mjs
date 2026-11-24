@@ -30,6 +30,7 @@ export const ORCAD_CHILD_ENTRY_POINTS = {
   journalSqlReader: 'src/main/native-chat/agent-session-journal/journal-sql-reader-entry.ts',
   agentIdentityWorker: 'src/main/agent-hooks/identity/agent-identity-worker-entry.ts',
   botsDbWorker: 'src/main/bots/db-worker/bots-db-worker-entry.ts',
+  pipelineStoreWorker: 'src/main/runtime/pipelines/pipeline-store-worker-entry.ts',
   orchestrationReader:
     'src/main/runtime/orchestration/db/reader-worker/orchestration-reader-entry.ts',
   portScanCommandWorker: 'src/main/ports/port-scan-command-worker-entry.ts',

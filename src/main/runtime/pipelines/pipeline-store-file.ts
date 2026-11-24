@@ -1,4 +1,4 @@
-import { closeSync, existsSync, lstatSync, openSync } from 'node:fs'
+import { chmodSync, closeSync, existsSync, lstatSync, openSync } from 'node:fs'
 
 export function preparePipelineStoreFile(file: string): void {
   if (file === ':memory:') {
@@ -16,5 +16,15 @@ export function preparePipelineStoreFile(file: string): void {
     (process.getuid && stat.uid !== process.getuid())
   ) {
     throw new Error('pipeline_store_permissions')
+  }
+}
+
+export function restrictPipelineStoreSidecars(file: string): void {
+  if (file !== ':memory:') {
+    for (const suffix of ['-wal', '-shm']) {
+      if (existsSync(file + suffix)) {
+        chmodSync(file + suffix, 0o600)
+      }
+    }
   }
 }

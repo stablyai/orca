@@ -1,4 +1,4 @@
-import { z } from 'zod'
+import * as z from 'zod'
 import { spec, ALL_SURFACES, FRAMES_ONLY } from './plugin-host-method-spec'
 import { PipelineControlParams } from '../../rpc-contract/pipeline-params'
 

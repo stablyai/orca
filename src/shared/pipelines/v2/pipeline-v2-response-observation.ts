@@ -1,4 +1,4 @@
-import { z } from 'zod'
+import * as z from 'zod'
 import { pipelineV2Digest, pipelineV2Id } from './pipeline-v2-values'
 import { AgentSessionTurnTokenCountsSchema } from '../../agent-session/conversation-context/agent-session-turn-token-accounting'
 

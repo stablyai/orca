@@ -12,7 +12,7 @@ export type SystemWorkerCoordinator = {
   prepared: (
     worker: { dispatchId: string; sessionId: string },
     authority: { paneKey: string | null }
-  ) => void
+  ) => void | Promise<void>
 }
 
 export function applySystemWorkerLaunch(
@@ -45,18 +45,18 @@ export function assertSystemWorkerMode(
   }
 }
 
-export function bindSystemWorkerCoordinator(
+export async function bindSystemWorkerCoordinator(
   coordinator: SystemWorkerCoordinator | undefined,
   db: OrchestrationDb,
   paneKey: string | null,
   dispatchId: string,
   sessionId: string
-): void {
+): Promise<void> {
   if (!coordinator) {
     return
   }
   if (paneKey) {
     db.keepWorkerTerminalOpen(paneKey)
   }
-  coordinator.prepared({ dispatchId, sessionId }, { paneKey })
+  await coordinator.prepared({ dispatchId, sessionId }, { paneKey })
 }
