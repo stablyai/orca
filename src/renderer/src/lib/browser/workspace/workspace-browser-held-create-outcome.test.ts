@@ -25,6 +25,7 @@ const destination: BrowserLinkDestination = {
 }
 
 function request(isCurrent: boolean): OpenWorkspaceBrowserTabRequest {
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: a minimal tab request: the held-create path reads only these fields.
   return {
     workspaceId: WORKSPACE,
     url: URL_TO_OPEN,

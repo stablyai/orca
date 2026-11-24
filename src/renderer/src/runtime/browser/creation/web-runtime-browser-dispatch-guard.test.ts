@@ -1,6 +1,10 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
-const h = vi.hoisted(() => ({ rpc: [] as string[], discarded: 0, admit: true }))
+const h = vi.hoisted((): { rpc: string[]; discarded: number; admit: boolean } => ({
+  rpc: [],
+  discarded: 0,
+  admit: true
+}))
 
 vi.mock('../../web-session-tabs-sync/identity/web-runtime-session-environment', () => ({
   isWebRuntimeSessionActive: () => true

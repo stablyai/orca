@@ -12,6 +12,7 @@ function context(overrides: Partial<TerminalLinkActionContext>): TerminalLinkAct
   return {
     requests,
     paneId: 1,
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: a pointer-gesture fake: the chooser path calls only canRequestAction.
     pointerGesture: {
       canRequestAction: () => true
     } as unknown as TerminalLinkActionContext['pointerGesture'],
@@ -23,6 +24,7 @@ function context(overrides: Partial<TerminalLinkActionContext>): TerminalLinkAct
 }
 
 function click(button = 0): MouseEvent {
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: a partial MouseEvent: routing reads only button, detail and modifier keys.
   return {
     button,
     altKey: false,

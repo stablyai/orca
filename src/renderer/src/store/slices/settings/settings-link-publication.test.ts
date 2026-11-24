@@ -6,7 +6,7 @@ import { getDefaultSettings } from '../../../../../shared/orca-profiles/constant
 import type { GlobalSettings } from '../../../../../shared/settings/global-settings-types'
 import type * as OwnerSettingsModule from './worktree-visibility-owner-settings'
 
-const hydration = vi.hoisted(() => ({ gate: null as Promise<void> | null }))
+const hydration = vi.hoisted((): { gate: Promise<void> | null } => ({ gate: null }))
 vi.mock('./worktree-visibility-owner-settings', async (importOriginal) => {
   const original = await importOriginal<typeof OwnerSettingsModule>()
   return {

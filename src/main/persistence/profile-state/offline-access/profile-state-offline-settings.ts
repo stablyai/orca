@@ -3,7 +3,10 @@ import { homedir } from 'node:os'
 import type { GlobalSettings } from '../../../../shared/settings/global-settings-types'
 import { getDefaultPersistedState } from '../../../../shared/orca-profiles/constants'
 import { normalizeDisabledTuiAgents } from '../../../../shared/agent-launch/catalog/tui-agent-selection'
-import { profileStateJsonMatchesAcceptance } from '../documents/profile-state-documents'
+import {
+  profileStateJsonMatchesAcceptance,
+  readProfileStateParsedSnapshot
+} from '../documents/profile-state-documents'
 import { isRecord, parseProfileStateRoot } from '../documents/profile-state-document-validation'
 import {
   openProfileStateDatabase,
@@ -16,7 +19,6 @@ import { assertProfileStateCanInitialize } from '../recovery/profile-state-recov
 import { classifyProfileStateStorage } from '../database/profile-state-storage-classification'
 import { migrateProfileStateToSqlite } from '../startup/profile-state-migration'
 import { ensureProfileStateAuthorityMarker } from '../database/profile-state-authority-marker'
-import { readProfileStateParsedSnapshot } from '../documents/profile-state-documents'
 import { seedNewProfileLinkMode } from '../../loading-store/profile-loading/loaded-cohort-migrations'
 
 export type ProfileStateOfflineLocation = {

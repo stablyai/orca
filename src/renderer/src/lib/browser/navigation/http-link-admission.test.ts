@@ -16,6 +16,7 @@ const LOCAL = { kind: 'local' } as const
 const settle = (): Promise<void> => new Promise((resolve) => setTimeout(resolve, 0))
 
 function storeState(): HttpLinkStoreState {
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: a minimal store: admission reads only settings and the browser opener seam.
   return {
     settings: { openLinksInApp: true },
     setActiveWorktree: vi.fn()

@@ -4,7 +4,7 @@ import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type * as DomainWrites from '../documents/profile-state-domain-writes'
 
-const concurrent = vi.hoisted(() => ({ write: null as null | (() => void) }))
+const concurrent = vi.hoisted((): { write: null | (() => void) } => ({ write: null }))
 vi.mock('electron', () => ({
   app: { getPath: () => tmpdir() },
   safeStorage: { isEncryptionAvailable: () => false }

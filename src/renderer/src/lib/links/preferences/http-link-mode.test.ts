@@ -13,6 +13,7 @@ describe('desktop link-open mode', () => {
   })
 
   it('asks for a missing or invalid mode only when the terminal choice is the chooser', () => {
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: an out-of-range stored value, as an older or corrupt profile could hold.
     const invalid = 'sometimes' as unknown as 'ask'
     expect(httpLinkModeFor({ terminalLinkClickBehavior: 'actions' })).toBe('ask')
     expect(

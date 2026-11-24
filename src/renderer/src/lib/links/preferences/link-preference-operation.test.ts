@@ -10,7 +10,10 @@ const accepted = (fields: LinkPreferenceFields): GlobalSettings => ({
   ...fields
 })
 
-const notices = vi.hoisted(() => ({ shown: [] as unknown[], dismissed: 0 }))
+const notices = vi.hoisted((): { shown: unknown[]; dismissed: number } => ({
+  shown: [],
+  dismissed: 0
+}))
 vi.mock('./link-preference-notice', () => ({
   showLinkPreferenceNotice: (notice: unknown) => notices.shown.push(notice),
   dismissLinkPreferenceNotice: () => {

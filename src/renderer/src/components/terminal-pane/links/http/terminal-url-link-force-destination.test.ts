@@ -18,6 +18,7 @@ const URL = 'https://example.com/'
 const requestPreference = vi.fn()
 
 function click(modifiers: Partial<MouseEvent> = {}): MouseEvent {
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: a partial MouseEvent: routing reads only button, detail and modifier keys.
   return {
     button: 0,
     altKey: false,
@@ -37,6 +38,7 @@ function linkContext(
 ): TerminalLinkActionContext {
   return {
     paneId: 1,
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: a pointer-gesture fake: the chooser path calls only canRequestAction.
     pointerGesture: {
       canRequestAction: () => true
     } as unknown as TerminalLinkActionContext['pointerGesture'],
