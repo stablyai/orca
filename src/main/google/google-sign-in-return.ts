@@ -24,8 +24,9 @@ export const GOOGLE_RETURN_PAGES = {
   /** Says why, in the same words Orca and the CLI show. */
   notSignedIn: (reason: string) =>
     orcaCallbackOutcome({ ok: false, heading: 'Couldn’t sign in to Google', line: reason }),
+  // An ended sign-in, so the cross the other ends show; `ok: null` is a page still waiting and has no icon.
   cancelled: orcaCallbackOutcome({
-    ok: null,
+    ok: false,
     heading: 'Google sign-in was cancelled',
     line: 'Orca stopped waiting for this sign-in. Return to Orca to sign in again.'
   })

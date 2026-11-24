@@ -14,6 +14,7 @@ const { readGoogleAccount, saveGoogleAccount } = await import('./google-credenti
 const { runGoogleSignIn } = await import('./google-sign-in-run')
 const { googleAccountView } = await import('./google-connect')
 const { googleAccountApp } = await import('../../shared/google/google-account-app')
+const { setActiveSink } = await import('../observability/tracer')
 
 const CURRENT = {
   clientId: 'current-id',
@@ -211,10 +212,19 @@ const tokens = (overrides: Record<string, unknown> = {}) =>
   )
 
 describe('a Google sign-in that fails after Google returned', () => {
-  it('says Orca couldn’t reach Google, in the tab too, when the exchange can’t connect', async () => {
+  it('says Orca couldn’t reach Google, in the tab and the app log too, when the exchange can’t connect', async () => {
+    const traced: unknown[] = []
+    setActiveSink({ push: (record) => traced.push(record), flush: () => {}, close: () => {} })
     const { error, page, logged } = await failedSignIn(() =>
       Promise.reject(new TypeError('fetch failed'))
-    )
+    ).finally(() => setActiveSink(null))
+    expect(traced).toEqual([
+      expect.objectContaining({
+        name: 'google.sign-in',
+        attributes: { step: 'token exchange', category: 'network' },
+        exit: { _tag: 'Failure', cause: 'network' }
+      })
+    ])
     expect(error).toBe(
       'Orca couldn’t reach Google from this computer. Check your VPN, proxy or HTTPS inspection, then try again.'
     )

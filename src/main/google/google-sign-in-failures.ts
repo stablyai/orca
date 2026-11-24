@@ -1,5 +1,6 @@
 // Why a Google sign-in failed after Google returned, in the words the CLI, the card and the tab show.
 import { HOST_ACCOUNT_SIGN_IN_FAILURE_COPY } from '../../shared/agent-accounts/host-account-sign-in-types'
+import { startSpan } from '../observability/tracer'
 import { GoogleTokenError } from './google-token-endpoint'
 
 const GOOGLE_SIGN_IN_FAILURES = {
@@ -17,11 +18,15 @@ const GOOGLE_SIGN_IN_FAILURES = {
 
 type GoogleSignInFailureCategory = keyof typeof GOOGLE_SIGN_IN_FAILURES
 
-/** Logs the step and category only: never a code, token, account or address. */
+/**
+ * Logs the step and category only (never a code, token, account or address), to the console and to
+ * the app's trace log, where a packaged app's user can find it.
+ */
 export function signInFailure(
   step: 'token exchange' | 'account' | 'save',
   category: GoogleSignInFailureCategory
 ): Error {
+  startSpan('google.sign-in', { attributes: { step, category } }).fail(category)
   console.warn(`[google] sign-in failed at ${step}: ${category}`)
   return new Error(GOOGLE_SIGN_IN_FAILURES[category])
 }
