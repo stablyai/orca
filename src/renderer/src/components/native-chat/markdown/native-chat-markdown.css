@@ -11,6 +11,10 @@
   font-weight: var(--font-weight-normal);
 }
 
+.native-chat-markdown :is(strong, b, h1, h2, h3, h4, h5, h6, [role='heading']) code {
+  font-weight: inherit;
+}
+
 /* Shared markdown also renders sidebar comments, so chat styling stays opt-in. */
 /* Bold and headings stand out by weight alone, in the text color around them (body text in
    replies, the bubble's color in user messages); a theme may still color bold. :where keeps this
