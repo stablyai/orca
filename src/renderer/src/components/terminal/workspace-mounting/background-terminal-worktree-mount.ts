@@ -257,6 +257,7 @@ export function revealActivationDeferredTabs(opts: {
   }
   if (grew) {
     restrictions.set(worktreeId, next)
+    carryActivationAdmissionDrained(existing, next)
   }
   replaceActivationDeferredMountTabs(deferredMountTabIdsByWorktree, worktreeId, next, allTabIds)
 }

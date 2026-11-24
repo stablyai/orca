@@ -18,7 +18,7 @@ export function markActivationAdmissionDrained(restriction: ReadonlySet<string>)
   return true
 }
 
-/** A replacement that only prunes closed tabs or allows more adds nothing to warm, so it stays drained. */
+/** Every restriction replacement only prunes closed tabs or allows more; neither adds a tab to warm, so it stays drained. */
 export function carryActivationAdmissionDrained(
   from: ReadonlySet<string>,
   to: ReadonlySet<string>
