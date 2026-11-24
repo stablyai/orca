@@ -4027,8 +4027,9 @@
           "done": "Done",
           "waiting": "Waiting for you",
           "working": "Working",
-          "you": "You",
-          "stopped": "Stopped"
+          "stopped": "Stopped",
+          "doneCount": "{{count}} steps done",
+          "more": "+ {{count}} more steps"
         },
         "account": {
           "title": "Which Google account should I use?",
@@ -7788,7 +7789,6 @@
         "removeConfirm": "Remove",
         "signedOutOnHost": "Not connected on {{host}}",
         "uses": "What it can use",
-        "who": "Who can use it",
         "whoNote": "Anyone who can ask {{name}} can have it read and send your email, calendar and files.",
         "removeFrom": "Remove Google from {{name}}…"
       },
@@ -7802,18 +7802,16 @@
       "state": {
         "ready": "Ready",
         "apiOff": "Turned off in Google Cloud",
-        "notAllowed": "You didn’t allow it",
+        "allowOnHost": "Allow again on {{host}}",
         "adminBlocked": "Your company’s Google admin blocked it",
         "error": "Couldn’t check"
       },
       "headline": {
-        "ended": "Google access ended. Reconnect.",
         "connected": "Google is connected",
         "toFixOne": "Almost there: 1 thing to fix",
-        "toFix": "Almost there: {{count}} things to fix"
+        "toFix": "Almost there: {{count}} things to fix",
+        "endedOnHost": "Google access ended. Sign in again on {{host}}."
       },
-      "signInOnHost": "Sign in to Google again on {{host}}",
-      "addOnHost": "Add a service or another account in Orca on {{host}}.",
       "defaultBadge": "Default",
       "setDefault": "Set as default",
       "shareButton": "Share setup",
@@ -7829,6 +7827,10 @@
         "confirm": "Disconnect",
         "removeFromHost": "Remove from {{host}}",
         "revoke": "Remove and revoke at Google"
+      },
+      "accounts": "Accounts",
+      "row": {
+        "signedOut": "Signed out by Google"
       }
     },
     "failures": {

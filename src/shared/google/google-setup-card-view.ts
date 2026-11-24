@@ -81,6 +81,18 @@ export function googleSetupShownStepStatus(
     : status
 }
 
+/** How many finished steps before the open one, and steps past the one after it, fold into a line each
+ *  on the phone; two or more, since one step is no shorter folded. */
+export function googleSetupFoldedSteps(
+  run: GoogleSetupRun,
+  steps: readonly GoogleSetupStep[]
+): { before: number; after: number } {
+  const open = steps.findIndex((step) => run.steps[step]?.status !== 'done')
+  const finished = open === -1 ? steps.length : open
+  const rest = steps.length - finished - 2
+  return { before: finished >= 2 ? finished : 0, after: rest >= 2 ? rest : 0 }
+}
+
 export type GoogleSetupProgressView = {
   steps: GoogleSetupStep[]
   state: 'working' | 'waiting' | 'done' | 'stopped' | null
