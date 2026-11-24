@@ -2,6 +2,10 @@ import type { SetupTrustMismatch } from '../../worktree/create-types'
 import type { TaskSourceContext, WorkspaceRunContext } from '../../work-items/task-source-context'
 import type { AutomationRunEvent } from '../../automation-event-triggers'
 import type { AutomationTriggeredBy } from '../../bots/bot-acts-for'
+import {
+  isPendingAutomationRecovery,
+  type AutomationMissedOccurrenceRecovery
+} from '../automation-missed-occurrence-recovery'
 
 export type AutomationRunStatus =
   | 'pending'
@@ -45,7 +49,7 @@ export function isFinalAutomationRunStatus(status: AutomationRunStatus): boolean
 export function isRecoveringAutomationRun(
   run: Pick<AutomationRun, 'missedOccurrenceRecovery'>
 ): boolean {
-  return !!run.missedOccurrenceRecovery && run.missedOccurrenceRecovery.failure === undefined
+  return isPendingAutomationRecovery(run.missedOccurrenceRecovery)
 }
 
 /** Folded runs keep their first occurrence's timestamps, so the latest occurrence is when it last ran. */
@@ -160,15 +164,7 @@ export type AutomationRun = {
   /** `scheduledFor` of the most recently folded occurrence; absent until one folds. */
   lastOccurrenceAt?: number
   /** A fixed historical interval still being counted in bounded batches; never dispatches. */
-  missedOccurrenceRecovery?: {
-    rrule: string
-    dtstart: number
-    timezone: string
-    nextAt: number
-    before: number
-    /** Quarantined snapshots retain their partial count and diagnostic without retrying. */
-    failure?: string
-  }
+  missedOccurrenceRecovery?: AutomationMissedOccurrenceRecovery
   /** The latest event folded into it; a manual run of an event automation replays the latest one. */
   event?: AutomationRunEvent
   /** Who did the event that started it, kept as it was when later events fold in; never whom it acts for. */

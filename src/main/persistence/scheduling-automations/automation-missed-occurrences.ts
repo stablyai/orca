@@ -1,11 +1,18 @@
 import type { Automation } from '../../../shared/automations/automation-definition'
 import {
+  automationRecoveryQueue,
+  isPendingAutomationRecovery
+} from '../../../shared/automations/automation-missed-occurrence-recovery'
+import {
   isRecoveringAutomationRun,
   type AutomationRun
 } from '../../../shared/automations/history/automation-run'
 import { errorMessage } from '../../../shared/errors/error-message'
 import { nextAutomationOccurrenceAfter } from '../../../shared/automations/scheduling/automation-schedule-occurrences'
-import { pruneAutomationRuns } from '../../../shared/automations/history/automation-run-retention'
+import {
+  MAX_AUTOMATION_RUNS_PER_AUTOMATION,
+  pruneAutomationRuns
+} from '../../../shared/automations/history/automation-run-retention'
 import type { AutomationStorageAuthority } from './automation-owner-projection'
 import { automationScheduleZone } from './automation-schedule-operations'
 import {
@@ -17,6 +24,7 @@ import {
 type Recovery = NonNullable<AutomationRun['missedOccurrenceRecovery']>
 type RecoveryBatch = {
   run?: AutomationRun
+  pendingIndex?: number
   recovery: Recovery
   first: number
   last: number
@@ -24,7 +32,7 @@ type RecoveryBatch = {
 }
 type RecoveryBudget = { slots: number; spanMs: number }
 
-/** Claim the gap and checkpoint its history together; nextRunAt remains the operational clock. */
+/** Claim gaps and their checkpoints together, including batches with no missed rows yet. */
 export function recordMissedAutomationOccurrences(
   operations: AutomationRunOperations,
   automation: Automation,
@@ -41,6 +49,10 @@ export function recordMissedAutomationOccurrences(
     (run) => run.automationId === current.id
   )
   const pending = history.filter(isRecoveringAutomationRun)
+  const uncounted = automationRecoveryQueue(current)
+  const invalidQueue =
+    current.missedOccurrenceRecoveries !== undefined &&
+    !Array.isArray(current.missedOccurrenceRecoveries)
   const newRecovery: Recovery = {
     rrule: current.rrule,
     dtstart: current.dtstart,
@@ -50,9 +62,14 @@ export function recordMissedAutomationOccurrences(
   }
   const plans: RecoveryBatch[] = []
   const failures = new Map<string, string>()
+  const pendingUpdates = new Map<number, Recovery | null>()
+  const newPending: Recovery[] = []
   const budget: RecoveryBudget = { slots: 256, spanMs: 32 * 24 * 60 * 60 * 1000 }
-  const candidates = [
+  const candidates: { run?: AutomationRun; pendingIndex?: number; recovery: Recovery }[] = [
     ...(current.nextRunAt < before ? [{ run: undefined, recovery: newRecovery }] : []),
+    ...uncounted.flatMap((recovery, pendingIndex) =>
+      isPendingAutomationRecovery(recovery) ? [{ recovery, pendingIndex }] : []
+    ),
     ...pending.map((run) => ({ run, recovery: run.missedOccurrenceRecovery! }))
   ]
   for (const candidate of candidates) {
@@ -63,21 +80,46 @@ export function recordMissedAutomationOccurrences(
       const plan = countRecoveryBatch(candidate, history, budget)
       if (plan) {
         plans.push(plan)
+      } else if (candidate.pendingIndex !== undefined) {
+        pendingUpdates.set(candidate.pendingIndex, null)
       }
     } catch (error) {
-      if (!candidate.run) {
+      if (candidate.run) {
+        failures.set(candidate.run.id, errorMessage(error))
+      } else if (candidate.pendingIndex !== undefined) {
+        pendingUpdates.set(candidate.pendingIndex, {
+          ...candidate.recovery,
+          failure: errorMessage(error)
+        })
+      } else {
         throw error
       }
-      failures.set(candidate.run.id, errorMessage(error))
     }
   }
-  if (plans.length === 0 && failures.size === 0 && current.nextRunAt >= before) {
+  if (
+    plans.length === 0 &&
+    failures.size === 0 &&
+    pendingUpdates.size === 0 &&
+    !invalidQueue &&
+    current.nextRunAt >= before
+  ) {
     return true
   }
   // No intermediate pending row or partial count can be persisted ahead of its checkpoint.
   const batchOperations = { ...operations, flush: () => {} }
   for (const plan of plans) {
     let run = plan.run
+    if (plan.pendingIndex !== undefined) {
+      pendingUpdates.set(plan.pendingIndex, null)
+    }
+    if (!run && plan.count === 0) {
+      if (plan.pendingIndex !== undefined) {
+        pendingUpdates.set(plan.pendingIndex, plan.recovery)
+      } else {
+        newPending.push(plan.recovery)
+      }
+      continue
+    }
     if (!run) {
       const created = createAutomationRun(batchOperations, current, plan.first)
       run = updateAutomationRun(batchOperations, {
@@ -115,15 +157,36 @@ export function recordMissedAutomationOccurrences(
   })
   operations.state.automationRuns = pruneAutomationRuns(operations.state.automationRuns)
   operations.recordAutomationRunsMutation?.(operations.state.automationRuns)
-  operations.state.automations = operations.state.automations.map((entry) =>
-    entry.id === current.id ? { ...entry, nextRunAt: Math.max(entry.nextRunAt, before) } : entry
-  )
+  const retainedPending = [
+    ...uncounted.flatMap((recovery, index) => {
+      if (!pendingUpdates.has(index)) {
+        return [recovery]
+      }
+      const updated = pendingUpdates.get(index)
+      return updated ? [updated] : []
+    }),
+    ...newPending
+  ].slice(-MAX_AUTOMATION_RUNS_PER_AUTOMATION)
+  operations.state.automations = operations.state.automations.map((entry) => {
+    if (entry.id !== current.id) {
+      return entry
+    }
+    const { missedOccurrenceRecoveries: _pending, ...definition } = entry
+    return {
+      ...definition,
+      nextRunAt: Math.max(entry.nextRunAt, before),
+      ...(retainedPending.length > 0 ? { missedOccurrenceRecoveries: retainedPending } : {})
+    }
+  })
   operations.flush()
+  if (invalidQueue) {
+    console.error('[automations] discarded invalid historical recovery queue:', current.id)
+  }
   return true
 }
 
 function countRecoveryBatch(
-  candidate: { run?: AutomationRun; recovery: Recovery },
+  candidate: { run?: AutomationRun; pendingIndex?: number; recovery: Recovery },
   history: AutomationRun[],
   budget: RecoveryBudget
 ): RecoveryBatch | null {
@@ -171,5 +234,7 @@ function countRecoveryBatch(
   }
   recovery.nextAt = cursor
   budget.spanMs -= Math.max(0, cursor - start)
-  return count > 0 || candidate.run ? { run: candidate.run, recovery, first, last, count } : null
+  return count > 0 || candidate.run || cursor < recovery.before
+    ? { ...candidate, recovery, first, last, count }
+    : null
 }

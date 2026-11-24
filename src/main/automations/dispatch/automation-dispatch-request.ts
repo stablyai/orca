@@ -56,7 +56,13 @@ type DispatchContext = Pick<
 }
 
 function definition(automation: Automation) {
-  const { lastRunAt: _last, updatedAt: _updated, nextRunAt: _next, ...configured } = automation
+  const {
+    lastRunAt: _last,
+    updatedAt: _updated,
+    nextRunAt: _next,
+    missedOccurrenceRecoveries: _recovery,
+    ...configured
+  } = automation
   return configured
 }
 
