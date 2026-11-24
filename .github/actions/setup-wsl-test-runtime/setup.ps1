@@ -20,10 +20,10 @@ $installer = Start-Process msiexec.exe -ArgumentList @('/i', $kernelMsi, '/quiet
 if ($installer.ExitCode -ne 0) { throw "WSL kernel installation failed: $($installer.ExitCode)" }
 wsl.exe --status
 if ($LASTEXITCODE -ne 0) { throw "WSL status failed: $LASTEXITCODE" }
-wsl.exe --distribution Ubuntu --user root --exec /usr/bin/curl --fail --silent --show-error --location https://nodejs.org/dist/v22.14.0/node-v22.14.0-linux-x64.tar.xz --output /tmp/orca-node.tar.xz
+wsl.exe --distribution Ubuntu --user root --exec /usr/bin/curl --fail --silent --show-error --location https://nodejs.org/dist/v22.23.4/node-v22.23.4-linux-x64.tar.xz --output /tmp/orca-node.tar.xz
 if ($LASTEXITCODE -ne 0) { throw 'Node download failed' }
 $nodeHash = wsl.exe --distribution Ubuntu --user root --exec /usr/bin/sha256sum /tmp/orca-node.tar.xz
-if ($LASTEXITCODE -ne 0 -or -not ($nodeHash -match '^69b09dba5c8dcb05c4e4273a4340db1005abeafe3927efda2bc5b249e80437ec')) { throw 'Node checksum mismatch' }
+if ($LASTEXITCODE -ne 0 -or -not ($nodeHash -match '^1805bcd35e6815559bd2eb97db438d3fdb0eb3a5e6a977b7c1badca76337e9ce')) { throw 'Node checksum mismatch' }
 wsl.exe --distribution Ubuntu --user root --exec /usr/bin/tar -xJf /tmp/orca-node.tar.xz -C /usr/local --strip-components=1
 if ($LASTEXITCODE -ne 0) { throw 'Node extraction failed' }
 wsl.exe --distribution Ubuntu --user root --exec /usr/local/bin/node --version

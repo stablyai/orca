@@ -1,0 +1,71 @@
+import type { Debugger, WebContents } from 'electron'
+import {
+  runDebuggerCommandWithTimeout,
+  sendDebuggerCommand
+} from './browser-screencast-debugger-command'
+import { sendGuestCdpCommand } from '../debugger/guest-cdp-command'
+import type { BrowserScreencastOptions } from './browser-screencast-stream-types'
+import { positiveInteger, positiveNumber } from './browser-screencast-viewport-fit'
+
+export type BrowserScreencastDeviceMetrics = {
+  apply: () => Promise<void>
+  clear: () => Promise<void>
+  isOverridden: () => boolean
+  /** Chromium's mobile emulation cancels page zoom, so frames must not report it. */
+  emulatesMobile: () => boolean
+}
+
+export function createBrowserScreencastDeviceMetrics(
+  webContents: WebContents,
+  dbg: Debugger,
+  options: BrowserScreencastOptions
+): BrowserScreencastDeviceMetrics {
+  let deviceMetricsOverridden = false
+  let mobileEmulated = false
+  const sendViewportCommand = (method: string, params: Record<string, unknown>): Promise<unknown> =>
+    runDebuggerCommandWithTimeout(method, () => sendGuestCdpCommand(webContents, method, params))
+
+  const clearDeviceMetricsOverride = async (): Promise<void> => {
+    if (webContents.isDestroyed() || !dbg.isAttached()) {
+      deviceMetricsOverridden = false
+      mobileEmulated = false
+      return
+    }
+    await sendDebuggerCommand(dbg, 'Emulation.clearDeviceMetricsOverride')
+    deviceMetricsOverridden = false
+    mobileEmulated = false
+  }
+
+  const applyDeviceMetricsOverride = async (): Promise<void> => {
+    const viewportWidth = positiveInteger(options.viewportWidth)
+    const viewportHeight = positiveInteger(options.viewportHeight)
+    if (!viewportWidth || !viewportHeight) {
+      if (deviceMetricsOverridden) {
+        await clearDeviceMetricsOverride()
+      }
+      return
+    }
+    const deviceScaleFactor = positiveNumber(options.deviceScaleFactor) ?? 1
+    const mobile = options.mobile === true
+    // Navigation can drop emulation; restore client viewport metrics before fallback captures.
+    await sendViewportCommand('Emulation.setDeviceMetricsOverride', {
+      width: viewportWidth,
+      height: viewportHeight,
+      deviceScaleFactor,
+      mobile
+    })
+    mobileEmulated = mobile
+    await sendViewportCommand('Emulation.setVisibleSize', {
+      width: viewportWidth,
+      height: viewportHeight
+    }).catch(() => {})
+    deviceMetricsOverridden = true
+  }
+
+  return {
+    apply: applyDeviceMetricsOverride,
+    clear: clearDeviceMetricsOverride,
+    isOverridden: () => deviceMetricsOverridden,
+    emulatesMobile: () => mobileEmulated
+  }
+}

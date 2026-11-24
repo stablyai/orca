@@ -1,75 +1,99 @@
+import { selectWslHostsServing } from '../../../../runtime/hosts/wsl/use-wsl-hosts-enabled'
 import { useCallback, useMemo, useState } from 'react'
+import { shallow } from 'zustand/shallow'
+import { persistedUIValuesEqual } from '../../../../../../shared/collections/persisted-ui-equality'
 import { useShallow } from 'zustand/react/shallow'
-import { useAppStore } from '@/store'
+import { useAppStore } from '@/store/index'
+import { useUiLanguageRevision } from '@/i18n/use-ui-language-revision'
+import { selectSidebarLineageParentIdentities } from '@/store/slices/worktrees/metadata/cross-store-lineage-parents'
 import type { AppState } from '@/store/types'
-import type { FolderWorkspace } from '../../../../../../shared/folder-workspace-types'
-import type { ProjectGroup } from '../../../../../../shared/project-group-types'
-import type { ProjectOrderBy } from '../../../../../../shared/ui-chrome-types'
-import type { Repo } from '../../../../../../shared/repo-types'
-import type { WorkspaceStatusDefinition, Worktree } from '../../../../../../shared/worktree/types'
-import type { WorktreeLineage } from '../../../../../../shared/worktree/lineage-types'
-import type { ExecutionHostId } from '../../../../../../shared/execution-host'
-import { getHostDisplayLabelOverrides } from '../../../../../../shared/host-setting-overrides'
+import type { RuntimeStatuses } from '@/store/slices/runtime-status/views/runtime-status-owner'
+import { useAppStoreWithHostStatuses } from '@/store/slices/runtime-status/views/use-runtime-status-view'
+import type { Repo } from '../../../../../../shared/repository/repo-types'
+import {
+  getLocalExecutionHostLabel,
+  type ExecutionHostId
+} from '../../../../../../shared/execution-host/execution-host'
+import { getHostDisplayLabelOverrides } from '../../../../../../shared/execution-host/host-setting-overrides'
 import { planSidebarRows } from '../../../../../../shared/sidebar-list/sidebar-row-plan'
+import { indexHiddenProjects } from '../../../../../../shared/project/catalog/hidden-projects'
+import { createHostScopedRepoOf } from '../../../../../../shared/sidebar-list/feed/sidebar-feed-index'
 import { createSidebarPRGroupReader } from '../grouping/pr-group-key'
 import { useEffectiveCollapsedGroups } from './use-collapsed-groups'
-import type { ProjectGroupingModel } from '../../../../../../shared/project-section-grouping'
-import type {
-  ImportedWorktreesCardCandidate,
-  NewExternalWorktreesInboxCandidate,
-  PinnedWorktreeDisplayPolicy,
-  Row,
-  WorktreeGroupBy
-} from '../../../../../../shared/sidebar-list/row-types'
-import { getLogicalRepoOrderRankById } from '../../../../../../shared/project-section-order'
-import { getEmptyProjectPlaceholderRepoIds } from '../../../../../../shared/sidebar-list/empty-project-placeholder-repos'
+import type { Row } from '../../../../../../shared/sidebar-list/row-types'
+import type { SectionRowsArgs } from './sidebar-list-model'
+import { getLogicalRepoOrderRankById } from '../../../../../../shared/sidebar-list/sections/project-section-order'
+import { useEmptyProjectPlaceholderRepoIds } from './use-empty-project-placeholders'
 import {
   deferHostSectionCollapse,
   scopeHostSectionCollapse
-} from '../../../../../../shared/sidebar-list/host-section-collapse'
-import { addHostSectionRows } from '../../../../../../shared/sidebar-list/host-section-rows'
+} from '../../../../../../shared/sidebar-list/hosts/host-section-collapse'
+import { addHostSectionRows } from '../../../../../../shared/sidebar-list/hosts/host-section-rows'
 import { collectRenderedSidebarRowKeys } from './rendered-row-keys'
-import { orderHostSectionOptions } from '../../../../../../shared/sidebar-list/host-section-order'
-import { buildSidebarHostOptions } from '../../sidebar-host-options'
+import {
+  mergeDraggedHostSectionOrder,
+  orderHostSectionOptions
+} from '../../../../../../shared/sidebar-list/hosts/host-section-order'
+import type { ExecutionHostRegistryEntry } from '../../../../../../shared/execution-host/execution-host-registry-entry'
+import {
+  type SidebarHostOption,
+  buildSidebarHostOptions,
+  sidebarHostSemantics,
+  createSidebarHostLabelsSelector
+} from '../controls/sidebar-host-options'
 import { selectPendingWorktreeCreationKeys } from './pending-worktree-creation-keys'
+import { selectEphemeralVmHostLifecycles } from '@/store/slices/ephemeral-vm/ephemeral-vm-lifecycle'
 
-type SectionRowsArgs = {
-  agentSendTargetWorktreeId?: string | null
-  groupBy: WorktreeGroupBy
-  projectOrderBy: ProjectOrderBy
-  pinnedDisplayPolicy: PinnedWorktreeDisplayPolicy
-  defaultHostId: ExecutionHostId
-  worktrees: Worktree[]
-  repos: readonly Repo[]
-  repoMap: Map<string, Repo>
-  worktreeMap: Map<string, Worktree>
-  worktreeLineageById: Record<string, WorktreeLineage>
-  prCache: AppState['prCache'] | null
-  settings: AppState['settings']
-  workspaceStatuses: readonly WorkspaceStatusDefinition[]
-  effectiveCollapsedGroups: Set<string>
-  projectGrouping: ProjectGroupingModel
-  visibleReposForRows: readonly Repo[]
-  visibleProjectGroupsForRows: readonly ProjectGroup[]
-  visibleFolderWorkspacesForRows: readonly FolderWorkspace[]
-  importedWorktreesByRepo: ReadonlyMap<string, ImportedWorktreesCardCandidate>
-  newExternalWorktreesInboxByRepo: ReadonlyMap<string, NewExternalWorktreesInboxCandidate>
-  filterRepoIds: readonly string[]
-  visibleWorkspaceHostIds: readonly ExecutionHostId[] | null
-  workspaceHostScope: AppState['workspaceHostScope']
+function createSidebarHostOptionsSelector() {
+  let inputs: readonly unknown[] = []
+  let result: SidebarHostOption[] = []
+  return (
+    state: AppState,
+    statuses: RuntimeStatuses,
+    repos: readonly Repo[],
+    settings: AppState['settings'],
+    hostLabelOverrides: Parameters<typeof buildSidebarHostOptions>[0]['hostLabelOverrides']
+  ): SidebarHostOption[] => {
+    const nextInputs = [
+      repos,
+      state.sshTargetLabels,
+      state.sshConnectionStates,
+      settings,
+      statuses,
+      state.runtimeEnvironments,
+      hostLabelOverrides,
+      state.wslHostStatuses,
+      selectWslHostsServing(state),
+      state.wslHostServerFiles === 'missing',
+      selectEphemeralVmHostLifecycles(state)
+    ]
+    if (shallow(inputs, nextInputs)) {
+      return result
+    }
+    inputs = nextInputs
+    const next = buildSidebarHostOptions({
+      repos,
+      sshTargetLabels: state.sshTargetLabels,
+      sshConnectionStates: state.sshConnectionStates,
+      settings,
+      runtimeEnvironments: state.runtimeEnvironments,
+      runtimeStatusByEnvironmentId: statuses,
+      hostLabelOverrides,
+      wslHostStatuses: state.wslHostStatuses,
+      wslHostsEnabled: selectWslHostsServing(state),
+      wslHostServerFilesMissing: state.wslHostServerFiles === 'missing',
+      ephemeralVmHosts: selectEphemeralVmHostLifecycles(state)
+    })
+    if (!persistedUIValuesEqual(result.map(sidebarHostSemantics), next.map(sidebarHostSemantics))) {
+      result = next
+    }
+    return result
+  }
 }
 
-// Builds the full sidebar row model: grouped worktree rows first, then the host-section
-// tier wrapped around them.
 export function useSidebarSectionRows(args: SectionRowsArgs) {
   const { repos, worktrees, repoMap, defaultHostId } = args
-  const worktreesByRepo = useAppStore((s) => s.worktreesByRepo)
-  const sshTargetLabels = useAppStore((s) => s.sshTargetLabels)
-  const sshConnectionStates = useAppStore((s) => s.sshConnectionStates)
-  const runtimeEnvironments = useAppStore((s) => s.runtimeEnvironments)
-  const runtimeStatusByEnvironmentId = useAppStore((s) => s.runtimeStatusByEnvironmentId)
-  const wslHostStatuses = useAppStore((s) => s.wslHostStatuses)
-  const wslHostServerFilesMissing = useAppStore((s) => s.wslHostServerFiles === 'missing')
+  const lineageParentIdentities = useAppStoreWithHostStatuses(selectSidebarLineageParentIdentities)
   const workspaceHostOrder = useAppStore((s) => s.workspaceHostOrder)
   const setWorkspaceHostOrder = useAppStore((s) => s.setWorkspaceHostOrder)
 
@@ -79,17 +103,14 @@ export function useSidebarSectionRows(args: SectionRowsArgs) {
     [repos]
   )
   const allRepoIds = useMemo(() => repos.map((r) => r.id), [repos])
-  const placeholderRepoIds = useMemo(
-    () =>
-      getEmptyProjectPlaceholderRepoIds({
-        groupBy: args.groupBy,
-        repos: args.visibleReposForRows,
-        worktreesByRepo,
-        visibleWorktrees: worktrees,
-        filterRepoIds: args.filterRepoIds
-      }),
-    [args.filterRepoIds, args.groupBy, args.visibleReposForRows, worktrees, worktreesByRepo]
-  )
+  const placeholderRepoIds = useEmptyProjectPlaceholderRepoIds({
+    groupBy: args.groupBy,
+    repos,
+    visibleRepos: args.visibleReposForRows,
+    visibleWorktrees: worktrees,
+    filterRepoIds: args.filterRepoIds,
+    defaultHostId
+  })
 
   // Why: subscribe on a flat key array (useShallow) so progress ticks don't rebuild the whole row model.
   const pendingCreationKeys = useAppStore(
@@ -110,50 +131,32 @@ export function useSidebarSectionRows(args: SectionRowsArgs) {
     () => getHostDisplayLabelOverrides(args.settings),
     [args.settings]
   )
-  const hostOptions = useMemo(
-    () =>
-      buildSidebarHostOptions({
-        repos,
-        sshTargetLabels,
-        sshConnectionStates,
-        settings: args.settings,
-        runtimeEnvironments,
-        runtimeStatusByEnvironmentId,
-        hostLabelOverrides,
-        wslHostStatuses,
-        wslHostsEnabled: args.settings?.experimentalWslHosts === true,
-        wslHostServerFilesMissing
-      }),
-    [
-      repos,
-      sshTargetLabels,
-      sshConnectionStates,
-      args.settings,
-      runtimeEnvironments,
-      runtimeStatusByEnvironmentId,
-      hostLabelOverrides,
-      wslHostStatuses,
-      wslHostServerFilesMissing
-    ]
+  const selectHostOptions = useMemo(() => createSidebarHostOptionsSelector(), [])
+  const selectHostLabels = useMemo(() => createSidebarHostLabelsSelector(), [])
+  useUiLanguageRevision()
+  const hostOptions = useAppStoreWithHostStatuses((state, statuses) =>
+    selectHostOptions(state, statuses, repos, args.settings, hostLabelOverrides)
   )
-  const hostLabelById = useMemo(
-    () => new Map(hostOptions.map((host) => [host.id, host.label])),
-    [hostOptions]
-  )
+  const hostLabelById = selectHostLabels(hostOptions)
 
   const hostScopedGroups =
     args.workspaceHostScope !== 'all' || args.visibleWorkspaceHostIds !== null
+  // Same-id registrations on two hosts: each row and project header needs its own host's.
+  const repoOfWorktree = useMemo(() => createHostScopedRepoOf(repos, repoMap), [repos, repoMap])
   const rowPlan = useMemo(
     () =>
       planSidebarRows({
         groupBy: args.groupBy,
+        sortBy: args.sortBy,
         worktrees,
         repoMap,
+        repoOfWorktree,
         prGroupOf: createSidebarPRGroupReader(repoMap, args.prCache),
         repoOrder,
         workspaceStatuses: args.workspaceStatuses,
         projectOrderBy: args.projectOrderBy,
         lineageById: args.worktreeLineageById,
+        lineageParentIdentities,
         worktreeMap: args.worktreeMap,
         nestLineage: true,
         projectGroups: args.visibleProjectGroupsForRows,
@@ -166,18 +169,23 @@ export function useSidebarSectionRows(args: SectionRowsArgs) {
         hostLabelById,
         defaultHostId,
         pinnedDisplayPolicy: args.pinnedDisplayPolicy,
-        filterRepoIds: args.filterRepoIds
+        filterRepoIds: args.filterRepoIds,
+        hiddenProjects: indexHiddenProjects(repos, defaultHostId)
       }),
     [
       args.groupBy,
+      args.sortBy,
       worktrees,
+      repos,
       repoMap,
+      repoOfWorktree,
       args.prCache,
       defaultHostId,
       repoOrder,
       args.workspaceStatuses,
       args.projectOrderBy,
       args.worktreeLineageById,
+      lineageParentIdentities,
       args.worktreeMap,
       args.projectGrouping,
       args.visibleProjectGroupsForRows,
@@ -228,22 +236,14 @@ export function useSidebarSectionRows(args: SectionRowsArgs) {
   )
   const [hostDragActive, setHostDragActive] = useState(false)
   const handleReorderHostSections = useCallback(
-    (orderedVisibleHostIds: ExecutionHostId[]) => {
-      const visibleHostIds = new Set(orderedVisibleHostIds)
-      const hostOptionIds = orderedHostOptions.map((host) => host.id)
-      const knownHostIds = new Set(hostOptionIds)
-      const nextOrder: ExecutionHostId[] = [...orderedVisibleHostIds]
-      const seen = new Set(nextOrder)
-      // Why: dragging only covers rendered hosts; keep non-rendered SSH/runtime hosts in the saved order so they return in place.
-      for (const hostId of [...workspaceHostOrder, ...hostOptionIds]) {
-        if (!knownHostIds.has(hostId) || visibleHostIds.has(hostId) || seen.has(hostId)) {
-          continue
-        }
-        nextOrder.push(hostId)
-        seen.add(hostId)
-      }
-      setWorkspaceHostOrder(nextOrder)
-    },
+    (orderedVisibleHostIds: ExecutionHostId[]) =>
+      setWorkspaceHostOrder(
+        mergeDraggedHostSectionOrder(
+          orderedVisibleHostIds,
+          workspaceHostOrder,
+          orderedHostOptions.map((host) => host.id)
+        )
+      ),
     [orderedHostOptions, setWorkspaceHostOrder, workspaceHostOrder]
   )
   const sectionRows = useMemo(() => {
@@ -253,6 +253,7 @@ export function useSidebarSectionRows(args: SectionRowsArgs) {
       workspaceHostScope: args.workspaceHostScope,
       visibleWorkspaceHostIds: args.visibleWorkspaceHostIds,
       defaultHostId,
+      localHostLabel: getLocalExecutionHostLabel(),
       collapsedHostKeys: effectiveCollapsedGroups,
       forceCollapseHosts: hostDragActive,
       // Why: projects/workspaces are the primary sidebar object; host sections are only an explicit host-filter view.
@@ -279,8 +280,10 @@ export function useSidebarSectionRows(args: SectionRowsArgs) {
     [sectionRows]
   )
 
+  const headerHostOptions: readonly ExecutionHostRegistryEntry[] = hostOptions
   return {
     occurrencePlan: rowPlan.occurrencePlan,
+    hostOptions: headerHostOptions,
     effectiveCollapsedGroups,
     rows,
     sectionRows,

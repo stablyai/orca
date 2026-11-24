@@ -1,10 +1,12 @@
 import type { AppState } from '@/store/types'
-import type { WorktreeCardProperty } from '../../../../../../shared/ui-chrome-types'
+import type { WorktreeCardProperty } from '../../../../../../shared/ui-chrome/ui-chrome-types'
 import type { WorktreeGroupBy } from '../../../../../../shared/sidebar-list/row-types'
+import { selectFolderWorkspaces } from '@/store/workspaces/catalog/workspace-record-fields'
+import { selectDrawsNewWorktreeCards } from '@/store/appearance/worktree-card-style'
 
 export type WorktreeListReviewCacheState = Pick<
   AppState,
-  'folderWorkspaces' | 'hostedReviewCache' | 'prCache' | 'settings'
+  'folderWorkspaces' | 'hostedReviewCache' | 'prCache' | 'settings' | 'worktreeCardsIntroChoice'
 >
 
 export type WorktreeListReviewCacheInputs = {
@@ -24,16 +26,15 @@ export function selectWorktreeListReviewCacheInputs(
   groupBy: WorktreeGroupBy,
   cardProperties: readonly WorktreeCardProperty[]
 ): WorktreeListReviewCacheInputs {
-  const hasFolderWorkspaces = state.folderWorkspaces.length > 0
-  const newCardStyle = state.settings?.experimentalNewWorktreeCardStyle === true
+  const hasFolderWorkspaces = selectFolderWorkspaces(state).length > 0
+  const newCardStyle = selectDrawsNewWorktreeCards(state)
   const folderCardsNeedReview =
     hasFolderWorkspaces &&
     (newCardStyle ? cardProperties.includes('status') : cardProperties.includes('pr'))
   const needsPrCache = groupBy === 'pr-status' || folderCardsNeedReview
   const needsHostedReviewCache = newCardStyle && folderCardsNeedReview
 
-  // Why: ordinary git worktree cards own entry-level subscriptions. The list
-  // needs whole caches only for PR grouping or synthetic folder-card displays.
+  // Cards subscribe per entry; only PR grouping and synthetic folder cards need whole caches.
   if (!needsPrCache && !needsHostedReviewCache) {
     return EMPTY_WORKTREE_LIST_REVIEW_CACHE_INPUTS
   }

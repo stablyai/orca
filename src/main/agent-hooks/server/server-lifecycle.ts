@@ -1,34 +1,34 @@
-import { AgentHookStartup, listenForAgentHooks } from '../../../shared/agent-hook-startup'
-import { checkHookOwnerPresence } from '../../../shared/agent-hook-owner-presence'
-import { parsePaneKey } from '../../../shared/stable-pane-id'
+import {
+  AgentHookStartup,
+  listenForAgentHooks
+} from '../../../shared/agent-hook-listener/transport/agent-hook-startup'
 import { createServer, type IncomingMessage, type ServerResponse } from 'node:http'
 import { randomUUID } from 'node:crypto'
+import { join } from 'node:path'
 
 import {
   CLAUDE_STATUSLINE_PATHNAME,
-  parseClaudeStatusLineBody
-} from '../../../shared/claude-statusline-rate-limits'
+  readClaudeStatusLineForm,
+  readClaudeStatusLineRateLimits
+} from '../../../shared/agent-usage/rate-limits/claude-statusline-rate-limits'
+import { readClaudeStatusLineModel } from '../../../shared/agent-hook-listener/providers/claude/lifecycle/claude-statusline-model'
 import { mergeAgentHookRequestHeaders } from '../../../shared/agent-hook-listener/hook-envelope'
 import { readRequestBody } from '../../../shared/agent-hook-listener/request-body'
 import { resolveHookSource } from '../../../shared/agent-hook-listener/source-routing'
 import { HOOK_REQUEST_SLOWLORIS_MS } from '../../../shared/agent-hook-listener/listener-limits'
-import { isHookRequestTruncatedError } from '../../../shared/agent-hook-transport-interference'
+import { isHookRequestTruncatedError } from '../../../shared/agent-hook-listener/transport/agent-hook-transport-interference'
 import { clearAllListenerCaches } from '../../../shared/agent-hook-listener/listener-state'
 import { trackEmptyPaneKeyHook } from './server-transport-rules'
-import { AgentHookServerStatusHookLifecycle } from './server-status-hook-lifecycle'
-import { OPENCODE_STARTUP_PROMPT_CLAIM_PATH } from '../../../shared/opencode-startup-prompt'
+import { AgentHookServerClaudeStatusLineModel } from './server-claude-statusline-model'
+import { OPENCODE_STARTUP_PROMPT_CLAIM_PATH } from '../../../shared/agent-launch/startup/opencode-startup-prompt'
+import { CLAUDE_AGENT_VIEW_PATH } from '../../../shared/agent-hook-listener/providers/claude/view/claude-agent-view'
 
-type HookServerStartOptions = {
-  env?: string
-  userDataPath?: string
-  endpointNamespace?: string
-  statusHooksEnabled?: boolean
-}
+import type { HookServerStartOptions, NormalizedLocalHook } from './server-types'
+import { withPrefetchedRolloutReads } from '../../../shared/agent-hook-listener/providers/codex/codex-rollout-prefetch-scope'
 
-export abstract class AgentHookServerLifecycle extends AgentHookServerStatusHookLifecycle {
+export abstract class AgentHookServerLifecycle extends AgentHookServerClaudeStatusLineModel {
   private readonly startup = new AgentHookStartup()
 
-  /** Start the loopback listener after hydration and spool replay have settled. */
   start(options?: HookServerStartOptions): Promise<void> {
     return this.startup.start((isCurrent) => this.startListener(options, isCurrent))
   }
@@ -49,7 +49,7 @@ export abstract class AgentHookServerLifecycle extends AgentHookServerStatusHook
       this.env = options.env
     }
     if (options?.userDataPath) {
-      // Why: dev builds share one userData path; namespace per instance while packaged keeps the stable path for PTY reconnect.
+      // Namespace dev endpoints per instance; packaged endpoints stay stable for PTY reconnect.
       this.configureEndpointPaths(options.userDataPath, options.endpointNamespace)
     }
     this.token = randomUUID()
@@ -61,13 +61,15 @@ export abstract class AgentHookServerLifecycle extends AgentHookServerStatusHook
     if (!isCurrent()) {
       return
     }
+    if (this.endpointDir) {
+      void this.restoreClaudeAgentViews(join(this.endpointDir, 'claude-agent-views.json'))
+    }
     const handleRequest = async (req: IncomingMessage, res: ServerResponse): Promise<void> => {
       if (req.method !== 'POST') {
         res.writeHead(404)
         res.end()
         return
       }
-      // Why: authenticate before spending work reading an untrusted body.
       if (req.headers['x-orca-agent-hook-token'] !== this.token) {
         res.writeHead(403)
         res.end()
@@ -76,8 +78,7 @@ export abstract class AgentHookServerLifecycle extends AgentHookServerStatusHook
       const statusHookGeneration = this.statusHookGeneration
       const isStatusCurrent = () =>
         isCurrent() && this.statusHooksEnabled && this.statusHookGeneration === statusHookGeneration
-      // Why: bound request time so a stalled client can't hold a socket open (slowloris).
-      // Why: track our own destroy so the slowloris cap can't be misread as outside interference.
+      // Track our slowloris timeout so it cannot count as external transport interference.
       let destroyedBySlowlorisCap = false
       req.setTimeout(HOOK_REQUEST_SLOWLORIS_MS, () => {
         destroyedBySlowlorisCap = true
@@ -107,6 +108,17 @@ export abstract class AgentHookServerLifecycle extends AgentHookServerStatusHook
           res.end()
           return
         }
+        if (pathname === CLAUDE_AGENT_VIEW_PATH) {
+          const { durable, observed, ...reply } = this.claudeAgentViews.receive(body, {
+            sameMachine: this.claudeViewMayGoQuiet(body)
+          })
+          // Acknowledged only once saved, so a quit before the save cannot strand an idle Claude;
+          // without the flag the mod registers again and keeps checking in.
+          const saved = (durable || observed) && (await this.claudeAgentViews.saved())
+          res.writeHead(200, { 'content-type': 'application/json' })
+          res.end(JSON.stringify(saved ? { ...reply, durable, observed } : reply))
+          return
+        }
         await this.initializeStatusHookOwner()
         if (!isStatusCurrent()) {
           res.writeHead(404)
@@ -114,9 +126,16 @@ export abstract class AgentHookServerLifecycle extends AgentHookServerStatusHook
           return
         }
         if (pathname === CLAUDE_STATUSLINE_PATHNAME) {
-          const statusLineEvent = parseClaudeStatusLineBody(body)
-          if (statusLineEvent) {
-            this.onClaudeStatusLine?.(statusLineEvent)
+          const form = readClaudeStatusLineForm(body)
+          if (form) {
+            const statusLineEvent = readClaudeStatusLineRateLimits(form)
+            if (statusLineEvent) {
+              this.onClaudeStatusLine?.(statusLineEvent)
+            }
+            const modelReport = readClaudeStatusLineModel(form)
+            if (modelReport) {
+              this.applyClaudeStatusLineModel(modelReport)
+            }
           }
           res.writeHead(204)
           res.end()
@@ -128,66 +147,34 @@ export abstract class AgentHookServerLifecycle extends AgentHookServerStatusHook
           res.end()
           return
         }
-        // Why: merge transport headers before normalization so relay-compatible fields have one canonical path.
         const hookBody = mergeAgentHookRequestHeaders(body, req.headers)
-        trackEmptyPaneKeyHook(hookBody)
+        trackEmptyPaneKeyHook(hookBody, this.attributionDiagnostics)
         const aliasedBody = this.normalizeHookBodyPaneKeyAlias(hookBody)
         if (await this.ingestTmuxHook(source, aliasedBody)) {
           res.writeHead(204)
           res.end()
           return
         }
-        await checkHookOwnerPresence(this.state, source, aliasedBody, this.env, (paneKey) =>
-          this.checkAgentPresence(paneKey)
-        )
-        if (!isStatusCurrent()) {
-          res.writeHead(204)
-          res.end()
-          return
-        }
-        const normalized = this.normalizeLocalHookPayload(source, aliasedBody)
-        const statusDisposition = normalized.event
-          ? this.getAgentStatusDisposition(normalized.event.paneKey, {
-              source,
-              hookEventName: normalized.event.hookEventName,
-              isReplay: normalized.event.isReplay,
-              hasExplicitPrompt: normalized.event.hasExplicitPrompt,
-              launchToken: normalized.event.launchToken
-            })
-          : 'suppress'
-        if (normalized.event && statusDisposition !== 'suppress') {
-          const restartedAuthority =
-            statusDisposition === 'restart' && source === 'omp'
-              ? this.restoreRetiredStatusRestart(normalized.event.paneKey)
-              : undefined
-          const event =
-            statusDisposition === 'restart'
-              ? {
-                  ...normalized.event,
-                  launchToken: undefined,
-                  ...(restartedAuthority
-                    ? {
-                        ...restartedAuthority,
-                        tabId: parsePaneKey(restartedAuthority.paneKey)?.tabId
-                      }
-                    : {})
-                }
-              : normalized.event
-          if (statusDisposition === 'restart') {
-            // Why: a retired pane accepting a new turn is a different agent session behind the
-            // same key — later observations must not be ordered against the retired one.
-            this.observations.rebind(event.paneKey)
+        await this.checkHookOwner(source, aliasedBody)
+        // Why: rollout reads stay off the main thread; a slow open on Windows froze the window (#43539).
+        const prefetch =
+          source === 'codex'
+            ? await this.codexRolloutPrefetcher.prefetch(this.state, aliasedBody)
+            : undefined
+        let toolCallOwner: NormalizedLocalHook['event'] = null
+        try {
+          if (!isStatusCurrent()) {
+            res.writeHead(204)
+            res.end()
+            return
           }
-          this.recordCurrentAuthorityObservation(event)
-          const enriched = this.applyNormalizedStatus(event, normalized.onAccepted)
-          if (enriched) {
-            this.checkAgentPresenceAfterHook(event, enriched)
-            this.scheduleAssistantMessageRetry(source, aliasedBody, enriched)
-            this.scheduleTranscriptPoll(source, aliasedBody, enriched)
-          }
+          toolCallOwner = withPrefetchedRolloutReads(prefetch?.reads, () =>
+            this.ingestLocalHook(source, aliasedBody)
+          )
+        } finally {
+          prefetch?.release()
         }
-        res.writeHead(204)
-        res.end()
+        await this.respondToHook(req, res, source, aliasedBody, toolCallOwner)
       } catch (error) {
         if (pathname === OPENCODE_STARTUP_PROMPT_CLAIM_PATH) {
           if (isHookRequestTruncatedError(error) && !destroyedBySlowlorisCap) {
@@ -199,18 +186,16 @@ export abstract class AgentHookServerLifecycle extends AgentHookServerStatusHook
           res.end('{"allowed":false}')
           return
         }
-        // Why (#11217): an authenticated POST whose body dies short of its own Content-Length was cut
-        // by something on the loopback path, not by a bad payload. Fail open as before, but count it —
-        // this is the one failure mode that silently stops status for every runtime at once.
+        // Authenticated body truncation can interrupt all hook status; record it despite fail-open handling (#11217).
         if (isHookRequestTruncatedError(error) && !destroyedBySlowlorisCap) {
           this.transportInterference.record({ source: resolveHookSource(pathname) ?? null, error })
         }
-        // Why: fail open — return success on malformed payloads so a broken hook never blocks the agent.
+        // Malformed hooks must not block the agent.
         res.writeHead(204)
         res.end()
       }
     }
-    // Why: node ignores a returned promise, so the handler must settle it itself; handleRequest never rejects.
+    // Node ignores handler promises; handleRequest catches request errors internally.
     this.server = createServer((req, res) => {
       void handleRequest(req, res)
     })
@@ -225,7 +210,9 @@ export abstract class AgentHookServerLifecycle extends AgentHookServerStatusHook
           if (address && typeof address === 'object') {
             this.port = address.port
           }
+          this.activateClaudeHelperObservations()
           this.maybeWriteEndpointFile()
+          this.scheduleReplayTranscriptPolls()
         },
         (error) => console.error('[agent-hooks] server error', error)
       )
@@ -239,6 +226,7 @@ export abstract class AgentHookServerLifecycle extends AgentHookServerStatusHook
   }
 
   private rollbackTransportStart(): void {
+    this.replayTranscriptPolls.clear()
     this.server?.close()
     this.server = null
     this.port = 0
@@ -246,10 +234,11 @@ export abstract class AgentHookServerLifecycle extends AgentHookServerStatusHook
     this.endpointFileWritten = false
   }
 
-  /** `keepStatus`: quit only. The chat teardown after it still reads each chat's subagents and
-   *  background tasks from the status store to decide what to offer to resume; exit frees it. */
+  /** Quit retains status until chat teardown reads resumable child and background work. */
   stop(options?: { keepStatus?: boolean }): void {
     this.startup.stop()
+    this.claudeAgentViews.close()
+    this.claudePermissionHooks.drain()
     // Terminal status may still have a pending write while hook ingress is disabled.
     if (this.statusHooksEnabled || this.statusPersistTimer) {
       this.flushStatusPersistSync()
@@ -266,19 +255,19 @@ export abstract class AgentHookServerLifecycle extends AgentHookServerStatusHook
     this.onPaneStatusCleared = null
     this.onTransportInterference = null
     this.transportInterference.reset()
-    for (const timer of this.assistantMessageRetryTimers.values()) {
-      clearTimeout(timer)
-    }
-    this.assistantMessageRetryTimers.clear()
+    this.clearAllAssistantMessageRetries()
+    this.hookSilenceRechecks.clear()
+    this.clearModelWaits()
+    this.programStatusFacetRepublishes.clear()
     this.clearAllTranscriptPolls()
     this.claudeOwedNotificationExpiry.clearAll()
     this.endpointDir = null
     this.endpointFilePathCache = null
     this.endpointFileWritten = false
-    this.lastStatusFilePath = null
+    this.setStatusFilePath(null)
     this.closeStatusSnapshotWriter()
-    this.runtimeObservedStatusPaneKeys.clear()
-    this.paneKeyByTerminalHandle.clear()
+    this.agentIdentities.close()
+    this.clearRuntimeStatusQueries()
     this.hydratedAuthorityCommitments = Object.freeze([])
     this.hydratedLaunchTokenHashByPaneKey.clear()
     this.persistedAuthorityCommitmentsByPaneKey.clear()
@@ -291,11 +280,13 @@ export abstract class AgentHookServerLifecycle extends AgentHookServerStatusHook
     this.retiredPaneFencesByKey.clear()
     this.connectionTimestampWatermarkById.clear()
     this.evidenceObservedAtByPaneKey.clear()
+    this.programStatusFacets.clear()
     this.activeHookTurnCompletedAtByPaneKey.clear()
     this.legacyPaneKeyAliases.clear()
     this.paneKeyAliasPersistenceListener = null
     this.ownerStateInitialized = false
-    // Why: don't unlink the endpoint file — a stale file matches fail-open and avoids a TOCTOU race with a concurrent Orca.
+    // Leave the endpoint: stale files fail open, and unlinking can race another Orca instance.
+    this.providerRowsByTab = null
     clearAllListenerCaches(this.state)
     if (!options?.keepStatus) {
       this.resetCanonicalStatus()

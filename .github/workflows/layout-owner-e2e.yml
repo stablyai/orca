@@ -1,0 +1,30 @@
+name: Layout owner E2E (manual)
+run-name: Layout owner E2E ${{ inputs.ref || github.ref }}
+
+on:
+  workflow_dispatch:
+    inputs:
+      ref:
+        description: Commit or ref to test (defaults to the workflow commit)
+        required: false
+        type: string
+
+permissions:
+  contents: read
+
+# Reduced original journey selection; retired layout-oracle coverage is not claimed.
+concurrency:
+  group: layout-owner-e2e
+  cancel-in-progress: false
+
+jobs:
+  layout_owner_switch_on:
+    name: surviving layout-owner journeys (switch on)
+    permissions:
+      contents: read
+    uses: ./.github/workflows/e2e.yml
+    with:
+      ref: ${{ inputs.ref || github.sha }}
+      test_files: '["tests/e2e/golden-journeys/golden-file-open-edit-save.spec.ts","tests/e2e/golden-journeys/golden-source-control-open-diff.spec.ts"]'
+      artifact_suffix: -layout-owner-switch-on
+      layout_owner: main

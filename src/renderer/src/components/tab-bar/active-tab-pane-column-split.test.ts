@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { useAppStore } from '../../store'
-import type { Tab } from '../../../../shared/tab-types'
+import type { Tab } from '../../../../shared/workspace-layout/tab-groups/tab-types'
 import {
   TAB_SPLIT_SHORTCUT_DIRECTIONS,
   dispatchActiveTabSplitShortcut,

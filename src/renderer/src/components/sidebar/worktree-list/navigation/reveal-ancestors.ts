@@ -1,7 +1,10 @@
-import type { ProjectGroup } from '../../../../../../shared/project-group-types'
-import type { Repo } from '../../../../../../shared/repo-types'
-import { getProjectGroupHeaderKey } from '../../../../../../shared/sidebar-list/group-keys'
-import type { ProjectGroupingModel } from '../../../../../../shared/project-section-grouping'
+import type { ProjectGroup } from '../../../../../../shared/project/groups/project-group-types'
+import type { Repo } from '../../../../../../shared/repository/repo-types'
+import {
+  getProjectGroupHeaderKey,
+  PROJECTS_SECTION_GROUP_KEY
+} from '../../../../../../shared/sidebar-list/sections/group-keys'
+import type { ProjectGroupingModel } from '../../../../../../shared/sidebar-list/sections/project-section-grouping'
 
 function getProjectIdFromHeaderRowKey(rowKey: string): string | null {
   if (!rowKey.startsWith('project:')) {
@@ -72,7 +75,8 @@ export function getSidebarRowRevealAncestorKeys(args: {
 }): string[] {
   if (args.rowKey.startsWith('project-group:')) {
     const groupId = args.rowKey.slice('project-group:'.length)
-    const group = args.projectGroups.find((candidate) => candidate.id === groupId)
+    // Why the last copy: same-id host copies render as that one (getDistinctProjectGroups).
+    const group = args.projectGroups.findLast((candidate) => candidate.id === groupId)
     return getProjectGroupAncestorKeys(group?.parentGroupId, args.projectGroups)
   }
   const keys = new Set<string>()
@@ -87,4 +91,17 @@ export function getSidebarRowRevealAncestorKeys(args: {
     }
   }
   return [...keys]
+}
+
+/** A found row lives in the Projects list, so a folded Projects section is its outermost collapsed
+ * ancestor: unfold it the same way, and let the reveal rerun with real geometry. True when it toggled. */
+export function unfoldProjectsSectionForReveal(args: {
+  collapsedGroups: ReadonlySet<string>
+  toggleGroup: (key: string) => void
+}): boolean {
+  if (!args.collapsedGroups.has(PROJECTS_SECTION_GROUP_KEY)) {
+    return false
+  }
+  args.toggleGroup(PROJECTS_SECTION_GROUP_KEY)
+  return true
 }

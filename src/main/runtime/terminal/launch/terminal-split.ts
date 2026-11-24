@@ -1,13 +1,17 @@
 import type { TerminalSplitOptions } from './terminal-split-surface'
-import type { RuntimePtyWorktreeRecord } from '../../runtime-terminal-state-records'
-import { OrcaRuntimeWithStopExplicitlyClosedTabPtys } from '../../session-tabs/explicit-terminal-close-stops'
-import type { TerminalPaneSplitSource } from '../../../../shared/feature-education-telemetry'
-import type { RuntimeTerminalSplit } from '../../../../shared/runtime-types'
+import type { SplitPaneInMainOptions, SplitPaneSource } from './terminal-split-in-main'
+import type { RuntimePtyWorktreeRecord } from '../records/runtime-terminal-state-records'
+import { OrcaRuntimeWithStopExplicitlyClosedTabPtys } from '../../session-tabs/terminal-retirement/explicit-terminal-close-stops'
+import type { RuntimeTerminalSplit } from '../../../../shared/terminal/runtime/runtime-terminal-contracts'
 import { randomUUID } from 'node:crypto'
-import { parseExecutionHostId } from '../../../../shared/execution-host'
-import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/layout-owner-switch'
-import { admitRuntimePane } from '../../runtime-pane-admission'
+import {
+  RendererSplitLedger,
+  splitRetryUnknownError,
+  type RendererSplit
+} from './terminal-split-retry'
+import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/workspace-layout/layout-owner-switch'
 import type { Worktree } from '../../../../shared/worktree/types'
+import { applyRemoteViewerLaunchEnv } from './remote-viewer-launch-env'
 
 export abstract class OrcaRuntimeWithSplitTerminal extends OrcaRuntimeWithStopExplicitlyClosedTabPtys {
   protected abstract splitPtyBackedTerminal(
@@ -16,92 +20,90 @@ export abstract class OrcaRuntimeWithSplitTerminal extends OrcaRuntimeWithStopEx
     createdWorktree?: Worktree
   ): Promise<RuntimeTerminalSplit>
 
-  protected abstract waitForLeafInTab(
-    tabId: string,
-    leafId: string,
-    timeoutMs?: number
-  ): Promise<string>
+  protected abstract ownsTabLayout(worktreeId: string, tabId: string): boolean
+
+  protected abstract splitPaneInMain(
+    source: SplitPaneSource,
+    opts: SplitPaneInMainOptions
+  ): Promise<RuntimeTerminalSplit>
+
+  protected abstract waitForLeafInTab(tabId: string, leafId: string): Promise<string>
+
+  private readonly rendererSplits = new RendererSplitLedger()
 
   async splitTerminal(
     handle: string,
-    opts: {
-      direction?: 'horizontal' | 'vertical'
-      command?: string
-      env?: Record<string, string>
-      envToDelete?: string[]
-      activate?: boolean
-      // Why: same split as createTerminal — adopt the pane without revealing its
-      // workspace, for splits the user never asked to see.
-      surfaceOwner?: false
-      telemetrySource?: TerminalPaneSplitSource
+    options: TerminalSplitOptions & {
+      /** The leaf id a timed-out split reported: wait for that pane instead of splitting again. */
+      retrySplit?: string
     } = {},
     // Internal creation evidence; RPC and preload callers never supply it.
     createdWorktree?: Worktree
   ): Promise<RuntimeTerminalSplit> {
+    const opts = applyRemoteViewerLaunchEnv(options, options.terminalImageViewerSupported)
     const livePty = this.getLivePtyForHandle(handle)
+    if (livePty && opts.retrySplit) {
+      // Main starts these splits itself and answers without the window, so none can be pending.
+      throw splitRetryUnknownError(livePty.record.tabId, opts.retrySplit)
+    }
     if (livePty) {
       return await this.splitPtyBackedTerminal(livePty.pty, opts, createdWorktree)
     }
     this.assertGraphReady()
     const { leaf } = this.getLiveLeafForHandle(handle)
     const direction = opts.direction ?? 'horizontal'
-    // Switch point: main writes the split first; the window then mounts main's pane.
-    if (ORCA_LAYOUT_OWNER_IS_MAIN) {
-      const [hostId] = this.getWorkspaceSessionHostIdsForTab(leaf.worktreeId, leaf.tabId)
-      if (hostId && parseExecutionHostId(hostId)?.kind !== 'runtime') {
-        const newLeafId = randomUUID()
-        // Main keeps the pane however its start goes: one whose terminal never starts is a dead
-        // pane, as any. No pane written, no split: nothing else would put it in main's copy.
-        const outcome = await admitRuntimePane(
-          this.store,
-          {
-            type: 'splitPane',
-            workspace: leaf.worktreeId,
-            tabId: leaf.tabId,
-            leafId: leaf.leafId,
-            direction,
-            newLeafId
-          },
-          hostId
-        )
-        if (outcome !== 'admitted' && outcome !== 'exists') {
-          throw new Error(`split_not_written: ${outcome ?? 'unknown'}`)
-        }
-        this.notifier?.splitTerminal(leaf.tabId, leaf.paneRuntimeId, {
-          direction,
-          command: opts.command,
-          worktreeId: leaf.worktreeId,
-          sourceLeafId: leaf.leafId,
-          telemetrySource: opts.telemetrySource,
-          newLeafId
-        })
-        const newHandle = await this.waitForLeafInTab(leaf.tabId, newLeafId)
-        return {
-          handle: newHandle,
-          tabId: leaf.tabId,
-          paneRuntimeId: leaf.paneRuntimeId,
-          leafId: newLeafId
-        }
+    // Switch point: main writes the split and starts its terminal; the window attaches to it.
+    if (ORCA_LAYOUT_OWNER_IS_MAIN && this.ownsTabLayout(leaf.worktreeId, leaf.tabId)) {
+      if (opts.retrySplit) {
+        throw splitRetryUnknownError(leaf.tabId, opts.retrySplit)
       }
+      const cwd = leaf.ptyId
+        ? await this.ptyController?.getCwd?.(leaf.ptyId).catch(() => null)
+        : null
+      return this.splitPaneInMain(
+        { worktreeId: leaf.worktreeId, tabId: leaf.tabId, leafId: leaf.leafId },
+        {
+          direction,
+          ...(cwd ? { cwd } : {}),
+          command: opts.command,
+          env: opts.env,
+          envToDelete: opts.envToDelete,
+          activate: opts.activate,
+          ...(opts.wslUserAct ? { wslUserAct: true } : {}),
+          ...(opts.preAllocatedHandle ? { preAllocatedHandle: opts.preAllocatedHandle } : {})
+        }
+      )
     }
 
+    if (opts.retrySplit) {
+      // Retries only wait: reissuing during a pending start or remount gap could execute the command twice.
+      const split = this.rendererSplits.get(opts.retrySplit)
+      if (split?.tabId !== leaf.tabId) {
+        throw splitRetryUnknownError(leaf.tabId, opts.retrySplit)
+      }
+      return await this.awaitRendererSplit(split, opts.retrySplit)
+    }
     const newLeafId = randomUUID()
-
+    const split = { tabId: leaf.tabId, paneRuntimeId: leaf.paneRuntimeId }
+    this.rendererSplits.record(newLeafId, split)
     this.notifier?.splitTerminal(leaf.tabId, leaf.paneRuntimeId, {
       direction,
       command: opts.command,
+      ...(opts.terminalImageViewerSupported !== undefined ? { env: opts.env } : {}),
       worktreeId: leaf.worktreeId,
       sourceLeafId: leaf.leafId,
       telemetrySource: opts.telemetrySource,
-      newLeafId
+      newLeafId,
+      ...(opts.activate === false ? { activate: false } : {})
     })
+    return await this.awaitRendererSplit(split, newLeafId)
+  }
 
-    const newHandle = await this.waitForLeafInTab(leaf.tabId, newLeafId)
-    return {
-      handle: newHandle,
-      tabId: leaf.tabId,
-      paneRuntimeId: leaf.paneRuntimeId,
-      leafId: newLeafId
-    }
+  private async awaitRendererSplit(
+    split: RendererSplit,
+    leafId: string
+  ): Promise<RuntimeTerminalSplit> {
+    const handle = await this.waitForLeafInTab(split.tabId, leafId)
+    return { handle, tabId: split.tabId, paneRuntimeId: split.paneRuntimeId, leafId }
   }
 }

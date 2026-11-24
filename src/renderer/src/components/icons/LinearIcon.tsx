@@ -1,9 +1,5 @@
 import React from 'react'
 
-// Why: the Linear brand logo is referenced from multiple surfaces (sidebar
-// nav, workspace creation combobox). Keeping a single source avoids drift
-// in the path data and lets every caller pick its own size/color via
-// `currentColor`.
 export function LinearIcon({ className }: { className?: string }): React.JSX.Element {
   return (
     <svg viewBox="0 0 24 24" aria-hidden className={className} fill="currentColor">

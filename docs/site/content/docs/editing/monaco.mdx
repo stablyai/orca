@@ -8,6 +8,14 @@ Orca's code editor is Monaco — the same editor VS Code uses — with a few Orc
 
 Files save on blur and after short idle periods. There is no "dirty" dot because there are no unsaved changes in normal flow.
 
+## Final newline
+
+Enable **Insert Final Newline** under [Settings → General → Editor](/docs/settings) to add a missing line break when saving a non-empty file from the code editor. It is off by default, keeps the file's LF or CRLF line endings, and leaves the cursor in place. Rich Markdown, notebook, and CSV editors are unchanged.
+
+## Line endings
+
+New files, and files that have no line breaks yet, use the line ending of the system that runs the file's workspace: LF on Linux and macOS hosts, WSL hosts, and Windows projects that run in WSL; CRLF on Windows otherwise. Choose LF or CRLF under **End of Line** in [Settings → General → Editor](/docs/settings) to always use one. The ending is set only while the file has at most one line. Once it has line breaks, Orca never changes them, so lines you typed keep their ending. A file that opened with line breaks, or got them from text written outside the editor, keeps its ending even if you empty it. When outside text with line breaks lands in a file that has at most one line, the file takes that text's ending. If you type several lines before a remote SSH host or Orca server reports its system, those lines keep the editor's starting ending. WSL hosts are treated as Linux from the start, so they are not affected. Shell scripts always start with LF.
+
 ## Multi-cursor, go-to, find
 
 - `Cmd-D` — select next occurrence.

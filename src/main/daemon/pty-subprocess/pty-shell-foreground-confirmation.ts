@@ -1,11 +1,9 @@
 import type * as pty from 'node-pty'
 import { ptyShellProcessId } from '../../windows/windows-pty-job'
-import { confirmShellForegroundProcess } from '../../providers/agent-foreground-process'
-import { readWindowsPtyJobProcessIds } from '../../providers/windows-pty-job-membership'
+import { confirmShellForegroundProcess } from '../../providers/foreground/agent-process'
+import { readWindowsPtyJobProcessIds } from '../../providers/foreground/windows/pty-job-membership'
 
-/** Fresh execution-host proof that the spawned shell owns the PTY foreground:
- *  a post-request process inspection (POSIX `ps`, Windows job membership),
- *  never cached state. */
+/** Require fresh execution-host inspection; cached foreground state is insufficient. */
 export async function confirmPtyShellForeground(args: {
   process: pty.IPty
   shellPath: string | undefined

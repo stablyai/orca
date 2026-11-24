@@ -1,11 +1,13 @@
-import { DOC_PREVIEW_PARTITION } from '../../../../../shared/doc-preview-scheme'
-import { ORCA_BROWSER_GUEST_WEB_PREFERENCES_ATTRIBUTE } from '../../../../../shared/browser-guest-web-preferences'
+import { DOC_PREVIEW_PARTITION } from '../../../../../shared/document-preview/doc-preview-scheme'
+import { publishNativeChatVisualGuestTheme } from '@/components/native-chat/media/visuals/NativeChatVisualGuestThemePublisher'
+import { ORCA_BROWSER_PAGE_GUEST_WEB_PREFERENCES_ATTRIBUTE } from '../../../../../shared/browser/guest-lifecycle/browser-guest-web-preferences'
 import {
   moveFocusToRendererBeforeWebviewDetach,
   registerPersistentWebview,
   unregisterPersistentWebview,
   webviewRegistry
 } from '@/components/browser-pane/host-guest/webview-registry'
+import { isPageDocumentNavigationStart } from '@/components/browser-pane/host-guest/lifecycle/browser-page-webview-navigation-handlers'
 
 export function attachDocPreviewWebview({
   previewId,
@@ -31,38 +33,40 @@ export function attachDocPreviewWebview({
   onViewportMessage: (event: { message?: string }) => void
 }): { webview: Electron.WebviewTag; detach: () => void; reload: () => void } {
   const webview = document.createElement('webview') as Electron.WebviewTag
-  // Why no allowpopups: the guest's preload intercepts a trusted click on a link before Chromium
-  // considers a popup at all, so target="_blank" needs no popup path and every one stays denied.
+  // Trusted link clicks are intercepted by preload; target=_blank needs no popup permission.
   webview.setAttribute('partition', DOC_PREVIEW_PARTITION)
-  webview.setAttribute('webpreferences', ORCA_BROWSER_GUEST_WEB_PREFERENCES_ATTRIBUTE)
+  // Why opaque: Chromium paints its dark canvas for dark-scheme documents (JSON, text) only then.
+  webview.setAttribute('webpreferences', ORCA_BROWSER_PAGE_GUEST_WEB_PREFERENCES_ATTRIBUTE)
   webview.setAttribute('aria-label', ariaLabel)
-  // Browsers paint an undeclared page canvas white; the guest is transparent, so without this the
-  // editor's dark surface shows through and default black text becomes unreadable.
-  webview.style.backgroundColor = '#fff'
   webview.style.display = 'flex'
   webview.style.width = '100%'
   webview.style.height = '100%'
   webview.style.border = 'none'
-  webview.addEventListener('did-start-loading', onLoadStarted)
+  // Why not did-start-loading: it also fires for iframe loads, so lazy frames would re-cover the page.
+  const onNavigationStarted = (event: Electron.DidStartNavigationEvent): void => {
+    if (isPageDocumentNavigationStart(event)) {
+      onLoadStarted()
+    }
+  }
+  webview.addEventListener('did-start-navigation', onNavigationStarted)
   webview.addEventListener('did-stop-loading', onLoadStopped)
   webview.addEventListener('did-fail-load', onLoadFailed)
-  // Both: a link to a sibling document is a full navigation, a fragment link is an in-page one,
-  // and only the pair together tracks what Back can actually return to.
+  // Track both sibling-document navigation and fragment history for Back/Forward.
   webview.addEventListener('did-navigate', onNavigated)
   webview.addEventListener('did-navigate-in-page', onNavigated)
-  // Why the document names its own tab: a preview is a browser tab, and this is how every other
-  // one is named. What the document cannot do is name it the grant it is served over.
+  // Let document titles name the tab while keeping the internal grant origin hidden.
   webview.addEventListener('page-title-updated', onTitleUpdated)
   webview.addEventListener('console-message', onViewportMessage)
   // Register before append so a guest attached mid-drag cannot swallow the pointer stream.
   registerPersistentWebview(previewId, webview)
+  publishNativeChatVisualGuestTheme()
   container.appendChild(webview)
   webview.setAttribute('src', url)
 
   return {
     webview,
     detach: () => {
-      webview.removeEventListener('did-start-loading', onLoadStarted)
+      webview.removeEventListener('did-start-navigation', onNavigationStarted)
       webview.removeEventListener('did-stop-loading', onLoadStopped)
       webview.removeEventListener('did-fail-load', onLoadFailed)
       webview.removeEventListener('did-navigate', onNavigated)

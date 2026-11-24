@@ -1,21 +1,32 @@
 import { useEffect, useLayoutEffect, useRef } from 'react'
-import { lastVerifiedRuntimeStatus } from '../../../../shared/runtime-host-status'
+import {
+  lastVerifiedRuntimeStatus,
+  type RuntimeEnvironmentStatus
+} from '../../../../shared/remote-runtime/host-status/runtime-host-status'
+import { useRuntimeHostStatusSelector } from '../../store/slices/runtime-status/views/use-runtime-status-view'
 import { useAppStore } from '../../store'
-import { getExplicitRuntimeEnvironmentIdForWorktree } from '../../lib/worktree-runtime-owner'
-import { useRuntimeSessionMirrorEnvironmentKeys } from '../use-runtime-session-mirror-environment-key'
-import { sessionTabsFreshnessKey } from './tracking'
-import { clearWebSessionTabsTrackingForEnvironment } from './tracking-lifecycle'
+import { useRuntimeSessionMirrorEnvironmentKeys } from './subscriptions/use-runtime-session-mirror-environment-key'
+import { sessionTabsFreshnessKey } from './state'
+import { clearWebSessionTabsTrackingForEnvironment } from './tracking/tracking-lifecycle'
 import {
   installGlobalSessionTabsSubscriptions,
   type GlobalSubscriptionRefs
-} from './global-session-subscription'
-import { installActiveSessionTabsSubscription } from './active-session-subscription'
+} from './subscriptions/global-session-subscription'
+import { installActiveSessionTabsSubscription } from './subscriptions/active-session-subscription'
+import { mirroredRuntimeEnvironmentIdForWorkspace } from './workspace-selection/mirrored-workspace-owner'
 import {
   createWarmWorktreeSessionSubscriptions,
   type WarmWorktreeSessionSubscriptions
-} from './warm-worktree-subscriptions'
+} from './subscriptions/warm-worktree-subscriptions'
 
 /** Mount the paired-runtime tab mirrors and the selected-worktree stream. */
+type RuntimeStatusEntry = RuntimeEnvironmentStatus | undefined
+const selectVerifiedRuntimeId = (entry: RuntimeStatusEntry): string | null =>
+  lastVerifiedRuntimeStatus(entry)?.runtimeId ?? null
+const selectConnectionGeneration = (entry: RuntimeStatusEntry): number =>
+  entry?.connectionGeneration ?? 0
+const selectHostContactEpoch = (entry: RuntimeStatusEntry): number => entry?.hostContactEpoch ?? 0
+
 export function useWebSessionTabsSync(): void {
   const activeRuntimeEnvironmentIdRef = useRef<string | null>(null)
   const activeRuntimeWorktreeKeyRef = useRef<string | null>(null)
@@ -42,35 +53,24 @@ export function useWebSessionTabsSync(): void {
   const { environmentKey: runtimeSessionMirrorEnvironmentKey, resubscribeSignal } =
     useRuntimeSessionMirrorEnvironmentKeys()
   const activeWorktreeRuntimeEnvironmentId = useAppStore((state) =>
-    getExplicitRuntimeEnvironmentIdForWorktree(state, state.activeWorktreeId)
+    mirroredRuntimeEnvironmentIdForWorkspace(state, state.activeWorktreeId)
   )
-  // Keep this subscription dependency: a runtime reconnect can retain the same environment id
-  // while replacing its runtime instance, which must restart the scoped stream. Read the last
-  // identity the host answered with, not `entry.status` — an unverifiable probe nulls that and
-  // cold-rebuilt this stream for a host that was still delivering.
-  const activeWorktreeRuntimeId = useAppStore((state) => {
-    const environmentId = getExplicitRuntimeEnvironmentIdForWorktree(state, state.activeWorktreeId)
-    return environmentId
-      ? (lastVerifiedRuntimeStatus(state.runtimeStatusByEnvironmentId.get(environmentId))
-          ?.runtimeId ?? null)
-      : null
-  })
-  const activeWorktreeRuntimeConnectionGeneration = useAppStore((state) => {
-    const environmentId = getExplicitRuntimeEnvironmentIdForWorktree(state, state.activeWorktreeId)
-    return environmentId
-      ? (state.runtimeStatusByEnvironmentId.get(environmentId)?.connectionGeneration ?? 0)
-      : 0
-  })
-  // Restart trigger only, deliberately not passed to the installer: the scoped stream may have
-  // ended during the outage, but the frames it will resend still belong to the same connection.
-  const activeWorktreeRuntimeHostContactEpoch = useAppStore((state) => {
-    const environmentId = getExplicitRuntimeEnvironmentIdForWorktree(state, state.activeWorktreeId)
-    return environmentId
-      ? (state.runtimeStatusByEnvironmentId.get(environmentId)?.hostContactEpoch ?? 0)
-      : 0
-  })
+  // Reconnect may replace runtime under the same environment ID; restart scoped streams from last answered identity. Probe-unverifiable status is null even while delivery continues.
+  const activeWorktreeRuntimeId = useRuntimeHostStatusSelector(
+    activeWorktreeRuntimeEnvironmentId || null,
+    selectVerifiedRuntimeId
+  )
+  const activeWorktreeRuntimeConnectionGeneration = useRuntimeHostStatusSelector(
+    activeWorktreeRuntimeEnvironmentId || null,
+    selectConnectionGeneration
+  )
+  // Reconnect trigger only, not stream identity: outage-ended streams resend frames for the same connection.
+  const activeWorktreeRuntimeHostContactEpoch = useRuntimeHostStatusSelector(
+    activeWorktreeRuntimeEnvironmentId || null,
+    selectHostContactEpoch
+  )
   const activeWorktreeRuntimePairingRevision = useAppStore((state) => {
-    const environmentId = getExplicitRuntimeEnvironmentIdForWorktree(state, state.activeWorktreeId)
+    const environmentId = mirroredRuntimeEnvironmentIdForWorkspace(state, state.activeWorktreeId)
     const environment = state.runtimeEnvironments.find(
       (candidate) => candidate.id === environmentId
     )
@@ -118,9 +118,7 @@ export function useWebSessionTabsSync(): void {
     }
   }, [runtimeSessionMirrorEnvironmentKey, workspaceSessionReady])
 
-  // A regained host revives the streams that ended during the outage. Live ones are left alone:
-  // the mirror state they refill is stamped with the key, which has not moved, and a probe flap
-  // with no real outage must not cost a resubscribe.
+  // Regained contact revives only dead streams; stable mirror keys retain state, and probe flaps without outages must not resubscribe.
   useEffect(() => {
     globalSubscriptionsRef.current?.restartEnded()
   }, [resubscribeSignal])

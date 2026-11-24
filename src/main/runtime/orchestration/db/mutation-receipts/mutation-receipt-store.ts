@@ -1,10 +1,9 @@
 import { randomBytes } from 'node:crypto'
-import type { MutationReceiptRow } from '../../types'
+import type { MutationReceiptRow } from '../orchestration-records'
 import { OrchestrationError } from '../../orchestration-error'
-import { ensureMutationReceiptCapacity } from '../../mutation-receipt-capacity'
+import { ensureMutationReceiptCapacity } from './mutation-receipt-capacity'
 import type { OrchestrationDb } from '../orchestration-db'
-
-// ── Durable mutation receipts ──
+import { MUTATION_RECEIPT_COLUMN_LIST } from '../row-column-lists'
 
 export function getOrCreateLocalMutationCallerFingerprint(this: OrchestrationDb): string {
   if (this.localMutationCallerFingerprint) {
@@ -157,14 +156,43 @@ export function discardPendingMutationReceipt(
     .run(callerFingerprint, requestId)
 }
 
+export function countPendingMutationReceipts(
+  this: OrchestrationDb,
+  callerFingerprints: readonly string[]
+): number {
+  const count = this.db
+    .prepare(
+      `SELECT COUNT(*) AS count FROM mutation_receipts
+       WHERE caller_fingerprint IN (SELECT value FROM json_each(?)) AND state = 'pending'`
+    )
+    .get(JSON.stringify(callerFingerprints))?.count
+  return Number(count ?? 0)
+}
+
+/** Completes these callers' pending rows with `receipt`, for operations no running work owns. */
+export function settlePendingMutationReceipts(
+  this: OrchestrationDb,
+  callerFingerprints: readonly string[],
+  receipt: string
+): void {
+  this.db
+    .prepare(
+      `UPDATE mutation_receipts
+       SET state = 'completed', receipt = ?, updated_at = datetime('now')
+       WHERE caller_fingerprint IN (SELECT value FROM json_each(?)) AND state = 'pending'`
+    )
+    .run(receipt, JSON.stringify(callerFingerprints))
+}
+
 export function getMutationReceipt(
   this: OrchestrationDb,
   callerFingerprint: string,
   requestId: string
 ): MutationReceiptRow | undefined {
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the column list names every column of the row type, and a missing one fails compilation.
   return this.db
     .prepare(
-      `SELECT * FROM mutation_receipts
+      `SELECT ${MUTATION_RECEIPT_COLUMN_LIST} FROM mutation_receipts
        WHERE caller_fingerprint = ? AND request_id = ?`
     )
     .get(callerFingerprint, requestId) as MutationReceiptRow | undefined
@@ -176,6 +204,8 @@ export type MutationReceiptStoreMethods = {
   completeMutationReceipt: typeof completeMutationReceipt
   checkpointPendingMutationReceipt: typeof checkpointPendingMutationReceipt
   discardPendingMutationReceipt: typeof discardPendingMutationReceipt
+  countPendingMutationReceipts: typeof countPendingMutationReceipts
+  settlePendingMutationReceipts: typeof settlePendingMutationReceipts
   getMutationReceipt: typeof getMutationReceipt
 }
 
@@ -186,6 +216,8 @@ export function attachMutationReceiptStore(ctor: { prototype: object }): void {
     completeMutationReceipt,
     checkpointPendingMutationReceipt,
     discardPendingMutationReceipt,
+    countPendingMutationReceipts,
+    settlePendingMutationReceipts,
     getMutationReceipt
   })
 }

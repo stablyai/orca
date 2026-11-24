@@ -2,27 +2,35 @@ import type {
   StructuredAgentAdapterContext,
   StructuredAgentRuntimeAdapter,
   StructuredAgentRuntimeRegistration
-} from '../runtime/structured-agent-runtime-registration-types'
+} from '../runtime/agent-session/installation/structured-agent-runtime-registration-types'
 import {
   composeStructuredLaunch,
   structuredAgentLaunchSources
-} from '../runtime/structured-agent-launch-composition'
+} from '../runtime/agent-session/launch/structured-agent-launch-composition'
 import { PI_RPC_AGENT } from './rpc-agent-definition'
-import { piRpcLaunchPart } from './rpc-launch-resolution'
-import { PiRpcSessionAdapter } from './rpc-session-adapter'
+import { piRpcLaunchPart } from './rpc/launch/rpc-launch-resolution'
+import { PiRpcSessionAdapter } from './rpc/rpc-session-adapter'
 import { PI_RPC_RUNTIME_METADATA } from './rpc-runtime-metadata'
 
 function createPiRpcAdapter(context: StructuredAgentAdapterContext): StructuredAgentRuntimeAdapter {
   const { deps } = context
   return new PiRpcSessionAdapter({
-    resolveLaunch: composeStructuredLaunch(
-      PI_RPC_AGENT,
-      structuredAgentLaunchSources(context),
-      piRpcLaunchPart({})
-    ),
+    resolveLaunch:
+      deps.resolvePiLaunch ??
+      composeStructuredLaunch(
+        PI_RPC_AGENT,
+        structuredAgentLaunchSources(context),
+        piRpcLaunchPart({
+          logger: deps.logger,
+          dataDirectory: deps.stateDirectory,
+          managedExtensionsEnabled: deps.piManagedExtensionsEnabled
+        })
+      ),
     ...(deps.openPiConnection ? { openConnection: deps.openPiConnection } : {}),
     ...(deps.readProcessStartTime ? { readProcessStartTime: deps.readProcessStartTime } : {}),
     onLifecycle: context.deliverLifecycle,
+    onChildWorkEvidence: (sessionId, evidence, producer) =>
+      context.host()?.publishChildWorkEvidence(sessionId, evidence, producer),
     onSettled: ({ sessionId, clientMessageId, outcome }) => {
       if (outcome.state === 'admitted') {
         return
@@ -30,10 +38,20 @@ function createPiRpcAdapter(context: StructuredAgentAdapterContext): StructuredA
       context.followUps.onDispatchSettledLate({
         sessionId,
         clientMessageId,
-        ...(outcome.state === 'accepted' ? { providerIdentity: outcome.providerIdentity } : outcome)
+        ...(outcome.state === 'accepted'
+          ? {
+              providerIdentity: outcome.providerIdentity,
+              ...(outcome.answeredInTurn ? { answeredInTurn: outcome.answeredInTurn } : {})
+            }
+          : outcome)
       })
     },
-    onIdle: context.followUps.releaseUnansweredDispatches,
+    persistResumePoint: async ({ sessionId, fence, handle }) => {
+      await context.store.updateRecord(sessionId, {
+        kind: 'resume-point',
+        args: { fence, handle, now: Date.now() }
+      })
+    },
     logger: deps.logger
   })
 }

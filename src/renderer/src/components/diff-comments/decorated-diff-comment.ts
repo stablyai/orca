@@ -1,4 +1,4 @@
-import type { DiffComment } from '../../../../shared/diff-comment-types'
+import type { DiffComment } from '../../../../shared/file-review/diff-comment-types'
 
 export type DecoratedDiffComment = DiffComment & {
   author?: string

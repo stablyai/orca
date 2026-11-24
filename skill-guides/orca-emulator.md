@@ -24,8 +24,8 @@ unvalidated with the active device injected.
 device with `emulator_unsupported`. `tap`, `type`, `gesture`, `button`, `rotate`, `ax`, and
 `exec` work on both backends.
 
-Emulator control is local to the Mac that owns the simulator; remote and SSH worktrees are
-out of scope.
+Commands drive devices on the host that runs the Orca runtime. Simulators need that host to
+be a Mac, so a Linux `orca serve` or SSH host can drive only Android devices.
 
 ## Prerequisites
 
@@ -45,12 +45,12 @@ device.
 
 | Goal                     | Command                                                     | Constraint                                                                                                                                                            |
 | ------------------------ | ----------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| List available / running | `ORCA emulator list --json`                                 | Orca-managed sessions plus raw serve-sim streams. Use its ids for `--device` / `--emulator`.                                                                          |
+| List worktree's sessions | `ORCA emulator list --json`                                 | The worktree's attached sessions, iOS and Android; `--worktree all` lists every worktree's. Use a row's `deviceUdid` for `--device`.                                  |
 | List devices everywhere  | `ORCA emulator devices --json`                              | Every backend's devices with a platform column, booted and shutdown.                                                                                                  |
 | Attach / make active     | `ORCA emulator attach "iPhone 16 Pro" --json`               | Starts the helper if needed and makes the device active for the worktree. `--focus` switches the UI; it does not by default.                                          |
 | Single tap               | `ORCA emulator tap <x> <y> --json`                          | Normalized 0..1 coordinates.                                                                                                                                          |
 | Multi-step gesture       | `ORCA emulator gesture '<json>' --json`                     | Begin/move/end points. Use `tap` for a single tap.                                                                                                                    |
-| Type text                | `ORCA emulator type "text" --json`                          | US-ASCII only.                                                                                                                                                        |
+| Type text                | `ORCA emulator type "text" --json`                          | Any text. US keyboard text on a US hardware layout is typed as keys; other text is pasted via the simulator pasteboard.                                               |
 | Hardware button          | `ORCA emulator button home --json`                          | `home` and `side_button` are documented by the CLI spec; other names such as `swipe_home`, `app_switcher`, `lock`, and `siri` are forwarded to serve-sim unvalidated. |
 | Rotate device            | `ORCA emulator rotate landscape_left --json`                | The orientation persists for subsequent gestures.                                                                                                                     |
 | Accessibility tree       | `ORCA emulator ax --json`                                   | serve-sim node tree, capped at 500 nodes, frames normalized 0..1 with a top-left origin. Needs an active session.                                                     |
@@ -81,11 +81,21 @@ and retry.
   element at its frame center: `x + width / 2`, `y + height / 2`.
 - Prefer `tap` over `gesture` for a single tap. A separate gesture begin/end pair can be
   interpreted as a long press because of WebSocket overhead; `tap` sends the quick sequence.
-- `type` sends US-ASCII only, and unsupported characters error rather than degrading.
+- `type` accepts any text. Text that is not US keyboard text, or any text once the simulator's
+  hardware keyboard is not U.S., goes through the simulator pasteboard and Cmd+V, so it needs an
+  attached session and replaces the simulator's clipboard. Trailing newlines are still Enter.
+- While the pane has keyboard focus, Orca sets the simulator's hardware keyboard layout to the
+  Mac's current layout and restores it when the helper stops.
 - The pane and the CLI share one stream and one helper, so closing the pane can stop the
   stream.
 - Run `kill` when you are done. A helper left running holds the device until Orca quits.
 - The iOS backend drives private simulator APIs, so an Xcode update can change its behavior.
+- While Xcode's Device Hub is running, the simulator drops Orca's touch and keyboard input, so
+  `tap`, `type`, and `gesture` fail with `emulator_input_blocked`. Quit Device Hub, which shuts
+  the simulator down, then attach again. If Device Hub must stay open, run
+  `xcrun simctl spawn <udid> notifyutil -s com.apple.coredevice.dtuhidd.active 0` and
+  `xcrun simctl spawn <udid> launchctl kickstart -k system/com.apple.backboardd` (this closes
+  running apps), then `kill` and attach again.
 
 ## Examples
 
@@ -101,4 +111,4 @@ ORCA emulator kill --device "iPhone 16 Pro" --json
 ```
 
 See also: `orca-emulator-android` for Android devices, `orca-cli` for terminals, worktrees,
-and the built-in browser, and `computer-use` for desktop UI outside the simulator.
+and the built-in browser, and `orca-computer-use` for desktop UI outside the simulator.

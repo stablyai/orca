@@ -1,74 +1,82 @@
-import { useCallback, useMemo, useState } from 'react'
+import { useMemo, useReducer, useState } from 'react'
+import { useMobileTranslation } from '../i18n/use-mobile-translation'
 import { useLocalSearchParams, usePathname } from 'expo-router'
 import { useRouteHandoff } from '../navigation/route-handoff'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
-import { useHostProtocolGates } from '../components/host-protocol-gates-context'
+import { useHostProtocolGates } from '../components/host-connection/host-protocol-gates-context'
 import { visibleHostRouteNotice } from '../host-route-notice'
-import { resolveHostRouteActionState } from '../host-route-action-state'
 import { useActiveWorktreeScroll } from '../hooks/use-active-worktree-scroll'
-import { useNow } from '../hooks/use-now'
 import { useResponsiveLayout } from '../layout/responsive-layout'
-import { useForgetHostClient, useForceReconnect, useHostClient } from '../transport/client-context'
+import {
+  useForgetHostClient,
+  useForceReconnect,
+  useHostClient
+} from '../transport/connection/host-client-hooks'
 import {
   useLastConnectedAt,
   useReconnectAttempt,
   useRelayRecoveryStatus
-} from '../transport/client-context-connection-metrics'
-import { useWorkspaceSections } from '../worktree/use-workspace-sections'
-import { useHostDisplayWorktrees } from './use-host-display-worktrees'
-import { buildProjectSectionCatalog } from '../worktree/project-section-catalog'
-import { useHostProjectSections } from './use-host-project-sections'
-import { useHostRepoMetadata, type FetchHostRepoMetadata } from './use-host-repo-metadata'
-import { useHostScreenIdentity } from './use-host-screen-identity'
+} from '../transport/connection/client-context-connection-metrics'
+import {
+  useHostDisplayWorktrees,
+  useResolvedHostPlatform
+} from './workspace-list/use-host-display-worktrees'
+import { useHostListSections } from './workspace-list/use-host-list-sections'
+import { useSwitchedHostSidebarFeed } from './sidebar-feed/use-host-sidebar-feed'
+import { useHostProjectSections } from './catalog/use-host-project-sections'
+import { useHostRepoMetadata } from './catalog/use-host-repo-metadata'
+import { peekStoredHost, useHostScreenIdentity } from './identity/use-host-screen-identity'
 import { useHostScreenState } from './use-host-screen-state'
-import { useHostViewSettings } from './use-host-view-settings'
-import { rowFiltersForView } from '../worktree/workspace-view-settings'
+import { useHostViewSettings } from './view-settings/use-host-view-settings'
 import { countActiveWorkspaceFilters } from '../../../src/shared/workspace-view/workspace-row-filters'
-import { useHostWorktreeActions } from './use-host-worktree-actions'
-import { useHostWorktreeCatalog } from './use-host-worktree-catalog'
-import { useHostDisplay } from '../transport/use-host-display'
+import { useHostWorktreeActions } from './workspace-actions/use-host-worktree-actions'
+import { useHostWorktreeCatalog } from './catalog/use-host-worktree-catalog'
+import { useHostDisplay } from '../host-descriptors/use-host-display'
+import { classifyConnection } from '../transport/connection/connection-health'
+import { useHostBots } from '../bots/use-host-bots'
+import type { BotsChangeScope } from '../worktree/execution-hosts/host-worktree-refresh'
+import type { ExecutionHostId } from '../../../src/shared/execution-host/execution-host'
 
 export type HostScreenProps = {
-  // When true, rendered as the persistent tablet sidebar by the host layout, not as its own routed screen.
   embedded?: boolean
-  // Route params aren't in scope when rendered from the layout, so the caller passes these explicitly.
+  // Layout-mounted sidebars lack route params; receive them explicitly.
   hostId?: string
-  action?: string
   onHideSidebar?: () => void
 }
 
 export function useHostScreenController({
   embedded = false,
   hostId: hostIdProp,
-  action: actionProp,
   onHideSidebar
 }: HostScreenProps = {}) {
-  const params = useLocalSearchParams<{ hostId: string; action?: string; notice?: string }>()
+  useMobileTranslation()
+  const params = useLocalSearchParams<{ hostId: string; notice?: string }>()
   const hostId = hostIdProp ?? params.hostId
-  const action = actionProp ?? params.action
   const [dismissedNotice, setDismissedNotice] = useState<string | null>(null)
   const noticeParam = params.notice?.trim()
   const routeNotice = visibleHostRouteNotice(embedded, noticeParam, dismissedNotice)
-  // Not `useRouter` directly: the list is the one screen that also runs inside the shell's page,
-  // where a route it does not render is handed back to the app rather than pushed into this
-  // document. On a phone this is the router and nothing else.
+  // Use route handoff so the shell opens routes absent from the page instead of pushing them into this document.
   const router = useRouteHandoff()
   const pathname = usePathname()
   const insets = useSafeAreaInsets()
-  // Why: cap and center the list on wide/tablet canvases; on phones isWideLayout is false so it stays edge-to-edge.
   const { isWideLayout, contentMaxWidth } = useResponsiveLayout()
-  // Shared client per host owned by RpcClientProvider. See docs/mobile-shared-client-per-host.md.
   const { client, state: connState } = useHostClient(hostId)
   const reconnectAttempts = useReconnectAttempt(hostId)
   const lastConnectedAt = useLastConnectedAt(hostId)
   const relayRecovery = useRelayRecoveryStatus(hostId)
   const forgetHostClient = useForgetHostClient()
   const forceReconnectHost = useForceReconnect()
-  // One tick drives every visible agent row's relative timestamp.
-  const now = useNow(30_000)
-  const { hostCapabilities, floatingWorkspaceEnabled } = useHostProtocolGates()
-  const state = useHostScreenState(hostId, action)
+  const { hostCapabilities, statusReadable, floatingWorkspaceEnabled, hostInstallationId } =
+    useHostProtocolGates()
+  const state = useHostScreenState(hostId, peekStoredHost(hostId))
   const settings = useHostViewSettings({ client, connState, state })
+  const connectionVerdict = classifyConnection({
+    state: connState,
+    reconnectAttempts,
+    lastConnectedAt,
+    hostName: state.hostName,
+    ...relayRecovery
+  })
   const hostDisplay = useHostDisplay(
     hostId && state.hostName
       ? { id: hostId, name: state.hostName, ...state.hostStoredDescriptor }
@@ -76,24 +84,37 @@ export function useHostScreenController({
   )
 
   useHostScreenIdentity({ client, hostId, state })
-  const fetchRepoMetadataOnly = useHostRepoMetadata({ client, connState, hostId, state })
-  const fetchProjectSections = useHostProjectSections({ client, connState, hostId, state })
-  const fetchRepoMetadata = useCallback<FetchHostRepoMetadata>(
-    (options) => {
-      void fetchProjectSections(options)
-      return fetchRepoMetadataOnly(options)
-    },
-    [fetchProjectSections, fetchRepoMetadataOnly]
+  const sidebarFeed = useSwitchedHostSidebarFeed(client, hostId)
+  // The host's botsChanged re-reads its own bots; a reconnect or the foreground, every host's.
+  const [botsChangeKeys, noteBotsChanged] = useReducer(
+    (keys: Record<BotsChangeScope, number>, scope: BotsChangeScope) => ({
+      ...keys,
+      [scope]: keys[scope] + 1
+    }),
+    { host: 0, 'host-threads': 0, 'every-host': 0 }
   )
+  // The computer New bot starts on, while it is open.
+  const [newBotHostId, setNewBotHostId] = useState<ExecutionHostId | null>(null)
   const catalog = useHostWorktreeCatalog({
     client,
     connState,
     embedded,
-    fetchRepoMetadata,
     hostCapabilities,
+    hostStatusReadable: statusReadable,
+    hostId,
+    sidebarFeed: sidebarFeed?.triggers ?? null,
+    state,
+    syncViewSettingsFromDesktop: settings.syncViewSettingsFromDesktop,
+    onBotsChanged: noteBotsChanged
+  })
+  useHostRepoMetadata({ client, hostId, state, subscribed: catalog.subscribed })
+  const feed = sidebarFeed?.feed ?? null
+  useHostProjectSections({
+    client,
     hostId,
     state,
-    syncViewSettingsFromDesktop: settings.syncViewSettingsFromDesktop
+    subscribed: catalog.subscribed,
+    feedCarriesCatalog: feed?.kind === 'ready' && feed.domains.projectCatalog !== null
   })
   const actions = useHostWorktreeActions({
     client,
@@ -108,48 +129,43 @@ export function useHostScreenController({
     state
   })
 
-  const resolvedRouteActionState = resolveHostRouteActionState(state.routeActionState, action)
-  // Why: resolve `action=newWorktree` before commit, but don't reopen after the user closes while the URL persists.
-  if (resolvedRouteActionState !== state.routeActionState) {
-    state.setRouteActionState(resolvedRouteActionState)
-  }
-  const showNewWorktree = resolvedRouteActionState.showNewWorktree
-
-  const displayWorktrees = useHostDisplayWorktrees(connState, state, hostId)
-  const projectCatalog = useMemo(
-    () =>
-      buildProjectSectionCatalog(
-        state.servedProjectSections,
-        state.desktopRepos,
-        state.view.filters.visibleHostIds,
-        state.view.projectOrderBy
-      ),
-    [
-      state.servedProjectSections,
-      state.desktopRepos,
-      state.view.filters.visibleHostIds,
-      state.view.projectOrderBy
-    ]
+  const hostPlatform = useResolvedHostPlatform(state, hostId)
+  const { worktrees: displayWorktrees, hostContextOf } = useHostDisplayWorktrees(
+    connState,
+    state,
+    hostPlatform
   )
-  const collapsedGroups = useMemo(
-    () => new Set(state.view.collapsedGroups),
-    [state.view.collapsedGroups]
+  // Row identities, so a workspace swapped for another of the same count still rereads the bots.
+  const botRowsKey = useMemo(
+    () => displayWorktrees.map((row) => `${row.hostId ?? ''}|${row.worktreeId}`).join('\n'),
+    [displayWorktrees]
   )
-  const rowFilters = useMemo(() => rowFiltersForView(state.view), [state.view])
-  const sectionsResult = useWorkspaceSections({
-    displayWorktrees,
-    sortMode: state.view.sortBy,
-    filters: rowFilters,
-    search: state.search,
-    groupMode: state.view.groupBy,
-    pinnedIds: state.pinnedIds,
-    showPinnedInGroups: state.showPinnedInGroups,
-    projectCatalog,
-    filterCatalogRepos: state.servedProjectSections?.repos ?? state.desktopRepos,
-    collapsedGroups,
-    workspaceStatuses: state.view.workspaceStatuses,
-    repoHostIdByRepoId: state.repoHostIdByRepoId
+  const bots = useHostBots({
+    client,
+    pairedHostId: hostId,
+    connState,
+    hostCapabilities,
+    hostLabel: state.hostName,
+    serverHosts: state.serverWorkspaces.hosts,
+    rowsKey: botRowsKey,
+    changeKey: botsChangeKeys['every-host'],
+    pairedChangeKey: botsChangeKeys.host + botsChangeKeys['host-threads'],
+    pairedThreadsKey: botsChangeKeys['host-threads']
   })
+  const sectionsResult = useHostListSections({
+    client,
+    connected: connState === 'connected',
+    hostId,
+    feed,
+    displayWorktrees,
+    hostContextOf,
+    hostPlatform,
+    hostInstallationId,
+    hostCapabilities,
+    state,
+    bots
+  })
+  const { collapsedGroups, projectOrderBy } = sectionsResult
   const { uniqueRepos } = sectionsResult
   const activeFilterCount = useMemo(
     () =>
@@ -160,17 +176,19 @@ export function useHostScreenController({
     [state.view.filters, uniqueRepos]
   )
   const existingWorktreePaths = useMemo(() => state.worktrees.map((w) => w.path), [state.worktrees])
-  const activeWorktreeScroll = useActiveWorktreeScroll(sectionsResult.sections)
+  const activeWorktreeScroll = useActiveWorktreeScroll(sectionsResult.sections, collapsedGroups)
 
   return {
     actions,
     activeFilterCount,
     activeWorktreeScroll,
+    bots,
     catalog,
     collapsedGroups,
-    // Resolved: the desktop's value once read; the served catalog's (or the default) before.
-    projectOrderBy: projectCatalog.projectOrderBy,
+    feed,
+    projectOrderBy,
     client,
+    connectionVerdict,
     connState,
     contentMaxWidth,
     displayWorktrees,
@@ -186,7 +204,6 @@ export function useHostScreenController({
     isWideLayout,
     lastConnectedAt,
     noticeParam,
-    now,
     onHideSidebar,
     reconnectAttempts,
     relayRecovery,
@@ -195,8 +212,16 @@ export function useHostScreenController({
     sectionsResult,
     setDismissedNotice,
     settings,
-    showNewWorktree,
-    state
+    state,
+    newBot: {
+      hostId: newBotHostId,
+      open: setNewBotHostId,
+      // Its Home is a new row too; hosts that don't push rows would leave it to the backstop poll.
+      created: () => {
+        noteBotsChanged('every-host')
+        void catalog.fetchWorktrees()
+      }
+    }
   }
 }
 

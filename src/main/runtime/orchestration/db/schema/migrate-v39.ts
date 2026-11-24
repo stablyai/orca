@@ -1,15 +1,6 @@
 import type { OrchestrationDb } from '../orchestration-db'
 
-/**
- * Admits a structured session's journal into the worker archive.
- *
- * A CHECK constraint cannot be widened in place, so the table is rebuilt and copied forward. This
- * is the one part of the structured-session schema that a fresh `createTables` cannot supply to an
- * existing database: `IF NOT EXISTS` leaves an already-created table's narrower CHECK untouched.
- *
- * `structured_pointer_operations` is deliberately not created here — `createTables` runs
- * unconditionally on every open, ahead of migration, and already declares it.
- */
+/** Rebuild the archive CHECK for structured journals; createTables cannot widen it and already supplies pointer operations. */
 export function migrateV39(this: OrchestrationDb, current: number): void {
   if (current >= 39) {
     return

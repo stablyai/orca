@@ -1,0 +1,101 @@
+import { translate } from '@/i18n/i18n'
+import { translateSearchKeyword } from '../search/settings-search-keywords'
+import { createLocalizedCatalog } from '@/i18n/localized-catalog'
+
+export const PRIVACY_SETTING_ANCHORS = {
+  overview: 'privacy-overview',
+  usageData: 'privacy-usage-data',
+  diagnostics: 'privacy-diagnostics'
+} as const
+
+export const getPrivacyPaneSearchEntries = createLocalizedCatalog(() => [
+  {
+    targetSectionId: PRIVACY_SETTING_ANCHORS.overview,
+    title: translate('auto.components.settings.privacy.search.a966af0840', 'Privacy & telemetry'),
+    description: translate(
+      'auto.components.settings.privacy.search.aa3b794c17',
+      'Anonymous product usage data, diagnostics, and telemetry controls.'
+    ),
+    keywords: [
+      ...translateSearchKeyword('auto.components.settings.privacy.search.10124159f1', 'privacy'),
+      ...translateSearchKeyword('auto.components.settings.privacy.search.77d3180def', 'telemetry'),
+      ...translateSearchKeyword('auto.components.settings.privacy.search.4104f6f0f3', 'analytics'),
+      ...translateSearchKeyword('auto.components.settings.privacy.search.79c319948b', 'usage'),
+      ...translateSearchKeyword('auto.components.settings.privacy.search.b021b9cb81', 'anonymous'),
+      ...translateSearchKeyword('auto.components.settings.privacy.search.3922051573', 'data'),
+      ...translateSearchKeyword('auto.components.settings.privacy.search.2b5a5c312f', 'posthog'),
+      ...translateSearchKeyword('auto.components.settings.privacy.search.27a27b2f63', 'opt out'),
+      ...translateSearchKeyword('auto.components.settings.privacy.search.4d4bb76bf4', 'opt in')
+    ]
+  },
+  {
+    title: translate(
+      'auto.components.settings.privacy.search.6776226be7',
+      'Share anonymous usage data'
+    ),
+    description: translate(
+      'auto.components.settings.privacy.search.b707cc3981',
+      'Help improve Orca by sending anonymous feature-usage events.'
+    ),
+    keywords: [
+      ...translateSearchKeyword('auto.components.settings.privacy.search.77d3180def', 'telemetry'),
+      ...translateSearchKeyword('auto.components.settings.privacy.search.79c319948b', 'usage'),
+      ...translateSearchKeyword('auto.components.settings.privacy.search.b021b9cb81', 'anonymous'),
+      ...translateSearchKeyword('auto.components.settings.privacy.search.4d4bb76bf4', 'opt in'),
+      ...translateSearchKeyword('auto.components.settings.privacy.search.27a27b2f63', 'opt out'),
+      ...translateSearchKeyword('auto.components.settings.privacy.search.ead1deded2', 'share')
+    ]
+  },
+  {
+    targetSectionId: PRIVACY_SETTING_ANCHORS.diagnostics,
+    title: translate('auto.components.settings.privacy.search.6d258d2ed6', 'Diagnostics'),
+    description: translate(
+      'auto.components.settings.privacy.search.8b08f32366',
+      'App diagnostics and support sharing controls.'
+    ),
+    keywords: [
+      ...translateSearchKeyword(
+        'auto.components.settings.privacy.search.c0494ff48a',
+        'diagnostics'
+      ),
+      ...translateSearchKeyword('auto.components.settings.privacy.search.1686c07fee', 'support')
+    ]
+  },
+  {
+    // The variables disable the usage-data switch; their notice renders under it only while one is set.
+    targetSectionId: PRIVACY_SETTING_ANCHORS.usageData,
+    title: translate(
+      'auto.components.settings.privacy.search.e058a3c98d',
+      'Telemetry environment variables'
+    ),
+    description: translate(
+      'auto.components.settings.privacy.search.f7a2d9f137',
+      'Environment variables that disable telemetry transmission.'
+    ),
+    keywords: [
+      ...translateSearchKeyword(
+        'auto.components.settings.privacy.search.83a6cd79b3',
+        'do not track'
+      ),
+      ...translateSearchKeyword(
+        'auto.components.settings.privacy.search.058550f6bc',
+        'do_not_track'
+      ),
+      ...translateSearchKeyword(
+        'auto.components.settings.privacy.search.69637f4dc4',
+        'orca_telemetry_disabled'
+      ),
+      ...translateSearchKeyword('auto.components.settings.privacy.search.5854a5c752', 'ci'),
+      ...translateSearchKeyword(
+        'auto.components.settings.privacy.search.664f1a8984',
+        'continuous integration'
+      ),
+      ...translateSearchKeyword('auto.components.settings.privacy.search.94e04427f6', 'env'),
+      ...translateSearchKeyword(
+        'auto.components.settings.privacy.search.d8191ae5ca',
+        'environment variable'
+      ),
+      ...translateSearchKeyword('auto.components.settings.privacy.search.e8bc614a18', 'disable')
+    ]
+  }
+])

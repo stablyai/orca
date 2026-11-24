@@ -1,10 +1,15 @@
+import { posixCurlCommand } from '../agent-hooks/installation/scripts/hook-post-command'
+import { buildHookProcessCapture } from '../agent-hooks/installation/scripts/hook-process-capture'
 import {
   buildPosixHookPayloadCapture,
   POSIX_HOOK_JSON_STDIN,
   buildPosixHookSpoolLines,
   buildWindowsHookEnvironmentGuardLines
-} from '../agent-hooks/hook-stdin-contract'
-import { ANTIGRAVITY_PRE_TOOL_USE_DECISION } from './hook-events'
+} from '../agent-hooks/installation/scripts/hook-stdin-contract'
+import { WINDOWS_NATIVE_HOOK_EXECUTABLE_NAME } from '../agent-hooks/installation/commands/windows-native-hook-executable'
+
+// Matches ANTIGRAVITY_HANDLED_EXIT_CODE in native/windows-agent-hook/src/main.rs.
+const ANTIGRAVITY_NATIVE_HANDLED_EXIT_CODE = 17
 
 export function getManagedScript(
   target: 'local' | 'posix' = 'local',
@@ -13,19 +18,24 @@ export function getManagedScript(
   if (target === 'local' && process.platform === 'win32') {
     return [
       '@echo off',
-      // Why (#9358/#9941): inherited delayed expansion eats `!` out of the percent-expanded
-      // curl args, mangling paneKey and dropping worktreeId. `!` is legal in a Windows path.
+      // Delayed expansion corrupts literal ! characters in paths and hook coordinates.
       'setlocal DisableDelayedExpansion',
       'if /I "%ORCA_ANTIGRAVITY_EVENT%"=="Stop" (',
       '  echo {"decision":""}',
-      ') else if /I "%ORCA_ANTIGRAVITY_EVENT%"=="PreToolUse" (',
-      `  echo ${ANTIGRAVITY_PRE_TOOL_USE_DECISION}`,
-      ') else (',
+      ') else if /I not "%ORCA_ANTIGRAVITY_EVENT%"=="PreToolUse" (',
       '  echo {}',
       ')',
       'if defined ORCA_AGENT_HOOK_ENDPOINT if exist "%ORCA_AGENT_HOOK_ENDPOINT%" call "%ORCA_AGENT_HOOK_ENDPOINT%" 2>nul',
       ...buildWindowsHookEnvironmentGuardLines(),
-      // The runtime path is fixed at installation; hook payloads stay on stdin.
+      // The native reader skips an Electron start, whose cost under load hit agy's 10 s kill (#41298).
+      // Drop its stdout: an older copy prints {}, which agy reads as deny. Only the handled code
+      // proves this build read stdin; an older copy (0) or a failed start falls back to Node, and a
+      // crash (negative NTSTATUS) may have consumed stdin, so it skips a duplicate post.
+      `if exist "%~dp0${WINDOWS_NATIVE_HOOK_EXECUTABLE_NAME}" (`,
+      `  "%~dp0${WINDOWS_NATIVE_HOOK_EXECUTABLE_NAME}" antigravity >nul 2>nul`,
+      `  if errorlevel ${ANTIGRAVITY_NATIVE_HANDLED_EXIT_CODE} if not errorlevel ${ANTIGRAVITY_NATIVE_HANDLED_EXIT_CODE + 1} exit /b 0`,
+      '  if not errorlevel 0 exit /b 0',
+      ')',
       'set "ELECTRON_RUN_AS_NODE=1"',
       `if not defined ORCA_AGENT_HOOK_NODE set "ORCA_AGENT_HOOK_NODE=${windowsRuntimePath.replaceAll('%', '%%')}"`,
       '"%ORCA_AGENT_HOOK_NODE%" "%~dp0antigravity-hook-post.cjs" >nul 2>nul',
@@ -41,17 +51,14 @@ export function getManagedScript(
     '    printf \'{"decision":""}\\n\'',
     '    ;;',
     '  PreToolUse)',
-    `    printf '${ANTIGRAVITY_PRE_TOOL_USE_DECISION}\\n'`,
     '    ;;',
     '  *)',
-    // Why: Antigravity accepts an empty JSON object for passive status hooks;
-    // only the PreToolUse gate rejects it, and that branch answers above.
     '    printf "{}\\n"',
     '    ;;',
     'esac',
-    // Why: some Antigravity events arrive without stdin but still need a
-    // status post, so the shared capture maps empty input to an object.
+    // Events without stdin still need a status post.
     ...buildPosixHookPayloadCapture('empty-object', POSIX_HOOK_JSON_STDIN),
+    ...buildHookProcessCapture(),
     ...buildPosixHookSpoolLines('antigravity', 'ORCA_ANTIGRAVITY_EVENT'),
     'if [ -n "$ORCA_AGENT_HOOK_ENDPOINT" ] && [ -r "$ORCA_AGENT_HOOK_ENDPOINT" ]; then',
     '  . "$ORCA_AGENT_HOOK_ENDPOINT" 2>/dev/null || :',
@@ -60,11 +67,8 @@ export function getManagedScript(
     '  spool_hook_event',
     '  exit 0',
     'fi',
-    // Timeout caps best-effort hook posts if the local listener stalls.
-    // Why: pipe payload to curl's stdin (`payload@-`) instead of an inline
-    // `payload=$VALUE` arg, so tens-of-KB tool output stays off the curl
-    // command line (EDR command-line false positives). Wire body is identical.
-    'printf \'%s\' "$payload" | curl -sS -X POST "http://127.0.0.1:${ORCA_AGENT_HOOK_PORT}/hook/antigravity" \\',
+    // Keep large payloads off command lines to avoid EDR false positives.
+    `printf '%s' "$payload" | ${posixCurlCommand()} -sS -X POST "http://127.0.0.1:\${ORCA_AGENT_HOOK_PORT}/hook/antigravity" \\`,
     '  --connect-timeout 0.5 --max-time 1.5 \\',
     '  -H "Content-Type: application/x-www-form-urlencoded" \\',
     '  -H "X-Orca-Agent-Hook-Token: ${ORCA_AGENT_HOOK_TOKEN}" \\',
@@ -75,6 +79,8 @@ export function getManagedScript(
     '  --data-urlencode "env=${ORCA_AGENT_HOOK_ENV}" \\',
     '  --data-urlencode "version=${ORCA_AGENT_HOOK_VERSION}" \\',
     '  --data-urlencode "hook_event_name=${ORCA_ANTIGRAVITY_EVENT}" \\',
+    '  --data-urlencode "agentProcess=${orca_agent_process}" \\',
+    '  --data-urlencode "tmuxPane=${orca_tmux_pane}" \\',
     '  --data-urlencode "payload@-" >/dev/null 2>&1 || spool_hook_event',
     'exit 0',
     ''
@@ -84,9 +90,7 @@ export function getManagedScript(
 export function getWindowsWrapperScript(eventName: string): string {
   return [
     '@echo off',
-    // Why (#9358/#9941): `!` is legal in the hooks path, and inherited delayed expansion
-    // eats it out of the percent-expanded `%~dp0` — the wrapper then misses the core and
-    // silently falls back on every event. Same reason the core disables it.
+    // Preserve literal ! characters in the percent-expanded hooks path.
     'setlocal DisableDelayedExpansion',
     `set "ORCA_ANTIGRAVITY_EVENT=${eventName}"`,
     'set "ORCA_ANTIGRAVITY_CORE=%~dp0antigravity-hook.cmd"',
@@ -96,12 +100,9 @@ export function getWindowsWrapperScript(eventName: string): string {
     ')',
     'if /I "%ORCA_ANTIGRAVITY_EVENT%"=="Stop" (',
     '  echo {"decision":""}',
-    ') else if /I "%ORCA_ANTIGRAVITY_EVENT%"=="PreToolUse" (',
-    `  echo ${ANTIGRAVITY_PRE_TOOL_USE_DECISION}`,
-    ') else (',
+    ') else if /I not "%ORCA_ANTIGRAVITY_EVENT%"=="PreToolUse" (',
     '  echo {}',
     ')',
-    // Missing-core fallbacks obey the same outside-Orca stdin guard as the core.
     ...buildWindowsHookEnvironmentGuardLines(),
     'exit /b 0',
     ''

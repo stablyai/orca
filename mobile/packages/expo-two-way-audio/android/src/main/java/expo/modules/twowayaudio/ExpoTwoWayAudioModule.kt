@@ -4,17 +4,24 @@ import androidx.core.os.bundleOf
 import expo.modules.kotlin.modules.Module
 import expo.modules.kotlin.modules.ModuleDefinition
 import expo.modules.kotlin.Promise
+import expo.modules.kotlin.functions.Coroutine
 import expo.modules.interfaces.permissions.Permissions
 
 class ExpoTwoWayAudioModule : Module() {
     companion object {
         private const val ON_MIC_DATA_EVENT = "onMicrophoneData"
         private const val ON_INPUT_VOLUME_LEVEL_EVENT = "onInputVolumeLevelData"
-        private const val ON_OUTPUT_VOLUME_LEVEL_EVENT = "onOutputVolumeLevelData"
         private const val ON_RECORDING_CHANGE_EVENT = "onRecordingChange"
         private const val ON_AUDIO_INTERRUPTION_EVENT = "onAudioInterruption"
         var audioEngine: AudioEngine? = null
     }
+
+    private val speechHandle = lazy {
+        OnDeviceSpeech(requireNotNull(appContext.reactContext).applicationContext) { name, body ->
+            sendEvent(name, body)
+        }
+    }
+    private val speech by speechHandle
 
     override fun definition() = ModuleDefinition {
         Name("ExpoTwoWayAudio")
@@ -51,34 +58,14 @@ class ExpoTwoWayAudioModule : Module() {
          }
 
          Function("restart") {
-             audioEngine?.resumeRecordingAndPlayer()
+             audioEngine?.regainAudioFocus()
              sendEvent(ON_RECORDING_CHANGE_EVENT, mapOf(
                  "data" to (audioEngine?.isRecording ?: false)
              ))
          }
 
-         Function("playPCMData") { data: kotlin.ByteArray ->
-             audioEngine?.playPCMData(data)
-         }
-
          Function("bypassVoiceProcessing") { bypass: Boolean ->
              audioEngine?.bypassVoiceProcessing(bypass)
-         }
-
-         Function("isPlaying") {
-             audioEngine?.isPlaying ?: false
-         }
-
-         Function("stopPlayback") {
-             audioEngine?.stopPlayback()
-         }
-
-         Function("pausePlayback") {
-             audioEngine?.pausePlayback()
-         }
-
-         Function("resumePlayback") {
-             audioEngine?.resumePlayback()
          }
 
         Function("getMicrophoneModeIOS") {
@@ -115,13 +102,42 @@ class ExpoTwoWayAudioModule : Module() {
              }
          }
 
-        // Register events
+        AsyncFunction("speechAvailability") Coroutine { locale: String ->
+            speech.availability(locale)
+        }
+
+        AsyncFunction("speechDownload") Coroutine { locale: String ->
+            speech.download(locale)
+        }
+
+        AsyncFunction("speechStart") Coroutine { locale: String, sampleRate: Int ->
+            speech.start(locale, sampleRate)
+        }
+
+        Function("speechFeed") { pcm: ByteArray ->
+            speech.feed(pcm)
+        }
+
+        AsyncFunction("speechFinish") Coroutine { ->
+            speech.finish()
+        }
+
+        Function("speechCancel") {
+            speech.cancel()
+        }
+
+        OnDestroy {
+            if (speechHandle.isInitialized()) speech.destroy()
+        }
+
         Events(
             ON_MIC_DATA_EVENT,
             ON_INPUT_VOLUME_LEVEL_EVENT,
-            ON_OUTPUT_VOLUME_LEVEL_EVENT,
             ON_RECORDING_CHANGE_EVENT,
-            ON_AUDIO_INTERRUPTION_EVENT
+            ON_AUDIO_INTERRUPTION_EVENT,
+            SPEECH_TEXT_EVENT,
+            SPEECH_ERROR_EVENT,
+            SPEECH_DOWNLOAD_PROGRESS_EVENT
         )
     }
 
@@ -132,9 +148,6 @@ class ExpoTwoWayAudioModule : Module() {
             }
             onInputVolumeCallback = { level ->
                 sendEvent(ON_INPUT_VOLUME_LEVEL_EVENT, bundleOf("data" to level))
-            }
-            onOutputVolumeCallback = { level ->
-                sendEvent(ON_OUTPUT_VOLUME_LEVEL_EVENT, bundleOf("data" to level))
             }
             onAudioInterruptionCallback = { data ->
                 sendEvent(ON_AUDIO_INTERRUPTION_EVENT, bundleOf("data" to data))

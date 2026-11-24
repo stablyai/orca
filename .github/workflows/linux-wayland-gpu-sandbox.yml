@@ -3,6 +3,9 @@ name: Linux Wayland GPU Sandbox
 on:
   workflow_dispatch:
 
+permissions:
+  contents: read
+
 jobs:
   verify:
     name: wayland terminal input
@@ -22,6 +25,7 @@ jobs:
         uses: actions/setup-node@v6
         with:
           node-version-file: package.json
+          check-latest: true
 
       - name: Setup pnpm
         uses: pnpm/setup@v2
@@ -75,7 +79,7 @@ jobs:
           set -euo pipefail
           git checkout --force "$GITHUB_SHA"
           rm -rf out
-          node config/scripts/verify-linux-wayland-gpu-sandbox.mjs
+          node config/scripts/diagnostics/wayland/verify-linux-wayland-gpu-sandbox.mjs
 
       - name: Upload Weston log
         if: always()

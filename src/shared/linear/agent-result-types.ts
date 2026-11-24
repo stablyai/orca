@@ -47,8 +47,7 @@ export type LinearIssueCommentNode = {
   id: string
   body: string
   bodyTruncated: boolean
-  // Extracted from the full comment body before truncation so media past the
-  // body cap is not lost.
+  // Extract before truncation so media beyond the body cap survives.
   inlineMedia?: LinearInlineMedia[]
   createdAt?: string | null
   updatedAt?: string | null
@@ -151,6 +150,8 @@ export type LinearSearchResult = {
     workspaceId?: (string & {}) | 'all'
     limit: number
     returned: number
+    /** Linear's match count before the limit; absent when any workspace could not report one. */
+    total?: number
     limitReached: boolean
     partial: boolean
     workspaceErrors: LinearWorkspaceReadError[]
@@ -216,7 +217,7 @@ export type LinearIssueListResult = {
     filter: LinearIssueListFilter
     workspaceId?: (string & {}) | 'all'
     team?: LinearTeamSummary
-    limit: number
+    limit: number | null
     returned: number
     hasMore: boolean
     partial: boolean
@@ -243,7 +244,7 @@ export type LinearProjectListResult = {
   meta: {
     query?: string
     workspaceId?: (string & {}) | 'all'
-    limit: number
+    limit: number | null
     returned: number
     hasMore: boolean
     partial: boolean

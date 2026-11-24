@@ -1,0 +1,24 @@
+{
+  "desktopBeforeMove": {
+    "lastActiveWorktreeId": null,
+    "collapsedGroups": [],
+    "showAgentModels": false,
+    "showDotfilesByWorktree": {
+      "repo-a::\\\\wsl.localhost\\Ubuntu\\home\\dev\\app": true
+    }
+  },
+  "projectedProjectUI": {
+    "showDotfilesByWorktree": {
+      "repo-a::\\\\wsl.localhost\\Ubuntu\\home\\dev\\app": true
+    }
+  },
+  "desktopAfterMove": {
+    "lastActiveWorktreeId": null,
+    "collapsedGroups": [],
+    "showAgentModels": false,
+    "showDotfilesByWorktree": {
+      "repo-a::\\\\wsl.localhost\\Ubuntu\\home\\dev\\app": true,
+      "repo-a::/home/dev/app": true
+    }
+  }
+}

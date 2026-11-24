@@ -1,16 +1,10 @@
-// Thin wrapper around Windows PowerShell 5.1 for the harness's Win32 probes.
-//
-// Everything that inspects windows or processes goes through Windows PowerShell
-// (powershell.exe) rather than pwsh, because 5.1 is guaranteed present on every
-// Windows box and the .ps1 probes are written for its quirks (notably the
-// single-item .Count pitfall — see window-enum.ps1 / daemon-processes.mjs).
+// Run Win32 probes through guaranteed Windows PowerShell 5.1, whose JSON/single-item quirks the scripts handle.
 
 import { spawn, spawnSync } from 'node:child_process'
 
 const POWERSHELL = 'powershell.exe'
 const BASE_ARGS = ['-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass']
-// Cap sync probes so a wedged PowerShell call can't block the harness until the
-// whole CI job times out. Callers can override via opts.timeout.
+// Bound synchronous probes so a wedged PowerShell cannot consume the full CI job timeout; opts.timeout can override.
 const DEFAULT_SYNC_TIMEOUT_MS = 60_000
 
 /** Quote a value as a PowerShell single-quoted literal. */
@@ -37,12 +31,7 @@ export function runScriptFileSync(scriptPath, scriptArgs = [], opts = {}) {
   }
 }
 
-/**
- * Run a .ps1 file whose stdout is a single JSON document and return the parsed
- * value. Throws with the raw stderr/stdout attached when parsing fails, so a
- * malformed probe surfaces its actual PowerShell error instead of a bare
- * SyntaxError.
- */
+// Parse one JSON stdout document; attach raw stderr/stdout on failure so PowerShell errors are not hidden by SyntaxError.
 export function runScriptFileJson(scriptPath, scriptArgs = [], opts = {}) {
   const { code, stdout, stderr, error } = runScriptFileSync(scriptPath, scriptArgs, opts)
   if (error) {
@@ -64,10 +53,7 @@ export function runScriptFileJson(scriptPath, scriptArgs = [], opts = {}) {
   }
 }
 
-/**
- * Spawn a .ps1 file as a long-running background child. Returns the ChildProcess
- * so the caller can track/stop it. Used for the window watch loop.
- */
+// Return a background PowerShell child for caller-owned tracking/stop, used by window watch.
 export function spawnScriptFile(scriptPath, scriptArgs = [], opts = {}) {
   return spawn(POWERSHELL, [...BASE_ARGS, '-File', scriptPath, ...scriptArgs], {
     stdio: ['ignore', 'pipe', 'pipe'],

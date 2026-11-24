@@ -1,8 +1,8 @@
 import {
   normalizeJiraFavouriteFilters,
   type JiraFavouriteFilterList
-} from '../../shared/jira-favourite-filters'
-import { JiraFavouriteFilterParams } from '../../shared/rpc-contract/jira-favourite-filter-params'
+} from '../../shared/jira/jira-favourite-filters'
+import { JiraFavouriteFilterParams } from '../../shared/rpc-contract/jira/jira-favourite-filter-params'
 import { apiBasePath, jiraRequest } from './authenticated-request'
 import { getClients } from './client'
 import { requireStrictJiraSite, withJiraDeadline } from './jira-read-failure'
@@ -13,7 +13,7 @@ export async function listFavouriteFilters(
   signal?: AbortSignal
 ): Promise<JiraFavouriteFilterList> {
   const selection = JiraFavouriteFilterParams.parse({ siteId }).siteId
-  const entries = getClients(selection)
+  const entries = await getClients(selection)
   requireStrictJiraSite(entries, selection, true)
   const entry = entries[0]
   return withJiraDeadline(signal, 25_000, async (deadlineSignal) => {

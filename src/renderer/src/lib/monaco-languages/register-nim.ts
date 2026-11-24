@@ -5,7 +5,6 @@ import { registerTextMateLanguage } from './textmate-language-registration'
 type MonacoModule = typeof Monaco
 
 export const NIM_LANGUAGE_ID = 'nim'
-export const NIM_TEXTMATE_SCOPE = 'source.nim'
 
 export const nimLanguageConfiguration: Monaco.languages.LanguageConfiguration = {
   comments: {

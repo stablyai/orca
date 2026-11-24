@@ -1,35 +1,45 @@
-import { selectFreshAgentRowForMobileTab } from '../../runtime-hook-agent-row-selection'
-import { OrcaRuntimeWithScheduleMobileSessionTabsChanged } from '../../session-tabs/session-tabs-change-publication'
-import type { TabGroupLayoutNode } from '../../../../shared/tab-types'
+import { rendererStatusReplica } from '../../session-graph/renderer-status-replica'
+import { selectFreshAgentRowForMobileTab } from '../../workspaces/process-listing/runtime-hook-agent-row-selection'
+import { OrcaRuntimeWithSavedConversationTitlePublication } from '../../session-tabs/chat/saved-conversation-title-publication'
+import type { TabGroupLayoutNode } from '../../../../shared/workspace-layout/tab-groups/tab-types'
 import type {
   RuntimeMobileSessionSnapshotTab,
+  RuntimeMobileSessionTerminalTab
+} from '../../../../shared/remote-runtime/session-graph/runtime-mobile-session-tab-contracts'
+import type {
   RuntimeMobileSessionTabGroup,
   RuntimeMobileSessionTabsResult,
-  RuntimeMobileSessionTabsSnapshot,
-  RuntimeMobileSessionTerminalTab
-} from '../../../../shared/runtime-types'
-import { mergeMobileSessionTabGroups } from '../../mobile-session-tab-merge'
-import { buildHeadlessMobileSessionTabGroups } from '../../mobile-session-layout-projection'
-import { projectRuntimeMobileSessionTabs } from '../../runtime-mobile-session-projection'
-import type { RuntimeMobileSessionProjectionHost } from '../../runtime-mobile-session-projection-contract'
-import type { RuntimePtyWorktreeRecord } from '../../runtime-terminal-state-records'
-import type { RuntimeAgentRowSnapshot } from '../../runtime-worktree-agent-rows'
+  RuntimeMobileSessionTabsSnapshot
+} from '../../../../shared/remote-runtime/session-graph/runtime-session-contracts'
+import { mergeMobileSessionTabGroups } from './mobile-session-tab-merge'
+import { buildHeadlessMobileSessionTabGroups } from '../../terminal/surface/mobile-session-layout-projection'
+import { projectTabsWithBotHomePins } from './bot-home-pinned-projection'
+import { inlineRuntimeBrowserTabFavicons } from './browser-tab-favicon-data-urls'
+import type { RuntimeMobileSessionProjectionHost } from './runtime-mobile-session-projection-contract'
+import type { RuntimePtyWorktreeRecord } from '../../terminal/records/runtime-terminal-state-records'
+import type { RuntimeAgentRowSnapshot } from '../../workspaces/process-listing/runtime-hook-agent-row-selection'
 import type {
   AgentStatusEntry,
-  AgentStatusIpcPayload,
   AgentStatusOrchestrationContext
-} from '../../../../shared/agent-status-types'
-import { buildRuntimeMobileAgentStatus } from '../../runtime-mobile-agent-status-builder'
-import { FIRST_PANE_ID } from '../../../../shared/pane-key'
-import { isTerminalLeafId, makePaneKey, parsePaneKey } from '../../../../shared/stable-pane-id'
-import { getStructuredAgentSessionHost } from '../../../native-chat/agent-session-wire/structured-agent-session-registry'
-import { structuredWorkerHandleAgentStatus } from '../../orchestration/structured-worker-group-addressing'
+} from '../../../../shared/agent-status/contracts/agent-status-types'
+import type { AgentStatusIpcPayload } from '../../../../shared/agent-status/contracts/agent-status-ipc-payload'
+import { buildRuntimeMobileAgentStatus } from './runtime-mobile-agent-status-builder'
+import { FIRST_PANE_ID } from '../../../../shared/workspace-layout/pane-key'
+import { isTerminalLeafId, makePaneKey } from '../../../../shared/workspace-layout/stable-pane-id'
+import { getStructuredAgentSessionHost } from '../../../native-chat/agent-session-wire/host/structured-agent-session-registry'
+import { structuredWorkerHandleAgentStatus } from '../../orchestration/addressing/groups/structured-worker-group-addressing'
 import {
-  retitleStructuredConversationTab,
+  retitleStructuredConversationTabs,
   titleStructuredConversationTabs
-} from '../../structured-conversation-tab-title'
+} from '../../session-tabs/chat/structured-conversation-tab-title'
+import { structuredConversationTabNamer } from '../../session-tabs/chat/structured-conversation-tab-namer'
+import { hostMobileTerminalTheme } from './host-mobile-terminal-theme'
 
-export abstract class OrcaRuntimeWithPruneMobileSessionTabGroupLayout extends OrcaRuntimeWithScheduleMobileSessionTabsChanged {
+export abstract class OrcaRuntimeWithPruneMobileSessionTabGroupLayout extends OrcaRuntimeWithSavedConversationTitlePublication {
+  private readonly hostMobileTerminalTheme = hostMobileTerminalTheme(this.store, () =>
+    this.notifyMobileSessionTabSnapshots()
+  )
+
   protected pruneMobileSessionTabGroupLayout(
     layout: TabGroupLayoutNode | null | undefined,
     validGroupIds: ReadonlySet<string>
@@ -48,15 +58,13 @@ export abstract class OrcaRuntimeWithPruneMobileSessionTabGroupLayout extends Or
     return first ?? second
   }
 
-  // Instance seams over the tab-group projections so callers (and tests) can
-  // reach them through the runtime the way the rest of this surface is reached.
   protected mergeMobileSessionTabGroups(
     worktreeId: string,
     groups: readonly RuntimeMobileSessionTabGroup[],
-    terminalTabs: readonly RuntimeMobileSessionTerminalTab[],
+    tabs: readonly RuntimeMobileSessionSnapshotTab[],
     activeTab: RuntimeMobileSessionTerminalTab | null
   ): RuntimeMobileSessionTabGroup[] {
-    return mergeMobileSessionTabGroups(worktreeId, groups, terminalTabs, activeTab)
+    return mergeMobileSessionTabGroups(worktreeId, groups, tabs, activeTab)
   }
 
   protected buildHeadlessMobileSessionTabGroups(
@@ -79,12 +87,12 @@ export abstract class OrcaRuntimeWithPruneMobileSessionTabGroupLayout extends Or
   protected toMobileSessionTabsResult(
     snapshot: RuntimeMobileSessionTabsSnapshot
   ): RuntimeMobileSessionTabsResult {
-    const host = getStructuredAgentSessionHost()
-    snapshot = titleStructuredConversationTabs(snapshot, (sessionId) => {
-      const record = host?.deps?.store?.getRecord(sessionId)
-      return record?.location.workspaceId === snapshot.worktree ? record.conversationName : null
-    })
-    return projectRuntimeMobileSessionTabs(snapshot, this.getMobileSessionProjectionHost())
+    snapshot = titleStructuredConversationTabs(
+      inlineRuntimeBrowserTabFavicons(this, this.settleOwedMobileSessionSnapshotVersion(snapshot)),
+      structuredConversationTabNamer(snapshot.worktree, this.savedWorkspaceTabs(snapshot.worktree)),
+      structuredConversationForked
+    )
+    return projectTabsWithBotHomePins(this.store, snapshot, this.getMobileSessionProjectionHost())
   }
 
   refreshStructuredConversationTabTitle(workspaceId: string, sessionId: string): void {
@@ -92,23 +100,47 @@ export abstract class OrcaRuntimeWithPruneMobileSessionTabGroupLayout extends Or
     if (!snapshot) {
       return
     }
-    const record = getStructuredAgentSessionHost()?.deps?.store?.getRecord(sessionId)
-    const name = record?.location.workspaceId === workspaceId ? record.conversationName : null
-    const next = retitleStructuredConversationTab(snapshot, sessionId, name)
+    // An older fork's shown name reads its source's, so the source's open forks retitle with it.
+    const store = getStructuredAgentSessionHost()?.deps?.store
+    const nameFor = structuredConversationTabNamer(
+      workspaceId,
+      this.savedWorkspaceTabs(workspaceId)
+    )
+    const names = new Map([[sessionId, nameFor(sessionId)]])
+    for (const tab of snapshot.tabs) {
+      if (
+        tab.type === 'agent-session' &&
+        store?.getConversation(tab.sessionId)?.forkedFrom?.sessionId === sessionId
+      ) {
+        names.set(tab.sessionId, nameFor(tab.sessionId))
+      }
+    }
+    const next = retitleStructuredConversationTabs(snapshot, names, structuredConversationForked)
     if (next) {
       this.emitMobileSessionTabsSnapshot(this.storeMobileSessionSnapshot(workspaceId, next))
     }
   }
 
+  private savedWorkspaceTabs(workspaceId: string) {
+    return () => this.getWorkspaceSessionForWorktree(workspaceId)?.unifiedTabs?.[workspaceId]
+  }
+
   protected getMobileSessionProjectionHost(): RuntimeMobileSessionProjectionHost {
     return {
+      getRendererStatus: (paneKey) =>
+        this.authoritativeWindowId !== 0 ? rendererStatusReplica(this).get(paneKey) : undefined,
       tabs: this.tabs,
       leaves: this.leaves,
       ptysById: this.ptysById,
+      getPtyAvailability: (ptyId) => this.ptyController?.getPtyAvailability?.(ptyId) ?? null,
+      isSessionTitlePublisher: (worktreeId, surfaceId) =>
+        this.isSessionTitlePublisher(worktreeId, surfaceId),
       getLiveBrowserTabs: (worktreeId) => this.getListedBrowserTabsByPageId(worktreeId),
+      isRendererOwnedMobileBrowserTab: (...args) => this.isRendererOwnedMobileBrowserTab(...args),
       getProviderSessionRows: (paneKey) => this.getAgentProviderSessionRowsForPaneFn?.(paneKey),
       getProviderSessionSnapshot: () => this.getAgentProviderSessionSnapshotFn?.() ?? [],
-      getStatusSnapshot: () => this.getAgentStatusSnapshotFn?.() ?? [],
+      getStatusRows: (paneKey, terminalHandle) =>
+        this.publicPaneStatusFn?.(paneKey, terminalHandle) ?? [],
       getLeafKey: (tabId, leafId) => this.getLeafKey(tabId, leafId),
       findPty: (worktreeId, tab, options) =>
         this.findPtyForMobileTerminalTab(worktreeId, tab, options),
@@ -123,7 +155,8 @@ export abstract class OrcaRuntimeWithPruneMobileSessionTabGroupLayout extends Or
       sanitizeGroups: (groups, tabs) => this.sanitizeMobileSessionTabGroups(groups, tabs),
       pruneGroupLayout: (layout, validGroupIds) =>
         this.pruneMobileSessionTabGroupLayout(layout, validGroupIds),
-      collectTabIds: (tabs) => this.collectReturnedSessionTabIds(tabs)
+      collectTabIds: (tabs) => this.collectReturnedSessionTabIds(tabs),
+      hostTerminalTheme: this.hostMobileTerminalTheme
     }
   }
 
@@ -134,7 +167,7 @@ export abstract class OrcaRuntimeWithPruneMobileSessionTabGroupLayout extends Or
     retained: RuntimeAgentRowSnapshot | null,
     getHookRowsForPane: (paneKey: string) => AgentStatusIpcPayload[]
   ): { agentStatus: AgentStatusEntry } | Record<string, never> {
-    // Why display records: a phone status is presentation, so it shows the stale-working clear.
+    // Phone status uses display records to include stale-working title clears.
     const displayPty = pty ? this.getPtyDisplayRecord(pty) : null
     return buildRuntimeMobileAgentStatus(
       displayPty,
@@ -150,7 +183,8 @@ export abstract class OrcaRuntimeWithPruneMobileSessionTabGroupLayout extends Or
         },
         getTrackedTitle: (ptyId) => this.getUnpersistedTrackedTitleForPty(ptyId),
         getPtyTitleObservedAtEpochMs: (ptyId) =>
-          ptyId ? (this.ptysById.get(ptyId)?.lastOscTitleEpochMs ?? null) : null
+          ptyId ? (this.ptysById.get(ptyId)?.lastOscTitleEpochMs ?? null) : null,
+        getPtyProcessStartedAtEpochMs: (ptyId) => this.terminalRunFacts.readProcessStartedAt(ptyId)
       }
     )
   }
@@ -169,8 +203,7 @@ export abstract class OrcaRuntimeWithPruneMobileSessionTabGroupLayout extends Or
     if (paneMatch || !pty) {
       return paneMatch
     }
-    // Why: the OSC producer can stamp a leaf or incarnation handle; use the same non-minting
-    // inventory as worktree.ps so a tab-id remint can rejoin the still-live central row.
+    // OSC may name a leaf or incarnation handle; reuse worktree.ps's non-minting inventory to rejoin central status after tab remints.
     for (const terminalHandle of this.getExistingTerminalHandlesForPtyId(pty.ptyId)) {
       const handleMatch = selectFreshAgentRowForMobileTab({
         paneKey,
@@ -196,17 +229,15 @@ export abstract class OrcaRuntimeWithPruneMobileSessionTabGroupLayout extends Or
       if (!pty) {
         return null
       }
-      // Why: persisted PTY ids can collide with unrelated provider ids after restart; only a matching spawn-time pane identity is safe to expose.
+      // Persisted PTY ids can collide after restart; require matching spawn-time pane identity before exposing them.
       if (this.mobileTerminalTabMatchesPty(worktreeId, tab, pty, paneKey)) {
         return pty
       }
-      if (
-        options.allowWorktreeOnlyMatch === true &&
-        pty.worktreeId === worktreeId &&
-        pty.tabId === null &&
-        pty.paneKey === null
-      ) {
-        return pty
+      if (options.allowWorktreeOnlyMatch === true && pty.worktreeId === worktreeId) {
+        const recorded = this.paneOfPty(pty)
+        if (recorded.tabId === null && recorded.paneKey === null) {
+          return pty
+        }
       }
       return null
     }
@@ -215,7 +246,12 @@ export abstract class OrcaRuntimeWithPruneMobileSessionTabGroupLayout extends Or
       paneKeys.add(`${tab.parentTabId}:${FIRST_PANE_ID}`)
     }
     for (const pty of this.ptysById.values()) {
-      if (pty.tabId === tab.parentTabId && pty.paneKey && paneKeys.has(pty.paneKey)) {
+      const recorded = this.paneOfPty(pty)
+      if (
+        recorded.tabId === tab.parentTabId &&
+        recorded.paneKey &&
+        paneKeys.has(recorded.paneKey)
+      ) {
         return pty
       }
     }
@@ -242,14 +278,16 @@ export abstract class OrcaRuntimeWithPruneMobileSessionTabGroupLayout extends Or
     pty: RuntimePtyWorktreeRecord,
     paneKey = this.getMobileTerminalPaneKey(tab)
   ): boolean {
-    return pty.worktreeId === worktreeId && pty.tabId === tab.parentTabId && pty.paneKey === paneKey
+    if (pty.worktreeId !== worktreeId) {
+      return false
+    }
+    const recorded = this.paneOfPty(pty)
+    return recorded.tabId === tab.parentTabId && recorded.paneKey === paneKey
   }
 
-  // Why: group address resolution (Section 4.5) queries per-handle status and must not throw on stale handles; return null on any error.
+  // Group resolution probes status; stale handles must return null instead of throwing.
   async getAgentStatusForHandle(handle: string): Promise<string | null> {
-    // A structured worker has no pane and no title, so every PTY probe below answers null and
-    // `@idle` would enumerate it and then silently drop it. Its status is the journal's, read
-    // through a conversation the idle sweep may have closed.
+    // Structured workers lack panes/titles; use their journal-backed status even after the idle sweep closed the conversation.
     const structured = await structuredWorkerHandleAgentStatus(handle, this._orchestrationDb)
     if (structured !== undefined) {
       return structured
@@ -266,29 +304,16 @@ export abstract class OrcaRuntimeWithPruneMobileSessionTabGroupLayout extends Or
     paneKey: string
   ): AgentStatusOrchestrationContext | undefined {
     const handle = this.getTerminalHandleForPaneKey(paneKey)
-    if (!handle) {
-      return undefined
-    }
-    return this.agentOrchestrationProjection.getForHandle(handle, undefined, { paneKey })
+    return handle
+      ? this.agentOrchestrationProjection.getForHandle(handle, undefined, { paneKey })
+      : undefined
   }
 
   getAgentStatusTerminalHandleForPaneKey(paneKey: string): string | undefined {
     return this.getTerminalHandleForPaneKey(paneKey) ?? undefined
   }
+}
 
-  getTerminalHandleForPaneKey(paneKey: string): string | null {
-    const parsed = parsePaneKey(paneKey)
-    const leaf = parsed ? this.leaves.get(this.getLeafKey(parsed.tabId, parsed.leafId)) : undefined
-    if (leaf?.ptyId && leaf.connected) {
-      return this.issueHandle(leaf)
-    }
-    const panePty = this.getPtyRecordForPaneKey(paneKey)
-    if (panePty?.connected) {
-      return this.issuePtyHandle(panePty)
-    }
-    if (leaf?.ptyId) {
-      return this.issueHandle(leaf)
-    }
-    return panePty ? this.issuePtyHandle(panePty) : null
-  }
+function structuredConversationForked(sessionId: string): boolean {
+  return !!getStructuredAgentSessionHost()?.deps?.store?.getConversation(sessionId)?.forkedFrom
 }

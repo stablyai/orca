@@ -1,7 +1,8 @@
-import type { BrowserPageConversionOrigin } from '../../../../../shared/browser-workspace-types'
+import type { BrowserPageConversionOrigin } from '../../../../../shared/browser/workspaces/browser-workspace-types'
 
 export type HtmlDocPreviewProps = {
   previewId: string
+  browserWorkspaceId: string
   filePath: string
   relativePath: string
   worktreeId: string

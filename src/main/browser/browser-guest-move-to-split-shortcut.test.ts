@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
-import { FLOATING_TERMINAL_WORKTREE_ID } from '../../shared/constants'
-import { setupGuestShortcutForwarding } from './browser-guest-shortcut-forwarding'
+import { FLOATING_TERMINAL_WORKTREE_ID } from '../../shared/workspace/identity/floating-workspace-id'
+import { setupGuestShortcutForwarding } from './guest-lifecycle/input/shortcuts/browser-guest-shortcut-forwarding'
 
 function setup(worktreeId: string): {
   send: ReturnType<typeof vi.fn>

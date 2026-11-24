@@ -1,32 +1,40 @@
+import { SecuritySurface } from '@/components/ui/security-surface'
 import { useEffect, useRef, useState } from 'react'
-import { Copy, ExternalLink, Globe, Loader2, RefreshCw, ShieldAlert } from 'lucide-react'
+import { Loader2 } from 'lucide-react'
 
 import { Button } from '@/components/ui/button'
 import { translate } from '@/i18n/i18n'
+import { useTranslate, type Translate } from '@/i18n/use-translate'
 import type {
   BrowserCertificateFailure,
   BrowserCertificateProceedFailureReason,
   BrowserCertificateProceedResult,
   BrowserLoadError
-} from '../../../../../shared/browser-workspace-types'
-import { isEligibleLocalCertificateHost } from '../../../../../shared/browser-url'
-import { normalizeCertificateError } from '../../../../../shared/browser-certificate-errors'
+} from '../../../../../shared/browser/workspaces/browser-workspace-types'
+import {
+  browserCertificatePresentationLoadError,
+  browserCertificateProceedFailureKind,
+  matchBrowserCertificateFailure
+} from '../../../../../shared/browser/certificate-trust/browser-certificate-failure-match'
+import {
+  describeBrowserLoadFailure,
+  type BrowserLoadFailureRoute
+} from '../../../../../shared/browser/navigation/browser-load-failure'
 import {
   formatLoadFailureDescription,
-  formatLoadFailureRecoveryHint,
-  isCertificateLoadError,
-  type LoadFailureMeta
+  formatLoadFailureTitle,
+  isCertificateLoadError
 } from './browser-notices'
-import { BROWSER_GUEST_RECOVERY_ERROR_CODE } from '../host-guest/browser-page-guest-recovery'
+import {
+  BrowserLoadFailureAutoRetryStatus,
+  type BrowserLoadFailureAutoRetry,
+  type BrowserLoadFailureRetry
+} from './browser-load-failure-auto-retry'
 
 type BrowserLoadFailureOverlayProps = {
   loadError: BrowserLoadError
   externalUrl?: string | null
-  currentUrl: string
-  httpsRecoveryUrl: string | null
-  onRetry: () => void
-  onTryHttps: (url: string) => void
-  onCopy: (url: string) => void
+  onRetry: BrowserLoadFailureRetry
   onOpenExternal?: (url: string) => void
   certificateFailure?: BrowserCertificateFailure | null
   expectedBrowserPageId?: string | null
@@ -35,6 +43,10 @@ type BrowserLoadFailureOverlayProps = {
   sshRoutedHint?: boolean
   /** Set when the page's SSH host carries a persisted "Try anyway": undoes it so the connection check runs again. */
   onRecheckSshRoute?: (() => void) | null
+  /** How the page reaches the network; omit when this pane can't tell. */
+  route?: BrowserLoadFailureRoute | null
+  /** Set by panes whose Retry goes out the page's own route, so the page can recover by itself. */
+  autoRetry?: BrowserLoadFailureAutoRetry
 }
 
 type CertificateProceedAttempt = {
@@ -44,74 +56,30 @@ type CertificateProceedAttempt = {
   reason?: BrowserCertificateProceedFailureReason | 'request-failed'
 }
 
-function getLoadErrorMetadata(loadError: BrowserLoadError): LoadFailureMeta {
-  try {
-    const parsed = new URL(loadError.validatedUrl)
-    return {
-      host: parsed.host || null,
-      isLocalhostLike:
-        parsed.hostname === '0.0.0.0' || isEligibleLocalCertificateHost(parsed.hostname)
-    }
-  } catch {
-    return { host: null, isLocalhostLike: false }
-  }
-}
-
-function getMatchingCertificateFailure(args: {
-  loadError: BrowserLoadError
-  certificateFailure?: BrowserCertificateFailure | null
-  expectedBrowserPageId?: string | null
-  canProceed: boolean
-}): BrowserCertificateFailure | null {
-  const { loadError, certificateFailure, expectedBrowserPageId, canProceed } = args
-  const errorMatchesChallenge = Boolean(
-    certificateFailure &&
-    (loadError.code === -1 ||
-      (loadError.code === certificateFailure.errorCode &&
-        normalizeCertificateError(certificateFailure.error) ===
-          normalizeCertificateError(loadError.description)))
-  )
-  if (
-    !canProceed ||
-    !certificateFailure?.canProceed ||
-    !expectedBrowserPageId ||
-    certificateFailure.browserPageId !== expectedBrowserPageId ||
-    certificateFailure.errorCode !== -202 ||
-    !errorMatchesChallenge
-  ) {
-    return null
-  }
-  try {
-    return new URL(loadError.validatedUrl).origin === certificateFailure.origin
-      ? certificateFailure
-      : null
-  } catch {
-    return null
-  }
-}
-
 function formatCertificateProceedFailure(
-  reason: BrowserCertificateProceedFailureReason | 'request-failed'
+  reason: BrowserCertificateProceedFailureReason | 'request-failed',
+  t: Translate = translate
 ): string {
-  if (reason === 'expired') {
-    return translate(
+  const kind = browserCertificateProceedFailureKind(reason)
+  if (kind === 'expired') {
+    return t(
       'browser.loadFailure.certificateChallengeExpired',
       'This certificate approval expired. Retry the page to request a new one.'
     )
   }
-  if (reason === 'changed' || reason === 'navigated') {
-    return translate(
+  if (kind === 'changed') {
+    return t(
       'browser.loadFailure.certificateChallengeChanged',
       'The certificate request changed. Retry the page and review the new warning.'
     )
   }
-  if (reason === 'request-failed') {
-    return translate(
+  if (kind === 'request-failed') {
+    return t(
       'browser.loadFailure.certificateProceedFailed',
       'Orca could not approve this certificate request. Retry the page and try again.'
     )
   }
-  return translate(
+  return t(
     'browser.loadFailure.certificateChallengeUnavailable',
     'This certificate request is no longer available. Retry the page to request a new one.'
   )
@@ -120,43 +88,35 @@ function formatCertificateProceedFailure(
 export function BrowserLoadFailureOverlay({
   loadError,
   externalUrl,
-  currentUrl,
-  httpsRecoveryUrl,
   onRetry,
-  onTryHttps,
-  onCopy,
   onOpenExternal,
   certificateFailure,
   expectedBrowserPageId,
   onProceedCertificate,
   sshRoutedHint,
-  onRecheckSshRoute
+  onRecheckSshRoute,
+  route = null,
+  autoRetry
 }: BrowserLoadFailureOverlayProps): React.JSX.Element {
+  const t = useTranslate()
   const connectingTimerRef = useRef<{
     challengeId: string
     timer: ReturnType<typeof setTimeout>
   } | null>(null)
   const [proceedAttempt, setProceedAttempt] = useState<CertificateProceedAttempt | null>(null)
-  const matchingCertificateFailure = getMatchingCertificateFailure({
+  const matchingCertificateFailure = matchBrowserCertificateFailure({
     loadError,
     certificateFailure,
     expectedBrowserPageId,
     canProceed: Boolean(onProceedCertificate)
   })
-  // Why: Chromium's error-page fallback can replace the diagnostic code with
-  // -1 after main has already captured an exact live certificate challenge.
-  const presentationLoadError =
-    matchingCertificateFailure && loadError.code === -1
-      ? {
-          ...loadError,
-          code: matchingCertificateFailure.errorCode ?? loadError.code,
-          description: matchingCertificateFailure.error
-        }
-      : loadError
-  const meta = getLoadErrorMetadata(presentationLoadError)
+  const presentationLoadError = browserCertificatePresentationLoadError(
+    loadError,
+    matchingCertificateFailure
+  )
   const certificateError = isCertificateLoadError(presentationLoadError)
-  const guestRecoveryError = presentationLoadError.code === BROWSER_GUEST_RECOVERY_ERROR_CODE
-  const recoveryHint = formatLoadFailureRecoveryHint(meta, presentationLoadError)
+  const failure = describeBrowserLoadFailure(presentationLoadError, route)
+  const description = formatLoadFailureDescription(presentationLoadError, failure, sshRoutedHint, t)
   const activeProceedAttempt =
     proceedAttempt?.challengeId === matchingCertificateFailure?.challengeId ? proceedAttempt : null
   const actionsDisabled = activeProceedAttempt?.state === 'submitting'
@@ -225,143 +185,88 @@ export function BrowserLoadFailureOverlay({
   const retryButton = (
     <Button
       size="sm"
-      variant={certificateError && !externalUrl ? 'default' : 'outline'}
-      className="h-9 gap-2 px-3"
+      variant={certificateError && externalUrl ? 'outline' : 'default'}
       disabled={actionsDisabled}
-      onClick={onRetry}
+      onClick={() => void onRetry()}
     >
-      <RefreshCw className="size-4" />
-      {translate('browser.loadFailure.retry', 'Retry')}
+      {t('browser.loadFailure.retry', 'Retry')}
     </Button>
   )
-  const copyButton = (
-    <Button
-      size="sm"
-      variant="ghost"
-      className="h-9 gap-2 px-3"
-      disabled={actionsDisabled}
-      onClick={() => onCopy(currentUrl)}
-    >
-      <Copy className="size-4" />
-      {translate('browser.loadFailure.copyAddress', 'Copy Address')}
-    </Button>
-  )
-  const externalButton =
-    externalUrl && onOpenExternal ? (
-      <Button
-        size="sm"
-        variant={certificateError ? 'default' : 'ghost'}
-        className="h-9 gap-2 px-3"
-        disabled={actionsDisabled}
-        onClick={() => onOpenExternal(externalUrl)}
-      >
-        <ExternalLink className="size-4" />
-        {translate('browser.loadFailure.openExternally', 'Open Externally')}
-      </Button>
-    ) : null
-
-  return (
-    <div className="absolute inset-0 z-20 flex items-center justify-center bg-background px-6">
-      <div aria-live="polite" className="flex max-w-lg flex-col items-center px-8 py-8 text-center">
-        <div className="mb-4 rounded-full border border-border bg-muted p-3 text-muted-foreground">
-          {certificateError ? <ShieldAlert className="size-5" /> : <Globe className="size-5" />}
-        </div>
-        <h2 className="text-base font-semibold text-foreground">
-          {certificateError
-            ? translate('browser.loadFailure.connectionNotSecure', "Connection isn't secure")
-            : guestRecoveryError
-              ? translate('browser.guestRecovery.title', 'Browser page stopped')
-              : meta.host
-                ? translate('browser.loadFailure.cantReachHost', "Can't reach {{value0}}", {
-                    value0: meta.host
-                  })
-                : translate('browser.loadFailure.cantLoadPage', "Can't load this page")}
-        </h2>
-        <p className="mt-2 text-sm text-muted-foreground">
-          {formatLoadFailureDescription(presentationLoadError, meta)}
-        </p>
-        {certificateError && meta.isLocalhostLike ? (
-          <p className="mt-2 text-xs text-muted-foreground">
-            {translate(
-              'browser.loadFailure.trustedCertificateGuidance',
-              'For local development, use a trusted local certificate when possible.'
-            )}
-          </p>
-        ) : null}
-        {recoveryHint ? <p className="mt-2 text-xs text-muted-foreground">{recoveryHint}</p> : null}
-        {sshRoutedHint ? (
-          <p className="mt-2 text-xs text-muted-foreground">
-            {translate(
-              'browser.loadFailure.sshRoutedHint',
-              "This page browses through the workspace's SSH host — the host may be disconnected or unable to reach this site."
-            )}
-            {onRecheckSshRoute ? (
-              <>
-                {' '}
-                <Button
-                  type="button"
-                  variant="link"
-                  size="xs"
-                  className="h-auto px-0 align-baseline"
-                  data-testid="browser-load-failure-recheck-ssh-route"
-                  onClick={onRecheckSshRoute}
-                >
-                  {translate('browser.loadFailure.recheckSshRoute', 'Run connection check')}
-                </Button>
-              </>
-            ) : null}
-          </p>
-        ) : null}
-        {activeProceedAttempt?.state === 'failed' && activeProceedAttempt.reason ? (
-          <p role="alert" className="mt-3 text-xs text-destructive">
-            {formatCertificateProceedFailure(activeProceedAttempt.reason)}
-          </p>
-        ) : null}
-        <div className="mt-5 flex flex-wrap items-center justify-center gap-2">
-          {certificateError ? (
+  const certificateActions = (
+    <>
+      {externalUrl && onOpenExternal ? (
+        <Button size="sm" disabled={actionsDisabled} onClick={() => onOpenExternal(externalUrl)}>
+          {t('browser.loadFailure.openExternally', 'Open Externally')}
+        </Button>
+      ) : null}
+      {retryButton}
+      {matchingCertificateFailure ? (
+        <Button
+          size="sm"
+          variant="ghost"
+          className="w-48"
+          disabled={actionsDisabled}
+          onClick={proceedCertificate}
+        >
+          {activeProceedAttempt?.state === 'submitting' && activeProceedAttempt.showConnecting ? (
             <>
-              {externalButton}
-              {retryButton}
-              {copyButton}
-              {matchingCertificateFailure ? (
-                <Button
-                  size="sm"
-                  variant="outline"
-                  className="h-9 w-48 gap-2 px-3"
-                  disabled={actionsDisabled}
-                  onClick={proceedCertificate}
-                >
-                  {activeProceedAttempt?.state === 'submitting' &&
-                  activeProceedAttempt.showConnecting ? (
-                    <>
-                      <Loader2 className="size-4 animate-spin" />
-                      {translate('browser.loadFailure.connecting', 'Connecting…')}
-                    </>
-                  ) : (
-                    translate('browser.loadFailure.proceedUnsafe', 'Proceed Anyway (Unsafe)')
-                  )}
-                </Button>
-              ) : null}
+              <Loader2 className="animate-spin" />
+              {t('browser.loadFailure.connecting', 'Connecting…')}
             </>
           ) : (
-            <>
-              {httpsRecoveryUrl && !guestRecoveryError ? (
-                <Button
-                  size="sm"
-                  className="h-9 gap-2 px-3"
-                  disabled={actionsDisabled}
-                  onClick={() => onTryHttps(httpsRecoveryUrl)}
-                >
-                  {translate('browser.loadFailure.tryHttps', 'Try HTTPS')}
-                </Button>
-              ) : null}
-              {retryButton}
-              {copyButton}
-              {externalButton}
-            </>
+            t('browser.loadFailure.proceedUnsafe', 'Proceed Anyway (Unsafe)')
           )}
+        </Button>
+      ) : null}
+    </>
+  )
+  return (
+    <SecuritySurface>
+      <div className="scrollbar-sleek absolute inset-0 z-20 overflow-y-auto bg-background">
+        <div className="flex min-h-full items-center justify-center px-8 pt-12 pb-24">
+          <div aria-live="polite" className="w-full max-w-lg">
+            <h2 className="text-xl font-semibold text-balance text-foreground">
+              {formatLoadFailureTitle(presentationLoadError, failure, t)}
+            </h2>
+            {description ? (
+              <p className="mt-2 text-sm text-pretty text-muted-foreground">{description}</p>
+            ) : null}
+            {failure.errorName ? (
+              <p className="mt-3 font-mono text-xs text-muted-foreground">{failure.errorName}</p>
+            ) : null}
+            {activeProceedAttempt?.state === 'failed' && activeProceedAttempt.reason ? (
+              <p role="alert" className="mt-3 text-sm text-destructive">
+                {formatCertificateProceedFailure(activeProceedAttempt.reason, t)}
+              </p>
+            ) : null}
+            <div className="mt-6 flex flex-wrap items-center gap-2">
+              {certificateError ? (
+                certificateActions
+              ) : (
+                <>
+                  {retryButton}
+                  {onRecheckSshRoute ? (
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      data-testid="browser-load-failure-recheck-ssh-route"
+                      onClick={onRecheckSshRoute}
+                    >
+                      {t('browser.loadFailure.recheckSshRoute', 'Run connection check')}
+                    </Button>
+                  ) : null}
+                </>
+              )}
+            </div>
+            <BrowserLoadFailureAutoRetryStatus
+              failureKey={`${presentationLoadError.validatedUrl}\n${failure.kind}`}
+              failure={failure}
+              autoRetry={autoRetry}
+              retry={onRetry}
+            />
+          </div>
         </div>
       </div>
-    </div>
+    </SecuritySurface>
   )
 }

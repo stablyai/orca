@@ -1,10 +1,4 @@
-// Pure arg-building and line parsing for `adb logcat`. No process execution
-// here: the caller prepends the resolved adb binary path to every arg array.
-
-// `adb -s <serial> logcat` with `-d` to dump-and-exit (vs. follow), the
-// `threadtime` format always (gives pid/tid and matches the parser), an optional
-// `-t <lines>` tail, and trailing filterspec tokens (e.g. ['MyTag:D', '*:S'])
-// that must come last on the adb command line.
+// Filters must follow all logcat options; threadtime matches the line parser below.
 export function logcatArgs(
   serial: string,
   options?: { dump?: boolean; lines?: number; filters?: readonly string[] }
@@ -25,8 +19,7 @@ export function logcatArgs(
 
 export type LogcatEntry = { timestamp?: string; level?: string; tag?: string; message: string }
 
-// Matches `MM-DD HH:MM:SS.mmm <pid> <tid> <level> <tag>: <message>`. The tag is
-// every non-colon char up to the first colon, so colons in the message survive.
+// Match only the first colon so colons inside messages survive.
 const LOGCAT_LINE = /^(\d{2}-\d{2} \d{2}:\d{2}:\d{2}\.\d{3})\s+\d+\s+\d+\s+([A-Z])\s+([^:]+):(.*)$/
 
 export function parseLogcatLine(line: string): LogcatEntry {

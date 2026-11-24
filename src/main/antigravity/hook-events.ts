@@ -12,7 +12,6 @@ export const ANTIGRAVITY_EVENTS = [
     windowsWrapperFileName: 'antigravity-post-invocation.cmd'
   },
   { eventName: 'Stop', schema: 'direct', windowsWrapperFileName: 'antigravity-stop.cmd' },
-  // PreToolUse is the only pre-tool signal Antigravity emits; without it panes show a bare "Working" spinner (#12898).
   {
     eventName: 'PreToolUse',
     schema: 'tool',
@@ -25,9 +24,14 @@ export const ANTIGRAVITY_EVENTS = [
   }
 ] as const
 
-// Why: Antigravity requires a decision on PreToolUse and reads silence as deny (#2426). Of the documented values
-// only "ask" defers to the user's permission config — "allow" would auto-approve every tool call Orca observes.
-export const ANTIGRAVITY_PRE_TOOL_USE_DECISION = '{"decision":"ask"}'
+/** The no-op reply the managed script prints, for paths that skip the script. */
+export function getAntigravityNoOpStdout(eventName: string): string | undefined {
+  // Empty PreToolUse output leaves the decision to agy; any JSON, even {}, overrides its reviewer.
+  if (eventName === 'PreToolUse') {
+    return undefined
+  }
+  return eventName === 'Stop' ? '{"decision":""}' : '{}'
+}
 
 export type AntigravityEvent = (typeof ANTIGRAVITY_EVENTS)[number]
 

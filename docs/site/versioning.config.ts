@@ -1,10 +1,4 @@
-/**
- * The single source of truth for the public docs version layout.
- *
- * Keep the current docs in `content/docs` so existing URLs stay stable. The
- * reserved `content/versions/<id>` layout gives a future versioned loader a
- * predictable source tree; versioned routes are not enabled yet.
- */
+// Keep current docs in content/docs for stable URLs; reserve content/versions/<id> for a future loader. Versioned routes are not enabled.
 export type DocsVersion = {
   readonly id: string
   readonly label: string

@@ -11,15 +11,15 @@
  * that leaves the layout tree correct but paints one pane still fails.
  */
 
-import { test, expect } from './helpers/orca-app'
-import type { Page } from '@stablyai/playwright-test'
+import { test } from './desktop/electron-fixtures/orca-app'
+import { expect, type Page } from '@stablyai/playwright-test'
 import {
   waitForSessionReady,
   waitForActiveWorktree,
   ensureTerminalVisible,
   getActiveTabType
-} from './helpers/store'
-import { clickFileInExplorer, openFileExplorer } from './helpers/file-explorer'
+} from './desktop/renderer-probes/store'
+import { clickFileInExplorer, openFileExplorer } from './editor/file-explorer/file-explorer'
 
 const GROUP_BODY = '[data-tab-group-body-id]'
 const SORTABLE_TAB = '[data-testid="sortable-tab"]'

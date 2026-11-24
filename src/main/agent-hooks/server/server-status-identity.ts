@@ -1,12 +1,19 @@
-import type { AgentKind } from '../../../shared/telemetry-events'
+import type { AgentKind } from '../../../shared/telemetry/schemas/telemetry-property-schemas'
+import { publishedOrcaSessionId } from '../identity/pane-agent-identities'
+import { getAgentResumeArgv } from '../../../shared/agent-launch/startup/agent-resume-argv'
+import type { AgentProviderSessionMetadata } from '../../../shared/agent-session/lifecycle/agent-session-resume'
 import {
-  getAgentResumeArgv,
-  type AgentProviderSessionMetadata
-} from '../../../shared/agent-session-resume'
-import { parseLegacyNumericPaneKey, parsePaneKey } from '../../../shared/stable-pane-id'
-import type { AgentStatusIpcPayload, AgentType } from '../../../shared/agent-status-types'
+  parseLegacyNumericPaneKey,
+  parsePaneKey
+} from '../../../shared/workspace-layout/stable-pane-id'
+import {
+  pickHostTurnEnd,
+  type AgentType
+} from '../../../shared/agent-status/contracts/agent-status-types'
+import type { AgentStatusIpcPayload } from '../../../shared/agent-status/contracts/agent-status-ipc-payload'
 import type { EnrichedAgentHookEventPayload } from './server-types'
 import { AGENT_PROMPT_SENT_AGENT_KINDS } from './server-constants'
+import { cliWriterTopology } from './cli-writer-topology'
 import { MAX_PANE_KEY_LEN } from '../../../shared/agent-hook-listener/listener-limits'
 
 export function agentTypeToPromptSentAgentKind(agentType: AgentType | undefined): AgentKind {
@@ -31,14 +38,14 @@ export function equivalentInterruptAgentType(
   return normalizedActual === normalizedBaseline
 }
 
-// Why: validate the durable `${tabId}:${leafUuid}` leaf suffix at write/hydrate so legacy numeric rows fail closed.
+// Durable caches reject legacy numeric keys; only stable pane IDs survive restart.
 export function isValidPaneKey(value: unknown): value is string {
   return (
     typeof value === 'string' && value.length <= MAX_PANE_KEY_LEN && parsePaneKey(value) !== null
   )
 }
 
-// Why: remote metadata-only rows are currently a Pi contract; user-dismissed rows use an internal persisted marker instead.
+// Remote identity-only rows are a Pi contract; dismissed rows use a separate retained marker.
 export function isValidPiProviderSessionOnly(
   providerSession: AgentProviderSessionMetadata | undefined,
   agentType: AgentType | undefined
@@ -51,6 +58,7 @@ export function toAgentStatusIpcPayload(
 ): AgentStatusIpcPayload {
   return {
     paneKey: entry.paneKey,
+    ...(entry.paneSleep ? { paneSleep: entry.paneSleep } : {}),
     ...(entry.launchToken ? { launchToken: entry.launchToken } : {}),
     tabId: entry.tabId,
     worktreeId: entry.worktreeId,
@@ -61,18 +69,22 @@ export function toAgentStatusIpcPayload(
       : {}),
     stateStartedAt: entry.stateStartedAt,
     ...(entry.turnStartedAt !== undefined ? { turnStartedAt: entry.turnStartedAt } : {}),
+    ...pickHostTurnEnd(entry),
     ...(entry.providerSession ? { providerSession: entry.providerSession } : {}),
+    ...(cliWriterTopology(entry) === 'shared' ? { executionHost: 'shared' as const } : {}),
     ...(entry.providerSessionOnly ? { providerSessionOnly: true } : {}),
     ...(entry.promptInteractionKey ? { promptInteractionKey: entry.promptInteractionKey } : {}),
     ...(entry.restoredUnconfirmed ? { restoredUnconfirmed: true } : {}),
     ...(entry.observation ? { observation: entry.observation } : {}),
     ...(entry.structuredHost ? { structuredHost: entry.structuredHost } : {}),
     ...(entry.terminalHandle ? { terminalHandle: entry.terminalHandle } : {}),
+    ...(entry.programStatus ? { programStatus: entry.programStatus } : {}),
+    ...(publishedOrcaSessionId(entry.agentIdentity) !== undefined
+      ? { orcaSessionId: publishedOrcaSessionId(entry.agentIdentity) }
+      : {}),
     ...entry.payload
   }
 }
-
-export { isToolProgressWorkingAfterInterrupt } from '../../../shared/agent-hook-cancel-verdict-latch'
 
 export function paneCacheKeyTabId(key: string): string | null {
   const paneKey = key.split('\0', 1)[0] ?? key

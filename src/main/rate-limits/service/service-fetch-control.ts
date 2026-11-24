@@ -11,7 +11,7 @@ export abstract class RateLimitServiceFetchControl extends RateLimitServiceState
     ) {
       return Promise.resolve()
     }
-    // Why: explicit-refresh callers must await the queued follow-up cycle when a poll is in flight, else the UI stops spinning early.
+    // Explicit refresh waits for its queued follow-up cycle so loading cannot stop at the earlier poll.
     return new Promise((resolve) => {
       this.fetchIdleResolvers.push(resolve)
     })
@@ -64,7 +64,7 @@ export abstract class RateLimitServiceFetchControl extends RateLimitServiceState
   }
 
   protected clearQueuedFetches(): void {
-    this.fullFetchQueued = false
+    this.fullFetchQueued = null
     this.codexOnlyFetchQueued = false
     this.claudeOnlyFetchQueued = false
     this.grokOnlyFetchQueued = false

@@ -1,4 +1,9 @@
 import type { StateCreator } from 'zustand'
+import type { BrowserPageLoadingOwner } from '@/lib/browser/browser-page-loading-ownership'
+import type { ManagedBrowserProfileOwner } from '../../../../../shared/browser/profiles/browser-profile-scope'
+
+/** What a new tab opens on; a partition only when it must not be derived from the profile. */
+export type NewBrowserTabProfile = { sessionProfileId: string | null; sessionPartition?: string }
 import type { AppState } from '../../types'
 import type {
   BrowserCertificateFailure,
@@ -11,28 +16,27 @@ import type {
   BrowserSessionProfile,
   BrowserViewportPresetId,
   BrowserWorkspace
-} from '../../../../../shared/browser-workspace-types'
-import type { WorkspaceSessionState } from '../../../../../shared/workspace-session-state-types'
-import type { WorkspaceDocHistoryEntry } from '../../../../../shared/workspace-doc-history'
-import type {
-  BrowserAnnotationIntent,
-  BrowserPageAnnotation
-} from '../../../../../shared/browser-grab-types'
+} from '../../../../../shared/browser/workspaces/browser-workspace-types'
+import type { WorkspaceSessionState } from '../../../../../shared/workspace-session/workspace-session-state-types'
+import type { WorkspaceDocHistoryEntry } from '../../../../../shared/workspace-session/workspace-doc-history'
+import type { BrowserPageAnnotation } from '../../../../../shared/browser/element-grab/browser-grab-types'
 import type {
   BrowserPageConversionLeg,
   BrowserPageConversionTarget
-} from '../browser-page-conversion'
-import type { RecentlyClosedTabPosition } from '../recently-closed-tabs'
+} from './pages/browser-page-conversion'
+import type { RecentlyClosedTabPosition } from '../tabs/recently-closed-tab-position'
 import type {
   ClientHostedBrowserCloseIntentsByEnvironment,
   PendingClientHostedBrowserClose
-} from '@/runtime/client-hosted-browser-close-intents'
-import type { WorkspaceSessionHydrationOptions } from '@/lib/workspace-session-hydration-keys'
-import type { ExecutionHostId } from '../../../../../shared/execution-host'
-import type { TabSplitTarget } from '../tabs/tabs-slice-contract'
-import type { RuntimeBrowserPlacement } from '../../../../../shared/runtime-browser-placement'
+} from '@/runtime/browser/closing/client-hosted-browser-close-intents'
+import type { WorkspaceSessionHydrationOptions } from '@/lib/workspace/persistence/workspace-session-hydration-keys'
+import type { ExecutionHostId } from '../../../../../shared/execution-host/execution-host'
+import type { TabSplitDirection, TabSplitTarget } from '../tabs/tabs-slice-contract'
+import type { RuntimeBrowserPlacement } from '../../../../../shared/browser/client-hosting/runtime-browser-placement'
 
 export type CreateBrowserTabOptions = {
+  /** Link-only guard, checked before records and again at the unified-tab mutation. */
+  validateLinkPlacement?: (state: AppState) => void
   activate?: boolean
   browserPageId?: string
   title?: string
@@ -44,6 +48,8 @@ export type CreateBrowserTabOptions = {
   split?: TabSplitTarget
   /** Client-local unified tab id of the source; the new tab lands right after it when still live. */
   afterTabId?: string
+  /** Shows the tab in its pane without making it the active pane or browser surface. */
+  showInGroup?: boolean
   /** Verified execution host for the new wrapper; unset keeps createUnifiedTab's active-workspace fallback. */
   executionHostId?: ExecutionHostId
   // Explicit "New Tab" focuses the address bar even with a real home URL; link-opened tabs leave it unset.
@@ -80,26 +86,30 @@ export type ClosedBrowserWorkspaceSnapshot = {
   position?: RecentlyClosedTabPosition
 }
 
+import type { BrowserInitializationPresentation } from '@/runtime/web-session-tabs-sync/tab-projection/browser-initialization-presentation'
+
 export type RemoteBrowserPageHandle = {
+  initializationPresentation?: BrowserInitializationPresentation
   environmentId: string
   remotePageId: string
+  /** Profile identity confirmed by the host's current page snapshot. */
+  browserProfileId?: string
   placement?: RuntimeBrowserPlacement
   /** Optimistically staged by this client; the host has not published the page yet. */
   staged?: true
-  /**
-   * This client expects to host the staged page itself. The real placement is minted host-side and
-   * only arrives with the snapshot, so the pane needs this to mount as the right kind of pane from
-   * the first frame instead of swapping components at adoption.
-   */
+  /** Predict client hosting before live placement so staging mounts the correct component without an adoption remount. */
   stagedClientHosted?: true
-  /**
-   * Rebuilt at hydration from the persisted page row rather than observed from a host snapshot. The
-   * page id is real, but nothing has confirmed the host still has it, so the row is exempt from the
-   * absent-from-snapshot cull until the first snapshot that publishes it clears this.
-   */
+  /** Restored IDs are real but host presence is unproven; exempt from omission culling until first republication clears marker. */
   restoredFromSession?: true
   /** The restored page was hosted by this desktop, so it must not restore as a streamed pane. */
   restoredClientHosted?: true
+  /** This desktop itself asked the server to place the page here. Set locally, kept across republishes, never read from a snapshot. */
+  placedHere?: true
+}
+
+export type RemovedBrowserHistory = {
+  browserUrlHistory: BrowserHistoryEntry[]
+  workspaceDocHistory: WorkspaceDocHistoryEntry[]
 }
 
 export type BrowserCookieImportExecutionResult = BrowserCookieImportResult & {
@@ -110,19 +120,31 @@ export type BrowserCookieImportExecutionResult = BrowserCookieImportResult & {
   executionRemoteEnvironment: boolean
 }
 
+/** A page browsing through an SSH host keeps cookies in that host's jar, not the profile's. */
+export type BrowserSshPageCookieImportRoute = {
+  sshTargetId: string
+  hostLabel: string
+}
+
+/** The jar a page's own import fills; Settings imports (no route) follow the Settings host instead. */
+export type BrowserPageCookieImportRoute =
+  | { kind: 'local' }
+  | ({ kind: 'ssh' } & BrowserSshPageCookieImportRoute)
+  /** A server's page this desktop hosts: its jar depends on the page's profile and network host. */
+  | { kind: 'client-host'; environmentId: string; browserPageId: string; hostLabel: string }
+
 export type BrowserSlice = {
   browserTabsByWorktree: Record<string, BrowserWorkspace[]>
   browserPagesByWorkspace: Record<string, BrowserPage[]>
   browserCertificateFailuresByPageId: Record<string, BrowserCertificateFailure>
+  /** May precede the page record (client-hosted pages); main's false on guest teardown clears it. */
+  browserAudiblePageIds: Record<string, true>
+  /** Tab mute lives for the tab's life; each new guest of its pages is muted again. */
+  browserAudioMutedTabIds: Record<string, true>
   browserAnnotationsByPageId: Record<string, BrowserPageAnnotation[]>
   browserAnnotationMarkerIdsByPageId: Record<string, string[]>
   remoteBrowserPageHandlesByPageId: Record<string, RemoteBrowserPageHandle>
-  /**
-   * Closes of client-hosted pages their owning runtime never heard, keyed by environment.
-   *
-   * Durable because the runtime persists the pages themselves: a close swallowed while the host
-   * was down would otherwise be undone by that host's next start.
-   */
+  /** Persist undelivered client-page closes by environment or runtime restart restores its persisted pages. */
   clientHostedBrowserCloseIntentsByEnvironment: ClientHostedBrowserCloseIntentsByEnvironment
   recordClientHostedBrowserCloseIntents: (
     closes: readonly PendingClientHostedBrowserClose[]
@@ -142,14 +164,23 @@ export type BrowserSlice = {
     url: string,
     options?: CreateBrowserTabOptions
   ) => BrowserWorkspace
-  openNewBrowserTabInActiveWorkspace: (groupId: string) => Promise<void>
+  openNewBrowserTabInActiveWorkspace: (
+    groupId: string,
+    splitDirection?: TabSplitDirection
+  ) => Promise<void>
   /** `profileId: null` uses the workspace default profile. */
   openBrowserProfileTabInActiveWorkspace: (
     url: string,
     profileId: string | null
   ) => Promise<boolean>
-  closeBrowserTab: (tabId: string, options?: { reason?: 'cleanup' }) => void
-  shutdownWorktreeBrowsers: (worktreeId: string) => Promise<void>
+  closeBrowserTab: (
+    tabId: string,
+    options?: { reason?: 'cleanup'; preserveWorktreeSelection?: boolean }
+  ) => void
+  shutdownWorktreeBrowsers: (
+    worktreeId: string,
+    options?: { preserveWorktreeSelection?: boolean }
+  ) => void
   reopenClosedBrowserTab: (worktreeId: string) => BrowserWorkspace | null
   /** Activation uses the tab's workspace unless a target is supplied; global selection
    *  moves only when that workspace is active. */
@@ -160,9 +191,7 @@ export type BrowserSlice = {
     options?: CreateBrowserPageOptions
   ) => BrowserPage | null
   closeBrowserPage: (pageId: string) => void
-  // Why replacement and not mutation: a page's kind (doc vs web) is immutable for its life, so the
-  // address bar converts by replacing the page — fresh id, same workspace row — keeping the two
-  // main-process registry halves disjoint by construction.
+  // Doc/web kinds are immutable; conversion replaces page with fresh ID in surviving workspace to keep main registries disjoint.
   convertBrowserPage: (
     pageId: string,
     target: BrowserPageConversionTarget,
@@ -177,12 +206,22 @@ export type BrowserSlice = {
     options?: { surfacePane?: boolean }
   ) => void
   consumeAddressBarFocusRequest: (pageId: string) => boolean
-  updateBrowserTabPageState: (pageId: string, updates: BrowserTabPageState) => void
-  updateBrowserPageState: (pageId: string, updates: BrowserTabPageState) => void
+  updateBrowserTabPageState: (
+    pageId: string,
+    updates: BrowserTabPageState,
+    loadingOwner?: BrowserPageLoadingOwner
+  ) => void
+  updateBrowserPageState: (
+    pageId: string,
+    updates: BrowserTabPageState,
+    loadingOwner?: BrowserPageLoadingOwner
+  ) => void
   setBrowserPageCertificateFailure: (
     pageId: string,
     failure: BrowserCertificateFailure | null
   ) => void
+  setBrowserPageAudible: (pageId: string, audible: boolean) => void
+  setBrowserTabAudioMuted: (tabId: string, muted: boolean) => void
   setBrowserTabUrl: (pageId: string, url: string) => void
   setBrowserPageUrl: (pageId: string, url: string, options?: SetBrowserPageUrlOptions) => void
   setRemoteBrowserPageHandle: (pageId: string, handle: RemoteBrowserPageHandle) => void
@@ -198,7 +237,7 @@ export type BrowserSlice = {
   updateBrowserPageAnnotation: (
     pageId: string,
     annotationId: string,
-    patch: { comment: string; intent: BrowserAnnotationIntent }
+    patch: Pick<BrowserPageAnnotation, 'comment' | 'intent' | 'imagePaths'>
   ) => void
   deleteBrowserPageAnnotation: (pageId: string, annotationId: string) => void
   clearBrowserPageAnnotations: (pageId: string) => void
@@ -226,13 +265,34 @@ export type BrowserSlice = {
     summary: BrowserCookieImportSummary | null
     error: string | null
   } | null
-  fetchBrowserSessionProfiles: () => Promise<void>
+  /** Loads one host's profiles; defaults to the host Browser settings is showing. */
+  fetchBrowserSessionProfiles: (hostId?: ExecutionHostId) => Promise<void | {
+    hostId: ExecutionHostId
+    environmentId: string
+    pairingRevision: number | undefined
+    profiles: BrowserSessionProfile[]
+    executorRuntimeId?: string
+  }>
+  /** Creates on hostId's browser, or the Settings host's when omitted. */
   createBrowserSessionProfile: (
     scope: 'isolated' | 'imported',
-    label: string
+    label: string,
+    hostId?: ExecutionHostId
   ) => Promise<BrowserSessionProfile | null>
   deleteBrowserSessionProfile: (profileId: string) => Promise<boolean>
-  importCookiesToProfile: (profileId: string) => Promise<BrowserCookieImportExecutionResult>
+  /** A repo's or workspace's own local profile, at once; a placeholder until main first creates it. */
+  ensureManagedBrowserSessionProfile: (
+    owner: ManagedBrowserProfileOwner,
+    label: string
+  ) => NewBrowserTabProfile
+  /** A removed repo's or workspace's own profile goes with it, whichever host ran the removal. */
+  deleteManagedBrowserSessionProfile: (owner: ManagedBrowserProfileOwner) => Promise<void>
+  /** Managed profiles main has not finished creating; their pages must not mount on any other partition. */
+  managedBrowserProfileStatusById: Record<string, 'pending' | 'failed'>
+  importCookiesToProfile: (
+    profileId: string,
+    pageRoute?: BrowserPageCookieImportRoute | null
+  ) => Promise<BrowserCookieImportExecutionResult>
   clearBrowserSessionImportState: () => void
   detectedBrowsers: {
     family: string
@@ -241,35 +301,45 @@ export type BrowserSlice = {
     selectedProfile: string
   }[]
   detectedBrowsersLoaded: boolean
-  // Why: which machine answered detection for a remote environment, so import menus can say where
-  // the import will read and store; null while browser settings target the local host.
+  // Record detector machine for import menus; null while settings target local host.
   detectedBrowsersHost: { machine: 'client' | 'remote'; hostLabel: string } | null
   fetchDetectedBrowsers: () => Promise<void>
   importCookiesFromBrowser: (
     profileId: string,
     browserFamily: string,
-    browserProfile?: string
+    browserProfile?: string,
+    pageRoute?: BrowserPageCookieImportRoute | null
   ) => Promise<BrowserCookieImportExecutionResult>
-  clearDefaultSessionCookies: () => Promise<boolean>
+  /** Clears every store of one host's profile: a paired server's on both machines. `pairingRevision` is the one the person confirmed. */
+  clearBrowserProfileCookies: (target: {
+    hostId: ExecutionHostId
+    profileId: string
+    pairingRevision?: number
+    /** The paired server advertises browser.profile-cookie-clear.v1. */
+    serverClearsAnyProfile?: boolean
+  }) => Promise<boolean>
   browserUrlHistory: BrowserHistoryEntry[]
   addBrowserHistoryEntry: (url: string, title: string, faviconUrl?: string | null) => void
+  /** Returns the removed entry so an Undo can put it back with its visit count. */
+  removeBrowserHistoryEntry: (normalizedUrl: string) => BrowserHistoryEntry | null
+  /** Puts removed or cleared entries back, except ones a revisit has already re-created. */
+  restoreBrowserHistory: (removed: RemovedBrowserHistory) => void
   workspaceDocHistory: WorkspaceDocHistoryEntry[]
+  removeWorkspaceDocHistoryEntry: (docLocation: BrowserPageDocLocation) => void
   /** A visit bumps recency and count; a title-only refresh (bump: false) renames the row. */
   recordWorkspaceDocVisit: (
     docLocation: BrowserPageDocLocation,
     title: string | null,
     options?: { bump?: boolean }
   ) => void
-  clearBrowserHistory: () => void
-  defaultBrowserSessionProfileId: string | null
-  defaultBrowserSessionProfileIdByHostId: Partial<Record<ExecutionHostId, string | null>>
-  setDefaultBrowserSessionProfileId: (profileId: string | null) => void
+  /** Clears pages and documents last visited at or after `since` (everything when omitted). */
+  clearBrowserHistory: (since?: number) => RemovedBrowserHistory
+  /** The page whose history view is open; it opens what you pick in that page. */
+  browserHistoryPageId: string | null
+  setBrowserHistoryPageId: (pageId: string | null) => void
+  setDefaultBrowserSessionProfileId: (profileId: string | null) => Promise<void>
 }
 
 type BrowserStateCreator = StateCreator<AppState, [], [], BrowserSlice>
 export type BrowserSliceSet = Parameters<BrowserStateCreator>[0]
 export type BrowserSliceGet = Parameters<BrowserStateCreator>[1]
-
-// Keep the public slice surface's domain types available to existing consumers while the
-// implementation is split across focused modules.
-export type { BrowserPageConversionLeg, BrowserPageConversionTarget, BrowserSessionProfile }

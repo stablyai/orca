@@ -1,0 +1,80 @@
+import type { IssueInfo } from '../../../../../../shared/github/pull-requests/pull-request-types'
+import type {
+  Worktree,
+  WorkspaceAttachment,
+  AutomationWorkspaceProvenance,
+  CliWorkspaceProvenance
+} from '../../../../../../shared/worktree/types'
+import type { WorktreeCardPrDisplay } from '../review/worktree-card-pr-display'
+import type { WorktreeCardDetailsHoverControl } from '../details/worktree-card-details-hover-state'
+import type { WorkspaceReferenceDetailsMap } from '../review/workspace-reference-details'
+import type { Bot } from '../../../../../../shared/bot-types'
+
+export type WorktreeCardIssueDisplay =
+  | IssueInfo
+  | {
+      number: number
+      title: string
+      state?: IssueInfo['state']
+      url?: string
+      labels?: string[]
+    }
+
+export type WorktreeCardLinearIssueDisplay = {
+  identifier: string
+  title: string
+  url?: string
+  stateName?: string
+  stateType?: string
+  labels?: string[]
+}
+
+export type WorktreeCardJiraIssueDisplay = {
+  identifier: string
+  title: string
+  url: string
+}
+
+export type WorktreeCardMetaBadgesProps = {
+  referenceItems?: readonly WorkspaceAttachment[]
+  referenceDetails?: WorkspaceReferenceDetailsMap
+  linkedItemCount?: number
+  issue: WorktreeCardIssueDisplay | null
+  linearIssue: WorktreeCardLinearIssueDisplay | null
+  jiraIssue?: WorktreeCardJiraIssueDisplay | null
+  review: WorktreeCardPrDisplay | null
+  comment: string | null
+  automationProvenance?: AutomationWorkspaceProvenance | null
+  cliProvenance?: CliWorkspaceProvenance | null
+  /** The bot whose worker made the workspace. */
+  bot?: Pick<Bot, 'id' | 'name' | 'avatar' | 'hostId'> | null
+}
+
+export type WorktreeCardMetaBadgesRootProps = WorktreeCardMetaBadgesProps &
+  React.HTMLAttributes<HTMLDivElement>
+
+export type WorktreeCardDetailsHoverProps = WorktreeCardMetaBadgesProps & {
+  workspace?: Worktree
+  onManageLinks?: (event: React.MouseEvent) => void
+  children: React.ReactElement
+  branchName?: string
+  workspaceTitle?: string
+  identityOrder?: 'workspace-first' | 'branch-first'
+  workspaceTitleRenameDisabled?: boolean
+  detailsAfter?: React.ReactNode
+  openDelay?: number
+  closeDelay?: number
+  onRenameWorkspaceTitle?: (displayName: string) => Promise<void> | void
+  onWorkspaceTitleEditingChange?: (editing: boolean) => void
+  onEditIssue?: (event: React.MouseEvent) => void
+  onEditComment?: (event: React.MouseEvent) => void
+  onOpenGitHubIssueInOrca?: (event: React.MouseEvent) => void
+  onOpenIssueInBrowser?: (url: string) => void
+  onOpenLinearIssueInOrca?: (event: React.MouseEvent) => void
+  onOpenReviewInOrca?: (event: React.MouseEvent, review?: WorktreeCardPrDisplay) => void
+  onOpenReviewInBrowser?: (url: string) => void
+  onUnlinkReview?: (item?: WorkspaceAttachment) => void
+  onOpenAutomation?: (event: React.MouseEvent) => void
+  onOpenAutomationRun?: (event: React.MouseEvent) => void
+  hoverControl?: WorktreeCardDetailsHoverControl
+}

@@ -1,0 +1,9 @@
+{
+  "capturedAt": "2026-10-18T07:07:01.773Z",
+  "platform": "darwin",
+  "command": ["/tmp/i10923-omp/scripts/run-omp.sh"],
+  "cols": 100,
+  "rows": 30,
+  "note": "OMP 18.10.3, fake OpenAI-compatible model, one prompt; the user bubble closes its own OSC 133 zone (B C D;0)",
+  "exitCode": 129
+}

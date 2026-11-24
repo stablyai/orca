@@ -1,21 +1,32 @@
-import { OrcaRuntimeWithWriteTerminalAgentPrompt } from './terminal-agent-prompt'
-import {
-  CLAUDE_AGENT_PROMPT_RENDER_MARKER,
-  CLAUDE_AGENT_PROMPT_RENDER_QUIET_MS,
-  CLAUDE_AGENT_PROMPT_RENDER_TIMEOUT_MS
-} from '../../orca-runtime-core'
+import { OrcaRuntimeWithSubmitTerminalAgentPrompt } from './terminal-agent-prompt-submit'
 import type {
   RuntimeTerminalWait,
   RuntimeTerminalWaitCondition
-} from '../../../../shared/runtime-types'
+} from '../../../../shared/terminal/runtime/runtime-terminal-contracts'
+import type { RuntimeTerminalPromptSubmit } from '../../../../shared/terminal/runtime/runtime-terminal-send-contract'
+import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/workspace-layout/layout-owner-switch'
+import { isCompleteAgentPromptDraft } from '../../../../shared/agent-launch/startup/agent-prompt-injection'
+import { readTerminalComposerTypedText } from '../../../../shared/terminal/input/terminal-composer-draft'
+const CLAUDE_AGENT_PROMPT_RENDER_TIMEOUT_MS = 8000
 
-export abstract class OrcaRuntimeWithCreateAgentPromptRenderGate extends OrcaRuntimeWithWriteTerminalAgentPrompt {
+const CLAUDE_AGENT_PROMPT_RENDER_QUIET_MS = 1500
+
+/** How long a composer must keep showing the whole paste before Enter, outlasting paste-burst windows. */
+const AGENT_PROMPT_RENDER_DRAFT_SETTLE_MS = 300
+
+// Claude shows its cursor before composer rendering settles.
+const CLAUDE_AGENT_PROMPT_RENDER_MARKER = '\x1b[?25h'
+
+type AgentPromptRenderWaitEnd = NonNullable<RuntimeTerminalPromptSubmit['renderWait']>
+
+export abstract class OrcaRuntimeWithCreateAgentPromptRenderGate extends OrcaRuntimeWithSubmitTerminalAgentPrompt {
   protected createAgentPromptRenderGate(
     ptyId: string,
-    pasteIngestMs: number
+    pasteIngestMs: number,
+    prompt?: string
   ): {
     arm: () => void
-    wait: () => Promise<void>
+    wait: () => Promise<AgentPromptRenderWaitEnd>
     dispose: () => void
   } | null {
     const pty = this.ptysById.get(ptyId)
@@ -24,17 +35,16 @@ export abstract class OrcaRuntimeWithCreateAgentPromptRenderGate extends OrcaRun
     }
     let armed = false
     let observedMarker = false
-    let settled = false
+    let settled: AgentPromptRenderWaitEnd | null = null
     let ingested = pasteIngestMs <= 0
-    // Why absolute: the ingest clock starts once, here, but the cap is armed twice (at arm()
-    // and again on the marker). Re-adding the whole window would charge ingest twice.
+    // Arm and marker both set this cap; use an absolute deadline to avoid charging ingest twice.
     const ingestDeadlineAt = Date.now() + pasteIngestMs
     let markerCarry = ''
     let quietTimer: NodeJS.Timeout | null = null
     let hardTimer: NodeJS.Timeout | null = null
     let ingestTimer: NodeJS.Timeout | null = null
-    let resolveRender!: () => void
-    const rendered = new Promise<void>((resolve) => {
+    let resolveRender!: (end: AgentPromptRenderWaitEnd) => void
+    const rendered = new Promise<AgentPromptRenderWaitEnd>((resolve) => {
       resolveRender = resolve
     })
 
@@ -51,34 +61,75 @@ export abstract class OrcaRuntimeWithCreateAgentPromptRenderGate extends OrcaRun
         clearTimeout(ingestTimer)
         ingestTimer = null
       }
+      if (draftSettleTimer) {
+        clearTimeout(draftSettleTimer)
+        draftSettleTimer = null
+      }
     }
-    const finish = (): void => {
+    const finish = (end: AgentPromptRenderWaitEnd): void => {
       if (settled) {
         return
       }
-      settled = true
+      settled = end
+      composerProof = false
       clearGateTimers()
-      resolveRender()
+      resolveRender(end)
     }
     const armQuietTimer = (): void => {
-      // Why: the quiet window measures the agent going still after a *complete* paste.
-      // Silence during ingest is not settlement, so it cannot start the clock.
+      // Quiet starts after complete ingestion; silence during paste cannot settle it.
       if (!ingested) {
         return
       }
       if (quietTimer) {
         clearTimeout(quietTimer)
       }
-      quietTimer = setTimeout(finish, CLAUDE_AGENT_PROMPT_RENDER_QUIET_MS)
+      quietTimer = setTimeout(() => finish('quiet'), CLAUDE_AGENT_PROMPT_RENDER_QUIET_MS)
     }
     const armHardTimer = (): void => {
       if (hardTimer) {
         clearTimeout(hardTimer)
       }
       hardTimer = setTimeout(
-        finish,
+        () => finish('cap'),
         CLAUDE_AGENT_PROMPT_RENDER_TIMEOUT_MS + Math.max(0, ingestDeadlineAt - Date.now())
       )
+    }
+    // Child work can repaint forever; a composer that keeps showing exactly this paste proves it
+    // landed. Only from an empty composer: text already there cannot be told from the new paste.
+    let composerProof = false
+    let draftRead: Promise<void> | null = null
+    let draftMatchedAt: number | null = null
+    let draftSettleTimer: NodeJS.Timeout | null = null
+    const checkComposerDraft = (): void => {
+      if (!composerProof || prompt === undefined || !observedMarker || !ingested || draftRead) {
+        return
+      }
+      // The read waits for the screen model to catch up; typed text then excludes a dim suggestion.
+      draftRead = this.readCurrentTerminalWaitScreen(ptyId)
+        .then((screen) => {
+          if (!composerProof) {
+            return
+          }
+          const typed = screen ? this.readCaughtUpComposerTypedText(ptyId) : null
+          if (!isCompleteAgentPromptDraft(typed, prompt)) {
+            draftMatchedAt = null
+            return
+          }
+          draftMatchedAt ??= Date.now()
+          const settleLeftMs = draftMatchedAt + AGENT_PROMPT_RENDER_DRAFT_SETTLE_MS - Date.now()
+          if (settleLeftMs <= 0) {
+            finish('draft')
+          } else if (!draftSettleTimer) {
+            draftSettleTimer = setTimeout(() => {
+              draftSettleTimer = null
+              checkComposerDraft()
+            }, settleLeftMs)
+          }
+        })
+        .catch(() => undefined)
+        .finally(() => {
+          draftRead = null
+        })
     }
     const armIngestTimer = (): void => {
       if (ingested || ingestTimer) {
@@ -90,6 +141,7 @@ export abstract class OrcaRuntimeWithCreateAgentPromptRenderGate extends OrcaRun
           ingested = true
           if (observedMarker) {
             armQuietTimer()
+            checkComposerDraft()
           }
         },
         Math.max(0, ingestDeadlineAt - Date.now())
@@ -109,25 +161,31 @@ export abstract class OrcaRuntimeWithCreateAgentPromptRenderGate extends OrcaRun
         armHardTimer()
       }
       armQuietTimer()
+      checkComposerDraft()
     })
     return {
       arm: () => {
         armed = true
+        composerProof = prompt !== undefined && this.readCaughtUpComposerTypedText(ptyId) === ''
         markerCarry = ''
         armIngestTimer()
         armHardTimer()
       },
-      wait: async () => {
-        if (settled) {
-          return
-        }
-        await rendered
-      },
+      wait: () => (settled ? Promise.resolve(settled) : rendered),
       dispose: () => {
+        composerProof = false
         unsubscribe()
         clearGateTimers()
       }
     }
+  }
+
+  /** The user's text in a composer the screen model has fully caught up on; null when unknown. */
+  private readCaughtUpComposerTypedText(ptyId: string): string | null {
+    const state = this.readWholeScreenModel(ptyId)
+    return state && state.outputSequence === this.getPtyOutputSequence(ptyId)
+      ? readTerminalComposerTypedText(state.emulator.getCursorLineContext())
+      : null
   }
 
   waitForTerminal(
@@ -137,8 +195,28 @@ export abstract class OrcaRuntimeWithCreateAgentPromptRenderGate extends OrcaRun
       timeoutMs?: number
       signal?: AbortSignal
       launchReadiness?: boolean
+      acceptsMidTurnInput?: boolean
     }
   ): Promise<RuntimeTerminalWait> {
+    // Switch point: a saved pane main holds with no terminal yet starts first (once, shared).
+    const starting = ORCA_LAYOUT_OWNER_IS_MAIN
+      ? this.startRestoredHandlePane(handle, options ?? {})
+      : null
+    if (starting) {
+      const startedAt = Date.now()
+      return starting.then(async (target) => {
+        // The start spent part of the caller's deadline.
+        const timeoutMs = options?.timeoutMs
+        const left = timeoutMs && timeoutMs > 0 ? timeoutMs - (Date.now() - startedAt) : timeoutMs
+        if (timeoutMs && timeoutMs > 0 && left !== undefined && left <= 0) {
+          throw new Error('timeout')
+        }
+        return {
+          ...(await this.terminalWait.wait(target, { ...options, timeoutMs: left })),
+          handle
+        }
+      })
+    }
     return this.terminalWait.wait(handle, options)
   }
 }

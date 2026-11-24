@@ -4,6 +4,8 @@ import type {
   ClaudeUsageLocationBreakdown,
   ClaudeUsageSession
 } from './types'
+import { addLongContext } from './claude-billable-tokens'
+import { longContextTurnTokens } from './claude-model-pricing'
 
 export function mergeClaudeSessions(
   target: Map<string, ClaudeUsageSession>,
@@ -43,6 +45,7 @@ export function mergeClaudeSessions(
         existingLocation.cacheReadTokens += location.cacheReadTokens
         existingLocation.cacheWriteTokens += location.cacheWriteTokens
         existingLocation.cacheWrite1hTokens += location.cacheWrite1hTokens
+        addLongContext(existingLocation, location.longContext)
       } else {
         existing.locationBreakdown.push({ ...location })
       }
@@ -68,6 +71,7 @@ export function mergeClaudeDailyAggregates(
     existing.cacheReadTokens += aggregate.cacheReadTokens
     existing.cacheWriteTokens += aggregate.cacheWriteTokens
     existing.cacheWrite1hTokens += aggregate.cacheWrite1hTokens
+    addLongContext(existing, aggregate.longContext)
   }
 }
 
@@ -122,6 +126,7 @@ export function aggregateClaudeUsage(turns: ClaudeUsageAttributedTurn[]): {
     }
 
     const session = sessionsById.get(turn.sessionId)!
+    const longContext = longContextTurnTokens(turn.model, turn)
     if (turn.timestamp < session.firstTimestamp) {
       session.firstTimestamp = turn.timestamp
     }
@@ -147,6 +152,7 @@ export function aggregateClaudeUsage(turns: ClaudeUsageAttributedTurn[]): {
       location.cacheReadTokens += turn.cacheReadTokens
       location.cacheWriteTokens += turn.cacheWriteTokens
       location.cacheWrite1hTokens += turn.cacheWrite1hTokens
+      addLongContext(location, longContext)
     } else {
       session.locationBreakdown.push({
         locationKey: turn.projectKey,
@@ -158,7 +164,8 @@ export function aggregateClaudeUsage(turns: ClaudeUsageAttributedTurn[]): {
         outputTokens: turn.outputTokens,
         cacheReadTokens: turn.cacheReadTokens,
         cacheWriteTokens: turn.cacheWriteTokens,
-        cacheWrite1hTokens: turn.cacheWrite1hTokens
+        cacheWrite1hTokens: turn.cacheWrite1hTokens,
+        ...(longContext && { longContext })
       })
     }
 
@@ -174,6 +181,7 @@ export function aggregateClaudeUsage(turns: ClaudeUsageAttributedTurn[]): {
       existingDaily.cacheReadTokens += turn.cacheReadTokens
       existingDaily.cacheWriteTokens += turn.cacheWriteTokens
       existingDaily.cacheWrite1hTokens += turn.cacheWrite1hTokens
+      addLongContext(existingDaily, longContext)
     } else {
       dailyByKey.set(dailyKey, {
         day: turn.day,
@@ -188,7 +196,8 @@ export function aggregateClaudeUsage(turns: ClaudeUsageAttributedTurn[]): {
         outputTokens: turn.outputTokens,
         cacheReadTokens: turn.cacheReadTokens,
         cacheWriteTokens: turn.cacheWriteTokens,
-        cacheWrite1hTokens: turn.cacheWrite1hTokens
+        cacheWrite1hTokens: turn.cacheWrite1hTokens,
+        ...(longContext && { longContext })
       })
     }
   }

@@ -15,11 +15,9 @@ export type AndroidAxNode = {
   children: AndroidAxNode[]
 }
 
-// Raw element produced by the parser before mapping to the typed Android node.
 type RawElement = { tag: string; attributes: Record<string, string>; children: RawElement[] }
 
-// Parses an Android bounds string "[left,top][right,bottom]" -> AndroidAxBounds,
-// or null when the format doesn't match. Coordinates may be negative (off-screen).
+// Bounds may be negative for off-screen elements.
 export function parseAndroidBounds(value: string): AndroidAxBounds | null {
   const match = value.trim().match(/^\[(-?\d+),(-?\d+)\]\[(-?\d+),(-?\d+)\]$/)
   if (!match) {
@@ -33,9 +31,7 @@ export function parseAndroidBounds(value: string): AndroidAxBounds | null {
   }
 }
 
-// Parses uiautomator dump XML. The returned node is the synthetic root that
-// holds the top-level <node> children of <hierarchy>. Throws
-// EmulatorError('emulator_error', ...) on unparseable input.
+/** Return a synthetic root containing the top-level Android nodes. */
 export function parseUiAutomatorXml(xml: string): AndroidAxNode {
   if (xml.trim() === '') {
     throw new EmulatorError('emulator_error', 'Cannot parse empty uiautomator XML')
@@ -52,8 +48,6 @@ export function parseUiAutomatorXml(xml: string): AndroidAxNode {
       `Failed to parse uiautomator XML: ${(error as Error).message}`
     )
   }
-  // A bare <node> root is treated as the single top-level node; otherwise take
-  // the <node> children of <hierarchy>.
   const topLevel =
     root.tag === 'node' ? [root] : root.children.filter((child) => child.tag === 'node')
   return { children: topLevel.map(mapNode) }
@@ -64,7 +58,6 @@ function mapNode(raw: RawElement): AndroidAxNode {
   const node: AndroidAxNode = {
     children: raw.children.filter((child) => child.tag === 'node').map(mapNode)
   }
-  // Omit string fields whose attribute is absent or empty (no empty-string fields).
   setString(node, 'className', attrs['class'])
   setString(node, 'text', attrs['text'])
   setString(node, 'resourceId', attrs['resource-id'])
@@ -102,8 +95,6 @@ function setBool(
   }
 }
 
-// Recursive-descent parser for the well-formed XML `uiautomator dump` emits.
-// All cursor state is local so the function is pure and reentrant.
 function parseDocument(xml: string): RawElement {
   let i = 0
   const n = xml.length
@@ -137,7 +128,6 @@ function parseDocument(xml: string): RawElement {
     return xml.slice(start, i)
   }
 
-  // Skip prolog: whitespace, <?...?> declarations, comments, and <!DOCTYPE ...>.
   const skipProlog = (): void => {
     for (;;) {
       skipWs()
@@ -217,7 +207,7 @@ function parseDocument(xml: string): RawElement {
         fail(`Unterminated element <${tag}>`)
       }
       if (xml[i] !== '<') {
-        // Text content between elements carries no node data; skip to next tag.
+        // Text between elements carries no accessibility-node data.
         while (i < n && xml[i] !== '<') {
           i++
         }
@@ -255,7 +245,6 @@ function parseDocument(xml: string): RawElement {
   return parseElement()
 }
 
-// Decodes the predefined XML entities plus numeric character references.
 function decodeEntities(value: string): string {
   if (!value.includes('&')) {
     return value

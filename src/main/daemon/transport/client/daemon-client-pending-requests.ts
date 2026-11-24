@@ -1,0 +1,66 @@
+import {
+  parseTerminalStartFailure,
+  terminalStartError
+} from '../../../../shared/terminal/pty/lifecycle/terminal-start-failure'
+import {
+  DaemonConnectionLostError,
+  DaemonProtocolError,
+  decodeDaemonResponseError
+} from '../../protocol/daemon-errors'
+import type { RpcResponse } from '../../protocol/daemon-rpc-contract'
+
+import { addNodePtyRecoveryHint } from '../../pty-subprocess/node-pty-error-hints'
+
+export type PendingRequest = {
+  resolve: (value: unknown) => void
+  reject: (reason: Error) => void
+  cancelDeadline: () => void
+}
+
+export class DaemonPendingRequests {
+  private requests = new Map<string, PendingRequest>()
+
+  get size(): number {
+    return this.requests.size
+  }
+
+  add(id: string, pending: PendingRequest): void {
+    this.requests.set(id, pending)
+  }
+
+  drop(id: string): void {
+    this.requests.delete(id)
+  }
+
+  settle(response: RpcResponse): void {
+    if (response.id) {
+      const pending = this.requests.get(response.id)
+      if (pending) {
+        this.requests.delete(response.id)
+        pending.cancelDeadline()
+        if (response.ok) {
+          pending.resolve(response.payload)
+        } else {
+          const failure = parseTerminalStartFailure(response.terminalStartFailure)
+          const decoded = failure
+            ? terminalStartError(response.error, failure.cause, failure.incarnationId)
+            : decodeDaemonResponseError(response.error)
+          pending.reject(
+            decoded instanceof DaemonProtocolError
+              ? new DaemonProtocolError(addNodePtyRecoveryHint(response.error))
+              : decoded
+          )
+        }
+      }
+    }
+  }
+
+  // Keep transport failures distinct from refusal replies: only the former may tear down shared sockets.
+  rejectAll(reason: string): void {
+    for (const [id, pending] of this.requests) {
+      pending.cancelDeadline()
+      pending.reject(new DaemonConnectionLostError(reason))
+      this.requests.delete(id)
+    }
+  }
+}

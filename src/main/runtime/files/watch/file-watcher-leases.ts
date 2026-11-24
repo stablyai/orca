@@ -1,5 +1,5 @@
-import { normalizeRuntimePathForComparison } from '../../../../shared/cross-platform-path'
-import { isWatcherProcessFailure } from '../../../ipc/parcel-watcher-process-failure'
+import { normalizeRuntimePathForComparison } from '../../../../shared/file-access/cross-platform-path'
+import { isWatcherProcessFailure } from '../../../ipc/filesystem/watcher-process/parcel-watcher-process-failure'
 
 const pendingRuntimeFileWatcherUnsubscribes = new Set<Promise<void>>()
 
@@ -36,7 +36,7 @@ function runtimeWatcherReleaseKey(
   connectionId: string | undefined,
   rootPath: string
 ): string {
-  // Why: identical absolute paths exist on local and multiple SSH hosts; scope teardown to the host that owns it.
+  // Identical paths exist on different hosts; release only the owning host's subscription.
   return JSON.stringify([runtimeId, connectionId ?? null, normalizeRuntimeWatcherRoot(rootPath)])
 }
 
@@ -111,7 +111,7 @@ export function registerRuntimeFileWatcherRelease(
           })
           physicalExitPromise = physicalExit
         } else {
-          // Why: a synchronous close failure retains the native owner so a later removal or unsubscribe can retry the same handle.
+          // Retain failed native closes so later cleanup can retry the same owner.
           releasePromise = null
         }
       }
@@ -127,7 +127,7 @@ export function registerRuntimeFileWatcherRelease(
       if (resumePromise) {
         return physicalExitPromise ? Promise.resolve() : resumePromise
       }
-      // Why: a timed-out child still owns native handles until physical exit; join that owner before starting a replacement.
+      // Timeouts leave native handles live; join physical exit before replacement.
       const resumesAfterPhysicalExit = physicalExitPromise !== null
       const attempt = Promise.resolve(physicalExitPromise ?? releasePromise)
         .then(async () => {
@@ -188,27 +188,4 @@ export function registerRuntimeFileWatcherRelease(
 
 export async function awaitRuntimeFileWatcherUnsubscribes(): Promise<void> {
   await Promise.allSettled(Array.from(pendingRuntimeFileWatcherUnsubscribes))
-}
-
-export function _getRuntimeFileWatcherReleaseCountForTests(): number {
-  const leases = new Set<RuntimeFileWatcherLease>()
-  for (const rootLeases of runtimeFileWatcherLeasesByOwnerAndRoot.values()) {
-    for (const lease of rootLeases) {
-      leases.add(lease)
-    }
-  }
-  return leases.size
-}
-
-export function _resetRuntimeFileWatcherLeasesForTests(): void {
-  const leases = new Set<RuntimeFileWatcherLease>()
-  for (const rootLeases of runtimeFileWatcherLeasesByOwnerAndRoot.values()) {
-    for (const lease of rootLeases) {
-      leases.add(lease)
-    }
-  }
-  for (const lease of leases) {
-    lease.forget()
-  }
-  runtimeFileWatcherLeasesByOwnerAndRoot.clear()
 }

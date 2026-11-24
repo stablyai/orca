@@ -1,8 +1,11 @@
-import type { KeybindingActionId } from '../../../../shared/keybindings'
+import type { KeybindingActionId } from '../../../../shared/keybindings/types'
 import { useAppStore } from '../../store'
-import type { TabSplitDirection } from '../../store/slices/tabs'
-import { resolveBrowserWorkspaceOwner } from '@/lib/browser-workspace-source-resolution'
-import { canMoveTabToNewPaneColumn, moveTabToNewPaneColumn } from './tab-move-to-pane-column'
+import type { TabSplitDirection } from '../../store/slices/tabs/tabs-slice-contract'
+import { resolveBrowserWorkspaceOwner } from '@/lib/browser/workspace/browser-workspace-source-resolution'
+import {
+  canMoveTabToNewPaneColumn,
+  moveTabToNewPaneColumn
+} from './pane-actions/tab-move-to-pane-column'
 
 export type TabPaneColumnTarget = {
   unifiedTabId: string

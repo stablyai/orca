@@ -1,14 +1,20 @@
 import { OrcaRuntimeWithWaitForLeafPtyId } from '../view/renderer-terminal-snapshot'
-import type { RuntimeTerminalFocus } from '../../../../shared/runtime-types'
+import type { RuntimeTerminalFocus } from '../../../../shared/terminal/runtime/runtime-terminal-contracts'
 import type {
   RuntimeTerminalReveal,
   TerminalPaneRevealTarget
-} from '../../../../shared/terminal-pane-reveal'
-import { parsePaneKey } from '../../../../shared/stable-pane-id'
-import { getLatestPtyTitle } from '../../runtime-worktree-status-projection'
-import { copySleepingAgentLaunchConfig } from '../../runtime-agent-launch-resolution'
+} from '../../../../shared/workspace-layout/terminal-surfaces/terminal-pane-reveal'
+import { parsePaneKey } from '../../../../shared/workspace-layout/stable-pane-id'
+import type { PtyPaneOf } from '../surface/pty-pane-query'
+import { getLatestPtyTitle } from '../../workspaces/process-listing/runtime-worktree-status-projection'
+import { copySleepingAgentLaunchConfig } from '../launch/runtime-agent-launch-resolution'
+import type { OrcaRuntimeWithBuildPtyTerminalSummary as PtyTerminalSummaryMethods } from '../query/pty-terminal-summary'
 
 export abstract class OrcaRuntimeWithFocusTerminal extends OrcaRuntimeWithWaitForLeafPtyId {
+  protected abstract getPtyManualTitle(
+    ...args: Parameters<PtyTerminalSummaryMethods['getPtyManualTitle']>
+  ): ReturnType<PtyTerminalSummaryMethods['getPtyManualTitle']>
+
   async focusTerminal(
     handle: string,
     options: { navigateHost?: boolean } = {}
@@ -21,7 +27,7 @@ export abstract class OrcaRuntimeWithFocusTerminal extends OrcaRuntimeWithWaitFo
       }
       return {
         handle,
-        tabId: live.pty.tabId ?? live.record.tabId,
+        tabId: this.paneOfPty(live.pty).tabId ?? live.record.tabId,
         worktreeId: live.pty.worktreeId,
         navigated: false
       }
@@ -45,7 +51,7 @@ export abstract class OrcaRuntimeWithFocusTerminal extends OrcaRuntimeWithWaitFo
       if (!navigateHost || !this.notifier?.revealTerminalSession) {
         return {
           handle,
-          tabId: pty.pty.tabId ?? pty.record.tabId,
+          tabId: this.paneOfPty(pty.pty).tabId ?? pty.record.tabId,
           worktreeId: pty.pty.worktreeId,
           navigated: false
         }
@@ -63,7 +69,7 @@ export abstract class OrcaRuntimeWithFocusTerminal extends OrcaRuntimeWithWaitFo
           if (!ctx.isCurrent()) {
             return {
               handle,
-              tabId: live.pty.tabId ?? live.record.tabId,
+              tabId: this.paneOfPty(live.pty).tabId ?? live.record.tabId,
               worktreeId: live.pty.worktreeId,
               navigated: false
             }
@@ -72,34 +78,37 @@ export abstract class OrcaRuntimeWithFocusTerminal extends OrcaRuntimeWithWaitFo
           if (!notifier?.revealTerminalSession) {
             return {
               handle,
-              tabId: live.pty.tabId ?? live.record.tabId,
+              tabId: this.paneOfPty(live.pty).tabId ?? live.record.tabId,
               worktreeId: live.pty.worktreeId,
               navigated: false
             }
           }
-          const parsedPaneKey = parsePaneKey(live.pty.paneKey ?? '')
+          const recorded = this.paneOfPty(live.pty)
+          const parsedPaneKey = parsePaneKey(recorded.paneKey ?? '')
           const revealed = await notifier.revealTerminalSession(live.pty.worktreeId, {
             ptyId: live.pty.ptyId,
-            title: getLatestPtyTitle(this.getPtyDisplayRecord(live.pty)),
+            title:
+              this.getPtyManualTitle(live.pty, false) ??
+              getLatestPtyTitle(this.getPtyDisplayRecord(live.pty)),
             ...(live.pty.launchConfig
               ? { launchConfig: copySleepingAgentLaunchConfig(live.pty.launchConfig) }
               : {}),
             ...(live.pty.launchToken ? { launchToken: live.pty.launchToken } : {}),
             ...(live.pty.launchAgent ? { launchAgent: live.pty.launchAgent } : {}),
-            ...(live.pty.tabId !== null ? { tabId: live.pty.tabId } : {}),
+            ...(recorded.tabId !== null ? { tabId: recorded.tabId } : {}),
             ...(parsedPaneKey ? { leafId: parsedPaneKey.leafId } : {})
           })
           if (!ctx.isCurrent() || this.notifier !== notifier) {
             return {
               handle,
-              tabId: revealed?.tabId ?? live.pty.tabId ?? live.record.tabId,
+              tabId: revealed?.tabId ?? this.paneOfPty(live.pty).tabId ?? live.record.tabId,
               worktreeId: live.pty.worktreeId,
               navigated: false
             }
           }
           return {
             handle,
-            tabId: revealed?.tabId ?? live.pty.tabId ?? live.record.tabId,
+            tabId: revealed?.tabId ?? this.paneOfPty(live.pty).tabId ?? live.record.tabId,
             worktreeId: live.pty.worktreeId,
             navigated: true
           }
@@ -176,17 +185,36 @@ export abstract class OrcaRuntimeWithFocusTerminal extends OrcaRuntimeWithWaitFo
   }
 
   protected getPtyIdsForExplicitTabClose(worktreeId: string, tabId: string): string[] {
-    const ptyIds = new Set<string>()
+    return [...(this.getPtyIdsByTabForExplicitClose(worktreeId, tabId).get(tabId) ?? [])]
+  }
+
+  /** One pass over PTYs and leaves; `onlyTabId` keeps a single-tab close from grouping the rest. */
+  protected getPtyIdsByTabForExplicitClose(
+    worktreeId: string,
+    onlyTabId?: string
+  ): Map<string, Set<string>> {
+    const byTab = new Map<string, Set<string>>()
+    const add = (tabId: string | null | undefined, ptyId: string): void => {
+      if (!tabId || (onlyTabId !== undefined && tabId !== onlyTabId)) {
+        return
+      }
+      const ptyIds = byTab.get(tabId) ?? new Set<string>()
+      ptyIds.add(ptyId)
+      byTab.set(tabId, ptyIds)
+    }
+    // One lookup captured on first use: per-PTY `paneOfPty` would scan every main leaf for each PTY.
+    let paneOf: PtyPaneOf | undefined
     for (const pty of this.ptysById.values()) {
-      if (pty.connected && pty.worktreeId === worktreeId && pty.tabId === tabId) {
-        ptyIds.add(pty.ptyId)
+      if (pty.connected && pty.worktreeId === worktreeId) {
+        paneOf ??= this.captureTerminalPaneReader()
+        add(paneOf(pty).tabId, pty.ptyId)
       }
     }
     for (const leaf of this.leaves.values()) {
-      if (leaf.worktreeId === worktreeId && leaf.tabId === tabId && leaf.ptyId) {
-        ptyIds.add(leaf.ptyId)
+      if (leaf.worktreeId === worktreeId && leaf.ptyId) {
+        add(leaf.tabId, leaf.ptyId)
       }
     }
-    return [...ptyIds]
+    return byTab
   }
 }

@@ -1,32 +1,44 @@
-import { PushAuthAdmission } from './push-auth-admission.js'
+import { PushAuthAdmission } from './http/push-auth-admission.js'
 import { createAdaptorServer } from '@hono/node-server'
+import { PUSH_LIMITS } from '@orca-cloud/push-contract/push-limits'
+import { PushDeviceRegistrationRequestSchema } from '@orca-cloud/push-contract/device-registration-messages'
 import {
-  PUSH_LIMITS,
-  PushDeviceRegistrationRequestSchema,
   PushHostChallengeRequestSchema,
-  PushHostSessionRequestSchema,
-  PushSendRequestSchema,
-  type PushSendResult
-} from '@orca-cloud/push-contract'
+  PushHostSessionRequestSchema
+} from '@orca-cloud/push-contract/host-auth-messages'
+import { PushSendRequestSchema, type PushSendResult } from '@orca-cloud/push-contract/send-messages'
 import { Hono, type MiddlewareHandler } from 'hono'
 import { bodyLimit } from 'hono/body-limit'
-import { ApnsClient } from './apns-client.js'
-import { createApnsHttp2Transport, type ApnsTransport } from './apns-http2-transport.js'
-import { clientIpRateLimit, ClientIpRateLimiter, readClientIp } from './client-ip-rate-limit.js'
-import { DurablePushStore } from './durable-push-store.js'
-import { DurablePushWorker } from './durable-push-worker.js'
+import { ApnsClient } from './providers/apns/apns-client.js'
+import {
+  createApnsHttp2Transport,
+  type ApnsTransport
+} from './providers/apns/apns-http2-transport.js'
+import {
+  clientIpRateLimit,
+  ClientIpRateLimiter,
+  readClientIp
+} from './http/client-ip-rate-limit.js'
+import { DurablePushStore } from './delivery/durable-push-store.js'
+import { DurablePushWorker } from './delivery/durable-push-worker.js'
 import type { PushConfig } from './config.js'
-import { PushDeviceRegistryStore } from './device-registry-store.js'
-import { createFcmAccessTokenProvider } from './fcm-access-token.js'
-import { createFcmFetchTransport, FcmClient, type FcmTransport } from './fcm-client.js'
-import { PushHostChallengeStore } from './host-challenge-store.js'
-import { PushHostSessionStore } from './host-session-store.js'
-import type { PushDatabase } from './push-database.js'
-import { PushDispatcher } from './push-dispatcher.js'
+import { PushDeviceRegistryStore } from './devices/device-registry-store.js'
+import { PushBadgeCountStore } from './devices/push-badge-count-store.js'
+import { sendHostBadge, sendRemovalBadge } from './delivery/push-badge-send.js'
+import { createFcmAccessTokenProvider } from './providers/fcm/fcm-access-token.js'
+import {
+  createFcmFetchTransport,
+  FcmClient,
+  type FcmTransport
+} from './providers/fcm/fcm-client.js'
+import { PushHostChallengeStore } from './host-auth/host-challenge-store.js'
+import { PushHostSessionStore } from './host-auth/host-session-store.js'
+import type { CloudDatabase as PushDatabase } from '@orca-cloud/cloud-database/cloud-database'
+import { PushDispatcher } from './delivery/push-dispatcher.js'
 import { PushObservability } from './push-observability.js'
-import { reserveRequestConnection } from './push-background-database.js'
-import { createPushReadiness } from './push-readiness.js'
-import { PushRequestDrain } from './push-request-drain.js'
+import { reserveRequestConnection } from './database/push-background-database.js'
+import { createPushReadiness } from './http/push-readiness.js'
+import { PushRequestDrain } from './http/push-request-drain.js'
 
 export type PushServerOptions = {
   now?: () => number
@@ -44,8 +56,7 @@ export function readBearer(header: string | undefined): string | null {
   return scheme?.toLowerCase() === 'bearer' && token.length > 0 ? token : null
 }
 
-// Hono's body limit, not a Content-Length check: a chunked body declares no
-// length, and req.json() would buffer all of it before any handler ran.
+// Enforce Hono’s body limit: Content-Length misses chunked bodies that req.json would fully buffer.
 const limitBody = bodyLimit({
   maxSize: PUSH_LIMITS.maxHttpBodyBytes,
   onError: (context) => context.json({ error: 'request_too_large' }, 413)
@@ -61,6 +72,7 @@ export function createPushServer(
   const challenges = new PushHostChallengeStore(database, config.publicUrl, now)
   const sessions = new PushHostSessionStore(database, now)
   const devices = new PushDeviceRegistryStore(database, now)
+  const badges = new PushBadgeCountStore(database, now)
   const deliveryStore = new DurablePushStore(
     database,
     now,
@@ -69,6 +81,7 @@ export function createPushServer(
   const apnsTransport = options.apnsTransport ?? (config.apns ? createApnsHttp2Transport() : null)
   const dispatcher = new PushDispatcher({
     devices,
+    badges,
     ...(config.apns && apnsTransport
       ? {
           apns: new ApnsClient({
@@ -90,6 +103,7 @@ export function createPushServer(
         status === 'sent' ? 'delivery_sent' : status === 'dead' ? 'delivery_dead' : 'delivery_error'
       )
   })
+  const badgeDeps = { devices, badges, deliveryStore, dispatcher, now }
   const worker = new DurablePushWorker(deliveryStore, dispatcher, {
     now,
     onRetry: () => observability.record('delivery_retry')
@@ -119,8 +133,7 @@ export function createPushServer(
   const app = new Hono<{ Variables: PushVariables }>()
   const requestDrain = new PushRequestDrain()
   app.use('*', requestDrain.middleware)
-  // Hono's default handler prints the whole error, and a pg error carries the
-  // offending row in `detail`. Only the error's name may reach the logs.
+  // Default Hono logging exposes pg row detail; log only error names.
   app.onError((error, context) => {
     observability.record('request_error')
     console.warn(
@@ -235,12 +248,17 @@ export function createPushServer(
   })
 
   app.delete('/v1/devices/:registrationId', async (context) => {
-    const deleted = await devices.deleteOwned(
-      context.get('hostFingerprint'),
-      context.req.param('registrationId')
-    )
+    const hostFingerprint = context.get('hostFingerprint')
+    const registrationId = context.req.param('registrationId')
+    const device = (await devices.findOwned(hostFingerprint, [registrationId])).get(registrationId)
+    const share = device ? await badges.shareOf(registrationId) : 0
+    const deleted = await devices.deleteOwned(hostFingerprint, registrationId)
     if (!deleted) return context.json({ error: 'not_found' }, 404)
     observability.record('device_deleted')
+    if (device) {
+      // After the response: the desktop's unregister need not wait on the phone's new total.
+      void sendRemovalBadge(badgeDeps, device, share).catch(() => undefined)
+    }
     return context.body(null, 204)
   })
 
@@ -252,6 +270,13 @@ export function createPushServer(
     const body = PushSendRequestSchema.safeParse(await context.req.json().catch(() => null))
     if (!body.success) return context.json({ error: 'invalid_request' }, 400)
     const hostFingerprint = context.get('hostFingerprint')
+    const { notification } = body.data
+    if (notification.badge !== undefined) {
+      const { registrationIds } = body.data
+      return context.json({
+        results: await sendHostBadge(badgeDeps, hostFingerprint, registrationIds, notification, notification.badge)
+      })
+    }
     const owned = await devices.findOwned(hostFingerprint, body.data.registrationIds)
     const results: PushSendResult[] = []
     for (const registrationId of body.data.registrationIds) {
@@ -279,6 +304,7 @@ export function createPushServer(
       observability.record('send_queued')
       results.push({ registrationId, status: 'queued' })
     }
+    if (results.some((result) => result.status === 'queued')) worker.wake()
     return context.json({ results })
   })
 

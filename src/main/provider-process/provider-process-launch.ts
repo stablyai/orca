@@ -9,7 +9,6 @@ export type ProviderProcessLaunch = {
   envToDelete?: readonly string[]
 }
 
-/** The one env rule for provider children: inherit, overlay, then strip (so a delete beats an overlay). */
 export function resolveProviderChildEnv(
   launch: Pick<ProviderProcessLaunch, 'env' | 'envToDelete'>,
   baseEnv: NodeJS.ProcessEnv
