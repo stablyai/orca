@@ -29,7 +29,12 @@ class HostSocket {
  * The owner's real host E2EE server behind a stand-in relay cell. The cell accepts any relay
  * credential, then pipes frames both ways; the host answers every request with what it read.
  */
-function relayToHost(registry: DeviceRegistry, relayDeviceId: string) {
+function relayToHost(
+  registry: DeviceRegistry,
+  relayDeviceId: string,
+  // Resolves when the cell may accept the relay credential.
+  cellAccepts: Promise<void> = Promise.resolve()
+) {
   let handler: Parameters<MobileSocketTransport['onMessage']>[0] | null = null
   const transport: MobileSocketTransport = {
     onMessage: (next) => {
@@ -75,7 +80,9 @@ function relayToHost(registry: DeviceRegistry, relayDeviceId: string) {
           if (!relayAuthenticated) {
             relayAuthenticated = true
             const hello = { type: 'relay-hello', ok: true, credentialKind: 'invite' }
-            setImmediate(() => events.onMessage(JSON.stringify({ ...hello, leaseExpiresAt: 1 })))
+            void cellAccepts.then(() =>
+              events.onMessage(JSON.stringify({ ...hello, leaseExpiresAt: 1 }))
+            )
             return
           }
           // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the wiring only sends, closes and reads OPEN/readyState/bufferedAmount.
@@ -132,5 +139,31 @@ describe('relay client authentication against the host', () => {
     })
     expect(token.requests[0]).toMatchObject({ deviceToken: phone.token })
     phoneClient.close()
+  })
+  it('never sends a request that timed out before the host authenticated', async () => {
+    const registry = new DeviceRegistry(mkdtempSync(join(tmpdir(), 'orca-relay-client-')))
+    const phone = registry.addDevice('Phone', 'mobile')
+    let accept!: () => void
+    const cell = relayToHost(registry, phone.deviceId, new Promise((resolve) => (accept = resolve)))
+    let authenticated!: () => void
+    const signedIn = new Promise<void>((resolve) => (authenticated = resolve))
+    const client = connectRelayRpcClient(
+      {
+        platform: cell.platform,
+        endpoint: { cellUrl: 'https://cell.example', relayHostId: RELAY_HOST_ID },
+        credential: 'invite',
+        expectedCredentialKind: 'invite',
+        authCredential: { kind: 'token', deviceToken: phone.token! },
+        desktopPublicKeyB64,
+        requestTimeoutMs: 10
+      },
+      { onAuthenticated: () => authenticated() }
+    )
+    await expect(client.sendRequest('status.get')).rejects.toThrow('relay RPC timed out')
+    accept()
+    await signedIn
+    await new Promise((resolve) => setImmediate(resolve))
+    expect(cell.requests).toEqual([])
+    client.close()
   })
 })

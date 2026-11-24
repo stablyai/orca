@@ -8,6 +8,8 @@ type PendingRequest = {
   resolve: (response: RpcResponse) => void
   reject: (error: Error) => void
   timer: ReturnType<typeof setTimeout>
+  // Held until the host authenticates; a timeout drops it with the entry.
+  unsentFrame: string | null
 }
 
 export type RelayRpcClient = {
@@ -44,14 +46,7 @@ export function connectRelayRpcClient(
   let requestCounter = 0
   let closed = false
   let intentionallyClosed = false
-  let resolveAuthenticated!: () => void
-  let rejectAuthenticated!: (error: Error) => void
-  const authenticatedPromise = new Promise<void>((resolve, reject) => {
-    resolveAuthenticated = resolve
-    rejectAuthenticated = reject
-  })
-  // Why: requests settle through their own pending entries; an unwatched failure is not unhandled.
-  authenticatedPromise.catch(() => {})
+  let authenticated = false
 
   const link = new RelayE2eeLink({
     platform: args.platform,
@@ -73,8 +68,13 @@ export function connectRelayRpcClient(
       events.onHello?.(hello)
     },
     onAuthenticated: () => {
+      authenticated = true
       events.onAuthenticated?.()
-      resolveAuthenticated()
+      for (const [id, request] of pending) {
+        if (request.unsentFrame !== null) {
+          send(id, request, request.unsentFrame)
+        }
+      }
     },
     onText: (plaintext) => {
       let value: unknown
@@ -97,13 +97,21 @@ export function connectRelayRpcClient(
     onError: fail
   })
 
+  function send(id: string, request: PendingRequest, frame: string): void {
+    request.unsentFrame = null
+    if (!link.sendText(frame)) {
+      clearTimeout(request.timer)
+      pending.delete(id)
+      request.reject(new Error('relay E2EE channel not ready'))
+    }
+  }
+
   function fail(error: Error): void {
     if (closed) {
       return
     }
     closed = true
     link.close()
-    rejectAuthenticated(error)
     for (const request of pending.values()) {
       clearTimeout(request.timer)
       request.reject(error)
@@ -134,18 +142,11 @@ export function connectRelayRpcClient(
           pending.delete(id)
           reject(new Error(`relay RPC timed out: ${method}`))
         }, requestTimeoutMs)
-        pending.set(id, { resolve, reject, timer })
-        // A failed link rejects every pending request itself.
-        void authenticatedPromise.then(
-          () => {
-            if (pending.has(id) && !link.sendText(frame)) {
-              clearTimeout(timer)
-              pending.delete(id)
-              reject(new Error('relay E2EE channel not ready'))
-            }
-          },
-          () => {}
-        )
+        const request: PendingRequest = { resolve, reject, timer, unsentFrame: frame }
+        pending.set(id, request)
+        if (authenticated) {
+          send(id, request, frame)
+        }
       })
     },
     close: () => {
