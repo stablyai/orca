@@ -24,6 +24,7 @@ import {
   releasedHistorySlots,
   retireGitHistorySlot,
   subscribeGitHistory,
+  takeRetirementCandidates,
   presentGitHistoryEntry,
   pageKeyFor,
   type GitHistoryFence,
@@ -127,24 +128,22 @@ export function useSourceControlGitHistory({
     }
   }, [consumesSlot, slotKey])
 
-  // A catalog change (or mount) sweeps every retained request; a workspace switch checks only the
-  // slots released since the last sweep, so it never walks the whole request map.
+  // Only the ordinary panel's catalog says which worktrees exist. A folder section's lists just its
+  // owner, so a section never sweeps and never retires another worktree's page or pending read.
+  // A catalog change sweeps every retained request; otherwise only the slots released since the last sweep.
   // Declared after registration so a consumer whose worktree left the catalog has already released its slot.
-  const sweptCatalogRef = useRef<ReadonlyMap<string, unknown> | null>(null)
+  const ownsWorktreeCatalog = scope === null
   useEffect(() => {
-    const candidates =
-      sweptCatalogRef.current === worktreeMap
-        ? [...releasedHistorySlots]
-        : [...latestGitHistoryRequest.keys()]
-    sweptCatalogRef.current = worktreeMap
-    releasedHistorySlots.clear()
-    for (const key of candidates) {
+    if (!ownsWorktreeCatalog) {
+      return
+    }
+    for (const key of takeRetirementCandidates(worktreeMap)) {
       const request = latestGitHistoryRequest.get(key)
       if (request && !worktreeMap.has(request.worktreeId) && !mountedHistoryConsumers.has(key)) {
         retireGitHistorySlot(key)
       }
     }
-  }, [slotKey, worktreeMap])
+  }, [ownsWorktreeCatalog, slotKey, worktreeMap])
 
   const refreshGitHistory = useCallback(
     async (options?: HistoryRefresh): Promise<void> => {

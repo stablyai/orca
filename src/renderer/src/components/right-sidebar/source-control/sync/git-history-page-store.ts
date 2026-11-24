@@ -48,6 +48,19 @@ export const latestGitHistoryRequest = new Map<string, { worktreeId: string; id:
 export const mountedHistoryConsumers = new Map<string, number>()
 /** Slots no consumer has held since the last sweep; a workspace switch checks only these. */
 export const releasedHistorySlots = new Set<string>()
+// The worktree catalog the last sweep checked, shared so a remount with the same catalog does not sweep again.
+let sweptWorktreeCatalog: ReadonlyMap<string, unknown> | null = null
+
+/** Slots that may have lost their worktree: every request after a catalog change, else only released slots. */
+export function takeRetirementCandidates(catalog: ReadonlyMap<string, unknown>): string[] {
+  const candidates =
+    sweptWorktreeCatalog === catalog
+      ? [...releasedHistorySlots]
+      : [...latestGitHistoryRequest.keys()]
+  sweptWorktreeCatalog = catalog
+  releasedHistorySlots.clear()
+  return candidates
+}
 let gitHistoryRequestSeq = 0
 
 export function nextGitHistoryRequestId(): number {
