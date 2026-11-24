@@ -17,9 +17,11 @@ it('stops running plugin Git on quit and refuses to start more', async () => {
   // A 30 s child: without the abort this test exceeds its default timeout.
   const running = runPluginGit(['-c', 'alias.hang=!touch started && sleep 30', 'hang'], cwd)
   running.catch(() => undefined)
-  await vi.waitFor(() => access(join(cwd, 'started')), { timeout: 4000 })
-
-  abortPluginGitForShutdown()
+  try {
+    await vi.waitFor(() => access(join(cwd, 'started')), { timeout: 4000 })
+  } finally {
+    abortPluginGitForShutdown()
+  }
 
   await expect(running).rejects.toThrow()
   await expect(runPluginGit(['--version'], cwd)).rejects.toThrow()
