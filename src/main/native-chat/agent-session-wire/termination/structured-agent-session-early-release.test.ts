@@ -74,6 +74,20 @@ describe('releasing a finished background run', () => {
     expect(agentRunning()).toBe(true)
   })
 
+  it('says what it saw: busy while the provider holds a send, released once it stops', async () => {
+    await finishedRun()
+    rig.adapter.holdsDispatch.mockReturnValue(true)
+
+    expect(await rig.host.releaseIdleSession(SESSION, true)).toBe('busy')
+    expect(agentRunning()).toBe(true)
+
+    rig.adapter.holdsDispatch.mockReturnValue(false)
+    await eventually(async () => {
+      expect(await rig.host.releaseIdleSession(SESSION, true)).toBe('released')
+      expect(agentRunning()).toBe(false)
+    })
+  })
+
   it('keeps the agent while a question waits for an answer', async () => {
     await finishedRun()
     rig.adapter.acquire.mock.calls.at(-1)![0].events!.appendItem(

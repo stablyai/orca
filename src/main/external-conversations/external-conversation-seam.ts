@@ -33,6 +33,7 @@ import {
 } from './external-conversation-host'
 import {
   allLinks,
+  chatLinkSource,
   findLink,
   findConversationChat,
   type LinkedConversation
@@ -243,6 +244,9 @@ export class ExternalConversationSeam {
   get receipts(): DeliveryReceipts {
     return this.deps.receipts
   }
+
+  /** The outside thread one of these chat sessions is linked to (a keyed lookup by pane), if any. */
+  chatLinkSource = (sessionIds: readonly string[]) => chatLinkSource(this.deps.store, sessionIds)
 
   /** The chat a conversation is linked to on this host, if any. */
   linkedChat(key: ConversationKey, botId?: string) {

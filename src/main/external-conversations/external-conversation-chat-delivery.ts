@@ -194,31 +194,35 @@ export class ChatDeliveries {
         sent = this.admit(chat.sessionId, delivery.deliveryId)
       }
     }
-    const outcome = await deliverToChat((await chats?.ensure()) ?? null, chatLink(key, chat), {
-      ...delivery,
-      admitted
-    }).finally(() => {
+    // Held until the link is published, not only through the send: an end that checks between the
+    // send's acceptance and its link would take the chat and refuse the link of a turn it took.
+    try {
+      const outcome = await deliverToChat((await chats?.ensure()) ?? null, chatLink(key, chat), {
+        ...delivery,
+        admitted
+      })
+      if (!current()) {
+        return outcome
+      }
+      // Only a committed send's turn is the delivery's. A bot's title reads what its asker wrote.
+      if (outcome.outcome === 'refused') {
+        const left = this.unstarted.get(chat.sessionId)?.filter((entry) => entry !== sent)
+        if (left?.length) {
+          this.unstarted.set(chat.sessionId, left)
+        } else {
+          this.unstarted.delete(chat.sessionId)
+        }
+      } else {
+        // Marked first, so a turn the link joins is the delivery's.
+        this.delivered.add(chat.sessionId)
+        this.link(key, chat, delivery.asker?.text ?? delivery.text, delivery.asker)
+      }
+      return outcome
+    } finally {
       sending.delete(attempt)
       if (this.sending.get(chat.sessionId) === sending && sending.size === 0) {
         this.sending.delete(chat.sessionId)
       }
-    })
-    if (!current()) {
-      return outcome
     }
-    // Only a committed send's turn is the delivery's. A bot's title reads what its asker wrote.
-    if (outcome.outcome === 'refused') {
-      const left = this.unstarted.get(chat.sessionId)?.filter((entry) => entry !== sent)
-      if (left?.length) {
-        this.unstarted.set(chat.sessionId, left)
-      } else {
-        this.unstarted.delete(chat.sessionId)
-      }
-    } else {
-      // Marked first, so a turn the link joins is the delivery's.
-      this.delivered.add(chat.sessionId)
-      this.link(key, chat, delivery.asker?.text ?? delivery.text, delivery.asker)
-    }
-    return outcome
   }
 }

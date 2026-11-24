@@ -48,7 +48,7 @@ export type StructuredSessionTabPublicationInput = {
 export async function admitStructuredSessionTabPublication(
   input: Pick<
     StructuredSessionTabPublicationInput,
-    'sessionId' | 'tabId' | 'navigation' | 'workspaceAuthority'
+    'sessionId' | 'tabId' | 'navigation' | 'workspaceAuthority' | 'activate'
   >,
   restore: () => Promise<void>
 ): Promise<{ tabId: string; current: string | null; eligible: () => boolean }> {
@@ -61,7 +61,10 @@ export async function admitStructuredSessionTabPublication(
     if (!host) {
       throw new Error('Chat tab inventory is unavailable')
     }
+    // A publish that activates nothing emits nothing for a listed tab, so its name must not change.
+    const keepShowing = input.activate ? {} : { keepShowing: true }
     await host.setSessionTabVisibility(input.sessionId, true, newReopenedChatTabId(), {
+      ...keepShowing,
       writerFence: input.workspaceAuthority?.writerFence,
       check: () => input.workspaceAuthority?.check(),
       capture: (winner) => {
@@ -80,6 +83,7 @@ export async function admitStructuredSessionTabPublication(
     const openingHost = host
     await openingHost
       .setSessionTabVisibility(input.sessionId, true, input.tabId, {
+        ...(input.activate ? {} : { keepShowing: true }),
         check: () => input.workspaceAuthority?.check(),
         capture: (winner) => {
           if (winner) {
