@@ -20,6 +20,7 @@ import {
   keepSavedPictureDescription
 } from './generated-avatar-descriptions'
 import { pictureMascotIndex, type BotPictureCustom, type BotPictureValue } from './BotPicturePicker'
+import type { GenerateFaceDraft } from './AvatarGenerateFace'
 
 // Opens on a random mascot, or the one a proposal chose, so no bot is created without a picture.
 function firstMascot(chosen: string | undefined): BotPictureValue {
@@ -37,6 +38,7 @@ export type NewBotPicture = {
   /** For BotPicturePicker. */
   value: BotPictureValue
   custom: BotPictureCustom | null
+  descriptionDraft: GenerateFaceDraft
   onChange: (value: BotPictureValue) => void
   onUpload: (png: string, after: number) => void
   /** A picture taken by paste, drop or upload: it replaces the custom one in place, or lands beside the
@@ -89,6 +91,7 @@ export function useNewBotPicture(
     initialUpload ? { kind: 'custom' } : firstMascot(mascot)
   )
   const [picked, setColor] = useState<string | null>(look?.color ?? null)
+  const [description, setDescription] = useState('')
   const color = host.colors ? picked : null
   const [pickedOutfit, setOutfit] = useState<string | null>(look?.outfit ?? null)
   const outfit = host.outfits ? wornBotOutfit(pickedOutfit) : null
@@ -109,6 +112,7 @@ export function useNewBotPicture(
   return {
     value,
     custom,
+    descriptionDraft: { value: description, onChange: setDescription },
     onChange: setValue,
     onUpload: (png, after) => {
       setUpload({ png, after })
@@ -146,6 +150,7 @@ export function useNewBotPicture(
           )
         : bot,
     reset: () => {
+      setDescription('')
       setColor(look?.color ?? null)
       setOutfit(look?.outfit ?? null)
       setValue(initialUpload ? { kind: 'custom' } : firstMascot(mascot))

@@ -1901,7 +1901,11 @@
       "projectHostSetupOptions": {
         "locationNotSet": "プロジェクトの場所が設定されていません",
         "hostLocalGitProject": "このプロジェクトには一致する Git リモートがありません",
-        "hostLocalFolderProject": "フォルダープロジェクトは他のホストにリンクできません"
+        "hostLocalFolderProject": "フォルダープロジェクトは他のホストにリンクできません",
+        "pendingNotSetUp": "このホストで追跡中のプロジェクトですが、セットアップされていません",
+        "pendingSettingUp": "プロジェクトをセットアップしています",
+        "pendingError": "プロジェクトのセットアップに対応が必要です",
+        "pendingUnsupported": "このホストではプロジェクトがサポートされていません"
       },
       "updateCheckClickOptions": {
         "releaseHint": "{{rcKey}}+クリックで最新のリリース候補版（RC）を、{{perfKey}}+クリックで最新のパフォーマンステスト用ビルドを確認します。",
@@ -6024,11 +6028,6 @@
           "changesLost_other": "未コミットの変更 {{count}} 件が失われます",
           "uncountedChangesLost": "未コミットの変更が失われます",
           "moreLoadedPaths": "ほかに読み込まれたパスが{{value0}}件"
-        },
-        "DeleteWorktreeLineageNotice": {
-          "a940f3c96e": "子ワークスペースは削除されます",
-          "alsoDeletesChildren_other": "このワークスペースを削除すると、{{count}} 件の子ワークスペースも削除されます。",
-          "moreChildren_other": "ほか {{count}} 件"
         },
         "ImportedWorktreesVisibilityLine": {
           "b7a87dc32f": "worktreeを表示",
@@ -21899,6 +21898,12 @@
       "caveat": "これにより、リモートホスト上のこのページの最後のアドレスにある新規ページが開きます。サインインとその他の一時的なページの状態は異なる場合があり、フォーム送信からのページは空白で開きます。",
       "failed": "リモートホストでこのページを開けませんでした。接続を確認して再試行してください。"
     },
+    "deviceMove": {
+      "toThisComputer": "このコンピューターで開く",
+      "toHost": "{{host}} で開く",
+      "tooltip": "このアドレスを反対側の新しいタブで開き、このタブを閉じます。再度サインインが必要になる場合があります。",
+      "failedToThisComputer": "このコンピューターでこのページを開けませんでした。"
+    },
     "sshRoute": {
       "preparingTitle": "SSH ホスト経由で接続する",
       "errorTitle": "SSH ブラウザルーティングが利用できない",
@@ -23476,8 +23481,6 @@
     "setupTerminalTitle": "セットアップ",
     "delete": {
       "detachingChildren": "子ワークスペースを切り離し中…",
-      "childrenPreservedTitle": "子ワークスペースは保持されます",
-      "childrenCannotBeKeptTitle": "子ワークスペースを保持できません",
       "childrenPreservedDescription": "直下の子ワークスペースはトップレベルのワークスペースになります。それらのファイル、ターミナル、さらにその下の子ワークスペースは保持されます。",
       "detachChildren": "切り離して子ワークスペースを保持",
       "nestedChildrenCannotBeKept": "このワークスペース内にある子ワークスペースのフォルダーは、保持する前にこのワークスペースの外へ移動する必要があります。",
@@ -24624,6 +24627,7 @@
     "waitForImageUploads": "画像のアップロードが完了するまで待ってから、もう一度 [PR を作成] を実行してください。"
   },
   "agentPicker": {
+    "refreshModels": "モデルを更新",
     "catalogUnsupportedLaunch": "このホストでは{{agent}}のモデルを利用できません。現在の選択はそのまま適用されます。",
     "catalogEmpty": "{{agent}}に利用可能なモデルはありません。",
     "search": "検索、例: Opus 5.5…",

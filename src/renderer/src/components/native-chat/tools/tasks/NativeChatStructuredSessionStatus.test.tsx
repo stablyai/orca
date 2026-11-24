@@ -27,7 +27,8 @@ vi.mock('./dock/worker-dock-feed', () => ({
       available: true,
       rows: new Map(rows.map((row) => [row.id, row])),
       snapshot: { identities: rows },
-      loadWindow: async () => {}
+      loadWindow: async () => {},
+      readLosses: () => 0
     }
   }
 }))

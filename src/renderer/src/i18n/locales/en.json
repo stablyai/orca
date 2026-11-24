@@ -392,7 +392,12 @@
     },
     "serverPage": {
       "download": {
-        "started": "Downloading to {{path}} on {{host}}"
+        "started": "Downloading to {{path}} on {{host}}",
+        "saveHere": "Save to this computer",
+        "copying": "Downloading {{filename}} to this computer…",
+        "copied": "Saved to {{path}}",
+        "copyFailed": "Couldn't save {{filename}} to this computer.",
+        "showInFolder": "Show in Folder"
       },
       "print": {
         "failed": "Couldn't save the page as a PDF"
@@ -432,6 +437,12 @@
       "pending": "Reopening…",
       "caveat": "This opens a new page on the remote host at this page’s last address. Signed-in and other transient page state may differ, and a page that came from a form submission opens blank.",
       "failed": "Couldn't open this page on the remote host. Check the connection and try again."
+    },
+    "deviceMove": {
+      "toThisComputer": "Open on this computer",
+      "toHost": "Open on {{host}}",
+      "tooltip": "Opens this address in a new tab on the other side and closes this one. You may need to sign in again.",
+      "failedToThisComputer": "Couldn't open this page on this computer."
     },
     "sshRoute": {
       "preparingTitle": "Connecting through the SSH host",
@@ -2701,8 +2712,24 @@
           "tab": {
             "open": {
               "urlFailed": "Unable to open URL.",
-              "searchFailed": "Unable to search with {{value0}}."
+              "searchFailed": "Unable to search with {{value0}}.",
+              "failure": {
+                "stageError": "Error · {{value0}} · {{value1}}",
+                "hostNotFound": "Workspace's computer wasn't found.",
+                "linkBlocked": "Link open was blocked.",
+                "notWebLink": "Not a web link."
+              }
             }
+          }
+        },
+        "ports": {
+          "serverPortForward": {
+            "updateServer": "Couldn't forward port {{port}} from {{host}}. Update Orca on {{host}} and try again.",
+            "failed": "Couldn't forward port {{port}} from {{host}}. Check the connection and try again.",
+            "forwarded": "Forwarded port {{port}} from {{host}}",
+            "opened": "Opened {{address}} in your default browser.",
+            "otherMachine": "Couldn't forward port {{port}}: this workspace doesn't run on {{host}} itself.",
+            "useSshPorts": "Couldn't forward port {{port}} from {{host}}. Forward it in Ports, then try again."
           }
         }
       },
@@ -3015,7 +3042,11 @@
       "projectHostSetupOptions": {
         "locationNotSet": "Project location not set",
         "hostLocalGitProject": "No matched Git remote for this project",
-        "hostLocalFolderProject": "Folder projects can't link to other hosts"
+        "hostLocalFolderProject": "Folder projects can't link to other hosts",
+        "pendingNotSetUp": "Project tracked on this host but not set up",
+        "pendingSettingUp": "Project setup is in progress",
+        "pendingError": "Project setup needs attention",
+        "pendingUnsupported": "Project is unsupported on this host"
       },
       "updateCheckClickOptions": {
         "releaseHint": "{{rcKey}}+click checks the latest RC; {{perfKey}}+click checks the latest perf build.",
@@ -5235,6 +5266,7 @@
             "downloadAlreadyLocal": "'{{value0}}' is already on this computer.",
             "downloadFolderUnsupported": "Folder '{{value0}}' can't be downloaded from this host.",
             "downloadOpenFailed": "Failed to download '{{value0}}'.",
+            "openLinkInThisGroupRefused": "Couldn't open the link in this group",
             "openInThisGroupRefused": "Couldn't open {{value0}} in this group",
             "openInNewTab": "Open in new tab"
           },
@@ -7322,13 +7354,6 @@
           "changesLost_other": "{{count}} uncommitted changes will be lost",
           "uncountedChangesLost": "Uncommitted changes will be lost",
           "moreLoadedPaths": "and {{value0}} more loaded paths"
-        },
-        "DeleteWorktreeLineageNotice": {
-          "a940f3c96e": "Child workspaces will be deleted",
-          "alsoDeletesChildren_one": "Deleting this workspace also deletes {{count}} child workspace.",
-          "alsoDeletesChildren_other": "Deleting this workspace also deletes {{count}} child workspaces.",
-          "moreChildren_one": "+{{count}} more",
-          "moreChildren_other": "+{{count}} more"
         },
         "ImportedWorktreesVisibilityLine": {
           "b7a87dc32f": "Show worktree",
@@ -21850,7 +21875,8 @@
           "handedOff": "Handed off to",
           "task": "Task from",
           "update": "Update from",
-          "message": "Message from"
+          "message": "Message from",
+          "notSentYet": "not sent yet"
         },
         "kind": {
           "started": "Started",
@@ -22177,7 +22203,8 @@
         "oneComment": "1 comment",
         "comments": "{{count}} comments",
         "unavailable": "Preview unavailable.",
-        "retry": "Retry"
+        "retry": "Retry",
+        "retryKeyHint": "Preview unavailable. Press {{key}} to retry."
       },
       "webPeek": {
         "unavailable": "No preview for this page."
@@ -22777,6 +22804,8 @@
         "remoteOwner": "Stop or clear this from the computer it runs on",
         "restore": "Show in dock again",
         "unavailable": "Worker status unavailable",
+        "alreadyStopped": "Already stopped",
+        "cantStop": "Can't stop now",
         "empty": "0 workers",
         "clearAllLabel_one": "Clear failed worker",
         "clearAllLabel_other": "Clear all {{count}} failed workers",
@@ -24492,6 +24521,9 @@
     "scanTooLarge": "Quick Open scan too large ({{reason}})."
   },
   "checksPanel": {
+    "commentsUnavailable": "Could not load comments.",
+    "linkedReviewUnavailable": "Could not load the linked pull request.",
+    "loadingReviewDetails": "Loading review details…",
     "unlinked": {
       "title": "Pull request unlinked",
       "description": "PR #{{number}} is hidden for this workspace. Link it again to restore checks and review details.",
@@ -25476,8 +25508,6 @@
     "setupTerminalTitle": "Setup",
     "delete": {
       "detachingChildren": "Detaching children...",
-      "childrenPreservedTitle": "Child workspaces will be kept",
-      "childrenCannotBeKeptTitle": "Child workspaces cannot be kept",
       "childrenPreservedDescription": "Direct children will become top-level workspaces. Their files, terminals, and nested children will be kept.",
       "detachChildren": "Detach and keep child workspaces",
       "nestedChildrenCannotBeKept": "Child workspace folders inside this workspace must be moved outside it before they can be kept.",
@@ -25509,7 +25539,11 @@
       "singleTitle": "Delete {{name}}?",
       "forceExplanation": "Git couldn’t delete it because it has changes. Force delete removes them anyway.",
       "errorDetails": "Details",
-      "changesIncomplete": "Some changes couldn’t be fully checked."
+      "changesIncomplete": "Some changes couldn’t be fully checked.",
+      "parentWorkspace": "Parent workspace",
+      "workspacesToReview": "Workspaces to review",
+      "workspaceDetails": "Selected workspace details",
+      "workspaceKept": "Will be kept"
     }
   },
   "projectBoard": {
@@ -26829,6 +26863,7 @@
     "waitForImageUploads": "Wait for images to finish uploading, then retry Create PR."
   },
   "agentPicker": {
+    "refreshModels": "Refresh models",
     "catalogUnsupportedLaunch": "{{agent}} models are unavailable on this host. Your current choices still apply.",
     "catalogLoadFailed": "Could not load {{agent}} models.",
     "catalogLoading": "Loading models…",
@@ -28532,23 +28567,12 @@
       "newThreadHint": "starts fresh",
       "newThreadTab": "New thread",
       "items": {
-        "thisGroup": "This group",
-        "thread": "Thread",
-        "all": "All their work",
         "orNames": "{{names}} or {{last}}",
         "emptyBotsNeedsYou": "Nothing from {{names}} needs you",
         "emptyBots": "No items from {{names}}",
         "emptyTitle": "No items from this group yet",
-        "emptyBody": "When {{names}} take something on in this group, it shows up here.",
-        "showAll": "Show all their work",
         "filterNamed": "Filter items, filtered by {{filter}}",
-        "filterBot": "Bot",
-        "outside_one": "{{count}} more outside this group",
-        "outside_other": "{{count}} more outside this group",
-        "outsideRoom_one": "{{count}} more outside this room",
-        "outsideRoom_other": "{{count}} more outside this room",
-        "outsideThread_one": "{{count}} more outside this thread",
-        "outsideThread_other": "{{count}} more outside this thread"
+        "filterBot": "Bot"
       },
       "panel": {
         "membersMore": "Members: {{names}} and {{count}} more",
@@ -30188,7 +30212,6 @@
         "title": "title"
       },
       "filter": {
-        "chat": "Chat",
         "clearAll": "Clear filters",
         "label": "Filter items",
         "needsYou": "Needs you only",
@@ -30898,7 +30921,8 @@
     "navigationLabel": "App navigation",
     "toolsLabel": "App tools",
     "workspaces": "Workspaces",
-    "more": "More"
+    "more": "More",
+    "pageRegion": "Page"
   },
   "chats": {
     "delete": {
