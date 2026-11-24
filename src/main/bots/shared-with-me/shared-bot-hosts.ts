@@ -2,7 +2,7 @@
 // the window as hosts of their own. A message to a host that is away is held in Orca Cloud.
 import {
   SHARED_BOT_HOST_ERRORS,
-  type SharedBotHostView
+  type SharedBotHostsState
 } from '../../../shared/bots/shared-bot-hosts'
 import type { RelayClientPlatform } from '../../../shared/remote-runtime/relay/client/relay-client-platform'
 import type { RuntimeRpcResponse } from '../../../shared/remote-runtime/rpc/runtime-rpc-envelope'
@@ -22,7 +22,7 @@ import {
   sharedBotOffline
 } from './shared-bot-held-sends'
 import { nextPairingStep, pinnedSharedBotOffer, type MineShare } from './shared-bot-pairing'
-import type { SharedBotsCloud } from './shared-bots-cloud'
+import { sharesSupported, type SharedBotsCloud } from './shared-bots-cloud'
 import type { SharedBotHomes } from './shared-bot-home'
 
 // New shares and invites resolve within this; pairing and held messages are read sooner.
@@ -33,7 +33,7 @@ export type SharedBotHostsDeps = {
   userDataPath: string
   cloud: () => SharedBotsCloud | null
   platform: RelayClientPlatform
-  publish: (views: SharedBotHostView[]) => void
+  publish: (state: SharedBotHostsState) => void
   homes: SharedBotHomes
   now?: () => number
 }
@@ -49,6 +49,8 @@ export class SharedBotHosts {
   private timer: ReturnType<typeof setTimeout> | null = null
   private readonly now: () => number
   private loaded: Promise<void> | null = null
+  // Whether the account's Orca Cloud takes shares, from its last answer on the shares route.
+  private sharing: boolean | null = null
 
   constructor(private readonly deps: SharedBotHostsDeps) {
     this.store = new SharedBotHostStore(deps.userDataPath)
@@ -89,7 +91,11 @@ export class SharedBotHosts {
     return this.store.flushed()
   }
 
-  views(): SharedBotHostView[] {
+  state(): SharedBotHostsState {
+    return { hosts: this.views(), sharing: this.sharing }
+  }
+
+  views(): SharedBotHostsState['hosts'] {
     return this.store.list().flatMap((entry) =>
       this.shares === null || this.shares.has(entry.shareId)
         ? [
@@ -139,6 +145,7 @@ export class SharedBotHosts {
     const cloud = this.deps.cloud()
     const read = this.held.beginRead()
     const answer = cloud ? await cloud.mine() : null
+    this.sharing = sharesSupported(answer, this.sharing)
     // Signed out: the account's shares, keys and links go with it.
     const shares = answer?.ok ? answer.value.shares : answer?.error === 'signed_out' ? [] : null
     const gone = shares ? this.applyMine(shares, read) : []
@@ -321,6 +328,6 @@ export class SharedBotHosts {
   }
 
   private publish(): void {
-    this.deps.publish(this.views())
+    this.deps.publish(this.state())
   }
 }

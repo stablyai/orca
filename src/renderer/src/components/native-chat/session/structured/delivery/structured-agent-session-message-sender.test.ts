@@ -56,7 +56,7 @@ describe('structured agent session message sender', () => {
     vi.stubGlobal('window', {
       api: {
         sharedBotHosts: {
-          list: async () => [{ environmentId: 'shared-env' }],
+          list: async () => ({ hosts: [{ environmentId: 'shared-env' }], sharing: true }),
           onChanged: () => () => {}
         }
       }

@@ -1,7 +1,10 @@
 // The agents shared with this Orca account, as main publishes them. Each is a host the app reaches by
 // its environment id through main's relay link rather than a paired server's connection.
 import { useSyncExternalStore } from 'react'
-import type { SharedBotHostView } from '../../../../../shared/bots/shared-bot-hosts'
+import type {
+  SharedBotHostsState,
+  SharedBotHostView
+} from '../../../../../shared/bots/shared-bot-hosts'
 import { BOT_SHARE_RPC_METHODS } from '../../../../../shared/bots/bot-share-rpc-methods'
 import type { RuntimeRpcFailure } from '../../../../../shared/remote-runtime/rpc/runtime-rpc-envelope'
 import type { RuntimeClientTarget } from '../../../../../shared/remote-runtime/host-catalog/runtime-client-target'
@@ -11,13 +14,18 @@ import {
 } from '../../../../../shared/execution-host/execution-host'
 import { setSharedBotHostLookup } from '../../../../../shared/bots/bot-home-host'
 
-let views: readonly SharedBotHostView[] = []
+const NO_HOSTS: readonly SharedBotHostView[] = []
+let views: readonly SharedBotHostView[] = NO_HOSTS
+// Whether this account's Orca Cloud takes shares; null until it answers either way.
+let sharing: boolean | null = null
 // Until main first answers, the list says nothing about which shares are gone.
 let hydrated = false
 const listeners = new Set<() => void>()
 
-function setViews(next: readonly SharedBotHostView[]): void {
-  views = next
+function setState(next: SharedBotHostsState): void {
+  // A cloud that doesn't take shares has none to show, whatever was kept from before.
+  views = next.sharing === false ? NO_HOSTS : next.hosts
+  sharing = next.sharing
   hydrated = true
   for (const listener of listeners) {
     listener()
@@ -26,15 +34,16 @@ function setViews(next: readonly SharedBotHostView[]): void {
 
 /** Follows main's list; a paired web window has no account of its own, so it never has any. */
 export function installSharedBotHostCatalog(): () => void {
-  const stop = window.api.sharedBotHosts.onChanged(setViews)
-  void window.api.sharedBotHosts.list().then(setViews, () => {})
+  const stop = window.api.sharedBotHosts.onChanged(setState)
+  void window.api.sharedBotHosts.list().then(setState, () => {})
   const stopLookup = setSharedBotHostLookup(
     (environmentId) => sharedBotHostFor({ kind: 'environment', environmentId }) !== null
   )
   return () => {
     stop()
     stopLookup()
-    views = []
+    views = NO_HOSTS
+    sharing = null
     hydrated = false
     for (const listener of listeners) {
       listener()
@@ -92,6 +101,16 @@ export function sharedBotHostRefusal(method: string): RuntimeRpcFailure | null {
         // Read by its code, as from a host that lacks the method; never shown.
         error: { code: 'method_not_found', message: method }
       }
+}
+
+/** The one gate on every sharing entry: true only once this account's Orca Cloud answered its shares
+ *  route, so an older cloud (or none, or a paired web window) never offers sharing that would fail. */
+export function readTeamSharingOffered(): boolean {
+  return sharing === true
+}
+
+export function useTeamSharingOffered(): boolean {
+  return useSyncExternalStore(subscribeSharedBotHosts, readTeamSharingOffered)
 }
 
 export function useSharedBotHosts(): readonly SharedBotHostView[] {

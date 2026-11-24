@@ -4,7 +4,10 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { useAppStore } from '@/store/index'
 import type { AppState } from '@/store/types'
 import type { Bot } from '../../../../../shared/bot-types'
-import type { SharedBotHostView } from '../../../../../shared/bots/shared-bot-hosts'
+import type {
+  SharedBotHostsState,
+  SharedBotHostView
+} from '../../../../../shared/bots/shared-bot-hosts'
 import type { FolderWorkspace } from '../../../../../shared/folder-workspaces/folder-workspace-types'
 import { toRuntimeExecutionHostId } from '../../../../../shared/execution-host/execution-host'
 import { folderWorkspaceKey } from '../../../../../shared/workspace/identity/workspace-scope'
@@ -79,7 +82,7 @@ function resetStore(): void {
 }
 
 let stopCatalog: () => void = () => {}
-let changed: (views: SharedBotHostView[]) => void = () => {}
+let changed: (state: SharedBotHostsState) => void = () => {}
 // The owner's host as the share reaches it: the window's own share gate refuses what isn't allowed
 // before it is sent; a new chat started while the host is away is a placeholder there.
 const call = vi.fn(
@@ -99,8 +102,8 @@ beforeEach(async () => {
   vi.stubGlobal('api', {
     ...window.api,
     sharedBotHosts: {
-      list: async () => [SHARED],
-      onChanged: (listener: (views: SharedBotHostView[]) => void) => {
+      list: async () => ({ hosts: [SHARED], sharing: true }),
+      onChanged: (listener: (state: SharedBotHostsState) => void) => {
         changed = listener
         return () => {}
       },
@@ -166,14 +169,14 @@ describe('a shared agent’s chats on this computer', () => {
 
   it('opens a new chat started while the owner’s computer is away, and moves it to the chat the host starts once back', async () => {
     const [bot] = readHostBots(HOST)
-    changed([{ ...SHARED, link: 'offline' }])
+    changed({ hosts: [{ ...SHARED, link: 'offline' }], sharing: true })
     const placeholder = await startBotSession(bot, { agent: bot.agent })
     await activateAiVaultStructuredSession({
       structuredSession: { workspaceId: HOME_KEY, sessionId: placeholder }
     })
     expect(tabs().map((tab) => tab.entityId)).toEqual(['shared-new-1'])
     const stopSwap = installSharedBotNewChatSwap()
-    changed([SHARED])
+    changed({ hosts: [SHARED], sharing: true })
     await vi.waitFor(() =>
       expect(tabs()).toEqual([
         expect.objectContaining({ entityId: 'chat-real', executionHostId: HOST })

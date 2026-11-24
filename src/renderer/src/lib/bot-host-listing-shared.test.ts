@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { Bot } from '../../../shared/bot-types'
-import type { SharedBotHostView } from '../../../shared/bots/shared-bot-hosts'
+import type { SharedBotHostsState, SharedBotHostView } from '../../../shared/bots/shared-bot-hosts'
 import {
   LOCAL_EXECUTION_HOST_ID,
   toRuntimeExecutionHostId
@@ -54,8 +54,8 @@ const store = {
   subscribe: () => () => {}
 }
 
-let answerList: (views: SharedBotHostView[]) => void = () => {}
-let changed: (views: SharedBotHostView[]) => void = () => {}
+let answerList: (state: SharedBotHostsState) => void = () => {}
+let changed: (state: SharedBotHostsState) => void = () => {}
 const stops: (() => void)[] = []
 
 beforeEach(() => {
@@ -86,10 +86,10 @@ beforeEach(() => {
     api: {
       sharedBotHosts: {
         list: () =>
-          new Promise<SharedBotHostView[]>((resolve) => {
+          new Promise<SharedBotHostsState>((resolve) => {
             answerList = resolve
           }),
-        onChanged: (listener: (views: SharedBotHostView[]) => void) => {
+        onChanged: (listener: (state: SharedBotHostsState) => void) => {
           changed = listener
           return () => {}
         }
@@ -108,7 +108,7 @@ describe('a shared agent’s listing in the window', () => {
     stops.push(installSharedBotHostCatalog())
     stops.push(installBotHostListing(store, false))
     expect(localStorage.getItem(KEY)).not.toBeNull()
-    answerList([SHARED])
+    answerList({ hosts: [SHARED], sharing: true })
     await Promise.resolve()
     await Promise.resolve()
     expect(localStorage.getItem(KEY)).not.toBeNull()
@@ -118,14 +118,14 @@ describe('a shared agent’s listing in the window', () => {
   it('pairs its agent with the home this computer keeps for it, once main has made it', async () => {
     localStorage.removeItem(KEY)
     stops.push(installSharedBotHostCatalog())
-    answerList([SHARED])
+    answerList({ hosts: [SHARED], sharing: true })
     await Promise.resolve()
     stops.push(installBotHostListing(store, false))
     publishBots([ivy], { threadReplies: false, webhooks: undefined }, HOST)
     // The owner's home id names nothing here.
     const home = { id: 'local-ivy-home', connectionId: null, executionHostId: null }
     expect(getBotHomes(readHostBots(HOST), [home])).toEqual([])
-    changed([{ ...SHARED, homeWorkspaceId: home.id }])
+    changed({ hosts: [{ ...SHARED, homeWorkspaceId: home.id }], sharing: true })
     const [bot] = readHostBots(HOST)
     expect(bot).toMatchObject({ hostId: HOST, folderWorkspaceId: home.id })
     expect(getBotHomes(readHostBots(HOST), [home]).map((entry) => entry.home.id)).toEqual([home.id])

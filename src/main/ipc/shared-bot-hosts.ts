@@ -2,7 +2,7 @@
 // hosts. No runtime RPC reaches this, so no paired client can act as this account's share.
 import { BrowserWindow, ipcMain } from 'electron'
 import { z } from 'zod'
-import type { SharedBotHostView } from '../../shared/bots/shared-bot-hosts'
+import type { SharedBotHostsState } from '../../shared/bots/shared-bot-hosts'
 import { NODE_RELAY_CLIENT_PLATFORM } from '../../shared/remote-runtime/relay/client/node/node-relay-client-platform'
 import type { ConnectorCloud } from '../connector-cloud/connector-cloud'
 import { SharedBotHosts } from '../bots/shared-with-me/shared-bot-hosts'
@@ -31,10 +31,10 @@ export function registerSharedBotHostsHandlers(args: {
       const cloud = args.cloud()
       return cloud ? sharedBotsCloud(cloud) : null
     },
-    publish: (views: SharedBotHostView[]) => {
+    publish: (state: SharedBotHostsState) => {
       for (const window of BrowserWindow.getAllWindows()) {
         if (!window.webContents.isDestroyed()) {
-          window.webContents.send('sharedBotHosts:changed', views)
+          window.webContents.send('sharedBotHosts:changed', state)
         }
       }
     }
@@ -57,7 +57,7 @@ export function registerSharedBotHostsHandlers(args: {
   // Answered once the kept shares are loaded, so the window never reads an empty list as "none".
   ipcMain.handle('sharedBotHosts:list', async () => {
     await hosts.ready()
-    return hosts.views()
+    return hosts.state()
   })
   ipcMain.handle('sharedBotHosts:call', (_event, raw: { params?: unknown }) => {
     const { environmentId, method } = CallArgs.parse(raw)

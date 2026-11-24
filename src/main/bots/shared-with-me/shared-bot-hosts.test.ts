@@ -140,7 +140,7 @@ function hosts(
     userDataPath: dir,
     cloud: () => cloud,
     platform: NODE_RELAY_CLIENT_PLATFORM,
-    publish: (views) => published.push(views.map((view) => view.shareId)),
+    publish: (state) => published.push(state.hosts.map((view) => view.shareId)),
     homes: memory.homes,
     now
   })
@@ -450,7 +450,7 @@ describe('a shared agent’s home on this computer', () => {
         hold: async () => ({ ok: true, value: { status: 'held' } })
       }),
       platform: NODE_RELAY_CLIENT_PLATFORM,
-      publish: (next) => views.push(next),
+      publish: (next) => views.push(next.hosts),
       homes: memory.homes,
       now: () => 0
     })

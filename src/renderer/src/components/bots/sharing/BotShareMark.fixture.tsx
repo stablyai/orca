@@ -122,7 +122,7 @@ export const sharedBotRows = defineFixture({
     // Host reads stay pending: the rows and cards render from the listing alone.
     const pending = () => new Promise<never>(() => {})
     Reflect.set(window.api, 'sharedBotHosts', {
-      list: () => Promise.resolve([SHARED]),
+      list: () => Promise.resolve({ hosts: [SHARED], sharing: true }),
       onChanged: () => () => {},
       call: pending
     })

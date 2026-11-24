@@ -1,10 +1,17 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type { SharedBotHostView } from '../../../../../shared/bots/shared-bot-hosts'
+import type {
+  SharedBotHostsState,
+  SharedBotHostView
+} from '../../../../../shared/bots/shared-bot-hosts'
 import { callRuntimeRpc } from '../../rpc/calls/runtime-rpc-call'
 import { subscribeRuntimeRpc } from '../../rpc/subscriptions/runtime-rpc-subscribe'
 import { ensureRuntimeEnvironmentCompatible } from '../../rpc/compatibility/runtime-compatibility-probe'
 import { runtimeEnvironmentSupportsCapability } from '../../rpc/compatibility/runtime-capability-proof'
-import { installSharedBotHostCatalog } from './shared-bot-host-catalog'
+import {
+  installSharedBotHostCatalog,
+  readSharedBotHosts,
+  readTeamSharingOffered
+} from './shared-bot-host-catalog'
 
 const HOST: SharedBotHostView = {
   environmentId: 'shared-env',
@@ -23,6 +30,7 @@ let uninstall: () => void
 const call = vi.fn()
 const subscribe = vi.fn()
 const environmentCall = vi.fn()
+let changed: (state: SharedBotHostsState) => void = () => {}
 
 beforeEach(async () => {
   call.mockReset().mockResolvedValue({ id: 'x', ok: true, result: {}, _meta: { runtimeId: 'r' } })
@@ -31,8 +39,11 @@ beforeEach(async () => {
   vi.stubGlobal('window', {
     api: {
       sharedBotHosts: {
-        list: async () => [HOST],
-        onChanged: () => () => {},
+        list: async () => ({ hosts: [HOST], sharing: true }),
+        onChanged: (listener: typeof changed) => {
+          changed = listener
+          return () => {}
+        },
         call,
         subscribe
       },
@@ -98,5 +109,19 @@ describe('what a teammate’s Orca asks a shared agent’s host', () => {
     ).rejects.toMatchObject({ code: 'method_not_found' })
     expect(environmentCall).not.toHaveBeenCalled()
     expect(call).not.toHaveBeenCalled()
+  })
+})
+
+describe('sharing offered only where the account’s Orca Cloud takes shares', () => {
+  it('offers it on a shares answer, and hides every shared agent and offer on an older cloud', () => {
+    expect(readTeamSharingOffered()).toBe(true)
+    expect(readSharedBotHosts()).toEqual([HOST])
+    changed({ hosts: [HOST], sharing: false })
+    expect(readTeamSharingOffered()).toBe(false)
+    expect(readSharedBotHosts()).toEqual([])
+    // Before the cloud first answers, kept shares still list, but nothing new is offered.
+    changed({ hosts: [HOST], sharing: null })
+    expect(readTeamSharingOffered()).toBe(false)
+    expect(readSharedBotHosts()).toEqual([HOST])
   })
 })

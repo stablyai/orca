@@ -25,3 +25,15 @@ export function sharedBotsCloud(cloud: Pick<ConnectorCloud, 'call'>) {
 }
 
 export type SharedBotsCloud = ReturnType<typeof sharedBotsCloud>
+
+/** A shares answer says the cloud takes shares; a 404 (an older cloud), a sign-out or no cloud says it
+ *  doesn't; anything else (no answer, a 5xx) leaves what was known. */
+export function sharesSupported(
+  answer: Awaited<ReturnType<SharedBotsCloud['mine']>> | null,
+  known: boolean | null
+): boolean | null {
+  if (!answer || answer.ok) {
+    return answer !== null
+  }
+  return answer.error === 'signed_out' || answer.status === 404 ? false : known
+}
