@@ -7,7 +7,8 @@ const RETAINED_POSITION_LIMIT = 4096
  * only when its items moved, once per list.
  */
 export class ReplacedListLookup<T> {
-  private readonly indexedLists = new WeakSet<readonly T[]>()
+  // Replaced whenever positions are dropped: an indexed list's missing key must mean absent.
+  private indexedLists = new WeakSet<readonly T[]>()
   private readonly positionByKey = new Map<string, number>()
 
   constructor(private readonly keyOf: (item: T) => string) {}
@@ -18,7 +19,7 @@ export class ReplacedListLookup<T> {
       return known
     }
     if (this.positionByKey.size + list.length > RETAINED_POSITION_LIMIT) {
-      this.positionByKey.clear()
+      this.clear()
     }
     list.forEach((item, position) => this.positionByKey.set(this.keyOf(item), position))
     this.indexedLists.add(list)
@@ -27,6 +28,7 @@ export class ReplacedListLookup<T> {
 
   clear(): void {
     this.positionByKey.clear()
+    this.indexedLists = new WeakSet()
   }
 
   private at(list: readonly T[], key: string): T | undefined {
