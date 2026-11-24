@@ -185,7 +185,7 @@ export async function acquireClaudeSession({
     })
     launched = launch
     // Granted from this final launch before the connection can deliver a request.
-    const permissions = claudeLaunchPermissions({ sessionId, prompts, emit }, launch)
+    const permissions = claudeLaunchPermissions({ sessionId, prompts, emit, initProof }, launch)
     naming?.launch(launch)
     attempt.launch = launch
     observedLeafUuid = launch.resumeLeafUuid

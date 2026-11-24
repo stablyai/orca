@@ -3,6 +3,7 @@ import type { ClaudePromptRegistry } from './claude-prompt-registry'
 import type { ClaudeStructuredSessionEvent } from '../lifecycle/claude-structured-session-event'
 import type { ClaudeStreamJsonConnectionHandlers } from '../../claude-stream-json-connection'
 import type { ClaudeStructuredLaunch } from '../launch/claude-structured-launch-resolution'
+import type { ClaudeInitProof } from '../startup/claude-structured-init-proof'
 import { claudeLaunchSkipsPermissions } from '../launch/claude-structured-spawn-options'
 import { createClaudeFullAccessPolicy } from './claude-full-access-policy'
 import {
@@ -16,6 +17,8 @@ export type ClaudePermissionCallbackDeps = {
   emit: (event: ClaudeStructuredSessionEvent) => void
   /** Read once per request: whether this process's Full access applied where the request arrived. */
   fullAccessAt: (requestId: string) => boolean
+  /** Which session this process must prove it runs; no request is allowed or asked before that proof. */
+  initProof: Pick<ClaudeInitProof, 'proven' | 'promise'>
 }
 
 /** Questions and plan approval need the user's answer, not a permission; Full access never answers them. */
@@ -29,12 +32,32 @@ function needsUserAnswer(toolName: string, options: Parameters<CanUseTool>[2]): 
   )
 }
 
-function denySafeResult(toolUseId: string | undefined): PermissionResult {
+function denyResult(message: string, toolUseId: string | undefined): PermissionResult {
   return {
     behavior: 'deny',
-    message: 'Orca could not decode this permission request.',
+    message,
     ...(toolUseId ? { toolUseID: toolUseId } : {})
   }
+}
+
+/** The SDK answers requests from its reader while identity frames queue behind Orca's consumer, so a request
+ *  can outrun the proof ahead of it on the wire. It waits for that proof; a refusal or a failed child denies it. */
+function waitForClaudeSessionProof(
+  promise: Promise<unknown>,
+  options: Parameters<CanUseTool>[2],
+  answer: () => PermissionResult | Promise<PermissionResult | null>
+): Promise<PermissionResult | null> {
+  return promise.then(
+    // A request cancelled while it waited is never answered or asked.
+    () => (options.signal.aborted ? null : answer()),
+    () =>
+      options.signal.aborted
+        ? null
+        : denyResult(
+            'Orca could not confirm which Claude session made this request.',
+            options.toolUseID
+          )
+  )
 }
 
 /** Malformed requests are denied; provider cancellation forgets the callback without replying. */
@@ -42,7 +65,7 @@ export function buildClaudePermissionCallbacks(deps: ClaudePermissionCallbackDep
   canUseTool: CanUseTool
   onUserDialog: OnUserDialog
 } {
-  const canUseTool: CanUseTool = (toolName, input, options) => {
+  const answer: CanUseTool = (toolName, input, options) => {
     const fullAccess = deps.fullAccessAt(options.requestId)
     // Full access approves Claude's own asks too (ask rules, ask-answering hooks, built-in safety checks).
     if (fullAccess && toolName && !needsUserAnswer(toolName, options)) {
@@ -71,7 +94,7 @@ export function buildClaudePermissionCallbacks(deps: ClaudePermissionCallbackDep
         ...(options.agentID ? { agentId: options.agentID } : {})
       })
       if (!prompt) {
-        settle(denySafeResult(options.toolUseID))
+        settle(denyResult('Orca could not decode this permission request.', options.toolUseID))
         return
       }
       cancel = (): void => {
@@ -94,6 +117,13 @@ export function buildClaudePermissionCallbacks(deps: ClaudePermissionCallbackDep
       deps.emit({ type: 'prompt', sessionId: deps.sessionId, prompt })
     })
   }
+
+  const canUseTool: CanUseTool = (toolName, input, options) =>
+    deps.initProof.proven()
+      ? answer(toolName, input, options)
+      : waitForClaudeSessionProof(deps.initProof.promise, options, () =>
+          answer(toolName, input, options)
+        )
 
   const onUserDialog: OnUserDialog = () => Promise.resolve({ behavior: 'cancelled' })
 
