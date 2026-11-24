@@ -25,10 +25,10 @@ describe('resolveSidebarSlotLayout', () => {
     })
   })
 
-  it('falls back to the left default for an unknown saved position', () => {
+  it('falls back to the left default when a saved profile has no position', () => {
     expect(
       resolveSidebarSlotLayout({
-        workspaceSidebarPosition: 'sideways' as never,
+        workspaceSidebarPosition: undefined,
         platform: 'linux',
         isWebClient: false
       })

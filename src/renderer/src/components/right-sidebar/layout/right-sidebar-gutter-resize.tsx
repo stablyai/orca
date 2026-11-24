@@ -84,7 +84,9 @@ export function useRightSidebarGutterResize<T extends HTMLElement>(
       return false
     }
     const bounds = gutter.containerRef.current?.getBoundingClientRect()
-    if (!bounds) return false
+    if (!bounds) {
+      return false
+    }
     const distance =
       gutter.edge === 'left' ? bounds.right - event.clientX : event.clientX - bounds.left
     return distance >= 0 && distance < RIGHT_SIDEBAR_GUTTER_TARGET_PX

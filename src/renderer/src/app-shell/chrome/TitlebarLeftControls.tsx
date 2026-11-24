@@ -261,7 +261,9 @@ export function WorkspaceSidebarToggle({ edge }: { edge: 'left' | 'right' }): Re
         <button
           className="sidebar-toggle"
           onClick={() => {
-            if (!showWorkspaceListThen(useAppStore)) toggleSidebar()
+            if (!showWorkspaceListThen(useAppStore)) {
+              toggleSidebar()
+            }
           }}
           {...keepPaneFocusPressProps}
           aria-label={

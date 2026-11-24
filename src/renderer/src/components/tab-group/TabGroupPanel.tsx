@@ -346,13 +346,8 @@ export default function TabGroupPanel({
             {/* Why: Electron drag hit-test respects no-drag only on DOM descendants, not z-index siblings, so this no-drag spacer keeps the floating right-sidebar toggle + window controls clickable. */}
             {reserveRightTitlebarSpace ? (
               <div
-                className="shrink-0"
-                style={
-                  {
-                    width: 'var(--collapsed-trailing-chrome-width)',
-                    WebkitAppRegion: 'no-drag'
-                  } as React.CSSProperties
-                }
+                className="shrink-0 [-webkit-app-region:no-drag]"
+                style={{ width: 'var(--collapsed-trailing-chrome-width)' }}
               />
             ) : null}
           </div>
