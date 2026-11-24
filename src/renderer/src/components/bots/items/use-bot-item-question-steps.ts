@@ -286,7 +286,11 @@ export function useBotItemQuestionSteps(
   const [wasEmpty, setWasEmpty] = useState(boxEmpty)
   if (wasEmpty !== boxEmpty) {
     setWasEmpty(boxEmpty)
-    if (!boxEmpty && bound === null) {
+    if (
+      !boxEmpty &&
+      bound !== 'none' &&
+      (!bound || bound.askId !== askId || !eligible(bound.index))
+    ) {
       setBound(waiting && first !== undefined ? { askId, index: first, explicit: false } : 'none')
     } else if (boxEmpty && (bound === 'none' || (bound && !bound.explicit))) {
       setBound(null)

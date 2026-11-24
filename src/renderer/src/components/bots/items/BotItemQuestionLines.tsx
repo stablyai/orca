@@ -116,7 +116,7 @@ export function BotItemQuestionLines({
                 // Not sent: into the box, to send as a comment.
                 onClick={() => {
                   actions.recover(botItemAnswersText(shape, unsent))
-                  stored.hold([])
+                  stored.hold(stored.held.map((entry, index) => (sent?.[index] ? entry : null)))
                 }}
               />
             )

@@ -200,7 +200,7 @@ export function BotItemQuestionStep({
   }
   // A line's first control: its first quick reply, else its Type your answer.
   const firstOf = (index: number): HTMLButtonElement | undefined =>
-    targets.current.get(`${index}:0`) ?? targets.current.get(`${index}:type`)
+    targets.current.get(`${index}:first`) ?? targets.current.get(`${index}:type`)
   useLayoutEffect(() => {
     const next = focusNext.current
     focusNext.current = null
@@ -208,7 +208,7 @@ export function BotItemQuestionStep({
       return
     }
     if (next.kind === 'chip') {
-      focusInView(targets.current.get(`${next.index}:${next.label}`))
+      focusInView(targets.current.get(`${next.index}:reply:${next.label}`))
       return
     }
     if (next.kind === 'next') {
@@ -314,9 +314,9 @@ export function BotItemQuestionStep({
                   <button
                     key={reply.label}
                     ref={(node) => {
-                      target(`${index}:${reply.label}`)(node)
+                      target(`${index}:reply:${reply.label}`)(node)
                       if (at === 0) {
-                        target(`${index}:0`)(node)
+                        target(`${index}:first`)(node)
                       }
                     }}
                     type="button"
@@ -348,7 +348,7 @@ export function BotItemQuestionStep({
                 // Words held by an older build for this line: back into the box, whose Enter sends them.
                 <button
                   // Reopening a typed pick focuses it, as a picked reply would be.
-                  ref={target(`${index}:${pick}`)}
+                  ref={target(`${index}:reply:${pick}`)}
                   type="button"
                   className={cn(BOT_ITEM_CHIP, CHIP_ACTION, CHIP_PICKED)}
                   onClick={() => ownWords(index, pick)}

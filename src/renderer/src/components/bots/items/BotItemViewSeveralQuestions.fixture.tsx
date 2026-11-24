@@ -128,8 +128,33 @@ function clearBox(uid: string, held = ''): void {
 
 const pause = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms))
 
+async function waitForButton(
+  query: () => HTMLButtonElement | null | undefined,
+  label: string
+): Promise<HTMLButtonElement> {
+  const deadline = performance.now() + 3000
+  for (;;) {
+    const button = query()
+    if (button) {
+      return button
+    }
+    if (performance.now() > deadline) {
+      throw new Error(`Timed out waiting for ${label}`)
+    }
+    await pause(50)
+  }
+}
+
+function findButton(frame: HTMLElement, text: string): HTMLButtonElement | undefined {
+  return [...frame.querySelectorAll('button')].find((button) => button.textContent?.trim() === text)
+}
+
 // Words arriving in the open item's empty box take the line "Replying to" names; Enter holds them.
-async function typeAndEnter(frame: HTMLElement, uid: string, held = ''): Promise<void> {
+async function typeAndEnter(
+  frame: HTMLElement,
+  uid: string,
+  held = ''
+): Promise<HTMLButtonElement> {
   // Again once open: drafts a theme's earlier run left are restored from storage after setup.
   clearBox(uid, held)
   await pause(250)
@@ -138,9 +163,15 @@ async function typeAndEnter(frame: HTMLElement, uid: string, held = ''): Promise
     { text: TYPED },
     'immediate'
   )
-  await pause(250)
-  frame.querySelector<HTMLButtonElement>('button[aria-label="Comment"]')?.click()
-  await pause(400)
+  const comment = await waitForButton(
+    () => frame.querySelector('button[aria-label="Comment"]:not(:disabled)'),
+    'the Comment button'
+  )
+  comment.click()
+  return waitForButton(
+    () => frame.querySelector('button[title^="Where should the chat switcher live? →"]'),
+    'the folded typed answer'
+  )
 }
 
 // Words typed for the first of several questions, Enter in the box: held like a pick, the line folds
@@ -158,7 +189,9 @@ export const severalQuestionsTypedAnswer = defineFixture({
       />
     </div>
   ),
-  interact: (frame) => typeAndEnter(frame, typedItem.uid)
+  interact: async (frame) => {
+    await typeAndEnter(frame, typedItem.uid)
+  }
 })
 
 const reopenedItem = makeTestBotItem(235, { ...severalItem, uid: 'fixture-several-typed-reopened' })
@@ -178,10 +211,8 @@ export const severalQuestionsTypedAnswerReopened = defineFixture({
     </div>
   ),
   interact: async (frame) => {
-    await typeAndEnter(frame, reopenedItem.uid)
-    frame
-      .querySelector<HTMLButtonElement>('button[title^="Where should the chat switcher live? →"]')
-      ?.click()
+    const folded = await typeAndEnter(frame, reopenedItem.uid)
+    folded.click()
     await pause(250)
   }
 })
@@ -222,10 +253,9 @@ export const severalQuestionsTypedAnswerOnItsWay = defineFixture({
   ),
   interact: async (frame) => {
     await typeAndEnter(frame, onItsWayItem.uid, OTHERS_HELD)
-    ;[...frame.querySelectorAll<HTMLButtonElement>('button')]
-      .find((button) => button.textContent?.trim() === 'Send')
-      ?.click()
-    await pause(400)
+    const send = await waitForButton(() => findButton(frame, 'Send'), 'the full Send button')
+    send.click()
+    await waitForButton(() => findButton(frame, 'Sending…'), 'the pending Sending… button')
   }
 })
 

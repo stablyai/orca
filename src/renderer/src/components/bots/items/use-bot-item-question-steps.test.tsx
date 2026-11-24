@@ -14,6 +14,7 @@ import type {
 } from '../../../../../shared/bots/bot-item-pending-comments'
 import { updateNativeChatComposerDraft } from '../../native-chat/drafts/native-chat-composer-draft-store'
 import { readNativeChatDraftCache } from '../../native-chat/drafts/native-chat-draft-views'
+import { botItemCommentDraftScope } from './bot-item-comment-draft'
 import { botItemClearDeliveredAnswers } from './bot-item-held-answers'
 import { useBotItemQuestionSteps } from './use-bot-item-question-steps'
 
@@ -101,8 +102,13 @@ function steps(uid: string, own = asking, shown = item) {
   }
   // Its own item, so answers held on this device by another case don't carry over.
   const hook = renderHook(
-    ({ pending }: { pending: readonly BotItemPendingComment[] }) =>
-      useBotItemQuestionSteps(bot, { ...shown, uid }, [own], send, pending),
+    ({
+      pending,
+      events = [own]
+    }: {
+      pending: readonly BotItemPendingComment[]
+      events?: readonly BotItemEvent[]
+    }) => useBotItemQuestionSteps(bot, { ...shown, uid }, events, send, pending),
     { initialProps: { pending: NO_PENDING } }
   )
   return { hook, posted }
@@ -191,6 +197,33 @@ it('keeps a line named by its own Type your answer in an empty box', () => {
   expect(hook.result.current.waitingLine?.line).toBe(HOSTS)
   act(() => hook.result.current.steps!.bind(1))
   expect(hook.result.current.waitingLine?.line).toBe(GO)
+})
+
+it('binds a new draft to the displayed question after another client answers its old target', () => {
+  const uid = 'draft-after-answer'
+  const { hook, posted } = steps(uid)
+  act(() => hook.result.current.steps!.bind(0))
+  hook.rerender({
+    pending: NO_PENDING,
+    events: [
+      asking,
+      {
+        id: 'e3',
+        kind: 'commented',
+        actor: { kind: 'owner' },
+        data: { text: `${HOSTS} → Yes` },
+        at: NOW
+      }
+    ]
+  })
+  expect(hook.result.current.waitingLine?.line).toBe(GO)
+  const words = 'Wait for the dry run'
+  act(() =>
+    updateNativeChatComposerDraft(botItemCommentDraftScope(bot, uid), { text: words }, 'immediate')
+  )
+  act(() => hook.result.current.fromBox(words, [], hook.result.current.waitingLine?.id ?? null))
+  expect(hook.result.current.steps!.picks).toEqual([null, words])
+  expect(posted).toEqual([])
 })
 
 it('locks the lines of a send on its way, and Send then posts nothing', () => {
