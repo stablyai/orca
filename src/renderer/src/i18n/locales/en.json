@@ -10014,7 +10014,9 @@
           "lucideDescription": "{{label}} icon with repo color",
           "defaultIcon": "Default",
           "cc76342291": "Use GitHub avatar",
-          "43bf3709dd": "Repo icon"
+          "43bf3709dd": "Repo icon",
+          "autoColor": "Automatic color (kept distinct from other projects)",
+          "lettersDescription": "Letters “{{text}}”"
         },
         "RepositoryPane": {
           "15a99d9b9f": "Relative paths resolve from this project root.",
@@ -16617,6 +16619,25 @@
         },
         "forkIndicator": {
           "forkOf": "Fork of {{repo}}"
+        },
+        "ProjectPeek": {
+          "openRemote": "Open {{value0}} in browser",
+          "folderProject": "Folder · not a git repo",
+          "noRemote": "Local git repo · no remote",
+          "openUpstream": "Open {{value0}} in browser",
+          "forkOf": "Fork of {{value0}}",
+          "openSettingsPage": "Open settings page",
+          "done": "Done",
+          "resetDone": "Icon and color reset",
+          "undo": "Undo",
+          "styleLetters": "Letters",
+          "stylePicture": "Picture",
+          "resetAppearance": "Reset icon & color",
+          "faviconPlaceholder": "Website for favicon",
+          "lettersInput": "Up to 2 letters",
+          "lettersPlaceholder": "1–2 letters",
+          "useLetters": "Use “{{value0}}”",
+          "usingGitHubAvatar": "Using the GitHub avatar"
         }
       },
       "pet": {

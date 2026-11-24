@@ -181,6 +181,9 @@ function sameRepoIcon(a: RepoIcon | null | undefined, b: RepoIcon | null | undef
   if (a.type === 'emoji') {
     return a.emoji === (b as typeof a).emoji
   }
+  if (a.type === 'letters') {
+    return a.text === (b as typeof a).text
+  }
   const image = b as typeof a
   return a.src === image.src && a.source === image.source && a.label === image.label
 }
