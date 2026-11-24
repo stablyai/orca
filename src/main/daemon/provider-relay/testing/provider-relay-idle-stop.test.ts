@@ -151,5 +151,18 @@ describe('provider relay idle stop', () => {
     r.state.attached = true
     r.idle.disarm()
     expect(r.idle.carriedWork().endedWork).toBeUndefined()
+
+    // An app killed after it was handed an end (its stream dropped, so nothing was tracked) may
+    // have acked that end: the next app is never told to restate it.
+    r.detach({ turn: [], command: [[T, 'cmd-1']] })
+    r.line(command('item/completed', 'completed'))
+    r.state.attached = true
+    r.idle.disarm()
+    expect(r.idle.carriedWork().endedWork).toEqual({ command: [[T, 'cmd-1']] })
+    r.state.attached = false
+    r.idle.arm(null)
+    r.state.attached = true
+    r.idle.disarm()
+    expect(r.idle.carriedWork().endedWork).toBeUndefined()
   })
 })
