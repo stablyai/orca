@@ -16,6 +16,7 @@ export async function awaitStructuredWorkerSetupGate(args: {
   setup: WorkerSetupReceipt
   effects: WorkerEffect[]
   timeoutMs: number
+  signal?: AbortSignal
 }): Promise<StructuredWorkerSetupGate | null> {
   if (args.setup.startupPolicy !== 'wait-for-setup' || args.setup.state !== 'running') {
     return null
@@ -25,9 +26,12 @@ export async function awaitStructuredWorkerSetupGate(args: {
     return null
   }
   let timer: ReturnType<typeof setTimeout> | undefined
+  // Why: a budget that runs out must not leave the completion wait subscribed to the setup terminal.
+  const settled = new AbortController()
+  const signal = args.signal ? AbortSignal.any([args.signal, settled.signal]) : settled.signal
   try {
     return await Promise.race([
-      args.runtime.waitForSetupTerminalCompletion(setupTerminal).then((completion) => ({
+      args.runtime.waitForSetupTerminalCompletion(setupTerminal, signal).then((completion) => ({
         satisfied: completion.exitCode === 0,
         status: 'exited'
       })),
@@ -36,6 +40,9 @@ export async function awaitStructuredWorkerSetupGate(args: {
       })
     ])
   } catch (error) {
+    if (args.signal?.aborted) {
+      throw error
+    }
     // A taken wait that throws loses observation; record wait_unevaluated instead of conflating it with no applicable wait.
     args.effects.push({
       kind: 'setup',
@@ -45,5 +52,6 @@ export async function awaitStructuredWorkerSetupGate(args: {
     return null
   } finally {
     clearTimeout(timer)
+    settled.abort()
   }
 }
