@@ -51,6 +51,10 @@ export async function replaySpoolFile(replay: SpoolReplay): Promise<SpoolReplayO
   let partial = ''
   try {
     for await (const chunk of stream) {
+      // Checked per chunk, so a reader superseded while stalled stops at once rather than at a newline.
+      if (!replay.current()) {
+        return 'stale'
+      }
       if (!chunk.includes('\n')) {
         parts.push(chunk)
         continue
@@ -63,6 +67,10 @@ export async function replaySpoolFile(replay: SpoolReplay): Promise<SpoolReplayO
       partial = lines.pop() ?? ''
       for (const line of lines) {
         replayLine(line)
+      }
+      // A stale reader never waits on the replacement client's socket.
+      if (!replay.current()) {
+        return 'stale'
       }
       await replay.drained?.()
       if (!replay.current()) {
@@ -151,6 +159,9 @@ export async function replayMemoryTail(replay: MemoryTailReplay): Promise<number
     }
     replay.deliver(record)
     after = record.seq
+    if (!replay.current()) {
+      return null
+    }
     await replay.drained?.()
     if (!replay.current()) {
       return null
