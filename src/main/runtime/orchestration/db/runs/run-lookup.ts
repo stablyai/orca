@@ -19,7 +19,6 @@ import type { OrchestrationDb } from '../orchestration-db'
 import { RUN_COLUMN_LIST } from '../row-column-lists'
 import { parsePaneKey } from '../../../../../shared/workspace-layout/stable-pane-id'
 import { workerSeatGrabSql } from './run-coordinator-mail-routing'
-import { mailboxesWithMailSql, mailboxOwnerIdSql } from '../messages/mailboxes-with-mail-sql'
 
 export type LegacyAdoptedMailboxOwner = {
   runId: string
@@ -32,14 +31,15 @@ const RUNS_BOUND_TO_PANE_SQL = `SELECT ${RUN_COLUMN_LIST} FROM runs
          WHERE coordinator_pane_key IS NOT NULL AND legacy = 0
            AND ${RUN_PANE_KEY_MATCH_SUFFIX_SQL} = ?
          ORDER BY rowid DESC`
-// The pane's Runs with unread mail undelivered or held by a pointer reservation, found from that
-// mail (CROSS JOIN keeps it the outer loop) so Runs without mail are never visited.
-const RUNS_WITH_POINTER_WORK_BOUND_TO_PANE_SQL = `SELECT runs.id, runs.coordinator_pane_key
-         FROM (${mailboxesWithMailSql('run:', true)}) AS mail
-         CROSS JOIN runs ON runs.id = ${mailboxOwnerIdSql('run:')}
-         WHERE runs.coordinator_pane_key IS NOT NULL AND runs.legacy = 0
+// Only Runs whose mailbox has unread mail undelivered or held by a pointer reservation (getMailboxesWithPointerWork).
+const RUNS_WITH_POINTER_WORK_BOUND_TO_PANE_SQL = `SELECT id, coordinator_pane_key FROM runs
+         WHERE coordinator_pane_key IS NOT NULL AND legacy = 0
            AND ${RUN_PANE_KEY_MATCH_SUFFIX_SQL} = ?
-         ORDER BY runs.rowid DESC`
+           AND EXISTS (SELECT 1 FROM messages
+             WHERE to_handle = 'run:' || runs.id AND read = 0
+               AND delivery_contract = 'current_delivery'
+               AND (delivered_at IS NULL OR pointer_enter_pending > 0))
+         ORDER BY rowid DESC`
 // Predicates match the partial indexes idx_runs_current_pane_exact/_leaf (created on every open).
 const CURRENT_RUN_FOR_EXACT_PANE_SQL = `SELECT ${RUN_COLUMN_LIST} FROM runs
          WHERE legacy = 0 AND coordinator_pane_key IS NOT NULL AND coordinator_pane_key = ?
