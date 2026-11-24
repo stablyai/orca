@@ -5872,7 +5872,16 @@
           "repairAvailable": "可修復",
           "installAvailable": "可安裝",
           "otherBuild": "由其他版本的 Orca 安裝",
-          "otherBuildKept": "已保留：由其他版本的 Orca 寫入"
+          "otherBuildKept": "已保留：由其他版本的 Orca 寫入",
+          "differsFromOrca": "此副本與 Orca 的副本不同",
+          "replaceMovesFolder": "取代會將整個資料夾（包括所有額外檔案）移至 {{folder}}。",
+          "replaceMovesFolderOnHost": "取代會將整個資料夾（包括所有額外檔案）移至 {{host}} 上的 {{folder}}。",
+          "replaceMovesLink": "取代會將此連結移至 {{folder}}。",
+          "replaceMovesLinkOnHost": "取代會將此連結移至 {{host}} 上的 {{folder}}。",
+          "replaceMovesFile": "取代會將此檔案移至 {{folder}}。",
+          "replaceMovesFileOnHost": "取代會將此檔案移至 {{host}} 上的 {{folder}}。",
+          "replaceMovesCopy": "取代會將此副本移至 {{folder}}。",
+          "replaceMovesCopyOnHost": "取代會將此副本移至 {{host}} 上的 {{folder}}。"
         },
         "installResult": {
           "installed": "已安裝並驗證。",
@@ -5886,6 +5895,11 @@
         "managedRemoval": {
           "removed": "已移除 {{removed}} 個。",
           "removedPreserved_other": "已移除 {{removed}} 個 · 已保留 {{count}} 個已修改的技能。"
+        },
+        "SkillBackupPathLine": {
+          "movedTo": "舊副本已移至：",
+          "movedToOnHost": "舊副本已移至 {{host}} 上的下列路徑：",
+          "showFolder": "顯示資料夾"
         }
       },
       "sidebar": {
@@ -12969,7 +12983,11 @@
           "attentionOther": "需要處理 · 其他技能已使用此名稱",
           "attentionSharedNotCurrent": "需要處理 · 此資料夾使用的共用副本並非 Orca 的副本",
           "resultUpdateSkippedPlaces": "{{result}} · 已略過 {{places}} 處的更新：{{reason}}",
-          "resultUpdateSkippedAgent": "{{result}} · 已略過 {{agent}} 中的更新：{{reason}}"
+          "resultUpdateSkippedAgent": "{{result}} · 已略過 {{agent}} 中的更新：{{reason}}",
+          "attentionDiffersFromOrca": "需要處理 · 此副本與 Orca 的副本不同",
+          "replaceMovesCopyToBackup": "取代會將目前的副本（包括所有額外檔案）移至備份。",
+          "replaceMovesCopyToFolder": "取代會將目前的副本（包括所有額外檔案）移至 {{folder}}。",
+          "replaceMovesCopyToFolderOnHost": "取代會將目前的副本（包括所有額外檔案）移至 {{host}} 上的 {{folder}}。"
         },
         "recoverServer": {
           "checking": "正在檢查鎖定…",

@@ -5853,7 +5853,16 @@
           "repairAvailable": "修復できます",
           "installAvailable": "インストールできます",
           "otherBuild": "別のバージョンの Orca でインストール済み",
-          "otherBuildKept": "保持: 別のバージョンの Orca で書き込まれています"
+          "otherBuildKept": "保持: 別のバージョンの Orca で書き込まれています",
+          "differsFromOrca": "このコピーは Orca のものと異なります",
+          "replaceMovesFolder": "置き換えると、追加のファイルを含むフォルダー全体が {{folder}} に移動されます。",
+          "replaceMovesFolderOnHost": "置き換えると、追加のファイルを含むフォルダー全体が {{host}} 上の {{folder}} に移動されます。",
+          "replaceMovesLink": "置き換えると、このリンクが {{folder}} に移動されます。",
+          "replaceMovesLinkOnHost": "置き換えると、このリンクが {{host}} 上の {{folder}} に移動されます。",
+          "replaceMovesFile": "置き換えると、このファイルが {{folder}} に移動されます。",
+          "replaceMovesFileOnHost": "置き換えると、このファイルが {{host}} 上の {{folder}} に移動されます。",
+          "replaceMovesCopy": "置き換えると、このコピーが {{folder}} に移動されます。",
+          "replaceMovesCopyOnHost": "置き換えると、このコピーが {{host}} 上の {{folder}} に移動されます。"
         },
         "installResult": {
           "installed": "インストールと検証が完了しました。",
@@ -5875,6 +5884,11 @@
           "preservedDescription": "Orca はスキルを更新し、編集内容を {{value0}} に保存しました。",
           "uncertainTitle": "{{value0}} でのスキルの更新を確認できませんでした",
           "uncertainDescription": "Orca は {{value0}} 上のスキルを更新した可能性がありますが、結果を確認できませんでした。更新中にスキルを編集した場合、そのコピーは {{value1}} にあります。"
+        },
+        "SkillBackupPathLine": {
+          "movedTo": "古いコピーの移動先:",
+          "movedToOnHost": "古いコピーの移動先（{{host}}）:",
+          "showFolder": "フォルダーを表示"
         }
       },
       "sidebar": {
@@ -13120,7 +13134,11 @@
           "attentionOther": "対応が必要です · 別のスキルがすでにこの名前を使用しています",
           "attentionSharedNotCurrent": "対応が必要です · このフォルダーが使用する共有コピーは Orca のものではありません",
           "resultUpdateSkippedPlaces": "{{result}} · {{places}} か所で更新をスキップ: {{reason}}",
-          "resultUpdateSkippedAgent": "{{result}} · {{agent}} で更新をスキップ: {{reason}}"
+          "resultUpdateSkippedAgent": "{{result}} · {{agent}} で更新をスキップ: {{reason}}",
+          "attentionDiffersFromOrca": "対応が必要です · このコピーは Orca のものと異なります",
+          "replaceMovesCopyToBackup": "置き換えると、追加のファイルを含む現在のコピーがバックアップに移動されます。",
+          "replaceMovesCopyToFolder": "置き換えると、追加のファイルを含む現在のコピーが {{folder}} に移動されます。",
+          "replaceMovesCopyToFolderOnHost": "置き換えると、追加のファイルを含む現在のコピーが {{host}} 上の {{folder}} に移動されます。"
         },
         "ReleaseBuildPicker": {
           "build": "バージョン",

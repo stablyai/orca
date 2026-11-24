@@ -9778,7 +9778,11 @@
           "attentionOther": "Atenção necessária · Outra habilidade já usa este nome",
           "attentionSharedNotCurrent": "Atenção necessária · A cópia compartilhada usada por esta pasta não é do Orca",
           "resultUpdateSkippedPlaces": "{{result}} · Atualização ignorada em {{places}} locais: {{reason}}",
-          "resultUpdateSkippedAgent": "{{result}} · Atualização ignorada em {{agent}}: {{reason}}"
+          "resultUpdateSkippedAgent": "{{result}} · Atualização ignorada em {{agent}}: {{reason}}",
+          "attentionDiffersFromOrca": "Atenção necessária · Esta cópia é diferente da do Orca",
+          "replaceMovesCopyToBackup": "Ao substituir, a cópia atual, incluindo arquivos extras, é movida para um backup.",
+          "replaceMovesCopyToFolder": "Ao substituir, a cópia atual, incluindo arquivos extras, é movida para {{folder}}.",
+          "replaceMovesCopyToFolderOnHost": "Ao substituir, a cópia atual, incluindo arquivos extras, é movida para {{folder}} em {{host}}."
         },
         "ReleaseBuildPicker": {
           "build": "Versão",
@@ -14826,7 +14830,16 @@
           "repairAvailable": "Reparo disponível",
           "installAvailable": "Instalação disponível",
           "otherBuild": "Instalado por outra versão do Orca",
-          "otherBuildKept": "Mantido: gravado por outra versão do Orca"
+          "otherBuildKept": "Mantido: gravado por outra versão do Orca",
+          "differsFromOrca": "Esta cópia é diferente da do Orca",
+          "replaceMovesFolder": "Ao substituir, a pasta inteira, incluindo arquivos extras, é movida para {{folder}}.",
+          "replaceMovesFolderOnHost": "Ao substituir, a pasta inteira, incluindo arquivos extras, é movida para {{folder}} em {{host}}.",
+          "replaceMovesLink": "Ao substituir, este link é movido para {{folder}}.",
+          "replaceMovesLinkOnHost": "Ao substituir, este link é movido para {{folder}} em {{host}}.",
+          "replaceMovesFile": "Ao substituir, este arquivo é movido para {{folder}}.",
+          "replaceMovesFileOnHost": "Ao substituir, este arquivo é movido para {{folder}} em {{host}}.",
+          "replaceMovesCopy": "Ao substituir, esta cópia é movida para {{folder}}.",
+          "replaceMovesCopyOnHost": "Ao substituir, esta cópia é movida para {{folder}} em {{host}}."
         },
         "installResult": {
           "installed": "Instalada e verificada.",
@@ -14850,6 +14863,11 @@
           "preservedDescription": "O Orca atualizou a skill e salvou suas edições em {{value0}}.",
           "uncertainTitle": "O Orca não conseguiu confirmar a atualização da skill em {{value0}}",
           "uncertainDescription": "O Orca pode ter atualizado as skills em {{value0}}, mas não conseguiu confirmar o resultado. Se você editou uma skill durante a atualização, sua cópia está em {{value1}}."
+        },
+        "SkillBackupPathLine": {
+          "movedTo": "Cópia antiga movida para:",
+          "movedToOnHost": "Cópia antiga movida em {{host}} para:",
+          "showFolder": "Mostrar pasta"
         }
       },
       "automations": {
