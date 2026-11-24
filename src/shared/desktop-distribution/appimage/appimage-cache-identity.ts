@@ -1,6 +1,7 @@
 /** Find copies without APPIMAGE via cache/namespace/generation: namespace identifies the source path, generation its file identity. Share this layout with the CLI. */
 import { createHash } from 'node:crypto'
 import { readFileSync, statSync } from 'node:fs'
+import { stat } from 'node:fs/promises'
 import { basename, dirname, isAbsolute, join, resolve, sep } from 'node:path'
 import { APPIMAGE_NODE_RUNTIME_SEGMENTS } from './appimage-node-runtime'
 
@@ -27,6 +28,16 @@ export function appImageNamespaceKey(appImagePath: string): string {
 export function resolveAppImageCacheKey(appImagePath: string): string | null {
   try {
     const stats = statSync(appImagePath)
+    return appImageCacheDigest(`${stats.dev}\0${stats.ino}\0${stats.size}\0${stats.mtimeMs}`)
+  } catch {
+    return null
+  }
+}
+
+/** Async twin for main-thread callers; same identity, no event-loop block. */
+export async function resolveAppImageCacheKeyAsync(appImagePath: string): Promise<string | null> {
+  try {
+    const stats = await stat(appImagePath)
     return appImageCacheDigest(`${stats.dev}\0${stats.ino}\0${stats.size}\0${stats.mtimeMs}`)
   } catch {
     return null

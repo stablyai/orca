@@ -148,7 +148,11 @@ export function WorkbenchDialoguePanel({
                     <span className="truncate text-sm font-medium">{entry.task.title}</span>
                   </div>
                   <Badge variant="outline" className="shrink-0 rounded-full">
-                    {entry.runningStage ? `running: ${entry.runningStage}` : stage}
+                    {entry.runningStage
+                      ? t('auto.components.workbench.dialogue.runningStage', 'running: {{stage}}', {
+                          stage: entry.runningStage
+                        })
+                      : stage}
                   </Badge>
                 </div>
 
@@ -211,7 +215,10 @@ export function WorkbenchDialoguePanel({
                               [entry.task.id]: e.target.value
                             }))
                           }
-                          placeholder="PR #"
+                          placeholder={t(
+                            'auto.components.workbench.dialogue.prNumberPlaceholder',
+                            'PR #'
+                          )}
                           className="h-6 w-20 text-xs"
                         />
                         {stage === 'ci' ? (

@@ -23,8 +23,6 @@ function request(ptyId: string | null) {
   }
 }
 
-type MoveRequest = ReturnType<typeof request>
-
 describe('terminal.moveLeafToNewTab', () => {
   it('registers the durable move contract', () => {
     const method = moveMethod()
@@ -37,19 +35,23 @@ describe('terminal.moveLeafToNewTab', () => {
 
   it('resolves a Tauri remote PTY to the host PTY and maps the result back', async () => {
     const resolveLiveLeafForHandle = vi.fn(() => ({ ptyId: 'pty-host-1' }))
-    const moveTerminalLeafToNewTab = vi.fn(async (value: MoveRequest) => ({
-      status: 'moved' as const,
-      ptyId: value.ptyId,
-      tabId: value.targetTabId
+    const applyLayoutCommand = vi.fn(async () => ({
+      ok: true as const,
+      result: { tabId: 'tab-target', ptyId: 'pty-host-1' }
     }))
 
     const result = await moveLeafToNewTabOnRuntime(
-      { resolveLiveLeafForHandle, moveTerminalLeafToNewTab },
+      { resolveLiveLeafForHandle, applyLayoutCommand },
       request('remote:env-1@@terminal-1')
     )
 
     expect(resolveLiveLeafForHandle).toHaveBeenCalledWith('terminal-1')
-    expect(moveTerminalLeafToNewTab).toHaveBeenCalledWith(request('pty-host-1'))
+    expect(applyLayoutCommand).toHaveBeenCalledWith({
+      type: 'movePaneToNewTab',
+      workspace: 'worktree-1',
+      tabId: 'tab-source',
+      leafId: '11111111-1111-4111-8111-111111111111'
+    })
     expect(result).toEqual({
       status: 'moved',
       ptyId: 'remote:env-1@@terminal-1',
@@ -58,45 +60,46 @@ describe('terminal.moveLeafToNewTab', () => {
   })
 
   it('refuses a remote PTY that is no longer live instead of moving a stale binding', async () => {
-    const moveTerminalLeafToNewTab = vi.fn()
+    const applyLayoutCommand = vi.fn()
     const result = await moveLeafToNewTabOnRuntime(
       {
         resolveLiveLeafForHandle: vi.fn(() => null),
-        moveTerminalLeafToNewTab
+        applyLayoutCommand
       },
       request('remote:env-1@@terminal-1')
     )
 
     expect(result).toEqual({ status: 'refused', reason: 'pty_mismatch' })
-    expect(moveTerminalLeafToNewTab).not.toHaveBeenCalled()
+    expect(applyLayoutCommand).not.toHaveBeenCalled()
   })
 
   it.each([null, 'remote:malformed', 'pty-host-1'])(
     'refuses an unverifiable renderer binding %s before mutating the layout',
     async (ptyId) => {
-      const moveTerminalLeafToNewTab = vi.fn()
+      const applyLayoutCommand = vi.fn()
       const result = await moveLeafToNewTabOnRuntime(
-        { resolveLiveLeafForHandle: vi.fn(), moveTerminalLeafToNewTab },
+        { resolveLiveLeafForHandle: vi.fn(), applyLayoutCommand },
         request(ptyId)
       )
       expect(result).toEqual({ status: 'refused', reason: 'pty_mismatch' })
-      expect(moveTerminalLeafToNewTab).not.toHaveBeenCalled()
+      expect(applyLayoutCommand).not.toHaveBeenCalled()
     }
   )
 
-  it.each(['target_tab_exists', 'leaf_in_other_tab', 'pty_mismatch'] as const)(
-    'preserves host refusal %s',
-    async (reason) => {
-      const moveTerminalLeafToNewTab = vi.fn(async () => ({ status: 'refused' as const, reason }))
-      expect(
-        await moveLeafToNewTabOnRuntime(
-          {
-            resolveLiveLeafForHandle: vi.fn(() => ({ ptyId: 'pty-host-1' })),
-            moveTerminalLeafToNewTab
-          },
-          request('remote:env-1@@terminal-1')
-        )
-      ).toEqual({ status: 'refused', reason })
-    }
-  )
+  it.each([
+    ['tab_exists', 'target_tab_exists'],
+    ['pane_in_other_tab', 'leaf_in_other_tab'],
+    ['pty_mismatch', 'pty_mismatch']
+  ] as const)('preserves host refusal %s', async (code, reason) => {
+    const applyLayoutCommand = vi.fn(async () => ({ ok: false as const, code }))
+    expect(
+      await moveLeafToNewTabOnRuntime(
+        {
+          resolveLiveLeafForHandle: vi.fn(() => ({ ptyId: 'pty-host-1' })),
+          applyLayoutCommand
+        },
+        request('remote:env-1@@terminal-1')
+      )
+    ).toEqual({ status: 'refused', reason })
+  })
 })

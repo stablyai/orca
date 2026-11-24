@@ -138,6 +138,7 @@ export type UiViewHistory =
   | 'space'
   | 'skills'
   | 'artifacts'
+  | 'workbench'
   | 'mobile'
   | 'rooms'
 
@@ -183,6 +184,7 @@ export type UISliceCore = {
   previousViewBeforeSkills: Exclude<UiViewHistory, 'skills'>
   previousViewBeforeMobile: Exclude<UiViewHistory, 'mobile'>
   previousViewBeforeArtifacts: Exclude<UiViewHistory, 'artifacts'>
+  previousViewBeforeWorkbench: Exclude<UiViewHistory, 'workbench'>
   previousViewBeforeRooms: Exclude<UiViewHistory, 'rooms'>
   setActiveView: (view: UISliceCore['activeView']) => void
   taskPageData: TaskPageData
@@ -235,6 +237,8 @@ export type UISliceCore = {
   clearPendingSkillsSharedView: () => void
   openArtifactsPage: () => void
   closeArtifactsPage: () => void
+  openWorkbenchPage: () => void
+  closeWorkbenchPage: () => void
   openRoomsPage: () => void
   closeRoomsPage: () => void
   openMobilePage: () => void

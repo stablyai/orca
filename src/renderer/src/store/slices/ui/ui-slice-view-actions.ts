@@ -127,6 +127,19 @@ export function createUiViewActions(set: UISliceSet, get: UISliceGet): Partial<U
         activeView: state.previousViewBeforeArtifacts,
         worktreeNavHistoryIndex: rewindHistoryIndexPastView(state, 'artifacts')
       })),
+    openWorkbenchPage: () => {
+      get().recordViewVisit('workbench')
+      set((state) => ({
+        activeView: 'workbench',
+        previousViewBeforeWorkbench:
+          state.activeView === 'workbench' ? state.previousViewBeforeWorkbench : state.activeView
+      }))
+    },
+    closeWorkbenchPage: () =>
+      set((state) => ({
+        activeView: state.previousViewBeforeWorkbench,
+        worktreeNavHistoryIndex: rewindHistoryIndexPastView(state, 'workbench')
+      })),
     openRoomsPage: () => {
       get().recordViewVisit('rooms')
       set((state) => ({

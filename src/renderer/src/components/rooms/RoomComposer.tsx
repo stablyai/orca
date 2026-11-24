@@ -1,6 +1,6 @@
 import { Loader2, SendHorizonal } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import { Button } from '@/components/ui/button'
 import { Textarea } from '@/components/ui/textarea'
 /** Multi-line composer with @-mention completion and quiet delivery status. */
@@ -14,6 +14,7 @@ export function RoomComposer(props: {
   onApplyMention: (name: string) => void
   onSend: () => void
 }) {
+  const t = useTranslate()
   // Why: this memo boundary needs its own language subscription, while
   // translate() preserves Orca's pseudo-localization behavior.
   useTranslation()
@@ -42,10 +43,10 @@ export function RoomComposer(props: {
               className="max-h-40 min-h-10 border-0 bg-transparent focus-visible:ring-0"
               placeholder={
                 props.directMemberName
-                  ? translate('auto.components.rooms.page.directPlaceholder', 'Message {{name}}…', {
+                  ? t('auto.components.rooms.page.directPlaceholder', 'Message {{name}}…', {
                       name: props.directMemberName
                     })
-                  : translate('auto.components.rooms.page.composerPlaceholder', 'Message the team…')
+                  : t('auto.components.rooms.page.composerPlaceholder', 'Message the team…')
               }
               value={props.composer}
               onChange={(e) => props.onComposerChange(e.target.value)}
@@ -76,7 +77,7 @@ export function RoomComposer(props: {
             <Button
               size="icon"
               className="size-9 shrink-0 rounded-full"
-              aria-label={translate('auto.components.rooms.page.send', 'Send')}
+              aria-label={t('auto.components.rooms.page.send', 'Send')}
               onClick={props.onSend}
               disabled={props.sending || !props.composer.trim()}
             >

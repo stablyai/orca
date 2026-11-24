@@ -11,6 +11,8 @@ import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { SetupGuideSidebarEntry } from '../../setup-guide/SetupGuideSidebarEntry'
 import { SidebarTaskNavButton } from './SidebarTaskNavButton'
+import { SidebarWorkflowList } from './SidebarWorkflowList'
+import { SidebarWorkflowNavButton } from './SidebarWorkflowNavButton'
 import { HideSidebarMenu } from './sidebar-nav-controls'
 import { useTranslate } from '@/i18n/use-translate'
 import { lazyWithRetry } from '@/app-shell/startup/lazy-with-retry'
@@ -127,6 +129,8 @@ const SidebarNav = React.memo(function SidebarNav() {
           ))}
         </span>
       </button>
+      <SidebarWorkflowNavButton />
+      <SidebarWorkflowList />
       <SetupGuideSidebarEntry />
       <SidebarTaskNavButton />
       {showArtifactsButton ? (

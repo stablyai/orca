@@ -74,9 +74,15 @@ export const getTerminalWindowsShellSearchEntry = createLocalizedCatalog(() => [
         'auto.components.settings.terminal.windows.search.07ec155fb6',
         'bash.exe'
       ),
-      'niubash',
-      'niu',
-      'niu.exe'
+      ...translateSearchKeyword('settings.terminal.windows.keywordNiubash', 'niubash', {
+        englishOnly: true
+      }),
+      ...translateSearchKeyword('settings.terminal.windows.keywordNiu', 'niu', {
+        englishOnly: true
+      }),
+      ...translateSearchKeyword('settings.terminal.windows.keywordNiuExe', 'niu.exe', {
+        englishOnly: true
+      })
     ]
   }
 ])

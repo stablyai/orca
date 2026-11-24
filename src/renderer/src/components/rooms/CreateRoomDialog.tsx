@@ -2,7 +2,8 @@ import { useEffect, useState } from 'react'
 import { ChevronDown, Loader2, Plus } from 'lucide-react'
 import { toast } from 'sonner'
 import { useTranslation } from 'react-i18next'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
+import { runWithBusyFlag } from '@/lib/run-with-busy-flag'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import {
@@ -29,6 +30,7 @@ import { readAgentModels, type CatalogModel } from './room-model-catalog'
 
 /** New groups get a leader automatically; model tuning stays out of the first screen. */
 export function CreateRoomDialog(props: { onCreated: () => void; variant?: 'button' | 'icon' }) {
+  const t = useTranslate()
   useTranslation()
   const [open, setOpen] = useState(false)
   const [name, setName] = useState('')
@@ -58,49 +60,46 @@ export function CreateRoomDialog(props: { onCreated: () => void; variant?: 'butt
 
   const submit = async () => {
     if (!name.trim()) {
-      toast.error(translate('auto.components.rooms.createRoom.nameRequired', 'Name is required'))
+      toast.error(t('auto.components.rooms.createRoom.nameRequired', 'Name is required'))
       return
     }
     if (!worktreeId) {
-      toast.error(
-        translate('auto.components.rooms.spawnBot.pickWorkspace', 'Pick a workspace for the bot')
-      )
+      toast.error(t('auto.components.rooms.spawnBot.pickWorkspace', 'Pick a workspace for the bot'))
       return
     }
-    setBusy(true)
     try {
-      const created = await callRuntimeRpc<{ room: Room }>(LOCAL, 'orchestration.roomCreate', {
-        name: name.trim(),
-        mode: 'admin',
-        worktree: `id:${worktreeId}`
-      })
-      await callRuntimeRpc(LOCAL, 'orchestration.roomBotCreate', {
-        id: created.room.id,
-        worktree: `id:${worktreeId}`,
-        agent: 'codex',
-        model: model.trim() || undefined,
-        effort: effort || undefined,
-        name: 'admin',
-        isAdmin: true,
-        instructions: goal.trim() || undefined
-      })
-      toast.success(
-        translate('auto.components.rooms.createRoom.created', 'Room "{{name}}" created', {
-          name: name.trim()
+      await runWithBusyFlag(setBusy, async () => {
+        const created = await callRuntimeRpc<{ room: Room }>(LOCAL, 'orchestration.roomCreate', {
+          name: name.trim(),
+          mode: 'admin',
+          worktree: `id:${worktreeId}`
         })
-      )
-      setName('')
-      setGoal('')
-      setModel('')
-      setEffort('')
-      setOpen(false)
-      props.onCreated()
+        await callRuntimeRpc(LOCAL, 'orchestration.roomBotCreate', {
+          id: created.room.id,
+          worktree: `id:${worktreeId}`,
+          agent: 'codex',
+          model: model.trim() || undefined,
+          effort: effort || undefined,
+          name: 'admin',
+          isAdmin: true,
+          instructions: goal.trim() || undefined
+        })
+        toast.success(
+          t('auto.components.rooms.createRoom.created', 'Room "{{name}}" created', {
+            name: name.trim()
+          })
+        )
+        setName('')
+        setGoal('')
+        setModel('')
+        setEffort('')
+        setOpen(false)
+        props.onCreated()
+      })
     } catch (error) {
       toast.error(
-        `${translate('auto.components.rooms.createRoom.failed', 'Failed to create room')}: ${(error as Error).message}`
+        `${t('auto.components.rooms.createRoom.failed', 'Failed to create room')}: ${(error as Error).message}`
       )
-    } finally {
-      setBusy(false)
     }
   }
 
@@ -113,21 +112,19 @@ export function CreateRoomDialog(props: { onCreated: () => void; variant?: 'butt
           size={props.variant === 'icon' ? 'icon-sm' : 'sm'}
           variant={props.variant === 'icon' ? 'ghost' : 'default'}
           className={props.variant === 'icon' ? undefined : 'w-full'}
-          aria-label={translate('auto.components.rooms.createRoom.newRoom', 'New group')}
+          aria-label={t('auto.components.rooms.createRoom.newRoom', 'New group')}
         >
           <Plus className="h-4 w-4" />
           {props.variant === 'icon' ? null : (
-            <span>{translate('auto.components.rooms.createRoom.newRoom', 'New group')}</span>
+            <span>{t('auto.components.rooms.createRoom.newRoom', 'New group')}</span>
           )}
         </Button>
       </DialogTrigger>
       <DialogContent className="max-w-md">
         <DialogHeader>
-          <DialogTitle>
-            {translate('auto.components.rooms.createRoom.title', 'New group')}
-          </DialogTitle>
+          <DialogTitle>{t('auto.components.rooms.createRoom.title', 'New group')}</DialogTitle>
           <DialogDescription>
-            {translate(
+            {t(
               'auto.components.rooms.createRoom.description',
               'A leader bot is added automatically. You can also ask Orca Admin to do this in chat.'
             )}
@@ -135,16 +132,13 @@ export function CreateRoomDialog(props: { onCreated: () => void; variant?: 'butt
         </DialogHeader>
         <div className="space-y-3">
           <Input
-            placeholder={translate(
-              'auto.components.rooms.createRoom.namePlaceholder',
-              'Group name'
-            )}
+            placeholder={t('auto.components.rooms.createRoom.namePlaceholder', 'Group name')}
             value={name}
             onChange={(event) => setName(event.target.value)}
             disabled={busy}
           />
           <Input
-            placeholder={translate(
+            placeholder={t(
               'auto.components.rooms.createRoom.briefPlaceholder',
               'What should this group do? (optional)'
             )}
@@ -155,7 +149,7 @@ export function CreateRoomDialog(props: { onCreated: () => void; variant?: 'butt
           <details className="rounded-md border border-border/60 px-3 py-2">
             <summary className="flex cursor-pointer items-center gap-1.5 text-xs text-muted-foreground">
               <ChevronDown className="size-3.5" />
-              {translate('auto.components.rooms.createRoom.advanced', 'Advanced')}
+              {t('auto.components.rooms.createRoom.advanced', 'Advanced')}
             </summary>
             <div className="mt-3 space-y-2">
               {models.length > 0 ? (
@@ -172,10 +166,7 @@ export function CreateRoomDialog(props: { onCreated: () => void; variant?: 'butt
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="_default">
-                      {translate(
-                        'auto.components.rooms.createRoom.modelDefault',
-                        '(agent default)'
-                      )}
+                      {t('auto.components.rooms.createRoom.modelDefault', '(agent default)')}
                     </SelectItem>
                     {models.map((item) => (
                       <SelectItem key={item.id} value={item.id}>
@@ -196,10 +187,7 @@ export function CreateRoomDialog(props: { onCreated: () => void; variant?: 'butt
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="_default">
-                      {translate(
-                        'auto.components.rooms.createRoom.effortDefault',
-                        '(default thinking)'
-                      )}
+                      {t('auto.components.rooms.createRoom.effortDefault', '(default thinking)')}
                     </SelectItem>
                     {selectedModel.efforts.map((item) => (
                       <SelectItem key={item.value} value={item.value}>
@@ -214,11 +202,11 @@ export function CreateRoomDialog(props: { onCreated: () => void; variant?: 'butt
         </div>
         <DialogFooter>
           <Button variant="ghost" onClick={() => setOpen(false)} disabled={busy}>
-            {translate('auto.components.rooms.createRoom.cancel', 'Cancel')}
+            {t('auto.components.rooms.createRoom.cancel', 'Cancel')}
           </Button>
           <Button onClick={() => void submit()} disabled={busy}>
             {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />}
-            {translate('auto.components.rooms.createRoom.create', 'Create')}
+            {t('auto.components.rooms.createRoom.create', 'Create')}
           </Button>
         </DialogFooter>
       </DialogContent>

@@ -13,7 +13,7 @@ import { useAppStore } from '@/store'
 import { agentTypeToIconAgent } from '../../../../shared/agent-status/presentation/agent-type-icon-agent'
 import { formatAgentTypeLabel } from '../../../../shared/agent-status/presentation/agent-type-label'
 import { AgentIcon } from '@/components/agent/icons/AgentIcon'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import { useNativeChatTabOwnerWorktreeId } from './pane/ownership/use-native-chat-tab-owner'
 import type { AgentType } from '../../../../shared/agent-status/contracts/agent-status-types'
 
@@ -27,12 +27,18 @@ export function NativeChatAgentLaunchMenu({
   terminalTabId,
   agent
 }: NativeChatAgentLaunchMenuProps): React.JSX.Element | null {
+  const t = useTranslate()
   const worktreeId = useNativeChatTabOwnerWorktreeId(terminalTabId)
-  const label = translate(
-    'components.native-chat.composer.startAnotherAgent',
-    'Start another agent'
-  )
+  const label = t('components.native-chat.composer.startAnotherAgent', 'Start another agent')
   const iconAgent = agentTypeToIconAgent(agent)
+  // Why: subscribe instead of getState() so the compiler sees a hook call, not a hook as a value.
+  const groupId = useAppStore((state) =>
+    worktreeId === null
+      ? undefined
+      : (state.getTab(terminalTabId)?.groupId ??
+        state.activeGroupIdByWorktree[worktreeId] ??
+        state.groupsByWorktree[worktreeId]?.[0]?.id)
+  )
   if (!worktreeId) {
     return null
   }
@@ -55,21 +61,14 @@ export function NativeChatAgentLaunchMenu({
       </Tooltip>
       <DropdownMenuContent align="start" side="top" className="w-56">
         <DropdownMenuLabel>{label}</DropdownMenuLabel>
-        {(() => {
-          const state = useAppStore.getState()
-          const groupId =
-            state.getTab(terminalTabId)?.groupId ??
-            state.activeGroupIdByWorktree[worktreeId] ??
-            state.groupsByWorktree[worktreeId]?.[0]?.id
-          return groupId ? (
-            <QuickLaunchAgentMenuItems
-              worktreeId={worktreeId}
-              groupId={groupId}
-              onFocusTerminal={activateNativeChatAgentLaunchTab}
-              launchSource="native_chat"
-            />
-          ) : null
-        })()}
+        {groupId ? (
+          <QuickLaunchAgentMenuItems
+            worktreeId={worktreeId}
+            groupId={groupId}
+            onFocusTerminal={activateNativeChatAgentLaunchTab}
+            launchSource="native_chat"
+          />
+        ) : null}
       </DropdownMenuContent>
     </DropdownMenu>
   )

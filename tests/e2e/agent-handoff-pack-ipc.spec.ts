@@ -1,7 +1,8 @@
 import { mkdirSync, mkdtempSync, writeFileSync } from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
-import { expect, test } from './helpers/orca-app'
+import { test } from './desktop/electron-fixtures/orca-app'
+import { expect } from '@stablyai/playwright-test'
 
 // Why: this spec asserts on an IPC return value instead of the DOM. That is
 // deliberate: the decoded text is produced by the main process (parsers plus

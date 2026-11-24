@@ -1,4 +1,5 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
+import { installWindowVisibilityInterval } from '@/lib/window-activity/window-visibility-interval'
 import {
   ORCA_WORKTREE_FILE_CHANGE_EVENT,
   type WorktreeFileChangeEventDetail
@@ -144,7 +145,7 @@ export function useNativeChatWatchedTurnDiffs({
       if (normalizeRuntimePathForComparison(payload.worktreePath) !== normalizedWorktreePath) {
         return
       }
-      const turnKey = liveTurnKeyRef.current
+      const turnKey = liveTurnKey
       if (!turnKey) {
         return
       }
@@ -155,7 +156,9 @@ export function useNativeChatWatchedTurnDiffs({
         buffers.set(turnKey, buffer)
       }
       const { paths, overflow } = watchedFilePathsFromFsPayload(payload, worktreePath)
-      buffer.overflow ||= overflow
+      if (!buffer.overflow) {
+        buffer.overflow = overflow
+      }
       for (const path of paths) {
         if (!buffer.touched.has(path)) {
           buffer.touched.set(path, eventKindForPath(payload, path))
@@ -184,13 +187,12 @@ export function useNativeChatWatchedTurnDiffs({
     }
     window.addEventListener(ORCA_WORKTREE_FILE_CHANGE_EVENT, handle)
     return () => window.removeEventListener(ORCA_WORKTREE_FILE_CHANGE_EVENT, handle)
-  }, [enabled, worktreePath, normalizedWorktreePath, runtimeEnvironmentId])
+  }, [enabled, worktreePath, normalizedWorktreePath, runtimeEnvironmentId, liveTurnKey])
 
-  // Keep a ref so the watcher handler reads the live turn without re-subscribing.
-  const liveTurnKeyRef = useRef(liveTurnKey)
   const isWorkingRef = useRef(isWorking)
-  liveTurnKeyRef.current = liveTurnKey
-  isWorkingRef.current = isWorking
+  useLayoutEffect(() => {
+    isWorkingRef.current = isWorking
+  })
 
   // Settle turns whose host timing landed, and refresh the live turn's diff on
   // a slow cadence while it runs (the agent may still be writing).
@@ -247,14 +249,17 @@ export function useNativeChatWatchedTurnDiffs({
       }
     }
     void refresh()
-    const timer = setInterval(() => {
-      if (buffersRef.current.get(liveTurnKey)?.touched.size) {
-        void refresh()
-      }
-    }, 2_000)
+    const stopPoll = installWindowVisibilityInterval({
+      run: () => {
+        if (buffersRef.current.get(liveTurnKey)?.touched.size) {
+          void refresh()
+        }
+      },
+      intervalMs: 2_000
+    })
     return () => {
       cancelled = true
-      clearInterval(timer)
+      stopPoll()
     }
   }, [enabled, liveTurnKey, gitContext, liveTouched])
 

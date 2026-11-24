@@ -1,4 +1,5 @@
 import { handleAppMenuPasteRequest } from '@/lib/clipboard/menu/app-menu-paste'
+import { translate } from '@/i18n/i18n'
 import { isWebClientLocation } from '@/app-shell/platform/web-client-location'
 import { isTauriNativeHost } from '../../web/tauri-native-host'
 
@@ -20,14 +21,43 @@ export function shouldUsePlainEditableDomContextMenu(): boolean {
 export function buildPlainEditableDomContextMenuModel(options: {
   hasSelection: boolean
   readOnly: boolean
+  t?: (key: string, defaultValue: string) => string
 }): PlainEditableDomMenuEntry[] {
-  const { hasSelection, readOnly } = options
+  const { hasSelection, readOnly, t = translate } = options
   return [
-    { kind: 'edit', action: 'cut', label: 'Cut', disabled: !hasSelection || readOnly },
-    { kind: 'edit', action: 'copy', label: 'Copy', disabled: !hasSelection },
-    { kind: 'edit', action: 'paste', label: 'Paste', disabled: readOnly },
-    { kind: 'edit', action: 'paste-plain', label: 'Paste as plain text', disabled: readOnly },
-    { kind: 'edit', action: 'select-all', label: 'Select all', disabled: false }
+    {
+      kind: 'edit',
+      action: 'cut',
+      label: t('auto.components.editor.PlainEditableDomContextMenu.cut', 'Cut'),
+      disabled: !hasSelection || readOnly
+    },
+    {
+      kind: 'edit',
+      action: 'copy',
+      label: t('auto.components.editor.PlainEditableDomContextMenu.copy', 'Copy'),
+      disabled: !hasSelection
+    },
+    {
+      kind: 'edit',
+      action: 'paste',
+      label: t('auto.components.editor.PlainEditableDomContextMenu.paste', 'Paste'),
+      disabled: readOnly
+    },
+    {
+      kind: 'edit',
+      action: 'paste-plain',
+      label: t(
+        'auto.components.editor.PlainEditableDomContextMenu.pasteAsPlainText',
+        'Paste as plain text'
+      ),
+      disabled: readOnly
+    },
+    {
+      kind: 'edit',
+      action: 'select-all',
+      label: t('auto.components.editor.PlainEditableDomContextMenu.selectAll', 'Select all'),
+      disabled: false
+    }
   ]
 }
 

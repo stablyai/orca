@@ -8,9 +8,9 @@
 // `theme = <path>` references merge.
 
 import type { SettingsApi } from '../../../preload/api/preferences/settings-api'
+import type { GlobalSettings } from '../../../shared/settings/global-settings-types'
 
 type GhosttyImportPreview = Awaited<ReturnType<SettingsApi['previewGhosttyImport']>>
-import { getStoredSettings } from './preload-api/preferences/web-preferences-store'
 import { parseGhosttyConfig } from '../../../main/ghostty/parser'
 import { mapGhosttyToOrca } from '../../../main/ghostty/mapper'
 import { readStagedFileText, stagePath } from './tauri-native-staged-read'
@@ -45,6 +45,12 @@ function mergeParsed(target: ParsedConfig, parsed: ParsedConfig): void {
     }
     target[key] = value
   }
+}
+
+// Why public API: the preview only compares terminal keys, so it reads them
+// through the settings API that owns focus routing instead of the store reader.
+function currentTerminalDiffBase(): Partial<GlobalSettings> {
+  return window.api.settings.getSync() ?? {}
 }
 
 function usesConditionalThemePair(themeName: string): boolean {
@@ -128,7 +134,7 @@ export async function previewTauriGhosttyImport(): Promise<GhosttyImportPreview>
   const { diff: rawDiff, unsupportedKeys: mappedUnsupportedKeys } = mapGhosttyToOrca(parsed, false)
   const unsupportedKeys = [...mappedUnsupportedKeys, ...themeUnsupportedKeys]
 
-  const currentSettings = getStoredSettings()
+  const currentSettings = currentTerminalDiffBase()
   const actualDiff: Partial<typeof rawDiff> = {}
   for (const key of Object.keys(rawDiff) as (keyof typeof rawDiff)[]) {
     const value = rawDiff[key]

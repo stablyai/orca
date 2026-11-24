@@ -1,7 +1,8 @@
 import { useEffect, useState } from 'react'
 import { toast } from 'sonner'
 import { Loader2 } from 'lucide-react'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
+import { runWithBusyFlag } from '@/lib/run-with-busy-flag'
 import { callRuntimeRpc } from '@/runtime/rpc/calls/runtime-rpc-call'
 import { callStructuredAgentSession } from '@/runtime/native-chat/requests/structured-agent-session-call'
 import type { AgentSessionOptionsResult } from '../../../../shared/agent-session/options/protocol/agent-session-options-result'
@@ -36,6 +37,7 @@ function catalogModels(result: AgentSessionOptionsResult): CatalogModel[] {
 
 /** A member's live session is the single source for its model list and next-turn model. */
 export function RoomMemberModelPicker(props: { roomId: string; member: RoomMember }) {
+  const t = useTranslate()
   const sessionId = props.member.sessionId
   const agent = agentFromMemberId(props.member.memberId)
   const [model, setModel] = useState<MemberModel | null>(null)
@@ -74,23 +76,22 @@ export function RoomMemberModelPicker(props: { roomId: string; member: RoomMembe
     if (!model || saving || value === current) {
       return
     }
-    setSaving(true)
     try {
-      await callRuntimeRpc(LOCAL, 'orchestration.roomMemberSetModel', {
-        id: props.roomId,
-        memberId: props.member.memberId,
-        model: value
+      await runWithBusyFlag(setSaving, async () => {
+        await callRuntimeRpc(LOCAL, 'orchestration.roomMemberSetModel', {
+          id: props.roomId,
+          memberId: props.member.memberId,
+          model: value
+        })
+        setModel({ ...model, current: value })
+        toast.success(t('auto.components.rooms.roster.modelUpdated', 'Model updated'))
       })
-      setModel({ ...model, current: value })
-      toast.success(translate('auto.components.rooms.roster.modelUpdated', 'Model updated'))
     } catch (error) {
       toast.error(
-        `${translate('auto.components.rooms.roster.modelUpdateFailed', 'Model update failed')}: ${
+        `${t('auto.components.rooms.roster.modelUpdateFailed', 'Model update failed')}: ${
           (error as Error).message
         }`
       )
-    } finally {
-      setSaving(false)
     }
   }
 
@@ -107,7 +108,7 @@ export function RoomMemberModelPicker(props: { roomId: string; member: RoomMembe
       <SelectContent align="start" position="popper">
         {!current ? (
           <SelectItem value="_unknown">
-            {translate('auto.components.rooms.roster.modelUnknown', '(unknown)')}
+            {t('auto.components.rooms.roster.modelUnknown', '(unknown)')}
           </SelectItem>
         ) : null}
         {choices.map((choice) => (

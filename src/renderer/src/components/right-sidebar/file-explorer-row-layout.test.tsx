@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
 import { renderToStaticMarkup } from 'react-dom/server'
-import { WorkspaceFileIcon } from '@/components/WorkspaceFileIcon'
+import { FolderIcon } from '@/components/icons/FileTypeIcon'
 import { FileExplorerIndentGuides } from './FileExplorerIndentGuides'
 import { InlineInputRow } from './file-explorer/mutations/file-explorer-inline-input-row'
 import { FILE_EXPLORER_ROW_HEIGHT, getFileExplorerRowPadding } from './file-explorer-row-layout'
@@ -32,15 +32,6 @@ describe('compact file explorer rows', () => {
     expect(markup).toContain('var(--border)')
   })
 
-  it('switches icon assets with the app theme without adding accessible or draggable images', () => {
-    const markup = renderToStaticMarkup(<WorkspaceFileIcon path="index.ts" />)
-    expect(markup).toContain('aria-hidden="true"')
-    expect(markup).toContain('dark:hidden')
-    expect(markup).toContain('dark:block')
-    expect(markup.match(/draggable="false"/g)).toHaveLength(2)
-    expect(markup).toContain('alt=""')
-  })
-
   it('preserves the folder icon while renaming a directory', () => {
     const markup = renderToStaticMarkup(
       <InlineInputRow
@@ -57,7 +48,13 @@ describe('compact file explorer rows', () => {
       />
     )
     expect(markup).toContain(
-      renderToStaticMarkup(<WorkspaceFileIcon path="__fixtures__" directory />)
+      renderToStaticMarkup(
+        <FolderIcon
+          folderPath="__fixtures__"
+          open={false}
+          className="size-3 shrink-0 text-muted-foreground"
+        />
+      )
     )
   })
 })

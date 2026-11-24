@@ -28,12 +28,14 @@ export type WorktreeNavHistorySimpleViewEntry =
   | 'tasks'
   | 'automations'
   | 'artifacts'
+  | 'workbench'
   | 'skills'
   | 'rooms'
 const SIMPLE_VIEW_ENTRIES: readonly WorktreeNavHistorySimpleViewEntry[] = [
   'tasks',
   'automations',
   'artifacts',
+  'workbench',
   'skills',
   'rooms'
 ]
@@ -129,19 +131,13 @@ function getHistoryEntryKey(entry: WorktreeNavHistoryEntry): string {
   if (entry.kind === 'automations-page') {
     return `view:automations-page:${automationsPageLocationKey(entry.location)}`
   }
-  if (entry.source === 'github') {
+  if (entry.source === 'github' || entry.source === 'gitlab') {
     const sourceScope =
-      entry.sourceContext?.provider === 'github'
+      entry.sourceContext?.provider === entry.source
         ? getTaskSourceCacheScope(entry.sourceContext)
         : 'legacy'
-    return `view:task-detail:github:${sourceScope}:${entry.workItem.repoId}:${entry.workItem.type}:${entry.workItem.number}:${entry.initialTab ?? 'conversation'}`
-  }
-  if (entry.source === 'gitlab') {
-    const sourceScope =
-      entry.sourceContext?.provider === 'gitlab'
-        ? getTaskSourceCacheScope(entry.sourceContext)
-        : 'legacy'
-    return `view:task-detail:gitlab:${sourceScope}:${entry.workItem.repoId}:${entry.workItem.type}:${entry.workItem.number}`
+    const tabSuffix = entry.source === 'github' ? `:${entry.initialTab ?? 'conversation'}` : ''
+    return `view:task-detail:${entry.source}:${sourceScope}:${entry.workItem.repoId}:${entry.workItem.type}:${entry.workItem.number}${tabSuffix}`
   }
   if (entry.source === 'jira') {
     const sourceScope =
@@ -281,21 +277,10 @@ export const createWorktreeNavHistorySlice: StateCreator<
   worktreeNavHistoryIndex: -1,
   isNavigatingHistory: false,
 
-  recordWorktreeVisit: (worktreeId) => {
-    set((s) => appendHistoryEntry(s, worktreeId))
-  },
-
-  recordViewVisit: (entry) => {
-    set((s) => appendHistoryEntry(s, entry))
-  },
-
-  goBackWorktree: () => {
-    navigateToIndex(get, set, 'back')
-  },
-
-  goForwardWorktree: () => {
-    navigateToIndex(get, set, 'forward')
-  }
+  recordWorktreeVisit: (worktreeId) => set((s) => appendHistoryEntry(s, worktreeId)),
+  recordViewVisit: (entry) => set((s) => appendHistoryEntry(s, entry)),
+  goBackWorktree: () => navigateToIndex(get, set, 'back'),
+  goForwardWorktree: () => navigateToIndex(get, set, 'forward')
 })
 
 function navigateToIndex(

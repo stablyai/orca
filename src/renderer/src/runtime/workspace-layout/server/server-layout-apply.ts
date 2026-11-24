@@ -16,6 +16,7 @@ export const SERVER_ROUTED_LAYOUT_COMMANDS = [
   'moveTab',
   'splitGroup',
   'setGroupRatios',
+  'setChatPanelSide',
   'setPaneRatios',
   'equalizePanes',
   'movePane',
@@ -72,7 +73,11 @@ export function serverLayoutApplyFor(
   if (!route) {
     return null
   }
-  if (command.type === 'setGroupRatios' || command.type === 'setDefaultTabsApplied') {
+  if (
+    command.type === 'setGroupRatios' ||
+    command.type === 'setChatPanelSide' ||
+    command.type === 'setDefaultTabsApplied'
+  ) {
     // Group ids are the server's own: frames carry them unchanged; the mark names no tab.
     return { route, command }
   }

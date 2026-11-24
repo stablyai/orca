@@ -27,48 +27,86 @@ export function shouldUseRichMarkdownDomContextMenu(): boolean {
 export function buildRichMarkdownDomContextMenuModel(options: {
   cellType: RichMarkdownDomMenuCellType | null
   hasSelection: boolean
+  t?: (key: string, defaultValue: string) => string
 }): RichMarkdownDomMenuEntry[] {
-  const { cellType, hasSelection } = options
+  const { cellType, hasSelection, t = translate } = options
   const inHeaderRow = cellType === 'header'
+  // Why: one t() call per label keeps every key a static literal for catalog
+  // extraction while keeping this file under the max-lines budget.
+  const labels = {
+    addLink: t('auto.components.editor.RichMarkdownDomContextMenu.addLink', 'Add link'),
+    format: t('auto.components.editor.RichMarkdownDomContextMenu.format', 'Format'),
+    bold: t('auto.components.editor.RichMarkdownDomContextMenu.bold', 'Bold'),
+    italic: t('auto.components.editor.RichMarkdownDomContextMenu.italic', 'Italic'),
+    strike: t('auto.components.editor.RichMarkdownDomContextMenu.strike', 'Strike'),
+    inlineCode: t('auto.components.editor.RichMarkdownDomContextMenu.inlineCode', 'Inline code'),
+    codeBlock: t('auto.components.editor.RichMarkdownDomContextMenu.codeBlock', 'Code block'),
+    quote: t('auto.components.editor.RichMarkdownDomContextMenu.quote', 'Quote'),
+    paragraph: t('auto.components.editor.RichMarkdownDomContextMenu.paragraph', 'Paragraph'),
+    bodyText: t('auto.components.editor.RichMarkdownDomContextMenu.bodyText', 'Body text'),
+    heading1: t('auto.components.editor.RichMarkdownDomContextMenu.heading1', 'Heading 1'),
+    heading2: t('auto.components.editor.RichMarkdownDomContextMenu.heading2', 'Heading 2'),
+    heading3: t('auto.components.editor.RichMarkdownDomContextMenu.heading3', 'Heading 3'),
+    heading4: t('auto.components.editor.RichMarkdownDomContextMenu.heading4', 'Heading 4'),
+    heading5: t('auto.components.editor.RichMarkdownDomContextMenu.heading5', 'Heading 5'),
+    bulletList: t('auto.components.editor.RichMarkdownDomContextMenu.bulletList', 'Bullet list'),
+    numberedList: t(
+      'auto.components.editor.RichMarkdownDomContextMenu.numberedList',
+      'Numbered list'
+    ),
+    checklist: t('auto.components.editor.RichMarkdownDomContextMenu.checklist', 'Checklist'),
+    insert: t('auto.components.editor.RichMarkdownDomContextMenu.insert', 'Insert'),
+    link: t('auto.components.editor.RichMarkdownDomContextMenu.link', 'Link'),
+    image: t('auto.components.editor.RichMarkdownDomContextMenu.image', 'Image'),
+    divider: t('auto.components.editor.RichMarkdownDomContextMenu.divider', 'Divider'),
+    cut: t('auto.components.editor.RichMarkdownDomContextMenu.cut', 'Cut'),
+    copy: t('auto.components.editor.RichMarkdownDomContextMenu.copy', 'Copy'),
+    paste: t('auto.components.editor.RichMarkdownDomContextMenu.paste', 'Paste'),
+    pasteAsPlainText: t(
+      'auto.components.editor.RichMarkdownDomContextMenu.pasteAsPlainText',
+      'Paste as plain text'
+    ),
+    selectAll: t('auto.components.editor.RichMarkdownDomContextMenu.selectAll', 'Select all')
+  }
   return [
-    { kind: 'command', command: 'add-link', label: 'Add link' },
+    { kind: 'command', command: 'add-link', label: labels.addLink },
     { kind: 'separator' },
     {
       kind: 'submenu',
-      label: 'Format',
+      label: labels.format,
       items: [
-        { kind: 'command', command: 'bold', label: 'Bold' },
-        { kind: 'command', command: 'italic', label: 'Italic' },
-        { kind: 'command', command: 'strike', label: 'Strike' },
-        { kind: 'command', command: 'inline-code', label: 'Inline code' },
-        { kind: 'command', command: 'code-block', label: 'Code block' },
-        { kind: 'command', command: 'blockquote', label: 'Quote' }
+        { kind: 'command', command: 'bold', label: labels.bold },
+        { kind: 'command', command: 'italic', label: labels.italic },
+        { kind: 'command', command: 'strike', label: labels.strike },
+        { kind: 'command', command: 'inline-code', label: labels.inlineCode },
+        { kind: 'command', command: 'code-block', label: labels.codeBlock },
+        { kind: 'command', command: 'blockquote', label: labels.quote }
       ]
     },
     {
       kind: 'submenu',
-      label: 'Paragraph',
+      label: labels.paragraph,
       items: [
-        { kind: 'command', command: 'paragraph', label: 'Body text' },
-        { kind: 'command', command: 'heading-1', label: 'Heading 1' },
-        { kind: 'command', command: 'heading-2', label: 'Heading 2' },
-        { kind: 'command', command: 'heading-3', label: 'Heading 3' },
-        { kind: 'command', command: 'heading-4', label: 'Heading 4' },
-        { kind: 'command', command: 'heading-5', label: 'Heading 5' },
+        { kind: 'command', command: 'paragraph', label: labels.bodyText },
+        { kind: 'command', command: 'heading-1', label: labels.heading1 },
+        { kind: 'command', command: 'heading-2', label: labels.heading2 },
+        { kind: 'command', command: 'heading-3', label: labels.heading3 },
+        { kind: 'command', command: 'heading-4', label: labels.heading4 },
+        { kind: 'command', command: 'heading-5', label: labels.heading5 },
         { kind: 'separator' },
-        { kind: 'command', command: 'bullet-list', label: 'Bullet list' },
-        { kind: 'command', command: 'ordered-list', label: 'Numbered list' },
-        { kind: 'command', command: 'task-list', label: 'Checklist' }
+        { kind: 'command', command: 'bullet-list', label: labels.bulletList },
+        { kind: 'command', command: 'ordered-list', label: labels.numberedList },
+        { kind: 'command', command: 'task-list', label: labels.checklist }
       ]
     },
     {
       kind: 'submenu',
-      label: 'Insert',
+      label: labels.insert,
       items: [
-        { kind: 'command', command: 'add-link', label: 'Link' },
-        { kind: 'command', command: 'image', label: 'Image' },
-        { kind: 'command', command: 'divider', label: 'Divider' },
-        { kind: 'command', command: 'code-block', label: 'Code block' }
+        { kind: 'command', command: 'add-link', label: labels.link },
+        { kind: 'command', command: 'image', label: labels.image },
+        { kind: 'command', command: 'divider', label: labels.divider },
+        { kind: 'command', command: 'code-block', label: labels.codeBlock }
       ]
     },
     ...(cellType
@@ -136,11 +174,11 @@ export function buildRichMarkdownDomContextMenuModel(options: {
         ]
       : []),
     { kind: 'separator' },
-    { kind: 'edit', action: 'cut', label: 'Cut', disabled: !hasSelection },
-    { kind: 'edit', action: 'copy', label: 'Copy', disabled: !hasSelection },
-    { kind: 'edit', action: 'paste', label: 'Paste' },
-    { kind: 'edit', action: 'paste-plain', label: 'Paste as plain text' },
-    { kind: 'edit', action: 'select-all', label: 'Select all' }
+    { kind: 'edit', action: 'cut', label: labels.cut, disabled: !hasSelection },
+    { kind: 'edit', action: 'copy', label: labels.copy, disabled: !hasSelection },
+    { kind: 'edit', action: 'paste', label: labels.paste },
+    { kind: 'edit', action: 'paste-plain', label: labels.pasteAsPlainText },
+    { kind: 'edit', action: 'select-all', label: labels.selectAll }
   ]
 }
 

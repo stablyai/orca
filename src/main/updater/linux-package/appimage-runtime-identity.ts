@@ -8,11 +8,14 @@ import {
   statSync,
   type Stats
 } from 'node:fs'
-import { dirname, isAbsolute, join, relative, resolve, sep } from 'node:path'
-
-const APPIMAGE_HEADER_LENGTH = 11
-const ORCA_PACKAGE_MARKER_MAX_BYTES = 1_024
-const PACKAGE_TYPE_MARKER_MAX_BYTES = 32
+import { dirname, join, resolve } from 'node:path'
+import {
+  APPIMAGE_HEADER_LENGTH,
+  ORCA_PACKAGE_MARKER_MAX_BYTES,
+  PACKAGE_TYPE_MARKER_MAX_BYTES,
+  isAbsolutePath,
+  isInside
+} from './appimage-runtime-probe'
 
 export type AppImageRuntimeIdentity = {
   appImagePath: string
@@ -23,10 +26,6 @@ export type AppImageRuntimeIdentityInput = {
   environment?: NodeJS.ProcessEnv
   execPath?: unknown
   resourcesPath?: unknown
-}
-
-function isAbsolutePath(value: unknown): value is string {
-  return typeof value === 'string' && value.length > 0 && !value.includes('\0') && isAbsolute(value)
 }
 
 function readExact(fd: number, length: number): Buffer | null {
@@ -74,16 +73,6 @@ function hasAppImageHeader(appImagePath: string): boolean {
         header.subarray(8, 11).equals(Buffer.from([0x41, 0x49, 0x02]))
       )
     }) === true
-  )
-}
-
-function isInside(rootPath: string, candidatePath: string): boolean {
-  const candidateRelative = relative(rootPath, candidatePath)
-  return (
-    candidateRelative.length > 0 &&
-    candidateRelative !== '..' &&
-    !candidateRelative.startsWith(`..${sep}`) &&
-    !isAbsolute(candidateRelative)
   )
 }
 
@@ -197,3 +186,5 @@ export function resolveAppImageRuntimeIdentity(
 
   return { appImagePath }
 }
+
+export { resolveAppImageRuntimeIdentityAsync } from './appimage-runtime-probe'

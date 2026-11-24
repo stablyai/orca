@@ -27,6 +27,18 @@ export async function openTopologyStore(directory: string, seed?: string): Promi
   return (await openTopologyStoreWithAuthority(directory, seed)).store
 }
 
+// Open SQLite handles block recursive removal on Windows; every opened authority is tracked for teardown.
+const openTopologyAuthorities = new Set<DelayedAuthority>()
+
+/** Release SQLite handles before temp-dir removal; Windows rmSync fails on open databases. */
+export async function closeTopologyStores(): Promise<void> {
+  // Deleting the current entry mid-iteration is safe for Sets.
+  for (const authority of openTopologyAuthorities) {
+    openTopologyAuthorities.delete(authority)
+    await authority.close()
+  }
+}
+
 /** Expose authority so tests can inject write failures. */
 export async function openTopologyStoreWithAuthority(
   directory: string,
@@ -37,6 +49,7 @@ export async function openTopologyStoreWithAuthority(
     inner.writeSerializedState(Buffer.from(seed))
   }
   const authority = new DelayedAuthority(inner)
+  openTopologyAuthorities.add(authority)
   const store = new Store({
     dataFile: join(directory, 'orca-data.json'),
     profileStateAuthority: authority

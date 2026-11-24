@@ -4,6 +4,7 @@ import type { IssueInfo } from '../../../../shared/github/pull-requests/pull-req
 import { callRuntimeRpc } from '@/runtime/rpc/calls/runtime-rpc-call'
 import { ipcOrRuntimeTargetForHostId } from '@/runtime/rpc/targets/runtime-client-target'
 import { useActiveRepo } from '@/store/repos/use-repository-catalog'
+import { runWithBusyFlag } from '@/lib/run-with-busy-flag'
 
 const KANBAN_ISSUE_LIMIT = 50
 
@@ -22,27 +23,26 @@ export function useWorkbenchKanbanIssues() {
       setError('No routable host for the active repository.')
       return
     }
-    setLoading(true)
     setError(null)
     try {
-      const items =
-        target.kind === 'environment'
-          ? await callRuntimeRpc<IssueInfo[]>(
-              target,
-              'github.listIssues',
-              { repo: repo.id, limit: KANBAN_ISSUE_LIMIT },
-              { timeoutMs: 30_000 }
-            )
-          : await window.api.gh.listIssues({
-              repoPath: repo.path,
-              repoId: repo.id,
-              limit: KANBAN_ISSUE_LIMIT
-            })
-      setIssues(items)
+      await runWithBusyFlag(setLoading, async () => {
+        const items =
+          target.kind === 'environment'
+            ? await callRuntimeRpc<IssueInfo[]>(
+                target,
+                'github.listIssues',
+                { repo: repo.id, limit: KANBAN_ISSUE_LIMIT },
+                { timeoutMs: 30_000 }
+              )
+            : await window.api.gh.listIssues({
+                repoPath: repo.path,
+                repoId: repo.id,
+                limit: KANBAN_ISSUE_LIMIT
+              })
+        setIssues(items)
+      })
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : String(caught))
-    } finally {
-      setLoading(false)
     }
   }, [repo])
 

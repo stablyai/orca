@@ -2,6 +2,9 @@ import {
   replaceTabBuckets,
   replaceRecordEntries
 } from '@/store/record-transitions/keyed-record-transitions'
+import { dedupeTabOrder } from '../../../../../shared/workspace-layout/tab-groups/tab-order'
+import { pushRecentTabId, sanitizeRecentTabIds } from '../../slices/tabs/tab-selection-history'
+import type { TabGroup } from '../../../../../shared/workspace-layout/tab-groups/tab-types'
 import type { AppState } from '../../types'
 
 type TerminalTabReconnectState = Pick<
@@ -178,6 +181,34 @@ export function buildOrphanTerminalCompanionCleanupPatch(
     activeTabId:
       state.activeTabId && orphanTerminalIds.has(state.activeTabId) ? null : state.activeTabId
   }
+}
+
+/** Repair every group before adding a tab, or inactive/background creation can revive stale focus. */
+export function repairOrphanTerminalGroups(
+  groups: TabGroup[],
+  orphanTerminalIds: Set<string>
+): TabGroup[] {
+  if (orphanTerminalIds.size === 0) {
+    return groups
+  }
+  return groups.map((entry) => {
+    const tabOrder = dedupeTabOrder(entry.tabOrder).filter((tabId) => !orphanTerminalIds.has(tabId))
+    const recentTabIds = sanitizeRecentTabIds(entry.recentTabIds, tabOrder)
+    const replacedActiveTabId = Boolean(
+      entry.activeTabId && orphanTerminalIds.has(entry.activeTabId)
+    )
+    const fallbackActiveTabId = recentTabIds.at(-1) ?? tabOrder[0] ?? null
+    const activeTabId = replacedActiveTabId ? fallbackActiveTabId : entry.activeTabId
+    return {
+      ...entry,
+      activeTabId,
+      tabOrder,
+      recentTabIds:
+        replacedActiveTabId && activeTabId
+          ? pushRecentTabId(recentTabIds, activeTabId)
+          : recentTabIds
+    }
+  })
 }
 
 export function buildOrphanTerminalCleanupPatch(

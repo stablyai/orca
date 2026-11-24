@@ -13,6 +13,7 @@ import { WindowSession } from '../../../persistence/terminal-topology/testing/te
 import {
   emptyTerminalSessionProfile,
   FIXTURE_GIT_WORKTREE_ID as GIT,
+  closeTopologyStores,
   openTopologyStore
 } from '../../../persistence/terminal-topology/testing/terminal-topology-profile-fixture'
 import { applyWindowLayoutCommand } from '../layout/runtime-layout-apply'
@@ -85,8 +86,9 @@ beforeEach(() => {
   check = installLayoutFrameModelCheck()
 })
 
-afterEach(() => {
+afterEach(async () => {
   check.uninstall()
+  await closeTopologyStores()
   for (const directory of directories.splice(0)) {
     rmSync(directory, { recursive: true, force: true })
   }

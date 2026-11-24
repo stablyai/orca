@@ -23,6 +23,10 @@ import { RightSidebarToggle } from './RightSidebarToggle'
 /** Reuse left chrome across full-width and sidebar-width headers so controls/popovers stay consistent. */
 export function TitlebarLeftControls({ layout }: { layout: AppChromeLayout }): React.JSX.Element {
   const t = useTranslate()
+  // Why: destructure before render so the compiler stops treating sibling
+  // layout reads as ref reads through titlebarLeftControlsRef.
+  const { titlebarLeftControlsRef, leftTitlebarChromeLayout, isFullScreen, rightSidebarOpen } =
+    layout
   const toggleSidebar = useAppStore((s) => s.toggleSidebar)
   const updateSettings = useAppStore((s) => s.updateSettings)
   const canGoBackWorktree = useAppStore(canGoBackWorktreeHistory)
@@ -34,13 +38,13 @@ export function TitlebarLeftControls({ layout }: { layout: AppChromeLayout }): R
   return (
     // Measure the whole row for tab-strip spacing. w-max prevents the collapsed w-0 wrapper shrinking Windows text to one glyph.
     <div
-      ref={layout.titlebarLeftControlsRef}
+      ref={titlebarLeftControlsRef}
       className={`flex h-full shrink-0 items-center${
-        layout.leftTitlebarChromeLayout.isFloating ? ' w-max' : ' w-full'
+        leftTitlebarChromeLayout.isFloating ? ' w-max' : ' w-full'
       }`}
     >
       <div className="flex h-full items-center">
-        {hasMacTrafficLights && !layout.isFullScreen ? (
+        {hasMacTrafficLights && !isFullScreen ? (
           <div className="titlebar-traffic-light-pad" />
         ) : hasCustomTitleBar ? (
           /* Replace native Windows/Linux chrome with logo and application-menu access. */
@@ -102,7 +106,7 @@ export function TitlebarLeftControls({ layout }: { layout: AppChromeLayout }): R
         )}
       </div>
       {layout.showRightSidebarControls ? <SidebarLayoutToggle /> : null}
-      {layout.showRightSidebarControls && !layout.rightSidebarOpen ? <RightSidebarToggle /> : null}
+      {layout.showRightSidebarControls && !rightSidebarOpen ? <RightSidebarToggle /> : null}
       {/* Why: Back/Forward span worktree + page history, so show the cluster wherever the shortcut is live (hidden in Settings/non-stack views). */}
       {shouldShowWorktreeHistoryControls(layout.activeView) && (
         // Collapsed headers shrink-wrap, so ml-auto alone cannot leave a history-button gutter.

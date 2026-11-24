@@ -3,7 +3,7 @@ import { Loader2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { ContextMenu, ContextMenuTrigger } from '@/components/ui/context-menu'
 import { VirtualizedList } from '@/components/ui/virtualized-list'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import type {
   GitHistoryItem,
   GitHistoryResult
@@ -54,7 +54,14 @@ export function GitHistoryList({
   refreshing: boolean
   paginationPaused?: boolean
 }): React.JSX.Element {
+  const t = useTranslate()
   const [scrollElement, setScrollElement] = useState<HTMLDivElement | null>(null)
+  // Why: the reset effect below mutates the node, so it reads a ref; the state only feeds rendering.
+  const scrollElementRef = useRef<HTMLDivElement | null>(null)
+  const setScrollRefs = useCallback((element: HTMLDivElement | null) => {
+    scrollElementRef.current = element
+    setScrollElement(element)
+  }, [])
   const sentinelRef = useRef<HTMLDivElement>(null)
   const [expanded, setExpanded] = useState<Set<string>>(() => new Set())
   const [filesByCommit, setFilesByCommit] = useState<Record<string, GitHistoryCommitFilesState>>({})
@@ -69,10 +76,11 @@ export function GitHistoryList({
   }
   useEffect(() => {
     fileSessionRef.current = { identity, ids: new Set() }
-    if (scrollElement) {
-      scrollElement.scrollTop = 0
+    const element = scrollElementRef.current
+    if (element) {
+      element.scrollTop = 0
     }
-  }, [identity, scrollElement])
+  }, [identity])
 
   const canLoad = Boolean(onLoadMore)
   const pagingDisabled = refreshing || paginationPaused
@@ -152,10 +160,10 @@ export function GitHistoryList({
 
   return (
     <div
-      ref={setScrollElement}
+      ref={setScrollRefs}
       className="overflow-y-auto scrollbar-sleek"
       style={{ height }}
-      aria-label={translate('source-control.history.label', 'Commit history')}
+      aria-label={t('source-control.history.label', 'Commit history')}
       aria-busy={isLoadingMore || refreshing}
     >
       <VirtualizedList
@@ -212,23 +220,23 @@ export function GitHistoryList({
         {isLoadingMore ? (
           <span role="status" className="flex items-center gap-2">
             <Loader2 className="size-4 animate-spin" />
-            {translate('source-control.history.loading-more', 'Loading more commits…')}
+            {t('source-control.history.loading-more', 'Loading more commits…')}
           </span>
         ) : canLoad ? (
           <Button variant="ghost" size="xs" disabled={pagingDisabled} onClick={onLoadMore}>
             {loadMoreError
-              ? translate('source-control.history.retry', 'Retry loading commits')
-              : translate('source-control.history.load-more', 'Load more commits')}
+              ? t('source-control.history.retry', 'Retry loading commits')
+              : t('source-control.history.load-more', 'Load more commits')}
           </Button>
         ) : result.hasMore ? (
           <p>
-            {translate(
+            {t(
               'source-control.history.update-host',
               'Restart Orca or update the execution host to load older commits.'
             )}
           </p>
         ) : (
-          <span>{translate('source-control.history.all-loaded', 'All commits loaded')}</span>
+          <span>{t('source-control.history.all-loaded', 'All commits loaded')}</span>
         )}
       </div>
     </div>

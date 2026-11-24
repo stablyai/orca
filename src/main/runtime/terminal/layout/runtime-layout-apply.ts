@@ -22,6 +22,7 @@ export type WindowLayoutCommand =
       (
         | { tabId: string }
         | { type: 'setGroupRatios' }
+        | { type: 'setChatPanelSide' }
         | { type: 'closeTabs'; tabIds: [string] }
         | { browserTabId: string }
         | { type: 'moveTabToWorkspace' }

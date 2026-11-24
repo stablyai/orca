@@ -14,9 +14,14 @@ export function createWebFolderWorkspacesApi(): NonNullable<
   Partial<PreloadApi>['folderWorkspaces']
 > {
   return {
-    list: async () =>
-      (await callRuntimeResult<{ folderWorkspaces: FolderWorkspace[] }>('folderWorkspace.list'))
-        .folderWorkspaces,
+    list: async () => {
+      // Why destructure: the field belongs to the runtime RPC envelope, not the
+      // store record, so it reads through the envelope instead of the catalog selectors.
+      const { folderWorkspaces } = await callRuntimeResult<{
+        folderWorkspaces: FolderWorkspace[]
+      }>('folderWorkspace.list')
+      return folderWorkspaces
+    },
     getPathStatus: async (args: FolderWorkspacePathStatusRequest) =>
       (
         await callRuntimeResult<{ status: FolderWorkspacePathStatus }>(

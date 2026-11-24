@@ -16,6 +16,7 @@ import { createShellApi } from './preload-api/browser/web-shell-api'
 import { callRuntimeResult } from './runtime/client/web-runtime-calls'
 import { getBrowserPlatform } from './preload-api/web-storage'
 import { invokeNative, invokePlugin, isTauriNativeHost } from './tauri-native-host'
+import { translate } from '@/i18n/i18n'
 
 // Why silent: Electron drops malformed or disallowed URLs without throwing and
 // callers fire-and-forget, so a throw would surface as an unhandled rejection.
@@ -258,17 +259,21 @@ export function createTauriNativeShellApi(): NonNullable<Partial<PreloadApi>['sh
     pickAttachment: async () =>
       (
         await pickPaths({
-          title: 'Select attachment',
+          title: translate('auto.web.tauriNative.dialog.selectAttachment', 'Select attachment'),
           multiple: false,
           directory: false
         })
       )[0] ?? null,
     pickAttachments: () =>
-      pickPaths({ title: 'Select attachments', multiple: true, directory: false }),
+      pickPaths({
+        title: translate('auto.web.tauriNative.dialog.selectAttachments', 'Select attachments'),
+        multiple: true,
+        directory: false
+      }),
     pickImage: async () =>
       (
         await pickPaths({
-          title: 'Select image',
+          title: translate('auto.web.tauriNative.dialog.selectImage', 'Select image'),
           multiple: false,
           directory: false,
           filters: [
@@ -282,7 +287,10 @@ export function createTauriNativeShellApi(): NonNullable<Partial<PreloadApi>['sh
     pickRepoIconImage: async () => {
       const filePath = (
         await pickPaths({
-          title: 'Select repository icon',
+          title: translate(
+            'auto.web.tauriNative.dialog.selectRepositoryIcon',
+            'Select repository icon'
+          ),
           multiple: false,
           directory: false,
           filters: [{ name: 'PNG images', extensions: ['png'] }]
@@ -297,7 +305,7 @@ export function createTauriNativeShellApi(): NonNullable<Partial<PreloadApi>['sh
     pickAudio: async () =>
       (
         await pickPaths({
-          title: 'Select audio',
+          title: translate('auto.web.tauriNative.dialog.selectAudio', 'Select audio'),
           multiple: false,
           directory: false,
           filters: [{ name: 'Audio', extensions: ['ogg', 'mp3', 'wav', 'm4a', 'aac', 'flac'] }]
@@ -306,7 +314,7 @@ export function createTauriNativeShellApi(): NonNullable<Partial<PreloadApi>['sh
     pickDirectory: async ({ defaultPath }) =>
       (
         await pickPaths({
-          title: 'Select directory',
+          title: translate('auto.web.tauriNative.dialog.selectDirectory', 'Select directory'),
           multiple: false,
           directory: true,
           ...(defaultPath ? { defaultPath } : {})

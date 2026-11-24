@@ -1,6 +1,6 @@
 import { CircleAlert, Loader2, X } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import { Button } from '@/components/ui/button'
 import {
   Sheet,
@@ -26,6 +26,7 @@ export function RoomRosterBar(props: {
   onAddMember: (sessionId: string, isAdmin: boolean) => void
   onRemoveMember: (memberId: string) => void
 }) {
+  const t = useTranslate()
   // Why: this memo boundary needs its own language subscription, while
   // translate() preserves Orca's pseudo-localization behavior.
   useTranslation()
@@ -37,11 +38,9 @@ export function RoomRosterBar(props: {
         <div className="flex min-h-0 flex-1 flex-col overflow-y-auto scrollbar-sleek">
           <div className="border-b border-border/60">
             <SheetHeader>
-              <SheetTitle>
-                {translate('auto.components.rooms.roster.title', 'Team members')}
-              </SheetTitle>
+              <SheetTitle>{t('auto.components.rooms.roster.title', 'Team members')}</SheetTitle>
               <SheetDescription>
-                {translate(
+                {t(
                   'auto.components.rooms.roster.description',
                   'Create a bot, turn an open session into a fresh bot, or clean up this team.'
                 )}
@@ -51,12 +50,12 @@ export function RoomRosterBar(props: {
 
           <div className="space-y-3 p-4">
             <h3 className="text-xs font-semibold text-muted-foreground">
-              {translate('auto.components.rooms.roster.current', 'Current members')}
+              {t('auto.components.rooms.roster.current', 'Current members')}
             </h3>
             <div className="space-y-1">
               {selected.members.length === 0 ? (
                 <p className="rounded-md border border-dashed border-border/60 p-3 text-xs text-muted-foreground">
-                  {translate('auto.components.rooms.page.noMembers', 'No members yet.')}
+                  {t('auto.components.rooms.page.noMembers', 'No members yet.')}
                 </p>
               ) : (
                 selected.members.map((m) => (
@@ -75,16 +74,16 @@ export function RoomRosterBar(props: {
                     {m.status === 'working' ? (
                       <span className="inline-flex items-center gap-1 text-2xs text-muted-foreground">
                         <Loader2 className="size-3 animate-spin" />
-                        {translate('auto.components.rooms.sidebar.working', 'Working…')}
+                        {t('auto.components.rooms.sidebar.working', 'Working…')}
                       </span>
                     ) : m.status === 'waiting' ? (
                       <span className="inline-flex items-center gap-1 text-2xs text-status-warning">
                         <CircleAlert className="size-3" />
-                        {translate('auto.components.rooms.sidebar.waiting', 'Waiting approval…')}
+                        {t('auto.components.rooms.sidebar.waiting', 'Waiting approval…')}
                       </span>
                     ) : m.status === 'failed' ? (
                       <span className="inline-flex items-center gap-1 text-2xs text-destructive">
-                        {translate('auto.components.rooms.page.memberFailed', 'Failed')}
+                        {t('auto.components.rooms.page.memberFailed', 'Failed')}
                       </span>
                     ) : null}
                     {!m.isAdmin ? (
@@ -92,7 +91,7 @@ export function RoomRosterBar(props: {
                         variant="ghost"
                         size="icon-sm"
                         onClick={() => props.onRemoveMember(m.memberId)}
-                        aria-label={translate(
+                        aria-label={t(
                           'auto.components.rooms.page.removeMember',
                           'Remove {{name}}',
                           {
@@ -119,12 +118,12 @@ export function RoomRosterBar(props: {
 
           <div className="space-y-2 p-4 pt-0">
             <h3 className="text-xs font-semibold text-muted-foreground">
-              {translate('auto.components.rooms.page.addMember', 'Turn an open session into a bot')}
+              {t('auto.components.rooms.page.addMember', 'Turn an open session into a bot')}
             </h3>
             <div className="max-h-56 space-y-1 overflow-y-auto scrollbar-sleek">
               {props.poolAvailable.length === 0 ? (
                 <p className="text-xs text-muted-foreground/70">
-                  {translate(
+                  {t(
                     'auto.components.rooms.page.allSessionsAdded',
                     'Every open agent session is already represented here.'
                   )}
@@ -146,14 +145,14 @@ export function RoomRosterBar(props: {
                       variant="outline"
                       onClick={() => props.onAddMember(opt.sessionId, false)}
                     >
-                      {translate('auto.components.rooms.page.add', 'Create')}
+                      {t('auto.components.rooms.page.add', 'Create')}
                     </Button>
                     <Button
                       size="xs"
                       variant="outline"
                       onClick={() => props.onAddMember(opt.sessionId, true)}
                     >
-                      {translate('auto.components.rooms.page.addAsAdmin', 'Admin')}
+                      {t('auto.components.rooms.page.addAsAdmin', 'Admin')}
                     </Button>
                   </div>
                 ))

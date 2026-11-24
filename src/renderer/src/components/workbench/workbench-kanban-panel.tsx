@@ -6,7 +6,8 @@ import { Card } from '../ui/card'
 import { useTranslate } from '@/i18n/use-translate'
 import {
   groupIssuesByKanbanColumn,
-  WORKBENCH_KANBAN_COLUMNS
+  WORKBENCH_KANBAN_COLUMNS,
+  type WorkbenchKanbanColumnId
 } from '../../../../shared/github/issue-flow/issue-kanban'
 import type { IssueInfo } from '../../../../shared/github/pull-requests/pull-request-types'
 import { useWorkbenchKanbanIssues } from './use-workbench-kanban-issues'
@@ -19,6 +20,13 @@ export function WorkbenchKanbanPanel({
   const t = useTranslate()
   const { issues, loading, error, reload, hasRepo } = useWorkbenchKanbanIssues()
   const columns = useMemo(() => groupIssuesByKanbanColumn(issues), [issues])
+  // Static keys so extraction and catalogs see every column; the template form hid them.
+  const columnLabels: Record<WorkbenchKanbanColumnId, string> = {
+    todo: t('auto.components.workbench.kanban.todo', 'Todo'),
+    doing: t('auto.components.workbench.kanban.doing', 'Doing'),
+    review: t('auto.components.workbench.kanban.review', 'Review'),
+    done: t('auto.components.workbench.kanban.done', 'Done')
+  }
 
   return (
     <div className="flex min-h-0 flex-1 flex-col gap-2">
@@ -42,7 +50,7 @@ export function WorkbenchKanbanPanel({
           {WORKBENCH_KANBAN_COLUMNS.map((column) => (
             <Card key={column} className="flex min-h-0 flex-col gap-2 p-2">
               <span className="text-2xs font-semibold uppercase tracking-wider text-muted-foreground">
-                {t(`auto.components.workbench.kanban.${column}`, column)} · {columns[column].length}
+                {columnLabels[column]} · {columns[column].length}
               </span>
               {columns[column].map((issue) => (
                 <div key={`${issue.url}#${issue.number}`} className="rounded-md border p-2 text-sm">

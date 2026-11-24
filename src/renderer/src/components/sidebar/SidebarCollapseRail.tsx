@@ -5,7 +5,7 @@ import { useAppStore } from '@/store'
 import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { formatOptionalPrimaryShortcutLabel } from '@/lib/keyboard/useShortcutLabel'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 
 /** dsh-style collapsed sidebar width: icon rail, no resize. */
 export const SIDEBAR_COLLAPSE_RAIL_WIDTH = 56
@@ -23,6 +23,7 @@ const SidebarCollapseRail = React.memo(function SidebarCollapseRail({
   onNewWorkspace,
   onOpenSettings
 }: SidebarCollapseRailProps): React.JSX.Element {
+  const t = useTranslate()
   // Why: this memo boundary needs its own language subscription, while
   // translate() preserves Orca's pseudo-localization behavior.
   useTranslation()
@@ -34,14 +35,11 @@ const SidebarCollapseRail = React.memo(function SidebarCollapseRail({
     keybindings
   )
   const newWorkspaceShortcut = formatOptionalPrimaryShortcutLabel('workspace.create', keybindings)
-  const expandLabel = translate(
+  const expandLabel = t(
     'auto.components.sidebar.SidebarCollapseRail.expandSidebar',
     'Expand sidebar'
   )
-  const newWorkspaceLabel = translate(
-    'auto.components.sidebar.SidebarHeader.92154beb7e',
-    'New workspace'
-  )
+  const newWorkspaceLabel = t('auto.components.sidebar.SidebarHeader.92154beb7e', 'New workspace')
   return (
     <div
       className="flex h-full w-14 flex-col items-center bg-worktree-sidebar py-2"
@@ -98,17 +96,14 @@ const SidebarCollapseRail = React.memo(function SidebarCollapseRail({
             size="icon-xs"
             type="button"
             className="text-muted-foreground"
-            aria-label={translate(
-              'auto.components.sidebar.SidebarSettingsHelpMenu.a428c25998',
-              'Settings'
-            )}
+            aria-label={t('auto.components.sidebar.SidebarSettingsHelpMenu.a428c25998', 'Settings')}
             onClick={onOpenSettings}
           >
             <Settings className="size-3.5" strokeWidth={2.25} />
           </Button>
         </TooltipTrigger>
         <TooltipContent side="right" sideOffset={6}>
-          {translate('auto.components.sidebar.SidebarSettingsHelpMenu.a428c25998', 'Settings')}
+          {t('auto.components.sidebar.SidebarSettingsHelpMenu.a428c25998', 'Settings')}
         </TooltipContent>
       </Tooltip>
     </div>

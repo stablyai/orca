@@ -61,10 +61,10 @@ export type PtyShellLaunchPlan = {
   startupAgentRecognition: RecognizedAgentProcess | null
 }
 
-export function createPtyShellLaunchPlan(
+export async function createPtyShellLaunchPlan(
   opts: PtySubprocessOptions,
   env: Record<string, string>
-): PtyShellLaunchPlan {
+): Promise<PtyShellLaunchPlan> {
   const resolvedWslContext = resolveWslSessionContext(opts)
   let shellPath = resolvedWslContext ? 'wsl.exe' : opts.shellOverride || resolvePtyShellPath(env)
   let shellArgs: string[]
@@ -79,7 +79,7 @@ export function createPtyShellLaunchPlan(
   let validationCwd = spawnCwd
 
   if (process.platform === 'win32') {
-    shellPath = resolveNiubashShellPath(shellPath)
+    shellPath = await resolveNiubashShellPath(shellPath)
     const normalizedShellFamily = pathWin32.basename(shellPath).toLowerCase()
     const resolvedGitBashPath = resolveWindowsGitBashShellPath(shellPath)
     const resolvedShellFamily: WindowsPowerShellShellFamily =

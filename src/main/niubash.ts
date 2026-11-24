@@ -1,15 +1,16 @@
-import { accessSync, constants, statSync } from 'node:fs'
+import { constants } from 'node:fs'
+import { access, stat } from 'node:fs/promises'
 import { posix, win32 } from 'node:path'
 import { isNiubashShell } from '../shared/niubash-shell'
 
 type NiubashPathOptions = {
   platform?: NodeJS.Platform
   env?: NodeJS.ProcessEnv
-  isExecutable?: (path: string) => boolean
+  isExecutable?: (path: string) => boolean | Promise<boolean>
 }
 
 /** Only absolute PATH entries participate; a workspace-local niu must not shadow the shell. */
-export function resolveNiubashPath(options: NiubashPathOptions = {}): string | null {
+export async function resolveNiubashPath(options: NiubashPathOptions = {}): Promise<string | null> {
   const platform = options.platform ?? process.platform
   const env = options.env ?? process.env
   const path = platform === 'win32' ? win32 : posix
@@ -18,13 +19,13 @@ export function resolveNiubashPath(options: NiubashPathOptions = {}): string | n
   )?.[1]
   const isExecutable =
     options.isExecutable ??
-    ((candidate: string): boolean => {
+    (async (candidate: string): Promise<boolean> => {
       try {
-        if (!statSync(candidate).isFile()) {
+        if (!(await stat(candidate)).isFile()) {
           return false
         }
         if (platform !== 'win32') {
-          accessSync(candidate, constants.X_OK)
+          await access(candidate, constants.X_OK)
         }
         return true
       } catch {
@@ -37,18 +38,18 @@ export function resolveNiubashPath(options: NiubashPathOptions = {}): string | n
       continue
     }
     const candidate = path.join(directory, platform === 'win32' ? 'niu.exe' : 'niu')
-    if (isExecutable(candidate)) {
+    if (await isExecutable(candidate)) {
       return candidate
     }
   }
   return null
 }
 
-export function resolveNiubashShellPath(shell: string): string {
+export async function resolveNiubashShellPath(shell: string): Promise<string> {
   if (!isNiubashShell(shell) || win32.isAbsolute(shell) || posix.isAbsolute(shell)) {
     return shell
   }
-  const resolved = resolveNiubashPath()
+  const resolved = await resolveNiubashPath()
   if (!resolved) {
     throw new Error('Niubash was not found. Install niu and add it to PATH.')
   }

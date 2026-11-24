@@ -1,5 +1,5 @@
 import { useCallback, useRef } from 'react'
-import { WorkspaceFileIcon } from '@/components/WorkspaceFileIcon'
+import { FileTypeIcon, FolderIcon } from '@/components/icons/FileTypeIcon'
 import { FileExplorerIndentGuides } from '../../FileExplorerIndentGuides'
 import { FILE_EXPLORER_ROW_HEIGHT, getFileExplorerRowPadding } from '../../file-explorer-row-layout'
 import {
@@ -141,10 +141,18 @@ export function InlineInputRow({
     >
       <FileExplorerIndentGuides depth={depth} />
       <span className="size-3 shrink-0" />
-      <WorkspaceFileIcon
-        path={inlineInput.existingName ?? ''}
-        directory={inlineInput.type === 'folder' || Boolean(inlineInput.isDirectory)}
-      />
+      {inlineInput.type === 'folder' || inlineInput.isDirectory ? (
+        <FolderIcon
+          folderPath={inlineInput.existingName}
+          open={false}
+          className="size-3 shrink-0 text-muted-foreground"
+        />
+      ) : (
+        <FileTypeIcon
+          filePath={inlineInput.existingName ?? ''}
+          className="size-3 shrink-0 text-muted-foreground"
+        />
+      )}
       <input
         key={inlineInputKey}
         ref={setInputRef}

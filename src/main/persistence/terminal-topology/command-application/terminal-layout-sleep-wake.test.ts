@@ -9,6 +9,7 @@ import { WindowSession } from '../testing/terminal-topology-window-session-fixtu
 import {
   emptyTerminalSessionProfile,
   FIXTURE_GIT_WORKTREE_ID,
+  closeTopologyStores,
   openTopologyStore,
   reopenTopologyStore
 } from '../testing/terminal-topology-profile-fixture'
@@ -25,7 +26,8 @@ const LEFT = '11111111-1111-4111-8111-111111111111'
 const RIGHT = '22222222-2222-4222-8222-222222222222'
 const directories: string[] = []
 
-afterEach(() => {
+afterEach(async () => {
+  await closeTopologyStores()
   for (const directory of directories.splice(0)) {
     rmSync(directory, { recursive: true, force: true })
   }

@@ -9,6 +9,7 @@ import type { Store } from '../store'
 import {
   emptyTerminalSessionProfile,
   FIXTURE_GIT_WORKTREE_ID as WORKTREE,
+  closeTopologyStores,
   openTopologyStore,
   reopenTopologyStore
 } from '../../terminal-topology/testing/terminal-topology-profile-fixture'
@@ -28,7 +29,8 @@ const PANE_KEY = `${TAB}:${LEAF}`
 
 const directories: string[] = []
 
-afterEach(() => {
+afterEach(async () => {
+  await closeTopologyStores()
   for (const directory of directories.splice(0)) {
     rmSync(directory, { recursive: true, force: true })
   }

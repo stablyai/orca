@@ -1,9 +1,13 @@
 import { ArrowLeftRight } from 'lucide-react'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { useAppStore } from '../store'
 import { resolveWorkspaceMode, workspaceModeLayoutBundle } from './workspace-mode'
-import { normalizeWorktreeChatSide } from '../store/slices/tabs/chat-panel-layout'
+import {
+  chatPanelSideForMode,
+  normalizeWorktreeChatSide
+} from '../store/slices/tabs/chat-panel-layout'
+import { sendLayoutCommandToOwner } from '../runtime/workspace-layout/commands/layout-owner-command'
 
 /**
  * Work/Code mode switch. Work keeps sessions left with chat center; Code keeps
@@ -11,6 +15,7 @@ import { normalizeWorktreeChatSide } from '../store/slices/tabs/chat-panel-layou
  * fixed panel arrangement instead of just moving one sidebar.
  */
 export function SidebarLayoutToggle(): React.JSX.Element {
+  const t = useTranslate()
   const mode = useAppStore((s) => resolveWorkspaceMode(s.settings))
   const updateSettings = useAppStore((s) => s.updateSettings)
   const setSidebarOpen = useAppStore((s) => s.setSidebarOpen)
@@ -18,11 +23,8 @@ export function SidebarLayoutToggle(): React.JSX.Element {
   const setRightSidebarTab = useAppStore((s) => s.setRightSidebarTab)
   const isCode = mode === 'code'
   const label = isCode
-    ? translate(
-        'app.sidebarLayout.switchToWork',
-        'Switch to Work mode (sessions left, chat center)'
-      )
-    : translate('app.sidebarLayout.switchToCode', 'Switch to Code mode (Explorer left, chat right)')
+    ? t('app.sidebarLayout.switchToWork', 'Switch to Work mode (sessions left, chat center)')
+    : t('app.sidebarLayout.switchToCode', 'Switch to Code mode (Explorer left, chat right)')
 
   return (
     <Tooltip>
@@ -40,22 +42,24 @@ export function SidebarLayoutToggle(): React.JSX.Element {
             setRightSidebarOpen(next.rightSidebarOpen)
             // Why: a mode switch reorders existing columns so Code keeps
             // editor center with chat right instead of leaving chat left.
-            useAppStore.setState((state) => {
-              let changed = false
-              const layoutByWorktree = { ...state.layoutByWorktree }
-              for (const worktreeId of Object.keys(layoutByWorktree)) {
-                const normalized = normalizeWorktreeChatSide(
-                  layoutByWorktree[worktreeId],
-                  state.groupsByWorktree[worktreeId],
-                  nextMode
+            // Layout has one runtime owner: send the side per worktree.
+            const side = chatPanelSideForMode(nextMode)
+            const keep = (): void => {}
+            const owner = useAppStore.getState()
+            for (const worktreeId of Object.keys(owner.layoutByWorktree)) {
+              const normalized = normalizeWorktreeChatSide(
+                owner.layoutByWorktree[worktreeId],
+                owner.groupsByWorktree[worktreeId],
+                nextMode
+              )
+              if (normalized && normalized !== owner.layoutByWorktree[worktreeId]) {
+                sendLayoutCommandToOwner(
+                  worktreeId,
+                  { type: 'setChatPanelSide', side },
+                  { apply: keep, asToday: keep }
                 )
-                if (normalized && normalized !== layoutByWorktree[worktreeId]) {
-                  layoutByWorktree[worktreeId] = normalized
-                  changed = true
-                }
               }
-              return changed ? { layoutByWorktree } : state
-            })
+            }
             void updateSettings({
               workspaceMode: nextMode,
               toolsSidebarPosition: next.toolsSidebarPosition

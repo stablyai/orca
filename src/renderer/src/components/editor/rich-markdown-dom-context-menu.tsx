@@ -2,6 +2,7 @@ import React, { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { ChevronRightIcon } from 'lucide-react'
 import type { Editor } from '@tiptap/react'
+import { useTranslate } from '@/i18n/use-translate'
 import { cn } from '@/lib/class-names'
 import {
   buildRichMarkdownDomContextMenuModel,
@@ -48,6 +49,7 @@ export function RichMarkdownDomContextMenu({
   toggleLink: () => void
   pickImage: () => void
 }): React.JSX.Element | null {
+  const t = useTranslate()
   const [menu, setMenu] = useState<DomMenuState | null>(null)
   const [openSubmenu, setOpenSubmenu] = useState<{ index: number; flip: boolean } | null>(null)
   const [focus, setFocus] = useState<RichMarkdownDomMenuFocus | null>(null)
@@ -79,7 +81,8 @@ export function RichMarkdownDomContextMenu({
         initialDomMenuFocus(
           buildRichMarkdownDomContextMenuModel({
             cellType,
-            hasSelection: !editor.state.selection.empty
+            hasSelection: !editor.state.selection.empty,
+            t
           })
         )
       )
@@ -93,7 +96,7 @@ export function RichMarkdownDomContextMenu({
     return () => {
       dom.removeEventListener('contextmenu', onContextMenu)
     }
-  }, [editor])
+  }, [editor, t])
 
   useEffect(() => {
     if (!menu) {
@@ -108,7 +111,8 @@ export function RichMarkdownDomContextMenu({
     const onKeyDown = (event: KeyboardEvent): void => {
       const model = buildRichMarkdownDomContextMenuModel({
         cellType: menu.cellType,
-        hasSelection: editor?.state.selection.empty === false
+        hasSelection: editor?.state.selection.empty === false,
+        t
       })
       const openSubmenuEntries =
         openSubmenu === null ? null : levelDomMenuEntries(model, openSubmenu.index, true)
@@ -222,7 +226,7 @@ export function RichMarkdownDomContextMenu({
       window.removeEventListener('blur', close)
       window.removeEventListener('resize', close)
     }
-  }, [menu, editor, openSubmenu, focus])
+  }, [menu, editor, openSubmenu, focus, t])
 
   useLayoutEffect(() => {
     if (!menu || !panelRef.current) {
@@ -237,16 +241,12 @@ export function RichMarkdownDomContextMenu({
     })
   }, [menu])
 
-  if (!editor || !menu) {
-    return null
-  }
-
-  const panelPosition: React.CSSProperties = {
-    left: position?.x ?? menu.x,
-    top: position?.y ?? menu.y
-  }
-
   const dispatchEntry = (entry: RichMarkdownDomMenuEntry): void => {
+    // Why: listeners fire only while the menu is open, but the ref assignment
+    // below runs before the early return narrows editor and menu.
+    if (!editor || !menu) {
+      return
+    }
     if (entry.kind === 'edit') {
       runRichMarkdownDomMenuEditAction(editor, entry.action)
       setMenu(null)
@@ -263,11 +263,25 @@ export function RichMarkdownDomContextMenu({
     runRichMarkdownContextCommand({ payload, editor, toggleLink, pickImage })
     setMenu(null)
   }
-  dispatchEntryRef.current = dispatchEntry
+
+  // Why: the keyboard handler above calls through the ref so it always reaches the latest closure.
+  useEffect(() => {
+    dispatchEntryRef.current = dispatchEntry
+  })
+
+  if (!editor || !menu) {
+    return null
+  }
+
+  const panelPosition: React.CSSProperties = {
+    left: position?.x ?? menu.x,
+    top: position?.y ?? menu.y
+  }
 
   const model = buildRichMarkdownDomContextMenuModel({
     cellType: menu.cellType,
-    hasSelection: !editor.state.selection.empty
+    hasSelection: !editor.state.selection.empty,
+    t
   })
 
   const renderEntries = (
@@ -360,7 +374,10 @@ export function RichMarkdownDomContextMenu({
     <div
       ref={panelRef}
       role="menu"
-      aria-label="Markdown editing"
+      aria-label={t(
+        'auto.components.editor.RichMarkdownDomContextMenu.menuLabel',
+        'Markdown editing'
+      )}
       data-testid="rich-markdown-dom-context-menu"
       className={cn(MENU_PANEL_CLASS, 'fixed')}
       // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: WebkitAppRegion is Electron's drag-region hint and absent from csstype, like the shadcn context-menu primitive this mirrors.

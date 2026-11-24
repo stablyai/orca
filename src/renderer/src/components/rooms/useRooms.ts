@@ -2,10 +2,20 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { toast } from 'sonner'
 import { useTranslation } from 'react-i18next'
 import { translate } from '@/i18n/i18n'
+import { installWindowVisibilityInterval } from '@/lib/window-activity/window-visibility-interval'
 import { useActiveWorktreeId } from '@/store/workspaces/selection/use-selected-worktree'
 import { useAllWorktrees } from '@/store/slices/worktrees/listing/use-worktree-catalog'
 import { callRuntimeRpc } from '@/runtime/rpc/calls/runtime-rpc-call'
 import { LOCAL, type Room } from './room-types'
+
+async function fetchRoomsWithSettled(onSettled: () => void): Promise<Room[]> {
+  try {
+    const result = await callRuntimeRpc<{ rooms: Room[] }>(LOCAL, 'orchestration.roomList')
+    return result.rooms
+  } finally {
+    onSettled()
+  }
+}
 
 export function useRooms() {
   // Why: subscribe to language changes so toasts and room state re-render translated.
@@ -17,24 +27,23 @@ export function useRooms() {
   const ensuredHq = useRef(false)
   const refresh = useCallback(async (options?: { silent?: boolean }) => {
     try {
-      const result = await callRuntimeRpc<{ rooms: Room[] }>(LOCAL, 'orchestration.roomList')
-      setRooms(result.rooms)
+      setRooms(await fetchRoomsWithSettled(() => setLoading(false)))
     } catch (error) {
       if (!options?.silent) {
         toast.error(
           `${translate('auto.components.rooms.useRooms.listFailed', 'Failed to list rooms')}: ${(error as Error).message}`
         )
       }
-    } finally {
-      setLoading(false)
     }
   }, [])
   useEffect(() => {
     void refresh()
   }, [refresh])
   useEffect(() => {
-    const timer = setInterval(() => void refresh({ silent: true }), 3_000)
-    return () => clearInterval(timer)
+    return installWindowVisibilityInterval({
+      run: () => void refresh({ silent: true }),
+      intervalMs: 3_000
+    })
   }, [refresh])
   const ensureWorktreeId = activeWorktreeId ?? worktrees[0]?.id
   useEffect(() => {

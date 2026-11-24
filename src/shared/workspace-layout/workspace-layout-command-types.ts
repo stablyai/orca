@@ -13,6 +13,7 @@ import type {
   TerminalPaneSplitDirection
 } from './terminal-tab-types'
 import type { PaneSide } from './terminal-topology/terminal-pane-tree'
+import type { ChatPanelSide } from './tab-groups/chat-panel-side'
 import type { SplitRatioIntent } from './tab-groups/split-ratio-intents'
 import type { PaneOutcomeChanges } from './commands/workspace-layout-pane-outcomes'
 import type { LayoutEditorView } from './editor-tabs/layout-editor-view'
@@ -90,11 +91,9 @@ export type LayoutCommand =
     })
   | (On & { type: 'splitGroup'; tabId: string; besideGroupId: string; direction: GroupSide })
   /** `ratios`, or from a window older than them, `groupLayout`: exactly one. */
-  | (On & {
-      type: 'setGroupRatios'
-      groupLayout?: TabGroupLayoutNode
-      ratios?: SplitRatioIntent[]
-    })
+  | (On & { type: 'setGroupRatios'; groupLayout?: TabGroupLayoutNode; ratios?: SplitRatioIntent[] })
+  /** A workspace's chat column side; the owner swaps horizontal splits so the chat subtree sits on `side`. */
+  | (On & { type: 'setChatPanelSide'; side: ChatPanelSide })
   /** `ratios`, or from a window older than them, `root`: exactly one. */
   | (On & {
       type: 'setPaneRatios'

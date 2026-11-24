@@ -10,6 +10,7 @@ import {
 } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import { Button } from '@/components/ui/button'
 import {
   DropdownMenu,
@@ -65,6 +66,7 @@ function roomSubtitle(room: Room): string {
 
 /** ds_bot-like people list: the chief is first, teams stay one click away. */
 export function RoomSidebar(props: SidebarProps) {
+  const t = useTranslate()
   useTranslation()
   const closeRoomsPage = useAppStore((state) => state.closeRoomsPage)
   const home = props.rooms.find((room) => room.name === 'Orca HQ')
@@ -143,12 +145,12 @@ export function RoomSidebar(props: SidebarProps) {
               {props.waitingIds.has(room.id) ? (
                 <span className="inline-flex items-center gap-1 text-status-warning">
                   <CircleAlert className="size-3" />
-                  {translate('auto.components.rooms.sidebar.waiting', 'Waiting approval…')}
+                  {t('auto.components.rooms.sidebar.waiting', 'Waiting approval…')}
                 </span>
               ) : props.workingIds.has(room.id) ? (
                 <span className="inline-flex items-center gap-1 animate-pulse">
                   <Loader2 className="size-3 animate-spin" />
-                  {translate('auto.components.rooms.sidebar.working', 'Working…')}
+                  {t('auto.components.rooms.sidebar.working', 'Working…')}
                 </span>
               ) : (
                 roomSubtitle(room)
@@ -164,7 +166,7 @@ export function RoomSidebar(props: SidebarProps) {
             <div className="space-y-1">{room.members.map(renderMember)}</div>
           ) : (
             <p className="ml-6 px-2 text-xs text-muted-foreground">
-              {translate('auto.components.rooms.sidebar.noMembers', 'No members yet')}
+              {t('auto.components.rooms.sidebar.noMembers', 'No members yet')}
             </p>
           )
         ) : null}
@@ -179,10 +181,10 @@ export function RoomSidebar(props: SidebarProps) {
           variant="ghost"
           size="sm"
           onClick={closeRoomsPage}
-          aria-label={translate('auto.components.rooms.page.backToApp', 'Back to app')}
+          aria-label={t('auto.components.rooms.page.backToApp', 'Back to app')}
         >
           <ArrowLeft />
-          {translate('auto.components.rooms.page.backToApp', 'Back to app')}
+          {t('auto.components.rooms.page.backToApp', 'Back to app')}
         </Button>
         <div className="flex items-center gap-0.5">
           <Tooltip>
@@ -190,7 +192,7 @@ export function RoomSidebar(props: SidebarProps) {
               <CreateRoomDialog onCreated={props.onCreated} variant="icon" />
             </TooltipTrigger>
             <TooltipContent>
-              {translate('auto.components.rooms.createRoom.newRoom', 'New group')}
+              {t('auto.components.rooms.createRoom.newRoom', 'New group')}
             </TooltipContent>
           </Tooltip>
           <DropdownMenu>
@@ -198,7 +200,7 @@ export function RoomSidebar(props: SidebarProps) {
               <Button
                 variant="ghost"
                 size="icon-sm"
-                aria-label={translate('auto.components.rooms.sidebar.more', 'More actions')}
+                aria-label={t('auto.components.rooms.sidebar.more', 'More actions')}
               >
                 <EllipsisIcon />
               </Button>
@@ -206,7 +208,7 @@ export function RoomSidebar(props: SidebarProps) {
             <DropdownMenuContent align="end">
               <DropdownMenuItem onSelect={props.onRefresh}>
                 <RefreshCw />
-                {translate('auto.components.rooms.page.refresh', 'Refresh')}
+                {t('auto.components.rooms.page.refresh', 'Refresh')}
               </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
@@ -218,28 +220,25 @@ export function RoomSidebar(props: SidebarProps) {
           {props.loading ? (
             <div className="flex items-center gap-2 px-2 py-4 text-sm text-muted-foreground">
               <Loader2 className="size-4 animate-spin" />
-              {translate('auto.components.rooms.page.loading', 'Loading…')}
+              {t('auto.components.rooms.page.loading', 'Loading…')}
             </div>
           ) : (
             <>
               {home ? (
                 <section>
                   <h2 className="px-2 pb-1 text-2xs font-semibold uppercase tracking-wide text-muted-foreground">
-                    {translate('auto.components.rooms.sidebar.chief', 'Chief')}
+                    {t('auto.components.rooms.sidebar.chief', 'Chief')}
                   </h2>
                   <div className="space-y-1">{renderRoom(home, true)}</div>
                 </section>
               ) : null}
               <section>
                 <h2 className="px-2 pb-1 text-2xs font-semibold uppercase tracking-wide text-muted-foreground">
-                  {translate('auto.components.rooms.sidebar.teams', 'Teams')}
+                  {t('auto.components.rooms.sidebar.teams', 'Teams')}
                 </h2>
                 {teams.length === 0 ? (
                   <p className="px-2 py-2 text-xs text-muted-foreground">
-                    {translate(
-                      'auto.components.rooms.sidebar.noTeams',
-                      'Ask the chief to create one.'
-                    )}
+                    {t('auto.components.rooms.sidebar.noTeams', 'Ask the chief to create one.')}
                   </p>
                 ) : (
                   <div className="space-y-1">{teams.map((room) => renderRoom(room, false))}</div>

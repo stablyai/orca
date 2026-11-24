@@ -1,6 +1,6 @@
 import { ArrowLeft, EllipsisVertical, Settings2, Trash2 } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import { Button } from '@/components/ui/button'
 import {
   DropdownMenu,
@@ -21,6 +21,7 @@ export function RoomChatHeader(props: {
   onOpenMembers: () => void
   onDelete: () => void
 }) {
+  const t = useTranslate()
   useTranslation()
   const { selected, adminName, directMember } = props
   const isHome = selected.name === 'Orca HQ'
@@ -33,7 +34,7 @@ export function RoomChatHeader(props: {
             variant="ghost"
             size="icon-sm"
             onClick={props.onExitDirect}
-            aria-label={translate('auto.components.rooms.page.backToRoom', 'Back to room')}
+            aria-label={t('auto.components.rooms.page.backToRoom', 'Back to room')}
           >
             <ArrowLeft />
           </Button>
@@ -59,25 +60,25 @@ export function RoomChatHeader(props: {
             </span>
             {!directMember && isHome && adminName ? (
               <span className="rounded-full border border-annotation-highlight/50 bg-annotation-highlight/10 px-1.5 py-px text-2xs text-annotation-highlight dark:text-annotation-highlight">
-                {translate('auto.components.rooms.page.adminRole', 'Admin')}
+                {t('auto.components.rooms.page.adminRole', 'Admin')}
               </span>
             ) : null}
           </div>
           <div className="truncate text-xs text-muted-foreground">
             {directMember
-              ? translate('auto.components.rooms.page.directRoomHint', 'Focused chat in {{room}}', {
+              ? t('auto.components.rooms.page.directRoomHint', 'Focused chat in {{room}}', {
                   room: selected.name
                 })
               : isHome
-                ? translate(
+                ? t(
                     'auto.components.rooms.page.homeHint',
                     'Ask in plain language to create bots or group chats'
                   )
                 : adminName
-                  ? translate('auto.components.rooms.page.adminLeads', '{{name}} leads this team', {
+                  ? t('auto.components.rooms.page.adminLeads', '{{name}} leads this team', {
                       name: adminName
                     })
-                  : translate('auto.components.rooms.page.memberCountOnly', '{{count}} members', {
+                  : t('auto.components.rooms.page.memberCountOnly', '{{count}} members', {
                       count: selected.members.length
                     })}
           </div>
@@ -88,7 +89,7 @@ export function RoomChatHeader(props: {
           <Button
             variant="ghost"
             size="icon-sm"
-            aria-label={translate('auto.components.rooms.page.actions', 'Room actions')}
+            aria-label={t('auto.components.rooms.page.actions', 'Room actions')}
           >
             <EllipsisVertical />
           </Button>
@@ -96,14 +97,14 @@ export function RoomChatHeader(props: {
         <DropdownMenuContent align="end">
           <DropdownMenuItem onSelect={props.onOpenMembers}>
             <Settings2 />
-            {translate('auto.components.rooms.page.manageMembers', 'Manage members')}
+            {t('auto.components.rooms.page.manageMembers', 'Manage members')}
           </DropdownMenuItem>
           {!isHome ? (
             <>
               <DropdownMenuSeparator />
               <DropdownMenuItem variant="destructive" onSelect={props.onDelete}>
                 <Trash2 />
-                {translate('auto.components.rooms.page.deleteRoom', 'Delete room')}
+                {t('auto.components.rooms.page.deleteRoom', 'Delete room')}
               </DropdownMenuItem>
             </>
           ) : null}

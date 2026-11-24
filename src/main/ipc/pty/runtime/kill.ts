@@ -20,6 +20,8 @@ import {
   isLegacyRelayBridgedPty,
   stopLegacyRelayPaneAndWait
 } from '../../../ssh/legacy-relay/bridge/legacy-relay-bridge-registry'
+// Relay-era panes stay drivable over runtime RPC; the runtime method table reaches them here.
+export { SSH_LEGACY_RELAY_BRIDGE_METHODS } from '../../../ssh/legacy-relay/bridge/legacy-relay-bridge-methods'
 
 // Bounds the wait for an observed exit to reach the runtime record when the caller set no deadline.
 const OBSERVED_EXIT_RECORD_WAIT_MS = 10_000

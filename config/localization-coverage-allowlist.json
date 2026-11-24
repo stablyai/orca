@@ -355,5 +355,166 @@
     "text": "Switch back to",
     "dynamic": false,
     "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/workbench/HarnessPolicyPopover.tsx",
+    "kind": "jsx-text",
+    "text": ".orca/harness.yml",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/workbench/workflow-node-config-strip.tsx",
+    "kind": "object-property:label",
+    "text": "PowerShell",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/workbench/workflow-node-config-strip.tsx",
+    "kind": "object-property:label",
+    "text": "PowerShell 7 (pwsh)",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/workbench/workflow-node-config-strip.tsx",
+    "kind": "object-property:label",
+    "text": "CMD",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/workbench/workflow-node-config-strip.tsx",
+    "kind": "object-property:label",
+    "text": "Bash",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/workbench/workflow-node-config-strip.tsx",
+    "kind": "object-property:label",
+    "text": "sh",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/workbench/workflow-node-config-strip.tsx",
+    "kind": "object-property:label",
+    "text": "WSL",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/workbench/WorkflowYamlGuidePopover.tsx",
+    "kind": "jsx-text",
+    "text": ".orca/workflows/*.yml",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/workbench/WorkflowYamlGuidePopover.tsx",
+    "kind": "jsx-text",
+    "text": "name",
+    "dynamic": false,
+    "count": 2
+  },
+  {
+    "filePath": "src/renderer/src/components/workbench/WorkflowYamlGuidePopover.tsx",
+    "kind": "jsx-text",
+    "text": "description",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/workbench/WorkflowYamlGuidePopover.tsx",
+    "kind": "jsx-text",
+    "text": "steps",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/workbench/WorkflowYamlGuidePopover.tsx",
+    "kind": "jsx-text",
+    "text": "id",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/workbench/WorkflowYamlGuidePopover.tsx",
+    "kind": "jsx-text",
+    "text": "kind",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/workbench/WorkflowYamlGuidePopover.tsx",
+    "kind": "jsx-text",
+    "text": "analyze",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/workbench/WorkflowYamlGuidePopover.tsx",
+    "kind": "jsx-text",
+    "text": "implement",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/workbench/WorkflowYamlGuidePopover.tsx",
+    "kind": "jsx-text",
+    "text": "verify",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/workbench/WorkflowYamlGuidePopover.tsx",
+    "kind": "jsx-text",
+    "text": "accept",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/workbench/WorkflowYamlGuidePopover.tsx",
+    "kind": "jsx-text",
+    "text": "commit",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/workbench/WorkflowYamlGuidePopover.tsx",
+    "kind": "jsx-text",
+    "text": "cli",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/workbench/WorkflowYamlGuidePopover.tsx",
+    "kind": "jsx-text",
+    "text": "prompt",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/workbench/WorkflowYamlGuidePopover.tsx",
+    "kind": "jsx-text",
+    "text": "run",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/workbench/WorkflowYamlGuidePopover.tsx",
+    "kind": "jsx-text",
+    "text": "agent",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/workbench/WorkflowYamlGuidePopover.tsx",
+    "kind": "jsx-text",
+    "text": "model",
+    "dynamic": false,
+    "count": 1
   }
 ]

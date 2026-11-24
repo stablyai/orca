@@ -16,6 +16,7 @@ import {
 } from './workspace-layout-command-steps'
 import type { CommandOf, LayoutContext } from '../workspace-layout-command-types'
 import type { WorkspaceLayout, WorkspaceLayoutModel } from '../workspace-layout-model'
+import { normalizeLayoutChatSide } from '../tab-groups/chat-panel-side'
 import { withWorkspace } from './workspace-layout-removal'
 import { groupShowsTabFile } from '../editor-tabs/workspace-layout-workspace-move'
 import { withGroupSplitRatios } from '../tab-groups/split-ratio-intents'
@@ -190,6 +191,28 @@ export function setGroupRatios(
         : null
   if (!groupLayout) {
     return refuse('group_set_changed')
+  }
+  return applied(withWorkspace(model, command.workspace, { ...workspace, groupLayout }))
+}
+
+export function setChatPanelSide(
+  model: WorkspaceLayoutModel,
+  command: CommandOf<'setChatPanelSide'>
+): Applied {
+  const workspace = model.workspaces[command.workspace]!
+  const current = workspace.groupLayout
+  if (!current) {
+    return refuse('group_set_changed')
+  }
+  const chatGroupIds = new Set(
+    workspace.groups.filter((group) => group.isChatPanel).map((group) => group.id)
+  )
+  if (chatGroupIds.size === 0) {
+    return refuse('group_not_found')
+  }
+  const groupLayout = normalizeLayoutChatSide(current, chatGroupIds, command.side)
+  if (groupLayout === current) {
+    return applied(model)
   }
   return applied(withWorkspace(model, command.workspace, { ...workspace, groupLayout }))
 }

@@ -7,10 +7,10 @@ import { resolveSetupRunnerShell } from './workspace-hooks/worktree-runner-scrip
 afterEach(() => vi.unstubAllGlobals())
 
 describe('Niubash executable resolution', () => {
-  it('uses absolute PATH entries in order, including quoted paths and mixed-case Windows keys', () => {
+  it('uses absolute PATH entries in order, including quoted paths and mixed-case Windows keys', async () => {
     const isExecutable = vi.fn((path: string) => path === 'D:\\Niu Shell\\niu.exe')
     expect(
-      resolveNiubashPath({
+      await resolveNiubashPath({
         platform: 'win32',
         env: { pAtH: ';.;relative;C:\\missing;"D:\\Niu Shell"' },
         isExecutable
@@ -19,20 +19,27 @@ describe('Niubash executable resolution', () => {
     expect(isExecutable.mock.calls).toEqual([['C:\\missing\\niu.exe'], ['D:\\Niu Shell\\niu.exe']])
   })
 
-  it.each(['linux', 'darwin'] as const)('finds the portable niu executable on %s', (platform) => {
-    expect(
-      resolveNiubashPath({
-        platform,
-        env: { PATH: '/usr/local/bin:/usr/bin' },
-        isExecutable: (path) => path === '/usr/local/bin/niu'
-      })
-    ).toBe('/usr/local/bin/niu')
-  })
+  it.each(['linux', 'darwin'] as const)(
+    'finds the portable niu executable on %s',
+    async (platform) => {
+      expect(
+        await resolveNiubashPath({
+          platform,
+          env: { PATH: '/usr/local/bin:/usr/bin' },
+          isExecutable: (path) => path === '/usr/local/bin/niu'
+        })
+      ).toBe('/usr/local/bin/niu')
+    }
+  )
 
-  it('does not invent a shell when PATH contains no niu', () => {
-    expect(resolveNiubashPath({ platform: 'win32', env: {}, isExecutable: () => false })).toBeNull()
-    expect(resolveNiubashShellPath('powershell.exe')).toBe('powershell.exe')
-    expect(resolveNiubashShellPath('D:\\Portable Niu\\niu.exe')).toBe('D:\\Portable Niu\\niu.exe')
+  it('does not invent a shell when PATH contains no niu', async () => {
+    expect(
+      await resolveNiubashPath({ platform: 'win32', env: {}, isExecutable: () => false })
+    ).toBeNull()
+    expect(await resolveNiubashShellPath('powershell.exe')).toBe('powershell.exe')
+    expect(await resolveNiubashShellPath('D:\\Portable Niu\\niu.exe')).toBe(
+      'D:\\Portable Niu\\niu.exe'
+    )
   })
 })
 

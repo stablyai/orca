@@ -12,6 +12,7 @@ import type {
   WriteTerminalRenderDesyncEvidenceResult
 } from '../../../shared/terminal/diagnostics/terminal-render-desync-evidence'
 import { invokeNative, invokePlugin, isTauriNativeHost } from './tauri-native-host'
+import { translate } from '../i18n/i18n'
 import { prepareAndInvokeAppRestart } from '../../../preload/renderer/restart/renderer-restart-wiring'
 
 type TauriNativePlatformInfo = Awaited<ReturnType<PlatformApi['get']>>
@@ -218,7 +219,10 @@ export function createTauriNativeAppApi(): Partial<AppApi> {
       const directory = await callRuntimeResult<string>('host.floating.getMarkdownDirectory')
       const picked = await invokePlugin<string | string[] | null>('dialog', 'open', {
         options: {
-          title: 'Select markdown document',
+          title: translate(
+            'auto.web.tauriNative.dialog.selectMarkdownDocument',
+            'Select markdown document'
+          ),
           defaultPath: directory,
           multiple: false,
           filters: [{ name: 'Markdown', extensions: ['md', 'mdx', 'markdown'] }]
@@ -236,7 +240,10 @@ export function createTauriNativeAppApi(): Partial<AppApi> {
     pickFloatingWorkspaceDirectory: async () => {
       const picked = await invokePlugin<string | string[] | null>('dialog', 'open', {
         options: {
-          title: 'Select floating workspace directory',
+          title: translate(
+            'auto.web.tauriNative.dialog.selectFloatingWorkspaceDirectory',
+            'Select floating workspace directory'
+          ),
           directory: true,
           multiple: false
         }

@@ -10,8 +10,6 @@ export function migrateV51(this: OrchestrationDb, current: number): void {
     this.db.exec(`ALTER TABLE room_members ADD COLUMN status TEXT NOT NULL DEFAULT 'idle'`)
   }
   if (!cols.some((col) => col.name === 'status_updated_at')) {
-    this.db.exec(
-      `ALTER TABLE room_members ADD COLUMN status_updated_at TEXT NOT NULL DEFAULT ''`
-    )
+    this.db.exec(`ALTER TABLE room_members ADD COLUMN status_updated_at TEXT NOT NULL DEFAULT ''`)
   }
 }

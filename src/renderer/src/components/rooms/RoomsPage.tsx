@@ -7,6 +7,8 @@ import type { JSX } from 'react'
 import { toast } from 'sonner'
 import { useTranslation } from 'react-i18next'
 import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
+import { runWithBusyFlag } from '@/lib/run-with-busy-flag'
 import { useAllWorktrees } from '@/store/slices/worktrees/listing/use-worktree-catalog'
 import { callRuntimeRpc } from '@/runtime/rpc/calls/runtime-rpc-call'
 import { BOT_AGENTS, LOCAL, ORCA_SESSION_PREFIX } from './room-types'
@@ -23,6 +25,7 @@ import { selectRoomMemberChatLines } from './room-chat-transcript-model'
 import { useNow } from '@/lib/window-activity/use-now'
 
 export default function RoomsPage(): JSX.Element {
+  const t = useTranslate()
   // Why: this memo boundary needs its own language subscription, while
   // translate() preserves Orca's pseudo-localization behavior.
   useTranslation()
@@ -94,33 +97,32 @@ export default function RoomsPage(): JSX.Element {
           : trimmed
       const pendingKey = addPendingMessage(roomId, message, directMember?.memberId)
       setComposer('')
-      setSending(true)
       try {
-        const delivered = await callRuntimeRpc<{
-          seq: number
-          slots: { name: string; status: string; note?: string }[]
-        }>(LOCAL, 'orchestration.roomSend', {
-          id: roomId,
-          text: message,
-          ...(directMember ? { targetMemberId: directMember.memberId } : {})
+        await runWithBusyFlag(setSending, async () => {
+          const delivered = await callRuntimeRpc<{
+            seq: number
+            slots: { name: string; status: string; note?: string }[]
+          }>(LOCAL, 'orchestration.roomSend', {
+            id: roomId,
+            text: message,
+            ...(directMember ? { targetMemberId: directMember.memberId } : {})
+          })
+          discardPendingMessage(pendingKey)
+          for (const slot of delivered.slots.filter((slot) => slot.status === 'failed')) {
+            toast.error(
+              `${translate('auto.components.rooms.page.botFailed', 'Bot failed')}: ${slot.name}${
+                slot.note ? ` — ${slot.note}` : ''
+              }`
+            )
+          }
+          await refreshLog()
         })
-        discardPendingMessage(pendingKey)
-        for (const slot of delivered.slots.filter((slot) => slot.status === 'failed')) {
-          toast.error(
-            `${translate('auto.components.rooms.page.botFailed', 'Bot failed')}: ${slot.name}${
-              slot.note ? ` — ${slot.note}` : ''
-            }`
-          )
-        }
-        await refreshLog()
       } catch (error) {
         discardPendingMessage(pendingKey)
         setComposer(message)
         toast.error(
           `${translate('auto.components.rooms.page.sendFailed', 'Failed to send')}: ${(error as Error).message}`
         )
-      } finally {
-        setSending(false)
       }
     },
     [selected, directMember, sending, refreshLog, addPendingMessage, discardPendingMessage]
@@ -132,12 +134,12 @@ export default function RoomsPage(): JSX.Element {
     }
     try {
       await callRuntimeRpc(LOCAL, 'orchestration.roomDelete', { id: selected.id })
-      toast.success(translate('auto.components.rooms.page.deleted', 'Room deleted'))
+      toast.success(t('auto.components.rooms.page.deleted', 'Room deleted'))
       setSelectedId(null)
       await refresh()
     } catch (error) {
       toast.error(
-        `${translate('auto.components.rooms.page.deleteFailed', 'Failed to delete')}: ${(error as Error).message}`
+        `${t('auto.components.rooms.page.deleteFailed', 'Failed to delete')}: ${(error as Error).message}`
       )
     }
   }
@@ -149,9 +151,7 @@ export default function RoomsPage(): JSX.Element {
     const opt = pool.find((p) => p.sessionId === sessionId)
     const agent = sessionId.split('_')[0] ?? ''
     if (!opt || !BOT_AGENTS.some((item) => item.id === agent)) {
-      toast.error(
-        translate('auto.components.rooms.page.unsupportedSessionAgent', 'Unknown agent type')
-      )
+      toast.error(t('auto.components.rooms.page.unsupportedSessionAgent', 'Unknown agent type'))
       return
     }
     try {
@@ -163,10 +163,10 @@ export default function RoomsPage(): JSX.Element {
         isAdmin
       })
       await refresh()
-      toast.success(translate('auto.components.rooms.page.memberAdded', 'Member added'))
+      toast.success(t('auto.components.rooms.page.memberAdded', 'Member added'))
     } catch (error) {
       toast.error(
-        `${translate('auto.components.rooms.page.addMemberFailed', 'Failed to add member')}: ${(error as Error).message}`
+        `${t('auto.components.rooms.page.addMemberFailed', 'Failed to add member')}: ${(error as Error).message}`
       )
     }
   }
@@ -180,7 +180,7 @@ export default function RoomsPage(): JSX.Element {
       await refresh()
     } catch (error) {
       toast.error(
-        `${translate('auto.components.rooms.page.removeMemberFailed', 'Failed to remove member')}: ${(error as Error).message}`
+        `${t('auto.components.rooms.page.removeMemberFailed', 'Failed to remove member')}: ${(error as Error).message}`
       )
     }
   }
@@ -307,7 +307,7 @@ export default function RoomsPage(): JSX.Element {
               adminName={adminName}
               directMember={directMember}
               bottomRef={bottomRef}
-              onQuickSend={(t) => void sendText(t)}
+              onQuickSend={(text) => void sendText(text)}
               onSpawnBot={() => {
                 setMembersOpen(true)
               }}
@@ -336,10 +336,7 @@ export default function RoomsPage(): JSX.Element {
           </>
         ) : (
           <div className="flex flex-1 items-center justify-center text-sm text-muted-foreground">
-            {translate(
-              'auto.components.rooms.page.pickRoom',
-              'Pick a room, or create one on the left.'
-            )}
+            {t('auto.components.rooms.page.pickRoom', 'Pick a room, or create one on the left.')}
           </div>
         )}
       </main>

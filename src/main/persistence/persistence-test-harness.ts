@@ -23,6 +23,7 @@ import { exportProfileStateJson } from './profile-state/documents/profile-state-
 
 export const testState = { dir: '' }
 const stores = new Set<Store>()
+const storeAuthorities = new Map<Store, ProfileStateSqliteAuthority>()
 
 class UnitTestProfileStateAuthority extends ProfileStateSqliteAuthority {
   // Worker backup coverage uses the dedicated real-worker fixtures.
@@ -47,6 +48,7 @@ export function createSqliteTestStore(
       profileStateAuthority: authority
     })
     stores.add(store)
+    storeAuthorities.set(store, authority)
     return store
   } catch (error) {
     authority.close()
@@ -69,6 +71,12 @@ export async function closeTestStores(): Promise<void> {
   const opened = [...stores]
   stores.clear()
   await Promise.all(opened.map((store) => store.freezeWritesAsync()))
+  // Frozen stores keep their SQLite handles; deletion on Windows requires the close.
+  for (const store of opened) {
+    const authority = storeAuthorities.get(store)
+    storeAuthorities.delete(store)
+    authority?.close()
+  }
 }
 
 export function readPersistedStateJson(path = dataFile(), profileId = 'persistence-test'): string {

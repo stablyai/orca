@@ -6200,7 +6200,9 @@
           "fee535205b": "任務",
           "d599269755": "從側邊欄隱藏",
           "artifacts": "成品",
-          "skills": "技能"
+          "skills": "技能",
+          "workflow": "工作流",
+          "rooms": "機器人"
         },
         "SidebarRepositoryFilterSection": {
           "d3a9c4cea1": "清除",
@@ -16181,13 +16183,7 @@
         },
         "MonacoEditor": {
           "68cb83f4a7": "在選定的文字上新增備註",
-          "fd68ae03b3": "在檔案中搜尋",
           "largePasteTooLarge": "貼上內容過大。"
-        },
-        "MonacoGutterContextMenu": {
-          "7b57b1b468": "複製遠端 URL",
-          "2e0b1cdc05": "複製含行號的相對路徑",
-          "4eaa991bde": "複製含行號的路徑"
         },
         "NotesSendMenu": {
           "44dc5e60a6": "傳送備註",
@@ -16719,6 +16715,39 @@
           "tooLarge": "{{value0}} 過大，無法在 {{value1}} 中開啟（{{value2}}；上限為 {{value3}}）。",
           "unsupported": "{{value0}} 無法從此檔案的儲存位置讀取它。請更新託管該檔案的 Orca 伺服器，或切換到原始碼。",
           "readFailed": "無法為 {{value1}} 讀取 {{value0}}。{{value2}}"
+        },
+        "debug": {
+          "adapterLabel": "除錯適配器",
+          "argsLabel": "參數",
+          "attachAction": "附加",
+          "breakpointCount_one": "{{count}} 個中斷點",
+          "breakpointCount_other": "{{count}} 個中斷點",
+          "breakpointHint": "點擊邊界設定中斷點",
+          "callStackTitle": "呼叫堆疊",
+          "clearConsoleTitle": "清除主控台",
+          "consoleTitle": "主控台 / 求值",
+          "continueTitle": "繼續",
+          "cwdLabel": "目錄",
+          "cwdPlaceholder": "預設為目前檔案所在目錄",
+          "debugFileAction": "除錯檔案",
+          "evalPlaceholder": "求值運算式（Enter）...",
+          "extraJsonLabel": "額外 DAP JSON（選填，如 stopOnEntry / port）",
+          "launchConfigHeading": "啟動配置",
+          "launchConfigTitle": "除錯啟動配置",
+          "modeAttach": "Attach（附加執行中處理程序）",
+          "modeLabel": "模式",
+          "modeLaunch": "Launch（啟動目前檔案）",
+          "noFrames": "無堆疊框架",
+          "noScopes": "無範圍",
+          "notPaused": "未暫停",
+          "panelToggle": "除錯面板",
+          "pauseTitle": "暫停",
+          "stepIntoTitle": "單步進入",
+          "stepOutTitle": "單步跳出",
+          "stepOverTitle": "單步跳過",
+          "stopTitle": "停止除錯",
+          "variablesTitle": "變數",
+          "breakpointCount": "{{count}} 個中斷點"
         }
       },
       "diff": {
@@ -18735,6 +18764,118 @@
         "setting-global-off": "已在代理程式設定中關閉資料夾信任，因此代理程式一律會詢問。",
         "keyword-trust": "信任",
         "keyword-hooks": "鉤子"
+      },
+      "workbench": {
+        "flow": {
+          "requirementPlaceholder": "輸入你的需求或任務描述（Enter 立即開始）...",
+          "openWorktree": "打开 Worktree",
+          "retryNode": "重试当前节点",
+          "stop": "停止",
+          "start": "开始执行",
+          "editYaml": "编辑 YAML",
+          "newYaml": "新建 YAML",
+          "inheritAgent": "跟随底部 ChatUI",
+          "nodeRunPlaceholder": "CLI 命令（如：pnpm tc && pnpm test）",
+          "nodePromptPlaceholder": "该节点的专属提示词 / 指令...",
+          "saveNodeYaml": "保存到 YAML",
+          "applyNode": "应用",
+          "modeAgent": "AI Agent",
+          "modeCli": "CLI 命令",
+          "browseFolder": "選擇本機資料夾...",
+          "deleteNode": "刪除",
+          "deleteNodeTitle": "刪除節點",
+          "insertAcceptDesc": "AI 審查改動品質",
+          "insertAnalyzeDesc": "AI 拆解需求與定位檔案",
+          "insertCliDesc": "直接執行 Shell（不經模型）",
+          "insertCommitDesc": "受 Harness 約束提交",
+          "insertImplementDesc": "AI 撰寫與修改程式碼",
+          "insertNodeHeading": "插入新節點",
+          "insertNodeTitle": "插入節點",
+          "insertVerifyDesc": "類型檢查 / 單元測試門禁",
+          "moveNodeLeft": "左移節點",
+          "moveNodeRight": "右移節點",
+          "nodeNamePlaceholder": "節點名稱",
+          "retry": "重試此步驟",
+          "runLabel": "執行 {{code}}",
+          "runtimeEnvironment": "執行環境",
+          "shellAuto": "Auto（系統預設）",
+          "stepProgress": "第 {{current}} 步，共 {{total}} 步",
+          "targetFolderHeading": "執行目錄 / 專案",
+          "targetFolderTitle": "選擇工作流執行目錄",
+          "tplAcceptDesc": "審查改動並確認通過",
+          "tplAcceptLabel": "Diff 驗收",
+          "tplAnalyzeDesc": "拆解需求並定位目標檔案",
+          "tplAnalyzeLabel": "需求分析",
+          "tplCliDesc": "執行本機 Shell 命令（不消耗模型）",
+          "tplCliLabel": "CLI 命令",
+          "tplCommitDesc": "依 Harness 規範提交變更",
+          "tplCommitLabel": "規範提交",
+          "tplImplementDesc": "在工作區完成程式碼修改",
+          "tplImplementLabel": "編碼實作",
+          "tplVerifyDesc": "執行類型檢查或測試命令",
+          "tplVerifyLabel": "驗證測試",
+          "viewWorktree": "查看工作區"
+        },
+        "presets": {
+          "standard": {
+            "name": "标准研发流",
+            "desc": "需求分析 → 编码实现 → 自检测试 → 验收通过。"
+          },
+          "bugfix": {
+            "name": "Bug 修复流",
+            "desc": "问题定位 → 修复改动 → 回归验证 → 验收通过。"
+          },
+          "refactor": {
+            "name": "重构优化流",
+            "desc": "结构评估 → 重构实施 → 质量检查 → 验收通过。"
+          },
+          "devE2e": {
+            "name": "研发一条龙",
+            "desc": "需求分析 → 编码实现 → 跑 CI → 修复 CI → Code Review → Commit。"
+          }
+        },
+        "nodes": {
+          "analyze": "需求分析",
+          "analyzeDesc": "拆解需求并定位目标文件",
+          "implement": "编码实现",
+          "implementDesc": "在隔离 Worktree 中完成代码修改",
+          "verify": "自检测试",
+          "verifyDesc": "运行 Lint、类型检查与相关测试",
+          "accept": "验收通过",
+          "acceptDesc": "最终评审与验收确认",
+          "locate": "问题定位",
+          "locateDesc": "追踪故障链路并复现问题",
+          "fix": "修复改动",
+          "fixDesc": "以最小改动修复根因",
+          "regression": "回归验证",
+          "regressionDesc": "验证修复效果并确认无回归",
+          "assess": "结构评估",
+          "assessDesc": "梳理模块边界并制定重构方案",
+          "refactor": "重构实施",
+          "refactorDesc": "执行模块化重构改动",
+          "ci": "运行 CI",
+          "ciDesc": "运行 Lint、类型检查与受影响测试",
+          "fixCi": "修复 CI",
+          "fixCiDesc": "针对 CI 失败项自动定位并修复至通过",
+          "review": "Code Review",
+          "reviewDesc": "审查代码质量、边界条件与 diff 规范",
+          "commit": "提交代码",
+          "commitDesc": "校验改动并生成规范 Commit 提交"
+        },
+        "builder": {
+          "cancel": "取消"
+        },
+        "harness": {
+          "title": "Harness 规范策略",
+          "presetOff": "自由",
+          "presetStandard": "标准",
+          "presetCustom": "自定义",
+          "commitPerFeature": "每功能必提交",
+          "commitStyle": "Commit 规范",
+          "preCommitGate": "提交前门禁",
+          "presetGoogleCl": "Google CL",
+          "triggerLabel": "Harness: {{preset}}"
+        }
       }
     },
     "i18n": {
@@ -23509,5 +23650,58 @@
     "dontSend": "不要傳送",
     "sending": "正在傳送…",
     "sendReport": "傳送報告"
+  },
+  "tauri": {
+    "runtimeInit": {
+      "description": "Orca 無法啟動本機運行時，因此未重用先前的連線。請重試以重新啟動。",
+      "hint": "若持續失敗，運行時日誌（orcad-supervisor-stderr.log）中有當機詳細資訊。",
+      "retry": "重試",
+      "title": "本機運行時啟動失敗"
+    }
+  },
+  "workbench": {
+    "waypoints": {
+      "asksFirst": "先詢問",
+      "close": "返回工作流配置",
+      "completed": "已完成",
+      "needsYou": "等待你",
+      "needsYouBadge": "需要你",
+      "running": "執行中",
+      "stopped": "已停止",
+      "working": "正在處理步驟..."
+    },
+    "workflowMenu": {
+      "delete": "刪除",
+      "deleteCancel": "取消",
+      "deleteConfirm": "刪除",
+      "deletePresetDescription": "確定要從清單中移除預設工作流「{{name}}」嗎？",
+      "deleteTitle": "刪除工作流",
+      "deleteYamlDescription": "確定要刪除工作流「{{name}}」嗎？這將從 .orca/workflows 中移除對應的 YAML 檔案。",
+      "duplicate": "建立副本",
+      "editYaml": "編輯 YAML",
+      "open": "開啟工作流",
+      "rename": "重新命名",
+      "saveAsYaml": "另存為 YAML 編輯"
+    },
+    "workflowNavMenu": {
+      "editHarness": "編輯 Harness 策略",
+      "newWorkflow": "新增工作流",
+      "openGuide": "YAML 語法文件",
+      "openWorkbench": "開啟工作台",
+      "refresh": "重新整理工作流清單",
+      "restorePresets": "還原隱藏的預設工作流"
+    },
+    "yamlGuide": {
+      "agentModelDesc": "：選填，可單獨覆寫節點模型",
+      "button": "語法說明",
+      "idNameDesc": "：節點識別與顯示名稱",
+      "openDoc": "開啟完整文件",
+      "promptDesc": "：AI 節點指令（用於 analyze/implement/accept/commit）",
+      "runDesc": "：Shell 命令（用於 cli/verify，不經大模型）",
+      "sample": "steps:\n  - id: analyze\n    name: 需求分析\n    kind: analyze\n    prompt: 分析需求並定位目標檔案\n  - id: check\n    name: 類型檢查\n    kind: cli\n    run: pnpm tc:web",
+      "stepsHeading": "步驟節點（steps[]）：",
+      "title": "Workflow YAML 速查",
+      "topFields": "頂層欄位："
+    }
   }
 }

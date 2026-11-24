@@ -7,7 +7,7 @@ import {
   DropdownMenuRadioItem,
   DropdownMenuTrigger
 } from '@/components/ui/dropdown-menu'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 
 type GitHistoryScope = 'current' | 'all'
 
@@ -18,15 +18,16 @@ export function GitHistoryScopeMenu({
   scope: GitHistoryScope
   onChange: (scope: GitHistoryScope) => void
 }): React.JSX.Element {
-  const allLabel = translate('source-control.history.all-branches', 'All branches')
-  const currentLabel = translate('source-control.history.current-branch', 'Current branch')
+  const t = useTranslate()
+  const allLabel = t('source-control.history.all-branches', 'All branches')
+  const currentLabel = t('source-control.history.current-branch', 'Current branch')
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
         <Button
           variant="ghost"
           size="xs"
-          aria-label={translate('source-control.history.scope', 'History branches')}
+          aria-label={t('source-control.history.scope', 'History branches')}
         >
           <GitBranch className="size-3" />
           {scope === 'all' ? allLabel : currentLabel}

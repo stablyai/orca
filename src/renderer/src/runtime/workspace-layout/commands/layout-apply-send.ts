@@ -24,6 +24,7 @@ import {
 } from '@/runtime/workspace-layout/server/server-layout-apply-routes'
 import type { RuntimeClientTarget } from '../../../../../shared/remote-runtime/host-catalog/runtime-client-target'
 import type { SleepingAgentSessionRecord } from '../../../../../shared/agent-session/lifecycle/agent-session-resume'
+import type { ChatPanelSide } from '../../../../../shared/workspace-layout/tab-groups/chat-panel-side'
 import type { SplitRatioIntent } from '../../../../../shared/workspace-layout/tab-groups/split-ratio-intents'
 import type { PaneSide } from '../../../../../shared/workspace-layout/terminal-topology/terminal-pane-tree'
 import type { LayoutEditorFile } from '../../../../../shared/workspace-layout/workspace-layout-model'
@@ -65,6 +66,7 @@ export type WindowLayoutCommand =
     }
   | { type: 'splitGroup'; tabId: string; besideGroupId: string; direction: GroupSide }
   | { type: 'setGroupRatios'; ratios: SplitRatioIntent[] }
+  | { type: 'setChatPanelSide'; side: ChatPanelSide }
   | { type: 'closeTabs'; tabIds: [string]; recordClose?: 'user' | 'cleanup' }
   | ({ type: 'renameTab'; tabId: string } & TabTitle)
   | {
@@ -203,6 +205,7 @@ function drawnTabHolds(worktreeId: string, command: WindowLayoutCommand): DrawnT
     case 'createTerminalTab':
       return [{ workspace: worktreeId, ids: [command.tabId] }]
     case 'setGroupRatios':
+    case 'setChatPanelSide':
       return [{ workspace: worktreeId, ids: [], groupLayout: true }]
     // Pane commands hold their drawn tree; records are not frame-drawn. Editor/browser/chat/simulator opens and page changes send before drawing.
     case 'openBrowserTab':
@@ -316,7 +319,8 @@ export function refusalActsAsToday(
   )
 }
 
-const keepWindowCopy = (): void => {}
+// Noops: the window already drew the change, so the answer needs no local apply.
+const keep = (): void => {}
 
 /** Records a change the window already made: drawn as the window made it until main answers. */
 export function recordLayoutApply(
@@ -324,9 +328,5 @@ export function recordLayoutApply(
   worktreeId: string,
   command: WindowLayoutCommand
 ): void {
-  sendLayoutApply(state, worktreeId, command, {
-    apply: keepWindowCopy,
-    asToday: keepWindowCopy,
-    drawn: true
-  })
+  sendLayoutApply(state, worktreeId, command, { apply: keep, asToday: keep, drawn: true })
 }

@@ -3,7 +3,11 @@ import { isTerminalLeafId } from '../../workspace-layout/stable-pane-id'
 import { SleepCommand, StartPaneCommand, WakeCommand } from './workspace-layout-sleep-wake-params'
 import { RenameTabsCommand } from './workspace-layout-rename-tabs-params'
 import { EditorFileRecord, EditorViewRecord } from './workspace-layout-editor-file-params'
-import { SetGroupRatiosCommand, SetPaneRatiosCommand } from './workspace-layout-ratio-params'
+import {
+  SetChatPanelSideCommand,
+  SetGroupRatiosCommand,
+  SetPaneRatiosCommand
+} from './workspace-layout-ratio-params'
 import {
   ApplyDefaultTabsCommand,
   CreateTerminalTabCommand,
@@ -311,6 +315,7 @@ export const LayoutApplyParams = z.object({
     MoveTabCommand,
     SplitGroupCommand,
     SetGroupRatiosCommand,
+    SetChatPanelSideCommand,
     CloseTabsCommand,
     RenameTabCommand,
     RenameTabsCommand,

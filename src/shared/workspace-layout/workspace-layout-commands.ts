@@ -23,6 +23,7 @@ import {
 import {
   moveTab,
   openInNewGroup,
+  setChatPanelSide,
   setGroupRatios,
   splitGroup
 } from './commands/workspace-layout-group-commands'
@@ -131,6 +132,8 @@ function applyCommand(
       return splitGroup(model, command, context)
     case 'setGroupRatios':
       return setGroupRatios(model, command)
+    case 'setChatPanelSide':
+      return setChatPanelSide(model, command)
     case 'setPaneRatios':
       return setPaneRatios(model, command)
     case 'movePane':

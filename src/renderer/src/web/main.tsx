@@ -26,7 +26,8 @@ import { installBodyOverlayAttributes } from '../lib/overlay-interaction/body-ov
 import { installAppKeyboardRouter } from '../lib/keyboard/app-keyboard-router'
 import { isTauriNativeHost } from './tauri-native-host'
 import { installTauriWindowDragBridge } from './tauri-native-bridge'
-import { initializeTauriRuntime } from './tauri-runtime-startup'
+import { getTauriRuntimeInitFailure, initializeTauriRuntime } from './tauri-runtime-startup'
+import TauriRuntimeInitFailure from './TauriRuntimeInitFailure'
 
 const disposeOsFileDropGuard = installOsFileDropCancellationGuard()
 import.meta.hot?.dispose(disposeOsFileDropGuard)
@@ -60,6 +61,11 @@ function WebRoot(): React.JSX.Element {
     }
     return decision
   }, [initialPairingInput, isTauri])
+  // Why gated: a failed Tauri runtime start must not mount the App against the
+  // previous launch's stale endpoint (an infinite reconnect-error loop).
+  const [tauriInitFailed, setTauriInitFailed] = useState(
+    () => isTauri && getTauriRuntimeInitFailure() !== null
+  )
   const [hasEnvironment, setHasEnvironment] = useState(() => {
     if (isTauri) {
       return true
@@ -76,6 +82,10 @@ function WebRoot(): React.JSX.Element {
     }
     return startupDecision.kind === 'use-stored-environment'
   })
+
+  if (tauriInitFailed) {
+    return <TauriRuntimeInitFailure onRecovered={() => setTauriInitFailed(false)} />
+  }
 
   if (!hasEnvironment) {
     return (

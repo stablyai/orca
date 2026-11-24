@@ -1,7 +1,7 @@
 import type { RefObject } from 'react'
 import { CircleAlert, Loader2, MessageSquare, RotateCcw } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/class-names'
@@ -30,11 +30,25 @@ function memberForLine(selected: Room, memberId: string | null): RoomMember | un
 
 /** Consecutive agent messages read as one turn, like ds_bot. */
 export function RoomTranscript(props: TranscriptProps) {
-  const { selected, lines } = props
+  const t = useTranslate()
+  // Why: destructure before render so the compiler stops treating sibling
+  // prop reads as ref reads through bottomRef.
+  const {
+    selected,
+    lines,
+    adminName,
+    directMember,
+    workingMembers,
+    waitingMembers,
+    bottomRef,
+    onQuickSend,
+    onSpawnBot,
+    onRetryMember
+  } = props
   useTranslation()
   const segments = buildRoomChatSegments(lines)
   const hasAgentReply = lines.some((line) => line.memberId && line.kind !== 'failed')
-  const emptyDirectChat = Boolean(props.directMember) && lines.length === 0
+  const emptyDirectChat = Boolean(directMember) && lines.length === 0
 
   return (
     <ScrollArea className="min-h-0 flex-1">
@@ -42,23 +56,21 @@ export function RoomTranscript(props: TranscriptProps) {
         {!hasAgentReply && !emptyDirectChat ? (
           <RoomWelcomeHero
             roomName={selected.name}
-            adminName={props.adminName}
-            onQuickSend={props.onQuickSend}
-            onSpawnBot={props.onSpawnBot}
+            adminName={adminName}
+            onQuickSend={onQuickSend}
+            onSpawnBot={onSpawnBot}
           />
         ) : null}
         {emptyDirectChat ? (
           <div className="rounded-2xl border border-border/60 bg-card p-6 text-center">
             <MessageSquare className="mx-auto mb-2 size-5 text-muted-foreground" />
             <h2 className="text-sm font-medium">
-              {translate(
-                'auto.components.rooms.page.directEmptyTitle',
-                'Message {{name}} in this room',
-                { name: props.directMember?.name }
-              )}
+              {t('auto.components.rooms.page.directEmptyTitle', 'Message {{name}} in this room', {
+                name: directMember?.name
+              })}
             </h2>
             <p className="mx-auto mt-1 max-w-md text-xs text-muted-foreground">
-              {translate(
+              {t(
                 'auto.components.rooms.page.directEmptyHint',
                 'This is a focused room conversation. Other members do not join it unless mentioned.'
               )}
@@ -68,7 +80,7 @@ export function RoomTranscript(props: TranscriptProps) {
         {segments.map((segment) => {
           const member = memberForLine(selected, segment.memberId)
           const failed = segment.entries.some((entry) => entry.line.kind === 'failed')
-          const retryable = failed && props.onRetryMember !== undefined
+          const retryable = failed && onRetryMember !== undefined
           return (
             <article
               key={segment.key}
@@ -96,7 +108,7 @@ export function RoomTranscript(props: TranscriptProps) {
                     <span className="font-medium text-foreground">{segment.who}</span>
                     {member?.isAdmin ? (
                       <span className="rounded-full border border-annotation-highlight/50 bg-annotation-highlight/10 px-1.5 py-px text-2xs text-annotation-highlight dark:text-annotation-highlight">
-                        {translate('auto.components.rooms.page.adminRole', 'Admin')}
+                        {t('auto.components.rooms.page.adminRole', 'Admin')}
                       </span>
                     ) : null}
                   </div>
@@ -119,17 +131,17 @@ export function RoomTranscript(props: TranscriptProps) {
                     variant="outline"
                     size="xs"
                     className="text-destructive"
-                    onClick={() => props.onRetryMember(segment.memberId!)}
+                    onClick={() => onRetryMember(segment.memberId!)}
                   >
                     <RotateCcw className="size-3" />
-                    {translate('auto.components.rooms.page.retry', 'Retry')}
+                    {t('auto.components.rooms.page.retry', 'Retry')}
                   </Button>
                 ) : null}
               </div>
             </article>
           )
         })}
-        {props.workingMembers.map((member) => (
+        {workingMembers.map((member) => (
           <article key={member.memberId} className="flex gap-2.5" aria-label={member.name}>
             <RoomMemberAvatar
               member={{ ...member, agent: agentFromMemberId(member.memberId) ?? undefined }}
@@ -138,12 +150,12 @@ export function RoomTranscript(props: TranscriptProps) {
               <div className="mb-1 text-xs text-muted-foreground">{member.name}</div>
               <div className="inline-flex items-center gap-2 rounded-2xl border border-border/60 bg-card px-3.5 py-2.5 text-sm text-muted-foreground">
                 <Loader2 className="size-3.5 animate-spin" />
-                {translate('auto.components.rooms.page.memberWorking', 'Working…')}
+                {t('auto.components.rooms.page.memberWorking', 'Working…')}
               </div>
             </div>
           </article>
         ))}
-        {props.waitingMembers.map((member) => (
+        {waitingMembers.map((member) => (
           <article key={member.memberId} className="flex gap-2.5" aria-label={member.name}>
             <RoomMemberAvatar
               member={{ ...member, agent: agentFromMemberId(member.memberId) ?? undefined }}
@@ -152,12 +164,12 @@ export function RoomTranscript(props: TranscriptProps) {
               <div className="mb-1 text-xs text-muted-foreground">{member.name}</div>
               <div className="inline-flex items-center gap-2 rounded-2xl border border-status-warning-border bg-status-warning-background px-3.5 py-2.5 text-sm text-status-warning">
                 <CircleAlert className="size-3.5" />
-                {translate('auto.components.rooms.page.memberWaiting', 'Waiting for approval…')}
+                {t('auto.components.rooms.page.memberWaiting', 'Waiting for approval…')}
               </div>
             </div>
           </article>
         ))}
-        <div ref={props.bottomRef} />
+        <div ref={bottomRef} />
       </div>
     </ScrollArea>
   )

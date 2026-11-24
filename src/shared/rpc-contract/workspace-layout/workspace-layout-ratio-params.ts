@@ -40,3 +40,10 @@ export const SetGroupRatiosCommand = z
     ratios: SplitRatioIntents.optional()
   })
   .refine((command) => (command.groupLayout === undefined) !== (command.ratios === undefined))
+
+/** A workspace's chat column side; the owner swaps horizontal splits so the chat sits on `side`. */
+export const SetChatPanelSideCommand = z.object({
+  type: z.literal('setChatPanelSide'),
+  workspace: z.string().min(1),
+  side: z.enum(['first', 'second'])
+})

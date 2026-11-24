@@ -2,7 +2,7 @@ import { Pencil, Plus, X } from 'lucide-react'
 import type { Tab } from '../../../../shared/workspace-layout/tab-groups/tab-types'
 import { resolveUnifiedTabLabel } from '../../../../shared/workspace-layout/tab-groups/tab-title-resolution'
 import { useAppStore } from '../../store'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import { AgentIcon } from '@/components/agent/icons/AgentIcon'
 import { agentTypeToIconAgent } from '../../../../shared/agent-status/presentation/agent-type-icon-agent'
 import { isImeCompositionKeyDown } from '@/lib/text-input/ime/ime-composition-keyboard-event'
@@ -41,12 +41,13 @@ export function ChatPanelHeader({
   /** Keeps header actions clear of the fixed Windows/Linux window controls. */
   insetWindowControls?: boolean
 }): React.JSX.Element {
+  const t = useTranslate()
   const generatedTitles = useAppStore((state) => state.settings?.tabAutoGenerateTitle === true)
   const setTabCustomTitle = useAppStore((state) => state.setTabCustomTitle)
-  const closeLabel = translate('chatPanel.close', 'Close chat')
-  const chatLabel = translate('chatPanel.title', 'Chat')
-  const renameLabel = translate('chatPanel.rename', 'Rename chat')
-  const newChatLabel = translate('chatPanel.newChat', 'New chat')
+  const closeLabel = t('chatPanel.close', 'Close chat')
+  const chatLabel = t('chatPanel.title', 'Chat')
+  const renameLabel = t('chatPanel.rename', 'Rename chat')
+  const newChatLabel = t('chatPanel.newChat', 'New chat')
   const active = chats.find((tab) => tab.id === activeTabId)
   return (
     <div

@@ -1,5 +1,6 @@
 import React, { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
+import { useTranslate } from '@/i18n/use-translate'
 import {
   buildPlainEditableDomContextMenuModel,
   findPlainEditableContextMenuTarget,
@@ -29,7 +30,9 @@ type PlainMenuState = {
 // surfaces that own their menu (rich markdown, native chat, terminal) run
 // first and claim the event with preventDefault before this host sees it.
 export function PlainEditableDomContextMenuHost(): React.JSX.Element | null {
+  const t = useTranslate()
   const [menu, setMenu] = useState<PlainMenuState | null>(null)
+  const [menuTarget, setMenuTarget] = useState<HTMLElement | null>(null)
   const [focus, setFocus] = useState<number | null>(null)
   const [position, setPosition] = useState<{ x: number; y: number } | null>(null)
   const panelRef = useRef<HTMLDivElement | null>(null)
@@ -52,10 +55,11 @@ export function PlainEditableDomContextMenuHost(): React.JSX.Element | null {
       }
       event.preventDefault()
       targetRef.current = target
+      setMenuTarget(target)
       const { hasSelection, readOnly } = readPlainEditableTargetState(target)
       setFocus(
         initialPlainEditableDomMenuFocus(
-          buildPlainEditableDomContextMenuModel({ hasSelection, readOnly })
+          buildPlainEditableDomContextMenuModel({ hasSelection, readOnly, t })
         )
       )
       setPosition(null)
@@ -65,7 +69,7 @@ export function PlainEditableDomContextMenuHost(): React.JSX.Element | null {
     return () => {
       window.removeEventListener('contextmenu', onContextMenu)
     }
-  }, [])
+  }, [t])
 
   useEffect(() => {
     if (!menu) {
@@ -76,7 +80,7 @@ export function PlainEditableDomContextMenuHost(): React.JSX.Element | null {
       const { hasSelection, readOnly } = target
         ? readPlainEditableTargetState(target)
         : { hasSelection: false, readOnly: false }
-      return { model: buildPlainEditableDomContextMenuModel({ hasSelection, readOnly }) }
+      return { model: buildPlainEditableDomContextMenuModel({ hasSelection, readOnly, t }) }
     }
     const onPointerDown = (event: PointerEvent): void => {
       if (event.target instanceof Node && panelRef.current?.contains(event.target)) {
@@ -143,7 +147,7 @@ export function PlainEditableDomContextMenuHost(): React.JSX.Element | null {
       window.removeEventListener('blur', close)
       window.removeEventListener('resize', close)
     }
-  }, [menu, focus])
+  }, [menu, focus, t])
 
   useLayoutEffect(() => {
     if (!menu || !panelRef.current) {
@@ -158,10 +162,6 @@ export function PlainEditableDomContextMenuHost(): React.JSX.Element | null {
     })
   }, [menu])
 
-  if (!menu) {
-    return null
-  }
-
   const dispatchAction = (action: PlainEditableDomMenuAction): void => {
     const target = targetRef.current
     if (!target || !target.isConnected) {
@@ -171,19 +171,28 @@ export function PlainEditableDomContextMenuHost(): React.JSX.Element | null {
     runPlainEditableDomMenuEditAction(target, action)
     setMenu(null)
   }
-  dispatchActionRef.current = dispatchAction
 
-  const target = targetRef.current
+  // Why: the listeners above call through the ref so they always reach the latest closure.
+  useEffect(() => {
+    dispatchActionRef.current = dispatchAction
+  })
+
+  if (!menu) {
+    return null
+  }
+
+  // Why: render reads the state mirror; the ref is only for listeners and callbacks.
+  const target = menuTarget
   const { hasSelection, readOnly } = target
     ? readPlainEditableTargetState(target)
     : { hasSelection: false, readOnly: false }
-  const model = buildPlainEditableDomContextMenuModel({ hasSelection, readOnly })
+  const model = buildPlainEditableDomContextMenuModel({ hasSelection, readOnly, t })
 
   return createPortal(
     <div
       ref={panelRef}
       role="menu"
-      aria-label="Edit"
+      aria-label={t('auto.components.editor.PlainEditableDomContextMenu.menuLabel', 'Edit')}
       data-testid="plain-editable-dom-context-menu"
       className={MENU_PANEL_CLASS}
       style={{

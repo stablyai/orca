@@ -101,6 +101,7 @@ export const STATIC_RIGHT_SIDEBAR_TABS = [
   'source-control',
   'checks',
   'ports',
+  'debug',
   'bot-activity',
   'bot-automations',
   'bot-connectors',
@@ -134,5 +135,6 @@ export type TopLevelView =
   | 'space'
   | 'skills'
   | 'artifacts'
+  | 'workbench'
   | 'mobile'
   | 'rooms'

@@ -1,4 +1,3 @@
-/* eslint-disable max-lines */
 import { publishedLegacyChatPermissionMode } from '../../../../shared/agent-launch/permissions/agent-chat-permission-mode'
 import { getClaudeAgentViewService } from '../../../claude/agent-view/agent-view-service'
 import { getAppEnvironment } from '../../../../shared/app-lifecycle/app-environment'
@@ -11,10 +10,7 @@ import {
   type TerminalQuickCommandMutation
 } from '../../../../shared/terminal/quick-commands/terminal-quick-commands'
 import { haveSameDisabledTuiAgents } from '../../../../shared/agent-launch/catalog/tui-agent-selection'
-import { normalizeSourceControlAiSettings } from '../../../../shared/source-control/ai/settings/source-control-ai-settings'
 import { normalizeSourceControlGroupOrder } from '../../../../shared/source-control/listing/source-control-group-order'
-import { SOURCE_CONTROL_LAUNCH_ACTION_IDS } from '../../../../shared/source-control/ai/recipes/source-control-ai-actions'
-import type { GlobalSettings } from '../../../../shared/settings/global-settings-types'
 import { applyNativeChatSessionOptionSettingsMutation } from '../../../../shared/native-chat/input/session-options/native-chat-session-option-defaults'
 import type { NativeChatSessionOptionSettingsMutation } from '../../../../shared/native-chat/input/native-chat-session-options'
 import { getHostDisplayLabelOverrides } from '../../../../shared/execution-host/host-setting-overrides'
@@ -42,9 +38,9 @@ import { agentLaunchSettingsRollbackUpdates } from '../../terminal/launch/agent-
 import type {
   RuntimeClientSettings,
   RuntimeClientSettingsUpdate,
-  RuntimeClientSourceControlAi,
   RuntimeHostDisplayLabelOverrides
 } from './runtime-client-settings-shape'
+import { projectSourceControlLaunchRecipes } from './runtime-client-source-control-recipes'
 import { normalizeNewTabMenuLayout } from '../../../../shared/new-tab-menu/new-tab-menu-layout'
 import { hostNativeChatDefaults } from '../../../../shared/native-chat/settings/native-chat-providers'
 
@@ -312,23 +308,5 @@ export class RuntimeClientSettingsController {
     })
     this.reconciliationTail = reconciliation.catch(() => {})
     return reconciliation
-  }
-}
-
-function projectSourceControlLaunchRecipes(
-  settings: Partial<Pick<GlobalSettings, 'sourceControlAi' | 'commitMessageAi'>>
-): RuntimeClientSourceControlAi {
-  const { enabled, actions } = normalizeSourceControlAiSettings(
-    settings.sourceControlAi,
-    settings.commitMessageAi
-  )
-  return {
-    enabled,
-    actions: Object.fromEntries(
-      SOURCE_CONTROL_LAUNCH_ACTION_IDS.flatMap((actionId) => {
-        const recipe = actions?.[actionId]
-        return recipe ? [[actionId, recipe]] : []
-      })
-    )
   }
 }

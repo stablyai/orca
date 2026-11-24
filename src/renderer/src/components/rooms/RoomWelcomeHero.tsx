@@ -1,7 +1,7 @@
 import { Bot, Crown, Sparkles } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { useTranslation } from 'react-i18next'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 
 /** Static welcome for empty rooms: explains the Chief pattern, never written to the log. */
 export function RoomWelcomeHero(props: {
@@ -10,6 +10,7 @@ export function RoomWelcomeHero(props: {
   onQuickSend: (text: string) => void
   onSpawnBot: () => void
 }) {
+  const t = useTranslate()
   // Why: this memo boundary needs its own language subscription, while
   // translate() preserves Orca's pseudo-localization behavior.
   useTranslation()
@@ -21,11 +22,11 @@ export function RoomWelcomeHero(props: {
       <div className="mt-3 text-lg font-semibold">{props.adminName ?? props.roomName}</div>
       <div className="mt-2 text-sm text-muted-foreground">
         {props.adminName
-          ? translate('auto.components.rooms.hero.adminLeads', '{{name}} is the admin here. ', {
+          ? t('auto.components.rooms.hero.adminLeads', '{{name}} is the admin here. ', {
               name: props.adminName
             })
           : ''}
-        {translate(
+        {t(
           'auto.components.rooms.hero.subtitle',
           'Describe the team or task you need. The chief can create bots and start group chats.'
         )}
@@ -37,8 +38,7 @@ export function RoomWelcomeHero(props: {
             variant="secondary"
             onClick={() => props.onQuickSend('你好，请介绍一下你能帮我做什么？')}
           >
-            <Sparkles className="h-3.5 w-3.5" />{' '}
-            {translate('auto.components.rooms.hero.sayHi', 'Say hi')}
+            <Sparkles className="h-3.5 w-3.5" /> {t('auto.components.rooms.hero.sayHi', 'Say hi')}
           </Button>
           <Button
             size="sm"
@@ -46,7 +46,7 @@ export function RoomWelcomeHero(props: {
             onClick={() => props.onQuickSend('帮我创建一个代码审查 Bot，并拉一个小群。')}
           >
             <Bot className="h-3.5 w-3.5" />{' '}
-            {translate('auto.components.rooms.hero.spawnBot', 'Create a bot')}
+            {t('auto.components.rooms.hero.spawnBot', 'Create a bot')}
           </Button>
         </div>
         <Button
@@ -56,7 +56,7 @@ export function RoomWelcomeHero(props: {
             props.onQuickSend('帮我建一个小组：一个规划 Bot，一个实现 Bot，一个审查 Bot。')
           }
         >
-          {translate('auto.components.rooms.hero.howTo', 'Build a review team')}
+          {t('auto.components.rooms.hero.howTo', 'Build a review team')}
         </Button>
         <Button
           variant="ghost"
@@ -65,7 +65,7 @@ export function RoomWelcomeHero(props: {
             props.onQuickSend('帮我创建一个文档整理 Bot，让它先列出可以自动整理的事项。')
           }
         >
-          {translate('auto.components.rooms.hero.docBot', 'Create a document bot')}
+          {t('auto.components.rooms.hero.docBot', 'Create a document bot')}
         </Button>
       </div>
     </div>

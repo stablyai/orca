@@ -15,6 +15,7 @@ import type {
 import { makeCustomTerminalThemeSelection } from '../../../shared/terminal-themes/terminal-custom-themes'
 import { parseWarpThemeYaml } from '../../../main/warp-themes/parser'
 import { invokeNative, invokePlugin } from './tauri-native-host'
+import { translate } from '../i18n/i18n'
 import { readStagedFileText, stagePath } from './tauri-native-staged-read'
 
 const MAX_THEME_FILE_BYTES = 1_000_000
@@ -77,7 +78,7 @@ export async function previewTauriWarpThemeImport(
   if (source.kind === 'chooseFile') {
     const picked = await invokePlugin<string | string[] | null>('dialog', 'open', {
       options: {
-        title: 'Import Warp themes',
+        title: translate('auto.web.tauriNative.dialog.importWarpThemes', 'Import Warp themes'),
         multiple: true,
         filters: [{ name: 'Warp themes', extensions: ['yaml', 'yml'] }]
       }
@@ -94,7 +95,14 @@ export async function previewTauriWarpThemeImport(
     sourceLabel = 'Selected files'
   } else if (source.kind === 'chooseFolder') {
     const picked = await invokePlugin<string | string[] | null>('dialog', 'open', {
-      options: { title: 'Import Warp themes folder', directory: true, multiple: false }
+      options: {
+        title: translate(
+          'auto.web.tauriNative.dialog.importWarpThemesFolder',
+          'Import Warp themes folder'
+        ),
+        directory: true,
+        multiple: false
+      }
     })
     const folder = Array.isArray(picked) ? picked[0] : picked
     if (!folder) {

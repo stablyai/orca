@@ -26,7 +26,7 @@ export async function notifyMinimizedToTrayOnce(): Promise<void> {
   }
   await invokePlugin('notification', 'notify', {
     options: {
-      title: 'Orca',
+      title: translate('tray.minimizeNotice.title', 'Orca'),
       body: translate('tray.minimizeNotice.body', 'Orca is still running in the system tray')
     }
   }).catch(() => {})

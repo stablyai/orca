@@ -16,6 +16,7 @@ import {
   type NativeFilesystemFallback
 } from './tauri-native-filesystem-read-api'
 import { invokeNative, invokePlugin, isTauriNativeHost } from './tauri-native-host'
+import { translate } from '../i18n/i18n'
 
 const RUNTIME_UPLOAD_CHUNK_BYTES = 384 * 1024
 const RUNTIME_UPLOAD_CHUNK_TIMEOUT_MS = 30_000
@@ -61,7 +62,10 @@ async function downloadTauriSshFolder(args: {
 }): Promise<{ canceled: true } | { canceled: false; destinationPath: string }> {
   const parentPath = await invokePlugin<string | string[] | null>('dialog', 'open', {
     options: {
-      title: 'Select download destination',
+      title: translate(
+        'auto.web.tauriNative.dialog.selectDownloadDestination',
+        'Select download destination'
+      ),
       multiple: false,
       directory: true
     }

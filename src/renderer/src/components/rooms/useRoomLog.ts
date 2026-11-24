@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { toast } from 'sonner'
 import { translate } from '@/i18n/i18n'
+import { installWindowVisibilityInterval } from '@/lib/window-activity/window-visibility-interval'
 import { callRuntimeRpc } from '@/runtime/rpc/calls/runtime-rpc-call'
 import { LOCAL, type Room, type RoomLine } from './room-types'
 
@@ -74,8 +75,7 @@ export function useRoomLog(roomId: string | null) {
     if (!roomId) {
       return
     }
-    const timer = setInterval(() => void refresh(), 3000)
-    return () => clearInterval(timer)
+    return installWindowVisibilityInterval({ run: () => void refresh(), intervalMs: 3000 })
   }, [refresh, roomId])
   const pendingLines = useMemo(
     () =>

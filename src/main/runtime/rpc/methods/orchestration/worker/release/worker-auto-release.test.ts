@@ -198,7 +198,13 @@ describe('orchestration worker automatic release', () => {
     beforeEach(() => {
       userDataDir = mkdtempSync(join(tmpdir(), 'orca-auto-release-restart-'))
     })
-    afterEach(() => rmSync(userDataDir, { recursive: true, force: true }))
+    afterEach(() => {
+      // Inner hooks run before the outer harness cleanup, so close the file-backed
+      // database first: Windows locks open SQLite files and rmSync would hit EBUSY.
+      h.cleanup()
+      // Transient Windows locks (AV scan, lazy handle release) fail a single unlink pass.
+      rmSync(userDataDir, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 })
+    })
 
     function setupFileBacked(): void {
       vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout', 'Date'] })

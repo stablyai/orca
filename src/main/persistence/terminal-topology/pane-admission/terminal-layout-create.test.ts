@@ -10,6 +10,7 @@ import {
   emptyTerminalSessionProfile,
   FIXTURE_FOLDER_WORKTREE_ID,
   FIXTURE_GIT_WORKTREE_ID,
+  closeTopologyStores,
   openTopologyStore,
   reopenTopologyStore
 } from '../testing/terminal-topology-profile-fixture'
@@ -28,7 +29,8 @@ const NEW_TAB = 'tab-new'
 const NEW_LEAF = '22222222-2222-4222-8222-222222222222'
 const directories: string[] = []
 
-afterEach(() => {
+afterEach(async () => {
+  await closeTopologyStores()
   for (const directory of directories.splice(0)) {
     rmSync(directory, { recursive: true, force: true })
   }

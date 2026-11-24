@@ -17,16 +17,15 @@ export function useWindowSidebarListModel(args: SidebarListModelArgs): SidebarLi
     visibleWorktrees: baseVisibleWorktrees,
     pairedDeviceIdsByEnvironment,
     botListedWorktreeIdentities
-  } =
-    useVisibleSidebarWorktrees({
-      filterState,
-      sortBy,
-      sortedIds,
-      repoMap,
-      worktreeLineageById: args.worktreeLineageById,
-      defaultHostId,
-      agentSendTargetWorktreeId: args.agentSendTargetWorktreeId
-    })
+  } = useVisibleSidebarWorktrees({
+    filterState,
+    sortBy,
+    sortedIds,
+    repoMap,
+    worktreeLineageById: args.worktreeLineageById,
+    defaultHostId,
+    agentSendTargetWorktreeId: args.agentSendTargetWorktreeId
+  })
   const textSearch = useSidebarTextSearch(
     baseVisibleWorktrees,
     repoMap,

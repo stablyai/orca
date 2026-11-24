@@ -31,6 +31,7 @@ import {
   SshTargetAdd,
   SshTargetUpdate
 } from '../../../../../shared/rpc-contract/ssh/ssh-params'
+import { SSH_LEGACY_RELAY_BRIDGE_METHODS } from '../../../../ipc/pty/runtime/kill'
 
 // Keep generation optional so older server rows still key by target id.
 function toSshTargetSummary(
@@ -183,6 +184,8 @@ export const SSH_METHODS = [
       return { removed: true }
     }
   }),
+  // Relay-era panes an older Orca still runs stay drivable for paired clients.
+  ...SSH_LEGACY_RELAY_BRIDGE_METHODS,
   defineMethod({
     name: 'ssh.browseDir',
     permission: 'workspace',

@@ -71,11 +71,24 @@ describe('Tauri owned runtime startup', () => {
   })
 
   it('surfaces native startup failures', async () => {
-    const globals = installBrowserGlobals('Windows')
-    const { initializeTauriRuntime } = await loadRuntimeStartup()
-    Object.assign(globals.window, {
-      __TAURI_INTERNALS__: { invoke: vi.fn().mockRejectedValue(new Error('runtime unavailable')) }
-    })
-    await expect(initializeTauriRuntime()).rejects.toThrow('runtime unavailable')
+    vi.useFakeTimers()
+    try {
+      const globals = installBrowserGlobals('Windows')
+      const { initializeTauriRuntime } = await loadRuntimeStartup()
+      Object.assign(globals.window, {
+        __TAURI_INTERNALS__: {
+          invoke: vi.fn((command: string) =>
+            command === 'poc_browser_identity_set_renderer_user_agent'
+              ? Promise.resolve(true)
+              : Promise.reject(new Error('runtime unavailable'))
+          )
+        }
+      })
+      const assertion = expect(initializeTauriRuntime()).rejects.toThrow('runtime unavailable')
+      await vi.runAllTimersAsync()
+      await assertion
+    } finally {
+      vi.useRealTimers()
+    }
   })
 })

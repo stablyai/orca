@@ -7,6 +7,10 @@ import type {
 } from '../../../../../shared/workspace-disk-space/workspace-space-types'
 import type { WorktreeRemovalTarget } from '../../../../../shared/worktree/removal/removal'
 import { composeWorktreeHostIdentity } from '../../../../../shared/worktree/host-qualified-identity'
+import {
+  selectDetectedWorktreesByRepo,
+  selectWorktreesByRepo
+} from '../../workspaces/catalog/workspace-record-fields'
 import type { AppState } from '../../types'
 
 let inFlightScan: Promise<WorkspaceSpaceAnalysis> | null = null
@@ -96,8 +100,8 @@ function buildWorkspaceSpaceAnalyzeInput(
   state: Pick<AppState, 'repos' | 'worktreesByRepo' | 'detectedWorktreesByRepo'>
 ): WorkspaceSpaceAnalyzeInput {
   const worktrees = [
-    ...Object.values(state.worktreesByRepo).flat(),
-    ...Object.values(state.detectedWorktreesByRepo).flatMap((result) => result.worktrees)
+    ...Object.values(selectWorktreesByRepo(state)).flat(),
+    ...Object.values(selectDetectedWorktreesByRepo(state)).flatMap((result) => result.worktrees)
   ]
   const seen = new Set<string>()
   return {

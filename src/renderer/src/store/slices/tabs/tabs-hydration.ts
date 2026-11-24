@@ -19,6 +19,8 @@ import {
   selectHydratedActiveGroupId
 } from './tab-hydration-records'
 import { sanitizeRecentTabIds } from './tab-selection-history'
+import { insertSplitGroup } from './tabs-group-actions'
+import { separateChatPanelGroupRecords } from '../../../../../shared/workspace-layout/tab-groups/chat-panel-separation'
 import { dedupeTabOrder } from '../../../../../shared/workspace-layout/tab-groups/tab-order'
 import { restoresSavedContentTab } from '../../../../../shared/workspace-layout/editor-tabs/saved-editor-tab-restore'
 
@@ -226,6 +228,27 @@ export function buildHydratedTabState(
   }
 
   adoptGrouplessTabs(tabsByWorktree, groupsByWorktree, activeGroupIdByWorktree, layoutByWorktree)
+
+  // Why: sessions saved before the fixed panel split chats inside content groups;
+  // separate them on load so a restart restores the panel instead of a mixed strip.
+  for (const worktreeId of Object.keys(groupsByWorktree)) {
+    const separated = separateChatPanelGroupRecords(
+      tabsByWorktree[worktreeId] ?? [],
+      groupsByWorktree[worktreeId] ?? [],
+      activeGroupIdByWorktree[worktreeId],
+      layoutByWorktree[worktreeId],
+      worktreeId,
+      { splitGroup: insertSplitGroup, sanitizeRecentTabIds }
+    )
+    tabsByWorktree[worktreeId] = separated.tabs
+    groupsByWorktree[worktreeId] = separated.groups
+    if (separated.activeGroupId !== undefined) {
+      activeGroupIdByWorktree[worktreeId] = separated.activeGroupId
+    }
+    if (separated.layout !== undefined) {
+      layoutByWorktree[worktreeId] = separated.layout
+    }
+  }
 
   return {
     unifiedTabsByWorktree: tabsByWorktree,

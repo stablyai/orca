@@ -6264,7 +6264,9 @@
           "fee535205b": "任务",
           "d599269755": "从侧边栏隐藏",
           "artifacts": "产物",
-          "skills": "技能"
+          "skills": "技能",
+          "workflow": "工作流",
+          "rooms": "机器人"
         },
         "SidebarRepositoryFilterSection": {
           "d3a9c4cea1": "清除",
@@ -16581,13 +16583,7 @@
         },
         "MonacoEditor": {
           "68cb83f4a7": "在选定的文本上添加注释",
-          "fd68ae03b3": "在文件中搜索",
           "largePasteTooLarge": "粘贴内容过大"
-        },
-        "MonacoGutterContextMenu": {
-          "7b57b1b468": "复制远程 URL",
-          "2e0b1cdc05": "复制相对路径到行",
-          "4eaa991bde": "复制路径到行"
         },
         "NotesSendMenu": {
           "44dc5e60a6": "发送笔记",
@@ -17147,6 +17143,39 @@
           "open": "用默认应用打开",
           "downloadOpen": "下载并用默认应用打开",
           "openFailed": "这台计算机上没有能打开此文件的应用"
+        },
+        "debug": {
+          "adapterLabel": "调试适配器",
+          "argsLabel": "参数",
+          "attachAction": "附加",
+          "breakpointCount_one": "{{count}} 个断点",
+          "breakpointCount_other": "{{count}} 个断点",
+          "breakpointHint": "点击装订线设置断点",
+          "callStackTitle": "调用堆栈",
+          "clearConsoleTitle": "清空控制台",
+          "consoleTitle": "控制台 / 求值",
+          "continueTitle": "继续",
+          "cwdLabel": "目录",
+          "cwdPlaceholder": "默认当前文件所在目录",
+          "debugFileAction": "调试文件",
+          "evalPlaceholder": "求值表达式（Enter）...",
+          "extraJsonLabel": "额外 DAP JSON（可选，如 stopOnEntry / port）",
+          "launchConfigHeading": "启动配置",
+          "launchConfigTitle": "调试启动配置",
+          "modeAttach": "Attach (附加运行中进程)",
+          "modeLabel": "模式",
+          "modeLaunch": "Launch (启动当前文件)",
+          "noFrames": "无堆栈帧",
+          "noScopes": "无作用域",
+          "notPaused": "未暂停",
+          "panelToggle": "调试面板",
+          "pauseTitle": "暂停",
+          "stepIntoTitle": "单步进入",
+          "stepOutTitle": "单步跳出",
+          "stepOverTitle": "单步跳过",
+          "stopTitle": "停止调试",
+          "variablesTitle": "变量",
+          "breakpointCount": "{{count}} 个断点"
         }
       },
       "diff": {
@@ -19336,6 +19365,118 @@
       },
       "NewWorkspaceComposerFooter": {
         "create": "创建"
+      },
+      "workbench": {
+        "flow": {
+          "requirementPlaceholder": "输入你的需求或任务描述（Enter 立即开始）...",
+          "openWorktree": "打开 Worktree",
+          "retryNode": "重试当前节点",
+          "stop": "停止",
+          "start": "开始执行",
+          "editYaml": "编辑 YAML",
+          "newYaml": "新建 YAML",
+          "inheritAgent": "跟随底部 ChatUI",
+          "nodeRunPlaceholder": "CLI 命令（如：pnpm tc && pnpm test）",
+          "nodePromptPlaceholder": "该节点的专属提示词 / 指令...",
+          "saveNodeYaml": "保存到 YAML",
+          "applyNode": "应用",
+          "modeAgent": "AI Agent",
+          "modeCli": "CLI 命令",
+          "browseFolder": "选择本地文件夹...",
+          "deleteNode": "删除",
+          "deleteNodeTitle": "删除节点",
+          "insertAcceptDesc": "AI 审查改动质量",
+          "insertAnalyzeDesc": "AI 拆解需求与定位文件",
+          "insertCliDesc": "直接执行 Shell（不走模型）",
+          "insertCommitDesc": "受 Harness 约束提交",
+          "insertImplementDesc": "AI 编写与修改代码",
+          "insertNodeHeading": "插入新节点",
+          "insertNodeTitle": "插入节点",
+          "insertVerifyDesc": "类型检查 / 单元测试门禁",
+          "moveNodeLeft": "左移节点",
+          "moveNodeRight": "右移节点",
+          "nodeNamePlaceholder": "节点名称",
+          "retry": "重试此步",
+          "runLabel": "运行 {{code}}",
+          "runtimeEnvironment": "运行环境",
+          "shellAuto": "Auto (系统默认)",
+          "stepProgress": "第 {{current}} 步，共 {{total}} 步",
+          "targetFolderHeading": "运行目录 / 项目",
+          "targetFolderTitle": "选择工作流运行目录",
+          "tplAcceptDesc": "审查改动并确认通过",
+          "tplAcceptLabel": "Diff 验收",
+          "tplAnalyzeDesc": "拆解需求并定位目标文件",
+          "tplAnalyzeLabel": "需求分析",
+          "tplCliDesc": "执行本地 Shell 命令（不消耗模型）",
+          "tplCliLabel": "CLI 命令",
+          "tplCommitDesc": "按 Harness 规范提交变更",
+          "tplCommitLabel": "规范提交",
+          "tplImplementDesc": "在工作区完成代码修改",
+          "tplImplementLabel": "编码实现",
+          "tplVerifyDesc": "运行类型检查或测试命令",
+          "tplVerifyLabel": "校验测试",
+          "viewWorktree": "查看工作区"
+        },
+        "presets": {
+          "standard": {
+            "name": "标准研发流",
+            "desc": "需求分析 → 编码实现 → 自检测试 → 验收通过。"
+          },
+          "bugfix": {
+            "name": "Bug 修复流",
+            "desc": "问题定位 → 修复改动 → 回归验证 → 验收通过。"
+          },
+          "refactor": {
+            "name": "重构优化流",
+            "desc": "结构评估 → 重构实施 → 质量检查 → 验收通过。"
+          },
+          "devE2e": {
+            "name": "研发一条龙",
+            "desc": "需求分析 → 编码实现 → 跑 CI → 修复 CI → Code Review → Commit。"
+          }
+        },
+        "nodes": {
+          "analyze": "需求分析",
+          "analyzeDesc": "拆解需求并定位目标文件",
+          "implement": "编码实现",
+          "implementDesc": "在隔离 Worktree 中完成代码修改",
+          "verify": "自检测试",
+          "verifyDesc": "运行 Lint、类型检查与相关测试",
+          "accept": "验收通过",
+          "acceptDesc": "最终评审与验收确认",
+          "locate": "问题定位",
+          "locateDesc": "追踪故障链路并复现问题",
+          "fix": "修复改动",
+          "fixDesc": "以最小改动修复根因",
+          "regression": "回归验证",
+          "regressionDesc": "验证修复效果并确认无回归",
+          "assess": "结构评估",
+          "assessDesc": "梳理模块边界并制定重构方案",
+          "refactor": "重构实施",
+          "refactorDesc": "执行模块化重构改动",
+          "ci": "运行 CI",
+          "ciDesc": "运行 Lint、类型检查与受影响测试",
+          "fixCi": "修复 CI",
+          "fixCiDesc": "针对 CI 失败项自动定位并修复至通过",
+          "review": "Code Review",
+          "reviewDesc": "审查代码质量、边界条件与 diff 规范",
+          "commit": "提交代码",
+          "commitDesc": "校验改动并生成规范 Commit 提交"
+        },
+        "builder": {
+          "cancel": "取消"
+        },
+        "harness": {
+          "title": "Harness 规范策略",
+          "presetOff": "自由",
+          "presetStandard": "标准",
+          "presetCustom": "自定义",
+          "commitPerFeature": "每功能必提交",
+          "commitStyle": "Commit 规范",
+          "preCommitGate": "提交前门禁",
+          "presetGoogleCl": "Google CL",
+          "triggerLabel": "Harness: {{preset}}"
+        }
       }
     },
     "i18n": {
@@ -25689,5 +25830,58 @@
     "includeRecentLogsRedacted": "包含近期日志（已脱敏）",
     "details": "详情",
     "sending": "正在发送…"
+  },
+  "tauri": {
+    "runtimeInit": {
+      "description": "Orca 无法启动本地运行时，因此未复用之前的连接。请重试以重新启动。",
+      "hint": "如果仍然失败，运行时日志（orcad-supervisor-stderr.log）中有崩溃详情。",
+      "retry": "重试",
+      "title": "本地运行时启动失败"
+    }
+  },
+  "workbench": {
+    "waypoints": {
+      "asksFirst": "先询问",
+      "close": "返回工作流配置",
+      "completed": "已完成",
+      "needsYou": "等待你",
+      "needsYouBadge": "需要你",
+      "running": "运行中",
+      "stopped": "已停止",
+      "working": "正在处理步骤..."
+    },
+    "workflowMenu": {
+      "delete": "删除",
+      "deleteCancel": "取消",
+      "deleteConfirm": "删除",
+      "deletePresetDescription": "确定要从列表中移除预设工作流「{{name}}」吗？",
+      "deleteTitle": "删除工作流",
+      "deleteYamlDescription": "确定要删除工作流「{{name}}」吗？这将从 .orca/workflows 中移除对应的 YAML 文件。",
+      "duplicate": "创建副本",
+      "editYaml": "编辑 YAML",
+      "open": "打开工作流",
+      "rename": "重命名",
+      "saveAsYaml": "另存为 YAML 编辑"
+    },
+    "workflowNavMenu": {
+      "editHarness": "编辑 Harness 策略",
+      "newWorkflow": "新建工作流",
+      "openGuide": "YAML 语法文档",
+      "openWorkbench": "打开工作台",
+      "refresh": "刷新工作流列表",
+      "restorePresets": "恢复隐藏的预设工作流"
+    },
+    "yamlGuide": {
+      "agentModelDesc": "：可选，单独覆盖节点模型",
+      "button": "语法说明",
+      "idNameDesc": "：节点标识与显示名称",
+      "openDoc": "打开完整文档",
+      "promptDesc": "：AI 节点指令（用于 analyze/implement/accept/commit）",
+      "runDesc": "：Shell 命令（用于 cli/verify，不走大模型）",
+      "sample": "steps:\n  - id: analyze\n    name: 需求分析\n    kind: analyze\n    prompt: 分析需求并定位目标文件\n  - id: check\n    name: 类型检查\n    kind: cli\n    run: pnpm tc:web",
+      "stepsHeading": "步骤节点（steps[]）：",
+      "title": "Workflow YAML 速查",
+      "topFields": "顶层字段："
+    }
   }
 }

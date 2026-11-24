@@ -53,7 +53,7 @@ vi.mock('../../../ssh/ssh-credential-decline', () => ({
   isSshCredentialDeclined: isSshCredentialDeclinedMock
 }))
 
-vi.mock('../../../ssh/legacy-relay/legacy-relay-bridge-registry', () => ({
+vi.mock('../../../ssh/legacy-relay/bridge/legacy-relay-bridge-registry', () => ({
   installLegacyRelayBridge: vi.fn(),
   terminalsBucket: vi.fn(),
   startLegacyRelayBridge: vi.fn(),

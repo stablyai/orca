@@ -2,7 +2,7 @@ import React from 'react'
 import { ChevronRight, CircleAlert, CircleSlash, Link, Loader2 } from 'lucide-react'
 import { ContextMenu, ContextMenuTrigger } from '@/components/ui/context-menu'
 import { cn } from '@/lib/class-names'
-import { WorkspaceFileIcon } from '@/components/WorkspaceFileIcon'
+import { FileTypeIcon, FolderIcon } from '@/components/icons/FileTypeIcon'
 import { FileExplorerIndentGuides } from '../../FileExplorerIndentGuides'
 import { getFileExplorerRowPadding } from '../../file-explorer-row-layout'
 import {
@@ -208,7 +208,11 @@ export function FileExplorerRow({
               ) : showLoadError ? (
                 <CircleAlert className="size-3 shrink-0 text-destructive" />
               ) : (
-                <WorkspaceFileIcon path={node.relativePath || node.name} directory />
+                <FolderIcon
+                  folderPath={node.name}
+                  open={isExpanded}
+                  className="size-3 shrink-0 text-muted-foreground"
+                />
               )}
             </>
           ) : (
@@ -217,7 +221,10 @@ export function FileExplorerRow({
               {node.isSymlink ? (
                 <Link className="size-3 shrink-0 text-muted-foreground" />
               ) : (
-                <WorkspaceFileIcon path={node.relativePath || node.name} />
+                React.createElement(FileTypeIcon, {
+                  filePath: node.relativePath || node.name,
+                  className: 'size-3 shrink-0 text-muted-foreground'
+                })
               )}
             </>
           )}

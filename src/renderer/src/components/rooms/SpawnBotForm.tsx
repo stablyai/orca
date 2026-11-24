@@ -2,7 +2,8 @@ import { useEffect, useState } from 'react'
 import { Bot, Loader2, Sparkles } from 'lucide-react'
 import { toast } from 'sonner'
 import { useTranslation } from 'react-i18next'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
+import { runWithBusyFlag } from '@/lib/run-with-busy-flag'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import {
@@ -24,6 +25,7 @@ export function SpawnBotForm(props: {
   onSpawned: () => void
   onCancel: () => void
 }) {
+  const t = useTranslate()
   // Why: this memo boundary needs its own language subscription, while
   // translate() preserves Orca's pseudo-localization behavior.
   useTranslation()
@@ -61,48 +63,44 @@ export function SpawnBotForm(props: {
 
   const submit = async () => {
     if (!name.trim()) {
-      toast.error(translate('auto.components.rooms.spawnBot.needsName', 'Bot needs a name'))
+      toast.error(t('auto.components.rooms.spawnBot.needsName', 'Bot needs a name'))
       return
     }
     if (!worktreeId) {
-      toast.error(
-        translate('auto.components.rooms.spawnBot.pickWorkspace', 'Pick a workspace for the bot')
-      )
+      toast.error(t('auto.components.rooms.spawnBot.pickWorkspace', 'Pick a workspace for the bot'))
       return
     }
-    setBusy(true)
     try {
-      await callRuntimeRpc(LOCAL, 'orchestration.roomBotCreate', {
-        id: props.roomId,
-        worktree: `id:${worktreeId}`,
-        agent,
-        model: model.trim() || undefined,
-        effort: effort || undefined,
-        name: name.trim(),
-        instructions: instructions.trim() || undefined
-      })
-      toast.success(
-        translate('auto.components.rooms.spawnBot.joined', 'Bot "{{name}}" joined the room', {
-          name: name.trim()
+      await runWithBusyFlag(setBusy, async () => {
+        await callRuntimeRpc(LOCAL, 'orchestration.roomBotCreate', {
+          id: props.roomId,
+          worktree: `id:${worktreeId}`,
+          agent,
+          model: model.trim() || undefined,
+          effort: effort || undefined,
+          name: name.trim(),
+          instructions: instructions.trim() || undefined
         })
-      )
-      props.onSpawned()
+        toast.success(
+          t('auto.components.rooms.spawnBot.joined', 'Bot "{{name}}" joined the room', {
+            name: name.trim()
+          })
+        )
+        props.onSpawned()
+      })
     } catch (error) {
       toast.error(
-        `${translate('auto.components.rooms.spawnBot.failed', 'Failed to spawn bot')}: ${(error as Error).message}`
+        `${t('auto.components.rooms.spawnBot.failed', 'Failed to spawn bot')}: ${(error as Error).message}`
       )
-    } finally {
-      setBusy(false)
     }
   }
   return (
     <div className="space-y-2 rounded-md border border-border/60 bg-card p-3">
       <div className="flex items-center gap-1.5 text-sm font-medium">
-        <Bot className="h-3.5 w-3.5" />{' '}
-        {translate('auto.components.rooms.spawnBot.title', 'New bot')}
+        <Bot className="h-3.5 w-3.5" /> {t('auto.components.rooms.spawnBot.title', 'New bot')}
       </div>
       <Input
-        placeholder={translate(
+        placeholder={t(
           'auto.components.rooms.spawnBot.namePlaceholder',
           'Name (e.g. reviewer, planner)'
         )}
@@ -111,7 +109,7 @@ export function SpawnBotForm(props: {
         disabled={busy}
       />
       <Input
-        placeholder={translate(
+        placeholder={t(
           'auto.components.rooms.spawnBot.instructionsPlaceholder',
           'What is this bot responsible for? (optional)'
         )}
@@ -133,7 +131,7 @@ export function SpawnBotForm(props: {
       </Select>
       <details className="rounded-md border border-border/60 px-3 py-2">
         <summary className="cursor-pointer text-xs text-muted-foreground">
-          {translate('auto.components.rooms.spawnBot.advanced', 'Advanced')}
+          {t('auto.components.rooms.spawnBot.advanced', 'Advanced')}
         </summary>
         <div className="mt-2 space-y-2">
           <Select
@@ -147,7 +145,7 @@ export function SpawnBotForm(props: {
             <SelectContent>
               {worktrees.length === 0 ? (
                 <SelectItem value="_none">
-                  {translate('auto.components.rooms.spawnBot.noWorkspace', '(no workspace)')}
+                  {t('auto.components.rooms.spawnBot.noWorkspace', '(no workspace)')}
                 </SelectItem>
               ) : null}
               {worktrees.map((w) => (
@@ -171,7 +169,7 @@ export function SpawnBotForm(props: {
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="_default">
-                  {translate('auto.components.rooms.spawnBot.modelDefault', '(agent default)')}
+                  {t('auto.components.rooms.spawnBot.modelDefault', '(agent default)')}
                 </SelectItem>
                 {models.map((m) => (
                   <SelectItem key={m.id} value={m.id}>
@@ -197,10 +195,7 @@ export function SpawnBotForm(props: {
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="_default">
-                    {translate(
-                      'auto.components.rooms.spawnBot.effortDefault',
-                      '(default thinking)'
-                    )}
+                    {t('auto.components.rooms.spawnBot.effortDefault', '(default thinking)')}
                   </SelectItem>
                   {picked.efforts.map((e) => (
                     <SelectItem key={e.value} value={e.value}>
@@ -215,11 +210,11 @@ export function SpawnBotForm(props: {
       </details>
       <div className="flex justify-end gap-2">
         <Button variant="ghost" size="sm" onClick={props.onCancel} disabled={busy}>
-          {translate('auto.components.rooms.spawnBot.cancel', 'Cancel')}
+          {t('auto.components.rooms.spawnBot.cancel', 'Cancel')}
         </Button>
         <Button size="sm" onClick={() => void submit()} disabled={busy}>
           {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />}
-          {translate('auto.components.rooms.spawnBot.spawn', 'Spawn')}
+          {t('auto.components.rooms.spawnBot.spawn', 'Spawn')}
         </Button>
       </div>
     </div>

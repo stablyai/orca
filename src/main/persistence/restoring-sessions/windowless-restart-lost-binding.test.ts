@@ -8,6 +8,7 @@ import { leafIds } from '../terminal-topology/testing/terminal-topology-window-s
 import {
   emptyTerminalSessionProfile,
   FIXTURE_GIT_WORKTREE_ID,
+  closeTopologyStores,
   openTopologyStore,
   reopenTopologyStore
 } from '../terminal-topology/testing/terminal-topology-profile-fixture'
@@ -27,7 +28,8 @@ const LEAF = '11111111-1111-4111-8111-111111111111'
 const PTY = 'pty-live'
 const directories: string[] = []
 
-afterEach(() => {
+afterEach(async () => {
+  await closeTopologyStores()
   for (const directory of directories.splice(0)) {
     rmSync(directory, { recursive: true, force: true })
   }

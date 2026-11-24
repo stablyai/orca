@@ -10,7 +10,8 @@ import { singlePaneLayoutSnapshot } from '../../layout/terminal-single-pane-layo
 import { isTerminalLeafId } from '../../../../../../shared/workspace-layout/stable-pane-id'
 import {
   buildOrphanTerminalCompanionCleanupPatch,
-  getOrphanTerminalIds
+  getOrphanTerminalIds,
+  repairOrphanTerminalGroups
 } from '../../retirement/terminal-orphan-cleanup'
 import {
   ensureWorktreeGroup,
@@ -21,6 +22,8 @@ import { pushRecentTabId, sanitizeRecentTabIds } from '../../../slices/tabs/tab-
 import { dedupeTabOrder } from '../../../../../../shared/workspace-layout/tab-groups/tab-order'
 import { createNonSecureContextUuid as createBrowserUuid } from '../../../../../../shared/identifiers/non-secure-context-uuid'
 import { emptySplitGroup, splitGroupEntries } from '../../../slices/tabs/tabs-group-actions'
+import { applyDefaultChatPanelLayout } from '../../../slices/tabs/chat-panel-layout'
+import { resolveWorkspaceMode } from '../../../../app-shell/workspace-mode'
 import { ownsGlobalSelection } from '../../../workspaces/selection/global-selection-owner'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../../../shared/workspace-layout/layout-owner-switch'
 import {
@@ -166,30 +169,7 @@ export function createTerminalTabCreationActions(
           'terminal'
         )
         const groupsForWorktree = createdGroup ? [group] : (worktreeGroups ?? [])
-        const cleanedGroups =
-          orphanTerminalIds.size === 0
-            ? groupsForWorktree
-            : groupsForWorktree.map((entry) => {
-                // Why: repair every group before adding the new tab, or inactive/background creation can revive stale focus.
-                const tabOrder = dedupeTabOrder(entry.tabOrder).filter(
-                  (tabId) => !orphanTerminalIds.has(tabId)
-                )
-                const recentTabIds = sanitizeRecentTabIds(entry.recentTabIds, tabOrder)
-                const replacedActiveTabId = Boolean(
-                  entry.activeTabId && orphanTerminalIds.has(entry.activeTabId)
-                )
-                const fallbackActiveTabId = recentTabIds.at(-1) ?? tabOrder[0] ?? null
-                const activeTabId = replacedActiveTabId ? fallbackActiveTabId : entry.activeTabId
-                return {
-                  ...entry,
-                  activeTabId,
-                  tabOrder,
-                  recentTabIds:
-                    replacedActiveTabId && activeTabId
-                      ? pushRecentTabId(recentTabIds, activeTabId)
-                      : recentTabIds
-                }
-              })
+        const cleanedGroups = repairOrphanTerminalGroups(groupsForWorktree, orphanTerminalIds)
         const cleanedTargetGroup = cleanedGroups.find((entry) => entry.id === group.id) ?? group
         const cleanedGroupOrder = dedupeTabOrder(cleanedTargetGroup.tabOrder).filter(
           (tabId) => !orphanTerminalIds.has(tabId)
@@ -226,7 +206,8 @@ export function createTerminalTabCreationActions(
           : (cleanedActiveTabIdForWorktree ?? cleanedGroupActiveTabId ?? tab.id)
         // Against the updater's state: the orphan cleanup's per-tab deletes, in its order, then the created tab.
         const orphanDeletes = [...orphanTerminalIds].map((orphanId) => [orphanId, null] as const)
-        return {
+        // Why: a terminal created from the focused panel must not mix it; separate chats out.
+        const patch = {
           ...orphanCleanupPatch,
           tabsByWorktree: replaceTabBuckets(current.tabsByWorktree, [
             [worktreeId, [...existing, tab]]
@@ -290,6 +271,8 @@ export function createTerminalTabCreationActions(
             [tab.id, singlePaneLayoutSnapshot(initialLeafId, options?.initialPtyId)]
           ])
         }
+        const mode = resolveWorkspaceMode(s.settings)
+        return { ...patch, ...applyDefaultChatPanelLayout(patch, worktreeId, mode) }
       })
       // Switch point: main writes the tab under these ids before any later command names it.
       if (ORCA_LAYOUT_OWNER_IS_MAIN) {

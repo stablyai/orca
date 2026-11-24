@@ -1,6 +1,11 @@
 import { writeFileSync } from 'node:fs'
-import { test, expect } from './helpers/orca-app'
-import { ensureTerminalVisible, waitForActiveWorktree, waitForSessionReady } from './helpers/store'
+import { test } from './desktop/electron-fixtures/orca-app'
+import { expect } from '@stablyai/playwright-test'
+import {
+  ensureTerminalVisible,
+  waitForActiveWorktree,
+  waitForSessionReady
+} from './desktop/renderer-probes/store'
 
 for (const theme of ['light', 'dark'] as const) {
   test(`left tools rail leaves one content toolbar below the titlebar (${theme})`, async ({
