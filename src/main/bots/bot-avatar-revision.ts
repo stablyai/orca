@@ -63,6 +63,7 @@ export async function readBotHomePicture(homes: RevisionHomes, bot: Bot): Promis
   const revision = home.avatarRevision ?? 0
   const profileRevision = bot.avatarRevision ?? 0
   if (
+    (home.avatarRevisionEpoch !== undefined && home.avatarRevision === undefined) ||
     (!home.avatarRevisionEpoch && bot.avatarRevisionEpoch) ||
     (home.avatarRevisionEpoch === bot.avatarRevisionEpoch &&
       !samePicture &&

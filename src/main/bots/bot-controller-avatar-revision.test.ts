@@ -201,6 +201,42 @@ describe('BotController', () => {
       ).toBe(2)
     })
 
+    it('requires a new history after a repaired home loses its revision', async () => {
+      const { id } = await bots.create({ name: 'Reviewer' })
+      const folder = join(botsRoot(), 'reviewer')
+      const path = join(folder, 'bot.json')
+      rmSync(path)
+      const older = await bots.update(id, { avatar: mascotAvatar('A1') })
+      rmSync(path)
+      const manual = squarePng(512, 1)
+      const saved = await bots.setAvatarImage(id, manual)
+      const prior = await bots.generationRevision(id, 2, saved.avatarRevisionEpoch)
+      const manifest = JSON.parse(readFileSync(path, 'utf8'))
+      delete manifest.avatarRevision
+      const damaged = JSON.stringify(manifest)
+      writeFileSync(path, damaged)
+      store.saveBot(older)
+
+      await expect(bots.generationRevision(id, 1, older.avatarRevisionEpoch)).rejects.toThrow(
+        'bot_avatar_home_unreadable'
+      )
+      expect(readFileSync(path, 'utf8')).toBe(damaged)
+      expect(readFileSync(join(folder, BOT_AVATAR_FILE))).toEqual(Buffer.from(manual))
+      expect(bots.list().find((bot) => bot.id === id)).toEqual(older)
+
+      const repaired = await bots.setAvatarImage(id, manual)
+      expect(repaired.avatarRevision).toBe(prior.revision)
+      expect(repaired.avatarRevisionEpoch).not.toBe(prior.epoch)
+      const generated = squarePng(512, 2)
+      await expect(bots.setAvatarImage(id, generated, prior.revision, prior.epoch)).rejects.toThrow(
+        'bot_avatar_changed'
+      )
+      const fresh = await bots.generationRevision(id, 2, repaired.avatarRevisionEpoch)
+      expect(
+        (await bots.setAvatarImage(id, generated, fresh.revision, fresh.epoch)).avatarRevision
+      ).toBe(3)
+    })
+
     it('restores a mascot under a look picked at its revision only while the automatic replacement is current', async () => {
       const bot = await bots.create({ name: 'Reviewer', avatar: mascotAvatar('A1') })
       const look = { avatarOutfit: 'tie', lookAtRevision: 0 }
