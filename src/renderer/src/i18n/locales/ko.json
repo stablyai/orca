@@ -14533,7 +14533,31 @@
             "markResolved": "해결됨으로 표시",
             "keepFile": "파일 유지",
             "keepDeletion": "삭제 유지",
-            "refreshAll": "모두 새로 고침"
+            "refreshAll": "모두 새로 고침",
+            "baseUpToDate": "최신 상태",
+            "rebaseOperationInProgress": "현재 Git 작업이 끝날 때까지 기다리세요",
+            "rebaseButton": "리베이스",
+            "rebaseConflictCount_other": "충돌 {{count}}개",
+            "rebasePaused": "리베이스 일시 중지됨",
+            "rebaseResolveConflictsFirst": "먼저 충돌을 해결하세요",
+            "rebaseAbort": "중단",
+            "rebaseContinue": "계속",
+            "continueRebasePausedAgain": "다음 충돌에서 리베이스가 일시 중지됨",
+            "continueRebaseFailed": "리베이스 계속 실패",
+            "rebaseAutostashConflict": "리베이스했습니다. 커밋하지 않은 변경 사항을 깔끔하게 다시 적용하지 못해 stash에 저장했습니다.",
+            "rebaseStoppedByGit": "Git이 리베이스를 일시 중지했습니다",
+            "continueRebaseUnconfirmed": "결과를 확인할 수 없습니다. 소스 제어를 새로 고쳐 현재 상태를 표시했습니다.",
+            "noRebaseInProgress": "진행 중인 리베이스가 없습니다",
+            "rebaseStopMovedOn": "리베이스가 이미 다음 단계로 진행되었습니다. 패널을 확인하고 다시 시도하세요.",
+            "rebaseEmptyStep": "이 단계에는 커밋할 내용이 없습니다. 리베이스를 중단하거나 터미널에서 마무리하세요.",
+            "rebaseStepUnreadableShort": "확인 실패",
+            "rebaseCheckAgain": "다시 확인",
+            "rebaseRetryInspect": "다시 시도",
+            "rebaseRetryInspectLabel": "리베이스 단계 다시 확인",
+            "rebaseStoppedFinishInTerminal": "Git이 이 단계에서 일시 중지했습니다. 터미널에서 마무리하거나 중단하세요.",
+            "rebaseCheckingStep": "리베이스 단계 확인 중",
+            "rebaseEmptyStepShort": "빈 단계",
+            "rebaseAbortLabel": "리베이스 중단"
           },
           "SourceControlAgentActionDialog": {
             "8e856842d1": "선택한 에이전트를 시작할 수 없습니다.",
@@ -14969,7 +14993,6 @@
                   "titleCommitAndPush": "스테이지된 변경 사항을 커밋하고 푸시",
                   "commitForcePush": "커밋 및 강제 푸시",
                   "commitPush": "커밋 및 푸시",
-                  "titleOperationInProgress": "작업 진행 중…",
                   "titleAbortRebaseInProgress": "진행 중인 리베이스 중단",
                   "titleAbortMergeInProgress": "진행 중인 병합 중단",
                   "titleNothingToPushTo": "{{upstreamName}}에 푸시할 항목이 없습니다",
@@ -15049,10 +15072,8 @@
                   "titlePublishBranchFirst": "커밋을 동기화하려면 먼저 브랜치를 게시하세요",
                   "titleUseForcePush": "커밋 및 강제 푸시를 사용하세요 — 원격에는 로컬 커밋의 이전 사본만 있습니다",
                   "titleCommitThenPullPush": "커밋한 다음 풀 및 푸시",
-                  "rebaseFromNamedBase": "{{baseRef}}에서 리베이스",
                   "rebaseFromBase": "베이스에서 리베이스",
                   "rebaseChooseRemoteBase": "리베이스할 원격 베이스 브랜치를 선택하세요",
-                  "rebaseDirtyHint": "리베이스를 시도합니다. git에서 먼저 로컬 변경 사항을 커밋하거나 stash해야 할 수 있습니다",
                   "rebaseWithLatestFrom": "현재 브랜치를 {{baseRef}}의 최신 커밋으로 리베이스",
                   "blockedCommitFirst": "먼저 변경 사항을 커밋하세요",
                   "blockedCheckOutBranchFirst": "먼저 브랜치를 체크아웃하세요",
@@ -15065,7 +15086,13 @@
                   "blockedExistingReview": "{{reviewLabel}}이(가) 이미 있습니다",
                   "blockedForkHeadUnsupported": "포크 헤드는 지원되지 않습니다",
                   "blockedBaseNotOnRemote": "베이스 브랜치가 원격에 없습니다",
-                  "blockedBranchNotReady": "브랜치가 준비되지 않았습니다"
+                  "blockedBranchNotReady": "브랜치가 준비되지 않았습니다",
+                  "rebaseOntoNamedBase": "{{base}}(으)로 리베이스",
+                  "rebaseCommitOrStashFirst": "먼저 변경 사항을 커밋하거나 스태시하세요",
+                  "continueRebase": "리베이스 계속",
+                  "titleContinueRebase": "일시 중지된 리베이스 계속",
+                  "rebaseFromNamedBase": "{{baseRef}}에서 리베이스",
+                  "rebaseDirtyHint": "리베이스를 시도합니다. git에서 먼저 로컬 변경 사항을 커밋하거나 stash해야 할 수 있습니다"
                 }
               },
               "primary": {
@@ -15108,7 +15135,8 @@
                   "e9b5d1f470": "{{value0}}을(를) 만들기 전에 브랜치를 체크아웃하세요.",
                   "f0c6e2a581": "이 브랜치는 아직 {{value0}}을(를) 만들 준비가 되지 않았습니다.",
                   "8f9a0b1c2d": "커밋할 항목이 없습니다. 브랜치가 최신 상태입니다.",
-                  "h3i4j5k607": "이 브랜치에서 {{value0}}을(를) 만들 수 있는지 확인 중…"
+                  "h3i4j5k607": "이 브랜치에서 {{value0}}을(를) 만들 수 있는지 확인 중…",
+                  "nothingToCommit": "커밋할 내용 없음"
                 }
               },
               "branch": {
@@ -19863,7 +19891,8 @@
         "transitionFieldsNeedsUpdate": "필수 전환 필드를 제출하려면 원격 Orca 서버를 업데이트하거나 Jira에서 전환을 완료하세요."
       },
       "runtimeGitSyncClient": {
-        "completeMergeNeedsNewerHost": "병합을 완료하려면 이 호스트에 더 최신 버전의 Orca가 필요합니다. 해당 호스트의 Orca를 업데이트하세요."
+        "completeMergeNeedsNewerHost": "병합을 완료하려면 이 호스트에 더 최신 버전의 Orca가 필요합니다. 해당 호스트의 Orca를 업데이트하세요.",
+        "continueRebaseNeedsNewerHost": "리베이스를 계속하려면 이 호스트에 최신 Orca가 필요합니다. 해당 호스트에서 Orca를 업데이트하세요."
       },
       "runtimeGitWorkingTreeClient": {
         "resolveConflictNeedsNewerHost": "충돌을 해결하려면 이 호스트에 더 최신 버전의 Orca가 필요합니다. 해당 호스트의 Orca를 업데이트하세요."

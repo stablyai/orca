@@ -15489,7 +15489,32 @@
             "markResolved": "Mark as resolved",
             "keepFile": "Keep file",
             "keepDeletion": "Keep deletion",
-            "refreshAll": "Refresh all"
+            "refreshAll": "Refresh all",
+            "baseUpToDate": "Up to date",
+            "rebaseOperationInProgress": "Wait for the current Git operation to finish",
+            "rebaseButton": "Rebase",
+            "rebaseConflictCount_one": "{{count}} conflict",
+            "rebaseConflictCount_other": "{{count}} conflicts",
+            "rebasePaused": "Rebase paused",
+            "rebaseResolveConflictsFirst": "Resolve conflicts first",
+            "rebaseAbort": "Abort",
+            "rebaseContinue": "Continue",
+            "continueRebasePausedAgain": "Rebase paused at the next conflict",
+            "continueRebaseFailed": "Continue rebase failed",
+            "rebaseAutostashConflict": "Rebased. Your uncommitted changes didn't reapply cleanly; they're saved in the stash.",
+            "rebaseStoppedByGit": "Git paused the rebase",
+            "continueRebaseUnconfirmed": "Couldn't confirm the result. Source Control refreshed to show the current state.",
+            "noRebaseInProgress": "No rebase is in progress",
+            "rebaseStopMovedOn": "The rebase already moved on. Check the panel and try again.",
+            "rebaseEmptyStep": "Nothing to commit in this step. Abort the rebase or finish it in a terminal.",
+            "rebaseStepUnreadableShort": "Check failed",
+            "rebaseCheckAgain": "Check again",
+            "rebaseRetryInspect": "Retry",
+            "rebaseRetryInspectLabel": "Retry checking the rebase step",
+            "rebaseStoppedFinishInTerminal": "Git paused this step. Finish it in a terminal or abort.",
+            "rebaseCheckingStep": "Checking the rebase step",
+            "rebaseEmptyStepShort": "Empty step",
+            "rebaseAbortLabel": "Abort rebase"
           },
           "SourceControlAgentActionDialog": {
             "8e856842d1": "Could not start the selected agent.",
@@ -15924,10 +15949,8 @@
                   "titlePublishBranchFirst": "Publish the branch first to sync commits",
                   "titleUseForcePush": "Use Commit & Force Push — remote only has older copies of local commits",
                   "titleCommitThenPullPush": "Commit, then pull and push",
-                  "rebaseFromNamedBase": "Rebase from {{baseRef}}",
                   "rebaseFromBase": "Rebase from Base",
                   "rebaseChooseRemoteBase": "Choose a remote base branch to rebase from",
-                  "rebaseDirtyHint": "Try rebasing; git may require committing or stashing local changes first",
                   "rebaseWithLatestFrom": "Rebase current branch with latest commits from {{baseRef}}",
                   "blockedCommitFirst": "Commit changes first",
                   "blockedCheckOutBranchFirst": "Check out a branch first",
@@ -15949,7 +15972,6 @@
                   "titleCommitAndPush": "Commit staged changes and push",
                   "commitForcePush": "Commit & Force Push",
                   "commitPush": "Commit & Push",
-                  "titleOperationInProgress": "Operation in progress…",
                   "titleAbortRebaseInProgress": "Abort the rebase in progress",
                   "titleAbortMergeInProgress": "Abort the merge in progress",
                   "titleNothingToPushTo": "Nothing to push to {{upstreamName}}",
@@ -16010,7 +16032,6 @@
                   "statusSetsUpstream": "Sets upstream",
                   "statusMayFail": "May fail",
                   "statusPublished": "Published",
-                  "statusStashFirst": "Stash first",
                   "statusReplaces": "Replaces ↓{{behind}}",
                   "statusCommitFirst": "Commit first",
                   "statusReviewOpen": "{{shortLabel}} open",
@@ -16021,7 +16042,14 @@
                   "statusPushFirst": "Push first",
                   "statusForcePushFirst": "Force push first",
                   "statusSyncFirst": "Sync first",
-                  "statusUnsupported": "Unsupported"
+                  "statusUnsupported": "Unsupported",
+                  "rebaseOntoNamedBase": "Rebase onto {{base}}",
+                  "rebaseCommitOrStashFirst": "Commit or stash changes first",
+                  "continueRebase": "Continue rebase",
+                  "titleContinueRebase": "Continue the paused rebase",
+                  "rebaseFromNamedBase": "Rebase from {{baseRef}}",
+                  "rebaseDirtyHint": "Try rebasing; git may require committing or stashing local changes first",
+                  "statusStashFirst": "Stash first"
                 }
               },
               "primary": {
@@ -16064,7 +16092,8 @@
                   "e9b5d1f470": "Check out a branch before creating a {{value0}}.",
                   "f0c6e2a581": "This branch is not ready for a {{value0}} yet.",
                   "8f9a0b1c2d": "Nothing to commit. Branch is up to date.",
-                  "h3i4j5k607": "Checking whether this branch can create a {{value0}}…"
+                  "h3i4j5k607": "Checking whether this branch can create a {{value0}}…",
+                  "nothingToCommit": "Nothing to commit"
                 }
               },
               "branch": {
@@ -20800,7 +20829,8 @@
         "transitionFieldsNeedsUpdate": "Update the remote Orca server to submit required transition fields, or complete the transition in Jira."
       },
       "runtimeGitSyncClient": {
-        "completeMergeNeedsNewerHost": "Completing a merge needs a newer Orca on this host. Update Orca on that host."
+        "completeMergeNeedsNewerHost": "Completing a merge needs a newer Orca on this host. Update Orca on that host.",
+        "continueRebaseNeedsNewerHost": "Continuing a rebase needs a newer Orca on this host. Update Orca on that host."
       },
       "runtimeGitWorkingTreeClient": {
         "resolveConflictNeedsNewerHost": "Resolving conflicts needs a newer Orca on this host. Update Orca on that host."
