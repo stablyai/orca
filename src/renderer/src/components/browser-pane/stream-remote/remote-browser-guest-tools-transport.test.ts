@@ -89,11 +89,11 @@ it('a cancel reaches the host while an earlier enable still waits for its page',
   // The enable has reached the host, which holds it until the page loads.
   await vi.waitFor(() => expect(sentEnables).toEqual(['waits-for-page']))
   sent.length = 0
-  await expect(
-    tools.cancelGrab({ browserPageId: 'page', requestId: 'waits-for-page' })
-  ).resolves.toBe(false)
-  // Before the fix the cancel sat behind the enable in the input queue and never left.
+  const cancel = tools.cancelGrab({ browserPageId: 'page', requestId: 'waits-for-page' })
+  await Promise.resolve()
+  // Sent at once: queued behind the held enable, the cancel would never leave.
   expect(sent).toContain('browser.grab.cancel')
+  await expect(cancel).resolves.toBe(false)
 })
 
 it('a cancel without a request still ends every wait', async () => {

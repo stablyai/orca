@@ -71,10 +71,13 @@ it('a pick retired while its screenshot waits for the lane submits no readback; 
   )
   releaseLane()
   await flush()
+  // The stale screenshot ends without a readback; one still running would leave it pending here.
+  await expect(
+    Promise.race([selection, flush().then(() => 'stale screenshot still reading back')])
+  ).resolves.toBeNull()
   expect(readbacks).toHaveLength(1)
   readbacks[0]()
   await expect(draw).resolves.toEqual({ dataUrl: 'data:image/png;base64,AA', width: 8, height: 8 })
-  await expect(selection).resolves.toBeNull()
   // Only Draw's readback ever reached the native lane.
   expect(readbacks).toHaveLength(1)
 })
@@ -90,11 +93,12 @@ it('a pick still live after the wait is captured once the lane frees', async () 
     () => true
   )
   releaseLane()
-  await flush()
-  readbacks[0]()
+  // Settle each readback as it reaches the lane, in whichever order the two captures submit.
+  for (const index of [0, 1]) {
+    await vi.waitFor(() => expect(readbacks.length).toBeGreaterThan(index))
+    readbacks[index]()
+  }
   await expect(draw).resolves.not.toBeNull()
-  await vi.waitFor(() => expect(readbacks).toHaveLength(2))
-  readbacks[1]()
   await expect(selection).resolves.toMatchObject({ mimeType: 'image/png', width: 4, height: 4 })
 })
 

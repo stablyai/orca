@@ -91,7 +91,9 @@ it('a cancel during page admission settles the enable and releases its page clai
     cancelled: true
   })
   // Settled while the page still loads, so the viewer's later input is not held behind it.
-  await expect(enable).resolves.toEqual({ ok: false, reason: 'not-ready' })
+  await expect(
+    Promise.race([enable, flush().then(() => 'still waiting for the page')])
+  ).resolves.toEqual({ ok: false, reason: 'not-ready' })
   expect(liveClaims.get('page')).toBe(0)
 
   // The page's own load was not aborted; when it finishes nothing arms.
