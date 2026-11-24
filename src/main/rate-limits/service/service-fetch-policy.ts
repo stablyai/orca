@@ -108,9 +108,15 @@ export abstract class RateLimitServiceFetchPolicy extends RateLimitServiceFetchT
     const current = this.state.claude
     if (fresh.status !== 'ok' && current && this.isLiveClaudeUsageFresh(current)) {
       const retryAtMs = fresh.usageMetadata?.retryAtMs
-      return retryAtMs
-        ? { ...current, usageMetadata: { ...current.usageMetadata, retryAtMs } }
-        : current
+      return {
+        ...current,
+        error: fresh.error ?? null,
+        status: 'error',
+        usageMetadata: {
+          ...current.usageMetadata,
+          ...(retryAtMs != null ? { retryAtMs } : {})
+        }
+      }
     }
     return this.applyStalePolicy(fresh, previous)
   }
