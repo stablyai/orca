@@ -8,17 +8,17 @@ import {
 import type { AppState } from '../../types'
 
 function restartStore() {
-  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the restart actions read and write only these slices.
-  return createStore<AppState>()(
-    (set, get) =>
-      ({
-        codexRestartNoticeByPtyId: {},
-        pendingPaneAccountRestarts: {},
-        suppressedPtyExitIds: {},
-        pendingPtyShutdownIds: {},
-        ...createTerminalRestartActions(set, get)
-      }) as unknown as AppState
-  )
+  return createStore<AppState>()((set, get) => {
+    const slices = {
+      codexRestartNoticeByPtyId: {},
+      pendingPaneAccountRestarts: {},
+      suppressedPtyExitIds: {},
+      pendingPtyShutdownIds: {},
+      ...createTerminalRestartActions(set, get)
+    }
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the restart actions read and write only these slices.
+    return slices as unknown as AppState
+  })
 }
 
 describe('restart notice generations', () => {

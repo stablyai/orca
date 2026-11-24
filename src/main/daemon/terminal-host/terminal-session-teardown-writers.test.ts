@@ -1,7 +1,9 @@
 import { describe, expect, it, vi } from 'vitest'
 import type { DescendantSnapshot } from '../../pty/process-retirement/pty-descendant-termination'
 
-const { sweep } = vi.hoisted(() => ({ sweep: { snapshot: null as DescendantSnapshot | null } }))
+const { sweep } = vi.hoisted((): { sweep: { snapshot: DescendantSnapshot | null } } => ({
+  sweep: { snapshot: null }
+}))
 vi.mock('../../pty/process-retirement/pty-descendant-termination', () => ({
   killWithDescendantSweep: async (
     _pid: number,
