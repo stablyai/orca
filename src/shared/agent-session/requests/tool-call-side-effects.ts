@@ -108,7 +108,12 @@ const GIT_REFUSED = [
   '--receive-pack'
 ]
 
-function gitReads(args: readonly string[]): boolean {
+function gitReads(given: readonly string[]): boolean {
+  // `git -C <dir>` and `--no-pager` come before the subcommand and change nothing it does.
+  let args = given
+  while (args[0] === '--no-pager' || (args[0] === '-C' && args[1] !== undefined)) {
+    args = args.slice(args[0] === '-C' ? 2 : 1)
+  }
   const [sub, ...rest] = args
   if (
     args.some(
@@ -201,14 +206,30 @@ export function shellCommandOnlyReads(command: string): boolean {
   }
   const commands = line.split(/&&|\|\||[;|\n]/)
   return commands.every((part) => {
-    const words = part.trim().split(/\s+/).filter(Boolean)
-    if (words.length === 0) {
-      return true
+    const words = plainWords(part)
+    if (words === null || words.length === 0) {
+      return words !== null
     }
-    const [program, ...args] = words.map((word) => word.replace(/^['"]|['"]$/g, ''))
+    const [program, ...args] = words
     const reads = program !== undefined && Object.hasOwn(READ_PROGRAMS, program)
     return reads && READ_PROGRAMS[program!]!(args)
   })
+}
+
+// A word the shell passes through as written: plain characters, or one whole quoted string with
+// nothing the shell would expand inside. Any other text (inner quotes, `\\`, `$`, braces) is unread.
+const WORD = /(?<=^|\s)(?:'([^']*)'|"([^"$`\\]*)"|([A-Za-z0-9._/:=@,+%^*?-]+))(?=\s|$)/g
+
+/** A command's words as the program gets them, or null when the shell would change one. */
+function plainWords(part: string): string[] | null {
+  const words: string[] = []
+  let consumed = ''
+  for (const match of part.matchAll(WORD)) {
+    words.push(match[1] ?? match[2] ?? match[3] ?? '')
+    consumed += match[0]
+  }
+  const bare = (text: string) => text.replace(/\s/g, '')
+  return bare(consumed) === bare(part) ? words : null
 }
 
 /** Whether a journal item is work that may have changed something: an edit recorded as a diff

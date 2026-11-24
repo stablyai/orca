@@ -14,7 +14,8 @@ describe('toolCallHasSideEffects', () => {
       ['Bash', { command: '"${ORCA_CLI_COMMAND:-orca}" bot item show 4' }],
       ['shell', { command: "/bin/zsh -lc 'cat a.txt'" }],
       ['read', { command: "bash -lc 'sed -n 1,20p a.ts'" }],
-      ['read_file', { path: 'a.ts' }]
+      ['read_file', { path: 'a.ts' }],
+      ['Bash', { command: 'git -C /repo --no-pager status && cat "a b" && ls *.ts' }]
     ]
     const acts: [string, unknown][] = [
       ['Edit', { file_path: 'a.ts' }],
@@ -41,7 +42,12 @@ describe('toolCallHasSideEffects', () => {
       ['Bash', { command: 'gh api -iXDELETE repos/o/r/git/refs/heads/main' }],
       ['Bash', { command: 'git grep -nOrm foo' }],
       ['Bash', { command: 'git grep --open=rm foo' }],
-      ['Bash', { command: 'sort --o=out in' }]
+      ['Bash', { command: 'sort --o=out in' }],
+      ['Bash', { command: 'find . -name x -"delete"' }],
+      ['Bash', { command: "find . -de''lete" }],
+      ['Bash', { command: 'find . -dele\\te' }],
+      ['Bash', { command: "find . -name '*.log' -{delete,print}" }],
+      ['Bash', { command: 'git log ${X:---output=/tmp/x}' }]
     ]
     expect(reads.filter(([name, input]) => toolCallHasSideEffects(name, input))).toEqual([])
     expect(acts.filter(([name, input]) => !toolCallHasSideEffects(name, input))).toEqual([])
