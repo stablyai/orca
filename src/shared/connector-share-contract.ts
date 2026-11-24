@@ -53,7 +53,8 @@ export const ShareAcceptDelivery = z
   .refine(isOnItsShare)
 
 // The contract's maxHeldMessageChars: one held message keeps under the cloud's 1 MiB request cap.
-const MAX_HELD_MESSAGE_CHARS = 1024 * 1024 - 4 * 1024
+/** One held message as the cloud's request holds it: sealed, base64 (contract maxHeldMessageChars). */
+export const MAX_HELD_MESSAGE_CHARS = 1024 * 1024 - 4 * 1024
 
 // A teammate's message held while the host was away, sealed to the host's hello hostKey. Only the
 // host can open it; the sender it names is checked against the host's own share device rows.
@@ -75,4 +76,49 @@ export const UNKNOWN_SHARE_REFUSAL = 'unknown_share'
 
 export function shareOfferPath(botId: string, shareId: string): string {
   return `${CONNECTOR_PATHS.bots}/${encodeURIComponent(botId)}/shares/${encodeURIComponent(shareId)}/offer`
+}
+
+// The teammate's side: GET `${shares}/mine`, POST `…/<share id>/accept` and `…/<share id>/messages`.
+
+const MAX_SHARE_HELD_STATES = 500
+
+export const SHARE_HELD_STATES = ['waiting', 'delivered', 'not_sent'] as const
+
+export const ConnectorSharesMineSchema = z.object({
+  v: z.literal(1),
+  shares: z.array(
+    z.object({
+      shareId: BotShareIdSchema,
+      botId: Id,
+      botName: Name,
+      ownerName: Name,
+      avatarUrl: z.string().url().max(2048).optional(),
+      hostOnline: z.boolean(),
+      state: z.enum(['ready', 'needs-accept']),
+      // Present only once the host takes held messages; absent, hold nothing.
+      hostKey: PublicKey.optional(),
+      offers: z
+        .array(z.object({ devicePublicKey: PublicKey, sealedOffer: z.string().min(1) }))
+        .optional(),
+      held: z
+        .array(z.object({ clientMessageId: Id, state: z.enum(SHARE_HELD_STATES) }))
+        .max(MAX_SHARE_HELD_STATES)
+    })
+  )
+})
+export type ConnectorSharesMine = z.infer<typeof ConnectorSharesMineSchema>
+
+export type ConnectorShareAcceptRequest = {
+  v: 1
+  devicePublicKey: string
+  sealKey: string
+  deviceName?: string
+}
+export const ConnectorShareAcceptSchema = z.object({ status: z.literal('queued') })
+
+export type ConnectorShareHoldRequest = { v: 1; clientMessageId: string; sealed: string }
+export const ConnectorShareHoldSchema = z.object({ status: z.enum(['held', 'duplicate']) })
+
+export function sharePath(shareId: string, tail: 'accept' | 'messages'): string {
+  return `${CONNECTOR_PATHS.shares}/${encodeURIComponent(shareId)}/${tail}`
 }

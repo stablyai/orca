@@ -14,7 +14,7 @@ import {
   type MineShare
 } from './shared-bot-pairing'
 import type { SharedBotsCloud } from './shared-bots-cloud'
-import type { ConnectorShareAcceptRequest } from '../../../../cloud/packages/connector-contract/src/share-messages'
+import type { ConnectorShareAcceptRequest } from '../../../shared/connector-share-contract'
 
 const HOST_KEY = Buffer.from(nacl.box.keyPair().publicKey).toString('base64')
 const dirs: string[] = []

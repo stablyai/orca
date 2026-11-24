@@ -1,7 +1,7 @@
 // A teammate's message to a shared agent whose host can't be reached: sealed to the host's key and
 // signed by this device, then held in Orca Cloud until the host is back.
 import nacl from 'tweetnacl'
-import { CONNECTOR_LIMITS } from '../../../../cloud/packages/connector-contract/src/connector-limits'
+import { MAX_HELD_MESSAGE_CHARS } from '../../../shared/connector-share-contract'
 import { sealBotTeamShareHeldMessage } from '../../../shared/bots/bot-team-share-seal'
 import { NODE_PAIRED_E2EE_PRIMITIVES } from '../../../shared/remote-runtime/e2ee/node/paired-e2ee-node-primitives'
 import type { SharedBotHeldMessage, SharedBotHostEntry } from './shared-bot-host-store'
@@ -49,7 +49,7 @@ export async function handOffSharedBotMessage(
     },
     sign: async (bytes) => nacl.sign.detached(bytes, secretKey)
   })
-  if (sealed.length > CONNECTOR_LIMITS.maxHeldMessageChars) {
+  if (sealed.length > MAX_HELD_MESSAGE_CHARS) {
     return { kind: 'too-large' }
   }
   const answer = await cloud.hold(entry.shareId, {

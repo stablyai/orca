@@ -4,14 +4,12 @@ import {
   ConnectorShareAcceptSchema,
   ConnectorShareHoldSchema,
   ConnectorSharesMineSchema,
+  sharePath,
   type ConnectorShareAcceptRequest,
   type ConnectorShareHoldRequest
-} from '../../../../cloud/packages/connector-contract/src/share-messages'
+} from '../../../shared/connector-share-contract'
 import { CONNECTOR_PATHS } from '../../../shared/connectors/connector-cloud-paths'
 import type { ConnectorCloud } from '../../connector-cloud/connector-cloud'
-
-const sharePath = (shareId: string, tail: string): string =>
-  `${CONNECTOR_PATHS.shares}/${encodeURIComponent(shareId)}/${tail}`
 
 export function sharedBotsCloud(cloud: Pick<ConnectorCloud, 'call'>) {
   return {

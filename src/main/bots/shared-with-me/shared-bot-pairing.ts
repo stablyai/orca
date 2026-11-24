@@ -1,6 +1,6 @@
 // What this device does next for one shared agent, from its entry and the cloud's latest word on the
 // share, and where a message to it goes. Pure, so the order of pairing and hand-off can be tested.
-import type { ConnectorSharesMine } from '../../../../cloud/packages/connector-contract/src/share-messages'
+import type { ConnectorSharesMine } from '../../../shared/connector-share-contract'
 import type { SharedHostRelayCredential } from '../../../shared/remote-runtime/relay/client/shared-host-relay-connection'
 import type { SharedBotHeldMessage, SharedBotHostEntry } from './shared-bot-host-store'
 
