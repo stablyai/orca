@@ -1,7 +1,12 @@
-import { describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it } from 'vitest'
+import { setNetworkProxySettingsSource } from '../../../browser/network/execution-routes/browser-network-proxy-settings-source'
 import { buildPluginWorkerEnv } from './plugin-worker-env'
 
 describe('buildPluginWorkerEnv', () => {
+  afterEach(() => {
+    setNetworkProxySettingsSource(null)
+  })
+
   const sessionEnv = {
     PATH: '/usr/bin',
     XDG_RUNTIME_DIR: '/run/user/1000',
@@ -66,5 +71,55 @@ describe('buildPluginWorkerEnv', () => {
       GIT_TERMINAL_PROMPT: '0',
       ELECTRON_RUN_AS_NODE: '1'
     })
+  })
+
+  it('passes the proxy Orca was started with, in every spelling it inherited', () => {
+    const env = buildPluginWorkerEnv(
+      {
+        ...sessionEnv,
+        HTTPS_PROXY: 'http://proxy.example:3128',
+        NO_PROXY: 'localhost',
+        NODE_USE_ENV_PROXY: '1'
+      },
+      'linux'
+    )
+    expect(env.HTTPS_PROXY).toBe('http://proxy.example:3128')
+    expect(env.NO_PROXY).toBe('localhost')
+    expect(env.NODE_USE_ENV_PROXY).toBe('1')
+    expect(env.GITHUB_TOKEN).toBeUndefined()
+  })
+
+  it('keeps a lowercase proxy name as the platform spelled it', () => {
+    const env = buildPluginWorkerEnv(
+      { ...sessionEnv, https_proxy: 'http://proxy.example:3128', no_proxy: '.internal' },
+      'linux'
+    )
+    expect(env.https_proxy).toBe('http://proxy.example:3128')
+    expect(env.no_proxy).toBe('.internal')
+    expect(env).not.toHaveProperty('HTTPS_PROXY')
+  })
+
+  it('falls back to the proxy configured in Settings when none was inherited', () => {
+    setNetworkProxySettingsSource(() => ({
+      httpProxyUrl: 'socks5://proxy.example:1080',
+      httpProxyBypassRules: 'localhost; 127.0.0.1'
+    }))
+    const env = buildPluginWorkerEnv(sessionEnv, 'linux')
+    expect(env.HTTPS_PROXY).toBe('socks5://proxy.example:1080')
+    expect(env.https_proxy).toBe('socks5://proxy.example:1080')
+    expect(env.NO_PROXY).toBe('localhost,127.0.0.1')
+  })
+
+  it('lets an inherited proxy win over the one configured in Settings', () => {
+    setNetworkProxySettingsSource(() => ({
+      httpProxyUrl: 'http://settings-proxy.example:8080',
+      httpProxyBypassRules: ''
+    }))
+    const env = buildPluginWorkerEnv(
+      { ...sessionEnv, HTTPS_PROXY: 'http://inherited.example:3128', NO_PROXY: '*' },
+      'linux'
+    )
+    expect(env.HTTPS_PROXY).toBe('http://inherited.example:3128')
+    expect(env.NO_PROXY).toBe('*')
   })
 })
