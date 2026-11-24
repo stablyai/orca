@@ -27,7 +27,9 @@ export async function rebindKeptStructuredAgentSessionAgent(
     context.deps.logger.warn('reattaching a kept chat agent failed', {
       scope: 'relay-rebind',
       sessionId,
-      code: outcome.refusal.code
+      code: outcome.refusal.code,
+      message: outcome.refusal.message,
+      ...(outcome.refusal.details ? { details: outcome.refusal.details } : {})
     })
   }
   if (keptRunningProviderRelayPid(sessionId) !== null) {

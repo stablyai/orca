@@ -104,10 +104,14 @@ export async function openStructuredAgentSessionConversationJournal(
   // An agent the terminal host kept running is not gone: its turn, sends and queue go on once it
   // reattaches, so nothing of the last run is recovered or settled here.
   const kept = !options.acquisition && (await agentKeptRunning(sessionId))
+  // A reattach's own open comes after the launch listing it reattaches from, so no wait here.
+  const keptWriter =
+    kept || (options.acquisition && keptRunningProviderRelayPid(sessionId) !== null)
   const journal = await openAgentSessionJournal({
     identity,
     database: deps.journalDatabase,
     ...(kept ? {} : { recover: { fence } }),
+    ...(keptWriter ? { keptWriter: true as const } : {}),
     onRecoveryFailure: ({ step, failure }) => {
       const messages = {
         'pending-unknown': 'marking pending sends unknown on open failed',
