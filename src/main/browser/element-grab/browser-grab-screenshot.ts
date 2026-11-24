@@ -111,6 +111,10 @@ export async function captureSelectionScreenshot(
     if (!(await pickUnchanged())) {
       return null
     }
+    // Main may have retired the picker while that page answer was in transit: no bytes then.
+    if (!pickerStillOwned() || guest.isDestroyed()) {
+      return null
+    }
     const bitmap = image.getSize()
     const scale = bitmap.width / rect.viewportWidth
     if (!Number.isFinite(scale) || scale <= 0) {
