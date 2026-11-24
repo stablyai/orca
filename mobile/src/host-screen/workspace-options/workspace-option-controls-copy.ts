@@ -1,9 +1,6 @@
 import * as viewOptions from '../../../../src/shared/workspace-view/workspace-view-options'
 import type { WorkspaceViewChoice } from '../../../../src/shared/workspace-view/workspace-view-options'
-import type { WorktreeCardProperty } from '../../../../src/shared/ui-chrome/ui-chrome-types'
 import type { Translate } from '../../i18n/mobile-i18n'
-import { phoneCardPropertyChoices } from './phone-card-property-choices'
-import type { HostScreenController } from '../use-host-screen-controller'
 
 function workspaceOptionChoices<Id extends string>(
   choices: readonly WorkspaceViewChoice<Id>[],
@@ -65,56 +62,3 @@ export const projectOrderChoices = (t: Translate) =>
       )
     }
   )
-
-export const cardLayoutChoices = (t: Translate) =>
-  workspaceOptionChoices(viewOptions.WORKSPACE_CARD_LAYOUT_CHOICES, {
-    detailed: t('hostScreen.workspaceOptionControls.detailed', 'Detailed'),
-    compact: t('hostScreen.workspaceOptionControls.compact', 'Compact')
-  })
-
-export const activityLayoutChoices = (t: Translate) =>
-  workspaceOptionChoices(viewOptions.WORKSPACE_AGENT_ACTIVITY_LAYOUT_CHOICES, {
-    compact: t('hostScreen.workspaceOptionControls.compact', 'Compact'),
-    full: t('hostScreen.workspaceOptionControls.fullList', 'Full list')
-  })
-
-export const cardPropertyChoices = (t: Translate) =>
-  phoneCardPropertyChoices(
-    workspaceOptionChoices(viewOptions.WORKSPACE_CARD_PROPERTY_CHOICES, {
-      issue: t('hostScreen.workspaceOptionControls.githubTicket', 'GitHub ticket'),
-      'linear-issue': t('hostScreen.workspaceOptionControls.linearIssue', 'Linear issue'),
-      'jira-issue': t('hostScreen.workspaceOptionControls.jiraIssue', 'Jira issue'),
-      pr: t('hostScreen.workspaceOptionControls.prMrLink', 'PR/MR link'),
-      automation: t('hostScreen.workspaceOptionControls.automation', 'Automation'),
-      comment: t('hostScreen.workspaceOptionControls.notes', 'Notes'),
-      ports: t('hostScreen.workspaceOptionControls.ports', 'Ports'),
-      'inline-agents': t('hostScreen.workspaceOptionControls.agentActivity', 'Agent activity'),
-      host: t('hostScreen.workspaceOptionControls.host', 'Host')
-    })
-  )
-
-// Infer project-group availability from folder rows: hosts list folder workspaces only under a group.
-export function cardDisplayChoices(
-  controller: HostScreenController,
-  t: Translate
-): WorkspaceViewChoice<WorktreeCardProperty>[] {
-  const hasProjectGroups = controller.state.worktrees.some(
-    (row) => row.workspaceKind === 'folder-workspace'
-  )
-  return phoneCardPropertyChoices(
-    workspaceOptionChoices(viewOptions.WORKSPACE_CARD_DISPLAY_CHOICES, {
-      issue: t('hostScreen.workspaceOptionControls.githubIssues', 'GitHub issues'),
-      'linear-issue': t('hostScreen.workspaceOptionControls.linearIssues', 'Linear issues'),
-      'jira-issue': t('hostScreen.workspaceOptionControls.jiraIssues', 'Jira issues'),
-      comment: t('hostScreen.workspaceOptionControls.notes', 'Notes'),
-      automation: t('hostScreen.workspaceOptionControls.automation', 'Automation'),
-      cli: 'Orca CLI',
-      ports: t('hostScreen.workspaceOptionControls.ports', 'Ports'),
-      'inline-agents': t('hostScreen.workspaceOptionControls.agentStatuses', 'Agent statuses'),
-      host: t('hostScreen.workspaceOptionControls.host', 'Host'),
-      branch: hasProjectGroups
-        ? t('hostScreen.workspaceOptionControls.branchFolderPath', 'Branch / folder path')
-        : t('hostScreen.workspaceOptionControls.branchName', 'Branch name')
-    })
-  )
-}

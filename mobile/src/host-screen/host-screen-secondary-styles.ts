@@ -64,17 +64,6 @@ export const hostScreenSecondaryStyles = themedStyleSheet(() => ({
     justifyContent: 'center',
     paddingLeft: spacing.xs
   },
-  filterModalSubtitle: {
-    fontSize: typography.metaSize,
-    color: colors.textMuted
-  },
-  optionPending: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: spacing.xs,
-    marginBottom: spacing.sm
-  },
   optionSectionGap: {
     height: spacing.xs
   },

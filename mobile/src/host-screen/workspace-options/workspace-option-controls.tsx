@@ -2,28 +2,21 @@ import { useState, type ComponentType } from 'react'
 import { View } from 'react-native'
 import { MobileSearchField } from '../../components/controls/MobileSearchField'
 import { MobileSegmentedControl } from '../../components/controls/MobileSegmentedControl'
-import * as viewOptions from '../../../../src/shared/workspace-view/workspace-view-options'
 import type {
   WorkspaceViewChoice,
   WorkspaceViewOptionKey
 } from '../../../../src/shared/workspace-view/workspace-view-options'
 import * as hostVisibility from '../../../../src/shared/workspace-view/workspace-host-visibility'
 import type { ExecutionHostId } from '../../../../src/shared/execution-host/execution-host'
-import type { WorktreeCardProperty } from '../../../../src/shared/ui-chrome/ui-chrome-types'
 import { useMobileColorScheme } from '../../theme/use-mobile-color-scheme'
 import { hostScreenStyles as styles } from '../host-screen-styles'
-import { withoutPhoneHiddenProperties } from './phone-card-property-choices'
 import type { HostScreenController } from '../use-host-screen-controller'
 import {
   groupByChoices,
   sortByChoices,
-  projectOrderChoices,
-  cardLayoutChoices,
-  activityLayoutChoices,
-  cardPropertyChoices,
-  cardDisplayChoices
+  projectOrderChoices
 } from './workspace-option-controls-copy'
-import { ListGroup, SectionHeader } from '../../components/list/ListGroup'
+import { ListGroup } from '../../components/list/ListGroup'
 import { CheckRow, ChoiceRows, SwitchRow } from './workspace-option-rows'
 import { choiceLabel, summarizeChecklist } from './workspace-option-values'
 import type { Translate } from '../../i18n/mobile-i18n'
@@ -192,84 +185,6 @@ function choicePage<Id extends string>(
   }
 }
 
-function CardPropertyRows(props: {
-  controller: HostScreenController
-  choices: readonly WorkspaceViewChoice<WorktreeCardProperty>[]
-}) {
-  useMobileColorScheme()
-  const { settings, state } = props.controller
-  return (
-    <ListGroup style={styles.optionGroup}>
-      {props.choices.map((choice) => (
-        <CheckRow
-          key={choice.id}
-          label={choice.label}
-          checked={state.view.worktreeCardProperties.includes(choice.id)}
-          onPress={() => settings.toggleCardProperty(choice.id)}
-        />
-      ))}
-    </ListGroup>
-  )
-}
-
-function showPropertiesValue({ controller }: WorkspaceOptionProps, t: Translate): string {
-  const value = viewOptions.getWorkspaceCardPropertiesValue(
-    withoutPhoneHiddenProperties(controller.state.view.worktreeCardProperties),
-    controller.state.view.compactWorktreeCards
-  )
-  return value === 'hover'
-    ? t('hostScreen.workspaceOptionControls.hover', 'Hover')
-    : value === null
-      ? ''
-      : String(value)
-}
-
-function propertiesPage(
-  choices: (
-    controller: HostScreenController,
-    t: Translate
-  ) => readonly WorkspaceViewChoice<WorktreeCardProperty>[],
-  options: {
-    value: (props: WorkspaceOptionProps, t: Translate) => string
-    withAgentLayout: boolean
-  }
-): Extract<WorkspaceOptionControl, { kind: 'page' }> {
-  const { withAgentLayout } = options
-  return {
-    kind: 'page',
-    value: options.value,
-    Page: function PropertiesPage({ controller }) {
-      const t = useMobileTranslation()
-      return (
-        <>
-          <CardPropertyRows controller={controller} choices={choices(controller, t)} />
-          {withAgentLayout && (
-            <>
-              <SectionHeader
-                title={t(
-                  'hostScreen.workspaceOptionControls.agentActivityLayout',
-                  'Agent activity layout'
-                )}
-              />
-              <MobileSegmentedControl
-                segments={activityLayoutChoices(t).map(({ id, label }) => ({
-                  value: id,
-                  label
-                }))}
-                selected={controller.state.view.agentActivityDisplayMode}
-                onSelect={controller.settings.setAgentActivityDisplayMode}
-                fill
-                onSheet
-                style={styles.optionSegmented}
-              />
-            </>
-          )}
-        </>
-      )
-    }
-  }
-}
-
 function filterSwitch(
   key: Extract<WorkspaceViewOptionKey, `hide${string}` | `always${string}`>
 ): WorkspaceOptionControl {
@@ -293,7 +208,19 @@ function filterSwitch(
   }
 }
 
-export const WORKSPACE_OPTION_CONTROLS: Record<WorkspaceViewOptionKey, WorkspaceOptionControl> = {
+/** The desktop's card options shape its sidebar cards; the phone's one-line rows draw none of them. */
+export type PhoneWorkspaceOptionKey = Exclude<
+  WorkspaceViewOptionKey,
+  'cardLayout' | 'cardProperties' | 'cardDisplay'
+>
+
+export function isPhoneWorkspaceOption(
+  key: WorkspaceViewOptionKey
+): key is PhoneWorkspaceOptionKey {
+  return Object.hasOwn(WORKSPACE_OPTION_CONTROLS, key)
+}
+
+export const WORKSPACE_OPTION_CONTROLS: Record<PhoneWorkspaceOptionKey, WorkspaceOptionControl> = {
   hosts: { kind: 'page', value: hostsValue, Page: HostsPage },
   projects: { kind: 'page', value: projectsValue, Page: ProjectsPage },
   groupBy: {
@@ -323,16 +250,6 @@ export const WORKSPACE_OPTION_CONTROLS: Record<WorkspaceViewOptionKey, Workspace
     (controller) => controller.projectOrderBy,
     (controller) => controller.settings.setProjectOrderBy
   ),
-  cardLayout: choicePage(
-    cardLayoutChoices,
-    (controller) => (controller.state.view.compactWorktreeCards ? 'compact' : 'detailed'),
-    (controller) => controller.settings.setCardLayout
-  ),
-  cardProperties: propertiesPage((_controller, t) => cardPropertyChoices(t), {
-    value: showPropertiesValue,
-    withAgentLayout: true
-  }),
-  cardDisplay: propertiesPage(cardDisplayChoices, { value: () => '', withAgentLayout: false }),
   hideSleepingWorkspaces: filterSwitch('hideSleepingWorkspaces'),
   alwaysShowDefaultBranchWorkspace: filterSwitch('alwaysShowDefaultBranchWorkspace'),
   hideDefaultBranchWorkspace: filterSwitch('hideDefaultBranchWorkspace'),
