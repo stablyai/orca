@@ -10,7 +10,8 @@ import { scaledType } from './mobile-native-chat-message-styles'
 export function useMobileNativeChatMessageTimeLabel(
   timestamp: number | null | undefined
 ): { short: string; full: string } | null {
-  const time = useMobileMessageTime()
+  // A row with no time, such as waiting agent mail, keeps no clock running.
+  const time = useMobileMessageTime(timestamp != null)
   if (timestamp == null) {
     return null
   }

@@ -4,7 +4,6 @@ import { existsSync } from 'node:fs'
 import type { AgentJournalMessageItem } from '../../shared/agent-session/journal/agent-session-journal-types'
 import {
   getRepoExecutionHostId,
-  getRepoRoutingConnectionId,
   LOCAL_EXECUTION_HOST_ID
 } from '../../shared/execution-host/execution-host'
 import { splitWorktreeId } from '../../shared/worktree/id'
@@ -18,7 +17,6 @@ import { readWorkspaceReviewPR } from '../../shared/sidebar-list/feed-facts/work
 import type { RuntimeStore } from '../runtime/construction/runtime-store-contract'
 import { getProfileUserDataPath } from '../orca-profiles/profile-storage-paths'
 import type { OrcaRuntimeService } from '../runtime/orca-runtime'
-import type { Bot } from '../../shared/bot-types'
 import type { OrchestrationDb } from '../runtime/orchestration/db/orchestration-db'
 import {
   BotWorkRecord,
@@ -26,19 +24,15 @@ import {
   type BotWorkWorker,
   type BotWorkWorkspace
 } from './bot-work-record'
-import { BotWorkStore, botWorkStoreFile, type BotWorkHost } from './bot-work-store'
+import type { BotWorkHost } from './bot-work-store'
+import { botWorkStoreFile, type BotWorkRemote } from './bot-work-ops'
+import type { BotsDbWorkerClient } from './db-worker/bots-db-worker-client'
 import type { BotWorkWorkspaceShow } from './bot-work-workspace-show'
 import type { ScopedWorktreeReads } from '../runtime/workspaces/catalog/scoped-worktree-row-resolution'
-import { isInBotHome } from './bot-home-membership'
+import { getStructuredAgentSessionHost } from '../native-chat/agent-session-wire/host/structured-agent-session-registry'
 import { readWorkers } from './bot-work-workers-read'
-import { readRemoteGitHubRepo, readRemoteWorkspace } from './bot-work-remote-workspace'
+import { readRemoteWorkspace } from './bot-work-remote-workspace'
 import { getRemoteDispatch } from '../runtime/orchestration/db/remote-owned/remote-dispatch-records'
-import { worktreesUnderHomes } from './bot-handed-workspaces'
-import { workspaceOnBranch, type BotGitHubRepo, type BotPrRepo } from './bot-work-pr-branch'
-import { normalizeLocalBranchName } from '../runtime/workspaces/catalog/runtime-worktree-selection'
-import { folderWorkspaceKey } from '../../shared/workspace/identity/workspace-scope'
-import type { WorkspaceKey } from '../../shared/workspace/identity/workspace-scope'
-import type { WorkspaceLineage } from '../../shared/worktree/lineage-types'
 
 type TurnMessage = Pick<AgentJournalMessageItem, 'origin'>
 
@@ -50,7 +44,6 @@ export type BotWorkRuntime = Pick<
   | 'getOrchestrationFleetAgentStatusSnapshot'
   | 'ensureStructuredAgentSessionHost'
   | 'getAgentStatusSnapshotFn'
-  | 'bots'
 > & {
   showManagedTerminalWorkspace: BotWorkWorkspaceShow
   linkStore: () =>
@@ -72,24 +65,34 @@ export function botWorkHostOf(db: OrchestrationDb, dispatchId: string): BotWorkH
   )
 }
 
-/** One batch's workspace reader; `reads`: its repo reads, shared by every workspace it reads. */
+/** One batch's workspace reader; `reads`: its repo reads, shared by every workspace it reads.
+ *  `exists`: path checks shared too, only where a 'gone' never closes anything (item views). */
 export function workspaceReader(
   runtime: BotWorkRuntime,
-  reads: ScopedWorktreeReads = new Map()
+  reads: ScopedWorktreeReads = new Map(),
+  exists?: Map<string, boolean>
 ): (worker: BotWorkWorker) => Promise<BotWorkWorkspace | 'gone' | null> {
   return async (worker) => {
     if (worker.host !== 'local') {
       return readRemoteWorkspace(runtime, worker)
     }
-    return worker.worktreeId ? readLocalWorkspace(runtime, worker.worktreeId, reads) : null
+    return worker.worktreeId ? readLocalWorkspace(runtime, worker.worktreeId, reads, exists) : null
   }
+}
+
+/** `check`'s answer under `key`, asked once per batch; without a batch, asked every time. */
+function existsOnce(key: string, check: () => boolean, known?: Map<string, boolean>): boolean {
+  const answer = known?.get(key) ?? check()
+  known?.set(key, answer)
+  return answer
 }
 
 /** One of this host's worktrees as the work record reads it; 'gone' only with proof. */
 async function readLocalWorkspace(
   runtime: BotWorkRuntime,
   worktreeId: string,
-  reads?: ScopedWorktreeReads
+  reads?: ScopedWorktreeReads,
+  exists?: Map<string, boolean>
 ): Promise<BotWorkWorkspace | 'gone' | null> {
   const store = runtime.linkStore()
   const parsed = splitWorktreeId(worktreeId)
@@ -105,8 +108,8 @@ async function readLocalWorkspace(
   if (
     getRepoExecutionHostId(repo) === LOCAL_EXECUTION_HOST_ID &&
     !parseWslUncPath(parsed.worktreePath) &&
-    existsSync(repo.path) &&
-    !existsSync(parsed.worktreePath)
+    existsOnce(`repo:${repo.path}`, () => existsSync(repo.path), exists) &&
+    !existsOnce(`worktree:${parsed.worktreePath}`, () => existsSync(parsed.worktreePath), exists)
   ) {
     return 'gone'
   }
@@ -128,77 +131,6 @@ async function readLocalWorkspace(
         }
       : null
   }
-}
-
-export type BotHomeLineage = {
-  listWorkspaceLineage: () => Promise<Readonly<Record<WorkspaceKey, WorkspaceLineage>>>
-}
-
-/** The GitHub repository a worktree of this host tracks on this branch, else its origin. */
-async function localGitHubRepo(
-  runtime: BotWorkRuntime,
-  worktreeId: string,
-  branch: string
-): Promise<BotGitHubRepo | null> {
-  const parsed = splitWorktreeId(worktreeId)
-  const repo =
-    parsed &&
-    runtime
-      .linkStore()
-      ?.getRepos()
-      .find((entry) => entry.id === parsed.repoId)
-  if (!repo) {
-    return null
-  }
-  // Loaded on first use: GitHub lookups pull the git stack into whatever imports bots.
-  const { getGitHubTrackedRepository } = await import('../github/client/fetch/tracked-repository')
-  return getGitHubTrackedRepository(
-    repo.path,
-    normalizeLocalBranchName(branch),
-    getRepoRoutingConnectionId(repo)
-  )
-}
-
-/** The GitHub repository a worker's workspace tracks on its branch: here, or on its paired server
- *  by name. Null when it can't be told. */
-export async function workerGitHubRepo(
-  runtime: BotWorkRuntime,
-  worker: BotWorkWorker,
-  branch: string
-): Promise<BotGitHubRepo | null> {
-  if (worker.host !== 'local') {
-    return readRemoteGitHubRepo(runtime, worker)
-  }
-  return worker.worktreeId ? localGitHubRepo(runtime, worker.worktreeId, branch) : null
-}
-
-/**
- * Whether a worktree under a bot's home (made there by its workers, or handed to it) has this branch
- * checked out in this repository: a pull request from it is the bot's work, even after its work row
- * closed. One that can't be read counts as not on it.
- */
-export async function botHomeWorktreeOnBranch(
-  runtime: BotWorkRuntime & BotHomeLineage,
-  repo: BotPrRepo,
-  headRef: string
-): Promise<boolean> {
-  const homes = runtime.bots.list().map((bot) => folderWorkspaceKey(bot.folderWorkspaceId))
-  const under = worktreesUnderHomes(await runtime.listWorkspaceLineage(), homes)
-  for (const worktreeId of new Set([...under.values()].flatMap((ids) => [...ids]))) {
-    const workspace = await readLocalWorkspace(runtime, worktreeId).catch(() => null)
-    const branch = workspace && workspace !== 'gone' ? workspace.branch : null
-    if (
-      branch &&
-      (await workspaceOnBranch(
-        { branch, githubRepo: () => localGitHubRepo(runtime, worktreeId, branch) },
-        repo,
-        headRef
-      ))
-    ) {
-      return true
-    }
-  }
-  return false
 }
 
 /** The bot conversation a session's turn came from. A bot's Chat is its owner's too, so there only
@@ -227,13 +159,17 @@ async function readTurnAddress(
   }
 }
 
-export function runtimeBotWork(runtime: BotWorkRuntime): BotWorkRecord {
-  const stores = new Map<string, BotWorkStore>()
+/** `db`: the runtime's bots DB worker, which runs the store's SQL. */
+export function runtimeBotWork(
+  runtime: BotWorkRuntime,
+  db: Pick<BotsDbWorkerClient, 'work'>
+): BotWorkRecord {
+  const stores = new Map<string, BotWorkRemote>()
   return new BotWorkRecord({
     // Per profile: a profile switch reads that profile's record.
     store: () => {
       const path = botWorkStoreFile(getProfileUserDataPath())
-      const store = stores.get(path) ?? BotWorkStore.open(path)
+      const store = stores.get(path) ?? db.work(path)
       stores.set(path, store)
       return store
     },
@@ -241,43 +177,12 @@ export function runtimeBotWork(runtime: BotWorkRuntime): BotWorkRecord {
     workspaces: () => workspaceReader(runtime),
     turnAddress: (sessionId, message) => readTurnAddress(runtime, sessionId, message),
     conversationTitle: (address) => {
+      if (address.source === 'chat') {
+        const chat = getStructuredAgentSessionHost()?.deps.store.getConversation(address.externalId)
+        return chat?.conversationName || null
+      }
       const store = runtime.linkStore()
       return (store && findLink(store, address)?.link.title) || null
     }
   })
-}
-
-/** Reads which conversation a bot's turn is when a worker start begins, so a message arriving while
- *  it starts can't move it; records the worker once it started. */
-export function prepareBotWorkerStart(
-  runtime: {
-    bots: { list: () => readonly Pick<Bot, 'folderWorkspaceId'>[] }
-    botWork: Pick<BotWorkRecord, 'turnOf' | 'started'>
-    /** 'local', or the paired server a Dispatch runs on. */
-    hostOf: (dispatchId: string) => BotWorkHost
-  },
-  callerSession: { sessionId: string; workspaceId: string } | undefined
-): (start: { taskId: string; dispatchId: string }) => void {
-  const turn = Promise.resolve()
-    .then(() =>
-      callerSession && isInBotHome(runtime.bots, callerSession)
-        ? runtime.botWork.turnOf(callerSession.sessionId)
-        : null
-    )
-    .catch(warnUnrecorded)
-  return ({ taskId, dispatchId }) => {
-    void turn
-      .then(async (address) => {
-        if (address) {
-          const host = runtime.hostOf(dispatchId)
-          await runtime.botWork.started(address, { taskId, dispatchId, host })
-        }
-      })
-      .catch(warnUnrecorded)
-  }
-}
-
-function warnUnrecorded(error: unknown): null {
-  console.warn('[bots] recording a bot worker failed', error)
-  return null
 }

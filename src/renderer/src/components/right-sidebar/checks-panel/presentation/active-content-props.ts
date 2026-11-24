@@ -19,11 +19,12 @@ export type ChecksPanelActiveContentModel = Pick<
   | 'agentComposerState'
   | 'checks'
   | 'checksError'
+  | 'checksLoaded'
   | 'checksLoading'
   | 'claimedCommentResolutionRef'
   | 'commentResolutionLaunchAcceptedRef'
   | 'comments'
-  | 'commentsError'
+  | 'commentsLoaded'
   | 'commentsLoading'
   | 'commentsSelectionClearRequest'
   | 'conflictDetailsRefreshing'
@@ -50,7 +51,6 @@ export type ChecksPanelActiveContentModel = Pick<
     | 'activeReview'
     | 'linkedGitLabMR'
     | 'pr'
-    | 'prRefreshState'
     | 'setChecksPanelContentRef'
   > &
   Pick<

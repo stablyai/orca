@@ -109,6 +109,8 @@ export const ProfileClearGoogleCookies = ProfileDelete.extend({
   executorRuntimeId: z.string().min(1)
 })
 
+export const ProfileClearCookies = ProfileClearGoogleCookies
+
 export const ProfileImportFromBrowser = z.object({
   profileId: requiredString('Missing required --profile'),
   browserFamily: requiredString('Missing required --browser-family'),
@@ -166,7 +168,10 @@ export const Highlight = BrowserTarget.extend({
 })
 
 export const Exec = BrowserTarget.extend({
-  command: requiredString('Missing required --command')
+  command: requiredString('Missing required --command'),
+  // A local caller's directory (and legacy WSL distro), so file operands resolve as it typed them.
+  cwd: OptionalString,
+  wslDistro: OptionalString
 })
 
 export const Get = BrowserTarget.extend({

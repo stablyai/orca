@@ -309,24 +309,27 @@ class BrowserSessionRegistry {
     return true
   }
 
-  async clearDefaultSessionCookies(): Promise<boolean> {
+  /** Clears every cookie in one profile's own jar; false for an unknown profile or a failed clear. */
+  async clearProfileSessionCookies(profileId: string): Promise<boolean> {
+    const profile = this.profiles.get(profileId)
+    if (!profile) {
+      return false
+    }
     try {
       // Clear import metadata first so quitting during storage cleanup cannot leave a stale source badge.
-      const defaultProfile = this.profiles.get('default')
-      if (defaultProfile) {
-        this.profiles.set('default', { ...defaultProfile, source: null })
-      }
+      this.profiles.set(profileId, { ...profile, source: null })
       const meta = this.loadPersistedMeta()
       const pendingCookieImports = { ...meta.pendingCookieImports }
-      delete pendingCookieImports[this.defaultPartition]
+      delete pendingCookieImports[profile.partition]
       this.persistMeta({
-        defaultSource: null,
-        pendingCookieDbPath: null,
+        ...(profileId === 'default'
+          ? { defaultSource: null, pendingCookieDbPath: null }
+          : { profiles: [...this.profiles.values()].filter((p) => p.id !== 'default') }),
         pendingCookieImports
       })
       this.onProfilesChanged?.()
 
-      await clearBrowserCookieJar(session.fromPartition(this.defaultPartition))
+      await clearBrowserCookieJar(session.fromPartition(profile.partition))
       return true
     } catch {
       return false

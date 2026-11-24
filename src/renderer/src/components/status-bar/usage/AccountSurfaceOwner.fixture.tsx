@@ -107,6 +107,17 @@ function fixture(
           runtimeId: 'fixture',
           preferredEndpointId: 'fixture',
           endpoints: []
+        } satisfies PublicKnownRuntimeEnvironment,
+        {
+          id: 'ubuntu',
+          name: 'WSL Ubuntu',
+          createdAt: 1,
+          updatedAt: 1,
+          lastUsedAt: null,
+          runtimeId: 'fixture',
+          preferredEndpointId: 'fixture',
+          endpoints: [],
+          orcadDeployment: { kind: 'wsl', distro: 'Ubuntu', localPort: 1234, remotePort: 1234 }
         } satisfies PublicKnownRuntimeEnvironment
       ],
       runtimeEnvironmentCatalogHydrated: true,
@@ -167,6 +178,14 @@ function fixture(
         return { sendBinary: () => {}, unsubscribe: () => {} }
       }
     },
+    interact:
+      hostId === 'runtime:ubuntu'
+        ? (frame) => {
+            frame
+              .querySelector<HTMLButtonElement>('button[aria-label="Usage"]')
+              ?.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true, button: 0 }))
+          }
+        : undefined,
     render: () => (
       <div className="flex h-[540px] flex-col bg-background">
         <div className="relative min-h-0 flex-1">
@@ -199,3 +218,6 @@ export const unresolved = fixture(null)
 export const narrow = fixture('local', 360)
 
 export const splitPane = fixture('runtime:m4', 800, false, false, true)
+
+export const wslUnavailable = fixture('runtime:ubuntu')
+export const wslUnavailableNarrow = fixture('runtime:ubuntu', 360)

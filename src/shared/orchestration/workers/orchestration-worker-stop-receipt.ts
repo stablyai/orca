@@ -18,6 +18,8 @@ export type WorkerStopReceipt = {
   alreadySettled: boolean
   processAction: string
   close?: unknown
+  /** How a stop settled without a proven exit, such as a start it cancelled. */
+  reason?: string
   lastError?: string | null
   warning?: string
   helpers?: HelperStopOutcome[]

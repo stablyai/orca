@@ -21,8 +21,11 @@ type State = {
   snapshot: WorkerDockSnapshot | null
   available: boolean
   rows: ReadonlyMap<string, WorkerDockEntry>
+  /** Counts every publication that lost the feed. It is read live, so a loss and a recovery
+   *  published before React renders still show as a change. */
+  losses: number
 }
-const EMPTY: State = { snapshot: null, available: true, rows: new Map() }
+const EMPTY: State = { snapshot: null, available: true, rows: new Map(), losses: 0 }
 
 class WorkerDockFeed {
   state = EMPTY
@@ -90,7 +93,12 @@ class WorkerDockFeed {
         }
       }
     }
-    this.state = { snapshot: snapshot ?? this.state.snapshot, available, rows }
+    this.state = {
+      snapshot: snapshot ?? this.state.snapshot,
+      available,
+      rows,
+      losses: this.state.losses + (available ? 0 : 1)
+    }
     for (const listener of this.listeners) {
       listener()
     }
@@ -245,7 +253,9 @@ export function useWorkerDockFeed(
   )
   const read = useCallback(() => feed?.read() ?? EMPTY, [feed])
   const value = useSyncExternalStore(subscribe, read)
-  return { ...value, party: feed?.party ?? null, loadWindow: feed?.window }
+  // The live loss count, not the rendered one: a press compares it from start to activation.
+  const readLosses = useCallback(() => feed?.read().losses ?? 0, [feed])
+  return { ...value, party: feed?.party ?? null, loadWindow: feed?.window, readLosses }
 }
 
 const seededSources = new Set<string>()

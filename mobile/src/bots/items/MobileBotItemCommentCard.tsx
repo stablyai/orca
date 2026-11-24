@@ -15,6 +15,7 @@ import {
 } from '../../../../src/shared/bots/use-bot-item-question-steps'
 import { MobileMarkdown } from '../../components/markdown/MobileMarkdown'
 import { useMobileTranslation } from '../../i18n/use-mobile-translation'
+import { INLINE_TEXT_SELECTION } from '../../platform/text-selection/inline-text-selection'
 import { colors, radii, spacing, typography } from '../../theme/mobile-theme'
 import { themedStyleSheet } from '../../theme/themed-styles'
 import {
@@ -42,7 +43,9 @@ export function MobileBotItemCommentCard({
 }: {
   item: BotItem
   entry: Pick<Extract<BotItemActivityEntry, { kind: 'comment' }>, 'event' | 'replyTo' | 'waiting'> &
-    Partial<Pick<Extract<BotItemActivityEntry, { kind: 'comment' }>, 'answers' | 'byOrder'>>
+    Partial<
+      Pick<Extract<BotItemActivityEntry, { kind: 'comment' }>, 'answers' | 'byOrder' | 'ended'>
+    >
   attachments: MobileBotItemAttachmentSource
   /** A comment sent from the box that didn't reach the host; no Retry when it may have. */
   failed?: { retry: (() => void) | null; discard: () => void }
@@ -90,7 +93,9 @@ export function MobileBotItemCommentCard({
         <MobileBotItemReplyQuote text={replyTo.text} onShowQuestion={onShowQuestion ?? null} />
       ) : null}
       <MobileBotItemCommentAttachments data={event.data} {...attachments}>
-        {text.trim() ? <MobileMarkdown content={text} /> : null}
+        {text.trim() ? (
+          <MobileMarkdown content={text} rangeSelectable={INLINE_TEXT_SELECTION} />
+        ) : null}
       </MobileBotItemCommentAttachments>
       {asks ? (
         <MobileBotItemQuestionLines
@@ -104,6 +109,7 @@ export function MobileBotItemCommentCard({
           waiting={waiting}
           answers={entry.answers}
           byOrder={entry.byOrder}
+          ended={entry.ended}
           actions={quickReplies}
           disabled={repliesDisabled}
           // Ruled off only below something: a question with no body stays under the name.
